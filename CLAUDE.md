@@ -32,6 +32,91 @@ cargo test                           # 13 unit tests
 | `src/ui/widgets.rs` | Rotary knob, step button, LED, section header. |
 | `src/tests.rs` | Unit tests for pure functions. |
 
+## Coding style — functional patterns first
+
+This project deliberately applies functional programming principles in Rust.
+Follow these consistently when writing or modifying any code.
+
+### Core logic must be pure functions
+
+Business logic, DSP, sequencer math, and state transitions must be
+**pure functions**: same input → same output, no hidden state, no side effects.
+
+```rust
+// CORRECT — pure, trivially testable
+pub fn apply_llm_update(state: AppState, update: &serde_json::Value) -> AppState { ... }
+pub fn advance_clock(clock: ClockState, seq: &SequencerState, ...) -> (ClockState, Vec<TriggerEvent>) { ... }
+pub fn midi_to_hz(note: u8) -> f32 { ... }
+
+// WRONG — mutates in place, hard to test, hard to reason about
+pub fn apply_llm_update(&mut self, update: &serde_json::Value) { ... }
+```
+
+### State transitions by value, not by mutation
+
+State structs derive `Clone`. Transition functions take ownership (or a clone)
+and return new state. The caller replaces the old state.
+
+```rust
+// CORRECT
+let state = toggle_drum_step(state, DrumVoice::Kick808, 3);
+
+// WRONG
+state.toggle_drum_step(DrumVoice::Kick808, 3);
+```
+
+### Immutable snapshots for cross-thread reads
+
+When the LLM or audio thread needs to read shared state, snapshot it first,
+then release the lock, then do the work on the owned copy.
+
+```rust
+// CORRECT — lock held for microseconds
+let snapshot = state.read().clone();
+// ... long inference or DSP work on snapshot ...
+
+// WRONG — lock held across inference/audio work
+let guard = state.read();
+backend.infer(&guard); // blocks other writers for the entire call
+```
+
+### Side effects at the edges only
+
+Pure core, effectful shell. I/O, threads, channels, and locks belong in:
+- `main.rs` — thread spawning, channel wiring
+- `audio/mod.rs` — cpal stream, rtrb writes
+- `api/mod.rs` — HTTP handlers
+- `llm/mod.rs` — inference thread loop
+
+Everything under `state/`, `sequencer/`, and DSP voices in `audio/dsp.rs`
+must be free of side effects.
+
+### Every pure function gets a test
+
+New pure functions go in `src/tests.rs`. If a function is pure, testing it
+is trivial — just call it with inputs and assert on outputs. No mocks needed.
+
+```rust
+#[test]
+fn my_new_thing_does_what_it_says() {
+    let result = my_pure_fn(input_a, input_b);
+    assert_eq!(result, expected);
+}
+```
+
+### Avoid unnecessary abstraction
+
+Don't create traits, wrapper types, or helper utilities for things that only
+exist once. Three similar lines of code are better than a premature abstraction.
+Extract only when the same logic is needed in three or more genuinely distinct places.
+
+### No speculative features
+
+Don't add parameters, config options, or code paths for hypothetical future
+requirements. Build exactly what the current task needs.
+
+---
+
 ## Key invariants — do not break these
 
 1. **Audio callback is allocation-free.** No `Vec::new()`, no `.clone()`, no locks inside `process_block()` or the cpal callback closure.
