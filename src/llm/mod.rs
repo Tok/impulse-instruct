@@ -32,6 +32,8 @@ pub struct LlmOutput {
     pub tokens_per_sec: f32,
     pub context_used: usize,
     pub is_jam: bool,
+    /// Chain-of-thought from <think>…</think> blocks, if the model emitted one.
+    pub thinking: Option<String>,
 }
 
 // ─── LLM backend trait (swappable) ────────────────────────────────────────────
@@ -169,9 +171,9 @@ impl LlmBackend for LlamaServerBackend {
         // heat 0.0 → temp 0.1 (near-deterministic), heat 1.0 → temp 1.2 (creative)
         let temperature = 0.1_f64 + (heat as f64).clamp(0.0, 1.0) * 1.1;
 
-        // json_object mode: server guarantees valid JSON; schema is enforced by
-        // the system prompt + grammar.  Using json_schema+strict is not supported
-        // in all llama-server builds and can cause the request to hang.
+        // json_object mode keeps the server honest about emitting valid JSON.
+        // max_tokens: JSON synth params are short; 192 is generous and keeps
+        // latency down on CPU fallback.
         let body = serde_json::json!({
             "model": "bonsai",
             "messages": [
@@ -179,7 +181,7 @@ impl LlmBackend for LlamaServerBackend {
                 { "role": "user",    "content": user   }
             ],
             "temperature": temperature,
-            "max_tokens": 512,
+            "max_tokens": 192,
             "response_format": { "type": "json_object" }
         });
 
@@ -202,13 +204,19 @@ impl LlmBackend for LlamaServerBackend {
         let resp_json: serde_json::Value = serde_json::from_str(&resp_text)
             .map_err(|e| anyhow::anyhow!("failed to parse server JSON: {e}\nraw: {resp_text}"))?;
 
-        let text = resp_json["choices"][0]["message"]["content"]
+        let raw_content = resp_json["choices"][0]["message"]["content"]
             .as_str()
             .unwrap_or("")
             .to_string();
 
-        if text.is_empty() {
+        if raw_content.is_empty() {
             log::warn!("llama-server returned empty content; full response: {resp_text}");
+        }
+
+        // Strip <think>…</think> chain-of-thought block that Qwen3 may emit.
+        let (thinking, json_text) = split_thinking(&raw_content);
+        if thinking.is_some() {
+            log::debug!("Bonsai thinking: {} chars", thinking.as_ref().unwrap().len());
         }
 
         let usage = &resp_json["usage"];
@@ -216,15 +224,16 @@ impl LlmBackend for LlamaServerBackend {
         let tps = if elapsed > 0.0 { completion_tokens / elapsed } else { 0.0 };
         let ctx_used = usage["total_tokens"].as_u64().unwrap_or(0) as usize;
 
-        let param_update = serde_json::from_str::<serde_json::Value>(text.trim())
-            .map_err(|e| anyhow::anyhow!("JSON parse failed: {e}\nraw: {text}"))?;
+        let param_update = serde_json::from_str::<serde_json::Value>(json_text.trim())
+            .map_err(|e| anyhow::anyhow!("JSON parse failed: {e}\nraw: {json_text}"))?;
 
         Ok(LlmOutput {
-            text,
+            text: json_text,
             param_update: Some(param_update),
             tokens_per_sec: tps,
             context_used: ctx_used,
             is_jam: false,
+            thinking,
         })
     }
 
@@ -232,6 +241,21 @@ impl LlmBackend for LlamaServerBackend {
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
+
+/// Split a `<think>…</think>` block from the front of a model response.
+/// Returns `(thinking_text, remainder)`.  If no block is present, thinking is None
+/// and the whole string is returned as remainder.
+fn split_thinking(s: &str) -> (Option<String>, String) {
+    let s = s.trim();
+    if let Some(rest) = s.strip_prefix("<think>") {
+        if let Some(end) = rest.find("</think>") {
+            let thinking = rest[..end].trim().to_string();
+            let after = rest[end + "</think>".len()..].trim().to_string();
+            return (Some(thinking).filter(|t| !t.is_empty()), after);
+        }
+    }
+    (None, s.to_string())
+}
 
 fn free_port() -> Option<u16> {
     std::net::TcpListener::bind("127.0.0.1:0").ok()
@@ -265,6 +289,7 @@ pub fn mock_response(prompt: &str, heat: f32) -> Result<LlmOutput> {
             tokens_per_sec: 42.0,
             context_used: 256,
             is_jam: false,
+            thinking: None,
         });
     }
 
@@ -383,7 +408,8 @@ pub fn mock_response(prompt: &str, heat: f32) -> Result<LlmOutput> {
         param_update: Some(json),
         tokens_per_sec: 42.0, // mock speed
         context_used: 256,
-        is_jam: false, // caller sets this after the fact if needed
+        is_jam: false,
+        thinking: None,
     })
 }
 
@@ -405,6 +431,7 @@ pub fn run_llm_loop(
             tokens_per_sec: 0.0,
             context_used: 0,
             is_jam: false,
+            thinking: None,
         });
     } else {
         log::warn!(
@@ -417,6 +444,7 @@ pub fn run_llm_loop(
             tokens_per_sec: 0.0,
             context_used: 0,
             is_jam: false,
+            thinking: None,
         });
     }
 
@@ -506,6 +534,7 @@ pub fn run_llm_loop(
                 tokens_per_sec: 0.0,
                 context_used: 0,
                 is_jam: true,
+                thinking: None,
             });
         }
     }

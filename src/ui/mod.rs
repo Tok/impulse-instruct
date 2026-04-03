@@ -90,6 +90,9 @@ pub struct ImpulseApp {
     // Piano preferences
     piano_show_labels: bool,
     piano_show_colors: bool,
+    // Last chain-of-thought from Bonsai (shown collapsible below the log)
+    last_thinking: Option<String>,
+    show_thinking: bool,
 }
 
 impl ImpulseApp {
@@ -136,6 +139,8 @@ impl ImpulseApp {
             ui_volume: 1.0,
             piano_show_labels: true,
             piano_show_colors: true,
+            last_thinking: None,
+            show_thinking: false,
         }
     }
 
@@ -153,6 +158,13 @@ impl ImpulseApp {
     /// Drain LLM output messages.
     fn drain_llm_outputs(&mut self) {
         while let Ok(out) = self.llm_rx.try_recv() {
+            // Store thinking tokens for display
+            if let Some(ref thinking) = out.thinking {
+                if !thinking.is_empty() {
+                    self.last_thinking = Some(thinking.clone());
+                }
+            }
+
             if !out.is_jam && (out.param_update.is_some() || (!out.text.is_empty() && !out.text.starts_with('['))) {
                 let conv_mode = self.state.read().llm.conversation_mode.clone();
                 let display = if let Some(ref update) = out.param_update {
@@ -173,7 +185,13 @@ impl ImpulseApp {
                 } else {
                     out.text.clone()
                 };
-                self.log_text.push_str(&format!("Bonsai → {}\n", display));
+                // Append thinking indicator when present
+                let line = if out.thinking.as_ref().map_or(false, |t| !t.is_empty()) {
+                    format!("Bonsai → {} [🧠]\n", display)
+                } else {
+                    format!("Bonsai → {}\n", display)
+                };
+                self.log_text.push_str(&line);
             }
             // If jam cycle done and auto_jam is on, re-trigger
             if out.text == "[jam_cycle_done]" {
@@ -714,6 +732,33 @@ impl eframe::App for ImpulseApp {
                                 .interactive(true)
                         );
                     });
+
+                // Thinking tokens (collapsible, only shown when present)
+                if let Some(ref thinking) = self.last_thinking.clone() {
+                    ui.horizontal(|ui| {
+                        let label = if self.show_thinking { "▾ thinking" } else { "▸ thinking" };
+                        if ui.small_button(egui::RichText::new(label).color(theme::IRON).size(9.0)).clicked() {
+                            self.show_thinking = !self.show_thinking;
+                        }
+                    });
+                    if self.show_thinking {
+                        egui::ScrollArea::vertical()
+                            .id_source("thinking_scroll")
+                            .max_height(60.0)
+                            .auto_shrink([false, false])
+                            .show(ui, |ui| {
+                                let mut t = thinking.clone();
+                                ui.add(
+                                    egui::TextEdit::multiline(&mut t)
+                                        .desired_width(f32::INFINITY)
+                                        .font(egui::FontId::monospace(9.0))
+                                        .text_color(theme::IRON)
+                                        .frame(false)
+                                        .interactive(false)
+                                );
+                            });
+                    }
+                }
             });
 
         // ── Tab bar (data-driven — add InstrumentSlot to self.instruments to extend) ──
