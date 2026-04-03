@@ -181,6 +181,109 @@ mod prompt_tests {
 }
 
 #[cfg(test)]
+mod instruction_tests {
+    use crate::llm::instructions::InstructionSet;
+    use crate::llm::mock_response;
+
+    /// Recursively verify that every key present in `expected` also appears in
+    /// `actual` (ignores `_comment` and does not assert exact leaf values).
+    fn assert_keys_present(expected: &serde_json::Value, actual: &serde_json::Value, path: &str) {
+        if let Some(obj) = expected.as_object() {
+            for (k, v) in obj {
+                if k == "_comment" { continue; }
+                let child_path = format!("{}.{}", path, k);
+                assert!(
+                    actual.get(k).is_some(),
+                    "instruction '{}': expected key '{}' in mock output, but it was missing\noutput: {}",
+                    path, child_path, actual
+                );
+                assert_keys_present(v, &actual[k], &child_path);
+            }
+        }
+    }
+
+    #[test]
+    fn instruction_set_loads_and_is_non_empty() {
+        let set = InstructionSet::get();
+        assert!(set.len() > 0, "instruction set should have at least one entry");
+    }
+
+    #[test]
+    fn find_best_match_returns_none_for_empty_prompt() {
+        let set = InstructionSet::get();
+        // A prompt with no recognisable keywords should not match any instruction
+        assert!(set.find_best_match("xyzzy blorple quux").is_none());
+    }
+
+    #[test]
+    fn remove_clap_beats_add_clap_for_negation_prompts() {
+        let set = InstructionSet::get();
+        for prompt in &["remove claps", "no claps", "clear claps", "can you remove the claps"] {
+            let m = set.find_best_match(prompt);
+            assert!(m.is_some(), "no match for '{}'", prompt);
+            assert_eq!(
+                m.unwrap().id, "remove_clap",
+                "prompt '{}' should match 'remove_clap', got '{}'",
+                prompt, m.unwrap().id
+            );
+        }
+    }
+
+    #[test]
+    fn add_clap_wins_for_positive_prompts() {
+        let set = InstructionSet::get();
+        for prompt in &["add claps", "add clap on 2 and 4", "put a clap on beats 2 and 4"] {
+            let m = set.find_best_match(prompt);
+            assert!(m.is_some(), "no match for '{}'", prompt);
+            assert_eq!(
+                m.unwrap().id, "add_clap_2_and_4",
+                "prompt '{}' should match 'add_clap_2_and_4', got '{}'",
+                prompt, m.unwrap().id
+            );
+        }
+    }
+
+    /// For every instruction, use its *first keyword* as a test prompt and
+    /// verify that the mock output contains all the expected parameter keys.
+    #[test]
+    fn all_instructions_produce_expected_param_keys() {
+        let set = InstructionSet::get();
+        for inst in set.iter() {
+            let test_prompt = inst.keywords.first()
+                .expect("instruction has no keywords");
+            let result = mock_response(test_prompt, 0.5)
+                .unwrap_or_else(|e| panic!("mock_response failed for '{}': {}", test_prompt, e));
+            let output = result.param_update
+                .unwrap_or_else(|| panic!("no param_update for instruction '{}'", inst.id));
+            assert_keys_present(&inst.params, &output, &inst.id);
+        }
+    }
+
+    /// Spot-check a few critical instructions by name.
+    #[test]
+    fn remove_instructions_emit_all_false_arrays() {
+        let set = InstructionSet::get();
+        let removal_ids = ["remove_clap", "remove_kick808", "remove_hihat808", "remove_snare808"];
+        for id in removal_ids {
+            let inst = set.iter().find(|i| i.id == id)
+                .unwrap_or_else(|| panic!("instruction '{}' not found", id));
+            // Every array in params should be all-false
+            if let Some(seq) = inst.params.get("sequencer").and_then(|s| s.as_object()) {
+                for (field, val) in seq {
+                    if let Some(arr) = val.as_array() {
+                        assert!(
+                            arr.iter().all(|v| v == &serde_json::json!(false)),
+                            "instruction '{}', field '{}' should be all false",
+                            id, field
+                        );
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[cfg(test)]
 mod dsp_tests {
     use crate::audio::dsp::midi_to_hz;
 

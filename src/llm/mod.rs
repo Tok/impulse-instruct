@@ -4,6 +4,7 @@
 // Communicates with UI via crossbeam channels.
 
 pub mod prompt;
+pub mod instructions;
 pub use prompt::build_system_prompt;
 pub use prompt::param_json_schema;
 
@@ -76,8 +77,24 @@ impl LlmBackend for LlamaCppBackend {
 }
 
 /// Generate a plausible JSON response for testing without a real model.
-fn mock_response(prompt: &str, heat: f32) -> Result<LlmOutput> {
+pub fn mock_response(prompt: &str, heat: f32) -> Result<LlmOutput> {
     let prompt_lower = prompt.to_lowercase();
+
+    // Instruction set takes priority — handles all specific add/remove commands
+    // and named presets. Falls through to jam-variation when nothing matches.
+    if let Some(inst) = instructions::InstructionSet::get().find_best_match(&prompt_lower) {
+        let mut json = inst.params.clone();
+        if json.get("_comment").is_none() {
+            json["_comment"] = serde_json::json!(inst.comment);
+        }
+        return Ok(LlmOutput {
+            text: serde_json::to_string_pretty(&json).unwrap_or_default(),
+            param_update: Some(json),
+            tokens_per_sec: 42.0,
+            context_used: 256,
+            is_jam: false,
+        });
+    }
 
     let json = if prompt_lower.contains("acid") {
         serde_json::json!({

@@ -32,7 +32,7 @@ pub struct ImpulseApp {
     llm_tx: Sender<LlmInput>,
     llm_rx: Receiver<LlmOutput>,
     prompt_input: String,
-    log_lines: Vec<String>,
+    log_text: String,
     active_panel: Panel,
     api_port: Option<u16>, // Some(port) if --api was passed
 }
@@ -50,9 +50,9 @@ impl ImpulseApp {
         api_port: Option<u16>,
     ) -> Self {
         theme::apply(&cc.egui_ctx);
-        let mut log_lines = vec!["[ Impulse Instruct ready ]".into()];
+        let mut log_text = "[ Impulse Instruct ready ]\n".to_string();
         if let Some(port) = api_port {
-            log_lines.push(format!("[ HTTP API active → http://localhost:{} ]", port));
+            log_text.push_str(&format!("[ HTTP API active → http://localhost:{} ]\n", port));
         }
         Self {
             state,
@@ -60,7 +60,7 @@ impl ImpulseApp {
             llm_tx,
             llm_rx,
             prompt_input: "let's make some acid".to_string(),
-            log_lines,
+            log_text,
             active_panel: Panel::Sequencer,
             api_port,
         }
@@ -95,10 +95,7 @@ impl ImpulseApp {
                 } else {
                     out.text.clone()
                 };
-                self.log_lines.push(format!("Bonsai → {}", display));
-                if self.log_lines.len() > 50 {
-                    self.log_lines.remove(0);
-                }
+                self.log_text.push_str(&format!("Bonsai → {}\n", display));
             }
             // If jam cycle done and auto_jam is on, re-trigger
             if out.text == "[jam_cycle_done]" {
@@ -259,7 +256,7 @@ impl eframe::App for ImpulseApp {
 
                     if (submit || enter_pressed) && !self.prompt_input.trim().is_empty() {
                         let prompt = self.prompt_input.trim().to_string();
-                        self.log_lines.push(format!("YOU → {}", prompt));
+                        self.log_text.push_str(&format!("YOU → {}\n", prompt));
                         let _ = self.llm_tx.try_send(LlmInput { prompt, one_shot: true });
                         self.prompt_input.clear();
                     }
@@ -267,18 +264,21 @@ impl eframe::App for ImpulseApp {
 
                 ui.add_space(4.0);
 
-                // Scrollable log
+                // Selectable, copy-pastable log backed by an append-only string
                 egui::ScrollArea::vertical()
                     .id_source("log_scroll")
                     .stick_to_bottom(true)
                     .max_height(90.0)
                     .auto_shrink([false, false])
                     .show(ui, |ui: &mut egui::Ui| {
-                        for line in &self.log_lines {
-                            ui.label(
-                                egui::RichText::new(line).color(theme::SMOKE).monospace().size(9.0)
-                            );
-                        }
+                        ui.add(
+                            egui::TextEdit::multiline(&mut self.log_text)
+                                .desired_width(f32::INFINITY)
+                                .font(egui::FontId::monospace(9.0))
+                                .text_color(theme::SMOKE)
+                                .frame(false)
+                                .interactive(true)
+                        );
                     });
             });
 
