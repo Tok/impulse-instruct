@@ -1,56 +1,67 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
-  <!-- Background: #0C0C0C (R=G=B=12) -->
+  <!-- Background: #0C0C0C -->
   <rect width="256" height="256" fill="#0C0C0C"/>
 
   <!--
-    One octave C–B, 7 white keys, centered in 256×256.
-    White key: width=28, gap=1 → stride=29. Height=144.
-    7 keys × 29 = 203px wide → x_start = (256-203)/2 = 26.5 → 27
-    Black key: width=17, height=90. rx=1.
-
-    All positions below are RELATIVE to the group translate(27, 56).
-    Gap between key n and n+1 = n*29 + 28 (center of 1px gap).
-    Black key left = gap_center − floor(17/2) = gap_center − 8.
-      C# (gap=28):  x = 20
-      D# (gap=57):  x = 49
-      F# (gap=115): x = 107
-      G# (gap=144): x = 136
-      A# (gap=173): x = 165
-    Keyboard y_start = (256-144)/2 = 56
+    Title: "IMPULSE INSTRUCT" bold white, centered, letter-spaced to span
+    approximately the same width as the keyboard below (~202px).
+    font-size=15, letter-spacing=4.5 → approx 202px wide.
+    Baseline at y=36 (top-padding ~20px for ascenders).
   -->
-  <g transform="translate(27, 56)">
+  <text x="128" y="36"
+        font-family="'Courier New', Courier, monospace"
+        font-size="15" font-weight="bold"
+        fill="#FFFFFF" letter-spacing="4.5"
+        text-anchor="middle">IMPULSE INSTRUCT</text>
+
+  <!--
+    One octave C–B, 7 white keys.
+    White key: width=28, gap=1 → stride=29. Height=160. rx=3.
+    Black key: width=17, height=100. rx=1.
+    7 keys × 29 = 203px wide → x_start = (256-203)/2 = 26.5 → 27
+    Keyboard y_start = 52 (below title + gap).
+
+    All positions RELATIVE to the group translate(27, 52).
+    Gap center = n*29 + 28. Black key left = gap_center − 8.
+      C# (gap=28):  x=20
+      D# (gap=57):  x=49
+      F# (gap=115): x=107
+      G# (gap=144): x=136
+      A# (gap=173): x=165
+  -->
+  <g transform="translate(27, 52)">
 
     <!-- White keys -->
-    <rect x="0"   y="0" width="28" height="144" rx="3" fill="#3366DD" stroke="#000000" stroke-width="1"/><!-- C -->
-    <rect x="29"  y="0" width="28" height="144" rx="3" fill="#33AA66" stroke="#000000" stroke-width="1"/><!-- D -->
-    <rect x="58"  y="0" width="28" height="144" rx="3" fill="#DDCC22" stroke="#000000" stroke-width="1"/><!-- E -->
-    <rect x="87"  y="0" width="28" height="144" rx="3" fill="#EE8822" stroke="#000000" stroke-width="1"/><!-- F -->
-    <rect x="116" y="0" width="28" height="144" rx="3" fill="#EE3366" stroke="#000000" stroke-width="1"/><!-- G -->
-    <rect x="145" y="0" width="28" height="144" rx="3" fill="#9966CC" stroke="#000000" stroke-width="1"/><!-- A -->
-    <rect x="174" y="0" width="28" height="144" rx="3" fill="#4433AA" stroke="#000000" stroke-width="1"/><!-- B -->
+    <rect x="0"   y="0" width="28" height="160" rx="3" fill="#3366DD" stroke="#000000" stroke-width="1"/><!-- C -->
+    <rect x="29"  y="0" width="28" height="160" rx="3" fill="#33AA66" stroke="#000000" stroke-width="1"/><!-- D -->
+    <rect x="58"  y="0" width="28" height="160" rx="3" fill="#DDCC22" stroke="#000000" stroke-width="1"/><!-- E -->
+    <rect x="87"  y="0" width="28" height="160" rx="3" fill="#EE8822" stroke="#000000" stroke-width="1"/><!-- F -->
+    <rect x="116" y="0" width="28" height="160" rx="3" fill="#EE3366" stroke="#000000" stroke-width="1"/><!-- G -->
+    <rect x="145" y="0" width="28" height="160" rx="3" fill="#9966CC" stroke="#000000" stroke-width="1"/><!-- A -->
+    <rect x="174" y="0" width="28" height="160" rx="3" fill="#4433AA" stroke="#000000" stroke-width="1"/><!-- B -->
 
     <!-- White key labels -->
-    <text x="14"  y="136" font-family="monospace" font-size="9" fill="#0C0C0C" opacity="0.55" text-anchor="middle">C</text>
-    <text x="43"  y="136" font-family="monospace" font-size="9" fill="#0C0C0C" opacity="0.55" text-anchor="middle">D</text>
-    <text x="72"  y="136" font-family="monospace" font-size="9" fill="#0C0C0C" opacity="0.55" text-anchor="middle">E</text>
-    <text x="101" y="136" font-family="monospace" font-size="9" fill="#0C0C0C" opacity="0.55" text-anchor="middle">F</text>
-    <text x="130" y="136" font-family="monospace" font-size="9" fill="#0C0C0C" opacity="0.55" text-anchor="middle">G</text>
-    <text x="159" y="136" font-family="monospace" font-size="9" fill="#0C0C0C" opacity="0.55" text-anchor="middle">A</text>
-    <text x="188" y="136" font-family="monospace" font-size="9" fill="#0C0C0C" opacity="0.55" text-anchor="middle">B</text>
+    <text x="14"  y="152" font-family="monospace" font-size="9" fill="#0C0C0C" opacity="0.55" text-anchor="middle">C</text>
+    <text x="43"  y="152" font-family="monospace" font-size="9" fill="#0C0C0C" opacity="0.55" text-anchor="middle">D</text>
+    <text x="72"  y="152" font-family="monospace" font-size="9" fill="#0C0C0C" opacity="0.55" text-anchor="middle">E</text>
+    <text x="101" y="152" font-family="monospace" font-size="9" fill="#0C0C0C" opacity="0.55" text-anchor="middle">F</text>
+    <text x="130" y="152" font-family="monospace" font-size="9" fill="#0C0C0C" opacity="0.55" text-anchor="middle">G</text>
+    <text x="159" y="152" font-family="monospace" font-size="9" fill="#0C0C0C" opacity="0.55" text-anchor="middle">A</text>
+    <text x="188" y="152" font-family="monospace" font-size="9" fill="#0C0C0C" opacity="0.55" text-anchor="middle">B</text>
 
-    <!-- Black keys (drawn on top of white keys) -->
-    <rect x="20"  y="0" width="17" height="90" rx="1" fill="#2299BB" stroke="#000000" stroke-width="1"/><!-- C# -->
-    <rect x="49"  y="0" width="17" height="90" rx="1" fill="#88CC22" stroke="#000000" stroke-width="1"/><!-- D# -->
-    <rect x="107" y="0" width="17" height="90" rx="1" fill="#DD4422" stroke="#000000" stroke-width="1"/><!-- F# -->
-    <rect x="136" y="0" width="17" height="90" rx="1" fill="#CC1144" stroke="#000000" stroke-width="1"/><!-- G# -->
-    <rect x="165" y="0" width="17" height="90" rx="1" fill="#7744BB" stroke="#000000" stroke-width="1"/><!-- A# -->
+    <!-- Black keys (drawn on top) -->
+    <rect x="20"  y="0" width="17" height="100" rx="1" fill="#2299BB" stroke="#000000" stroke-width="1"/><!-- C# -->
+    <rect x="49"  y="0" width="17" height="100" rx="1" fill="#88CC22" stroke="#000000" stroke-width="1"/><!-- D# -->
+    <rect x="107" y="0" width="17" height="100" rx="1" fill="#DD4422" stroke="#000000" stroke-width="1"/><!-- F# -->
+    <rect x="136" y="0" width="17" height="100" rx="1" fill="#CC1144" stroke="#000000" stroke-width="1"/><!-- G# -->
+    <rect x="165" y="0" width="17" height="100" rx="1" fill="#7744BB" stroke="#000000" stroke-width="1"/><!-- A# -->
 
     <!-- Black key labels -->
-    <text x="28"  y="83" font-family="monospace" font-size="7" fill="#0C0C0C" opacity="0.5" text-anchor="middle">C#</text>
-    <text x="57"  y="83" font-family="monospace" font-size="7" fill="#0C0C0C" opacity="0.5" text-anchor="middle">D#</text>
-    <text x="115" y="83" font-family="monospace" font-size="7" fill="#0C0C0C" opacity="0.5" text-anchor="middle">F#</text>
-    <text x="144" y="83" font-family="monospace" font-size="7" fill="#0C0C0C" opacity="0.5" text-anchor="middle">G#</text>
-    <text x="173" y="83" font-family="monospace" font-size="7" fill="#0C0C0C" opacity="0.5" text-anchor="middle">A#</text>
+    <text x="28"  y="92" font-family="monospace" font-size="7" fill="#0C0C0C" opacity="0.5" text-anchor="middle">C#</text>
+    <text x="57"  y="92" font-family="monospace" font-size="7" fill="#0C0C0C" opacity="0.5" text-anchor="middle">D#</text>
+    <text x="115" y="92" font-family="monospace" font-size="7" fill="#0C0C0C" opacity="0.5" text-anchor="middle">F#</text>
+    <text x="144" y="92" font-family="monospace" font-size="7" fill="#0C0C0C" opacity="0.5" text-anchor="middle">G#</text>
+    <text x="173" y="92" font-family="monospace" font-size="7" fill="#0C0C0C" opacity="0.5" text-anchor="middle">A#</text>
 
   </g>
 </svg>
