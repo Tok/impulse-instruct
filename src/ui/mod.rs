@@ -22,7 +22,7 @@ use std::sync::Arc;
 
 use crate::audio::{AudioCommand, AudioParams};
 use crate::llm::{LlmInput, LlmOutput};
-use crate::state::{AppState, DrumVoice, Waveform, toggle_drum_step};
+use crate::state::{AppState, DrumVoice, Waveform, toggle_drum_step, save_project};
 
 // ─── ImpulseApp ───────────────────────────────────────────────────────────────
 
@@ -206,6 +206,25 @@ impl eframe::App for ImpulseApp {
                                 prompt: "start jamming".to_string(),
                                 one_shot: false,
                             });
+                        }
+                    }
+
+                    ui.add_space(4.0);
+
+                    // Save project
+                    if ui.button(egui::RichText::new("SAVE").monospace().size(10.0)).clicked() {
+                        let snapshot = self.state.read().clone();
+                        match save_project(&snapshot) {
+                            Ok(path) => {
+                                let msg = format!("[ saved → {} ]", path.display());
+                                log::info!("{}", msg);
+                                self.log_text.push_str(&format!("{}\n", msg));
+                            }
+                            Err(e) => {
+                                let msg = format!("[ save failed: {} ]", e);
+                                log::error!("{}", msg);
+                                self.log_text.push_str(&format!("{}\n", msg));
+                            }
                         }
                     }
 
