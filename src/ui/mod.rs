@@ -598,9 +598,26 @@ impl eframe::App for ImpulseApp {
                     let enter_pressed = response.lost_focus()
                         && ctx.input(|i| i.key_pressed(egui::Key::Enter));
 
-                    if (submit || enter_pressed) && !self.prompt_input.trim().is_empty() {
-                        let prompt = self.prompt_input.trim().to_string();
-                        self.log_text.push_str(&format!("YOU → {}\n", prompt));
+                    if submit || enter_pressed {
+                        let typed = self.prompt_input.trim().to_string();
+                        let (prompt, log_line) = if typed.is_empty() {
+                            // Empty submit — nudge Bonsai to do something fresh
+                            let active_style = self.state.read().llm.active_style.clone();
+                            let p = match active_style.as_deref() {
+                                Some(id) => {
+                                    let name = StyleCatalog::get()
+                                        .find_by_id(id)
+                                        .map(|s| s.name.as_str())
+                                        .unwrap_or(id);
+                                    format!("do something fresh in the {} style — surprise me", name)
+                                }
+                                None => "do something interesting — evolve the pattern and sound however you feel".to_string(),
+                            };
+                            (p, "YOU → ✦\n".to_string())
+                        } else {
+                            (typed.clone(), format!("YOU → {}\n", typed))
+                        };
+                        self.log_text.push_str(&log_line);
                         let _ = self.llm_tx.try_send(LlmInput { prompt, one_shot: true });
                         self.prompt_input.clear();
                     }
