@@ -100,6 +100,8 @@ Complementary colors (directly opposite on wheel) correspond to tritone interval
 
 The REST interface starts automatically on port 8765. Use `--no-api` to disable it, or `--port` to change the port.
 
+> **Why does a synthesizer start a web server?** Bonsai 8B uses a 1-bit quantisation format (`Q1_0_g128`) that requires PrismML's custom llama.cpp fork to run. Rather than embedding that C++ library directly into the Rust binary — which would couple us tightly to a moving fork and complicate builds — Impulse Instruct spawns `llama-server` as a subprocess and talks to it over a local HTTP connection. The same port also doubles as an MCP-compatible API so other tools can connect to the synth.
+
 ```bash
 cargo run                         # API on :8765
 cargo run -- --port 9000          # API on :9000
