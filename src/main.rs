@@ -178,6 +178,7 @@ fn main() -> anyhow::Result<()> {
     let native_options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_title("Impulse Instruct")
+            .with_icon(std::sync::Arc::new(make_window_icon()))
             .with_maximized(true)
             .with_min_inner_size([800.0, 500.0]),
         ..Default::default()
@@ -203,4 +204,59 @@ fn main() -> anyhow::Result<()> {
     .map_err(|e| anyhow::anyhow!("UI error: {}", e))?;
 
     Ok(())
+}
+
+/// Generate the window icon pixel buffer — one Huth-colored octave on dark background.
+/// Mirrors docs/icon.svg: 256×256, white keys (28×144 px) + black keys (17×90 px).
+fn make_window_icon() -> egui::IconData {
+    const W: u32 = 256;
+    const H: u32 = 256;
+    let mut rgba = vec![0u8; (W * H * 4) as usize];
+    // Background: #0C0C0C opaque
+    for chunk in rgba.chunks_mut(4) {
+        chunk[0] = 12; chunk[1] = 12; chunk[2] = 12; chunk[3] = 255;
+    }
+
+    let mut fill = |x0: u32, y0: u32, w: u32, h: u32, r: u8, g: u8, b: u8| {
+        for py in y0..y0 + h {
+            for px in x0..x0 + w {
+                if px < W && py < H {
+                    let i = ((py * W + px) * 4) as usize;
+                    rgba[i] = r; rgba[i + 1] = g; rgba[i + 2] = b; rgba[i + 3] = 255;
+                }
+            }
+        }
+    };
+
+    // Translate: x_start=27, y_start=56 (same as SVG group)
+    let tx: u32 = 27;
+    let ty: u32 = 56;
+
+    // White keys: stride=29, width=28, height=144
+    let white = [
+        (0u32,  0x33u8, 0x66u8, 0xDDu8), // C
+        (29,    0x33,   0xAA,   0x66  ), // D
+        (58,    0xDD,   0xCC,   0x22  ), // E
+        (87,    0xEE,   0x88,   0x22  ), // F
+        (116,   0xEE,   0x33,   0x66  ), // G
+        (145,   0x99,   0x66,   0xCC  ), // A
+        (174,   0x44,   0x33,   0xAA  ), // B
+    ];
+    for (rx, r, g, b) in white {
+        fill(tx + rx, ty, 28, 144, r, g, b);
+    }
+
+    // Black keys: width=17, height=90, centered in white-key gaps
+    let black = [
+        (20u32, 0x22u8, 0x99u8, 0xBBu8), // C#
+        (49,    0x88,   0xCC,   0x22  ), // D#
+        (107,   0xDD,   0x44,   0x22  ), // F#
+        (136,   0xCC,   0x11,   0x44  ), // G#
+        (165,   0x77,   0x44,   0xBB  ), // A#
+    ];
+    for (rx, r, g, b) in black {
+        fill(tx + rx, ty, 17, 90, r, g, b);
+    }
+
+    egui::IconData { rgba, width: W, height: H }
 }

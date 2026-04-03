@@ -1,4 +1,7 @@
 <p align="center">
+  <img src="docs/icon.svg" alt="icon" width="72"/>
+</p>
+<p align="center">
   <img src="docs/header.svg" alt="Impulse Instruct" width="800"/>
 </p>
 

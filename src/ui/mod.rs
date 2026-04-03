@@ -61,7 +61,7 @@ use crate::llm::{LlmInput, LlmOutput};
 use crate::midi::MidiEvent;
 use crate::sequencer::TriggerEvent;
 use crate::llm::styles::StyleCatalog;
-use crate::state::{AppState, ConversationMode, DrumVoice, Waveform, MAX_STEPS, toggle_drum_step, save_project};
+use crate::state::{AppState, ConversationMode, StyleVerbosity, DrumVoice, Waveform, MAX_STEPS, toggle_drum_step, save_project};
 
 // ─── Instrument slot system ───────────────────────────────────────────────────
 
@@ -418,6 +418,19 @@ impl eframe::App for ImpulseApp {
                             let mut tts = self.state.read().llm.tts_enabled;
                             if widgets::toggle_button(ui, if tts { "ON" } else { "OFF" }, &mut tts) {
                                 self.state.write().llm.tts_enabled = tts;
+                            }
+                        });
+                    });
+                    ui.horizontal(|ui| {
+                        ui.label(egui::RichText::new("Style description").monospace().size(9.5).color(theme::FOG));
+                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                            let mut is_full = self.state.read().llm.style_verbosity == StyleVerbosity::Full;
+                            if widgets::toggle_button(ui, if is_full { "FULL" } else { "BRIEF" }, &mut is_full) {
+                                self.state.write().llm.style_verbosity = if is_full {
+                                    StyleVerbosity::Full
+                                } else {
+                                    StyleVerbosity::Brief
+                                };
                             }
                         });
                     });

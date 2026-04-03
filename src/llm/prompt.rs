@@ -2,7 +2,7 @@
 // Builds the system prompt that grounds the LLM in current synth state.
 
 use crate::llm::styles::StyleCatalog;
-use crate::state::{AppState, ConversationMode};
+use crate::state::{AppState, ConversationMode, StyleVerbosity};
 
 /// Returns the system prompt. If the user has set a non-empty `system_prompt_override`,
 /// that is returned verbatim — giving full control over the model's grounding.
@@ -79,11 +79,22 @@ pub fn build_system_prompt(state: &AppState) -> String {
             }
         }
         Some(id) => StyleCatalog::get().find_by_id(id)
-            .map(|s| format!(
-                "\n═══ ACTIVE STYLE ═══\n\n{}\n\nUse this as your creative brief. \
-                 Evolve the current sound toward this aesthetic — don't reset everything at once.\n",
-                s.description
-            ))
+            .map(|s| {
+                let text = match state.llm.style_verbosity {
+                    StyleVerbosity::Brief if !s.brief.is_empty() => s.brief.as_str(),
+                    _ => s.description.as_str(),
+                };
+                let seed = if !s.seed_patterns.is_empty() {
+                    format!("\nSeed patterns (concrete starting point — adapt freely):\n{}\n", s.seed_patterns.to_prompt_lines())
+                } else {
+                    String::new()
+                };
+                format!(
+                    "\n═══ ACTIVE STYLE ═══\n\n{}{}\nUse this as your creative brief. \
+                     Evolve the current sound toward this aesthetic — don't reset everything at once.\n",
+                    text, seed
+                )
+            })
             .unwrap_or_default(),
     };
 

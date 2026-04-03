@@ -1,61 +1,36 @@
 // ─── banner.rs ────────────────────────────────────────────────────────────────
-// Terminal startup banner: ASCII art title, tagline, Huth-colored keyboard.
+// Terminal startup banner: clean title + tagline + Huth-colored keyboard.
 // Pure function — only side effect is printing to stdout.
 
 pub fn print_banner() {
-    // ── ASCII art (pyfiglet slant font) ──────────────────────────────────────
-    const GRAY: &str = "\x1b[38;2;120;120;120m";
-    const DIM: &str = "\x1b[38;2;50;50;50m";
+    const GRAY: &str  = "\x1b[38;2;160;160;160m";
+    const DIM:  &str  = "\x1b[38;2;50;50;50m";
     const RESET: &str = "\x1b[0m";
 
-    println!("{GRAY}    ______  _______  __  ____   _____ ______{RESET}");
-    println!("{GRAY}   /  _/  |/  / __ \\/ / / / /  / ___// ____/{RESET}");
-    println!("{GRAY}   / // /|_/ / /_/ / / / / /   \\__ \\/ __/   {RESET}");
-    println!("{GRAY} _/ // /  / / ____/ /_/ / /______/ / /___   {RESET}");
-    println!("{GRAY}/___/_/  /_/_/    \\____/_____/____/_____/   {RESET}");
+    // ── Title & tagline ───────────────────────────────────────────────────────
     println!();
-    println!("{GRAY}    _____   _________________  __  ______________{RESET}");
-    println!("{GRAY}   /  _/ | / / ___/_  __/ __ \\/ / / / ____/_  __/{RESET}");
-    println!("{GRAY}   / //  |/ /\\__ \\ / / / /_/ / / / / /     / /   {RESET}");
-    println!("{GRAY} _/ // /|  /___/ // / / _, _/ /_/ / /___  / /    {RESET}");
-    println!("{GRAY}/___/_/ |_//____//_/ /_/ |_|\\____/\\____/ /_/{RESET}");
-    println!();
-
-    // ── Tagline ───────────────────────────────────────────────────────────────
+    println!("{GRAY}  I M P U L S E   I N S T R U C T{RESET}");
     println!("{DIM}  a synthesizer with a tiny LLM living inside it  ·  rust  ·  llama.cpp{RESET}");
 
     // ── Huth-colored keyboard (2 octaves C3–C5) ──────────────────────────────
     //
-    // Layout: 4 terminal cells per white key, 2 cells per black key.
-    // Each cell = 1 space with ANSI 24-bit background color.
-    // One octave = 28 cells (3+2+2+2+3 + 3+2+2+2+3 = 7 white keys × 4 = 28).
+    // Layout: 5 terminal cells per white key, 3 cells per black key.
+    // Each cell = 1 char with ANSI 24-bit background color.
+    // '|' chars use a dark foreground over the key background, marking:
+    //   - Left and right walls of each black key
+    //   - Left wall of each white key (lower zone)
+    //   - E/F and B/C boundaries in the upper zone (no black key there)
     //
-    // UPPER ROW (black-key zone): shows black key color where a black key sits,
-    //   white key color everywhere else — no dark squares between black keys.
+    // UPPER ROW breakdown per octave (35 cells total):
+    //   C(3)  C#(|_|)  D(2)  D#(|_|)  E+boundary(4)
+    //   F(3)  F#(|_|)  G(2)  G#(|_|)  A(2)  A#(|_|)  B+boundary(4)
     //
-    //   pos  0,1,2   → C  (exposed left of C before C# arrives)
-    //   pos  3,4     → C# (black key straddles C/D boundary)
-    //   pos  5,6     → D  (exposed center of D between C# and D#)
-    //   pos  7,8     → D# (black key straddles D/E boundary)
-    //   pos  9,10,11 → E  (E is fully exposed — no black key between E and F)
-    //   pos 12,13,14 → F  (F exposed before F#)
-    //   pos 15,16    → F# (black key straddles F/G boundary)
-    //   pos 17,18    → G  (exposed center of G)
-    //   pos 19,20    → G# (black key)
-    //   pos 21,22    → A  (exposed center of A)
-    //   pos 23,24    → A# (black key)
-    //   pos 25,26,27 → B  (B fully exposed — no black key between B and C)
-    //
-    // LOWER ROW (white-key zone): each white key gets all 4 cells.
-    //   pos  0..3  → C
-    //   pos  4..7  → D
-    //   pos  8..11 → E
-    //   pos 12..15 → F
-    //   pos 16..19 → G
-    //   pos 20..23 → A
-    //   pos 24..27 → B
+    // LOWER ROW: each of 7 white keys = '|' + 4 spaces (5 cells)
+    //   Keyboard closes with an extra C: '|' + 4 spaces + closing '|'
 
-    type Rgb = (u8, u8, u8);
+    type Rgb  = (u8, u8, u8);
+    type Cell = (Rgb, char);
+
     const C:  Rgb = (0x33, 0x66, 0xDD);
     const CS: Rgb = (0x22, 0x99, 0xBB);
     const D:  Rgb = (0x33, 0xAA, 0x66);
@@ -69,57 +44,76 @@ pub fn print_banner() {
     const AS: Rgb = (0x77, 0x44, 0xBB);
     const B:  Rgb = (0x44, 0x33, 0xAA);
 
-    // Upper row: 28 colors per octave, index = terminal cell position
-    const UPPER: [Rgb; 28] = [
-        C, C, C,        // pos  0-2  : C exposed
-        CS, CS,         // pos  3-4  : C# black key
-        D, D,           // pos  5-6  : D exposed center
-        DS, DS,         // pos  7-8  : D# black key
-        E, E, E,        // pos  9-11 : E fully exposed
-        F, F, F,        // pos 12-14 : F exposed
-        FS, FS,         // pos 15-16 : F# black key
-        G, G,           // pos 17-18 : G exposed center
-        GS, GS,         // pos 19-20 : G# black key
-        A, A,           // pos 21-22 : A exposed center
-        AS, AS,         // pos 23-24 : A# black key
-        B, B, B,        // pos 25-27 : B fully exposed
+    // Upper zone: 35 cells per octave.
+    // Black keys are 3 wide with '|' walls; white exposed regions show bare color.
+    // E/F boundary at index 14, B/C boundary at index 34.
+    #[rustfmt::skip]
+    const UPPER: [Cell; 35] = [
+        (C,  ' '), (C,  ' '), (C,  ' '),            // C exposed          (0-2)
+        (CS, '|'), (CS, ' '), (CS, '|'),             // C# walls           (3-5)
+        (D,  ' '), (D,  ' '),                         // D exposed          (6-7)
+        (DS, '|'), (DS, ' '), (DS, '|'),              // D# walls           (8-10)
+        (E,  ' '), (E,  ' '), (E,  ' '), (E,  '|'),  // E exposed + E/F |  (11-14)
+        (F,  ' '), (F,  ' '), (F,  ' '),              // F exposed          (15-17)
+        (FS, '|'), (FS, ' '), (FS, '|'),              // F# walls           (18-20)
+        (G,  ' '), (G,  ' '),                         // G exposed          (21-22)
+        (GS, '|'), (GS, ' '), (GS, '|'),              // G# walls           (23-25)
+        (A,  ' '), (A,  ' '),                         // A exposed          (26-27)
+        (AS, '|'), (AS, ' '), (AS, '|'),              // A# walls           (28-30)
+        (B,  ' '), (B,  ' '), (B,  ' '), (B,  '|'),  // B exposed + B/C |  (31-34)
     ];
 
-    // Lower row: 28 colors per octave
-    const LOWER: [Rgb; 28] = [
-        C, C, C, C,     // pos  0-3  : C (4 wide)
-        D, D, D, D,     // pos  4-7  : D
-        E, E, E, E,     // pos  8-11 : E
-        F, F, F, F,     // pos 12-15 : F
-        G, G, G, G,     // pos 16-19 : G
-        A, A, A, A,     // pos 20-23 : A
-        B, B, B, B,     // pos 24-27 : B
+    // Lower zone: 35 cells per octave.
+    // Each white key = left '|' + 4 spaces.
+    #[rustfmt::skip]
+    const LOWER: [Cell; 35] = [
+        (C, '|'), (C, ' '), (C, ' '), (C, ' '), (C, ' '),
+        (D, '|'), (D, ' '), (D, ' '), (D, ' '), (D, ' '),
+        (E, '|'), (E, ' '), (E, ' '), (E, ' '), (E, ' '),
+        (F, '|'), (F, ' '), (F, ' '), (F, ' '), (F, ' '),
+        (G, '|'), (G, ' '), (G, ' '), (G, ' '), (G, ' '),
+        (A, '|'), (A, ' '), (A, ' '), (A, ' '), (A, ' '),
+        (B, '|'), (B, ' '), (B, ' '), (B, ' '), (B, ' '),
     ];
 
-    // Build a single keyboard row string from a slice of RGB colors + optional extra C
-    let build_row = |row: &[Rgb], extra_c: bool| -> String {
-        let mut s = String::with_capacity(512);
-        // Two octaves
-        for _ in 0..2 {
-            for &(r, g, b) in row {
+    // Closing C5 cells appended after two octave repeats.
+    const UPPER_C5: [Cell; 3] = [(C, ' '), (C, ' '), (C, ' ')];
+    const LOWER_C5: [Cell; 6] = [
+        (C, '|'), (C, ' '), (C, ' '), (C, ' '), (C, ' '), (C, '|'),
+    ];
+
+    // Render a slice of cells to an ANSI string.
+    // Space cells → background-color-only; '|' cells → dark fg over key bg.
+    let render = |cells: &[Cell]| -> String {
+        let mut s = String::with_capacity(cells.len() * 24);
+        for &((r, g, b), ch) in cells {
+            if ch == ' ' {
                 s.push_str(&format!("\x1b[48;2;{r};{g};{b}m \x1b[0m"));
-            }
-        }
-        // Final C (4 cells for white row, 3 for upper row)
-        if extra_c {
-            let (r, g, b) = C;
-            let n = if row.len() == 28 { 4 } else { 3 };
-            for _ in 0..n {
-                s.push_str(&format!("\x1b[48;2;{r};{g};{b}m \x1b[0m"));
+            } else {
+                s.push_str(&format!(
+                    "\x1b[48;2;{r};{g};{b}m\x1b[38;2;14;14;14m{ch}\x1b[0m"
+                ));
             }
         }
         s
     };
 
+    // Build two-octave rows by chaining UPPER/LOWER twice then the C5 caps.
+    let upper_row: Vec<Cell> = UPPER.iter()
+        .chain(UPPER.iter())
+        .chain(UPPER_C5.iter())
+        .copied()
+        .collect();
+    let lower_row: Vec<Cell> = LOWER.iter()
+        .chain(LOWER.iter())
+        .chain(LOWER_C5.iter())
+        .copied()
+        .collect();
+
+    let upper = render(&upper_row);
+    let lower = render(&lower_row);
+
     println!();
-    let upper = build_row(&UPPER, true);
-    let lower = build_row(&LOWER, true);
-    // Print upper zone 2× for height, lower zone 3× for height
     for _ in 0..2 { println!("  {upper}"); }
     for _ in 0..3 { println!("  {lower}"); }
     println!("{RESET}");

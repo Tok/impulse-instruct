@@ -369,6 +369,15 @@ pub enum ConversationMode {
     Mc,             // jungle/rave MC — "selector!", "junglist massive!", "rewind!"
 }
 
+/// Whether to use the short `brief` or full `description` from styles.json.
+/// Brief (~50 tokens) suits smaller/faster models; Full (~150 tokens) for capable models.
+#[derive(Clone, Debug, PartialEq, Default, Serialize, Deserialize)]
+pub enum StyleVerbosity {
+    Brief,  // short keyword-dense creative brief
+    #[default]
+    Full,   // long prose description — more context for capable models
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct LlmState {
     pub model_path: String,
@@ -391,6 +400,7 @@ pub struct LlmState {
     pub persona_name: String,         // AI persona name shown in UI and used in system prompt
     pub system_prompt_override: String, // if non-empty, replaces the generated system prompt entirely
     pub tts_enabled: bool,            // speak _comment via espeak-ng when true
+    pub style_verbosity: StyleVerbosity, // Brief = ~50 token brief, Full = ~150 token description
 }
 
 impl Default for LlmState {
@@ -420,6 +430,7 @@ impl Default for LlmState {
             persona_name: String::from("PULSE"),
             system_prompt_override: String::new(),
             tts_enabled: false,
+            style_verbosity: StyleVerbosity::Full,
         }
     }
 }

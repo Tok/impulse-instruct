@@ -18,45 +18,31 @@
   <!--
     Piano keyboard: 2 octaves C3–C5, 15 white keys.
     White key: width=35, gap=1 → stride=36. Height=88. rx=2.
-    Black key: width=20, height=54. rx=1.
-    Centered at gap between adjacent white keys:
-      gap between key[n] and key[n+1] = n*36 + 35.5
-      black key left edge             = gap_center - 10 = n*36 + 25.5 → round to n*36+25
-
-    C# : between C(0) and D(36)   → gap=35.5 → x=25
-    D# : between D(36) and E(72)  → gap=71.5 → x=61
-    F# : between F(108) and G(144)→ gap=143.5→ x=133
-    G# : between G(144) and A(180)→ gap=179.5→ x=169
-    A# : between A(180) and B(216)→ gap=215.5→ x=205
-    Octave 2: add 252 (=7×36) to each.
+    Black key: width=20, height=54. rx=1. stroke="#000000" stroke-width="1".
+    All positions are RELATIVE to the group translate(130, 100).
+    Black key left = gap_center − 10 = n*36 + 35.5 − 10 = n*36 + 25.5 → floor to n*36+25.
+      C#: 25, D#: 61, F#: 133, G#: 169, A#: 205 (octave 4: each +252)
   -->
   <g transform="translate(130, 100)">
 
     <!-- ── White keys (drawn first, behind black keys) ── -->
-    <rect x="0"   y="0" width="35" height="88" rx="2" fill="#3366DD"/><!-- C3  -->
-    <rect x="36"  y="0" width="35" height="88" rx="2" fill="#33AA66"/><!-- D3  -->
-    <rect x="72"  y="0" width="35" height="88" rx="2" fill="#DDCC22"/><!-- E3  -->
-    <rect x="108" y="0" width="35" height="88" rx="2" fill="#EE8822"/><!-- F3  -->
-    <rect x="144" y="0" width="35" height="88" rx="2" fill="#EE3366"/><!-- G3  -->
-    <rect x="180" y="0" width="35" height="88" rx="2" fill="#9966CC"/><!-- A3  -->
-    <rect x="216" y="0" width="35" height="88" rx="2" fill="#4433AA"/><!-- B3  -->
-    <rect x="252" y="0" width="35" height="88" rx="2" fill="#3366DD"/><!-- C4  -->
-    <rect x="288" y="0" width="35" height="88" rx="2" fill="#33AA66"/><!-- D4  -->
-    <rect x="324" y="0" width="35" height="88" rx="2" fill="#DDCC22"/><!-- E4  -->
-    <rect x="360" y="0" width="35" height="88" rx="2" fill="#EE8822"/><!-- F4  -->
-    <rect x="396" y="0" width="35" height="88" rx="2" fill="#EE3366"/><!-- G4  -->
-    <rect x="432" y="0" width="35" height="88" rx="2" fill="#9966CC"/><!-- A4  -->
-    <rect x="468" y="0" width="35" height="88" rx="2" fill="#4433AA"/><!-- B4  -->
-    <rect x="504" y="0" width="35" height="88" rx="2" fill="#3366DD"/><!-- C5  -->
-
-    <!-- Separator lines at E–F and B–C boundaries (no black key spans these) -->
-    <line x1="108" y1="0"  x2="108" y2="88" stroke="#0C0C0C" stroke-width="1"/>
-    <line x1="252" y1="0"  x2="252" y2="88" stroke="#0C0C0C" stroke-width="1"/>
-    <line x1="360" y1="0"  x2="360" y2="88" stroke="#0C0C0C" stroke-width="1"/>
-    <line x1="504" y1="0"  x2="504" y2="88" stroke="#0C0C0C" stroke-width="1"/>
+    <rect x="0"   y="0" width="35" height="88" rx="2" fill="#3366DD" stroke="#000000" stroke-width="1"/><!-- C3  -->
+    <rect x="36"  y="0" width="35" height="88" rx="2" fill="#33AA66" stroke="#000000" stroke-width="1"/><!-- D3  -->
+    <rect x="72"  y="0" width="35" height="88" rx="2" fill="#DDCC22" stroke="#000000" stroke-width="1"/><!-- E3  -->
+    <rect x="108" y="0" width="35" height="88" rx="2" fill="#EE8822" stroke="#000000" stroke-width="1"/><!-- F3  -->
+    <rect x="144" y="0" width="35" height="88" rx="2" fill="#EE3366" stroke="#000000" stroke-width="1"/><!-- G3  -->
+    <rect x="180" y="0" width="35" height="88" rx="2" fill="#9966CC" stroke="#000000" stroke-width="1"/><!-- A3  -->
+    <rect x="216" y="0" width="35" height="88" rx="2" fill="#4433AA" stroke="#000000" stroke-width="1"/><!-- B3  -->
+    <rect x="252" y="0" width="35" height="88" rx="2" fill="#3366DD" stroke="#000000" stroke-width="1"/><!-- C4  -->
+    <rect x="288" y="0" width="35" height="88" rx="2" fill="#33AA66" stroke="#000000" stroke-width="1"/><!-- D4  -->
+    <rect x="324" y="0" width="35" height="88" rx="2" fill="#DDCC22" stroke="#000000" stroke-width="1"/><!-- E4  -->
+    <rect x="360" y="0" width="35" height="88" rx="2" fill="#EE8822" stroke="#000000" stroke-width="1"/><!-- F4  -->
+    <rect x="396" y="0" width="35" height="88" rx="2" fill="#EE3366" stroke="#000000" stroke-width="1"/><!-- G4  -->
+    <rect x="432" y="0" width="35" height="88" rx="2" fill="#9966CC" stroke="#000000" stroke-width="1"/><!-- A4  -->
+    <rect x="468" y="0" width="35" height="88" rx="2" fill="#4433AA" stroke="#000000" stroke-width="1"/><!-- B4  -->
+    <rect x="504" y="0" width="35" height="88" rx="2" fill="#3366DD" stroke="#000000" stroke-width="1"/><!-- C5  -->
 
     <!-- ── White key note labels (bottom of each key) ── -->
-    <!-- font-size=8, fill=#0C0C0C at 60% opacity → rendered as dark label on vivid key -->
     <text x="17"  y="83" font-family="monospace" font-size="8" fill="#0C0C0C" opacity="0.55" text-anchor="middle">C3</text>
     <text x="53"  y="83" font-family="monospace" font-size="8" fill="#0C0C0C" opacity="0.55" text-anchor="middle">D</text>
     <text x="89"  y="83" font-family="monospace" font-size="8" fill="#0C0C0C" opacity="0.55" text-anchor="middle">E</text>
@@ -75,17 +61,17 @@
 
     <!-- ── Black keys (drawn on top of white keys) ── -->
     <!-- Octave 3: C#=25, D#=61, F#=133, G#=169, A#=205 -->
-    <rect x="25"  y="0" width="20" height="54" rx="1" fill="#2299BB"/><!-- C#3 -->
-    <rect x="61"  y="0" width="20" height="54" rx="1" fill="#88CC22"/><!-- D#3 -->
-    <rect x="133" y="0" width="20" height="54" rx="1" fill="#DD4422"/><!-- F#3 -->
-    <rect x="169" y="0" width="20" height="54" rx="1" fill="#CC1144"/><!-- G#3 -->
-    <rect x="205" y="0" width="20" height="54" rx="1" fill="#7744BB"/><!-- A#3 -->
+    <rect x="25"  y="0" width="20" height="54" rx="1" fill="#2299BB" stroke="#000000" stroke-width="1"/><!-- C#3 -->
+    <rect x="61"  y="0" width="20" height="54" rx="1" fill="#88CC22" stroke="#000000" stroke-width="1"/><!-- D#3 -->
+    <rect x="133" y="0" width="20" height="54" rx="1" fill="#DD4422" stroke="#000000" stroke-width="1"/><!-- F#3 -->
+    <rect x="169" y="0" width="20" height="54" rx="1" fill="#CC1144" stroke="#000000" stroke-width="1"/><!-- G#3 -->
+    <rect x="205" y="0" width="20" height="54" rx="1" fill="#7744BB" stroke="#000000" stroke-width="1"/><!-- A#3 -->
     <!-- Octave 4: add 252 -->
-    <rect x="277" y="0" width="20" height="54" rx="1" fill="#2299BB"/><!-- C#4 -->
-    <rect x="313" y="0" width="20" height="54" rx="1" fill="#88CC22"/><!-- D#4 -->
-    <rect x="385" y="0" width="20" height="54" rx="1" fill="#DD4422"/><!-- F#4 -->
-    <rect x="421" y="0" width="20" height="54" rx="1" fill="#CC1144"/><!-- G#4 -->
-    <rect x="457" y="0" width="20" height="54" rx="1" fill="#7744BB"/><!-- A#4 -->
+    <rect x="277" y="0" width="20" height="54" rx="1" fill="#2299BB" stroke="#000000" stroke-width="1"/><!-- C#4 -->
+    <rect x="313" y="0" width="20" height="54" rx="1" fill="#88CC22" stroke="#000000" stroke-width="1"/><!-- D#4 -->
+    <rect x="385" y="0" width="20" height="54" rx="1" fill="#DD4422" stroke="#000000" stroke-width="1"/><!-- F#4 -->
+    <rect x="421" y="0" width="20" height="54" rx="1" fill="#CC1144" stroke="#000000" stroke-width="1"/><!-- G#4 -->
+    <rect x="457" y="0" width="20" height="54" rx="1" fill="#7744BB" stroke="#000000" stroke-width="1"/><!-- A#4 -->
 
     <!-- ── Black key note labels (near bottom of black key) ── -->
     <text x="35"  y="49" font-family="monospace" font-size="7" fill="#0C0C0C" opacity="0.5" text-anchor="middle">C#</text>
