@@ -21,7 +21,9 @@ pub enum MidiEvent {
 
 // ─── CC → param mapping ───────────────────────────────────────────────────────
 
-pub fn cc_to_param_path(cc: u8) -> Option<(&'static str, fn(u8) -> f32)> {
+type CcMapping = Option<(&'static str, fn(u8) -> f32)>;
+
+pub fn cc_to_param_path(cc: u8) -> CcMapping {
     let norm = |v: u8| v as f32 / 127.0;
     match cc {
         74 => Some(("bass.cutoff", norm)),
@@ -33,8 +35,8 @@ pub fn cc_to_param_path(cc: u8) -> Option<(&'static str, fn(u8) -> f32)> {
         91 => Some(("fx.reverb_mix", norm)),
         93 => Some(("fx.delay_mix", norm)),
         94 => Some(("fx.delay_feedback", norm)),
-        7  => Some(("fx.master_volume", norm)),
-        _  => None,
+        7 => Some(("fx.master_volume", norm)),
+        _ => None,
     }
 }
 
@@ -47,7 +49,9 @@ pub struct MidiListener {
 impl MidiListener {
     pub fn new(port_name: &str, event_tx: Sender<MidiEvent>) -> Self {
         let connection = try_open_midi(port_name, event_tx);
-        Self { _connection: connection }
+        Self {
+            _connection: connection,
+        }
     }
 
     pub fn list_ports() -> Vec<String> {
@@ -69,9 +73,14 @@ impl MidiListener {
         let ports = Self::list_ports();
         log::debug!("MIDI ports available: {:?}", ports);
 
-        let chosen = ports.iter()
+        let chosen = ports
+            .iter()
             .find(|p| p.to_lowercase().contains("lpk25"))
-            .or_else(|| ports.iter().find(|p| !p.to_lowercase().contains("midi through")))
+            .or_else(|| {
+                ports
+                    .iter()
+                    .find(|p| !p.to_lowercase().contains("midi through"))
+            })
             .cloned();
 
         match chosen {
@@ -92,7 +101,9 @@ fn try_open_midi(port_name: &str, event_tx: Sender<MidiEvent>) -> Option<MidiInp
     let mut midi_in = MidiInput::new("impulse-instruct").ok()?;
     midi_in.ignore(midir::Ignore::None);
 
-    let port = midi_in.ports().into_iter()
+    let port = midi_in
+        .ports()
+        .into_iter()
         .find(|p| midi_in.port_name(p).ok().as_deref() == Some(port_name))?;
 
     let connection = midi_in
@@ -113,23 +124,33 @@ fn try_open_midi(port_name: &str, event_tx: Sender<MidiEvent>) -> Option<MidiInp
 }
 
 fn parse_midi(msg: &[u8]) -> Option<MidiEvent> {
-    if msg.is_empty() { return None; }
+    if msg.is_empty() {
+        return None;
+    }
     let status = msg[0];
     let channel = status & 0x0F;
     match status & 0xF0 {
         0x90 if msg.len() >= 3 && msg[2] > 0 => Some(MidiEvent::NoteOn {
-            channel, note: msg[1], velocity: msg[2],
+            channel,
+            note: msg[1],
+            velocity: msg[2],
         }),
         0x90 | 0x80 if msg.len() >= 2 => Some(MidiEvent::NoteOff {
-            channel, note: msg[1],
+            channel,
+            note: msg[1],
         }),
         0xB0 if msg.len() >= 3 => Some(MidiEvent::ControlChange {
-            channel, cc: msg[1], value: msg[2],
+            channel,
+            cc: msg[1],
+            value: msg[2],
         }),
         0xE0 if msg.len() >= 3 => {
             let raw = (msg[1] as i16) | ((msg[2] as i16) << 7);
             let val = (raw - 8192) as f32 / 8192.0;
-            Some(MidiEvent::PitchBend { channel, value: val })
+            Some(MidiEvent::PitchBend {
+                channel,
+                value: val,
+            })
         }
         0xF8 => Some(MidiEvent::Clock),
         0xFA => Some(MidiEvent::Start),

@@ -3,11 +3,11 @@
 // Runs on its own tokio runtime in a separate OS thread.
 
 use axum::{
+    Router,
     extract::State as AxumState,
     http::StatusCode,
     response::Json,
     routing::{get, post},
-    Router,
 };
 use crossbeam_channel::Sender;
 use parking_lot::RwLock;
@@ -68,9 +68,15 @@ async fn post_prompt(
     Json(req): Json<PromptRequest>,
 ) -> Result<Json<OkResponse>, StatusCode> {
     api.llm_tx
-        .try_send(LlmInput::Infer { prompt: req.prompt, one_shot: req.one_shot })
+        .try_send(LlmInput::Infer {
+            prompt: req.prompt,
+            one_shot: req.one_shot,
+        })
         .map_err(|_| StatusCode::SERVICE_UNAVAILABLE)?;
-    Ok(Json(OkResponse { ok: true, message: None }))
+    Ok(Json(OkResponse {
+        ok: true,
+        message: None,
+    }))
 }
 
 async fn post_params(
@@ -79,7 +85,10 @@ async fn post_params(
 ) -> Json<OkResponse> {
     let next = apply_llm_update(api.app_state.read().clone(), &req.params);
     *api.app_state.write() = next;
-    Json(OkResponse { ok: true, message: Some("params updated".into()) })
+    Json(OkResponse {
+        ok: true,
+        message: Some("params updated".into()),
+    })
 }
 
 async fn post_lock(
@@ -89,7 +98,10 @@ async fn post_lock(
     let refs: Vec<&str> = req.paths.iter().map(String::as_str).collect();
     let next = lock_params(api.app_state.read().clone(), &refs);
     *api.app_state.write() = next;
-    Json(OkResponse { ok: true, message: Some(format!("locked {} params", req.paths.len())) })
+    Json(OkResponse {
+        ok: true,
+        message: Some(format!("locked {} params", req.paths.len())),
+    })
 }
 
 async fn post_unlock(
@@ -99,7 +111,10 @@ async fn post_unlock(
     let refs: Vec<&str> = req.paths.iter().map(String::as_str).collect();
     let next = unlock_params(api.app_state.read().clone(), &refs);
     *api.app_state.write() = next;
-    Json(OkResponse { ok: true, message: Some(format!("unlocked {} params", req.paths.len())) })
+    Json(OkResponse {
+        ok: true,
+        message: Some(format!("unlocked {} params", req.paths.len())),
+    })
 }
 
 async fn post_play(AxumState(api): AxumState<ApiState>) -> Json<OkResponse> {
@@ -108,14 +123,20 @@ async fn post_play(AxumState(api): AxumState<ApiState>) -> Json<OkResponse> {
     let mut s = next;
     s.sequencer.running = true;
     *api.app_state.write() = s;
-    Json(OkResponse { ok: true, message: None })
+    Json(OkResponse {
+        ok: true,
+        message: None,
+    })
 }
 
 async fn post_stop(AxumState(api): AxumState<ApiState>) -> Json<OkResponse> {
     let mut next = api.app_state.read().clone();
     next.sequencer.running = false;
     *api.app_state.write() = next;
-    Json(OkResponse { ok: true, message: None })
+    Json(OkResponse {
+        ok: true,
+        message: None,
+    })
 }
 
 // ─── Server entry point ───────────────────────────────────────────────────────
@@ -147,4 +168,3 @@ pub async fn run_server(api_state: ApiState, port: u16) -> anyhow::Result<()> {
     axum::serve(listener, build_router(api_state)).await?;
     Ok(())
 }
-

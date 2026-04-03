@@ -1,26 +1,32 @@
 // ─── ui/mod.rs ────────────────────────────────────────────────────────────────
 // Main egui application.
 
+mod header;
+mod llm_strip;
+pub mod panels;
 pub mod theme;
 pub mod widgets;
+mod windows;
 
 /// Convert a dot-path + float value into a nested JSON object.
 /// "bass.cutoff", 0.4  →  {"bass": {"cutoff": 0.4}}
 fn dot_path_to_json(path: &str, value: f32) -> serde_json::Value {
     let parts: Vec<&str> = path.split('.').collect();
     let leaf = serde_json::json!(value);
-    parts.iter().rev().fold(leaf, |acc, &key| serde_json::json!({ key: acc }))
+    parts
+        .iter()
+        .rev()
+        .fold(leaf, |acc, &key| serde_json::json!({ key: acc }))
 }
 
 /// Short note name for a MIDI note number (e.g. 60 → "C4").
-fn note_name(midi: u8) -> &'static str {
+pub(crate) fn note_name(midi: u8) -> &'static str {
     const NAMES: &[&str] = &[
-        "C1","C#1","D1","D#1","E1","F1","F#1","G1","G#1","A1","A#1","B1",
-        "C2","C#2","D2","D#2","E2","F2","F#2","G2","G#2","A2","A#2","B2",
-        "C3","C#3","D3","D#3","E3","F3","F#3","G3","G#3","A3","A#3","B3",
-        "C4","C#4","D4","D#4","E4","F4","F#4","G4","G#4","A4","A#4","B4",
-        "C5","C#5","D5","D#5","E5","F5","F#5","G5","G#5","A5","A#5","B5",
-        "C6",
+        "C1", "C#1", "D1", "D#1", "E1", "F1", "F#1", "G1", "G#1", "A1", "A#1", "B1", "C2", "C#2",
+        "D2", "D#2", "E2", "F2", "F#2", "G2", "G#2", "A2", "A#2", "B2", "C3", "C#3", "D3", "D#3",
+        "E3", "F3", "F#3", "G3", "G#3", "A3", "A#3", "B3", "C4", "C#4", "D4", "D#4", "E4", "F4",
+        "F#4", "G4", "G#4", "A4", "A#4", "B4", "C5", "C#5", "D5", "D#5", "E5", "F5", "F#5", "G5",
+        "G#5", "A5", "A#5", "B5", "C6",
     ];
     // MIDI 24 = C1
     let idx = midi.saturating_sub(24) as usize;
@@ -28,7 +34,7 @@ fn note_name(midi: u8) -> &'static str {
 }
 
 /// Scan the models/ directory and return paths of all .gguf files found.
-fn scan_models() -> Vec<String> {
+pub(super) fn scan_models() -> Vec<String> {
     std::fs::read_dir("models")
         .into_iter()
         .flatten()
@@ -40,13 +46,15 @@ fn scan_models() -> Vec<String> {
 }
 
 /// Open a URL in the system browser (cross-platform, no extra dep).
-fn webbrowser_open(url: &str) -> std::io::Result<()> {
+pub(super) fn webbrowser_open(url: &str) -> std::io::Result<()> {
     #[cfg(target_os = "linux")]
     std::process::Command::new("xdg-open").arg(url).spawn()?;
     #[cfg(target_os = "macos")]
     std::process::Command::new("open").arg(url).spawn()?;
     #[cfg(target_os = "windows")]
-    std::process::Command::new("cmd").args(["/c", "start", url]).spawn()?;
+    std::process::Command::new("cmd")
+        .args(["/c", "start", url])
+        .spawn()?;
     Ok(())
 }
 
@@ -56,28 +64,25 @@ use parking_lot::RwLock;
 use std::sync::Arc;
 
 use crate::audio::{AudioCommand, AudioParams};
-use crate::export::{export_wav, export_mp3};
 use crate::llm::{LlmInput, LlmOutput};
 use crate::midi::MidiEvent;
 use crate::sequencer::TriggerEvent;
-use crate::llm::styles::StyleCatalog;
-use crate::state::{AppState, ConversationMode, StyleVerbosity, DrumVoice, Waveform, MAX_STEPS,
-                   ParamMode, param_mode, cycle_param_mode, toggle_drum_step, save_project};
+use crate::state::{AppState, ConversationMode};
 
-const LOG_LEVELS: &[(&str, log::LevelFilter)] = &[
+pub(super) const LOG_LEVELS: &[(&str, log::LevelFilter)] = &[
     ("ERROR", log::LevelFilter::Error),
-    ("WARN",  log::LevelFilter::Warn),
-    ("INFO",  log::LevelFilter::Info),
+    ("WARN", log::LevelFilter::Warn),
+    ("INFO", log::LevelFilter::Info),
     ("DEBUG", log::LevelFilter::Debug),
 ];
 
 // Startup prompts live in config.json and are loaded via crate::config.
 
 // ─── Sequencer row layout ─────────────────────────────────────────────────────
-const SEQ_LABEL_W: f32 = 72.0;
-const SEQ_LABEL_H: f32 = 22.0;
-const SEQ_VOL_W:   f32 = 52.0;
-const SEQ_VOL_H:   f32 = 14.0;
+pub(crate) const SEQ_LABEL_W: f32 = 72.0;
+pub(crate) const SEQ_LABEL_H: f32 = 22.0;
+pub(crate) const SEQ_VOL_W: f32 = 52.0;
+pub(crate) const SEQ_VOL_H: f32 = 14.0;
 
 // ─── Instrument slot system ───────────────────────────────────────────────────
 
@@ -124,7 +129,7 @@ pub struct ImpulseApp {
     show_about: bool,
     show_prefs: bool,
     export_bars: u32,
-    ui_volume: f32,         // monitor-only gain; never written to state or export
+    ui_volume: f32, // monitor-only gain; never written to state or export
     // Piano preferences
     piano_show_labels: bool,
     piano_show_colors: bool,
@@ -162,20 +167,19 @@ impl ImpulseApp {
         theme::apply(&cc.egui_ctx);
 
         // ── Load last session from eframe's persistent storage ────────────────
-        if let Some(storage) = cc.storage {
-            if let Some(json) = storage.get_string("session") {
-                if let Ok(mut loaded) = serde_json::from_str::<AppState>(&json) {
-                    // Reset runtime-only flags; the LLM thread sets them once it's ready.
-                    loaded.llm.is_mock = false;
-                    loaded.llm.llm_initializing = true;
-                    loaded.llm.is_inferring = false;
-                    loaded.llm.last_response = String::new();
-                    loaded.sequencer.running = false; // started below
-                    loaded.sequencer.current_step = 0;
-                    *state.write() = loaded;
-                    log::info!("Session restored from last run.");
-                }
-            }
+        if let Some(storage) = cc.storage
+            && let Some(json) = storage.get_string("session")
+            && let Ok(mut loaded) = serde_json::from_str::<AppState>(&json)
+        {
+            // Reset runtime-only flags; the LLM thread sets them once it's ready.
+            loaded.llm.is_mock = false;
+            loaded.llm.llm_initializing = true;
+            loaded.llm.is_inferring = false;
+            loaded.llm.last_response = String::new();
+            loaded.sequencer.running = false; // started below
+            loaded.sequencer.current_step = 0;
+            *state.write() = loaded;
+            log::info!("Session restored from last run.");
         }
 
         // Auto-start sequencer so there's always audio from the first frame.
@@ -191,7 +195,10 @@ impl ImpulseApp {
             log_text.push_str("[ MIDI: no device found ]\n");
         }
         if let Some(port) = api_port {
-            log_text.push_str(&format!("[ HTTP API active → http://localhost:{} ]\n", port));
+            log_text.push_str(&format!(
+                "[ HTTP API active → http://localhost:{} ]\n",
+                port
+            ));
         }
         Self {
             state,
@@ -207,9 +214,18 @@ impl ImpulseApp {
             log_text,
             active_panel: Panel::Sequencer,
             instruments: vec![
-                InstrumentSlot { label: "BASS SYNTH", kind: InstrumentKind::AcidBass   },
-                InstrumentSlot { label: "DRUM KIT A", kind: InstrumentKind::DrumKit808 },
-                InstrumentSlot { label: "DRUM KIT B", kind: InstrumentKind::DrumKit909 },
+                InstrumentSlot {
+                    label: "BASS SYNTH",
+                    kind: InstrumentKind::AcidBass,
+                },
+                InstrumentSlot {
+                    label: "DRUM KIT A",
+                    kind: InstrumentKind::DrumKit808,
+                },
+                InstrumentSlot {
+                    label: "DRUM KIT B",
+                    kind: InstrumentKind::DrumKit909,
+                },
             ],
             api_port,
             show_about: false,
@@ -224,7 +240,8 @@ impl ImpulseApp {
             seq_page: 0,
             available_models: Vec::new(),
             sys_info: {
-                let shared = std::sync::Arc::new(std::sync::Mutex::new(crate::sysinfo::SysInfo::default()));
+                let shared =
+                    std::sync::Arc::new(std::sync::Mutex::new(crate::sysinfo::SysInfo::default()));
                 crate::sysinfo::spawn_poller(std::sync::Arc::clone(&shared), 3);
                 shared
             },
@@ -236,7 +253,6 @@ impl ImpulseApp {
     }
 
     /// Push any pending audio param snapshot to the audio thread.
-
     fn push_audio_params(&mut self) {
         let params = {
             let s = self.state.read();
@@ -251,26 +267,41 @@ impl ImpulseApp {
     fn drain_llm_outputs(&mut self) {
         while let Ok(out) = self.llm_rx.try_recv() {
             // Store thinking tokens for display
-            if let Some(ref thinking) = out.thinking {
-                if !thinking.is_empty() {
-                    self.last_thinking = Some(thinking.clone());
-                }
+            if let Some(ref thinking) = out.thinking
+                && !thinking.is_empty()
+            {
+                self.last_thinking = Some(thinking.clone());
             }
 
-            if !out.is_jam && (out.param_update.is_some() || (!out.text.is_empty() && !out.text.starts_with('['))) {
+            if !out.is_jam
+                && (out.param_update.is_some()
+                    || (!out.text.is_empty() && !out.text.starts_with('[')))
+            {
                 let conv_mode = self.state.read().llm.conversation_mode.clone();
                 let display = if let Some(ref update) = out.param_update {
                     if conv_mode == ConversationMode::Off {
                         // Off: show only what keys changed, no commentary
-                        let keys: Vec<&str> = update.as_object()
-                            .map(|o| o.keys().filter(|k| *k != "_comment").map(|k| k.as_str()).collect())
+                        let keys: Vec<&str> = update
+                            .as_object()
+                            .map(|o| {
+                                o.keys()
+                                    .filter(|k| *k != "_comment")
+                                    .map(|k| k.as_str())
+                                    .collect()
+                            })
                             .unwrap_or_default();
                         format!("updated {}", keys.join(", "))
                     } else if let Some(comment) = update.get("_comment").and_then(|v| v.as_str()) {
                         comment.to_string()
                     } else {
-                        let keys: Vec<&str> = update.as_object()
-                            .map(|o| o.keys().filter(|k| *k != "_comment").map(|k| k.as_str()).collect())
+                        let keys: Vec<&str> = update
+                            .as_object()
+                            .map(|o| {
+                                o.keys()
+                                    .filter(|k| *k != "_comment")
+                                    .map(|k| k.as_str())
+                                    .collect()
+                            })
                             .unwrap_or_default();
                         format!("updated {}", keys.join(", "))
                     }
@@ -279,7 +310,7 @@ impl ImpulseApp {
                 };
                 // Append thinking indicator when present
                 let persona = self.state.read().llm.persona_name.clone();
-                let line = if out.thinking.as_ref().map_or(false, |t| !t.is_empty()) {
+                let line = if out.thinking.as_ref().is_some_and(|t| !t.is_empty()) {
                     format!("{} → {} [think]\n", persona, display)
                 } else {
                     format!("{} → {}\n", persona, display)
@@ -314,25 +345,32 @@ impl ImpulseApp {
                     self.pressed_notes.insert(note);
                     let vel = velocity as f32 / 127.0;
 
-                    let _ = self.audio_tx.push(AudioCommand::Trigger(
-                        TriggerEvent::BassTrigger {
+                    let _ = self
+                        .audio_tx
+                        .push(AudioCommand::Trigger(TriggerEvent::BassTrigger {
                             note,
                             accent: vel > 0.8,
                             slide: false,
                             gate_samples: 22050, // ~0.5 s at 44100 Hz
-                        }
-                    ));
+                        }));
 
                     // Write note into current step so you can step-program live.
                     let step = self.state.read().sequencer.current_step;
                     let s = self.state.read().clone();
-                    let was_active = s.sequencer.bass_pattern.get(step).map(|b| b.active).unwrap_or(false);
+                    let was_active = s
+                        .sequencer
+                        .bass_pattern
+                        .get(step)
+                        .map(|b| b.active)
+                        .unwrap_or(false);
                     *self.state.write() = crate::state::set_bass_step(s, step, note, was_active);
                 }
 
                 MidiEvent::NoteOff { note, .. } => {
                     self.pressed_notes.remove(&note);
-                    let _ = self.audio_tx.push(AudioCommand::Trigger(TriggerEvent::BassGateOff));
+                    let _ = self
+                        .audio_tx
+                        .push(AudioCommand::Trigger(TriggerEvent::BassGateOff));
                 }
 
                 // CC → synth params via the standard mapping table.
@@ -377,7 +415,7 @@ impl eframe::App for ImpulseApp {
         }
     }
 
-    fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
+    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         self.drain_llm_outputs();
         self.drain_midi_events();
 
@@ -405,805 +443,22 @@ impl eframe::App for ImpulseApp {
             self.scope_buf.drain(..drain);
         }
 
-        // ── Preferences window ────────────────────────────────────────────────
-        if self.show_prefs {
-            egui::Window::new("Preferences")
-                .collapsible(false)
-                .resizable(false)
-                .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
-                .show(ctx, |ui| {
-                    ui.set_min_width(340.0);
+        // ── Floating windows (prefs / about / sysinfo) ────────────────────────
+        self.draw_windows(ctx);
 
-                    // ── Tab strip ─────────────────────────────────────────────
-                    let tabs = ["AI", "Controls", "Display", "System"];
-                    ui.horizontal(|ui| {
-                        for (i, label) in tabs.iter().enumerate() {
-                            let active = self.prefs_tab == i;
-                            let color = if active { theme::CHALK } else { theme::ASH };
-                            let text = egui::RichText::new(*label).monospace().size(10.0).color(color);
-                            if ui.selectable_label(active, text).clicked() {
-                                self.prefs_tab = i;
-                            }
-                        }
-                    });
-                    ui.separator();
-                    ui.add_space(4.0);
+        // ── Menu bar + Header ─────────────────────────────────────────────────
+        self.draw_menu_and_header(ctx);
 
-                    match self.prefs_tab {
-                        // ── Tab 0: AI ─────────────────────────────────────────
-                        0 => {
-                            widgets::section_header(ui, "PERSONA");
-                            ui.horizontal(|ui| {
-                                ui.label(egui::RichText::new("Name").monospace().size(9.5).color(theme::FOG));
-                                let mut name = self.state.read().llm.persona_name.clone();
-                                let resp = ui.add(egui::TextEdit::singleline(&mut name)
-                                    .desired_width(120.0)
-                                    .font(egui::TextStyle::Monospace));
-                                if resp.changed() { self.state.write().llm.persona_name = name; }
-                                ui.label(egui::RichText::new("(injected into system prompt)").monospace().size(8.0).color(theme::IRON));
-                            });
-                            ui.add_space(8.0);
-
-                            widgets::section_header(ui, "MODEL");
-                            if ui.small_button("scan models/").clicked() {
-                                self.available_models = scan_models();
-                            }
-                            if self.available_models.is_empty() {
-                                self.available_models = scan_models();
-                            }
-                            let cur_model = self.state.read().llm.model_path.clone();
-                            for path in &self.available_models {
-                                let short = std::path::Path::new(path)
-                                    .file_name().unwrap_or_default().to_string_lossy();
-                                let selected = *path == cur_model;
-                                let text = egui::RichText::new(short.as_ref()).monospace().size(9.5)
-                                    .color(if selected { theme::CHALK } else { theme::FOG });
-                                if ui.selectable_label(selected, text).clicked() && !selected {
-                                    let _ = self.llm_tx.try_send(LlmInput::SwitchModel(path.clone()));
-                                }
-                            }
-                            ui.add_space(8.0);
-
-                            widgets::section_header(ui, "PERSONALITY");
-                            ui.label(egui::RichText::new("How the AI narrates its moves").monospace().size(8.5).color(theme::IRON));
-                            ui.add_space(4.0);
-                            let cur_mode = self.state.read().llm.conversation_mode.clone();
-                            for (label, mode, hint) in &[
-                                ("Off",      ConversationMode::Off,      "no commentary"),
-                                ("Producer", ConversationMode::Producer, "what & why (default)"),
-                                ("DJ",       ConversationMode::Dj,       "hype party energy"),
-                                ("MC",       ConversationMode::Mc,       "jungle/rave MC"),
-                            ] {
-                                ui.horizontal(|ui| {
-                                    let selected = cur_mode == *mode;
-                                    let text = egui::RichText::new(*label).monospace().size(10.0)
-                                        .color(if selected { theme::CHALK } else { theme::FOG });
-                                    if ui.selectable_label(selected, text).clicked() && !selected {
-                                        self.state.write().llm.conversation_mode = mode.clone();
-                                    }
-                                    ui.label(egui::RichText::new(*hint).monospace().size(8.5).color(theme::IRON));
-                                });
-                            }
-                            ui.add_space(6.0);
-                            ui.horizontal(|ui| {
-                                ui.label(egui::RichText::new("TTS voice (espeak-ng)").monospace().size(9.5).color(theme::FOG));
-                                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                                    let mut tts = self.state.read().llm.tts_enabled;
-                                    if widgets::toggle_button(ui, if tts { "ON" } else { "OFF" }, &mut tts) {
-                                        self.state.write().llm.tts_enabled = tts;
-                                    }
-                                });
-                            });
-                            ui.horizontal(|ui| {
-                                ui.label(egui::RichText::new("Style description").monospace().size(9.5).color(theme::FOG));
-                                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                                    let mut is_full = self.state.read().llm.style_verbosity == StyleVerbosity::Full;
-                                    if widgets::toggle_button(ui, if is_full { "FULL" } else { "BRIEF" }, &mut is_full) {
-                                        self.state.write().llm.style_verbosity = if is_full { StyleVerbosity::Full } else { StyleVerbosity::Brief };
-                                    }
-                                });
-                            });
-                            ui.add_space(8.0);
-
-                            widgets::section_header(ui, "SYSTEM PROMPT");
-                            ui.label(egui::RichText::new("Override: replaces the generated prompt entirely.").monospace().size(8.0).color(theme::IRON));
-                            ui.add_space(2.0);
-                            let mut sp_override = self.state.read().llm.system_prompt_override.clone();
-                            let sp_resp = ui.add(
-                                egui::TextEdit::multiline(&mut sp_override)
-                                    .desired_rows(4)
-                                    .desired_width(f32::INFINITY)
-                                    .font(egui::TextStyle::Monospace)
-                                    .hint_text("Leave empty for auto-generated system prompt…"),
-                            );
-                            if sp_resp.changed() { self.state.write().llm.system_prompt_override = sp_override; }
-                        }
-
-                        // ── Tab 1: Controls ───────────────────────────────────
-                        1 => {
-                            widgets::section_header(ui, "KNOB LAYOUT");
-                            ui.horizontal(|ui| {
-                                ui.label(egui::RichText::new("Control style").monospace().size(9.5).color(theme::FOG));
-                                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                                    if widgets::toggle_button(ui, if self.use_sliders { "SLIDERS" } else { "KNOBS" }, &mut self.use_sliders) {}
-                                });
-                            });
-                            ui.add_space(8.0);
-
-                            widgets::section_header(ui, "LOCK BEHAVIOUR");
-                            ui.horizontal(|ui| {
-                                ui.label(egui::RichText::new("Auto-lock on touch").monospace().size(9.5).color(theme::FOG));
-                                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                                    let mut alt = self.state.read().llm.auto_lock_on_touch;
-                                    if widgets::toggle_button(ui, if alt { "ON" } else { "OFF" }, &mut alt) {
-                                        self.state.write().llm.auto_lock_on_touch = alt;
-                                    }
-                                });
-                            });
-                            ui.label(egui::RichText::new("  Off: knobs are free — click knob to toggle lock").monospace().size(8.0).color(theme::IRON));
-                        }
-
-                        // ── Tab 2: Display ────────────────────────────────────
-                        2 => {
-                            widgets::section_header(ui, "PIANO DISPLAY");
-                            ui.horizontal(|ui| {
-                                ui.label(egui::RichText::new("Note labels").monospace().size(9.5).color(theme::FOG));
-                                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                                    widgets::toggle_button(ui, if self.piano_show_labels { "ON" } else { "OFF" }, &mut self.piano_show_labels);
-                                });
-                            });
-                            ui.horizontal(|ui| {
-                                ui.label(egui::RichText::new("Farbige Noten colors").monospace().size(9.5).color(theme::FOG));
-                                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                                    widgets::toggle_button(ui, if self.piano_show_colors { "ON" } else { "OFF" }, &mut self.piano_show_colors);
-                                });
-                            });
-                        }
-
-                        // ── Tab 3: System ─────────────────────────────────────
-                        _ => {
-                            widgets::section_header(ui, "LOG VERBOSITY");
-                            ui.label(egui::RichText::new("Controls what appears in the terminal log.").monospace().size(8.0).color(theme::IRON));
-                            ui.add_space(4.0);
-                            for (i, (label, filter)) in LOG_LEVELS.iter().enumerate() {
-                                let selected = self.log_level_idx == i;
-                                let text = egui::RichText::new(*label).monospace().size(10.0)
-                                    .color(if selected { theme::CHALK } else { theme::FOG });
-                                if ui.selectable_label(selected, text).clicked() && !selected {
-                                    self.log_level_idx = i;
-                                    log::set_max_level(*filter);
-                                }
-                            }
-                            ui.label(egui::RichText::new("  Current: applies immediately, resets on restart.").monospace().size(8.0).color(theme::IRON));
-                        }
-                    }
-
-                    ui.add_space(10.0);
-                    ui.separator();
-                    ui.add_space(4.0);
-                    ui.vertical_centered(|ui| {
-                        if ui.button("Close").clicked() { self.show_prefs = false; }
-                    });
-                });
-        }
-
-        // ── About window ──────────────────────────────────────────────────────
-        if self.show_about {
-            egui::Window::new("About Impulse Instruct")
-                .collapsible(false)
-                .resizable(false)
-                .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
-                .show(ctx, |ui| {
-                    ui.vertical_centered(|ui| {
-                        ui.label(egui::RichText::new("◆ IMPULSE INSTRUCT").monospace().size(14.0).color(theme::CHALK));
-                        ui.label(egui::RichText::new("v0.1 — LLM-controlled synthesizer").monospace().size(9.5).color(theme::SMOKE));
-                        ui.add_space(8.0);
-                        ui.label(egui::RichText::new("Bass Synth  ·  Drum Kit A  ·  Drum Kit B").monospace().size(9.0).color(theme::ASH));
-                        ui.label(egui::RichText::new("LLM engine: llama.cpp").monospace().size(9.0).color(theme::ASH));
-                        ui.add_space(10.0);
-                        ui.label(egui::RichText::new("Type a prompt and press ASK.").monospace().size(9.0).color(theme::FOG));
-                        ui.label(egui::RichText::new("Toggle JAM for continuous mutation.").monospace().size(9.0).color(theme::FOG));
-                        ui.label(egui::RichText::new("HEAT controls how wild it gets.").monospace().size(9.0).color(theme::FOG));
-                        ui.add_space(10.0);
-                        if ui.button("Close").clicked() {
-                            self.show_about = false;
-                        }
-                    });
-                });
-        }
-
-        // ── System Info window ────────────────────────────────────────────────
-        if self.show_sysinfo {
-            let si = self.sys_info.lock().ok().map(|g| g.clone()).unwrap_or_default();
-            egui::Window::new("System Info")
-                .collapsible(false)
-                .resizable(false)
-                .min_width(320.0)
-                .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
-                .show(ctx, |ui| {
-                    let row = |ui: &mut egui::Ui, label: &str, val: &str| {
-                        ui.horizontal(|ui| {
-                            ui.label(egui::RichText::new(label).color(theme::SMOKE).monospace().size(9.5));
-                            ui.label(egui::RichText::new(val).color(theme::FOG).monospace().size(9.5));
-                        });
-                    };
-
-                    ui.label(egui::RichText::new("GPU").color(theme::CHALK).monospace().size(10.5).strong());
-                    ui.separator();
-                    if si.gpu_name.is_empty() {
-                        row(ui, "GPU:    ", "nvidia-smi not found or no NVIDIA GPU");
-                    } else {
-                        row(ui, "Name:   ", &si.gpu_name);
-                        row(ui, "Driver: ", &si.driver_version);
-                        if !si.cuda_version.is_empty() {
-                            row(ui, "CUDA:   ", &si.cuda_version);
-                        }
-                        ui.add_space(4.0);
-                        ui.horizontal(|ui| {
-                            let frac = if si.vram_total_mb > 0 {
-                                si.vram_used_mb as f32 / si.vram_total_mb as f32
-                            } else { 0.0 };
-                            ui.label(egui::RichText::new("VRAM:   ").color(theme::SMOKE).monospace().size(9.5));
-                            ui.add_sized([120.0, 10.0], egui::ProgressBar::new(frac));
-                            ui.label(egui::RichText::new(format!(
-                                "  {} / {}  ({:.0}%)",
-                                crate::sysinfo::fmt_mb(si.vram_used_mb),
-                                crate::sysinfo::fmt_mb(si.vram_total_mb),
-                                frac * 100.0
-                            )).color(theme::FOG).monospace().size(9.5));
-                        });
-                    }
-
-                    ui.add_space(8.0);
-                    ui.label(egui::RichText::new("System Memory").color(theme::CHALK).monospace().size(10.5).strong());
-                    ui.separator();
-                    if si.ram_total_mb > 0 {
-                        ui.horizontal(|ui| {
-                            let frac = si.ram_used_mb as f32 / si.ram_total_mb as f32;
-                            ui.label(egui::RichText::new("RAM:    ").color(theme::SMOKE).monospace().size(9.5));
-                            ui.add_sized([120.0, 10.0], egui::ProgressBar::new(frac));
-                            ui.label(egui::RichText::new(format!(
-                                "  {} / {}  ({:.0}%)",
-                                crate::sysinfo::fmt_mb(si.ram_used_mb),
-                                crate::sysinfo::fmt_mb(si.ram_total_mb),
-                                frac * 100.0
-                            )).color(theme::FOG).monospace().size(9.5));
-                        });
-                    } else {
-                        row(ui, "RAM:    ", "/proc/meminfo not available");
-                    }
-
-                    ui.add_space(10.0);
-                    ui.label(egui::RichText::new("Updated every 3 seconds").color(theme::IRON).monospace().size(8.5));
-                    ui.add_space(4.0);
-                    if ui.button("Close").clicked() {
-                        self.show_sysinfo = false;
-                    }
-                });
-        }
-
-        // ── Menu bar ──────────────────────────────────────────────────────────
-        TopBottomPanel::top("menu_bar")
-            .frame(Frame::none().fill(theme::VOID).inner_margin(egui::Margin::symmetric(4.0, 2.0)))
-            .show(ctx, |ui| {
-                egui::menu::bar(ui, |ui| {
-                    ui.menu_button(egui::RichText::new("File").monospace().size(10.0), |ui| {
-                        if ui.button(egui::RichText::new("Save project").monospace().size(10.0)).clicked() {
-                            let snapshot = self.state.read().clone();
-                            match save_project(&snapshot) {
-                                Ok(path) => {
-                                    let msg = format!("[ saved → {} ]", path.display());
-                                    log::info!("{}", msg);
-                                    self.log_text.push_str(&format!("{}\n", msg));
-                                }
-                                Err(e) => {
-                                    let msg = format!("[ save failed: {} ]", e);
-                                    log::error!("{}", msg);
-                                    self.log_text.push_str(&format!("{}\n", msg));
-                                }
-                            }
-                            ui.close_menu();
-                        }
-
-                        ui.separator();
-
-                        ui.horizontal(|ui| {
-                            ui.label(egui::RichText::new("Bars:").monospace().size(9.5).color(theme::SMOKE));
-                            ui.add(egui::DragValue::new(&mut self.export_bars).range(1..=64).speed(1.0));
-                        });
-
-                        if ui.button(egui::RichText::new("Export WAV").monospace().size(10.0)).clicked() {
-                            let snapshot = self.state.read().clone();
-                            let bars = self.export_bars;
-                            match export_wav(&snapshot, bars) {
-                                Ok(path) => {
-                                    let msg = format!("[ exported → {} ]", path.display());
-                                    log::info!("{}", msg);
-                                    self.log_text.push_str(&format!("{}\n", msg));
-                                }
-                                Err(e) => {
-                                    let msg = format!("[ export failed: {} ]", e);
-                                    log::error!("{}", msg);
-                                    self.log_text.push_str(&format!("{}\n", msg));
-                                }
-                            }
-                            ui.close_menu();
-                        }
-
-                        if ui.button(egui::RichText::new("Export MP3").monospace().size(10.0)).clicked() {
-                            let snapshot = self.state.read().clone();
-                            let bars = self.export_bars;
-                            match export_mp3(&snapshot, bars) {
-                                Ok(path) => {
-                                    let msg = format!("[ exported → {} ]", path.display());
-                                    log::info!("{}", msg);
-                                    self.log_text.push_str(&format!("{}\n", msg));
-                                }
-                                Err(e) => {
-                                    let msg = format!("[ export: {} ]", e);
-                                    log::warn!("{}", msg);
-                                    self.log_text.push_str(&format!("{}\n", msg));
-                                }
-                            }
-                            ui.close_menu();
-                        }
-
-                        ui.separator();
-
-                        if ui.button(egui::RichText::new("Quit").monospace().size(10.0)).clicked() {
-                            ctx.send_viewport_cmd(egui::ViewportCommand::Close);
-                        }
-                    });
-
-                    ui.menu_button(egui::RichText::new("Help").monospace().size(10.0), |ui| {
-                        if ui.button(egui::RichText::new("Preferences…").monospace().size(10.0)).clicked() {
-                            self.show_prefs = true;
-                            ui.close_menu();
-                        }
-                        if ui.button(egui::RichText::new("System…").monospace().size(10.0)).clicked() {
-                            self.show_sysinfo = true;
-                            ui.close_menu();
-                        }
-                        ui.separator();
-                        if ui.button(egui::RichText::new("About").monospace().size(10.0)).clicked() {
-                            self.show_about = true;
-                            ui.close_menu();
-                        }
-                    });
-                });
-            });
-
-        let _ = frame; // suppress unused warning (frame.close() replaced by viewport cmd)
-
-        // ── Header ────────────────────────────────────────────────────────────
-        TopBottomPanel::top("header")
-            .frame(Frame::none().fill(theme::VOID).inner_margin(egui::Margin::symmetric(10.0, 6.0)))
-            .show(ctx, |ui| {
-                ui.horizontal(|ui| {
-                    // Logo
-                    ui.label(
-                        egui::RichText::new("◆ IMPULSE INSTRUCT")
-                            .color(theme::CHALK)
-                            .size(13.0)
-                            .monospace()
-                            .strong()
-                    );
-
-                    ui.add_space(16.0);
-
-                    // Model stats — or status warning when not live
-                    {
-                        let s = self.state.read();
-                        let inferring   = s.llm.is_inferring;
-                        let tps         = s.llm.tokens_per_sec;
-                        let ptok        = s.llm.prompt_tokens;
-                        let ctok        = s.llm.completion_tokens;
-                        let tthink      = s.llm.thinking_tokens;
-                        let ctx_pct     = if s.llm.context_max > 0 {
-                            s.llm.context_used as f32 / s.llm.context_max as f32 * 100.0
-                        } else { 0.0 };
-                        let is_mock     = s.llm.is_mock;
-                        let initializing = s.llm.llm_initializing;
-
-                        if initializing {
-                            // Show a neutral "loading" pill in place of stats
-                            ui.label(egui::RichText::new("○").color(theme::ASH).size(10.0));
-                            ui.label(egui::RichText::new("Loading model…").color(theme::ASH).size(9.0).monospace());
-                        } else if is_mock {
-                            // Bold inverse-style warning — bright orange text, clearly visible
-                            ui.label(egui::RichText::new("!").color(egui::Color32::from_rgb(255, 100, 60)).size(12.0).monospace().strong());
-                            ui.vertical(|ui| {
-                                ui.label(egui::RichText::new("MOCK MODE").color(egui::Color32::from_rgb(255, 100, 60)).size(10.0).monospace().strong());
-                                ui.label(egui::RichText::new("no model  —  ./build-bonsai-server.sh + ./download-models.sh").color(egui::Color32::from_rgb(200, 80, 40)).size(8.0).monospace());
-                            });
-                        } else {
-                            let inf_color = if inferring { theme::CHALK } else { theme::IRON };
-                            ui.label(egui::RichText::new("●").color(inf_color).size(10.0));
-
-                            ui.vertical(|ui| {
-                                // Line 1: speed + context
-                                let line1 = format!("{:.0}t/s  ctx:{:.0}%", tps, ctx_pct);
-                                ui.label(egui::RichText::new(line1).color(theme::SMOKE).size(9.0).monospace());
-                                // Line 2: in / out / think token counts
-                                if ptok > 0 || ctok > 0 {
-                                    let line2 = if tthink > 0 {
-                                        format!("in:{} out:{} think:~{}", ptok, ctok, tthink)
-                                    } else {
-                                        format!("in:{}  out:{}", ptok, ctok)
-                                    };
-                                    ui.label(egui::RichText::new(line2).color(theme::IRON).size(8.5).monospace());
-                                }
-                            });
-                        }
-
-                        ui.add_space(8.0);
-
-                        // BPM display
-                        let bpm = s.sequencer.bpm;
-                        let running = s.sequencer.running;
-                        let run_color = if running { theme::CHALK } else { theme::ASH };
-                        ui.label(egui::RichText::new(format!("{:.0} BPM", bpm))
-                            .color(run_color).size(11.0).monospace());
-                    }
-
-                    ui.add_space(8.0);
-
-                    // Play / Stop
-                    {
-                        let running = self.state.read().sequencer.running;
-                        let play_label = if running { "■ STOP" } else { "▶ PLAY" };
-                        if ui.button(egui::RichText::new(play_label).monospace().size(10.0)).clicked() {
-                            let next = crate::state::toggle_sequencer_running(self.state.read().clone());
-                            *self.state.write() = next;
-                        }
-                    }
-
-                    ui.add_space(4.0);
-
-                    // Heat slider
-                    {
-                        let mut heat = self.state.read().llm.heat;
-                        let heat_color = if heat < 0.3 { theme::IRON }
-                            else if heat < 0.6 { theme::ASH }
-                            else if heat < 0.85 { theme::SMOKE }
-                            else { theme::CHALK };
-                        ui.label(egui::RichText::new("HEAT").color(heat_color).monospace().size(9.0));
-                        if ui.add_sized(
-                            [80.0, 16.0],
-                            egui::Slider::new(&mut heat, 0.0..=1.0).show_value(false)
-                        ).changed() {
-                            self.state.write().llm.heat = heat;
-                        }
-                    }
-
-                    ui.add_space(4.0);
-
-                    // JAM toggle
-                    let jam = self.state.read().llm.auto_jam;
-                    let jam_color = if jam { theme::CHALK } else { theme::ASH };
-                    if ui.button(egui::RichText::new("JAM").color(jam_color).monospace().size(10.0)).clicked() {
-                        let mut next = self.state.read().clone();
-                        next.llm.auto_jam = !next.llm.auto_jam;
-                        let now_jamming = next.llm.auto_jam;
-                        *self.state.write() = next;
-                        if now_jamming {
-                            let _ = self.llm_tx.try_send(LlmInput::Infer {
-                                prompt: "start jamming".to_string(),
-                                one_shot: false,
-                            });
-                        }
-                    }
-
-                    ui.add_space(4.0);
-
-                    // Knob / Slider toggle
-                    {
-                        let label = if self.use_sliders { "SLIDERS" } else { "KNOBS" };
-                        let color  = if self.use_sliders { theme::CHALK } else { theme::ASH };
-                        if ui.button(egui::RichText::new(label).color(color).monospace().size(9.0)).clicked() {
-                            self.use_sliders = !self.use_sliders;
-                        }
-                    }
-
-                    // Right-aligned: VRAM/RAM bars + VOL slider + optional API link
-                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        // API link
-                        if let Some(port) = self.api_port {
-                            let api_label = format!("API :{}", port);
-                            let btn = ui.add(
-                                egui::Button::new(
-                                    egui::RichText::new(&api_label).color(theme::SMOKE).monospace().size(8.5)
-                                )
-                                .fill(theme::VOID)
-                                .stroke(egui::Stroke::new(1.0, theme::SLATE))
-                            );
-                            if btn.clicked() {
-                                let url = format!("http://localhost:{}/api/schema", port);
-                                let _ = webbrowser_open(&url);
-                            }
-                            if btn.hovered() {
-                                btn.on_hover_text("Open API schema in browser");
-                            }
-                            ui.add_space(8.0);
-                        }
-
-                        // Monitor volume slider (does not affect export)
-                        let vol_color = if self.ui_volume < 0.4 { theme::IRON }
-                            else if self.ui_volume < 0.75 { theme::ASH }
-                            else { theme::SMOKE };
-                        ui.label(egui::RichText::new(format!("{:.0}%", self.ui_volume * 100.0))
-                            .color(vol_color).monospace().size(9.0));
-                        if ui.add_sized(
-                            [72.0, 16.0],
-                            egui::Slider::new(&mut self.ui_volume, 0.0..=1.0).show_value(false)
-                        ).changed() {
-                            let _ = self.audio_tx.push(AudioCommand::SetMonitorVolume(self.ui_volume));
-                        }
-                        ui.label(egui::RichText::new("VOL").color(vol_color).monospace().size(9.0));
-
-                        ui.add_space(8.0);
-
-                        // VRAM / RAM compact progress bars
-                        if let Ok(si) = self.sys_info.lock() {
-                            ui.vertical(|ui| {
-                                // VRAM row
-                                if si.vram_total_mb > 0 {
-                                    let frac = si.vram_used_mb as f32 / si.vram_total_mb as f32;
-                                    ui.horizontal(|ui| {
-                                        ui.label(egui::RichText::new("VRAM").color(theme::IRON).monospace().size(8.0));
-                                        ui.add_sized(
-                                            [54.0, 6.0],
-                                            egui::ProgressBar::new(frac)
-                                        );
-                                        ui.label(egui::RichText::new(
-                                            format!("{}", crate::sysinfo::fmt_mb(si.vram_used_mb))
-                                        ).color(theme::IRON).monospace().size(8.0));
-                                    });
-                                }
-                                // RAM row
-                                if si.ram_total_mb > 0 {
-                                    let frac = si.ram_used_mb as f32 / si.ram_total_mb as f32;
-                                    ui.horizontal(|ui| {
-                                        ui.label(egui::RichText::new("RAM ").color(theme::IRON).monospace().size(8.0));
-                                        ui.add_sized(
-                                            [54.0, 6.0],
-                                            egui::ProgressBar::new(frac)
-                                        );
-                                        ui.label(egui::RichText::new(
-                                            format!("{}", crate::sysinfo::fmt_mb(si.ram_used_mb))
-                                        ).color(theme::IRON).monospace().size(8.0));
-                                    });
-                                }
-                            });
-                        }
-                    });
-                });
-            });
-
-        // ── LLM strip (log + prompt) ──────────────────────────────────────────
-        TopBottomPanel::top("llm_strip")
-            .frame(Frame::none().fill(theme::PIT).inner_margin(egui::Margin::symmetric(10.0, 6.0)))
-            .min_height(80.0)
-            .max_height(140.0)
-            .show(ctx, |ui| {
-                // ── Style selector ────────────────────────────────────────────
-                ui.horizontal(|ui| {
-                    ui.label(egui::RichText::new("STYLE").monospace().size(9.0).color(theme::IRON));
-                    ui.add_space(4.0);
-
-                    let cur_style = self.state.read().llm.active_style.clone();
-                    let catalog = StyleCatalog::get();
-                    let cur_name = match cur_style.as_deref() {
-                        None            => "None",
-                        Some("__free__")   => "Free",
-                        Some("__custom__") => "Custom",
-                        Some(id) => catalog.find_by_id(id).map(|s| s.name.as_str()).unwrap_or("None"),
-                    };
-
-                    let mut new_style_selection: Option<Option<String>> = None;
-
-                    egui::ComboBox::from_id_source("style_selector")
-                        .selected_text(egui::RichText::new(cur_name).monospace().size(9.5))
-                        .width(160.0)
-                        .show_ui(ui, |ui| {
-                            if ui.selectable_label(
-                                cur_style.is_none(),
-                                egui::RichText::new("None").monospace().size(9.5),
-                            ).clicked() {
-                                new_style_selection = Some(None);
-                            }
-                            if ui.selectable_label(
-                                cur_style.as_deref() == Some("__free__"),
-                                egui::RichText::new("Free").monospace().size(9.5),
-                            ).clicked() {
-                                new_style_selection = Some(Some("__free__".to_string()));
-                            }
-                            if ui.selectable_label(
-                                cur_style.as_deref() == Some("__custom__"),
-                                egui::RichText::new("Custom...").monospace().size(9.5),
-                            ).clicked() {
-                                new_style_selection = Some(Some("__custom__".to_string()));
-                            }
-                            ui.separator();
-                            for style in catalog.styles() {
-                                let active = cur_style.as_deref() == Some(style.id.as_str());
-                                if ui.selectable_label(
-                                    active,
-                                    egui::RichText::new(&style.name).monospace().size(9.5),
-                                ).clicked() {
-                                    new_style_selection = Some(Some(style.id.clone()));
-                                }
-                            }
-                        });
-
-                    if let Some(maybe_id) = new_style_selection {
-                        match maybe_id {
-                            None => {
-                                self.state.write().llm.active_style = None;
-                                self.log_text.push_str("Style cleared\n");
-                            }
-                            Some(ref id) if id == "__free__" => {
-                                self.state.write().llm.active_style = Some(id.clone());
-                                self.log_text.push_str("Style → Free (no constraints)\n");
-                                let _ = self.llm_tx.try_send(LlmInput::Infer {
-                                    prompt: "we're going free — be creative and unpredictable, surprise me".to_string(),
-                                    one_shot: true,
-                                });
-                            }
-                            Some(ref id) if id == "__custom__" => {
-                                self.state.write().llm.active_style = Some(id.clone());
-                                self.log_text.push_str("Style → Custom (edit brief below)\n");
-                            }
-                            Some(id) => {
-                                let name = catalog.find_by_id(&id)
-                                    .map(|s| s.name.clone()).unwrap_or_default();
-                                self.state.write().llm.active_style = Some(id);
-                                let prompt = format!(
-                                    "we're going {} now — set up the sound and rhythm for this style",
-                                    name
-                                );
-                                self.log_text.push_str(&format!("Style → {}\n", name));
-                                let _ = self.llm_tx.try_send(LlmInput::Infer { prompt, one_shot: true });
-                            }
-                        }
-                    }
-                });
-
-                // ── Custom style brief input (shown only when Custom is active) ──
-                if self.state.read().llm.active_style.as_deref() == Some("__custom__") {
-                    ui.horizontal(|ui| {
-                        ui.add_space(40.0); // indent to align with dropdown content
-                        let mut custom_text = self.state.read().llm.custom_style_text.clone();
-                        let r = ui.add(
-                            egui::TextEdit::singleline(&mut custom_text)
-                                .hint_text("describe your style brief for the AI…")
-                                .desired_width(ui.available_width() - 60.0)
-                                .font(egui::FontId::monospace(10.0))
-                        );
-                        if r.changed() {
-                            self.state.write().llm.custom_style_text = custom_text.clone();
-                        }
-                        if r.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter))
-                            && !custom_text.trim().is_empty()
-                        {
-                            self.log_text.push_str("Custom style brief updated\n");
-                            let _ = self.llm_tx.try_send(LlmInput::Infer {
-                                prompt: "apply the active style brief — update sound and rhythm accordingly".to_string(),
-                                one_shot: true,
-                            });
-                        }
-                    });
-                }
-
-                ui.add_space(2.0);
-
-                // ── Persistent user instructions ──────────────────────────────
-                {
-                    let mut instr = self.state.read().llm.user_instructions.clone();
-                    let r = ui.add(
-                        egui::TextEdit::singleline(&mut instr)
-                            .hint_text("persistent instructions injected into every prompt…")
-                            .desired_width(ui.available_width())
-                            .font(egui::FontId::monospace(10.0))
-                    );
-                    if r.changed() {
-                        self.state.write().llm.user_instructions = instr;
-                    }
-                }
-
-                ui.add_space(2.0);
-
-                // ── Prompt input ──────────────────────────────────────────────
-                ui.horizontal(|ui| {
-                    let text_width = ui.available_width() - 52.0; // reserve space for ASK button
-                    let response = ui.add(
-                        egui::TextEdit::singleline(&mut self.prompt_input)
-                            .hint_text("prompt the model…")
-                            .desired_width(text_width)
-                            .font(egui::FontId::monospace(10.5))
-                    );
-                    let submit = ui.button(
-                        egui::RichText::new("ASK").monospace().size(10.0)
-                    ).clicked();
-
-                    let enter_pressed = response.lost_focus()
-                        && ctx.input(|i| i.key_pressed(egui::Key::Enter));
-
-                    if submit || enter_pressed {
-                        let typed = self.prompt_input.trim().to_string();
-                        let (prompt, log_line) = if typed.is_empty() {
-                            // Empty submit — nudge the AI to do something fresh
-                            let active_style = self.state.read().llm.active_style.clone();
-                            let p = match active_style.as_deref() {
-                                Some(id) => {
-                                    let name = StyleCatalog::get()
-                                        .find_by_id(id)
-                                        .map(|s| s.name.as_str())
-                                        .unwrap_or(id);
-                                    format!("do something fresh in the {} style — surprise me", name)
-                                }
-                                None => "do something interesting — evolve the pattern and sound however you feel".to_string(),
-                            };
-                            (p, "YOU → ✦\n".to_string())
-                        } else {
-                            (typed.clone(), format!("YOU → {}\n", typed))
-                        };
-                        self.log_text.push_str(&log_line);
-                        let _ = self.llm_tx.try_send(LlmInput::Infer { prompt, one_shot: true });
-                        self.prompt_input.clear();
-                    }
-                });
-
-                ui.add_space(4.0);
-
-                // Selectable, copy-pastable log backed by an append-only string
-                egui::ScrollArea::vertical()
-                    .id_source("log_scroll")
-                    .stick_to_bottom(true)
-                    .max_height(90.0)
-                    .auto_shrink([false, false])
-                    .show(ui, |ui: &mut egui::Ui| {
-                        ui.add(
-                            egui::TextEdit::multiline(&mut self.log_text)
-                                .desired_width(f32::INFINITY)
-                                .font(egui::FontId::monospace(9.0))
-                                .text_color(theme::SMOKE)
-                                .frame(false)
-                                .interactive(true)
-                        );
-                    });
-
-                // Thinking tokens (collapsible, only shown when present)
-                if let Some(ref thinking) = self.last_thinking.clone() {
-                    ui.horizontal(|ui| {
-                        let label = if self.show_thinking { "▾ thinking" } else { "▸ thinking" };
-                        if ui.small_button(egui::RichText::new(label).color(theme::IRON).size(9.0)).clicked() {
-                            self.show_thinking = !self.show_thinking;
-                        }
-                    });
-                    if self.show_thinking {
-                        egui::ScrollArea::vertical()
-                            .id_source("thinking_scroll")
-                            .max_height(60.0)
-                            .auto_shrink([false, false])
-                            .show(ui, |ui| {
-                                let mut t = thinking.clone();
-                                ui.add(
-                                    egui::TextEdit::multiline(&mut t)
-                                        .desired_width(f32::INFINITY)
-                                        .font(egui::FontId::monospace(9.0))
-                                        .text_color(theme::IRON)
-                                        .frame(false)
-                                        .interactive(false)
-                                );
-                            });
-                    }
-                }
-            });
+        // ── LLM interaction strip ────────────────────────────────────────────
+        self.draw_llm_strip(ctx);
 
         // ── Oscilloscope strip ────────────────────────────────────────────────
         TopBottomPanel::top("scope")
-            .frame(Frame::none().fill(theme::PIT).inner_margin(egui::Margin::symmetric(8.0, 4.0)))
+            .frame(
+                Frame::none()
+                    .fill(theme::PIT)
+                    .inner_margin(egui::Margin::symmetric(8.0, 4.0)),
+            )
             .exact_height(48.0)
             .show(ctx, |ui| {
                 self.draw_scope(ui);
@@ -1211,19 +466,36 @@ impl eframe::App for ImpulseApp {
 
         // ── Tab bar (data-driven — add InstrumentSlot to self.instruments to extend) ──
         TopBottomPanel::top("tabs")
-            .frame(Frame::none().fill(theme::DEEP).inner_margin(egui::Margin::symmetric(8.0, 2.0)))
+            .frame(
+                Frame::none()
+                    .fill(theme::DEEP)
+                    .inner_margin(egui::Margin::symmetric(8.0, 2.0)),
+            )
             .show(ctx, |ui| {
                 ui.horizontal(|ui| {
                     // Fixed left tab
-                    let tab = |ui: &mut egui::Ui, panel: Panel, label: &str, active_panel: Panel| -> bool {
+                    let tab = |ui: &mut egui::Ui,
+                               panel: Panel,
+                               label: &str,
+                               active_panel: Panel|
+                     -> bool {
                         let active = active_panel == panel;
                         let color = if active { theme::CHALK } else { theme::IRON };
-                        let fill  = if active { theme::SLATE  } else { theme::DEEP  };
+                        let fill = if active { theme::SLATE } else { theme::DEEP };
                         ui.add(
-                            egui::Button::new(egui::RichText::new(label).color(color).monospace().size(9.5))
-                                .fill(fill)
-                                .stroke(egui::Stroke::new(1.0, if active { theme::ASH } else { theme::VOID }))
-                        ).clicked()
+                            egui::Button::new(
+                                egui::RichText::new(label)
+                                    .color(color)
+                                    .monospace()
+                                    .size(9.5),
+                            )
+                            .fill(fill)
+                            .stroke(egui::Stroke::new(
+                                1.0,
+                                if active { theme::ASH } else { theme::VOID },
+                            )),
+                        )
+                        .clicked()
                     };
 
                     if tab(ui, Panel::Sequencer, "SEQUENCER", self.active_panel) {
@@ -1243,41 +515,56 @@ impl eframe::App for ImpulseApp {
 
         // ── Footer ────────────────────────────────────────────────────────────
         TopBottomPanel::bottom("footer")
-            .frame(Frame::none().fill(theme::VOID).inner_margin(egui::Margin::symmetric(6.0, 2.0)))
+            .frame(
+                Frame::none()
+                    .fill(theme::VOID)
+                    .inner_margin(egui::Margin::symmetric(6.0, 2.0)),
+            )
             .exact_height(18.0)
             .show(ctx, |ui| {
                 ui.horizontal(|ui| {
                     let midi_text = match &self.midi_port {
                         Some(port) => format!("MIDI: {}", port.trim()),
-                        None       => "MIDI: no device".to_string(),
+                        None => "MIDI: no device".to_string(),
                     };
-                    ui.label(egui::RichText::new(midi_text).color(theme::IRON).monospace().size(9.0));
+                    ui.label(
+                        egui::RichText::new(midi_text)
+                            .color(theme::IRON)
+                            .monospace()
+                            .size(9.0),
+                    );
                 });
             });
 
         TopBottomPanel::bottom("piano")
-            .frame(Frame::none().fill(theme::VOID).inner_margin(egui::Margin::symmetric(0.0, 0.0)))
+            .frame(
+                Frame::none()
+                    .fill(theme::VOID)
+                    .inner_margin(egui::Margin::symmetric(0.0, 0.0)),
+            )
             .exact_height(80.0)
             .show(ctx, |ui| {
-                self.draw_piano(ui, ctx);
+                panels::draw_piano(self, ui, ctx);
             });
 
         // ── Main content ──────────────────────────────────────────────────────
         CentralPanel::default()
-            .frame(Frame::none().fill(theme::DEEP).inner_margin(egui::Margin::same(8.0)))
-            .show(ctx, |ui| {
-                match self.active_panel {
-                    Panel::Sequencer => self.draw_sequencer(ui),
-                    Panel::Instrument(i) => {
-                        let kind = self.instruments[i].kind;
-                        match kind {
-                            InstrumentKind::AcidBass   => self.draw_bass(ui),
-                            InstrumentKind::DrumKit808 => self.draw_kit_a(ui),
-                            InstrumentKind::DrumKit909 => self.draw_kit_b(ui),
-                        }
+            .frame(
+                Frame::none()
+                    .fill(theme::DEEP)
+                    .inner_margin(egui::Margin::same(8.0)),
+            )
+            .show(ctx, |ui| match self.active_panel {
+                Panel::Sequencer => panels::draw_sequencer(self, ui),
+                Panel::Instrument(i) => {
+                    let kind = self.instruments[i].kind;
+                    match kind {
+                        InstrumentKind::AcidBass => panels::draw_bass(self, ui),
+                        InstrumentKind::DrumKit808 => panels::draw_kit_a(self, ui),
+                        InstrumentKind::DrumKit909 => panels::draw_kit_b(self, ui),
                     }
-                    Panel::Fx => self.draw_fx(ui),
                 }
+                Panel::Fx => panels::draw_fx(self, ui),
             });
     }
 }
@@ -1286,27 +573,44 @@ impl eframe::App for ImpulseApp {
 
 impl ImpulseApp {
     fn draw_scope(&self, ui: &mut egui::Ui) {
-        let (rect, _) = ui.allocate_exact_size(egui::vec2(ui.available_width(), 40.0), egui::Sense::hover());
-        if !ui.is_rect_visible(rect) { return; }
+        let (rect, _) =
+            ui.allocate_exact_size(egui::vec2(ui.available_width(), 40.0), egui::Sense::hover());
+        if !ui.is_rect_visible(rect) {
+            return;
+        }
         let painter = ui.painter();
         painter.rect_filled(rect, egui::Rounding::ZERO, theme::PIT);
-        painter.rect_stroke(rect, egui::Rounding::ZERO, egui::Stroke::new(1.0, theme::SLATE));
+        painter.rect_stroke(
+            rect,
+            egui::Rounding::ZERO,
+            egui::Stroke::new(1.0, theme::SLATE),
+        );
 
         let n = self.scope_buf.len();
-        if n < 2 { return; }
+        if n < 2 {
+            return;
+        }
         let w = rect.width();
         let h = rect.height();
         let mid = rect.center().y;
         let amp = h * 0.45;
 
-        let points: Vec<egui::Pos2> = self.scope_buf.iter().enumerate().map(|(i, &s)| {
-            let x = rect.min.x + (i as f32 / (n - 1) as f32) * w;
-            let y = mid - s.clamp(-1.0, 1.0) * amp;
-            egui::Pos2::new(x, y)
-        }).collect();
+        let points: Vec<egui::Pos2> = self
+            .scope_buf
+            .iter()
+            .enumerate()
+            .map(|(i, &s)| {
+                let x = rect.min.x + (i as f32 / (n - 1) as f32) * w;
+                let y = mid - s.clamp(-1.0, 1.0) * amp;
+                egui::Pos2::new(x, y)
+            })
+            .collect();
 
         for i in 0..points.len().saturating_sub(1) {
-            painter.line_segment([points[i], points[i + 1]], egui::Stroke::new(1.0, theme::CHALK));
+            painter.line_segment(
+                [points[i], points[i + 1]],
+                egui::Stroke::new(1.0, theme::CHALK),
+            );
         }
     }
 
@@ -1317,758 +621,5 @@ impl ImpulseApp {
             .stroke(egui::Stroke::new(1.0, theme::SLATE))
             .rounding(egui::Rounding::same(3.0))
             .inner_margin(egui::Margin::same(8.0))
-    }
-
-    // ── Sequencer ────────────────────────────────────────────────────────────
-
-    fn draw_sequencer(&mut self, ui: &mut egui::Ui) {
-        let (current_step, running, seq_steps) = {
-            let s = self.state.read();
-            (s.sequencer.current_step, s.sequencer.running, s.sequencer.steps)
-        };
-        // Only highlight the cursor when the sequencer is actually playing;
-        // usize::MAX guarantees no step matches when stopped.
-        let cursor = if running { current_step } else { usize::MAX };
-
-        widgets::section_header(ui, "STEP SEQUENCER");
-
-        // Steps counter control
-        ui.horizontal(|ui| {
-            ui.label(egui::RichText::new("STEPS").color(theme::SMOKE).monospace().size(9.0));
-            let mut steps = self.state.read().sequencer.steps;
-            if ui.small_button("−").clicked() && steps > 1 {
-                steps -= 1;
-                self.state.write().sequencer.steps = steps; // shrink: no tiling needed
-            }
-            ui.label(egui::RichText::new(format!("{:02}", steps)).color(theme::FOG).monospace());
-            if ui.small_button("+").clicked() && steps < MAX_STEPS {
-                steps += 1;
-                let new_state = crate::state::expand_sequencer_steps(self.state.read().clone(), steps);
-                *self.state.write() = new_state;
-            }
-
-            // Preset step count buttons
-            for &preset in &[8usize, 16, 32, 64] {
-                if ui.small_button(format!("[{}]", preset)).clicked() {
-                    let new_state = crate::state::expand_sequencer_steps(self.state.read().clone(), preset);
-                    *self.state.write() = new_state;
-                }
-            }
-
-            ui.add_space(12.0);
-
-            // BPM
-            let mut bpm = self.state.read().sequencer.bpm;
-            ui.label(egui::RichText::new("BPM").color(theme::SMOKE).monospace().size(9.0));
-            let resp = ui.add(egui::DragValue::new(&mut bpm).range(40.0..=250.0).speed(0.5));
-            if resp.changed() {
-                self.state.write().sequencer.bpm = bpm;
-                self.push_audio_params();
-            }
-        });
-
-        ui.add_space(4.0);
-
-        let page_start = self.seq_page * 16;
-        let total_pages = (seq_steps + 15) / 16;
-
-        // Auto-follow cursor when playing
-        if running && cursor != usize::MAX {
-            let cursor_page = cursor / 16;
-            if self.seq_page != cursor_page {
-                self.seq_page = cursor_page;
-            }
-        }
-
-        // Page nav (only shown when steps > 16)
-        if total_pages > 1 {
-            ui.horizontal(|ui| {
-                if ui.small_button("<").clicked() && self.seq_page > 0 { self.seq_page -= 1; }
-                ui.label(egui::RichText::new(format!("PAGE {}/{}", self.seq_page + 1, total_pages)).monospace().size(9.0).color(theme::SMOKE));
-                if ui.small_button(">").clicked() && self.seq_page < total_pages - 1 { self.seq_page += 1; }
-            });
-        }
-
-        ui.add_space(2.0);
-
-        let voices = DrumVoice::ALL;
-
-        // Step grid — draw each row
-        egui::ScrollArea::vertical().show(ui, |ui| {
-            for voice in voices {
-                ui.horizontal(|ui| {
-                    // Voice label
-                    let label = voice.label();
-                    ui.add_sized(
-                        [SEQ_LABEL_W, SEQ_LABEL_H],
-                        egui::Label::new(
-                            egui::RichText::new(label).color(theme::SMOKE).monospace().size(8.5)
-                        )
-                    );
-
-                    // Per-voice volume slider
-                    let mut vol = voice.get_volume(&self.state.read());
-                    let vol_resp = ui.add_sized(
-                        [SEQ_VOL_W, SEQ_VOL_H],
-                        egui::Slider::new(&mut vol, 0.0..=1.0)
-                            .show_value(false)
-                            .trailing_fill(true),
-                    );
-                    if vol_resp.changed() {
-                        let s = self.state.read().clone();
-                        *self.state.write() = voice.set_volume(s, vol);
-                        self.push_audio_params();
-                    }
-
-                    // Snapshot pattern for this page
-                    let pattern: Vec<crate::state::Step> = {
-                        let s = self.state.read();
-                        s.sequencer.drum_patterns.get(voice)
-                            .map(|p| p[page_start..(page_start + 16).min(p.len())].to_vec())
-                            .unwrap_or_else(|| vec![crate::state::Step::default(); 16])
-                    };
-
-                    let mut toggled = None;
-                    for i in 0..16usize {
-                        let abs = page_start + i;
-                        // Group dividers every 4
-                        if i > 0 && i % 4 == 0 {
-                            ui.add_space(2.0);
-                        }
-                        let is_active = pattern.get(i).map(|s| s.active).unwrap_or(false);
-                        let is_current = abs == cursor;
-                        let vel = pattern.get(i).map(|s| s.velocity).unwrap_or(0.0);
-                        let enabled = abs < seq_steps;
-
-                        ui.add_enabled_ui(enabled, |ui| {
-                            if widgets::step_button(ui, is_active, is_current, vel, None) {
-                                toggled = Some(abs);
-                            }
-                        });
-                    }
-
-                    if let Some(step) = toggled {
-                        let s = self.state.read().clone();
-                        *self.state.write() = toggle_drum_step(s, *voice, step);
-                    }
-                });
-            }
-
-            // Bass row
-            ui.add_space(2.0);
-            ui.separator();
-            ui.add_space(2.0);
-            ui.horizontal(|ui| {
-                ui.add_sized(
-                    [80.0, 22.0],
-                    egui::Label::new(
-                        egui::RichText::new("BASS").color(theme::SMOKE).monospace().size(8.5)
-                    )
-                );
-                let bass_page: Vec<crate::state::TB303Step> = {
-                    let s = self.state.read();
-                    let end = (page_start + 16).min(s.sequencer.bass_pattern.len());
-                    s.sequencer.bass_pattern[page_start..end].to_vec()
-                };
-                for i in 0..16usize {
-                    let abs = page_start + i;
-                    if i > 0 && i % 4 == 0 { ui.add_space(2.0); }
-                    let is_active = bass_page.get(i).map(|s| s.active).unwrap_or(false);
-                    let is_current = abs == cursor;
-                    let note_col = bass_page.get(i).map(|s| Some(theme::note_color(s.note))).unwrap_or(None);
-                    ui.add_enabled_ui(abs < seq_steps, |ui| {
-                        if widgets::step_button(ui, is_active, is_current, 1.0, note_col) {
-                            let s = self.state.read().clone();
-                            let note = s.sequencer.bass_pattern.get(abs).map(|b| b.note).unwrap_or(36);
-                            let was = s.sequencer.bass_pattern.get(abs).map(|b| b.active).unwrap_or(false);
-                            *self.state.write() = crate::state::set_bass_step(s, abs, note, !was);
-                        }
-                    });
-                }
-            });
-        });
-    }
-
-    // ── Bass synth ────────────────────────────────────────────────────────────
-
-    fn draw_bass(&mut self, ui: &mut egui::Ui) {
-        widgets::section_header(ui, "BASS SYNTHESIZER");
-
-        // Snapshot everything needed for rendering — lock released before any widget call
-        let (mut cutoff, mut resonance, mut env_mod, mut decay, mut accent, mut dist, mut vol,
-             waveform, mut supersaw_detune, supersaw_voices, locked, focused, auto_lock) = {
-            let s = self.state.read();
-            (s.bass.cutoff, s.bass.resonance, s.bass.env_mod, s.bass.decay,
-             s.bass.accent_level, s.bass.distortion, s.bass.volume,
-             s.bass.waveform.clone(), s.bass.supersaw_detune, s.bass.supersaw_voices,
-             s.llm.locked_params.clone(), s.llm.focused_params.clone(),
-             s.llm.auto_lock_on_touch)
-        };
-
-        let mut cycle_paths: Vec<&str> = Vec::new();
-        let mut changed = false;
-
-        let use_sliders = self.use_sliders;
-        let draw_bass_controls = |ui: &mut egui::Ui| {
-            let (ch, cy) = widgets::param_control(ui, "CUTOFF",    &mut cutoff,    param_mode("bass.cutoff",       &locked, &focused), use_sliders);
-            if ch { changed = true; } if cy { cycle_paths.push("bass.cutoff"); }
-            let (ch, cy) = widgets::param_control(ui, "RESONANCE", &mut resonance, param_mode("bass.resonance",    &locked, &focused), use_sliders);
-            if ch { changed = true; } if cy { cycle_paths.push("bass.resonance"); }
-            let (ch, cy) = widgets::param_control(ui, "ENV MOD",   &mut env_mod,   param_mode("bass.env_mod",      &locked, &focused), use_sliders);
-            if ch { changed = true; } if cy { cycle_paths.push("bass.env_mod"); }
-            let (ch, cy) = widgets::param_control(ui, "DECAY",     &mut decay,     param_mode("bass.decay",        &locked, &focused), use_sliders);
-            if ch { changed = true; } if cy { cycle_paths.push("bass.decay"); }
-            let (ch, cy) = widgets::param_control(ui, "ACCENT",    &mut accent,    param_mode("bass.accent_level", &locked, &focused), use_sliders);
-            if ch { changed = true; } if cy { cycle_paths.push("bass.accent_level"); }
-            let (ch, cy) = widgets::param_control(ui, "DRIVE",     &mut dist,      param_mode("bass.distortion",   &locked, &focused), use_sliders);
-            if ch { changed = true; } if cy { cycle_paths.push("bass.distortion"); }
-            let (ch, cy) = widgets::param_control(ui, "VOLUME",    &mut vol,       param_mode("bass.volume",       &locked, &focused), use_sliders);
-            if ch { changed = true; } if cy { cycle_paths.push("bass.volume"); }
-        };
-        if use_sliders {
-            ui.vertical(draw_bass_controls);
-        } else {
-            ui.horizontal_wrapped(draw_bass_controls);
-        }
-
-        // Apply all changes in a single brief write, using pure state transitions
-        let needs_write = changed || !cycle_paths.is_empty();
-        if needs_write {
-            let mut snap = self.state.read().clone();
-            if changed {
-                snap.bass.cutoff       = cutoff;
-                snap.bass.resonance    = resonance;
-                snap.bass.env_mod      = env_mod;
-                snap.bass.decay        = decay;
-                snap.bass.accent_level = accent;
-                snap.bass.distortion   = dist;
-                snap.bass.volume       = vol;
-                // auto_lock: touching a free param immediately makes it UserOwned
-                if auto_lock {
-                    for p in ["bass.cutoff","bass.resonance","bass.env_mod","bass.decay",
-                              "bass.accent_level","bass.distortion","bass.volume"] {
-                        if snap.llm.locked_params.contains(p) { continue; }
-                        if snap.llm.focused_params.contains(p) { continue; }
-                        snap.llm.locked_params.insert(p.to_string());
-                    }
-                }
-            }
-            for path in &cycle_paths {
-                snap = cycle_param_mode(snap, path);
-            }
-            *self.state.write() = snap;
-            if changed { self.push_audio_params(); }
-        }
-
-        ui.add_space(6.0);
-
-        // XY Control Squares — two 2D pads for the core acid parameters
-        let xy1_locked = param_mode("bass.cutoff",   &locked, &focused) == ParamMode::UserOwned
-                      || param_mode("bass.resonance", &locked, &focused) == ParamMode::UserOwned;
-        let xy2_locked = param_mode("bass.env_mod",  &locked, &focused) == ParamMode::UserOwned
-                      || param_mode("bass.decay",    &locked, &focused) == ParamMode::UserOwned;
-
-        ui.horizontal(|ui| {
-            // Pad 1: Cutoff (X) × Resonance (Y)
-            if widgets::xy_pad(ui, "CUT", "RES", &mut cutoff, &mut resonance, 88.0, xy1_locked) {
-                let mut snap = self.state.read().clone();
-                snap.bass.cutoff    = cutoff;
-                snap.bass.resonance = resonance;
-                *self.state.write() = snap;
-                self.push_audio_params();
-            }
-            ui.add_space(6.0);
-            // Pad 2: Env Mod (X) × Decay (Y)
-            if widgets::xy_pad(ui, "ENV", "DEC", &mut env_mod, &mut decay, 88.0, xy2_locked) {
-                let mut snap = self.state.read().clone();
-                snap.bass.env_mod = env_mod;
-                snap.bass.decay   = decay;
-                *self.state.write() = snap;
-                self.push_audio_params();
-            }
-        });
-
-        ui.add_space(8.0);
-
-        // Waveform toggle
-        ui.horizontal(|ui| {
-            ui.label(egui::RichText::new("WAVE").color(theme::SMOKE).monospace().size(9.0));
-            let mut saw = waveform == Waveform::Saw;
-            if widgets::toggle_button(ui, "SAW", &mut saw) {
-                self.state.write().bass.waveform = Waveform::Saw;
-                self.push_audio_params();
-            }
-            let mut sq = waveform == Waveform::Square;
-            if widgets::toggle_button(ui, "SQR", &mut sq) {
-                self.state.write().bass.waveform = Waveform::Square;
-                self.push_audio_params();
-            }
-            let mut ss = waveform == Waveform::Supersaw;
-            if widgets::toggle_button(ui, "SUPER", &mut ss) {
-                self.state.write().bass.waveform = Waveform::Supersaw;
-                self.push_audio_params();
-            }
-        });
-
-        // Supersaw controls (only shown when Supersaw is active)
-        if waveform == Waveform::Supersaw {
-            ui.horizontal(|ui| {
-                ui.label(egui::RichText::new("DETUNE").color(theme::SMOKE).monospace().size(9.0));
-                if widgets::param_control(ui, "", &mut supersaw_detune, ParamMode::Free, use_sliders).0 {
-                    let mut s = self.state.write();
-                    s.bass.supersaw_detune = supersaw_detune;
-                    drop(s);
-                    self.push_audio_params();
-                }
-                let voices_label = format!("{}V", supersaw_voices);
-                ui.label(egui::RichText::new("VOICES").color(theme::SMOKE).monospace().size(9.0));
-                if ui.small_button("-").clicked() && supersaw_voices > 2 {
-                    self.state.write().bass.supersaw_voices = supersaw_voices - 1;
-                    self.push_audio_params();
-                }
-                ui.label(egui::RichText::new(&voices_label).color(theme::CHALK).monospace().size(9.0));
-                if ui.small_button("+").clicked() && supersaw_voices < 7 {
-                    self.state.write().bass.supersaw_voices = supersaw_voices + 1;
-                    self.push_audio_params();
-                }
-            });
-        }
-
-        ui.add_space(12.0);
-
-        // Locked params management
-        let locked_bass: Vec<String> = locked.iter()
-            .filter(|p| p.starts_with("bass"))
-            .cloned().collect();
-
-        ui.horizontal(|ui| {
-            ui.label(egui::RichText::new("LOCKED:").color(theme::SMOKE).monospace().size(8.5));
-            if locked_bass.is_empty() {
-                ui.label(egui::RichText::new("none (LLM controls all)").color(theme::IRON).monospace().size(8.5));
-            } else {
-                let mut to_remove: Option<String> = None;
-                for p in &locked_bass {
-                    let short = p.replace("bass.", "");
-                    if ui.small_button(egui::RichText::new(format!("× {}", short)).monospace().size(8.0)).clicked() {
-                        to_remove = Some(p.clone());
-                    }
-                }
-                if let Some(p) = to_remove {
-                    let next = crate::state::unlock_param(self.state.read().clone(), &p);
-                    *self.state.write() = next;
-                }
-            }
-            if ui.small_button(egui::RichText::new("UNLOCK ALL").monospace().size(8.0)).clicked() {
-                let mut next = self.state.read().clone();
-                next.llm.locked_params.retain(|p| !p.starts_with("bass"));
-                *self.state.write() = next;
-            }
-        });
-    }
-
-    // ── Drum Kit A ────────────────────────────────────────────────────────────
-
-    fn draw_kit_a(&mut self, ui: &mut egui::Ui) {
-        widgets::section_header(ui, "DRUM KIT A");
-
-        // Snapshot all values before any widget rendering
-        let (mut kp, mut kd, mut kpu, mut kv,
-             mut st, mut ssn, mut sd, mut sv,
-             mut hcd, mut hod, mut hv) = {
-            let s = self.state.read();
-            (s.kit_a.kick.pitch, s.kit_a.kick.decay, s.kit_a.kick.punch, s.kit_a.kick.volume,
-             s.kit_a.snare.tone, s.kit_a.snare.snappy, s.kit_a.snare.decay, s.kit_a.snare.volume,
-             s.kit_a.hihat_closed.decay, s.kit_a.hihat_open.decay, s.kit_a.hihat_closed.volume)
-        };
-        let mut changed = false;
-
-        let use_sliders = self.use_sliders;
-        ui.horizontal_wrapped(|ui| {
-            ui.group(|ui| {
-                ui.label(egui::RichText::new("KICK").color(theme::FOG).monospace().size(9.5));
-                if widgets::param_control(ui, "PITCH", &mut kp, ParamMode::Free, use_sliders).0 { changed = true; }
-                if widgets::param_control(ui, "DECAY", &mut kd, ParamMode::Free, use_sliders).0 { changed = true; }
-                if widgets::param_control(ui, "PUNCH", &mut kpu, ParamMode::Free, use_sliders).0 { changed = true; }
-                if widgets::param_control(ui, "LEVEL", &mut kv, ParamMode::Free, use_sliders).0 { changed = true; }
-            });
-            ui.add_space(4.0);
-            ui.group(|ui| {
-                ui.label(egui::RichText::new("SNARE").color(theme::FOG).monospace().size(9.5));
-                if widgets::param_control(ui, "TONE",   &mut st, ParamMode::Free, use_sliders).0 { changed = true; }
-                if widgets::param_control(ui, "SNAPPY", &mut ssn, ParamMode::Free, use_sliders).0 { changed = true; }
-                if widgets::param_control(ui, "DECAY",  &mut sd, ParamMode::Free, use_sliders).0 { changed = true; }
-                if widgets::param_control(ui, "LEVEL",  &mut sv, ParamMode::Free, use_sliders).0 { changed = true; }
-            });
-            ui.add_space(4.0);
-            ui.group(|ui| {
-                ui.label(egui::RichText::new("HIHAT").color(theme::FOG).monospace().size(9.5));
-                if widgets::param_control(ui, "CLOSED", &mut hcd, ParamMode::Free, use_sliders).0 { changed = true; }
-                if widgets::param_control(ui, "OPEN",   &mut hod, ParamMode::Free, use_sliders).0 { changed = true; }
-                if widgets::param_control(ui, "LEVEL",  &mut hv, ParamMode::Free, use_sliders).0 { changed = true; }
-            });
-        });
-
-        // Single brief write with all changes
-        if changed {
-            let mut s = self.state.write();
-            s.kit_a.kick.pitch          = kp;
-            s.kit_a.kick.decay          = kd;
-            s.kit_a.kick.punch          = kpu;
-            s.kit_a.kick.volume         = kv;
-            s.kit_a.snare.tone          = st;
-            s.kit_a.snare.snappy        = ssn;
-            s.kit_a.snare.decay         = sd;
-            s.kit_a.snare.volume        = sv;
-            s.kit_a.hihat_closed.decay  = hcd;
-            s.kit_a.hihat_open.decay    = hod;
-            s.kit_a.hihat_closed.volume = hv;
-            s.kit_a.hihat_open.volume   = hv;
-            drop(s);
-            self.push_audio_params();
-        }
-    }
-
-    // ── Drum Kit B ────────────────────────────────────────────────────────────
-
-    fn draw_kit_b(&mut self, ui: &mut egui::Ui) {
-        widgets::section_header(ui, "DRUM KIT B");
-
-        let (mut kp, mut kd, mut kpu, mut kv,
-             mut st, mut ssn, mut sd, mut sv,
-             mut cd, mut cv) = {
-            let s = self.state.read();
-            (s.kit_b.kick.pitch, s.kit_b.kick.decay, s.kit_b.kick.punch, s.kit_b.kick.volume,
-             s.kit_b.snare.tone, s.kit_b.snare.snappy, s.kit_b.snare.decay, s.kit_b.snare.volume,
-             s.kit_b.clap.decay, s.kit_b.clap.volume)
-        };
-        let mut changed = false;
-
-        let use_sliders = self.use_sliders;
-        ui.horizontal_wrapped(|ui| {
-            ui.group(|ui| {
-                ui.label(egui::RichText::new("KICK").color(theme::FOG).monospace().size(9.5));
-                if widgets::param_control(ui, "PITCH", &mut kp, ParamMode::Free, use_sliders).0 { changed = true; }
-                if widgets::param_control(ui, "DECAY", &mut kd, ParamMode::Free, use_sliders).0 { changed = true; }
-                if widgets::param_control(ui, "PUNCH", &mut kpu, ParamMode::Free, use_sliders).0 { changed = true; }
-                if widgets::param_control(ui, "LEVEL", &mut kv, ParamMode::Free, use_sliders).0 { changed = true; }
-            });
-            ui.add_space(4.0);
-            ui.group(|ui| {
-                ui.label(egui::RichText::new("SNARE").color(theme::FOG).monospace().size(9.5));
-                if widgets::param_control(ui, "TONE",   &mut st, ParamMode::Free, use_sliders).0 { changed = true; }
-                if widgets::param_control(ui, "SNAPPY", &mut ssn, ParamMode::Free, use_sliders).0 { changed = true; }
-                if widgets::param_control(ui, "DECAY",  &mut sd, ParamMode::Free, use_sliders).0 { changed = true; }
-                if widgets::param_control(ui, "LEVEL",  &mut sv, ParamMode::Free, use_sliders).0 { changed = true; }
-            });
-            ui.add_space(4.0);
-            ui.group(|ui| {
-                ui.label(egui::RichText::new("CLAP / RIM").color(theme::FOG).monospace().size(9.5));
-                if widgets::param_control(ui, "CLAP DEC", &mut cd, ParamMode::Free, use_sliders).0 { changed = true; }
-                if widgets::param_control(ui, "CLAP LVL", &mut cv, ParamMode::Free, use_sliders).0 { changed = true; }
-            });
-        });
-
-        if changed {
-            let mut s = self.state.write();
-            s.kit_b.kick.pitch   = kp;
-            s.kit_b.kick.decay   = kd;
-            s.kit_b.kick.punch   = kpu;
-            s.kit_b.kick.volume  = kv;
-            s.kit_b.snare.tone   = st;
-            s.kit_b.snare.snappy = ssn;
-            s.kit_b.snare.decay  = sd;
-            s.kit_b.snare.volume = sv;
-            s.kit_b.clap.decay   = cd;
-            s.kit_b.clap.volume  = cv;
-            drop(s);
-            self.push_audio_params();
-        }
-    }
-
-    // ── Piano keyboard display ────────────────────────────────────────────────
-
-    fn draw_piano(&mut self, ui: &mut egui::Ui, ctx: &egui::Context) {
-        use egui::{Color32, Pos2, Rect, Sense, Stroke, Vec2};
-
-        // Range: C1 (MIDI 24) → C6 (MIDI 84) = 5 octaves + high C
-        const START_NOTE: u8 = 24;
-        const END_NOTE:   u8 = 84;   // inclusive
-        const N_OCTAVES:  usize = 5;
-        const N_WHITE:    usize = N_OCTAVES * 7 + 1; // 36 white keys (including C6)
-
-        // Which semitones are white keys?
-        const fn is_white(semitone: u8) -> bool {
-            matches!(semitone, 0 | 2 | 4 | 5 | 7 | 9 | 11)
-        }
-
-        // Black key center positions in white-key units from octave start (C=0).
-        // Each value sits at the boundary between two adjacent white keys so the
-        // black key straddles the gap, matching a real piano layout.
-        const BLACK_KEYS: &[(u8, f32)] = &[
-            (1,  1.0), // C# — between C and D
-            (3,  2.0), // D# — between D and E
-            (6,  4.0), // F# — between F and G
-            (8,  5.0), // G# — between G and A
-            (10, 6.0), // A# — between A and B
-        ];
-
-        let available_w = ui.available_width();
-        let wk_w = (available_w / N_WHITE as f32).max(8.0);
-        let wk_h = 74.0_f32;
-        let bk_w = wk_w * 0.55;
-        let bk_h = wk_h * 0.60;
-        let total_w = wk_w * N_WHITE as f32;
-
-        let (rect, response) = ui.allocate_exact_size(
-            Vec2::new(total_w, wk_h),
-            Sense::click_and_drag(),
-        );
-
-        // Detect click/drag position for interactive playing
-        let click_pos: Option<Pos2> = if response.is_pointer_button_down_on() || response.dragged() {
-            ctx.input(|i| i.pointer.interact_pos())
-        } else {
-            None
-        };
-        let mut clicked_note: Option<u8> = None;
-
-        // Sequencer cursor note (for highlighting)
-        let (seq_note, seq_running) = {
-            let s = self.state.read();
-            let step = s.sequencer.current_step;
-            let running = s.sequencer.running;
-            if running && s.sequencer.bass_pattern.get(step).map(|b| b.active).unwrap_or(false) {
-                (Some(s.sequencer.bass_pattern[step].note), true)
-            } else {
-                (None, running)
-            }
-        };
-        let _ = seq_running;
-
-        if !ui.is_rect_visible(rect) { return; }
-
-        let painter = ui.painter();
-        painter.rect_filled(rect, 0.0, theme::VOID);
-
-        let ox = rect.min.x; // origin x
-        let oy = rect.min.y;
-
-        let use_color  = self.piano_show_colors;
-        let show_label = self.piano_show_labels;
-
-        // Classic (non-Farbige) base colors
-        let classic_white_inactive = Color32::from_rgb(58, 58, 58);
-        let classic_black_inactive = Color32::from_rgb(18, 18, 18);
-        let classic_active         = Color32::from_rgb(200, 200, 200);
-
-        // ── White keys ────────────────────────────────────────────────────────
-        let mut white_idx = 0usize;
-        for note in START_NOTE..=END_NOTE {
-            let semi = note % 12;
-            if !is_white(semi) { continue; }
-
-            let x = ox + white_idx as f32 * wk_w;
-            let key_rect = Rect::from_min_size(
-                Pos2::new(x + 0.5, oy),
-                Vec2::new(wk_w - 1.0, wk_h),
-            );
-
-            let pressed    = self.pressed_notes.contains(&note);
-            let seq_active = seq_note == Some(note);
-            let active     = pressed || seq_active;
-
-            let fill: Color32 = if use_color {
-                let huth = theme::note_color(note);
-                if pressed       { theme::lerp_color(huth, theme::CHALK, 0.25) }
-                else if seq_active { theme::lerp_color(huth, theme::SMOKE, 0.35) }
-                else               { theme::lerp_color(huth, Color32::from_rgb(62, 62, 62), 0.80) }
-            } else {
-                if active { classic_active } else { classic_white_inactive }
-            };
-
-            painter.rect_filled(key_rect, egui::Rounding::same(1.0), fill);
-            painter.rect_stroke(key_rect, egui::Rounding::same(1.0),
-                Stroke::new(0.5, theme::SLATE));
-
-            // Label — all white keys when labels are on
-            if show_label {
-                let lbl = note_name(note);
-                // For non-C notes, trim the octave number to save space
-                let lbl_short = if semi == 0 { lbl } else { &lbl[..lbl.len()-1] };
-                let label_color = if active {
-                    if use_color { theme::VOID } else { theme::DEEP }
-                } else {
-                    theme::ASH
-                };
-                painter.text(
-                    Pos2::new(x + wk_w * 0.5, oy + wk_h - 9.0),
-                    egui::Align2::CENTER_CENTER,
-                    lbl_short,
-                    egui::FontId::monospace(7.0),
-                    label_color,
-                );
-            }
-
-            // Click detection — white keys
-            if let Some(cp) = click_pos {
-                if key_rect.contains(cp) { clicked_note = Some(note); }
-            }
-
-            white_idx += 1;
-        }
-
-        // ── Black keys (drawn on top) ─────────────────────────────────────────
-        for oct in 0..N_OCTAVES {
-            for &(semi, wk_off) in BLACK_KEYS {
-                let note = START_NOTE + oct as u8 * 12 + semi;
-                if note > END_NOTE { continue; }
-
-                let white_oct_start = ox + oct as f32 * 7.0 * wk_w;
-                let x = white_oct_start + wk_off * wk_w - bk_w * 0.5;
-                let key_rect = Rect::from_min_size(
-                    Pos2::new(x, oy),
-                    Vec2::new(bk_w, bk_h),
-                );
-
-                let pressed    = self.pressed_notes.contains(&note);
-                let seq_active = seq_note == Some(note);
-                let active     = pressed || seq_active;
-
-                let fill: Color32 = if use_color {
-                    let huth = theme::note_color(note);
-                    if pressed       { theme::lerp_color(huth, theme::CHALK, 0.15) }
-                    else if seq_active { huth }
-                    else               { theme::lerp_color(huth, theme::PIT, 0.82) }
-                } else {
-                    if active { classic_active } else { classic_black_inactive }
-                };
-
-                painter.rect_filled(key_rect, egui::Rounding::same(1.0), fill);
-                painter.rect_stroke(key_rect, egui::Rounding::same(1.0),
-                    Stroke::new(0.5, theme::SLATE));
-
-                // Label — sharp name only (no octave number, key is too narrow)
-                if show_label {
-                    // e.g. "C#" from "C#3"
-                    let full = note_name(note);
-                    let sharp = &full[..full.len()-1]; // strip octave digit
-                    let label_color = if active { theme::VOID } else { theme::IRON };
-                    painter.text(
-                        Pos2::new(x + bk_w * 0.5, oy + bk_h - 8.0),
-                        egui::Align2::CENTER_CENTER,
-                        sharp,
-                        egui::FontId::monospace(6.0),
-                        label_color,
-                    );
-                }
-
-                // Click detection — black keys take priority
-                if let Some(cp) = click_pos {
-                    if key_rect.contains(cp) { clicked_note = Some(note); }
-                }
-            }
-        }
-
-        // ── Click-to-play ─────────────────────────────────────────────────────
-        if let Some(note) = clicked_note {
-            if !self.pressed_notes.contains(&note) {
-                self.pressed_notes.insert(note);
-                let _ = self.audio_tx.push(AudioCommand::Trigger(
-                    TriggerEvent::BassTrigger {
-                        note,
-                        accent: false,
-                        slide: false,
-                        gate_samples: 22050,
-                    }
-                ));
-            }
-        } else if response.drag_stopped() || (!response.is_pointer_button_down_on() && !self.pressed_notes.is_empty()) {
-            // Release all click-triggered notes when pointer lifts
-            // (MIDI notes are managed by their own NoteOff messages)
-            // Only clear notes that aren't from MIDI (we track MIDI separately)
-            // Simple heuristic: clear on pointer release
-            let _ = self.audio_tx.push(AudioCommand::Trigger(TriggerEvent::BassGateOff));
-        }
-    }
-
-    // ── FX Chain ─────────────────────────────────────────────────────────────
-
-    fn draw_fx(&mut self, ui: &mut egui::Ui) {
-        widgets::section_header(ui, "FX CHAIN");
-
-        // Snapshot all FX values + locked set before any widget call
-        let (mut rs, mut rd, mut rm,
-             mut dt, mut df, mut dm,
-             mut dd, mut dx, mut mv,
-             locked, auto_lock) = {
-            let s = self.state.read();
-            (s.fx.reverb_size, s.fx.reverb_damp, s.fx.reverb_mix,
-             s.fx.delay_time, s.fx.delay_feedback, s.fx.delay_mix,
-             s.fx.distortion_drive, s.fx.distortion_mix, s.fx.master_volume,
-             s.llm.locked_params.clone(), s.llm.auto_lock_on_touch)
-        };
-
-        let mut changed = false;
-
-        let l_rs = locked.contains("fx.reverb_size");
-        let l_rm = locked.contains("fx.reverb_mix");
-        let l_df = locked.contains("fx.delay_feedback");
-        let l_dm = locked.contains("fx.delay_mix");
-
-        let use_sliders = self.use_sliders;
-        ui.horizontal_wrapped(|ui| {
-            ui.group(|ui| {
-                ui.label(egui::RichText::new("REVERB").color(theme::FOG).monospace().size(9.5));
-                // MIX (X) × SIZE (Y) pad — the two most-used reverb params
-                if widgets::xy_pad(ui, "MIX", "SIZE", &mut rm, &mut rs, 88.0, l_rm || l_rs) {
-                    let mut s = self.state.write();
-                    if !l_rm { s.fx.reverb_mix  = rm; if auto_lock { s.llm.locked_params.insert("fx.reverb_mix".to_string()); } }
-                    if !l_rs { s.fx.reverb_size = rs; if auto_lock { s.llm.locked_params.insert("fx.reverb_size".to_string()); } }
-                    drop(s);
-                    self.push_audio_params();
-                }
-                if widgets::param_control(ui, "DAMP", &mut rd, ParamMode::Free, use_sliders).0 {
-                    changed = true;
-                }
-            });
-
-            ui.add_space(4.0);
-
-            ui.group(|ui| {
-                ui.label(egui::RichText::new("DELAY").color(theme::FOG).monospace().size(9.5));
-                // MIX (X) × FDBK (Y) pad — feedback × mix is the key delay texture dial
-                if widgets::xy_pad(ui, "MIX", "FDBK", &mut dm, &mut df, 88.0, l_dm || l_df) {
-                    let mut s = self.state.write();
-                    if !l_dm { s.fx.delay_mix      = dm; if auto_lock { s.llm.locked_params.insert("fx.delay_mix".to_string()); } }
-                    if !l_df { s.fx.delay_feedback = df; if auto_lock { s.llm.locked_params.insert("fx.delay_feedback".to_string()); } }
-                    drop(s);
-                    self.push_audio_params();
-                }
-                if widgets::param_control(ui, "TIME", &mut dt, ParamMode::Free, use_sliders).0 {
-                    changed = true;
-                }
-            });
-
-            ui.add_space(4.0);
-
-            ui.group(|ui| {
-                ui.label(egui::RichText::new("DRIVE / MASTER").color(theme::FOG).monospace().size(9.5));
-                if widgets::param_control(ui, "DRIVE",  &mut dd, ParamMode::Free, use_sliders).0 { changed = true; }
-                if widgets::param_control(ui, "MIX",    &mut dx, ParamMode::Free, use_sliders).0 { changed = true; }
-                if widgets::param_control(ui, "MASTER", &mut mv, ParamMode::Free, use_sliders).0 { changed = true; }
-            });
-        });
-
-        // Write-back for standalone knobs (DAMP, TIME, DRIVE, etc.)
-        if changed {
-            let mut s = self.state.write();
-            s.fx.reverb_damp       = rd;
-            s.fx.delay_time        = dt;
-            s.fx.distortion_drive  = dd;
-            s.fx.distortion_mix    = dx;
-            s.fx.master_volume     = mv;
-            drop(s);
-            self.push_audio_params();
-        }
     }
 }

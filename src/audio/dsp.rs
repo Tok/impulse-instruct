@@ -265,7 +265,9 @@ impl Bass303 {
 
         // Oscillator
         self.phase += self.freq / sr;
-        if self.phase >= 1.0 { self.phase -= 1.0; }
+        if self.phase >= 1.0 {
+            self.phase -= 1.0;
+        }
 
         let osc = if p.waveform_supersaw {
             // Supersaw: N detuned saws mixed and normalised
@@ -275,11 +277,17 @@ impl Bass303 {
             let spread_semitones = p.supersaw_detune; // 0–1 semitone range
             let mut sum = self.phase * 2.0 - 1.0; // voice 0 at centre pitch
             for i in 0..(n - 1) {
-                let t = if n > 2 { i as f32 / (n as f32 - 2.0) } else { 0.5 };
+                let t = if n > 2 {
+                    i as f32 / (n as f32 - 2.0)
+                } else {
+                    0.5
+                };
                 let detune_st = (t - 0.5) * spread_semitones;
                 let ratio = 2.0f32.powf(detune_st / 12.0);
                 self.unison_phases[i] += self.freq * ratio / sr;
-                if self.unison_phases[i] >= 1.0 { self.unison_phases[i] -= 1.0; }
+                if self.unison_phases[i] >= 1.0 {
+                    self.unison_phases[i] -= 1.0;
+                }
                 sum += self.unison_phases[i] * 2.0 - 1.0;
             }
             (sum / n as f32) * 1.4 // slight gain boost to compensate cancellation
@@ -291,7 +299,11 @@ impl Bass303 {
         };
 
         // Envelope decay coefficients
-        let accent_mult = if self.accent { p.accent_level * 0.4 + 0.8 } else { 1.0 };
+        let accent_mult = if self.accent {
+            p.accent_level * 0.4 + 0.8
+        } else {
+            1.0
+        };
         let env_decay_coeff = {
             let t = p.decay_303 * 1.9 + 0.1; // 0.1–2.0 s decay
             (-1.0 / (sr * t)).exp()
@@ -342,9 +354,14 @@ impl Envelope {
         self.active = true;
     }
     fn tick(&mut self, decay_coeff: f32) -> f32 {
-        if !self.active { return 0.0; }
+        if !self.active {
+            return 0.0;
+        }
         self.value *= decay_coeff;
-        if self.value < 1e-6 { self.active = false; self.value = 0.0; }
+        if self.value < 1e-6 {
+            self.active = false;
+            self.value = 0.0;
+        }
         self.value
     }
 }
@@ -390,7 +407,9 @@ impl Kick {
 
         let freq = base_hz + pitch_mod * base_hz * 6.0;
         self.phase += freq / sr;
-        if self.phase >= 1.0 { self.phase -= 1.0; }
+        if self.phase >= 1.0 {
+            self.phase -= 1.0;
+        }
 
         let sine = (self.phase * std::f32::consts::TAU).sin();
         let click = self.noise_gen.next() * punch_amp * punch;
@@ -435,7 +454,9 @@ impl Snare {
         let noise_amp = self.noise_env.tick(noise_decay);
 
         self.phase += tone_hz / sr;
-        if self.phase >= 1.0 { self.phase -= 1.0; }
+        if self.phase >= 1.0 {
+            self.phase -= 1.0;
+        }
 
         let tone_out = (self.phase * std::f32::consts::TAU).sin() * tone_amp;
         let noise_raw = self.noise_gen.next();
@@ -546,7 +567,7 @@ struct Reverb {
 }
 
 // Freeverb-inspired delay lengths (prime-ish, tuned for ~44.1kHz)
-const COMB_LENGTHS: [usize; REVERB_COMBS] =    [1116, 1188, 1277, 1356, 1422, 1491, 1557, 1617];
+const COMB_LENGTHS: [usize; REVERB_COMBS] = [1116, 1188, 1277, 1356, 1422, 1491, 1557, 1617];
 const ALLPASS_LENGTHS: [usize; REVERB_ALLPASS] = [556, 441, 341, 225];
 
 impl Reverb {
@@ -567,8 +588,7 @@ impl Reverb {
 
         // Parallel comb filters
         let mut out = 0.0f32;
-        for i in 0..REVERB_COMBS {
-            let len = COMB_LENGTHS[i];
+        for (i, &len) in COMB_LENGTHS.iter().enumerate() {
             let ptr = self.comb_ptrs[i];
             let delayed = self.comb_delays[i][ptr];
 
@@ -582,8 +602,7 @@ impl Reverb {
         out *= 0.125; // scale by num combs
 
         // Series all-pass filters
-        for i in 0..REVERB_ALLPASS {
-            let len = ALLPASS_LENGTHS[i];
+        for (i, &len) in ALLPASS_LENGTHS.iter().enumerate() {
             let ptr = self.allpass_ptrs[i];
             let delayed = self.allpass_delays[i][ptr];
 
@@ -605,7 +624,10 @@ struct DelayLine {
 
 impl DelayLine {
     fn new() -> Self {
-        Self { buf: vec![0.0; MAX_DELAY_SAMPLES], ptr: 0 }
+        Self {
+            buf: vec![0.0; MAX_DELAY_SAMPLES],
+            ptr: 0,
+        }
     }
 
     fn process(&mut self, input: f32, delay_samples: usize, feedback: f32) -> f32 {
@@ -698,7 +720,12 @@ impl DspState {
                 DrumVoice::Clap909 => self.clap909.trigger(),
                 DrumVoice::Rim909 => self.rim909.trigger(),
             },
-            BassTrigger { note, accent, slide, gate_samples: _ } => {
+            BassTrigger {
+                note,
+                accent,
+                slide,
+                gate_samples: _,
+            } => {
                 self.bass.trigger(*note, *accent, *slide);
             }
             BassGateOff => self.bass.gate_off(),
@@ -710,37 +737,85 @@ impl DspState {
         let p = self.params;
         let sr = self.sample_rate;
 
-        let delay_samples = (p.delay_time * sr * 1.0).clamp(1.0, MAX_DELAY_SAMPLES as f32 - 1.0) as usize;
+        let delay_samples =
+            (p.delay_time * sr * 1.0).clamp(1.0, MAX_DELAY_SAMPLES as f32 - 1.0) as usize;
 
         for frame in output.chunks_mut(channels) {
             // Mix all voices to mono
             let bass_out = self.bass.process(&p);
 
-            let k808 = self.kick808.process(p.kick808_pitch, p.kick808_decay, p.kick808_punch, p.kick808_volume, sr);
-            let s808 = self.snare808.process(p.snare808_tone, p.snare808_snappy, p.snare808_decay, p.snare808_volume, sr);
-            let hh808c = self.hihat_closed808.process(p.hihat_closed808_decay, 0.8, p.hihat808_volume, sr);
-            let hh808o = self.hihat_open808.process(p.hihat_open808_decay, 0.75, p.hihat808_volume, sr);
+            let k808 = self.kick808.process(
+                p.kick808_pitch,
+                p.kick808_decay,
+                p.kick808_punch,
+                p.kick808_volume,
+                sr,
+            );
+            let s808 = self.snare808.process(
+                p.snare808_tone,
+                p.snare808_snappy,
+                p.snare808_decay,
+                p.snare808_volume,
+                sr,
+            );
+            let hh808c =
+                self.hihat_closed808
+                    .process(p.hihat_closed808_decay, 0.8, p.hihat808_volume, sr);
+            let hh808o =
+                self.hihat_open808
+                    .process(p.hihat_open808_decay, 0.75, p.hihat808_volume, sr);
             let th808 = self.tom_hi808.process(0.7, 0.4, 0.6, 0.7, sr);
             let tm808 = self.tom_mid808.process(0.5, 0.45, 0.6, 0.7, sr);
             let tl808 = self.tom_lo808.process(0.3, 0.5, 0.6, 0.7, sr);
 
-            let k909 = self.kick909.process(p.kick909_pitch, p.kick909_decay, p.kick909_punch, p.kick909_volume, sr);
-            let s909 = self.snare909.process(p.snare909_tone, p.snare909_snappy, p.snare909_decay, p.snare909_volume, sr);
-            let hh909c = self.hihat_closed909.process(p.hihat_closed909_decay, 0.85, p.hihat909_volume, sr);
-            let hh909o = self.hihat_open909.process(p.hihat_open909_decay, 0.8, p.hihat909_volume, sr);
+            let k909 = self.kick909.process(
+                p.kick909_pitch,
+                p.kick909_decay,
+                p.kick909_punch,
+                p.kick909_volume,
+                sr,
+            );
+            let s909 = self.snare909.process(
+                p.snare909_tone,
+                p.snare909_snappy,
+                p.snare909_decay,
+                p.snare909_volume,
+                sr,
+            );
+            let hh909c =
+                self.hihat_closed909
+                    .process(p.hihat_closed909_decay, 0.85, p.hihat909_volume, sr);
+            let hh909o =
+                self.hihat_open909
+                    .process(p.hihat_open909_decay, 0.8, p.hihat909_volume, sr);
             let clap = self.clap909.process(p.clap909_decay, p.clap909_volume, sr);
             let rim = self.rim909.process(0.7, 0.3, 0.15, 0.75, sr);
 
             // Scale mix to prevent clipping — summing 14 voices without gain staging
             // causes hard clipping even with moderate individual volumes
-            let dry = (bass_out + k808 + s808 + hh808c + hh808o + th808 + tm808 + tl808
-                + k909 + s909 + hh909c + hh909o + clap + rim) * 0.65;
+            let dry = (bass_out
+                + k808
+                + s808
+                + hh808c
+                + hh808o
+                + th808
+                + tm808
+                + tl808
+                + k909
+                + s909
+                + hh909c
+                + hh909o
+                + clap
+                + rim)
+                * 0.65;
 
             // FX chain
             let reverb_wet = self.reverb.process(dry, p.reverb_size, p.reverb_damp);
             let reverbed = dry * (1.0 - p.reverb_mix) + reverb_wet * p.reverb_mix;
 
-            let delay_wet = self.delay.process(reverbed, delay_samples, p.delay_feedback);
+            let delay_wet = self
+                .delay
+                .process(reverbed, delay_samples, p.delay_feedback);
             let delayed = reverbed * (1.0 - p.delay_mix) + delay_wet * p.delay_mix;
 
             // Bitcrush (bit depth reduction + sample rate decimation)

@@ -9,7 +9,7 @@ static CONFIG: OnceLock<Config> = OnceLock::new();
 
 const DEFAULT_JSON: &str = include_str!("../config.json");
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Default, Deserialize)]
 pub struct Config {
     /// Prompts sent automatically on startup once the LLM is ready.
     /// A random one is picked each launch.
@@ -17,16 +17,10 @@ pub struct Config {
     pub startup_prompts: Vec<String>,
 }
 
-impl Default for Config {
-    fn default() -> Self {
-        Self { startup_prompts: Vec::new() }
-    }
-}
-
 pub fn get() -> &'static Config {
     CONFIG.get_or_init(|| {
-        let json = std::fs::read_to_string("config.json")
-            .unwrap_or_else(|_| DEFAULT_JSON.to_string());
+        let json =
+            std::fs::read_to_string("config.json").unwrap_or_else(|_| DEFAULT_JSON.to_string());
         match serde_json::from_str::<Config>(&json) {
             Ok(c) => c,
             Err(e) => {

@@ -26,30 +26,38 @@ pub enum ParamMode {
 
 /// Derive the mode for a single dot-path from the two state sets.
 pub fn param_mode(path: &str, locked: &HashSet<String>, focused: &HashSet<String>) -> ParamMode {
-    if locked.contains(path)  { return ParamMode::UserOwned; }
-    if focused.contains(path) { return ParamMode::LlmFocus;  }
+    if locked.contains(path) {
+        return ParamMode::UserOwned;
+    }
+    if focused.contains(path) {
+        return ParamMode::LlmFocus;
+    }
     ParamMode::Free
 }
 
 /// Cycle a param through Free → UserOwned → LlmFocus → Free (pure).
 pub fn cycle_param_mode(state: AppState, path: &str) -> AppState {
     let mut s = state;
-    let owned   = s.llm.locked_params.contains(path);
+    let owned = s.llm.locked_params.contains(path);
     let focused = s.llm.focused_params.contains(path);
     match (owned, focused) {
-        (false, false) => { s.llm.locked_params.insert(path.to_string()); }
-        (true,  false) => {
+        (false, false) => {
+            s.llm.locked_params.insert(path.to_string());
+        }
+        (true, false) => {
             s.llm.locked_params.remove(path);
             s.llm.focused_params.insert(path.to_string());
         }
-        (_,     true)  => { s.llm.focused_params.remove(path); }
+        (_, true) => {
+            s.llm.focused_params.remove(path);
+        }
     }
     s
 }
 
 // ─── Top-level ───────────────────────────────────────────────────────────────
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct AppState {
     pub bass: BassState,
     pub kit_a: DrumKit808,
@@ -57,19 +65,6 @@ pub struct AppState {
     pub sequencer: SequencerState,
     pub fx: FxState,
     pub llm: LlmState,
-}
-
-impl Default for AppState {
-    fn default() -> Self {
-        Self {
-            bass: BassState::default(),
-            kit_a: DrumKit808::default(),
-            kit_b: DrumKit909::default(),
-            sequencer: SequencerState::default(),
-            fx: FxState::default(),
-            llm: LlmState::default(),
-        }
-    }
 }
 
 // ─── Bass synth ───────────────────────────────────────────────────────────────
@@ -89,10 +84,10 @@ pub struct BassState {
     pub decay: f32,        // 0–1 → 50–2000 ms
     pub accent_level: f32, // 0–1
     pub waveform: Waveform,
-    pub distortion: f32,          // 0–1
-    pub volume: f32,               // 0–1
-    pub supersaw_detune: f32,      // 0–1 → 0–1 semitone spread between voices
-    pub supersaw_voices: u8,       // 2–7
+    pub distortion: f32,      // 0–1
+    pub volume: f32,          // 0–1
+    pub supersaw_detune: f32, // 0–1 → 0–1 semitone spread between voices
+    pub supersaw_voices: u8,  // 2–7
 }
 
 impl Default for BassState {
@@ -116,43 +111,58 @@ impl Default for BassState {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct KickParams {
-    pub pitch: f32,   // 0–1 → 40–80 Hz base
-    pub decay: f32,   // 0–1 → 0.2–2.0 s
-    pub punch: f32,   // 0–1 attack transient
-    pub tone: f32,    // 0–1 sine/noise blend
-    pub volume: f32,  // 0–1
+    pub pitch: f32,  // 0–1 → 40–80 Hz base
+    pub decay: f32,  // 0–1 → 0.2–2.0 s
+    pub punch: f32,  // 0–1 attack transient
+    pub tone: f32,   // 0–1 sine/noise blend
+    pub volume: f32, // 0–1
 }
 
 impl Default for KickParams {
     fn default() -> Self {
-        Self { pitch: 0.5, decay: 0.6, punch: 0.45, tone: 0.8, volume: 0.65 }
+        Self {
+            pitch: 0.5,
+            decay: 0.6,
+            punch: 0.45,
+            tone: 0.8,
+            volume: 0.65,
+        }
     }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct SnareParams {
-    pub tone: f32,    // 0–1 tone freq
-    pub snappy: f32,  // 0–1 noise amount
-    pub decay: f32,   // 0–1
+    pub tone: f32,   // 0–1 tone freq
+    pub snappy: f32, // 0–1 noise amount
+    pub decay: f32,  // 0–1
     pub volume: f32,
 }
 
 impl Default for SnareParams {
     fn default() -> Self {
-        Self { tone: 0.5, snappy: 0.6, decay: 0.4, volume: 0.60 }
+        Self {
+            tone: 0.5,
+            snappy: 0.6,
+            decay: 0.4,
+            volume: 0.60,
+        }
     }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct HihatParams {
-    pub decay: f32,   // 0–1 (open hat = higher)
-    pub tone: f32,    // 0–1 filter cutoff
+    pub decay: f32, // 0–1 (open hat = higher)
+    pub tone: f32,  // 0–1 filter cutoff
     pub volume: f32,
 }
 
 impl Default for HihatParams {
     fn default() -> Self {
-        Self { decay: 0.2, tone: 0.7, volume: 0.75 }
+        Self {
+            decay: 0.2,
+            tone: 0.7,
+            volume: 0.75,
+        }
     }
 }
 
@@ -165,7 +175,11 @@ pub struct TomParams {
 
 impl Default for TomParams {
     fn default() -> Self {
-        Self { pitch: 0.5, decay: 0.5, volume: 0.7 }
+        Self {
+            pitch: 0.5,
+            decay: 0.5,
+            volume: 0.7,
+        }
     }
 }
 
@@ -185,11 +199,31 @@ impl Default for DrumKit808 {
         Self {
             kick: KickParams::default(),
             snare: SnareParams::default(),
-            hihat_closed: HihatParams { decay: 0.08, tone: 0.8, volume: 0.55 },
-            hihat_open: HihatParams { decay: 0.4, tone: 0.75, volume: 0.55 },
-            tom_hi: TomParams { pitch: 0.7, decay: 0.4, volume: 0.65 },
-            tom_mid: TomParams { pitch: 0.5, decay: 0.45, volume: 0.65 },
-            tom_lo: TomParams { pitch: 0.3, decay: 0.5, volume: 0.65 },
+            hihat_closed: HihatParams {
+                decay: 0.08,
+                tone: 0.8,
+                volume: 0.55,
+            },
+            hihat_open: HihatParams {
+                decay: 0.4,
+                tone: 0.75,
+                volume: 0.55,
+            },
+            tom_hi: TomParams {
+                pitch: 0.7,
+                decay: 0.4,
+                volume: 0.65,
+            },
+            tom_mid: TomParams {
+                pitch: 0.5,
+                decay: 0.45,
+                volume: 0.65,
+            },
+            tom_lo: TomParams {
+                pitch: 0.3,
+                decay: 0.5,
+                volume: 0.65,
+            },
         }
     }
 }
@@ -204,7 +238,10 @@ pub struct ClapParams {
 
 impl Default for ClapParams {
     fn default() -> Self {
-        Self { decay: 0.3, volume: 0.8 }
+        Self {
+            decay: 0.3,
+            volume: 0.8,
+        }
     }
 }
 
@@ -221,12 +258,39 @@ pub struct DrumKit909 {
 impl Default for DrumKit909 {
     fn default() -> Self {
         Self {
-            kick: KickParams { pitch: 0.55, decay: 0.5, punch: 0.5, tone: 0.9, volume: 0.65 },
-            snare: SnareParams { tone: 0.55, snappy: 0.7, decay: 0.35, volume: 0.60 },
-            hihat_closed: HihatParams { decay: 0.06, tone: 0.85, volume: 0.55 },
-            hihat_open: HihatParams { decay: 0.45, tone: 0.8, volume: 0.55 },
-            clap: ClapParams { decay: 0.3, volume: 0.60 },
-            rim: SnareParams { tone: 0.7, snappy: 0.3, decay: 0.15, volume: 0.55 },
+            kick: KickParams {
+                pitch: 0.55,
+                decay: 0.5,
+                punch: 0.5,
+                tone: 0.9,
+                volume: 0.65,
+            },
+            snare: SnareParams {
+                tone: 0.55,
+                snappy: 0.7,
+                decay: 0.35,
+                volume: 0.60,
+            },
+            hihat_closed: HihatParams {
+                decay: 0.06,
+                tone: 0.85,
+                volume: 0.55,
+            },
+            hihat_open: HihatParams {
+                decay: 0.45,
+                tone: 0.8,
+                volume: 0.55,
+            },
+            clap: ClapParams {
+                decay: 0.3,
+                volume: 0.60,
+            },
+            rim: SnareParams {
+                tone: 0.7,
+                snappy: 0.3,
+                decay: 0.15,
+                volume: 0.55,
+            },
         }
     }
 }
@@ -242,7 +306,7 @@ pub struct Step {
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]
 pub struct TB303Step {
     pub active: bool,
-    pub note: u8,   // MIDI note number
+    pub note: u8, // MIDI note number
     pub accent: bool,
     pub slide: bool,
     pub gate: f32, // 0–1 gate length ratio
@@ -250,7 +314,13 @@ pub struct TB303Step {
 
 impl Default for TB303Step {
     fn default() -> Self {
-        Self { active: false, note: 36, accent: false, slide: false, gate: 0.5 }
+        Self {
+            active: false,
+            note: 36,
+            accent: false,
+            slide: false,
+            gate: 0.5,
+        }
     }
 }
 
@@ -309,37 +379,37 @@ impl DrumVoice {
 
     pub fn get_volume(&self, s: &AppState) -> f32 {
         match self {
-            DrumVoice::Kick808        => s.kit_a.kick.volume,
-            DrumVoice::Snare808       => s.kit_a.snare.volume,
+            DrumVoice::Kick808 => s.kit_a.kick.volume,
+            DrumVoice::Snare808 => s.kit_a.snare.volume,
             DrumVoice::HihatClosed808 => s.kit_a.hihat_closed.volume,
-            DrumVoice::HihatOpen808   => s.kit_a.hihat_open.volume,
-            DrumVoice::TomHi808       => s.kit_a.tom_hi.volume,
-            DrumVoice::TomMid808      => s.kit_a.tom_mid.volume,
-            DrumVoice::TomLo808       => s.kit_a.tom_lo.volume,
-            DrumVoice::Kick909        => s.kit_b.kick.volume,
-            DrumVoice::Snare909       => s.kit_b.snare.volume,
+            DrumVoice::HihatOpen808 => s.kit_a.hihat_open.volume,
+            DrumVoice::TomHi808 => s.kit_a.tom_hi.volume,
+            DrumVoice::TomMid808 => s.kit_a.tom_mid.volume,
+            DrumVoice::TomLo808 => s.kit_a.tom_lo.volume,
+            DrumVoice::Kick909 => s.kit_b.kick.volume,
+            DrumVoice::Snare909 => s.kit_b.snare.volume,
             DrumVoice::HihatClosed909 => s.kit_b.hihat_closed.volume,
-            DrumVoice::HihatOpen909   => s.kit_b.hihat_open.volume,
-            DrumVoice::Clap909        => s.kit_b.clap.volume,
-            DrumVoice::Rim909         => s.kit_b.rim.volume,
+            DrumVoice::HihatOpen909 => s.kit_b.hihat_open.volume,
+            DrumVoice::Clap909 => s.kit_b.clap.volume,
+            DrumVoice::Rim909 => s.kit_b.rim.volume,
         }
     }
 
     pub fn set_volume(self, mut s: AppState, v: f32) -> AppState {
         match self {
-            DrumVoice::Kick808        => s.kit_a.kick.volume = v,
-            DrumVoice::Snare808       => s.kit_a.snare.volume = v,
+            DrumVoice::Kick808 => s.kit_a.kick.volume = v,
+            DrumVoice::Snare808 => s.kit_a.snare.volume = v,
             DrumVoice::HihatClosed808 => s.kit_a.hihat_closed.volume = v,
-            DrumVoice::HihatOpen808   => s.kit_a.hihat_open.volume = v,
-            DrumVoice::TomHi808       => s.kit_a.tom_hi.volume = v,
-            DrumVoice::TomMid808      => s.kit_a.tom_mid.volume = v,
-            DrumVoice::TomLo808       => s.kit_a.tom_lo.volume = v,
-            DrumVoice::Kick909        => s.kit_b.kick.volume = v,
-            DrumVoice::Snare909       => s.kit_b.snare.volume = v,
+            DrumVoice::HihatOpen808 => s.kit_a.hihat_open.volume = v,
+            DrumVoice::TomHi808 => s.kit_a.tom_hi.volume = v,
+            DrumVoice::TomMid808 => s.kit_a.tom_mid.volume = v,
+            DrumVoice::TomLo808 => s.kit_a.tom_lo.volume = v,
+            DrumVoice::Kick909 => s.kit_b.kick.volume = v,
+            DrumVoice::Snare909 => s.kit_b.snare.volume = v,
             DrumVoice::HihatClosed909 => s.kit_b.hihat_closed.volume = v,
-            DrumVoice::HihatOpen909   => s.kit_b.hihat_open.volume = v,
-            DrumVoice::Clap909        => s.kit_b.clap.volume = v,
-            DrumVoice::Rim909         => s.kit_b.rim.volume = v,
+            DrumVoice::HihatOpen909 => s.kit_b.hihat_open.volume = v,
+            DrumVoice::Clap909 => s.kit_b.clap.volume = v,
+            DrumVoice::Rim909 => s.kit_b.rim.volume = v,
         }
         s
     }
@@ -365,8 +435,8 @@ impl Default for SequencerState {
 
         // Minimal starter beat: 4-on-the-floor kick + offbeat hi-hats.
         // Just enough to hear the clock — the AI writes all creative patterns.
-        let kick_steps = [1,0,0,0, 1,0,0,0, 1,0,0,0, 1,0,0,0usize];
-        let hat_steps  = [0,0,1,0, 0,0,1,0, 0,0,1,0, 0,0,1,0usize];
+        let kick_steps = [1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0usize];
+        let hat_steps = [0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0usize];
         if let Some(p) = drum_patterns.get_mut(&DrumVoice::Kick808) {
             for (i, &on) in kick_steps.iter().enumerate() {
                 p[i].active = on == 1;
@@ -395,20 +465,20 @@ impl Default for SequencerState {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct FxState {
-    pub reverb_size: f32,       // 0–1 room size
-    pub reverb_damp: f32,       // 0–1 damping
-    pub reverb_mix: f32,        // 0–1 wet/dry
-    pub delay_time: f32,        // 0–1 → 0–1000 ms
-    pub delay_feedback: f32,    // 0–1
-    pub delay_mix: f32,         // 0–1 wet/dry
-    pub distortion_drive: f32,  // 0–1
-    pub distortion_mix: f32,    // 0–1 wet/dry
+    pub reverb_size: f32,          // 0–1 room size
+    pub reverb_damp: f32,          // 0–1 damping
+    pub reverb_mix: f32,           // 0–1 wet/dry
+    pub delay_time: f32,           // 0–1 → 0–1000 ms
+    pub delay_feedback: f32,       // 0–1
+    pub delay_mix: f32,            // 0–1 wet/dry
+    pub distortion_drive: f32,     // 0–1
+    pub distortion_mix: f32,       // 0–1 wet/dry
     pub compressor_threshold: f32, // 0–1 → -40–0 dB
     pub compressor_ratio: f32,     // 0–1 → 1–20:1
-    pub master_volume: f32,     // 0–1
-    pub bitcrush_bits: f32,  // 0–1: 1.0 = full quality (bypass), 0.0 = 1-bit
-    pub bitcrush_rate: f32,  // 0–1: 0.0 = no decimation, 1.0 = extreme downsampling
-    pub bitcrush_mix: f32,   // 0–1: wet/dry
+    pub master_volume: f32,        // 0–1
+    pub bitcrush_bits: f32,        // 0–1: 1.0 = full quality (bypass), 0.0 = 1-bit
+    pub bitcrush_rate: f32,        // 0–1: 0.0 = no decimation, 1.0 = extreme downsampling
+    pub bitcrush_mix: f32,         // 0–1: wet/dry
 }
 
 impl Default for FxState {
@@ -437,20 +507,20 @@ impl Default for FxState {
 /// How the AI persona presents itself in the `_comment` field.
 #[derive(Clone, Debug, PartialEq, Default, Serialize, Deserialize)]
 pub enum ConversationMode {
-    Off,            // no commentary shown; brief technical label only
+    Off, // no commentary shown; brief technical label only
     #[default]
-    Producer,       // candid — what changed and why it serves the music
-    Dj,             // hype DJ persona, cheesy party energy
-    Mc,             // jungle/rave MC — "selector!", "junglist massive!", "rewind!"
+    Producer, // candid — what changed and why it serves the music
+    Dj,  // hype DJ persona, cheesy party energy
+    Mc,  // jungle/rave MC — "selector!", "junglist massive!", "rewind!"
 }
 
 /// Whether to use the short `brief` or full `description` from styles.json.
 /// Brief (~50 tokens) suits smaller/faster models; Full (~150 tokens) for capable models.
 #[derive(Clone, Debug, PartialEq, Default, Serialize, Deserialize)]
 pub enum StyleVerbosity {
-    Brief,  // short keyword-dense creative brief
+    Brief, // short keyword-dense creative brief
     #[default]
-    Full,   // long prose description — more context for capable models
+    Full, // long prose description — more context for capable models
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -465,21 +535,21 @@ pub struct LlmState {
     pub thinking_tokens: usize, // chars in last _thinking field ÷ 4 (approx)
     pub context_used: usize,
     pub context_max: usize,
-    pub locked_params:  HashSet<String>, // UserOwned: LLM skips these entirely
+    pub locked_params: HashSet<String>, // UserOwned: LLM skips these entirely
     pub focused_params: HashSet<String>, // LlmFocus: LLM should prioritize these
-    pub auto_jam: bool, // LLM continuously generates pattern variations
-    pub heat: f32,      // 0–1: jam mutation intensity (low=subtle, high=wild)
+    pub auto_jam: bool,                 // LLM continuously generates pattern variations
+    pub heat: f32,                      // 0–1: jam mutation intensity (low=subtle, high=wild)
     pub conversation_mode: ConversationMode,
     pub active_style: Option<String>, // style id from styles.json, "__free__", "__custom__", or None
     pub custom_style_text: String,    // used when active_style == Some("__custom__")
-    pub user_instructions: String,    // persistent user instructions injected into every system prompt
-    pub persona_name: String,         // AI persona name shown in UI and used in system prompt
+    pub user_instructions: String, // persistent user instructions injected into every system prompt
+    pub persona_name: String,      // AI persona name shown in UI and used in system prompt
     pub system_prompt_override: String, // if non-empty, replaces the generated system prompt entirely
-    pub tts_enabled: bool,            // speak _comment via espeak-ng when true
+    pub tts_enabled: bool,              // speak _comment via espeak-ng when true
     pub style_verbosity: StyleVerbosity, // Brief = ~50 token brief, Full = ~150 token description
-    pub auto_lock_on_touch: bool,     // if true, touching a knob locks it to user-only control
-    pub is_mock: bool,                // true when running without a real model (no llama-server)
-    pub llm_initializing: bool,       // true while wait_for_ready is running (suppress false mock warning)
+    pub auto_lock_on_touch: bool,       // if true, touching a knob locks it to user-only control
+    pub is_mock: bool,                  // true when running without a real model (no llama-server)
+    pub llm_initializing: bool, // true while wait_for_ready is running (suppress false mock warning)
 }
 
 impl Default for LlmState {
@@ -523,94 +593,110 @@ pub fn apply_llm_update(state: AppState, update: &serde_json::Value) -> AppState
     let locked = &s.llm.locked_params.clone();
 
     if let Some(b) = update.get("bass").and_then(|v| v.as_object()) {
-        s.bass.cutoff       = unlocked_f32(s.bass.cutoff,       b, "cutoff",       "bass.cutoff",       locked);
-        s.bass.resonance    = unlocked_f32(s.bass.resonance,    b, "resonance",    "bass.resonance",    locked);
-        s.bass.env_mod      = unlocked_f32(s.bass.env_mod,      b, "env_mod",      "bass.env_mod",      locked);
-        s.bass.decay        = unlocked_f32(s.bass.decay,        b, "decay",        "bass.decay",        locked);
-        s.bass.accent_level = unlocked_f32(s.bass.accent_level, b, "accent_level", "bass.accent_level", locked);
-        s.bass.distortion   = unlocked_f32(s.bass.distortion,   b, "distortion",   "bass.distortion",   locked);
-        s.bass.volume       = unlocked_f32(s.bass.volume,       b, "volume",       "bass.volume",       locked);
-        s.bass.supersaw_detune = unlocked_f32(s.bass.supersaw_detune, b, "supersaw_detune", "bass.supersaw_detune", locked);
-        if let Some(v) = b.get("supersaw_voices").and_then(|v| v.as_u64()) {
-            if !locked.contains("bass.supersaw_voices") {
-                s.bass.supersaw_voices = (v as u8).clamp(2, 7);
-            }
+        s.bass.cutoff = unlocked_f32(s.bass.cutoff, b, "cutoff", "bass.cutoff", locked);
+        s.bass.resonance = unlocked_f32(s.bass.resonance, b, "resonance", "bass.resonance", locked);
+        s.bass.env_mod = unlocked_f32(s.bass.env_mod, b, "env_mod", "bass.env_mod", locked);
+        s.bass.decay = unlocked_f32(s.bass.decay, b, "decay", "bass.decay", locked);
+        s.bass.accent_level = unlocked_f32(
+            s.bass.accent_level,
+            b,
+            "accent_level",
+            "bass.accent_level",
+            locked,
+        );
+        s.bass.distortion = unlocked_f32(
+            s.bass.distortion,
+            b,
+            "distortion",
+            "bass.distortion",
+            locked,
+        );
+        s.bass.volume = unlocked_f32(s.bass.volume, b, "volume", "bass.volume", locked);
+        s.bass.supersaw_detune = unlocked_f32(
+            s.bass.supersaw_detune,
+            b,
+            "supersaw_detune",
+            "bass.supersaw_detune",
+            locked,
+        );
+        if let Some(v) = b.get("supersaw_voices").and_then(|v| v.as_u64())
+            && !locked.contains("bass.supersaw_voices")
+        {
+            s.bass.supersaw_voices = (v as u8).clamp(2, 7);
         }
-        if !locked.contains("bass.waveform") {
-            if let Some(w) = b.get("waveform").and_then(|v| v.as_str()) {
-                s.bass.waveform = match w {
-                    "Square"   => Waveform::Square,
-                    "Supersaw" => Waveform::Supersaw,
-                    _          => Waveform::Saw,
-                };
-            }
+        if !locked.contains("bass.waveform")
+            && let Some(w) = b.get("waveform").and_then(|v| v.as_str())
+        {
+            s.bass.waveform = match w {
+                "Square" => Waveform::Square,
+                "Supersaw" => Waveform::Supersaw,
+                _ => Waveform::Saw,
+            };
         }
     }
 
     if let Some(seq) = update.get("sequencer").and_then(|v| v.as_object()) {
-        if !locked.contains("sequencer.bpm") {
-            if let Some(bpm) = seq.get("bpm").and_then(|v| v.as_f64()) {
-                s.sequencer.bpm = (bpm as f32).clamp(40.0, 250.0);
-            }
+        if !locked.contains("sequencer.bpm")
+            && let Some(bpm) = seq.get("bpm").and_then(|v| v.as_f64())
+        {
+            s.sequencer.bpm = (bpm as f32).clamp(40.0, 250.0);
         }
-        if !locked.contains("sequencer.steps") {
-            if let Some(steps) = seq.get("steps").and_then(|v| v.as_u64()) {
-                s = expand_sequencer_steps(s, steps as usize);
-            }
+        if !locked.contains("sequencer.steps")
+            && let Some(steps) = seq.get("steps").and_then(|v| v.as_u64())
+        {
+            s = expand_sequencer_steps(s, steps as usize);
         }
-        if !locked.contains("sequencer.bass_steps") {
-            if let Some(arr) = seq.get("bass_steps").and_then(|v| v.as_array()) {
-                for (i, val) in arr.iter().enumerate().take(MAX_STEPS) {
-                    if let Some(active) = val.as_bool() {
-                        s.sequencer.bass_pattern[i].active = active;
-                    }
+        if !locked.contains("sequencer.bass_steps")
+            && let Some(arr) = seq.get("bass_steps").and_then(|v| v.as_array())
+        {
+            for (i, val) in arr.iter().enumerate().take(MAX_STEPS) {
+                if let Some(active) = val.as_bool() {
+                    s.sequencer.bass_pattern[i].active = active;
                 }
             }
         }
-        if !locked.contains("sequencer.bass_notes") {
-            if let Some(arr) = seq.get("bass_notes").and_then(|v| v.as_array()) {
-                for (i, val) in arr.iter().enumerate().take(MAX_STEPS) {
-                    if let Some(note) = val.as_u64() {
-                        s.sequencer.bass_pattern[i].note = note.clamp(0, 127) as u8;
-                    }
+        if !locked.contains("sequencer.bass_notes")
+            && let Some(arr) = seq.get("bass_notes").and_then(|v| v.as_array())
+        {
+            for (i, val) in arr.iter().enumerate().take(MAX_STEPS) {
+                if let Some(note) = val.as_u64() {
+                    s.sequencer.bass_pattern[i].note = note.clamp(0, 127) as u8;
                 }
             }
         }
-        if !locked.contains("sequencer.kick_a_steps") {
-            if let Some(arr) = seq.get("kick_a_steps").and_then(|v| v.as_array()) {
-                if let Some(pattern) = s.sequencer.drum_patterns.get_mut(&DrumVoice::Kick808) {
-                    for (i, val) in arr.iter().enumerate().take(MAX_STEPS) {
-                        if let Some(active) = val.as_bool() {
-                            pattern[i].active = active;
-                            if active && pattern[i].velocity == 0.0 {
-                                pattern[i].velocity = 1.0;
-                            }
-                        }
+        if !locked.contains("sequencer.kick_a_steps")
+            && let Some(arr) = seq.get("kick_a_steps").and_then(|v| v.as_array())
+            && let Some(pattern) = s.sequencer.drum_patterns.get_mut(&DrumVoice::Kick808)
+        {
+            for (i, val) in arr.iter().enumerate().take(MAX_STEPS) {
+                if let Some(active) = val.as_bool() {
+                    pattern[i].active = active;
+                    if active && pattern[i].velocity == 0.0 {
+                        pattern[i].velocity = 1.0;
                     }
                 }
             }
         }
         // Generic drum pattern helper — avoids repeating the same block per voice
         let drum_pattern_fields: &[(&str, DrumVoice, f32)] = &[
-            ("hihat_a_steps",  DrumVoice::HihatClosed808, 0.7),
-            ("snare_a_steps",  DrumVoice::Snare808,       1.0),
-            ("kick_b_steps",   DrumVoice::Kick909,        1.0),
-            ("snare_b_steps",  DrumVoice::Snare909,       1.0),
-            ("clap_b_steps",   DrumVoice::Clap909,        1.0),
-            ("hihat_b_steps",  DrumVoice::HihatClosed909, 0.7),
+            ("hihat_a_steps", DrumVoice::HihatClosed808, 0.7),
+            ("snare_a_steps", DrumVoice::Snare808, 1.0),
+            ("kick_b_steps", DrumVoice::Kick909, 1.0),
+            ("snare_b_steps", DrumVoice::Snare909, 1.0),
+            ("clap_b_steps", DrumVoice::Clap909, 1.0),
+            ("hihat_b_steps", DrumVoice::HihatClosed909, 0.7),
         ];
         for &(field, voice, default_vel) in drum_pattern_fields {
             let lock_key = format!("sequencer.{}", field);
-            if !locked.contains(&lock_key) {
-                if let Some(arr) = seq.get(field).and_then(|v| v.as_array()) {
-                    if let Some(pattern) = s.sequencer.drum_patterns.get_mut(&voice) {
-                        for (i, val) in arr.iter().enumerate().take(MAX_STEPS) {
-                            if let Some(active) = val.as_bool() {
-                                pattern[i].active = active;
-                                if active && pattern[i].velocity == 0.0 {
-                                    pattern[i].velocity = default_vel;
-                                }
-                            }
+            if !locked.contains(&lock_key)
+                && let Some(arr) = seq.get(field).and_then(|v| v.as_array())
+                && let Some(pattern) = s.sequencer.drum_patterns.get_mut(&voice)
+            {
+                for (i, val) in arr.iter().enumerate().take(MAX_STEPS) {
+                    if let Some(active) = val.as_bool() {
+                        pattern[i].active = active;
+                        if active && pattern[i].velocity == 0.0 {
+                            pattern[i].velocity = default_vel;
                         }
                     }
                 }
@@ -619,16 +705,58 @@ pub fn apply_llm_update(state: AppState, update: &serde_json::Value) -> AppState
     }
 
     if let Some(fx) = update.get("fx").and_then(|v| v.as_object()) {
-        s.fx.reverb_size      = unlocked_f32(s.fx.reverb_size,      fx, "reverb_size",      "fx.reverb_size",      locked);
-        s.fx.reverb_mix       = unlocked_f32(s.fx.reverb_mix,       fx, "reverb_mix",       "fx.reverb_mix",       locked);
-        s.fx.delay_time       = unlocked_f32(s.fx.delay_time,       fx, "delay_time",       "fx.delay_time",       locked);
-        s.fx.delay_feedback   = unlocked_f32(s.fx.delay_feedback,   fx, "delay_feedback",   "fx.delay_feedback",   locked);
-        s.fx.delay_mix        = unlocked_f32(s.fx.delay_mix,        fx, "delay_mix",        "fx.delay_mix",        locked);
-        s.fx.distortion_drive = unlocked_f32(s.fx.distortion_drive, fx, "distortion_drive", "fx.distortion_drive", locked);
-        s.fx.distortion_mix   = unlocked_f32(s.fx.distortion_mix,   fx, "distortion_mix",   "fx.distortion_mix",   locked);
-        s.fx.bitcrush_bits    = unlocked_f32(s.fx.bitcrush_bits,    fx, "bitcrush_bits",    "fx.bitcrush_bits",    locked);
-        s.fx.bitcrush_rate    = unlocked_f32(s.fx.bitcrush_rate,    fx, "bitcrush_rate",    "fx.bitcrush_rate",    locked);
-        s.fx.bitcrush_mix     = unlocked_f32(s.fx.bitcrush_mix,     fx, "bitcrush_mix",     "fx.bitcrush_mix",     locked);
+        s.fx.reverb_size = unlocked_f32(
+            s.fx.reverb_size,
+            fx,
+            "reverb_size",
+            "fx.reverb_size",
+            locked,
+        );
+        s.fx.reverb_mix = unlocked_f32(s.fx.reverb_mix, fx, "reverb_mix", "fx.reverb_mix", locked);
+        s.fx.delay_time = unlocked_f32(s.fx.delay_time, fx, "delay_time", "fx.delay_time", locked);
+        s.fx.delay_feedback = unlocked_f32(
+            s.fx.delay_feedback,
+            fx,
+            "delay_feedback",
+            "fx.delay_feedback",
+            locked,
+        );
+        s.fx.delay_mix = unlocked_f32(s.fx.delay_mix, fx, "delay_mix", "fx.delay_mix", locked);
+        s.fx.distortion_drive = unlocked_f32(
+            s.fx.distortion_drive,
+            fx,
+            "distortion_drive",
+            "fx.distortion_drive",
+            locked,
+        );
+        s.fx.distortion_mix = unlocked_f32(
+            s.fx.distortion_mix,
+            fx,
+            "distortion_mix",
+            "fx.distortion_mix",
+            locked,
+        );
+        s.fx.bitcrush_bits = unlocked_f32(
+            s.fx.bitcrush_bits,
+            fx,
+            "bitcrush_bits",
+            "fx.bitcrush_bits",
+            locked,
+        );
+        s.fx.bitcrush_rate = unlocked_f32(
+            s.fx.bitcrush_rate,
+            fx,
+            "bitcrush_rate",
+            "fx.bitcrush_rate",
+            locked,
+        );
+        s.fx.bitcrush_mix = unlocked_f32(
+            s.fx.bitcrush_mix,
+            fx,
+            "bitcrush_mix",
+            "fx.bitcrush_mix",
+            locked,
+        );
     }
 
     s
@@ -643,7 +771,9 @@ fn unlocked_f32(
     path: &str,
     locked: &HashSet<String>,
 ) -> f32 {
-    if locked.contains(path) { return current; }
+    if locked.contains(path) {
+        return current;
+    }
     obj.get(key)
         .and_then(|v| v.as_f64())
         .map(|v| (v as f32).clamp(0.0, 1.0))
@@ -665,14 +795,14 @@ pub fn expand_sequencer_steps(state: AppState, new_steps: usize) -> AppState {
     if new_steps > old_steps && old_steps > 0 {
         // Tile bass pattern
         for i in old_steps..new_steps {
-            s.sequencer.bass_pattern[i] = s.sequencer.bass_pattern[i % old_steps].clone();
+            s.sequencer.bass_pattern[i] = s.sequencer.bass_pattern[i % old_steps];
         }
         // Tile every drum voice
         let voices: Vec<DrumVoice> = s.sequencer.drum_patterns.keys().cloned().collect();
         for voice in voices {
             if let Some(pattern) = s.sequencer.drum_patterns.get_mut(&voice) {
                 for i in old_steps..new_steps {
-                    pattern[i] = pattern[i % old_steps].clone();
+                    pattern[i] = pattern[i % old_steps];
                 }
             }
         }
@@ -723,12 +853,12 @@ pub fn unlock_params(state: AppState, paths: &[&str]) -> AppState {
 /// Toggle a drum step (pure function).
 pub fn toggle_drum_step(state: AppState, voice: DrumVoice, step: usize) -> AppState {
     let mut s = state;
-    if let Some(pattern) = s.sequencer.drum_patterns.get_mut(&voice) {
-        if step < pattern.len() {
-            pattern[step].active = !pattern[step].active;
-            if pattern[step].active && pattern[step].velocity == 0.0 {
-                pattern[step].velocity = 1.0;
-            }
+    if let Some(pattern) = s.sequencer.drum_patterns.get_mut(&voice)
+        && step < pattern.len()
+    {
+        pattern[step].active = !pattern[step].active;
+        if pattern[step].active && pattern[step].velocity == 0.0 {
+            pattern[step].velocity = 1.0;
         }
     }
     s
@@ -754,17 +884,13 @@ pub fn save_project(state: &AppState) -> Result<std::path::PathBuf, String> {
         .map(|d| d.as_secs())
         .unwrap_or(0);
     let path = std::path::PathBuf::from(format!("project-{}.json", ts));
-    let json = serde_json::to_string_pretty(state)
-        .map_err(|e| format!("serialise error: {e}"))?;
-    std::fs::write(&path, json)
-        .map_err(|e| format!("write error: {e}"))?;
+    let json = serde_json::to_string_pretty(state).map_err(|e| format!("serialise error: {e}"))?;
+    std::fs::write(&path, json).map_err(|e| format!("write error: {e}"))?;
     Ok(path)
 }
 
 /// Load an `AppState` from a JSON project file.
 pub fn load_project(path: &std::path::Path) -> Result<AppState, String> {
-    let json = std::fs::read_to_string(path)
-        .map_err(|e| format!("read error: {e}"))?;
-    serde_json::from_str(&json)
-        .map_err(|e| format!("parse error: {e}"))
+    let json = std::fs::read_to_string(path).map_err(|e| format!("read error: {e}"))?;
+    serde_json::from_str(&json).map_err(|e| format!("parse error: {e}"))
 }

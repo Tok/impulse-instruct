@@ -1,0 +1,131 @@
+// ─── ui/panels/fx.rs ──────────────────────────────────────────────────────────
+// FX chain panel.
+
+use crate::state::ParamMode;
+use crate::ui::{ImpulseApp, theme, widgets};
+
+pub fn draw_fx(app: &mut ImpulseApp, ui: &mut egui::Ui) {
+    widgets::section_header(ui, "FX CHAIN");
+
+    // Snapshot all FX values + locked set before any widget call
+    let (mut rs, mut rd, mut rm, mut dt, mut df, mut dm, mut dd, mut dx, mut mv, locked, auto_lock) = {
+        let s = app.state.read();
+        (
+            s.fx.reverb_size,
+            s.fx.reverb_damp,
+            s.fx.reverb_mix,
+            s.fx.delay_time,
+            s.fx.delay_feedback,
+            s.fx.delay_mix,
+            s.fx.distortion_drive,
+            s.fx.distortion_mix,
+            s.fx.master_volume,
+            s.llm.locked_params.clone(),
+            s.llm.auto_lock_on_touch,
+        )
+    };
+
+    let mut changed = false;
+
+    let l_rs = locked.contains("fx.reverb_size");
+    let l_rm = locked.contains("fx.reverb_mix");
+    let l_df = locked.contains("fx.delay_feedback");
+    let l_dm = locked.contains("fx.delay_mix");
+
+    let use_sliders = app.use_sliders;
+    ui.horizontal_wrapped(|ui| {
+        ui.group(|ui| {
+            ui.label(
+                egui::RichText::new("REVERB")
+                    .color(theme::FOG)
+                    .monospace()
+                    .size(9.5),
+            );
+            // MIX (X) × SIZE (Y) pad — the two most-used reverb params
+            if widgets::xy_pad(ui, "MIX", "SIZE", &mut rm, &mut rs, 88.0, l_rm || l_rs) {
+                let mut s = app.state.write();
+                if !l_rm {
+                    s.fx.reverb_mix = rm;
+                    if auto_lock {
+                        s.llm.locked_params.insert("fx.reverb_mix".to_string());
+                    }
+                }
+                if !l_rs {
+                    s.fx.reverb_size = rs;
+                    if auto_lock {
+                        s.llm.locked_params.insert("fx.reverb_size".to_string());
+                    }
+                }
+                drop(s);
+                app.push_audio_params();
+            }
+            if widgets::param_control(ui, "DAMP", &mut rd, ParamMode::Free, use_sliders).0 {
+                changed = true;
+            }
+        });
+
+        ui.add_space(4.0);
+
+        ui.group(|ui| {
+            ui.label(
+                egui::RichText::new("DELAY")
+                    .color(theme::FOG)
+                    .monospace()
+                    .size(9.5),
+            );
+            // MIX (X) × FDBK (Y) pad — feedback × mix is the key delay texture dial
+            if widgets::xy_pad(ui, "MIX", "FDBK", &mut dm, &mut df, 88.0, l_dm || l_df) {
+                let mut s = app.state.write();
+                if !l_dm {
+                    s.fx.delay_mix = dm;
+                    if auto_lock {
+                        s.llm.locked_params.insert("fx.delay_mix".to_string());
+                    }
+                }
+                if !l_df {
+                    s.fx.delay_feedback = df;
+                    if auto_lock {
+                        s.llm.locked_params.insert("fx.delay_feedback".to_string());
+                    }
+                }
+                drop(s);
+                app.push_audio_params();
+            }
+            if widgets::param_control(ui, "TIME", &mut dt, ParamMode::Free, use_sliders).0 {
+                changed = true;
+            }
+        });
+
+        ui.add_space(4.0);
+
+        ui.group(|ui| {
+            ui.label(
+                egui::RichText::new("DRIVE / MASTER")
+                    .color(theme::FOG)
+                    .monospace()
+                    .size(9.5),
+            );
+            if widgets::param_control(ui, "DRIVE", &mut dd, ParamMode::Free, use_sliders).0 {
+                changed = true;
+            }
+            if widgets::param_control(ui, "MIX", &mut dx, ParamMode::Free, use_sliders).0 {
+                changed = true;
+            }
+            if widgets::param_control(ui, "MASTER", &mut mv, ParamMode::Free, use_sliders).0 {
+                changed = true;
+            }
+        });
+    });
+
+    // Write-back for standalone knobs (DAMP, TIME, DRIVE, etc.)
+    if changed {
+        let mut s = app.state.write();
+        s.fx.reverb_damp = rd;
+        s.fx.delay_time = dt;
+        s.fx.distortion_drive = dd;
+        s.fx.distortion_mix = dx;
+        s.fx.master_volume = mv;
+        drop(s);
+        app.push_audio_params();
+    }
+}

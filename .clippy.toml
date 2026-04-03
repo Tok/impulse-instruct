@@ -1,0 +1,13 @@
+# Clippy configuration for Impulse Instruct
+# https://doc.rust-lang.org/clippy/configuration.html
+
+# Cognitive complexity limit per function.
+# Clippy's default is 25; we set it lower to catch god-functions early.
+cognitive-complexity-threshold = 30
+
+# Warn on functions longer than this many lines (statements).
+# This catches methods that need to be split out.
+too-many-lines-threshold = 100
+
+# App constructors legitimately take many args (channels, state, ports…).
+too-many-arguments-threshold = 10

@@ -3,14 +3,16 @@
 // Pure function — only side effect is printing to stdout.
 
 pub fn print_banner() {
-    const GRAY: &str  = "\x1b[38;2;160;160;160m";
-    const DIM:  &str  = "\x1b[38;2;50;50;50m";
+    const GRAY: &str = "\x1b[38;2;160;160;160m";
+    const DIM: &str = "\x1b[38;2;50;50;50m";
     const RESET: &str = "\x1b[0m";
 
     // ── Title & tagline ───────────────────────────────────────────────────────
     println!();
     println!("{GRAY}  I M P U L S E   I N S T R U C T{RESET}");
-    println!("{DIM}  a synthesizer with a tiny LLM living inside of it  ·  rust  ·  llama.cpp{RESET}");
+    println!(
+        "{DIM}  a synthesizer with a tiny LLM living inside of it  ·  rust  ·  llama.cpp{RESET}"
+    );
 
     // ── Huth-colored keyboard (3 octaves) ────────────────────────────────────
     //
@@ -34,21 +36,21 @@ pub fn print_banner() {
     //
     // Height: upper ×4 rows (black key body), lower ×2 + bottom ×1 = 7 rows total.
 
-    type Rgb  = (u8, u8, u8);
+    type Rgb = (u8, u8, u8);
     type Cell = (Rgb, char);
 
-    const C:  Rgb = (0x33, 0x66, 0xDD);
+    const C: Rgb = (0x33, 0x66, 0xDD);
     const CS: Rgb = (0x22, 0x99, 0xBB);
-    const D:  Rgb = (0x33, 0xAA, 0x66);
+    const D: Rgb = (0x33, 0xAA, 0x66);
     const DS: Rgb = (0x88, 0xCC, 0x22);
-    const E:  Rgb = (0xDD, 0xCC, 0x22);
-    const F:  Rgb = (0xEE, 0x88, 0x22);
+    const E: Rgb = (0xDD, 0xCC, 0x22);
+    const F: Rgb = (0xEE, 0x88, 0x22);
     const FS: Rgb = (0xDD, 0x44, 0x22);
-    const G:  Rgb = (0xEE, 0x33, 0x66);
+    const G: Rgb = (0xEE, 0x33, 0x66);
     const GS: Rgb = (0xCC, 0x11, 0x44);
-    const A:  Rgb = (0x99, 0x66, 0xCC);
+    const A: Rgb = (0x99, 0x66, 0xCC);
     const AS: Rgb = (0x77, 0x44, 0xBB);
-    const B:  Rgb = (0x44, 0x33, 0xAA);
+    const B: Rgb = (0x44, 0x33, 0xAA);
 
     // Upper zone: 35 cells per octave (W=5 white, B=3 black).
     #[rustfmt::skip]
@@ -110,17 +112,21 @@ pub fn print_banner() {
 
     // Two octaves: chain arrays × 2.
     // 35 cells × 2 = 70 chars + 2 indent = 72 — fits comfortably within 80 columns.
-    let upper_row:  Vec<Cell> = UPPER.iter().chain(UPPER.iter()).copied().collect();
-    let lower_row:  Vec<Cell> = LOWER.iter().chain(LOWER.iter()).copied().collect();
+    let upper_row: Vec<Cell> = UPPER.iter().chain(UPPER.iter()).copied().collect();
+    let lower_row: Vec<Cell> = LOWER.iter().chain(LOWER.iter()).copied().collect();
     let bottom_row: Vec<Cell> = LOWER_BTM.iter().chain(LOWER_BTM.iter()).copied().collect();
 
-    let upper  = render(&upper_row);
-    let lower  = render(&lower_row);
+    let upper = render(&upper_row);
+    let lower = render(&lower_row);
     let bottom = render(&bottom_row);
 
     println!();
-    for _ in 0..4 { println!("  {upper}"); }   // 4 rows — black key zone
-    for _ in 0..2 { println!("  {lower}"); }   // 2 rows — white key body
-    println!("  {bottom}");                     // 1 row  — white key floor (|____)
+    for _ in 0..4 {
+        println!("  {upper}");
+    } // 4 rows — black key zone
+    for _ in 0..2 {
+        println!("  {lower}");
+    } // 2 rows — white key body
+    println!("  {bottom}"); // 1 row  — white key floor (|____)
     println!("{RESET}");
 }

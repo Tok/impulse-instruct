@@ -40,9 +40,15 @@ impl SeedPatterns {
             format!("[{}]", s.join(","))
         };
         let mut lines = Vec::new();
-        if !self.kick.is_empty()  { lines.push(format!("kick:  {}", fmt(&self.kick))); }
-        if !self.snare.is_empty() { lines.push(format!("snare: {}", fmt(&self.snare))); }
-        if !self.hihat.is_empty() { lines.push(format!("hihat: {}", fmt(&self.hihat))); }
+        if !self.kick.is_empty() {
+            lines.push(format!("kick:  {}", fmt(&self.kick)));
+        }
+        if !self.snare.is_empty() {
+            lines.push(format!("snare: {}", fmt(&self.snare)));
+        }
+        if !self.hihat.is_empty() {
+            lines.push(format!("hihat: {}", fmt(&self.hihat)));
+        }
         lines.join("\n")
     }
 }
@@ -73,13 +79,12 @@ pub struct StyleCatalog(Vec<Style>);
 impl StyleCatalog {
     pub fn get() -> &'static StyleCatalog {
         STYLE_CATALOG.get_or_init(|| {
-            let json = std::fs::read_to_string("styles.json")
-                .unwrap_or_else(|_| DEFAULT_JSON.to_string());
-            let styles: Vec<Style> = serde_json::from_str(&json)
-                .unwrap_or_else(|e| {
-                    log::warn!("styles.json parse error: {e} — using embedded defaults");
-                    serde_json::from_str(DEFAULT_JSON).unwrap_or_default()
-                });
+            let json =
+                std::fs::read_to_string("styles.json").unwrap_or_else(|_| DEFAULT_JSON.to_string());
+            let styles: Vec<Style> = serde_json::from_str(&json).unwrap_or_else(|e| {
+                log::warn!("styles.json parse error: {e} — using embedded defaults");
+                serde_json::from_str(DEFAULT_JSON).unwrap_or_default()
+            });
             log::debug!("Style catalog loaded: {} styles", styles.len());
             StyleCatalog(styles)
         })
@@ -92,5 +97,4 @@ impl StyleCatalog {
     pub fn find_by_id(&self, id: &str) -> Option<&Style> {
         self.0.iter().find(|s| s.id == id)
     }
-
 }

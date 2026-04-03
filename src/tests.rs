@@ -5,7 +5,7 @@
 
 #[cfg(test)]
 mod sequencer_tests {
-    use crate::sequencer::{advance_clock, ClockState, samples_per_step};
+    use crate::sequencer::{ClockState, advance_clock, samples_per_step};
     use crate::state::{DrumVoice, SequencerState, Step};
 
     #[test]
@@ -18,7 +18,10 @@ mod sequencer_tests {
 
     #[test]
     fn advance_clock_does_not_tick_when_stopped() {
-        let seq = SequencerState { running: false, ..SequencerState::default() };
+        let seq = SequencerState {
+            running: false,
+            ..SequencerState::default()
+        };
         let clock = ClockState::default();
         let (new_clock, events) = advance_clock(clock, &seq, 512, 44100.0);
         assert!(events.is_empty());
@@ -33,7 +36,11 @@ mod sequencer_tests {
         seq.steps = 4; // 4-step pattern
 
         let sps = samples_per_step(120.0, 44100.0) as usize;
-        let clock = ClockState { sample_accumulator: 0.0, current_step: 3, gate_counter: 0 };
+        let clock = ClockState {
+            sample_accumulator: 0.0,
+            current_step: 3,
+            gate_counter: 0,
+        };
 
         // Advance by slightly more than one step
         let (new_clock, _) = advance_clock(clock, &seq, sps + 1, 44100.0);
@@ -48,14 +55,28 @@ mod sequencer_tests {
         seq.running = true;
         seq.bpm = 120.0;
         // Activate step 1 of kick 808
-        seq.drum_patterns.get_mut(&DrumVoice::Kick808).unwrap()[1] =
-            Step { active: true, velocity: 1.0 };
+        seq.drum_patterns.get_mut(&DrumVoice::Kick808).unwrap()[1] = Step {
+            active: true,
+            velocity: 1.0,
+        };
 
         let sps = samples_per_step(120.0, 44100.0) as usize;
-        let clock = ClockState { sample_accumulator: 0.0, current_step: 0, gate_counter: 0 };
+        let clock = ClockState {
+            sample_accumulator: 0.0,
+            current_step: 0,
+            gate_counter: 0,
+        };
 
         let (_, events) = advance_clock(clock, &seq, sps + 1, 44100.0);
-        let has_kick = events.iter().any(|e| matches!(e, TriggerEvent::DrumTrigger { voice: DrumVoice::Kick808, .. }));
+        let has_kick = events.iter().any(|e| {
+            matches!(
+                e,
+                TriggerEvent::DrumTrigger {
+                    voice: DrumVoice::Kick808,
+                    ..
+                }
+            )
+        });
         assert!(has_kick, "expected kick trigger, got {:?}", events);
     }
 }
@@ -88,7 +109,10 @@ mod state_tests {
 
         let update = serde_json::json!({ "bass": { "cutoff": 0.99 } });
         let next = apply_llm_update(state, &update);
-        assert_eq!(next.bass.cutoff, original_cutoff, "locked param should be untouched");
+        assert_eq!(
+            next.bass.cutoff, original_cutoff,
+            "locked param should be untouched"
+        );
     }
 
     #[test]
@@ -131,8 +155,13 @@ mod prompt_tests {
     fn build_system_prompt_contains_json_only_instruction() {
         let state = AppState::default();
         let prompt = build_system_prompt(&state);
-        assert!(prompt.contains("Output ONLY valid JSON") || prompt.contains("ONLY valid JSON") || prompt.contains("Output JSON only") || prompt.contains("Output ONLY"),
-            "prompt should instruct JSON-only output");
+        assert!(
+            prompt.contains("Output ONLY valid JSON")
+                || prompt.contains("ONLY valid JSON")
+                || prompt.contains("Output JSON only")
+                || prompt.contains("Output ONLY"),
+            "prompt should instruct JSON-only output"
+        );
     }
 
     #[test]
@@ -140,7 +169,10 @@ mod prompt_tests {
         let mut state = AppState::default();
         state.bass.cutoff = 0.5; // exact f32 representation
         let prompt = build_system_prompt(&state);
-        assert!(prompt.contains("0.5"), "prompt should embed current cutoff value");
+        assert!(
+            prompt.contains("0.5"),
+            "prompt should embed current cutoff value"
+        );
     }
 
     #[test]
@@ -148,16 +180,21 @@ mod prompt_tests {
         use crate::state::lock_param;
         let state = lock_param(AppState::default(), "bass.cutoff");
         let prompt = build_system_prompt(&state);
-        assert!(prompt.contains("bass.cutoff"), "locked params should appear in prompt");
+        assert!(
+            prompt.contains("bass.cutoff"),
+            "locked params should appear in prompt"
+        );
     }
 
     #[test]
     fn param_json_schema_has_bass_cutoff_range() {
         let schema = param_json_schema();
         let min = schema["properties"]["bass"]["properties"]["cutoff"]["minimum"]
-            .as_f64().unwrap();
+            .as_f64()
+            .unwrap();
         let max = schema["properties"]["bass"]["properties"]["cutoff"]["maximum"]
-            .as_f64().unwrap();
+            .as_f64()
+            .unwrap();
         assert_eq!(min, 0.0);
         assert_eq!(max, 1.0);
     }
@@ -166,9 +203,11 @@ mod prompt_tests {
     fn param_json_schema_bpm_range_is_40_to_250() {
         let schema = param_json_schema();
         let min = schema["properties"]["sequencer"]["properties"]["bpm"]["minimum"]
-            .as_f64().unwrap();
+            .as_f64()
+            .unwrap();
         let max = schema["properties"]["sequencer"]["properties"]["bpm"]["maximum"]
-            .as_f64().unwrap();
+            .as_f64()
+            .unwrap();
         assert_eq!(min, 40.0);
         assert_eq!(max, 250.0);
     }
@@ -190,12 +229,16 @@ mod instruction_tests {
     fn assert_keys_present(expected: &serde_json::Value, actual: &serde_json::Value, path: &str) {
         if let Some(obj) = expected.as_object() {
             for (k, v) in obj {
-                if k == "_comment" { continue; }
+                if k == "_comment" {
+                    continue;
+                }
                 let child_path = format!("{}.{}", path, k);
                 assert!(
                     actual.get(k).is_some(),
                     "instruction '{}': expected key '{}' in mock output, but it was missing\noutput: {}",
-                    path, child_path, actual
+                    path,
+                    child_path,
+                    actual
                 );
                 assert_keys_present(v, &actual[k], &child_path);
             }
@@ -205,7 +248,10 @@ mod instruction_tests {
     #[test]
     fn instruction_set_loads_and_is_non_empty() {
         let set = InstructionSet::get();
-        assert!(set.len() > 0, "instruction set should have at least one entry");
+        assert!(
+            set.len() > 0,
+            "instruction set should have at least one entry"
+        );
     }
 
     #[test]
@@ -222,9 +268,11 @@ mod instruction_tests {
             let m = set.find_best_match(prompt);
             assert!(m.is_some(), "no match for '{}'", prompt);
             assert_eq!(
-                m.unwrap().id, "remove_clap",
+                m.unwrap().id,
+                "remove_clap",
                 "prompt '{}' should match 'remove_clap', got '{}'",
-                prompt, m.unwrap().id
+                prompt,
+                m.unwrap().id
             );
         }
     }
@@ -235,11 +283,11 @@ mod instruction_tests {
     fn all_instructions_produce_expected_param_keys() {
         let set = InstructionSet::get();
         for inst in set.iter() {
-            let test_prompt = inst.keywords.first()
-                .expect("instruction has no keywords");
+            let test_prompt = inst.keywords.first().expect("instruction has no keywords");
             let result = mock_response(test_prompt, 0.5)
                 .unwrap_or_else(|e| panic!("mock_response failed for '{}': {}", test_prompt, e));
-            let output = result.param_update
+            let output = result
+                .param_update
                 .unwrap_or_else(|| panic!("no param_update for instruction '{}'", inst.id));
             assert_keys_present(&inst.params, &output, &inst.id);
         }
@@ -249,9 +297,16 @@ mod instruction_tests {
     #[test]
     fn remove_instructions_emit_all_false_arrays() {
         let set = InstructionSet::get();
-        let removal_ids = ["remove_clap", "remove_kick", "remove_hihat_a", "remove_snare_a"];
+        let removal_ids = [
+            "remove_clap",
+            "remove_kick",
+            "remove_hihat_a",
+            "remove_snare_a",
+        ];
         for id in removal_ids {
-            let inst = set.iter().find(|i| i.id == id)
+            let inst = set
+                .iter()
+                .find(|i| i.id == id)
                 .unwrap_or_else(|| panic!("instruction '{}' not found", id));
             // Every array in params should be all-false
             if let Some(seq) = inst.params.get("sequencer").and_then(|s| s.as_object()) {
@@ -260,7 +315,8 @@ mod instruction_tests {
                         assert!(
                             arr.iter().all(|v| v == &serde_json::json!(false)),
                             "instruction '{}', field '{}' should be all false",
-                            id, field
+                            id,
+                            field
                         );
                     }
                 }
@@ -285,11 +341,15 @@ mod expand_steps_tests {
         let state = expand_sequencer_steps(state, 32);
         assert_eq!(state.sequencer.steps, 32);
         // Step 16 should mirror step 0 (active)
-        assert!(state.sequencer.drum_patterns[&DrumVoice::Snare808][16].active,
-            "step 16 should be tiled from step 0");
+        assert!(
+            state.sequencer.drum_patterns[&DrumVoice::Snare808][16].active,
+            "step 16 should be tiled from step 0"
+        );
         // Step 19 should mirror step 3 (active)
-        assert!(state.sequencer.drum_patterns[&DrumVoice::Snare808][19].active,
-            "step 19 should be tiled from step 3");
+        assert!(
+            state.sequencer.drum_patterns[&DrumVoice::Snare808][19].active,
+            "step 19 should be tiled from step 3"
+        );
         // Step 17 should mirror step 1 (inactive)
         assert!(!state.sequencer.drum_patterns[&DrumVoice::Snare808][17].active);
     }
@@ -304,7 +364,11 @@ mod expand_steps_tests {
         // Each bank of 16 should repeat the same pattern
         for bank in 0..4 {
             assert!(kick[bank * 16].active, "kick missing at step {}", bank * 16);
-            assert!(kick[bank * 16 + 4].active, "kick missing at step {}", bank * 16 + 4);
+            assert!(
+                kick[bank * 16 + 4].active,
+                "kick missing at step {}",
+                bank * 16 + 4
+            );
         }
     }
 

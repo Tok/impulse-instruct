@@ -17,8 +17,8 @@
 // Requires: libclang-dev cmake (for llama-cpp-2) + ./download-models.sh
 // Skip:     if model file not present, all tests pass silently.
 
-use crate::llm::{LlamaServerBackend, LlmBackend};
 use crate::llm::prompt::build_system_prompt;
+use crate::llm::{LlamaServerBackend, LlmBackend};
 use crate::state::AppState;
 use serde_json::Value;
 
@@ -76,7 +76,12 @@ fn setup() -> Option<(LlamaServerBackend, String)> {
     Some((backend, system))
 }
 
-fn infer_json(backend: &mut LlamaServerBackend, system: &str, prompt: &str, heat: f32) -> Option<Value> {
+fn infer_json(
+    backend: &mut LlamaServerBackend,
+    system: &str,
+    prompt: &str,
+    heat: f32,
+) -> Option<Value> {
     backend.infer(system, prompt, heat).ok()?.param_update
 }
 
@@ -90,13 +95,20 @@ fn assert_gate(
     check: impl Fn(&Value) -> bool,
 ) {
     let passes = (0..RUNS)
-        .filter(|_| infer_json(backend, system, prompt, heat).map(|v| check(&v)).unwrap_or(false))
+        .filter(|_| {
+            infer_json(backend, system, prompt, heat)
+                .map(|v| check(&v))
+                .unwrap_or(false)
+        })
         .count();
     assert!(
         passes >= required,
         "[llm-suite] '{}': {}/{} runs passed (need {})\n\
          → model needs tuning or system prompt needs adjustment",
-        prompt, passes, RUNS, required
+        prompt,
+        passes,
+        RUNS,
+        required
     );
 }
 
@@ -108,44 +120,53 @@ fn assert_gate(
 #[test]
 fn acid_raises_resonance() {
     let Some((mut b, sys)) = setup() else { return };
-    assert_gate(&mut b, &sys, "more acid", 0.3, REQUIRED_LOOSE,
-        |j| num(j, "bass.resonance") >= 0.6);
+    assert_gate(&mut b, &sys, "more acid", 0.3, REQUIRED_LOOSE, |j| {
+        num(j, "bass.resonance") >= 0.6
+    });
 }
 
 #[test]
 fn acid_raises_env_mod() {
     let Some((mut b, sys)) = setup() else { return };
-    assert_gate(&mut b, &sys, "acid squelch", 0.3, REQUIRED_LOOSE,
-        |j| at(j, "bass.env_mod").is_some() && num(j, "bass.env_mod") >= 0.5);
+    assert_gate(&mut b, &sys, "acid squelch", 0.3, REQUIRED_LOOSE, |j| {
+        at(j, "bass.env_mod").is_some() && num(j, "bass.env_mod") >= 0.5
+    });
 }
 
 #[test]
 fn darker_lowers_cutoff() {
     let Some((mut b, sys)) = setup() else { return };
-    assert_gate(&mut b, &sys, "make it darker", 0.3, REQUIRED_LOOSE,
-        |j| num(j, "bass.cutoff") <= 0.35);
+    assert_gate(&mut b, &sys, "make it darker", 0.3, REQUIRED_LOOSE, |j| {
+        num(j, "bass.cutoff") <= 0.35
+    });
 }
 
 #[test]
 fn add_reverb_raises_reverb_mix() {
     let Some((mut b, sys)) = setup() else { return };
-    assert_gate(&mut b, &sys, "add reverb", 0.3, REQUIRED_LOOSE,
-        |j| at(j, "fx.reverb_mix").is_some() && num(j, "fx.reverb_mix") >= 0.1);
+    assert_gate(&mut b, &sys, "add reverb", 0.3, REQUIRED_LOOSE, |j| {
+        at(j, "fx.reverb_mix").is_some() && num(j, "fx.reverb_mix") >= 0.1
+    });
 }
 
 #[test]
 fn remove_reverb_zeroes_mix() {
     let Some((mut b, sys)) = setup() else { return };
-    assert_gate(&mut b, &sys, "no reverb", 0.3, REQUIRED_TIGHT,
-        |j| num(j, "fx.reverb_mix") < 0.01);
+    assert_gate(&mut b, &sys, "no reverb", 0.3, REQUIRED_TIGHT, |j| {
+        num(j, "fx.reverb_mix") < 0.01
+    });
 }
 
 #[test]
 fn harder_raises_distortion() {
     let Some((mut b, sys)) = setup() else { return };
     assert_gate(&mut b, &sys, "make it harder", 0.3, REQUIRED_LOOSE, |j| {
-        let bass = at(j, "bass.distortion").and_then(|v| v.as_f64()).unwrap_or(0.0);
-        let fx   = at(j, "fx.distortion_drive").and_then(|v| v.as_f64()).unwrap_or(0.0);
+        let bass = at(j, "bass.distortion")
+            .and_then(|v| v.as_f64())
+            .unwrap_or(0.0);
+        let fx = at(j, "fx.distortion_drive")
+            .and_then(|v| v.as_f64())
+            .unwrap_or(0.0);
         bass > 0.05 || fx > 0.05
     });
 }
@@ -153,15 +174,17 @@ fn harder_raises_distortion() {
 #[test]
 fn add_delay_raises_mix() {
     let Some((mut b, sys)) = setup() else { return };
-    assert_gate(&mut b, &sys, "add delay", 0.3, REQUIRED_LOOSE,
-        |j| at(j, "fx.delay_mix").is_some() && num(j, "fx.delay_mix") > 0.0);
+    assert_gate(&mut b, &sys, "add delay", 0.3, REQUIRED_LOOSE, |j| {
+        at(j, "fx.delay_mix").is_some() && num(j, "fx.delay_mix") > 0.0
+    });
 }
 
 #[test]
 fn remove_delay_zeroes_mix() {
     let Some((mut b, sys)) = setup() else { return };
-    assert_gate(&mut b, &sys, "no delay", 0.3, REQUIRED_TIGHT,
-        |j| num(j, "fx.delay_mix") < 0.01);
+    assert_gate(&mut b, &sys, "no delay", 0.3, REQUIRED_TIGHT, |j| {
+        num(j, "fx.delay_mix") < 0.01
+    });
 }
 
 // ── Pattern clearing (REQUIRED_TIGHT) ────────────────────────────────────────
@@ -172,29 +195,33 @@ fn remove_delay_zeroes_mix() {
 #[test]
 fn remove_kick_clears_pattern() {
     let Some((mut b, sys)) = setup() else { return };
-    assert_gate(&mut b, &sys, "remove kick", 0.3, REQUIRED_TIGHT,
-        |j| all_false(j, "sequencer.kick_a_steps"));
+    assert_gate(&mut b, &sys, "remove kick", 0.3, REQUIRED_TIGHT, |j| {
+        all_false(j, "sequencer.kick_a_steps")
+    });
 }
 
 #[test]
 fn remove_clap_clears_pattern() {
     let Some((mut b, sys)) = setup() else { return };
-    assert_gate(&mut b, &sys, "no claps", 0.3, REQUIRED_TIGHT,
-        |j| all_false(j, "sequencer.clap_b_steps"));
+    assert_gate(&mut b, &sys, "no claps", 0.3, REQUIRED_TIGHT, |j| {
+        all_false(j, "sequencer.clap_b_steps")
+    });
 }
 
 #[test]
 fn remove_hihat_clears_pattern() {
     let Some((mut b, sys)) = setup() else { return };
-    assert_gate(&mut b, &sys, "no hats", 0.3, REQUIRED_TIGHT,
-        |j| all_false(j, "sequencer.hihat_a_steps"));
+    assert_gate(&mut b, &sys, "no hats", 0.3, REQUIRED_TIGHT, |j| {
+        all_false(j, "sequencer.hihat_a_steps")
+    });
 }
 
 #[test]
 fn remove_snare_clears_pattern() {
     let Some((mut b, sys)) = setup() else { return };
-    assert_gate(&mut b, &sys, "no snare", 0.3, REQUIRED_TIGHT,
-        |j| all_false(j, "sequencer.snare_a_steps"));
+    assert_gate(&mut b, &sys, "no snare", 0.3, REQUIRED_TIGHT, |j| {
+        all_false(j, "sequencer.snare_a_steps")
+    });
 }
 
 #[test]
@@ -228,24 +255,36 @@ fn clear_all_drums_clears_all_voices() {
 #[test]
 fn classic_acid_phuture_sets_high_resonance() {
     let Some((mut b, sys)) = setup() else { return };
-    assert_gate(&mut b, &sys,
+    assert_gate(
+        &mut b,
+        &sys,
         "classic Chicago acid house — think Phuture, DJ Pierre, Trax Records, pure 303 squelch",
-        0.3, REQUIRED_LOOSE,
-        |j| num(j, "bass.resonance") >= 0.65);
+        0.3,
+        REQUIRED_LOOSE,
+        |j| num(j, "bass.resonance") >= 0.65,
+    );
 }
 
 /// Classic acid should stay dry — barely any FX.
 #[test]
 fn classic_acid_phuture_stays_dry() {
     let Some((mut b, sys)) = setup() else { return };
-    assert_gate(&mut b, &sys,
+    assert_gate(
+        &mut b,
+        &sys,
         "classic acid, Phuture style — raw and dry, no reverb, no delay",
-        0.3, REQUIRED_LOOSE,
+        0.3,
+        REQUIRED_LOOSE,
         |j| {
-            let rmix = at(j, "fx.reverb_mix").and_then(|v| v.as_f64()).unwrap_or(0.0);
-            let dmix = at(j, "fx.delay_mix").and_then(|v| v.as_f64()).unwrap_or(0.0);
+            let rmix = at(j, "fx.reverb_mix")
+                .and_then(|v| v.as_f64())
+                .unwrap_or(0.0);
+            let dmix = at(j, "fx.delay_mix")
+                .and_then(|v| v.as_f64())
+                .unwrap_or(0.0);
             rmix <= 0.2 && dmix <= 0.15
-        });
+        },
+    );
 }
 
 /// Autechre = IDM, so kick should NOT be strict four-on-the-floor.
@@ -253,29 +292,37 @@ fn classic_acid_phuture_stays_dry() {
 #[test]
 fn autechre_idm_breaks_four_on_the_floor() {
     let four_floor = serde_json::json!([
-        true,false,false,false, true,false,false,false,
-        true,false,false,false, true,false,false,false
+        true, false, false, false, true, false, false, false, true, false, false, false, true,
+        false, false, false
     ]);
     let Some((mut b, sys)) = setup() else { return };
-    assert_gate(&mut b, &sys,
+    assert_gate(
+        &mut b,
+        &sys,
         "go full Autechre IDM — irregular kick, subvert the grid, nothing four-on-the-floor",
-        0.3, REQUIRED_LOOSE,
+        0.3,
+        REQUIRED_LOOSE,
         |j| {
             match at(j, "sequencer.kick_a_steps") {
-                None      => true,                    // no kick at all = fine for IDM
-                Some(arr) => arr != &four_floor,      // anything but pure 4-on-the-floor
+                None => true,                    // no kick at all = fine for IDM
+                Some(arr) => arr != &four_floor, // anything but pure 4-on-the-floor
             }
-        });
+        },
+    );
 }
 
 /// Aphex Twin Selected Ambient Works Vol 2 = spacious, heavy reverb.
 #[test]
 fn aphex_twin_ambient_uses_reverb() {
     let Some((mut b, sys)) = setup() else { return };
-    assert_gate(&mut b, &sys,
+    assert_gate(
+        &mut b,
+        &sys,
         "ambient Aphex Twin mood — Selected Ambient Works Vol 2, spacious and ethereal",
-        0.3, REQUIRED_LOOSE,
-        |j| num(j, "fx.reverb_mix") >= 0.25);
+        0.3,
+        REQUIRED_LOOSE,
+        |j| num(j, "fx.reverb_mix") >= 0.25,
+    );
 }
 
 /// Basic Channel dub techno = FX-heavy (reverb + delay are the music).
@@ -283,10 +330,14 @@ fn aphex_twin_ambient_uses_reverb() {
 #[test]
 fn basic_channel_dub_techno_uses_heavy_fx() {
     let Some((mut b, sys)) = setup() else { return };
-    assert_gate(&mut b, &sys,
+    assert_gate(
+        &mut b,
+        &sys,
         "dub techno in the style of Basic Channel — maximum reverb, ghost delay echoes",
-        0.3, REQUIRED_LOOSE,
-        |j| num(j, "fx.reverb_mix") >= 0.3 || num(j, "fx.delay_mix") >= 0.2);
+        0.3,
+        REQUIRED_LOOSE,
+        |j| num(j, "fx.reverb_mix") >= 0.3 || num(j, "fx.delay_mix") >= 0.2,
+    );
 }
 
 /// Berlin techno = dark filter, deep bass, not much melody.
@@ -294,10 +345,14 @@ fn basic_channel_dub_techno_uses_heavy_fx() {
 #[test]
 fn berlin_techno_sets_dark_filter() {
     let Some((mut b, sys)) = setup() else { return };
-    assert_gate(&mut b, &sys,
+    assert_gate(
+        &mut b,
+        &sys,
         "Berlin techno — Berghain floor, deep dark kick, filter nearly closed, Richie Hawtin",
-        0.3, REQUIRED_LOOSE,
-        |j| num(j, "bass.cutoff") <= 0.35);
+        0.3,
+        REQUIRED_LOOSE,
+        |j| num(j, "bass.cutoff") <= 0.35,
+    );
 }
 
 /// Venetian Snares breakcore = very high BPM (if the model touches BPM at all).
@@ -306,15 +361,19 @@ fn berlin_techno_sets_dark_filter() {
 fn venetian_snares_sets_high_bpm() {
     let Some((mut b, sys)) = setup() else { return };
     // Only meaningful if BPM is in the output at all
-    assert_gate(&mut b, &sys,
+    assert_gate(
+        &mut b,
+        &sys,
         "breakcore chaos, Venetian Snares energy — shredded Amen, extreme BPM",
-        0.3, REQUIRED_LOOSE,
+        0.3,
+        REQUIRED_LOOSE,
         |j| {
             match at(j, "sequencer.bpm").and_then(|v| v.as_f64()) {
-                None      => true,   // didn't touch BPM — inconclusive, not a failure
+                None => true, // didn't touch BPM — inconclusive, not a failure
                 Some(bpm) => bpm >= 160.0,
             }
-        });
+        },
+    );
 }
 
 // ── Schema compliance (REQUIRED_TIGHT) ───────────────────────────────────────
@@ -325,23 +384,37 @@ fn venetian_snares_sets_high_bpm() {
 #[test]
 fn responses_always_have_comment() {
     let Some((mut b, sys)) = setup() else { return };
-    for prompt in ["more acid", "darker", "add reverb", "remove kick", "make it harder"] {
-        assert_gate(&mut b, &sys, prompt, 0.3, REQUIRED_TIGHT,
-            |j| j.get("_comment").is_some());
+    for prompt in [
+        "more acid",
+        "darker",
+        "add reverb",
+        "remove kick",
+        "make it harder",
+    ] {
+        assert_gate(&mut b, &sys, prompt, 0.3, REQUIRED_TIGHT, |j| {
+            j.get("_comment").is_some()
+        });
     }
 }
 
 #[test]
 fn unit_params_always_in_range() {
     let paths = [
-        "bass.cutoff", "bass.resonance", "bass.env_mod", "bass.decay",
-        "fx.reverb_mix", "fx.delay_mix", "fx.distortion_drive", "fx.distortion_mix",
+        "bass.cutoff",
+        "bass.resonance",
+        "bass.env_mod",
+        "bass.decay",
+        "fx.reverb_mix",
+        "fx.delay_mix",
+        "fx.distortion_drive",
+        "fx.distortion_mix",
     ];
     let Some((mut b, sys)) = setup() else { return };
     for prompt in ["more acid", "darker", "harder", "add reverb"] {
         assert_gate(&mut b, &sys, prompt, 0.5, REQUIRED_TIGHT, |j| {
             paths.iter().all(|path| {
-                at(j, path).and_then(|v| v.as_f64())
+                at(j, path)
+                    .and_then(|v| v.as_f64())
                     .map_or(true, |v| (0.0..=1.0).contains(&v))
             })
         });
@@ -354,9 +427,8 @@ fn no_unknown_top_level_keys() {
     let Some((mut b, sys)) = setup() else { return };
     for prompt in ["more acid", "darker", "add reverb", "remove kick"] {
         assert_gate(&mut b, &sys, prompt, 0.3, REQUIRED_TIGHT, |j| {
-            j.as_object().map_or(true, |obj| {
-                obj.keys().all(|k| known.contains(&k.as_str()))
-            })
+            j.as_object()
+                .map_or(true, |obj| obj.keys().all(|k| known.contains(&k.as_str())))
         });
     }
 }

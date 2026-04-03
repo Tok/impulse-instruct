@@ -22,12 +22,14 @@ pub struct SysInfo {
 pub fn spawn_poller(shared: Arc<Mutex<SysInfo>>, interval_secs: u64) {
     std::thread::Builder::new()
         .name("sysinfo".into())
-        .spawn(move || loop {
-            let info = poll_once();
-            if let Ok(mut guard) = shared.lock() {
-                *guard = info;
+        .spawn(move || {
+            loop {
+                let info = poll_once();
+                if let Ok(mut guard) = shared.lock() {
+                    *guard = info;
+                }
+                std::thread::sleep(Duration::from_secs(interval_secs));
             }
-            std::thread::sleep(Duration::from_secs(interval_secs));
         })
         .ok();
 }
@@ -42,22 +44,21 @@ fn poll_once() -> SysInfo {
             "--format=csv,noheader,nounits",
         ])
         .output()
+        && out.status.success()
     {
-        if out.status.success() {
-            let text = String::from_utf8_lossy(&out.stdout);
-            let parts: Vec<&str> = text
-                .lines()
-                .next()
-                .unwrap_or("")
-                .split(',')
-                .map(str::trim)
-                .collect();
-            if parts.len() >= 4 {
-                info.gpu_name        = parts[0].to_string();
-                info.driver_version  = parts[1].to_string();
-                info.vram_used_mb    = parts[2].parse().unwrap_or(0);
-                info.vram_total_mb   = parts[3].parse().unwrap_or(0);
-            }
+        let text = String::from_utf8_lossy(&out.stdout);
+        let parts: Vec<&str> = text
+            .lines()
+            .next()
+            .unwrap_or("")
+            .split(',')
+            .map(str::trim)
+            .collect();
+        if parts.len() >= 4 {
+            info.gpu_name = parts[0].to_string();
+            info.driver_version = parts[1].to_string();
+            info.vram_used_mb = parts[2].parse().unwrap_or(0);
+            info.vram_total_mb = parts[3].parse().unwrap_or(0);
         }
     }
 
@@ -67,29 +68,28 @@ fn poll_once() -> SysInfo {
     if let Ok(out) = std::process::Command::new("nvidia-smi")
         .args(["--query-gpu=compute_cap", "--format=csv,noheader"])
         .output()
+        && out.status.success()
     {
-        if out.status.success() {
-            let text = String::from_utf8_lossy(&out.stdout);
-            let cc = text.trim().to_string();
-            if !cc.is_empty() {
-                info.cuda_version = format!("sm_{}", cc.replace('.', ""));
-            }
+        let text = String::from_utf8_lossy(&out.stdout);
+        let cc = text.trim().to_string();
+        if !cc.is_empty() {
+            info.cuda_version = format!("sm_{}", cc.replace('.', ""));
         }
     }
     // Try nvcc --version for the actual CUDA toolkit version (overrides sm_xx)
-    if let Ok(out) = std::process::Command::new("nvcc").arg("--version").output() {
-        if out.status.success() {
-            let text = String::from_utf8_lossy(&out.stdout);
-            // Line like: "Cuda compilation tools, release 12.4, V12.4.131"
-            for line in text.lines() {
-                if line.contains("release") {
-                    if let Some(start) = line.find("release ") {
-                        let rest = &line[start + 8..];
-                        let ver = rest.split(',').next().unwrap_or("").trim();
-                        if !ver.is_empty() {
-                            info.cuda_version = format!("CUDA {}", ver);
-                        }
-                    }
+    if let Ok(out) = std::process::Command::new("nvcc").arg("--version").output()
+        && out.status.success()
+    {
+        let text = String::from_utf8_lossy(&out.stdout);
+        // Line like: "Cuda compilation tools, release 12.4, V12.4.131"
+        for line in text.lines() {
+            if line.contains("release")
+                && let Some(start) = line.find("release ")
+            {
+                let rest = &line[start + 8..];
+                let ver = rest.split(',').next().unwrap_or("").trim();
+                if !ver.is_empty() {
+                    info.cuda_version = format!("CUDA {}", ver);
                 }
             }
         }
@@ -102,13 +102,17 @@ fn poll_once() -> SysInfo {
         for line in contents.lines() {
             let mut parts = line.split_whitespace();
             match parts.next() {
-                Some("MemTotal:")     => { total_kb     = parts.next().unwrap_or("0").parse().unwrap_or(0); }
-                Some("MemAvailable:") => { available_kb = parts.next().unwrap_or("0").parse().unwrap_or(0); }
+                Some("MemTotal:") => {
+                    total_kb = parts.next().unwrap_or("0").parse().unwrap_or(0);
+                }
+                Some("MemAvailable:") => {
+                    available_kb = parts.next().unwrap_or("0").parse().unwrap_or(0);
+                }
                 _ => {}
             }
         }
         info.ram_total_mb = total_kb / 1024;
-        info.ram_used_mb  = info.ram_total_mb.saturating_sub(available_kb / 1024);
+        info.ram_used_mb = info.ram_total_mb.saturating_sub(available_kb / 1024);
     }
 
     info

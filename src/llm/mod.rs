@@ -11,8 +11,8 @@ pub use prompt::param_json_schema;
 
 use anyhow::Result;
 use crossbeam_channel::{Receiver, Sender};
-use std::sync::Arc;
 use parking_lot::RwLock;
+use std::sync::Arc;
 use std::time::Instant;
 
 use crate::state::{AppState, ConversationMode, apply_llm_update};
@@ -55,8 +55,8 @@ pub trait LlmBackend: Send {
 
 /// Candidate paths for the llama-server binary (PrismML fork).
 const SERVER_BINARY_CANDIDATES: &[&str] = &[
-    ".llama-build/bin/llama-server",  // built by build-bonsai-server.sh
-    "llama-server",                    // $PATH
+    ".llama-build/bin/llama-server", // built by build-bonsai-server.sh
+    "llama-server",                  // $PATH
 ];
 
 /// Fixed port for llama-server.  Using a fixed port prevents the process-leak
@@ -66,9 +66,9 @@ const SERVER_BINARY_CANDIDATES: &[&str] = &[
 const LLAMA_PORT: u16 = 8766;
 
 pub struct LlamaServerBackend {
-    child:    Option<std::process::Child>,
+    child: Option<std::process::Child>,
     base_url: String,
-    live:     bool,
+    live: bool,
 }
 
 /// Kill any leftover llama-server processes from a previous run.
@@ -91,16 +91,20 @@ impl LlamaServerBackend {
     /// Returns `live: false` (hard-fail path) if binary or model are missing —
     /// the caller (`run_llm_loop`) decides whether to exit or continue in mock.
     pub fn new(model_path: &str) -> Self {
-        let bin = SERVER_BINARY_CANDIDATES.iter()
-            .find(|&&p| std::path::Path::new(p).exists()
-                || which_in_path(p))
+        let bin = SERVER_BINARY_CANDIDATES
+            .iter()
+            .find(|&&p| std::path::Path::new(p).exists() || which_in_path(p))
             .copied();
 
         let Some(bin) = bin else {
             log::error!(
                 "llama-server binary not found — run ./build-bonsai-server.sh to build it."
             );
-            return Self { child: None, base_url: String::new(), live: false };
+            return Self {
+                child: None,
+                base_url: String::new(),
+                live: false,
+            };
         };
 
         if !std::path::Path::new(model_path).exists() {
@@ -108,7 +112,11 @@ impl LlamaServerBackend {
                 "Model not found at '{}' — run ./download-models.sh.",
                 model_path
             );
-            return Self { child: None, base_url: String::new(), live: false };
+            return Self {
+                child: None,
+                base_url: String::new(),
+                live: false,
+            };
         }
 
         let port = LLAMA_PORT;
@@ -117,24 +125,44 @@ impl LlamaServerBackend {
         // Reuse an already-healthy server (e.g. user restarted the UI without
         // killing the server) — avoids a 30–90 s reload of the model.
         let health_url = format!("{}/health", base_url);
-        if ureq::get(&health_url).call().map(|r| r.status() == 200).unwrap_or(false) {
-            log::info!("Reusing existing llama-server on port {} (already healthy)", port);
-            return Self { child: None, base_url, live: true };
+        if ureq::get(&health_url)
+            .call()
+            .map(|r| r.status() == 200)
+            .unwrap_or(false)
+        {
+            log::info!(
+                "Reusing existing llama-server on port {} (already healthy)",
+                port
+            );
+            return Self {
+                child: None,
+                base_url,
+                live: true,
+            };
         }
 
         // Kill any leaked process from a previous run that holds the port.
         kill_leaked_servers(bin);
 
-        log::info!("Spawning llama-server on port {} with model {}", port, model_path);
+        log::info!(
+            "Spawning llama-server on port {} with model {}",
+            port,
+            model_path
+        );
 
         let child = std::process::Command::new(bin)
             .args([
-                "--model", model_path,
-                "--host", "127.0.0.1",
-                "--port", &port.to_string(),
-                "--ctx-size", "4096",
-                "--n-gpu-layers", "99",
-                "--log-disable",   // reduce noise; we log our own status
+                "--model",
+                model_path,
+                "--host",
+                "127.0.0.1",
+                "--port",
+                &port.to_string(),
+                "--ctx-size",
+                "4096",
+                "--n-gpu-layers",
+                "99",
+                "--log-disable", // reduce noise; we log our own status
             ])
             .stdout(std::process::Stdio::null())
             .stderr(std::process::Stdio::null())
@@ -142,11 +170,22 @@ impl LlamaServerBackend {
 
         match child {
             Err(e) => {
-                log::error!("Failed to spawn llama-server: {} — falling back to mock.", e);
-                Self { child: None, base_url: String::new(), live: false }
+                log::error!(
+                    "Failed to spawn llama-server: {} — falling back to mock.",
+                    e
+                );
+                Self {
+                    child: None,
+                    base_url: String::new(),
+                    live: false,
+                }
             }
             Ok(child) => {
-                let mut backend = Self { child: Some(child), base_url, live: false };
+                let mut backend = Self {
+                    child: Some(child),
+                    base_url,
+                    live: false,
+                };
                 backend.wait_for_ready();
                 backend
             }
@@ -158,16 +197,26 @@ impl LlamaServerBackend {
     /// Used by the LLM test suite when `LLAMA_SERVER_URL` is set.
     pub fn connect(base_url: &str) -> Self {
         let url = format!("{}/health", base_url);
-        let live = ureq::get(&url).call()
+        let live = ureq::get(&url)
+            .call()
             .map(|r| r.status() == 200)
             .unwrap_or(false);
         if !live {
-            log::warn!("LlamaServerBackend::connect: server at {} not responding", base_url);
+            log::warn!(
+                "LlamaServerBackend::connect: server at {} not responding",
+                base_url
+            );
         }
-        Self { child: None, base_url: base_url.to_string(), live }
+        Self {
+            child: None,
+            base_url: base_url.to_string(),
+            live,
+        }
     }
 
-    pub fn is_live(&self) -> bool { self.live }
+    pub fn is_live(&self) -> bool {
+        self.live
+    }
 
     /// Poll /health until the server is ready (up to ~90 s).
     /// llama-server can take a while to load a large model into VRAM.
@@ -195,7 +244,9 @@ impl Drop for LlamaServerBackend {
             #[cfg(unix)]
             {
                 let pid = child.id() as i32;
-                unsafe { libc::kill(pid, libc::SIGKILL); }
+                unsafe {
+                    libc::kill(pid, libc::SIGKILL);
+                }
             }
             #[cfg(not(unix))]
             let _ = child.kill();
@@ -245,7 +296,8 @@ impl LlmBackend for LlamaServerBackend {
 
         let elapsed = t0.elapsed().as_secs_f32();
 
-        let resp_text = resp.into_string()
+        let resp_text = resp
+            .into_string()
             .map_err(|e| anyhow::anyhow!("failed to read server response body: {}", e))?;
 
         let resp_json: serde_json::Value = serde_json::from_str(&resp_text)
@@ -264,25 +316,35 @@ impl LlmBackend for LlamaServerBackend {
         let (tag_thinking, json_text) = split_thinking(&raw_content);
 
         let usage = &resp_json["usage"];
-        let prompt_tok  = usage["prompt_tokens"].as_u64().unwrap_or(0) as usize;
-        let compl_tok   = usage["completion_tokens"].as_u64().unwrap_or(0) as usize;
-        let tps = if elapsed > 0.0 { compl_tok as f32 / elapsed } else { 0.0 };
+        let prompt_tok = usage["prompt_tokens"].as_u64().unwrap_or(0) as usize;
+        let compl_tok = usage["completion_tokens"].as_u64().unwrap_or(0) as usize;
+        let tps = if elapsed > 0.0 {
+            compl_tok as f32 / elapsed
+        } else {
+            0.0
+        };
         let ctx_used = usage["total_tokens"].as_u64().unwrap_or(0) as usize;
 
-        let mut param_update = repair_json(json_text.trim())
-            .ok_or_else(|| anyhow::anyhow!("JSON parse and repair both failed\nraw: {json_text}"))?;
+        let mut param_update = repair_json(json_text.trim()).ok_or_else(|| {
+            anyhow::anyhow!("JSON parse and repair both failed\nraw: {json_text}")
+        })?;
 
         // Extract _thinking from the JSON itself (our prompted reasoning field).
         // Prefer tag-based thinking if the model produced it; fall back to _thinking field.
         let thinking = tag_thinking.or_else(|| {
-            param_update.as_object_mut()
+            param_update
+                .as_object_mut()
                 .and_then(|o| o.remove("_thinking"))
                 .and_then(|v| v.as_str().map(|s| s.to_string()))
                 .filter(|s| !s.is_empty())
         });
 
         if let Some(ref t) = thinking {
-            log::debug!("LLM thinking ({} chars): {}", t.len(), &t[..t.len().min(120)]);
+            log::debug!(
+                "LLM thinking ({} chars): {}",
+                t.len(),
+                &t[..t.len().min(120)]
+            );
         }
 
         Ok(LlmOutput {
@@ -296,7 +358,6 @@ impl LlmBackend for LlamaServerBackend {
             thinking,
         })
     }
-
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -322,22 +383,35 @@ fn repair_json(s: &str) -> Option<serde_json::Value> {
     let mut in_str = false;
     let mut esc = false;
     for c in attempt.chars() {
-        if esc        { esc = false; continue; }
-        if c == '\\'  && in_str { esc = true; continue; }
-        if c == '"'   { in_str = !in_str; continue; }
-        if !in_str    {
+        if esc {
+            esc = false;
+            continue;
+        }
+        if c == '\\' && in_str {
+            esc = true;
+            continue;
+        }
+        if c == '"' {
+            in_str = !in_str;
+            continue;
+        }
+        if !in_str {
             match c {
                 '{' => obj_depth += 1,
                 '}' => obj_depth -= 1,
                 '[' => arr_depth += 1,
                 ']' => arr_depth -= 1,
-                _   => {}
+                _ => {}
             }
         }
     }
     // Close in reverse order: arrays first, then objects
-    for _ in 0..arr_depth.max(0) { attempt.push(']'); }
-    for _ in 0..obj_depth.max(0) { attempt.push('}'); }
+    for _ in 0..arr_depth.max(0) {
+        attempt.push(']');
+    }
+    for _ in 0..obj_depth.max(0) {
+        attempt.push('}');
+    }
 
     serde_json::from_str::<serde_json::Value>(&attempt)
         .ok()
@@ -353,11 +427,12 @@ fn sanitize_json_structure(v: serde_json::Value) -> serde_json::Value {
     };
 
     // Extract misplaced keys from inside "sequencer"
-    let (bass_lift, fx_lift) = if let Some(seq) = obj.get_mut("sequencer").and_then(|s| s.as_object_mut()) {
-        (seq.remove("bass"), seq.remove("fx"))
-    } else {
-        (None, None)
-    };
+    let (bass_lift, fx_lift) =
+        if let Some(seq) = obj.get_mut("sequencer").and_then(|s| s.as_object_mut()) {
+            (seq.remove("bass"), seq.remove("fx"))
+        } else {
+            (None, None)
+        };
     if let Some(b) = bass_lift {
         obj.entry("bass").or_insert(b);
     }
@@ -378,20 +453,19 @@ fn sanitize_json_structure(v: serde_json::Value) -> serde_json::Value {
 /// and the whole string is returned as remainder.
 fn split_thinking(s: &str) -> (Option<String>, String) {
     let s = s.trim();
-    if let Some(rest) = s.strip_prefix("<think>") {
-        if let Some(end) = rest.find("</think>") {
-            let thinking = rest[..end].trim().to_string();
-            let after = rest[end + "</think>".len()..].trim().to_string();
-            return (Some(thinking).filter(|t| !t.is_empty()), after);
-        }
+    if let Some(rest) = s.strip_prefix("<think>")
+        && let Some(end) = rest.find("</think>")
+    {
+        let thinking = rest[..end].trim().to_string();
+        let after = rest[end + "</think>".len()..].trim().to_string();
+        return (Some(thinking).filter(|t| !t.is_empty()), after);
     }
     (None, s.to_string())
 }
 
 fn which_in_path(name: &str) -> bool {
     std::env::var_os("PATH")
-        .map(|paths| std::env::split_paths(&paths)
-            .any(|dir| dir.join(name).exists()))
+        .map(|paths| std::env::split_paths(&paths).any(|dir| dir.join(name).exists()))
         .unwrap_or(false)
 }
 
@@ -433,28 +507,47 @@ pub fn mock_response(prompt: &str, heat: f32) -> Result<LlmOutput> {
             "bass": { "cutoff": 0.15, "resonance": 0.5, "env_mod": 0.3 },
             "fx": { "reverb_size": 0.8, "reverb_mix": 0.5, "delay_mix": 0.3 }
         })
-    } else if prompt_lower.contains("fast") || prompt_lower.contains("hard") || prompt_lower.contains("harder") {
+    } else if prompt_lower.contains("fast")
+        || prompt_lower.contains("hard")
+        || prompt_lower.contains("harder")
+    {
         serde_json::json!({
             "_comment": "harder — decay tighter, distortion drive up",
             "bass": { "decay": 0.2, "distortion": 0.12, "env_mod": 0.85 },
             "fx": { "distortion_drive": 0.15, "distortion_mix": 0.3 }
         })
-    } else if prompt_lower.contains("mellow") || prompt_lower.contains("chill") || prompt_lower.contains("softer") || prompt_lower.contains("quieter") {
+    } else if prompt_lower.contains("mellow")
+        || prompt_lower.contains("chill")
+        || prompt_lower.contains("softer")
+        || prompt_lower.contains("quieter")
+    {
         serde_json::json!({
             "_comment": "softer — filter open, resonance back, volume down",
             "bass": { "cutoff": 0.6, "resonance": 0.3, "env_mod": 0.25, "volume": 0.75 },
             "fx": { "reverb_mix": 0.3, "delay_mix": 0.2 }
         })
-    } else if prompt_lower.contains("melody") || prompt_lower.contains("notes") || prompt_lower.contains("bass line") || prompt_lower.contains("bassline")
-           || prompt_lower.contains("clap") || prompt_lower.contains("snare")
-           || prompt_lower.contains("hihat") || prompt_lower.contains("hi-hat") || prompt_lower.contains("hat")
-           || prompt_lower.contains("kick") || prompt_lower.contains("pattern") {
+    } else if prompt_lower.contains("melody")
+        || prompt_lower.contains("notes")
+        || prompt_lower.contains("bass line")
+        || prompt_lower.contains("bassline")
+        || prompt_lower.contains("clap")
+        || prompt_lower.contains("snare")
+        || prompt_lower.contains("hihat")
+        || prompt_lower.contains("hi-hat")
+        || prompt_lower.contains("hat")
+        || prompt_lower.contains("kick")
+        || prompt_lower.contains("pattern")
+    {
         // Pattern requests require the real model — mock mode can only nudge knobs.
         serde_json::json!({
             "_comment": "pattern/rhythm request — needs real model; nudging filter in mock mode",
             "bass": { "env_mod": (0.4 + heat * 0.3).clamp(0.2, 0.95) }
         })
-    } else if prompt_lower.contains("reverb") || prompt_lower.contains("space") || prompt_lower.contains("room") || prompt_lower.contains("atmosphere") {
+    } else if prompt_lower.contains("reverb")
+        || prompt_lower.contains("space")
+        || prompt_lower.contains("room")
+        || prompt_lower.contains("atmosphere")
+    {
         serde_json::json!({
             "_comment": "reverb + delay up for depth and space",
             "fx": { "reverb_mix": 0.3, "reverb_size": 0.6, "delay_mix": 0.18, "delay_feedback": 0.4 }
@@ -464,17 +557,26 @@ pub fn mock_response(prompt: &str, heat: f32) -> Result<LlmOutput> {
             "_comment": "dotted-eighth delay",
             "fx": { "delay_time": 0.375, "delay_feedback": 0.45, "delay_mix": 0.25 }
         })
-    } else if prompt_lower.contains("distort") || prompt_lower.contains("drive") || prompt_lower.contains("grit") {
+    } else if prompt_lower.contains("distort")
+        || prompt_lower.contains("drive")
+        || prompt_lower.contains("grit")
+    {
         serde_json::json!({
             "_comment": "master bus saturation up",
             "fx": { "distortion_drive": 0.25, "distortion_mix": 0.4 }
         })
-    } else if prompt_lower.contains("no fx") || prompt_lower.contains("dry") || prompt_lower.contains("clean") {
+    } else if prompt_lower.contains("no fx")
+        || prompt_lower.contains("dry")
+        || prompt_lower.contains("clean")
+    {
         serde_json::json!({
             "_comment": "all FX cleared",
             "fx": { "reverb_mix": 0.0, "delay_mix": 0.0, "distortion_mix": 0.0, "distortion_drive": 0.0 }
         })
-    } else if prompt_lower.contains("simpler") || prompt_lower.contains("strip") || prompt_lower.contains("minimal") {
+    } else if prompt_lower.contains("simpler")
+        || prompt_lower.contains("strip")
+        || prompt_lower.contains("minimal")
+    {
         serde_json::json!({
             "_comment": "FX stripped back",
             "fx": { "reverb_mix": 0.0, "delay_mix": 0.0 }
@@ -516,10 +618,10 @@ pub fn mock_response(prompt: &str, heat: f32) -> Result<LlmOutput> {
             })
         } else {
             let styles: &[(&str, f32, f32, f32, f32)] = &[
-                ("full acid — resonance + chaos up",   0.2, 0.88, 0.85, 148.0),
-                ("dark + slow — filter down, BPM down", 0.7, 0.40, 0.30,  95.0),
-                ("hard + fast — filter sweep, BPM up",  0.5, 0.65, 0.70, 160.0),
-                ("hypnotic — mid filter, lower BPM",    0.6, 0.55, 0.50, 118.0),
+                ("full acid — resonance + chaos up", 0.2, 0.88, 0.85, 148.0),
+                ("dark + slow — filter down, BPM down", 0.7, 0.40, 0.30, 95.0),
+                ("hard + fast — filter sweep, BPM up", 0.5, 0.65, 0.70, 160.0),
+                ("hypnotic — mid filter, lower BPM", 0.6, 0.55, 0.50, 118.0),
             ];
             let (cmt, cut2, res2, env2, bpm2) = styles[((ms * 0.003) as usize) % styles.len()];
             serde_json::json!({
@@ -579,7 +681,7 @@ pub fn run_llm_loop(
         // Server failed to start and --mock was not passed: hard fail.
         {
             let mut s = state.write();
-            s.llm.is_mock = false;        // not mock — this is a hard error
+            s.llm.is_mock = false; // not mock — this is a hard error
             s.llm.llm_initializing = false;
         }
         log::error!(
@@ -611,12 +713,7 @@ pub fn run_llm_loop(
         thinking: None,
     });
 
-    loop {
-        let input = match input_rx.recv() {
-            Ok(i) => i,
-            Err(_) => break, // channel closed
-        };
-
+    while let Ok(input) = input_rx.recv() {
         // ── Model switch ──────────────────────────────────────────────────────
         if let LlmInput::SwitchModel(ref new_path) = input {
             log::info!("LLM: switching model → {}", new_path);
@@ -643,7 +740,13 @@ pub fn run_llm_loop(
             continue;
         }
 
-        let LlmInput::Infer { ref prompt, one_shot } = input else { continue };
+        let LlmInput::Infer {
+            ref prompt,
+            one_shot,
+        } = input
+        else {
+            continue;
+        };
 
         // Snapshot prompt before acquiring any lock (clone outside critical section)
         if one_shot {
@@ -669,10 +772,10 @@ pub fn run_llm_loop(
 
         match result {
             Ok(output) => {
-                let tps   = output.tokens_per_sec;
-                let ptok  = output.prompt_tokens;
-                let ctok  = output.completion_tokens;
-                let ctx   = output.context_used;
+                let tps = output.tokens_per_sec;
+                let ptok = output.prompt_tokens;
+                let ctok = output.completion_tokens;
+                let ctx = output.context_used;
                 let tthink = output.thinking.as_ref().map(|t| t.len() / 4).unwrap_or(0);
 
                 // Apply param update to shared state
@@ -696,7 +799,9 @@ pub fn run_llm_loop(
 
                 // Log the natural-language comment if present, otherwise the raw response
                 if let Some(ref update) = output.param_update {
-                    let comment = update.get("_comment").and_then(|v| v.as_str())
+                    let comment = update
+                        .get("_comment")
+                        .and_then(|v| v.as_str())
                         .unwrap_or(&output.text);
                     let persona = state.read().llm.persona_name.clone();
                     if one_shot {
@@ -761,18 +866,22 @@ fn run_mock_loop(
     input_rx: Receiver<LlmInput>,
     output_tx: Sender<LlmOutput>,
 ) {
-    loop {
-        let input = match input_rx.recv() {
-            Ok(i) => i,
-            Err(_) => break,
-        };
-
+    while let Ok(input) = input_rx.recv() {
         if let LlmInput::SwitchModel(ref new_path) = input {
-            log::warn!("Mock mode: model switch to '{}' ignored (no real backend)", new_path);
+            log::warn!(
+                "Mock mode: model switch to '{}' ignored (no real backend)",
+                new_path
+            );
             continue;
         }
 
-        let LlmInput::Infer { ref prompt, one_shot } = input else { continue };
+        let LlmInput::Infer {
+            ref prompt,
+            one_shot,
+        } = input
+        else {
+            continue;
+        };
 
         let heat = state.read().llm.heat;
         {
@@ -787,7 +896,9 @@ fn run_mock_loop(
                     let current = state.read().clone();
                     let next = apply_llm_update(current, update);
                     *state.write() = next;
-                    let comment = update.get("_comment").and_then(|v| v.as_str())
+                    let comment = update
+                        .get("_comment")
+                        .and_then(|v| v.as_str())
                         .unwrap_or("[mock]");
                     let persona = state.read().llm.persona_name.clone();
                     if one_shot {
@@ -834,17 +945,20 @@ fn run_mock_loop(
 pub fn speak(text: &str, mode: &ConversationMode) {
     // Sanitise: strip anything that could be shell-injected.  We pass the
     // text as a single argument (no shell involved), but strip control chars.
-    let clean: String = text.chars()
+    let clean: String = text
+        .chars()
         .filter(|c| c.is_ascii_graphic() || *c == ' ')
         .take(200)
         .collect();
-    if clean.is_empty() { return; }
+    if clean.is_empty() {
+        return;
+    }
 
     let (pitch, speed, voice) = match mode {
-        ConversationMode::Mc       => ("60", "160", "en+m3"),   // high-pitched ragga MC
-        ConversationMode::Dj       => ("40", "140", "en+m4"),   // hype DJ
-        ConversationMode::Producer => ("50", "120", "en+m5"),   // calm producer
-        ConversationMode::Off      => return,
+        ConversationMode::Mc => ("60", "160", "en+m3"), // high-pitched ragga MC
+        ConversationMode::Dj => ("40", "140", "en+m4"), // hype DJ
+        ConversationMode::Producer => ("50", "120", "en+m5"), // calm producer
+        ConversationMode::Off => return,
     };
 
     // Spawn and detach — we don't wait for it.

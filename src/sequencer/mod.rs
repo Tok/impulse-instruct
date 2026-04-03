@@ -11,7 +11,7 @@ use crate::state::{DrumVoice, SequencerState};
 pub enum TriggerEvent {
     DrumTrigger {
         voice: DrumVoice,
-        velocity: f32,   // reserved for per-step velocity routing
+        velocity: f32, // reserved for per-step velocity routing
     },
     BassTrigger {
         note: u8,
@@ -26,9 +26,9 @@ pub enum TriggerEvent {
 
 #[derive(Clone, Debug)]
 pub struct ClockState {
-    pub sample_accumulator: f64,  // fractional samples since last step
+    pub sample_accumulator: f64, // fractional samples since last step
     pub current_step: usize,
-    pub gate_counter: u32,        // samples remaining in bass gate
+    pub gate_counter: u32, // samples remaining in bass gate
 }
 
 impl Default for ClockState {

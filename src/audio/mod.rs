@@ -9,7 +9,7 @@ use cpal::{Device, SampleFormat, Stream, StreamConfig};
 use rtrb::{Consumer, Producer};
 use std::sync::Arc;
 
-use crate::sequencer::{advance_clock, ClockState, TriggerEvent};
+use crate::sequencer::{ClockState, TriggerEvent, advance_clock};
 use crate::state::AppState;
 
 pub use dsp::{AudioParams, DspState};
@@ -87,7 +87,8 @@ impl AudioEngine {
                     };
 
                     let _ = (bpm, running); // used inside advance_clock via seq_snap
-                    let (new_clock, events) = advance_clock(clock.clone(), &seq_snap, block, sample_rate);
+                    let (new_clock, events) =
+                        advance_clock(clock.clone(), &seq_snap, block, sample_rate);
                     clock = new_clock;
 
                     for event in events {
@@ -97,7 +98,9 @@ impl AudioEngine {
                     // Generate audio, then apply monitor gain
                     dsp.process_block(output, channels);
                     if monitor_vol != 1.0 {
-                        for s in output.iter_mut() { *s *= monitor_vol; }
+                        for s in output.iter_mut() {
+                            *s *= monitor_vol;
+                        }
                     }
 
                     // Write first channel of each frame to scope ring buffer
@@ -116,6 +119,10 @@ impl AudioEngine {
         stream.play()?;
         log::info!("Audio engine started at {}Hz, {} ch", sample_rate, channels);
 
-        Ok(Self { params_tx, scope_rx, _stream: stream })
+        Ok(Self {
+            params_tx,
+            scope_rx,
+            _stream: stream,
+        })
     }
 }

@@ -23,15 +23,15 @@ mod banner;
 mod config;
 mod export;
 mod llm;
+#[cfg(all(test, feature = "llm-tests"))]
+mod llm_suite;
 mod midi;
 mod sequencer;
 mod state;
 mod sysinfo;
-mod ui;
 #[cfg(test)]
 mod tests;
-#[cfg(all(test, feature = "llm-tests"))]
-mod llm_suite;
+mod ui;
 
 use midi::MidiEvent;
 
@@ -67,7 +67,7 @@ impl Args {
         while i < args.len() {
             match args[i].as_str() {
                 "--no-api" => result.no_api = true,
-                "--mock"   => result.mock = true,
+                "--mock" => result.mock = true,
                 "--port" => {
                     i += 1;
                     if let Some(v) = args.get(i) {
@@ -106,27 +106,28 @@ impl Args {
 fn main() -> anyhow::Result<()> {
     let args = Args::parse();
 
-    env_logger::Builder::from_env(
-        env_logger::Env::default().default_filter_or(&args.log_level)
-    )
-    .format(|buf, record| {
-        use std::io::Write;
-        let ts = buf.timestamp_millis();
-        // Replace the default ISO8601/UTC 'T'+'Z' format with a plain
-        // human-readable timestamp: "2026-04-03 22:00:04.123 INFO ..."
-        let ts_str = format!("{}", ts)
-            .replace('T', " ")
-            .trim_end_matches('Z')
-            .to_string();
-        writeln!(buf, "{} {:5} {}", ts_str, record.level(), record.args())
-    })
-    .init();
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or(&args.log_level))
+        .format(|buf, record| {
+            use std::io::Write;
+            let ts = buf.timestamp_millis();
+            // Replace the default ISO8601/UTC 'T'+'Z' format with a plain
+            // human-readable timestamp: "2026-04-03 22:00:04.123 INFO ..."
+            let ts_str = format!("{}", ts)
+                .replace('T', " ")
+                .trim_end_matches('Z')
+                .to_string();
+            writeln!(buf, "{} {:5} {}", ts_str, record.level(), record.args())
+        })
+        .init();
 
     crate::banner::print_banner();
 
-    log::info!("Impulse Instruct starting…");
+    log::info!("Starting…");
     if !args.no_api {
-        log::info!("HTTP API enabled on port {} (pass --no-api to disable)", args.port);
+        log::info!(
+            "HTTP API enabled on port {} (pass --no-api to disable)",
+            args.port
+        );
     }
 
     // ── Shared state ──────────────────────────────────────────────────────────
@@ -199,7 +200,7 @@ fn main() -> anyhow::Result<()> {
             .with_title("Impulse Instruct")
             .with_icon(std::sync::Arc::new(make_window_icon()))
             .with_maximized(true)
-            .with_inner_size([1920.0, 1080.0])  // fallback if maximized hint is ignored by WM
+            .with_inner_size([1920.0, 1080.0]) // fallback if maximized hint is ignored by WM
             .with_min_inner_size([800.0, 500.0]),
         ..Default::default()
     };
@@ -234,7 +235,10 @@ fn make_window_icon() -> egui::IconData {
     let mut rgba = vec![0u8; (W * H * 4) as usize];
     // Background: #0C0C0C opaque
     for chunk in rgba.chunks_mut(4) {
-        chunk[0] = 12; chunk[1] = 12; chunk[2] = 12; chunk[3] = 255;
+        chunk[0] = 12;
+        chunk[1] = 12;
+        chunk[2] = 12;
+        chunk[3] = 255;
     }
 
     let mut fill = |x0: u32, y0: u32, w: u32, h: u32, r: u8, g: u8, b: u8| {
@@ -242,7 +246,10 @@ fn make_window_icon() -> egui::IconData {
             for px in x0..x0 + w {
                 if px < W && py < H {
                     let i = ((py * W + px) * 4) as usize;
-                    rgba[i] = r; rgba[i + 1] = g; rgba[i + 2] = b; rgba[i + 3] = 255;
+                    rgba[i] = r;
+                    rgba[i + 1] = g;
+                    rgba[i + 2] = b;
+                    rgba[i + 3] = 255;
                 }
             }
         }
@@ -254,13 +261,13 @@ fn make_window_icon() -> egui::IconData {
 
     // White keys: stride=29, width=28, height=144
     let white = [
-        (0u32,  0x33u8, 0x66u8, 0xDDu8), // C
-        (29,    0x33,   0xAA,   0x66  ), // D
-        (58,    0xDD,   0xCC,   0x22  ), // E
-        (87,    0xEE,   0x88,   0x22  ), // F
-        (116,   0xEE,   0x33,   0x66  ), // G
-        (145,   0x99,   0x66,   0xCC  ), // A
-        (174,   0x44,   0x33,   0xAA  ), // B
+        (0u32, 0x33u8, 0x66u8, 0xDDu8), // C
+        (29, 0x33, 0xAA, 0x66),         // D
+        (58, 0xDD, 0xCC, 0x22),         // E
+        (87, 0xEE, 0x88, 0x22),         // F
+        (116, 0xEE, 0x33, 0x66),        // G
+        (145, 0x99, 0x66, 0xCC),        // A
+        (174, 0x44, 0x33, 0xAA),        // B
     ];
     for (rx, r, g, b) in white {
         fill(tx + rx, ty, 28, 144, r, g, b);
@@ -269,14 +276,18 @@ fn make_window_icon() -> egui::IconData {
     // Black keys: width=17, height=90, centered in white-key gaps
     let black = [
         (20u32, 0x22u8, 0x99u8, 0xBBu8), // C#
-        (49,    0x88,   0xCC,   0x22  ), // D#
-        (107,   0xDD,   0x44,   0x22  ), // F#
-        (136,   0xCC,   0x11,   0x44  ), // G#
-        (165,   0x77,   0x44,   0xBB  ), // A#
+        (49, 0x88, 0xCC, 0x22),          // D#
+        (107, 0xDD, 0x44, 0x22),         // F#
+        (136, 0xCC, 0x11, 0x44),         // G#
+        (165, 0x77, 0x44, 0xBB),         // A#
     ];
     for (rx, r, g, b) in black {
         fill(tx + rx, ty, 17, 90, r, g, b);
     }
 
-    egui::IconData { rgba, width: W, height: H }
+    egui::IconData {
+        rgba,
+        width: W,
+        height: H,
+    }
 }

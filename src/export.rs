@@ -5,7 +5,7 @@
 use std::path::{Path, PathBuf};
 
 use crate::audio::dsp::{AudioParams, DspState};
-use crate::sequencer::{advance_clock, ClockState};
+use crate::sequencer::{ClockState, advance_clock};
 use crate::state::AppState;
 
 const EXPORT_SR: f32 = 44100.0;
@@ -75,12 +75,16 @@ fn write_wav(path: &Path, samples: &[f32]) -> Result<(), String> {
         bits_per_sample: 32,
         sample_format: hound::SampleFormat::Float,
     };
-    let mut writer = hound::WavWriter::create(path, spec)
-        .map_err(|e| format!("WAV create error: {e}"))?;
+    let mut writer =
+        hound::WavWriter::create(path, spec).map_err(|e| format!("WAV create error: {e}"))?;
     for &s in samples {
-        writer.write_sample(s).map_err(|e| format!("WAV write error: {e}"))?;
+        writer
+            .write_sample(s)
+            .map_err(|e| format!("WAV write error: {e}"))?;
     }
-    writer.finalize().map_err(|e| format!("WAV finalise error: {e}"))?;
+    writer
+        .finalize()
+        .map_err(|e| format!("WAV finalise error: {e}"))?;
     Ok(())
 }
 
@@ -95,9 +99,12 @@ pub fn export_mp3(state: &AppState, bars: u32) -> Result<PathBuf, String> {
     let status = std::process::Command::new("ffmpeg")
         .args([
             "-y",
-            "-i", wav_path.to_str().unwrap_or("export.wav"),
-            "-codec:a", "libmp3lame",
-            "-qscale:a", "2",  // ~190 kbps VBR
+            "-i",
+            wav_path.to_str().unwrap_or("export.wav"),
+            "-codec:a",
+            "libmp3lame",
+            "-qscale:a",
+            "2", // ~190 kbps VBR
             mp3_path.to_str().unwrap_or("export.mp3"),
         ])
         .stdout(std::process::Stdio::null())

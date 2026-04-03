@@ -35,11 +35,10 @@ impl InstructionSet {
         INSTRUCTION_SET.get_or_init(|| {
             let json = std::fs::read_to_string("instructions.json")
                 .unwrap_or_else(|_| DEFAULT_JSON.to_string());
-            let instructions: Vec<Instruction> = serde_json::from_str(&json)
-                .unwrap_or_else(|e| {
-                    log::warn!("instructions.json parse error: {e} — using embedded defaults");
-                    serde_json::from_str(DEFAULT_JSON).unwrap_or_default()
-                });
+            let instructions: Vec<Instruction> = serde_json::from_str(&json).unwrap_or_else(|e| {
+                log::warn!("instructions.json parse error: {e} — using embedded defaults");
+                serde_json::from_str(DEFAULT_JSON).unwrap_or_default()
+            });
             InstructionSet(instructions)
         })
     }
@@ -55,11 +54,13 @@ impl InstructionSet {
         let lower = prompt.to_lowercase();
         let mut best: Option<(&Instruction, usize)> = None;
         for inst in &self.0 {
-            let score: usize = inst.keywords.iter()
+            let score: usize = inst
+                .keywords
+                .iter()
                 .filter(|kw| lower.contains(kw.as_str()))
                 .map(|kw| kw.split_whitespace().count())
                 .sum();
-            if score > 0 && best.map_or(true, |(_, s)| score > s) {
+            if score > 0 && best.is_none_or(|(_, s)| score > s) {
                 best = Some((inst, score));
             }
         }

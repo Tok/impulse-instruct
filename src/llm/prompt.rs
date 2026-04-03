@@ -17,7 +17,12 @@ pub fn build_system_prompt(state: &AppState) -> String {
         locked.join(", ")
     };
 
-    let focused: Vec<&str> = state.llm.focused_params.iter().map(|s| s.as_str()).collect();
+    let focused: Vec<&str> = state
+        .llm
+        .focused_params
+        .iter()
+        .map(|s| s.as_str())
+        .collect();
     let focused_str = if focused.is_empty() {
         String::new()
     } else {
@@ -30,18 +35,28 @@ pub fn build_system_prompt(state: &AppState) -> String {
     let heat_pct = (heat * 100.0) as u32;
     let heat_desc = match heat {
         h if h < 0.25 => "cold — subtle incremental changes only, no pattern mutations",
-        h if h < 0.5  => "warm — moderate evolution, occasional step changes",
+        h if h < 0.5 => "warm — moderate evolution, occasional step changes",
         h if h < 0.75 => "hot — bold sweeps, pattern mutations, noticeable style shifts",
-        _              => "fire — anything goes, dramatic mutations, surprise",
+        _ => "fire — anything goes, dramatic mutations, surprise",
     };
 
     // Summarise active bass steps so the LLM can see what's playing
-    let active_bass: Vec<usize> = state.sequencer.bass_pattern.iter().enumerate()
-        .filter(|(_, s)| s.active).map(|(i, _)| i).collect();
+    let active_bass: Vec<usize> = state
+        .sequencer
+        .bass_pattern
+        .iter()
+        .enumerate()
+        .filter(|(_, s)| s.active)
+        .map(|(i, _)| i)
+        .collect();
     let bass_summary = if active_bass.is_empty() {
         "none (silent)".to_string()
     } else {
-        active_bass.iter().map(|i| i.to_string()).collect::<Vec<_>>().join(", ")
+        active_bass
+            .iter()
+            .map(|i| i.to_string())
+            .collect::<Vec<_>>()
+            .join(", ")
     };
 
     let current_json = serde_json::to_string_pretty(&serde_json::json!({
@@ -64,9 +79,13 @@ pub fn build_system_prompt(state: &AppState) -> String {
             "distortion_drive": state.fx.distortion_drive,
             "distortion_mix": state.fx.distortion_mix
         }
-    })).unwrap_or_default();
+    }))
+    .unwrap_or_default();
     // Bass pattern summary shown separately so the model doesn't treat it as an output field
-    let bass_info = format!("Active bass steps (for reference only, not a JSON field): {}", bass_summary);
+    let bass_info = format!(
+        "Active bass steps (for reference only, not a JSON field): {}",
+        bass_summary
+    );
 
     // Resolve active style section (empty string if none set)
     let style_section = match state.llm.active_style.as_deref() {
@@ -304,29 +323,35 @@ Example — "more acid":
                  \"SELECTOR pull up that riddim, junglist in the house!\"",
         },
         clap_example = match state.llm.conversation_mode {
-            ConversationMode::Off      => "clap909_steps updated",
-            ConversationMode::Producer => "adding a 909 clap on beats 2 and 4 for a classic house feel",
-            ConversationMode::Dj       => "CLAP CLAP CLAP just dropped the backbeat FEEL THAT",
-            ConversationMode::Mc       => "SELECTOR! clap ting incoming, big up the backbeat massive!",
+            ConversationMode::Off => "clap909_steps updated",
+            ConversationMode::Producer =>
+                "adding a 909 clap on beats 2 and 4 for a classic house feel",
+            ConversationMode::Dj => "CLAP CLAP CLAP just dropped the backbeat FEEL THAT",
+            ConversationMode::Mc => "SELECTOR! clap ting incoming, big up the backbeat massive!",
         },
         melody_example = match state.llm.conversation_mode {
-            ConversationMode::Off      => "bass_steps and bass_notes updated",
-            ConversationMode::Producer => "new bass line — stepping up a fifth and back with a chromatic passing note",
-            ConversationMode::Dj       => "NEW BASSLINE JUST DROPPED who ordered the groove you're welcome",
-            ConversationMode::Mc       => "WHEEL IT UP! fresh line incoming, junglist riddim massive!",
+            ConversationMode::Off => "bass_steps and bass_notes updated",
+            ConversationMode::Producer =>
+                "new bass line — stepping up a fifth and back with a chromatic passing note",
+            ConversationMode::Dj =>
+                "NEW BASSLINE JUST DROPPED who ordered the groove you're welcome",
+            ConversationMode::Mc => "WHEEL IT UP! fresh line incoming, junglist riddim massive!",
         },
         acid_example = match state.llm.conversation_mode {
-            ConversationMode::Off      => "bass resonance and env_mod updated",
-            ConversationMode::Producer => "cranking the resonance and env_mod for full acid squelch",
-            ConversationMode::Dj       => "ACID ACID ACID your boy just went full 303 mode YOU ARE WELCOME",
-            ConversationMode::Mc       => "REWIND! acid ting, selector pull up, junglist massive BWOY!",
+            ConversationMode::Off => "bass resonance and env_mod updated",
+            ConversationMode::Producer =>
+                "cranking the resonance and env_mod for full acid squelch",
+            ConversationMode::Dj =>
+                "ACID ACID ACID your boy just went full 303 mode YOU ARE WELCOME",
+            ConversationMode::Mc => "REWIND! acid ting, selector pull up, junglist massive BWOY!",
         },
     )
 }
 
 /// JSON Schema for grammar-constrained generation (used by llama-cpp-2).
 pub fn param_json_schema() -> serde_json::Value {
-    let bool_array = serde_json::json!({ "type": "array", "items": { "type": "boolean" }, "maxItems": 16 });
+    let bool_array =
+        serde_json::json!({ "type": "array", "items": { "type": "boolean" }, "maxItems": 16 });
     let note_array = serde_json::json!({ "type": "array", "items": { "type": "integer", "minimum": 0, "maximum": 127 }, "maxItems": 16 });
     serde_json::json!({
         "$schema": "http://json-schema.org/draft-07/schema",

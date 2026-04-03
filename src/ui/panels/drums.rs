@@ -1,0 +1,219 @@
+// ─── ui/panels/drums.rs ───────────────────────────────────────────────────────
+// Drum kit panels: Kit A (808-style) and Kit B (909-style).
+
+use crate::state::ParamMode;
+use crate::ui::{ImpulseApp, theme, widgets};
+
+pub fn draw_kit_a(app: &mut ImpulseApp, ui: &mut egui::Ui) {
+    widgets::section_header(ui, "DRUM KIT A");
+
+    // Snapshot all values before any widget rendering
+    let (
+        mut kp,
+        mut kd,
+        mut kpu,
+        mut kv,
+        mut st,
+        mut ssn,
+        mut sd,
+        mut sv,
+        mut hcd,
+        mut hod,
+        mut hv,
+    ) = {
+        let s = app.state.read();
+        (
+            s.kit_a.kick.pitch,
+            s.kit_a.kick.decay,
+            s.kit_a.kick.punch,
+            s.kit_a.kick.volume,
+            s.kit_a.snare.tone,
+            s.kit_a.snare.snappy,
+            s.kit_a.snare.decay,
+            s.kit_a.snare.volume,
+            s.kit_a.hihat_closed.decay,
+            s.kit_a.hihat_open.decay,
+            s.kit_a.hihat_closed.volume,
+        )
+    };
+    let mut changed = false;
+
+    let use_sliders = app.use_sliders;
+    ui.horizontal_wrapped(|ui| {
+        ui.group(|ui| {
+            ui.label(
+                egui::RichText::new("KICK")
+                    .color(theme::FOG)
+                    .monospace()
+                    .size(9.5),
+            );
+            if widgets::param_control(ui, "PITCH", &mut kp, ParamMode::Free, use_sliders).0 {
+                changed = true;
+            }
+            if widgets::param_control(ui, "DECAY", &mut kd, ParamMode::Free, use_sliders).0 {
+                changed = true;
+            }
+            if widgets::param_control(ui, "PUNCH", &mut kpu, ParamMode::Free, use_sliders).0 {
+                changed = true;
+            }
+            if widgets::param_control(ui, "LEVEL", &mut kv, ParamMode::Free, use_sliders).0 {
+                changed = true;
+            }
+        });
+        ui.add_space(4.0);
+        ui.group(|ui| {
+            ui.label(
+                egui::RichText::new("SNARE")
+                    .color(theme::FOG)
+                    .monospace()
+                    .size(9.5),
+            );
+            if widgets::param_control(ui, "TONE", &mut st, ParamMode::Free, use_sliders).0 {
+                changed = true;
+            }
+            if widgets::param_control(ui, "SNAPPY", &mut ssn, ParamMode::Free, use_sliders).0 {
+                changed = true;
+            }
+            if widgets::param_control(ui, "DECAY", &mut sd, ParamMode::Free, use_sliders).0 {
+                changed = true;
+            }
+            if widgets::param_control(ui, "LEVEL", &mut sv, ParamMode::Free, use_sliders).0 {
+                changed = true;
+            }
+        });
+        ui.add_space(4.0);
+        ui.group(|ui| {
+            ui.label(
+                egui::RichText::new("HIHAT")
+                    .color(theme::FOG)
+                    .monospace()
+                    .size(9.5),
+            );
+            if widgets::param_control(ui, "CLOSED", &mut hcd, ParamMode::Free, use_sliders).0 {
+                changed = true;
+            }
+            if widgets::param_control(ui, "OPEN", &mut hod, ParamMode::Free, use_sliders).0 {
+                changed = true;
+            }
+            if widgets::param_control(ui, "LEVEL", &mut hv, ParamMode::Free, use_sliders).0 {
+                changed = true;
+            }
+        });
+    });
+
+    // Single brief write with all changes
+    if changed {
+        let mut s = app.state.write();
+        s.kit_a.kick.pitch = kp;
+        s.kit_a.kick.decay = kd;
+        s.kit_a.kick.punch = kpu;
+        s.kit_a.kick.volume = kv;
+        s.kit_a.snare.tone = st;
+        s.kit_a.snare.snappy = ssn;
+        s.kit_a.snare.decay = sd;
+        s.kit_a.snare.volume = sv;
+        s.kit_a.hihat_closed.decay = hcd;
+        s.kit_a.hihat_open.decay = hod;
+        s.kit_a.hihat_closed.volume = hv;
+        s.kit_a.hihat_open.volume = hv;
+        drop(s);
+        app.push_audio_params();
+    }
+}
+
+pub fn draw_kit_b(app: &mut ImpulseApp, ui: &mut egui::Ui) {
+    widgets::section_header(ui, "DRUM KIT B");
+
+    let (mut kp, mut kd, mut kpu, mut kv, mut st, mut ssn, mut sd, mut sv, mut cd, mut cv) = {
+        let s = app.state.read();
+        (
+            s.kit_b.kick.pitch,
+            s.kit_b.kick.decay,
+            s.kit_b.kick.punch,
+            s.kit_b.kick.volume,
+            s.kit_b.snare.tone,
+            s.kit_b.snare.snappy,
+            s.kit_b.snare.decay,
+            s.kit_b.snare.volume,
+            s.kit_b.clap.decay,
+            s.kit_b.clap.volume,
+        )
+    };
+    let mut changed = false;
+
+    let use_sliders = app.use_sliders;
+    ui.horizontal_wrapped(|ui| {
+        ui.group(|ui| {
+            ui.label(
+                egui::RichText::new("KICK")
+                    .color(theme::FOG)
+                    .monospace()
+                    .size(9.5),
+            );
+            if widgets::param_control(ui, "PITCH", &mut kp, ParamMode::Free, use_sliders).0 {
+                changed = true;
+            }
+            if widgets::param_control(ui, "DECAY", &mut kd, ParamMode::Free, use_sliders).0 {
+                changed = true;
+            }
+            if widgets::param_control(ui, "PUNCH", &mut kpu, ParamMode::Free, use_sliders).0 {
+                changed = true;
+            }
+            if widgets::param_control(ui, "LEVEL", &mut kv, ParamMode::Free, use_sliders).0 {
+                changed = true;
+            }
+        });
+        ui.add_space(4.0);
+        ui.group(|ui| {
+            ui.label(
+                egui::RichText::new("SNARE")
+                    .color(theme::FOG)
+                    .monospace()
+                    .size(9.5),
+            );
+            if widgets::param_control(ui, "TONE", &mut st, ParamMode::Free, use_sliders).0 {
+                changed = true;
+            }
+            if widgets::param_control(ui, "SNAPPY", &mut ssn, ParamMode::Free, use_sliders).0 {
+                changed = true;
+            }
+            if widgets::param_control(ui, "DECAY", &mut sd, ParamMode::Free, use_sliders).0 {
+                changed = true;
+            }
+            if widgets::param_control(ui, "LEVEL", &mut sv, ParamMode::Free, use_sliders).0 {
+                changed = true;
+            }
+        });
+        ui.add_space(4.0);
+        ui.group(|ui| {
+            ui.label(
+                egui::RichText::new("CLAP / RIM")
+                    .color(theme::FOG)
+                    .monospace()
+                    .size(9.5),
+            );
+            if widgets::param_control(ui, "CLAP DEC", &mut cd, ParamMode::Free, use_sliders).0 {
+                changed = true;
+            }
+            if widgets::param_control(ui, "CLAP LVL", &mut cv, ParamMode::Free, use_sliders).0 {
+                changed = true;
+            }
+        });
+    });
+
+    if changed {
+        let mut s = app.state.write();
+        s.kit_b.kick.pitch = kp;
+        s.kit_b.kick.decay = kd;
+        s.kit_b.kick.punch = kpu;
+        s.kit_b.kick.volume = kv;
+        s.kit_b.snare.tone = st;
+        s.kit_b.snare.snappy = ssn;
+        s.kit_b.snare.decay = sd;
+        s.kit_b.snare.volume = sv;
+        s.kit_b.clap.decay = cd;
+        s.kit_b.clap.volume = cv;
+        drop(s);
+        app.push_audio_params();
+    }
+}

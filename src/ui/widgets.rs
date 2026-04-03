@@ -10,22 +10,41 @@ use crate::state::ParamMode;
 
 // ─── Mode indicator colours ───────────────────────────────────────────────────
 
-/// Indicator colour for each param mode.
-/// Free = nearly invisible; UserOwned = iron/white; LlmFocus = teal.
+/// Indicator brightness for each param mode — all values are pure grey (R=G=B).
+///
+/// Free      = near-invisible (28)  — no visual noise for unmanaged params
+/// UserOwned = dim iron (60)        — "locked down", deliberately subdued
+/// LlmFocus  = near-white (235)     — brightest state: LLM is actively driving this
 fn mode_color(mode: ParamMode) -> Color32 {
     match mode {
-        ParamMode::Free      => Color32::from_gray(28),
-        ParamMode::UserOwned => theme::IRON,
-        ParamMode::LlmFocus  => Color32::from_rgb(0x22, 0x99, 0xBB), // Huth C# teal
+        ParamMode::Free => Color32::from_gray(28),
+        ParamMode::UserOwned => theme::IRON, // 60
+        ParamMode::LlmFocus => theme::CHALK, // 235
     }
 }
 
 /// Short character label for the mode indicator button on sliders.
 fn mode_char(mode: ParamMode) -> &'static str {
     match mode {
-        ParamMode::Free      => "·",
+        ParamMode::Free => "·",
         ParamMode::UserOwned => "U",
-        ParamMode::LlmFocus  => "F",
+        ParamMode::LlmFocus => "F",
+    }
+}
+
+/// Hover tooltip text explaining the current mode and how to cycle.
+/// Knobs: right-click cycles. Sliders: click the ·/U/F button.
+fn mode_tooltip(mode: ParamMode) -> &'static str {
+    match mode {
+        ParamMode::Free => {
+            "· Free — LLM and user both control this\nRight-click to lock to user only (U)"
+        }
+        ParamMode::UserOwned => {
+            "U User owned — LLM ignores this param\nRight-click to set LLM focus (F)"
+        }
+        ParamMode::LlmFocus => {
+            "F LLM focus — model will actively drive this param\nRight-click to release (·)"
+        }
     }
 }
 
@@ -33,15 +52,13 @@ fn mode_char(mode: ParamMode) -> &'static str {
 
 /// A rotary knob widget.
 /// Returns `(value_changed, mode_cycled)`.
-/// Drag changes the value; click (without drag) cycles the param mode.
+/// Left-drag changes the value; right-click cycles the param mode.
 pub fn knob(ui: &mut Ui, label: &str, value: &mut f32, mode: ParamMode) -> (bool, bool) {
     let size = 44.0_f32;
-    let (rect, response) = ui.allocate_exact_size(Vec2::splat(size + 14.0), Sense::click_and_drag());
+    let (rect, response) =
+        ui.allocate_exact_size(Vec2::splat(size + 14.0), Sense::click_and_drag());
 
-    let knob_rect = Rect::from_center_size(
-        rect.center() - Vec2::new(0.0, 6.0),
-        Vec2::splat(size),
-    );
+    let knob_rect = Rect::from_center_size(rect.center() - Vec2::new(0.0, 6.0), Vec2::splat(size));
     let label_rect = Rect::from_min_size(
         Pos2::new(rect.min.x, knob_rect.max.y + 1.0),
         Vec2::new(rect.width(), 12.0),
@@ -64,12 +81,17 @@ pub fn knob(ui: &mut Ui, label: &str, value: &mut f32, mode: ParamMode) -> (bool
             egui::Align2::CENTER_CENTER,
             label,
             egui::FontId::monospace(8.5),
-            if mode == ParamMode::UserOwned { theme::ASH } else { theme::SMOKE },
+            if mode == ParamMode::UserOwned {
+                theme::ASH
+            } else {
+                theme::SMOKE
+            },
         );
     }
 
-    // Click (no drag) = cycle mode
-    let mode_cycled = response.clicked();
+    // Right-click = cycle mode; tooltip explains the states on hover.
+    let response = response.on_hover_text(mode_tooltip(mode));
+    let mode_cycled = response.secondary_clicked();
     (changed, mode_cycled)
 }
 
@@ -82,8 +104,8 @@ fn draw_knob(painter: &Painter, rect: Rect, value: f32, mode: ParamMode, hovered
     painter.circle_filled(center, radius, bg);
     let ring_col = match mode {
         ParamMode::UserOwned => theme::IRON,
-        ParamMode::LlmFocus  => mode_color(ParamMode::LlmFocus),
-        ParamMode::Free      => theme::ASH,
+        ParamMode::LlmFocus => mode_color(ParamMode::LlmFocus),
+        ParamMode::Free => theme::ASH,
     };
     painter.circle_stroke(center, radius, Stroke::new(1.0, ring_col));
 
@@ -92,16 +114,32 @@ fn draw_knob(painter: &Painter, rect: Rect, value: f32, mode: ParamMode, hovered
     let sweep = TAU * 0.75;
     let track_r = radius * 0.72;
 
-    draw_arc(painter, center, track_r, start_angle, sweep, 1.0, theme::SLATE);
+    draw_arc(
+        painter,
+        center,
+        track_r,
+        start_angle,
+        sweep,
+        1.0,
+        theme::SLATE,
+    );
 
     let filled_sweep = sweep * value;
     let arc_color = match mode {
         ParamMode::UserOwned => theme::IRON,
-        ParamMode::LlmFocus  => mode_color(ParamMode::LlmFocus),
-        ParamMode::Free      => theme::FOG,
+        ParamMode::LlmFocus => mode_color(ParamMode::LlmFocus),
+        ParamMode::Free => theme::FOG,
     };
     if filled_sweep > 0.01 {
-        draw_arc(painter, center, track_r, start_angle, filled_sweep, 2.0, arc_color);
+        draw_arc(
+            painter,
+            center,
+            track_r,
+            start_angle,
+            filled_sweep,
+            2.0,
+            arc_color,
+        );
     }
 
     // Pointer dot
@@ -119,8 +157,16 @@ fn draw_knob(painter: &Painter, rect: Rect, value: f32, mode: ParamMode, hovered
     );
 }
 
-fn draw_arc(painter: &Painter, center: Pos2, radius: f32, start: f32, sweep: f32, width: f32, color: Color32) {
-    let steps = ((sweep.abs() * radius * 2.0) as usize).max(8).min(64);
+fn draw_arc(
+    painter: &Painter,
+    center: Pos2,
+    radius: f32,
+    start: f32,
+    sweep: f32,
+    width: f32,
+    color: Color32,
+) {
+    let steps = ((sweep.abs() * radius * 2.0) as usize).clamp(8, 64);
     let points: Vec<Pos2> = (0..=steps)
         .map(|i| {
             let a = start + sweep * i as f32 / steps as f32;
@@ -138,16 +184,25 @@ fn draw_arc(painter: &Painter, center: Pos2, radius: f32, start: f32, sweep: f32
 /// Returns `(value_changed, mode_cycled)`.
 /// The mode button at the end cycles Free → UserOwned → LlmFocus → Free.
 pub fn slider(ui: &mut Ui, label: &str, value: &mut f32, mode: ParamMode) -> (bool, bool) {
-    let label_w  = 72.0_f32;
+    let label_w = 72.0_f32;
     let mode_btn_w = 18.0_f32;
     let mut changed = false;
     let mut mode_cycled = false;
 
     ui.horizontal(|ui| {
-        let text_color = if mode == ParamMode::UserOwned { theme::ASH } else { theme::SMOKE };
+        let text_color = if mode == ParamMode::UserOwned {
+            theme::ASH
+        } else {
+            theme::SMOKE
+        };
         ui.add_sized(
             [label_w, 14.0],
-            egui::Label::new(egui::RichText::new(label).monospace().size(9.0).color(text_color)),
+            egui::Label::new(
+                egui::RichText::new(label)
+                    .monospace()
+                    .size(9.0)
+                    .color(text_color),
+            ),
         );
 
         let avail = (ui.available_width() - mode_btn_w).max(40.0);
@@ -155,7 +210,10 @@ pub fn slider(ui: &mut Ui, label: &str, value: &mut f32, mode: ParamMode) -> (bo
         if mode == ParamMode::UserOwned {
             // Show the value but disable editing
             let mut v = *value;
-            ui.add_enabled(false, egui::Slider::new(&mut v, 0.0..=1.0).show_value(false));
+            ui.add_enabled(
+                false,
+                egui::Slider::new(&mut v, 0.0..=1.0).show_value(false),
+            );
         } else {
             let resp = ui.add_sized(
                 [avail, 14.0],
@@ -167,16 +225,18 @@ pub fn slider(ui: &mut Ui, label: &str, value: &mut f32, mode: ParamMode) -> (bo
         }
 
         // Mode cycle button — character and colour reflect current state
-        if ui.add_sized(
+        let btn = ui.add_sized(
             [mode_btn_w, 14.0],
             egui::Button::new(
                 egui::RichText::new(mode_char(mode))
-                    .monospace().size(9.0)
-                    .color(mode_color(mode))
+                    .monospace()
+                    .size(9.0)
+                    .color(mode_color(mode)),
             )
             .fill(egui::Color32::TRANSPARENT)
             .frame(false),
-        ).clicked() {
+        );
+        if btn.on_hover_text(mode_tooltip(mode)).clicked() {
             mode_cycled = true;
         }
     });
@@ -186,7 +246,13 @@ pub fn slider(ui: &mut Ui, label: &str, value: &mut f32, mode: ParamMode) -> (bo
 
 /// Dispatch to `knob` or `slider` based on `use_sliders`.
 /// Returns `(value_changed, mode_cycled)`.
-pub fn param_control(ui: &mut Ui, label: &str, value: &mut f32, mode: ParamMode, use_sliders: bool) -> (bool, bool) {
+pub fn param_control(
+    ui: &mut Ui,
+    label: &str,
+    value: &mut f32,
+    mode: ParamMode,
+    use_sliders: bool,
+) -> (bool, bool) {
     if use_sliders {
         slider(ui, label, value, mode)
     } else {
@@ -198,14 +264,20 @@ pub fn param_control(ui: &mut Ui, label: &str, value: &mut f32, mode: ParamMode,
 
 /// A stateful on/off button.  Flips `active` and returns true on click.
 pub fn toggle_button(ui: &mut Ui, label: &str, active: &mut bool) -> bool {
-    let fill       = if *active { theme::IRON } else { theme::PIT };
+    let fill = if *active { theme::IRON } else { theme::PIT };
     let text_color = if *active { theme::CHALK } else { theme::ASH };
 
     let button = egui::Button::new(
-        egui::RichText::new(label).color(text_color).size(9.5).monospace()
+        egui::RichText::new(label)
+            .color(text_color)
+            .size(9.5)
+            .monospace(),
     )
     .fill(fill)
-    .stroke(Stroke::new(1.0, if *active { theme::ASH } else { theme::SLATE }))
+    .stroke(Stroke::new(
+        1.0,
+        if *active { theme::ASH } else { theme::SLATE },
+    ))
     .min_size(Vec2::new(36.0, 16.0));
 
     let resp = ui.add(button);
@@ -235,7 +307,7 @@ pub fn step_button(
 
         let fill = if active {
             let base = color_override.unwrap_or(theme::IRON);
-            let dim  = 0.4_f32 + vel * 0.6;
+            let dim = 0.4_f32 + vel * 0.6;
             Color32::from_rgb(
                 (base.r() as f32 * dim) as u8,
                 (base.g() as f32 * dim) as u8,
@@ -269,7 +341,12 @@ pub fn led(ui: &mut Ui, active: bool) {
 
 pub fn section_header(ui: &mut Ui, label: &str) {
     ui.add_space(4.0);
-    ui.label(egui::RichText::new(label).monospace().size(9.5).color(theme::SMOKE));
+    ui.label(
+        egui::RichText::new(label)
+            .monospace()
+            .size(9.5)
+            .color(theme::SMOKE),
+    );
     ui.add_space(2.0);
 }
 
@@ -299,20 +376,23 @@ pub fn xy_pad(
 
     let mut changed = false;
 
-    if !locked {
-        if response.dragged() || response.clicked() {
-            if let Some(pos) = response.interact_pointer_pos() {
-                *x = ((pos.x - pad_rect.min.x) / pad_rect.width()).clamp(0.0, 1.0);
-                *y = (1.0 - (pos.y - pad_rect.min.y) / pad_rect.height()).clamp(0.0, 1.0);
-                changed = true;
-            }
-        }
+    if !locked
+        && (response.dragged() || response.clicked())
+        && let Some(pos) = response.interact_pointer_pos()
+    {
+        *x = ((pos.x - pad_rect.min.x) / pad_rect.width()).clamp(0.0, 1.0);
+        *y = (1.0 - (pos.y - pad_rect.min.y) / pad_rect.height()).clamp(0.0, 1.0);
+        changed = true;
     }
 
     if ui.is_rect_visible(outer) {
         let painter = ui.painter();
 
-        let bg_col = if response.hovered() && !locked { theme::SLATE } else { theme::PIT };
+        let bg_col = if response.hovered() && !locked {
+            theme::SLATE
+        } else {
+            theme::PIT
+        };
         painter.rect_filled(pad_rect, egui::Rounding::same(2.0), bg_col);
         painter.rect_stroke(
             pad_rect,
@@ -348,7 +428,11 @@ pub fn xy_pad(
 
         let dot_col = if locked { theme::ASH } else { theme::CHALK };
         painter.circle_filled(Pos2::new(cx, cy), 4.5, dot_col);
-        painter.circle_stroke(Pos2::new(cx, cy), 4.5, Stroke::new(1.0, if locked { theme::IRON } else { theme::FOG }));
+        painter.circle_stroke(
+            Pos2::new(cx, cy),
+            4.5,
+            Stroke::new(1.0, if locked { theme::IRON } else { theme::FOG }),
+        );
 
         if locked {
             painter.text(
