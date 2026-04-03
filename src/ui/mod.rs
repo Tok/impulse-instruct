@@ -184,6 +184,8 @@ impl ImpulseApp {
                 MidiEvent::NoteOn { note, velocity, .. } => {
                     self.pressed_notes.insert(note);
                     let vel = velocity as f32 / 127.0;
+
+                    // Play note immediately through DSP
                     let _ = self.audio_tx.push(AudioCommand::Trigger(
                         TriggerEvent::BassTrigger {
                             note,
@@ -192,12 +194,21 @@ impl ImpulseApp {
                             gate_samples: 22050, // ~0.5 s at 44100 Hz
                         }
                     ));
+
+                    // Write note into the current step of the bass pattern.
+                    // When stopped the cursor sits at step 0; when running it
+                    // follows the clock — in both cases the highlighted step
+                    // gets the new pitch so you can re-pitch live or step-program.
+                    let step = self.state.read().sequencer.current_step;
+                    let s = self.state.read().clone();
+                    let was_active = s.sequencer.bass_pattern[step].active;
+                    *self.state.write() = crate::state::set_bass_step(s, step, note, was_active);
                 }
                 MidiEvent::NoteOff { note, .. } => {
                     self.pressed_notes.remove(&note);
                     let _ = self.audio_tx.push(AudioCommand::Trigger(TriggerEvent::BassGateOff));
                 }
-                _ => {} // CC / pitch bend handled separately if needed
+                _ => {}
             }
         }
     }
@@ -884,11 +895,11 @@ impl ImpulseApp {
     fn draw_piano(&mut self, ui: &mut egui::Ui, ctx: &egui::Context) {
         use egui::{Color32, Pos2, Rect, Sense, Stroke, Vec2};
 
-        // Range: C2 (MIDI 36) → C5 (MIDI 72) = 3 octaves + high C
-        const START_NOTE: u8 = 36;
+        // Range: C1 (MIDI 24) → C5 (MIDI 72) = 4 octaves + high C
+        const START_NOTE: u8 = 24;
         const END_NOTE:   u8 = 72;   // inclusive
-        const N_OCTAVES:  usize = 3;
-        const N_WHITE:    usize = N_OCTAVES * 7 + 1; // 22 white keys (including C5)
+        const N_OCTAVES:  usize = 4;
+        const N_WHITE:    usize = N_OCTAVES * 7 + 1; // 29 white keys (including C5)
 
         // Which semitones are white keys?
         const fn is_white(semitone: u8) -> bool {
