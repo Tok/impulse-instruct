@@ -263,6 +263,42 @@ HuggingFace sources (verify before downloading):
 
 ---
 
+## LLM Music Theory Grounding  *(prompt engineering, do when tuning)*
+
+The LLM should understand enough music theory to make intelligent harmonic choices —
+not just timbre/rhythm. Currently it knows nothing about keys, chords, or scales, so
+"make it more jazzy" affects only texture. Goal: it should be able to set bass notes and
+step patterns that are tonally coherent.
+
+### System prompt additions
+- [ ] Embed a compact music theory reference in the system prompt (or a separate
+      `system_prompt_music_theory` block injected alongside the existing prompt):
+      - 12-note chromatic scale with semitone offsets
+      - Major and natural minor scale formulas (W-W-H-W-W-W-H)
+      - Common triad shapes: major (0,4,7), minor (0,3,7), diminished (0,3,6)
+      - Common 7th chords: maj7 (0,4,7,11), dom7 (0,4,7,10), min7 (0,3,7,10)
+      - Nashville number system shorthand (I ii iii IV V vi vii°) so the LLM
+        can reason about chord progressions without needing to know the key
+
+### Key / scale state
+- [ ] Add `root_note: u8` (MIDI 0–11, default 0 = C) and `scale: Scale` enum
+      (Major, NaturalMinor, Dorian, Phrygian, Lydian, Mixolydian, Locrian,
+      Pentatonic, Blues, Chromatic) to `AppState` / sequencer state
+- [ ] LLM can set `root_note` and `scale` via JSON schema
+- [ ] Sequencer step notes snap to the current scale (optional, toggleable)
+- [ ] UI: root note selector (piano key row) + scale selector dropdown in sequencer panel
+- [ ] Huth note colors on root/chord tones — highlight tonic, 3rd, 5th in their
+      respective colors so the grid is visually harmonic
+
+### Style briefs
+- [ ] Add `"suggested_root"` and `"suggested_scale"` fields to styles.json entries
+      so genre styles carry their natural tonality (e.g. acid → minor/phrygian,
+      BoC → dorian, jungle → minor, dub techno → minor/dorian)
+- [ ] System prompt builder reads active style's `suggested_root/scale` and
+      includes them as a strong hint to the LLM
+
+---
+
 ## UI Inspiration: Ableton Learning Synths
 
 https://learningsynths.ableton.com/en/playground
@@ -306,8 +342,8 @@ Key elements to implement (in egui, respecting grayscale + Huth note colors only
 6. [x] XY control squares widget (CUT×RES, ENV×DEC pads in bass panel)
 7. [x] Model selector UI (scan models/, hot-swap via LlmInput::SwitchModel)
 8. [x] Oscilloscope strip (rtrb ring buffer → egui polyline)
-9. [ ] AI persona name — decouple from model file, editable in prefs
-10. [ ] Reasoning toggle (Qwen3 /think mode, greyed out for unsupported models)
-11. [ ] Download script: Qwen3-8B Q4_K_M option
+9. [x] AI persona name — decouple from model file, editable in prefs
+10. [x] Reasoning toggle (Qwen3 /think mode, greyed out for unsupported models)
+11. [x] Download script: Qwen3-8B Q4_K_M option
 12. [ ] Run artist reference LLM tests — audit styles.json, drop dead references
 13. [x] FX XY pads (reverb and delay panels)

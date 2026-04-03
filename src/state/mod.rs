@@ -545,6 +545,7 @@ pub struct LlmState {
     pub user_instructions: String, // persistent user instructions injected into every system prompt
     pub persona_name: String,      // AI persona name shown in UI and used in system prompt
     pub system_prompt_override: String, // if non-empty, replaces the generated system prompt entirely
+    pub enable_thinking: bool,          // append /think or /no_think to prompt (Qwen3)
     pub tts_enabled: bool,              // speak _comment via espeak-ng when true
     pub style_verbosity: StyleVerbosity, // Brief = ~50 token brief, Full = ~150 token description
     pub auto_lock_on_touch: bool,       // if true, touching a knob locks it to user-only control
@@ -575,6 +576,7 @@ impl Default for LlmState {
             user_instructions: String::new(),
             persona_name: String::from("PULSE"),
             system_prompt_override: String::new(),
+            enable_thinking: false,
             tts_enabled: false,
             style_verbosity: StyleVerbosity::Full,
             auto_lock_on_touch: false,

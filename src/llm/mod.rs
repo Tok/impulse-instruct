@@ -766,8 +766,20 @@ pub fn run_llm_loop(
         }
 
         let heat = state.read().llm.heat;
+        let enable_thinking = state.read().llm.enable_thinking;
+        // Qwen3-style thinking toggle: /think enables chain-of-thought (slower, deeper),
+        // /no_think disables it (faster responses for simple commands).
+        let think_prompt = format!(
+            "{} {}",
+            prompt,
+            if enable_thinking {
+                "/think"
+            } else {
+                "/no_think"
+            }
+        );
         let t0 = Instant::now();
-        let result = backend.infer(&system, prompt, heat);
+        let result = backend.infer(&system, &think_prompt, heat);
         let elapsed = t0.elapsed().as_secs_f32();
 
         match result {

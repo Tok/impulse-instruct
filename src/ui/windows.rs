@@ -96,6 +96,49 @@ impl ImpulseApp {
                         }
                         ui.add_space(8.0);
 
+                        widgets::section_header(ui, "INFERENCE");
+                        let is_mock = self.state.read().llm.is_mock;
+                        ui.add_enabled_ui(!is_mock, |ui| {
+                            ui.horizontal(|ui| {
+                                ui.label(
+                                    egui::RichText::new("Reasoning mode (/think)")
+                                        .monospace()
+                                        .size(9.5)
+                                        .color(if is_mock { theme::IRON } else { theme::FOG }),
+                                );
+                                ui.with_layout(
+                                    egui::Layout::right_to_left(egui::Align::Center),
+                                    |ui| {
+                                        let mut thinking = self.state.read().llm.enable_thinking;
+                                        if widgets::toggle_button(
+                                            ui,
+                                            if thinking { "ON" } else { "OFF" },
+                                            &mut thinking,
+                                        ) {
+                                            self.state.write().llm.enable_thinking = thinking;
+                                        }
+                                    },
+                                );
+                            });
+                            ui.label(
+                                egui::RichText::new(
+                                    "Qwen3: slower, deeper reasoning — off for quick commands",
+                                )
+                                .monospace()
+                                .size(8.0)
+                                .color(theme::IRON),
+                            );
+                        });
+                        if is_mock {
+                            ui.label(
+                                egui::RichText::new("  (unavailable in mock mode)")
+                                    .monospace()
+                                    .size(8.0)
+                                    .color(theme::IRON),
+                            );
+                        }
+                        ui.add_space(8.0);
+
                         widgets::section_header(ui, "PERSONALITY");
                         ui.label(
                             egui::RichText::new("How the AI narrates its moves")

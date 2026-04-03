@@ -1,12 +1,10 @@
 #!/usr/bin/env bash
 # ─── download-models.sh ───────────────────────────────────────────────────────
-# Download the Bonsai 8B GGUF model for Impulse Instruct.
-#
-# Model: prism-ml/Bonsai-8B-gguf (Apache 2.0 license)
-# Available file: Bonsai-8B.gguf
+# Download GGUF models for Impulse Instruct.
 #
 # Usage:
-#   ./download-models.sh
+#   ./download-models.sh              # Bonsai-8B (default, 1-bit Q1, ~1.1 GB)
+#   ./download-models.sh qwen3        # Qwen3-8B Q4_K_M (~5 GB, ~5× better quality)
 #
 # NOTE: A free HuggingFace account is required.
 #   Sign up at https://huggingface.co/join
@@ -15,13 +13,34 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 
-HF_REPO="prism-ml/Bonsai-8B-gguf"
 MODEL_DIR="models"
-
 mkdir -p "$MODEL_DIR"
 
-MODEL_FILE="Bonsai-8B.gguf"
+# ── Model selection ───────────────────────────────────────────────────────────
+MODEL="${1:-bonsai}"
+
+case "$MODEL" in
+  bonsai|"")
+    HF_REPO="prism-ml/Bonsai-8B-gguf"
+    MODEL_FILE="Bonsai-8B.gguf"
+    MODEL_DESC="Bonsai-8B Q1_0_g128 (PrismML, ~1.1 GB) — default, fastest"
+    ;;
+  qwen3)
+    HF_REPO="bartowski/Qwen_Qwen3-8B-GGUF"
+    MODEL_FILE="Qwen_Qwen3-8B-Q4_K_M.gguf"
+    MODEL_DESC="Qwen3-8B Q4_K_M (bartowski, ~5 GB) — ~5× better quality, supports /think"
+    ;;
+  *)
+    echo "Unknown model: '$MODEL'"
+    echo "Available options: bonsai (default), qwen3"
+    exit 1
+    ;;
+esac
+
 OUTPUT_PATH="${MODEL_DIR}/${MODEL_FILE}"
+
+echo "Model: ${MODEL_DESC}"
+echo ""
 
 if [[ -f "$OUTPUT_PATH" ]]; then
   echo "✓ Model already present: ${OUTPUT_PATH}"
@@ -30,7 +49,14 @@ else
   echo "Downloading ${HF_REPO} → ${OUTPUT_PATH}"
   echo ""
 
-  # Try huggingface-cli first (preferred — handles auth + resumable downloads)
+  # ── Ensure huggingface-cli is available ────────────────────────────────────
+  if ! command -v huggingface-cli &>/dev/null; then
+    if command -v pip3 &>/dev/null || command -v pip &>/dev/null; then
+      echo "huggingface-cli not found — installing huggingface_hub…"
+      pip install -q huggingface_hub 2>/dev/null || pip3 install -q huggingface_hub
+    fi
+  fi
+
   if command -v huggingface-cli &>/dev/null; then
     # Check login; prompt if not authenticated
     if ! huggingface-cli whoami &>/dev/null; then
@@ -49,14 +75,6 @@ else
       huggingface-cli login || { echo "Login cancelled. Re-run after logging in."; exit 1; }
     fi
     echo "Using huggingface-cli…"
-    huggingface-cli download "$HF_REPO" "$MODEL_FILE" \
-      --local-dir "$MODEL_DIR" \
-      --local-dir-use-symlinks False
-
-  # Fallback: pip install huggingface_hub then retry
-  elif command -v pip3 &>/dev/null || command -v pip &>/dev/null; then
-    echo "huggingface-cli not found — installing huggingface_hub…"
-    pip install -q huggingface_hub 2>/dev/null || pip3 install -q huggingface_hub
     huggingface-cli download "$HF_REPO" "$MODEL_FILE" \
       --local-dir "$MODEL_DIR" \
       --local-dir-use-symlinks False
@@ -91,7 +109,15 @@ else
 fi
 
 echo ""
-echo "─── License notice ────────────────────────────────────────────────────────"
-echo "Bonsai 8B is released under the Apache License 2.0 by prism-ml."
-echo "See: https://huggingface.co/${HF_REPO}"
-echo "────────────────────────────────────────────────────────────────────────────"
+echo "─── License notice ─────────────────────────────────────────────────────────"
+case "$MODEL" in
+  bonsai)
+    echo "Bonsai 8B is released under the Apache License 2.0 by prism-ml."
+    echo "See: https://huggingface.co/${HF_REPO}"
+    ;;
+  qwen3)
+    echo "Qwen3-8B is released under the Qwen Research License by Alibaba Cloud."
+    echo "Quantisation by bartowski. See: https://huggingface.co/${HF_REPO}"
+    ;;
+esac
+echo "─────────────────────────────────────────────────────────────────────────────"
