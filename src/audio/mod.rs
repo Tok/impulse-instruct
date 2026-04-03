@@ -6,7 +6,7 @@ pub mod dsp;
 
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use cpal::{Device, SampleFormat, Stream, StreamConfig};
-use rtrb::Producer;
+use rtrb::{Consumer, Producer};
 use std::sync::Arc;
 
 use crate::sequencer::{advance_clock, ClockState, TriggerEvent};
@@ -28,6 +28,7 @@ pub enum AudioCommand {
 
 pub struct AudioEngine {
     pub params_tx: Producer<AudioCommand>,
+    pub scope_rx: Consumer<f32>,
     _stream: Stream, // kept alive
 }
 
@@ -49,6 +50,9 @@ impl AudioEngine {
 
         // Ring buffer: UI → audio thread
         let (params_tx, mut params_rx) = rtrb::RingBuffer::<AudioCommand>::new(256);
+
+        // Ring buffer: audio thread → scope display
+        let (mut scope_tx, scope_rx) = rtrb::RingBuffer::<f32>::new(4096);
 
         // Audio-thread-local DSP state
         let initial_params = {
@@ -95,6 +99,11 @@ impl AudioEngine {
                     if monitor_vol != 1.0 {
                         for s in output.iter_mut() { *s *= monitor_vol; }
                     }
+
+                    // Write first channel of each frame to scope ring buffer
+                    for frame in output.chunks(channels) {
+                        scope_tx.push(frame[0]).ok(); // non-blocking, drop if full
+                    }
                 },
                 |err| log::error!("Audio stream error: {}", err),
                 None,
@@ -107,6 +116,6 @@ impl AudioEngine {
         stream.play()?;
         log::info!("Audio engine started at {}Hz, {} ch", sample_rate, channels);
 
-        Ok(Self { params_tx, _stream: stream })
+        Ok(Self { params_tx, scope_rx, _stream: stream })
     }
 }

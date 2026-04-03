@@ -27,6 +27,18 @@ fn note_name(midi: u8) -> &'static str {
     NAMES.get(idx).copied().unwrap_or("?")
 }
 
+/// Scan the models/ directory and return paths of all .gguf files found.
+fn scan_models() -> Vec<String> {
+    std::fs::read_dir("models")
+        .into_iter()
+        .flatten()
+        .filter_map(|e| e.ok())
+        .map(|e| e.path())
+        .filter(|p| p.extension().map(|x| x == "gguf").unwrap_or(false))
+        .map(|p| p.to_string_lossy().into_owned())
+        .collect()
+}
+
 /// Open a URL in the system browser (cross-platform, no extra dep).
 fn webbrowser_open(url: &str) -> std::io::Result<()> {
     #[cfg(target_os = "linux")]
@@ -81,6 +93,8 @@ enum Panel {
 pub struct ImpulseApp {
     state: Arc<RwLock<AppState>>,
     audio_tx: rtrb::Producer<AudioCommand>,
+    scope_rx: rtrb::Consumer<f32>,
+    scope_buf: Vec<f32>,
     llm_tx: Sender<LlmInput>,
     llm_rx: Receiver<LlmOutput>,
     midi_rx: Receiver<MidiEvent>,
@@ -105,6 +119,8 @@ pub struct ImpulseApp {
     use_sliders: bool,
     // Sequencer page (for >16 step patterns)
     seq_page: usize,
+    // Model selector
+    available_models: Vec<String>,
 }
 
 impl ImpulseApp {
@@ -112,6 +128,7 @@ impl ImpulseApp {
         cc: &eframe::CreationContext<'_>,
         state: Arc<RwLock<AppState>>,
         audio_tx: rtrb::Producer<AudioCommand>,
+        scope_rx: rtrb::Consumer<f32>,
         llm_tx: Sender<LlmInput>,
         llm_rx: Receiver<LlmOutput>,
         midi_rx: Receiver<MidiEvent>,
@@ -131,6 +148,8 @@ impl ImpulseApp {
         Self {
             state,
             audio_tx,
+            scope_rx,
+            scope_buf: Vec::new(),
             llm_tx,
             llm_rx,
             midi_rx,
@@ -155,6 +174,7 @@ impl ImpulseApp {
             show_thinking: false,
             use_sliders: false,
             seq_page: 0,
+            available_models: Vec::new(),
         }
     }
 
@@ -212,7 +232,7 @@ impl ImpulseApp {
             if out.text == "[jam_cycle_done]" {
                 let auto_jam = self.state.read().llm.auto_jam;
                 if auto_jam {
-                    let _ = self.llm_tx.try_send(LlmInput {
+                    let _ = self.llm_tx.try_send(LlmInput::Infer {
                         prompt: "continue jamming, evolve the pattern".to_string(),
                         one_shot: false,
                     });
@@ -296,6 +316,15 @@ impl eframe::App for ImpulseApp {
         self.drain_midi_events();
         ctx.request_repaint_after(std::time::Duration::from_millis(16));
 
+        // ── Drain scope ring buffer ────────────────────────────────────────────
+        while let Ok(s) = self.scope_rx.pop() {
+            self.scope_buf.push(s);
+        }
+        if self.scope_buf.len() > 512 {
+            let drain = self.scope_buf.len() - 512;
+            self.scope_buf.drain(..drain);
+        }
+
         // ── Preferences window ────────────────────────────────────────────────
         if self.show_prefs {
             egui::Window::new("Preferences")
@@ -304,6 +333,33 @@ impl eframe::App for ImpulseApp {
                 .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
                 .show(ctx, |ui| {
                     ui.set_min_width(260.0);
+
+                    // ── Model selector ────────────────────────────────────────
+                    widgets::section_header(ui, "MODEL");
+
+                    if ui.small_button("↺ scan models/").clicked() {
+                        self.available_models = scan_models();
+                    }
+                    if self.available_models.is_empty() {
+                        self.available_models = scan_models();
+                    }
+
+                    let cur_model = self.state.read().llm.model_path.clone();
+                    for path in &self.available_models {
+                        let short = std::path::Path::new(path)
+                            .file_name().unwrap_or_default()
+                            .to_string_lossy();
+                        let selected = *path == cur_model;
+                        let text = egui::RichText::new(short.as_ref()).monospace().size(9.5)
+                            .color(if selected { theme::CHALK } else { theme::FOG });
+                        if ui.selectable_label(selected, text).clicked() && !selected {
+                            let _ = self.llm_tx.try_send(LlmInput::SwitchModel(path.clone()));
+                        }
+                    }
+
+                    ui.add_space(8.0);
+                    ui.separator();
+                    ui.add_space(4.0);
 
                     // ── Bonsai personality ────────────────────────────────────
                     widgets::section_header(ui, "BONSAI PERSONALITY");
@@ -569,7 +625,7 @@ impl eframe::App for ImpulseApp {
                         let now_jamming = next.llm.auto_jam;
                         *self.state.write() = next;
                         if now_jamming {
-                            let _ = self.llm_tx.try_send(LlmInput {
+                            let _ = self.llm_tx.try_send(LlmInput::Infer {
                                 prompt: "start jamming".to_string(),
                                 one_shot: false,
                             });
@@ -691,7 +747,7 @@ impl eframe::App for ImpulseApp {
                             Some(ref id) if id == "__free__" => {
                                 self.state.write().llm.active_style = Some(id.clone());
                                 self.log_text.push_str("Style → Free (no constraints)\n");
-                                let _ = self.llm_tx.try_send(LlmInput {
+                                let _ = self.llm_tx.try_send(LlmInput::Infer {
                                     prompt: "we're going free — be creative and unpredictable, surprise me".to_string(),
                                     one_shot: true,
                                 });
@@ -709,7 +765,7 @@ impl eframe::App for ImpulseApp {
                                     name
                                 );
                                 self.log_text.push_str(&format!("Style → {}\n", name));
-                                let _ = self.llm_tx.try_send(LlmInput { prompt, one_shot: true });
+                                let _ = self.llm_tx.try_send(LlmInput::Infer { prompt, one_shot: true });
                             }
                         }
                     }
@@ -733,7 +789,7 @@ impl eframe::App for ImpulseApp {
                             && !custom_text.trim().is_empty()
                         {
                             self.log_text.push_str("Custom style brief updated\n");
-                            let _ = self.llm_tx.try_send(LlmInput {
+                            let _ = self.llm_tx.try_send(LlmInput::Infer {
                                 prompt: "apply the active style brief — update sound and rhythm accordingly".to_string(),
                                 one_shot: true,
                             });
@@ -795,7 +851,7 @@ impl eframe::App for ImpulseApp {
                             (typed.clone(), format!("YOU → {}\n", typed))
                         };
                         self.log_text.push_str(&log_line);
-                        let _ = self.llm_tx.try_send(LlmInput { prompt, one_shot: true });
+                        let _ = self.llm_tx.try_send(LlmInput::Infer { prompt, one_shot: true });
                         self.prompt_input.clear();
                     }
                 });
@@ -845,6 +901,14 @@ impl eframe::App for ImpulseApp {
                             });
                     }
                 }
+            });
+
+        // ── Oscilloscope strip ────────────────────────────────────────────────
+        TopBottomPanel::top("scope")
+            .frame(Frame::none().fill(theme::PIT).inner_margin(egui::Margin::symmetric(8.0, 4.0)))
+            .exact_height(48.0)
+            .show(ctx, |ui| {
+                self.draw_scope(ui);
             });
 
         // ── Tab bar (data-driven — add InstrumentSlot to self.instruments to extend) ──
@@ -923,6 +987,31 @@ impl eframe::App for ImpulseApp {
 // ─── Panel drawing ────────────────────────────────────────────────────────────
 
 impl ImpulseApp {
+    fn draw_scope(&self, ui: &mut egui::Ui) {
+        let (rect, _) = ui.allocate_exact_size(egui::vec2(ui.available_width(), 40.0), egui::Sense::hover());
+        if !ui.is_rect_visible(rect) { return; }
+        let painter = ui.painter();
+        painter.rect_filled(rect, egui::Rounding::ZERO, theme::PIT);
+        painter.rect_stroke(rect, egui::Rounding::ZERO, egui::Stroke::new(1.0, theme::SLATE));
+
+        let n = self.scope_buf.len();
+        if n < 2 { return; }
+        let w = rect.width();
+        let h = rect.height();
+        let mid = rect.center().y;
+        let amp = h * 0.45;
+
+        let points: Vec<egui::Pos2> = self.scope_buf.iter().enumerate().map(|(i, &s)| {
+            let x = rect.min.x + (i as f32 / (n - 1) as f32) * w;
+            let y = mid - s.clamp(-1.0, 1.0) * amp;
+            egui::Pos2::new(x, y)
+        }).collect();
+
+        for i in 0..points.len().saturating_sub(1) {
+            painter.line_segment([points[i], points[i + 1]], egui::Stroke::new(1.0, theme::CHALK));
+        }
+    }
+
     #[allow(dead_code)] // used when panels get individual frames
     fn panel_frame() -> Frame {
         Frame::none()
