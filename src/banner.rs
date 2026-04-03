@@ -12,28 +12,27 @@ pub fn print_banner() {
     println!("{GRAY}  I M P U L S E   I N S T R U C T{RESET}");
     println!("{DIM}  a synthesizer with a tiny LLM living inside it  ·  rust  ·  llama.cpp{RESET}");
 
-    // ── Huth-colored keyboard (2 octaves C3–C5) ──────────────────────────────
+    // ── Huth-colored keyboard (1 octave C3–B3) ───────────────────────────────
     //
-    // Layout: 5 terminal cells per white key, 3 cells per black key.
-    // Each cell = 1 char with ANSI 24-bit background color.
+    // Layout: 7 terminal cells per white key, 4 cells per black key.
+    //   White key = '|' (left wall) + 6 spaces  → 7 cells
+    //   Black key = '|' (left wall) + 2 spaces + '|' (right wall) → 4 cells
+    //   1 octave = 49 cells total; fits well within 80 columns.
     //
-    // UPPER ROW (35 cells per octave, printed ×3 for black-key height):
-    //   '|' chars appear at:
-    //     pos  0  — C left wall          (aligns with C left wall in lower zone)
-    //     pos  5  — C# right wall        (aligns with D left wall in lower zone)
-    //     pos 10  — D# right wall        (aligns with E left wall in lower zone)
-    //     pos 15  — F left wall          (aligns with F left wall in lower zone)
-    //     pos 20  — F# right wall        (aligns with G left wall in lower zone)
-    //     pos 25  — G# right wall        (aligns with A left wall in lower zone)
-    //     pos 30  — A# right wall        (aligns with B left wall in lower zone)
-    //   Black keys: left-wall | space | right-wall (3 cells).
-    //   E (pos 11-14) and B (pos 31-34) are plain exposed cells — their
-    //   boundaries are marked by adjacent walls (D# right at 10, F left at 15,
-    //   A# right at 30, and C left of the next octave at 0).
+    // Black key centering: with W=7 and B=4, each black key center lands
+    // exactly on the white key boundary (left = boundary − 2).
+    //   boundary formula: n*W + W − 1  →  e.g. C/D = 6.5
+    //   C# left = 6.5 − 2 = 4.5 → pos 5   (center 6.5 ✓)
+    //   D# left = 13.5 − 2       → pos 12  (center 13.5 ✓)
+    //   F# left = 27.5 − 2       → pos 26  (center 27.5 ✓)
+    //   G# left = 34.5 − 2       → pos 33  (center 34.5 ✓)
+    //   A# left = 41.5 − 2       → pos 40  (center 41.5 ✓)
     //
-    // LOWER ROW (35 cells per octave, printed ×2):
-    //   Each white key = left-wall '|' + 4 spaces.
-    //   Final C5 cap is the same (no trailing '|').
+    // Exposed regions per note in the UPPER zone:
+    //   C=5  D=3  E=5  |  F=5  G=3  A=3  B=5
+    //
+    // Height: upper zone ×4 rows (black key area), lower zone ×3 rows (white key
+    // bottom) = 7 rows total; black keys at 57% of height, close to real piano.
 
     type Rgb  = (u8, u8, u8);
     type Cell = (Rgb, char);
@@ -51,38 +50,36 @@ pub fn print_banner() {
     const AS: Rgb = (0x77, 0x44, 0xBB);
     const B:  Rgb = (0x44, 0x33, 0xAA);
 
-    // Upper zone: 35 cells per octave.
-    // Alignment: '|' columns in upper zone land on the same horizontal positions
-    // as '|' left-walls in the lower zone, creating clean vertical columns.
+    // Upper zone: 49 cells.  Black keys are exactly centered at their boundaries.
     #[rustfmt::skip]
-    const UPPER: [Cell; 35] = [
-        (C,  '|'), (C,  ' '), (C,  ' '),            // C: left wall + 2 exp   (0-2)
-        (CS, '|'), (CS, ' '), (CS, '|'),             // C# walls               (3-5)   → col 5 = D left
-        (D,  ' '), (D,  ' '),                         // D: exposed             (6-7)
-        (DS, '|'), (DS, ' '), (DS, '|'),              // D# walls               (8-10)  → col 10 = E left
-        (E,  ' '), (E,  ' '), (E,  ' '), (E,  ' '),  // E: 4 exposed           (11-14)
-        (F,  '|'), (F,  ' '), (F,  ' '),              // F: left wall + 2 exp   (15-17) → col 15 = F left
-        (FS, '|'), (FS, ' '), (FS, '|'),              // F# walls               (18-20) → col 20 = G left
-        (G,  ' '), (G,  ' '),                         // G: exposed             (21-22)
-        (GS, '|'), (GS, ' '), (GS, '|'),              // G# walls               (23-25) → col 25 = A left
-        (A,  ' '), (A,  ' '),                         // A: exposed             (26-27)
-        (AS, '|'), (AS, ' '), (AS, '|'),              // A# walls               (28-30) → col 30 = B left
-        (B,  ' '), (B,  ' '), (B,  ' '), (B,  ' '),  // B: 4 exposed           (31-34)
+    const UPPER: [Cell; 49] = [
+        (C,  '|'), (C,  ' '), (C,  ' '), (C,  ' '), (C,  ' '),  // C  wall+exp  (0-4)
+        (CS, '|'), (CS, ' '), (CS, ' '), (CS, '|'),               // C# |  |     (5-8)
+        (D,  ' '), (D,  ' '), (D,  ' '),                           // D  exposed  (9-11)
+        (DS, '|'), (DS, ' '), (DS, ' '), (DS, '|'),               // D# |  |     (12-15)
+        (E,  ' '), (E,  ' '), (E,  ' '), (E,  ' '), (E,  ' '),   // E  exposed  (16-20)
+        (F,  '|'), (F,  ' '), (F,  ' '), (F,  ' '), (F,  ' '),   // F  wall+exp (21-25)
+        (FS, '|'), (FS, ' '), (FS, ' '), (FS, '|'),               // F# |  |     (26-29)
+        (G,  ' '), (G,  ' '), (G,  ' '),                           // G  exposed  (30-32)
+        (GS, '|'), (GS, ' '), (GS, ' '), (GS, '|'),               // G# |  |     (33-36)
+        (A,  ' '), (A,  ' '), (A,  ' '),                           // A  exposed  (37-39)
+        (AS, '|'), (AS, ' '), (AS, ' '), (AS, '|'),               // A# |  |     (40-43)
+        (B,  ' '), (B,  ' '), (B,  ' '), (B,  ' '), (B,  ' '),   // B  exposed  (44-48)
     ];
 
-    // Lower zone: 35 cells per octave.  Each white key = left '|' + 4 spaces.
+    // Lower zone: 49 cells.  Each white key = left '|' + 6 spaces.
     #[rustfmt::skip]
-    const LOWER: [Cell; 35] = [
-        (C, '|'), (C, ' '), (C, ' '), (C, ' '), (C, ' '),   // C  (0-4)
-        (D, '|'), (D, ' '), (D, ' '), (D, ' '), (D, ' '),   // D  (5-9)
-        (E, '|'), (E, ' '), (E, ' '), (E, ' '), (E, ' '),   // E  (10-14)
-        (F, '|'), (F, ' '), (F, ' '), (F, ' '), (F, ' '),   // F  (15-19)
-        (G, '|'), (G, ' '), (G, ' '), (G, ' '), (G, ' '),   // G  (20-24)
-        (A, '|'), (A, ' '), (A, ' '), (A, ' '), (A, ' '),   // A  (25-29)
-        (B, '|'), (B, ' '), (B, ' '), (B, ' '), (B, ' '),   // B  (30-34)
+    const LOWER: [Cell; 49] = [
+        (C, '|'), (C, ' '), (C, ' '), (C, ' '), (C, ' '), (C, ' '), (C, ' '),
+        (D, '|'), (D, ' '), (D, ' '), (D, ' '), (D, ' '), (D, ' '), (D, ' '),
+        (E, '|'), (E, ' '), (E, ' '), (E, ' '), (E, ' '), (E, ' '), (E, ' '),
+        (F, '|'), (F, ' '), (F, ' '), (F, ' '), (F, ' '), (F, ' '), (F, ' '),
+        (G, '|'), (G, ' '), (G, ' '), (G, ' '), (G, ' '), (G, ' '), (G, ' '),
+        (A, '|'), (A, ' '), (A, ' '), (A, ' '), (A, ' '), (A, ' '), (A, ' '),
+        (B, '|'), (B, ' '), (B, ' '), (B, ' '), (B, ' '), (B, ' '), (B, ' '),
     ];
 
-    // Render a cell slice: spaces → bg only; '|' → dark fg on key bg.
+    // Render a cell slice: spaces → bg only; any other char → dark fg on key bg.
     let render = |cells: &[Cell]| -> String {
         let mut s = String::with_capacity(cells.len() * 24);
         for &((r, g, b), ch) in cells {
@@ -97,6 +94,8 @@ pub fn print_banner() {
         s
     };
 
+    // Two octaves: chain UPPER/LOWER with themselves.
+    // 49 cells × 2 = 98 chars + 2 indent = 100 — fits most terminals at 120 cols.
     let upper_row: Vec<Cell> = UPPER.iter().chain(UPPER.iter()).copied().collect();
     let lower_row: Vec<Cell> = LOWER.iter().chain(LOWER.iter()).copied().collect();
 
@@ -104,7 +103,7 @@ pub fn print_banner() {
     let lower = render(&lower_row);
 
     println!();
-    for _ in 0..3 { println!("  {upper}"); }   // 3 rows — taller black keys
-    for _ in 0..2 { println!("  {lower}"); }   // 2 rows — white key bottom
+    for _ in 0..4 { println!("  {upper}"); }   // 4 rows — black key zone
+    for _ in 0..3 { println!("  {lower}"); }   // 3 rows — white key bottom
     println!("{RESET}");
 }
