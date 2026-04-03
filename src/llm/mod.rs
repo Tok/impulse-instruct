@@ -20,9 +20,11 @@ use crate::state::{AppState, ConversationMode, apply_llm_update};
 // ─── Messages ─────────────────────────────────────────────────────────────────
 
 #[derive(Clone, Debug)]
-pub struct LlmInput {
-    pub prompt: String,
-    pub one_shot: bool, // false = continuous jam mode
+pub enum LlmInput {
+    /// Run inference with a user prompt.
+    Infer { prompt: String, one_shot: bool },
+    /// Drop the current backend and reload with a new model file.
+    SwitchModel(String),
 }
 
 #[derive(Clone, Debug)]
@@ -555,15 +557,41 @@ pub fn run_llm_loop(
     }
 
     loop {
-        // Block until a prompt arrives
+        // Block until a prompt or command arrives
         let input = match input_rx.recv() {
             Ok(i) => i,
             Err(_) => break, // channel closed, shutdown
         };
 
+        // ── Model switch ──────────────────────────────────────────────────────
+        if let LlmInput::SwitchModel(ref new_path) = input {
+            log::info!("LLM: switching model → {}", new_path);
+            state.write().llm.model_path = new_path.clone();
+            // Drop old backend (kills server subprocess if owned), reload new one
+            backend = LlamaServerBackend::new(new_path);
+            let status = if backend.is_live() {
+                format!("[ Model loaded: {} ]", new_path)
+            } else {
+                format!("[ Model not found: {} — falling back to mock ]", new_path)
+            };
+            state.write().llm.last_response = status.clone();
+            let _ = output_tx.try_send(LlmOutput {
+                text: status,
+                param_update: None,
+                tokens_per_sec: 0.0,
+                prompt_tokens: 0,
+                completion_tokens: 0,
+                context_used: 0,
+                is_jam: false,
+                thinking: None,
+            });
+            continue;
+        }
+
+        let LlmInput::Infer { ref prompt, one_shot } = input else { continue };
+
         // Snapshot prompt before acquiring any lock (clone outside critical section)
-        let prompt = input.prompt.clone();
-        if input.one_shot {
+        if one_shot {
             log::info!("YOU → {}", prompt);
         } else {
             log::debug!("YOU (jam) → {}", prompt);
@@ -576,12 +604,12 @@ pub fn run_llm_loop(
         {
             let mut s = state.write();
             s.llm.is_inferring = true;
-            s.llm.last_prompt = prompt;
+            s.llm.last_prompt = prompt.clone();
         }
 
         let heat = state.read().llm.heat;
         let t0 = Instant::now();
-        let result = backend.infer(&system, &input.prompt, heat);
+        let result = backend.infer(&system, prompt, heat);
         let elapsed = t0.elapsed().as_secs_f32();
 
         match result {
@@ -590,6 +618,7 @@ pub fn run_llm_loop(
                 let ptok  = output.prompt_tokens;
                 let ctok  = output.completion_tokens;
                 let ctx   = output.context_used;
+                let tthink = output.thinking.as_ref().map(|t| t.len() / 4).unwrap_or(0);
 
                 // Apply param update to shared state
                 if let Some(ref update) = output.param_update {
@@ -606,6 +635,7 @@ pub fn run_llm_loop(
                     s.llm.prompt_tokens = ptok;
                     s.llm.completion_tokens = ctok;
                     s.llm.context_used = ctx;
+                    s.llm.thinking_tokens = tthink;
                     s.llm.last_response = output.text.clone();
                 }
 
@@ -613,7 +643,7 @@ pub fn run_llm_loop(
                 if let Some(ref update) = output.param_update {
                     let comment = update.get("_comment").and_then(|v| v.as_str())
                         .unwrap_or(&output.text);
-                    if input.one_shot {
+                    if one_shot {
                         log::info!("Bonsai → {}", comment);
                     } else {
                         log::debug!("Bonsai (jam) → {}", comment);
@@ -629,7 +659,7 @@ pub fn run_llm_loop(
                     }
                 }
                 let mut output = output;
-                output.is_jam = !input.one_shot;
+                output.is_jam = !one_shot;
                 let _ = output_tx.try_send(output);
                 log::debug!("inference complete in {:.2}s", elapsed);
             }
@@ -642,7 +672,7 @@ pub fn run_llm_loop(
         }
 
         // In jam mode, re-queue immediately
-        if input.one_shot {
+        if one_shot {
             // nothing — wait for next prompt
         } else {
             let _ = input_rx.try_recv(); // drain any queued prompts

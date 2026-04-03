@@ -378,6 +378,7 @@ pub struct LlmState {
     pub tokens_per_sec: f32,
     pub prompt_tokens: usize,
     pub completion_tokens: usize,
+    pub thinking_tokens: usize, // chars in last _thinking field ÷ 4 (approx)
     pub context_used: usize,
     pub context_max: usize,
     pub locked_params: HashSet<String>, // dot-path keys the user has taken over
@@ -400,6 +401,7 @@ impl Default for LlmState {
             tokens_per_sec: 0.0,
             prompt_tokens: 0,
             completion_tokens: 0,
+            thinking_tokens: 0,
             context_used: 0,
             context_max: 4096,
             locked_params: {

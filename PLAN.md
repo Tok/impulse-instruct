@@ -218,13 +218,27 @@ HuggingFace sources (verify before downloading):
 - `bartowski/Meta-Llama-3.1-8B-Instruct-GGUF` — Llama 3.1
 - `unsloth/gemma-4-E4B-it-GGUF` — Gemma 4 (if available)
 
-### TODO: model selector
+### TODO: model infrastructure
 - [ ] `download-models.sh` — add options for Qwen3-8B Q4_K_M and Llama 3.1-8B
-- [ ] UI model selector: scan `models/` directory, show file list as radio group in prefs
-- [ ] Hot-swap: changing model sends a "restart LLM thread" signal to main loop
-- [ ] "Bonzai Records" confusion: Bonsai name triggers Belgian techno associations —
-      add explicit note in system prompt "you are NOT Bonzai Records, this is about synthesis"
-      OR switch to a model without this association
+- [x] UI model selector: scan `models/` directory, show file list as radio group in prefs
+- [x] Hot-swap: `LlmInput::SwitchModel(path)` restarts backend in LLM thread
+- [ ] Reasoning / thinking mode toggle — **only relevant for models that support it**
+      (Qwen3 supports thinking via `/no_think` token or system prompt toggle;
+      Bonsai uses our `_thinking` JSON field hack instead of native `<think>` tags).
+      When enabled: longer latency, better multi-step reasoning for complex prompts.
+      When disabled: faster responses for simple parameter commands.
+      Add checkbox in prefs panel, disabled/greyed out when model doesn't support it.
+      Implement: set `enable_thinking: bool` on `LlmState`; in `infer()` append
+      `/think` or `/no_think` suffix to user message for Qwen3, or add
+      `"thinking": {"type": "enabled", "budget_tokens": 512}` to request body
+      (depends on server/model capabilities).
+- [ ] AI persona name — when stitching different models, decouple the persona from
+      the model name. Current name "Bonsai" is confusing (Bonzai Records association,
+      Belgian techno). Give the synth intelligence a snappy internal name that is
+      model-agnostic. Something like **UNIT**, **GRID**, **IRIS**, **VERB**, **OSC**,
+      **PULSE**, or **VOLT** — displayed in the UI and used in system prompt persona
+      ("you are PULSE, the intelligence inside Impulse Instruct, a synthesizer...").
+      Model file stays separate from persona. Add to prefs panel as a text field.
 
 ---
 
@@ -269,7 +283,10 @@ Key elements to implement (in egui, respecting grayscale + Huth note colors only
 4. [x] Bitcrush FX — unblocks gabber, breakcore, lo-fi sounds
 5. [x] TTS MC mode — highest fun-per-line-of-code ratio
 6. [x] XY control squares widget (CUT×RES, ENV×DEC pads in bass panel)
-7. [ ] Model selector UI + Qwen3-8B download option
-8. [ ] Oscilloscope strip (rtrb ring buffer → egui polyline)
-9. [ ] Run artist reference LLM tests — audit styles.json, drop dead references
-10. [ ] FX XY pads (reverb and delay panels)
+7. [x] Model selector UI (scan models/, hot-swap via LlmInput::SwitchModel)
+8. [x] Oscilloscope strip (rtrb ring buffer → egui polyline)
+9. [ ] AI persona name — decouple from model file, editable in prefs
+10. [ ] Reasoning toggle (Qwen3 /think mode, greyed out for unsupported models)
+11. [ ] Download script: Qwen3-8B Q4_K_M option
+12. [ ] Run artist reference LLM tests — audit styles.json, drop dead references
+13. [ ] FX XY pads (reverb and delay panels)

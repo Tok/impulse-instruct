@@ -557,22 +557,32 @@ impl eframe::App for ImpulseApp {
                     // Model stats
                     {
                         let s = self.state.read();
-                        let inferring = s.llm.is_inferring;
-                        let tps  = s.llm.tokens_per_sec;
-                        let ptok = s.llm.prompt_tokens;
-                        let ctok = s.llm.completion_tokens;
-                        let ctx_pct = if s.llm.context_max > 0 {
+                        let inferring  = s.llm.is_inferring;
+                        let tps        = s.llm.tokens_per_sec;
+                        let ptok       = s.llm.prompt_tokens;
+                        let ctok       = s.llm.completion_tokens;
+                        let tthink     = s.llm.thinking_tokens;
+                        let ctx_pct    = if s.llm.context_max > 0 {
                             s.llm.context_used as f32 / s.llm.context_max as f32 * 100.0
                         } else { 0.0 };
 
                         let inf_color = if inferring { theme::CHALK } else { theme::IRON };
                         ui.label(egui::RichText::new("●").color(inf_color).size(10.0));
-                        let stats = if ptok > 0 || ctok > 0 {
-                            format!("{:.0}t/s  p:{} c:{}  ctx:{:.0}%", tps, ptok, ctok, ctx_pct)
-                        } else {
-                            format!("{:.0}t/s  ctx:{:.0}%", tps, ctx_pct)
-                        };
-                        ui.label(egui::RichText::new(stats).color(theme::SMOKE).size(9.5).monospace());
+
+                        ui.vertical(|ui| {
+                            // Line 1: speed + context
+                            let line1 = format!("{:.0}t/s  ctx:{:.0}%", tps, ctx_pct);
+                            ui.label(egui::RichText::new(line1).color(theme::SMOKE).size(9.0).monospace());
+                            // Line 2: in / out / think token counts (only when we have data)
+                            if ptok > 0 || ctok > 0 {
+                                let line2 = if tthink > 0 {
+                                    format!("in:{} out:{} think:~{}", ptok, ctok, tthink)
+                                } else {
+                                    format!("in:{}  out:{}", ptok, ctok)
+                                };
+                                ui.label(egui::RichText::new(line2).color(theme::IRON).size(8.5).monospace());
+                            }
+                        });
 
                         ui.add_space(8.0);
 
