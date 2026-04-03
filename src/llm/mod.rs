@@ -100,15 +100,9 @@ pub fn mock_response(prompt: &str, heat: f32) -> Result<LlmOutput> {
 
     let json = if prompt_lower.contains("acid") {
         serde_json::json!({
-            "_comment": "acid — bass resonance + env_mod up, syncopated pattern, 4-on-the-floor kick",
+            "_comment": "acid — bass resonance + env_mod up, short decay",
             "bass": { "cutoff": 0.5, "resonance": 0.70, "env_mod": 0.80, "decay": 0.38, "distortion": 0.05, "volume": 0.9 },
-            "sequencer": {
-                "bpm": 135.0,
-                "bass_steps": [true, false, true, false, false, true, false, true, true, false, false, true, false, true, false, false],
-                "bass_notes": [36, 36, 36, 36, 36, 41, 36, 43, 36, 36, 36, 36, 36, 43, 36, 36],
-                "kick808_steps": [true, false, false, false, true, false, false, false, true, false, false, false, true, false, false, false],
-                "hihat808_steps": [false, false, true, false, false, false, true, false, false, false, true, false, false, false, true, false]
-            },
+            "sequencer": { "bpm": 135.0 },
             "fx": { "distortion_drive": 0.0, "distortion_mix": 0.0, "delay_time": 0.3, "delay_feedback": 0.35, "delay_mix": 0.15 }
         })
     } else if prompt_lower.contains("dark") || prompt_lower.contains("deep") {
@@ -129,34 +123,14 @@ pub fn mock_response(prompt: &str, heat: f32) -> Result<LlmOutput> {
             "bass": { "cutoff": 0.6, "resonance": 0.3, "env_mod": 0.25, "volume": 0.75 },
             "fx": { "reverb_mix": 0.3, "delay_mix": 0.2 }
         })
-    } else if prompt_lower.contains("melody") || prompt_lower.contains("notes") || prompt_lower.contains("bass line") || prompt_lower.contains("bassline") {
+    } else if prompt_lower.contains("melody") || prompt_lower.contains("notes") || prompt_lower.contains("bass line") || prompt_lower.contains("bassline")
+           || prompt_lower.contains("clap") || prompt_lower.contains("snare")
+           || prompt_lower.contains("hihat") || prompt_lower.contains("hi-hat") || prompt_lower.contains("hat")
+           || prompt_lower.contains("kick") || prompt_lower.contains("pattern") {
+        // Pattern requests require the real model — mock mode can only nudge knobs.
         serde_json::json!({
-            "_comment": "new melody — stepwise bass line C2–G2 with chromatic passing note",
-            "sequencer": {
-                "bass_steps": [true, false, true, false, false, true, false, true, false, true, false, false, true, false, true, false],
-                "bass_notes": [36,   36,    38,   36,    36,    40,   36,    41,   36,   43,   36,    36,    41,   36,   38,   36]
-            }
-        })
-    } else if prompt_lower.contains("clap") || prompt_lower.contains("claps") {
-        serde_json::json!({
-            "_comment": "909 clap on beats 2 and 4",
-            "sequencer": {
-                "clap909_steps": [false,false,false,false,true,false,false,false,false,false,false,false,true,false,false,false]
-            }
-        })
-    } else if prompt_lower.contains("snare") {
-        serde_json::json!({
-            "_comment": "808 snare on 2 and 4 with ghost on the 'e' of 3",
-            "sequencer": {
-                "snare808_steps": [false,false,false,false,true,false,false,false,false,false,true,false,true,false,false,false]
-            }
-        })
-    } else if prompt_lower.contains("hihat") || prompt_lower.contains("hi-hat") || prompt_lower.contains("hat") {
-        serde_json::json!({
-            "_comment": "16th-note hi-hat — every step",
-            "sequencer": {
-                "hihat808_steps": [true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true]
-            }
+            "_comment": "pattern/rhythm request — needs real model; nudging filter in mock mode",
+            "bass": { "env_mod": (0.4 + heat * 0.3).clamp(0.2, 0.95) }
         })
     } else if prompt_lower.contains("reverb") || prompt_lower.contains("space") || prompt_lower.contains("room") || prompt_lower.contains("atmosphere") {
         serde_json::json!({
@@ -180,11 +154,7 @@ pub fn mock_response(prompt: &str, heat: f32) -> Result<LlmOutput> {
         })
     } else if prompt_lower.contains("simpler") || prompt_lower.contains("strip") || prompt_lower.contains("minimal") {
         serde_json::json!({
-            "_comment": "sparse pattern, FX off",
-            "sequencer": {
-                "bass_steps": [true,false,false,false,false,false,false,true,false,false,false,false,true,false,false,false],
-                "clap909_steps": [false,false,false,false,true,false,false,false,false,false,false,false,true,false,false,false]
-            },
+            "_comment": "FX stripped back",
             "fx": { "reverb_mix": 0.0, "delay_mix": 0.0 }
         })
     } else {
@@ -214,19 +184,13 @@ pub fn mock_response(prompt: &str, heat: f32) -> Result<LlmOutput> {
                 "sequencer": { "bpm": (130.0 + bpm_shift as f32).clamp(100.0, 160.0) }
             })
         } else if heat < 0.85 {
-            let step_a = ((ms * 13.0) as usize) % 16;
-            let step_b = ((ms * 7.0) as usize) % 16;
-            let mut steps = [false; 16];
-            for i in [0usize, 2, 5, 7, 8, 11, 13] { steps[i] = true; }
-            steps[step_a] = !steps[step_a];
-            steps[step_b] = !steps[step_b];
             let bpm = (125.0 + (p3 * 2.0).sin() * heat * 20.0).clamp(110.0, 155.0);
             serde_json::json!({
-                "_comment": "pattern + filter mutation",
+                "_comment": "filter + bpm push",
                 "bass": { "cutoff": cut, "resonance": res,
                            "env_mod": (0.6 + (p1 * 1.1).cos() * sweep).clamp(0.3, 0.95),
                            "decay": (0.3 + (p2 * 0.5).sin().abs() * 0.4).clamp(0.15, 0.8) },
-                "sequencer": { "bpm": bpm, "bass_steps": steps }
+                "sequencer": { "bpm": bpm }
             })
         } else {
             let styles: &[(&str, f32, f32, f32, f32)] = &[

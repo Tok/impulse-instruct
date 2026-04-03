@@ -2,15 +2,9 @@
   {
     "id": "acid_preset",
     "keywords": ["acid", "squelch", "squelchy", "303", "resonant", "let's make some acid"],
-    "comment": "classic acid setup — resonant filter sweeping over a syncopated 303 line, 4-on-the-floor kick",
+    "comment": "classic acid setup — resonant filter with envelope sweep and short decay",
     "params": {
       "bass": { "cutoff": 0.5, "resonance": 0.70, "env_mod": 0.80, "decay": 0.38, "distortion": 0.05, "volume": 0.9 },
-      "sequencer": {
-        "bass_steps": [true,false,true,false,false,true,false,true,true,false,false,true,false,true,false,false],
-        "bass_notes": [36,36,36,36,36,41,36,43,36,36,36,36,36,43,36,36],
-        "kick808_steps": [true,false,false,false,true,false,false,false,true,false,false,false,true,false,false,false],
-        "hihat808_steps": [false,false,true,false,false,false,true,false,false,false,true,false,false,false,true,false]
-      },
       "fx": { "delay_time": 0.3, "delay_feedback": 0.35, "delay_mix": 0.15 }
     }
   },
@@ -42,20 +36,9 @@
     }
   },
   {
-    "id": "change_melody",
-    "keywords": ["change the melody", "new melody", "different melody", "change melody", "new bass line", "new bassline", "different notes", "change notes", "new notes", "different pattern", "change the pattern"],
-    "comment": "new bass line — stepping up a fifth and back with a chromatic passing note",
-    "params": {
-      "sequencer": {
-        "bass_steps": [true,false,true,false,false,true,false,true,false,true,false,false,true,false,true,false],
-        "bass_notes": [36,36,38,36,36,40,36,41,36,43,36,36,41,36,38,36]
-      }
-    }
-  },
-  {
     "id": "remove_bass",
-    "keywords": ["remove bass", "no bass", "clear bass", "mute bass", "silence bass", "remove 303", "no 303"],
-    "comment": "muting the 303 bass line — all steps off",
+    "keywords": ["remove bass", "no bass", "clear bass", "mute bass", "silence bass"],
+    "comment": "muting the bass line — all steps off",
     "params": {
       "sequencer": {
         "bass_steps": [false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false]
@@ -63,19 +46,9 @@
     }
   },
   {
-    "id": "add_clap_2_and_4",
-    "keywords": ["add clap", "add claps", "clap on 2 and 4", "clap on beats", "more clap", "clapping", "put clap", "claps on 2"],
-    "comment": "909 clap on beats 2 and 4 — classic backbeat",
-    "params": {
-      "sequencer": {
-        "clap909_steps": [false,false,false,false,true,false,false,false,false,false,false,false,true,false,false,false]
-      }
-    }
-  },
-  {
     "id": "remove_clap",
-    "keywords": ["remove clap", "remove claps", "remove the clap", "remove the claps", "no clap", "no claps", "clear claps", "clear clap", "delete clap", "mute clap", "kill clap", "silence clap", "clap off", "turn off clap"],
-    "comment": "removing all 909 claps — clearing the pattern",
+    "keywords": ["remove clap", "remove claps", "no clap", "no claps", "clear clap", "mute clap", "kill clap", "clap off"],
+    "comment": "removing all 909 claps",
     "params": {
       "sequencer": {
         "clap909_steps": [false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false]
@@ -83,32 +56,12 @@
     }
   },
   {
-    "id": "add_snare808",
-    "keywords": ["add snare", "808 snare", "add 808 snare", "snare on 2 and 4", "snare backbeat", "put snare"],
-    "comment": "808 snare on beats 2 and 4 with a ghost note",
-    "params": {
-      "sequencer": {
-        "snare808_steps": [false,false,false,false,true,false,false,false,false,false,true,false,true,false,false,false]
-      }
-    }
-  },
-  {
     "id": "remove_snare808",
-    "keywords": ["remove snare", "no snare", "clear snare", "mute snare", "delete snare", "snare off", "kill snare", "remove 808 snare"],
+    "keywords": ["remove snare", "no snare", "clear snare", "mute snare", "snare off", "kill snare"],
     "comment": "clearing the 808 snare pattern",
     "params": {
       "sequencer": {
         "snare808_steps": [false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false]
-      }
-    }
-  },
-  {
-    "id": "add_snare909",
-    "keywords": ["add 909 snare", "909 snare", "add tight snare", "tight snare"],
-    "comment": "909 snare on beats 2 and 4 — punchy and tight",
-    "params": {
-      "sequencer": {
-        "snare909_steps": [false,false,false,false,true,false,false,false,false,false,false,false,true,false,false,false]
       }
     }
   },
@@ -123,19 +76,9 @@
     }
   },
   {
-    "id": "add_kick808",
-    "keywords": ["add kick", "kick on the 1", "four on the floor", "kick pattern", "808 kick", "add 808 kick", "four to the floor"],
-    "comment": "808 kick 4-on-the-floor — steady house/techno pulse",
-    "params": {
-      "sequencer": {
-        "kick808_steps": [true,false,false,false,true,false,false,false,true,false,false,false,true,false,false,false]
-      }
-    }
-  },
-  {
     "id": "remove_kick808",
-    "keywords": ["remove kick", "no kick", "clear kick", "mute kick", "delete kick", "kick off", "remove 808 kick", "no 808 kick"],
-    "comment": "clearing the 808 kick — silence on the floor",
+    "keywords": ["remove kick", "no kick", "clear kick", "mute kick", "kick off", "no 808 kick"],
+    "comment": "clearing the 808 kick",
     "params": {
       "sequencer": {
         "kick808_steps": [false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false]
@@ -143,42 +86,12 @@
     }
   },
   {
-    "id": "add_hihat808",
-    "keywords": ["add hihat", "add hi hat", "add hats", "more hats", "808 hihat", "add 808 hihat", "16th hihats", "16th note hats", "open hihat"],
-    "comment": "808 closed hihat on every 16th note — maximum density",
-    "params": {
-      "sequencer": {
-        "hihat808_steps": [true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true]
-      }
-    }
-  },
-  {
-    "id": "hihat808_offbeat",
-    "keywords": ["hihat on 2 and 4", "hihat offbeat", "offbeat hats", "hats on offbeat"],
-    "comment": "808 hihat on the offbeats — syncopated feel",
-    "params": {
-      "sequencer": {
-        "hihat808_steps": [false,false,true,false,false,false,true,false,false,false,true,false,false,false,true,false]
-      }
-    }
-  },
-  {
     "id": "remove_hihat808",
-    "keywords": ["remove hihat", "no hihat", "remove hi hat", "no hats", "clear hats", "mute hats", "remove hats", "hat off", "no 808 hihat"],
+    "keywords": ["remove hihat", "no hihat", "no hats", "clear hats", "mute hats", "hat off", "no 808 hihat"],
     "comment": "clearing all 808 hihats",
     "params": {
       "sequencer": {
         "hihat808_steps": [false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false]
-      }
-    }
-  },
-  {
-    "id": "add_hihat909",
-    "keywords": ["909 hihat", "add 909 hihat", "add 909 hats", "909 hats"],
-    "comment": "909 closed hihat on every 8th note — tight and punchy",
-    "params": {
-      "sequencer": {
-        "hihat909_steps": [true,false,true,false,true,false,true,false,true,false,true,false,true,false,true,false]
       }
     }
   },
@@ -209,7 +122,7 @@
   },
   {
     "id": "add_reverb",
-    "keywords": ["add reverb", "more reverb", "add space", "more space", "more atmosphere", "add atmosphere", "room", "wet", "spacious"],
+    "keywords": ["add reverb", "more reverb", "add space", "more space", "more atmosphere", "room", "wet", "spacious"],
     "comment": "adding reverb — medium room with a touch of delay for depth",
     "params": {
       "fx": { "reverb_mix": 0.3, "reverb_size": 0.6, "delay_mix": 0.18, "delay_feedback": 0.4 }
@@ -217,15 +130,15 @@
   },
   {
     "id": "remove_reverb",
-    "keywords": ["remove reverb", "no reverb", "less reverb", "reverb off", "turn off reverb", "dry reverb"],
-    "comment": "removing the reverb — cutting the wet signal",
+    "keywords": ["remove reverb", "no reverb", "less reverb", "reverb off", "turn off reverb"],
+    "comment": "removing the reverb",
     "params": {
       "fx": { "reverb_mix": 0.0 }
     }
   },
   {
     "id": "add_delay",
-    "keywords": ["add delay", "more delay", "add echo", "echo", "delay", "dotted eighth"],
+    "keywords": ["add delay", "more delay", "add echo", "echo", "dotted eighth"],
     "comment": "dotted-eighth delay for a rhythmic echo",
     "params": {
       "fx": { "delay_time": 0.375, "delay_feedback": 0.45, "delay_mix": 0.25 }
@@ -233,8 +146,8 @@
   },
   {
     "id": "remove_delay",
-    "keywords": ["remove delay", "no delay", "less delay", "delay off", "no echo", "remove echo"],
-    "comment": "removing the delay — clean rhythmic signal",
+    "keywords": ["remove delay", "no delay", "delay off", "no echo", "remove echo"],
+    "comment": "removing the delay",
     "params": {
       "fx": { "delay_mix": 0.0, "delay_feedback": 0.0 }
     }
@@ -249,7 +162,7 @@
   },
   {
     "id": "remove_distortion",
-    "keywords": ["remove distortion", "no distortion", "less distortion", "distortion off", "clean up", "no drive", "remove drive"],
+    "keywords": ["remove distortion", "no distortion", "distortion off", "clean up", "no drive"],
     "comment": "removing distortion — clean master bus",
     "params": {
       "fx": { "distortion_drive": 0.0, "distortion_mix": 0.0 }
@@ -265,7 +178,7 @@
   },
   {
     "id": "open_filter",
-    "keywords": ["open filter", "open the filter", "brighter", "more treble", "filter up", "raise cutoff", "more brightness"],
+    "keywords": ["open filter", "open the filter", "brighter", "more treble", "filter up", "raise cutoff"],
     "comment": "opening up the filter — letting the high frequencies through",
     "params": {
       "bass": { "cutoff": 0.75, "resonance": 0.35 }
@@ -285,35 +198,6 @@
     "comment": "cranking the resonance and env mod for maximum acid character",
     "params": {
       "bass": { "resonance": 0.82, "env_mod": 0.75, "decay": 0.35 }
-    }
-  },
-  {
-    "id": "minimal_pattern",
-    "keywords": ["simpler", "strip it back", "minimal", "less busy", "sparse", "simplify"],
-    "comment": "stripping back to a sparse, minimal pattern",
-    "params": {
-      "sequencer": {
-        "bass_steps": [true,false,false,false,false,false,false,true,false,false,false,false,true,false,false,false],
-        "kick808_steps": [true,false,false,false,true,false,false,false,true,false,false,false,true,false,false,false],
-        "snare808_steps": [false,false,false,false,true,false,false,false,false,false,false,false,true,false,false,false],
-        "hihat808_steps": [false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false],
-        "clap909_steps": [false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false]
-      },
-      "fx": { "reverb_mix": 0.0, "delay_mix": 0.0 }
-    }
-  },
-  {
-    "id": "full_pattern",
-    "keywords": ["full pattern", "busy", "dense", "everything", "all drums", "full drums"],
-    "comment": "filling out the pattern — all voices active, layered rhythm",
-    "params": {
-      "sequencer": {
-        "kick808_steps":  [true,false,false,false,true,false,false,false,true,false,false,false,true,false,false,false],
-        "snare808_steps": [false,false,false,false,true,false,false,false,false,false,false,false,true,false,false,false],
-        "hihat808_steps": [true,false,true,false,true,false,true,false,true,false,true,false,true,false,true,false],
-        "clap909_steps":  [false,false,false,false,true,false,false,false,false,false,false,false,true,false,false,false],
-        "hihat909_steps": [false,true,false,true,false,true,false,true,false,true,false,true,false,true,false,true]
-      }
     }
   }
 ]

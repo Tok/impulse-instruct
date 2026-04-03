@@ -280,6 +280,23 @@ impl Default for SequencerState {
             drum_patterns.insert(*v, [Step::default(); 16]);
         }
 
+        // Minimal starter beat: 4-on-the-floor kick + offbeat hi-hats.
+        // Just enough to hear the clock — Bonsai writes all creative patterns.
+        let kick_steps = [1,0,0,0, 1,0,0,0, 1,0,0,0, 1,0,0,0usize];
+        let hat_steps  = [0,0,1,0, 0,0,1,0, 0,0,1,0, 0,0,1,0usize];
+        if let Some(p) = drum_patterns.get_mut(&DrumVoice::Kick808) {
+            for (i, &on) in kick_steps.iter().enumerate() {
+                p[i].active = on == 1;
+                p[i].velocity = 1.0;
+            }
+        }
+        if let Some(p) = drum_patterns.get_mut(&DrumVoice::HihatClosed808) {
+            for (i, &on) in hat_steps.iter().enumerate() {
+                p[i].active = on == 1;
+                p[i].velocity = 0.7;
+            }
+        }
+
         Self {
             bpm: 120.0,
             steps: 16,
