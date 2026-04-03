@@ -49,7 +49,7 @@ use crate::llm::{LlmInput, LlmOutput};
 use crate::midi::MidiEvent;
 use crate::sequencer::TriggerEvent;
 use crate::llm::styles::StyleCatalog;
-use crate::state::{AppState, ConversationMode, DrumVoice, Waveform, toggle_drum_step, save_project};
+use crate::state::{AppState, ConversationMode, DrumVoice, Waveform, MAX_STEPS, toggle_drum_step, save_project};
 
 // ─── Instrument slot system ───────────────────────────────────────────────────
 
@@ -103,6 +103,8 @@ pub struct ImpulseApp {
     show_thinking: bool,
     // Control layout preference
     use_sliders: bool,
+    // Sequencer page (for >16 step patterns)
+    seq_page: usize,
 }
 
 impl ImpulseApp {
@@ -152,6 +154,7 @@ impl ImpulseApp {
             last_thinking: None,
             show_thinking: false,
             use_sliders: false,
+            seq_page: 0,
         }
     }
 
@@ -245,7 +248,7 @@ impl ImpulseApp {
                     // Write note into current step so you can step-program live.
                     let step = self.state.read().sequencer.current_step;
                     let s = self.state.read().clone();
-                    let was_active = s.sequencer.bass_pattern[step].active;
+                    let was_active = s.sequencer.bass_pattern.get(step).map(|b| b.active).unwrap_or(false);
                     *self.state.write() = crate::state::set_bass_step(s, step, note, was_active);
                 }
 
@@ -866,6 +869,19 @@ impl eframe::App for ImpulseApp {
             });
 
         // ── Piano display (bottom, always visible) ────────────────────────────
+        TopBottomPanel::bottom("footer")
+            .frame(Frame::none().fill(theme::VOID).inner_margin(egui::Margin::symmetric(6.0, 2.0)))
+            .exact_height(18.0)
+            .show(ctx, |ui| {
+                ui.horizontal(|ui| {
+                    let midi_text = match &self.midi_port {
+                        Some(port) => format!("MIDI: {}", port.trim()),
+                        None       => "MIDI: no device".to_string(),
+                    };
+                    ui.label(egui::RichText::new(midi_text).color(theme::IRON).monospace().size(9.0));
+                });
+            });
+
         TopBottomPanel::bottom("piano")
             .frame(Frame::none().fill(theme::VOID).inner_margin(egui::Margin::symmetric(0.0, 0.0)))
             .exact_height(80.0)
@@ -908,15 +924,15 @@ impl ImpulseApp {
     // ── Sequencer ────────────────────────────────────────────────────────────
 
     fn draw_sequencer(&mut self, ui: &mut egui::Ui) {
-        let (current_step, running) = {
+        let (current_step, running, seq_steps) = {
             let s = self.state.read();
-            (s.sequencer.current_step, s.sequencer.running)
+            (s.sequencer.current_step, s.sequencer.running, s.sequencer.steps)
         };
         // Only highlight the cursor when the sequencer is actually playing;
         // usize::MAX guarantees no step matches when stopped.
         let cursor = if running { current_step } else { usize::MAX };
 
-        widgets::section_header(ui, "STEP SEQUENCER — 16 STEPS");
+        widgets::section_header(ui, "STEP SEQUENCER");
 
         // Steps counter control
         ui.horizontal(|ui| {
@@ -924,7 +940,14 @@ impl ImpulseApp {
             let mut steps = self.state.read().sequencer.steps;
             if ui.small_button("−").clicked() && steps > 1 { steps -= 1; self.state.write().sequencer.steps = steps; }
             ui.label(egui::RichText::new(format!("{:02}", steps)).color(theme::FOG).monospace());
-            if ui.small_button("+").clicked() && steps < 16 { steps += 1; self.state.write().sequencer.steps = steps; }
+            if ui.small_button("+").clicked() && steps < MAX_STEPS { steps += 1; self.state.write().sequencer.steps = steps; }
+
+            // Preset step count buttons
+            for &preset in &[8usize, 16, 32, 64] {
+                if ui.small_button(format!("[{}]", preset)).clicked() {
+                    self.state.write().sequencer.steps = preset;
+                }
+            }
 
             ui.add_space(12.0);
 
@@ -938,10 +961,31 @@ impl ImpulseApp {
             }
         });
 
-        ui.add_space(6.0);
+        ui.add_space(4.0);
+
+        let page_start = self.seq_page * 16;
+        let total_pages = (seq_steps + 15) / 16;
+
+        // Auto-follow cursor when playing
+        if running && cursor != usize::MAX {
+            let cursor_page = cursor / 16;
+            if self.seq_page != cursor_page {
+                self.seq_page = cursor_page;
+            }
+        }
+
+        // Page nav (only shown when steps > 16)
+        if total_pages > 1 {
+            ui.horizontal(|ui| {
+                if ui.small_button("<").clicked() && self.seq_page > 0 { self.seq_page -= 1; }
+                ui.label(egui::RichText::new(format!("PAGE {}/{}", self.seq_page + 1, total_pages)).monospace().size(9.0).color(theme::SMOKE));
+                if ui.small_button(">").clicked() && self.seq_page < total_pages - 1 { self.seq_page += 1; }
+            });
+        }
+
+        ui.add_space(2.0);
 
         let voices = DrumVoice::ALL;
-        let num_steps = 16;
 
         // Step grid — draw each row
         egui::ScrollArea::vertical().show(ui, |ui| {
@@ -956,28 +1000,29 @@ impl ImpulseApp {
                         )
                     );
 
-                    // Step buttons
-                    let (pattern, step_count) = {
+                    // Snapshot pattern for this page
+                    let pattern: Vec<crate::state::Step> = {
                         let s = self.state.read();
-                        let pat = s.sequencer.drum_patterns.get(voice).copied()
-                            .unwrap_or_default();
-                        (pat, s.sequencer.steps)
+                        s.sequencer.drum_patterns.get(voice)
+                            .map(|p| p[page_start..(page_start + 16).min(p.len())].to_vec())
+                            .unwrap_or_else(|| vec![crate::state::Step::default(); 16])
                     };
 
                     let mut toggled = None;
-                    for i in 0..num_steps {
+                    for i in 0..16usize {
+                        let abs = page_start + i;
                         // Group dividers every 4
                         if i > 0 && i % 4 == 0 {
                             ui.add_space(2.0);
                         }
-                        let is_active = pattern[i].active;
-                        let is_current = i == cursor;
-                        let vel = pattern[i].velocity;
-                        let enabled = i < step_count;
+                        let is_active = pattern.get(i).map(|s| s.active).unwrap_or(false);
+                        let is_current = abs == cursor;
+                        let vel = pattern.get(i).map(|s| s.velocity).unwrap_or(0.0);
+                        let enabled = abs < seq_steps;
 
                         ui.add_enabled_ui(enabled, |ui| {
                             if widgets::step_button(ui, is_active, is_current, vel, None) {
-                                toggled = Some(i);
+                                toggled = Some(abs);
                             }
                         });
                     }
@@ -1000,21 +1045,23 @@ impl ImpulseApp {
                         egui::RichText::new("BASS").color(theme::SMOKE).monospace().size(8.5)
                     )
                 );
-                let (bass_pattern, step_count) = {
+                let bass_page: Vec<crate::state::TB303Step> = {
                     let s = self.state.read();
-                    (s.sequencer.bass_pattern, s.sequencer.steps)
+                    let end = (page_start + 16).min(s.sequencer.bass_pattern.len());
+                    s.sequencer.bass_pattern[page_start..end].to_vec()
                 };
-                for i in 0..num_steps {
+                for i in 0..16usize {
+                    let abs = page_start + i;
                     if i > 0 && i % 4 == 0 { ui.add_space(2.0); }
-                    let is_active = bass_pattern[i].active;
-                    let is_current = i == cursor;
-                    let note_col = Some(theme::note_color(bass_pattern[i].note));
-                    ui.add_enabled_ui(i < step_count, |ui| {
+                    let is_active = bass_page.get(i).map(|s| s.active).unwrap_or(false);
+                    let is_current = abs == cursor;
+                    let note_col = bass_page.get(i).map(|s| Some(theme::note_color(s.note))).unwrap_or(None);
+                    ui.add_enabled_ui(abs < seq_steps, |ui| {
                         if widgets::step_button(ui, is_active, is_current, 1.0, note_col) {
                             let s = self.state.read().clone();
-                            let note = s.sequencer.bass_pattern[i].note;
-                            let was = s.sequencer.bass_pattern[i].active;
-                            *self.state.write() = crate::state::set_bass_step(s, i, note, !was);
+                            let note = s.sequencer.bass_pattern.get(abs).map(|b| b.note).unwrap_or(36);
+                            let was = s.sequencer.bass_pattern.get(abs).map(|b| b.active).unwrap_or(false);
+                            *self.state.write() = crate::state::set_bass_step(s, abs, note, !was);
                         }
                     });
                 }
@@ -1292,7 +1339,7 @@ impl ImpulseApp {
             let s = self.state.read();
             let step = s.sequencer.current_step;
             let running = s.sequencer.running;
-            if running && s.sequencer.bass_pattern[step].active {
+            if running && s.sequencer.bass_pattern.get(step).map(|b| b.active).unwrap_or(false) {
                 (Some(s.sequencer.bass_pattern[step].note), true)
             } else {
                 (None, running)
@@ -1422,18 +1469,6 @@ impl ImpulseApp {
                     if key_rect.contains(cp) { clicked_note = Some(note); }
                 }
             }
-        }
-
-        // ── MIDI device label (right side, subtle) ────────────────────────────
-        if let Some(ref port) = self.midi_port {
-            let short = port.trim().split(' ').next().unwrap_or(port);
-            painter.text(
-                Pos2::new(rect.max.x - 4.0, oy + wk_h - 4.0),
-                egui::Align2::RIGHT_BOTTOM,
-                short,
-                egui::FontId::monospace(7.5),
-                theme::IRON,
-            );
         }
 
         // ── Click-to-play ─────────────────────────────────────────────────────

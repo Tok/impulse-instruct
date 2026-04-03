@@ -115,6 +115,7 @@ BASS SYNTHESIZER (all 0.0–1.0):
   bass.volume       — bass synth level in mix
 
 STEP SEQUENCER (16 steps = one 4/4 bar of 16th notes):
+  sequencer.steps         — total loop length in steps (8/16/32/64, default 16)
   sequencer.bass_steps    — 16-element bool array: which steps trigger the 303
   sequencer.bass_notes    — 16-element int array: MIDI note per step
                             (24=C1, 36=C2, 48=C3; typical range 33–48 for acid)
@@ -134,6 +135,9 @@ FX (all 0.0–1.0):  ← ONLY valid inside "fx": {{…}}, never inside "sequence
   fx.delay_mix        — delay wet amount
   fx.distortion_drive — master bus saturation drive
   fx.distortion_mix   — master bus distortion wet amount
+  fx.bitcrush_bits    — bit depth (1.0=clean/bypass, 0.5=8-bit, 0.0=1-bit crunch)
+  fx.bitcrush_rate    — sample rate decimation (0=off, 1=extreme lo-fi)
+  fx.bitcrush_mix     — bitcrush wet/dry
 
 ═══ RHYTHM BASICS ═══
 
@@ -286,6 +290,7 @@ pub fn param_json_schema() -> serde_json::Value {
                 "type": "object",
                 "properties": {
                     "bpm":           { "type": "number", "minimum": 40.0, "maximum": 250.0 },
+                    "steps":         { "type": "integer", "minimum": 8, "maximum": 64, "multipleOf": 8 },
                     "bass_steps":    bool_array.clone(),
                     "bass_notes":    note_array,
                     "kick_a_steps":  bool_array.clone(),
@@ -307,7 +312,10 @@ pub fn param_json_schema() -> serde_json::Value {
                     "delay_feedback":   { "type": "number", "minimum": 0.0, "maximum": 1.0 },
                     "delay_mix":        { "type": "number", "minimum": 0.0, "maximum": 1.0 },
                     "distortion_drive": { "type": "number", "minimum": 0.0, "maximum": 1.0 },
-                    "distortion_mix":   { "type": "number", "minimum": 0.0, "maximum": 1.0 }
+                    "distortion_mix":   { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+                    "bitcrush_bits": { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+                    "bitcrush_rate": { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+                    "bitcrush_mix":  { "type": "number", "minimum": 0.0, "maximum": 1.0 }
                 },
                 "additionalProperties": false
             }

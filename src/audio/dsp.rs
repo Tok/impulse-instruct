@@ -70,6 +70,10 @@ pub struct AudioParams {
     pub distortion_drive: f32,
     pub distortion_mix: f32,
     pub master_volume: f32,
+    // Bitcrush
+    pub bitcrush_bits: f32,
+    pub bitcrush_rate: f32,
+    pub bitcrush_mix: f32,
     // Sample rate
     pub sample_rate: f32,
 }
@@ -118,6 +122,9 @@ impl AudioParams {
             distortion_drive: s.fx.distortion_drive,
             distortion_mix: s.fx.distortion_mix,
             master_volume: s.fx.master_volume,
+            bitcrush_bits: s.fx.bitcrush_bits,
+            bitcrush_rate: s.fx.bitcrush_rate,
+            bitcrush_mix: s.fx.bitcrush_mix,
             sample_rate: 44100.0,
         }
     }
@@ -608,6 +615,8 @@ pub struct DspState {
     // FX
     reverb: Reverb,
     delay: DelayLine,
+    bitcrush_held: f32,
+    bitcrush_counter: u32,
     // Current params
     params: AudioParams,
     sample_rate: f32,
@@ -634,6 +643,8 @@ impl DspState {
             rim909: Snare::new(0xffff),
             reverb: Reverb::new(),
             delay: DelayLine::new(),
+            bitcrush_held: 0.0,
+            bitcrush_counter: 0,
             params: p,
             sample_rate,
         }
@@ -707,6 +718,25 @@ impl DspState {
 
             let delay_wet = self.delay.process(reverbed, delay_samples, p.delay_feedback);
             let delayed = reverbed * (1.0 - p.delay_mix) + delay_wet * p.delay_mix;
+
+            // Bitcrush (bit depth reduction + sample rate decimation)
+            let delayed = if p.bitcrush_mix > 0.01 {
+                // Sample rate decimation: hold sample for N frames
+                let hold_frames = (1.0 + p.bitcrush_rate * 15.0) as u32;
+                if self.bitcrush_counter == 0 {
+                    // Bit depth reduction
+                    let bits = (1.0 + p.bitcrush_bits * 15.0).round().max(1.0);
+                    let scale = (1u32 << (bits as u32 - 1)) as f32;
+                    self.bitcrush_held = (delayed * scale).round() / scale;
+                    self.bitcrush_counter = hold_frames;
+                } else {
+                    self.bitcrush_counter -= 1;
+                }
+                let crushed = self.bitcrush_held;
+                delayed * (1.0 - p.bitcrush_mix) + crushed * p.bitcrush_mix
+            } else {
+                delayed
+            };
 
             // Master drive (soft clip)
             let driven = if p.distortion_drive > 0.01 {

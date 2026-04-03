@@ -15,7 +15,7 @@
     "comment": "removing all claps",
     "params": {
       "sequencer": {
-        "clap909_steps": [false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false]
+        "clap_b_steps": [false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false]
       }
     }
   },
@@ -25,7 +25,7 @@
     "comment": "clearing Kit A snare",
     "params": {
       "sequencer": {
-        "snare808_steps": [false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false]
+        "snare_a_steps": [false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false]
       }
     }
   },
@@ -35,7 +35,7 @@
     "comment": "clearing Kit B snare",
     "params": {
       "sequencer": {
-        "snare909_steps": [false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false]
+        "snare_b_steps": [false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false]
       }
     }
   },
@@ -45,7 +45,7 @@
     "comment": "clearing the kick",
     "params": {
       "sequencer": {
-        "kick808_steps": [false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false]
+        "kick_a_steps":[false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false]
       }
     }
   },
@@ -55,7 +55,7 @@
     "comment": "clearing Kit A hi-hats",
     "params": {
       "sequencer": {
-        "hihat808_steps": [false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false]
+        "hihat_a_steps": [false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false]
       }
     }
   },
@@ -65,7 +65,7 @@
     "comment": "clearing Kit B hi-hats",
     "params": {
       "sequencer": {
-        "hihat909_steps": [false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false]
+        "hihat_b_steps": [false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false]
       }
     }
   },
@@ -75,12 +75,12 @@
     "comment": "clearing all drum patterns — blank canvas",
     "params": {
       "sequencer": {
-        "kick808_steps":  [false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false],
-        "snare808_steps": [false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false],
-        "hihat808_steps": [false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false],
-        "snare909_steps": [false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false],
-        "clap909_steps":  [false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false],
-        "hihat909_steps": [false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false]
+        "kick_a_steps": [false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false],
+        "snare_a_steps": [false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false],
+        "hihat_a_steps": [false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false],
+        "snare_b_steps": [false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false],
+        "clap_b_steps":  [false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false],
+        "hihat_b_steps": [false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false]
       }
     }
   },
@@ -138,6 +138,35 @@
     "comment": "all FX cleared",
     "params": {
       "fx": { "reverb_mix": 0.0, "delay_mix": 0.0, "distortion_mix": 0.0, "distortion_drive": 0.0 }
+    }
+  },
+  {
+    "id": "amen_break",
+    "keywords": ["amen break", "amen", "breakbeat", "jungle break", "dnb break", "make an amen"],
+    "comment": "amen break — syncopated kick/snare with rolling hihats at 170 BPM",
+    "params": {
+      "sequencer": {
+        "bpm": 170.0,
+        "kick_a_steps":  [true,false,false,true,false,false,true,false,true,false,false,true,false,false,false,false],
+        "snare_a_steps": [false,false,false,false,true,false,false,true,false,false,false,false,true,false,true,false],
+        "hihat_a_steps": [true,false,true,false,true,false,true,false,true,false,true,false,true,false,true,false],
+        "kick_b_steps":  [false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false],
+        "snare_b_steps": [false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false],
+        "clap_b_steps":  [false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false],
+        "hihat_b_steps": [false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false]
+      }
+    }
+  },
+  {
+    "id": "four_on_floor",
+    "keywords": ["four on the floor", "four on floor", "4 on the floor", "4x4", "house beat", "basic beat", "simple beat"],
+    "comment": "four-on-the-floor kick with offbeat hihats",
+    "params": {
+      "sequencer": {
+        "kick_a_steps":  [true,false,false,false,true,false,false,false,true,false,false,false,true,false,false,false],
+        "hihat_a_steps": [false,false,true,false,false,false,true,false,false,false,true,false,false,false,true,false],
+        "snare_a_steps": [false,false,false,false,true,false,false,false,false,false,false,false,true,false,false,false]
+      }
     }
   }
 ]

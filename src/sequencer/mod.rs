@@ -3,7 +3,7 @@
 // Sample-accurate step sequencer clock.
 // All functions are pure: they take state in, return (new_state, events).
 
-use crate::state::{DrumVoice, SequencerState, Step, TB303Step};
+use crate::state::{DrumVoice, SequencerState};
 
 // ─── Events emitted by the sequencer ─────────────────────────────────────────
 
@@ -84,7 +84,7 @@ pub fn advance_clock(
         // Drum triggers
         for voice in DrumVoice::ALL {
             if let Some(pattern) = seq.drum_patterns.get(voice) {
-                let s: Step = pattern[step];
+                let s = pattern.get(step).copied().unwrap_or_default();
                 if s.active {
                     events.push(TriggerEvent::DrumTrigger {
                         voice: *voice,
@@ -95,7 +95,7 @@ pub fn advance_clock(
         }
 
         // Bass trigger
-        let bs: TB303Step = seq.bass_pattern[step];
+        let bs = seq.bass_pattern.get(step).copied().unwrap_or_default();
         if bs.active {
             let gate_samples = (sps * bs.gate as f64) as u32;
             gate_counter = gate_samples;

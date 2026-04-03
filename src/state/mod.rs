@@ -7,6 +7,8 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 
+pub const MAX_STEPS: usize = 64;
+
 // ─── Top-level ───────────────────────────────────────────────────────────────
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -266,18 +268,19 @@ impl DrumVoice {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct SequencerState {
     pub bpm: f32,
-    pub steps: usize, // 1–16
+    pub steps: usize, // 1–64, active step count
     pub current_step: usize,
     pub running: bool,
-    pub drum_patterns: std::collections::HashMap<DrumVoice, [Step; 16]>,
-    pub bass_pattern: [TB303Step; 16],
+    pub drum_patterns: std::collections::HashMap<DrumVoice, Vec<Step>>,
+    pub bass_pattern: Vec<TB303Step>,
 }
 
 impl Default for SequencerState {
     fn default() -> Self {
         let mut drum_patterns = std::collections::HashMap::new();
+        // Pre-allocate MAX_STEPS silent steps; only the first `steps` are active in the clock.
         for v in DrumVoice::ALL {
-            drum_patterns.insert(*v, [Step::default(); 16]);
+            drum_patterns.insert(*v, vec![Step::default(); MAX_STEPS]);
         }
 
         // Minimal starter beat: 4-on-the-floor kick + offbeat hi-hats.
@@ -303,7 +306,7 @@ impl Default for SequencerState {
             current_step: 0,
             running: false,
             drum_patterns,
-            bass_pattern: [TB303Step::default(); 16],
+            bass_pattern: vec![TB303Step::default(); MAX_STEPS],
         }
     }
 }
@@ -323,6 +326,9 @@ pub struct FxState {
     pub compressor_threshold: f32, // 0–1 → -40–0 dB
     pub compressor_ratio: f32,     // 0–1 → 1–20:1
     pub master_volume: f32,     // 0–1
+    pub bitcrush_bits: f32,  // 0–1: 1.0 = full quality (bypass), 0.0 = 1-bit
+    pub bitcrush_rate: f32,  // 0–1: 0.0 = no decimation, 1.0 = extreme downsampling
+    pub bitcrush_mix: f32,   // 0–1: wet/dry
 }
 
 impl Default for FxState {
@@ -339,6 +345,9 @@ impl Default for FxState {
             compressor_threshold: 0.7,
             compressor_ratio: 0.3,
             master_volume: 0.85,
+            bitcrush_bits: 1.0,
+            bitcrush_rate: 0.0,
+            bitcrush_mix: 0.0,
         }
     }
 }
@@ -434,9 +443,14 @@ pub fn apply_llm_update(state: AppState, update: &serde_json::Value) -> AppState
                 s.sequencer.bpm = (bpm as f32).clamp(40.0, 250.0);
             }
         }
+        if !locked.contains("sequencer.steps") {
+            if let Some(steps) = seq.get("steps").and_then(|v| v.as_u64()) {
+                s.sequencer.steps = (steps as usize).clamp(1, MAX_STEPS);
+            }
+        }
         if !locked.contains("sequencer.bass_steps") {
             if let Some(arr) = seq.get("bass_steps").and_then(|v| v.as_array()) {
-                for (i, val) in arr.iter().enumerate().take(16) {
+                for (i, val) in arr.iter().enumerate().take(MAX_STEPS) {
                     if let Some(active) = val.as_bool() {
                         s.sequencer.bass_pattern[i].active = active;
                     }
@@ -445,7 +459,7 @@ pub fn apply_llm_update(state: AppState, update: &serde_json::Value) -> AppState
         }
         if !locked.contains("sequencer.bass_notes") {
             if let Some(arr) = seq.get("bass_notes").and_then(|v| v.as_array()) {
-                for (i, val) in arr.iter().enumerate().take(16) {
+                for (i, val) in arr.iter().enumerate().take(MAX_STEPS) {
                     if let Some(note) = val.as_u64() {
                         s.sequencer.bass_pattern[i].note = note.clamp(0, 127) as u8;
                     }
@@ -455,7 +469,7 @@ pub fn apply_llm_update(state: AppState, update: &serde_json::Value) -> AppState
         if !locked.contains("sequencer.kick_a_steps") {
             if let Some(arr) = seq.get("kick_a_steps").and_then(|v| v.as_array()) {
                 if let Some(pattern) = s.sequencer.drum_patterns.get_mut(&DrumVoice::Kick808) {
-                    for (i, val) in arr.iter().enumerate().take(16) {
+                    for (i, val) in arr.iter().enumerate().take(MAX_STEPS) {
                         if let Some(active) = val.as_bool() {
                             pattern[i].active = active;
                             if active && pattern[i].velocity == 0.0 {
@@ -480,7 +494,7 @@ pub fn apply_llm_update(state: AppState, update: &serde_json::Value) -> AppState
             if !locked.contains(&lock_key) {
                 if let Some(arr) = seq.get(field).and_then(|v| v.as_array()) {
                     if let Some(pattern) = s.sequencer.drum_patterns.get_mut(&voice) {
-                        for (i, val) in arr.iter().enumerate().take(16) {
+                        for (i, val) in arr.iter().enumerate().take(MAX_STEPS) {
                             if let Some(active) = val.as_bool() {
                                 pattern[i].active = active;
                                 if active && pattern[i].velocity == 0.0 {
@@ -502,6 +516,9 @@ pub fn apply_llm_update(state: AppState, update: &serde_json::Value) -> AppState
         s.fx.delay_mix        = unlocked_f32(s.fx.delay_mix,        fx, "delay_mix",        "fx.delay_mix",        locked);
         s.fx.distortion_drive = unlocked_f32(s.fx.distortion_drive, fx, "distortion_drive", "fx.distortion_drive", locked);
         s.fx.distortion_mix   = unlocked_f32(s.fx.distortion_mix,   fx, "distortion_mix",   "fx.distortion_mix",   locked);
+        s.fx.bitcrush_bits    = unlocked_f32(s.fx.bitcrush_bits,    fx, "bitcrush_bits",    "fx.bitcrush_bits",    locked);
+        s.fx.bitcrush_rate    = unlocked_f32(s.fx.bitcrush_rate,    fx, "bitcrush_rate",    "fx.bitcrush_rate",    locked);
+        s.fx.bitcrush_mix     = unlocked_f32(s.fx.bitcrush_mix,     fx, "bitcrush_mix",     "fx.bitcrush_mix",     locked);
     }
 
     s
@@ -566,7 +583,7 @@ pub fn unlock_params(state: AppState, paths: &[&str]) -> AppState {
 pub fn toggle_drum_step(state: AppState, voice: DrumVoice, step: usize) -> AppState {
     let mut s = state;
     if let Some(pattern) = s.sequencer.drum_patterns.get_mut(&voice) {
-        if step < 16 {
+        if step < pattern.len() {
             pattern[step].active = !pattern[step].active;
             if pattern[step].active && pattern[step].velocity == 0.0 {
                 pattern[step].velocity = 1.0;
@@ -579,7 +596,7 @@ pub fn toggle_drum_step(state: AppState, voice: DrumVoice, step: usize) -> AppSt
 /// Set a 303 step note.
 pub fn set_bass_step(state: AppState, step: usize, note: u8, active: bool) -> AppState {
     let mut s = state;
-    if step < 16 {
+    if step < s.sequencer.bass_pattern.len() {
         s.sequencer.bass_pattern[step].active = active;
         s.sequencer.bass_pattern[step].note = note;
     }
