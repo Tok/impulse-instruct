@@ -8,15 +8,18 @@ Built in Rust. Runs the [Bonsai 8B](https://huggingface.co/prism-ml/Bonsai-8B-gg
 
 ## What it does
 
-- **TB-303** bass synthesizer — ladder filter, saw/square oscillator, accent & slide
-- **TR-808** drum machine — kick, snare, hihat, toms (analog-modeled)
-- **TR-909** drum machine — kick, snare, hihat, clap, rim
+- **Bass synthesizer** — ladder filter, saw/square oscillator, accent & slide
+- **Drum Kit A** — kick, snare, hihat, toms (808-style analog modeling)
+- **Drum Kit B** — kick, snare, hihat, clap, rim (909-style)
 - **16-step sequencer** — sample-accurate clock, per-voice patterns
 - **FX chain** — reverb, delay, drive, master volume
-- **MIDI I/O** — CC-to-param mapping, note input
+- **Piano display** — Huth *Farbige Noten* color theory (1888); C2–C5 keyboard lights up on MIDI input and sequencer playback
+- **MIDI input** — auto-connects to first USB MIDI keyboard (class-compliant, tested with AKAI LPK25); live play triggers the bass synth
 - **LLM control** — model continuously generates JSON parameter updates
 - **Lock system** — touch a knob and it's yours; the LLM won't override it
 - **Jam mode** — LLM evolves the pattern autonomously
+- **Export** — WAV (32-bit float) and MP3 (via ffmpeg); offline render, no audio device needed
+- **Project save/load** — JSON snapshots via File menu
 - **HTTP/MCP API** — connect other LLMs or tools via `--api`
 
 ---
@@ -28,15 +31,30 @@ Built in Rust. Runs the [Bonsai 8B](https://huggingface.co/prism-ml/Bonsai-8B-gg
 git clone <repo> impulse-instruct && cd impulse-instruct
 
 # 2. Run with mock LLM (no model needed, works immediately)
-./start.sh
+cargo run
 
 # 3. Download real model and run with full LLM inference
 #    Requires a free HuggingFace account — https://huggingface.co/join
-./download-models.sh          # Linux/macOS
-download-models.bat           # Windows
+./download-models.sh          # Linux/macOS (~1.1 GB 1-bit model)
 sudo apt install libclang-dev cmake   # needed to compile llama.cpp bindings
-./start.sh --llm
+cargo run --features llm --release
 ```
+
+### MIDI keyboard setup (Linux)
+
+The AKAI LPK25 (and most USB MIDI keyboards) work out of the box:
+
+```bash
+# Check the device is detected
+aconnect -o
+# Should show: client N: 'LPK25' [type=kernel]
+
+# Required packages (usually already installed)
+sudo apt install libasound2-dev alsa-utils
+```
+
+Impulse Instruct auto-connects to the first available MIDI input on startup.
+The connected port name is shown in the log and at the bottom-right of the piano display.
 
 ---
 
@@ -44,27 +62,45 @@ sudo apt install libclang-dev cmake   # needed to compile llama.cpp bindings
 
 | Script | What it does |
 |--------|-------------|
-| `./start.sh` | Build and launch (mock LLM by default) |
-| `./start.sh --llm` | Launch with real LLM inference |
-| `./start.sh --api` | Enable HTTP/MCP API on port 8765 |
-| `./start.sh --dev` | Debug build + verbose logging |
-| `./download-models.sh` | Download Bonsai 8B Q4_K_M (~5 GB) |
-| `./download-models.sh Q3_K_M` | Smaller quantization (~4 GB) |
-| `./download-models.sh --list` | List available quantizations |
+| `cargo run` | Build and launch (mock LLM) |
+| `cargo run -- --api` | Launch with HTTP/MCP API on port 8765 |
+| `cargo run --features llm --release` | Real LLM inference |
+| `./download-models.sh` | Download Bonsai 8B 1-bit GGUF |
 | `./build-all.sh` | Build Linux + Windows release binaries into `dist/` |
-| `./run-tests.sh` | Run 13 unit tests |
-| `./run-tests.sh --coverage` | Tests + HTML coverage report |
-| `./run-tests.sh --watch` | Re-run on file changes |
+| `cargo test` | Run 25 unit tests |
+
+---
+
+## Farbige Noten — Color Theory
+
+The piano display uses Ch. A. B. Huth's *Farbige Noten* (Hamburg 1888–1889), a 12-color system where each chromatic semitone maps counter-clockwise around the RYB color wheel starting from Blue at C.
+
+| Note | Color | RYB |
+|------|-------|-----|
+| C   | Blue         | 240° |
+| C#  | Cyan-Blue    | 210° |
+| D   | Green/Teal   | 180° |
+| D#  | Yellow-Green | 150° |
+| E   | Yellow       | 120° |
+| F   | Orange       |  60° |
+| F#  | Vermilion    |  30° |
+| G   | Rose         | 350° |
+| G#  | Carmine      | 320° |
+| A   | Lilac-Violet | 290° |
+| A#  | Purple       | 265° |
+| B   | Indigo       | 245° |
+
+Complementary colors (directly opposite on wheel) correspond to tritone intervals — e.g. Blue C ↔ Orange F#. See `docs/colorful-notes.md` for the full theory.
 
 ---
 
 ## HTTP / MCP API
 
-Start with `--api` to expose a REST interface on port 8765. The API link appears in the top-right corner of the UI.
+Start with `--api` to expose a REST interface on port 8765.
 
 ```bash
-./start.sh --api
-./start.sh --api --port 9000   # custom port
+cargo run -- --api
+cargo run -- --api --port 9000
 ```
 
 ### Endpoints
@@ -91,15 +127,12 @@ curl -X POST http://localhost:8765/api/prompt \
 # Set params directly
 curl -X POST http://localhost:8765/api/params \
   -H "Content-Type: application/json" \
-  -d '{"params": {"tb303": {"cutoff": 0.4, "resonance": 0.8}}}'
+  -d '{"params": {"bass": {"cutoff": 0.4, "resonance": 0.8}}}'
 
-# Lock a param so LLM can't touch it
+# Lock a param so LLM can not touch it
 curl -X POST http://localhost:8765/api/lock \
   -H "Content-Type: application/json" \
-  -d '{"paths": ["tb303.cutoff"]}'
-
-# Get full schema (useful for MCP tool definitions)
-curl http://localhost:8765/api/schema
+  -d '{"paths": ["bass.cutoff"]}'
 ```
 
 ---
@@ -110,13 +143,13 @@ All floats 0.0–1.0 unless noted.
 
 | Path | Description |
 |------|-------------|
-| `tb303.cutoff` | Filter cutoff (0=dark, 1=bright) |
-| `tb303.resonance` | Resonance / squelch (high = acid) |
-| `tb303.env_mod` | Filter envelope depth |
-| `tb303.decay` | Filter envelope decay |
-| `tb303.accent_level` | Accent boost |
-| `tb303.waveform` | `"Saw"` or `"Square"` |
-| `tb303.distortion` | Internal overdrive |
+| `bass.cutoff` | Filter cutoff (0=dark, 1=bright) |
+| `bass.resonance` | Resonance / squelch (high = acid) |
+| `bass.env_mod` | Filter envelope depth |
+| `bass.decay` | Filter envelope decay |
+| `bass.accent_level` | Accent boost |
+| `bass.waveform` | `"Saw"` or `"Square"` |
+| `bass.distortion` | Internal overdrive |
 | `sequencer.bpm` | Tempo (40–250 BPM) |
 | `fx.reverb_size` | Room size |
 | `fx.reverb_mix` | Reverb wet/dry |
@@ -135,30 +168,7 @@ All floats 0.0–1.0 unless noted.
 sudo apt install clang lld cmake ninja-build
 cargo install cargo-xwin
 ./build-all.sh
-# → dist/impulse-instruct-windows-x86_64.exe
-```
-
----
-
-## Model
-
-**Bonsai 8B** by [prism-ml](https://huggingface.co/prism-ml/Bonsai-8B-gguf)  
-License: Apache 2.0
-
-The model is not bundled with the binary. A free **HuggingFace account** is required to download it — [create one here](https://huggingface.co/join).
-
-```bash
-# Linux / macOS
-./download-models.sh           # Q4_K_M, ~5 GB, recommended
-./download-models.sh Q3_K_M   # smaller alternative
-
-# Windows
-download-models.bat
-download-models.bat Q3_K_M
-
-# Manual — log in first, then download
-huggingface-cli login          # paste your HF token (Settings → Access Tokens)
-./download-models.sh
+# dist/impulse-instruct-windows-x86_64.exe
 ```
 
 ---
@@ -183,12 +193,29 @@ huggingface-cli login          # paste your HF token (Settings → Access Tokens
 └─────────────────────────────────────────────────┘
 
 ┌─────────────────────────────────────────────────┐
+│  MIDI Thread (midir + ALSA)                      │
+│  NoteOn/Off → pressed_notes + DSP trigger        │
+└─────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────┐
 │  HTTP Thread (tokio, optional --api)             │
 │  REST endpoints → read/write AppState            │
 └─────────────────────────────────────────────────┘
 ```
 
 All DSP is pure functions. The audio callback never allocates or locks.
+
+---
+
+## Model
+
+**Bonsai 8B** by [prism-ml](https://huggingface.co/prism-ml/Bonsai-8B-gguf) — Apache 2.0
+
+The model is not bundled with the binary. A free **HuggingFace account** is required to download it.
+
+```bash
+./download-models.sh   # 1-bit GGUF, ~1.1 GB
+```
 
 ---
 
