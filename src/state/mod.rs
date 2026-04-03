@@ -101,7 +101,7 @@ pub struct SnareParams {
 
 impl Default for SnareParams {
     fn default() -> Self {
-        Self { tone: 0.5, snappy: 0.6, decay: 0.4, volume: 0.85 }
+        Self { tone: 0.5, snappy: 0.6, decay: 0.4, volume: 0.60 }
     }
 }
 
@@ -147,11 +147,11 @@ impl Default for DrumKit808 {
         Self {
             kick: KickParams::default(),
             snare: SnareParams::default(),
-            hihat_closed: HihatParams { decay: 0.08, tone: 0.8, volume: 0.7 },
-            hihat_open: HihatParams { decay: 0.4, tone: 0.75, volume: 0.7 },
-            tom_hi: TomParams { pitch: 0.7, decay: 0.4, volume: 0.7 },
-            tom_mid: TomParams { pitch: 0.5, decay: 0.45, volume: 0.7 },
-            tom_lo: TomParams { pitch: 0.3, decay: 0.5, volume: 0.7 },
+            hihat_closed: HihatParams { decay: 0.08, tone: 0.8, volume: 0.55 },
+            hihat_open: HihatParams { decay: 0.4, tone: 0.75, volume: 0.55 },
+            tom_hi: TomParams { pitch: 0.7, decay: 0.4, volume: 0.65 },
+            tom_mid: TomParams { pitch: 0.5, decay: 0.45, volume: 0.65 },
+            tom_lo: TomParams { pitch: 0.3, decay: 0.5, volume: 0.65 },
         }
     }
 }
@@ -184,11 +184,11 @@ impl Default for DrumKit909 {
     fn default() -> Self {
         Self {
             kick: KickParams { pitch: 0.55, decay: 0.5, punch: 0.5, tone: 0.9, volume: 0.65 },
-            snare: SnareParams { tone: 0.55, snappy: 0.7, decay: 0.35, volume: 0.85 },
-            hihat_closed: HihatParams { decay: 0.06, tone: 0.85, volume: 0.7 },
-            hihat_open: HihatParams { decay: 0.45, tone: 0.8, volume: 0.7 },
-            clap: ClapParams::default(),
-            rim: SnareParams { tone: 0.7, snappy: 0.3, decay: 0.15, volume: 0.75 },
+            snare: SnareParams { tone: 0.55, snappy: 0.7, decay: 0.35, volume: 0.60 },
+            hihat_closed: HihatParams { decay: 0.06, tone: 0.85, volume: 0.55 },
+            hihat_open: HihatParams { decay: 0.45, tone: 0.8, volume: 0.55 },
+            clap: ClapParams { decay: 0.3, volume: 0.60 },
+            rim: SnareParams { tone: 0.7, snappy: 0.3, decay: 0.15, volume: 0.55 },
         }
     }
 }
@@ -267,6 +267,43 @@ impl DrumVoice {
             DrumVoice::Clap909 => "KB Clap",
             DrumVoice::Rim909 => "KB Rim",
         }
+    }
+
+    pub fn get_volume(&self, s: &AppState) -> f32 {
+        match self {
+            DrumVoice::Kick808        => s.kit_a.kick.volume,
+            DrumVoice::Snare808       => s.kit_a.snare.volume,
+            DrumVoice::HihatClosed808 => s.kit_a.hihat_closed.volume,
+            DrumVoice::HihatOpen808   => s.kit_a.hihat_open.volume,
+            DrumVoice::TomHi808       => s.kit_a.tom_hi.volume,
+            DrumVoice::TomMid808      => s.kit_a.tom_mid.volume,
+            DrumVoice::TomLo808       => s.kit_a.tom_lo.volume,
+            DrumVoice::Kick909        => s.kit_b.kick.volume,
+            DrumVoice::Snare909       => s.kit_b.snare.volume,
+            DrumVoice::HihatClosed909 => s.kit_b.hihat_closed.volume,
+            DrumVoice::HihatOpen909   => s.kit_b.hihat_open.volume,
+            DrumVoice::Clap909        => s.kit_b.clap.volume,
+            DrumVoice::Rim909         => s.kit_b.rim.volume,
+        }
+    }
+
+    pub fn set_volume(self, mut s: AppState, v: f32) -> AppState {
+        match self {
+            DrumVoice::Kick808        => s.kit_a.kick.volume = v,
+            DrumVoice::Snare808       => s.kit_a.snare.volume = v,
+            DrumVoice::HihatClosed808 => s.kit_a.hihat_closed.volume = v,
+            DrumVoice::HihatOpen808   => s.kit_a.hihat_open.volume = v,
+            DrumVoice::TomHi808       => s.kit_a.tom_hi.volume = v,
+            DrumVoice::TomMid808      => s.kit_a.tom_mid.volume = v,
+            DrumVoice::TomLo808       => s.kit_a.tom_lo.volume = v,
+            DrumVoice::Kick909        => s.kit_b.kick.volume = v,
+            DrumVoice::Snare909       => s.kit_b.snare.volume = v,
+            DrumVoice::HihatClosed909 => s.kit_b.hihat_closed.volume = v,
+            DrumVoice::HihatOpen909   => s.kit_b.hihat_open.volume = v,
+            DrumVoice::Clap909        => s.kit_b.clap.volume = v,
+            DrumVoice::Rim909         => s.kit_b.rim.volume = v,
+        }
+        s
     }
 }
 

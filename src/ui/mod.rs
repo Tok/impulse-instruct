@@ -1342,11 +1342,25 @@ impl ImpulseApp {
                     // Voice label
                     let label = voice.label();
                     ui.add_sized(
-                        [80.0, 22.0],
+                        [72.0, 22.0],
                         egui::Label::new(
                             egui::RichText::new(label).color(theme::SMOKE).monospace().size(8.5)
                         )
                     );
+
+                    // Per-voice volume slider
+                    let mut vol = voice.get_volume(&self.state.read());
+                    let vol_resp = ui.add_sized(
+                        [52.0, 14.0],
+                        egui::Slider::new(&mut vol, 0.0..=1.0)
+                            .show_value(false)
+                            .trailing_fill(true),
+                    );
+                    if vol_resp.changed() {
+                        let s = self.state.read().clone();
+                        *self.state.write() = voice.set_volume(s, vol);
+                        self.push_audio_params();
+                    }
 
                     // Snapshot pattern for this page
                     let pattern: Vec<crate::state::Step> = {
