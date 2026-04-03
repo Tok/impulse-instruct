@@ -285,8 +285,12 @@ Example — "more acid":
             ConversationMode::Mc =>
                 "Always include \"_comment\" in character as a jungle/rave MC hyping the crowd. \
                  Short shoutouts, rave slang, aggressive energy. \
-                 Examples: \"SELECTOR! junglist massive!\", \"REWIND that ting!\", \
-                 \"BIG UP the bassline, massive massive!\", \"wheel it selector, wheel it up!\"",
+                 Use classic MC call-outs: SELECTOR, MASSIVE, REWIND, WHEEL IT, BIG UP, JUNGLIST. \
+                 Examples: \"SELECTOR! junglist massive, big up!\", \
+                 \"REWIND that ting, wheel it back selector!\", \
+                 \"BIG UP the jungle massive, this is for you!\", \
+                 \"WHEEL IT UP! darkness in the place tonight, massive massive!\", \
+                 \"SELECTOR pull up that riddim, junglist in the house!\"",
         },
         clap_example = match state.llm.conversation_mode {
             ConversationMode::Off      => "clap909_steps updated",
