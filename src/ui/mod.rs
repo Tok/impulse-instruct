@@ -4,8 +4,19 @@
 pub mod theme;
 pub mod widgets;
 
+/// Open a URL in the system browser (cross-platform, no extra dep).
+fn webbrowser_open(url: &str) -> std::io::Result<()> {
+    #[cfg(target_os = "linux")]
+    std::process::Command::new("xdg-open").arg(url).spawn()?;
+    #[cfg(target_os = "macos")]
+    std::process::Command::new("open").arg(url).spawn()?;
+    #[cfg(target_os = "windows")]
+    std::process::Command::new("cmd").args(["/c", "start", url]).spawn()?;
+    Ok(())
+}
+
 use crossbeam_channel::{Receiver, Sender};
-use egui::{CentralPanel, Color32, Frame, TopBottomPanel};
+use egui::{CentralPanel, Frame, TopBottomPanel};
 use parking_lot::RwLock;
 use std::sync::Arc;
 
@@ -23,6 +34,7 @@ pub struct ImpulseApp {
     prompt_input: String,
     log_lines: Vec<String>,
     active_panel: Panel,
+    api_port: Option<u16>, // Some(port) if --api was passed
 }
 
 #[derive(PartialEq, Clone, Copy)]
@@ -35,16 +47,22 @@ impl ImpulseApp {
         audio_tx: rtrb::Producer<AudioCommand>,
         llm_tx: Sender<LlmInput>,
         llm_rx: Receiver<LlmOutput>,
+        api_port: Option<u16>,
     ) -> Self {
         theme::apply(&cc.egui_ctx);
+        let mut log_lines = vec!["[ Impulse Instruct ready ]".into()];
+        if let Some(port) = api_port {
+            log_lines.push(format!("[ HTTP API active → http://localhost:{} ]", port));
+        }
         Self {
             state,
             audio_tx,
             llm_tx,
             llm_rx,
             prompt_input: String::new(),
-            log_lines: vec!["[ Impulse Instruct ready ]".into()],
+            log_lines,
             active_panel: Panel::Sequencer,
+            api_port,
         }
     }
 
@@ -149,6 +167,26 @@ impl eframe::App for ImpulseApp {
                     }
 
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        // API link (right-most, only shown when --api was passed)
+                        if let Some(port) = self.api_port {
+                            let api_label = format!("API :{}", port);
+                            let btn = ui.add(
+                                egui::Button::new(
+                                    egui::RichText::new(&api_label).color(theme::SMOKE).monospace().size(8.5)
+                                )
+                                .fill(theme::VOID)
+                                .stroke(egui::Stroke::new(1.0, theme::SLATE))
+                            );
+                            if btn.clicked() {
+                                let url = format!("http://localhost:{}/api/schema", port);
+                                let _ = webbrowser_open(&url);
+                            }
+                            if btn.hovered() {
+                                btn.on_hover_text("Open API schema in browser");
+                            }
+                            ui.add_space(4.0);
+                        }
+
                         // Prompt submit
                         let submit = ui.button(
                             egui::RichText::new("ASK").monospace().size(10.0)
@@ -251,6 +289,7 @@ impl eframe::App for ImpulseApp {
 // ─── Panel drawing ────────────────────────────────────────────────────────────
 
 impl ImpulseApp {
+    #[allow(dead_code)] // used when panels get individual frames
     fn panel_frame() -> Frame {
         Frame::none()
             .fill(theme::PIT)
@@ -372,24 +411,6 @@ impl ImpulseApp {
 
         ui.horizontal_wrapped(|ui| {
             let mut changed = false;
-            macro_rules! knob {
-                ($label:expr, $field:expr, $path:expr) => {{
-                    let is_locked = locked.contains($path);
-                    let mut val = $field;
-                    if widgets::knob(ui, $label, &mut val, is_locked) {
-                        $field = val;
-                        if is_locked {} // already locked — value was set by user, that's fine
-                        else {
-                            // Lock this param since user is touching it
-                            self.state.write().llm.locked_params.insert($path.to_string());
-                        }
-                        changed = true;
-                    }
-                    // Right-click to unlock
-                    // (implement context menu if needed later)
-                }};
-            }
-
             {
                 let mut s = self.state.write();
                 let cutoff = s.tb303.cutoff;

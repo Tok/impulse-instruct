@@ -1,4 +1,5 @@
 // ─── midi/mod.rs ─────────────────────────────────────────────────────────────
+#![allow(dead_code)] // MIDI wiring grows with hardware support
 // MIDI input/output via midir.
 // Maps incoming MIDI to AppState mutations sent back to the UI thread.
 

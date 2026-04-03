@@ -1,4 +1,5 @@
 // ─── ui/theme.rs ─────────────────────────────────────────────────────────────
+#![allow(dead_code)] // palette constants used as features are added
 // Grayscale palette — all colors are off-tint R=G=B.
 // Color channels will later be used for highlights/accents.
 

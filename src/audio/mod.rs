@@ -2,11 +2,11 @@
 // Audio engine: owns the cpal stream, DSP state, and sequencer clock.
 // The audio callback is real-time safe: no allocations, no locks.
 
-mod dsp;
+pub mod dsp;
 
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use cpal::{Device, SampleFormat, Stream, StreamConfig};
-use rtrb::{Consumer, Producer};
+use rtrb::Producer;
 use std::sync::Arc;
 
 use crate::sequencer::{advance_clock, ClockState, TriggerEvent};
@@ -16,6 +16,7 @@ pub use dsp::{AudioParams, DspState};
 
 // ─── Messages sent from UI/HTTP thread to audio thread ───────────────────────
 
+#[allow(dead_code)] // Trigger variant used for manual note input (MIDI/UI, coming soon)
 pub enum AudioCommand {
     UpdateParams(AudioParams),
     Trigger(TriggerEvent),

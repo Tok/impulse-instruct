@@ -1,4 +1,5 @@
-// ─── app_state.rs ────────────────────────────────────────────────────────────
+// ─── state/mod.rs ────────────────────────────────────────────────────────────
+#![allow(dead_code)] // many transition fns are called via API/MIDI, not yet wired in UI
 // Single source of truth for all synth parameters.
 // Pure data only — no methods that mutate in-place.
 // All state transitions happen via the named functions at the bottom.

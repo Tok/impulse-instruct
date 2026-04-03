@@ -1,7 +1,8 @@
 // ─── ui/widgets.rs ───────────────────────────────────────────────────────────
+#![allow(dead_code)] // widget library grows alongside panels
 // Custom widgets: rotary knob, step button, LED indicator.
 
-use egui::{Color32, Painter, Pos2, Rect, Response, Sense, Stroke, Ui, Vec2};
+use egui::{Color32, Painter, Pos2, Rect, Sense, Stroke, Ui, Vec2};
 use std::f32::consts::TAU;
 
 use super::theme;

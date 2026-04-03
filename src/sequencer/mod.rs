@@ -1,4 +1,5 @@
 // ─── sequencer/mod.rs ────────────────────────────────────────────────────────
+#![allow(dead_code)] // velocity/gate_samples reserved for future per-step routing
 // Sample-accurate step sequencer clock.
 // All functions are pure: they take state in, return (new_state, events).
 
@@ -10,13 +11,13 @@ use crate::state::{DrumVoice, SequencerState, Step, TB303Step};
 pub enum TriggerEvent {
     DrumTrigger {
         voice: DrumVoice,
-        velocity: f32,
+        velocity: f32,   // reserved for per-step velocity routing
     },
     BassTrigger {
         note: u8,
         accent: bool,
         slide: bool,
-        gate_samples: u32,
+        gate_samples: u32, // reserved for gate-off timing
     },
     BassGateOff,
 }

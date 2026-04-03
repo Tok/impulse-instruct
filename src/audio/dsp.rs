@@ -11,7 +11,7 @@
 //   FX: simple reverb (Schroeder), echo delay, waveshaper drive
 
 use crate::sequencer::TriggerEvent;
-use crate::state::{AppState, DrumVoice, FxState, Waveform};
+use crate::state::{AppState, DrumVoice, Waveform};
 
 const MAX_DELAY_SAMPLES: usize = 96_000; // 2s @ 48kHz
 const REVERB_COMBS: usize = 8;

@@ -35,26 +35,41 @@ pub struct LlmOutput {
 
 pub trait LlmBackend: Send {
     fn infer(&mut self, system: &str, user: &str) -> Result<LlmOutput>;
+    #[allow(dead_code)]
     fn context_size(&self) -> usize;
 }
 
 // ─── llama.cpp backend ────────────────────────────────────────────────────────
 
+// Default model download info (Apache 2.0 — prism-ml/Bonsai-8B-gguf)
+const BONSAI_HF_REPO: &str = "prism-ml/Bonsai-8B-gguf";
+const BONSAI_DEFAULT_QUANT: &str = "Q4_K_M";
+
 pub struct LlamaCppBackend {
     model_path: String,
-    // Actual llama-cpp-2 types go here when the model is loaded
-    // We use Option so we can report a useful error if the model file is missing
     loaded: bool,
 }
 
 impl LlamaCppBackend {
     pub fn new(model_path: &str) -> Self {
-        let loaded = std::path::Path::new(model_path).exists();
+        let path = std::path::Path::new(model_path);
+        let loaded = path.exists();
         if !loaded {
-            log::warn!("GGUF model not found at '{}' — LLM will run in mock mode.", model_path);
+            log::warn!(
+                "GGUF model not found at '{}' — running in mock mode.\n  \
+                 Download the model with:  ./download-models.sh\n  \
+                 Or run with:  huggingface-cli download {} --include '*{}*.gguf' --local-dir models/",
+                model_path, BONSAI_HF_REPO, BONSAI_DEFAULT_QUANT
+            );
         }
         Self { model_path: model_path.to_string(), loaded }
     }
+
+    /// True if the model file is present on disk.
+    pub fn is_loaded(&self) -> bool { self.loaded }
+
+    /// HuggingFace repo for the Bonsai model (Apache 2.0).
+    pub fn model_repo() -> &'static str { BONSAI_HF_REPO }
 }
 
 impl LlmBackend for LlamaCppBackend {
@@ -139,7 +154,27 @@ pub fn run_llm_loop(
     let model_path = state.read().llm.model_path.clone();
     let mut backend = LlamaCppBackend::new(&model_path);
 
-    log::info!("LLM thread started");
+    if backend.is_loaded() {
+        log::info!("LLM thread started — model: {}", model_path);
+        let _ = output_tx.try_send(LlmOutput {
+            text: format!("[ Model loaded: {} ]", model_path),
+            param_update: None,
+            tokens_per_sec: 0.0,
+            context_used: 0,
+        });
+    } else {
+        log::info!("LLM thread started — mock mode (no model file)");
+        let msg = format!(
+            "[ Mock mode — no model at '{}'. Run ./download-models.sh to get Bonsai 8B ]",
+            model_path
+        );
+        let _ = output_tx.try_send(LlmOutput {
+            text: msg,
+            param_update: None,
+            tokens_per_sec: 0.0,
+            context_used: 0,
+        });
+    }
 
     loop {
         // Block until a prompt arrives
@@ -200,10 +235,6 @@ pub fn run_llm_loop(
         if input.one_shot {
             // nothing — wait for next prompt
         } else {
-            let jam_input = LlmInput {
-                prompt: "continue the pattern, vary slightly".to_string(),
-                one_shot: false,
-            };
             let _ = output_tx.try_send(LlmOutput {
                 text: String::new(),
                 param_update: None,

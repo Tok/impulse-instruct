@@ -1,10 +1,20 @@
 // ─── main.rs ─────────────────────────────────────────────────────────────────
 // Impulse Instruct — LLM-first audio synthesizer
+//
+// Usage:
+//   impulse-instruct [OPTIONS]
+//
+// Options:
+//   --api              Enable HTTP/MCP API on port 8765
+//   --port <N>         HTTP port (default 8765, requires --api)
+//   --model <path>     Path to GGUF model file
+//   --log <level>      Log level: error/warn/info/debug (default info)
+//
 // Thread model:
 //   Main/UI:  eframe runs here (required by macOS/Windows)
 //   Audio:    cpal callback (real-time, elevated by OS)
 //   LLM:      std::thread (blocking inference)
-//   HTTP:     tokio runtime in separate OS thread
+//   HTTP:     tokio runtime in separate OS thread (only if --api)
 
 mod api;
 mod audio;
@@ -13,6 +23,8 @@ mod midi;
 mod sequencer;
 mod state;
 mod ui;
+#[cfg(test)]
+mod tests;
 
 use parking_lot::RwLock;
 use std::sync::Arc;
@@ -21,12 +33,82 @@ use audio::AudioEngine;
 use llm::{LlmInput, run_llm_loop};
 use state::AppState;
 
+// ─── CLI args (no extra deps — just std::env::args) ──────────────────────────
+
+struct Args {
+    api: bool,
+    port: u16,
+    model: Option<String>,
+    log_level: String,
+}
+
+impl Args {
+    fn parse() -> Self {
+        let args: Vec<String> = std::env::args().collect();
+        let mut result = Self {
+            api: false,
+            port: 8765,
+            model: None,
+            log_level: "info".into(),
+        };
+
+        let mut i = 1;
+        while i < args.len() {
+            match args[i].as_str() {
+                "--api" => result.api = true,
+                "--port" => {
+                    i += 1;
+                    if let Some(v) = args.get(i) {
+                        result.port = v.parse().unwrap_or(8765);
+                    }
+                }
+                "--model" => {
+                    i += 1;
+                    result.model = args.get(i).cloned();
+                }
+                "--log" => {
+                    i += 1;
+                    if let Some(v) = args.get(i) {
+                        result.log_level = v.clone();
+                    }
+                }
+                "--help" | "-h" => {
+                    println!("Impulse Instruct — LLM-first audio synthesizer\n");
+                    println!("USAGE: impulse-instruct [OPTIONS]\n");
+                    println!("OPTIONS:");
+                    println!("  --api              Enable HTTP/MCP API (default: off)");
+                    println!("  --port <N>         HTTP port (default: 8765)");
+                    println!("  --model <path>     GGUF model path");
+                    println!("  --log <level>      Log level (default: info)");
+                    std::process::exit(0);
+                }
+                other => log::warn!("Unknown argument: {}", other),
+            }
+            i += 1;
+        }
+        result
+    }
+}
+
 fn main() -> anyhow::Result<()> {
-    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
+    let args = Args::parse();
+
+    env_logger::Builder::from_env(
+        env_logger::Env::default().default_filter_or(&args.log_level)
+    ).init();
+
     log::info!("Impulse Instruct starting…");
+    if args.api {
+        log::info!("HTTP API enabled on port {}", args.port);
+    }
 
     // ── Shared state ──────────────────────────────────────────────────────────
     let app_state = Arc::new(RwLock::new(AppState::default()));
+
+    // Apply --model override
+    if let Some(ref model_path) = args.model {
+        app_state.write().llm.model_path = model_path.clone();
+    }
 
     // ── Channels ─────────────────────────────────────────────────────────────
     let (llm_tx, llm_rx) = crossbeam_channel::bounded::<LlmInput>(16);
@@ -38,13 +120,14 @@ fn main() -> anyhow::Result<()> {
         let out_tx = llm_out_tx.clone();
         std::thread::Builder::new()
             .name("llm".into())
-            .stack_size(8 * 1024 * 1024) // 8MB stack for inference
+            .stack_size(8 * 1024 * 1024)
             .spawn(move || run_llm_loop(state, llm_rx, out_tx))
             .expect("failed to spawn LLM thread");
     }
 
-    // ── HTTP API thread ───────────────────────────────────────────────────────
-    {
+    // ── HTTP API thread (only when --api) ─────────────────────────────────────
+    let api_port = if args.api { Some(args.port) } else { None };
+    if let Some(port) = api_port {
         let state = Arc::clone(&app_state);
         let llm_tx_http = llm_tx.clone();
         std::thread::Builder::new()
@@ -60,7 +143,7 @@ fn main() -> anyhow::Result<()> {
                         app_state: state,
                         llm_tx: llm_tx_http,
                     };
-                    if let Err(e) = api::run_server(api_state, 8765).await {
+                    if let Err(e) = api::run_server(api_state, port).await {
                         log::error!("HTTP server error: {}", e);
                     }
                 });
@@ -93,6 +176,7 @@ fn main() -> anyhow::Result<()> {
                 audio_tx,
                 llm_tx,
                 llm_out_rx,
+                api_port,
             )))
         }),
     )
