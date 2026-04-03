@@ -6,7 +6,7 @@
 # Windows build: target/x86_64-pc-windows-msvc/release/impulse-instruct.exe
 #
 # Prerequisites (Windows cross-compile):
-#   cargo install cargo-xwin
+#   cargo install cargo-xwin@0.19.2   (0.19.2 = last version supporting rustc 1.85+)
 #   sudo apt install clang lld cmake ninja-build
 # ──────────────────────────────────────────────────────────────────────────────
 set -euo pipefail
@@ -40,8 +40,8 @@ WIN_TARGET="x86_64-pc-windows-msvc"
 rustup target add "$WIN_TARGET" 2>/dev/null || true
 
 if ! command -v cargo-xwin &>/dev/null; then
-  echo "  cargo-xwin not found — installing…"
-  cargo install cargo-xwin
+  echo "  cargo-xwin not found — installing v0.19.2 (compatible with rustc 1.85+)…"
+  cargo install cargo-xwin --version 0.19.2
 fi
 
 if ! command -v clang &>/dev/null; then
