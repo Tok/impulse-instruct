@@ -368,7 +368,8 @@ pub struct LlmState {
     pub auto_jam: bool, // LLM continuously generates pattern variations
     pub heat: f32,      // 0–1: jam mutation intensity (low=subtle, high=wild)
     pub conversation_mode: ConversationMode,
-    pub active_style: Option<String>, // style id from styles.json, or None
+    pub active_style: Option<String>, // style id from styles.json, "__free__", "__custom__", or None
+    pub custom_style_text: String,    // used when active_style == Some("__custom__")
 }
 
 impl Default for LlmState {
@@ -390,6 +391,7 @@ impl Default for LlmState {
             heat: 0.4,
             conversation_mode: ConversationMode::Producer,
             active_style: None,
+            custom_style_text: String::new(),
         }
     }
 }

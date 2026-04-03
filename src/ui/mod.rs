@@ -551,34 +551,107 @@ impl eframe::App for ImpulseApp {
 
                     let cur_style = self.state.read().llm.active_style.clone();
                     let catalog = StyleCatalog::get();
+                    let cur_name = match cur_style.as_deref() {
+                        None            => "None",
+                        Some("__free__")   => "Free",
+                        Some("__custom__") => "Custom",
+                        Some(id) => catalog.find_by_id(id).map(|s| s.name.as_str()).unwrap_or("None"),
+                    };
 
-                    // "None" button
-                    let none_active = cur_style.is_none();
-                    let none_text = egui::RichText::new("None").monospace().size(9.5)
-                        .color(if none_active { theme::CHALK } else { theme::IRON });
-                    if ui.selectable_label(none_active, none_text).clicked() && !none_active {
-                        self.state.write().llm.active_style = None;
-                        self.log_text.push_str("Style cleared\n");
-                    }
+                    let mut new_style_selection: Option<Option<String>> = None;
 
-                    ui.add_space(4.0);
+                    egui::ComboBox::from_id_source("style_selector")
+                        .selected_text(egui::RichText::new(cur_name).monospace().size(9.5))
+                        .width(160.0)
+                        .show_ui(ui, |ui| {
+                            if ui.selectable_label(
+                                cur_style.is_none(),
+                                egui::RichText::new("None").monospace().size(9.5),
+                            ).clicked() {
+                                new_style_selection = Some(None);
+                            }
+                            if ui.selectable_label(
+                                cur_style.as_deref() == Some("__free__"),
+                                egui::RichText::new("Free").monospace().size(9.5),
+                            ).clicked() {
+                                new_style_selection = Some(Some("__free__".to_string()));
+                            }
+                            if ui.selectable_label(
+                                cur_style.as_deref() == Some("__custom__"),
+                                egui::RichText::new("Custom...").monospace().size(9.5),
+                            ).clicked() {
+                                new_style_selection = Some(Some("__custom__".to_string()));
+                            }
+                            ui.separator();
+                            for style in catalog.styles() {
+                                let active = cur_style.as_deref() == Some(style.id.as_str());
+                                if ui.selectable_label(
+                                    active,
+                                    egui::RichText::new(&style.name).monospace().size(9.5),
+                                ).clicked() {
+                                    new_style_selection = Some(Some(style.id.clone()));
+                                }
+                            }
+                        });
 
-                    // One button per style
-                    for style in catalog.styles() {
-                        let active = cur_style.as_deref() == Some(style.id.as_str());
-                        let text = egui::RichText::new(&style.name).monospace().size(9.5)
-                            .color(if active { theme::CHALK } else { theme::IRON });
-                        if ui.selectable_label(active, text).clicked() && !active {
-                            self.state.write().llm.active_style = Some(style.id.clone());
-                            let prompt = format!(
-                                "we're going {} now — set up the sound and rhythm for this style",
-                                style.name
-                            );
-                            self.log_text.push_str(&format!("Style → {}\n", style.name));
-                            let _ = self.llm_tx.try_send(LlmInput { prompt, one_shot: true });
+                    if let Some(maybe_id) = new_style_selection {
+                        match maybe_id {
+                            None => {
+                                self.state.write().llm.active_style = None;
+                                self.log_text.push_str("Style cleared\n");
+                            }
+                            Some(ref id) if id == "__free__" => {
+                                self.state.write().llm.active_style = Some(id.clone());
+                                self.log_text.push_str("Style → Free (no constraints)\n");
+                                let _ = self.llm_tx.try_send(LlmInput {
+                                    prompt: "we're going free — be creative and unpredictable, surprise me".to_string(),
+                                    one_shot: true,
+                                });
+                            }
+                            Some(ref id) if id == "__custom__" => {
+                                self.state.write().llm.active_style = Some(id.clone());
+                                self.log_text.push_str("Style → Custom (edit brief below)\n");
+                            }
+                            Some(id) => {
+                                let name = catalog.find_by_id(&id)
+                                    .map(|s| s.name.clone()).unwrap_or_default();
+                                self.state.write().llm.active_style = Some(id);
+                                let prompt = format!(
+                                    "we're going {} now — set up the sound and rhythm for this style",
+                                    name
+                                );
+                                self.log_text.push_str(&format!("Style → {}\n", name));
+                                let _ = self.llm_tx.try_send(LlmInput { prompt, one_shot: true });
+                            }
                         }
                     }
                 });
+
+                // ── Custom style brief input (shown only when Custom is active) ──
+                if self.state.read().llm.active_style.as_deref() == Some("__custom__") {
+                    ui.horizontal(|ui| {
+                        ui.add_space(40.0); // indent to align with dropdown content
+                        let mut custom_text = self.state.read().llm.custom_style_text.clone();
+                        let r = ui.add(
+                            egui::TextEdit::singleline(&mut custom_text)
+                                .hint_text("describe your style brief for Bonsai…")
+                                .desired_width(ui.available_width() - 60.0)
+                                .font(egui::FontId::monospace(10.0))
+                        );
+                        if r.changed() {
+                            self.state.write().llm.custom_style_text = custom_text.clone();
+                        }
+                        if r.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter))
+                            && !custom_text.trim().is_empty()
+                        {
+                            self.log_text.push_str("Custom style brief updated\n");
+                            let _ = self.llm_tx.try_send(LlmInput {
+                                prompt: "apply the active style brief — update sound and rhythm accordingly".to_string(),
+                                one_shot: true,
+                            });
+                        }
+                    });
+                }
 
                 ui.add_space(2.0);
 

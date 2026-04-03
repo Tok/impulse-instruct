@@ -52,15 +52,34 @@ pub fn build_system_prompt(state: &AppState) -> String {
         }
     })).unwrap_or_default();
 
-    // Resolve active style description (empty string if none set)
-    let style_section = state.llm.active_style.as_deref()
-        .and_then(|id| StyleCatalog::get().find_by_id(id))
-        .map(|s| format!(
-            "\n═══ ACTIVE STYLE ═══\n\n{}\n\nUse this as your creative brief. \
-             Evolve the current sound toward this aesthetic — don't reset everything at once.\n",
-            s.description
-        ))
-        .unwrap_or_default();
+    // Resolve active style section (empty string if none set)
+    let style_section = match state.llm.active_style.as_deref() {
+        None => String::new(),
+        Some("__free__") =>
+            "\n═══ ACTIVE STYLE ═══\n\nFree mode — no style constraints. \
+             Be creative and unpredictable. Experiment freely with sound and rhythm. \
+             Surprise the listener. Choose any musical direction that feels interesting \
+             and don't hold back.\n".to_string(),
+        Some("__custom__") => {
+            let desc = state.llm.custom_style_text.trim();
+            if desc.is_empty() {
+                String::new()
+            } else {
+                format!(
+                    "\n═══ ACTIVE STYLE ═══\n\n{}\n\nUse this as your creative brief. \
+                     Evolve the current sound toward this aesthetic — don't reset everything at once.\n",
+                    desc
+                )
+            }
+        }
+        Some(id) => StyleCatalog::get().find_by_id(id)
+            .map(|s| format!(
+                "\n═══ ACTIVE STYLE ═══\n\n{}\n\nUse this as your creative brief. \
+                 Evolve the current sound toward this aesthetic — don't reset everything at once.\n",
+                s.description
+            ))
+            .unwrap_or_default(),
+    };
 
     format!(
         r#"You are Impulse Instruct — an AI that controls a hardware-style synthesizer.
