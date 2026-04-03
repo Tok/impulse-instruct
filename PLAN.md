@@ -59,6 +59,58 @@ It can nail acid. Everything else is a lie. Fix that.
 
 ---
 
+## AN1X-Style Voice (BoC / Warm VA Aesthetic)
+
+Target sound: Boards of Canada — warm, slightly detuned virtual analog. Nostalgic,
+drifting, slightly wrong. The AN1X (Yamaha, 1997) was a VA synth whose specific
+character — a digital engine with analog-flavoured imperfection — is central to that
+palette. This is a separate voice type from the 303 bass, oriented toward pads, leads,
+and melodic sequences.
+
+### Oscillator layer
+- [ ] Dual oscillator (OSC1 + OSC2), each with: Saw, Square (PWM), Triangle, Sine, Noise
+- [ ] OSC2 coarse + fine detune relative to OSC1 (the detuned beating is the core BoC texture)
+- [ ] OSC2 octave offset (−2 / −1 / 0 / +1 / +2)
+- [ ] Oscillator mix (OSC1 level, OSC2 level, noise level)
+- [ ] Hard sync: OSC2 resets its phase to OSC1 each cycle — with pitch sweep this produces the aggressive "screaming" harmonic sweep (more trance/techno than BoC, but part of the AN1X palette)
+- [ ] Ring modulation: OSC1 × OSC2 output mixed into signal path
+- [ ] Sub-oscillator: square wave one octave below OSC1, level control
+
+### Modulation
+- [ ] 2 LFOs, each with: Sine, Triangle, Saw, Square, Sample+Hold (random), Noise
+- [ ] LFO rate: 0.01 Hz (glacial, BoC-style breathing) to ~20 Hz (vibrato)
+- [ ] LFO delay + fade-in (starts slow, deepens over held note)
+- [ ] LFO destinations per LFO: OSC1 pitch, OSC2 pitch, OSC1+2 pitch, filter cutoff, amplitude, PWM width
+- [ ] LFO sync to BPM (rate snaps to musical divisions)
+- [ ] Pitch drift: very low-depth random LFO on pitch — simulates tape instability and slight tuning imperfection (key BoC texture, subtly "analogue feeling")
+- [ ] Free EG concept: one slow arbitrary-shape envelope that can be drawn and assigned to any target (filter, pitch, amp, detune) — enables long evolving patches
+
+### Envelopes
+- [ ] Filter envelope (ADSR) with amount + polarity (positive/negative modulation)
+- [ ] Amplitude envelope (ADSR)
+- [ ] Pitch envelope (Attack + Decay + amount) — for pluck-style pitch transients
+
+### Filter
+- [ ] Filter mode selector: Lowpass 24dB (Moog-style, current), Highpass 12dB, Bandpass 12dB
+- [ ] Self-oscillation at high resonance (produces sine wave at resonant frequency)
+- [ ] Filter key tracking (filter cutoff follows note pitch — 0%, 50%, 100%)
+
+### Portamento
+- [ ] Glide time (separate from 303 slide — smooth exponential pitch glide between notes)
+- [ ] Glide mode: always on, legato only (only when notes overlap)
+
+### Voice style in the LLM
+- [ ] Add `an1x` as a separate controllable voice in JSON schema alongside `bass`
+- [ ] Style briefs updated so BoC / IDM / ambient styles preferentially target this voice
+- [ ] LLM can set: detune, lfo_rate, lfo_depth, lfo_target, drift, filter_mode, glide
+
+### Known gap
+The BoC aesthetic also relies heavily on tape saturation, lo-fi sampling, and pitch
+manipulation of recorded material — none of which synthesis alone can fully replicate.
+The AN1X voice gets the synthesis side. Bitcrush + tape saturation FX complete the picture.
+
+---
+
 ## Phase 2 — Make It Talk  *(TTS + MC mode)*
 
 Bonsai generates the text. A TTS engine speaks it. The crowd goes wild.

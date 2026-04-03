@@ -30,9 +30,11 @@ pub struct LlmOutput {
     pub text: String,
     pub param_update: Option<serde_json::Value>,
     pub tokens_per_sec: f32,
+    pub prompt_tokens: usize,
+    pub completion_tokens: usize,
     pub context_used: usize,
     pub is_jam: bool,
-    /// Chain-of-thought from <think>…</think> blocks, if the model emitted one.
+    /// Reasoning extracted from the "_thinking" JSON field.
     pub thinking: Option<String>,
 }
 
@@ -184,8 +186,8 @@ impl LlmBackend for LlamaServerBackend {
         let temperature = 0.1_f64 + (heat as f64).clamp(0.0, 1.0) * 1.1;
 
         // json_object mode keeps the server honest about emitting valid JSON.
-        // max_tokens: a full response with two 16-step arrays + bass params needs ~350–400
-        // tokens; 512 gives comfortable headroom without wasting inference time.
+        // max_tokens: two 16-step arrays + bass params ~400 tokens; _thinking adds ~100.
+        // 768 gives comfortable headroom.
         let body = serde_json::json!({
             "model": "bonsai",
             "messages": [
@@ -193,7 +195,7 @@ impl LlmBackend for LlamaServerBackend {
                 { "role": "user",    "content": user   }
             ],
             "temperature": temperature,
-            "max_tokens": 512,
+            "max_tokens": 768,
             "response_format": { "type": "json_object" }
         });
 
@@ -225,24 +227,37 @@ impl LlmBackend for LlamaServerBackend {
             log::warn!("llama-server returned empty content; full response: {resp_text}");
         }
 
-        // Strip <think>…</think> chain-of-thought block that Qwen3 may emit.
-        let (thinking, json_text) = split_thinking(&raw_content);
-        if thinking.is_some() {
-            log::debug!("Bonsai thinking: {} chars", thinking.as_ref().unwrap().len());
-        }
+        // Strip <think>…</think> if the model emits it (Qwen3-style), otherwise pass through.
+        let (tag_thinking, json_text) = split_thinking(&raw_content);
 
         let usage = &resp_json["usage"];
-        let completion_tokens = usage["completion_tokens"].as_f64().unwrap_or(0.0) as f32;
-        let tps = if elapsed > 0.0 { completion_tokens / elapsed } else { 0.0 };
+        let prompt_tok  = usage["prompt_tokens"].as_u64().unwrap_or(0) as usize;
+        let compl_tok   = usage["completion_tokens"].as_u64().unwrap_or(0) as usize;
+        let tps = if elapsed > 0.0 { compl_tok as f32 / elapsed } else { 0.0 };
         let ctx_used = usage["total_tokens"].as_u64().unwrap_or(0) as usize;
 
-        let param_update = repair_json(json_text.trim())
+        let mut param_update = repair_json(json_text.trim())
             .ok_or_else(|| anyhow::anyhow!("JSON parse and repair both failed\nraw: {json_text}"))?;
+
+        // Extract _thinking from the JSON itself (our prompted reasoning field).
+        // Prefer tag-based thinking if the model produced it; fall back to _thinking field.
+        let thinking = tag_thinking.or_else(|| {
+            param_update.as_object_mut()
+                .and_then(|o| o.remove("_thinking"))
+                .and_then(|v| v.as_str().map(|s| s.to_string()))
+                .filter(|s| !s.is_empty())
+        });
+
+        if let Some(ref t) = thinking {
+            log::debug!("Bonsai thinking ({} chars): {}", t.len(), &t[..t.len().min(120)]);
+        }
 
         Ok(LlmOutput {
             text: json_text,
             param_update: Some(param_update),
             tokens_per_sec: tps,
+            prompt_tokens: prompt_tok,
+            completion_tokens: compl_tok,
             context_used: ctx_used,
             is_jam: false,
             thinking,
@@ -370,6 +385,8 @@ pub fn mock_response(prompt: &str, heat: f32) -> Result<LlmOutput> {
             text: serde_json::to_string_pretty(&json).unwrap_or_default(),
             param_update: Some(json),
             tokens_per_sec: 42.0,
+            prompt_tokens: 0,
+            completion_tokens: 0,
             context_used: 256,
             is_jam: false,
             thinking: None,
@@ -490,6 +507,8 @@ pub fn mock_response(prompt: &str, heat: f32) -> Result<LlmOutput> {
         text: serde_json::to_string_pretty(&json).unwrap_or_default(),
         param_update: Some(json),
         tokens_per_sec: 42.0, // mock speed
+        prompt_tokens: 0,
+        completion_tokens: 0,
         context_used: 256,
         is_jam: false,
         thinking: None,
@@ -512,6 +531,8 @@ pub fn run_llm_loop(
             text: format!("[ Bonsai server loaded: {} ]", model_path),
             param_update: None,
             tokens_per_sec: 0.0,
+            prompt_tokens: 0,
+            completion_tokens: 0,
             context_used: 0,
             is_jam: false,
             thinking: None,
@@ -525,6 +546,8 @@ pub fn run_llm_loop(
             text: "[ Mock mode — run ./build-bonsai-server.sh + ./download-models.sh ]".to_string(),
             param_update: None,
             tokens_per_sec: 0.0,
+            prompt_tokens: 0,
+            completion_tokens: 0,
             context_used: 0,
             is_jam: false,
             thinking: None,
@@ -563,8 +586,10 @@ pub fn run_llm_loop(
 
         match result {
             Ok(output) => {
-                let tps = output.tokens_per_sec;
-                let ctx = output.context_used;
+                let tps   = output.tokens_per_sec;
+                let ptok  = output.prompt_tokens;
+                let ctok  = output.completion_tokens;
+                let ctx   = output.context_used;
 
                 // Apply param update to shared state
                 if let Some(ref update) = output.param_update {
@@ -578,6 +603,8 @@ pub fn run_llm_loop(
                     let mut s = state.write();
                     s.llm.is_inferring = false;
                     s.llm.tokens_per_sec = tps;
+                    s.llm.prompt_tokens = ptok;
+                    s.llm.completion_tokens = ctok;
                     s.llm.context_used = ctx;
                     s.llm.last_response = output.text.clone();
                 }
@@ -615,6 +642,8 @@ pub fn run_llm_loop(
                 text: "[jam_cycle_done]".to_string(),
                 param_update: None,
                 tokens_per_sec: 0.0,
+                prompt_tokens: 0,
+                completion_tokens: 0,
                 context_used: 0,
                 is_jam: true,
                 thinking: None,

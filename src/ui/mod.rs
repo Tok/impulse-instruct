@@ -488,16 +488,21 @@ impl eframe::App for ImpulseApp {
                     {
                         let s = self.state.read();
                         let inferring = s.llm.is_inferring;
-                        let tps = s.llm.tokens_per_sec;
+                        let tps  = s.llm.tokens_per_sec;
+                        let ptok = s.llm.prompt_tokens;
+                        let ctok = s.llm.completion_tokens;
                         let ctx_pct = if s.llm.context_max > 0 {
                             s.llm.context_used as f32 / s.llm.context_max as f32 * 100.0
                         } else { 0.0 };
 
                         let inf_color = if inferring { theme::CHALK } else { theme::IRON };
                         ui.label(egui::RichText::new("●").color(inf_color).size(10.0));
-                        ui.label(egui::RichText::new(
+                        let stats = if ptok > 0 || ctok > 0 {
+                            format!("{:.0}t/s  p:{} c:{}  ctx:{:.0}%", tps, ptok, ctok, ctx_pct)
+                        } else {
                             format!("{:.0}t/s  ctx:{:.0}%", tps, ctx_pct)
-                        ).color(theme::SMOKE).size(9.5).monospace());
+                        };
+                        ui.label(egui::RichText::new(stats).color(theme::SMOKE).size(9.5).monospace());
 
                         ui.add_space(8.0);
 

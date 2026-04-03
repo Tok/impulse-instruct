@@ -53,14 +53,15 @@ fi
 PORT=$(python3 -c "import socket; s=socket.socket(); s.bind(('',0)); p=s.getsockname()[1]; s.close(); print(p)")
 export LLAMA_SERVER_URL="http://127.0.0.1:${PORT}"
 
-echo "→ Starting Bonsai server on port ${PORT}…"
+SERVER_LOG="$(mktemp /tmp/bonsai-server-XXXXXX.log)"
+echo "→ Starting Bonsai server on port ${PORT} (log: ${SERVER_LOG})…"
 "$SERVER_BIN" \
   --model "$MODEL" \
   --host 127.0.0.1 \
   --port "$PORT" \
   --ctx-size 4096 \
   --n-gpu-layers 99 \
-  --log-disable &
+  2>"$SERVER_LOG" &
 SERVER_PID=$!
 
 # Ensure server is killed when the script exits (success or failure)
@@ -78,11 +79,18 @@ for i in $(seq 1 60); do
   if [[ $i -eq 60 ]]; then
     echo ""
     echo "ERROR: server did not become ready within 6s"
+    echo "Server log (last 20 lines):"
+    tail -20 "$SERVER_LOG"
     exit 1
   fi
 done
 
 # ── Run the tests ─────────────────────────────────────────────────────────────
+# Show GPU/CUDA lines from startup so we can confirm layers were offloaded
+echo "→ Server startup (GPU lines):"
+grep -i "cuda\|gpu\|layer\|offload\|ggml_cuda" "$SERVER_LOG" 2>/dev/null | head -10 || echo "   (no GPU lines found — check ${SERVER_LOG} if inference seems slow)"
+echo ""
+
 echo "→ Running tests (LLAMA_SERVER_URL=${LLAMA_SERVER_URL})"
 echo ""
 

@@ -187,6 +187,7 @@ JAM HEAT: {heat_pct}% — {heat_desc}
 
 ═══ OUTPUT FORMAT ═══
 
+Always start your response with "_thinking": one or two sentences explaining what the user is asking for and what specific parameters you will change. This is your reasoning scratch-pad — write it before anything else.
 {comment_instruction}
 Only include fields you are actually changing.
 TOP-LEVEL SCHEMA — the only valid top-level keys are "_comment", "bass", "sequencer", "fx".
@@ -265,6 +266,7 @@ pub fn param_json_schema() -> serde_json::Value {
         "$schema": "http://json-schema.org/draft-07/schema",
         "type": "object",
         "properties": {
+            "_thinking": { "type": "string", "maxLength": 300 },
             "_comment": { "type": "string", "maxLength": 200 },
             "bass": {
                 "type": "object",

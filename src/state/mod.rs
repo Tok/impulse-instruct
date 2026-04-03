@@ -362,6 +362,8 @@ pub struct LlmState {
     pub last_response: String,
     pub is_inferring: bool,
     pub tokens_per_sec: f32,
+    pub prompt_tokens: usize,
+    pub completion_tokens: usize,
     pub context_used: usize,
     pub context_max: usize,
     pub locked_params: HashSet<String>, // dot-path keys the user has taken over
@@ -381,6 +383,8 @@ impl Default for LlmState {
             last_response: String::new(),
             is_inferring: false,
             tokens_per_sec: 0.0,
+            prompt_tokens: 0,
+            completion_tokens: 0,
             context_used: 0,
             context_max: 4096,
             locked_params: {
