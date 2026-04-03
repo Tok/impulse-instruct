@@ -1,7 +1,7 @@
 // ─── llm/prompt.rs ───────────────────────────────────────────────────────────
 // Builds the system prompt that grounds the LLM in current synth state.
 
-use crate::state::AppState;
+use crate::state::{AppState, ConversationMode};
 
 pub fn build_system_prompt(state: &AppState) -> String {
     let locked: Vec<&str> = state.llm.locked_params.iter().map(|s| s.as_str()).collect();
@@ -122,26 +122,61 @@ JAM HEAT: {heat_pct}% — {heat_desc}
 
 ═══ OUTPUT FORMAT ═══
 
-Always include "_comment" (one sentence, plain English, what and why).
+{comment_instruction}
 Only include fields you are actually changing.
 
 Example — "add claps on 2 and 4":
-{{"_comment": "adding a 909 clap on beats 2 and 4 for a classic house feel",
+{{"_comment": "{clap_example}",
   "sequencer": {{"clap909_steps": [false,false,false,false,true,false,false,false,false,false,false,false,true,false,false,false]}}}}
 
 Example — "change the melody":
-{{"_comment": "new bass line — stepping up a fifth and back with a little chromatic passing note",
+{{"_comment": "{melody_example}",
   "sequencer": {{"bass_steps": [true,false,true,false,false,true,false,true,false,false,true,false,false,true,false,false],
                  "bass_notes":  [36,36,36,36,36,41,36,43,36,36,38,36,36,36,40,36]}}}}
 
 Example — "more acid":
-{{"_comment": "cranking the resonance and env_mod for full acid squelch",
+{{"_comment": "{acid_example}",
   "bass": {{"resonance": 0.85, "env_mod": 0.80, "cutoff": 0.35}}}}
 "#,
         current_json = current_json,
         locked_str = locked_str,
         heat_pct = heat_pct,
         heat_desc = heat_desc,
+        comment_instruction = match state.llm.conversation_mode {
+            ConversationMode::Off =>
+                "\"_comment\": one short technical label of what params changed. No personality.",
+            ConversationMode::Producer =>
+                "Always include \"_comment\" (one sentence) — what you changed and why it serves the music right now.",
+            ConversationMode::Dj =>
+                "Always include \"_comment\" in character as a hype DJ hyping up the crowd. \
+                 Short, punchy, first-person, cheesy party energy. \
+                 Examples: \"OKAY WE ARE DROPPING THE BASS RIGHT NOW!\", \
+                 \"your boy just cranked the filter, you're WELCOME!\", \
+                 \"DJ Bonsai in the house, stepping up the BPM cos this crowd needs MORE!\"",
+            ConversationMode::Mc =>
+                "Always include \"_comment\" in character as a jungle/rave MC hyping the crowd. \
+                 Short shoutouts, rave slang, aggressive energy. \
+                 Examples: \"SELECTOR! junglist massive!\", \"REWIND that ting!\", \
+                 \"BIG UP the bassline, massive massive!\", \"wheel it selector, wheel it up!\"",
+        },
+        clap_example = match state.llm.conversation_mode {
+            ConversationMode::Off      => "clap909_steps updated",
+            ConversationMode::Producer => "adding a 909 clap on beats 2 and 4 for a classic house feel",
+            ConversationMode::Dj       => "CLAP CLAP CLAP DJ Bonsai just dropped the backbeat FEEL THAT",
+            ConversationMode::Mc       => "SELECTOR! clap ting incoming, big up the backbeat massive!",
+        },
+        melody_example = match state.llm.conversation_mode {
+            ConversationMode::Off      => "bass_steps and bass_notes updated",
+            ConversationMode::Producer => "new bass line — stepping up a fifth and back with a chromatic passing note",
+            ConversationMode::Dj       => "NEW BASSLINE JUST DROPPED who ordered the groove you're welcome",
+            ConversationMode::Mc       => "WHEEL IT UP! fresh line incoming, junglist riddim massive!",
+        },
+        acid_example = match state.llm.conversation_mode {
+            ConversationMode::Off      => "bass resonance and env_mod updated",
+            ConversationMode::Producer => "cranking the resonance and env_mod for full acid squelch",
+            ConversationMode::Dj       => "ACID ACID ACID your boy just went full 303 mode YOU ARE WELCOME",
+            ConversationMode::Mc       => "REWIND! acid ting, selector pull up, junglist massive BWOY!",
+        },
     )
 }
 

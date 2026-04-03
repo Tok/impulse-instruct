@@ -40,7 +40,7 @@ use crate::export::{export_wav, export_mp3};
 use crate::llm::{LlmInput, LlmOutput};
 use crate::midi::MidiEvent;
 use crate::sequencer::TriggerEvent;
-use crate::state::{AppState, DrumVoice, Waveform, toggle_drum_step, save_project};
+use crate::state::{AppState, ConversationMode, DrumVoice, Waveform, toggle_drum_step, save_project};
 
 // ─── Instrument slot system ───────────────────────────────────────────────────
 
@@ -153,14 +153,19 @@ impl ImpulseApp {
     fn drain_llm_outputs(&mut self) {
         while let Ok(out) = self.llm_rx.try_recv() {
             if !out.is_jam && (out.param_update.is_some() || (!out.text.is_empty() && !out.text.starts_with('['))) {
+                let conv_mode = self.state.read().llm.conversation_mode.clone();
                 let display = if let Some(ref update) = out.param_update {
-                    // Prefer the natural-language comment; fall back to a terse param summary
-                    if let Some(comment) = update.get("_comment").and_then(|v| v.as_str()) {
+                    if conv_mode == ConversationMode::Off {
+                        // Off: show only what keys changed, no commentary
+                        let keys: Vec<&str> = update.as_object()
+                            .map(|o| o.keys().filter(|k| *k != "_comment").map(|k| k.as_str()).collect())
+                            .unwrap_or_default();
+                        format!("updated {}", keys.join(", "))
+                    } else if let Some(comment) = update.get("_comment").and_then(|v| v.as_str()) {
                         comment.to_string()
                     } else {
-                        // Build a short summary of what changed
                         let keys: Vec<&str> = update.as_object()
-                            .map(|o| o.keys().map(|k| k.as_str()).collect())
+                            .map(|o| o.keys().filter(|k| *k != "_comment").map(|k| k.as_str()).collect())
                             .unwrap_or_default();
                         format!("updated {}", keys.join(", "))
                     }
@@ -236,7 +241,36 @@ impl eframe::App for ImpulseApp {
                 .resizable(false)
                 .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
                 .show(ctx, |ui| {
-                    ui.set_min_width(240.0);
+                    ui.set_min_width(260.0);
+
+                    // ── Bonsai personality ────────────────────────────────────
+                    widgets::section_header(ui, "BONSAI PERSONALITY");
+                    ui.label(egui::RichText::new("How Bonsai narrates its moves").monospace().size(8.5).color(theme::IRON));
+                    ui.add_space(4.0);
+                    let cur_mode = self.state.read().llm.conversation_mode.clone();
+                    let modes: &[(&str, ConversationMode, &str)] = &[
+                        ("Off",      ConversationMode::Off,      "no commentary"),
+                        ("Producer", ConversationMode::Producer, "what & why (default)"),
+                        ("DJ",       ConversationMode::Dj,       "hype party energy"),
+                        ("MC",       ConversationMode::Mc,       "jungle/rave MC"),
+                    ];
+                    for (label, mode, hint) in modes {
+                        ui.horizontal(|ui| {
+                            let selected = cur_mode == *mode;
+                            let text = egui::RichText::new(*label).monospace().size(10.0)
+                                .color(if selected { theme::CHALK } else { theme::FOG });
+                            if ui.selectable_label(selected, text).clicked() && !selected {
+                                self.state.write().llm.conversation_mode = mode.clone();
+                            }
+                            ui.label(egui::RichText::new(*hint).monospace().size(8.5).color(theme::IRON));
+                        });
+                    }
+
+                    ui.add_space(8.0);
+                    ui.separator();
+                    ui.add_space(4.0);
+
+                    // ── Piano display ─────────────────────────────────────────
                     widgets::section_header(ui, "PIANO DISPLAY");
                     ui.horizontal(|ui| {
                         ui.label(egui::RichText::new("Note labels").monospace().size(9.5).color(theme::FOG));
@@ -968,14 +1002,15 @@ impl ImpulseApp {
             matches!(semitone, 0 | 2 | 4 | 5 | 7 | 9 | 11)
         }
 
-        // Black key offset (in white-key units from octave start C) and semitone
-        //   Layout derived from standard piano proportions
+        // Black key center positions in white-key units from octave start (C=0).
+        // Each value sits at the boundary between two adjacent white keys so the
+        // black key straddles the gap, matching a real piano layout.
         const BLACK_KEYS: &[(u8, f32)] = &[
-            (1,  0.65), // C#
-            (3,  1.65), // D#
-            (6,  3.65), // F#
-            (8,  4.65), // G#
-            (10, 5.65), // A#
+            (1,  1.0), // C# — between C and D
+            (3,  2.0), // D# — between D and E
+            (6,  4.0), // F# — between F and G
+            (8,  5.0), // G# — between G and A
+            (10, 6.0), // A# — between A and B
         ];
 
         let available_w = ui.available_width();

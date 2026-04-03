@@ -328,6 +328,16 @@ impl Default for FxState {
 
 // ─── LLM ─────────────────────────────────────────────────────────────────────
 
+/// How Bonsai presents itself in the `_comment` field.
+#[derive(Clone, Debug, PartialEq, Default, Serialize, Deserialize)]
+pub enum ConversationMode {
+    Off,            // no commentary shown; brief technical label only
+    #[default]
+    Producer,       // candid — what changed and why it serves the music
+    Dj,             // hype DJ persona, cheesy party energy
+    Mc,             // jungle/rave MC — "selector!", "junglist massive!", "rewind!"
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct LlmState {
     pub model_path: String,
@@ -340,6 +350,7 @@ pub struct LlmState {
     pub locked_params: HashSet<String>, // dot-path keys the user has taken over
     pub auto_jam: bool, // LLM continuously generates pattern variations
     pub heat: f32,      // 0–1: jam mutation intensity (low=subtle, high=wild)
+    pub conversation_mode: ConversationMode,
 }
 
 impl Default for LlmState {
@@ -359,6 +370,7 @@ impl Default for LlmState {
             },
             auto_jam: false,
             heat: 0.4,
+            conversation_mode: ConversationMode::Producer,
         }
     }
 }
