@@ -158,7 +158,7 @@ impl ImpulseApp {
             midi_rx,
             midi_port,
             pressed_notes: std::collections::HashSet::new(),
-            prompt_input: "let's make some acid".to_string(),
+            prompt_input: String::new(),
             log_text,
             active_panel: Panel::Sequencer,
             instruments: vec![
@@ -1133,17 +1133,26 @@ impl eframe::App for ImpulseApp {
                 });
             });
 
-        // ── Piano display (bottom, always visible) ────────────────────────────
+        // ── Footer ────────────────────────────────────────────────────────────
+        let is_mock = self.state.read().llm.is_mock;
         TopBottomPanel::bottom("footer")
-            .frame(Frame::none().fill(theme::VOID).inner_margin(egui::Margin::symmetric(6.0, 2.0)))
+            .frame(Frame::none()
+                .fill(if is_mock { egui::Color32::from_rgb(90, 18, 18) } else { theme::VOID })
+                .inner_margin(egui::Margin::symmetric(6.0, 2.0)))
             .exact_height(18.0)
             .show(ctx, |ui| {
                 ui.horizontal(|ui| {
-                    let midi_text = match &self.midi_port {
-                        Some(port) => format!("MIDI: {}", port.trim()),
-                        None       => "MIDI: no device".to_string(),
-                    };
-                    ui.label(egui::RichText::new(midi_text).color(theme::IRON).monospace().size(9.0));
+                    if is_mock {
+                        ui.label(egui::RichText::new(
+                            "⚠  MOCK MODE — no model loaded. Run ./build-bonsai-server.sh + ./download-models.sh"
+                        ).color(egui::Color32::from_rgb(255, 160, 80)).monospace().size(9.0));
+                    } else {
+                        let midi_text = match &self.midi_port {
+                            Some(port) => format!("MIDI: {}", port.trim()),
+                            None       => "MIDI: no device".to_string(),
+                        };
+                        ui.label(egui::RichText::new(midi_text).color(theme::IRON).monospace().size(9.0));
+                    }
                 });
             });
 

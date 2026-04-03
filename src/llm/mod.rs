@@ -139,21 +139,22 @@ impl LlamaServerBackend {
 
     pub fn is_live(&self) -> bool { self.live }
 
-    /// Poll /health until the server is ready (up to ~30 s).
+    /// Poll /health until the server is ready (up to ~90 s).
+    /// llama-server can take a while to load a large model into VRAM.
     fn wait_for_ready(&mut self) {
         let url = format!("{}/health", self.base_url);
-        for attempt in 0..60 {
+        for attempt in 0..180 {
             std::thread::sleep(std::time::Duration::from_millis(500));
             match ureq::get(&url).call() {
                 Ok(resp) if resp.status() == 200 => {
-                    log::info!("Bonsai server ready after {}ms", (attempt + 1) * 500);
+                    log::info!("LLM server ready after {}ms", (attempt + 1) * 500);
                     self.live = true;
                     return;
                 }
                 _ => {}
             }
         }
-        log::error!("Bonsai server did not become ready within 30s — falling back to mock.");
+        log::error!("LLM server did not become ready within 90s — falling back to mock.");
     }
 }
 
@@ -527,10 +528,13 @@ pub fn run_llm_loop(
     let model_path = state.read().llm.model_path.clone();
     let mut backend = LlamaServerBackend::new(&model_path);
 
+    // Publish live/mock status to AppState so the UI can show a warning
+    state.write().llm.is_mock = !backend.is_live();
+
     if backend.is_live() {
-        log::info!("LLM thread started — Bonsai server live: {}", model_path);
+        log::info!("LLM thread started — server live: {}", model_path);
         let _ = output_tx.try_send(LlmOutput {
-            text: format!("[ Bonsai server loaded: {} ]", model_path),
+            text: format!("[ Model loaded: {} ]", model_path),
             param_update: None,
             tokens_per_sec: 0.0,
             prompt_tokens: 0,
@@ -556,11 +560,47 @@ pub fn run_llm_loop(
         });
     }
 
+    // When in mock mode, retry connecting every 30s so the user can start the
+    // server after launching the app without needing to restart.
+    let mut last_retry = std::time::Instant::now();
+    const RETRY_INTERVAL: std::time::Duration = std::time::Duration::from_secs(30);
+
     loop {
-        // Block until a prompt or command arrives
-        let input = match input_rx.recv() {
-            Ok(i) => i,
-            Err(_) => break, // channel closed, shutdown
+        // Use recv_timeout when in mock mode so we can retry the server periodically.
+        let input = if !backend.is_live() && last_retry.elapsed() >= RETRY_INTERVAL {
+            last_retry = std::time::Instant::now();
+            log::info!("Mock mode: retrying LLM server connection…");
+            let mp = state.read().llm.model_path.clone();
+            backend = LlamaServerBackend::new(&mp);
+            state.write().llm.is_mock = !backend.is_live();
+            if backend.is_live() {
+                log::info!("LLM server reconnected: {}", mp);
+                let _ = output_tx.try_send(LlmOutput {
+                    text: format!("[ Model reconnected: {} ]", mp),
+                    param_update: None,
+                    tokens_per_sec: 0.0,
+                    prompt_tokens: 0,
+                    completion_tokens: 0,
+                    context_used: 0,
+                    is_jam: false,
+                    thinking: None,
+                });
+            }
+            match input_rx.recv_timeout(std::time::Duration::from_millis(100)) {
+                Ok(i) => i,
+                Err(_) => continue,
+            }
+        } else {
+            let timeout = if !backend.is_live() {
+                RETRY_INTERVAL.saturating_sub(last_retry.elapsed())
+            } else {
+                std::time::Duration::from_secs(3600)
+            };
+            match input_rx.recv_timeout(timeout) {
+                Ok(i) => i,
+                Err(crossbeam_channel::RecvTimeoutError::Timeout) => continue,
+                Err(crossbeam_channel::RecvTimeoutError::Disconnected) => break,
+            }
         };
 
         // ── Model switch ──────────────────────────────────────────────────────
@@ -569,6 +609,7 @@ pub fn run_llm_loop(
             state.write().llm.model_path = new_path.clone();
             // Drop old backend (kills server subprocess if owned), reload new one
             backend = LlamaServerBackend::new(new_path);
+            state.write().llm.is_mock = !backend.is_live();
             let status = if backend.is_live() {
                 format!("[ Model loaded: {} ]", new_path)
             } else {

@@ -18,7 +18,7 @@ pub fn print_banner() {
     //   White key = '|' (left wall) + 4 spaces  → 5 cells
     //   Black key = '|' (left wall) + ' ' + '|' → 3 cells
     //   1 octave = 35 cells total.
-    //   3 octaves = 105 chars + 2 indent = 107 — requires ~110 terminal columns.
+    //   2 octaves = 70 chars + 2 indent = 72 — fits within 80 columns.
     //
     // Black keys are near-centered on white key boundaries.
     // With W=5 and B=3, exact centering is impossible (half-integer boundaries)
@@ -108,11 +108,11 @@ pub fn print_banner() {
         s
     };
 
-    // Three octaves: chain arrays × 3.
-    // 35 cells × 3 = 105 chars + 2 indent = 107 — fits in 110+ column terminals.
-    let upper_row:  Vec<Cell> = UPPER.iter().chain(UPPER.iter()).chain(UPPER.iter()).copied().collect();
-    let lower_row:  Vec<Cell> = LOWER.iter().chain(LOWER.iter()).chain(LOWER.iter()).copied().collect();
-    let bottom_row: Vec<Cell> = LOWER_BTM.iter().chain(LOWER_BTM.iter()).chain(LOWER_BTM.iter()).copied().collect();
+    // Two octaves: chain arrays × 2.
+    // 35 cells × 2 = 70 chars + 2 indent = 72 — fits comfortably within 80 columns.
+    let upper_row:  Vec<Cell> = UPPER.iter().chain(UPPER.iter()).copied().collect();
+    let lower_row:  Vec<Cell> = LOWER.iter().chain(LOWER.iter()).copied().collect();
+    let bottom_row: Vec<Cell> = LOWER_BTM.iter().chain(LOWER_BTM.iter()).copied().collect();
 
     let upper  = render(&upper_row);
     let lower  = render(&lower_row);
