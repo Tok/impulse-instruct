@@ -27,6 +27,8 @@ mod ui;
 #[cfg(test)]
 mod tests;
 
+use midi::MidiEvent;
+
 use parking_lot::RwLock;
 use std::sync::Arc;
 
@@ -155,6 +157,13 @@ fn main() -> anyhow::Result<()> {
     // ── Audio engine ──────────────────────────────────────────────────────────
     let audio_engine = AudioEngine::new(Arc::clone(&app_state))?;
 
+    // ── MIDI input ────────────────────────────────────────────────────────────
+    let (midi_tx, midi_rx) = crossbeam_channel::bounded::<MidiEvent>(256);
+    let (_midi_listener, midi_port) = midi::MidiListener::auto_connect(midi_tx);
+    if let Some(ref name) = midi_port {
+        log::info!("MIDI: connected to '{}'", name);
+    }
+
     // ── UI (blocks this thread) ───────────────────────────────────────────────
     let state_for_ui = Arc::clone(&app_state);
     let audio_tx = audio_engine.params_tx;
@@ -177,6 +186,8 @@ fn main() -> anyhow::Result<()> {
                 audio_tx,
                 llm_tx,
                 llm_out_rx,
+                midi_rx,
+                midi_port,
                 api_port,
             )))
         }),

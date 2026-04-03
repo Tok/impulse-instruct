@@ -61,6 +61,31 @@ impl MidiListener {
             })
             .unwrap_or_default()
     }
+
+    /// Scan available MIDI ports and connect to the first non-"Midi Through" device.
+    /// Prefers a port whose name contains "LPK25"; otherwise takes the first real port.
+    /// Returns (listener, connected_port_name).
+    pub fn auto_connect(event_tx: Sender<MidiEvent>) -> (Self, Option<String>) {
+        let ports = Self::list_ports();
+        log::debug!("MIDI ports available: {:?}", ports);
+
+        let chosen = ports.iter()
+            .find(|p| p.to_lowercase().contains("lpk25"))
+            .or_else(|| ports.iter().find(|p| !p.to_lowercase().contains("midi through")))
+            .cloned();
+
+        match chosen {
+            Some(ref name) => {
+                log::info!("Connecting MIDI input: {}", name);
+                let listener = Self::new(name, event_tx);
+                (listener, Some(name.clone()))
+            }
+            None => {
+                log::info!("No MIDI input device found");
+                (Self { _connection: None }, None)
+            }
+        }
+    }
 }
 
 fn try_open_midi(port_name: &str, event_tx: Sender<MidiEvent>) -> Option<MidiInputConnection<()>> {

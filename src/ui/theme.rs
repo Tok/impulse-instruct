@@ -127,6 +127,16 @@ pub fn lerp_gray(a: u8, b: u8, t: f32) -> Color32 {
     Color32::from_rgb(v, v, v)
 }
 
+/// Linearly interpolate between two colors.
+pub fn lerp_color(a: Color32, b: Color32, t: f32) -> Color32 {
+    let t = t.clamp(0.0, 1.0);
+    Color32::from_rgb(
+        (a.r() as f32 + (b.r() as f32 - a.r() as f32) * t) as u8,
+        (a.g() as f32 + (b.g() as f32 - a.g() as f32) * t) as u8,
+        (a.b() as f32 + (b.b() as f32 - a.b() as f32) * t) as u8,
+    )
+}
+
 /// Dim text for labels.
 pub fn label_color() -> Color32 { SMOKE }
 /// Bright text for values.

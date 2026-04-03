@@ -4,6 +4,21 @@
 pub mod theme;
 pub mod widgets;
 
+/// Short note name for a MIDI note number (e.g. 60 → "C4").
+fn note_name(midi: u8) -> &'static str {
+    const NAMES: &[&str] = &[
+        "C1","C#1","D1","D#1","E1","F1","F#1","G1","G#1","A1","A#1","B1",
+        "C2","C#2","D2","D#2","E2","F2","F#2","G2","G#2","A2","A#2","B2",
+        "C3","C#3","D3","D#3","E3","F3","F#3","G3","G#3","A3","A#3","B3",
+        "C4","C#4","D4","D#4","E4","F4","F#4","G4","G#4","A4","A#4","B4",
+        "C5","C#5","D5","D#5","E5","F5","F#5","G5","G#5","A5","A#5","B5",
+        "C6",
+    ];
+    // MIDI 24 = C1
+    let idx = midi.saturating_sub(24) as usize;
+    NAMES.get(idx).copied().unwrap_or("?")
+}
+
 /// Open a URL in the system browser (cross-platform, no extra dep).
 fn webbrowser_open(url: &str) -> std::io::Result<()> {
     #[cfg(target_os = "linux")]
@@ -23,6 +38,8 @@ use std::sync::Arc;
 use crate::audio::{AudioCommand, AudioParams};
 use crate::export::{export_wav, export_mp3};
 use crate::llm::{LlmInput, LlmOutput};
+use crate::midi::MidiEvent;
+use crate::sequencer::TriggerEvent;
 use crate::state::{AppState, DrumVoice, Waveform, toggle_drum_step, save_project};
 
 // ─── Instrument slot system ───────────────────────────────────────────────────
@@ -57,6 +74,9 @@ pub struct ImpulseApp {
     audio_tx: rtrb::Producer<AudioCommand>,
     llm_tx: Sender<LlmInput>,
     llm_rx: Receiver<LlmOutput>,
+    midi_rx: Receiver<MidiEvent>,
+    midi_port: Option<String>,      // name of connected MIDI device, if any
+    pressed_notes: std::collections::HashSet<u8>, // keys currently held on MIDI keyboard
     prompt_input: String,
     log_text: String,
     active_panel: Panel,
@@ -73,10 +93,17 @@ impl ImpulseApp {
         audio_tx: rtrb::Producer<AudioCommand>,
         llm_tx: Sender<LlmInput>,
         llm_rx: Receiver<LlmOutput>,
+        midi_rx: Receiver<MidiEvent>,
+        midi_port: Option<String>,
         api_port: Option<u16>,
     ) -> Self {
         theme::apply(&cc.egui_ctx);
         let mut log_text = "[ Impulse Instruct ready ]\n".to_string();
+        if let Some(ref port) = midi_port {
+            log_text.push_str(&format!("[ MIDI: {} ]\n", port));
+        } else {
+            log_text.push_str("[ MIDI: no device found ]\n");
+        }
         if let Some(port) = api_port {
             log_text.push_str(&format!("[ HTTP API active → http://localhost:{} ]\n", port));
         }
@@ -85,6 +112,9 @@ impl ImpulseApp {
             audio_tx,
             llm_tx,
             llm_rx,
+            midi_rx,
+            midi_port,
+            pressed_notes: std::collections::HashSet::new(),
             prompt_input: "let's make some acid".to_string(),
             log_text,
             active_panel: Panel::Sequencer,
@@ -146,11 +176,37 @@ impl ImpulseApp {
             }
         }
     }
+
+    /// Drain incoming MIDI events, update pressed_notes, trigger DSP.
+    fn drain_midi_events(&mut self) {
+        while let Ok(event) = self.midi_rx.try_recv() {
+            match event {
+                MidiEvent::NoteOn { note, velocity, .. } => {
+                    self.pressed_notes.insert(note);
+                    let vel = velocity as f32 / 127.0;
+                    let _ = self.audio_tx.push(AudioCommand::Trigger(
+                        TriggerEvent::BassTrigger {
+                            note,
+                            accent: vel > 0.8,
+                            slide: false,
+                            gate_samples: 22050, // ~0.5 s at 44100 Hz
+                        }
+                    ));
+                }
+                MidiEvent::NoteOff { note, .. } => {
+                    self.pressed_notes.remove(&note);
+                    let _ = self.audio_tx.push(AudioCommand::Trigger(TriggerEvent::BassGateOff));
+                }
+                _ => {} // CC / pitch bend handled separately if needed
+            }
+        }
+    }
 }
 
 impl eframe::App for ImpulseApp {
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
         self.drain_llm_outputs();
+        self.drain_midi_events();
         ctx.request_repaint_after(std::time::Duration::from_millis(16));
 
         // ── About window ──────────────────────────────────────────────────────
@@ -454,6 +510,14 @@ impl eframe::App for ImpulseApp {
                         self.active_panel = Panel::Fx;
                     }
                 });
+            });
+
+        // ── Piano display (bottom, always visible) ────────────────────────────
+        TopBottomPanel::bottom("piano")
+            .frame(Frame::none().fill(theme::VOID).inner_margin(egui::Margin::symmetric(0.0, 0.0)))
+            .exact_height(80.0)
+            .show(ctx, |ui| {
+                self.draw_piano(ui, ctx);
             });
 
         // ── Main content ──────────────────────────────────────────────────────
@@ -812,6 +876,199 @@ impl ImpulseApp {
             s.kit_b.clap.volume  = cv;
             drop(s);
             self.push_audio_params();
+        }
+    }
+
+    // ── Piano keyboard display ────────────────────────────────────────────────
+
+    fn draw_piano(&mut self, ui: &mut egui::Ui, ctx: &egui::Context) {
+        use egui::{Color32, Pos2, Rect, Sense, Stroke, Vec2};
+
+        // Range: C2 (MIDI 36) → C5 (MIDI 72) = 3 octaves + high C
+        const START_NOTE: u8 = 36;
+        const END_NOTE:   u8 = 72;   // inclusive
+        const N_OCTAVES:  usize = 3;
+        const N_WHITE:    usize = N_OCTAVES * 7 + 1; // 22 white keys (including C5)
+
+        // Which semitones are white keys?
+        const fn is_white(semitone: u8) -> bool {
+            matches!(semitone, 0 | 2 | 4 | 5 | 7 | 9 | 11)
+        }
+
+        // Black key offset (in white-key units from octave start C) and semitone
+        //   Layout derived from standard piano proportions
+        const BLACK_KEYS: &[(u8, f32)] = &[
+            (1,  0.65), // C#
+            (3,  1.65), // D#
+            (6,  3.65), // F#
+            (8,  4.65), // G#
+            (10, 5.65), // A#
+        ];
+
+        let available_w = ui.available_width();
+        let wk_w = (available_w / N_WHITE as f32).max(8.0);
+        let wk_h = 74.0_f32;
+        let bk_w = wk_w * 0.55;
+        let bk_h = wk_h * 0.60;
+        let total_w = wk_w * N_WHITE as f32;
+
+        let (rect, response) = ui.allocate_exact_size(
+            Vec2::new(total_w, wk_h),
+            Sense::click_and_drag(),
+        );
+
+        // Detect click/drag position for interactive playing
+        let click_pos: Option<Pos2> = if response.is_pointer_button_down_on() || response.dragged() {
+            ctx.input(|i| i.pointer.interact_pos())
+        } else {
+            None
+        };
+        let mut clicked_note: Option<u8> = None;
+
+        // Sequencer cursor note (for highlighting)
+        let (seq_note, seq_running) = {
+            let s = self.state.read();
+            let step = s.sequencer.current_step;
+            let running = s.sequencer.running;
+            if running && s.sequencer.bass_pattern[step].active {
+                (Some(s.sequencer.bass_pattern[step].note), true)
+            } else {
+                (None, running)
+            }
+        };
+        let _ = seq_running;
+
+        if !ui.is_rect_visible(rect) { return; }
+
+        let painter = ui.painter();
+        painter.rect_filled(rect, 0.0, theme::VOID);
+
+        let ox = rect.min.x; // origin x
+        let oy = rect.min.y;
+
+        // ── White keys ────────────────────────────────────────────────────────
+        let mut white_idx = 0usize;
+        for note in START_NOTE..=END_NOTE {
+            let semi = note % 12;
+            if !is_white(semi) { continue; }
+
+            let x = ox + white_idx as f32 * wk_w;
+            let key_rect = Rect::from_min_size(
+                Pos2::new(x + 0.5, oy),
+                Vec2::new(wk_w - 1.0, wk_h),
+            );
+
+            let huth = theme::note_color(note);
+            let pressed = self.pressed_notes.contains(&note);
+            let seq_active = seq_note == Some(note);
+
+            let fill: Color32 = if pressed {
+                // Full Huth color, blended toward CHALK for brightness
+                theme::lerp_color(huth, theme::CHALK, 0.25)
+            } else if seq_active {
+                // Sequencer playing this note — slightly dimmer tint
+                theme::lerp_color(huth, theme::SMOKE, 0.35)
+            } else {
+                // Inactive — dark gray with a faint Huth tint so color is hinted
+                theme::lerp_color(huth, Color32::from_rgb(62, 62, 62), 0.80)
+            };
+
+            painter.rect_filled(key_rect, egui::Rounding::same(1.0), fill);
+            painter.rect_stroke(key_rect, egui::Rounding::same(1.0),
+                Stroke::new(0.5, theme::SLATE));
+
+            // Note label on lowest C of each octave
+            if semi == 0 {
+                let note_name = note_name(note);
+                painter.text(
+                    Pos2::new(x + wk_w * 0.5, oy + wk_h - 10.0),
+                    egui::Align2::CENTER_CENTER,
+                    note_name,
+                    egui::FontId::monospace(7.5),
+                    if pressed || seq_active { theme::VOID } else { theme::IRON },
+                );
+            }
+
+            // Click detection — white keys
+            if let Some(cp) = click_pos {
+                if key_rect.contains(cp) {
+                    clicked_note = Some(note);
+                }
+            }
+
+            white_idx += 1;
+        }
+
+        // ── Black keys (drawn on top) ─────────────────────────────────────────
+        for oct in 0..N_OCTAVES {
+            for &(semi, wk_off) in BLACK_KEYS {
+                let note = START_NOTE + oct as u8 * 12 + semi;
+                if note > END_NOTE { continue; }
+
+                let white_oct_start = ox + oct as f32 * 7.0 * wk_w;
+                let x = white_oct_start + wk_off * wk_w - bk_w * 0.5;
+                let key_rect = Rect::from_min_size(
+                    Pos2::new(x, oy),
+                    Vec2::new(bk_w, bk_h),
+                );
+
+                let huth = theme::note_color(note);
+                let pressed = self.pressed_notes.contains(&note);
+                let seq_active = seq_note == Some(note);
+
+                let fill: Color32 = if pressed {
+                    theme::lerp_color(huth, theme::CHALK, 0.15)
+                } else if seq_active {
+                    huth
+                } else {
+                    // Mostly dark, slight Huth tint
+                    theme::lerp_color(huth, theme::PIT, 0.82)
+                };
+
+                painter.rect_filled(key_rect, egui::Rounding::same(1.0), fill);
+                painter.rect_stroke(key_rect, egui::Rounding::same(1.0),
+                    Stroke::new(0.5, theme::SLATE));
+
+                // Click detection — black keys take priority
+                if let Some(cp) = click_pos {
+                    if key_rect.contains(cp) {
+                        clicked_note = Some(note); // overrides white key
+                    }
+                }
+            }
+        }
+
+        // ── MIDI device label (right side, subtle) ────────────────────────────
+        if let Some(ref port) = self.midi_port {
+            let short = port.trim().split(' ').next().unwrap_or(port);
+            painter.text(
+                Pos2::new(rect.max.x - 4.0, oy + wk_h - 4.0),
+                egui::Align2::RIGHT_BOTTOM,
+                short,
+                egui::FontId::monospace(7.5),
+                theme::IRON,
+            );
+        }
+
+        // ── Click-to-play ─────────────────────────────────────────────────────
+        if let Some(note) = clicked_note {
+            if !self.pressed_notes.contains(&note) {
+                self.pressed_notes.insert(note);
+                let _ = self.audio_tx.push(AudioCommand::Trigger(
+                    TriggerEvent::BassTrigger {
+                        note,
+                        accent: false,
+                        slide: false,
+                        gate_samples: 22050,
+                    }
+                ));
+            }
+        } else if response.drag_stopped() || (!response.is_pointer_button_down_on() && !self.pressed_notes.is_empty()) {
+            // Release all click-triggered notes when pointer lifts
+            // (MIDI notes are managed by their own NoteOff messages)
+            // Only clear notes that aren't from MIDI (we track MIDI separately)
+            // Simple heuristic: clear on pointer release
+            let _ = self.audio_tx.push(AudioCommand::Trigger(TriggerEvent::BassGateOff));
         }
     }
 
