@@ -6,13 +6,35 @@ use egui::{Color32, Painter, Pos2, Rect, Sense, Stroke, Ui, Vec2};
 use std::f32::consts::TAU;
 
 use super::theme;
+use crate::state::ParamMode;
+
+// ─── Mode indicator colours ───────────────────────────────────────────────────
+
+/// Indicator colour for each param mode.
+/// Free = nearly invisible; UserOwned = iron/white; LlmFocus = teal.
+fn mode_color(mode: ParamMode) -> Color32 {
+    match mode {
+        ParamMode::Free      => Color32::from_gray(28),
+        ParamMode::UserOwned => theme::IRON,
+        ParamMode::LlmFocus  => Color32::from_rgb(0x22, 0x99, 0xBB), // Huth C# teal
+    }
+}
+
+/// Short character label for the mode indicator button on sliders.
+fn mode_char(mode: ParamMode) -> &'static str {
+    match mode {
+        ParamMode::Free      => "·",
+        ParamMode::UserOwned => "U",
+        ParamMode::LlmFocus  => "F",
+    }
+}
 
 // ─── Rotary Knob ─────────────────────────────────────────────────────────────
 
 /// A rotary knob widget.
-/// Returns `(value_changed, lock_toggled)`.
-/// Drag changes the value; click (without drag) toggles the lock.
-pub fn knob(ui: &mut Ui, label: &str, value: &mut f32, locked: bool) -> (bool, bool) {
+/// Returns `(value_changed, mode_cycled)`.
+/// Drag changes the value; click (without drag) cycles the param mode.
+pub fn knob(ui: &mut Ui, label: &str, value: &mut f32, mode: ParamMode) -> (bool, bool) {
     let size = 44.0_f32;
     let (rect, response) = ui.allocate_exact_size(Vec2::splat(size + 14.0), Sense::click_and_drag());
 
@@ -27,7 +49,8 @@ pub fn knob(ui: &mut Ui, label: &str, value: &mut f32, locked: bool) -> (bool, b
 
     let mut changed = false;
 
-    if !locked && response.dragged() {
+    // UserOwned: block dragging so the user explicitly has to unlock first
+    if mode != ParamMode::UserOwned && response.dragged() {
         let delta = response.drag_delta();
         *value = (*value - delta.y * 0.005 + delta.x * 0.003).clamp(0.0, 1.0);
         changed = true;
@@ -35,59 +58,64 @@ pub fn knob(ui: &mut Ui, label: &str, value: &mut f32, locked: bool) -> (bool, b
 
     if ui.is_rect_visible(rect) {
         let painter = ui.painter();
-        draw_knob(painter, knob_rect, *value, locked, response.hovered());
+        draw_knob(painter, knob_rect, *value, mode, response.hovered());
         painter.text(
             label_rect.center(),
             egui::Align2::CENTER_CENTER,
             label,
             egui::FontId::monospace(8.5),
-            if locked { theme::ASH } else { theme::SMOKE },
+            if mode == ParamMode::UserOwned { theme::ASH } else { theme::SMOKE },
         );
     }
 
-    // Click (no drag) = toggle lock
-    let lock_toggled = response.clicked();
-    (changed, lock_toggled)
+    // Click (no drag) = cycle mode
+    let mode_cycled = response.clicked();
+    (changed, mode_cycled)
 }
 
-fn draw_knob(painter: &Painter, rect: Rect, value: f32, locked: bool, hovered: bool) {
+fn draw_knob(painter: &Painter, rect: Rect, value: f32, mode: ParamMode, hovered: bool) {
     let center = rect.center();
     let radius = rect.width() * 0.45;
 
     // Background circle
-    let bg = if locked { theme::PIT } else if hovered { theme::SLATE } else { theme::PIT };
+    let bg = if hovered { theme::SLATE } else { theme::PIT };
     painter.circle_filled(center, radius, bg);
-    painter.circle_stroke(center, radius, Stroke::new(1.0, if locked { theme::IRON } else { theme::ASH }));
+    let ring_col = match mode {
+        ParamMode::UserOwned => theme::IRON,
+        ParamMode::LlmFocus  => mode_color(ParamMode::LlmFocus),
+        ParamMode::Free      => theme::ASH,
+    };
+    painter.circle_stroke(center, radius, Stroke::new(1.0, ring_col));
 
     // Arc track (270° sweep, starting bottom-left)
     let start_angle: f32 = std::f32::consts::FRAC_PI_2 + std::f32::consts::FRAC_PI_4 * 3.0;
     let sweep = TAU * 0.75;
     let track_r = radius * 0.72;
 
-    // Draw track ghost
     draw_arc(painter, center, track_r, start_angle, sweep, 1.0, theme::SLATE);
 
-    // Draw filled portion
     let filled_sweep = sweep * value;
-    let active_color = if locked { theme::IRON } else { theme::FOG };
+    let arc_color = match mode {
+        ParamMode::UserOwned => theme::IRON,
+        ParamMode::LlmFocus  => mode_color(ParamMode::LlmFocus),
+        ParamMode::Free      => theme::FOG,
+    };
     if filled_sweep > 0.01 {
-        draw_arc(painter, center, track_r, start_angle, filled_sweep, 2.0, active_color);
+        draw_arc(painter, center, track_r, start_angle, filled_sweep, 2.0, arc_color);
     }
 
     // Pointer dot
     let end_angle = start_angle + filled_sweep;
     let dot_pos = center + Vec2::new(end_angle.cos(), end_angle.sin()) * (radius * 0.58);
-    let dot_color = if locked { theme::ASH } else { theme::CHALK };
-    painter.circle_filled(dot_pos, 2.5, dot_color);
+    painter.circle_filled(dot_pos, 2.5, arc_color);
 
-    // Lock indicator — always rendered; bright when locked, nearly invisible when not.
-    // The knob is clickable (click = toggle lock), so a subtle hint helps discoverability.
+    // Mode indicator — centre of knob, always rendered, colour signals state.
     painter.text(
         center,
         egui::Align2::CENTER_CENTER,
-        "L",
+        mode_char(mode),
         egui::FontId::monospace(8.0),
-        if locked { theme::IRON } else { Color32::from_gray(28) },
+        mode_color(mode),
     );
 }
 
@@ -107,24 +135,25 @@ fn draw_arc(painter: &Painter, center: Pos2, radius: f32, start: f32, sweep: f32
 // ─── Horizontal Slider ───────────────────────────────────────────────────────
 
 /// A labeled horizontal slider.
-/// Returns `(value_changed, lock_toggled)`.
-/// The `L` button at the end is always interactive — click it to toggle lock.
-pub fn slider(ui: &mut Ui, label: &str, value: &mut f32, locked: bool) -> (bool, bool) {
-    let label_w = 72.0_f32;
-    let lock_w  = 18.0_f32;
+/// Returns `(value_changed, mode_cycled)`.
+/// The mode button at the end cycles Free → UserOwned → LlmFocus → Free.
+pub fn slider(ui: &mut Ui, label: &str, value: &mut f32, mode: ParamMode) -> (bool, bool) {
+    let label_w  = 72.0_f32;
+    let mode_btn_w = 18.0_f32;
     let mut changed = false;
-    let mut lock_toggled = false;
+    let mut mode_cycled = false;
 
     ui.horizontal(|ui| {
-        let text_color = if locked { theme::ASH } else { theme::SMOKE };
+        let text_color = if mode == ParamMode::UserOwned { theme::ASH } else { theme::SMOKE };
         ui.add_sized(
             [label_w, 14.0],
             egui::Label::new(egui::RichText::new(label).monospace().size(9.0).color(text_color)),
         );
 
-        let avail = (ui.available_width() - lock_w).max(40.0);
+        let avail = (ui.available_width() - mode_btn_w).max(40.0);
 
-        if locked {
+        if mode == ParamMode::UserOwned {
+            // Show the value but disable editing
             let mut v = *value;
             ui.add_enabled(false, egui::Slider::new(&mut v, 0.0..=1.0).show_value(false));
         } else {
@@ -137,136 +166,118 @@ pub fn slider(ui: &mut Ui, label: &str, value: &mut f32, locked: bool) -> (bool,
             }
         }
 
-        // Lock toggle button — always present, bright when locked
-        let lock_color = if locked { theme::CHALK } else { theme::SLATE };
+        // Mode cycle button — character and colour reflect current state
         if ui.add_sized(
-            [lock_w, 14.0],
-            egui::Button::new(egui::RichText::new("L").monospace().size(9.0).color(lock_color))
-                .fill(egui::Color32::TRANSPARENT)
-                .frame(false),
+            [mode_btn_w, 14.0],
+            egui::Button::new(
+                egui::RichText::new(mode_char(mode))
+                    .monospace().size(9.0)
+                    .color(mode_color(mode))
+            )
+            .fill(egui::Color32::TRANSPARENT)
+            .frame(false),
         ).clicked() {
-            lock_toggled = true;
+            mode_cycled = true;
         }
     });
 
-    (changed, lock_toggled)
+    (changed, mode_cycled)
 }
 
 /// Dispatch to `knob` or `slider` based on `use_sliders`.
-/// Returns `(value_changed, lock_toggled)`.
-pub fn param_control(ui: &mut Ui, label: &str, value: &mut f32, locked: bool, use_sliders: bool) -> (bool, bool) {
+/// Returns `(value_changed, mode_cycled)`.
+pub fn param_control(ui: &mut Ui, label: &str, value: &mut f32, mode: ParamMode, use_sliders: bool) -> (bool, bool) {
     if use_sliders {
-        slider(ui, label, value, locked)
+        slider(ui, label, value, mode)
     } else {
-        knob(ui, label, value, locked)
+        knob(ui, label, value, mode)
     }
 }
 
-// ─── Step Button ──────────────────────────────────────────────────────────────
+// ─── Toggle Button ───────────────────────────────────────────────────────────
 
-/// A step sequencer button. Returns true if clicked (toggle).
-/// `note_color` — if Some, the active-step dot is tinted with that color (Huth palette).
+/// A stateful on/off button.  Flips `active` and returns true on click.
+pub fn toggle_button(ui: &mut Ui, label: &str, active: &mut bool) -> bool {
+    let fill       = if *active { theme::IRON } else { theme::PIT };
+    let text_color = if *active { theme::CHALK } else { theme::ASH };
+
+    let button = egui::Button::new(
+        egui::RichText::new(label).color(text_color).size(9.5).monospace()
+    )
+    .fill(fill)
+    .stroke(Stroke::new(1.0, if *active { theme::ASH } else { theme::SLATE }))
+    .min_size(Vec2::new(36.0, 16.0));
+
+    let resp = ui.add(button);
+    if resp.clicked() {
+        *active = !*active;
+        return true;
+    }
+    false
+}
+
+// ─── Step Button ─────────────────────────────────────────────────────────────
+
+/// A 16-step sequencer button.  Returns true when clicked (toggle request).
+/// `vel` tints the fill when active (0 = dim, 1 = full bright).
 pub fn step_button(
     ui: &mut Ui,
     active: bool,
-    is_current: bool,
-    velocity: f32,
-    note_color: Option<Color32>,
+    current: bool,
+    vel: f32,
+    color_override: Option<Color32>,
 ) -> bool {
-    let size = Vec2::new(28.0, 22.0);
+    let size = Vec2::new(26.0, 26.0);
     let (rect, response) = ui.allocate_exact_size(size, Sense::click());
 
     if ui.is_rect_visible(rect) {
         let painter = ui.painter();
 
-        // Background — active color takes priority; cursor shows via the border only,
-        // with a faint warm tint on inactive steps so the position is visible without
-        // the step turning white.
-        let bg = if active {
-            theme::lerp_gray(45, 160, velocity)
-        } else if is_current {
-            theme::lerp_gray(28, 55, 0.5) // dim mid-gray cursor hint
+        let fill = if active {
+            let base = color_override.unwrap_or(theme::IRON);
+            let dim  = 0.4_f32 + vel * 0.6;
+            Color32::from_rgb(
+                (base.r() as f32 * dim) as u8,
+                (base.g() as f32 * dim) as u8,
+                (base.b() as f32 * dim) as u8,
+            )
         } else {
             theme::PIT
         };
 
-        painter.rect_filled(rect.shrink(1.0), egui::Rounding::same(2.0), bg);
+        let border = if current { theme::CHALK } else { theme::SLATE };
 
-        // Border
-        let border = if response.hovered() { theme::FOG }
-            else if is_current { theme::CHALK }
-            else if active { theme::ASH }
-            else { theme::SLATE };
-        painter.rect_stroke(rect.shrink(1.0), egui::Rounding::same(2.0), Stroke::new(1.0, border));
-
-        // Active dot — use Huth note color when provided, otherwise plain CHALK
-        if active && !is_current {
-            let dot_y = rect.center().y + 3.0;
-            let dot_col = note_color.unwrap_or(theme::CHALK);
-            painter.circle_filled(
-                Pos2::new(rect.center().x, dot_y),
-                2.0,
-                dot_col,
-            );
-        }
+        painter.rect_filled(rect.shrink(1.0), 2.0, fill);
+        painter.rect_stroke(rect.shrink(1.0), 2.0, Stroke::new(1.0, border));
     }
 
     response.clicked()
 }
 
-// ─── LED indicator ────────────────────────────────────────────────────────────
+// ─── LED Indicator ────────────────────────────────────────────────────────────
 
-pub fn led(ui: &mut Ui, on: bool, label: &str) {
+pub fn led(ui: &mut Ui, active: bool) {
     let size = Vec2::new(8.0, 8.0);
     let (rect, _) = ui.allocate_exact_size(size, Sense::hover());
     if ui.is_rect_visible(rect) {
-        let color = if on { theme::CHALK } else { theme::SLATE };
+        let color = if active { theme::CHALK } else { theme::SLATE };
         ui.painter().circle_filled(rect.center(), 3.5, color);
     }
-    ui.label(egui::RichText::new(label).color(theme::SMOKE).size(9.0));
 }
 
-// ─── Section header bar ───────────────────────────────────────────────────────
+// ─── Section Header ───────────────────────────────────────────────────────────
 
-pub fn section_header(ui: &mut Ui, title: &str) {
-    ui.horizontal(|ui| {
-        ui.add_space(2.0);
-        let label = egui::RichText::new(title)
-            .color(theme::FOG)
-            .size(10.5)
-            .monospace();
-        ui.label(label);
-    });
-    ui.add_space(3.0);
+pub fn section_header(ui: &mut Ui, label: &str) {
+    ui.add_space(4.0);
+    ui.label(egui::RichText::new(label).monospace().size(9.5).color(theme::SMOKE));
+    ui.add_space(2.0);
 }
 
-// ─── Small toggle button ──────────────────────────────────────────────────────
+// ─── XY Pad ──────────────────────────────────────────────────────────────────
 
-// ─── XY Control Square ────────────────────────────────────────────────────────
-//
-// A 2D parameter pad inspired by the Ableton Learning Synths playground.
-// Drag anywhere in the square to simultaneously control two parameters.
-//
-// Layout:
-//   ┌─────────────────────┐
-//   │  Y_MAX              │  ← Y label (rotated text drawn manually)
-//   │         ·           │
-//   │   [cursor dot]      │
-//   │                     │
-//   │  Y_MIN              │
-//   └─────────────────────┘
-//     X_MIN           X_MAX
-//     ←── label_x  ──→
-//
-// Usage in a panel:
-//   if xy_pad(ui, "CUTOFF", "RESO", &mut cutoff, &mut resonance, 100.0, locked) {
-//       state.bass.cutoff = cutoff; state.bass.resonance = resonance;
-//   }
-
-/// 2D XY control pad. Returns true if either value changed.
-///
-/// `size` — side length of the square in logical pixels (e.g. 100.0).
-/// X increases left→right, Y increases bottom→top (audio convention).
+/// An XY pad controlling two parameters simultaneously.
+/// Returns true when a value changed.
+/// `locked` follows the UserOwned convention — pad is read-only when true.
 pub fn xy_pad(
     ui: &mut Ui,
     label_x: &str,
@@ -276,9 +287,8 @@ pub fn xy_pad(
     size: f32,
     locked: bool,
 ) -> bool {
-    // Total allocation: square + label row below + label col left
     let label_h = 13.0_f32;
-    let label_w = 12.0_f32; // left column for rotated Y label
+    let label_w = 12.0_f32;
     let total = Vec2::new(label_w + size + 2.0, size + label_h + 2.0);
     let (outer, response) = ui.allocate_exact_size(total, Sense::click_and_drag());
 
@@ -293,7 +303,6 @@ pub fn xy_pad(
         if response.dragged() || response.clicked() {
             if let Some(pos) = response.interact_pointer_pos() {
                 *x = ((pos.x - pad_rect.min.x) / pad_rect.width()).clamp(0.0, 1.0);
-                // Y is inverted: top = 1.0, bottom = 0.0
                 *y = (1.0 - (pos.y - pad_rect.min.y) / pad_rect.height()).clamp(0.0, 1.0);
                 changed = true;
             }
@@ -303,8 +312,7 @@ pub fn xy_pad(
     if ui.is_rect_visible(outer) {
         let painter = ui.painter();
 
-        // Background
-        let bg_col = if locked { theme::PIT } else if response.hovered() { theme::SLATE } else { theme::PIT };
+        let bg_col = if response.hovered() && !locked { theme::SLATE } else { theme::PIT };
         painter.rect_filled(pad_rect, egui::Rounding::same(2.0), bg_col);
         painter.rect_stroke(
             pad_rect,
@@ -312,7 +320,6 @@ pub fn xy_pad(
             Stroke::new(1.0, if locked { theme::IRON } else { theme::ASH }),
         );
 
-        // Subtle grid lines at 25%, 50%, 75%
         let grid_col = theme::SLATE;
         for t in [0.25_f32, 0.5, 0.75] {
             let gx = pad_rect.min.x + pad_rect.width() * t;
@@ -327,10 +334,9 @@ pub fn xy_pad(
             );
         }
 
-        // Crosshair lines from cursor to edges (dim guide lines)
         let cx = pad_rect.min.x + pad_rect.width() * x.clamp(0.0, 1.0);
         let cy = pad_rect.min.y + pad_rect.height() * (1.0 - y.clamp(0.0, 1.0));
-        let guide_col = if locked { theme::IRON } else { theme::IRON };
+        let guide_col = theme::IRON;
         painter.line_segment(
             [Pos2::new(cx, pad_rect.min.y), Pos2::new(cx, pad_rect.max.y)],
             Stroke::new(0.5, guide_col),
@@ -340,23 +346,20 @@ pub fn xy_pad(
             Stroke::new(0.5, guide_col),
         );
 
-        // Cursor dot
         let dot_col = if locked { theme::ASH } else { theme::CHALK };
         painter.circle_filled(Pos2::new(cx, cy), 4.5, dot_col);
         painter.circle_stroke(Pos2::new(cx, cy), 4.5, Stroke::new(1.0, if locked { theme::IRON } else { theme::FOG }));
 
-        // Lock indicator in center
         if locked {
             painter.text(
                 pad_rect.center(),
                 egui::Align2::CENTER_CENTER,
-                "L",
+                "U",
                 egui::FontId::monospace(8.0),
                 theme::IRON,
             );
         }
 
-        // X axis label (below square, centered)
         let x_label_rect = Rect::from_min_size(
             Pos2::new(pad_rect.min.x, pad_rect.max.y + 1.0),
             Vec2::new(pad_rect.width(), label_h),
@@ -370,12 +373,7 @@ pub fn xy_pad(
             col,
         );
 
-        // Y axis label (left of square, rotated — draw as vertical text via characters)
-        // We paint it as a short text rotated 90°
-        let y_label_center = Pos2::new(
-            outer.min.x + label_w * 0.5,
-            pad_rect.center().y,
-        );
+        let y_label_center = Pos2::new(outer.min.x + label_w * 0.5, pad_rect.center().y);
         painter.text(
             y_label_center,
             egui::Align2::CENTER_CENTER,
@@ -393,23 +391,4 @@ pub fn xy_pad(
     }
 
     changed
-}
-
-pub fn toggle_button(ui: &mut Ui, label: &str, active: &mut bool) -> bool {
-    let fill = if *active { theme::IRON } else { theme::PIT };
-    let text_color = if *active { theme::CHALK } else { theme::ASH };
-
-    let button = egui::Button::new(
-        egui::RichText::new(label).color(text_color).size(9.5).monospace()
-    )
-    .fill(fill)
-    .stroke(Stroke::new(1.0, if *active { theme::ASH } else { theme::SLATE }))
-    .min_size(Vec2::new(36.0, 16.0));
-
-    let resp = ui.add(button);
-    if resp.clicked() {
-        *active = !*active;
-        return true;
-    }
-    false
 }

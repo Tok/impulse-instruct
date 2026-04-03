@@ -16,6 +16,16 @@ pub fn build_system_prompt(state: &AppState) -> String {
     } else {
         locked.join(", ")
     };
+
+    let focused: Vec<&str> = state.llm.focused_params.iter().map(|s| s.as_str()).collect();
+    let focused_str = if focused.is_empty() {
+        String::new()
+    } else {
+        format!(
+            "\nFOCUS (user wants LLM to actively drive these — prioritise movement here): {}\n",
+            focused.join(", ")
+        )
+    };
     let heat = state.llm.heat;
     let heat_pct = (heat * 100.0) as u32;
     let heat_desc = match heat {
@@ -120,7 +130,7 @@ CURRENT STATE:
 {bass_info}
 
 LOCKED (user-owned, never include in output): {locked_str}
-
+{focused_str}
 ═══ WHAT YOU CAN CONTROL ═══
 
 BASS SYNTHESIZER (all 0.0–1.0):
@@ -269,6 +279,7 @@ Example — "more acid":
         current_json = current_json,
         bass_info = bass_info,
         locked_str = locked_str,
+        focused_str = focused_str,
         heat_pct = heat_pct,
         heat_desc = heat_desc,
         comment_instruction = match state.llm.conversation_mode {

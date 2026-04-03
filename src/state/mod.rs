@@ -9,6 +9,44 @@ use std::collections::HashSet;
 
 pub const MAX_STEPS: usize = 64;
 
+// ─── Param control mode (tristate) ───────────────────────────────────────────
+
+/// Whether a parameter is under user control, free for the LLM, or actively
+/// targeted by the LLM.  Stored as two separate HashSets so the common "free"
+/// case has zero allocation cost.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ParamMode {
+    /// Default: both user and LLM can change the value.
+    Free,
+    /// User has taken ownership — LLM will skip this param entirely.
+    UserOwned,
+    /// User wants the LLM to actively drive this param — hinted in every prompt.
+    LlmFocus,
+}
+
+/// Derive the mode for a single dot-path from the two state sets.
+pub fn param_mode(path: &str, locked: &HashSet<String>, focused: &HashSet<String>) -> ParamMode {
+    if locked.contains(path)  { return ParamMode::UserOwned; }
+    if focused.contains(path) { return ParamMode::LlmFocus;  }
+    ParamMode::Free
+}
+
+/// Cycle a param through Free → UserOwned → LlmFocus → Free (pure).
+pub fn cycle_param_mode(state: AppState, path: &str) -> AppState {
+    let mut s = state;
+    let owned   = s.llm.locked_params.contains(path);
+    let focused = s.llm.focused_params.contains(path);
+    match (owned, focused) {
+        (false, false) => { s.llm.locked_params.insert(path.to_string()); }
+        (true,  false) => {
+            s.llm.locked_params.remove(path);
+            s.llm.focused_params.insert(path.to_string());
+        }
+        (_,     true)  => { s.llm.focused_params.remove(path); }
+    }
+    s
+}
+
 // ─── Top-level ───────────────────────────────────────────────────────────────
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -427,7 +465,8 @@ pub struct LlmState {
     pub thinking_tokens: usize, // chars in last _thinking field ÷ 4 (approx)
     pub context_used: usize,
     pub context_max: usize,
-    pub locked_params: HashSet<String>, // dot-path keys the user has taken over
+    pub locked_params:  HashSet<String>, // UserOwned: LLM skips these entirely
+    pub focused_params: HashSet<String>, // LlmFocus: LLM should prioritize these
     pub auto_jam: bool, // LLM continuously generates pattern variations
     pub heat: f32,      // 0–1: jam mutation intensity (low=subtle, high=wild)
     pub conversation_mode: ConversationMode,
@@ -456,11 +495,8 @@ impl Default for LlmState {
             thinking_tokens: 0,
             context_used: 0,
             context_max: 4096,
-            locked_params: {
-                let mut s = HashSet::new();
-                s.insert("sequencer.bpm".to_string()); // user controls tempo by default
-                s
-            },
+            locked_params: HashSet::new(),
+            focused_params: HashSet::new(),
             auto_jam: false,
             heat: 0.4,
             conversation_mode: ConversationMode::Producer,

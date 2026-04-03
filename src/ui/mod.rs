@@ -61,7 +61,8 @@ use crate::llm::{LlmInput, LlmOutput};
 use crate::midi::MidiEvent;
 use crate::sequencer::TriggerEvent;
 use crate::llm::styles::StyleCatalog;
-use crate::state::{AppState, ConversationMode, StyleVerbosity, DrumVoice, Waveform, MAX_STEPS, toggle_drum_step, save_project};
+use crate::state::{AppState, ConversationMode, StyleVerbosity, DrumVoice, Waveform, MAX_STEPS,
+                   ParamMode, param_mode, cycle_param_mode, toggle_drum_step, save_project};
 
 const LOG_LEVELS: &[(&str, log::LevelFilter)] = &[
     ("ERROR", log::LevelFilter::Error),
@@ -1494,34 +1495,35 @@ impl ImpulseApp {
         widgets::section_header(ui, "BASS SYNTHESIZER");
 
         // Snapshot everything needed for rendering — lock released before any widget call
-        let (mut cutoff, mut resonance, mut env_mod, mut decay, mut accent, mut dist, mut vol, waveform, mut supersaw_detune, supersaw_voices, locked, auto_lock) = {
+        let (mut cutoff, mut resonance, mut env_mod, mut decay, mut accent, mut dist, mut vol,
+             waveform, mut supersaw_detune, supersaw_voices, locked, focused, auto_lock) = {
             let s = self.state.read();
             (s.bass.cutoff, s.bass.resonance, s.bass.env_mod, s.bass.decay,
              s.bass.accent_level, s.bass.distortion, s.bass.volume,
              s.bass.waveform.clone(), s.bass.supersaw_detune, s.bass.supersaw_voices,
-             s.llm.locked_params.clone(), s.llm.auto_lock_on_touch)
+             s.llm.locked_params.clone(), s.llm.focused_params.clone(),
+             s.llm.auto_lock_on_touch)
         };
 
-        let mut new_locks:    Vec<&str> = Vec::new();
-        let mut toggle_locks: Vec<&str> = Vec::new();
+        let mut cycle_paths: Vec<&str> = Vec::new();
         let mut changed = false;
 
         let use_sliders = self.use_sliders;
         let draw_bass_controls = |ui: &mut egui::Ui| {
-            let (ch, lk) = widgets::param_control(ui, "CUTOFF",    &mut cutoff,    locked.contains("bass.cutoff"),       use_sliders);
-            if ch { changed = true; new_locks.push("bass.cutoff"); }       if lk { toggle_locks.push("bass.cutoff"); }
-            let (ch, lk) = widgets::param_control(ui, "RESONANCE", &mut resonance, locked.contains("bass.resonance"),    use_sliders);
-            if ch { changed = true; new_locks.push("bass.resonance"); }    if lk { toggle_locks.push("bass.resonance"); }
-            let (ch, lk) = widgets::param_control(ui, "ENV MOD",   &mut env_mod,   locked.contains("bass.env_mod"),      use_sliders);
-            if ch { changed = true; new_locks.push("bass.env_mod"); }      if lk { toggle_locks.push("bass.env_mod"); }
-            let (ch, lk) = widgets::param_control(ui, "DECAY",     &mut decay,     locked.contains("bass.decay"),        use_sliders);
-            if ch { changed = true; new_locks.push("bass.decay"); }        if lk { toggle_locks.push("bass.decay"); }
-            let (ch, lk) = widgets::param_control(ui, "ACCENT",    &mut accent,    locked.contains("bass.accent_level"), use_sliders);
-            if ch { changed = true; new_locks.push("bass.accent_level"); } if lk { toggle_locks.push("bass.accent_level"); }
-            let (ch, lk) = widgets::param_control(ui, "DRIVE",     &mut dist,      locked.contains("bass.distortion"),   use_sliders);
-            if ch { changed = true; new_locks.push("bass.distortion"); }   if lk { toggle_locks.push("bass.distortion"); }
-            let (ch, lk) = widgets::param_control(ui, "VOLUME",    &mut vol,       locked.contains("bass.volume"),       use_sliders);
-            if ch { changed = true; new_locks.push("bass.volume"); }       if lk { toggle_locks.push("bass.volume"); }
+            let (ch, cy) = widgets::param_control(ui, "CUTOFF",    &mut cutoff,    param_mode("bass.cutoff",       &locked, &focused), use_sliders);
+            if ch { changed = true; } if cy { cycle_paths.push("bass.cutoff"); }
+            let (ch, cy) = widgets::param_control(ui, "RESONANCE", &mut resonance, param_mode("bass.resonance",    &locked, &focused), use_sliders);
+            if ch { changed = true; } if cy { cycle_paths.push("bass.resonance"); }
+            let (ch, cy) = widgets::param_control(ui, "ENV MOD",   &mut env_mod,   param_mode("bass.env_mod",      &locked, &focused), use_sliders);
+            if ch { changed = true; } if cy { cycle_paths.push("bass.env_mod"); }
+            let (ch, cy) = widgets::param_control(ui, "DECAY",     &mut decay,     param_mode("bass.decay",        &locked, &focused), use_sliders);
+            if ch { changed = true; } if cy { cycle_paths.push("bass.decay"); }
+            let (ch, cy) = widgets::param_control(ui, "ACCENT",    &mut accent,    param_mode("bass.accent_level", &locked, &focused), use_sliders);
+            if ch { changed = true; } if cy { cycle_paths.push("bass.accent_level"); }
+            let (ch, cy) = widgets::param_control(ui, "DRIVE",     &mut dist,      param_mode("bass.distortion",   &locked, &focused), use_sliders);
+            if ch { changed = true; } if cy { cycle_paths.push("bass.distortion"); }
+            let (ch, cy) = widgets::param_control(ui, "VOLUME",    &mut vol,       param_mode("bass.volume",       &locked, &focused), use_sliders);
+            if ch { changed = true; } if cy { cycle_paths.push("bass.volume"); }
         };
         if use_sliders {
             ui.vertical(draw_bass_controls);
@@ -1529,58 +1531,59 @@ impl ImpulseApp {
             ui.horizontal_wrapped(draw_bass_controls);
         }
 
-        // Apply all changes in a single brief write
-        let needs_write = changed || !toggle_locks.is_empty();
+        // Apply all changes in a single brief write, using pure state transitions
+        let needs_write = changed || !cycle_paths.is_empty();
         if needs_write {
-            let mut s = self.state.write();
+            let mut snap = self.state.read().clone();
             if changed {
-                s.bass.cutoff       = cutoff;
-                s.bass.resonance    = resonance;
-                s.bass.env_mod      = env_mod;
-                s.bass.decay        = decay;
-                s.bass.accent_level = accent;
-                s.bass.distortion   = dist;
-                s.bass.volume       = vol;
+                snap.bass.cutoff       = cutoff;
+                snap.bass.resonance    = resonance;
+                snap.bass.env_mod      = env_mod;
+                snap.bass.decay        = decay;
+                snap.bass.accent_level = accent;
+                snap.bass.distortion   = dist;
+                snap.bass.volume       = vol;
+                // auto_lock: touching a free param immediately makes it UserOwned
                 if auto_lock {
-                    for path in &new_locks { s.llm.locked_params.insert(path.to_string()); }
+                    for p in ["bass.cutoff","bass.resonance","bass.env_mod","bass.decay",
+                              "bass.accent_level","bass.distortion","bass.volume"] {
+                        if snap.llm.locked_params.contains(p) { continue; }
+                        if snap.llm.focused_params.contains(p) { continue; }
+                        snap.llm.locked_params.insert(p.to_string());
+                    }
                 }
             }
-            for path in &toggle_locks {
-                if s.llm.locked_params.contains(*path) { s.llm.locked_params.remove(*path); }
-                else { s.llm.locked_params.insert(path.to_string()); }
+            for path in &cycle_paths {
+                snap = cycle_param_mode(snap, path);
             }
-            drop(s);
+            *self.state.write() = snap;
             if changed { self.push_audio_params(); }
         }
 
         ui.add_space(6.0);
 
         // XY Control Squares — two 2D pads for the core acid parameters
-        let cutoff_locked  = locked.contains("bass.cutoff");
-        let reso_locked    = locked.contains("bass.resonance");
-        let envmod_locked  = locked.contains("bass.env_mod");
-        let decay_locked   = locked.contains("bass.decay");
-        let xy1_locked = cutoff_locked || reso_locked;
-        let xy2_locked = envmod_locked || decay_locked;
+        let xy1_locked = param_mode("bass.cutoff",   &locked, &focused) == ParamMode::UserOwned
+                      || param_mode("bass.resonance", &locked, &focused) == ParamMode::UserOwned;
+        let xy2_locked = param_mode("bass.env_mod",  &locked, &focused) == ParamMode::UserOwned
+                      || param_mode("bass.decay",    &locked, &focused) == ParamMode::UserOwned;
 
         ui.horizontal(|ui| {
             // Pad 1: Cutoff (X) × Resonance (Y)
             if widgets::xy_pad(ui, "CUT", "RES", &mut cutoff, &mut resonance, 88.0, xy1_locked) {
-                let mut s = self.state.write();
-                let alt = s.llm.auto_lock_on_touch;
-                if !cutoff_locked { s.bass.cutoff    = cutoff;    if alt { s.llm.locked_params.insert("bass.cutoff".to_string()); } }
-                if !reso_locked   { s.bass.resonance = resonance; if alt { s.llm.locked_params.insert("bass.resonance".to_string()); } }
-                drop(s);
+                let mut snap = self.state.read().clone();
+                snap.bass.cutoff    = cutoff;
+                snap.bass.resonance = resonance;
+                *self.state.write() = snap;
                 self.push_audio_params();
             }
             ui.add_space(6.0);
             // Pad 2: Env Mod (X) × Decay (Y)
             if widgets::xy_pad(ui, "ENV", "DEC", &mut env_mod, &mut decay, 88.0, xy2_locked) {
-                let mut s = self.state.write();
-                let alt = s.llm.auto_lock_on_touch;
-                if !envmod_locked { s.bass.env_mod = env_mod; if alt { s.llm.locked_params.insert("bass.env_mod".to_string()); } }
-                if !decay_locked  { s.bass.decay   = decay;   if alt { s.llm.locked_params.insert("bass.decay".to_string()); } }
-                drop(s);
+                let mut snap = self.state.read().clone();
+                snap.bass.env_mod = env_mod;
+                snap.bass.decay   = decay;
+                *self.state.write() = snap;
                 self.push_audio_params();
             }
         });
@@ -1611,7 +1614,7 @@ impl ImpulseApp {
         if waveform == Waveform::Supersaw {
             ui.horizontal(|ui| {
                 ui.label(egui::RichText::new("DETUNE").color(theme::SMOKE).monospace().size(9.0));
-                if widgets::param_control(ui, "", &mut supersaw_detune, false, use_sliders).0 {
+                if widgets::param_control(ui, "", &mut supersaw_detune, ParamMode::Free, use_sliders).0 {
                     let mut s = self.state.write();
                     s.bass.supersaw_detune = supersaw_detune;
                     drop(s);
@@ -1683,25 +1686,25 @@ impl ImpulseApp {
         ui.horizontal_wrapped(|ui| {
             ui.group(|ui| {
                 ui.label(egui::RichText::new("KICK").color(theme::FOG).monospace().size(9.5));
-                if widgets::param_control(ui, "PITCH", &mut kp,  false, use_sliders).0 { changed = true; }
-                if widgets::param_control(ui, "DECAY", &mut kd,  false, use_sliders).0 { changed = true; }
-                if widgets::param_control(ui, "PUNCH", &mut kpu, false, use_sliders).0 { changed = true; }
-                if widgets::param_control(ui, "LEVEL", &mut kv,  false, use_sliders).0 { changed = true; }
+                if widgets::param_control(ui, "PITCH", &mut kp, ParamMode::Free, use_sliders).0 { changed = true; }
+                if widgets::param_control(ui, "DECAY", &mut kd, ParamMode::Free, use_sliders).0 { changed = true; }
+                if widgets::param_control(ui, "PUNCH", &mut kpu, ParamMode::Free, use_sliders).0 { changed = true; }
+                if widgets::param_control(ui, "LEVEL", &mut kv, ParamMode::Free, use_sliders).0 { changed = true; }
             });
             ui.add_space(4.0);
             ui.group(|ui| {
                 ui.label(egui::RichText::new("SNARE").color(theme::FOG).monospace().size(9.5));
-                if widgets::param_control(ui, "TONE",   &mut st,  false, use_sliders).0 { changed = true; }
-                if widgets::param_control(ui, "SNAPPY", &mut ssn, false, use_sliders).0 { changed = true; }
-                if widgets::param_control(ui, "DECAY",  &mut sd,  false, use_sliders).0 { changed = true; }
-                if widgets::param_control(ui, "LEVEL",  &mut sv,  false, use_sliders).0 { changed = true; }
+                if widgets::param_control(ui, "TONE",   &mut st, ParamMode::Free, use_sliders).0 { changed = true; }
+                if widgets::param_control(ui, "SNAPPY", &mut ssn, ParamMode::Free, use_sliders).0 { changed = true; }
+                if widgets::param_control(ui, "DECAY",  &mut sd, ParamMode::Free, use_sliders).0 { changed = true; }
+                if widgets::param_control(ui, "LEVEL",  &mut sv, ParamMode::Free, use_sliders).0 { changed = true; }
             });
             ui.add_space(4.0);
             ui.group(|ui| {
                 ui.label(egui::RichText::new("HIHAT").color(theme::FOG).monospace().size(9.5));
-                if widgets::param_control(ui, "CLOSED", &mut hcd, false, use_sliders).0 { changed = true; }
-                if widgets::param_control(ui, "OPEN",   &mut hod, false, use_sliders).0 { changed = true; }
-                if widgets::param_control(ui, "LEVEL",  &mut hv,  false, use_sliders).0 { changed = true; }
+                if widgets::param_control(ui, "CLOSED", &mut hcd, ParamMode::Free, use_sliders).0 { changed = true; }
+                if widgets::param_control(ui, "OPEN",   &mut hod, ParamMode::Free, use_sliders).0 { changed = true; }
+                if widgets::param_control(ui, "LEVEL",  &mut hv, ParamMode::Free, use_sliders).0 { changed = true; }
             });
         });
 
@@ -1744,24 +1747,24 @@ impl ImpulseApp {
         ui.horizontal_wrapped(|ui| {
             ui.group(|ui| {
                 ui.label(egui::RichText::new("KICK").color(theme::FOG).monospace().size(9.5));
-                if widgets::param_control(ui, "PITCH", &mut kp,  false, use_sliders).0 { changed = true; }
-                if widgets::param_control(ui, "DECAY", &mut kd,  false, use_sliders).0 { changed = true; }
-                if widgets::param_control(ui, "PUNCH", &mut kpu, false, use_sliders).0 { changed = true; }
-                if widgets::param_control(ui, "LEVEL", &mut kv,  false, use_sliders).0 { changed = true; }
+                if widgets::param_control(ui, "PITCH", &mut kp, ParamMode::Free, use_sliders).0 { changed = true; }
+                if widgets::param_control(ui, "DECAY", &mut kd, ParamMode::Free, use_sliders).0 { changed = true; }
+                if widgets::param_control(ui, "PUNCH", &mut kpu, ParamMode::Free, use_sliders).0 { changed = true; }
+                if widgets::param_control(ui, "LEVEL", &mut kv, ParamMode::Free, use_sliders).0 { changed = true; }
             });
             ui.add_space(4.0);
             ui.group(|ui| {
                 ui.label(egui::RichText::new("SNARE").color(theme::FOG).monospace().size(9.5));
-                if widgets::param_control(ui, "TONE",   &mut st,  false, use_sliders).0 { changed = true; }
-                if widgets::param_control(ui, "SNAPPY", &mut ssn, false, use_sliders).0 { changed = true; }
-                if widgets::param_control(ui, "DECAY",  &mut sd,  false, use_sliders).0 { changed = true; }
-                if widgets::param_control(ui, "LEVEL",  &mut sv,  false, use_sliders).0 { changed = true; }
+                if widgets::param_control(ui, "TONE",   &mut st, ParamMode::Free, use_sliders).0 { changed = true; }
+                if widgets::param_control(ui, "SNAPPY", &mut ssn, ParamMode::Free, use_sliders).0 { changed = true; }
+                if widgets::param_control(ui, "DECAY",  &mut sd, ParamMode::Free, use_sliders).0 { changed = true; }
+                if widgets::param_control(ui, "LEVEL",  &mut sv, ParamMode::Free, use_sliders).0 { changed = true; }
             });
             ui.add_space(4.0);
             ui.group(|ui| {
                 ui.label(egui::RichText::new("CLAP / RIM").color(theme::FOG).monospace().size(9.5));
-                if widgets::param_control(ui, "CLAP DEC", &mut cd, false, use_sliders).0 { changed = true; }
-                if widgets::param_control(ui, "CLAP LVL", &mut cv, false, use_sliders).0 { changed = true; }
+                if widgets::param_control(ui, "CLAP DEC", &mut cd, ParamMode::Free, use_sliders).0 { changed = true; }
+                if widgets::param_control(ui, "CLAP LVL", &mut cv, ParamMode::Free, use_sliders).0 { changed = true; }
             });
         });
 
@@ -2024,7 +2027,7 @@ impl ImpulseApp {
                     drop(s);
                     self.push_audio_params();
                 }
-                if widgets::param_control(ui, "DAMP", &mut rd, false, use_sliders).0 {
+                if widgets::param_control(ui, "DAMP", &mut rd, ParamMode::Free, use_sliders).0 {
                     changed = true;
                 }
             });
@@ -2041,7 +2044,7 @@ impl ImpulseApp {
                     drop(s);
                     self.push_audio_params();
                 }
-                if widgets::param_control(ui, "TIME", &mut dt, false, use_sliders).0 {
+                if widgets::param_control(ui, "TIME", &mut dt, ParamMode::Free, use_sliders).0 {
                     changed = true;
                 }
             });
@@ -2050,9 +2053,9 @@ impl ImpulseApp {
 
             ui.group(|ui| {
                 ui.label(egui::RichText::new("DRIVE / MASTER").color(theme::FOG).monospace().size(9.5));
-                if widgets::param_control(ui, "DRIVE",  &mut dd, false, use_sliders).0 { changed = true; }
-                if widgets::param_control(ui, "MIX",    &mut dx, false, use_sliders).0 { changed = true; }
-                if widgets::param_control(ui, "MASTER", &mut mv, false, use_sliders).0 { changed = true; }
+                if widgets::param_control(ui, "DRIVE",  &mut dd, ParamMode::Free, use_sliders).0 { changed = true; }
+                if widgets::param_control(ui, "MIX",    &mut dx, ParamMode::Free, use_sliders).0 { changed = true; }
+                if widgets::param_control(ui, "MASTER", &mut mv, ParamMode::Free, use_sliders).0 { changed = true; }
             });
         });
 
