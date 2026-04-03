@@ -24,6 +24,7 @@ mod llm;
 mod midi;
 mod sequencer;
 mod state;
+mod sysinfo;
 mod ui;
 #[cfg(test)]
 mod tests;

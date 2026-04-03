@@ -121,6 +121,9 @@ pub struct ImpulseApp {
     seq_page: usize,
     // Model selector
     available_models: Vec<String>,
+    // System info (GPU/VRAM/RAM) — polled in background thread
+    sys_info: std::sync::Arc<std::sync::Mutex<crate::sysinfo::SysInfo>>,
+    show_sysinfo: bool,
 }
 
 impl ImpulseApp {
@@ -175,6 +178,12 @@ impl ImpulseApp {
             use_sliders: false,
             seq_page: 0,
             available_models: Vec::new(),
+            sys_info: {
+                let shared = std::sync::Arc::new(std::sync::Mutex::new(crate::sysinfo::SysInfo::default()));
+                crate::sysinfo::spawn_poller(std::sync::Arc::clone(&shared), 3);
+                shared
+            },
+            show_sysinfo: false,
         }
     }
 
@@ -487,6 +496,76 @@ impl eframe::App for ImpulseApp {
                 });
         }
 
+        // ── System Info window ────────────────────────────────────────────────
+        if self.show_sysinfo {
+            let si = self.sys_info.lock().ok().map(|g| g.clone()).unwrap_or_default();
+            egui::Window::new("System Info")
+                .collapsible(false)
+                .resizable(false)
+                .min_width(320.0)
+                .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
+                .show(ctx, |ui| {
+                    let row = |ui: &mut egui::Ui, label: &str, val: &str| {
+                        ui.horizontal(|ui| {
+                            ui.label(egui::RichText::new(label).color(theme::SMOKE).monospace().size(9.5));
+                            ui.label(egui::RichText::new(val).color(theme::FOG).monospace().size(9.5));
+                        });
+                    };
+
+                    ui.label(egui::RichText::new("GPU").color(theme::CHALK).monospace().size(10.5).strong());
+                    ui.separator();
+                    if si.gpu_name.is_empty() {
+                        row(ui, "GPU:    ", "nvidia-smi not found or no NVIDIA GPU");
+                    } else {
+                        row(ui, "Name:   ", &si.gpu_name);
+                        row(ui, "Driver: ", &si.driver_version);
+                        if !si.cuda_version.is_empty() {
+                            row(ui, "CUDA:   ", &si.cuda_version);
+                        }
+                        ui.add_space(4.0);
+                        ui.horizontal(|ui| {
+                            let frac = if si.vram_total_mb > 0 {
+                                si.vram_used_mb as f32 / si.vram_total_mb as f32
+                            } else { 0.0 };
+                            ui.label(egui::RichText::new("VRAM:   ").color(theme::SMOKE).monospace().size(9.5));
+                            ui.add_sized([120.0, 10.0], egui::ProgressBar::new(frac));
+                            ui.label(egui::RichText::new(format!(
+                                "  {} / {}  ({:.0}%)",
+                                crate::sysinfo::fmt_mb(si.vram_used_mb),
+                                crate::sysinfo::fmt_mb(si.vram_total_mb),
+                                frac * 100.0
+                            )).color(theme::FOG).monospace().size(9.5));
+                        });
+                    }
+
+                    ui.add_space(8.0);
+                    ui.label(egui::RichText::new("System Memory").color(theme::CHALK).monospace().size(10.5).strong());
+                    ui.separator();
+                    if si.ram_total_mb > 0 {
+                        ui.horizontal(|ui| {
+                            let frac = si.ram_used_mb as f32 / si.ram_total_mb as f32;
+                            ui.label(egui::RichText::new("RAM:    ").color(theme::SMOKE).monospace().size(9.5));
+                            ui.add_sized([120.0, 10.0], egui::ProgressBar::new(frac));
+                            ui.label(egui::RichText::new(format!(
+                                "  {} / {}  ({:.0}%)",
+                                crate::sysinfo::fmt_mb(si.ram_used_mb),
+                                crate::sysinfo::fmt_mb(si.ram_total_mb),
+                                frac * 100.0
+                            )).color(theme::FOG).monospace().size(9.5));
+                        });
+                    } else {
+                        row(ui, "RAM:    ", "/proc/meminfo not available");
+                    }
+
+                    ui.add_space(10.0);
+                    ui.label(egui::RichText::new("Updated every 3 seconds").color(theme::IRON).monospace().size(8.5));
+                    ui.add_space(4.0);
+                    if ui.button("Close").clicked() {
+                        self.show_sysinfo = false;
+                    }
+                });
+        }
+
         // ── Menu bar ──────────────────────────────────────────────────────────
         TopBottomPanel::top("menu_bar")
             .frame(Frame::none().fill(theme::VOID).inner_margin(egui::Margin::symmetric(4.0, 2.0)))
@@ -563,6 +642,10 @@ impl eframe::App for ImpulseApp {
                     ui.menu_button(egui::RichText::new("Help").monospace().size(10.0), |ui| {
                         if ui.button(egui::RichText::new("Preferences…").monospace().size(10.0)).clicked() {
                             self.show_prefs = true;
+                            ui.close_menu();
+                        }
+                        if ui.button(egui::RichText::new("System…").monospace().size(10.0)).clicked() {
+                            self.show_sysinfo = true;
                             ui.close_menu();
                         }
                         ui.separator();
@@ -691,7 +774,7 @@ impl eframe::App for ImpulseApp {
                         }
                     }
 
-                    // Right-aligned: VOL slider + optional API link
+                    // Right-aligned: VRAM/RAM bars + VOL slider + optional API link
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         // API link
                         if let Some(port) = self.api_port {
@@ -726,6 +809,42 @@ impl eframe::App for ImpulseApp {
                             let _ = self.audio_tx.push(AudioCommand::SetMonitorVolume(self.ui_volume));
                         }
                         ui.label(egui::RichText::new("VOL").color(vol_color).monospace().size(9.0));
+
+                        ui.add_space(8.0);
+
+                        // VRAM / RAM compact progress bars
+                        if let Ok(si) = self.sys_info.lock() {
+                            ui.vertical(|ui| {
+                                // VRAM row
+                                if si.vram_total_mb > 0 {
+                                    let frac = si.vram_used_mb as f32 / si.vram_total_mb as f32;
+                                    ui.horizontal(|ui| {
+                                        ui.label(egui::RichText::new("VRAM").color(theme::IRON).monospace().size(8.0));
+                                        ui.add_sized(
+                                            [54.0, 6.0],
+                                            egui::ProgressBar::new(frac)
+                                        );
+                                        ui.label(egui::RichText::new(
+                                            format!("{}", crate::sysinfo::fmt_mb(si.vram_used_mb))
+                                        ).color(theme::IRON).monospace().size(8.0));
+                                    });
+                                }
+                                // RAM row
+                                if si.ram_total_mb > 0 {
+                                    let frac = si.ram_used_mb as f32 / si.ram_total_mb as f32;
+                                    ui.horizontal(|ui| {
+                                        ui.label(egui::RichText::new("RAM ").color(theme::IRON).monospace().size(8.0));
+                                        ui.add_sized(
+                                            [54.0, 6.0],
+                                            egui::ProgressBar::new(frac)
+                                        );
+                                        ui.label(egui::RichText::new(
+                                            format!("{}", crate::sysinfo::fmt_mb(si.ram_used_mb))
+                                        ).color(theme::IRON).monospace().size(8.0));
+                                    });
+                                }
+                            });
+                        }
                     });
                 });
             });
