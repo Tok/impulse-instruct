@@ -4,7 +4,12 @@
 use crate::llm::styles::StyleCatalog;
 use crate::state::{AppState, ConversationMode};
 
+/// Returns the system prompt. If the user has set a non-empty `system_prompt_override`,
+/// that is returned verbatim — giving full control over the model's grounding.
 pub fn build_system_prompt(state: &AppState) -> String {
+    if !state.llm.system_prompt_override.trim().is_empty() {
+        return state.llm.system_prompt_override.clone();
+    }
     let locked: Vec<&str> = state.llm.locked_params.iter().map(|s| s.as_str()).collect();
     let locked_str = if locked.is_empty() {
         "none".to_string()
@@ -92,8 +97,11 @@ pub fn build_system_prompt(state: &AppState) -> String {
         }
     };
 
+    let persona = state.llm.persona_name.trim();
+    let persona = if persona.is_empty() { "PULSE" } else { persona };
+
     format!(
-        r#"You are Impulse Instruct — an AI that controls a hardware-style synthesizer.
+        r#"You are {persona} — the AI intelligence inside Impulse Instruct, a hardware-style synthesizer.
 Output ONLY valid JSON. No prose, no markdown, no explanation outside the "_comment" field.
 {style_section}{user_instructions_section}
 CURRENT STATE:
@@ -179,6 +187,31 @@ BASS MELODY BASICS:
 "simpler" / "strip it back"
   → Reduce active bass_steps, remove some drum steps
 
+CLEARING COMMANDS — these must use all-false 16-element arrays:
+"remove kick" / "no kick" / "kick off"
+  → {{"sequencer": {{"kick_a_steps": [false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false]}}}}
+
+"no snare" / "remove snare"
+  → {{"sequencer": {{"snare_a_steps": [false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false]}}}}
+
+"no hats" / "no hihat" / "remove hihat"
+  → {{"sequencer": {{"hihat_a_steps": [false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false]}}}}
+
+"no claps" / "remove clap"
+  → {{"sequencer": {{"clap_b_steps": [false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false]}}}}
+
+"no delay" / "remove delay"
+  → {{"fx": {{"delay_mix": 0.0, "delay_feedback": 0.0}}}}
+
+"no reverb" / "remove reverb"
+  → {{"fx": {{"reverb_mix": 0.0}}}}
+
+"clear all drums" / "no drums"
+  → {{"sequencer": {{"kick_a_steps": [false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false],
+                     "snare_a_steps": [false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false],
+                     "hihat_a_steps": [false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false],
+                     "clap_b_steps":  [false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false]}}}}
+
 ACID JAM GUIDANCE — while jamming in acid styles, actively vary:
   bass.cutoff between 0.15 and 0.60 (keep it moving — static cutoff sounds dead)
   bass.resonance between 0.65 and 0.90 (higher = more squelch)
@@ -219,6 +252,7 @@ Example — "more acid":
 {{"_comment": "{acid_example}",
   "bass": {{"resonance": 0.85, "env_mod": 0.80, "cutoff": 0.30, "decay": 0.25}}}}
 "#,
+        persona = persona,
         user_instructions_section = user_instructions_section,
         style_section = style_section,
         current_json = current_json,
@@ -246,7 +280,7 @@ Example — "more acid":
         clap_example = match state.llm.conversation_mode {
             ConversationMode::Off      => "clap909_steps updated",
             ConversationMode::Producer => "adding a 909 clap on beats 2 and 4 for a classic house feel",
-            ConversationMode::Dj       => "CLAP CLAP CLAP DJ Bonsai just dropped the backbeat FEEL THAT",
+            ConversationMode::Dj       => "CLAP CLAP CLAP just dropped the backbeat FEEL THAT",
             ConversationMode::Mc       => "SELECTOR! clap ting incoming, big up the backbeat massive!",
         },
         melody_example = match state.llm.conversation_mode {

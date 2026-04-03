@@ -388,6 +388,8 @@ pub struct LlmState {
     pub active_style: Option<String>, // style id from styles.json, "__free__", "__custom__", or None
     pub custom_style_text: String,    // used when active_style == Some("__custom__")
     pub user_instructions: String,    // persistent user instructions injected into every system prompt
+    pub persona_name: String,         // AI persona name shown in UI and used in system prompt
+    pub system_prompt_override: String, // if non-empty, replaces the generated system prompt entirely
     pub tts_enabled: bool,            // speak _comment via espeak-ng when true
 }
 
@@ -415,6 +417,8 @@ impl Default for LlmState {
             active_style: None,
             custom_style_text: String::new(),
             user_instructions: String::new(),
+            persona_name: String::from("PULSE"),
+            system_prompt_override: String::new(),
             tts_enabled: false,
         }
     }

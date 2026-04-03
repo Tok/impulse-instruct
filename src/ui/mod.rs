@@ -332,7 +332,25 @@ impl eframe::App for ImpulseApp {
                 .resizable(false)
                 .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
                 .show(ctx, |ui| {
-                    ui.set_min_width(260.0);
+                    ui.set_min_width(300.0);
+
+                    // ── AI persona name ───────────────────────────────────────
+                    widgets::section_header(ui, "AI PERSONA");
+                    ui.horizontal(|ui| {
+                        ui.label(egui::RichText::new("Name").monospace().size(9.5).color(theme::FOG));
+                        let mut name = self.state.read().llm.persona_name.clone();
+                        let resp = ui.add(egui::TextEdit::singleline(&mut name)
+                            .desired_width(120.0)
+                            .font(egui::TextStyle::Monospace));
+                        if resp.changed() {
+                            self.state.write().llm.persona_name = name;
+                        }
+                        ui.label(egui::RichText::new("(used in system prompt)").monospace().size(8.0).color(theme::IRON));
+                    });
+
+                    ui.add_space(8.0);
+                    ui.separator();
+                    ui.add_space(4.0);
 
                     // ── Model selector ────────────────────────────────────────
                     widgets::section_header(ui, "MODEL");
@@ -361,9 +379,9 @@ impl eframe::App for ImpulseApp {
                     ui.separator();
                     ui.add_space(4.0);
 
-                    // ── Bonsai personality ────────────────────────────────────
-                    widgets::section_header(ui, "BONSAI PERSONALITY");
-                    ui.label(egui::RichText::new("How Bonsai narrates its moves").monospace().size(8.5).color(theme::IRON));
+                    // ── AI personality ────────────────────────────────────────
+                    widgets::section_header(ui, "PERSONALITY");
+                    ui.label(egui::RichText::new("How the AI narrates its moves").monospace().size(8.5).color(theme::IRON));
                     ui.add_space(4.0);
                     let cur_mode = self.state.read().llm.conversation_mode.clone();
                     let modes: &[(&str, ConversationMode, &str)] = &[
@@ -394,6 +412,26 @@ impl eframe::App for ImpulseApp {
                             }
                         });
                     });
+
+                    ui.add_space(8.0);
+                    ui.separator();
+                    ui.add_space(4.0);
+
+                    // ── System prompt override ────────────────────────────────
+                    widgets::section_header(ui, "SYSTEM PROMPT");
+                    ui.label(egui::RichText::new("Override: replaces generated prompt entirely.\nLeave empty to use the auto-generated prompt.").monospace().size(8.0).color(theme::IRON));
+                    ui.add_space(2.0);
+                    let mut sp_override = self.state.read().llm.system_prompt_override.clone();
+                    let sp_resp = ui.add(
+                        egui::TextEdit::multiline(&mut sp_override)
+                            .desired_rows(4)
+                            .desired_width(f32::INFINITY)
+                            .font(egui::TextStyle::Monospace)
+                            .hint_text("Leave empty for auto-generated system prompt…"),
+                    );
+                    if sp_resp.changed() {
+                        self.state.write().llm.system_prompt_override = sp_override;
+                    }
 
                     ui.add_space(8.0);
                     ui.separator();

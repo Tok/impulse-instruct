@@ -68,7 +68,7 @@ async fn post_prompt(
     Json(req): Json<PromptRequest>,
 ) -> Result<Json<OkResponse>, StatusCode> {
     api.llm_tx
-        .try_send(LlmInput { prompt: req.prompt, one_shot: req.one_shot })
+        .try_send(LlmInput::Infer { prompt: req.prompt, one_shot: req.one_shot })
         .map_err(|_| StatusCode::SERVICE_UNAVAILABLE)?;
     Ok(Json(OkResponse { ok: true, message: None }))
 }
