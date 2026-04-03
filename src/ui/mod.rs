@@ -4,6 +4,14 @@
 pub mod theme;
 pub mod widgets;
 
+/// Convert a dot-path + float value into a nested JSON object.
+/// "bass.cutoff", 0.4  →  {"bass": {"cutoff": 0.4}}
+fn dot_path_to_json(path: &str, value: f32) -> serde_json::Value {
+    let parts: Vec<&str> = path.split('.').collect();
+    let leaf = serde_json::json!(value);
+    parts.iter().rev().fold(leaf, |acc, &key| serde_json::json!({ key: acc }))
+}
+
 /// Short note name for a MIDI note number (e.g. 60 → "C4").
 fn note_name(midi: u8) -> &'static str {
     const NAMES: &[&str] = &[
@@ -145,6 +153,7 @@ impl ImpulseApp {
     }
 
     /// Push any pending audio param snapshot to the audio thread.
+
     fn push_audio_params(&mut self) {
         let params = {
             let s = self.state.read();
@@ -212,13 +221,15 @@ impl ImpulseApp {
 
     /// Drain incoming MIDI events, update pressed_notes, trigger DSP.
     fn drain_midi_events(&mut self) {
+        use crate::midi::cc_to_param_path;
+        use crate::state::{apply_llm_update, toggle_sequencer_running};
+
         while let Ok(event) = self.midi_rx.try_recv() {
             match event {
                 MidiEvent::NoteOn { note, velocity, .. } => {
                     self.pressed_notes.insert(note);
                     let vel = velocity as f32 / 127.0;
 
-                    // Play note immediately through DSP
                     let _ = self.audio_tx.push(AudioCommand::Trigger(
                         TriggerEvent::BassTrigger {
                             note,
@@ -228,19 +239,45 @@ impl ImpulseApp {
                         }
                     ));
 
-                    // Write note into the current step of the bass pattern.
-                    // When stopped the cursor sits at step 0; when running it
-                    // follows the clock — in both cases the highlighted step
-                    // gets the new pitch so you can re-pitch live or step-program.
+                    // Write note into current step so you can step-program live.
                     let step = self.state.read().sequencer.current_step;
                     let s = self.state.read().clone();
                     let was_active = s.sequencer.bass_pattern[step].active;
                     *self.state.write() = crate::state::set_bass_step(s, step, note, was_active);
                 }
+
                 MidiEvent::NoteOff { note, .. } => {
                     self.pressed_notes.remove(&note);
                     let _ = self.audio_tx.push(AudioCommand::Trigger(TriggerEvent::BassGateOff));
                 }
+
+                // CC → synth params via the standard mapping table.
+                // Builds a partial JSON update matching the dot-path and feeds it
+                // through apply_llm_update so locked params are respected.
+                MidiEvent::ControlChange { cc, value, .. } => {
+                    if let Some((path, scale)) = cc_to_param_path(cc) {
+                        let scaled = scale(value);
+                        let update = dot_path_to_json(path, scaled);
+                        let next = apply_llm_update(self.state.read().clone(), &update);
+                        *self.state.write() = next;
+                        self.push_audio_params();
+                    }
+                }
+
+                // MIDI transport — Start/Stop control the sequencer.
+                MidiEvent::Start => {
+                    let s = self.state.read().clone();
+                    if !s.sequencer.running {
+                        *self.state.write() = toggle_sequencer_running(s);
+                    }
+                }
+                MidiEvent::Stop => {
+                    let s = self.state.read().clone();
+                    if s.sequencer.running {
+                        *self.state.write() = toggle_sequencer_running(s);
+                    }
+                }
+
                 _ => {}
             }
         }

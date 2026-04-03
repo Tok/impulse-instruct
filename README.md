@@ -54,21 +54,7 @@ cargo run --release
 
 **No GPU / no model?** The app still runs in mock mode — the synth, sequencer, MIDI, and API all work, but responses are keyword-based rather than model-generated.
 
-### MIDI keyboard setup (Linux)
-
-The AKAI LPK25 (and most USB MIDI keyboards) work out of the box:
-
-```bash
-# Check the device is detected
-aconnect -o
-# Should show: client N: 'LPK25' [type=kernel]
-
-# Required packages (usually already installed)
-sudo apt install libasound2-dev alsa-utils
-```
-
-Impulse Instruct auto-connects to the first available MIDI input on startup.
-The connected port name is shown in the log and at the bottom-right of the piano display.
+MIDI (tested with AKAI LPK25, any class-compliant USB keyboard works) auto-connects on startup. Requires `libasound2-dev` on Linux. Notes trigger the bass synth live and write into the current sequencer step. Standard CC knobs map to synth params (filter, resonance, env mod, decay, FX). MIDI Start/Stop control the sequencer transport.
 
 ---
 
