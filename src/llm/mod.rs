@@ -148,6 +148,9 @@ impl Drop for LlamaServerBackend {
     }
 }
 
+/// Timeout for a single inference call.  8B models on CPU can take 60–90 s.
+const INFER_TIMEOUT_SECS: u64 = 180;
+
 impl LlmBackend for LlamaServerBackend {
     fn infer(&mut self, system: &str, user: &str, heat: f32) -> Result<LlmOutput> {
         if !self.live {
@@ -158,8 +161,9 @@ impl LlmBackend for LlamaServerBackend {
         // heat 0.0 → temp 0.1 (near-deterministic), heat 1.0 → temp 1.2 (creative)
         let temperature = 0.1_f64 + (heat as f64).clamp(0.0, 1.0) * 1.1;
 
-        let schema = crate::llm::param_json_schema();
-
+        // json_object mode: server guarantees valid JSON; schema is enforced by
+        // the system prompt + grammar.  Using json_schema+strict is not supported
+        // in all llama-server builds and can cause the request to hang.
         let body = serde_json::json!({
             "model": "bonsai",
             "messages": [
@@ -168,31 +172,36 @@ impl LlmBackend for LlamaServerBackend {
             ],
             "temperature": temperature,
             "max_tokens": 512,
-            "response_format": {
-                "type": "json_schema",
-                "json_schema": {
-                    "name": "synth_params",
-                    "strict": true,
-                    "schema": schema
-                }
-            }
+            "response_format": { "type": "json_object" }
         });
 
+        let agent = ureq::AgentBuilder::new()
+            .timeout(std::time::Duration::from_secs(INFER_TIMEOUT_SECS))
+            .build();
+
         let t0 = std::time::Instant::now();
-        let resp = ureq::post(&url)
+        let resp = agent
+            .post(&url)
             .set("Content-Type", "application/json")
             .send_json(&body)
             .map_err(|e| anyhow::anyhow!("llama-server request failed: {}", e))?;
 
         let elapsed = t0.elapsed().as_secs_f32();
 
-        let resp_json: serde_json::Value = resp.into_json()
-            .map_err(|e| anyhow::anyhow!("failed to parse server response: {}", e))?;
+        let resp_text = resp.into_string()
+            .map_err(|e| anyhow::anyhow!("failed to read server response body: {}", e))?;
+
+        let resp_json: serde_json::Value = serde_json::from_str(&resp_text)
+            .map_err(|e| anyhow::anyhow!("failed to parse server JSON: {e}\nraw: {resp_text}"))?;
 
         let text = resp_json["choices"][0]["message"]["content"]
             .as_str()
             .unwrap_or("")
             .to_string();
+
+        if text.is_empty() {
+            log::warn!("llama-server returned empty content; full response: {resp_text}");
+        }
 
         let usage = &resp_json["usage"];
         let completion_tokens = usage["completion_tokens"].as_f64().unwrap_or(0.0) as f32;
