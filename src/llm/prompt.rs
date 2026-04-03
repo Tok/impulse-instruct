@@ -41,8 +41,7 @@ pub fn build_system_prompt(state: &AppState) -> String {
             "volume": state.bass.volume
         },
         "sequencer": {
-            "bpm": state.sequencer.bpm,
-            "active_bass_steps": bass_summary
+            "bpm": state.sequencer.bpm
         },
         "fx": {
             "reverb_mix": state.fx.reverb_mix,
@@ -51,6 +50,8 @@ pub fn build_system_prompt(state: &AppState) -> String {
             "distortion_mix": state.fx.distortion_mix
         }
     })).unwrap_or_default();
+    // Bass pattern summary shown separately so the model doesn't treat it as an output field
+    let bass_info = format!("Active bass steps (for reference only, not a JSON field): {}", bass_summary);
 
     // Resolve active style section (empty string if none set)
     let style_section = match state.llm.active_style.as_deref() {
@@ -87,6 +88,7 @@ Output ONLY valid JSON. No prose, no markdown, no explanation outside the "_comm
 {style_section}
 CURRENT STATE:
 {current_json}
+{bass_info}
 
 LOCKED (user-owned, never include in output): {locked_str}
 
@@ -103,24 +105,25 @@ BASS SYNTHESIZER (all 0.0–1.0):
   bass.volume       — bass synth level in mix
 
 STEP SEQUENCER (16 steps = one 4/4 bar of 16th notes):
-  sequencer.bass_steps       — 16-element bool array: which steps trigger the 303
-  sequencer.bass_notes       — 16-element int array: MIDI note per step
-                               (24=C1, 36=C2, 48=C3; typical range 33–48 for acid)
-  sequencer.kick808_steps    — 16-element bool: 808 kick pattern
-  sequencer.snare808_steps   — 16-element bool: 808 snare pattern
-  sequencer.hihat808_steps   — 16-element bool: 808 closed hihat
-  sequencer.snare909_steps   — 16-element bool: 909 snare pattern
-  sequencer.clap909_steps    — 16-element bool: 909 clap pattern
-  sequencer.hihat909_steps   — 16-element bool: 909 closed hihat
+  sequencer.bass_steps    — 16-element bool array: which steps trigger the 303
+  sequencer.bass_notes    — 16-element int array: MIDI note per step
+                            (24=C1, 36=C2, 48=C3; typical range 33–48 for acid)
+  sequencer.kick_a_steps  — 16-element bool: Kit A kick
+  sequencer.snare_a_steps — 16-element bool: Kit A snare
+  sequencer.hihat_a_steps — 16-element bool: Kit A closed hihat
+  sequencer.kick_b_steps  — 16-element bool: Kit B kick
+  sequencer.snare_b_steps — 16-element bool: Kit B snare
+  sequencer.clap_b_steps  — 16-element bool: Kit B clap
+  sequencer.hihat_b_steps — 16-element bool: Kit B closed hihat
 
-FX (all 0.0–1.0):
-  fx.reverb_mix      — reverb wet amount (0=off, 0.3=noticeable)
-  fx.reverb_size     — reverb room size
-  fx.delay_time      — delay time (0.375 = dotted 8th at ~130 BPM)
-  fx.delay_feedback  — delay repeats
-  fx.delay_mix       — delay wet amount
+FX (all 0.0–1.0):  ← ONLY valid inside "fx": {{…}}, never inside "sequencer"
+  fx.reverb_mix       — reverb wet amount (0=off, 0.3=noticeable)
+  fx.reverb_size      — reverb room size
+  fx.delay_time       — delay time (0.375 = dotted 8th at ~130 BPM)
+  fx.delay_feedback   — delay repeats
+  fx.delay_mix        — delay wet amount
   fx.distortion_drive — master bus saturation drive
-  fx.distortion_mix  — master bus distortion wet amount
+  fx.distortion_mix   — master bus distortion wet amount
 
 ═══ HOW TO INTERPRET INSTRUCTIONS ═══
 
@@ -128,25 +131,31 @@ FX (all 0.0–1.0):
   → Set bass_steps to a new 16-step pattern, set bass_notes to MIDI pitches
 
 "add claps" / "add snare"
-  → Set clap909_steps or snare808_steps to a useful drum pattern
+  → Set clap_b_steps or snare_a_steps to a useful drum pattern
 
 "add hihats" / "more hats"
-  → Set hihat808_steps or hihat909_steps
+  → Set hihat_a_steps or hihat_b_steps
 
 "more acid" / "squelchier"
   → Raise bass.resonance (0.75–0.88), raise bass.env_mod, lower bass.cutoff
 
 "darker" / "more weight"
-  → Lower bass.cutoff, raise reverb_mix slightly
+  → Lower bass.cutoff, raise fx.reverb_mix slightly
 
 "add space" / "more atmosphere"
-  → Raise reverb_mix (0.2–0.4), add delay_mix (0.1–0.25)
+  → Raise fx.reverb_mix (0.2–0.4), add fx.delay_mix (0.1–0.25)
 
 "harder" / "more drive"
-  → Raise distortion_drive + distortion_mix
+  → Raise fx.distortion_drive + fx.distortion_mix
 
 "simpler" / "strip it back"
   → Reduce active bass_steps, remove some drum steps
+
+ACID JAM GUIDANCE — while jamming in acid styles, actively vary:
+  bass.cutoff between 0.15 and 0.60 (keep it moving — static cutoff sounds dead)
+  bass.resonance between 0.65 and 0.90 (higher = more squelch)
+  bass.env_mod between 0.40 and 0.85 (controls sweep character)
+  bass.decay between 0.20 and 0.55 (shorter = punchier acid stabs)
 
 JAM HEAT: {heat_pct}% — {heat_desc}
 
@@ -154,10 +163,11 @@ JAM HEAT: {heat_pct}% — {heat_desc}
 
 {comment_instruction}
 Only include fields you are actually changing.
+CRITICAL: fx fields go inside "fx": {{…}}, NOT inside "sequencer". Never duplicate top-level keys.
 
 Example — "add claps on 2 and 4":
 {{"_comment": "{clap_example}",
-  "sequencer": {{"clap909_steps": [false,false,false,false,true,false,false,false,false,false,false,false,true,false,false,false]}}}}
+  "sequencer": {{"clap_b_steps": [false,false,false,false,true,false,false,false,false,false,false,false,true,false,false,false]}}}}
 
 Example — "change the melody":
 {{"_comment": "{melody_example}",
@@ -166,10 +176,11 @@ Example — "change the melody":
 
 Example — "more acid":
 {{"_comment": "{acid_example}",
-  "bass": {{"resonance": 0.85, "env_mod": 0.80, "cutoff": 0.35}}}}
+  "bass": {{"resonance": 0.85, "env_mod": 0.80, "cutoff": 0.30, "decay": 0.25}}}}
 "#,
         style_section = style_section,
         current_json = current_json,
+        bass_info = bass_info,
         locked_str = locked_str,
         heat_pct = heat_pct,
         heat_desc = heat_desc,
@@ -237,15 +248,16 @@ pub fn param_json_schema() -> serde_json::Value {
             "sequencer": {
                 "type": "object",
                 "properties": {
-                    "bpm":              { "type": "number", "minimum": 40.0, "maximum": 250.0 },
-                    "bass_steps":       bool_array.clone(),
-                    "bass_notes":       note_array,
-                    "kick808_steps":    bool_array.clone(),
-                    "snare808_steps":   bool_array.clone(),
-                    "hihat808_steps":   bool_array.clone(),
-                    "snare909_steps":   bool_array.clone(),
-                    "clap909_steps":    bool_array.clone(),
-                    "hihat909_steps":   bool_array
+                    "bpm":           { "type": "number", "minimum": 40.0, "maximum": 250.0 },
+                    "bass_steps":    bool_array.clone(),
+                    "bass_notes":    note_array,
+                    "kick_a_steps":  bool_array.clone(),
+                    "snare_a_steps": bool_array.clone(),
+                    "hihat_a_steps": bool_array.clone(),
+                    "kick_b_steps":  bool_array.clone(),
+                    "snare_b_steps": bool_array.clone(),
+                    "clap_b_steps":  bool_array.clone(),
+                    "hihat_b_steps": bool_array
                 },
                 "additionalProperties": false
             },

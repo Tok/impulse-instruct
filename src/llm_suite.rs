@@ -161,38 +161,38 @@ fn remove_delay_zeroes_mix() {
 fn remove_kick_clears_pattern() {
     let Some((mut b, sys)) = setup() else { return };
     assert_gate(&mut b, &sys, "remove kick", 0.3, REQUIRED_TIGHT,
-        |j| all_false(j, "sequencer.kick808_steps"));
+        |j| all_false(j, "sequencer.kick_a_steps"));
 }
 
 #[test]
 fn remove_clap_clears_pattern() {
     let Some((mut b, sys)) = setup() else { return };
     assert_gate(&mut b, &sys, "no claps", 0.3, REQUIRED_TIGHT,
-        |j| all_false(j, "sequencer.clap909_steps"));
+        |j| all_false(j, "sequencer.clap_b_steps"));
 }
 
 #[test]
 fn remove_hihat_clears_pattern() {
     let Some((mut b, sys)) = setup() else { return };
     assert_gate(&mut b, &sys, "no hats", 0.3, REQUIRED_TIGHT,
-        |j| all_false(j, "sequencer.hihat808_steps"));
+        |j| all_false(j, "sequencer.hihat_a_steps"));
 }
 
 #[test]
 fn remove_snare_clears_pattern() {
     let Some((mut b, sys)) = setup() else { return };
     assert_gate(&mut b, &sys, "no snare", 0.3, REQUIRED_TIGHT,
-        |j| all_false(j, "sequencer.snare808_steps"));
+        |j| all_false(j, "sequencer.snare_a_steps"));
 }
 
 #[test]
 fn clear_all_drums_clears_all_voices() {
     let Some((mut b, sys)) = setup() else { return };
     assert_gate(&mut b, &sys, "clear all drums", 0.3, REQUIRED_TIGHT, |j| {
-        all_false(j, "sequencer.kick808_steps")
-            && all_false(j, "sequencer.snare808_steps")
-            && all_false(j, "sequencer.hihat808_steps")
-            && all_false(j, "sequencer.clap909_steps")
+        all_false(j, "sequencer.kick_a_steps")
+            && all_false(j, "sequencer.snare_a_steps")
+            && all_false(j, "sequencer.hihat_a_steps")
+            && all_false(j, "sequencer.clap_b_steps")
     });
 }
 

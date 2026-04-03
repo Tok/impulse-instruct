@@ -446,8 +446,8 @@ pub fn apply_llm_update(state: AppState, update: &serde_json::Value) -> AppState
                 }
             }
         }
-        if !locked.contains("sequencer.kick808_steps") {
-            if let Some(arr) = seq.get("kick808_steps").and_then(|v| v.as_array()) {
+        if !locked.contains("sequencer.kick_a_steps") {
+            if let Some(arr) = seq.get("kick_a_steps").and_then(|v| v.as_array()) {
                 if let Some(pattern) = s.sequencer.drum_patterns.get_mut(&DrumVoice::Kick808) {
                     for (i, val) in arr.iter().enumerate().take(16) {
                         if let Some(active) = val.as_bool() {
@@ -462,11 +462,12 @@ pub fn apply_llm_update(state: AppState, update: &serde_json::Value) -> AppState
         }
         // Generic drum pattern helper — avoids repeating the same block per voice
         let drum_pattern_fields: &[(&str, DrumVoice, f32)] = &[
-            ("hihat808_steps",  DrumVoice::HihatClosed808, 0.7),
-            ("snare808_steps",  DrumVoice::Snare808,       1.0),
-            ("snare909_steps",  DrumVoice::Snare909,       1.0),
-            ("clap909_steps",   DrumVoice::Clap909,        1.0),
-            ("hihat909_steps",  DrumVoice::HihatClosed909, 0.7),
+            ("hihat_a_steps",  DrumVoice::HihatClosed808, 0.7),
+            ("snare_a_steps",  DrumVoice::Snare808,       1.0),
+            ("kick_b_steps",   DrumVoice::Kick909,        1.0),
+            ("snare_b_steps",  DrumVoice::Snare909,       1.0),
+            ("clap_b_steps",   DrumVoice::Clap909,        1.0),
+            ("hihat_b_steps",  DrumVoice::HihatClosed909, 0.7),
         ];
         for &(field, voice, default_vel) in drum_pattern_fields {
             let lock_key = format!("sequencer.{}", field);

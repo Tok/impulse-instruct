@@ -1,10 +1,10 @@
 # Impulse Instruct
 
-An LLM-first audio synthesizer. The model has full control of the synth — you can override it at any time.
+A synthesizer with a tiny LLM living inside it. Bonsai 8B runs locally and has full control of the sound — it listens to what you say, jams autonomously, and responds to the music in real time. You keep the keys you want; it owns everything else.
 
-Built in Rust. Runs the [Bonsai 8B](https://huggingface.co/prism-ml/Bonsai-8B-gguf) 1-bit GGUF model locally.
+Built in Rust. Runs [Bonsai 8B](https://huggingface.co/prism-ml/Bonsai-8B-gguf) — a 1-bit, 1.1 GB model — entirely on your GPU.
 
-> **Requires an NVIDIA GPU (CUDA).** CPU-only inference is technically possible but at ~0.4 tok/s it's not usable in practice. The app falls back to mock mode without a working llama-server.
+> **Requires an NVIDIA GPU (CUDA).** CPU inference is ~0.4 tok/s — not usable in practice. The app falls back to mock mode without a working llama-server.
 
 ---
 

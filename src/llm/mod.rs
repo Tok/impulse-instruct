@@ -172,8 +172,8 @@ impl LlmBackend for LlamaServerBackend {
         let temperature = 0.1_f64 + (heat as f64).clamp(0.0, 1.0) * 1.1;
 
         // json_object mode keeps the server honest about emitting valid JSON.
-        // max_tokens: JSON synth params are short; 192 is generous and keeps
-        // latency down on CPU fallback.
+        // max_tokens: a full response with two 16-step arrays + bass params needs ~350–400
+        // tokens; 512 gives comfortable headroom without wasting inference time.
         let body = serde_json::json!({
             "model": "bonsai",
             "messages": [
@@ -181,7 +181,7 @@ impl LlmBackend for LlamaServerBackend {
                 { "role": "user",    "content": user   }
             ],
             "temperature": temperature,
-            "max_tokens": 192,
+            "max_tokens": 512,
             "response_format": { "type": "json_object" }
         });
 
