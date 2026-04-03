@@ -401,6 +401,7 @@ pub struct LlmState {
     pub system_prompt_override: String, // if non-empty, replaces the generated system prompt entirely
     pub tts_enabled: bool,            // speak _comment via espeak-ng when true
     pub style_verbosity: StyleVerbosity, // Brief = ~50 token brief, Full = ~150 token description
+    pub auto_lock_on_touch: bool,     // if true, touching a knob locks it to user-only control
 }
 
 impl Default for LlmState {
@@ -431,6 +432,7 @@ impl Default for LlmState {
             system_prompt_override: String::new(),
             tts_enabled: false,
             style_verbosity: StyleVerbosity::Full,
+            auto_lock_on_touch: false,
         }
     }
 }

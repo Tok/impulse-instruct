@@ -180,6 +180,7 @@ fn main() -> anyhow::Result<()> {
             .with_title("Impulse Instruct")
             .with_icon(std::sync::Arc::new(make_window_icon()))
             .with_maximized(true)
+            .with_inner_size([1920.0, 1080.0])  // fallback if maximized hint is ignored by WM
             .with_min_inner_size([800.0, 500.0]),
         ..Default::default()
     };

@@ -9,8 +9,10 @@ use super::theme;
 
 // ─── Rotary Knob ─────────────────────────────────────────────────────────────
 
-/// A rotary knob widget. Returns true if the value changed.
-pub fn knob(ui: &mut Ui, label: &str, value: &mut f32, locked: bool) -> bool {
+/// A rotary knob widget.
+/// Returns `(value_changed, lock_toggled)`.
+/// Drag changes the value; click (without drag) toggles the lock.
+pub fn knob(ui: &mut Ui, label: &str, value: &mut f32, locked: bool) -> (bool, bool) {
     let size = 44.0_f32;
     let (rect, response) = ui.allocate_exact_size(Vec2::splat(size + 14.0), Sense::click_and_drag());
 
@@ -43,7 +45,9 @@ pub fn knob(ui: &mut Ui, label: &str, value: &mut f32, locked: bool) -> bool {
         );
     }
 
-    changed
+    // Click (no drag) = toggle lock
+    let lock_toggled = response.clicked();
+    (changed, lock_toggled)
 }
 
 fn draw_knob(painter: &Painter, rect: Rect, value: f32, locked: bool, hovered: bool) {
@@ -76,16 +80,15 @@ fn draw_knob(painter: &Painter, rect: Rect, value: f32, locked: bool, hovered: b
     let dot_color = if locked { theme::ASH } else { theme::CHALK };
     painter.circle_filled(dot_pos, 2.5, dot_color);
 
-    // Lock indicator
-    if locked {
-        painter.text(
-            center,
-            egui::Align2::CENTER_CENTER,
-            "L",
-            egui::FontId::monospace(8.0),
-            theme::IRON,
-        );
-    }
+    // Lock indicator — always rendered; bright when locked, nearly invisible when not.
+    // The knob is clickable (click = toggle lock), so a subtle hint helps discoverability.
+    painter.text(
+        center,
+        egui::Align2::CENTER_CENTER,
+        "L",
+        egui::FontId::monospace(8.0),
+        if locked { theme::IRON } else { Color32::from_gray(28) },
+    );
 }
 
 fn draw_arc(painter: &Painter, center: Pos2, radius: f32, start: f32, sweep: f32, width: f32, color: Color32) {
@@ -103,11 +106,14 @@ fn draw_arc(painter: &Painter, center: Pos2, radius: f32, start: f32, sweep: f32
 
 // ─── Horizontal Slider ───────────────────────────────────────────────────────
 
-/// A labeled horizontal slider. Label is left-aligned in a fixed column;
-/// slider fills remaining width.  Returns true if the value changed.
-pub fn slider(ui: &mut Ui, label: &str, value: &mut f32, locked: bool) -> bool {
+/// A labeled horizontal slider.
+/// Returns `(value_changed, lock_toggled)`.
+/// The `L` button at the end is always interactive — click it to toggle lock.
+pub fn slider(ui: &mut Ui, label: &str, value: &mut f32, locked: bool) -> (bool, bool) {
     let label_w = 72.0_f32;
+    let lock_w  = 18.0_f32;
     let mut changed = false;
+    let mut lock_toggled = false;
 
     ui.horizontal(|ui| {
         let text_color = if locked { theme::ASH } else { theme::SMOKE };
@@ -116,15 +122,11 @@ pub fn slider(ui: &mut Ui, label: &str, value: &mut f32, locked: bool) -> bool {
             egui::Label::new(egui::RichText::new(label).monospace().size(9.0).color(text_color)),
         );
 
-        let avail = (ui.available_width() - if locked { 18.0 } else { 0.0 }).max(40.0);
+        let avail = (ui.available_width() - lock_w).max(40.0);
+
         if locked {
-            // Show a non-interactive, dimmed slider
             let mut v = *value;
             ui.add_enabled(false, egui::Slider::new(&mut v, 0.0..=1.0).show_value(false));
-            ui.add_sized(
-                [18.0, 14.0],
-                egui::Label::new(egui::RichText::new("L").monospace().size(9.0).color(theme::IRON)),
-            );
         } else {
             let resp = ui.add_sized(
                 [avail, 14.0],
@@ -134,13 +136,25 @@ pub fn slider(ui: &mut Ui, label: &str, value: &mut f32, locked: bool) -> bool {
                 changed = true;
             }
         }
+
+        // Lock toggle button — always present, bright when locked
+        let lock_color = if locked { theme::CHALK } else { theme::SLATE };
+        if ui.add_sized(
+            [lock_w, 14.0],
+            egui::Button::new(egui::RichText::new("L").monospace().size(9.0).color(lock_color))
+                .fill(egui::Color32::TRANSPARENT)
+                .frame(false),
+        ).clicked() {
+            lock_toggled = true;
+        }
     });
 
-    changed
+    (changed, lock_toggled)
 }
 
 /// Dispatch to `knob` or `slider` based on `use_sliders`.
-pub fn param_control(ui: &mut Ui, label: &str, value: &mut f32, locked: bool, use_sliders: bool) -> bool {
+/// Returns `(value_changed, lock_toggled)`.
+pub fn param_control(ui: &mut Ui, label: &str, value: &mut f32, locked: bool, use_sliders: bool) -> (bool, bool) {
     if use_sliders {
         slider(ui, label, value, locked)
     } else {
