@@ -1,0 +1,469 @@
+// ─── app_state.rs ────────────────────────────────────────────────────────────
+// Single source of truth for all synth parameters.
+// Pure data only — no methods that mutate in-place.
+// All state transitions happen via the named functions at the bottom.
+
+use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
+
+// ─── Top-level ───────────────────────────────────────────────────────────────
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct AppState {
+    pub tb303: TB303State,
+    pub tr808: TR808State,
+    pub tr909: TR909State,
+    pub sequencer: SequencerState,
+    pub fx: FxState,
+    pub llm: LlmState,
+}
+
+impl Default for AppState {
+    fn default() -> Self {
+        Self {
+            tb303: TB303State::default(),
+            tr808: TR808State::default(),
+            tr909: TR909State::default(),
+            sequencer: SequencerState::default(),
+            fx: FxState::default(),
+            llm: LlmState::default(),
+        }
+    }
+}
+
+// ─── TB-303 ──────────────────────────────────────────────────────────────────
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub enum Waveform {
+    Saw,
+    Square,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct TB303State {
+    pub cutoff: f32,       // 0–1 → 200–8000 Hz
+    pub resonance: f32,    // 0–1
+    pub env_mod: f32,      // 0–1 filter env depth
+    pub decay: f32,        // 0–1 → 50–2000 ms
+    pub accent_level: f32, // 0–1
+    pub waveform: Waveform,
+    pub distortion: f32, // 0–1
+    pub volume: f32,     // 0–1
+}
+
+impl Default for TB303State {
+    fn default() -> Self {
+        Self {
+            cutoff: 0.4,
+            resonance: 0.6,
+            env_mod: 0.5,
+            decay: 0.4,
+            accent_level: 0.7,
+            waveform: Waveform::Saw,
+            distortion: 0.2,
+            volume: 0.8,
+        }
+    }
+}
+
+// ─── TR-808 ──────────────────────────────────────────────────────────────────
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct KickParams {
+    pub pitch: f32,   // 0–1 → 40–80 Hz base
+    pub decay: f32,   // 0–1 → 0.2–2.0 s
+    pub punch: f32,   // 0–1 attack transient
+    pub tone: f32,    // 0–1 sine/noise blend
+    pub volume: f32,  // 0–1
+}
+
+impl Default for KickParams {
+    fn default() -> Self {
+        Self { pitch: 0.5, decay: 0.6, punch: 0.7, tone: 0.8, volume: 0.9 }
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct SnareParams {
+    pub tone: f32,    // 0–1 tone freq
+    pub snappy: f32,  // 0–1 noise amount
+    pub decay: f32,   // 0–1
+    pub volume: f32,
+}
+
+impl Default for SnareParams {
+    fn default() -> Self {
+        Self { tone: 0.5, snappy: 0.6, decay: 0.4, volume: 0.85 }
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct HihatParams {
+    pub decay: f32,   // 0–1 (open hat = higher)
+    pub tone: f32,    // 0–1 filter cutoff
+    pub volume: f32,
+}
+
+impl Default for HihatParams {
+    fn default() -> Self {
+        Self { decay: 0.2, tone: 0.7, volume: 0.75 }
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct TomParams {
+    pub pitch: f32,
+    pub decay: f32,
+    pub volume: f32,
+}
+
+impl Default for TomParams {
+    fn default() -> Self {
+        Self { pitch: 0.5, decay: 0.5, volume: 0.7 }
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct TR808State {
+    pub kick: KickParams,
+    pub snare: SnareParams,
+    pub hihat_closed: HihatParams,
+    pub hihat_open: HihatParams,
+    pub tom_hi: TomParams,
+    pub tom_mid: TomParams,
+    pub tom_lo: TomParams,
+}
+
+impl Default for TR808State {
+    fn default() -> Self {
+        Self {
+            kick: KickParams::default(),
+            snare: SnareParams::default(),
+            hihat_closed: HihatParams { decay: 0.08, tone: 0.8, volume: 0.7 },
+            hihat_open: HihatParams { decay: 0.4, tone: 0.75, volume: 0.7 },
+            tom_hi: TomParams { pitch: 0.7, decay: 0.4, volume: 0.7 },
+            tom_mid: TomParams { pitch: 0.5, decay: 0.45, volume: 0.7 },
+            tom_lo: TomParams { pitch: 0.3, decay: 0.5, volume: 0.7 },
+        }
+    }
+}
+
+// ─── TR-909 ──────────────────────────────────────────────────────────────────
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct ClapParams {
+    pub decay: f32,
+    pub volume: f32,
+}
+
+impl Default for ClapParams {
+    fn default() -> Self {
+        Self { decay: 0.3, volume: 0.8 }
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct TR909State {
+    pub kick: KickParams,
+    pub snare: SnareParams,
+    pub hihat_closed: HihatParams,
+    pub hihat_open: HihatParams,
+    pub clap: ClapParams,
+    pub rim: SnareParams, // rim shot reuses snare params
+}
+
+impl Default for TR909State {
+    fn default() -> Self {
+        Self {
+            kick: KickParams { pitch: 0.55, decay: 0.5, punch: 0.9, tone: 0.9, volume: 0.9 },
+            snare: SnareParams { tone: 0.55, snappy: 0.7, decay: 0.35, volume: 0.85 },
+            hihat_closed: HihatParams { decay: 0.06, tone: 0.85, volume: 0.7 },
+            hihat_open: HihatParams { decay: 0.45, tone: 0.8, volume: 0.7 },
+            clap: ClapParams::default(),
+            rim: SnareParams { tone: 0.7, snappy: 0.3, decay: 0.15, volume: 0.75 },
+        }
+    }
+}
+
+// ─── Sequencer ───────────────────────────────────────────────────────────────
+
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, Default)]
+pub struct Step {
+    pub active: bool,
+    pub velocity: f32, // 0–1
+}
+
+#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
+pub struct TB303Step {
+    pub active: bool,
+    pub note: u8,   // MIDI note number
+    pub accent: bool,
+    pub slide: bool,
+    pub gate: f32, // 0–1 gate length ratio
+}
+
+impl Default for TB303Step {
+    fn default() -> Self {
+        Self { active: false, note: 36, accent: false, slide: false, gate: 0.5 }
+    }
+}
+
+// Which drum machine each drum pattern lane belongs to
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
+pub enum DrumVoice {
+    Kick808,
+    Snare808,
+    HihatClosed808,
+    HihatOpen808,
+    TomHi808,
+    TomMid808,
+    TomLo808,
+    Kick909,
+    Snare909,
+    HihatClosed909,
+    HihatOpen909,
+    Clap909,
+    Rim909,
+}
+
+impl DrumVoice {
+    pub const ALL: &'static [DrumVoice] = &[
+        DrumVoice::Kick808,
+        DrumVoice::Snare808,
+        DrumVoice::HihatClosed808,
+        DrumVoice::HihatOpen808,
+        DrumVoice::TomHi808,
+        DrumVoice::TomMid808,
+        DrumVoice::TomLo808,
+        DrumVoice::Kick909,
+        DrumVoice::Snare909,
+        DrumVoice::HihatClosed909,
+        DrumVoice::HihatOpen909,
+        DrumVoice::Clap909,
+        DrumVoice::Rim909,
+    ];
+
+    pub fn label(&self) -> &'static str {
+        match self {
+            DrumVoice::Kick808 => "808 Kick",
+            DrumVoice::Snare808 => "808 Snare",
+            DrumVoice::HihatClosed808 => "808 CHH",
+            DrumVoice::HihatOpen808 => "808 OHH",
+            DrumVoice::TomHi808 => "808 Hi Tom",
+            DrumVoice::TomMid808 => "808 Mid Tom",
+            DrumVoice::TomLo808 => "808 Lo Tom",
+            DrumVoice::Kick909 => "909 Kick",
+            DrumVoice::Snare909 => "909 Snare",
+            DrumVoice::HihatClosed909 => "909 CHH",
+            DrumVoice::HihatOpen909 => "909 OHH",
+            DrumVoice::Clap909 => "909 Clap",
+            DrumVoice::Rim909 => "909 Rim",
+        }
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct SequencerState {
+    pub bpm: f32,
+    pub steps: usize, // 1–16
+    pub current_step: usize,
+    pub running: bool,
+    pub drum_patterns: std::collections::HashMap<DrumVoice, [Step; 16]>,
+    pub bass_pattern: [TB303Step; 16],
+}
+
+impl Default for SequencerState {
+    fn default() -> Self {
+        let mut drum_patterns = std::collections::HashMap::new();
+        for v in DrumVoice::ALL {
+            drum_patterns.insert(*v, [Step::default(); 16]);
+        }
+        // Default 4-on-the-floor kick pattern
+        if let Some(pattern) = drum_patterns.get_mut(&DrumVoice::Kick808) {
+            for i in [0, 4, 8, 12] {
+                pattern[i] = Step { active: true, velocity: 1.0 };
+            }
+        }
+        // Default hihat on every other 8th note
+        if let Some(pattern) = drum_patterns.get_mut(&DrumVoice::HihatClosed808) {
+            for i in [2, 6, 10, 14] {
+                pattern[i] = Step { active: true, velocity: 0.7 };
+            }
+        }
+
+        Self {
+            bpm: 128.0,
+            steps: 16,
+            current_step: 0,
+            running: false,
+            drum_patterns,
+            bass_pattern: [TB303Step::default(); 16],
+        }
+    }
+}
+
+// ─── FX Chain ────────────────────────────────────────────────────────────────
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct FxState {
+    pub reverb_size: f32,       // 0–1 room size
+    pub reverb_damp: f32,       // 0–1 damping
+    pub reverb_mix: f32,        // 0–1 wet/dry
+    pub delay_time: f32,        // 0–1 → 0–1000 ms
+    pub delay_feedback: f32,    // 0–1
+    pub delay_mix: f32,         // 0–1 wet/dry
+    pub distortion_drive: f32,  // 0–1
+    pub distortion_mix: f32,    // 0–1 wet/dry
+    pub compressor_threshold: f32, // 0–1 → -40–0 dB
+    pub compressor_ratio: f32,     // 0–1 → 1–20:1
+    pub master_volume: f32,     // 0–1
+}
+
+impl Default for FxState {
+    fn default() -> Self {
+        Self {
+            reverb_size: 0.4,
+            reverb_damp: 0.5,
+            reverb_mix: 0.25,
+            delay_time: 0.375,
+            delay_feedback: 0.4,
+            delay_mix: 0.2,
+            distortion_drive: 0.0,
+            distortion_mix: 0.0,
+            compressor_threshold: 0.7,
+            compressor_ratio: 0.3,
+            master_volume: 0.85,
+        }
+    }
+}
+
+// ─── LLM ─────────────────────────────────────────────────────────────────────
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct LlmState {
+    pub model_path: String,
+    pub last_prompt: String,
+    pub last_response: String,
+    pub is_inferring: bool,
+    pub tokens_per_sec: f32,
+    pub context_used: usize,
+    pub context_max: usize,
+    pub locked_params: HashSet<String>, // dot-path keys the user has taken over
+    pub auto_jam: bool, // LLM continuously generates pattern variations
+}
+
+impl Default for LlmState {
+    fn default() -> Self {
+        Self {
+            model_path: String::from("models/bonsai-8b-q4.gguf"),
+            last_prompt: String::new(),
+            last_response: String::new(),
+            is_inferring: false,
+            tokens_per_sec: 0.0,
+            context_used: 0,
+            context_max: 4096,
+            locked_params: HashSet::new(),
+            auto_jam: false,
+        }
+    }
+}
+
+// ─── Pure state transition functions ─────────────────────────────────────────
+
+/// Apply an LLM-generated partial update, respecting locked params.
+/// Returns the new state (caller replaces old state with this).
+pub fn apply_llm_update(state: AppState, update: &serde_json::Value) -> AppState {
+    let mut s = state;
+    let locked = &s.llm.locked_params.clone();
+
+    if let Some(b) = update.get("tb303").and_then(|v| v.as_object()) {
+        apply_f32_if_unlocked(&mut s.tb303.cutoff, b, "cutoff", "tb303.cutoff", locked);
+        apply_f32_if_unlocked(&mut s.tb303.resonance, b, "resonance", "tb303.resonance", locked);
+        apply_f32_if_unlocked(&mut s.tb303.env_mod, b, "env_mod", "tb303.env_mod", locked);
+        apply_f32_if_unlocked(&mut s.tb303.decay, b, "decay", "tb303.decay", locked);
+        apply_f32_if_unlocked(&mut s.tb303.accent_level, b, "accent_level", "tb303.accent_level", locked);
+        apply_f32_if_unlocked(&mut s.tb303.distortion, b, "distortion", "tb303.distortion", locked);
+        apply_f32_if_unlocked(&mut s.tb303.volume, b, "volume", "tb303.volume", locked);
+        if !locked.contains("tb303.waveform") {
+            if let Some(w) = b.get("waveform").and_then(|v| v.as_str()) {
+                s.tb303.waveform = match w {
+                    "Square" => Waveform::Square,
+                    _ => Waveform::Saw,
+                };
+            }
+        }
+    }
+
+    if let Some(seq) = update.get("sequencer").and_then(|v| v.as_object()) {
+        if let Some(bpm) = seq.get("bpm").and_then(|v| v.as_f64()) {
+            if !locked.contains("sequencer.bpm") {
+                s.sequencer.bpm = (bpm as f32).clamp(40.0, 250.0);
+            }
+        }
+    }
+
+    if let Some(fx) = update.get("fx").and_then(|v| v.as_object()) {
+        apply_f32_if_unlocked(&mut s.fx.reverb_size, fx, "reverb_size", "fx.reverb_size", locked);
+        apply_f32_if_unlocked(&mut s.fx.reverb_mix, fx, "reverb_mix", "fx.reverb_mix", locked);
+        apply_f32_if_unlocked(&mut s.fx.delay_time, fx, "delay_time", "fx.delay_time", locked);
+        apply_f32_if_unlocked(&mut s.fx.delay_feedback, fx, "delay_feedback", "fx.delay_feedback", locked);
+        apply_f32_if_unlocked(&mut s.fx.delay_mix, fx, "delay_mix", "fx.delay_mix", locked);
+        apply_f32_if_unlocked(&mut s.fx.distortion_drive, fx, "distortion_drive", "fx.distortion_drive", locked);
+        apply_f32_if_unlocked(&mut s.fx.distortion_mix, fx, "distortion_mix", "fx.distortion_mix", locked);
+    }
+
+    s
+}
+
+fn apply_f32_if_unlocked(
+    field: &mut f32,
+    obj: &serde_json::Map<String, serde_json::Value>,
+    key: &str,
+    path: &str,
+    locked: &HashSet<String>,
+) {
+    if locked.contains(path) {
+        return;
+    }
+    if let Some(v) = obj.get(key).and_then(|v| v.as_f64()) {
+        *field = (v as f32).clamp(0.0, 1.0);
+    }
+}
+
+/// Lock a parameter so the LLM cannot change it.
+pub fn lock_param(state: AppState, path: &str) -> AppState {
+    let mut s = state;
+    s.llm.locked_params.insert(path.to_string());
+    s
+}
+
+/// Unlock a parameter.
+pub fn unlock_param(state: AppState, path: &str) -> AppState {
+    let mut s = state;
+    s.llm.locked_params.remove(path);
+    s
+}
+
+/// Toggle a drum step (pure function).
+pub fn toggle_drum_step(state: AppState, voice: DrumVoice, step: usize) -> AppState {
+    let mut s = state;
+    if let Some(pattern) = s.sequencer.drum_patterns.get_mut(&voice) {
+        if step < 16 {
+            pattern[step].active = !pattern[step].active;
+            if pattern[step].active && pattern[step].velocity == 0.0 {
+                pattern[step].velocity = 1.0;
+            }
+        }
+    }
+    s
+}
+
+/// Set a 303 step note.
+pub fn set_bass_step(state: AppState, step: usize, note: u8, active: bool) -> AppState {
+    let mut s = state;
+    if step < 16 {
+        s.sequencer.bass_pattern[step].active = active;
+        s.sequencer.bass_pattern[step].note = note;
+    }
+    s
+}

@@ -1,0 +1,116 @@
+// ─── sequencer/mod.rs ────────────────────────────────────────────────────────
+// Sample-accurate step sequencer clock.
+// All functions are pure: they take state in, return (new_state, events).
+
+use crate::state::{DrumVoice, SequencerState, Step, TB303Step};
+
+// ─── Events emitted by the sequencer ─────────────────────────────────────────
+
+#[derive(Clone, Debug)]
+pub enum TriggerEvent {
+    DrumTrigger {
+        voice: DrumVoice,
+        velocity: f32,
+    },
+    BassTrigger {
+        note: u8,
+        accent: bool,
+        slide: bool,
+        gate_samples: u32,
+    },
+    BassGateOff,
+}
+
+// ─── Clock state (audio-thread local, not in shared AppState) ─────────────────
+
+#[derive(Clone, Debug)]
+pub struct ClockState {
+    pub sample_accumulator: f64,  // fractional samples since last step
+    pub current_step: usize,
+    pub gate_counter: u32,        // samples remaining in bass gate
+}
+
+impl Default for ClockState {
+    fn default() -> Self {
+        Self {
+            sample_accumulator: 0.0,
+            current_step: 0,
+            gate_counter: 0,
+        }
+    }
+}
+
+/// Compute samples per 16th note at given BPM and sample rate.
+pub fn samples_per_step(bpm: f32, sample_rate: f32) -> f64 {
+    // 1 beat = 4 16th notes; beats_per_sec = bpm/60
+    // samples_per_beat = sr / (bpm/60) = sr * 60 / bpm
+    // samples_per_16th = samples_per_beat / 4
+    (sample_rate as f64 * 60.0) / (bpm as f64 * 4.0)
+}
+
+/// Advance the sequencer clock by `block_size` samples.
+/// Returns (new_clock, Vec<TriggerEvent>) — pure function.
+pub fn advance_clock(
+    clock: ClockState,
+    seq: &SequencerState,
+    block_size: usize,
+    sample_rate: f32,
+) -> (ClockState, Vec<TriggerEvent>) {
+    if !seq.running {
+        return (clock, vec![]);
+    }
+
+    let sps = samples_per_step(seq.bpm, sample_rate);
+    let mut events: Vec<TriggerEvent> = Vec::new();
+    let mut acc = clock.sample_accumulator + block_size as f64;
+    let mut step = clock.current_step;
+    let mut gate_counter = clock.gate_counter;
+
+    // Handle gate-off for bass
+    if gate_counter > 0 {
+        if block_size as u32 >= gate_counter {
+            events.push(TriggerEvent::BassGateOff);
+            gate_counter = 0;
+        } else {
+            gate_counter -= block_size as u32;
+        }
+    }
+
+    while acc >= sps {
+        acc -= sps;
+        step = (step + 1) % seq.steps.max(1);
+
+        // Drum triggers
+        for voice in DrumVoice::ALL {
+            if let Some(pattern) = seq.drum_patterns.get(voice) {
+                let s: Step = pattern[step];
+                if s.active {
+                    events.push(TriggerEvent::DrumTrigger {
+                        voice: *voice,
+                        velocity: s.velocity,
+                    });
+                }
+            }
+        }
+
+        // Bass trigger
+        let bs: TB303Step = seq.bass_pattern[step];
+        if bs.active {
+            let gate_samples = (sps * bs.gate as f64) as u32;
+            gate_counter = gate_samples;
+            events.push(TriggerEvent::BassTrigger {
+                note: bs.note,
+                accent: bs.accent,
+                slide: bs.slide,
+                gate_samples,
+            });
+        }
+    }
+
+    let new_clock = ClockState {
+        sample_accumulator: acc,
+        current_step: step,
+        gate_counter,
+    };
+    (new_clock, events)
+}

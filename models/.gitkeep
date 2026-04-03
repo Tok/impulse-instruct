@@ -1,0 +1,4 @@
+# Place your GGUF model here.
+# Recommended: prism-ml/Bonsai-8B-gguf (Q4_K_M, ~5GB)
+# huggingface-cli download prism-ml/Bonsai-8B-gguf --include "*.gguf" --local-dir models/
+# Then update models/bonsai-8b-q4.gguf in the app or set via --model flag.

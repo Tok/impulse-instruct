@@ -1,0 +1,10 @@
+# Cross-compilation config
+
+# Windows MSVC target (via cargo-xwin)
+[target.x86_64-pc-windows-msvc]
+linker = "lld-link"
+rustflags = ["-C", "target-feature=+crt-static"]
+
+# Native Linux optimizations
+[target.x86_64-unknown-linux-gnu]
+rustflags = ["-C", "target-cpu=native"]
