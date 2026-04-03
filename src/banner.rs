@@ -82,11 +82,6 @@ pub fn print_banner() {
         (B, '|'), (B, ' '), (B, ' '), (B, ' '), (B, ' '),   // B  (30-34)
     ];
 
-    // C5 terminators.  Upper: left wall + 2 exposed (same shape as C in UPPER).
-    // Lower: left wall + 4 spaces, no trailing '|' — keyboard just ends cleanly.
-    const UPPER_C5: [Cell; 3] = [(C, ' '), (C, ' '), (C, ' ')];
-    const LOWER_C5: [Cell; 5] = [(C, ' '), (C, ' '), (C, ' '), (C, ' '), (C, ' ')];
-
     // Render a cell slice: spaces → bg only; '|' → dark fg on key bg.
     let render = |cells: &[Cell]| -> String {
         let mut s = String::with_capacity(cells.len() * 24);
@@ -102,16 +97,8 @@ pub fn print_banner() {
         s
     };
 
-    let upper_row: Vec<Cell> = UPPER.iter()
-        .chain(UPPER.iter())
-        .chain(UPPER_C5.iter())
-        .copied()
-        .collect();
-    let lower_row: Vec<Cell> = LOWER.iter()
-        .chain(LOWER.iter())
-        .chain(LOWER_C5.iter())
-        .copied()
-        .collect();
+    let upper_row: Vec<Cell> = UPPER.iter().chain(UPPER.iter()).copied().collect();
+    let lower_row: Vec<Cell> = LOWER.iter().chain(LOWER.iter()).copied().collect();
 
     let upper = render(&upper_row);
     let lower = render(&lower_row);
