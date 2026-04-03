@@ -132,9 +132,10 @@ struct LadderFilter {
 }
 
 impl LadderFilter {
-    fn process(&mut self, input: f32, cutoff_norm: f32, resonance: f32) -> f32 {
-        // Frequency warping: cutoff_norm 0-1 → 0-π
-        let f = (cutoff_norm * std::f32::consts::PI * 0.5).sin() * 2.0;
+    /// `g` is the per-stage filter coefficient (0–~0.99).
+    /// Callers must map cutoff to a proper g before calling.
+    fn process(&mut self, input: f32, g: f32, resonance: f32) -> f32 {
+        let f = g.clamp(0.001, 0.99);
         let k = resonance * 4.0; // self-oscillation at k=4.0
 
         // Feedback
@@ -273,11 +274,16 @@ impl Bass303 {
         // Filter envelope
         self.filt_env *= env_decay_coeff;
 
-        // Dynamic cutoff
-        let cutoff = (p.cutoff + self.filt_env * p.env_mod * accent_mult).clamp(0.0, 0.98);
+        // Dynamic cutoff: 0-1 → 200-8000 Hz (exponential) → per-stage coefficient g
+        let cutoff_env = (p.cutoff + self.filt_env * p.env_mod * accent_mult).clamp(0.0, 1.0);
+        let cutoff_hz = 200.0 * (40.0f32).powf(cutoff_env); // 200 Hz at 0 → 8000 Hz at 1
+        let g = {
+            let w = cutoff_hz / sr;
+            (w / (1.0 + w)).clamp(0.001, 0.99)
+        };
 
         // Ladder filter
-        let filtered = self.filter.process(osc, cutoff, p.resonance * 0.97);
+        let filtered = self.filter.process(osc, g, p.resonance * 0.97);
 
         // Soft clip distortion
         let dist = if p.distortion_303 > 0.01 {

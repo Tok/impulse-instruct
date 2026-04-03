@@ -106,7 +106,8 @@ mod state_tests {
 
     #[test]
     fn bpm_update_via_llm() {
-        let state = AppState::default();
+        // BPM is locked by default — must explicitly unlock first
+        let state = crate::state::unlock_param(AppState::default(), "sequencer.bpm");
         let update = serde_json::json!({ "sequencer": { "bpm": 175.0 } });
         let next = apply_llm_update(state, &update);
         assert!((next.sequencer.bpm - 175.0).abs() < 0.01);

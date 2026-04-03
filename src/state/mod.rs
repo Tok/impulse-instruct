@@ -80,7 +80,7 @@ pub struct KickParams {
 
 impl Default for KickParams {
     fn default() -> Self {
-        Self { pitch: 0.5, decay: 0.6, punch: 0.7, tone: 0.8, volume: 0.75 }
+        Self { pitch: 0.5, decay: 0.6, punch: 0.45, tone: 0.8, volume: 0.65 }
     }
 }
 
@@ -176,7 +176,7 @@ pub struct TR909State {
 impl Default for TR909State {
     fn default() -> Self {
         Self {
-            kick: KickParams { pitch: 0.55, decay: 0.5, punch: 0.9, tone: 0.9, volume: 0.9 },
+            kick: KickParams { pitch: 0.55, decay: 0.5, punch: 0.5, tone: 0.9, volume: 0.65 },
             snare: SnareParams { tone: 0.55, snappy: 0.7, decay: 0.35, volume: 0.85 },
             hihat_closed: HihatParams { decay: 0.06, tone: 0.85, volume: 0.7 },
             hihat_open: HihatParams { decay: 0.45, tone: 0.8, volume: 0.7 },
@@ -313,10 +313,10 @@ impl Default for FxState {
         Self {
             reverb_size: 0.4,
             reverb_damp: 0.5,
-            reverb_mix: 0.25,
+            reverb_mix: 0.0,
             delay_time: 0.375,
             delay_feedback: 0.4,
-            delay_mix: 0.2,
+            delay_mix: 0.0,
             distortion_drive: 0.0,
             distortion_mix: 0.0,
             compressor_threshold: 0.7,
@@ -352,7 +352,11 @@ impl Default for LlmState {
             tokens_per_sec: 0.0,
             context_used: 0,
             context_max: 4096,
-            locked_params: HashSet::new(),
+            locked_params: {
+                let mut s = HashSet::new();
+                s.insert("sequencer.bpm".to_string()); // user controls tempo by default
+                s
+            },
             auto_jam: false,
             heat: 0.4,
         }
