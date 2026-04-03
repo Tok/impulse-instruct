@@ -345,5 +345,5 @@ Key elements to implement (in egui, respecting grayscale + Huth note colors only
 9. [x] AI persona name — decouple from model file, editable in prefs
 10. [x] Reasoning toggle (Qwen3 /think mode, greyed out for unsupported models)
 11. [x] Download script: Qwen3-8B Q4_K_M option
-12. [ ] Run artist reference LLM tests — audit styles.json, drop dead references
+12. [x] Run artist reference LLM tests — audit styles.json, drop dead references
 13. [x] FX XY pads (reverb and delay panels)
