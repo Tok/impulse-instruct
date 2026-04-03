@@ -18,6 +18,7 @@
 
 mod api;
 mod audio;
+mod export;
 mod llm;
 mod midi;
 mod sequencer;

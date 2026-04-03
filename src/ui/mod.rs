@@ -21,6 +21,7 @@ use parking_lot::RwLock;
 use std::sync::Arc;
 
 use crate::audio::{AudioCommand, AudioParams};
+use crate::export::{export_wav, export_mp3};
 use crate::llm::{LlmInput, LlmOutput};
 use crate::state::{AppState, DrumVoice, Waveform, toggle_drum_step, save_project};
 
@@ -35,6 +36,8 @@ pub struct ImpulseApp {
     log_text: String,
     active_panel: Panel,
     api_port: Option<u16>, // Some(port) if --api was passed
+    show_about: bool,
+    export_bars: u32,
 }
 
 #[derive(PartialEq, Clone, Copy)]
@@ -63,6 +66,8 @@ impl ImpulseApp {
             log_text,
             active_panel: Panel::Sequencer,
             api_port,
+            show_about: false,
+            export_bars: 8,
         }
     }
 
@@ -116,9 +121,118 @@ impl ImpulseApp {
 }
 
 impl eframe::App for ImpulseApp {
-    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+    fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
         self.drain_llm_outputs();
         ctx.request_repaint_after(std::time::Duration::from_millis(16));
+
+        // ── About window ──────────────────────────────────────────────────────
+        if self.show_about {
+            egui::Window::new("About Impulse Instruct")
+                .collapsible(false)
+                .resizable(false)
+                .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
+                .show(ctx, |ui| {
+                    ui.vertical_centered(|ui| {
+                        ui.label(egui::RichText::new("◆ IMPULSE INSTRUCT").monospace().size(14.0).color(theme::CHALK));
+                        ui.label(egui::RichText::new("v0.1 — LLM-controlled synthesizer").monospace().size(9.5).color(theme::SMOKE));
+                        ui.add_space(8.0);
+                        ui.label(egui::RichText::new("TB-303  ·  TR-808  ·  TR-909").monospace().size(9.0).color(theme::ASH));
+                        ui.label(egui::RichText::new("Bonsai 8B 1-bit · llama.cpp").monospace().size(9.0).color(theme::ASH));
+                        ui.add_space(10.0);
+                        ui.label(egui::RichText::new("Type a prompt and press ASK.").monospace().size(9.0).color(theme::FOG));
+                        ui.label(egui::RichText::new("Toggle JAM for continuous mutation.").monospace().size(9.0).color(theme::FOG));
+                        ui.label(egui::RichText::new("HEAT controls how wild it gets.").monospace().size(9.0).color(theme::FOG));
+                        ui.add_space(10.0);
+                        if ui.button("Close").clicked() {
+                            self.show_about = false;
+                        }
+                    });
+                });
+        }
+
+        // ── Menu bar ──────────────────────────────────────────────────────────
+        TopBottomPanel::top("menu_bar")
+            .frame(Frame::none().fill(theme::VOID).inner_margin(egui::Margin::symmetric(4.0, 2.0)))
+            .show(ctx, |ui| {
+                egui::menu::bar(ui, |ui| {
+                    ui.menu_button(egui::RichText::new("File").monospace().size(10.0), |ui| {
+                        if ui.button(egui::RichText::new("Save project").monospace().size(10.0)).clicked() {
+                            let snapshot = self.state.read().clone();
+                            match save_project(&snapshot) {
+                                Ok(path) => {
+                                    let msg = format!("[ saved → {} ]", path.display());
+                                    log::info!("{}", msg);
+                                    self.log_text.push_str(&format!("{}\n", msg));
+                                }
+                                Err(e) => {
+                                    let msg = format!("[ save failed: {} ]", e);
+                                    log::error!("{}", msg);
+                                    self.log_text.push_str(&format!("{}\n", msg));
+                                }
+                            }
+                            ui.close_menu();
+                        }
+
+                        ui.separator();
+
+                        ui.horizontal(|ui| {
+                            ui.label(egui::RichText::new("Bars:").monospace().size(9.5).color(theme::SMOKE));
+                            ui.add(egui::DragValue::new(&mut self.export_bars).range(1..=64).speed(1.0));
+                        });
+
+                        if ui.button(egui::RichText::new("Export WAV").monospace().size(10.0)).clicked() {
+                            let snapshot = self.state.read().clone();
+                            let bars = self.export_bars;
+                            match export_wav(&snapshot, bars) {
+                                Ok(path) => {
+                                    let msg = format!("[ exported → {} ]", path.display());
+                                    log::info!("{}", msg);
+                                    self.log_text.push_str(&format!("{}\n", msg));
+                                }
+                                Err(e) => {
+                                    let msg = format!("[ export failed: {} ]", e);
+                                    log::error!("{}", msg);
+                                    self.log_text.push_str(&format!("{}\n", msg));
+                                }
+                            }
+                            ui.close_menu();
+                        }
+
+                        if ui.button(egui::RichText::new("Export MP3").monospace().size(10.0)).clicked() {
+                            let snapshot = self.state.read().clone();
+                            let bars = self.export_bars;
+                            match export_mp3(&snapshot, bars) {
+                                Ok(path) => {
+                                    let msg = format!("[ exported → {} ]", path.display());
+                                    log::info!("{}", msg);
+                                    self.log_text.push_str(&format!("{}\n", msg));
+                                }
+                                Err(e) => {
+                                    let msg = format!("[ export: {} ]", e);
+                                    log::warn!("{}", msg);
+                                    self.log_text.push_str(&format!("{}\n", msg));
+                                }
+                            }
+                            ui.close_menu();
+                        }
+
+                        ui.separator();
+
+                        if ui.button(egui::RichText::new("Quit").monospace().size(10.0)).clicked() {
+                            ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+                        }
+                    });
+
+                    ui.menu_button(egui::RichText::new("Help").monospace().size(10.0), |ui| {
+                        if ui.button(egui::RichText::new("About").monospace().size(10.0)).clicked() {
+                            self.show_about = true;
+                            ui.close_menu();
+                        }
+                    });
+                });
+            });
+
+        let _ = frame; // suppress unused warning (frame.close() replaced by viewport cmd)
 
         // ── Header ────────────────────────────────────────────────────────────
         TopBottomPanel::top("header")
@@ -206,25 +320,6 @@ impl eframe::App for ImpulseApp {
                                 prompt: "start jamming".to_string(),
                                 one_shot: false,
                             });
-                        }
-                    }
-
-                    ui.add_space(4.0);
-
-                    // Save project
-                    if ui.button(egui::RichText::new("SAVE").monospace().size(10.0)).clicked() {
-                        let snapshot = self.state.read().clone();
-                        match save_project(&snapshot) {
-                            Ok(path) => {
-                                let msg = format!("[ saved → {} ]", path.display());
-                                log::info!("{}", msg);
-                                self.log_text.push_str(&format!("{}\n", msg));
-                            }
-                            Err(e) => {
-                                let msg = format!("[ save failed: {} ]", e);
-                                log::error!("{}", msg);
-                                self.log_text.push_str(&format!("{}\n", msg));
-                            }
                         }
                     }
 

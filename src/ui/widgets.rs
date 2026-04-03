@@ -116,11 +116,13 @@ pub fn step_button(
     if ui.is_rect_visible(rect) {
         let painter = ui.painter();
 
-        // Background
-        let bg = if is_current {
-            theme::CURSOR
-        } else if active {
+        // Background — active color takes priority; cursor shows via the border only,
+        // with a faint warm tint on inactive steps so the position is visible without
+        // the step turning white.
+        let bg = if active {
             theme::lerp_gray(45, 160, velocity)
+        } else if is_current {
+            egui::Color32::from_rgb(52, 52, 40) // dim warm glow
         } else {
             theme::PIT
         };

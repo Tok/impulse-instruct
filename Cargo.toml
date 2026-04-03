@@ -34,6 +34,9 @@ midi-msg = "0.5"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 
+# WAV encoding (export)
+hound = "3"
+
 # Lock-free audio↔UI ring buffer (wait-free, no-alloc in callback)
 rtrb = "0.3"
 
