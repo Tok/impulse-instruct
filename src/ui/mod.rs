@@ -80,13 +80,22 @@ impl ImpulseApp {
     /// Drain LLM output messages.
     fn drain_llm_outputs(&mut self) {
         while let Ok(out) = self.llm_rx.try_recv() {
-            if !out.text.is_empty() && !out.text.starts_with('[') {
-                let trimmed = if out.text.len() > 200 {
-                    format!("{}…", &out.text[..200])
+            if out.param_update.is_some() || (!out.text.is_empty() && !out.text.starts_with('[')) {
+                let display = if let Some(ref update) = out.param_update {
+                    // Prefer the natural-language comment; fall back to a terse param summary
+                    if let Some(comment) = update.get("_comment").and_then(|v| v.as_str()) {
+                        comment.to_string()
+                    } else {
+                        // Build a short summary of what changed
+                        let keys: Vec<&str> = update.as_object()
+                            .map(|o| o.keys().map(|k| k.as_str()).collect())
+                            .unwrap_or_default();
+                        format!("updated {}", keys.join(", "))
+                    }
                 } else {
                     out.text.clone()
                 };
-                self.log_lines.push(format!("LLM → {}", trimmed));
+                self.log_lines.push(format!("Bonsai → {}", display));
                 if self.log_lines.len() > 50 {
                     self.log_lines.remove(0);
                 }

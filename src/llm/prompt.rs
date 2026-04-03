@@ -80,8 +80,10 @@ STYLE VOCABULARY:
   "squeeze" → compressor_threshold low, ratio high
   "glitch"  → rapid param variation, short decay
 
-OUTPUT FORMAT: Only include fields you want to change. Example:
-{{"tb303": {{"cutoff": 0.45, "resonance": 0.78}}, "sequencer": {{"bpm": 132.0}}}}"#,
+OUTPUT FORMAT: JSON only. Always include a "_comment" field with one short sentence
+explaining what you're doing and why. Only include param fields you want to change.
+Example:
+{{"_comment": "pushing up the resonance for that squelchy acid character", "tb303": {{"cutoff": 0.45, "resonance": 0.78}}, "sequencer": {{"bpm": 132.0}}}}"#,
         current_json = current_json,
         locked_str = locked_str,
     )
@@ -93,6 +95,7 @@ pub fn param_json_schema() -> serde_json::Value {
         "$schema": "http://json-schema.org/draft-07/schema",
         "type": "object",
         "properties": {
+            "_comment": { "type": "string", "maxLength": 180 },
             "tb303": {
                 "type": "object",
                 "properties": {

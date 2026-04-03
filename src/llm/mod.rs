@@ -94,31 +94,32 @@ fn mock_response(prompt: &str) -> Result<LlmOutput> {
 
     let json = if prompt_lower.contains("acid") {
         serde_json::json!({
+            "_comment": "classic acid setup — tight resonant filter with heavy env mod, syncopated 303 bass line, 4-on-the-floor kick",
             "tb303": { "cutoff": 0.35, "resonance": 0.82, "env_mod": 0.75, "decay": 0.35, "distortion": 0.3, "volume": 0.8 },
             "sequencer": {
                 "bpm": 138.0,
-                // Classic acid bass line — syncopated 16th notes on C2/F2/G2
                 "bass_steps": [true, false, true, false, false, true, false, true, true, false, false, true, false, true, false, false],
-                "bass_notes": [36,  36,    36,   36,    36,    41,    36,    43,    36,   36,    36,    36,   36,    43,   36,    36],
-                // 4-on-the-floor kick
+                "bass_notes": [36, 36, 36, 36, 36, 41, 36, 43, 36, 36, 36, 36, 36, 43, 36, 36],
                 "kick808_steps": [true, false, false, false, true, false, false, false, true, false, false, false, true, false, false, false],
-                // Offbeat hihat
                 "hihat808_steps": [false, false, true, false, false, false, true, false, false, false, true, false, false, false, true, false]
             },
             "fx": { "distortion_drive": 0.25, "distortion_mix": 0.4 }
         })
     } else if prompt_lower.contains("dark") || prompt_lower.contains("deep") {
         serde_json::json!({
+            "_comment": "going dark — pulling the filter way down and adding space with long reverb and delay",
             "tb303": { "cutoff": 0.15, "resonance": 0.5, "env_mod": 0.3 },
             "fx": { "reverb_size": 0.8, "reverb_mix": 0.5, "delay_mix": 0.3 }
         })
     } else if prompt_lower.contains("fast") || prompt_lower.contains("hard") {
         serde_json::json!({
+            "_comment": "cranking the tempo and adding drive for harder, more aggressive energy",
             "sequencer": { "bpm": 160.0 },
             "tb303": { "decay": 0.2, "distortion": 0.4 }
         })
     } else if prompt_lower.contains("mellow") || prompt_lower.contains("chill") {
         serde_json::json!({
+            "_comment": "dialing back to something smooth — slower tempo, softer filter, letting the reverb breathe",
             "sequencer": { "bpm": 95.0 },
             "tb303": { "cutoff": 0.55, "resonance": 0.3, "env_mod": 0.2 },
             "fx": { "reverb_mix": 0.45, "delay_mix": 0.35 }
@@ -132,6 +133,7 @@ fn mock_response(prompt: &str) -> Result<LlmOutput> {
         let cut = 0.3 + (phase * 2.7).sin().abs() * 0.5;
         let res = 0.4 + (phase * 1.3).cos().abs() * 0.4;
         serde_json::json!({
+            "_comment": "nudging the filter for some movement",
             "tb303": { "cutoff": cut, "resonance": res }
         })
     };
@@ -185,6 +187,7 @@ pub fn run_llm_loop(
 
         // Snapshot prompt before acquiring any lock (clone outside critical section)
         let prompt = input.prompt.clone();
+        log::info!("YOU → {}", prompt);
 
         // Build system prompt from a read snapshot — lock held for clone only
         let system = build_system_prompt(&state.read().clone());
@@ -221,8 +224,16 @@ pub fn run_llm_loop(
                     s.llm.last_response = output.text.clone();
                 }
 
+                // Log the natural-language comment if present, otherwise the raw response
+                if let Some(ref update) = output.param_update {
+                    if let Some(comment) = update.get("_comment").and_then(|v| v.as_str()) {
+                        log::info!("Bonsai → {}", comment);
+                    } else {
+                        log::info!("Bonsai → {}", output.text);
+                    }
+                }
                 let _ = output_tx.try_send(output);
-                log::debug!("LLM inference complete in {:.2}s", elapsed);
+                log::debug!("inference complete in {:.2}s", elapsed);
             }
             Err(e) => {
                 log::error!("LLM inference error: {}", e);
