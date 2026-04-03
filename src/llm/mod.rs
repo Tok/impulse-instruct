@@ -41,10 +41,6 @@ pub trait LlmBackend: Send {
 
 // ─── llama.cpp backend ────────────────────────────────────────────────────────
 
-// Default model download info (Apache 2.0 — prism-ml/Bonsai-8B-gguf)
-const BONSAI_HF_REPO: &str = "prism-ml/Bonsai-8B-gguf";
-const BONSAI_DEFAULT_QUANT: &str = "Q4_K_M";
-
 pub struct LlamaCppBackend {
     model_path: String,
     loaded: bool,
@@ -57,19 +53,14 @@ impl LlamaCppBackend {
         if !loaded {
             log::warn!(
                 "GGUF model not found at '{}' — running in mock mode.\n  \
-                 Download the model with:  ./download-models.sh\n  \
-                 Or run with:  huggingface-cli download {} --include '*{}*.gguf' --local-dir models/",
-                model_path, BONSAI_HF_REPO, BONSAI_DEFAULT_QUANT
+                 Download the model with:  ./download-models.sh",
+                model_path
             );
         }
         Self { model_path: model_path.to_string(), loaded }
     }
 
-    /// True if the model file is present on disk.
     pub fn is_loaded(&self) -> bool { self.loaded }
-
-    /// HuggingFace repo for the Bonsai model (Apache 2.0).
-    pub fn model_repo() -> &'static str { BONSAI_HF_REPO }
 }
 
 impl LlmBackend for LlamaCppBackend {

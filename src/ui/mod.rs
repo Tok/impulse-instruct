@@ -221,18 +221,17 @@ impl eframe::App for ImpulseApp {
             .max_height(140.0)
             .show(ctx, |ui| {
                 // Full-width prompt input
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    let submit = ui.button(
-                        egui::RichText::new("ASK").monospace().size(10.0)
-                    ).clicked();
-
-                    let remaining = ui.available_width();
+                ui.horizontal(|ui| {
+                    let text_width = ui.available_width() - 52.0; // reserve space for ASK button
                     let response = ui.add(
                         egui::TextEdit::singleline(&mut self.prompt_input)
                             .hint_text("prompt the model…")
-                            .desired_width(remaining)
+                            .desired_width(text_width)
                             .font(egui::FontId::monospace(10.5))
                     );
+                    let submit = ui.button(
+                        egui::RichText::new("ASK").monospace().size(10.0)
+                    ).clicked();
 
                     let enter_pressed = response.lost_focus()
                         && ctx.input(|i| i.key_pressed(egui::Key::Enter));
