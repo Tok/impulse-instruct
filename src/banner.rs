@@ -17,8 +17,8 @@ pub fn print_banner() {
     // ── Huth-colored keyboard (3 octaves) ────────────────────────────────────
     //
     // Layout: W=5 cells per white key, B=3 cells per black key.
-    //   White key = '|' (left wall) + 4 spaces  → 5 cells
-    //   Black key = '|' (left wall) + ' ' + '|' → 3 cells
+    //   White key = '║' (left wall) + 4 spaces  → 5 cells
+    //   Black key = '║' (left wall) + ' ' + '║' → 3 cells
     //   1 octave = 35 cells total.
     //   2 octaves = 70 chars + 2 indent = 72 — fits within 80 columns.
     //
@@ -56,43 +56,43 @@ pub fn print_banner() {
     #[rustfmt::skip]
     const UPPER: [Cell; 35] = [
         // ── 2-key group ──────────────────────────────────────────────────────
-        (C,  '|'), (C,  ' '), (C,  ' '), (C,  ' '),     // C  wall+3  (0-3)
-        (CS, '|'), (CS, ' '), (CS, '|'),                  // C# (4-6)
+        (C,  '│'), (C,  ' '), (C,  ' '), (C,  ' '),     // C  wall+3  (0-3)
+        (CS, '│'), (CS, ' '), (CS, '│'),                  // C# (4-6)
         (D,  ' '), (D,  ' '),                             // D  2 exp   (7-8)
-        (DS, '|'), (DS, ' '), (DS, '|'),                  // D# (9-11)
+        (DS, '│'), (DS, ' '), (DS, '│'),                  // D# (9-11)
         (E,  ' '), (E,  ' '), (E,  ' '),                 // E  3 exp   (12-14)
         // ── 3-key group ──────────────────────────────────────────────────────
-        (F,  '|'), (F,  ' '), (F,  ' '), (F,  ' '),     // F  wall+3  (15-18)
-        (FS, '|'), (FS, ' '), (FS, '|'),                  // F# (19-21)
+        (F,  '│'), (F,  ' '), (F,  ' '), (F,  ' '),     // F  wall+3  (15-18)
+        (FS, '│'), (FS, ' '), (FS, '│'),                  // F# (19-21)
         (G,  ' '), (G,  ' '),                             // G  2 exp   (22-23)
-        (GS, '|'), (GS, ' '), (GS, '|'),                  // G# (24-26)
+        (GS, '│'), (GS, ' '), (GS, '│'),                  // G# (24-26)
         (A,  ' '), (A,  ' '),                             // A  2 exp   (27-28)
-        (AS, '|'), (AS, ' '), (AS, '|'),                  // A# (29-31)
+        (AS, '│'), (AS, ' '), (AS, '│'),                  // A# (29-31)
         (B,  ' '), (B,  ' '), (B,  ' '),                 // B  3 exp   (32-34)
     ];
 
-    // Lower zone: 35 cells.  Each white key = left '|' + 4 spaces (W=5).
+    // Lower zone: 35 cells.  Each white key = left '│' + 4 spaces (W=5).
     #[rustfmt::skip]
     const LOWER: [Cell; 35] = [
-        (C, '|'), (C, ' '), (C, ' '), (C, ' '), (C, ' '),
-        (D, '|'), (D, ' '), (D, ' '), (D, ' '), (D, ' '),
-        (E, '|'), (E, ' '), (E, ' '), (E, ' '), (E, ' '),
-        (F, '|'), (F, ' '), (F, ' '), (F, ' '), (F, ' '),
-        (G, '|'), (G, ' '), (G, ' '), (G, ' '), (G, ' '),
-        (A, '|'), (A, ' '), (A, ' '), (A, ' '), (A, ' '),
-        (B, '|'), (B, ' '), (B, ' '), (B, ' '), (B, ' '),
+        (C, '│'), (C, ' '), (C, ' '), (C, ' '), (C, ' '),
+        (D, '│'), (D, ' '), (D, ' '), (D, ' '), (D, ' '),
+        (E, '│'), (E, ' '), (E, ' '), (E, ' '), (E, ' '),
+        (F, '│'), (F, ' '), (F, ' '), (F, ' '), (F, ' '),
+        (G, '│'), (G, ' '), (G, ' '), (G, ' '), (G, ' '),
+        (A, '│'), (A, ' '), (A, ' '), (A, ' '), (A, ' '),
+        (B, '│'), (B, ' '), (B, ' '), (B, ' '), (B, ' '),
     ];
 
-    // Bottom edge row: '|' wall + 4 underscores → visual floor on each white key.
+    // Bottom edge row: '└' corner + 3 '─' + '┘' corner → closed floor per white key.
     #[rustfmt::skip]
     const LOWER_BTM: [Cell; 35] = [
-        (C, '|'), (C, '_'), (C, '_'), (C, '_'), (C, '_'),
-        (D, '|'), (D, '_'), (D, '_'), (D, '_'), (D, '_'),
-        (E, '|'), (E, '_'), (E, '_'), (E, '_'), (E, '_'),
-        (F, '|'), (F, '_'), (F, '_'), (F, '_'), (F, '_'),
-        (G, '|'), (G, '_'), (G, '_'), (G, '_'), (G, '_'),
-        (A, '|'), (A, '_'), (A, '_'), (A, '_'), (A, '_'),
-        (B, '|'), (B, '_'), (B, '_'), (B, '_'), (B, '_'),
+        (C, '└'), (C, '─'), (C, '─'), (C, '─'), (C, '┘'),
+        (D, '└'), (D, '─'), (D, '─'), (D, '─'), (D, '┘'),
+        (E, '└'), (E, '─'), (E, '─'), (E, '─'), (E, '┘'),
+        (F, '└'), (F, '─'), (F, '─'), (F, '─'), (F, '┘'),
+        (G, '└'), (G, '─'), (G, '─'), (G, '─'), (G, '┘'),
+        (A, '└'), (A, '─'), (A, '─'), (A, '─'), (A, '┘'),
+        (B, '└'), (B, '─'), (B, '─'), (B, '─'), (B, '┘'),
     ];
 
     // Render a cell slice: spaces → bg only; any other char → dark fg on key bg.
@@ -127,6 +127,6 @@ pub fn print_banner() {
     for _ in 0..2 {
         println!("  {lower}");
     } // 2 rows — white key body
-    println!("  {bottom}"); // 1 row  — white key floor (|____)
+    println!("  {bottom}"); // 1 row  — white key floor (└───┘)
     println!("{RESET}");
 }
