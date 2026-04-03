@@ -649,12 +649,15 @@ pub fn run_llm_loop(
                         log::debug!("Bonsai (jam) → {}", comment);
                     }
 
-                    // TTS: speak the comment when enabled
+                    // TTS: speak only MC/DJ crowd content — producer explanations
+                    // are never read aloud (they sound wrong as TTS output).
                     let (tts_on, mode) = {
                         let s = state.read();
                         (s.llm.tts_enabled, s.llm.conversation_mode.clone())
                     };
-                    if tts_on {
+                    let tts_mode = matches!(mode, ConversationMode::Mc | ConversationMode::Dj);
+                    if tts_on && tts_mode {
+                        log::info!("[TTS] {}", comment);
                         speak(comment, &mode);
                     }
                 }

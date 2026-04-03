@@ -116,12 +116,15 @@ The AN1X voice gets the synthesis side. Bitcrush + tape saturation FX complete t
 Bonsai generates the text. A TTS engine speaks it. The crowd goes wild.
 
 - [x] TTS backend — `espeak-ng` subprocess (simple, zero-dep, Linux)
+- [x] TTS only fires in MC / DJ mode — producer-mode explanations are never spoken (sounds wrong)
+- [x] TTS output mirrored to CLI console (`log::info!("[TTS] …")`)
+- [ ] TTS output mirrored to in-UI comment log (distinguish from LLM text log visually)
+- [ ] TTS settings panel: pitch, speed, amplitude, voice character selector
+- [ ] Per-character pitch/speed randomisation (±10%) — prevents robotic monotone
 - [ ] Alternative: Coqui TTS for higher quality voice (Python subprocess or REST)
-- [x] MC mode: when `_comment` is generated in MC/DJ mode, pass text to TTS
-- [ ] Optional: pitch-shift + distort TTS output for "vocoder MC" effect
 - [ ] LLM generates `"mc_line"` JSON field alongside param updates (separate from `_comment`)
 - [ ] Selectable MC voice character: Jungle MC, Rave Announcer, Robot, Smooth DJ
-- [ ] TTS FX wiring: reverb / chorus / bitcrush on the TTS audio output
+- [ ] TTS FX wiring: TTS audio routed through a light reverb + optional bitcrush (hall MC sound)
 - [ ] Volume envelope on TTS so it ducks under the music
 
 ---

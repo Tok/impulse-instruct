@@ -50,33 +50,63 @@ pub fn print_banner() {
     const AS: Rgb = (0x77, 0x44, 0xBB);
     const B:  Rgb = (0x44, 0x33, 0xAA);
 
-    // Upper zone: 49 cells.  Black keys are exactly centered at their boundaries.
+    // Upper zone: 42 cells per octave  (W=6 white key, B=4 black key).
+    //
+    // White key boundaries at half-integers: C/D=5.5, D/E=11.5, F/G=23.5, G/A=29.5, A/B=35.5
+    //
+    // Real piano offset — black keys are NOT centered on their boundaries:
+    //
+    //   2-key group (C#, D#): lean outward to widen D's gap
+    //     C# lean −1 (toward C): center 4.5,  left = 3  → C# right wall pos 6 = D left ✓
+    //     D# lean +1 (toward E): center 12.5, left = 11 → D gets 4 exposed cells
+    //
+    //   3-key group (F#, G#, A#): F# left, G# centered, A# right
+    //     F# lean −1 (toward F): center 22.5, left = 21 → F# right wall pos 24 = G left ✓
+    //     G# centered at G/A boundary: center 29.5, left = 28
+    //     A# lean +1 (toward B): center 36.5, left = 35
+    //     → F, G, A, B each get 3 exposed cells
+    //
+    // Exposed cells per note: C=3  D=4  E=3 | F=3  G=3  A=3  B=3
     #[rustfmt::skip]
-    const UPPER: [Cell; 49] = [
-        (C,  '|'), (C,  ' '), (C,  ' '), (C,  ' '), (C,  ' '),  // C  wall+exp  (0-4)
-        (CS, '|'), (CS, ' '), (CS, ' '), (CS, '|'),               // C# |  |     (5-8)
-        (D,  ' '), (D,  ' '), (D,  ' '),                           // D  exposed  (9-11)
-        (DS, '|'), (DS, ' '), (DS, ' '), (DS, '|'),               // D# |  |     (12-15)
-        (E,  ' '), (E,  ' '), (E,  ' '), (E,  ' '), (E,  ' '),   // E  exposed  (16-20)
-        (F,  '|'), (F,  ' '), (F,  ' '), (F,  ' '), (F,  ' '),   // F  wall+exp (21-25)
-        (FS, '|'), (FS, ' '), (FS, ' '), (FS, '|'),               // F# |  |     (26-29)
-        (G,  ' '), (G,  ' '), (G,  ' '),                           // G  exposed  (30-32)
-        (GS, '|'), (GS, ' '), (GS, ' '), (GS, '|'),               // G# |  |     (33-36)
-        (A,  ' '), (A,  ' '), (A,  ' '),                           // A  exposed  (37-39)
-        (AS, '|'), (AS, ' '), (AS, ' '), (AS, '|'),               // A# |  |     (40-43)
-        (B,  ' '), (B,  ' '), (B,  ' '), (B,  ' '), (B,  ' '),   // B  exposed  (44-48)
+    const UPPER: [Cell; 42] = [
+        // ── 2-key group ──────────────────────────────────────────────────────
+        (C,  '|'), (C,  ' '), (C,  ' '),                          // C  3 exp  (0-2)
+        (CS, '|'), (CS, ' '), (CS, ' '), (CS, '|'),               // C# −1    (3-6)   → col 6 = D left
+        (D,  ' '), (D,  ' '), (D,  ' '), (D,  ' '),              // D  4 exp  (7-10)
+        (DS, '|'), (DS, ' '), (DS, ' '), (DS, '|'),               // D# +1    (11-14)
+        (E,  ' '), (E,  ' '), (E,  ' '),                          // E  3 exp  (15-17)
+        // ── 3-key group ──────────────────────────────────────────────────────
+        (F,  '|'), (F,  ' '), (F,  ' '),                          // F  3 exp  (18-20)
+        (FS, '|'), (FS, ' '), (FS, ' '), (FS, '|'),               // F# −1    (21-24)  → col 24 = G left
+        (G,  ' '), (G,  ' '), (G,  ' '),                          // G  3 exp  (25-27)
+        (GS, '|'), (GS, ' '), (GS, ' '), (GS, '|'),               // G# ctr   (28-31)
+        (A,  ' '), (A,  ' '), (A,  ' '),                          // A  3 exp  (32-34)
+        (AS, '|'), (AS, ' '), (AS, ' '), (AS, '|'),               // A# +1    (35-38)
+        (B,  ' '), (B,  ' '), (B,  ' '),                          // B  3 exp  (39-41)
     ];
 
-    // Lower zone: 49 cells.  Each white key = left '|' + 6 spaces.
+    // Lower zone: 42 cells.  Each white key = left '|' + 5 spaces (W=6).
     #[rustfmt::skip]
-    const LOWER: [Cell; 49] = [
-        (C, '|'), (C, ' '), (C, ' '), (C, ' '), (C, ' '), (C, ' '), (C, ' '),
-        (D, '|'), (D, ' '), (D, ' '), (D, ' '), (D, ' '), (D, ' '), (D, ' '),
-        (E, '|'), (E, ' '), (E, ' '), (E, ' '), (E, ' '), (E, ' '), (E, ' '),
-        (F, '|'), (F, ' '), (F, ' '), (F, ' '), (F, ' '), (F, ' '), (F, ' '),
-        (G, '|'), (G, ' '), (G, ' '), (G, ' '), (G, ' '), (G, ' '), (G, ' '),
-        (A, '|'), (A, ' '), (A, ' '), (A, ' '), (A, ' '), (A, ' '), (A, ' '),
-        (B, '|'), (B, ' '), (B, ' '), (B, ' '), (B, ' '), (B, ' '), (B, ' '),
+    const LOWER: [Cell; 42] = [
+        (C, '|'), (C, ' '), (C, ' '), (C, ' '), (C, ' '), (C, ' '),
+        (D, '|'), (D, ' '), (D, ' '), (D, ' '), (D, ' '), (D, ' '),
+        (E, '|'), (E, ' '), (E, ' '), (E, ' '), (E, ' '), (E, ' '),
+        (F, '|'), (F, ' '), (F, ' '), (F, ' '), (F, ' '), (F, ' '),
+        (G, '|'), (G, ' '), (G, ' '), (G, ' '), (G, ' '), (G, ' '),
+        (A, '|'), (A, ' '), (A, ' '), (A, ' '), (A, ' '), (A, ' '),
+        (B, '|'), (B, ' '), (B, ' '), (B, ' '), (B, ' '), (B, ' '),
+    ];
+
+    // Bottom edge row: '|' wall + 5 underscores → visual floor on each white key.
+    #[rustfmt::skip]
+    const LOWER_BTM: [Cell; 42] = [
+        (C, '|'), (C, '_'), (C, '_'), (C, '_'), (C, '_'), (C, '_'),
+        (D, '|'), (D, '_'), (D, '_'), (D, '_'), (D, '_'), (D, '_'),
+        (E, '|'), (E, '_'), (E, '_'), (E, '_'), (E, '_'), (E, '_'),
+        (F, '|'), (F, '_'), (F, '_'), (F, '_'), (F, '_'), (F, '_'),
+        (G, '|'), (G, '_'), (G, '_'), (G, '_'), (G, '_'), (G, '_'),
+        (A, '|'), (A, '_'), (A, '_'), (A, '_'), (A, '_'), (A, '_'),
+        (B, '|'), (B, '_'), (B, '_'), (B, '_'), (B, '_'), (B, '_'),
     ];
 
     // Render a cell slice: spaces → bg only; any other char → dark fg on key bg.
@@ -95,15 +125,18 @@ pub fn print_banner() {
     };
 
     // Two octaves: chain UPPER/LOWER with themselves.
-    // 49 cells × 2 = 98 chars + 2 indent = 100 — fits most terminals at 120 cols.
-    let upper_row: Vec<Cell> = UPPER.iter().chain(UPPER.iter()).copied().collect();
-    let lower_row: Vec<Cell> = LOWER.iter().chain(LOWER.iter()).copied().collect();
+    // 42 cells × 2 = 84 chars + 2 indent = 86 — fits comfortably within 80 cols.
+    let upper_row:  Vec<Cell> = UPPER.iter().chain(UPPER.iter()).copied().collect();
+    let lower_row:  Vec<Cell> = LOWER.iter().chain(LOWER.iter()).copied().collect();
+    let bottom_row: Vec<Cell> = LOWER_BTM.iter().chain(LOWER_BTM.iter()).copied().collect();
 
-    let upper = render(&upper_row);
-    let lower = render(&lower_row);
+    let upper  = render(&upper_row);
+    let lower  = render(&lower_row);
+    let bottom = render(&bottom_row);
 
     println!();
     for _ in 0..4 { println!("  {upper}"); }   // 4 rows — black key zone
-    for _ in 0..3 { println!("  {lower}"); }   // 3 rows — white key bottom
+    for _ in 0..2 { println!("  {lower}"); }   // 2 rows — white key body
+    println!("  {bottom}");                     // 1 row  — white key floor (|______)
     println!("{RESET}");
 }
