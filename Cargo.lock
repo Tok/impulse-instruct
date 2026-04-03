@@ -1423,6 +1423,7 @@ dependencies = [
  "env_logger",
  "fundsp",
  "hound",
+ "libc",
  "log",
  "midi-msg",
  "midir",

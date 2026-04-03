@@ -43,6 +43,7 @@ parking_lot = "0.12"
 crossbeam-channel = "0.5"
 
 # Utilities
+libc = "0.2"
 anyhow = "1"
 log = "0.4"
 env_logger = "0.11"

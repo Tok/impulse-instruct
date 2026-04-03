@@ -141,6 +141,14 @@ impl LlamaServerBackend {
 impl Drop for LlamaServerBackend {
     fn drop(&mut self) {
         if let Some(mut child) = self.child.take() {
+            // llama-server can ignore SIGTERM while in CPU/GPU kernel work — use SIGKILL.
+            #[cfg(unix)]
+            {
+                use std::os::unix::process::CommandExt;
+                let pid = child.id() as i32;
+                unsafe { libc::kill(pid, libc::SIGKILL); }
+            }
+            #[cfg(not(unix))]
             let _ = child.kill();
             let _ = child.wait();
             log::info!("Bonsai server stopped.");
