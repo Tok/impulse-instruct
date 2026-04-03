@@ -1,6 +1,7 @@
 // ─── llm/prompt.rs ───────────────────────────────────────────────────────────
 // Builds the system prompt that grounds the LLM in current synth state.
 
+use crate::llm::styles::StyleCatalog;
 use crate::state::{AppState, ConversationMode};
 
 pub fn build_system_prompt(state: &AppState) -> String {
@@ -51,10 +52,20 @@ pub fn build_system_prompt(state: &AppState) -> String {
         }
     })).unwrap_or_default();
 
+    // Resolve active style description (empty string if none set)
+    let style_section = state.llm.active_style.as_deref()
+        .and_then(|id| StyleCatalog::get().find_by_id(id))
+        .map(|s| format!(
+            "\n═══ ACTIVE STYLE ═══\n\n{}\n\nUse this as your creative brief. \
+             Evolve the current sound toward this aesthetic — don't reset everything at once.\n",
+            s.description
+        ))
+        .unwrap_or_default();
+
     format!(
         r#"You are Impulse Instruct — an AI that controls a hardware-style synthesizer.
 Output ONLY valid JSON. No prose, no markdown, no explanation outside the "_comment" field.
-
+{style_section}
 CURRENT STATE:
 {current_json}
 
@@ -138,6 +149,7 @@ Example — "more acid":
 {{"_comment": "{acid_example}",
   "bass": {{"resonance": 0.85, "env_mod": 0.80, "cutoff": 0.35}}}}
 "#,
+        style_section = style_section,
         current_json = current_json,
         locked_str = locked_str,
         heat_pct = heat_pct,

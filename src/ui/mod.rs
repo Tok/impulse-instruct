@@ -40,6 +40,7 @@ use crate::export::{export_wav, export_mp3};
 use crate::llm::{LlmInput, LlmOutput};
 use crate::midi::MidiEvent;
 use crate::sequencer::TriggerEvent;
+use crate::llm::styles::StyleCatalog;
 use crate::state::{AppState, ConversationMode, DrumVoice, Waveform, toggle_drum_step, save_project};
 
 // ─── Instrument slot system ───────────────────────────────────────────────────
@@ -543,7 +544,45 @@ impl eframe::App for ImpulseApp {
             .min_height(80.0)
             .max_height(140.0)
             .show(ctx, |ui| {
-                // Full-width prompt input
+                // ── Style selector ────────────────────────────────────────────
+                ui.horizontal(|ui| {
+                    ui.label(egui::RichText::new("STYLE").monospace().size(9.0).color(theme::IRON));
+                    ui.add_space(4.0);
+
+                    let cur_style = self.state.read().llm.active_style.clone();
+                    let catalog = StyleCatalog::get();
+
+                    // "None" button
+                    let none_active = cur_style.is_none();
+                    let none_text = egui::RichText::new("None").monospace().size(9.5)
+                        .color(if none_active { theme::CHALK } else { theme::IRON });
+                    if ui.selectable_label(none_active, none_text).clicked() && !none_active {
+                        self.state.write().llm.active_style = None;
+                        self.log_text.push_str("Style cleared\n");
+                    }
+
+                    ui.add_space(4.0);
+
+                    // One button per style
+                    for style in catalog.styles() {
+                        let active = cur_style.as_deref() == Some(style.id.as_str());
+                        let text = egui::RichText::new(&style.name).monospace().size(9.5)
+                            .color(if active { theme::CHALK } else { theme::IRON });
+                        if ui.selectable_label(active, text).clicked() && !active {
+                            self.state.write().llm.active_style = Some(style.id.clone());
+                            let prompt = format!(
+                                "we're going {} now — set up the sound and rhythm for this style",
+                                style.name
+                            );
+                            self.log_text.push_str(&format!("Style → {}\n", style.name));
+                            let _ = self.llm_tx.try_send(LlmInput { prompt, one_shot: true });
+                        }
+                    }
+                });
+
+                ui.add_space(2.0);
+
+                // ── Prompt input ──────────────────────────────────────────────
                 ui.horizontal(|ui| {
                     let text_width = ui.available_width() - 52.0; // reserve space for ASK button
                     let response = ui.add(

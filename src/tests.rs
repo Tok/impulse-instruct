@@ -249,7 +249,7 @@ mod instruction_tests {
     #[test]
     fn remove_instructions_emit_all_false_arrays() {
         let set = InstructionSet::get();
-        let removal_ids = ["remove_clap", "remove_kick808", "remove_hihat808", "remove_snare808"];
+        let removal_ids = ["remove_clap", "remove_kick", "remove_hihat_a", "remove_snare_a"];
         for id in removal_ids {
             let inst = set.iter().find(|i| i.id == id)
                 .unwrap_or_else(|| panic!("instruction '{}' not found", id));

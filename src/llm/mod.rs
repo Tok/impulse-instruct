@@ -3,8 +3,9 @@
 // Loads a GGUF model and runs continuous inference to control synth params.
 // Communicates with UI via crossbeam channels.
 
-pub mod prompt;
 pub mod instructions;
+pub mod prompt;
+pub mod styles;
 pub use prompt::build_system_prompt;
 pub use prompt::param_json_schema;
 

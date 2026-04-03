@@ -1,0 +1,86 @@
+[
+  {
+    "id": "acid_house",
+    "name": "Acid House",
+    "keywords": ["acid", "acid house", "303", "squelch", "squelchy", "tb303", "tb-303"],
+    "bpm_range": "120–128",
+    "description": "Acid House — 120 to 128 BPM. The defining character is the TB-303 squelch: high resonance, strong filter envelope modulation, and short decay create a sweeping woozy filter effect on every note trigger. Bass lines are hypnotic and repetitive, not melodic — syncopated 16th-note patterns, occasional octave jumps, slide between notes. Notes in the C1 to C3 range. Kick four-on-the-floor, closed hi-hats on 8th notes. Keep reverb short and dry — the filter squelch is the centrepiece, don't bury it. A subtle rhythmic delay is fine. Accent and slide are essential to the authentic 303 feel."
+  },
+  {
+    "id": "detroit_techno",
+    "name": "Detroit Techno",
+    "keywords": ["detroit techno", "detroit", "techno funk", "motor city"],
+    "bpm_range": "130–140",
+    "description": "Detroit Techno — 130 to 140 BPM. Funky, polyrhythmic, and warm. Four-on-the-floor kick but with syncopated snare and ghost hits that give it a human swing. Bass lines are more melodically active than Berlin techno — moving, funky, locked to the kick but with rhythmic character. Moderate filter resonance, warm mid-range tone. Medium room reverb, short sync'd delays for rhythmic thickening. Think of it as electronic soul — mechanical precision with a soulful groove underneath."
+  },
+  {
+    "id": "berlin_techno",
+    "name": "Berlin Techno",
+    "keywords": ["berlin techno", "berlin", "industrial techno", "hard techno", "dark techno"],
+    "bpm_range": "128–134",
+    "description": "Berlin Techno — 128 to 134 BPM. Relentless and heavy. The kick is everything — deep sub, lots of weight, four-on-the-floor. Bass is minimal, often a single repeated low note locked to the kick. Filter stays dark and low, barely sweeping. Snare is sparse, hi-hats minimal. Large reverb for industrial atmosphere, longer delays, subtle distortion adds grit. No funk, no sweetness — this is machine music, hypnotic through repetition and weight."
+  },
+  {
+    "id": "chicago_house",
+    "name": "Chicago House",
+    "keywords": ["house", "chicago house", "deep house", "jack house", "classic house"],
+    "bpm_range": "118–125",
+    "description": "Chicago House — 118 to 125 BPM. Soulful and groovy. Four-on-the-floor kick, syncopated offbeat hi-hats, clap or snare on beats 2 and 4. Bass lines are hooky and melodic — medium note density, octave jumps, C1 to C3 range, locked to the groove but with character. Warm filter, moderate resonance, no squelch. Medium room reverb gives it a raw, slightly roomy feel. The feel is human and analogue even though it's entirely electronic."
+  },
+  {
+    "id": "jungle",
+    "name": "Jungle",
+    "keywords": ["jungle", "early dnb", "early drum and bass", "oldskool dnb", "raggajungle"],
+    "bpm_range": "160–175",
+    "description": "Jungle — 160 to 175 BPM. Breakbeat-driven, chaotic, and energetic. Kick and snare do not sit on a simple four-on-the-floor grid — use complex syncopated patterns with ghost snares, off-grid kicks, and dense hi-hat work that rolls and swings. Think of the Amen break: snare displaced, kick on offbeats, cymbals filling gaps. Sub bass is deep and minimal, mostly staying in C0 to C1, just anchoring the bottom. Short reverb to maintain clarity at this speed. The groove comes entirely from rhythmic complexity, not melody."
+  },
+  {
+    "id": "drum_and_bass",
+    "name": "Drum and Bass",
+    "keywords": ["drum and bass", "dnb", "d&b", "neurofunk", "liquid dnb", "reese", "rolling dnb"],
+    "bpm_range": "170–180",
+    "description": "Drum and Bass — 170 to 180 BPM. Rolling, heavy, and technical. Complex drum patterns with a big snare on beats 2 and 4 and intricate hi-hat work between. Bass is the emotional core — rolling sub bass with slow filter movement, staying low but with subtle pitch variation. Think deep growling bass with a slow undulating quality. Short reverb, minimal delay. The energy comes from the interplay between the complex drums and the deep relentless bass."
+  },
+  {
+    "id": "dub_techno",
+    "name": "Dub Techno",
+    "keywords": ["dub techno", "minimal techno", "basic channel", "dub", "minimal", "deep minimal"],
+    "bpm_range": "120–126",
+    "description": "Dub Techno — 120 to 126 BPM. Hypnotic minimalism. Sparse drums — often just a kick, maybe a faint clap, no fills. Bass is a single deep note or tiny two-note motif, barely moving, almost sub-sonic. The FX chain IS the music: very long reverb (5 to 6 seconds), dotted delay creating rhythmic echoes, heavy saturation. Filter sweeps happen slowly over 4 to 8 bars. Everything is about negative space, depth, and the way the reverb tail fills the silence. Meditative, dark, infinite."
+  },
+  {
+    "id": "trance",
+    "name": "Trance",
+    "keywords": ["trance", "uplifting trance", "progressive trance", "euphoric", "138"],
+    "bpm_range": "135–140",
+    "description": "Trance — 135 to 140 BPM (138 is canonical). Emotional, euphoric, building. Four-on-the-floor kick, clean backbeat, driving 8th-note bass locked to the kick. The energy arc is everything — build tension, then release. Medium reverb and sync'd delay. BPM should be around 138. The feeling should be upward momentum, like something is always about to drop."
+  },
+  {
+    "id": "gabber",
+    "name": "Gabber / Hardcore",
+    "keywords": ["gabber", "hardcore", "gabba", "rotterdam", "speedcore", "frenchcore"],
+    "bpm_range": "180–220",
+    "description": "Gabber — 180 to 200+ BPM. The kick is everything. Four-on-the-floor at extreme tempo, the kick heavily distorted so it clips into an aggressive tone with a falling pitch — this IS the melody. Distortion drive up. Reverb minimal or off. No subtlety, no space, no rest. The bass follows the kick almost exactly. Relentless, aggressive, overwhelming. This style is about sonic assault through repetition and distortion."
+  },
+  {
+    "id": "idm",
+    "name": "IDM / Braindance",
+    "keywords": ["idm", "braindance", "aphex", "autechre", "glitch", "experimental", "broken beat"],
+    "bpm_range": "variable",
+    "description": "IDM / Braindance — no fixed BPM, break the rules. Kick patterns should be irregular and off-grid — avoid four-on-the-floor entirely. Snare displaced, ghost notes, polyrhythmic hi-hat work. Bass is unpredictable — could be sparse and simple, could be dense and angular. Filter movement should be unexpected and rapid. The goal is to subvert expectations at every turn while maintaining a strange internal groove. Modulate things that are usually static. Put notes where they shouldn't be."
+  },
+  {
+    "id": "electro",
+    "name": "Electro",
+    "keywords": ["electro", "electro funk", "808 bass", "breakdance", "miami bass"],
+    "bpm_range": "115–125",
+    "description": "Electro — 115 to 125 BPM. Robotic funk. Drum machine precision — 808 kick with that distinctive long boomy tail, snare on 2 and 4 with a mechanical snap. Bass is often a detuned square wave bass line with short staccato hits, robotic and angular rather than smooth. Hi-hats syncopated and mechanical. The feel is cold and funky at the same time. Minimal reverb, dry and punchy. Think early hip-hop drum machine — rigid grid, no swing, yet impossible not to move to."
+  },
+  {
+    "id": "ambient_drone",
+    "name": "Ambient / Drone",
+    "keywords": ["ambient", "drone", "atmospheric", "space", "ambient techno", "kosmische"],
+    "bpm_range": "60–90 or none",
+    "description": "Ambient / Drone — very slow tempo or no clear beat. If there's rhythm, it's sparse and spacious — kick once per bar or less, no snare. Bass is a very long held note or slow movement over many bars. Maximum reverb and delay — let sounds blur and dissolve into each other. Filter should move extremely slowly, like a slow tide. The texture and the space matter more than rhythm or melody. Meditative, oceanic, time distorted."
+  }
+]

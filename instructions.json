@@ -1,41 +1,5 @@
 [
   {
-    "id": "acid_preset",
-    "keywords": ["acid", "squelch", "squelchy", "303", "resonant", "let's make some acid"],
-    "comment": "classic acid setup — resonant filter with envelope sweep and short decay",
-    "params": {
-      "bass": { "cutoff": 0.5, "resonance": 0.70, "env_mod": 0.80, "decay": 0.38, "distortion": 0.05, "volume": 0.9 },
-      "fx": { "delay_time": 0.3, "delay_feedback": 0.35, "delay_mix": 0.15 }
-    }
-  },
-  {
-    "id": "dark_preset",
-    "keywords": ["dark", "deep", "heavy", "go dark", "make it dark", "darker"],
-    "comment": "going dark — pulling the filter way down and adding space with long reverb",
-    "params": {
-      "bass": { "cutoff": 0.15, "resonance": 0.5, "env_mod": 0.3 },
-      "fx": { "reverb_size": 0.8, "reverb_mix": 0.45, "delay_mix": 0.25 }
-    }
-  },
-  {
-    "id": "harder_preset",
-    "keywords": ["harder", "hard", "more drive", "distort", "grit", "saturate", "push"],
-    "comment": "pushing harder — tighter decay, master bus saturation",
-    "params": {
-      "bass": { "decay": 0.2, "distortion": 0.12, "env_mod": 0.85 },
-      "fx": { "distortion_drive": 0.2, "distortion_mix": 0.35 }
-    }
-  },
-  {
-    "id": "mellow_preset",
-    "keywords": ["mellow", "chill", "softer", "quieter", "soft", "gentle", "relax"],
-    "comment": "softening things — opening the filter gently, pulling resonance back",
-    "params": {
-      "bass": { "cutoff": 0.6, "resonance": 0.3, "env_mod": 0.25, "volume": 0.75 },
-      "fx": { "reverb_mix": 0.3, "delay_mix": 0.2 }
-    }
-  },
-  {
     "id": "remove_bass",
     "keywords": ["remove bass", "no bass", "clear bass", "mute bass", "silence bass"],
     "comment": "muting the bass line — all steps off",
@@ -48,7 +12,7 @@
   {
     "id": "remove_clap",
     "keywords": ["remove clap", "remove claps", "no clap", "no claps", "clear clap", "mute clap", "kill clap", "clap off"],
-    "comment": "removing all 909 claps",
+    "comment": "removing all claps",
     "params": {
       "sequencer": {
         "clap909_steps": [false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false]
@@ -56,9 +20,9 @@
     }
   },
   {
-    "id": "remove_snare808",
+    "id": "remove_snare_a",
     "keywords": ["remove snare", "no snare", "clear snare", "mute snare", "snare off", "kill snare"],
-    "comment": "clearing the 808 snare pattern",
+    "comment": "clearing Kit A snare",
     "params": {
       "sequencer": {
         "snare808_steps": [false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false]
@@ -66,9 +30,9 @@
     }
   },
   {
-    "id": "remove_snare909",
-    "keywords": ["remove 909 snare", "no 909 snare", "clear 909 snare", "mute 909 snare"],
-    "comment": "clearing the 909 snare pattern",
+    "id": "remove_snare_b",
+    "keywords": ["remove kit b snare", "no kit b snare", "clear 909 snare", "mute 909 snare"],
+    "comment": "clearing Kit B snare",
     "params": {
       "sequencer": {
         "snare909_steps": [false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false]
@@ -76,9 +40,9 @@
     }
   },
   {
-    "id": "remove_kick808",
-    "keywords": ["remove kick", "no kick", "clear kick", "mute kick", "kick off", "no 808 kick"],
-    "comment": "clearing the 808 kick",
+    "id": "remove_kick",
+    "keywords": ["remove kick", "no kick", "clear kick", "mute kick", "kick off"],
+    "comment": "clearing the kick",
     "params": {
       "sequencer": {
         "kick808_steps": [false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false]
@@ -86,9 +50,9 @@
     }
   },
   {
-    "id": "remove_hihat808",
-    "keywords": ["remove hihat", "no hihat", "no hats", "clear hats", "mute hats", "hat off", "no 808 hihat"],
-    "comment": "clearing all 808 hihats",
+    "id": "remove_hihat_a",
+    "keywords": ["remove hihat", "no hihat", "no hats", "clear hats", "mute hats", "hat off"],
+    "comment": "clearing Kit A hi-hats",
     "params": {
       "sequencer": {
         "hihat808_steps": [false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false]
@@ -96,9 +60,9 @@
     }
   },
   {
-    "id": "remove_hihat909",
-    "keywords": ["remove 909 hihat", "no 909 hihat", "clear 909 hihat", "no 909 hats"],
-    "comment": "clearing the 909 hihat pattern",
+    "id": "remove_hihat_b",
+    "keywords": ["remove kit b hihat", "no 909 hihat", "clear 909 hihat", "no 909 hats"],
+    "comment": "clearing Kit B hi-hats",
     "params": {
       "sequencer": {
         "hihat909_steps": [false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false]
@@ -123,7 +87,7 @@
   {
     "id": "add_reverb",
     "keywords": ["add reverb", "more reverb", "add space", "more space", "more atmosphere", "room", "wet", "spacious"],
-    "comment": "adding reverb — medium room with a touch of delay for depth",
+    "comment": "reverb up",
     "params": {
       "fx": { "reverb_mix": 0.3, "reverb_size": 0.6, "delay_mix": 0.18, "delay_feedback": 0.4 }
     }
@@ -131,7 +95,7 @@
   {
     "id": "remove_reverb",
     "keywords": ["remove reverb", "no reverb", "less reverb", "reverb off", "turn off reverb"],
-    "comment": "removing the reverb",
+    "comment": "reverb off",
     "params": {
       "fx": { "reverb_mix": 0.0 }
     }
@@ -139,7 +103,7 @@
   {
     "id": "add_delay",
     "keywords": ["add delay", "more delay", "add echo", "echo", "dotted eighth"],
-    "comment": "dotted-eighth delay for a rhythmic echo",
+    "comment": "delay up",
     "params": {
       "fx": { "delay_time": 0.375, "delay_feedback": 0.45, "delay_mix": 0.25 }
     }
@@ -147,7 +111,7 @@
   {
     "id": "remove_delay",
     "keywords": ["remove delay", "no delay", "delay off", "no echo", "remove echo"],
-    "comment": "removing the delay",
+    "comment": "delay off",
     "params": {
       "fx": { "delay_mix": 0.0, "delay_feedback": 0.0 }
     }
@@ -155,7 +119,7 @@
   {
     "id": "add_distortion",
     "keywords": ["add distortion", "more distortion", "add drive", "saturation", "overdrive", "crunch"],
-    "comment": "adding master bus saturation for grit and glue",
+    "comment": "distortion up",
     "params": {
       "fx": { "distortion_drive": 0.25, "distortion_mix": 0.4 }
     }
@@ -163,7 +127,7 @@
   {
     "id": "remove_distortion",
     "keywords": ["remove distortion", "no distortion", "distortion off", "clean up", "no drive"],
-    "comment": "removing distortion — clean master bus",
+    "comment": "distortion off",
     "params": {
       "fx": { "distortion_drive": 0.0, "distortion_mix": 0.0 }
     }
@@ -171,33 +135,9 @@
   {
     "id": "clean_fx",
     "keywords": ["no fx", "dry signal", "remove all fx", "clear fx", "no effects", "bypass fx", "clean signal"],
-    "comment": "clearing all FX — back to a completely dry signal",
+    "comment": "all FX cleared",
     "params": {
       "fx": { "reverb_mix": 0.0, "delay_mix": 0.0, "distortion_mix": 0.0, "distortion_drive": 0.0 }
-    }
-  },
-  {
-    "id": "open_filter",
-    "keywords": ["open filter", "open the filter", "brighter", "more treble", "filter up", "raise cutoff"],
-    "comment": "opening up the filter — letting the high frequencies through",
-    "params": {
-      "bass": { "cutoff": 0.75, "resonance": 0.35 }
-    }
-  },
-  {
-    "id": "close_filter",
-    "keywords": ["close filter", "close the filter", "filter down", "lower cutoff", "more bass", "bassy", "sub"],
-    "comment": "closing down the filter — pushing the sound into sub-bass territory",
-    "params": {
-      "bass": { "cutoff": 0.15, "resonance": 0.45 }
-    }
-  },
-  {
-    "id": "more_acid_filter",
-    "keywords": ["more acid", "more resonance", "more squelch", "squelchier", "resonance up", "filter acid"],
-    "comment": "cranking the resonance and env mod for maximum acid character",
-    "params": {
-      "bass": { "resonance": 0.82, "env_mod": 0.75, "decay": 0.35 }
     }
   }
 ]
