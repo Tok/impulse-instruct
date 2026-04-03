@@ -220,22 +220,6 @@ impl eframe::App for ImpulseApp {
             .min_height(80.0)
             .max_height(140.0)
             .show(ctx, |ui| {
-                // Scrollable log
-                egui::ScrollArea::vertical()
-                    .id_source("log_scroll")
-                    .stick_to_bottom(true)
-                    .max_height(90.0)
-                    .auto_shrink([false, false])
-                    .show(ui, |ui: &mut egui::Ui| {
-                        for line in &self.log_lines {
-                            ui.label(
-                                egui::RichText::new(line).color(theme::SMOKE).monospace().size(9.0)
-                            );
-                        }
-                    });
-
-                ui.add_space(4.0);
-
                 // Full-width prompt input
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     let submit = ui.button(
@@ -260,6 +244,22 @@ impl eframe::App for ImpulseApp {
                         self.prompt_input.clear();
                     }
                 });
+
+                ui.add_space(4.0);
+
+                // Scrollable log
+                egui::ScrollArea::vertical()
+                    .id_source("log_scroll")
+                    .stick_to_bottom(true)
+                    .max_height(90.0)
+                    .auto_shrink([false, false])
+                    .show(ui, |ui: &mut egui::Ui| {
+                        for line in &self.log_lines {
+                            ui.label(
+                                egui::RichText::new(line).color(theme::SMOKE).monospace().size(9.0)
+                            );
+                        }
+                    });
             });
 
         // ── Tab bar ───────────────────────────────────────────────────────────

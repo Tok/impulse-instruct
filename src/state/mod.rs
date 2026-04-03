@@ -389,6 +389,52 @@ pub fn apply_llm_update(state: AppState, update: &serde_json::Value) -> AppState
                 s.sequencer.bpm = (bpm as f32).clamp(40.0, 250.0);
             }
         }
+        if !locked.contains("sequencer.bass_steps") {
+            if let Some(arr) = seq.get("bass_steps").and_then(|v| v.as_array()) {
+                for (i, val) in arr.iter().enumerate().take(16) {
+                    if let Some(active) = val.as_bool() {
+                        s.sequencer.bass_pattern[i].active = active;
+                    }
+                }
+            }
+        }
+        if !locked.contains("sequencer.bass_notes") {
+            if let Some(arr) = seq.get("bass_notes").and_then(|v| v.as_array()) {
+                for (i, val) in arr.iter().enumerate().take(16) {
+                    if let Some(note) = val.as_u64() {
+                        s.sequencer.bass_pattern[i].note = note.clamp(0, 127) as u8;
+                    }
+                }
+            }
+        }
+        if !locked.contains("sequencer.kick808_steps") {
+            if let Some(arr) = seq.get("kick808_steps").and_then(|v| v.as_array()) {
+                if let Some(pattern) = s.sequencer.drum_patterns.get_mut(&DrumVoice::Kick808) {
+                    for (i, val) in arr.iter().enumerate().take(16) {
+                        if let Some(active) = val.as_bool() {
+                            pattern[i].active = active;
+                            if active && pattern[i].velocity == 0.0 {
+                                pattern[i].velocity = 1.0;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        if !locked.contains("sequencer.hihat808_steps") {
+            if let Some(arr) = seq.get("hihat808_steps").and_then(|v| v.as_array()) {
+                if let Some(pattern) = s.sequencer.drum_patterns.get_mut(&DrumVoice::HihatClosed808) {
+                    for (i, val) in arr.iter().enumerate().take(16) {
+                        if let Some(active) = val.as_bool() {
+                            pattern[i].active = active;
+                            if active && pattern[i].velocity == 0.0 {
+                                pattern[i].velocity = 0.7;
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 
     if let Some(fx) = update.get("fx").and_then(|v| v.as_object()) {

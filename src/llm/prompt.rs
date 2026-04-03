@@ -57,7 +57,11 @@ AVAILABLE PARAMETERS (all floats 0.0–1.0 unless noted):
   tb303.distortion     — internal overdrive
   tb303.volume         — bass level
 
-  sequencer.bpm        — tempo in BPM (float 40–250)
+  sequencer.bpm              — tempo in BPM (float 40–250)
+  sequencer.bass_steps       — 16-element boolean array, which 16th-note steps are active
+  sequencer.bass_notes       — 16-element int array, MIDI note per step (0–127; 36=C2, 48=C3)
+  sequencer.kick808_steps    — 16-element boolean array for 808 kick pattern
+  sequencer.hihat808_steps   — 16-element boolean array for 808 closed hihat pattern
 
   fx.reverb_size       — room size
   fx.reverb_mix        — reverb wet/dry
@@ -106,7 +110,11 @@ pub fn param_json_schema() -> serde_json::Value {
             "sequencer": {
                 "type": "object",
                 "properties": {
-                    "bpm": { "type": "number", "minimum": 40.0, "maximum": 250.0 }
+                    "bpm": { "type": "number", "minimum": 40.0, "maximum": 250.0 },
+                    "bass_steps":    { "type": "array", "items": { "type": "boolean" }, "maxItems": 16 },
+                    "bass_notes":    { "type": "array", "items": { "type": "integer", "minimum": 0, "maximum": 127 }, "maxItems": 16 },
+                    "kick808_steps": { "type": "array", "items": { "type": "boolean" }, "maxItems": 16 },
+                    "hihat808_steps":{ "type": "array", "items": { "type": "boolean" }, "maxItems": 16 }
                 },
                 "additionalProperties": false
             },

@@ -103,8 +103,17 @@ fn mock_response(prompt: &str) -> Result<LlmOutput> {
 
     let json = if prompt_lower.contains("acid") {
         serde_json::json!({
-            "tb303": { "cutoff": 0.35, "resonance": 0.82, "env_mod": 0.75, "decay": 0.35, "distortion": 0.3 },
-            "sequencer": { "bpm": 138.0 },
+            "tb303": { "cutoff": 0.35, "resonance": 0.82, "env_mod": 0.75, "decay": 0.35, "distortion": 0.3, "volume": 0.8 },
+            "sequencer": {
+                "bpm": 138.0,
+                // Classic acid bass line — syncopated 16th notes on C2/F2/G2
+                "bass_steps": [true, false, true, false, false, true, false, true, true, false, false, true, false, true, false, false],
+                "bass_notes": [36,  36,    36,   36,    36,    41,    36,    43,    36,   36,    36,    36,   36,    43,   36,    36],
+                // 4-on-the-floor kick
+                "kick808_steps": [true, false, false, false, true, false, false, false, true, false, false, false, true, false, false, false],
+                // Offbeat hihat
+                "hihat808_steps": [false, false, true, false, false, false, true, false, false, false, true, false, false, false, true, false]
+            },
             "fx": { "distortion_drive": 0.25, "distortion_mix": 0.4 }
         })
     } else if prompt_lower.contains("dark") || prompt_lower.contains("deep") {
