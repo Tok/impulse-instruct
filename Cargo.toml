@@ -44,6 +44,9 @@ rtrb = "0.3"
 parking_lot = "0.12"
 crossbeam-channel = "0.5"
 
+# Character encoding — used by llama-cpp-2's token_to_piece API
+encoding_rs = "0.8"
+
 # Utilities
 anyhow = "1"
 log = "0.4"

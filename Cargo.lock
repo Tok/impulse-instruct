@@ -1452,6 +1452,7 @@ dependencies = [
  "crossbeam-channel",
  "eframe",
  "egui",
+ "encoding_rs",
  "env_logger",
  "fundsp",
  "hound",

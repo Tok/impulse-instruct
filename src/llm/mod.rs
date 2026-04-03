@@ -43,38 +43,177 @@ pub trait LlmBackend: Send {
 
 // ─── llama.cpp backend ────────────────────────────────────────────────────────
 
+/// Heap-allocated to avoid moving the large model struct around.
+#[cfg(feature = "llm")]
+struct LlamaInner {
+    backend: llama_cpp_2::llama_backend::LlamaBackend,
+    model:   llama_cpp_2::model::LlamaModel,
+}
+
+#[cfg(feature = "llm")]
+impl LlamaInner {
+    fn load(model_path: &str) -> Result<Box<Self>> {
+        use llama_cpp_2::{
+            llama_backend::LlamaBackend,
+            model::{LlamaModel, params::LlamaModelParams},
+        };
+        let backend = LlamaBackend::init()?;
+        let params  = LlamaModelParams::default();
+        let model   = LlamaModel::load_from_file(&backend, std::path::Path::new(model_path), &params)?;
+        Ok(Box::new(Self { backend, model }))
+    }
+}
+
 pub struct LlamaCppBackend {
     model_path: String,
     loaded: bool,
+    #[cfg(feature = "llm")]
+    inner: Option<Box<LlamaInner>>,
 }
 
 impl LlamaCppBackend {
     pub fn new(model_path: &str) -> Self {
-        let path = std::path::Path::new(model_path);
-        let loaded = path.exists();
-        if !loaded {
-            log::warn!(
-                "GGUF model not found at '{}' — running in mock mode.\n  \
-                 Download the model with:  ./download-models.sh",
-                model_path
-            );
+        #[cfg(feature = "llm")]
+        {
+            if std::path::Path::new(model_path).exists() {
+                match LlamaInner::load(model_path) {
+                    Ok(inner) => {
+                        log::info!("Model loaded: {}", model_path);
+                        return Self { model_path: model_path.to_string(), loaded: true, inner: Some(inner) };
+                    }
+                    Err(e) => log::error!("Failed to load model '{}': {}", model_path, e),
+                }
+            } else {
+                log::warn!(
+                    "Model not found at '{}' — falling back to mock.\n  \
+                     Run ./download-models.sh",
+                    model_path
+                );
+            }
+            return Self { model_path: model_path.to_string(), loaded: false, inner: None };
         }
-        Self { model_path: model_path.to_string(), loaded }
+        #[cfg(not(feature = "llm"))]
+        {
+            let loaded = std::path::Path::new(model_path).exists();
+            if !loaded {
+                log::warn!(
+                    "Model not found at '{}' — running in mock mode.\n  \
+                     Run ./download-models.sh",
+                    model_path
+                );
+            } else {
+                log::warn!(
+                    "Model found at '{}' but `--features llm` not enabled — mock mode.",
+                    model_path
+                );
+            }
+            Self { model_path: model_path.to_string(), loaded }
+        }
     }
 
     pub fn is_loaded(&self) -> bool { self.loaded }
 }
 
 impl LlmBackend for LlamaCppBackend {
-    fn infer(&mut self, _system: &str, user: &str, heat: f32) -> Result<LlmOutput> {
-        if !self.loaded {
-            return mock_response(user, heat);
+    fn infer(&mut self, system: &str, user: &str, heat: f32) -> Result<LlmOutput> {
+        #[cfg(feature = "llm")]
+        if let Some(ref inner) = self.inner {
+            return infer_real(inner, system, user, heat);
         }
-        log::debug!("Model found at {}, but llama-cpp-2 inference not yet fully wired.", self.model_path);
+        let _ = system;
         mock_response(user, heat)
     }
 
     fn context_size(&self) -> usize { 4096 }
+}
+
+// ─── Real llama.cpp inference ─────────────────────────────────────────────────
+
+#[cfg(feature = "llm")]
+fn infer_real(inner: &LlamaInner, system: &str, user: &str, heat: f32) -> Result<LlmOutput> {
+    use llama_cpp_2::{
+        model::{AddBos, LlamaChatMessage},
+        context::params::LlamaContextParams,
+        llama_batch::LlamaBatch,
+        sampling::LlamaSampler,
+        json_schema_to_grammar,
+    };
+    use std::num::NonZeroU32;
+
+    // ── Prompt ────────────────────────────────────────────────────────────────
+    let messages = vec![
+        LlamaChatMessage::new("system".to_string(), system.to_string())?,
+        LlamaChatMessage::new("user".to_string(),   user.to_string())?,
+    ];
+    let template = inner.model.chat_template(None)?;
+    let prompt   = inner.model.apply_chat_template(&template, &messages, true)?;
+
+    // ── Tokenise ──────────────────────────────────────────────────────────────
+    let input_tokens = inner.model.str_to_token(&prompt, AddBos::Always)?;
+    let n_input      = input_tokens.len();
+
+    // ── Context ───────────────────────────────────────────────────────────────
+    // Round up to next power of two; at least 2048
+    let ctx_size = ((n_input + 512).next_power_of_two() as u32).max(2048);
+    let ctx_params = LlamaContextParams::default()
+        .with_n_ctx(Some(NonZeroU32::new(ctx_size).unwrap()));
+    let mut ctx = inner.model.new_context(&inner.backend, ctx_params)?;
+
+    // ── Fill batch with input ─────────────────────────────────────────────────
+    let mut batch = LlamaBatch::new(ctx_size as usize, 1);
+    for (i, &tok) in input_tokens.iter().enumerate() {
+        batch.add(tok, i as i32, &[0], i == n_input - 1)?;
+    }
+    ctx.decode(&mut batch)?;
+
+    // ── Sampler: grammar + temperature ────────────────────────────────────────
+    let schema        = serde_json::to_string(&crate::llm::param_json_schema())?;
+    let grammar       = json_schema_to_grammar(&schema)?;
+    let grammar_sampler = LlamaSampler::grammar(&inner.model, &grammar, "root")?;
+    // heat 0.0 → temp 0.1 (near-deterministic), heat 1.0 → temp 1.2 (wild)
+    let temp = 0.1_f32 + heat.clamp(0.0, 1.0) * 1.1;
+    let seed = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .subsec_micros();
+    let mut sampler = LlamaSampler::chain_simple([
+        grammar_sampler,
+        LlamaSampler::temp(temp),
+        LlamaSampler::dist(seed),
+    ]);
+
+    // ── Generate ──────────────────────────────────────────────────────────────
+    let t0    = std::time::Instant::now();
+    let eos   = inner.model.token_eos();
+    let mut decoder = encoding_rs::UTF_8.new_decoder();
+    let mut output  = String::new();
+    let mut n_gen   = 0usize;
+
+    for pos in n_input..(n_input + 512) {
+        let next = sampler.sample(&ctx, batch.n_tokens() - 1);
+        sampler.accept(next);
+        if next == eos { break; }
+
+        output.push_str(&inner.model.token_to_piece(next, &mut decoder, false, None)?);
+        n_gen += 1;
+
+        batch.clear();
+        batch.add(next, pos as i32, &[0], true)?;
+        ctx.decode(&mut batch)?;
+    }
+
+    let tps = n_gen as f32 / t0.elapsed().as_secs_f32().max(0.001);
+
+    let json = serde_json::from_str::<serde_json::Value>(output.trim())
+        .map_err(|e| anyhow::anyhow!("JSON parse failed: {e}\nraw: {output}"))?;
+
+    Ok(LlmOutput {
+        text:          output,
+        param_update:  Some(json),
+        tokens_per_sec: tps,
+        context_used:  n_input + n_gen,
+        is_jam:        false,
+    })
 }
 
 /// Generate a plausible JSON response for testing without a real model.
