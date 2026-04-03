@@ -16,10 +16,12 @@ pub use dsp::{AudioParams, DspState};
 
 // ─── Messages sent from UI/HTTP thread to audio thread ───────────────────────
 
-#[allow(dead_code)] // Trigger variant used for manual note input (MIDI/UI, coming soon)
 pub enum AudioCommand {
     UpdateParams(AudioParams),
     Trigger(TriggerEvent),
+    /// Live monitor gain (0.0–1.0). Applied after DSP, not saved to state,
+    /// never reaches the export path — exports always render at full volume.
+    SetMonitorVolume(f32),
 }
 
 // ─── Audio Engine ─────────────────────────────────────────────────────────────
@@ -55,6 +57,7 @@ impl AudioEngine {
         };
         let mut dsp = DspState::new(sample_rate, initial_params);
         let mut clock = ClockState::default();
+        let mut monitor_vol = 1.0_f32;
 
         let state_clone = Arc::clone(&state);
 
@@ -67,6 +70,7 @@ impl AudioEngine {
                         match cmd {
                             AudioCommand::UpdateParams(p) => dsp.update_params(p),
                             AudioCommand::Trigger(e) => dsp.handle_trigger(&e),
+                            AudioCommand::SetMonitorVolume(v) => monitor_vol = v,
                         }
                     }
 
@@ -86,8 +90,11 @@ impl AudioEngine {
                         dsp.handle_trigger(&event);
                     }
 
-                    // Generate audio
+                    // Generate audio, then apply monitor gain
                     dsp.process_block(output, channels);
+                    if monitor_vol != 1.0 {
+                        for s in output.iter_mut() { *s *= monitor_vol; }
+                    }
                 },
                 |err| log::error!("Audio stream error: {}", err),
                 None,

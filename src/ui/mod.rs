@@ -85,6 +85,7 @@ pub struct ImpulseApp {
     show_about: bool,
     show_prefs: bool,
     export_bars: u32,
+    ui_volume: f32,         // monitor-only gain; never written to state or export
     // Piano preferences
     piano_show_labels: bool,
     piano_show_colors: bool,
@@ -131,6 +132,7 @@ impl ImpulseApp {
             show_about: false,
             show_prefs: false,
             export_bars: 8,
+            ui_volume: 1.0,
             piano_show_labels: true,
             piano_show_colors: true,
         }
@@ -462,9 +464,10 @@ impl eframe::App for ImpulseApp {
                         }
                     }
 
-                    // API link (right-aligned)
-                    if let Some(port) = self.api_port {
-                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    // Right-aligned: VOL slider + optional API link
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        // API link
+                        if let Some(port) = self.api_port {
                             let api_label = format!("API :{}", port);
                             let btn = ui.add(
                                 egui::Button::new(
@@ -480,8 +483,23 @@ impl eframe::App for ImpulseApp {
                             if btn.hovered() {
                                 btn.on_hover_text("Open API schema in browser");
                             }
-                        });
-                    }
+                            ui.add_space(8.0);
+                        }
+
+                        // Monitor volume slider (does not affect export)
+                        let vol_color = if self.ui_volume < 0.4 { theme::IRON }
+                            else if self.ui_volume < 0.75 { theme::ASH }
+                            else { theme::SMOKE };
+                        ui.label(egui::RichText::new(format!("{:.0}%", self.ui_volume * 100.0))
+                            .color(vol_color).monospace().size(9.0));
+                        if ui.add_sized(
+                            [72.0, 16.0],
+                            egui::Slider::new(&mut self.ui_volume, 0.0..=1.0).show_value(false)
+                        ).changed() {
+                            let _ = self.audio_tx.push(AudioCommand::SetMonitorVolume(self.ui_volume));
+                        }
+                        ui.label(egui::RichText::new("VOL").color(vol_color).monospace().size(9.0));
+                    });
                 });
             });
 
