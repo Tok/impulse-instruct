@@ -20,9 +20,9 @@ pub const CHALK:     Color32 = Color32::from_rgb(235,235,235); // highlights
 pub const GHOST:     Color32 = Color32::from_rgb(255,255,255); // active elements
 
 // Accent colors for active/hot states (subtle, not pure-color)
-pub const HOT:       Color32 = Color32::from_rgb(220,220,200); // warm white
+pub const HOT:       Color32 = Color32::from_rgb(210,210,210); // bright accent (alias HAZE)
 pub const ACTIVE_STEP: Color32 = Color32::from_rgb(200,200,200); // active step bg
-pub const CURSOR:    Color32 = Color32::from_rgb(240,240,220); // sequencer cursor
+pub const CURSOR:    Color32 = Color32::from_rgb(240,240,240); // sequencer cursor
 
 // ─── Apply theme to egui context ─────────────────────────────────────────────
 

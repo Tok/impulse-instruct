@@ -122,7 +122,7 @@ pub fn step_button(
         let bg = if active {
             theme::lerp_gray(45, 160, velocity)
         } else if is_current {
-            egui::Color32::from_rgb(52, 52, 40) // dim warm glow
+            theme::lerp_gray(28, 55, 0.5) // dim mid-gray cursor hint
         } else {
             theme::PIT
         };
