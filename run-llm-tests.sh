@@ -94,4 +94,7 @@ echo ""
 echo "→ Running tests (LLAMA_SERVER_URL=${LLAMA_SERVER_URL})"
 echo ""
 
-cargo test --features llm-tests -- --nocapture ${FILTER:+$FILTER}
+# --test-threads 1: llama-server handles one request at a time; parallel threads
+# cause 503/timeout flooding and all 10 runs fail.  Serial is slower (~5 min)
+# but gives reliable pass/fail signals.
+cargo test --features llm-tests -- --nocapture --test-threads 1 ${FILTER:+$FILTER}
