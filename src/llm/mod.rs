@@ -59,15 +59,37 @@ const SERVER_BINARY_CANDIDATES: &[&str] = &[
     "llama-server",                    // $PATH
 ];
 
+/// Fixed port for llama-server.  Using a fixed port prevents the process-leak
+/// problem that occurs with random ports: each restart now lands on the same
+/// address so the OS rejects a second bind, and we can detect + reuse an
+/// already-running healthy server.
+const LLAMA_PORT: u16 = 8766;
+
 pub struct LlamaServerBackend {
     child:    Option<std::process::Child>,
     base_url: String,
     live:     bool,
 }
 
+/// Kill any leftover llama-server processes from a previous run.
+/// Called before spawning a new instance so stale processes don't compete for
+/// GPU memory or hold the fixed port.
+fn kill_leaked_servers(bin_path: &str) {
+    #[cfg(unix)]
+    {
+        // Match on the full binary path to avoid killing unrelated processes.
+        let _ = std::process::Command::new("pkill")
+            .args(["-KILL", "-f", &format!("{} --model", bin_path)])
+            .status();
+        // Brief pause so the OS reclaims the port before we try to bind it.
+        std::thread::sleep(std::time::Duration::from_millis(400));
+    }
+}
+
 impl LlamaServerBackend {
     /// Spawn `llama-server` with the given model file.
-    /// Returns a backend in mock mode if binary or model are missing.
+    /// Returns `live: false` (hard-fail path) if binary or model are missing —
+    /// the caller (`run_llm_loop`) decides whether to exit or continue in mock.
     pub fn new(model_path: &str) -> Self {
         let bin = SERVER_BINARY_CANDIDATES.iter()
             .find(|&&p| std::path::Path::new(p).exists()
@@ -75,25 +97,33 @@ impl LlamaServerBackend {
             .copied();
 
         let Some(bin) = bin else {
-            log::warn!(
-                "llama-server not found — run ./build-bonsai-server.sh to build it. \
-                 Falling back to mock."
+            log::error!(
+                "llama-server binary not found — run ./build-bonsai-server.sh to build it."
             );
             return Self { child: None, base_url: String::new(), live: false };
         };
 
         if !std::path::Path::new(model_path).exists() {
-            log::warn!(
-                "Model not found at '{}' — run ./download-models.sh. \
-                 Falling back to mock.",
+            log::error!(
+                "Model not found at '{}' — run ./download-models.sh.",
                 model_path
             );
             return Self { child: None, base_url: String::new(), live: false };
         }
 
-        // Pick a free port
-        let port = free_port().unwrap_or(9999);
+        let port = LLAMA_PORT;
         let base_url = format!("http://127.0.0.1:{}", port);
+
+        // Reuse an already-healthy server (e.g. user restarted the UI without
+        // killing the server) — avoids a 30–90 s reload of the model.
+        let health_url = format!("{}/health", base_url);
+        if ureq::get(&health_url).call().map(|r| r.status() == 200).unwrap_or(false) {
+            log::info!("Reusing existing llama-server on port {} (already healthy)", port);
+            return Self { child: None, base_url, live: true };
+        }
+
+        // Kill any leaked process from a previous run that holds the port.
+        kill_leaked_servers(bin);
 
         log::info!("Spawning llama-server on port {} with model {}", port, model_path);
 
@@ -358,12 +388,6 @@ fn split_thinking(s: &str) -> (Option<String>, String) {
     (None, s.to_string())
 }
 
-fn free_port() -> Option<u16> {
-    std::net::TcpListener::bind("127.0.0.1:0").ok()
-        .and_then(|l| l.local_addr().ok())
-        .map(|a| a.port())
-}
-
 fn which_in_path(name: &str) -> bool {
     std::env::var_os("PATH")
         .map(|paths| std::env::split_paths(&paths)
@@ -524,92 +548,73 @@ pub fn run_llm_loop(
     state: Arc<RwLock<AppState>>,
     input_rx: Receiver<LlmInput>,
     output_tx: Sender<LlmOutput>,
+    mock: bool,
 ) {
+    if mock {
+        // Explicit --mock flag: skip server entirely, run mock forever.
+        {
+            let mut s = state.write();
+            s.llm.is_mock = true;
+            s.llm.llm_initializing = false;
+        }
+        log::warn!("Mock mode enabled via --mock flag. No real inference.");
+        let _ = output_tx.try_send(LlmOutput {
+            text: "[ Mock mode — pass --mock to confirm, or add model + server ]".to_string(),
+            param_update: None,
+            tokens_per_sec: 0.0,
+            prompt_tokens: 0,
+            completion_tokens: 0,
+            context_used: 0,
+            is_jam: false,
+            thinking: None,
+        });
+        run_mock_loop(state, input_rx, output_tx);
+        return;
+    }
+
     let model_path = state.read().llm.model_path.clone();
     let mut backend = LlamaServerBackend::new(&model_path);
 
-    // Publish live/mock status — clears the "initializing" flag so the footer
-    // shows the real status (live or mock) rather than a false warning during loading.
+    if !backend.is_live() {
+        // Server failed to start and --mock was not passed: hard fail.
+        {
+            let mut s = state.write();
+            s.llm.is_mock = false;        // not mock — this is a hard error
+            s.llm.llm_initializing = false;
+        }
+        log::error!(
+            "LLM server unavailable and --mock not passed. \
+             Build the server: ./build-bonsai-server.sh \
+             Download a model: ./download-models.sh \
+             Then restart. Pass --mock to run without a model."
+        );
+        // Give the UI a moment to paint the error state before exiting.
+        std::thread::sleep(std::time::Duration::from_secs(1));
+        std::process::exit(1);
+    }
+
+    // Server is live.
     {
         let mut s = state.write();
-        s.llm.is_mock = !backend.is_live();
+        s.llm.is_mock = false;
         s.llm.llm_initializing = false;
     }
-
-    if backend.is_live() {
-        log::info!("LLM thread started — server live: {}", model_path);
-        let _ = output_tx.try_send(LlmOutput {
-            text: format!("[ Model loaded: {} ]", model_path),
-            param_update: None,
-            tokens_per_sec: 0.0,
-            prompt_tokens: 0,
-            completion_tokens: 0,
-            context_used: 0,
-            is_jam: false,
-            thinking: None,
-        });
-    } else {
-        log::warn!(
-            "LLM thread started — mock mode. \
-             Run ./build-bonsai-server.sh + ./download-models.sh to enable real inference."
-        );
-        let _ = output_tx.try_send(LlmOutput {
-            text: "[ Mock mode — run ./build-bonsai-server.sh + ./download-models.sh ]".to_string(),
-            param_update: None,
-            tokens_per_sec: 0.0,
-            prompt_tokens: 0,
-            completion_tokens: 0,
-            context_used: 0,
-            is_jam: false,
-            thinking: None,
-        });
-    }
-
-    // When in mock mode, retry connecting every 30s so the user can start the
-    // server after launching the app without needing to restart.
-    let mut last_retry = std::time::Instant::now();
-    const RETRY_INTERVAL: std::time::Duration = std::time::Duration::from_secs(30);
+    log::info!("LLM thread started — server live: {}", model_path);
+    let _ = output_tx.try_send(LlmOutput {
+        text: format!("[ Model loaded: {} ]", model_path),
+        param_update: None,
+        tokens_per_sec: 0.0,
+        prompt_tokens: 0,
+        completion_tokens: 0,
+        context_used: 0,
+        is_jam: false,
+        thinking: None,
+    });
 
     loop {
-        // Use recv_timeout when in mock mode so we can retry the server periodically.
-        let input = if !backend.is_live() && last_retry.elapsed() >= RETRY_INTERVAL {
-            last_retry = std::time::Instant::now();
-            log::info!("Mock mode: retrying LLM server connection…");
-            let mp = state.read().llm.model_path.clone();
-            backend = LlamaServerBackend::new(&mp);
-            {
-                let mut s = state.write();
-                s.llm.is_mock = !backend.is_live();
-                s.llm.llm_initializing = false;
-            }
-            if backend.is_live() {
-                log::info!("LLM server reconnected: {}", mp);
-                let _ = output_tx.try_send(LlmOutput {
-                    text: format!("[ Model reconnected: {} ]", mp),
-                    param_update: None,
-                    tokens_per_sec: 0.0,
-                    prompt_tokens: 0,
-                    completion_tokens: 0,
-                    context_used: 0,
-                    is_jam: false,
-                    thinking: None,
-                });
-            }
-            match input_rx.recv_timeout(std::time::Duration::from_millis(100)) {
-                Ok(i) => i,
-                Err(_) => continue,
-            }
-        } else {
-            let timeout = if !backend.is_live() {
-                RETRY_INTERVAL.saturating_sub(last_retry.elapsed())
-            } else {
-                std::time::Duration::from_secs(3600)
-            };
-            match input_rx.recv_timeout(timeout) {
-                Ok(i) => i,
-                Err(crossbeam_channel::RecvTimeoutError::Timeout) => continue,
-                Err(crossbeam_channel::RecvTimeoutError::Disconnected) => break,
-            }
+        let input = match input_rx.recv() {
+            Ok(i) => i,
+            Err(_) => break, // channel closed
         };
 
         // ── Model switch ──────────────────────────────────────────────────────
@@ -622,7 +627,7 @@ pub fn run_llm_loop(
             let status = if backend.is_live() {
                 format!("[ Model loaded: {} ]", new_path)
             } else {
-                format!("[ Model not found: {} — falling back to mock ]", new_path)
+                format!("[ Model not found: {} — check path and restart ]", new_path)
             };
             state.write().llm.last_response = status.clone();
             let _ = output_tx.try_send(LlmOutput {
@@ -745,6 +750,80 @@ pub fn run_llm_loop(
     }
 
     log::info!("LLM thread exiting");
+}
+
+// ─── Mock loop ───────────────────────────────────────────────────────────────
+
+/// Runs when --mock is explicitly passed.  Handles inference with `mock_response`
+/// and model-switch no-ops.  Never exits unless the channel closes.
+fn run_mock_loop(
+    state: Arc<RwLock<AppState>>,
+    input_rx: Receiver<LlmInput>,
+    output_tx: Sender<LlmOutput>,
+) {
+    loop {
+        let input = match input_rx.recv() {
+            Ok(i) => i,
+            Err(_) => break,
+        };
+
+        if let LlmInput::SwitchModel(ref new_path) = input {
+            log::warn!("Mock mode: model switch to '{}' ignored (no real backend)", new_path);
+            continue;
+        }
+
+        let LlmInput::Infer { ref prompt, one_shot } = input else { continue };
+
+        let heat = state.read().llm.heat;
+        {
+            let mut s = state.write();
+            s.llm.is_inferring = true;
+            s.llm.last_prompt = prompt.clone();
+        }
+
+        match mock_response(prompt, heat) {
+            Ok(output) => {
+                if let Some(ref update) = output.param_update {
+                    let current = state.read().clone();
+                    let next = apply_llm_update(current, update);
+                    *state.write() = next;
+                    let comment = update.get("_comment").and_then(|v| v.as_str())
+                        .unwrap_or("[mock]");
+                    let persona = state.read().llm.persona_name.clone();
+                    if one_shot {
+                        log::info!("{} (mock) → {}", persona, comment);
+                    }
+                }
+                {
+                    let mut s = state.write();
+                    s.llm.is_inferring = false;
+                    s.llm.tokens_per_sec = output.tokens_per_sec;
+                    s.llm.last_response = output.text.clone();
+                }
+                let mut output = output;
+                output.is_jam = !one_shot;
+                let _ = output_tx.try_send(output);
+                if !one_shot {
+                    let _ = input_rx.try_recv();
+                    let _ = output_tx.send(LlmOutput {
+                        text: "[jam_cycle_done]".to_string(),
+                        param_update: None,
+                        tokens_per_sec: 0.0,
+                        prompt_tokens: 0,
+                        completion_tokens: 0,
+                        context_used: 0,
+                        is_jam: true,
+                        thinking: None,
+                    });
+                }
+            }
+            Err(e) => {
+                log::error!("Mock inference error: {}", e);
+                state.write().llm.is_inferring = false;
+            }
+        }
+    }
+    log::info!("Mock LLM loop exiting");
 }
 
 // ─── TTS ─────────────────────────────────────────────────────────────────────

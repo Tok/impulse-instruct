@@ -63,6 +63,13 @@ use crate::sequencer::TriggerEvent;
 use crate::llm::styles::StyleCatalog;
 use crate::state::{AppState, ConversationMode, StyleVerbosity, DrumVoice, Waveform, MAX_STEPS, toggle_drum_step, save_project};
 
+const LOG_LEVELS: &[(&str, log::LevelFilter)] = &[
+    ("ERROR", log::LevelFilter::Error),
+    ("WARN",  log::LevelFilter::Warn),
+    ("INFO",  log::LevelFilter::Info),
+    ("DEBUG", log::LevelFilter::Debug),
+];
+
 // ─── Instrument slot system ───────────────────────────────────────────────────
 
 /// The synthesis character of an instrument module.
@@ -124,6 +131,9 @@ pub struct ImpulseApp {
     // System info (GPU/VRAM/RAM) — polled in background thread
     sys_info: std::sync::Arc<std::sync::Mutex<crate::sysinfo::SysInfo>>,
     show_sysinfo: bool,
+    // Preferences
+    prefs_tab: usize,
+    log_level_idx: usize, // index into LOG_LEVELS
 }
 
 impl ImpulseApp {
@@ -184,6 +194,8 @@ impl ImpulseApp {
                 shared
             },
             show_sysinfo: false,
+            prefs_tab: 0,
+            log_level_idx: 2, // default: Info
         }
     }
 
@@ -342,155 +354,177 @@ impl eframe::App for ImpulseApp {
                 .resizable(false)
                 .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
                 .show(ctx, |ui| {
-                    ui.set_min_width(300.0);
+                    ui.set_min_width(340.0);
 
-                    // ── AI persona name ───────────────────────────────────────
-                    widgets::section_header(ui, "AI PERSONA");
+                    // ── Tab strip ─────────────────────────────────────────────
+                    let tabs = ["AI", "Controls", "Display", "System"];
                     ui.horizontal(|ui| {
-                        ui.label(egui::RichText::new("Name").monospace().size(9.5).color(theme::FOG));
-                        let mut name = self.state.read().llm.persona_name.clone();
-                        let resp = ui.add(egui::TextEdit::singleline(&mut name)
-                            .desired_width(120.0)
-                            .font(egui::TextStyle::Monospace));
-                        if resp.changed() {
-                            self.state.write().llm.persona_name = name;
+                        for (i, label) in tabs.iter().enumerate() {
+                            let active = self.prefs_tab == i;
+                            let color = if active { theme::CHALK } else { theme::ASH };
+                            let text = egui::RichText::new(*label).monospace().size(10.0).color(color);
+                            if ui.selectable_label(active, text).clicked() {
+                                self.prefs_tab = i;
+                            }
                         }
-                        ui.label(egui::RichText::new("(used in system prompt)").monospace().size(8.0).color(theme::IRON));
                     });
-
-                    ui.add_space(8.0);
                     ui.separator();
                     ui.add_space(4.0);
 
-                    // ── Model selector ────────────────────────────────────────
-                    widgets::section_header(ui, "MODEL");
+                    match self.prefs_tab {
+                        // ── Tab 0: AI ─────────────────────────────────────────
+                        0 => {
+                            widgets::section_header(ui, "PERSONA");
+                            ui.horizontal(|ui| {
+                                ui.label(egui::RichText::new("Name").monospace().size(9.5).color(theme::FOG));
+                                let mut name = self.state.read().llm.persona_name.clone();
+                                let resp = ui.add(egui::TextEdit::singleline(&mut name)
+                                    .desired_width(120.0)
+                                    .font(egui::TextStyle::Monospace));
+                                if resp.changed() { self.state.write().llm.persona_name = name; }
+                                ui.label(egui::RichText::new("(injected into system prompt)").monospace().size(8.0).color(theme::IRON));
+                            });
+                            ui.add_space(8.0);
 
-                    if ui.small_button("↺ scan models/").clicked() {
-                        self.available_models = scan_models();
-                    }
-                    if self.available_models.is_empty() {
-                        self.available_models = scan_models();
-                    }
+                            widgets::section_header(ui, "MODEL");
+                            if ui.small_button("scan models/").clicked() {
+                                self.available_models = scan_models();
+                            }
+                            if self.available_models.is_empty() {
+                                self.available_models = scan_models();
+                            }
+                            let cur_model = self.state.read().llm.model_path.clone();
+                            for path in &self.available_models {
+                                let short = std::path::Path::new(path)
+                                    .file_name().unwrap_or_default().to_string_lossy();
+                                let selected = *path == cur_model;
+                                let text = egui::RichText::new(short.as_ref()).monospace().size(9.5)
+                                    .color(if selected { theme::CHALK } else { theme::FOG });
+                                if ui.selectable_label(selected, text).clicked() && !selected {
+                                    let _ = self.llm_tx.try_send(LlmInput::SwitchModel(path.clone()));
+                                }
+                            }
+                            ui.add_space(8.0);
 
-                    let cur_model = self.state.read().llm.model_path.clone();
-                    for path in &self.available_models {
-                        let short = std::path::Path::new(path)
-                            .file_name().unwrap_or_default()
-                            .to_string_lossy();
-                        let selected = *path == cur_model;
-                        let text = egui::RichText::new(short.as_ref()).monospace().size(9.5)
-                            .color(if selected { theme::CHALK } else { theme::FOG });
-                        if ui.selectable_label(selected, text).clicked() && !selected {
-                            let _ = self.llm_tx.try_send(LlmInput::SwitchModel(path.clone()));
+                            widgets::section_header(ui, "PERSONALITY");
+                            ui.label(egui::RichText::new("How the AI narrates its moves").monospace().size(8.5).color(theme::IRON));
+                            ui.add_space(4.0);
+                            let cur_mode = self.state.read().llm.conversation_mode.clone();
+                            for (label, mode, hint) in &[
+                                ("Off",      ConversationMode::Off,      "no commentary"),
+                                ("Producer", ConversationMode::Producer, "what & why (default)"),
+                                ("DJ",       ConversationMode::Dj,       "hype party energy"),
+                                ("MC",       ConversationMode::Mc,       "jungle/rave MC"),
+                            ] {
+                                ui.horizontal(|ui| {
+                                    let selected = cur_mode == *mode;
+                                    let text = egui::RichText::new(*label).monospace().size(10.0)
+                                        .color(if selected { theme::CHALK } else { theme::FOG });
+                                    if ui.selectable_label(selected, text).clicked() && !selected {
+                                        self.state.write().llm.conversation_mode = mode.clone();
+                                    }
+                                    ui.label(egui::RichText::new(*hint).monospace().size(8.5).color(theme::IRON));
+                                });
+                            }
+                            ui.add_space(6.0);
+                            ui.horizontal(|ui| {
+                                ui.label(egui::RichText::new("TTS voice (espeak-ng)").monospace().size(9.5).color(theme::FOG));
+                                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                                    let mut tts = self.state.read().llm.tts_enabled;
+                                    if widgets::toggle_button(ui, if tts { "ON" } else { "OFF" }, &mut tts) {
+                                        self.state.write().llm.tts_enabled = tts;
+                                    }
+                                });
+                            });
+                            ui.horizontal(|ui| {
+                                ui.label(egui::RichText::new("Style description").monospace().size(9.5).color(theme::FOG));
+                                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                                    let mut is_full = self.state.read().llm.style_verbosity == StyleVerbosity::Full;
+                                    if widgets::toggle_button(ui, if is_full { "FULL" } else { "BRIEF" }, &mut is_full) {
+                                        self.state.write().llm.style_verbosity = if is_full { StyleVerbosity::Full } else { StyleVerbosity::Brief };
+                                    }
+                                });
+                            });
+                            ui.add_space(8.0);
+
+                            widgets::section_header(ui, "SYSTEM PROMPT");
+                            ui.label(egui::RichText::new("Override: replaces the generated prompt entirely.").monospace().size(8.0).color(theme::IRON));
+                            ui.add_space(2.0);
+                            let mut sp_override = self.state.read().llm.system_prompt_override.clone();
+                            let sp_resp = ui.add(
+                                egui::TextEdit::multiline(&mut sp_override)
+                                    .desired_rows(4)
+                                    .desired_width(f32::INFINITY)
+                                    .font(egui::TextStyle::Monospace)
+                                    .hint_text("Leave empty for auto-generated system prompt…"),
+                            );
+                            if sp_resp.changed() { self.state.write().llm.system_prompt_override = sp_override; }
+                        }
+
+                        // ── Tab 1: Controls ───────────────────────────────────
+                        1 => {
+                            widgets::section_header(ui, "KNOB LAYOUT");
+                            ui.horizontal(|ui| {
+                                ui.label(egui::RichText::new("Control style").monospace().size(9.5).color(theme::FOG));
+                                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                                    if widgets::toggle_button(ui, if self.use_sliders { "SLIDERS" } else { "KNOBS" }, &mut self.use_sliders) {}
+                                });
+                            });
+                            ui.add_space(8.0);
+
+                            widgets::section_header(ui, "LOCK BEHAVIOUR");
+                            ui.horizontal(|ui| {
+                                ui.label(egui::RichText::new("Auto-lock on touch").monospace().size(9.5).color(theme::FOG));
+                                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                                    let mut alt = self.state.read().llm.auto_lock_on_touch;
+                                    if widgets::toggle_button(ui, if alt { "ON" } else { "OFF" }, &mut alt) {
+                                        self.state.write().llm.auto_lock_on_touch = alt;
+                                    }
+                                });
+                            });
+                            ui.label(egui::RichText::new("  Off: knobs are free — click knob to toggle lock").monospace().size(8.0).color(theme::IRON));
+                        }
+
+                        // ── Tab 2: Display ────────────────────────────────────
+                        2 => {
+                            widgets::section_header(ui, "PIANO DISPLAY");
+                            ui.horizontal(|ui| {
+                                ui.label(egui::RichText::new("Note labels").monospace().size(9.5).color(theme::FOG));
+                                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                                    widgets::toggle_button(ui, if self.piano_show_labels { "ON" } else { "OFF" }, &mut self.piano_show_labels);
+                                });
+                            });
+                            ui.horizontal(|ui| {
+                                ui.label(egui::RichText::new("Farbige Noten colors").monospace().size(9.5).color(theme::FOG));
+                                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                                    widgets::toggle_button(ui, if self.piano_show_colors { "ON" } else { "OFF" }, &mut self.piano_show_colors);
+                                });
+                            });
+                        }
+
+                        // ── Tab 3: System ─────────────────────────────────────
+                        _ => {
+                            widgets::section_header(ui, "LOG VERBOSITY");
+                            ui.label(egui::RichText::new("Controls what appears in the terminal log.").monospace().size(8.0).color(theme::IRON));
+                            ui.add_space(4.0);
+                            for (i, (label, filter)) in LOG_LEVELS.iter().enumerate() {
+                                let selected = self.log_level_idx == i;
+                                let text = egui::RichText::new(*label).monospace().size(10.0)
+                                    .color(if selected { theme::CHALK } else { theme::FOG });
+                                if ui.selectable_label(selected, text).clicked() && !selected {
+                                    self.log_level_idx = i;
+                                    log::set_max_level(*filter);
+                                }
+                            }
+                            ui.label(egui::RichText::new("  Current: applies immediately, resets on restart.").monospace().size(8.0).color(theme::IRON));
                         }
                     }
 
-                    ui.add_space(8.0);
-                    ui.separator();
-                    ui.add_space(4.0);
-
-                    // ── AI personality ────────────────────────────────────────
-                    widgets::section_header(ui, "PERSONALITY");
-                    ui.label(egui::RichText::new("How the AI narrates its moves").monospace().size(8.5).color(theme::IRON));
-                    ui.add_space(4.0);
-                    let cur_mode = self.state.read().llm.conversation_mode.clone();
-                    let modes: &[(&str, ConversationMode, &str)] = &[
-                        ("Off",      ConversationMode::Off,      "no commentary"),
-                        ("Producer", ConversationMode::Producer, "what & why (default)"),
-                        ("DJ",       ConversationMode::Dj,       "hype party energy"),
-                        ("MC",       ConversationMode::Mc,       "jungle/rave MC"),
-                    ];
-                    for (label, mode, hint) in modes {
-                        ui.horizontal(|ui| {
-                            let selected = cur_mode == *mode;
-                            let text = egui::RichText::new(*label).monospace().size(10.0)
-                                .color(if selected { theme::CHALK } else { theme::FOG });
-                            if ui.selectable_label(selected, text).clicked() && !selected {
-                                self.state.write().llm.conversation_mode = mode.clone();
-                            }
-                            ui.label(egui::RichText::new(*hint).monospace().size(8.5).color(theme::IRON));
-                        });
-                    }
-
-                    ui.add_space(6.0);
-                    ui.horizontal(|ui| {
-                        ui.label(egui::RichText::new("TTS voice (espeak-ng)").monospace().size(9.5).color(theme::FOG));
-                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                            let mut tts = self.state.read().llm.tts_enabled;
-                            if widgets::toggle_button(ui, if tts { "ON" } else { "OFF" }, &mut tts) {
-                                self.state.write().llm.tts_enabled = tts;
-                            }
-                        });
-                    });
-                    ui.horizontal(|ui| {
-                        ui.label(egui::RichText::new("Auto-lock on touch").monospace().size(9.5).color(theme::FOG));
-                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                            let mut alt = self.state.read().llm.auto_lock_on_touch;
-                            if widgets::toggle_button(ui, if alt { "ON" } else { "OFF" }, &mut alt) {
-                                self.state.write().llm.auto_lock_on_touch = alt;
-                            }
-                        });
-                    });
-                    ui.label(egui::RichText::new("  Off: knobs are free — click knob to toggle lock").monospace().size(8.0).color(theme::IRON));
-                    ui.horizontal(|ui| {
-                        ui.label(egui::RichText::new("Style description").monospace().size(9.5).color(theme::FOG));
-                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                            let mut is_full = self.state.read().llm.style_verbosity == StyleVerbosity::Full;
-                            if widgets::toggle_button(ui, if is_full { "FULL" } else { "BRIEF" }, &mut is_full) {
-                                self.state.write().llm.style_verbosity = if is_full {
-                                    StyleVerbosity::Full
-                                } else {
-                                    StyleVerbosity::Brief
-                                };
-                            }
-                        });
-                    });
-
-                    ui.add_space(8.0);
-                    ui.separator();
-                    ui.add_space(4.0);
-
-                    // ── System prompt override ────────────────────────────────
-                    widgets::section_header(ui, "SYSTEM PROMPT");
-                    ui.label(egui::RichText::new("Override: replaces generated prompt entirely.\nLeave empty to use the auto-generated prompt.").monospace().size(8.0).color(theme::IRON));
-                    ui.add_space(2.0);
-                    let mut sp_override = self.state.read().llm.system_prompt_override.clone();
-                    let sp_resp = ui.add(
-                        egui::TextEdit::multiline(&mut sp_override)
-                            .desired_rows(4)
-                            .desired_width(f32::INFINITY)
-                            .font(egui::TextStyle::Monospace)
-                            .hint_text("Leave empty for auto-generated system prompt…"),
-                    );
-                    if sp_resp.changed() {
-                        self.state.write().llm.system_prompt_override = sp_override;
-                    }
-
-                    ui.add_space(8.0);
-                    ui.separator();
-                    ui.add_space(4.0);
-
-                    // ── Piano display ─────────────────────────────────────────
-                    widgets::section_header(ui, "PIANO DISPLAY");
-                    ui.horizontal(|ui| {
-                        ui.label(egui::RichText::new("Note labels").monospace().size(9.5).color(theme::FOG));
-                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                            widgets::toggle_button(ui, if self.piano_show_labels { "ON" } else { "OFF" }, &mut self.piano_show_labels);
-                        });
-                    });
-                    ui.horizontal(|ui| {
-                        ui.label(egui::RichText::new("Farbige Noten colors").monospace().size(9.5).color(theme::FOG));
-                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                            widgets::toggle_button(ui, if self.piano_show_colors { "ON" } else { "OFF" }, &mut self.piano_show_colors);
-                        });
-                    });
-                    ui.add_space(8.0);
+                    ui.add_space(10.0);
                     ui.separator();
                     ui.add_space(4.0);
                     ui.vertical_centered(|ui| {
-                        if ui.button("Close").clicked() {
-                            self.show_prefs = false;
-                        }
+                        if ui.button("Close").clicked() { self.show_prefs = false; }
                     });
                 });
         }
@@ -699,35 +733,50 @@ impl eframe::App for ImpulseApp {
 
                     ui.add_space(16.0);
 
-                    // Model stats
+                    // Model stats — or status warning when not live
                     {
                         let s = self.state.read();
-                        let inferring  = s.llm.is_inferring;
-                        let tps        = s.llm.tokens_per_sec;
-                        let ptok       = s.llm.prompt_tokens;
-                        let ctok       = s.llm.completion_tokens;
-                        let tthink     = s.llm.thinking_tokens;
-                        let ctx_pct    = if s.llm.context_max > 0 {
+                        let inferring   = s.llm.is_inferring;
+                        let tps         = s.llm.tokens_per_sec;
+                        let ptok        = s.llm.prompt_tokens;
+                        let ctok        = s.llm.completion_tokens;
+                        let tthink      = s.llm.thinking_tokens;
+                        let ctx_pct     = if s.llm.context_max > 0 {
                             s.llm.context_used as f32 / s.llm.context_max as f32 * 100.0
                         } else { 0.0 };
+                        let is_mock     = s.llm.is_mock;
+                        let initializing = s.llm.llm_initializing;
 
-                        let inf_color = if inferring { theme::CHALK } else { theme::IRON };
-                        ui.label(egui::RichText::new("●").color(inf_color).size(10.0));
+                        if initializing {
+                            // Show a neutral "loading" pill in place of stats
+                            ui.label(egui::RichText::new("○").color(theme::ASH).size(10.0));
+                            ui.label(egui::RichText::new("Loading model…").color(theme::ASH).size(9.0).monospace());
+                        } else if is_mock {
+                            // Bold inverse-style warning — bright orange text, clearly visible
+                            ui.label(egui::RichText::new("!").color(egui::Color32::from_rgb(255, 100, 60)).size(12.0).monospace().strong());
+                            ui.vertical(|ui| {
+                                ui.label(egui::RichText::new("MOCK MODE").color(egui::Color32::from_rgb(255, 100, 60)).size(10.0).monospace().strong());
+                                ui.label(egui::RichText::new("no model  —  ./build-bonsai-server.sh + ./download-models.sh").color(egui::Color32::from_rgb(200, 80, 40)).size(8.0).monospace());
+                            });
+                        } else {
+                            let inf_color = if inferring { theme::CHALK } else { theme::IRON };
+                            ui.label(egui::RichText::new("●").color(inf_color).size(10.0));
 
-                        ui.vertical(|ui| {
-                            // Line 1: speed + context
-                            let line1 = format!("{:.0}t/s  ctx:{:.0}%", tps, ctx_pct);
-                            ui.label(egui::RichText::new(line1).color(theme::SMOKE).size(9.0).monospace());
-                            // Line 2: in / out / think token counts (only when we have data)
-                            if ptok > 0 || ctok > 0 {
-                                let line2 = if tthink > 0 {
-                                    format!("in:{} out:{} think:~{}", ptok, ctok, tthink)
-                                } else {
-                                    format!("in:{}  out:{}", ptok, ctok)
-                                };
-                                ui.label(egui::RichText::new(line2).color(theme::IRON).size(8.5).monospace());
-                            }
-                        });
+                            ui.vertical(|ui| {
+                                // Line 1: speed + context
+                                let line1 = format!("{:.0}t/s  ctx:{:.0}%", tps, ctx_pct);
+                                ui.label(egui::RichText::new(line1).color(theme::SMOKE).size(9.0).monospace());
+                                // Line 2: in / out / think token counts
+                                if ptok > 0 || ctok > 0 {
+                                    let line2 = if tthink > 0 {
+                                        format!("in:{} out:{} think:~{}", ptok, ctok, tthink)
+                                    } else {
+                                        format!("in:{}  out:{}", ptok, ctok)
+                                    };
+                                    ui.label(egui::RichText::new(line2).color(theme::IRON).size(8.5).monospace());
+                                }
+                            });
+                        }
 
                         ui.add_space(8.0);
 
@@ -1135,32 +1184,16 @@ impl eframe::App for ImpulseApp {
             });
 
         // ── Footer ────────────────────────────────────────────────────────────
-        let (is_mock, initializing) = {
-            let s = self.state.read();
-            (s.llm.is_mock, s.llm.llm_initializing)
-        };
         TopBottomPanel::bottom("footer")
-            .frame(Frame::none()
-                .fill(if is_mock && !initializing { egui::Color32::from_rgb(90, 18, 18) } else { theme::VOID })
-                .inner_margin(egui::Margin::symmetric(6.0, 2.0)))
+            .frame(Frame::none().fill(theme::VOID).inner_margin(egui::Margin::symmetric(6.0, 2.0)))
             .exact_height(18.0)
             .show(ctx, |ui| {
                 ui.horizontal(|ui| {
-                    if initializing {
-                        ui.label(egui::RichText::new(
-                            "Loading model…"
-                        ).color(theme::ASH).monospace().size(9.0));
-                    } else if is_mock {
-                        ui.label(egui::RichText::new(
-                            "! MOCK MODE — no model loaded. Run ./build-bonsai-server.sh + ./download-models.sh"
-                        ).color(egui::Color32::from_rgb(255, 160, 80)).monospace().size(9.0));
-                    } else {
-                        let midi_text = match &self.midi_port {
-                            Some(port) => format!("MIDI: {}", port.trim()),
-                            None       => "MIDI: no device".to_string(),
-                        };
-                        ui.label(egui::RichText::new(midi_text).color(theme::IRON).monospace().size(9.0));
-                    }
+                    let midi_text = match &self.midi_port {
+                        Some(port) => format!("MIDI: {}", port.trim()),
+                        None       => "MIDI: no device".to_string(),
+                    };
+                    ui.label(egui::RichText::new(midi_text).color(theme::IRON).monospace().size(9.0));
                 });
             });
 

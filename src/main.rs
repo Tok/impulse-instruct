@@ -9,6 +9,7 @@
 //   --port <N>         HTTP port (default 8765)
 //   --model <path>     Path to GGUF model file
 //   --log <level>      Log level: error/warn/info/debug (default info)
+//   --mock             Run with mock LLM responses (no real model needed)
 //
 // Thread model:
 //   Main/UI:  eframe runs here (required by macOS/Windows)
@@ -47,6 +48,7 @@ struct Args {
     port: u16,
     model: Option<String>,
     log_level: String,
+    mock: bool,
 }
 
 impl Args {
@@ -57,12 +59,14 @@ impl Args {
             port: 8765,
             model: None,
             log_level: "info".into(),
+            mock: false,
         };
 
         let mut i = 1;
         while i < args.len() {
             match args[i].as_str() {
                 "--no-api" => result.no_api = true,
+                "--mock"   => result.mock = true,
                 "--port" => {
                     i += 1;
                     if let Some(v) = args.get(i) {
@@ -87,6 +91,7 @@ impl Args {
                     println!("  --port <N>         HTTP port (default: 8765)");
                     println!("  --model <path>     GGUF model path");
                     println!("  --log <level>      Log level (default: info)");
+                    println!("  --mock             Run without LLM (mock responses only)");
                     std::process::exit(0);
                 }
                 other => log::warn!("Unknown argument: {}", other),
@@ -102,7 +107,19 @@ fn main() -> anyhow::Result<()> {
 
     env_logger::Builder::from_env(
         env_logger::Env::default().default_filter_or(&args.log_level)
-    ).init();
+    )
+    .format(|buf, record| {
+        use std::io::Write;
+        let ts = buf.timestamp_millis();
+        // Replace the default ISO8601/UTC 'T'+'Z' format with a plain
+        // human-readable timestamp: "2026-04-03 22:00:04.123 INFO ..."
+        let ts_str = format!("{}", ts)
+            .replace('T', " ")
+            .trim_end_matches('Z')
+            .to_string();
+        writeln!(buf, "{} {:5} {}", ts_str, record.level(), record.args())
+    })
+    .init();
 
     crate::banner::print_banner();
 
@@ -127,10 +144,11 @@ fn main() -> anyhow::Result<()> {
     {
         let state = Arc::clone(&app_state);
         let out_tx = llm_out_tx.clone();
+        let mock = args.mock;
         std::thread::Builder::new()
             .name("llm".into())
             .stack_size(8 * 1024 * 1024)
-            .spawn(move || run_llm_loop(state, llm_rx, out_tx))
+            .spawn(move || run_llm_loop(state, llm_rx, out_tx, mock))
             .expect("failed to spawn LLM thread");
     }
 
