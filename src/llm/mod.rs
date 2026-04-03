@@ -528,8 +528,13 @@ pub fn run_llm_loop(
     let model_path = state.read().llm.model_path.clone();
     let mut backend = LlamaServerBackend::new(&model_path);
 
-    // Publish live/mock status to AppState so the UI can show a warning
-    state.write().llm.is_mock = !backend.is_live();
+    // Publish live/mock status — clears the "initializing" flag so the footer
+    // shows the real status (live or mock) rather than a false warning during loading.
+    {
+        let mut s = state.write();
+        s.llm.is_mock = !backend.is_live();
+        s.llm.llm_initializing = false;
+    }
 
     if backend.is_live() {
         log::info!("LLM thread started — server live: {}", model_path);
@@ -572,7 +577,11 @@ pub fn run_llm_loop(
             log::info!("Mock mode: retrying LLM server connection…");
             let mp = state.read().llm.model_path.clone();
             backend = LlamaServerBackend::new(&mp);
-            state.write().llm.is_mock = !backend.is_live();
+            {
+                let mut s = state.write();
+                s.llm.is_mock = !backend.is_live();
+                s.llm.llm_initializing = false;
+            }
             if backend.is_live() {
                 log::info!("LLM server reconnected: {}", mp);
                 let _ = output_tx.try_send(LlmOutput {

@@ -403,6 +403,7 @@ pub struct LlmState {
     pub style_verbosity: StyleVerbosity, // Brief = ~50 token brief, Full = ~150 token description
     pub auto_lock_on_touch: bool,     // if true, touching a knob locks it to user-only control
     pub is_mock: bool,                // true when running without a real model (no llama-server)
+    pub llm_initializing: bool,       // true while wait_for_ready is running (suppress false mock warning)
 }
 
 impl Default for LlmState {
@@ -434,7 +435,8 @@ impl Default for LlmState {
             tts_enabled: false,
             style_verbosity: StyleVerbosity::Full,
             auto_lock_on_touch: false,
-            is_mock: true, // assumed mock until LLM thread confirms server is live
+            is_mock: false,
+            llm_initializing: true, // cleared by LLM thread once live/mock status is known
         }
     }
 }

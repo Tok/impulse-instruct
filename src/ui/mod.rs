@@ -1135,15 +1135,22 @@ impl eframe::App for ImpulseApp {
             });
 
         // ── Footer ────────────────────────────────────────────────────────────
-        let is_mock = self.state.read().llm.is_mock;
+        let (is_mock, initializing) = {
+            let s = self.state.read();
+            (s.llm.is_mock, s.llm.llm_initializing)
+        };
         TopBottomPanel::bottom("footer")
             .frame(Frame::none()
-                .fill(if is_mock { egui::Color32::from_rgb(90, 18, 18) } else { theme::VOID })
+                .fill(if is_mock && !initializing { egui::Color32::from_rgb(90, 18, 18) } else { theme::VOID })
                 .inner_margin(egui::Margin::symmetric(6.0, 2.0)))
             .exact_height(18.0)
             .show(ctx, |ui| {
                 ui.horizontal(|ui| {
-                    if is_mock {
+                    if initializing {
+                        ui.label(egui::RichText::new(
+                            "Loading model…"
+                        ).color(theme::ASH).monospace().size(9.0));
+                    } else if is_mock {
                         ui.label(egui::RichText::new(
                             "! MOCK MODE — no model loaded. Run ./build-bonsai-server.sh + ./download-models.sh"
                         ).color(egui::Color32::from_rgb(255, 160, 80)).monospace().size(9.0));
