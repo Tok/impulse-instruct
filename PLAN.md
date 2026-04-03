@@ -251,7 +251,7 @@ Key elements to implement (in egui, respecting grayscale + Huth note colors only
 ### XY Control Squares  ← **implement next**
 - [x] `widgets::xy_pad(ui, label_x, label_y, x, y, size, locked)` — 2D parameter pad
 - [x] Used in bass panel: CUT×RES pad and ENV×DEC pad
-- [ ] Use in FX panel: REVERB_MIX×REVERB_SIZE and DELAY_MIX×DELAY_FEEDBACK
+- [x] Use in FX panel: REVERB_MIX×REVERB_SIZE and DELAY_MIX×DELAY_FEEDBACK
 - [ ] Use in 808 kick: PITCH×DECAY pad
 - [ ] Generic: any two correlated params benefit from this (filter cutoff + resonance is the canonical case)
 - [ ] Optional: show parameter name on cursor when dragging (tooltip-style)
@@ -289,4 +289,4 @@ Key elements to implement (in egui, respecting grayscale + Huth note colors only
 10. [ ] Reasoning toggle (Qwen3 /think mode, greyed out for unsupported models)
 11. [ ] Download script: Qwen3-8B Q4_K_M option
 12. [ ] Run artist reference LLM tests — audit styles.json, drop dead references
-13. [ ] FX XY pads (reverb and delay panels)
+13. [x] FX XY pads (reverb and delay panels)

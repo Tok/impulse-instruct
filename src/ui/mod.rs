@@ -1725,27 +1725,45 @@ impl ImpulseApp {
              s.llm.locked_params.clone())
         };
 
-        let mut new_locks: Vec<&str> = Vec::new();
         let mut changed = false;
+
+        let l_rs = locked.contains("fx.reverb_size");
+        let l_rm = locked.contains("fx.reverb_mix");
+        let l_df = locked.contains("fx.delay_feedback");
+        let l_dm = locked.contains("fx.delay_mix");
 
         let use_sliders = self.use_sliders;
         ui.horizontal_wrapped(|ui| {
             ui.group(|ui| {
                 ui.label(egui::RichText::new("REVERB").color(theme::FOG).monospace().size(9.5));
-                let l_rs = locked.contains("fx.reverb_size");
-                let l_rm = locked.contains("fx.reverb_mix");
-                if widgets::param_control(ui, "SIZE", &mut rs, l_rs,  use_sliders) { if !l_rs { new_locks.push("fx.reverb_size"); } changed = true; }
-                if widgets::param_control(ui, "DAMP", &mut rd, false, use_sliders) { changed = true; }
-                if widgets::param_control(ui, "MIX",  &mut rm, l_rm,  use_sliders) { if !l_rm { new_locks.push("fx.reverb_mix");  } changed = true; }
+                // MIX (X) × SIZE (Y) pad — the two most-used reverb params
+                if widgets::xy_pad(ui, "MIX", "SIZE", &mut rm, &mut rs, 88.0, l_rm || l_rs) {
+                    let mut s = self.state.write();
+                    if !l_rm { s.fx.reverb_mix  = rm; s.llm.locked_params.insert("fx.reverb_mix".to_string()); }
+                    if !l_rs { s.fx.reverb_size = rs; s.llm.locked_params.insert("fx.reverb_size".to_string()); }
+                    drop(s);
+                    self.push_audio_params();
+                }
+                if widgets::param_control(ui, "DAMP", &mut rd, false, use_sliders) {
+                    changed = true;
+                }
             });
 
             ui.add_space(4.0);
 
             ui.group(|ui| {
                 ui.label(egui::RichText::new("DELAY").color(theme::FOG).monospace().size(9.5));
-                if widgets::param_control(ui, "TIME", &mut dt, false, use_sliders) { changed = true; }
-                if widgets::param_control(ui, "FDBK", &mut df, false, use_sliders) { changed = true; }
-                if widgets::param_control(ui, "MIX",  &mut dm, false, use_sliders) { changed = true; }
+                // MIX (X) × FDBK (Y) pad — feedback × mix is the key delay texture dial
+                if widgets::xy_pad(ui, "MIX", "FDBK", &mut dm, &mut df, 88.0, l_dm || l_df) {
+                    let mut s = self.state.write();
+                    if !l_dm { s.fx.delay_mix      = dm; s.llm.locked_params.insert("fx.delay_mix".to_string()); }
+                    if !l_df { s.fx.delay_feedback = df; s.llm.locked_params.insert("fx.delay_feedback".to_string()); }
+                    drop(s);
+                    self.push_audio_params();
+                }
+                if widgets::param_control(ui, "TIME", &mut dt, false, use_sliders) {
+                    changed = true;
+                }
             });
 
             ui.add_space(4.0);
@@ -1758,21 +1776,14 @@ impl ImpulseApp {
             });
         });
 
-        // Single brief write after all groups are rendered
+        // Write-back for standalone knobs (DAMP, TIME, DRIVE, etc.)
         if changed {
             let mut s = self.state.write();
-            s.fx.reverb_size       = rs;
             s.fx.reverb_damp       = rd;
-            s.fx.reverb_mix        = rm;
             s.fx.delay_time        = dt;
-            s.fx.delay_feedback    = df;
-            s.fx.delay_mix         = dm;
             s.fx.distortion_drive  = dd;
             s.fx.distortion_mix    = dx;
             s.fx.master_volume     = mv;
-            for path in new_locks {
-                s.llm.locked_params.insert(path.to_string());
-            }
             drop(s);
             self.push_audio_params();
         }
