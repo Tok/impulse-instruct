@@ -10,6 +10,10 @@
 ::   Q2_K    ~2.8 GB  smallest
 ::   Q8_0    ~8.6 GB  near-lossless
 ::
+:: NOTE: A free HuggingFace account is required.
+::   Sign up at https://huggingface.co/join
+::   Then log in: huggingface-cli login   (paste your access token)
+::
 :: Usage:
 ::   download-models.bat              download Q4_K_M (recommended)
 ::   download-models.bat Q3_K_M       specific quantization
@@ -134,6 +138,28 @@ echo.
 exit /b 1
 
 :use_hf_cli
+:: Check if already logged in; if not, prompt to log in
+huggingface-cli whoami >nul 2>&1
+if %errorlevel% neq 0 (
+    echo.
+    echo  ============================================================
+    echo   HuggingFace login required
+    echo  ============================================================
+    echo   A free account is needed to download this model.
+    echo.
+    echo   1. Sign up ^(free^): https://huggingface.co/join
+    echo   2. Get your access token: https://huggingface.co/settings/tokens
+    echo      ^(Create a token with "Read" permissions^)
+    echo   3. Paste your token below when prompted.
+    echo  ============================================================
+    echo.
+    huggingface-cli login
+    if %errorlevel% neq 0 (
+        echo.
+        echo  Login failed or cancelled. Re-run this script after logging in.
+        exit /b 1
+    )
+)
 echo  Using huggingface-cli ^(resumable download^)...
 echo.
 huggingface-cli download %HF_REPO% --include "*%QUANT%*.gguf" --local-dir %MODEL_DIR% --local-dir-use-symlinks False

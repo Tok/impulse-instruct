@@ -27,11 +27,13 @@ Built in Rust. Runs the [Bonsai 8B](https://huggingface.co/prism-ml/Bonsai-8B-gg
 # 1. Clone and enter
 git clone <repo> impulse-instruct && cd impulse-instruct
 
-# 2. Run with mock LLM (no model needed)
+# 2. Run with mock LLM (no model needed, works immediately)
 ./start.sh
 
 # 3. Download real model and run with full LLM inference
-./download-models.sh
+#    Requires a free HuggingFace account — https://huggingface.co/join
+./download-models.sh          # Linux/macOS
+download-models.bat           # Windows
 sudo apt install libclang-dev cmake   # needed to compile llama.cpp bindings
 ./start.sh --llm
 ```
@@ -143,7 +145,21 @@ cargo install cargo-xwin
 **Bonsai 8B** by [prism-ml](https://huggingface.co/prism-ml/Bonsai-8B-gguf)  
 License: Apache 2.0
 
-The model is not bundled with the binary. Download it with `./download-models.sh`.
+The model is not bundled with the binary. A free **HuggingFace account** is required to download it — [create one here](https://huggingface.co/join).
+
+```bash
+# Linux / macOS
+./download-models.sh           # Q4_K_M, ~5 GB, recommended
+./download-models.sh Q3_K_M   # smaller alternative
+
+# Windows
+download-models.bat
+download-models.bat Q3_K_M
+
+# Manual — log in first, then download
+huggingface-cli login          # paste your HF token (Settings → Access Tokens)
+./download-models.sh
+```
 
 ---
 

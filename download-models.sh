@@ -14,6 +14,10 @@
 #   ./download-models.sh                  # downloads Q4_K_M (recommended)
 #   ./download-models.sh Q3_K_M           # specific quantization
 #   ./download-models.sh --list           # list available files
+#
+# NOTE: A free HuggingFace account is required.
+#   Sign up at https://huggingface.co/join
+#   Then log in: huggingface-cli login
 # ──────────────────────────────────────────────────────────────────────────────
 set -euo pipefail
 cd "$(dirname "$0")"
@@ -50,6 +54,22 @@ else
 
   # Try huggingface-cli first (preferred — handles auth + resumable downloads)
   if command -v huggingface-cli &>/dev/null; then
+    # Check login; prompt if not authenticated
+    if ! huggingface-cli whoami &>/dev/null; then
+      echo ""
+      echo "  ════════════════════════════════════════════════════"
+      echo "   HuggingFace login required"
+      echo "  ════════════════════════════════════════════════════"
+      echo "   A free account is needed to download this model."
+      echo ""
+      echo "   1. Sign up (free): https://huggingface.co/join"
+      echo "   2. Get your token: https://huggingface.co/settings/tokens"
+      echo "      (Create a token with Read permissions)"
+      echo "   3. Paste it below when prompted."
+      echo "  ════════════════════════════════════════════════════"
+      echo ""
+      huggingface-cli login || { echo "Login cancelled. Re-run after logging in."; exit 1; }
+    fi
     echo "Using huggingface-cli…"
     huggingface-cli download "$HF_REPO" \
       --include "*${QUANT}*.gguf" \
