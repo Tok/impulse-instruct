@@ -21,14 +21,14 @@ It can nail acid. Everything else is a lie. Fix that.
 ### Sequencer
 - [x] 16-step sequencer with per-step velocity
 - [x] BPM locked to user by default — unlock for LLM control
-- [ ] Variable step count per pattern (8 / 16 / 32 / 64)
+- [x] Variable step count per pattern (8 / 16 / 32 / 64)
 - [ ] Swing / shuffle per pattern
 - [ ] Per-step accent and slide on bass sequencer
 - [ ] Time signature selector (4/4, 3/4, 5/4, 6/8, 7/8…)
-- [ ] Amen break pattern preset — "make an amen break" should load a proper syncopated 170 BPM breakbeat
+- [x] Amen break pattern preset — "make an amen break" should load a proper syncopated 170 BPM breakbeat
 
 ### Synthesis
-- [ ] Supersaw oscillator (detune + unison count) — needed for trance, rave stabs, Reese bass
+- [x] Supersaw oscillator (detune + unison count) — needed for trance, rave stabs, Reese bass
 - [ ] Sub-oscillator (one octave below, mix control)
 - [ ] Oscillator detune (for that Reese bass detuned-saws feel)
 - [ ] FM pair (simple 2-op FM for metallic/bell tones)
@@ -44,7 +44,7 @@ It can nail acid. Everything else is a lie. Fix that.
 - [x] Reverb (basic)
 - [x] Delay
 - [x] Distortion / drive
-- [ ] Bitcrush (bit depth + sample rate reduction — lo-fi, gabber, breakcore)
+- [x] Bitcrush (bit depth + sample rate reduction — lo-fi, gabber, breakcore)
 - [ ] Chorus / flanger as standalone FX slot
 - [ ] EQ (3-band: low shelf, mid peak, high shelf)
 - [ ] Compressor / limiter on master bus
@@ -197,6 +197,70 @@ Move from a fixed linear audio chain to a node graph.
 
 ---
 
+## Model Options
+
+Bonsai-8B is Qwen3-8B compressed to 1-bit (Q1_0_g128, PrismML format, 1.1 GB).
+Quality ceiling is low. With 16 GB VRAM there is plenty of headroom for better quants
+or larger models. The llama-server backend is model-agnostic — just swap the GGUF file.
+
+### Recommended alternatives
+
+| Model | Quant | Size | VRAM | Notes |
+|-------|-------|------|------|-------|
+| **Qwen3-8B Q4_K_M** | Q4_K_M | ~5 GB | ~7 GB | Same base as Bonsai, ~5× better quality |
+| **Qwen3-8B Q8_0** | Q8_0 | ~8.7 GB | ~10 GB | Near-lossless; fits RTX 4070 Ti |
+| **Qwen3-14B Q4_K_M** | Q4_K_M | ~9 GB | ~11 GB | Better musical reasoning, still fits |
+| **Gemma 4 4B (E4B)** | Q4 | ~3 GB | ~5 GB | Fast, good structured output |
+| **Llama 3.1-8B Q4_K_M** | Q4_K_M | ~5 GB | ~7 GB | Excellent JSON compliance |
+
+HuggingFace sources (verify before downloading):
+- `bartowski/Qwen_Qwen3-8B-GGUF` — Qwen3-8B quants
+- `bartowski/Meta-Llama-3.1-8B-Instruct-GGUF` — Llama 3.1
+- `unsloth/gemma-4-E4B-it-GGUF` — Gemma 4 (if available)
+
+### TODO: model selector
+- [ ] `download-models.sh` — add options for Qwen3-8B Q4_K_M and Llama 3.1-8B
+- [ ] UI model selector: scan `models/` directory, show file list as radio group in prefs
+- [ ] Hot-swap: changing model sends a "restart LLM thread" signal to main loop
+- [ ] "Bonzai Records" confusion: Bonsai name triggers Belgian techno associations —
+      add explicit note in system prompt "you are NOT Bonzai Records, this is about synthesis"
+      OR switch to a model without this association
+
+---
+
+## UI Inspiration: Ableton Learning Synths
+
+https://learningsynths.ableton.com/en/playground
+
+Key elements to implement (in egui, respecting grayscale + Huth note colors only):
+
+### XY Control Squares  ← **implement next**
+- [x] `widgets::xy_pad(ui, label_x, label_y, x, y, size, locked)` — 2D parameter pad
+- [x] Used in bass panel: CUT×RES pad and ENV×DEC pad
+- [ ] Use in FX panel: REVERB_MIX×REVERB_SIZE and DELAY_MIX×DELAY_FEEDBACK
+- [ ] Use in 808 kick: PITCH×DECAY pad
+- [ ] Generic: any two correlated params benefit from this (filter cutoff + resonance is the canonical case)
+- [ ] Optional: show parameter name on cursor when dragging (tooltip-style)
+
+### Oscilloscope / Waveform Display
+- [ ] Ring buffer in audio thread → UI: `rtrb::RingBuffer<f32>` of ~2048 samples
+- [ ] egui painter draws the waveform as a polyline (white stroke on PIT bg)
+- [ ] Place above the piano in the main view, or as a narrow strip at the top of each voice panel
+- [ ] No color — grayscale only: CHALK line on PIT bg with SLATE border
+
+### Envelope Visualization
+- [ ] Draw ADSR shape as a polyline given the 4 parameter values
+- [ ] Used in AN1X voice panel and 303 panel (decay only, simplified)
+- [ ] Interactive: drag the breakpoints to edit A/D/S/R directly on the shape
+
+### Step Sequencer Improvements (inspired by Ableton's grid)
+- [ ] Step length indicator: small marker showing 16th / 8th / dotted etc.
+- [ ] Velocity lanes below each step row (small bar graph per step, drag to set)
+- [ ] Mute/solo per row (M/S buttons on left edge of each row)
+- [ ] Pattern copy/paste (right-click menu or keyboard shortcut)
+
+---
+
 ## Immediate next steps
 
 1. [x] Variable step count (8/16/32/64) — unblocks amen breaks and polyrhythm
@@ -204,4 +268,8 @@ Move from a fixed linear audio chain to a node graph.
 3. [x] Supersaw oscillator — unblocks Reese bass, rave stabs, DnB
 4. [x] Bitcrush FX — unblocks gabber, breakcore, lo-fi sounds
 5. [x] TTS MC mode — highest fun-per-line-of-code ratio
-6. [ ] Run artist reference LLM tests — audit styles.json, drop dead references
+6. [x] XY control squares widget (CUT×RES, ENV×DEC pads in bass panel)
+7. [ ] Model selector UI + Qwen3-8B download option
+8. [ ] Oscilloscope strip (rtrb ring buffer → egui polyline)
+9. [ ] Run artist reference LLM tests — audit styles.json, drop dead references
+10. [ ] FX XY pads (reverb and delay panels)

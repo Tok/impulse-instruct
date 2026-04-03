@@ -228,6 +228,159 @@ pub fn section_header(ui: &mut Ui, title: &str) {
 
 // ─── Small toggle button ──────────────────────────────────────────────────────
 
+// ─── XY Control Square ────────────────────────────────────────────────────────
+//
+// A 2D parameter pad inspired by the Ableton Learning Synths playground.
+// Drag anywhere in the square to simultaneously control two parameters.
+//
+// Layout:
+//   ┌─────────────────────┐
+//   │  Y_MAX              │  ← Y label (rotated text drawn manually)
+//   │         ·           │
+//   │   [cursor dot]      │
+//   │                     │
+//   │  Y_MIN              │
+//   └─────────────────────┘
+//     X_MIN           X_MAX
+//     ←── label_x  ──→
+//
+// Usage in a panel:
+//   if xy_pad(ui, "CUTOFF", "RESO", &mut cutoff, &mut resonance, 100.0, locked) {
+//       state.bass.cutoff = cutoff; state.bass.resonance = resonance;
+//   }
+
+/// 2D XY control pad. Returns true if either value changed.
+///
+/// `size` — side length of the square in logical pixels (e.g. 100.0).
+/// X increases left→right, Y increases bottom→top (audio convention).
+pub fn xy_pad(
+    ui: &mut Ui,
+    label_x: &str,
+    label_y: &str,
+    x: &mut f32,
+    y: &mut f32,
+    size: f32,
+    locked: bool,
+) -> bool {
+    // Total allocation: square + label row below + label col left
+    let label_h = 13.0_f32;
+    let label_w = 12.0_f32; // left column for rotated Y label
+    let total = Vec2::new(label_w + size + 2.0, size + label_h + 2.0);
+    let (outer, response) = ui.allocate_exact_size(total, Sense::click_and_drag());
+
+    let pad_rect = Rect::from_min_size(
+        Pos2::new(outer.min.x + label_w, outer.min.y),
+        Vec2::splat(size),
+    );
+
+    let mut changed = false;
+
+    if !locked {
+        if response.dragged() || response.clicked() {
+            if let Some(pos) = response.interact_pointer_pos() {
+                *x = ((pos.x - pad_rect.min.x) / pad_rect.width()).clamp(0.0, 1.0);
+                // Y is inverted: top = 1.0, bottom = 0.0
+                *y = (1.0 - (pos.y - pad_rect.min.y) / pad_rect.height()).clamp(0.0, 1.0);
+                changed = true;
+            }
+        }
+    }
+
+    if ui.is_rect_visible(outer) {
+        let painter = ui.painter();
+
+        // Background
+        let bg_col = if locked { theme::PIT } else if response.hovered() { theme::SLATE } else { theme::PIT };
+        painter.rect_filled(pad_rect, egui::Rounding::same(2.0), bg_col);
+        painter.rect_stroke(
+            pad_rect,
+            egui::Rounding::same(2.0),
+            Stroke::new(1.0, if locked { theme::IRON } else { theme::ASH }),
+        );
+
+        // Subtle grid lines at 25%, 50%, 75%
+        let grid_col = theme::SLATE;
+        for t in [0.25_f32, 0.5, 0.75] {
+            let gx = pad_rect.min.x + pad_rect.width() * t;
+            let gy = pad_rect.min.y + pad_rect.height() * t;
+            painter.line_segment(
+                [Pos2::new(gx, pad_rect.min.y), Pos2::new(gx, pad_rect.max.y)],
+                Stroke::new(0.5, grid_col),
+            );
+            painter.line_segment(
+                [Pos2::new(pad_rect.min.x, gy), Pos2::new(pad_rect.max.x, gy)],
+                Stroke::new(0.5, grid_col),
+            );
+        }
+
+        // Crosshair lines from cursor to edges (dim guide lines)
+        let cx = pad_rect.min.x + pad_rect.width() * x.clamp(0.0, 1.0);
+        let cy = pad_rect.min.y + pad_rect.height() * (1.0 - y.clamp(0.0, 1.0));
+        let guide_col = if locked { theme::IRON } else { theme::IRON };
+        painter.line_segment(
+            [Pos2::new(cx, pad_rect.min.y), Pos2::new(cx, pad_rect.max.y)],
+            Stroke::new(0.5, guide_col),
+        );
+        painter.line_segment(
+            [Pos2::new(pad_rect.min.x, cy), Pos2::new(pad_rect.max.x, cy)],
+            Stroke::new(0.5, guide_col),
+        );
+
+        // Cursor dot
+        let dot_col = if locked { theme::ASH } else { theme::CHALK };
+        painter.circle_filled(Pos2::new(cx, cy), 4.5, dot_col);
+        painter.circle_stroke(Pos2::new(cx, cy), 4.5, Stroke::new(1.0, if locked { theme::IRON } else { theme::FOG }));
+
+        // Lock indicator in center
+        if locked {
+            painter.text(
+                pad_rect.center(),
+                egui::Align2::CENTER_CENTER,
+                "L",
+                egui::FontId::monospace(8.0),
+                theme::IRON,
+            );
+        }
+
+        // X axis label (below square, centered)
+        let x_label_rect = Rect::from_min_size(
+            Pos2::new(pad_rect.min.x, pad_rect.max.y + 1.0),
+            Vec2::new(pad_rect.width(), label_h),
+        );
+        let col = if locked { theme::IRON } else { theme::SMOKE };
+        painter.text(
+            x_label_rect.center(),
+            egui::Align2::CENTER_CENTER,
+            format!("{} {:.2}", label_x, x),
+            egui::FontId::monospace(8.0),
+            col,
+        );
+
+        // Y axis label (left of square, rotated — draw as vertical text via characters)
+        // We paint it as a short text rotated 90°
+        let y_label_center = Pos2::new(
+            outer.min.x + label_w * 0.5,
+            pad_rect.center().y,
+        );
+        painter.text(
+            y_label_center,
+            egui::Align2::CENTER_CENTER,
+            format!("{:.2}", y),
+            egui::FontId::monospace(7.5),
+            col,
+        );
+        painter.text(
+            Pos2::new(outer.min.x + label_w * 0.5, pad_rect.min.y + 5.0),
+            egui::Align2::CENTER_CENTER,
+            label_y,
+            egui::FontId::monospace(7.0),
+            col,
+        );
+    }
+
+    changed
+}
+
 pub fn toggle_button(ui: &mut Ui, label: &str, active: &mut bool) -> bool {
     let fill = if *active { theme::IRON } else { theme::PIT };
     let text_color = if *active { theme::CHALK } else { theme::ASH };

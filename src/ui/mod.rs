@@ -1130,6 +1130,36 @@ impl ImpulseApp {
             self.push_audio_params();
         }
 
+        ui.add_space(6.0);
+
+        // XY Control Squares — two 2D pads for the core acid parameters
+        let cutoff_locked  = locked.contains("bass.cutoff");
+        let reso_locked    = locked.contains("bass.resonance");
+        let envmod_locked  = locked.contains("bass.env_mod");
+        let decay_locked   = locked.contains("bass.decay");
+        let xy1_locked = cutoff_locked || reso_locked;
+        let xy2_locked = envmod_locked || decay_locked;
+
+        ui.horizontal(|ui| {
+            // Pad 1: Cutoff (X) × Resonance (Y)
+            if widgets::xy_pad(ui, "CUT", "RES", &mut cutoff, &mut resonance, 88.0, xy1_locked) {
+                let mut s = self.state.write();
+                if !cutoff_locked  { s.bass.cutoff     = cutoff;     s.llm.locked_params.insert("bass.cutoff".to_string()); }
+                if !reso_locked    { s.bass.resonance  = resonance;  s.llm.locked_params.insert("bass.resonance".to_string()); }
+                drop(s);
+                self.push_audio_params();
+            }
+            ui.add_space(6.0);
+            // Pad 2: Env Mod (X) × Decay (Y)
+            if widgets::xy_pad(ui, "ENV", "DEC", &mut env_mod, &mut decay, 88.0, xy2_locked) {
+                let mut s = self.state.write();
+                if !envmod_locked { s.bass.env_mod = env_mod; s.llm.locked_params.insert("bass.env_mod".to_string()); }
+                if !decay_locked  { s.bass.decay   = decay;   s.llm.locked_params.insert("bass.decay".to_string()); }
+                drop(s);
+                self.push_audio_params();
+            }
+        });
+
         ui.add_space(8.0);
 
         // Waveform toggle
