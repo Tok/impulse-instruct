@@ -16,7 +16,7 @@ use std::sync::Arc;
 use tower_http::cors::{Any, CorsLayer};
 
 use crate::llm::LlmInput;
-use crate::state::AppState;
+use crate::state::{AppState, apply_llm_update, lock_params, unlock_params};
 
 // ─── Shared API state ─────────────────────────────────────────────────────────
 
@@ -77,8 +77,7 @@ async fn post_params(
     AxumState(api): AxumState<ApiState>,
     Json(req): Json<ParamsRequest>,
 ) -> Json<OkResponse> {
-    let current = api.app_state.read().clone();
-    let next = crate::state::apply_llm_update(current, &req.params);
+    let next = apply_llm_update(api.app_state.read().clone(), &req.params);
     *api.app_state.write() = next;
     Json(OkResponse { ok: true, message: Some("params updated".into()) })
 }
@@ -87,10 +86,9 @@ async fn post_lock(
     AxumState(api): AxumState<ApiState>,
     Json(req): Json<LockRequest>,
 ) -> Json<OkResponse> {
-    let mut s = api.app_state.write();
-    for path in &req.paths {
-        s.llm.locked_params.insert(path.clone());
-    }
+    let refs: Vec<&str> = req.paths.iter().map(String::as_str).collect();
+    let next = lock_params(api.app_state.read().clone(), &refs);
+    *api.app_state.write() = next;
     Json(OkResponse { ok: true, message: Some(format!("locked {} params", req.paths.len())) })
 }
 
@@ -98,20 +96,25 @@ async fn post_unlock(
     AxumState(api): AxumState<ApiState>,
     Json(req): Json<LockRequest>,
 ) -> Json<OkResponse> {
-    let mut s = api.app_state.write();
-    for path in &req.paths {
-        s.llm.locked_params.remove(path);
-    }
+    let refs: Vec<&str> = req.paths.iter().map(String::as_str).collect();
+    let next = unlock_params(api.app_state.read().clone(), &refs);
+    *api.app_state.write() = next;
     Json(OkResponse { ok: true, message: Some(format!("unlocked {} params", req.paths.len())) })
 }
 
 async fn post_play(AxumState(api): AxumState<ApiState>) -> Json<OkResponse> {
-    api.app_state.write().sequencer.running = true;
+    let next = crate::state::toggle_sequencer_running(api.app_state.read().clone());
+    // Ensure it ends up running regardless of current state
+    let mut s = next;
+    s.sequencer.running = true;
+    *api.app_state.write() = s;
     Json(OkResponse { ok: true, message: None })
 }
 
 async fn post_stop(AxumState(api): AxumState<ApiState>) -> Json<OkResponse> {
-    api.app_state.write().sequencer.running = false;
+    let mut next = api.app_state.read().clone();
+    next.sequencer.running = false;
+    *api.app_state.write() = next;
     Json(OkResponse { ok: true, message: None })
 }
 

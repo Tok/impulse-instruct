@@ -378,13 +378,13 @@ pub fn apply_llm_update(state: AppState, update: &serde_json::Value) -> AppState
     let locked = &s.llm.locked_params.clone();
 
     if let Some(b) = update.get("tb303").and_then(|v| v.as_object()) {
-        apply_f32_if_unlocked(&mut s.tb303.cutoff, b, "cutoff", "tb303.cutoff", locked);
-        apply_f32_if_unlocked(&mut s.tb303.resonance, b, "resonance", "tb303.resonance", locked);
-        apply_f32_if_unlocked(&mut s.tb303.env_mod, b, "env_mod", "tb303.env_mod", locked);
-        apply_f32_if_unlocked(&mut s.tb303.decay, b, "decay", "tb303.decay", locked);
-        apply_f32_if_unlocked(&mut s.tb303.accent_level, b, "accent_level", "tb303.accent_level", locked);
-        apply_f32_if_unlocked(&mut s.tb303.distortion, b, "distortion", "tb303.distortion", locked);
-        apply_f32_if_unlocked(&mut s.tb303.volume, b, "volume", "tb303.volume", locked);
+        s.tb303.cutoff       = unlocked_f32(s.tb303.cutoff,       b, "cutoff",       "tb303.cutoff",       locked);
+        s.tb303.resonance    = unlocked_f32(s.tb303.resonance,    b, "resonance",    "tb303.resonance",    locked);
+        s.tb303.env_mod      = unlocked_f32(s.tb303.env_mod,      b, "env_mod",      "tb303.env_mod",      locked);
+        s.tb303.decay        = unlocked_f32(s.tb303.decay,        b, "decay",        "tb303.decay",        locked);
+        s.tb303.accent_level = unlocked_f32(s.tb303.accent_level, b, "accent_level", "tb303.accent_level", locked);
+        s.tb303.distortion   = unlocked_f32(s.tb303.distortion,   b, "distortion",   "tb303.distortion",   locked);
+        s.tb303.volume       = unlocked_f32(s.tb303.volume,       b, "volume",       "tb303.volume",       locked);
         if !locked.contains("tb303.waveform") {
             if let Some(w) = b.get("waveform").and_then(|v| v.as_str()) {
                 s.tb303.waveform = match w {
@@ -396,52 +396,78 @@ pub fn apply_llm_update(state: AppState, update: &serde_json::Value) -> AppState
     }
 
     if let Some(seq) = update.get("sequencer").and_then(|v| v.as_object()) {
-        if let Some(bpm) = seq.get("bpm").and_then(|v| v.as_f64()) {
-            if !locked.contains("sequencer.bpm") {
+        if !locked.contains("sequencer.bpm") {
+            if let Some(bpm) = seq.get("bpm").and_then(|v| v.as_f64()) {
                 s.sequencer.bpm = (bpm as f32).clamp(40.0, 250.0);
             }
         }
     }
 
     if let Some(fx) = update.get("fx").and_then(|v| v.as_object()) {
-        apply_f32_if_unlocked(&mut s.fx.reverb_size, fx, "reverb_size", "fx.reverb_size", locked);
-        apply_f32_if_unlocked(&mut s.fx.reverb_mix, fx, "reverb_mix", "fx.reverb_mix", locked);
-        apply_f32_if_unlocked(&mut s.fx.delay_time, fx, "delay_time", "fx.delay_time", locked);
-        apply_f32_if_unlocked(&mut s.fx.delay_feedback, fx, "delay_feedback", "fx.delay_feedback", locked);
-        apply_f32_if_unlocked(&mut s.fx.delay_mix, fx, "delay_mix", "fx.delay_mix", locked);
-        apply_f32_if_unlocked(&mut s.fx.distortion_drive, fx, "distortion_drive", "fx.distortion_drive", locked);
-        apply_f32_if_unlocked(&mut s.fx.distortion_mix, fx, "distortion_mix", "fx.distortion_mix", locked);
+        s.fx.reverb_size      = unlocked_f32(s.fx.reverb_size,      fx, "reverb_size",      "fx.reverb_size",      locked);
+        s.fx.reverb_mix       = unlocked_f32(s.fx.reverb_mix,       fx, "reverb_mix",       "fx.reverb_mix",       locked);
+        s.fx.delay_time       = unlocked_f32(s.fx.delay_time,       fx, "delay_time",       "fx.delay_time",       locked);
+        s.fx.delay_feedback   = unlocked_f32(s.fx.delay_feedback,   fx, "delay_feedback",   "fx.delay_feedback",   locked);
+        s.fx.delay_mix        = unlocked_f32(s.fx.delay_mix,        fx, "delay_mix",        "fx.delay_mix",        locked);
+        s.fx.distortion_drive = unlocked_f32(s.fx.distortion_drive, fx, "distortion_drive", "fx.distortion_drive", locked);
+        s.fx.distortion_mix   = unlocked_f32(s.fx.distortion_mix,   fx, "distortion_mix",   "fx.distortion_mix",   locked);
     }
 
     s
 }
 
-fn apply_f32_if_unlocked(
-    field: &mut f32,
+/// Returns the updated value if not locked, otherwise returns the original.
+/// Pure — no side effects.
+fn unlocked_f32(
+    current: f32,
     obj: &serde_json::Map<String, serde_json::Value>,
     key: &str,
     path: &str,
     locked: &HashSet<String>,
-) {
-    if locked.contains(path) {
-        return;
-    }
-    if let Some(v) = obj.get(key).and_then(|v| v.as_f64()) {
-        *field = (v as f32).clamp(0.0, 1.0);
-    }
+) -> f32 {
+    if locked.contains(path) { return current; }
+    obj.get(key)
+        .and_then(|v| v.as_f64())
+        .map(|v| (v as f32).clamp(0.0, 1.0))
+        .unwrap_or(current)
 }
 
-/// Lock a parameter so the LLM cannot change it.
+/// Toggle sequencer running state.
+pub fn toggle_sequencer_running(state: AppState) -> AppState {
+    let mut s = state;
+    s.sequencer.running = !s.sequencer.running;
+    s
+}
+
+/// Lock a single parameter so the LLM cannot change it.
 pub fn lock_param(state: AppState, path: &str) -> AppState {
     let mut s = state;
     s.llm.locked_params.insert(path.to_string());
     s
 }
 
-/// Unlock a parameter.
+/// Lock multiple parameters at once.
+pub fn lock_params(state: AppState, paths: &[&str]) -> AppState {
+    let mut s = state;
+    for path in paths {
+        s.llm.locked_params.insert(path.to_string());
+    }
+    s
+}
+
+/// Unlock a single parameter.
 pub fn unlock_param(state: AppState, path: &str) -> AppState {
     let mut s = state;
     s.llm.locked_params.remove(path);
+    s
+}
+
+/// Unlock multiple parameters at once.
+pub fn unlock_params(state: AppState, paths: &[&str]) -> AppState {
+    let mut s = state;
+    for path in paths {
+        s.llm.locked_params.remove(*path);
+    }
     s
 }
 

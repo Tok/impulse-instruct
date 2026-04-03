@@ -183,17 +183,18 @@ pub fn run_llm_loop(
             Err(_) => break, // channel closed, shutdown
         };
 
-        // Mark as inferring
+        // Snapshot prompt before acquiring any lock (clone outside critical section)
+        let prompt = input.prompt.clone();
+
+        // Build system prompt from a read snapshot — lock held for clone only
+        let system = build_system_prompt(&state.read().clone());
+
+        // Brief write to mark inferring + store last prompt
         {
             let mut s = state.write();
             s.llm.is_inferring = true;
-            s.llm.last_prompt = input.prompt.clone();
+            s.llm.last_prompt = prompt;
         }
-
-        let system = {
-            let s = state.read();
-            build_system_prompt(&s)
-        };
 
         let t0 = Instant::now();
         let result = backend.infer(&system, &input.prompt);

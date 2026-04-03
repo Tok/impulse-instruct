@@ -162,7 +162,8 @@ impl eframe::App for ImpulseApp {
                         let running = self.state.read().sequencer.running;
                         let play_label = if running { "■ STOP" } else { "▶ PLAY" };
                         if ui.button(egui::RichText::new(play_label).monospace().size(10.0)).clicked() {
-                            self.state.write().sequencer.running = !running;
+                            let next = crate::state::toggle_sequencer_running(self.state.read().clone());
+                            *self.state.write() = next;
                         }
                     }
 
@@ -199,9 +200,12 @@ impl eframe::App for ImpulseApp {
                         };
                         let jam_color = if jam { theme::CHALK } else { theme::ASH };
                         if ui.button(egui::RichText::new("JAM").color(jam_color).monospace().size(10.0)).clicked() {
-                            let mut s = self.state.write();
-                            s.llm.auto_jam = !s.llm.auto_jam;
-                            if s.llm.auto_jam {
+                            // Snapshot → mutate → write (no lock held during channel send)
+                            let mut next = self.state.read().clone();
+                            next.llm.auto_jam = !next.llm.auto_jam;
+                            let now_jamming = next.llm.auto_jam;
+                            *self.state.write() = next;
+                            if now_jamming {
                                 let _ = self.llm_tx.try_send(LlmInput {
                                     prompt: "start jamming".to_string(),
                                     one_shot: false,
@@ -393,8 +397,10 @@ impl ImpulseApp {
                     let is_current = i == current_step;
                     ui.add_enabled_ui(i < step_count, |ui| {
                         if widgets::step_button(ui, is_active, is_current, 1.0) {
-                            let mut s = self.state.write();
-                            s.sequencer.bass_pattern[i].active = !s.sequencer.bass_pattern[i].active;
+                            let s = self.state.read().clone();
+                            let note = s.sequencer.bass_pattern[i].note;
+                            let was = s.sequencer.bass_pattern[i].active;
+                            *self.state.write() = crate::state::set_bass_step(s, i, note, !was);
                         }
                     });
                 }
@@ -407,38 +413,49 @@ impl ImpulseApp {
     fn draw_303(&mut self, ui: &mut egui::Ui) {
         widgets::section_header(ui, "TB-303 BASS SYNTHESIZER");
 
-        let locked = self.state.read().llm.locked_params.clone();
+        // Snapshot everything needed for rendering — lock released before any widget call
+        let (mut cutoff, mut resonance, mut env_mod, mut decay, mut accent, mut dist, mut vol, waveform, locked) = {
+            let s = self.state.read();
+            (s.tb303.cutoff, s.tb303.resonance, s.tb303.env_mod, s.tb303.decay,
+             s.tb303.accent_level, s.tb303.distortion, s.tb303.volume,
+             s.tb303.waveform.clone(), s.llm.locked_params.clone())
+        };
+
+        let mut new_locks: Vec<&str> = Vec::new();
+        let mut changed = false;
 
         ui.horizontal_wrapped(|ui| {
-            let mut changed = false;
-            {
-                let mut s = self.state.write();
-                let cutoff = s.tb303.cutoff;
-                let resonance = s.tb303.resonance;
-                let env_mod = s.tb303.env_mod;
-                let decay = s.tb303.decay;
-                let accent = s.tb303.accent_level;
-                let dist = s.tb303.distortion;
-                let vol = s.tb303.volume;
-
-                let mut c = cutoff;   if widgets::knob(ui, "CUTOFF",   &mut c, locked.contains("tb303.cutoff"))   { s.tb303.cutoff = c;      s.llm.locked_params.insert("tb303.cutoff".into());      changed = true; }
-                let mut r = resonance;if widgets::knob(ui, "RESONANCE",&mut r, locked.contains("tb303.resonance")){ s.tb303.resonance = r;  s.llm.locked_params.insert("tb303.resonance".into());  changed = true; }
-                let mut e = env_mod;  if widgets::knob(ui, "ENV MOD",  &mut e, locked.contains("tb303.env_mod"))  { s.tb303.env_mod = e;     s.llm.locked_params.insert("tb303.env_mod".into());     changed = true; }
-                let mut d = decay;    if widgets::knob(ui, "DECAY",    &mut d, locked.contains("tb303.decay"))    { s.tb303.decay = d;       s.llm.locked_params.insert("tb303.decay".into());       changed = true; }
-                let mut a = accent;   if widgets::knob(ui, "ACCENT",   &mut a, locked.contains("tb303.accent_level")) { s.tb303.accent_level = a; s.llm.locked_params.insert("tb303.accent_level".into()); changed = true; }
-                let mut ds = dist;    if widgets::knob(ui, "DRIVE",    &mut ds, locked.contains("tb303.distortion")) { s.tb303.distortion = ds; s.llm.locked_params.insert("tb303.distortion".into()); changed = true; }
-                let mut v = vol;      if widgets::knob(ui, "VOLUME",   &mut v, locked.contains("tb303.volume"))  { s.tb303.volume = v;      s.llm.locked_params.insert("tb303.volume".into());      changed = true; }
-            }
-
-            if changed { self.push_audio_params(); }
+            if widgets::knob(ui, "CUTOFF",    &mut cutoff,    locked.contains("tb303.cutoff"))       { new_locks.push("tb303.cutoff");       changed = true; }
+            if widgets::knob(ui, "RESONANCE", &mut resonance, locked.contains("tb303.resonance"))    { new_locks.push("tb303.resonance");    changed = true; }
+            if widgets::knob(ui, "ENV MOD",   &mut env_mod,   locked.contains("tb303.env_mod"))      { new_locks.push("tb303.env_mod");      changed = true; }
+            if widgets::knob(ui, "DECAY",     &mut decay,     locked.contains("tb303.decay"))        { new_locks.push("tb303.decay");        changed = true; }
+            if widgets::knob(ui, "ACCENT",    &mut accent,    locked.contains("tb303.accent_level")) { new_locks.push("tb303.accent_level"); changed = true; }
+            if widgets::knob(ui, "DRIVE",     &mut dist,      locked.contains("tb303.distortion"))   { new_locks.push("tb303.distortion");   changed = true; }
+            if widgets::knob(ui, "VOLUME",    &mut vol,       locked.contains("tb303.volume"))       { new_locks.push("tb303.volume");       changed = true; }
         });
+
+        // Apply all changes in a single brief write
+        if changed {
+            let mut s = self.state.write();
+            s.tb303.cutoff       = cutoff;
+            s.tb303.resonance    = resonance;
+            s.tb303.env_mod      = env_mod;
+            s.tb303.decay        = decay;
+            s.tb303.accent_level = accent;
+            s.tb303.distortion   = dist;
+            s.tb303.volume       = vol;
+            for path in new_locks {
+                s.llm.locked_params.insert(path.to_string());
+            }
+            drop(s);
+            self.push_audio_params();
+        }
 
         ui.add_space(8.0);
 
         // Waveform toggle
         ui.horizontal(|ui| {
             ui.label(egui::RichText::new("WAVE").color(theme::SMOKE).monospace().size(9.0));
-            let waveform = self.state.read().tb303.waveform.clone();
             let saw_active = waveform == Waveform::Saw;
             let mut saw = saw_active;
             if widgets::toggle_button(ui, "SAW", &mut saw) {
@@ -454,26 +471,32 @@ impl ImpulseApp {
 
         ui.add_space(12.0);
 
-        // Locked params management
+        // Locked params management — snapshot locked set, apply removals after rendering
+        let locked_303: Vec<String> = locked.iter()
+            .filter(|p| p.starts_with("tb303"))
+            .cloned().collect();
+
         ui.horizontal(|ui| {
             ui.label(egui::RichText::new("LOCKED:").color(theme::SMOKE).monospace().size(8.5));
-            let locked = self.state.read().llm.locked_params.clone();
-            if locked.is_empty() {
+            if locked_303.is_empty() {
                 ui.label(egui::RichText::new("none (LLM controls all)").color(theme::IRON).monospace().size(8.5));
             } else {
-                let params: Vec<String> = locked.iter()
-                    .filter(|p| p.starts_with("tb303"))
-                    .cloned().collect();
-                for p in &params {
+                let mut to_remove: Option<String> = None;
+                for p in &locked_303 {
                     let short = p.replace("tb303.", "");
                     if ui.small_button(egui::RichText::new(format!("× {}", short)).monospace().size(8.0)).clicked() {
-                        self.state.write().llm.locked_params.remove(p);
+                        to_remove = Some(p.clone());
                     }
+                }
+                if let Some(p) = to_remove {
+                    let next = crate::state::unlock_param(self.state.read().clone(), &p);
+                    *self.state.write() = next;
                 }
             }
             if ui.small_button(egui::RichText::new("UNLOCK ALL").monospace().size(8.0)).clicked() {
-                let mut s = self.state.write();
-                s.llm.locked_params.retain(|p| !p.starts_with("tb303"));
+                let mut next = self.state.read().clone();
+                next.llm.locked_params.retain(|p| !p.starts_with("tb303"));
+                *self.state.write() = next;
             }
         });
     }
@@ -483,55 +506,60 @@ impl ImpulseApp {
     fn draw_808(&mut self, ui: &mut egui::Ui) {
         widgets::section_header(ui, "TR-808 DRUM MACHINE");
 
+        // Snapshot all values before any widget rendering
+        let (mut kp, mut kd, mut kpu, mut kv,
+             mut st, mut ssn, mut sd, mut sv,
+             mut hcd, mut hod, mut hv) = {
+            let s = self.state.read();
+            (s.tr808.kick.pitch, s.tr808.kick.decay, s.tr808.kick.punch, s.tr808.kick.volume,
+             s.tr808.snare.tone, s.tr808.snare.snappy, s.tr808.snare.decay, s.tr808.snare.volume,
+             s.tr808.hihat_closed.decay, s.tr808.hihat_open.decay, s.tr808.hihat_closed.volume)
+        };
         let mut changed = false;
 
         ui.horizontal_wrapped(|ui| {
-            // Kick
             ui.group(|ui| {
                 ui.label(egui::RichText::new("KICK").color(theme::FOG).monospace().size(9.5));
-                let mut s = self.state.write();
-                let mut p = s.tr808.kick.pitch;
-                let mut d = s.tr808.kick.decay;
-                let mut pu = s.tr808.kick.punch;
-                let mut v = s.tr808.kick.volume;
-                if widgets::knob(ui, "PITCH", &mut p, false) { s.tr808.kick.pitch = p; changed = true; }
-                if widgets::knob(ui, "DECAY", &mut d, false) { s.tr808.kick.decay = d; changed = true; }
-                if widgets::knob(ui, "PUNCH", &mut pu, false) { s.tr808.kick.punch = pu; changed = true; }
-                if widgets::knob(ui, "LEVEL", &mut v, false) { s.tr808.kick.volume = v; changed = true; }
+                if widgets::knob(ui, "PITCH", &mut kp,  false) { changed = true; }
+                if widgets::knob(ui, "DECAY", &mut kd,  false) { changed = true; }
+                if widgets::knob(ui, "PUNCH", &mut kpu, false) { changed = true; }
+                if widgets::knob(ui, "LEVEL", &mut kv,  false) { changed = true; }
             });
-
             ui.add_space(4.0);
-
-            // Snare
             ui.group(|ui| {
                 ui.label(egui::RichText::new("SNARE").color(theme::FOG).monospace().size(9.5));
-                let mut s = self.state.write();
-                let mut t = s.tr808.snare.tone;
-                let mut sn = s.tr808.snare.snappy;
-                let mut d = s.tr808.snare.decay;
-                let mut v = s.tr808.snare.volume;
-                if widgets::knob(ui, "TONE",   &mut t, false) { s.tr808.snare.tone = t; changed = true; }
-                if widgets::knob(ui, "SNAPPY", &mut sn, false) { s.tr808.snare.snappy = sn; changed = true; }
-                if widgets::knob(ui, "DECAY",  &mut d, false) { s.tr808.snare.decay = d; changed = true; }
-                if widgets::knob(ui, "LEVEL",  &mut v, false) { s.tr808.snare.volume = v; changed = true; }
+                if widgets::knob(ui, "TONE",   &mut st,  false) { changed = true; }
+                if widgets::knob(ui, "SNAPPY", &mut ssn, false) { changed = true; }
+                if widgets::knob(ui, "DECAY",  &mut sd,  false) { changed = true; }
+                if widgets::knob(ui, "LEVEL",  &mut sv,  false) { changed = true; }
             });
-
             ui.add_space(4.0);
-
-            // Hihats
             ui.group(|ui| {
                 ui.label(egui::RichText::new("HIHAT").color(theme::FOG).monospace().size(9.5));
-                let mut s = self.state.write();
-                let mut cd = s.tr808.hihat_closed.decay;
-                let mut od = s.tr808.hihat_open.decay;
-                let mut v = s.tr808.hihat_closed.volume;
-                if widgets::knob(ui, "CLOSED", &mut cd, false) { s.tr808.hihat_closed.decay = cd; changed = true; }
-                if widgets::knob(ui, "OPEN",   &mut od, false) { s.tr808.hihat_open.decay = od; changed = true; }
-                if widgets::knob(ui, "LEVEL",  &mut v, false) { s.tr808.hihat_closed.volume = v; s.tr808.hihat_open.volume = v; changed = true; }
+                if widgets::knob(ui, "CLOSED", &mut hcd, false) { changed = true; }
+                if widgets::knob(ui, "OPEN",   &mut hod, false) { changed = true; }
+                if widgets::knob(ui, "LEVEL",  &mut hv,  false) { changed = true; }
             });
         });
 
-        if changed { self.push_audio_params(); }
+        // Single brief write with all changes
+        if changed {
+            let mut s = self.state.write();
+            s.tr808.kick.pitch         = kp;
+            s.tr808.kick.decay         = kd;
+            s.tr808.kick.punch         = kpu;
+            s.tr808.kick.volume        = kv;
+            s.tr808.snare.tone         = st;
+            s.tr808.snare.snappy       = ssn;
+            s.tr808.snare.decay        = sd;
+            s.tr808.snare.volume       = sv;
+            s.tr808.hihat_closed.decay = hcd;
+            s.tr808.hihat_open.decay   = hod;
+            s.tr808.hihat_closed.volume = hv;
+            s.tr808.hihat_open.volume   = hv;
+            drop(s);
+            self.push_audio_params();
+        }
     }
 
     // ── 909 Drums ────────────────────────────────────────────────────────────
@@ -539,46 +567,55 @@ impl ImpulseApp {
     fn draw_909(&mut self, ui: &mut egui::Ui) {
         widgets::section_header(ui, "TR-909 DRUM MACHINE");
 
+        let (mut kp, mut kd, mut kpu, mut kv,
+             mut st, mut ssn, mut sd, mut sv,
+             mut cd, mut cv) = {
+            let s = self.state.read();
+            (s.tr909.kick.pitch, s.tr909.kick.decay, s.tr909.kick.punch, s.tr909.kick.volume,
+             s.tr909.snare.tone, s.tr909.snare.snappy, s.tr909.snare.decay, s.tr909.snare.volume,
+             s.tr909.clap.decay, s.tr909.clap.volume)
+        };
         let mut changed = false;
 
         ui.horizontal_wrapped(|ui| {
             ui.group(|ui| {
                 ui.label(egui::RichText::new("KICK").color(theme::FOG).monospace().size(9.5));
-                let mut s = self.state.write();
-                let mut p  = s.tr909.kick.pitch;
-                let mut d  = s.tr909.kick.decay;
-                let mut pu = s.tr909.kick.punch;
-                let mut v  = s.tr909.kick.volume;
-                if widgets::knob(ui, "PITCH", &mut p,  false) { s.tr909.kick.pitch  = p;  changed = true; }
-                if widgets::knob(ui, "DECAY", &mut d,  false) { s.tr909.kick.decay  = d;  changed = true; }
-                if widgets::knob(ui, "PUNCH", &mut pu, false) { s.tr909.kick.punch  = pu; changed = true; }
-                if widgets::knob(ui, "LEVEL", &mut v,  false) { s.tr909.kick.volume = v;  changed = true; }
+                if widgets::knob(ui, "PITCH", &mut kp,  false) { changed = true; }
+                if widgets::knob(ui, "DECAY", &mut kd,  false) { changed = true; }
+                if widgets::knob(ui, "PUNCH", &mut kpu, false) { changed = true; }
+                if widgets::knob(ui, "LEVEL", &mut kv,  false) { changed = true; }
             });
             ui.add_space(4.0);
             ui.group(|ui| {
                 ui.label(egui::RichText::new("SNARE").color(theme::FOG).monospace().size(9.5));
-                let mut s = self.state.write();
-                let mut t  = s.tr909.snare.tone;
-                let mut sn = s.tr909.snare.snappy;
-                let mut d  = s.tr909.snare.decay;
-                let mut v  = s.tr909.snare.volume;
-                if widgets::knob(ui, "TONE",   &mut t,  false) { s.tr909.snare.tone   = t;  changed = true; }
-                if widgets::knob(ui, "SNAPPY", &mut sn, false) { s.tr909.snare.snappy = sn; changed = true; }
-                if widgets::knob(ui, "DECAY",  &mut d,  false) { s.tr909.snare.decay  = d;  changed = true; }
-                if widgets::knob(ui, "LEVEL",  &mut v,  false) { s.tr909.snare.volume = v;  changed = true; }
+                if widgets::knob(ui, "TONE",   &mut st,  false) { changed = true; }
+                if widgets::knob(ui, "SNAPPY", &mut ssn, false) { changed = true; }
+                if widgets::knob(ui, "DECAY",  &mut sd,  false) { changed = true; }
+                if widgets::knob(ui, "LEVEL",  &mut sv,  false) { changed = true; }
             });
             ui.add_space(4.0);
             ui.group(|ui| {
                 ui.label(egui::RichText::new("CLAP / RIM").color(theme::FOG).monospace().size(9.5));
-                let mut s = self.state.write();
-                let mut cd = s.tr909.clap.decay;
-                let mut cv = s.tr909.clap.volume;
-                if widgets::knob(ui, "CLAP DEC", &mut cd, false) { s.tr909.clap.decay  = cd; changed = true; }
-                if widgets::knob(ui, "CLAP LVL", &mut cv, false) { s.tr909.clap.volume = cv; changed = true; }
+                if widgets::knob(ui, "CLAP DEC", &mut cd, false) { changed = true; }
+                if widgets::knob(ui, "CLAP LVL", &mut cv, false) { changed = true; }
             });
         });
 
-        if changed { self.push_audio_params(); }
+        if changed {
+            let mut s = self.state.write();
+            s.tr909.kick.pitch    = kp;
+            s.tr909.kick.decay    = kd;
+            s.tr909.kick.punch    = kpu;
+            s.tr909.kick.volume   = kv;
+            s.tr909.snare.tone    = st;
+            s.tr909.snare.snappy  = ssn;
+            s.tr909.snare.decay   = sd;
+            s.tr909.snare.volume  = sv;
+            s.tr909.clap.decay    = cd;
+            s.tr909.clap.volume   = cv;
+            drop(s);
+            self.push_audio_params();
+        }
     }
 
     // ── FX Chain ─────────────────────────────────────────────────────────────
@@ -586,50 +623,67 @@ impl ImpulseApp {
     fn draw_fx(&mut self, ui: &mut egui::Ui) {
         widgets::section_header(ui, "FX CHAIN");
 
-        let locked = self.state.read().llm.locked_params.clone();
+        // Snapshot all FX values + locked set before any widget call
+        let (mut rs, mut rd, mut rm,
+             mut dt, mut df, mut dm,
+             mut dd, mut dx, mut mv,
+             locked) = {
+            let s = self.state.read();
+            (s.fx.reverb_size, s.fx.reverb_damp, s.fx.reverb_mix,
+             s.fx.delay_time, s.fx.delay_feedback, s.fx.delay_mix,
+             s.fx.distortion_drive, s.fx.distortion_mix, s.fx.master_volume,
+             s.llm.locked_params.clone())
+        };
+
+        let mut new_locks: Vec<&str> = Vec::new();
         let mut changed = false;
 
         ui.horizontal_wrapped(|ui| {
             ui.group(|ui| {
                 ui.label(egui::RichText::new("REVERB").color(theme::FOG).monospace().size(9.5));
-                let mut s = self.state.write();
-                let mut rs = s.fx.reverb_size;
-                let mut rd = s.fx.reverb_damp;
-                let mut rm = s.fx.reverb_mix;
                 let l_rs = locked.contains("fx.reverb_size");
                 let l_rm = locked.contains("fx.reverb_mix");
-                if widgets::knob(ui, "SIZE", &mut rs, l_rs) { s.fx.reverb_size = rs; if !l_rs { s.llm.locked_params.insert("fx.reverb_size".into()); } changed = true; }
-                if widgets::knob(ui, "DAMP", &mut rd, false) { s.fx.reverb_damp = rd; changed = true; }
-                if widgets::knob(ui, "MIX",  &mut rm, l_rm) { s.fx.reverb_mix  = rm; if !l_rm { s.llm.locked_params.insert("fx.reverb_mix".into()); } changed = true; }
+                if widgets::knob(ui, "SIZE", &mut rs, l_rs) { if !l_rs { new_locks.push("fx.reverb_size"); } changed = true; }
+                if widgets::knob(ui, "DAMP", &mut rd, false) { changed = true; }
+                if widgets::knob(ui, "MIX",  &mut rm, l_rm) { if !l_rm { new_locks.push("fx.reverb_mix");  } changed = true; }
             });
 
             ui.add_space(4.0);
 
             ui.group(|ui| {
                 ui.label(egui::RichText::new("DELAY").color(theme::FOG).monospace().size(9.5));
-                let mut s = self.state.write();
-                let mut dt = s.fx.delay_time;
-                let mut df = s.fx.delay_feedback;
-                let mut dm = s.fx.delay_mix;
-                if widgets::knob(ui, "TIME", &mut dt, false) { s.fx.delay_time = dt; changed = true; }
-                if widgets::knob(ui, "FDBK", &mut df, false) { s.fx.delay_feedback = df; changed = true; }
-                if widgets::knob(ui, "MIX",  &mut dm, false) { s.fx.delay_mix = dm; changed = true; }
+                if widgets::knob(ui, "TIME", &mut dt, false) { changed = true; }
+                if widgets::knob(ui, "FDBK", &mut df, false) { changed = true; }
+                if widgets::knob(ui, "MIX",  &mut dm, false) { changed = true; }
             });
 
             ui.add_space(4.0);
 
             ui.group(|ui| {
                 ui.label(egui::RichText::new("DRIVE / MASTER").color(theme::FOG).monospace().size(9.5));
-                let mut s = self.state.write();
-                let mut dd = s.fx.distortion_drive;
-                let mut dm = s.fx.distortion_mix;
-                let mut mv = s.fx.master_volume;
-                if widgets::knob(ui, "DRIVE", &mut dd, false) { s.fx.distortion_drive = dd; changed = true; }
-                if widgets::knob(ui, "MIX",   &mut dm, false) { s.fx.distortion_mix = dm;   changed = true; }
-                if widgets::knob(ui, "MASTER",&mut mv, false) { s.fx.master_volume = mv;     changed = true; }
+                if widgets::knob(ui, "DRIVE",  &mut dd, false) { changed = true; }
+                if widgets::knob(ui, "MIX",    &mut dx, false) { changed = true; }
+                if widgets::knob(ui, "MASTER", &mut mv, false) { changed = true; }
             });
         });
 
-        if changed { self.push_audio_params(); }
+        // Single brief write after all groups are rendered
+        if changed {
+            let mut s = self.state.write();
+            s.fx.reverb_size       = rs;
+            s.fx.reverb_damp       = rd;
+            s.fx.reverb_mix        = rm;
+            s.fx.delay_time        = dt;
+            s.fx.delay_feedback    = df;
+            s.fx.delay_mix         = dm;
+            s.fx.distortion_drive  = dd;
+            s.fx.distortion_mix    = dx;
+            s.fx.master_volume     = mv;
+            for path in new_locks {
+                s.llm.locked_params.insert(path.to_string());
+            }
+            drop(s);
+            self.push_audio_params();
+        }
     }
 }

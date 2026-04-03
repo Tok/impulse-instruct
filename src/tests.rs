@@ -122,6 +122,63 @@ mod state_tests {
 }
 
 #[cfg(test)]
+mod prompt_tests {
+    use crate::llm::{build_system_prompt, param_json_schema};
+    use crate::state::AppState;
+
+    #[test]
+    fn build_system_prompt_contains_json_only_instruction() {
+        let state = AppState::default();
+        let prompt = build_system_prompt(&state);
+        assert!(prompt.contains("Output JSON only"), "prompt should instruct JSON-only output");
+    }
+
+    #[test]
+    fn build_system_prompt_reflects_current_cutoff() {
+        let mut state = AppState::default();
+        state.tb303.cutoff = 0.5; // exact f32 representation
+        let prompt = build_system_prompt(&state);
+        assert!(prompt.contains("0.5"), "prompt should embed current cutoff value");
+    }
+
+    #[test]
+    fn build_system_prompt_lists_locked_params() {
+        use crate::state::lock_param;
+        let state = lock_param(AppState::default(), "tb303.cutoff");
+        let prompt = build_system_prompt(&state);
+        assert!(prompt.contains("tb303.cutoff"), "locked params should appear in prompt");
+    }
+
+    #[test]
+    fn param_json_schema_has_tb303_cutoff_range() {
+        let schema = param_json_schema();
+        let min = schema["properties"]["tb303"]["properties"]["cutoff"]["minimum"]
+            .as_f64().unwrap();
+        let max = schema["properties"]["tb303"]["properties"]["cutoff"]["maximum"]
+            .as_f64().unwrap();
+        assert_eq!(min, 0.0);
+        assert_eq!(max, 1.0);
+    }
+
+    #[test]
+    fn param_json_schema_bpm_range_is_40_to_250() {
+        let schema = param_json_schema();
+        let min = schema["properties"]["sequencer"]["properties"]["bpm"]["minimum"]
+            .as_f64().unwrap();
+        let max = schema["properties"]["sequencer"]["properties"]["bpm"]["maximum"]
+            .as_f64().unwrap();
+        assert_eq!(min, 40.0);
+        assert_eq!(max, 250.0);
+    }
+
+    #[test]
+    fn param_json_schema_rejects_additional_properties() {
+        let schema = param_json_schema();
+        assert_eq!(schema["additionalProperties"], serde_json::json!(false));
+    }
+}
+
+#[cfg(test)]
 mod dsp_tests {
     use crate::audio::dsp::midi_to_hz;
 
