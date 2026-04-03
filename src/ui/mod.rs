@@ -25,6 +25,31 @@ use crate::export::{export_wav, export_mp3};
 use crate::llm::{LlmInput, LlmOutput};
 use crate::state::{AppState, DrumVoice, Waveform, toggle_drum_step, save_project};
 
+// ─── Instrument slot system ───────────────────────────────────────────────────
+
+/// The synthesis character of an instrument module.
+/// Determines which draw function is called for `Panel::Instrument(i)`.
+#[derive(Clone, Copy, PartialEq)]
+enum InstrumentKind {
+    AcidBass,   // draw_bass()
+    DrumKit808, // draw_kit_a()
+    DrumKit909, // draw_kit_b()
+}
+
+struct InstrumentSlot {
+    label: &'static str,
+    kind: InstrumentKind,
+}
+
+/// Active panel — Sequencer and Fx are fixed; Instrument(i) indexes into
+/// `ImpulseApp.instruments` so the tab bar is fully data-driven.
+#[derive(PartialEq, Clone, Copy)]
+enum Panel {
+    Sequencer,
+    Instrument(usize),
+    Fx,
+}
+
 // ─── ImpulseApp ───────────────────────────────────────────────────────────────
 
 pub struct ImpulseApp {
@@ -35,13 +60,11 @@ pub struct ImpulseApp {
     prompt_input: String,
     log_text: String,
     active_panel: Panel,
+    instruments: Vec<InstrumentSlot>,
     api_port: Option<u16>, // Some(port) if --api was passed
     show_about: bool,
     export_bars: u32,
 }
-
-#[derive(PartialEq, Clone, Copy)]
-enum Panel { Sequencer, Drums808, Drums909, Bass303, Fx }
 
 impl ImpulseApp {
     pub fn new(
@@ -65,6 +88,11 @@ impl ImpulseApp {
             prompt_input: "let's make some acid".to_string(),
             log_text,
             active_panel: Panel::Sequencer,
+            instruments: vec![
+                InstrumentSlot { label: "BASS SYNTH", kind: InstrumentKind::AcidBass   },
+                InstrumentSlot { label: "DRUM KIT A", kind: InstrumentKind::DrumKit808 },
+                InstrumentSlot { label: "DRUM KIT B", kind: InstrumentKind::DrumKit909 },
+            ],
             api_port,
             show_about: false,
             export_bars: 8,
@@ -136,7 +164,7 @@ impl eframe::App for ImpulseApp {
                         ui.label(egui::RichText::new("◆ IMPULSE INSTRUCT").monospace().size(14.0).color(theme::CHALK));
                         ui.label(egui::RichText::new("v0.1 — LLM-controlled synthesizer").monospace().size(9.5).color(theme::SMOKE));
                         ui.add_space(8.0);
-                        ui.label(egui::RichText::new("TB-303  ·  TR-808  ·  TR-909").monospace().size(9.0).color(theme::ASH));
+                        ui.label(egui::RichText::new("Bass Synth  ·  Drum Kit A  ·  Drum Kit B").monospace().size(9.0).color(theme::ASH));
                         ui.label(egui::RichText::new("Bonsai 8B 1-bit · llama.cpp").monospace().size(9.0).color(theme::ASH));
                         ui.add_space(10.0);
                         ui.label(egui::RichText::new("Type a prompt and press ASK.").monospace().size(9.0).color(theme::FOG));
@@ -396,28 +424,34 @@ impl eframe::App for ImpulseApp {
                     });
             });
 
-        // ── Tab bar ───────────────────────────────────────────────────────────
+        // ── Tab bar (data-driven — add InstrumentSlot to self.instruments to extend) ──
         TopBottomPanel::top("tabs")
             .frame(Frame::none().fill(theme::DEEP).inner_margin(egui::Margin::symmetric(8.0, 2.0)))
             .show(ctx, |ui| {
                 ui.horizontal(|ui| {
-                    for (panel, label) in [
-                        (Panel::Sequencer, "SEQUENCER"),
-                        (Panel::Bass303,   "303 BASS"),
-                        (Panel::Drums808,  "808 DRUMS"),
-                        (Panel::Drums909,  "909 DRUMS"),
-                        (Panel::Fx,        "FX CHAIN"),
-                    ] {
-                        let active = self.active_panel == panel;
+                    // Fixed left tab
+                    let tab = |ui: &mut egui::Ui, panel: Panel, label: &str, active_panel: Panel| -> bool {
+                        let active = active_panel == panel;
                         let color = if active { theme::CHALK } else { theme::IRON };
-                        let fill = if active { theme::SLATE } else { theme::DEEP };
-                        if ui.add(
+                        let fill  = if active { theme::SLATE  } else { theme::DEEP  };
+                        ui.add(
                             egui::Button::new(egui::RichText::new(label).color(color).monospace().size(9.5))
                                 .fill(fill)
                                 .stroke(egui::Stroke::new(1.0, if active { theme::ASH } else { theme::VOID }))
-                        ).clicked() {
-                            self.active_panel = panel;
+                        ).clicked()
+                    };
+
+                    if tab(ui, Panel::Sequencer, "SEQUENCER", self.active_panel) {
+                        self.active_panel = Panel::Sequencer;
+                    }
+                    for i in 0..self.instruments.len() {
+                        let label = self.instruments[i].label;
+                        if tab(ui, Panel::Instrument(i), label, self.active_panel) {
+                            self.active_panel = Panel::Instrument(i);
                         }
+                    }
+                    if tab(ui, Panel::Fx, "FX CHAIN", self.active_panel) {
+                        self.active_panel = Panel::Fx;
                     }
                 });
             });
@@ -428,10 +462,15 @@ impl eframe::App for ImpulseApp {
             .show(ctx, |ui| {
                 match self.active_panel {
                     Panel::Sequencer => self.draw_sequencer(ui),
-                    Panel::Bass303   => self.draw_303(ui),
-                    Panel::Drums808  => self.draw_808(ui),
-                    Panel::Drums909  => self.draw_909(ui),
-                    Panel::Fx        => self.draw_fx(ui),
+                    Panel::Instrument(i) => {
+                        let kind = self.instruments[i].kind;
+                        match kind {
+                            InstrumentKind::AcidBass   => self.draw_bass(ui),
+                            InstrumentKind::DrumKit808 => self.draw_kit_a(ui),
+                            InstrumentKind::DrumKit909 => self.draw_kit_b(ui),
+                        }
+                    }
+                    Panel::Fx => self.draw_fx(ui),
                 }
             });
     }
@@ -520,7 +559,7 @@ impl ImpulseApp {
                         let enabled = i < step_count;
 
                         ui.add_enabled_ui(enabled, |ui| {
-                            if widgets::step_button(ui, is_active, is_current, vel) {
+                            if widgets::step_button(ui, is_active, is_current, vel, None) {
                                 toggled = Some(i);
                             }
                         });
@@ -541,7 +580,7 @@ impl ImpulseApp {
                 ui.add_sized(
                     [80.0, 22.0],
                     egui::Label::new(
-                        egui::RichText::new("303 BASS").color(theme::SMOKE).monospace().size(8.5)
+                        egui::RichText::new("BASS").color(theme::SMOKE).monospace().size(8.5)
                     )
                 );
                 let (bass_pattern, step_count) = {
@@ -552,8 +591,9 @@ impl ImpulseApp {
                     if i > 0 && i % 4 == 0 { ui.add_space(2.0); }
                     let is_active = bass_pattern[i].active;
                     let is_current = i == cursor;
+                    let note_col = Some(theme::note_color(bass_pattern[i].note));
                     ui.add_enabled_ui(i < step_count, |ui| {
-                        if widgets::step_button(ui, is_active, is_current, 1.0) {
+                        if widgets::step_button(ui, is_active, is_current, 1.0, note_col) {
                             let s = self.state.read().clone();
                             let note = s.sequencer.bass_pattern[i].note;
                             let was = s.sequencer.bass_pattern[i].active;
@@ -565,42 +605,42 @@ impl ImpulseApp {
         });
     }
 
-    // ── 303 Bass ─────────────────────────────────────────────────────────────
+    // ── Bass synth ────────────────────────────────────────────────────────────
 
-    fn draw_303(&mut self, ui: &mut egui::Ui) {
-        widgets::section_header(ui, "TB-303 BASS SYNTHESIZER");
+    fn draw_bass(&mut self, ui: &mut egui::Ui) {
+        widgets::section_header(ui, "BASS SYNTHESIZER");
 
         // Snapshot everything needed for rendering — lock released before any widget call
         let (mut cutoff, mut resonance, mut env_mod, mut decay, mut accent, mut dist, mut vol, waveform, locked) = {
             let s = self.state.read();
-            (s.tb303.cutoff, s.tb303.resonance, s.tb303.env_mod, s.tb303.decay,
-             s.tb303.accent_level, s.tb303.distortion, s.tb303.volume,
-             s.tb303.waveform.clone(), s.llm.locked_params.clone())
+            (s.bass.cutoff, s.bass.resonance, s.bass.env_mod, s.bass.decay,
+             s.bass.accent_level, s.bass.distortion, s.bass.volume,
+             s.bass.waveform.clone(), s.llm.locked_params.clone())
         };
 
         let mut new_locks: Vec<&str> = Vec::new();
         let mut changed = false;
 
         ui.horizontal_wrapped(|ui| {
-            if widgets::knob(ui, "CUTOFF",    &mut cutoff,    locked.contains("tb303.cutoff"))       { new_locks.push("tb303.cutoff");       changed = true; }
-            if widgets::knob(ui, "RESONANCE", &mut resonance, locked.contains("tb303.resonance"))    { new_locks.push("tb303.resonance");    changed = true; }
-            if widgets::knob(ui, "ENV MOD",   &mut env_mod,   locked.contains("tb303.env_mod"))      { new_locks.push("tb303.env_mod");      changed = true; }
-            if widgets::knob(ui, "DECAY",     &mut decay,     locked.contains("tb303.decay"))        { new_locks.push("tb303.decay");        changed = true; }
-            if widgets::knob(ui, "ACCENT",    &mut accent,    locked.contains("tb303.accent_level")) { new_locks.push("tb303.accent_level"); changed = true; }
-            if widgets::knob(ui, "DRIVE",     &mut dist,      locked.contains("tb303.distortion"))   { new_locks.push("tb303.distortion");   changed = true; }
-            if widgets::knob(ui, "VOLUME",    &mut vol,       locked.contains("tb303.volume"))       { new_locks.push("tb303.volume");       changed = true; }
+            if widgets::knob(ui, "CUTOFF",    &mut cutoff,    locked.contains("bass.cutoff"))       { new_locks.push("bass.cutoff");       changed = true; }
+            if widgets::knob(ui, "RESONANCE", &mut resonance, locked.contains("bass.resonance"))    { new_locks.push("bass.resonance");    changed = true; }
+            if widgets::knob(ui, "ENV MOD",   &mut env_mod,   locked.contains("bass.env_mod"))      { new_locks.push("bass.env_mod");      changed = true; }
+            if widgets::knob(ui, "DECAY",     &mut decay,     locked.contains("bass.decay"))        { new_locks.push("bass.decay");        changed = true; }
+            if widgets::knob(ui, "ACCENT",    &mut accent,    locked.contains("bass.accent_level")) { new_locks.push("bass.accent_level"); changed = true; }
+            if widgets::knob(ui, "DRIVE",     &mut dist,      locked.contains("bass.distortion"))   { new_locks.push("bass.distortion");   changed = true; }
+            if widgets::knob(ui, "VOLUME",    &mut vol,       locked.contains("bass.volume"))       { new_locks.push("bass.volume");       changed = true; }
         });
 
         // Apply all changes in a single brief write
         if changed {
             let mut s = self.state.write();
-            s.tb303.cutoff       = cutoff;
-            s.tb303.resonance    = resonance;
-            s.tb303.env_mod      = env_mod;
-            s.tb303.decay        = decay;
-            s.tb303.accent_level = accent;
-            s.tb303.distortion   = dist;
-            s.tb303.volume       = vol;
+            s.bass.cutoff       = cutoff;
+            s.bass.resonance    = resonance;
+            s.bass.env_mod      = env_mod;
+            s.bass.decay        = decay;
+            s.bass.accent_level = accent;
+            s.bass.distortion   = dist;
+            s.bass.volume       = vol;
             for path in new_locks {
                 s.llm.locked_params.insert(path.to_string());
             }
@@ -616,31 +656,31 @@ impl ImpulseApp {
             let saw_active = waveform == Waveform::Saw;
             let mut saw = saw_active;
             if widgets::toggle_button(ui, "SAW", &mut saw) {
-                self.state.write().tb303.waveform = Waveform::Saw;
+                self.state.write().bass.waveform = Waveform::Saw;
                 self.push_audio_params();
             }
             let mut sq = !saw_active;
             if widgets::toggle_button(ui, "SQR", &mut sq) {
-                self.state.write().tb303.waveform = Waveform::Square;
+                self.state.write().bass.waveform = Waveform::Square;
                 self.push_audio_params();
             }
         });
 
         ui.add_space(12.0);
 
-        // Locked params management — snapshot locked set, apply removals after rendering
-        let locked_303: Vec<String> = locked.iter()
-            .filter(|p| p.starts_with("tb303"))
+        // Locked params management
+        let locked_bass: Vec<String> = locked.iter()
+            .filter(|p| p.starts_with("bass"))
             .cloned().collect();
 
         ui.horizontal(|ui| {
             ui.label(egui::RichText::new("LOCKED:").color(theme::SMOKE).monospace().size(8.5));
-            if locked_303.is_empty() {
+            if locked_bass.is_empty() {
                 ui.label(egui::RichText::new("none (LLM controls all)").color(theme::IRON).monospace().size(8.5));
             } else {
                 let mut to_remove: Option<String> = None;
-                for p in &locked_303 {
-                    let short = p.replace("tb303.", "");
+                for p in &locked_bass {
+                    let short = p.replace("bass.", "");
                     if ui.small_button(egui::RichText::new(format!("× {}", short)).monospace().size(8.0)).clicked() {
                         to_remove = Some(p.clone());
                     }
@@ -652,25 +692,25 @@ impl ImpulseApp {
             }
             if ui.small_button(egui::RichText::new("UNLOCK ALL").monospace().size(8.0)).clicked() {
                 let mut next = self.state.read().clone();
-                next.llm.locked_params.retain(|p| !p.starts_with("tb303"));
+                next.llm.locked_params.retain(|p| !p.starts_with("bass"));
                 *self.state.write() = next;
             }
         });
     }
 
-    // ── 808 Drums ────────────────────────────────────────────────────────────
+    // ── Drum Kit A ────────────────────────────────────────────────────────────
 
-    fn draw_808(&mut self, ui: &mut egui::Ui) {
-        widgets::section_header(ui, "TR-808 DRUM MACHINE");
+    fn draw_kit_a(&mut self, ui: &mut egui::Ui) {
+        widgets::section_header(ui, "DRUM KIT A");
 
         // Snapshot all values before any widget rendering
         let (mut kp, mut kd, mut kpu, mut kv,
              mut st, mut ssn, mut sd, mut sv,
              mut hcd, mut hod, mut hv) = {
             let s = self.state.read();
-            (s.tr808.kick.pitch, s.tr808.kick.decay, s.tr808.kick.punch, s.tr808.kick.volume,
-             s.tr808.snare.tone, s.tr808.snare.snappy, s.tr808.snare.decay, s.tr808.snare.volume,
-             s.tr808.hihat_closed.decay, s.tr808.hihat_open.decay, s.tr808.hihat_closed.volume)
+            (s.kit_a.kick.pitch, s.kit_a.kick.decay, s.kit_a.kick.punch, s.kit_a.kick.volume,
+             s.kit_a.snare.tone, s.kit_a.snare.snappy, s.kit_a.snare.decay, s.kit_a.snare.volume,
+             s.kit_a.hihat_closed.decay, s.kit_a.hihat_open.decay, s.kit_a.hihat_closed.volume)
         };
         let mut changed = false;
 
@@ -702,35 +742,35 @@ impl ImpulseApp {
         // Single brief write with all changes
         if changed {
             let mut s = self.state.write();
-            s.tr808.kick.pitch         = kp;
-            s.tr808.kick.decay         = kd;
-            s.tr808.kick.punch         = kpu;
-            s.tr808.kick.volume        = kv;
-            s.tr808.snare.tone         = st;
-            s.tr808.snare.snappy       = ssn;
-            s.tr808.snare.decay        = sd;
-            s.tr808.snare.volume       = sv;
-            s.tr808.hihat_closed.decay = hcd;
-            s.tr808.hihat_open.decay   = hod;
-            s.tr808.hihat_closed.volume = hv;
-            s.tr808.hihat_open.volume   = hv;
+            s.kit_a.kick.pitch          = kp;
+            s.kit_a.kick.decay          = kd;
+            s.kit_a.kick.punch          = kpu;
+            s.kit_a.kick.volume         = kv;
+            s.kit_a.snare.tone          = st;
+            s.kit_a.snare.snappy        = ssn;
+            s.kit_a.snare.decay         = sd;
+            s.kit_a.snare.volume        = sv;
+            s.kit_a.hihat_closed.decay  = hcd;
+            s.kit_a.hihat_open.decay    = hod;
+            s.kit_a.hihat_closed.volume = hv;
+            s.kit_a.hihat_open.volume   = hv;
             drop(s);
             self.push_audio_params();
         }
     }
 
-    // ── 909 Drums ────────────────────────────────────────────────────────────
+    // ── Drum Kit B ────────────────────────────────────────────────────────────
 
-    fn draw_909(&mut self, ui: &mut egui::Ui) {
-        widgets::section_header(ui, "TR-909 DRUM MACHINE");
+    fn draw_kit_b(&mut self, ui: &mut egui::Ui) {
+        widgets::section_header(ui, "DRUM KIT B");
 
         let (mut kp, mut kd, mut kpu, mut kv,
              mut st, mut ssn, mut sd, mut sv,
              mut cd, mut cv) = {
             let s = self.state.read();
-            (s.tr909.kick.pitch, s.tr909.kick.decay, s.tr909.kick.punch, s.tr909.kick.volume,
-             s.tr909.snare.tone, s.tr909.snare.snappy, s.tr909.snare.decay, s.tr909.snare.volume,
-             s.tr909.clap.decay, s.tr909.clap.volume)
+            (s.kit_b.kick.pitch, s.kit_b.kick.decay, s.kit_b.kick.punch, s.kit_b.kick.volume,
+             s.kit_b.snare.tone, s.kit_b.snare.snappy, s.kit_b.snare.decay, s.kit_b.snare.volume,
+             s.kit_b.clap.decay, s.kit_b.clap.volume)
         };
         let mut changed = false;
 
@@ -760,16 +800,16 @@ impl ImpulseApp {
 
         if changed {
             let mut s = self.state.write();
-            s.tr909.kick.pitch    = kp;
-            s.tr909.kick.decay    = kd;
-            s.tr909.kick.punch    = kpu;
-            s.tr909.kick.volume   = kv;
-            s.tr909.snare.tone    = st;
-            s.tr909.snare.snappy  = ssn;
-            s.tr909.snare.decay   = sd;
-            s.tr909.snare.volume  = sv;
-            s.tr909.clap.decay    = cd;
-            s.tr909.clap.volume   = cv;
+            s.kit_b.kick.pitch   = kp;
+            s.kit_b.kick.decay   = kd;
+            s.kit_b.kick.punch   = kpu;
+            s.kit_b.kick.volume  = kv;
+            s.kit_b.snare.tone   = st;
+            s.kit_b.snare.snappy = ssn;
+            s.kit_b.snare.decay  = sd;
+            s.kit_b.snare.volume = sv;
+            s.kit_b.clap.decay   = cd;
+            s.kit_b.clap.volume  = cv;
             drop(s);
             self.push_audio_params();
         }

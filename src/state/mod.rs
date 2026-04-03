@@ -11,9 +11,9 @@ use std::collections::HashSet;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct AppState {
-    pub tb303: TB303State,
-    pub tr808: TR808State,
-    pub tr909: TR909State,
+    pub bass: BassState,
+    pub kit_a: DrumKit808,
+    pub kit_b: DrumKit909,
     pub sequencer: SequencerState,
     pub fx: FxState,
     pub llm: LlmState,
@@ -22,9 +22,9 @@ pub struct AppState {
 impl Default for AppState {
     fn default() -> Self {
         Self {
-            tb303: TB303State::default(),
-            tr808: TR808State::default(),
-            tr909: TR909State::default(),
+            bass: BassState::default(),
+            kit_a: DrumKit808::default(),
+            kit_b: DrumKit909::default(),
             sequencer: SequencerState::default(),
             fx: FxState::default(),
             llm: LlmState::default(),
@@ -32,7 +32,7 @@ impl Default for AppState {
     }
 }
 
-// ─── TB-303 ──────────────────────────────────────────────────────────────────
+// ─── Bass synth ───────────────────────────────────────────────────────────────
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub enum Waveform {
@@ -41,7 +41,7 @@ pub enum Waveform {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct TB303State {
+pub struct BassState {
     pub cutoff: f32,       // 0–1 → 200–8000 Hz
     pub resonance: f32,    // 0–1
     pub env_mod: f32,      // 0–1 filter env depth
@@ -52,7 +52,7 @@ pub struct TB303State {
     pub volume: f32,     // 0–1
 }
 
-impl Default for TB303State {
+impl Default for BassState {
     fn default() -> Self {
         Self {
             cutoff: 0.4,
@@ -67,7 +67,7 @@ impl Default for TB303State {
     }
 }
 
-// ─── TR-808 ──────────────────────────────────────────────────────────────────
+// ─── Drum Kit A (808-style) ───────────────────────────────────────────────────
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct KickParams {
@@ -125,7 +125,7 @@ impl Default for TomParams {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct TR808State {
+pub struct DrumKit808 {
     pub kick: KickParams,
     pub snare: SnareParams,
     pub hihat_closed: HihatParams,
@@ -135,7 +135,7 @@ pub struct TR808State {
     pub tom_lo: TomParams,
 }
 
-impl Default for TR808State {
+impl Default for DrumKit808 {
     fn default() -> Self {
         Self {
             kick: KickParams::default(),
@@ -149,7 +149,7 @@ impl Default for TR808State {
     }
 }
 
-// ─── TR-909 ──────────────────────────────────────────────────────────────────
+// ─── Drum Kit B (909-style) ───────────────────────────────────────────────────
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ClapParams {
@@ -164,7 +164,7 @@ impl Default for ClapParams {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct TR909State {
+pub struct DrumKit909 {
     pub kick: KickParams,
     pub snare: SnareParams,
     pub hihat_closed: HihatParams,
@@ -173,7 +173,7 @@ pub struct TR909State {
     pub rim: SnareParams, // rim shot reuses snare params
 }
 
-impl Default for TR909State {
+impl Default for DrumKit909 {
     fn default() -> Self {
         Self {
             kick: KickParams { pitch: 0.55, decay: 0.5, punch: 0.5, tone: 0.9, volume: 0.65 },
@@ -246,19 +246,19 @@ impl DrumVoice {
 
     pub fn label(&self) -> &'static str {
         match self {
-            DrumVoice::Kick808 => "808 Kick",
-            DrumVoice::Snare808 => "808 Snare",
-            DrumVoice::HihatClosed808 => "808 CHH",
-            DrumVoice::HihatOpen808 => "808 OHH",
-            DrumVoice::TomHi808 => "808 Hi Tom",
-            DrumVoice::TomMid808 => "808 Mid Tom",
-            DrumVoice::TomLo808 => "808 Lo Tom",
-            DrumVoice::Kick909 => "909 Kick",
-            DrumVoice::Snare909 => "909 Snare",
-            DrumVoice::HihatClosed909 => "909 CHH",
-            DrumVoice::HihatOpen909 => "909 OHH",
-            DrumVoice::Clap909 => "909 Clap",
-            DrumVoice::Rim909 => "909 Rim",
+            DrumVoice::Kick808 => "KA Kick",
+            DrumVoice::Snare808 => "KA Snare",
+            DrumVoice::HihatClosed808 => "KA CHH",
+            DrumVoice::HihatOpen808 => "KA OHH",
+            DrumVoice::TomHi808 => "KA Hi Tom",
+            DrumVoice::TomMid808 => "KA Mid Tom",
+            DrumVoice::TomLo808 => "KA Lo Tom",
+            DrumVoice::Kick909 => "KB Kick",
+            DrumVoice::Snare909 => "KB Snare",
+            DrumVoice::HihatClosed909 => "KB CHH",
+            DrumVoice::HihatOpen909 => "KB OHH",
+            DrumVoice::Clap909 => "KB Clap",
+            DrumVoice::Rim909 => "KB Rim",
         }
     }
 }
@@ -371,17 +371,17 @@ pub fn apply_llm_update(state: AppState, update: &serde_json::Value) -> AppState
     let mut s = state;
     let locked = &s.llm.locked_params.clone();
 
-    if let Some(b) = update.get("tb303").and_then(|v| v.as_object()) {
-        s.tb303.cutoff       = unlocked_f32(s.tb303.cutoff,       b, "cutoff",       "tb303.cutoff",       locked);
-        s.tb303.resonance    = unlocked_f32(s.tb303.resonance,    b, "resonance",    "tb303.resonance",    locked);
-        s.tb303.env_mod      = unlocked_f32(s.tb303.env_mod,      b, "env_mod",      "tb303.env_mod",      locked);
-        s.tb303.decay        = unlocked_f32(s.tb303.decay,        b, "decay",        "tb303.decay",        locked);
-        s.tb303.accent_level = unlocked_f32(s.tb303.accent_level, b, "accent_level", "tb303.accent_level", locked);
-        s.tb303.distortion   = unlocked_f32(s.tb303.distortion,   b, "distortion",   "tb303.distortion",   locked);
-        s.tb303.volume       = unlocked_f32(s.tb303.volume,       b, "volume",       "tb303.volume",       locked);
-        if !locked.contains("tb303.waveform") {
+    if let Some(b) = update.get("bass").and_then(|v| v.as_object()) {
+        s.bass.cutoff       = unlocked_f32(s.bass.cutoff,       b, "cutoff",       "bass.cutoff",       locked);
+        s.bass.resonance    = unlocked_f32(s.bass.resonance,    b, "resonance",    "bass.resonance",    locked);
+        s.bass.env_mod      = unlocked_f32(s.bass.env_mod,      b, "env_mod",      "bass.env_mod",      locked);
+        s.bass.decay        = unlocked_f32(s.bass.decay,        b, "decay",        "bass.decay",        locked);
+        s.bass.accent_level = unlocked_f32(s.bass.accent_level, b, "accent_level", "bass.accent_level", locked);
+        s.bass.distortion   = unlocked_f32(s.bass.distortion,   b, "distortion",   "bass.distortion",   locked);
+        s.bass.volume       = unlocked_f32(s.bass.volume,       b, "volume",       "bass.volume",       locked);
+        if !locked.contains("bass.waveform") {
             if let Some(w) = b.get("waveform").and_then(|v| v.as_str()) {
-                s.tb303.waveform = match w {
+                s.bass.waveform = match w {
                     "Square" => Waveform::Square,
                     _ => Waveform::Saw,
                 };

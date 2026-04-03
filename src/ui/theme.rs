@@ -24,6 +24,31 @@ pub const HOT:       Color32 = Color32::from_rgb(210,210,210); // bright accent 
 pub const ACTIVE_STEP: Color32 = Color32::from_rgb(200,200,200); // active step bg
 pub const CURSOR:    Color32 = Color32::from_rgb(240,240,240); // sequencer cursor
 
+// ─── Huth Farbige Noten — note-to-color mapping ──────────────────────────────
+// Ch. A. B. Huth, *Farbige Noten*, Hamburg 1888–1889.
+// 12 chromatic semitones mapped counter-clockwise on the RYB wheel, starting
+// from Blue at C. One octave = 360° = one full circuit. See docs/colorful-notes.md.
+
+pub const NOTE_COLORS: [Color32; 12] = [
+    Color32::from_rgb(0x33, 0x66, 0xDD), // C  — BLU  Blue
+    Color32::from_rgb(0x22, 0x99, 0xBB), // C# — SE   Seegrün (cyan-blue)
+    Color32::from_rgb(0x33, 0xAA, 0x66), // D  — VER  Vert (green/teal)
+    Color32::from_rgb(0x88, 0xCC, 0x22), // D# — MO   Yellow-green
+    Color32::from_rgb(0xDD, 0xCC, 0x22), // E  — GEL  Gelb (yellow)
+    Color32::from_rgb(0xEE, 0x88, 0x22), // F  — OR   Orange
+    Color32::from_rgb(0xDD, 0x44, 0x22), // F# — NER  Vermilion
+    Color32::from_rgb(0xEE, 0x33, 0x66), // G  — ROS  Rose
+    Color32::from_rgb(0xCC, 0x11, 0x44), // G# — CAR  Carmine
+    Color32::from_rgb(0x99, 0x66, 0xCC), // A  — LIL  Lila (lilac-violet)
+    Color32::from_rgb(0x77, 0x44, 0xBB), // A# — PEN  Pensée (purple-violet)
+    Color32::from_rgb(0x44, 0x33, 0xAA), // B  — IN   Indigo
+];
+
+/// Return the Huth color for any MIDI note (wraps at octave boundary).
+pub fn note_color(midi_note: u8) -> Color32 {
+    NOTE_COLORS[(midi_note % 12) as usize]
+}
+
 // ─── Apply theme to egui context ─────────────────────────────────────────────
 
 pub fn apply(ctx: &egui::Context) {

@@ -4,7 +4,7 @@
     "keywords": ["acid", "squelch", "squelchy", "303", "resonant", "let's make some acid"],
     "comment": "classic acid setup — resonant filter sweeping over a syncopated 303 line, 4-on-the-floor kick",
     "params": {
-      "tb303": { "cutoff": 0.5, "resonance": 0.70, "env_mod": 0.80, "decay": 0.38, "distortion": 0.05, "volume": 0.9 },
+      "bass": { "cutoff": 0.5, "resonance": 0.70, "env_mod": 0.80, "decay": 0.38, "distortion": 0.05, "volume": 0.9 },
       "sequencer": {
         "bass_steps": [true,false,true,false,false,true,false,true,true,false,false,true,false,true,false,false],
         "bass_notes": [36,36,36,36,36,41,36,43,36,36,36,36,36,43,36,36],
@@ -19,7 +19,7 @@
     "keywords": ["dark", "deep", "heavy", "go dark", "make it dark", "darker"],
     "comment": "going dark — pulling the filter way down and adding space with long reverb",
     "params": {
-      "tb303": { "cutoff": 0.15, "resonance": 0.5, "env_mod": 0.3 },
+      "bass": { "cutoff": 0.15, "resonance": 0.5, "env_mod": 0.3 },
       "fx": { "reverb_size": 0.8, "reverb_mix": 0.45, "delay_mix": 0.25 }
     }
   },
@@ -28,7 +28,7 @@
     "keywords": ["harder", "hard", "more drive", "distort", "grit", "saturate", "push"],
     "comment": "pushing harder — tighter decay, master bus saturation",
     "params": {
-      "tb303": { "decay": 0.2, "distortion": 0.12, "env_mod": 0.85 },
+      "bass": { "decay": 0.2, "distortion": 0.12, "env_mod": 0.85 },
       "fx": { "distortion_drive": 0.2, "distortion_mix": 0.35 }
     }
   },
@@ -37,7 +37,7 @@
     "keywords": ["mellow", "chill", "softer", "quieter", "soft", "gentle", "relax"],
     "comment": "softening things — opening the filter gently, pulling resonance back",
     "params": {
-      "tb303": { "cutoff": 0.6, "resonance": 0.3, "env_mod": 0.25, "volume": 0.75 },
+      "bass": { "cutoff": 0.6, "resonance": 0.3, "env_mod": 0.25, "volume": 0.75 },
       "fx": { "reverb_mix": 0.3, "delay_mix": 0.2 }
     }
   },
@@ -268,7 +268,7 @@
     "keywords": ["open filter", "open the filter", "brighter", "more treble", "filter up", "raise cutoff", "more brightness"],
     "comment": "opening up the filter — letting the high frequencies through",
     "params": {
-      "tb303": { "cutoff": 0.75, "resonance": 0.35 }
+      "bass": { "cutoff": 0.75, "resonance": 0.35 }
     }
   },
   {
@@ -276,7 +276,7 @@
     "keywords": ["close filter", "close the filter", "filter down", "lower cutoff", "more bass", "bassy", "sub"],
     "comment": "closing down the filter — pushing the sound into sub-bass territory",
     "params": {
-      "tb303": { "cutoff": 0.15, "resonance": 0.45 }
+      "bass": { "cutoff": 0.15, "resonance": 0.45 }
     }
   },
   {
@@ -284,7 +284,7 @@
     "keywords": ["more acid", "more resonance", "more squelch", "squelchier", "resonance up", "filter acid"],
     "comment": "cranking the resonance and env mod for maximum acid character",
     "params": {
-      "tb303": { "resonance": 0.82, "env_mod": 0.75, "decay": 0.35 }
+      "bass": { "resonance": 0.82, "env_mod": 0.75, "decay": 0.35 }
     }
   },
   {

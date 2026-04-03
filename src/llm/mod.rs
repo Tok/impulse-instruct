@@ -99,7 +99,7 @@ pub fn mock_response(prompt: &str, heat: f32) -> Result<LlmOutput> {
     let json = if prompt_lower.contains("acid") {
         serde_json::json!({
             "_comment": "classic acid setup — resonant filter sweeping over a syncopated 303 line, 4-on-the-floor kick",
-            "tb303": { "cutoff": 0.5, "resonance": 0.70, "env_mod": 0.80, "decay": 0.38, "distortion": 0.05, "volume": 0.9 },
+            "bass": { "cutoff": 0.5, "resonance": 0.70, "env_mod": 0.80, "decay": 0.38, "distortion": 0.05, "volume": 0.9 },
             "sequencer": {
                 "bpm": 135.0,
                 "bass_steps": [true, false, true, false, false, true, false, true, true, false, false, true, false, true, false, false],
@@ -112,19 +112,19 @@ pub fn mock_response(prompt: &str, heat: f32) -> Result<LlmOutput> {
     } else if prompt_lower.contains("dark") || prompt_lower.contains("deep") {
         serde_json::json!({
             "_comment": "going dark — pulling the filter way down and adding space with long reverb and delay",
-            "tb303": { "cutoff": 0.15, "resonance": 0.5, "env_mod": 0.3 },
+            "bass": { "cutoff": 0.15, "resonance": 0.5, "env_mod": 0.3 },
             "fx": { "reverb_size": 0.8, "reverb_mix": 0.5, "delay_mix": 0.3 }
         })
     } else if prompt_lower.contains("fast") || prompt_lower.contains("hard") || prompt_lower.contains("harder") {
         serde_json::json!({
             "_comment": "pushing harder — tighter decay, a touch of drive",
-            "tb303": { "decay": 0.2, "distortion": 0.12, "env_mod": 0.85 },
+            "bass": { "decay": 0.2, "distortion": 0.12, "env_mod": 0.85 },
             "fx": { "distortion_drive": 0.15, "distortion_mix": 0.3 }
         })
     } else if prompt_lower.contains("mellow") || prompt_lower.contains("chill") || prompt_lower.contains("softer") || prompt_lower.contains("quieter") {
         serde_json::json!({
             "_comment": "softening things — opening the filter gently, pulling resonance back",
-            "tb303": { "cutoff": 0.6, "resonance": 0.3, "env_mod": 0.25, "volume": 0.75 },
+            "bass": { "cutoff": 0.6, "resonance": 0.3, "env_mod": 0.25, "volume": 0.75 },
             "fx": { "reverb_mix": 0.3, "delay_mix": 0.2 }
         })
     } else if prompt_lower.contains("melody") || prompt_lower.contains("notes") || prompt_lower.contains("bass line") || prompt_lower.contains("bassline") {
@@ -201,13 +201,13 @@ pub fn mock_response(prompt: &str, heat: f32) -> Result<LlmOutput> {
         if heat < 0.3 {
             serde_json::json!({
                 "_comment": "subtle filter movement — keeping things settled",
-                "tb303": { "cutoff": cut, "resonance": res }
+                "bass": { "cutoff": cut, "resonance": res }
             })
         } else if heat < 0.6 {
             let bpm_shift = (p3.sin() * heat * 12.0) as i32;
             serde_json::json!({
                 "_comment": "evolving the filter and nudging the groove",
-                "tb303": { "cutoff": cut, "resonance": res,
+                "bass": { "cutoff": cut, "resonance": res,
                            "env_mod": (0.5 + (p2 * 0.8).sin() * sweep).clamp(0.2, 0.95) },
                 "sequencer": { "bpm": (130.0 + bpm_shift as f32).clamp(100.0, 160.0) }
             })
@@ -221,7 +221,7 @@ pub fn mock_response(prompt: &str, heat: f32) -> Result<LlmOutput> {
             let bpm = (125.0 + (p3 * 2.0).sin() * heat * 20.0).clamp(110.0, 155.0);
             serde_json::json!({
                 "_comment": "shaking up the pattern and pushing the filter harder",
-                "tb303": { "cutoff": cut, "resonance": res,
+                "bass": { "cutoff": cut, "resonance": res,
                            "env_mod": (0.6 + (p1 * 1.1).cos() * sweep).clamp(0.3, 0.95),
                            "decay": (0.3 + (p2 * 0.5).sin().abs() * 0.4).clamp(0.15, 0.8) },
                 "sequencer": { "bpm": bpm, "bass_steps": steps }
@@ -236,7 +236,7 @@ pub fn mock_response(prompt: &str, heat: f32) -> Result<LlmOutput> {
             let (cmt, cut2, res2, env2, bpm2) = styles[((ms * 0.003) as usize) % styles.len()];
             serde_json::json!({
                 "_comment": cmt,
-                "tb303": { "cutoff": cut2, "resonance": res2, "env_mod": env2 },
+                "bass": { "cutoff": cut2, "resonance": res2, "env_mod": env2 },
                 "sequencer": { "bpm": bpm2 }
             })
         }

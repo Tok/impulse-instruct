@@ -24,12 +24,12 @@ pub enum MidiEvent {
 pub fn cc_to_param_path(cc: u8) -> Option<(&'static str, fn(u8) -> f32)> {
     let norm = |v: u8| v as f32 / 127.0;
     match cc {
-        74 => Some(("tb303.cutoff", norm)),
-        71 => Some(("tb303.resonance", norm)),
-        72 => Some(("tb303.decay", norm)),
-        73 => Some(("tb303.env_mod", norm)),
-        75 => Some(("tb303.accent_level", norm)),
-        76 => Some(("tb303.distortion", norm)),
+        74 => Some(("bass.cutoff", norm)),
+        71 => Some(("bass.resonance", norm)),
+        72 => Some(("bass.decay", norm)),
+        73 => Some(("bass.env_mod", norm)),
+        75 => Some(("bass.accent_level", norm)),
+        76 => Some(("bass.distortion", norm)),
         91 => Some(("fx.reverb_mix", norm)),
         93 => Some(("fx.delay_mix", norm)),
         94 => Some(("fx.delay_feedback", norm)),

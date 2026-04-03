@@ -67,28 +67,28 @@ mod state_tests {
     #[test]
     fn apply_llm_update_sets_cutoff() {
         let state = AppState::default();
-        let update = serde_json::json!({ "tb303": { "cutoff": 0.9 } });
+        let update = serde_json::json!({ "bass": { "cutoff": 0.9 } });
         let next = apply_llm_update(state, &update);
-        assert!((next.tb303.cutoff - 0.9).abs() < 1e-4);
+        assert!((next.bass.cutoff - 0.9).abs() < 1e-4);
     }
 
     #[test]
     fn apply_llm_update_clamps_to_unit_range() {
         let state = AppState::default();
-        let update = serde_json::json!({ "tb303": { "cutoff": 1.5 } });
+        let update = serde_json::json!({ "bass": { "cutoff": 1.5 } });
         let next = apply_llm_update(state, &update);
-        assert!(next.tb303.cutoff <= 1.0);
+        assert!(next.bass.cutoff <= 1.0);
     }
 
     #[test]
     fn locked_param_not_overwritten_by_llm() {
         let state = AppState::default();
-        let original_cutoff = state.tb303.cutoff;
-        let state = lock_param(state, "tb303.cutoff");
+        let original_cutoff = state.bass.cutoff;
+        let state = lock_param(state, "bass.cutoff");
 
-        let update = serde_json::json!({ "tb303": { "cutoff": 0.99 } });
+        let update = serde_json::json!({ "bass": { "cutoff": 0.99 } });
         let next = apply_llm_update(state, &update);
-        assert_eq!(next.tb303.cutoff, original_cutoff, "locked param should be untouched");
+        assert_eq!(next.bass.cutoff, original_cutoff, "locked param should be untouched");
     }
 
     #[test]
@@ -138,7 +138,7 @@ mod prompt_tests {
     #[test]
     fn build_system_prompt_reflects_current_cutoff() {
         let mut state = AppState::default();
-        state.tb303.cutoff = 0.5; // exact f32 representation
+        state.bass.cutoff = 0.5; // exact f32 representation
         let prompt = build_system_prompt(&state);
         assert!(prompt.contains("0.5"), "prompt should embed current cutoff value");
     }
@@ -146,17 +146,17 @@ mod prompt_tests {
     #[test]
     fn build_system_prompt_lists_locked_params() {
         use crate::state::lock_param;
-        let state = lock_param(AppState::default(), "tb303.cutoff");
+        let state = lock_param(AppState::default(), "bass.cutoff");
         let prompt = build_system_prompt(&state);
-        assert!(prompt.contains("tb303.cutoff"), "locked params should appear in prompt");
+        assert!(prompt.contains("bass.cutoff"), "locked params should appear in prompt");
     }
 
     #[test]
-    fn param_json_schema_has_tb303_cutoff_range() {
+    fn param_json_schema_has_bass_cutoff_range() {
         let schema = param_json_schema();
-        let min = schema["properties"]["tb303"]["properties"]["cutoff"]["minimum"]
+        let min = schema["properties"]["bass"]["properties"]["cutoff"]["minimum"]
             .as_f64().unwrap();
-        let max = schema["properties"]["tb303"]["properties"]["cutoff"]["maximum"]
+        let max = schema["properties"]["bass"]["properties"]["cutoff"]["maximum"]
             .as_f64().unwrap();
         assert_eq!(min, 0.0);
         assert_eq!(max, 1.0);

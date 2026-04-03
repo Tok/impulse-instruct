@@ -29,15 +29,15 @@ pub fn build_system_prompt(state: &AppState) -> String {
     };
 
     let current_json = serde_json::to_string_pretty(&serde_json::json!({
-        "tb303": {
-            "cutoff": state.tb303.cutoff,
-            "resonance": state.tb303.resonance,
-            "env_mod": state.tb303.env_mod,
-            "decay": state.tb303.decay,
-            "accent_level": state.tb303.accent_level,
-            "waveform": format!("{:?}", state.tb303.waveform),
-            "distortion": state.tb303.distortion,
-            "volume": state.tb303.volume
+        "bass": {
+            "cutoff": state.bass.cutoff,
+            "resonance": state.bass.resonance,
+            "env_mod": state.bass.env_mod,
+            "decay": state.bass.decay,
+            "accent_level": state.bass.accent_level,
+            "waveform": format!("{:?}", state.bass.waveform),
+            "distortion": state.bass.distortion,
+            "volume": state.bass.volume
         },
         "sequencer": {
             "bpm": state.sequencer.bpm,
@@ -62,15 +62,15 @@ LOCKED (user-owned, never include in output): {locked_str}
 
 ═══ WHAT YOU CAN CONTROL ═══
 
-TB-303 SYNTHESIZER (all 0.0–1.0):
-  tb303.cutoff       — filter frequency (0=very dark/closed, 0.5=mid, 1=fully open)
-  tb303.resonance    — filter resonance / squelch (0.7–0.9 = classic acid character)
-  tb303.env_mod      — how much the envelope opens the filter (high = dramatic sweep)
-  tb303.decay        — filter envelope decay time (low=punchy, high=slow sweep)
-  tb303.accent_level — accent intensity boost
-  tb303.waveform     — "Saw" (smooth, warm) or "Square" (hollow, buzzy)
-  tb303.distortion   — internal overdrive (keep low; 0.0–0.15 is enough)
-  tb303.volume       — bass synth level in mix
+BASS SYNTHESIZER (all 0.0–1.0):
+  bass.cutoff       — filter frequency (0=very dark/closed, 0.5=mid, 1=fully open)
+  bass.resonance    — filter resonance / squelch (0.7–0.9 = classic acid character)
+  bass.env_mod      — how much the envelope opens the filter (high = dramatic sweep)
+  bass.decay        — filter envelope decay time (low=punchy, high=slow sweep)
+  bass.accent_level — accent intensity boost
+  bass.waveform     — "Saw" (smooth, warm) or "Square" (hollow, buzzy)
+  bass.distortion   — internal overdrive (keep low; 0.0–0.15 is enough)
+  bass.volume       — bass synth level in mix
 
 STEP SEQUENCER (16 steps = one 4/4 bar of 16th notes):
   sequencer.bass_steps       — 16-element bool array: which steps trigger the 303
@@ -104,10 +104,10 @@ FX (all 0.0–1.0):
   → Set hihat808_steps or hihat909_steps
 
 "more acid" / "squelchier"
-  → Raise resonance (0.75–0.88), raise env_mod, lower cutoff base
+  → Raise bass.resonance (0.75–0.88), raise bass.env_mod, lower bass.cutoff
 
 "darker" / "more weight"
-  → Lower cutoff, raise reverb_mix slightly
+  → Lower bass.cutoff, raise reverb_mix slightly
 
 "add space" / "more atmosphere"
   → Raise reverb_mix (0.2–0.4), add delay_mix (0.1–0.25)
@@ -133,6 +133,10 @@ Example — "change the melody":
 {{"_comment": "new bass line — stepping up a fifth and back with a little chromatic passing note",
   "sequencer": {{"bass_steps": [true,false,true,false,false,true,false,true,false,false,true,false,false,true,false,false],
                  "bass_notes":  [36,36,36,36,36,41,36,43,36,36,38,36,36,36,40,36]}}}}
+
+Example — "more acid":
+{{"_comment": "cranking the resonance and env_mod for full acid squelch",
+  "bass": {{"resonance": 0.85, "env_mod": 0.80, "cutoff": 0.35}}}}
 "#,
         current_json = current_json,
         locked_str = locked_str,
@@ -150,7 +154,7 @@ pub fn param_json_schema() -> serde_json::Value {
         "type": "object",
         "properties": {
             "_comment": { "type": "string", "maxLength": 200 },
-            "tb303": {
+            "bass": {
                 "type": "object",
                 "properties": {
                     "cutoff":       { "type": "number", "minimum": 0.0, "maximum": 1.0 },

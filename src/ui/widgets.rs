@@ -104,11 +104,13 @@ fn draw_arc(painter: &Painter, center: Pos2, radius: f32, start: f32, sweep: f32
 // ─── Step Button ──────────────────────────────────────────────────────────────
 
 /// A step sequencer button. Returns true if clicked (toggle).
+/// `note_color` — if Some, the active-step dot is tinted with that color (Huth palette).
 pub fn step_button(
     ui: &mut Ui,
     active: bool,
     is_current: bool,
     velocity: f32,
+    note_color: Option<Color32>,
 ) -> bool {
     let size = Vec2::new(28.0, 22.0);
     let (rect, response) = ui.allocate_exact_size(size, Sense::click());
@@ -136,13 +138,14 @@ pub fn step_button(
             else { theme::SLATE };
         painter.rect_stroke(rect.shrink(1.0), egui::Rounding::same(2.0), Stroke::new(1.0, border));
 
-        // Active dot
+        // Active dot — use Huth note color when provided, otherwise plain CHALK
         if active && !is_current {
             let dot_y = rect.center().y + 3.0;
+            let dot_col = note_color.unwrap_or(theme::CHALK);
             painter.circle_filled(
                 Pos2::new(rect.center().x, dot_y),
                 2.0,
-                theme::CHALK,
+                dot_col,
             );
         }
     }
