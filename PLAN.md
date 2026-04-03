@@ -5,7 +5,7 @@ Bonsai listens, jams, evolves, and shouts at the crowd.
 
 ---
 
-## The North Star
+## Vision
 
 You talk to it like a producer or a crowd. It responds like a machine that has listened
 to everything and has taste. You can say "make an amen break", "go darker", "drop the

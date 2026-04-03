@@ -84,8 +84,8 @@ pub fn print_banner() {
 
     // C5 terminators.  Upper: left wall + 2 exposed (same shape as C in UPPER).
     // Lower: left wall + 4 spaces, no trailing '|' — keyboard just ends cleanly.
-    const UPPER_C5: [Cell; 3] = [(C, '|'), (C, ' '), (C, ' ')];
-    const LOWER_C5: [Cell; 5] = [(C, '|'), (C, ' '), (C, ' '), (C, ' '), (C, ' ')];
+    const UPPER_C5: [Cell; 3] = [(C, ' '), (C, ' '), (C, ' ')];
+    const LOWER_C5: [Cell; 5] = [(C, ' '), (C, ' '), (C, ' '), (C, ' '), (C, ' ')];
 
     // Render a cell slice: spaces → bg only; '|' → dark fg on key bg.
     let render = |cells: &[Cell]| -> String {
