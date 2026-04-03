@@ -26,6 +26,8 @@ mod state;
 mod ui;
 #[cfg(test)]
 mod tests;
+#[cfg(all(test, feature = "llm-tests"))]
+mod llm_suite;
 
 use midi::MidiEvent;
 

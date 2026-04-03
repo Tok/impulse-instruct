@@ -3,10 +3,13 @@
 # Run tests with optional coverage reporting.
 #
 # Usage:
-#   ./run-tests.sh              # run all tests
+#   ./run-tests.sh              # run unit tests only (CI-safe)
 #   ./run-tests.sh --coverage   # run tests + generate HTML coverage report
 #   ./run-tests.sh --watch      # re-run on file changes (needs cargo-watch)
 #   ./run-tests.sh -- sequencer # run only tests matching "sequencer"
+#
+# For LLM response tests (not CI-safe):
+#   ./run-llm-tests.sh
 #
 # Coverage tool: cargo-tarpaulin (Linux only)
 #   Install: cargo install cargo-tarpaulin

@@ -54,6 +54,10 @@ thiserror = "1"
 # Enable real LLM inference (requires libclang-dev and cmake)
 llm = ["llama-cpp-2"]
 cuda = ["llama-cpp-2/cuda", "llm"]
+# Run LLM response suite against real Bonsai inference
+# Requires: libclang-dev cmake + ./download-models.sh
+# cargo test --features llm-tests   (or ./run-llm-tests.sh)
+llm-tests = ["llm"]
 
 [profile.release]
 opt-level = 3
