@@ -40,7 +40,6 @@ pub struct LlmOutput {
 
 pub trait LlmBackend: Send {
     fn infer(&mut self, system: &str, user: &str, heat: f32) -> Result<LlmOutput>;
-    fn context_size(&self) -> usize;
 }
 
 // ─── Bonsai server backend ────────────────────────────────────────────────────
@@ -146,7 +145,6 @@ impl Drop for LlamaServerBackend {
             // llama-server can ignore SIGTERM while in CPU/GPU kernel work — use SIGKILL.
             #[cfg(unix)]
             {
-                use std::os::unix::process::CommandExt;
                 let pid = child.id() as i32;
                 unsafe { libc::kill(pid, libc::SIGKILL); }
             }
@@ -237,7 +235,6 @@ impl LlmBackend for LlamaServerBackend {
         })
     }
 
-    fn context_size(&self) -> usize { 4096 }
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────

@@ -51,19 +51,4 @@ impl StyleCatalog {
         self.0.iter().find(|s| s.id == id)
     }
 
-    /// Find the best-matching style for a free-text prompt.
-    /// Uses substring matching on keywords; returns the highest-scoring match.
-    pub fn find_by_prompt(&self, prompt: &str) -> Option<&Style> {
-        let lower = prompt.to_lowercase();
-        self.0.iter()
-            .filter_map(|s| {
-                let score: usize = s.keywords.iter()
-                    .filter(|kw| lower.contains(kw.as_str()))
-                    .map(|kw| kw.split_whitespace().count())
-                    .sum();
-                if score > 0 { Some((score, s)) } else { None }
-            })
-            .max_by_key(|(score, _)| *score)
-            .map(|(_, s)| s)
-    }
 }

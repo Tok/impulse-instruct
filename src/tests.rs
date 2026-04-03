@@ -6,7 +6,7 @@
 #[cfg(test)]
 mod sequencer_tests {
     use crate::sequencer::{advance_clock, ClockState, samples_per_step};
-    use crate::state::{AppState, DrumVoice, SequencerState, Step};
+    use crate::state::{DrumVoice, SequencerState, Step};
 
     #[test]
     fn samples_per_step_at_120bpm_44100hz() {
