@@ -94,16 +94,16 @@ fn mock_response(prompt: &str) -> Result<LlmOutput> {
 
     let json = if prompt_lower.contains("acid") {
         serde_json::json!({
-            "_comment": "classic acid setup — tight resonant filter with heavy env mod, syncopated 303 bass line, 4-on-the-floor kick",
-            "tb303": { "cutoff": 0.35, "resonance": 0.82, "env_mod": 0.75, "decay": 0.35, "distortion": 0.3, "volume": 0.8 },
+            "_comment": "classic acid setup — resonant filter sweeping over a syncopated 303 line, 4-on-the-floor kick",
+            "tb303": { "cutoff": 0.45, "resonance": 0.72, "env_mod": 0.78, "decay": 0.38, "distortion": 0.08, "volume": 0.85 },
             "sequencer": {
-                "bpm": 138.0,
+                "bpm": 135.0,
                 "bass_steps": [true, false, true, false, false, true, false, true, true, false, false, true, false, true, false, false],
                 "bass_notes": [36, 36, 36, 36, 36, 41, 36, 43, 36, 36, 36, 36, 36, 43, 36, 36],
                 "kick808_steps": [true, false, false, false, true, false, false, false, true, false, false, false, true, false, false, false],
                 "hihat808_steps": [false, false, true, false, false, false, true, false, false, false, true, false, false, false, true, false]
             },
-            "fx": { "distortion_drive": 0.25, "distortion_mix": 0.4 }
+            "fx": { "distortion_drive": 0.0, "distortion_mix": 0.0, "delay_time": 0.3, "delay_feedback": 0.35, "delay_mix": 0.15 }
         })
     } else if prompt_lower.contains("dark") || prompt_lower.contains("deep") {
         serde_json::json!({
@@ -187,7 +187,11 @@ pub fn run_llm_loop(
 
         // Snapshot prompt before acquiring any lock (clone outside critical section)
         let prompt = input.prompt.clone();
-        log::info!("YOU → {}", prompt);
+        if input.one_shot {
+            log::info!("YOU → {}", prompt);
+        } else {
+            log::debug!("YOU (jam) → {}", prompt);
+        }
 
         // Build system prompt from a read snapshot — lock held for clone only
         let system = build_system_prompt(&state.read().clone());
@@ -226,10 +230,12 @@ pub fn run_llm_loop(
 
                 // Log the natural-language comment if present, otherwise the raw response
                 if let Some(ref update) = output.param_update {
-                    if let Some(comment) = update.get("_comment").and_then(|v| v.as_str()) {
+                    let comment = update.get("_comment").and_then(|v| v.as_str())
+                        .unwrap_or(&output.text);
+                    if input.one_shot {
                         log::info!("Bonsai → {}", comment);
                     } else {
-                        log::info!("Bonsai → {}", output.text);
+                        log::debug!("Bonsai (jam) → {}", comment);
                     }
                 }
                 let _ = output_tx.try_send(output);

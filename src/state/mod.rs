@@ -80,7 +80,7 @@ pub struct KickParams {
 
 impl Default for KickParams {
     fn default() -> Self {
-        Self { pitch: 0.5, decay: 0.6, punch: 0.7, tone: 0.8, volume: 0.9 }
+        Self { pitch: 0.5, decay: 0.6, punch: 0.7, tone: 0.8, volume: 0.75 }
     }
 }
 
