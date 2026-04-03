@@ -66,7 +66,6 @@ impl LlamaInner {
 
 pub struct LlamaCppBackend {
     model_path: String,
-    loaded: bool,
     #[cfg(feature = "llm")]
     inner: Option<Box<LlamaInner>>,
 }
@@ -78,10 +77,14 @@ impl LlamaCppBackend {
             if std::path::Path::new(model_path).exists() {
                 match LlamaInner::load(model_path) {
                     Ok(inner) => {
-                        log::info!("Model loaded: {}", model_path);
-                        return Self { model_path: model_path.to_string(), loaded: true, inner: Some(inner) };
+                        return Self { model_path: model_path.to_string(), inner: Some(inner) };
                     }
-                    Err(e) => log::error!("Failed to load model '{}': {}", model_path, e),
+                    Err(e) => {
+                        log::error!(
+                            "Failed to load model '{}': {} — falling back to mock.",
+                            model_path, e
+                        );
+                    }
                 }
             } else {
                 log::warn!(
@@ -90,28 +93,19 @@ impl LlamaCppBackend {
                     model_path
                 );
             }
-            return Self { model_path: model_path.to_string(), loaded: false, inner: None };
+            return Self { model_path: model_path.to_string(), inner: None };
         }
         #[cfg(not(feature = "llm"))]
-        {
-            let loaded = std::path::Path::new(model_path).exists();
-            if !loaded {
-                log::warn!(
-                    "Model not found at '{}' — running in mock mode.\n  \
-                     Run ./download-models.sh",
-                    model_path
-                );
-            } else {
-                log::warn!(
-                    "Model found at '{}' but `--features llm` not enabled — mock mode.",
-                    model_path
-                );
-            }
-            Self { model_path: model_path.to_string(), loaded }
-        }
+        Self { model_path: model_path.to_string() }
     }
 
-    pub fn is_loaded(&self) -> bool { self.loaded }
+    /// True only when the model is actually loaded and inference is available.
+    pub fn is_loaded(&self) -> bool {
+        #[cfg(feature = "llm")]
+        return self.inner.is_some();
+        #[cfg(not(feature = "llm"))]
+        false
+    }
 }
 
 impl LlmBackend for LlamaCppBackend {
@@ -377,10 +371,9 @@ pub fn run_llm_loop(
             is_jam: false,
         });
     } else {
-        log::info!("LLM thread started — mock mode (no model file)");
+        log::warn!("LLM thread started — mock mode (model not loaded). Run ./download-models.sh");
         let msg = format!(
-            "[ Mock mode — no model at '{}'. Run ./download-models.sh to get Bonsai 8B ]",
-            model_path
+            "[ Mock mode — model not loaded. Run ./download-models.sh to get Bonsai 8B ]"
         );
         let _ = output_tx.try_send(LlmOutput {
             text: msg,

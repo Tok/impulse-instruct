@@ -54,7 +54,10 @@ env_logger = "0.11"
 thiserror = "1"
 
 [features]
-# Enable real LLM inference (requires libclang-dev and cmake)
+# LLM inference is on by default — it's integral to the synth.
+# Requires: sudo apt install libclang-dev cmake
+# To build without (mock-only, no libclang needed): cargo build --no-default-features
+default = ["llm"]
 llm = ["llama-cpp-2"]
 cuda = ["llama-cpp-2/cuda", "llm"]
 # Run LLM response suite against real Bonsai inference
