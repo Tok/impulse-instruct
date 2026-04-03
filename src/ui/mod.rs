@@ -178,6 +178,24 @@ impl eframe::App for ImpulseApp {
 
                     ui.add_space(4.0);
 
+                    // Heat slider
+                    {
+                        let mut heat = self.state.read().llm.heat;
+                        let heat_color = if heat < 0.3 { theme::IRON }
+                            else if heat < 0.6 { theme::ASH }
+                            else if heat < 0.85 { theme::SMOKE }
+                            else { theme::CHALK };
+                        ui.label(egui::RichText::new("HEAT").color(heat_color).monospace().size(9.0));
+                        if ui.add_sized(
+                            [80.0, 16.0],
+                            egui::Slider::new(&mut heat, 0.0..=1.0).show_value(false)
+                        ).changed() {
+                            self.state.write().llm.heat = heat;
+                        }
+                    }
+
+                    ui.add_space(4.0);
+
                     // JAM toggle
                     let jam = self.state.read().llm.auto_jam;
                     let jam_color = if jam { theme::CHALK } else { theme::ASH };

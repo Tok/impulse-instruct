@@ -10,6 +10,14 @@ pub fn build_system_prompt(state: &AppState) -> String {
     } else {
         locked.join(", ")
     };
+    let heat = state.llm.heat;
+    let heat_pct = (heat * 100.0) as u32;
+    let heat_desc = match heat {
+        h if h < 0.25 => "cold — make only subtle incremental changes, no pattern mutations",
+        h if h < 0.5  => "warm — moderate filter/BPM evolution, occasional step changes",
+        h if h < 0.75 => "hot — bold sweeps, pattern mutations, noticeable style shifts",
+        _              => "fire — anything goes, dramatic mutations, surprise me",
+    };
 
     let current_json = serde_json::to_string_pretty(&serde_json::json!({
         "tb303": {
@@ -71,6 +79,9 @@ AVAILABLE PARAMETERS (all floats 0.0–1.0 unless noted):
   fx.distortion_drive  — master bus drive
   fx.distortion_mix    — distortion wet/dry
 
+JAM HEAT: {heat_pct}% — {heat_desc}
+When jamming, scale your mutation intensity to match this level.
+
 STYLE VOCABULARY:
   "acid"    → cutoff 0.3-0.6, resonance 0.7-0.9, env_mod 0.6-0.9, fast decay
   "dark"    → cutoff < 0.3, reverb_mix 0.4+, bpm 110-125
@@ -86,6 +97,8 @@ Example:
 {{"_comment": "pushing up the resonance for that squelchy acid character", "tb303": {{"cutoff": 0.45, "resonance": 0.78}}, "sequencer": {{"bpm": 132.0}}}}"#,
         current_json = current_json,
         locked_str = locked_str,
+        heat_pct = heat_pct,
+        heat_desc = heat_desc,
     )
 }
 

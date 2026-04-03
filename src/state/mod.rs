@@ -339,6 +339,7 @@ pub struct LlmState {
     pub context_max: usize,
     pub locked_params: HashSet<String>, // dot-path keys the user has taken over
     pub auto_jam: bool, // LLM continuously generates pattern variations
+    pub heat: f32,      // 0–1: jam mutation intensity (low=subtle, high=wild)
 }
 
 impl Default for LlmState {
@@ -353,6 +354,7 @@ impl Default for LlmState {
             context_max: 4096,
             locked_params: HashSet::new(),
             auto_jam: false,
+            heat: 0.4,
         }
     }
 }

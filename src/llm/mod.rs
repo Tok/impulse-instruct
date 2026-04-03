@@ -35,8 +35,7 @@ pub struct LlmOutput {
 // ─── LLM backend trait (swappable) ────────────────────────────────────────────
 
 pub trait LlmBackend: Send {
-    fn infer(&mut self, system: &str, user: &str) -> Result<LlmOutput>;
-    #[allow(dead_code)]
+    fn infer(&mut self, system: &str, user: &str, heat: f32) -> Result<LlmOutput>;
     fn context_size(&self) -> usize;
 }
 
@@ -65,32 +64,19 @@ impl LlamaCppBackend {
 }
 
 impl LlmBackend for LlamaCppBackend {
-    fn infer(&mut self, _system: &str, user: &str) -> Result<LlmOutput> {
+    fn infer(&mut self, _system: &str, user: &str, heat: f32) -> Result<LlmOutput> {
         if !self.loaded {
-            return mock_response(user);
+            return mock_response(user, heat);
         }
-
-        // When model file exists, use llama-cpp-2:
-        // This is the real implementation path — requires llama-cpp-2 crate
-        // and the model file present at self.model_path.
-        //
-        // The actual llama-cpp-2 API:
-        //   use llama_cpp_2::model::LlamaModel;
-        //   use llama_cpp_2::context::LlamaContext;
-        //   let model = LlamaModel::load_from_file(&params, path, &model_params)?;
-        //   let ctx = model.new_context(&backend, ctx_params)?;
-        //   // tokenize, decode, sample tokens until EOF
-        //
-        // For now, fall through to mock until model loading is wired up.
         log::debug!("Model found at {}, but llama-cpp-2 inference not yet fully wired.", self.model_path);
-        mock_response(user)
+        mock_response(user, heat)
     }
 
     fn context_size(&self) -> usize { 4096 }
 }
 
 /// Generate a plausible JSON response for testing without a real model.
-fn mock_response(prompt: &str) -> Result<LlmOutput> {
+fn mock_response(prompt: &str, heat: f32) -> Result<LlmOutput> {
     let prompt_lower = prompt.to_lowercase();
 
     let json = if prompt_lower.contains("acid") {
@@ -126,17 +112,60 @@ fn mock_response(prompt: &str) -> Result<LlmOutput> {
             "fx": { "reverb_mix": 0.45, "delay_mix": 0.35 }
         })
     } else {
-        // Random variation for jam mode
-        let phase = std::time::SystemTime::now()
+        // Jam mode — heat controls how dramatic the mutation is
+        let ms = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap_or_default()
-            .subsec_millis() as f32 / 1000.0;
-        let cut = 0.3 + (phase * 2.7).sin().abs() * 0.5;
-        let res = 0.4 + (phase * 1.3).cos().abs() * 0.4;
-        serde_json::json!({
-            "_comment": "nudging the filter for some movement",
-            "tb303": { "cutoff": cut, "resonance": res }
-        })
+            .subsec_millis() as f32;
+        let p1 = ms / 1000.0;
+        let p2 = ms * 1.7 / 1000.0;
+        let p3 = ms * 0.4 / 1000.0;
+        let sweep = heat * 0.5 + 0.05;
+        let cut = (0.3 + (p1 * 2.7).sin().abs() * sweep * 1.6).clamp(0.15, 0.95);
+        let res = (0.45 + (p2 * 1.9).cos() * sweep).clamp(0.2, 0.95);
+
+        if heat < 0.3 {
+            serde_json::json!({
+                "_comment": "subtle filter movement — keeping things settled",
+                "tb303": { "cutoff": cut, "resonance": res }
+            })
+        } else if heat < 0.6 {
+            let bpm_shift = (p3.sin() * heat * 12.0) as i32;
+            serde_json::json!({
+                "_comment": "evolving the filter and nudging the groove",
+                "tb303": { "cutoff": cut, "resonance": res,
+                           "env_mod": (0.5 + (p2 * 0.8).sin() * sweep).clamp(0.2, 0.95) },
+                "sequencer": { "bpm": (130.0 + bpm_shift as f32).clamp(100.0, 160.0) }
+            })
+        } else if heat < 0.85 {
+            let step_a = ((ms * 13.0) as usize) % 16;
+            let step_b = ((ms * 7.0) as usize) % 16;
+            let mut steps = [false; 16];
+            for i in [0usize, 2, 5, 7, 8, 11, 13] { steps[i] = true; }
+            steps[step_a] = !steps[step_a];
+            steps[step_b] = !steps[step_b];
+            let bpm = (125.0 + (p3 * 2.0).sin() * heat * 20.0).clamp(110.0, 155.0);
+            serde_json::json!({
+                "_comment": "shaking up the pattern and pushing the filter harder",
+                "tb303": { "cutoff": cut, "resonance": res,
+                           "env_mod": (0.6 + (p1 * 1.1).cos() * sweep).clamp(0.3, 0.95),
+                           "decay": (0.3 + (p2 * 0.5).sin().abs() * 0.4).clamp(0.15, 0.8) },
+                "sequencer": { "bpm": bpm, "bass_steps": steps }
+            })
+        } else {
+            let styles: &[(&str, f32, f32, f32, f32)] = &[
+                ("full acid meltdown — cranking resonance and chaos",       0.2, 0.88, 0.85, 148.0),
+                ("pulling everything back into something dark and slow",     0.7, 0.40, 0.30,  95.0),
+                ("going hard — high tempo, tight filter sweeps",            0.5, 0.65, 0.70, 160.0),
+                ("shifting into a looser, more hypnotic groove",            0.6, 0.55, 0.50, 118.0),
+            ];
+            let (cmt, cut2, res2, env2, bpm2) = styles[((ms * 0.003) as usize) % styles.len()];
+            serde_json::json!({
+                "_comment": cmt,
+                "tb303": { "cutoff": cut2, "resonance": res2, "env_mod": env2 },
+                "sequencer": { "bpm": bpm2 }
+            })
+        }
     };
 
     Ok(LlmOutput {
@@ -207,8 +236,9 @@ pub fn run_llm_loop(
             s.llm.last_prompt = prompt;
         }
 
+        let heat = state.read().llm.heat;
         let t0 = Instant::now();
-        let result = backend.infer(&system, &input.prompt);
+        let result = backend.infer(&system, &input.prompt, heat);
         let elapsed = t0.elapsed().as_secs_f32();
 
         match result {
