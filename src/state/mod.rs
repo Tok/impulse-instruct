@@ -40,6 +40,7 @@ impl Default for AppState {
 pub enum Waveform {
     Saw,
     Square,
+    Supersaw, // detuned unison saws
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -50,8 +51,10 @@ pub struct BassState {
     pub decay: f32,        // 0–1 → 50–2000 ms
     pub accent_level: f32, // 0–1
     pub waveform: Waveform,
-    pub distortion: f32, // 0–1
-    pub volume: f32,     // 0–1
+    pub distortion: f32,          // 0–1
+    pub volume: f32,               // 0–1
+    pub supersaw_detune: f32,      // 0–1 → 0–1 semitone spread between voices
+    pub supersaw_voices: u8,       // 2–7
 }
 
 impl Default for BassState {
@@ -65,6 +68,8 @@ impl Default for BassState {
             waveform: Waveform::Saw,
             distortion: 0.2,
             volume: 0.8,
+            supersaw_detune: 0.5,
+            supersaw_voices: 5,
         }
     }
 }
@@ -429,11 +434,18 @@ pub fn apply_llm_update(state: AppState, update: &serde_json::Value) -> AppState
         s.bass.accent_level = unlocked_f32(s.bass.accent_level, b, "accent_level", "bass.accent_level", locked);
         s.bass.distortion   = unlocked_f32(s.bass.distortion,   b, "distortion",   "bass.distortion",   locked);
         s.bass.volume       = unlocked_f32(s.bass.volume,       b, "volume",       "bass.volume",       locked);
+        s.bass.supersaw_detune = unlocked_f32(s.bass.supersaw_detune, b, "supersaw_detune", "bass.supersaw_detune", locked);
+        if let Some(v) = b.get("supersaw_voices").and_then(|v| v.as_u64()) {
+            if !locked.contains("bass.supersaw_voices") {
+                s.bass.supersaw_voices = (v as u8).clamp(2, 7);
+            }
+        }
         if !locked.contains("bass.waveform") {
             if let Some(w) = b.get("waveform").and_then(|v| v.as_str()) {
                 s.bass.waveform = match w {
-                    "Square" => Waveform::Square,
-                    _ => Waveform::Saw,
+                    "Square"   => Waveform::Square,
+                    "Supersaw" => Waveform::Supersaw,
+                    _          => Waveform::Saw,
                 };
             }
         }

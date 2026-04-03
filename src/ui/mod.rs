@@ -1086,11 +1086,12 @@ impl ImpulseApp {
         widgets::section_header(ui, "BASS SYNTHESIZER");
 
         // Snapshot everything needed for rendering — lock released before any widget call
-        let (mut cutoff, mut resonance, mut env_mod, mut decay, mut accent, mut dist, mut vol, waveform, locked) = {
+        let (mut cutoff, mut resonance, mut env_mod, mut decay, mut accent, mut dist, mut vol, waveform, mut supersaw_detune, supersaw_voices, locked) = {
             let s = self.state.read();
             (s.bass.cutoff, s.bass.resonance, s.bass.env_mod, s.bass.decay,
              s.bass.accent_level, s.bass.distortion, s.bass.volume,
-             s.bass.waveform.clone(), s.llm.locked_params.clone())
+             s.bass.waveform.clone(), s.bass.supersaw_detune, s.bass.supersaw_voices,
+             s.llm.locked_params.clone())
         };
 
         let mut new_locks: Vec<&str> = Vec::new();
@@ -1134,18 +1135,46 @@ impl ImpulseApp {
         // Waveform toggle
         ui.horizontal(|ui| {
             ui.label(egui::RichText::new("WAVE").color(theme::SMOKE).monospace().size(9.0));
-            let saw_active = waveform == Waveform::Saw;
-            let mut saw = saw_active;
+            let mut saw = waveform == Waveform::Saw;
             if widgets::toggle_button(ui, "SAW", &mut saw) {
                 self.state.write().bass.waveform = Waveform::Saw;
                 self.push_audio_params();
             }
-            let mut sq = !saw_active;
+            let mut sq = waveform == Waveform::Square;
             if widgets::toggle_button(ui, "SQR", &mut sq) {
                 self.state.write().bass.waveform = Waveform::Square;
                 self.push_audio_params();
             }
+            let mut ss = waveform == Waveform::Supersaw;
+            if widgets::toggle_button(ui, "SUPER", &mut ss) {
+                self.state.write().bass.waveform = Waveform::Supersaw;
+                self.push_audio_params();
+            }
         });
+
+        // Supersaw controls (only shown when Supersaw is active)
+        if waveform == Waveform::Supersaw {
+            ui.horizontal(|ui| {
+                ui.label(egui::RichText::new("DETUNE").color(theme::SMOKE).monospace().size(9.0));
+                if widgets::param_control(ui, "", &mut supersaw_detune, false, use_sliders) {
+                    let mut s = self.state.write();
+                    s.bass.supersaw_detune = supersaw_detune;
+                    drop(s);
+                    self.push_audio_params();
+                }
+                let voices_label = format!("{}V", supersaw_voices);
+                ui.label(egui::RichText::new("VOICES").color(theme::SMOKE).monospace().size(9.0));
+                if ui.small_button("-").clicked() && supersaw_voices > 2 {
+                    self.state.write().bass.supersaw_voices = supersaw_voices - 1;
+                    self.push_audio_params();
+                }
+                ui.label(egui::RichText::new(&voices_label).color(theme::CHALK).monospace().size(9.0));
+                if ui.small_button("+").clicked() && supersaw_voices < 7 {
+                    self.state.write().bass.supersaw_voices = supersaw_voices + 1;
+                    self.push_audio_params();
+                }
+            });
+        }
 
         ui.add_space(12.0);
 

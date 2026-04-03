@@ -110,9 +110,11 @@ BASS SYNTHESIZER (all 0.0–1.0):
   bass.env_mod      — how much the envelope opens the filter (high = dramatic sweep)
   bass.decay        — filter envelope decay time (low=punchy, high=slow sweep)
   bass.accent_level — accent intensity boost
-  bass.waveform     — "Saw" (smooth, warm) or "Square" (hollow, buzzy)
-  bass.distortion   — internal overdrive (keep low; 0.0–0.15 is enough)
-  bass.volume       — bass synth level in mix
+  bass.waveform          — "Saw" (smooth, warm), "Square" (hollow, buzzy), or "Supersaw" (thick unison)
+  bass.supersaw_detune   — 0–1 spread between supersaw voices (0=tight unison, 1=wide chorus)
+  bass.supersaw_voices   — 2–7 unison voices (Supersaw mode only)
+  bass.distortion        — internal overdrive (keep low; 0.0–0.15 is enough)
+  bass.volume            — bass synth level in mix
 
 STEP SEQUENCER (16 steps = one 4/4 bar of 16th notes):
   sequencer.steps         — total loop length in steps (8/16/32/64, default 16)
@@ -280,9 +282,11 @@ pub fn param_json_schema() -> serde_json::Value {
                     "env_mod":      { "type": "number", "minimum": 0.0, "maximum": 1.0 },
                     "decay":        { "type": "number", "minimum": 0.0, "maximum": 1.0 },
                     "accent_level": { "type": "number", "minimum": 0.0, "maximum": 1.0 },
-                    "waveform":     { "type": "string", "enum": ["Saw", "Square"] },
-                    "distortion":   { "type": "number", "minimum": 0.0, "maximum": 1.0 },
-                    "volume":       { "type": "number", "minimum": 0.0, "maximum": 1.0 }
+                    "waveform":          { "type": "string", "enum": ["Saw", "Square", "Supersaw"] },
+                    "supersaw_detune":   { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+                    "supersaw_voices":   { "type": "integer", "minimum": 2, "maximum": 7 },
+                    "distortion":        { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+                    "volume":            { "type": "number", "minimum": 0.0, "maximum": 1.0 }
                 },
                 "additionalProperties": false
             },

@@ -27,7 +27,10 @@ pub struct AudioParams {
     pub env_mod: f32,
     pub decay_303: f32,
     pub accent_level: f32,
-    pub waveform_saw: bool, // true = saw, false = square
+    pub waveform_saw: bool,      // true = saw, false = square
+    pub waveform_supersaw: bool, // true = supersaw (overrides waveform_saw)
+    pub supersaw_detune: f32,    // 0–1 → 0–1 semitone spread
+    pub supersaw_voices: u8,     // 2–7
     pub distortion_303: f32,
     pub volume_303: f32,
     // 808 kick
@@ -87,6 +90,9 @@ impl AudioParams {
             decay_303: s.bass.decay,
             accent_level: s.bass.accent_level,
             waveform_saw: s.bass.waveform == Waveform::Saw,
+            waveform_supersaw: s.bass.waveform == Waveform::Supersaw,
+            supersaw_detune: s.bass.supersaw_detune,
+            supersaw_voices: s.bass.supersaw_voices,
             distortion_303: s.bass.distortion,
             volume_303: s.bass.volume,
             kick808_pitch: s.kit_a.kick.pitch,
@@ -199,11 +205,12 @@ impl NoiseGen {
 
 #[derive(Clone)]
 struct Bass303 {
-    phase: f32,         // oscillator phase 0-1
-    freq: f32,          // current freq Hz
-    target_freq: f32,   // slide target
-    amp_env: f32,       // VCA envelope
-    filt_env: f32,      // filter envelope
+    phase: f32,              // oscillator phase 0-1 (voice 0)
+    unison_phases: [f32; 6], // phases for voices 1–6 (supersaw)
+    freq: f32,               // current freq Hz
+    target_freq: f32,        // slide target
+    amp_env: f32,            // VCA envelope
+    filt_env: f32,           // filter envelope
     gate: bool,
     accent: bool,
     slide: bool,
@@ -214,6 +221,7 @@ impl Default for Bass303 {
     fn default() -> Self {
         Self {
             phase: 0.0,
+            unison_phases: [0.0, 0.142, 0.285, 0.428, 0.571, 0.714], // spread across cycle
             freq: 110.0,
             target_freq: 110.0,
             amp_env: 0.0,
@@ -259,7 +267,23 @@ impl Bass303 {
         self.phase += self.freq / sr;
         if self.phase >= 1.0 { self.phase -= 1.0; }
 
-        let osc = if p.waveform_saw {
+        let osc = if p.waveform_supersaw {
+            // Supersaw: N detuned saws mixed and normalised
+            let n = p.supersaw_voices.clamp(2, 7) as usize;
+            // Detune spread: 0–1 maps to 0–1 semitone total spread
+            // Each voice is offset by i / (n-1) semitones from -spread/2 to +spread/2
+            let spread_semitones = p.supersaw_detune; // 0–1 semitone range
+            let mut sum = self.phase * 2.0 - 1.0; // voice 0 at centre pitch
+            for i in 0..(n - 1) {
+                let t = if n > 2 { i as f32 / (n as f32 - 2.0) } else { 0.5 };
+                let detune_st = (t - 0.5) * spread_semitones;
+                let ratio = 2.0f32.powf(detune_st / 12.0);
+                self.unison_phases[i] += self.freq * ratio / sr;
+                if self.unison_phases[i] >= 1.0 { self.unison_phases[i] -= 1.0; }
+                sum += self.unison_phases[i] * 2.0 - 1.0;
+            }
+            (sum / n as f32) * 1.4 // slight gain boost to compensate cancellation
+        } else if p.waveform_saw {
             self.phase * 2.0 - 1.0
         } else {
             // Square with slight PWM

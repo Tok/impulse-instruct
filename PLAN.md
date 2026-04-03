@@ -201,7 +201,7 @@ Move from a fixed linear audio chain to a node graph.
 
 1. [x] Variable step count (8/16/32/64) — unblocks amen breaks and polyrhythm
 2. [x] Amen break pattern preset + LLM instruction "make an amen break"
-3. [ ] Supersaw oscillator — unblocks Reese bass, rave stabs, DnB
+3. [x] Supersaw oscillator — unblocks Reese bass, rave stabs, DnB
 4. [x] Bitcrush FX — unblocks gabber, breakcore, lo-fi sounds
 5. [x] TTS MC mode — highest fun-per-line-of-code ratio
 6. [ ] Run artist reference LLM tests — audit styles.json, drop dead references
