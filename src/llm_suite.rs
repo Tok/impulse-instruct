@@ -78,7 +78,7 @@ fn assert_gate(
     check: impl Fn(&Value) -> bool,
 ) {
     let passes = (0..RUNS)
-        .filter(|_| infer_json(backend, system, prompt, heat).map_or(false, &check))
+        .filter(|_| infer_json(backend, system, prompt, heat).map(|v| check(&v)).unwrap_or(false))
         .count();
     assert!(
         passes >= required,
