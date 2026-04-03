@@ -94,14 +94,14 @@ mod state_tests {
     #[test]
     fn toggle_drum_step_flips_active() {
         let state = AppState::default();
-        // Kick808 step 0 is active by default
-        assert!(state.sequencer.drum_patterns[&DrumVoice::Kick808][0].active);
-
-        let state = toggle_drum_step(state, DrumVoice::Kick808, 0);
+        // Step 0 starts inactive (silent default)
         assert!(!state.sequencer.drum_patterns[&DrumVoice::Kick808][0].active);
 
         let state = toggle_drum_step(state, DrumVoice::Kick808, 0);
         assert!(state.sequencer.drum_patterns[&DrumVoice::Kick808][0].active);
+
+        let state = toggle_drum_step(state, DrumVoice::Kick808, 0);
+        assert!(!state.sequencer.drum_patterns[&DrumVoice::Kick808][0].active);
     }
 
     #[test]
