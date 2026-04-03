@@ -338,7 +338,13 @@ impl ImpulseApp {
     // ── Sequencer ────────────────────────────────────────────────────────────
 
     fn draw_sequencer(&mut self, ui: &mut egui::Ui) {
-        let current_step = self.state.read().sequencer.current_step;
+        let (current_step, running) = {
+            let s = self.state.read();
+            (s.sequencer.current_step, s.sequencer.running)
+        };
+        // Only highlight the cursor when the sequencer is actually playing;
+        // usize::MAX guarantees no step matches when stopped.
+        let cursor = if running { current_step } else { usize::MAX };
 
         widgets::section_header(ui, "STEP SEQUENCER — 16 STEPS");
 
@@ -395,7 +401,7 @@ impl ImpulseApp {
                             ui.add_space(2.0);
                         }
                         let is_active = pattern[i].active;
-                        let is_current = i == current_step;
+                        let is_current = i == cursor;
                         let vel = pattern[i].velocity;
                         let enabled = i < step_count;
 
@@ -414,12 +420,16 @@ impl ImpulseApp {
             }
 
             // Bass row
-            ui.add_space(6.0);
+            ui.add_space(2.0);
             ui.separator();
-            ui.add_space(4.0);
-            ui.label(egui::RichText::new("303 BASS").color(theme::SMOKE).monospace().size(8.5));
+            ui.add_space(2.0);
             ui.horizontal(|ui| {
-                ui.add_sized([80.0, 22.0], egui::Label::new(""));
+                ui.add_sized(
+                    [80.0, 22.0],
+                    egui::Label::new(
+                        egui::RichText::new("303 BASS").color(theme::SMOKE).monospace().size(8.5)
+                    )
+                );
                 let (bass_pattern, step_count) = {
                     let s = self.state.read();
                     (s.sequencer.bass_pattern, s.sequencer.steps)
@@ -427,7 +437,7 @@ impl ImpulseApp {
                 for i in 0..num_steps {
                     if i > 0 && i % 4 == 0 { ui.add_space(2.0); }
                     let is_active = bass_pattern[i].active;
-                    let is_current = i == current_step;
+                    let is_current = i == cursor;
                     ui.add_enabled_ui(i < step_count, |ui| {
                         if widgets::step_button(ui, is_active, is_current, 1.0) {
                             let s = self.state.read().clone();
