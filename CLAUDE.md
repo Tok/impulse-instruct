@@ -12,7 +12,7 @@ cargo run --features llm --release   # real LLM inference (needs libclang-dev)
 cargo test                           # 13 unit tests
 ./run-tests.sh --coverage            # HTML coverage report
 ./build-all.sh                       # Linux + Windows EXE → dist/
-./download-models.sh                 # fetch Bonsai 8B GGUF (~5 GB, needs HF account)
+./download-models.sh                 # fetch Bonsai 8B GGUF (~1.1 GB 1-bit model, needs HF account)
 ```
 
 ## Architecture — what lives where

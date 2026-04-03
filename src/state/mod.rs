@@ -279,21 +279,9 @@ impl Default for SequencerState {
         for v in DrumVoice::ALL {
             drum_patterns.insert(*v, [Step::default(); 16]);
         }
-        // Default 4-on-the-floor kick pattern
-        if let Some(pattern) = drum_patterns.get_mut(&DrumVoice::Kick808) {
-            for i in [0, 4, 8, 12] {
-                pattern[i] = Step { active: true, velocity: 1.0 };
-            }
-        }
-        // Default hihat on every other 8th note
-        if let Some(pattern) = drum_patterns.get_mut(&DrumVoice::HihatClosed808) {
-            for i in [2, 6, 10, 14] {
-                pattern[i] = Step { active: true, velocity: 0.7 };
-            }
-        }
 
         Self {
-            bpm: 128.0,
+            bpm: 120.0,
             steps: 16,
             current_step: 0,
             running: false,

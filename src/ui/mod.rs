@@ -50,10 +50,16 @@ impl ImpulseApp {
         api_port: Option<u16>,
     ) -> Self {
         theme::apply(&cc.egui_ctx);
-        let mut log_lines = vec!["[ Impulse Instruct ready ]".into()];
+        let mut log_lines = vec!["[ Impulse Instruct ready — prompting Bonsai… ]".into()];
         if let Some(port) = api_port {
             log_lines.push(format!("[ HTTP API active → http://localhost:{} ]", port));
         }
+        // Auto-prompt on startup — let Bonsai set an initial sound
+        let _ = llm_tx.try_send(LlmInput {
+            prompt: "let's make some acid".to_string(),
+            one_shot: true,
+        });
+        log_lines.push("YOU → let's make some acid".into());
         Self {
             state,
             audio_tx,
@@ -167,9 +173,27 @@ impl eframe::App for ImpulseApp {
                         }
                     }
 
-                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        // API link (right-most, only shown when --api was passed)
-                        if let Some(port) = self.api_port {
+                    ui.add_space(4.0);
+
+                    // JAM toggle
+                    let jam = self.state.read().llm.auto_jam;
+                    let jam_color = if jam { theme::CHALK } else { theme::ASH };
+                    if ui.button(egui::RichText::new("JAM").color(jam_color).monospace().size(10.0)).clicked() {
+                        let mut next = self.state.read().clone();
+                        next.llm.auto_jam = !next.llm.auto_jam;
+                        let now_jamming = next.llm.auto_jam;
+                        *self.state.write() = next;
+                        if now_jamming {
+                            let _ = self.llm_tx.try_send(LlmInput {
+                                prompt: "start jamming".to_string(),
+                                one_shot: false,
+                            });
+                        }
+                    }
+
+                    // API link (right-aligned)
+                    if let Some(port) = self.api_port {
+                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                             let api_label = format!("API :{}", port);
                             let btn = ui.add(
                                 egui::Button::new(
@@ -185,54 +209,56 @@ impl eframe::App for ImpulseApp {
                             if btn.hovered() {
                                 btn.on_hover_text("Open API schema in browser");
                             }
-                            ui.add_space(4.0);
-                        }
+                        });
+                    }
+                });
+            });
 
-                        // Prompt submit
-                        let submit = ui.button(
-                            egui::RichText::new("ASK").monospace().size(10.0)
-                        ).clicked();
-
-                        // Jam toggle
-                        let jam = {
-                            let s = self.state.read();
-                            s.llm.auto_jam
-                        };
-                        let jam_color = if jam { theme::CHALK } else { theme::ASH };
-                        if ui.button(egui::RichText::new("JAM").color(jam_color).monospace().size(10.0)).clicked() {
-                            // Snapshot → mutate → write (no lock held during channel send)
-                            let mut next = self.state.read().clone();
-                            next.llm.auto_jam = !next.llm.auto_jam;
-                            let now_jamming = next.llm.auto_jam;
-                            *self.state.write() = next;
-                            if now_jamming {
-                                let _ = self.llm_tx.try_send(LlmInput {
-                                    prompt: "start jamming".to_string(),
-                                    one_shot: false,
-                                });
-                            }
-                        }
-
-                        ui.add_space(4.0);
-
-                        // Text input
-                        let response = ui.add(
-                            egui::TextEdit::singleline(&mut self.prompt_input)
-                                .hint_text("prompt the model…")
-                                .desired_width(320.0)
-                                .font(egui::FontId::monospace(10.5))
-                        );
-
-                        let enter_pressed = response.lost_focus()
-                            && ctx.input(|i| i.key_pressed(egui::Key::Enter));
-
-                        if (submit || enter_pressed) && !self.prompt_input.trim().is_empty() {
-                            let prompt = self.prompt_input.trim().to_string();
-                            self.log_lines.push(format!("YOU → {}", prompt));
-                            let _ = self.llm_tx.try_send(LlmInput { prompt, one_shot: true });
-                            self.prompt_input.clear();
+        // ── LLM strip (log + prompt) ──────────────────────────────────────────
+        TopBottomPanel::top("llm_strip")
+            .frame(Frame::none().fill(theme::PIT).inner_margin(egui::Margin::symmetric(10.0, 6.0)))
+            .min_height(80.0)
+            .max_height(140.0)
+            .show(ctx, |ui| {
+                // Scrollable log
+                egui::ScrollArea::vertical()
+                    .id_source("log_scroll")
+                    .stick_to_bottom(true)
+                    .max_height(90.0)
+                    .auto_shrink([false, false])
+                    .show(ui, |ui: &mut egui::Ui| {
+                        for line in &self.log_lines {
+                            ui.label(
+                                egui::RichText::new(line).color(theme::SMOKE).monospace().size(9.0)
+                            );
                         }
                     });
+
+                ui.add_space(4.0);
+
+                // Full-width prompt input
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    let submit = ui.button(
+                        egui::RichText::new("ASK").monospace().size(10.0)
+                    ).clicked();
+
+                    let remaining = ui.available_width();
+                    let response = ui.add(
+                        egui::TextEdit::singleline(&mut self.prompt_input)
+                            .hint_text("prompt the model…")
+                            .desired_width(remaining)
+                            .font(egui::FontId::monospace(10.5))
+                    );
+
+                    let enter_pressed = response.lost_focus()
+                        && ctx.input(|i| i.key_pressed(egui::Key::Enter));
+
+                    if (submit || enter_pressed) && !self.prompt_input.trim().is_empty() {
+                        let prompt = self.prompt_input.trim().to_string();
+                        self.log_lines.push(format!("YOU → {}", prompt));
+                        let _ = self.llm_tx.try_send(LlmInput { prompt, one_shot: true });
+                        self.prompt_input.clear();
+                    }
                 });
             });
 
@@ -258,19 +284,6 @@ impl eframe::App for ImpulseApp {
                         ).clicked() {
                             self.active_panel = panel;
                         }
-                    }
-                });
-            });
-
-        // ── Log strip ─────────────────────────────────────────────────────────
-        TopBottomPanel::bottom("log")
-            .frame(Frame::none().fill(theme::VOID).inner_margin(egui::Margin::symmetric(10.0, 4.0)))
-            .min_height(30.0)
-            .max_height(60.0)
-            .show(ctx, |ui| {
-                egui::ScrollArea::vertical().stick_to_bottom(true).show(ui, |ui| {
-                    for line in &self.log_lines {
-                        ui.label(egui::RichText::new(line).color(theme::SMOKE).monospace().size(9.0));
                     }
                 });
             });

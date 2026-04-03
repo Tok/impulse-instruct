@@ -3,17 +3,10 @@
 # Download the Bonsai 8B GGUF model for Impulse Instruct.
 #
 # Model: prism-ml/Bonsai-8B-gguf (Apache 2.0 license)
-# Quantizations available (choose one):
-#   Q4_K_M  — recommended, ~5.0 GB, good quality/speed balance
-#   Q3_K_M  — smaller, ~4.0 GB, slightly lower quality
-#   Q5_K_M  — larger, ~6.0 GB, higher quality
-#   Q2_K    — smallest, ~2.8 GB, lower quality
-#   Q8_0    — near-lossless, ~8.6 GB, slowest
+# Available file: Bonsai-8B.gguf
 #
 # Usage:
-#   ./download-models.sh                  # downloads Q4_K_M (recommended)
-#   ./download-models.sh Q3_K_M           # specific quantization
-#   ./download-models.sh --list           # list available files
+#   ./download-models.sh
 #
 # NOTE: A free HuggingFace account is required.
 #   Sign up at https://huggingface.co/join
@@ -24,32 +17,18 @@ cd "$(dirname "$0")"
 
 HF_REPO="prism-ml/Bonsai-8B-gguf"
 MODEL_DIR="models"
-QUANT="${1:-Q4_K_M}"
 
 mkdir -p "$MODEL_DIR"
 
-# Derive filename (HuggingFace repos vary — adjust if needed)
-# Convention: Bonsai-8B-{QUANT}.gguf
-MODEL_FILE="Bonsai-8B-${QUANT}.gguf"
+MODEL_FILE="Bonsai-8B.gguf"
 OUTPUT_PATH="${MODEL_DIR}/${MODEL_FILE}"
 SYMLINK="${MODEL_DIR}/bonsai-8b-q4.gguf"  # default path the app looks for
-
-if [[ "$QUANT" == "--list" ]]; then
-  echo "Available quantizations:"
-  echo "  Q2_K    ~2.8 GB  (smallest)"
-  echo "  Q3_K_M  ~4.0 GB"
-  echo "  Q4_K_M  ~5.0 GB  (recommended)"
-  echo "  Q5_K_M  ~6.0 GB"
-  echo "  Q8_0    ~8.6 GB  (near-lossless)"
-  exit 0
-fi
 
 if [[ -f "$OUTPUT_PATH" ]]; then
   echo "✓ Model already present: ${OUTPUT_PATH}"
   echo "  Delete it to re-download."
 else
   echo "Downloading ${HF_REPO} → ${OUTPUT_PATH}"
-  echo "Quantization: ${QUANT}"
   echo ""
 
   # Try huggingface-cli first (preferred — handles auth + resumable downloads)
@@ -71,22 +50,15 @@ else
       huggingface-cli login || { echo "Login cancelled. Re-run after logging in."; exit 1; }
     fi
     echo "Using huggingface-cli…"
-    huggingface-cli download "$HF_REPO" \
-      --include "*${QUANT}*.gguf" \
+    huggingface-cli download "$HF_REPO" "$MODEL_FILE" \
       --local-dir "$MODEL_DIR" \
       --local-dir-use-symlinks False
-    # Find the downloaded file and rename if needed
-    FOUND=$(find "$MODEL_DIR" -name "*${QUANT}*.gguf" | head -1)
-    if [[ -n "$FOUND" && "$FOUND" != "$OUTPUT_PATH" ]]; then
-      mv "$FOUND" "$OUTPUT_PATH"
-    fi
 
   # Fallback: pip install huggingface_hub then retry
   elif command -v pip3 &>/dev/null || command -v pip &>/dev/null; then
     echo "huggingface-cli not found — installing huggingface_hub…"
     pip install -q huggingface_hub 2>/dev/null || pip3 install -q huggingface_hub
-    huggingface-cli download "$HF_REPO" \
-      --include "*${QUANT}*.gguf" \
+    huggingface-cli download "$HF_REPO" "$MODEL_FILE" \
       --local-dir "$MODEL_DIR" \
       --local-dir-use-symlinks False
 
