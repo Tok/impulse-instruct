@@ -171,7 +171,7 @@ fn main() -> anyhow::Result<()> {
     let native_options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_title("Impulse Instruct")
-            .with_inner_size([1100.0, 720.0])
+            .with_maximized(true)
             .with_min_inner_size([800.0, 500.0]),
         ..Default::default()
     };

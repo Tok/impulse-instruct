@@ -75,15 +75,19 @@ pub struct ImpulseApp {
     llm_tx: Sender<LlmInput>,
     llm_rx: Receiver<LlmOutput>,
     midi_rx: Receiver<MidiEvent>,
-    midi_port: Option<String>,      // name of connected MIDI device, if any
-    pressed_notes: std::collections::HashSet<u8>, // keys currently held on MIDI keyboard
+    midi_port: Option<String>,
+    pressed_notes: std::collections::HashSet<u8>,
     prompt_input: String,
     log_text: String,
     active_panel: Panel,
     instruments: Vec<InstrumentSlot>,
-    api_port: Option<u16>, // Some(port) if --api was passed
+    api_port: Option<u16>,
     show_about: bool,
+    show_prefs: bool,
     export_bars: u32,
+    // Piano preferences
+    piano_show_labels: bool,
+    piano_show_colors: bool,
 }
 
 impl ImpulseApp {
@@ -125,7 +129,10 @@ impl ImpulseApp {
             ],
             api_port,
             show_about: false,
+            show_prefs: false,
             export_bars: 8,
+            piano_show_labels: true,
+            piano_show_colors: true,
         }
     }
 
@@ -219,6 +226,38 @@ impl eframe::App for ImpulseApp {
         self.drain_llm_outputs();
         self.drain_midi_events();
         ctx.request_repaint_after(std::time::Duration::from_millis(16));
+
+        // ── Preferences window ────────────────────────────────────────────────
+        if self.show_prefs {
+            egui::Window::new("Preferences")
+                .collapsible(false)
+                .resizable(false)
+                .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
+                .show(ctx, |ui| {
+                    ui.set_min_width(240.0);
+                    widgets::section_header(ui, "PIANO DISPLAY");
+                    ui.horizontal(|ui| {
+                        ui.label(egui::RichText::new("Note labels").monospace().size(9.5).color(theme::FOG));
+                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                            widgets::toggle_button(ui, if self.piano_show_labels { "ON" } else { "OFF" }, &mut self.piano_show_labels);
+                        });
+                    });
+                    ui.horizontal(|ui| {
+                        ui.label(egui::RichText::new("Farbige Noten colors").monospace().size(9.5).color(theme::FOG));
+                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                            widgets::toggle_button(ui, if self.piano_show_colors { "ON" } else { "OFF" }, &mut self.piano_show_colors);
+                        });
+                    });
+                    ui.add_space(8.0);
+                    ui.separator();
+                    ui.add_space(4.0);
+                    ui.vertical_centered(|ui| {
+                        if ui.button("Close").clicked() {
+                            self.show_prefs = false;
+                        }
+                    });
+                });
+        }
 
         // ── About window ──────────────────────────────────────────────────────
         if self.show_about {
@@ -319,6 +358,11 @@ impl eframe::App for ImpulseApp {
                     });
 
                     ui.menu_button(egui::RichText::new("Help").monospace().size(10.0), |ui| {
+                        if ui.button(egui::RichText::new("Preferences…").monospace().size(10.0)).clicked() {
+                            self.show_prefs = true;
+                            ui.close_menu();
+                        }
+                        ui.separator();
                         if ui.button(egui::RichText::new("About").monospace().size(10.0)).clicked() {
                             self.show_about = true;
                             ui.close_menu();
@@ -895,11 +939,11 @@ impl ImpulseApp {
     fn draw_piano(&mut self, ui: &mut egui::Ui, ctx: &egui::Context) {
         use egui::{Color32, Pos2, Rect, Sense, Stroke, Vec2};
 
-        // Range: C1 (MIDI 24) → C5 (MIDI 72) = 4 octaves + high C
+        // Range: C1 (MIDI 24) → C6 (MIDI 84) = 5 octaves + high C
         const START_NOTE: u8 = 24;
-        const END_NOTE:   u8 = 72;   // inclusive
-        const N_OCTAVES:  usize = 4;
-        const N_WHITE:    usize = N_OCTAVES * 7 + 1; // 29 white keys (including C5)
+        const END_NOTE:   u8 = 84;   // inclusive
+        const N_OCTAVES:  usize = 5;
+        const N_WHITE:    usize = N_OCTAVES * 7 + 1; // 36 white keys (including C6)
 
         // Which semitones are white keys?
         const fn is_white(semitone: u8) -> bool {
@@ -957,6 +1001,14 @@ impl ImpulseApp {
         let ox = rect.min.x; // origin x
         let oy = rect.min.y;
 
+        let use_color  = self.piano_show_colors;
+        let show_label = self.piano_show_labels;
+
+        // Classic (non-Farbige) base colors
+        let classic_white_inactive = Color32::from_rgb(58, 58, 58);
+        let classic_black_inactive = Color32::from_rgb(18, 18, 18);
+        let classic_active         = Color32::from_rgb(200, 200, 200);
+
         // ── White keys ────────────────────────────────────────────────────────
         let mut white_idx = 0usize;
         for note in START_NOTE..=END_NOTE {
@@ -969,42 +1021,45 @@ impl ImpulseApp {
                 Vec2::new(wk_w - 1.0, wk_h),
             );
 
-            let huth = theme::note_color(note);
-            let pressed = self.pressed_notes.contains(&note);
+            let pressed    = self.pressed_notes.contains(&note);
             let seq_active = seq_note == Some(note);
+            let active     = pressed || seq_active;
 
-            let fill: Color32 = if pressed {
-                // Full Huth color, blended toward CHALK for brightness
-                theme::lerp_color(huth, theme::CHALK, 0.25)
-            } else if seq_active {
-                // Sequencer playing this note — slightly dimmer tint
-                theme::lerp_color(huth, theme::SMOKE, 0.35)
+            let fill: Color32 = if use_color {
+                let huth = theme::note_color(note);
+                if pressed       { theme::lerp_color(huth, theme::CHALK, 0.25) }
+                else if seq_active { theme::lerp_color(huth, theme::SMOKE, 0.35) }
+                else               { theme::lerp_color(huth, Color32::from_rgb(62, 62, 62), 0.80) }
             } else {
-                // Inactive — dark gray with a faint Huth tint so color is hinted
-                theme::lerp_color(huth, Color32::from_rgb(62, 62, 62), 0.80)
+                if active { classic_active } else { classic_white_inactive }
             };
 
             painter.rect_filled(key_rect, egui::Rounding::same(1.0), fill);
             painter.rect_stroke(key_rect, egui::Rounding::same(1.0),
                 Stroke::new(0.5, theme::SLATE));
 
-            // Note label on lowest C of each octave
-            if semi == 0 {
-                let note_name = note_name(note);
+            // Label — all white keys when labels are on
+            if show_label {
+                let lbl = note_name(note);
+                // For non-C notes, trim the octave number to save space
+                let lbl_short = if semi == 0 { lbl } else { &lbl[..lbl.len()-1] };
+                let label_color = if active {
+                    if use_color { theme::VOID } else { theme::DEEP }
+                } else {
+                    theme::ASH
+                };
                 painter.text(
-                    Pos2::new(x + wk_w * 0.5, oy + wk_h - 10.0),
+                    Pos2::new(x + wk_w * 0.5, oy + wk_h - 9.0),
                     egui::Align2::CENTER_CENTER,
-                    note_name,
-                    egui::FontId::monospace(7.5),
-                    if pressed || seq_active { theme::VOID } else { theme::IRON },
+                    lbl_short,
+                    egui::FontId::monospace(7.0),
+                    label_color,
                 );
             }
 
             // Click detection — white keys
             if let Some(cp) = click_pos {
-                if key_rect.contains(cp) {
-                    clicked_note = Some(note);
-                }
+                if key_rect.contains(cp) { clicked_note = Some(note); }
             }
 
             white_idx += 1;
@@ -1023,28 +1078,41 @@ impl ImpulseApp {
                     Vec2::new(bk_w, bk_h),
                 );
 
-                let huth = theme::note_color(note);
-                let pressed = self.pressed_notes.contains(&note);
+                let pressed    = self.pressed_notes.contains(&note);
                 let seq_active = seq_note == Some(note);
+                let active     = pressed || seq_active;
 
-                let fill: Color32 = if pressed {
-                    theme::lerp_color(huth, theme::CHALK, 0.15)
-                } else if seq_active {
-                    huth
+                let fill: Color32 = if use_color {
+                    let huth = theme::note_color(note);
+                    if pressed       { theme::lerp_color(huth, theme::CHALK, 0.15) }
+                    else if seq_active { huth }
+                    else               { theme::lerp_color(huth, theme::PIT, 0.82) }
                 } else {
-                    // Mostly dark, slight Huth tint
-                    theme::lerp_color(huth, theme::PIT, 0.82)
+                    if active { classic_active } else { classic_black_inactive }
                 };
 
                 painter.rect_filled(key_rect, egui::Rounding::same(1.0), fill);
                 painter.rect_stroke(key_rect, egui::Rounding::same(1.0),
                     Stroke::new(0.5, theme::SLATE));
 
+                // Label — sharp name only (no octave number, key is too narrow)
+                if show_label {
+                    // e.g. "C#" from "C#3"
+                    let full = note_name(note);
+                    let sharp = &full[..full.len()-1]; // strip octave digit
+                    let label_color = if active { theme::VOID } else { theme::IRON };
+                    painter.text(
+                        Pos2::new(x + bk_w * 0.5, oy + bk_h - 8.0),
+                        egui::Align2::CENTER_CENTER,
+                        sharp,
+                        egui::FontId::monospace(6.0),
+                        label_color,
+                    );
+                }
+
                 // Click detection — black keys take priority
                 if let Some(cp) = click_pos {
-                    if key_rect.contains(cp) {
-                        clicked_note = Some(note); // overrides white key
-                    }
+                    if key_rect.contains(cp) { clicked_note = Some(note); }
                 }
             }
         }
