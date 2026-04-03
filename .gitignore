@@ -3,3 +3,5 @@
 /models/*.bin
 .env
 *.swp
+.llama-build
+.llama-src
