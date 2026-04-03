@@ -70,6 +70,14 @@ const LOG_LEVELS: &[(&str, log::LevelFilter)] = &[
     ("DEBUG", log::LevelFilter::Debug),
 ];
 
+// Startup prompts live in config.json and are loaded via crate::config.
+
+// ─── Sequencer row layout ─────────────────────────────────────────────────────
+const SEQ_LABEL_W: f32 = 72.0;
+const SEQ_LABEL_H: f32 = 22.0;
+const SEQ_VOL_W:   f32 = 52.0;
+const SEQ_VOL_H:   f32 = 14.0;
+
 // ─── Instrument slot system ───────────────────────────────────────────────────
 
 /// The synthesis character of an instrument module.
@@ -134,6 +142,8 @@ pub struct ImpulseApp {
     // Preferences
     prefs_tab: usize,
     log_level_idx: usize, // index into LOG_LEVELS
+    // Startup hook: fire a prompt once the LLM transitions from initializing to ready
+    startup_done: bool,
 }
 
 impl ImpulseApp {
@@ -149,6 +159,30 @@ impl ImpulseApp {
         api_port: Option<u16>,
     ) -> Self {
         theme::apply(&cc.egui_ctx);
+
+        // ── Load last session from eframe's persistent storage ────────────────
+        if let Some(storage) = cc.storage {
+            if let Some(json) = storage.get_string("session") {
+                if let Ok(mut loaded) = serde_json::from_str::<AppState>(&json) {
+                    // Reset runtime-only flags; the LLM thread sets them once it's ready.
+                    loaded.llm.is_mock = false;
+                    loaded.llm.llm_initializing = true;
+                    loaded.llm.is_inferring = false;
+                    loaded.llm.last_response = String::new();
+                    loaded.sequencer.running = false; // started below
+                    loaded.sequencer.current_step = 0;
+                    *state.write() = loaded;
+                    log::info!("Session restored from last run.");
+                }
+            }
+        }
+
+        // Auto-start sequencer so there's always audio from the first frame.
+        {
+            let mut s = state.write();
+            s.sequencer.running = true;
+        }
+
         let mut log_text = "[ Impulse Instruct ready ]\n".to_string();
         if let Some(ref port) = midi_port {
             log_text.push_str(&format!("[ MIDI: {} ]\n", port));
@@ -196,6 +230,7 @@ impl ImpulseApp {
             show_sysinfo: false,
             prefs_tab: 0,
             log_level_idx: 2, // default: Info
+            startup_done: false,
         }
     }
 
@@ -333,9 +368,31 @@ impl ImpulseApp {
 }
 
 impl eframe::App for ImpulseApp {
+    /// Persist synth state so the next launch resumes from the same session.
+    fn save(&mut self, storage: &mut dyn eframe::Storage) {
+        let s = self.state.read().clone();
+        if let Ok(json) = serde_json::to_string(&s) {
+            storage.set_string("session", json);
+        }
+    }
+
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
         self.drain_llm_outputs();
         self.drain_midi_events();
+
+        // ── Startup hook ──────────────────────────────────────────────────────
+        // Fire once — right after the LLM transitions from initializing to ready.
+        if !self.startup_done && !self.state.read().llm.llm_initializing {
+            self.startup_done = true;
+            if let Some(prompt) = crate::config::random_startup_prompt() {
+                let _ = self.llm_tx.try_send(LlmInput::Infer {
+                    prompt: prompt.to_string(),
+                    one_shot: true,
+                });
+                log::info!("Startup prompt: {}", prompt);
+            }
+        }
+
         ctx.request_repaint_after(std::time::Duration::from_millis(16));
 
         // ── Drain scope ring buffer ────────────────────────────────────────────
@@ -1342,7 +1399,7 @@ impl ImpulseApp {
                     // Voice label
                     let label = voice.label();
                     ui.add_sized(
-                        [72.0, 22.0],
+                        [SEQ_LABEL_W, SEQ_LABEL_H],
                         egui::Label::new(
                             egui::RichText::new(label).color(theme::SMOKE).monospace().size(8.5)
                         )
@@ -1351,7 +1408,7 @@ impl ImpulseApp {
                     // Per-voice volume slider
                     let mut vol = voice.get_volume(&self.state.read());
                     let vol_resp = ui.add_sized(
-                        [52.0, 14.0],
+                        [SEQ_VOL_W, SEQ_VOL_H],
                         egui::Slider::new(&mut vol, 0.0..=1.0)
                             .show_value(false)
                             .trailing_fill(true),

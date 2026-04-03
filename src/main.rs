@@ -20,6 +20,7 @@
 mod api;
 mod audio;
 mod banner;
+mod config;
 mod export;
 mod llm;
 mod midi;

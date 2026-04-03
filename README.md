@@ -4,7 +4,7 @@
 
 # Impulse Instruct
 
-A synthesizer with a tiny LLM living inside it. PULSE runs locally and has full control of the sound — it listens to what you say, jams autonomously, and responds to the music in real time. You keep the keys you want; it owns everything else.
+A synthesizer with a tiny LLM living inside of it. PULSE runs locally and has full control of the sound — it listens to what you say, jams autonomously, and responds to the music in real time. You keep the keys you want; it owns everything else.
 
 Built in Rust. Runs [Bonsai 8B](https://huggingface.co/prism-ml/Bonsai-8B-gguf) — a 1-bit, 1.1 GB model — entirely on your GPU.
 
