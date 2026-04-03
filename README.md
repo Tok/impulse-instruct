@@ -4,6 +4,8 @@ An LLM-first audio synthesizer. The model has full control of the synth — you 
 
 Built in Rust. Runs the [Bonsai 8B](https://huggingface.co/prism-ml/Bonsai-8B-gguf) 1-bit GGUF model locally.
 
+> **Requires an NVIDIA GPU (CUDA).** CPU-only inference is technically possible but at ~0.4 tok/s it's not usable in practice. The app falls back to mock mode without a working llama-server.
+
 ---
 
 ## What it does
@@ -24,22 +26,33 @@ Built in Rust. Runs the [Bonsai 8B](https://huggingface.co/prism-ml/Bonsai-8B-gg
 
 ---
 
+## Requirements
+
+| | |
+|---|---|
+| **GPU** | NVIDIA GPU with CUDA 12.x (tested: RTX 4070 Ti Super) |
+| **VRAM** | ≥ 2 GB (model is 1.1 GB, fits entirely in VRAM) |
+| **OS** | Linux (Windows build possible via cargo-xwin, untested) |
+| **Rust** | 1.85+ (edition 2024) |
+
 ## Quick start
 
 ```bash
 # 1. Clone and enter
 git clone <repo> impulse-instruct && cd impulse-instruct
 
-# 2. Run with mock LLM (no model needed, works immediately)
-#    HTTP API starts automatically on port 8765
-cargo run
+# 2. Build the Bonsai inference server (one-time, ~3 min)
+#    Requires: git cmake build-essential cuda-toolkit-12-x
+./build-bonsai-server.sh
 
-# 3. Enable real LLM inference (Bonsai 8B, 1-bit, ~1.1 GB)
-#    Requires a free HuggingFace account — https://huggingface.co/join
-./build-bonsai-server.sh      # build PrismML llama-server (~3 min, one-time)
-./download-models.sh          # download Bonsai 8B GGUF
+# 3. Download Bonsai 8B (~1.1 GB, requires free HuggingFace account)
+./download-models.sh
+
+# 4. Run
 cargo run --release
 ```
+
+**No GPU / no model?** The app still runs in mock mode — the synth, sequencer, MIDI, and API all work, but responses are keyword-based rather than model-generated.
 
 ### MIDI keyboard setup (Linux)
 
