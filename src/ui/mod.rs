@@ -80,7 +80,7 @@ impl ImpulseApp {
     /// Drain LLM output messages.
     fn drain_llm_outputs(&mut self) {
         while let Ok(out) = self.llm_rx.try_recv() {
-            if out.param_update.is_some() || (!out.text.is_empty() && !out.text.starts_with('[')) {
+            if !out.is_jam && (out.param_update.is_some() || (!out.text.is_empty() && !out.text.starts_with('['))) {
                 let display = if let Some(ref update) = out.param_update {
                     // Prefer the natural-language comment; fall back to a terse param summary
                     if let Some(comment) = update.get("_comment").and_then(|v| v.as_str()) {

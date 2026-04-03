@@ -29,6 +29,7 @@ pub struct LlmOutput {
     pub param_update: Option<serde_json::Value>,
     pub tokens_per_sec: f32,
     pub context_used: usize,
+    pub is_jam: bool,
 }
 
 // ─── LLM backend trait (swappable) ────────────────────────────────────────────
@@ -95,7 +96,7 @@ fn mock_response(prompt: &str) -> Result<LlmOutput> {
     let json = if prompt_lower.contains("acid") {
         serde_json::json!({
             "_comment": "classic acid setup — resonant filter sweeping over a syncopated 303 line, 4-on-the-floor kick",
-            "tb303": { "cutoff": 0.45, "resonance": 0.72, "env_mod": 0.78, "decay": 0.38, "distortion": 0.08, "volume": 0.85 },
+            "tb303": { "cutoff": 0.5, "resonance": 0.70, "env_mod": 0.80, "decay": 0.38, "distortion": 0.05, "volume": 0.9 },
             "sequencer": {
                 "bpm": 135.0,
                 "bass_steps": [true, false, true, false, false, true, false, true, true, false, false, true, false, true, false, false],
@@ -143,6 +144,7 @@ fn mock_response(prompt: &str) -> Result<LlmOutput> {
         param_update: Some(json),
         tokens_per_sec: 42.0, // mock speed
         context_used: 256,
+        is_jam: false, // caller sets this after the fact if needed
     })
 }
 
@@ -163,6 +165,7 @@ pub fn run_llm_loop(
             param_update: None,
             tokens_per_sec: 0.0,
             context_used: 0,
+            is_jam: false,
         });
     } else {
         log::info!("LLM thread started — mock mode (no model file)");
@@ -175,6 +178,7 @@ pub fn run_llm_loop(
             param_update: None,
             tokens_per_sec: 0.0,
             context_used: 0,
+            is_jam: false,
         });
     }
 
@@ -238,6 +242,8 @@ pub fn run_llm_loop(
                         log::debug!("Bonsai (jam) → {}", comment);
                     }
                 }
+                let mut output = output;
+                output.is_jam = !input.one_shot;
                 let _ = output_tx.try_send(output);
                 log::debug!("inference complete in {:.2}s", elapsed);
             }
@@ -253,20 +259,6 @@ pub fn run_llm_loop(
         if input.one_shot {
             // nothing — wait for next prompt
         } else {
-            let _ = output_tx.try_send(LlmOutput {
-                text: String::new(),
-                param_update: None,
-                tokens_per_sec: 0.0,
-                context_used: 0,
-            });
-            // Re-send to self to keep jamming
-            // (the UI thread checks auto_jam and re-sends if needed)
-            let _ = output_tx.try_send(LlmOutput {
-                text: "[jam]".to_string(),
-                param_update: None,
-                tokens_per_sec: 0.0,
-                context_used: 0,
-            });
             let _ = input_rx.try_recv(); // drain any queued prompts
             // Signal back so UI can re-trigger if in auto_jam mode
             let _ = output_tx.send(LlmOutput {
@@ -274,6 +266,7 @@ pub fn run_llm_loop(
                 param_update: None,
                 tokens_per_sec: 0.0,
                 context_used: 0,
+                is_jam: true,
             });
         }
     }

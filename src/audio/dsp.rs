@@ -690,8 +690,10 @@ impl DspState {
             let clap = self.clap909.process(p.clap909_decay, p.clap909_volume, sr);
             let rim = self.rim909.process(0.7, 0.3, 0.15, 0.75, sr);
 
-            let dry = bass_out + k808 + s808 + hh808c + hh808o + th808 + tm808 + tl808
-                + k909 + s909 + hh909c + hh909o + clap + rim;
+            // Scale mix to prevent clipping — summing 14 voices without gain staging
+            // causes hard clipping even with moderate individual volumes
+            let dry = (bass_out + k808 + s808 + hh808c + hh808o + th808 + tm808 + tl808
+                + k909 + s909 + hh909c + hh909o + clap + rim) * 0.65;
 
             // FX chain
             let reverb_wet = self.reverb.process(dry, p.reverb_size, p.reverb_damp);
