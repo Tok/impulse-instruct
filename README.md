@@ -1,6 +1,10 @@
+<p align="center">
+  <img src="docs/header.svg" alt="Impulse Instruct" width="800"/>
+</p>
+
 # Impulse Instruct
 
-A synthesizer with a tiny LLM living inside it. Bonsai 8B runs locally and has full control of the sound — it listens to what you say, jams autonomously, and responds to the music in real time. You keep the keys you want; it owns everything else.
+A synthesizer with a tiny LLM living inside it. PULSE runs locally and has full control of the sound — it listens to what you say, jams autonomously, and responds to the music in real time. You keep the keys you want; it owns everything else.
 
 Built in Rust. Runs [Bonsai 8B](https://huggingface.co/prism-ml/Bonsai-8B-gguf) — a 1-bit, 1.1 GB model — entirely on your GPU.
 
@@ -11,15 +15,18 @@ Built in Rust. Runs [Bonsai 8B](https://huggingface.co/prism-ml/Bonsai-8B-gguf) 
 ## What it does
 
 - **Bass synthesizer** — ladder filter, saw/square oscillator, accent & slide
+- **Supersaw oscillator** — unison detuned saws for trance, Reese bass, rave stabs
 - **Drum Kit A** — kick, snare, hihat, toms (808-style analog modeling)
 - **Drum Kit B** — kick, snare, hihat, clap, rim (909-style)
-- **16-step sequencer** — sample-accurate clock, per-voice patterns
+- **up to 64-step sequencer with variable step count** — sample-accurate clock, per-voice patterns
 - **FX chain** — reverb, delay, drive, master volume
+- **Bitcrush FX** — bit depth + sample rate reduction for lo-fi, gabber, breakcore
 - **Piano display** — Huth *Farbige Noten* color theory (1888); C2–C5 keyboard lights up on MIDI input and sequencer playback
 - **MIDI input** — auto-connects to first USB MIDI keyboard (class-compliant, tested with AKAI LPK25); live play triggers the bass synth
-- **LLM control** — model continuously generates JSON parameter updates
+- **PULSE** — the AI inside; generates JSON parameter updates continuously
 - **Lock system** — touch a knob and it's yours; the LLM won't override it
 - **Jam mode** — LLM evolves the pattern autonomously
+- **TTS MC mode** — espeak-ng voice output; LLM speaks its comments as an MC
 - **Export** — WAV (32-bit float) and MP3 (via ffmpeg); offline render, no audio device needed
 - **Project save/load** — JSON snapshots via File menu
 - **HTTP/MCP API** — REST interface on port 8765 (on by default; `--no-api` to disable)

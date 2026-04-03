@@ -137,13 +137,31 @@ Move from a fixed linear audio chain to a node graph.
 - [ ] Patch connections stored as `Vec<Connection { from: NodeId, to: NodeId, port: u8 }>`
 - [ ] Backward-compatible: default graph = current fixed chain
 
-### Cable UI (Rack View)
-- [ ] New "Rack" tab (opt-in, alongside current panels)
-- [ ] Each node renders as a panel with named I/O port circles
-- [ ] Drag from output port to input port draws a Bezier cable (egui painter)
-- [ ] Delete cable by clicking on it
-- [ ] Rack layout is resizable and scrollable
-- [ ] Cable colors by signal type (audio = white, CV/mod = yellow, MIDI = blue)
+### Cable UI — Reason-style Rack Flip
+
+Propellerhead Reason (2000) is the reference: pressing **Tab** flips all rack
+modules to reveal their back panels, where the user patches virtual cables
+between I/O ports freely — the same physical reality of hardware modular
+synthesis. Goal: replicate this interaction exactly.
+
+- [ ] **Tab toggle** — pressing Tab (or a button) flips the view from front panels
+      to a "back of rack" cable view and back. Same modules, different face.
+- [ ] Front view: knobs, buttons, sequencer (current UI panels, unchanged)
+- [ ] Back view: each module renders as a flat back panel with labeled I/O
+      port jacks (circles); no controls visible — only ports and cables
+- [ ] Drag from output jack to input jack → spawn a Bezier cable
+- [ ] Cable snaps to nearest valid port on release (within threshold pixels)
+- [ ] Delete cable: click anywhere on the cable path, or right-click → remove
+- [ ] Cable colors by signal type: audio = white, CV/modulation = yellow,
+      MIDI = blue, gate/trigger = green
+- [ ] Cables rendered as thick Bezier curves with a slight droop (gravity sim:
+      midpoint offset proportional to distance, like a real cable hanging)
+- [ ] Rack layout is scrollable horizontally; modules appear left-to-right in
+      the same order as the front tabs
+- [ ] Connections stored as `Vec<Connection { from: (NodeId, PortId), to: (NodeId, PortId) }>`
+- [ ] Back-view patch state persists across Tab flips
+- [ ] Default patch (no user cables) = current fixed audio chain, shown as
+      pre-wired cables on first open (so new users see how things connect)
 
 ---
 

@@ -18,6 +18,7 @@
 
 mod api;
 mod audio;
+mod banner;
 mod export;
 mod llm;
 mod midi;
@@ -101,6 +102,8 @@ fn main() -> anyhow::Result<()> {
     env_logger::Builder::from_env(
         env_logger::Env::default().default_filter_or(&args.log_level)
     ).init();
+
+    crate::banner::print_banner();
 
     log::info!("Impulse Instruct starting…");
     if !args.no_api {
