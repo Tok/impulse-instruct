@@ -46,16 +46,28 @@ fn all_false(json: &Value, path: &str) -> bool {
         .unwrap_or(false)
 }
 
-/// Returns `(backend, system_prompt)` if the server comes up.
-/// Returns `None` and prints a skip message if binary or model are missing.
+/// Returns `(backend, system_prompt)` if the server is reachable.
+///
+/// Two modes:
+///   • `LLAMA_SERVER_URL=http://127.0.0.1:PORT` — connect to an already-running server
+///     (used by `run-llm-tests.sh`, avoids spawning a second instance that would
+///     compete for VRAM and cause a 30-second timeout).
+///   • No env var — spawn a new server the normal way (slow; each test binary pays
+///     the full model load time, but works standalone).
 fn setup() -> Option<(LlamaServerBackend, String)> {
     let state = AppState::default();
-    let backend = LlamaServerBackend::new(&state.llm.model_path);
+
+    let backend = if let Ok(url) = std::env::var("LLAMA_SERVER_URL") {
+        LlamaServerBackend::connect(&url)
+    } else {
+        LlamaServerBackend::new(&state.llm.model_path)
+    };
+
     if !backend.is_live() {
         eprintln!(
             "\n[llm-suite] SKIP — Bonsai server not available \
              (model: '{}')\n\
-             Run ./build-bonsai-server.sh + ./download-models.sh.\n",
+             Run ./run-llm-tests.sh, or set LLAMA_SERVER_URL to a running instance.\n",
             state.llm.model_path
         );
         return None;
@@ -194,6 +206,115 @@ fn clear_all_drums_clears_all_voices() {
             && all_false(j, "sequencer.hihat_a_steps")
             && all_false(j, "sequencer.clap_b_steps")
     });
+}
+
+// ── Artist / cultural reference comprehension (REQUIRED_LOOSE) ───────────────
+//
+// These tests check whether Bonsai maps cultural references to the right
+// sonic parameter space.  A consistent FAIL means the reference is not in the
+// model's training data and the description in styles.json should be rewritten
+// as a plain sonic brief instead.
+//
+// Artist tiers for Bonsai 8B (likely trained on web text up to ~2023):
+//   ✅ Probably known: Aphex Twin, Autechre, Daft Punk, Kraftwerk, Tangerine Dream
+//   🟡 Possibly known: Phuture/DJ Pierre, Basic Channel, Venetian Snares, Plastikman
+//   ❓ Uncertain: Neophyte, Drexciya, Mixmaster Morris, Gost, Enduser
+//
+// If a test here fails, update styles.json to drop the name and describe the sound.
+
+/// Classic acid should set high resonance — the squelch IS the point.
+/// Phuture and DJ Pierre are foundational acid house; if Bonsai knows "acid house"
+/// at all it should know these names.
+#[test]
+fn classic_acid_phuture_sets_high_resonance() {
+    let Some((mut b, sys)) = setup() else { return };
+    assert_gate(&mut b, &sys,
+        "classic Chicago acid house — think Phuture, DJ Pierre, Trax Records, pure 303 squelch",
+        0.3, REQUIRED_LOOSE,
+        |j| num(j, "bass.resonance") >= 0.65);
+}
+
+/// Classic acid should stay dry — barely any FX.
+#[test]
+fn classic_acid_phuture_stays_dry() {
+    let Some((mut b, sys)) = setup() else { return };
+    assert_gate(&mut b, &sys,
+        "classic acid, Phuture style — raw and dry, no reverb, no delay",
+        0.3, REQUIRED_LOOSE,
+        |j| {
+            let rmix = at(j, "fx.reverb_mix").and_then(|v| v.as_f64()).unwrap_or(0.0);
+            let dmix = at(j, "fx.delay_mix").and_then(|v| v.as_f64()).unwrap_or(0.0);
+            rmix <= 0.2 && dmix <= 0.15
+        });
+}
+
+/// Autechre = IDM, so kick should NOT be strict four-on-the-floor.
+/// This is one of the most famous IDM acts — if Bonsai knows any IDM, it knows Autechre.
+#[test]
+fn autechre_idm_breaks_four_on_the_floor() {
+    let four_floor = serde_json::json!([
+        true,false,false,false, true,false,false,false,
+        true,false,false,false, true,false,false,false
+    ]);
+    let Some((mut b, sys)) = setup() else { return };
+    assert_gate(&mut b, &sys,
+        "go full Autechre IDM — irregular kick, subvert the grid, nothing four-on-the-floor",
+        0.3, REQUIRED_LOOSE,
+        |j| {
+            match at(j, "sequencer.kick_a_steps") {
+                None      => true,                    // no kick at all = fine for IDM
+                Some(arr) => arr != &four_floor,      // anything but pure 4-on-the-floor
+            }
+        });
+}
+
+/// Aphex Twin Selected Ambient Works Vol 2 = spacious, heavy reverb.
+#[test]
+fn aphex_twin_ambient_uses_reverb() {
+    let Some((mut b, sys)) = setup() else { return };
+    assert_gate(&mut b, &sys,
+        "ambient Aphex Twin mood — Selected Ambient Works Vol 2, spacious and ethereal",
+        0.3, REQUIRED_LOOSE,
+        |j| num(j, "fx.reverb_mix") >= 0.25);
+}
+
+/// Basic Channel dub techno = FX-heavy (reverb + delay are the music).
+/// If Bonsai doesn't know Basic Channel, "dub techno" alone should still trigger FX.
+#[test]
+fn basic_channel_dub_techno_uses_heavy_fx() {
+    let Some((mut b, sys)) = setup() else { return };
+    assert_gate(&mut b, &sys,
+        "dub techno in the style of Basic Channel — maximum reverb, ghost delay echoes",
+        0.3, REQUIRED_LOOSE,
+        |j| num(j, "fx.reverb_mix") >= 0.3 || num(j, "fx.delay_mix") >= 0.2);
+}
+
+/// Berlin techno = dark filter, deep bass, not much melody.
+/// Richie Hawtin / Berghain refs — model should understand "Berlin" if not the names.
+#[test]
+fn berlin_techno_sets_dark_filter() {
+    let Some((mut b, sys)) = setup() else { return };
+    assert_gate(&mut b, &sys,
+        "Berlin techno — Berghain floor, deep dark kick, filter nearly closed, Richie Hawtin",
+        0.3, REQUIRED_LOOSE,
+        |j| num(j, "bass.cutoff") <= 0.35);
+}
+
+/// Venetian Snares breakcore = very high BPM (if the model touches BPM at all).
+/// If Bonsai doesn't know Venetian Snares, this tells us to drop the name.
+#[test]
+fn venetian_snares_sets_high_bpm() {
+    let Some((mut b, sys)) = setup() else { return };
+    // Only meaningful if BPM is in the output at all
+    assert_gate(&mut b, &sys,
+        "breakcore chaos, Venetian Snares energy — shredded Amen, extreme BPM",
+        0.3, REQUIRED_LOOSE,
+        |j| {
+            match at(j, "sequencer.bpm").and_then(|v| v.as_f64()) {
+                None      => true,   // didn't touch BPM — inconclusive, not a failure
+                Some(bpm) => bpm >= 160.0,
+            }
+        });
 }
 
 // ── Schema compliance (REQUIRED_TIGHT) ───────────────────────────────────────

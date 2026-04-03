@@ -119,6 +119,20 @@ impl LlamaServerBackend {
         }
     }
 
+    /// Connect to an already-running llama-server without spawning a new process.
+    #[allow(dead_code)] // used by llm-tests feature (llm_suite.rs)
+    /// Used by the LLM test suite when `LLAMA_SERVER_URL` is set.
+    pub fn connect(base_url: &str) -> Self {
+        let url = format!("{}/health", base_url);
+        let live = ureq::get(&url).call()
+            .map(|r| r.status() == 200)
+            .unwrap_or(false);
+        if !live {
+            log::warn!("LlamaServerBackend::connect: server at {} not responding", base_url);
+        }
+        Self { child: None, base_url: base_url.to_string(), live }
+    }
+
     pub fn is_live(&self) -> bool { self.live }
 
     /// Poll /health until the server is ready (up to ~30 s).
@@ -222,8 +236,8 @@ impl LlmBackend for LlamaServerBackend {
         let tps = if elapsed > 0.0 { completion_tokens / elapsed } else { 0.0 };
         let ctx_used = usage["total_tokens"].as_u64().unwrap_or(0) as usize;
 
-        let param_update = serde_json::from_str::<serde_json::Value>(json_text.trim())
-            .map_err(|e| anyhow::anyhow!("JSON parse failed: {e}\nraw: {json_text}"))?;
+        let param_update = repair_json(json_text.trim())
+            .ok_or_else(|| anyhow::anyhow!("JSON parse and repair both failed\nraw: {json_text}"))?;
 
         Ok(LlmOutput {
             text: json_text,
@@ -238,6 +252,78 @@ impl LlmBackend for LlamaServerBackend {
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
+
+/// Best-effort JSON repair for truncated or structurally confused LLM output.
+/// 1. Try parsing as-is.
+/// 2. Close unclosed brackets and retry.
+/// 3. Sanitize the resulting structure (lift misplaced keys, remove nested fx loops).
+fn repair_json(s: &str) -> Option<serde_json::Value> {
+    // Fast path — valid JSON
+    if let Ok(v) = serde_json::from_str::<serde_json::Value>(s) {
+        let fixed = sanitize_json_structure(v);
+        return Some(fixed);
+    }
+
+    log::warn!("JSON parse failed — attempting repair (truncated/malformed output)");
+
+    // Build a repaired candidate by closing unclosed brackets.
+    let mut attempt = s.trim_end_matches([',', ' ', '\n', '\r', ':']).to_string();
+
+    // Count unclosed nesting levels (ignore chars inside strings).
+    let (mut obj_depth, mut arr_depth) = (0i32, 0i32);
+    let mut in_str = false;
+    let mut esc = false;
+    for c in attempt.chars() {
+        if esc        { esc = false; continue; }
+        if c == '\\'  && in_str { esc = true; continue; }
+        if c == '"'   { in_str = !in_str; continue; }
+        if !in_str    {
+            match c {
+                '{' => obj_depth += 1,
+                '}' => obj_depth -= 1,
+                '[' => arr_depth += 1,
+                ']' => arr_depth -= 1,
+                _   => {}
+            }
+        }
+    }
+    // Close in reverse order: arrays first, then objects
+    for _ in 0..arr_depth.max(0) { attempt.push(']'); }
+    for _ in 0..obj_depth.max(0) { attempt.push('}'); }
+
+    serde_json::from_str::<serde_json::Value>(&attempt)
+        .ok()
+        .map(sanitize_json_structure)
+}
+
+/// Promote `bass` and `fx` keys that the model incorrectly nests inside `sequencer`
+/// back to the top level, and strip `"fx"` keys nested inside `"fx"` (looping pattern).
+fn sanitize_json_structure(v: serde_json::Value) -> serde_json::Value {
+    let mut obj = match v {
+        serde_json::Value::Object(m) => m,
+        other => return other,
+    };
+
+    // Extract misplaced keys from inside "sequencer"
+    let (bass_lift, fx_lift) = if let Some(seq) = obj.get_mut("sequencer").and_then(|s| s.as_object_mut()) {
+        (seq.remove("bass"), seq.remove("fx"))
+    } else {
+        (None, None)
+    };
+    if let Some(b) = bass_lift {
+        obj.entry("bass").or_insert(b);
+    }
+    if let Some(f) = fx_lift {
+        obj.entry("fx").or_insert(f);
+    }
+
+    // Remove nested "fx" inside "fx" (the recursive loop the model falls into)
+    if let Some(fx) = obj.get_mut("fx").and_then(|f| f.as_object_mut()) {
+        fx.remove("fx");
+    }
+
+    serde_json::Value::Object(obj)
+}
 
 /// Split a `<think>…</think>` block from the front of a model response.
 /// Returns `(thinking_text, remainder)`.  If no block is present, thinking is None

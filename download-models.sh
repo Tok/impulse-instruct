@@ -22,7 +22,6 @@ mkdir -p "$MODEL_DIR"
 
 MODEL_FILE="Bonsai-8B.gguf"
 OUTPUT_PATH="${MODEL_DIR}/${MODEL_FILE}"
-SYMLINK="${MODEL_DIR}/bonsai-8b-q4.gguf"  # default path the app looks for
 
 if [[ -f "$OUTPUT_PATH" ]]; then
   echo "✓ Model already present: ${OUTPUT_PATH}"
@@ -79,19 +78,13 @@ else
   fi
 fi
 
-# Create/update the default symlink the app uses
 if [[ -f "$OUTPUT_PATH" ]]; then
-  if [[ "$OUTPUT_PATH" != "$SYMLINK" ]]; then
-    ln -sf "$(basename "$OUTPUT_PATH")" "$SYMLINK"
-    echo "→ Default symlink: ${SYMLINK} → ${MODEL_FILE}"
-  fi
   SIZE=$(du -sh "$OUTPUT_PATH" | cut -f1)
   echo ""
   echo "✓ Model ready: ${OUTPUT_PATH} (${SIZE})"
   echo ""
   echo "Run with real LLM inference:"
-  echo "  ./start.sh --llm"
-  echo "  # or: cargo run --features llm --release"
+  echo "  cargo run --release"
 else
   echo "ERROR: Download failed. File not found at ${OUTPUT_PATH}"
   exit 1

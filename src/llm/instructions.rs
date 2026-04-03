@@ -66,10 +66,12 @@ impl InstructionSet {
         best.map(|(inst, _)| inst)
     }
 
+    #[allow(dead_code)]
     pub fn iter(&self) -> impl Iterator<Item = &Instruction> {
         self.0.iter()
     }
 
+    #[allow(dead_code)]
     pub fn len(&self) -> usize {
         self.0.len()
     }

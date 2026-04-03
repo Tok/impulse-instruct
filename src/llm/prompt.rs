@@ -82,10 +82,20 @@ pub fn build_system_prompt(state: &AppState) -> String {
             .unwrap_or_default(),
     };
 
+    // Inject user instructions when set
+    let user_instructions_section = {
+        let s = state.llm.user_instructions.trim();
+        if s.is_empty() {
+            String::new()
+        } else {
+            format!("\n═══ USER INSTRUCTIONS ═══\n{}\n", s)
+        }
+    };
+
     format!(
         r#"You are Impulse Instruct — an AI that controls a hardware-style synthesizer.
 Output ONLY valid JSON. No prose, no markdown, no explanation outside the "_comment" field.
-{style_section}
+{style_section}{user_instructions_section}
 CURRENT STATE:
 {current_json}
 {bass_info}
@@ -125,6 +135,18 @@ FX (all 0.0–1.0):  ← ONLY valid inside "fx": {{…}}, never inside "sequence
   fx.distortion_drive — master bus saturation drive
   fx.distortion_mix   — master bus distortion wet amount
 
+═══ RHYTHM BASICS ═══
+
+Minimal 4/4 foundation (indices 0–15):
+  kick_a_steps 4-on-the-floor: [true,false,false,false,true,false,false,false,true,false,false,false,true,false,false,false]
+  hihat_a_steps offbeat 8ths:  [false,false,true,false,false,false,true,false,false,false,true,false,false,false,true,false]
+Build from there — add syncopation and gaps. Never fill every step with the same drum.
+
+BASS MELODY BASICS:
+  Acid range C2–C3: C2=36, D2=38, Eb2=39, F2=41, G2=43, A2=45, Bb2=46, B2=47, C3=48
+  Minor pentatonic (C): 36, 39, 41, 43, 46 (and 48 for octave)
+  Keep to 3–5 distinct pitches per loop. Use false in bass_steps for rhythmic rests.
+
 ═══ HOW TO INTERPRET INSTRUCTIONS ═══
 
 "change the melody" / "different pattern" / "new notes"
@@ -157,13 +179,25 @@ ACID JAM GUIDANCE — while jamming in acid styles, actively vary:
   bass.env_mod between 0.40 and 0.85 (controls sweep character)
   bass.decay between 0.20 and 0.55 (shorter = punchier acid stabs)
 
+FX RESTRAINT — always start clean:
+  Unless explicitly asked, keep FX minimal: reverb_mix ≤ 0.12, delay_mix ≤ 0.08, distortion at 0.0
+  Never set heavy reverb + heavy delay + distortion simultaneously.
+
 JAM HEAT: {heat_pct}% — {heat_desc}
 
 ═══ OUTPUT FORMAT ═══
 
 {comment_instruction}
 Only include fields you are actually changing.
-CRITICAL: fx fields go inside "fx": {{…}}, NOT inside "sequencer". Never duplicate top-level keys.
+TOP-LEVEL SCHEMA — the only valid top-level keys are "_comment", "bass", "sequencer", "fx".
+  "bass" and "fx" are NEVER nested inside "sequencer".
+  "fx" is NEVER nested inside "fx".
+  Each key appears at most ONCE per object.
+
+WRONG (do not do this):
+  {{"sequencer": {{"bass_steps": [...], "bass": {{"cutoff": 0.3}}}}}}       ← bass inside sequencer
+  {{"fx": {{"reverb_mix": 0.1, "fx": {{"delay_mix": 0.2}}}}}}              ← fx inside fx
+  {{"sequencer": {{"bass_steps": [...], "fx": {{"reverb_mix": 0.1}}}}}}    ← fx inside sequencer
 
 Example — "add claps on 2 and 4":
 {{"_comment": "{clap_example}",
@@ -178,6 +212,7 @@ Example — "more acid":
 {{"_comment": "{acid_example}",
   "bass": {{"resonance": 0.85, "env_mod": 0.80, "cutoff": 0.30, "decay": 0.25}}}}
 "#,
+        user_instructions_section = user_instructions_section,
         style_section = style_section,
         current_json = current_json,
         bass_info = bass_info,

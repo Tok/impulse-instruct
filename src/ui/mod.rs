@@ -724,6 +724,22 @@ impl eframe::App for ImpulseApp {
 
                 ui.add_space(2.0);
 
+                // ── Persistent user instructions ──────────────────────────────
+                {
+                    let mut instr = self.state.read().llm.user_instructions.clone();
+                    let r = ui.add(
+                        egui::TextEdit::singleline(&mut instr)
+                            .hint_text("persistent instructions for Bonsai (injected into every prompt)…")
+                            .desired_width(ui.available_width())
+                            .font(egui::FontId::monospace(10.0))
+                    );
+                    if r.changed() {
+                        self.state.write().llm.user_instructions = instr;
+                    }
+                }
+
+                ui.add_space(2.0);
+
                 // ── Prompt input ──────────────────────────────────────────────
                 ui.horizontal(|ui| {
                     let text_width = ui.available_width() - 52.0; // reserve space for ASK button

@@ -370,12 +370,13 @@ pub struct LlmState {
     pub conversation_mode: ConversationMode,
     pub active_style: Option<String>, // style id from styles.json, "__free__", "__custom__", or None
     pub custom_style_text: String,    // used when active_style == Some("__custom__")
+    pub user_instructions: String,    // persistent user instructions injected into every system prompt
 }
 
 impl Default for LlmState {
     fn default() -> Self {
         Self {
-            model_path: String::from("models/bonsai-8b-q4.gguf"),
+            model_path: String::from("models/Bonsai-8B.gguf"),
             last_prompt: String::new(),
             last_response: String::new(),
             is_inferring: false,
@@ -392,6 +393,7 @@ impl Default for LlmState {
             conversation_mode: ConversationMode::Producer,
             active_style: None,
             custom_style_text: String::new(),
+            user_instructions: String::new(),
         }
     }
 }

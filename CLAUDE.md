@@ -147,7 +147,7 @@ requirements. Build exactly what the current task needs.
 ## LLM integration
 
 - Mock mode: runs without model, returns plausible JSON based on prompt keywords
-- Real mode: `--features llm` + GGUF file at `models/bonsai-8b-q4.gguf`
+- Real mode: requires `models/Bonsai-8B.gguf` (1-bit Q1_0_g128, PrismML format) + PrismML llama-server
 - LLM outputs JSON only, constrained by the schema in `src/llm/prompt.rs`
 - JSON is applied via `apply_llm_update()` which respects `locked_params`
 
