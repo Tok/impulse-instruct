@@ -1086,14 +1086,22 @@ impl ImpulseApp {
         ui.horizontal(|ui| {
             ui.label(egui::RichText::new("STEPS").color(theme::SMOKE).monospace().size(9.0));
             let mut steps = self.state.read().sequencer.steps;
-            if ui.small_button("−").clicked() && steps > 1 { steps -= 1; self.state.write().sequencer.steps = steps; }
+            if ui.small_button("−").clicked() && steps > 1 {
+                steps -= 1;
+                self.state.write().sequencer.steps = steps; // shrink: no tiling needed
+            }
             ui.label(egui::RichText::new(format!("{:02}", steps)).color(theme::FOG).monospace());
-            if ui.small_button("+").clicked() && steps < MAX_STEPS { steps += 1; self.state.write().sequencer.steps = steps; }
+            if ui.small_button("+").clicked() && steps < MAX_STEPS {
+                steps += 1;
+                let new_state = crate::state::expand_sequencer_steps(self.state.read().clone(), steps);
+                *self.state.write() = new_state;
+            }
 
             // Preset step count buttons
             for &preset in &[8usize, 16, 32, 64] {
                 if ui.small_button(format!("[{}]", preset)).clicked() {
-                    self.state.write().sequencer.steps = preset;
+                    let new_state = crate::state::expand_sequencer_steps(self.state.read().clone(), preset);
+                    *self.state.write() = new_state;
                 }
             }
 

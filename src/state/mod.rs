@@ -195,7 +195,7 @@ impl Default for DrumKit909 {
 
 // ─── Sequencer ───────────────────────────────────────────────────────────────
 
-#[derive(Clone, Copy, Debug, Serialize, Deserialize, Default)]
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, Default, PartialEq)]
 pub struct Step {
     pub active: bool,
     pub velocity: f32, // 0–1
@@ -465,7 +465,7 @@ pub fn apply_llm_update(state: AppState, update: &serde_json::Value) -> AppState
         }
         if !locked.contains("sequencer.steps") {
             if let Some(steps) = seq.get("steps").and_then(|v| v.as_u64()) {
-                s.sequencer.steps = (steps as usize).clamp(1, MAX_STEPS);
+                s = expand_sequencer_steps(s, steps as usize);
             }
         }
         if !locked.contains("sequencer.bass_steps") {
@@ -558,6 +558,37 @@ fn unlocked_f32(
         .and_then(|v| v.as_f64())
         .map(|v| (v as f32).clamp(0.0, 1.0))
         .unwrap_or(current)
+}
+
+/// Set the active step count, tiling existing patterns into the new slots when expanding.
+///
+/// When going from 16 → 32 steps, steps 16–31 are filled by repeating the pattern from 0–15.
+/// When going from 16 → 64, the 16-step pattern is repeated into all four banks.
+/// Shrinking never erases data — the slots above the new count remain in memory (hidden).
+/// Any LLM-provided pattern arrays applied *after* this call will overwrite the tiled values.
+pub fn expand_sequencer_steps(state: AppState, new_steps: usize) -> AppState {
+    let mut s = state;
+    let old_steps = s.sequencer.steps;
+    let new_steps = new_steps.clamp(1, MAX_STEPS);
+    s.sequencer.steps = new_steps;
+
+    if new_steps > old_steps && old_steps > 0 {
+        // Tile bass pattern
+        for i in old_steps..new_steps {
+            s.sequencer.bass_pattern[i] = s.sequencer.bass_pattern[i % old_steps].clone();
+        }
+        // Tile every drum voice
+        let voices: Vec<DrumVoice> = s.sequencer.drum_patterns.keys().cloned().collect();
+        for voice in voices {
+            if let Some(pattern) = s.sequencer.drum_patterns.get_mut(&voice) {
+                for i in old_steps..new_steps {
+                    pattern[i] = pattern[i % old_steps].clone();
+                }
+            }
+        }
+    }
+
+    s
 }
 
 /// Toggle sequencer running state.

@@ -270,6 +270,70 @@ mod instruction_tests {
 }
 
 #[cfg(test)]
+mod expand_steps_tests {
+    use crate::state::{AppState, DrumVoice, expand_sequencer_steps, toggle_drum_step};
+
+    #[test]
+    fn expand_tiles_drum_pattern_into_new_slots() {
+        // Snare808 starts silent; turn on step 0 and step 3, then expand 16 → 32
+        let state = AppState::default();
+        let state = toggle_drum_step(state, DrumVoice::Snare808, 0);
+        let state = toggle_drum_step(state, DrumVoice::Snare808, 3);
+        assert!(state.sequencer.drum_patterns[&DrumVoice::Snare808][0].active);
+        assert!(!state.sequencer.drum_patterns[&DrumVoice::Snare808][16].active);
+
+        let state = expand_sequencer_steps(state, 32);
+        assert_eq!(state.sequencer.steps, 32);
+        // Step 16 should mirror step 0 (active)
+        assert!(state.sequencer.drum_patterns[&DrumVoice::Snare808][16].active,
+            "step 16 should be tiled from step 0");
+        // Step 19 should mirror step 3 (active)
+        assert!(state.sequencer.drum_patterns[&DrumVoice::Snare808][19].active,
+            "step 19 should be tiled from step 3");
+        // Step 17 should mirror step 1 (inactive)
+        assert!(!state.sequencer.drum_patterns[&DrumVoice::Snare808][17].active);
+    }
+
+    #[test]
+    fn expand_16_to_64_tiles_four_copies() {
+        let state = AppState::default();
+        // Default has kick on steps 0, 4, 8, 12
+        let state = expand_sequencer_steps(state, 64);
+        assert_eq!(state.sequencer.steps, 64);
+        let kick = &state.sequencer.drum_patterns[&DrumVoice::Kick808];
+        // Each bank of 16 should repeat the same pattern
+        for bank in 0..4 {
+            assert!(kick[bank * 16].active, "kick missing at step {}", bank * 16);
+            assert!(kick[bank * 16 + 4].active, "kick missing at step {}", bank * 16 + 4);
+        }
+    }
+
+    #[test]
+    fn shrink_does_not_tile_or_erase() {
+        // Expand to 32, set step 20, shrink to 16 — step 20 stays in memory
+        let state = AppState::default();
+        let state = expand_sequencer_steps(state, 32);
+        let state = toggle_drum_step(state, DrumVoice::Snare808, 20);
+        assert!(state.sequencer.drum_patterns[&DrumVoice::Snare808][20].active);
+
+        let mut state = state;
+        state.sequencer.steps = 16; // shrink directly (UI minus button)
+        assert_eq!(state.sequencer.steps, 16);
+        // Data above step 16 is preserved (hidden but not lost)
+        assert!(state.sequencer.drum_patterns[&DrumVoice::Snare808][20].active);
+    }
+
+    #[test]
+    fn expand_to_same_count_is_noop() {
+        let state = AppState::default();
+        let before = state.sequencer.drum_patterns[&DrumVoice::Kick808].clone();
+        let state = expand_sequencer_steps(state, 16);
+        assert_eq!(state.sequencer.steps, 16);
+        assert_eq!(state.sequencer.drum_patterns[&DrumVoice::Kick808], before);
+    }
+}
+
+#[cfg(test)]
 mod dsp_tests {
     use crate::audio::dsp::midi_to_hz;
 
