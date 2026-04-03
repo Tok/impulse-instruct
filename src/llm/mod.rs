@@ -81,7 +81,7 @@ impl LlmBackend for LlamaCppBackend {
         //   // tokenize, decode, sample tokens until EOF
         //
         // For now, fall through to mock until model loading is wired up.
-        log::info!("Model found at {}, but llama-cpp-2 inference not yet fully wired.", self.model_path);
+        log::debug!("Model found at {}, but llama-cpp-2 inference not yet fully wired.", self.model_path);
         mock_response(user)
     }
 

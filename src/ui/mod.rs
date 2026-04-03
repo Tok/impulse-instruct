@@ -50,22 +50,16 @@ impl ImpulseApp {
         api_port: Option<u16>,
     ) -> Self {
         theme::apply(&cc.egui_ctx);
-        let mut log_lines = vec!["[ Impulse Instruct ready — prompting Bonsai… ]".into()];
+        let mut log_lines = vec!["[ Impulse Instruct ready ]".into()];
         if let Some(port) = api_port {
             log_lines.push(format!("[ HTTP API active → http://localhost:{} ]", port));
         }
-        // Auto-prompt on startup — let Bonsai set an initial sound
-        let _ = llm_tx.try_send(LlmInput {
-            prompt: "let's make some acid".to_string(),
-            one_shot: true,
-        });
-        log_lines.push("YOU → let's make some acid".into());
         Self {
             state,
             audio_tx,
             llm_tx,
             llm_rx,
-            prompt_input: String::new(),
+            prompt_input: "let's make some acid".to_string(),
             log_lines,
             active_panel: Panel::Sequencer,
             api_port,
