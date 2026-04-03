@@ -101,6 +101,8 @@ pub struct ImpulseApp {
     // Last chain-of-thought from Bonsai (shown collapsible below the log)
     last_thinking: Option<String>,
     show_thinking: bool,
+    // Control layout preference
+    use_sliders: bool,
 }
 
 impl ImpulseApp {
@@ -149,6 +151,7 @@ impl ImpulseApp {
             piano_show_colors: true,
             last_thinking: None,
             show_thinking: false,
+            use_sliders: false,
         }
     }
 
@@ -551,6 +554,17 @@ impl eframe::App for ImpulseApp {
                                 prompt: "start jamming".to_string(),
                                 one_shot: false,
                             });
+                        }
+                    }
+
+                    ui.add_space(4.0);
+
+                    // Knob / Slider toggle
+                    {
+                        let label = if self.use_sliders { "SLIDERS" } else { "KNOBS" };
+                        let color  = if self.use_sliders { theme::CHALK } else { theme::ASH };
+                        if ui.button(egui::RichText::new(label).color(color).monospace().size(9.0)).clicked() {
+                            self.use_sliders = !self.use_sliders;
                         }
                     }
 
@@ -1003,15 +1017,21 @@ impl ImpulseApp {
         let mut new_locks: Vec<&str> = Vec::new();
         let mut changed = false;
 
-        ui.horizontal_wrapped(|ui| {
-            if widgets::knob(ui, "CUTOFF",    &mut cutoff,    locked.contains("bass.cutoff"))       { new_locks.push("bass.cutoff");       changed = true; }
-            if widgets::knob(ui, "RESONANCE", &mut resonance, locked.contains("bass.resonance"))    { new_locks.push("bass.resonance");    changed = true; }
-            if widgets::knob(ui, "ENV MOD",   &mut env_mod,   locked.contains("bass.env_mod"))      { new_locks.push("bass.env_mod");      changed = true; }
-            if widgets::knob(ui, "DECAY",     &mut decay,     locked.contains("bass.decay"))        { new_locks.push("bass.decay");        changed = true; }
-            if widgets::knob(ui, "ACCENT",    &mut accent,    locked.contains("bass.accent_level")) { new_locks.push("bass.accent_level"); changed = true; }
-            if widgets::knob(ui, "DRIVE",     &mut dist,      locked.contains("bass.distortion"))   { new_locks.push("bass.distortion");   changed = true; }
-            if widgets::knob(ui, "VOLUME",    &mut vol,       locked.contains("bass.volume"))       { new_locks.push("bass.volume");       changed = true; }
-        });
+        let use_sliders = self.use_sliders;
+        let draw_bass_controls = |ui: &mut egui::Ui| {
+            if widgets::param_control(ui, "CUTOFF",    &mut cutoff,    locked.contains("bass.cutoff"),       use_sliders) { new_locks.push("bass.cutoff");       changed = true; }
+            if widgets::param_control(ui, "RESONANCE", &mut resonance, locked.contains("bass.resonance"),    use_sliders) { new_locks.push("bass.resonance");    changed = true; }
+            if widgets::param_control(ui, "ENV MOD",   &mut env_mod,   locked.contains("bass.env_mod"),      use_sliders) { new_locks.push("bass.env_mod");      changed = true; }
+            if widgets::param_control(ui, "DECAY",     &mut decay,     locked.contains("bass.decay"),        use_sliders) { new_locks.push("bass.decay");        changed = true; }
+            if widgets::param_control(ui, "ACCENT",    &mut accent,    locked.contains("bass.accent_level"), use_sliders) { new_locks.push("bass.accent_level"); changed = true; }
+            if widgets::param_control(ui, "DRIVE",     &mut dist,      locked.contains("bass.distortion"),   use_sliders) { new_locks.push("bass.distortion");   changed = true; }
+            if widgets::param_control(ui, "VOLUME",    &mut vol,       locked.contains("bass.volume"),       use_sliders) { new_locks.push("bass.volume");       changed = true; }
+        };
+        if use_sliders {
+            ui.vertical(draw_bass_controls);
+        } else {
+            ui.horizontal_wrapped(draw_bass_controls);
+        }
 
         // Apply all changes in a single brief write
         if changed {
@@ -1096,28 +1116,29 @@ impl ImpulseApp {
         };
         let mut changed = false;
 
+        let use_sliders = self.use_sliders;
         ui.horizontal_wrapped(|ui| {
             ui.group(|ui| {
                 ui.label(egui::RichText::new("KICK").color(theme::FOG).monospace().size(9.5));
-                if widgets::knob(ui, "PITCH", &mut kp,  false) { changed = true; }
-                if widgets::knob(ui, "DECAY", &mut kd,  false) { changed = true; }
-                if widgets::knob(ui, "PUNCH", &mut kpu, false) { changed = true; }
-                if widgets::knob(ui, "LEVEL", &mut kv,  false) { changed = true; }
+                if widgets::param_control(ui, "PITCH", &mut kp,  false, use_sliders) { changed = true; }
+                if widgets::param_control(ui, "DECAY", &mut kd,  false, use_sliders) { changed = true; }
+                if widgets::param_control(ui, "PUNCH", &mut kpu, false, use_sliders) { changed = true; }
+                if widgets::param_control(ui, "LEVEL", &mut kv,  false, use_sliders) { changed = true; }
             });
             ui.add_space(4.0);
             ui.group(|ui| {
                 ui.label(egui::RichText::new("SNARE").color(theme::FOG).monospace().size(9.5));
-                if widgets::knob(ui, "TONE",   &mut st,  false) { changed = true; }
-                if widgets::knob(ui, "SNAPPY", &mut ssn, false) { changed = true; }
-                if widgets::knob(ui, "DECAY",  &mut sd,  false) { changed = true; }
-                if widgets::knob(ui, "LEVEL",  &mut sv,  false) { changed = true; }
+                if widgets::param_control(ui, "TONE",   &mut st,  false, use_sliders) { changed = true; }
+                if widgets::param_control(ui, "SNAPPY", &mut ssn, false, use_sliders) { changed = true; }
+                if widgets::param_control(ui, "DECAY",  &mut sd,  false, use_sliders) { changed = true; }
+                if widgets::param_control(ui, "LEVEL",  &mut sv,  false, use_sliders) { changed = true; }
             });
             ui.add_space(4.0);
             ui.group(|ui| {
                 ui.label(egui::RichText::new("HIHAT").color(theme::FOG).monospace().size(9.5));
-                if widgets::knob(ui, "CLOSED", &mut hcd, false) { changed = true; }
-                if widgets::knob(ui, "OPEN",   &mut hod, false) { changed = true; }
-                if widgets::knob(ui, "LEVEL",  &mut hv,  false) { changed = true; }
+                if widgets::param_control(ui, "CLOSED", &mut hcd, false, use_sliders) { changed = true; }
+                if widgets::param_control(ui, "OPEN",   &mut hod, false, use_sliders) { changed = true; }
+                if widgets::param_control(ui, "LEVEL",  &mut hv,  false, use_sliders) { changed = true; }
             });
         });
 
@@ -1156,27 +1177,28 @@ impl ImpulseApp {
         };
         let mut changed = false;
 
+        let use_sliders = self.use_sliders;
         ui.horizontal_wrapped(|ui| {
             ui.group(|ui| {
                 ui.label(egui::RichText::new("KICK").color(theme::FOG).monospace().size(9.5));
-                if widgets::knob(ui, "PITCH", &mut kp,  false) { changed = true; }
-                if widgets::knob(ui, "DECAY", &mut kd,  false) { changed = true; }
-                if widgets::knob(ui, "PUNCH", &mut kpu, false) { changed = true; }
-                if widgets::knob(ui, "LEVEL", &mut kv,  false) { changed = true; }
+                if widgets::param_control(ui, "PITCH", &mut kp,  false, use_sliders) { changed = true; }
+                if widgets::param_control(ui, "DECAY", &mut kd,  false, use_sliders) { changed = true; }
+                if widgets::param_control(ui, "PUNCH", &mut kpu, false, use_sliders) { changed = true; }
+                if widgets::param_control(ui, "LEVEL", &mut kv,  false, use_sliders) { changed = true; }
             });
             ui.add_space(4.0);
             ui.group(|ui| {
                 ui.label(egui::RichText::new("SNARE").color(theme::FOG).monospace().size(9.5));
-                if widgets::knob(ui, "TONE",   &mut st,  false) { changed = true; }
-                if widgets::knob(ui, "SNAPPY", &mut ssn, false) { changed = true; }
-                if widgets::knob(ui, "DECAY",  &mut sd,  false) { changed = true; }
-                if widgets::knob(ui, "LEVEL",  &mut sv,  false) { changed = true; }
+                if widgets::param_control(ui, "TONE",   &mut st,  false, use_sliders) { changed = true; }
+                if widgets::param_control(ui, "SNAPPY", &mut ssn, false, use_sliders) { changed = true; }
+                if widgets::param_control(ui, "DECAY",  &mut sd,  false, use_sliders) { changed = true; }
+                if widgets::param_control(ui, "LEVEL",  &mut sv,  false, use_sliders) { changed = true; }
             });
             ui.add_space(4.0);
             ui.group(|ui| {
                 ui.label(egui::RichText::new("CLAP / RIM").color(theme::FOG).monospace().size(9.5));
-                if widgets::knob(ui, "CLAP DEC", &mut cd, false) { changed = true; }
-                if widgets::knob(ui, "CLAP LVL", &mut cv, false) { changed = true; }
+                if widgets::param_control(ui, "CLAP DEC", &mut cd, false, use_sliders) { changed = true; }
+                if widgets::param_control(ui, "CLAP LVL", &mut cv, false, use_sliders) { changed = true; }
             });
         });
 
@@ -1435,32 +1457,33 @@ impl ImpulseApp {
         let mut new_locks: Vec<&str> = Vec::new();
         let mut changed = false;
 
+        let use_sliders = self.use_sliders;
         ui.horizontal_wrapped(|ui| {
             ui.group(|ui| {
                 ui.label(egui::RichText::new("REVERB").color(theme::FOG).monospace().size(9.5));
                 let l_rs = locked.contains("fx.reverb_size");
                 let l_rm = locked.contains("fx.reverb_mix");
-                if widgets::knob(ui, "SIZE", &mut rs, l_rs) { if !l_rs { new_locks.push("fx.reverb_size"); } changed = true; }
-                if widgets::knob(ui, "DAMP", &mut rd, false) { changed = true; }
-                if widgets::knob(ui, "MIX",  &mut rm, l_rm) { if !l_rm { new_locks.push("fx.reverb_mix");  } changed = true; }
+                if widgets::param_control(ui, "SIZE", &mut rs, l_rs,  use_sliders) { if !l_rs { new_locks.push("fx.reverb_size"); } changed = true; }
+                if widgets::param_control(ui, "DAMP", &mut rd, false, use_sliders) { changed = true; }
+                if widgets::param_control(ui, "MIX",  &mut rm, l_rm,  use_sliders) { if !l_rm { new_locks.push("fx.reverb_mix");  } changed = true; }
             });
 
             ui.add_space(4.0);
 
             ui.group(|ui| {
                 ui.label(egui::RichText::new("DELAY").color(theme::FOG).monospace().size(9.5));
-                if widgets::knob(ui, "TIME", &mut dt, false) { changed = true; }
-                if widgets::knob(ui, "FDBK", &mut df, false) { changed = true; }
-                if widgets::knob(ui, "MIX",  &mut dm, false) { changed = true; }
+                if widgets::param_control(ui, "TIME", &mut dt, false, use_sliders) { changed = true; }
+                if widgets::param_control(ui, "FDBK", &mut df, false, use_sliders) { changed = true; }
+                if widgets::param_control(ui, "MIX",  &mut dm, false, use_sliders) { changed = true; }
             });
 
             ui.add_space(4.0);
 
             ui.group(|ui| {
                 ui.label(egui::RichText::new("DRIVE / MASTER").color(theme::FOG).monospace().size(9.5));
-                if widgets::knob(ui, "DRIVE",  &mut dd, false) { changed = true; }
-                if widgets::knob(ui, "MIX",    &mut dx, false) { changed = true; }
-                if widgets::knob(ui, "MASTER", &mut mv, false) { changed = true; }
+                if widgets::param_control(ui, "DRIVE",  &mut dd, false, use_sliders) { changed = true; }
+                if widgets::param_control(ui, "MIX",    &mut dx, false, use_sliders) { changed = true; }
+                if widgets::param_control(ui, "MASTER", &mut mv, false, use_sliders) { changed = true; }
             });
         });
 

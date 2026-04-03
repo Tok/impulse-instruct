@@ -101,6 +101,53 @@ fn draw_arc(painter: &Painter, center: Pos2, radius: f32, start: f32, sweep: f32
     }
 }
 
+// ─── Horizontal Slider ───────────────────────────────────────────────────────
+
+/// A labeled horizontal slider. Label is left-aligned in a fixed column;
+/// slider fills remaining width.  Returns true if the value changed.
+pub fn slider(ui: &mut Ui, label: &str, value: &mut f32, locked: bool) -> bool {
+    let label_w = 72.0_f32;
+    let mut changed = false;
+
+    ui.horizontal(|ui| {
+        let text_color = if locked { theme::ASH } else { theme::SMOKE };
+        ui.add_sized(
+            [label_w, 14.0],
+            egui::Label::new(egui::RichText::new(label).monospace().size(9.0).color(text_color)),
+        );
+
+        let avail = (ui.available_width() - if locked { 18.0 } else { 0.0 }).max(40.0);
+        if locked {
+            // Show a non-interactive, dimmed slider
+            let mut v = *value;
+            ui.add_enabled(false, egui::Slider::new(&mut v, 0.0..=1.0).show_value(false));
+            ui.add_sized(
+                [18.0, 14.0],
+                egui::Label::new(egui::RichText::new("L").monospace().size(9.0).color(theme::IRON)),
+            );
+        } else {
+            let resp = ui.add_sized(
+                [avail, 14.0],
+                egui::Slider::new(value, 0.0..=1.0).show_value(false),
+            );
+            if resp.changed() {
+                changed = true;
+            }
+        }
+    });
+
+    changed
+}
+
+/// Dispatch to `knob` or `slider` based on `use_sliders`.
+pub fn param_control(ui: &mut Ui, label: &str, value: &mut f32, locked: bool, use_sliders: bool) -> bool {
+    if use_sliders {
+        slider(ui, label, value, locked)
+    } else {
+        knob(ui, label, value, locked)
+    }
+}
+
 // ─── Step Button ──────────────────────────────────────────────────────────────
 
 /// A step sequencer button. Returns true if clicked (toggle).
