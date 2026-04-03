@@ -13,10 +13,19 @@ pub fn build_system_prompt(state: &AppState) -> String {
     let heat = state.llm.heat;
     let heat_pct = (heat * 100.0) as u32;
     let heat_desc = match heat {
-        h if h < 0.25 => "cold — make only subtle incremental changes, no pattern mutations",
-        h if h < 0.5  => "warm — moderate filter/BPM evolution, occasional step changes",
+        h if h < 0.25 => "cold — subtle incremental changes only, no pattern mutations",
+        h if h < 0.5  => "warm — moderate evolution, occasional step changes",
         h if h < 0.75 => "hot — bold sweeps, pattern mutations, noticeable style shifts",
-        _              => "fire — anything goes, dramatic mutations, surprise me",
+        _              => "fire — anything goes, dramatic mutations, surprise",
+    };
+
+    // Summarise active bass steps so the LLM can see what's playing
+    let active_bass: Vec<usize> = state.sequencer.bass_pattern.iter().enumerate()
+        .filter(|(_, s)| s.active).map(|(i, _)| i).collect();
+    let bass_summary = if active_bass.is_empty() {
+        "none (silent)".to_string()
+    } else {
+        active_bass.iter().map(|i| i.to_string()).collect::<Vec<_>>().join(", ")
     };
 
     let current_json = serde_json::to_string_pretty(&serde_json::json!({
@@ -31,13 +40,11 @@ pub fn build_system_prompt(state: &AppState) -> String {
             "volume": state.tb303.volume
         },
         "sequencer": {
-            "bpm": state.sequencer.bpm
+            "bpm": state.sequencer.bpm,
+            "active_bass_steps": bass_summary
         },
         "fx": {
-            "reverb_size": state.fx.reverb_size,
             "reverb_mix": state.fx.reverb_mix,
-            "delay_time": state.fx.delay_time,
-            "delay_feedback": state.fx.delay_feedback,
             "delay_mix": state.fx.delay_mix,
             "distortion_drive": state.fx.distortion_drive,
             "distortion_mix": state.fx.distortion_mix
@@ -45,56 +52,88 @@ pub fn build_system_prompt(state: &AppState) -> String {
     })).unwrap_or_default();
 
     format!(
-        r#"You are Impulse Instruct, an AI audio synthesizer controller.
-Your ONLY output is valid JSON that modifies synthesizer parameters.
-Do NOT write explanations, prose, or markdown. Output JSON only.
+        r#"You are Impulse Instruct — an AI that controls a hardware-style synthesizer.
+Output ONLY valid JSON. No prose, no markdown, no explanation outside the "_comment" field.
 
-CURRENT PARAMETERS:
+CURRENT STATE:
 {current_json}
 
-LOCKED PARAMETERS (user-controlled, do NOT include these in output):
-{locked_str}
+LOCKED (user-owned, never include in output): {locked_str}
 
-AVAILABLE PARAMETERS (all floats 0.0–1.0 unless noted):
-  tb303.cutoff         — filter cutoff (0=dark, 1=bright)
-  tb303.resonance      — filter resonance / squelch (high=acid)
-  tb303.env_mod        — filter envelope depth
-  tb303.decay          — filter envelope decay
-  tb303.accent_level   — accent velocity boost
-  tb303.waveform       — "Saw" or "Square"
-  tb303.distortion     — internal overdrive
-  tb303.volume         — bass level
+═══ WHAT YOU CAN CONTROL ═══
 
-  sequencer.bpm              — tempo in BPM (float 40–250)
-  sequencer.bass_steps       — 16-element boolean array, which 16th-note steps are active
-  sequencer.bass_notes       — 16-element int array, MIDI note per step (0–127; 36=C2, 48=C3)
-  sequencer.kick808_steps    — 16-element boolean array for 808 kick pattern
-  sequencer.hihat808_steps   — 16-element boolean array for 808 closed hihat pattern
+TB-303 SYNTHESIZER (all 0.0–1.0):
+  tb303.cutoff       — filter frequency (0=very dark/closed, 0.5=mid, 1=fully open)
+  tb303.resonance    — filter resonance / squelch (0.7–0.9 = classic acid character)
+  tb303.env_mod      — how much the envelope opens the filter (high = dramatic sweep)
+  tb303.decay        — filter envelope decay time (low=punchy, high=slow sweep)
+  tb303.accent_level — accent intensity boost
+  tb303.waveform     — "Saw" (smooth, warm) or "Square" (hollow, buzzy)
+  tb303.distortion   — internal overdrive (keep low; 0.0–0.15 is enough)
+  tb303.volume       — bass synth level in mix
 
-  fx.reverb_size       — room size
-  fx.reverb_mix        — reverb wet/dry
-  fx.delay_time        — delay time (0=0ms, 1=1000ms)
-  fx.delay_feedback    — delay repeats
-  fx.delay_mix         — delay wet/dry
-  fx.distortion_drive  — master bus drive
-  fx.distortion_mix    — distortion wet/dry
+STEP SEQUENCER (16 steps = one 4/4 bar of 16th notes):
+  sequencer.bass_steps       — 16-element bool array: which steps trigger the 303
+  sequencer.bass_notes       — 16-element int array: MIDI note per step
+                               (24=C1, 36=C2, 48=C3; typical range 33–48 for acid)
+  sequencer.kick808_steps    — 16-element bool: 808 kick pattern
+  sequencer.snare808_steps   — 16-element bool: 808 snare pattern
+  sequencer.hihat808_steps   — 16-element bool: 808 closed hihat
+  sequencer.snare909_steps   — 16-element bool: 909 snare pattern
+  sequencer.clap909_steps    — 16-element bool: 909 clap pattern
+  sequencer.hihat909_steps   — 16-element bool: 909 closed hihat
+
+FX (all 0.0–1.0):
+  fx.reverb_mix      — reverb wet amount (0=off, 0.3=noticeable)
+  fx.reverb_size     — reverb room size
+  fx.delay_time      — delay time (0.375 = dotted 8th at ~130 BPM)
+  fx.delay_feedback  — delay repeats
+  fx.delay_mix       — delay wet amount
+  fx.distortion_drive — master bus saturation drive
+  fx.distortion_mix  — master bus distortion wet amount
+
+═══ HOW TO INTERPRET INSTRUCTIONS ═══
+
+"change the melody" / "different pattern" / "new notes"
+  → Set bass_steps to a new 16-step pattern, set bass_notes to MIDI pitches
+
+"add claps" / "add snare"
+  → Set clap909_steps or snare808_steps to a useful drum pattern
+
+"add hihats" / "more hats"
+  → Set hihat808_steps or hihat909_steps
+
+"more acid" / "squelchier"
+  → Raise resonance (0.75–0.88), raise env_mod, lower cutoff base
+
+"darker" / "more weight"
+  → Lower cutoff, raise reverb_mix slightly
+
+"add space" / "more atmosphere"
+  → Raise reverb_mix (0.2–0.4), add delay_mix (0.1–0.25)
+
+"harder" / "more drive"
+  → Raise distortion_drive + distortion_mix
+
+"simpler" / "strip it back"
+  → Reduce active bass_steps, remove some drum steps
 
 JAM HEAT: {heat_pct}% — {heat_desc}
-When jamming, scale your mutation intensity to match this level.
 
-STYLE VOCABULARY:
-  "acid"    → cutoff 0.3-0.6, resonance 0.7-0.9, env_mod 0.6-0.9, fast decay
-  "dark"    → cutoff < 0.3, reverb_mix 0.4+, bpm 110-125
-  "minimal" → fewer active steps, low resonance, moderate cutoff
-  "hard"    → bpm 145+, distortion 0.3+, punch
-  "ambient" → slow bpm, high reverb, long delay, gentle filter
-  "squeeze" → compressor_threshold low, ratio high
-  "glitch"  → rapid param variation, short decay
+═══ OUTPUT FORMAT ═══
 
-OUTPUT FORMAT: JSON only. Always include a "_comment" field with one short sentence
-explaining what you're doing and why. Only include param fields you want to change.
-Example:
-{{"_comment": "pushing up the resonance for that squelchy acid character", "tb303": {{"cutoff": 0.45, "resonance": 0.78}}, "sequencer": {{"bpm": 132.0}}}}"#,
+Always include "_comment" (one sentence, plain English, what and why).
+Only include fields you are actually changing.
+
+Example — "add claps on 2 and 4":
+{{"_comment": "adding a 909 clap on beats 2 and 4 for a classic house feel",
+  "sequencer": {{"clap909_steps": [false,false,false,false,true,false,false,false,false,false,false,false,true,false,false,false]}}}}
+
+Example — "change the melody":
+{{"_comment": "new bass line — stepping up a fifth and back with a little chromatic passing note",
+  "sequencer": {{"bass_steps": [true,false,true,false,false,true,false,true,false,false,true,false,false,true,false,false],
+                 "bass_notes":  [36,36,36,36,36,41,36,43,36,36,38,36,36,36,40,36]}}}}
+"#,
         current_json = current_json,
         locked_str = locked_str,
         heat_pct = heat_pct,
@@ -104,11 +143,13 @@ Example:
 
 /// JSON Schema for grammar-constrained generation (used by llama-cpp-2).
 pub fn param_json_schema() -> serde_json::Value {
+    let bool_array = serde_json::json!({ "type": "array", "items": { "type": "boolean" }, "maxItems": 16 });
+    let note_array = serde_json::json!({ "type": "array", "items": { "type": "integer", "minimum": 0, "maximum": 127 }, "maxItems": 16 });
     serde_json::json!({
         "$schema": "http://json-schema.org/draft-07/schema",
         "type": "object",
         "properties": {
-            "_comment": { "type": "string", "maxLength": 180 },
+            "_comment": { "type": "string", "maxLength": 200 },
             "tb303": {
                 "type": "object",
                 "properties": {
@@ -126,11 +167,15 @@ pub fn param_json_schema() -> serde_json::Value {
             "sequencer": {
                 "type": "object",
                 "properties": {
-                    "bpm": { "type": "number", "minimum": 40.0, "maximum": 250.0 },
-                    "bass_steps":    { "type": "array", "items": { "type": "boolean" }, "maxItems": 16 },
-                    "bass_notes":    { "type": "array", "items": { "type": "integer", "minimum": 0, "maximum": 127 }, "maxItems": 16 },
-                    "kick808_steps": { "type": "array", "items": { "type": "boolean" }, "maxItems": 16 },
-                    "hihat808_steps":{ "type": "array", "items": { "type": "boolean" }, "maxItems": 16 }
+                    "bpm":              { "type": "number", "minimum": 40.0, "maximum": 250.0 },
+                    "bass_steps":       bool_array.clone(),
+                    "bass_notes":       note_array,
+                    "kick808_steps":    bool_array.clone(),
+                    "snare808_steps":   bool_array.clone(),
+                    "hihat808_steps":   bool_array.clone(),
+                    "snare909_steps":   bool_array.clone(),
+                    "clap909_steps":    bool_array.clone(),
+                    "hihat909_steps":   bool_array
                 },
                 "additionalProperties": false
             },

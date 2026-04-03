@@ -98,18 +98,75 @@ fn mock_response(prompt: &str, heat: f32) -> Result<LlmOutput> {
             "tb303": { "cutoff": 0.15, "resonance": 0.5, "env_mod": 0.3 },
             "fx": { "reverb_size": 0.8, "reverb_mix": 0.5, "delay_mix": 0.3 }
         })
-    } else if prompt_lower.contains("fast") || prompt_lower.contains("hard") {
+    } else if prompt_lower.contains("fast") || prompt_lower.contains("hard") || prompt_lower.contains("harder") {
         serde_json::json!({
-            "_comment": "cranking the tempo and adding drive for harder, more aggressive energy",
-            "sequencer": { "bpm": 160.0 },
-            "tb303": { "decay": 0.2, "distortion": 0.4 }
+            "_comment": "pushing harder — tighter decay, a touch of drive",
+            "tb303": { "decay": 0.2, "distortion": 0.12, "env_mod": 0.85 },
+            "fx": { "distortion_drive": 0.15, "distortion_mix": 0.3 }
         })
-    } else if prompt_lower.contains("mellow") || prompt_lower.contains("chill") {
+    } else if prompt_lower.contains("mellow") || prompt_lower.contains("chill") || prompt_lower.contains("softer") || prompt_lower.contains("quieter") {
         serde_json::json!({
-            "_comment": "dialing back to something smooth — slower tempo, softer filter, letting the reverb breathe",
-            "sequencer": { "bpm": 95.0 },
-            "tb303": { "cutoff": 0.55, "resonance": 0.3, "env_mod": 0.2 },
-            "fx": { "reverb_mix": 0.45, "delay_mix": 0.35 }
+            "_comment": "softening things — opening the filter gently, pulling resonance back",
+            "tb303": { "cutoff": 0.6, "resonance": 0.3, "env_mod": 0.25, "volume": 0.75 },
+            "fx": { "reverb_mix": 0.3, "delay_mix": 0.2 }
+        })
+    } else if prompt_lower.contains("melody") || prompt_lower.contains("notes") || prompt_lower.contains("bass line") || prompt_lower.contains("bassline") {
+        serde_json::json!({
+            "_comment": "new melody — a stepwise line climbing from C2 with a chromatic passing note",
+            "sequencer": {
+                "bass_steps": [true, false, true, false, false, true, false, true, false, true, false, false, true, false, true, false],
+                "bass_notes": [36,   36,    38,   36,    36,    40,   36,    41,   36,   43,   36,    36,    41,   36,   38,   36]
+            }
+        })
+    } else if prompt_lower.contains("clap") || prompt_lower.contains("claps") {
+        serde_json::json!({
+            "_comment": "909 clap on beats 2 and 4 — classic backbeat",
+            "sequencer": {
+                "clap909_steps": [false,false,false,false,true,false,false,false,false,false,false,false,true,false,false,false]
+            }
+        })
+    } else if prompt_lower.contains("snare") {
+        serde_json::json!({
+            "_comment": "808 snare on 2 and 4 with a ghost on the 'e' of 3",
+            "sequencer": {
+                "snare808_steps": [false,false,false,false,true,false,false,false,false,false,true,false,true,false,false,false]
+            }
+        })
+    } else if prompt_lower.contains("hihat") || prompt_lower.contains("hi-hat") || prompt_lower.contains("hat") {
+        serde_json::json!({
+            "_comment": "16th-note hihat pattern — every step for maximum groove density",
+            "sequencer": {
+                "hihat808_steps": [true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true]
+            }
+        })
+    } else if prompt_lower.contains("reverb") || prompt_lower.contains("space") || prompt_lower.contains("room") || prompt_lower.contains("atmosphere") {
+        serde_json::json!({
+            "_comment": "adding depth with a medium reverb and a touch of delay",
+            "fx": { "reverb_mix": 0.3, "reverb_size": 0.6, "delay_mix": 0.18, "delay_feedback": 0.4 }
+        })
+    } else if prompt_lower.contains("delay") || prompt_lower.contains("echo") {
+        serde_json::json!({
+            "_comment": "dotted-eighth delay for a rhythmic echo effect",
+            "fx": { "delay_time": 0.375, "delay_feedback": 0.45, "delay_mix": 0.25 }
+        })
+    } else if prompt_lower.contains("distort") || prompt_lower.contains("drive") || prompt_lower.contains("grit") {
+        serde_json::json!({
+            "_comment": "adding master bus saturation for grit and glue",
+            "fx": { "distortion_drive": 0.25, "distortion_mix": 0.4 }
+        })
+    } else if prompt_lower.contains("no fx") || prompt_lower.contains("dry") || prompt_lower.contains("clean") {
+        serde_json::json!({
+            "_comment": "clearing all FX — back to a dry signal",
+            "fx": { "reverb_mix": 0.0, "delay_mix": 0.0, "distortion_mix": 0.0, "distortion_drive": 0.0 }
+        })
+    } else if prompt_lower.contains("simpler") || prompt_lower.contains("strip") || prompt_lower.contains("minimal") {
+        serde_json::json!({
+            "_comment": "stripping it back — sparse pattern, no FX",
+            "sequencer": {
+                "bass_steps": [true,false,false,false,false,false,false,true,false,false,false,false,true,false,false,false],
+                "clap909_steps": [false,false,false,false,true,false,false,false,false,false,false,false,true,false,false,false]
+            },
+            "fx": { "reverb_mix": 0.0, "delay_mix": 0.0 }
         })
     } else {
         // Jam mode — heat controls how dramatic the mutation is

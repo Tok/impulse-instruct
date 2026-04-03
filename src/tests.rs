@@ -131,7 +131,8 @@ mod prompt_tests {
     fn build_system_prompt_contains_json_only_instruction() {
         let state = AppState::default();
         let prompt = build_system_prompt(&state);
-        assert!(prompt.contains("Output JSON only"), "prompt should instruct JSON-only output");
+        assert!(prompt.contains("Output ONLY valid JSON") || prompt.contains("ONLY valid JSON") || prompt.contains("Output JSON only") || prompt.contains("Output ONLY"),
+            "prompt should instruct JSON-only output");
     }
 
     #[test]
