@@ -20,7 +20,7 @@ Built in Rust. Runs the [Bonsai 8B](https://huggingface.co/prism-ml/Bonsai-8B-gg
 - **Jam mode** — LLM evolves the pattern autonomously
 - **Export** — WAV (32-bit float) and MP3 (via ffmpeg); offline render, no audio device needed
 - **Project save/load** — JSON snapshots via File menu
-- **HTTP/MCP API** — connect other LLMs or tools via `--api`
+- **HTTP/MCP API** — REST interface on port 8765 (on by default; `--no-api` to disable)
 
 ---
 
@@ -31,13 +31,14 @@ Built in Rust. Runs the [Bonsai 8B](https://huggingface.co/prism-ml/Bonsai-8B-gg
 git clone <repo> impulse-instruct && cd impulse-instruct
 
 # 2. Run with mock LLM (no model needed, works immediately)
+#    HTTP API starts automatically on port 8765
 cargo run
 
-# 3. Download real model and run with full LLM inference
+# 3. Enable real LLM inference (Bonsai 8B, 1-bit, ~1.1 GB)
 #    Requires a free HuggingFace account — https://huggingface.co/join
-./download-models.sh          # Linux/macOS (~1.1 GB 1-bit model)
-sudo apt install libclang-dev cmake   # needed to compile llama.cpp bindings
-cargo run --features llm --release
+./build-bonsai-server.sh      # build PrismML llama-server (~3 min, one-time)
+./download-models.sh          # download Bonsai 8B GGUF
+cargo run --release
 ```
 
 ### MIDI keyboard setup (Linux)
@@ -62,12 +63,14 @@ The connected port name is shown in the log and at the bottom-right of the piano
 
 | Script | What it does |
 |--------|-------------|
-| `cargo run` | Build and launch (mock LLM) |
-| `cargo run -- --api` | Launch with HTTP/MCP API on port 8765 |
-| `cargo run --features llm --release` | Real LLM inference |
+| `cargo run` | Build and launch (mock LLM, API on port 8765) |
+| `cargo run -- --no-api` | Launch without HTTP/MCP API |
+| `cargo run --release` | Release build with real LLM (needs llama-server) |
+| `./build-bonsai-server.sh` | Build PrismML llama-server for Bonsai 8B support |
 | `./download-models.sh` | Download Bonsai 8B 1-bit GGUF |
+| `./run-llm-tests.sh` | Run real Bonsai integration test suite |
 | `./build-all.sh` | Build Linux + Windows release binaries into `dist/` |
-| `cargo test` | Run 25 unit tests |
+| `cargo test` | Run unit tests |
 
 ---
 
@@ -96,11 +99,12 @@ Complementary colors (directly opposite on wheel) correspond to tritone interval
 
 ## HTTP / MCP API
 
-Start with `--api` to expose a REST interface on port 8765.
+The REST interface starts automatically on port 8765. Use `--no-api` to disable it, or `--port` to change the port.
 
 ```bash
-cargo run -- --api
-cargo run -- --api --port 9000
+cargo run                         # API on :8765
+cargo run -- --port 9000          # API on :9000
+cargo run -- --no-api             # no API
 ```
 
 ### Endpoints
@@ -188,8 +192,9 @@ cargo install cargo-xwin
 └─────────────────────────────────────────────────┘
 
 ┌─────────────────────────────────────────────────┐
-│  LLM Thread (blocking inference)                 │
-│  prompt → JSON params → apply_llm_update()       │
+│  LLM Thread                                      │
+│  spawns llama-server subprocess (PrismML fork)   │
+│  prompt → HTTP → JSON params → apply_llm_update()│
 └─────────────────────────────────────────────────┘
 
 ┌─────────────────────────────────────────────────┐
@@ -198,8 +203,9 @@ cargo install cargo-xwin
 └─────────────────────────────────────────────────┘
 
 ┌─────────────────────────────────────────────────┐
-│  HTTP Thread (tokio, optional --api)             │
+│  HTTP Thread (tokio, default port 8765)          │
 │  REST endpoints → read/write AppState            │
+│  disabled with --no-api                          │
 └─────────────────────────────────────────────────┘
 ```
 

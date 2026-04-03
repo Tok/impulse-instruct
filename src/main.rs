@@ -5,16 +5,16 @@
 //   impulse-instruct [OPTIONS]
 //
 // Options:
-//   --api              Enable HTTP/MCP API on port 8765
-//   --port <N>         HTTP port (default 8765, requires --api)
+//   --no-api           Disable HTTP/MCP API (default: on, port 8765)
+//   --port <N>         HTTP port (default 8765)
 //   --model <path>     Path to GGUF model file
 //   --log <level>      Log level: error/warn/info/debug (default info)
 //
 // Thread model:
 //   Main/UI:  eframe runs here (required by macOS/Windows)
 //   Audio:    cpal callback (real-time, elevated by OS)
-//   LLM:      std::thread (blocking inference)
-//   HTTP:     tokio runtime in separate OS thread (only if --api)
+//   LLM:      std::thread (blocking inference, spawns llama-server subprocess)
+//   HTTP:     tokio runtime in separate OS thread (disabled by --no-api)
 
 mod api;
 mod audio;
@@ -41,7 +41,7 @@ use state::AppState;
 // ─── CLI args (no extra deps — just std::env::args) ──────────────────────────
 
 struct Args {
-    api: bool,
+    no_api: bool,
     port: u16,
     model: Option<String>,
     log_level: String,
@@ -51,7 +51,7 @@ impl Args {
     fn parse() -> Self {
         let args: Vec<String> = std::env::args().collect();
         let mut result = Self {
-            api: false,
+            no_api: false,
             port: 8765,
             model: None,
             log_level: "info".into(),
@@ -60,7 +60,7 @@ impl Args {
         let mut i = 1;
         while i < args.len() {
             match args[i].as_str() {
-                "--api" => result.api = true,
+                "--no-api" => result.no_api = true,
                 "--port" => {
                     i += 1;
                     if let Some(v) = args.get(i) {
@@ -81,7 +81,7 @@ impl Args {
                     println!("Impulse Instruct — LLM-first audio synthesizer\n");
                     println!("USAGE: impulse-instruct [OPTIONS]\n");
                     println!("OPTIONS:");
-                    println!("  --api              Enable HTTP/MCP API (default: off)");
+                    println!("  --no-api           Disable HTTP/MCP API (default: on, port 8765)");
                     println!("  --port <N>         HTTP port (default: 8765)");
                     println!("  --model <path>     GGUF model path");
                     println!("  --log <level>      Log level (default: info)");
@@ -103,8 +103,8 @@ fn main() -> anyhow::Result<()> {
     ).init();
 
     log::info!("Impulse Instruct starting…");
-    if args.api {
-        log::info!("HTTP API enabled on port {}", args.port);
+    if !args.no_api {
+        log::info!("HTTP API enabled on port {} (pass --no-api to disable)", args.port);
     }
 
     // ── Shared state ──────────────────────────────────────────────────────────
@@ -130,8 +130,8 @@ fn main() -> anyhow::Result<()> {
             .expect("failed to spawn LLM thread");
     }
 
-    // ── HTTP API thread (only when --api) ─────────────────────────────────────
-    let api_port = if args.api { Some(args.port) } else { None };
+    // ── HTTP API thread (on by default; disabled by --no-api) ────────────────
+    let api_port = if !args.no_api { Some(args.port) } else { None };
     if let Some(port) = api_port {
         let state = Arc::clone(&app_state);
         let llm_tx_http = llm_tx.clone();

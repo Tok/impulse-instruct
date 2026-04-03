@@ -17,7 +17,7 @@
 // Requires: libclang-dev cmake (for llama-cpp-2) + ./download-models.sh
 // Skip:     if model file not present, all tests pass silently.
 
-use crate::llm::{LlamaCppBackend, LlmBackend};
+use crate::llm::{LlamaServerBackend, LlmBackend};
 use crate::llm::prompt::build_system_prompt;
 use crate::state::AppState;
 use serde_json::Value;
@@ -46,15 +46,16 @@ fn all_false(json: &Value, path: &str) -> bool {
         .unwrap_or(false)
 }
 
-/// Returns `(backend, system_prompt)` if the model file exists.
-/// Returns `None` and prints a skip message if not — tests call `return` on None.
-fn setup() -> Option<(LlamaCppBackend, String)> {
+/// Returns `(backend, system_prompt)` if the server comes up.
+/// Returns `None` and prints a skip message if binary or model are missing.
+fn setup() -> Option<(LlamaServerBackend, String)> {
     let state = AppState::default();
-    let backend = LlamaCppBackend::new(&state.llm.model_path);
-    if !backend.is_loaded() {
+    let backend = LlamaServerBackend::new(&state.llm.model_path);
+    if !backend.is_live() {
         eprintln!(
-            "\n[llm-suite] SKIP — model not found at '{}'\n\
-             Run ./download-models.sh to fetch Bonsai 8B.\n",
+            "\n[llm-suite] SKIP — Bonsai server not available \
+             (model: '{}')\n\
+             Run ./build-bonsai-server.sh + ./download-models.sh.\n",
             state.llm.model_path
         );
         return None;
@@ -63,13 +64,13 @@ fn setup() -> Option<(LlamaCppBackend, String)> {
     Some((backend, system))
 }
 
-fn infer_json(backend: &mut LlamaCppBackend, system: &str, prompt: &str, heat: f32) -> Option<Value> {
+fn infer_json(backend: &mut LlamaServerBackend, system: &str, prompt: &str, heat: f32) -> Option<Value> {
     backend.infer(system, prompt, heat).ok()?.param_update
 }
 
 /// Run `check` RUNS times; assert at least `required` pass.
 fn assert_gate(
-    backend: &mut LlamaCppBackend,
+    backend: &mut LlamaServerBackend,
     system: &str,
     prompt: &str,
     heat: f32,

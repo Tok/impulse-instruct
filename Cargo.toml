@@ -14,17 +14,15 @@ cpal = "0.15"
 # DSP graph
 fundsp = { version = "0.18", default-features = false, features = ["std"] }
 
-# LLM inference (wraps llama.cpp) — requires libclang: sudo apt install libclang-dev
-llama-cpp-2 = { version = "0.1", optional = true }
-
 # UI — immediate-mode, cross-platform
 eframe = { version = "0.28", default-features = false, features = ["default_fonts", "glow"] }
 egui = "0.28"
 
-# HTTP API (MCP bridge)
+# HTTP API (MCP bridge) + internal Bonsai server client
 axum = { version = "0.7", features = ["json"] }
 tokio = { version = "1", features = ["full"] }
 tower-http = { version = "0.5", features = ["cors"] }
+ureq = { version = "2", features = ["json"] }
 
 # MIDI
 midir = "0.9"
@@ -44,9 +42,6 @@ rtrb = "0.3"
 parking_lot = "0.12"
 crossbeam-channel = "0.5"
 
-# Character encoding — used by llama-cpp-2's token_to_piece API
-encoding_rs = "0.8"
-
 # Utilities
 anyhow = "1"
 log = "0.4"
@@ -54,16 +49,9 @@ env_logger = "0.11"
 thiserror = "1"
 
 [features]
-# LLM inference is on by default — it's integral to the synth.
-# Requires: sudo apt install libclang-dev cmake
-# To build without (mock-only, no libclang needed): cargo build --no-default-features
-default = ["llm"]
-llm = ["llama-cpp-2"]
-cuda = ["llama-cpp-2/cuda", "llm"]
-# Run LLM response suite against real Bonsai inference
-# Requires: libclang-dev cmake + ./download-models.sh
-# cargo test --features llm-tests   (or ./run-llm-tests.sh)
-llm-tests = ["llm"]
+# Run LLM response suite against real Bonsai server
+# ./run-llm-tests.sh   (or: cargo test --features llm-tests)
+llm-tests = []
 
 [profile.release]
 opt-level = 3

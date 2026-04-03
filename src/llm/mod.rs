@@ -41,173 +41,192 @@ pub trait LlmBackend: Send {
     fn context_size(&self) -> usize;
 }
 
-// ─── llama.cpp backend ────────────────────────────────────────────────────────
+// ─── Bonsai server backend ────────────────────────────────────────────────────
+// Spawns PrismML's llama-server as a child process and talks to it over HTTP.
+// Falls back to mock if the server binary or model file is not found.
+//
+// Build the server:  ./build-bonsai-server.sh
+// Model:             ./download-models.sh
 
-/// Heap-allocated to avoid moving the large model struct around.
-#[cfg(feature = "llm")]
-struct LlamaInner {
-    backend: llama_cpp_2::llama_backend::LlamaBackend,
-    model:   llama_cpp_2::model::LlamaModel,
+/// Candidate paths for the llama-server binary (PrismML fork).
+const SERVER_BINARY_CANDIDATES: &[&str] = &[
+    ".llama-build/bin/llama-server",  // built by build-bonsai-server.sh
+    "llama-server",                    // $PATH
+];
+
+pub struct LlamaServerBackend {
+    child:    Option<std::process::Child>,
+    base_url: String,
+    live:     bool,
 }
 
-#[cfg(feature = "llm")]
-impl LlamaInner {
-    fn load(model_path: &str) -> Result<Box<Self>> {
-        use llama_cpp_2::{
-            llama_backend::LlamaBackend,
-            model::{LlamaModel, params::LlamaModelParams},
-        };
-        let backend = LlamaBackend::init()?;
-        let params  = LlamaModelParams::default();
-        let model   = LlamaModel::load_from_file(&backend, std::path::Path::new(model_path), &params)?;
-        Ok(Box::new(Self { backend, model }))
-    }
-}
-
-pub struct LlamaCppBackend {
-    model_path: String,
-    #[cfg(feature = "llm")]
-    inner: Option<Box<LlamaInner>>,
-}
-
-impl LlamaCppBackend {
+impl LlamaServerBackend {
+    /// Spawn `llama-server` with the given model file.
+    /// Returns a backend in mock mode if binary or model are missing.
     pub fn new(model_path: &str) -> Self {
-        #[cfg(feature = "llm")]
-        {
-            if std::path::Path::new(model_path).exists() {
-                match LlamaInner::load(model_path) {
-                    Ok(inner) => {
-                        return Self { model_path: model_path.to_string(), inner: Some(inner) };
-                    }
-                    Err(e) => {
-                        log::error!(
-                            "Failed to load model '{}': {} — falling back to mock.",
-                            model_path, e
-                        );
-                    }
-                }
-            } else {
-                log::warn!(
-                    "Model not found at '{}' — falling back to mock.\n  \
-                     Run ./download-models.sh",
-                    model_path
-                );
-            }
-            return Self { model_path: model_path.to_string(), inner: None };
+        let bin = SERVER_BINARY_CANDIDATES.iter()
+            .find(|&&p| std::path::Path::new(p).exists()
+                || which_in_path(p))
+            .copied();
+
+        let Some(bin) = bin else {
+            log::warn!(
+                "llama-server not found — run ./build-bonsai-server.sh to build it. \
+                 Falling back to mock."
+            );
+            return Self { child: None, base_url: String::new(), live: false };
+        };
+
+        if !std::path::Path::new(model_path).exists() {
+            log::warn!(
+                "Model not found at '{}' — run ./download-models.sh. \
+                 Falling back to mock.",
+                model_path
+            );
+            return Self { child: None, base_url: String::new(), live: false };
         }
-        #[cfg(not(feature = "llm"))]
-        Self { model_path: model_path.to_string() }
+
+        // Pick a free port
+        let port = free_port().unwrap_or(9999);
+        let base_url = format!("http://127.0.0.1:{}", port);
+
+        log::info!("Spawning llama-server on port {} with model {}", port, model_path);
+
+        let child = std::process::Command::new(bin)
+            .args([
+                "--model", model_path,
+                "--host", "127.0.0.1",
+                "--port", &port.to_string(),
+                "--ctx-size", "4096",
+                "--n-gpu-layers", "99",
+                "--log-disable",   // reduce noise; we log our own status
+            ])
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .spawn();
+
+        match child {
+            Err(e) => {
+                log::error!("Failed to spawn llama-server: {} — falling back to mock.", e);
+                Self { child: None, base_url: String::new(), live: false }
+            }
+            Ok(child) => {
+                let mut backend = Self { child: Some(child), base_url, live: false };
+                backend.wait_for_ready();
+                backend
+            }
+        }
     }
 
-    /// True only when the model is actually loaded and inference is available.
-    pub fn is_loaded(&self) -> bool {
-        #[cfg(feature = "llm")]
-        return self.inner.is_some();
-        #[cfg(not(feature = "llm"))]
-        false
+    pub fn is_live(&self) -> bool { self.live }
+
+    /// Poll /health until the server is ready (up to ~30 s).
+    fn wait_for_ready(&mut self) {
+        let url = format!("{}/health", self.base_url);
+        for attempt in 0..60 {
+            std::thread::sleep(std::time::Duration::from_millis(500));
+            match ureq::get(&url).call() {
+                Ok(resp) if resp.status() == 200 => {
+                    log::info!("Bonsai server ready after {}ms", (attempt + 1) * 500);
+                    self.live = true;
+                    return;
+                }
+                _ => {}
+            }
+        }
+        log::error!("Bonsai server did not become ready within 30s — falling back to mock.");
     }
 }
 
-impl LlmBackend for LlamaCppBackend {
-    fn infer(&mut self, system: &str, user: &str, heat: f32) -> Result<LlmOutput> {
-        #[cfg(feature = "llm")]
-        if let Some(ref inner) = self.inner {
-            return infer_real(inner, system, user, heat);
+impl Drop for LlamaServerBackend {
+    fn drop(&mut self) {
+        if let Some(mut child) = self.child.take() {
+            let _ = child.kill();
+            let _ = child.wait();
+            log::info!("Bonsai server stopped.");
         }
-        let _ = system;
-        mock_response(user, heat)
+    }
+}
+
+impl LlmBackend for LlamaServerBackend {
+    fn infer(&mut self, system: &str, user: &str, heat: f32) -> Result<LlmOutput> {
+        if !self.live {
+            return mock_response(user, heat);
+        }
+
+        let url = format!("{}/v1/chat/completions", self.base_url);
+        // heat 0.0 → temp 0.1 (near-deterministic), heat 1.0 → temp 1.2 (creative)
+        let temperature = 0.1_f64 + (heat as f64).clamp(0.0, 1.0) * 1.1;
+
+        let schema = crate::llm::param_json_schema();
+
+        let body = serde_json::json!({
+            "model": "bonsai",
+            "messages": [
+                { "role": "system",  "content": system },
+                { "role": "user",    "content": user   }
+            ],
+            "temperature": temperature,
+            "max_tokens": 512,
+            "response_format": {
+                "type": "json_schema",
+                "json_schema": {
+                    "name": "synth_params",
+                    "strict": true,
+                    "schema": schema
+                }
+            }
+        });
+
+        let t0 = std::time::Instant::now();
+        let resp = ureq::post(&url)
+            .set("Content-Type", "application/json")
+            .send_json(&body)
+            .map_err(|e| anyhow::anyhow!("llama-server request failed: {}", e))?;
+
+        let elapsed = t0.elapsed().as_secs_f32();
+
+        let resp_json: serde_json::Value = resp.into_json()
+            .map_err(|e| anyhow::anyhow!("failed to parse server response: {}", e))?;
+
+        let text = resp_json["choices"][0]["message"]["content"]
+            .as_str()
+            .unwrap_or("")
+            .to_string();
+
+        let usage = &resp_json["usage"];
+        let completion_tokens = usage["completion_tokens"].as_f64().unwrap_or(0.0) as f32;
+        let tps = if elapsed > 0.0 { completion_tokens / elapsed } else { 0.0 };
+        let ctx_used = usage["total_tokens"].as_u64().unwrap_or(0) as usize;
+
+        let param_update = serde_json::from_str::<serde_json::Value>(text.trim())
+            .map_err(|e| anyhow::anyhow!("JSON parse failed: {e}\nraw: {text}"))?;
+
+        Ok(LlmOutput {
+            text,
+            param_update: Some(param_update),
+            tokens_per_sec: tps,
+            context_used: ctx_used,
+            is_jam: false,
+        })
     }
 
     fn context_size(&self) -> usize { 4096 }
 }
 
-// ─── Real llama.cpp inference ─────────────────────────────────────────────────
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
-#[cfg(feature = "llm")]
-fn infer_real(inner: &LlamaInner, system: &str, user: &str, heat: f32) -> Result<LlmOutput> {
-    use llama_cpp_2::{
-        model::{AddBos, LlamaChatMessage},
-        context::params::LlamaContextParams,
-        llama_batch::LlamaBatch,
-        sampling::LlamaSampler,
-        json_schema_to_grammar,
-    };
-    use std::num::NonZeroU32;
+fn free_port() -> Option<u16> {
+    std::net::TcpListener::bind("127.0.0.1:0").ok()
+        .and_then(|l| l.local_addr().ok())
+        .map(|a| a.port())
+}
 
-    // ── Prompt ────────────────────────────────────────────────────────────────
-    let messages = vec![
-        LlamaChatMessage::new("system".to_string(), system.to_string())?,
-        LlamaChatMessage::new("user".to_string(),   user.to_string())?,
-    ];
-    let template = inner.model.chat_template(None)?;
-    let prompt   = inner.model.apply_chat_template(&template, &messages, true)?;
-
-    // ── Tokenise ──────────────────────────────────────────────────────────────
-    let input_tokens = inner.model.str_to_token(&prompt, AddBos::Always)?;
-    let n_input      = input_tokens.len();
-
-    // ── Context ───────────────────────────────────────────────────────────────
-    // Round up to next power of two; at least 2048
-    let ctx_size = ((n_input + 512).next_power_of_two() as u32).max(2048);
-    let ctx_params = LlamaContextParams::default()
-        .with_n_ctx(Some(NonZeroU32::new(ctx_size).unwrap()));
-    let mut ctx = inner.model.new_context(&inner.backend, ctx_params)?;
-
-    // ── Fill batch with input ─────────────────────────────────────────────────
-    let mut batch = LlamaBatch::new(ctx_size as usize, 1);
-    for (i, &tok) in input_tokens.iter().enumerate() {
-        batch.add(tok, i as i32, &[0], i == n_input - 1)?;
-    }
-    ctx.decode(&mut batch)?;
-
-    // ── Sampler: grammar + temperature ────────────────────────────────────────
-    let schema        = serde_json::to_string(&crate::llm::param_json_schema())?;
-    let grammar       = json_schema_to_grammar(&schema)?;
-    let grammar_sampler = LlamaSampler::grammar(&inner.model, &grammar, "root")?;
-    // heat 0.0 → temp 0.1 (near-deterministic), heat 1.0 → temp 1.2 (wild)
-    let temp = 0.1_f32 + heat.clamp(0.0, 1.0) * 1.1;
-    let seed = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap_or_default()
-        .subsec_micros();
-    let mut sampler = LlamaSampler::chain_simple([
-        grammar_sampler,
-        LlamaSampler::temp(temp),
-        LlamaSampler::dist(seed),
-    ]);
-
-    // ── Generate ──────────────────────────────────────────────────────────────
-    let t0    = std::time::Instant::now();
-    let eos   = inner.model.token_eos();
-    let mut decoder = encoding_rs::UTF_8.new_decoder();
-    let mut output  = String::new();
-    let mut n_gen   = 0usize;
-
-    for pos in n_input..(n_input + 512) {
-        let next = sampler.sample(&ctx, batch.n_tokens() - 1);
-        sampler.accept(next);
-        if next == eos { break; }
-
-        output.push_str(&inner.model.token_to_piece(next, &mut decoder, false, None)?);
-        n_gen += 1;
-
-        batch.clear();
-        batch.add(next, pos as i32, &[0], true)?;
-        ctx.decode(&mut batch)?;
-    }
-
-    let tps = n_gen as f32 / t0.elapsed().as_secs_f32().max(0.001);
-
-    let json = serde_json::from_str::<serde_json::Value>(output.trim())
-        .map_err(|e| anyhow::anyhow!("JSON parse failed: {e}\nraw: {output}"))?;
-
-    Ok(LlmOutput {
-        text:          output,
-        param_update:  Some(json),
-        tokens_per_sec: tps,
-        context_used:  n_input + n_gen,
-        is_jam:        false,
-    })
+fn which_in_path(name: &str) -> bool {
+    std::env::var_os("PATH")
+        .map(|paths| std::env::split_paths(&paths)
+            .any(|dir| dir.join(name).exists()))
+        .unwrap_or(false)
 }
 
 /// Generate a plausible JSON response for testing without a real model.
@@ -359,24 +378,24 @@ pub fn run_llm_loop(
     output_tx: Sender<LlmOutput>,
 ) {
     let model_path = state.read().llm.model_path.clone();
-    let mut backend = LlamaCppBackend::new(&model_path);
+    let mut backend = LlamaServerBackend::new(&model_path);
 
-    if backend.is_loaded() {
-        log::info!("LLM thread started — model: {}", model_path);
+    if backend.is_live() {
+        log::info!("LLM thread started — Bonsai server live: {}", model_path);
         let _ = output_tx.try_send(LlmOutput {
-            text: format!("[ Model loaded: {} ]", model_path),
+            text: format!("[ Bonsai server loaded: {} ]", model_path),
             param_update: None,
             tokens_per_sec: 0.0,
             context_used: 0,
             is_jam: false,
         });
     } else {
-        log::warn!("LLM thread started — mock mode (model not loaded). Run ./download-models.sh");
-        let msg = format!(
-            "[ Mock mode — model not loaded. Run ./download-models.sh to get Bonsai 8B ]"
+        log::warn!(
+            "LLM thread started — mock mode. \
+             Run ./build-bonsai-server.sh + ./download-models.sh to enable real inference."
         );
         let _ = output_tx.try_send(LlmOutput {
-            text: msg,
+            text: "[ Mock mode — run ./build-bonsai-server.sh + ./download-models.sh ]".to_string(),
             param_update: None,
             tokens_per_sec: 0.0,
             context_used: 0,
