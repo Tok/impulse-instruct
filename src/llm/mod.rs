@@ -15,7 +15,7 @@ use std::sync::Arc;
 use parking_lot::RwLock;
 use std::time::Instant;
 
-use crate::state::{AppState, apply_llm_update};
+use crate::state::{AppState, ConversationMode, apply_llm_update};
 
 // ─── Messages ─────────────────────────────────────────────────────────────────
 
@@ -618,6 +618,15 @@ pub fn run_llm_loop(
                     } else {
                         log::debug!("Bonsai (jam) → {}", comment);
                     }
+
+                    // TTS: speak the comment when enabled
+                    let (tts_on, mode) = {
+                        let s = state.read();
+                        (s.llm.tts_enabled, s.llm.conversation_mode.clone())
+                    };
+                    if tts_on {
+                        speak(comment, &mode);
+                    }
                 }
                 let mut output = output;
                 output.is_jam = !input.one_shot;
@@ -652,4 +661,34 @@ pub fn run_llm_loop(
     }
 
     log::info!("LLM thread exiting");
+}
+
+// ─── TTS ─────────────────────────────────────────────────────────────────────
+
+/// Speak `text` via espeak-ng in a detached background process.
+/// Voice pitch/speed are adjusted per conversation mode for character.
+/// No-ops silently if espeak-ng is not installed.
+pub fn speak(text: &str, mode: &ConversationMode) {
+    // Sanitise: strip anything that could be shell-injected.  We pass the
+    // text as a single argument (no shell involved), but strip control chars.
+    let clean: String = text.chars()
+        .filter(|c| c.is_ascii_graphic() || *c == ' ')
+        .take(200)
+        .collect();
+    if clean.is_empty() { return; }
+
+    let (pitch, speed, voice) = match mode {
+        ConversationMode::Mc       => ("60", "160", "en+m3"),   // high-pitched ragga MC
+        ConversationMode::Dj       => ("40", "140", "en+m4"),   // hype DJ
+        ConversationMode::Producer => ("50", "120", "en+m5"),   // calm producer
+        ConversationMode::Off      => return,
+    };
+
+    // Spawn and detach — we don't wait for it.
+    let _ = std::process::Command::new("espeak-ng")
+        .args(["-p", pitch, "-s", speed, "-v", voice, &clean])
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .spawn();
 }

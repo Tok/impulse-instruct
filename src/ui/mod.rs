@@ -328,6 +328,17 @@ impl eframe::App for ImpulseApp {
                         });
                     }
 
+                    ui.add_space(6.0);
+                    ui.horizontal(|ui| {
+                        ui.label(egui::RichText::new("TTS voice (espeak-ng)").monospace().size(9.5).color(theme::FOG));
+                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                            let mut tts = self.state.read().llm.tts_enabled;
+                            if widgets::toggle_button(ui, if tts { "ON" } else { "OFF" }, &mut tts) {
+                                self.state.write().llm.tts_enabled = tts;
+                            }
+                        });
+                    });
+
                     ui.add_space(8.0);
                     ui.separator();
                     ui.add_space(4.0);

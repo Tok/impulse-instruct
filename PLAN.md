@@ -115,9 +115,9 @@ The AN1X voice gets the synthesis side. Bitcrush + tape saturation FX complete t
 
 Bonsai generates the text. A TTS engine speaks it. The crowd goes wild.
 
-- [ ] TTS backend — `espeak-ng` subprocess (simple, zero-dep, Linux)
+- [x] TTS backend — `espeak-ng` subprocess (simple, zero-dep, Linux)
 - [ ] Alternative: Coqui TTS for higher quality voice (Python subprocess or REST)
-- [ ] MC mode: when `_comment` is generated in MC/DJ mode, pass text to TTS
+- [x] MC mode: when `_comment` is generated in MC/DJ mode, pass text to TTS
 - [ ] Optional: pitch-shift + distort TTS output for "vocoder MC" effect
 - [ ] LLM generates `"mc_line"` JSON field alongside param updates (separate from `_comment`)
 - [ ] Selectable MC voice character: Jungle MC, Rave Announcer, Robot, Smooth DJ
@@ -199,9 +199,9 @@ Move from a fixed linear audio chain to a node graph.
 
 ## Immediate next steps
 
-1. [ ] Variable step count (8/16/32/64) — unblocks amen breaks and polyrhythm
-2. [ ] Amen break pattern preset + LLM instruction "make an amen break"
+1. [x] Variable step count (8/16/32/64) — unblocks amen breaks and polyrhythm
+2. [x] Amen break pattern preset + LLM instruction "make an amen break"
 3. [ ] Supersaw oscillator — unblocks Reese bass, rave stabs, DnB
-4. [ ] Bitcrush FX — unblocks gabber, breakcore, lo-fi sounds
-5. [ ] TTS MC mode — highest fun-per-line-of-code ratio
+4. [x] Bitcrush FX — unblocks gabber, breakcore, lo-fi sounds
+5. [x] TTS MC mode — highest fun-per-line-of-code ratio
 6. [ ] Run artist reference LLM tests — audit styles.json, drop dead references
