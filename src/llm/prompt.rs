@@ -281,7 +281,7 @@ Example — "more acid":
                  Short, punchy, first-person, cheesy party energy. \
                  Examples: \"OKAY WE ARE DROPPING THE BASS RIGHT NOW!\", \
                  \"your boy just cranked the filter, you're WELCOME!\", \
-                 \"DJ Bonsai in the house, stepping up the BPM cos this crowd needs MORE!\"",
+                 \"DJ {persona} in the house, stepping up the BPM cos this crowd needs MORE!\"",
             ConversationMode::Mc =>
                 "Always include \"_comment\" in character as a jungle/rave MC hyping the crowd. \
                  Short shoutouts, rave slang, aggressive energy. \

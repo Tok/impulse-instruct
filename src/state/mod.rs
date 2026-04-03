@@ -289,7 +289,7 @@ impl Default for SequencerState {
         }
 
         // Minimal starter beat: 4-on-the-floor kick + offbeat hi-hats.
-        // Just enough to hear the clock — Bonsai writes all creative patterns.
+        // Just enough to hear the clock — the AI writes all creative patterns.
         let kick_steps = [1,0,0,0, 1,0,0,0, 1,0,0,0, 1,0,0,0usize];
         let hat_steps  = [0,0,1,0, 0,0,1,0, 0,0,1,0, 0,0,1,0usize];
         if let Some(p) = drum_patterns.get_mut(&DrumVoice::Kick808) {
@@ -359,7 +359,7 @@ impl Default for FxState {
 
 // ─── LLM ─────────────────────────────────────────────────────────────────────
 
-/// How Bonsai presents itself in the `_comment` field.
+/// How the AI persona presents itself in the `_comment` field.
 #[derive(Clone, Debug, PartialEq, Default, Serialize, Deserialize)]
 pub enum ConversationMode {
     Off,            // no commentary shown; brief technical label only

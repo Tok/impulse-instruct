@@ -46,7 +46,7 @@ pub trait LlmBackend: Send {
     fn infer(&mut self, system: &str, user: &str, heat: f32) -> Result<LlmOutput>;
 }
 
-// ─── Bonsai server backend ────────────────────────────────────────────────────
+// ─── LLM server backend ───────────────────────────────────────────────────────
 // Spawns PrismML's llama-server as a child process and talks to it over HTTP.
 // Falls back to mock if the server binary or model file is not found.
 //
@@ -170,7 +170,7 @@ impl Drop for LlamaServerBackend {
             #[cfg(not(unix))]
             let _ = child.kill();
             let _ = child.wait();
-            log::info!("Bonsai server stopped.");
+            log::info!("LLM server stopped.");
         }
     }
 }
@@ -252,7 +252,7 @@ impl LlmBackend for LlamaServerBackend {
         });
 
         if let Some(ref t) = thinking {
-            log::debug!("Bonsai thinking ({} chars): {}", t.len(), &t[..t.len().min(120)]);
+            log::debug!("LLM thinking ({} chars): {}", t.len(), &t[..t.len().min(120)]);
         }
 
         Ok(LlmOutput {
@@ -684,10 +684,11 @@ pub fn run_llm_loop(
                 if let Some(ref update) = output.param_update {
                     let comment = update.get("_comment").and_then(|v| v.as_str())
                         .unwrap_or(&output.text);
+                    let persona = state.read().llm.persona_name.clone();
                     if one_shot {
-                        log::info!("Bonsai → {}", comment);
+                        log::info!("{} → {}", persona, comment);
                     } else {
-                        log::debug!("Bonsai (jam) → {}", comment);
+                        log::debug!("{} (jam) → {}", persona, comment);
                     }
 
                     // TTS: speak only MC/DJ crowd content — producer explanations

@@ -230,10 +230,11 @@ impl ImpulseApp {
                     out.text.clone()
                 };
                 // Append thinking indicator when present
+                let persona = self.state.read().llm.persona_name.clone();
                 let line = if out.thinking.as_ref().map_or(false, |t| !t.is_empty()) {
-                    format!("Bonsai → {} [🧠]\n", display)
+                    format!("{} → {} [think]\n", persona, display)
                 } else {
-                    format!("Bonsai → {}\n", display)
+                    format!("{} → {}\n", persona, display)
                 };
                 self.log_text.push_str(&line);
             }
@@ -506,7 +507,7 @@ impl eframe::App for ImpulseApp {
                         ui.label(egui::RichText::new("v0.1 — LLM-controlled synthesizer").monospace().size(9.5).color(theme::SMOKE));
                         ui.add_space(8.0);
                         ui.label(egui::RichText::new("Bass Synth  ·  Drum Kit A  ·  Drum Kit B").monospace().size(9.0).color(theme::ASH));
-                        ui.label(egui::RichText::new("Bonsai 8B 1-bit · llama.cpp").monospace().size(9.0).color(theme::ASH));
+                        ui.label(egui::RichText::new("LLM engine: llama.cpp").monospace().size(9.0).color(theme::ASH));
                         ui.add_space(10.0);
                         ui.label(egui::RichText::new("Type a prompt and press ASK.").monospace().size(9.0).color(theme::FOG));
                         ui.label(egui::RichText::new("Toggle JAM for continuous mutation.").monospace().size(9.0).color(theme::FOG));
@@ -968,7 +969,7 @@ impl eframe::App for ImpulseApp {
                         let mut custom_text = self.state.read().llm.custom_style_text.clone();
                         let r = ui.add(
                             egui::TextEdit::singleline(&mut custom_text)
-                                .hint_text("describe your style brief for Bonsai…")
+                                .hint_text("describe your style brief for the AI…")
                                 .desired_width(ui.available_width() - 60.0)
                                 .font(egui::FontId::monospace(10.0))
                         );
@@ -994,7 +995,7 @@ impl eframe::App for ImpulseApp {
                     let mut instr = self.state.read().llm.user_instructions.clone();
                     let r = ui.add(
                         egui::TextEdit::singleline(&mut instr)
-                            .hint_text("persistent instructions for Bonsai (injected into every prompt)…")
+                            .hint_text("persistent instructions injected into every prompt…")
                             .desired_width(ui.available_width())
                             .font(egui::FontId::monospace(10.0))
                     );
@@ -1024,7 +1025,7 @@ impl eframe::App for ImpulseApp {
                     if submit || enter_pressed {
                         let typed = self.prompt_input.trim().to_string();
                         let (prompt, log_line) = if typed.is_empty() {
-                            // Empty submit — nudge Bonsai to do something fresh
+                            // Empty submit — nudge the AI to do something fresh
                             let active_style = self.state.read().llm.active_style.clone();
                             let p = match active_style.as_deref() {
                                 Some(id) => {
@@ -1144,7 +1145,7 @@ impl eframe::App for ImpulseApp {
                 ui.horizontal(|ui| {
                     if is_mock {
                         ui.label(egui::RichText::new(
-                            "⚠  MOCK MODE — no model loaded. Run ./build-bonsai-server.sh + ./download-models.sh"
+                            "! MOCK MODE — no model loaded. Run ./build-bonsai-server.sh + ./download-models.sh"
                         ).color(egui::Color32::from_rgb(255, 160, 80)).monospace().size(9.0));
                     } else {
                         let midi_text = match &self.midi_port {
