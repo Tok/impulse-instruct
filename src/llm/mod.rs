@@ -293,13 +293,26 @@ impl LlamaServerBackend {
             if let Some(ref mut child) = self.child {
                 match child.try_wait() {
                     Ok(Some(status)) => {
-                        log::error!(
-                            "llama-server exited early ({}). \
-                             The model may be unsupported by this server build, \
-                             or it ran out of VRAM. Check VRAM usage and try a \
-                             smaller model.",
-                            status
-                        );
+                        // Read the tail of llama-server.log for the actual error.
+                        let detail = std::fs::read_to_string("llama-server.log")
+                            .ok()
+                            .map(|s| {
+                                // Last non-empty line is usually the most useful.
+                                s.lines()
+                                    .rfind(|l| !l.trim().is_empty())
+                                    .unwrap_or("")
+                                    .trim()
+                                    .to_string()
+                            })
+                            .filter(|s| !s.is_empty());
+                        if let Some(msg) = detail {
+                            log::error!("llama-server exited early ({}): {}", status, msg);
+                        } else {
+                            log::error!(
+                                "llama-server exited early ({}) — see llama-server.log for details.",
+                                status
+                            );
+                        }
                         self.child = None;
                         return;
                     }
