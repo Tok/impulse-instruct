@@ -6,3 +6,4 @@
 .llama-build
 .llama-src
 .llama-src-prismml
+llama-server.log
