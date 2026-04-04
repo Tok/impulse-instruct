@@ -7,6 +7,10 @@ edition = "2024"
 name = "impulse-instruct"
 path = "src/main.rs"
 
+[[bin]]
+name = "model_eval"
+path = "src/bin/model_eval.rs"
+
 [dependencies]
 # Audio I/O
 cpal = "0.15"

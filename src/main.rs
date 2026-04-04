@@ -1,4 +1,3 @@
-#![recursion_limit = "256"]
 // ─── main.rs ─────────────────────────────────────────────────────────────────
 // Impulse Instruct — LLM-first audio synthesizer
 //
@@ -18,23 +17,8 @@
 //   LLM:      std::thread (blocking inference, spawns llama-server subprocess)
 //   HTTP:     tokio runtime in separate OS thread (disabled by --no-api)
 
-mod api;
-mod audio;
-mod banner;
-mod config;
-mod export;
-mod llm;
-#[cfg(all(test, feature = "llm-tests"))]
-mod llm_suite;
-mod midi;
-mod sequencer;
-mod state;
-mod sysinfo;
-#[cfg(test)]
-mod tests;
-mod ui;
-
-use midi::MidiEvent;
+use impulse_instruct::midi::MidiEvent;
+use impulse_instruct::{api, audio, banner, llm, midi, state, ui};
 
 use parking_lot::RwLock;
 use std::sync::Arc;
@@ -121,7 +105,7 @@ fn main() -> anyhow::Result<()> {
         })
         .init();
 
-    crate::banner::print_banner();
+    banner::print_banner();
 
     log::info!("Starting…");
     if !args.no_api {
@@ -137,7 +121,7 @@ fn main() -> anyhow::Result<()> {
     // Apply --model override, falling back to the last-used model from settings.json
     if let Some(ref model_path) = args.model {
         app_state.write().llm.model_path = model_path.clone();
-    } else if let Some(saved) = state::load_model_setting() {
+    } else if let Some(saved) = impulse_instruct::state::load_model_setting() {
         app_state.write().llm.model_path = saved;
     }
 
