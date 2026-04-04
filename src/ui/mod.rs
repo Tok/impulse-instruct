@@ -133,7 +133,6 @@ pub struct ImpulseApp {
     ui_volume: f32, // monitor-only gain; never written to state or export
     // Piano preferences
     piano_show_labels: bool,
-    piano_show_colors: bool,
     // Last chain-of-thought from Bonsai (shown collapsible below the log)
     last_thinking: Option<String>,
     show_thinking: bool,
@@ -243,7 +242,6 @@ impl ImpulseApp {
             export_bars: 8,
             ui_volume: 1.0,
             piano_show_labels: true,
-            piano_show_colors: true,
             last_thinking: None,
             show_thinking: false,
             seq_page: 0,

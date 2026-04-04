@@ -443,24 +443,12 @@ impl ImpulseApp {
                                 },
                             );
                         });
-                        ui.horizontal(|ui| {
-                            ui.label(
-                                egui::RichText::new("Farbige Noten colors")
-                                    .monospace()
-                                    .size(9.5)
-                                    .color(theme::FOG),
-                            );
-                            ui.with_layout(
-                                egui::Layout::right_to_left(egui::Align::Center),
-                                |ui| {
-                                    widgets::toggle_button(
-                                        ui,
-                                        if self.piano_show_colors { "ON" } else { "OFF" },
-                                        &mut self.piano_show_colors,
-                                    );
-                                },
-                            );
-                        });
+                        ui.label(
+                            egui::RichText::new("Note colors always on — active keys bloom.")
+                                .monospace()
+                                .size(8.0)
+                                .color(theme::IRON),
+                        );
                     }
 
                     // ── Tab 3: System ─────────────────────────────────────────

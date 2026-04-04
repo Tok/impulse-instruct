@@ -8,11 +8,11 @@ use crate::ui::{ImpulseApp, note_name, theme};
 pub fn draw_piano(app: &mut ImpulseApp, ui: &mut egui::Ui, ctx: &egui::Context) {
     use egui::{Color32, Pos2, Rect, Sense, Stroke, Vec2};
 
-    // Range: C1 (MIDI 24) → C6 (MIDI 84) = 5 octaves + high C
+    // Range: C1 (MIDI 24) → C8 (MIDI 108) = 7 octaves + high C
     const START_NOTE: u8 = 24;
-    const END_NOTE: u8 = 84; // inclusive
-    const N_OCTAVES: usize = 5;
-    const N_WHITE: usize = N_OCTAVES * 7 + 1; // 36 white keys (including C6)
+    const END_NOTE: u8 = 108; // inclusive
+    const N_OCTAVES: usize = 7;
+    const N_WHITE: usize = N_OCTAVES * 7 + 1; // 50 white keys (including C8)
 
     // Which semitones are white keys?
     const fn is_white(semitone: u8) -> bool {
@@ -31,10 +31,12 @@ pub fn draw_piano(app: &mut ImpulseApp, ui: &mut egui::Ui, ctx: &egui::Context) 
     ];
 
     let available_w = ui.available_width();
-    let wk_w = (available_w / N_WHITE as f32).max(8.0);
-    let wk_h = 74.0_f32;
-    let bk_w = wk_w * 0.55;
-    let bk_h = wk_h * 0.60;
+    // Keys fill available width; clamp min so very narrow windows stay usable.
+    // Target ~6:1 height:width — real piano keys are ≈23 mm wide × 150 mm tall.
+    let wk_w = (available_w / N_WHITE as f32).max(7.0);
+    let wk_h = (wk_w * 6.2).clamp(52.0, 88.0);
+    let bk_w = wk_w * 0.58;
+    let bk_h = wk_h * 0.62;
     let total_w = wk_w * N_WHITE as f32;
 
     let (rect, response) =
@@ -77,13 +79,7 @@ pub fn draw_piano(app: &mut ImpulseApp, ui: &mut egui::Ui, ctx: &egui::Context) 
     let ox = rect.min.x; // origin x
     let oy = rect.min.y;
 
-    let use_color = app.piano_show_colors;
     let show_label = app.piano_show_labels;
-
-    // Classic (non-Farbige) base colors
-    let classic_white_inactive = Color32::from_rgb(58, 58, 58);
-    let classic_black_inactive = Color32::from_rgb(18, 18, 18);
-    let classic_active = Color32::from_rgb(200, 200, 200);
 
     // ── White keys ────────────────────────────────────────────────────────────
     let mut white_idx = 0usize;
@@ -100,49 +96,97 @@ pub fn draw_piano(app: &mut ImpulseApp, ui: &mut egui::Ui, ctx: &egui::Context) 
         let seq_active = seq_note == Some(note);
         let active = pressed || seq_active;
 
-        let fill: Color32 = if use_color {
-            let huth = theme::note_color(note);
-            if pressed {
-                theme::lerp_color(huth, theme::CHALK, 0.25)
-            } else if seq_active {
-                theme::lerp_color(huth, theme::SMOKE, 0.35)
-            } else {
-                theme::lerp_color(huth, Color32::from_rgb(62, 62, 62), 0.80)
-            }
+        let hue = theme::note_color(note);
+        let fill = if active {
+            // Bright saturated fill when active
+            theme::lerp_color(hue, theme::CHALK, 0.35)
         } else {
-            if active {
-                classic_active
-            } else {
-                classic_white_inactive
-            }
+            // Dim but coloured — always show hue, just muted
+            theme::lerp_color(hue, Color32::from_rgb(48, 48, 48), 0.60)
         };
 
-        painter.rect_filled(key_rect, egui::Rounding::same(1.0), fill);
-        painter.rect_stroke(
-            key_rect,
-            egui::Rounding::same(1.0),
-            Stroke::new(0.5, theme::SLATE),
+        let rounding = egui::Rounding {
+            nw: 1.0,
+            ne: 1.0,
+            sw: 3.0,
+            se: 3.0,
+        };
+
+        // Bloom: draw soft glow halos behind the key when active
+        if active {
+            let [r, g, b, _] = hue.to_array();
+            for i in 1..=4u8 {
+                let expand = i as f32 * 2.0;
+                let alpha = 55 - i * 12;
+                painter.rect_filled(
+                    key_rect.expand(expand),
+                    rounding,
+                    Color32::from_rgba_unmultiplied(r, g, b, alpha),
+                );
+            }
+        }
+
+        painter.rect_filled(key_rect, rounding, fill);
+
+        // Neumorphic edges
+        let (hi, sh) = if active {
+            (Color32::from_gray(130), Color32::from_gray(10))
+        } else {
+            (Color32::from_gray(85), Color32::from_gray(22))
+        };
+        painter.line_segment(
+            [key_rect.left_top(), key_rect.right_top()],
+            Stroke::new(1.0, hi),
+        );
+        painter.line_segment(
+            [key_rect.left_top(), key_rect.left_bottom()],
+            Stroke::new(1.0, hi),
+        );
+        painter.line_segment(
+            [key_rect.left_bottom(), key_rect.right_bottom()],
+            Stroke::new(1.0, sh),
+        );
+        painter.line_segment(
+            [key_rect.right_top(), key_rect.right_bottom()],
+            Stroke::new(0.5, sh),
+        );
+        // Subtle groove near top
+        let groove_y = key_rect.min.y + wk_h * 0.08;
+        painter.line_segment(
+            [
+                Pos2::new(key_rect.min.x + 1.5, groove_y),
+                Pos2::new(key_rect.max.x - 1.0, groove_y),
+            ],
+            Stroke::new(0.5, Color32::from_gray(if active { 170 } else { 72 })),
         );
 
-        // Label — all white keys when labels are on
-        if show_label {
+        painter.rect_stroke(key_rect, rounding, Stroke::new(0.5, theme::VOID));
+
+        // Labels: always show C notes; show all when show_label is on
+        let is_c = semi == 0;
+        if is_c || show_label {
             let lbl = note_name(note);
-            // For non-C notes, trim the octave number to save space
-            let lbl_short = if semi == 0 {
-                lbl
-            } else {
-                &lbl[..lbl.len() - 1]
-            };
-            let label_color = if active {
-                if use_color { theme::VOID } else { theme::DEEP }
-            } else {
-                theme::ASH
-            };
+            let lbl_text = if is_c { lbl } else { &lbl[..lbl.len() - 1] };
+            let font_size = if is_c { 8.5 } else { 7.5 };
+            let label_pos = Pos2::new(x + wk_w * 0.5, oy + wk_h - 10.0);
+
+            // Dark pill background for contrast
+            let pill = Rect::from_center_size(
+                label_pos,
+                egui::Vec2::new(lbl_text.len() as f32 * 5.5 + 4.0, 11.0),
+            );
+            painter.rect_filled(
+                pill,
+                egui::Rounding::same(2.0),
+                Color32::from_black_alpha(140),
+            );
+
+            let label_color = if active { theme::CHALK } else { theme::SMOKE };
             painter.text(
-                Pos2::new(x + wk_w * 0.5, oy + wk_h - 9.0),
+                label_pos,
                 egui::Align2::CENTER_CENTER,
-                lbl_short,
-                egui::FontId::monospace(7.0),
+                lbl_text,
+                egui::FontId::monospace(font_size),
                 label_color,
             );
         }
@@ -173,41 +217,81 @@ pub fn draw_piano(app: &mut ImpulseApp, ui: &mut egui::Ui, ctx: &egui::Context) 
             let seq_active = seq_note == Some(note);
             let active = pressed || seq_active;
 
-            let fill: Color32 = if use_color {
-                let huth = theme::note_color(note);
-                if pressed {
-                    theme::lerp_color(huth, theme::CHALK, 0.15)
-                } else if seq_active {
-                    huth
-                } else {
-                    theme::lerp_color(huth, theme::PIT, 0.82)
-                }
+            let bk_hue = theme::note_color(note);
+            let fill = if active {
+                theme::lerp_color(bk_hue, theme::CHALK, 0.22)
             } else {
-                if active {
-                    classic_active
-                } else {
-                    classic_black_inactive
-                }
+                theme::lerp_color(bk_hue, theme::PIT, 0.72)
             };
 
-            painter.rect_filled(key_rect, egui::Rounding::same(1.0), fill);
-            painter.rect_stroke(
-                key_rect,
-                egui::Rounding::same(1.0),
-                Stroke::new(0.5, theme::SLATE),
+            let bk_rounding = egui::Rounding {
+                nw: 1.0,
+                ne: 1.0,
+                sw: 3.0,
+                se: 3.0,
+            };
+
+            // Bloom for active black keys
+            if active {
+                let [r, g, b, _] = bk_hue.to_array();
+                for i in 1..=3u8 {
+                    let expand = i as f32 * 2.0;
+                    let alpha = 45 - i * 13;
+                    painter.rect_filled(
+                        key_rect.expand(expand),
+                        bk_rounding,
+                        Color32::from_rgba_unmultiplied(r, g, b, alpha),
+                    );
+                }
+            }
+
+            painter.rect_filled(key_rect, bk_rounding, fill);
+
+            // Neumorphic edges
+            let (bhi, bsh) = if active {
+                (Color32::from_gray(100), Color32::from_gray(8))
+            } else {
+                (Color32::from_gray(52), Color32::from_gray(8))
+            };
+            painter.line_segment(
+                [key_rect.left_top(), key_rect.right_top()],
+                Stroke::new(2.0, bhi),
+            );
+            painter.line_segment(
+                [key_rect.left_top(), key_rect.left_bottom()],
+                Stroke::new(1.0, bhi),
+            );
+            painter.line_segment(
+                [key_rect.right_top(), key_rect.right_bottom()],
+                Stroke::new(1.0, bsh),
+            );
+            painter.line_segment(
+                [key_rect.left_bottom(), key_rect.right_bottom()],
+                Stroke::new(1.0, bsh),
             );
 
-            // Label — sharp name only (no octave number, key is too narrow)
+            painter.rect_stroke(key_rect, bk_rounding, Stroke::new(0.5, theme::VOID));
+
+            // Label when show_label is on
             if show_label {
-                // e.g. "C#" from "C#3"
                 let full = note_name(note);
-                let sharp = &full[..full.len() - 1]; // strip octave digit
-                let label_color = if active { theme::VOID } else { theme::IRON };
+                let sharp = &full[..full.len() - 1];
+                let label_pos = Pos2::new(x + bk_w * 0.5, oy + bk_h - 9.0);
+                let pill = Rect::from_center_size(
+                    label_pos,
+                    egui::Vec2::new(sharp.len() as f32 * 5.0 + 3.0, 10.0),
+                );
+                painter.rect_filled(
+                    pill,
+                    egui::Rounding::same(2.0),
+                    Color32::from_black_alpha(160),
+                );
+                let label_color = if active { theme::CHALK } else { theme::FOG };
                 painter.text(
-                    Pos2::new(x + bk_w * 0.5, oy + bk_h - 8.0),
+                    label_pos,
                     egui::Align2::CENTER_CENTER,
                     sharp,
-                    egui::FontId::monospace(6.0),
+                    egui::FontId::monospace(7.0),
                     label_color,
                 );
             }
