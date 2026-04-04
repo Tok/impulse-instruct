@@ -26,8 +26,10 @@ use crate::state::{AppState, ConversationMode, apply_llm_update};
 pub enum LlmInput {
     /// Run inference with a user prompt.
     Infer { prompt: String, one_shot: bool },
-    /// Drop the current backend and reload with a new model file.
+    /// Kill the current server and restart with a new model file.
     SwitchModel(String),
+    /// Kill and restart the server with the same model (clears KV cache / context window).
+    ResetContext,
 }
 
 #[derive(Clone, Debug)]
@@ -239,6 +241,34 @@ impl LlamaServerBackend {
             }
         }
         log::error!("LLM server did not become ready within 90s — falling back to mock.");
+    }
+}
+
+impl LlamaServerBackend {
+    /// Kill the running server immediately (both owned child and any leaked process on the
+    /// fixed port). Used before a model switch or context reset so `new()` always spawns
+    /// fresh rather than hitting the "already healthy" reuse path.
+    pub fn shutdown(&mut self) {
+        if let Some(mut child) = self.child.take() {
+            #[cfg(unix)]
+            {
+                let pid = child.id() as i32;
+                unsafe { libc::kill(pid, libc::SIGKILL) };
+            }
+            #[cfg(not(unix))]
+            let _ = child.kill();
+            let _ = child.wait();
+        }
+        // Also kill any detached server that was reused without owning the child PID.
+        let bin = SERVER_BINARY_CANDIDATES
+            .iter()
+            .find(|&&p| std::path::Path::new(p).exists() || which_in_path(p))
+            .copied();
+        if let Some(bin) = bin {
+            kill_leaked_servers(bin);
+        }
+        self.live = false;
+        log::info!("LLM server stopped.");
     }
 }
 
@@ -590,29 +620,57 @@ pub fn run_llm_loop(
     });
 
     while let Ok(input) = input_rx.recv() {
-        if let LlmInput::SwitchModel(ref new_path) = input {
-            log::info!("LLM: switching model -> {}", new_path);
-            state.write().llm.model_path = new_path.clone();
-            backend = LlamaServerBackend::new(new_path);
-            state.write().llm.is_mock = !backend.is_live();
-            let status = if backend.is_live() {
-                format!("[ Model loaded: {} ]", new_path)
-            } else {
-                format!("[ Model not found: {} — check path and restart ]", new_path)
-            };
-            state.write().llm.last_response = status.clone();
-            let _ = output_tx.try_send(LlmOutput {
-                text: status,
-                param_update: None,
-                tokens_per_sec: 0.0,
-                prompt_tokens: 0,
-                completion_tokens: 0,
-                context_used: 0,
-                is_jam: false,
-                thinking: None,
-                mc_line: None,
-            });
-            continue;
+        match &input {
+            LlmInput::SwitchModel(new_path) => {
+                let new_path = new_path.clone();
+                log::info!("LLM: switching model -> {}", new_path);
+                // Kill the running server BEFORE calling new() so the health-check
+                // reuse path in new() doesn't silently keep the old model loaded.
+                backend.shutdown();
+                state.write().llm.model_path = new_path.clone();
+                state.write().llm.context_used = 0;
+                backend = LlamaServerBackend::new(&new_path);
+                state.write().llm.is_mock = !backend.is_live();
+                let status = if backend.is_live() {
+                    format!("[ Model loaded: {} ]", new_path)
+                } else {
+                    format!("[ Model not found: {} — check path and restart ]", new_path)
+                };
+                state.write().llm.last_response = status.clone();
+                let _ = output_tx.try_send(LlmOutput {
+                    text: status,
+                    param_update: None,
+                    tokens_per_sec: 0.0,
+                    prompt_tokens: 0,
+                    completion_tokens: 0,
+                    context_used: 0,
+                    is_jam: false,
+                    thinking: None,
+                    mc_line: None,
+                });
+                continue;
+            }
+            LlmInput::ResetContext => {
+                let model_path = state.read().llm.model_path.clone();
+                log::info!("LLM: resetting context (restart with same model)");
+                backend.shutdown();
+                state.write().llm.context_used = 0;
+                backend = LlamaServerBackend::new(&model_path);
+                state.write().llm.is_mock = !backend.is_live();
+                let _ = output_tx.try_send(LlmOutput {
+                    text: "[ Context reset ]".to_string(),
+                    param_update: None,
+                    tokens_per_sec: 0.0,
+                    prompt_tokens: 0,
+                    completion_tokens: 0,
+                    context_used: 0,
+                    is_jam: false,
+                    thinking: None,
+                    mc_line: None,
+                });
+                continue;
+            }
+            LlmInput::Infer { .. } => {}
         }
 
         let LlmInput::Infer {
@@ -674,6 +732,40 @@ pub fn run_llm_loop(
                     s.llm.context_used = ctx;
                     s.llm.thinking_tokens = tthink;
                     s.llm.last_response = output.text.clone();
+                }
+
+                // Auto-compact: if context is > 85% full and the setting is on,
+                // restart the server now so the *next* inference starts fresh.
+                {
+                    let s = state.read();
+                    let pct = if s.llm.context_max > 0 {
+                        ctx as f32 / s.llm.context_max as f32
+                    } else {
+                        0.0
+                    };
+                    if s.llm.auto_compact && pct >= 0.85 {
+                        drop(s);
+                        log::info!(
+                            "LLM: context {:.0}% full — auto-compact: restarting server",
+                            pct * 100.0
+                        );
+                        let model_path = state.read().llm.model_path.clone();
+                        backend.shutdown();
+                        state.write().llm.context_used = 0;
+                        backend = LlamaServerBackend::new(&model_path);
+                        state.write().llm.is_mock = !backend.is_live();
+                        let _ = output_tx.try_send(LlmOutput {
+                            text: "[ Context auto-compacted ]".to_string(),
+                            param_update: None,
+                            tokens_per_sec: 0.0,
+                            prompt_tokens: 0,
+                            completion_tokens: 0,
+                            context_used: 0,
+                            is_jam: false,
+                            thinking: None,
+                            mc_line: None,
+                        });
+                    }
                 }
 
                 if let Some(ref update) = output.param_update {

@@ -146,18 +146,22 @@ impl ImpulseApp {
             .frame(Frame::none().fill(theme::VOID).inner_margin(egui::Margin::symmetric(10.0, 6.0)))
             .show(ctx, |ui| {
                 ui.horizontal(|ui| {
-                    // Logo + model name
+                    // Logo + model dropdown
                     {
-                        let model_name = {
+                        let (cur_model, initializing) = {
                             let s = self.state.read();
-                            let path = s.llm.model_path.clone();
-                            // Extract filename without extension: "models/Bonsai-8B.gguf" → "Bonsai-8B"
-                            std::path::Path::new(&path)
-                                .file_stem()
-                                .and_then(|s| s.to_str())
-                                .unwrap_or("unknown")
-                                .to_string()
+                            (s.llm.model_path.clone(), s.llm.llm_initializing)
                         };
+                        let cur_short = std::path::Path::new(&cur_model)
+                            .file_stem()
+                            .and_then(|s| s.to_str())
+                            .unwrap_or("unknown")
+                            .to_string();
+
+                        if self.available_models.is_empty() {
+                            self.available_models = super::scan_models();
+                        }
+
                         ui.vertical(|ui| {
                             ui.label(
                                 egui::RichText::new("◆ IMPULSE INSTRUCT")
@@ -166,12 +170,35 @@ impl ImpulseApp {
                                     .monospace()
                                     .strong(),
                             );
-                            ui.label(
-                                egui::RichText::new(&model_name)
-                                    .color(theme::IRON)
-                                    .size(8.5)
-                                    .monospace(),
-                            );
+                            ui.add_enabled_ui(!initializing, |ui| {
+                                let label_color = if initializing { theme::IRON } else { theme::SMOKE };
+                                egui::ComboBox::from_id_source("model_dropdown")
+                                    .selected_text(
+                                        egui::RichText::new(&cur_short)
+                                            .color(label_color)
+                                            .size(8.5)
+                                            .monospace(),
+                                    )
+                                    .width(160.0)
+                                    .show_ui(ui, |ui: &mut egui::Ui| {
+                                        for path in &self.available_models.clone() {
+                                            let short = std::path::Path::new(path)
+                                                .file_stem()
+                                                .and_then(|s| s.to_str())
+                                                .unwrap_or(path)
+                                                .to_string();
+                                            let selected = *path == cur_model;
+                                            let text = egui::RichText::new(&short)
+                                                .monospace()
+                                                .size(9.5)
+                                                .color(if selected { theme::CHALK } else { theme::FOG });
+                                            if ui.selectable_label(selected, text).clicked() && !selected {
+                                                let _ = self.llm_tx.try_send(LlmInput::SwitchModel(path.clone()));
+                                                self.state.write().llm.llm_initializing = true;
+                                            }
+                                        }
+                                    });
+                            });
                         });
                     }
 
@@ -185,11 +212,14 @@ impl ImpulseApp {
                         let ptok         = s.llm.prompt_tokens;
                         let ctok         = s.llm.completion_tokens;
                         let tthink       = s.llm.thinking_tokens;
-                        let ctx_pct      = if s.llm.context_max > 0 {
-                            s.llm.context_used as f32 / s.llm.context_max as f32 * 100.0
+                        let ctx_used     = s.llm.context_used;
+                        let ctx_max      = s.llm.context_max;
+                        let ctx_pct      = if ctx_max > 0 {
+                            ctx_used as f32 / ctx_max as f32 * 100.0
                         } else { 0.0 };
                         let is_mock      = s.llm.is_mock;
                         let initializing = s.llm.llm_initializing;
+                        let auto_compact = s.llm.auto_compact;
                         let bpm          = s.sequencer.bpm;
                         let running      = s.sequencer.running;
 
@@ -206,8 +236,24 @@ impl ImpulseApp {
                             let inf_color = if inferring { theme::CHALK } else { theme::IRON };
                             ui.label(egui::RichText::new("●").color(inf_color).size(10.0));
                             ui.vertical(|ui| {
-                                let line1 = format!("{:.0}t/s  ctx:{:.0}%", tps, ctx_pct);
-                                ui.label(egui::RichText::new(line1).color(theme::SMOKE).size(9.0).monospace());
+                                // Context bar: color shifts red as it fills up
+                                let ctx_color = if ctx_pct < 60.0 {
+                                    theme::IRON
+                                } else if ctx_pct < 85.0 {
+                                    theme::SMOKE
+                                } else {
+                                    egui::Color32::from_rgb(220, 80, 50)
+                                };
+                                ui.horizontal(|ui| {
+                                    let tps_str = format!("{:.0}t/s", tps);
+                                    ui.label(egui::RichText::new(tps_str).color(theme::SMOKE).size(9.0).monospace());
+                                    ui.add_sized(
+                                        [44.0, 6.0],
+                                        egui::ProgressBar::new(ctx_pct / 100.0),
+                                    );
+                                    let ctx_label = format!("{}/{}", ctx_used, ctx_max);
+                                    ui.label(egui::RichText::new(ctx_label).color(ctx_color).size(8.0).monospace());
+                                });
                                 if ptok > 0 || ctok > 0 {
                                     let line2 = if tthink > 0 {
                                         format!("in:{} out:{} think:~{}", ptok, ctok, tthink)
@@ -217,6 +263,22 @@ impl ImpulseApp {
                                     ui.label(egui::RichText::new(line2).color(theme::IRON).size(8.5).monospace());
                                 }
                             });
+
+                            // CTX RESET button
+                            let reset_color = if ctx_pct >= 85.0 { egui::Color32::from_rgb(220, 80, 50) } else { theme::IRON };
+                            if ui.add(egui::Button::new(
+                                egui::RichText::new("CTX").monospace().size(8.5).color(reset_color)
+                            ).fill(egui::Color32::TRANSPARENT)).on_hover_text("Reset context window (restart server)").clicked() {
+                                let _ = self.llm_tx.try_send(LlmInput::ResetContext);
+                            }
+
+                            // Auto-compact toggle
+                            let ac_color = if auto_compact { theme::SMOKE } else { theme::IRON };
+                            if ui.add(egui::Button::new(
+                                egui::RichText::new("AUTO").monospace().size(8.5).color(ac_color)
+                            ).fill(egui::Color32::TRANSPARENT)).on_hover_text("Auto-compact: restart server when context > 85% full").clicked() {
+                                self.state.write().llm.auto_compact = !auto_compact;
+                            }
                         }
 
                         ui.add_space(8.0);

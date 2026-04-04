@@ -1,10 +1,9 @@
 // ─── ui/windows.rs ────────────────────────────────────────────────────────────
 // Floating windows: Preferences, About, System Info.
 
-use crate::llm::LlmInput;
 use crate::state::{ConversationMode, McVoiceChar, StyleVerbosity};
+use crate::ui::LOG_LEVELS;
 use crate::ui::{ImpulseApp, theme, widgets};
-use crate::ui::{LOG_LEVELS, scan_models};
 
 impl ImpulseApp {
     /// Draw all floating overlay windows (prefs, about, sysinfo).
@@ -70,30 +69,6 @@ impl ImpulseApp {
                                     .color(theme::IRON),
                             );
                         });
-                        ui.add_space(8.0);
-
-                        widgets::section_header(ui, "MODEL");
-                        if ui.small_button("scan models/").clicked() {
-                            self.available_models = scan_models();
-                        }
-                        if self.available_models.is_empty() {
-                            self.available_models = scan_models();
-                        }
-                        let cur_model = self.state.read().llm.model_path.clone();
-                        for path in &self.available_models {
-                            let short = std::path::Path::new(path)
-                                .file_name()
-                                .unwrap_or_default()
-                                .to_string_lossy();
-                            let selected = *path == cur_model;
-                            let text = egui::RichText::new(short.as_ref())
-                                .monospace()
-                                .size(9.5)
-                                .color(if selected { theme::CHALK } else { theme::FOG });
-                            if ui.selectable_label(selected, text).clicked() && !selected {
-                                let _ = self.llm_tx.try_send(LlmInput::SwitchModel(path.clone()));
-                            }
-                        }
                         ui.add_space(8.0);
 
                         widgets::section_header(ui, "INFERENCE");
