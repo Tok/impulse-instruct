@@ -48,6 +48,31 @@ It can nail acid. Everything else is a lie. Fix that.
 - [x] Proper 808 kick voice with pitch envelope (booming sub tail)
 - [ ] Amen break sampler voice — load a WAV, pitch + stretch — the only real jungle solution
 
+### LFO (global, wireable)
+
+A standalone LFO engine separate from the AN1X voice — targets any parameter
+in the synth. Think of it as a modulation matrix row, not a per-voice feature.
+
+- [ ] `LfoState` in `AppState`: up to 4 LFO slots, each with:
+      - `waveform`: Sine, Triangle, Saw, InvSaw, Square, S&H (random), Noise
+      - `rate`: 0.01–20 Hz, plus BPM-sync divisions (1/1, 1/2, 1/4, 1/8, 1/16, 1/32, dotted, triplet)
+      - `depth`: 0–1 (bipolar mod amount)
+      - `phase_offset`: 0–1 (start phase, useful for polyrhythmic LFOs)
+      - `target`: enum covering all patchable sinks (see below)
+      - `enabled`: bool
+- [ ] Patchable sinks (LFO target enum):
+      Bass: `cutoff`, `resonance`, `pitch`, `volume`, `distortion`, `sub_osc_level`
+      FX: `reverb_mix`, `delay_time`, `delay_feedback`, `bitcrush_depth`, `chorus_rate`
+      Sequencer: `bpm` (tempo wobble)
+      Drums: `kick808_pitch`, `kick808_punch` (for pumping kick effects)
+- [ ] LFO runs in `process_block()` — one tick per audio block (not per sample),
+      output stored in `DspState.lfo_values: [f32; 4]`, read by each voice's process
+- [ ] LFO sync to sequencer transport: phase resets on sequencer start
+- [ ] UI: LFO panel with rate knob, depth knob, waveform selector, target dropdown,
+      Huth color on the waveform display matching the target parameter's voice color
+- [ ] LLM can set all LFO fields via JSON schema (`lfo[0..3].rate`, `.depth`, `.target`, etc.)
+- [ ] "Slow filter sweep" / "wobble bass" / "tremolo" → LLM maps to appropriate LFO config
+
 ### FX Chain
 - [x] Reverb (basic)
 - [x] Delay
