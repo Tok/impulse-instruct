@@ -152,7 +152,7 @@ Quality ceiling is low but it fits in 2 GB VRAM. The llama-server backend is mod
 | **Bonsai-8B** | `./download-models.sh` | ~1.1 GB | ~2 GB | Default; fastest, lowest quality |
 | **Qwen3-8B Q4_K_M** | `./download-models.sh qwen3` | ~5 GB | ~7 GB | ~5× better; supports `/think` reasoning |
 | **Qwen3-14B Q4_K_M** | `./download-models.sh qwen3-14b` | ~9 GB | ~11 GB | Best musical reasoning; needs 12 GB VRAM |
-| **Gemma 4 4B Q4_K_M** | `./download-models.sh gemma4` | ~3 GB | ~5 GB | Fast; strong structured JSON output |
+| **Gemma 4 E4B Q4_K_M** | `./download-models.sh gemma4` | ~5 GB | ~7 GB | Fast; strong structured JSON output |
 | **Llama 3.1 8B Q4_K_M** | `./download-models.sh llama31` | ~5 GB | ~7 GB | Excellent JSON compliance |
 
 All models require a free HuggingFace account (`huggingface-cli login`).

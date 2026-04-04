@@ -39,9 +39,9 @@ case "$MODEL" in
     MODEL_DESC="Qwen3-14B Q4_K_M (bartowski, ~9 GB) — best musical reasoning, needs 12 GB VRAM"
     ;;
   gemma4)
-    HF_REPO="unsloth/gemma-4-4b-it-GGUF"
-    MODEL_FILE="gemma-4-4b-it-Q4_K_M.gguf"
-    MODEL_DESC="Gemma 4 4B Q4_K_M (unsloth, ~3 GB) — fast, strong structured output"
+    HF_REPO="unsloth/gemma-4-E4B-it-GGUF"
+    MODEL_FILE="gemma-4-E4B-it-Q4_K_M.gguf"
+    MODEL_DESC="Gemma 4 E4B Q4_K_M (unsloth, ~5 GB) — fast, strong structured output"
     ;;
   llama31)
     HF_REPO="bartowski/Meta-Llama-3.1-8B-Instruct-GGUF"
@@ -154,7 +154,7 @@ case "$MODEL" in
     echo "Quantisation by bartowski. See: https://huggingface.co/${HF_REPO}"
     ;;
   gemma4)
-    echo "Gemma 4 is released under the Gemma Terms of Use by Google DeepMind."
+    echo "Gemma 4 E4B is released under the Gemma Terms of Use by Google DeepMind."
     echo "Quantisation by unsloth. See: https://huggingface.co/${HF_REPO}"
     ;;
   llama31)
