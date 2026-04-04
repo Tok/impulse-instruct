@@ -257,111 +257,18 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
 
     let voices = DrumVoice::ALL;
 
-    // Step grid — draw each row
-    egui::ScrollArea::vertical().show(ui, |ui| {
-        for voice in voices {
-            // Check whether this voice has any active step anywhere in the full pattern
-            let has_active = {
-                let s = app.state.read();
-                s.sequencer
-                    .drum_patterns
-                    .get(voice)
-                    .map(|p| p.iter().any(|s| s.active))
-                    .unwrap_or(false)
-            };
-            let expanded = app.expanded_seq_voices.contains(voice);
-
-            if !has_active && !expanded {
-                // Collapsed stub: just the label as a small clickable button to expand
-                ui.horizontal(|ui| {
-                    let resp = ui.add_sized(
-                        [SEQ_LABEL_W + SEQ_VOL_W + 8.0, 13.0],
-                        egui::Button::new(
-                            egui::RichText::new(format!("+ {}", voice.label()))
-                                .color(theme::PIT)
-                                .monospace()
-                                .size(7.5),
-                        )
-                        .fill(egui::Color32::TRANSPARENT),
-                    );
-                    if resp.clicked() {
-                        app.expanded_seq_voices.insert(*voice);
-                    }
-                });
-                continue;
-            }
-
-            ui.horizontal(|ui| {
-                // Voice label
-                let label = voice.label();
-                ui.add_sized(
-                    [SEQ_LABEL_W, SEQ_LABEL_H],
-                    egui::Label::new(
-                        egui::RichText::new(label)
-                            .color(theme::SMOKE)
-                            .monospace()
-                            .size(8.5),
-                    ),
-                );
-
-                // Per-voice volume slider
-                let mut vol = voice.get_volume(&app.state.read());
-                let vol_resp = ui.add_sized(
-                    [SEQ_VOL_W, SEQ_VOL_H],
-                    egui::Slider::new(&mut vol, 0.0..=1.0)
-                        .show_value(false)
-                        .trailing_fill(true),
-                );
-                if vol_resp.changed() {
-                    let s = app.state.read().clone();
-                    *app.state.write() = voice.set_volume(s, vol);
-                    app.push_audio_params();
-                }
-
-                // Snapshot pattern for this page
-                let pattern: Vec<crate::state::Step> = {
-                    let s = app.state.read();
-                    s.sequencer
-                        .drum_patterns
-                        .get(voice)
-                        .map(|p| p[page_start..(page_start + 16).min(p.len())].to_vec())
-                        .unwrap_or_else(|| vec![crate::state::Step::default(); 16])
-                };
-
-                let mut toggled = None;
-                for i in 0..16usize {
-                    let abs = page_start + i;
-                    // Beat dividers: wider gap at beat boundaries, narrow gap every 4
-                    let beat_pos = (page_start + i) % time_sig_num;
-                    if i > 0 && beat_pos == 0 {
-                        ui.add_space(4.0); // beat boundary — wider
-                    } else if i > 0 && i % 4 == 0 {
-                        ui.add_space(2.0); // sub-group divider
-                    }
-                    let is_active = pattern.get(i).map(|s| s.active).unwrap_or(false);
-                    let is_current = abs == cursor;
-                    let vel = pattern.get(i).map(|s| s.velocity).unwrap_or(0.0);
-                    let enabled = abs < seq_steps;
-
-                    ui.add_enabled_ui(enabled, |ui| {
-                        if widgets::step_button(ui, is_active, is_current, vel, None, pad_px) {
-                            toggled = Some(abs);
-                        }
-                    });
-                }
-
-                if let Some(step) = toggled {
-                    let s = app.state.read().clone();
-                    *app.state.write() = toggle_drum_step(s, *voice, step);
-                }
-            });
+    // ── Helper closure: emit beat dividers ────────────────────────────────────
+    let beat_div = |ui: &mut egui::Ui, i: usize| {
+        let beat_pos = (page_start + i) % time_sig_num;
+        if i > 0 && beat_pos == 0 {
+            ui.add_space(4.0);
+        } else if i > 0 && i.is_multiple_of(4) {
+            ui.add_space(2.0);
         }
+    };
 
-        // Bass / Accent / Slide rows
-        ui.add_space(2.0);
-        ui.separator();
-        ui.add_space(2.0);
-
+    egui::ScrollArea::vertical().show(ui, |ui| {
+        // ── Bass rows at the top — always visible ─────────────────────────────
         let bass_page: Vec<crate::state::TB303Step> = {
             let s = app.state.read();
             let end = (page_start + 16).min(s.sequencer.bass_pattern.len());
@@ -371,7 +278,7 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         // Bass note row
         ui.horizontal(|ui| {
             ui.add_sized(
-                [80.0, 22.0],
+                [SEQ_LABEL_W + SEQ_VOL_W + 8.0, SEQ_LABEL_H],
                 egui::Label::new(
                     egui::RichText::new("BASS")
                         .color(theme::SMOKE)
@@ -381,15 +288,9 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             );
             for i in 0..16usize {
                 let abs = page_start + i;
-                let beat_pos = (page_start + i) % time_sig_num;
-                if i > 0 && beat_pos == 0 {
-                    ui.add_space(4.0);
-                } else if i > 0 && i % 4 == 0 {
-                    ui.add_space(2.0);
-                }
+                beat_div(ui, i);
                 let is_active = bass_page.get(i).map(|s| s.active).unwrap_or(false);
                 let is_current = abs == cursor;
-                // Dot color only for active steps — inactive steps are plain chrome
                 let note_col = if is_active {
                     bass_page.get(i).map(|s| theme::note_color(s.note))
                 } else {
@@ -416,10 +317,10 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             }
         });
 
-        // Accent row — small A buttons, lit when accent=true
+        // Accent row
         ui.horizontal(|ui| {
             ui.add_sized(
-                [80.0, 14.0],
+                [SEQ_LABEL_W + SEQ_VOL_W + 8.0, 14.0],
                 egui::Label::new(
                     egui::RichText::new("ACCENT")
                         .color(theme::IRON)
@@ -429,12 +330,7 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             );
             for i in 0..16usize {
                 let abs = page_start + i;
-                let beat_pos = (page_start + i) % time_sig_num;
-                if i > 0 && beat_pos == 0 {
-                    ui.add_space(4.0);
-                } else if i > 0 && i % 4 == 0 {
-                    ui.add_space(2.0);
-                }
+                beat_div(ui, i);
                 let is_accent = bass_page.get(i).map(|s| s.accent).unwrap_or(false);
                 ui.add_enabled_ui(abs < seq_steps, |ui| {
                     let color = if is_accent { theme::CHALK } else { theme::PIT };
@@ -453,10 +349,10 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             }
         });
 
-        // Slide row — small S buttons, lit when slide=true
+        // Slide row
         ui.horizontal(|ui| {
             ui.add_sized(
-                [80.0, 14.0],
+                [SEQ_LABEL_W + SEQ_VOL_W + 8.0, 14.0],
                 egui::Label::new(
                     egui::RichText::new("SLIDE")
                         .color(theme::IRON)
@@ -466,12 +362,7 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             );
             for i in 0..16usize {
                 let abs = page_start + i;
-                let beat_pos = (page_start + i) % time_sig_num;
-                if i > 0 && beat_pos == 0 {
-                    ui.add_space(4.0);
-                } else if i > 0 && i % 4 == 0 {
-                    ui.add_space(2.0);
-                }
+                beat_div(ui, i);
                 let is_slide = bass_page.get(i).map(|s| s.slide).unwrap_or(false);
                 ui.add_enabled_ui(abs < seq_steps, |ui| {
                     let color = if is_slide { theme::CHALK } else { theme::PIT };
@@ -489,5 +380,122 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                 });
             }
         });
+
+        ui.add_space(2.0);
+        ui.separator();
+        ui.add_space(2.0);
+
+        // ── Drum rows ─────────────────────────────────────────────────────────
+        // Inactive + not-expanded voices → one compact horizontal chip strip.
+        let collapsed: Vec<&DrumVoice> = voices
+            .iter()
+            .filter(|v| {
+                let has_active = app
+                    .state
+                    .read()
+                    .sequencer
+                    .drum_patterns
+                    .get(v)
+                    .map(|p| p.iter().any(|s| s.active))
+                    .unwrap_or(false);
+                !has_active && !app.expanded_seq_voices.contains(v)
+            })
+            .collect();
+
+        if !collapsed.is_empty() {
+            ui.horizontal_wrapped(|ui| {
+                ui.label(
+                    egui::RichText::new("+ ")
+                        .color(theme::PIT)
+                        .monospace()
+                        .size(7.5),
+                );
+                for voice in &collapsed {
+                    if ui
+                        .add(
+                            egui::Button::new(
+                                egui::RichText::new(voice.label())
+                                    .color(theme::PIT)
+                                    .monospace()
+                                    .size(7.5),
+                            )
+                            .fill(egui::Color32::TRANSPARENT)
+                            .min_size(egui::vec2(0.0, 13.0)),
+                        )
+                        .clicked()
+                    {
+                        app.expanded_seq_voices.insert(**voice);
+                    }
+                }
+            });
+        }
+
+        // Active / expanded drum rows
+        for voice in voices {
+            let has_active = {
+                let s = app.state.read();
+                s.sequencer
+                    .drum_patterns
+                    .get(voice)
+                    .map(|p| p.iter().any(|s| s.active))
+                    .unwrap_or(false)
+            };
+            if !has_active && !app.expanded_seq_voices.contains(voice) {
+                continue;
+            }
+
+            ui.horizontal(|ui| {
+                ui.add_sized(
+                    [SEQ_LABEL_W, SEQ_LABEL_H],
+                    egui::Label::new(
+                        egui::RichText::new(voice.label())
+                            .color(theme::SMOKE)
+                            .monospace()
+                            .size(8.5),
+                    ),
+                );
+
+                let mut vol = voice.get_volume(&app.state.read());
+                let vol_resp = ui.add_sized(
+                    [SEQ_VOL_W, SEQ_VOL_H],
+                    egui::Slider::new(&mut vol, 0.0..=1.0)
+                        .show_value(false)
+                        .trailing_fill(true),
+                );
+                if vol_resp.changed() {
+                    let s = app.state.read().clone();
+                    *app.state.write() = voice.set_volume(s, vol);
+                    app.push_audio_params();
+                }
+
+                let pattern: Vec<crate::state::Step> = {
+                    let s = app.state.read();
+                    s.sequencer
+                        .drum_patterns
+                        .get(voice)
+                        .map(|p| p[page_start..(page_start + 16).min(p.len())].to_vec())
+                        .unwrap_or_else(|| vec![crate::state::Step::default(); 16])
+                };
+
+                let mut toggled = None;
+                for i in 0..16usize {
+                    let abs = page_start + i;
+                    beat_div(ui, i);
+                    let is_active = pattern.get(i).map(|s| s.active).unwrap_or(false);
+                    let is_current = abs == cursor;
+                    let vel = pattern.get(i).map(|s| s.velocity).unwrap_or(0.0);
+                    ui.add_enabled_ui(abs < seq_steps, |ui| {
+                        if widgets::step_button(ui, is_active, is_current, vel, None, pad_px) {
+                            toggled = Some(abs);
+                        }
+                    });
+                }
+
+                if let Some(step) = toggled {
+                    let s = app.state.read().clone();
+                    *app.state.write() = toggle_drum_step(s, *voice, step);
+                }
+            });
+        }
     });
 }
