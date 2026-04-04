@@ -22,19 +22,30 @@
 #   ./download-models.sh       (downloads models/Bonsai-8B.gguf)
 #
 # Usage:
-#   ./run-llm-tests.sh                              # Bonsai, full suite
-#   ./run-llm-tests.sh models/Qwen3-8B.gguf         # different model
-#   ./run-llm-tests.sh models/Bonsai-8B.gguf darker # model + test filter
-#   ./run-llm-tests.sh "" darker                    # default model + filter
+#   ./run-llm-tests.sh                                    # Bonsai, full suite
+#   ./run-llm-tests.sh models/Qwen3-8B.gguf               # different model
+#   ./run-llm-tests.sh models/Bonsai-8B.gguf darker       # model + test filter
+#   ./run-llm-tests.sh "" darker                          # default model + filter
+#   ./run-llm-tests.sh --verbose                          # full JSON, no truncation
+#   ./run-llm-tests.sh models/Qwen3-8B.gguf "" --verbose  # model + verbose
 # ──────────────────────────────────────────────────────────────────────────────
 set -euo pipefail
 cd "$(dirname "$0")"
 
-# ── Args: optional MODEL path, optional test FILTER ───────────────────────────
-# First arg: model path (defaults to Bonsai). If empty string "", use default.
+# ── Args ──────────────────────────────────────────────────────────────────────
+# First arg:  model path (defaults to Bonsai). Pass "" to use default.
 # Second arg: test name filter (passed through to cargo test).
+# Flags:      --verbose   set LLM_SUITE_VERBOSE=1 (print full JSON, no truncation)
 MODEL="${1:-}"
 FILTER="${2:-}"
+
+# Scan for --verbose anywhere in the args and export the env var.
+for arg in "$@"; do
+  if [[ "$arg" == "--verbose" ]]; then
+    export LLM_SUITE_VERBOSE=1
+    echo "→ Verbose mode: full JSON output (no truncation)"
+  fi
+done
 
 if [[ -z "$MODEL" ]]; then
   MODEL="models/Bonsai-8B.gguf"

@@ -80,6 +80,16 @@ fn setup() -> Option<(LlamaServerBackend, String)> {
 const THINK_ON: &str = "\x1b[2;3m";
 const THINK_OFF: &str = "\x1b[0m";
 
+/// Truncate `s` to at most `max` chars, appending "…" if cut.
+/// When `LLM_SUITE_VERBOSE=1` is set, returns the full string untruncated.
+fn trunc(s: &str, max: usize) -> String {
+    if std::env::var("LLM_SUITE_VERBOSE").is_ok_and(|v| v == "1") || s.len() <= max {
+        s.to_string()
+    } else {
+        format!("{}…", &s[..s.floor_char_boundary(max)])
+    }
+}
+
 fn infer_json(
     backend: &mut LlamaServerBackend,
     system: &str,
@@ -91,18 +101,21 @@ fn infer_json(
             // Print thinking tokens in dim+italic so they're visible but clearly
             // subordinate to the test result line.
             if let Some(ref think) = out.thinking {
-                eprintln!("{THINK_ON}  <think> {think} </think>{THINK_OFF}");
+                eprintln!(
+                    "{THINK_ON}  <think> {} </think>{THINK_OFF}",
+                    trunc(think, 300)
+                );
             }
             if out.param_update.is_none() {
                 eprintln!(
-                    "[llm-suite] infer OK but param_update=None (text: {:?})",
-                    out.text
+                    "[llm-suite] infer OK but param_update=None (text: {})",
+                    trunc(&out.text, 200)
                 );
             }
             out.param_update
         }
         Err(e) => {
-            eprintln!("[llm-suite] infer error: {e}");
+            eprintln!("[llm-suite] infer error: {}", trunc(&e.to_string(), 300));
             None
         }
     }
