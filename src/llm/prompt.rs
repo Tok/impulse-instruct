@@ -233,6 +233,18 @@ LFO (global wireable modulators, 4 slots indexed 0–3):
                        "ReverbMix" | "DelayTime" | "DelayFeedback" | "ChorusMix" | "ChorusRate"
                        "Kick808Pitch" | "None"
 
+HOOVER LEAD (supersaw + HP filter sweep):
+  hoover.enabled        — true/false
+  hoover.filter_start   — HP cutoff start position (0=200Hz, 1=8kHz; 0.8 is classic)
+  hoover.sweep_time     — filter sweep duration 0–1 (maps to 0.1–4 s; 0.13=~550ms)
+  hoover.resonance      — resonance 0–1 (0.76 = canonical Hoover character)
+  hoover.detune         — supersaw spread (0=mono, 0.42=lush shimmer)
+  hoover.voices         — unison count 2–7 (5 is standard)
+  hoover.volume         — 0–1
+  hoover.hoover_steps   — 16-element bool array: which steps trigger the Hoover
+  hoover.hoover_notes   — 16-element int array: MIDI note per step
+  LLM triggers: "add a hoover", "rave lead", "dominator", "hardcore lead", "early rave"
+
 ═══ RHYTHM BASICS ═══
 
 Minimal 4/4 foundation (indices 0–15):
@@ -495,6 +507,24 @@ pub fn param_json_schema() -> serde_json::Value {
                     "volume":  { "type": "number", "minimum": 0.0, "maximum": 1.0 },
                     "color":   { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "0=white, 0.5=pink, 1=brown" },
                     "cutoff":  { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "LP filter cutoff, 0=200Hz, 1=20kHz" }
+                },
+                "additionalProperties": false
+            },
+            "hoover": {
+                "type": "object",
+                "description": "Hoover lead voice — supersaw + HP filter sweep. LLM triggers: 'add a hoover', 'rave lead', 'dominator'.",
+                "properties": {
+                    "enabled":          { "type": "boolean" },
+                    "filter_start":     { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "HP filter starting cutoff (0=200Hz, 1=8kHz). High values = thin bright transient." },
+                    "sweep_time":       { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "Filter sweep duration 0-1 (maps to 0.1-4.0 s)" },
+                    "resonance":        { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "Filter resonance — high values create the Hoover character" },
+                    "detune":           { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "Supersaw detune spread (0=no shimmer, 1=wide)" },
+                    "voices":           { "type": "integer", "minimum": 2, "maximum": 7, "description": "Supersaw unison voice count" },
+                    "volume":           { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+                    "pitch_lfo_rate":   { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "Wail LFO rate 0-1 (maps to 0-8 Hz)" },
+                    "pitch_lfo_depth":  { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "Wail LFO depth 0-1 (maps to 0-2 semitones)" },
+                    "hoover_steps":     bool_array,
+                    "hoover_notes":     { "type": "array", "items": { "type": "integer", "minimum": 0, "maximum": 127 }, "maxItems": 64, "description": "MIDI note per hoover step" }
                 },
                 "additionalProperties": false
             },

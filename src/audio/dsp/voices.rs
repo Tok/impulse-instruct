@@ -363,3 +363,121 @@ impl NoiseVoice {
         self.lp_state * volume
     }
 }
+
+// ─── Hoover Lead Voice ────────────────────────────────────────────────────────
+// Supersaw oscillator into a highpass filter that sweeps down from a high
+// starting cutoff. Heavy resonance creates the "vacuum cleaner" sweep.
+// Named after Human Resource "Dominator" (1991).
+
+#[derive(Clone)]
+pub(super) struct HooverVoice {
+    phase: f32,
+    unison_phases: [f32; 6],
+    freq: f32,
+    gate: bool,
+    amp_env: f32,  // VCA envelope
+    filt_env: f32, // Filter sweep: 1.0 = high HP cutoff, decays to 0.0
+    svf_low: f32,
+    svf_band: f32,
+    lfo_phase: f32,
+}
+
+impl HooverVoice {
+    pub(super) fn new() -> Self {
+        Self {
+            phase: 0.0,
+            unison_phases: [0.0; 6],
+            freq: 220.0,
+            gate: false,
+            amp_env: 0.0,
+            filt_env: 0.0,
+            svf_low: 0.0,
+            svf_band: 0.0,
+            lfo_phase: 0.0,
+        }
+    }
+
+    pub(super) fn trigger(&mut self, note: u8) {
+        self.freq = super::midi_to_hz(note);
+        self.gate = true;
+        self.amp_env = 0.0; // will rise on fast attack
+        self.filt_env = 1.0; // start at max HP cutoff
+        self.svf_low = 0.0;
+        self.svf_band = 0.0;
+    }
+
+    pub(super) fn gate_off(&mut self) {
+        self.gate = false;
+    }
+
+    pub(super) fn process(&mut self, sr: f32, p: &super::AudioParams) -> f32 {
+        if self.amp_env < 1e-5 && !self.gate {
+            return 0.0;
+        }
+
+        // Amplitude envelope: fast attack (~5 ms), release (~80 ms)
+        if self.gate {
+            let attack_coeff = (-1.0_f32 / (0.005 * sr)).exp();
+            self.amp_env = 1.0 - (1.0 - self.amp_env) * attack_coeff;
+        } else {
+            let release_coeff = (-1.0_f32 / (0.08 * sr)).exp();
+            self.amp_env *= release_coeff;
+        }
+
+        // Filter sweep: filt_env decays from 1.0 → 0.0 over sweep_time
+        let sweep_coeff = (-1.0_f32 / (p.hoover_sweep_time * sr)).exp();
+        if self.filt_env > 1e-5 {
+            self.filt_env *= sweep_coeff;
+        } else {
+            self.filt_env = 0.0;
+        }
+
+        // Pitch LFO (sine, adds the wailing character)
+        self.lfo_phase += p.hoover_pitch_lfo_rate / sr;
+        if self.lfo_phase >= 1.0 {
+            self.lfo_phase -= 1.0;
+        }
+        let lfo = (self.lfo_phase * std::f32::consts::TAU).sin();
+        let freq_mod = 2.0_f32.powf(lfo * p.hoover_pitch_lfo_depth / 12.0);
+        let eff_freq = self.freq * freq_mod;
+
+        // Supersaw oscillator (same algorithm as Bass303)
+        let n = p.hoover_voices.clamp(2, 7) as usize;
+        let spread = p.hoover_detune; // semitone spread
+        self.phase += eff_freq / sr;
+        if self.phase >= 1.0 {
+            self.phase -= 1.0;
+        }
+        let mut osc_sum = self.phase * 2.0 - 1.0;
+        for i in 0..(n - 1) {
+            let t = if n > 2 {
+                i as f32 / (n as f32 - 2.0)
+            } else {
+                0.5
+            };
+            let detune_st = (t - 0.5) * spread;
+            let ratio = 2.0_f32.powf(detune_st / 12.0);
+            self.unison_phases[i] += eff_freq * ratio / sr;
+            if self.unison_phases[i] >= 1.0 {
+                self.unison_phases[i] -= 1.0;
+            }
+            osc_sum += self.unison_phases[i] * 2.0 - 1.0;
+        }
+        let osc = osc_sum / n as f32 * 1.4;
+
+        // Chamberlin SVF — highpass output
+        // HP cutoff sweeps from filter_start (high) down to near-zero as filt_env decays.
+        let hp_norm = (p.hoover_filter_start * self.filt_env).clamp(0.0, 1.0);
+        let hp_hz = (200.0_f32 * 40.0_f32.powf(hp_norm)).min(sr * 0.45);
+        let f = (std::f32::consts::PI * hp_hz / sr).clamp(0.001, 0.49);
+        // q = damping; low q = high resonance. 0.92 gives q_min ≈ 0.08 at full resonance.
+        let q = 1.0 - p.hoover_resonance * 0.92;
+        let high = osc - self.svf_low - q * self.svf_band;
+        let band_new = f * high + self.svf_band;
+        let low_new = f * band_new + self.svf_low;
+        self.svf_band = band_new;
+        self.svf_low = low_new;
+
+        high * self.amp_env * p.hoover_volume
+    }
+}

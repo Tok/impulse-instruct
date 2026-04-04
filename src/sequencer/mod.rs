@@ -20,6 +20,10 @@ pub enum TriggerEvent {
         gate_samples: u32, // reserved for gate-off timing
     },
     BassGateOff,
+    HooverTrigger {
+        note: u8,
+    },
+    HooverGateOff,
 }
 
 // ─── Clock state (audio-thread local, not in shared AppState) ─────────────────
@@ -28,7 +32,8 @@ pub enum TriggerEvent {
 pub struct ClockState {
     pub sample_accumulator: f64, // fractional samples since last step
     pub current_step: usize,
-    pub gate_counter: u32, // samples remaining in bass gate
+    pub gate_counter: u32,        // samples remaining in bass gate
+    pub gate_counter_hoover: u32, // samples remaining in hoover gate
 }
 
 impl Default for ClockState {
@@ -37,6 +42,7 @@ impl Default for ClockState {
             sample_accumulator: 0.0,
             current_step: 0,
             gate_counter: 0,
+            gate_counter_hoover: 0,
         }
     }
 }
@@ -66,6 +72,7 @@ pub fn advance_clock(
     let mut acc = clock.sample_accumulator + block_size as f64;
     let mut step = clock.current_step;
     let mut gate_counter = clock.gate_counter;
+    let mut gate_counter_hoover = clock.gate_counter_hoover;
 
     // Handle gate-off for bass
     if gate_counter > 0 {
@@ -74,6 +81,16 @@ pub fn advance_clock(
             gate_counter = 0;
         } else {
             gate_counter -= block_size as u32;
+        }
+    }
+
+    // Handle gate-off for hoover
+    if gate_counter_hoover > 0 {
+        if block_size as u32 >= gate_counter_hoover {
+            events.push(TriggerEvent::HooverGateOff);
+            gate_counter_hoover = 0;
+        } else {
+            gate_counter_hoover -= block_size as u32;
         }
     }
 
@@ -122,12 +139,21 @@ pub fn advance_clock(
                 gate_samples,
             });
         }
+
+        // Hoover trigger
+        let hs = seq.hoover_pattern.get(step).copied().unwrap_or_default();
+        if hs.active {
+            let gate_samples = (sps * 0.75) as u32; // 3/4 step gate length
+            gate_counter_hoover = gate_samples;
+            events.push(TriggerEvent::HooverTrigger { note: hs.note });
+        }
     }
 
     let new_clock = ClockState {
         sample_accumulator: acc,
         current_step: step,
         gate_counter,
+        gate_counter_hoover,
     };
     (new_clock, events)
 }

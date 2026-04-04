@@ -93,6 +93,7 @@ enum InstrumentKind {
     AcidBass,   // draw_bass()
     DrumKit808, // draw_kit_a()
     DrumKit909, // draw_kit_b()
+    HooverLead, // draw_hoover()
 }
 
 struct InstrumentSlot {
@@ -237,6 +238,10 @@ impl ImpulseApp {
                 InstrumentSlot {
                     label: "DRUM KIT B",
                     kind: InstrumentKind::DrumKit909,
+                },
+                InstrumentSlot {
+                    label: "HOOVER",
+                    kind: InstrumentKind::HooverLead,
                 },
             ],
             api_port,
@@ -587,6 +592,7 @@ impl eframe::App for ImpulseApp {
                         InstrumentKind::AcidBass => panels::draw_bass(self, ui),
                         InstrumentKind::DrumKit808 => panels::draw_kit_a(self, ui),
                         InstrumentKind::DrumKit909 => panels::draw_kit_b(self, ui),
+                        InstrumentKind::HooverLead => panels::draw_hoover(self, ui),
                     }
                 }
                 Panel::Fx => panels::draw_fx(self, ui),

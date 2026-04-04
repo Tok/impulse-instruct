@@ -139,6 +139,16 @@ pub struct AudioParams {
     pub noise_voice_volume: f32,
     pub noise_voice_color: f32,
     pub noise_voice_cutoff: f32,
+    // Hoover lead
+    pub hoover_enabled: bool,
+    pub hoover_filter_start: f32,
+    pub hoover_sweep_time: f32,
+    pub hoover_resonance: f32,
+    pub hoover_detune: f32,
+    pub hoover_voices: u8,
+    pub hoover_pitch_lfo_rate: f32,
+    pub hoover_pitch_lfo_depth: f32,
+    pub hoover_volume: f32,
 }
 
 impl AudioParams {
@@ -272,6 +282,15 @@ impl AudioParams {
             noise_voice_volume: s.noise_voice.volume,
             noise_voice_color: s.noise_voice.color,
             noise_voice_cutoff: s.noise_voice.cutoff,
+            hoover_enabled: s.hoover.enabled,
+            hoover_filter_start: s.hoover.filter_start,
+            hoover_sweep_time: s.hoover.sweep_time.clamp(0.1, 4.0),
+            hoover_resonance: s.hoover.resonance,
+            hoover_detune: s.hoover.detune,
+            hoover_voices: s.hoover.voices,
+            hoover_pitch_lfo_rate: s.hoover.pitch_lfo_rate, // Hz, stored directly
+            hoover_pitch_lfo_depth: s.hoover.pitch_lfo_depth, // semitones, stored directly
+            hoover_volume: s.hoover.volume,
         }
     }
 }
@@ -503,6 +522,7 @@ pub struct DspState {
     ring_mod_phase: f32,
     eq: EqBands,
     noise_voice: NoiseVoice,
+    hoover: HooverVoice,
     // LFO state
     lfo_phases: [f32; 4],
     lfo_sh_held: [f32; 4],
@@ -543,6 +563,7 @@ impl DspState {
             bitcrush_held: 0.0,
             bitcrush_counter: 0,
             noise_voice: NoiseVoice::new(0x4015_EB3D),
+            hoover: HooverVoice::new(),
             lfo_phases: [0.0; 4],
             lfo_sh_held: [0.0; 4],
             lfo_noise: NoiseGen::new(0xCAFE_BABE),
@@ -585,6 +606,8 @@ impl DspState {
                 self.bass.trigger(*note, *accent, *slide);
             }
             BassGateOff => self.bass.gate_off(),
+            HooverTrigger { note } => self.hoover.trigger(*note),
+            HooverGateOff => self.hoover.gate_off(),
         }
     }
 
@@ -718,8 +741,13 @@ impl DspState {
             } else {
                 0.0
             };
+            let hoover_out = if p.hoover_enabled {
+                self.hoover.process(sr, &p)
+            } else {
+                0.0
+            };
 
-            // Scale mix to prevent clipping — summing 14 voices without gain staging
+            // Scale mix to prevent clipping — summing voices without gain staging
             // causes hard clipping even with moderate individual volumes
             let dry = (bass_out
                 + k808
@@ -735,8 +763,9 @@ impl DspState {
                 + hh909o
                 + clap
                 + rim
-                + noise_out)
-                * 0.65;
+                + noise_out
+                + hoover_out)
+                * 0.62;
 
             // Waveshaper — pre-FX insert, adds harmonic saturation before time-based FX
             let dry = if p.waveshaper_mix > 0.001 {
