@@ -479,6 +479,7 @@ pub struct LlmState {
     pub tts_randomise: bool,            // ±10% pitch/speed jitter per utterance
     pub tts_reverb_mix: f32,            // 0.0–1.0 wet reverb on TTS audio (default 0.3)
     pub tts_bitcrush: f32,              // 0.0–1.0 bitcrush depth on TTS audio (0 = off)
+    pub tts_pitch_snap: bool,           // snap TTS voice to nearest in-key note (T-Pain effect)
     pub style_verbosity: StyleVerbosity, // Brief = ~50 token brief, Full = ~150 token description
     pub auto_lock_on_touch: bool,       // if true, touching a knob locks it to user-only control
     pub auto_compact: bool,             // restart server automatically when context > 85% full
@@ -518,6 +519,7 @@ impl Default for LlmState {
             tts_randomise: false,
             tts_reverb_mix: 0.3,
             tts_bitcrush: 0.0,
+            tts_pitch_snap: false,
             style_verbosity: StyleVerbosity::Full,
             auto_lock_on_touch: false,
             auto_compact: true,

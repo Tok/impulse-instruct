@@ -93,7 +93,8 @@ pub fn speak(
 // ─── FX path: render → WAV → reverb/bitcrush → audio ring buffer ─────────────
 
 /// Like `speak()` but routes processed audio through the main audio ring buffer.
-/// When `reverb_mix` and `bitcrush` are both 0.0 this falls back to `speak()`.
+/// When all FX are inactive this falls back to `speak()` (lower latency).
+/// `pitch_snap` shifts the rendered voice to the nearest note in `root_note`/`scale`.
 #[allow(clippy::too_many_arguments)]
 pub fn speak_fx(
     text: &str,
@@ -105,10 +106,13 @@ pub fn speak_fx(
     randomise: bool,
     reverb_mix: f32,
     bitcrush: f32,
+    pitch_snap: bool,
+    root_note: u8,
+    scale: crate::state::Scale,
     tts_tx: &Arc<Mutex<Producer<f32>>>,
 ) {
     // Fall back to direct playback when no FX are active.
-    if reverb_mix <= 0.01 && bitcrush <= 0.01 {
+    if reverb_mix <= 0.01 && bitcrush <= 0.01 && !pitch_snap {
         speak(text, mode, pitch, speed, amplitude, voice_char, randomise);
         return;
     }
@@ -188,6 +192,13 @@ pub fn speak_fx(
 
     // Decode WAV and apply FX.
     if let Some(mut samples) = read_wav_f32(&tmp_path) {
+        // Pitch-snap: shift voice to nearest in-key note (T-Pain / jungle MC effect).
+        if pitch_snap && let Some(hz) = detect_pitch_hz(&samples, 44100.0) {
+            let detected_midi = (12.0 * (hz / 440.0).log2() + 69.0).round() as u8;
+            let snapped_midi = crate::state::snap_to_scale(detected_midi, root_note, scale);
+            let shift = snapped_midi as f32 - detected_midi as f32;
+            samples = resample_pitch_shift(&samples, shift);
+        }
         tts_apply_reverb(&mut samples, reverb_mix);
         if bitcrush > 0.01 {
             tts_apply_bitcrush(&mut samples, bitcrush);
@@ -308,4 +319,66 @@ fn tts_apply_bitcrush(samples: &mut [f32], amount: f32) {
     for s in samples.iter_mut() {
         *s = (*s * levels).round() / levels;
     }
+}
+
+/// Detect the dominant fundamental frequency (Hz) of `samples` at `sample_rate` Hz.
+/// Uses normalised autocorrelation over a 4096-sample window from the middle of the
+/// signal. Detects in the 50–500 Hz speech range. Returns `None` for silence or
+/// clearly unpitched signals.
+fn detect_pitch_hz(samples: &[f32], sample_rate: f32) -> Option<f32> {
+    const WINDOW: usize = 4096;
+    if samples.len() < WINDOW {
+        return None;
+    }
+    // Start a quarter of the way in to skip any leading silence.
+    let start = (samples.len() / 4).min(samples.len() - WINDOW);
+    let w = &samples[start..start + WINDOW];
+
+    let zero: f32 = w.iter().map(|s| s * s).sum();
+    if zero < 1e-6 {
+        return None; // silence
+    }
+
+    let min_lag = (sample_rate / 500.0) as usize; // 500 Hz max
+    let max_lag = (sample_rate / 50.0) as usize; // 50 Hz min
+
+    let mut best_lag = 0usize;
+    let mut best_corr = 0.0_f32;
+
+    for lag in min_lag..=max_lag.min(WINDOW / 2) {
+        let corr: f32 = w[..WINDOW - lag]
+            .iter()
+            .zip(&w[lag..])
+            .map(|(a, b)| a * b)
+            .sum::<f32>()
+            / zero;
+        if corr > best_corr {
+            best_corr = corr;
+            best_lag = lag;
+        }
+    }
+
+    if best_corr < 0.25 || best_lag == 0 {
+        return None; // no clear fundamental
+    }
+
+    Some(sample_rate / best_lag as f32)
+}
+
+/// Resample `samples` to shift pitch by `semitones` using linear interpolation.
+/// Positive = shift up, negative = shift down. Duration changes slightly (shorter
+/// when shifting up) — acceptable for short TTS phrases.
+fn resample_pitch_shift(samples: &[f32], semitones: f32) -> Vec<f32> {
+    let ratio = 2.0_f32.powf(semitones / 12.0);
+    let new_len = (samples.len() as f32 / ratio) as usize;
+    let mut out = Vec::with_capacity(new_len);
+    for i in 0..new_len {
+        let src = i as f32 * ratio;
+        let idx = src as usize;
+        let frac = src - idx as f32;
+        let a = samples.get(idx).copied().unwrap_or(0.0);
+        let b = samples.get(idx + 1).copied().unwrap_or(0.0);
+        out.push(a + (b - a) * frac);
+    }
+    out
 }

@@ -314,6 +314,27 @@ impl ImpulseApp {
                                     self.state.write().llm.tts_bitcrush = v;
                                 }
                             });
+                            ui.horizontal(|ui| {
+                                ui.label(
+                                    egui::RichText::new("Pitch snap")
+                                        .monospace()
+                                        .size(9.5)
+                                        .color(theme::FOG),
+                                );
+                                ui.with_layout(
+                                    egui::Layout::right_to_left(egui::Align::Center),
+                                    |ui| {
+                                        let mut ps = self.state.read().llm.tts_pitch_snap;
+                                        if widgets::toggle_button(
+                                            ui,
+                                            if ps { "ON" } else { "OFF" },
+                                            &mut ps,
+                                        ) {
+                                            self.state.write().llm.tts_pitch_snap = ps;
+                                        }
+                                    },
+                                );
+                            });
                         }
                         ui.horizontal(|ui| {
                             ui.label(

@@ -890,6 +890,9 @@ pub fn run_llm_loop(
                         randomise,
                         rev_mix,
                         bitcrush,
+                        pitch_snap,
+                        root_note,
+                        tts_scale,
                     ) = {
                         let s = state.read();
                         (
@@ -902,6 +905,9 @@ pub fn run_llm_loop(
                             s.llm.tts_randomise,
                             s.llm.tts_reverb_mix,
                             s.llm.tts_bitcrush,
+                            s.llm.tts_pitch_snap,
+                            s.sequencer.root_note,
+                            s.sequencer.scale,
                         )
                     };
                     let tts_mode = matches!(mode, ConversationMode::Mc | ConversationMode::Dj);
@@ -918,6 +924,9 @@ pub fn run_llm_loop(
                             randomise,
                             rev_mix,
                             bitcrush,
+                            pitch_snap,
+                            root_note,
+                            tts_scale,
                             &tts_tx,
                         );
                     }
