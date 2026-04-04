@@ -1,7 +1,7 @@
 // ─── ui/panels/lfo.rs ─────────────────────────────────────────────────────────
 // Global LFO panel — 4 wireable LFOs.
 
-use crate::state::{LfoSlot, LfoTarget, LfoWaveform};
+use crate::state::{FreeEg, LfoSlot, LfoTarget, LfoWaveform};
 use crate::ui::{ImpulseApp, theme, widgets};
 
 const TARGET_LABELS: &[(&str, LfoTarget)] = &[
@@ -166,4 +166,141 @@ pub fn draw_lfo(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         .monospace()
         .size(8.5),
     );
+
+    // ── Free EG ──────────────────────────────────────────────────────────────
+    ui.add_space(10.0);
+    widgets::section_header(ui, "FREE EG");
+
+    let eg = app.state.read().free_eg.clone();
+
+    // Enable + loop toggle row
+    ui.horizontal(|ui| {
+        let mut enabled = eg.enabled;
+        if widgets::toggle_button(ui, if enabled { "ON" } else { "OFF" }, &mut enabled) {
+            app.state.write().free_eg.enabled = enabled;
+        }
+        ui.add_space(8.0);
+        let mut looping = eg.loop_mode;
+        if widgets::toggle_button(ui, if looping { "LOOP" } else { "1-SHOT" }, &mut looping) {
+            app.state.write().free_eg.loop_mode = looping;
+        }
+        ui.add_space(8.0);
+        // Target cycle button
+        let tgt_label = target_label(&eg.target);
+        if ui.small_button(format!("→ {tgt_label}")).clicked() {
+            app.state.write().free_eg.target = next_target(&eg.target);
+        }
+    });
+
+    // Period + depth sliders
+    ui.horizontal(|ui| {
+        ui.label(
+            egui::RichText::new("PERIOD")
+                .monospace()
+                .size(8.5)
+                .color(theme::FOG),
+        );
+        let mut period = eg.period;
+        if ui
+            .add(
+                egui::Slider::new(&mut period, 0.0..=1.0)
+                    .show_value(false)
+                    .trailing_fill(true),
+            )
+            .changed()
+        {
+            app.state.write().free_eg.period = period;
+        }
+        // Show actual seconds
+        let secs = 0.5 * 64.0_f32.powf(eg.period);
+        ui.label(
+            egui::RichText::new(format!("{:.1}s", secs))
+                .monospace()
+                .size(8.0)
+                .color(theme::IRON),
+        );
+    });
+    ui.horizontal(|ui| {
+        ui.label(
+            egui::RichText::new("DEPTH ")
+                .monospace()
+                .size(8.5)
+                .color(theme::FOG),
+        );
+        let mut depth = eg.depth;
+        if ui
+            .add(
+                egui::Slider::new(&mut depth, 0.0..=1.0)
+                    .show_value(false)
+                    .trailing_fill(true),
+            )
+            .changed()
+        {
+            app.state.write().free_eg.depth = depth;
+        }
+    });
+
+    // 8-step drawable bar graph
+    ui.add_space(4.0);
+    ui.label(
+        egui::RichText::new("SHAPE  (drag bars)")
+            .monospace()
+            .size(8.0)
+            .color(theme::IRON),
+    );
+    ui.horizontal(|ui| {
+        let bar_w = 14.0_f32;
+        let bar_max_h = 36.0_f32;
+        let mut changed_idx: Option<(usize, f32)> = None;
+        for i in 0..8usize {
+            let val = eg.values[i];
+            let (rect, resp) =
+                ui.allocate_exact_size(egui::vec2(bar_w, bar_max_h + 4.0), egui::Sense::drag());
+            if ui.is_rect_visible(rect) {
+                let fill_h = bar_max_h * val;
+                let bar_rect = egui::Rect::from_min_size(
+                    egui::pos2(rect.min.x + 1.0, rect.max.y - 4.0 - fill_h),
+                    egui::vec2(bar_w - 2.0, fill_h.max(1.0)),
+                );
+                let col = if eg.enabled {
+                    egui::Color32::from_gray(90)
+                } else {
+                    egui::Color32::from_gray(40)
+                };
+                ui.painter()
+                    .rect_filled(bar_rect, egui::Rounding::ZERO, col);
+                // Track outline
+                ui.painter().rect_stroke(
+                    egui::Rect::from_min_size(
+                        egui::pos2(rect.min.x + 1.0, rect.max.y - 4.0 - bar_max_h),
+                        egui::vec2(bar_w - 2.0, bar_max_h),
+                    ),
+                    egui::Rounding::ZERO,
+                    egui::Stroke::new(1.0, egui::Color32::from_gray(30)),
+                );
+            }
+            if resp.dragged() {
+                let delta = -resp.drag_delta().y / bar_max_h;
+                let new_val = (val + delta).clamp(0.0, 1.0);
+                changed_idx = Some((i, new_val));
+            }
+        }
+        if let Some((idx, v)) = changed_idx {
+            app.state.write().free_eg.values[idx] = v;
+            app.push_audio_params();
+        }
+    });
+
+    ui.add_space(4.0);
+    ui.label(
+        egui::RichText::new("Draw any shape. Period sets loop speed. Depth scales modulation.")
+            .color(theme::IRON)
+            .monospace()
+            .size(8.0),
+    );
 }
+
+// Suppress unused import warning — FreeEg imported for type inference in clone()
+const _: fn() = || {
+    let _: FreeEg = FreeEg::default();
+};

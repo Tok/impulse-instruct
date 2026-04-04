@@ -84,6 +84,14 @@ pub fn build_system_prompt(state: &AppState) -> String {
             "distortion_drive": state.fx.distortion_drive,
             "distortion_mix": state.fx.distortion_mix,
             "chorus_mix": state.fx.chorus_mix
+        },
+        "free_eg": {
+            "enabled": state.free_eg.enabled,
+            "period": state.free_eg.period,
+            "depth": state.free_eg.depth,
+            "target": format!("{:?}", state.free_eg.target),
+            "loop_mode": state.free_eg.loop_mode,
+            "values": state.free_eg.values.as_slice()
         }
     }))
     .unwrap_or_default();
@@ -240,6 +248,16 @@ LFO (global wireable modulators, 4 slots indexed 0–3):
   lfo[N].target      — "BassCutoff" | "BassResonance" | "BassPitch" | "BassVolume"
                        "ReverbMix" | "DelayTime" | "DelayFeedback" | "ChorusMix" | "ChorusRate"
                        "Kick808Pitch" | "None"
+
+FREE EG (drawable arbitrary-shape modulator — 8 draggable levels, looped slowly):
+  free_eg.enabled    — true/false
+  free_eg.values     — 8-element array 0–1: the envelope shape drawn as 8 level steps
+  free_eg.period     — 0–1 (0=0.5s fast, 0.35≈2s, 0.5≈4s, 0.75≈11s, 1.0=32s glacial)
+  free_eg.depth      — 0–1 (0.5=no mod, 0=full negative, 1=full positive modulation)
+  free_eg.target     — same target strings as lfo[N].target
+  free_eg.loop_mode  — true=loop, false=one-shot then hold
+  Use for: glacial filter sweeps, slow pitch drift, long evolving textures, breathing effects.
+  Example — slow rising cutoff: values=[0,0.1,0.2,0.35,0.5,0.65,0.8,1.0], period=0.7, depth=0.8, target="BassCutoff"
 
 AN1X VOICE (warm VA pads / leads — Boards of Canada aesthetic):
   an1x.enabled          — true/false
@@ -545,6 +563,18 @@ pub fn param_json_schema() -> serde_json::Value {
                     "volume":  { "type": "number", "minimum": 0.0, "maximum": 1.0 },
                     "color":   { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "0=white, 0.5=pink, 1=brown" },
                     "cutoff":  { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "LP filter cutoff, 0=200Hz, 1=20kHz" }
+                },
+                "additionalProperties": false
+            },
+            "free_eg": {
+                "type": "object",
+                "properties": {
+                    "enabled":   { "type": "boolean" },
+                    "loop_mode": { "type": "boolean", "description": "true=loop, false=one-shot" },
+                    "period":    { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "0=0.5s, 0.35≈2s, 0.5≈4s, 0.75≈11s, 1.0=32s" },
+                    "depth":     { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "0.5=no mod, 1.0=full positive, 0.0=full negative" },
+                    "target":    { "type": "string", "enum": ["None","BassCutoff","BassResonance","BassPitch","BassVolume","ReverbMix","DelayTime","DelayFeedback","ChorusMix","ChorusRate","Kick808Pitch"] },
+                    "values":    { "type": "array", "items": { "type": "number", "minimum": 0.0, "maximum": 1.0 }, "minItems": 8, "maxItems": 8, "description": "8 envelope levels 0-1" }
                 },
                 "additionalProperties": false
             },

@@ -94,6 +94,8 @@ pub struct AppState {
     #[serde(default)]
     pub lfo: [LfoSlot; 4],
     #[serde(default)]
+    pub free_eg: FreeEg,
+    #[serde(default)]
     pub noise_voice: NoiseVoiceState,
     #[serde(default)]
     pub hoover: HooverState,

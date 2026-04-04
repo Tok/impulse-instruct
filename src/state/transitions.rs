@@ -682,6 +682,45 @@ pub fn apply_llm_update(state: AppState, update: &serde_json::Value) -> AppState
         }
     }
 
+    if let Some(eg) = update.get("free_eg").and_then(|v| v.as_object())
+        && !locked.contains("free_eg")
+    {
+        if let Some(v) = eg.get("enabled").and_then(|v| v.as_bool()) {
+            s.free_eg.enabled = v;
+        }
+        if let Some(v) = eg.get("period").and_then(|v| v.as_f64()) {
+            s.free_eg.period = (v as f32).clamp(0.0, 1.0);
+        }
+        if let Some(v) = eg.get("depth").and_then(|v| v.as_f64()) {
+            s.free_eg.depth = (v as f32).clamp(0.0, 1.0);
+        }
+        if let Some(v) = eg.get("loop_mode").and_then(|v| v.as_bool()) {
+            s.free_eg.loop_mode = v;
+        }
+        if let Some(v) = eg.get("target").and_then(|v| v.as_str()) {
+            s.free_eg.target = match v {
+                "BassCutoff" => LfoTarget::BassCutoff,
+                "BassResonance" => LfoTarget::BassResonance,
+                "BassPitch" => LfoTarget::BassPitch,
+                "BassVolume" => LfoTarget::BassVolume,
+                "ReverbMix" => LfoTarget::ReverbMix,
+                "DelayTime" => LfoTarget::DelayTime,
+                "DelayFeedback" => LfoTarget::DelayFeedback,
+                "ChorusMix" => LfoTarget::ChorusMix,
+                "ChorusRate" => LfoTarget::ChorusRate,
+                "Kick808Pitch" => LfoTarget::Kick808Pitch,
+                _ => LfoTarget::None,
+            };
+        }
+        if let Some(arr) = eg.get("values").and_then(|v| v.as_array()) {
+            for (i, val) in arr.iter().enumerate().take(8) {
+                if let Some(v) = val.as_f64() {
+                    s.free_eg.values[i] = (v as f32).clamp(0.0, 1.0);
+                }
+            }
+        }
+    }
+
     if let Some(n) = update.get("noise").and_then(|v| v.as_object()) {
         if !locked.contains("noise.enabled")
             && let Some(v) = n.get("enabled").and_then(|v| v.as_bool())

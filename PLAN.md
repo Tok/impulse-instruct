@@ -118,7 +118,7 @@ and melodic sequences.
 - [x] LFO destinations per LFO: OSC1 pitch, OSC2 pitch, OSC1+2 pitch, filter cutoff, amplitude, PWM width
 - [x] LFO sync to BPM (rate snaps to musical divisions)
 - [x] Pitch drift: very low-depth random LFO on pitch — simulates tape instability and slight tuning imperfection (key BoC texture, subtly "analogue feeling")
-- [ ] Free EG concept: one slow arbitrary-shape envelope that can be drawn and assigned to any target (filter, pitch, amp, detune) — enables long evolving patches
+- [x] Free EG concept: 8-step drawable envelope (drag bars), period 0.5–32s, depth/target controls, loop/one-shot; runs in process_block() alongside LFOs; LLM-addressable via free_eg.* schema
 
 ### Envelopes
 - [x] Filter envelope (ADSR) with amount + polarity (positive/negative modulation)
