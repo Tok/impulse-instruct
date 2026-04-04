@@ -87,13 +87,23 @@ pub struct An1xState {
     pub amp_sustain: f32, // 0–1
     pub amp_release: f32, // 0–1 → 1ms–8 s
 
-    // ── LFO (single, slow BoC-style) ───────────────────────────────────────
-    pub lfo_rate: f32,  // 0–1 → 0.01–20 Hz
+    // ── LFO (single, slow) ────────────────────────────────────────────────
+    /// Free rate: 0.01–20 Hz. Ignored when lfo_bpm_sync is on.
+    pub lfo_rate: f32, // 0–1 → 0.01–20 Hz
     pub lfo_depth: f32, // 0–1
     pub lfo_waveform: LfoWaveform,
     pub lfo_target: An1xLfoTarget,
     /// Fade-in time before LFO reaches full depth. 0–1 → 0–4 s.
     pub lfo_delay: f32,
+    /// Snap LFO rate to a musical division of the current BPM.
+    pub lfo_bpm_sync: bool,
+    /// Division in beats (4.0=bar, 2.0=half, 1.0=quarter, 0.5=8th, 0.25=16th).
+    pub lfo_sync_beats: f32,
+
+    // ── Oscillator sync / modulation extras ───────────────────────────────
+    /// Hard sync: OSC2 phase resets to 0 on every OSC1 cycle — produces the
+    /// aggressive harmonic sweep characteristic when OSC2 is detuned above OSC1.
+    pub hard_sync: bool,
 
     // ── Pitch envelope (AD — one-shot transient) ───────────────────────────
     /// Attack time. 0–1 → 1ms–2 s.
@@ -103,11 +113,14 @@ pub struct An1xState {
     /// Amount ±24 semitones. 0.5 = zero; <0.5 = negative, >0.5 = positive.
     pub pitch_env_amount: f32,
 
-    // ── Texture ────────────────────────────────────────────────────────────
+    // ── Texture / portamento ───────────────────────────────────────────────
     /// Pitch instability depth (random micro-LFO). 0–1 → 0–0.15 semitones.
     pub drift: f32,
     /// Glide time (exponential pitch glide on note change). 0–1 → 0–500 ms.
     pub glide_time: f32,
+    /// When true, glide only activates when a new note is struck while another
+    /// is already held (legato). When false, glide always applies.
+    pub glide_legato: bool,
 }
 
 impl Default for An1xState {
@@ -123,6 +136,7 @@ impl Default for An1xState {
             osc2_octave: 0,
             sub_level: 0.0,
             ring_mod: false,
+            hard_sync: false,
             filter_cutoff: 0.45,
             filter_resonance: 0.30,
             filter_mode: FilterMode::Lowpass,
@@ -144,8 +158,11 @@ impl Default for An1xState {
             lfo_waveform: LfoWaveform::Sine,
             lfo_target: An1xLfoTarget::Pitch,
             lfo_delay: 0.3,
-            drift: 0.12, // subtle pitch imperfection
+            lfo_bpm_sync: false,
+            lfo_sync_beats: 4.0, // 1 bar
+            drift: 0.12,         // subtle pitch imperfection
             glide_time: 0.2,
+            glide_legato: true,
         }
     }
 }

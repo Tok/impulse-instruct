@@ -633,8 +633,9 @@ impl An1xVoice {
 
     pub(super) fn trigger(&mut self, note: u8, sr: f32, p: &super::AudioParams) {
         let new_note = note as f32;
-        // Glide: only slide if gate was already open (legato-style)
-        if !self.gate {
+        // Legato mode: snap to new note only when gate was off (staccato).
+        // Always-glide mode: never snap — glide from wherever current_pitch is.
+        if p.an1x_glide_legato && !self.gate {
             self.current_pitch = new_note;
         }
         self.note = new_note;
@@ -737,10 +738,15 @@ impl An1xVoice {
         let osc2_freq = base_freq * 2.0_f32.powf((osc2_detune_st + osc2_octave_shift) / 12.0);
 
         self.osc1_phase += base_freq / sr;
-        if self.osc1_phase >= 1.0 {
+        let osc1_wrapped = self.osc1_phase >= 1.0;
+        if osc1_wrapped {
             self.osc1_phase -= 1.0;
         }
         self.osc2_phase += osc2_freq / sr;
+        // Hard sync: reset OSC2 on every OSC1 cycle boundary
+        if p.an1x_hard_sync && osc1_wrapped {
+            self.osc2_phase = 0.0;
+        }
         if self.osc2_phase >= 1.0 {
             self.osc2_phase -= 1.0;
         }
@@ -792,14 +798,18 @@ impl An1xVoice {
             .clamp(0.0, 1.0);
         let cutoff_hz = (80.0_f32 * 225.0_f32.powf(cutoff_norm)).min(sr * 0.45);
         let f_coeff = (std::f32::consts::PI * cutoff_hz / sr).clamp(0.001, 0.49);
-        let q = 1.0 - p.an1x_filter_resonance * 0.92;
+        // Allow q to reach near-zero for self-oscillation at resonance ≥ ~0.95
+        let q = (1.0 - p.an1x_filter_resonance * 0.995).max(0.005);
+        // Reduce input at high resonance to prevent blow-up when self-oscillating
+        let input_gain = 1.0 - p.an1x_filter_resonance * 0.65;
 
         // Chamberlin SVF (LP / HP / BP selector)
-        let high = osc_mix - self.svf_low - q * self.svf_band;
+        let high = osc_mix * input_gain - self.svf_low - q * self.svf_band;
         let band_new = f_coeff * high + self.svf_band;
         let low_new = f_coeff * band_new + self.svf_low;
-        self.svf_band = band_new;
-        self.svf_low = low_new;
+        // Soft-clip the band to prevent blow-up; produces a sine at self-oscillation
+        self.svf_band = band_new.tanh();
+        self.svf_low = low_new.clamp(-1.5, 1.5);
         let filtered = match p.an1x_filter_mode {
             0 => self.svf_low,
             1 => high,

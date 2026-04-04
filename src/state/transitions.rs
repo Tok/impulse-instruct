@@ -233,8 +233,12 @@ pub fn apply_boc_preset(state: AppState) -> AppState {
     s.an1x.pitch_env_attack = 0.0;
     s.an1x.pitch_env_decay = 0.1;
     s.an1x.pitch_env_amount = 0.5; // neutral — no pitch transient on pads
+    s.an1x.hard_sync = false;
+    s.an1x.lfo_bpm_sync = false;
+    s.an1x.lfo_sync_beats = 4.0;
     s.an1x.drift = 0.14;
     s.an1x.glide_time = 0.18;
+    s.an1x.glide_legato = true;
     s.an1x.volume = 0.75;
     s
 }
@@ -846,6 +850,23 @@ pub fn apply_llm_update(state: AppState, update: &serde_json::Value) -> AppState
         s.an1x.lfo_rate = unlocked_f32(s.an1x.lfo_rate, a, "lfo_rate", "an1x.lfo_rate", locked);
         s.an1x.lfo_depth = unlocked_f32(s.an1x.lfo_depth, a, "lfo_depth", "an1x.lfo_depth", locked);
         s.an1x.lfo_delay = unlocked_f32(s.an1x.lfo_delay, a, "lfo_delay", "an1x.lfo_delay", locked);
+        s.an1x.lfo_sync_beats = unlocked_f32(
+            s.an1x.lfo_sync_beats,
+            a,
+            "lfo_sync_beats",
+            "an1x.lfo_sync_beats",
+            locked,
+        );
+        if !locked.contains("an1x.lfo_bpm_sync")
+            && let Some(v) = a.get("lfo_bpm_sync").and_then(|v| v.as_bool())
+        {
+            s.an1x.lfo_bpm_sync = v;
+        }
+        if !locked.contains("an1x.hard_sync")
+            && let Some(v) = a.get("hard_sync").and_then(|v| v.as_bool())
+        {
+            s.an1x.hard_sync = v;
+        }
         s.an1x.pitch_env_attack = unlocked_f32(
             s.an1x.pitch_env_attack,
             a,

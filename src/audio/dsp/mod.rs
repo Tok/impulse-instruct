@@ -162,6 +162,7 @@ pub struct AudioParams {
     pub an1x_osc2_octave: i8,  // -2..+2
     pub an1x_sub_level: f32,
     pub an1x_ring_mod: bool,
+    pub an1x_hard_sync: bool,
     pub an1x_filter_cutoff: f32,
     pub an1x_filter_resonance: f32,
     pub an1x_filter_mode: u8, // 0=LP 1=HP 2=BP
@@ -184,6 +185,7 @@ pub struct AudioParams {
     pub an1x_pitch_env_amount: f32, // 0–1 (0.5=zero, ±24 st)
     pub an1x_drift: f32,            // 0–1
     pub an1x_glide_time: f32,       // 0–1 → 0–500ms
+    pub an1x_glide_legato: bool,
 }
 
 impl AudioParams {
@@ -348,6 +350,7 @@ impl AudioParams {
             an1x_osc2_octave: s.an1x.osc2_octave,
             an1x_sub_level: s.an1x.sub_level,
             an1x_ring_mod: s.an1x.ring_mod,
+            an1x_hard_sync: s.an1x.hard_sync,
             an1x_filter_cutoff: s.an1x.filter_cutoff,
             an1x_filter_resonance: s.an1x.filter_resonance,
             an1x_filter_mode: match s.an1x.filter_mode {
@@ -365,7 +368,11 @@ impl AudioParams {
             an1x_amp_decay: s.an1x.amp_decay,
             an1x_amp_sustain: s.an1x.amp_sustain,
             an1x_amp_release: s.an1x.amp_release,
-            an1x_lfo_rate_hz: 0.01 + s.an1x.lfo_rate * s.an1x.lfo_rate * 19.99,
+            an1x_lfo_rate_hz: if s.an1x.lfo_bpm_sync && s.an1x.lfo_sync_beats > 0.0 {
+                (s.sequencer.bpm / 60.0) / s.an1x.lfo_sync_beats
+            } else {
+                0.01 + s.an1x.lfo_rate * s.an1x.lfo_rate * 19.99
+            },
             an1x_lfo_depth: s.an1x.lfo_depth,
             an1x_lfo_target: match s.an1x.lfo_target {
                 An1xLfoTarget::Pitch => 0,
@@ -378,6 +385,7 @@ impl AudioParams {
             an1x_pitch_env_amount: s.an1x.pitch_env_amount,
             an1x_drift: s.an1x.drift,
             an1x_glide_time: s.an1x.glide_time,
+            an1x_glide_legato: s.an1x.glide_legato,
         }
     }
 }

@@ -157,9 +157,28 @@ pub fn draw_an1x(app: &mut ImpulseApp, ui: &mut Ui) {
                     }))
                     .fill(if ring { theme::SLATE } else { theme::PIT }),
                 )
+                .on_hover_text("Ring modulation: OSC1 × OSC2")
                 .clicked()
             {
                 app.state.write().an1x.ring_mod = !ring;
+                app.push_audio_params();
+            }
+        }
+        {
+            let sync = app.state.read().an1x.hard_sync;
+            if ui
+                .add(
+                    egui::Button::new(egui::RichText::new("SYNC").color(if sync {
+                        theme::CHALK
+                    } else {
+                        theme::IRON
+                    }))
+                    .fill(if sync { theme::SLATE } else { theme::PIT }),
+                )
+                .on_hover_text("Hard sync: OSC2 phase resets on each OSC1 cycle")
+                .clicked()
+            {
+                app.state.write().an1x.hard_sync = !sync;
                 app.push_audio_params();
             }
         }
@@ -296,11 +315,84 @@ pub fn draw_an1x(app: &mut ImpulseApp, ui: &mut Ui) {
                 }
             }};
         }
-        k!("RATE", lfo_rate);
+        // BPM sync toggle
+        {
+            let synced = app.state.read().an1x.lfo_bpm_sync;
+            if ui
+                .add(
+                    egui::Button::new(egui::RichText::new("BPM").color(if synced {
+                        theme::CHALK
+                    } else {
+                        theme::IRON
+                    }))
+                    .fill(if synced { theme::SLATE } else { theme::PIT }),
+                )
+                .on_hover_text("Snap LFO rate to a musical division of the current BPM")
+                .clicked()
+            {
+                app.state.write().an1x.lfo_bpm_sync = !synced;
+                app.push_audio_params();
+            }
+        }
+        if app.state.read().an1x.lfo_bpm_sync {
+            // Division selector: 4, 2, 1, 0.5, 0.25 beats
+            let cur_beats = app.state.read().an1x.lfo_sync_beats;
+            for (label, beats) in &[
+                ("1/1", 4.0_f32),
+                ("1/2", 2.0),
+                ("1/4", 1.0),
+                ("1/8", 0.5),
+                ("1/16", 0.25),
+            ] {
+                let active = (cur_beats - beats).abs() < 0.01;
+                if ui
+                    .add(
+                        egui::Button::new(
+                            egui::RichText::new(*label)
+                                .monospace()
+                                .size(8.5)
+                                .color(if active { theme::CHALK } else { theme::IRON }),
+                        )
+                        .fill(if active { theme::SLATE } else { theme::PIT })
+                        .min_size(egui::vec2(28.0, 16.0)),
+                    )
+                    .clicked()
+                {
+                    app.state.write().an1x.lfo_sync_beats = *beats;
+                    app.push_audio_params();
+                }
+            }
+        } else {
+            k!("RATE", lfo_rate);
+        }
         k!("DEPTH", lfo_depth);
         k!("DELAY", lfo_delay);
         k!("DRIFT", drift);
+        // Glide controls
         k!("GLIDE", glide_time);
+        {
+            let legato = app.state.read().an1x.glide_legato;
+            if ui
+                .add(
+                    egui::Button::new(
+                        egui::RichText::new(if legato { "LEG" } else { "ALWYS" })
+                            .monospace()
+                            .size(8.5)
+                            .color(theme::CHALK),
+                    )
+                    .fill(theme::SLATE),
+                )
+                .on_hover_text(if legato {
+                    "Legato glide: only when notes overlap"
+                } else {
+                    "Always glide: even from silence"
+                })
+                .clicked()
+            {
+                app.state.write().an1x.glide_legato = !legato;
+                app.push_audio_params();
+            }
+        }
     });
     ui.add_space(4.0);
 

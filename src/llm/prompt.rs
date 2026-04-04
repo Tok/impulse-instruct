@@ -253,9 +253,13 @@ AN1X VOICE (warm VA pads / leads — Boards of Canada aesthetic):
   an1x.filter_attack/decay/sustain/release — filter ADSR, 0–1 → 1ms–8s
   an1x.amp_attack       — 0–1; 0=instant, 0.3=~300ms pad attack, 0.6=slow swell
   an1x.amp_decay/sustain/release — amplitude ADSR
-  an1x.lfo_rate         — 0.09=BoC breathing (~0.12Hz), 0.3=tremolo, 0.6=fast vibrato
+  an1x.hard_sync        — OSC2 phase resets each OSC1 cycle: harsh harmonic sweep when detuned
+  an1x.lfo_bpm_sync     — snap LFO rate to a musical division of current BPM
+  an1x.lfo_sync_beats   — division: 4.0=bar, 2.0=half, 1.0=quarter, 0.5=8th, 0.25=16th
+  an1x.lfo_rate         — free rate (ignored when lfo_bpm_sync=true)
   an1x.lfo_depth        — 0–1 LFO depth
   an1x.lfo_delay        — 0–1 → 0–4s LFO fade-in (vibrato deepens as note is held)
+  an1x.glide_legato     — true=glide only on legato; false=always glide
   an1x.pitch_env_attack — 0–1 AD pitch envelope attack
   an1x.pitch_env_decay  — 0–1 AD pitch envelope decay
   an1x.pitch_env_amount — 0–1 (0.5=none, >0.5=up, <0.5=down, ±24 st max)
@@ -563,9 +567,13 @@ pub fn param_json_schema() -> serde_json::Value {
                     "amp_decay":          { "type": "number", "minimum": 0.0, "maximum": 1.0 },
                     "amp_sustain":        { "type": "number", "minimum": 0.0, "maximum": 1.0 },
                     "amp_release":        { "type": "number", "minimum": 0.0, "maximum": 1.0 },
-                    "lfo_rate":           { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "LFO rate 0-1 → 0.01-20 Hz. 0.09=BoC breathing (~0.12Hz), 0.5=~5Hz vibrato." },
+                    "hard_sync":          { "type": "boolean", "description": "OSC2 hard sync to OSC1: harsh harmonic content when OSC2 is detuned above" },
+                    "lfo_bpm_sync":       { "type": "boolean", "description": "snap LFO rate to musical division of current BPM" },
+                    "lfo_sync_beats":     { "type": "number", "description": "LFO division in beats: 4=bar, 2=half, 1=quarter, 0.5=8th, 0.25=16th" },
+                    "lfo_rate":           { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "free LFO rate 0-1 → 0.01-20 Hz (ignored when lfo_bpm_sync=true)" },
                     "lfo_depth":          { "type": "number", "minimum": 0.0, "maximum": 1.0 },
                     "lfo_delay":          { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "LFO fade-in time: 0-1 → 0-4 s" },
+                    "glide_legato":       { "type": "boolean", "description": "true=glide only when notes overlap; false=always glide" },
                     "pitch_env_attack":   { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "pitch envelope attack time" },
                     "pitch_env_decay":    { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "pitch envelope decay time" },
                     "pitch_env_amount":   { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "pitch env amount: 0.5=none, >0.5=up bend, <0.5=down bend (max ±24 st)" },
