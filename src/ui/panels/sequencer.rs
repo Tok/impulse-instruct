@@ -3,8 +3,8 @@
 
 use crate::state::{
     DrumVoice, MAX_STEPS, ROOT_NAMES, Scale, Step, set_an1x_step, set_drum_step_probability,
-    set_drum_step_velocity, set_hoover_step, set_root_note, set_scale, set_scale_snap,
-    toggle_bass_accent, toggle_bass_slide, toggle_drum_step,
+    set_drum_step_velocity, set_drum_voice_steps, set_hoover_step, set_root_note, set_scale,
+    set_scale_snap, toggle_bass_accent, toggle_bass_slide, toggle_drum_step,
 };
 use crate::ui::{ImpulseApp, SEQ_LABEL_H, SEQ_LABEL_W, SEQ_VOL_H, SEQ_VOL_W, theme, widgets};
 
@@ -692,6 +692,51 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                     app.push_audio_params();
                 }
 
+                // Per-voice step length — scrolling adjusts polyrhythm length.
+                let voice_steps = app
+                    .state
+                    .read()
+                    .sequencer
+                    .drum_steps
+                    .get(voice)
+                    .copied()
+                    .unwrap_or(seq_steps);
+                let steps_resp = ui.add_sized(
+                    [18.0, SEQ_LABEL_H],
+                    egui::Label::new(
+                        egui::RichText::new(format!("{:02}", voice_steps))
+                            .color(if voice_steps == seq_steps {
+                                theme::PIT
+                            } else {
+                                theme::FOG
+                            })
+                            .monospace()
+                            .size(7.5),
+                    )
+                    .sense(egui::Sense::click_and_drag()),
+                );
+                if steps_resp.dragged() {
+                    let delta = steps_resp.drag_delta().x;
+                    if delta.abs() > 2.0 {
+                        let new_n = ((voice_steps as i32 + delta.signum() as i32)
+                            .clamp(1, MAX_STEPS as i32))
+                            as usize;
+                        let s = app.state.read().clone();
+                        *app.state.write() = set_drum_voice_steps(s, *voice, new_n);
+                    }
+                }
+                if steps_resp.double_clicked() {
+                    // Reset to global steps on double-click
+                    let s = app.state.read().clone();
+                    *app.state.write() = set_drum_voice_steps(s, *voice, seq_steps);
+                }
+
+                let voice_cursor = if running {
+                    current_step % voice_steps.max(1)
+                } else {
+                    usize::MAX
+                };
+
                 let pattern: Vec<crate::state::Step> = {
                     let s = app.state.read();
                     s.sequencer
@@ -706,9 +751,9 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                     let abs = page_start + i;
                     beat_div(ui, i);
                     let is_active = pattern.get(i).map(|s| s.active).unwrap_or(false);
-                    let is_current = abs == cursor;
+                    let is_current = abs == voice_cursor;
                     let vel = pattern.get(i).map(|s| s.velocity).unwrap_or(0.0);
-                    ui.add_enabled_ui(abs < seq_steps, |ui| {
+                    ui.add_enabled_ui(abs < voice_steps, |ui| {
                         if widgets::step_button(ui, is_active, is_current, vel, None, pad_px) {
                             toggled = Some(abs);
                         }

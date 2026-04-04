@@ -268,6 +268,14 @@ EUCLIDEAN RHYTHMS:
                     (7,16)=afro-cuban bell, (3,16)=sparse kick
   LLM trigger: "5-in-16 euclidean kick", "make it a euclidean hi-hat", "add a clave pattern"
 
+POLYRHYTHM (per-voice step lengths):
+  In the sequencer block, add "drum_lengths" to give each drum voice its own loop length.
+  Each voice loops independently — overlapping loops create polyrhythmic feel.
+  {{ "sequencer": {{ "drum_lengths": {{ "kick_a": 16, "hihat_a": 12 }} }} }}
+  Also: "bass_len", "hoover_len", "an1x_len" integers control those lane lengths.
+  Classic: kick=16 + hihat=12 gives 4-against-3 over 48 steps. kick=16 + clave=12 = afro-cuban.
+  LLM trigger: "polyrhythm", "make it swing against itself", "kick 16 hihat 12"
+
 AN1X VOICE (warm VA pads / leads — Boards of Canada aesthetic):
   an1x.enabled          — true/false
   an1x.volume           — 0–1

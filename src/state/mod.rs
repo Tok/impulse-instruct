@@ -210,6 +210,13 @@ pub struct SequencerState {
     pub scale: Scale,
     /// When true, LLM-provided bass_notes are snapped to the active scale.
     pub scale_snap: bool,
+    /// Per-voice step counts for polyrhythm. Each voice loops independently at
+    /// its own length; voices not present here default to `steps`.
+    pub drum_steps: std::collections::HashMap<DrumVoice, usize>,
+    /// Independent step counts for bass, hoover, and AN1X lanes.
+    pub bass_steps: usize,
+    pub hoover_steps: usize,
+    pub an1x_steps: usize,
     /// Drum voices that are muted (never trigger regardless of pattern).
     pub muted_drums: std::collections::HashSet<DrumVoice>,
     /// Drum voices in solo mode. When non-empty, only these voices trigger.
@@ -249,6 +256,12 @@ impl Default for SequencerState {
             bass_pattern[step].note = note;
         }
 
+        // Default: all drum voices use the global `steps` length.
+        let mut drum_steps = std::collections::HashMap::new();
+        for v in DrumVoice::ALL {
+            drum_steps.insert(*v, 16usize);
+        }
+
         Self {
             bpm: 120.0,
             steps: 16,
@@ -263,6 +276,10 @@ impl Default for SequencerState {
             root_note: 9, // A — the starter pattern is A minor
             scale: Scale::NaturalMinor,
             scale_snap: false,
+            drum_steps,
+            bass_steps: 16,
+            hoover_steps: 16,
+            an1x_steps: 16,
             muted_drums: std::collections::HashSet::new(),
             soloed_drums: std::collections::HashSet::new(),
         }
@@ -454,6 +471,7 @@ impl Default for LlmState {
     }
 }
 
+pub(crate) mod llm_helpers;
 pub mod transitions;
 
 pub use transitions::*;

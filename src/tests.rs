@@ -29,25 +29,29 @@ mod sequencer_tests {
     }
 
     #[test]
-    fn advance_clock_wraps_at_step_count() {
+    fn advance_clock_wraps_at_max_steps() {
+        // current_step is a global tick counter that wraps at MAX_STEPS (64).
+        // Per-voice lengths are applied as modulo at trigger time.
+        use crate::state::MAX_STEPS;
         let mut seq = SequencerState::default();
         seq.running = true;
         seq.bpm = 120.0;
-        seq.steps = 4; // 4-step pattern
 
         let sps = samples_per_step(120.0, 44100.0) as usize;
         let clock = ClockState {
             sample_accumulator: 0.0,
-            current_step: 3,
+            current_step: MAX_STEPS - 1,
             loop_count: 0,
             gate_counter: 0,
             gate_counter_hoover: 0,
             gate_counter_an1x: 0,
         };
 
-        // Advance by slightly more than one step
         let (new_clock, _) = advance_clock(clock, &seq, sps + 1, 44100.0);
-        assert_eq!(new_clock.current_step, 0, "should wrap from 3 to 0");
+        assert_eq!(
+            new_clock.current_step, 0,
+            "should wrap from MAX_STEPS-1 to 0"
+        );
     }
 
     #[test]

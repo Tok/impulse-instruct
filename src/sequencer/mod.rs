@@ -133,25 +133,32 @@ pub fn advance_clock(
         }
         acc -= step_sps;
         let prev_step = step;
-        step = (step + 1) % seq.steps.max(1);
-        // Increment loop counter when the pattern wraps.
+        // Advance the global tick counter, wrapping at MAX_STEPS.
+        // Each voice uses `step % voice_steps` to index its own pattern.
+        step = (step + 1) % crate::state::MAX_STEPS;
         if step < prev_step {
             loop_count = loop_count.wrapping_add(1);
         }
 
-        // Drum triggers — respect mute and solo state
+        // Drum triggers — each voice uses its own step length for polyrhythm.
         let has_solo = !seq.soloed_drums.is_empty();
         for voice in DrumVoice::ALL {
-            // Skip if muted; skip if solo is active and this voice isn't soloed.
             if seq.muted_drums.contains(voice) {
                 continue;
             }
             if has_solo && !seq.soloed_drums.contains(voice) {
                 continue;
             }
+            let vstep = step
+                % seq
+                    .drum_steps
+                    .get(voice)
+                    .copied()
+                    .unwrap_or(seq.steps)
+                    .max(1);
             if let Some(pattern) = seq.drum_patterns.get(voice) {
-                let s = pattern.get(step).copied().unwrap_or_default();
-                if s.active && prob_hit(s.probability, step, loop_count, *voice as u32) {
+                let s = pattern.get(vstep).copied().unwrap_or_default();
+                if s.active && prob_hit(s.probability, vstep, loop_count, *voice as u32) {
                     events.push(TriggerEvent::DrumTrigger {
                         voice: *voice,
                         velocity: s.velocity,
@@ -160,8 +167,9 @@ pub fn advance_clock(
             }
         }
 
-        // Bass trigger
-        let bs = seq.bass_pattern.get(step).copied().unwrap_or_default();
+        // Bass trigger — independent step length
+        let bstep = step % seq.bass_steps.max(1);
+        let bs = seq.bass_pattern.get(bstep).copied().unwrap_or_default();
         if bs.active {
             let gate_samples = (sps * bs.gate as f64) as u32;
             gate_counter = gate_samples;
@@ -173,16 +181,18 @@ pub fn advance_clock(
             });
         }
 
-        // Hoover trigger
-        let hs = seq.hoover_pattern.get(step).copied().unwrap_or_default();
+        // Hoover trigger — independent step length
+        let hstep = step % seq.hoover_steps.max(1);
+        let hs = seq.hoover_pattern.get(hstep).copied().unwrap_or_default();
         if hs.active {
             let gate_samples = (sps * 0.75) as u32;
             gate_counter_hoover = gate_samples;
             events.push(TriggerEvent::HooverTrigger { note: hs.note });
         }
 
-        // AN1X trigger
-        let ax = seq.an1x_pattern.get(step).copied().unwrap_or_default();
+        // AN1X trigger — independent step length
+        let astep = step % seq.an1x_steps.max(1);
+        let ax = seq.an1x_pattern.get(astep).copied().unwrap_or_default();
         if ax.active {
             let gate_samples = (sps * ax.gate as f64) as u32;
             gate_counter_an1x = gate_samples;
