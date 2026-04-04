@@ -276,6 +276,13 @@ POLYRHYTHM (per-voice step lengths):
   Classic: kick=16 + hihat=12 gives 4-against-3 over 48 steps. kick=16 + clave=12 = afro-cuban.
   LLM trigger: "polyrhythm", "make it swing against itself", "kick 16 hihat 12"
 
+RATCHET / NOTE REPEAT (per-step sub-triggers for drums):
+  Add "drum_ratchets" object in the sequencer block to set ratchet count per voice per step.
+  Each entry is {{ "voice_name": [r0, r1, ..., r15] }} — one integer per step, value 1–4.
+  1 = single hit (default), 2 = two hits per step, 3 = three, 4 = four (machine-gun).
+  {{ "sequencer": {{ "drum_ratchets": {{ "hihat_a": [1,1,1,1, 1,1,2,1, 1,1,1,1, 1,1,4,1] }} }} }}
+  LLM trigger: "ratchet hi-hat on step 7", "machine-gun snare fill", "add note repeat"
+
 AN1X VOICE (warm VA pads / leads — Boards of Canada aesthetic):
   an1x.enabled          — true/false
   an1x.volume           — 0–1

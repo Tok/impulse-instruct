@@ -3,8 +3,9 @@
 
 use crate::state::{
     DrumVoice, MAX_STEPS, ROOT_NAMES, Scale, Step, set_an1x_step, set_drum_step_probability,
-    set_drum_step_velocity, set_drum_voice_steps, set_hoover_step, set_root_note, set_scale,
-    set_scale_snap, toggle_bass_accent, toggle_bass_slide, toggle_drum_step,
+    set_drum_step_ratchet, set_drum_step_velocity, set_drum_voice_steps, set_hoover_step,
+    set_root_note, set_scale, set_scale_snap, toggle_bass_accent, toggle_bass_slide,
+    toggle_drum_step,
 };
 use crate::ui::{ImpulseApp, SEQ_LABEL_H, SEQ_LABEL_W, SEQ_VOL_H, SEQ_VOL_W, theme, widgets};
 
@@ -839,6 +840,50 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                 if let Some((step, new_prob)) = prob_changed {
                     let s = app.state.read().clone();
                     *app.state.write() = set_drum_step_probability(s, *voice, step, new_prob);
+                }
+            });
+
+            // ── Ratchet lane ──────────────────────────────────────────────────
+            ui.horizontal(|ui| {
+                ui.add_space(lane_spacer);
+                let cell_h = 4.0_f32;
+                let mut ratchet_changed: Option<(usize, u8)> = None;
+                for i in 0..16usize {
+                    let abs = page_start + i;
+                    let ratchet = pattern.get(i).map(|s| s.ratchet).unwrap_or(1);
+                    let is_active = pattern.get(i).map(|s| s.active).unwrap_or(false);
+                    let (rect, resp) = ui.allocate_exact_size(
+                        egui::vec2(pad_px, cell_h + 2.0),
+                        egui::Sense::click(),
+                    );
+                    if ui.is_rect_visible(rect) {
+                        // Draw N small tick marks for the ratchet value
+                        let tick_w = (pad_px - 1.0) / 4.0;
+                        for t in 0..4u8 {
+                            let lit = t < ratchet;
+                            let col = if lit && is_active {
+                                egui::Color32::from_gray(90)
+                            } else if lit {
+                                egui::Color32::from_gray(40)
+                            } else {
+                                egui::Color32::from_gray(15)
+                            };
+                            let tick_rect = egui::Rect::from_min_size(
+                                egui::pos2(rect.min.x + t as f32 * tick_w, rect.min.y + 1.0),
+                                egui::vec2((tick_w - 1.0).max(1.0), cell_h),
+                            );
+                            ui.painter()
+                                .rect_filled(tick_rect, egui::Rounding::ZERO, col);
+                        }
+                    }
+                    if resp.clicked() && abs < voice_steps {
+                        let next = if ratchet >= 4 { 1 } else { ratchet + 1 };
+                        ratchet_changed = Some((abs, next));
+                    }
+                }
+                if let Some((step, new_ratchet)) = ratchet_changed {
+                    let s = app.state.read().clone();
+                    *app.state.write() = set_drum_step_ratchet(s, *voice, step, new_ratchet);
                 }
             });
         }

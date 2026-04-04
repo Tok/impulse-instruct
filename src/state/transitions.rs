@@ -154,6 +154,21 @@ pub fn set_drum_step_probability(
     s
 }
 
+pub fn set_drum_step_ratchet(
+    state: AppState,
+    voice: DrumVoice,
+    step: usize,
+    ratchet: u8,
+) -> AppState {
+    let mut s = state;
+    if let Some(pattern) = s.sequencer.drum_patterns.get_mut(&voice)
+        && step < pattern.len()
+    {
+        pattern[step].ratchet = ratchet.clamp(1, 4);
+    }
+    s
+}
+
 /// Set the step length for an individual drum voice (polyrhythm).
 pub fn set_drum_voice_steps(state: AppState, voice: DrumVoice, n: usize) -> AppState {
     let mut s = state;
@@ -349,6 +364,31 @@ pub fn apply_llm_update(state: AppState, update: &serde_json::Value) -> AppState
             ] {
                 if let Some(n) = obj.get(*key).and_then(|v| v.as_u64()) {
                     s = set_drum_voice_steps(s, *voice, n as usize);
+                }
+            }
+        }
+        // Ratchet: per-voice per-step sub-hit counts.
+        if !locked.contains("sequencer.drum_ratchets")
+            && let Some(obj) = seq.get("drum_ratchets").and_then(|v| v.as_object())
+        {
+            use DrumVoice::*;
+            for (key, voice) in &[
+                ("kick_a", Kick808),
+                ("snare_a", Snare808),
+                ("hihat_a", HihatClosed808),
+                ("hihat_a_open", HihatOpen808),
+                ("kick_b", Kick909),
+                ("snare_b", Snare909),
+                ("hihat_b", HihatClosed909),
+                ("hihat_b_open", HihatOpen909),
+                ("clap_b", Clap909),
+            ] {
+                if let Some(arr) = obj.get(*key).and_then(|v| v.as_array()) {
+                    for (step, val) in arr.iter().enumerate().take(MAX_STEPS) {
+                        if let Some(r) = val.as_u64() {
+                            s = set_drum_step_ratchet(s, *voice, step, r as u8);
+                        }
+                    }
                 }
             }
         }

@@ -32,6 +32,9 @@ pub enum TriggerEvent {
 
 // ─── Clock state (audio-thread local, not in shared AppState) ─────────────────
 
+/// Number of drum voices — must match DrumVoice::ALL.len()
+const NUM_DRUM_VOICES: usize = 13;
+
 #[derive(Clone, Debug)]
 pub struct ClockState {
     pub sample_accumulator: f64, // fractional samples since last step
@@ -40,6 +43,11 @@ pub struct ClockState {
     pub gate_counter: u32, // samples remaining in bass gate
     pub gate_counter_hoover: u32, // samples remaining in hoover gate
     pub gate_counter_an1x: u32, // samples remaining in AN1X gate
+    // Ratchet sub-hit tracking — fixed arrays, no allocation
+    pub ratchet_remaining: [u8; NUM_DRUM_VOICES], // sub-hits left per voice
+    pub ratchet_acc: [f64; NUM_DRUM_VOICES],      // sample accumulator since step fire
+    pub ratchet_interval: [f64; NUM_DRUM_VOICES], // sps / N
+    pub ratchet_vel: [f32; NUM_DRUM_VOICES],      // velocity of sub-hits
 }
 
 impl Default for ClockState {
@@ -51,6 +59,10 @@ impl Default for ClockState {
             gate_counter: 0,
             gate_counter_hoover: 0,
             gate_counter_an1x: 0,
+            ratchet_remaining: [0; NUM_DRUM_VOICES],
+            ratchet_acc: [0.0; NUM_DRUM_VOICES],
+            ratchet_interval: [0.0; NUM_DRUM_VOICES],
+            ratchet_vel: [0.0; NUM_DRUM_VOICES],
         }
     }
 }
@@ -83,6 +95,27 @@ pub fn advance_clock(
     let mut gate_counter = clock.gate_counter;
     let mut gate_counter_hoover = clock.gate_counter_hoover;
     let mut gate_counter_an1x = clock.gate_counter_an1x;
+    let mut ratchet_remaining = clock.ratchet_remaining;
+    let mut ratchet_acc = clock.ratchet_acc;
+    let mut ratchet_interval = clock.ratchet_interval;
+    let mut ratchet_vel = clock.ratchet_vel;
+
+    // Advance ratchet sub-hit accumulators and emit any pending sub-hits.
+    // Each pending voice fires when its acc crosses the ratchet interval.
+    for (i, voice) in DrumVoice::ALL.iter().enumerate() {
+        if ratchet_remaining[i] == 0 {
+            continue;
+        }
+        ratchet_acc[i] += block_size as f64;
+        while ratchet_remaining[i] > 0 && ratchet_acc[i] >= ratchet_interval[i] {
+            ratchet_acc[i] -= ratchet_interval[i];
+            ratchet_remaining[i] -= 1;
+            events.push(TriggerEvent::DrumTrigger {
+                voice: *voice,
+                velocity: ratchet_vel[i],
+            });
+        }
+    }
 
     // Handle gate-off for bass
     if gate_counter > 0 {
@@ -142,7 +175,7 @@ pub fn advance_clock(
 
         // Drum triggers — each voice uses its own step length for polyrhythm.
         let has_solo = !seq.soloed_drums.is_empty();
-        for voice in DrumVoice::ALL {
+        for (i, voice) in DrumVoice::ALL.iter().enumerate() {
             if seq.muted_drums.contains(voice) {
                 continue;
             }
@@ -163,6 +196,13 @@ pub fn advance_clock(
                         voice: *voice,
                         velocity: s.velocity,
                     });
+                    // Schedule ratchet sub-hits (ratchet=1 means no sub-hits).
+                    if s.ratchet > 1 {
+                        ratchet_remaining[i] = s.ratchet - 1;
+                        ratchet_interval[i] = sps / s.ratchet as f64;
+                        ratchet_acc[i] = 0.0;
+                        ratchet_vel[i] = s.velocity;
+                    }
                 }
             }
         }
@@ -207,6 +247,10 @@ pub fn advance_clock(
         gate_counter,
         gate_counter_hoover,
         gate_counter_an1x,
+        ratchet_remaining,
+        ratchet_acc,
+        ratchet_interval,
+        ratchet_vel,
     };
     (new_clock, events)
 }

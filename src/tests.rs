@@ -5,8 +5,8 @@
 
 #[cfg(test)]
 mod sequencer_tests {
-    use crate::sequencer::{ClockState, advance_clock, samples_per_step};
-    use crate::state::{DrumVoice, SequencerState, Step};
+    use crate::sequencer::{ClockState, TriggerEvent, advance_clock, samples_per_step};
+    use crate::state::{DrumVoice, MAX_STEPS, SequencerState, Step};
 
     #[test]
     fn samples_per_step_at_120bpm_44100hz() {
@@ -32,19 +32,14 @@ mod sequencer_tests {
     fn advance_clock_wraps_at_max_steps() {
         // current_step is a global tick counter that wraps at MAX_STEPS (64).
         // Per-voice lengths are applied as modulo at trigger time.
-        use crate::state::MAX_STEPS;
         let mut seq = SequencerState::default();
         seq.running = true;
         seq.bpm = 120.0;
 
         let sps = samples_per_step(120.0, 44100.0) as usize;
         let clock = ClockState {
-            sample_accumulator: 0.0,
             current_step: MAX_STEPS - 1,
-            loop_count: 0,
-            gate_counter: 0,
-            gate_counter_hoover: 0,
-            gate_counter_an1x: 0,
+            ..ClockState::default()
         };
 
         let (new_clock, _) = advance_clock(clock, &seq, sps + 1, 44100.0);
@@ -66,17 +61,11 @@ mod sequencer_tests {
             active: true,
             velocity: 1.0,
             probability: 1.0,
+            ratchet: 1,
         };
 
         let sps = samples_per_step(120.0, 44100.0) as usize;
-        let clock = ClockState {
-            sample_accumulator: 0.0,
-            current_step: 0,
-            loop_count: 0,
-            gate_counter: 0,
-            gate_counter_hoover: 0,
-            gate_counter_an1x: 0,
-        };
+        let clock = ClockState::default();
 
         let (_, events) = advance_clock(clock, &seq, sps + 1, 44100.0);
         let has_kick = events.iter().any(|e| {
@@ -89,6 +78,57 @@ mod sequencer_tests {
             )
         });
         assert!(has_kick, "expected kick trigger, got {:?}", events);
+    }
+
+    #[test]
+    fn ratchet_2_emits_sub_hit_after_step_fires() {
+        let mut seq = SequencerState::default();
+        seq.running = true;
+        seq.bpm = 120.0;
+        seq.drum_patterns.get_mut(&DrumVoice::Kick808).unwrap()[1] = Step {
+            active: true,
+            velocity: 1.0,
+            probability: 1.0,
+            ratchet: 2,
+        };
+
+        let sps = samples_per_step(120.0, 44100.0);
+        // First block fires step 0 (ratchet=2 → first hit + schedule 1 sub-hit)
+        let clock = ClockState::default();
+        let (clock2, events1) = advance_clock(clock, &seq, sps as usize + 1, 44100.0);
+        let first_kick = events1
+            .iter()
+            .filter(|e| {
+                matches!(
+                    e,
+                    TriggerEvent::DrumTrigger {
+                        voice: DrumVoice::Kick808,
+                        ..
+                    }
+                )
+            })
+            .count();
+        assert_eq!(first_kick, 1, "first block should fire one kick");
+        assert!(
+            clock2.ratchet_remaining[0] > 0,
+            "sub-hit should be pending after ratchet=2"
+        );
+
+        // Second block advances past the half-step interval → sub-hit fires
+        let (_, events2) = advance_clock(clock2, &seq, sps as usize / 2 + 1, 44100.0);
+        let sub_kick = events2
+            .iter()
+            .filter(|e| {
+                matches!(
+                    e,
+                    TriggerEvent::DrumTrigger {
+                        voice: DrumVoice::Kick808,
+                        ..
+                    }
+                )
+            })
+            .count();
+        assert!(sub_kick >= 1, "ratchet sub-hit should fire in second block");
     }
 }
 

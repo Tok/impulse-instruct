@@ -159,6 +159,12 @@ pub struct Step {
     pub active: bool,
     pub velocity: f32,    // 0–1
     pub probability: f32, // 0–1: chance the step fires (1.0 = always, 0.5 = 50%)
+    #[serde(default = "default_ratchet")]
+    pub ratchet: u8, // 1 = single hit, 2/3/4 = N sub-hits per step
+}
+
+fn default_ratchet() -> u8 {
+    1
 }
 
 impl Default for Step {
@@ -167,6 +173,7 @@ impl Default for Step {
             active: false,
             velocity: 1.0,
             probability: 1.0,
+            ratchet: 1,
         }
     }
 }
