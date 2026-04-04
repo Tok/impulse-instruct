@@ -630,7 +630,11 @@ pub fn run_llm_loop(
                 state.write().llm.model_path = new_path.clone();
                 state.write().llm.context_used = 0;
                 backend = LlamaServerBackend::new(&new_path);
-                state.write().llm.is_mock = !backend.is_live();
+                {
+                    let mut s = state.write();
+                    s.llm.is_mock = !backend.is_live();
+                    s.llm.llm_initializing = false;
+                }
                 let status = if backend.is_live() {
                     format!("[ Model loaded: {} ]", new_path)
                 } else {
@@ -656,7 +660,11 @@ pub fn run_llm_loop(
                 backend.shutdown();
                 state.write().llm.context_used = 0;
                 backend = LlamaServerBackend::new(&model_path);
-                state.write().llm.is_mock = !backend.is_live();
+                {
+                    let mut s = state.write();
+                    s.llm.is_mock = !backend.is_live();
+                    s.llm.llm_initializing = false;
+                }
                 let _ = output_tx.try_send(LlmOutput {
                     text: "[ Context reset ]".to_string(),
                     param_update: None,
