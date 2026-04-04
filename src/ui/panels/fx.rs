@@ -21,6 +21,9 @@ pub fn draw_fx(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         mut ch_rate,
         mut ch_depth,
         mut ch_mix,
+        mut ph_rate,
+        mut ph_depth,
+        mut ph_mix,
         locked,
         auto_lock,
     ) = {
@@ -38,6 +41,9 @@ pub fn draw_fx(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             s.fx.chorus_rate,
             s.fx.chorus_depth,
             s.fx.chorus_mix,
+            s.fx.phaser_rate,
+            s.fx.phaser_depth,
+            s.fx.phaser_mix,
             s.llm.locked_params.clone(),
             s.llm.auto_lock_on_touch,
         )
@@ -138,6 +144,26 @@ pub fn draw_fx(app: &mut ImpulseApp, ui: &mut egui::Ui) {
 
         ui.group(|ui| {
             ui.label(
+                egui::RichText::new("PHASER")
+                    .color(theme::FOG)
+                    .monospace()
+                    .size(9.5),
+            );
+            if widgets::param_control(ui, "MIX", &mut ph_mix, ParamMode::Free, use_sliders).0 {
+                changed = true;
+            }
+            if widgets::param_control(ui, "RATE", &mut ph_rate, ParamMode::Free, use_sliders).0 {
+                changed = true;
+            }
+            if widgets::param_control(ui, "DEPTH", &mut ph_depth, ParamMode::Free, use_sliders).0 {
+                changed = true;
+            }
+        });
+
+        ui.add_space(4.0);
+
+        ui.group(|ui| {
+            ui.label(
                 egui::RichText::new("DRIVE / MASTER")
                     .color(theme::FOG)
                     .monospace()
@@ -166,6 +192,9 @@ pub fn draw_fx(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         s.fx.chorus_rate = ch_rate;
         s.fx.chorus_depth = ch_depth;
         s.fx.chorus_mix = ch_mix;
+        s.fx.phaser_rate = ph_rate;
+        s.fx.phaser_depth = ph_depth;
+        s.fx.phaser_mix = ph_mix;
         drop(s);
         app.push_audio_params();
     }

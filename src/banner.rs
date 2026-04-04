@@ -8,10 +8,14 @@ pub fn print_banner() {
     const RESET: &str = "\x1b[0m";
 
     // ── Title & tagline ───────────────────────────────────────────────────────
+    // Sine flanks (18 chars each) peak at ██ against the title, centering it
+    // within the 72-char keyboard width (2-space indent + 70 key cells).
     println!();
-    println!("{GRAY}  I M P U L S E   I N S T R U C T{RESET}");
     println!(
-        "{SUBGRAY}  a synthesizer with a tiny LLM living inside of it  ·  rust  ·  llama.cpp{RESET}"
+        "{SUBGRAY}  ▁▂▄▅▇██▇▅▄▂▁▂▄▅▇██{GRAY} I M P U L S E   I N S T R U C T {SUBGRAY}██▇▅▄▂▁▂▄▅▇██▇▅▄▂▁{RESET}"
+    );
+    println!(
+        "{SUBGRAY}  a synthesizer with a tiny LLM living inside of it · Rust · llama.cpp{RESET}"
     );
 
     // ── Huth-colored keyboard (2 octaves, 7 rows) ────────────────────────────

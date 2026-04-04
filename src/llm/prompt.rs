@@ -410,7 +410,9 @@ pub fn param_json_schema() -> serde_json::Value {
                     "supersaw_voices":   { "type": "integer", "minimum": 2, "maximum": 7 },
                     "distortion":        { "type": "number", "minimum": 0.0, "maximum": 1.0 },
                     "volume":            { "type": "number", "minimum": 0.0, "maximum": 1.0 },
-                    "sub_osc_level":     { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "sub-oscillator level: sine one octave below, 0=off 1=full" }
+                    "sub_osc_level":     { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "sub-oscillator level: sine one octave below, 0=off 1=full" },
+                    "portamento_time":   { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "slide/glide time: 0=10ms (snappy), 1=500ms (slow)" },
+                    "noise_mix":         { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "white noise mixed before filter: 0=off, 0.3=gritty, 1=full noise" }
                 },
                 "additionalProperties": false
             },
@@ -443,7 +445,13 @@ pub fn param_json_schema() -> serde_json::Value {
                     "distortion_mix":   { "type": "number", "minimum": 0.0, "maximum": 1.0 },
                     "bitcrush_bits": { "type": "number", "minimum": 0.0, "maximum": 1.0 },
                     "bitcrush_rate": { "type": "number", "minimum": 0.0, "maximum": 1.0 },
-                    "bitcrush_mix":  { "type": "number", "minimum": 0.0, "maximum": 1.0 }
+                    "bitcrush_mix":  { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+                    "chorus_rate":   { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+                    "chorus_depth":  { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+                    "chorus_mix":    { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+                    "phaser_rate":   { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "phaser LFO rate: 0=0.05Hz (slow) 1=5Hz (fast)" },
+                    "phaser_depth":  { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "phaser sweep width" },
+                    "phaser_mix":    { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "phaser wet/dry" }
                 },
                 "additionalProperties": false
             },

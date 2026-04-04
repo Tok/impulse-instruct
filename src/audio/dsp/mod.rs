@@ -40,11 +40,13 @@ pub struct AudioParams {
     pub env_mod: f32,
     pub decay_303: f32,
     pub accent_level: f32,
-    pub waveform_saw: bool,      // true = saw, false = square
-    pub waveform_supersaw: bool, // true = supersaw (overrides waveform_saw)
-    pub supersaw_detune: f32,    // 0–1 → 0–1 semitone spread
-    pub supersaw_voices: u8,     // 2–7
-    pub sub_osc_level: f32,      // 0–1 sub-oscillator mix level
+    pub waveform_saw: bool,       // true = saw, false = square
+    pub waveform_supersaw: bool,  // true = supersaw (overrides waveform_saw)
+    pub supersaw_detune: f32,     // 0–1 → 0–1 semitone spread
+    pub supersaw_voices: u8,      // 2–7
+    pub sub_osc_level: f32,       // 0–1 sub-oscillator mix level
+    pub portamento_time_303: f32, // 0–1 → 10ms–500ms
+    pub noise_mix_303: f32,       // 0–1 white noise into osc before filter
     pub distortion_303: f32,
     pub volume_303: f32,
     // 808 kick
@@ -99,6 +101,10 @@ pub struct AudioParams {
     pub chorus_rate: f32,
     pub chorus_depth: f32,
     pub chorus_mix: f32,
+    // Phaser
+    pub phaser_rate: f32,
+    pub phaser_depth: f32,
+    pub phaser_mix: f32,
     // Filter mode (0=LP, 1=HP, 2=BP)
     pub filter_mode: u8,
     // Sample rate
@@ -122,6 +128,8 @@ impl AudioParams {
             supersaw_detune: s.bass.supersaw_detune,
             supersaw_voices: s.bass.supersaw_voices,
             sub_osc_level: s.bass.sub_osc_level,
+            portamento_time_303: s.bass.portamento_time,
+            noise_mix_303: s.bass.noise_mix,
             distortion_303: s.bass.distortion,
             volume_303: s.bass.volume,
             kick808_pitch: s.kit_a.kick.pitch,
@@ -167,6 +175,9 @@ impl AudioParams {
             chorus_rate: s.fx.chorus_rate,
             chorus_depth: s.fx.chorus_depth,
             chorus_mix: s.fx.chorus_mix,
+            phaser_rate: s.fx.phaser_rate,
+            phaser_depth: s.fx.phaser_depth,
+            phaser_mix: s.fx.phaser_mix,
             filter_mode: match s.bass.filter_mode {
                 FilterMode::Lowpass => 0,
                 FilterMode::Highpass => 1,
@@ -243,6 +254,7 @@ struct Bass303 {
     filter: LadderFilter,
     svf_low: f32,  // Chamberlin SVF low-pass state
     svf_band: f32, // Chamberlin SVF band-pass state
+    noise_gen: NoiseGen,
 }
 
 impl Default for Bass303 {
@@ -261,6 +273,7 @@ impl Default for Bass303 {
             filter: LadderFilter::default(),
             svf_low: 0.0,
             svf_band: 0.0,
+            noise_gen: NoiseGen::new(0xBAD_C0DE),
         }
     }
 }
@@ -288,9 +301,10 @@ impl Bass303 {
     fn process(&mut self, p: &AudioParams) -> f32 {
         let sr = p.sample_rate;
 
-        // Slide: portamento toward target
+        // Slide: portamento toward target; time 0–1 → 10ms–500ms
         if self.slide {
-            let slide_coeff = (-1.0 / (sr * 0.06)).exp(); // 60ms slide
+            let slide_time = 0.01 + p.portamento_time_303 * 0.49;
+            let slide_coeff = (-1.0 / (sr * slide_time)).exp();
             self.freq = self.freq + (self.target_freq - self.freq) * (1.0 - slide_coeff);
         }
 
@@ -338,7 +352,8 @@ impl Bass303 {
             self.sub_phase -= 1.0;
         }
         let sub = (self.sub_phase * std::f32::consts::TAU).sin();
-        let osc = osc + sub * p.sub_osc_level;
+        let noise = self.noise_gen.next();
+        let osc = osc + sub * p.sub_osc_level + noise * p.noise_mix_303;
 
         // Envelope decay coefficients
         let accent_mult = if self.accent {
@@ -419,6 +434,7 @@ pub struct DspState {
     reverb: Reverb,
     delay: DelayLine,
     chorus: Chorus,
+    phaser: Phaser,
     bitcrush_held: f32,
     bitcrush_counter: u32,
     // LFO state
@@ -453,6 +469,7 @@ impl DspState {
             reverb: Reverb::new(),
             delay: DelayLine::new(),
             chorus: Chorus::new(),
+            phaser: Phaser::new(),
             bitcrush_held: 0.0,
             bitcrush_counter: 0,
             lfo_phases: [0.0; 4],
@@ -668,12 +685,14 @@ impl DspState {
             };
 
             // Chorus / ensemble
-            let delayed = if p.chorus_mix > 0.001 {
+            let delayed =
                 self.chorus
-                    .process(delayed, p.chorus_rate, p.chorus_depth, p.chorus_mix, sr)
-            } else {
-                delayed
-            };
+                    .process(delayed, p.chorus_rate, p.chorus_depth, p.chorus_mix, sr);
+
+            // Phaser
+            let delayed =
+                self.phaser
+                    .process(delayed, p.phaser_rate, p.phaser_depth, p.phaser_mix, sr);
 
             // Master drive (soft clip)
             let driven = if p.distortion_drive > 0.01 {

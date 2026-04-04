@@ -23,7 +23,7 @@ It can nail acid. Everything else is a lie. Fix that.
 - [x] BPM locked to user by default — unlock for LLM control
 - [x] Variable step count per pattern (8 / 16 / 32 / 64)
 - [x] Swing / shuffle per pattern
-- [ ] Per-step accent and slide on bass sequencer
+- [x] Per-step accent and slide on bass sequencer
 - [ ] Time signature selector (4/4, 3/4, 5/4, 6/8, 7/8…)
 - [x] Amen break pattern preset — "make an amen break" should load a proper syncopated 170 BPM breakbeat
 
@@ -32,8 +32,8 @@ It can nail acid. Everything else is a lie. Fix that.
 - [x] Sub-oscillator (one octave below, mix control)
 - [ ] Oscillator detune (for that Reese bass detuned-saws feel)
 - [ ] FM pair (simple 2-op FM for metallic/bell tones)
-- [ ] Noise source (for snare body, hi-hat, wind textures)
-- [ ] Portamento / glide time (separate from TB-303 slide)
+- [x] Noise source (noise_mix into bass oscillator before filter)
+- [x] Portamento / glide time (separate from TB-303 slide)
 - [x] Second filter mode: highpass + bandpass (current is always lowpass)
 - [ ] Waveshaper / soft clip (lighter distortion option)
 - [x] Chorus / ensemble effect (essential for 80s sounds, Reese bass)
@@ -68,7 +68,7 @@ in the synth. Think of it as a modulation matrix row, not a per-voice feature.
 - [x] Distortion / drive
 - [x] Bitcrush (bit depth + sample rate reduction — lo-fi, gabber, breakcore)
 - [x] Chorus / flanger as standalone FX slot
-- [ ] Phaser — all-pass filter chain with LFO-swept center frequency; classic psychedelic sweep
+- [x] Phaser — all-pass filter chain with LFO-swept center frequency; classic psychedelic sweep
 - [ ] Ring modulator — multiply signal by a carrier sine; metallic/robotic character
 - [ ] EQ (3-band: low shelf, mid peak, high shelf)
 - [ ] Compressor / limiter on master bus

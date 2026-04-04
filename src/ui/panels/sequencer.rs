@@ -1,7 +1,7 @@
 // ─── ui/panels/sequencer.rs ───────────────────────────────────────────────────
 // Step sequencer panel.
 
-use crate::state::{DrumVoice, MAX_STEPS, toggle_drum_step};
+use crate::state::{DrumVoice, MAX_STEPS, toggle_bass_accent, toggle_bass_slide, toggle_drum_step};
 use crate::ui::{ImpulseApp, SEQ_LABEL_H, SEQ_LABEL_W, SEQ_VOL_H, SEQ_VOL_W, theme, widgets};
 
 pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
@@ -194,10 +194,18 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             });
         }
 
-        // Bass row
+        // Bass / Accent / Slide rows
         ui.add_space(2.0);
         ui.separator();
         ui.add_space(2.0);
+
+        let bass_page: Vec<crate::state::TB303Step> = {
+            let s = app.state.read();
+            let end = (page_start + 16).min(s.sequencer.bass_pattern.len());
+            s.sequencer.bass_pattern[page_start..end].to_vec()
+        };
+
+        // Bass note row
         ui.horizontal(|ui| {
             ui.add_sized(
                 [80.0, 22.0],
@@ -208,11 +216,6 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                         .size(8.5),
                 ),
             );
-            let bass_page: Vec<crate::state::TB303Step> = {
-                let s = app.state.read();
-                let end = (page_start + 16).min(s.sequencer.bass_pattern.len());
-                s.sequencer.bass_pattern[page_start..end].to_vec()
-            };
             for i in 0..16usize {
                 let abs = page_start + i;
                 if i > 0 && i % 4 == 0 {
@@ -240,6 +243,74 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                             .map(|b| b.active)
                             .unwrap_or(false);
                         *app.state.write() = crate::state::set_bass_step(s, abs, note, !was);
+                    }
+                });
+            }
+        });
+
+        // Accent row — small A buttons, lit when accent=true
+        ui.horizontal(|ui| {
+            ui.add_sized(
+                [80.0, 14.0],
+                egui::Label::new(
+                    egui::RichText::new("ACCENT")
+                        .color(theme::IRON)
+                        .monospace()
+                        .size(7.5),
+                ),
+            );
+            for i in 0..16usize {
+                let abs = page_start + i;
+                if i > 0 && i % 4 == 0 {
+                    ui.add_space(2.0);
+                }
+                let is_accent = bass_page.get(i).map(|s| s.accent).unwrap_or(false);
+                ui.add_enabled_ui(abs < seq_steps, |ui| {
+                    let color = if is_accent { theme::CHALK } else { theme::PIT };
+                    let text = egui::RichText::new("A").monospace().size(7.5).color(color);
+                    if ui
+                        .add_sized(
+                            [14.0, 14.0],
+                            egui::Button::new(text).fill(egui::Color32::TRANSPARENT),
+                        )
+                        .clicked()
+                    {
+                        let s = app.state.read().clone();
+                        *app.state.write() = toggle_bass_accent(s, abs);
+                    }
+                });
+            }
+        });
+
+        // Slide row — small S buttons, lit when slide=true
+        ui.horizontal(|ui| {
+            ui.add_sized(
+                [80.0, 14.0],
+                egui::Label::new(
+                    egui::RichText::new("SLIDE")
+                        .color(theme::IRON)
+                        .monospace()
+                        .size(7.5),
+                ),
+            );
+            for i in 0..16usize {
+                let abs = page_start + i;
+                if i > 0 && i % 4 == 0 {
+                    ui.add_space(2.0);
+                }
+                let is_slide = bass_page.get(i).map(|s| s.slide).unwrap_or(false);
+                ui.add_enabled_ui(abs < seq_steps, |ui| {
+                    let color = if is_slide { theme::CHALK } else { theme::PIT };
+                    let text = egui::RichText::new("S").monospace().size(7.5).color(color);
+                    if ui
+                        .add_sized(
+                            [14.0, 14.0],
+                            egui::Button::new(text).fill(egui::Color32::TRANSPARENT),
+                        )
+                        .clicked()
+                    {
+                        let s = app.state.read().clone();
+                        *app.state.write() = toggle_bass_slide(s, abs);
                     }
                 });
             }

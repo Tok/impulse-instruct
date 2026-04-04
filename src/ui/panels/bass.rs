@@ -17,6 +17,8 @@ pub fn draw_bass(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         mut dist,
         mut vol,
         mut sub_osc_level,
+        mut portamento_time,
+        mut noise_mix,
         waveform,
         filter_mode,
         mut supersaw_detune,
@@ -35,6 +37,8 @@ pub fn draw_bass(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             s.bass.distortion,
             s.bass.volume,
             s.bass.sub_osc_level,
+            s.bass.portamento_time,
+            s.bass.noise_mix,
             s.bass.waveform.clone(),
             s.bass.filter_mode.clone(),
             s.bass.supersaw_detune,
@@ -154,6 +158,32 @@ pub fn draw_bass(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         if cy {
             cycle_paths.push("bass.sub_osc_level");
         }
+        let (ch, cy) = widgets::param_control(
+            ui,
+            "GLIDE",
+            &mut portamento_time,
+            param_mode("bass.portamento_time", &locked, &focused),
+            use_sliders,
+        );
+        if ch {
+            changed = true;
+        }
+        if cy {
+            cycle_paths.push("bass.portamento_time");
+        }
+        let (ch, cy) = widgets::param_control(
+            ui,
+            "NOISE",
+            &mut noise_mix,
+            param_mode("bass.noise_mix", &locked, &focused),
+            use_sliders,
+        );
+        if ch {
+            changed = true;
+        }
+        if cy {
+            cycle_paths.push("bass.noise_mix");
+        }
     };
     if use_sliders {
         ui.vertical(draw_bass_controls);
@@ -174,6 +204,8 @@ pub fn draw_bass(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             snap.bass.distortion = dist;
             snap.bass.volume = vol;
             snap.bass.sub_osc_level = sub_osc_level;
+            snap.bass.portamento_time = portamento_time;
+            snap.bass.noise_mix = noise_mix;
             // auto_lock: touching a free param immediately makes it UserOwned
             if auto_lock {
                 for p in [
@@ -185,6 +217,8 @@ pub fn draw_bass(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                     "bass.distortion",
                     "bass.volume",
                     "bass.sub_osc_level",
+                    "bass.portamento_time",
+                    "bass.noise_mix",
                 ] {
                     if snap.llm.locked_params.contains(p) {
                         continue;

@@ -110,6 +110,9 @@ impl Chorus {
     /// Two-voice BBD-style chorus: base ±10ms modulated by two phase-offset LFOs.
     /// `rate`: 0–1 → 0.1–8 Hz, `depth`: 0–1 → 0–10ms, `mix`: 0–1 wet/dry.
     pub(super) fn process(&mut self, input: f32, rate: f32, depth: f32, mix: f32, sr: f32) -> f32 {
+        if mix < 0.001 {
+            return input;
+        }
         self.buf[self.write] = input;
 
         let rate_hz = 0.1 + rate * 7.9;
@@ -139,5 +142,57 @@ impl Chorus {
         self.write = (self.write + 1) % MAX_CHORUS_SIZE;
 
         input * (1.0 - mix) + wet * mix
+    }
+}
+
+// ─── Phaser (4-stage all-pass cascade) ────────────────────────────────────────
+
+pub(super) struct Phaser {
+    /// All-pass filter states (one per stage, Chamberlin transposed-direct-form-II).
+    stages: [f32; 4],
+    lfo_phase: f32,
+}
+
+impl Phaser {
+    pub(super) fn new() -> Self {
+        Self {
+            stages: [0.0; 4],
+            lfo_phase: 0.0,
+        }
+    }
+
+    /// `rate`: 0–1 → 0.05–5 Hz LFO rate.
+    /// `depth`: 0–1 sweep width (0 = narrow, 1 = full 300–4000 Hz sweep).
+    /// `mix`: 0–1 wet/dry.
+    pub(super) fn process(&mut self, input: f32, rate: f32, depth: f32, mix: f32, sr: f32) -> f32 {
+        if mix < 0.001 {
+            return input;
+        }
+
+        let rate_hz = 0.05 + rate * 4.95;
+        self.lfo_phase += rate_hz / sr;
+        if self.lfo_phase >= 1.0 {
+            self.lfo_phase -= 1.0;
+        }
+
+        let lfo = (self.lfo_phase * std::f32::consts::TAU).sin();
+
+        // LFO sweeps center frequency: 300–4000 Hz
+        let fc = (1150.0 + lfo * depth * 1850.0).clamp(50.0, sr * 0.45);
+
+        // First-order all-pass coefficient: d = (tan(π·fc/sr) − 1) / (tan(π·fc/sr) + 1)
+        let t = (std::f32::consts::PI * fc / sr).tan().clamp(0.001, 999.0);
+        let d = (t - 1.0) / (t + 1.0);
+
+        // 4 all-pass stages in series (transposed form: s stores x[n-1] − d·y[n-1])
+        let mut x = input;
+        for s in &mut self.stages {
+            let y = d * x + *s;
+            *s = x - d * y;
+            x = y;
+        }
+
+        // Classic phaser: summing dry + wet creates comb notches
+        input * (1.0 - mix) + x * mix
     }
 }

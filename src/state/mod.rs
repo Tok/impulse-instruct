@@ -105,6 +105,8 @@ pub struct BassState {
     pub supersaw_detune: f32,    // 0–1 → 0–1 semitone spread between voices
     pub supersaw_voices: u8,     // 2–7
     pub sub_osc_level: f32,      // 0–1 sine one octave below, mixed before filter
+    pub portamento_time: f32,    // 0–1 → 10ms–500ms slide/glide time
+    pub noise_mix: f32,          // 0–1 white noise mixed into oscillator before filter
 }
 
 impl Default for BassState {
@@ -122,6 +124,8 @@ impl Default for BassState {
             supersaw_detune: 0.5,
             supersaw_voices: 5,
             sub_osc_level: 0.0,
+            portamento_time: 0.1, // ~60ms
+            noise_mix: 0.0,
         }
     }
 }
@@ -315,6 +319,9 @@ pub struct FxState {
     pub chorus_rate: f32,          // 0–1 → 0.1–8 Hz LFO rate
     pub chorus_depth: f32,         // 0–1 modulation depth
     pub chorus_mix: f32,           // 0–1 wet/dry
+    pub phaser_rate: f32,          // 0–1 → 0.05–5 Hz LFO rate
+    pub phaser_depth: f32,         // 0–1 sweep depth
+    pub phaser_mix: f32,           // 0–1 wet/dry
 }
 
 impl Default for FxState {
@@ -337,6 +344,9 @@ impl Default for FxState {
             chorus_rate: 0.3,
             chorus_depth: 0.5,
             chorus_mix: 0.0,
+            phaser_rate: 0.3,
+            phaser_depth: 0.5,
+            phaser_mix: 0.0,
         }
     }
 }
@@ -469,6 +479,16 @@ pub fn apply_llm_update(state: AppState, update: &serde_json::Value) -> AppState
             && let Some(v) = b.get("sub_osc_level").and_then(|v| v.as_f64())
         {
             s.bass.sub_osc_level = (v as f32).clamp(0.0, 1.0);
+        }
+        if !locked.contains("bass.portamento_time")
+            && let Some(v) = b.get("portamento_time").and_then(|v| v.as_f64())
+        {
+            s.bass.portamento_time = (v as f32).clamp(0.0, 1.0);
+        }
+        if !locked.contains("bass.noise_mix")
+            && let Some(v) = b.get("noise_mix").and_then(|v| v.as_f64())
+        {
+            s.bass.noise_mix = (v as f32).clamp(0.0, 1.0);
         }
         if !locked.contains("bass.waveform")
             && let Some(w) = b.get("waveform").and_then(|v| v.as_str())
@@ -670,6 +690,21 @@ pub fn apply_llm_update(state: AppState, update: &serde_json::Value) -> AppState
             locked,
         );
         s.fx.chorus_mix = unlocked_f32(s.fx.chorus_mix, fx, "chorus_mix", "fx.chorus_mix", locked);
+        s.fx.phaser_rate = unlocked_f32(
+            s.fx.phaser_rate,
+            fx,
+            "phaser_rate",
+            "fx.phaser_rate",
+            locked,
+        );
+        s.fx.phaser_depth = unlocked_f32(
+            s.fx.phaser_depth,
+            fx,
+            "phaser_depth",
+            "fx.phaser_depth",
+            locked,
+        );
+        s.fx.phaser_mix = unlocked_f32(s.fx.phaser_mix, fx, "phaser_mix", "fx.phaser_mix", locked);
     }
 
     if let Some(lfo_arr) = update.get("lfo").and_then(|v| v.as_array()) {
@@ -831,6 +866,24 @@ pub fn set_bass_step(state: AppState, step: usize, note: u8, active: bool) -> Ap
     if step < s.sequencer.bass_pattern.len() {
         s.sequencer.bass_pattern[step].active = active;
         s.sequencer.bass_pattern[step].note = note;
+    }
+    s
+}
+
+/// Toggle accent on a 303 step.
+pub fn toggle_bass_accent(state: AppState, step: usize) -> AppState {
+    let mut s = state;
+    if step < s.sequencer.bass_pattern.len() {
+        s.sequencer.bass_pattern[step].accent = !s.sequencer.bass_pattern[step].accent;
+    }
+    s
+}
+
+/// Toggle slide on a 303 step.
+pub fn toggle_bass_slide(state: AppState, step: usize) -> AppState {
+    let mut s = state;
+    if step < s.sequencer.bass_pattern.len() {
+        s.sequencer.bass_pattern[step].slide = !s.sequencer.bass_pattern[step].slide;
     }
     s
 }
