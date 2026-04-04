@@ -1,7 +1,7 @@
 // ─── state/transitions.rs ────────────────────────────────────────────────────
 // Pure state transition helpers extracted to keep state/mod.rs under 1000 lines.
 
-use super::{AppState, DrumVoice, MAX_STEPS};
+use super::{AppState, DrumVoice, FilterMode, MAX_STEPS, Waveform};
 
 /// Set the active step count, tiling existing patterns into the new slots when expanding.
 ///
@@ -112,5 +112,23 @@ pub fn toggle_bass_slide(state: AppState, step: usize) -> AppState {
     if step < s.sequencer.bass_pattern.len() {
         s.sequencer.bass_pattern[step].slide = !s.sequencer.bass_pattern[step].slide;
     }
+    s
+}
+
+/// Apply the Reese bass preset.
+/// Detuned dual saws + sub oscillator + highpass to cut sub mud + light chorus.
+/// LLM trigger: "Reese bass", "detuned bass", "jungle bass".
+pub fn apply_reese_preset(state: AppState) -> AppState {
+    let mut s = state;
+    s.bass.waveform = Waveform::Supersaw;
+    s.bass.supersaw_voices = 2;
+    s.bass.supersaw_detune = 0.3; // tight detuning — beating without flange
+    s.bass.sub_osc_level = 0.5;
+    s.bass.filter_mode = FilterMode::Highpass;
+    s.bass.cutoff = 0.25; // HP removes low mud, keeps mid growl
+    s.bass.resonance = 0.35;
+    s.bass.env_mod = 0.0;
+    s.bass.distortion = 0.15;
+    s.bass.fm_depth = 0.0;
     s
 }

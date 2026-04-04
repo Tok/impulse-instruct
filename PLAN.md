@@ -24,16 +24,16 @@ It can nail acid. Everything else is a lie. Fix that.
 - [x] Variable step count per pattern (8 / 16 / 32 / 64)
 - [x] Swing / shuffle per pattern
 - [x] Per-step accent and slide on bass sequencer
-- [ ] Time signature selector (4/4, 3/4, 5/4, 6/8, 7/8…)
+- [x] Time signature selector (4/4, 3/4, 5/4, 6/8, 7/8…)
 - [x] Amen break pattern preset — "make an amen break" should load a proper syncopated 170 BPM breakbeat
 
 ### Synthesis
 - [x] Supersaw oscillator (detune + unison count) — needed for trance, rave stabs, Reese bass
 - [x] Sub-oscillator (one octave below, mix control)
 - [x] Oscillator detune (osc_detune ±1 semitone, shifts whole oscillator pitch)
-- [ ] FM pair (simple 2-op FM for metallic/bell tones)
+- [x] FM pair (simple 2-op FM for metallic/bell tones)
 - [x] Noise source (noise_mix into bass oscillator before filter)
-- [ ] Standalone noise voice (white / pink / brown) — LLM-addressable voice for ambient drones, texture
+- [x] Standalone noise voice (white / pink / brown) — LLM-addressable voice for ambient drones, texture
       layers, and breath. White = flat spectrum; pink = −3dB/octave (Paul Kellett's 3-stage pink filter);
       brown = −6dB/octave (integrated white). Expose volume + color (0=white→1=brown) + filter cutoff.
       LLM trigger: "add wind", "drone texture", "white noise sweep", "brown noise bed".
@@ -47,7 +47,7 @@ It can nail acid. Everything else is a lie. Fix that.
       heavy resonance. Optionally add a pitch LFO for the "wailing" character. Expose as a voice
       preset or a dedicated `hoover` section in the synth with: `filter_start` (0–1), `sweep_time`
       (0.1–4 s), `resonance` (0–1), `detune` (0–1). LLM trigger: "add a hoover", "rave lead".
-- [ ] Reese bass preset — detuned saws (supersaw_voices=2, supersaw_detune≈0.3) + sub_osc≈0.5
+- [x] Reese bass preset — detuned saws (supersaw_voices=2, supersaw_detune≈0.3) + sub_osc≈0.5
       + highpass filter removing sub mud + slight chorus. Expose as a one-shot LLM preset.
 - [x] Proper 808 kick voice with pitch envelope (booming sub tail)
 - [ ] Amen break sampler voice — load a WAV, pitch + stretch — the only real jungle solution

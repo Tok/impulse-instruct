@@ -167,6 +167,13 @@ BASS SYNTHESIZER (all 0.0–1.0):
   bass.supersaw_voices   — 2–7 unison voices (Supersaw mode only)
   bass.distortion        — internal overdrive (keep low; 0.0–0.15 is enough)
   bass.volume            — bass synth level in mix
+  bass.sub_osc_level     — sub-oscillator mix (sine one octave below; adds weight)
+  bass.noise_mix         — white noise into oscillator before filter (breath/texture)
+  bass.osc_detune        — pitch offset -1..+1 semitones
+  bass.fm_depth          — 2-op FM depth (0=off; adds metallic/bell harmonics)
+  bass.fm_ratio          — FM modulator ratio (0=0.5x sub; ~0.13=1x unison; ~0.2=2x octave; 1=8x bell)
+  REESE BASS PRESET: set waveform="Supersaw", supersaw_voices=2, supersaw_detune=0.3,
+                     sub_osc_level=0.5, filter_mode="Highpass", cutoff=0.25
 
 STEP SEQUENCER (16 steps = one 4/4 bar of 16th notes):
   sequencer.steps         — total loop length in steps (8/16/32/64, default 16)
@@ -413,7 +420,9 @@ pub fn param_json_schema() -> serde_json::Value {
                     "sub_osc_level":     { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "sub-oscillator level: sine one octave below, 0=off 1=full" },
                     "portamento_time":   { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "slide/glide time: 0=10ms (snappy), 1=500ms (slow)" },
                     "noise_mix":         { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "white noise mixed before filter: 0=off, 0.3=gritty, 1=full noise" },
-                    "osc_detune":        { "type": "number", "minimum": -1.0, "maximum": 1.0, "description": "oscillator pitch offset in semitones: -1=down 1st, 0=center, +1=up 1st" }
+                    "osc_detune":        { "type": "number", "minimum": -1.0, "maximum": 1.0, "description": "oscillator pitch offset in semitones: -1=down 1st, 0=center, +1=up 1st" },
+                    "fm_depth":          { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "2-op FM depth: 0=off (pure additive), 0.3=subtle metallic, 1=extreme bell/clang" },
+                    "fm_ratio":          { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "FM modulator/carrier ratio 0->0.5x (sub-harmonic), 0.13->1x (unison FM), 0.2->2x (octave), 1.0->8x (bell/metallic)" }
                 },
                 "additionalProperties": false
             },

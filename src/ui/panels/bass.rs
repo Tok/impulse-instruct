@@ -20,6 +20,8 @@ pub fn draw_bass(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         mut portamento_time,
         mut noise_mix,
         mut osc_detune,
+        mut fm_ratio,
+        mut fm_depth,
         waveform,
         filter_mode,
         mut supersaw_detune,
@@ -41,6 +43,8 @@ pub fn draw_bass(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             s.bass.portamento_time,
             s.bass.noise_mix,
             s.bass.osc_detune,
+            s.bass.fm_ratio,
+            s.bass.fm_depth,
             s.bass.waveform.clone(),
             s.bass.filter_mode.clone(),
             s.bass.supersaw_detune,
@@ -207,6 +211,24 @@ pub fn draw_bass(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                 changed = true;
             }
         });
+
+        // FM pair
+        let (ch, cy) =
+            widgets::param_control(ui, "FM DEPTH", &mut fm_depth, ParamMode::Free, use_sliders);
+        if ch {
+            changed = true;
+        }
+        if cy {
+            cycle_paths.push("bass.fm_depth");
+        }
+        let (ch, cy) =
+            widgets::param_control(ui, "FM RATIO", &mut fm_ratio, ParamMode::Free, use_sliders);
+        if ch {
+            changed = true;
+        }
+        if cy {
+            cycle_paths.push("bass.fm_ratio");
+        }
     };
     if use_sliders {
         ui.vertical(draw_bass_controls);
@@ -230,6 +252,8 @@ pub fn draw_bass(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             snap.bass.portamento_time = portamento_time;
             snap.bass.noise_mix = noise_mix;
             snap.bass.osc_detune = osc_detune;
+            snap.bass.fm_ratio = fm_ratio;
+            snap.bass.fm_depth = fm_depth;
             // auto_lock: touching a free param immediately makes it UserOwned
             if auto_lock {
                 for p in [
@@ -390,6 +414,30 @@ pub fn draw_bass(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             }
         });
     }
+
+    // Preset shortcuts
+    ui.horizontal(|ui| {
+        ui.label(
+            egui::RichText::new("PRESET")
+                .color(theme::SMOKE)
+                .monospace()
+                .size(9.0),
+        );
+        if ui
+            .add(egui::Button::new(
+                egui::RichText::new("REESE")
+                    .monospace()
+                    .size(9.0)
+                    .color(theme::FOG),
+            ))
+            .on_hover_text("Detuned dual saws + sub + highpass — classic DnB/jungle bass")
+            .clicked()
+        {
+            let s = app.state.read().clone();
+            *app.state.write() = crate::state::apply_reese_preset(s);
+            app.push_audio_params();
+        }
+    });
 
     ui.add_space(12.0);
 

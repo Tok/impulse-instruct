@@ -48,6 +48,8 @@ pub struct AudioParams {
     pub portamento_time_303: f32, // 0–1 → 10ms–500ms
     pub noise_mix_303: f32,       // 0–1 white noise into osc before filter
     pub osc_detune_303: f32,      // semitone offset -1..+1
+    pub fm_ratio_303: f32,        // 0–1 → modulator/carrier ratio 0.5–8.0
+    pub fm_depth_303: f32,        // 0–1 FM depth; 0 = off
     pub distortion_303: f32,
     pub volume_303: f32,
     // 808 kick
@@ -155,6 +157,8 @@ impl AudioParams {
             portamento_time_303: s.bass.portamento_time,
             noise_mix_303: s.bass.noise_mix,
             osc_detune_303: s.bass.osc_detune,
+            fm_ratio_303: s.bass.fm_ratio,
+            fm_depth_303: s.bass.fm_depth,
             distortion_303: s.bass.distortion,
             volume_303: s.bass.volume,
             kick808_pitch: s.kit_a.kick.pitch,
@@ -285,6 +289,7 @@ pub(crate) fn tanh(x: f32) -> f32 {
 struct Bass303 {
     phase: f32,              // oscillator phase 0-1 (voice 0)
     sub_phase: f32,          // sub-oscillator phase (one octave below)
+    fm_phase: f32,           // FM modulator phase
     unison_phases: [f32; 6], // phases for voices 1–6 (supersaw)
     freq: f32,               // current freq Hz
     target_freq: f32,        // slide target
@@ -304,6 +309,7 @@ impl Default for Bass303 {
         Self {
             phase: 0.0,
             sub_phase: 0.0,
+            fm_phase: 0.0,
             unison_phases: [0.0, 0.142, 0.285, 0.428, 0.571, 0.714], // spread across cycle
             freq: 110.0,
             target_freq: 110.0,
@@ -353,8 +359,20 @@ impl Bass303 {
         // Pitch modulation: LFO + oscillator detune (both in semitones)
         let freq_mod = 2.0f32.powf((p.lfo_pitch_mod_st + p.osc_detune_303) / 12.0);
 
-        // Oscillator
-        self.phase += self.freq * freq_mod / sr;
+        // FM modulator: sine wave at carrier × ratio; adds to carrier phase increment
+        let fm_mod = if p.fm_depth_303 > 0.001 {
+            let mod_ratio = 0.5 + p.fm_ratio_303 * 7.5; // 0.5–8.0
+            self.fm_phase += self.freq * freq_mod * mod_ratio / sr;
+            if self.fm_phase >= 1.0 {
+                self.fm_phase -= 1.0;
+            }
+            (self.fm_phase * std::f32::consts::TAU).sin() * p.fm_depth_303
+        } else {
+            0.0
+        };
+
+        // Oscillator — FM shifts the phase increment each sample
+        self.phase += self.freq * freq_mod * (1.0 + fm_mod) / sr;
         if self.phase >= 1.0 {
             self.phase -= 1.0;
         }

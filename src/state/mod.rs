@@ -113,6 +113,8 @@ pub struct BassState {
     pub portamento_time: f32,    // 0–1 → 10ms–500ms slide/glide time
     pub noise_mix: f32,          // 0–1 white noise mixed into oscillator before filter
     pub osc_detune: f32,         // semitone offset -1..+1, shifts entire oscillator pitch
+    pub fm_ratio: f32,           // 0–1 → modulator/carrier ratio 0.5–8.0
+    pub fm_depth: f32,           // 0–1 FM modulation depth; 0 = off (pure additive)
 }
 
 impl Default for BassState {
@@ -133,6 +135,8 @@ impl Default for BassState {
             portamento_time: 0.1, // ~60ms
             noise_mix: 0.0,
             osc_detune: 0.0,
+            fm_ratio: 0.0,
+            fm_depth: 0.0,
         }
     }
 }
@@ -534,6 +538,8 @@ pub fn apply_llm_update(state: AppState, update: &serde_json::Value) -> AppState
         {
             s.bass.osc_detune = (v as f32).clamp(-1.0, 1.0);
         }
+        s.bass.fm_ratio = unlocked_f32(s.bass.fm_ratio, b, "fm_ratio", "bass.fm_ratio", locked);
+        s.bass.fm_depth = unlocked_f32(s.bass.fm_depth, b, "fm_depth", "bass.fm_depth", locked);
         if !locked.contains("bass.waveform")
             && let Some(w) = b.get("waveform").and_then(|v| v.as_str())
         {
