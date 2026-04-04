@@ -6,4 +6,7 @@
 .llama-build
 .llama-src
 .llama-src-prismml
+.llama-src-official
+.llama-official-build
 llama-server.log
+settings.json
