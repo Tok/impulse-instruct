@@ -71,6 +71,26 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             app.state.write().sequencer.bpm = bpm;
             app.push_audio_params();
         }
+
+        ui.add_space(8.0);
+
+        // Swing
+        let mut swing = app.state.read().sequencer.swing;
+        ui.label(
+            egui::RichText::new("SWING")
+                .color(theme::SMOKE)
+                .monospace()
+                .size(9.0),
+        );
+        let resp = ui.add(
+            egui::DragValue::new(&mut swing)
+                .range(0.0..=1.0)
+                .speed(0.005)
+                .fixed_decimals(2),
+        );
+        if resp.changed() {
+            app.state.write().sequencer.swing = swing;
+        }
     });
 
     ui.add_space(4.0);

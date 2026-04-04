@@ -77,8 +77,24 @@ pub fn advance_clock(
         }
     }
 
-    while acc >= sps {
-        acc -= sps;
+    // Swing: even steps (downbeats) are long, odd steps (upbeats) are short.
+    // swing=0 → equal; swing=0.5 → 75%/25% triplet shuffle.
+    // The duration before the NEXT step fires depends on the CURRENT step's parity.
+    // After firing step N, the gap to step N+1 is:
+    //   even N → sps*(1 + swing*0.5)  (upbeat comes late)
+    //   odd  N → sps*(1 - swing*0.5)  (quick jump back to downbeat)
+    let swing_offset = seq.swing as f64 * 0.5;
+
+    loop {
+        let step_sps = if step.is_multiple_of(2) {
+            sps * (1.0 + swing_offset)
+        } else {
+            sps * (1.0 - swing_offset)
+        };
+        if acc < step_sps {
+            break;
+        }
+        acc -= step_sps;
         step = (step + 1) % seq.steps.max(1);
 
         // Drum triggers

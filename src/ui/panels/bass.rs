@@ -1,7 +1,7 @@
 // ─── ui/panels/bass.rs ────────────────────────────────────────────────────────
 // Bass synthesizer panel.
 
-use crate::state::{ParamMode, Waveform, cycle_param_mode, param_mode};
+use crate::state::{FilterMode, ParamMode, Waveform, cycle_param_mode, param_mode};
 use crate::ui::{ImpulseApp, theme, widgets};
 
 pub fn draw_bass(app: &mut ImpulseApp, ui: &mut egui::Ui) {
@@ -18,6 +18,7 @@ pub fn draw_bass(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         mut vol,
         mut sub_osc_level,
         waveform,
+        filter_mode,
         mut supersaw_detune,
         supersaw_voices,
         locked,
@@ -35,6 +36,7 @@ pub fn draw_bass(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             s.bass.volume,
             s.bass.sub_osc_level,
             s.bass.waveform.clone(),
+            s.bass.filter_mode.clone(),
             s.bass.supersaw_detune,
             s.bass.supersaw_voices,
             s.llm.locked_params.clone(),
@@ -262,6 +264,31 @@ pub fn draw_bass(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         let mut ss = waveform == Waveform::Supersaw;
         if widgets::toggle_button(ui, "SUPER", &mut ss) {
             app.state.write().bass.waveform = Waveform::Supersaw;
+            app.push_audio_params();
+        }
+    });
+
+    // Filter mode toggle
+    ui.horizontal(|ui| {
+        ui.label(
+            egui::RichText::new("FILT")
+                .color(theme::SMOKE)
+                .monospace()
+                .size(9.0),
+        );
+        let mut lp = filter_mode == FilterMode::Lowpass;
+        if widgets::toggle_button(ui, "LP", &mut lp) {
+            app.state.write().bass.filter_mode = FilterMode::Lowpass;
+            app.push_audio_params();
+        }
+        let mut hp = filter_mode == FilterMode::Highpass;
+        if widgets::toggle_button(ui, "HP", &mut hp) {
+            app.state.write().bass.filter_mode = FilterMode::Highpass;
+            app.push_audio_params();
+        }
+        let mut bp = filter_mode == FilterMode::Bandpass;
+        if widgets::toggle_button(ui, "BP", &mut bp) {
+            app.state.write().bass.filter_mode = FilterMode::Bandpass;
             app.push_audio_params();
         }
     });

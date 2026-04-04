@@ -107,6 +107,7 @@ enum Panel {
     Sequencer,
     Instrument(usize),
     Fx,
+    Lfo,
 }
 
 // ─── ImpulseApp ───────────────────────────────────────────────────────────────
@@ -260,7 +261,9 @@ impl ImpulseApp {
             p.sample_rate = 44100.0; // will be overwritten by engine
             p
         };
-        let _ = self.audio_tx.push(AudioCommand::UpdateParams(params));
+        let _ = self
+            .audio_tx
+            .push(AudioCommand::UpdateParams(Box::new(params)));
     }
 
     /// Drain LLM output messages.
@@ -510,6 +513,9 @@ impl eframe::App for ImpulseApp {
                     if tab(ui, Panel::Fx, "FX CHAIN", self.active_panel) {
                         self.active_panel = Panel::Fx;
                     }
+                    if tab(ui, Panel::Lfo, "LFO", self.active_panel) {
+                        self.active_panel = Panel::Lfo;
+                    }
                 });
             });
 
@@ -565,6 +571,7 @@ impl eframe::App for ImpulseApp {
                     }
                 }
                 Panel::Fx => panels::draw_fx(self, ui),
+                Panel::Lfo => panels::draw_lfo(self, ui),
             });
     }
 }

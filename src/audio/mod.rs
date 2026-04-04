@@ -17,7 +17,7 @@ pub use dsp::{AudioParams, DspState};
 // ─── Messages sent from UI/HTTP thread to audio thread ───────────────────────
 
 pub enum AudioCommand {
-    UpdateParams(AudioParams),
+    UpdateParams(Box<AudioParams>),
     Trigger(TriggerEvent),
     /// Live monitor gain (0.0–1.0). Applied after DSP, not saved to state,
     /// never reaches the export path — exports always render at full volume.
@@ -72,7 +72,7 @@ impl AudioEngine {
                     // Drain incoming commands
                     while let Ok(cmd) = params_rx.pop() {
                         match cmd {
-                            AudioCommand::UpdateParams(p) => dsp.update_params(p),
+                            AudioCommand::UpdateParams(p) => dsp.update_params(*p),
                             AudioCommand::Trigger(e) => dsp.handle_trigger(&e),
                             AudioCommand::SetMonitorVolume(v) => monitor_vol = v,
                         }

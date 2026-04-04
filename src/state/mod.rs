@@ -7,6 +7,12 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 
+pub mod drums;
+pub use drums::*;
+
+pub mod lfo;
+pub use lfo::*;
+
 pub const MAX_STEPS: usize = 64;
 
 // ─── Param control mode (tristate) ───────────────────────────────────────────
@@ -65,6 +71,8 @@ pub struct AppState {
     pub sequencer: SequencerState,
     pub fx: FxState,
     pub llm: LlmState,
+    #[serde(default)]
+    pub lfo: [LfoSlot; 4],
 }
 
 // ─── Bass synth ───────────────────────────────────────────────────────────────
@@ -76,6 +84,13 @@ pub enum Waveform {
     Supersaw, // detuned unison saws
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub enum FilterMode {
+    Lowpass,
+    Highpass,
+    Bandpass,
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct BassState {
     pub cutoff: f32,       // 0–1 → 200–8000 Hz
@@ -84,11 +99,12 @@ pub struct BassState {
     pub decay: f32,        // 0–1 → 50–2000 ms
     pub accent_level: f32, // 0–1
     pub waveform: Waveform,
-    pub distortion: f32,      // 0–1
-    pub volume: f32,          // 0–1
-    pub supersaw_detune: f32, // 0–1 → 0–1 semitone spread between voices
-    pub supersaw_voices: u8,  // 2–7
-    pub sub_osc_level: f32,   // 0–1 sine one octave below, mixed before filter
+    pub filter_mode: FilterMode, // LP / HP / BP
+    pub distortion: f32,         // 0–1
+    pub volume: f32,             // 0–1
+    pub supersaw_detune: f32,    // 0–1 → 0–1 semitone spread between voices
+    pub supersaw_voices: u8,     // 2–7
+    pub sub_osc_level: f32,      // 0–1 sine one octave below, mixed before filter
 }
 
 impl Default for BassState {
@@ -100,205 +116,12 @@ impl Default for BassState {
             decay: 0.4,
             accent_level: 0.7,
             waveform: Waveform::Saw,
+            filter_mode: FilterMode::Lowpass,
             distortion: 0.2,
             volume: 0.8,
             supersaw_detune: 0.5,
             supersaw_voices: 5,
             sub_osc_level: 0.0,
-        }
-    }
-}
-
-// ─── Drum Kit A (808-style) ───────────────────────────────────────────────────
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct KickParams {
-    pub pitch: f32,           // 0–1 → 40–80 Hz base
-    pub decay: f32,           // 0–1 → 0.2–2.0 s
-    pub punch: f32,           // 0–1 attack transient
-    pub tone: f32,            // 0–1 sine/noise blend
-    pub volume: f32,          // 0–1
-    pub pitch_env_depth: f32, // 0–1 → 1×–10× pitch drop height
-    pub pitch_env_time: f32,  // 0–1 → 10ms–200ms pitch drop decay
-}
-
-impl Default for KickParams {
-    fn default() -> Self {
-        Self {
-            pitch: 0.5,
-            decay: 0.6,
-            punch: 0.45,
-            tone: 0.8,
-            volume: 0.65,
-            pitch_env_depth: 0.5, // 5.5× → close to hardcoded 6×
-            pitch_env_time: 0.2,  // 48ms → close to hardcoded 40ms
-        }
-    }
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct SnareParams {
-    pub tone: f32,   // 0–1 tone freq
-    pub snappy: f32, // 0–1 noise amount
-    pub decay: f32,  // 0–1
-    pub volume: f32,
-}
-
-impl Default for SnareParams {
-    fn default() -> Self {
-        Self {
-            tone: 0.5,
-            snappy: 0.6,
-            decay: 0.4,
-            volume: 0.60,
-        }
-    }
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct HihatParams {
-    pub decay: f32, // 0–1 (open hat = higher)
-    pub tone: f32,  // 0–1 filter cutoff
-    pub volume: f32,
-}
-
-impl Default for HihatParams {
-    fn default() -> Self {
-        Self {
-            decay: 0.2,
-            tone: 0.7,
-            volume: 0.75,
-        }
-    }
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct TomParams {
-    pub pitch: f32,
-    pub decay: f32,
-    pub volume: f32,
-}
-
-impl Default for TomParams {
-    fn default() -> Self {
-        Self {
-            pitch: 0.5,
-            decay: 0.5,
-            volume: 0.7,
-        }
-    }
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct DrumKit808 {
-    pub kick: KickParams,
-    pub snare: SnareParams,
-    pub hihat_closed: HihatParams,
-    pub hihat_open: HihatParams,
-    pub tom_hi: TomParams,
-    pub tom_mid: TomParams,
-    pub tom_lo: TomParams,
-}
-
-impl Default for DrumKit808 {
-    fn default() -> Self {
-        Self {
-            kick: KickParams::default(),
-            snare: SnareParams::default(),
-            hihat_closed: HihatParams {
-                decay: 0.08,
-                tone: 0.8,
-                volume: 0.55,
-            },
-            hihat_open: HihatParams {
-                decay: 0.4,
-                tone: 0.75,
-                volume: 0.55,
-            },
-            tom_hi: TomParams {
-                pitch: 0.7,
-                decay: 0.4,
-                volume: 0.65,
-            },
-            tom_mid: TomParams {
-                pitch: 0.5,
-                decay: 0.45,
-                volume: 0.65,
-            },
-            tom_lo: TomParams {
-                pitch: 0.3,
-                decay: 0.5,
-                volume: 0.65,
-            },
-        }
-    }
-}
-
-// ─── Drum Kit B (909-style) ───────────────────────────────────────────────────
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct ClapParams {
-    pub decay: f32,
-    pub volume: f32,
-}
-
-impl Default for ClapParams {
-    fn default() -> Self {
-        Self {
-            decay: 0.3,
-            volume: 0.8,
-        }
-    }
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct DrumKit909 {
-    pub kick: KickParams,
-    pub snare: SnareParams,
-    pub hihat_closed: HihatParams,
-    pub hihat_open: HihatParams,
-    pub clap: ClapParams,
-    pub rim: SnareParams, // rim shot reuses snare params
-}
-
-impl Default for DrumKit909 {
-    fn default() -> Self {
-        Self {
-            kick: KickParams {
-                pitch: 0.55,
-                decay: 0.5,
-                punch: 0.5,
-                tone: 0.9,
-                volume: 0.65,
-                pitch_env_depth: 0.5,
-                pitch_env_time: 0.2,
-            },
-            snare: SnareParams {
-                tone: 0.55,
-                snappy: 0.7,
-                decay: 0.35,
-                volume: 0.60,
-            },
-            hihat_closed: HihatParams {
-                decay: 0.06,
-                tone: 0.85,
-                volume: 0.55,
-            },
-            hihat_open: HihatParams {
-                decay: 0.45,
-                tone: 0.8,
-                volume: 0.55,
-            },
-            clap: ClapParams {
-                decay: 0.3,
-                volume: 0.60,
-            },
-            rim: SnareParams {
-                tone: 0.7,
-                snappy: 0.3,
-                decay: 0.15,
-                volume: 0.55,
-            },
         }
     }
 }
@@ -429,6 +252,7 @@ pub struct SequencerState {
     pub steps: usize, // 1–64, active step count
     pub current_step: usize,
     pub running: bool,
+    pub swing: f32, // 0–1: 0=straight, 0.5=strong shuffle (75/25 triplet feel)
     pub drum_patterns: std::collections::HashMap<DrumVoice, Vec<Step>>,
     pub bass_pattern: Vec<TB303Step>,
 }
@@ -463,6 +287,7 @@ impl Default for SequencerState {
             steps: 16,
             current_step: 0,
             running: false,
+            swing: 0.0,
             drum_patterns,
             bass_pattern: vec![TB303Step::default(); MAX_STEPS],
         }
@@ -487,6 +312,9 @@ pub struct FxState {
     pub bitcrush_bits: f32,        // 0–1: 1.0 = full quality (bypass), 0.0 = 1-bit
     pub bitcrush_rate: f32,        // 0–1: 0.0 = no decimation, 1.0 = extreme downsampling
     pub bitcrush_mix: f32,         // 0–1: wet/dry
+    pub chorus_rate: f32,          // 0–1 → 0.1–8 Hz LFO rate
+    pub chorus_depth: f32,         // 0–1 modulation depth
+    pub chorus_mix: f32,           // 0–1 wet/dry
 }
 
 impl Default for FxState {
@@ -506,6 +334,9 @@ impl Default for FxState {
             bitcrush_bits: 1.0,
             bitcrush_rate: 0.0,
             bitcrush_mix: 0.0,
+            chorus_rate: 0.3,
+            chorus_depth: 0.5,
+            chorus_mix: 0.0,
         }
     }
 }
@@ -648,6 +479,15 @@ pub fn apply_llm_update(state: AppState, update: &serde_json::Value) -> AppState
                 _ => Waveform::Saw,
             };
         }
+        if !locked.contains("bass.filter_mode")
+            && let Some(m) = b.get("filter_mode").and_then(|v| v.as_str())
+        {
+            s.bass.filter_mode = match m {
+                "Highpass" | "HP" => FilterMode::Highpass,
+                "Bandpass" | "BP" => FilterMode::Bandpass,
+                _ => FilterMode::Lowpass,
+            };
+        }
     }
 
     if let Some(seq) = update.get("sequencer").and_then(|v| v.as_object()) {
@@ -655,6 +495,11 @@ pub fn apply_llm_update(state: AppState, update: &serde_json::Value) -> AppState
             && let Some(bpm) = seq.get("bpm").and_then(|v| v.as_f64())
         {
             s.sequencer.bpm = (bpm as f32).clamp(40.0, 250.0);
+        }
+        if !locked.contains("sequencer.swing")
+            && let Some(v) = seq.get("swing").and_then(|v| v.as_f64())
+        {
+            s.sequencer.swing = (v as f32).clamp(0.0, 1.0);
         }
         if !locked.contains("sequencer.steps")
             && let Some(steps) = seq.get("steps").and_then(|v| v.as_u64())
@@ -810,6 +655,69 @@ pub fn apply_llm_update(state: AppState, update: &serde_json::Value) -> AppState
             "fx.bitcrush_mix",
             locked,
         );
+        s.fx.chorus_rate = unlocked_f32(
+            s.fx.chorus_rate,
+            fx,
+            "chorus_rate",
+            "fx.chorus_rate",
+            locked,
+        );
+        s.fx.chorus_depth = unlocked_f32(
+            s.fx.chorus_depth,
+            fx,
+            "chorus_depth",
+            "fx.chorus_depth",
+            locked,
+        );
+        s.fx.chorus_mix = unlocked_f32(s.fx.chorus_mix, fx, "chorus_mix", "fx.chorus_mix", locked);
+    }
+
+    if let Some(lfo_arr) = update.get("lfo").and_then(|v| v.as_array()) {
+        for (i, slot_val) in lfo_arr.iter().enumerate().take(4) {
+            let path_prefix = format!("lfo[{}]", i);
+            if locked.contains(&path_prefix) {
+                continue;
+            }
+            if let Some(obj) = slot_val.as_object() {
+                if let Some(v) = obj.get("enabled").and_then(|v| v.as_bool()) {
+                    s.lfo[i].enabled = v;
+                }
+                if let Some(v) = obj.get("rate").and_then(|v| v.as_f64()) {
+                    s.lfo[i].rate = (v as f32).clamp(0.0, 1.0);
+                }
+                if let Some(v) = obj.get("depth").and_then(|v| v.as_f64()) {
+                    s.lfo[i].depth = (v as f32).clamp(0.0, 1.0);
+                }
+                if let Some(v) = obj.get("phase_offset").and_then(|v| v.as_f64()) {
+                    s.lfo[i].phase_offset = (v as f32).clamp(0.0, 1.0);
+                }
+                if let Some(v) = obj.get("waveform").and_then(|v| v.as_str()) {
+                    s.lfo[i].waveform = match v {
+                        "Triangle" => LfoWaveform::Triangle,
+                        "Saw" => LfoWaveform::Saw,
+                        "InvSaw" => LfoWaveform::InvSaw,
+                        "Square" => LfoWaveform::Square,
+                        "SampleAndHold" | "S&H" => LfoWaveform::SampleAndHold,
+                        _ => LfoWaveform::Sine,
+                    };
+                }
+                if let Some(v) = obj.get("target").and_then(|v| v.as_str()) {
+                    s.lfo[i].target = match v {
+                        "BassCutoff" => LfoTarget::BassCutoff,
+                        "BassResonance" => LfoTarget::BassResonance,
+                        "BassPitch" => LfoTarget::BassPitch,
+                        "BassVolume" => LfoTarget::BassVolume,
+                        "ReverbMix" => LfoTarget::ReverbMix,
+                        "DelayTime" => LfoTarget::DelayTime,
+                        "DelayFeedback" => LfoTarget::DelayFeedback,
+                        "ChorusMix" => LfoTarget::ChorusMix,
+                        "ChorusRate" => LfoTarget::ChorusRate,
+                        "Kick808Pitch" => LfoTarget::Kick808Pitch,
+                        _ => LfoTarget::None,
+                    };
+                }
+            }
+        }
     }
 
     s

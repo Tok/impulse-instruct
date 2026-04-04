@@ -67,17 +67,20 @@ pub fn build_system_prompt(state: &AppState) -> String {
             "decay": state.bass.decay,
             "accent_level": state.bass.accent_level,
             "waveform": format!("{:?}", state.bass.waveform),
+            "filter_mode": format!("{:?}", state.bass.filter_mode),
             "distortion": state.bass.distortion,
             "volume": state.bass.volume
         },
         "sequencer": {
-            "bpm": state.sequencer.bpm
+            "bpm": state.sequencer.bpm,
+            "swing": state.sequencer.swing
         },
         "fx": {
             "reverb_mix": state.fx.reverb_mix,
             "delay_mix": state.fx.delay_mix,
             "distortion_drive": state.fx.distortion_drive,
-            "distortion_mix": state.fx.distortion_mix
+            "distortion_mix": state.fx.distortion_mix,
+            "chorus_mix": state.fx.chorus_mix
         }
     }))
     .unwrap_or_default();
@@ -159,6 +162,7 @@ BASS SYNTHESIZER (all 0.0–1.0):
   bass.decay        — filter envelope decay time (low=punchy, high=slow sweep)
   bass.accent_level — accent intensity boost
   bass.waveform          — "Saw" (smooth, warm), "Square" (hollow, buzzy), or "Supersaw" (thick unison)
+  bass.filter_mode       — "Lowpass" (default, warm), "Highpass" (thin, cutting), or "Bandpass" (nasal, mid-focus)
   bass.supersaw_detune   — 0–1 spread between supersaw voices (0=tight unison, 1=wide chorus)
   bass.supersaw_voices   — 2–7 unison voices (Supersaw mode only)
   bass.distortion        — internal overdrive (keep low; 0.0–0.15 is enough)
@@ -166,6 +170,7 @@ BASS SYNTHESIZER (all 0.0–1.0):
 
 STEP SEQUENCER (16 steps = one 4/4 bar of 16th notes):
   sequencer.steps         — total loop length in steps (8/16/32/64, default 16)
+  sequencer.swing         — 0–1 rhythmic swing (0=straight, 0.5=strong shuffle/triplet feel)
   sequencer.bass_steps    — 16-element bool array: which steps trigger the 303
   sequencer.bass_notes    — 16-element int array: MIDI note per step
                             (24=C1, 36=C2, 48=C3; typical range 33–48 for acid)
@@ -188,6 +193,18 @@ FX (all 0.0–1.0):  ← ONLY valid inside "fx": {{…}}, never inside "sequence
   fx.bitcrush_bits    — bit depth (1.0=clean/bypass, 0.5=8-bit, 0.0=1-bit crunch)
   fx.bitcrush_rate    — sample rate decimation (0=off, 1=extreme lo-fi)
   fx.bitcrush_mix     — bitcrush wet/dry
+  fx.chorus_mix       — chorus wet/dry (0=off, 0.3=subtle, 0.6=thick ensemble)
+  fx.chorus_rate      — chorus LFO rate (0=slow drift, 1=fast flutter)
+  fx.chorus_depth     — chorus modulation depth (0=tight, 1=wide, watery)
+
+LFO (global wireable modulators, 4 slots indexed 0–3):
+  lfo[N].enabled     — true/false
+  lfo[N].waveform    — "Sine" | "Triangle" | "Saw" | "InvSaw" | "Square" | "SampleAndHold"
+  lfo[N].rate        — 0–1 (0.01=glacial sweep, 0.1=slow wobble, 0.5=fast, 1.0=8Hz audio-rate)
+  lfo[N].depth       — 0–1 bipolar mod depth
+  lfo[N].target      — "BassCutoff" | "BassResonance" | "BassPitch" | "BassVolume"
+                       "ReverbMix" | "DelayTime" | "DelayFeedback" | "ChorusMix" | "ChorusRate"
+                       "Kick808Pitch" | "None"
 
 ═══ RHYTHM BASICS ═══
 
@@ -224,6 +241,18 @@ BASS MELODY BASICS:
 "harder" / "more drive"
   → Raise fx.distortion_drive + fx.distortion_mix
 
+"swing it" / "add shuffle" / "make it groove"
+  → Set sequencer.swing to 0.25–0.4 for mild shuffle, 0.5 for strong triplet feel
+
+"chorus" / "ensemble" / "wide" / "lush"
+  → Set fx.chorus_mix to 0.3–0.6, fx.chorus_depth to 0.4–0.7
+
+"highpass" / "thin it out" / "remove the lows"
+  → Set bass.filter_mode to "Highpass" — removes sub lows, cutting and percussive
+
+"bandpass" / "nasal" / "mid focus"
+  → Set bass.filter_mode to "Bandpass"
+
 "simpler" / "strip it back"
   → Reduce active bass_steps, remove some drum steps
 
@@ -257,6 +286,15 @@ ACID JAM GUIDANCE — while jamming in acid styles, actively vary:
   bass.resonance between 0.65 and 0.90 (higher = more squelch)
   bass.env_mod between 0.40 and 0.85 (controls sweep character)
   bass.decay between 0.20 and 0.55 (shorter = punchier acid stabs)
+
+"wobble bass" / "slow filter sweep"
+  → lfo[0].enabled=true, target="BassCutoff", rate=0.05–0.15, depth=0.2–0.4, waveform="Sine"
+
+"tremolo" / "volume pulse"
+  → lfo[0].enabled=true, target="BassVolume", rate=0.1–0.3, depth=0.3–0.5, waveform="Triangle"
+
+"pitch vibrato"
+  → lfo[0].enabled=true, target="BassPitch", rate=0.1–0.2, depth=0.1–0.2, waveform="Sine"
 
 FX RESTRAINT — always start clean:
   Unless explicitly asked, keep FX minimal: reverb_mix ≤ 0.12, delay_mix ≤ 0.08, distortion at 0.0

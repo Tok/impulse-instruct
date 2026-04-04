@@ -8,7 +8,22 @@ pub fn draw_fx(app: &mut ImpulseApp, ui: &mut egui::Ui) {
     widgets::section_header(ui, "FX CHAIN");
 
     // Snapshot all FX values + locked set before any widget call
-    let (mut rs, mut rd, mut rm, mut dt, mut df, mut dm, mut dd, mut dx, mut mv, locked, auto_lock) = {
+    let (
+        mut rs,
+        mut rd,
+        mut rm,
+        mut dt,
+        mut df,
+        mut dm,
+        mut dd,
+        mut dx,
+        mut mv,
+        mut ch_rate,
+        mut ch_depth,
+        mut ch_mix,
+        locked,
+        auto_lock,
+    ) = {
         let s = app.state.read();
         (
             s.fx.reverb_size,
@@ -20,6 +35,9 @@ pub fn draw_fx(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             s.fx.distortion_drive,
             s.fx.distortion_mix,
             s.fx.master_volume,
+            s.fx.chorus_rate,
+            s.fx.chorus_depth,
+            s.fx.chorus_mix,
             s.llm.locked_params.clone(),
             s.llm.auto_lock_on_touch,
         )
@@ -100,6 +118,26 @@ pub fn draw_fx(app: &mut ImpulseApp, ui: &mut egui::Ui) {
 
         ui.group(|ui| {
             ui.label(
+                egui::RichText::new("CHORUS")
+                    .color(theme::FOG)
+                    .monospace()
+                    .size(9.5),
+            );
+            if widgets::param_control(ui, "MIX", &mut ch_mix, ParamMode::Free, use_sliders).0 {
+                changed = true;
+            }
+            if widgets::param_control(ui, "RATE", &mut ch_rate, ParamMode::Free, use_sliders).0 {
+                changed = true;
+            }
+            if widgets::param_control(ui, "DEPTH", &mut ch_depth, ParamMode::Free, use_sliders).0 {
+                changed = true;
+            }
+        });
+
+        ui.add_space(4.0);
+
+        ui.group(|ui| {
+            ui.label(
                 egui::RichText::new("DRIVE / MASTER")
                     .color(theme::FOG)
                     .monospace()
@@ -117,7 +155,7 @@ pub fn draw_fx(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         });
     });
 
-    // Write-back for standalone knobs (DAMP, TIME, DRIVE, etc.)
+    // Write-back for standalone knobs (DAMP, TIME, DRIVE, CHORUS, etc.)
     if changed {
         let mut s = app.state.write();
         s.fx.reverb_damp = rd;
@@ -125,6 +163,9 @@ pub fn draw_fx(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         s.fx.distortion_drive = dd;
         s.fx.distortion_mix = dx;
         s.fx.master_volume = mv;
+        s.fx.chorus_rate = ch_rate;
+        s.fx.chorus_depth = ch_depth;
+        s.fx.chorus_mix = ch_mix;
         drop(s);
         app.push_audio_params();
     }

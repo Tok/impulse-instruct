@@ -131,6 +131,24 @@ pub fn draw_kit_a(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         drop(s);
         app.push_audio_params();
     }
+
+    // PITCH × DECAY XY pad for quick kick shaping
+    ui.add_space(6.0);
+    ui.label(
+        egui::RichText::new("KICK: PITCH × DECAY")
+            .color(theme::SMOKE)
+            .monospace()
+            .size(9.0),
+    );
+    ui.horizontal(|ui| {
+        if widgets::xy_pad(ui, "PIT", "DEC", &mut kp, &mut kd, 88.0, false) {
+            let mut s = app.state.write();
+            s.kit_a.kick.pitch = kp;
+            s.kit_a.kick.decay = kd;
+            drop(s);
+            app.push_audio_params();
+        }
+    });
 }
 
 pub fn draw_kit_b(app: &mut ImpulseApp, ui: &mut egui::Ui) {

@@ -22,7 +22,7 @@ It can nail acid. Everything else is a lie. Fix that.
 - [x] 16-step sequencer with per-step velocity
 - [x] BPM locked to user by default — unlock for LLM control
 - [x] Variable step count per pattern (8 / 16 / 32 / 64)
-- [ ] Swing / shuffle per pattern
+- [x] Swing / shuffle per pattern
 - [ ] Per-step accent and slide on bass sequencer
 - [ ] Time signature selector (4/4, 3/4, 5/4, 6/8, 7/8…)
 - [x] Amen break pattern preset — "make an amen break" should load a proper syncopated 170 BPM breakbeat
@@ -34,9 +34,9 @@ It can nail acid. Everything else is a lie. Fix that.
 - [ ] FM pair (simple 2-op FM for metallic/bell tones)
 - [ ] Noise source (for snare body, hi-hat, wind textures)
 - [ ] Portamento / glide time (separate from TB-303 slide)
-- [ ] Second filter mode: highpass + bandpass (current is always lowpass)
+- [x] Second filter mode: highpass + bandpass (current is always lowpass)
 - [ ] Waveshaper / soft clip (lighter distortion option)
-- [ ] Chorus / ensemble effect (essential for 80s sounds, Reese bass)
+- [x] Chorus / ensemble effect (essential for 80s sounds, Reese bass)
 - [ ] Hoover lead — iconic early rave / hardcore sound: supersaw + aggressive highpass filter sweep
       triggered by pitch. Named after the vacuum cleaner drone on Human Resource "Dominator" (1991).
       Implementation: supersaw osc → highpass filter with fast attack env, slow cutoff sweep down,
@@ -53,32 +53,21 @@ It can nail acid. Everything else is a lie. Fix that.
 A standalone LFO engine separate from the AN1X voice — targets any parameter
 in the synth. Think of it as a modulation matrix row, not a per-voice feature.
 
-- [ ] `LfoState` in `AppState`: up to 4 LFO slots, each with:
-      - `waveform`: Sine, Triangle, Saw, InvSaw, Square, S&H (random), Noise
-      - `rate`: 0.01–20 Hz, plus BPM-sync divisions (1/1, 1/2, 1/4, 1/8, 1/16, 1/32, dotted, triplet)
-      - `depth`: 0–1 (bipolar mod amount)
-      - `phase_offset`: 0–1 (start phase, useful for polyrhythmic LFOs)
-      - `target`: enum covering all patchable sinks (see below)
-      - `enabled`: bool
-- [ ] Patchable sinks (LFO target enum):
-      Bass: `cutoff`, `resonance`, `pitch`, `volume`, `distortion`, `sub_osc_level`
-      FX: `reverb_mix`, `delay_time`, `delay_feedback`, `bitcrush_depth`, `chorus_rate`
-      Sequencer: `bpm` (tempo wobble)
-      Drums: `kick808_pitch`, `kick808_punch` (for pumping kick effects)
-- [ ] LFO runs in `process_block()` — one tick per audio block (not per sample),
-      output stored in `DspState.lfo_values: [f32; 4]`, read by each voice's process
-- [ ] LFO sync to sequencer transport: phase resets on sequencer start
-- [ ] UI: LFO panel with rate knob, depth knob, waveform selector, target dropdown,
-      Huth color on the waveform display matching the target parameter's voice color
-- [ ] LLM can set all LFO fields via JSON schema (`lfo[0..3].rate`, `.depth`, `.target`, etc.)
-- [ ] "Slow filter sweep" / "wobble bass" / "tremolo" → LLM maps to appropriate LFO config
+- [x] `LfoState` in `AppState`: up to 4 LFO slots (waveform, rate, depth, phase_offset, target, enabled)
+- [x] Patchable sinks: BassCutoff, BassResonance, BassPitch, BassVolume, ReverbMix, DelayTime,
+      DelayFeedback, ChorusMix, ChorusRate, Kick808Pitch
+- [x] LFO runs in `process_block()` — one tick per audio block, modulates working params copy
+- [x] LFO sync to sequencer transport: phase resets on sequencer start
+- [x] UI: LFO panel — enable toggle, waveform buttons, rate/depth drag, target cycle button
+- [x] LLM can set all LFO fields via JSON schema (`lfo[0..3].rate`, `.depth`, `.target`, etc.)
+- [x] "Slow filter sweep" / "wobble bass" / "tremolo" → LLM maps to appropriate LFO config
 
 ### FX Chain
 - [x] Reverb (basic)
 - [x] Delay
 - [x] Distortion / drive
 - [x] Bitcrush (bit depth + sample rate reduction — lo-fi, gabber, breakcore)
-- [ ] Chorus / flanger as standalone FX slot
+- [x] Chorus / flanger as standalone FX slot
 - [ ] Phaser — all-pass filter chain with LFO-swept center frequency; classic psychedelic sweep
 - [ ] Ring modulator — multiply signal by a carrier sine; metallic/robotic character
 - [ ] EQ (3-band: low shelf, mid peak, high shelf)
@@ -157,7 +146,7 @@ The AN1X voice gets the synthesis side. Bitcrush + tape saturation FX complete t
 
 Bonsai generates the text. A TTS engine speaks it. The crowd goes wild.
 
-- [x] TTS backend — `espeak-ng` subprocess (simple, zero-dep, Linux)
+- [x] TTS backend — `espeak-ng` subprocess (zero-dep, Linux + Windows)
 - [x] TTS only fires in MC / DJ mode — producer-mode explanations are never spoken (sounds wrong)
 - [x] TTS output mirrored to CLI console (`log::info!("[TTS] …")`)
 - [ ] TTS output mirrored to in-UI comment log (distinguish from LLM text log visually)
@@ -168,6 +157,26 @@ Bonsai generates the text. A TTS engine speaks it. The crowd goes wild.
 - [ ] Selectable MC voice character: Jungle MC, Rave Announcer, Robot, Smooth DJ
 - [ ] TTS FX wiring: TTS audio routed through a light reverb + optional bitcrush (hall MC sound)
 - [ ] Volume envelope on TTS so it ducks under the music
+- [ ] **Autotune / pitch-snap on TTS** — pitch-quantize the espeak-ng output to the synth's current
+      key and scale, giving the MC voice a melodic "T-Pain" or jungle toaster character.
+      Implementation approach (offline post-process, feasible with no new language deps):
+        1. TTS renders to a temp WAV (espeak-ng already supports `-w outfile.wav`)
+        2. Per-frame fundamental frequency tracked (YIN algorithm, ~50 lines of pure Rust)
+        3. Each frame pitch-shifted to nearest scale degree via `rubberband-cli` subprocess
+           (`rubberband --pitch N input.wav out.wav`) — same call on Linux and Windows
+        4. Processed WAV decoded and played back through `cpal` (already in the project) —
+           no `aplay` or platform-specific player needed
+        5. Target scale = `AppState.sequencer.root_note` + `scale` (once key/scale state lands)
+           — defaults to chromatic if not set
+      Simpler fallback: shift the whole line to a fixed pitch (root note) with one
+      `rubberband` call + no pitch tracking — instant T-Pain feel, trivial to implement first.
+      **Dependencies** (both required, both cross-platform):
+        - `espeak-ng` — Linux: `apt install espeak-ng`; Windows: installer from espeak-ng.github.io
+        - `rubberband-cli` — Linux: `apt install rubberband-cli`; Windows: official builds at
+          breakfastquay.com/rubberband, or via vcpkg / MSYS2 / winget
+      Document both in README as required deps; the app degrades gracefully (no TTS/autotune)
+      if either is absent — but they are not optional in spirit, just runtime deps not compile deps.
+      Add checkbox in TTS settings: "Pitch snap" + "Snap to root only / full scale".
 
 ---
 

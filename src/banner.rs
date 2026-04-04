@@ -4,14 +4,14 @@
 
 pub fn print_banner() {
     const GRAY: &str = "\x1b[38;2;160;160;160m";
-    const DIM: &str = "\x1b[38;2;50;50;50m";
+    const SUBGRAY: &str = "\x1b[38;2;110;110;110m";
     const RESET: &str = "\x1b[0m";
 
     // ── Title & tagline ───────────────────────────────────────────────────────
     println!();
     println!("{GRAY}  I M P U L S E   I N S T R U C T{RESET}");
     println!(
-        "{DIM}  a synthesizer with a tiny LLM living inside of it  ·  rust  ·  llama.cpp{RESET}"
+        "{SUBGRAY}  a synthesizer with a tiny LLM living inside of it  ·  rust  ·  llama.cpp{RESET}"
     );
 
     // ── Huth-colored keyboard (2 octaves, 7 rows) ────────────────────────────
@@ -131,7 +131,6 @@ pub fn print_banner() {
     let lower = render(&lower_row);
     let bottom = render(&bottom_row);
 
-    println!();
     for _ in 0..3 {
         println!("  {upper}");
     } // rows 1–3: black key bodies

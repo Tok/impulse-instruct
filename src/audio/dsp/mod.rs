@@ -1,4 +1,4 @@
-// ─── audio/dsp.rs ─────────────────────────────────────────────────────────────
+// ─── audio/dsp/mod.rs ─────────────────────────────────────────────────────────
 // Pure DSP — all synthesis happens here.
 // No allocations inside process_block(). State machines, not globals.
 //
@@ -10,14 +10,27 @@
 //   909 variants: same architecture, different tuning/character
 //   FX: simple reverb (Schroeder), echo delay, waveshaper drive
 
-use crate::sequencer::TriggerEvent;
-use crate::state::{AppState, DrumVoice, Waveform};
+mod fx;
+mod voices;
+use fx::*;
+use voices::*;
 
-const MAX_DELAY_SAMPLES: usize = 96_000; // 2s @ 48kHz
-const REVERB_COMBS: usize = 8;
-const REVERB_ALLPASS: usize = 4;
+use crate::sequencer::TriggerEvent;
+use crate::state::{AppState, DrumVoice, FilterMode, LfoTarget, LfoWaveform, Waveform};
 
 // ─── AudioParams snapshot (copied from AppState for audio thread) ──────────────
+
+/// Per-slot LFO configuration passed to the audio thread (Copy-safe).
+#[derive(Clone, Copy, Debug)]
+pub struct LfoParamsCopy {
+    pub enabled: bool,
+    pub waveform: u8,      // 0=Sine 1=Triangle 2=Saw 3=InvSaw 4=Square 5=S&H
+    pub rate: f32,         // 0–1
+    pub depth: f32,        // 0–1
+    pub phase_offset: f32, // 0–1
+    pub target: u8,        // 0=None 1=BassCutoff 2=BassResonance 3=BassPitch 4=BassVolume
+                           // 5=ReverbMix 6=DelayTime 7=DelayFeedback 8=ChorusMix 9=ChorusRate 10=Kick808Pitch
+}
 
 #[derive(Clone, Copy, Debug)]
 pub struct AudioParams {
@@ -82,8 +95,18 @@ pub struct AudioParams {
     pub bitcrush_bits: f32,
     pub bitcrush_rate: f32,
     pub bitcrush_mix: f32,
+    // Chorus
+    pub chorus_rate: f32,
+    pub chorus_depth: f32,
+    pub chorus_mix: f32,
+    // Filter mode (0=LP, 1=HP, 2=BP)
+    pub filter_mode: u8,
     // Sample rate
     pub sample_rate: f32,
+    // LFO
+    pub lfo: [LfoParamsCopy; 4],
+    pub sequencer_running: bool,
+    pub lfo_pitch_mod_st: f32,
 }
 
 impl AudioParams {
@@ -141,74 +164,66 @@ impl AudioParams {
             bitcrush_bits: s.fx.bitcrush_bits,
             bitcrush_rate: s.fx.bitcrush_rate,
             bitcrush_mix: s.fx.bitcrush_mix,
+            chorus_rate: s.fx.chorus_rate,
+            chorus_depth: s.fx.chorus_depth,
+            chorus_mix: s.fx.chorus_mix,
+            filter_mode: match s.bass.filter_mode {
+                FilterMode::Lowpass => 0,
+                FilterMode::Highpass => 1,
+                FilterMode::Bandpass => 2,
+            },
             sample_rate: 44100.0,
+            lfo: {
+                let mut arr = [LfoParamsCopy {
+                    enabled: false,
+                    waveform: 0,
+                    rate: 0.2,
+                    depth: 0.3,
+                    phase_offset: 0.0,
+                    target: 0,
+                }; 4];
+                for (i, slot) in s.lfo.iter().enumerate() {
+                    arr[i] = LfoParamsCopy {
+                        enabled: slot.enabled,
+                        waveform: match slot.waveform {
+                            LfoWaveform::Sine => 0,
+                            LfoWaveform::Triangle => 1,
+                            LfoWaveform::Saw => 2,
+                            LfoWaveform::InvSaw => 3,
+                            LfoWaveform::Square => 4,
+                            LfoWaveform::SampleAndHold => 5,
+                        },
+                        rate: slot.rate,
+                        depth: slot.depth,
+                        phase_offset: slot.phase_offset,
+                        target: match slot.target {
+                            LfoTarget::None => 0,
+                            LfoTarget::BassCutoff => 1,
+                            LfoTarget::BassResonance => 2,
+                            LfoTarget::BassPitch => 3,
+                            LfoTarget::BassVolume => 4,
+                            LfoTarget::ReverbMix => 5,
+                            LfoTarget::DelayTime => 6,
+                            LfoTarget::DelayFeedback => 7,
+                            LfoTarget::ChorusMix => 8,
+                            LfoTarget::ChorusRate => 9,
+                            LfoTarget::Kick808Pitch => 10,
+                        },
+                    };
+                }
+                arr
+            },
+            sequencer_running: s.sequencer.running,
+            lfo_pitch_mod_st: 0.0,
         }
     }
 }
 
-// ─── Low-level voice state machines ──────────────────────────────────────────
+// ─── Fast tanh approximation (used by LadderFilter and Bass303) ───────────────
 
-/// Moog-style 4-pole ladder filter state.
-#[derive(Clone, Copy, Default)]
-struct LadderFilter {
-    s: [f32; 4],
-}
-
-impl LadderFilter {
-    /// `g` is the per-stage filter coefficient (0–~0.99).
-    /// Callers must map cutoff to a proper g before calling.
-    fn process(&mut self, input: f32, g: f32, resonance: f32) -> f32 {
-        let f = g.clamp(0.001, 0.99);
-        let k = resonance * 4.0; // self-oscillation at k=4.0
-
-        // Feedback
-        let fb = k * self.s[3];
-        let x = input - fb;
-
-        // 4 one-pole stages
-        self.s[0] = self.s[0] + f * (tanh(x) - tanh(self.s[0]));
-        self.s[1] = self.s[1] + f * (tanh(self.s[0]) - tanh(self.s[1]));
-        self.s[2] = self.s[2] + f * (tanh(self.s[1]) - tanh(self.s[2]));
-        self.s[3] = self.s[3] + f * (tanh(self.s[2]) - tanh(self.s[3]));
-        self.s[3]
-    }
-}
-
-fn tanh(x: f32) -> f32 {
-    // Fast tanh approximation
+pub(crate) fn tanh(x: f32) -> f32 {
     let x2 = x * x;
     x * (27.0 + x2) / (27.0 + 9.0 * x2)
-}
-
-/// Simple one-pole smoothing filter.
-#[derive(Clone, Copy, Default)]
-struct OnePole {
-    state: f32,
-}
-
-impl OnePole {
-    fn process(&mut self, input: f32, coeff: f32) -> f32 {
-        self.state = self.state * coeff + input * (1.0 - coeff);
-        self.state
-    }
-}
-
-/// PRNG for noise generation (xorshift32 — no stdlib, no heap).
-#[derive(Clone, Copy)]
-struct NoiseGen {
-    state: u32,
-}
-
-impl NoiseGen {
-    fn new(seed: u32) -> Self {
-        Self { state: seed.max(1) }
-    }
-    fn next(&mut self) -> f32 {
-        self.state ^= self.state << 13;
-        self.state ^= self.state >> 17;
-        self.state ^= self.state << 5;
-        (self.state as f32 / u32::MAX as f32) * 2.0 - 1.0
-    }
 }
 
 // ─── TB-303 voice ─────────────────────────────────────────────────────────────
@@ -226,6 +241,8 @@ struct Bass303 {
     accent: bool,
     slide: bool,
     filter: LadderFilter,
+    svf_low: f32,  // Chamberlin SVF low-pass state
+    svf_band: f32, // Chamberlin SVF band-pass state
 }
 
 impl Default for Bass303 {
@@ -242,6 +259,8 @@ impl Default for Bass303 {
             accent: false,
             slide: false,
             filter: LadderFilter::default(),
+            svf_low: 0.0,
+            svf_band: 0.0,
         }
     }
 }
@@ -275,8 +294,11 @@ impl Bass303 {
             self.freq = self.freq + (self.target_freq - self.freq) * (1.0 - slide_coeff);
         }
 
+        // Pitch modulation from LFO
+        let freq_mod = 2.0f32.powf(p.lfo_pitch_mod_st / 12.0);
+
         // Oscillator
-        self.phase += self.freq / sr;
+        self.phase += self.freq * freq_mod / sr;
         if self.phase >= 1.0 {
             self.phase -= 1.0;
         }
@@ -296,7 +318,7 @@ impl Bass303 {
                 };
                 let detune_st = (t - 0.5) * spread_semitones;
                 let ratio = 2.0f32.powf(detune_st / 12.0);
-                self.unison_phases[i] += self.freq * ratio / sr;
+                self.unison_phases[i] += self.freq * freq_mod * ratio / sr;
                 if self.unison_phases[i] >= 1.0 {
                     self.unison_phases[i] -= 1.0;
                 }
@@ -311,7 +333,7 @@ impl Bass303 {
         };
 
         // Sub-oscillator: sine one octave below, mixed before filter
-        self.sub_phase += self.freq * 0.5 / sr;
+        self.sub_phase += self.freq * freq_mod * 0.5 / sr;
         if self.sub_phase >= 1.0 {
             self.sub_phase -= 1.0;
         }
@@ -345,8 +367,23 @@ impl Bass303 {
             (w / (1.0 + w)).clamp(0.001, 0.99)
         };
 
-        // Ladder filter
-        let filtered = self.filter.process(osc, g, p.resonance * 0.97);
+        // Filter — LP uses Moog ladder, HP/BP use Chamberlin SVF
+        let filtered = if p.filter_mode == 0 {
+            self.filter.process(osc, g, p.resonance * 0.97)
+        } else {
+            // Chamberlin State Variable Filter
+            // f = 2*sin(pi*fc/sr), clamped to avoid instability
+            let f = (std::f32::consts::PI * cutoff_hz / sr).sin().min(0.95);
+            let q = 1.0 - p.resonance * 0.95; // q=1 = no resonance, q≈0 = self-oscillation
+            self.svf_low += f * self.svf_band;
+            let high = osc - self.svf_low - q * self.svf_band;
+            self.svf_band += f * high;
+            if p.filter_mode == 1 {
+                high
+            } else {
+                self.svf_band
+            } // 1=HP, 2=BP
+        };
 
         // Soft clip distortion
         let dist = if p.distortion_303 > 0.01 {
@@ -357,316 +394,6 @@ impl Bass303 {
         };
 
         dist * self.amp_env * p.volume_303 * accent_mult
-    }
-}
-
-// ─── Drum voice generic base ──────────────────────────────────────────────────
-
-#[derive(Clone, Copy, Default)]
-struct Envelope {
-    value: f32,
-    active: bool,
-}
-
-impl Envelope {
-    fn trigger(&mut self) {
-        self.value = 1.0;
-        self.active = true;
-    }
-    fn tick(&mut self, decay_coeff: f32) -> f32 {
-        if !self.active {
-            return 0.0;
-        }
-        self.value *= decay_coeff;
-        if self.value < 1e-6 {
-            self.active = false;
-            self.value = 0.0;
-        }
-        self.value
-    }
-}
-
-// ─── 808/909 Kick ─────────────────────────────────────────────────────────────
-
-#[derive(Clone)]
-struct Kick {
-    phase: f32,
-    pitch_env: Envelope,
-    amp_env: Envelope,
-    noise_gen: NoiseGen,
-    punch_env: Envelope,
-}
-
-impl Kick {
-    fn new(seed: u32) -> Self {
-        Self {
-            phase: 0.0,
-            pitch_env: Envelope::default(),
-            amp_env: Envelope::default(),
-            noise_gen: NoiseGen::new(seed),
-            punch_env: Envelope::default(),
-        }
-    }
-
-    fn trigger(&mut self) {
-        self.pitch_env.trigger();
-        self.amp_env.trigger();
-        self.punch_env.trigger();
-        self.phase = 0.0;
-    }
-
-    fn process(
-        &mut self,
-        base_pitch: f32,
-        decay: f32,
-        punch: f32,
-        volume: f32,
-        pitch_env_depth: f32,
-        pitch_env_time: f32,
-        sr: f32,
-    ) -> f32 {
-        let base_hz = 40.0 + base_pitch * 40.0; // 40–80 Hz
-        let decay_coeff = (-1.0 / (sr * (decay * 1.8 + 0.2))).exp();
-        let pitch_decay_time = 0.01 + pitch_env_time * 0.19; // 10ms–200ms
-        let pitch_decay = (-1.0 / (sr * pitch_decay_time)).exp();
-        let punch_decay = (-1.0 / (sr * 0.005)).exp(); // 5ms punch
-
-        let amp = self.amp_env.tick(decay_coeff);
-        let pitch_mod = self.pitch_env.tick(pitch_decay);
-        let punch_amp = self.punch_env.tick(punch_decay);
-
-        let freq = base_hz + pitch_mod * base_hz * (1.0 + pitch_env_depth * 9.0);
-        self.phase += freq / sr;
-        if self.phase >= 1.0 {
-            self.phase -= 1.0;
-        }
-
-        let sine = (self.phase * std::f32::consts::TAU).sin();
-        let click = self.noise_gen.next() * punch_amp * punch;
-
-        (sine * amp + click * 0.3) * volume
-    }
-}
-
-// ─── 808/909 Snare ────────────────────────────────────────────────────────────
-
-#[derive(Clone)]
-struct Snare {
-    phase: f32,
-    tone_env: Envelope,
-    noise_env: Envelope,
-    noise_filter: OnePole,
-    noise_gen: NoiseGen,
-}
-
-impl Snare {
-    fn new(seed: u32) -> Self {
-        Self {
-            phase: 0.0,
-            tone_env: Envelope::default(),
-            noise_env: Envelope::default(),
-            noise_filter: OnePole::default(),
-            noise_gen: NoiseGen::new(seed),
-        }
-    }
-
-    fn trigger(&mut self) {
-        self.tone_env.trigger();
-        self.noise_env.trigger();
-    }
-
-    fn process(&mut self, tone: f32, snappy: f32, decay: f32, volume: f32, sr: f32) -> f32 {
-        let tone_hz = 100.0 + tone * 200.0;
-        let decay_coeff = (-1.0 / (sr * (decay * 0.4 + 0.05))).exp();
-        let noise_decay = (-1.0 / (sr * (decay * 0.3 + 0.03))).exp();
-
-        let tone_amp = self.tone_env.tick(decay_coeff);
-        let noise_amp = self.noise_env.tick(noise_decay);
-
-        self.phase += tone_hz / sr;
-        if self.phase >= 1.0 {
-            self.phase -= 1.0;
-        }
-
-        let tone_out = (self.phase * std::f32::consts::TAU).sin() * tone_amp;
-        let noise_raw = self.noise_gen.next();
-        // High-pass noise: subtract low-pass
-        let lp = self.noise_filter.process(noise_raw, 0.7);
-        let noise_hp = noise_raw - lp;
-        let noise_out = noise_hp * noise_amp * snappy;
-
-        (tone_out * (1.0 - snappy * 0.5) + noise_out) * volume
-    }
-}
-
-// ─── HiHat ────────────────────────────────────────────────────────────────────
-
-#[derive(Clone)]
-struct HiHat {
-    amp_env: Envelope,
-    noise_filter: OnePole,
-    noise_gen: NoiseGen,
-}
-
-impl HiHat {
-    fn new(seed: u32) -> Self {
-        Self {
-            amp_env: Envelope::default(),
-            noise_filter: OnePole::default(),
-            noise_gen: NoiseGen::new(seed),
-        }
-    }
-
-    fn trigger(&mut self) {
-        self.amp_env.trigger();
-    }
-
-    fn process(&mut self, decay: f32, tone: f32, volume: f32, sr: f32) -> f32 {
-        let decay_time = decay * decay * 0.5 + 0.005; // 5ms–500ms
-        let decay_coeff = (-1.0 / (sr * decay_time)).exp();
-        let amp = self.amp_env.tick(decay_coeff);
-
-        let noise = self.noise_gen.next();
-        // Band-pass via two one-poles
-        let lp = self.noise_filter.process(noise, 0.95 - tone * 0.15);
-        let hp = noise - lp;
-
-        hp * amp * volume
-    }
-}
-
-// ─── 909 Clap ─────────────────────────────────────────────────────────────────
-
-#[derive(Clone)]
-struct Clap {
-    amp_env: Envelope,
-    burst_env: Envelope,
-    noise_gen: NoiseGen,
-    burst_count: u8,
-    burst_timer: u32,
-}
-
-impl Clap {
-    fn new(seed: u32) -> Self {
-        Self {
-            amp_env: Envelope::default(),
-            burst_env: Envelope::default(),
-            noise_gen: NoiseGen::new(seed),
-            burst_count: 0,
-            burst_timer: 0,
-        }
-    }
-
-    fn trigger(&mut self) {
-        self.amp_env.trigger();
-        self.burst_env.trigger();
-        self.burst_count = 3;
-        self.burst_timer = 0;
-    }
-
-    fn process(&mut self, decay: f32, volume: f32, sr: f32) -> f32 {
-        let decay_coeff = (-1.0 / (sr * (decay * 0.5 + 0.05))).exp();
-        let burst_coeff = (-1.0 / (sr * 0.005)).exp();
-
-        // Multi-burst characteristic of 909 clap
-        if self.burst_count > 0 {
-            self.burst_timer += 1;
-            if self.burst_timer > (sr * 0.008) as u32 {
-                self.burst_count -= 1;
-                self.burst_timer = 0;
-                self.burst_env.trigger();
-            }
-        }
-
-        let amp = self.amp_env.tick(decay_coeff);
-        let burst = self.burst_env.tick(burst_coeff);
-
-        let noise = self.noise_gen.next();
-        noise * (amp + burst * 0.5) * volume
-    }
-}
-
-// ─── Simple Schroeder reverb ──────────────────────────────────────────────────
-
-struct Reverb {
-    comb_delays: [Vec<f32>; REVERB_COMBS],
-    comb_ptrs: [usize; REVERB_COMBS],
-    comb_filters: [f32; REVERB_COMBS],
-    allpass_delays: [Vec<f32>; REVERB_ALLPASS],
-    allpass_ptrs: [usize; REVERB_ALLPASS],
-}
-
-// Freeverb-inspired delay lengths (prime-ish, tuned for ~44.1kHz)
-const COMB_LENGTHS: [usize; REVERB_COMBS] = [1116, 1188, 1277, 1356, 1422, 1491, 1557, 1617];
-const ALLPASS_LENGTHS: [usize; REVERB_ALLPASS] = [556, 441, 341, 225];
-
-impl Reverb {
-    fn new() -> Self {
-        Self {
-            comb_delays: std::array::from_fn(|i| vec![0.0f32; COMB_LENGTHS[i]]),
-            comb_ptrs: [0; REVERB_COMBS],
-            comb_filters: [0.0; REVERB_COMBS],
-            allpass_delays: std::array::from_fn(|i| vec![0.0f32; ALLPASS_LENGTHS[i]]),
-            allpass_ptrs: [0; REVERB_ALLPASS],
-        }
-    }
-
-    fn process(&mut self, input: f32, room_size: f32, damp: f32) -> f32 {
-        let feedback = room_size * 0.28 + 0.7; // 0.7–0.98
-        let damp1 = damp * 0.4;
-        let damp2 = 1.0 - damp1;
-
-        // Parallel comb filters
-        let mut out = 0.0f32;
-        for (i, &len) in COMB_LENGTHS.iter().enumerate() {
-            let ptr = self.comb_ptrs[i];
-            let delayed = self.comb_delays[i][ptr];
-
-            // Low-pass filtered feedback
-            self.comb_filters[i] = delayed * damp2 + self.comb_filters[i] * damp1;
-            self.comb_delays[i][ptr] = input + self.comb_filters[i] * feedback;
-
-            self.comb_ptrs[i] = (ptr + 1) % len;
-            out += delayed;
-        }
-        out *= 0.125; // scale by num combs
-
-        // Series all-pass filters
-        for (i, &len) in ALLPASS_LENGTHS.iter().enumerate() {
-            let ptr = self.allpass_ptrs[i];
-            let delayed = self.allpass_delays[i][ptr];
-
-            self.allpass_delays[i][ptr] = out + delayed * 0.5;
-            self.allpass_ptrs[i] = (ptr + 1) % len;
-            out = delayed - out;
-        }
-
-        out
-    }
-}
-
-// ─── Delay line ───────────────────────────────────────────────────────────────
-
-struct DelayLine {
-    buf: Vec<f32>,
-    ptr: usize,
-}
-
-impl DelayLine {
-    fn new() -> Self {
-        Self {
-            buf: vec![0.0; MAX_DELAY_SAMPLES],
-            ptr: 0,
-        }
-    }
-
-    fn process(&mut self, input: f32, delay_samples: usize, feedback: f32) -> f32 {
-        let delay_samples = delay_samples.clamp(1, MAX_DELAY_SAMPLES - 1);
-        let read_ptr = (self.ptr + MAX_DELAY_SAMPLES - delay_samples) % MAX_DELAY_SAMPLES;
-        let delayed = self.buf[read_ptr];
-        self.buf[self.ptr] = input + delayed * feedback;
-        self.ptr = (self.ptr + 1) % MAX_DELAY_SAMPLES;
-        delayed
     }
 }
 
@@ -691,8 +418,14 @@ pub struct DspState {
     // FX
     reverb: Reverb,
     delay: DelayLine,
+    chorus: Chorus,
     bitcrush_held: f32,
     bitcrush_counter: u32,
+    // LFO state
+    lfo_phases: [f32; 4],
+    lfo_sh_held: [f32; 4],
+    lfo_noise: NoiseGen,
+    prev_running: bool,
     // Current params
     params: AudioParams,
     sample_rate: f32,
@@ -719,8 +452,13 @@ impl DspState {
             rim909: Snare::new(0xffff),
             reverb: Reverb::new(),
             delay: DelayLine::new(),
+            chorus: Chorus::new(),
             bitcrush_held: 0.0,
             bitcrush_counter: 0,
+            lfo_phases: [0.0; 4],
+            lfo_sh_held: [0.0; 4],
+            lfo_noise: NoiseGen::new(0xCAFE_BABE),
+            prev_running: false,
             params: p,
             sample_rate,
         }
@@ -764,8 +502,66 @@ impl DspState {
 
     /// Process one buffer — pure computation, no I/O, no allocation.
     pub fn process_block(&mut self, output: &mut [f32], channels: usize) {
-        let p = self.params;
+        let p_base = self.params;
         let sr = self.sample_rate;
+        let block_size = output.len() / channels.max(1);
+
+        // Phase reset: when sequencer transitions from stopped to running, reset all LFO phases
+        if p_base.sequencer_running && !self.prev_running {
+            self.lfo_phases = [0.0; 4];
+        }
+        self.prev_running = p_base.sequencer_running;
+
+        // Advance LFO phases once per block and apply modulation to a working params copy
+        let mut p = p_base;
+        for i in 0..4 {
+            let lp = p_base.lfo[i];
+            if !lp.enabled {
+                continue;
+            }
+            let rate_hz = 0.01 + lp.rate * 19.99;
+            let phase_inc = rate_hz * (block_size as f32 / sr);
+            let old_phase = self.lfo_phases[i];
+            self.lfo_phases[i] = (old_phase + phase_inc) % 1.0;
+            let wrapped = self.lfo_phases[i] < old_phase; // true when phase wrapped
+
+            let phase = (self.lfo_phases[i] + lp.phase_offset) % 1.0;
+            let lfo_val = match lp.waveform {
+                0 => (phase * std::f32::consts::TAU).sin(),
+                1 => 1.0 - 4.0 * (phase - 0.5).abs(),
+                2 => phase * 2.0 - 1.0,
+                3 => 1.0 - phase * 2.0,
+                4 => {
+                    if phase < 0.5 {
+                        1.0
+                    } else {
+                        -1.0
+                    }
+                }
+                _ => {
+                    // S&H: update held value on phase wrap
+                    if wrapped {
+                        self.lfo_sh_held[i] = self.lfo_noise.next();
+                    }
+                    self.lfo_sh_held[i]
+                }
+            };
+
+            let mod_val = lfo_val * lp.depth;
+            match lp.target {
+                1 => p.cutoff = (p.cutoff + mod_val).clamp(0.0, 1.0),
+                2 => p.resonance = (p.resonance + mod_val).clamp(0.0, 1.0),
+                3 => p.lfo_pitch_mod_st += mod_val * 12.0, // ±12 semitones at depth=1
+                4 => p.volume_303 = (p.volume_303 + mod_val).clamp(0.0, 1.5),
+                5 => p.reverb_mix = (p.reverb_mix + mod_val).clamp(0.0, 1.0),
+                6 => p.delay_time = (p.delay_time + mod_val * 0.5).clamp(0.0, 1.0),
+                7 => p.delay_feedback = (p.delay_feedback + mod_val * 0.5).clamp(0.0, 0.99),
+                8 => p.chorus_mix = (p.chorus_mix + mod_val).clamp(0.0, 1.0),
+                9 => p.chorus_rate = (p.chorus_rate + mod_val).clamp(0.0, 1.0),
+                10 => p.kick808_pitch = (p.kick808_pitch + mod_val * 0.5).clamp(0.0, 1.0),
+                _ => {}
+            }
+        }
 
         let delay_samples =
             (p.delay_time * sr * 1.0).clamp(1.0, MAX_DELAY_SAMPLES as f32 - 1.0) as usize;
@@ -867,6 +663,14 @@ impl DspState {
                 }
                 let crushed = self.bitcrush_held;
                 delayed * (1.0 - p.bitcrush_mix) + crushed * p.bitcrush_mix
+            } else {
+                delayed
+            };
+
+            // Chorus / ensemble
+            let delayed = if p.chorus_mix > 0.001 {
+                self.chorus
+                    .process(delayed, p.chorus_rate, p.chorus_depth, p.chorus_mix, sr)
             } else {
                 delayed
             };
