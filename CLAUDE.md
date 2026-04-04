@@ -9,7 +9,7 @@ cargo run                            # run (mock LLM, no model needed)
 cargo run -- --api                   # enable HTTP API on :8765
 cargo run -- --api --model models/x.gguf --log debug
 cargo run --features llm --release   # real LLM inference (needs libclang-dev)
-cargo test                           # 13 unit tests
+cargo test                           # 75 unit tests (split across src/tests/)
 ./run-tests.sh --coverage            # HTML coverage report
 ./build-all.sh                       # Linux + Windows EXE → dist/
 ./download-models.sh                 # fetch Bonsai 8B GGUF (~1.1 GB 1-bit model, needs HF account)
@@ -26,11 +26,16 @@ cargo test                           # 13 unit tests
 | `src/llm/mod.rs` | LLM inference thread. Mock mode when no model file found. Real inference via `--features llm`. |
 | `src/llm/prompt.rs` | System prompt builder + JSON schema for grammar-constrained generation. |
 | `src/api/mod.rs` | axum HTTP/MCP API. Only starts when `--api` flag passed. |
-| `src/midi/mod.rs` | midir input, CC→param mapping. |
-| `src/ui/mod.rs` | egui app: 5 panels (Sequencer / 303 / 808 / 909 / FX). |
-| `src/ui/theme.rs` | Grayscale palette — all colors are R=G=B. Color will be used for highlights later. |
-| `src/ui/widgets.rs` | Rotary knob, step button, LED, section header. |
-| `src/tests.rs` | Unit tests for pure functions. |
+| `src/midi/mod.rs` | midir input (CC→param mapping, NoteOn/Off → live record) + MIDI clock output (MidiClockOutput struct). |
+| `src/ui/mod.rs` | egui app: 5 panels (Sequencer / 303 / 808 / 909 / FX) + AN1X + Hoover sub-panels. |
+| `src/ui/theme.rs` | Grayscale palette — all colors are R=G=B. Huth Farbige Noten colors used for note highlights only. |
+| `src/ui/widgets.rs` | Chrome knob, glass slider, embossed button, step button, LED, XY pad, oscilloscope, ADSR visualizer. |
+| `src/ui/panels/` | One file per synth panel (bass, 808, 909, hoover, an1x, fx, sequencer). |
+| `src/state/transitions.rs` | Pure state transition functions (all the `toggle_*`, `set_*`, `apply_*`, `bank_*`, `chain_*` fns). |
+| `src/tests/mod.rs` | Test submodule index. |
+| `src/tests/seq_tests.rs` | Sequencer, euclidean, step array, probability tests. |
+| `src/tests/state_tests.rs` | State, expand steps, transition, bank/chain tests. |
+| `src/tests/llm_tests.rs` | Prompt, instruction, music theory, DSP tests. |
 
 ## Coding style — functional patterns first
 
@@ -93,8 +98,14 @@ must be free of side effects.
 
 ### Every pure function gets a test
 
-New pure functions go in `src/tests.rs`. If a function is pure, testing it
-is trivial — just call it with inputs and assert on outputs. No mocks needed.
+New pure functions go in the appropriate submodule under `src/tests/`:
+- `seq_tests.rs` — sequencer, euclidean, step arrays, probability
+- `state_tests.rs` — state transitions, bank/chain operations
+- `llm_tests.rs` — prompt building, instruction set, music theory, DSP
+
+If a function is pure, testing it is trivial — just call it with inputs and assert on outputs. No mocks needed.
+
+Each test file has a **1000-line limit** enforced by the pre-commit hook. If a file approaches the limit, split it into a new submodule and add an entry to `src/tests/mod.rs`.
 
 ```rust
 #[test]
@@ -146,10 +157,12 @@ requirements. Build exactly what the current task needs.
 
 ## LLM integration
 
-- Mock mode: runs without model, returns plausible JSON based on prompt keywords
-- Real mode: requires `models/Bonsai-8B.gguf` (1-bit Q1_0_g128, PrismML format) + PrismML llama-server
-- LLM outputs JSON only, constrained by the schema in `src/llm/prompt.rs`
-- JSON is applied via `apply_llm_update()` which respects `locked_params`
+- Mock mode: runs without model, returns plausible JSON based on prompt keywords + instruction set
+- Real mode: any GGUF model via PrismML llama-server subprocess; model selected at runtime via UI
+- LLM outputs JSON only — step arrays use compact formats: index list `[0,4,8,12]` or inline `[1,0,…]` or clear `[]`
+- JSON is applied via `apply_llm_update()` in `src/state/transitions.rs`, which respects `locked_params`
+- `sanitize_json_structure()` in `src/llm/mod.rs` fixes common LLM output errors (LFO dot-notation, etc.) before parsing
+- `max_tokens: 1200` — keep this high enough to avoid JSON truncation on complex responses
 
 ## HTTP API (port 8765)
 
@@ -164,11 +177,16 @@ POST /api/sequencer/play
 POST /api/sequencer/stop
 ```
 
-## Planned / not yet implemented
+## Not yet implemented
 
-- Real llama-cpp-2 inference path (mock only for now)
-- MIDI wiring to AppState mutations
-- Per-step velocity in UI
-- Bitcrush FX
+- Amen break sampler voice (load WAV, pitch + time-stretch)
+- Autotune / pitch-snap on TTS output (rubberband-cli post-process)
+- MIDI clock in (slave BPM to external)
+- OSC support (Max/MSP, TouchOSC)
+- Stem export (per-voice WAV)
+- Project versioning (auto-save snapshots, revert history)
+- Modular FX routing (currently a fixed chain)
+- Gabber kick voice (pitch env + hard clipper)
+- Bloom post-process (needs custom wgpu render pass)
 - Alternate tuning tables (gamelan slendro etc.)
 - Windows: `start.bat`, `build.bat`
