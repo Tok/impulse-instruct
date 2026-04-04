@@ -364,7 +364,7 @@ impl ModelResult {
 
 // ─── Core eval loop ──────────────────────────────────────────────────────────
 
-fn run_model(model_path: &str, specs: &[StyleSpec], timeout_secs: u64) -> ModelResult {
+fn run_model(model_path: &str, specs: &[&StyleSpec], timeout_secs: u64) -> ModelResult {
     let model_name = std::path::Path::new(model_path)
         .file_stem()
         .and_then(|s| s.to_str())
@@ -749,8 +749,7 @@ fn main() {
             eprintln!("⚠  Model not found: {model_path} — skipping");
             continue;
         }
-        // Pass owned specs by collecting check names — re-build per model to satisfy borrow checker
-        let result = run_model(model_path, &all_specs, args.timeout_secs);
+        let result = run_model(model_path, &specs, args.timeout_secs);
         results.push(result);
     }
 
@@ -762,15 +761,6 @@ fn main() {
     if args.json_output {
         print_json(&results);
     } else {
-        // Filter the display specs for the table
-        let display_specs: Vec<&StyleSpec> = if args.style_filter.is_empty() {
-            all_specs.iter().collect()
-        } else {
-            all_specs
-                .iter()
-                .filter(|s| args.style_filter.iter().any(|f| s.id.contains(f.as_str())))
-                .collect()
-        };
-        print_ascii_table(&results, &display_specs);
+        print_ascii_table(&results, &specs);
     }
 }
