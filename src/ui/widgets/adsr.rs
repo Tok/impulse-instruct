@@ -1,5 +1,5 @@
 // ─── ui/widgets/adsr.rs ───────────────────────────────────────────────────────
-// Interactive ADSR envelope visualiser widget.
+// Interactive ADSR envelope visualiser widget + simplified decay-only display.
 
 use egui::{Color32, Pos2, Sense, Stroke, Ui, Vec2};
 
@@ -148,6 +148,87 @@ pub fn adsr_display(
                 rect.right_top() + Vec2::new(-4.0, 4.0),
                 egui::Align2::RIGHT_TOP,
                 label,
+                egui::FontId::monospace(8.0),
+                Color32::from_gray(100),
+            );
+        }
+    }
+
+    changed
+}
+
+/// Simplified decay-only envelope display for the 303 bass.
+/// Shows an instant attack to `env_mod` peak, then linear decay to zero.
+/// Drag horizontally to edit `decay`. Returns `true` if changed.
+pub fn decay_display(ui: &mut Ui, decay: &mut f32, env_mod: f32, width: f32, height: f32) -> bool {
+    let size = Vec2::new(width, height);
+    let (rect, response) = ui.allocate_exact_size(size, Sense::click_and_drag());
+
+    let mut changed = false;
+
+    if response.dragged() {
+        let dx = response.drag_delta().x / rect.width();
+        *decay = (*decay + dx * 2.0).clamp(0.0, 1.0);
+        changed = true;
+    }
+
+    if ui.is_rect_visible(rect) {
+        let painter = ui.painter();
+
+        painter.rect_filled(rect, egui::Rounding::same(2.0), Color32::from_gray(10));
+        painter.rect_stroke(
+            rect,
+            egui::Rounding::same(2.0),
+            Stroke::new(1.0, Color32::from_gray(30)),
+        );
+        painter.line_segment(
+            [
+                rect.left_top() + Vec2::new(2.0, 0.5),
+                rect.right_top() - Vec2::new(2.0, 0.0),
+            ],
+            Stroke::new(1.0, Color32::from_gray(45)),
+        );
+
+        let pad = 3.0_f32;
+        let inner_w = rect.width() - pad * 2.0;
+        let inner_h = rect.height() - pad * 2.0;
+        let px = |t: f32| rect.min.x + pad + t * inner_w;
+        let py = |v: f32| rect.min.y + pad + (1.0 - v) * inner_h;
+
+        // Shape: (0,0) → instant rise to env_mod at x=0.1 → decay to 0 at x=0.1+decay*0.9
+        let peak_x = 0.08_f32;
+        let decay_end_x = peak_x + *decay * (1.0 - peak_x);
+        let peak = env_mod.clamp(0.0, 1.0);
+
+        let pts = [
+            Pos2::new(px(0.0), py(0.0)),
+            Pos2::new(px(peak_x), py(peak)),
+            Pos2::new(px(decay_end_x), py(0.0)),
+            Pos2::new(px(1.0), py(0.0)),
+        ];
+
+        let fill_col = Color32::from_rgba_premultiplied(55, 55, 55, 30);
+        painter.add(egui::Shape::convex_polygon(
+            pts.to_vec(),
+            fill_col,
+            Stroke::NONE,
+        ));
+
+        let line_col = if response.hovered() || response.dragged() {
+            Color32::from_gray(200)
+        } else {
+            Color32::from_gray(140)
+        };
+        for w in pts.windows(2) {
+            painter.line_segment([w[0], w[1]], Stroke::new(1.5, line_col));
+        }
+        painter.circle_filled(pts[1], 2.5, Color32::from_gray(180));
+
+        if response.hovered() {
+            painter.text(
+                rect.right_top() + Vec2::new(-4.0, 4.0),
+                egui::Align2::RIGHT_TOP,
+                "D",
                 egui::FontId::monospace(8.0),
                 Color32::from_gray(100),
             );

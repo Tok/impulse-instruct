@@ -626,7 +626,7 @@ pub fn xy_pad(
 
 // ─── ADSR Envelope Visualiser ────────────────────────────────────────────────
 mod adsr;
-pub use adsr::adsr_display;
+pub use adsr::{adsr_display, decay_display};
 
 // ─── Glass Group ─────────────────────────────────────────────────────────────
 

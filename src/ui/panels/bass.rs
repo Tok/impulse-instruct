@@ -330,7 +330,25 @@ pub fn draw_bass(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         }
     });
 
-    ui.add_space(8.0);
+    ui.add_space(6.0);
+
+    // Decay envelope visualiser — shows the 303's decay-only filter envelope shape
+    ui.horizontal(|ui| {
+        ui.label(
+            egui::RichText::new("ENV")
+                .color(theme::SMOKE)
+                .monospace()
+                .size(9.0),
+        );
+        if widgets::decay_display(ui, &mut decay, env_mod, 100.0, 28.0) {
+            let mut snap = app.state.read().clone();
+            snap.bass.decay = decay;
+            *app.state.write() = snap;
+            app.push_audio_params();
+        }
+    });
+
+    ui.add_space(6.0);
 
     // Waveform toggle
     ui.horizontal(|ui| {
