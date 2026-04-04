@@ -3,7 +3,7 @@
 
 use crate::audio::AudioCommand;
 use crate::sequencer::TriggerEvent;
-use crate::state::scale_degree;
+use crate::state::{record_bass_note, scale_degree};
 use crate::ui::{ImpulseApp, note_name, theme};
 
 pub fn draw_piano(app: &mut ImpulseApp, ui: &mut egui::Ui, ctx: &egui::Context) {
@@ -357,6 +357,15 @@ pub fn draw_piano(app: &mut ImpulseApp, ui: &mut egui::Ui, ctx: &egui::Context) 
                     slide: false,
                     gate_samples: 22050,
                 }));
+            // Live record: write note into the bass pattern at the current step.
+            let (live_record, running, current_step) = {
+                let s = app.state.read();
+                (s.live_record, s.sequencer.running, s.sequencer.current_step)
+            };
+            if live_record && running {
+                let snap = app.state.read().clone();
+                *app.state.write() = record_bass_note(snap, current_step, note);
+            }
         }
     } else if app.piano_mouse_note.is_some()
         && (response.drag_stopped() || !response.is_pointer_button_down_on())

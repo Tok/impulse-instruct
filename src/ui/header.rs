@@ -239,6 +239,30 @@ impl ImpulseApp {
                         }
                     }
 
+                    // REC — live record piano notes into bass pattern
+                    {
+                        let (live_record, running) = {
+                            let s = self.state.read();
+                            (s.live_record, s.sequencer.running)
+                        };
+                        let rec_col = if live_record && running {
+                            theme::CHALK
+                        } else {
+                            theme::IRON
+                        };
+                        let rec_fill = if live_record && running {
+                            egui::Color32::from_gray(60)
+                        } else {
+                            egui::Color32::TRANSPARENT
+                        };
+                        if ui.add(egui::Button::new(
+                            egui::RichText::new("⏺ REC").monospace().size(10.0).color(rec_col)
+                        ).fill(rec_fill)).clicked() {
+                            let next = crate::state::toggle_live_record(self.state.read().clone());
+                            *self.state.write() = next;
+                        }
+                    }
+
                     ui.add_space(4.0);
 
                     // Heat slider

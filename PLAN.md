@@ -240,8 +240,8 @@ synthesis. Goal: replicate this interaction exactly.
 - [x] Polyrhythm: per-voice step counts that don't have to match (kick 16, hihat 12, bass 7)
 - [x] Euclidean rhythm generator (LLM can say "4-in-16 euclidean kick")
 - [x] Step probability per step (0–100% chance of firing)
-- [ ] Ratcheting / note repeat per step
-- [ ] Pattern chaining: define multiple patterns and sequence them (A → B → A → C)
+- [x] Ratcheting / note repeat per step
+- [x] Pattern chaining: define multiple patterns and sequence them (A → B → A → C)
 - [ ] Live record: play keyboard, record directly into sequencer steps
 
 ---

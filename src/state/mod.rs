@@ -122,6 +122,9 @@ pub struct AppState {
     /// Current position in the chain — written by audio thread, read by UI.
     #[serde(default)]
     pub chain_pos: usize,
+    /// When true, piano/MIDI note-ons while running write into the bass pattern.
+    #[serde(default)]
+    pub live_record: bool,
 }
 
 impl Default for AppState {
@@ -144,6 +147,7 @@ impl Default for AppState {
             chain: Vec::new(),
             chain_enabled: false,
             chain_pos: 0,
+            live_record: false,
         }
     }
 }

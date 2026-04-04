@@ -744,3 +744,21 @@ pub fn set_chain_enabled(state: AppState, enabled: bool) -> AppState {
     }
     s
 }
+
+/// Toggle live-record mode. Disables itself automatically when sequencer stops.
+pub fn toggle_live_record(state: AppState) -> AppState {
+    let mut s = state;
+    s.live_record = !s.live_record;
+    s
+}
+
+/// Write a note into the bass pattern at the given step (used by live record).
+pub fn record_bass_note(state: AppState, step: usize, note: u8) -> AppState {
+    let mut s = state;
+    let step = step % s.sequencer.bass_steps.max(1);
+    if step < s.sequencer.bass_pattern.len() {
+        s.sequencer.bass_pattern[step].active = true;
+        s.sequencer.bass_pattern[step].note = note;
+    }
+    s
+}
