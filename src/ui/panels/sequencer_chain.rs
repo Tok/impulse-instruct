@@ -1,9 +1,7 @@
 // ─── ui/panels/sequencer_chain.rs ────────────────────────────────────────────
 // Pattern bank selector and chain editor for the sequencer panel.
 
-use crate::state::{
-    bank_load, bank_write, chain_pop, chain_push, set_chain_enabled, set_pattern_edit,
-};
+use crate::state::{bank_swap, bank_write, chain_pop, chain_push, set_chain_enabled};
 use crate::ui::{ImpulseApp, theme};
 
 const SLOT_NAMES: [&str; 8] = ["A", "B", "C", "D", "E", "F", "G", "H"];
@@ -41,20 +39,18 @@ pub fn draw_pattern_chain(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                     .fill(fill),
             );
             if resp.clicked() {
+                // Save current edits to old slot, then load this slot.
                 let s = app.state.read().clone();
-                *app.state.write() = set_pattern_edit(s, slot);
+                *app.state.write() = bank_swap(s, slot);
             }
             if resp.secondary_clicked() {
+                // Right-click: save current to this slot without switching.
                 let s = app.state.read().clone();
                 *app.state.write() = bank_write(s, slot);
             }
-            if resp.middle_clicked() {
-                let s = app.state.read().clone();
-                *app.state.write() = bank_load(s, slot, true);
-            }
         }
         ui.label(
-            egui::RichText::new("  r-click=save  m-click=load")
+            egui::RichText::new("  click=switch  r-click=save")
                 .color(theme::IRON)
                 .monospace()
                 .size(7.0),

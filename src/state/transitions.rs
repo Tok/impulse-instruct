@@ -745,6 +745,34 @@ pub fn set_chain_enabled(state: AppState, enabled: bool) -> AppState {
     s
 }
 
+/// Save current sequencer to `pattern_edit` slot, then load `new_slot` (keep transport).
+/// This is the primary bank-switch operation: always saves before loading so no edits are lost.
+pub fn bank_swap(state: AppState, new_slot: usize) -> AppState {
+    let mut s = state;
+    let new_slot = new_slot.min(7);
+    if s.pattern_edit == new_slot {
+        return s; // already on this slot — save in place
+    }
+    if s.pattern_bank.len() < 8 {
+        s.pattern_bank
+            .resize_with(8, super::SequencerState::default);
+    }
+    // Save current edits to the previously active slot
+    s.pattern_bank[s.pattern_edit] = s.sequencer.clone();
+    // Load new slot, preserving transport
+    let bpm = s.sequencer.bpm;
+    let swing = s.sequencer.swing;
+    let running = s.sequencer.running;
+    let step = s.sequencer.current_step;
+    s.sequencer = s.pattern_bank.get(new_slot).cloned().unwrap_or_default();
+    s.sequencer.bpm = bpm;
+    s.sequencer.swing = swing;
+    s.sequencer.running = running;
+    s.sequencer.current_step = step;
+    s.pattern_edit = new_slot;
+    s
+}
+
 /// Toggle live-record mode. Disables itself automatically when sequencer stops.
 pub fn toggle_live_record(state: AppState) -> AppState {
     let mut s = state;

@@ -308,7 +308,10 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         // Bass note row
         ui.horizontal(|ui| {
             ui.add_sized(
-                [SEQ_LABEL_W + SEQ_VOL_W + 8.0, SEQ_LABEL_H],
+                [
+                    10.0 + 10.0 + (SEQ_LABEL_W - 20.0) + SEQ_VOL_W + 18.0 + 4.0 * 8.0,
+                    SEQ_LABEL_H,
+                ],
                 egui::Label::new(
                     egui::RichText::new("BASS")
                         .color(theme::SMOKE)
@@ -350,7 +353,10 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         // Accent row
         ui.horizontal(|ui| {
             ui.add_sized(
-                [SEQ_LABEL_W + SEQ_VOL_W + 8.0, 14.0],
+                [
+                    10.0 + 10.0 + (SEQ_LABEL_W - 20.0) + SEQ_VOL_W + 18.0 + 4.0 * 8.0,
+                    14.0,
+                ],
                 egui::Label::new(
                     egui::RichText::new("ACCENT")
                         .color(theme::IRON)
@@ -382,7 +388,10 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         // Slide row
         ui.horizontal(|ui| {
             ui.add_sized(
-                [SEQ_LABEL_W + SEQ_VOL_W + 8.0, 14.0],
+                [
+                    10.0 + 10.0 + (SEQ_LABEL_W - 20.0) + SEQ_VOL_W + 18.0 + 4.0 * 8.0,
+                    14.0,
+                ],
                 egui::Label::new(
                     egui::RichText::new("SLIDE")
                         .color(theme::IRON)
@@ -425,7 +434,10 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                 theme::PIT
             };
             ui.add_sized(
-                [SEQ_LABEL_W + SEQ_VOL_W + 8.0, SEQ_LABEL_H],
+                [
+                    10.0 + 10.0 + (SEQ_LABEL_W - 20.0) + SEQ_VOL_W + 18.0 + 4.0 * 8.0,
+                    SEQ_LABEL_H,
+                ],
                 egui::Label::new(
                     egui::RichText::new("HOOVER")
                         .color(label_color)
@@ -478,7 +490,10 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                 theme::PIT
             };
             ui.add_sized(
-                [SEQ_LABEL_W + SEQ_VOL_W + 8.0, SEQ_LABEL_H],
+                [
+                    10.0 + 10.0 + (SEQ_LABEL_W - 20.0) + SEQ_VOL_W + 18.0 + 4.0 * 8.0,
+                    SEQ_LABEL_H,
+                ],
                 egui::Label::new(
                     egui::RichText::new("AN1X")
                         .color(label_color)
@@ -770,9 +785,9 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                 }
             });
 
-            // Spacer width: M(10)+S(10)+label(SEQ_LABEL_W-20)+vol(SEQ_VOL_W)+nn(18)+spacing
-            // ≈ SEQ_LABEL_W + SEQ_LABEL_H + SEQ_VOL_W + SEQ_VOL_H + 20.0
-            let lane_spacer = SEQ_LABEL_W + SEQ_LABEL_H + SEQ_VOL_W + SEQ_VOL_H + 20.0;
+            // lane_spacer = M(10)+S(10)+(SEQ_LABEL_W-20)+SEQ_VOL_W+18 + 4 item gaps (8px each)
+            // = 10+10+52+52+18 + 32 = 174 — aligns velocity/prob/ratchet bars with step buttons.
+            let lane_spacer = 10.0 + 10.0 + (SEQ_LABEL_W - 20.0) + SEQ_VOL_W + 18.0 + 4.0 * 8.0;
 
             // ── Velocity lane ─────────────────────────────────────────────────
             ui.horizontal(|ui| {

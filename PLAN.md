@@ -242,7 +242,7 @@ synthesis. Goal: replicate this interaction exactly.
 - [x] Step probability per step (0–100% chance of firing)
 - [x] Ratcheting / note repeat per step
 - [x] Pattern chaining: define multiple patterns and sequence them (A → B → A → C)
-- [ ] Live record: play keyboard, record directly into sequencer steps
+- [x] Live record: play keyboard, record directly into sequencer steps
 
 ---
 

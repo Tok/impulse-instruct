@@ -120,6 +120,12 @@ impl AudioEngine {
                             let bpm = s.sequencer.bpm;
                             let swing = s.sequencer.swing;
                             let running = s.sequencer.running;
+                            // Auto-save current edits to the active bank slot before switching.
+                            let current_edit = s.pattern_edit;
+                            let snap = s.sequencer.clone();
+                            if let Some(slot) = s.pattern_bank.get_mut(current_edit) {
+                                *slot = snap;
+                            }
                             s.chain_pos = (chain_pos_snap + 1) % chain_snap.len();
                             s.sequencer =
                                 s.pattern_bank.get(next_slot).cloned().unwrap_or_default();
@@ -127,6 +133,7 @@ impl AudioEngine {
                             s.sequencer.swing = swing;
                             s.sequencer.running = running;
                             s.sequencer.current_step = clock.current_step;
+                            s.pattern_edit = next_slot;
                         }
                     }
 
