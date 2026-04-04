@@ -185,7 +185,8 @@ impl LlamaServerBackend {
         kill_leaked_servers(bin);
 
         log::info!(
-            "Spawning llama-server on port {} with model {}",
+            "Spawning llama-server ({}) on port {} with model {}",
+            bin,
             port,
             model_path
         );
