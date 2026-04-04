@@ -498,3 +498,36 @@ mod music_theory_tests {
         assert_eq!(new_state.sequencer.bass_pattern[0].note, 49);
     }
 }
+
+#[cfg(test)]
+mod euclidean_tests {
+    use crate::sequencer::euclidean_rhythm;
+
+    #[test]
+    fn euclid_pulse_count_matches() {
+        for (pulses, steps) in [(4, 16), (5, 8), (3, 7), (1, 4), (7, 7), (0, 8)] {
+            let r = euclidean_rhythm(pulses, steps);
+            assert_eq!(r.len(), steps, "len mismatch {}/{}", pulses, steps);
+            let count = r.iter().filter(|&&x| x).count();
+            assert_eq!(count, pulses, "pulse count mismatch {}/{}", pulses, steps);
+        }
+    }
+
+    #[test]
+    fn euclid_edge_cases() {
+        assert_eq!(euclidean_rhythm(0, 8), vec![false; 8]);
+        assert_eq!(euclidean_rhythm(8, 8), vec![true; 8]);
+        assert!(euclidean_rhythm(0, 0).is_empty());
+    }
+
+    #[test]
+    fn euclid_4_in_16_is_four_on_floor() {
+        // Classic: 4-on-the-floor places pulses at indices 0, 4, 8, 12.
+        let r = euclidean_rhythm(4, 16);
+        assert!(
+            r[0] && r[4] && r[8] && r[12],
+            "4-on-floor placement wrong: {:?}",
+            r
+        );
+    }
+}

@@ -7,6 +7,7 @@ use super::{
     AppState, DrumVoice, FilterMode, LfoTarget, LfoWaveform, MAX_STEPS, Scale, Waveform,
     snap_to_scale,
 };
+use crate::sequencer::euclidean_rhythm;
 
 /// Set the active step count, tiling existing patterns into the new slots when expanding.
 ///
@@ -477,161 +478,7 @@ pub fn apply_llm_update(state: AppState, update: &serde_json::Value) -> AppState
     }
 
     if let Some(fx) = update.get("fx").and_then(|v| v.as_object()) {
-        s.fx.reverb_size = unlocked_f32(
-            s.fx.reverb_size,
-            fx,
-            "reverb_size",
-            "fx.reverb_size",
-            locked,
-        );
-        s.fx.reverb_mix = unlocked_f32(s.fx.reverb_mix, fx, "reverb_mix", "fx.reverb_mix", locked);
-        s.fx.delay_time = unlocked_f32(s.fx.delay_time, fx, "delay_time", "fx.delay_time", locked);
-        s.fx.delay_feedback = unlocked_f32(
-            s.fx.delay_feedback,
-            fx,
-            "delay_feedback",
-            "fx.delay_feedback",
-            locked,
-        );
-        s.fx.delay_mix = unlocked_f32(s.fx.delay_mix, fx, "delay_mix", "fx.delay_mix", locked);
-        s.fx.distortion_drive = unlocked_f32(
-            s.fx.distortion_drive,
-            fx,
-            "distortion_drive",
-            "fx.distortion_drive",
-            locked,
-        );
-        s.fx.distortion_mix = unlocked_f32(
-            s.fx.distortion_mix,
-            fx,
-            "distortion_mix",
-            "fx.distortion_mix",
-            locked,
-        );
-        s.fx.bitcrush_bits = unlocked_f32(
-            s.fx.bitcrush_bits,
-            fx,
-            "bitcrush_bits",
-            "fx.bitcrush_bits",
-            locked,
-        );
-        s.fx.bitcrush_rate = unlocked_f32(
-            s.fx.bitcrush_rate,
-            fx,
-            "bitcrush_rate",
-            "fx.bitcrush_rate",
-            locked,
-        );
-        s.fx.bitcrush_mix = unlocked_f32(
-            s.fx.bitcrush_mix,
-            fx,
-            "bitcrush_mix",
-            "fx.bitcrush_mix",
-            locked,
-        );
-        s.fx.chorus_rate = unlocked_f32(
-            s.fx.chorus_rate,
-            fx,
-            "chorus_rate",
-            "fx.chorus_rate",
-            locked,
-        );
-        s.fx.chorus_depth = unlocked_f32(
-            s.fx.chorus_depth,
-            fx,
-            "chorus_depth",
-            "fx.chorus_depth",
-            locked,
-        );
-        s.fx.chorus_mix = unlocked_f32(s.fx.chorus_mix, fx, "chorus_mix", "fx.chorus_mix", locked);
-        s.fx.phaser_rate = unlocked_f32(
-            s.fx.phaser_rate,
-            fx,
-            "phaser_rate",
-            "fx.phaser_rate",
-            locked,
-        );
-        s.fx.phaser_depth = unlocked_f32(
-            s.fx.phaser_depth,
-            fx,
-            "phaser_depth",
-            "fx.phaser_depth",
-            locked,
-        );
-        s.fx.phaser_mix = unlocked_f32(s.fx.phaser_mix, fx, "phaser_mix", "fx.phaser_mix", locked);
-        s.fx.waveshaper_drive = unlocked_f32(
-            s.fx.waveshaper_drive,
-            fx,
-            "waveshaper_drive",
-            "fx.waveshaper_drive",
-            locked,
-        );
-        s.fx.waveshaper_mix = unlocked_f32(
-            s.fx.waveshaper_mix,
-            fx,
-            "waveshaper_mix",
-            "fx.waveshaper_mix",
-            locked,
-        );
-        s.fx.ring_mod_freq = unlocked_f32(
-            s.fx.ring_mod_freq,
-            fx,
-            "ring_mod_freq",
-            "fx.ring_mod_freq",
-            locked,
-        );
-        s.fx.ring_mod_mix = unlocked_f32(
-            s.fx.ring_mod_mix,
-            fx,
-            "ring_mod_mix",
-            "fx.ring_mod_mix",
-            locked,
-        );
-        s.fx.eq_low_gain = unlocked_f32(
-            s.fx.eq_low_gain,
-            fx,
-            "eq_low_gain",
-            "fx.eq_low_gain",
-            locked,
-        );
-        s.fx.eq_mid_gain = unlocked_f32(
-            s.fx.eq_mid_gain,
-            fx,
-            "eq_mid_gain",
-            "fx.eq_mid_gain",
-            locked,
-        );
-        s.fx.eq_hi_gain = unlocked_f32(s.fx.eq_hi_gain, fx, "eq_hi_gain", "fx.eq_hi_gain", locked);
-        s.fx.compressor_threshold = unlocked_f32(
-            s.fx.compressor_threshold,
-            fx,
-            "compressor_threshold",
-            "fx.compressor_threshold",
-            locked,
-        );
-        s.fx.compressor_ratio = unlocked_f32(
-            s.fx.compressor_ratio,
-            fx,
-            "compressor_ratio",
-            "fx.compressor_ratio",
-            locked,
-        );
-        s.fx.compressor_mix = unlocked_f32(
-            s.fx.compressor_mix,
-            fx,
-            "compressor_mix",
-            "fx.compressor_mix",
-            locked,
-        );
-        s.fx.tape_drive = unlocked_f32(s.fx.tape_drive, fx, "tape_drive", "fx.tape_drive", locked);
-        s.fx.tape_mix = unlocked_f32(s.fx.tape_mix, fx, "tape_mix", "fx.tape_mix", locked);
-        s.fx.tape_flutter = unlocked_f32(
-            s.fx.tape_flutter,
-            fx,
-            "tape_flutter",
-            "fx.tape_flutter",
-            locked,
-        );
+        apply_fx_update(&mut s, fx, locked);
     }
 
     if let Some(lfo_arr) = update.get("lfo").and_then(|v| v.as_array()) {
@@ -803,169 +650,38 @@ pub fn apply_llm_update(state: AppState, update: &serde_json::Value) -> AppState
     }
 
     if let Some(a) = update.get("an1x").and_then(|v| v.as_object()) {
-        if !locked.contains("an1x.enabled")
-            && let Some(v) = a.get("enabled").and_then(|v| v.as_bool())
-        {
-            s.an1x.enabled = v;
-        }
-        s.an1x.volume = unlocked_f32(s.an1x.volume, a, "volume", "an1x.volume", locked);
-        s.an1x.osc1_level = unlocked_f32(
-            s.an1x.osc1_level,
-            a,
-            "osc1_level",
-            "an1x.osc1_level",
-            locked,
-        );
-        s.an1x.osc2_level = unlocked_f32(
-            s.an1x.osc2_level,
-            a,
-            "osc2_level",
-            "an1x.osc2_level",
-            locked,
-        );
-        s.an1x.osc2_detune = unlocked_f32(
-            s.an1x.osc2_detune,
-            a,
-            "osc2_detune",
-            "an1x.osc2_detune",
-            locked,
-        );
-        s.an1x.sub_level = unlocked_f32(s.an1x.sub_level, a, "sub_level", "an1x.sub_level", locked);
-        s.an1x.filter_cutoff = unlocked_f32(
-            s.an1x.filter_cutoff,
-            a,
-            "filter_cutoff",
-            "an1x.filter_cutoff",
-            locked,
-        );
-        s.an1x.filter_resonance = unlocked_f32(
-            s.an1x.filter_resonance,
-            a,
-            "filter_resonance",
-            "an1x.filter_resonance",
-            locked,
-        );
-        s.an1x.filter_env_amount = unlocked_f32(
-            s.an1x.filter_env_amount,
-            a,
-            "filter_env_amount",
-            "an1x.filter_env_amount",
-            locked,
-        );
-        s.an1x.filter_attack = unlocked_f32(
-            s.an1x.filter_attack,
-            a,
-            "filter_attack",
-            "an1x.filter_attack",
-            locked,
-        );
-        s.an1x.filter_decay = unlocked_f32(
-            s.an1x.filter_decay,
-            a,
-            "filter_decay",
-            "an1x.filter_decay",
-            locked,
-        );
-        s.an1x.filter_sustain = unlocked_f32(
-            s.an1x.filter_sustain,
-            a,
-            "filter_sustain",
-            "an1x.filter_sustain",
-            locked,
-        );
-        s.an1x.filter_release = unlocked_f32(
-            s.an1x.filter_release,
-            a,
-            "filter_release",
-            "an1x.filter_release",
-            locked,
-        );
-        s.an1x.amp_attack = unlocked_f32(
-            s.an1x.amp_attack,
-            a,
-            "amp_attack",
-            "an1x.amp_attack",
-            locked,
-        );
-        s.an1x.amp_decay = unlocked_f32(s.an1x.amp_decay, a, "amp_decay", "an1x.amp_decay", locked);
-        s.an1x.amp_sustain = unlocked_f32(
-            s.an1x.amp_sustain,
-            a,
-            "amp_sustain",
-            "an1x.amp_sustain",
-            locked,
-        );
-        s.an1x.amp_release = unlocked_f32(
-            s.an1x.amp_release,
-            a,
-            "amp_release",
-            "an1x.amp_release",
-            locked,
-        );
-        s.an1x.lfo_rate = unlocked_f32(s.an1x.lfo_rate, a, "lfo_rate", "an1x.lfo_rate", locked);
-        s.an1x.lfo_depth = unlocked_f32(s.an1x.lfo_depth, a, "lfo_depth", "an1x.lfo_depth", locked);
-        s.an1x.lfo_delay = unlocked_f32(s.an1x.lfo_delay, a, "lfo_delay", "an1x.lfo_delay", locked);
-        s.an1x.lfo_sync_beats = unlocked_f32(
-            s.an1x.lfo_sync_beats,
-            a,
-            "lfo_sync_beats",
-            "an1x.lfo_sync_beats",
-            locked,
-        );
-        if !locked.contains("an1x.lfo_bpm_sync")
-            && let Some(v) = a.get("lfo_bpm_sync").and_then(|v| v.as_bool())
-        {
-            s.an1x.lfo_bpm_sync = v;
-        }
-        if !locked.contains("an1x.hard_sync")
-            && let Some(v) = a.get("hard_sync").and_then(|v| v.as_bool())
-        {
-            s.an1x.hard_sync = v;
-        }
-        s.an1x.pitch_env_attack = unlocked_f32(
-            s.an1x.pitch_env_attack,
-            a,
-            "pitch_env_attack",
-            "an1x.pitch_env_attack",
-            locked,
-        );
-        s.an1x.pitch_env_decay = unlocked_f32(
-            s.an1x.pitch_env_decay,
-            a,
-            "pitch_env_decay",
-            "an1x.pitch_env_decay",
-            locked,
-        );
-        s.an1x.pitch_env_amount = unlocked_f32(
-            s.an1x.pitch_env_amount,
-            a,
-            "pitch_env_amount",
-            "an1x.pitch_env_amount",
-            locked,
-        );
-        s.an1x.drift = unlocked_f32(s.an1x.drift, a, "drift", "an1x.drift", locked);
-        s.an1x.glide_time = unlocked_f32(
-            s.an1x.glide_time,
-            a,
-            "glide_time",
-            "an1x.glide_time",
-            locked,
-        );
-        if !locked.contains("sequencer.an1x_steps")
-            && let Some(arr) = a.get("an1x_steps").and_then(|v| v.as_array())
-        {
-            for (i, val) in arr.iter().enumerate().take(MAX_STEPS) {
-                if let Some(on) = val.as_bool() {
-                    s.sequencer.an1x_pattern[i].active = on;
-                }
-            }
-        }
-        if !locked.contains("sequencer.an1x_notes")
-            && let Some(arr) = a.get("an1x_notes").and_then(|v| v.as_array())
-        {
-            for (i, val) in arr.iter().enumerate().take(MAX_STEPS) {
-                if let Some(n) = val.as_u64() {
-                    s.sequencer.an1x_pattern[i].note = n.clamp(0, 127) as u8;
+        apply_an1x_update(&mut s, a, locked);
+    }
+
+    // ── Euclidean rhythm ──────────────────────────────────────────────────────
+    // JSON: { "euclidean": { "voice": "kick_a", "pulses": 5, "steps": 16 } }
+    if let Some(e) = update.get("euclidean").and_then(|v| v.as_object()) {
+        let voice_str = e.get("voice").and_then(|v| v.as_str()).unwrap_or("");
+        let pulses = e.get("pulses").and_then(|v| v.as_u64()).unwrap_or(4) as usize;
+        let n_steps = e
+            .get("steps")
+            .and_then(|v| v.as_u64())
+            .unwrap_or(s.sequencer.steps as u64) as usize;
+        let drum_voice = match voice_str {
+            "kick_a" => Some(DrumVoice::Kick808),
+            "snare_a" => Some(DrumVoice::Snare808),
+            "hihat_a" | "closed_hat_a" => Some(DrumVoice::HihatClosed808),
+            "hihat_a_open" | "open_hat_a" => Some(DrumVoice::HihatOpen808),
+            "kick_b" => Some(DrumVoice::Kick909),
+            "snare_b" => Some(DrumVoice::Snare909),
+            "hihat_b" | "closed_hat_b" => Some(DrumVoice::HihatClosed909),
+            "hihat_b_open" | "open_hat_b" => Some(DrumVoice::HihatOpen909),
+            "clap_b" => Some(DrumVoice::Clap909),
+            _ => None,
+        };
+        if let Some(voice) = drum_voice {
+            let lock_path = format!("sequencer.{}_steps", voice_str);
+            if !locked.contains(&lock_path) {
+                let pattern = euclidean_rhythm(pulses, n_steps);
+                if let Some(row) = s.sequencer.drum_patterns.get_mut(&voice) {
+                    for (i, &active) in pattern.iter().enumerate().take(row.len()) {
+                        row[i].active = active;
+                    }
                 }
             }
         }
@@ -989,4 +705,240 @@ pub(super) fn unlocked_f32(
         .and_then(|v| v.as_f64())
         .map(|v| (v as f32).clamp(0.0, 1.0))
         .unwrap_or(current)
+}
+
+/// Apply AN1X voice fields from an LLM JSON update object.
+/// Extracted to keep `apply_llm_update` under the 1000-line limit.
+fn apply_an1x_update(
+    s: &mut AppState,
+    a: &serde_json::Map<String, serde_json::Value>,
+    locked: &HashSet<String>,
+) {
+    if !locked.contains("an1x.enabled")
+        && let Some(v) = a.get("enabled").and_then(|v| v.as_bool())
+    {
+        s.an1x.enabled = v;
+    }
+    s.an1x.volume = unlocked_f32(s.an1x.volume, a, "volume", "an1x.volume", locked);
+    s.an1x.osc1_level = unlocked_f32(
+        s.an1x.osc1_level,
+        a,
+        "osc1_level",
+        "an1x.osc1_level",
+        locked,
+    );
+    s.an1x.osc2_level = unlocked_f32(
+        s.an1x.osc2_level,
+        a,
+        "osc2_level",
+        "an1x.osc2_level",
+        locked,
+    );
+    s.an1x.osc2_detune = unlocked_f32(
+        s.an1x.osc2_detune,
+        a,
+        "osc2_detune",
+        "an1x.osc2_detune",
+        locked,
+    );
+    s.an1x.sub_level = unlocked_f32(s.an1x.sub_level, a, "sub_level", "an1x.sub_level", locked);
+    s.an1x.filter_cutoff = unlocked_f32(
+        s.an1x.filter_cutoff,
+        a,
+        "filter_cutoff",
+        "an1x.filter_cutoff",
+        locked,
+    );
+    s.an1x.filter_resonance = unlocked_f32(
+        s.an1x.filter_resonance,
+        a,
+        "filter_resonance",
+        "an1x.filter_resonance",
+        locked,
+    );
+    s.an1x.filter_env_amount = unlocked_f32(
+        s.an1x.filter_env_amount,
+        a,
+        "filter_env_amount",
+        "an1x.filter_env_amount",
+        locked,
+    );
+    s.an1x.filter_attack = unlocked_f32(
+        s.an1x.filter_attack,
+        a,
+        "filter_attack",
+        "an1x.filter_attack",
+        locked,
+    );
+    s.an1x.filter_decay = unlocked_f32(
+        s.an1x.filter_decay,
+        a,
+        "filter_decay",
+        "an1x.filter_decay",
+        locked,
+    );
+    s.an1x.filter_sustain = unlocked_f32(
+        s.an1x.filter_sustain,
+        a,
+        "filter_sustain",
+        "an1x.filter_sustain",
+        locked,
+    );
+    s.an1x.filter_release = unlocked_f32(
+        s.an1x.filter_release,
+        a,
+        "filter_release",
+        "an1x.filter_release",
+        locked,
+    );
+    s.an1x.amp_attack = unlocked_f32(
+        s.an1x.amp_attack,
+        a,
+        "amp_attack",
+        "an1x.amp_attack",
+        locked,
+    );
+    s.an1x.amp_decay = unlocked_f32(s.an1x.amp_decay, a, "amp_decay", "an1x.amp_decay", locked);
+    s.an1x.amp_sustain = unlocked_f32(
+        s.an1x.amp_sustain,
+        a,
+        "amp_sustain",
+        "an1x.amp_sustain",
+        locked,
+    );
+    s.an1x.amp_release = unlocked_f32(
+        s.an1x.amp_release,
+        a,
+        "amp_release",
+        "an1x.amp_release",
+        locked,
+    );
+    s.an1x.lfo_rate = unlocked_f32(s.an1x.lfo_rate, a, "lfo_rate", "an1x.lfo_rate", locked);
+    s.an1x.lfo_depth = unlocked_f32(s.an1x.lfo_depth, a, "lfo_depth", "an1x.lfo_depth", locked);
+    s.an1x.lfo_delay = unlocked_f32(s.an1x.lfo_delay, a, "lfo_delay", "an1x.lfo_delay", locked);
+    s.an1x.lfo_sync_beats = unlocked_f32(
+        s.an1x.lfo_sync_beats,
+        a,
+        "lfo_sync_beats",
+        "an1x.lfo_sync_beats",
+        locked,
+    );
+    if !locked.contains("an1x.lfo_bpm_sync")
+        && let Some(v) = a.get("lfo_bpm_sync").and_then(|v| v.as_bool())
+    {
+        s.an1x.lfo_bpm_sync = v;
+    }
+    if !locked.contains("an1x.hard_sync")
+        && let Some(v) = a.get("hard_sync").and_then(|v| v.as_bool())
+    {
+        s.an1x.hard_sync = v;
+    }
+    s.an1x.pitch_env_attack = unlocked_f32(
+        s.an1x.pitch_env_attack,
+        a,
+        "pitch_env_attack",
+        "an1x.pitch_env_attack",
+        locked,
+    );
+    s.an1x.pitch_env_decay = unlocked_f32(
+        s.an1x.pitch_env_decay,
+        a,
+        "pitch_env_decay",
+        "an1x.pitch_env_decay",
+        locked,
+    );
+    s.an1x.pitch_env_amount = unlocked_f32(
+        s.an1x.pitch_env_amount,
+        a,
+        "pitch_env_amount",
+        "an1x.pitch_env_amount",
+        locked,
+    );
+    s.an1x.drift = unlocked_f32(s.an1x.drift, a, "drift", "an1x.drift", locked);
+    s.an1x.glide_time = unlocked_f32(
+        s.an1x.glide_time,
+        a,
+        "glide_time",
+        "an1x.glide_time",
+        locked,
+    );
+    if !locked.contains("sequencer.an1x_steps")
+        && let Some(arr) = a.get("an1x_steps").and_then(|v| v.as_array())
+    {
+        for (i, val) in arr.iter().enumerate().take(MAX_STEPS) {
+            if let Some(on) = val.as_bool() {
+                s.sequencer.an1x_pattern[i].active = on;
+            }
+        }
+    }
+    if !locked.contains("sequencer.an1x_notes")
+        && let Some(arr) = a.get("an1x_notes").and_then(|v| v.as_array())
+    {
+        for (i, val) in arr.iter().enumerate().take(MAX_STEPS) {
+            if let Some(n) = val.as_u64() {
+                s.sequencer.an1x_pattern[i].note = n.clamp(0, 127) as u8;
+            }
+        }
+    }
+}
+
+/// Apply FX fields from an LLM JSON update object.
+/// Extracted to keep `apply_llm_update` under the 1000-line limit.
+fn apply_fx_update(
+    s: &mut AppState,
+    fx: &serde_json::Map<String, serde_json::Value>,
+    locked: &HashSet<String>,
+) {
+    macro_rules! u {
+        ($field:expr, $key:literal, $path:literal) => {
+            $field = unlocked_f32($field, fx, $key, $path, locked);
+        };
+    }
+    u!(s.fx.reverb_size, "reverb_size", "fx.reverb_size");
+    u!(s.fx.reverb_damp, "reverb_damp", "fx.reverb_damp");
+    u!(s.fx.reverb_mix, "reverb_mix", "fx.reverb_mix");
+    u!(s.fx.delay_time, "delay_time", "fx.delay_time");
+    u!(s.fx.delay_feedback, "delay_feedback", "fx.delay_feedback");
+    u!(s.fx.delay_mix, "delay_mix", "fx.delay_mix");
+    u!(
+        s.fx.distortion_drive,
+        "distortion_drive",
+        "fx.distortion_drive"
+    );
+    u!(s.fx.distortion_mix, "distortion_mix", "fx.distortion_mix");
+    u!(s.fx.bitcrush_bits, "bitcrush_bits", "fx.bitcrush_bits");
+    u!(s.fx.bitcrush_rate, "bitcrush_rate", "fx.bitcrush_rate");
+    u!(s.fx.bitcrush_mix, "bitcrush_mix", "fx.bitcrush_mix");
+    u!(s.fx.chorus_rate, "chorus_rate", "fx.chorus_rate");
+    u!(s.fx.chorus_depth, "chorus_depth", "fx.chorus_depth");
+    u!(s.fx.chorus_mix, "chorus_mix", "fx.chorus_mix");
+    u!(s.fx.phaser_rate, "phaser_rate", "fx.phaser_rate");
+    u!(s.fx.phaser_depth, "phaser_depth", "fx.phaser_depth");
+    u!(s.fx.phaser_mix, "phaser_mix", "fx.phaser_mix");
+    u!(
+        s.fx.waveshaper_drive,
+        "waveshaper_drive",
+        "fx.waveshaper_drive"
+    );
+    u!(s.fx.waveshaper_mix, "waveshaper_mix", "fx.waveshaper_mix");
+    u!(s.fx.ring_mod_freq, "ring_mod_freq", "fx.ring_mod_freq");
+    u!(s.fx.ring_mod_mix, "ring_mod_mix", "fx.ring_mod_mix");
+    u!(s.fx.eq_low_gain, "eq_low_gain", "fx.eq_low_gain");
+    u!(s.fx.eq_mid_gain, "eq_mid_gain", "fx.eq_mid_gain");
+    u!(s.fx.eq_hi_gain, "eq_hi_gain", "fx.eq_hi_gain");
+    u!(
+        s.fx.compressor_threshold,
+        "compressor_threshold",
+        "fx.compressor_threshold"
+    );
+    u!(
+        s.fx.compressor_ratio,
+        "compressor_ratio",
+        "fx.compressor_ratio"
+    );
+    u!(s.fx.compressor_mix, "compressor_mix", "fx.compressor_mix");
+    u!(s.fx.tape_drive, "tape_drive", "fx.tape_drive");
+    u!(s.fx.tape_mix, "tape_mix", "fx.tape_mix");
+    u!(s.fx.tape_flutter, "tape_flutter", "fx.tape_flutter");
+    u!(s.fx.master_volume, "master_volume", "fx.master_volume");
 }

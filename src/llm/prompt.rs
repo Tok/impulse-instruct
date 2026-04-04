@@ -259,6 +259,15 @@ FREE EG (drawable arbitrary-shape modulator — 8 draggable levels, looped slowl
   Use for: glacial filter sweeps, slow pitch drift, long evolving textures, breathing effects.
   Example — slow rising cutoff: values=[0,0.1,0.2,0.35,0.5,0.65,0.8,1.0], period=0.7, depth=0.8, target="BassCutoff"
 
+EUCLIDEAN RHYTHMS:
+  {{ "euclidean": {{ "voice": "<voice_name>", "pulses": N, "steps": M }} }}
+  Distributes N pulses across M steps using the Bjorklund algorithm (maximum evenness).
+  voice names: "kick_a", "snare_a", "hihat_a", "hihat_a_open", "kick_b", "snare_b",
+               "hihat_b", "hihat_b_open", "clap_b"
+  Classic patterns: (4,16)=4-on-floor, (5,16)=clave, (3,8)=basic, (5,8)=tresillo,
+                    (7,16)=afro-cuban bell, (3,16)=sparse kick
+  LLM trigger: "5-in-16 euclidean kick", "make it a euclidean hi-hat", "add a clave pattern"
+
 AN1X VOICE (warm VA pads / leads — Boards of Canada aesthetic):
   an1x.enabled          — true/false
   an1x.volume           — 0–1
@@ -697,6 +706,17 @@ pub fn param_json_schema() -> serde_json::Value {
                 },
                 "additionalProperties": false
             }
+        },
+        "euclidean": {
+            "type": "object",
+            "description": "Apply a Euclidean (Bjorklund) rhythm to a drum voice. Distributes pulses as evenly as possible across steps.",
+            "properties": {
+                "voice":  { "type": "string", "enum": ["kick_a","snare_a","hihat_a","hihat_a_open","kick_b","snare_b","hihat_b","hihat_b_open","clap_b"], "description": "drum voice to pattern" },
+                "pulses": { "type": "integer", "minimum": 0, "maximum": 64, "description": "number of active steps to place" },
+                "steps":  { "type": "integer", "minimum": 1, "maximum": 64, "description": "total steps in the pattern (defaults to current sequencer step count)" }
+            },
+            "required": ["voice", "pulses"],
+            "additionalProperties": false
         },
         "additionalProperties": false
     })

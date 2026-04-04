@@ -191,3 +191,62 @@ pub fn advance_clock(
     };
     (new_clock, events)
 }
+
+// ─── Euclidean rhythm generator ───────────────────────────────────────────────
+
+/// Distribute `pulses` evenly across `steps` using the Bjorklund algorithm.
+/// Returns a `Vec<bool>` of length `steps` with `pulses` `true` values placed
+/// as evenly as possible (Euclidean rhythm / Bjorklund distribution).
+///
+/// Classic examples: `(4, 16)` = 4-on-the-floor, `(5, 16)` = clave, `(3, 8)` = basic.
+/// LLM trigger: "5-in-16 euclidean kick", "3-in-8 euclidean hi-hat".
+pub fn euclidean_rhythm(pulses: usize, steps: usize) -> Vec<bool> {
+    if steps == 0 {
+        return vec![];
+    }
+    let pulses = pulses.min(steps);
+    if pulses == 0 {
+        return vec![false; steps];
+    }
+    if pulses == steps {
+        return vec![true; steps];
+    }
+
+    // Bjorklund: build two groups iteratively.
+    // pattern[i] = (ones, zeros) per group element.
+    let mut pattern: Vec<(usize, usize)> = vec![(1, 0); pulses];
+    let mut remainder: Vec<(usize, usize)> = vec![(0, 1); steps - pulses];
+
+    while remainder.len() > 1 {
+        let take = remainder.len().min(pattern.len());
+        let next_pattern: Vec<(usize, usize)> = pattern
+            .iter()
+            .zip(remainder.iter())
+            .map(|(a, b)| (a.0 + b.0, a.1 + b.1))
+            .collect();
+        let leftover: Vec<(usize, usize)> = if pattern.len() > take {
+            pattern[take..].to_vec()
+        } else {
+            remainder[take..].to_vec()
+        };
+        pattern = next_pattern;
+        remainder = leftover;
+    }
+
+    // Flatten groups into a bool vector.
+    let mut result = Vec::with_capacity(steps);
+    let flatten = |result: &mut Vec<bool>, groups: &[(usize, usize)]| {
+        for (o, z) in groups {
+            result.extend(std::iter::repeat_n(true, *o));
+            result.extend(std::iter::repeat_n(false, *z));
+        }
+    };
+    flatten(&mut result, &pattern);
+    flatten(&mut result, &remainder);
+    result.truncate(steps);
+    result
+}
+
+// keep unused variable warnings quiet during tests
+#[allow(dead_code)]
+const _EUCLID_SANITY: () = ();
