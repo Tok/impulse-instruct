@@ -122,6 +122,8 @@ pub struct ImpulseApp {
     midi_rx: Receiver<MidiEvent>,
     midi_port: Option<String>,
     pressed_notes: std::collections::HashSet<u8>,
+    /// Note currently held down by the mouse (separate from MIDI-held notes).
+    piano_mouse_note: Option<u8>,
     prompt_input: String,
     log_text: String,
     active_panel: Panel,
@@ -219,6 +221,7 @@ impl ImpulseApp {
             midi_rx,
             midi_port,
             pressed_notes: std::collections::HashSet::new(),
+            piano_mouse_note: None,
             prompt_input: String::new(),
             log_text,
             active_panel: Panel::Sequencer,

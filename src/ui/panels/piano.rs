@@ -160,8 +160,6 @@ pub fn draw_piano(app: &mut ImpulseApp, ui: &mut egui::Ui, ctx: &egui::Context) 
             Stroke::new(0.5, Color32::from_gray(if active { 170 } else { 72 })),
         );
 
-        painter.rect_stroke(key_rect, rounding, Stroke::new(0.5, theme::VOID));
-
         // Labels: always show C notes; show all when show_label is on
         let is_c = semi == 0;
         if is_c || show_label {
@@ -270,8 +268,6 @@ pub fn draw_piano(app: &mut ImpulseApp, ui: &mut egui::Ui, ctx: &egui::Context) 
                 Stroke::new(1.0, bsh),
             );
 
-            painter.rect_stroke(key_rect, bk_rounding, Stroke::new(0.5, theme::VOID));
-
             // Label when show_label is on
             if show_label {
                 let full = note_name(note);
@@ -307,7 +303,13 @@ pub fn draw_piano(app: &mut ImpulseApp, ui: &mut egui::Ui, ctx: &egui::Context) 
 
     // ── Click-to-play ─────────────────────────────────────────────────────────
     if let Some(note) = clicked_note {
-        if !app.pressed_notes.contains(&note) {
+        // New note pressed (or dragged onto a different key)
+        if app.piano_mouse_note != Some(note) {
+            // Release previous mouse note if any
+            if let Some(prev) = app.piano_mouse_note {
+                app.pressed_notes.remove(&prev);
+            }
+            app.piano_mouse_note = Some(note);
             app.pressed_notes.insert(note);
             let _ = app
                 .audio_tx
@@ -318,13 +320,13 @@ pub fn draw_piano(app: &mut ImpulseApp, ui: &mut egui::Ui, ctx: &egui::Context) 
                     gate_samples: 22050,
                 }));
         }
-    } else if response.drag_stopped()
-        || (!response.is_pointer_button_down_on() && !app.pressed_notes.is_empty())
+    } else if app.piano_mouse_note.is_some()
+        && (response.drag_stopped() || !response.is_pointer_button_down_on())
     {
-        // Release all click-triggered notes when pointer lifts
-        // (MIDI notes are managed by their own NoteOff messages)
-        // Only clear notes that aren't from MIDI (we track MIDI separately)
-        // Simple heuristic: clear on pointer release
+        // Mouse released — remove only the mouse-held note, leave MIDI notes alone
+        if let Some(prev) = app.piano_mouse_note.take() {
+            app.pressed_notes.remove(&prev);
+        }
         let _ = app
             .audio_tx
             .push(AudioCommand::Trigger(TriggerEvent::BassGateOff));
