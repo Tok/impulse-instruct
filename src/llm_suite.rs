@@ -139,7 +139,7 @@ fn assert_gate(
         .count();
     // Always print the score so the test line reads "... (7/10) ok" or "(1/10) FAILED".
     let gate_label = if passes >= required { "✓" } else { "✗" };
-    eprintln!("  {gate_label} {passes}/{RUNS} (need ≥{required})");
+    eprint!("  {gate_label} {passes}/{RUNS} (need ≥{required})  ");
     assert!(
         passes >= required,
         "[llm-suite] '{}': {}/{} runs passed (need {})\n\
