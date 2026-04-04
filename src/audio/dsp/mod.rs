@@ -624,6 +624,8 @@ pub struct DspState {
     lfo_sh_held: [f32; 4],
     lfo_noise: NoiseGen,
     prev_running: bool,
+    // Per-voice velocity (set on trigger, applied to voice output)
+    drum_velocity: [f32; 13],
     // Current params
     params: AudioParams,
     sample_rate: f32,
@@ -664,6 +666,7 @@ impl DspState {
             lfo_phases: [0.0; 4],
             lfo_sh_held: [0.0; 4],
             lfo_noise: NoiseGen::new(0xCAFE_BABE),
+            drum_velocity: [1.0; 13],
             prev_running: false,
             params: p,
             sample_rate,
@@ -679,21 +682,24 @@ impl DspState {
     pub fn handle_trigger(&mut self, event: &TriggerEvent) {
         use crate::sequencer::TriggerEvent::*;
         match event {
-            DrumTrigger { voice, velocity: _ } => match voice {
-                DrumVoice::Kick808 => self.kick808.trigger(),
-                DrumVoice::Snare808 => self.snare808.trigger(),
-                DrumVoice::HihatClosed808 => self.hihat_closed808.trigger(),
-                DrumVoice::HihatOpen808 => self.hihat_open808.trigger(),
-                DrumVoice::TomHi808 => self.tom_hi808.trigger(),
-                DrumVoice::TomMid808 => self.tom_mid808.trigger(),
-                DrumVoice::TomLo808 => self.tom_lo808.trigger(),
-                DrumVoice::Kick909 => self.kick909.trigger(),
-                DrumVoice::Snare909 => self.snare909.trigger(),
-                DrumVoice::HihatClosed909 => self.hihat_closed909.trigger(),
-                DrumVoice::HihatOpen909 => self.hihat_open909.trigger(),
-                DrumVoice::Clap909 => self.clap909.trigger(),
-                DrumVoice::Rim909 => self.rim909.trigger(),
-            },
+            DrumTrigger { voice, velocity } => {
+                self.drum_velocity[voices::drum_voice_idx(voice)] = velocity.clamp(0.0, 1.0);
+                match voice {
+                    DrumVoice::Kick808 => self.kick808.trigger(),
+                    DrumVoice::Snare808 => self.snare808.trigger(),
+                    DrumVoice::HihatClosed808 => self.hihat_closed808.trigger(),
+                    DrumVoice::HihatOpen808 => self.hihat_open808.trigger(),
+                    DrumVoice::TomHi808 => self.tom_hi808.trigger(),
+                    DrumVoice::TomMid808 => self.tom_mid808.trigger(),
+                    DrumVoice::TomLo808 => self.tom_lo808.trigger(),
+                    DrumVoice::Kick909 => self.kick909.trigger(),
+                    DrumVoice::Snare909 => self.snare909.trigger(),
+                    DrumVoice::HihatClosed909 => self.hihat_closed909.trigger(),
+                    DrumVoice::HihatOpen909 => self.hihat_open909.trigger(),
+                    DrumVoice::Clap909 => self.clap909.trigger(),
+                    DrumVoice::Rim909 => self.rim909.trigger(),
+                }
+            }
             BassTrigger {
                 note,
                 accent,
@@ -780,6 +786,7 @@ impl DspState {
             // Mix all voices to mono
             let bass_out = self.bass.process(&p);
 
+            let dv = &self.drum_velocity;
             let k808 = self.kick808.process(
                 p.kick808_pitch,
                 p.kick808_decay,
@@ -854,19 +861,19 @@ impl DspState {
             // Scale mix to prevent clipping — summing voices without gain staging
             // causes hard clipping even with moderate individual volumes
             let dry = (bass_out
-                + k808
-                + s808
-                + hh808c
-                + hh808o
-                + th808
-                + tm808
-                + tl808
-                + k909
-                + s909
-                + hh909c
-                + hh909o
-                + clap
-                + rim
+                + k808 * dv[0]
+                + s808 * dv[1]
+                + hh808c * dv[2]
+                + hh808o * dv[3]
+                + th808 * dv[4]
+                + tm808 * dv[5]
+                + tl808 * dv[6]
+                + k909 * dv[7]
+                + s909 * dv[8]
+                + hh909c * dv[9]
+                + hh909o * dv[10]
+                + clap * dv[11]
+                + rim * dv[12]
                 + noise_out
                 + hoover_out
                 + an1x_out)

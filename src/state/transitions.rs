@@ -121,6 +121,22 @@ pub fn toggle_drum_step(state: AppState, voice: DrumVoice, step: usize) -> AppSt
     s
 }
 
+/// Set velocity for a single drum step.
+pub fn set_drum_step_velocity(
+    state: AppState,
+    voice: DrumVoice,
+    step: usize,
+    vel: f32,
+) -> AppState {
+    let mut s = state;
+    if let Some(pattern) = s.sequencer.drum_patterns.get_mut(&voice)
+        && step < pattern.len()
+    {
+        pattern[step].velocity = vel.clamp(0.05, 1.0);
+    }
+    s
+}
+
 /// Set a 303 step note.
 pub fn set_bass_step(state: AppState, step: usize, note: u8, active: bool) -> AppState {
     let mut s = state;

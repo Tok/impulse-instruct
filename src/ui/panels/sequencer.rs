@@ -2,8 +2,9 @@
 // Step sequencer panel.
 
 use crate::state::{
-    DrumVoice, MAX_STEPS, ROOT_NAMES, Scale, set_an1x_step, set_hoover_step, set_root_note,
-    set_scale, set_scale_snap, toggle_bass_accent, toggle_bass_slide, toggle_drum_step,
+    DrumVoice, MAX_STEPS, ROOT_NAMES, Scale, set_an1x_step, set_drum_step_velocity,
+    set_hoover_step, set_root_note, set_scale, set_scale_snap, toggle_bass_accent,
+    toggle_bass_slide, toggle_drum_step,
 };
 use crate::ui::{ImpulseApp, SEQ_LABEL_H, SEQ_LABEL_W, SEQ_VOL_H, SEQ_VOL_W, theme, widgets};
 
@@ -601,6 +602,45 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                     let s = app.state.read().clone();
                     *app.state.write() = toggle_drum_step(s, *voice, step);
                 }
+
+                // ── Velocity lane ─────────────────────────────────────────────
+                ui.horizontal(|ui| {
+                    // Spacer to align with step buttons (skip label + volume columns)
+                    ui.add_space(SEQ_LABEL_W + SEQ_LABEL_H + SEQ_VOL_W + SEQ_VOL_H + 2.0);
+                    let bar_h = 5.0_f32;
+                    let mut vel_changed: Option<(usize, f32)> = None;
+                    for i in 0..16usize {
+                        let abs = page_start + i;
+                        let vel = pattern.get(i).map(|s| s.velocity).unwrap_or(1.0);
+                        let is_active = pattern.get(i).map(|s| s.active).unwrap_or(false);
+                        let (rect, resp) = ui.allocate_exact_size(
+                            egui::vec2(pad_px, bar_h + 2.0),
+                            egui::Sense::drag(),
+                        );
+                        if ui.is_rect_visible(rect) {
+                            let bar_rect = egui::Rect::from_min_size(
+                                egui::pos2(rect.min.x, rect.max.y - bar_h * vel),
+                                egui::vec2(pad_px - 1.0, bar_h * vel),
+                            );
+                            let col = if is_active {
+                                egui::Color32::from_gray(70)
+                            } else {
+                                egui::Color32::from_gray(28)
+                            };
+                            ui.painter()
+                                .rect_filled(bar_rect, egui::Rounding::ZERO, col);
+                        }
+                        if resp.dragged() && abs < seq_steps {
+                            let delta = -resp.drag_delta().y / (bar_h * 8.0);
+                            let new_vel = (vel + delta).clamp(0.05, 1.0);
+                            vel_changed = Some((abs, new_vel));
+                        }
+                    }
+                    if let Some((step, new_vel)) = vel_changed {
+                        let s = app.state.read().clone();
+                        *app.state.write() = set_drum_step_velocity(s, *voice, step, new_vel);
+                    }
+                });
             });
         }
     });

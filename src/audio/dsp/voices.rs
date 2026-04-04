@@ -841,3 +841,23 @@ impl An1xVoice {
         filtered * amp * p.an1x_volume
     }
 }
+
+/// Map DrumVoice to its index in the drum_velocity array (matches DrumVoice::ALL order).
+pub(super) fn drum_voice_idx(voice: &crate::state::DrumVoice) -> usize {
+    use crate::state::DrumVoice::*;
+    match voice {
+        Kick808 => 0,
+        Snare808 => 1,
+        HihatClosed808 => 2,
+        HihatOpen808 => 3,
+        TomHi808 => 4,
+        TomMid808 => 5,
+        TomLo808 => 6,
+        Kick909 => 7,
+        Snare909 => 8,
+        HihatClosed909 => 9,
+        HihatOpen909 => 10,
+        Clap909 => 11,
+        Rim909 => 12,
+    }
+}
