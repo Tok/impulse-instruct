@@ -5,12 +5,13 @@ use crate::state::{DrumVoice, MAX_STEPS, toggle_bass_accent, toggle_bass_slide, 
 use crate::ui::{ImpulseApp, SEQ_LABEL_H, SEQ_LABEL_W, SEQ_VOL_H, SEQ_VOL_W, theme, widgets};
 
 pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
-    let (current_step, running, seq_steps) = {
+    let (current_step, running, seq_steps, time_sig_num) = {
         let s = app.state.read();
         (
             s.sequencer.current_step,
             s.sequencer.running,
             s.sequencer.steps,
+            s.sequencer.time_sig_num as usize,
         )
     };
     // Only highlight the cursor when the sequencer is actually playing;
@@ -51,45 +52,86 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                 *app.state.write() = new_state;
             }
         }
+    });
 
-        ui.add_space(12.0);
-
-        // BPM
-        let mut bpm = app.state.read().sequencer.bpm;
+    // BPM row
+    ui.horizontal(|ui| {
         ui.label(
-            egui::RichText::new("BPM")
+            egui::RichText::new("BPM  ")
                 .color(theme::SMOKE)
                 .monospace()
                 .size(9.0),
         );
+        let mut bpm = app.state.read().sequencer.bpm;
         let resp = ui.add(
-            egui::DragValue::new(&mut bpm)
-                .range(40.0..=250.0)
-                .speed(0.5),
+            egui::Slider::new(&mut bpm, 40.0..=250.0)
+                .show_value(false)
+                .trailing_fill(true),
         );
         if resp.changed() {
             app.state.write().sequencer.bpm = bpm;
             app.push_audio_params();
         }
+        ui.label(
+            egui::RichText::new(format!("{:.0}", bpm))
+                .color(theme::FOG)
+                .monospace()
+                .size(9.0),
+        );
+    });
 
-        ui.add_space(8.0);
-
-        // Swing
-        let mut swing = app.state.read().sequencer.swing;
+    // Swing row
+    ui.horizontal(|ui| {
         ui.label(
             egui::RichText::new("SWING")
                 .color(theme::SMOKE)
                 .monospace()
                 .size(9.0),
         );
+        let mut swing = app.state.read().sequencer.swing;
         let resp = ui.add(
-            egui::DragValue::new(&mut swing)
-                .range(0.0..=1.0)
-                .speed(0.005)
-                .fixed_decimals(2),
+            egui::Slider::new(&mut swing, 0.0..=1.0)
+                .show_value(false)
+                .trailing_fill(true),
         );
         if resp.changed() {
             app.state.write().sequencer.swing = swing;
+        }
+        ui.label(
+            egui::RichText::new(format!("{:.2}", swing))
+                .color(theme::FOG)
+                .monospace()
+                .size(9.0),
+        );
+    });
+
+    // Time signature row
+    ui.horizontal(|ui| {
+        ui.label(
+            egui::RichText::new("TIME SIG:")
+                .color(theme::SMOKE)
+                .monospace()
+                .size(9.0),
+        );
+        let current_ts = app.state.read().sequencer.time_sig_num;
+        for n in 2u8..=9 {
+            let active = n == current_ts;
+            let color = if active { theme::CHALK } else { theme::IRON };
+            let fill = if active {
+                egui::Color32::from_gray(50)
+            } else {
+                egui::Color32::TRANSPARENT
+            };
+            let text = egui::RichText::new(format!("{}", n))
+                .monospace()
+                .size(9.0)
+                .color(color);
+            if ui
+                .add_sized([18.0, 16.0], egui::Button::new(text).fill(fill))
+                .clicked()
+            {
+                app.state.write().sequencer.time_sig_num = n;
+            }
         }
     });
 
@@ -171,9 +213,12 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                 let mut toggled = None;
                 for i in 0..16usize {
                     let abs = page_start + i;
-                    // Group dividers every 4
-                    if i > 0 && i % 4 == 0 {
-                        ui.add_space(2.0);
+                    // Beat dividers: wider gap at beat boundaries, narrow gap every 4
+                    let beat_pos = (page_start + i) % time_sig_num;
+                    if i > 0 && beat_pos == 0 {
+                        ui.add_space(4.0); // beat boundary — wider
+                    } else if i > 0 && i % 4 == 0 {
+                        ui.add_space(2.0); // sub-group divider
                     }
                     let is_active = pattern.get(i).map(|s| s.active).unwrap_or(false);
                     let is_current = abs == cursor;
@@ -218,7 +263,10 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             );
             for i in 0..16usize {
                 let abs = page_start + i;
-                if i > 0 && i % 4 == 0 {
+                let beat_pos = (page_start + i) % time_sig_num;
+                if i > 0 && beat_pos == 0 {
+                    ui.add_space(4.0);
+                } else if i > 0 && i % 4 == 0 {
                     ui.add_space(2.0);
                 }
                 let is_active = bass_page.get(i).map(|s| s.active).unwrap_or(false);
@@ -261,7 +309,10 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             );
             for i in 0..16usize {
                 let abs = page_start + i;
-                if i > 0 && i % 4 == 0 {
+                let beat_pos = (page_start + i) % time_sig_num;
+                if i > 0 && beat_pos == 0 {
+                    ui.add_space(4.0);
+                } else if i > 0 && i % 4 == 0 {
                     ui.add_space(2.0);
                 }
                 let is_accent = bass_page.get(i).map(|s| s.accent).unwrap_or(false);
@@ -295,7 +346,10 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             );
             for i in 0..16usize {
                 let abs = page_start + i;
-                if i > 0 && i % 4 == 0 {
+                let beat_pos = (page_start + i) % time_sig_num;
+                if i > 0 && beat_pos == 0 {
+                    ui.add_space(4.0);
+                } else if i > 0 && i % 4 == 0 {
                     ui.add_space(2.0);
                 }
                 let is_slide = bass_page.get(i).map(|s| s.slide).unwrap_or(false);

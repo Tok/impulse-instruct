@@ -132,6 +132,11 @@ pub struct AudioParams {
     pub lfo: [LfoParamsCopy; 4],
     pub sequencer_running: bool,
     pub lfo_pitch_mod_st: f32,
+    // Noise voice
+    pub noise_voice_enabled: bool,
+    pub noise_voice_volume: f32,
+    pub noise_voice_color: f32,
+    pub noise_voice_cutoff: f32,
 }
 
 impl AudioParams {
@@ -259,6 +264,10 @@ impl AudioParams {
             },
             sequencer_running: s.sequencer.running,
             lfo_pitch_mod_st: 0.0,
+            noise_voice_enabled: s.noise_voice.enabled,
+            noise_voice_volume: s.noise_voice.volume,
+            noise_voice_color: s.noise_voice.color,
+            noise_voice_cutoff: s.noise_voice.cutoff,
         }
     }
 }
@@ -475,6 +484,7 @@ pub struct DspState {
     tape_sat: TapeSat,
     ring_mod_phase: f32,
     eq: EqBands,
+    noise_voice: NoiseVoice,
     // LFO state
     lfo_phases: [f32; 4],
     lfo_sh_held: [f32; 4],
@@ -514,6 +524,7 @@ impl DspState {
             eq: EqBands::new(sample_rate),
             bitcrush_held: 0.0,
             bitcrush_counter: 0,
+            noise_voice: NoiseVoice::new(0x4015_EB3D),
             lfo_phases: [0.0; 4],
             lfo_sh_held: [0.0; 4],
             lfo_noise: NoiseGen::new(0xCAFE_BABE),
@@ -679,6 +690,16 @@ impl DspState {
                     .process(p.hihat_open909_decay, 0.8, p.hihat909_volume, sr);
             let clap = self.clap909.process(p.clap909_decay, p.clap909_volume, sr);
             let rim = self.rim909.process(0.7, 0.3, 0.15, 0.75, sr);
+            let noise_out = if p.noise_voice_enabled {
+                self.noise_voice.process(
+                    p.noise_voice_volume,
+                    p.noise_voice_color,
+                    p.noise_voice_cutoff,
+                    sr,
+                )
+            } else {
+                0.0
+            };
 
             // Scale mix to prevent clipping — summing 14 voices without gain staging
             // causes hard clipping even with moderate individual volumes
@@ -695,7 +716,8 @@ impl DspState {
                 + hh909c
                 + hh909o
                 + clap
-                + rim)
+                + rim
+                + noise_out)
                 * 0.65;
 
             // Waveshaper — pre-FX insert, adds harmonic saturation before time-based FX

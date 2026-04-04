@@ -290,3 +290,76 @@ impl Clap {
         noise * (amp + burst * 0.5) * volume
     }
 }
+
+// ─── Standalone Noise Voice ───────────────────────────────────────────────────
+
+#[derive(Clone)]
+pub(super) struct NoiseVoice {
+    rng: NoiseGen,
+    // Pink noise filter state (Paul Kellett's 3-stage pink filter)
+    b0: f32,
+    b1: f32,
+    b2: f32,
+    b3: f32,
+    b4: f32,
+    b5: f32,
+    // Brown noise state
+    brown: f32,
+    // 1-pole LP filter state
+    lp_state: f32,
+}
+
+impl NoiseVoice {
+    pub(super) fn new(seed: u32) -> Self {
+        Self {
+            rng: NoiseGen::new(seed),
+            b0: 0.0,
+            b1: 0.0,
+            b2: 0.0,
+            b3: 0.0,
+            b4: 0.0,
+            b5: 0.0,
+            brown: 0.0,
+            lp_state: 0.0,
+        }
+    }
+
+    /// `color`: 0=white, 0.5=pink, 1=brown. `cutoff`: 0–1 LP filter (200–20000 Hz).
+    pub(super) fn process(&mut self, volume: f32, color: f32, cutoff: f32, sr: f32) -> f32 {
+        if volume < 0.001 {
+            return 0.0;
+        }
+
+        let white = self.rng.next();
+
+        // Pink noise (Paul Kellett)
+        self.b0 = 0.99886 * self.b0 + white * 0.0555179;
+        self.b1 = 0.99332 * self.b1 + white * 0.0750759;
+        self.b2 = 0.96900 * self.b2 + white * 0.153_852;
+        self.b3 = 0.86650 * self.b3 + white * 0.3104856;
+        self.b4 = 0.55000 * self.b4 + white * 0.5329522;
+        self.b5 = -0.7616 * self.b5 + white * 0.0168980;
+        let pink =
+            (self.b0 + self.b1 + self.b2 + self.b3 + self.b4 + self.b5 + white * 0.5362) * 0.11;
+
+        // Brown noise (integrated white)
+        self.brown = (self.brown + 0.02 * white) / 1.02;
+        let brown = self.brown * 3.5;
+
+        // Color crossfade: 0=white, 0.5=pink, 1=brown
+        let out = if color < 0.5 {
+            let t = color * 2.0;
+            white * (1.0 - t) + pink * t
+        } else {
+            let t = (color - 0.5) * 2.0;
+            pink * (1.0 - t) + brown * t
+        };
+
+        // 1-pole LP filter: cutoff 0–1 → 200–20000 Hz
+        let fc = (200.0 * (100.0f32).powf(cutoff)).min(sr * 0.45);
+        let a = 1.0 - (-std::f32::consts::TAU * fc / sr).exp();
+        self.lp_state += a * (out - self.lp_state);
+
+        self.lp_state * volume
+    }
+}

@@ -422,6 +422,8 @@ pub fn param_json_schema() -> serde_json::Value {
                 "properties": {
                     "bpm":           { "type": "number", "minimum": 40.0, "maximum": 250.0 },
                     "steps":         { "type": "integer", "minimum": 8, "maximum": 64, "multipleOf": 8 },
+                    "swing":         { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+                    "time_sig_num":  { "type": "integer", "minimum": 2, "maximum": 9 },
                     "bass_steps":    bool_array.clone(),
                     "bass_notes":    note_array,
                     "kick_a_steps":  bool_array.clone(),
@@ -431,6 +433,16 @@ pub fn param_json_schema() -> serde_json::Value {
                     "snare_b_steps": bool_array.clone(),
                     "clap_b_steps":  bool_array.clone(),
                     "hihat_b_steps": bool_array
+                },
+                "additionalProperties": false
+            },
+            "noise": {
+                "type": "object",
+                "properties": {
+                    "enabled": { "type": "boolean" },
+                    "volume":  { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+                    "color":   { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "0=white, 0.5=pink, 1=brown" },
+                    "cutoff":  { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "LP filter cutoff, 0=200Hz, 1=20kHz" }
                 },
                 "additionalProperties": false
             },
