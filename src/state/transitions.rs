@@ -669,3 +669,78 @@ pub fn apply_llm_update(state: AppState, update: &serde_json::Value) -> AppState
 
     s
 }
+
+// ─── Pattern bank & chain ─────────────────────────────────────────────────────
+
+/// Save the live `sequencer` state into `pattern_bank[slot]` (0–7).
+pub fn bank_write(state: AppState, slot: usize) -> AppState {
+    let mut s = state;
+    let slot = slot.min(7);
+    if s.pattern_bank.len() < 8 {
+        s.pattern_bank
+            .resize_with(8, super::SequencerState::default);
+    }
+    s.pattern_bank[slot] = s.sequencer.clone();
+    s
+}
+
+/// Load `pattern_bank[slot]` into the live `sequencer`.
+/// `keep_transport` = true preserves BPM/swing/running (used during live performance).
+pub fn bank_load(state: AppState, slot: usize, keep_transport: bool) -> AppState {
+    let mut s = state;
+    let slot = slot.min(7);
+    if let Some(pattern) = s.pattern_bank.get(slot).cloned() {
+        let bpm = s.sequencer.bpm;
+        let swing = s.sequencer.swing;
+        let running = s.sequencer.running;
+        let step = s.sequencer.current_step;
+        s.sequencer = pattern;
+        if keep_transport {
+            s.sequencer.bpm = bpm;
+            s.sequencer.swing = swing;
+            s.sequencer.running = running;
+            s.sequencer.current_step = step;
+        }
+    }
+    s
+}
+
+/// Set which bank slot the UI is editing (0–7). Does not affect playback.
+pub fn set_pattern_edit(state: AppState, slot: usize) -> AppState {
+    let mut s = state;
+    s.pattern_edit = slot.min(7);
+    s
+}
+
+/// Replace the entire chain sequence (entries clamped to 0–7, max 8 slots).
+pub fn set_chain(state: AppState, chain: Vec<usize>) -> AppState {
+    let mut s = state;
+    s.chain = chain.into_iter().map(|v| v.min(7)).take(8).collect();
+    s
+}
+
+/// Append one slot index to the chain (noop if already 8 entries).
+pub fn chain_push(state: AppState, slot: usize) -> AppState {
+    let mut s = state;
+    if s.chain.len() < 8 {
+        s.chain.push(slot.min(7));
+    }
+    s
+}
+
+/// Remove the last entry from the chain.
+pub fn chain_pop(state: AppState) -> AppState {
+    let mut s = state;
+    s.chain.pop();
+    s
+}
+
+/// Enable or disable chain playback mode.
+pub fn set_chain_enabled(state: AppState, enabled: bool) -> AppState {
+    let mut s = state;
+    s.chain_enabled = enabled;
+    if !enabled {
+        s.chain_pos = 0;
+    }
+    s
+}

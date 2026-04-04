@@ -1,6 +1,7 @@
 // ─── ui/panels/sequencer.rs ───────────────────────────────────────────────────
 // Step sequencer panel.
 
+use super::sequencer_chain::draw_pattern_chain;
 use crate::state::{
     DrumVoice, MAX_STEPS, ROOT_NAMES, Scale, Step, set_an1x_step, set_drum_step_probability,
     set_drum_step_ratchet, set_drum_step_velocity, set_drum_voice_steps, set_hoover_step,
@@ -28,6 +29,8 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
     let cursor = if running { current_step } else { usize::MAX };
 
     widgets::section_header(ui, "STEP SEQUENCER");
+
+    draw_pattern_chain(app, ui);
 
     // Steps counter control
     ui.horizontal(|ui| {

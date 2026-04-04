@@ -93,21 +93,41 @@ impl AudioEngine {
                     let block = output.len() / channels;
 
                     // Advance sequencer — snapshot seq state (no lock held during DSP)
-                    let (bpm, running, seq_snap) = {
+                    let (seq_snap, chain_snap, chain_enabled, chain_pos_snap) = {
                         let s = state_clone.read();
-                        (s.sequencer.bpm, s.sequencer.running, s.sequencer.clone())
+                        (
+                            s.sequencer.clone(),
+                            s.chain.clone(),
+                            s.chain_enabled,
+                            s.chain_pos,
+                        )
                     };
 
-                    let _ = (bpm, running); // used inside advance_clock via seq_snap
+                    let prev_loop_count = clock.loop_count;
                     let (new_clock, events) =
                         advance_clock(clock.clone(), &seq_snap, block, sample_rate);
                     clock = new_clock;
 
-                    // Propagate current_step back so the UI cursor animates.
-                    // Brief write of a single usize — no allocation, releases immediately.
+                    // Propagate current_step back; advance chain on each loop boundary.
                     {
                         let mut s = state_clone.write();
                         s.sequencer.current_step = clock.current_step;
+                        if clock.loop_count != prev_loop_count
+                            && chain_enabled
+                            && !chain_snap.is_empty()
+                        {
+                            let next_slot = chain_snap[chain_pos_snap % chain_snap.len()];
+                            let bpm = s.sequencer.bpm;
+                            let swing = s.sequencer.swing;
+                            let running = s.sequencer.running;
+                            s.chain_pos = (chain_pos_snap + 1) % chain_snap.len();
+                            s.sequencer =
+                                s.pattern_bank.get(next_slot).cloned().unwrap_or_default();
+                            s.sequencer.bpm = bpm;
+                            s.sequencer.swing = swing;
+                            s.sequencer.running = running;
+                            s.sequencer.current_step = clock.current_step;
+                        }
                     }
 
                     for event in events {

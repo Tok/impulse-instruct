@@ -9,6 +9,7 @@ pub mod hoover;
 pub mod lfo;
 pub mod piano;
 pub mod sequencer;
+pub mod sequencer_chain;
 
 pub use an1x::draw_an1x;
 pub use bass::draw_bass;

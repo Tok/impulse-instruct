@@ -83,7 +83,11 @@ pub use ui_prefs::{KnobSize, KnobStyle, PadSize, UiPrefs};
 
 // ─── Top-level ───────────────────────────────────────────────────────────────
 
-#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+fn default_pattern_bank() -> Vec<SequencerState> {
+    vec![SequencerState::default(); 8]
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct AppState {
     pub bass: BassState,
     pub kit_a: DrumKit808,
@@ -103,6 +107,45 @@ pub struct AppState {
     pub an1x: An1xState,
     #[serde(default)]
     pub ui_prefs: UiPrefs,
+    /// 8 named pattern slots (A–H) for storage and chain playback.
+    #[serde(default = "default_pattern_bank")]
+    pub pattern_bank: Vec<SequencerState>,
+    /// Which bank slot the UI is currently editing (0–7).
+    #[serde(default)]
+    pub pattern_edit: usize,
+    /// Ordered playback chain — indices into pattern_bank (max 8 entries).
+    #[serde(default)]
+    pub chain: Vec<usize>,
+    /// When true the audio thread advances through `chain` on each pattern loop.
+    #[serde(default)]
+    pub chain_enabled: bool,
+    /// Current position in the chain — written by audio thread, read by UI.
+    #[serde(default)]
+    pub chain_pos: usize,
+}
+
+impl Default for AppState {
+    fn default() -> Self {
+        Self {
+            bass: Default::default(),
+            kit_a: Default::default(),
+            kit_b: Default::default(),
+            sequencer: Default::default(),
+            fx: Default::default(),
+            llm: Default::default(),
+            lfo: Default::default(),
+            free_eg: Default::default(),
+            noise_voice: Default::default(),
+            hoover: Default::default(),
+            an1x: Default::default(),
+            ui_prefs: Default::default(),
+            pattern_bank: default_pattern_bank(),
+            pattern_edit: 0,
+            chain: Vec::new(),
+            chain_enabled: false,
+            chain_pos: 0,
+        }
+    }
 }
 
 // ─── Bass synth ───────────────────────────────────────────────────────────────
