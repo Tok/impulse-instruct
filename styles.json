@@ -886,8 +886,8 @@
       "techno dub"
     ],
     "bpm_range": "120–126",
-    "brief": "Dub Techno 120–126 BPM. Sparse minimal drums — just kick, whisper of clap. Single deep bass note or two-note motif. FX is the music: maximum reverb (long tail), dotted delay ghost echoes, heavy saturation. Glacial filter sweeps. Negative space. Basic Channel.",
-    "description": "Dub Techno — 120 to 126 BPM. Hypnotic minimalism. Sparse drums — often just a kick, maybe a whisper of a clap. Bass is a single deep note or tiny two-note motif barely moving. The FX chain IS the music: maximum reverb (5 to 6 seconds), dotted delay creating rhythmic ghost echoes, heavy saturation blurring the edges. Filter sweeps happen glacially over 4 to 8 bars. Everything is about negative space and depth. Meditative, dark, oceanic. Basic Channel, Pole, Maurizio.",
+    "brief": "Dub Techno 120–126 BPM. Hypnotic minimalism. Sparse drums: just a kick, maybe a ghost clap. Bass is a single deep note or a two-note motif barely moving. FX IS the music: maximum reverb (5–6 s decay), dotted delay for ghost echoes, heavy tape saturation, glacial filter sweeps over 4–8 bars. Negative space. Every element dissolves into the reverb tail.",
+    "description": "Dub Techno 120–126 BPM. Hypnotic minimalism where the FX chain defines the genre. Sparse drums: only a kick (often 4-on-the-floor or with one step missing), possibly a faint whisper of a clap. Bass is a single deep note or a tiny two-note motif barely moving over 4–8 bars. The reverb, delay, and saturation are not accessories — they ARE the music: maximum reverb size and mix (reverb_size=0.95, reverb_mix=0.7), dotted 8th delay creating rhythmic ghost echoes (delay_time=0.375, delay_feedback=0.5), heavy tape saturation blurring transients, and a glacial filter sweep happening so slowly you can barely track it. Negative space and depth above all else. Meditative, oceanic, industrial-pastoral. AN1X voice for evolving pads — slow attack, LP filter, heavy drift and reverb.",
     "seed_patterns": {
       "kick": [
         1,

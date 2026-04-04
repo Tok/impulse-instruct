@@ -279,7 +279,7 @@ HOOVER LEAD (supersaw + HP filter sweep):
   hoover.volume         — 0–1
   hoover.hoover_steps   — 16-element bool array: which steps trigger the Hoover
   hoover.hoover_notes   — 16-element int array: MIDI note per step
-  LLM triggers: "add a hoover", "rave lead", "dominator", "hardcore lead", "early rave"
+  LLM triggers: "add a hoover", "rave lead", "hardcore lead", "early rave"
 
 ═══ RHYTHM BASICS ═══
 
@@ -300,7 +300,7 @@ CHROMATIC: C=0, C#=1, D=2, D#=3, E=4, F=5, F#=6, G=7, G#=8, A=9, A#=10, B=11
 SCALE INTERVALS (semitones from root):
   Major:        0 2 4 5 7 9 11   W-W-H-W-W-W-H — bright, resolved
   Minor:        0 2 3 5 7 8 10   W-H-W-W-H-W-W — dark, natural minor (acid default)
-  Dorian:       0 2 3 5 7 9 10   like minor but raised 6th — BoC, jazz-funk
+  Dorian:       0 2 3 5 7 9 10   like minor but raised 6th — warm, jazz-funk
   Phrygian:     0 1 3 5 7 8 10   like minor but b2 — flamenco, dark techno
   Pentatonic:   0 3 5 7 10       5-note minor — universal, always sounds good
   Blues:        0 3 5 6 7 10     pentatonic + tritone blue note
