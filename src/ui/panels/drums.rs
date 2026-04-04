@@ -13,6 +13,8 @@ pub fn draw_kit_a(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         mut kd,
         mut kpu,
         mut kv,
+        mut kped,
+        mut kpet,
         mut st,
         mut ssn,
         mut sd,
@@ -27,6 +29,8 @@ pub fn draw_kit_a(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             s.kit_a.kick.decay,
             s.kit_a.kick.punch,
             s.kit_a.kick.volume,
+            s.kit_a.kick.pitch_env_depth,
+            s.kit_a.kick.pitch_env_time,
             s.kit_a.snare.tone,
             s.kit_a.snare.snappy,
             s.kit_a.snare.decay,
@@ -57,6 +61,12 @@ pub fn draw_kit_a(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                 changed = true;
             }
             if widgets::param_control(ui, "LEVEL", &mut kv, ParamMode::Free, use_sliders).0 {
+                changed = true;
+            }
+            if widgets::param_control(ui, "P.DEPTH", &mut kped, ParamMode::Free, use_sliders).0 {
+                changed = true;
+            }
+            if widgets::param_control(ui, "P.TIME", &mut kpet, ParamMode::Free, use_sliders).0 {
                 changed = true;
             }
         });
@@ -108,6 +118,8 @@ pub fn draw_kit_a(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         s.kit_a.kick.decay = kd;
         s.kit_a.kick.punch = kpu;
         s.kit_a.kick.volume = kv;
+        s.kit_a.kick.pitch_env_depth = kped;
+        s.kit_a.kick.pitch_env_time = kpet;
         s.kit_a.snare.tone = st;
         s.kit_a.snare.snappy = ssn;
         s.kit_a.snare.decay = sd;
@@ -124,13 +136,28 @@ pub fn draw_kit_a(app: &mut ImpulseApp, ui: &mut egui::Ui) {
 pub fn draw_kit_b(app: &mut ImpulseApp, ui: &mut egui::Ui) {
     widgets::section_header(ui, "DRUM KIT B");
 
-    let (mut kp, mut kd, mut kpu, mut kv, mut st, mut ssn, mut sd, mut sv, mut cd, mut cv) = {
+    let (
+        mut kp,
+        mut kd,
+        mut kpu,
+        mut kv,
+        mut kped,
+        mut kpet,
+        mut st,
+        mut ssn,
+        mut sd,
+        mut sv,
+        mut cd,
+        mut cv,
+    ) = {
         let s = app.state.read();
         (
             s.kit_b.kick.pitch,
             s.kit_b.kick.decay,
             s.kit_b.kick.punch,
             s.kit_b.kick.volume,
+            s.kit_b.kick.pitch_env_depth,
+            s.kit_b.kick.pitch_env_time,
             s.kit_b.snare.tone,
             s.kit_b.snare.snappy,
             s.kit_b.snare.decay,
@@ -160,6 +187,12 @@ pub fn draw_kit_b(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                 changed = true;
             }
             if widgets::param_control(ui, "LEVEL", &mut kv, ParamMode::Free, use_sliders).0 {
+                changed = true;
+            }
+            if widgets::param_control(ui, "P.DEPTH", &mut kped, ParamMode::Free, use_sliders).0 {
+                changed = true;
+            }
+            if widgets::param_control(ui, "P.TIME", &mut kpet, ParamMode::Free, use_sliders).0 {
                 changed = true;
             }
         });
@@ -207,6 +240,8 @@ pub fn draw_kit_b(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         s.kit_b.kick.decay = kd;
         s.kit_b.kick.punch = kpu;
         s.kit_b.kick.volume = kv;
+        s.kit_b.kick.pitch_env_depth = kped;
+        s.kit_b.kick.pitch_env_time = kpet;
         s.kit_b.snare.tone = st;
         s.kit_b.snare.snappy = ssn;
         s.kit_b.snare.decay = sd;

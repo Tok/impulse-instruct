@@ -14,27 +14,19 @@ pub fn print_banner() {
         "{DIM}  a synthesizer with a tiny LLM living inside of it  ·  rust  ·  llama.cpp{RESET}"
     );
 
-    // ── Huth-colored keyboard (3 octaves) ────────────────────────────────────
+    // ── Huth-colored keyboard (2 octaves, 7 rows) ────────────────────────────
     //
     // Layout: W=5 cells per white key, B=3 cells per black key.
-    //   White key = '║' (left wall) + 4 spaces  → 5 cells
-    //   Black key = '║' (left wall) + ' ' + '║' → 3 cells
-    //   1 octave = 35 cells total.
-    //   2 octaves = 70 chars + 2 indent = 72 — fits within 80 columns.
+    //   White key  = '│' (left wall) + 3 spaces + '│' (right wall) → 5 cells
+    //   Black key  = '│' (left wall) + ' ' + '│' (right wall)      → 3 cells
+    //   1 octave   = 35 cells total.
+    //   2 octaves  = 70 chars + 2 indent = 72 — fits within 80 columns.
     //
-    // Black keys are near-centered on white key boundaries.
-    // With W=5 and B=3, exact centering is impossible (half-integer boundaries)
-    // so each black key is offset 0.5 cells to the right of its boundary:
-    //   C/D boundary 4.5 → C# left=4 (center 5, boundary 4.5 — 0.5 right bias)
-    //   D/E boundary 9.5 → D# left=9 (center 10)
-    //   F/G boundary 19.5 → F# left=19 (center 20)
-    //   G/A boundary 24.5 → G# left=24 (center 25)
-    //   A/B boundary 29.5 → A# left=29 (center 30)
-    //
-    // Exposed cells per note in UPPER zone:
-    //   C=4  D=2  E=3  |  F=4  G=2  A=2  B=3
-    //
-    // Height: upper ×4 rows (black key body), lower ×2 + bottom ×1 = 7 rows total.
+    // Height layout (7 rows):
+    //   Rows 1–3  UPPER     — black key body (│ │)
+    //   Row  4    UPPER_BTM — black key floor (└─┘), white key walls continue
+    //   Rows 5–6  LOWER     — white key body (│   │)
+    //   Row  7    LOWER_BTM — white key floor (└───┘)
 
     type Rgb = (u8, u8, u8);
     type Cell = (Rgb, char);
@@ -52,38 +44,56 @@ pub fn print_banner() {
     const AS: Rgb = (0x77, 0x44, 0xBB);
     const B: Rgb = (0x44, 0x33, 0xAA);
 
-    // Upper zone: 35 cells per octave (W=5 white, B=3 black).
+    // Rows 1–3: black key bodies (│ │), white key walls + exposed space.
+    // White keys have │ on left only here — right wall comes from adjacent black key.
     #[rustfmt::skip]
     const UPPER: [Cell; 35] = [
-        // ── 2-key group ──────────────────────────────────────────────────────
+        // ── 2-key group (C D E) ──────────────────────────────────────────────
         (C,  '│'), (C,  ' '), (C,  ' '), (C,  ' '),     // C  wall+3  (0-3)
-        (CS, '│'), (CS, ' '), (CS, '│'),                  // C# (4-6)
+        (CS, '│'), (CS, ' '), (CS, '│'),                  // C# body    (4-6)
         (D,  ' '), (D,  ' '),                             // D  2 exp   (7-8)
-        (DS, '│'), (DS, ' '), (DS, '│'),                  // D# (9-11)
+        (DS, '│'), (DS, ' '), (DS, '│'),                  // D# body    (9-11)
         (E,  ' '), (E,  ' '), (E,  ' '),                 // E  3 exp   (12-14)
-        // ── 3-key group ──────────────────────────────────────────────────────
+        // ── 3-key group (F G A B) ────────────────────────────────────────────
         (F,  '│'), (F,  ' '), (F,  ' '), (F,  ' '),     // F  wall+3  (15-18)
-        (FS, '│'), (FS, ' '), (FS, '│'),                  // F# (19-21)
+        (FS, '│'), (FS, ' '), (FS, '│'),                  // F# body    (19-21)
         (G,  ' '), (G,  ' '),                             // G  2 exp   (22-23)
-        (GS, '│'), (GS, ' '), (GS, '│'),                  // G# (24-26)
+        (GS, '│'), (GS, ' '), (GS, '│'),                  // G# body    (24-26)
         (A,  ' '), (A,  ' '),                             // A  2 exp   (27-28)
-        (AS, '│'), (AS, ' '), (AS, '│'),                  // A# (29-31)
+        (AS, '│'), (AS, ' '), (AS, '│'),                  // A# body    (29-31)
         (B,  ' '), (B,  ' '), (B,  ' '),                 // B  3 exp   (32-34)
     ];
 
-    // Lower zone: 35 cells.  Each white key = left '│' + 4 spaces (W=5).
+    // Row 4: black key floor (└─┘ closes each black key), white key walls continue.
     #[rustfmt::skip]
-    const LOWER: [Cell; 35] = [
-        (C, '│'), (C, ' '), (C, ' '), (C, ' '), (C, ' '),
-        (D, '│'), (D, ' '), (D, ' '), (D, ' '), (D, ' '),
-        (E, '│'), (E, ' '), (E, ' '), (E, ' '), (E, ' '),
-        (F, '│'), (F, ' '), (F, ' '), (F, ' '), (F, ' '),
-        (G, '│'), (G, ' '), (G, ' '), (G, ' '), (G, ' '),
-        (A, '│'), (A, ' '), (A, ' '), (A, ' '), (A, ' '),
-        (B, '│'), (B, ' '), (B, ' '), (B, ' '), (B, ' '),
+    const UPPER_BTM: [Cell; 35] = [
+        (C,  '│'), (C,  ' '), (C,  ' '), (C,  ' '),     // C  wall+3
+        (CS, '└'), (CS, '─'), (CS, '┘'),                  // C# floor
+        (D,  ' '), (D,  ' '),                             // D  2 exp
+        (DS, '└'), (DS, '─'), (DS, '┘'),                  // D# floor
+        (E,  ' '), (E,  ' '), (E,  ' '),                 // E  3 exp
+        (F,  '│'), (F,  ' '), (F,  ' '), (F,  ' '),     // F  wall+3
+        (FS, '└'), (FS, '─'), (FS, '┘'),                  // F# floor
+        (G,  ' '), (G,  ' '),                             // G  2 exp
+        (GS, '└'), (GS, '─'), (GS, '┘'),                  // G# floor
+        (A,  ' '), (A,  ' '),                             // A  2 exp
+        (AS, '└'), (AS, '─'), (AS, '┘'),                  // A# floor
+        (B,  ' '), (B,  ' '), (B,  ' '),                 // B  3 exp
     ];
 
-    // Bottom edge row: '└' corner + 3 '─' + '┘' corner → closed floor per white key.
+    // Rows 5–6: white key body — both left '│' and right '│' walls visible.
+    #[rustfmt::skip]
+    const LOWER: [Cell; 35] = [
+        (C, '│'), (C, ' '), (C, ' '), (C, ' '), (C, '│'),
+        (D, '│'), (D, ' '), (D, ' '), (D, ' '), (D, '│'),
+        (E, '│'), (E, ' '), (E, ' '), (E, ' '), (E, '│'),
+        (F, '│'), (F, ' '), (F, ' '), (F, ' '), (F, '│'),
+        (G, '│'), (G, ' '), (G, ' '), (G, ' '), (G, '│'),
+        (A, '│'), (A, ' '), (A, ' '), (A, ' '), (A, '│'),
+        (B, '│'), (B, ' '), (B, ' '), (B, ' '), (B, '│'),
+    ];
+
+    // Row 7: white key floor — '└───┘' closes each white key.
     #[rustfmt::skip]
     const LOWER_BTM: [Cell; 35] = [
         (C, '└'), (C, '─'), (C, '─'), (C, '─'), (C, '┘'),
@@ -111,22 +121,24 @@ pub fn print_banner() {
     };
 
     // Two octaves: chain arrays × 2.
-    // 35 cells × 2 = 70 chars + 2 indent = 72 — fits comfortably within 80 columns.
     let upper_row: Vec<Cell> = UPPER.iter().chain(UPPER.iter()).copied().collect();
+    let upper_btm_row: Vec<Cell> = UPPER_BTM.iter().chain(UPPER_BTM.iter()).copied().collect();
     let lower_row: Vec<Cell> = LOWER.iter().chain(LOWER.iter()).copied().collect();
     let bottom_row: Vec<Cell> = LOWER_BTM.iter().chain(LOWER_BTM.iter()).copied().collect();
 
     let upper = render(&upper_row);
+    let upper_btm = render(&upper_btm_row);
     let lower = render(&lower_row);
     let bottom = render(&bottom_row);
 
     println!();
-    for _ in 0..4 {
+    for _ in 0..3 {
         println!("  {upper}");
-    } // 4 rows — black key zone
+    } // rows 1–3: black key bodies
+    println!("  {upper_btm}"); // row 4:   black key floors
     for _ in 0..2 {
         println!("  {lower}");
-    } // 2 rows — white key body
-    println!("  {bottom}"); // 1 row  — white key floor (└───┘)
+    } // rows 5–6: white key bodies
+    println!("  {bottom}"); // row 7:   white key floors
     println!("{RESET}");
 }

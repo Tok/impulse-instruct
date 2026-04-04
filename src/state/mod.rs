@@ -88,6 +88,7 @@ pub struct BassState {
     pub volume: f32,          // 0–1
     pub supersaw_detune: f32, // 0–1 → 0–1 semitone spread between voices
     pub supersaw_voices: u8,  // 2–7
+    pub sub_osc_level: f32,   // 0–1 sine one octave below, mixed before filter
 }
 
 impl Default for BassState {
@@ -103,6 +104,7 @@ impl Default for BassState {
             volume: 0.8,
             supersaw_detune: 0.5,
             supersaw_voices: 5,
+            sub_osc_level: 0.0,
         }
     }
 }
@@ -111,11 +113,13 @@ impl Default for BassState {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct KickParams {
-    pub pitch: f32,  // 0–1 → 40–80 Hz base
-    pub decay: f32,  // 0–1 → 0.2–2.0 s
-    pub punch: f32,  // 0–1 attack transient
-    pub tone: f32,   // 0–1 sine/noise blend
-    pub volume: f32, // 0–1
+    pub pitch: f32,           // 0–1 → 40–80 Hz base
+    pub decay: f32,           // 0–1 → 0.2–2.0 s
+    pub punch: f32,           // 0–1 attack transient
+    pub tone: f32,            // 0–1 sine/noise blend
+    pub volume: f32,          // 0–1
+    pub pitch_env_depth: f32, // 0–1 → 1×–10× pitch drop height
+    pub pitch_env_time: f32,  // 0–1 → 10ms–200ms pitch drop decay
 }
 
 impl Default for KickParams {
@@ -126,6 +130,8 @@ impl Default for KickParams {
             punch: 0.45,
             tone: 0.8,
             volume: 0.65,
+            pitch_env_depth: 0.5, // 5.5× → close to hardcoded 6×
+            pitch_env_time: 0.2,  // 48ms → close to hardcoded 40ms
         }
     }
 }
@@ -264,6 +270,8 @@ impl Default for DrumKit909 {
                 punch: 0.5,
                 tone: 0.9,
                 volume: 0.65,
+                pitch_env_depth: 0.5,
+                pitch_env_time: 0.2,
             },
             snare: SnareParams {
                 tone: 0.55,
@@ -626,6 +634,11 @@ pub fn apply_llm_update(state: AppState, update: &serde_json::Value) -> AppState
         {
             s.bass.supersaw_voices = (v as u8).clamp(2, 7);
         }
+        if !locked.contains("bass.sub_osc_level")
+            && let Some(v) = b.get("sub_osc_level").and_then(|v| v.as_f64())
+        {
+            s.bass.sub_osc_level = (v as f32).clamp(0.0, 1.0);
+        }
         if !locked.contains("bass.waveform")
             && let Some(w) = b.get("waveform").and_then(|v| v.as_str())
         {
@@ -704,6 +717,44 @@ pub fn apply_llm_update(state: AppState, update: &serde_json::Value) -> AppState
                 }
             }
         }
+    }
+
+    if let Some(kit_a) = update.get("kit_a").and_then(|v| v.as_object())
+        && let Some(kick) = kit_a.get("kick").and_then(|v| v.as_object())
+    {
+        s.kit_a.kick.pitch_env_depth = unlocked_f32(
+            s.kit_a.kick.pitch_env_depth,
+            kick,
+            "pitch_env_depth",
+            "kit_a.kick.pitch_env_depth",
+            locked,
+        );
+        s.kit_a.kick.pitch_env_time = unlocked_f32(
+            s.kit_a.kick.pitch_env_time,
+            kick,
+            "pitch_env_time",
+            "kit_a.kick.pitch_env_time",
+            locked,
+        );
+    }
+
+    if let Some(kit_b) = update.get("kit_b").and_then(|v| v.as_object())
+        && let Some(kick) = kit_b.get("kick").and_then(|v| v.as_object())
+    {
+        s.kit_b.kick.pitch_env_depth = unlocked_f32(
+            s.kit_b.kick.pitch_env_depth,
+            kick,
+            "pitch_env_depth",
+            "kit_b.kick.pitch_env_depth",
+            locked,
+        );
+        s.kit_b.kick.pitch_env_time = unlocked_f32(
+            s.kit_b.kick.pitch_env_time,
+            kick,
+            "pitch_env_time",
+            "kit_b.kick.pitch_env_time",
+            locked,
+        );
     }
 
     if let Some(fx) = update.get("fx").and_then(|v| v.as_object()) {

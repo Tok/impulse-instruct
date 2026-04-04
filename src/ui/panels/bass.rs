@@ -16,6 +16,7 @@ pub fn draw_bass(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         mut accent,
         mut dist,
         mut vol,
+        mut sub_osc_level,
         waveform,
         mut supersaw_detune,
         supersaw_voices,
@@ -32,6 +33,7 @@ pub fn draw_bass(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             s.bass.accent_level,
             s.bass.distortion,
             s.bass.volume,
+            s.bass.sub_osc_level,
             s.bass.waveform.clone(),
             s.bass.supersaw_detune,
             s.bass.supersaw_voices,
@@ -137,6 +139,19 @@ pub fn draw_bass(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         if cy {
             cycle_paths.push("bass.volume");
         }
+        let (ch, cy) = widgets::param_control(
+            ui,
+            "SUB OSC",
+            &mut sub_osc_level,
+            param_mode("bass.sub_osc_level", &locked, &focused),
+            use_sliders,
+        );
+        if ch {
+            changed = true;
+        }
+        if cy {
+            cycle_paths.push("bass.sub_osc_level");
+        }
     };
     if use_sliders {
         ui.vertical(draw_bass_controls);
@@ -156,6 +171,7 @@ pub fn draw_bass(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             snap.bass.accent_level = accent;
             snap.bass.distortion = dist;
             snap.bass.volume = vol;
+            snap.bass.sub_osc_level = sub_osc_level;
             // auto_lock: touching a free param immediately makes it UserOwned
             if auto_lock {
                 for p in [
@@ -166,6 +182,7 @@ pub fn draw_bass(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                     "bass.accent_level",
                     "bass.distortion",
                     "bass.volume",
+                    "bass.sub_osc_level",
                 ] {
                     if snap.llm.locked_params.contains(p) {
                         continue;

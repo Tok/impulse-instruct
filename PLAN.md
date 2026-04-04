@@ -29,7 +29,7 @@ It can nail acid. Everything else is a lie. Fix that.
 
 ### Synthesis
 - [x] Supersaw oscillator (detune + unison count) — needed for trance, rave stabs, Reese bass
-- [ ] Sub-oscillator (one octave below, mix control)
+- [x] Sub-oscillator (one octave below, mix control)
 - [ ] Oscillator detune (for that Reese bass detuned-saws feel)
 - [ ] FM pair (simple 2-op FM for metallic/bell tones)
 - [ ] Noise source (for snare body, hi-hat, wind textures)
@@ -37,7 +37,15 @@ It can nail acid. Everything else is a lie. Fix that.
 - [ ] Second filter mode: highpass + bandpass (current is always lowpass)
 - [ ] Waveshaper / soft clip (lighter distortion option)
 - [ ] Chorus / ensemble effect (essential for 80s sounds, Reese bass)
-- [ ] Proper 808 kick voice with pitch envelope (booming sub tail)
+- [ ] Hoover lead — iconic early rave / hardcore sound: supersaw + aggressive highpass filter sweep
+      triggered by pitch. Named after the vacuum cleaner drone on Human Resource "Dominator" (1991).
+      Implementation: supersaw osc → highpass filter with fast attack env, slow cutoff sweep down,
+      heavy resonance. Optionally add a pitch LFO for the "wailing" character. Expose as a voice
+      preset or a dedicated `hoover` section in the synth with: `filter_start` (0–1), `sweep_time`
+      (0.1–4 s), `resonance` (0–1), `detune` (0–1). LLM trigger: "add a hoover", "rave lead".
+- [ ] Reese bass preset — detuned saws (supersaw_voices=2, supersaw_detune≈0.3) + sub_osc≈0.5
+      + highpass filter removing sub mud + slight chorus. Expose as a one-shot LLM preset.
+- [x] Proper 808 kick voice with pitch envelope (booming sub tail)
 - [ ] Amen break sampler voice — load a WAV, pitch + stretch — the only real jungle solution
 
 ### FX Chain
@@ -46,10 +54,19 @@ It can nail acid. Everything else is a lie. Fix that.
 - [x] Distortion / drive
 - [x] Bitcrush (bit depth + sample rate reduction — lo-fi, gabber, breakcore)
 - [ ] Chorus / flanger as standalone FX slot
+- [ ] Phaser — all-pass filter chain with LFO-swept center frequency; classic psychedelic sweep
+- [ ] Ring modulator — multiply signal by a carrier sine; metallic/robotic character
 - [ ] EQ (3-band: low shelf, mid peak, high shelf)
 - [ ] Compressor / limiter on master bus
 - [ ] Tape saturation / warmth (warm distortion with subtle wow/flutter)
 - [ ] FX routing: modular FX slots instead of fixed chain — each slot is an assignable module
+
+### Terminal / CLI
+- [ ] Font configuration for Unicode box-drawing and special chars — the ✦ char (U+2726) logged
+      on empty-prompt jam triggers renders as a replacement square □ in some terminals. Fix:
+      document in README that the terminal font must include Unicode Block Elements and Geometric
+      Shapes (e.g. JetBrains Mono, Fira Code, Nerd Fonts). Consider falling back to `*` when the
+      locale is not UTF-8, or just replace ✦ with a plain `·` to avoid the issue entirely.
 
 ### Styles
 - [ ] Audit styles.json: remove or replace any artist reference that Bonsai doesn't understand (run llm_suite artist tests first)

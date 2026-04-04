@@ -371,7 +371,8 @@ pub fn param_json_schema() -> serde_json::Value {
                     "supersaw_detune":   { "type": "number", "minimum": 0.0, "maximum": 1.0 },
                     "supersaw_voices":   { "type": "integer", "minimum": 2, "maximum": 7 },
                     "distortion":        { "type": "number", "minimum": 0.0, "maximum": 1.0 },
-                    "volume":            { "type": "number", "minimum": 0.0, "maximum": 1.0 }
+                    "volume":            { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+                    "sub_osc_level":     { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "sub-oscillator level: sine one octave below, 0=off 1=full" }
                 },
                 "additionalProperties": false
             },
@@ -405,6 +406,34 @@ pub fn param_json_schema() -> serde_json::Value {
                     "bitcrush_bits": { "type": "number", "minimum": 0.0, "maximum": 1.0 },
                     "bitcrush_rate": { "type": "number", "minimum": 0.0, "maximum": 1.0 },
                     "bitcrush_mix":  { "type": "number", "minimum": 0.0, "maximum": 1.0 }
+                },
+                "additionalProperties": false
+            },
+            "kit_a": {
+                "type": "object",
+                "properties": {
+                    "kick": {
+                        "type": "object",
+                        "properties": {
+                            "pitch_env_depth": { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "kick pitch drop height: 0=subtle 1=extreme" },
+                            "pitch_env_time":  { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "kick pitch drop decay time: 0=10ms 1=200ms" }
+                        },
+                        "additionalProperties": false
+                    }
+                },
+                "additionalProperties": false
+            },
+            "kit_b": {
+                "type": "object",
+                "properties": {
+                    "kick": {
+                        "type": "object",
+                        "properties": {
+                            "pitch_env_depth": { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "kick pitch drop height: 0=subtle 1=extreme" },
+                            "pitch_env_time":  { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "kick pitch drop decay time: 0=10ms 1=200ms" }
+                        },
+                        "additionalProperties": false
+                    }
                 },
                 "additionalProperties": false
             }

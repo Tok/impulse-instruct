@@ -31,6 +31,7 @@ pub struct AudioParams {
     pub waveform_supersaw: bool, // true = supersaw (overrides waveform_saw)
     pub supersaw_detune: f32,    // 0–1 → 0–1 semitone spread
     pub supersaw_voices: u8,     // 2–7
+    pub sub_osc_level: f32,      // 0–1 sub-oscillator mix level
     pub distortion_303: f32,
     pub volume_303: f32,
     // 808 kick
@@ -38,6 +39,8 @@ pub struct AudioParams {
     pub kick808_decay: f32,
     pub kick808_punch: f32,
     pub kick808_volume: f32,
+    pub kick808_pitch_env_depth: f32,
+    pub kick808_pitch_env_time: f32,
     // 808 snare
     pub snare808_tone: f32,
     pub snare808_snappy: f32,
@@ -52,6 +55,8 @@ pub struct AudioParams {
     pub kick909_decay: f32,
     pub kick909_punch: f32,
     pub kick909_volume: f32,
+    pub kick909_pitch_env_depth: f32,
+    pub kick909_pitch_env_time: f32,
     // 909 snare
     pub snare909_tone: f32,
     pub snare909_snappy: f32,
@@ -93,12 +98,15 @@ impl AudioParams {
             waveform_supersaw: s.bass.waveform == Waveform::Supersaw,
             supersaw_detune: s.bass.supersaw_detune,
             supersaw_voices: s.bass.supersaw_voices,
+            sub_osc_level: s.bass.sub_osc_level,
             distortion_303: s.bass.distortion,
             volume_303: s.bass.volume,
             kick808_pitch: s.kit_a.kick.pitch,
             kick808_decay: s.kit_a.kick.decay,
             kick808_punch: s.kit_a.kick.punch,
             kick808_volume: s.kit_a.kick.volume,
+            kick808_pitch_env_depth: s.kit_a.kick.pitch_env_depth,
+            kick808_pitch_env_time: s.kit_a.kick.pitch_env_time,
             snare808_tone: s.kit_a.snare.tone,
             snare808_snappy: s.kit_a.snare.snappy,
             snare808_decay: s.kit_a.snare.decay,
@@ -110,6 +118,8 @@ impl AudioParams {
             kick909_decay: s.kit_b.kick.decay,
             kick909_punch: s.kit_b.kick.punch,
             kick909_volume: s.kit_b.kick.volume,
+            kick909_pitch_env_depth: s.kit_b.kick.pitch_env_depth,
+            kick909_pitch_env_time: s.kit_b.kick.pitch_env_time,
             snare909_tone: s.kit_b.snare.tone,
             snare909_snappy: s.kit_b.snare.snappy,
             snare909_decay: s.kit_b.snare.decay,
@@ -206,6 +216,7 @@ impl NoiseGen {
 #[derive(Clone)]
 struct Bass303 {
     phase: f32,              // oscillator phase 0-1 (voice 0)
+    sub_phase: f32,          // sub-oscillator phase (one octave below)
     unison_phases: [f32; 6], // phases for voices 1–6 (supersaw)
     freq: f32,               // current freq Hz
     target_freq: f32,        // slide target
@@ -221,6 +232,7 @@ impl Default for Bass303 {
     fn default() -> Self {
         Self {
             phase: 0.0,
+            sub_phase: 0.0,
             unison_phases: [0.0, 0.142, 0.285, 0.428, 0.571, 0.714], // spread across cycle
             freq: 110.0,
             target_freq: 110.0,
@@ -297,6 +309,14 @@ impl Bass303 {
             // Square with slight PWM
             if self.phase < 0.5 { 1.0 } else { -1.0 }
         };
+
+        // Sub-oscillator: sine one octave below, mixed before filter
+        self.sub_phase += self.freq * 0.5 / sr;
+        if self.sub_phase >= 1.0 {
+            self.sub_phase -= 1.0;
+        }
+        let sub = (self.sub_phase * std::f32::consts::TAU).sin();
+        let osc = osc + sub * p.sub_osc_level;
 
         // Envelope decay coefficients
         let accent_mult = if self.accent {
@@ -395,17 +415,27 @@ impl Kick {
         self.phase = 0.0;
     }
 
-    fn process(&mut self, base_pitch: f32, decay: f32, punch: f32, volume: f32, sr: f32) -> f32 {
+    fn process(
+        &mut self,
+        base_pitch: f32,
+        decay: f32,
+        punch: f32,
+        volume: f32,
+        pitch_env_depth: f32,
+        pitch_env_time: f32,
+        sr: f32,
+    ) -> f32 {
         let base_hz = 40.0 + base_pitch * 40.0; // 40–80 Hz
         let decay_coeff = (-1.0 / (sr * (decay * 1.8 + 0.2))).exp();
-        let pitch_decay = (-1.0 / (sr * 0.04)).exp(); // 40ms pitch drop
+        let pitch_decay_time = 0.01 + pitch_env_time * 0.19; // 10ms–200ms
+        let pitch_decay = (-1.0 / (sr * pitch_decay_time)).exp();
         let punch_decay = (-1.0 / (sr * 0.005)).exp(); // 5ms punch
 
         let amp = self.amp_env.tick(decay_coeff);
         let pitch_mod = self.pitch_env.tick(pitch_decay);
         let punch_amp = self.punch_env.tick(punch_decay);
 
-        let freq = base_hz + pitch_mod * base_hz * 6.0;
+        let freq = base_hz + pitch_mod * base_hz * (1.0 + pitch_env_depth * 9.0);
         self.phase += freq / sr;
         if self.phase >= 1.0 {
             self.phase -= 1.0;
@@ -749,6 +779,8 @@ impl DspState {
                 p.kick808_decay,
                 p.kick808_punch,
                 p.kick808_volume,
+                p.kick808_pitch_env_depth,
+                p.kick808_pitch_env_time,
                 sr,
             );
             let s808 = self.snare808.process(
@@ -764,15 +796,17 @@ impl DspState {
             let hh808o =
                 self.hihat_open808
                     .process(p.hihat_open808_decay, 0.75, p.hihat808_volume, sr);
-            let th808 = self.tom_hi808.process(0.7, 0.4, 0.6, 0.7, sr);
-            let tm808 = self.tom_mid808.process(0.5, 0.45, 0.6, 0.7, sr);
-            let tl808 = self.tom_lo808.process(0.3, 0.5, 0.6, 0.7, sr);
+            let th808 = self.tom_hi808.process(0.7, 0.4, 0.6, 0.7, 0.5, 0.2, sr);
+            let tm808 = self.tom_mid808.process(0.5, 0.45, 0.6, 0.7, 0.5, 0.2, sr);
+            let tl808 = self.tom_lo808.process(0.3, 0.5, 0.6, 0.7, 0.5, 0.2, sr);
 
             let k909 = self.kick909.process(
                 p.kick909_pitch,
                 p.kick909_decay,
                 p.kick909_punch,
                 p.kick909_volume,
+                p.kick909_pitch_env_depth,
+                p.kick909_pitch_env_time,
                 sr,
             );
             let s909 = self.snare909.process(
