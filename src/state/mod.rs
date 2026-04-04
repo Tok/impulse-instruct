@@ -81,6 +81,31 @@ pub fn cycle_param_mode(state: AppState, path: &str) -> AppState {
 pub mod ui_prefs;
 pub use ui_prefs::{KnobSize, KnobStyle, PadSize, UiPrefs};
 
+// ─── Amen / WAV sampler voice state ──────────────────────────────────────────
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct AmenState {
+    /// Path to the WAV file to load (empty = no sample loaded).
+    pub path: String,
+    /// Playback pitch offset in semitones (-24 to +24). 0 = original pitch.
+    pub pitch: f32,
+    /// Output volume (0.0–1.0).
+    pub volume: f32,
+    /// When true, loops the sample; otherwise plays once per trigger.
+    pub loop_mode: bool,
+}
+
+impl Default for AmenState {
+    fn default() -> Self {
+        Self {
+            path: String::new(),
+            pitch: 0.0,
+            volume: 0.75,
+            loop_mode: false,
+        }
+    }
+}
+
 // ─── Top-level ───────────────────────────────────────────────────────────────
 
 fn default_pattern_bank() -> Vec<SequencerState> {
@@ -105,6 +130,8 @@ pub struct AppState {
     pub hoover: HooverState,
     #[serde(default)]
     pub an1x: An1xState,
+    #[serde(default)]
+    pub amen: AmenState,
     #[serde(default)]
     pub ui_prefs: UiPrefs,
     /// 8 named pattern slots (A–H) for storage and chain playback.
@@ -141,6 +168,7 @@ impl Default for AppState {
             noise_voice: Default::default(),
             hoover: Default::default(),
             an1x: Default::default(),
+            amen: Default::default(),
             ui_prefs: Default::default(),
             pattern_bank: default_pattern_bank(),
             pattern_edit: 0,

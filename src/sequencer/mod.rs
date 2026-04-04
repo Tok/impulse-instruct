@@ -33,7 +33,7 @@ pub enum TriggerEvent {
 // ─── Clock state (audio-thread local, not in shared AppState) ─────────────────
 
 /// Number of drum voices — must match DrumVoice::ALL.len()
-const NUM_DRUM_VOICES: usize = 13;
+const NUM_DRUM_VOICES: usize = 14;
 
 #[derive(Clone, Debug)]
 pub struct ClockState {

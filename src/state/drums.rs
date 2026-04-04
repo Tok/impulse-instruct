@@ -215,6 +215,8 @@ pub enum DrumVoice {
     HihatOpen909,
     Clap909,
     Rim909,
+    /// WAV sampler voice — plays the loaded amen (or any user WAV).
+    Amen,
 }
 
 impl DrumVoice {
@@ -232,6 +234,7 @@ impl DrumVoice {
         DrumVoice::HihatOpen909,
         DrumVoice::Clap909,
         DrumVoice::Rim909,
+        DrumVoice::Amen,
     ];
 
     pub fn label(&self) -> &'static str {
@@ -249,6 +252,7 @@ impl DrumVoice {
             DrumVoice::HihatOpen909 => "KB OHH",
             DrumVoice::Clap909 => "KB Clap",
             DrumVoice::Rim909 => "KB Rim",
+            DrumVoice::Amen => "Amen",
         }
     }
 
@@ -267,6 +271,7 @@ impl DrumVoice {
             DrumVoice::HihatOpen909 => s.kit_b.hihat_open.volume,
             DrumVoice::Clap909 => s.kit_b.clap.volume,
             DrumVoice::Rim909 => s.kit_b.rim.volume,
+            DrumVoice::Amen => s.amen.volume,
         }
     }
 
@@ -285,6 +290,7 @@ impl DrumVoice {
             DrumVoice::HihatOpen909 => s.kit_b.hihat_open.volume = v,
             DrumVoice::Clap909 => s.kit_b.clap.volume = v,
             DrumVoice::Rim909 => s.kit_b.rim.volume = v,
+            DrumVoice::Amen => s.amen.volume = v,
         }
         s
     }

@@ -1,6 +1,7 @@
 // ─── ui/panels/drums.rs ───────────────────────────────────────────────────────
-// Drum kit panels: Kit A (808-style) and Kit B (909-style).
+// Drum kit panels: Kit A (808-style), Kit B (909-style), and Amen sampler.
 
+use crate::audio::{AudioCommand, load_wav_to_44100};
 use crate::state::ParamMode;
 use crate::ui::{ImpulseApp, theme, widgets};
 
@@ -267,6 +268,91 @@ pub fn draw_kit_b(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         s.kit_b.snare.volume = sv;
         s.kit_b.clap.decay = cd;
         s.kit_b.clap.volume = cv;
+        drop(s);
+        app.push_audio_params();
+    }
+}
+
+// ─── Amen / WAV sampler panel ─────────────────────────────────────────────────
+
+pub fn draw_amen(app: &mut ImpulseApp, ui: &mut egui::Ui) {
+    widgets::section_header(ui, "AMEN SAMPLER");
+
+    let ctrl = widgets::ControlPrefs::from_prefs(&app.state.read().ui_prefs);
+
+    // ── File path + Load button ───────────────────────────────────────────────
+    let mut path = app.state.read().amen.path.clone();
+    ui.horizontal(|ui| {
+        ui.label(
+            egui::RichText::new("WAV file")
+                .monospace()
+                .size(9.5)
+                .color(theme::FOG),
+        );
+    });
+    ui.horizontal(|ui| {
+        let resp = ui.add(
+            egui::TextEdit::singleline(&mut path)
+                .hint_text("path/to/amen.wav")
+                .desired_width(ui.available_width() - 60.0),
+        );
+        if resp.changed() {
+            app.state.write().amen.path = path.clone();
+        }
+        if ui.button("Load").clicked() {
+            match load_wav_to_44100(&path) {
+                Some(data) => {
+                    let _ = app.audio_tx.push(AudioCommand::LoadSampler(data));
+                    log::info!("Amen sampler: loaded '{}'", path);
+                }
+                None => {
+                    log::warn!("Amen sampler: could not load '{}'", path);
+                }
+            }
+        }
+    });
+
+    ui.add_space(4.0);
+
+    // ── Volume + Pitch knobs ──────────────────────────────────────────────────
+    let (mut vol, mut pitch, mut loop_mode) = {
+        let s = app.state.read();
+        (s.amen.volume, s.amen.pitch, s.amen.loop_mode)
+    };
+    let mut changed = false;
+
+    widgets::glass_group(ui, ctrl.group_max_width(), |ui| {
+        ui.horizontal_wrapped(|ui| {
+            if widgets::param_control(ui, "VOLUME", &mut vol, ParamMode::Free, ctrl).0 {
+                changed = true;
+            }
+            let mut pitch_norm = (pitch + 24.0) / 48.0; // -24..+24 → 0..1
+            if widgets::param_control(ui, "PITCH", &mut pitch_norm, ParamMode::Free, ctrl).0 {
+                pitch = pitch_norm * 48.0 - 24.0;
+                changed = true;
+            }
+        });
+        ui.horizontal(|ui| {
+            ui.label(
+                egui::RichText::new("Loop")
+                    .monospace()
+                    .size(9.5)
+                    .color(theme::FOG),
+            );
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                if widgets::toggle_button(ui, if loop_mode { "ON" } else { "OFF" }, &mut loop_mode)
+                {
+                    changed = true;
+                }
+            });
+        });
+    });
+
+    if changed {
+        let mut s = app.state.write();
+        s.amen.volume = vol;
+        s.amen.pitch = pitch;
+        s.amen.loop_mode = loop_mode;
         drop(s);
         app.push_audio_params();
     }

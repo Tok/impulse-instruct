@@ -82,10 +82,9 @@ Ordered by value — tackle roughly from top to bottom.
 
 ### Immediate
 
-- [ ] **Autotune / pitch-snap on TTS** — pitch-quantize espeak-ng output to current key/scale
-      ("T-Pain" jungle toaster effect). Approach: TTS → temp WAV → YIN pitch tracker → rubberband-cli
-      per-frame pitch shift → play back via cpal. Simpler fallback: shift whole line to root note.
-      Deps: `rubberband-cli` (apt/vcpkg). Add "Pitch snap" checkbox in TTS settings.
+- [x] **Autotune / pitch-snap on TTS** — pitch-quantize espeak-ng output to current key/scale
+      ("T-Pain" jungle toaster effect). Pure Rust: autocorrelation pitch detect → snap via
+      `snap_to_scale` → linear-interpolation resample. "Pitch snap" toggle in TTS settings.
 
 - [ ] **Amen break sampler voice** — load a WAV, pitch + time-stretch for real jungle/DnB.
       The only way to fully nail the amen aesthetic without synthesis approximation.

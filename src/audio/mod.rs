@@ -23,6 +23,9 @@ pub enum AudioCommand {
     /// Live monitor gain (0.0–1.0). Applied after DSP, not saved to state,
     /// never reaches the export path — exports always render at full volume.
     SetMonitorVolume(f32),
+    /// Load new sample data into the amen/WAV sampler voice.
+    /// The Arc is just a pointer copy — allocation-free in the audio callback.
+    LoadSampler(Arc<Vec<f32>>),
 }
 
 // ─── Audio Engine ─────────────────────────────────────────────────────────────
@@ -96,6 +99,7 @@ impl AudioEngine {
                             AudioCommand::UpdateParams(p) => dsp.update_params(*p),
                             AudioCommand::Trigger(e) => dsp.handle_trigger(&e),
                             AudioCommand::SetMonitorVolume(v) => monitor_vol = v,
+                            AudioCommand::LoadSampler(data) => dsp.load_amen(data),
                         }
                     }
 
@@ -228,4 +232,88 @@ impl AudioEngine {
             _stream: stream,
         })
     }
+}
+
+// ─── WAV utilities ────────────────────────────────────────────────────────────
+
+/// Load a 16-bit PCM WAV file, return mono f32 samples normalised to ±1 and
+/// resampled to 44100 Hz. Returns `None` on any parse or I/O error.
+pub fn load_wav_to_44100(path: &str) -> Option<Arc<Vec<f32>>> {
+    let bytes = std::fs::read(path).ok()?;
+    if bytes.len() < 44 || &bytes[0..4] != b"RIFF" || &bytes[8..12] != b"WAVE" {
+        return None;
+    }
+
+    let mut pos = 12usize;
+    let mut channels = 1u16;
+    let mut src_rate = 44100u32;
+    let mut bits = 16u16;
+    let mut data_start = 0usize;
+    let mut data_len = 0usize;
+
+    while pos + 8 <= bytes.len() {
+        let tag = &bytes[pos..pos + 4];
+        let chunk_len = u32::from_le_bytes(bytes[pos + 4..pos + 8].try_into().ok()?) as usize;
+        pos += 8;
+        if tag == b"fmt " && chunk_len >= 16 {
+            channels = u16::from_le_bytes(bytes[pos + 2..pos + 4].try_into().ok()?);
+            src_rate = u32::from_le_bytes(bytes[pos + 4..pos + 8].try_into().ok()?);
+            bits = u16::from_le_bytes(bytes[pos + 14..pos + 16].try_into().ok()?);
+        } else if tag == b"data" {
+            data_start = pos;
+            data_len = chunk_len;
+            break;
+        }
+        pos += chunk_len + (chunk_len & 1);
+    }
+
+    if data_start == 0 || bits != 16 {
+        return None;
+    }
+
+    let frame_bytes = channels as usize * 2;
+    let n_frames = data_len / frame_bytes;
+    let mut mono = Vec::with_capacity(n_frames);
+
+    for i in 0..n_frames {
+        let base = data_start + i * frame_bytes;
+        let mut sum = 0.0f32;
+        for ch in 0..channels as usize {
+            let off = base + ch * 2;
+            if off + 2 > bytes.len() {
+                break;
+            }
+            let raw = i16::from_le_bytes(bytes[off..off + 2].try_into().ok()?);
+            sum += raw as f32 / 32768.0;
+        }
+        mono.push(sum / channels as f32);
+    }
+
+    // Resample to 44100 Hz if needed.
+    let out = if src_rate == 44100 {
+        mono
+    } else {
+        let ratio = src_rate as f32 / 44100.0;
+        let new_len = (mono.len() as f32 / ratio) as usize;
+        (0..new_len)
+            .map(|i| {
+                let src = i as f32 * ratio;
+                let idx = src as usize;
+                let frac = src - idx as f32;
+                let a = mono.get(idx).copied().unwrap_or(0.0);
+                let b = mono.get(idx + 1).copied().unwrap_or(0.0);
+                a + (b - a) * frac
+            })
+            .collect()
+    };
+
+    log::info!(
+        "Loaded WAV: {} ({} Hz, {} ch, {} frames → {} samples at 44100 Hz)",
+        path,
+        src_rate,
+        channels,
+        n_frames,
+        out.len()
+    );
+    Some(Arc::new(out))
 }

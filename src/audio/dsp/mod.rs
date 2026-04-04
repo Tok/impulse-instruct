@@ -249,6 +249,7 @@ pub struct DspState {
     noise_voice: NoiseVoice,
     hoover: HooverVoice,
     an1x: An1xVoice,
+    amen: AmenVoice,
     // LFO state
     lfo_phases: [f32; 4],
     lfo_sh_held: [f32; 4],
@@ -257,7 +258,7 @@ pub struct DspState {
     free_eg_done: bool, // true after one-shot completes
     prev_running: bool,
     // Per-voice velocity (set on trigger, applied to voice output)
-    drum_velocity: [f32; 13],
+    drum_velocity: [f32; 14],
     // Current params
     params: AudioParams,
     sample_rate: f32,
@@ -295,12 +296,13 @@ impl DspState {
             noise_voice: NoiseVoice::new(0x4015_EB3D),
             hoover: HooverVoice::new(),
             an1x: An1xVoice::new(),
+            amen: AmenVoice::new(),
             lfo_phases: [0.0; 4],
             lfo_sh_held: [0.0; 4],
             lfo_noise: NoiseGen::new(0xCAFE_BABE),
             free_eg_phase: 0.0,
             free_eg_done: false,
-            drum_velocity: [1.0; 13],
+            drum_velocity: [1.0; 14],
             prev_running: false,
             params: p,
             sample_rate,
@@ -311,6 +313,12 @@ impl DspState {
         let mut p = p;
         p.sample_rate = self.sample_rate;
         self.params = p;
+    }
+
+    /// Load new sample data into the amen voice. Called from the audio command handler
+    /// (outside process_block) when the user picks a new WAV file.
+    pub fn load_amen(&mut self, data: std::sync::Arc<Vec<f32>>) {
+        self.amen.load(data);
     }
 
     pub fn handle_trigger(&mut self, event: &TriggerEvent) {
@@ -332,6 +340,7 @@ impl DspState {
                     DrumVoice::HihatOpen909 => self.hihat_open909.trigger(),
                     DrumVoice::Clap909 => self.clap909.trigger(),
                     DrumVoice::Rim909 => self.rim909.trigger(),
+                    DrumVoice::Amen => self.amen.trigger(),
                 }
             }
             BassTrigger {
@@ -531,6 +540,7 @@ impl DspState {
             } else {
                 0.0
             };
+            let amen_out = self.amen.process(p.amen_pitch, p.amen_volume, p.amen_loop);
 
             // Scale mix to prevent clipping — summing voices without gain staging
             // causes hard clipping even with moderate individual volumes
@@ -550,7 +560,8 @@ impl DspState {
                 + rim * dv[12]
                 + noise_out
                 + hoover_out
-                + an1x_out)
+                + an1x_out
+                + amen_out * dv[13])
                 * 0.60;
 
             // Waveshaper — pre-FX insert, adds harmonic saturation before time-based FX

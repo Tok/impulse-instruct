@@ -175,6 +175,10 @@ pub struct AudioParams {
     pub an1x_drift: f32,            // 0–1
     pub an1x_glide_time: f32,       // 0–1 → 0–500ms
     pub an1x_glide_legato: bool,
+    // Amen sampler
+    pub amen_pitch: f32,  // semitones -24..+24
+    pub amen_volume: f32, // 0–1
+    pub amen_loop: bool,
 }
 
 impl AudioParams {
@@ -393,6 +397,9 @@ impl AudioParams {
             an1x_drift: s.an1x.drift,
             an1x_glide_time: s.an1x.glide_time,
             an1x_glide_legato: s.an1x.glide_legato,
+            amen_pitch: s.amen.pitch,
+            amen_volume: s.amen.volume,
+            amen_loop: s.amen.loop_mode,
         }
     }
 }

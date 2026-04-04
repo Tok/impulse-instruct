@@ -90,11 +90,12 @@ pub(crate) const SEQ_VOL_H: f32 = 14.0;
 /// Determines which draw function is called for `Panel::Instrument(i)`.
 #[derive(Clone, Copy, PartialEq)]
 enum InstrumentKind {
-    AcidBass,   // draw_bass()
-    DrumKit808, // draw_kit_a()
-    DrumKit909, // draw_kit_b()
-    HooverLead, // draw_hoover()
-    An1xVoice,  // draw_an1x()
+    AcidBass,    // draw_bass()
+    DrumKit808,  // draw_kit_a()
+    DrumKit909,  // draw_kit_b()
+    HooverLead,  // draw_hoover()
+    An1xVoice,   // draw_an1x()
+    AmenSampler, // draw_amen()
 }
 
 struct InstrumentSlot {
@@ -163,7 +164,7 @@ impl ImpulseApp {
     pub fn new(
         cc: &eframe::CreationContext<'_>,
         state: Arc<RwLock<AppState>>,
-        audio_tx: rtrb::Producer<AudioCommand>,
+        mut audio_tx: rtrb::Producer<AudioCommand>,
         scope_rx: rtrb::Consumer<f32>,
         llm_tx: Sender<LlmInput>,
         llm_rx: Receiver<LlmOutput>,
@@ -201,6 +202,16 @@ impl ImpulseApp {
         {
             let mut s = state.write();
             s.sequencer.running = true;
+        }
+
+        // Pre-load amen WAV if path is set in restored session.
+        {
+            let path = state.read().amen.path.clone();
+            if !path.is_empty()
+                && let Some(data) = crate::audio::load_wav_to_44100(&path)
+            {
+                let _ = audio_tx.push(AudioCommand::LoadSampler(data));
+            }
         }
 
         let mut log_text = "[ Impulse Instruct ready ]\n".to_string();
@@ -249,6 +260,10 @@ impl ImpulseApp {
                 InstrumentSlot {
                     label: "AN1X",
                     kind: InstrumentKind::An1xVoice,
+                },
+                InstrumentSlot {
+                    label: "AMEN",
+                    kind: InstrumentKind::AmenSampler,
                 },
             ],
             api_port,
@@ -606,6 +621,7 @@ impl eframe::App for ImpulseApp {
                         InstrumentKind::DrumKit909 => panels::draw_kit_b(self, ui),
                         InstrumentKind::HooverLead => panels::draw_hoover(self, ui),
                         InstrumentKind::An1xVoice => panels::draw_an1x(self, ui),
+                        InstrumentKind::AmenSampler => panels::draw_amen(self, ui),
                     }
                 }
                 Panel::Fx => panels::draw_fx(self, ui),

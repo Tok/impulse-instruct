@@ -1,4 +1,5 @@
 // ─── Low-level voice state machines ──────────────────────────────────────────
+use std::sync::Arc;
 // Pure numeric DSP structs — no allocations.
 
 /// Moog-style 4-pole ladder filter state.
@@ -859,5 +860,66 @@ pub(super) fn drum_voice_idx(voice: &crate::state::DrumVoice) -> usize {
         HihatOpen909 => 10,
         Clap909 => 11,
         Rim909 => 12,
+        Amen => 13,
+    }
+}
+
+// ─── Amen / WAV sampler voice ─────────────────────────────────────────────────
+
+/// Plays back a pre-loaded mono f32 WAV at variable pitch via linear-interpolation
+/// resampling. Allocation-free during playback — the sample data is held in an Arc.
+pub(super) struct AmenVoice {
+    samples: Option<Arc<Vec<f32>>>,
+    pos: f32,
+    playing: bool,
+}
+
+impl AmenVoice {
+    pub(super) fn new() -> Self {
+        Self {
+            samples: None,
+            pos: 0.0,
+            playing: false,
+        }
+    }
+
+    /// Replace the sample data (called from the audio command handler, not process_block).
+    pub(super) fn load(&mut self, data: Arc<Vec<f32>>) {
+        self.samples = Some(data);
+        self.playing = false;
+        self.pos = 0.0;
+    }
+
+    pub(super) fn trigger(&mut self) {
+        if self.samples.is_some() {
+            self.pos = 0.0;
+            self.playing = true;
+        }
+    }
+
+    /// Render one sample. `pitch_semitones` shifts playback speed (±24 st);
+    /// positive = faster/higher, negative = slower/lower.
+    pub(super) fn process(&mut self, pitch_semitones: f32, volume: f32, loop_mode: bool) -> f32 {
+        let samples = match &self.samples {
+            Some(s) => s,
+            None => return 0.0,
+        };
+        if !self.playing {
+            return 0.0;
+        }
+        let rate = 2.0_f32.powf(pitch_semitones / 12.0);
+        let idx = self.pos as usize;
+        if idx + 1 >= samples.len() {
+            if loop_mode {
+                self.pos = 0.0;
+            } else {
+                self.playing = false;
+            }
+            return 0.0;
+        }
+        let frac = self.pos - idx as f32;
+        let out = samples[idx] + (samples[idx + 1] - samples[idx]) * frac;
+        self.pos += rate;
+        out * volume
     }
 }
