@@ -319,6 +319,79 @@ HuggingFace sources (verify before downloading):
 
 ---
 
+## UI Aesthetics — Skeuomorphic / Neumorphic Upgrade
+
+Current UI is flat monochrome egui defaults. Goal: hardware-inspired materials while
+staying R=G=B grayscale (colour reserved for note highlights / Farbige Noten accents).
+The design language is **neumorphic chrome** — physical objects made of brushed metal
+and frosted glass, faked entirely with layered geometry in egui's `Painter` API.
+
+### Rotary knob redesign (chrome ring style)
+
+Real chrome knobs look silver via **many concentric rings of alternating light and dark** —
+the "lathe rings" of a machined aluminium face. To fake this in software:
+
+- Outer rim: dark ring (shadow, ~0.12 grey)
+- One bright specular ring just inside (~0.85 grey, 2–3px wide)
+- Body fill: radial-ish gradient faked as several concentric rings stepping from
+  mid-grey (0.35) at edge down to near-black (0.08) at centre — the "dome" sheen
+- A tiny 1–2px highlight arc at ~1 o'clock (0.9 grey) — the top-lit specular catch
+- Tick mark: bright line (0.95) with a 1px dark shadow offset — raised feel
+- Value arc: slightly recessed track (darker) with a bright filled arc on top
+- When active/hovered: outer specular ring brightens; subtle 1px glow ring outside
+
+Implementation: custom `knob_chrome` widget in `src/ui/widgets.rs` using
+`ui.painter().circle_filled`, `.circle_stroke`, `.line_segment`.
+Keep the existing `knob` widget as fallback; add a `visual_style: KnobStyle` enum
+(Flat / Chrome) to `AppState.ui_prefs`, defaulting to Chrome.
+
+### Slider redesign (frosted glass track)
+
+- Track: rounded rect, slightly recessed (dark border, semi-dark fill ~0.12)
+- Fill: brighter segment from left to thumb (~0.35), 1px specular top edge (~0.55)
+- Thumb: small chrome pill — same concentric-ring treatment as knob but oval
+- Subtle inner shadow on track ends (the "slot" depth illusion)
+
+### Button redesign (soft emboss)
+
+- Inactive: raised rectangle — bright top/left edge stroke, dark bottom/right, mid fill
+- Active: pressed — flip edges (dark top/left, bright bottom/right), fill darkens
+- Hover: top edge brightens (+0.1)
+
+### Glass panel surfaces
+
+- Group/section backgrounds: very dark fill (0.06) with 1px bright top border (0.25)
+  and 1px dark bottom border (0.03) — the "edge of smoked glass" look
+- Section headers: small bright underline rule after the label text
+
+### Bloom / glow (optional, settings-gated)
+
+Post-process bloom is not native to egui — it would require rendering to a texture
+then applying a blur pass, which means a custom wgpu render pipeline.
+
+Plan (Phase 3 or later):
+- Add `UiPrefs.bloom_enabled: bool` (default false) and `bloom_intensity: f32`
+- On egui frame end, if enabled: blit the egui texture to an intermediate render target,
+  run a separable Gaussian blur (σ ≈ 3–6px) on the bright pixels only (threshold ~0.7),
+  additive-blend back onto the main frame
+- Coloured bloom: the Farbige Noten note highlights would bleed colour into surrounding
+  area — piano keys glow their note colour when pressed
+- Setting lives in prefs panel under a "Visual FX" section: Bloom toggle + intensity slider
+- Defaults off — must be a setting because it costs a GPU render pass per frame
+
+### TODO list
+
+- [ ] `KnobStyle` enum in AppState + prefs toggle (Flat / Chrome)
+- [ ] `knob_chrome` widget: concentric ring chrome face, raised tick, value arc
+- [ ] `slider_glass` widget: recessed track, chrome thumb pill
+- [ ] `button_emboss` widget: raised/pressed states via edge highlight swap
+- [ ] Glass panel frame style applied to all `ui.group()` sections
+- [ ] `UiPrefs` struct in AppState (visual_style, bloom_enabled, bloom_intensity)
+- [ ] Bloom post-process pipeline (Phase 3 — needs custom wgpu pass)
+- [ ] Coloured bloom on Farbige Noten note highlights (gated by bloom setting)
+
+---
+
 ## LLM Music Theory Grounding  *(prompt engineering, do when tuning)*
 
 The LLM should understand enough music theory to make intelligent harmonic choices —
