@@ -52,18 +52,6 @@ else
   MODELS=("$MODEL_ARG")
 fi
 
-echo "══════════════════════════════════════════"
-echo "  LLM integration suite"
-echo "  models to test: ${#MODELS[@]}"
-echo "══════════════════════════════════════════"
-for m in "${MODELS[@]}"; do echo "    $(basename "$m")"; done
-echo ""
-
-# ── Compile once up front ─────────────────────────────────────────────────────
-echo "→ Compiling test binary…"
-cargo build --features llm-tests --tests -q
-echo ""
-
 # ── Helper: select server binary for a given model path ──────────────────────
 pick_server_bin() {
   local model_lower="${1,,}"
@@ -86,6 +74,31 @@ server_label() {
     *)                       echo "\$PATH llama-server" ;;
   esac
 }
+
+echo "══════════════════════════════════════════"
+echo "  LLM integration suite"
+echo "  models to test: ${#MODELS[@]}"
+echo "══════════════════════════════════════════"
+printf "  %-40s  %-8s  %s\n" "Model" "Size" "Server"
+echo "  ──────────────────────────────────────────────────────────────────"
+for m in "${MODELS[@]}"; do
+  name="$(basename "$m")"
+  if [[ -f "$m" ]]; then
+    size_bytes=$(stat -c%s "$m" 2>/dev/null || stat -f%z "$m" 2>/dev/null || echo 0)
+    size_gb=$(awk "BEGIN {printf \"%.1fG\", $size_bytes/1073741824}")
+  else
+    size_gb="missing"
+  fi
+  sbin="$(pick_server_bin "$m")"
+  slabel="$(server_label "$sbin")"
+  printf "  %-40s  %-8s  %s\n" "$name" "$size_gb" "$slabel"
+done
+echo ""
+
+# ── Compile once up front ─────────────────────────────────────────────────────
+echo "→ Compiling test binary…"
+cargo build --features llm-tests --tests -q
+echo ""
 
 # ── Per-model results accumulator ─────────────────────────────────────────────
 declare -a SUMMARY_LINES=()

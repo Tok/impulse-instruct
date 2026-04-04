@@ -9,7 +9,7 @@ path = "src/main.rs"
 
 [[bin]]
 name = "model_eval"
-path = "src/bin/model_eval.rs"
+path = "src/bin/model_eval/main.rs"
 
 [dependencies]
 # Audio I/O
