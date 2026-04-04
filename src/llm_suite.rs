@@ -76,6 +76,10 @@ fn setup() -> Option<(LlamaServerBackend, String)> {
     Some((backend, system))
 }
 
+// ANSI dim+italic for thinking tokens — readable but visually subordinate.
+const THINK_ON: &str = "\x1b[2;3m";
+const THINK_OFF: &str = "\x1b[0m";
+
 fn infer_json(
     backend: &mut LlamaServerBackend,
     system: &str,
@@ -84,6 +88,11 @@ fn infer_json(
 ) -> Option<Value> {
     match backend.infer(system, prompt, heat) {
         Ok(out) => {
+            // Print thinking tokens in dim+italic so they're visible but clearly
+            // subordinate to the test result line.
+            if let Some(ref think) = out.thinking {
+                eprintln!("{THINK_ON}  <think> {think} </think>{THINK_OFF}");
+            }
             if out.param_update.is_none() {
                 eprintln!(
                     "[llm-suite] infer OK but param_update=None (text: {:?})",
