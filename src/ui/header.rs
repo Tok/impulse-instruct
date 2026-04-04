@@ -2,7 +2,7 @@
 // Menu bar and header panel (BPM, transport, HEAT, JAM, vol, VRAM/RAM).
 
 use crate::audio::AudioCommand;
-use crate::export::{export_mp3, export_wav};
+use crate::export::{export_mp3, export_stems, export_wav};
 use crate::llm::LlmInput;
 use crate::state::save_project;
 use crate::ui::{ImpulseApp, theme, webbrowser_open};
@@ -97,6 +97,41 @@ impl ImpulseApp {
                                 Err(e) => {
                                     let msg = format!("[ export: {} ]", e);
                                     log::warn!("{}", msg);
+                                    self.log_text.push_str(&format!("{}\n", msg));
+                                }
+                            }
+                            ui.close_menu();
+                        }
+
+                        if ui
+                            .button(egui::RichText::new("Export Stems").monospace().size(10.0))
+                            .clicked()
+                        {
+                            let snapshot = self.state.read().clone();
+                            let bars = self.export_bars;
+                            let ts = std::time::SystemTime::now()
+                                .duration_since(std::time::UNIX_EPOCH)
+                                .map(|d| d.as_secs())
+                                .unwrap_or(0);
+                            let prefix = format!("stems-{}", ts);
+                            match export_stems(&snapshot, bars, &prefix) {
+                                Ok(paths) => {
+                                    let msg = format!(
+                                        "[ stems → {} files ({}) ]",
+                                        paths.len(),
+                                        paths
+                                            .iter()
+                                            .filter_map(|p| p.file_name())
+                                            .map(|n| n.to_string_lossy())
+                                            .collect::<Vec<_>>()
+                                            .join(", ")
+                                    );
+                                    log::info!("{}", msg);
+                                    self.log_text.push_str(&format!("{}\n", msg));
+                                }
+                                Err(e) => {
+                                    let msg = format!("[ stems failed: {} ]", e);
+                                    log::error!("{}", msg);
                                     self.log_text.push_str(&format!("{}\n", msg));
                                 }
                             }

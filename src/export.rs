@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 
 use crate::audio::dsp::{AudioParams, DspState};
 use crate::sequencer::{ClockState, advance_clock};
-use crate::state::AppState;
+use crate::state::{AppState, DrumVoice};
 
 const EXPORT_SR: f32 = 44100.0;
 const BLOCK_SIZE: usize = 512;
@@ -126,4 +126,167 @@ pub fn export_mp3(state: &AppState, bars: u32) -> Result<PathBuf, String> {
             wav_path.display()
         )),
     }
+}
+
+// ─── Stem export ─────────────────────────────────────────────────────────────
+
+/// A named audio stem (voice label + rendered PCM).
+pub struct Stem {
+    pub name: String,
+    pub samples: Vec<f32>,
+}
+
+/// Render per-voice stems for `bars` bars.
+/// Each stem isolates one voice group by zeroing out all others.
+/// Returns one Stem per active group (skips disabled voices).
+pub fn render_stems(state: &AppState, bars: u32) -> Vec<Stem> {
+    let mut stems = Vec::new();
+
+    // Helper: zero all drum volumes in a state clone.
+    let silence_drums = |mut s: AppState| -> AppState {
+        for v in DrumVoice::ALL {
+            s = DrumVoice::set_volume(*v, s, 0.0);
+        }
+        s
+    };
+
+    // Helper: zero all melodic voice volumes in a state clone.
+    let silence_melodic = |mut s: AppState| -> AppState {
+        s.bass.volume = 0.0;
+        s.noise_voice.volume = 0.0;
+        s.hoover.volume = 0.0;
+        s.an1x.volume = 0.0;
+        s.amen.volume = 0.0;
+        s
+    };
+
+    // ── Bass (TB-303) ─────────────────────────────────────────────────────────
+    if state.bass.volume > 0.01 {
+        let mut s = silence_drums(state.clone());
+        s.noise_voice.volume = 0.0;
+        s.hoover.volume = 0.0;
+        s.an1x.volume = 0.0;
+        s.amen.volume = 0.0;
+        stems.push(Stem {
+            name: "bass".into(),
+            samples: render_bars(&s, bars),
+        });
+    }
+
+    // ── Kit A (808-style) ─────────────────────────────────────────────────────
+    {
+        let kit_a_voices = [
+            DrumVoice::Kick808,
+            DrumVoice::Snare808,
+            DrumVoice::HihatClosed808,
+            DrumVoice::HihatOpen808,
+            DrumVoice::TomHi808,
+            DrumVoice::TomMid808,
+            DrumVoice::TomLo808,
+        ];
+        let active = kit_a_voices.iter().any(|v| v.get_volume(state) > 0.01);
+        if active {
+            let mut s = silence_melodic(state.clone());
+            for v in DrumVoice::ALL {
+                if !kit_a_voices.contains(v) {
+                    s = DrumVoice::set_volume(*v, s, 0.0);
+                }
+            }
+            stems.push(Stem {
+                name: "kit_a".into(),
+                samples: render_bars(&s, bars),
+            });
+        }
+    }
+
+    // ── Kit B (909-style) ─────────────────────────────────────────────────────
+    {
+        let kit_b_voices = [
+            DrumVoice::Kick909,
+            DrumVoice::Snare909,
+            DrumVoice::HihatClosed909,
+            DrumVoice::HihatOpen909,
+            DrumVoice::Clap909,
+            DrumVoice::Rim909,
+        ];
+        let active = kit_b_voices.iter().any(|v| v.get_volume(state) > 0.01);
+        if active {
+            let mut s = silence_melodic(state.clone());
+            for v in DrumVoice::ALL {
+                if !kit_b_voices.contains(v) {
+                    s = DrumVoice::set_volume(*v, s, 0.0);
+                }
+            }
+            stems.push(Stem {
+                name: "kit_b".into(),
+                samples: render_bars(&s, bars),
+            });
+        }
+    }
+
+    // ── Amen sampler ─────────────────────────────────────────────────────────
+    if state.amen.volume > 0.01 {
+        let mut s = silence_melodic(state.clone());
+        s.amen.volume = state.amen.volume; // restore amen
+        s = silence_drums(s);
+        s = DrumVoice::set_volume(DrumVoice::Amen, s, state.amen.volume);
+        stems.push(Stem {
+            name: "amen".into(),
+            samples: render_bars(&s, bars),
+        });
+    }
+
+    // ── Noise voice ───────────────────────────────────────────────────────────
+    if state.noise_voice.enabled && state.noise_voice.volume > 0.01 {
+        let mut s = silence_drums(state.clone());
+        s.bass.volume = 0.0;
+        s.hoover.volume = 0.0;
+        s.an1x.volume = 0.0;
+        s.amen.volume = 0.0;
+        stems.push(Stem {
+            name: "noise".into(),
+            samples: render_bars(&s, bars),
+        });
+    }
+
+    // ── Hoover ────────────────────────────────────────────────────────────────
+    if state.hoover.enabled && state.hoover.volume > 0.01 {
+        let mut s = silence_drums(state.clone());
+        s.bass.volume = 0.0;
+        s.noise_voice.volume = 0.0;
+        s.an1x.volume = 0.0;
+        s.amen.volume = 0.0;
+        stems.push(Stem {
+            name: "hoover".into(),
+            samples: render_bars(&s, bars),
+        });
+    }
+
+    // ── AN1X ─────────────────────────────────────────────────────────────────
+    if state.an1x.enabled && state.an1x.volume > 0.01 {
+        let mut s = silence_drums(state.clone());
+        s.bass.volume = 0.0;
+        s.noise_voice.volume = 0.0;
+        s.hoover.volume = 0.0;
+        s.amen.volume = 0.0;
+        stems.push(Stem {
+            name: "an1x".into(),
+            samples: render_bars(&s, bars),
+        });
+    }
+
+    stems
+}
+
+/// Render stems and write each to `<prefix>-<name>.wav`.
+/// Returns the list of paths written on success, or the first error.
+pub fn export_stems(state: &AppState, bars: u32, prefix: &str) -> Result<Vec<PathBuf>, String> {
+    let stems = render_stems(state, bars);
+    let mut paths = Vec::new();
+    for stem in stems {
+        let path = PathBuf::from(format!("{}-{}.wav", prefix, stem.name));
+        write_wav(&path, &stem.samples)?;
+        paths.push(path);
+    }
+    Ok(paths)
 }

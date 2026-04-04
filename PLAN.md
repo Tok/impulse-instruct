@@ -96,9 +96,8 @@ Ordered by value — tackle roughly from top to bottom.
 
 - [x] **MIDI clock in** — 8-pulse rolling average, SYNC button in BPM row, resets on Start/Stop.
 
-- [ ] **Codecov integration** — before publishing to GitHub.
-      See: https://github.com/codecov/example-rust
-      Add `codecov` step to CI workflow, upload `lcov.info` from `./run-tests.sh --coverage`.
+- [x] **Codecov integration** — `.github/workflows/ci.yml` runs tests + tarpaulin + uploads lcov.info.
+      Requires `CODECOV_TOKEN` secret in repo settings once published.
 
 - [ ] **OSC support** — connect to Max/MSP, Ableton, TouchOSC. Pairs well with the MCP API.
 
