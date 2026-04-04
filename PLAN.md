@@ -161,7 +161,7 @@ Bonsai generates the text. A TTS engine speaks it. The crowd goes wild.
 - [x] LLM generates `"mc_line"` JSON field alongside param updates (separate from `_comment`)
 - [x] Selectable MC voice character: Jungle MC, Rave Announcer, Robot, Smooth DJ
 - [x] TTS FX wiring: TTS audio routed through a light reverb + optional bitcrush (hall MC sound)
-- [ ] Volume envelope on TTS so it ducks under the music
+- [x] Volume envelope on TTS so it ducks under the music
 - [ ] **Autotune / pitch-snap on TTS** — pitch-quantize the espeak-ng output to the synth's current
       key and scale, giving the MC voice a melodic "T-Pain" or jungle toaster character.
       Implementation approach (offline post-process, feasible with no new language deps):

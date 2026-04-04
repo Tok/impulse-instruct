@@ -69,6 +69,11 @@ impl AudioEngine {
         let mut dsp = DspState::new(sample_rate, initial_params);
         let mut clock = ClockState::default();
         let mut monitor_vol = 1.0_f32;
+        // TTS duck envelope: 1.0 = full synth, 0.3 = ducked under TTS voice
+        let mut tts_duck = 1.0_f32;
+        let duck_target = 0.35_f32; // synth level when TTS is speaking
+        let duck_attack = 1.0 - (-8.0_f32 / sample_rate).exp(); // ~fast
+        let duck_release = 1.0 - (-2.0_f32 / sample_rate).exp(); // ~slow
 
         let state_clone = Arc::clone(&state);
 
@@ -117,8 +122,22 @@ impl AudioEngine {
                         }
                     }
 
-                    // Mix in TTS audio (lock-free pop per frame)
+                    // Duck synth and mix in TTS audio (lock-free pop per frame)
+                    let tts_active = tts_consumer.slots() > 0;
                     for frame in output.chunks_mut(channels) {
+                        // Smooth duck gain toward target
+                        let target = if tts_active { duck_target } else { 1.0 };
+                        let coeff = if tts_duck > target {
+                            duck_attack
+                        } else {
+                            duck_release
+                        };
+                        tts_duck += (target - tts_duck) * coeff;
+                        // Apply duck to synth frame
+                        for ch in frame.iter_mut() {
+                            *ch *= tts_duck;
+                        }
+                        // Add TTS sample
                         if let Ok(tts_s) = tts_consumer.pop() {
                             for ch in frame.iter_mut() {
                                 *ch += tts_s;
