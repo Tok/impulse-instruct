@@ -131,8 +131,16 @@ pub fn advance_clock(
         acc -= step_sps;
         step = (step + 1) % seq.steps.max(1);
 
-        // Drum triggers
+        // Drum triggers — respect mute and solo state
+        let has_solo = !seq.soloed_drums.is_empty();
         for voice in DrumVoice::ALL {
+            // Skip if muted; skip if solo is active and this voice isn't soloed.
+            if seq.muted_drums.contains(voice) {
+                continue;
+            }
+            if has_solo && !seq.soloed_drums.contains(voice) {
+                continue;
+            }
             if let Some(pattern) = seq.drum_patterns.get(voice) {
                 let s = pattern.get(step).copied().unwrap_or_default();
                 if s.active {

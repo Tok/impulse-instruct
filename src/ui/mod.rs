@@ -145,6 +145,8 @@ pub struct ImpulseApp {
     seq_page: usize,
     // Voices manually expanded in the sequencer even if they have no active steps
     expanded_seq_voices: std::collections::HashSet<crate::state::DrumVoice>,
+    // Copy/paste clipboard for drum patterns (voice → step slice)
+    drum_clipboard: Option<(crate::state::DrumVoice, Vec<crate::state::Step>)>,
     // Model selector
     available_models: Vec<String>,
     // System info (GPU/VRAM/RAM) — polled in background thread
@@ -259,6 +261,7 @@ impl ImpulseApp {
             show_thinking: false,
             seq_page: 0,
             expanded_seq_voices: std::collections::HashSet::new(),
+            drum_clipboard: None,
             available_models: Vec::new(),
             sys_info: {
                 let shared =

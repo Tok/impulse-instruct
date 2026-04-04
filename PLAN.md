@@ -86,10 +86,10 @@ in the synth. Think of it as a modulation matrix row, not a per-voice feature.
       UTF-8 is not advertised; all log → arrows replaced with ASCII -> for universal compat.
 
 ### Styles
-- [ ] Audit styles.json: remove or replace any artist reference that Bonsai doesn't understand (run llm_suite artist tests first)
-- [ ] Add amen break template to jungle / DnB styles
-- [ ] Rewrite dub techno description to make FX chain actually dominant
-- [ ] Add genre-specific starter patterns (not just parameter suggestions)
+- [x] Audit styles.json: remove or replace any artist reference that Bonsai doesn't understand (run llm_suite artist tests first)
+- [x] Add amen break template to jungle / DnB styles
+- [x] Rewrite dub techno description to make FX chain actually dominant
+- [x] Add genre-specific starter patterns (not just parameter suggestions)
 
 ---
 
@@ -106,7 +106,7 @@ and melodic sequences.
 - [x] OSC2 coarse + fine detune relative to OSC1 (the detuned beating is the core BoC texture)
 - [x] OSC2 octave offset (−2 / −1 / 0 / +1 / +2)
 - [x] Oscillator mix (OSC1 level, OSC2 level, noise level)
-- [ ] Hard sync: OSC2 resets its phase to OSC1 each cycle — with pitch sweep this produces the aggressive "screaming" harmonic sweep (more trance/techno than BoC, but part of the AN1X palette)
+- [x] Hard sync: OSC2 resets its phase to OSC1 each cycle — with pitch sweep this produces the aggressive "screaming" harmonic sweep (more trance/techno than BoC, but part of the AN1X palette)
 - [x] Ring modulation: OSC1 × OSC2 output mixed into signal path
 - [x] Sub-oscillator: square wave one octave below OSC1, level control
 
@@ -116,27 +116,27 @@ and melodic sequences.
 - [x] LFO rate: 0.01 Hz (glacial, BoC-style breathing) to ~20 Hz (vibrato)
 - [x] LFO delay + fade-in (starts slow, deepens over held note)
 - [x] LFO destinations per LFO: OSC1 pitch, OSC2 pitch, OSC1+2 pitch, filter cutoff, amplitude, PWM width
-- [ ] LFO sync to BPM (rate snaps to musical divisions)
+- [x] LFO sync to BPM (rate snaps to musical divisions)
 - [x] Pitch drift: very low-depth random LFO on pitch — simulates tape instability and slight tuning imperfection (key BoC texture, subtly "analogue feeling")
 - [ ] Free EG concept: one slow arbitrary-shape envelope that can be drawn and assigned to any target (filter, pitch, amp, detune) — enables long evolving patches
 
 ### Envelopes
 - [x] Filter envelope (ADSR) with amount + polarity (positive/negative modulation)
 - [x] Amplitude envelope (ADSR)
-- [ ] Pitch envelope (Attack + Decay + amount) — for pluck-style pitch transients
+- [x] Pitch envelope (Attack + Decay + amount) — for pluck-style pitch transients
 
 ### Filter
 - [x] Filter mode selector: Lowpass 24dB (Moog-style, current), Highpass 12dB, Bandpass 12dB
-- [ ] Self-oscillation at high resonance (produces sine wave at resonant frequency)
+- [x] Self-oscillation at high resonance (produces sine wave at resonant frequency)
 - [x] Filter key tracking (filter cutoff follows note pitch — 0%, 50%, 100%)
 
 ### Portamento
 - [x] Glide time (separate from 303 slide — smooth exponential pitch glide between notes)
-- [ ] Glide mode: always on, legato only (only when notes overlap)
+- [x] Glide mode: always on, legato only (only when notes overlap)
 
 ### Voice style in the LLM
 - [x] Add `an1x` as a separate controllable voice in JSON schema alongside `bass`
-- [ ] Style briefs updated so BoC / IDM / ambient styles preferentially target this voice
+- [x] Style briefs updated so BoC / IDM / ambient styles preferentially target this voice
 - [x] LLM can set: detune, lfo_rate, lfo_depth, lfo_target, drift, filter_mode, glide
 
 ### Known gap
@@ -153,13 +153,13 @@ Bonsai generates the text. A TTS engine speaks it. The crowd goes wild.
 - [x] TTS backend — `espeak-ng` subprocess (zero-dep, Linux + Windows)
 - [x] TTS only fires in MC / DJ mode — producer-mode explanations are never spoken (sounds wrong)
 - [x] TTS output mirrored to CLI console (`log::info!("[TTS] …")`)
-- [ ] TTS output mirrored to in-UI comment log (distinguish from LLM text log visually)
-- [ ] TTS settings panel: pitch, speed, amplitude, voice character selector
-      *(add TTS tab to prefs window now; full redesign deferred to Phase 3 modular UI)*
-- [ ] Per-character pitch/speed randomisation (±10%) — prevents robotic monotone
+- [x] TTS output mirrored to in-UI comment log (distinguish from LLM text log visually)
+- [x] TTS settings panel: pitch, speed, amplitude sliders in prefs
+      *(voice character selector deferred — see below)*
+- [x] Per-character pitch/speed randomisation (±10%) — prevents robotic monotone
 - [ ] Alternative: Coqui TTS for higher quality voice (Python subprocess or REST)
-- [ ] LLM generates `"mc_line"` JSON field alongside param updates (separate from `_comment`)
-- [ ] Selectable MC voice character: Jungle MC, Rave Announcer, Robot, Smooth DJ
+- [x] LLM generates `"mc_line"` JSON field alongside param updates (separate from `_comment`)
+- [x] Selectable MC voice character: Jungle MC, Rave Announcer, Robot, Smooth DJ
 - [ ] TTS FX wiring: TTS audio routed through a light reverb + optional bitcrush (hall MC sound)
 - [ ] Volume envelope on TTS so it ducks under the music
 - [ ] **Autotune / pitch-snap on TTS** — pitch-quantize the espeak-ng output to the synth's current
@@ -299,23 +299,10 @@ HuggingFace sources (verify before downloading):
 - [ ] `download-models.sh` — add options for Qwen3-8B Q4_K_M and Llama 3.1-8B
 - [x] UI model selector: scan `models/` directory, show file list as radio group in prefs
 - [x] Hot-swap: `LlmInput::SwitchModel(path)` restarts backend in LLM thread
-- [ ] Reasoning / thinking mode toggle — **only relevant for models that support it**
-      (Qwen3 supports thinking via `/no_think` token or system prompt toggle;
-      Bonsai uses our `_thinking` JSON field hack instead of native `<think>` tags).
-      When enabled: longer latency, better multi-step reasoning for complex prompts.
-      When disabled: faster responses for simple parameter commands.
-      Add checkbox in prefs panel, disabled/greyed out when model doesn't support it.
-      Implement: set `enable_thinking: bool` on `LlmState`; in `infer()` append
-      `/think` or `/no_think` suffix to user message for Qwen3, or add
-      `"thinking": {"type": "enabled", "budget_tokens": 512}` to request body
-      (depends on server/model capabilities).
-- [ ] AI persona name — when stitching different models, decouple the persona from
-      the model name. Current name "Bonsai" is confusing (Bonzai Records association,
-      Belgian techno). Give the synth intelligence a snappy internal name that is
-      model-agnostic. Something like **UNIT**, **GRID**, **IRIS**, **VERB**, **OSC**,
-      **PULSE**, or **VOLT** — displayed in the UI and used in system prompt persona
-      ("you are PULSE, the intelligence inside Impulse Instruct, a synthesizer...").
-      Model file stays separate from persona. Add to prefs panel as a text field.
+- [x] Reasoning / thinking mode toggle — `enable_thinking` on `LlmState`; `/think` or
+      `/no_think` suffix appended to user message; checkbox in prefs panel.
+- [x] AI persona name — `persona_name` field on `LlmState`, default "PULSE"; editable
+      text field in prefs panel; used in system prompt persona line.
 
 ---
 
@@ -438,26 +425,27 @@ Key elements to implement (in egui, respecting grayscale + Huth note colors only
 - [x] `widgets::xy_pad(ui, label_x, label_y, x, y, size, locked)` — 2D parameter pad
 - [x] Used in bass panel: CUT×RES pad and ENV×DEC pad
 - [x] Use in FX panel: REVERB_MIX×REVERB_SIZE and DELAY_MIX×DELAY_FEEDBACK
-- [ ] Use in 808 kick: PITCH×DECAY pad
+- [x] Use in 808 kick: PITCH×DECAY pad
 - [ ] Generic: any two correlated params benefit from this (filter cutoff + resonance is the canonical case)
 - [ ] Optional: show parameter name on cursor when dragging (tooltip-style)
 
 ### Oscilloscope / Waveform Display
-- [ ] Ring buffer in audio thread → UI: `rtrb::RingBuffer<f32>` of ~2048 samples
-- [ ] egui painter draws the waveform as a polyline (white stroke on PIT bg)
-- [ ] Place above the piano in the main view, or as a narrow strip at the top of each voice panel
-- [ ] No color — grayscale only: CHALK line on PIT bg with SLATE border
+- [x] Ring buffer in audio thread → UI: `rtrb::Consumer<f32>` scope_rx in ImpulseApp
+- [x] egui painter draws the waveform as a polyline (white stroke on PIT bg)
+- [x] 512-sample rolling scope_buf, drained each frame
+- [x] No color — grayscale only: CHALK line on PIT bg with SLATE border
 
 ### Envelope Visualization
-- [ ] Draw ADSR shape as a polyline given the 4 parameter values
-- [ ] Used in AN1X voice panel and 303 panel (decay only, simplified)
-- [ ] Interactive: drag the breakpoints to edit A/D/S/R directly on the shape
+- [x] Draw ADSR shape as a polyline given the 4 parameter values
+- [x] Used in AN1X voice panel — filter ADSR and amp ADSR both have visualisers
+- [x] Interactive: drag in each zone to edit A/D/S/R; drag vertical in D/S zones adjusts sustain level
+- [ ] Used in 303 bass panel (decay only, simplified)
 
 ### Step Sequencer Improvements (inspired by Ableton's grid)
-- [ ] Step length indicator: small marker showing 16th / 8th / dotted etc.
-- [ ] Velocity lanes below each step row (small bar graph per step, drag to set)
-- [ ] Mute/solo per row (M/S buttons on left edge of each row)
-- [ ] Pattern copy/paste (right-click menu or keyboard shortcut)
+- [x] Step length indicator: label shows 1/4, 1/8, 1/16, 1/32 based on steps÷time_sig in sequencer header
+- [x] Velocity lanes below each step row (drag bars per step, DSP velocity scaling)
+- [x] Mute/solo per row (M/S buttons on left edge of each row; mute/solo state in SequencerState, respected by advance_clock)
+- [x] Pattern copy/paste (right-click context menu on row label: Copy / Paste / Clear)
 
 ---
 

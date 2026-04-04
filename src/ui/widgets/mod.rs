@@ -624,6 +624,10 @@ pub fn xy_pad(
     changed
 }
 
+// ─── ADSR Envelope Visualiser ────────────────────────────────────────────────
+mod adsr;
+pub use adsr::adsr_display;
+
 // ─── Glass Group ─────────────────────────────────────────────────────────────
 
 /// Neumorphic smoked-glass group panel — dark fill, bright top edge, dark bottom edge.

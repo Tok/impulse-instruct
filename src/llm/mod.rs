@@ -845,7 +845,7 @@ pub fn run_llm_loop(
 
                     // TTS: speak mc_line (crowd shout) if present, else _comment.
                     // Only fires in MC/DJ modes — producer mode is never read aloud.
-                    let (tts_on, mode, tts_pitch, tts_speed, tts_amplitude) = {
+                    let (tts_on, mode, tts_pitch, tts_speed, tts_amplitude, voice_char, randomise) = {
                         let s = state.read();
                         (
                             s.llm.tts_enabled,
@@ -853,13 +853,23 @@ pub fn run_llm_loop(
                             s.llm.tts_pitch,
                             s.llm.tts_speed,
                             s.llm.tts_amplitude,
+                            s.llm.tts_voice_char.clone(),
+                            s.llm.tts_randomise,
                         )
                     };
                     let tts_mode = matches!(mode, ConversationMode::Mc | ConversationMode::Dj);
                     if tts_on && tts_mode {
                         let tts_text = output.mc_line.as_deref().unwrap_or(comment);
                         log::info!("[TTS] {}", tts_text);
-                        speak(tts_text, &mode, tts_pitch, tts_speed, tts_amplitude);
+                        speak(
+                            tts_text,
+                            &mode,
+                            tts_pitch,
+                            tts_speed,
+                            tts_amplitude,
+                            &voice_char,
+                            randomise,
+                        );
                     }
                 }
                 let mut output = output;

@@ -197,6 +197,10 @@ pub struct SequencerState {
     pub scale: Scale,
     /// When true, LLM-provided bass_notes are snapped to the active scale.
     pub scale_snap: bool,
+    /// Drum voices that are muted (never trigger regardless of pattern).
+    pub muted_drums: std::collections::HashSet<DrumVoice>,
+    /// Drum voices in solo mode. When non-empty, only these voices trigger.
+    pub soloed_drums: std::collections::HashSet<DrumVoice>,
 }
 
 impl Default for SequencerState {
@@ -246,6 +250,8 @@ impl Default for SequencerState {
             root_note: 9, // A — the starter pattern is A minor
             scale: Scale::NaturalMinor,
             scale_snap: false,
+            muted_drums: std::collections::HashSet::new(),
+            soloed_drums: std::collections::HashSet::new(),
         }
     }
 }
@@ -337,6 +343,18 @@ pub enum ConversationMode {
     Mc,  // jungle/rave MC — "selector!", "junglist massive!", "rewind!"
 }
 
+/// espeak-ng voice character preset for TTS output.
+/// Auto = follow ConversationMode's default. Others override the voice selection.
+#[derive(Clone, Debug, PartialEq, Default, Serialize, Deserialize)]
+pub enum McVoiceChar {
+    #[default]
+    Auto, // follow ConversationMode defaults
+    JungleMc,      // fast, high-pitched ragga MC (en+m3)
+    RaveAnnouncer, // loud, rapid hype announcer (en+m2)
+    Robot,         // robotic, flat, low (en+m7)
+    SmoothDj,      // mid-low smooth DJ (en+m4)
+}
+
 /// Whether to use the short `brief` or full `description` from styles.json.
 /// Brief (~50 tokens) suits smaller/faster models; Full (~150 tokens) for capable models.
 #[derive(Clone, Debug, PartialEq, Default, Serialize, Deserialize)]
@@ -373,6 +391,8 @@ pub struct LlmState {
     pub tts_pitch: u8,                  // 0 = mode default; 1–99 override
     pub tts_speed: u16,                 // 0 = mode default; words/min override
     pub tts_amplitude: u8,              // 0 = default (100); 1–200 override
+    pub tts_voice_char: McVoiceChar,    // voice character preset (Auto = follow mode)
+    pub tts_randomise: bool,            // ±10% pitch/speed jitter per utterance
     pub style_verbosity: StyleVerbosity, // Brief = ~50 token brief, Full = ~150 token description
     pub auto_lock_on_touch: bool,       // if true, touching a knob locks it to user-only control
     pub is_mock: bool,                  // true when running without a real model (no llama-server)
@@ -407,6 +427,8 @@ impl Default for LlmState {
             tts_pitch: 0,
             tts_speed: 0,
             tts_amplitude: 0,
+            tts_voice_char: McVoiceChar::Auto,
+            tts_randomise: false,
             style_verbosity: StyleVerbosity::Full,
             auto_lock_on_touch: false,
             is_mock: false,

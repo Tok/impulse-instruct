@@ -2,7 +2,7 @@
 // Floating windows: Preferences, About, System Info.
 
 use crate::llm::LlmInput;
-use crate::state::{ConversationMode, StyleVerbosity};
+use crate::state::{ConversationMode, McVoiceChar, StyleVerbosity};
 use crate::ui::{ImpulseApp, theme, widgets};
 use crate::ui::{LOG_LEVELS, scan_models};
 
@@ -249,6 +249,57 @@ impl ImpulseApp {
                                     }
                                 }
                             }
+                            // Voice character selector + randomise toggle
+                            ui.add_space(4.0);
+                            ui.horizontal(|ui| {
+                                ui.label(
+                                    egui::RichText::new("Voice character")
+                                        .monospace()
+                                        .size(9.5)
+                                        .color(theme::FOG),
+                                );
+                                ui.with_layout(
+                                    egui::Layout::right_to_left(egui::Align::Center),
+                                    |ui| {
+                                        let chars = [
+                                            (McVoiceChar::Auto, "AUTO"),
+                                            (McVoiceChar::JungleMc, "JUNGLE MC"),
+                                            (McVoiceChar::RaveAnnouncer, "RAVE"),
+                                            (McVoiceChar::Robot, "ROBOT"),
+                                            (McVoiceChar::SmoothDj, "SMOOTH DJ"),
+                                        ];
+                                        let cur = self.state.read().llm.tts_voice_char.clone();
+                                        let cur_idx =
+                                            chars.iter().position(|(c, _)| *c == cur).unwrap_or(0);
+                                        let next_idx = (cur_idx + 1) % chars.len();
+                                        if ui.small_button(chars[cur_idx].1).clicked() {
+                                            self.state.write().llm.tts_voice_char =
+                                                chars[next_idx].0.clone();
+                                        }
+                                    },
+                                );
+                            });
+                            ui.horizontal(|ui| {
+                                ui.label(
+                                    egui::RichText::new("Pitch/speed jitter")
+                                        .monospace()
+                                        .size(9.5)
+                                        .color(theme::FOG),
+                                );
+                                ui.with_layout(
+                                    egui::Layout::right_to_left(egui::Align::Center),
+                                    |ui| {
+                                        let mut rand = self.state.read().llm.tts_randomise;
+                                        if widgets::toggle_button(
+                                            ui,
+                                            if rand { "ON" } else { "OFF" },
+                                            &mut rand,
+                                        ) {
+                                            self.state.write().llm.tts_randomise = rand;
+                                        }
+                                    },
+                                );
+                            });
                         }
                         ui.horizontal(|ui| {
                             ui.label(

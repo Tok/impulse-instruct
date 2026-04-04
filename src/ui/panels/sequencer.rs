@@ -2,7 +2,7 @@
 // Step sequencer panel.
 
 use crate::state::{
-    DrumVoice, MAX_STEPS, ROOT_NAMES, Scale, set_an1x_step, set_drum_step_velocity,
+    DrumVoice, MAX_STEPS, ROOT_NAMES, Scale, Step, set_an1x_step, set_drum_step_velocity,
     set_hoover_step, set_root_note, set_scale, set_scale_snap, toggle_bass_accent,
     toggle_bass_slide, toggle_drum_step,
 };
@@ -59,6 +59,31 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                     crate::state::expand_sequencer_steps(app.state.read().clone(), preset);
                 *app.state.write() = new_state;
             }
+        }
+
+        // Step length indicator — shows the note value of each step
+        let steps_per_beat = (seq_steps as f32 / time_sig_num as f32).max(0.5);
+        let step_label = if (steps_per_beat - steps_per_beat.round()).abs() < 0.01 {
+            let spb = steps_per_beat.round() as u32;
+            match spb {
+                1 => "1/4",
+                2 => "1/8",
+                4 => "1/16",
+                8 => "1/32",
+                _ => "",
+            }
+        } else {
+            ""
+        };
+        if !step_label.is_empty() {
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                ui.label(
+                    egui::RichText::new(step_label)
+                        .monospace()
+                        .size(8.5)
+                        .color(theme::IRON),
+                );
+            });
         }
     });
 
@@ -552,15 +577,107 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             }
 
             ui.horizontal(|ui| {
-                ui.add_sized(
-                    [SEQ_LABEL_W, SEQ_LABEL_H],
+                // ── M/S buttons (mute/solo) ───────────────────────────────────
+                let (is_muted, is_soloed) = {
+                    let s = app.state.read();
+                    (
+                        s.sequencer.muted_drums.contains(voice),
+                        s.sequencer.soloed_drums.contains(voice),
+                    )
+                };
+                let m_col = if is_muted {
+                    egui::Color32::from_gray(200)
+                } else {
+                    egui::Color32::from_gray(50)
+                };
+                let s_col = if is_soloed {
+                    egui::Color32::from_gray(200)
+                } else {
+                    egui::Color32::from_gray(50)
+                };
+                if ui
+                    .add(
+                        egui::Button::new(
+                            egui::RichText::new("M").monospace().size(7.5).color(m_col),
+                        )
+                        .min_size(egui::vec2(10.0, SEQ_LABEL_H))
+                        .fill(egui::Color32::TRANSPARENT),
+                    )
+                    .clicked()
+                {
+                    let mut s = app.state.write();
+                    if is_muted {
+                        s.sequencer.muted_drums.remove(voice);
+                    } else {
+                        s.sequencer.muted_drums.insert(*voice);
+                    }
+                }
+                if ui
+                    .add(
+                        egui::Button::new(
+                            egui::RichText::new("S").monospace().size(7.5).color(s_col),
+                        )
+                        .min_size(egui::vec2(10.0, SEQ_LABEL_H))
+                        .fill(egui::Color32::TRANSPARENT),
+                    )
+                    .clicked()
+                {
+                    let mut s = app.state.write();
+                    if is_soloed {
+                        s.sequencer.soloed_drums.remove(voice);
+                    } else {
+                        s.sequencer.soloed_drums.insert(*voice);
+                    }
+                }
+
+                // ── Row label with right-click copy/paste ────────────────────
+                let label_resp = ui.add_sized(
+                    [SEQ_LABEL_W - 20.0, SEQ_LABEL_H],
                     egui::Label::new(
                         egui::RichText::new(voice.label())
-                            .color(theme::SMOKE)
+                            .color(if is_muted { theme::PIT } else { theme::SMOKE })
                             .monospace()
                             .size(8.5),
-                    ),
+                    )
+                    .sense(egui::Sense::click()),
                 );
+                label_resp.context_menu(|ui| {
+                    if ui.button("Copy pattern").clicked() {
+                        let pattern = app
+                            .state
+                            .read()
+                            .sequencer
+                            .drum_patterns
+                            .get(voice)
+                            .cloned()
+                            .unwrap_or_default();
+                        app.drum_clipboard = Some((*voice, pattern));
+                        ui.close_menu();
+                    }
+                    let can_paste = app.drum_clipboard.is_some();
+                    if ui
+                        .add_enabled(can_paste, egui::Button::new("Paste pattern"))
+                        .clicked()
+                    {
+                        if let Some((_, ref steps)) = app.drum_clipboard.clone() {
+                            let mut s = app.state.write();
+                            if let Some(p) = s.sequencer.drum_patterns.get_mut(voice) {
+                                let copy_len = steps.len().min(p.len());
+                                p[..copy_len].clone_from_slice(&steps[..copy_len]);
+                            }
+                        }
+                        ui.close_menu();
+                    }
+                    if ui.button("Clear pattern").clicked() {
+                        let mut s = app.state.write();
+                        if let Some(p) = s.sequencer.drum_patterns.get_mut(voice) {
+                            for step in p.iter_mut() {
+                                *step = Step::default();
+                            }
+                        }
+                        ui.close_menu();
+                    }
+                });
 
                 let mut vol = voice.get_volume(&app.state.read());
                 let vol_resp = ui.add_sized(

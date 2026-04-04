@@ -13,7 +13,7 @@ const DEFAULT_JSON: &str = include_str!("../../styles.json");
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-/// Typical 16-step drum grid for a style — used as a seed suggestion in the prompt.
+/// Typical 16-step drum + bass grid for a style — used as a seed suggestion in the prompt.
 /// All fields are optional; absent voices are left at the model's discretion.
 #[derive(Debug, Clone, Deserialize, Serialize, Default)]
 pub struct SeedPatterns {
@@ -26,28 +26,70 @@ pub struct SeedPatterns {
     /// 16-element 0/1 array for closed hi-hat.
     #[serde(default)]
     pub hihat: Vec<u8>,
+    /// 16-element 0/1 array for bass sequencer gate (which steps trigger bass).
+    #[serde(default)]
+    pub bass_steps: Vec<u8>,
+    /// 16-element MIDI note array for bass sequencer (0 = not used on that step).
+    #[serde(default)]
+    pub bass_notes: Vec<u8>,
+}
+
+const NOTE_NAMES: [&str; 12] = [
+    "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B",
+];
+
+fn midi_name(n: u8) -> String {
+    let oct = (n as i32 / 12) - 1;
+    format!("{}{}", NOTE_NAMES[(n as usize) % 12], oct)
 }
 
 impl SeedPatterns {
     pub fn is_empty(&self) -> bool {
-        self.kick.is_empty() && self.snare.is_empty() && self.hihat.is_empty()
+        self.kick.is_empty()
+            && self.snare.is_empty()
+            && self.hihat.is_empty()
+            && self.bass_steps.is_empty()
     }
 
     /// Render as compact lines for prompt injection.
     pub fn to_prompt_lines(&self) -> String {
-        let fmt = |v: &[u8]| -> String {
+        let fmt_bits = |v: &[u8]| -> String {
             let s: Vec<&str> = v.iter().map(|x| if *x == 1 { "1" } else { "0" }).collect();
             format!("[{}]", s.join(","))
         };
         let mut lines = Vec::new();
         if !self.kick.is_empty() {
-            lines.push(format!("kick:  {}", fmt(&self.kick)));
+            lines.push(format!("kick:       {}", fmt_bits(&self.kick)));
         }
         if !self.snare.is_empty() {
-            lines.push(format!("snare: {}", fmt(&self.snare)));
+            lines.push(format!("snare:      {}", fmt_bits(&self.snare)));
         }
         if !self.hihat.is_empty() {
-            lines.push(format!("hihat: {}", fmt(&self.hihat)));
+            lines.push(format!("hihat:      {}", fmt_bits(&self.hihat)));
+        }
+        if !self.bass_steps.is_empty() {
+            lines.push(format!("bass_steps: {}", fmt_bits(&self.bass_steps)));
+        }
+        if !self.bass_notes.is_empty() {
+            // Show both MIDI ints and note names side by side
+            let nums: Vec<String> = self.bass_notes.iter().map(|n| n.to_string()).collect();
+            let names: Vec<String> = self
+                .bass_notes
+                .iter()
+                .zip(self.bass_steps.iter().chain(std::iter::repeat(&1u8)))
+                .map(|(&n, &s)| {
+                    if s == 1 {
+                        midi_name(n)
+                    } else {
+                        "..".to_string()
+                    }
+                })
+                .collect();
+            lines.push(format!(
+                "bass_notes: [{}]  ({})",
+                nums.join(","),
+                names.join(" ")
+            ));
         }
         lines.join("\n")
     }

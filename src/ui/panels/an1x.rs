@@ -231,6 +231,27 @@ pub fn draw_an1x(app: &mut ImpulseApp, ui: &mut Ui) {
             .color(theme::IRON)
             .small(),
     );
+    // Filter ADSR visualiser — interactive, drag to edit
+    {
+        let (mut a, mut d, mut s, mut r) = {
+            let st = app.state.read();
+            (
+                st.an1x.filter_attack,
+                st.an1x.filter_decay,
+                st.an1x.filter_sustain,
+                st.an1x.filter_release,
+            )
+        };
+        if widgets::adsr_display(ui, &mut a, &mut d, &mut s, &mut r, 140.0, 36.0) {
+            let mut st = app.state.write();
+            st.an1x.filter_attack = a;
+            st.an1x.filter_decay = d;
+            st.an1x.filter_sustain = s;
+            st.an1x.filter_release = r;
+            drop(st);
+            app.push_audio_params();
+        }
+    }
     ui.horizontal_wrapped(|ui| {
         macro_rules! k {
             ($lbl:expr, $fld:ident) => {{
@@ -251,6 +272,27 @@ pub fn draw_an1x(app: &mut ImpulseApp, ui: &mut Ui) {
 
     // ── AMP ADSR ─────────────────────────────────────────────────────────────
     widgets::section_header(ui, "AMP ADSR");
+    // Amp ADSR visualiser
+    {
+        let (mut a, mut d, mut s, mut r) = {
+            let st = app.state.read();
+            (
+                st.an1x.amp_attack,
+                st.an1x.amp_decay,
+                st.an1x.amp_sustain,
+                st.an1x.amp_release,
+            )
+        };
+        if widgets::adsr_display(ui, &mut a, &mut d, &mut s, &mut r, 140.0, 36.0) {
+            let mut st = app.state.write();
+            st.an1x.amp_attack = a;
+            st.an1x.amp_decay = d;
+            st.an1x.amp_sustain = s;
+            st.an1x.amp_release = r;
+            drop(st);
+            app.push_audio_params();
+        }
+    }
     ui.horizontal_wrapped(|ui| {
         macro_rules! k {
             ($lbl:expr, $fld:ident) => {{
