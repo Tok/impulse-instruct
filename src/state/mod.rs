@@ -13,6 +13,11 @@ pub use drums::*;
 pub mod lfo;
 pub use lfo::*;
 
+pub mod music;
+#[allow(unused_imports)]
+pub use music::note_in_scale;
+pub use music::{ROOT_NAMES, Scale, scale_degree, scale_notes, snap_to_scale};
+
 pub mod noise;
 pub use noise::NoiseVoiceState;
 
@@ -276,6 +281,12 @@ pub struct SequencerState {
     pub time_sig_num: u8, // beats per bar (2–9, default 4); denominator always /4
     pub drum_patterns: std::collections::HashMap<DrumVoice, Vec<Step>>,
     pub bass_pattern: Vec<TB303Step>,
+    /// Tonic note (0=C … 11=B). Used for scale highlighting and LLM music theory.
+    pub root_note: u8,
+    /// Active scale / mode for this pattern.
+    pub scale: Scale,
+    /// When true, LLM-provided bass_notes are snapped to the active scale.
+    pub scale_snap: bool,
 }
 
 impl Default for SequencerState {
@@ -320,6 +331,9 @@ impl Default for SequencerState {
             time_sig_num: 4,
             drum_patterns,
             bass_pattern,
+            root_note: 9, // A — the starter pattern is A minor
+            scale: Scale::NaturalMinor,
+            scale_snap: false,
         }
     }
 }
@@ -595,12 +609,32 @@ pub fn apply_llm_update(state: AppState, update: &serde_json::Value) -> AppState
                 }
             }
         }
+        if !locked.contains("sequencer.root_note")
+            && let Some(v) = seq.get("root_note").and_then(|v| v.as_u64())
+        {
+            s.sequencer.root_note = (v as u8).clamp(0, 11);
+        }
+        if !locked.contains("sequencer.scale")
+            && let Some(v) = seq.get("scale").and_then(|v| v.as_str())
+            && let Some(sc) = Scale::from_str(v)
+        {
+            s.sequencer.scale = sc;
+        }
+
         if !locked.contains("sequencer.bass_notes")
             && let Some(arr) = seq.get("bass_notes").and_then(|v| v.as_array())
         {
+            let snap = s.sequencer.scale_snap;
+            let root = s.sequencer.root_note;
+            let scale = s.sequencer.scale;
             for (i, val) in arr.iter().enumerate().take(MAX_STEPS) {
                 if let Some(note) = val.as_u64() {
-                    s.sequencer.bass_pattern[i].note = note.clamp(0, 127) as u8;
+                    let note = note.clamp(0, 127) as u8;
+                    s.sequencer.bass_pattern[i].note = if snap {
+                        snap_to_scale(note, root, scale)
+                    } else {
+                        note
+                    };
                 }
             }
         }

@@ -1,7 +1,7 @@
 // ─── state/transitions.rs ────────────────────────────────────────────────────
 // Pure state transition helpers extracted to keep state/mod.rs under 1000 lines.
 
-use super::{AppState, DrumVoice, FilterMode, MAX_STEPS, Waveform};
+use super::{AppState, DrumVoice, FilterMode, MAX_STEPS, Scale, Waveform};
 
 /// Set the active step count, tiling existing patterns into the new slots when expanding.
 ///
@@ -31,6 +31,27 @@ pub fn expand_sequencer_steps(state: AppState, new_steps: usize) -> AppState {
         }
     }
 
+    s
+}
+
+/// Set the key root note (0=C … 11=B).
+pub fn set_root_note(state: AppState, root: u8) -> AppState {
+    let mut s = state;
+    s.sequencer.root_note = root.clamp(0, 11);
+    s
+}
+
+/// Set the active scale / mode.
+pub fn set_scale(state: AppState, scale: Scale) -> AppState {
+    let mut s = state;
+    s.sequencer.scale = scale;
+    s
+}
+
+/// Enable or disable automatic scale-snapping of LLM-provided bass notes.
+pub fn set_scale_snap(state: AppState, enabled: bool) -> AppState {
+    let mut s = state;
+    s.sequencer.scale_snap = enabled;
     s
 }
 

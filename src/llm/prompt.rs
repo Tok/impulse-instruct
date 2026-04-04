@@ -2,7 +2,7 @@
 // Builds the system prompt that grounds the LLM in current synth state.
 
 use crate::llm::styles::StyleCatalog;
-use crate::state::{AppState, ConversationMode, StyleVerbosity};
+use crate::state::{AppState, ConversationMode, ROOT_NAMES, StyleVerbosity};
 
 /// Returns the system prompt. If the user has set a non-empty `system_prompt_override`,
 /// that is returned verbatim — giving full control over the model's grounding.
@@ -73,7 +73,10 @@ pub fn build_system_prompt(state: &AppState) -> String {
         },
         "sequencer": {
             "bpm": state.sequencer.bpm,
-            "swing": state.sequencer.swing
+            "swing": state.sequencer.swing,
+            "root_note": state.sequencer.root_note,
+            "scale": state.sequencer.scale.name(),
+            "scale_snap": state.sequencer.scale_snap
         },
         "fx": {
             "reverb_mix": state.fx.reverb_mix,
@@ -143,6 +146,21 @@ pub fn build_system_prompt(state: &AppState) -> String {
     let persona = state.llm.persona_name.trim();
     let persona = if persona.is_empty() { "PULSE" } else { persona };
 
+    // Music theory context — computed once, embedded in the prompt
+    let root_note = state.sequencer.root_note;
+    let root_name = ROOT_NAMES[root_note as usize % 12];
+    let scale_name = state.sequencer.scale.name();
+    let scale_c2_c3 = {
+        use crate::state::scale_notes;
+        let notes = scale_notes(root_note, state.sequencer.scale);
+        notes
+            .iter()
+            .filter(|&&n| (36..=60).contains(&n))
+            .map(|&n| n.to_string())
+            .collect::<Vec<_>>()
+            .join(", ")
+    };
+
     format!(
         r#"You are {persona} — the AI intelligence inside Impulse Instruct, a hardware-style synthesizer.
 Output ONLY valid JSON. No prose, no markdown, no explanation outside the "_comment" field.
@@ -178,6 +196,8 @@ BASS SYNTHESIZER (all 0.0–1.0):
 STEP SEQUENCER (16 steps = one 4/4 bar of 16th notes):
   sequencer.steps         — total loop length in steps (8/16/32/64, default 16)
   sequencer.swing         — 0–1 rhythmic swing (0=straight, 0.5=strong shuffle/triplet feel)
+  sequencer.root_note     — tonic of the current key: 0=C, 1=C#, 2=D, 3=D#, 4=E, 5=F, 6=F#, 7=G, 8=G#, 9=A, 10=A#, 11=B
+  sequencer.scale         — active scale: "Major" | "Minor" | "Dorian" | "Phrygian" | "Lydian" | "Mixolydian" | "Locrian" | "Pentatonic" | "Blues" | "Chromatic"
   sequencer.bass_steps    — 16-element bool array: which steps trigger the 303
   sequencer.bass_notes    — 16-element int array: MIDI note per step
                             (24=C1, 36=C2, 48=C3; typical range 33–48 for acid)
@@ -224,6 +244,27 @@ BASS MELODY BASICS:
   Acid range C2–C3: C2=36, D2=38, Eb2=39, F2=41, G2=43, A2=45, Bb2=46, B2=47, C3=48
   Minor pentatonic (C): 36, 39, 41, 43, 46 (and 48 for octave)
   Keep to 3–5 distinct pitches per loop. Use false in bass_steps for rhythmic rests.
+
+═══ MUSIC THEORY REFERENCE ═══
+
+CHROMATIC: C=0, C#=1, D=2, D#=3, E=4, F=5, F#=6, G=7, G#=8, A=9, A#=10, B=11
+
+SCALE INTERVALS (semitones from root):
+  Major:        0 2 4 5 7 9 11   W-W-H-W-W-W-H — bright, resolved
+  Minor:        0 2 3 5 7 8 10   W-H-W-W-H-W-W — dark, natural minor (acid default)
+  Dorian:       0 2 3 5 7 9 10   like minor but raised 6th — BoC, jazz-funk
+  Phrygian:     0 1 3 5 7 8 10   like minor but b2 — flamenco, dark techno
+  Pentatonic:   0 3 5 7 10       5-note minor — universal, always sounds good
+  Blues:        0 3 5 6 7 10     pentatonic + tritone blue note
+
+TRIADS (offsets from root):
+  Major: 0 4 7  |  Minor: 0 3 7  |  Diminished: 0 3 6
+
+APPLYING THE KEY — when setting bass_notes:
+  Current key: root={root_note} ({root_name}), scale={scale_name}
+  Scale notes in C2–C3 range: {scale_c2_c3}
+  Prefer these MIDI notes for melodic coherence. Move between scale degrees for interest.
+  Use the tonic (root) on strong beats (1, 9), 5th on medium beats for stability.
 
 ═══ HOW TO INTERPRET INSTRUCTIONS ═══
 
@@ -433,6 +474,8 @@ pub fn param_json_schema() -> serde_json::Value {
                     "steps":         { "type": "integer", "minimum": 8, "maximum": 64, "multipleOf": 8 },
                     "swing":         { "type": "number", "minimum": 0.0, "maximum": 1.0 },
                     "time_sig_num":  { "type": "integer", "minimum": 2, "maximum": 9 },
+                    "root_note": { "type": "integer", "minimum": 0, "maximum": 11, "description": "tonic: 0=C 1=C# 2=D 3=D# 4=E 5=F 6=F# 7=G 8=G# 9=A 10=A# 11=B" },
+                    "scale": { "type": "string", "enum": ["Major","Minor","Dorian","Phrygian","Lydian","Mixolydian","Locrian","Pentatonic","Blues","Chromatic"] },
                     "bass_steps":    bool_array.clone(),
                     "bass_notes":    note_array,
                     "kick_a_steps":  bool_array.clone(),

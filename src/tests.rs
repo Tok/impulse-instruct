@@ -418,3 +418,79 @@ mod dsp_tests {
         assert!((c5 / c4 - 2.0).abs() < 0.001);
     }
 }
+
+#[cfg(test)]
+mod music_theory_tests {
+    use crate::state::{Scale, note_in_scale, scale_degree, scale_notes, snap_to_scale};
+
+    #[test]
+    fn a_minor_contains_expected_notes() {
+        // A natural minor: A B C D E F G — MIDI offsets from A(9): 0,2,3,5,7,8,10
+        assert!(note_in_scale(45, 9, Scale::NaturalMinor)); // A2
+        assert!(note_in_scale(48, 9, Scale::NaturalMinor)); // C3
+        assert!(note_in_scale(52, 9, Scale::NaturalMinor)); // E3
+        assert!(!note_in_scale(46, 9, Scale::NaturalMinor)); // A#2 — not in A minor
+    }
+
+    #[test]
+    fn tonic_is_degree_zero() {
+        assert_eq!(scale_degree(45, 9, Scale::NaturalMinor), Some(0)); // A2 in A minor
+        assert_eq!(scale_degree(57, 9, Scale::NaturalMinor), Some(0)); // A3
+        assert_eq!(scale_degree(46, 9, Scale::NaturalMinor), None); // A#2 not in scale
+    }
+
+    #[test]
+    fn snap_keeps_in_scale_note_unchanged() {
+        // C3 (48) is in C major — should snap to itself
+        assert_eq!(snap_to_scale(48, 0, Scale::Major), 48);
+    }
+
+    #[test]
+    fn snap_moves_out_of_scale_note_to_nearest() {
+        // C# (49) is not in C major — should snap to C (48) or D (50), whichever closer
+        let snapped = snap_to_scale(49, 0, Scale::Major);
+        assert!(snapped == 48 || snapped == 50);
+    }
+
+    #[test]
+    fn chromatic_scale_contains_all_notes() {
+        let notes = scale_notes(0, Scale::Chromatic);
+        assert_eq!(notes.len(), 128);
+    }
+
+    #[test]
+    fn pentatonic_has_five_notes_per_octave() {
+        let notes = scale_notes(0, Scale::Pentatonic);
+        // 5 notes per octave × ~10.67 octaves in 0-127 = ~53-54 notes
+        assert!(notes.len() >= 50 && notes.len() <= 60);
+    }
+
+    #[test]
+    fn llm_update_snaps_bass_notes_when_enabled() {
+        use crate::state::{AppState, apply_llm_update};
+        let mut state = AppState::default();
+        state.sequencer.root_note = 0; // C
+        state.sequencer.scale = Scale::Major;
+        state.sequencer.scale_snap = true;
+        // C# (49) should snap to C (48) or D (50) in C major
+        let update = serde_json::json!({ "sequencer": { "bass_notes": [49] } });
+        let new_state = apply_llm_update(state, &update);
+        let note = new_state.sequencer.bass_pattern[0].note;
+        assert!(
+            note == 48 || note == 50,
+            "snapped to {note}, expected 48 or 50"
+        );
+    }
+
+    #[test]
+    fn llm_update_leaves_notes_unsnapped_when_disabled() {
+        use crate::state::{AppState, apply_llm_update};
+        let mut state = AppState::default();
+        state.sequencer.root_note = 0;
+        state.sequencer.scale = Scale::Major;
+        state.sequencer.scale_snap = false;
+        let update = serde_json::json!({ "sequencer": { "bass_notes": [49] } });
+        let new_state = apply_llm_update(state, &update);
+        assert_eq!(new_state.sequencer.bass_pattern[0].note, 49);
+    }
+}

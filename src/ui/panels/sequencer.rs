@@ -1,11 +1,14 @@
 // ─── ui/panels/sequencer.rs ───────────────────────────────────────────────────
 // Step sequencer panel.
 
-use crate::state::{DrumVoice, MAX_STEPS, toggle_bass_accent, toggle_bass_slide, toggle_drum_step};
+use crate::state::{
+    DrumVoice, MAX_STEPS, ROOT_NAMES, Scale, set_root_note, set_scale, set_scale_snap,
+    toggle_bass_accent, toggle_bass_slide, toggle_drum_step,
+};
 use crate::ui::{ImpulseApp, SEQ_LABEL_H, SEQ_LABEL_W, SEQ_VOL_H, SEQ_VOL_W, theme, widgets};
 
 pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
-    let (current_step, running, seq_steps, time_sig_num, pad_px) = {
+    let (current_step, running, seq_steps, time_sig_num, pad_px, root_note, scale, scale_snap) = {
         let s = app.state.read();
         (
             s.sequencer.current_step,
@@ -13,6 +16,9 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             s.sequencer.steps,
             s.sequencer.time_sig_num as usize,
             s.ui_prefs.pad_size.px(),
+            s.sequencer.root_note,
+            s.sequencer.scale,
+            s.sequencer.scale_snap,
         )
     };
     // Only highlight the cursor when the sequencer is actually playing;
@@ -133,6 +139,86 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             {
                 app.state.write().sequencer.time_sig_num = n;
             }
+        }
+    });
+
+    // ── Key / scale row ───────────────────────────────────────────────────────
+    ui.horizontal(|ui| {
+        ui.label(
+            egui::RichText::new("KEY  ")
+                .color(theme::SMOKE)
+                .monospace()
+                .size(9.0),
+        );
+        for note in 0u8..12 {
+            let active = note == root_note;
+            let color = if active { theme::CHALK } else { theme::IRON };
+            let fill = if active {
+                egui::Color32::from_gray(50)
+            } else {
+                egui::Color32::TRANSPARENT
+            };
+            let text = egui::RichText::new(ROOT_NAMES[note as usize])
+                .monospace()
+                .size(8.0)
+                .color(color);
+            if ui
+                .add_sized([22.0, 16.0], egui::Button::new(text).fill(fill))
+                .clicked()
+            {
+                let s = app.state.read().clone();
+                *app.state.write() = set_root_note(s, note);
+            }
+        }
+    });
+
+    ui.horizontal(|ui| {
+        ui.label(
+            egui::RichText::new("SCALE")
+                .color(theme::SMOKE)
+                .monospace()
+                .size(9.0),
+        );
+        for &sc in Scale::all() {
+            let active = sc == scale;
+            let color = if active { theme::CHALK } else { theme::IRON };
+            let fill = if active {
+                egui::Color32::from_gray(50)
+            } else {
+                egui::Color32::TRANSPARENT
+            };
+            let text = egui::RichText::new(sc.name())
+                .monospace()
+                .size(7.5)
+                .color(color);
+            if ui
+                .add_sized([46.0, 16.0], egui::Button::new(text).fill(fill))
+                .clicked()
+            {
+                let s = app.state.read().clone();
+                *app.state.write() = set_scale(s, sc);
+            }
+        }
+
+        ui.add_space(8.0);
+        // Scale snap toggle
+        let snap_color = if scale_snap { theme::CHALK } else { theme::PIT };
+        let snap_fill = if scale_snap {
+            egui::Color32::from_gray(50)
+        } else {
+            egui::Color32::TRANSPARENT
+        };
+        let snap_text = egui::RichText::new("SNAP")
+            .monospace()
+            .size(7.5)
+            .color(snap_color);
+        if ui
+            .add_sized([36.0, 16.0], egui::Button::new(snap_text).fill(snap_fill))
+            .on_hover_text("Snap LLM bass notes to the active scale")
+            .clicked()
+        {
+            let s = app.state.read().clone();
+            *app.state.write() = set_scale_snap(s, !scale_snap);
         }
     });
 

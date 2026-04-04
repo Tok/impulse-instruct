@@ -3,6 +3,7 @@
 
 use crate::audio::AudioCommand;
 use crate::sequencer::TriggerEvent;
+use crate::state::scale_degree;
 use crate::ui::{ImpulseApp, note_name, theme};
 
 pub fn draw_piano(app: &mut ImpulseApp, ui: &mut egui::Ui, ctx: &egui::Context) {
@@ -49,6 +50,12 @@ pub fn draw_piano(app: &mut ImpulseApp, ui: &mut egui::Ui, ctx: &egui::Context) 
         None
     };
     let mut clicked_note: Option<u8> = None;
+
+    // Key / scale for degree highlighting
+    let (root_note, seq_scale) = {
+        let s = app.state.read();
+        (s.sequencer.root_note, s.sequencer.scale)
+    };
 
     // Sequencer cursor note (for highlighting)
     let (seq_note, seq_running) = {
@@ -150,6 +157,24 @@ pub fn draw_piano(app: &mut ImpulseApp, ui: &mut egui::Ui, ctx: &egui::Context) 
             ],
             Stroke::new(0.5, Color32::from_gray(if active { 170 } else { 72 })),
         );
+
+        // Scale degree dot — small marker near the top of scale-tone keys
+        if !active && let Some(degree) = scale_degree(note, root_note, seq_scale) {
+            let dot_y = key_rect.min.y + wk_h * 0.18;
+            let dot_x = key_rect.center().x;
+            let (dot_r, dot_alpha) = if degree == 0 {
+                (2.8, 200u8) // tonic — brighter, larger
+            } else if degree == 2 || degree == 4 {
+                (2.0, 120u8) // 3rd / 5th — medium
+            } else {
+                (1.5, 70u8) // other degrees — subtle
+            };
+            painter.circle_filled(
+                Pos2::new(dot_x, dot_y),
+                dot_r,
+                Color32::from_rgba_unmultiplied(200, 200, 200, dot_alpha),
+            );
+        }
 
         // Labels: C notes always visible; all notes when show_label is on
         let is_c = semi == 0;
@@ -269,6 +294,17 @@ pub fn draw_piano(app: &mut ImpulseApp, ui: &mut egui::Ui, ctx: &egui::Context) 
                 [key_rect.left_bottom(), key_rect.right_bottom()],
                 Stroke::new(1.0, bsh),
             );
+
+            // Scale degree dot for black keys
+            if !active && let Some(degree) = scale_degree(note, root_note, seq_scale) {
+                let dot_alpha: u8 = if degree == 0 { 200 } else { 100 };
+                let dot_r = if degree == 0 { 2.2 } else { 1.5 };
+                painter.circle_filled(
+                    Pos2::new(x + bk_w * 0.5, key_rect.min.y + bk_h * 0.22),
+                    dot_r,
+                    Color32::from_rgba_unmultiplied(200, 200, 200, dot_alpha),
+                );
+            }
 
             // Label when show_label is on
             if show_label {
