@@ -64,6 +64,9 @@ pub fn cycle_param_mode(state: AppState, path: &str) -> AppState {
     s
 }
 
+pub mod ui_prefs;
+pub use ui_prefs::{KnobSize, KnobStyle, PadSize, UiPrefs};
+
 // ─── Top-level ───────────────────────────────────────────────────────────────
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
@@ -78,6 +81,8 @@ pub struct AppState {
     pub lfo: [LfoSlot; 4],
     #[serde(default)]
     pub noise_voice: NoiseVoiceState,
+    #[serde(default)]
+    pub ui_prefs: UiPrefs,
 }
 
 // ─── Bass synth ───────────────────────────────────────────────────────────────

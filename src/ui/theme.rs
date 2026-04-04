@@ -151,3 +151,34 @@ pub fn value_color() -> Color32 {
 pub fn header_color() -> Color32 {
     FOG
 }
+
+// ─── Glass panel frame ────────────────────────────────────────────────────────
+
+/// Draw a smoked-glass group background behind `rect`.
+/// Call from a `ui.painter()` *before* the group content so the content sits on top.
+///
+/// Effect: very dark fill + 1px bright top border + 1px dark bottom border —
+/// the "edge of smoked glass" look from the neumorphic chrome spec.
+pub fn draw_glass_panel(painter: &egui::Painter, rect: egui::Rect, rounding: egui::Rounding) {
+    // Dark glass fill
+    painter.rect_filled(rect, rounding, Color32::from_gray(15));
+    // 1px bright top border
+    painter.line_segment(
+        [rect.left_top(), rect.right_top()],
+        Stroke::new(1.0, Color32::from_gray(64)),
+    );
+    // 1px dark bottom border
+    painter.line_segment(
+        [rect.left_bottom(), rect.right_bottom()],
+        Stroke::new(1.0, Color32::from_gray(8)),
+    );
+    // 1px dim side borders
+    painter.line_segment(
+        [rect.left_top(), rect.left_bottom()],
+        Stroke::new(1.0, Color32::from_gray(28)),
+    );
+    painter.line_segment(
+        [rect.right_top(), rect.right_bottom()],
+        Stroke::new(1.0, Color32::from_gray(28)),
+    );
+}

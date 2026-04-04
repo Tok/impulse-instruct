@@ -137,8 +137,7 @@ pub struct ImpulseApp {
     // Last chain-of-thought from Bonsai (shown collapsible below the log)
     last_thinking: Option<String>,
     show_thinking: bool,
-    // Control layout preference
-    use_sliders: bool,
+    // Control layout preference — derived from AppState.ui_prefs each frame
     // Sequencer page (for >16 step patterns)
     seq_page: usize,
     // Voices manually expanded in the sequencer even if they have no active steps
@@ -150,7 +149,7 @@ pub struct ImpulseApp {
     show_sysinfo: bool,
     // Preferences
     prefs_tab: usize,
-    log_level_idx: usize, // index into LOG_LEVELS
+    // log_level_idx now persisted in AppState.ui_prefs.log_level_idx
     // Startup hook: fire a prompt once the LLM transitions from initializing to ready
     startup_done: bool,
 }
@@ -183,6 +182,14 @@ impl ImpulseApp {
             loaded.sequencer.current_step = 0;
             *state.write() = loaded;
             log::info!("Session restored from last run.");
+        }
+
+        // Restore persisted log level from ui_prefs
+        {
+            let idx = state.read().ui_prefs.log_level_idx;
+            if let Some((_, filter)) = LOG_LEVELS.get(idx) {
+                log::set_max_level(*filter);
+            }
         }
 
         // Auto-start sequencer so there's always audio from the first frame.
@@ -239,7 +246,6 @@ impl ImpulseApp {
             piano_show_colors: true,
             last_thinking: None,
             show_thinking: false,
-            use_sliders: false,
             seq_page: 0,
             expanded_seq_voices: std::collections::HashSet::new(),
             available_models: Vec::new(),
@@ -251,7 +257,6 @@ impl ImpulseApp {
             },
             show_sysinfo: false,
             prefs_tab: 0,
-            log_level_idx: 2, // default: Info
             startup_done: false,
         }
     }

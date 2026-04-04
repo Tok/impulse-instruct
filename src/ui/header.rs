@@ -279,10 +279,11 @@ impl ImpulseApp {
 
                     // Knob / Slider toggle
                     {
-                        let label = if self.use_sliders { "SLIDERS" } else { "KNOBS" };
-                        let color  = if self.use_sliders { theme::CHALK } else { theme::ASH };
+                        let use_sliders = self.state.read().ui_prefs.use_sliders;
+                        let label = if use_sliders { "SLIDERS" } else { "KNOBS" };
+                        let color  = if use_sliders { theme::CHALK } else { theme::ASH };
                         if ui.button(egui::RichText::new(label).color(color).monospace().size(9.0)).clicked() {
-                            self.use_sliders = !self.use_sliders;
+                            self.state.write().ui_prefs.use_sliders = !use_sliders;
                         }
                     }
 

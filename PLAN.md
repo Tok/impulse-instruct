@@ -380,12 +380,12 @@ Plan (Phase 3 or later):
 
 ### TODO list
 
-- [ ] `KnobStyle` enum in AppState + prefs toggle (Flat / Chrome)
-- [ ] `knob_chrome` widget: concentric ring chrome face, raised tick, value arc
-- [ ] `slider_glass` widget: recessed track, chrome thumb pill
-- [ ] `button_emboss` widget: raised/pressed states via edge highlight swap
-- [ ] Glass panel frame style applied to all `ui.group()` sections
-- [ ] `UiPrefs` struct in AppState (visual_style, bloom_enabled, bloom_intensity)
+- [x] `KnobStyle` enum in AppState + prefs toggle (Flat / Chrome)
+- [x] `knob_chrome` widget: concentric ring chrome face, raised tick, value arc
+- [x] `slider_glass` widget: recessed track, chrome thumb pill
+- [x] `button_emboss` widget: raised/pressed states via edge highlight swap
+- [x] Glass panel frame style applied to all `ui.group()` sections
+- [x] `UiPrefs` struct in AppState (visual_style, bloom_enabled, bloom_intensity)
 - [ ] Bloom post-process pipeline (Phase 3 — needs custom wgpu pass)
 - [ ] Coloured bloom on Farbige Noten note highlights (gated by bloom setting)
 

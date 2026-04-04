@@ -42,70 +42,71 @@ pub fn draw_kit_a(app: &mut ImpulseApp, ui: &mut egui::Ui) {
     };
     let mut changed = false;
 
-    let use_sliders = app.use_sliders;
+    let ctrl = widgets::ControlPrefs::from_prefs(&app.state.read().ui_prefs);
+    let xy_size = app.state.read().ui_prefs.pad_size.px() * (88.0 / 26.0);
     ui.horizontal_wrapped(|ui| {
-        ui.group(|ui| {
+        widgets::glass_group(ui, ctrl.group_max_width(), |ui| {
             ui.label(
                 egui::RichText::new("KICK")
                     .color(theme::FOG)
                     .monospace()
                     .size(9.5),
             );
-            if widgets::param_control(ui, "PITCH", &mut kp, ParamMode::Free, use_sliders).0 {
+            if widgets::param_control(ui, "PITCH", &mut kp, ParamMode::Free, ctrl).0 {
                 changed = true;
             }
-            if widgets::param_control(ui, "DECAY", &mut kd, ParamMode::Free, use_sliders).0 {
+            if widgets::param_control(ui, "DECAY", &mut kd, ParamMode::Free, ctrl).0 {
                 changed = true;
             }
-            if widgets::param_control(ui, "PUNCH", &mut kpu, ParamMode::Free, use_sliders).0 {
+            if widgets::param_control(ui, "PUNCH", &mut kpu, ParamMode::Free, ctrl).0 {
                 changed = true;
             }
-            if widgets::param_control(ui, "LEVEL", &mut kv, ParamMode::Free, use_sliders).0 {
+            if widgets::param_control(ui, "LEVEL", &mut kv, ParamMode::Free, ctrl).0 {
                 changed = true;
             }
-            if widgets::param_control(ui, "P.DEPTH", &mut kped, ParamMode::Free, use_sliders).0 {
+            if widgets::param_control(ui, "P.DEPTH", &mut kped, ParamMode::Free, ctrl).0 {
                 changed = true;
             }
-            if widgets::param_control(ui, "P.TIME", &mut kpet, ParamMode::Free, use_sliders).0 {
+            if widgets::param_control(ui, "P.TIME", &mut kpet, ParamMode::Free, ctrl).0 {
                 changed = true;
             }
         });
         ui.add_space(4.0);
-        ui.group(|ui| {
+        widgets::glass_group(ui, ctrl.group_max_width(), |ui| {
             ui.label(
                 egui::RichText::new("SNARE")
                     .color(theme::FOG)
                     .monospace()
                     .size(9.5),
             );
-            if widgets::param_control(ui, "TONE", &mut st, ParamMode::Free, use_sliders).0 {
+            if widgets::param_control(ui, "TONE", &mut st, ParamMode::Free, ctrl).0 {
                 changed = true;
             }
-            if widgets::param_control(ui, "SNAPPY", &mut ssn, ParamMode::Free, use_sliders).0 {
+            if widgets::param_control(ui, "SNAPPY", &mut ssn, ParamMode::Free, ctrl).0 {
                 changed = true;
             }
-            if widgets::param_control(ui, "DECAY", &mut sd, ParamMode::Free, use_sliders).0 {
+            if widgets::param_control(ui, "DECAY", &mut sd, ParamMode::Free, ctrl).0 {
                 changed = true;
             }
-            if widgets::param_control(ui, "LEVEL", &mut sv, ParamMode::Free, use_sliders).0 {
+            if widgets::param_control(ui, "LEVEL", &mut sv, ParamMode::Free, ctrl).0 {
                 changed = true;
             }
         });
         ui.add_space(4.0);
-        ui.group(|ui| {
+        widgets::glass_group(ui, ctrl.group_max_width(), |ui| {
             ui.label(
                 egui::RichText::new("HIHAT")
                     .color(theme::FOG)
                     .monospace()
                     .size(9.5),
             );
-            if widgets::param_control(ui, "CLOSED", &mut hcd, ParamMode::Free, use_sliders).0 {
+            if widgets::param_control(ui, "CLOSED", &mut hcd, ParamMode::Free, ctrl).0 {
                 changed = true;
             }
-            if widgets::param_control(ui, "OPEN", &mut hod, ParamMode::Free, use_sliders).0 {
+            if widgets::param_control(ui, "OPEN", &mut hod, ParamMode::Free, ctrl).0 {
                 changed = true;
             }
-            if widgets::param_control(ui, "LEVEL", &mut hv, ParamMode::Free, use_sliders).0 {
+            if widgets::param_control(ui, "LEVEL", &mut hv, ParamMode::Free, ctrl).0 {
                 changed = true;
             }
         });
@@ -141,7 +142,7 @@ pub fn draw_kit_a(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             .size(9.0),
     );
     ui.horizontal(|ui| {
-        if widgets::xy_pad(ui, "PIT", "DEC", &mut kp, &mut kd, 88.0, false) {
+        if widgets::xy_pad(ui, "PIT", "DEC", &mut kp, &mut kd, xy_size, false) {
             let mut s = app.state.write();
             s.kit_a.kick.pitch = kp;
             s.kit_a.kick.decay = kd;
@@ -186,67 +187,67 @@ pub fn draw_kit_b(app: &mut ImpulseApp, ui: &mut egui::Ui) {
     };
     let mut changed = false;
 
-    let use_sliders = app.use_sliders;
+    let ctrl = widgets::ControlPrefs::from_prefs(&app.state.read().ui_prefs);
     ui.horizontal_wrapped(|ui| {
-        ui.group(|ui| {
+        widgets::glass_group(ui, ctrl.group_max_width(), |ui| {
             ui.label(
                 egui::RichText::new("KICK")
                     .color(theme::FOG)
                     .monospace()
                     .size(9.5),
             );
-            if widgets::param_control(ui, "PITCH", &mut kp, ParamMode::Free, use_sliders).0 {
+            if widgets::param_control(ui, "PITCH", &mut kp, ParamMode::Free, ctrl).0 {
                 changed = true;
             }
-            if widgets::param_control(ui, "DECAY", &mut kd, ParamMode::Free, use_sliders).0 {
+            if widgets::param_control(ui, "DECAY", &mut kd, ParamMode::Free, ctrl).0 {
                 changed = true;
             }
-            if widgets::param_control(ui, "PUNCH", &mut kpu, ParamMode::Free, use_sliders).0 {
+            if widgets::param_control(ui, "PUNCH", &mut kpu, ParamMode::Free, ctrl).0 {
                 changed = true;
             }
-            if widgets::param_control(ui, "LEVEL", &mut kv, ParamMode::Free, use_sliders).0 {
+            if widgets::param_control(ui, "LEVEL", &mut kv, ParamMode::Free, ctrl).0 {
                 changed = true;
             }
-            if widgets::param_control(ui, "P.DEPTH", &mut kped, ParamMode::Free, use_sliders).0 {
+            if widgets::param_control(ui, "P.DEPTH", &mut kped, ParamMode::Free, ctrl).0 {
                 changed = true;
             }
-            if widgets::param_control(ui, "P.TIME", &mut kpet, ParamMode::Free, use_sliders).0 {
+            if widgets::param_control(ui, "P.TIME", &mut kpet, ParamMode::Free, ctrl).0 {
                 changed = true;
             }
         });
         ui.add_space(4.0);
-        ui.group(|ui| {
+        widgets::glass_group(ui, ctrl.group_max_width(), |ui| {
             ui.label(
                 egui::RichText::new("SNARE")
                     .color(theme::FOG)
                     .monospace()
                     .size(9.5),
             );
-            if widgets::param_control(ui, "TONE", &mut st, ParamMode::Free, use_sliders).0 {
+            if widgets::param_control(ui, "TONE", &mut st, ParamMode::Free, ctrl).0 {
                 changed = true;
             }
-            if widgets::param_control(ui, "SNAPPY", &mut ssn, ParamMode::Free, use_sliders).0 {
+            if widgets::param_control(ui, "SNAPPY", &mut ssn, ParamMode::Free, ctrl).0 {
                 changed = true;
             }
-            if widgets::param_control(ui, "DECAY", &mut sd, ParamMode::Free, use_sliders).0 {
+            if widgets::param_control(ui, "DECAY", &mut sd, ParamMode::Free, ctrl).0 {
                 changed = true;
             }
-            if widgets::param_control(ui, "LEVEL", &mut sv, ParamMode::Free, use_sliders).0 {
+            if widgets::param_control(ui, "LEVEL", &mut sv, ParamMode::Free, ctrl).0 {
                 changed = true;
             }
         });
         ui.add_space(4.0);
-        ui.group(|ui| {
+        widgets::glass_group(ui, ctrl.group_max_width(), |ui| {
             ui.label(
                 egui::RichText::new("CLAP / RIM")
                     .color(theme::FOG)
                     .monospace()
                     .size(9.5),
             );
-            if widgets::param_control(ui, "CLAP DEC", &mut cd, ParamMode::Free, use_sliders).0 {
+            if widgets::param_control(ui, "CLAP DEC", &mut cd, ParamMode::Free, ctrl).0 {
                 changed = true;
             }
-            if widgets::param_control(ui, "CLAP LVL", &mut cv, ParamMode::Free, use_sliders).0 {
+            if widgets::param_control(ui, "CLAP LVL", &mut cv, ParamMode::Free, ctrl).0 {
                 changed = true;
             }
         });

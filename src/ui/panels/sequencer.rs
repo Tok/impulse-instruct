@@ -5,13 +5,14 @@ use crate::state::{DrumVoice, MAX_STEPS, toggle_bass_accent, toggle_bass_slide, 
 use crate::ui::{ImpulseApp, SEQ_LABEL_H, SEQ_LABEL_W, SEQ_VOL_H, SEQ_VOL_W, theme, widgets};
 
 pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
-    let (current_step, running, seq_steps, time_sig_num) = {
+    let (current_step, running, seq_steps, time_sig_num, pad_px) = {
         let s = app.state.read();
         (
             s.sequencer.current_step,
             s.sequencer.running,
             s.sequencer.steps,
             s.sequencer.time_sig_num as usize,
+            s.ui_prefs.pad_size.px(),
         )
     };
     // Only highlight the cursor when the sequencer is actually playing;
@@ -257,7 +258,7 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                     let enabled = abs < seq_steps;
 
                     ui.add_enabled_ui(enabled, |ui| {
-                        if widgets::step_button(ui, is_active, is_current, vel, None) {
+                        if widgets::step_button(ui, is_active, is_current, vel, None, pad_px) {
                             toggled = Some(abs);
                         }
                     });
@@ -307,7 +308,7 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                     .map(|s| Some(theme::note_color(s.note)))
                     .unwrap_or(None);
                 ui.add_enabled_ui(abs < seq_steps, |ui| {
-                    if widgets::step_button(ui, is_active, is_current, 1.0, note_col) {
+                    if widgets::step_button(ui, is_active, is_current, 1.0, note_col, pad_px) {
                         let s = app.state.read().clone();
                         let note = s
                             .sequencer

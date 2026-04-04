@@ -58,14 +58,15 @@ pub fn draw_bass(app: &mut ImpulseApp, ui: &mut egui::Ui) {
     let mut cycle_paths: Vec<&str> = Vec::new();
     let mut changed = false;
 
-    let use_sliders = app.use_sliders;
+    let ctrl = widgets::ControlPrefs::from_prefs(&app.state.read().ui_prefs);
+    let xy_size = app.state.read().ui_prefs.pad_size.px() * (88.0 / 26.0);
     let draw_bass_controls = |ui: &mut egui::Ui| {
         let (ch, cy) = widgets::param_control(
             ui,
             "CUTOFF",
             &mut cutoff,
             param_mode("bass.cutoff", &locked, &focused),
-            use_sliders,
+            ctrl,
         );
         if ch {
             changed = true;
@@ -78,7 +79,7 @@ pub fn draw_bass(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             "RESONANCE",
             &mut resonance,
             param_mode("bass.resonance", &locked, &focused),
-            use_sliders,
+            ctrl,
         );
         if ch {
             changed = true;
@@ -91,7 +92,7 @@ pub fn draw_bass(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             "ENV MOD",
             &mut env_mod,
             param_mode("bass.env_mod", &locked, &focused),
-            use_sliders,
+            ctrl,
         );
         if ch {
             changed = true;
@@ -104,7 +105,7 @@ pub fn draw_bass(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             "DECAY",
             &mut decay,
             param_mode("bass.decay", &locked, &focused),
-            use_sliders,
+            ctrl,
         );
         if ch {
             changed = true;
@@ -117,7 +118,7 @@ pub fn draw_bass(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             "ACCENT",
             &mut accent,
             param_mode("bass.accent_level", &locked, &focused),
-            use_sliders,
+            ctrl,
         );
         if ch {
             changed = true;
@@ -130,7 +131,7 @@ pub fn draw_bass(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             "DRIVE",
             &mut dist,
             param_mode("bass.distortion", &locked, &focused),
-            use_sliders,
+            ctrl,
         );
         if ch {
             changed = true;
@@ -143,7 +144,7 @@ pub fn draw_bass(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             "VOLUME",
             &mut vol,
             param_mode("bass.volume", &locked, &focused),
-            use_sliders,
+            ctrl,
         );
         if ch {
             changed = true;
@@ -156,7 +157,7 @@ pub fn draw_bass(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             "SUB OSC",
             &mut sub_osc_level,
             param_mode("bass.sub_osc_level", &locked, &focused),
-            use_sliders,
+            ctrl,
         );
         if ch {
             changed = true;
@@ -169,7 +170,7 @@ pub fn draw_bass(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             "GLIDE",
             &mut portamento_time,
             param_mode("bass.portamento_time", &locked, &focused),
-            use_sliders,
+            ctrl,
         );
         if ch {
             changed = true;
@@ -182,7 +183,7 @@ pub fn draw_bass(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             "NOISE",
             &mut noise_mix,
             param_mode("bass.noise_mix", &locked, &focused),
-            use_sliders,
+            ctrl,
         );
         if ch {
             changed = true;
@@ -213,16 +214,14 @@ pub fn draw_bass(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         });
 
         // FM pair
-        let (ch, cy) =
-            widgets::param_control(ui, "FM DEPTH", &mut fm_depth, ParamMode::Free, use_sliders);
+        let (ch, cy) = widgets::param_control(ui, "FM DEPTH", &mut fm_depth, ParamMode::Free, ctrl);
         if ch {
             changed = true;
         }
         if cy {
             cycle_paths.push("bass.fm_depth");
         }
-        let (ch, cy) =
-            widgets::param_control(ui, "FM RATIO", &mut fm_ratio, ParamMode::Free, use_sliders);
+        let (ch, cy) = widgets::param_control(ui, "FM RATIO", &mut fm_ratio, ParamMode::Free, ctrl);
         if ch {
             changed = true;
         }
@@ -230,7 +229,7 @@ pub fn draw_bass(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             cycle_paths.push("bass.fm_ratio");
         }
     };
-    if use_sliders {
+    if ctrl.style == widgets::ControlStyle::Sliders {
         ui.vertical(draw_bass_controls);
     } else {
         ui.horizontal_wrapped(draw_bass_controls);
@@ -303,7 +302,7 @@ pub fn draw_bass(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             "RES",
             &mut cutoff,
             &mut resonance,
-            88.0,
+            xy_size,
             xy1_locked,
         ) {
             let mut snap = app.state.read().clone();
@@ -314,7 +313,15 @@ pub fn draw_bass(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         }
         ui.add_space(6.0);
         // Pad 2: Env Mod (X) × Decay (Y)
-        if widgets::xy_pad(ui, "ENV", "DEC", &mut env_mod, &mut decay, 88.0, xy2_locked) {
+        if widgets::xy_pad(
+            ui,
+            "ENV",
+            "DEC",
+            &mut env_mod,
+            &mut decay,
+            xy_size,
+            xy2_locked,
+        ) {
             let mut snap = app.state.read().clone();
             snap.bass.env_mod = env_mod;
             snap.bass.decay = decay;
@@ -384,8 +391,7 @@ pub fn draw_bass(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                     .monospace()
                     .size(9.0),
             );
-            if widgets::param_control(ui, "", &mut supersaw_detune, ParamMode::Free, use_sliders).0
-            {
+            if widgets::param_control(ui, "", &mut supersaw_detune, ParamMode::Free, ctrl).0 {
                 let mut s = app.state.write();
                 s.bass.supersaw_detune = supersaw_detune;
                 drop(s);

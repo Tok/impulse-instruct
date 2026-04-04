@@ -251,24 +251,143 @@ impl ImpulseApp {
                     // ── Tab 1: Controls ───────────────────────────────────────
                     1 => {
                         widgets::section_header(ui, "KNOB LAYOUT");
-                        ui.horizontal(|ui| {
-                            ui.label(
-                                egui::RichText::new("Control style")
-                                    .monospace()
-                                    .size(9.5)
-                                    .color(theme::FOG),
-                            );
-                            ui.with_layout(
-                                egui::Layout::right_to_left(egui::Align::Center),
-                                |ui| {
-                                    if widgets::toggle_button(
-                                        ui,
-                                        if self.use_sliders { "SLIDERS" } else { "KNOBS" },
-                                        &mut self.use_sliders,
-                                    ) {}
-                                },
-                            );
-                        });
+                        {
+                            let mut prefs = self.state.read().ui_prefs.clone();
+                            let mut dirty = false;
+
+                            // Sliders vs Knobs toggle
+                            ui.horizontal(|ui| {
+                                ui.label(
+                                    egui::RichText::new("Control style")
+                                        .monospace()
+                                        .size(9.5)
+                                        .color(theme::FOG),
+                                );
+                                ui.with_layout(
+                                    egui::Layout::right_to_left(egui::Align::Center),
+                                    |ui| {
+                                        if widgets::toggle_button(
+                                            ui,
+                                            if prefs.use_sliders {
+                                                "SLIDERS"
+                                            } else {
+                                                "KNOBS"
+                                            },
+                                            &mut prefs.use_sliders,
+                                        ) {
+                                            dirty = true;
+                                        }
+                                    },
+                                );
+                            });
+
+                            // Knob style: Flat vs Chrome (only relevant when not using sliders)
+                            if !prefs.use_sliders {
+                                ui.horizontal(|ui| {
+                                    ui.label(
+                                        egui::RichText::new("Knob style")
+                                            .monospace()
+                                            .size(9.5)
+                                            .color(theme::FOG),
+                                    );
+                                    ui.with_layout(
+                                        egui::Layout::right_to_left(egui::Align::Center),
+                                        |ui| {
+                                            use crate::state::KnobStyle;
+                                            if widgets::toggle_button(
+                                                ui,
+                                                if prefs.knob_style == KnobStyle::Chrome {
+                                                    "CHROME"
+                                                } else {
+                                                    "FLAT"
+                                                },
+                                                &mut (prefs.knob_style == KnobStyle::Chrome),
+                                            ) {
+                                                prefs.knob_style =
+                                                    if prefs.knob_style == KnobStyle::Chrome {
+                                                        KnobStyle::Flat
+                                                    } else {
+                                                        KnobStyle::Chrome
+                                                    };
+                                                dirty = true;
+                                            }
+                                        },
+                                    );
+                                });
+                            }
+
+                            // Knob size — fibonacci steps: 34 / 55 / 89 / 144 px
+                            ui.add_space(4.0);
+                            widgets::section_header(ui, "KNOB SIZE");
+                            ui.horizontal(|ui| {
+                                use crate::state::KnobSize;
+                                for (label, size) in [
+                                    ("S", KnobSize::Small),
+                                    ("M", KnobSize::Normal),
+                                    ("L", KnobSize::Large),
+                                    ("XL", KnobSize::XL),
+                                ] {
+                                    let active = prefs.knob_size == size;
+                                    let col = if active { theme::CHALK } else { theme::ASH };
+                                    let fill = if active { theme::IRON } else { theme::PIT };
+                                    if ui
+                                        .add(
+                                            egui::Button::new(
+                                                egui::RichText::new(label)
+                                                    .monospace()
+                                                    .size(9.5)
+                                                    .color(col),
+                                            )
+                                            .fill(fill)
+                                            .min_size(egui::vec2(28.0, 18.0)),
+                                        )
+                                        .clicked()
+                                        && !active
+                                    {
+                                        prefs.knob_size = size;
+                                        dirty = true;
+                                    }
+                                }
+                            });
+
+                            // Pad / step button size
+                            ui.add_space(4.0);
+                            widgets::section_header(ui, "PAD SIZE");
+                            ui.horizontal(|ui| {
+                                use crate::state::PadSize;
+                                for (label, size) in [
+                                    ("S", PadSize::Small),
+                                    ("M", PadSize::Normal),
+                                    ("L", PadSize::Large),
+                                    ("XL", PadSize::XL),
+                                ] {
+                                    let active = prefs.pad_size == size;
+                                    let col = if active { theme::CHALK } else { theme::ASH };
+                                    let fill = if active { theme::IRON } else { theme::PIT };
+                                    if ui
+                                        .add(
+                                            egui::Button::new(
+                                                egui::RichText::new(label)
+                                                    .monospace()
+                                                    .size(9.5)
+                                                    .color(col),
+                                            )
+                                            .fill(fill)
+                                            .min_size(egui::vec2(28.0, 18.0)),
+                                        )
+                                        .clicked()
+                                        && !active
+                                    {
+                                        prefs.pad_size = size;
+                                        dirty = true;
+                                    }
+                                }
+                            });
+
+                            if dirty {
+                                self.state.write().ui_prefs = prefs;
+                            }
+                        }
                         ui.add_space(8.0);
 
                         widgets::section_header(ui, "LOCK BEHAVIOUR");
@@ -354,20 +473,21 @@ impl ImpulseApp {
                                 .color(theme::IRON),
                         );
                         ui.add_space(4.0);
+                        let cur_idx = self.state.read().ui_prefs.log_level_idx;
                         for (i, (label, filter)) in LOG_LEVELS.iter().enumerate() {
-                            let selected = self.log_level_idx == i;
+                            let selected = cur_idx == i;
                             let text = egui::RichText::new(*label)
                                 .monospace()
                                 .size(10.0)
                                 .color(if selected { theme::CHALK } else { theme::FOG });
                             if ui.selectable_label(selected, text).clicked() && !selected {
-                                self.log_level_idx = i;
+                                self.state.write().ui_prefs.log_level_idx = i;
                                 log::set_max_level(*filter);
                             }
                         }
                         ui.label(
                             egui::RichText::new(
-                                "  Current: applies immediately, resets on restart.",
+                                "  Current: applies immediately, persisted across sessions.",
                             )
                             .monospace()
                             .size(8.0)
