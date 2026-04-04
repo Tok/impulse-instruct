@@ -53,7 +53,7 @@ pub fn print_banner() {
         (CS, '│'), (CS, ' '), (CS, '│'),                  // C# body    (4-6)
         (D,  ' '), (D,  ' '),                             // D  2 exp   (7-8)
         (DS, '│'), (DS, ' '), (DS, '│'),                  // D# body    (9-11)
-        (E,  ' '), (E,  ' '), (E,  ' '),                 // E  3 exp   (12-14)
+        (E,  ' '), (E,  ' '), (E,  '│'),                 // E  2 exp + right wall (12-14)
         // ── 3-key group (F G A B) ────────────────────────────────────────────
         (F,  '│'), (F,  ' '), (F,  ' '), (F,  ' '),     // F  wall+3  (15-18)
         (FS, '│'), (FS, ' '), (FS, '│'),                  // F# body    (19-21)
@@ -61,7 +61,7 @@ pub fn print_banner() {
         (GS, '│'), (GS, ' '), (GS, '│'),                  // G# body    (24-26)
         (A,  ' '), (A,  ' '),                             // A  2 exp   (27-28)
         (AS, '│'), (AS, ' '), (AS, '│'),                  // A# body    (29-31)
-        (B,  ' '), (B,  ' '), (B,  ' '),                 // B  3 exp   (32-34)
+        (B,  ' '), (B,  ' '), (B,  '│'),                 // B  2 exp + right wall (32-34)
     ];
 
     // Row 4: black key floor (└─┘ closes each black key), white key walls continue.
@@ -71,14 +71,14 @@ pub fn print_banner() {
         (CS, '└'), (CS, '─'), (CS, '┘'),                  // C# floor
         (D,  ' '), (D,  ' '),                             // D  2 exp
         (DS, '└'), (DS, '─'), (DS, '┘'),                  // D# floor
-        (E,  ' '), (E,  ' '), (E,  ' '),                 // E  3 exp
+        (E,  ' '), (E,  ' '), (E,  '│'),                 // E  2 exp + right wall
         (F,  '│'), (F,  ' '), (F,  ' '), (F,  ' '),     // F  wall+3
         (FS, '└'), (FS, '─'), (FS, '┘'),                  // F# floor
         (G,  ' '), (G,  ' '),                             // G  2 exp
         (GS, '└'), (GS, '─'), (GS, '┘'),                  // G# floor
         (A,  ' '), (A,  ' '),                             // A  2 exp
         (AS, '└'), (AS, '─'), (AS, '┘'),                  // A# floor
-        (B,  ' '), (B,  ' '), (B,  ' '),                 // B  3 exp
+        (B,  ' '), (B,  ' '), (B,  '│'),                 // B  2 exp + right wall
     ];
 
     // Rows 5–6: white key body — both left '│' and right '│' walls visible.
