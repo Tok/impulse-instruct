@@ -38,6 +38,8 @@ pub struct LlmOutput {
     pub is_jam: bool,
     /// Reasoning extracted from the "_thinking" JSON field.
     pub thinking: Option<String>,
+    /// MC crowd line — spoken via TTS in MC/DJ mode; displayed in log with a marker.
+    pub mc_line: Option<String>,
 }
 
 // ─── LLM backend trait (swappable) ────────────────────────────────────────────
@@ -353,6 +355,13 @@ impl LlmBackend for LlamaServerBackend {
             );
         }
 
+        // Extract mc_line — crowd-facing shout for MC/DJ mode TTS.
+        let mc_line = param_update
+            .as_object_mut()
+            .and_then(|o| o.remove("mc_line"))
+            .and_then(|v| v.as_str().map(|s| s.to_string()))
+            .filter(|s| !s.is_empty());
+
         Ok(LlmOutput {
             text: json_text,
             param_update: Some(param_update),
@@ -362,6 +371,7 @@ impl LlmBackend for LlamaServerBackend {
             context_used: ctx_used,
             is_jam: false,
             thinking,
+            mc_line,
         })
     }
 }
@@ -497,6 +507,7 @@ pub fn mock_response(prompt: &str, heat: f32) -> Result<LlmOutput> {
             context_used: 256,
             is_jam: false,
             thinking: None,
+            mc_line: None,
         });
     }
 
@@ -647,6 +658,7 @@ pub fn mock_response(prompt: &str, heat: f32) -> Result<LlmOutput> {
         context_used: 256,
         is_jam: false,
         thinking: None,
+        mc_line: None,
     })
 }
 
@@ -675,6 +687,7 @@ pub fn run_llm_loop(
             context_used: 0,
             is_jam: false,
             thinking: None,
+            mc_line: None,
         });
         run_mock_loop(state, input_rx, output_tx);
         return;
@@ -717,6 +730,7 @@ pub fn run_llm_loop(
         context_used: 0,
         is_jam: false,
         thinking: None,
+        mc_line: None,
     });
 
     while let Ok(input) = input_rx.recv() {
@@ -742,6 +756,7 @@ pub fn run_llm_loop(
                 context_used: 0,
                 is_jam: false,
                 thinking: None,
+                mc_line: None,
             });
             continue;
         }
@@ -828,16 +843,23 @@ pub fn run_llm_loop(
                         log::debug!("{} (jam) -> {}", persona, comment);
                     }
 
-                    // TTS: speak only MC/DJ crowd content — producer explanations
-                    // are never read aloud (they sound wrong as TTS output).
-                    let (tts_on, mode) = {
+                    // TTS: speak mc_line (crowd shout) if present, else _comment.
+                    // Only fires in MC/DJ modes — producer mode is never read aloud.
+                    let (tts_on, mode, tts_pitch, tts_speed, tts_amplitude) = {
                         let s = state.read();
-                        (s.llm.tts_enabled, s.llm.conversation_mode.clone())
+                        (
+                            s.llm.tts_enabled,
+                            s.llm.conversation_mode.clone(),
+                            s.llm.tts_pitch,
+                            s.llm.tts_speed,
+                            s.llm.tts_amplitude,
+                        )
                     };
                     let tts_mode = matches!(mode, ConversationMode::Mc | ConversationMode::Dj);
                     if tts_on && tts_mode {
-                        log::info!("[TTS] {}", comment);
-                        speak(comment, &mode);
+                        let tts_text = output.mc_line.as_deref().unwrap_or(comment);
+                        log::info!("[TTS] {}", tts_text);
+                        speak(tts_text, &mode, tts_pitch, tts_speed, tts_amplitude);
                     }
                 }
                 let mut output = output;
@@ -868,6 +890,7 @@ pub fn run_llm_loop(
                 context_used: 0,
                 is_jam: true,
                 thinking: None,
+                mc_line: None,
             });
         }
     }
@@ -943,6 +966,7 @@ fn run_mock_loop(
                         context_used: 0,
                         is_jam: true,
                         thinking: None,
+                        mc_line: None,
                     });
                 }
             }
@@ -955,35 +979,5 @@ fn run_mock_loop(
     log::info!("Mock LLM loop exiting");
 }
 
-// ─── TTS ─────────────────────────────────────────────────────────────────────
-
-/// Speak `text` via espeak-ng in a detached background process.
-/// Voice pitch/speed are adjusted per conversation mode for character.
-/// No-ops silently if espeak-ng is not installed.
-pub fn speak(text: &str, mode: &ConversationMode) {
-    // Sanitise: strip anything that could be shell-injected.  We pass the
-    // text as a single argument (no shell involved), but strip control chars.
-    let clean: String = text
-        .chars()
-        .filter(|c| c.is_ascii_graphic() || *c == ' ')
-        .take(200)
-        .collect();
-    if clean.is_empty() {
-        return;
-    }
-
-    let (pitch, speed, voice) = match mode {
-        ConversationMode::Mc => ("60", "160", "en+m3"), // high-pitched ragga MC
-        ConversationMode::Dj => ("40", "140", "en+m4"), // hype DJ
-        ConversationMode::Producer => ("50", "120", "en+m5"), // calm producer
-        ConversationMode::Off => return,
-    };
-
-    // Spawn and detach — we don't wait for it.
-    let _ = std::process::Command::new("espeak-ng")
-        .args(["-p", pitch, "-s", speed, "-v", voice, &clean])
-        .stdin(std::process::Stdio::null())
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .spawn();
-}
+pub mod tts;
+pub use tts::speak;

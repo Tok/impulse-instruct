@@ -338,6 +338,10 @@ impl ImpulseApp {
                     format!("{} → {}\n", persona, display)
                 };
                 self.log_text.push_str(&line);
+                // MC line: shown separately with a marker so it's visually distinct
+                if let Some(ref mc) = out.mc_line {
+                    self.log_text.push_str(&format!("◆ {}\n", mc));
+                }
             }
             // If jam cycle done and auto_jam is on, re-trigger
             if out.text == "[jam_cycle_done]" {

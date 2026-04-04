@@ -369,7 +369,10 @@ pub struct LlmState {
     pub persona_name: String,      // AI persona name shown in UI and used in system prompt
     pub system_prompt_override: String, // if non-empty, replaces the generated system prompt entirely
     pub enable_thinking: bool,          // append /think or /no_think to prompt (Qwen3)
-    pub tts_enabled: bool,              // speak _comment via espeak-ng when true
+    pub tts_enabled: bool,              // speak MC/DJ content via espeak-ng when true
+    pub tts_pitch: u8,                  // 0 = mode default; 1–99 override
+    pub tts_speed: u16,                 // 0 = mode default; words/min override
+    pub tts_amplitude: u8,              // 0 = default (100); 1–200 override
     pub style_verbosity: StyleVerbosity, // Brief = ~50 token brief, Full = ~150 token description
     pub auto_lock_on_touch: bool,       // if true, touching a knob locks it to user-only control
     pub is_mock: bool,                  // true when running without a real model (no llama-server)
@@ -401,6 +404,9 @@ impl Default for LlmState {
             system_prompt_override: String::new(),
             enable_thinking: false,
             tts_enabled: false,
+            tts_pitch: 0,
+            tts_speed: 0,
+            tts_amplitude: 0,
             style_verbosity: StyleVerbosity::Full,
             auto_lock_on_touch: false,
             is_mock: false,

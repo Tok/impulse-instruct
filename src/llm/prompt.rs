@@ -403,7 +403,8 @@ JAM HEAT: {heat_pct}% — {heat_desc}
 Always start your response with "_thinking": one or two sentences explaining what the user is asking for and what specific parameters you will change. This is your reasoning scratch-pad — write it before anything else.
 {comment_instruction}
 Only include fields you are actually changing.
-TOP-LEVEL SCHEMA — the only valid top-level keys are "_comment", "bass", "sequencer", "fx".
+In MC or DJ mode you may add an optional "mc_line" string — a short crowd shout spoken via TTS, separate from "_comment". Keep it under 12 words. Use it for big moments, drops, or energy peaks.
+TOP-LEVEL SCHEMA — the only valid top-level keys are "_comment", "mc_line", "bass", "sequencer", "fx".
   "bass" and "fx" are NEVER nested inside "sequencer".
   "fx" is NEVER nested inside "fx".
   Each key appears at most ONCE per object.
@@ -493,6 +494,7 @@ pub fn param_json_schema() -> serde_json::Value {
         "properties": {
             "_thinking": { "type": "string", "maxLength": 300 },
             "_comment": { "type": "string", "maxLength": 200 },
+            "mc_line":  { "type": "string", "maxLength": 80, "description": "Short crowd shout for MC/DJ mode TTS (optional). Under 12 words." },
             "bass": {
                 "type": "object",
                 "properties": {

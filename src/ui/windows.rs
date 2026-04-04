@@ -197,6 +197,59 @@ impl ImpulseApp {
                                 },
                             );
                         });
+                        // TTS pitch / speed / amplitude sliders (shown when TTS is on)
+                        if self.state.read().llm.tts_enabled {
+                            for (label, hint) in &[
+                                ("TTS pitch  (0=auto)", "1–99; 0=use mode default"),
+                                ("TTS speed  (0=auto)", "words/min; 0=use mode default"),
+                                ("TTS volume (0=auto)", "0–200; 0=default (100)"),
+                            ] {
+                                ui.horizontal(|ui| {
+                                    ui.label(
+                                        egui::RichText::new(*label)
+                                            .monospace()
+                                            .size(9.5)
+                                            .color(theme::FOG),
+                                    );
+                                    ui.with_layout(
+                                        egui::Layout::right_to_left(egui::Align::Center),
+                                        |ui| {
+                                            ui.label(
+                                                egui::RichText::new(*hint)
+                                                    .monospace()
+                                                    .size(8.0)
+                                                    .color(theme::IRON),
+                                            );
+                                        },
+                                    );
+                                });
+                                if label.contains("pitch") {
+                                    let mut v = self.state.read().llm.tts_pitch as f32;
+                                    if ui
+                                        .add(egui::Slider::new(&mut v, 0.0..=99.0).integer())
+                                        .changed()
+                                    {
+                                        self.state.write().llm.tts_pitch = v as u8;
+                                    }
+                                } else if label.contains("speed") {
+                                    let mut v = self.state.read().llm.tts_speed as f32;
+                                    if ui
+                                        .add(egui::Slider::new(&mut v, 0.0..=500.0).integer())
+                                        .changed()
+                                    {
+                                        self.state.write().llm.tts_speed = v as u16;
+                                    }
+                                } else {
+                                    let mut v = self.state.read().llm.tts_amplitude as f32;
+                                    if ui
+                                        .add(egui::Slider::new(&mut v, 0.0..=200.0).integer())
+                                        .changed()
+                                    {
+                                        self.state.write().llm.tts_amplitude = v as u8;
+                                    }
+                                }
+                            }
+                        }
                         ui.horizontal(|ui| {
                             ui.label(
                                 egui::RichText::new("Style description")
