@@ -96,7 +96,7 @@ echo "→ Starting server on port ${PORT} (log: ${SERVER_LOG})…"
   --model "$MODEL" \
   --host 127.0.0.1 \
   --port "$PORT" \
-  --ctx-size 4096 \
+  --ctx-size 16384 \
   --n-gpu-layers 99 \
   2>"$SERVER_LOG" &
 SERVER_PID=$!
