@@ -103,7 +103,7 @@ Ordered by value — tackle roughly from top to bottom.
 
 - [x] **Stem export** — "Export Stems" in File menu; renders bass/kit_a/kit_b/amen/noise/hoover/an1x separately.
 
-- [ ] **Project versioning** — auto-save snapshots on pattern change, revert history (ring buffer of N states).
+- [x] **Project versioning** — StateHistory ring buffer (50 deep), Ctrl+Z/Y, Edit menu, LLM snapshots before apply.
 
 ### Later
 
