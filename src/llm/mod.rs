@@ -184,6 +184,21 @@ impl LlamaServerBackend {
         // Kill any leaked process from a previous run that holds the port.
         kill_leaked_servers(bin);
 
+        // Log free VRAM so OOM failures are immediately diagnosable.
+        if let Ok(out) = std::process::Command::new("nvidia-smi")
+            .args([
+                "--query-gpu=memory.free,memory.total",
+                "--format=csv,noheader,nounits",
+            ])
+            .output()
+        {
+            let s = String::from_utf8_lossy(&out.stdout);
+            let parts: Vec<&str> = s.trim().splitn(2, ", ").collect();
+            if let (Some(free), Some(total)) = (parts.first(), parts.get(1)) {
+                log::info!("VRAM: {} MB free / {} MB total", free.trim(), total.trim());
+            }
+        }
+
         log::info!(
             "Spawning llama-server ({}) on port {} with model {}",
             bin,
