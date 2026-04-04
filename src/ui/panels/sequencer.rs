@@ -303,10 +303,12 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                 }
                 let is_active = bass_page.get(i).map(|s| s.active).unwrap_or(false);
                 let is_current = abs == cursor;
-                let note_col = bass_page
-                    .get(i)
-                    .map(|s| Some(theme::note_color(s.note)))
-                    .unwrap_or(None);
+                // Dot color only for active steps — inactive steps are plain chrome
+                let note_col = if is_active {
+                    bass_page.get(i).map(|s| theme::note_color(s.note))
+                } else {
+                    None
+                };
                 ui.add_enabled_ui(abs < seq_steps, |ui| {
                     if widgets::step_button(ui, is_active, is_current, 1.0, note_col, pad_px) {
                         let s = app.state.read().clone();

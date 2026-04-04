@@ -348,13 +348,15 @@ pub fn toggle_button(ui: &mut Ui, label: &str, active: &mut bool) -> bool {
 /// A sequencer step button with neumorphic raised/pressed chrome style.
 /// Returns true when clicked (toggle request).
 /// `vel` tints the fill when active (0 = dim, 1 = full bright).
+/// `dot_color`: when Some, the button body stays neutral and only a small
+///   coloured dot is drawn — used for bass steps so the palette stays subtle.
 /// `size_px` comes from `UiPrefs.pad_size.px()`.
 pub fn step_button(
     ui: &mut Ui,
     active: bool,
     current: bool,
     vel: f32,
-    color_override: Option<Color32>,
+    dot_color: Option<Color32>,
     size_px: f32,
 ) -> bool {
     let sz = Vec2::splat(size_px);
@@ -366,16 +368,8 @@ pub fn step_button(
         let inner = rect.shrink(1.0);
 
         if active {
-            // Pressed look: darker fill, reversed edges (bright bottom-right)
-            let base = color_override.unwrap_or(theme::IRON);
-            let dim = 0.35_f32 + vel * 0.65;
-            let fill = Color32::from_rgb(
-                (base.r() as f32 * dim) as u8,
-                (base.g() as f32 * dim) as u8,
-                (base.b() as f32 * dim) as u8,
-            );
-            painter.rect_filled(inner, r, fill);
-            // Dark top-left edge
+            // Pressed look — neutral chrome fill regardless of dot_color
+            painter.rect_filled(inner, r, Color32::from_gray(48));
             painter.line_segment(
                 [inner.left_top(), inner.right_top()],
                 Stroke::new(1.0, Color32::from_gray(8)),
@@ -384,7 +378,6 @@ pub fn step_button(
                 [inner.left_top(), inner.left_bottom()],
                 Stroke::new(1.0, Color32::from_gray(8)),
             );
-            // Bright bottom-right edge
             painter.line_segment(
                 [inner.left_bottom(), inner.right_bottom()],
                 Stroke::new(1.0, Color32::from_gray(80)),
@@ -393,10 +386,22 @@ pub fn step_button(
                 [inner.right_top(), inner.right_bottom()],
                 Stroke::new(1.0, Color32::from_gray(80)),
             );
+
+            // Dot or full-fill indicator
+            if let Some(col) = dot_color {
+                // Small coloured dot — subtle note-pitch indicator
+                let dot_r = (size_px * 0.18).max(2.5);
+                let dot_pos = Pos2::new(inner.center().x, inner.max.y - dot_r - 2.0);
+                painter.circle_filled(dot_pos, dot_r, col);
+            } else {
+                // Drum mode: white bloom tint over the active fill
+                let dim = 0.35_f32 + vel * 0.65;
+                let g = (200.0 * dim) as u8;
+                painter.rect_filled(inner, r, Color32::from_rgba_unmultiplied(g, g, g, 60));
+            }
         } else {
-            // Raised look: brighter top-left, dark bottom-right
+            // Raised look
             painter.rect_filled(inner, r, Color32::from_gray(30));
-            // Bright top-left
             painter.line_segment(
                 [inner.left_top(), inner.right_top()],
                 Stroke::new(1.0, Color32::from_gray(62)),
@@ -405,7 +410,6 @@ pub fn step_button(
                 [inner.left_top(), inner.left_bottom()],
                 Stroke::new(1.0, Color32::from_gray(62)),
             );
-            // Dark bottom-right shadow
             painter.line_segment(
                 [inner.left_bottom(), inner.right_bottom()],
                 Stroke::new(1.0, Color32::from_gray(10)),
@@ -414,10 +418,30 @@ pub fn step_button(
                 [inner.right_top(), inner.right_bottom()],
                 Stroke::new(1.0, Color32::from_gray(10)),
             );
+
+            // Inactive bass step with assigned note: faint dot
+            if let Some(col) = dot_color {
+                let dot_r = (size_px * 0.14).max(2.0);
+                let dot_pos = Pos2::new(inner.center().x, inner.max.y - dot_r - 2.0);
+                painter.circle_filled(
+                    dot_pos,
+                    dot_r,
+                    Color32::from_rgba_unmultiplied(col.r(), col.g(), col.b(), 80),
+                );
+            }
         }
 
-        // Current-step cursor: bright outer border
+        // Current-step cursor: white bloom glow + bright border
         if current {
+            for i in 1..=3u8 {
+                let expand = i as f32 * 1.5;
+                let alpha = 40u8.saturating_sub(i * 12);
+                painter.rect_filled(
+                    rect.expand(expand),
+                    r,
+                    Color32::from_rgba_unmultiplied(220, 220, 220, alpha),
+                );
+            }
             painter.rect_stroke(rect.shrink(0.5), r, Stroke::new(1.5, theme::CHALK));
         }
     }

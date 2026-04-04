@@ -91,6 +91,13 @@ impl AudioEngine {
                         advance_clock(clock.clone(), &seq_snap, block, sample_rate);
                     clock = new_clock;
 
+                    // Propagate current_step back so the UI cursor animates.
+                    // Brief write of a single usize — no allocation, releases immediately.
+                    {
+                        let mut s = state_clone.write();
+                        s.sequencer.current_step = clock.current_step;
+                    }
+
                     for event in events {
                         dsp.handle_trigger(&event);
                     }
