@@ -49,48 +49,48 @@ pub fn print_banner() {
     #[rustfmt::skip]
     const UPPER: [Cell; 35] = [
         // ── 2-key group (C D E) ──────────────────────────────────────────────
-        (C,  '│'), (C,  ' '), (C,  ' '), (C,  ' '),     // C  wall+3  (0-3)
+        (C,  '║'), (C,  ' '), (C,  ' '), (C,  ' '),     // C  wall+3  (0-3)
         (CS, '│'), (CS, ' '), (CS, '│'),                  // C# body    (4-6)
         (D,  ' '), (D,  ' '),                             // D  2 exp   (7-8)
         (DS, '│'), (DS, ' '), (DS, '│'),                  // D# body    (9-11)
-        (E,  ' '), (E,  ' '), (E,  '│'),                 // E  2 exp + right wall (12-14)
+        (E,  ' '), (E,  ' '), (E,  '║'),                 // E  2 exp + right wall (12-14)
         // ── 3-key group (F G A B) ────────────────────────────────────────────
-        (F,  '│'), (F,  ' '), (F,  ' '), (F,  ' '),     // F  wall+3  (15-18)
+        (F,  '║'), (F,  ' '), (F,  ' '), (F,  ' '),     // F  wall+3  (15-18)
         (FS, '│'), (FS, ' '), (FS, '│'),                  // F# body    (19-21)
         (G,  ' '), (G,  ' '),                             // G  2 exp   (22-23)
         (GS, '│'), (GS, ' '), (GS, '│'),                  // G# body    (24-26)
         (A,  ' '), (A,  ' '),                             // A  2 exp   (27-28)
         (AS, '│'), (AS, ' '), (AS, '│'),                  // A# body    (29-31)
-        (B,  ' '), (B,  ' '), (B,  '│'),                 // B  2 exp + right wall (32-34)
+        (B,  ' '), (B,  ' '), (B,  '║'),                 // B  2 exp + right wall (32-34)
     ];
 
     // Row 4: black key floor (└─┘ closes each black key), white key walls continue.
     #[rustfmt::skip]
     const UPPER_BTM: [Cell; 35] = [
-        (C,  '│'), (C,  ' '), (C,  ' '), (C,  ' '),     // C  wall+3
+        (C,  '║'), (C,  ' '), (C,  ' '), (C,  ' '),     // C  wall+3
         (CS, '└'), (CS, '─'), (CS, '┘'),                  // C# floor
         (D,  ' '), (D,  ' '),                             // D  2 exp
         (DS, '└'), (DS, '─'), (DS, '┘'),                  // D# floor
-        (E,  ' '), (E,  ' '), (E,  '│'),                 // E  2 exp + right wall
-        (F,  '│'), (F,  ' '), (F,  ' '), (F,  ' '),     // F  wall+3
+        (E,  ' '), (E,  ' '), (E,  '║'),                 // E  2 exp + right wall
+        (F,  '║'), (F,  ' '), (F,  ' '), (F,  ' '),     // F  wall+3
         (FS, '└'), (FS, '─'), (FS, '┘'),                  // F# floor
         (G,  ' '), (G,  ' '),                             // G  2 exp
         (GS, '└'), (GS, '─'), (GS, '┘'),                  // G# floor
         (A,  ' '), (A,  ' '),                             // A  2 exp
         (AS, '└'), (AS, '─'), (AS, '┘'),                  // A# floor
-        (B,  ' '), (B,  ' '), (B,  '│'),                 // B  2 exp + right wall
+        (B,  ' '), (B,  ' '), (B,  '║'),                 // B  2 exp + right wall
     ];
 
-    // Rows 5–6: white key body — both left '│' and right '│' walls visible.
+    // Rows 5–6: white key body — both left '║' and right '║' walls visible.
     #[rustfmt::skip]
     const LOWER: [Cell; 35] = [
-        (C, '│'), (C, ' '), (C, ' '), (C, ' '), (C, '│'),
-        (D, '│'), (D, ' '), (D, ' '), (D, ' '), (D, '│'),
-        (E, '│'), (E, ' '), (E, ' '), (E, ' '), (E, '│'),
-        (F, '│'), (F, ' '), (F, ' '), (F, ' '), (F, '│'),
-        (G, '│'), (G, ' '), (G, ' '), (G, ' '), (G, '│'),
-        (A, '│'), (A, ' '), (A, ' '), (A, ' '), (A, '│'),
-        (B, '│'), (B, ' '), (B, ' '), (B, ' '), (B, '│'),
+        (C, '║'), (C, ' '), (C, ' '), (C, ' '), (C, '║'),
+        (D, '║'), (D, ' '), (D, ' '), (D, ' '), (D, '║'),
+        (E, '║'), (E, ' '), (E, ' '), (E, ' '), (E, '║'),
+        (F, '║'), (F, ' '), (F, ' '), (F, ' '), (F, '║'),
+        (G, '║'), (G, ' '), (G, ' '), (G, ' '), (G, '║'),
+        (A, '║'), (A, ' '), (A, ' '), (A, ' '), (A, '║'),
+        (B, '║'), (B, ' '), (B, ' '), (B, ' '), (B, '║'),
     ];
 
     // Row 7: white key floor — '└───┘' closes each white key.
