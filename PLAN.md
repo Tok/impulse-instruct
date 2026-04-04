@@ -151,6 +151,7 @@ Bonsai generates the text. A TTS engine speaks it. The crowd goes wild.
 - [x] TTS output mirrored to CLI console (`log::info!("[TTS] …")`)
 - [ ] TTS output mirrored to in-UI comment log (distinguish from LLM text log visually)
 - [ ] TTS settings panel: pitch, speed, amplitude, voice character selector
+      *(add TTS tab to prefs window now; full redesign deferred to Phase 3 modular UI)*
 - [ ] Per-character pitch/speed randomisation (±10%) — prevents robotic monotone
 - [ ] Alternative: Coqui TTS for higher quality voice (Python subprocess or REST)
 - [ ] LLM generates `"mc_line"` JSON field alongside param updates (separate from `_comment`)

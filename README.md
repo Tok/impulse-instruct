@@ -14,22 +14,38 @@ Built in Rust. Runs [Bonsai 8B](https://huggingface.co/prism-ml/Bonsai-8B-gguf) 
 
 ## What it does
 
-- **Bass synthesizer** — ladder filter, saw/square oscillator, accent & slide
-- **Supersaw oscillator** — unison detuned saws for trance, Reese bass, rave stabs
-- **Drum Kit A** — kick, snare, hihat, toms (808-style analog modeling)
-- **Drum Kit B** — kick, snare, hihat, clap, rim (909-style)
-- **up to 64-step sequencer with variable step count** — sample-accurate clock, per-voice patterns
-- **FX chain** — reverb, delay, drive, master volume
-- **Bitcrush FX** — bit depth + sample rate reduction for lo-fi, gabber, breakcore
-- **Piano display** — Huth *Farbige Noten* color theory (1888); C2–C5 keyboard lights up on MIDI input and sequencer playback
-- **MIDI input** — auto-connects to first USB MIDI keyboard (class-compliant, tested with AKAI LPK25); live play triggers the bass synth
-- **PULSE** — the AI inside; generates JSON parameter updates continuously
-- **Lock system** — touch a knob and it's yours; the LLM won't override it
-- **Jam mode** — LLM evolves the pattern autonomously
-- **TTS MC mode** — espeak-ng voice output; LLM speaks its comments as an MC
-- **Export** — WAV (32-bit float) and MP3 (via ffmpeg); offline render, no audio device needed
-- **Project save/load** — JSON snapshots via File menu
-- **HTTP/MCP API** — REST interface on port 8765 (on by default; `--no-api` to disable)
+**Bass synthesizer**
+- Saw / Square / Supersaw (detuned unison) oscillator; ±1 semitone oscillator detune
+- Sub-oscillator (sine one octave below, mixable); white noise source
+- Moog-style 4-pole ladder filter — LP / HP / BP modes
+- Portamento / glide time; per-step accent and slide in sequencer
+- Internal overdrive; TB-303 filter envelope with env mod + decay
+
+**Drum machines**
+- Kit A — kick, snare, hihat ×2, toms (808-style analog modeling)
+- Kit B — kick, snare, hihat ×2, clap, rim (909-style)
+- Up to 64-step sequencer with variable step count; per-voice velocity lanes; swing
+
+**FX chain** (all LLM-wireable)
+- Reverb (Schroeder/Freeverb), delay, chorus/ensemble, phaser (4-stage all-pass)
+- Waveshaper (pre-FX tanh saturation), ring modulator (50–500 Hz carrier)
+- 3-band EQ: low shelf 200 Hz · mid peak 1 kHz · high shelf 5 kHz (biquad)
+- Bitcrush (bit depth + sample rate reduction), master drive
+
+**LFO system** — 4 independent slots, each wireable to any parameter (bass cutoff, resonance, pitch, volume, reverb, delay, chorus, kick pitch…); sync to transport
+
+**Intelligence**
+- **PULSE** — the AI inside; runs locally, generates JSON parameter updates in real time
+- **Jam mode** — on by default; PULSE evolves the pattern autonomously, endlessly
+- **Lock system** — touch a knob and it's yours; PULSE won't override it; LLM-focus mode inverts this to actively target a param
+- **TTS MC mode** — espeak-ng voice output; PULSE speaks its comments as a jungle MC
+
+**I/O**
+- MIDI input — auto-connects to first USB MIDI keyboard (class-compliant, tested with AKAI LPK25)
+- Export — WAV (32-bit float) and MP3 (via ffmpeg); offline render, no audio device needed
+- Project save/load — JSON snapshots via File menu
+- HTTP/MCP API — REST interface on port 8765 (`--no-api` to disable)
+- Piano display — Huth *Farbige Noten* color theory (1888); C2–C5 keyboard
 
 ---
 
@@ -151,25 +167,44 @@ curl -X POST http://localhost:8765/api/lock \
 
 ## Parameters
 
-All floats 0.0–1.0 unless noted.
+The full JSON Schema for every parameter is available at runtime:
+
+```bash
+curl http://localhost:8765/api/schema
+```
+
+Key paths (all floats 0–1 unless noted):
 
 | Path | Description |
 |------|-------------|
 | `bass.cutoff` | Filter cutoff (0=dark, 1=bright) |
-| `bass.resonance` | Resonance / squelch (high = acid) |
+| `bass.resonance` | Resonance / squelch |
 | `bass.env_mod` | Filter envelope depth |
 | `bass.decay` | Filter envelope decay |
-| `bass.accent_level` | Accent boost |
-| `bass.waveform` | `"Saw"` or `"Square"` |
+| `bass.accent_level` | Accent boost intensity |
+| `bass.waveform` | `"Saw"` / `"Square"` / `"Supersaw"` |
+| `bass.filter_mode` | `"Lowpass"` / `"Highpass"` / `"Bandpass"` |
+| `bass.supersaw_detune` | Unison spread (semitones) |
+| `bass.supersaw_voices` | Unison voice count (2–7) |
+| `bass.sub_osc_level` | Sub-oscillator mix |
+| `bass.osc_detune` | Oscillator pitch offset −1..+1 semitones |
+| `bass.noise_mix` | White noise into filter |
+| `bass.portamento_time` | Glide time (0=10ms, 1=500ms) |
 | `bass.distortion` | Internal overdrive |
 | `sequencer.bpm` | Tempo (40–250 BPM) |
-| `fx.reverb_size` | Room size |
-| `fx.reverb_mix` | Reverb wet/dry |
-| `fx.delay_time` | Delay time (0–1000ms) |
-| `fx.delay_feedback` | Delay repeats |
-| `fx.delay_mix` | Delay wet/dry |
-| `fx.distortion_drive` | Master bus drive |
+| `sequencer.swing` | Shuffle amount |
+| `sequencer.steps` | Active step count (8–64) |
+| `fx.reverb_mix` / `reverb_size` | Reverb wet/dry, room size |
+| `fx.delay_mix` / `delay_feedback` / `delay_time` | Delay |
+| `fx.chorus_mix` / `chorus_rate` / `chorus_depth` | Chorus |
+| `fx.phaser_mix` / `phaser_rate` / `phaser_depth` | Phaser |
+| `fx.waveshaper_mix` / `waveshaper_drive` | Pre-FX saturation |
+| `fx.ring_mod_mix` / `ring_mod_freq` | Ring modulator |
+| `fx.eq_low_gain` / `eq_mid_gain` / `eq_hi_gain` | 3-band EQ (−1..+1 → ±12 dB) |
+| `fx.bitcrush_mix` / `bitcrush_bits` / `bitcrush_rate` | Bitcrush |
+| `fx.distortion_drive` / `distortion_mix` | Master bus drive |
 | `fx.master_volume` | Output level |
+| `lfo[0..3].rate` / `.depth` / `.target` / `.waveform` | LFO modulation matrix |
 
 ---
 
