@@ -576,6 +576,31 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                 continue;
             }
 
+            // Read per-voice state before the horizontal row so the sub-lanes
+            // can be rendered as separate rows OUTSIDE the outer horizontal.
+            let voice_steps = {
+                let s = app.state.read();
+                s.sequencer
+                    .drum_steps
+                    .get(voice)
+                    .copied()
+                    .unwrap_or(seq_steps)
+            };
+            let voice_cursor = if running {
+                current_step % voice_steps.max(1)
+            } else {
+                usize::MAX
+            };
+            let pattern: Vec<crate::state::Step> = {
+                let s = app.state.read();
+                s.sequencer
+                    .drum_patterns
+                    .get(voice)
+                    .map(|p| p[page_start..(page_start + 16).min(p.len())].to_vec())
+                    .unwrap_or_else(|| vec![crate::state::Step::default(); 16])
+            };
+
+            // ── Step buttons row ──────────────────────────────────────────────
             ui.horizontal(|ui| {
                 // ── M/S buttons (mute/solo) ───────────────────────────────────
                 let (is_muted, is_soloed) = {
@@ -692,15 +717,7 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                     app.push_audio_params();
                 }
 
-                // Per-voice step length — scrolling adjusts polyrhythm length.
-                let voice_steps = app
-                    .state
-                    .read()
-                    .sequencer
-                    .drum_steps
-                    .get(voice)
-                    .copied()
-                    .unwrap_or(seq_steps);
+                // Per-voice step length (polyrhythm) — drag to adjust, double-click resets.
                 let steps_resp = ui.add_sized(
                     [18.0, SEQ_LABEL_H],
                     egui::Label::new(
@@ -726,25 +743,9 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                     }
                 }
                 if steps_resp.double_clicked() {
-                    // Reset to global steps on double-click
                     let s = app.state.read().clone();
                     *app.state.write() = set_drum_voice_steps(s, *voice, seq_steps);
                 }
-
-                let voice_cursor = if running {
-                    current_step % voice_steps.max(1)
-                } else {
-                    usize::MAX
-                };
-
-                let pattern: Vec<crate::state::Step> = {
-                    let s = app.state.read();
-                    s.sequencer
-                        .drum_patterns
-                        .get(voice)
-                        .map(|p| p[page_start..(page_start + 16).min(p.len())].to_vec())
-                        .unwrap_or_else(|| vec![crate::state::Step::default(); 16])
-                };
 
                 let mut toggled = None;
                 for i in 0..16usize {
@@ -759,88 +760,86 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                         }
                     });
                 }
-
                 if let Some(step) = toggled {
                     let s = app.state.read().clone();
                     *app.state.write() = toggle_drum_step(s, *voice, step);
                 }
+            });
 
-                // ── Velocity lane ─────────────────────────────────────────────
-                ui.horizontal(|ui| {
-                    // Spacer to align with step buttons (skip label + volume columns)
-                    ui.add_space(SEQ_LABEL_W + SEQ_LABEL_H + SEQ_VOL_W + SEQ_VOL_H + 2.0);
-                    let bar_h = 5.0_f32;
-                    let mut vel_changed: Option<(usize, f32)> = None;
-                    for i in 0..16usize {
-                        let abs = page_start + i;
-                        let vel = pattern.get(i).map(|s| s.velocity).unwrap_or(1.0);
-                        let is_active = pattern.get(i).map(|s| s.active).unwrap_or(false);
-                        let (rect, resp) = ui.allocate_exact_size(
-                            egui::vec2(pad_px, bar_h + 2.0),
-                            egui::Sense::drag(),
-                        );
-                        if ui.is_rect_visible(rect) {
-                            let bar_rect = egui::Rect::from_min_size(
-                                egui::pos2(rect.min.x, rect.max.y - bar_h * vel),
-                                egui::vec2(pad_px - 1.0, bar_h * vel),
-                            );
-                            let col = if is_active {
-                                egui::Color32::from_gray(70)
-                            } else {
-                                egui::Color32::from_gray(28)
-                            };
-                            ui.painter()
-                                .rect_filled(bar_rect, egui::Rounding::ZERO, col);
-                        }
-                        if resp.dragged() && abs < seq_steps {
-                            let delta = -resp.drag_delta().y / (bar_h * 8.0);
-                            let new_vel = (vel + delta).clamp(0.05, 1.0);
-                            vel_changed = Some((abs, new_vel));
-                        }
-                    }
-                    if let Some((step, new_vel)) = vel_changed {
-                        let s = app.state.read().clone();
-                        *app.state.write() = set_drum_step_velocity(s, *voice, step, new_vel);
-                    }
-                });
+            // Spacer width: M(10)+S(10)+label(SEQ_LABEL_W-20)+vol(SEQ_VOL_W)+nn(18)+spacing
+            // ≈ SEQ_LABEL_W + SEQ_LABEL_H + SEQ_VOL_W + SEQ_VOL_H + 20.0
+            let lane_spacer = SEQ_LABEL_W + SEQ_LABEL_H + SEQ_VOL_W + SEQ_VOL_H + 20.0;
 
-                // ── Probability lane ──────────────────────────────────────────
-                ui.horizontal(|ui| {
-                    ui.add_space(SEQ_LABEL_W + SEQ_LABEL_H + SEQ_VOL_W + SEQ_VOL_H + 2.0);
-                    let bar_h = 3.0_f32;
-                    let mut prob_changed: Option<(usize, f32)> = None;
-                    for i in 0..16usize {
-                        let abs = page_start + i;
-                        let prob = pattern.get(i).map(|s| s.probability).unwrap_or(1.0);
-                        let is_active = pattern.get(i).map(|s| s.active).unwrap_or(false);
-                        let (rect, resp) = ui.allocate_exact_size(
-                            egui::vec2(pad_px, bar_h + 2.0),
-                            egui::Sense::drag(),
+            // ── Velocity lane ─────────────────────────────────────────────────
+            ui.horizontal(|ui| {
+                ui.add_space(lane_spacer);
+                let bar_h = 5.0_f32;
+                let mut vel_changed: Option<(usize, f32)> = None;
+                for i in 0..16usize {
+                    let abs = page_start + i;
+                    let vel = pattern.get(i).map(|s| s.velocity).unwrap_or(1.0);
+                    let is_active = pattern.get(i).map(|s| s.active).unwrap_or(false);
+                    let (rect, resp) = ui
+                        .allocate_exact_size(egui::vec2(pad_px, bar_h + 2.0), egui::Sense::drag());
+                    if ui.is_rect_visible(rect) {
+                        let bar_rect = egui::Rect::from_min_size(
+                            egui::pos2(rect.min.x, rect.max.y - bar_h * vel),
+                            egui::vec2(pad_px - 1.0, bar_h * vel),
                         );
-                        if ui.is_rect_visible(rect) {
-                            let bar_rect = egui::Rect::from_min_size(
-                                egui::pos2(rect.min.x, rect.max.y - bar_h * prob),
-                                egui::vec2(pad_px - 1.0, bar_h * prob),
-                            );
-                            let col = if is_active {
-                                egui::Color32::from_gray(50)
-                            } else {
-                                egui::Color32::from_gray(20)
-                            };
-                            ui.painter()
-                                .rect_filled(bar_rect, egui::Rounding::ZERO, col);
-                        }
-                        if resp.dragged() && abs < seq_steps {
-                            let delta = -resp.drag_delta().y / (bar_h * 8.0);
-                            let new_prob = (prob + delta).clamp(0.0, 1.0);
-                            prob_changed = Some((abs, new_prob));
-                        }
+                        let col = if is_active {
+                            egui::Color32::from_gray(70)
+                        } else {
+                            egui::Color32::from_gray(28)
+                        };
+                        ui.painter()
+                            .rect_filled(bar_rect, egui::Rounding::ZERO, col);
                     }
-                    if let Some((step, new_prob)) = prob_changed {
-                        let s = app.state.read().clone();
-                        *app.state.write() = set_drum_step_probability(s, *voice, step, new_prob);
+                    if resp.dragged() && abs < voice_steps {
+                        let delta = -resp.drag_delta().y / (bar_h * 8.0);
+                        let new_vel = (vel + delta).clamp(0.05, 1.0);
+                        vel_changed = Some((abs, new_vel));
                     }
-                });
+                }
+                if let Some((step, new_vel)) = vel_changed {
+                    let s = app.state.read().clone();
+                    *app.state.write() = set_drum_step_velocity(s, *voice, step, new_vel);
+                }
+            });
+
+            // ── Probability lane ──────────────────────────────────────────────
+            ui.horizontal(|ui| {
+                ui.add_space(lane_spacer);
+                let bar_h = 3.0_f32;
+                let mut prob_changed: Option<(usize, f32)> = None;
+                for i in 0..16usize {
+                    let abs = page_start + i;
+                    let prob = pattern.get(i).map(|s| s.probability).unwrap_or(1.0);
+                    let is_active = pattern.get(i).map(|s| s.active).unwrap_or(false);
+                    let (rect, resp) = ui
+                        .allocate_exact_size(egui::vec2(pad_px, bar_h + 2.0), egui::Sense::drag());
+                    if ui.is_rect_visible(rect) {
+                        let bar_rect = egui::Rect::from_min_size(
+                            egui::pos2(rect.min.x, rect.max.y - bar_h * prob),
+                            egui::vec2(pad_px - 1.0, bar_h * prob),
+                        );
+                        let col = if is_active {
+                            egui::Color32::from_gray(50)
+                        } else {
+                            egui::Color32::from_gray(20)
+                        };
+                        ui.painter()
+                            .rect_filled(bar_rect, egui::Rounding::ZERO, col);
+                    }
+                    if resp.dragged() && abs < voice_steps {
+                        let delta = -resp.drag_delta().y / (bar_h * 8.0);
+                        let new_prob = (prob + delta).clamp(0.0, 1.0);
+                        prob_changed = Some((abs, new_prob));
+                    }
+                }
+                if let Some((step, new_prob)) = prob_changed {
+                    let s = app.state.read().clone();
+                    *app.state.write() = set_drum_step_probability(s, *voice, step, new_prob);
+                }
             });
         }
     });
