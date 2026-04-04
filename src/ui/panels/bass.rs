@@ -19,6 +19,7 @@ pub fn draw_bass(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         mut sub_osc_level,
         mut portamento_time,
         mut noise_mix,
+        mut osc_detune,
         waveform,
         filter_mode,
         mut supersaw_detune,
@@ -39,6 +40,7 @@ pub fn draw_bass(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             s.bass.sub_osc_level,
             s.bass.portamento_time,
             s.bass.noise_mix,
+            s.bass.osc_detune,
             s.bass.waveform.clone(),
             s.bass.filter_mode.clone(),
             s.bass.supersaw_detune,
@@ -184,6 +186,27 @@ pub fn draw_bass(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         if cy {
             cycle_paths.push("bass.noise_mix");
         }
+        // Detune: -1..+1 semitones — use DragValue since range is bipolar
+        ui.horizontal(|ui| {
+            ui.label(
+                egui::RichText::new("DETUNE")
+                    .color(theme::SMOKE)
+                    .monospace()
+                    .size(9.0),
+            );
+            if ui
+                .add(
+                    egui::DragValue::new(&mut osc_detune)
+                        .range(-1.0..=1.0)
+                        .speed(0.01)
+                        .fixed_decimals(2)
+                        .suffix(" st"),
+                )
+                .changed()
+            {
+                changed = true;
+            }
+        });
     };
     if use_sliders {
         ui.vertical(draw_bass_controls);
@@ -206,6 +229,7 @@ pub fn draw_bass(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             snap.bass.sub_osc_level = sub_osc_level;
             snap.bass.portamento_time = portamento_time;
             snap.bass.noise_mix = noise_mix;
+            snap.bass.osc_detune = osc_detune;
             // auto_lock: touching a free param immediately makes it UserOwned
             if auto_lock {
                 for p in [

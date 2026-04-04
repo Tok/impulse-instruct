@@ -107,6 +107,7 @@ pub struct BassState {
     pub sub_osc_level: f32,      // 0–1 sine one octave below, mixed before filter
     pub portamento_time: f32,    // 0–1 → 10ms–500ms slide/glide time
     pub noise_mix: f32,          // 0–1 white noise mixed into oscillator before filter
+    pub osc_detune: f32,         // semitone offset -1..+1, shifts entire oscillator pitch
 }
 
 impl Default for BassState {
@@ -126,6 +127,7 @@ impl Default for BassState {
             sub_osc_level: 0.0,
             portamento_time: 0.1, // ~60ms
             noise_mix: 0.0,
+            osc_detune: 0.0,
         }
     }
 }
@@ -322,6 +324,13 @@ pub struct FxState {
     pub phaser_rate: f32,          // 0–1 → 0.05–5 Hz LFO rate
     pub phaser_depth: f32,         // 0–1 sweep depth
     pub phaser_mix: f32,           // 0–1 wet/dry
+    pub waveshaper_drive: f32,     // 0–1 → soft-clip drive amount (pre-FX)
+    pub waveshaper_mix: f32,       // 0–1 wet/dry
+    pub ring_mod_freq: f32,        // 0–1 → 50–500 Hz carrier frequency
+    pub ring_mod_mix: f32,         // 0–1 wet/dry
+    pub eq_low_gain: f32,          // -1..+1 → -12..+12 dB low shelf (~200 Hz)
+    pub eq_mid_gain: f32,          // -1..+1 → -12..+12 dB mid peak (~1 kHz)
+    pub eq_hi_gain: f32,           // -1..+1 → -12..+12 dB high shelf (~5 kHz)
 }
 
 impl Default for FxState {
@@ -347,6 +356,13 @@ impl Default for FxState {
             phaser_rate: 0.3,
             phaser_depth: 0.5,
             phaser_mix: 0.0,
+            waveshaper_drive: 0.0,
+            waveshaper_mix: 0.0,
+            ring_mod_freq: 0.2,
+            ring_mod_mix: 0.0,
+            eq_low_gain: 0.0,
+            eq_mid_gain: 0.0,
+            eq_hi_gain: 0.0,
         }
     }
 }
@@ -417,7 +433,7 @@ impl Default for LlmState {
             context_max: 4096,
             locked_params: HashSet::new(),
             focused_params: HashSet::new(),
-            auto_jam: false,
+            auto_jam: true,
             heat: 0.4,
             conversation_mode: ConversationMode::Producer,
             active_style: None,
@@ -489,6 +505,11 @@ pub fn apply_llm_update(state: AppState, update: &serde_json::Value) -> AppState
             && let Some(v) = b.get("noise_mix").and_then(|v| v.as_f64())
         {
             s.bass.noise_mix = (v as f32).clamp(0.0, 1.0);
+        }
+        if !locked.contains("bass.osc_detune")
+            && let Some(v) = b.get("osc_detune").and_then(|v| v.as_f64())
+        {
+            s.bass.osc_detune = (v as f32).clamp(-1.0, 1.0);
         }
         if !locked.contains("bass.waveform")
             && let Some(w) = b.get("waveform").and_then(|v| v.as_str())
@@ -705,6 +726,49 @@ pub fn apply_llm_update(state: AppState, update: &serde_json::Value) -> AppState
             locked,
         );
         s.fx.phaser_mix = unlocked_f32(s.fx.phaser_mix, fx, "phaser_mix", "fx.phaser_mix", locked);
+        s.fx.waveshaper_drive = unlocked_f32(
+            s.fx.waveshaper_drive,
+            fx,
+            "waveshaper_drive",
+            "fx.waveshaper_drive",
+            locked,
+        );
+        s.fx.waveshaper_mix = unlocked_f32(
+            s.fx.waveshaper_mix,
+            fx,
+            "waveshaper_mix",
+            "fx.waveshaper_mix",
+            locked,
+        );
+        s.fx.ring_mod_freq = unlocked_f32(
+            s.fx.ring_mod_freq,
+            fx,
+            "ring_mod_freq",
+            "fx.ring_mod_freq",
+            locked,
+        );
+        s.fx.ring_mod_mix = unlocked_f32(
+            s.fx.ring_mod_mix,
+            fx,
+            "ring_mod_mix",
+            "fx.ring_mod_mix",
+            locked,
+        );
+        s.fx.eq_low_gain = unlocked_f32(
+            s.fx.eq_low_gain,
+            fx,
+            "eq_low_gain",
+            "fx.eq_low_gain",
+            locked,
+        );
+        s.fx.eq_mid_gain = unlocked_f32(
+            s.fx.eq_mid_gain,
+            fx,
+            "eq_mid_gain",
+            "fx.eq_mid_gain",
+            locked,
+        );
+        s.fx.eq_hi_gain = unlocked_f32(s.fx.eq_hi_gain, fx, "eq_hi_gain", "fx.eq_hi_gain", locked);
     }
 
     if let Some(lfo_arr) = update.get("lfo").and_then(|v| v.as_array()) {

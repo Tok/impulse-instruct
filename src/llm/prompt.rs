@@ -412,7 +412,8 @@ pub fn param_json_schema() -> serde_json::Value {
                     "volume":            { "type": "number", "minimum": 0.0, "maximum": 1.0 },
                     "sub_osc_level":     { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "sub-oscillator level: sine one octave below, 0=off 1=full" },
                     "portamento_time":   { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "slide/glide time: 0=10ms (snappy), 1=500ms (slow)" },
-                    "noise_mix":         { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "white noise mixed before filter: 0=off, 0.3=gritty, 1=full noise" }
+                    "noise_mix":         { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "white noise mixed before filter: 0=off, 0.3=gritty, 1=full noise" },
+                    "osc_detune":        { "type": "number", "minimum": -1.0, "maximum": 1.0, "description": "oscillator pitch offset in semitones: -1=down 1st, 0=center, +1=up 1st" }
                 },
                 "additionalProperties": false
             },
@@ -449,9 +450,16 @@ pub fn param_json_schema() -> serde_json::Value {
                     "chorus_rate":   { "type": "number", "minimum": 0.0, "maximum": 1.0 },
                     "chorus_depth":  { "type": "number", "minimum": 0.0, "maximum": 1.0 },
                     "chorus_mix":    { "type": "number", "minimum": 0.0, "maximum": 1.0 },
-                    "phaser_rate":   { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "phaser LFO rate: 0=0.05Hz (slow) 1=5Hz (fast)" },
-                    "phaser_depth":  { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "phaser sweep width" },
-                    "phaser_mix":    { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "phaser wet/dry" }
+                    "phaser_rate":        { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "phaser LFO rate: 0=0.05Hz (slow) 1=5Hz (fast)" },
+                    "phaser_depth":       { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "phaser sweep width" },
+                    "phaser_mix":         { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "phaser wet/dry" },
+                    "waveshaper_drive":   { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "pre-FX soft clip drive (0=clean, 1=heavy saturation)" },
+                    "waveshaper_mix":     { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+                    "ring_mod_freq":      { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "ring mod carrier: 0=50Hz (growl), 1=500Hz (metallic)" },
+                    "ring_mod_mix":       { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+                    "eq_low_gain":        { "type": "number", "minimum": -1.0, "maximum": 1.0, "description": "low shelf 200Hz gain: -1=-12dB, 0=flat, +1=+12dB" },
+                    "eq_mid_gain":        { "type": "number", "minimum": -1.0, "maximum": 1.0, "description": "mid peak 1kHz gain" },
+                    "eq_hi_gain":         { "type": "number", "minimum": -1.0, "maximum": 1.0, "description": "high shelf 5kHz gain" }
                 },
                 "additionalProperties": false
             },

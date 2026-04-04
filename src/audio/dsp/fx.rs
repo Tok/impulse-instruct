@@ -145,6 +145,149 @@ impl Chorus {
     }
 }
 
+// ─── 3-band parametric EQ (biquad shelves + peak) ─────────────────────────────
+
+/// One biquad filter in direct form II transposed.
+struct Biquad {
+    b0: f32,
+    b1: f32,
+    b2: f32,
+    a1: f32,
+    a2: f32,
+    s1: f32,
+    s2: f32,
+}
+
+impl Biquad {
+    fn process(&mut self, x: f32) -> f32 {
+        let y = self.b0 * x + self.s1;
+        self.s1 = self.b1 * x - self.a1 * y + self.s2;
+        self.s2 = self.b2 * x - self.a2 * y;
+        y
+    }
+
+    /// Low shelf at `fc` Hz with `gain_db` boost/cut.
+    fn low_shelf(fc: f32, gain_db: f32, sr: f32) -> Self {
+        let a = 10.0f32.powf(gain_db / 40.0);
+        let w0 = std::f32::consts::TAU * fc / sr;
+        let cos_w0 = w0.cos();
+        let alpha = w0.sin() / 2.0 * (a + 1.0 / a).sqrt();
+        let b0 = a * ((a + 1.0) - (a - 1.0) * cos_w0 + 2.0 * a.sqrt() * alpha);
+        let b1 = 2.0 * a * ((a - 1.0) - (a + 1.0) * cos_w0);
+        let b2 = a * ((a + 1.0) - (a - 1.0) * cos_w0 - 2.0 * a.sqrt() * alpha);
+        let a0 = (a + 1.0) + (a - 1.0) * cos_w0 + 2.0 * a.sqrt() * alpha;
+        let a1 = -2.0 * ((a - 1.0) + (a + 1.0) * cos_w0);
+        let a2 = (a + 1.0) + (a - 1.0) * cos_w0 - 2.0 * a.sqrt() * alpha;
+        Self {
+            b0: b0 / a0,
+            b1: b1 / a0,
+            b2: b2 / a0,
+            a1: a1 / a0,
+            a2: a2 / a0,
+            s1: 0.0,
+            s2: 0.0,
+        }
+    }
+
+    /// High shelf at `fc` Hz with `gain_db` boost/cut.
+    fn high_shelf(fc: f32, gain_db: f32, sr: f32) -> Self {
+        let a = 10.0f32.powf(gain_db / 40.0);
+        let w0 = std::f32::consts::TAU * fc / sr;
+        let cos_w0 = w0.cos();
+        let alpha = w0.sin() / 2.0 * (a + 1.0 / a).sqrt();
+        let b0 = a * ((a + 1.0) + (a - 1.0) * cos_w0 + 2.0 * a.sqrt() * alpha);
+        let b1 = -2.0 * a * ((a - 1.0) + (a + 1.0) * cos_w0);
+        let b2 = a * ((a + 1.0) + (a - 1.0) * cos_w0 - 2.0 * a.sqrt() * alpha);
+        let a0 = (a + 1.0) - (a - 1.0) * cos_w0 + 2.0 * a.sqrt() * alpha;
+        let a1 = 2.0 * ((a - 1.0) - (a + 1.0) * cos_w0);
+        let a2 = (a + 1.0) - (a - 1.0) * cos_w0 - 2.0 * a.sqrt() * alpha;
+        Self {
+            b0: b0 / a0,
+            b1: b1 / a0,
+            b2: b2 / a0,
+            a1: a1 / a0,
+            a2: a2 / a0,
+            s1: 0.0,
+            s2: 0.0,
+        }
+    }
+
+    /// Peaking EQ at `fc` Hz, bandwidth Q, with `gain_db` boost/cut.
+    fn peak(fc: f32, q: f32, gain_db: f32, sr: f32) -> Self {
+        let a = 10.0f32.powf(gain_db / 40.0);
+        let w0 = std::f32::consts::TAU * fc / sr;
+        let alpha = w0.sin() / (2.0 * q);
+        let b0 = 1.0 + alpha * a;
+        let b1 = -2.0 * w0.cos();
+        let b2 = 1.0 - alpha * a;
+        let a0 = 1.0 + alpha / a;
+        let a1 = -2.0 * w0.cos();
+        let a2 = 1.0 - alpha / a;
+        Self {
+            b0: b0 / a0,
+            b1: b1 / a0,
+            b2: b2 / a0,
+            a1: a1 / a0,
+            a2: a2 / a0,
+            s1: 0.0,
+            s2: 0.0,
+        }
+    }
+}
+
+/// 3-band EQ: low shelf 200 Hz · mid peak 1 kHz · high shelf 5 kHz.
+/// Coefficients are recomputed only when gain values change (per-block comparison).
+pub(super) struct EqBands {
+    low: Biquad,
+    mid: Biquad,
+    hi: Biquad,
+    sr: f32,
+    last_low: f32,
+    last_mid: f32,
+    last_hi: f32,
+}
+
+impl EqBands {
+    pub(super) fn new(sr: f32) -> Self {
+        Self {
+            low: Biquad::low_shelf(200.0, 0.0, sr),
+            mid: Biquad::peak(1000.0, 1.0, 0.0, sr),
+            hi: Biquad::high_shelf(5000.0, 0.0, sr),
+            sr,
+            last_low: 0.0,
+            last_mid: 0.0,
+            last_hi: 0.0,
+        }
+    }
+
+    /// `low/mid/hi_gain`: -1..+1 → -12..+12 dB.
+    pub(super) fn process(
+        &mut self,
+        input: f32,
+        low_gain: f32,
+        mid_gain: f32,
+        hi_gain: f32,
+    ) -> f32 {
+        // Recompute coefficients only when a band changes (avoids per-sample trig)
+        let low_db = low_gain * 12.0;
+        let mid_db = mid_gain * 12.0;
+        let hi_db = hi_gain * 12.0;
+        if (low_gain - self.last_low).abs() > 0.001 {
+            self.low = Biquad::low_shelf(200.0, low_db, self.sr);
+            self.last_low = low_gain;
+        }
+        if (mid_gain - self.last_mid).abs() > 0.001 {
+            self.mid = Biquad::peak(1000.0, 1.0, mid_db, self.sr);
+            self.last_mid = mid_gain;
+        }
+        if (hi_gain - self.last_hi).abs() > 0.001 {
+            self.hi = Biquad::high_shelf(5000.0, hi_db, self.sr);
+            self.last_hi = hi_gain;
+        }
+        self.hi.process(self.mid.process(self.low.process(input)))
+    }
+}
+
 // ─── Phaser (4-stage all-pass cascade) ────────────────────────────────────────
 
 pub(super) struct Phaser {

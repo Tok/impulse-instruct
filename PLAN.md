@@ -30,12 +30,12 @@ It can nail acid. Everything else is a lie. Fix that.
 ### Synthesis
 - [x] Supersaw oscillator (detune + unison count) — needed for trance, rave stabs, Reese bass
 - [x] Sub-oscillator (one octave below, mix control)
-- [ ] Oscillator detune (for that Reese bass detuned-saws feel)
+- [x] Oscillator detune (osc_detune ±1 semitone, shifts whole oscillator pitch)
 - [ ] FM pair (simple 2-op FM for metallic/bell tones)
 - [x] Noise source (noise_mix into bass oscillator before filter)
 - [x] Portamento / glide time (separate from TB-303 slide)
 - [x] Second filter mode: highpass + bandpass (current is always lowpass)
-- [ ] Waveshaper / soft clip (lighter distortion option)
+- [x] Waveshaper / soft clip (pre-FX tanh saturation insert)
 - [x] Chorus / ensemble effect (essential for 80s sounds, Reese bass)
 - [ ] Hoover lead — iconic early rave / hardcore sound: supersaw + aggressive highpass filter sweep
       triggered by pitch. Named after the vacuum cleaner drone on Human Resource "Dominator" (1991).
@@ -69,8 +69,8 @@ in the synth. Think of it as a modulation matrix row, not a per-voice feature.
 - [x] Bitcrush (bit depth + sample rate reduction — lo-fi, gabber, breakcore)
 - [x] Chorus / flanger as standalone FX slot
 - [x] Phaser — all-pass filter chain with LFO-swept center frequency; classic psychedelic sweep
-- [ ] Ring modulator — multiply signal by a carrier sine; metallic/robotic character
-- [ ] EQ (3-band: low shelf, mid peak, high shelf)
+- [x] Ring modulator — multiply signal by a carrier sine; metallic/robotic character
+- [x] EQ (3-band: low shelf 200Hz, mid peak 1kHz, high shelf 5kHz; biquad)
 - [ ] Compressor / limiter on master bus
 - [ ] Tape saturation / warmth (warm distortion with subtle wow/flutter)
 - [ ] FX routing: modular FX slots instead of fixed chain — each slot is an assignable module

@@ -24,6 +24,13 @@ pub fn draw_fx(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         mut ph_rate,
         mut ph_depth,
         mut ph_mix,
+        mut ws_drive,
+        mut ws_mix,
+        mut rm_freq,
+        mut rm_mix,
+        mut eq_low,
+        mut eq_mid,
+        mut eq_hi,
         locked,
         auto_lock,
     ) = {
@@ -44,6 +51,13 @@ pub fn draw_fx(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             s.fx.phaser_rate,
             s.fx.phaser_depth,
             s.fx.phaser_mix,
+            s.fx.waveshaper_drive,
+            s.fx.waveshaper_mix,
+            s.fx.ring_mod_freq,
+            s.fx.ring_mod_mix,
+            s.fx.eq_low_gain,
+            s.fx.eq_mid_gain,
+            s.fx.eq_hi_gain,
             s.llm.locked_params.clone(),
             s.llm.auto_lock_on_touch,
         )
@@ -164,6 +178,60 @@ pub fn draw_fx(app: &mut ImpulseApp, ui: &mut egui::Ui) {
 
         ui.group(|ui| {
             ui.label(
+                egui::RichText::new("WAVESHAPER")
+                    .color(theme::FOG)
+                    .monospace()
+                    .size(9.5),
+            );
+            if widgets::param_control(ui, "MIX", &mut ws_mix, ParamMode::Free, use_sliders).0 {
+                changed = true;
+            }
+            if widgets::param_control(ui, "DRIVE", &mut ws_drive, ParamMode::Free, use_sliders).0 {
+                changed = true;
+            }
+        });
+
+        ui.add_space(4.0);
+
+        ui.group(|ui| {
+            ui.label(
+                egui::RichText::new("RING MOD")
+                    .color(theme::FOG)
+                    .monospace()
+                    .size(9.5),
+            );
+            if widgets::param_control(ui, "MIX", &mut rm_mix, ParamMode::Free, use_sliders).0 {
+                changed = true;
+            }
+            if widgets::param_control(ui, "FREQ", &mut rm_freq, ParamMode::Free, use_sliders).0 {
+                changed = true;
+            }
+        });
+
+        ui.add_space(4.0);
+
+        ui.group(|ui| {
+            ui.label(
+                egui::RichText::new("EQ")
+                    .color(theme::FOG)
+                    .monospace()
+                    .size(9.5),
+            );
+            if widgets::param_control(ui, "LOW", &mut eq_low, ParamMode::Free, use_sliders).0 {
+                changed = true;
+            }
+            if widgets::param_control(ui, "MID", &mut eq_mid, ParamMode::Free, use_sliders).0 {
+                changed = true;
+            }
+            if widgets::param_control(ui, "HI", &mut eq_hi, ParamMode::Free, use_sliders).0 {
+                changed = true;
+            }
+        });
+
+        ui.add_space(4.0);
+
+        ui.group(|ui| {
+            ui.label(
                 egui::RichText::new("DRIVE / MASTER")
                     .color(theme::FOG)
                     .monospace()
@@ -195,6 +263,13 @@ pub fn draw_fx(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         s.fx.phaser_rate = ph_rate;
         s.fx.phaser_depth = ph_depth;
         s.fx.phaser_mix = ph_mix;
+        s.fx.waveshaper_drive = ws_drive;
+        s.fx.waveshaper_mix = ws_mix;
+        s.fx.ring_mod_freq = rm_freq;
+        s.fx.ring_mod_mix = rm_mix;
+        s.fx.eq_low_gain = eq_low;
+        s.fx.eq_mid_gain = eq_mid;
+        s.fx.eq_hi_gain = eq_hi;
         drop(s);
         app.push_audio_params();
     }

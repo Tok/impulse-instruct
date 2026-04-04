@@ -47,6 +47,7 @@ pub struct AudioParams {
     pub sub_osc_level: f32,       // 0–1 sub-oscillator mix level
     pub portamento_time_303: f32, // 0–1 → 10ms–500ms
     pub noise_mix_303: f32,       // 0–1 white noise into osc before filter
+    pub osc_detune_303: f32,      // semitone offset -1..+1
     pub distortion_303: f32,
     pub volume_303: f32,
     // 808 kick
@@ -105,6 +106,16 @@ pub struct AudioParams {
     pub phaser_rate: f32,
     pub phaser_depth: f32,
     pub phaser_mix: f32,
+    // Waveshaper
+    pub waveshaper_drive: f32,
+    pub waveshaper_mix: f32,
+    // Ring modulator
+    pub ring_mod_freq: f32,
+    pub ring_mod_mix: f32,
+    // 3-band EQ
+    pub eq_low_gain: f32,
+    pub eq_mid_gain: f32,
+    pub eq_hi_gain: f32,
     // Filter mode (0=LP, 1=HP, 2=BP)
     pub filter_mode: u8,
     // Sample rate
@@ -130,6 +141,7 @@ impl AudioParams {
             sub_osc_level: s.bass.sub_osc_level,
             portamento_time_303: s.bass.portamento_time,
             noise_mix_303: s.bass.noise_mix,
+            osc_detune_303: s.bass.osc_detune,
             distortion_303: s.bass.distortion,
             volume_303: s.bass.volume,
             kick808_pitch: s.kit_a.kick.pitch,
@@ -178,6 +190,13 @@ impl AudioParams {
             phaser_rate: s.fx.phaser_rate,
             phaser_depth: s.fx.phaser_depth,
             phaser_mix: s.fx.phaser_mix,
+            waveshaper_drive: s.fx.waveshaper_drive,
+            waveshaper_mix: s.fx.waveshaper_mix,
+            ring_mod_freq: s.fx.ring_mod_freq,
+            ring_mod_mix: s.fx.ring_mod_mix,
+            eq_low_gain: s.fx.eq_low_gain,
+            eq_mid_gain: s.fx.eq_mid_gain,
+            eq_hi_gain: s.fx.eq_hi_gain,
             filter_mode: match s.bass.filter_mode {
                 FilterMode::Lowpass => 0,
                 FilterMode::Highpass => 1,
@@ -308,8 +327,8 @@ impl Bass303 {
             self.freq = self.freq + (self.target_freq - self.freq) * (1.0 - slide_coeff);
         }
 
-        // Pitch modulation from LFO
-        let freq_mod = 2.0f32.powf(p.lfo_pitch_mod_st / 12.0);
+        // Pitch modulation: LFO + oscillator detune (both in semitones)
+        let freq_mod = 2.0f32.powf((p.lfo_pitch_mod_st + p.osc_detune_303) / 12.0);
 
         // Oscillator
         self.phase += self.freq * freq_mod / sr;
@@ -437,6 +456,9 @@ pub struct DspState {
     phaser: Phaser,
     bitcrush_held: f32,
     bitcrush_counter: u32,
+    // FX state
+    ring_mod_phase: f32,
+    eq: EqBands,
     // LFO state
     lfo_phases: [f32; 4],
     lfo_sh_held: [f32; 4],
@@ -470,6 +492,8 @@ impl DspState {
             delay: DelayLine::new(),
             chorus: Chorus::new(),
             phaser: Phaser::new(),
+            ring_mod_phase: 0.0,
+            eq: EqBands::new(sample_rate),
             bitcrush_held: 0.0,
             bitcrush_counter: 0,
             lfo_phases: [0.0; 4],
@@ -656,6 +680,15 @@ impl DspState {
                 + rim)
                 * 0.65;
 
+            // Waveshaper — pre-FX insert, adds harmonic saturation before time-based FX
+            let dry = if p.waveshaper_mix > 0.001 {
+                let drive = p.waveshaper_drive * 8.0 + 1.0;
+                let shaped = tanh(dry * drive) / tanh(drive);
+                dry * (1.0 - p.waveshaper_mix) + shaped * p.waveshaper_mix
+            } else {
+                dry
+            };
+
             // FX chain
             let reverb_wet = self.reverb.process(dry, p.reverb_size, p.reverb_damp);
             let reverbed = dry * (1.0 - p.reverb_mix) + reverb_wet * p.reverb_mix;
@@ -693,6 +726,25 @@ impl DspState {
             let delayed =
                 self.phaser
                     .process(delayed, p.phaser_rate, p.phaser_depth, p.phaser_mix, sr);
+
+            // Ring modulator
+            let delayed = if p.ring_mod_mix > 0.001 {
+                let freq_hz = 50.0 + p.ring_mod_freq * 450.0;
+                self.ring_mod_phase += freq_hz / sr;
+                if self.ring_mod_phase >= 1.0 {
+                    self.ring_mod_phase -= 1.0;
+                }
+                let carrier = (self.ring_mod_phase * std::f32::consts::TAU).sin();
+                let ring = delayed * carrier;
+                delayed * (1.0 - p.ring_mod_mix) + ring * p.ring_mod_mix
+            } else {
+                delayed
+            };
+
+            // 3-band EQ
+            let delayed = self
+                .eq
+                .process(delayed, p.eq_low_gain, p.eq_mid_gain, p.eq_hi_gain);
 
             // Master drive (soft clip)
             let driven = if p.distortion_drive > 0.01 {
