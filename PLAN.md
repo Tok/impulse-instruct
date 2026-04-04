@@ -41,7 +41,7 @@ It can nail acid. Everything else is a lie. Fix that.
 - [x] Second filter mode: highpass + bandpass (current is always lowpass)
 - [x] Waveshaper / soft clip (pre-FX tanh saturation insert)
 - [x] Chorus / ensemble effect (essential for 80s sounds, Reese bass)
-- [ ] Hoover lead — iconic early rave / hardcore sound: supersaw + aggressive highpass filter sweep
+- [x] Hoover lead — iconic early rave / hardcore sound: supersaw + aggressive highpass filter sweep
       triggered by pitch. Named after the vacuum cleaner drone on Human Resource "Dominator" (1991).
       Implementation: supersaw osc → highpass filter with fast attack env, slow cutoff sweep down,
       heavy resonance. Optionally add a pitch LFO for the "wailing" character. Expose as a voice
@@ -409,13 +409,13 @@ step patterns that are tonally coherent.
         can reason about chord progressions without needing to know the key
 
 ### Key / scale state
-- [ ] Add `root_note: u8` (MIDI 0–11, default 0 = C) and `scale: Scale` enum
+- [x] Add `root_note: u8` (MIDI 0–11, default 0 = C) and `scale: Scale` enum
       (Major, NaturalMinor, Dorian, Phrygian, Lydian, Mixolydian, Locrian,
       Pentatonic, Blues, Chromatic) to `AppState` / sequencer state
-- [ ] LLM can set `root_note` and `scale` via JSON schema
-- [ ] Sequencer step notes snap to the current scale (optional, toggleable)
-- [ ] UI: root note selector (piano key row) + scale selector dropdown in sequencer panel
-- [ ] Huth note colors on root/chord tones — highlight tonic, 3rd, 5th in their
+- [x] LLM can set `root_note` and `scale` via JSON schema
+- [x] Sequencer step notes snap to the current scale (optional, toggleable)
+- [x] UI: root note selector (piano key row) + scale selector dropdown in sequencer panel
+- [x] Huth note colors on root/chord tones — highlight tonic, 3rd, 5th in their
       respective colors so the grid is visually harmonic
 
 ### Style briefs

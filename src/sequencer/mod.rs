@@ -24,6 +24,10 @@ pub enum TriggerEvent {
         note: u8,
     },
     HooverGateOff,
+    An1xTrigger {
+        note: u8,
+    },
+    An1xGateOff,
 }
 
 // ─── Clock state (audio-thread local, not in shared AppState) ─────────────────
@@ -34,6 +38,7 @@ pub struct ClockState {
     pub current_step: usize,
     pub gate_counter: u32,        // samples remaining in bass gate
     pub gate_counter_hoover: u32, // samples remaining in hoover gate
+    pub gate_counter_an1x: u32,   // samples remaining in AN1X gate
 }
 
 impl Default for ClockState {
@@ -43,6 +48,7 @@ impl Default for ClockState {
             current_step: 0,
             gate_counter: 0,
             gate_counter_hoover: 0,
+            gate_counter_an1x: 0,
         }
     }
 }
@@ -73,6 +79,7 @@ pub fn advance_clock(
     let mut step = clock.current_step;
     let mut gate_counter = clock.gate_counter;
     let mut gate_counter_hoover = clock.gate_counter_hoover;
+    let mut gate_counter_an1x = clock.gate_counter_an1x;
 
     // Handle gate-off for bass
     if gate_counter > 0 {
@@ -91,6 +98,16 @@ pub fn advance_clock(
             gate_counter_hoover = 0;
         } else {
             gate_counter_hoover -= block_size as u32;
+        }
+    }
+
+    // Handle gate-off for AN1X
+    if gate_counter_an1x > 0 {
+        if block_size as u32 >= gate_counter_an1x {
+            events.push(TriggerEvent::An1xGateOff);
+            gate_counter_an1x = 0;
+        } else {
+            gate_counter_an1x -= block_size as u32;
         }
     }
 
@@ -143,9 +160,17 @@ pub fn advance_clock(
         // Hoover trigger
         let hs = seq.hoover_pattern.get(step).copied().unwrap_or_default();
         if hs.active {
-            let gate_samples = (sps * 0.75) as u32; // 3/4 step gate length
+            let gate_samples = (sps * 0.75) as u32;
             gate_counter_hoover = gate_samples;
             events.push(TriggerEvent::HooverTrigger { note: hs.note });
+        }
+
+        // AN1X trigger
+        let ax = seq.an1x_pattern.get(step).copied().unwrap_or_default();
+        if ax.active {
+            let gate_samples = (sps * ax.gate as f64) as u32;
+            gate_counter_an1x = gate_samples;
+            events.push(TriggerEvent::An1xTrigger { note: ax.note });
         }
     }
 
@@ -154,6 +179,7 @@ pub fn advance_clock(
         current_step: step,
         gate_counter,
         gate_counter_hoover,
+        gate_counter_an1x,
     };
     (new_clock, events)
 }

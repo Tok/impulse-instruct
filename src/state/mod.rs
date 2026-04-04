@@ -18,11 +18,17 @@ pub mod music;
 pub use music::note_in_scale;
 pub use music::{ROOT_NAMES, Scale, scale_degree, scale_notes, snap_to_scale};
 
+pub mod synth_types;
+pub use synth_types::{FilterMode, Waveform};
+
 pub mod hoover;
 pub use hoover::HooverState;
 
 pub mod noise;
 pub use noise::NoiseVoiceState;
+
+pub mod an1x;
+pub use an1x::{An1xLfoTarget, An1xState, An1xWave};
 
 pub const MAX_STEPS: usize = 64;
 
@@ -92,24 +98,12 @@ pub struct AppState {
     #[serde(default)]
     pub hoover: HooverState,
     #[serde(default)]
+    pub an1x: An1xState,
+    #[serde(default)]
     pub ui_prefs: UiPrefs,
 }
 
 // ─── Bass synth ───────────────────────────────────────────────────────────────
-
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
-pub enum Waveform {
-    Saw,
-    Square,
-    Supersaw, // detuned unison saws
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
-pub enum FilterMode {
-    Lowpass,
-    Highpass,
-    Bandpass,
-}
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct BassState {
@@ -185,97 +179,6 @@ impl Default for TB303Step {
     }
 }
 
-// Which drum machine each drum pattern lane belongs to
-#[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
-pub enum DrumVoice {
-    Kick808,
-    Snare808,
-    HihatClosed808,
-    HihatOpen808,
-    TomHi808,
-    TomMid808,
-    TomLo808,
-    Kick909,
-    Snare909,
-    HihatClosed909,
-    HihatOpen909,
-    Clap909,
-    Rim909,
-}
-
-impl DrumVoice {
-    pub const ALL: &'static [DrumVoice] = &[
-        DrumVoice::Kick808,
-        DrumVoice::Snare808,
-        DrumVoice::HihatClosed808,
-        DrumVoice::HihatOpen808,
-        DrumVoice::TomHi808,
-        DrumVoice::TomMid808,
-        DrumVoice::TomLo808,
-        DrumVoice::Kick909,
-        DrumVoice::Snare909,
-        DrumVoice::HihatClosed909,
-        DrumVoice::HihatOpen909,
-        DrumVoice::Clap909,
-        DrumVoice::Rim909,
-    ];
-
-    pub fn label(&self) -> &'static str {
-        match self {
-            DrumVoice::Kick808 => "KA Kick",
-            DrumVoice::Snare808 => "KA Snare",
-            DrumVoice::HihatClosed808 => "KA CHH",
-            DrumVoice::HihatOpen808 => "KA OHH",
-            DrumVoice::TomHi808 => "KA Hi Tom",
-            DrumVoice::TomMid808 => "KA Mid Tom",
-            DrumVoice::TomLo808 => "KA Lo Tom",
-            DrumVoice::Kick909 => "KB Kick",
-            DrumVoice::Snare909 => "KB Snare",
-            DrumVoice::HihatClosed909 => "KB CHH",
-            DrumVoice::HihatOpen909 => "KB OHH",
-            DrumVoice::Clap909 => "KB Clap",
-            DrumVoice::Rim909 => "KB Rim",
-        }
-    }
-
-    pub fn get_volume(&self, s: &AppState) -> f32 {
-        match self {
-            DrumVoice::Kick808 => s.kit_a.kick.volume,
-            DrumVoice::Snare808 => s.kit_a.snare.volume,
-            DrumVoice::HihatClosed808 => s.kit_a.hihat_closed.volume,
-            DrumVoice::HihatOpen808 => s.kit_a.hihat_open.volume,
-            DrumVoice::TomHi808 => s.kit_a.tom_hi.volume,
-            DrumVoice::TomMid808 => s.kit_a.tom_mid.volume,
-            DrumVoice::TomLo808 => s.kit_a.tom_lo.volume,
-            DrumVoice::Kick909 => s.kit_b.kick.volume,
-            DrumVoice::Snare909 => s.kit_b.snare.volume,
-            DrumVoice::HihatClosed909 => s.kit_b.hihat_closed.volume,
-            DrumVoice::HihatOpen909 => s.kit_b.hihat_open.volume,
-            DrumVoice::Clap909 => s.kit_b.clap.volume,
-            DrumVoice::Rim909 => s.kit_b.rim.volume,
-        }
-    }
-
-    pub fn set_volume(self, mut s: AppState, v: f32) -> AppState {
-        match self {
-            DrumVoice::Kick808 => s.kit_a.kick.volume = v,
-            DrumVoice::Snare808 => s.kit_a.snare.volume = v,
-            DrumVoice::HihatClosed808 => s.kit_a.hihat_closed.volume = v,
-            DrumVoice::HihatOpen808 => s.kit_a.hihat_open.volume = v,
-            DrumVoice::TomHi808 => s.kit_a.tom_hi.volume = v,
-            DrumVoice::TomMid808 => s.kit_a.tom_mid.volume = v,
-            DrumVoice::TomLo808 => s.kit_a.tom_lo.volume = v,
-            DrumVoice::Kick909 => s.kit_b.kick.volume = v,
-            DrumVoice::Snare909 => s.kit_b.snare.volume = v,
-            DrumVoice::HihatClosed909 => s.kit_b.hihat_closed.volume = v,
-            DrumVoice::HihatOpen909 => s.kit_b.hihat_open.volume = v,
-            DrumVoice::Clap909 => s.kit_b.clap.volume = v,
-            DrumVoice::Rim909 => s.kit_b.rim.volume = v,
-        }
-        s
-    }
-}
-
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct SequencerState {
     pub bpm: f32,
@@ -287,6 +190,7 @@ pub struct SequencerState {
     pub drum_patterns: std::collections::HashMap<DrumVoice, Vec<Step>>,
     pub bass_pattern: Vec<TB303Step>,
     pub hoover_pattern: Vec<TB303Step>,
+    pub an1x_pattern: Vec<TB303Step>,
     /// Tonic note (0=C … 11=B). Used for scale highlighting and LLM music theory.
     pub root_note: u8,
     /// Active scale / mode for this pattern.
@@ -338,6 +242,7 @@ impl Default for SequencerState {
             drum_patterns,
             bass_pattern,
             hoover_pattern: vec![TB303Step::default(); MAX_STEPS],
+            an1x_pattern: vec![TB303Step::default(); MAX_STEPS],
             root_note: 9, // A — the starter pattern is A minor
             scale: Scale::NaturalMinor,
             scale_snap: false,

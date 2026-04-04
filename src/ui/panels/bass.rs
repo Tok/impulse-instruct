@@ -46,7 +46,7 @@ pub fn draw_bass(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             s.bass.fm_ratio,
             s.bass.fm_depth,
             s.bass.waveform.clone(),
-            s.bass.filter_mode.clone(),
+            s.bass.filter_mode,
             s.bass.supersaw_detune,
             s.bass.supersaw_voices,
             s.llm.locked_params.clone(),

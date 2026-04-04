@@ -2,8 +2,8 @@
 // Step sequencer panel.
 
 use crate::state::{
-    DrumVoice, MAX_STEPS, ROOT_NAMES, Scale, set_hoover_step, set_root_note, set_scale,
-    set_scale_snap, toggle_bass_accent, toggle_bass_slide, toggle_drum_step,
+    DrumVoice, MAX_STEPS, ROOT_NAMES, Scale, set_an1x_step, set_hoover_step, set_root_note,
+    set_scale, set_scale_snap, toggle_bass_accent, toggle_bass_slide, toggle_drum_step,
 };
 use crate::ui::{ImpulseApp, SEQ_LABEL_H, SEQ_LABEL_W, SEQ_VOL_H, SEQ_VOL_W, theme, widgets};
 
@@ -429,6 +429,59 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                             .map(|b| b.active)
                             .unwrap_or(false);
                         *app.state.write() = set_hoover_step(s, abs, note, !was);
+                    }
+                });
+            }
+        });
+
+        // ── AN1X row ──────────────────────────────────────────────────────────
+        let an1x_enabled = app.state.read().an1x.enabled;
+        let an1x_page: Vec<crate::state::TB303Step> = {
+            let s = app.state.read();
+            let end = (page_start + 16).min(s.sequencer.an1x_pattern.len());
+            s.sequencer.an1x_pattern[page_start..end].to_vec()
+        };
+        ui.horizontal(|ui| {
+            let label_color = if an1x_enabled {
+                theme::SMOKE
+            } else {
+                theme::PIT
+            };
+            ui.add_sized(
+                [SEQ_LABEL_W + SEQ_VOL_W + 8.0, SEQ_LABEL_H],
+                egui::Label::new(
+                    egui::RichText::new("AN1X")
+                        .color(label_color)
+                        .monospace()
+                        .size(8.5),
+                ),
+            );
+            for i in 0..16usize {
+                let abs = page_start + i;
+                beat_div(ui, i);
+                let is_active = an1x_page.get(i).map(|s| s.active).unwrap_or(false);
+                let is_current = abs == cursor;
+                let note_col = if is_active {
+                    an1x_page.get(i).map(|s| theme::note_color(s.note))
+                } else {
+                    None
+                };
+                ui.add_enabled_ui(abs < seq_steps, |ui| {
+                    if widgets::step_button(ui, is_active, is_current, 1.0, note_col, pad_px) {
+                        let s = app.state.read().clone();
+                        let note = s
+                            .sequencer
+                            .an1x_pattern
+                            .get(abs)
+                            .map(|b| b.note)
+                            .unwrap_or(57);
+                        let was = s
+                            .sequencer
+                            .an1x_pattern
+                            .get(abs)
+                            .map(|b| b.active)
+                            .unwrap_or(false);
+                        *app.state.write() = set_an1x_step(s, abs, note, !was);
                     }
                 });
             }

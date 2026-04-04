@@ -16,7 +16,9 @@ use fx::*;
 use voices::*;
 
 use crate::sequencer::TriggerEvent;
-use crate::state::{AppState, DrumVoice, FilterMode, LfoTarget, LfoWaveform, Waveform};
+use crate::state::{
+    An1xLfoTarget, An1xWave, AppState, DrumVoice, FilterMode, LfoTarget, LfoWaveform, Waveform,
+};
 
 // ─── AudioParams snapshot (copied from AppState for audio thread) ──────────────
 
@@ -149,6 +151,36 @@ pub struct AudioParams {
     pub hoover_pitch_lfo_rate: f32,
     pub hoover_pitch_lfo_depth: f32,
     pub hoover_volume: f32,
+    // AN1X voice
+    pub an1x_enabled: bool,
+    pub an1x_volume: f32,
+    pub an1x_osc1_wave: u8, // 0=Saw 1=Square 2=Triangle 3=Sine 4=Noise
+    pub an1x_osc1_level: f32,
+    pub an1x_osc2_wave: u8,
+    pub an1x_osc2_level: f32,
+    pub an1x_osc2_detune: f32, // 0–1 (0.5 = unison)
+    pub an1x_osc2_octave: i8,  // -2..+2
+    pub an1x_sub_level: f32,
+    pub an1x_ring_mod: bool,
+    pub an1x_filter_cutoff: f32,
+    pub an1x_filter_resonance: f32,
+    pub an1x_filter_mode: u8, // 0=LP 1=HP 2=BP
+    pub an1x_filter_key_track: f32,
+    pub an1x_filter_env_amount: f32,
+    pub an1x_filter_attack: f32,
+    pub an1x_filter_decay: f32,
+    pub an1x_filter_sustain: f32,
+    pub an1x_filter_release: f32,
+    pub an1x_amp_attack: f32,
+    pub an1x_amp_decay: f32,
+    pub an1x_amp_sustain: f32,
+    pub an1x_amp_release: f32,
+    pub an1x_lfo_rate_hz: f32, // Hz (0.01–20)
+    pub an1x_lfo_depth: f32,   // 0–1
+    pub an1x_lfo_target: u8,   // 0=Pitch 1=FilterCutoff 2=Amplitude
+    pub an1x_lfo_delay: f32,   // 0–1 → 0–4s fade-in
+    pub an1x_drift: f32,       // 0–1
+    pub an1x_glide_time: f32,  // 0–1 → 0–500ms
 }
 
 impl AudioParams {
@@ -288,9 +320,58 @@ impl AudioParams {
             hoover_resonance: s.hoover.resonance,
             hoover_detune: s.hoover.detune,
             hoover_voices: s.hoover.voices,
-            hoover_pitch_lfo_rate: s.hoover.pitch_lfo_rate, // Hz, stored directly
-            hoover_pitch_lfo_depth: s.hoover.pitch_lfo_depth, // semitones, stored directly
+            hoover_pitch_lfo_rate: s.hoover.pitch_lfo_rate,
+            hoover_pitch_lfo_depth: s.hoover.pitch_lfo_depth,
             hoover_volume: s.hoover.volume,
+            an1x_enabled: s.an1x.enabled,
+            an1x_volume: s.an1x.volume,
+            an1x_osc1_wave: match s.an1x.osc1_wave {
+                An1xWave::Saw => 0,
+                An1xWave::Square => 1,
+                An1xWave::Triangle => 2,
+                An1xWave::Sine => 3,
+                An1xWave::Noise => 4,
+            },
+            an1x_osc1_level: s.an1x.osc1_level,
+            an1x_osc2_wave: match s.an1x.osc2_wave {
+                An1xWave::Saw => 0,
+                An1xWave::Square => 1,
+                An1xWave::Triangle => 2,
+                An1xWave::Sine => 3,
+                An1xWave::Noise => 4,
+            },
+            an1x_osc2_level: s.an1x.osc2_level,
+            an1x_osc2_detune: s.an1x.osc2_detune,
+            an1x_osc2_octave: s.an1x.osc2_octave,
+            an1x_sub_level: s.an1x.sub_level,
+            an1x_ring_mod: s.an1x.ring_mod,
+            an1x_filter_cutoff: s.an1x.filter_cutoff,
+            an1x_filter_resonance: s.an1x.filter_resonance,
+            an1x_filter_mode: match s.an1x.filter_mode {
+                FilterMode::Lowpass => 0,
+                FilterMode::Highpass => 1,
+                FilterMode::Bandpass => 2,
+            },
+            an1x_filter_key_track: s.an1x.filter_key_track,
+            an1x_filter_env_amount: s.an1x.filter_env_amount,
+            an1x_filter_attack: s.an1x.filter_attack,
+            an1x_filter_decay: s.an1x.filter_decay,
+            an1x_filter_sustain: s.an1x.filter_sustain,
+            an1x_filter_release: s.an1x.filter_release,
+            an1x_amp_attack: s.an1x.amp_attack,
+            an1x_amp_decay: s.an1x.amp_decay,
+            an1x_amp_sustain: s.an1x.amp_sustain,
+            an1x_amp_release: s.an1x.amp_release,
+            an1x_lfo_rate_hz: 0.01 + s.an1x.lfo_rate * s.an1x.lfo_rate * 19.99,
+            an1x_lfo_depth: s.an1x.lfo_depth,
+            an1x_lfo_target: match s.an1x.lfo_target {
+                An1xLfoTarget::Pitch => 0,
+                An1xLfoTarget::FilterCutoff => 1,
+                An1xLfoTarget::Amplitude => 2,
+            },
+            an1x_lfo_delay: s.an1x.lfo_delay,
+            an1x_drift: s.an1x.drift,
+            an1x_glide_time: s.an1x.glide_time,
         }
     }
 }
@@ -523,6 +604,7 @@ pub struct DspState {
     eq: EqBands,
     noise_voice: NoiseVoice,
     hoover: HooverVoice,
+    an1x: An1xVoice,
     // LFO state
     lfo_phases: [f32; 4],
     lfo_sh_held: [f32; 4],
@@ -564,6 +646,7 @@ impl DspState {
             bitcrush_counter: 0,
             noise_voice: NoiseVoice::new(0x4015_EB3D),
             hoover: HooverVoice::new(),
+            an1x: An1xVoice::new(),
             lfo_phases: [0.0; 4],
             lfo_sh_held: [0.0; 4],
             lfo_noise: NoiseGen::new(0xCAFE_BABE),
@@ -608,6 +691,8 @@ impl DspState {
             BassGateOff => self.bass.gate_off(),
             HooverTrigger { note } => self.hoover.trigger(*note),
             HooverGateOff => self.hoover.gate_off(),
+            An1xTrigger { note } => self.an1x.trigger(*note, self.sample_rate, &self.params),
+            An1xGateOff => self.an1x.gate_off(),
         }
     }
 
@@ -746,6 +831,11 @@ impl DspState {
             } else {
                 0.0
             };
+            let an1x_out = if p.an1x_enabled {
+                self.an1x.process(sr, &p)
+            } else {
+                0.0
+            };
 
             // Scale mix to prevent clipping — summing voices without gain staging
             // causes hard clipping even with moderate individual volumes
@@ -764,8 +854,9 @@ impl DspState {
                 + clap
                 + rim
                 + noise_out
-                + hoover_out)
-                * 0.62;
+                + hoover_out
+                + an1x_out)
+                * 0.60;
 
             // Waveshaper — pre-FX insert, adds harmonic saturation before time-based FX
             let dry = if p.waveshaper_mix > 0.001 {

@@ -29,6 +29,10 @@ pub fn expand_sequencer_steps(state: AppState, new_steps: usize) -> AppState {
         for i in old_steps..new_steps {
             s.sequencer.hoover_pattern[i] = s.sequencer.hoover_pattern[i % old_steps];
         }
+        // Tile AN1X pattern
+        for i in old_steps..new_steps {
+            s.sequencer.an1x_pattern[i] = s.sequencer.an1x_pattern[i % old_steps];
+        }
         // Tile every drum voice
         let voices: Vec<DrumVoice> = s.sequencer.drum_patterns.keys().cloned().collect();
         for voice in voices {
@@ -173,6 +177,16 @@ pub fn set_hoover_step(state: AppState, step: usize, note: u8, active: bool) -> 
     s
 }
 
+/// Set an AN1X sequencer step.
+pub fn set_an1x_step(state: AppState, step: usize, note: u8, active: bool) -> AppState {
+    let mut s = state;
+    if step < s.sequencer.an1x_pattern.len() {
+        s.sequencer.an1x_pattern[step].active = active;
+        s.sequencer.an1x_pattern[step].note = note;
+    }
+    s
+}
+
 /// Apply the Hoover lead preset — sets canonical Hoover parameters.
 /// LLM trigger: "add a hoover", "rave lead", "dominator".
 pub fn apply_hoover_preset(state: AppState) -> AppState {
@@ -186,6 +200,39 @@ pub fn apply_hoover_preset(state: AppState) -> AppState {
     s.hoover.pitch_lfo_rate = 1.3;
     s.hoover.pitch_lfo_depth = 0.18;
     s.hoover.volume = 0.72;
+    s
+}
+
+/// Apply the BoC-style AN1X preset — warm detuned pad with slow attack and LFO drift.
+/// LLM trigger: "add a pad", "warm lead", "BoC", "ambient".
+pub fn apply_boc_preset(state: AppState) -> AppState {
+    let mut s = state;
+    s.an1x.enabled = true;
+    s.an1x.osc1_wave = crate::state::An1xWave::Saw;
+    s.an1x.osc2_wave = crate::state::An1xWave::Saw;
+    s.an1x.osc1_level = 0.8;
+    s.an1x.osc2_level = 0.65;
+    s.an1x.osc2_detune = 0.53; // ~+2.9 semitones — classic detuned beating
+    s.an1x.osc2_octave = 0;
+    s.an1x.sub_level = 0.15;
+    s.an1x.filter_cutoff = 0.42;
+    s.an1x.filter_resonance = 0.28;
+    s.an1x.filter_env_amount = 0.58; // gentle positive mod
+    s.an1x.filter_attack = 0.15;
+    s.an1x.filter_decay = 0.5;
+    s.an1x.filter_sustain = 0.35;
+    s.an1x.filter_release = 0.4;
+    s.an1x.amp_attack = 0.32; // slow pad attack
+    s.an1x.amp_decay = 0.55;
+    s.an1x.amp_sustain = 0.65;
+    s.an1x.amp_release = 0.5;
+    s.an1x.lfo_rate = 0.09; // ~0.12 Hz — barely perceptible breathing
+    s.an1x.lfo_depth = 0.12;
+    s.an1x.lfo_target = crate::state::An1xLfoTarget::Pitch;
+    s.an1x.lfo_delay = 0.4; // LFO fades in over ~1.6s after note is struck
+    s.an1x.drift = 0.14;
+    s.an1x.glide_time = 0.18;
+    s.an1x.volume = 0.75;
     s
 }
 
@@ -688,6 +735,137 @@ pub fn apply_llm_update(state: AppState, update: &serde_json::Value) -> AppState
             for (i, val) in arr.iter().enumerate().take(MAX_STEPS) {
                 if let Some(n) = val.as_u64() {
                     s.sequencer.hoover_pattern[i].note = n.clamp(0, 127) as u8;
+                }
+            }
+        }
+    }
+
+    if let Some(a) = update.get("an1x").and_then(|v| v.as_object()) {
+        if !locked.contains("an1x.enabled")
+            && let Some(v) = a.get("enabled").and_then(|v| v.as_bool())
+        {
+            s.an1x.enabled = v;
+        }
+        s.an1x.volume = unlocked_f32(s.an1x.volume, a, "volume", "an1x.volume", locked);
+        s.an1x.osc1_level = unlocked_f32(
+            s.an1x.osc1_level,
+            a,
+            "osc1_level",
+            "an1x.osc1_level",
+            locked,
+        );
+        s.an1x.osc2_level = unlocked_f32(
+            s.an1x.osc2_level,
+            a,
+            "osc2_level",
+            "an1x.osc2_level",
+            locked,
+        );
+        s.an1x.osc2_detune = unlocked_f32(
+            s.an1x.osc2_detune,
+            a,
+            "osc2_detune",
+            "an1x.osc2_detune",
+            locked,
+        );
+        s.an1x.sub_level = unlocked_f32(s.an1x.sub_level, a, "sub_level", "an1x.sub_level", locked);
+        s.an1x.filter_cutoff = unlocked_f32(
+            s.an1x.filter_cutoff,
+            a,
+            "filter_cutoff",
+            "an1x.filter_cutoff",
+            locked,
+        );
+        s.an1x.filter_resonance = unlocked_f32(
+            s.an1x.filter_resonance,
+            a,
+            "filter_resonance",
+            "an1x.filter_resonance",
+            locked,
+        );
+        s.an1x.filter_env_amount = unlocked_f32(
+            s.an1x.filter_env_amount,
+            a,
+            "filter_env_amount",
+            "an1x.filter_env_amount",
+            locked,
+        );
+        s.an1x.filter_attack = unlocked_f32(
+            s.an1x.filter_attack,
+            a,
+            "filter_attack",
+            "an1x.filter_attack",
+            locked,
+        );
+        s.an1x.filter_decay = unlocked_f32(
+            s.an1x.filter_decay,
+            a,
+            "filter_decay",
+            "an1x.filter_decay",
+            locked,
+        );
+        s.an1x.filter_sustain = unlocked_f32(
+            s.an1x.filter_sustain,
+            a,
+            "filter_sustain",
+            "an1x.filter_sustain",
+            locked,
+        );
+        s.an1x.filter_release = unlocked_f32(
+            s.an1x.filter_release,
+            a,
+            "filter_release",
+            "an1x.filter_release",
+            locked,
+        );
+        s.an1x.amp_attack = unlocked_f32(
+            s.an1x.amp_attack,
+            a,
+            "amp_attack",
+            "an1x.amp_attack",
+            locked,
+        );
+        s.an1x.amp_decay = unlocked_f32(s.an1x.amp_decay, a, "amp_decay", "an1x.amp_decay", locked);
+        s.an1x.amp_sustain = unlocked_f32(
+            s.an1x.amp_sustain,
+            a,
+            "amp_sustain",
+            "an1x.amp_sustain",
+            locked,
+        );
+        s.an1x.amp_release = unlocked_f32(
+            s.an1x.amp_release,
+            a,
+            "amp_release",
+            "an1x.amp_release",
+            locked,
+        );
+        s.an1x.lfo_rate = unlocked_f32(s.an1x.lfo_rate, a, "lfo_rate", "an1x.lfo_rate", locked);
+        s.an1x.lfo_depth = unlocked_f32(s.an1x.lfo_depth, a, "lfo_depth", "an1x.lfo_depth", locked);
+        s.an1x.lfo_delay = unlocked_f32(s.an1x.lfo_delay, a, "lfo_delay", "an1x.lfo_delay", locked);
+        s.an1x.drift = unlocked_f32(s.an1x.drift, a, "drift", "an1x.drift", locked);
+        s.an1x.glide_time = unlocked_f32(
+            s.an1x.glide_time,
+            a,
+            "glide_time",
+            "an1x.glide_time",
+            locked,
+        );
+        if !locked.contains("sequencer.an1x_steps")
+            && let Some(arr) = a.get("an1x_steps").and_then(|v| v.as_array())
+        {
+            for (i, val) in arr.iter().enumerate().take(MAX_STEPS) {
+                if let Some(on) = val.as_bool() {
+                    s.sequencer.an1x_pattern[i].active = on;
+                }
+            }
+        }
+        if !locked.contains("sequencer.an1x_notes")
+            && let Some(arr) = a.get("an1x_notes").and_then(|v| v.as_array())
+        {
+            for (i, val) in arr.iter().enumerate().take(MAX_STEPS) {
+                if let Some(n) = val.as_u64() {
+                    s.sequencer.an1x_pattern[i].note = n.clamp(0, 127) as u8;
                 }
             }
         }

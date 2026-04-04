@@ -233,6 +233,27 @@ LFO (global wireable modulators, 4 slots indexed 0–3):
                        "ReverbMix" | "DelayTime" | "DelayFeedback" | "ChorusMix" | "ChorusRate"
                        "Kick808Pitch" | "None"
 
+AN1X VOICE (warm VA pads / leads — Boards of Canada aesthetic):
+  an1x.enabled          — true/false
+  an1x.volume           — 0–1
+  an1x.osc1_level / osc2_level — oscillator mix levels 0–1
+  an1x.osc2_detune      — 0.5=unison, 0.52=subtle chorus, 0.6=wide detune, 1.0=+24st
+  an1x.sub_level        — sub-oscillator level (−1 octave square wave) 0–1
+  an1x.filter_cutoff    — 0–1 (0.3=dark, 0.6=open, 1.0=bright)
+  an1x.filter_resonance — 0–1
+  an1x.filter_env_amount — 0.5=none, >0.5=positive mod (filter opens on note), <0.5=negative
+  an1x.filter_attack/decay/sustain/release — filter ADSR, 0–1 → 1ms–8s
+  an1x.amp_attack       — 0–1; 0=instant, 0.3=~300ms pad attack, 0.6=slow swell
+  an1x.amp_decay/sustain/release — amplitude ADSR
+  an1x.lfo_rate         — 0.09=BoC breathing (~0.12Hz), 0.3=tremolo, 0.6=fast vibrato
+  an1x.lfo_depth        — 0–1 LFO depth
+  an1x.lfo_delay        — 0–1 → 0–4s LFO fade-in (vibrato deepens as note is held)
+  an1x.drift            — 0–1 pitch instability; 0.12=subtle analogue feel
+  an1x.glide_time       — 0–1 → 0–500ms pitch glide between notes
+  an1x.an1x_steps       — 16-element bool array: which steps trigger the AN1X
+  an1x.an1x_notes       — 16-element int array: MIDI note per step
+  LLM triggers: "add a pad", "warm lead", "BoC", "ambient melody", "detuned synth", "slow attack"
+
 HOOVER LEAD (supersaw + HP filter sweep):
   hoover.enabled        — true/false
   hoover.filter_start   — HP cutoff start position (0=200Hz, 1=8kHz; 0.8 is classic)
@@ -507,6 +528,37 @@ pub fn param_json_schema() -> serde_json::Value {
                     "volume":  { "type": "number", "minimum": 0.0, "maximum": 1.0 },
                     "color":   { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "0=white, 0.5=pink, 1=brown" },
                     "cutoff":  { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "LP filter cutoff, 0=200Hz, 1=20kHz" }
+                },
+                "additionalProperties": false
+            },
+            "an1x": {
+                "type": "object",
+                "description": "AN1X-style VA voice — warm detuned pads/leads (Boards of Canada aesthetic). LLM triggers: 'add a pad', 'warm lead', 'BoC', 'ambient', 'detuned'.",
+                "properties": {
+                    "enabled":            { "type": "boolean" },
+                    "volume":             { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+                    "osc1_level":         { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+                    "osc2_level":         { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+                    "osc2_detune":        { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "OSC2 detune: 0.5=unison, 0=−24st, 1=+24st" },
+                    "sub_level":          { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "sub-oscillator (−1 octave) level" },
+                    "filter_cutoff":      { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+                    "filter_resonance":   { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+                    "filter_env_amount":  { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "filter env mod: 0.5=none, <0.5=negative, >0.5=positive" },
+                    "filter_attack":      { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "filter ADSR attack 0-1 → 1ms-8s" },
+                    "filter_decay":       { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+                    "filter_sustain":     { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+                    "filter_release":     { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+                    "amp_attack":         { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "amp ADSR attack 0-1 → 1ms-8s. Use high values for slow pad attacks." },
+                    "amp_decay":          { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+                    "amp_sustain":        { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+                    "amp_release":        { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+                    "lfo_rate":           { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "LFO rate 0-1 → 0.01-20 Hz. 0.09=BoC breathing (~0.12Hz), 0.5=~5Hz vibrato." },
+                    "lfo_depth":          { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+                    "lfo_delay":          { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "LFO fade-in time: 0-1 → 0-4 s" },
+                    "drift":              { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "pitch instability depth — 0=stable, 1=max analogue wobble (±0.15 st)" },
+                    "glide_time":         { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "pitch glide: 0=instant, 1=500ms exponential slide" },
+                    "an1x_steps":         bool_array,
+                    "an1x_notes":         { "type": "array", "items": { "type": "integer", "minimum": 0, "maximum": 127 }, "maxItems": 64 }
                 },
                 "additionalProperties": false
             },

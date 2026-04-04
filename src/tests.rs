@@ -41,6 +41,7 @@ mod sequencer_tests {
             current_step: 3,
             gate_counter: 0,
             gate_counter_hoover: 0,
+            gate_counter_an1x: 0,
         };
 
         // Advance by slightly more than one step
@@ -67,6 +68,7 @@ mod sequencer_tests {
             current_step: 0,
             gate_counter: 0,
             gate_counter_hoover: 0,
+            gate_counter_an1x: 0,
         };
 
         let (_, events) = advance_clock(clock, &seq, sps + 1, 44100.0);

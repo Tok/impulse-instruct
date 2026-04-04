@@ -94,6 +94,7 @@ enum InstrumentKind {
     DrumKit808, // draw_kit_a()
     DrumKit909, // draw_kit_b()
     HooverLead, // draw_hoover()
+    An1xVoice,  // draw_an1x()
 }
 
 struct InstrumentSlot {
@@ -242,6 +243,10 @@ impl ImpulseApp {
                 InstrumentSlot {
                     label: "HOOVER",
                     kind: InstrumentKind::HooverLead,
+                },
+                InstrumentSlot {
+                    label: "AN1X",
+                    kind: InstrumentKind::An1xVoice,
                 },
             ],
             api_port,
@@ -593,6 +598,7 @@ impl eframe::App for ImpulseApp {
                         InstrumentKind::DrumKit808 => panels::draw_kit_a(self, ui),
                         InstrumentKind::DrumKit909 => panels::draw_kit_b(self, ui),
                         InstrumentKind::HooverLead => panels::draw_hoover(self, ui),
+                        InstrumentKind::An1xVoice => panels::draw_an1x(self, ui),
                     }
                 }
                 Panel::Fx => panels::draw_fx(self, ui),
