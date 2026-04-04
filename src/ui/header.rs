@@ -148,6 +148,43 @@ impl ImpulseApp {
                         }
                     });
 
+                    ui.menu_button(egui::RichText::new("Edit").monospace().size(10.0), |ui| {
+                        let can_undo = self.history.can_undo();
+                        let can_redo = self.history.can_redo();
+                        if ui
+                            .add_enabled(
+                                can_undo,
+                                egui::Button::new(
+                                    egui::RichText::new("Undo  Ctrl+Z").monospace().size(10.0),
+                                ),
+                            )
+                            .clicked()
+                        {
+                            let current = self.state.read().clone();
+                            if let Some(prev) = self.history.undo(current) {
+                                *self.state.write() = prev;
+                                self.push_audio_params();
+                            }
+                            ui.close_menu();
+                        }
+                        if ui
+                            .add_enabled(
+                                can_redo,
+                                egui::Button::new(
+                                    egui::RichText::new("Redo  Ctrl+Y").monospace().size(10.0),
+                                ),
+                            )
+                            .clicked()
+                        {
+                            let current = self.state.read().clone();
+                            if let Some(next) = self.history.redo(current) {
+                                *self.state.write() = next;
+                                self.push_audio_params();
+                            }
+                            ui.close_menu();
+                        }
+                    });
+
                     ui.menu_button(egui::RichText::new("Help").monospace().size(10.0), |ui| {
                         if ui
                             .button(egui::RichText::new("Preferences…").monospace().size(10.0))

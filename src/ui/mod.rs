@@ -134,6 +134,59 @@ impl MidiClockTracker {
     }
 }
 
+// ─── Undo / redo history ─────────────────────────────────────────────────────
+
+const HISTORY_DEPTH: usize = 50;
+
+/// Ring-buffer undo/redo stack for `AppState` snapshots.
+struct StateHistory {
+    past: std::collections::VecDeque<crate::state::AppState>,
+    future: Vec<crate::state::AppState>,
+}
+
+impl StateHistory {
+    fn new() -> Self {
+        Self {
+            past: std::collections::VecDeque::with_capacity(HISTORY_DEPTH),
+            future: Vec::new(),
+        }
+    }
+
+    /// Record a snapshot before a mutation. Clears redo stack.
+    fn push(&mut self, snapshot: crate::state::AppState) {
+        if self.past.len() >= HISTORY_DEPTH {
+            self.past.pop_front();
+        }
+        self.past.push_back(snapshot);
+        self.future.clear();
+    }
+
+    /// Undo: restore previous state, push current to redo stack.
+    /// Returns the state to restore, or None if nothing to undo.
+    fn undo(&mut self, current: crate::state::AppState) -> Option<crate::state::AppState> {
+        let prev = self.past.pop_back()?;
+        self.future.push(current);
+        Some(prev)
+    }
+
+    /// Redo: re-apply a previously undone change.
+    fn redo(&mut self, current: crate::state::AppState) -> Option<crate::state::AppState> {
+        let next = self.future.pop()?;
+        if self.past.len() >= HISTORY_DEPTH {
+            self.past.pop_front();
+        }
+        self.past.push_back(current);
+        Some(next)
+    }
+
+    fn can_undo(&self) -> bool {
+        !self.past.is_empty()
+    }
+    fn can_redo(&self) -> bool {
+        !self.future.is_empty()
+    }
+}
+
 // ─── Instrument slot system ───────────────────────────────────────────────────
 
 /// The synthesis character of an instrument module.
@@ -210,6 +263,8 @@ pub struct ImpulseApp {
     startup_done: bool,
     // MIDI clock BPM tracker — averages recent pulse intervals to derive tempo.
     midi_clock_tracker: MidiClockTracker,
+    // Undo/redo history — ring buffer of recent AppState snapshots.
+    history: StateHistory,
 }
 
 impl ImpulseApp {
@@ -340,10 +395,17 @@ impl ImpulseApp {
             prefs_tab: 0,
             startup_done: false,
             midi_clock_tracker: MidiClockTracker::new(),
+            history: StateHistory::new(),
         }
     }
 
     /// Push any pending audio param snapshot to the audio thread.
+    /// Record the current state to the undo history before a mutation.
+    pub(crate) fn push_history(&mut self) {
+        let snapshot = self.state.read().clone();
+        self.history.push(snapshot);
+    }
+
     fn push_audio_params(&mut self) {
         let params = {
             let s = self.state.read();
@@ -424,8 +486,14 @@ impl ImpulseApp {
                     });
                 }
             }
-            // Push updated params after LLM changed state
+            // Push updated params after LLM changed state; record the pre-update
+            // snapshot to the undo history so Ctrl+Z can revert an LLM response.
             if out.param_update.is_some() {
+                if let Some(before) = out.before_state {
+                    self.history.push(*before); // snapshot taken by LLM thread pre-update
+                } else {
+                    self.push_history(); // fallback: snapshot current state
+                }
                 self.push_audio_params();
             }
         }
@@ -536,6 +604,28 @@ impl eframe::App for ImpulseApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         self.drain_llm_outputs();
         self.drain_midi_events();
+
+        // ── Undo / redo (Ctrl+Z / Ctrl+Y or Ctrl+Shift+Z) ────────────────────
+        let undo = ctx.input_mut(|i| {
+            i.consume_key(egui::Modifiers::CTRL, egui::Key::Z) && !i.modifiers.shift
+        });
+        let redo = ctx.input_mut(|i| {
+            i.consume_key(egui::Modifiers::CTRL, egui::Key::Y)
+                || (i.consume_key(egui::Modifiers::CTRL | egui::Modifiers::SHIFT, egui::Key::Z))
+        });
+        if undo {
+            let current = self.state.read().clone();
+            if let Some(prev) = self.history.undo(current) {
+                *self.state.write() = prev;
+                self.push_audio_params();
+            }
+        } else if redo {
+            let current = self.state.read().clone();
+            if let Some(next) = self.history.redo(current) {
+                *self.state.write() = next;
+                self.push_audio_params();
+            }
+        }
 
         // ── Startup hook ──────────────────────────────────────────────────────
         // Fire once — right after the LLM transitions from initializing to ready.

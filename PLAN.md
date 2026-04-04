@@ -101,7 +101,7 @@ Ordered by value — tackle roughly from top to bottom.
 
 - [ ] **OSC support** — connect to Max/MSP, Ableton, TouchOSC. Pairs well with the MCP API.
 
-- [ ] **Stem export** — per-voice WAV files. Route each voice to its own output buffer before mix.
+- [x] **Stem export** — "Export Stems" in File menu; renders bass/kit_a/kit_b/amen/noise/hoover/an1x separately.
 
 - [ ] **Project versioning** — auto-save snapshots on pattern change, revert history (ring buffer of N states).
 

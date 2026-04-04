@@ -33,6 +33,7 @@ pub fn mock_response(prompt: &str, heat: f32) -> Result<LlmOutput> {
             is_jam: false,
             thinking: None,
             mc_line: None,
+            before_state: None,
         });
     }
 
@@ -184,6 +185,7 @@ pub fn mock_response(prompt: &str, heat: f32) -> Result<LlmOutput> {
         is_jam: false,
         thinking: None,
         mc_line: None,
+        before_state: None,
     })
 }
 
@@ -254,6 +256,7 @@ pub fn run_mock_loop(
                         is_jam: true,
                         thinking: None,
                         mc_line: None,
+                        before_state: None,
                     });
                 }
             }

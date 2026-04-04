@@ -45,6 +45,9 @@ pub struct LlmOutput {
     pub thinking: Option<String>,
     /// MC crowd line — spoken via TTS in MC/DJ mode; displayed in log with a marker.
     pub mc_line: Option<String>,
+    /// Snapshot of `AppState` taken immediately before the param update was applied.
+    /// The UI uses this to push a correct undo entry.
+    pub before_state: Option<Box<AppState>>,
 }
 
 // ─── LLM backend trait (swappable) ────────────────────────────────────────────
@@ -494,6 +497,7 @@ impl LlmBackend for LlamaServerBackend {
             is_jam: false,
             thinking,
             mc_line,
+            before_state: None, // set by run_llm_loop after apply_llm_update
         })
     }
 }
@@ -666,6 +670,7 @@ pub fn run_llm_loop(
             is_jam: false,
             thinking: None,
             mc_line: None,
+            before_state: None,
         });
         run_mock_loop(state, input_rx, output_tx);
         return;
@@ -706,6 +711,7 @@ pub fn run_llm_loop(
         is_jam: false,
         thinking: None,
         mc_line: None,
+        before_state: None,
     });
 
     while let Ok(input) = input_rx.recv() {
@@ -743,6 +749,7 @@ pub fn run_llm_loop(
                     is_jam: false,
                     thinking: None,
                     mc_line: None,
+                    before_state: None,
                 });
                 continue;
             }
@@ -767,6 +774,7 @@ pub fn run_llm_loop(
                     is_jam: false,
                     thinking: None,
                     mc_line: None,
+                    before_state: None,
                 });
                 continue;
             }
@@ -817,11 +825,15 @@ pub fn run_llm_loop(
                 let ctx = output.context_used;
                 let tthink = output.thinking.as_ref().map(|t| t.len() / 4).unwrap_or(0);
 
-                if let Some(ref update) = output.param_update {
+                let before_state = if let Some(ref update) = output.param_update {
                     let current = state.read().clone();
+                    let before = Box::new(current.clone());
                     let next = apply_llm_update(current, update);
                     *state.write() = next;
-                }
+                    Some(before)
+                } else {
+                    None
+                };
 
                 {
                     let mut s = state.write();
@@ -864,6 +876,7 @@ pub fn run_llm_loop(
                             is_jam: false,
                             thinking: None,
                             mc_line: None,
+                            before_state: None,
                         });
                     }
                 }
@@ -933,6 +946,7 @@ pub fn run_llm_loop(
                 }
                 let mut output = output;
                 output.is_jam = !one_shot;
+                output.before_state = before_state;
                 let _ = output_tx.try_send(output);
                 log::debug!("inference complete in {:.2}s", elapsed);
             }
@@ -958,6 +972,7 @@ pub fn run_llm_loop(
                 is_jam: true,
                 thinking: None,
                 mc_line: None,
+                before_state: None,
             });
         }
     }
