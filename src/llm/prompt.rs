@@ -446,7 +446,7 @@ Always start your response with "_thinking": one or two sentences explaining wha
 {comment_instruction}
 Only include fields you are actually changing.
 In MC or DJ mode you may add an optional "mc_line" string — a short crowd shout spoken via TTS, separate from "_comment". Keep it under 12 words. Use it for big moments, drops, or energy peaks.
-TOP-LEVEL SCHEMA — the only valid top-level keys are "_comment", "mc_line", "bass", "sequencer", "fx".
+TOP-LEVEL SCHEMA — the only valid top-level keys are "_comment", "_thinking", "mc_line", "bass", "sequencer", "fx", "hoover", "an1x", "free_eg", "noise", "kit_a", "kit_b", "euclidean".
   "bass" and "fx" are NEVER nested inside "sequencer".
   "fx" is NEVER nested inside "fx".
   Each key appears at most ONCE per object.

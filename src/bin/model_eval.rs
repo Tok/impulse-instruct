@@ -307,6 +307,73 @@ fn build_style_specs() -> Vec<StyleSpec> {
             ],
         },
         StyleSpec {
+            id: "baroque_bach",
+            prompt: "FULL RESET to Baroque Bach style — dense stepwise piano melody in D minor, \
+                     no drums, no bass, classical counterpoint phrasing",
+            checks: vec![
+                Check::bpm("bpm 70–130 (baroque range)", 70.0, 130.0),
+                Check::bool_eq("an1x enabled (piano voice)", |s| s.an1x.enabled, true),
+                Check::new("bass silent (no bass in baroque)", |s| {
+                    if s.bass.volume <= 0.05 {
+                        CheckResult::Pass
+                    } else {
+                        CheckResult::Fail(format!(
+                            "bass.volume={:.2} — baroque piano should have no bass line",
+                            s.bass.volume
+                        ))
+                    }
+                }),
+                Check::new("no kick drums", |s| {
+                    let kicks = s
+                        .sequencer
+                        .drum_patterns
+                        .get(&DrumVoice::Kick808)
+                        .map(|p| p.iter().filter(|step| step.active).count())
+                        .unwrap_or(0)
+                        + s.sequencer
+                            .drum_patterns
+                            .get(&DrumVoice::Kick909)
+                            .map(|p| p.iter().filter(|step| step.active).count())
+                            .unwrap_or(0);
+                    if kicks == 0 {
+                        CheckResult::Pass
+                    } else {
+                        CheckResult::Fail(format!(
+                            "{kicks} kick steps — Bach doesn't have a 4-on-floor"
+                        ))
+                    }
+                }),
+                Check::new("an1x melody is mostly stepwise", |s| {
+                    let notes: Vec<u8> = s
+                        .sequencer
+                        .an1x_pattern
+                        .iter()
+                        .filter(|step| step.active)
+                        .map(|step| step.note)
+                        .collect();
+                    if notes.len() < 3 {
+                        return CheckResult::Fail(format!(
+                            "only {} active an1x steps — need at least 3 for a phrase",
+                            notes.len()
+                        ));
+                    }
+                    let stepwise = notes
+                        .windows(2)
+                        .filter(|w| (w[0] as i16 - w[1] as i16).unsigned_abs() <= 5)
+                        .count();
+                    let ratio = stepwise as f32 / (notes.len() - 1) as f32;
+                    if ratio >= 0.55 {
+                        CheckResult::Pass
+                    } else {
+                        CheckResult::Fail(format!(
+                            "{:.0}% stepwise motion — want ≥55% (Bach uses conjunct voice leading)",
+                            ratio * 100.0
+                        ))
+                    }
+                }),
+            ],
+        },
+        StyleSpec {
             id: "detroit_techno",
             prompt: "FULL RESET to Detroit techno — raw, soulful, spacious, moderate reverb, no hoover",
             checks: vec![

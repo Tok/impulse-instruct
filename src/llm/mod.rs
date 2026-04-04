@@ -267,11 +267,20 @@ impl LlamaServerBackend {
         let url = format!("{}/health", base_url);
         let live = ureq::get(&url)
             .call()
-            .map(|r| r.status() == 200)
+            .map(|r| {
+                if r.status() != 200 {
+                    return false;
+                }
+                // Some llama-server builds return HTTP 200 while still loading the model
+                // (body: {"status":"loading model"}).  Only treat as live when body has "ok".
+                r.into_string()
+                    .map(|body| body.contains("\"ok\""))
+                    .unwrap_or(false)
+            })
             .unwrap_or(false);
         if !live {
             log::warn!(
-                "LlamaServerBackend::connect: server at {} not responding",
+                "LlamaServerBackend::connect: server at {} not ready (not ok)",
                 base_url
             );
         }

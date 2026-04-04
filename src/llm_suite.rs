@@ -82,7 +82,21 @@ fn infer_json(
     prompt: &str,
     heat: f32,
 ) -> Option<Value> {
-    backend.infer(system, prompt, heat).ok()?.param_update
+    match backend.infer(system, prompt, heat) {
+        Ok(out) => {
+            if out.param_update.is_none() {
+                eprintln!(
+                    "[llm-suite] infer OK but param_update=None (text: {:?})",
+                    out.text
+                );
+            }
+            out.param_update
+        }
+        Err(e) => {
+            eprintln!("[llm-suite] infer error: {e}");
+            None
+        }
+    }
 }
 
 /// Run `check` RUNS times; assert at least `required` pass.
@@ -376,6 +390,93 @@ fn venetian_snares_sets_high_bpm() {
     );
 }
 
+// ── Baroque / Bach style (REQUIRED_LOOSE) ────────────────────────────────────
+//
+// These test whether the model understands classical melodic structure:
+// stepwise voice leading, correct tempo range, no drums, piano-like voice.
+// A consistent FAIL means the model has no Baroque knowledge — the style
+// description in styles.json should be rewritten as explicit param instructions.
+
+/// A Bach melody should move mostly by step (conjunct motion ≤5 semitones).
+/// An acid line or random drum pattern fails; a genuine diatonic melody passes.
+#[test]
+fn bach_melody_is_mostly_stepwise() {
+    let Some((mut b, sys)) = setup() else { return };
+    assert_gate(
+        &mut b,
+        &sys,
+        "compose a Bach-style Baroque melody in D minor — \
+         dense stepwise piano melody, no drums, no bass",
+        0.3,
+        REQUIRED_LOOSE,
+        |j| {
+            // Accept notes from AN1X or bass melody voices
+            let notes_arr = at(j, "an1x.an1x_notes")
+                .or_else(|| at(j, "sequencer.bass_notes"))
+                .or_else(|| at(j, "hoover.hoover_notes"))
+                .and_then(|v| v.as_array());
+
+            let Some(arr) = notes_arr else {
+                return false; // no melody produced
+            };
+            let notes: Vec<u8> = arr
+                .iter()
+                .filter_map(|n| n.as_u64().map(|v| v as u8))
+                .collect();
+            if notes.len() < 3 {
+                return false; // need at least a short phrase
+            }
+            // Stepwise: consecutive interval ≤ 5 semitones (a 4th)
+            let stepwise = notes
+                .windows(2)
+                .filter(|w| (w[0] as i16 - w[1] as i16).unsigned_abs() <= 5)
+                .count();
+            stepwise as f64 / (notes.len() - 1) as f64 >= 0.55
+        },
+    );
+}
+
+/// Baroque Bach should NOT be at club tempo.
+/// If the model sets BPM at all, it must be ≤140.  Not setting BPM is fine.
+#[test]
+fn bach_not_club_tempo() {
+    let Some((mut b, sys)) = setup() else { return };
+    assert_gate(
+        &mut b,
+        &sys,
+        "compose a Bach-style Baroque melody in D minor",
+        0.3,
+        REQUIRED_LOOSE,
+        |j| match at(j, "sequencer.bpm").and_then(|v| v.as_f64()) {
+            None => true, // didn't touch BPM — fine for a melodic request
+            Some(bpm) => bpm <= 140.0,
+        },
+    );
+}
+
+/// Bach piano needs AN1X enabled; bass should be silent or absent.
+#[test]
+fn bach_enables_an1x_not_bass() {
+    let Some((mut b, sys)) = setup() else { return };
+    assert_gate(
+        &mut b,
+        &sys,
+        "FULL RESET to Baroque Bach piano — dense D minor melody, no drums, no bass",
+        0.3,
+        REQUIRED_LOOSE,
+        |j| {
+            let an1x_on = at(j, "an1x.enabled")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false);
+            // bass.volume should be zero or absent; reverb should be light
+            let bass_silent = at(j, "bass.volume")
+                .and_then(|v| v.as_f64())
+                .map_or(true, |v| v <= 0.1);
+            an1x_on && bass_silent
+        },
+    );
+}
+
 // ── Schema compliance (REQUIRED_TIGHT) ───────────────────────────────────────
 //
 // The model must always produce valid JSON within the known schema.
@@ -423,7 +524,21 @@ fn unit_params_always_in_range() {
 
 #[test]
 fn no_unknown_top_level_keys() {
-    let known = ["_comment", "bass", "sequencer", "fx"];
+    let known = [
+        "_thinking",
+        "_comment",
+        "mc_line",
+        "bass",
+        "sequencer",
+        "fx",
+        "hoover",
+        "an1x",
+        "free_eg",
+        "noise",
+        "kit_a",
+        "kit_b",
+        "euclidean",
+    ];
     let Some((mut b, sys)) = setup() else { return };
     for prompt in ["more acid", "darker", "add reverb", "remove kick"] {
         assert_gate(&mut b, &sys, prompt, 0.3, REQUIRED_TIGHT, |j| {
