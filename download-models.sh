@@ -67,17 +67,25 @@ else
   echo "Downloading ${HF_REPO} → ${OUTPUT_PATH}"
   echo ""
 
-  # ── Ensure huggingface-cli is available ────────────────────────────────────
-  if ! command -v huggingface-cli &>/dev/null; then
+  # ── Ensure hf / huggingface-cli is available ─────────────────────────────
+  if ! command -v hf &>/dev/null && ! command -v huggingface-cli &>/dev/null; then
     if command -v pip3 &>/dev/null || command -v pip &>/dev/null; then
-      echo "huggingface-cli not found — installing huggingface_hub…"
+      echo "hf not found — installing huggingface_hub…"
       pip install -q huggingface_hub 2>/dev/null || pip3 install -q huggingface_hub
     fi
   fi
 
-  if command -v huggingface-cli &>/dev/null; then
+  # Prefer 'hf' (new CLI name); fall back to 'huggingface-cli' (old name)
+  HF_CMD=""
+  if command -v hf &>/dev/null; then
+    HF_CMD="hf"
+  elif command -v huggingface-cli &>/dev/null; then
+    HF_CMD="huggingface-cli"
+  fi
+
+  if [[ -n "$HF_CMD" ]]; then
     # Check login; prompt if not authenticated
-    if ! huggingface-cli whoami &>/dev/null; then
+    if ! $HF_CMD whoami &>/dev/null; then
       echo ""
       echo "  ════════════════════════════════════════════════════"
       echo "   HuggingFace login required"
@@ -90,12 +98,11 @@ else
       echo "   3. Paste it below when prompted."
       echo "  ════════════════════════════════════════════════════"
       echo ""
-      huggingface-cli login || { echo "Login cancelled. Re-run after logging in."; exit 1; }
+      $HF_CMD login || { echo "Login cancelled. Re-run after logging in."; exit 1; }
     fi
-    echo "Using huggingface-cli…"
-    huggingface-cli download "$HF_REPO" "$MODEL_FILE" \
-      --local-dir "$MODEL_DIR" \
-      --local-dir-use-symlinks False
+    echo "Using ${HF_CMD}…"
+    $HF_CMD download "$HF_REPO" "$MODEL_FILE" \
+      --local-dir "$MODEL_DIR"
 
   # Last resort: direct wget/curl from HuggingFace CDN
   else
@@ -108,7 +115,7 @@ else
     elif command -v curl &>/dev/null; then
       curl -L --continue-at - -o "$OUTPUT_PATH" "$HF_URL"
     else
-      echo "ERROR: No download tool found (need huggingface-cli, wget, or curl)."
+      echo "ERROR: No download tool found (need hf / huggingface-cli, wget, or curl)."
       exit 1
     fi
   fi
