@@ -94,7 +94,7 @@ Ordered by value — tackle roughly from top to bottom.
 
 ### Near-term
 
-- [ ] **MIDI clock in** — slave BPM to external hardware or DAW.
+- [x] **MIDI clock in** — 8-pulse rolling average, SYNC button in BPM row, resets on Start/Stop.
 
 - [ ] **Codecov integration** — before publishing to GitHub.
       See: https://github.com/codecov/example-rust
