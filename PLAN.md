@@ -86,10 +86,11 @@ Ordered by value — tackle roughly from top to bottom.
       ("T-Pain" jungle toaster effect). Pure Rust: autocorrelation pitch detect → snap via
       `snap_to_scale` → linear-interpolation resample. "Pitch snap" toggle in TTS settings.
 
-- [ ] **Amen break sampler voice** — load a WAV, pitch + time-stretch for real jungle/DnB.
-      The only way to fully nail the amen aesthetic without synthesis approximation.
+- [x] **Amen break sampler voice** — DrumVoice::Amen in sequencer, AmenVoice DSP with linear-interp
+      playback, AudioCommand::LoadSampler, AMEN tab with path/pitch/volume/loop UI.
+      (Pitch-shift only — duration changes with pitch; rubberband time-stretch is a later item.)
 
-- [ ] **Envelope visualization in bass panel** — decay-only simplified ADSR shape (the AN1X panel already has the full visualizer; bass panel is the gap).
+- [x] **Envelope visualization in bass panel** — decay_display widget already in bass.rs:343.
 
 ### Near-term
 

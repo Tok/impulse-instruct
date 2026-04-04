@@ -303,6 +303,9 @@ pub struct SequencerState {
     pub muted_drums: std::collections::HashSet<DrumVoice>,
     /// Drum voices in solo mode. When non-empty, only these voices trigger.
     pub soloed_drums: std::collections::HashSet<DrumVoice>,
+    /// When true, BPM is slaved to incoming MIDI clock pulses (0xF8).
+    #[serde(default)]
+    pub midi_clock_sync: bool,
 }
 
 impl Default for SequencerState {
@@ -364,6 +367,7 @@ impl Default for SequencerState {
             an1x_steps: 16,
             muted_drums: std::collections::HashSet::new(),
             soloed_drums: std::collections::HashSet::new(),
+            midi_clock_sync: false,
         }
     }
 }

@@ -99,22 +99,50 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                 .monospace()
                 .size(9.0),
         );
-        let mut bpm = app.state.read().sequencer.bpm;
+        let (mut bpm, sync_on) = {
+            let s = app.state.read();
+            (s.sequencer.bpm, s.sequencer.midi_clock_sync)
+        };
+        // Dim the slider when MIDI sync is active (BPM is externally controlled).
+        let slider_col = if sync_on { theme::FOG } else { theme::IRON };
+        ui.visuals_mut().selection.bg_fill = slider_col;
         let resp = ui.add(
-            egui::Slider::new(&mut bpm, 40.0..=250.0)
+            egui::Slider::new(&mut bpm, 40.0..=300.0)
                 .show_value(false)
                 .trailing_fill(true),
         );
-        if resp.changed() {
+        if resp.changed() && !sync_on {
             app.state.write().sequencer.bpm = bpm;
             app.push_audio_params();
         }
         ui.label(
             egui::RichText::new(format!("{:.0}", bpm))
-                .color(theme::FOG)
+                .color(if sync_on { theme::IRON } else { theme::FOG })
                 .monospace()
                 .size(9.0),
         );
+        // MIDI clock sync toggle
+        let mut sync = sync_on;
+        let sync_color = if sync_on {
+            egui::Color32::from_rgb(80, 180, 80)
+        } else {
+            theme::SMOKE
+        };
+        if ui
+            .add(
+                egui::Button::new(
+                    egui::RichText::new("SYNC")
+                        .monospace()
+                        .size(8.5)
+                        .color(sync_color),
+                )
+                .min_size(egui::Vec2::new(34.0, 16.0)),
+            )
+            .clicked()
+        {
+            sync = !sync;
+            app.state.write().sequencer.midi_clock_sync = sync;
+        }
     });
 
     // Swing row

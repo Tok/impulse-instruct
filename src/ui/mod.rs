@@ -84,6 +84,56 @@ pub(crate) const SEQ_LABEL_H: f32 = 22.0;
 pub(crate) const SEQ_VOL_W: f32 = 52.0;
 pub(crate) const SEQ_VOL_H: f32 = 14.0;
 
+// ─── MIDI clock BPM tracker ──────────────────────────────────────────────────
+
+/// Derives BPM from incoming MIDI clock pulses (24 per quarter note).
+/// Averages the last 8 inter-pulse intervals for stability.
+struct MidiClockTracker {
+    last: Option<std::time::Instant>,
+    intervals: [f64; 8],
+    head: usize,
+    count: usize,
+}
+
+impl MidiClockTracker {
+    fn new() -> Self {
+        Self {
+            last: None,
+            intervals: [0.0; 8],
+            head: 0,
+            count: 0,
+        }
+    }
+
+    /// Call on each 0xF8 pulse. Returns computed BPM if stable, else None.
+    fn on_clock(&mut self) -> Option<f32> {
+        let now = std::time::Instant::now();
+        if let Some(last) = self.last {
+            let secs = now.duration_since(last).as_secs_f64();
+            // 10ms = 300 BPM, 300ms ≈ 8 BPM — ignore outliers outside this range.
+            if secs > 0.01 && secs < 0.30 {
+                self.intervals[self.head] = secs;
+                self.head = (self.head + 1) % 8;
+                if self.count < 8 {
+                    self.count += 1;
+                }
+                let avg = self.intervals[..self.count].iter().sum::<f64>() / self.count as f64;
+                let bpm = 60.0 / (avg * 24.0);
+                self.last = Some(now);
+                return Some(bpm as f32);
+            }
+        }
+        self.last = Some(now);
+        None
+    }
+
+    fn reset(&mut self) {
+        self.last = None;
+        self.count = 0;
+        self.head = 0;
+    }
+}
+
 // ─── Instrument slot system ───────────────────────────────────────────────────
 
 /// The synthesis character of an instrument module.
@@ -158,6 +208,8 @@ pub struct ImpulseApp {
     // log_level_idx now persisted in AppState.ui_prefs.log_level_idx
     // Startup hook: fire a prompt once the LLM transitions from initializing to ready
     startup_done: bool,
+    // MIDI clock BPM tracker — averages recent pulse intervals to derive tempo.
+    midi_clock_tracker: MidiClockTracker,
 }
 
 impl ImpulseApp {
@@ -287,6 +339,7 @@ impl ImpulseApp {
             show_sysinfo: false,
             prefs_tab: 0,
             startup_done: false,
+            midi_clock_tracker: MidiClockTracker::new(),
         }
     }
 
@@ -442,15 +495,26 @@ impl ImpulseApp {
 
                 // MIDI transport — Start/Stop control the sequencer.
                 MidiEvent::Start => {
+                    self.midi_clock_tracker.reset();
                     let s = self.state.read().clone();
                     if !s.sequencer.running {
                         *self.state.write() = toggle_sequencer_running(s);
                     }
                 }
                 MidiEvent::Stop => {
+                    self.midi_clock_tracker.reset();
                     let s = self.state.read().clone();
                     if s.sequencer.running {
                         *self.state.write() = toggle_sequencer_running(s);
+                    }
+                }
+
+                // MIDI clock — derive BPM from pulse timing when sync is on.
+                MidiEvent::Clock => {
+                    let sync_on = self.state.read().sequencer.midi_clock_sync;
+                    if sync_on && let Some(bpm) = self.midi_clock_tracker.on_clock() {
+                        self.state.write().sequencer.bpm = bpm.clamp(20.0, 300.0);
+                        self.push_audio_params();
                     }
                 }
 
