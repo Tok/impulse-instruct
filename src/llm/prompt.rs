@@ -141,8 +141,9 @@ pub fn build_system_prompt(state: &AppState) -> String {
                     _ => String::new(),
                 };
                 format!(
-                    "\n═══ ACTIVE STYLE ═══\n\n{}{}{}\nUse this as your creative brief. \
-                     Evolve the current sound toward this aesthetic — don't reset everything at once.\n",
+                    "\n═══ ACTIVE STYLE ═══\n\n{}{}{}\nThis is your creative brief. \
+                     RESET parameters to fully match this genre — set BPM, patterns, synth params, \
+                     and FX from scratch. Do not carry over settings from a previous style.\n",
                     text, seed, tonality
                 )
             })
@@ -316,17 +317,20 @@ AN1X VOICE (warm VA pads / leads — Boards of Canada aesthetic):
   an1x.an1x_notes       — 16-element int array: MIDI note per step
   LLM triggers: "add a pad", "warm lead", "BoC", "ambient melody", "detuned synth", "slow attack"
 
-HOOVER LEAD (supersaw + HP filter sweep):
-  hoover.enabled        — true/false
-  hoover.filter_start   — HP cutoff start position (0=200Hz, 1=8kHz; 0.8 is classic)
-  hoover.sweep_time     — filter sweep duration 0–1 (maps to 0.1–4 s; 0.13=~550ms)
-  hoover.resonance      — resonance 0–1 (0.76 = canonical Hoover character)
-  hoover.detune         — supersaw spread (0=mono, 0.42=lush shimmer)
+HOOVER LEAD (supersaw + resonant LP filter sweep — dominator/rave character):
+  hoover.enabled        — true/false — MUST BE true for the hoover to sound at all
+  hoover.filter_start   — LP cutoff openness at note trigger (0=100Hz dark, 0.88=12kHz wide open)
+                          Sweeps DOWN from this value over sweep_time. Higher = brighter start.
+                          Classic dominator: 0.85–0.92
+  hoover.sweep_time     — filter sweep duration 0–1 (maps to 0.1–4 s; 0.2=~850ms)
+  hoover.resonance      — resonance 0–1 (0.82 = moving resonant peak = hoover character)
+  hoover.detune         — supersaw spread semitones (0=mono, 0.45=lush shimmer)
   hoover.voices         — unison count 2–7 (5 is standard)
   hoover.volume         — 0–1
   hoover.hoover_steps   — 16-element bool array: which steps trigger the Hoover
   hoover.hoover_notes   — 16-element int array: MIDI note per step
-  LLM triggers: "add a hoover", "rave lead", "hardcore lead", "early rave"
+  AUTHENTIC DOMINATOR: enabled=true, filter_start=0.88, resonance=0.82, sweep_time=0.2, detune=0.45, voices=5
+  LLM triggers: "add a hoover", "rave lead", "dominator", "hardcore lead", "early rave"
 
 ═══ RHYTHM BASICS ═══
 

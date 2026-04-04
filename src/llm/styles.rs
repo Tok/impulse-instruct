@@ -120,6 +120,11 @@ pub struct Style {
     /// Suggested scale name for this genre (e.g. "minor", "dorian", "chromatic").
     #[serde(default)]
     pub suggested_scale: Option<String>,
+    /// Immediate parameter reset applied when style is selected (before LLM fires).
+    /// Same format as LLM JSON output — applied via `apply_llm_update`.
+    /// Establishes a style baseline so the LLM doesn't inherit a previous style's settings.
+    #[serde(default)]
+    pub baseline_params: Option<serde_json::Value>,
 }
 
 pub struct StyleCatalog(Vec<Style>);

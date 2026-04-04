@@ -124,6 +124,30 @@ pub fn mock_response(prompt: &str, heat: f32) -> Result<LlmOutput> {
             "_comment": "FX stripped back",
             "fx": { "reverb_mix": 0.0, "delay_mix": 0.0 }
         })
+    } else if prompt_lower.contains("hoover")
+        || prompt_lower.contains("dominator")
+        || prompt_lower.contains("rave")
+        || prompt_lower.contains("early hardcore")
+        || prompt_lower.contains("belgian")
+    {
+        serde_json::json!({
+            "_comment": "hoover enabled — dominator/rave character",
+            "hoover": { "enabled": true, "filter_start": 0.88, "resonance": 0.82, "sweep_time": 0.85, "detune": 0.45, "voices": 5, "volume": 0.75 },
+            "bass": { "cutoff": 0.55, "resonance": 0.6, "env_mod": 0.55, "decay": 0.4, "volume": 0.8 },
+            "sequencer": { "bpm": 155.0 },
+            "fx": { "reverb_mix": 0.15, "delay_mix": 0.1 }
+        })
+    } else if prompt_lower.contains("ambient")
+        || prompt_lower.contains("drone")
+        || prompt_lower.contains("pad")
+        || prompt_lower.contains("atmospheric")
+    {
+        serde_json::json!({
+            "_comment": "ambient — long reverb tails, slow filter, minimal drums",
+            "bass": { "cutoff": 0.55, "resonance": 0.2, "env_mod": 0.1, "decay": 0.85, "volume": 0.6 },
+            "fx": { "reverb_mix": 0.8, "reverb_size": 0.9, "delay_mix": 0.4, "delay_feedback": 0.65 },
+            "sequencer": { "bpm": 100.0 }
+        })
     } else {
         // Jam mode — heat controls how dramatic the mutation is
         let ms = std::time::SystemTime::now()

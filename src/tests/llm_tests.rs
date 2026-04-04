@@ -254,6 +254,197 @@ mod music_theory_tests {
 }
 
 #[cfg(test)]
+mod style_tests {
+    use crate::llm::styles::StyleCatalog;
+    use crate::state::{AppState, apply_llm_update};
+
+    // Helper: apply a style's baseline_params to a fresh AppState
+    fn apply_baseline(style_id: &str) -> AppState {
+        let catalog = StyleCatalog::get();
+        let style = catalog
+            .find_by_id(style_id)
+            .unwrap_or_else(|| panic!("style '{}' not found in catalog", style_id));
+        let state = AppState::default();
+        match &style.baseline_params {
+            Some(bp) => apply_llm_update(state, bp),
+            None => state,
+        }
+    }
+
+    #[test]
+    fn all_styles_have_baseline_params() {
+        let catalog = StyleCatalog::get();
+        let missing: Vec<&str> = catalog
+            .styles()
+            .iter()
+            .filter(|s| s.baseline_params.is_none())
+            .map(|s| s.id.as_str())
+            .collect();
+        assert!(
+            missing.is_empty(),
+            "styles missing baseline_params: {:?}",
+            missing
+        );
+    }
+
+    #[test]
+    fn acid_classic_baseline_is_acid_character() {
+        let state = apply_baseline("acid_classic");
+        assert!(
+            state.bass.resonance >= 0.7,
+            "acid needs high resonance (≥0.7), got {}",
+            state.bass.resonance
+        );
+        assert!(
+            state.bass.env_mod >= 0.6,
+            "acid needs high env_mod (≥0.6), got {}",
+            state.bass.env_mod
+        );
+        assert!(
+            state.sequencer.bpm >= 112.0 && state.sequencer.bpm <= 130.0,
+            "acid bpm should be 112–130, got {}",
+            state.sequencer.bpm
+        );
+        assert!(!state.hoover.enabled, "acid should not have hoover enabled");
+    }
+
+    #[test]
+    fn breakcore_baseline_has_extreme_bpm() {
+        let state = apply_baseline("breakcore");
+        assert!(
+            state.sequencer.bpm >= 160.0,
+            "breakcore bpm should be ≥160, got {}",
+            state.sequencer.bpm
+        );
+    }
+
+    #[test]
+    fn gabber_baseline_uses_heavy_distortion() {
+        let state = apply_baseline("gabber");
+        assert!(
+            state.fx.distortion_drive >= 0.2 || state.fx.distortion_mix >= 0.3,
+            "gabber should have heavy distortion (drive≥0.2 or mix≥0.3)"
+        );
+        assert!(
+            state.sequencer.bpm >= 160.0,
+            "gabber bpm should be ≥160, got {}",
+            state.sequencer.bpm
+        );
+    }
+
+    #[test]
+    fn early_rave_baseline_enables_hoover() {
+        let state = apply_baseline("early_rave");
+        assert!(state.hoover.enabled, "early_rave must have hoover enabled");
+        assert!(
+            state.hoover.resonance >= 0.75,
+            "hoover resonance should be ≥0.75 for dominator sound, got {}",
+            state.hoover.resonance
+        );
+        assert!(
+            state.hoover.filter_start >= 0.8,
+            "hoover filter_start should be ≥0.8 for bright start, got {}",
+            state.hoover.filter_start
+        );
+        assert!(
+            state.sequencer.bpm >= 145.0 && state.sequencer.bpm <= 170.0,
+            "early_rave bpm should be 145–170, got {}",
+            state.sequencer.bpm
+        );
+    }
+
+    #[test]
+    fn trance_baseline_enables_hoover() {
+        let state = apply_baseline("trance");
+        assert!(state.hoover.enabled, "trance should have hoover enabled");
+        assert!(
+            state.sequencer.bpm >= 130.0 && state.sequencer.bpm <= 145.0,
+            "trance bpm should be 130–145, got {}",
+            state.sequencer.bpm
+        );
+    }
+
+    #[test]
+    fn ambient_baselines_have_heavy_reverb() {
+        for id in &[
+            "dark_ambient",
+            "space_ambient",
+            "ambient_techno",
+            "ambient_house",
+        ] {
+            let state = apply_baseline(id);
+            assert!(
+                state.fx.reverb_mix >= 0.6,
+                "{} should have reverb_mix ≥0.6, got {}",
+                id,
+                state.fx.reverb_mix
+            );
+        }
+    }
+
+    #[test]
+    fn ambient_baselines_have_slow_bpm() {
+        for id in &["dark_ambient", "space_ambient"] {
+            let state = apply_baseline(id);
+            assert!(
+                state.sequencer.bpm <= 80.0,
+                "{} bpm should be ≤80, got {}",
+                id,
+                state.sequencer.bpm
+            );
+        }
+    }
+
+    #[test]
+    fn dub_techno_baseline_has_long_reverb_and_delay() {
+        let state = apply_baseline("dub_techno");
+        assert!(
+            state.fx.reverb_mix >= 0.5,
+            "dub techno needs heavy reverb, got {}",
+            state.fx.reverb_mix
+        );
+        assert!(
+            state.fx.delay_feedback >= 0.6,
+            "dub techno needs long delay feedback, got {}",
+            state.fx.delay_feedback
+        );
+    }
+
+    #[test]
+    fn style_keywords_cover_rave_and_dominator() {
+        let catalog = StyleCatalog::get();
+        let has_dominator = catalog
+            .styles()
+            .iter()
+            .any(|s| s.keywords.iter().any(|kw| kw.contains("dominator")));
+        assert!(
+            has_dominator,
+            "catalog should have a style with 'dominator' keyword"
+        );
+        let has_hoover = catalog
+            .styles()
+            .iter()
+            .any(|s| s.keywords.iter().any(|kw| kw.contains("hoover")));
+        assert!(
+            has_hoover,
+            "catalog should have a style with 'hoover' keyword"
+        );
+    }
+
+    #[test]
+    fn style_prompt_language_says_reset() {
+        use crate::llm::build_system_prompt;
+        let mut state = AppState::default();
+        state.llm.active_style = Some("acid_classic".to_string());
+        let prompt = build_system_prompt(&state);
+        assert!(
+            prompt.contains("RESET") || prompt.contains("from scratch"),
+            "style prompt should say RESET or 'from scratch', not 'evolve'"
+        );
+    }
+}
+
+#[cfg(test)]
 mod dsp_tests {
     use crate::audio::dsp::midi_to_hz;
 

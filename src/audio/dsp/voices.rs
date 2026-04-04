@@ -366,8 +366,9 @@ impl NoiseVoice {
 }
 
 // ─── Hoover Lead Voice ────────────────────────────────────────────────────────
-// Supersaw oscillator into a highpass filter that sweeps down from a high
-// starting cutoff. Heavy resonance creates the "vacuum cleaner" sweep.
+// Supersaw oscillator into a resonant lowpass filter that starts open (bright)
+// and sweeps DOWN as the envelope decays. High resonance creates a moving
+// resonant peak — the authentic "vacuum cleaner" hoover sweep.
 // Named after Human Resource "Dominator" (1991).
 
 #[derive(Clone)]
@@ -377,7 +378,7 @@ pub(super) struct HooverVoice {
     freq: f32,
     gate: bool,
     amp_env: f32,  // VCA envelope
-    filt_env: f32, // Filter sweep: 1.0 = high HP cutoff, decays to 0.0
+    filt_env: f32, // Filter sweep: 1.0 = LP wide open (bright), decays to 0.0 (dark)
     svf_low: f32,
     svf_band: f32,
     lfo_phase: f32,
@@ -402,7 +403,7 @@ impl HooverVoice {
         self.freq = super::midi_to_hz(note);
         self.gate = true;
         self.amp_env = 0.0; // will rise on fast attack
-        self.filt_env = 1.0; // start at max HP cutoff
+        self.filt_env = 1.0; // start wide open (LP fully bright)
         self.svf_low = 0.0;
         self.svf_band = 0.0;
     }
@@ -466,20 +467,23 @@ impl HooverVoice {
         }
         let osc = osc_sum / n as f32 * 1.4;
 
-        // Chamberlin SVF — highpass output
-        // HP cutoff sweeps from filter_start (high) down to near-zero as filt_env decays.
-        let hp_norm = (p.hoover_filter_start * self.filt_env).clamp(0.0, 1.0);
-        let hp_hz = (200.0_f32 * 40.0_f32.powf(hp_norm)).min(sr * 0.45);
-        let f = (std::f32::consts::PI * hp_hz / sr).clamp(0.001, 0.49);
-        // q = damping; low q = high resonance. 0.92 gives q_min ≈ 0.08 at full resonance.
-        let q = 1.0 - p.hoover_resonance * 0.92;
+        // Chamberlin SVF — lowpass output
+        // LP cutoff starts wide open (bright) and sweeps DOWN as filt_env decays.
+        // High resonance creates a moving resonant peak sweeping from bright to dark —
+        // the authentic dominator hoover "oooh" character.
+        let lp_norm = (p.hoover_filter_start * self.filt_env).clamp(0.0, 1.0);
+        // Exponential map: 0 → ~100 Hz (very dark/closed), 1 → ~12 kHz (wide open)
+        let lp_hz = (100.0_f32 * 120.0_f32.powf(lp_norm)).min(sr * 0.45);
+        let f = (std::f32::consts::PI * lp_hz / sr).clamp(0.001, 0.49);
+        // q = damping; low q = high resonance. Clamp at 0.05 to prevent blowup.
+        let q = (1.0 - p.hoover_resonance * 0.95).max(0.05);
         let high = osc - self.svf_low - q * self.svf_band;
         let band_new = f * high + self.svf_band;
         let low_new = f * band_new + self.svf_low;
         self.svf_band = band_new;
         self.svf_low = low_new;
 
-        high * self.amp_env * p.hoover_volume
+        low_new * self.amp_env * p.hoover_volume
     }
 }
 

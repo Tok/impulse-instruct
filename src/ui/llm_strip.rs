@@ -3,6 +3,7 @@
 
 use crate::llm::LlmInput;
 use crate::llm::styles::StyleCatalog;
+use crate::state::apply_llm_update;
 use crate::ui::{ImpulseApp, theme};
 use egui::{Frame, TopBottomPanel};
 
@@ -83,14 +84,22 @@ impl ImpulseApp {
                                 self.log_text.push_str("Style → Custom (edit brief below)\n");
                             }
                             Some(id) => {
-                                let name = catalog.find_by_id(&id)
-                                    .map(|s| s.name.clone()).unwrap_or_default();
+                                let (name, baseline) = catalog.find_by_id(&id)
+                                    .map(|s| (s.name.clone(), s.baseline_params.clone()))
+                                    .unwrap_or_default();
+                                // Apply baseline params immediately before LLM fires
+                                if let Some(ref bp) = baseline {
+                                    let current = self.state.read().clone();
+                                    *self.state.write() = apply_llm_update(current, bp);
+                                }
                                 self.state.write().llm.active_style = Some(id);
+                                // Reset LLM context so model has no memory of previous style
+                                let _ = self.llm_tx.try_send(LlmInput::ResetContext);
                                 let prompt = format!(
-                                    "we're going {} now — set up the sound and rhythm for this style",
+                                    "FULL RESET to {} — generate all parameters from scratch for this genre. BPM, patterns, synth, FX — everything should match the style brief.",
                                     name
                                 );
-                                self.log_text.push_str(&format!("Style → {}\n", name));
+                                self.log_text.push_str(&format!("Style → {} (context reset)\n", name));
                                 let _ = self.llm_tx.try_send(LlmInput::Infer { prompt, one_shot: true });
                             }
                         }
