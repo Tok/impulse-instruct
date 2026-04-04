@@ -39,6 +39,7 @@ mod sequencer_tests {
         let clock = ClockState {
             sample_accumulator: 0.0,
             current_step: 3,
+            loop_count: 0,
             gate_counter: 0,
             gate_counter_hoover: 0,
             gate_counter_an1x: 0,
@@ -60,12 +61,14 @@ mod sequencer_tests {
         seq.drum_patterns.get_mut(&DrumVoice::Kick808).unwrap()[1] = Step {
             active: true,
             velocity: 1.0,
+            probability: 1.0,
         };
 
         let sps = samples_per_step(120.0, 44100.0) as usize;
         let clock = ClockState {
             sample_accumulator: 0.0,
             current_step: 0,
+            loop_count: 0,
             gate_counter: 0,
             gate_counter_hoover: 0,
             gate_counter_an1x: 0,

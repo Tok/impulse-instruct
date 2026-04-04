@@ -138,6 +138,21 @@ pub fn set_drum_step_velocity(
     s
 }
 
+pub fn set_drum_step_probability(
+    state: AppState,
+    voice: DrumVoice,
+    step: usize,
+    prob: f32,
+) -> AppState {
+    let mut s = state;
+    if let Some(pattern) = s.sequencer.drum_patterns.get_mut(&voice)
+        && step < pattern.len()
+    {
+        pattern[step].probability = prob.clamp(0.0, 1.0);
+    }
+    s
+}
+
 /// Set a 303 step note.
 pub fn set_bass_step(state: AppState, step: usize, note: u8, active: bool) -> AppState {
     let mut s = state;

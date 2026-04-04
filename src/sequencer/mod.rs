@@ -36,9 +36,10 @@ pub enum TriggerEvent {
 pub struct ClockState {
     pub sample_accumulator: f64, // fractional samples since last step
     pub current_step: usize,
-    pub gate_counter: u32,        // samples remaining in bass gate
+    pub loop_count: u32, // increments each full pattern loop (used for probability RNG)
+    pub gate_counter: u32, // samples remaining in bass gate
     pub gate_counter_hoover: u32, // samples remaining in hoover gate
-    pub gate_counter_an1x: u32,   // samples remaining in AN1X gate
+    pub gate_counter_an1x: u32, // samples remaining in AN1X gate
 }
 
 impl Default for ClockState {
@@ -46,6 +47,7 @@ impl Default for ClockState {
         Self {
             sample_accumulator: 0.0,
             current_step: 0,
+            loop_count: 0,
             gate_counter: 0,
             gate_counter_hoover: 0,
             gate_counter_an1x: 0,
@@ -77,6 +79,7 @@ pub fn advance_clock(
     let mut events: Vec<TriggerEvent> = Vec::new();
     let mut acc = clock.sample_accumulator + block_size as f64;
     let mut step = clock.current_step;
+    let mut loop_count = clock.loop_count;
     let mut gate_counter = clock.gate_counter;
     let mut gate_counter_hoover = clock.gate_counter_hoover;
     let mut gate_counter_an1x = clock.gate_counter_an1x;
@@ -129,7 +132,12 @@ pub fn advance_clock(
             break;
         }
         acc -= step_sps;
+        let prev_step = step;
         step = (step + 1) % seq.steps.max(1);
+        // Increment loop counter when the pattern wraps.
+        if step < prev_step {
+            loop_count = loop_count.wrapping_add(1);
+        }
 
         // Drum triggers — respect mute and solo state
         let has_solo = !seq.soloed_drums.is_empty();
@@ -143,7 +151,7 @@ pub fn advance_clock(
             }
             if let Some(pattern) = seq.drum_patterns.get(voice) {
                 let s = pattern.get(step).copied().unwrap_or_default();
-                if s.active {
+                if s.active && prob_hit(s.probability, step, loop_count, *voice as u32) {
                     events.push(TriggerEvent::DrumTrigger {
                         voice: *voice,
                         velocity: s.velocity,
@@ -185,11 +193,32 @@ pub fn advance_clock(
     let new_clock = ClockState {
         sample_accumulator: acc,
         current_step: step,
+        loop_count,
         gate_counter,
         gate_counter_hoover,
         gate_counter_an1x,
     };
     (new_clock, events)
+}
+
+/// Cheap deterministic probability gate — no allocation, no global state.
+/// Returns true with probability `prob` (0.0–1.0).
+/// Uses a Knuth-style hash of step + loop + voice_id as the random source.
+#[inline]
+fn prob_hit(prob: f32, step: usize, loop_count: u32, voice_id: u32) -> bool {
+    if prob >= 1.0 {
+        return true;
+    }
+    if prob <= 0.0 {
+        return false;
+    }
+    // Combine all entropy sources into one 32-bit hash.
+    let h = (step as u32)
+        .wrapping_mul(2654435769)
+        .wrapping_add(loop_count.wrapping_mul(1234567891))
+        .wrapping_add(voice_id.wrapping_mul(0x9e3779b9));
+    let norm = (h >> 8) as f32 / (u32::MAX >> 8) as f32; // 0..1
+    norm < prob
 }
 
 // ─── Euclidean rhythm generator ───────────────────────────────────────────────

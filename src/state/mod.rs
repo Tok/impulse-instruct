@@ -154,10 +154,21 @@ impl Default for BassState {
 
 // ─── Sequencer ───────────────────────────────────────────────────────────────
 
-#[derive(Clone, Copy, Debug, Serialize, Deserialize, Default, PartialEq)]
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq)]
 pub struct Step {
     pub active: bool,
-    pub velocity: f32, // 0–1
+    pub velocity: f32,    // 0–1
+    pub probability: f32, // 0–1: chance the step fires (1.0 = always, 0.5 = 50%)
+}
+
+impl Default for Step {
+    fn default() -> Self {
+        Self {
+            active: false,
+            velocity: 1.0,
+            probability: 1.0,
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]
