@@ -84,8 +84,17 @@ else
   fi
 
   if [[ -n "$HF_CMD" ]]; then
+    # 'hf' uses 'hf auth whoami' / 'hf auth login'; legacy CLI uses flat subcommands
+    if [[ "$HF_CMD" == "hf" ]]; then
+      HF_WHOAMI="$HF_CMD auth whoami"
+      HF_LOGIN="$HF_CMD auth login"
+    else
+      HF_WHOAMI="$HF_CMD whoami"
+      HF_LOGIN="$HF_CMD login"
+    fi
+
     # Check login; prompt if not authenticated
-    if ! $HF_CMD whoami &>/dev/null; then
+    if ! $HF_WHOAMI &>/dev/null; then
       echo ""
       echo "  ════════════════════════════════════════════════════"
       echo "   HuggingFace login required"
@@ -98,7 +107,7 @@ else
       echo "   3. Paste it below when prompted."
       echo "  ════════════════════════════════════════════════════"
       echo ""
-      $HF_CMD login || { echo "Login cancelled. Re-run after logging in."; exit 1; }
+      $HF_LOGIN || { echo "Login cancelled. Re-run after logging in."; exit 1; }
     fi
     echo "Using ${HF_CMD}…"
     $HF_CMD download "$HF_REPO" "$MODEL_FILE" \
