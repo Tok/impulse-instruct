@@ -251,7 +251,7 @@ synthesis. Goal: replicate this interaction exactly.
 - [x] WAV export (32-bit float)
 - [x] MP3 export (ffmpeg)
 - [x] HTTP/MCP API
-- [ ] MIDI clock out (sync external hardware / DAW)
+- [x] MIDI clock out (sync external hardware / DAW)
 - [ ] MIDI clock in (slave to external BPM)
 - [ ] OSC support (for Max/MSP, Ableton, TouchOSC)
 - [ ] Stem export (per-voice WAV files)

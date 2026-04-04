@@ -4,7 +4,7 @@
 // Maps incoming MIDI to AppState mutations sent back to the UI thread.
 
 use crossbeam_channel::Sender;
-use midir::{MidiInput, MidiInputConnection};
+use midir::{MidiInput, MidiInputConnection, MidiOutput, MidiOutputConnection};
 
 // ─── MIDI events we emit to the UI thread ─────────────────────────────────────
 
@@ -156,5 +156,61 @@ fn parse_midi(msg: &[u8]) -> Option<MidiEvent> {
         0xFA => Some(MidiEvent::Start),
         0xFC => Some(MidiEvent::Stop),
         _ => None,
+    }
+}
+
+// ─── MIDI clock output ────────────────────────────────────────────────────────
+
+/// Sends MIDI timing clock (0xF8 / 24 PPQN), Start (0xFA), and Stop (0xFC)
+/// to a MIDI output port. Thread-safe to move; send methods are blocking but
+/// complete in microseconds for single-byte messages.
+pub struct MidiClockOutput {
+    connection: MidiOutputConnection,
+}
+
+impl MidiClockOutput {
+    pub fn list_output_ports() -> Vec<String> {
+        let output = MidiOutput::new("impulse-instruct-scan").ok();
+        output
+            .map(|m| {
+                m.ports()
+                    .iter()
+                    .filter_map(|p| m.port_name(p).ok())
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
+    pub fn connect(port_name: &str) -> Option<Self> {
+        let output = MidiOutput::new("impulse-instruct-clock").ok()?;
+        let port = output
+            .ports()
+            .into_iter()
+            .find(|p| output.port_name(p).ok().as_deref() == Some(port_name))?;
+        let connection = output.connect(&port, "impulse-clock-out").ok()?;
+        log::info!("MIDI clock out: connected to '{}'", port_name);
+        Some(Self { connection })
+    }
+
+    /// Auto-connect to the first non-"Midi Through" output port.
+    pub fn auto_connect() -> (Option<Self>, Option<String>) {
+        let ports = Self::list_output_ports();
+        let chosen = ports
+            .iter()
+            .find(|p| !p.to_lowercase().contains("midi through"))
+            .cloned();
+        match chosen {
+            Some(ref name) => (Self::connect(name), Some(name.clone())),
+            None => {
+                log::info!("MIDI clock out: no output port found");
+                (None, None)
+            }
+        }
+    }
+
+    /// Send a single raw MIDI byte (0xF8 clock / 0xFA start / 0xFC stop).
+    #[inline]
+    pub fn send_byte(&mut self, byte: u8) {
+        self.connection.send(&[byte]).ok();
     }
 }

@@ -32,6 +32,9 @@ pub struct AudioEngine {
     pub scope_rx: Consumer<f32>,
     /// TTS processed audio pushed by the LLM thread, mixed into the output.
     pub tts_tx: Arc<Mutex<Producer<f32>>>,
+    /// MIDI clock bytes (0xF8/0xFA/0xFC) produced by the audio thread.
+    /// Drain this in a dedicated thread and forward to a MIDI output port.
+    pub midi_clock_rx: Consumer<u8>,
     _stream: Stream, // kept alive
 }
 
@@ -61,6 +64,9 @@ impl AudioEngine {
         let (tts_producer, mut tts_consumer) = rtrb::RingBuffer::<f32>::new(262144);
         let tts_tx = Arc::new(Mutex::new(tts_producer));
 
+        // Ring buffer: audio thread → MIDI clock output thread (1 byte per tick, 24 PPQN)
+        let (mut midi_clock_tx, midi_clock_rx) = rtrb::RingBuffer::<u8>::new(512);
+
         // Audio-thread-local DSP state
         let initial_params = {
             let s = state.read();
@@ -69,6 +75,9 @@ impl AudioEngine {
         let mut dsp = DspState::new(sample_rate, initial_params);
         let mut clock = ClockState::default();
         let mut monitor_vol = 1.0_f32;
+        // MIDI clock out: accumulator tracks fractional samples until next 0xF8 tick
+        let mut midi_clock_acc = 0.0_f64;
+        let mut midi_clock_running = false; // tracks sequencer running state for Start/Stop
         // TTS duck envelope: 1.0 = full synth, 0.3 = ducked under TTS voice
         let mut tts_duck = 1.0_f32;
         let duck_target = 0.35_f32; // synth level when TTS is speaking
@@ -141,6 +150,29 @@ impl AudioEngine {
                         dsp.handle_trigger(&event);
                     }
 
+                    // MIDI clock out — 24 PPQN ticks + Start/Stop transport messages
+                    {
+                        let running_now = seq_snap.running;
+                        if running_now && !midi_clock_running {
+                            midi_clock_acc = 0.0;
+                            midi_clock_tx.push(0xFA).ok(); // MIDI Start
+                        } else if !running_now && midi_clock_running {
+                            midi_clock_tx.push(0xFC).ok(); // MIDI Stop
+                        }
+                        midi_clock_running = running_now;
+
+                        if running_now {
+                            // tick_interval = sr * 60 / (bpm * 24)
+                            let tick_interval =
+                                (sample_rate as f64 * 60.0) / (seq_snap.bpm as f64 * 24.0);
+                            midi_clock_acc += block as f64;
+                            while midi_clock_acc >= tick_interval {
+                                midi_clock_acc -= tick_interval;
+                                midi_clock_tx.push(0xF8).ok(); // MIDI Clock
+                            }
+                        }
+                    }
+
                     // Generate audio, then apply monitor gain
                     dsp.process_block(output, channels);
                     if monitor_vol != 1.0 {
@@ -192,6 +224,7 @@ impl AudioEngine {
             params_tx,
             scope_rx,
             tts_tx,
+            midi_clock_rx,
             _stream: stream,
         })
     }

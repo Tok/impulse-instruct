@@ -155,7 +155,7 @@ pub fn draw_hoover(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         .add_sized(
             [110.0, 18.0],
             egui::Button::new(
-                egui::RichText::new("DOMINATOR PRESET")
+                egui::RichText::new("RESET PRESET")
                     .monospace()
                     .size(7.5)
                     .color(theme::SMOKE),

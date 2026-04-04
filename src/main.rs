@@ -192,6 +192,28 @@ fn main() -> anyhow::Result<()> {
         log::info!("MIDI: connected to '{}'", name);
     }
 
+    // ── MIDI clock output ─────────────────────────────────────────────────────
+    {
+        let mut midi_clock_rx = audio_engine.midi_clock_rx;
+        let (clock_out, _clock_port) = midi::MidiClockOutput::auto_connect();
+        if let Some(mut sender) = clock_out {
+            std::thread::Builder::new()
+                .name("midi-clock-out".into())
+                .spawn(move || {
+                    loop {
+                        while let Ok(byte) = midi_clock_rx.pop() {
+                            sender.send_byte(byte);
+                        }
+                        std::thread::sleep(std::time::Duration::from_micros(500));
+                    }
+                })
+                .expect("failed to spawn MIDI clock out thread");
+        } else {
+            // Still need to drain the rx so it doesn't fill up; drop it here if no output.
+            drop(midi_clock_rx);
+        }
+    }
+
     // ── UI (blocks this thread) ───────────────────────────────────────────────
     let state_for_ui = Arc::clone(&app_state);
     let audio_tx = audio_engine.params_tx;
