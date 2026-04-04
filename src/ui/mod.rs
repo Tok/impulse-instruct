@@ -353,6 +353,16 @@ impl ImpulseApp {
 
         while let Ok(event) = self.midi_rx.try_recv() {
             match event {
+                MidiEvent::NoteOn {
+                    note, velocity: 0, ..
+                } => {
+                    // NoteOn with vel=0 is standard MIDI running-status NoteOff
+                    self.pressed_notes.remove(&note);
+                    let _ = self
+                        .audio_tx
+                        .push(AudioCommand::Trigger(TriggerEvent::BassGateOff));
+                }
+
                 MidiEvent::NoteOn { note, velocity, .. } => {
                     self.pressed_notes.insert(note);
                     let vel = velocity as f32 / 127.0;

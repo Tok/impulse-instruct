@@ -82,6 +82,17 @@ pub fn draw_piano(app: &mut ImpulseApp, ui: &mut egui::Ui, ctx: &egui::Context) 
     let show_label = app.piano_show_labels;
 
     // ── White keys ────────────────────────────────────────────────────────────
+    // Collect active white key bloom data so we can draw blooms AFTER all white
+    // key fills — otherwise the rightward bloom gets covered by the next key's fill.
+    let mut white_blooms: Vec<(Rect, Color32)> = Vec::new();
+
+    let wk_rounding = egui::Rounding {
+        nw: 1.0,
+        ne: 1.0,
+        sw: 3.0,
+        se: 3.0,
+    };
+
     let mut white_idx = 0usize;
     for note in START_NOTE..=END_NOTE {
         let semi = note % 12;
@@ -98,35 +109,16 @@ pub fn draw_piano(app: &mut ImpulseApp, ui: &mut egui::Ui, ctx: &egui::Context) 
 
         let hue = theme::note_color(note);
         let fill = if active {
-            // Bright saturated fill when active
             theme::lerp_color(hue, theme::CHALK, 0.35)
         } else {
-            // Dim but coloured — always show hue, just muted
             theme::lerp_color(hue, Color32::from_rgb(48, 48, 48), 0.60)
         };
 
-        let rounding = egui::Rounding {
-            nw: 1.0,
-            ne: 1.0,
-            sw: 3.0,
-            se: 3.0,
-        };
-
-        // Bloom: draw soft glow halos behind the key when active
         if active {
-            let [r, g, b, _] = hue.to_array();
-            for i in 1..=4u8 {
-                let expand = i as f32 * 2.0;
-                let alpha = 55 - i * 12;
-                painter.rect_filled(
-                    key_rect.expand(expand),
-                    rounding,
-                    Color32::from_rgba_unmultiplied(r, g, b, alpha),
-                );
-            }
+            white_blooms.push((key_rect, hue));
         }
 
-        painter.rect_filled(key_rect, rounding, fill);
+        painter.rect_filled(key_rect, wk_rounding, fill);
 
         // Neumorphic edges
         let (hi, sh) = if active {
@@ -150,7 +142,6 @@ pub fn draw_piano(app: &mut ImpulseApp, ui: &mut egui::Ui, ctx: &egui::Context) 
             [key_rect.right_top(), key_rect.right_bottom()],
             Stroke::new(0.5, sh),
         );
-        // Subtle groove near top
         let groove_y = key_rect.min.y + wk_h * 0.08;
         painter.line_segment(
             [
@@ -160,15 +151,13 @@ pub fn draw_piano(app: &mut ImpulseApp, ui: &mut egui::Ui, ctx: &egui::Context) 
             Stroke::new(0.5, Color32::from_gray(if active { 170 } else { 72 })),
         );
 
-        // Labels: always show C notes; show all when show_label is on
+        // Labels: C notes always visible; all notes when show_label is on
         let is_c = semi == 0;
         if is_c || show_label {
             let lbl = note_name(note);
             let lbl_text = if is_c { lbl } else { &lbl[..lbl.len() - 1] };
             let font_size = if is_c { 8.5 } else { 7.5 };
             let label_pos = Pos2::new(x + wk_w * 0.5, oy + wk_h - 10.0);
-
-            // Dark pill background for contrast
             let pill = Rect::from_center_size(
                 label_pos,
                 egui::Vec2::new(lbl_text.len() as f32 * 5.5 + 4.0, 11.0),
@@ -178,7 +167,6 @@ pub fn draw_piano(app: &mut ImpulseApp, ui: &mut egui::Ui, ctx: &egui::Context) 
                 egui::Rounding::same(2.0),
                 Color32::from_black_alpha(140),
             );
-
             let label_color = if active { theme::CHALK } else { theme::SMOKE };
             painter.text(
                 label_pos,
@@ -189,7 +177,6 @@ pub fn draw_piano(app: &mut ImpulseApp, ui: &mut egui::Ui, ctx: &egui::Context) 
             );
         }
 
-        // Click detection — white keys
         if let Some(cp) = click_pos
             && key_rect.contains(cp)
         {
@@ -197,6 +184,21 @@ pub fn draw_piano(app: &mut ImpulseApp, ui: &mut egui::Ui, ctx: &egui::Context) 
         }
 
         white_idx += 1;
+    }
+
+    // Draw white key blooms now — after all fills, so glow is symmetric on both sides.
+    // Black keys (drawn next) will naturally sit on top, which is correct visually.
+    for (key_rect, hue) in &white_blooms {
+        let [r, g, b, _] = hue.to_array();
+        for i in 1..=4u8 {
+            let expand = i as f32 * 2.2;
+            let alpha = 52u8.saturating_sub(i * 11);
+            painter.rect_filled(
+                key_rect.expand(expand),
+                wk_rounding,
+                Color32::from_rgba_unmultiplied(r, g, b, alpha),
+            );
+        }
     }
 
     // ── Black keys (drawn on top) ─────────────────────────────────────────────
