@@ -159,7 +159,7 @@ impl LlamaServerBackend {
                 "--port",
                 &port.to_string(),
                 "--ctx-size",
-                "4096",
+                "8192",
                 "--n-gpu-layers",
                 "99",
                 "--log-disable", // reduce noise; we log our own status
@@ -292,7 +292,13 @@ impl LlmBackend for LlamaServerBackend {
             .post(&url)
             .set("Content-Type", "application/json")
             .send_json(&body)
-            .map_err(|e| anyhow::anyhow!("llama-server request failed: {}", e))?;
+            .map_err(|e| match e {
+                ureq::Error::Status(code, response) => {
+                    let body = response.into_string().unwrap_or_default();
+                    anyhow::anyhow!("llama-server request failed: status code {code}\nbody: {body}")
+                }
+                other => anyhow::anyhow!("llama-server request failed: {other}"),
+            })?;
 
         let elapsed = t0.elapsed().as_secs_f32();
 

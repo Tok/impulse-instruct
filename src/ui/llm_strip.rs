@@ -173,6 +173,15 @@ impl ImpulseApp {
                             };
                             (p, "YOU → ✦\n".to_string())
                         } else {
+                            // Detect style keywords in the typed prompt and update dropdown.
+                            let lower = typed.to_lowercase();
+                            let catalog = StyleCatalog::get();
+                            if let Some(matched) = catalog.styles().iter().find(|s| {
+                                s.keywords.iter().any(|kw| lower.contains(&kw.to_lowercase()))
+                            }) {
+                                self.state.write().llm.active_style = Some(matched.id.clone());
+                                self.log_text.push_str(&format!("Style → {}\n", matched.name));
+                            }
                             (typed.clone(), format!("YOU → {}\n", typed))
                         };
                         self.log_text.push_str(&log_line);
