@@ -134,9 +134,11 @@ fn main() -> anyhow::Result<()> {
     // ── Shared state ──────────────────────────────────────────────────────────
     let app_state = Arc::new(RwLock::new(AppState::default()));
 
-    // Apply --model override
+    // Apply --model override, falling back to the last-used model from settings.json
     if let Some(ref model_path) = args.model {
         app_state.write().llm.model_path = model_path.clone();
+    } else if let Some(saved) = state::load_model_setting() {
+        app_state.write().llm.model_path = saved;
     }
 
     // ── Channels ─────────────────────────────────────────────────────────────

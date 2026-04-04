@@ -3,6 +3,31 @@
 
 use super::AppState;
 
+const SETTINGS_PATH: &str = "settings.json";
+
+/// Write the model path to `settings.json` so it persists across restarts.
+pub fn save_model_setting(model_path: &str) {
+    let json = format!(
+        "{{\"model_path\":{}}}\n",
+        serde_json::to_string(model_path).unwrap_or_default()
+    );
+    if let Err(e) = std::fs::write(SETTINGS_PATH, json) {
+        log::warn!("Could not write {SETTINGS_PATH}: {e}");
+    }
+}
+
+/// Read the saved model path from `settings.json`, if it exists and is valid.
+pub fn load_model_setting() -> Option<String> {
+    let json = std::fs::read_to_string(SETTINGS_PATH).ok()?;
+    let v: serde_json::Value = serde_json::from_str(&json).ok()?;
+    let path = v.get("model_path")?.as_str()?.to_string();
+    if std::path::Path::new(&path).exists() {
+        Some(path)
+    } else {
+        None
+    }
+}
+
 /// Serialise `state` to `project-<unix_seconds>.json` in the current directory.
 /// Returns the path written on success.
 pub fn save_project(state: &AppState) -> Result<std::path::PathBuf, String> {

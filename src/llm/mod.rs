@@ -157,6 +157,15 @@ impl LlamaServerBackend {
             model_path
         );
 
+        // Redirect server stderr to a log file so crashes are diagnosable.
+        let stderr_log = std::fs::OpenOptions::new()
+            .create(true)
+            .write(true)
+            .truncate(true)
+            .open("llama-server.log")
+            .map(std::process::Stdio::from)
+            .unwrap_or(std::process::Stdio::null());
+
         let child = std::process::Command::new(bin)
             .args([
                 "--model",
@@ -172,7 +181,7 @@ impl LlamaServerBackend {
                 "--log-disable", // reduce noise; we log our own status
             ])
             .stdout(std::process::Stdio::null())
-            .stderr(std::process::Stdio::null())
+            .stderr(stderr_log)
             .spawn();
 
         match child {
@@ -225,11 +234,30 @@ impl LlamaServerBackend {
         self.live
     }
 
-    /// Poll /health until the server is ready (up to ~90 s).
+    /// Poll /health until the server is ready (up to ~120 s).
     /// llama-server can take a while to load a large model into VRAM.
+    /// Bails out immediately if the child process exits (crashed).
     fn wait_for_ready(&mut self) {
         let url = format!("{}/health", self.base_url);
-        for attempt in 0..180 {
+        for attempt in 0..240 {
+            // Check if the child crashed before the health endpoint came up.
+            if let Some(ref mut child) = self.child {
+                match child.try_wait() {
+                    Ok(Some(status)) => {
+                        log::error!(
+                            "llama-server exited early ({}). \
+                             The model may be unsupported by this server build, \
+                             or it ran out of VRAM. Check VRAM usage and try a \
+                             smaller model.",
+                            status
+                        );
+                        self.child = None;
+                        return;
+                    }
+                    Ok(None) => {} // still running — continue polling
+                    Err(_) => {}
+                }
+            }
             std::thread::sleep(std::time::Duration::from_millis(500));
             match ureq::get(&url).call() {
                 Ok(resp) if resp.status() == 200 => {
@@ -240,7 +268,7 @@ impl LlamaServerBackend {
                 _ => {}
             }
         }
-        log::error!("LLM server did not become ready within 90s — falling back to mock.");
+        log::error!("LLM server did not become ready within 120s — falling back to mock.");
     }
 }
 
@@ -634,6 +662,9 @@ pub fn run_llm_loop(
                     let mut s = state.write();
                     s.llm.is_mock = !backend.is_live();
                     s.llm.llm_initializing = false;
+                }
+                if backend.is_live() {
+                    crate::state::save_model_setting(&new_path);
                 }
                 let status = if backend.is_live() {
                     format!("[ Model loaded: {} ]", new_path)
