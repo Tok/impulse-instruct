@@ -212,18 +212,23 @@ BASS SYNTHESIZER (all 0.0–1.0):
 STEP SEQUENCER (16 steps = one 4/4 bar of 16th notes):
   sequencer.steps         — total loop length in steps (8/16/32/64, default 16)
   sequencer.swing         — 0–1 rhythmic swing (0=straight, 0.5=strong shuffle/triplet feel)
-  sequencer.root_note     — tonic of the current key: 0=C, 1=C#, 2=D, 3=D#, 4=E, 5=F, 6=F#, 7=G, 8=G#, 9=A, 10=A#, 11=B
-  sequencer.scale         — active scale: "Major" | "Minor" | "Dorian" | "Phrygian" | "Lydian" | "Mixolydian" | "Locrian" | "Pentatonic" | "Blues" | "Chromatic"
-  sequencer.bass_steps    — 16-element bool array: which steps trigger the 303
-  sequencer.bass_notes    — 16-element int array: MIDI note per step
-                            (24=C1, 36=C2, 48=C3; typical range 33–48 for acid)
-  sequencer.kick_a_steps  — 16-element bool: Kit A kick
-  sequencer.snare_a_steps — 16-element bool: Kit A snare
-  sequencer.hihat_a_steps — 16-element bool: Kit A closed hihat
-  sequencer.kick_b_steps  — 16-element bool: Kit B kick
-  sequencer.snare_b_steps — 16-element bool: Kit B snare
-  sequencer.clap_b_steps  — 16-element bool: Kit B clap
-  sequencer.hihat_b_steps — 16-element bool: Kit B closed hihat
+  sequencer.root_note     — tonic: 0=C, 1=C#, 2=D, 3=D#, 4=E, 5=F, 6=F#, 7=G, 8=G#, 9=A, 10=A#, 11=B
+  sequencer.scale         — "Major"|"Minor"|"Dorian"|"Phrygian"|"Lydian"|"Mixolydian"|"Locrian"|"Pentatonic"|"Blues"|"Chromatic"
+
+  STEP ARRAYS — two compact formats (prefer index lists to save tokens):
+    Index list  [0,4,8,12]   — active step indices; all others cleared. SAVES TOKENS — use this.
+    Inline      [1,0,0,0,…]  — 16 values, 0/1 (or false/true). Use only when most steps are on.
+    Clear       []           — silence all steps for that voice.
+
+  sequencer.bass_steps    — step array for 303 bass trigger
+  sequencer.bass_notes    — 16-element MIDI note array (24=C1, 36=C2, 48=C3; acid range 33–48)
+  sequencer.kick_a_steps  — Kit A kick steps
+  sequencer.snare_a_steps — Kit A snare steps
+  sequencer.hihat_a_steps — Kit A closed hihat steps
+  sequencer.kick_b_steps  — Kit B kick steps
+  sequencer.snare_b_steps — Kit B snare steps
+  sequencer.clap_b_steps  — Kit B clap steps
+  sequencer.hihat_b_steps — Kit B closed hihat steps
 
 FX (all 0.0–1.0):  ← ONLY valid inside "fx": {{…}}, never inside "sequencer"
   fx.reverb_mix       — reverb wet amount (0=off, 0.3=noticeable)
@@ -325,10 +330,16 @@ HOOVER LEAD (supersaw + HP filter sweep):
 
 ═══ RHYTHM BASICS ═══
 
-Minimal 4/4 foundation (indices 0–15):
-  kick_a_steps 4-on-the-floor: [true,false,false,false,true,false,false,false,true,false,false,false,true,false,false,false]
-  hihat_a_steps offbeat 8ths:  [false,false,true,false,false,false,true,false,false,false,true,false,false,false,true,false]
+Minimal 4/4 foundation — use index list format (compact, preferred):
+  kick_a_steps 4-on-floor:   [0,4,8,12]
+  hihat_a_steps offbeat 8ths:[2,6,10,14]
+  snare_a_steps on 2 and 4:  [4,12]
+  clap_b_steps on 2 and 4:   [4,12]
 Build from there — add syncopation and gaps. Never fill every step with the same drum.
+
+IMPORTANT — drum_ratchets takes INTEGERS 1–4 only, never booleans:
+  CORRECT: {{"drum_ratchets": {{"hihat_a": [1,1,2,1,1,1,4,1,1,1,2,1,1,1,1,1]}}}}
+  WRONG:   {{"drum_ratchets": {{"hihat_a": [true,false,true,…]}}}}  ← booleans are invalid here
 
 BASS MELODY BASICS:
   Acid range C2–C3: C2=36, D2=38, Eb2=39, F2=41, G2=43, A2=45, Bb2=46, B2=47, C3=48
@@ -394,30 +405,15 @@ APPLYING THE KEY — when setting bass_notes:
 "simpler" / "strip it back"
   → Reduce active bass_steps, remove some drum steps
 
-CLEARING COMMANDS — these must use all-false 16-element arrays:
-"remove kick" / "no kick" / "kick off"
-  → {{"sequencer": {{"kick_a_steps": [false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false]}}}}
-
-"no snare" / "remove snare"
-  → {{"sequencer": {{"snare_a_steps": [false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false]}}}}
-
-"no hats" / "no hihat" / "remove hihat"
-  → {{"sequencer": {{"hihat_a_steps": [false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false]}}}}
-
-"no claps" / "remove clap"
-  → {{"sequencer": {{"clap_b_steps": [false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false]}}}}
-
-"no delay" / "remove delay"
-  → {{"fx": {{"delay_mix": 0.0, "delay_feedback": 0.0}}}}
-
-"no reverb" / "remove reverb"
-  → {{"fx": {{"reverb_mix": 0.0}}}}
-
+CLEARING COMMANDS — use empty array [] to silence a voice:
+"remove kick" / "no kick"   → {{"sequencer": {{"kick_a_steps": []}}}}
+"no snare" / "remove snare" → {{"sequencer": {{"snare_a_steps": []}}}}
+"no hats" / "remove hihat"  → {{"sequencer": {{"hihat_a_steps": []}}}}
+"no claps" / "remove clap"  → {{"sequencer": {{"clap_b_steps": []}}}}
+"no delay" / "remove delay" → {{"fx": {{"delay_mix": 0.0, "delay_feedback": 0.0}}}}
+"no reverb"                  → {{"fx": {{"reverb_mix": 0.0}}}}
 "clear all drums" / "no drums"
-  → {{"sequencer": {{"kick_a_steps": [false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false],
-                     "snare_a_steps": [false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false],
-                     "hihat_a_steps": [false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false],
-                     "clap_b_steps":  [false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false]}}}}
+  → {{"sequencer": {{"kick_a_steps":[],"snare_a_steps":[],"hihat_a_steps":[],"clap_b_steps":[]}}}}
 
 ACID JAM GUIDANCE — while jamming in acid styles, actively vary:
   bass.cutoff between 0.15 and 0.60 (keep it moving — static cutoff sounds dead)
@@ -458,12 +454,12 @@ WRONG (do not do this):
 
 Example — "add claps on 2 and 4":
 {{"_comment": "{clap_example}",
-  "sequencer": {{"clap_b_steps": [false,false,false,false,true,false,false,false,false,false,false,false,true,false,false,false]}}}}
+  "sequencer": {{"clap_b_steps": [4,12]}}}}
 
 Example — "change the melody":
 {{"_comment": "{melody_example}",
-  "sequencer": {{"bass_steps": [true,false,true,false,false,true,false,true,false,false,true,false,false,true,false,false],
-                 "bass_notes":  [36,36,36,36,36,41,36,43,36,36,38,36,36,36,40,36]}}}}
+  "sequencer": {{"bass_steps": [0,2,5,7,10,13],
+                 "bass_notes":  [36,36,36,41,43,38,36,36,36,38,36,36,36,36,40,36]}}}}
 
 Example — "more acid":
 {{"_comment": "{acid_example}",

@@ -275,8 +275,8 @@ impl LlmBackend for LlamaServerBackend {
         let temperature = 0.1_f64 + (heat as f64).clamp(0.0, 1.0) * 1.1;
 
         // json_object mode keeps the server honest about emitting valid JSON.
-        // max_tokens: two 16-step arrays + bass params ~400 tokens; _thinking adds ~100.
-        // 768 gives comfortable headroom.
+        // max_tokens: compact index-format patterns are small (~10 tok/voice), but the
+        // model may still emit FX + LFO + AN1X simultaneously. 1200 gives real headroom.
         let body = serde_json::json!({
             "model": "bonsai",
             "messages": [
@@ -284,7 +284,7 @@ impl LlmBackend for LlamaServerBackend {
                 { "role": "user",    "content": user   }
             ],
             "temperature": temperature,
-            "max_tokens": 768,
+            "max_tokens": 1200,
             "response_format": { "type": "json_object" }
         });
 
@@ -438,7 +438,9 @@ fn repair_json(s: &str) -> Option<serde_json::Value> {
 }
 
 /// Promote `bass` and `fx` keys that the model incorrectly nests inside `sequencer`
-/// back to the top level, and strip `"fx"` keys nested inside `"fx"` (looping pattern).
+/// back to the top level, strip `"fx"` keys nested inside `"fx"`, and convert
+/// LFO dot-notation objects (`"lfo": {"lfo[0].enabled": true, …}`) to the expected
+/// array format (`"lfo": [{"enabled": true, …}, …]`).
 fn sanitize_json_structure(v: serde_json::Value) -> serde_json::Value {
     let mut obj = match v {
         serde_json::Value::Object(m) => m,
@@ -462,6 +464,37 @@ fn sanitize_json_structure(v: serde_json::Value) -> serde_json::Value {
     // Remove nested "fx" inside "fx" (the recursive loop the model falls into)
     if let Some(fx) = obj.get_mut("fx").and_then(|f| f.as_object_mut()) {
         fx.remove("fx");
+    }
+
+    // Fix LFO dot-notation: model sometimes emits
+    //   "lfo": {"lfo[0].enabled": true, "lfo[0].rate": 0.1, "lfo[1].target": "BassCutoff"}
+    // instead of the expected array format. Convert to:
+    //   "lfo": [{"enabled": true, "rate": 0.1}, {"target": "BassCutoff"}]
+    if let Some(lfo_val) = obj.get("lfo")
+        && let Some(lfo_obj) = lfo_val.as_object()
+    {
+        // Check if any key matches "lfo[N].field" pattern
+        let has_dot_notation = lfo_obj
+            .keys()
+            .any(|k| k.starts_with("lfo[") && k.contains("]."));
+        if has_dot_notation {
+            let mut slots: [serde_json::Map<String, serde_json::Value>; 4] = Default::default();
+            for (key, val) in lfo_obj {
+                // Parse "lfo[N].field" → slot index N, field name
+                if let Some(rest) = key.strip_prefix("lfo[")
+                    && let Some(bracket) = rest.find("].")
+                    && let Ok(idx) = rest[..bracket].parse::<usize>()
+                    && idx < 4
+                {
+                    let field = &rest[bracket + 2..];
+                    slots[idx].insert(field.to_string(), val.clone());
+                }
+            }
+            let lfo_array: serde_json::Value = serde_json::Value::Array(
+                slots.into_iter().map(serde_json::Value::Object).collect(),
+            );
+            obj.insert("lfo".to_string(), lfo_array);
+        }
     }
 
     serde_json::Value::Object(obj)

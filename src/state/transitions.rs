@@ -410,11 +410,9 @@ pub fn apply_llm_update(state: AppState, update: &serde_json::Value) -> AppState
         if !locked.contains("sequencer.bass_steps")
             && let Some(arr) = seq.get("bass_steps").and_then(|v| v.as_array())
         {
-            for (i, val) in arr.iter().enumerate().take(MAX_STEPS) {
-                if let Some(active) = val.as_bool() {
-                    s.sequencer.bass_pattern[i].active = active;
-                }
-            }
+            apply_llm_step_array(arr, &mut s.sequencer.bass_pattern, MAX_STEPS, |step, a| {
+                step.active = a;
+            });
         }
         if !locked.contains("sequencer.root_note")
             && let Some(v) = seq.get("root_note").and_then(|v| v.as_u64())
@@ -444,20 +442,8 @@ pub fn apply_llm_update(state: AppState, update: &serde_json::Value) -> AppState
                 }
             }
         }
-        if !locked.contains("sequencer.kick_a_steps")
-            && let Some(arr) = seq.get("kick_a_steps").and_then(|v| v.as_array())
-            && let Some(pattern) = s.sequencer.drum_patterns.get_mut(&DrumVoice::Kick808)
-        {
-            for (i, val) in arr.iter().enumerate().take(MAX_STEPS) {
-                if let Some(active) = val.as_bool() {
-                    pattern[i].active = active;
-                    if active && pattern[i].velocity == 0.0 {
-                        pattern[i].velocity = 1.0;
-                    }
-                }
-            }
-        }
-        let drum_pattern_fields: &[(&str, DrumVoice, f32)] = &[
+        let drum_step_fields: &[(&str, DrumVoice, f32)] = &[
+            ("kick_a_steps", DrumVoice::Kick808, 1.0),
             ("hihat_a_steps", DrumVoice::HihatClosed808, 0.7),
             ("snare_a_steps", DrumVoice::Snare808, 1.0),
             ("kick_b_steps", DrumVoice::Kick909, 1.0),
@@ -465,19 +451,20 @@ pub fn apply_llm_update(state: AppState, update: &serde_json::Value) -> AppState
             ("clap_b_steps", DrumVoice::Clap909, 1.0),
             ("hihat_b_steps", DrumVoice::HihatClosed909, 0.7),
         ];
-        for &(field, voice, default_vel) in drum_pattern_fields {
+        for &(field, voice, default_vel) in drum_step_fields {
             let lock_key = format!("sequencer.{}", field);
             if !locked.contains(&lock_key)
                 && let Some(arr) = seq.get(field).and_then(|v| v.as_array())
-                && let Some(pattern) = s.sequencer.drum_patterns.get_mut(&voice)
             {
-                for (i, val) in arr.iter().enumerate().take(MAX_STEPS) {
-                    if let Some(active) = val.as_bool() {
-                        pattern[i].active = active;
-                        if active && pattern[i].velocity == 0.0 {
-                            pattern[i].velocity = default_vel;
+                // Collect indices first to avoid split-borrow issues with drum_patterns
+                let arr: Vec<_> = arr.clone();
+                if let Some(pattern) = s.sequencer.drum_patterns.get_mut(&voice) {
+                    apply_llm_step_array(&arr, pattern, MAX_STEPS, |step, active| {
+                        step.active = active;
+                        if active && step.velocity == 0.0 {
+                            step.velocity = default_vel;
                         }
-                    }
+                    });
                 }
             }
         }
@@ -668,6 +655,58 @@ pub fn apply_llm_update(state: AppState, update: &serde_json::Value) -> AppState
     }
 
     s
+}
+
+// ─── Step-array parser ────────────────────────────────────────────────────────
+
+/// Apply a JSON step array to a mutable pattern slice.
+///
+/// Accepts three compact formats from the LLM:
+///   `[]`           — clear: set every step to `false`
+///   `[0, 4, 8]`    — index list (< 16 elements): clear all, then activate listed indices
+///   `[1,0,1,0,…]`  — inline 0/1 or true/false (≥ 16 elements): write element-by-element
+///
+/// `set_active` is called once per step and must update `active` plus any default fields
+/// (e.g. initialise `velocity` on first activation).
+pub fn apply_llm_step_array<T, F>(
+    arr: &[serde_json::Value],
+    items: &mut [T],
+    max_write: usize,
+    mut set_active: F,
+) where
+    F: FnMut(&mut T, bool),
+{
+    let n = items.len().min(max_write);
+    if arr.is_empty() {
+        // [] = clear all
+        for item in items[..n].iter_mut() {
+            set_active(item, false);
+        }
+        return;
+    }
+    if arr.len() < 16 {
+        // Index list: clear everything, then activate listed positions
+        for item in items[..n].iter_mut() {
+            set_active(item, false);
+        }
+        for val in arr {
+            if let Some(idx) = val.as_u64().map(|i| i as usize)
+                && idx < n
+            {
+                set_active(&mut items[idx], true);
+            }
+        }
+        return;
+    }
+    // Inline: element-by-element (0/1 integers accepted alongside true/false)
+    for (i, val) in arr.iter().enumerate().take(n) {
+        let active = match val {
+            serde_json::Value::Bool(b) => *b,
+            serde_json::Value::Number(num) => num.as_u64().unwrap_or(0) != 0,
+            _ => continue,
+        };
+        set_active(&mut items[i], active);
+    }
 }
 
 // ─── Pattern bank & chain ─────────────────────────────────────────────────────

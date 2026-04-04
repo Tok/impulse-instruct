@@ -5,6 +5,9 @@
 # Usage:
 #   ./download-models.sh              # Bonsai-8B (default, 1-bit Q1, ~1.1 GB)
 #   ./download-models.sh qwen3        # Qwen3-8B Q4_K_M (~5 GB, ~5× better quality)
+#   ./download-models.sh qwen3-14b    # Qwen3-14B Q4_K_M (~9 GB, best musical reasoning)
+#   ./download-models.sh gemma4       # Gemma 4 4B Q4 (~3 GB, fast + strong JSON)
+#   ./download-models.sh llama31      # Llama 3.1 8B Q4_K_M (~5 GB, excellent JSON)
 #
 # NOTE: A free HuggingFace account is required.
 #   Sign up at https://huggingface.co/join
@@ -23,16 +26,31 @@ case "$MODEL" in
   bonsai|"")
     HF_REPO="prism-ml/Bonsai-8B-gguf"
     MODEL_FILE="Bonsai-8B.gguf"
-    MODEL_DESC="Bonsai-8B Q1_0_g128 (PrismML, ~1.1 GB) — default, fastest"
+    MODEL_DESC="Bonsai-8B Q1_0_g128 (PrismML, ~1.1 GB) — default, fastest but weakest"
     ;;
   qwen3)
     HF_REPO="bartowski/Qwen_Qwen3-8B-GGUF"
     MODEL_FILE="Qwen_Qwen3-8B-Q4_K_M.gguf"
-    MODEL_DESC="Qwen3-8B Q4_K_M (bartowski, ~5 GB) — ~5× better quality, supports /think"
+    MODEL_DESC="Qwen3-8B Q4_K_M (bartowski, ~5 GB) — ~5× better than Bonsai, supports /think"
+    ;;
+  qwen3-14b)
+    HF_REPO="bartowski/Qwen_Qwen3-14B-GGUF"
+    MODEL_FILE="Qwen_Qwen3-14B-Q4_K_M.gguf"
+    MODEL_DESC="Qwen3-14B Q4_K_M (bartowski, ~9 GB) — best musical reasoning, needs 12 GB VRAM"
+    ;;
+  gemma4)
+    HF_REPO="unsloth/gemma-4-4b-it-GGUF"
+    MODEL_FILE="gemma-4-4b-it-Q4_K_M.gguf"
+    MODEL_DESC="Gemma 4 4B Q4_K_M (unsloth, ~3 GB) — fast, strong structured output"
+    ;;
+  llama31)
+    HF_REPO="bartowski/Meta-Llama-3.1-8B-Instruct-GGUF"
+    MODEL_FILE="Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf"
+    MODEL_DESC="Llama 3.1 8B Q4_K_M (bartowski, ~5 GB) — excellent JSON compliance"
     ;;
   *)
     echo "Unknown model: '$MODEL'"
-    echo "Available options: bonsai (default), qwen3"
+    echo "Available: bonsai (default), qwen3, qwen3-14b, gemma4, llama31"
     exit 1
     ;;
 esac
@@ -115,8 +133,16 @@ case "$MODEL" in
     echo "Bonsai 8B is released under the Apache License 2.0 by prism-ml."
     echo "See: https://huggingface.co/${HF_REPO}"
     ;;
-  qwen3)
-    echo "Qwen3-8B is released under the Qwen Research License by Alibaba Cloud."
+  qwen3|qwen3-14b)
+    echo "Qwen3 is released under the Qwen Research License by Alibaba Cloud."
+    echo "Quantisation by bartowski. See: https://huggingface.co/${HF_REPO}"
+    ;;
+  gemma4)
+    echo "Gemma 4 is released under the Gemma Terms of Use by Google DeepMind."
+    echo "Quantisation by unsloth. See: https://huggingface.co/${HF_REPO}"
+    ;;
+  llama31)
+    echo "Llama 3.1 is released under the Meta Llama 3.1 Community License by Meta."
     echo "Quantisation by bartowski. See: https://huggingface.co/${HF_REPO}"
     ;;
 esac
