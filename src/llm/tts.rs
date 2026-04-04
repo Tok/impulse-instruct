@@ -1,5 +1,11 @@
 // ─── llm/tts.rs ───────────────────────────────────────────────────────────────
-// TTS output via espeak-ng. Detached background process, no-op when not installed.
+// TTS output via espeak-ng.
+//   speak()    — detached background process, no FX, lowest latency.
+//   speak_fx() — renders to WAV, applies reverb/bitcrush, feeds the audio ring buffer.
+
+use parking_lot::Mutex;
+use rtrb::Producer;
+use std::sync::Arc;
 
 use crate::state::{ConversationMode, McVoiceChar};
 
@@ -82,4 +88,224 @@ pub fn speak(
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::null())
         .spawn();
+}
+
+// ─── FX path: render → WAV → reverb/bitcrush → audio ring buffer ─────────────
+
+/// Like `speak()` but routes processed audio through the main audio ring buffer.
+/// When `reverb_mix` and `bitcrush` are both 0.0 this falls back to `speak()`.
+#[allow(clippy::too_many_arguments)]
+pub fn speak_fx(
+    text: &str,
+    mode: &ConversationMode,
+    pitch: u8,
+    speed: u16,
+    amplitude: u8,
+    voice_char: &McVoiceChar,
+    randomise: bool,
+    reverb_mix: f32,
+    bitcrush: f32,
+    tts_tx: &Arc<Mutex<Producer<f32>>>,
+) {
+    // Fall back to direct playback when no FX are active.
+    if reverb_mix <= 0.01 && bitcrush <= 0.01 {
+        speak(text, mode, pitch, speed, amplitude, voice_char, randomise);
+        return;
+    }
+
+    let clean: String = text
+        .chars()
+        .filter(|c| c.is_ascii_graphic() || *c == ' ')
+        .take(200)
+        .collect();
+    if clean.is_empty() {
+        return;
+    }
+
+    let (default_pitch, default_speed, mode_voice) = match mode {
+        ConversationMode::Mc => (60u8, 160u16, "en+m3"),
+        ConversationMode::Dj => (40, 140, "en+m4"),
+        ConversationMode::Producer => (50, 120, "en+m5"),
+        ConversationMode::Off => return,
+    };
+    let voice = match voice_char {
+        McVoiceChar::Auto => mode_voice,
+        McVoiceChar::JungleMc => "en+m3",
+        McVoiceChar::RaveAnnouncer => "en+m2",
+        McVoiceChar::Robot => "en+m7",
+        McVoiceChar::SmoothDj => "en+m4",
+    };
+
+    let p = if pitch == 0 { default_pitch } else { pitch };
+    let s = if speed == 0 { default_speed } else { speed };
+    let a = if amplitude == 0 { 100u8 } else { amplitude };
+
+    let (p, s) = if randomise {
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .subsec_nanos();
+        let r1 = ((nanos & 0xFFFF) as f32 / 0xFFFF as f32) * 2.0 - 1.0;
+        let r2 = ((nanos >> 16) as f32 / 0xFFFF as f32) * 2.0 - 1.0;
+        (
+            ((p as f32) * (1.0 + r1 * 0.10)).clamp(1.0, 99.0) as u8,
+            ((s as f32) * (1.0 + r2 * 0.10)).clamp(80.0, 500.0) as u16,
+        )
+    } else {
+        (p, s)
+    };
+
+    // Render to a temp WAV file.
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .subsec_nanos();
+    let tmp_path = format!("/tmp/impulse_tts_{}.wav", nanos);
+
+    let render_ok = std::process::Command::new("espeak-ng")
+        .args([
+            "-p",
+            &p.to_string(),
+            "-s",
+            &s.to_string(),
+            "-a",
+            &a.to_string(),
+            "-v",
+            voice,
+            "-w",
+            &tmp_path,
+            &clean,
+        ])
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .output()
+        .is_ok();
+
+    if !render_ok {
+        return;
+    }
+
+    // Decode WAV and apply FX.
+    if let Some(mut samples) = read_wav_f32(&tmp_path) {
+        tts_apply_reverb(&mut samples, reverb_mix);
+        if bitcrush > 0.01 {
+            tts_apply_bitcrush(&mut samples, bitcrush);
+        }
+        // Push to ring buffer — non-blocking; drops silently if buffer full.
+        let mut tx = tts_tx.lock();
+        for s in &samples {
+            let _ = tx.push(*s);
+        }
+    }
+
+    let _ = std::fs::remove_file(&tmp_path);
+}
+
+/// Minimal PCM-16 WAV reader — returns mono f32 samples normalised to ±1.
+/// Converts stereo to mono by averaging channels.
+/// Returns `None` on any parse error (not a valid RIFF/WAV).
+fn read_wav_f32(path: &str) -> Option<Vec<f32>> {
+    let bytes = std::fs::read(path).ok()?;
+    if bytes.len() < 44 {
+        return None;
+    }
+    if &bytes[0..4] != b"RIFF" || &bytes[8..12] != b"WAVE" {
+        return None;
+    }
+
+    // Walk chunks looking for fmt and data.
+    let mut pos = 12usize;
+    let mut channels = 1u16;
+    let mut src_rate = 22050u32;
+    let mut bits = 16u16;
+    let mut data_start = 0usize;
+    let mut data_len = 0usize;
+
+    while pos + 8 <= bytes.len() {
+        let tag = &bytes[pos..pos + 4];
+        let chunk_len = u32::from_le_bytes(bytes[pos + 4..pos + 8].try_into().ok()?) as usize;
+        pos += 8;
+        if tag == b"fmt " && chunk_len >= 16 {
+            channels = u16::from_le_bytes(bytes[pos + 2..pos + 4].try_into().ok()?);
+            src_rate = u32::from_le_bytes(bytes[pos + 4..pos + 8].try_into().ok()?);
+            bits = u16::from_le_bytes(bytes[pos + 14..pos + 16].try_into().ok()?);
+        } else if tag == b"data" {
+            data_start = pos;
+            data_len = chunk_len;
+            break;
+        }
+        pos += chunk_len + (chunk_len & 1); // word-align
+    }
+
+    if data_start == 0 || bits != 16 {
+        return None;
+    }
+
+    let frame_bytes = (channels as usize) * 2;
+    let n_frames = data_len / frame_bytes;
+    let mut mono = Vec::with_capacity(n_frames);
+
+    for i in 0..n_frames {
+        let base = data_start + i * frame_bytes;
+        let mut sum = 0.0f32;
+        for ch in 0..channels as usize {
+            let off = base + ch * 2;
+            if off + 2 > bytes.len() {
+                break;
+            }
+            let raw = i16::from_le_bytes(bytes[off..off + 2].try_into().ok()?);
+            sum += raw as f32 / 32768.0;
+        }
+        mono.push(sum / channels as f32);
+    }
+
+    // Upsample to 44100 Hz if needed (2× linear interpolation for 22050→44100).
+    if src_rate == 22050 {
+        let mut up = Vec::with_capacity(mono.len() * 2);
+        for i in 0..mono.len() {
+            let a = mono[i];
+            let b = if i + 1 < mono.len() { mono[i + 1] } else { 0.0 };
+            up.push(a);
+            up.push((a + b) * 0.5);
+        }
+        return Some(up);
+    }
+
+    Some(mono)
+}
+
+/// Simple multi-comb reverb for TTS hall effect.
+fn tts_apply_reverb(samples: &mut [f32], mix: f32) {
+    if mix <= 0.0 || samples.is_empty() {
+        return;
+    }
+    // Four comb filters in parallel (prime-length delay lines).
+    const LENS: [usize; 4] = [1116, 1356, 1557, 1617];
+    const FB: f32 = 0.72;
+    let mut combs: [Vec<f32>; 4] = LENS.map(|l| vec![0.0f32; l]);
+    let mut ptrs = [0usize; 4];
+
+    let dry = 1.0 - mix;
+    for s in samples.iter_mut() {
+        let input = *s;
+        let mut wet = 0.0f32;
+        for k in 0..4 {
+            let p = ptrs[k];
+            let delayed = combs[k][p];
+            combs[k][p] = input + delayed * FB;
+            ptrs[k] = (p + 1) % LENS[k];
+            wet += delayed;
+        }
+        *s = input * dry + (wet * 0.25) * mix;
+    }
+}
+
+/// Quantise samples to `bits` bits (maps bitcrush 0→1 to 16→4 bit depth).
+fn tts_apply_bitcrush(samples: &mut [f32], amount: f32) {
+    let bits = 16.0 - amount * 12.0; // 0→16 bit, 1→4 bit
+    let levels = 2.0_f32.powf(bits);
+    for s in samples.iter_mut() {
+        *s = (*s * levels).round() / levels;
+    }
 }

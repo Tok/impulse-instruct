@@ -143,15 +143,19 @@ fn main() -> anyhow::Result<()> {
     let (llm_tx, llm_rx) = crossbeam_channel::bounded::<LlmInput>(16);
     let (llm_out_tx, llm_out_rx) = crossbeam_channel::bounded::<llm::LlmOutput>(32);
 
+    // ── Audio engine (before LLM thread so we can share tts_tx) ─────────────
+    let audio_engine = AudioEngine::new(Arc::clone(&app_state))?;
+
     // ── LLM thread ────────────────────────────────────────────────────────────
     {
         let state = Arc::clone(&app_state);
         let out_tx = llm_out_tx.clone();
         let mock = args.mock;
+        let tts_tx = Arc::clone(&audio_engine.tts_tx);
         std::thread::Builder::new()
             .name("llm".into())
             .stack_size(8 * 1024 * 1024)
-            .spawn(move || run_llm_loop(state, llm_rx, out_tx, mock))
+            .spawn(move || run_llm_loop(state, llm_rx, out_tx, mock, tts_tx))
             .expect("failed to spawn LLM thread");
     }
 
@@ -180,9 +184,6 @@ fn main() -> anyhow::Result<()> {
             })
             .expect("failed to spawn HTTP thread");
     }
-
-    // ── Audio engine ──────────────────────────────────────────────────────────
-    let audio_engine = AudioEngine::new(Arc::clone(&app_state))?;
 
     // ── MIDI input ────────────────────────────────────────────────────────────
     let (midi_tx, midi_rx) = crossbeam_channel::bounded::<MidiEvent>(256);

@@ -160,7 +160,7 @@ Bonsai generates the text. A TTS engine speaks it. The crowd goes wild.
 - [ ] Alternative: Coqui TTS for higher quality voice (Python subprocess or REST)
 - [x] LLM generates `"mc_line"` JSON field alongside param updates (separate from `_comment`)
 - [x] Selectable MC voice character: Jungle MC, Rave Announcer, Robot, Smooth DJ
-- [ ] TTS FX wiring: TTS audio routed through a light reverb + optional bitcrush (hall MC sound)
+- [x] TTS FX wiring: TTS audio routed through a light reverb + optional bitcrush (hall MC sound)
 - [ ] Volume envelope on TTS so it ducks under the music
 - [ ] **Autotune / pitch-snap on TTS** — pitch-quantize the espeak-ng output to the synth's current
       key and scale, giving the MC voice a melodic "T-Pain" or jungle toaster character.
@@ -387,14 +387,12 @@ not just timbre/rhythm. Currently it knows nothing about keys, chords, or scales
 step patterns that are tonally coherent.
 
 ### System prompt additions
-- [ ] Embed a compact music theory reference in the system prompt (or a separate
+- [x] Embed a compact music theory reference in the system prompt (or a separate
       `system_prompt_music_theory` block injected alongside the existing prompt):
       - 12-note chromatic scale with semitone offsets
       - Major and natural minor scale formulas (W-W-H-W-W-W-H)
       - Common triad shapes: major (0,4,7), minor (0,3,7), diminished (0,3,6)
-      - Common 7th chords: maj7 (0,4,7,11), dom7 (0,4,7,10), min7 (0,3,7,10)
-      - Nashville number system shorthand (I ii iii IV V vi vii°) so the LLM
-        can reason about chord progressions without needing to know the key
+      - Scale notes in current key injected per prompt: "Current key: root=9 (A), scale=minor; scale notes in C2–C3: 45 47 48 50 52…"
 
 ### Key / scale state
 - [x] Add `root_note: u8` (MIDI 0–11, default 0 = C) and `scale: Scale` enum
@@ -407,10 +405,10 @@ step patterns that are tonally coherent.
       respective colors so the grid is visually harmonic
 
 ### Style briefs
-- [ ] Add `"suggested_root"` and `"suggested_scale"` fields to styles.json entries
+- [x] Add `"suggested_root"` and `"suggested_scale"` fields to styles.json entries
       so genre styles carry their natural tonality (e.g. acid → minor/phrygian,
       BoC → dorian, jungle → minor, dub techno → minor/dorian)
-- [ ] System prompt builder reads active style's `suggested_root/scale` and
+- [x] System prompt builder reads active style's `suggested_root/scale` and
       includes them as a strong hint to the LLM
 
 ---

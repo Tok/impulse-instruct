@@ -395,6 +395,8 @@ pub struct LlmState {
     pub tts_amplitude: u8,              // 0 = default (100); 1–200 override
     pub tts_voice_char: McVoiceChar,    // voice character preset (Auto = follow mode)
     pub tts_randomise: bool,            // ±10% pitch/speed jitter per utterance
+    pub tts_reverb_mix: f32,            // 0.0–1.0 wet reverb on TTS audio (default 0.3)
+    pub tts_bitcrush: f32,              // 0.0–1.0 bitcrush depth on TTS audio (0 = off)
     pub style_verbosity: StyleVerbosity, // Brief = ~50 token brief, Full = ~150 token description
     pub auto_lock_on_touch: bool,       // if true, touching a knob locks it to user-only control
     pub is_mock: bool,                  // true when running without a real model (no llama-server)
@@ -431,6 +433,8 @@ impl Default for LlmState {
             tts_amplitude: 0,
             tts_voice_char: McVoiceChar::Auto,
             tts_randomise: false,
+            tts_reverb_mix: 0.3,
+            tts_bitcrush: 0.0,
             style_verbosity: StyleVerbosity::Full,
             auto_lock_on_touch: false,
             is_mock: false,

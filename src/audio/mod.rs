@@ -6,6 +6,7 @@ pub mod dsp;
 
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use cpal::{Device, SampleFormat, Stream, StreamConfig};
+use parking_lot::Mutex;
 use rtrb::{Consumer, Producer};
 use std::sync::Arc;
 
@@ -29,6 +30,8 @@ pub enum AudioCommand {
 pub struct AudioEngine {
     pub params_tx: Producer<AudioCommand>,
     pub scope_rx: Consumer<f32>,
+    /// TTS processed audio pushed by the LLM thread, mixed into the output.
+    pub tts_tx: Arc<Mutex<Producer<f32>>>,
     _stream: Stream, // kept alive
 }
 
@@ -53,6 +56,10 @@ impl AudioEngine {
 
         // Ring buffer: audio thread → scope display
         let (mut scope_tx, scope_rx) = rtrb::RingBuffer::<f32>::new(4096);
+
+        // Ring buffer: TTS processed audio → audio thread mix (≈6s @ 44100Hz)
+        let (tts_producer, mut tts_consumer) = rtrb::RingBuffer::<f32>::new(262144);
+        let tts_tx = Arc::new(Mutex::new(tts_producer));
 
         // Audio-thread-local DSP state
         let initial_params = {
@@ -110,6 +117,15 @@ impl AudioEngine {
                         }
                     }
 
+                    // Mix in TTS audio (lock-free pop per frame)
+                    for frame in output.chunks_mut(channels) {
+                        if let Ok(tts_s) = tts_consumer.pop() {
+                            for ch in frame.iter_mut() {
+                                *ch += tts_s;
+                            }
+                        }
+                    }
+
                     // Write first channel of each frame to scope ring buffer
                     for frame in output.chunks(channels) {
                         scope_tx.push(frame[0]).ok(); // non-blocking, drop if full
@@ -129,6 +145,7 @@ impl AudioEngine {
         Ok(Self {
             params_tx,
             scope_rx,
+            tts_tx,
             _stream: stream,
         })
     }
