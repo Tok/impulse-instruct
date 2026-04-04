@@ -36,7 +36,7 @@ pub fn draw_hoover(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         }
 
         ui.label(
-            egui::RichText::new("Human Resource / Dominator (1991)")
+            egui::RichText::new("supersaw → HP sweep → resonance")
                 .color(theme::PIT)
                 .monospace()
                 .size(7.5),

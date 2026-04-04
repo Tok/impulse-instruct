@@ -230,6 +230,9 @@ pub fn apply_boc_preset(state: AppState) -> AppState {
     s.an1x.lfo_depth = 0.12;
     s.an1x.lfo_target = crate::state::An1xLfoTarget::Pitch;
     s.an1x.lfo_delay = 0.4; // LFO fades in over ~1.6s after note is struck
+    s.an1x.pitch_env_attack = 0.0;
+    s.an1x.pitch_env_decay = 0.1;
+    s.an1x.pitch_env_amount = 0.5; // neutral — no pitch transient on pads
     s.an1x.drift = 0.14;
     s.an1x.glide_time = 0.18;
     s.an1x.volume = 0.75;
@@ -843,6 +846,27 @@ pub fn apply_llm_update(state: AppState, update: &serde_json::Value) -> AppState
         s.an1x.lfo_rate = unlocked_f32(s.an1x.lfo_rate, a, "lfo_rate", "an1x.lfo_rate", locked);
         s.an1x.lfo_depth = unlocked_f32(s.an1x.lfo_depth, a, "lfo_depth", "an1x.lfo_depth", locked);
         s.an1x.lfo_delay = unlocked_f32(s.an1x.lfo_delay, a, "lfo_delay", "an1x.lfo_delay", locked);
+        s.an1x.pitch_env_attack = unlocked_f32(
+            s.an1x.pitch_env_attack,
+            a,
+            "pitch_env_attack",
+            "an1x.pitch_env_attack",
+            locked,
+        );
+        s.an1x.pitch_env_decay = unlocked_f32(
+            s.an1x.pitch_env_decay,
+            a,
+            "pitch_env_decay",
+            "an1x.pitch_env_decay",
+            locked,
+        );
+        s.an1x.pitch_env_amount = unlocked_f32(
+            s.an1x.pitch_env_amount,
+            a,
+            "pitch_env_amount",
+            "an1x.pitch_env_amount",
+            locked,
+        );
         s.an1x.drift = unlocked_f32(s.an1x.drift, a, "drift", "an1x.drift", locked);
         s.an1x.glide_time = unlocked_f32(
             s.an1x.glide_time,

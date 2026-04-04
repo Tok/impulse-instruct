@@ -72,6 +72,12 @@ pub struct Style {
     /// Injected into the style section so the model has a concrete reference.
     #[serde(default)]
     pub seed_patterns: SeedPatterns,
+    /// Suggested tonic for this genre (MIDI 0–11, e.g. 0=C, 9=A). None = no suggestion.
+    #[serde(default)]
+    pub suggested_root: Option<u8>,
+    /// Suggested scale name for this genre (e.g. "minor", "dorian", "chromatic").
+    #[serde(default)]
+    pub suggested_scale: Option<String>,
 }
 
 pub struct StyleCatalog(Vec<Style>);

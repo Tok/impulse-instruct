@@ -175,12 +175,15 @@ pub struct AudioParams {
     pub an1x_amp_decay: f32,
     pub an1x_amp_sustain: f32,
     pub an1x_amp_release: f32,
-    pub an1x_lfo_rate_hz: f32, // Hz (0.01–20)
-    pub an1x_lfo_depth: f32,   // 0–1
-    pub an1x_lfo_target: u8,   // 0=Pitch 1=FilterCutoff 2=Amplitude
-    pub an1x_lfo_delay: f32,   // 0–1 → 0–4s fade-in
-    pub an1x_drift: f32,       // 0–1
-    pub an1x_glide_time: f32,  // 0–1 → 0–500ms
+    pub an1x_lfo_rate_hz: f32,      // Hz (0.01–20)
+    pub an1x_lfo_depth: f32,        // 0–1
+    pub an1x_lfo_target: u8,        // 0=Pitch 1=FilterCutoff 2=Amplitude
+    pub an1x_lfo_delay: f32,        // 0–1 → 0–4s fade-in
+    pub an1x_pitch_env_attack: f32, // 0–1
+    pub an1x_pitch_env_decay: f32,  // 0–1
+    pub an1x_pitch_env_amount: f32, // 0–1 (0.5=zero, ±24 st)
+    pub an1x_drift: f32,            // 0–1
+    pub an1x_glide_time: f32,       // 0–1 → 0–500ms
 }
 
 impl AudioParams {
@@ -370,6 +373,9 @@ impl AudioParams {
                 An1xLfoTarget::Amplitude => 2,
             },
             an1x_lfo_delay: s.an1x.lfo_delay,
+            an1x_pitch_env_attack: s.an1x.pitch_env_attack,
+            an1x_pitch_env_decay: s.an1x.pitch_env_decay,
+            an1x_pitch_env_amount: s.an1x.pitch_env_amount,
             an1x_drift: s.an1x.drift,
             an1x_glide_time: s.an1x.glide_time,
         }

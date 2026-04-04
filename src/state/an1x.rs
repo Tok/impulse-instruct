@@ -95,6 +95,14 @@ pub struct An1xState {
     /// Fade-in time before LFO reaches full depth. 0–1 → 0–4 s.
     pub lfo_delay: f32,
 
+    // ── Pitch envelope (AD — one-shot transient) ───────────────────────────
+    /// Attack time. 0–1 → 1ms–2 s.
+    pub pitch_env_attack: f32,
+    /// Decay time back to unaffected pitch. 0–1 → 1ms–4 s.
+    pub pitch_env_decay: f32,
+    /// Amount ±24 semitones. 0.5 = zero; <0.5 = negative, >0.5 = positive.
+    pub pitch_env_amount: f32,
+
     // ── Texture ────────────────────────────────────────────────────────────
     /// Pitch instability depth (random micro-LFO). 0–1 → 0–0.15 semitones.
     pub drift: f32,
@@ -128,7 +136,10 @@ impl Default for An1xState {
             amp_decay: 0.5,
             amp_sustain: 0.6,
             amp_release: 0.4,
-            lfo_rate: 0.09, // ~0.12 Hz — very slow BoC breathing
+            pitch_env_attack: 0.0,
+            pitch_env_decay: 0.1,
+            pitch_env_amount: 0.5, // zero by default
+            lfo_rate: 0.09,        // ~0.12 Hz — very slow BoC breathing
             lfo_depth: 0.15,
             lfo_waveform: LfoWaveform::Sine,
             lfo_target: An1xLfoTarget::Pitch,

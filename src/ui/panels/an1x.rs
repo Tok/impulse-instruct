@@ -1,12 +1,12 @@
 // ─── ui/panels/an1x.rs ───────────────────────────────────────────────────────
-// AN1X-style VA voice panel — warm pads / leads (BoC aesthetic).
+// AN1X-style VA voice panel — warm pads / leads.
 
 use crate::state::{An1xWave, FilterMode, ParamMode, apply_boc_preset};
 use crate::ui::{ImpulseApp, theme, widgets};
 use egui::Ui;
 
 pub fn draw_an1x(app: &mut ImpulseApp, ui: &mut Ui) {
-    widgets::section_header(ui, "AN1X  VOICE  (BoC / Warm VA)");
+    widgets::section_header(ui, "AN1X  VOICE  (Warm VA)");
 
     let ctrl = widgets::ControlPrefs::from_prefs(&app.state.read().ui_prefs);
 
@@ -37,7 +37,7 @@ pub fn draw_an1x(app: &mut ImpulseApp, ui: &mut Ui) {
             app.push_audio_params();
         }
         ui.label(
-            egui::RichText::new("Boards of Canada — warm, slightly detuned")
+            egui::RichText::new("dual osc · SVF filter · drift · glide")
                 .color(theme::PIT)
                 .monospace()
                 .size(7.5),
@@ -251,6 +251,25 @@ pub fn draw_an1x(app: &mut ImpulseApp, ui: &mut Ui) {
     });
     ui.add_space(4.0);
 
+    // ── PITCH ENVELOPE ───────────────────────────────────────────────────────
+    widgets::section_header(ui, "PITCH  ENV  (AD)");
+    ui.horizontal_wrapped(|ui| {
+        macro_rules! k {
+            ($lbl:expr, $fld:ident) => {{
+                let mut v = app.state.read().an1x.$fld;
+                let (ch, _) = widgets::param_control(ui, $lbl, &mut v, ParamMode::Free, ctrl);
+                if ch {
+                    app.state.write().an1x.$fld = v;
+                    app.push_audio_params();
+                }
+            }};
+        }
+        k!("ATCK", pitch_env_attack);
+        k!("DCAY", pitch_env_decay);
+        k!("AMT", pitch_env_amount);
+    });
+    ui.add_space(4.0);
+
     // ── LFO + TEXTURE ────────────────────────────────────────────────────────
     widgets::section_header(ui, "LFO  /  TEXTURE");
     ui.horizontal_wrapped(|ui| {
@@ -285,14 +304,14 @@ pub fn draw_an1x(app: &mut ImpulseApp, ui: &mut Ui) {
     });
     ui.add_space(4.0);
 
-    // ── BoC PRESET ───────────────────────────────────────────────────────────
+    // ── WARM PRESET ──────────────────────────────────────────────────────────
     if ui
         .add(
-            egui::Button::new(egui::RichText::new("BoC PRESET").color(theme::CHALK))
+            egui::Button::new(egui::RichText::new("WARM PRESET").color(theme::CHALK))
                 .fill(theme::PIT)
                 .stroke(egui::Stroke::new(1.0, theme::SLATE)),
         )
-        .on_hover_text("Boards of Canada: slow attack, warm LP, detuned saws, subtle drift")
+        .on_hover_text("Warm VA preset: slow attack, LP filter, detuned saws, subtle drift")
         .clicked()
     {
         let s = app.state.read().clone();

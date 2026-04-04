@@ -124,10 +124,18 @@ pub fn build_system_prompt(state: &AppState) -> String {
                 } else {
                     String::new()
                 };
+                let tonality = match (&s.suggested_root, &s.suggested_scale) {
+                    (Some(root), Some(scale)) => {
+                        const NAMES: [&str; 12] = ["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"];
+                        format!("\nSuggested tonality: {} {} — prefer scale-coherent bass notes and set root_note/scale accordingly.\n",
+                            NAMES[(*root as usize) % 12], scale)
+                    }
+                    _ => String::new(),
+                };
                 format!(
-                    "\n═══ ACTIVE STYLE ═══\n\n{}{}\nUse this as your creative brief. \
+                    "\n═══ ACTIVE STYLE ═══\n\n{}{}{}\nUse this as your creative brief. \
                      Evolve the current sound toward this aesthetic — don't reset everything at once.\n",
-                    text, seed
+                    text, seed, tonality
                 )
             })
             .unwrap_or_default(),
@@ -248,6 +256,9 @@ AN1X VOICE (warm VA pads / leads — Boards of Canada aesthetic):
   an1x.lfo_rate         — 0.09=BoC breathing (~0.12Hz), 0.3=tremolo, 0.6=fast vibrato
   an1x.lfo_depth        — 0–1 LFO depth
   an1x.lfo_delay        — 0–1 → 0–4s LFO fade-in (vibrato deepens as note is held)
+  an1x.pitch_env_attack — 0–1 AD pitch envelope attack
+  an1x.pitch_env_decay  — 0–1 AD pitch envelope decay
+  an1x.pitch_env_amount — 0–1 (0.5=none, >0.5=up, <0.5=down, ±24 st max)
   an1x.drift            — 0–1 pitch instability; 0.12=subtle analogue feel
   an1x.glide_time       — 0–1 → 0–500ms pitch glide between notes
   an1x.an1x_steps       — 16-element bool array: which steps trigger the AN1X
@@ -555,6 +566,9 @@ pub fn param_json_schema() -> serde_json::Value {
                     "lfo_rate":           { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "LFO rate 0-1 → 0.01-20 Hz. 0.09=BoC breathing (~0.12Hz), 0.5=~5Hz vibrato." },
                     "lfo_depth":          { "type": "number", "minimum": 0.0, "maximum": 1.0 },
                     "lfo_delay":          { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "LFO fade-in time: 0-1 → 0-4 s" },
+                    "pitch_env_attack":   { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "pitch envelope attack time" },
+                    "pitch_env_decay":    { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "pitch envelope decay time" },
+                    "pitch_env_amount":   { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "pitch env amount: 0.5=none, >0.5=up bend, <0.5=down bend (max ±24 st)" },
                     "drift":              { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "pitch instability depth — 0=stable, 1=max analogue wobble (±0.15 st)" },
                     "glide_time":         { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "pitch glide: 0=instant, 1=500ms exponential slide" },
                     "an1x_steps":         bool_array,

@@ -588,6 +588,8 @@ pub(super) struct An1xVoice {
     amp_val: f32,
     filt_phase: AdsrPhase,
     filt_val: f32,
+    pitch_phase: AdsrPhase, // AD-only pitch envelope
+    pitch_val: f32,
 
     svf_low: f32,
     svf_band: f32,
@@ -616,6 +618,8 @@ impl An1xVoice {
             amp_val: 0.0,
             filt_phase: AdsrPhase::Idle,
             filt_val: 0.0,
+            pitch_phase: AdsrPhase::Idle,
+            pitch_val: 0.0,
             svf_low: 0.0,
             svf_band: 0.0,
             lfo_phase: 0.0,
@@ -638,6 +642,8 @@ impl An1xVoice {
         self.active = true;
         self.amp_phase = AdsrPhase::Attack;
         self.filt_phase = AdsrPhase::Attack;
+        self.pitch_phase = AdsrPhase::Attack;
+        self.pitch_val = 0.0;
         // Reset LFO delay counter
         let delay_secs = p.an1x_lfo_delay * 4.0; // 0–4 s
         self.lfo_delay_samples = (delay_secs * sr) as u32;
@@ -703,13 +709,26 @@ impl An1xVoice {
         }
         let lfo = lfo_raw * self.lfo_depth_cur;
 
+        // ── Pitch envelope (AD only — sustain=0, release=decay) ─────────────
+        adsr_tick(
+            &mut self.pitch_phase,
+            &mut self.pitch_val,
+            false, // gate=false → env decays immediately after attack
+            p.an1x_pitch_env_attack,
+            p.an1x_pitch_env_decay,
+            0.0, // sustain = 0
+            p.an1x_pitch_env_decay,
+            sr,
+        );
+        let pitch_env_st = (p.an1x_pitch_env_amount - 0.5) * 48.0 * self.pitch_val; // ±24 st
+
         // ── OSC frequencies ─────────────────────────────────────────────────
         let pitch_lfo_st = if p.an1x_lfo_target == 0 {
             lfo * 2.0
         } else {
             0.0
         }; // ±2 st
-        let pitch_st = self.current_pitch + drift_st + pitch_lfo_st;
+        let pitch_st = self.current_pitch + drift_st + pitch_lfo_st + pitch_env_st;
         let base_freq = super::midi_to_hz(pitch_st.round() as u8)
             * 2.0_f32.powf((pitch_st - pitch_st.round()) / 12.0);
 

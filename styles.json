@@ -10,9 +10,9 @@
       "pure acid",
       "303 acid"
     ],
-    "bpm_range": "112\u2013127",
-    "brief": "Classic Acid House 112\u2013127 BPM. Pure TB-303: high resonance 0.75\u20130.85, short decay, sparse hypnotic one-note pattern, filter motion is the melody. 4-on-floor kick, offbeat hi-hat. Dry, no FX. Phuture, Trax Records.",
-    "description": "Classic Acid House \u2014 112 to 127 BPM. The original Chicago sound, minimal and raw. Pure TB-303 manipulation: high resonance, moderate env_mod, short decay, slide and accent doing all the work. Bass patterns are sparse and hypnotic \u2014 often a single repeating note cluster with filter motion carrying the energy rather than melody. Kick four-on-the-floor, loose open hi-hat on offbeats. Almost no FX \u2014 maybe a touch of room reverb, nothing more. The squelch is the entire point. Dry, analogue, relentless. Think Phuture, Trax Records, early DJ Pierre.",
+    "bpm_range": "112–127",
+    "brief": "Classic Acid House 112–127 BPM. Pure TB-303: high resonance 0.75–0.85, short decay, sparse hypnotic one-note pattern, filter motion is the melody. 4-on-floor kick, offbeat hi-hat. Dry, no FX. Phuture, Trax Records.",
+    "description": "Classic Acid House — 112 to 127 BPM. The original Chicago sound, minimal and raw. Pure TB-303 manipulation: high resonance, moderate env_mod, short decay, slide and accent doing all the work. Bass patterns are sparse and hypnotic — often a single repeating note cluster with filter motion carrying the energy rather than melody. Kick four-on-the-floor, loose open hi-hat on offbeats. Almost no FX — maybe a touch of room reverb, nothing more. The squelch is the entire point. Dry, analogue, relentless. Think Phuture, Trax Records, early DJ Pierre.",
     "seed_patterns": {
       "kick": [
         1,
@@ -70,7 +70,7 @@
       ]
     },
     "suggested_root": 9,
-    "suggested_scale": "Minor"
+    "suggested_scale": "minor"
   },
   {
     "id": "acid_house",
@@ -83,9 +83,9 @@
       "tb-303",
       "acid groove"
     ],
-    "bpm_range": "122\u2013130",
-    "brief": "Acid House 122\u2013130 BPM. TB-303 squelch front and centre, strong env_mod, high resonance, short\u2013medium decay. Syncopated bass, occasional octave jumps C1\u2013C3. 4-on-floor kick, 8th closed hats, clap on 2&4. Short reverb, subtle rhythmic delay.",
-    "description": "Acid House \u2014 122 to 130 BPM. The evolved club sound: TB-303 squelch front and centre, but with more production gloss than pure classic acid. High resonance, strong env_mod, short to medium decay, accent and slide on key steps. Bass patterns are syncopated and hypnotic \u2014 occasional octave jumps, C1 to C3 range. Kick four-on-the-floor, closed hi-hats on 8th notes, maybe a clap on 2 and 4. Short reverb, subtle rhythmic delay \u2014 keep it tight. The filter movement IS the melody here.",
+    "bpm_range": "122–130",
+    "brief": "Acid House 122–130 BPM. TB-303 squelch front and centre, strong env_mod, high resonance, short–medium decay. Syncopated bass, occasional octave jumps C1–C3. 4-on-floor kick, 8th closed hats, clap on 2&4. Short reverb, subtle rhythmic delay.",
+    "description": "Acid House — 122 to 130 BPM. The evolved club sound: TB-303 squelch front and centre, but with more production gloss than pure classic acid. High resonance, strong env_mod, short to medium decay, accent and slide on key steps. Bass patterns are syncopated and hypnotic — occasional octave jumps, C1 to C3 range. Kick four-on-the-floor, closed hi-hats on 8th notes, maybe a clap on 2 and 4. Short reverb, subtle rhythmic delay — keep it tight. The filter movement IS the melody here.",
     "seed_patterns": {
       "kick": [
         1,
@@ -142,8 +142,8 @@
         0
       ]
     },
-    "suggested_root": 9,
-    "suggested_scale": "Minor"
+    "suggested_root": 5,
+    "suggested_scale": "minor"
   },
   {
     "id": "acid_techno",
@@ -156,9 +156,9 @@
       "acid rave",
       "acid trance"
     ],
-    "bpm_range": "130\u2013145",
-    "brief": "Acid Techno 130\u2013145 BPM. 303 pushed to extremes: resonance cranked, env_mod strong, cutoff sweeping dramatically. Repetitive single/two-note lines. Bass distortion for bite. Heavy driving kick, dense hi-hats. More reverb, aggressive delay. Dave Clarke, Hardfloor.",
-    "description": "Acid Techno \u2014 130 to 145 BPM. Harder, faster, more aggressive than acid house. The 303 is pushed to extremes \u2014 resonance cranked high, env_mod strong, cutoff sweeping dramatically. Bass patterns are relentless, often repetitive single-note or two-note lines that let the filter do the talking. Add distortion to the bass for extra bite. Kick heavy and driving, hi-hats dense and machine-like. More reverb allowed, maybe aggressive delay. This is rave floor music \u2014 brutal, hypnotic, relentless. Think Dave Clarke, Luke Slater, Hardfloor.",
+    "bpm_range": "130–145",
+    "brief": "Acid Techno 130–145 BPM. 303 pushed to extremes: resonance cranked, env_mod strong, cutoff sweeping dramatically. Repetitive single/two-note lines. Bass distortion for bite. Heavy driving kick, dense hi-hats. More reverb, aggressive delay. Dave Clarke, Hardfloor.",
+    "description": "Acid Techno — 130 to 145 BPM. Harder, faster, more aggressive than acid house. The 303 is pushed to extremes — resonance cranked high, env_mod strong, cutoff sweeping dramatically. Bass patterns are relentless, often repetitive single-note or two-note lines that let the filter do the talking. Add distortion to the bass for extra bite. Kick heavy and driving, hi-hats dense and machine-like. More reverb allowed, maybe aggressive delay. This is rave floor music — brutal, hypnotic, relentless. Think Dave Clarke, Luke Slater, Hardfloor.",
     "seed_patterns": {
       "kick": [
         1,
@@ -216,7 +216,7 @@
       ]
     },
     "suggested_root": 9,
-    "suggested_scale": "Phrygian"
+    "suggested_scale": "minor"
   },
   {
     "id": "detroit_techno",
@@ -228,9 +228,9 @@
       "motor city",
       "deep techno"
     ],
-    "bpm_range": "120\u2013135",
-    "brief": "Detroit Techno 120\u2013135 BPM. Funky polyrhythmic machine-soul. 4-on-floor kick, syncopated snare with ghost hits, swing. Melodic active bass locked to kick. Moderate resonance, warm tone. Medium room reverb, short sync'd delay. Juan Atkins, Derrick May.",
-    "description": "Detroit Techno \u2014 120 to 135 BPM. Funky, polyrhythmic, and warm \u2014 electronic soul. Four-on-the-floor kick but with syncopated snare placement and ghost hits that give it human swing. Bass lines are more melodically active than Berlin: moving, funky, locked to the kick but with character. Moderate filter resonance, warm analogue tone, mid-range presence. Medium room reverb, short sync'd delays for rhythmic thickening. Think of it as machines playing funk \u2014 precise but alive. Juan Atkins, Derrick May, Kevin Saunderson.",
+    "bpm_range": "120–135",
+    "brief": "Detroit Techno 120–135 BPM. Funky polyrhythmic machine-soul. 4-on-floor kick, syncopated snare with ghost hits, swing. Melodic active bass locked to kick. Moderate resonance, warm tone. Medium room reverb, short sync'd delay. Juan Atkins, Derrick May.",
+    "description": "Detroit Techno — 120 to 135 BPM. Funky, polyrhythmic, and warm — electronic soul. Four-on-the-floor kick but with syncopated snare placement and ghost hits that give it human swing. Bass lines are more melodically active than Berlin: moving, funky, locked to the kick but with character. Moderate filter resonance, warm analogue tone, mid-range presence. Medium room reverb, short sync'd delays for rhythmic thickening. Think of it as machines playing funk — precise but alive. Juan Atkins, Derrick May, Kevin Saunderson.",
     "seed_patterns": {
       "kick": [
         1,
@@ -288,7 +288,7 @@
       ]
     },
     "suggested_root": 9,
-    "suggested_scale": "Dorian"
+    "suggested_scale": "minor"
   },
   {
     "id": "berlin_techno",
@@ -301,9 +301,9 @@
       "dark techno",
       "berghain"
     ],
-    "bpm_range": "128\u2013134",
-    "brief": "Berlin Techno 128\u2013134 BPM. Kick is everything \u2014 deep sub, massive, 4-on-floor. Bass single low note or sub tail only. Filter dark, barely sweeping. Sparse snare and hi-hats. Large industrial reverb, longer delay, distortion grit. No funk. Richie Hawtin, Ben Klock.",
-    "description": "Berlin Techno \u2014 128 to 134 BPM. Relentless and heavy. The kick is everything \u2014 deep sub, massive weight, four-on-the-floor. Bass is minimal, often a single repeated low note or just the kick's sub tail. Filter stays dark, barely sweeping. Snare sparse, hi-hats minimal. Large reverb for industrial atmosphere, longer delays, distortion adds grit. No funk, no sweetness \u2014 machine music, hypnotic through repetition and sheer weight. Richie Hawtin, Marcel Dettmann, Ben Klock.",
+    "bpm_range": "128–134",
+    "brief": "Berlin Techno 128–134 BPM. Kick is everything — deep sub, massive, 4-on-floor. Bass single low note or sub tail only. Filter dark, barely sweeping. Sparse snare and hi-hats. Large industrial reverb, longer delay, distortion grit. No funk. Richie Hawtin, Ben Klock.",
+    "description": "Berlin Techno — 128 to 134 BPM. Relentless and heavy. The kick is everything — deep sub, massive weight, four-on-the-floor. Bass is minimal, often a single repeated low note or just the kick's sub tail. Filter stays dark, barely sweeping. Snare sparse, hi-hats minimal. Large reverb for industrial atmosphere, longer delays, distortion adds grit. No funk, no sweetness — machine music, hypnotic through repetition and sheer weight. Richie Hawtin, Marcel Dettmann, Ben Klock.",
     "seed_patterns": {
       "kick": [
         1,
@@ -361,7 +361,7 @@
       ]
     },
     "suggested_root": 0,
-    "suggested_scale": "Minor"
+    "suggested_scale": "minor"
   },
   {
     "id": "chicago_house",
@@ -373,9 +373,9 @@
       "classic house",
       "trax records"
     ],
-    "bpm_range": "118\u2013125",
-    "brief": "Chicago House 118\u2013125 BPM. Soulful, raw, groovy. 4-on-floor kick, offbeat syncopated hats, clap 2&4. Hooky melodic bass, medium density, octave jumps C1\u2013C3. Warm filter, moderate resonance. Medium room reverb. Marshall Jefferson, Larry Heard.",
-    "description": "Chicago House \u2014 118 to 125 BPM. Soulful, raw, and groovy. Four-on-the-floor kick, syncopated offbeat hi-hats, clap or snare on 2 and 4. Bass lines are hooky and melodic \u2014 medium density, octave jumps, C1 to C3 range, locked to the groove but with personality. Warm filter, moderate resonance, no harsh squelch. Medium room reverb gives it a slightly roomy feel. The vibe is human and physical \u2014 body music. Marshall Jefferson, Larry Heard, Ten City.",
+    "bpm_range": "118–125",
+    "brief": "Chicago House 118–125 BPM. Soulful, raw, groovy. 4-on-floor kick, offbeat syncopated hats, clap 2&4. Hooky melodic bass, medium density, octave jumps C1–C3. Warm filter, moderate resonance. Medium room reverb. Marshall Jefferson, Larry Heard.",
+    "description": "Chicago House — 118 to 125 BPM. Soulful, raw, and groovy. Four-on-the-floor kick, syncopated offbeat hi-hats, clap or snare on 2 and 4. Bass lines are hooky and melodic — medium density, octave jumps, C1 to C3 range, locked to the groove but with personality. Warm filter, moderate resonance, no harsh squelch. Medium room reverb gives it a slightly roomy feel. The vibe is human and physical — body music. Marshall Jefferson, Larry Heard, Ten City.",
     "seed_patterns": {
       "kick": [
         1,
@@ -433,7 +433,7 @@
       ]
     },
     "suggested_root": 5,
-    "suggested_scale": "Major"
+    "suggested_scale": "major"
   },
   {
     "id": "deep_house",
@@ -445,9 +445,9 @@
       "slow house",
       "jazzy house"
     ],
-    "bpm_range": "118\u2013122",
-    "brief": "Deep House 118\u2013122 BPM. Slow, warm, introspective. Understated kick, gentle hi-hats, minimal percussion \u2014 space matters. Smooth melodic bass with soft filter, low resonance. Long reverb trails, warm delay, heavy tape saturation. Late night meditative. Larry Heard.",
-    "description": "Deep House \u2014 118 to 122 BPM. Slow, warm, and introspective. Understated kick, gentle hi-hat patterns, minimal percussion \u2014 space is as important as sound. Bass is smooth and melodic, almost conversational, often with subtle slides and soft filter movement. Filter warm and slightly open, low resonance. Long reverb trails, warm delay, heavy saturation giving an analogue tape feel. The mood is late night and meditative. Larry Heard, Frankie Knuckles, Larry Levan.",
+    "bpm_range": "118–122",
+    "brief": "Deep House 118–122 BPM. Slow, warm, introspective. Understated kick, gentle hi-hats, minimal percussion — space matters. Smooth melodic bass with soft filter, low resonance. Long reverb trails, warm delay, heavy tape saturation. Late night meditative. Larry Heard.",
+    "description": "Deep House — 118 to 122 BPM. Slow, warm, and introspective. Understated kick, gentle hi-hat patterns, minimal percussion — space is as important as sound. Bass is smooth and melodic, almost conversational, often with subtle slides and soft filter movement. Filter warm and slightly open, low resonance. Long reverb trails, warm delay, heavy saturation giving an analogue tape feel. The mood is late night and meditative. Larry Heard, Frankie Knuckles, Larry Levan.",
     "seed_patterns": {
       "kick": [
         1,
@@ -505,7 +505,7 @@
       ]
     },
     "suggested_root": 5,
-    "suggested_scale": "Dorian"
+    "suggested_scale": "dorian"
   },
   {
     "id": "uk_garage",
@@ -519,9 +519,9 @@
       "garage",
       "shuffled house"
     ],
-    "bpm_range": "130\u2013135",
-    "brief": "UK Garage 130\u2013135 BPM. 2-step shuffle groove \u2014 kick displaced from grid, snare on 2&4 with ghost hits. Skippy syncopated hi-hats. Sub bass punchy and short, mid-bass melodic. Warm filter, moderate resonance. Short bright reverb, light delay. MJ Cole, Craig David, So Solid.",
-    "description": "UK Garage \u2014 130 to 135 BPM. The 2-step shuffle feel is everything. Kick is displaced from the four-on-the-floor grid \u2014 it skips, misses, and doubles unexpectedly. Snare on 2 and 4 but with ghost hits around it. Hi-hats are syncopated and skippy \u2014 16th note patterns with gaps that create forward momentum. Bass is a split personality: deep sub-bass on the kick hits, melodic mid-bass filling the spaces. Warm filter, moderate resonance, some accent. Short bright reverb, light rhythmic delay. The feel is snappy and intimate. MJ Cole, Artful Dodger, Craig David, So Solid Crew.",
+    "bpm_range": "130–135",
+    "brief": "UK Garage 130–135 BPM. 2-step shuffle groove — kick displaced from grid, snare on 2&4 with ghost hits. Skippy syncopated hi-hats. Sub bass punchy and short, mid-bass melodic. Warm filter, moderate resonance. Short bright reverb, light delay. MJ Cole, Craig David, So Solid.",
+    "description": "UK Garage — 130 to 135 BPM. The 2-step shuffle feel is everything. Kick is displaced from the four-on-the-floor grid — it skips, misses, and doubles unexpectedly. Snare on 2 and 4 but with ghost hits around it. Hi-hats are syncopated and skippy — 16th note patterns with gaps that create forward momentum. Bass is a split personality: deep sub-bass on the kick hits, melodic mid-bass filling the spaces. Warm filter, moderate resonance, some accent. Short bright reverb, light rhythmic delay. The feel is snappy and intimate. MJ Cole, Artful Dodger, Craig David, So Solid Crew.",
     "seed_patterns": {
       "kick": [
         1,
@@ -579,7 +579,7 @@
       ]
     },
     "suggested_root": 7,
-    "suggested_scale": "Minor"
+    "suggested_scale": "minor"
   },
   {
     "id": "dubstep",
@@ -593,9 +593,9 @@
       "brostep",
       "dark dubstep"
     ],
-    "bpm_range": "138\u2013142",
-    "brief": "Dubstep 138\u2013142 BPM half-time feel. Kick on 1, snare on 3 (half-time grid). Wobble bass: slow LFO on filter, resonance 0.6\u20130.8, env_mod sweeping. Heavy sub. Reverb for space, moderate delay. Skream, Benga, Digital Mystikz.",
-    "description": "Dubstep \u2014 138 to 142 BPM but with a half-time feel that makes it move at 70 BPM. The signature half-time drum pattern: kick on beat 1, massive snare crack on beat 3. Hi-hats fill the spaces with syncopated 16ths. The wobble bass is the centrepiece \u2014 slow LFO modulating the filter gives that undulating growl: resonance 0.6 to 0.8, env_mod sweeping, heavy sub underneath. Distortion for the aggressive mid-range teeth of the wobble. Heavy reverb for weight and space, moderate delay. Dark, weighty, and sub-heavy. Skream, Benga, Digital Mystikz, Loefah.",
+    "bpm_range": "138–142",
+    "brief": "Dubstep 138–142 BPM half-time feel. Kick on 1, snare on 3 (half-time grid). Wobble bass: slow LFO on filter, resonance 0.6–0.8, env_mod sweeping. Heavy sub. Reverb for space, moderate delay. Skream, Benga, Digital Mystikz.",
+    "description": "Dubstep — 138 to 142 BPM but with a half-time feel that makes it move at 70 BPM. The signature half-time drum pattern: kick on beat 1, massive snare crack on beat 3. Hi-hats fill the spaces with syncopated 16ths. The wobble bass is the centrepiece — slow LFO modulating the filter gives that undulating growl: resonance 0.6 to 0.8, env_mod sweeping, heavy sub underneath. Distortion for the aggressive mid-range teeth of the wobble. Heavy reverb for weight and space, moderate delay. Dark, weighty, and sub-heavy. Skream, Benga, Digital Mystikz, Loefah.",
     "seed_patterns": {
       "kick": [
         1,
@@ -653,7 +653,7 @@
       ]
     },
     "suggested_root": 0,
-    "suggested_scale": "Minor"
+    "suggested_scale": "minor"
   },
   {
     "id": "jungle",
@@ -666,9 +666,9 @@
       "raggajungle",
       "amen"
     ],
-    "bpm_range": "160\u2013175",
-    "brief": "Jungle 160\u2013175 BPM. Breakbeat-driven \u2014 NO 4-on-floor. Syncopated ghost snares, off-grid kicks, dense rolling hats. Amen break energy. Deep sparse sub-bass C0\u2013C1. Short reverb for clarity. Complexity is in the rhythm, not the melody.",
-    "description": "Jungle \u2014 160 to 175 BPM. Breakbeat-driven, chaotic, and raw. Drums do NOT sit on a four-on-the-floor grid \u2014 complex syncopated patterns, ghost snares, off-grid kicks, dense rolling hi-hat work. Think Amen break energy: snare displaced and unpredictable, kick hitting offbeats, fills everywhere. Sub bass is deep and sparse, mostly C0 to C1, just anchoring the bottom end while the breaks do everything else. Short reverb for clarity. The whole energy is in the rhythmic complexity \u2014 loose, dangerous, physical.",
+    "bpm_range": "160–175",
+    "brief": "Jungle 160–175 BPM. Breakbeat-driven — NO 4-on-floor. Syncopated ghost snares, off-grid kicks, dense rolling hats. Amen break energy. Deep sparse sub-bass C0–C1. Short reverb for clarity. Complexity is in the rhythm, not the melody.",
+    "description": "Jungle — 160 to 175 BPM. Breakbeat-driven, chaotic, and raw. Drums do NOT sit on a four-on-the-floor grid — complex syncopated patterns, ghost snares, off-grid kicks, dense rolling hi-hat work. Think Amen break energy: snare displaced and unpredictable, kick hitting offbeats, fills everywhere. Sub bass is deep and sparse, mostly C0 to C1, just anchoring the bottom end while the breaks do everything else. Short reverb for clarity. The whole energy is in the rhythmic complexity — loose, dangerous, physical.",
     "seed_patterns": {
       "kick": [
         1,
@@ -726,7 +726,7 @@
       ]
     },
     "suggested_root": 9,
-    "suggested_scale": "Minor"
+    "suggested_scale": "minor"
   },
   {
     "id": "drum_and_bass",
@@ -740,9 +740,9 @@
       "reese",
       "rolling dnb"
     ],
-    "bpm_range": "170\u2013180",
-    "brief": "Drum and Bass 170\u2013180 BPM. Big snare on 2&4, intricate hi-hats. Reese bass: detuned dark sub, slow filter undulation, growling movement. Short reverb, minimal delay \u2014 everything must cut through. Tension between mechanical kick and fluid bass.",
-    "description": "Drum and Bass \u2014 170 to 180 BPM. Tight, technical, and heavy. Big snare on 2 and 4 with intricate hi-hat work filling the spaces. Bass is the emotional core \u2014 deep rolling sub with slow filter movement, growling and undulating. A Reese bass feel: detuned, dark, with subtle pitch movement. Short reverb, minimal delay \u2014 everything needs to cut through at this speed. The energy is in the tension between the mechanical precision of the kick and the fluid movement of the bass.",
+    "bpm_range": "170–180",
+    "brief": "Drum and Bass 170–180 BPM. Big snare on 2&4, intricate hi-hats. Reese bass: detuned dark sub, slow filter undulation, growling movement. Short reverb, minimal delay — everything must cut through. Tension between mechanical kick and fluid bass.",
+    "description": "Drum and Bass — 170 to 180 BPM. Tight, technical, and heavy. Big snare on 2 and 4 with intricate hi-hat work filling the spaces. Bass is the emotional core — deep rolling sub with slow filter movement, growling and undulating. A Reese bass feel: detuned, dark, with subtle pitch movement. Short reverb, minimal delay — everything needs to cut through at this speed. The energy is in the tension between the mechanical precision of the kick and the fluid movement of the bass.",
     "seed_patterns": {
       "kick": [
         1,
@@ -800,7 +800,7 @@
       ]
     },
     "suggested_root": 9,
-    "suggested_scale": "Minor"
+    "suggested_scale": "minor"
   },
   {
     "id": "breakcore",
@@ -813,9 +813,9 @@
       "amen breakcore",
       "broken hardcore"
     ],
-    "bpm_range": "160\u2013300",
-    "brief": "Breakcore 160\u2013300+ BPM irregular. Maximum Amen break chaos \u2014 rapid-fire kicks and snares in unexpected micro-timed positions. Angular aggressive bass with erratic pitching. Distortion on everything. Short brutal reverb. No conventional groove. Venetian Snares.",
-    "description": "Breakcore \u2014 160 to 300+ BPM, often irregular. Maximum breakbeat chaos. Amen break and other loops shredded and reassembled \u2014 rapid-fire kick and snare hits firing in unexpected places, micro-timed fills, patterns that seem to fall apart and reconstruct themselves. Bass is angular and aggressive, often pitching erratically. Distortion on everything. BPM may feel variable even if technically constant. Reverb short and brutal. No groove in the conventional sense \u2014 the pleasure is in controlled chaos and rhythmic surprise. Venetian Snares, Bong-Ra, Enduser.",
+    "bpm_range": "160–300",
+    "brief": "Breakcore 160–300+ BPM irregular. Maximum Amen break chaos — rapid-fire kicks and snares in unexpected micro-timed positions. Angular aggressive bass with erratic pitching. Distortion on everything. Short brutal reverb. No conventional groove. Venetian Snares.",
+    "description": "Breakcore — 160 to 300+ BPM, often irregular. Maximum breakbeat chaos. Amen break and other loops shredded and reassembled — rapid-fire kick and snare hits firing in unexpected places, micro-timed fills, patterns that seem to fall apart and reconstruct themselves. Bass is angular and aggressive, often pitching erratically. Distortion on everything. BPM may feel variable even if technically constant. Reverb short and brutal. No groove in the conventional sense — the pleasure is in controlled chaos and rhythmic surprise. Venetian Snares, Bong-Ra, Enduser.",
     "seed_patterns": {
       "kick": [
         1,
@@ -873,7 +873,7 @@
       ]
     },
     "suggested_root": 0,
-    "suggested_scale": "Chromatic"
+    "suggested_scale": "chromatic"
   },
   {
     "id": "dub_techno",
@@ -885,9 +885,9 @@
       "deep dub",
       "techno dub"
     ],
-    "bpm_range": "120\u2013126",
-    "brief": "Dub Techno 120\u2013126 BPM. Sparse minimal drums \u2014 just kick, whisper of clap. Single deep bass note or two-note motif. FX is the music: maximum reverb (long tail), dotted delay ghost echoes, heavy saturation. Glacial filter sweeps. Negative space. Basic Channel.",
-    "description": "Dub Techno \u2014 120 to 126 BPM. Hypnotic minimalism. Sparse drums \u2014 often just a kick, maybe a whisper of a clap. Bass is a single deep note or tiny two-note motif barely moving. The FX chain IS the music: maximum reverb (5 to 6 seconds), dotted delay creating rhythmic ghost echoes, heavy saturation blurring the edges. Filter sweeps happen glacially over 4 to 8 bars. Everything is about negative space and depth. Meditative, dark, oceanic. Basic Channel, Pole, Maurizio.",
+    "bpm_range": "120–126",
+    "brief": "Dub Techno 120–126 BPM. Sparse minimal drums — just kick, whisper of clap. Single deep bass note or two-note motif. FX is the music: maximum reverb (long tail), dotted delay ghost echoes, heavy saturation. Glacial filter sweeps. Negative space. Basic Channel.",
+    "description": "Dub Techno — 120 to 126 BPM. Hypnotic minimalism. Sparse drums — often just a kick, maybe a whisper of a clap. Bass is a single deep note or tiny two-note motif barely moving. The FX chain IS the music: maximum reverb (5 to 6 seconds), dotted delay creating rhythmic ghost echoes, heavy saturation blurring the edges. Filter sweeps happen glacially over 4 to 8 bars. Everything is about negative space and depth. Meditative, dark, oceanic. Basic Channel, Pole, Maurizio.",
     "seed_patterns": {
       "kick": [
         1,
@@ -945,7 +945,7 @@
       ]
     },
     "suggested_root": 9,
-    "suggested_scale": "Minor"
+    "suggested_scale": "dorian"
   },
   {
     "id": "minimal_techno",
@@ -957,9 +957,9 @@
       "minimal groove",
       "microhouse"
     ],
-    "bpm_range": "125\u2013132",
-    "brief": "Minimal Techno 125\u2013132 BPM. Stripped to the bone \u2014 kick and maybe a shaker. Single repeating bass note or two-step pattern. Interest through tiny variations: filter nudged, hi-hat accent moved, delay send opened. Dry or very short reverb. Plastikman.",
-    "description": "Minimal Techno \u2014 125 to 132 BPM. Stripped to the bone. Kick and maybe a shaker or click \u2014 no more. Bass is a single repeating note or a two-step pattern. The interest comes from tiny variations and subtle automation \u2014 a filter nudged a fraction, a hi-hat accent moved a 16th, a delay send opened slightly. Nothing dramatic happens; the music works through accumulation of small shifts. Dry or very short reverb, precise and clean. Plastikman, Richie Hawtin's early minimal work, Ricardo Villalobos.",
+    "bpm_range": "125–132",
+    "brief": "Minimal Techno 125–132 BPM. Stripped to the bone — kick and maybe a shaker. Single repeating bass note or two-step pattern. Interest through tiny variations: filter nudged, hi-hat accent moved, delay send opened. Dry or very short reverb. Plastikman.",
+    "description": "Minimal Techno — 125 to 132 BPM. Stripped to the bone. Kick and maybe a shaker or click — no more. Bass is a single repeating note or a two-step pattern. The interest comes from tiny variations and subtle automation — a filter nudged a fraction, a hi-hat accent moved a 16th, a delay send opened slightly. Nothing dramatic happens; the music works through accumulation of small shifts. Dry or very short reverb, precise and clean. Plastikman, Richie Hawtin's early minimal work, Ricardo Villalobos.",
     "seed_patterns": {
       "kick": [
         1,
@@ -1017,7 +1017,7 @@
       ]
     },
     "suggested_root": 9,
-    "suggested_scale": "Pentatonic"
+    "suggested_scale": "minor"
   },
   {
     "id": "trance",
@@ -1030,9 +1030,9 @@
       "138",
       "psy trance adjacent"
     ],
-    "bpm_range": "135\u2013142",
-    "brief": "Trance 135\u2013142 BPM, 138 canonical. Emotional, euphoric, build-drop-release. 4-on-floor kick, clean snare 2&4, driving 8th-note bass locked to kick. Medium\u2013large reverb, sync'd delay. Slightly open filter, warm resonance. Forward motion always. Armin, Ti\u00ebsto.",
-    "description": "Trance \u2014 135 to 142 BPM, 138 canonical. Emotional and euphoric. Four-on-the-floor kick, clean snare on 2 and 4, driving 8th-note bass locked to the kick. The energy arc is everything \u2014 build, drop, release. Medium to large reverb, sync'd delay. BPM around 138. Slightly open filter with some resonance for warmth. The bass should feel like it's pushing forward constantly. Armin van Buuren, Ti\u00ebsto, Paul van Dyk.",
+    "bpm_range": "135–142",
+    "brief": "Trance 135–142 BPM, 138 canonical. Emotional, euphoric, build-drop-release. 4-on-floor kick, clean snare 2&4, driving 8th-note bass locked to kick. Medium–large reverb, sync'd delay. Slightly open filter, warm resonance. Forward motion always. Armin, Tiësto.",
+    "description": "Trance — 135 to 142 BPM, 138 canonical. Emotional and euphoric. Four-on-the-floor kick, clean snare on 2 and 4, driving 8th-note bass locked to the kick. The energy arc is everything — build, drop, release. Medium to large reverb, sync'd delay. BPM around 138. Slightly open filter with some resonance for warmth. The bass should feel like it's pushing forward constantly. Armin van Buuren, Tiësto, Paul van Dyk.",
     "seed_patterns": {
       "kick": [
         1,
@@ -1090,7 +1090,7 @@
       ]
     },
     "suggested_root": 9,
-    "suggested_scale": "Minor"
+    "suggested_scale": "minor"
   },
   {
     "id": "gabber",
@@ -1104,9 +1104,9 @@
       "frenchcore",
       "happy hardcore"
     ],
-    "bpm_range": "160\u2013190",
-    "brief": "Gabber 160\u2013190 BPM. Kick IS everything \u2014 4-on-floor at extreme tempo, distorted falling-pitch tone doubling as bass. Distortion drive max. No reverb, no space, no subtlety. Single note pounding with kick. Overwhelming, relentless repetition. Neophyte, DJ Buzz.",
-    "description": "Gabber \u2014 160 to 190 BPM. The kick IS everything. Four-on-the-floor at extreme tempo, the kick distorted into a falling-pitch tone that doubles as bass. Distortion drive cranked up. No reverb, no space, no subtlety. Bass is either merged with the kick or a single note pounding along with it. Relentless, overwhelming, physically loud. This style is about maximalism and aggression through pure repetition. Neophyte, DJ Buzz, Rotterdam Terror Corps.",
+    "bpm_range": "160–190",
+    "brief": "Gabber 160–190 BPM. Kick IS everything — 4-on-floor at extreme tempo, distorted falling-pitch tone doubling as bass. Distortion drive max. No reverb, no space, no subtlety. Single note pounding with kick. Overwhelming, relentless repetition. Neophyte, DJ Buzz.",
+    "description": "Gabber — 160 to 190 BPM. The kick IS everything. Four-on-the-floor at extreme tempo, the kick distorted into a falling-pitch tone that doubles as bass. Distortion drive cranked up. No reverb, no space, no subtlety. Bass is either merged with the kick or a single note pounding along with it. Relentless, overwhelming, physically loud. This style is about maximalism and aggression through pure repetition. Neophyte, DJ Buzz, Rotterdam Terror Corps.",
     "seed_patterns": {
       "kick": [
         1,
@@ -1164,7 +1164,7 @@
       ]
     },
     "suggested_root": 0,
-    "suggested_scale": "Minor"
+    "suggested_scale": "chromatic"
   },
   {
     "id": "synthwave",
@@ -1178,9 +1178,9 @@
       "neon",
       "vapor synth"
     ],
-    "bpm_range": "95\u2013120",
-    "brief": "Synthwave 95\u2013120 BPM. 80s cinematic sci-fi. Driving kick, prominent gated-reverb snare 2&4. Melodic driving arpeggiated bass, slightly detuned analogue feel. Open bright filter, moderate resonance. Long cinematic reverb, tempo-sync'd delay. Neon city at night. Kavinsky.",
-    "description": "Synthwave \u2014 95 to 120 BPM. 1980s cinematic sci-fi aesthetics through modern production. Driving kick with a prominent gated-reverb snare cracking on 2 and 4 \u2014 that gated reverb is the signature 80s drum sound. Bass is melodic and driving, often arpeggiated, with a slightly detuned analogue feel. Filter is open and bright with moderate resonance. Long reverb for cinematic space, tempo-sync'd delay. The mood is driving through a neon city at night \u2014 nostalgic, cinematic, forward motion. FM-84, Kavinsky, Perturbator.",
+    "bpm_range": "95–120",
+    "brief": "Synthwave 95–120 BPM. 80s cinematic sci-fi. Driving kick, prominent gated-reverb snare 2&4. Melodic driving arpeggiated bass, slightly detuned analogue feel. Open bright filter, moderate resonance. Long cinematic reverb, tempo-sync'd delay. Neon city at night. Kavinsky.",
+    "description": "Synthwave — 95 to 120 BPM. 1980s cinematic sci-fi aesthetics through modern production. Driving kick with a prominent gated-reverb snare cracking on 2 and 4 — that gated reverb is the signature 80s drum sound. Bass is melodic and driving, often arpeggiated, with a slightly detuned analogue feel. Filter is open and bright with moderate resonance. Long reverb for cinematic space, tempo-sync'd delay. The mood is driving through a neon city at night — nostalgic, cinematic, forward motion. FM-84, Kavinsky, Perturbator.",
     "seed_patterns": {
       "kick": [
         1,
@@ -1238,7 +1238,7 @@
       ]
     },
     "suggested_root": 9,
-    "suggested_scale": "Minor"
+    "suggested_scale": "minor"
   },
   {
     "id": "darksynth",
@@ -1252,9 +1252,9 @@
       "horror synth",
       "metal synth"
     ],
-    "bpm_range": "120\u2013145",
-    "brief": "Darksynth 120\u2013145 BPM. Cinematic dread and aggression. Heavy distorted kick, faster than synthwave. Hard snare, sometimes double-time. Thick distorted bass, power-chord influenced, low and dark. Distortion drive up. Large dark reverb, prominent delay. Perturbator, Carpenter Brut.",
-    "description": "Darksynth / Outrun \u2014 120 to 145 BPM. Cinematic dread and aggression. Heavy, distorted kick \u2014 faster and more aggressive than standard synthwave. Snare hits hard, sometimes double-time. Bass is thick and distorted, power-chord influenced, often low and dark. Distortion drive up significantly. Reverb large and dark, delay prominent. Filter dark to mid, resonance moderate. Think horror film soundtrack meets techno \u2014 pulsing tension, synthetic menace. Perturbator, Carpenter Brut, Gost, Dance with the Dead.",
+    "bpm_range": "120–145",
+    "brief": "Darksynth 120–145 BPM. Cinematic dread and aggression. Heavy distorted kick, faster than synthwave. Hard snare, sometimes double-time. Thick distorted bass, power-chord influenced, low and dark. Distortion drive up. Large dark reverb, prominent delay. Perturbator, Carpenter Brut.",
+    "description": "Darksynth / Outrun — 120 to 145 BPM. Cinematic dread and aggression. Heavy, distorted kick — faster and more aggressive than standard synthwave. Snare hits hard, sometimes double-time. Bass is thick and distorted, power-chord influenced, often low and dark. Distortion drive up significantly. Reverb large and dark, delay prominent. Filter dark to mid, resonance moderate. Think horror film soundtrack meets techno — pulsing tension, synthetic menace. Perturbator, Carpenter Brut, Gost, Dance with the Dead.",
     "seed_patterns": {
       "kick": [
         1,
@@ -1312,7 +1312,7 @@
       ]
     },
     "suggested_root": 9,
-    "suggested_scale": "Phrygian"
+    "suggested_scale": "minor"
   },
   {
     "id": "vaporwave",
@@ -1326,9 +1326,9 @@
       "lo-fi dreamy",
       "dreampunk"
     ],
-    "bpm_range": "50\u201375",
-    "brief": "Vaporwave 50\u201375 BPM drifting. Dreamy hazy nostalgia. Soft muffled kick, whispered hi-hats. Slow sustained bass, smooth filter, low resonance, barely moving. Heavy blurring reverb, long tape-delay echoes, warm tape saturation. Empty mall at 3am. Macintosh Plus.",
-    "description": "Vaporwave \u2014 50 to 75 BPM, often drifting. Dreamy, hazy, melancholic nostalgia. Slow tempo with soft drumming \u2014 kick gentle and muffled, hi-hats whispered. Bass slow and sustained, smooth filter, low resonance, barely moving. Heavy reverb blurring everything together, pitch-shifted down for that woozy quality. Long tape-delay echoes. Saturation giving a warm degraded tape feel. The mood is an empty shopping mall at 3am, a forgotten 80s dream. Macintosh Plus, Blank Banshee, 2814.",
+    "bpm_range": "50–75",
+    "brief": "Vaporwave 50–75 BPM drifting. Dreamy hazy nostalgia. Soft muffled kick, whispered hi-hats. Slow sustained bass, smooth filter, low resonance, barely moving. Heavy blurring reverb, long tape-delay echoes, warm tape saturation. Empty mall at 3am. Macintosh Plus. AN1X voice for warm detuned chords — detune osc2, slow attack, slight drift, LP filter half-open.",
+    "description": "Vaporwave — 50 to 75 BPM, often drifting. Dreamy, hazy, melancholic nostalgia. Slow tempo with soft drumming — kick gentle and muffled, hi-hats whispered. Bass slow and sustained, smooth filter, low resonance, barely moving. Heavy reverb blurring everything together, pitch-shifted down for that woozy quality. Long tape-delay echoes. Saturation giving a warm degraded tape feel. The mood is an empty shopping mall at 3am, a forgotten 80s dream. Macintosh Plus, Blank Banshee, 2814. AN1X voice for warm detuned chords — detune osc2, slow attack, slight drift, LP filter half-open.",
     "seed_patterns": {
       "kick": [
         1,
@@ -1386,7 +1386,7 @@
       ]
     },
     "suggested_root": 2,
-    "suggested_scale": "Major"
+    "suggested_scale": "major"
   },
   {
     "id": "idm",
@@ -1402,8 +1402,8 @@
       "intelligent dance"
     ],
     "bpm_range": "variable",
-    "brief": "IDM variable BPM. Break every rule. Off-grid kick \u2014 almost always avoids 4-on-floor, can subvert it ironically. Ghost notes, polyrhythmic hats. Unpredictable bass: sparse or dense, unexpected pitch shifts. Rapid non-musical filter movement. Strange internal logic. Aphex Twin, Autechre.",
-    "description": "IDM / Braindance \u2014 variable BPM, break every rule. Kick patterns must be irregular and off-grid \u2014 almost always avoids four-on-the-floor, though can deploy it ironically for effect. Snare displaced constantly, ghost notes everywhere, polyrhythmic hi-hat work. Bass is unpredictable: could be sparse, could be dense, could pitch-shift unexpectedly. Filter movement should be rapid and non-musical. The pleasure is in subverting expectations while maintaining a strange internal logic. Modulate things that are usually static. Put notes where they shouldn't be. Cold, mischievous, technically intricate. Aphex Twin, Autechre, Squarepusher.",
+    "brief": "IDM variable BPM. Break every rule. Off-grid kick — almost always avoids 4-on-floor, can subvert it ironically. Ghost notes, polyrhythmic hats. Unpredictable bass: sparse or dense, unexpected pitch shifts. Rapid non-musical filter movement. Strange internal logic. Aphex Twin, Autechre. AN1X voice for melodic and timbral mangling — detune aggressively, use noise oscillator, rapid filter sweeps.",
+    "description": "IDM / Braindance — variable BPM, break every rule. Kick patterns must be irregular and off-grid — almost always avoids four-on-the-floor, though can deploy it ironically for effect. Snare displaced constantly, ghost notes everywhere, polyrhythmic hi-hat work. Bass is unpredictable: could be sparse, could be dense, could pitch-shift unexpectedly. Filter movement should be rapid and non-musical. The pleasure is in subverting expectations while maintaining a strange internal logic. Modulate things that are usually static. Put notes where they shouldn't be. Cold, mischievous, technically intricate. Aphex Twin, Autechre, Squarepusher. AN1X voice for melodic and timbral mangling — detune aggressively, use noise oscillator, rapid filter sweeps.",
     "seed_patterns": {
       "kick": [
         1,
@@ -1461,7 +1461,7 @@
       ]
     },
     "suggested_root": 0,
-    "suggested_scale": "Dorian"
+    "suggested_scale": "chromatic"
   },
   {
     "id": "electro",
@@ -1474,9 +1474,9 @@
       "miami bass",
       "electro breaks"
     ],
-    "bpm_range": "112\u2013126",
-    "brief": "Electro 112\u2013126 BPM. Robotic funk. Long-tail boomy kick, snare 2&4 mechanical snap, syncopated stiff hats. Angular staccato bass \u2014 short notes, robotic rhythmic, not smooth. Square wave feel, slightly detuned. Rigid grid, no swing. Minimal reverb, dry punchy. Afrika Bambaataa.",
-    "description": "Electro \u2014 112 to 126 BPM. Robotic funk. Drum machine precision \u2014 kick with a long boomy tail, snare on 2 and 4 with a mechanical snap, hi-hats syncopated and stiff. Bass is angular, staccato, short note lengths \u2014 robotic and rhythmic rather than smooth. Square wave feel, slightly detuned. The feel is cold and funky simultaneously: rigid grid, no swing, yet impossible not to move to. Minimal reverb, dry and punchy. Afrika Bambaataa, Drexciya, early Detroit electro.",
+    "bpm_range": "112–126",
+    "brief": "Electro 112–126 BPM. Robotic funk. Long-tail boomy kick, snare 2&4 mechanical snap, syncopated stiff hats. Angular staccato bass — short notes, robotic rhythmic, not smooth. Square wave feel, slightly detuned. Rigid grid, no swing. Minimal reverb, dry punchy. Afrika Bambaataa.",
+    "description": "Electro — 112 to 126 BPM. Robotic funk. Drum machine precision — kick with a long boomy tail, snare on 2 and 4 with a mechanical snap, hi-hats syncopated and stiff. Bass is angular, staccato, short note lengths — robotic and rhythmic rather than smooth. Square wave feel, slightly detuned. The feel is cold and funky simultaneously: rigid grid, no swing, yet impossible not to move to. Minimal reverb, dry and punchy. Afrika Bambaataa, Drexciya, early Detroit electro.",
     "seed_patterns": {
       "kick": [
         1,
@@ -1534,7 +1534,7 @@
       ]
     },
     "suggested_root": 9,
-    "suggested_scale": "Minor"
+    "suggested_scale": "minor"
   },
   {
     "id": "ambient_house",
@@ -1547,9 +1547,9 @@
       "rave ambient",
       "downtempo house"
     ],
-    "bpm_range": "100\u2013118",
-    "brief": "Ambient House 100\u2013118 BPM. Beat-driven but floaty. Gentle kick, soft hats, very spacious \u2014 lots of room. Smooth melodic bass, slow filter sweeps, low resonance, warm. Maximum reverb, long delay tails, subtle chorus. Groove present but never urgent. The Orb.",
-    "description": "Ambient House \u2014 100 to 118 BPM. Beat-driven but floaty and dreamy. Gentle kick, soft hi-hats, very spacious \u2014 lots of room between hits. Bass is smooth and melodic, slow filter sweeps, low resonance, warm. Maximum reverb for a spacious open feel, long delay tails, subtle chorus. The groove is present but never urgent \u2014 music to dissolve into. The Orb, Mixmaster Morris, early KLF ambient works, Irresistible Force.",
+    "bpm_range": "100–118",
+    "brief": "Ambient House 100–118 BPM. Beat-driven but floaty. Gentle kick, soft hats, very spacious — lots of room. Smooth melodic bass, slow filter sweeps, low resonance, warm. Maximum reverb, long delay tails, subtle chorus. Groove present but never urgent. The Orb. AN1X voice for warm pad chords — slow amp attack, LP filter, gentle LFO depth.",
+    "description": "Ambient House — 100 to 118 BPM. Beat-driven but floaty and dreamy. Gentle kick, soft hi-hats, very spacious — lots of room between hits. Bass is smooth and melodic, slow filter sweeps, low resonance, warm. Maximum reverb for a spacious open feel, long delay tails, subtle chorus. The groove is present but never urgent — music to dissolve into. The Orb, Mixmaster Morris, early KLF ambient works, Irresistible Force. AN1X voice for warm pad chords — slow amp attack, LP filter, gentle LFO depth.",
     "seed_patterns": {
       "kick": [
         1,
@@ -1607,7 +1607,7 @@
       ]
     },
     "suggested_root": 5,
-    "suggested_scale": "Dorian"
+    "suggested_scale": "dorian"
   },
   {
     "id": "ambient_techno",
@@ -1619,9 +1619,9 @@
       "drone techno",
       "machine ambient"
     ],
-    "bpm_range": "100\u2013120",
-    "brief": "Ambient Techno 100\u2013120 BPM. Machines dreaming. Slow kick \u2014 not necessarily 4-on-floor. Deep evolving bass drone or slow two-note movement, filter sweeping over many bars. Very long reverb dissolving everything. Cold mechanical yet serene. Aphex Twin SAW Vol 2, early Autechre.",
-    "description": "Ambient Techno \u2014 100 to 120 BPM. Machines dreaming. Slow kick patterns \u2014 not necessarily four-on-the-floor, sometimes just marking slow time. Bass is a deep evolving drone or slow two-note movement, filter sweeping over many bars. Very long reverb dissolving everything. Repetitive but slowly morphing. Cold and mechanical yet strangely serene. The rhythm creates a hypnotic grid but the sounds float above it. Aphex Twin's Selected Ambient Works Vol 2, early Autechre, B12.",
+    "bpm_range": "100–120",
+    "brief": "Ambient Techno 100–120 BPM. Machines dreaming. Slow kick — not necessarily 4-on-floor. Deep evolving bass drone or slow two-note movement, filter sweeping over many bars. Very long reverb dissolving everything. Cold mechanical yet serene. Aphex Twin SAW Vol 2, early Autechre. AN1X voice for evolving pads — slow attack, high drift, glacial LFO filter sweep over many bars.",
+    "description": "Ambient Techno — 100 to 120 BPM. Machines dreaming. Slow kick patterns — not necessarily four-on-the-floor, sometimes just marking slow time. Bass is a deep evolving drone or slow two-note movement, filter sweeping over many bars. Very long reverb dissolving everything. Repetitive but slowly morphing. Cold and mechanical yet strangely serene. The rhythm creates a hypnotic grid but the sounds float above it. Aphex Twin's Selected Ambient Works Vol 2, early Autechre, B12. AN1X voice for evolving pads — slow attack, high drift, glacial LFO filter sweep over many bars.",
     "seed_patterns": {
       "kick": [
         1,
@@ -1679,7 +1679,7 @@
       ]
     },
     "suggested_root": 9,
-    "suggested_scale": "Minor"
+    "suggested_scale": "dorian"
   },
   {
     "id": "dark_ambient",
@@ -1694,8 +1694,8 @@
       "void"
     ],
     "bpm_range": "none or very slow",
-    "brief": "Dark Ambient \u2014 no tempo or extremely slow. No kick, no hi-hat. Bass is a slowly shifting low drone or sub-frequency rumble \u2014 barely a note, more a presence. Maximum reverb and delay, cavernous space. Distortion for grit. Filter closed and dark. Atmosphere over groove. Lustmord.",
-    "description": "Dark Ambient \u2014 no tempo or extremely slow, no conventional rhythm. This is texture and dread. No kick, no hi-hat. Bass is a slowly shifting low drone or sub-frequency rumble \u2014 barely a note, more of a presence. Maximum reverb and delay creating a cavernous, suffocating space. Distortion and saturation for grit. Filter closed and dark. The goal is atmosphere over groove \u2014 brooding, cinematic tension with no resolution. Lustmord, Coil, early Zoviet France, Thomas K\u00f6ner.",
+    "brief": "Dark Ambient — no tempo or extremely slow. No kick, no hi-hat. Bass is a slowly shifting low drone or sub-frequency rumble — barely a note, more a presence. Maximum reverb and delay, cavernous space. Distortion for grit. Filter closed and dark. Atmosphere over groove. Lustmord. AN1X voice for sub-frequency drone — triangle wave, filter closed, maximum drift, no gate (long release).",
+    "description": "Dark Ambient — no tempo or extremely slow, no conventional rhythm. This is texture and dread. No kick, no hi-hat. Bass is a slowly shifting low drone or sub-frequency rumble — barely a note, more of a presence. Maximum reverb and delay creating a cavernous, suffocating space. Distortion and saturation for grit. Filter closed and dark. The goal is atmosphere over groove — brooding, cinematic tension with no resolution. Lustmord, Coil, early Zoviet France, Thomas Köner. AN1X voice for sub-frequency drone — triangle wave, filter closed, maximum drift, no gate (long release).",
     "seed_patterns": {
       "kick": [
         1,
@@ -1753,7 +1753,7 @@
       ]
     },
     "suggested_root": 0,
-    "suggested_scale": "Phrygian"
+    "suggested_scale": "minor"
   },
   {
     "id": "space_ambient",
@@ -1768,8 +1768,8 @@
       "starfield"
     ],
     "bpm_range": "very slow or free",
-    "brief": "Space Ambient \u2014 very slow or free. Sparse cosmic pulse if any. Bass moves in long glacial arcs over many bars, filter drifting. Maximum reverb for infinite space, long echo tails, everything blurring. Warm, gentle, enormous. Vast scale. Tangerine Dream, Klaus Schulze, Brian Eno.",
-    "description": "Space Ambient \u2014 very slow or free tempo, vast and weightless. If there's a rhythm, it moves like a slow cosmic pulse \u2014 sparse, widely spaced. Bass moves in long glacial arcs across many bars, filter drifting open and closed like breathing. Maximum reverb for infinite space, long echo tails, everything blurring into a continuous wash. Warm, gentle, and enormous. The sense of scale matters \u2014 each sound should feel vast. Tangerine Dream, Klaus Schulze, Brian Eno, Cluster.",
+    "brief": "Space Ambient — very slow or free. Sparse cosmic pulse if any. Bass moves in long glacial arcs over many bars, filter drifting. Maximum reverb for infinite space, long echo tails, everything blurring. Warm, gentle, enormous. Vast scale. Tangerine Dream, Klaus Schulze, Brian Eno. AN1X voice for cosmic pads — sine + triangle mix, maximum glide, slow LFO on pitch, heavy drift.",
+    "description": "Space Ambient — very slow or free tempo, vast and weightless. If there's a rhythm, it moves like a slow cosmic pulse — sparse, widely spaced. Bass moves in long glacial arcs across many bars, filter drifting open and closed like breathing. Maximum reverb for infinite space, long echo tails, everything blurring into a continuous wash. Warm, gentle, and enormous. The sense of scale matters — each sound should feel vast. Tangerine Dream, Klaus Schulze, Brian Eno, Cluster. AN1X voice for cosmic pads — sine + triangle mix, maximum glide, slow LFO on pitch, heavy drift.",
     "seed_patterns": {
       "kick": [
         1,
@@ -1827,7 +1827,7 @@
       ]
     },
     "suggested_root": 0,
-    "suggested_scale": "Lydian"
+    "suggested_scale": "major"
   },
   {
     "id": "lo_fi_hip_hop",
@@ -1841,9 +1841,9 @@
       "boom bap chill",
       "jazzy lofi"
     ],
-    "bpm_range": "70\u201395",
-    "brief": "Lo-fi Hip-Hop 70\u201395 BPM. Warm dusty nostalgic. Kick 1&3, snare 2&4 loose human feel, syncopated soft hats. Smooth jazzy bass, warm filter, low resonance. Heavy tape saturation, subtle vinyl crackle. Short warm room reverb. Late night introspective. Lo-fi chill streams.",
-    "description": "Lo-fi Hip-Hop \u2014 70 to 95 BPM. Warm, dusty, and nostalgic. Kick and snare on a loose hip-hop grid \u2014 kick on 1 and 3, snare on 2 and 4, but with subtle timing imperfections for a human feel. Hi-hats syncopated and soft. Bass is melodic and smooth, jazzy movement, warm filter, low resonance. Heavy tape saturation and subtle vinyl crackle feel. Short reverb with a warm room character. Gentle and introspective. The mood is late night studying, rainy windows, lo-fi chill streams.",
+    "bpm_range": "70–95",
+    "brief": "Lo-fi Hip-Hop 70–95 BPM. Warm dusty nostalgic. Kick 1&3, snare 2&4 loose human feel, syncopated soft hats. Smooth jazzy bass, warm filter, low resonance. Heavy tape saturation, subtle vinyl crackle. Short warm room reverb. Late night introspective. Lo-fi chill streams.",
+    "description": "Lo-fi Hip-Hop — 70 to 95 BPM. Warm, dusty, and nostalgic. Kick and snare on a loose hip-hop grid — kick on 1 and 3, snare on 2 and 4, but with subtle timing imperfections for a human feel. Hi-hats syncopated and soft. Bass is melodic and smooth, jazzy movement, warm filter, low resonance. Heavy tape saturation and subtle vinyl crackle feel. Short reverb with a warm room character. Gentle and introspective. The mood is late night studying, rainy windows, lo-fi chill streams.",
     "seed_patterns": {
       "kick": [
         1,
@@ -1901,6 +1901,6 @@
       ]
     },
     "suggested_root": 5,
-    "suggested_scale": "Dorian"
+    "suggested_scale": "dorian"
   }
 ]
