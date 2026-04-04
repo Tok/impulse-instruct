@@ -60,9 +60,13 @@ pub trait LlmBackend: Send {
 // Build the server:  ./build-bonsai-server.sh
 // Model:             ./download-models.sh
 
-/// Candidate paths for the llama-server binary (PrismML fork).
+/// Candidate paths for the llama-server binary.
+/// Checked in order — PrismML fork first (required for Bonsai 1-bit),
+/// then official llama.cpp build (required for Gemma 4 / newer architectures),
+/// then $PATH fallback.
 const SERVER_BINARY_CANDIDATES: &[&str] = &[
-    ".llama-build/bin/llama-server", // built by build-bonsai-server.sh
+    ".llama-build/bin/llama-server", // PrismML fork — build-bonsai-server.sh
+    ".llama-official-build/bin/llama-server", // official llama.cpp — build-llama-server.sh
     "llama-server",                  // $PATH
 ];
 
@@ -71,6 +75,37 @@ const SERVER_BINARY_CANDIDATES: &[&str] = &[
 /// address so the OS rejects a second bind, and we can detect + reuse an
 /// already-running healthy server.
 const LLAMA_PORT: u16 = 8766;
+
+/// Pick the right llama-server binary for the given model path.
+///
+/// - Bonsai 8B (Q1_0_g128): requires the PrismML fork
+///   (.llama-build/bin/llama-server)
+/// - All other standard GGUF models: prefer the official build
+///   (.llama-official-build/bin/llama-server) then fall back to PrismML fork
+///   (which handles Qwen3, Llama 3.1, etc.) then $PATH
+fn pick_server_binary(model_path: &str) -> Option<&'static str> {
+    let is_bonsai = model_path.to_lowercase().contains("bonsai");
+
+    if is_bonsai {
+        // Bonsai requires the PrismML fork — try it first
+        SERVER_BINARY_CANDIDATES
+            .iter()
+            .copied()
+            .find(|&p| std::path::Path::new(p).exists() || which_in_path(p))
+    } else {
+        // For standard GGUF models prefer the official build, then PrismML fork, then $PATH.
+        // Official build handles newer architectures (Gemma 4, etc.) that the fork may not.
+        let preference: &[&str] = &[
+            ".llama-official-build/bin/llama-server",
+            ".llama-build/bin/llama-server",
+            "llama-server",
+        ];
+        preference
+            .iter()
+            .copied()
+            .find(|&p| std::path::Path::new(p).exists() || which_in_path(p))
+    }
+}
 
 pub struct LlamaServerBackend {
     child: Option<std::process::Child>,
@@ -98,14 +133,12 @@ impl LlamaServerBackend {
     /// Returns `live: false` (hard-fail path) if binary or model are missing —
     /// the caller (`run_llm_loop`) decides whether to exit or continue in mock.
     pub fn new(model_path: &str) -> Self {
-        let bin = SERVER_BINARY_CANDIDATES
-            .iter()
-            .find(|&&p| std::path::Path::new(p).exists() || which_in_path(p))
-            .copied();
+        let bin = pick_server_binary(model_path);
 
         let Some(bin) = bin else {
             log::error!(
-                "llama-server binary not found — run ./build-bonsai-server.sh to build it."
+                "llama-server binary not found — run ./build-bonsai-server.sh (Bonsai) \
+                 or ./build-llama-server.sh (all other models)."
             );
             return Self {
                 child: None,
@@ -288,12 +321,11 @@ impl LlamaServerBackend {
             let _ = child.wait();
         }
         // Also kill any detached server that was reused without owning the child PID.
-        let bin = SERVER_BINARY_CANDIDATES
-            .iter()
-            .find(|&&p| std::path::Path::new(p).exists() || which_in_path(p))
-            .copied();
-        if let Some(bin) = bin {
-            kill_leaked_servers(bin);
+        // Try both builds — either could be holding the port.
+        for &bin in SERVER_BINARY_CANDIDATES {
+            if std::path::Path::new(bin).exists() || which_in_path(bin) {
+                kill_leaked_servers(bin);
+            }
         }
         self.live = false;
         log::info!("LLM server stopped.");
