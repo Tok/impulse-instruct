@@ -141,6 +141,8 @@ pub struct ImpulseApp {
     use_sliders: bool,
     // Sequencer page (for >16 step patterns)
     seq_page: usize,
+    // Voices manually expanded in the sequencer even if they have no active steps
+    expanded_seq_voices: std::collections::HashSet<crate::state::DrumVoice>,
     // Model selector
     available_models: Vec<String>,
     // System info (GPU/VRAM/RAM) — polled in background thread
@@ -239,6 +241,7 @@ impl ImpulseApp {
             show_thinking: false,
             use_sliders: false,
             seq_page: 0,
+            expanded_seq_voices: std::collections::HashSet::new(),
             available_models: Vec::new(),
             sys_info: {
                 let shared =

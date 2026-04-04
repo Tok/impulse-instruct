@@ -1,5 +1,5 @@
 // ─── ui/panels/fx.rs ──────────────────────────────────────────────────────────
-// FX chain panel.
+// FX chain panel — all groups in a horizontal_wrapped flow inside a ScrollArea.
 
 use crate::state::ParamMode;
 use crate::ui::{ImpulseApp, theme, widgets};
@@ -7,7 +7,7 @@ use crate::ui::{ImpulseApp, theme, widgets};
 pub fn draw_fx(app: &mut ImpulseApp, ui: &mut egui::Ui) {
     widgets::section_header(ui, "FX CHAIN");
 
-    // Snapshot all FX values + locked set before any widget call
+    // Snapshot all FX values before any widget call
     let (
         mut rs,
         mut rd,
@@ -38,7 +38,6 @@ pub fn draw_fx(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         mut tape_mix,
         mut tape_flutter,
         locked,
-        auto_lock,
     ) = {
         let s = app.state.read();
         (
@@ -71,253 +70,256 @@ pub fn draw_fx(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             s.fx.tape_mix,
             s.fx.tape_flutter,
             s.llm.locked_params.clone(),
-            s.llm.auto_lock_on_touch,
         )
     };
 
     let mut changed = false;
-
-    let l_rs = locked.contains("fx.reverb_size");
-    let l_rm = locked.contains("fx.reverb_mix");
-    let l_df = locked.contains("fx.delay_feedback");
-    let l_dm = locked.contains("fx.delay_mix");
-
     let use_sliders = app.use_sliders;
-    ui.horizontal_wrapped(|ui| {
-        ui.group(|ui| {
-            ui.label(
-                egui::RichText::new("REVERB")
-                    .color(theme::FOG)
-                    .monospace()
-                    .size(9.5),
-            );
-            // MIX (X) × SIZE (Y) pad — the two most-used reverb params
-            if widgets::xy_pad(ui, "MIX", "SIZE", &mut rm, &mut rs, 88.0, l_rm || l_rs) {
-                let mut s = app.state.write();
-                if !l_rm {
-                    s.fx.reverb_mix = rm;
-                    if auto_lock {
-                        s.llm.locked_params.insert("fx.reverb_mix".to_string());
-                    }
+
+    // Helper: derive ParamMode from locked set
+    let pm = |path: &str| {
+        if locked.contains(path) {
+            ParamMode::UserOwned
+        } else {
+            ParamMode::Free
+        }
+    };
+
+    egui::ScrollArea::vertical().show(ui, |ui| {
+        ui.horizontal_wrapped(|ui| {
+            // ── REVERB ──────────────────────────────────────────────────────────
+            ui.group(|ui| {
+                ui.label(
+                    egui::RichText::new("REVERB")
+                        .color(theme::FOG)
+                        .monospace()
+                        .size(9.5),
+                );
+                if widgets::param_control(ui, "MIX", &mut rm, pm("fx.reverb_mix"), use_sliders).0 {
+                    changed = true;
                 }
-                if !l_rs {
-                    s.fx.reverb_size = rs;
-                    if auto_lock {
-                        s.llm.locked_params.insert("fx.reverb_size".to_string());
-                    }
+                if widgets::param_control(ui, "SIZE", &mut rs, pm("fx.reverb_size"), use_sliders).0
+                {
+                    changed = true;
                 }
-                drop(s);
-                app.push_audio_params();
-            }
-            if widgets::param_control(ui, "DAMP", &mut rd, ParamMode::Free, use_sliders).0 {
-                changed = true;
-            }
-        });
-
-        ui.add_space(4.0);
-
-        ui.group(|ui| {
-            ui.label(
-                egui::RichText::new("DELAY")
-                    .color(theme::FOG)
-                    .monospace()
-                    .size(9.5),
-            );
-            // MIX (X) × FDBK (Y) pad — feedback × mix is the key delay texture dial
-            if widgets::xy_pad(ui, "MIX", "FDBK", &mut dm, &mut df, 88.0, l_dm || l_df) {
-                let mut s = app.state.write();
-                if !l_dm {
-                    s.fx.delay_mix = dm;
-                    if auto_lock {
-                        s.llm.locked_params.insert("fx.delay_mix".to_string());
-                    }
+                if widgets::param_control(ui, "DAMP", &mut rd, ParamMode::Free, use_sliders).0 {
+                    changed = true;
                 }
-                if !l_df {
-                    s.fx.delay_feedback = df;
-                    if auto_lock {
-                        s.llm.locked_params.insert("fx.delay_feedback".to_string());
-                    }
+            });
+
+            // ── DELAY ───────────────────────────────────────────────────────────
+            ui.group(|ui| {
+                ui.label(
+                    egui::RichText::new("DELAY")
+                        .color(theme::FOG)
+                        .monospace()
+                        .size(9.5),
+                );
+                if widgets::param_control(ui, "MIX", &mut dm, pm("fx.delay_mix"), use_sliders).0 {
+                    changed = true;
                 }
-                drop(s);
-                app.push_audio_params();
-            }
-            if widgets::param_control(ui, "TIME", &mut dt, ParamMode::Free, use_sliders).0 {
-                changed = true;
-            }
-        });
+                if widgets::param_control(ui, "TIME", &mut dt, ParamMode::Free, use_sliders).0 {
+                    changed = true;
+                }
+                if widgets::param_control(ui, "FDBK", &mut df, pm("fx.delay_feedback"), use_sliders)
+                    .0
+                {
+                    changed = true;
+                }
+            });
 
-        ui.add_space(4.0);
+            // ── CHORUS ──────────────────────────────────────────────────────────
+            ui.group(|ui| {
+                ui.label(
+                    egui::RichText::new("CHORUS")
+                        .color(theme::FOG)
+                        .monospace()
+                        .size(9.5),
+                );
+                if widgets::param_control(ui, "MIX", &mut ch_mix, ParamMode::Free, use_sliders).0 {
+                    changed = true;
+                }
+                if widgets::param_control(ui, "RATE", &mut ch_rate, ParamMode::Free, use_sliders).0
+                {
+                    changed = true;
+                }
+                if widgets::param_control(ui, "DEPTH", &mut ch_depth, ParamMode::Free, use_sliders)
+                    .0
+                {
+                    changed = true;
+                }
+            });
 
-        ui.group(|ui| {
-            ui.label(
-                egui::RichText::new("CHORUS")
-                    .color(theme::FOG)
-                    .monospace()
-                    .size(9.5),
-            );
-            if widgets::param_control(ui, "MIX", &mut ch_mix, ParamMode::Free, use_sliders).0 {
-                changed = true;
-            }
-            if widgets::param_control(ui, "RATE", &mut ch_rate, ParamMode::Free, use_sliders).0 {
-                changed = true;
-            }
-            if widgets::param_control(ui, "DEPTH", &mut ch_depth, ParamMode::Free, use_sliders).0 {
-                changed = true;
-            }
-        });
+            // ── PHASER ──────────────────────────────────────────────────────────
+            ui.group(|ui| {
+                ui.label(
+                    egui::RichText::new("PHASER")
+                        .color(theme::FOG)
+                        .monospace()
+                        .size(9.5),
+                );
+                if widgets::param_control(ui, "MIX", &mut ph_mix, ParamMode::Free, use_sliders).0 {
+                    changed = true;
+                }
+                if widgets::param_control(ui, "RATE", &mut ph_rate, ParamMode::Free, use_sliders).0
+                {
+                    changed = true;
+                }
+                if widgets::param_control(ui, "DEPTH", &mut ph_depth, ParamMode::Free, use_sliders)
+                    .0
+                {
+                    changed = true;
+                }
+            });
 
-        ui.add_space(4.0);
+            // ── SHAPE: waveshaper + ring mod combined ───────────────────────────
+            ui.group(|ui| {
+                ui.label(
+                    egui::RichText::new("SHAPE")
+                        .color(theme::FOG)
+                        .monospace()
+                        .size(9.5),
+                );
+                if widgets::param_control(ui, "WS MIX", &mut ws_mix, ParamMode::Free, use_sliders).0
+                {
+                    changed = true;
+                }
+                if widgets::param_control(ui, "WS DRV", &mut ws_drive, ParamMode::Free, use_sliders)
+                    .0
+                {
+                    changed = true;
+                }
+                if widgets::param_control(ui, "RM MIX", &mut rm_mix, ParamMode::Free, use_sliders).0
+                {
+                    changed = true;
+                }
+                if widgets::param_control(ui, "RM FREQ", &mut rm_freq, ParamMode::Free, use_sliders)
+                    .0
+                {
+                    changed = true;
+                }
+            });
 
-        ui.group(|ui| {
-            ui.label(
-                egui::RichText::new("PHASER")
-                    .color(theme::FOG)
-                    .monospace()
-                    .size(9.5),
-            );
-            if widgets::param_control(ui, "MIX", &mut ph_mix, ParamMode::Free, use_sliders).0 {
-                changed = true;
-            }
-            if widgets::param_control(ui, "RATE", &mut ph_rate, ParamMode::Free, use_sliders).0 {
-                changed = true;
-            }
-            if widgets::param_control(ui, "DEPTH", &mut ph_depth, ParamMode::Free, use_sliders).0 {
-                changed = true;
-            }
-        });
+            // ── EQ ──────────────────────────────────────────────────────────────
+            ui.group(|ui| {
+                ui.label(
+                    egui::RichText::new("EQ")
+                        .color(theme::FOG)
+                        .monospace()
+                        .size(9.5),
+                );
+                if widgets::param_control(ui, "LOW", &mut eq_low, ParamMode::Free, use_sliders).0 {
+                    changed = true;
+                }
+                if widgets::param_control(ui, "MID", &mut eq_mid, ParamMode::Free, use_sliders).0 {
+                    changed = true;
+                }
+                if widgets::param_control(ui, "HI", &mut eq_hi, ParamMode::Free, use_sliders).0 {
+                    changed = true;
+                }
+            });
 
-        ui.add_space(4.0);
-
-        ui.group(|ui| {
-            ui.label(
-                egui::RichText::new("WAVESHAPER")
-                    .color(theme::FOG)
-                    .monospace()
-                    .size(9.5),
-            );
-            if widgets::param_control(ui, "MIX", &mut ws_mix, ParamMode::Free, use_sliders).0 {
-                changed = true;
-            }
-            if widgets::param_control(ui, "DRIVE", &mut ws_drive, ParamMode::Free, use_sliders).0 {
-                changed = true;
-            }
-        });
-
-        ui.add_space(4.0);
-
-        ui.group(|ui| {
-            ui.label(
-                egui::RichText::new("RING MOD")
-                    .color(theme::FOG)
-                    .monospace()
-                    .size(9.5),
-            );
-            if widgets::param_control(ui, "MIX", &mut rm_mix, ParamMode::Free, use_sliders).0 {
-                changed = true;
-            }
-            if widgets::param_control(ui, "FREQ", &mut rm_freq, ParamMode::Free, use_sliders).0 {
-                changed = true;
-            }
-        });
-
-        ui.add_space(4.0);
-
-        ui.group(|ui| {
-            ui.label(
-                egui::RichText::new("EQ")
-                    .color(theme::FOG)
-                    .monospace()
-                    .size(9.5),
-            );
-            if widgets::param_control(ui, "LOW", &mut eq_low, ParamMode::Free, use_sliders).0 {
-                changed = true;
-            }
-            if widgets::param_control(ui, "MID", &mut eq_mid, ParamMode::Free, use_sliders).0 {
-                changed = true;
-            }
-            if widgets::param_control(ui, "HI", &mut eq_hi, ParamMode::Free, use_sliders).0 {
-                changed = true;
-            }
-        });
-
-        ui.add_space(4.0);
-
-        ui.group(|ui| {
-            ui.label(
-                egui::RichText::new("COMPRESSOR")
-                    .color(theme::FOG)
-                    .monospace()
-                    .size(9.5),
-            );
-            if widgets::param_control(ui, "MIX", &mut comp_mix, ParamMode::Free, use_sliders).0 {
-                changed = true;
-            }
-            if widgets::param_control(ui, "THRESH", &mut comp_thresh, ParamMode::Free, use_sliders)
+            // ── COMPRESSOR ──────────────────────────────────────────────────────
+            ui.group(|ui| {
+                ui.label(
+                    egui::RichText::new("COMP")
+                        .color(theme::FOG)
+                        .monospace()
+                        .size(9.5),
+                );
+                if widgets::param_control(ui, "MIX", &mut comp_mix, ParamMode::Free, use_sliders).0
+                {
+                    changed = true;
+                }
+                if widgets::param_control(
+                    ui,
+                    "THRESH",
+                    &mut comp_thresh,
+                    ParamMode::Free,
+                    use_sliders,
+                )
                 .0
-            {
-                changed = true;
-            }
-            if widgets::param_control(ui, "RATIO", &mut comp_ratio, ParamMode::Free, use_sliders).0
-            {
-                changed = true;
-            }
-        });
+                {
+                    changed = true;
+                }
+                if widgets::param_control(
+                    ui,
+                    "RATIO",
+                    &mut comp_ratio,
+                    ParamMode::Free,
+                    use_sliders,
+                )
+                .0
+                {
+                    changed = true;
+                }
+            });
 
-        ui.add_space(4.0);
+            // ── TAPE ────────────────────────────────────────────────────────────
+            ui.group(|ui| {
+                ui.label(
+                    egui::RichText::new("TAPE")
+                        .color(theme::FOG)
+                        .monospace()
+                        .size(9.5),
+                );
+                if widgets::param_control(ui, "MIX", &mut tape_mix, ParamMode::Free, use_sliders).0
+                {
+                    changed = true;
+                }
+                if widgets::param_control(
+                    ui,
+                    "DRIVE",
+                    &mut tape_drive,
+                    ParamMode::Free,
+                    use_sliders,
+                )
+                .0
+                {
+                    changed = true;
+                }
+                if widgets::param_control(
+                    ui,
+                    "FLUTTER",
+                    &mut tape_flutter,
+                    ParamMode::Free,
+                    use_sliders,
+                )
+                .0
+                {
+                    changed = true;
+                }
+            });
 
-        ui.group(|ui| {
-            ui.label(
-                egui::RichText::new("TAPE")
-                    .color(theme::FOG)
-                    .monospace()
-                    .size(9.5),
-            );
-            if widgets::param_control(ui, "MIX", &mut tape_mix, ParamMode::Free, use_sliders).0 {
-                changed = true;
-            }
-            if widgets::param_control(ui, "DRIVE", &mut tape_drive, ParamMode::Free, use_sliders).0
-            {
-                changed = true;
-            }
-            if widgets::param_control(
-                ui,
-                "FLUTTER",
-                &mut tape_flutter,
-                ParamMode::Free,
-                use_sliders,
-            )
-            .0
-            {
-                changed = true;
-            }
-        });
-
-        ui.add_space(4.0);
-
-        ui.group(|ui| {
-            ui.label(
-                egui::RichText::new("DRIVE / MASTER")
-                    .color(theme::FOG)
-                    .monospace()
-                    .size(9.5),
-            );
-            if widgets::param_control(ui, "DRIVE", &mut dd, ParamMode::Free, use_sliders).0 {
-                changed = true;
-            }
-            if widgets::param_control(ui, "MIX", &mut dx, ParamMode::Free, use_sliders).0 {
-                changed = true;
-            }
-            if widgets::param_control(ui, "MASTER", &mut mv, ParamMode::Free, use_sliders).0 {
-                changed = true;
-            }
+            // ── MASTER ──────────────────────────────────────────────────────────
+            ui.group(|ui| {
+                ui.label(
+                    egui::RichText::new("MASTER")
+                        .color(theme::FOG)
+                        .monospace()
+                        .size(9.5),
+                );
+                if widgets::param_control(ui, "DRIVE", &mut dd, ParamMode::Free, use_sliders).0 {
+                    changed = true;
+                }
+                if widgets::param_control(ui, "MIX", &mut dx, ParamMode::Free, use_sliders).0 {
+                    changed = true;
+                }
+                if widgets::param_control(ui, "VOLUME", &mut mv, ParamMode::Free, use_sliders).0 {
+                    changed = true;
+                }
+            });
         });
     });
 
-    // Write-back for standalone knobs (DAMP, TIME, DRIVE, CHORUS, etc.)
     if changed {
         let mut s = app.state.write();
+        s.fx.reverb_size = rs;
         s.fx.reverb_damp = rd;
+        s.fx.reverb_mix = rm;
         s.fx.delay_time = dt;
+        s.fx.delay_feedback = df;
+        s.fx.delay_mix = dm;
         s.fx.distortion_drive = dd;
         s.fx.distortion_mix = dx;
         s.fx.master_volume = mv;

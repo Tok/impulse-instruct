@@ -173,6 +173,37 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
     // Step grid — draw each row
     egui::ScrollArea::vertical().show(ui, |ui| {
         for voice in voices {
+            // Check whether this voice has any active step anywhere in the full pattern
+            let has_active = {
+                let s = app.state.read();
+                s.sequencer
+                    .drum_patterns
+                    .get(voice)
+                    .map(|p| p.iter().any(|s| s.active))
+                    .unwrap_or(false)
+            };
+            let expanded = app.expanded_seq_voices.contains(voice);
+
+            if !has_active && !expanded {
+                // Collapsed stub: just the label as a small clickable button to expand
+                ui.horizontal(|ui| {
+                    let resp = ui.add_sized(
+                        [SEQ_LABEL_W + SEQ_VOL_W + 8.0, 13.0],
+                        egui::Button::new(
+                            egui::RichText::new(format!("+ {}", voice.label()))
+                                .color(theme::PIT)
+                                .monospace()
+                                .size(7.5),
+                        )
+                        .fill(egui::Color32::TRANSPARENT),
+                    );
+                    if resp.clicked() {
+                        app.expanded_seq_voices.insert(*voice);
+                    }
+                });
+                continue;
+            }
+
             ui.horizontal(|ui| {
                 // Voice label
                 let label = voice.label();

@@ -277,8 +277,7 @@ impl Default for SequencerState {
             drum_patterns.insert(*v, vec![Step::default(); MAX_STEPS]);
         }
 
-        // Minimal starter beat: 4-on-the-floor kick + offbeat hi-hats.
-        // Just enough to hear the clock — the AI writes all creative patterns.
+        // Starter beat: 4-on-the-floor kick + offbeat closed hi-hats.
         let kick_steps = [1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0usize];
         let hat_steps = [0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0usize];
         if let Some(p) = drum_patterns.get_mut(&DrumVoice::Kick808) {
@@ -294,6 +293,15 @@ impl Default for SequencerState {
             }
         }
 
+        // Starter bass: A minor chord tones spread across the bar.
+        // A2 (45) on beat 1 · C3 (48) between beats 2–3 · E3 (52) on beat 4.
+        let mut bass_pattern = vec![TB303Step::default(); MAX_STEPS];
+        let bass_notes: &[(usize, u8)] = &[(0, 45), (6, 48), (12, 52)];
+        for &(step, note) in bass_notes {
+            bass_pattern[step].active = true;
+            bass_pattern[step].note = note;
+        }
+
         Self {
             bpm: 120.0,
             steps: 16,
@@ -302,7 +310,7 @@ impl Default for SequencerState {
             swing: 0.0,
             time_sig_num: 4,
             drum_patterns,
-            bass_pattern: vec![TB303Step::default(); MAX_STEPS],
+            bass_pattern,
         }
     }
 }
