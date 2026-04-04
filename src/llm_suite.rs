@@ -535,6 +535,7 @@ fn no_unknown_top_level_keys() {
         "an1x",
         "free_eg",
         "noise",
+        "lfo",
         "kit_a",
         "kit_b",
         "euclidean",

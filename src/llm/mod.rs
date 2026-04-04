@@ -4,6 +4,7 @@
 // Communicates with UI via crossbeam channels.
 
 pub mod instructions;
+mod json_repair;
 pub mod mock;
 pub mod prompt;
 pub mod styles;
@@ -19,6 +20,7 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use crate::state::{AppState, ConversationMode, apply_llm_update};
+use json_repair::{repair_json, split_thinking};
 
 // ─── Messages ─────────────────────────────────────────────────────────────────
 
@@ -406,8 +408,9 @@ impl LlmBackend for LlamaServerBackend {
         let temperature = 0.1_f64 + (heat as f64).clamp(0.0, 1.0) * 1.1;
 
         // json_object mode keeps the server honest about emitting valid JSON.
-        // max_tokens: compact index-format patterns are small (~10 tok/voice), but the
-        // model may still emit FX + LFO + AN1X simultaneously. 1200 gives real headroom.
+        // max_tokens: Bonsai often emits full-reset responses (all voices + FX + LFO) which
+        // exceed 1200 tokens and truncate mid-JSON, making them unparseable.  2400 gives
+        // headroom for the largest possible complete response.
         let body = serde_json::json!({
             "model": "bonsai",
             "messages": [
@@ -415,7 +418,7 @@ impl LlmBackend for LlamaServerBackend {
                 { "role": "user",    "content": user   }
             ],
             "temperature": temperature,
-            "max_tokens": 1200,
+            "max_tokens": 2400,
             "response_format": { "type": "json_object" }
         });
 
@@ -517,136 +520,6 @@ impl LlmBackend for LlamaServerBackend {
 /// 1. Try parsing as-is.
 /// 2. Close unclosed brackets and retry.
 /// 3. Sanitize the resulting structure (lift misplaced keys, remove nested fx loops).
-fn repair_json(s: &str) -> Option<serde_json::Value> {
-    // Fast path — valid JSON
-    if let Ok(v) = serde_json::from_str::<serde_json::Value>(s) {
-        let fixed = sanitize_json_structure(v);
-        return Some(fixed);
-    }
-
-    log::warn!("JSON parse failed — attempting repair (truncated/malformed output)");
-
-    // Build a repaired candidate by closing unclosed brackets.
-    let mut attempt = s.trim_end_matches([',', ' ', '\n', '\r', ':']).to_string();
-
-    // Count unclosed nesting levels (ignore chars inside strings).
-    let (mut obj_depth, mut arr_depth) = (0i32, 0i32);
-    let mut in_str = false;
-    let mut esc = false;
-    for c in attempt.chars() {
-        if esc {
-            esc = false;
-            continue;
-        }
-        if c == '\\' && in_str {
-            esc = true;
-            continue;
-        }
-        if c == '"' {
-            in_str = !in_str;
-            continue;
-        }
-        if !in_str {
-            match c {
-                '{' => obj_depth += 1,
-                '}' => obj_depth -= 1,
-                '[' => arr_depth += 1,
-                ']' => arr_depth -= 1,
-                _ => {}
-            }
-        }
-    }
-    // Close in reverse order: arrays first, then objects
-    for _ in 0..arr_depth.max(0) {
-        attempt.push(']');
-    }
-    for _ in 0..obj_depth.max(0) {
-        attempt.push('}');
-    }
-
-    serde_json::from_str::<serde_json::Value>(&attempt)
-        .ok()
-        .map(sanitize_json_structure)
-}
-
-/// Promote `bass` and `fx` keys that the model incorrectly nests inside `sequencer`
-/// back to the top level, strip `"fx"` keys nested inside `"fx"`, and convert
-/// LFO dot-notation objects (`"lfo": {"lfo[0].enabled": true, …}`) to the expected
-/// array format (`"lfo": [{"enabled": true, …}, …]`).
-fn sanitize_json_structure(v: serde_json::Value) -> serde_json::Value {
-    let mut obj = match v {
-        serde_json::Value::Object(m) => m,
-        other => return other,
-    };
-
-    // Extract misplaced keys from inside "sequencer"
-    let (bass_lift, fx_lift) =
-        if let Some(seq) = obj.get_mut("sequencer").and_then(|s| s.as_object_mut()) {
-            (seq.remove("bass"), seq.remove("fx"))
-        } else {
-            (None, None)
-        };
-    if let Some(b) = bass_lift {
-        obj.entry("bass").or_insert(b);
-    }
-    if let Some(f) = fx_lift {
-        obj.entry("fx").or_insert(f);
-    }
-
-    // Remove nested "fx" inside "fx" (the recursive loop the model falls into)
-    if let Some(fx) = obj.get_mut("fx").and_then(|f| f.as_object_mut()) {
-        fx.remove("fx");
-    }
-
-    // Fix LFO dot-notation: model sometimes emits
-    //   "lfo": {"lfo[0].enabled": true, "lfo[0].rate": 0.1, "lfo[1].target": "BassCutoff"}
-    // instead of the expected array format. Convert to:
-    //   "lfo": [{"enabled": true, "rate": 0.1}, {"target": "BassCutoff"}]
-    if let Some(lfo_val) = obj.get("lfo")
-        && let Some(lfo_obj) = lfo_val.as_object()
-    {
-        // Check if any key matches "lfo[N].field" pattern
-        let has_dot_notation = lfo_obj
-            .keys()
-            .any(|k| k.starts_with("lfo[") && k.contains("]."));
-        if has_dot_notation {
-            let mut slots: [serde_json::Map<String, serde_json::Value>; 4] = Default::default();
-            for (key, val) in lfo_obj {
-                // Parse "lfo[N].field" → slot index N, field name
-                if let Some(rest) = key.strip_prefix("lfo[")
-                    && let Some(bracket) = rest.find("].")
-                    && let Ok(idx) = rest[..bracket].parse::<usize>()
-                    && idx < 4
-                {
-                    let field = &rest[bracket + 2..];
-                    slots[idx].insert(field.to_string(), val.clone());
-                }
-            }
-            let lfo_array: serde_json::Value = serde_json::Value::Array(
-                slots.into_iter().map(serde_json::Value::Object).collect(),
-            );
-            obj.insert("lfo".to_string(), lfo_array);
-        }
-    }
-
-    serde_json::Value::Object(obj)
-}
-
-/// Split a `<think>…</think>` block from the front of a model response.
-/// Returns `(thinking_text, remainder)`.  If no block is present, thinking is None
-/// and the whole string is returned as remainder.
-fn split_thinking(s: &str) -> (Option<String>, String) {
-    let s = s.trim();
-    if let Some(rest) = s.strip_prefix("<think>")
-        && let Some(end) = rest.find("</think>")
-    {
-        let thinking = rest[..end].trim().to_string();
-        let after = rest[end + "</think>".len()..].trim().to_string();
-        return (Some(thinking).filter(|t| !t.is_empty()), after);
-    }
-    (None, s.to_string())
-}
-
 fn which_in_path(name: &str) -> bool {
     std::env::var_os("PATH")
         .map(|paths| std::env::split_paths(&paths).any(|dir| dir.join(name).exists()))
