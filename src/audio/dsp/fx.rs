@@ -288,6 +288,99 @@ impl EqBands {
     }
 }
 
+// ─── Compressor / limiter ─────────────────────────────────────────────────────
+
+pub(super) struct Compressor {
+    env: f32, // peak envelope follower state
+}
+
+impl Compressor {
+    pub(super) fn new() -> Self {
+        Self { env: 0.0 }
+    }
+
+    /// `threshold`: 0–1 → −40..0 dB. `ratio`: 0–1 → 1:1..20:1. `mix`: 0–1 wet/dry.
+    pub(super) fn process(
+        &mut self,
+        input: f32,
+        threshold: f32,
+        ratio: f32,
+        mix: f32,
+        sr: f32,
+    ) -> f32 {
+        if mix < 0.001 {
+            return input;
+        }
+        // Map params
+        let thresh_db = -40.0 * (1.0 - threshold); // 0→−40 dB, 1→0 dB
+        let ratio_val = 1.0 + ratio * 19.0; // 0→1:1, 1→20:1
+
+        // Peak envelope follower: fast attack (1 ms), medium release (80 ms)
+        let level = input.abs();
+        let att = (-1.0 / (sr * 0.001)).exp();
+        let rel = (-1.0 / (sr * 0.08)).exp();
+        self.env = if level > self.env {
+            self.env * att + level * (1.0 - att)
+        } else {
+            self.env * rel + level * (1.0 - rel)
+        };
+
+        // Gain computer
+        let env_db = 20.0 * self.env.max(1e-9).log10();
+        let gain_db = if env_db > thresh_db {
+            (env_db - thresh_db) * (1.0 - 1.0 / ratio_val)
+        } else {
+            0.0
+        };
+        let gain = 10.0f32.powf(-gain_db / 20.0);
+        let compressed = input * gain;
+
+        // Parallel compression (mix = 1 → fully compressed, 0 → dry)
+        input * (1.0 - mix) + compressed * mix
+    }
+}
+
+// ─── Tape saturation ──────────────────────────────────────────────────────────
+
+pub(super) struct TapeSat {
+    flutter_phase: f32,
+}
+
+impl TapeSat {
+    pub(super) fn new() -> Self {
+        Self { flutter_phase: 0.0 }
+    }
+
+    /// `drive`: 0–1 saturation amount. `mix`: 0–1 wet/dry. `flutter`: 0–1 wow depth (~2.5 Hz).
+    pub(super) fn process(
+        &mut self,
+        input: f32,
+        drive: f32,
+        mix: f32,
+        flutter: f32,
+        sr: f32,
+    ) -> f32 {
+        if mix < 0.001 {
+            return input;
+        }
+        // Wow/flutter: ±4% amplitude modulation at ~2.5 Hz
+        self.flutter_phase += 2.5 / sr;
+        if self.flutter_phase >= 1.0 {
+            self.flutter_phase -= 1.0;
+        }
+        let wow = 1.0 + flutter * 0.04 * (self.flutter_phase * std::f32::consts::TAU).sin();
+
+        // Arctan saturation: softer knee than tanh, distinct harmonic content
+        let d = drive * 5.0 + 1.0;
+        let x = input * d * wow;
+        let sat = x.atan() * std::f32::consts::FRAC_2_PI; // normalised to −1..+1
+        let sat =
+            sat / d.atan() * std::f32::consts::FRAC_2_PI.recip() * (std::f32::consts::PI / 2.0);
+
+        input * (1.0 - mix) + sat * mix
+    }
+}
+
 // ─── Phaser (4-stage all-pass cascade) ────────────────────────────────────────
 
 pub(super) struct Phaser {

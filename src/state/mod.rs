@@ -313,8 +313,12 @@ pub struct FxState {
     pub distortion_drive: f32,     // 0–1
     pub distortion_mix: f32,       // 0–1 wet/dry
     pub compressor_threshold: f32, // 0–1 → -40–0 dB
-    pub compressor_ratio: f32,     // 0–1 → 1–20:1
+    pub compressor_ratio: f32,     // 0–1 → 1:1–20:1
+    pub compressor_mix: f32,       // 0–1 wet/dry (0 = bypassed)
     pub master_volume: f32,        // 0–1
+    pub tape_drive: f32,           // 0–1 saturation amount
+    pub tape_mix: f32,             // 0–1 wet/dry
+    pub tape_flutter: f32,         // 0–1 wow/flutter depth
     pub bitcrush_bits: f32,        // 0–1: 1.0 = full quality (bypass), 0.0 = 1-bit
     pub bitcrush_rate: f32,        // 0–1: 0.0 = no decimation, 1.0 = extreme downsampling
     pub bitcrush_mix: f32,         // 0–1: wet/dry
@@ -346,7 +350,11 @@ impl Default for FxState {
             distortion_mix: 0.0,
             compressor_threshold: 0.7,
             compressor_ratio: 0.3,
+            compressor_mix: 0.0,
             master_volume: 0.85,
+            tape_drive: 0.3,
+            tape_mix: 0.0,
+            tape_flutter: 0.2,
             bitcrush_bits: 1.0,
             bitcrush_rate: 0.0,
             bitcrush_mix: 0.0,
@@ -769,6 +777,36 @@ pub fn apply_llm_update(state: AppState, update: &serde_json::Value) -> AppState
             locked,
         );
         s.fx.eq_hi_gain = unlocked_f32(s.fx.eq_hi_gain, fx, "eq_hi_gain", "fx.eq_hi_gain", locked);
+        s.fx.compressor_threshold = unlocked_f32(
+            s.fx.compressor_threshold,
+            fx,
+            "compressor_threshold",
+            "fx.compressor_threshold",
+            locked,
+        );
+        s.fx.compressor_ratio = unlocked_f32(
+            s.fx.compressor_ratio,
+            fx,
+            "compressor_ratio",
+            "fx.compressor_ratio",
+            locked,
+        );
+        s.fx.compressor_mix = unlocked_f32(
+            s.fx.compressor_mix,
+            fx,
+            "compressor_mix",
+            "fx.compressor_mix",
+            locked,
+        );
+        s.fx.tape_drive = unlocked_f32(s.fx.tape_drive, fx, "tape_drive", "fx.tape_drive", locked);
+        s.fx.tape_mix = unlocked_f32(s.fx.tape_mix, fx, "tape_mix", "fx.tape_mix", locked);
+        s.fx.tape_flutter = unlocked_f32(
+            s.fx.tape_flutter,
+            fx,
+            "tape_flutter",
+            "fx.tape_flutter",
+            locked,
+        );
     }
 
     if let Some(lfo_arr) = update.get("lfo").and_then(|v| v.as_array()) {
@@ -952,23 +990,5 @@ pub fn toggle_bass_slide(state: AppState, step: usize) -> AppState {
     s
 }
 
-// ─── Project save / load ──────────────────────────────────────────────────────
-
-/// Serialise `state` to `project-<unix_seconds>.json` in the current directory.
-/// Returns the path written on success.
-pub fn save_project(state: &AppState) -> Result<std::path::PathBuf, String> {
-    let ts = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_secs())
-        .unwrap_or(0);
-    let path = std::path::PathBuf::from(format!("project-{}.json", ts));
-    let json = serde_json::to_string_pretty(state).map_err(|e| format!("serialise error: {e}"))?;
-    std::fs::write(&path, json).map_err(|e| format!("write error: {e}"))?;
-    Ok(path)
-}
-
-/// Load an `AppState` from a JSON project file.
-pub fn load_project(path: &std::path::Path) -> Result<AppState, String> {
-    let json = std::fs::read_to_string(path).map_err(|e| format!("read error: {e}"))?;
-    serde_json::from_str(&json).map_err(|e| format!("parse error: {e}"))
-}
+pub mod persistence;
+pub use persistence::save_project;

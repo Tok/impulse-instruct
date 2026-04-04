@@ -146,14 +146,34 @@ impl ImpulseApp {
             .frame(Frame::none().fill(theme::VOID).inner_margin(egui::Margin::symmetric(10.0, 6.0)))
             .show(ctx, |ui| {
                 ui.horizontal(|ui| {
-                    // Logo
-                    ui.label(
-                        egui::RichText::new("◆ IMPULSE INSTRUCT")
-                            .color(theme::CHALK)
-                            .size(13.0)
-                            .monospace()
-                            .strong()
-                    );
+                    // Logo + model name
+                    {
+                        let model_name = {
+                            let s = self.state.read();
+                            let path = s.llm.model_path.clone();
+                            // Extract filename without extension: "models/Bonsai-8B.gguf" → "Bonsai-8B"
+                            std::path::Path::new(&path)
+                                .file_stem()
+                                .and_then(|s| s.to_str())
+                                .unwrap_or("unknown")
+                                .to_string()
+                        };
+                        ui.vertical(|ui| {
+                            ui.label(
+                                egui::RichText::new("◆ IMPULSE INSTRUCT")
+                                    .color(theme::CHALK)
+                                    .size(13.0)
+                                    .monospace()
+                                    .strong(),
+                            );
+                            ui.label(
+                                egui::RichText::new(&model_name)
+                                    .color(theme::IRON)
+                                    .size(8.5)
+                                    .monospace(),
+                            );
+                        });
+                    }
 
                     ui.add_space(16.0);
 

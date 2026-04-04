@@ -116,6 +116,14 @@ pub struct AudioParams {
     pub eq_low_gain: f32,
     pub eq_mid_gain: f32,
     pub eq_hi_gain: f32,
+    // Compressor
+    pub compressor_threshold: f32,
+    pub compressor_ratio: f32,
+    pub compressor_mix: f32,
+    // Tape saturation
+    pub tape_drive: f32,
+    pub tape_mix: f32,
+    pub tape_flutter: f32,
     // Filter mode (0=LP, 1=HP, 2=BP)
     pub filter_mode: u8,
     // Sample rate
@@ -197,6 +205,12 @@ impl AudioParams {
             eq_low_gain: s.fx.eq_low_gain,
             eq_mid_gain: s.fx.eq_mid_gain,
             eq_hi_gain: s.fx.eq_hi_gain,
+            compressor_threshold: s.fx.compressor_threshold,
+            compressor_ratio: s.fx.compressor_ratio,
+            compressor_mix: s.fx.compressor_mix,
+            tape_drive: s.fx.tape_drive,
+            tape_mix: s.fx.tape_mix,
+            tape_flutter: s.fx.tape_flutter,
             filter_mode: match s.bass.filter_mode {
                 FilterMode::Lowpass => 0,
                 FilterMode::Highpass => 1,
@@ -457,6 +471,8 @@ pub struct DspState {
     bitcrush_held: f32,
     bitcrush_counter: u32,
     // FX state
+    compressor: Compressor,
+    tape_sat: TapeSat,
     ring_mod_phase: f32,
     eq: EqBands,
     // LFO state
@@ -492,6 +508,8 @@ impl DspState {
             delay: DelayLine::new(),
             chorus: Chorus::new(),
             phaser: Phaser::new(),
+            compressor: Compressor::new(),
+            tape_sat: TapeSat::new(),
             ring_mod_phase: 0.0,
             eq: EqBands::new(sample_rate),
             bitcrush_held: 0.0,
@@ -745,6 +763,20 @@ impl DspState {
             let delayed = self
                 .eq
                 .process(delayed, p.eq_low_gain, p.eq_mid_gain, p.eq_hi_gain);
+
+            // Compressor
+            let delayed = self.compressor.process(
+                delayed,
+                p.compressor_threshold,
+                p.compressor_ratio,
+                p.compressor_mix,
+                sr,
+            );
+
+            // Tape saturation
+            let delayed =
+                self.tape_sat
+                    .process(delayed, p.tape_drive, p.tape_mix, p.tape_flutter, sr);
 
             // Master drive (soft clip)
             let driven = if p.distortion_drive > 0.01 {

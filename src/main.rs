@@ -1,3 +1,4 @@
+#![recursion_limit = "256"]
 // ─── main.rs ─────────────────────────────────────────────────────────────────
 // Impulse Instruct — LLM-first audio synthesizer
 //

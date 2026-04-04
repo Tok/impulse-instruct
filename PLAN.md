@@ -33,6 +33,10 @@ It can nail acid. Everything else is a lie. Fix that.
 - [x] Oscillator detune (osc_detune ±1 semitone, shifts whole oscillator pitch)
 - [ ] FM pair (simple 2-op FM for metallic/bell tones)
 - [x] Noise source (noise_mix into bass oscillator before filter)
+- [ ] Standalone noise voice (white / pink / brown) — LLM-addressable voice for ambient drones, texture
+      layers, and breath. White = flat spectrum; pink = −3dB/octave (Paul Kellett's 3-stage pink filter);
+      brown = −6dB/octave (integrated white). Expose volume + color (0=white→1=brown) + filter cutoff.
+      LLM trigger: "add wind", "drone texture", "white noise sweep", "brown noise bed".
 - [x] Portamento / glide time (separate from TB-303 slide)
 - [x] Second filter mode: highpass + bandpass (current is always lowpass)
 - [x] Waveshaper / soft clip (pre-FX tanh saturation insert)
@@ -71,8 +75,8 @@ in the synth. Think of it as a modulation matrix row, not a per-voice feature.
 - [x] Phaser — all-pass filter chain with LFO-swept center frequency; classic psychedelic sweep
 - [x] Ring modulator — multiply signal by a carrier sine; metallic/robotic character
 - [x] EQ (3-band: low shelf 200Hz, mid peak 1kHz, high shelf 5kHz; biquad)
-- [ ] Compressor / limiter on master bus
-- [ ] Tape saturation / warmth (warm distortion with subtle wow/flutter)
+- [x] Compressor / limiter on master bus
+- [x] Tape saturation / warmth (warm distortion with subtle wow/flutter)
 - [ ] FX routing: modular FX slots instead of fixed chain — each slot is an assignable module
 
 ### Terminal / CLI

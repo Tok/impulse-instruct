@@ -31,6 +31,12 @@ pub fn draw_fx(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         mut eq_low,
         mut eq_mid,
         mut eq_hi,
+        mut comp_thresh,
+        mut comp_ratio,
+        mut comp_mix,
+        mut tape_drive,
+        mut tape_mix,
+        mut tape_flutter,
         locked,
         auto_lock,
     ) = {
@@ -58,6 +64,12 @@ pub fn draw_fx(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             s.fx.eq_low_gain,
             s.fx.eq_mid_gain,
             s.fx.eq_hi_gain,
+            s.fx.compressor_threshold,
+            s.fx.compressor_ratio,
+            s.fx.compressor_mix,
+            s.fx.tape_drive,
+            s.fx.tape_mix,
+            s.fx.tape_flutter,
             s.llm.locked_params.clone(),
             s.llm.auto_lock_on_touch,
         )
@@ -232,6 +244,58 @@ pub fn draw_fx(app: &mut ImpulseApp, ui: &mut egui::Ui) {
 
         ui.group(|ui| {
             ui.label(
+                egui::RichText::new("COMPRESSOR")
+                    .color(theme::FOG)
+                    .monospace()
+                    .size(9.5),
+            );
+            if widgets::param_control(ui, "MIX", &mut comp_mix, ParamMode::Free, use_sliders).0 {
+                changed = true;
+            }
+            if widgets::param_control(ui, "THRESH", &mut comp_thresh, ParamMode::Free, use_sliders)
+                .0
+            {
+                changed = true;
+            }
+            if widgets::param_control(ui, "RATIO", &mut comp_ratio, ParamMode::Free, use_sliders).0
+            {
+                changed = true;
+            }
+        });
+
+        ui.add_space(4.0);
+
+        ui.group(|ui| {
+            ui.label(
+                egui::RichText::new("TAPE")
+                    .color(theme::FOG)
+                    .monospace()
+                    .size(9.5),
+            );
+            if widgets::param_control(ui, "MIX", &mut tape_mix, ParamMode::Free, use_sliders).0 {
+                changed = true;
+            }
+            if widgets::param_control(ui, "DRIVE", &mut tape_drive, ParamMode::Free, use_sliders).0
+            {
+                changed = true;
+            }
+            if widgets::param_control(
+                ui,
+                "FLUTTER",
+                &mut tape_flutter,
+                ParamMode::Free,
+                use_sliders,
+            )
+            .0
+            {
+                changed = true;
+            }
+        });
+
+        ui.add_space(4.0);
+
+        ui.group(|ui| {
+            ui.label(
                 egui::RichText::new("DRIVE / MASTER")
                     .color(theme::FOG)
                     .monospace()
@@ -270,6 +334,12 @@ pub fn draw_fx(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         s.fx.eq_low_gain = eq_low;
         s.fx.eq_mid_gain = eq_mid;
         s.fx.eq_hi_gain = eq_hi;
+        s.fx.compressor_threshold = comp_thresh;
+        s.fx.compressor_ratio = comp_ratio;
+        s.fx.compressor_mix = comp_mix;
+        s.fx.tape_drive = tape_drive;
+        s.fx.tape_mix = tape_mix;
+        s.fx.tape_flutter = tape_flutter;
         drop(s);
         app.push_audio_params();
     }
