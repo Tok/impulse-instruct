@@ -80,11 +80,10 @@ in the synth. Think of it as a modulation matrix row, not a per-voice feature.
 - [ ] FX routing: modular FX slots instead of fixed chain — each slot is an assignable module
 
 ### Terminal / CLI
-- [ ] Font configuration for Unicode box-drawing and special chars — the ✦ char (U+2726) logged
+- [x] Font configuration for Unicode box-drawing and special chars — the ✦ char (U+2726) logged
       on empty-prompt jam triggers renders as a replacement square □ in some terminals. Fix:
-      document in README that the terminal font must include Unicode Block Elements and Geometric
-      Shapes (e.g. JetBrains Mono, Fira Code, Nerd Fonts). Consider falling back to `*` when the
-      locale is not UTF-8, or just replace ✦ with a plain `·` to avoid the issue entirely.
+      documented in README; banner detects LANG/LC_CTYPE at startup and falls back to ASCII when
+      UTF-8 is not advertised; all log → arrows replaced with ASCII -> for universal compat.
 
 ### Styles
 - [ ] Audit styles.json: remove or replace any artist reference that Bonsai doesn't understand (run llm_suite artist tests first)

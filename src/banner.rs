@@ -2,10 +2,34 @@
 // Terminal startup banner: clean title + tagline + Huth-colored keyboard.
 // Pure function — only side effect is printing to stdout.
 
+/// Returns true if the current locale advertises UTF-8 support.
+/// Checks LANG, LC_ALL, and LC_CTYPE in order (first non-empty wins).
+fn terminal_is_utf8() -> bool {
+    for var in &["LC_ALL", "LC_CTYPE", "LANG"] {
+        if let Ok(val) = std::env::var(var)
+            && !val.is_empty()
+        {
+            return val.to_uppercase().contains("UTF-8") || val.to_uppercase().contains("UTF8");
+        }
+    }
+    // No locale set — conservative fallback: assume ASCII-only
+    false
+}
+
 pub fn print_banner() {
     const GRAY: &str = "\x1b[38;2;160;160;160m";
     const SUBGRAY: &str = "\x1b[38;2;110;110;110m";
     const RESET: &str = "\x1b[0m";
+
+    if !terminal_is_utf8() {
+        // ASCII-safe fallback for non-UTF-8 terminals
+        println!();
+        println!("  IMPULSE INSTRUCT");
+        println!("  a synthesizer with a tiny LLM living inside of it | Rust | llama.cpp");
+        println!("  (set LANG=en_US.UTF-8 for the full graphical banner)");
+        println!();
+        return;
+    }
 
     // ── Title & tagline ───────────────────────────────────────────────────────
     // Sine flanks (18 chars each) peak at ██ against the title, centering it

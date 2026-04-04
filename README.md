@@ -57,6 +57,7 @@ Built in Rust. Runs [Bonsai 8B](https://huggingface.co/prism-ml/Bonsai-8B-gguf) 
 | **VRAM** | ≥ 2 GB (model is 1.1 GB, fits entirely in VRAM) |
 | **OS** | Linux (Windows build possible via cargo-xwin, untested) |
 | **Rust** | 1.85+ (edition 2024) |
+| **Terminal font** | A font with Unicode Block Elements and Box Drawing support for the graphical banner (JetBrains Mono, Fira Code, any Nerd Font). The app detects `LANG`/`LC_CTYPE` at startup and falls back to a plain ASCII banner automatically if UTF-8 is not advertised. |
 
 ## Quick start
 

@@ -716,7 +716,7 @@ pub fn run_llm_loop(
     while let Ok(input) = input_rx.recv() {
         // ── Model switch ──────────────────────────────────────────────────────
         if let LlmInput::SwitchModel(ref new_path) = input {
-            log::info!("LLM: switching model → {}", new_path);
+            log::info!("LLM: switching model -> {}", new_path);
             state.write().llm.model_path = new_path.clone();
             // Drop old backend (kills server subprocess if owned), reload new one
             backend = LlamaServerBackend::new(new_path);
@@ -750,9 +750,9 @@ pub fn run_llm_loop(
 
         // Snapshot prompt before acquiring any lock (clone outside critical section)
         if one_shot {
-            log::info!("YOU → {}", prompt);
+            log::info!("YOU -> {}", prompt);
         } else {
-            log::debug!("YOU (jam) → {}", prompt);
+            log::debug!("YOU (jam) -> {}", prompt);
         }
 
         // Build system prompt from a read snapshot — lock held for clone only
@@ -817,9 +817,9 @@ pub fn run_llm_loop(
                         .unwrap_or(&output.text);
                     let persona = state.read().llm.persona_name.clone();
                     if one_shot {
-                        log::info!("{} → {}", persona, comment);
+                        log::info!("{} -> {}", persona, comment);
                     } else {
-                        log::debug!("{} (jam) → {}", persona, comment);
+                        log::debug!("{} (jam) -> {}", persona, comment);
                     }
 
                     // TTS: speak only MC/DJ crowd content — producer explanations
@@ -914,7 +914,7 @@ fn run_mock_loop(
                         .unwrap_or("[mock]");
                     let persona = state.read().llm.persona_name.clone();
                     if one_shot {
-                        log::info!("{} (mock) → {}", persona, comment);
+                        log::info!("{} (mock) -> {}", persona, comment);
                     }
                 }
                 {
