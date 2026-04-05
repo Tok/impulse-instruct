@@ -1,4 +1,4 @@
-# Audio Feedback — PULSE Listening to Itself
+# Audio Feedback - PULSE Listening to Itself
 
 PULSE can analyse the audio it produces and feed that analysis back to
 the LLM. This page documents what's built, what's experimental, and what
@@ -10,7 +10,7 @@ to check if you want to push this further.
 
 A lightweight DSP analysis pipeline runs in the UI thread when the user
 clicks **LISTEN** in the LLM strip. It produces a structured text snapshot
-that is prepended to the inference prompt — no model changes required.
+that is prepended to the inference prompt - no model changes required.
 
 ### Analysis pipeline (`src/audio/analysis.rs`)
 
@@ -30,7 +30,7 @@ All dB values are dBFS. Results are displayed inline in the LLM strip and
 formatted as a snapshot string prepended to the prompt:
 
 ```
-[AUDIO SNAPSHOT — 8.3s captured]
+[AUDIO SNAPSHOT - 8.3s captured]
 Band RMS (dBFS):  sub -18  low -14  mid -22  high -28
 Peak: -2.1 dBFS  |  Crest: 16.0 dB  |  Transients: ~8.0/bar
 ```
@@ -39,7 +39,7 @@ Peak: -2.1 dBFS  |  Crest: 16.0 dB  |  Transients: ~8.0/bar
 
 A 10-second ring buffer (`capture_rx`, 441 000 samples) runs alongside
 the scope buffer in the audio callback. The LISTEN button drains it and
-runs the analysis. No BPM sync — captures whatever was playing.
+runs the analysis. No BPM sync - captures whatever was playing.
 
 ### LLM wiring
 
@@ -52,23 +52,23 @@ Clicking LISTEN:
 
 ---
 
-## Phase 2 — Real audio input to the model (experimental / future)
+## Phase 2 - Real audio input to the model (experimental / future)
 
 ### The idea
 
 Gemma 4 E4B (our default model) is multimodal and has an audio encoder.
 In theory, we could capture a short WAV of the synth's output, base64-encode
-it, and pass it directly in the inference request — letting the model hear
+it, and pass it directly in the inference request - letting the model hear
 what it made rather than reading a text description.
 
 ### Current status (researched 2026-04-05)
 
 | Question | Answer |
 |----------|--------|
-| Gemma 4 E4B has audio encoder? | Yes — USM conformer, same as Gemma-3n |
-| llama.cpp supports it? | **No** — see below |
+| Gemma 4 E4B has audio encoder? | Yes - USM conformer, same as Gemma-3n |
+| llama.cpp supports it? | **No** - see below |
 | mmproj quantised variants? | Only F16 (990 MB); no Q4 mmproj yet |
-| Gemma 4 audio trained on music? | **No — speech only** (model card warning) |
+| Gemma 4 audio trained on music? | **No - speech only** (model card warning) |
 | Other llama.cpp-compatible audio models? | Ultravox 0.5, Voxtral Mini, Qwen2.5-Omni |
 | vLLM supports Gemma 4 audio? | Yes, day-one (April 2, 2026) |
 
@@ -88,7 +88,7 @@ but the eval path doesn't propagate it).
 
 **Track these to know when it's ready:**
 - PR to add audio: watch the llama.cpp repo for a follow-up to #21309 by `ngxson`
-- Eval bug: **ggml-org/llama.cpp #21325** — "Eval bug: Gemma 4 audio support is missing"
+- Eval bug: **ggml-org/llama.cpp #21325** - "Eval bug: Gemma 4 audio support is missing"
 - Fix attempt: **ggml-org/llama.cpp #21348** (status unclear as of April 5)
 
 ### The music problem
@@ -102,8 +102,8 @@ and worth testing once the API is available.
 **Our guess:** for mix-level feedback (loudness, transient density,
 frequency balance) the text descriptor in Phase 1 probably works better
 than raw audio, because we control exactly what's measured. Raw audio
-input might only add value for things we can't easily quantify — timbre,
-character, "does this sound harsh" — but that requires music-trained audio
+input might only add value for things we can't easily quantify - timbre,
+character, "does this sound harsh" - but that requires music-trained audio
 understanding that Gemma 4 doesn't have today.
 
 ### API format when llama.cpp ships it
@@ -125,7 +125,7 @@ content part looks like:
     },
     {
       "type": "text",
-      "text": "You are listening to the audio you just produced. React — correct any mix or arrangement issues. Respond in JSON."
+      "text": "You are listening to the audio you just produced. React - correct any mix or arrangement issues. Respond in JSON."
     }
   ]
 }
@@ -173,11 +173,11 @@ it's technically feasible without waiting for Gemma 4 audio support.
 
 ## Sources
 
-- [model: support gemma 4 (vision + moe, no audio) — llama.cpp #21309](https://github.com/ggml-org/llama.cpp/pull/21309)
-- [Eval bug: Gemma 4 audio support is missing — llama.cpp #21325](https://github.com/ggml-org/llama.cpp/issues/21325)
-- [How to input audio to Gemma 4 E4B? — llama.cpp Discussion #21334](https://github.com/ggml-org/llama.cpp/discussions/21334)
+- [model: support gemma 4 (vision + moe, no audio) - llama.cpp #21309](https://github.com/ggml-org/llama.cpp/pull/21309)
+- [Eval bug: Gemma 4 audio support is missing - llama.cpp #21325](https://github.com/ggml-org/llama.cpp/issues/21325)
+- [How to input audio to Gemma 4 E4B? - llama.cpp Discussion #21334](https://github.com/ggml-org/llama.cpp/discussions/21334)
 - [ggml-org/gemma-4-E4B-it-GGUF on HuggingFace](https://huggingface.co/ggml-org/gemma-4-E4B-it-GGUF)
-- [Welcome Gemma 4 — Hugging Face blog](https://huggingface.co/blog/gemma4)
-- [Audio input support in llama.cpp — Discussion #13759](https://github.com/ggml-org/llama.cpp/discussions/13759)
+- [Welcome Gemma 4 - Hugging Face blog](https://huggingface.co/blog/gemma4)
+- [Audio input support in llama.cpp - Discussion #13759](https://github.com/ggml-org/llama.cpp/discussions/13759)
 - [llama.cpp multimodal docs](https://github.com/ggml-org/llama.cpp/blob/master/docs/multimodal.md)
-- [Gemma 4 Usage Guide — vLLM Recipes](https://docs.vllm.ai/projects/recipes/en/latest/Google/Gemma4.html)
+- [Gemma 4 Usage Guide - vLLM Recipes](https://docs.vllm.ai/projects/recipes/en/latest/Google/Gemma4.html)

@@ -1,4 +1,4 @@
-# Impulse Instruct — Developer Setup
+# Impulse Instruct - Developer Setup
 
 Build instructions, architecture notes, HTTP API reference, and contributor setup.
 
@@ -190,16 +190,16 @@ Key paths (all floats 0–1 unless noted):
 | `lfo[0..3].rate` / `.depth` / `.target` / `.waveform` | LFO modulation matrix |
 
 Step arrays accept three formats:
-- Index list: `[0, 4, 8, 12]` — active step indices; all others cleared
-- Inline: `[1,0,0,0,1,0,0,0,…]` — full 16-value boolean array
-- Clear: `[]` — silence all steps
+- Index list: `[0, 4, 8, 12]` - active step indices; all others cleared
+- Inline: `[1,0,0,0,1,0,0,0,…]` - full 16-value boolean array
+- Clear: `[]` - silence all steps
 
 ---
 
 ## Windows build
 
 ```bash
-# On Linux host — cross-compile for Windows
+# On Linux host - cross-compile for Windows
 sudo apt install clang lld cmake ninja-build
 cargo install cargo-xwin
 ./scripts/build-all.sh

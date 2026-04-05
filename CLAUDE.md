@@ -1,4 +1,4 @@
-# Impulse Instruct — Claude Code Guide
+# Impulse Instruct - Claude Code Guide
 
 ## Build & run
 
@@ -33,12 +33,12 @@ scripts\run-llm-style.bat
 scripts\run-llm-theory.bat
 ```
 
-## Architecture — what lives where
+## Architecture - what lives where
 
 | Path | Purpose |
 |------|---------|
 | `src/state/mod.rs` | Single `AppState` struct. All state transitions are **pure functions** at the bottom of this file. Start here when adding new parameters. |
-| `src/audio/dsp.rs` | All DSP synthesis: 303 ladder filter, 808/909 voices, reverb, delay. Pure functions only — **no allocations inside `process_block()`**. |
+| `src/audio/dsp.rs` | All DSP synthesis: 303 ladder filter, 808/909 voices, reverb, delay. Pure functions only - **no allocations inside `process_block()`**. |
 | `src/audio/mod.rs` | cpal stream + rtrb ring buffer. Audio callback reads from rtrb, never touches `Arc<RwLock<AppState>>`. |
 | `src/sequencer/mod.rs` | 16-step clock as a pure function: `advance_clock(ClockState, &SequencerState, block_size, sr) → (ClockState, Vec<TriggerEvent>)` |
 | `src/llm/mod.rs` | LLM inference thread. Mock mode when no model file found. Real inference via `--features llm`. |
@@ -46,7 +46,7 @@ scripts\run-llm-theory.bat
 | `src/api/mod.rs` | axum HTTP/MCP API. Only starts when `--api` flag passed. |
 | `src/midi/mod.rs` | midir input (CC→param mapping, NoteOn/Off → live record) + MIDI clock output (MidiClockOutput struct). |
 | `src/ui/mod.rs` | egui app: 5 panels (Sequencer / 303 / 808 / 909 / FX) + AN1X + Hoover sub-panels. |
-| `src/ui/theme.rs` | Grayscale palette — **all UI colors must satisfy R=G=B** (no tint). Huth *Farbige Noten* colors are the only exception (note highlights). See `docs/ui-design.md`. |
+| `src/ui/theme.rs` | Grayscale palette - **all UI colors must satisfy R=G=B** (no tint). Huth *Farbige Noten* colors are the only exception (note highlights). See `docs/ui-design.md`. |
 | `src/ui/widgets.rs` | Chrome knob, glass slider, embossed button, step button, LED, XY pad, oscilloscope, ADSR visualizer. |
 | `src/ui/panels/` | One file per synth panel (bass, 808, 909, hoover, an1x, fx, sequencer). |
 | `src/state/transitions.rs` | Pure state transition functions (all the `toggle_*`, `set_*`, `apply_*`, `bank_*`, `chain_*` fns). |
@@ -55,7 +55,7 @@ scripts\run-llm-theory.bat
 | `src/tests/state_tests.rs` | State, expand steps, transition, bank/chain tests. |
 | `src/tests/llm_tests.rs` | Prompt, instruction, music theory, DSP tests. |
 
-## Coding style — functional patterns first
+## Coding style - functional patterns first
 
 This project deliberately applies functional programming principles in Rust.
 Follow these consistently when writing or modifying any code.
@@ -66,12 +66,12 @@ Business logic, DSP, sequencer math, and state transitions must be
 **pure functions**: same input → same output, no hidden state, no side effects.
 
 ```rust
-// CORRECT — pure, trivially testable
+// CORRECT - pure, trivially testable
 pub fn apply_llm_update(state: AppState, update: &serde_json::Value) -> AppState { ... }
 pub fn advance_clock(clock: ClockState, seq: &SequencerState, ...) -> (ClockState, Vec<TriggerEvent>) { ... }
 pub fn midi_to_hz(note: u8) -> f32 { ... }
 
-// WRONG — mutates in place, hard to test, hard to reason about
+// WRONG - mutates in place, hard to test, hard to reason about
 pub fn apply_llm_update(&mut self, update: &serde_json::Value) { ... }
 ```
 
@@ -94,11 +94,11 @@ When the LLM or audio thread needs to read shared state, snapshot it first,
 then release the lock, then do the work on the owned copy.
 
 ```rust
-// CORRECT — lock held for microseconds
+// CORRECT - lock held for microseconds
 let snapshot = state.read().clone();
 // ... long inference or DSP work on snapshot ...
 
-// WRONG — lock held across inference/audio work
+// WRONG - lock held across inference/audio work
 let guard = state.read();
 backend.infer(&guard); // blocks other writers for the entire call
 ```
@@ -106,10 +106,10 @@ backend.infer(&guard); // blocks other writers for the entire call
 ### Side effects at the edges only
 
 Pure core, effectful shell. I/O, threads, channels, and locks belong in:
-- `main.rs` — thread spawning, channel wiring
-- `audio/mod.rs` — cpal stream, rtrb writes
-- `api/mod.rs` — HTTP handlers
-- `llm/mod.rs` — inference thread loop
+- `main.rs` - thread spawning, channel wiring
+- `audio/mod.rs` - cpal stream, rtrb writes
+- `api/mod.rs` - HTTP handlers
+- `llm/mod.rs` - inference thread loop
 
 Everything under `state/`, `sequencer/`, and DSP voices in `audio/dsp.rs`
 must be free of side effects.
@@ -117,11 +117,11 @@ must be free of side effects.
 ### Every pure function gets a test
 
 New pure functions go in the appropriate submodule under `src/tests/`:
-- `seq_tests.rs` — sequencer, euclidean, step arrays, probability
-- `state_tests.rs` — state transitions, bank/chain operations
-- `llm_tests.rs` — prompt building, instruction set, music theory, DSP
+- `seq_tests.rs` - sequencer, euclidean, step arrays, probability
+- `state_tests.rs` - state transitions, bank/chain operations
+- `llm_tests.rs` - prompt building, instruction set, music theory, DSP
 
-If a function is pure, testing it is trivial — just call it with inputs and assert on outputs. No mocks needed.
+If a function is pure, testing it is trivial - just call it with inputs and assert on outputs. No mocks needed.
 
 Each test file has a **1000-line limit** enforced by the pre-commit hook. If a file approaches the limit, split it into a new submodule and add an entry to `src/tests/mod.rs`.
 
@@ -146,12 +146,12 @@ requirements. Build exactly what the current task needs.
 
 ---
 
-## Key invariants — do not break these
+## Key invariants - do not break these
 
 1. **Audio callback is allocation-free.** No `Vec::new()`, no `.clone()`, no locks inside `process_block()` or the cpal callback closure.
 2. **AppState is never locked from the audio thread.** Audio reads params via the rtrb `Consumer<AudioCommand>` only.
 3. **State transitions are pure functions.** `apply_llm_update`, `toggle_drum_step`, `lock_param` etc. take ownership, return new state. No `&mut AppState` methods.
-4. **LLM cannot override locked params.** `AppState.llm.locked_params: HashSet<String>` — checked in `apply_llm_update`. Touching a UI knob adds its dot-path to this set.
+4. **LLM cannot override locked params.** `AppState.llm.locked_params: HashSet<String>` - checked in `apply_llm_update`. Touching a UI knob adds its dot-path to this set.
 5. **HTTP API only starts with `--api`.** Don't start it unconditionally.
 
 ## Adding a new synth parameter
@@ -166,30 +166,30 @@ requirements. Build exactly what the current task needs.
 
 ## Crate versions (locked)
 
-- egui/eframe 0.28 — UI
-- cpal 0.15 — audio I/O
-- axum 0.7 — HTTP
-- midir 0.9 — MIDI
-- rtrb 0.3 — lock-free audio ring buffer
-- llama-cpp-2 0.1 — optional, needs `libclang-dev cmake`
+- egui/eframe 0.28 - UI
+- cpal 0.15 - audio I/O
+- axum 0.7 - HTTP
+- midir 0.9 - MIDI
+- rtrb 0.3 - lock-free audio ring buffer
+- llama-cpp-2 0.1 - optional, needs `libclang-dev cmake`
 
 ## LLM integration
 
 Models (ranked by test suite results):
-- **Gemma 4 E4B Q4_K_M** — default, 4.6 GB, best accuracy, passes all 39 integration tests
-- **Bonsai 8B Q1_0_g128** — 1.1 GB lightweight fallback, no chain-of-thought, requires PrismML llama-server fork
-- **Qwen3-8B / 14B** — optional, chain-of-thought capable; not recommended as default (heavier, no accuracy gain over Gemma 4)
-- **Other GGUF models** (e.g. Llama variants) — technically compatible with llama-server but not evaluated; system prompt is not tuned for them. Users are free to experiment.
+- **Gemma 4 E4B Q4_K_M** - default, 4.6 GB, best accuracy, passes all 39 integration tests
+- **Bonsai 8B Q1_0_g128** - 1.1 GB lightweight fallback, no chain-of-thought, requires PrismML llama-server fork
+- **Qwen3-8B / 14B** - optional, chain-of-thought capable; not recommended as default (heavier, no accuracy gain over Gemma 4)
+- **Other GGUF models** (e.g. Llama variants) - technically compatible with llama-server but not evaluated; system prompt is not tuned for them. Users are free to experiment.
 
 Server selection: Bonsai uses `.llama-build/bin/llama-server` (PrismML fork, Q1_0_g128 format).
 All other models use `.llama-official-build/bin/llama-server` (standard llama.cpp).
 
 - Mock mode: runs without model, returns plausible JSON based on prompt keywords + instruction set
 - Real mode: any GGUF model via llama-server subprocess; model selected at runtime via UI
-- LLM outputs JSON only — step arrays use compact formats: index list `[0,4,8,12]` or inline `[1,0,…]` or clear `[]`
+- LLM outputs JSON only - step arrays use compact formats: index list `[0,4,8,12]` or inline `[1,0,…]` or clear `[]`
 - JSON is applied via `apply_llm_update()` in `src/state/transitions.rs`, which respects `locked_params`
 - `sanitize_json_structure()` in `src/llm/mod.rs` fixes common LLM output errors (LFO dot-notation, etc.) before parsing
-- `max_tokens: 1200` — keep this high enough to avoid JSON truncation on complex responses
+- `max_tokens: 1200` - keep this high enough to avoid JSON truncation on complex responses
 
 ## HTTP API (port 8765)
 

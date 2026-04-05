@@ -1,6 +1,6 @@
-# Farbige Noten — Color Theory Integration
+# Farbige Noten - Color Theory Integration
 
-> Ch. A. B. Huth — *Farbige Noten*, Hamburg 1888–1889.
+> Ch. A. B. Huth - *Farbige Noten*, Hamburg 1888–1889.
 > Three-volume treatise linking the chromatic Western scale to a 12-color
 > system derived from the **golden ratio** applied simultaneously to tone
 > scale and color scale (*Farbenleiter*).
@@ -12,8 +12,8 @@
 | Volume | Year | Title | Key Content |
 |--------|------|-------|-------------|
 | 1 | 1888 | *Farben und Noten* | Foundational theory; piano notation plates (6 Farbtafeln); establishes the 12-color chromatic cycle with international color-name abbreviations |
-| 2 | 1889 | *Weiterer Verfolg der neuen Theorie auf das Tonsystem* | Harmonic and compositional theory; TAFEL I — the large spectral "Entwicklung der Tonleiter" chart; TAFEL I (notation) — colored musical examples |
-| 3 | — | *Vorschlag eines neuen vereinfachten Notensystems* | Simplified notation proposal; **TAFEL III** — the definitive piano keyboard color chart; TAFEL IV — chord grids for all major/minor keys; TAFEL V — "Farben u. Noten" prism diagram; TAFEL VI — color ring (*Kalte / Warme Töne*) |
+| 2 | 1889 | *Weiterer Verfolg der neuen Theorie auf das Tonsystem* | Harmonic and compositional theory; TAFEL I - the large spectral "Entwicklung der Tonleiter" chart; TAFEL I (notation) - colored musical examples |
+| 3 | - | *Vorschlag eines neuen vereinfachten Notensystems* | Simplified notation proposal; **TAFEL III** - the definitive piano keyboard color chart; TAFEL IV - chord grids for all major/minor keys; TAFEL V - "Farben u. Noten" prism diagram; TAFEL VI - color ring (*Kalte / Warme Töne*) |
 
 ---
 
@@ -23,7 +23,7 @@ Huth observed that applying the **golden section** (φ = 1.618…) to both the
 tone scale and the color scale yields the same proportional cut-points. On
 the tone scale these intersections produce the harmonic consonances (major
 and minor thirds, fifths). On the color scale they produce harmonic color
-triads — what Huth calls *harmonische Tricoloren*.
+triads - what Huth calls *harmonische Tricoloren*.
 
 The color wheel he uses is the **traditional RYB wheel** (Red = 0°,
 Yellow = 120°, Blue = 240°), which was standard in 19th-century European
@@ -47,9 +47,9 @@ the same blue, confirming cyclic closure.
 **Complementary pairs** (TAFEL VI, *Complementäre Farbtöne*):
 Standard RYB complementaries map to the tritone interval (6 semitones apart,
 180° on the hue wheel):
-- Blue (C) ↔ Orange (F#) — tritone
-- Green/Teal (D) ↔ Carmine (G#) — tritone
-- Yellow (E) ↔ Violet/Purple (A#) — tritone
+- Blue (C) ↔ Orange (F#) - tritone
+- Green/Teal (D) ↔ Carmine (G#) - tritone
+- Yellow (E) ↔ Violet/Purple (A#) - tritone
 
 ---
 
@@ -88,7 +88,7 @@ Huth's international abbreviations (Vol. 1, system plate bottom line):
 
 ## Visual Evidence
 
-### TAFEL III (Vol. 3) — Definitive Piano Color Chart
+### TAFEL III (Vol. 3) - Definitive Piano Color Chart
 The primary color reference. Shows a piano keyboard with one octave of
 colored vertical columns. The 7 natural-note (white-key) columns, left to
 right (C → B), display a smooth blue-to-orange-red spectrum. The 5
@@ -98,19 +98,19 @@ As a 135-year-old chromolithograph the printed inks have shifted
 significantly. The hex values above are derived from **Huth's text-stated
 color names** rather than from direct pipetting of the aged image.
 
-### TAFEL V (Vol. 3) — "Farben u. Noten" Prism Diagram
+### TAFEL V (Vol. 3) - "Farben u. Noten" Prism Diagram
 Spectral prism diagram showing the **physical** correspondence between
 light-wave frequency and pitch across the full piano range (not one octave).
 Lowest notes (bass) → red-orange; highest notes (treble) → blue-violet.
 This is the physical mapping; the cyclic 12-color system in TAFEL III is the
 *symbolic* mapping used in the notation.
 
-### TAFEL VI (Vol. 3) — Color Ring
+### TAFEL VI (Vol. 3) - Color Ring
 Color wheel showing *Kalte Töne* (cool: upper half) and *Warme Töne* (warm:
 lower half), plus complementary color pairs. Confirms the warm/cool grouping
 and the tritone-complementary relationship.
 
-### TAFEL I (Vol. 2) — "Entwicklung der Tonleiter"
+### TAFEL I (Vol. 2) - "Entwicklung der Tonleiter"
 Large spectral chart showing the harmonic scale derivation with colored
 horizontal bands (one per note) across five octaves.
 
@@ -126,7 +126,7 @@ and the helper `note_color(midi_note: u8) -> Color32`.
 **Bass sequencer row** (`src/ui/mod.rs` → `draw_sequencer()`):
 Each active bass step shows its note's Huth color as a dot indicator inside
 the step button. The color gives instant visual feedback about the melody
-shape before you even listen — an interval of a fifth apart produces
+shape before you even listen - an interval of a fifth apart produces
 complementary colors (tritone = exact opposite on the wheel).
 
 **Widget layer** (`src/ui/widgets.rs` → `step_button()`):
@@ -142,12 +142,12 @@ This makes interval relationships visible at a glance.
 
 **LLM context:**
 The system prompt could describe the current melody in terms of Huth color
-names ("the line moves from Blue (C) through Orange (F#) — a tritone jump").
+names ("the line moves from Blue (C) through Orange (F#) - a tritone jump").
 This gives the model a richer, non-numeric vocabulary for melodic motion.
 
 **Waveform display:**
 If a scope / waveform visualiser is added, the signal color could be mapped
-to the dominant pitch via pitch-detection — live Huth coloring of the audio.
+to the dominant pitch via pitch-detection - live Huth coloring of the audio.
 
 **Chord grid (TAFEL IV style):**
 Huth's chord grids show which color triads are "harmonisch" (complementary
@@ -188,7 +188,7 @@ enum InstrumentKind { AcidBass, DrumKit808, DrumKit909 }
 struct InstrumentSlot { label: &'static str, kind: InstrumentKind }
 
 // ImpulseApp.instruments: Vec<InstrumentSlot>
-// Panel::Instrument(usize) — index into the list
+// Panel::Instrument(usize) - index into the list
 ```
 
 The tab bar is generated dynamically from `self.instruments`. Adding a new
@@ -199,8 +199,8 @@ synth means pushing to that Vec and providing a `draw_` function for its
 | Old | New | Notes |
 |-----|-----|-------|
 | `AppState.tb303: TB303State` | `AppState.bass: BassState` | JSON key: `"bass"` |
-| `AppState.tr808: TR808State` | `AppState.kit_a: DrumKit808` | — |
-| `AppState.tr909: TR909State` | `AppState.kit_b: DrumKit909` | — |
+| `AppState.tr808: TR808State` | `AppState.kit_a: DrumKit808` | - |
+| `AppState.tr909: TR909State` | `AppState.kit_b: DrumKit909` | - |
 
 **Future extension points:**
 - Second bass synth: push `InstrumentSlot { label: "BASS B", kind: InstrumentKind::AcidBass2 }`

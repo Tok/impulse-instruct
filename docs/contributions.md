@@ -4,7 +4,7 @@
 
 ### Style and tuning contributions
 
-The LLM integration tests in `src/llm_suite_style.rs` check whether PULSE responds correctly to genre and artist references — "make it BoC", "go full gabber", "darkstep energy". Each test fires a real prompt against a running model and asserts on specific parameter outcomes.
+The LLM integration tests in `src/llm_suite_style.rs` check whether PULSE responds correctly to genre and artist references - "make it BoC", "go full gabber", "darkstep energy". Each test fires a real prompt against a running model and asserts on specific parameter outcomes.
 
 The most valuable contributions are **new style entries and failing test cases**:
 
@@ -22,7 +22,7 @@ The style catalog lives in `src/llm/styles.json`. Each entry has:
 }
 ```
 
-The `full` field is injected into the system prompt when the style is active. Good `full` entries are specific about sound design decisions, not just vibes — they tell the LLM *which parameters* to move and *why*.
+The `full` field is injected into the system prompt when the style is active. Good `full` entries are specific about sound design decisions, not just vibes - they tell the LLM *which parameters* to move and *why*.
 
 ### Music theory test suite
 
@@ -43,7 +43,7 @@ To run the suites:
 
 ### Synth voice tuning
 
-Some voices are rough. The hoover lead is the most obvious gap — it doesn't yet sound like the classic Human Resource / Dominator vacuum cleaner screech. Getting it there requires tuning the supersaw → highpass sweep → pitch LFO chain, and probably a dedicated resonant sweep shape.
+Some voices are rough. The hoover lead is the most obvious gap - it doesn't yet sound like the classic Human Resource / Dominator vacuum cleaner screech. Getting it there requires tuning the supersaw → highpass sweep → pitch LFO chain, and probably a dedicated resonant sweep shape.
 
 If you know the original signal chain and want to help dial it in, the relevant code is in `src/audio/dsp/hoover.rs` (if it exists) or the hoover voice section of `src/audio/dsp/mod.rs`. Parameter ranges are set in `src/state/mod.rs` under `HooverState`.
 
@@ -59,7 +59,7 @@ Open an issue with the prompt that triggered it, the model version, and the log 
 
 Read `CLAUDE.md` first. The short version:
 
-- Business logic and DSP must be **pure functions** — same input → same output, no side effects
+- Business logic and DSP must be **pure functions** - same input → same output, no side effects
 - Every new pure function needs a test in `src/tests/`
 - No files over 1000 lines (enforced by pre-commit)
 - `cargo fmt` + `cargo clippy -- -D warnings` must pass

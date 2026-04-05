@@ -6,7 +6,7 @@ Thank you for your interest in contributing! This guide is organized by contribu
 
 ## 👥 For Human Contributors
 
-**TL;DR:** Don't stress about the strict rules below — they're mainly for AI coding assistants. Submit your PR even if some checks fail or formatting is off. We appreciate your contribution and may have bots tidy things up later.
+**TL;DR:** Don't stress about the strict rules below - they're mainly for AI coding assistants. Submit your PR even if some checks fail or formatting is off. We appreciate your contribution and may have bots tidy things up later.
 
 ### Philosophy
 
@@ -49,7 +49,7 @@ cargo test        # run unit tests
 4. **Submit PR** to `main`:
    - Describe what you changed and why
    - Mention any tests you ran
-   - Note any checks that fail — we'll handle it
+   - Note any checks that fail - we'll handle it
 
 ### Commit Message Format
 
@@ -63,13 +63,13 @@ type: brief description
 
 ## 🎛️ For Style & Prompt Contributors (No Coding Required)
 
-This is the area where **domain knowledge matters most** and technical skill is almost entirely optional. If you know electronic music production — genre history, synthesis techniques, rhythm patterns, scene culture — you can contribute directly to the intelligence that drives PULSE.
+This is the area where **domain knowledge matters most** and technical skill is almost entirely optional. If you know electronic music production - genre history, synthesis techniques, rhythm patterns, scene culture - you can contribute directly to the intelligence that drives PULSE.
 
 ### What You Can Contribute
 
-**`styles.json`** — the genre catalog PULSE draws from when you name a style.
-**`instructions.json`** — the shortcut library for one-liner prompts ("make it darker", "remove the hihat").
-**`config.json`** — the startup prompts that greet PULSE when it loads.
+**`styles.json`** - the genre catalog PULSE draws from when you name a style.
+**`instructions.json`** - the shortcut library for one-liner prompts ("make it darker", "remove the hihat").
+**`config.json`** - the startup prompts that greet PULSE when it loads.
 
 No Rust knowledge needed. No build tools required beyond a text editor and `cargo run` to verify.
 
@@ -103,22 +103,22 @@ Each style entry looks like this:
 
 | Field | What it does |
 |-------|-------------|
-| `id` | Unique snake_case identifier — used in code, keep it stable |
+| `id` | Unique snake_case identifier - used in code, keep it stable |
 | `name` | Human-readable display name |
 | `keywords` | Words that trigger this style when typed in the prompt box |
 | `bpm_range` | `[min, max]` BPM the LLM targets for this genre |
 | `brief` | One-sentence description injected into shorter prompts |
-| `description` | Full paragraph injected when the LLM needs more context — be specific: mention hardware, era, key artists (without naming them directly in output), synthesis techniques |
-| `seed_patterns` | 16-step arrays that prime the sequencer — `1`=on, `0`=off; `bass_notes` are MIDI note numbers (0=rest) |
+| `description` | Full paragraph injected when the LLM needs more context - be specific: mention hardware, era, key artists (without naming them directly in output), synthesis techniques |
+| `seed_patterns` | 16-step arrays that prime the sequencer - `1`=on, `0`=off; `bass_notes` are MIDI note numbers (0=rest) |
 | `suggested_root` | Key root: `"A"` through `"G"`, with `#`/`b` if needed |
 | `suggested_scale` | `"minor"`, `"major"`, `"pentatonic"`, `"dorian"`, `"phrygian"`, etc. |
 
 **Tips for great style entries:**
 
-- **Multiple setups for the same style are welcome.** Use suffixed IDs like `dub_techno_sparse`, `dub_techno_hypnotic`, `jungle_ragga`, `jungle_instrumental` — PULSE will pick based on keywords or the user can name them explicitly.
-- **Be specific in `description`** — mention the hardware (TR-808, TB-303, Juno-106), the era, the geography, the tempo feel, and the filter/FX character. The LLM reads this to understand what "sounds right".
-- **Seed patterns prime the feel** but the LLM overwrites them — think of them as "first impression" defaults, not locked values.
-- **Keywords drive matching** — include slang, sub-genres, gear names, and artist-adjacent terms that a user might type.
+- **Multiple setups for the same style are welcome.** Use suffixed IDs like `dub_techno_sparse`, `dub_techno_hypnotic`, `jungle_ragga`, `jungle_instrumental` - PULSE will pick based on keywords or the user can name them explicitly.
+- **Be specific in `description`** - mention the hardware (TR-808, TB-303, Juno-106), the era, the geography, the tempo feel, and the filter/FX character. The LLM reads this to understand what "sounds right".
+- **Seed patterns prime the feel** but the LLM overwrites them - think of them as "first impression" defaults, not locked values.
+- **Keywords drive matching** - include slang, sub-genres, gear names, and artist-adjacent terms that a user might type.
 
 **Styles we'd especially love:**
 
@@ -142,7 +142,7 @@ Each style entry looks like this:
 
 ### Adding or Improving an Instruction (`instructions.json`)
 
-Instructions are shortcut templates — when the user types something that matches the keywords, the app applies the `params` JSON directly without calling the LLM. Fast, deterministic, and offline-capable.
+Instructions are shortcut templates - when the user types something that matches the keywords, the app applies the `params` JSON directly without calling the LLM. Fast, deterministic, and offline-capable.
 
 ```json
 {
@@ -160,9 +160,9 @@ Instructions are shortcut templates — when the user types something that match
 
 **Tips:**
 
-- `keywords` are matched by score — multi-word phrases score higher than single words, so `"more reverb"` outweighs just `"reverb"`. Include natural-language variations of the same intent.
+- `keywords` are matched by score - multi-word phrases score higher than single words, so `"more reverb"` outweighs just `"reverb"`. Include natural-language variations of the same intent.
 - `params` uses the same JSON path structure as the HTTP API (`/api/params`). Check `GET /api/schema` for the full list of paths.
-- Instructions complement the LLM — they handle the fast, unambiguous cases ("remove kick", "clean FX") so the LLM can focus on creative decisions.
+- Instructions complement the LLM - they handle the fast, unambiguous cases ("remove kick", "clean FX") so the LLM can focus on creative decisions.
 - **Common gaps:** genre-specific FX presets ("dub echo", "gabber distortion"), performance shortcuts ("full volume", "cut all FX"), drum variation shortcuts.
 
 ---
@@ -203,13 +203,13 @@ All AI contributors MUST read and follow **[CLAUDE.md](CLAUDE.md)** for:
 
 Unlike human contributors, AI tools are expected to:
 - ✅ **Format all code** with `cargo fmt` before committing
-- ✅ **Pass `cargo clippy`** — no warnings allowed
-- ✅ **Pass all unit tests** — `cargo test`
+- ✅ **Pass `cargo clippy`** - no warnings allowed
+- ✅ **Pass all unit tests** - `cargo test`
 - ✅ **Add tests** for every new pure function
-- ✅ **Respect the 1000-line limit** per test file — split into a new submodule if approaching it
-- ✅ **Never allocate inside `process_block()`** — the audio callback is allocation-free
+- ✅ **Respect the 1000-line limit** per test file - split into a new submodule if approaching it
+- ✅ **Never allocate inside `process_block()`** - the audio callback is allocation-free
 - ✅ **Never lock `AppState` from the audio thread**
-- ✅ **Keep state transitions as pure functions** — no `&mut AppState` methods
+- ✅ **Keep state transitions as pure functions** - no `&mut AppState` methods
 - ✅ **Run the pre-commit hook** which enforces all of the above automatically
 
 ### Why Stricter for AI?
@@ -246,8 +246,8 @@ Before every commit, verify:
 
 ### Documentation
 
-- **[CLAUDE.md](CLAUDE.md)** — Development guide (AI-focused but useful for all)
-- **[PLAN.md](PLAN.md)** — Roadmap and what's built vs. what's left
+- **[CLAUDE.md](CLAUDE.md)** - Development guide (AI-focused but useful for all)
+- **[PLAN.md](PLAN.md)** - Roadmap and what's built vs. what's left
 
 ### Running Tests
 
@@ -278,4 +278,4 @@ cargo check                          # fast type-check
 
 **Thank you for contributing to Impulse Instruct!**
 
-Whether you're a music producer tweaking JSON, a synth nerd fixing a DSP bug, or an AI assistant following the rules — your contribution makes PULSE smarter and more musical. 🎛️
+Whether you're a music producer tweaking JSON, a synth nerd fixing a DSP bug, or an AI assistant following the rules - your contribution makes PULSE smarter and more musical. 🎛️
