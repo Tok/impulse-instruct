@@ -20,6 +20,8 @@ FEATURE_FLAGS=""
 [[ -n "$FEATURES" ]] && FEATURE_FLAGS="--features ${FEATURES}"
 
 DIST="dist"
+# Clean dist before each build so stale files (session.json, old binaries) never ship
+rm -rf "$DIST"
 mkdir -p "$DIST"
 
 # ── Linux ─────────────────────────────────────────────────────────────────────
@@ -33,6 +35,11 @@ cp "$LINUX_BIN" "${DIST}/impulse-instruct-linux-x86_64"
 strip "${DIST}/impulse-instruct-linux-x86_64"
 cp scripts/dist-start.sh "${DIST}/start.sh"
 chmod +x "${DIST}/start.sh"
+
+# Ship user-tunable JSON configs (styles, instructions, startup prompts)
+cp config.json instructions.json styles.json "${DIST}/"
+# Empty models/ dir so users know where to place their GGUF files
+mkdir -p "${DIST}/models"
 echo "✓ Linux: ${DIST}/impulse-instruct-linux-x86_64 ($(du -sh "${DIST}/impulse-instruct-linux-x86_64" | cut -f1))"
 
 # ── Windows ───────────────────────────────────────────────────────────────────
@@ -94,6 +101,7 @@ else
   cp "$WIN_BIN" "${DIST}/impulse-instruct-windows-x86_64.exe"
   cp scripts/dist-start.bat "${DIST}/start.bat"
   echo "✓ Windows: ${DIST}/impulse-instruct-windows-x86_64.exe ($(du -sh "${DIST}/impulse-instruct-windows-x86_64.exe" | cut -f1))"
+  # JSON configs and models/ dir already added by Linux step above
 fi
 
 echo ""

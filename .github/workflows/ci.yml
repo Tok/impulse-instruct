@@ -2,16 +2,16 @@ name: CI
 
 on:
   push:
-    branches: [main, master]
+    branches: [main]
   pull_request:
-    branches: [main, master]
+    branches: [main]
 
 env:
   CARGO_TERM_COLOR: always
 
 jobs:
   test:
-    name: Test + Coverage
+    name: Unit tests
     runs-on: ubuntu-latest
 
     steps:
@@ -21,7 +21,6 @@ jobs:
         run: |
           sudo apt-get update -q
           sudo apt-get install -y --no-install-recommends \
-            build-essential \
             libasound2-dev \
             libxcb-xfixes0-dev \
             libxcb-shape0-dev \
@@ -31,6 +30,8 @@ jobs:
 
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
 
       - name: Cache cargo
         uses: actions/cache@v4
@@ -43,27 +44,31 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-cargo-
 
-      - name: Cargo check
-        run: cargo check
+      - name: Check formatting
+        run: cargo fmt --check
 
-      - name: Run tests
+      - name: Clippy
+        run: cargo clippy -- -D warnings
+
+      - name: Unit tests
+        # LLM integration tests (scripts/run-llm-*.sh) are excluded — they
+        # require a running CUDA GPU + llama-server. Run those locally.
         run: cargo test
 
       - name: Install cargo-tarpaulin
         run: cargo install cargo-tarpaulin --locked
 
-      - name: Generate coverage (lcov)
+      - name: Coverage
         run: |
           cargo tarpaulin \
-            --out Lcov \
-            --output-dir . \
+            --out Xml \
             --exclude-files "src/main.rs" \
             --exclude-files "src/banner.rs" \
+            --exclude-files "src/bin/*" \
             --timeout 120
 
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v4
+        uses: codecov/codecov-action@v5
         with:
-          files: ./lcov.info
           token: ${{ secrets.CODECOV_TOKEN }}
           fail_ci_if_error: false
