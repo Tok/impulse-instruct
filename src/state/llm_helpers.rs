@@ -418,5 +418,11 @@ pub(super) fn apply_fx_update(
     u!(s.fx.tape_drive, "tape_drive", "fx.tape_drive");
     u!(s.fx.tape_mix, "tape_mix", "fx.tape_mix");
     u!(s.fx.tape_flutter, "tape_flutter", "fx.tape_flutter");
+    u!(
+        s.fx.autotune_amount,
+        "autotune_amount",
+        "fx.autotune_amount"
+    );
+    u!(s.fx.autotune_mix, "autotune_mix", "fx.autotune_mix");
     u!(s.fx.master_volume, "master_volume", "fx.master_volume");
 }

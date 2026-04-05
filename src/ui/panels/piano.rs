@@ -205,7 +205,7 @@ pub fn draw_piano(app: &mut ImpulseApp, ui: &mut egui::Ui, ctx: &egui::Context) 
                 egui::Rounding::same(2.0),
                 Color32::from_black_alpha(140),
             );
-            let label_color = if active { theme::CHALK } else { theme::SMOKE };
+            let label_color = theme::note_color(note);
             painter.text(
                 label_pos,
                 egui::Align2::CENTER_CENTER,
@@ -345,7 +345,7 @@ pub fn draw_piano(app: &mut ImpulseApp, ui: &mut egui::Ui, ctx: &egui::Context) 
                     egui::Rounding::same(2.0),
                     Color32::from_black_alpha(160),
                 );
-                let label_color = if active { theme::CHALK } else { theme::FOG };
+                let label_color = theme::note_color(note);
                 painter.text(
                     label_pos,
                     egui::Align2::CENTER_CENTER,

@@ -171,6 +171,23 @@ pub(super) fn draw_fx_content(app: &mut ImpulseApp, ui: &mut egui::Ui, kind: Mod
                 s.fx.distortion_mix = mi;
             }
         }
+        ModuleKind::FxAutotune => {
+            let (mut amt, mut mi) = {
+                let s = app.state.read();
+                (s.fx.autotune_amount, s.fx.autotune_mix)
+            };
+            if widgets::param_control(ui, "AMOUNT", &mut amt, pm("fx.autotune_amount"), ctrl).0 {
+                changed = true;
+            }
+            if widgets::param_control(ui, "MIX", &mut mi, pm("fx.autotune_mix"), ctrl).0 {
+                changed = true;
+            }
+            if changed {
+                let mut s = app.state.write();
+                s.fx.autotune_amount = amt;
+                s.fx.autotune_mix = mi;
+            }
+        }
         ModuleKind::FxWaveshaper => {
             let (mut dr, mut mi) = {
                 let s = app.state.read();

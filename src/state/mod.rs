@@ -441,6 +441,10 @@ pub struct FxState {
     pub eq_low_gain: f32, // -1..+1 → -12..+12 dB low shelf (~200 Hz)
     pub eq_mid_gain: f32, // -1..+1 → -12..+12 dB mid peak (~1 kHz)
     pub eq_hi_gain: f32,  // -1..+1 → -12..+12 dB high shelf (~5 kHz)
+    #[serde(default)]
+    pub autotune_amount: f32, // 0–1 → 0..+12 semitones upward pitch shift
+    #[serde(default)]
+    pub autotune_mix: f32, // 0–1 wet/dry
 }
 
 impl Default for FxState {
@@ -479,6 +483,8 @@ impl Default for FxState {
             eq_low_gain: 0.0,
             eq_mid_gain: 0.0,
             eq_hi_gain: 0.0,
+            autotune_amount: 0.0,
+            autotune_mix: 0.0,
         }
     }
 }

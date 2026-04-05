@@ -256,6 +256,7 @@ pub struct ImpulseApp {
     show_sysinfo: bool,
     // Preferences
     prefs_tab: usize,
+    llm_tab: usize,
     // log_level_idx now persisted in AppState.ui_prefs.log_level_idx
     // Startup hook: fire a prompt once the LLM transitions from initializing to ready
     startup_done: bool,
@@ -287,6 +288,10 @@ pub struct ImpulseApp {
     native_ppp: f32,
     /// Central lock-paint mode: None = normal drag, Some(mode) = click paints that mode.
     pub(crate) touch_mode: Option<crate::state::ParamMode>,
+    // Per-zone collapse state.
+    pub(crate) zone_global_collapsed: bool,
+    pub(crate) zone_voice_collapsed: bool,
+    pub(crate) zone_fxmod_collapsed: bool,
 }
 
 impl ImpulseApp {
@@ -392,6 +397,7 @@ impl ImpulseApp {
             },
             show_sysinfo: false,
             prefs_tab: 0,
+            llm_tab: 0,
             startup_done: false,
             midi_clock_tracker: MidiClockTracker::new(),
             history: StateHistory::new(),
@@ -409,6 +415,9 @@ impl ImpulseApp {
             llm_strip_collapsed: false,
             native_ppp: 0.0, // captured on first frame after DPI is established
             touch_mode: None,
+            zone_global_collapsed: false,
+            zone_voice_collapsed: false,
+            zone_fxmod_collapsed: false,
         }
     }
 
@@ -477,8 +486,11 @@ impl ImpulseApp {
                 && !thinking.is_empty()
             {
                 self.last_thinking = Some(thinking.clone());
+                let think_persona = self.state.read().llm.persona_name.clone();
+                log::info!("{} (think): {}", think_persona, thinking);
                 if self.state.read().llm.show_thinking_in_log {
-                    self.log_text.push_str(&format!("think → {}\n", thinking));
+                    self.log_text
+                        .push_str(&format!("{} (think): {}\n", think_persona, thinking));
                 }
             }
 

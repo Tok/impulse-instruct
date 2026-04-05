@@ -50,20 +50,27 @@ Ordered by value.  Branch: **`develop`** (merge to `main` only for tagged releas
 - [x] **Heat chaos amplification** — temperature range 0.1–1.7 (was 1.2); top_p widens with heat; CHAOS tier in system prompt at ≥90%.
 - [x] **CI/CD supply-chain security** — `release` job builds Linux+Windows in GH Actions on `v*` tags; SHA-256 sidecars + SLSA level-2 attestation; codecov now runs on `develop` too.
 - [x] **Banner symmetry** — wave and tagline centred correctly.
+- [x] **Snapshot versioning** — `Cargo.toml` bumped to `0.5.8-alpha.1`; `scripts/bump-version.sh` added (commit + release tag on clean semver).
+- [x] **LLM tuning tab in Preferences** — AI tab split into four sub-tabs: **Model** (ctx_size, seed, inference/thinking), **Sampling** (top_k/p/min_p/repeat/freq — labelled "experimental"), **Personality** (persona, voice mode, style verbosity, system prompt override), **TTS** (engine, voice shape, character).
+- [x] **Zone visual hierarchy** — zone rails distinct gray backgrounds (Global 24, Voices 18, FX+Mod 14); module card content 6px/8px margin; 3-dot drag affordance in title bar.
+- [x] **Autotune FX module** — `ModuleKind::FxAutotune`; grain-based pitch shifter in `fx.rs` (two-head overlap-add, pre-allocated 4096-sample buffer); wired into FxStep, FxPlan, AudioParams, rack add-menu, LLM schema.
+- [x] **Per-zone collapse** — each zone rail has a ▶/▼ toggle; Voice, FX+Mod, Global collapse independently.
+- [x] **Log level persistence fix** — `log_level_idx` added to `SessionData`; survives restarts.
+- [x] **Huth note coloring in log** — in-UI log parses note names (`C4`, `A#3`), frequencies (`440Hz`), and MIDI context (`note 60`) and renders them in their Huth chromatic color; `colorize_log()` in `llm_strip.rs`; uses `egui::Label::selectable(true)` + `LayoutJob` so text remains copy-paste-able.
 
 ---
 
-### Next — immediate queue
+### Next — pre-release queue
 
-- [ ] **Snapshot versioning** — bump `Cargo.toml` version to `0.5.8-alpha.1` on `develop` so builds are clearly pre-release.  Add `scripts/bump-version.sh` that sets version, commits, and tags.  Cargo convention: `MAJOR.MINOR.PATCH-alpha.N` / `-rc.N` pre-release suffixes; clean `MAJOR.MINOR.PATCH` only on release tags.
+- [ ] **Huth coloring in synth panels** — apply `theme::note_color()` to note name labels wherever they appear in bass/drum/AN1X panels and oscilloscope readouts.  CLI terminal output (the `log::info!` etc.) should also emit ANSI escape codes for note names when stdout is a TTY.
 
-- [ ] **LLM tuning tab in Preferences** — split the settings panel into tabs: **Model** (model path, ctx_size, seed), **Sampling** (top_k, top_p, min_p, repeat_penalty, freq_penalty — with "experimental" label), **Personality** (persona, user instructions, style), **TTS** (engine, voice, pitch/speed/vol).  Currently a flat scrollable list.
+- [ ] **Rack cable drag-to-patch** — wire up the existing `CableDrag` infrastructure into a usable patch interaction: click+drag from any port circle to another to create a cable; right-click a cable to delete it.  The overlay already draws cables; the missing piece is the hit-test interaction layer.
 
-- [ ] **Zone visual hierarchy** — zone rails (Voice / FX+Mod / Global) need distinct background tints (slightly different gray values, not tints — keep R=G=B rule).  Module cards: 6px side padding, 8px top/bottom; title bar 20px min height.  Drag affordance: 3-dot handle icon in title bar.
+- [ ] **Sequencer piano-roll note names** — melodic step rows (bass, hoover, AN1X) should show the note name (`C4`, `A#3`) inside each active step cell (or as a tooltip), colored with Huth.
 
-- [ ] **Autotune FX module** — `ModuleKind::FxAutotune`; pitch correction on voice output.  Implement as a simple chromatic or scale-quantised pitch shifter in `dsp.rs`.  Add to rack, wire into FX plan.
+- [ ] **Per-voice FX send UI** — surface the voice→FX cable routing in a compact matrix view (voice rows × FX columns, checkbox grid), so users can easily route individual voices to specific FX without navigating the full rack overlay.
 
-- [ ] **Per-zone collapse** — each zone rail has a ▶/▼ toggle to hide all its cards; useful when focussing on just bass or just FX.
+- [ ] **Session autosave interval setting** — currently saves on every state change (throttled); add a Preferences option: immediate / 5 s / 30 s / manual only.
 
 ---
 

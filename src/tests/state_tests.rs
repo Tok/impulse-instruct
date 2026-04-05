@@ -455,8 +455,8 @@ mod fx_plan_tests {
         let rack = RackState::default();
         let plan = compile_fx_plan(&rack);
         // Default rack wires FX serially: Waveshaper→Reverb→Delay→Bitcrush→
-        // Chorus→Phaser→RingMod→Eq→Compressor→TapeSat→Drive
-        assert_eq!(plan.steps.len(), 11);
+        // Chorus→Phaser→RingMod→Eq→Compressor→TapeSat→Drive→Autotune
+        assert_eq!(plan.steps.len(), 12);
         assert_eq!(plan.steps[0], FxStep::Waveshaper);
         assert_eq!(plan.steps[1], FxStep::Reverb);
         assert_eq!(plan.steps[2], FxStep::Delay);
@@ -468,6 +468,7 @@ mod fx_plan_tests {
         assert_eq!(plan.steps[8], FxStep::Compressor);
         assert_eq!(plan.steps[9], FxStep::TapeSat);
         assert_eq!(plan.steps[10], FxStep::Drive);
+        assert_eq!(plan.steps[11], FxStep::Autotune);
     }
 
     #[test]
@@ -497,8 +498,8 @@ mod fx_plan_tests {
             !plan.steps.contains(&FxStep::Reverb),
             "disabled module must not appear in plan"
         );
-        // Rest of chain still intact (10 steps, not 11)
-        assert_eq!(plan.steps.len(), 10);
+        // Rest of chain still intact (11 steps, not 12)
+        assert_eq!(plan.steps.len(), 11);
     }
 
     #[test]

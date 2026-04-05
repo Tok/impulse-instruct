@@ -244,6 +244,7 @@ pub struct DspState {
     // FX state
     compressor: Compressor,
     tape_sat: TapeSat,
+    autotune: Autotune,
     ring_mod_phase: f32,
     eq: EqBands,
     noise_voice: NoiseVoice,
@@ -305,6 +306,7 @@ impl DspState {
             phaser: Phaser::new(),
             compressor: Compressor::new(),
             tape_sat: TapeSat::new(),
+            autotune: Autotune::new(),
             ring_mod_phase: 0.0,
             eq: EqBands::new(sample_rate),
             bitcrush_held: 0.0,
@@ -429,6 +431,9 @@ impl DspState {
                     sig
                 }
             }
+            FxStep::Autotune => self
+                .autotune
+                .process(sig, p.autotune_amount, p.autotune_mix),
         }
     }
 

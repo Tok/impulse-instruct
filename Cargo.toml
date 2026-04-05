@@ -1,6 +1,6 @@
 [package]
 name = "impulse-instruct"
-version = "0.5.7"
+version = "0.5.8-alpha.1"
 edition = "2024"
 
 [[bin]]

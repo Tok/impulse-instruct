@@ -127,6 +127,7 @@ pub enum ModuleKind {
     FxCompressor,
     FxTapeSat,
     FxDrive,
+    FxAutotune,
     // ── Modulation ────────────────────────────────────────────────────────────
     LfoModule,
     // ── Utility ───────────────────────────────────────────────────────────────
@@ -158,6 +159,7 @@ impl ModuleKind {
             Self::FxCompressor => "COMPRESSOR",
             Self::FxTapeSat => "TAPE SAT",
             Self::FxDrive => "DRIVE",
+            Self::FxAutotune => "AUTOTUNE",
             Self::LfoModule => "LFO",
             Self::MasterOutput => "MASTER",
         }
@@ -187,6 +189,7 @@ impl ModuleKind {
             | Self::FxCompressor
             | Self::FxTapeSat
             | Self::FxDrive
+            | Self::FxAutotune
             | Self::LfoModule => Zone::FxMod,
         }
     }
@@ -206,6 +209,7 @@ impl ModuleKind {
                 | Self::FxCompressor
                 | Self::FxTapeSat
                 | Self::FxDrive
+                | Self::FxAutotune
                 | Self::LfoModule
         )
     }
@@ -352,6 +356,7 @@ impl Default for RackState {
         rack.add_module(ModuleKind::FxCompressor);
         rack.add_module(ModuleKind::FxTapeSat);
         rack.add_module(ModuleKind::FxDrive);
+        rack.add_module(ModuleKind::FxAutotune);
         // Default 4 LFO slots.
         rack.add_module(ModuleKind::LfoModule);
         rack.add_module(ModuleKind::LfoModule);
@@ -396,6 +401,7 @@ impl Default for RackState {
             ModuleKind::FxCompressor,
             ModuleKind::FxTapeSat,
             ModuleKind::FxDrive,
+            ModuleKind::FxAutotune,
         ];
         let fx_ids: Vec<u32> = fx_chain.iter().filter_map(|&k| find(k)).collect();
         let _ = find; // end closure borrow before mutable connect() calls
@@ -496,6 +502,7 @@ pub enum FxStep {
     Compressor,
     TapeSat,
     Drive,
+    Autotune,
 }
 
 /// Compiled FX processing order derived from the rack cable graph.
@@ -573,6 +580,10 @@ pub(crate) fn rack_kind_name_matches(kind: ModuleKind, name: &str) -> bool {
             "tapesat" | "tape_sat" | "tape sat" | "tape" | "saturation"
         ),
         ModuleKind::FxDrive => matches!(n.as_str(), "drive" | "overdrive" | "distortion"),
+        ModuleKind::FxAutotune => matches!(
+            n.as_str(),
+            "autotune" | "auto_tune" | "pitch_correct" | "tune"
+        ),
         ModuleKind::LfoModule => matches!(n.as_str(), "lfo"),
         ModuleKind::AcidBass => matches!(n.as_str(), "bass" | "acid" | "303"),
         ModuleKind::DrumKit808 => matches!(n.as_str(), "808" | "kit_a" | "drum_a" | "drums_a"),
@@ -604,6 +615,7 @@ fn kind_to_fx_step(kind: ModuleKind) -> Option<FxStep> {
         ModuleKind::FxCompressor => Some(FxStep::Compressor),
         ModuleKind::FxTapeSat => Some(FxStep::TapeSat),
         ModuleKind::FxDrive => Some(FxStep::Drive),
+        ModuleKind::FxAutotune => Some(FxStep::Autotune),
         _ => None,
     }
 }

@@ -432,3 +432,83 @@ impl Phaser {
         input * (1.0 - mix) + x * mix
     }
 }
+
+// ─── Autotune — grain-based pitch shifter ─────────────────────────────────────
+//
+// Two-grain overlap-add pitch shifter.  Writes into a pre-allocated ring buffer;
+// two read heads advance at `pitch_ratio` samples per input sample.  A triangular
+// crossfade envelope blends the grains to suppress the periodic amplitude flutter.
+//
+// `amount`: 0–1 → 0..+12 semitones (upward).  At 0 the effect is bypassed.
+// `mix`:    0–1 wet/dry blend.
+
+const AUTOTUNE_BUF: usize = 4096; // ~93 ms @ 44.1 kHz — no heap alloc
+const AUTOTUNE_GRAIN: f32 = 1024.0; // ~23 ms crossfade period
+
+pub(super) struct Autotune {
+    buf: [f32; AUTOTUNE_BUF],
+    write: usize,
+    r1: f32,  // grain-1 read head (fractional sample index into ring buffer)
+    r2: f32,  // grain-2 read head (offset by half grain)
+    env: f32, // crossfade envelope phase 0..1, wraps every AUTOTUNE_GRAIN samples
+}
+
+impl Autotune {
+    pub(super) fn new() -> Self {
+        Self {
+            buf: [0.0; AUTOTUNE_BUF],
+            write: 0,
+            r1: 0.0,
+            r2: AUTOTUNE_GRAIN * 0.5,
+            env: 0.0,
+        }
+    }
+
+    /// Process one sample.  `amount`: 0–1.  `mix`: 0–1 wet/dry.
+    pub(super) fn process(&mut self, input: f32, amount: f32, mix: f32) -> f32 {
+        if mix < 0.001 || amount < 0.001 {
+            return input;
+        }
+
+        // Write input into ring buffer (no allocation — buffer is a fixed array).
+        self.buf[self.write % AUTOTUNE_BUF] = input;
+        self.write = self.write.wrapping_add(1);
+
+        // Pitch ratio: 2^(amount * 12 / 12) = 2^amount → 1.0 .. 2.0
+        let ratio = 2.0_f32.powf(amount);
+
+        // Advance both read heads at `ratio` samples per input sample.
+        self.r1 += ratio;
+        self.r2 += ratio;
+        self.env += 1.0 / AUTOTUNE_GRAIN;
+
+        // Wrap grain-1 read head: keep it within one buffer length of the write head.
+        let write_f = self.write as f32;
+        if write_f - self.r1 > AUTOTUNE_BUF as f32 {
+            self.r1 = write_f - AUTOTUNE_GRAIN;
+        }
+        if write_f - self.r2 > AUTOTUNE_BUF as f32 {
+            self.r2 = write_f - AUTOTUNE_GRAIN;
+        }
+        if self.env >= 1.0 {
+            self.env -= 1.0;
+        }
+
+        // Linearly interpolated read from ring buffer.
+        let read_sample = |pos: f32| -> f32 {
+            let i0 = pos as usize % AUTOTUNE_BUF;
+            let i1 = (i0 + 1) % AUTOTUNE_BUF;
+            let frac = pos - pos.floor();
+            self.buf[i0] * (1.0 - frac) + self.buf[i1] * frac
+        };
+        let s1 = read_sample(self.r1);
+        let s2 = read_sample(self.r2);
+
+        // Triangular crossfade: w(e) = 1 − |2e − 1|
+        let w1 = 1.0 - (2.0 * self.env - 1.0).abs();
+        let w2 = 1.0 - (2.0 * (self.env + 0.5).rem_euclid(1.0) - 1.0).abs();
+        let wet = s1 * w1 + s2 * w2;
+
+        input * (1.0 - mix) + wet * mix
+    }
+}

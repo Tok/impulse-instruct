@@ -45,7 +45,8 @@ fn title_fill(kind: ModuleKind) -> Color32 {
         | ModuleKind::FxEq
         | ModuleKind::FxCompressor
         | ModuleKind::FxTapeSat
-        | ModuleKind::FxDrive => 20,
+        | ModuleKind::FxDrive
+        | ModuleKind::FxAutotune => 20,
         ModuleKind::LfoModule => 18,
     };
     Color32::from_gray(v)
@@ -139,7 +140,7 @@ pub fn module_card<R>(
             ui.set_max_width(card_w);
 
             // ── Title bar ─────────────────────────────────────────────────────
-            let title_h = 22.0;
+            let title_h = 22.0_f32.max(20.0); // min 20px per design spec
             // Use card_w explicitly — avoids inheriting stale available_width from
             // the horizontal_wrapped parent when the content hasn't settled yet.
             let (title_rect, _) =
@@ -215,6 +216,7 @@ pub fn module_card<R>(
                     | ModuleKind::FxCompressor
                     | ModuleKind::FxTapeSat
                     | ModuleKind::FxDrive
+                    | ModuleKind::FxAutotune
                     | ModuleKind::MasterOutput
             );
             if has_audio_in {
@@ -329,6 +331,20 @@ pub fn module_card<R>(
             if drag_resp.hovered() || drag_resp.dragged() {
                 ui.ctx().set_cursor_icon(egui::CursorIcon::Grab);
             }
+            // 3-dot drag affordance: three small circles near the right of the drag zone
+            {
+                let dot_col = if drag_resp.hovered() || drag_resp.dragged() {
+                    Color32::from_gray(140)
+                } else {
+                    Color32::from_gray(55)
+                };
+                let handle_x = drag_rect.right() - 10.0;
+                let cy = title_rect.center().y;
+                for i in 0i32..3 {
+                    let dx = (i - 1) as f32 * 5.0;
+                    painter.circle_filled(Pos2::new(handle_x + dx, cy), 1.5, dot_col);
+                }
+            }
 
             // ── Remove button (×) on far right, before ports ──────────────────
             let rm_rect = Rect::from_center_size(
@@ -359,13 +375,13 @@ pub fn module_card<R>(
             // ── Content ───────────────────────────────────────────────────────
             let content_frame = Frame::none()
                 .fill(fill)
-                .inner_margin(Margin::symmetric(3.0, 2.0));
+                .inner_margin(Margin::symmetric(6.0, 8.0));
             let inner_resp = content_frame.show(ui, |ui| {
                 ui.spacing_mut().item_spacing = Vec2::new(2.0, 2.0);
                 // Clamp content width to the card width (minus horizontal margin×2).
                 // This prevents wide content (e.g. many knobs, long labels) from
                 // pushing the card beyond its allocated slot.
-                ui.set_max_width(card_w - 6.0);
+                ui.set_max_width(card_w - 12.0);
                 if enabled {
                     content(ui)
                 } else {
@@ -390,16 +406,25 @@ pub fn module_card<R>(
 
 // ─── Zone rail ────────────────────────────────────────────────────────────────
 
-/// Draw a horizontal zone rail separator with a label and optional [+ Add] button.
-/// Returns true if the add button was clicked.
-pub fn zone_rail(ui: &mut egui::Ui, label: &str, show_add: bool) -> bool {
+/// Draw a horizontal zone rail separator with collapse toggle, label, and optional [+ Add] button.
+/// `bg_gray` sets the zone rail background brightness (R=G=B — no tint).
+/// `collapsed` reflects the current collapse state (affects the ▶/▼ arrow drawn).
+/// Returns `(add_clicked, collapse_toggle_clicked)`.
+pub fn zone_rail(
+    ui: &mut egui::Ui,
+    label: &str,
+    show_add: bool,
+    bg_gray: u8,
+    collapsed: bool,
+) -> (bool, bool) {
     let mut add_clicked = false;
+    let mut collapse_clicked = false;
     let (rail_rect, _) =
         ui.allocate_exact_size(Vec2::new(ui.available_width(), 18.0), Sense::hover());
     let painter = ui.painter_at(rail_rect);
 
-    // Rail background
-    painter.rect_filled(rail_rect, Rounding::ZERO, Color32::from_gray(18));
+    // Rail background — distinct per zone
+    painter.rect_filled(rail_rect, Rounding::ZERO, Color32::from_gray(bg_gray));
     // Top highlight / bottom shadow
     painter.line_segment(
         [rail_rect.left_top(), rail_rect.right_top()],
@@ -425,9 +450,35 @@ pub fn zone_rail(ui: &mut egui::Ui, label: &str, show_add: bool) -> bool {
             Stroke::new(0.5, Color32::from_gray(50)),
         );
     }
-    // Zone label
+    // Collapse toggle (▶ collapsed / ▼ expanded) — left side before the label
+    let arrow_rect = Rect::from_center_size(
+        Pos2::new(rail_rect.left() + 8.0, screw_y),
+        Vec2::splat(14.0),
+    );
+    let arrow_resp = ui.interact(arrow_rect, ui.id().with("collapse"), Sense::click());
+    if arrow_resp.hovered() {
+        ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
+    }
+    let arrow_col = if arrow_resp.hovered() {
+        Color32::from_gray(160)
+    } else {
+        Color32::from_gray(70)
+    };
+    let arrow = if collapsed { "▶" } else { "▼" };
     painter.text(
-        Pos2::new(rail_rect.left() + 24.0, screw_y),
+        arrow_rect.center(),
+        egui::Align2::CENTER_CENTER,
+        arrow,
+        egui::FontId::monospace(8.0),
+        arrow_col,
+    );
+    if arrow_resp.clicked() {
+        collapse_clicked = true;
+    }
+
+    // Zone label — shifted right to make room for the arrow
+    painter.text(
+        Pos2::new(rail_rect.left() + 20.0, screw_y),
         egui::Align2::LEFT_CENTER,
         label,
         egui::FontId::monospace(8.5),
@@ -460,5 +511,5 @@ pub fn zone_rail(ui: &mut egui::Ui, label: &str, show_add: bool) -> bool {
         }
     }
 
-    add_clicked
+    (add_clicked, collapse_clicked)
 }
