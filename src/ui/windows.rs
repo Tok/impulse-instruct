@@ -625,6 +625,44 @@ impl ImpulseApp {
                                 }
                             });
 
+                            // UI scale
+                            widgets::section_header(ui, "UI SCALE");
+                            ui.horizontal(|ui| {
+                                if ui
+                                    .add(
+                                        egui::DragValue::new(&mut prefs.ui_scale)
+                                            .range(0.5..=3.0)
+                                            .speed(0.01)
+                                            .fixed_decimals(2),
+                                    )
+                                    .changed()
+                                {
+                                    dirty = true;
+                                }
+                                ui.label(
+                                    egui::RichText::new("× (0.5 – 3.0, takes effect immediately)")
+                                        .monospace()
+                                        .size(9.0)
+                                        .color(theme::SLATE),
+                                );
+                                if ui
+                                    .add(
+                                        egui::Button::new(
+                                            egui::RichText::new("reset")
+                                                .monospace()
+                                                .size(9.0)
+                                                .color(theme::ASH),
+                                        )
+                                        .fill(theme::PIT)
+                                        .min_size(egui::vec2(36.0, 16.0)),
+                                    )
+                                    .clicked()
+                                {
+                                    prefs.ui_scale = 1.0;
+                                    dirty = true;
+                                }
+                            });
+
                             if dirty {
                                 self.state.write().ui_prefs = prefs;
                                 self.session_dirty = true;

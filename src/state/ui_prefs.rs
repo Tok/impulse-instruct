@@ -102,6 +102,8 @@ pub struct UiPrefs {
     pub bloom_intensity: f32,
     /// Persisted log level index (0=Trace … 4=Error); matches LOG_LEVELS in header.rs.
     pub log_level_idx: usize,
+    /// Global UI scale multiplier applied via pixels_per_point (0.5–3.0, default 1.0).
+    pub ui_scale: f32,
 }
 
 impl Default for UiPrefs {
@@ -115,6 +117,7 @@ impl Default for UiPrefs {
             bloom_enabled: false,
             bloom_intensity: 0.5,
             log_level_idx: 2, // Info
+            ui_scale: 1.0,
         }
     }
 }

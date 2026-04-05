@@ -283,6 +283,8 @@ pub struct ImpulseApp {
     jam_next_fire: Option<std::time::Instant>,
     // When true the LLM strip collapses to show only the prompt row.
     pub(crate) llm_strip_collapsed: bool,
+    // Native pixels_per_point at startup — used as base for ui_scale.
+    native_ppp: f32,
 }
 
 impl ImpulseApp {
@@ -403,6 +405,7 @@ impl ImpulseApp {
             auto_listen_counter: 0,
             jam_next_fire: None,
             llm_strip_collapsed: false,
+            native_ppp: cc.egui_ctx.pixels_per_point(),
         }
     }
 
@@ -718,6 +721,10 @@ impl eframe::App for ImpulseApp {
     }
 
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        // Apply persisted UI scale — set every frame so changes take effect immediately.
+        let ui_scale = self.state.read().ui_prefs.ui_scale;
+        ctx.set_pixels_per_point(self.native_ppp * ui_scale);
+
         self.drain_llm_outputs();
         self.drain_midi_events();
 

@@ -471,7 +471,7 @@ impl ImpulseApp {
                                 }
                                 None => "do something interesting — evolve the pattern and sound".to_string(),
                             };
-                            (p, "YOU → ✦\n".to_string())
+                            (p, "YOU → [evolve]\n".to_string())
                         } else {
                             let lower = typed.to_lowercase();
                             let catalog = StyleCatalog::get();
