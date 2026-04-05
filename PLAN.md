@@ -195,14 +195,9 @@ Ordered by value — tackle roughly from top to bottom.
       - **Heat-aware mutation rules**: at heat < 0.3 only rhythmic variation; at heat > 0.7
         allow timbre + FX sweeps; at heat = 1.0 anything goes.
 
-- [ ] **Internal music API** — helper functions the LLM can call as tool-calls (or via
-      structured JSON extensions) to do music-theory work without reinventing it each time:
-      - `chord(root, quality)` → note array (e.g. `chord("E", "major")` → [E, G#, B])
-      - `random_chord(key)` → diatonic chord in key
-      - `amen_pattern(heat)` → randomised Amen break step array at given heat level (0–1)
-      - `scale_run(root, scale, direction)` → bass pattern ascending/descending through scale
-      These are pure Rust functions in a new `src/music_api/` module, callable from
-      `apply_llm_update` when the LLM output includes a `"music_api"` block.
+- [x] **Internal music API** — `src/music_api/mod.rs`; all 10 ChordQuality variants,
+      amen_pattern(heat, seed), scale_run(root, scale, direction, seed),
+      random_diatonic_chord; LLM dispatches via `"music_api"` JSON block; 47 tests.
 
 - [ ] **Multiple voices** — `Vec<SynthVoice>`, each with its own sequencer + oscillator + filter. LLM can target "voice 2, more acid".
 
