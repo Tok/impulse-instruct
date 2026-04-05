@@ -4,7 +4,13 @@
 
 # Impulse Instruct
 
-A synthesizer with a tiny LLM living inside of it. **PULSE** runs locally and has full control of the sound - it listens to what you say, jams autonomously, and responds to the music in real time. You keep the parameters you want; it owns everything else.
+A **smart synthesizer** - a full-featured software synth with a locally-running language model built directly into the instrument. **PULSE** is the AI inside: it reads the entire parameter schema of the synth, understands music theory and genre vocabulary, and has direct write access to every knob and every step in the pattern.
+
+You talk to it the way you'd talk to a collaborator in the studio. Say "make it acid" and it adjusts the ladder filter, env mod, resonance, and note density to get there. Say "dark techno, sparse, 132 BPM" and it restructures the pattern and tightens the FX routing to match. Say "keep the kick but change everything else" and it respects that boundary.
+
+PULSE runs a continuous jam loop in the background, evolving the sound between prompts at a rate you control with the **HEAT** slider. At low heat it nudges filters and rhythm details. At full heat it rewrites the pattern, swaps instruments, and restructures the FX chain constantly. You can lock any parameter you've dialled in - touch a knob and PULSE will not overwrite it, even at full heat.
+
+The synthesis engine runs entirely offline: no cloud calls, no subscriptions, no latency waiting on a remote server. The LLM runs locally via llama-server, the audio engine runs in a dedicated real-time thread, and the two communicate through a lock-free ring buffer. Nothing leaves your machine.
 
 > **Requires an NVIDIA GPU (CUDA).** A model must be downloaded before first run - see [Getting started](#getting-started).
 
@@ -71,6 +77,60 @@ The app auto-detects the model in `models/` and connects to it. The model select
 | **Bonsai 8B Q1_0_g128** | ~1.1 GB | ~2 GB | Lightweight fallback. Fits in 2 GB VRAM. Misses style/theory tests more often, no chain-of-thought, uses a separate server binary. |
 
 Switch models at any time via **Prefs -> Model**. The app restarts the inference server automatically.
+
+---
+
+## Features
+
+**Synthesis**
+- TB-303-style bass synth - saw/square/supersaw with detuned unison, 4-pole Moog ladder filter (LP/HP/BP), sub-oscillator, FM pair, waveshaper, overdrive, per-step accent and slide
+- 808-style drum machine - kick with pitch envelope, snare, two hihats, toms
+- 909-style drum machine - kick, snare, two hihats, clap, rim
+- AN1X-style virtual analog voice - dual oscillator, hard sync, ring mod, two independent ADSRs, two per-voice LFOs, pitch envelope, free EG (8-step drawable envelope)
+- Hoover lead synth - supersaw into aggressive highpass sweep
+- Standalone noise voice - white/pink/brown with filter
+- Amen break sampler voice - loop-playback with pitch control
+
+**Sequencer**
+- 16 to 64 steps per pattern, independently configurable per voice (polyrhythm)
+- Per-step velocity, probability, ratchet (1-4x), accent, slide
+- Euclidean rhythm generator; swing; time signature selector (4/4, 3/4, 5/4, 6/8, 7/8, ...)
+- Pattern bank (8 slots); chain playback (up to 8 patterns in sequence)
+- Live record from MIDI keyboard; mute/solo per voice; copy/paste
+
+**FX and modulation**
+- Reverb, delay (echo), chorus/ensemble, 4-stage phaser, ring modulator
+- Waveshaper (pre-FX tanh saturation), bitcrush (bit depth + rate), 3-band EQ, tape saturation, master drive
+- Master compressor/limiter
+- Modular rack: connect voices to FX modules with Bezier cables; per-voice FX buses; topology compiled live
+- 4-slot LFO matrix - any waveform, BPM-syncable, wireable to any parameter
+
+**Intelligence**
+- Local LLM via llama-server; no cloud calls; model swappable at runtime without restart
+- Jam mode: continuous autonomous loop, rate and intensity controlled by HEAT slider (0-100%)
+- Behaviour templates: "build", "drop", "breakdown", "tension", "euphoric"
+- Lock system: touch any knob to claim it; LLM will not overwrite user-owned parameters
+- Scale and root note in system prompt; bass notes snapped to current scale
+- Instruction set: pre-written JSON templates for common phrases ("make an amen break", etc.)
+- Context-aware: rolling conversation history, auto-restart when approaching token limit
+- Adjustable sampling params (temperature, top_k, top_p, min_p, repeat penalty, seed)
+- Chain-of-thought reasoning visible in the log (toggle)
+- LISTEN button: captures audio, runs per-band analysis, prepends snapshot to prompt
+
+**TTS / MC mode**
+- espeak-ng backend for low-latency MC lines
+- Coqui TTS backend for higher quality synthesis
+- Per-character pitch and speed variation; pitch-snap to current key/scale
+- Voice characters: Jungle MC, Rave Announcer, Robot, Smooth DJ
+- TTS routed through the rack FX chain (default: reverb); synth ducked under TTS
+
+**I/O and integration**
+- MIDI in: NoteOn/Off to bass synth and live record; CC to synth params; Start/Stop transport
+- MIDI clock out: 24 PPQN via dedicated thread (alloc-free audio path)
+- HTTP/MCP REST API on port 8765 (`--api` flag) - query state, send prompts, set params, lock/unlock, control transport
+- OSC input: UDP listener, compatible with Max/MSP, TouchOSC, Ableton, oscsend
+- WAV export (32-bit float) and MP3 export (via ffmpeg); stem export per voice
+- Project save/load as JSON snapshots; undo/redo (50-deep history)
 
 ---
 
@@ -291,7 +351,7 @@ Run them:
 ./scripts/run-llm-theory.sh     # theory tests only
 ```
 
-Currently 39 tests, all passing on Gemma 4 E4B Q4_K_M.
+All passing on Gemma 4 E4B Q4_K_M.
 
 **Contributions welcome**, especially:
 - New style entries in `src/llm/styles.json` that translate genres more accurately
@@ -311,6 +371,24 @@ Full color table, hex values, theory, and historical context in [docs/colorful-n
 
 ---
 
+## Tech stack
+
+Written in Rust. Key dependencies:
+
+| Component | Library |
+|-----------|---------|
+| UI | [egui](https://github.com/emilk/egui) / eframe 0.28 |
+| Audio I/O | [cpal](https://github.com/RustAudio/cpal) 0.15 |
+| Audio thread → DSP | [rtrb](https://github.com/mgeier/rtrb) lock-free ring buffer |
+| LLM inference | [llama-server](https://github.com/ggml-org/llama.cpp) (official) / [PrismML fork](https://github.com/prism-ml/llama.cpp) for Bonsai 1-bit |
+| TTS (low-latency) | [espeak-ng](https://github.com/espeak-ng/espeak-ng) |
+| TTS (quality) | [Coqui TTS](https://github.com/coqui-ai/TTS) (CLI, optional) |
+| HTTP/MCP API | [axum](https://github.com/tokio-rs/axum) 0.7 |
+| MIDI | [midir](https://github.com/Boddlnagg/midir) 0.9 |
+| JSON / serde | serde_json |
+
+---
+
 ## License
 
 MIT - see [LICENSE](LICENSE)
@@ -325,6 +403,7 @@ Bonsai 8B model: Apache 2.0 - credit to [prism-ml](https://huggingface.co/prism-
 | | |
 |---|---|
 | [docs/dev-setup.md](docs/dev-setup.md) | Build from source, architecture, HTTP API reference, parameter schema, Windows cross-compile |
-| [docs/contributions.md](docs/contributions.md) | How to contribute styles, tests, and voice tuning |
+| [docs/features.md](docs/features.md) | Detailed list of all implemented features |
+| [docs/contributions.md](docs/contributions.md) | How to contribute styles, tests, model benchmarks, and voice tuning |
 | [docs/colorful-notes.md](docs/colorful-notes.md) | Full Huth *Farbige Noten* color theory - intervals, complementary pairs, historical context |
 | [docs/ui-design.md](docs/ui-design.md) | UI design principles, grayscale palette, widget system |

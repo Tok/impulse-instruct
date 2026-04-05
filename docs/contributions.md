@@ -49,6 +49,32 @@ Some voices are rough. The hoover lead is the most obvious gap - it doesn't yet 
 
 If you know the original signal chain and want to help dial it in, the relevant code is in `src/audio/dsp/hoover.rs` (if it exists) or the hoover voice section of `src/audio/dsp/mod.rs`. Parameter ranges are set in `src/state/mod.rs` under `HooverState`.
 
+### Benchmarking other GGUF models
+
+The LLM test suites run against whatever model is loaded, so they double as a benchmark for any GGUF you want to evaluate. If you try a model that isn't listed in the README, running the test suites and sharing the results is genuinely useful.
+
+To benchmark a model:
+
+1. Download the GGUF and place it in `models/`
+2. Start the server manually (see `docs/dev-setup.md`) or launch the app and select the model in Prefs
+3. Run all three suites and note the pass rates:
+
+```bash
+./scripts/run-llm-tests.sh      # core parameter targeting
+./scripts/run-llm-style.sh      # genre and artist references
+./scripts/run-llm-theory.sh     # music theory + producer terminology
+```
+
+Useful things to include in a benchmark report:
+- Model name, quant format, and file size
+- Pass/fail count per suite (the runner prints a summary at the end)
+- Any patterns in what it gets wrong - certain genres, certain parameters, certain prompt types
+- Hardware: GPU model, VRAM used, tokens/second at that quant
+
+The default model (Gemma 4 E4B Q4_K_M) passes all 39 integration tests. If you find a smaller model that gets close, or a larger model that improves on style accuracy, that's worth knowing about.
+
+Open an issue or PR with your results. Even partial results (one suite, one genre) are useful.
+
 ### Bug reports and edge cases
 
 - Patterns that crash the JSON parser (LLM output malformed in a reproducible way)
