@@ -153,8 +153,9 @@ Gemma 4 E4B is the default: best test scores (39/39 integration tests), fast, co
 | Model | Download | Size | VRAM | Notes |
 |-------|----------|------|------|-------|
 | **Gemma 4 E4B Q4_K_M** | `./scripts/download-models.sh` | ~4.6 GB | ~6 GB | **Default**; best accuracy, 39/39 tests |
-| **Bonsai-8B Q1_0_g128** | `./scripts/download-models.sh bonsai` | ~1.1 GB | ~2 GB | Fallback; no CoT, needs PrismML server fork |
-| **Qwen3-8B Q4_K_M** | `./scripts/download-models.sh qwen3` | ~5 GB | ~7 GB | Optional; chain-of-thought `/think` mode |
+| **Bonsai-8B Q1_0_g128** | `./scripts/download-models.sh bonsai` | ~1.1 GB | ~2 GB | Lightweight fallback; no CoT, needs PrismML server fork |
+| **Qwen3-8B Q4_K_M** | `./scripts/download-models.sh qwen3` | ~5 GB | ~7 GB | Optional; `/think` chain-of-thought mode; not recommended (heavier, no accuracy gain) |
 | **Qwen3-14B Q4_K_M** | `./scripts/download-models.sh qwen3-14b` | ~9 GB | ~11 GB | Optional large; needs 12 GB VRAM |
+| Any other GGUF | drop in `models/` | varies | varies | Technically compatible; prompt not tuned. Llama variants were tested — may work with user tuning. |
 
 All models require a free HuggingFace account (`huggingface-cli login`).

@@ -19,9 +19,9 @@
 #   ./scripts/build-llama-server.sh    (builds .llama-official-build/bin/llama-server, standard)
 #   ./scripts/download-models.sh       (downloads models/Bonsai-8B.gguf)
 #
-# Default model set: Gemma 4 E4B + Bonsai 8B (the evaluated defaults).
-# Qwen and other models are skipped by default (use --all-models to include them).
-# Models with "llama" in the filename are excluded (unsupported, OOM under load).
+# Default model set: Gemma 4 E4B + Bonsai 8B (officially evaluated).
+# Qwen and Llama variants are skipped by default — pass --all-models to test everything
+# in models/. They may work; the system prompt just isn't tuned for them.
 #
 # Usage:
 #   ./scripts/run-llm-tests.sh                                    # Gemma + Bonsai, all suites
@@ -56,9 +56,11 @@ done
 
 # ── Resolve model list ────────────────────────────────────────────────────────
 if [[ -z "$MODEL_ARG" || "$MODEL_ARG" == --* ]]; then
-  # No model specified — scan models/ directory
-  # Default: only Gemma 4 and Bonsai (the evaluated defaults).
-  # Models with "llama" in the name are excluded (unsupported). Qwen requires --all-models.
+  # No model specified — scan models/ directory.
+  # Default set: Gemma 4 + Bonsai (officially evaluated).
+  # Qwen requires --all-models (works but adds ~2× runtime for marginal gain).
+  # Any other *.gguf (including Llama variants) is included when --all-models is set;
+  # they may work but the system prompt is not tuned for them.
   ALL_GGUF=()
   mapfile -t ALL_GGUF < <(ls models/*.gguf 2>/dev/null | sort)
   if [[ ${#ALL_GGUF[@]} -eq 0 ]]; then
@@ -68,16 +70,15 @@ if [[ -z "$MODEL_ARG" || "$MODEL_ARG" == --* ]]; then
   MODELS=()
   for m in "${ALL_GGUF[@]}"; do
     lower="${m,,}"
-    # Always skip dropped models
-    [[ "$lower" == *"llama"* ]] && continue
-    # Skip optional models unless --all-models
+    # Skip non-default models unless --all-models
     if ! $ALL_MODELS; then
-      [[ "$lower" == *"qwen"* ]] && continue
+      [[ "$lower" == *"qwen"* ]]  && continue
+      [[ "$lower" == *"llama"* ]] && continue
     fi
     MODELS+=("$m")
   done
   if [[ ${#MODELS[@]} -eq 0 ]]; then
-    echo "ERROR: no default models found (gemma/bonsai). Use --all-models to include Qwen."
+    echo "ERROR: no default models found (gemma/bonsai). Use --all-models to include Qwen and others."
     exit 1
   fi
 else

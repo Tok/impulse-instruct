@@ -3,8 +3,9 @@ setlocal enabledelayedexpansion
 rem ─── scripts\run-llm-tests.bat ───────────────────────────────────────────────
 rem Run the LLM integration suite against one or all models.
 rem
-rem Default model set: Gemma 4 E4B + Bonsai 8B (the evaluated defaults).
-rem Qwen and other models skipped by default. Models with "llama" in filename excluded.
+rem Default model set: Gemma 4 E4B + Bonsai 8B (officially evaluated).
+rem Qwen and Llama variants skipped by default. Use --all-models to test everything in models\.
+rem They may work; the system prompt just isn't tuned for them.
 rem
 rem Server binary selection:
 rem   Bonsai / *bonsai* -> .llama-build\bin\llama-server.exe          (PrismML fork)
@@ -68,13 +69,11 @@ if not "%MODEL_ARG%"=="" (
         set FNAME=%%~nxf
         set SKIP=0
 
-        rem Always skip dropped models (llama)
-        echo !FNAME! | findstr /i "llama" >nul
-        if not errorlevel 1 set SKIP=1
-
-        rem Skip qwen unless --all-models
+        rem Skip non-default models unless --all-models
         if "!ALL_MODELS!"=="0" (
             echo !FNAME! | findstr /i "qwen" >nul
+            if not errorlevel 1 set SKIP=1
+            echo !FNAME! | findstr /i "llama" >nul
             if not errorlevel 1 set SKIP=1
         )
 
@@ -84,7 +83,7 @@ if not "%MODEL_ARG%"=="" (
         )
     )
     if "!MODELS_RAN!"=="0" (
-        echo ERROR: no default models found (gemma/bonsai). Use --all-models to include Qwen.
+        echo ERROR: no default models found (gemma/bonsai). Use --all-models to include Qwen and others.
         exit /b 1
     )
 )

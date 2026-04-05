@@ -177,8 +177,9 @@ requirements. Build exactly what the current task needs.
 
 Models (ranked by test suite results):
 - **Gemma 4 E4B Q4_K_M** — default, 4.6 GB, best accuracy, passes all 39 integration tests
-- **Bonsai 8B Q1_0_g128** — 1.1 GB fallback, no chain-of-thought, requires PrismML llama-server fork
-- **Qwen3-8B / 14B** — optional, chain-of-thought capable, slower but no accuracy advantage
+- **Bonsai 8B Q1_0_g128** — 1.1 GB lightweight fallback, no chain-of-thought, requires PrismML llama-server fork
+- **Qwen3-8B / 14B** — optional, chain-of-thought capable; not recommended as default (heavier, no accuracy gain over Gemma 4)
+- **Other GGUF models** (e.g. Llama variants) — technically compatible with llama-server but not evaluated; system prompt is not tuned for them. Users are free to experiment.
 
 Server selection: Bonsai uses `.llama-build/bin/llama-server` (PrismML fork, Q1_0_g128 format).
 All other models use `.llama-official-build/bin/llama-server` (standard llama.cpp).
