@@ -187,7 +187,7 @@ for MODEL in "${MODELS[@]}"; do
     --port "$PORT" \
     --ctx-size 8192 \
     --n-gpu-layers 99 \
-    --flash-attn \
+    --flash-attn on \
     --cache-type-k q8_0 \
     --cache-type-v q8_0 \
     2>"$SERVER_LOG" &
