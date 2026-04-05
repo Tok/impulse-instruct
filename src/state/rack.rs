@@ -520,6 +520,24 @@ pub struct FxPlan {
 
 // ─── LLM rack helpers ─────────────────────────────────────────────────────────
 
+/// Maps an `LfoTarget` to the rack `ModuleKind` it modulates.
+/// Used to synthesise visual cables for active LFO slots.
+/// Returns `None` for `LfoTarget::None` or targets without a matching module kind.
+pub(crate) fn lfo_target_module_kind(target: crate::state::LfoTarget) -> Option<ModuleKind> {
+    use crate::state::LfoTarget;
+    match target {
+        LfoTarget::None => None,
+        LfoTarget::BassCutoff
+        | LfoTarget::BassResonance
+        | LfoTarget::BassPitch
+        | LfoTarget::BassVolume => Some(ModuleKind::AcidBass),
+        LfoTarget::Kick808Pitch => Some(ModuleKind::DrumKit808),
+        LfoTarget::ReverbMix => Some(ModuleKind::FxReverb),
+        LfoTarget::DelayTime | LfoTarget::DelayFeedback => Some(ModuleKind::FxDelay),
+        LfoTarget::ChorusMix | LfoTarget::ChorusRate => Some(ModuleKind::FxChorus),
+    }
+}
+
 /// Returns the `PortKind` emitted on a module's primary output.
 /// CV sources (LFO, Sequencer) use `Cv`; everything else uses `Audio`.
 /// The destination port kind always matches the source.

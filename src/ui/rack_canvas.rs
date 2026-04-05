@@ -17,7 +17,8 @@
 
 use egui::{Color32, Pos2, ScrollArea, Stroke, Vec2};
 
-use crate::state::{ModuleKind, Zone};
+use crate::state::rack::lfo_target_module_kind;
+use crate::state::{LfoTarget, ModuleKind, PortDir, PortKind, PortRef, Zone};
 use crate::ui::module_card::PortPos;
 use crate::ui::{ImpulseApp, module_card};
 
@@ -222,6 +223,66 @@ pub fn draw_rack(app: &mut ImpulseApp, ctx: &egui::Context, ui: &mut egui::Ui) {
                     draw_cable(&painter, from, to, time, phase, true);
                 }
             }
+
+            // Synthesise visual cables for active LFO slots.
+            // The LFO→param connection is a state param (lfo.target), not a rack
+            // cable, so we derive the cable position from current state here.
+            {
+                let state = app.state.read();
+                let lfo_ids: Vec<u32> = state
+                    .rack
+                    .modules
+                    .iter()
+                    .filter(|m| m.kind == ModuleKind::LfoModule)
+                    .map(|m| m.id)
+                    .collect();
+                for (i, lfo_slot) in state.lfo.iter().enumerate() {
+                    if !lfo_slot.enabled || lfo_slot.target == LfoTarget::None {
+                        continue;
+                    }
+                    let Some(&lfo_id) = lfo_ids.get(i) else {
+                        continue;
+                    };
+                    let Some(tgt_kind) = lfo_target_module_kind(lfo_slot.target) else {
+                        continue;
+                    };
+                    let Some(tgt_id) = state
+                        .rack
+                        .modules
+                        .iter()
+                        .find(|m| m.kind == tgt_kind)
+                        .map(|m| m.id)
+                    else {
+                        continue;
+                    };
+                    // Skip if a real rack cable already covers this pair.
+                    if cables
+                        .iter()
+                        .any(|c| c.from.module_id == lfo_id && c.to.module_id == tgt_id)
+                    {
+                        continue;
+                    }
+                    let from_ref = PortRef {
+                        module_id: lfo_id,
+                        dir: PortDir::Out,
+                        kind: PortKind::Cv,
+                        index: 0,
+                    };
+                    let to_ref = PortRef {
+                        module_id: tgt_id,
+                        dir: PortDir::In,
+                        kind: PortKind::Cv,
+                        index: 0,
+                    };
+                    let from_pos = ports.iter().find(|p| p.port == from_ref).map(|p| p.center);
+                    let to_pos = ports.iter().find(|p| p.port == to_ref).map(|p| p.center);
+                    if let (Some(from), Some(to)) = (from_pos, to_pos) {
+                        let phase = (cables.len() + i) as f32 * 2.399;
+                        draw_cable(&painter, from, to, time, phase, true);
+                    }
+                }
+            }
+
             // Animate continuously while cables are visible.
             ctx.request_repaint();
         }
