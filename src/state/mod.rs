@@ -78,6 +78,26 @@ pub fn cycle_param_mode(state: AppState, path: &str) -> AppState {
     s
 }
 
+/// Set a param to a specific mode (Free clears both sets; pure function).
+pub fn set_param_mode(state: AppState, path: &str, mode: ParamMode) -> AppState {
+    let mut s = state;
+    match mode {
+        ParamMode::Free => {
+            s.llm.locked_params.remove(path);
+            s.llm.focused_params.remove(path);
+        }
+        ParamMode::UserOwned => {
+            s.llm.focused_params.remove(path);
+            s.llm.locked_params.insert(path.to_string());
+        }
+        ParamMode::LlmFocus => {
+            s.llm.locked_params.remove(path);
+            s.llm.focused_params.insert(path.to_string());
+        }
+    }
+    s
+}
+
 pub mod ui_prefs;
 pub use ui_prefs::{HuthStyle, KnobSize, KnobStyle, PadSize, UiPrefs};
 

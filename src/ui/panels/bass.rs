@@ -1,7 +1,7 @@
 // ─── ui/panels/bass.rs ────────────────────────────────────────────────────────
 // Bass synthesizer panel.
 
-use crate::state::{FilterMode, ParamMode, Waveform, cycle_param_mode, param_mode};
+use crate::state::{FilterMode, ParamMode, Waveform, cycle_param_mode, param_mode, set_param_mode};
 use crate::ui::{ImpulseApp, theme, widgets};
 
 pub fn draw_bass(app: &mut ImpulseApp, ui: &mut egui::Ui) {
@@ -339,8 +339,14 @@ pub fn draw_bass(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                 }
             }
         }
+        // Touch-paint mode: set to the active mode; otherwise cycle Free→U→F→Free.
+        let tmode = app.touch_mode;
         for path in &cycle_paths {
-            snap = cycle_param_mode(snap, path);
+            snap = if let Some(m) = tmode {
+                set_param_mode(snap, path, m)
+            } else {
+                cycle_param_mode(snap, path)
+            };
         }
         *app.state.write() = snap;
         if changed {

@@ -272,7 +272,7 @@ pub struct ImpulseApp {
     // Module being dragged by its title bar (id + current pointer position).
     pub(crate) module_drag: Option<rack_canvas::ModuleDrag>,
     // Auto-save: set when rack or session-worthy state changes; saved next frame.
-    session_dirty: bool,
+    pub(crate) session_dirty: bool,
     // Track last-saved rack cable/module count to detect changes.
     last_saved_rack_sig: (usize, usize),
     // Auto-listen: when enabled, trigger LISTEN automatically every N jam cycles.
@@ -285,6 +285,8 @@ pub struct ImpulseApp {
     pub(crate) llm_strip_collapsed: bool,
     // Native pixels_per_point at startup — used as base for ui_scale.
     native_ppp: f32,
+    /// Central lock-paint mode: None = normal drag, Some(mode) = click paints that mode.
+    pub(crate) touch_mode: Option<crate::state::ParamMode>,
 }
 
 impl ImpulseApp {
@@ -405,7 +407,8 @@ impl ImpulseApp {
             auto_listen_counter: 0,
             jam_next_fire: None,
             llm_strip_collapsed: false,
-            native_ppp: cc.egui_ctx.pixels_per_point(),
+            native_ppp: 0.0, // captured on first frame after DPI is established
+            touch_mode: None,
         }
     }
 
@@ -721,9 +724,21 @@ impl eframe::App for ImpulseApp {
     }
 
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        // Apply persisted UI scale — set every frame so changes take effect immediately.
+        // Capture the system's native pixels_per_point on the first real frame,
+        // after the window is shown and DPI is known.
+        if self.native_ppp <= 0.0 {
+            self.native_ppp = ctx.pixels_per_point();
+        }
+        // Apply persisted UI scale — only override when the user has changed it.
         let ui_scale = self.state.read().ui_prefs.ui_scale;
-        ctx.set_pixels_per_point(self.native_ppp * ui_scale);
+        if (ui_scale - 1.0).abs() > 0.005 {
+            ctx.set_pixels_per_point(self.native_ppp * ui_scale);
+        }
+
+        // Publish touch_mode so widgets can read it without signature changes.
+        ctx.data_mut(|d| {
+            d.insert_temp(egui::Id::new("touch_mode"), self.touch_mode);
+        });
 
         self.drain_llm_outputs();
         self.drain_midi_events();

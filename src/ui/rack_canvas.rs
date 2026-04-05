@@ -172,6 +172,86 @@ const FXMOD_KINDS: &[ModuleKind] = &[
 // ─── Main rack canvas ─────────────────────────────────────────────────────────
 
 pub fn draw_rack(app: &mut ImpulseApp, ctx: &egui::Context, ui: &mut egui::Ui) {
+    // ── Mode toolbar ─────────────────────────────────────────────────────────
+    // Touch-paint mode (· / U / F) + cable visibility toggle.
+    ui.horizontal(|ui| {
+        ui.label(
+            egui::RichText::new("MODE")
+                .monospace()
+                .size(8.5)
+                .color(Color32::from_gray(80)),
+        );
+        for (label, mode_opt, tip) in [
+            ("·", None, "Normal — drag knobs to change value"),
+            (
+                "U",
+                Some(crate::state::ParamMode::UserOwned),
+                "Lock mode — click a knob to lock it (user-owned)",
+            ),
+            (
+                "F",
+                Some(crate::state::ParamMode::LlmFocus),
+                "Focus mode — click a knob to set LLM focus",
+            ),
+        ] {
+            let active = app.touch_mode == mode_opt;
+            let col = if active {
+                Color32::from_gray(220)
+            } else {
+                Color32::from_gray(110)
+            };
+            let fill = if active {
+                Color32::from_gray(55)
+            } else {
+                Color32::from_gray(22)
+            };
+            if ui
+                .add(
+                    egui::Button::new(egui::RichText::new(label).monospace().size(10.0).color(col))
+                        .fill(fill)
+                        .min_size(egui::vec2(22.0, 18.0)),
+                )
+                .on_hover_text(tip)
+                .clicked()
+            {
+                app.touch_mode = mode_opt;
+            }
+        }
+
+        ui.add_space(8.0);
+        ui.separator();
+        ui.add_space(4.0);
+
+        let cable_col = if app.show_cables {
+            Color32::from_gray(220)
+        } else {
+            Color32::from_gray(90)
+        };
+        let cable_fill = if app.show_cables {
+            Color32::from_gray(55)
+        } else {
+            Color32::from_gray(22)
+        };
+        if ui
+            .add(
+                egui::Button::new(
+                    egui::RichText::new("CABLES")
+                        .monospace()
+                        .size(8.5)
+                        .color(cable_col),
+                )
+                .fill(cable_fill)
+                .min_size(egui::vec2(50.0, 18.0)),
+            )
+            .on_hover_text("Toggle patch cable overlay  [Tab]")
+            .clicked()
+        {
+            app.show_cables = !app.show_cables;
+            app.session_dirty = true;
+        }
+    });
+    ui.add_space(2.0);
+
     // Collect port positions during this frame's render pass.
     let mut ports: Vec<PortPos> = Vec::new();
 

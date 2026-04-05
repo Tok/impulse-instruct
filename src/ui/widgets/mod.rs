@@ -15,6 +15,14 @@ use std::f32::consts::TAU;
 use super::theme;
 use crate::state::{KnobStyle, ParamMode, UiPrefs};
 
+/// Read the active touch-paint mode from the shared egui context data.
+/// Returns `None` when the user is in normal (drag) mode.
+fn touch_mode(ui: &Ui) -> Option<ParamMode> {
+    ui.ctx()
+        .data(|d| d.get_temp::<Option<ParamMode>>(egui::Id::new("touch_mode")))
+        .flatten()
+}
+
 // ─── Control preferences ──────────────────────────────────────────────────────
 
 /// Combined rendering mode derived from `UiPrefs`.
@@ -109,7 +117,8 @@ fn mode_tooltip(mode: ParamMode) -> &'static str {
 
 /// A rotary knob widget.
 /// Returns `(value_changed, mode_cycled)`.
-/// Left-drag changes the value; right-click cycles the param mode.
+/// Left-drag changes the value.  When a touch-paint mode is active, a primary
+/// click paints that mode instead of dragging; otherwise no mode change occurs.
 pub fn knob(ui: &mut Ui, label: &str, value: &mut f32, mode: ParamMode, size: f32) -> (bool, bool) {
     let label_h = (size * 0.28).max(14.0).round();
     let (rect, response) =
@@ -123,9 +132,11 @@ pub fn knob(ui: &mut Ui, label: &str, value: &mut f32, mode: ParamMode, size: f3
     );
     let label_font_size = (size * 0.175).clamp(8.0, 13.0);
 
+    let tmode = touch_mode(ui);
     let mut changed = false;
 
-    if response.dragged() {
+    // Only drag-to-change when no touch-paint mode is active.
+    if tmode.is_none() && response.dragged() {
         let delta = response.drag_delta();
         *value = (*value - delta.y * 0.005 + delta.x * 0.003).clamp(0.0, 1.0);
         changed = true;
@@ -147,9 +158,10 @@ pub fn knob(ui: &mut Ui, label: &str, value: &mut f32, mode: ParamMode, size: f3
         );
     }
 
-    // Right-click = cycle mode; tooltip explains the states on hover.
     let response = response.on_hover_text(mode_tooltip(mode));
-    let mode_cycled = response.secondary_clicked();
+    // Touch-paint mode: primary click sets mode. Normal mode: no auto-cycle
+    // (right-click is reserved for context menus).
+    let mode_cycled = tmode.is_some() && response.clicked();
     (changed, mode_cycled)
 }
 
@@ -777,8 +789,9 @@ pub fn knob_chrome(
     );
     let label_font_size = (size * 0.175).clamp(8.0, 13.0);
 
+    let tmode = touch_mode(ui);
     let mut changed = false;
-    if response.dragged() {
+    if tmode.is_none() && response.dragged() {
         let delta = response.drag_delta();
         *value = (*value - delta.y * 0.005 + delta.x * 0.003).clamp(0.0, 1.0);
         changed = true;
@@ -802,7 +815,7 @@ pub fn knob_chrome(
     }
 
     let response = response.on_hover_text(mode_tooltip(mode));
-    let mode_cycled = response.secondary_clicked();
+    let mode_cycled = tmode.is_some() && response.clicked();
     (changed, mode_cycled)
 }
 
