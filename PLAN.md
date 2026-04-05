@@ -37,6 +37,21 @@ Ordered by value.
 
 - [x] **Audio feedback Phase 2 improvements** - done: AUTO toggle fires every 4 jam cycles, 8 per-voice level bars in LISTEN strip. Watch llama.cpp #21325 for Gemma 4 audio encoder PR.
 
+### CI/CD + supply-chain security
+
+- [x] **codecov runs on `develop`** — CI workflow extended to `push/PR` on both `main` and `develop` branches.
+
+- [x] **CI-built release binaries + SHA-256 + SLSA attestation** — the `release` job in `ci.yml` fires on `refs/tags/v*` and:
+  1. Builds Linux and Windows binaries entirely inside GitHub Actions (no maintainer-local builds land in releases).
+  2. Produces a `.sha256` sidecar for each artifact — users can verify with `sha256sum -c`.
+  3. Attests build provenance via `actions/attest-build-provenance` (SLSA level 2), giving a cryptographically signed link from artifact → commit → workflow run.  Users verify with: `gh attestation verify <file> --repo Tok/impulse-instruct`
+  
+  This directly counters the class of attack where a maintainer's machine is compromised and a swapped binary is uploaded before a release is published.
+
+- [ ] **Snapshot versioning** — adopt `0.5.7-dev` (or `-SNAPSHOT` / `-alpha.N`) for commits on `develop` so nightlies are clearly distinguished from tagged releases.  Cargo convention: use `0.5.8-alpha.1` style pre-release suffixes in `Cargo.toml` on the develop branch, bumping to a clean version only on release tags.  A small `scripts/bump-version.sh` can automate the pattern.
+
+- [ ] **Windows code-signing** — the Windows `.exe` is currently unsigned; SmartScreen may warn on first run.  Acquiring an EV code-signing certificate and wiring it into the CI `release` job is the correct fix, but requires a paid certificate.  Low priority until there are enough Windows users to matter.
+
 ### Post-release
 
 - [ ] **Multiple voices** - `Vec<SynthVoice>`, each with its own sequencer + oscillator + filter. LLM can target "voice 2, more acid".

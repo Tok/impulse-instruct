@@ -39,7 +39,7 @@ pub fn print_banner() {
         "{SUBGRAY}  ▁▂▄▅▇██▇▅▄▂▁▁▂▄▅▇██{GRAY} I M P U L S E   I N S T R U C T {SUBGRAY}██▇▅▄▂▁▁▂▄▅▇██▇▅▄▂▁{RESET}"
     );
     println!(
-        "{SUBGRAY}  a synthesizer with a tiny LLM living inside of it · Rust · llama.cpp{RESET}"
+        "{SUBGRAY}   a synthesizer with a tiny LLM living inside of it · Rust · llama.cpp{RESET}"
     );
 
     // ── Huth-colored keyboard (2 octaves, 7 rows) ────────────────────────────
