@@ -3,7 +3,9 @@
 
 mod header;
 mod llm_strip;
+pub mod module_card;
 pub mod panels;
+pub mod rack_canvas;
 pub mod theme;
 pub mod widgets;
 mod windows;
@@ -187,35 +189,6 @@ impl StateHistory {
     }
 }
 
-// ─── Instrument slot system ───────────────────────────────────────────────────
-
-/// The synthesis character of an instrument module.
-/// Determines which draw function is called for `Panel::Instrument(i)`.
-#[derive(Clone, Copy, PartialEq)]
-enum InstrumentKind {
-    AcidBass,    // draw_bass()
-    DrumKit808,  // draw_kit_a()
-    DrumKit909,  // draw_kit_b()
-    HooverLead,  // draw_hoover()
-    An1xVoice,   // draw_an1x()
-    AmenSampler, // draw_amen()
-}
-
-struct InstrumentSlot {
-    label: &'static str,
-    kind: InstrumentKind,
-}
-
-/// Active panel — Sequencer and Fx are fixed; Instrument(i) indexes into
-/// `ImpulseApp.instruments` so the tab bar is fully data-driven.
-#[derive(PartialEq, Clone, Copy)]
-enum Panel {
-    Sequencer,
-    Instrument(usize),
-    Fx,
-    Lfo,
-}
-
 // ─── ImpulseApp ───────────────────────────────────────────────────────────────
 
 pub struct ImpulseApp {
@@ -232,8 +205,6 @@ pub struct ImpulseApp {
     piano_mouse_note: Option<u8>,
     prompt_input: String,
     log_text: String,
-    active_panel: Panel,
-    instruments: Vec<InstrumentSlot>,
     api_port: Option<u16>,
     show_about: bool,
     show_prefs: bool,
@@ -265,6 +236,8 @@ pub struct ImpulseApp {
     midi_clock_tracker: MidiClockTracker,
     // Undo/redo history — ring buffer of recent AppState snapshots.
     history: StateHistory,
+    // In-progress cable drag in the rack patch view.
+    pub(crate) cable_drag: Option<rack_canvas::CableDrag>,
 }
 
 impl ImpulseApp {
@@ -346,33 +319,6 @@ impl ImpulseApp {
             piano_mouse_note: None,
             prompt_input: String::new(),
             log_text,
-            active_panel: Panel::Sequencer,
-            instruments: vec![
-                InstrumentSlot {
-                    label: "BASS SYNTH",
-                    kind: InstrumentKind::AcidBass,
-                },
-                InstrumentSlot {
-                    label: "DRUM KIT A",
-                    kind: InstrumentKind::DrumKit808,
-                },
-                InstrumentSlot {
-                    label: "DRUM KIT B",
-                    kind: InstrumentKind::DrumKit909,
-                },
-                InstrumentSlot {
-                    label: "HOOVER",
-                    kind: InstrumentKind::HooverLead,
-                },
-                InstrumentSlot {
-                    label: "AN1X",
-                    kind: InstrumentKind::An1xVoice,
-                },
-                InstrumentSlot {
-                    label: "AMEN",
-                    kind: InstrumentKind::AmenSampler,
-                },
-            ],
             api_port,
             show_about: false,
             show_prefs: false,
@@ -396,6 +342,7 @@ impl ImpulseApp {
             startup_done: false,
             midi_clock_tracker: MidiClockTracker::new(),
             history: StateHistory::new(),
+            cable_drag: None,
         }
     }
 
@@ -672,58 +619,6 @@ impl eframe::App for ImpulseApp {
                 self.draw_scope(ui);
             });
 
-        // ── Tab bar (data-driven — add InstrumentSlot to self.instruments to extend) ──
-        TopBottomPanel::top("tabs")
-            .frame(
-                Frame::none()
-                    .fill(theme::DEEP)
-                    .inner_margin(egui::Margin::symmetric(8.0, 2.0)),
-            )
-            .show(ctx, |ui| {
-                ui.horizontal(|ui| {
-                    // Fixed left tab
-                    let tab = |ui: &mut egui::Ui,
-                               panel: Panel,
-                               label: &str,
-                               active_panel: Panel|
-                     -> bool {
-                        let active = active_panel == panel;
-                        let color = if active { theme::CHALK } else { theme::IRON };
-                        let fill = if active { theme::SLATE } else { theme::DEEP };
-                        ui.add(
-                            egui::Button::new(
-                                egui::RichText::new(label)
-                                    .color(color)
-                                    .monospace()
-                                    .size(9.5),
-                            )
-                            .fill(fill)
-                            .stroke(egui::Stroke::new(
-                                1.0,
-                                if active { theme::ASH } else { theme::VOID },
-                            )),
-                        )
-                        .clicked()
-                    };
-
-                    if tab(ui, Panel::Sequencer, "SEQUENCER", self.active_panel) {
-                        self.active_panel = Panel::Sequencer;
-                    }
-                    for i in 0..self.instruments.len() {
-                        let label = self.instruments[i].label;
-                        if tab(ui, Panel::Instrument(i), label, self.active_panel) {
-                            self.active_panel = Panel::Instrument(i);
-                        }
-                    }
-                    if tab(ui, Panel::Fx, "FX CHAIN", self.active_panel) {
-                        self.active_panel = Panel::Fx;
-                    }
-                    if tab(ui, Panel::Lfo, "LFO", self.active_panel) {
-                        self.active_panel = Panel::Lfo;
-                    }
-                });
-            });
-
         // ── Footer ────────────────────────────────────────────────────────────
         TopBottomPanel::bottom("footer")
             .frame(
@@ -758,28 +653,15 @@ impl eframe::App for ImpulseApp {
                 panels::draw_piano(self, ui, ctx);
             });
 
-        // ── Main content ──────────────────────────────────────────────────────
+        // ── Rack canvas (replaces tab panels) ────────────────────────────────
         CentralPanel::default()
             .frame(
                 Frame::none()
-                    .fill(theme::DEEP)
-                    .inner_margin(egui::Margin::same(8.0)),
+                    .fill(egui::Color32::from_gray(8))
+                    .inner_margin(egui::Margin::same(4.0)),
             )
-            .show(ctx, |ui| match self.active_panel {
-                Panel::Sequencer => panels::draw_sequencer(self, ui),
-                Panel::Instrument(i) => {
-                    let kind = self.instruments[i].kind;
-                    match kind {
-                        InstrumentKind::AcidBass => panels::draw_bass(self, ui),
-                        InstrumentKind::DrumKit808 => panels::draw_kit_a(self, ui),
-                        InstrumentKind::DrumKit909 => panels::draw_kit_b(self, ui),
-                        InstrumentKind::HooverLead => panels::draw_hoover(self, ui),
-                        InstrumentKind::An1xVoice => panels::draw_an1x(self, ui),
-                        InstrumentKind::AmenSampler => panels::draw_amen(self, ui),
-                    }
-                }
-                Panel::Fx => panels::draw_fx(self, ui),
-                Panel::Lfo => panels::draw_lfo(self, ui),
+            .show(ctx, |ui| {
+                rack_canvas::draw_rack(self, ctx, ui);
             });
     }
 }

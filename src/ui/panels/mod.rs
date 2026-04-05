@@ -16,6 +16,6 @@ pub use bass::draw_bass;
 pub use drums::{draw_amen, draw_kit_a, draw_kit_b};
 pub use fx::draw_fx;
 pub use hoover::draw_hoover;
-pub use lfo::draw_lfo;
+pub use lfo::{draw_lfo, draw_lfo_slot};
 pub use piano::draw_piano;
 pub use sequencer::draw_sequencer;

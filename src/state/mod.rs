@@ -81,6 +81,11 @@ pub fn cycle_param_mode(state: AppState, path: &str) -> AppState {
 pub mod ui_prefs;
 pub use ui_prefs::{KnobSize, KnobStyle, PadSize, UiPrefs};
 
+pub mod rack;
+pub use rack::{
+    Cable, CableColor, ModuleKind, PortDir, PortKind, PortRef, RackModule, RackState, Zone,
+};
+
 // ─── Amen / WAV sampler voice state ──────────────────────────────────────────
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -152,6 +157,9 @@ pub struct AppState {
     /// When true, piano/MIDI note-ons while running write into the bass pattern.
     #[serde(default)]
     pub live_record: bool,
+    /// Modular rack — which modules are visible and how they are cabled.
+    #[serde(default)]
+    pub rack: RackState,
 }
 
 impl Default for AppState {
@@ -176,6 +184,7 @@ impl Default for AppState {
             chain_enabled: false,
             chain_pos: 0,
             live_record: false,
+            rack: Default::default(),
         }
     }
 }
