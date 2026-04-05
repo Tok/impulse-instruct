@@ -29,42 +29,59 @@ alternative Ultravox-as-secondary-listener sketch.
 
 ## What's Left
 
-Ordered by value.
+Ordered by value.  Branch: **`develop`** (merge to `main` only for tagged releases).
 
-### In progress / next
+---
 
-- [x] **TTS rack module UI panel** - done: `src/ui/panels/tts.rs`, wired into `draw_voice_content()`.
+### Completed this sprint (develop, not yet merged to main)
 
-- [x] **Audio feedback Phase 2 improvements** - done: AUTO toggle fires every 4 jam cycles, 8 per-voice level bars in LISTEN strip. Watch llama.cpp #21325 for Gemma 4 audio encoder PR.
+- [x] **TTS rack module UI panel** — `src/ui/panels/tts.rs`, EspeakNgTts / CoquiTts cards wired into `draw_voice_content()`.
+- [x] **Audio feedback Phase 2** — AUTO toggle fires every 4 jam cycles; 8 per-voice level bars in LISTEN strip.
+- [x] **LLM cable visual sync** — LFO→target and Sequencer→voice cables now synthesised from state in the rack overlay; PortKind mismatch fixed.
+- [x] **Cable signal animation** — speed and dot count normalised to arc length (no longer length-dependent).
+- [x] **Skeuomorphic widget depth** — step buttons get inset well + inverted edge highlights; flat knob gets well shadow + catch-light; section headers get a 1px rule line.
+- [x] **Responsive voice card grid** — columns adapt to window width (1/2/3 at 420px min per column).
+- [x] **LLM strip collapse** — ▲/▼ toggle collapses strip to prompt row only.
+- [x] **Central touch-paint mode** — `· / U / F` toolbar row replaces broken right-click per-knob cycling (context menus conflicted); cables toggle also lives here.
+- [x] **UI scale setting** — `UiPrefs.ui_scale` DragValue in Preferences, applied via `pixels_per_point`, persisted in session.
+- [x] **Pad size M = 44px default** (was 26px); knob default bumped to M (55px).
+- [x] **All UI prefs persisted** — `pad_size`, `knob_size`, `ui_scale` all survive restarts.
+- [x] **Header responsive rework** — heat slider fills remaining width; COOL/WARM/HOT/FIRE/CHAOS tier labels; monitor volume relabelled MON; right_to_left layout.
+- [x] **Heat chaos amplification** — temperature range 0.1–1.7 (was 1.2); top_p widens with heat; CHAOS tier in system prompt at ≥90%.
+- [x] **CI/CD supply-chain security** — `release` job builds Linux+Windows in GH Actions on `v*` tags; SHA-256 sidecars + SLSA level-2 attestation; codecov now runs on `develop` too.
+- [x] **Banner symmetry** — wave and tagline centred correctly.
 
-### CI/CD + supply-chain security
+---
 
-- [x] **codecov runs on `develop`** — CI workflow extended to `push/PR` on both `main` and `develop` branches.
+### Next — immediate queue
 
-- [x] **CI-built release binaries + SHA-256 + SLSA attestation** — the `release` job in `ci.yml` fires on `refs/tags/v*` and:
-  1. Builds Linux and Windows binaries entirely inside GitHub Actions (no maintainer-local builds land in releases).
-  2. Produces a `.sha256` sidecar for each artifact — users can verify with `sha256sum -c`.
-  3. Attests build provenance via `actions/attest-build-provenance` (SLSA level 2), giving a cryptographically signed link from artifact → commit → workflow run.  Users verify with: `gh attestation verify <file> --repo Tok/impulse-instruct`
-  
-  This directly counters the class of attack where a maintainer's machine is compromised and a swapped binary is uploaded before a release is published.
+- [ ] **Snapshot versioning** — bump `Cargo.toml` version to `0.5.8-alpha.1` on `develop` so builds are clearly pre-release.  Add `scripts/bump-version.sh` that sets version, commits, and tags.  Cargo convention: `MAJOR.MINOR.PATCH-alpha.N` / `-rc.N` pre-release suffixes; clean `MAJOR.MINOR.PATCH` only on release tags.
 
-- [ ] **Snapshot versioning** — adopt `0.5.7-dev` (or `-SNAPSHOT` / `-alpha.N`) for commits on `develop` so nightlies are clearly distinguished from tagged releases.  Cargo convention: use `0.5.8-alpha.1` style pre-release suffixes in `Cargo.toml` on the develop branch, bumping to a clean version only on release tags.  A small `scripts/bump-version.sh` can automate the pattern.
+- [ ] **LLM tuning tab in Preferences** — split the settings panel into tabs: **Model** (model path, ctx_size, seed), **Sampling** (top_k, top_p, min_p, repeat_penalty, freq_penalty — with "experimental" label), **Personality** (persona, user instructions, style), **TTS** (engine, voice, pitch/speed/vol).  Currently a flat scrollable list.
 
-- [ ] **Windows code-signing** — the Windows `.exe` is currently unsigned; SmartScreen may warn on first run.  Acquiring an EV code-signing certificate and wiring it into the CI `release` job is the correct fix, but requires a paid certificate.  Low priority until there are enough Windows users to matter.
+- [ ] **Zone visual hierarchy** — zone rails (Voice / FX+Mod / Global) need distinct background tints (slightly different gray values, not tints — keep R=G=B rule).  Module cards: 6px side padding, 8px top/bottom; title bar 20px min height.  Drag affordance: 3-dot handle icon in title bar.
 
-### Post-release
+- [ ] **Autotune FX module** — `ModuleKind::FxAutotune`; pitch correction on voice output.  Implement as a simple chromatic or scale-quantised pitch shifter in `dsp.rs`.  Add to rack, wire into FX plan.
 
-- [ ] **Multiple voices** - `Vec<SynthVoice>`, each with its own sequencer + oscillator + filter. LLM can target "voice 2, more acid".
+- [ ] **Per-zone collapse** — each zone rail has a ▶/▼ toggle to hide all its cards; useful when focussing on just bass or just FX.
 
-- [ ] **Multiple LLM instances** - one LLM per voice, or a routing matrix.
+---
 
-- [ ] **Modular cable UI** (Reason-style rack flip) - Tab flips to back panel showing I/O ports + Bezier cables. Infrastructure exists; needs a dedicated interaction layer.
+### Post-release backlog
 
-- [ ] **UI/UX rework** - Full layout and interaction quality pass. See **[docs/ui-rework.md](docs/ui-rework.md)** for the full issue list. Highest-priority items: (1) cables must not occlude module controls, (2) voice module cards are too narrow, (3) LLM strip needs collapse, (4) module panel internals need skeuomorphic depth — knobs, pads, sliders as physical objects not flat rectangles.
+- [ ] **Multiple voices** — `Vec<SynthVoice>`, each with its own sequencer + oscillator + filter.  LLM can target "voice 2, more acid".
 
-- [ ] **LLM tuning tab in Preferences** - The current settings panel mixes model/context/sampling/personality into a single scrollable list. Split into named tabs: Model, Sampling, Personality, TTS. The Sampling tab exposes ctx_size, top_k, top_p, min_p, repeat_penalty, freq_penalty, seed as an "Advanced / experimental" section, replacing the scroll-through layout. Useful for power users experimenting with different models whose defaults differ from Gemma.
+- [ ] **Multiple LLM instances** — one LLM per voice, or a routing matrix.
 
-- [ ] **Bloom post-process / UI polish** - Bloom (egui to wgpu render pass, Gaussian blur on bright pixels, additive blend) is GPU-expensive and may not add much over existing chrome finish. Evaluate after the ui-rework pass.
+- [ ] **Modular cable UI** (Reason-style rack flip) — Tab flips to back panel showing I/O ports + Bezier cables.  Infrastructure exists; needs a dedicated drag-to-patch interaction layer.
+
+- [ ] **Separate LLM heat slider** — decouple "LLM temperature" from "jam energy / mutation rate" so they can be tuned independently.  Currently both are driven by the single heat value.
+
+- [ ] **Bloom post-process** — Gaussian blur + additive blend on bright pixels.  Needs custom wgpu render pass; GPU-expensive.  Evaluate after ui-rework pass.
+
+- [ ] **Windows code-signing** — unsigned `.exe` triggers SmartScreen.  Requires EV certificate.  Low priority until meaningful Windows user base.
+
+- [ ] **Alternate tuning tables** — gamelan slendro, just intonation, etc.  Data-modelled; not wired into DSP.
 
 ---
 

@@ -78,24 +78,35 @@ A detailed log of what's built. The roadmap lives in [PLAN.md](../PLAN.md).
 
 - 5 panels: Sequencer / Bass (303) / 808 / 909 / FX; AN1X and Hoover in sequencer area
 - Chrome knobs, glass sliders, embossed buttons (neumorphic grayscale)
+- **Skeuomorphic step buttons** - active inset well (debossed 2px) with inverted edge highlights; velocity bloom over inset; chrome knob well shadow + catch-light
 - Velocity lanes below each step row (drag bars)
-- XY pads (CUT x RES, ENV x DEC, REVERB mix x size, DELAY mix x feedback, 808 PITCH x DECAY); right-click to cycle pairs; pair indicator in corner
+- XY pads (CUT x RES, ENV x DEC, REVERB mix x size, DELAY mix x feedback, 808 PITCH x DECAY); pair indicator in corner
 - Oscilloscope strip (rolling 512-sample waveform)
 - ADSR envelope visualizer (interactive - drag zones)
 - Piano display - Huth *Farbige Noten* (1888) 12-color theory, C2-C5; Off/Piano/Full setting
 - Huth sequencer cells (Full mode) - colored U-cup notation on bass/hoover/AN1X rows; gate-proportional height
 - Model selector - scan `models/`, hot-swap without restart
 - Reasoning toggle; thinking blocks shown in log
-- LLM strip: LISTEN button + live audio analysis display (sub/low/mid/high RMS, peak, crest, transients)
-- Rack canvas - zone-based horizontal module cards with Bezier cable overlay
+- LLM strip: LISTEN button + live audio analysis display (sub/low/mid/high RMS, peak, crest, transients); collapsible to prompt row only (▲/▼ toggle)
+- **Rack canvas** - zone-based horizontal module cards with Bezier cable overlay; responsive voice card grid (1/2/3 columns adaptive); Tab/toolbar toggle for cables
+- **Cable signal animation** - normalised to arc length (constant perceived speed regardless of cable length); 2-5 dots per cable based on length
+- **LFO visual cables** - active LFO slots synthesise rack cables from state (lfo.target → ModuleKind mapping) so LFO connections show without needing a rack cable entry
+- **Central touch-paint mode** - `· / U / F` toolbar row; clicking a knob paints its param mode when mode is active; replaces broken right-click cycling
+- **UI preferences** - knob style (Chrome/Flat), knob size (S/M/L/XL, default M=55px), pad size (S/M/L/XL, default M=44px), UI scale (0.5–3.0×, instant via pixels_per_point); all persisted in session.json
+- **Responsive header** - heat slider fills remaining width; COOL/WARM/HOT/FIRE/CHAOS tier labels with color ramp; monitor volume labelled MON (listen-only, not export)
+
+## Intelligence
+
+- Heat chaos amplification: temperature 0.1 + heat×1.6 (max 1.7); top_p widens with heat; CHAOS tier (≥90%) adds explicit "maximum disorder" instruction to system prompt
 
 ## Testing and build
 
 - Unit tests across submodules (seq_tests, state_tests, llm_tests, audio::analysis, jam_tools_tests, music_api_tests), split at 1000-line limit per file
+- 207 unit tests total (as of v0.5.7)
 - 39 LLM integration tests in 3 suites: `llm_suite` (core), `llm_suite_style` (artist refs), `llm_suite_theory` (music theory + producer lingo)
 - Pre-commit hook: fmt + clippy + tests + 1000-line LOC limit
 - `scripts/run-tests.sh --coverage` - HTML coverage report (lcov)
 - Cross-compile to Windows EXE via `cargo-xwin` + `scripts/build-all.sh`
 - `scripts/download-models.sh` - Gemma 4 E4B (default), Bonsai 8B, Qwen3-8B, Qwen3-14B
 - Windows `.bat` equivalents for all scripts (`start.bat`, `scripts/*.bat`)
-- Codecov integration - `.github/workflows/ci.yml` runs tests + tarpaulin + uploads lcov.info
+- **CI/CD security** - `ci.yml` runs tests + tarpaulin + Codecov on `main` and `develop`; `release` job on `v*` tags builds Linux+Windows in GH Actions (no local builds), attaches `.sha256` sidecars and SLSA level-2 build provenance attestation
