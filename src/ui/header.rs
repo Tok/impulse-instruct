@@ -522,13 +522,12 @@ impl ImpulseApp {
                         let api_shown = self.api_port.is_some();
 
                         // Approximate pixel width of every item drawn AFTER the heat slider:
-                        //   tier(40) + pct(36) + sep(12) + KNOBS(70) + sep(12)
+                        //   sep(12) + KNOBS(70) + sep(12)
                         //   + MON-label(28) + MON-slider(60) + gap(4)
                         //   + [VRAM bar+label+RAM bar+label](110) + gap(2)
                         //   + [API badge](56)
-                        let fixed_right_w = 40.0
-                            + 36.0
-                            + 12.0
+                        // Tier and pct are painted as overlay on the slider, not separate items.
+                        let fixed_right_w = 12.0
                             + 70.0
                             + 12.0
                             + 28.0
@@ -562,7 +561,9 @@ impl ImpulseApp {
                             "Jam energy and LLM creativity. CHAOS (100%) = maximum disorder.",
                         );
 
-                        // ── HEAT slider — fills remaining - fixed_right_w ─────
+                        // ── HEAT slider — fills all remaining space ───────────
+                        // Tier name and percentage are painted as overlays on the
+                        // slider rect so they don't eat into its width.
                         let heat_w = (ui.available_width() - fixed_right_w).max(60.0);
                         let (heat_rect, _) =
                             ui.allocate_exact_size(egui::vec2(heat_w, 18.0), egui::Sense::hover());
@@ -577,34 +578,23 @@ impl ImpulseApp {
                         {
                             self.state.write().llm.heat = heat;
                         }
-
-                        // ── Tier + pct labels (fixed 40 + 36 px) ─────────────
-                        let row_h = ui.available_height();
-                        {
-                            let (r, _) = ui
-                                .allocate_exact_size(egui::vec2(40.0, row_h), egui::Sense::hover());
-                            if ui.is_rect_visible(r) {
-                                ui.painter().text(
-                                    r.center(),
-                                    egui::Align2::CENTER_CENTER,
-                                    heat_tier,
-                                    egui::FontId::monospace(8.5),
-                                    heat_color,
-                                );
-                            }
-                        }
-                        {
-                            let (r, _) = ui
-                                .allocate_exact_size(egui::vec2(36.0, row_h), egui::Sense::hover());
-                            if ui.is_rect_visible(r) {
-                                ui.painter().text(
-                                    r.center(),
-                                    egui::Align2::CENTER_CENTER,
-                                    format!("{heat_pct}%"),
-                                    egui::FontId::monospace(9.0),
-                                    heat_color,
-                                );
-                            }
+                        // Overlay tier name (left-aligned) and pct (right-aligned).
+                        if ui.is_rect_visible(heat_rect) {
+                            let p = ui.painter();
+                            p.text(
+                                heat_rect.left_center() + egui::vec2(6.0, 0.0),
+                                egui::Align2::LEFT_CENTER,
+                                heat_tier,
+                                egui::FontId::monospace(8.5),
+                                heat_color,
+                            );
+                            p.text(
+                                heat_rect.right_center() - egui::vec2(6.0, 0.0),
+                                egui::Align2::RIGHT_CENTER,
+                                format!("{heat_pct}%"),
+                                egui::FontId::monospace(8.5),
+                                heat_color,
+                            );
                         }
 
                         ui.separator();
