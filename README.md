@@ -318,24 +318,9 @@ See [docs/contributions.md](docs/contributions.md) for detail on how to add styl
 
 ## Farbige Noten — Color Theory
 
-The piano display uses Ch. A. B. Huth's *Farbige Noten* (Hamburg 1888–1889), a 12-color system where each chromatic semitone maps counter-clockwise around the RYB color wheel starting from Blue at C.
+The piano display uses Ch. A. B. Huth's *Farbige Noten* (Hamburg 1888–1889), a 12-color system mapping each chromatic semitone to a hue on the RYB wheel. Tritone intervals land on complementary colors — Blue C ↔ Orange F#, Green/Teal D ↔ Carmine G#.
 
-| Note | Color |
-|------|-------|
-| C | Blue |
-| C# | Cyan-Blue |
-| D | Green/Teal |
-| D# | Yellow-Green |
-| E | Yellow |
-| F | Orange |
-| F# | Vermilion |
-| G | Rose |
-| G# | Carmine |
-| A | Lilac-Violet |
-| A# | Purple |
-| B | Indigo |
-
-Complementary colors (directly opposite on the wheel) correspond to tritone intervals — e.g. Blue C ↔ Orange F#. See `docs/colorful-notes.md` for the full theory, or the [original source at IMSLP](https://imslp.org/wiki/Farbige_Noten_(Huth,_Ch._A._B.)).
+Full color table, hex values, theory, and historical context in [docs/colorful-notes.md](docs/colorful-notes.md). Original source scans at [IMSLP](https://imslp.org/wiki/Farbige_Noten_(Huth,_Ch._A._B.)).
 
 ---
 
