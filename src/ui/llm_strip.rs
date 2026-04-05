@@ -14,13 +14,13 @@ use egui::{Frame, TopBottomPanel};
 impl ImpulseApp {
     /// Style selector, prompt input, log, and thinking display.
     pub(super) fn draw_llm_strip(&mut self, ctx: &egui::Context) {
-        // ~5 log lines × ~13px + style row ~22px + prompt ~30px + margins ≈ 120px.
-        // resizable(true) lets the user drag the bottom border to adjust.
+        // Compact default: style row ~22px + instructions ~22px + prompt ~34px + top margin 4px ≈ 82px.
+        // User can drag the bottom border down to reveal more log lines.
         TopBottomPanel::top("llm_strip")
             .frame(Frame::none().fill(theme::PIT).inner_margin(egui::Margin { left: 8.0, right: 8.0, top: 4.0, bottom: 0.0 }))
             .resizable(true)
             .min_height(70.0)
-            .default_height(145.0)
+            .default_height(95.0)
             .show(ctx, |ui| {
                 // ── TOP row: style + instructions | log ───────────────────────
                 ui.horizontal(|ui| {

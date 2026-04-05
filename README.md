@@ -6,9 +6,60 @@
 
 A synthesizer with a tiny LLM living inside of it. **PULSE** runs locally and has full control of the sound — it listens to what you say, jams autonomously, and responds to the music in real time. You keep the parameters you want; it owns everything else.
 
-Built in Rust. Supports [Bonsai 8B](https://huggingface.co/prism-ml/Bonsai-8B-gguf) (1-bit, 1.1 GB, fits in 2 GB VRAM) and larger models via any GGUF-compatible llama-server.
-
 > **Requires an NVIDIA GPU (CUDA) for real inference.** The app runs in mock mode without a model — the synth, sequencer, MIDI, and API all work, but responses are keyword-based rather than generated.
+
+---
+
+## Download
+
+Pre-built binaries are available on the releases page:
+
+- `impulse-instruct-linux-x86_64` — Linux (Ubuntu 22.04+)
+- `impulse-instruct-windows-x86_64.exe` — Windows 10/11
+
+**No installation required.** Download, make executable (Linux: `chmod +x`), and run.
+
+---
+
+## Getting started
+
+### 1 — Download a model
+
+The app ships without a model. Download one before first run:
+
+```bash
+./scripts/download-models.sh          # Gemma 4 E4B (~4.6 GB, recommended)
+./scripts/download-models.sh bonsai   # Bonsai 8B (~1.1 GB, lightweight fallback)
+```
+
+A free [HuggingFace](https://huggingface.co/join) account is required. The script handles authentication and places the file in `models/`.
+
+On **Windows**, run the equivalent `.bat` script:
+```
+scripts\download-models.bat
+scripts\download-models.bat bonsai
+```
+
+### 2 — Run
+
+```bash
+./impulse-instruct-linux-x86_64
+```
+
+The app auto-detects the model in `models/` and connects to it. The model selector in **Prefs** lets you switch at runtime — no restart needed.
+
+**No GPU?** Launch without a model and the app runs in mock mode. Responses are keyword-based presets rather than generated, but the full synth, sequencer, MIDI, and FX chain all work normally.
+
+---
+
+## Models
+
+| Model | Size | VRAM | Notes |
+|-------|------|------|-------|
+| **Gemma 4 E4B Q4_K_M** | ~4.6 GB | ~6 GB | **Recommended.** Best JSON accuracy, passes all integration tests. Requires the standard llama-server (bundled). |
+| **Bonsai 8B Q1_0_g128** | ~1.1 GB | ~2 GB | Lightweight fallback. Fits in 2 GB VRAM. Requires the PrismML llama-server fork (bundled separately). Lower musical accuracy. |
+
+Switch models at any time via the model selector in **Prefs → Model**. The app restarts the inference server automatically.
 
 ---
 
@@ -35,63 +86,50 @@ Built in Rust. Supports [Bonsai 8B](https://huggingface.co/prism-ml/Bonsai-8B-gg
 - Kit B — kick, snare, hihat × 2, clap, rim (909-style)
 - Up to 64-step sequencer; per-voice velocity lanes; swing; euclidean rhythm generator
 
-**Standalone noise voice** — white / pink / brown; volume + color + filter cutoff; LLM-addressable for ambient drones, breath, texture layers
+**Standalone noise voice** — white / pink / brown; volume + color + filter cutoff; addressable for ambient drones, breath, texture layers
 
-**FX chain** (all LLM-wireable)
+**FX chain** (all wireable via prompt)
 - Reverb (Schroeder/Freeverb), delay, chorus/ensemble, phaser (4-stage all-pass)
-- Waveshaper (pre-FX tanh saturation), ring modulator (50–500 Hz carrier)
-- 3-band EQ: low shelf 200 Hz · mid peak 1 kHz · high shelf 5 kHz (biquad)
-- Bitcrush (bit depth + sample rate reduction), tape saturation, master drive
+- Waveshaper, ring modulator, 3-band EQ, bitcrush, tape saturation, master drive
 - Master compressor/limiter
 
-**LFO system** — 4 independent slots, each wireable to any parameter (bass cutoff, resonance, pitch, volume, reverb, delay, chorus, kick pitch…); BPM sync; phase resets on transport start
+**LFO system** — 4 independent slots, each wireable to any parameter; BPM sync; phase resets on transport start
 
-**Intelligence**
-- **PULSE** — the AI inside; runs locally, generates JSON parameter updates in real time
-- **Jam mode** — on by default; PULSE evolves the pattern autonomously, endlessly
-- **Lock system** — touch a knob and it's yours; PULSE won't override it
-- **Instruction set** — pre-written JSON templates for common phrases ("make an amen break", "remove claps", "acid bass", "BoC vibes"…)
-- **Music theory grounding** — root note + scale injected into system prompt; bass notes snap to scale
-
-**TTS / MC mode** — espeak-ng speaks PULSE's comments as a jungle MC; voice characters (Jungle MC, Rave Announcer, Robot, Smooth DJ); TTS ducks under music; routed through reverb + optional bitcrush
-
-**I/O**
+**MIDI**
 - MIDI in — auto-connects to first USB keyboard; notes trigger bass synth and write into live record; CC knobs map to synth params
 - MIDI clock out — 24 PPQN, syncs external hardware and DAWs
-- Export — WAV (32-bit float) and MP3 (via ffmpeg)
-- Project save/load — JSON snapshots
-- HTTP/MCP API — REST interface on port 8765 (`--api` flag)
-- Piano display — Huth *Farbige Noten* color theory (1888); C2–C5 keyboard
+
+**Export** — WAV (32-bit float) and MP3 (via ffmpeg)
 
 ---
 
 ## Talking to PULSE
 
-PULSE is the AI living inside Impulse Instruct. It reads a JSON schema for every parameter, listens to what you type, and writes back structured JSON that gets applied to the synth in real time. You can talk to it like a producer collaborator — it understands music terminology, genre references, mixing decisions, and routing commands.
+PULSE is the AI inside. It reads the full parameter schema, listens to what you type, and writes back structured JSON that gets applied to the synth in real time. Talk to it like a producer collaborator — it understands music terminology, genre references, mixing decisions, and routing commands.
 
 ### Heat — the jam intensity dial
 
-The **HEAT** slider (header bar, shown as a percentage) controls how aggressively PULSE mutates the sound between turns.
+The **HEAT** slider in the header (shown as a percentage) controls how aggressively PULSE mutates the sound on its own.
 
 | Heat | What happens |
 |------|-------------|
-| **0%** | PULSE is parked. Jam loop stops. It responds only when you send an explicit prompt. |
-| **~15–25%** | Subtle drift — PULSE nudges filters, levels, and rhythm details between prompts. Good for long sets. |
+| **0%** | PULSE is parked. Jam loop stops. It only responds when you send an explicit prompt. |
+| **~15–25%** | Subtle drift — nudges filters, levels, and rhythm details between prompts. Good for long sets. |
 | **~30–40%** | Default sweet spot. Slow pattern evolution, filter sweeps, occasional step changes. |
-| **~60–75%** | Active rearrangement — new step patterns, instrument swaps, FX chain edits every few bars. |
-| **100%** | Full chaos. PULSE rewrites everything it can reach constantly. |
+| **~60–75%** | Active rearrangement — new patterns, instrument swaps, FX edits every few bars. |
+| **100%** | Full chaos. PULSE rewrites everything it can reach, constantly. |
 
 Heat maps to LLM temperature (`0.1` at 0% → `1.2` at 100%). Low heat → more deterministic, tightly focused responses. High heat → wider sampling, more surprising choices.
 
 ### Jam mode
 
-Jam is always on. As soon as a jam cycle completes, PULSE generates the next mutation automatically — as long as heat is above 0%. To pause autonomous generation without losing your settings, drag heat to 0. To stop it narrating while still jamming, change the conversation mode to **Off** in settings.
+Jam is always on. As soon as a cycle completes, PULSE generates the next mutation automatically — as long as heat is above 0%. To pause autonomous generation without losing your settings, drag heat to 0. To stop narration while still jamming, change the conversation mode to **Off** in settings.
 
 You can talk over the jam at any time. Your typed prompt takes priority and resets the cycle.
 
 ### The lock system
 
-Touch any knob or slider and a small **U** indicator appears — that parameter is now **user-owned**. PULSE sees it as locked and will not overwrite it, even at full heat. The dot shows the current mode:
+Touch any knob or slider and a small **U** indicator appears — that parameter is now **user-owned**. PULSE sees it as locked and will not overwrite it, even at full heat.
 
 - **·** (dot) — Free — PULSE can touch this
 - **U** — User-owned — yours; PULSE skips it
@@ -99,11 +137,19 @@ Touch any knob or slider and a small **U** indicator appears — that parameter 
 
 Right-click a knob to cycle modes manually, or let PULSE manage focus through prompts.
 
+### Context and memory
+
+PULSE keeps a rolling conversation history with the inference server. Every exchange — your prompts and its responses — is appended to the context window until it approaches the server's limit (~8 K tokens by default).
+
+When the context reaches ~85% full, the app automatically restarts the server and clears the history (configurable via **auto-compact** in Prefs). PULSE starts fresh but carries the current synth state forward — it can see all the parameters as they are now, it just loses memory of past conversation turns.
+
+The token counter in the header shows current context usage. If you notice PULSE becoming repetitive or drifting from earlier instructions, a manual **Reset context** in Prefs will clear the history and give it a clean slate.
+
 ---
 
 ## Prompt examples
 
-PULSE understands plain English. These are real things you can type into the prompt bar.
+Any parameter visible in the UI, PULSE can be asked to adjust. Any module in the rack, it can enable, configure, and wire up.
 
 ### Vibe and style
 
@@ -126,7 +172,6 @@ four-on-the-floor with an offbeat hihat
 euclidean 5/16 on the kick
 add a clap on beat 3
 shuffle the hihat pattern
-make the amen break feel more broken
 syncopate the bass, drop the root on beat 1
 swing everything harder
 ```
@@ -139,8 +184,7 @@ open up the cutoff slowly
 make the bass supersaw with lots of unison
 add FM to the bass — subtle, just for texture
 distort the kick harder
-pitch-tune the 808 kick to the root
-add a sine sub under the bass
+pitch the 808 kick to the root note
 make the snare crack more
 ```
 
@@ -153,8 +197,6 @@ add a short delay to the hihat — dotted eighth
 turn up the phaser on the hoover
 add tape saturation to the master
 increase the reverb size, make it cavernous
-drop the delay feedback to avoid mud
-bypass the chorus
 add an LFO on the filter cutoff — slow sine, 0.5 depth
 ```
 
@@ -163,19 +205,16 @@ add an LFO on the filter cutoff — slow sine, 0.5 depth
 ```
 add a hoover lead
 bring in the AN1X — warm pad underneath
-enable the noise voice — pink noise, low cutoff
+enable the noise voice for texture
 activate the Amen sampler
 add the bitcrush module
 remove the chorus
-disable the phaser
-swap the delay for a longer time
 ```
 
 ### Production moves
 
 ```
 raise the BPM to 140
-drop it to 128 for a house feel
 transpose everything up a fifth
 change the scale to Dorian
 lock the BPM — don't touch it
@@ -189,85 +228,9 @@ save the project
 talk less — just make the sounds
 go into MC mode
 stop narrating
-change your name to DRIFT
 heat yourself down a bit, things are too chaotic
 turn the heat up — surprise me
 ```
-
-Any parameter you can see in the UI, PULSE can be asked to adjust. Any module it can see in the rack, it can enable, configure, and wire up. If you've locked something (touched it yourself), PULSE will skip it — even if you ask it to change the whole sound.
-
----
-
-## Requirements
-
-| | |
-|---|---|
-| **GPU** | NVIDIA GPU with CUDA 12.x (tested: RTX 4070 Ti Super) |
-| **VRAM** | ≥ 2 GB for Bonsai 8B; ≥ 7 GB for Qwen3-8B Q4 |
-| **OS** | Linux (Windows cross-compile via cargo-xwin) |
-| **Rust** | 1.85+ (edition 2024) |
-| **TTS** (optional) | `apt install espeak-ng` for MC mode |
-| **MP3 export** (optional) | `apt install ffmpeg` |
-| **Terminal font** | JetBrains Mono, Fira Code, or any Nerd Font for the graphical banner. Falls back to ASCII automatically when UTF-8 is not detected. |
-
----
-
-## Quick start
-
-```bash
-# 1. Clone
-git clone <repo> impulse-instruct && cd impulse-instruct
-
-# 2. Build the Bonsai inference server (one-time, ~3 min)
-#    Requires: git cmake build-essential cuda-toolkit-12-x
-./build-bonsai-server.sh
-
-# 3. Download a model (requires free HuggingFace account)
-./download-models.sh              # Bonsai 8B (~1.1 GB, default, fastest)
-./download-models.sh qwen3        # Qwen3-8B Q4_K_M (~5 GB, ~5× better quality)
-./download-models.sh qwen3-14b    # Qwen3-14B Q4_K_M (~9 GB, best reasoning)
-./download-models.sh gemma4       # Gemma 4 4B Q4 (~3 GB, fast + strong JSON)
-./download-models.sh llama31      # Llama 3.1 8B Q4_K_M (~5 GB, excellent JSON)
-
-# 4. Run
-cargo run --release               # real LLM inference
-cargo run                         # mock mode (no model needed)
-```
-
-**No GPU / no model?** The app still runs in mock mode — synth, sequencer, MIDI, and API all work, but PULSE responds with keyword-based presets instead of model-generated output.
-
-MIDI auto-connects on startup. Requires `libasound2-dev` on Linux. Notes trigger the bass synth live and write into the current sequencer step when live record is on. Standard CC knobs map to synth params.
-
----
-
-## Scripts
-
-| Script | What it does |
-|--------|-------------|
-| `cargo run` | Build and launch (mock LLM, no API) |
-| `cargo run -- --api` | Launch with HTTP/MCP API on port 8765 |
-| `cargo run -- --api --port 9000` | API on custom port |
-| `cargo run --release` | Release build with real LLM (needs llama-server) |
-| `./build-bonsai-server.sh` | Build PrismML llama-server for Bonsai 8B |
-| `./download-models.sh [model]` | Download GGUF model (bonsai / qwen3 / qwen3-14b / gemma4 / llama31) |
-| `./run-llm-tests.sh` | Run real Bonsai integration test suite |
-| `./run-tests.sh --coverage` | Unit tests + HTML coverage report |
-| `./build-all.sh` | Build Linux + Windows release binaries into `dist/` |
-| `cargo test` | Run 75 unit tests |
-
----
-
-## Models
-
-| Model | Download | Size | VRAM | Notes |
-|-------|----------|------|------|-------|
-| **Bonsai-8B** | `./download-models.sh` | ~1.1 GB | ~2 GB | Default; fits any NVIDIA GPU; lowest quality |
-| **Qwen3-8B Q4_K_M** | `./download-models.sh qwen3` | ~5 GB | ~7 GB | ~5× better; supports `/think` reasoning mode |
-| **Qwen3-14B Q4_K_M** | `./download-models.sh qwen3-14b` | ~9 GB | ~11 GB | Best musical reasoning; needs 12 GB VRAM |
-| **Gemma 4 E4B Q4_K_M** | `./download-models.sh gemma4` | ~5 GB | ~7 GB | Fast; strong structured JSON output |
-| **Llama 3.1 8B Q4_K_M** | `./download-models.sh llama31` | ~5 GB | ~7 GB | Excellent JSON compliance |
-
-All models require a free [HuggingFace](https://huggingface.co/join) account. Switch models at runtime via the model selector in prefs — no restart needed.
 
 ---
 
@@ -275,183 +238,39 @@ All models require a free [HuggingFace](https://huggingface.co/join) account. Sw
 
 The piano display uses Ch. A. B. Huth's *Farbige Noten* (Hamburg 1888–1889), a 12-color system where each chromatic semitone maps counter-clockwise around the RYB color wheel starting from Blue at C.
 
-| Note | Color | RYB |
-|------|-------|-----|
-| C   | Blue         | 240° |
-| C#  | Cyan-Blue    | 210° |
-| D   | Green/Teal   | 180° |
-| D#  | Yellow-Green | 150° |
-| E   | Yellow       | 120° |
-| F   | Orange       |  60° |
-| F#  | Vermilion    |  30° |
-| G   | Rose         | 350° |
-| G#  | Carmine      | 320° |
-| A   | Lilac-Violet | 290° |
-| A#  | Purple       | 265° |
-| B   | Indigo       | 245° |
+| Note | Color |
+|------|-------|
+| C | Blue |
+| C# | Cyan-Blue |
+| D | Green/Teal |
+| D# | Yellow-Green |
+| E | Yellow |
+| F | Orange |
+| F# | Vermilion |
+| G | Rose |
+| G# | Carmine |
+| A | Lilac-Violet |
+| A# | Purple |
+| B | Indigo |
 
-Complementary colors (directly opposite on wheel) correspond to tritone intervals — e.g. Blue C ↔ Orange F#. See `docs/colorful-notes.md` for the full theory.
-
----
-
-## HTTP / MCP API
-
-Start with `--api`:
-
-```bash
-cargo run -- --api                # API on :8765
-cargo run -- --api --port 9000    # custom port
-```
-
-> **Why does a synthesizer have a web server?** Bonsai 8B uses a 1-bit quantisation format (`Q1_0_g128`) that requires PrismML's custom llama.cpp fork. Rather than embedding that C++ library into the Rust binary, Impulse Instruct spawns `llama-server` as a subprocess and talks to it over a local HTTP connection. The same port doubles as an MCP-compatible API so external tools can control the synth.
-
-### Endpoints
-
-```
-GET  /api/state                  Full synth state as JSON
-GET  /api/schema                 JSON Schema for all parameters
-POST /api/prompt                 Send a prompt to the LLM
-POST /api/params                 Directly set parameters
-POST /api/lock                   Lock params from LLM override
-POST /api/unlock                 Unlock params
-POST /api/sequencer/play         Start sequencer
-POST /api/sequencer/stop         Stop sequencer
-```
-
-### Examples
-
-```bash
-# Ask PULSE
-curl -X POST http://localhost:8765/api/prompt \
-  -H "Content-Type: application/json" \
-  -d '{"prompt": "make it acid"}'
-
-# Set params directly
-curl -X POST http://localhost:8765/api/params \
-  -H "Content-Type: application/json" \
-  -d '{"params": {"bass": {"cutoff": 0.4, "resonance": 0.8}}}'
-
-# Lock a param so LLM cannot touch it
-curl -X POST http://localhost:8765/api/lock \
-  -H "Content-Type: application/json" \
-  -d '{"paths": ["bass.cutoff"]}'
-```
-
----
-
-## Parameters
-
-The full JSON Schema for every parameter is available at runtime:
-
-```bash
-curl http://localhost:8765/api/schema
-```
-
-Key paths (all floats 0–1 unless noted):
-
-| Path | Description |
-|------|-------------|
-| `bass.cutoff` | Filter cutoff (0=dark, 1=bright) |
-| `bass.resonance` | Resonance / squelch |
-| `bass.env_mod` | Filter envelope depth |
-| `bass.decay` | Filter envelope decay |
-| `bass.accent_level` | Accent boost intensity |
-| `bass.waveform` | `"Saw"` / `"Square"` / `"Supersaw"` |
-| `bass.filter_mode` | `"Lowpass"` / `"Highpass"` / `"Bandpass"` |
-| `bass.supersaw_detune` | Unison spread (semitones) |
-| `bass.supersaw_voices` | Unison voice count (2–7) |
-| `bass.sub_osc_level` | Sub-oscillator mix |
-| `bass.osc_detune` | Oscillator pitch offset −1..+1 semitones |
-| `bass.noise_mix` | White noise into filter |
-| `bass.portamento_time` | Glide time (0=10ms, 1=500ms) |
-| `bass.distortion` | Internal overdrive |
-| `sequencer.bpm` | Tempo (40–250 BPM) |
-| `sequencer.swing` | Shuffle amount |
-| `sequencer.steps` | Active step count (8–64) |
-| `sequencer.root_note` | Key root (0=C … 11=B) |
-| `sequencer.scale` | `"Major"` / `"NaturalMinor"` / `"Dorian"` / `"Pentatonic"` / … |
-| `fx.reverb_mix` / `reverb_size` | Reverb wet/dry, room size |
-| `fx.delay_mix` / `delay_feedback` / `delay_time` | Delay |
-| `fx.chorus_mix` / `chorus_rate` / `chorus_depth` | Chorus |
-| `fx.phaser_mix` / `phaser_rate` / `phaser_depth` | Phaser |
-| `fx.bitcrush_mix` / `bitcrush_bits` / `bitcrush_rate` | Bitcrush |
-| `fx.eq_low_gain` / `eq_mid_gain` / `eq_hi_gain` | 3-band EQ (−1..+1 → ±12 dB) |
-| `fx.master_volume` | Output level |
-| `lfo[0..3].rate` / `.depth` / `.target` / `.waveform` | LFO modulation matrix |
-
-Step arrays accept three formats to save tokens:
-- Index list: `[0, 4, 8, 12]` — active step indices; all others cleared
-- Inline: `[1,0,0,0,1,0,0,0,…]` — 16 values (0/1 or true/false)
-- Clear: `[]` — silence all steps
-
----
-
-## Architecture
-
-```
-┌─────────────────────────────────────────────────┐
-│  UI Thread (egui)                                │
-│  reads/writes AppState via Arc<RwLock<>>         │
-│  pushes AudioParams + AudioCommands via rtrb     │
-└──────────────┬──────────────────────────────────┘
-               │ rtrb ring buffer (lock-free)
-               ▼
-┌─────────────────────────────────────────────────┐
-│  Audio Thread (cpal, real-time)                  │
-│  sequencer clock → triggers → DSP → output       │
-│  writes MIDI clock bytes to rtrb                 │
-└─────────────────────────────────────────────────┘
-               │ rtrb ring buffer (u8 bytes)
-               ▼
-┌─────────────────────────────────────────────────┐
-│  MIDI Clock Out Thread (midir)                   │
-│  drains rtrb → sends 0xF8/0xFA/0xFC bytes        │
-└─────────────────────────────────────────────────┘
-
-┌─────────────────────────────────────────────────┐
-│  LLM Thread                                      │
-│  spawns llama-server subprocess (PrismML fork)   │
-│  prompt → HTTP → JSON params → apply_llm_update()│
-└─────────────────────────────────────────────────┘
-
-┌─────────────────────────────────────────────────┐
-│  MIDI In Thread (midir + ALSA)                   │
-│  NoteOn/Off → bass synth trigger + live record   │
-│  CC → synth params                               │
-└─────────────────────────────────────────────────┘
-
-┌─────────────────────────────────────────────────┐
-│  HTTP Thread (tokio, port 8765)                  │
-│  REST + MCP endpoints → read/write AppState      │
-│  only started with --api flag                    │
-└─────────────────────────────────────────────────┘
-```
-
-All DSP is pure functions. The audio callback never allocates or locks.
-
----
-
-## Windows build
-
-```bash
-# On Linux host — cross-compile for Windows
-sudo apt install clang lld cmake ninja-build
-cargo install cargo-xwin
-./build-all.sh
-# → dist/impulse-instruct-windows-x86_64.exe
-```
-
----
-
-## Model
-
-**Bonsai 8B** by [prism-ml](https://huggingface.co/prism-ml/Bonsai-8B-gguf) — Apache 2.0
-
-The model is not bundled with the binary. A free HuggingFace account is required to download it.
+Complementary colors (directly opposite on the wheel) correspond to tritone intervals — e.g. Blue C ↔ Orange F#. See `docs/colorful-notes.md` for the full theory.
 
 ---
 
 ## License
 
 MIT — see LICENSE  
+Gemma 4 model: [Google Gemma Terms of Use](https://ai.google.dev/gemma/terms)  
 Bonsai 8B model: Apache 2.0 — credit to [prism-ml](https://huggingface.co/prism-ml)
+
+---
+
+---
+
+## Further reading
+
+| | |
+|---|---|
+| [docs/dev-setup.md](docs/dev-setup.md) | Build from source, architecture, HTTP API reference, parameter schema, Windows cross-compile |
+| [docs/colorful-notes.md](docs/colorful-notes.md) | Full Huth *Farbige Noten* color theory — intervals, complementary pairs, historical context |
+| [docs/ui-design.md](docs/ui-design.md) | UI design principles, grayscale palette, widget system |
