@@ -269,7 +269,7 @@ impl LlamaServerBackend {
                 "--port",
                 &port.to_string(),
                 "--ctx-size",
-                "8192",
+                "16384",
                 "--n-gpu-layers",
                 "99",
                 "--flash-attn",
