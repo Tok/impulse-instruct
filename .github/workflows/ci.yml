@@ -59,8 +59,7 @@ jobs:
         run: cargo install cargo-tarpaulin --locked
 
       - name: Coverage
-        run: cargo tarpaulin
-        # Exclusions and output format are in [package.metadata.tarpaulin] in Cargo.toml
+        run: cargo tarpaulin --config .tarpaulin.toml
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v5

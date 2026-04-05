@@ -1,0 +1,30 @@
+# Tarpaulin coverage configuration.
+# Excludes hardware-dependent I/O layers that cannot run in CI.
+# Only the testable pure-function core is measured:
+#   state transitions, sequencer, DSP math, LLM prompt building,
+#   music API, audio analysis, rack compilation.
+#
+# Note: tarpaulin glob uses * (no ** support), so subdirectories need
+# explicit patterns per level.
+
+[default]
+exclude-files = [
+    "src/main.rs",
+    "src/banner.rs",
+    "src/bin/*",
+    "src/bin/model_eval/*",
+    "src/ui/*",
+    "src/ui/panels/*",
+    "src/ui/widgets/*",
+    "src/audio/mod.rs",
+    "src/midi/*",
+    "src/osc/*",
+    "src/export.rs",
+    "src/api/*",
+    "src/llm/tts.rs",
+    "src/llm_suite.rs",
+    "src/llm_suite_style.rs",
+    "src/llm_suite_theory.rs",
+]
+timeout = "120s"
+out = ["Xml"]
