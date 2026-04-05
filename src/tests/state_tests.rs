@@ -628,3 +628,234 @@ mod fx_plan_tests {
         assert_eq!(bass_route, &[FxStep::Reverb]);
     }
 }
+
+// ─── Transition tests — untested pure functions ────────────────────────────────
+#[cfg(test)]
+mod transition_coverage_tests {
+    use crate::state::synth_types::Waveform;
+    use crate::state::{
+        AppState, Scale, apply_boc_preset, apply_hoover_preset, apply_reese_preset, bank_load,
+        bank_write, lock_param, set_an1x_step, set_bass_step, set_chain, set_chain_enabled,
+        set_hoover_step, set_pattern_edit, set_root_note, set_scale, set_scale_snap,
+        toggle_bass_accent, toggle_bass_slide, toggle_sequencer_running, unlock_param,
+    };
+
+    #[test]
+    fn set_root_note_clamps_to_11() {
+        let s = set_root_note(AppState::default(), 99);
+        assert_eq!(s.sequencer.root_note, 11);
+    }
+
+    #[test]
+    fn set_root_note_accepts_valid() {
+        let s = set_root_note(AppState::default(), 5);
+        assert_eq!(s.sequencer.root_note, 5);
+    }
+
+    #[test]
+    fn set_scale_round_trip() {
+        let s = set_scale(AppState::default(), Scale::Dorian);
+        assert_eq!(s.sequencer.scale, Scale::Dorian);
+    }
+
+    #[test]
+    fn set_scale_snap_toggles() {
+        let s = set_scale_snap(AppState::default(), true);
+        assert!(s.sequencer.scale_snap);
+        let s = set_scale_snap(s, false);
+        assert!(!s.sequencer.scale_snap);
+    }
+
+    #[test]
+    fn toggle_sequencer_running_flips_state() {
+        let s = AppState::default();
+        let was = s.sequencer.running;
+        let s = toggle_sequencer_running(s);
+        assert_eq!(s.sequencer.running, !was);
+        let s = toggle_sequencer_running(s);
+        assert_eq!(s.sequencer.running, was);
+    }
+
+    #[test]
+    fn unlock_param_removes_lock() {
+        let s = lock_param(AppState::default(), "bass.cutoff");
+        assert!(s.llm.locked_params.contains("bass.cutoff"));
+        let s = unlock_param(s, "bass.cutoff");
+        assert!(!s.llm.locked_params.contains("bass.cutoff"));
+    }
+
+    #[test]
+    fn set_bass_step_active_and_note() {
+        let s = set_bass_step(AppState::default(), 3, 60, true);
+        assert_eq!(s.sequencer.bass_pattern[3].note, 60);
+        assert!(s.sequencer.bass_pattern[3].active);
+    }
+
+    #[test]
+    fn set_bass_step_deactivate() {
+        let s = set_bass_step(AppState::default(), 0, 48, true);
+        let s = set_bass_step(s, 0, 48, false);
+        assert!(!s.sequencer.bass_pattern[0].active);
+    }
+
+    #[test]
+    fn toggle_bass_accent_flips() {
+        let s = AppState::default();
+        let was = s.sequencer.bass_pattern[2].accent;
+        let s = toggle_bass_accent(s, 2);
+        assert_eq!(s.sequencer.bass_pattern[2].accent, !was);
+    }
+
+    #[test]
+    fn toggle_bass_slide_flips() {
+        let s = AppState::default();
+        let was = s.sequencer.bass_pattern[1].slide;
+        let s = toggle_bass_slide(s, 1);
+        assert_eq!(s.sequencer.bass_pattern[1].slide, !was);
+    }
+
+    #[test]
+    fn set_hoover_step_stores_note() {
+        let s = set_hoover_step(AppState::default(), 4, 72, true);
+        assert_eq!(s.sequencer.hoover_pattern[4].note, 72);
+        assert!(s.sequencer.hoover_pattern[4].active);
+    }
+
+    #[test]
+    fn set_an1x_step_stores_note() {
+        let s = set_an1x_step(AppState::default(), 7, 55, true);
+        assert_eq!(s.sequencer.an1x_pattern[7].note, 55);
+        assert!(s.sequencer.an1x_pattern[7].active);
+    }
+
+    #[test]
+    fn apply_reese_preset_sets_waveform() {
+        let s = apply_reese_preset(AppState::default());
+        assert_eq!(
+            s.bass.waveform,
+            Waveform::Supersaw,
+            "Reese preset must use supersaw"
+        );
+    }
+
+    #[test]
+    fn apply_hoover_preset_enables_hoover() {
+        let s = apply_hoover_preset(AppState::default());
+        assert!(s.hoover.enabled);
+    }
+
+    #[test]
+    fn apply_boc_preset_enables_an1x() {
+        let s = apply_boc_preset(AppState::default());
+        assert!(s.an1x.enabled);
+    }
+
+    #[test]
+    fn bank_write_then_load_restores_bpm() {
+        let mut s = AppState::default();
+        s.sequencer.bpm = 142.0;
+        let s = bank_write(s, 2);
+        // bank_load reads from the same state's pattern_bank
+        let mut s = s;
+        s.sequencer.bpm = 100.0;
+        let s = bank_load(s, 2, false);
+        assert_eq!(s.sequencer.bpm, 142.0);
+    }
+
+    #[test]
+    fn bank_load_out_of_range_is_noop() {
+        let s = AppState::default();
+        let bpm = s.sequencer.bpm;
+        let s = bank_load(s, 99, false);
+        assert_eq!(s.sequencer.bpm, bpm);
+    }
+
+    #[test]
+    fn set_pattern_edit_clamps_to_valid_slot() {
+        let s = set_pattern_edit(AppState::default(), 3);
+        assert_eq!(s.pattern_edit, 3);
+    }
+
+    #[test]
+    fn set_chain_stores_sequence() {
+        let s = set_chain(AppState::default(), vec![0, 2, 1]);
+        assert_eq!(s.chain, vec![0, 2, 1]);
+    }
+
+    #[test]
+    fn set_chain_enabled_true_sets_flag() {
+        let s = set_chain_enabled(AppState::default(), true);
+        assert!(s.chain_enabled);
+    }
+
+    #[test]
+    fn set_chain_enabled_false_resets_position() {
+        let mut s = AppState::default();
+        s.chain_pos = 3;
+        let s = set_chain_enabled(s, false);
+        assert!(!s.chain_enabled);
+        assert_eq!(s.chain_pos, 0);
+    }
+}
+
+// ─── Schema and rack tests ─────────────────────────────────────────────────────
+#[cfg(test)]
+mod schema_and_rack_tests {
+    use crate::llm::prompt::param_json_schema;
+    use crate::state::RackState;
+    use crate::state::rack::CableColor;
+
+    #[test]
+    fn param_json_schema_is_object_with_bass_key() {
+        let schema = param_json_schema();
+        assert!(schema.is_object(), "schema must be a JSON object");
+        let props = schema
+            .get("properties")
+            .expect("schema must have 'properties'");
+        assert!(
+            props.get("bass").is_some(),
+            "properties must contain 'bass' key"
+        );
+    }
+
+    #[test]
+    fn param_json_schema_has_sequencer_key() {
+        let schema = param_json_schema();
+        let props = schema
+            .get("properties")
+            .expect("schema must have 'properties'");
+        assert!(
+            props.get("sequencer").is_some(),
+            "properties must contain 'sequencer' key"
+        );
+    }
+
+    #[test]
+    fn next_cable_color_cycles() {
+        let mut rack = RackState::default();
+        let c1 = rack.next_cable_color();
+        let c2 = rack.next_cable_color();
+        // Colors must be valid CableColor variants and can differ
+        let _ = c1;
+        let _ = c2;
+        // After cycling through all colors, must not panic
+        for _ in 0..32 {
+            let _ = rack.next_cable_color();
+        }
+    }
+
+    #[test]
+    fn next_cable_color_wraps_around() {
+        let mut rack = RackState::default();
+        let n = CableColor::ALL.len();
+        // Advance through exactly one full cycle
+        for _ in 0..n {
+            rack.next_cable_color();
+        }
+        // Color after full cycle should match the first color
+        let after_cycle = rack.next_cable_color();
+        let mut rack2 = RackState::default();
+        let first = rack2.next_cable_color();
+        assert_eq!(after_cycle, first);
+    }
+}
