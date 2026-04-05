@@ -185,8 +185,11 @@ for MODEL in "${MODELS[@]}"; do
     --model "$MODEL" \
     --host 127.0.0.1 \
     --port "$PORT" \
-    --ctx-size 16384 \
+    --ctx-size 8192 \
     --n-gpu-layers 99 \
+    --flash-attn \
+    --cache-type-k q8_0 \
+    --cache-type-v q8_0 \
     2>"$SERVER_LOG" &
   SERVER_PID=$!
   trap "kill $SERVER_PID 2>/dev/null || true; unset SERVER_PID" EXIT

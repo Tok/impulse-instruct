@@ -139,7 +139,7 @@ for /f %%p in ('powershell -noprofile -command "$l=New-Object Net.Sockets.TcpLis
 set LLAMA_SERVER_URL=http://127.0.0.1:%PORT%
 
 echo -^> Starting server on port %PORT%...
-start /b "" "%SERVER_BIN%" --model "%MODEL_PATH%" --host 127.0.0.1 --port %PORT% --ctx-size 16384 --n-gpu-layers 99
+start /b "" "%SERVER_BIN%" --model "%MODEL_PATH%" --host 127.0.0.1 --port %PORT% --ctx-size 8192 --n-gpu-layers 99 --flash-attn --cache-type-k q8_0 --cache-type-v q8_0
 
 rem Wait for server ready (up to 120s)
 echo -^> Waiting for server to be ready...

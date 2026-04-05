@@ -234,6 +234,11 @@ impl LlamaServerBackend {
                 "8192",
                 "--n-gpu-layers",
                 "99",
+                "--flash-attn",   // ~30% faster on CUDA; no-op if unsupported
+                "--cache-type-k", // KV cache quantization: less VRAM, faster
+                "q8_0",
+                "--cache-type-v",
+                "q8_0",
                 "--log-disable", // reduce noise; we log our own status
             ])
             .stdout(std::process::Stdio::null())

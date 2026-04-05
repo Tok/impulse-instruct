@@ -3,10 +3,12 @@ rem ─── scripts\download-models.bat ────────────�
 rem Download GGUF models for Impulse Instruct.
 rem
 rem Usage:
-rem   scripts\download-models.bat              Gemma 4 E4B (default, ~4.6 GB, best overall)
-rem   scripts\download-models.bat bonsai       Bonsai-8B (1-bit Q1, ~1.1 GB, fallback)
-rem   scripts\download-models.bat qwen3        Qwen3-8B Q4_K_M (~5 GB, optional)
-rem   scripts\download-models.bat qwen3-14b    Qwen3-14B Q4_K_M (~9 GB, optional)
+rem   scripts\download-models.bat                  Gemma 4 E4B (default, ~4.6 GB, best overall)
+rem   scripts\download-models.bat bonsai           Bonsai-8B (1-bit Q1, ~1.1 GB, lightweight)
+rem   scripts\download-models.bat deepseek-r1-7b   DeepSeek-R1-Distill-Qwen-7B (~5 GB, CoT)
+rem   scripts\download-models.bat deepseek-r1-14b  DeepSeek-R1-Distill-Qwen-14B (~9 GB, CoT)
+rem   scripts\download-models.bat qwen3            Qwen3-8B Q4_K_M (~5 GB, optional)
+rem   scripts\download-models.bat qwen3-14b        Qwen3-14B Q4_K_M (~9 GB, optional)
 rem
 rem NOTE: A free HuggingFace account is required.
 rem   Sign up at https://huggingface.co/join
@@ -45,9 +47,21 @@ if "%MODEL%"=="qwen3-14b" (
     set MODEL_DESC=Qwen3-14B Q4_K_M (bartowski, ~9 GB) -- optional large, needs 12 GB VRAM
     goto download
 )
+if "%MODEL%"=="deepseek-r1-7b" (
+    set HF_REPO=bartowski/DeepSeek-R1-Distill-Qwen-7B-GGUF
+    set MODEL_FILE=DeepSeek-R1-Distill-Qwen-7B-Q4_K_M.gguf
+    set MODEL_DESC=DeepSeek-R1-Distill-Qwen-7B Q4_K_M (~5 GB) -- CoT, Qwen2.5 base
+    goto download
+)
+if "%MODEL%"=="deepseek-r1-14b" (
+    set HF_REPO=bartowski/DeepSeek-R1-Distill-Qwen-14B-GGUF
+    set MODEL_FILE=DeepSeek-R1-Distill-Qwen-14B-Q4_K_M.gguf
+    set MODEL_DESC=DeepSeek-R1-Distill-Qwen-14B Q4_K_M (~9 GB) -- CoT, needs ~12 GB VRAM
+    goto download
+)
 
 echo Unknown model: '%MODEL%'
-echo Available: gemma4 (default), bonsai, qwen3, qwen3-14b
+echo Available: gemma4 (default), bonsai, deepseek-r1-7b, deepseek-r1-14b, qwen3, qwen3-14b
 exit /b 1
 
 :download

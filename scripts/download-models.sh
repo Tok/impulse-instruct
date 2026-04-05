@@ -3,10 +3,12 @@
 # Download GGUF models for Impulse Instruct.
 #
 # Usage:
-#   ./scripts/download-models.sh              # Gemma 4 E4B (default, ~4.6 GB, best overall)
-#   ./scripts/download-models.sh bonsai       # Bonsai-8B (1-bit Q1, ~1.1 GB, fallback)
-#   ./scripts/download-models.sh qwen3        # Qwen3-8B Q4_K_M (~5 GB, optional)
-#   ./scripts/download-models.sh qwen3-14b    # Qwen3-14B Q4_K_M (~9 GB, optional)
+#   ./scripts/download-models.sh                  # Gemma 4 E4B (default, ~4.6 GB, best overall)
+#   ./scripts/download-models.sh bonsai           # Bonsai-8B (1-bit Q1, ~1.1 GB, lightweight)
+#   ./scripts/download-models.sh deepseek-r1-7b   # DeepSeek-R1-Distill-Qwen-7B (~5 GB, CoT, fast)
+#   ./scripts/download-models.sh deepseek-r1-14b  # DeepSeek-R1-Distill-Qwen-14B (~9 GB, CoT, accurate)
+#   ./scripts/download-models.sh qwen3            # Qwen3-8B Q4_K_M (~5 GB, optional)
+#   ./scripts/download-models.sh qwen3-14b        # Qwen3-14B Q4_K_M (~9 GB, optional)
 #
 # NOTE: A free HuggingFace account is required.
 #   Sign up at https://huggingface.co/join
@@ -42,9 +44,19 @@ case "$MODEL" in
     MODEL_FILE="Qwen_Qwen3-14B-Q4_K_M.gguf"
     MODEL_DESC="Qwen3-14B Q4_K_M (bartowski, ~9 GB) — optional large, needs 12 GB VRAM"
     ;;
+  deepseek-r1-7b)
+    HF_REPO="bartowski/DeepSeek-R1-Distill-Qwen-7B-GGUF"
+    MODEL_FILE="DeepSeek-R1-Distill-Qwen-7B-Q4_K_M.gguf"
+    MODEL_DESC="DeepSeek-R1-Distill-Qwen-7B Q4_K_M (~5 GB) — chain-of-thought, Qwen2.5 base; newer distills may exist"
+    ;;
+  deepseek-r1-14b)
+    HF_REPO="bartowski/DeepSeek-R1-Distill-Qwen-14B-GGUF"
+    MODEL_FILE="DeepSeek-R1-Distill-Qwen-14B-Q4_K_M.gguf"
+    MODEL_DESC="DeepSeek-R1-Distill-Qwen-14B Q4_K_M (~9 GB) — CoT, needs ~12 GB VRAM; newer distills may exist"
+    ;;
   *)
     echo "Unknown model: '$MODEL'"
-    echo "Available: gemma4 (default), bonsai, qwen3, qwen3-14b"
+    echo "Available: gemma4 (default), bonsai, deepseek-r1-7b, deepseek-r1-14b, qwen3, qwen3-14b"
     exit 1
     ;;
 esac
@@ -149,6 +161,10 @@ case "$MODEL" in
     ;;
   qwen3|qwen3-14b)
     echo "Qwen3 is released under the Qwen Research License by Alibaba Cloud."
+    echo "Quantisation by bartowski. See: https://huggingface.co/${HF_REPO}"
+    ;;
+  deepseek-r1-7b|deepseek-r1-14b)
+    echo "DeepSeek-R1-Distill is released under the MIT License by DeepSeek AI."
     echo "Quantisation by bartowski. See: https://huggingface.co/${HF_REPO}"
     ;;
 esac
