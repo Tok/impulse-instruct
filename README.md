@@ -6,27 +6,19 @@
 
 A synthesizer with a tiny LLM living inside of it. **PULSE** runs locally and has full control of the sound - it listens to what you say, jams autonomously, and responds to the music in real time. You keep the parameters you want; it owns everything else.
 
-> **Requires an NVIDIA GPU (CUDA) for real inference.** The app runs in mock mode without a model - the synth, sequencer, MIDI, and API all work, but responses are keyword-based rather than generated.
+> **Requires an NVIDIA GPU (CUDA).** A model must be downloaded before first run - see [Getting started](#getting-started).
 
 ---
 
 ## ⚠️ Alpha - Work in Progress (v0.5.6)
 
-**This is pre-release software.** It works and makes sound, but several pieces are still being tuned. Read this section before you book a gig.
+**This is pre-release software.** It works and makes sound, but expect rough edges. A few things worth knowing before you dive in:
 
-### What this means in practice
+- **Not ready for hyped live crowds.** PULSE is agentic - it makes its own creative decisions. That's delightful in the studio and potentially awkward in front of 300 people waiting for someone to shout "jungle selector massive!!". We can't currently guarantee it will shout the right thing at the right moment.
+- **PULSE is not an undo button.** Full heat means it rewrites your track. The same prompt at the same heat will produce different results each run. That's the point - but the output is not deterministic.
+- **The synthesis is more limited than the LLM's vocabulary.** The gap between what PULSE intends and what the synth engine produces is where most of the roughness lives - not in the model's musical understanding.
 
-- **Not ready for hyped live crowds.** The LLM is agentic - it makes its own creative decisions and can surprise you in ways that are delightful in the studio and potentially awkward in front of 300 people waiting for someone to shout "jungle selector massive!!". We cannot currently guarantee that PULSE will shout the right thing at the right moment, or anything at all.
-
-- **The hoover lead isn't right yet.** You can hear it, but it doesn't yet reproduce the classic vacuum-cleaner screech from Human Resource's *Dominator* (1991). Getting that wailing, resonant character requires more work on the supersaw → highpass sweep → pitch LFO chain. It's on the list.
-
-- **PULSE is an autonomous agent, not an undo button.** If you give it full heat and walk away, it will rewrite your track. That's the point - but it means the output is not deterministic. The same prompt at the same heat level will produce different results each run. This is a feature and a limitation simultaneously.
-
-- **The synthesis is more limited than the LLM's vocabulary.** When PULSE says "add tape warmth" or "detune slightly for that BoC texture", it knows exactly what it means musically. Whether the current voice implementation can actually deliver that is a separate question. The gap between what PULSE intends and what the synth engine produces is where most of the alpha roughness lives - not in the model's musical understanding.
-
-### What works well right now
-
-The acid bass, 808/909 drums, euclidean rhythms, FX chain, sequencer, and MIDI are solid. The LLM integration - the prompt understanding, parameter targeting, lock system, and jam loop - passes [39 integration tests](#test-suites-and-contributions) across music theory, genre references, and producer terminology. Style-guided generation (dark techno, jungle, gabber, ambient) works reliably in the studio context.
+See [Known Limitations](#known-limitations) for specifics on what works and what doesn't yet.
 
 ---
 
@@ -68,57 +60,54 @@ scripts\download-models.bat bonsai
 
 The app auto-detects the model in `models/` and connects to it. The model selector in **Prefs** lets you switch at runtime - no restart needed.
 
-**No GPU?** Launch without a model and the app runs in mock mode. Responses are keyword-based presets rather than generated, but the full synth, sequencer, MIDI, and FX chain all work normally.
-
 ---
 
 ## Models
 
 | Model | Size | VRAM | Notes |
 |-------|------|------|-------|
-| **Gemma 4 E4B Q4_K_M** | ~4.6 GB | ~6 GB | **Recommended.** Best JSON accuracy, passes all integration tests. Requires the standard llama-server (bundled). |
-| **Bonsai 8B Q1_0_g128** | ~1.1 GB | ~2 GB | Lightweight fallback. Fits in 2 GB VRAM. Requires the PrismML llama-server fork (bundled separately). Lower musical accuracy. |
+| **Gemma 4 E4B Q4_K_M** | ~4.6 GB | ~6 GB | **Recommended.** Best JSON accuracy, passes all integration tests. |
+| **Bonsai 8B Q1_0_g128** | ~1.1 GB | ~2 GB | Lightweight fallback. Fits in 2 GB VRAM. Misses style/theory tests more often, no chain-of-thought, uses a separate server binary. |
 
-Switch models at any time via the model selector in **Prefs → Model**. The app restarts the inference server automatically.
+Switch models at any time via **Prefs -> Model**. The app restarts the inference server automatically.
 
 ---
 
 ## What it does
 
-**Bass synthesizer**
-- Saw / Square / Supersaw (detuned unison) oscillator; sub-oscillator; white noise source; FM pair
-- Moog-style 4-pole ladder filter - LP / HP / BP modes; filter key tracking
-- Portamento / glide time; per-step accent and slide; waveshaper (pre-filter tanh saturation)
-- Internal overdrive; TB-303 envelope with env mod + decay
-
-**Hoover lead** *(tuning in progress)*
-- Supersaw → aggressive highpass filter sweep, pitch LFO for the "wailing" character
-- Named after the vacuum cleaner drone on Human Resource "Dominator" (1991)
-- Sounds like a lead synth, not yet like a hoover - see [Known Limitations](#known-limitations)
-
-**AN1X-style virtual analog voice** (Boards of Canada / warm VA aesthetic)
-- Dual oscillator (Saw, Square/PWM, Triangle, Sine, Noise); OSC2 detune coarse + fine; hard sync; ring mod
-- Filter ADSR + amplitude ADSR + pitch envelope; per-voice LFO × 2 with delay and fade-in
-- Pitch drift - subtle random LFO for tape-instability character; glide (always or legato)
-- Free EG - 8-step drawable envelope (drag bars), runs alongside LFOs
+**Acid bass synthesizer**
+- Saw / Square / Supersaw oscillator with detuned unison; sub-oscillator; white noise; FM pair
+- Moog-style 4-pole ladder filter - LP / HP / BP; filter key tracking
+- Per-step accent and slide; portamento; waveshaper (pre-filter tanh saturation); internal overdrive
+- TB-303 envelope: env mod, decay, gate
 
 **Drum machines**
-- Kit A - kick (808-style with pitch envelope), snare, hihat × 2, toms
-- Kit B - kick, snare, hihat × 2, clap, rim (909-style)
-- Up to 64-step sequencer; per-voice velocity lanes; swing; euclidean rhythm generator
+- Kit A - 808-style: kick with pitch envelope, snare, two hihats, toms
+- Kit B - 909-style: kick, snare, two hihats, clap, rim
+- Up to 64 steps per pattern; per-voice velocity lanes; swing; euclidean rhythm generator
 
-**Standalone noise voice** - white / pink / brown; volume + color + filter cutoff; addressable for ambient drones, breath, texture layers
+**AN1X-style virtual analog voice**
+- Dual oscillator (Saw, Square/PWM, Triangle, Sine, Noise); OSC2 detune coarse + fine; hard sync; ring mod
+- Filter ADSR + amplitude ADSR + pitch envelope; two per-voice LFOs with delay and fade-in
+- Pitch drift for tape-instability character; glide (always or legato)
+- Free EG - 8-step drawable envelope, runs alongside LFOs
+
+**Hoover lead** *(work in progress - see [Known Limitations](#known-limitations))*
+- Supersaw into an aggressive highpass filter sweep with pitch LFO
+- Named after Human Resource "Dominator" (1991) - sounds like a lead synth, not yet like a hoover
+
+**Standalone noise voice** - white / pink / brown; volume, color, and filter cutoff
 
 **FX chain** (all wireable via prompt)
-- Reverb (Schroeder/Freeverb), delay, chorus/ensemble, phaser (4-stage all-pass)
+- Reverb, delay, chorus/ensemble, phaser (4-stage all-pass)
 - Waveshaper, ring modulator, 3-band EQ, bitcrush, tape saturation, master drive
 - Master compressor/limiter
 
-**LFO system** - 4 independent slots, each wireable to any parameter; BPM sync; phase resets on transport start
+**LFO system** - 4 independent slots, each wireable to any parameter; BPM sync
 
 **MIDI**
-- MIDI in - auto-connects to first USB keyboard; notes trigger bass synth and write into live record; CC knobs map to synth params
-- MIDI clock out - 24 PPQN, syncs external hardware and DAWs
+- In: auto-connects to first USB keyboard; notes trigger bass synth and write into live record; CC knobs map to synth params
+- Clock out: 24 PPQN, syncs external hardware and DAWs
 
 **Export** - WAV (32-bit float) and MP3 (via ffmpeg)
 
@@ -130,7 +119,7 @@ PULSE is the AI inside. It reads the full parameter schema, listens to what you 
 
 ### PULSE is an agent, not a knob
 
-This is worth understanding before you spend an hour trying to predict its behaviour. PULSE doesn't execute instructions like a script - it interprets them. "Make it more acidic" at heat 60% will produce a different result every time, informed by the conversation so far, the current state of the synth, and whatever the model considers musically coherent in that context.
+PULSE doesn't execute instructions like a script - it interprets them. "Make it more acidic" at heat 60% will produce a different result every time, informed by the conversation so far, the current state of the synth, and whatever the model considers musically coherent in that context.
 
 **What to expect:**
 - High creativity, especially on style and genre prompts - it has strong opinions
@@ -141,31 +130,29 @@ This is worth understanding before you spend an hour trying to predict its behav
 **What not to expect:**
 - Exact repeatability - this is a generative system, not a deterministic one
 - Perfect parameter targeting every time - it misses occasionally, especially on complex multi-parameter prompts
-- Reliable "MC" / crowd-hype performance in live settings - the model is not yet calibrated for live energy cues
+- Reliable MC / crowd-hype performance in live settings
 
 To constrain behaviour: drag heat down, lock the parameters you care about, or be more specific in your prompts. The lock system is the most reliable tool for protecting patches you've dialled in.
 
 ### Heat - the jam intensity dial
 
-The **HEAT** slider in the header (shown as a percentage) controls how aggressively PULSE mutates the sound on its own.
+The **HEAT** slider in the header controls how aggressively PULSE mutates the sound on its own.
 
 | Heat | What happens |
 |------|-------------|
 | **0%** | PULSE is parked. Jam loop stops. It only responds when you send an explicit prompt. |
-| **~15–25%** | Subtle drift - nudges filters, levels, and rhythm details between prompts. Good for long sets. |
-| **~30–40%** | Default sweet spot. Slow pattern evolution, filter sweeps, occasional step changes. |
-| **~60–75%** | Active rearrangement - new patterns, instrument swaps, FX edits every few bars. |
+| **~15-25%** | Subtle drift - nudges filters, levels, and rhythm details between prompts. Good for long sets. |
+| **~30-40%** | Default sweet spot. Slow pattern evolution, filter sweeps, occasional step changes. |
+| **~60-75%** | Active rearrangement - new patterns, instrument swaps, FX edits every few bars. |
 | **100%** | Full chaos. PULSE rewrites everything it can reach, constantly. |
 
-Heat maps to LLM temperature (`0.1` at 0% → `1.2` at 100%). Low heat → more deterministic, tightly focused responses. High heat → wider sampling, more surprising choices.
+Heat maps to LLM temperature (`0.1` at 0% -> `1.2` at 100%).
 
 ### Jam mode
 
-The jam loop runs continuously while heat is above 0%. Each cycle: PULSE generates a mutation, applies it to the synth, and immediately queues the next cycle. The **JAM** row in the LLM strip shows the cycle count, tokens/second, and lets you set an interval (CONT → 1 → 2 → 4 → 8 bars) to add breathing room between cycles.
+The jam loop runs continuously while heat is above 0%. Each cycle: PULSE generates a mutation, applies it to the synth, and queues the next cycle. The **JAM** row in the LLM strip shows the cycle count, tokens/second, and lets you set an interval (CONT -> 1 -> 2 -> 4 -> 8 bars) to add breathing room between cycles.
 
 You can talk over the jam at any time. Your typed prompt takes priority and resets the cycle.
-
-You can also ask PULSE to slow down its own cycle: `{ "settings": { "jam_bars": 4 } }` or just type "take your time between cycles".
 
 ### The lock system
 
@@ -179,11 +166,11 @@ Right-click a knob to cycle modes manually, or let PULSE manage focus through pr
 
 ### Context and memory
 
-PULSE keeps a rolling conversation history with the inference server. Every exchange - your prompts and its responses - is appended to the context window until it approaches the server's limit (~8 K tokens by default).
+PULSE keeps a rolling conversation history with the inference server. Every exchange is appended to the context window until it approaches the server's limit (~8 K tokens by default).
 
-When the context reaches ~85% full, the app automatically restarts the server and clears the history (configurable via **auto-compact** in Prefs). PULSE starts fresh but carries the current synth state forward - it can see all the parameters as they are now, it just loses memory of past conversation turns.
+When the context reaches ~85% full, the app automatically restarts the server and clears the history. PULSE starts fresh but carries the current synth state forward.
 
-The token counter in the header shows current context usage. If you notice PULSE becoming repetitive or drifting from earlier instructions, a manual **Reset context** in Prefs will clear the history and give it a clean slate.
+The token counter in the header shows current context usage. If you notice PULSE becoming repetitive or drifting, a manual **Reset context** in Prefs will give it a clean slate.
 
 ---
 
@@ -246,7 +233,6 @@ add an LFO on the filter cutoff - slow sine, 0.5 depth
 add a hoover lead
 bring in the AN1X - warm pad underneath
 enable the noise voice for texture
-activate the Amen sampler
 add the bitcrush module
 remove the chorus
 ```
@@ -279,9 +265,9 @@ slow down between cycles - every 4 bars
 
 The LLM understands musical intent well. The gap between what PULSE asks for and what you actually hear is almost always a synthesis or tuning issue, not a model issue.
 
-A few things to be aware of: the hoover lead exists but doesn't yet sound like a hoover - it's more of a lead synth than the vacuum-cleaner screech from *Dominator*. The Amen break is synthesised step-by-step rather than sampled. Some genre textures (dub techno FX sends, glacial ambient sweeps) are partially wired but not finished.
+**What works well:** acid bass. The ladder filter, env mod, resonance, and slide are all solid - give it some heat and the right prompt and it will do acid convincingly.
 
-On the other hand, acid jamming can work really well when the parameters are dialled in. The ladder filter, env mod, resonance, and slide are all solid - give it some heat and the right prompt and it will do acid.
+**What doesn't yet:** the hoover lead exists but doesn't sound like a hoover - it's more of a lead synth than the vacuum-cleaner screech from *Dominator*. The Amen break is synthesised step-by-step rather than sampled. True ambient - glacial sweeps, very slow LFO movement, long attack/release textures - is partially wired but not reliably delivered. Some genre textures (dub techno FX sends) are partially wired but not finished.
 
 A lot of what you get depends on how you prompt it, and on the style and system prompt definitions in `src/llm/styles.json` and `src/llm/prompt.rs`. These are plain text and JSON - you're encouraged to edit them, tune the style entries for the genres you care about, and experiment. The model will follow a good system prompt surprisingly faithfully.
 
@@ -293,9 +279,9 @@ The LLM integration is covered by three test suites that run against a real mode
 
 | Suite | What it tests |
 |-------|--------------|
-| `llm_suite` | Core parameter targeting - does "make it acid" change the right knobs? |
-| `llm_suite_style` | Genre and artist references - BoC, jungle, gabber, dark techno, ambient, synthwave |
-| `llm_suite_theory` | Producer terminology - "more tension", "drop the root", "add brightness", "euclidean 5/16" |
+| [`llm_suite`](src/llm_suite.rs) | Core parameter targeting - does "make it acid" change the right knobs? |
+| [`llm_suite_style`](src/llm_suite_style.rs) | Genre and artist references - BoC, jungle, gabber, dark techno, ambient, synthwave |
+| [`llm_suite_theory`](src/llm_suite_theory.rs) | Producer terminology - "more tension", "drop the root", "add brightness", "euclidean 5/16" |
 
 Run them:
 ```bash
@@ -318,7 +304,7 @@ See [docs/contributions.md](docs/contributions.md) for detail on how to add styl
 
 ## Farbige Noten - Color Theory
 
-The piano display uses Ch. A. B. Huth's *Farbige Noten* (Hamburg 1888–1889), a 12-color system mapping each chromatic semitone to a hue on the RYB wheel. Tritone intervals land on complementary colors - Blue C ↔ Orange F#, Green/Teal D ↔ Carmine G#.
+The piano display uses Ch. A. B. Huth's *Farbige Noten* (Hamburg 1888-1889), a 12-color system mapping each chromatic semitone to a hue on the RYB wheel. Tritone intervals land on complementary colors - Blue C <-> Orange F#, Green/Teal D <-> Carmine G#.
 
 Full color table, hex values, theory, and historical context in [docs/colorful-notes.md](docs/colorful-notes.md). Original source scans at [IMSLP](https://imslp.org/wiki/Farbige_Noten_(Huth,_Ch._A._B.)).
 
