@@ -31,7 +31,7 @@ PULSE listens, jams, evolves, and shouts at the crowd.
 - Master compressor/limiter, tape saturation, drive
 
 ### Intelligence
-- LLM runs locally via llama-server subprocess (PrismML CUDA fork for Bonsai 1-bit)
+- LLM runs locally via llama-server subprocess (official llama.cpp for Gemma/Qwen; PrismML fork for Bonsai 1-bit)
 - Mock mode when no model present — keyword-based, synth still fully functional
 - Jam mode — PULSE evolves the pattern autonomously
 - Lock system — touch a knob to claim it; LLM won't override it
@@ -68,11 +68,13 @@ PULSE listens, jams, evolves, and shouts at the crowd.
 - AI persona name — editable, used in system prompt
 
 ### Testing & build
-- 75 unit tests across 4 submodules (`seq_tests`, `state_tests`, `llm_tests`, split at 1000-line limit)
+- 86 unit tests across 4 submodules (`seq_tests`, `state_tests`, `llm_tests`, split at 1000-line limit)
+- 39 LLM integration tests in 3 suites: `llm_suite` (core), `llm_suite_style` (artist refs), `llm_suite_theory` (music theory + producer lingo)
 - Pre-commit hook: fmt + clippy + tests + 1000-line LOC limit
-- `run-tests.sh --coverage` → HTML coverage report (lcov)
-- Cross-compile to Windows EXE via `cargo-xwin` + `build-all.sh`
-- `download-models.sh` — Bonsai 8B (default), Qwen3-8B, Qwen3-14B, Gemma 4, Llama 3.1
+- `scripts/run-tests.sh --coverage` → HTML coverage report (lcov)
+- `scripts/run-llm-tests.sh` / `run-llm-style.sh` / `run-llm-theory.sh` — LLM test runners
+- Cross-compile to Windows EXE via `cargo-xwin` + `scripts/build-all.sh`
+- `scripts/download-models.sh` — Gemma 4 E4B (default), Bonsai 8B, Qwen3-8B, Qwen3-14B
 
 ---
 
@@ -99,7 +101,9 @@ Ordered by value — tackle roughly from top to bottom.
 - [x] **Codecov integration** — `.github/workflows/ci.yml` runs tests + tarpaulin + uploads lcov.info.
       Requires `CODECOV_TOKEN` secret in repo settings once published.
 
-- [ ] **OSC support** — connect to Max/MSP, Ableton, TouchOSC. Pairs well with the MCP API.
+- [x] **OSC support** — UDP listener on `--osc` (port 57120) or `--osc-port N`. Addresses:
+      `/impulse/<section>/<param> <value>`, `/impulse/sequencer/play|stop`,
+      `/impulse/prompt <string>`. Works with Max/MSP, TouchOSC, Ableton, oscsend.
 
 - [x] **Stem export** — "Export Stems" in File menu; renders bass/kit_a/kit_b/amen/noise/hoover/an1x separately.
 
@@ -142,16 +146,14 @@ Ordered by value — tackle roughly from top to bottom.
 
 ## Model Options
 
-Bonsai-8B is Qwen3-8B compressed to 1-bit (Q1_0_g128, PrismML format, 1.1 GB).
-Quality ceiling is low but it fits in 2 GB VRAM. The llama-server backend is model-agnostic
-— just swap the GGUF file and update the model selector in prefs.
+The llama-server backend is model-agnostic — swap the GGUF and update the model selector.
+Gemma 4 E4B is the default: best test scores (39/39 integration tests), fast, compact.
 
 | Model | Download | Size | VRAM | Notes |
 |-------|----------|------|------|-------|
-| **Bonsai-8B** | `./download-models.sh` | ~1.1 GB | ~2 GB | Default; fastest, lowest quality |
-| **Qwen3-8B Q4_K_M** | `./download-models.sh qwen3` | ~5 GB | ~7 GB | ~5× better; supports `/think` reasoning |
-| **Qwen3-14B Q4_K_M** | `./download-models.sh qwen3-14b` | ~9 GB | ~11 GB | Best musical reasoning; needs 12 GB VRAM |
-| **Gemma 4 E4B Q4_K_M** | `./download-models.sh gemma4` | ~5 GB | ~7 GB | Fast; strong structured JSON output |
-| **Llama 3.1 8B Q4_K_M** | `./download-models.sh llama31` | ~5 GB | ~7 GB | Excellent JSON compliance |
+| **Gemma 4 E4B Q4_K_M** | `./scripts/download-models.sh` | ~4.6 GB | ~6 GB | **Default**; best accuracy, 39/39 tests |
+| **Bonsai-8B Q1_0_g128** | `./scripts/download-models.sh bonsai` | ~1.1 GB | ~2 GB | Fallback; no CoT, needs PrismML server fork |
+| **Qwen3-8B Q4_K_M** | `./scripts/download-models.sh qwen3` | ~5 GB | ~7 GB | Optional; chain-of-thought `/think` mode |
+| **Qwen3-14B Q4_K_M** | `./scripts/download-models.sh qwen3-14b` | ~9 GB | ~11 GB | Optional large; needs 12 GB VRAM |
 
 All models require a free HuggingFace account (`huggingface-cli login`).

@@ -35,6 +35,7 @@ struct Args {
     model: Option<String>,
     log_level: String,
     mock: bool,
+    osc_port: Option<u16>, // None = disabled; Some(port) = OSC listener enabled
 }
 
 impl Args {
@@ -46,6 +47,7 @@ impl Args {
             model: None,
             log_level: "info".into(),
             mock: false,
+            osc_port: None,
         };
 
         let mut i = 1;
@@ -69,6 +71,13 @@ impl Args {
                         result.log_level = v.clone();
                     }
                 }
+                "--osc" => result.osc_port = Some(57120),
+                "--osc-port" => {
+                    i += 1;
+                    if let Some(v) = args.get(i) {
+                        result.osc_port = Some(v.parse().unwrap_or(57120));
+                    }
+                }
                 "--help" | "-h" => {
                     println!("Impulse Instruct — LLM-first audio synthesizer\n");
                     println!("USAGE: impulse-instruct [OPTIONS]\n");
@@ -78,6 +87,8 @@ impl Args {
                     println!("  --model <path>     GGUF model path");
                     println!("  --log <level>      Log level (default: info)");
                     println!("  --mock             Run without LLM (mock responses only)");
+                    println!("  --osc              Enable OSC input on port 57120 (UDP)");
+                    println!("  --osc-port <N>     Enable OSC input on port N (UDP)");
                     std::process::exit(0);
                 }
                 other => log::warn!("Unknown argument: {}", other),
@@ -199,6 +210,11 @@ fn main() -> anyhow::Result<()> {
             drop(midi_clock_rx);
         }
     }
+
+    // ── OSC listener (optional, disabled by default) ─────────────────────────
+    let _osc_listener = args.osc_port.map(|port| {
+        impulse_instruct::osc::OscListener::start(port, Arc::clone(&app_state), llm_tx.clone())
+    });
 
     // ── UI (blocks this thread) ───────────────────────────────────────────────
     let state_for_ui = Arc::clone(&app_state);

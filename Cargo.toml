@@ -30,6 +30,9 @@ ureq = { version = "2", features = ["json"] }
 
 # MIDI
 midir = "0.9"
+
+# OSC (Open Sound Control) — UDP listener for Max/MSP, TouchOSC, Ableton
+rosc = "0.9"
 midi-msg = "0.5"
 
 # Serialization
