@@ -348,6 +348,44 @@ impl Default for RackState {
         rack.add_module(ModuleKind::LfoModule);
         rack.add_module(ModuleKind::LfoModule);
 
+        // ── Default cables — every voice wired to master out ─────────────────
+        // Collect IDs first (no borrow conflict with connect()).
+        let find = |kind: ModuleKind| -> Option<u32> {
+            rack.modules.iter().find(|m| m.kind == kind).map(|m| m.id)
+        };
+        let master_id = find(ModuleKind::MasterOutput);
+        let voice_ids: Vec<u32> = [
+            ModuleKind::AcidBass,
+            ModuleKind::DrumKit808,
+            ModuleKind::DrumKit909,
+            ModuleKind::HooverLead,
+            ModuleKind::An1xVoice,
+            ModuleKind::AmenSampler,
+        ]
+        .iter()
+        .filter_map(|&k| find(k))
+        .collect();
+        let _ = find; // end closure borrow before mutable connect() calls
+
+        if let Some(mid) = master_id {
+            for vid in voice_ids {
+                rack.connect(
+                    PortRef {
+                        module_id: vid,
+                        dir: PortDir::Out,
+                        kind: PortKind::Audio,
+                        index: 0,
+                    },
+                    PortRef {
+                        module_id: mid,
+                        dir: PortDir::In,
+                        kind: PortKind::Audio,
+                        index: 0,
+                    },
+                );
+            }
+        }
+
         rack
     }
 }

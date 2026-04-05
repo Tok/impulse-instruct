@@ -6,8 +6,6 @@ use crate::state::ParamMode;
 use crate::ui::{ImpulseApp, theme, widgets};
 
 pub fn draw_kit_a(app: &mut ImpulseApp, ui: &mut egui::Ui) {
-    widgets::section_header(ui, "DRUM KIT A");
-
     // Snapshot all values before any widget rendering
     let (
         mut kp,
@@ -135,7 +133,7 @@ pub fn draw_kit_a(app: &mut ImpulseApp, ui: &mut egui::Ui) {
     }
 
     // PITCH × DECAY XY pad for quick kick shaping
-    ui.add_space(6.0);
+    ui.add_space(2.0);
     ui.label(
         egui::RichText::new("KICK: PITCH × DECAY")
             .color(theme::SMOKE)
@@ -154,8 +152,6 @@ pub fn draw_kit_a(app: &mut ImpulseApp, ui: &mut egui::Ui) {
 }
 
 pub fn draw_kit_b(app: &mut ImpulseApp, ui: &mut egui::Ui) {
-    widgets::section_header(ui, "DRUM KIT B");
-
     let (
         mut kp,
         mut kd,
@@ -276,8 +272,6 @@ pub fn draw_kit_b(app: &mut ImpulseApp, ui: &mut egui::Ui) {
 // ─── Amen / WAV sampler panel ─────────────────────────────────────────────────
 
 pub fn draw_amen(app: &mut ImpulseApp, ui: &mut egui::Ui) {
-    widgets::section_header(ui, "AMEN SAMPLER");
-
     let ctrl = widgets::ControlPrefs::from_prefs(&app.state.read().ui_prefs);
 
     // ── File path + Load button ───────────────────────────────────────────────

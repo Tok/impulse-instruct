@@ -238,6 +238,10 @@ pub struct ImpulseApp {
     history: StateHistory,
     // In-progress cable drag in the rack patch view.
     pub(crate) cable_drag: Option<rack_canvas::CableDrag>,
+    // When true, patch cables are drawn over the rack. Tab to toggle.
+    pub(crate) show_cables: bool,
+    // Zone whose [+ ADD] popup is currently open.
+    pub(crate) add_menu_zone: Option<crate::state::Zone>,
 }
 
 impl ImpulseApp {
@@ -343,6 +347,8 @@ impl ImpulseApp {
             midi_clock_tracker: MidiClockTracker::new(),
             history: StateHistory::new(),
             cable_drag: None,
+            show_cables: true,
+            add_menu_zone: None,
         }
     }
 
@@ -574,6 +580,11 @@ impl eframe::App for ImpulseApp {
             }
         }
 
+        // ── Tab: toggle cable visibility ──────────────────────────────────────
+        if ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Tab)) {
+            self.show_cables = !self.show_cables;
+        }
+
         // ── Startup hook ──────────────────────────────────────────────────────
         // Fire once — right after the LLM transitions from initializing to ready.
         if !self.startup_done && !self.state.read().llm.llm_initializing {
@@ -635,7 +646,7 @@ impl eframe::App for ImpulseApp {
                     };
                     ui.label(
                         egui::RichText::new(midi_text)
-                            .color(theme::IRON)
+                            .color(theme::ASH)
                             .monospace()
                             .size(9.0),
                     );

@@ -256,6 +256,26 @@ impl DrumVoice {
         }
     }
 
+    /// Which rack `ModuleKind` this drum voice belongs to.
+    pub fn module_kind(self) -> crate::state::ModuleKind {
+        match self {
+            DrumVoice::Kick808
+            | DrumVoice::Snare808
+            | DrumVoice::HihatClosed808
+            | DrumVoice::HihatOpen808
+            | DrumVoice::TomHi808
+            | DrumVoice::TomMid808
+            | DrumVoice::TomLo808 => crate::state::ModuleKind::DrumKit808,
+            DrumVoice::Kick909
+            | DrumVoice::Snare909
+            | DrumVoice::HihatClosed909
+            | DrumVoice::HihatOpen909
+            | DrumVoice::Clap909
+            | DrumVoice::Rim909 => crate::state::ModuleKind::DrumKit909,
+            DrumVoice::Amen => crate::state::ModuleKind::AmenSampler,
+        }
+    }
+
     pub fn get_volume(&self, s: &AppState) -> f32 {
         match self {
             DrumVoice::Kick808 => s.kit_a.kick.volume,

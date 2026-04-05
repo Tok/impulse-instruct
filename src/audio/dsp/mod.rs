@@ -325,6 +325,25 @@ impl DspState {
         use crate::sequencer::TriggerEvent::*;
         match event {
             DrumTrigger { voice, velocity } => {
+                let in_rack = match voice {
+                    DrumVoice::Kick808
+                    | DrumVoice::Snare808
+                    | DrumVoice::HihatClosed808
+                    | DrumVoice::HihatOpen808
+                    | DrumVoice::TomHi808
+                    | DrumVoice::TomMid808
+                    | DrumVoice::TomLo808 => self.params.rack_drums808,
+                    DrumVoice::Kick909
+                    | DrumVoice::Snare909
+                    | DrumVoice::HihatClosed909
+                    | DrumVoice::HihatOpen909
+                    | DrumVoice::Clap909
+                    | DrumVoice::Rim909 => self.params.rack_drums909,
+                    DrumVoice::Amen => self.params.rack_amen,
+                };
+                if !in_rack {
+                    return;
+                }
                 self.drum_velocity[voices::drum_voice_idx(voice)] = velocity.clamp(0.0, 1.0);
                 match voice {
                     DrumVoice::Kick808 => self.kick808.trigger(),
@@ -349,13 +368,35 @@ impl DspState {
                 slide,
                 gate_samples: _,
             } => {
-                self.bass.trigger(*note, *accent, *slide);
+                if self.params.rack_bass {
+                    self.bass.trigger(*note, *accent, *slide);
+                }
             }
-            BassGateOff => self.bass.gate_off(),
-            HooverTrigger { note } => self.hoover.trigger(*note),
-            HooverGateOff => self.hoover.gate_off(),
-            An1xTrigger { note } => self.an1x.trigger(*note, self.sample_rate, &self.params),
-            An1xGateOff => self.an1x.gate_off(),
+            BassGateOff => {
+                if self.params.rack_bass {
+                    self.bass.gate_off();
+                }
+            }
+            HooverTrigger { note } => {
+                if self.params.rack_hoover {
+                    self.hoover.trigger(*note);
+                }
+            }
+            HooverGateOff => {
+                if self.params.rack_hoover {
+                    self.hoover.gate_off();
+                }
+            }
+            An1xTrigger { note } => {
+                if self.params.rack_an1x {
+                    self.an1x.trigger(*note, self.sample_rate, &self.params);
+                }
+            }
+            An1xGateOff => {
+                if self.params.rack_an1x {
+                    self.an1x.gate_off();
+                }
+            }
         }
     }
 

@@ -5,8 +5,6 @@ use crate::state::{FilterMode, ParamMode, Waveform, cycle_param_mode, param_mode
 use crate::ui::{ImpulseApp, theme, widgets};
 
 pub fn draw_bass(app: &mut ImpulseApp, ui: &mut egui::Ui) {
-    widgets::section_header(ui, "BASS SYNTHESIZER");
-
     // Snapshot everything needed for rendering — lock released before any widget call
     let (
         mut cutoff,
@@ -60,138 +58,86 @@ pub fn draw_bass(app: &mut ImpulseApp, ui: &mut egui::Ui) {
 
     let ctrl = widgets::ControlPrefs::from_prefs(&app.state.read().ui_prefs);
     let xy_size = app.state.read().ui_prefs.pad_size.px() * (88.0 / 26.0);
-    let draw_bass_controls = |ui: &mut egui::Ui| {
-        let (ch, cy) = widgets::param_control(
-            ui,
+
+    // Helper macro — avoids repeating the changed/cycle boilerplate 13 times.
+    // Not a real macro here; we use a local closure that borrows changed/cycle_paths.
+    // (Rust closures can capture by &mut only if nothing else borrows them at the
+    //  same time — fine here since both are unused after the scope.)
+    if ctrl.style == widgets::ControlStyle::Sliders {
+        // ── Slider mode: plain vertical list ─────────────────────────────────
+        macro_rules! p {
+            ($label:expr, $val:expr, $mode:expr, $path:expr) => {{
+                let (ch, cy) = widgets::param_control(ui, $label, &mut $val, $mode, ctrl);
+                if ch {
+                    changed = true;
+                }
+                if cy {
+                    cycle_paths.push($path);
+                }
+            }};
+        }
+        p!(
             "CUTOFF",
-            &mut cutoff,
+            cutoff,
             param_mode("bass.cutoff", &locked, &focused),
-            ctrl,
+            "bass.cutoff"
         );
-        if ch {
-            changed = true;
-        }
-        if cy {
-            cycle_paths.push("bass.cutoff");
-        }
-        let (ch, cy) = widgets::param_control(
-            ui,
-            "RESONANCE",
-            &mut resonance,
+        p!(
+            "RES",
+            resonance,
             param_mode("bass.resonance", &locked, &focused),
-            ctrl,
+            "bass.resonance"
         );
-        if ch {
-            changed = true;
-        }
-        if cy {
-            cycle_paths.push("bass.resonance");
-        }
-        let (ch, cy) = widgets::param_control(
-            ui,
+        p!(
             "ENV MOD",
-            &mut env_mod,
+            env_mod,
             param_mode("bass.env_mod", &locked, &focused),
-            ctrl,
+            "bass.env_mod"
         );
-        if ch {
-            changed = true;
-        }
-        if cy {
-            cycle_paths.push("bass.env_mod");
-        }
-        let (ch, cy) = widgets::param_control(
-            ui,
+        p!(
             "DECAY",
-            &mut decay,
+            decay,
             param_mode("bass.decay", &locked, &focused),
-            ctrl,
+            "bass.decay"
         );
-        if ch {
-            changed = true;
-        }
-        if cy {
-            cycle_paths.push("bass.decay");
-        }
-        let (ch, cy) = widgets::param_control(
-            ui,
+        p!(
             "ACCENT",
-            &mut accent,
+            accent,
             param_mode("bass.accent_level", &locked, &focused),
-            ctrl,
+            "bass.accent_level"
         );
-        if ch {
-            changed = true;
-        }
-        if cy {
-            cycle_paths.push("bass.accent_level");
-        }
-        let (ch, cy) = widgets::param_control(
-            ui,
+        p!(
             "DRIVE",
-            &mut dist,
+            dist,
             param_mode("bass.distortion", &locked, &focused),
-            ctrl,
+            "bass.distortion"
         );
-        if ch {
-            changed = true;
-        }
-        if cy {
-            cycle_paths.push("bass.distortion");
-        }
-        let (ch, cy) = widgets::param_control(
-            ui,
+        p!(
             "VOLUME",
-            &mut vol,
+            vol,
             param_mode("bass.volume", &locked, &focused),
-            ctrl,
+            "bass.volume"
         );
-        if ch {
-            changed = true;
-        }
-        if cy {
-            cycle_paths.push("bass.volume");
-        }
-        let (ch, cy) = widgets::param_control(
-            ui,
+        p!(
             "SUB OSC",
-            &mut sub_osc_level,
+            sub_osc_level,
             param_mode("bass.sub_osc_level", &locked, &focused),
-            ctrl,
+            "bass.sub_osc_level"
         );
-        if ch {
-            changed = true;
-        }
-        if cy {
-            cycle_paths.push("bass.sub_osc_level");
-        }
-        let (ch, cy) = widgets::param_control(
-            ui,
+        p!(
             "GLIDE",
-            &mut portamento_time,
+            portamento_time,
             param_mode("bass.portamento_time", &locked, &focused),
-            ctrl,
+            "bass.portamento_time"
         );
-        if ch {
-            changed = true;
-        }
-        if cy {
-            cycle_paths.push("bass.portamento_time");
-        }
-        let (ch, cy) = widgets::param_control(
-            ui,
+        p!(
             "NOISE",
-            &mut noise_mix,
+            noise_mix,
             param_mode("bass.noise_mix", &locked, &focused),
-            ctrl,
+            "bass.noise_mix"
         );
-        if ch {
-            changed = true;
-        }
-        if cy {
-            cycle_paths.push("bass.noise_mix");
-        }
-        // Detune: -1..+1 semitones — use DragValue since range is bipolar
+        p!("FM DEPTH", fm_depth, ParamMode::Free, "bass.fm_depth");
+        p!("FM RATIO", fm_ratio, ParamMode::Free, "bass.fm_ratio");
         ui.horizontal(|ui| {
             ui.label(
                 egui::RichText::new("DETUNE")
@@ -212,27 +158,143 @@ pub fn draw_bass(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                 changed = true;
             }
         });
-
-        // FM pair
-        let (ch, cy) = widgets::param_control(ui, "FM DEPTH", &mut fm_depth, ParamMode::Free, ctrl);
-        if ch {
-            changed = true;
-        }
-        if cy {
-            cycle_paths.push("bass.fm_depth");
-        }
-        let (ch, cy) = widgets::param_control(ui, "FM RATIO", &mut fm_ratio, ParamMode::Free, ctrl);
-        if ch {
-            changed = true;
-        }
-        if cy {
-            cycle_paths.push("bass.fm_ratio");
-        }
-    };
-    if ctrl.style == widgets::ControlStyle::Sliders {
-        ui.vertical(draw_bass_controls);
     } else {
-        ui.horizontal_wrapped(draw_bass_controls);
+        // ── Knob mode: 4-column grid ──────────────────────────────────────────
+        // Row layout:  CUT  | RES  | ENV  | DEC
+        //              ACC  | DRV  | VOL  | SUB
+        //              GLD  | NSE  | FMD  | FMR
+        egui::Grid::new("bass_knobs")
+            .num_columns(4)
+            .spacing([4.0, 2.0])
+            .show(ui, |ui| {
+                macro_rules! k {
+                    ($label:expr, $val:expr, $mode:expr, $path:expr) => {{
+                        let (ch, cy) = widgets::param_control(ui, $label, &mut $val, $mode, ctrl);
+                        if ch {
+                            changed = true;
+                        }
+                        if cy {
+                            cycle_paths.push($path);
+                        }
+                    }};
+                    // FM params with no lock path
+                    ($label:expr, $val:expr) => {{
+                        let (ch, _) =
+                            widgets::param_control(ui, $label, &mut $val, ParamMode::Free, ctrl);
+                        if ch {
+                            changed = true;
+                        }
+                    }};
+                }
+                // Row 1 — filter core
+                k!(
+                    "CUT",
+                    cutoff,
+                    param_mode("bass.cutoff", &locked, &focused),
+                    "bass.cutoff"
+                );
+                k!(
+                    "RES",
+                    resonance,
+                    param_mode("bass.resonance", &locked, &focused),
+                    "bass.resonance"
+                );
+                k!(
+                    "ENV",
+                    env_mod,
+                    param_mode("bass.env_mod", &locked, &focused),
+                    "bass.env_mod"
+                );
+                k!(
+                    "DEC",
+                    decay,
+                    param_mode("bass.decay", &locked, &focused),
+                    "bass.decay"
+                );
+                ui.end_row();
+                // Row 2 — character
+                k!(
+                    "ACC",
+                    accent,
+                    param_mode("bass.accent_level", &locked, &focused),
+                    "bass.accent_level"
+                );
+                k!(
+                    "DRV",
+                    dist,
+                    param_mode("bass.distortion", &locked, &focused),
+                    "bass.distortion"
+                );
+                k!(
+                    "VOL",
+                    vol,
+                    param_mode("bass.volume", &locked, &focused),
+                    "bass.volume"
+                );
+                k!(
+                    "SUB",
+                    sub_osc_level,
+                    param_mode("bass.sub_osc_level", &locked, &focused),
+                    "bass.sub_osc_level"
+                );
+                ui.end_row();
+                // Row 3 — modulation
+                k!(
+                    "GLD",
+                    portamento_time,
+                    param_mode("bass.portamento_time", &locked, &focused),
+                    "bass.portamento_time"
+                );
+                k!(
+                    "NSE",
+                    noise_mix,
+                    param_mode("bass.noise_mix", &locked, &focused),
+                    "bass.noise_mix"
+                );
+                {
+                    let (ch, cy) =
+                        widgets::param_control(ui, "FMD", &mut fm_depth, ParamMode::Free, ctrl);
+                    if ch {
+                        changed = true;
+                    }
+                    if cy {
+                        cycle_paths.push("bass.fm_depth");
+                    }
+                }
+                {
+                    let (ch, cy) =
+                        widgets::param_control(ui, "FMR", &mut fm_ratio, ParamMode::Free, ctrl);
+                    if ch {
+                        changed = true;
+                    }
+                    if cy {
+                        cycle_paths.push("bass.fm_ratio");
+                    }
+                }
+                ui.end_row();
+            });
+
+        // Detune: bipolar DragValue — one compact row below the grid
+        ui.horizontal(|ui| {
+            ui.label(
+                egui::RichText::new("DETUNE")
+                    .color(theme::SMOKE)
+                    .monospace()
+                    .size(9.0),
+            );
+            if ui
+                .add(
+                    egui::DragValue::new(&mut osc_detune)
+                        .range(-1.0..=1.0)
+                        .speed(0.01)
+                        .fixed_decimals(2)
+                        .suffix(" st"),
+                )
+                .changed()
+            {
+                changed = true;
+            }
+        });
     }
 
     // Apply all changes in a single brief write, using pure state transitions
@@ -286,7 +348,7 @@ pub fn draw_bass(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         }
     }
 
-    ui.add_space(6.0);
+    ui.add_space(2.0);
 
     // XY Control Squares — two 2D pads for the core acid parameters
     let xy1_locked = param_mode("bass.cutoff", &locked, &focused) == ParamMode::UserOwned
@@ -330,7 +392,7 @@ pub fn draw_bass(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         }
     });
 
-    ui.add_space(6.0);
+    ui.add_space(2.0);
 
     // Decay envelope visualiser — shows the 303's decay-only filter envelope shape
     ui.horizontal(|ui| {
@@ -348,7 +410,7 @@ pub fn draw_bass(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         }
     });
 
-    ui.add_space(6.0);
+    ui.add_space(2.0);
 
     // Waveform toggle
     ui.horizontal(|ui| {
@@ -463,7 +525,7 @@ pub fn draw_bass(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         }
     });
 
-    ui.add_space(12.0);
+    ui.add_space(4.0);
 
     // Locked params management
     let locked_bass: Vec<String> = locked
@@ -516,7 +578,7 @@ pub fn draw_bass(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         }
     });
 
-    ui.add_space(8.0);
+    ui.add_space(4.0);
     widgets::section_header(ui, "NOISE VOICE");
 
     let (noise_enabled, mut noise_volume, mut noise_color, mut noise_cutoff) = {

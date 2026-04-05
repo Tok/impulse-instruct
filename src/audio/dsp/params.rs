@@ -2,7 +2,9 @@
 // AudioParams snapshot — copied from AppState for the audio thread.
 // This module has no side effects; all types are Copy/Clone.
 
-use crate::state::{An1xLfoTarget, An1xWave, AppState, FilterMode, LfoTarget, LfoWaveform};
+use crate::state::{
+    An1xLfoTarget, An1xWave, AppState, FilterMode, LfoTarget, LfoWaveform, ModuleKind,
+};
 
 /// Per-slot LFO configuration passed to the audio thread (Copy-safe).
 #[derive(Clone, Copy, Debug)]
@@ -179,6 +181,13 @@ pub struct AudioParams {
     pub amen_pitch: f32,  // semitones -24..+24
     pub amen_volume: f32, // 0–1
     pub amen_loop: bool,
+    // Rack presence — only trigger / process voices that are in the rack
+    pub rack_bass: bool,
+    pub rack_drums808: bool,
+    pub rack_drums909: bool,
+    pub rack_amen: bool,
+    pub rack_hoover: bool,
+    pub rack_an1x: bool,
 }
 
 impl AudioParams {
@@ -400,6 +409,36 @@ impl AudioParams {
             amen_pitch: s.amen.pitch,
             amen_volume: s.amen.volume,
             amen_loop: s.amen.loop_mode,
+            rack_bass: s
+                .rack
+                .modules
+                .iter()
+                .any(|m| m.kind == ModuleKind::AcidBass && m.enabled),
+            rack_drums808: s
+                .rack
+                .modules
+                .iter()
+                .any(|m| m.kind == ModuleKind::DrumKit808 && m.enabled),
+            rack_drums909: s
+                .rack
+                .modules
+                .iter()
+                .any(|m| m.kind == ModuleKind::DrumKit909 && m.enabled),
+            rack_amen: s
+                .rack
+                .modules
+                .iter()
+                .any(|m| m.kind == ModuleKind::AmenSampler && m.enabled),
+            rack_hoover: s
+                .rack
+                .modules
+                .iter()
+                .any(|m| m.kind == ModuleKind::HooverLead && m.enabled),
+            rack_an1x: s
+                .rack
+                .modules
+                .iter()
+                .any(|m| m.kind == ModuleKind::An1xVoice && m.enabled),
         }
     }
 }

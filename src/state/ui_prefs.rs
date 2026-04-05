@@ -95,7 +95,7 @@ impl Default for UiPrefs {
     fn default() -> Self {
         Self {
             knob_style: KnobStyle::Chrome,
-            knob_size: KnobSize::Normal,
+            knob_size: KnobSize::Small,
             pad_size: PadSize::Normal,
             use_sliders: false,
             bloom_enabled: false,

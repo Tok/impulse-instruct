@@ -5,8 +5,6 @@ use crate::state::ParamMode;
 use crate::ui::{ImpulseApp, theme, widgets};
 
 pub fn draw_hoover(app: &mut ImpulseApp, ui: &mut egui::Ui) {
-    widgets::section_header(ui, "HOOVER LEAD");
-
     let ctrl = widgets::ControlPrefs::from_prefs(&app.state.read().ui_prefs);
 
     ui.horizontal(|ui| {
@@ -43,7 +41,7 @@ pub fn draw_hoover(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         );
     });
 
-    ui.add_space(6.0);
+    ui.add_space(2.0);
 
     // ── Filter row ────────────────────────────────────────────────────────────
     widgets::section_header(ui, "FILTER  (HP sweeps down on trigger)");
@@ -148,7 +146,7 @@ pub fn draw_hoover(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         }
     });
 
-    ui.add_space(6.0);
+    ui.add_space(2.0);
 
     // ── Preset button ─────────────────────────────────────────────────────────
     if ui

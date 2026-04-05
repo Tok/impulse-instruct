@@ -253,21 +253,27 @@ fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
-/// Generate the window icon pixel buffer — one Huth-colored octave on dark background.
-/// Mirrors docs/icon.svg: 256×256, white keys (28×144 px) + black keys (17×90 px).
+/// Generate the window icon pixel buffer.
+/// Matches docs/icon.svg: 256×256, "IMPULSE INSTRUCT" title, Huth-colored octave,
+/// black 1px borders on every key (white and black).
 fn make_window_icon() -> egui::IconData {
     const W: u32 = 256;
     const H: u32 = 256;
     let mut rgba = vec![0u8; (W * H * 4) as usize];
-    // Background: #0C0C0C opaque
-    for chunk in rgba.chunks_mut(4) {
-        chunk[0] = 12;
-        chunk[1] = 12;
-        chunk[2] = 12;
-        chunk[3] = 255;
-    }
 
-    let mut fill = |x0: u32, y0: u32, w: u32, h: u32, r: u8, g: u8, b: u8| {
+    // ── pixel helpers ─────────────────────────────────────────────────────────
+
+    let put = |rgba: &mut Vec<u8>, px: u32, py: u32, r: u8, g: u8, b: u8| {
+        if px < W && py < H {
+            let i = ((py * W + px) * 4) as usize;
+            rgba[i] = r;
+            rgba[i + 1] = g;
+            rgba[i + 2] = b;
+            rgba[i + 3] = 255;
+        }
+    };
+
+    let fill_rect = |rgba: &mut Vec<u8>, x0: u32, y0: u32, w: u32, h: u32, r: u8, g: u8, b: u8| {
         for py in y0..y0 + h {
             for px in x0..x0 + w {
                 if px < W && py < H {
@@ -281,12 +287,24 @@ fn make_window_icon() -> egui::IconData {
         }
     };
 
-    // Translate: x_start=27, y_start=56 (same as SVG group)
-    let tx: u32 = 27;
-    let ty: u32 = 56;
+    // Background
+    for chunk in rgba.chunks_mut(4) {
+        chunk[0] = 12;
+        chunk[1] = 12;
+        chunk[2] = 12;
+        chunk[3] = 255;
+    }
 
-    // White keys: stride=29, width=28, height=144
-    let white = [
+    // ── keyboard (matches SVG: translate(27, 52), stride=29, white 28×160, black 17×100) ──
+    let tx: u32 = 27;
+    let ty: u32 = 52;
+    let wkey_w: u32 = 28;
+    let wkey_h: u32 = 160;
+    let bkey_w: u32 = 17;
+    let bkey_h: u32 = 100;
+
+    // White keys with 1px black border
+    let white_keys = [
         (0u32, 0x33u8, 0x66u8, 0xDDu8), // C
         (29, 0x33, 0xAA, 0x66),         // D
         (58, 0xDD, 0xCC, 0x22),         // E
@@ -295,20 +313,91 @@ fn make_window_icon() -> egui::IconData {
         (145, 0x99, 0x66, 0xCC),        // A
         (174, 0x44, 0x33, 0xAA),        // B
     ];
-    for (rx, r, g, b) in white {
-        fill(tx + rx, ty, 28, 144, r, g, b);
+    for (rx, r, g, b) in white_keys {
+        // Fill interior (inset 1px from border)
+        fill_rect(
+            &mut rgba,
+            tx + rx + 1,
+            ty + 1,
+            wkey_w - 2,
+            wkey_h - 2,
+            r,
+            g,
+            b,
+        );
+        // 1px black border
+        for px in tx + rx..tx + rx + wkey_w {
+            put(&mut rgba, px, ty, 0, 0, 0);
+        } // top
+        for px in tx + rx..tx + rx + wkey_w {
+            put(&mut rgba, px, ty + wkey_h - 1, 0, 0, 0);
+        } // bottom
+        for py in ty..ty + wkey_h {
+            put(&mut rgba, tx + rx, py, 0, 0, 0);
+        } // left
+        for py in ty..ty + wkey_h {
+            put(&mut rgba, tx + rx + wkey_w - 1, py, 0, 0, 0);
+        } // right
     }
 
-    // Black keys: width=17, height=90, centered in white-key gaps
-    let black = [
+    // Black keys drawn on top, with 1px black border
+    let black_keys = [
         (20u32, 0x22u8, 0x99u8, 0xBBu8), // C#
         (49, 0x88, 0xCC, 0x22),          // D#
         (107, 0xDD, 0x44, 0x22),         // F#
         (136, 0xCC, 0x11, 0x44),         // G#
         (165, 0x77, 0x44, 0xBB),         // A#
     ];
-    for (rx, r, g, b) in black {
-        fill(tx + rx, ty, 17, 90, r, g, b);
+    for (rx, r, g, b) in black_keys {
+        fill_rect(
+            &mut rgba,
+            tx + rx + 1,
+            ty + 1,
+            bkey_w - 2,
+            bkey_h - 2,
+            r,
+            g,
+            b,
+        );
+        for px in tx + rx..tx + rx + bkey_w {
+            put(&mut rgba, px, ty, 0, 0, 0);
+        }
+        for px in tx + rx..tx + rx + bkey_w {
+            put(&mut rgba, px, ty + bkey_h - 1, 0, 0, 0);
+        }
+        for py in ty..ty + bkey_h {
+            put(&mut rgba, tx + rx, py, 0, 0, 0);
+        }
+        for py in ty..ty + bkey_h {
+            put(&mut rgba, tx + rx + bkey_w - 1, py, 0, 0, 0);
+        }
+    }
+
+    // ── sine wave decoration above the keyboard ───────────────────────────────
+    // Two cycles across the full width, centred in the 52px gap above the keys.
+    // Drawn with soft alpha-falloff so it looks smooth at icon size.
+    let wave_cx: f32 = (ty as f32) / 2.0; // vertical centre of the gap
+    let amplitude: f32 = 14.0;
+    let cycles: f32 = 2.5;
+    for px in 0..W {
+        let phase = (px as f32 / W as f32) * cycles * 2.0 * std::f32::consts::PI;
+        let wave_y = wave_cx + amplitude * phase.sin();
+        // Draw 3px soft column around the wave
+        for dy in -2i32..=2i32 {
+            let py = wave_y + dy as f32;
+            if py < 0.0 || py >= H as f32 {
+                continue;
+            }
+            let dist = (dy as f32).abs();
+            let brightness = ((1.0 - dist / 2.5) * 255.0).max(0.0) as u8;
+            let i = ((py as u32 * W + px) * 4) as usize;
+            if i + 3 < rgba.len() {
+                rgba[i] = brightness;
+                rgba[i + 1] = brightness;
+                rgba[i + 2] = brightness;
+                rgba[i + 3] = 255;
+            }
+        }
     }
 
     egui::IconData {

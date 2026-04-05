@@ -6,8 +6,6 @@ use crate::ui::{ImpulseApp, theme, widgets};
 use egui::Ui;
 
 pub fn draw_an1x(app: &mut ImpulseApp, ui: &mut Ui) {
-    widgets::section_header(ui, "AN1X  VOICE  (Warm VA)");
-
     let ctrl = widgets::ControlPrefs::from_prefs(&app.state.read().ui_prefs);
 
     // ── ON / OFF ──────────────────────────────────────────────────────────────

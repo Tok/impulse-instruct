@@ -36,8 +36,6 @@ fn next_target(t: &LfoTarget) -> LfoTarget {
 // ─── Full panel (legacy) ──────────────────────────────────────────────────────
 
 pub fn draw_lfo(app: &mut ImpulseApp, ui: &mut egui::Ui) {
-    widgets::section_header(ui, "LFO — GLOBAL MODULATION");
-
     let slots: [LfoSlot; 4] = app.state.read().lfo;
     for (i, slot) in slots.iter().enumerate() {
         draw_lfo_slot_row(app, ui, i, slot);
