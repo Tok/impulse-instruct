@@ -645,17 +645,34 @@ pub fn run_llm_loop(
     if !backend.is_live() {
         {
             let mut s = state.write();
-            s.llm.is_mock = false;
+            s.llm.is_mock = true;
+            s.llm.model_missing = true;
             s.llm.llm_initializing = false;
         }
         log::error!(
-            "LLM server unavailable and --mock not passed. \
-             Build: ./scripts/build-llama-server.sh  \
-             Download: ./scripts/download-models.sh  \
-             Then restart. Pass --mock to run without a model."
+            "No model found at '{}'. \
+             Download one with: ./scripts/download-models.sh \
+             Then select it in Prefs and press Restart.",
+            model_path
         );
-        std::thread::sleep(std::time::Duration::from_secs(1));
-        std::process::exit(1);
+        let _ = output_tx.try_send(LlmOutput {
+            text: "[ No model found — download one with ./scripts/download-models.sh \
+                 then select it in Prefs → Model and press Restart.\n\
+                 Running without LLM — synth works, prompts ignored. ]"
+                .to_string(),
+            param_update: None,
+            tokens_per_sec: 0.0,
+            prompt_tokens: 0,
+            completion_tokens: 0,
+            context_used: 0,
+            is_jam: false,
+            thinking: None,
+            mc_line: None,
+            before_state: None,
+            actions: vec![],
+        });
+        run_mock_loop(state, input_rx, output_tx);
+        return;
     }
 
     {

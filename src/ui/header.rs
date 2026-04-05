@@ -311,6 +311,7 @@ impl ImpulseApp {
                             0.0
                         };
                         let is_mock = s.llm.is_mock;
+                        let model_missing = s.llm.model_missing;
                         let initializing = s.llm.llm_initializing;
                         let auto_compact = s.llm.auto_compact;
                         drop(s);
@@ -323,6 +324,24 @@ impl ImpulseApp {
                                         .size(9.0)
                                         .monospace(),
                                 );
+                            } else if model_missing {
+                                ui.vertical(|ui| {
+                                    ui.label(
+                                        egui::RichText::new("! NO MODEL")
+                                            .color(egui::Color32::from_rgb(255, 100, 60))
+                                            .size(10.0)
+                                            .monospace()
+                                            .strong(),
+                                    );
+                                    ui.label(
+                                        egui::RichText::new(
+                                            "run download-models.sh then select in Prefs",
+                                        )
+                                        .color(egui::Color32::from_rgb(180, 70, 40))
+                                        .size(8.0)
+                                        .monospace(),
+                                    );
+                                });
                             } else if is_mock {
                                 ui.vertical(|ui| {
                                     ui.label(

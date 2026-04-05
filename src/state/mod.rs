@@ -563,6 +563,8 @@ pub struct LlmState {
     pub is_mock: bool,               // true when running without a real model (no llama-server)
     pub llm_initializing: bool, // true while wait_for_ready is running (suppress false mock warning)
     #[serde(default)]
+    pub model_missing: bool, // no model file found on startup — prompt user to download
+    #[serde(default)]
     pub active_ramps: Vec<ParamRamp>, // ongoing smooth parameter transitions
     #[serde(default)]
     pub jam_bars: f32, // 0.0 = continuous (fire immediately); N = wait N bars before re-triggering
@@ -613,6 +615,7 @@ impl Default for LlmState {
             auto_lock_on_touch: false,
             auto_compact: true,
             is_mock: false,
+            model_missing: false,
             llm_initializing: true, // cleared by LLM thread once live/mock status is known
             active_ramps: Vec::new(),
             jam_bars: 0.0,

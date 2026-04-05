@@ -36,16 +36,36 @@ pub(crate) fn note_name(midi: u8) -> &'static str {
     NAMES.get(idx).copied().unwrap_or("?")
 }
 
-/// Scan the models/ directory and return paths of all .gguf files found.
+/// Scan for .gguf model files. Checks:
+///   1. models/ relative to CWD (dev: cargo run from repo root)
+///   2. models/ next to the binary (dist: user unpacked the release)
+///   3. The repo root itself (for convenience when a .gguf is dropped there)
 pub(super) fn scan_models() -> Vec<String> {
-    std::fs::read_dir("models")
+    let mut dirs: Vec<std::path::PathBuf> = vec![std::path::PathBuf::from("models")];
+    if let Ok(exe) = std::env::current_exe()
+        && let Some(parent) = exe.parent()
+    {
+        let sibling = parent.join("models");
+        if sibling != std::path::Path::new("models") {
+            dirs.push(sibling);
+        }
+    }
+    let mut found: Vec<String> = dirs
         .into_iter()
-        .flatten()
-        .filter_map(|e| e.ok())
-        .map(|e| e.path())
-        .filter(|p| p.extension().map(|x| x == "gguf").unwrap_or(false))
-        .map(|p| p.to_string_lossy().into_owned())
-        .collect()
+        .flat_map(|dir| {
+            std::fs::read_dir(&dir)
+                .into_iter()
+                .flatten()
+                .filter_map(|e| e.ok())
+                .map(|e| e.path())
+                .filter(|p| p.extension().map(|x| x == "gguf").unwrap_or(false))
+                .map(|p| p.to_string_lossy().into_owned())
+                .collect::<Vec<_>>()
+        })
+        .collect();
+    found.sort();
+    found.dedup();
+    found
 }
 
 /// Open a URL in the system browser (cross-platform, no extra dep).
