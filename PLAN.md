@@ -111,10 +111,11 @@ Ordered by value — tackle roughly from top to bottom.
 
 ### Next session — pick from here
 
-- [ ] **FX routing: per-voice buses** — `compile_fx_plan()` now drives the global
-      FX chain order from the rack cable graph. Next step: per-voice FX sends
-      (route bass to reverb, drums dry). Requires splitting the mono voice mix
-      into separate buses before the FX stage in `process_block()`.
+- [ ] **FX routing: per-voice buses** — `compile_fx_plan()` now collects
+      per-voice explicit FX routes from Voice→FX cables into `FxPlan.voice_routes`
+      (infrastructure done, 3 new tests). DSP wiring: split voice mix into buses,
+      use `voice_routes` to route each bus through its own FX chain instead of
+      the global chain. Requires separate FX state per bus or send/return model.
 
 - [x] **Audio feedback improvements** — Phase 1 is live. Done in Phase 2:
       - Auto-listen mode: AUTO toggle in LISTEN bar, fires every 4 jam cycles when heat > 0.
@@ -184,9 +185,9 @@ Ordered by value — tackle roughly from top to bottom.
 
 - [ ] **Bloom post-process** — egui frame → wgpu render pass → Gaussian blur on bright pixels → additive blend. Gated by `UiPrefs.bloom_enabled`. Costs a GPU render pass per frame.
 
-- [ ] **XY pad improvements** — show param name tooltip on cursor; use for any two correlated params.
+- [x] **XY pad improvements** — done: tooltip, pair cycling, pair indicator.
 
-- [ ] **Coqui TTS** — higher quality voice (Python subprocess or REST). Alternative to espeak-ng.
+- [x] **Coqui TTS** — done: TtsEngine enum, speak_coqui(), engine toggle in TTS settings.
 
 - [x] **Windows native scripts** — `start.bat`, `scripts/build-all.bat`, `scripts/run-tests.bat`, `scripts/run-llm-tests.bat`, `scripts/run-llm-style.bat`, `scripts/run-llm-theory.bat`, `scripts/download-models.bat`, `scripts/build-bonsai-server.bat`, `scripts/build-llama-server.bat`.
 

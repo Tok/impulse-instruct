@@ -99,7 +99,7 @@ pub struct Cable {
 // ─── Module kinds ─────────────────────────────────────────────────────────────
 
 /// Every instantiable module type in the rack.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum ModuleKind {
     // ── Voice modules ─────────────────────────────────────────────────────────
     AcidBass,
@@ -454,8 +454,18 @@ pub enum FxStep {
 /// `DspState` and iterates it in `process_block()`.
 #[derive(Clone, Debug, Default)]
 pub struct FxPlan {
-    /// Ordered list of FX steps to apply to the mixed dry signal.
+    /// Global FX chain order (from FX→FX cable topology).
+    /// Applied to all voice buses that have no explicit voice_routes entry.
     pub steps: Vec<FxStep>,
+    /// Per-voice-bus explicit FX chains (from Voice→FX cable topology).
+    ///
+    /// Key = voice module kind (AcidBass, DrumKit808, DrumKit909, AmenSampler, …).
+    /// Value = ordered FX steps reachable from that voice's explicit cables.
+    ///
+    /// When non-empty for a voice, the DSP should route that bus through its own
+    /// chain instead of the global chain.  Currently informational — full DSP
+    /// wiring is a follow-up step.
+    pub voice_routes: HashMap<ModuleKind, Vec<FxStep>>,
 }
 
 fn kind_to_fx_step(kind: ModuleKind) -> Option<FxStep> {
@@ -546,5 +556,75 @@ pub fn compile_fx_plan(rack: &RackState) -> FxPlan {
         }
     }
 
-    FxPlan { steps: ordered }
+    // ── Per-voice FX routes (Voice→FX cables) ────────────────────────────────
+    // Build a map: voice module kind → ordered list of FX steps reachable via
+    // explicit Voice→FX audio cables.  A voice without such cables has no entry
+    // here and falls through to the global chain in the DSP.
+
+    // Voice module kinds that map to DSP buses.
+    const VOICE_KINDS: &[ModuleKind] = &[
+        ModuleKind::AcidBass,
+        ModuleKind::DrumKit808,
+        ModuleKind::DrumKit909,
+        ModuleKind::HooverLead,
+        ModuleKind::An1xVoice,
+        ModuleKind::AmenSampler,
+        ModuleKind::NoiseVoice,
+    ];
+
+    // Map voice module id → kind for quick lookup.
+    let voice_id_map: HashMap<u32, ModuleKind> = rack
+        .modules
+        .iter()
+        .filter(|m| m.enabled && VOICE_KINDS.contains(&m.kind))
+        .map(|m| (m.id, m.kind))
+        .collect();
+
+    let mut voice_routes: HashMap<ModuleKind, Vec<FxStep>> = HashMap::new();
+
+    for cable in &rack.cables {
+        if cable.from.kind != PortKind::Audio {
+            continue;
+        }
+        let voice_kind = match voice_id_map.get(&cable.from.module_id) {
+            Some(&k) => k,
+            None => continue,
+        };
+        let first_fx = match fx_map.get(&cable.to.module_id) {
+            Some(&k) => k,
+            None => continue,
+        };
+        // BFS/DFS from first_fx through FX→FX adjacency to collect the sub-chain
+        // reachable from this voice.
+        let first_step = match kind_to_fx_step(first_fx) {
+            Some(s) => s,
+            None => continue,
+        };
+        let mut chain: Vec<FxStep> = vec![first_step];
+        // Walk adj from first FX module id.
+        let mut cur_id = cable.to.module_id;
+        // Follow the single-output chain (linear adjacency).
+        loop {
+            let next_ids = adj.get(&cur_id).map(|v| v.as_slice()).unwrap_or(&[]);
+            match next_ids {
+                [next_id] => {
+                    if let Some(&kind) = fx_map.get(next_id)
+                        && let Some(step) = kind_to_fx_step(kind)
+                    {
+                        chain.push(step);
+                        cur_id = *next_id;
+                    } else {
+                        break;
+                    }
+                }
+                _ => break, // fan-out or end of chain
+            }
+        }
+        voice_routes.entry(voice_kind).or_insert(chain);
+    }
+
+    FxPlan {
+        steps: ordered,
+        voice_routes,
+    }
 }

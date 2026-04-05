@@ -525,4 +525,100 @@ mod fx_plan_tests {
         let plan = compile_fx_plan(&rack);
         assert_eq!(plan.steps, vec![FxStep::Reverb, FxStep::Delay]);
     }
+
+    #[test]
+    fn default_rack_has_no_voice_routes() {
+        // Default rack has Voice→Master cables only, no Voice→FX cables.
+        let rack = RackState::default();
+        let plan = compile_fx_plan(&rack);
+        assert!(
+            plan.voice_routes.is_empty(),
+            "default rack: no explicit voice routes expected"
+        );
+    }
+
+    #[test]
+    fn voice_to_fx_cable_creates_voice_route() {
+        let mut rack = RackState {
+            modules: Vec::new(),
+            cables: Vec::new(),
+            next_id: 1,
+        };
+        let bass_id = rack.add_module(ModuleKind::AcidBass);
+        let rev_id = rack.add_module(ModuleKind::FxReverb);
+        let del_id = rack.add_module(ModuleKind::FxDelay);
+        // Wire Reverb → Delay (global FX chain)
+        rack.connect(
+            PortRef {
+                module_id: rev_id,
+                dir: PortDir::Out,
+                kind: PortKind::Audio,
+                index: 0,
+            },
+            PortRef {
+                module_id: del_id,
+                dir: PortDir::In,
+                kind: PortKind::Audio,
+                index: 0,
+            },
+        );
+        // Wire AcidBass → Reverb (explicit voice route)
+        rack.connect(
+            PortRef {
+                module_id: bass_id,
+                dir: PortDir::Out,
+                kind: PortKind::Audio,
+                index: 0,
+            },
+            PortRef {
+                module_id: rev_id,
+                dir: PortDir::In,
+                kind: PortKind::Audio,
+                index: 0,
+            },
+        );
+
+        let plan = compile_fx_plan(&rack);
+        // Global chain: Reverb → Delay
+        assert_eq!(plan.steps, vec![FxStep::Reverb, FxStep::Delay]);
+        // Bass explicit route starts at Reverb and follows Reverb → Delay chain
+        let bass_route = plan
+            .voice_routes
+            .get(&ModuleKind::AcidBass)
+            .expect("AcidBass should have an explicit route");
+        assert_eq!(bass_route, &[FxStep::Reverb, FxStep::Delay]);
+        // DrumKit808 has no explicit cable → no route entry
+        assert!(!plan.voice_routes.contains_key(&ModuleKind::DrumKit808));
+    }
+
+    #[test]
+    fn voice_route_single_fx_no_downstream() {
+        let mut rack = RackState {
+            modules: Vec::new(),
+            cables: Vec::new(),
+            next_id: 1,
+        };
+        let bass_id = rack.add_module(ModuleKind::AcidBass);
+        let rev_id = rack.add_module(ModuleKind::FxReverb);
+        rack.connect(
+            PortRef {
+                module_id: bass_id,
+                dir: PortDir::Out,
+                kind: PortKind::Audio,
+                index: 0,
+            },
+            PortRef {
+                module_id: rev_id,
+                dir: PortDir::In,
+                kind: PortKind::Audio,
+                index: 0,
+            },
+        );
+        let plan = compile_fx_plan(&rack);
+        let bass_route = plan
+            .voice_routes
+            .get(&ModuleKind::AcidBass)
+            .expect("should have a route");
+        assert_eq!(bass_route, &[FxStep::Reverb]);
+    }
 }
