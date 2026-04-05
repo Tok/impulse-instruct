@@ -11,3 +11,4 @@
 .llama-official-build
 llama-server.log
 settings.json
+cobertura.xml
