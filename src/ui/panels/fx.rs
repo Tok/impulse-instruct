@@ -12,6 +12,7 @@ pub fn draw_fx(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         mut rs,
         mut rd,
         mut rm,
+        mut rgt,
         mut dt,
         mut df,
         mut dm,
@@ -44,6 +45,7 @@ pub fn draw_fx(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             s.fx.reverb_size,
             s.fx.reverb_damp,
             s.fx.reverb_mix,
+            s.fx.reverb_gate_time,
             s.fx.delay_time,
             s.fx.delay_feedback,
             s.fx.delay_mix,
@@ -102,6 +104,20 @@ pub fn draw_fx(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                     changed = true;
                 }
                 if widgets::param_control(ui, "DAMP", &mut rd, ParamMode::Free, ctrl).0 {
+                    changed = true;
+                }
+                // Normalize gate_time 0–2s → 0–1 for the knob, convert back on write
+                let mut rgt_norm = rgt / 2.0;
+                if widgets::param_control(
+                    ui,
+                    "GATE",
+                    &mut rgt_norm,
+                    pm("fx.reverb_gate_time"),
+                    ctrl,
+                )
+                .0
+                {
+                    rgt = rgt_norm * 2.0;
                     changed = true;
                 }
             });
@@ -269,6 +285,7 @@ pub fn draw_fx(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         s.fx.reverb_size = rs;
         s.fx.reverb_damp = rd;
         s.fx.reverb_mix = rm;
+        s.fx.reverb_gate_time = rgt;
         s.fx.delay_time = dt;
         s.fx.delay_feedback = df;
         s.fx.delay_mix = dm;

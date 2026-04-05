@@ -264,6 +264,9 @@ pub struct DspState {
     sample_rate: f32,
     // Compiled FX routing plan (updated via AudioCommand::SetFxPlan)
     fx_plan: FxPlan,
+    // Gated reverb envelope: 1.0 = open, 0.0 = closed. Tracks transient
+    // detection; decays to 0 at a rate set by p.reverb_gate_time.
+    reverb_gate_env: f32,
 }
 
 impl DspState {
@@ -309,6 +312,7 @@ impl DspState {
             params: p,
             sample_rate,
             fx_plan,
+            reverb_gate_env: 1.0,
         }
     }
 
@@ -620,6 +624,22 @@ impl DspState {
                 + amen_out * dv[13])
                 * 0.60;
 
+            // Gated reverb: detect transient from pre-FX dry signal.
+            // When gate_time > 0, re-open gate on transients; close exponentially.
+            if p.reverb_gate_time > 0.001 {
+                if dry.abs() > 0.08 {
+                    // Transient detected — open gate immediately
+                    self.reverb_gate_env = 1.0;
+                } else {
+                    // Decay toward 0 at rate 1/(gate_time * sr)
+                    let decay = (-1.0 / (p.reverb_gate_time * sr)).exp();
+                    self.reverb_gate_env *= decay;
+                }
+            } else {
+                self.reverb_gate_env = 1.0; // gate off → always open
+            }
+            let gate_env = self.reverb_gate_env;
+
             // FX chain — driven by compiled plan (see compile_fx_plan in state/rack.rs).
             // Each step transforms `sig` in place; steps that are not in the plan are skipped.
             let mut sig = dry;
@@ -635,8 +655,13 @@ impl DspState {
                         }
                     }
                     FxStep::Reverb => {
-                        let wet = self.reverb.process(sig, p.reverb_size, p.reverb_damp);
-                        sig * (1.0 - p.reverb_mix) + wet * p.reverb_mix
+                        if p.reverb_mix > 0.001 {
+                            let wet = self.reverb.process(sig, p.reverb_size, p.reverb_damp);
+                            // Apply gate envelope to the wet reverb signal
+                            sig * (1.0 - p.reverb_mix) + wet * p.reverb_mix * gate_env
+                        } else {
+                            sig
+                        }
                     }
                     FxStep::Delay => {
                         let wet = self.delay.process(sig, delay_samples, p.delay_feedback);

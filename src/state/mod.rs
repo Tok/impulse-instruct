@@ -386,37 +386,39 @@ impl Default for SequencerState {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct FxState {
-    pub reverb_size: f32,          // 0–1 room size
-    pub reverb_damp: f32,          // 0–1 damping
-    pub reverb_mix: f32,           // 0–1 wet/dry
-    pub delay_time: f32,           // 0–1 → 0–1000 ms
-    pub delay_feedback: f32,       // 0–1
-    pub delay_mix: f32,            // 0–1 wet/dry
-    pub distortion_drive: f32,     // 0–1
-    pub distortion_mix: f32,       // 0–1 wet/dry
+    pub reverb_size: f32, // 0–1 room size
+    pub reverb_damp: f32, // 0–1 damping
+    pub reverb_mix: f32,  // 0–1 wet/dry
+    #[serde(default)]
+    pub reverb_gate_time: f32, // 0 = no gate; 0.01–2.0 s gate close time (gated reverb)
+    pub delay_time: f32,  // 0–1 → 0–1000 ms
+    pub delay_feedback: f32, // 0–1
+    pub delay_mix: f32,   // 0–1 wet/dry
+    pub distortion_drive: f32, // 0–1
+    pub distortion_mix: f32, // 0–1 wet/dry
     pub compressor_threshold: f32, // 0–1 → -40–0 dB
-    pub compressor_ratio: f32,     // 0–1 → 1:1–20:1
-    pub compressor_mix: f32,       // 0–1 wet/dry (0 = bypassed)
-    pub master_volume: f32,        // 0–1
-    pub tape_drive: f32,           // 0–1 saturation amount
-    pub tape_mix: f32,             // 0–1 wet/dry
-    pub tape_flutter: f32,         // 0–1 wow/flutter depth
-    pub bitcrush_bits: f32,        // 0–1: 1.0 = full quality (bypass), 0.0 = 1-bit
-    pub bitcrush_rate: f32,        // 0–1: 0.0 = no decimation, 1.0 = extreme downsampling
-    pub bitcrush_mix: f32,         // 0–1: wet/dry
-    pub chorus_rate: f32,          // 0–1 → 0.1–8 Hz LFO rate
-    pub chorus_depth: f32,         // 0–1 modulation depth
-    pub chorus_mix: f32,           // 0–1 wet/dry
-    pub phaser_rate: f32,          // 0–1 → 0.05–5 Hz LFO rate
-    pub phaser_depth: f32,         // 0–1 sweep depth
-    pub phaser_mix: f32,           // 0–1 wet/dry
-    pub waveshaper_drive: f32,     // 0–1 → soft-clip drive amount (pre-FX)
-    pub waveshaper_mix: f32,       // 0–1 wet/dry
-    pub ring_mod_freq: f32,        // 0–1 → 50–500 Hz carrier frequency
-    pub ring_mod_mix: f32,         // 0–1 wet/dry
-    pub eq_low_gain: f32,          // -1..+1 → -12..+12 dB low shelf (~200 Hz)
-    pub eq_mid_gain: f32,          // -1..+1 → -12..+12 dB mid peak (~1 kHz)
-    pub eq_hi_gain: f32,           // -1..+1 → -12..+12 dB high shelf (~5 kHz)
+    pub compressor_ratio: f32, // 0–1 → 1:1–20:1
+    pub compressor_mix: f32, // 0–1 wet/dry (0 = bypassed)
+    pub master_volume: f32, // 0–1
+    pub tape_drive: f32,  // 0–1 saturation amount
+    pub tape_mix: f32,    // 0–1 wet/dry
+    pub tape_flutter: f32, // 0–1 wow/flutter depth
+    pub bitcrush_bits: f32, // 0–1: 1.0 = full quality (bypass), 0.0 = 1-bit
+    pub bitcrush_rate: f32, // 0–1: 0.0 = no decimation, 1.0 = extreme downsampling
+    pub bitcrush_mix: f32, // 0–1: wet/dry
+    pub chorus_rate: f32, // 0–1 → 0.1–8 Hz LFO rate
+    pub chorus_depth: f32, // 0–1 modulation depth
+    pub chorus_mix: f32,  // 0–1 wet/dry
+    pub phaser_rate: f32, // 0–1 → 0.05–5 Hz LFO rate
+    pub phaser_depth: f32, // 0–1 sweep depth
+    pub phaser_mix: f32,  // 0–1 wet/dry
+    pub waveshaper_drive: f32, // 0–1 → soft-clip drive amount (pre-FX)
+    pub waveshaper_mix: f32, // 0–1 wet/dry
+    pub ring_mod_freq: f32, // 0–1 → 50–500 Hz carrier frequency
+    pub ring_mod_mix: f32, // 0–1 wet/dry
+    pub eq_low_gain: f32, // -1..+1 → -12..+12 dB low shelf (~200 Hz)
+    pub eq_mid_gain: f32, // -1..+1 → -12..+12 dB mid peak (~1 kHz)
+    pub eq_hi_gain: f32,  // -1..+1 → -12..+12 dB high shelf (~5 kHz)
 }
 
 impl Default for FxState {
@@ -425,6 +427,7 @@ impl Default for FxState {
             reverb_size: 0.4,
             reverb_damp: 0.5,
             reverb_mix: 0.0,
+            reverb_gate_time: 0.0,
             delay_time: 0.375,
             delay_feedback: 0.4,
             delay_mix: 0.0,

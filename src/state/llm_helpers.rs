@@ -363,6 +363,11 @@ pub(super) fn apply_fx_update(
     u!(s.fx.reverb_size, "reverb_size", "fx.reverb_size");
     u!(s.fx.reverb_damp, "reverb_damp", "fx.reverb_damp");
     u!(s.fx.reverb_mix, "reverb_mix", "fx.reverb_mix");
+    u!(
+        s.fx.reverb_gate_time,
+        "reverb_gate_time",
+        "fx.reverb_gate_time"
+    );
     u!(s.fx.delay_time, "delay_time", "fx.delay_time");
     u!(s.fx.delay_feedback, "delay_feedback", "fx.delay_feedback");
     u!(s.fx.delay_mix, "delay_mix", "fx.delay_mix");

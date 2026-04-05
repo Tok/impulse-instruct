@@ -78,6 +78,7 @@ pub struct AudioParams {
     pub reverb_size: f32,
     pub reverb_damp: f32,
     pub reverb_mix: f32,
+    pub reverb_gate_time: f32, // 0 = no gate; gate close time in seconds
     pub delay_time: f32,
     pub delay_feedback: f32,
     pub delay_mix: f32,
@@ -245,6 +246,7 @@ impl AudioParams {
             reverb_size: s.fx.reverb_size,
             reverb_damp: s.fx.reverb_damp,
             reverb_mix: s.fx.reverb_mix,
+            reverb_gate_time: s.fx.reverb_gate_time,
             delay_time: s.fx.delay_time,
             delay_feedback: s.fx.delay_feedback,
             delay_mix: s.fx.delay_mix,

@@ -234,6 +234,7 @@ STEP SEQUENCER (16 steps = one 4/4 bar of 16th notes):
 FX (all 0.0–1.0):  ← ONLY valid inside "fx": {{…}}, never inside "sequencer"
   fx.reverb_mix       — reverb wet amount (0=off, 0.3=noticeable)
   fx.reverb_size      — reverb room size
+  fx.reverb_gate_time — gated reverb gate close time in seconds (0=off, 0.1–0.5=80s snare effect)
   fx.delay_time       — delay time (0.375 = dotted 8th at ~130 BPM)
   fx.delay_feedback   — delay repeats
   fx.delay_mix        — delay wet amount
@@ -690,6 +691,7 @@ pub fn param_json_schema() -> serde_json::Value {
                 "properties": {
                     "reverb_size":      { "type": "number", "minimum": 0.0, "maximum": 1.0 },
                     "reverb_mix":       { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+                    "reverb_gate_time": { "type": "number", "minimum": 0.0, "maximum": 2.0, "description": "gated reverb: 0=no gate, 0.1–2.0s = gate close time (80s snare effect)" },
                     "delay_time":       { "type": "number", "minimum": 0.0, "maximum": 1.0 },
                     "delay_feedback":   { "type": "number", "minimum": 0.0, "maximum": 1.0 },
                     "delay_mix":        { "type": "number", "minimum": 0.0, "maximum": 1.0 },
