@@ -213,6 +213,88 @@ pub fn speak_fx(
     let _ = std::fs::remove_file(&tmp_path);
 }
 
+// ─── Coqui TTS path ───────────────────────────────────────────────────────────
+
+/// Render `text` using the Coqui TTS CLI (`tts` binary), apply FX, and push to
+/// the audio ring buffer.  Falls back silently to `speak_fx()` when:
+///   - the `tts` binary is not in PATH, or
+///   - synthesis fails for any reason.
+///
+/// Coqui TTS CLI usage: `tts --text "…" --out_path /tmp/out.wav`
+/// Uses the default model that ships with Coqui TTS.
+#[allow(clippy::too_many_arguments)]
+pub fn speak_coqui(
+    text: &str,
+    mode: &ConversationMode,
+    pitch: u8,
+    speed: u16,
+    amplitude: u8,
+    voice_char: &McVoiceChar,
+    randomise: bool,
+    reverb_mix: f32,
+    bitcrush: f32,
+    pitch_snap: bool,
+    root_note: u8,
+    scale: crate::state::Scale,
+    tts_tx: &Arc<Mutex<Producer<f32>>>,
+) {
+    let clean: String = text
+        .chars()
+        .filter(|c| c.is_ascii_graphic() || *c == ' ')
+        .take(200)
+        .collect();
+    if clean.is_empty() {
+        return;
+    }
+
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .subsec_nanos();
+    let tmp_path = format!("/tmp/impulse_coqui_{}.wav", nanos);
+
+    // Attempt Coqui TTS synthesis.
+    let coqui_ok = std::process::Command::new("tts")
+        .args(["--text", &clean, "--out_path", &tmp_path])
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false);
+
+    if !coqui_ok {
+        // Binary not found or synthesis failed — fall back to espeak-ng FX path.
+        log::debug!("Coqui TTS unavailable — falling back to espeak-ng");
+        speak_fx(
+            text, mode, pitch, speed, amplitude, voice_char, randomise, reverb_mix, bitcrush,
+            pitch_snap, root_note, scale, tts_tx,
+        );
+        let _ = std::fs::remove_file(&tmp_path);
+        return;
+    }
+
+    // Decode and apply FX (same pipeline as speak_fx).
+    if let Some(mut samples) = read_wav_f32(&tmp_path) {
+        if pitch_snap && let Some(hz) = detect_pitch_hz(&samples, 44100.0) {
+            let detected_midi = (12.0 * (hz / 440.0).log2() + 69.0).round() as u8;
+            let snapped_midi = crate::state::snap_to_scale(detected_midi, root_note, scale);
+            let shift = snapped_midi as f32 - detected_midi as f32;
+            samples = resample_pitch_shift(&samples, shift);
+        }
+        tts_apply_reverb(&mut samples, reverb_mix);
+        if bitcrush > 0.01 {
+            tts_apply_bitcrush(&mut samples, bitcrush);
+        }
+        let mut tx = tts_tx.lock();
+        for s in &samples {
+            let _ = tx.push(*s);
+        }
+    }
+
+    let _ = std::fs::remove_file(&tmp_path);
+}
+
 /// Minimal PCM-16 WAV reader — returns mono f32 samples normalised to ±1.
 /// Converts stereo to mono by averaging channels.
 /// Returns `None` on any parse error (not a valid RIFF/WAV).

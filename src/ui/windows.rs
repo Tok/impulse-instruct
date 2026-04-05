@@ -236,7 +236,7 @@ impl ImpulseApp {
                         ui.add_space(6.0);
                         ui.horizontal(|ui| {
                             ui.label(
-                                egui::RichText::new("TTS voice (espeak-ng)")
+                                egui::RichText::new("TTS voice")
                                     .monospace()
                                     .size(9.5)
                                     .color(theme::FOG),
@@ -255,6 +255,49 @@ impl ImpulseApp {
                                 },
                             );
                         });
+                        // TTS engine selector
+                        ui.horizontal(|ui| {
+                            ui.label(
+                                egui::RichText::new("TTS engine")
+                                    .monospace()
+                                    .size(9.0)
+                                    .color(theme::SMOKE),
+                            );
+                            ui.with_layout(
+                                egui::Layout::right_to_left(egui::Align::Center),
+                                |ui| {
+                                    use crate::state::TtsEngine;
+                                    let cur = self.state.read().llm.tts_engine.clone();
+                                    for (label, variant) in &[
+                                        ("espeak-ng", TtsEngine::EspeakNg),
+                                        ("Coqui TTS", TtsEngine::CoquiTts),
+                                    ] {
+                                        let active = cur == *variant;
+                                        let color =
+                                            if active { theme::FOG } else { theme::IRON };
+                                        if ui
+                                            .add(
+                                                egui::Button::new(
+                                                    egui::RichText::new(*label)
+                                                        .monospace()
+                                                        .size(9.0)
+                                                        .color(color),
+                                                )
+                                                .fill(egui::Color32::TRANSPARENT),
+                                            )
+                                            .clicked()
+                                        {
+                                            self.state.write().llm.tts_engine =
+                                                variant.clone();
+                                        }
+                                    }
+                                },
+                            );
+                        })
+                        .response
+                        .on_hover_text(
+                            "Coqui TTS: neural voice (requires `tts` CLI in PATH). Falls back to espeak-ng if unavailable.",
+                        );
                         // TTS pitch / speed / amplitude sliders (shown when TTS is on)
                         if self.state.read().llm.tts_enabled {
                             for (label, hint) in &[

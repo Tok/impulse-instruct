@@ -129,8 +129,9 @@ Ordered by value — tackle roughly from top to bottom.
 - [x] **XY pad improvements** — param name tooltip on cursor; arbitrary param pair selection.
       Right-click cycles pairs stored in egui temp memory; pair indicator (n/N) in corner.
 
-- [ ] **Coqui TTS** — higher quality MC voice. Python subprocess or REST call; espeak-ng stays
-      as fallback.
+- [x] **Coqui TTS** — higher quality MC voice. `TtsEngine` enum (EspeakNg / CoquiTts) in
+      `LlmState`. `speak_coqui()` calls `tts --text … --out_path /tmp/…` CLI; auto-falls
+      back to espeak-ng if binary not found. Engine toggle in TTS settings panel.
 
 ### Immediate
 

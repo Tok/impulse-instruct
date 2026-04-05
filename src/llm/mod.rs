@@ -880,6 +880,7 @@ pub fn run_llm_loop(
                         pitch_snap,
                         root_note,
                         tts_scale,
+                        tts_engine,
                     ) = {
                         let s = state.read();
                         (
@@ -895,27 +896,46 @@ pub fn run_llm_loop(
                             s.llm.tts_pitch_snap,
                             s.sequencer.root_note,
                             s.sequencer.scale,
+                            s.llm.tts_engine.clone(),
                         )
                     };
                     let tts_mode = matches!(mode, ConversationMode::Mc | ConversationMode::Dj);
                     if tts_on && tts_mode {
+                        use crate::state::TtsEngine;
                         let tts_text = output.mc_line.as_deref().unwrap_or(comment);
                         log::info!("[TTS] {}", tts_text);
-                        speak_fx(
-                            tts_text,
-                            &mode,
-                            tts_pitch,
-                            tts_speed,
-                            tts_amplitude,
-                            &voice_char,
-                            randomise,
-                            rev_mix,
-                            bitcrush,
-                            pitch_snap,
-                            root_note,
-                            tts_scale,
-                            &tts_tx,
-                        );
+                        match tts_engine {
+                            TtsEngine::CoquiTts => speak_coqui(
+                                tts_text,
+                                &mode,
+                                tts_pitch,
+                                tts_speed,
+                                tts_amplitude,
+                                &voice_char,
+                                randomise,
+                                rev_mix,
+                                bitcrush,
+                                pitch_snap,
+                                root_note,
+                                tts_scale,
+                                &tts_tx,
+                            ),
+                            TtsEngine::EspeakNg => speak_fx(
+                                tts_text,
+                                &mode,
+                                tts_pitch,
+                                tts_speed,
+                                tts_amplitude,
+                                &voice_char,
+                                randomise,
+                                rev_mix,
+                                bitcrush,
+                                pitch_snap,
+                                root_note,
+                                tts_scale,
+                                &tts_tx,
+                            ),
+                        }
                     }
                 }
                 let mut output = output;
@@ -956,4 +976,4 @@ pub fn run_llm_loop(
 }
 
 pub mod tts;
-pub use tts::speak_fx;
+pub use tts::{speak_coqui, speak_fx};

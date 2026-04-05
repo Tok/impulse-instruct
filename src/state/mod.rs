@@ -490,6 +490,17 @@ pub enum StyleVerbosity {
     Full, // long prose description — more context for capable models
 }
 
+/// TTS backend selection.
+/// EspeakNg: always available, low quality, zero setup.
+/// CoquiTts: higher quality neural voice; requires `tts` CLI in PATH. Falls
+///           back to espeak-ng automatically if the binary is not found.
+#[derive(Clone, Debug, PartialEq, Default, Serialize, Deserialize)]
+pub enum TtsEngine {
+    #[default]
+    EspeakNg,
+    CoquiTts,
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct LlmState {
     pub model_path: String,
@@ -515,25 +526,27 @@ pub struct LlmState {
     pub enable_thinking: bool,          // append /think or /no_think to prompt (Qwen3)
     pub show_thinking_in_log: bool,     // display reasoning blocks inline in the log
     // ── Sampling params (passed to llama-server on every inference call) ──────
-    pub top_k: i32,                      // 0 = disabled; Gemma default 64
-    pub top_p: f32,                      // nucleus sampling; Gemma default 0.95
-    pub min_p: f32,                      // min-prob floor; default 0.05
-    pub repeat_penalty: f32,             // 1.0 = off; >1.0 penalises repeated tokens
-    pub frequency_penalty: f32,          // OpenAI-compat; 0.0 = off
-    pub seed: i64,                       // -1 = random each call
-    pub tts_enabled: bool,               // speak MC/DJ content via espeak-ng when true
-    pub tts_pitch: u8,                   // 0 = mode default; 1–99 override
-    pub tts_speed: u16,                  // 0 = mode default; words/min override
-    pub tts_amplitude: u8,               // 0 = default (100); 1–200 override
-    pub tts_voice_char: McVoiceChar,     // voice character preset (Auto = follow mode)
-    pub tts_randomise: bool,             // ±10% pitch/speed jitter per utterance
-    pub tts_reverb_mix: f32,             // 0.0–1.0 wet reverb on TTS audio (default 0.3)
-    pub tts_bitcrush: f32,               // 0.0–1.0 bitcrush depth on TTS audio (0 = off)
-    pub tts_pitch_snap: bool,            // snap TTS voice to nearest in-key note (T-Pain effect)
+    pub top_k: i32,                  // 0 = disabled; Gemma default 64
+    pub top_p: f32,                  // nucleus sampling; Gemma default 0.95
+    pub min_p: f32,                  // min-prob floor; default 0.05
+    pub repeat_penalty: f32,         // 1.0 = off; >1.0 penalises repeated tokens
+    pub frequency_penalty: f32,      // OpenAI-compat; 0.0 = off
+    pub seed: i64,                   // -1 = random each call
+    pub tts_enabled: bool,           // speak MC/DJ content via espeak-ng when true
+    pub tts_pitch: u8,               // 0 = mode default; 1–99 override
+    pub tts_speed: u16,              // 0 = mode default; words/min override
+    pub tts_amplitude: u8,           // 0 = default (100); 1–200 override
+    pub tts_voice_char: McVoiceChar, // voice character preset (Auto = follow mode)
+    pub tts_randomise: bool,         // ±10% pitch/speed jitter per utterance
+    pub tts_reverb_mix: f32,         // 0.0–1.0 wet reverb on TTS audio (default 0.3)
+    pub tts_bitcrush: f32,           // 0.0–1.0 bitcrush depth on TTS audio (0 = off)
+    pub tts_pitch_snap: bool,        // snap TTS voice to nearest in-key note (T-Pain effect)
+    #[serde(default)]
+    pub tts_engine: TtsEngine, // EspeakNg (default) or CoquiTts (falls back if not installed)
     pub style_verbosity: StyleVerbosity, // Brief = ~50 token brief, Full = ~150 token description
-    pub auto_lock_on_touch: bool,        // if true, touching a knob locks it to user-only control
-    pub auto_compact: bool,              // restart server automatically when context > 85% full
-    pub is_mock: bool,                   // true when running without a real model (no llama-server)
+    pub auto_lock_on_touch: bool,    // if true, touching a knob locks it to user-only control
+    pub auto_compact: bool,          // restart server automatically when context > 85% full
+    pub is_mock: bool,               // true when running without a real model (no llama-server)
     pub llm_initializing: bool, // true while wait_for_ready is running (suppress false mock warning)
 }
 
@@ -577,6 +590,7 @@ impl Default for LlmState {
             tts_reverb_mix: 0.3,
             tts_bitcrush: 0.0,
             tts_pitch_snap: false,
+            tts_engine: TtsEngine::EspeakNg,
             style_verbosity: StyleVerbosity::Full,
             auto_lock_on_touch: false,
             auto_compact: true,
