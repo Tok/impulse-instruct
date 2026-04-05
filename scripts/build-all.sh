@@ -9,6 +9,8 @@
 #   rustup update stable               (needs rustc 1.89+)
 #   cargo install cargo-xwin
 #   sudo apt install clang lld cmake ninja-build
+# Note: Ubuntu installs LLVM tools as llvm-lib-18 etc. (versioned). This script
+# creates unversioned symlinks in /usr/local/bin automatically when they're missing.
 # ──────────────────────────────────────────────────────────────────────────────
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -55,6 +57,19 @@ if ! command -v clang &>/dev/null; then
   echo "  WARNING: clang not found. Install with: sudo apt install clang lld cmake"
   echo "  Skipping Windows build."
 else
+  # cc-rs (used by ring and other C deps) looks for llvm-lib and llvm-dlltool without
+  # a version suffix. Ubuntu installs them as llvm-lib-18 etc. Create unversioned
+  # symlinks in /usr/local/bin if they're missing so cc-rs can find them.
+  for tool in llvm-lib llvm-dlltool llvm-ar; do
+    if ! command -v "$tool" &>/dev/null; then
+      versioned=$(ls /usr/bin/${tool}-* 2>/dev/null | sort -V | tail -1)
+      if [[ -n "$versioned" ]]; then
+        echo "  Symlinking $versioned -> /usr/local/bin/$tool"
+        sudo ln -sf "$versioned" "/usr/local/bin/$tool"
+      fi
+    fi
+  done
+
   cargo xwin build --release --target "$WIN_TARGET" $FEATURE_FLAGS
 
   WIN_BIN="target/${WIN_TARGET}/release/impulse-instruct.exe"
