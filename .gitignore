@@ -1,4 +1,5 @@
 /target
+/dist
 /models/*.gguf
 /models/*.bin
 .env

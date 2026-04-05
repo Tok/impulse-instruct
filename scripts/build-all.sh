@@ -26,11 +26,13 @@ mkdir -p "$DIST"
 echo "══════════════════════════════════════════"
 echo "  Building Linux (x86_64)…"
 echo "══════════════════════════════════════════"
-cargo build --release $FEATURE_FLAGS
+cargo build --release --bin impulse-instruct $FEATURE_FLAGS
 
 LINUX_BIN="target/release/impulse-instruct"
 cp "$LINUX_BIN" "${DIST}/impulse-instruct-linux-x86_64"
 strip "${DIST}/impulse-instruct-linux-x86_64"
+cp scripts/dist-start.sh "${DIST}/start.sh"
+chmod +x "${DIST}/start.sh"
 echo "✓ Linux: ${DIST}/impulse-instruct-linux-x86_64 ($(du -sh "${DIST}/impulse-instruct-linux-x86_64" | cut -f1))"
 
 # ── Windows ───────────────────────────────────────────────────────────────────
@@ -86,10 +88,11 @@ else
     exit 1
   fi
 
-  cargo xwin build --release --target "$WIN_TARGET" $FEATURE_FLAGS
+  cargo xwin build --release --bin impulse-instruct --target "$WIN_TARGET" $FEATURE_FLAGS
 
   WIN_BIN="target/${WIN_TARGET}/release/impulse-instruct.exe"
   cp "$WIN_BIN" "${DIST}/impulse-instruct-windows-x86_64.exe"
+  cp scripts/dist-start.bat "${DIST}/start.bat"
   echo "✓ Windows: ${DIST}/impulse-instruct-windows-x86_64.exe ($(du -sh "${DIST}/impulse-instruct-windows-x86_64.exe" | cut -f1))"
 fi
 

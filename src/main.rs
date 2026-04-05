@@ -99,7 +99,75 @@ impl Args {
     }
 }
 
-fn main() -> anyhow::Result<()> {
+fn main() {
+    if let Err(e) = run() {
+        let msg = format!("Impulse Instruct failed to start:\n\n{e}");
+        eprintln!("{msg}");
+        // Write a log file next to the binary so users who launched without a
+        // terminal can find the error (the dialog below may not be available
+        // in all environments).
+        if let Ok(exe) = std::env::current_exe() {
+            let log = exe.with_file_name("impulse-instruct-error.log");
+            let _ = std::fs::write(&log, &msg);
+            eprintln!("Error log written to {}", log.display());
+        }
+        show_startup_error(&msg);
+        std::process::exit(1);
+    }
+}
+
+/// Show a native error dialog when startup fails before the UI is available.
+/// Tries platform-specific GUI tools in order; falls back gracefully.
+fn show_startup_error(msg: &str) {
+    #[cfg(unix)]
+    {
+        let args_list: &[(&str, &[&str])] = &[
+            (
+                "zenity",
+                &["--error", "--no-wrap", "--title=Impulse Instruct", "--text"],
+            ),
+            ("kdialog", &["--error", "--title=Impulse Instruct"]),
+            ("xmessage", &["-center", "-title", "Impulse Instruct"]),
+        ];
+        for (tool, prefix) in args_list {
+            let ok = std::process::Command::new(tool)
+                .args(*prefix)
+                .arg(msg)
+                .status()
+                .map(|s| s.success())
+                .unwrap_or(false);
+            if ok {
+                return;
+            }
+        }
+    }
+    #[cfg(windows)]
+    {
+        #[link(name = "user32")]
+        extern "system" {
+            fn MessageBoxA(
+                hwnd: *mut core::ffi::c_void,
+                text: *const u8,
+                caption: *const u8,
+                utype: u32,
+            ) -> i32;
+        }
+        let text = format!("{msg}\0");
+        let caption = b"Impulse Instruct\0";
+        // SAFETY: MessageBoxA is always available on Windows; pointers are valid
+        // for the duration of the call; strings are null-terminated.
+        unsafe {
+            MessageBoxA(
+                std::ptr::null_mut(),
+                text.as_ptr(),
+                caption.as_ptr(),
+                0x10, // MB_ICONERROR
+            );
+        }
+    }
+}
+
+fn run() -> anyhow::Result<()> {
     let args = Args::parse();
 
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or(&args.log_level))
