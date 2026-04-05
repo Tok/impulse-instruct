@@ -259,6 +259,8 @@ pub struct ImpulseApp {
     auto_listen: bool,
     // Counts jam cycles since the last auto-listen trigger.
     auto_listen_counter: u32,
+    // When jam_bars > 0, this holds the Instant when the next jam cycle should fire.
+    jam_next_fire: Option<std::time::Instant>,
 }
 
 impl ImpulseApp {
@@ -377,6 +379,7 @@ impl ImpulseApp {
             last_saved_rack_sig: (0, 0),
             auto_listen: false,
             auto_listen_counter: 0,
+            jam_next_fire: None,
         }
     }
 
@@ -511,6 +514,9 @@ impl ImpulseApp {
                     let next = crate::state::jam_tools::advance_ramps(cur);
                     *self.state.write() = next;
                 }
+                // Increment cycle count.
+                self.state.write().llm.jam_cycle_count =
+                    self.state.read().llm.jam_cycle_count.saturating_add(1);
                 // Auto-listen: every 4 jam cycles, inject an audio snapshot.
                 if self.auto_listen {
                     self.auto_listen_counter += 1;
@@ -519,10 +525,22 @@ impl ImpulseApp {
                         self.trigger_listen();
                     }
                 }
-                let _ = self.llm_tx.try_send(LlmInput::Infer {
-                    prompt: "continue jamming, evolve the pattern".to_string(),
-                    one_shot: false,
-                });
+                // Schedule next cycle: immediately if jam_bars == 0, else after N bars.
+                let (jam_bars, bpm) = {
+                    let s = self.state.read();
+                    (s.llm.jam_bars, s.sequencer.bpm)
+                };
+                if jam_bars > 0.0 && bpm > 0.0 {
+                    let delay_ms = (jam_bars * 240_000.0 / bpm) as u64;
+                    self.jam_next_fire = Some(
+                        std::time::Instant::now() + std::time::Duration::from_millis(delay_ms),
+                    );
+                } else {
+                    let _ = self.llm_tx.try_send(LlmInput::Infer {
+                        prompt: "continue jamming, evolve the pattern".to_string(),
+                        one_shot: false,
+                    });
+                }
             }
             // Handle actions extracted from the LLM JSON (save_project, heat, settings).
             for action in &out.actions {
@@ -553,6 +571,10 @@ impl ImpulseApp {
                             _ => ConversationMode::Producer,
                         };
                         self.state.write().llm.conversation_mode = mode;
+                        self.session_dirty = true;
+                    }
+                    crate::llm::LlmAction::SetJamBars(b) => {
+                        self.state.write().llm.jam_bars = *b;
                         self.session_dirty = true;
                     }
                 }
@@ -675,6 +697,22 @@ impl eframe::App for ImpulseApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         self.drain_llm_outputs();
         self.drain_midi_events();
+
+        // ── Jam timer: fire delayed jam cycle when the bar-count delay elapses ──
+        if let Some(fire_at) = self.jam_next_fire {
+            if std::time::Instant::now() >= fire_at {
+                self.jam_next_fire = None;
+                if self.state.read().llm.heat > 0.0 {
+                    let _ = self.llm_tx.try_send(LlmInput::Infer {
+                        prompt: "continue jamming, evolve the pattern".to_string(),
+                        one_shot: false,
+                    });
+                }
+            } else {
+                // Still waiting — request a repaint so we check again next frame
+                ctx.request_repaint_after(std::time::Duration::from_millis(200));
+            }
+        }
 
         // ── Auto-save session when rack or key settings change ────────────────
         {

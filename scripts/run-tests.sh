@@ -50,7 +50,11 @@ fi
 echo "══════════════════════════════════════════"
 echo "  Running tests…"
 echo "══════════════════════════════════════════"
-cargo test ${FILTER:+-- $FILTER} "${EXTRA[@]}" 2>&1
+set +e
+cargo test ${FILTER:+-- $FILTER} "${EXTRA[@]}" 2>&1 | grep -Ev "^running 0 tests$|^test result: ok\. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered"
+TEST_EXIT=${PIPESTATUS[0]}
+set -e
+if [ "$TEST_EXIT" -ne 0 ]; then exit "$TEST_EXIT"; fi
 
 # ── Coverage ──────────────────────────────────────────────────────────────────
 if $COVERAGE; then

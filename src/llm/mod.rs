@@ -40,6 +40,7 @@ pub enum LlmAction {
     SetHeat(f32),
     SetPersona(String),
     SetConversationMode(String),
+    SetJamBars(f32),
 }
 
 #[derive(Clone, Debug)]
@@ -568,6 +569,9 @@ impl LlmBackend for LlamaServerBackend {
                 }
                 if let Some(m) = s.get("conversation_mode").and_then(|v| v.as_str()) {
                     actions.push(LlmAction::SetConversationMode(m.to_string()));
+                }
+                if let Some(j) = s.get("jam_bars").and_then(|v| v.as_f64()) {
+                    actions.push(LlmAction::SetJamBars((j as f32).max(0.0)));
                 }
             }
             // Don't pass "settings" to apply_llm_update - remove it

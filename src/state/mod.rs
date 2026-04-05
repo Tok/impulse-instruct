@@ -566,6 +566,10 @@ pub struct LlmState {
     pub llm_initializing: bool, // true while wait_for_ready is running (suppress false mock warning)
     #[serde(default)]
     pub active_ramps: Vec<ParamRamp>, // ongoing smooth parameter transitions
+    #[serde(default)]
+    pub jam_bars: f32, // 0.0 = continuous (fire immediately); N = wait N bars before re-triggering
+    #[serde(default)]
+    pub jam_cycle_count: u32, // total jam cycles completed (display only)
 }
 
 impl Default for LlmState {
@@ -615,6 +619,8 @@ impl Default for LlmState {
             is_mock: false,
             llm_initializing: true, // cleared by LLM thread once live/mock status is known
             active_ramps: Vec::new(),
+            jam_bars: 0.0,
+            jam_cycle_count: 0,
         }
     }
 }

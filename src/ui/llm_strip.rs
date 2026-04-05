@@ -237,6 +237,87 @@ impl ImpulseApp {
                     });
                 }); // end top row
 
+                // ── JAM timing row ────────────────────────────────────────────
+                ui.horizontal(|ui| {
+                    ui.label(
+                        egui::RichText::new("JAM")
+                            .monospace()
+                            .size(8.5)
+                            .color(theme::ASH),
+                    );
+                    // Interval selector: CONT | 1 | 2 | 4 | 8 bars
+                    let (jam_bars, cycle_count, bpm, is_inferring, active_ramps, tps) = {
+                        let s = self.state.read();
+                        (
+                            s.llm.jam_bars,
+                            s.llm.jam_cycle_count,
+                            s.sequencer.bpm,
+                            s.llm.is_inferring,
+                            s.llm.active_ramps.len(),
+                            s.llm.tokens_per_sec,
+                        )
+                    };
+                    for (label, bars) in &[("CONT", 0.0f32), ("1", 1.0), ("2", 2.0), ("4", 4.0), ("8", 8.0)] {
+                        let active = (jam_bars - bars).abs() < 0.01;
+                        let col = if active { theme::FOG } else { theme::SMOKE };
+                        if ui.add(
+                            egui::Button::new(
+                                egui::RichText::new(*label).monospace().size(8.0).color(col),
+                            )
+                            .fill(egui::Color32::TRANSPARENT)
+                            .min_size(egui::vec2(0.0, 12.0)),
+                        ).on_hover_text(if *bars == 0.0 {
+                            "Fire next cycle immediately after inference".to_string()
+                        } else {
+                            format!("Wait {} bar{} (~{:.0}s) between cycles",
+                                bars, if *bars > 1.0 { "s" } else { "" },
+                                bars * 240.0 / bpm)
+                        }).clicked() {
+                            self.state.write().llm.jam_bars = *bars;
+                        }
+                    }
+                    ui.add_space(6.0);
+                    // Cycle counter
+                    ui.label(
+                        egui::RichText::new(format!("#{}", cycle_count))
+                            .monospace()
+                            .size(8.0)
+                            .color(theme::IRON),
+                    ).on_hover_text("Total jam cycles completed");
+                    // Inference indicator + tokens/sec
+                    if is_inferring {
+                        ui.label(
+                            egui::RichText::new("▶").size(8.0).color(theme::FOG),
+                        ).on_hover_text(format!("{:.1} tok/s", tps));
+                    } else if tps > 0.0 {
+                        ui.label(
+                            egui::RichText::new(format!("{:.1}t/s", tps))
+                                .monospace()
+                                .size(7.5)
+                                .color(theme::IRON),
+                        ).on_hover_text("Tokens per second (last inference)");
+                    }
+                    // Active ramps indicator
+                    if active_ramps > 0 {
+                        ui.label(
+                            egui::RichText::new(format!("~{}", active_ramps))
+                                .monospace()
+                                .size(7.5)
+                                .color(theme::IRON),
+                        ).on_hover_text(format!("{} active ramp{}", active_ramps, if active_ramps > 1 { "s" } else { "" }));
+                    }
+                    // Countdown when waiting between cycles
+                    if let Some(fire_at) = self.jam_next_fire {
+                        let remaining = fire_at.duration_since(std::time::Instant::now());
+                        ui.label(
+                            egui::RichText::new(format!("in {:.1}s", remaining.as_secs_f32()))
+                                .monospace()
+                                .size(7.5)
+                                .color(theme::ASH),
+                        ).on_hover_text("Next jam cycle fires after this delay");
+                    }
+                });
+
                 // ── LISTEN bar: capture + analysis display ────────────────────
                 ui.horizontal(|ui| {
                     // Listen button — drains capture ring buffer, runs analysis
