@@ -5,9 +5,9 @@
 ```bash
 cargo check                          # fast type-check, no binary
 cargo build                          # debug build
-cargo run                            # run (mock LLM, no model needed)
-cargo run -- --api                   # enable HTTP API on :8765
-cargo run -- --api --model models/x.gguf --log debug
+cargo run                            # run (mock LLM, HTTP API on by default)
+cargo run -- --no-api                # run without HTTP/MCP API
+cargo run -- --model models/x.gguf --log debug
 cargo run --features llm --release   # real LLM inference (needs libclang-dev)
 cargo test                           # unit tests (split across src/tests/)
 ./start.sh                           # build + launch (release, mock LLM)

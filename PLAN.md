@@ -177,13 +177,44 @@ Ordered by value — tackle roughly from top to bottom.
 
 - [x] **Gabber kick voice** — CLIP knob on both kicks. Hard-clip drive: boost then clamp to ±1.
 
+- [ ] **TTS as rack modules** — replace the current single `TtsEngine` enum with two proper
+      rack module kinds: `EspeakNgTts` and `CoquiTts`. Each has audio output ports so
+      it can be patched into the FX chain like any other module. Module front panel shows
+      voice/speed/pitch controls and a SYNC button (triggers a phrase on every N bars).
+      Personality (MC / DJ / Producer / Off) moves into a separate `PersonalityModule` that
+      can be connected to any TTS node — user drops the module they want, LLM can do the same.
+      The current `tts_engine` field + UI settings panel become a migration shim until rack
+      adoption is complete.
+
+- [ ] **LLM jam tools** — internal helpers that aren't user-facing but make the LLM more
+      capable during autonomous jamming:
+      - **Ramp scheduling**: `{"ramp": {"param": "fx.reverb_mix", "from": 0.0, "to": 0.6, "bars": 8}}`
+        — LLM can schedule smooth transitions over multiple bars instead of hard jumps.
+      - **Behaviour templates**: named presets the LLM can invoke to express intent
+        ("build", "drop", "breakdown", "full_energy") that expand to a set of param changes.
+      - **Heat-aware mutation rules**: at heat < 0.3 only rhythmic variation; at heat > 0.7
+        allow timbre + FX sweeps; at heat = 1.0 anything goes.
+
+- [ ] **Internal music API** — helper functions the LLM can call as tool-calls (or via
+      structured JSON extensions) to do music-theory work without reinventing it each time:
+      - `chord(root, quality)` → note array (e.g. `chord("E", "major")` → [E, G#, B])
+      - `random_chord(key)` → diatonic chord in key
+      - `amen_pattern(heat)` → randomised Amen break step array at given heat level (0–1)
+      - `scale_run(root, scale, direction)` → bass pattern ascending/descending through scale
+      These are pure Rust functions in a new `src/music_api/` module, callable from
+      `apply_llm_update` when the LLM output includes a `"music_api"` block.
+
 - [ ] **Multiple voices** — `Vec<SynthVoice>`, each with its own sequencer + oscillator + filter. LLM can target "voice 2, more acid".
 
 - [ ] **Multiple LLM instances** — one LLM per voice, or routing matrix.
 
 - [ ] **Modular cable UI** (Reason-style rack flip) — Tab flips to back panel showing I/O ports + Bezier cables. Needs modular FX routing first.
 
-- [ ] **Bloom post-process** — egui frame → wgpu render pass → Gaussian blur on bright pixels → additive blend. Gated by `UiPrefs.bloom_enabled`. Costs a GPU render pass per frame.
+- [ ] **Bloom post-process / UI polish** — Current knob highlights already look good.
+      Re-evaluate: Bloom (egui → wgpu render pass → Gaussian blur on bright pixels →
+      additive blend) is GPU-expensive and may not add much over existing chrome finish.
+      Alternative: spend the effort on general UI polish — tighter layout, better colour
+      contrast on inactive controls, smoother XY pad interactions. Decide when tackling.
 
 - [x] **XY pad improvements** — done: tooltip, pair cycling, pair indicator.
 
