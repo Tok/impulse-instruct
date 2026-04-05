@@ -46,7 +46,7 @@ scripts\run-llm-theory.bat
 | `src/api/mod.rs` | axum HTTP/MCP API. Only starts when `--api` flag passed. |
 | `src/midi/mod.rs` | midir input (CC→param mapping, NoteOn/Off → live record) + MIDI clock output (MidiClockOutput struct). |
 | `src/ui/mod.rs` | egui app: 5 panels (Sequencer / 303 / 808 / 909 / FX) + AN1X + Hoover sub-panels. |
-| `src/ui/theme.rs` | Grayscale palette — all colors are R=G=B. Huth Farbige Noten colors used for note highlights only. |
+| `src/ui/theme.rs` | Grayscale palette — **all UI colors must satisfy R=G=B** (no tint). Huth *Farbige Noten* colors are the only exception (note highlights). See `docs/ui-design.md`. |
 | `src/ui/widgets.rs` | Chrome knob, glass slider, embossed button, step button, LED, XY pad, oscilloscope, ADSR visualizer. |
 | `src/ui/panels/` | One file per synth panel (bass, 808, 909, hoover, an1x, fx, sequencer). |
 | `src/state/transitions.rs` | Pure state transition functions (all the `toggle_*`, `set_*`, `apply_*`, `bank_*`, `chain_*` fns). |
@@ -206,14 +206,8 @@ POST /api/sequencer/stop
 
 ## Not yet implemented
 
-- Amen break sampler voice (load WAV, pitch + time-stretch)
-- Autotune / pitch-snap on TTS output (rubberband-cli post-process)
-- MIDI clock in (slave BPM to external)
-- OSC support (Max/MSP, TouchOSC)
-- Stem export (per-voice WAV)
-- Project versioning (auto-save snapshots, revert history)
 - Modular FX routing (currently a fixed chain)
 - Gabber kick voice (pitch env + hard clipper)
 - Bloom post-process (needs custom wgpu render pass)
+- Multiple voices / multiple LLM instances
 - Alternate tuning tables (gamelan slendro etc.)
-- Windows: `start.bat`, `build.bat`
