@@ -4,6 +4,9 @@
 
 # Impulse Instruct
 
+[![CI](https://github.com/Tok/impulse-instruct/actions/workflows/ci.yml/badge.svg)](https://github.com/Tok/impulse-instruct/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/Tok/impulse-instruct/branch/main/graph/badge.svg)](https://codecov.io/gh/Tok/impulse-instruct)
+
 A **smart synthesizer** - a full-featured software synth with a locally-running language model built directly into the instrument. **PULSE** is the AI inside: it reads the entire parameter schema of the synth, understands music theory and genre vocabulary, and has direct write access to every knob and every step in the pattern.
 
 You talk to it the way you'd talk to a collaborator in the studio. Say "make it acid" and it adjusts the ladder filter, env mod, resonance, and note density to get there. Say "dark techno, sparse, 132 BPM" and it restructures the pattern and tightens the FX routing to match. Say "keep the kick but change everything else" and it respects that boundary.
