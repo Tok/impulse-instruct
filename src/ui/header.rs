@@ -616,46 +616,72 @@ impl ImpulseApp {
                         } else {
                             (egui::Color32::WHITE, "CHAOS")
                         };
-                        // Pct label — fixed width so slider doesn't shift
-                        ui.scope(|ui| {
-                            ui.set_min_width(36.0);
-                            ui.set_max_width(36.0);
-                            ui.label(
-                                egui::RichText::new(format!("{heat_pct}%"))
-                                    .color(heat_color)
-                                    .monospace()
-                                    .size(9.0),
+                        // Pct + tier labels: use allocate_exact_size so the RTL cursor
+                        // advances by exactly the right amount (ui.scope+set_min_width
+                        // is unreliable in RTL and causes available_width() to be wrong).
+                        let row_h = ui.available_height();
+                        {
+                            let (r, _) = ui.allocate_exact_size(
+                                egui::vec2(36.0, row_h),
+                                egui::Sense::hover(),
                             );
-                        });
-                        // Tier label — fixed width
-                        ui.scope(|ui| {
-                            ui.set_min_width(40.0);
-                            ui.set_max_width(40.0);
-                            ui.label(
-                                egui::RichText::new(heat_tier)
-                                    .color(heat_color)
-                                    .monospace()
-                                    .size(8.5)
-                                    .strong(),
+                            if ui.is_rect_visible(r) {
+                                ui.painter().text(
+                                    r.center(),
+                                    egui::Align2::CENTER_CENTER,
+                                    format!("{heat_pct}%"),
+                                    egui::FontId::monospace(9.0),
+                                    heat_color,
+                                );
+                            }
+                        }
+                        {
+                            let (r, _) = ui.allocate_exact_size(
+                                egui::vec2(40.0, row_h),
+                                egui::Sense::hover(),
                             );
-                        });
-                        // Heat slider — fills all remaining space
-                        let heat_w = ui.available_width().max(80.0) - 44.0;
+                            if ui.is_rect_visible(r) {
+                                ui.painter().text(
+                                    r.center(),
+                                    egui::Align2::CENTER_CENTER,
+                                    heat_tier,
+                                    egui::FontId::monospace(8.5),
+                                    heat_color,
+                                );
+                            }
+                        }
+                        // Heat slider — fills all remaining space (minus HEAT label)
+                        let heat_label_w = 44.0;
+                        let heat_w = (ui.available_width() - heat_label_w).max(60.0);
                         let slider = egui::Slider::new(&mut heat, 0.0..=1.0)
                             .show_value(false)
                             .trailing_fill(true);
                         if ui.add_sized([heat_w, 18.0], slider).changed() {
                             self.state.write().llm.heat = heat;
                         }
-                        ui.label(
-                            egui::RichText::new("HEAT")
-                                .color(heat_color)
-                                .monospace()
-                                .size(9.0),
-                        )
-                        .on_hover_text(
-                            "Jam energy and LLM creativity. CHAOS (100%) = maximum disorder, extreme settings, unpredictable mutations.",
-                        );
+                        {
+                            let (r, resp) = ui.allocate_exact_size(
+                                egui::vec2(heat_label_w, row_h),
+                                egui::Sense::hover(),
+                            );
+                            if ui.is_rect_visible(r) {
+                                ui.painter().text(
+                                    r.center(),
+                                    egui::Align2::CENTER_CENTER,
+                                    "HEAT",
+                                    egui::FontId::monospace(9.0),
+                                    heat_color,
+                                );
+                            }
+                            if resp.hovered() {
+                                egui::show_tooltip_text(
+                                    ui.ctx(),
+                                    ui.layer_id(),
+                                    egui::Id::new("heat_tooltip"),
+                                    "Jam energy and LLM creativity. CHAOS (100%) = maximum disorder, extreme settings, unpredictable mutations.",
+                                );
+                            }
+                        }
                     });
                 });
             });

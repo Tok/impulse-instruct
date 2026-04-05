@@ -36,7 +36,7 @@ pub fn print_banner() {
     // within the 72-char keyboard width (2-space indent + 70 key cells).
     println!();
     println!(
-        "{SUBGRAY}  ▁▂▄▅▇██▇▅▄▂▁▁▂▄▅▇██{GRAY} I M P U L S E   I N S T R U C T {SUBGRAY}██▇▅▄▂▁▁▂▄▅▇██▇▅▄▂▁{RESET}"
+        "{SUBGRAY}  ▁▂▄▅▇██▇▅▄▂▁▁▂▄▅▇█{GRAY} I M P U L S E • I N S T R U C T {SUBGRAY}█▇▅▄▂▁▁▂▄▅▇██▇▅▄▂▁{RESET}"
     );
     println!(
         "{SUBGRAY}   a synthesizer with a tiny LLM living inside of it · Rust · llama.cpp{RESET}"
