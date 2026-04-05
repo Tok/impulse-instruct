@@ -82,6 +82,10 @@ pub struct CardResponse {
     pub toggle_clicked: bool,
     /// Whether the remove button was clicked.
     pub remove_clicked: bool,
+    /// Whether the title bar is being dragged (for module reorder).
+    pub title_dragged: bool,
+    /// Whether the title bar drag was just released.
+    pub title_drag_released: bool,
 }
 
 /// Draw a module card around `content`, registering port positions into `ports`.
@@ -119,6 +123,8 @@ pub fn module_card<R>(
 
     let mut toggle_clicked = false;
     let mut remove_clicked = false;
+    let mut title_dragged = false;
+    let mut title_drag_released = false;
 
     let inner = frame.show(ui, |ui| {
         // Module cards are always vertical (title bar on top, content below),
@@ -269,6 +275,20 @@ pub fn module_card<R>(
             };
             painter.rect_filled(led_rect, Rounding::same(1.0), led_color);
 
+            // ── Title bar drag (for module reorder) ───────────────────────────
+            // Use a wide drag zone in the centre of the title bar, clear of LED/buttons/ports.
+            let drag_rect = Rect::from_min_max(
+                Pos2::new(title_rect.left() + 20.0, title_rect.min.y),
+                Pos2::new(title_rect.right() - 60.0, title_rect.max.y),
+            );
+            let drag_resp = ui.interact(drag_rect, ui.id().with("title_drag"), Sense::drag());
+            title_dragged = drag_resp.dragged();
+            title_drag_released = drag_resp.drag_stopped();
+            // Show grab cursor while hovering the drag zone
+            if drag_resp.hovered() || drag_resp.dragged() {
+                ui.ctx().set_cursor_icon(egui::CursorIcon::Grab);
+            }
+
             // ── Remove button (×) on far right, before ports ──────────────────
             let rm_rect = Rect::from_center_size(
                 Pos2::new(title_rect.right() - 44.0, title_rect.center().y),
@@ -320,6 +340,8 @@ pub fn module_card<R>(
         CardResponse {
             toggle_clicked,
             remove_clicked,
+            title_dragged,
+            title_drag_released,
         },
         inner.inner,
     )

@@ -16,10 +16,11 @@ impl ImpulseApp {
     pub(super) fn draw_llm_strip(&mut self, ctx: &egui::Context) {
         TopBottomPanel::top("llm_strip")
             .frame(Frame::none().fill(theme::PIT).inner_margin(egui::Margin::symmetric(8.0, 4.0)))
-            .exact_height(108.0)
+            .exact_height(120.0)
             .show(ctx, |ui| {
+                // ── TOP row: style + instructions | log ───────────────────────
                 ui.horizontal(|ui| {
-                    // ── LEFT column: controls ─────────────────────────────────
+                    // ── LEFT column: style + instructions ─────────────────────
                     let left_w = (ui.available_width() * 0.36).clamp(270.0, 420.0);
 
                     ui.scope(|ui| {
@@ -169,86 +170,6 @@ impl ImpulseApp {
                                 self.state.write().llm.user_instructions = instr;
                             }
                         }
-
-                        // Prompt input (multiline — Enter submits, Shift+Enter newline)
-                        // + ASK button aligned to the right of the text area.
-                        ui.horizontal(|ui| {
-                            let prompt_w = left_w - 46.0;
-                            let response = ui.add(
-                                egui::TextEdit::multiline(&mut self.prompt_input)
-                                    .hint_text("prompt the model…")
-                                    .desired_width(prompt_w)
-                                    .desired_rows(2)
-                                    .font(egui::FontId::monospace(10.0)),
-                            );
-                            let submit = ui
-                                .add_sized(
-                                    [40.0, 36.0],
-                                    egui::Button::new(
-                                        egui::RichText::new("ASK").monospace().size(10.0),
-                                    ),
-                                )
-                                .clicked();
-
-                            // Enter (without Shift) submits; trim the trailing newline first.
-                            let enter_pressed = response.has_focus()
-                                && ctx.input(|i| {
-                                    i.key_pressed(egui::Key::Enter) && !i.modifiers.shift
-                                });
-                            if enter_pressed {
-                                // Strip the newline that Enter just inserted before submitting.
-                                if self.prompt_input.ends_with('\n') {
-                                    self.prompt_input.pop();
-                                }
-                            }
-
-                            if submit || enter_pressed {
-                                let typed = self.prompt_input.trim().to_string();
-                                let (prompt, log_line) = if typed.is_empty() {
-                                    let active_style =
-                                        self.state.read().llm.active_style.clone();
-                                    let p = match active_style.as_deref() {
-                                        Some(id) => {
-                                            let name = StyleCatalog::get()
-                                                .find_by_id(id)
-                                                .map(|s| s.name.as_str())
-                                                .unwrap_or(id);
-                                            format!(
-                                                "do something fresh in the {} style",
-                                                name
-                                            )
-                                        }
-                                        None => "do something interesting — evolve the pattern and sound".to_string(),
-                                    };
-                                    (p, "YOU → ✦\n".to_string())
-                                } else {
-                                    let lower = typed.to_lowercase();
-                                    let catalog = StyleCatalog::get();
-                                    if let Some(matched) = catalog
-                                        .styles()
-                                        .iter()
-                                        .find(|s| {
-                                            s.keywords
-                                                .iter()
-                                                .any(|kw| lower.contains(&kw.to_lowercase()))
-                                        })
-                                    {
-                                        self.state.write().llm.active_style =
-                                            Some(matched.id.clone());
-                                        self.log_text.push_str(&format!(
-                                            "Style → {}\n",
-                                            matched.name
-                                        ));
-                                    }
-                                    (typed.clone(), format!("YOU → {}\n", typed))
-                                };
-                                self.log_text.push_str(&log_line);
-                                let _ = self
-                                    .llm_tx
-                                    .try_send(LlmInput::Infer { prompt, one_shot: true });
-                                self.prompt_input.clear();
-                            }
-                        });
                     }); // end left scope
 
                     ui.add_space(4.0);
@@ -310,6 +231,68 @@ impl ImpulseApp {
                                 );
                             });
                     });
+                }); // end top row
+
+                // ── BOTTOM row: full-width prompt + ASK ───────────────────────
+                ui.add_space(2.0);
+                ui.horizontal(|ui| {
+                    let avail = ui.available_width();
+                    let prompt_w = avail - 50.0;
+                    let response = ui.add(
+                        egui::TextEdit::multiline(&mut self.prompt_input)
+                            .hint_text("prompt the model…")
+                            .desired_width(prompt_w)
+                            .desired_rows(2)
+                            .font(egui::FontId::monospace(10.0)),
+                    );
+                    let submit = ui
+                        .add_sized(
+                            [44.0, 36.0],
+                            egui::Button::new(
+                                egui::RichText::new("ASK").monospace().size(10.0),
+                            ),
+                        )
+                        .clicked();
+
+                    // Enter (without Shift) submits; trim the trailing newline first.
+                    let enter_pressed = response.has_focus()
+                        && ctx.input(|i| {
+                            i.key_pressed(egui::Key::Enter) && !i.modifiers.shift
+                        });
+                    if enter_pressed && self.prompt_input.ends_with('\n') {
+                        self.prompt_input.pop();
+                    }
+
+                    if submit || enter_pressed {
+                        let typed = self.prompt_input.trim().to_string();
+                        let (prompt, log_line) = if typed.is_empty() {
+                            let active_style = self.state.read().llm.active_style.clone();
+                            let p = match active_style.as_deref() {
+                                Some(id) => {
+                                    let name = StyleCatalog::get()
+                                        .find_by_id(id)
+                                        .map(|s| s.name.as_str())
+                                        .unwrap_or(id);
+                                    format!("do something fresh in the {} style", name)
+                                }
+                                None => "do something interesting — evolve the pattern and sound".to_string(),
+                            };
+                            (p, "YOU → ✦\n".to_string())
+                        } else {
+                            let lower = typed.to_lowercase();
+                            let catalog = StyleCatalog::get();
+                            if let Some(matched) = catalog.styles().iter().find(|s| {
+                                s.keywords.iter().any(|kw| lower.contains(&kw.to_lowercase()))
+                            }) {
+                                self.state.write().llm.active_style = Some(matched.id.clone());
+                                self.log_text.push_str(&format!("Style → {}\n", matched.name));
+                            }
+                            (typed.clone(), format!("YOU → {}\n", typed))
+                        };
+                        self.log_text.push_str(&log_line);
+                        let _ = self.llm_tx.try_send(LlmInput::Infer { prompt, one_shot: true });
+                        self.prompt_input.clear();
+                    }
                 });
             });
     }

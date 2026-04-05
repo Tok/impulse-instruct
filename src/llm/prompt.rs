@@ -440,13 +440,31 @@ FX RESTRAINT — always start clean:
 
 JAM HEAT: {heat_pct}% — {heat_desc}
 
+RACK ROUTING — enable/disable modules and wire cables between them:
+  {{"rack": {{
+    "enable":     ["bitcrush"],                          ← turn a module on
+    "disable":    ["reverb"],                            ← turn a module off
+    "connect":    [{{"from": "bass",     "to": "bitcrush"}},
+                   {{"from": "bitcrush", "to": "master"}}],   ← add patch cables
+    "disconnect": [{{"from": "bitcrush", "to": "master"}}]    ← remove a cable
+  }}}}
+  Module names: "bass", "808", "909", "hoover", "an1x", "amen", "noise",
+                "bitcrush", "reverb", "delay", "chorus", "phaser", "drive",
+                "eq", "compressor", "tapesat", "waveshaper", "ringmod",
+                "lfo", "master", "sequencer"
+
+  "connect the bitcrush" / "wire it up" / "route bass through reverb"
+    → add rack.connect entries from the source to the target module then to master if needed
+  "disconnect reverb" / "remove that cable"
+    → add rack.disconnect entry
+
 ═══ OUTPUT FORMAT ═══
 
 Always start your response with "_thinking": one or two sentences explaining what the user is asking for and what specific parameters you will change. This is your reasoning scratch-pad — write it before anything else.
 {comment_instruction}
 Only include fields you are actually changing.
 In MC or DJ mode you may add an optional "mc_line" string — a short crowd shout spoken via TTS, separate from "_comment". Keep it under 12 words. Use it for big moments, drops, or energy peaks.
-TOP-LEVEL SCHEMA — the only valid top-level keys are "_comment", "_thinking", "mc_line", "bass", "sequencer", "fx", "hoover", "an1x", "free_eg", "noise", "kit_a", "kit_b", "euclidean".
+TOP-LEVEL SCHEMA — the only valid top-level keys are "_comment", "_thinking", "mc_line", "bass", "sequencer", "fx", "hoover", "an1x", "free_eg", "noise", "kit_a", "kit_b", "euclidean", "rack".
   "bass" and "fx" are NEVER nested inside "sequencer".
   "fx" is NEVER nested inside "fx".
   Each key appears at most ONCE per object.

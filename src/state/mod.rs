@@ -576,4 +576,6 @@ pub mod transitions;
 pub use transitions::*;
 
 pub mod persistence;
-pub use persistence::{load_model_setting, save_model_setting, save_project};
+pub use persistence::{
+    apply_session, load_model_setting, load_session, save_model_setting, save_project, save_session,
+};

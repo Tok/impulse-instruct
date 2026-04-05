@@ -117,6 +117,15 @@ pub struct CableDrag {
     pub from_screen: Pos2,
 }
 
+// ─── Module drag state ────────────────────────────────────────────────────────
+
+/// State for a module title bar being dragged to reorder it in the rack.
+#[derive(Clone, Debug)]
+pub struct ModuleDrag {
+    pub module_id: u32,
+    pub pointer: Pos2,
+}
+
 // ─── Available module kinds per zone (for add menus) ─────────────────────────
 
 const VOICE_KINDS: &[ModuleKind] = &[
@@ -202,6 +211,45 @@ pub fn draw_rack(app: &mut ImpulseApp, ctx: &egui::Context, ui: &mut egui::Ui) {
 
     // ── Cable drag — always active, no mode required ──────────────────────────
     handle_cable_drag(app, ctx, &ports);
+
+    // ── Module drag ghost overlay ─────────────────────────────────────────────
+    if let Some(ref drag) = app.module_drag
+        && let Some(pointer) = ctx.pointer_latest_pos()
+    {
+        let painter = ctx.layer_painter(egui::LayerId::new(
+            egui::Order::Tooltip,
+            egui::Id::new("module_drag_ghost"),
+        ));
+        let kind = app
+            .state
+            .read()
+            .rack
+            .modules
+            .iter()
+            .find(|m| m.id == drag.module_id)
+            .map(|m| m.kind);
+        if let Some(k) = kind {
+            let ghost_rect = egui::Rect::from_center_size(pointer, egui::Vec2::new(120.0, 22.0));
+            painter.rect_filled(
+                ghost_rect,
+                egui::Rounding::same(4.0),
+                Color32::from_rgba_premultiplied(30, 30, 30, 180),
+            );
+            painter.rect_stroke(
+                ghost_rect,
+                egui::Rounding::same(4.0),
+                egui::Stroke::new(1.0, Color32::from_gray(80)),
+            );
+            painter.text(
+                ghost_rect.center(),
+                egui::Align2::CENTER_CENTER,
+                k.label(),
+                egui::FontId::monospace(9.5),
+                Color32::from_gray(200),
+            );
+            ctx.request_repaint();
+        }
+    }
 
     // ── Add module popup ──────────────────────────────────────────────────────
     draw_add_menu(app, ctx);
@@ -352,6 +400,30 @@ fn module_slot_w(kind: ModuleKind, full_w: f32) -> f32 {
     }
 }
 
+/// Group items into rows so each row fits within `available_w`.
+/// Returns rows; each row is a slice of items that fits without overflow.
+fn group_into_rows(
+    items: &[(u32, ModuleKind, bool)],
+    available_w: f32,
+    gap: f32,
+) -> Vec<Vec<(u32, ModuleKind, bool)>> {
+    let mut rows: Vec<Vec<(u32, ModuleKind, bool)>> = vec![vec![]];
+    let mut row_w = 0.0f32;
+    for &item in items {
+        let w = module_slot_w(item.1, available_w);
+        if row_w > 0.0 && row_w + gap + w > available_w + 0.5 {
+            rows.push(vec![]);
+            row_w = 0.0;
+        }
+        if row_w > 0.0 {
+            row_w += gap;
+        }
+        row_w += w;
+        rows.last_mut().unwrap().push(item);
+    }
+    rows
+}
+
 fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<PortPos>) {
     // Subtract a small gutter so modules never touch the scrollbar.
     let available_w = (ui.available_width() - 8.0).max(200.0);
@@ -462,21 +534,30 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
         v
     };
 
-    // Voice modules — φ-based fixed slot widths.
-    {
-        ui.horizontal_wrapped(|ui| {
-            ui.spacing_mut().item_spacing = Vec2::new(4.0, 4.0);
-            for (id, kind, enabled) in &voice_ids {
+    // Shared ctx clone for drag handling across both zones.
+    let ctx_ref = ui.ctx().clone();
+
+    // Voice modules — manual row grouping prevents any module from going off-screen.
+    for row in group_into_rows(&voice_ids, available_w, 4.0) {
+        ui.horizontal(|ui| {
+            ui.spacing_mut().item_spacing = Vec2::new(4.0, 0.0);
+            for (id, kind, enabled) in &row {
                 let slot_w = module_slot_w(*kind, available_w);
-                let scoped = ui.scope(|ui| {
-                    ui.set_min_width(slot_w);
-                    ui.set_max_width(slot_w);
-                    module_card::module_card(ui, *id, *kind, *enabled, None, ports, |ui| {
+                // Dim the card ghost while it's being dragged
+                let is_dragging = app.module_drag.as_ref().map(|d| d.module_id) == Some(*id);
+                let eff_enabled = if is_dragging { false } else { *enabled };
+                let (resp, _) = module_card::module_card(
+                    ui,
+                    *id,
+                    *kind,
+                    eff_enabled,
+                    Some(slot_w),
+                    ports,
+                    |ui| {
                         draw_voice_content(app, ui, *kind);
-                    })
-                });
-                let (resp, _) = scoped.inner;
-                if resp.toggle_clicked {
+                    },
+                );
+                if resp.toggle_clicked && !is_dragging {
                     let en = *enabled;
                     if let Some(m) = app
                         .state
@@ -492,8 +573,13 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
                 if resp.remove_clicked {
                     app.state.write().rack.remove_module(*id);
                 }
+                let drop_pos = ctx_ref.pointer_latest_pos().unwrap_or_default();
+                if handle_title_drag(app, &ctx_ref, *id, &resp) {
+                    reorder_module_by_drop(app, *id, drop_pos, Zone::Voice);
+                }
             }
         });
+        ui.add_space(4.0);
     }
 
     ui.add_space(2.0);
@@ -526,34 +612,30 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
         v
     };
 
-    {
-        let fx_ids: Vec<_> = fxmod_ids
-            .iter()
-            .filter(|(_, k, _)| *k != ModuleKind::LfoModule)
-            .cloned()
-            .collect();
-        let lfo_ids: Vec<_> = fxmod_ids
-            .iter()
-            .filter(|(_, k, _)| *k == ModuleKind::LfoModule)
-            .cloned()
-            .collect();
-
-        // All FX and LFO modules are "narrow" (φ² = 38.2 %)
-        let fx_lfo_w = module_slot_w(ModuleKind::FxReverb, available_w); // narrow tier
-
-        ui.horizontal_wrapped(|ui| {
-            ui.spacing_mut().item_spacing = Vec2::new(4.0, 4.0);
-
-            for (id, kind, enabled) in &fx_ids {
-                let scoped = ui.scope(|ui| {
-                    ui.set_min_width(fx_lfo_w);
-                    ui.set_max_width(fx_lfo_w);
-                    module_card::module_card(ui, *id, *kind, *enabled, None, ports, |ui| {
-                        draw_fx_content(app, ui, *kind);
-                    })
-                });
-                let (resp, _) = scoped.inner;
-                if resp.toggle_clicked {
+    // FX + Mod modules — manual row grouping, same as voice zone.
+    for row in group_into_rows(&fxmod_ids, available_w, 4.0) {
+        ui.horizontal(|ui| {
+            ui.spacing_mut().item_spacing = Vec2::new(4.0, 0.0);
+            for (id, kind, enabled) in &row {
+                let slot_w = module_slot_w(*kind, available_w);
+                let is_dragging = app.module_drag.as_ref().map(|d| d.module_id) == Some(*id);
+                let eff_enabled = if is_dragging { false } else { *enabled };
+                let (resp, _) = module_card::module_card(
+                    ui,
+                    *id,
+                    *kind,
+                    eff_enabled,
+                    Some(slot_w),
+                    ports,
+                    |ui| {
+                        if *kind == ModuleKind::LfoModule {
+                            draw_lfo_content(app, ui, *id);
+                        } else {
+                            draw_fx_content(app, ui, *kind);
+                        }
+                    },
+                );
+                if resp.toggle_clicked && !is_dragging {
                     let en = *enabled;
                     if let Some(m) = app
                         .state
@@ -569,406 +651,109 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
                 if resp.remove_clicked {
                     app.state.write().rack.remove_module(*id);
                 }
-            }
-
-            for (id, kind, enabled) in &lfo_ids {
-                let scoped = ui.scope(|ui| {
-                    ui.set_min_width(fx_lfo_w);
-                    ui.set_max_width(fx_lfo_w);
-                    module_card::module_card(ui, *id, *kind, *enabled, None, ports, |ui| {
-                        draw_lfo_content(app, ui, *id);
-                    })
-                });
-                let (resp, _) = scoped.inner;
-                if resp.toggle_clicked {
-                    let en = *enabled;
-                    if let Some(m) = app
-                        .state
-                        .write()
-                        .rack
-                        .modules
-                        .iter_mut()
-                        .find(|m| m.id == *id)
-                    {
-                        m.enabled = !en;
-                    }
-                }
-                if resp.remove_clicked {
-                    app.state.write().rack.remove_module(*id);
+                let drop_pos = ctx_ref.pointer_latest_pos().unwrap_or_default();
+                if handle_title_drag(app, &ctx_ref, *id, &resp) {
+                    reorder_module_by_drop(app, *id, drop_pos, Zone::FxMod);
                 }
             }
         });
+        ui.add_space(4.0);
     }
 
     ui.add_space(4.0);
 }
 
-// ─── Master output content ────────────────────────────────────────────────────
+// ─── Module drag helpers ──────────────────────────────────────────────────────
 
-fn draw_master_content(app: &mut ImpulseApp, ui: &mut egui::Ui) {
-    use crate::ui::widgets;
-    let ctrl = widgets::ControlPrefs::from_prefs(&app.state.read().ui_prefs);
-    let mut master_vol = app.state.read().fx.master_volume;
-
-    ui.horizontal(|ui| {
-        ui.label(
-            egui::RichText::new("MASTER VOL")
-                .monospace()
-                .size(9.0)
-                .color(egui::Color32::from_gray(90)),
-        );
-        if widgets::param_control(ui, "", &mut master_vol, crate::state::ParamMode::Free, ctrl).0 {
-            app.state.write().fx.master_volume = master_vol;
-            app.push_audio_params();
+/// Process drag start/stop from a card response and update app.module_drag.
+/// Returns true if this card was just dropped (so caller can reorder slots).
+fn handle_title_drag(
+    app: &mut ImpulseApp,
+    ctx: &egui::Context,
+    id: u32,
+    resp: &module_card::CardResponse,
+) -> bool {
+    if resp.title_dragged {
+        if app.module_drag.as_ref().map(|d| d.module_id) != Some(id) {
+            app.module_drag = Some(ModuleDrag {
+                module_id: id,
+                pointer: ctx.pointer_latest_pos().unwrap_or_default(),
+            });
+        } else if let Some(ref mut drag) = app.module_drag {
+            drag.pointer = ctx.pointer_latest_pos().unwrap_or(drag.pointer);
         }
+    }
+    if resp.title_drag_released && app.module_drag.as_ref().map(|d| d.module_id) == Some(id) {
+        app.module_drag = None;
+        return true;
+    }
+    false
+}
 
-        // Active voices indicator strip
-        ui.separator();
+/// After a drop, reorder module slots so dragged module ends up at the position
+/// closest to `drop_pos` within its zone's ordered list.
+fn reorder_module_by_drop(
+    app: &mut ImpulseApp,
+    dragged_id: u32,
+    drop_pos: egui::Pos2,
+    zone: crate::state::Zone,
+) {
+    // Use 1200px as a reasonable default — drop position is proportional, not exact.
+    let available_w = 1200.0f32;
+    // Get ordered IDs + their widths for this zone
+    let zone_entries: Vec<(u32, ModuleKind)> = {
         let rack = app.state.read();
-        let voice_kinds = [
-            (crate::state::ModuleKind::AcidBass, "BASS"),
-            (crate::state::ModuleKind::DrumKit808, "808"),
-            (crate::state::ModuleKind::DrumKit909, "909"),
-            (crate::state::ModuleKind::HooverLead, "HVVR"),
-            (crate::state::ModuleKind::An1xVoice, "AN1X"),
-            (crate::state::ModuleKind::AmenSampler, "AMEN"),
-        ];
-        for (kind, label) in &voice_kinds {
-            let present = rack
-                .rack
-                .modules
-                .iter()
-                .any(|m| m.kind == *kind && m.enabled);
-            let col = if present {
-                egui::Color32::from_gray(160)
-            } else {
-                egui::Color32::from_gray(28)
-            };
-            ui.label(egui::RichText::new(*label).monospace().size(8.0).color(col));
-        }
-    });
-}
-
-// ─── Content dispatchers ──────────────────────────────────────────────────────
-
-fn draw_voice_content(app: &mut ImpulseApp, ui: &mut egui::Ui, kind: ModuleKind) {
-    match kind {
-        ModuleKind::AcidBass => crate::ui::panels::draw_bass(app, ui),
-        ModuleKind::DrumKit808 => crate::ui::panels::draw_kit_a(app, ui),
-        ModuleKind::DrumKit909 => crate::ui::panels::draw_kit_b(app, ui),
-        ModuleKind::HooverLead => crate::ui::panels::draw_hoover(app, ui),
-        ModuleKind::An1xVoice => crate::ui::panels::draw_an1x(app, ui),
-        ModuleKind::AmenSampler => crate::ui::panels::draw_amen(app, ui),
-        ModuleKind::NoiseVoice => draw_noise_stub(app, ui),
-        _ => {}
-    }
-}
-
-fn draw_fx_content(app: &mut ImpulseApp, ui: &mut egui::Ui, kind: ModuleKind) {
-    // Each FX module renders only its own group — extracted from the full FX
-    // panel so they can be placed as individual cards.
-    use crate::ui::widgets;
-
-    let ctrl = widgets::ControlPrefs::from_prefs(&app.state.read().ui_prefs);
-    let locked = app.state.read().llm.locked_params.clone();
-    let focused = app.state.read().llm.focused_params.clone();
-    let pm = |path: &str| crate::state::param_mode(path, &locked, &focused);
-    let mut changed = false;
-
-    match kind {
-        ModuleKind::FxReverb => {
-            let (mut rs, mut rd, mut rm) = {
-                let s = app.state.read();
-                (s.fx.reverb_size, s.fx.reverb_damp, s.fx.reverb_mix)
-            };
-            widgets::param_control(ui, "SIZE", &mut rs, pm("fx.reverb_size"), ctrl);
-            if widgets::param_control(ui, "DAMP", &mut rd, pm("fx.reverb_damp"), ctrl).0 {
-                changed = true;
-            }
-            if widgets::param_control(ui, "MIX", &mut rm, pm("fx.reverb_mix"), ctrl).0 {
-                changed = true;
-            }
-            if changed || rs != app.state.read().fx.reverb_size {
-                let mut s = app.state.write();
-                s.fx.reverb_size = rs;
-                s.fx.reverb_damp = rd;
-                s.fx.reverb_mix = rm;
-            }
-        }
-        ModuleKind::FxDelay => {
-            let (mut dt, mut df, mut dm) = {
-                let s = app.state.read();
-                (s.fx.delay_time, s.fx.delay_feedback, s.fx.delay_mix)
-            };
-            widgets::param_control(ui, "TIME", &mut dt, pm("fx.delay_time"), ctrl);
-            widgets::param_control(ui, "FDBK", &mut df, pm("fx.delay_feedback"), ctrl);
-            if widgets::param_control(ui, "MIX", &mut dm, pm("fx.delay_mix"), ctrl).0 {
-                changed = true;
-            }
-            if changed || dt != app.state.read().fx.delay_time {
-                let mut s = app.state.write();
-                s.fx.delay_time = dt;
-                s.fx.delay_feedback = df;
-                s.fx.delay_mix = dm;
-            }
-        }
-        ModuleKind::FxChorus => {
-            let (mut r, mut d, mut m) = {
-                let s = app.state.read();
-                (s.fx.chorus_rate, s.fx.chorus_depth, s.fx.chorus_mix)
-            };
-            widgets::param_control(ui, "RATE", &mut r, pm("fx.chorus_rate"), ctrl);
-            widgets::param_control(ui, "DEPTH", &mut d, pm("fx.chorus_depth"), ctrl);
-            if widgets::param_control(ui, "MIX", &mut m, pm("fx.chorus_mix"), ctrl).0 {
-                changed = true;
-            }
-            if changed || r != app.state.read().fx.chorus_rate {
-                let mut s = app.state.write();
-                s.fx.chorus_rate = r;
-                s.fx.chorus_depth = d;
-                s.fx.chorus_mix = m;
-            }
-        }
-        ModuleKind::FxPhaser => {
-            let (mut r, mut d, mut m) = {
-                let s = app.state.read();
-                (s.fx.phaser_rate, s.fx.phaser_depth, s.fx.phaser_mix)
-            };
-            widgets::param_control(ui, "RATE", &mut r, pm("fx.phaser_rate"), ctrl);
-            widgets::param_control(ui, "DEPTH", &mut d, pm("fx.phaser_depth"), ctrl);
-            if widgets::param_control(ui, "MIX", &mut m, pm("fx.phaser_mix"), ctrl).0 {
-                changed = true;
-            }
-            if changed || r != app.state.read().fx.phaser_rate {
-                let mut s = app.state.write();
-                s.fx.phaser_rate = r;
-                s.fx.phaser_depth = d;
-                s.fx.phaser_mix = m;
-            }
-        }
-        ModuleKind::FxEq => {
-            let (mut lo, mut mi, mut hi) = {
-                let s = app.state.read();
-                (s.fx.eq_low_gain, s.fx.eq_mid_gain, s.fx.eq_hi_gain)
-            };
-            widgets::param_control(ui, "LOW", &mut lo, pm("fx.eq_low_gain"), ctrl);
-            widgets::param_control(ui, "MID", &mut mi, pm("fx.eq_mid_gain"), ctrl);
-            if widgets::param_control(ui, "HIGH", &mut hi, pm("fx.eq_hi_gain"), ctrl).0 {
-                changed = true;
-            }
-            if changed || lo != app.state.read().fx.eq_low_gain {
-                let mut s = app.state.write();
-                s.fx.eq_low_gain = lo;
-                s.fx.eq_mid_gain = mi;
-                s.fx.eq_hi_gain = hi;
-            }
-        }
-        ModuleKind::FxCompressor => {
-            let (mut th, mut ra, mut mi) = {
-                let s = app.state.read();
-                (
-                    s.fx.compressor_threshold,
-                    s.fx.compressor_ratio,
-                    s.fx.compressor_mix,
-                )
-            };
-            widgets::param_control(ui, "THRESH", &mut th, pm("fx.compressor_threshold"), ctrl);
-            widgets::param_control(ui, "RATIO", &mut ra, pm("fx.compressor_ratio"), ctrl);
-            if widgets::param_control(ui, "MIX", &mut mi, pm("fx.compressor_mix"), ctrl).0 {
-                changed = true;
-            }
-            if changed || th != app.state.read().fx.compressor_threshold {
-                let mut s = app.state.write();
-                s.fx.compressor_threshold = th;
-                s.fx.compressor_ratio = ra;
-                s.fx.compressor_mix = mi;
-            }
-        }
-        ModuleKind::FxTapeSat => {
-            let (mut dr, mut fl, mut mi) = {
-                let s = app.state.read();
-                (s.fx.tape_drive, s.fx.tape_flutter, s.fx.tape_mix)
-            };
-            widgets::param_control(ui, "DRIVE", &mut dr, pm("fx.tape_drive"), ctrl);
-            widgets::param_control(ui, "FLUTTER", &mut fl, pm("fx.tape_flutter"), ctrl);
-            if widgets::param_control(ui, "MIX", &mut mi, pm("fx.tape_mix"), ctrl).0 {
-                changed = true;
-            }
-            if changed || dr != app.state.read().fx.tape_drive {
-                let mut s = app.state.write();
-                s.fx.tape_drive = dr;
-                s.fx.tape_flutter = fl;
-                s.fx.tape_mix = mi;
-            }
-        }
-        ModuleKind::FxDrive => {
-            let (mut dr, mut mi) = {
-                let s = app.state.read();
-                (s.fx.distortion_drive, s.fx.distortion_mix)
-            };
-            if widgets::param_control(ui, "DRIVE", &mut dr, pm("fx.distortion_drive"), ctrl).0 {
-                changed = true;
-            }
-            if widgets::param_control(ui, "MIX", &mut mi, pm("fx.distortion_mix"), ctrl).0 {
-                changed = true;
-            }
-            if changed {
-                let mut s = app.state.write();
-                s.fx.distortion_drive = dr;
-                s.fx.distortion_mix = mi;
-            }
-        }
-        ModuleKind::FxWaveshaper => {
-            let (mut dr, mut mi) = {
-                let s = app.state.read();
-                (s.fx.waveshaper_drive, s.fx.waveshaper_mix)
-            };
-            if widgets::param_control(ui, "DRIVE", &mut dr, pm("fx.waveshaper_drive"), ctrl).0 {
-                changed = true;
-            }
-            if widgets::param_control(ui, "MIX", &mut mi, pm("fx.waveshaper_mix"), ctrl).0 {
-                changed = true;
-            }
-            if changed {
-                let mut s = app.state.write();
-                s.fx.waveshaper_drive = dr;
-                s.fx.waveshaper_mix = mi;
-            }
-        }
-        ModuleKind::FxBitcrush => {
-            let (mut bi, mut ra, mut mi) = {
-                let s = app.state.read();
-                (s.fx.bitcrush_bits, s.fx.bitcrush_rate, s.fx.bitcrush_mix)
-            };
-            widgets::param_control(ui, "BITS", &mut bi, pm("fx.bitcrush_bits"), ctrl);
-            widgets::param_control(ui, "RATE", &mut ra, pm("fx.bitcrush_rate"), ctrl);
-            if widgets::param_control(ui, "MIX", &mut mi, pm("fx.bitcrush_mix"), ctrl).0 {
-                changed = true;
-            }
-            if changed || bi != app.state.read().fx.bitcrush_bits {
-                let mut s = app.state.write();
-                s.fx.bitcrush_bits = bi;
-                s.fx.bitcrush_rate = ra;
-                s.fx.bitcrush_mix = mi;
-            }
-        }
-        ModuleKind::FxRingMod => {
-            let (mut fr, mut mi) = {
-                let s = app.state.read();
-                (s.fx.ring_mod_freq, s.fx.ring_mod_mix)
-            };
-            if widgets::param_control(ui, "FREQ", &mut fr, pm("fx.ring_mod_freq"), ctrl).0 {
-                changed = true;
-            }
-            if widgets::param_control(ui, "MIX", &mut mi, pm("fx.ring_mod_mix"), ctrl).0 {
-                changed = true;
-            }
-            if changed {
-                let mut s = app.state.write();
-                s.fx.ring_mod_freq = fr;
-                s.fx.ring_mod_mix = mi;
-            }
-        }
-        _ => {}
-    }
-
-    if changed {
-        app.push_audio_params();
-    }
-}
-
-fn draw_lfo_content(app: &mut ImpulseApp, ui: &mut egui::Ui, module_id: u32) {
-    // Map module_id → LFO slot index (0–3) based on insertion order.
-    let slot = {
-        let rack = app.state.read();
-        rack.rack
+        let mut v: Vec<_> = rack
+            .rack
             .modules
             .iter()
-            .filter(|m| m.kind == ModuleKind::LfoModule)
-            .enumerate()
-            .find(|(_, m)| m.id == module_id)
-            .map(|(i, _)| i)
-            .unwrap_or(0)
+            .filter(|m| m.zone == zone)
+            .collect();
+        v.sort_by_key(|m| m.slot);
+        v.iter().map(|m| (m.id, m.kind)).collect()
     };
-    crate::ui::panels::draw_lfo_slot(app, ui, slot);
-}
-
-fn draw_noise_stub(app: &mut ImpulseApp, ui: &mut egui::Ui) {
-    use crate::ui::widgets;
-    let ctrl = widgets::ControlPrefs::from_prefs(&app.state.read().ui_prefs);
-    let locked = app.state.read().llm.locked_params.clone();
-    let focused = app.state.read().llm.focused_params.clone();
-    let pm = |path: &str| crate::state::param_mode(path, &locked, &focused);
-
-    let (mut vol, mut color, mut cutoff) = {
-        let s = app.state.read();
-        (
-            s.noise_voice.volume,
-            s.noise_voice.color,
-            s.noise_voice.cutoff,
-        )
+    let zone_ids: Vec<u32> = zone_entries.iter().map(|&(id, _)| id).collect();
+    // Find dragged module's current index
+    let Some(from_idx) = zone_ids.iter().position(|&id| id == dragged_id) else {
+        return;
     };
-    let mut changed = false;
-    if widgets::param_control(ui, "VOLUME", &mut vol, pm("noise_voice.volume"), ctrl).0 {
-        changed = true;
+    let n = zone_ids.len();
+    if n < 2 {
+        return;
     }
-    if widgets::param_control(ui, "COLOR", &mut color, pm("noise_voice.color"), ctrl).0 {
-        changed = true;
-    }
-    if widgets::param_control(ui, "CUTOFF", &mut cutoff, pm("noise_voice.cutoff"), ctrl).0 {
-        changed = true;
-    }
-    if changed {
-        {
-            let mut s = app.state.write();
-            s.noise_voice.volume = vol;
-            s.noise_voice.color = color;
-            s.noise_voice.cutoff = cutoff;
+    // Estimate target index: walk cumulative widths to find which slot drop_pos.x falls in.
+    // drop_pos.x is in screen space; subtract a small left margin approximation (8px).
+    let x = (drop_pos.x - 8.0).max(0.0);
+    let gap = 4.0f32;
+    let mut cursor = 0.0f32;
+    let mut to_idx = 0usize;
+    for (i, &(_, kind)) in zone_entries.iter().enumerate() {
+        let w = module_slot_w(kind, available_w);
+        let mid = cursor + w * 0.5;
+        if x >= mid {
+            to_idx = i + 1;
         }
-        app.push_audio_params();
+        cursor += w + gap;
+    }
+    let to_idx = to_idx.clamp(0, n - 1);
+    if from_idx == to_idx {
+        return;
+    }
+    // Reorder: move dragged to to_idx, shift others
+    let mut ids = zone_ids;
+    let removed = ids.remove(from_idx);
+    ids.insert(to_idx, removed);
+    // Write new slot values
+    let mut state = app.state.write();
+    for (slot, &id) in ids.iter().enumerate() {
+        if let Some(m) = state.rack.modules.iter_mut().find(|m| m.id == id) {
+            m.slot = slot as u8;
+        }
     }
 }
 
-// ─── Cable drag interaction ───────────────────────────────────────────────────
+// ─── Content dispatchers (implementation in rack_content.rs) ─────────────────
 
-fn handle_cable_drag(app: &mut ImpulseApp, ctx: &egui::Context, ports: &[PortPos]) {
-    let pointer = match ctx.pointer_latest_pos() {
-        Some(p) => p,
-        None => return,
-    };
-    let primary_down = ctx.input(|i| i.pointer.primary_down());
-    let primary_released = ctx.input(|i| i.pointer.primary_released());
-
-    // Check if pointer is over any port
-    let hovered_port = ports
-        .iter()
-        .find(|pp| pp.center.distance(pointer) <= module_card::PORT_RADIUS + 3.0);
-
-    // Start a drag when primary button pressed over a port
-    if primary_down
-        && app.cable_drag.is_none()
-        && let Some(pp) = hovered_port
-    {
-        app.cable_drag = Some(CableDrag {
-            from_port: pp.port.clone(),
-            from_screen: pp.center,
-        });
-    }
-
-    // Complete drag on release — .take() cancels the drag regardless of whether
-    // we find a valid target, so no explicit "else: cancel" branch is needed.
-    if primary_released
-        && let Some(drag) = app.cable_drag.take()
-        && let Some(target) = hovered_port
-        && drag.from_port.dir != target.port.dir
-        && drag.from_port.kind == target.port.kind
-        && drag.from_port.module_id != target.port.module_id
-    {
-        let (from, to) = if drag.from_port.dir == crate::state::PortDir::Out {
-            (drag.from_port, target.port.clone())
-        } else {
-            (target.port.clone(), drag.from_port)
-        };
-        app.state.write().rack.connect(from, to);
-    }
-}
+use super::rack_content::{
+    draw_fx_content, draw_lfo_content, draw_master_content, draw_voice_content, handle_cable_drag,
+};

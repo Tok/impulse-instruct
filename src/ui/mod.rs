@@ -6,6 +6,7 @@ mod llm_strip;
 pub mod module_card;
 pub mod panels;
 pub mod rack_canvas;
+pub(crate) mod rack_content;
 pub mod theme;
 pub mod widgets;
 mod windows;
@@ -242,6 +243,12 @@ pub struct ImpulseApp {
     pub(crate) show_cables: bool,
     // Zone whose [+ ADD] popup is currently open.
     pub(crate) add_menu_zone: Option<crate::state::Zone>,
+    // Module being dragged by its title bar (id + current pointer position).
+    pub(crate) module_drag: Option<rack_canvas::ModuleDrag>,
+    // Auto-save: set when rack or session-worthy state changes; saved next frame.
+    session_dirty: bool,
+    // Track last-saved rack cable/module count to detect changes.
+    last_saved_rack_sig: (usize, usize),
 }
 
 impl ImpulseApp {
@@ -347,8 +354,13 @@ impl ImpulseApp {
             midi_clock_tracker: MidiClockTracker::new(),
             history: StateHistory::new(),
             cable_drag: None,
-            show_cables: true,
+            show_cables: crate::state::load_session()
+                .and_then(|s| s.show_cables)
+                .unwrap_or(true),
             add_menu_zone: None,
+            module_drag: None,
+            session_dirty: false,
+            last_saved_rack_sig: (0, 0),
         }
     }
 
@@ -558,6 +570,27 @@ impl eframe::App for ImpulseApp {
         self.drain_llm_outputs();
         self.drain_midi_events();
 
+        // ── Auto-save session when rack or key settings change ────────────────
+        {
+            let rack = &self.state.read().rack;
+            let sig = (
+                rack.modules.len() + rack.cables.len() * 100,
+                rack.modules
+                    .iter()
+                    .map(|m| m.slot as usize + m.enabled as usize * 1000)
+                    .sum::<usize>(),
+            );
+            if sig != self.last_saved_rack_sig {
+                self.last_saved_rack_sig = sig;
+                self.session_dirty = true;
+            }
+        }
+        if self.session_dirty {
+            let state = self.state.read().clone();
+            crate::state::save_session(&state, self.show_cables);
+            self.session_dirty = false;
+        }
+
         // ── Undo / redo (Ctrl+Z / Ctrl+Y or Ctrl+Shift+Z) ────────────────────
         let undo = ctx.input_mut(|i| {
             i.consume_key(egui::Modifiers::CTRL, egui::Key::Z) && !i.modifiers.shift
@@ -583,6 +616,7 @@ impl eframe::App for ImpulseApp {
         // ── Tab: toggle cable visibility ──────────────────────────────────────
         if ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Tab)) {
             self.show_cables = !self.show_cables;
+            self.session_dirty = true;
         }
 
         // ── Startup hook ──────────────────────────────────────────────────────

@@ -129,10 +129,18 @@ fn main() -> anyhow::Result<()> {
     // ── Shared state ──────────────────────────────────────────────────────────
     let app_state = Arc::new(RwLock::new(AppState::default()));
 
-    // Apply --model override, falling back to the last-used model from settings.json
+    // Load session (rack layout, style, ui prefs) from last run.
+    if let Some(session) = impulse_instruct::state::load_session() {
+        impulse_instruct::state::apply_session(&mut app_state.write(), session);
+        log::info!("Session restored from session.json");
+    }
+
+    // Apply --model override, falling back to the last-used model from session / settings.json
     if let Some(ref model_path) = args.model {
         app_state.write().llm.model_path = model_path.clone();
-    } else if let Some(saved) = impulse_instruct::state::load_model_setting() {
+    } else if app_state.read().llm.model_path.is_empty()
+        && let Some(saved) = impulse_instruct::state::load_model_setting()
+    {
         app_state.write().llm.model_path = saved;
     }
 

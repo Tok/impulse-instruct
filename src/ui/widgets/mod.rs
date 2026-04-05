@@ -94,7 +94,7 @@ fn mode_tooltip(mode: ParamMode) -> &'static str {
             "· Free — LLM and user both control this\nRight-click to lock to user only (U)"
         }
         ParamMode::UserOwned => {
-            "U User owned — LLM ignores this param\nRight-click to set LLM focus (F)"
+            "U User owned — LLM ignores this param, you still control it\nRight-click to set LLM focus (F)"
         }
         ParamMode::LlmFocus => {
             "F LLM focus — model will actively drive this param\nRight-click to release (·)"
@@ -122,8 +122,7 @@ pub fn knob(ui: &mut Ui, label: &str, value: &mut f32, mode: ParamMode, size: f3
 
     let mut changed = false;
 
-    // UserOwned: block dragging so the user explicitly has to unlock first
-    if mode != ParamMode::UserOwned && response.dragged() {
+    if response.dragged() {
         let delta = response.drag_delta();
         *value = (*value - delta.y * 0.005 + delta.x * 0.003).clamp(0.0, 1.0);
         changed = true;
@@ -705,8 +704,7 @@ pub fn slider_glass(ui: &mut Ui, label: &str, value: &mut f32, mode: ParamMode) 
             Vec2::new(track_rect.width(), track_h),
         );
 
-        if mode != ParamMode::UserOwned
-            && (response.dragged() || response.clicked())
+        if (response.dragged() || response.clicked())
             && let Some(pos) = response.interact_pointer_pos()
         {
             *value = ((pos.x - track.min.x) / track.width()).clamp(0.0, 1.0);
@@ -803,7 +801,7 @@ pub fn knob_chrome(
     let label_font_size = (size * 0.175).clamp(8.0, 13.0);
 
     let mut changed = false;
-    if mode != ParamMode::UserOwned && response.dragged() {
+    if response.dragged() {
         let delta = response.drag_delta();
         *value = (*value - delta.y * 0.005 + delta.x * 0.003).clamp(0.0, 1.0);
         changed = true;
