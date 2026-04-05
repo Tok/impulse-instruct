@@ -1,9 +1,9 @@
 // ─── ui/llm_strip.rs ──────────────────────────────────────────────────────────
 // LLM interaction strip: style selector, instructions, prompt input, log.
 //
-// Layout (2-column, fixed height):
-//   LEFT (~38% width): style dropdown | instructions | prompt+ASK
-//   RIGHT (remaining): log output fills full height — no wasted horizontal space
+// Layout (resizable panel, drag the bottom border):
+//   TOP row  — LEFT: style + instructions  |  RIGHT: log (fills height)
+//   BOTTOM row — full-width prompt input + ASK button (vertically centred)
 
 use crate::llm::LlmInput;
 use crate::llm::styles::StyleCatalog;
@@ -14,9 +14,13 @@ use egui::{Frame, TopBottomPanel};
 impl ImpulseApp {
     /// Style selector, prompt input, log, and thinking display.
     pub(super) fn draw_llm_strip(&mut self, ctx: &egui::Context) {
+        // 8 log lines × ~13px/line ≈ 104px + top row ~36px + prompt ~34px + margins = ~185px.
+        // resizable(true) lets the user drag the bottom border to adjust.
         TopBottomPanel::top("llm_strip")
             .frame(Frame::none().fill(theme::PIT).inner_margin(egui::Margin::symmetric(8.0, 4.0)))
-            .exact_height(120.0)
+            .resizable(true)
+            .min_height(70.0)
+            .default_height(185.0)
             .show(ctx, |ui| {
                 // ── TOP row: style + instructions | log ───────────────────────
                 ui.horizontal(|ui| {
@@ -233,9 +237,11 @@ impl ImpulseApp {
                     });
                 }); // end top row
 
-                // ── BOTTOM row: full-width prompt + ASK ───────────────────────
+                // ── BOTTOM row: full-width prompt + ASK (vertically centred) ──
                 ui.add_space(2.0);
-                ui.horizontal(|ui| {
+                ui.with_layout(
+                    egui::Layout::left_to_right(egui::Align::Center),
+                    |ui| {
                     let avail = ui.available_width();
                     let prompt_w = avail - 50.0;
                     let response = ui.add(
@@ -247,7 +253,7 @@ impl ImpulseApp {
                     );
                     let submit = ui
                         .add_sized(
-                            [44.0, 36.0],
+                            [44.0, response.rect.height()],
                             egui::Button::new(
                                 egui::RichText::new("ASK").monospace().size(10.0),
                             ),
@@ -293,7 +299,7 @@ impl ImpulseApp {
                         let _ = self.llm_tx.try_send(LlmInput::Infer { prompt, one_shot: true });
                         self.prompt_input.clear();
                     }
-                });
+                    });
             });
     }
 }
