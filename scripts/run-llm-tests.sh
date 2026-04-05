@@ -226,9 +226,15 @@ for MODEL in "${MODELS[@]}"; do
   MODEL_LOG_FILES+=("$MODEL_TMP")
   MODEL_LOG_NAMES+=("$MODEL_NAME")
 
+  # Disable errexit so a failing test run doesn't abort the whole script.
+  # We capture the exit code manually via PIPESTATUS after tee.
+  set +e
   cargo test --features llm-tests -- "$SUITE" --nocapture --test-threads 1 \
        ${FILTER:+$FILTER} 2>&1 | tee "$MODEL_TMP"
-  if [[ ${PIPESTATUS[0]} -eq 0 ]]; then
+  TEST_EXIT=${PIPESTATUS[0]}
+  set -e
+
+  if [[ $TEST_EXIT -eq 0 ]]; then
     SUMMARY_LINES+=("  ✓ PASS  $MODEL_NAME")
   else
     SUMMARY_LINES+=("  ✗ FAIL  $MODEL_NAME")
