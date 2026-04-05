@@ -20,7 +20,6 @@ use crate::state::AppState;
 use serde_json::Value;
 
 const RUNS: usize = 10;
-const REQUIRED_TIGHT: usize = 9;
 const REQUIRED_LOOSE: usize = 7;
 
 fn at<'a>(json: &'a Value, path: &str) -> Option<&'a Value> {
