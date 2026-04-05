@@ -665,6 +665,19 @@ pub fn apply_llm_update(state: AppState, update: &serde_json::Value) -> AppState
         s = crate::music_api::apply_music_api(s, api);
     }
 
+    // ── Ramp scheduling ───────────────────────────────────────────────────────
+    // JSON: { "ramp": { "param": "fx.reverb_mix", "to": 0.6, "cycles": 8 } }
+    if let Some(obj) = update.get("ramp").and_then(|v| v.as_object()) {
+        s = crate::state::jam_tools::parse_and_schedule_ramp(s, obj);
+    }
+
+    // ── Behaviour templates ───────────────────────────────────────────────────
+    // JSON: { "behaviour": "build" }
+    if let Some(name) = update.get("behaviour").and_then(|v| v.as_str()) {
+        let heat = s.llm.heat;
+        s = crate::state::jam_tools::apply_behaviour(s, name, heat);
+    }
+
     // ── Rack routing (enable/disable modules, add/remove cables) ─────────────
     // JSON: { "rack": { "enable": ["bitcrush"], "disable": ["reverb"],
     //                   "connect": [{"from": "bitcrush", "to": "master"}],

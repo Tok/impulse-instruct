@@ -3,6 +3,7 @@
 // Run: ./run-tests.sh
 //      ./run-tests.sh --coverage
 
+mod jam_tools_tests;
 mod llm_tests;
 mod music_api_tests;
 mod seq_tests;

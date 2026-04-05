@@ -497,6 +497,16 @@ pub enum StyleVerbosity {
 }
 
 /// TTS backend selection.
+/// A smooth parameter transition scheduled by the LLM.
+/// `current` converges toward `target` by `step_per_cycle` each jam cycle.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct ParamRamp {
+    pub param: String, // dot-path, e.g. "fx.reverb_mix"
+    pub current: f32,
+    pub target: f32,
+    pub step_per_cycle: f32, // added to current each cycle until target is reached
+}
+
 /// EspeakNg: always available, low quality, zero setup.
 /// CoquiTts: higher quality neural voice; requires `tts` CLI in PATH. Falls
 ///           back to espeak-ng automatically if the binary is not found.
@@ -554,6 +564,8 @@ pub struct LlmState {
     pub auto_compact: bool,          // restart server automatically when context > 85% full
     pub is_mock: bool,               // true when running without a real model (no llama-server)
     pub llm_initializing: bool, // true while wait_for_ready is running (suppress false mock warning)
+    #[serde(default)]
+    pub active_ramps: Vec<ParamRamp>, // ongoing smooth parameter transitions
 }
 
 impl Default for LlmState {
@@ -602,10 +614,12 @@ impl Default for LlmState {
             auto_compact: true,
             is_mock: false,
             llm_initializing: true, // cleared by LLM thread once live/mock status is known
+            active_ramps: Vec::new(),
         }
     }
 }
 
+pub mod jam_tools;
 pub(crate) mod llm_helpers;
 pub mod transitions;
 

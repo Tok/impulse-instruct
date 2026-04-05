@@ -505,6 +505,12 @@ impl ImpulseApp {
             }
             // Jam re-triggers unless heat is at zero (model is parked).
             if out.text == "[jam_cycle_done]" && self.state.read().llm.heat > 0.0 {
+                // Advance any scheduled param ramps by one cycle.
+                {
+                    let cur = self.state.read().clone();
+                    let next = crate::state::jam_tools::advance_ramps(cur);
+                    *self.state.write() = next;
+                }
                 // Auto-listen: every 4 jam cycles, inject an audio snapshot.
                 if self.auto_listen {
                     self.auto_listen_counter += 1;
