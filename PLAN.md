@@ -94,7 +94,7 @@ alternative Ultravox-as-secondary-listener sketch.
 - LLM strip: LISTEN button + live audio analysis display (sub/low/mid/high RMS, peak, crest, transients)
 
 ### Testing & build
-- 96 unit tests across 4 submodules (`seq_tests`, `state_tests`, `llm_tests`, `audio::analysis`, split at 1000-line limit)
+- 182 unit tests across submodules (`seq_tests`, `state_tests`, `llm_tests`, `audio::analysis`, `jam_tools_tests`, `music_api_tests`, split at 1000-line limit)
 - 39 LLM integration tests in 3 suites: `llm_suite` (core), `llm_suite_style` (artist refs), `llm_suite_theory` (music theory + producer lingo)
 - Pre-commit hook: fmt + clippy + tests + 1000-line LOC limit
 - `scripts/run-tests.sh --coverage` → HTML coverage report (lcov)
@@ -111,11 +111,10 @@ Ordered by value - tackle roughly from top to bottom.
 
 ### Next session - pick from here
 
-- [ ] **FX routing: per-voice buses** - `compile_fx_plan()` now collects
-      per-voice explicit FX routes from Voice→FX cables into `FxPlan.voice_routes`
-      (infrastructure done, 3 new tests). DSP wiring: split voice mix into buses,
-      use `voice_routes` to route each bus through its own FX chain instead of
-      the global chain. Requires separate FX state per bus or send/return model.
+- [x] **FX routing: per-voice buses** - `compile_fx_plan()` collects per-voice
+      routes from Voice→FX cables into `FxPlan.voice_routes`. DSP: voices split
+      into 7 buses (AcidBass, DrumKit808/909, HooverLead, An1xVoice, AmenSampler,
+      NoiseVoice) + TTS bus; each routed through its chain or falls back to global.
 
 - [x] **Audio feedback improvements** - Phase 1 is live. Done in Phase 2:
       - Auto-listen mode: AUTO toggle in LISTEN bar, fires every 4 jam cycles when heat > 0.
@@ -177,14 +176,11 @@ Ordered by value - tackle roughly from top to bottom.
 
 - [x] **Gabber kick voice** - CLIP knob on both kicks. Hard-clip drive: boost then clamp to ±1.
 
-- [ ] **TTS as rack modules** - replace the current single `TtsEngine` enum with two proper
-      rack module kinds: `EspeakNgTts` and `CoquiTts`. Each has audio output ports so
-      it can be patched into the FX chain like any other module. Module front panel shows
-      voice/speed/pitch controls and a SYNC button (triggers a phrase on every N bars).
-      Personality (MC / DJ / Producer / Off) moves into a separate `PersonalityModule` that
-      can be connected to any TTS node - user drops the module they want, LLM can do the same.
-      The current `tts_engine` field + UI settings panel become a migration shim until rack
-      adoption is complete.
+- [x] **TTS as rack modules** - `EspeakNgTts` and `CoquiTts` added as proper `ModuleKind`
+      variants (Zone::Voice). Default rack wires EspeakNgTts → FxReverb. TTS audio now
+      pushed raw to ring buffer; DSP pops from tts_consumer and applies the voice's
+      compiled FX chain. Duck envelope moved into DspState. Old reverb_mix/bitcrush
+      sliders removed from TTS settings panel.
 
 - [x] **LLM jam tools** - done: ramp scheduling (`"ramp"` key), behaviour templates
       ("build", "drop", "breakdown", "tension", "euphoric"), heat-aware guidance in prompt.
