@@ -46,28 +46,27 @@ impl KnobSize {
     }
 }
 
-/// Step-button and XY-pad size.  Steps are chosen so consecutive sizes are
-/// close to a 1.3× factor — each one is noticeably larger without wasting space.
+/// Step-button and XY-pad size.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum PadSize {
-    /// 18 px — compact; 16 steps take ~300 px.
+    /// 26 px — compact; 16 steps take ~430 px.
     Small,
-    /// 26 px — default; matches legacy 26 px step button.
+    /// 44 px — default; generous spacing, good on most displays.
     #[default]
     Normal,
-    /// 34 px — generous; 16 steps take ~560 px.
+    /// 58 px — large; 16 steps take ~950 px.
     Large,
-    /// 44 px — XL; best on wide/high-DPI displays.
+    /// 76 px — XL; best on wide/high-DPI displays.
     XL,
 }
 
 impl PadSize {
     pub fn px(self) -> f32 {
         match self {
-            Self::Small => 18.0,
-            Self::Normal => 26.0,
-            Self::Large => 34.0,
-            Self::XL => 44.0,
+            Self::Small => 26.0,
+            Self::Normal => 44.0,
+            Self::Large => 58.0,
+            Self::XL => 76.0,
         }
     }
 }
@@ -109,7 +108,7 @@ impl Default for UiPrefs {
     fn default() -> Self {
         Self {
             knob_style: KnobStyle::Chrome,
-            knob_size: KnobSize::Small,
+            knob_size: KnobSize::Normal,
             pad_size: PadSize::Normal,
             use_sliders: false,
             huth_style: HuthStyle::PianoOnly,
