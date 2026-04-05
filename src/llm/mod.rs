@@ -35,6 +35,14 @@ pub enum LlmInput {
 }
 
 #[derive(Clone, Debug)]
+pub enum LlmAction {
+    SaveProject,
+    SetHeat(f32),
+    SetPersona(String),
+    SetConversationMode(String),
+}
+
+#[derive(Clone, Debug)]
 pub struct LlmOutput {
     pub text: String,
     pub param_update: Option<serde_json::Value>,
@@ -50,12 +58,41 @@ pub struct LlmOutput {
     /// Snapshot of `AppState` taken immediately before the param update was applied.
     /// The UI uses this to push a correct undo entry.
     pub before_state: Option<Box<AppState>>,
+    /// Actions extracted from the JSON response (save_project, heat, settings changes).
+    pub actions: Vec<LlmAction>,
+}
+
+// ─── Sampling parameters (passed through to llama-server) ────────────────────
+
+#[derive(Clone, Debug)]
+pub struct SamplingParams {
+    pub heat: f32,              // maps to temperature via 0.1 + heat * 1.1
+    pub top_k: i32,             // 0 = disabled; Gemma default 64
+    pub top_p: f32,             // 0.0–1.0 nucleus; Gemma default 0.95
+    pub min_p: f32,             // 0.0–1.0 min prob floor; llama.cpp default 0.05
+    pub repeat_penalty: f32,    // 1.0 = off; >1.0 penalises repeats
+    pub frequency_penalty: f32, // 0.0 = off (OpenAI-compat)
+    pub seed: i64,              // -1 = random
+}
+
+impl Default for SamplingParams {
+    fn default() -> Self {
+        Self {
+            heat: 0.4,
+            top_k: 64,
+            top_p: 0.95,
+            min_p: 0.05,
+            repeat_penalty: 1.0,
+            frequency_penalty: 0.0,
+            seed: -1,
+        }
+    }
 }
 
 // ─── LLM backend trait (swappable) ────────────────────────────────────────────
 
 pub trait LlmBackend: Send {
-    fn infer(&mut self, system: &str, user: &str, heat: f32) -> Result<LlmOutput>;
+    fn infer(&mut self, system: &str, user: &str, sampling: &SamplingParams) -> Result<LlmOutput>;
 }
 
 // ─── LLM server backend ───────────────────────────────────────────────────────
@@ -406,14 +443,14 @@ impl Drop for LlamaServerBackend {
 const INFER_TIMEOUT_SECS: u64 = 180;
 
 impl LlmBackend for LlamaServerBackend {
-    fn infer(&mut self, system: &str, user: &str, heat: f32) -> Result<LlmOutput> {
+    fn infer(&mut self, system: &str, user: &str, sampling: &SamplingParams) -> Result<LlmOutput> {
         if !self.live {
-            return mock_response(user, heat);
+            return mock_response(user, sampling.heat);
         }
 
         let url = format!("{}/v1/chat/completions", self.base_url);
         // heat 0.0 → temp 0.1 (near-deterministic), heat 1.0 → temp 1.2 (creative)
-        let temperature = 0.1_f64 + (heat as f64).clamp(0.0, 1.0) * 1.1;
+        let temperature = 0.1_f64 + (sampling.heat as f64).clamp(0.0, 1.0) * 1.1;
 
         // json_object mode keeps the server honest about emitting valid JSON.
         // max_tokens: full-reset responses (all voices + FX + LFO) can exceed 1200 tokens
@@ -425,6 +462,12 @@ impl LlmBackend for LlamaServerBackend {
                 { "role": "user",    "content": user   }
             ],
             "temperature": temperature,
+            "top_k": sampling.top_k,
+            "top_p": sampling.top_p as f64,
+            "min_p": sampling.min_p as f64,
+            "repeat_penalty": sampling.repeat_penalty as f64,
+            "frequency_penalty": sampling.frequency_penalty as f64,
+            "seed": sampling.seed,
             "max_tokens": 2400,
             "response_format": { "type": "json_object" }
         });
@@ -506,6 +549,31 @@ impl LlmBackend for LlamaServerBackend {
             .and_then(|v| v.as_str().map(|s| s.to_string()))
             .filter(|s| !s.is_empty());
 
+        // Extract actions from "save_project" and "settings" keys.
+        let mut actions = Vec::new();
+        if let Some(obj) = param_update.as_object_mut() {
+            if obj
+                .remove("save_project")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false)
+            {
+                actions.push(LlmAction::SaveProject);
+            }
+            if let Some(s) = obj.get("settings").and_then(|v| v.as_object()).cloned() {
+                if let Some(h) = s.get("heat").and_then(|v| v.as_f64()) {
+                    actions.push(LlmAction::SetHeat((h as f32).clamp(0.0, 1.0)));
+                }
+                if let Some(p) = s.get("persona").and_then(|v| v.as_str()) {
+                    actions.push(LlmAction::SetPersona(p.to_string()));
+                }
+                if let Some(m) = s.get("conversation_mode").and_then(|v| v.as_str()) {
+                    actions.push(LlmAction::SetConversationMode(m.to_string()));
+                }
+            }
+            // Don't pass "settings" to apply_llm_update - remove it
+            obj.remove("settings");
+        }
+
         Ok(LlmOutput {
             text: json_text,
             param_update: Some(param_update),
@@ -517,6 +585,7 @@ impl LlmBackend for LlamaServerBackend {
             thinking,
             mc_line,
             before_state: None, // set by run_llm_loop after apply_llm_update
+            actions,
         })
     }
 }
@@ -560,6 +629,7 @@ pub fn run_llm_loop(
             thinking: None,
             mc_line: None,
             before_state: None,
+            actions: vec![],
         });
         run_mock_loop(state, input_rx, output_tx);
         return;
@@ -601,6 +671,7 @@ pub fn run_llm_loop(
         thinking: None,
         mc_line: None,
         before_state: None,
+        actions: vec![],
     });
 
     while let Ok(input) = input_rx.recv() {
@@ -639,6 +710,7 @@ pub fn run_llm_loop(
                     thinking: None,
                     mc_line: None,
                     before_state: None,
+                    actions: vec![],
                 });
                 continue;
             }
@@ -664,6 +736,7 @@ pub fn run_llm_loop(
                     thinking: None,
                     mc_line: None,
                     before_state: None,
+                    actions: vec![],
                 });
                 continue;
             }
@@ -691,7 +764,18 @@ pub fn run_llm_loop(
             s.llm.last_prompt = prompt.clone();
         }
 
-        let heat = state.read().llm.heat;
+        let sampling = {
+            let s = state.read();
+            SamplingParams {
+                heat: s.llm.heat,
+                top_k: s.llm.top_k,
+                top_p: s.llm.top_p,
+                min_p: s.llm.min_p,
+                repeat_penalty: s.llm.repeat_penalty,
+                frequency_penalty: s.llm.frequency_penalty,
+                seed: s.llm.seed,
+            }
+        };
         let enable_thinking = state.read().llm.enable_thinking;
         let think_prompt = format!(
             "{} {}",
@@ -703,7 +787,7 @@ pub fn run_llm_loop(
             }
         );
         let t0 = Instant::now();
-        let result = backend.infer(&system, &think_prompt, heat);
+        let result = backend.infer(&system, &think_prompt, &sampling);
         let elapsed = t0.elapsed().as_secs_f32();
 
         match result {
@@ -766,6 +850,7 @@ pub fn run_llm_loop(
                             thinking: None,
                             mc_line: None,
                             before_state: None,
+                            actions: vec![],
                         });
                     }
                 }
@@ -862,6 +947,7 @@ pub fn run_llm_loop(
                 thinking: None,
                 mc_line: None,
                 before_state: None,
+                actions: vec![],
             });
         }
     }

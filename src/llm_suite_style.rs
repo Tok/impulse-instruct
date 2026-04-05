@@ -15,7 +15,7 @@
 //        cargo test --features llm-tests -- llm_suite_style
 
 use crate::llm::prompt::build_system_prompt;
-use crate::llm::{LlamaServerBackend, LlmBackend};
+use crate::llm::{LlamaServerBackend, LlmBackend, SamplingParams};
 use crate::state::AppState;
 use serde_json::Value;
 
@@ -66,7 +66,11 @@ fn infer_json(
     prompt: &str,
     heat: f32,
 ) -> Option<Value> {
-    match backend.infer(system, prompt, heat) {
+    let sampling = SamplingParams {
+        heat,
+        ..SamplingParams::default()
+    };
+    match backend.infer(system, prompt, &sampling) {
         Ok(out) => {
             if let Some(ref think) = out.thinking {
                 eprintln!(

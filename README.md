@@ -65,6 +65,139 @@ Built in Rust. Supports [Bonsai 8B](https://huggingface.co/prism-ml/Bonsai-8B-gg
 
 ---
 
+## Talking to PULSE
+
+PULSE is the AI living inside Impulse Instruct. It reads a JSON schema for every parameter, listens to what you type, and writes back structured JSON that gets applied to the synth in real time. You can talk to it like a producer collaborator — it understands music terminology, genre references, mixing decisions, and routing commands.
+
+### Heat — the jam intensity dial
+
+The **HEAT** slider (header bar, shown as a percentage) controls how aggressively PULSE mutates the sound between turns.
+
+| Heat | What happens |
+|------|-------------|
+| **0%** | PULSE is parked. Jam loop stops. It responds only when you send an explicit prompt. |
+| **~15–25%** | Subtle drift — PULSE nudges filters, levels, and rhythm details between prompts. Good for long sets. |
+| **~30–40%** | Default sweet spot. Slow pattern evolution, filter sweeps, occasional step changes. |
+| **~60–75%** | Active rearrangement — new step patterns, instrument swaps, FX chain edits every few bars. |
+| **100%** | Full chaos. PULSE rewrites everything it can reach constantly. |
+
+Heat maps to LLM temperature (`0.1` at 0% → `1.2` at 100%). Low heat → more deterministic, tightly focused responses. High heat → wider sampling, more surprising choices.
+
+### Jam mode
+
+Jam is always on. As soon as a jam cycle completes, PULSE generates the next mutation automatically — as long as heat is above 0%. To pause autonomous generation without losing your settings, drag heat to 0. To stop it narrating while still jamming, change the conversation mode to **Off** in settings.
+
+You can talk over the jam at any time. Your typed prompt takes priority and resets the cycle.
+
+### The lock system
+
+Touch any knob or slider and a small **U** indicator appears — that parameter is now **user-owned**. PULSE sees it as locked and will not overwrite it, even at full heat. The dot shows the current mode:
+
+- **·** (dot) — Free — PULSE can touch this
+- **U** — User-owned — yours; PULSE skips it
+- **F** — LLM focus — PULSE prioritises this parameter
+
+Right-click a knob to cycle modes manually, or let PULSE manage focus through prompts.
+
+---
+
+## Prompt examples
+
+PULSE understands plain English. These are real things you can type into the prompt bar.
+
+### Vibe and style
+
+```
+make it acid
+dark techno, slow and hypnotic
+go full jungle — fast breaks, heavy sub
+BoC vibes — detuned, warm, melancholic
+early 90s rave, hoover lead up front
+make the bass more aggressive
+softer — pull back the highs and add reverb
+go minimal — strip everything back
+```
+
+### Rhythm and sequencer
+
+```
+sparse kick pattern, leave space
+four-on-the-floor with an offbeat hihat
+euclidean 5/16 on the kick
+add a clap on beat 3
+shuffle the hihat pattern
+make the amen break feel more broken
+syncopate the bass, drop the root on beat 1
+swing everything harder
+```
+
+### Sound design
+
+```
+more resonance, less decay on the filter
+open up the cutoff slowly
+make the bass supersaw with lots of unison
+add FM to the bass — subtle, just for texture
+distort the kick harder
+pitch-tune the 808 kick to the root
+add a sine sub under the bass
+make the snare crack more
+```
+
+### FX and routing
+
+```
+connect the bitcrush to the bass
+wire up the reverb on the snare
+add a short delay to the hihat — dotted eighth
+turn up the phaser on the hoover
+add tape saturation to the master
+increase the reverb size, make it cavernous
+drop the delay feedback to avoid mud
+bypass the chorus
+add an LFO on the filter cutoff — slow sine, 0.5 depth
+```
+
+### Instruments and rack
+
+```
+add a hoover lead
+bring in the AN1X — warm pad underneath
+enable the noise voice — pink noise, low cutoff
+activate the Amen sampler
+add the bitcrush module
+remove the chorus
+disable the phaser
+swap the delay for a longer time
+```
+
+### Production moves
+
+```
+raise the BPM to 140
+drop it to 128 for a house feel
+transpose everything up a fifth
+change the scale to Dorian
+lock the BPM — don't touch it
+evolve the melody but keep the kick pattern
+save the project
+```
+
+### Settings and meta
+
+```
+talk less — just make the sounds
+go into MC mode
+stop narrating
+change your name to DRIFT
+heat yourself down a bit, things are too chaotic
+turn the heat up — surprise me
+```
+
+Any parameter you can see in the UI, PULSE can be asked to adjust. Any module it can see in the rack, it can enable, configure, and wire up. If you've locked something (touched it yourself), PULSE will skip it — even if you ask it to change the whole sound.
+
+---
+
 ## Requirements
 
 | | |

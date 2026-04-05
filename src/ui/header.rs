@@ -513,12 +513,13 @@ impl ImpulseApp {
 
                     // ── CONTROLS  (fixed 220px) ───────────────────────────────
                     ui.scope(|ui| {
-                        ui.set_min_width(220.0);
-                        ui.set_max_width(220.0);
+                        ui.set_min_width(260.0);
+                        ui.set_max_width(260.0);
 
                         ui.horizontal(|ui| {
                             // Heat
                             let mut heat = self.state.read().llm.heat;
+                            let heat_pct = (heat * 100.0).round() as u32;
                             let heat_color = if heat < 0.3 {
                                 theme::ASH
                             } else if heat < 0.6 {
@@ -534,41 +535,20 @@ impl ImpulseApp {
                                     .monospace()
                                     .size(9.0),
                             );
-                            if ui
-                                .add_sized(
-                                    [70.0, 16.0],
-                                    egui::Slider::new(&mut heat, 0.0..=1.0).show_value(false),
-                                )
-                                .changed()
-                            {
+                            let slider = egui::Slider::new(&mut heat, 0.0..=1.0)
+                                .show_value(false)
+                                .custom_formatter(|v, _| format!("{:.0}%", v * 100.0));
+                            if ui.add_sized([110.0, 18.0], slider).changed() {
                                 self.state.write().llm.heat = heat;
                             }
+                            ui.label(
+                                egui::RichText::new(format!("{heat_pct}%"))
+                                    .color(heat_color)
+                                    .monospace()
+                                    .size(9.0),
+                            );
 
                             ui.add_space(4.0);
-
-                            // JAM
-                            let jam = self.state.read().llm.auto_jam;
-                            let jam_color = if jam { theme::CHALK } else { theme::ASH };
-                            if ui
-                                .button(
-                                    egui::RichText::new("JAM")
-                                        .color(jam_color)
-                                        .monospace()
-                                        .size(10.0),
-                                )
-                                .clicked()
-                            {
-                                let mut next = self.state.read().clone();
-                                next.llm.auto_jam = !next.llm.auto_jam;
-                                let now_jamming = next.llm.auto_jam;
-                                *self.state.write() = next;
-                                if now_jamming {
-                                    let _ = self.llm_tx.try_send(LlmInput::Infer {
-                                        prompt: "start jamming".to_string(),
-                                        one_shot: false,
-                                    });
-                                }
-                            }
 
                             ui.add_space(2.0);
 

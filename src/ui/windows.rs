@@ -104,6 +104,28 @@ impl ImpulseApp {
                                 .color(theme::IRON),
                             );
                         });
+                        ui.add_space(4.0);
+                        ui.horizontal(|ui| {
+                            ui.label(
+                                egui::RichText::new("Show reasoning in log")
+                                    .monospace()
+                                    .size(9.5)
+                                    .color(theme::FOG),
+                            );
+                            ui.with_layout(
+                                egui::Layout::right_to_left(egui::Align::Center),
+                                |ui| {
+                                    let mut show = self.state.read().llm.show_thinking_in_log;
+                                    if widgets::toggle_button(
+                                        ui,
+                                        if show { "ON" } else { "OFF" },
+                                        &mut show,
+                                    ) {
+                                        self.state.write().llm.show_thinking_in_log = show;
+                                    }
+                                },
+                            );
+                        });
                         if is_mock {
                             ui.label(
                                 egui::RichText::new("  (unavailable in mock mode)")
@@ -112,6 +134,67 @@ impl ImpulseApp {
                                     .color(theme::IRON),
                             );
                         }
+                        ui.add_space(8.0);
+
+                        widgets::section_header(ui, "SAMPLING");
+                        ui.label(
+                            egui::RichText::new("Gemma defaults: top_k 64, top_p 0.95 · Bonsai: top_k 20, top_p 0.9, temp ×0.5")
+                                .monospace()
+                                .size(8.0)
+                                .color(theme::IRON),
+                        );
+                        ui.add_space(4.0);
+                        // Helper macro: labelled drag slider for a sampling param
+                        macro_rules! sampling_row {
+                            ($label:expr, $field:ident, $min:expr, $max:expr, $speed:expr, $hint:expr) => {
+                                ui.horizontal(|ui| {
+                                    ui.label(
+                                        egui::RichText::new($label)
+                                            .monospace()
+                                            .size(9.0)
+                                            .color(theme::FOG),
+                                    );
+                                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                                        let mut v = self.state.read().llm.$field;
+                                        let drag = egui::DragValue::new(&mut v)
+                                            .range($min..=$max)
+                                            .speed($speed)
+                                            .max_decimals(3);
+                                        if ui.add(drag).changed() {
+                                            self.state.write().llm.$field = v;
+                                        }
+                                    });
+                                });
+                                ui.label(
+                                    egui::RichText::new($hint).monospace().size(7.5).color(theme::IRON),
+                                );
+                            };
+                        }
+                        // top_k as i32 — use a separate block
+                        ui.horizontal(|ui| {
+                            ui.label(egui::RichText::new("top_k").monospace().size(9.0).color(theme::FOG));
+                            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                                let mut v = self.state.read().llm.top_k;
+                                if ui.add(egui::DragValue::new(&mut v).range(0..=200).speed(1)).changed() {
+                                    self.state.write().llm.top_k = v;
+                                }
+                            });
+                        });
+                        ui.label(egui::RichText::new("0 = disabled; Gemma 64, Bonsai 20").monospace().size(7.5).color(theme::IRON));
+                        sampling_row!("top_p", top_p, 0.0_f32, 1.0_f32, 0.01, "nucleus cutoff — Gemma 0.95, Bonsai 0.90");
+                        sampling_row!("min_p", min_p, 0.0_f32, 0.5_f32, 0.005, "min-prob floor — 0.05 default, 0 to disable");
+                        sampling_row!("repeat_penalty", repeat_penalty, 1.0_f32, 2.0_f32, 0.01, "1.0 = off; >1.0 penalises repeated tokens");
+                        sampling_row!("freq_penalty", frequency_penalty, 0.0_f32, 2.0_f32, 0.01, "0.0 = off; reduces repetitive phrasing");
+                        ui.horizontal(|ui| {
+                            ui.label(egui::RichText::new("seed").monospace().size(9.0).color(theme::FOG));
+                            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                                let mut v = self.state.read().llm.seed;
+                                if ui.add(egui::DragValue::new(&mut v).range(-1..=i64::MAX).speed(1)).changed() {
+                                    self.state.write().llm.seed = v;
+                                }
+                            });
+                        });
+                        ui.label(egui::RichText::new("-1 = random each call; fixed seed → reproducible outputs").monospace().size(7.5).color(theme::IRON));
                         ui.add_space(8.0);
 
                         widgets::section_header(ui, "PERSONALITY");

@@ -512,19 +512,27 @@ pub struct LlmState {
     pub persona_name: String,      // AI persona name shown in UI and used in system prompt
     pub system_prompt_override: String, // if non-empty, replaces the generated system prompt entirely
     pub enable_thinking: bool,          // append /think or /no_think to prompt (Qwen3)
-    pub tts_enabled: bool,              // speak MC/DJ content via espeak-ng when true
-    pub tts_pitch: u8,                  // 0 = mode default; 1–99 override
-    pub tts_speed: u16,                 // 0 = mode default; words/min override
-    pub tts_amplitude: u8,              // 0 = default (100); 1–200 override
-    pub tts_voice_char: McVoiceChar,    // voice character preset (Auto = follow mode)
-    pub tts_randomise: bool,            // ±10% pitch/speed jitter per utterance
-    pub tts_reverb_mix: f32,            // 0.0–1.0 wet reverb on TTS audio (default 0.3)
-    pub tts_bitcrush: f32,              // 0.0–1.0 bitcrush depth on TTS audio (0 = off)
-    pub tts_pitch_snap: bool,           // snap TTS voice to nearest in-key note (T-Pain effect)
+    pub show_thinking_in_log: bool,     // display reasoning blocks inline in the log
+    // ── Sampling params (passed to llama-server on every inference call) ──────
+    pub top_k: i32,                      // 0 = disabled; Gemma default 64
+    pub top_p: f32,                      // nucleus sampling; Gemma default 0.95
+    pub min_p: f32,                      // min-prob floor; default 0.05
+    pub repeat_penalty: f32,             // 1.0 = off; >1.0 penalises repeated tokens
+    pub frequency_penalty: f32,          // OpenAI-compat; 0.0 = off
+    pub seed: i64,                       // -1 = random each call
+    pub tts_enabled: bool,               // speak MC/DJ content via espeak-ng when true
+    pub tts_pitch: u8,                   // 0 = mode default; 1–99 override
+    pub tts_speed: u16,                  // 0 = mode default; words/min override
+    pub tts_amplitude: u8,               // 0 = default (100); 1–200 override
+    pub tts_voice_char: McVoiceChar,     // voice character preset (Auto = follow mode)
+    pub tts_randomise: bool,             // ±10% pitch/speed jitter per utterance
+    pub tts_reverb_mix: f32,             // 0.0–1.0 wet reverb on TTS audio (default 0.3)
+    pub tts_bitcrush: f32,               // 0.0–1.0 bitcrush depth on TTS audio (0 = off)
+    pub tts_pitch_snap: bool,            // snap TTS voice to nearest in-key note (T-Pain effect)
     pub style_verbosity: StyleVerbosity, // Brief = ~50 token brief, Full = ~150 token description
-    pub auto_lock_on_touch: bool,       // if true, touching a knob locks it to user-only control
-    pub auto_compact: bool,             // restart server automatically when context > 85% full
-    pub is_mock: bool,                  // true when running without a real model (no llama-server)
+    pub auto_lock_on_touch: bool,        // if true, touching a knob locks it to user-only control
+    pub auto_compact: bool,              // restart server automatically when context > 85% full
+    pub is_mock: bool,                   // true when running without a real model (no llama-server)
     pub llm_initializing: bool, // true while wait_for_ready is running (suppress false mock warning)
 }
 
@@ -552,6 +560,13 @@ impl Default for LlmState {
             persona_name: String::from("PULSE"),
             system_prompt_override: String::new(),
             enable_thinking: false,
+            show_thinking_in_log: true,
+            top_k: 64,
+            top_p: 0.95,
+            min_p: 0.05,
+            repeat_penalty: 1.0,
+            frequency_penalty: 0.0,
+            seed: -1,
             tts_enabled: false,
             tts_pitch: 0,
             tts_speed: 0,

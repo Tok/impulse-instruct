@@ -34,6 +34,7 @@ pub fn mock_response(prompt: &str, heat: f32) -> Result<LlmOutput> {
             thinking: None,
             mc_line: None,
             before_state: None,
+            actions: vec![],
         });
     }
 
@@ -210,6 +211,7 @@ pub fn mock_response(prompt: &str, heat: f32) -> Result<LlmOutput> {
         thinking: None,
         mc_line: None,
         before_state: None,
+        actions: vec![],
     })
 }
 
@@ -281,6 +283,7 @@ pub fn run_mock_loop(
                         thinking: None,
                         mc_line: None,
                         before_state: None,
+                        actions: vec![],
                     });
                 }
             }

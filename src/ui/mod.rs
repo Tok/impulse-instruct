@@ -386,11 +386,14 @@ impl ImpulseApp {
     /// Drain LLM output messages.
     fn drain_llm_outputs(&mut self) {
         while let Ok(out) = self.llm_rx.try_recv() {
-            // Store thinking tokens for display
+            // Store thinking tokens for display; also echo to log if enabled.
             if let Some(ref thinking) = out.thinking
                 && !thinking.is_empty()
             {
                 self.last_thinking = Some(thinking.clone());
+                if self.state.read().llm.show_thinking_in_log {
+                    self.log_text.push_str(&format!("think → {}\n", thinking));
+                }
             }
 
             if !out.is_jam
@@ -441,14 +444,44 @@ impl ImpulseApp {
                     self.log_text.push_str(&format!("◆ {}\n", mc));
                 }
             }
-            // If jam cycle done and auto_jam is on, re-trigger
-            if out.text == "[jam_cycle_done]" {
-                let auto_jam = self.state.read().llm.auto_jam;
-                if auto_jam {
-                    let _ = self.llm_tx.try_send(LlmInput::Infer {
-                        prompt: "continue jamming, evolve the pattern".to_string(),
-                        one_shot: false,
-                    });
+            // Jam re-triggers unless heat is at zero (model is parked).
+            if out.text == "[jam_cycle_done]" && self.state.read().llm.heat > 0.0 {
+                let _ = self.llm_tx.try_send(LlmInput::Infer {
+                    prompt: "continue jamming, evolve the pattern".to_string(),
+                    one_shot: false,
+                });
+            }
+            // Handle actions extracted from the LLM JSON (save_project, heat, settings).
+            for action in &out.actions {
+                match action {
+                    crate::llm::LlmAction::SaveProject => {
+                        let state = self.state.read().clone();
+                        match crate::state::save_project(&state) {
+                            Ok(path) => self
+                                .log_text
+                                .push_str(&format!("Project saved → {}\n", path.display())),
+                            Err(e) => self.log_text.push_str(&format!("Save failed: {}\n", e)),
+                        }
+                    }
+                    crate::llm::LlmAction::SetHeat(h) => {
+                        self.state.write().llm.heat = *h;
+                        self.session_dirty = true;
+                    }
+                    crate::llm::LlmAction::SetPersona(p) => {
+                        self.state.write().llm.persona_name = p.clone();
+                        self.session_dirty = true;
+                    }
+                    crate::llm::LlmAction::SetConversationMode(m) => {
+                        use crate::state::ConversationMode;
+                        let mode = match m.to_lowercase().as_str() {
+                            "off" => ConversationMode::Off,
+                            "dj" => ConversationMode::Dj,
+                            "mc" => ConversationMode::Mc,
+                            _ => ConversationMode::Producer,
+                        };
+                        self.state.write().llm.conversation_mode = mode;
+                        self.session_dirty = true;
+                    }
                 }
             }
             // Push updated params after LLM changed state; record the pre-update

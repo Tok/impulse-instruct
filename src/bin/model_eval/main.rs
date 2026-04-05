@@ -14,7 +14,7 @@
 mod specs;
 
 use impulse_instruct::llm::styles::StyleCatalog;
-use impulse_instruct::llm::{LlamaServerBackend, LlmBackend, build_system_prompt};
+use impulse_instruct::llm::{LlamaServerBackend, LlmBackend, SamplingParams, build_system_prompt};
 use impulse_instruct::state::{AppState, apply_llm_update};
 use specs::{CheckResult, StyleSpec, build_style_specs};
 use std::time::Instant;
@@ -103,7 +103,11 @@ fn run_model(model_path: &str, specs: &[&StyleSpec], timeout_secs: u64) -> Model
         // we just track elapsed time ourselves.
 
         let t_inf = Instant::now();
-        let output = backend.infer(&system, spec.prompt, 0.1); // heat=0.1 → near-deterministic
+        let sampling = SamplingParams {
+            heat: 0.1,
+            ..SamplingParams::default()
+        };
+        let output = backend.infer(&system, spec.prompt, &sampling); // heat=0.1 → near-deterministic
         let inference_ms = t_inf.elapsed().as_millis() as u64;
 
         let (final_state, json_valid) = match output {

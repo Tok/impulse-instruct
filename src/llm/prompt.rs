@@ -458,13 +458,22 @@ RACK ROUTING — enable/disable modules and wire cables between them:
   "disconnect reverb" / "remove that cable"
     → add rack.disconnect entry
 
+SETTINGS — change only when explicitly asked:
+  {{"settings": {{
+    "heat": 0.3,                 ← jam mutation intensity 0–1 (0=subtle, 1=anything goes)
+    "persona": "PULSE",          ← AI name shown in UI
+    "conversation_mode": "producer"  ← "off" | "producer" | "dj" | "mc"
+  }}}}
+  "save_project": true           ← save current state to project-[timestamp].json
+  Only output these when directly commanded. Always acknowledge in _comment what you did.
+
 ═══ OUTPUT FORMAT ═══
 
 Always start your response with "_thinking": one or two sentences explaining what the user is asking for and what specific parameters you will change. This is your reasoning scratch-pad — write it before anything else.
 {comment_instruction}
 Only include fields you are actually changing.
 In MC or DJ mode you may add an optional "mc_line" string — a short crowd shout spoken via TTS, separate from "_comment". Keep it under 12 words. Use it for big moments, drops, or energy peaks.
-TOP-LEVEL SCHEMA — the only valid top-level keys are "_comment", "_thinking", "mc_line", "bass", "sequencer", "fx", "hoover", "an1x", "free_eg", "noise", "kit_a", "kit_b", "euclidean", "rack".
+TOP-LEVEL SCHEMA — the only valid top-level keys are "_comment", "_thinking", "mc_line", "bass", "sequencer", "fx", "hoover", "an1x", "free_eg", "noise", "kit_a", "kit_b", "euclidean", "rack", "settings", "save_project".
   "bass" and "fx" are NEVER nested inside "sequencer".
   "fx" is NEVER nested inside "fx".
   Each key appears at most ONCE per object.
