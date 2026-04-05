@@ -2,8 +2,6 @@
   <img src="docs/header.svg" alt="Impulse Instruct" width="800"/>
 </p>
 
-# Impulse Instruct
-
 [![CI](https://github.com/Tok/impulse-instruct/actions/workflows/ci.yml/badge.svg)](https://github.com/Tok/impulse-instruct/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/Tok/impulse-instruct/branch/main/graph/badge.svg)](https://codecov.io/gh/Tok/impulse-instruct)
 
