@@ -27,9 +27,11 @@ mod sequencer_tests {
     fn advance_clock_wraps_at_max_steps() {
         // current_step is a global tick counter that wraps at MAX_STEPS (64).
         // Per-voice lengths are applied as modulo at trigger time.
-        let mut seq = SequencerState::default();
-        seq.running = true;
-        seq.bpm = 120.0;
+        let seq = SequencerState {
+            running: true,
+            bpm: 120.0,
+            ..SequencerState::default()
+        };
 
         let sps = samples_per_step(120.0, 44100.0) as usize;
         let clock = ClockState {
@@ -48,9 +50,11 @@ mod sequencer_tests {
     fn advance_clock_fires_active_steps() {
         use crate::sequencer::TriggerEvent;
 
-        let mut seq = SequencerState::default();
-        seq.running = true;
-        seq.bpm = 120.0;
+        let mut seq = SequencerState {
+            running: true,
+            bpm: 120.0,
+            ..SequencerState::default()
+        };
         // Activate step 1 of kick 808
         seq.drum_patterns.get_mut(&DrumVoice::Kick808).unwrap()[1] = Step {
             active: true,
@@ -77,9 +81,11 @@ mod sequencer_tests {
 
     #[test]
     fn ratchet_2_emits_sub_hit_after_step_fires() {
-        let mut seq = SequencerState::default();
-        seq.running = true;
-        seq.bpm = 120.0;
+        let mut seq = SequencerState {
+            running: true,
+            bpm: 120.0,
+            ..SequencerState::default()
+        };
         seq.drum_patterns.get_mut(&DrumVoice::Kick808).unwrap()[1] = Step {
             active: true,
             velocity: 1.0,
@@ -257,9 +263,11 @@ mod probability_tests {
     /// Build a sequencer with only step 0 of Kick808 active, all other kick steps cleared.
     /// The 16-step pattern cycles 4× per global 64-step loop, so step 0 visits 4 times per loop.
     fn seq_with_single_kick(prob: f32) -> SequencerState {
-        let mut seq = SequencerState::default();
-        seq.running = true;
-        seq.bpm = 120.0;
+        let mut seq = SequencerState {
+            running: true,
+            bpm: 120.0,
+            ..SequencerState::default()
+        };
         // Clear all kick808 steps, then set only step 0 with the target probability
         if let Some(pattern) = seq.drum_patterns.get_mut(&DrumVoice::Kick808) {
             for s in pattern.iter_mut() {
@@ -335,7 +343,7 @@ mod probability_tests {
         // Expect roughly 200 ± wide margin (150–250)
         let count = kick808_count_over_loops(0.5, 100);
         assert!(
-            count >= 100 && count <= 300,
+            (100..=300).contains(&count),
             "prob=0.5 over 100 loops: expected ~200, got {}",
             count
         );

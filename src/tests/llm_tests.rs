@@ -101,7 +101,7 @@ mod instruction_tests {
     fn instruction_set_loads_and_is_non_empty() {
         let set = InstructionSet::get();
         assert!(
-            set.len() > 0,
+            !set.is_empty(),
             "instruction set should have at least one entry"
         );
     }

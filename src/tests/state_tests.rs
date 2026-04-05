@@ -1,4 +1,5 @@
 #[cfg(test)]
+#[allow(clippy::module_inception)]
 mod state_tests {
     use crate::state::{AppState, DrumVoice, apply_llm_update, lock_param, toggle_drum_step};
 
@@ -430,9 +431,11 @@ mod bank_chain_tests {
 
     #[test]
     fn set_chain_enabled_false_resets_pos() {
-        let mut state = AppState::default();
-        state.chain_pos = 4;
-        state.chain_enabled = true;
+        let state = AppState {
+            chain_pos: 4,
+            chain_enabled: true,
+            ..AppState::default()
+        };
         let state = set_chain_enabled(state, false);
         assert!(!state.chain_enabled);
         assert_eq!(state.chain_pos, 0, "disabling chain should reset position");
@@ -790,8 +793,10 @@ mod transition_coverage_tests {
 
     #[test]
     fn set_chain_enabled_false_resets_position() {
-        let mut s = AppState::default();
-        s.chain_pos = 3;
+        let s = AppState {
+            chain_pos: 3,
+            ..AppState::default()
+        };
         let s = set_chain_enabled(s, false);
         assert!(!s.chain_enabled);
         assert_eq!(s.chain_pos, 0);
@@ -832,7 +837,7 @@ mod schema_and_rack_tests {
 
     #[test]
     fn next_cable_color_cycles() {
-        let mut rack = RackState::default();
+        let rack = RackState::default();
         let c1 = rack.next_cable_color();
         let c2 = rack.next_cable_color();
         // Colors must be valid CableColor variants and can differ
@@ -846,15 +851,16 @@ mod schema_and_rack_tests {
 
     #[test]
     fn next_cable_color_wraps_around() {
-        let mut rack = RackState::default();
+        let rack = RackState::default();
         let n = CableColor::ALL.len();
-        // Advance through exactly one full cycle
+        // Advance through exactly one full cycle — rack is stateless, color
+        // depends only on cables.len(), so an empty rack always returns ALL[0].
         for _ in 0..n {
             rack.next_cable_color();
         }
         // Color after full cycle should match the first color
         let after_cycle = rack.next_cable_color();
-        let mut rack2 = RackState::default();
+        let rack2 = RackState::default();
         let first = rack2.next_cable_color();
         assert_eq!(after_cycle, first);
     }
