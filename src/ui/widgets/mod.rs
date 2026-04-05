@@ -374,15 +374,34 @@ pub fn section_header(ui: &mut Ui, label: &str) {
 /// An XY pad controlling two parameters simultaneously.
 /// Returns true when a value changed.
 /// `locked` follows the UserOwned convention — pad is read-only when true.
+/// Return the currently selected pair index for an XY pad identified by `pad_id`.
+/// Call this *before* `xy_pad` to dispatch the correct `&mut f32` values on every frame.
+/// Return the currently selected pair index for an XY pad with the given `pad_id`.
+/// Call this *before* `xy_pad` on each frame to dispatch the correct `&mut f32` values.
+pub fn xy_pad_pair(ctx: &egui::Context, pad_id: &str) -> usize {
+    ctx.data(|d| d.get_temp(egui::Id::new(pad_id)).unwrap_or(0usize))
+}
+
+/// XY pad with optional pair cycling.
+///
+/// - `num_pairs` — how many param pairs this pad cycles through (1 = fixed, no cycle indicator).
+///   The active pair index is persisted in egui temp-memory keyed by the widget's allocated id.
+///   Right-click cycles to the next pair.
+///
+/// Returns `(changed, pair_index)`.  When `changed` is true the caller should write back
+/// the new `x`/`y` values.  The caller should use `pair_index` on every frame to decide
+/// which param pair to pass in as `x`/`y`.
 pub fn xy_pad(
     ui: &mut Ui,
+    pad_id: &str,
     label_x: &str,
     label_y: &str,
     x: &mut f32,
     y: &mut f32,
     size: f32,
     locked: bool,
-) -> bool {
+    num_pairs: usize,
+) -> (bool, usize) {
     let label_h = 13.0_f32;
     let label_w = 12.0_f32;
     let total = Vec2::new(label_w + size + 2.0, size + label_h + 2.0);
@@ -392,6 +411,14 @@ pub fn xy_pad(
         Pos2::new(outer.min.x + label_w, outer.min.y),
         Vec2::splat(size),
     );
+
+    // ── Pair cycling (right-click) ────────────────────────────────────────────
+    let mem_id = egui::Id::new(pad_id);
+    let pair: usize = ui.ctx().data(|d| d.get_temp(mem_id).unwrap_or(0usize));
+    if num_pairs > 1 && response.secondary_clicked() {
+        let next = (pair + 1) % num_pairs;
+        ui.ctx().data_mut(|d| d.insert_temp(mem_id, next));
+    }
 
     let mut changed = false;
 
@@ -403,6 +430,10 @@ pub fn xy_pad(
         *y = (1.0 - (pos.y - pad_rect.min.y) / pad_rect.height()).clamp(0.0, 1.0);
         changed = true;
     }
+
+    // ── Hover tooltip (shown inline after all drawing) ────────────────────────
+    let show_tooltip = response.hovered();
+    let tooltip_text = format!("{}: {:.3}   {}: {:.3}", label_x, *x, label_y, *y);
 
     if ui.is_rect_visible(outer) {
         let painter = ui.painter();
@@ -487,6 +518,22 @@ pub fn xy_pad(
             );
         }
 
+        // Pair-cycle indicator — small "⇄ n/N" in top-right corner when multiple pairs.
+        if num_pairs > 1 {
+            let ind_text = format!("{}/{}", pair + 1, num_pairs);
+            painter.text(
+                pad_rect.right_top() + Vec2::new(-2.0, 3.0),
+                egui::Align2::RIGHT_TOP,
+                ind_text,
+                egui::FontId::monospace(6.5),
+                if response.hovered() {
+                    Color32::from_gray(110)
+                } else {
+                    Color32::from_gray(55)
+                },
+            );
+        }
+
         let x_label_rect = Rect::from_min_size(
             Pos2::new(pad_rect.min.x, pad_rect.max.y + 1.0),
             Vec2::new(pad_rect.width(), label_h),
@@ -517,7 +564,13 @@ pub fn xy_pad(
         );
     }
 
-    changed
+    if show_tooltip {
+        response.on_hover_ui(|ui| {
+            ui.label(egui::RichText::new(&tooltip_text).monospace().size(9.5));
+        });
+    }
+
+    (changed, pair)
 }
 
 // ─── ADSR Envelope Visualiser ────────────────────────────────────────────────

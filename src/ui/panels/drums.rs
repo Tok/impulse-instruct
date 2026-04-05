@@ -147,7 +147,19 @@ pub fn draw_kit_a(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             .size(9.0),
     );
     ui.horizontal(|ui| {
-        if widgets::xy_pad(ui, "PIT", "DEC", &mut kp, &mut kd, xy_size, false) {
+        if widgets::xy_pad(
+            ui,
+            "drums_kick_xy",
+            "PIT",
+            "DEC",
+            &mut kp,
+            &mut kd,
+            xy_size,
+            false,
+            1,
+        )
+        .0
+        {
             let mut s = app.state.write();
             s.kit_a.kick.pitch = kp;
             s.kit_a.kick.decay = kd;

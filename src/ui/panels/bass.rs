@@ -357,36 +357,94 @@ pub fn draw_bass(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         || param_mode("bass.decay", &locked, &focused) == ParamMode::UserOwned;
 
     ui.horizontal(|ui| {
-        // Pad 1: Cutoff (X) × Resonance (Y)
-        if widgets::xy_pad(
+        // Pad 1 — cycles: CUT×RES | ACCENT×VOL | DIST×SUB
+        let p1 = widgets::xy_pad_pair(ui.ctx(), "bass_xy1");
+        let (lx1, ly1, mut vx1, mut vy1) = match p1 {
+            1 => ("ACCENT", "VOL", accent, vol),
+            2 => ("DIST", "SUB", dist, sub_osc_level),
+            _ => ("CUT", "RES", cutoff, resonance),
+        };
+        let xy1_locked_cur = match p1 {
+            1 => {
+                param_mode("bass.accent_level", &locked, &focused) == ParamMode::UserOwned
+                    || param_mode("bass.volume", &locked, &focused) == ParamMode::UserOwned
+            }
+            2 => {
+                param_mode("bass.distortion", &locked, &focused) == ParamMode::UserOwned
+                    || param_mode("bass.sub_osc_level", &locked, &focused) == ParamMode::UserOwned
+            }
+            _ => xy1_locked,
+        };
+        if let (true, _) = widgets::xy_pad(
             ui,
-            "CUT",
-            "RES",
-            &mut cutoff,
-            &mut resonance,
+            "bass_xy1",
+            lx1,
+            ly1,
+            &mut vx1,
+            &mut vy1,
             xy_size,
-            xy1_locked,
+            xy1_locked_cur,
+            3,
         ) {
             let mut snap = app.state.read().clone();
-            snap.bass.cutoff = cutoff;
-            snap.bass.resonance = resonance;
+            match p1 {
+                1 => {
+                    snap.bass.accent_level = vx1;
+                    snap.bass.volume = vy1;
+                }
+                2 => {
+                    snap.bass.distortion = vx1;
+                    snap.bass.sub_osc_level = vy1;
+                }
+                _ => {
+                    snap.bass.cutoff = vx1;
+                    snap.bass.resonance = vy1;
+                }
+            }
             *app.state.write() = snap;
             app.push_audio_params();
         }
+
         ui.add_space(6.0);
-        // Pad 2: Env Mod (X) × Decay (Y)
-        if widgets::xy_pad(
+
+        // Pad 2 — cycles: ENV×DEC | FM.D×FM.R | NOISE×GLIDE
+        let p2 = widgets::xy_pad_pair(ui.ctx(), "bass_xy2");
+        let (lx2, ly2, mut vx2, mut vy2) = match p2 {
+            1 => ("FM.D", "FM.R", fm_depth, fm_ratio),
+            2 => ("NOISE", "GLIDE", noise_mix, portamento_time),
+            _ => ("ENV", "DEC", env_mod, decay),
+        };
+        let xy2_locked_cur = match p2 {
+            1 => false,
+            2 => false,
+            _ => xy2_locked,
+        };
+        if let (true, _) = widgets::xy_pad(
             ui,
-            "ENV",
-            "DEC",
-            &mut env_mod,
-            &mut decay,
+            "bass_xy2",
+            lx2,
+            ly2,
+            &mut vx2,
+            &mut vy2,
             xy_size,
-            xy2_locked,
+            xy2_locked_cur,
+            3,
         ) {
             let mut snap = app.state.read().clone();
-            snap.bass.env_mod = env_mod;
-            snap.bass.decay = decay;
+            match p2 {
+                1 => {
+                    snap.bass.fm_depth = vx2;
+                    snap.bass.fm_ratio = vy2;
+                }
+                2 => {
+                    snap.bass.noise_mix = vx2;
+                    snap.bass.portamento_time = vy2;
+                }
+                _ => {
+                    snap.bass.env_mod = vx2;
+                    snap.bass.decay = vy2;
+                }
+            }
             *app.state.write() = snap;
             app.push_audio_params();
         }
