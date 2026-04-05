@@ -33,12 +33,9 @@ Ordered by value.
 
 ### In progress / next
 
-- [ ] **TTS rack module UI panel** - module card for EspeakNgTts/CoquiTts in the rack canvas showing voice/speed/pitch controls inline. Currently TTS is configured via the settings panel only; it should also surface in the rack like other modules.
+- [x] **TTS rack module UI panel** - done: `src/ui/panels/tts.rs`, wired into `draw_voice_content()`.
 
-- [ ] **Audio feedback Phase 2 improvements**
-  - Auto-listen mode: AUTO toggle in LISTEN bar, fires every 4 jam cycles when heat > 0
-  - Per-voice level bars: 8 mini bars (BAS/K-A/S-A/HH/K-B/S-B/CLP/AMN) from state volume params
-  - Watch llama.cpp #21325 for Gemma 4 audio encoder PR; test when it lands
+- [x] **Audio feedback Phase 2 improvements** - done: AUTO toggle fires every 4 jam cycles, 8 per-voice level bars in LISTEN strip. Watch llama.cpp #21325 for Gemma 4 audio encoder PR.
 
 ### Post-release
 

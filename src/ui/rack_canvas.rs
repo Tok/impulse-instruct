@@ -163,11 +163,12 @@ pub fn draw_rack(app: &mut ImpulseApp, ctx: &egui::Context, ui: &mut egui::Ui) {
     // context menu can cover the entire rack area with a single interact region.
     let canvas_rect = ui.available_rect_before_wrap();
 
-    // Disable drag-to-scroll so cable dragging across the rack doesn't pan it.
-    // Users scroll via mouse wheel or the always-visible scrollbar.
+    // Disable drag-to-scroll only while a cable is being dragged, so normal
+    // two-finger/trackpad scroll works when not patching.
+    let dragging_cable = app.cable_drag.is_some();
     ScrollArea::vertical()
         .id_source("rack_scroll")
-        .drag_to_scroll(false)
+        .drag_to_scroll(!dragging_cable)
         .auto_shrink([false; 2])
         .scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::AlwaysVisible)
         .show(ui, |ui| {
@@ -385,20 +386,59 @@ fn draw_add_menu(app: &mut ImpulseApp, ctx: &egui::Context) {
 }
 
 // Golden-ratio width tiers.  Each module picks one; the layout never recomputes
-// widths based on how many modules are present — this keeps the grid stable.
+// Slot widths use a responsive grid:
 //
-//   full   = available_w           (1 per row — global / sequencer / master)
-//   wide   = available_w / φ       ≈ 61.8 %   (1 per row — complex voices, AN1X)
-//   narrow = available_w / φ²      ≈ 38.2 %   (2 per row — simple voices, FX, LFO)
+//   Global (Sequencer, Master): always full width.
 //
-// Two narrow modules take 76.4 % of the row; three take 114.6 % → wraps to 2+1.
-const PHI: f32 = 1.618034;
+//   Voice modules: minimum 420 px; how many fit per row depends on available_w:
+//     < 840 px  → 1 per row (fills full width)
+//     840-1259  → 2 per row (each ≈ half)
+//     ≥ 1260 px → 3 per row (each ≈ third)
+//   AN1X is "wide" — always takes 2 columns worth (or full width when 1-per-row).
+//
+//   FX / LFO: fixed ~220 px, 4-5 per row.
+
+const VOICE_MIN_W: f32 = 420.0;
+const FX_SLOT_W: f32 = 220.0;
 
 fn module_slot_w(kind: ModuleKind, full_w: f32) -> f32 {
     match kind {
         ModuleKind::StepSequencer | ModuleKind::MasterOutput => full_w,
-        ModuleKind::An1xVoice => full_w / PHI,
-        _ => full_w / (PHI * PHI),
+        // FX and LFO: fixed compact width
+        ModuleKind::FxReverb
+        | ModuleKind::FxDelay
+        | ModuleKind::FxChorus
+        | ModuleKind::FxPhaser
+        | ModuleKind::FxRingMod
+        | ModuleKind::FxWaveshaper
+        | ModuleKind::FxBitcrush
+        | ModuleKind::FxEq
+        | ModuleKind::FxCompressor
+        | ModuleKind::FxTapeSat
+        | ModuleKind::FxDrive
+        | ModuleKind::LfoModule => FX_SLOT_W.min(full_w),
+        // AN1X: wide — 2 voice columns or full width
+        ModuleKind::An1xVoice => {
+            let cols = voice_cols(full_w);
+            if cols >= 2 {
+                (full_w / cols as f32) * 2.0
+            } else {
+                full_w
+            }
+        }
+        // All other voice modules: fill evenly by column count
+        _ => full_w / voice_cols(full_w) as f32,
+    }
+}
+
+/// How many voice columns fit in `full_w` while respecting VOICE_MIN_W.
+fn voice_cols(full_w: f32) -> usize {
+    if full_w >= VOICE_MIN_W * 3.0 {
+        3
+    } else if full_w >= VOICE_MIN_W * 2.0 {
+        2
+    } else {
+        1
     }
 }
 

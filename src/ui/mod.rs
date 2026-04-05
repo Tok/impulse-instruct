@@ -281,6 +281,8 @@ pub struct ImpulseApp {
     auto_listen_counter: u32,
     // When jam_bars > 0, this holds the Instant when the next jam cycle should fire.
     jam_next_fire: Option<std::time::Instant>,
+    // When true the LLM strip collapses to show only the prompt row.
+    pub(crate) llm_strip_collapsed: bool,
 }
 
 impl ImpulseApp {
@@ -400,6 +402,7 @@ impl ImpulseApp {
             auto_listen: false,
             auto_listen_counter: 0,
             jam_next_fire: None,
+            llm_strip_collapsed: false,
         }
     }
 

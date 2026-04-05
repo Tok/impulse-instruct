@@ -16,12 +16,35 @@ impl ImpulseApp {
     pub(super) fn draw_llm_strip(&mut self, ctx: &egui::Context) {
         // Compact default: style row ~22px + instructions ~22px + prompt ~34px + top margin 4px ≈ 82px.
         // User can drag the bottom border down to reveal more log lines.
+        let collapsed = self.llm_strip_collapsed;
         TopBottomPanel::top("llm_strip")
             .frame(Frame::none().fill(theme::PIT).inner_margin(egui::Margin { left: 8.0, right: 8.0, top: 4.0, bottom: 0.0 }))
-            .resizable(true)
-            .min_height(70.0)
-            .default_height(95.0)
+            .resizable(!collapsed)
+            .min_height(if collapsed { 36.0 } else { 70.0 })
+            .max_height(if collapsed { 36.0 } else { f32::INFINITY })
+            .default_height(if collapsed { 36.0 } else { 95.0 })
             .show(ctx, |ui| {
+                // ── Collapse toggle (top-right corner) ───────────────────────
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::TOP), |ui| {
+                    let icon = if collapsed { "▼" } else { "▲" };
+                    if ui
+                        .add(
+                            egui::Button::new(
+                                egui::RichText::new(icon).monospace().size(9.0).color(theme::IRON),
+                            )
+                            .frame(false),
+                        )
+                        .on_hover_text(if collapsed { "Expand LLM strip" } else { "Collapse LLM strip" })
+                        .clicked()
+                    {
+                        self.llm_strip_collapsed = !self.llm_strip_collapsed;
+                    }
+                });
+
+                if collapsed {
+                    // Collapsed: show only the prompt row
+                } else {
+
                 // ── TOP row: style + instructions | log ───────────────────────
                 ui.horizontal(|ui| {
                     // ── LEFT column: style + instructions ─────────────────────
@@ -400,6 +423,8 @@ impl ImpulseApp {
                         );
                     }
                 });
+
+                } // end !collapsed block
 
                 // ── BOTTOM row: full-width prompt + Enter (vertically centred) ──
                 ui.with_layout(
