@@ -514,6 +514,11 @@ impl DspState {
             }
         }
 
+        // Apply master pitch offset to melodic voices via lfo_pitch_mod_st accumulator.
+        if p.master_pitch_st.abs() > 0.001 {
+            p.lfo_pitch_mod_st += p.master_pitch_st;
+        }
+
         let delay_samples =
             (p.delay_time * sr * 1.0).clamp(1.0, MAX_DELAY_SAMPLES as f32 - 1.0) as usize;
 

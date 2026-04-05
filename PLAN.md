@@ -201,7 +201,7 @@ Ordered by value — tackle roughly from top to bottom.
 | Dub Techno | FX IS the music | Modular FX routing |
 | Gabber | Kick IS the bass | ~~Gabber kick voice (pitch env + clipper)~~ done — CLIP knob on both kicks |
 | Synthwave | Gated reverb snare | ~~Reverb gate~~ done — `fx.reverb_gate_time` (0–2s), GATE knob in FX panel |
-| Vaporwave | Pitch-shifted, woozy | Pitch control on output, pitch drift LFO on master |
+| Vaporwave | Pitch-shifted, woozy | ~~Master pitch~~ done — `fx.master_pitch_st` (±12 st), PITCH knob in MASTER group; LFO target 3 = bass pitch which subsumes drift |
 | Ambient | Glacial filter sweeps | LFO automation is wired; needs longer attack/decay times |
 
 ---

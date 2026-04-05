@@ -403,6 +403,8 @@ pub struct FxState {
     pub tape_drive: f32,  // 0–1 saturation amount
     pub tape_mix: f32,    // 0–1 wet/dry
     pub tape_flutter: f32, // 0–1 wow/flutter depth
+    #[serde(default)]
+    pub master_pitch_st: f32, // -12..+12 semitones: global pitch offset for melodic voices
     pub bitcrush_bits: f32, // 0–1: 1.0 = full quality (bypass), 0.0 = 1-bit
     pub bitcrush_rate: f32, // 0–1: 0.0 = no decimation, 1.0 = extreme downsampling
     pub bitcrush_mix: f32, // 0–1: wet/dry
@@ -440,6 +442,7 @@ impl Default for FxState {
             tape_drive: 0.3,
             tape_mix: 0.0,
             tape_flutter: 0.2,
+            master_pitch_st: 0.0,
             bitcrush_bits: 1.0,
             bitcrush_rate: 0.0,
             bitcrush_mix: 0.0,

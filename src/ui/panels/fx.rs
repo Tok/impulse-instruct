@@ -38,6 +38,7 @@ pub fn draw_fx(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         mut tape_drive,
         mut tape_mix,
         mut tape_flutter,
+        mut master_pitch,
         locked,
     ) = {
         let s = app.state.read();
@@ -71,6 +72,7 @@ pub fn draw_fx(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             s.fx.tape_drive,
             s.fx.tape_mix,
             s.fx.tape_flutter,
+            s.fx.master_pitch_st,
             s.llm.locked_params.clone(),
         )
     };
@@ -276,6 +278,14 @@ pub fn draw_fx(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                 if widgets::param_control(ui, "VOLUME", &mut mv, ParamMode::Free, ctrl).0 {
                     changed = true;
                 }
+                // PITCH: -12..+12 semitones → normalize to 0..1 for knob, convert back on write
+                let mut mp_norm = (master_pitch + 12.0) / 24.0;
+                if widgets::param_control(ui, "PITCH", &mut mp_norm, pm("fx.master_pitch_st"), ctrl)
+                    .0
+                {
+                    master_pitch = mp_norm * 24.0 - 12.0;
+                    changed = true;
+                }
             });
         });
     });
@@ -311,6 +321,7 @@ pub fn draw_fx(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         s.fx.tape_drive = tape_drive;
         s.fx.tape_mix = tape_mix;
         s.fx.tape_flutter = tape_flutter;
+        s.fx.master_pitch_st = master_pitch;
         drop(s);
         app.push_audio_params();
     }

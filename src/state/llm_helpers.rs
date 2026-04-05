@@ -368,6 +368,13 @@ pub(super) fn apply_fx_update(
         "reverb_gate_time",
         "fx.reverb_gate_time"
     );
+    // master_pitch_st: -12..+12 stored raw; unlocked_f32 clamp is applied via min/max
+    if let Some(v) = fx.get("master_pitch_st").and_then(|v| v.as_f64()) {
+        let path = "fx.master_pitch_st";
+        if !locked.contains(path) {
+            s.fx.master_pitch_st = (v as f32).clamp(-12.0, 12.0);
+        }
+    }
     u!(s.fx.delay_time, "delay_time", "fx.delay_time");
     u!(s.fx.delay_feedback, "delay_feedback", "fx.delay_feedback");
     u!(s.fx.delay_mix, "delay_mix", "fx.delay_mix");

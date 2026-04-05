@@ -115,6 +115,7 @@ pub struct AudioParams {
     pub tape_drive: f32,
     pub tape_mix: f32,
     pub tape_flutter: f32,
+    pub master_pitch_st: f32, // -12..+12 semitones added to all melodic voices
     // Filter mode (0=LP, 1=HP, 2=BP)
     pub filter_mode: u8,
     // Sample rate
@@ -275,6 +276,7 @@ impl AudioParams {
             tape_drive: s.fx.tape_drive,
             tape_mix: s.fx.tape_mix,
             tape_flutter: s.fx.tape_flutter,
+            master_pitch_st: s.fx.master_pitch_st,
             filter_mode: match s.bass.filter_mode {
                 FilterMode::Lowpass => 0,
                 FilterMode::Highpass => 1,
