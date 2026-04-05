@@ -364,6 +364,7 @@ impl Default for RackState {
             rack.modules.iter().find(|m| m.kind == kind).map(|m| m.id)
         };
         let master_id = find(ModuleKind::MasterOutput);
+        let seq_id = find(ModuleKind::StepSequencer);
 
         // Voice → MasterOutput (voice mix bus).
         let voice_ids: Vec<u32> = [
@@ -398,6 +399,26 @@ impl Default for RackState {
         ];
         let fx_ids: Vec<u32> = fx_chain.iter().filter_map(|&k| find(k)).collect();
         let _ = find; // end closure borrow before mutable connect() calls
+
+        // StepSequencer → each voice (gate/CV)
+        if let Some(sid) = seq_id {
+            for vid in &voice_ids {
+                rack.connect(
+                    PortRef {
+                        module_id: sid,
+                        dir: PortDir::Out,
+                        kind: PortKind::Cv,
+                        index: 0,
+                    },
+                    PortRef {
+                        module_id: *vid,
+                        dir: PortDir::In,
+                        kind: PortKind::Cv,
+                        index: 0,
+                    },
+                );
+            }
+        }
 
         // TTS → FxReverb
         if let (Some(tid), Some(rid)) = (tts_id, reverb_id) {

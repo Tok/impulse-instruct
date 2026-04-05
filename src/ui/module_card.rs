@@ -238,8 +238,9 @@ pub fn module_card<R>(
                 .on_hover_text("Audio In — drag to connect");
             }
 
-            // CV out for LFO
-            if kind == ModuleKind::LfoModule {
+            // CV out: LFO and StepSequencer both send CV/gate
+            let has_cv_out = matches!(kind, ModuleKind::LfoModule | ModuleKind::StepSequencer);
+            if has_cv_out {
                 let cv_out_x = audio_out_x - 18.0;
                 let cv_out_pos = Pos2::new(cv_out_x, audio_out_y);
                 draw_port_circle(&painter, cv_out_pos, PortKind::Cv, PortDir::Out);
@@ -252,12 +253,51 @@ pub fn module_card<R>(
                     },
                     center: cv_out_pos,
                 });
+                let hover = if kind == ModuleKind::StepSequencer {
+                    "Gate/Clock Out — connect to a voice CV In"
+                } else {
+                    "CV Out — drag to connect to a CV In"
+                };
                 ui.interact(
                     Rect::from_center_size(cv_out_pos, port_size),
                     ui.id().with("port_cv_out"),
                     Sense::hover(),
                 )
-                .on_hover_text("CV Out — drag to connect to a CV In");
+                .on_hover_text(hover);
+            }
+
+            // CV in: voice modules accept gate/clock from the sequencer
+            let has_cv_in = matches!(
+                kind,
+                ModuleKind::AcidBass
+                    | ModuleKind::DrumKit808
+                    | ModuleKind::DrumKit909
+                    | ModuleKind::HooverLead
+                    | ModuleKind::An1xVoice
+                    | ModuleKind::AmenSampler
+                    | ModuleKind::NoiseVoice
+                    | ModuleKind::EspeakNgTts
+                    | ModuleKind::CoquiTts
+            );
+            if has_cv_in {
+                let cv_in_x = audio_out_x - 18.0;
+                let cv_in_pos = Pos2::new(cv_in_x, audio_out_y);
+                draw_port_circle(&painter, cv_in_pos, PortKind::Cv, PortDir::In);
+                ports.push(PortPos {
+                    port: PortRef {
+                        module_id,
+                        dir: PortDir::In,
+                        kind: PortKind::Cv,
+                        index: 0,
+                    },
+                    center: cv_in_pos,
+                });
+                ui.interact(
+                    Rect::from_center_size(cv_in_pos, port_size),
+                    ui.id().with("port_cv_in"),
+                    Sense::hover(),
+                )
+                .on_hover_text("Gate In — connect from sequencer CV Out");
             }
 
             // ── Enable toggle (small square LED left of label) ────────────────
