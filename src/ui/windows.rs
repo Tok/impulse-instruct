@@ -627,6 +627,7 @@ impl ImpulseApp {
 
                             if dirty {
                                 self.state.write().ui_prefs = prefs;
+                                self.session_dirty = true;
                             }
                         }
                         ui.add_space(8.0);

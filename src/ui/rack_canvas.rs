@@ -209,7 +209,7 @@ pub fn draw_rack(app: &mut ImpulseApp, ctx: &egui::Context, ui: &mut egui::Ui) {
             draw_cable(&painter, drag.from_screen, pointer, time, 0.0, false);
         }
 
-        if app.show_cables {
+        if app.show_cables && !app.show_prefs {
             let cables = app.state.read().rack.cables.clone();
             for (ci, cable) in cables.iter().enumerate() {
                 let from_pos = ports

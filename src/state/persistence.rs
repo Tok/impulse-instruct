@@ -46,6 +46,7 @@ pub struct SessionData {
     // UI prefs subset
     pub knob_style: Option<crate::state::KnobStyle>,
     pub knob_size: Option<crate::state::KnobSize>,
+    pub pad_size: Option<crate::state::PadSize>,
     pub use_sliders: Option<bool>,
 }
 
@@ -61,6 +62,7 @@ pub fn save_session(state: &AppState, show_cables: bool) {
         show_cables: Some(show_cables),
         knob_style: Some(state.ui_prefs.knob_style),
         knob_size: Some(state.ui_prefs.knob_size),
+        pad_size: Some(state.ui_prefs.pad_size),
         use_sliders: Some(state.ui_prefs.use_sliders),
     };
     match serde_json::to_string_pretty(&data) {
@@ -106,6 +108,9 @@ pub fn apply_session(state: &mut AppState, data: SessionData) {
     }
     if let Some(v) = data.knob_size {
         state.ui_prefs.knob_size = v;
+    }
+    if let Some(v) = data.pad_size {
+        state.ui_prefs.pad_size = v;
     }
     if let Some(v) = data.use_sliders {
         state.ui_prefs.use_sliders = v;

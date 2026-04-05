@@ -234,7 +234,7 @@ pub struct ImpulseApp {
     log_text: String,
     api_port: Option<u16>,
     show_about: bool,
-    show_prefs: bool,
+    pub(crate) show_prefs: bool,
     export_bars: u32,
     ui_volume: f32, // monitor-only gain; never written to state or export
     // Piano preferences
