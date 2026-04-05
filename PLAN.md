@@ -112,7 +112,15 @@ Ordered by value — tackle roughly from top to bottom.
 
 ### Later
 
+- [x] **Modular rack canvas** — replace 5-tab layout with zone-based horizontal module cards
+      (Global / Voice / FxMod zones). RackState + Cable + PortRef in state. Module cards with
+      chrome title bars, port jack circles, enable LED, remove button. Rack-rail zone separators
+      with screw holes. Bezier cable overlay with 3D tube rendering (shadow + colour + specular).
+      Drag-to-connect port interaction. No horizontal scroll — cards wrap to next row.
+
 - [ ] **FX routing: modular slots** — replace fixed chain with assignable FX nodes. Unlocks dub techno (FX as instrument), gabber (pitch env + clipper on kick), and ambient (slow filter automation).
+      *Prerequisite: rack canvas is done. Next step: compile_fx_plan() + DSP pool to wire
+      the visual cable model into actual audio routing.*
 
 - [ ] **Gabber kick voice** — pitch envelope + hard clipper on kick output. Needed for gabber/hardcore styles where the kick IS the bass.
 
