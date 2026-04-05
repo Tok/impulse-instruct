@@ -3,11 +3,10 @@
 # Download GGUF models for Impulse Instruct.
 #
 # Usage:
-#   ./download-models.sh              # Bonsai-8B (default, 1-bit Q1, ~1.1 GB)
-#   ./download-models.sh qwen3        # Qwen3-8B Q4_K_M (~5 GB, ~5× better quality)
-#   ./download-models.sh qwen3-14b    # Qwen3-14B Q4_K_M (~9 GB, best musical reasoning)
-#   ./download-models.sh gemma4       # Gemma 4 4B Q4 (~3 GB, fast + strong JSON)
-#   ./download-models.sh llama31      # Llama 3.1 8B Q4_K_M (~5 GB, excellent JSON)
+#   ./scripts/download-models.sh              # Gemma 4 E4B (default, ~4.6 GB, best overall)
+#   ./scripts/download-models.sh bonsai       # Bonsai-8B (1-bit Q1, ~1.1 GB, fallback)
+#   ./scripts/download-models.sh qwen3        # Qwen3-8B Q4_K_M (~5 GB, optional)
+#   ./scripts/download-models.sh qwen3-14b    # Qwen3-14B Q4_K_M (~9 GB, optional)
 #
 # NOTE: A free HuggingFace account is required.
 #   Sign up at https://huggingface.co/join
@@ -20,37 +19,32 @@ MODEL_DIR="models"
 mkdir -p "$MODEL_DIR"
 
 # ── Model selection ───────────────────────────────────────────────────────────
-MODEL="${1:-bonsai}"
+MODEL="${1:-gemma4}"
 
 case "$MODEL" in
-  bonsai|"")
+  gemma4|"")
+    HF_REPO="unsloth/gemma-4-E4B-it-GGUF"
+    MODEL_FILE="gemma-4-E4B-it-Q4_K_M.gguf"
+    MODEL_DESC="Gemma 4 E4B Q4_K_M (unsloth, ~4.6 GB) — default, best accuracy + speed"
+    ;;
+  bonsai)
     HF_REPO="prism-ml/Bonsai-8B-gguf"
     MODEL_FILE="Bonsai-8B.gguf"
-    MODEL_DESC="Bonsai-8B Q1_0_g128 (PrismML, ~1.1 GB) — default, fastest but weakest"
+    MODEL_DESC="Bonsai-8B Q1_0_g128 (PrismML, ~1.1 GB) — tiny fallback, no chain-of-thought"
     ;;
   qwen3)
     HF_REPO="bartowski/Qwen_Qwen3-8B-GGUF"
     MODEL_FILE="Qwen_Qwen3-8B-Q4_K_M.gguf"
-    MODEL_DESC="Qwen3-8B Q4_K_M (bartowski, ~5 GB) — ~5× better than Bonsai, supports /think"
+    MODEL_DESC="Qwen3-8B Q4_K_M (bartowski, ~5 GB) — optional, supports /think chain-of-thought"
     ;;
   qwen3-14b)
     HF_REPO="bartowski/Qwen_Qwen3-14B-GGUF"
     MODEL_FILE="Qwen_Qwen3-14B-Q4_K_M.gguf"
-    MODEL_DESC="Qwen3-14B Q4_K_M (bartowski, ~9 GB) — best musical reasoning, needs 12 GB VRAM"
-    ;;
-  gemma4)
-    HF_REPO="unsloth/gemma-4-E4B-it-GGUF"
-    MODEL_FILE="gemma-4-E4B-it-Q4_K_M.gguf"
-    MODEL_DESC="Gemma 4 E4B Q4_K_M (unsloth, ~5 GB) — fast, strong structured output"
-    ;;
-  llama31)
-    HF_REPO="bartowski/Meta-Llama-3.1-8B-Instruct-GGUF"
-    MODEL_FILE="Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf"
-    MODEL_DESC="Llama 3.1 8B Q4_K_M (bartowski, ~5 GB) — excellent JSON compliance"
+    MODEL_DESC="Qwen3-14B Q4_K_M (bartowski, ~9 GB) — optional large, needs 12 GB VRAM"
     ;;
   *)
     echo "Unknown model: '$MODEL'"
-    echo "Available: bonsai (default), qwen3, qwen3-14b, gemma4, llama31"
+    echo "Available: gemma4 (default), bonsai, qwen3, qwen3-14b"
     exit 1
     ;;
 esac
@@ -145,20 +139,16 @@ fi
 echo ""
 echo "─── License notice ─────────────────────────────────────────────────────────"
 case "$MODEL" in
+  gemma4)
+    echo "Gemma 4 E4B is released under the Gemma Terms of Use by Google DeepMind."
+    echo "Quantisation by unsloth. See: https://huggingface.co/${HF_REPO}"
+    ;;
   bonsai)
     echo "Bonsai 8B is released under the Apache License 2.0 by prism-ml."
     echo "See: https://huggingface.co/${HF_REPO}"
     ;;
   qwen3|qwen3-14b)
     echo "Qwen3 is released under the Qwen Research License by Alibaba Cloud."
-    echo "Quantisation by bartowski. See: https://huggingface.co/${HF_REPO}"
-    ;;
-  gemma4)
-    echo "Gemma 4 E4B is released under the Gemma Terms of Use by Google DeepMind."
-    echo "Quantisation by unsloth. See: https://huggingface.co/${HF_REPO}"
-    ;;
-  llama31)
-    echo "Llama 3.1 is released under the Meta Llama 3.1 Community License by Meta."
     echo "Quantisation by bartowski. See: https://huggingface.co/${HF_REPO}"
     ;;
 esac

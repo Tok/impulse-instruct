@@ -12,7 +12,7 @@ cargo run --features llm --release   # real LLM inference (needs libclang-dev)
 cargo test                           # unit tests (split across src/tests/)
 ./scripts/run-tests.sh --coverage    # HTML coverage report
 ./scripts/build-all.sh               # Linux + Windows EXE → dist/
-./scripts/download-models.sh         # fetch Bonsai 8B GGUF (~1.1 GB 1-bit model, needs HF account)
+./scripts/download-models.sh         # fetch Gemma 4 E4B GGUF (~4.6 GB, default, needs HF account)
 ./scripts/run-llm-tests.sh           # all LLM integration suites (needs running model)
 ./scripts/run-llm-style.sh           # artist/genre reference tests only
 ./scripts/run-llm-theory.sh          # music theory + producer lingo tests only
@@ -160,8 +160,17 @@ requirements. Build exactly what the current task needs.
 
 ## LLM integration
 
+Models (ranked by test suite results):
+- **Gemma 4 E4B Q4_K_M** — default, 4.6 GB, best accuracy, passes all 39 integration tests
+- **Bonsai 8B Q1_0_g128** — 1.1 GB fallback, no chain-of-thought, requires PrismML llama-server fork
+- **Qwen3-8B / 14B** — optional, chain-of-thought capable, slower but no accuracy advantage
+- ~~Llama 3.1 8B~~ — removed, OOM crash under load
+
+Server selection: Bonsai uses `.llama-build/bin/llama-server` (PrismML fork, Q1_0_g128 format).
+All other models use `.llama-official-build/bin/llama-server` (standard llama.cpp).
+
 - Mock mode: runs without model, returns plausible JSON based on prompt keywords + instruction set
-- Real mode: any GGUF model via PrismML llama-server subprocess; model selected at runtime via UI
+- Real mode: any GGUF model via llama-server subprocess; model selected at runtime via UI
 - LLM outputs JSON only — step arrays use compact formats: index list `[0,4,8,12]` or inline `[1,0,…]` or clear `[]`
 - JSON is applied via `apply_llm_update()` in `src/state/transitions.rs`, which respects `locked_params`
 - `sanitize_json_structure()` in `src/llm/mod.rs` fixes common LLM output errors (LFO dot-notation, etc.) before parsing

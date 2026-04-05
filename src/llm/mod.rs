@@ -59,11 +59,13 @@ pub trait LlmBackend: Send {
 }
 
 // ─── LLM server backend ───────────────────────────────────────────────────────
-// Spawns PrismML's llama-server as a child process and talks to it over HTTP.
+// Spawns llama-server as a child process and talks to it over HTTP.
 // Falls back to mock if the server binary or model file is not found.
 //
-// Build the server:  ./build-bonsai-server.sh
-// Model:             ./download-models.sh
+// Default model (Gemma 4 E4B): ./scripts/build-llama-server.sh
+//                               ./scripts/download-models.sh
+// Bonsai fallback (1-bit):      ./scripts/build-bonsai-server.sh
+//                               ./scripts/download-models.sh bonsai
 
 /// Candidate paths for the llama-server binary.
 /// Checked in order — PrismML fork first (required for Bonsai 1-bit),
