@@ -660,31 +660,57 @@ impl ImpulseApp {
                         if let Ok(si) = self.sys_info.lock()
                             && (si.vram_total_mb > 0 || si.ram_total_mb > 0)
                         {
+                            const BAR_W: f32 = 48.0;
+                            const BAR_H: f32 = 5.0;
+                            const TRACK: egui::Color32 = egui::Color32::from_gray(38);
                             ui.add_space(4.0);
                             ui.vertical(|ui| {
+                                let draw_bar =
+                                    |ui: &mut egui::Ui,
+                                     label: &str,
+                                     frac: f32,
+                                     fill: egui::Color32| {
+                                        ui.horizontal(|ui| {
+                                            ui.label(
+                                                egui::RichText::new(label)
+                                                    .color(theme::ASH)
+                                                    .monospace()
+                                                    .size(8.0),
+                                            );
+                                            let (bar_rect, _) = ui.allocate_exact_size(
+                                                egui::vec2(BAR_W, BAR_H),
+                                                egui::Sense::hover(),
+                                            );
+                                            let p = ui.painter();
+                                            p.rect_filled(bar_rect, 1.0, TRACK);
+                                            let fill_w =
+                                                (bar_rect.width() * frac.clamp(0.0, 1.0)).max(0.0);
+                                            if fill_w > 0.0 {
+                                                let fill_rect = egui::Rect::from_min_size(
+                                                    bar_rect.min,
+                                                    egui::vec2(fill_w, bar_rect.height()),
+                                                );
+                                                p.rect_filled(fill_rect, 1.0, fill);
+                                            }
+                                        });
+                                    };
                                 if si.vram_total_mb > 0 {
                                     let frac = si.vram_used_mb as f32 / si.vram_total_mb as f32;
-                                    ui.horizontal(|ui| {
-                                        ui.label(
-                                            egui::RichText::new("VRAM")
-                                                .color(theme::ASH)
-                                                .monospace()
-                                                .size(8.0),
-                                        );
-                                        ui.add_sized([48.0, 6.0], egui::ProgressBar::new(frac));
-                                    });
+                                    let fill = if frac > 0.85 {
+                                        egui::Color32::from_gray(160)
+                                    } else {
+                                        egui::Color32::from_gray(90)
+                                    };
+                                    draw_bar(ui, "VRAM", frac, fill);
                                 }
                                 if si.ram_total_mb > 0 {
                                     let frac = si.ram_used_mb as f32 / si.ram_total_mb as f32;
-                                    ui.horizontal(|ui| {
-                                        ui.label(
-                                            egui::RichText::new("RAM ")
-                                                .color(theme::ASH)
-                                                .monospace()
-                                                .size(8.0),
-                                        );
-                                        ui.add_sized([48.0, 6.0], egui::ProgressBar::new(frac));
-                                    });
+                                    let fill = if frac > 0.85 {
+                                        egui::Color32::from_gray(160)
+                                    } else {
+                                        egui::Color32::from_gray(90)
+                                    };
+                                    draw_bar(ui, "RAM ", frac, fill);
                                 }
                             });
                         }
