@@ -659,6 +659,12 @@ pub fn apply_llm_update(state: AppState, update: &serde_json::Value) -> AppState
         }
     }
 
+    // ── Internal music API ────────────────────────────────────────────────────
+    // JSON: { "music_api": { "chord": {...}, "amen_pattern": {...}, "scale_run": {...} } }
+    if let Some(api) = update.get("music_api").and_then(|v| v.as_object()) {
+        s = crate::music_api::apply_music_api(s, api);
+    }
+
     // ── Rack routing (enable/disable modules, add/remove cables) ─────────────
     // JSON: { "rack": { "enable": ["bitcrush"], "disable": ["reverb"],
     //                   "connect": [{"from": "bitcrush", "to": "master"}],

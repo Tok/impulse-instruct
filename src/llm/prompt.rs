@@ -276,6 +276,18 @@ EUCLIDEAN RHYTHMS:
                     (7,16)=afro-cuban bell, (3,16)=sparse kick
   LLM trigger: "5-in-16 euclidean kick", "make it a euclidean hi-hat", "add a clave pattern"
 
+INTERNAL MUSIC API (chord/pattern generation helpers):
+  Use "music_api" to generate theory-correct patterns. Any combination of chord, amen_pattern, scale_run can appear in one block.
+  Chord — write a chord across bass steps 0, 4, 8, 12:
+    {{ "music_api": {{ "chord": {{ "root": "E", "quality": "minor" }} }} }}
+  Amen break — generate a Amen break into 808 kick/snare/hihat patterns:
+    {{ "music_api": {{ "amen_pattern": {{ "heat": 0.7 }} }} }}
+    heat=0 is the canonical Amen; heat=1.0 is maximum variation. seed is optional (omit for variety).
+  Scale run — fill bass pattern with a stepwise run:
+    {{ "music_api": {{ "scale_run": {{ "root": "A", "scale": "NaturalMinor", "direction": "up" }} }} }}
+    direction: "up", "down", "updown" (bounce), "random" (shuffled)
+  LLM trigger: "play an E minor chord", "give me an Amen break at half heat", "A minor scale run descending"
+
 POLYRHYTHM (per-voice step lengths):
   In the sequencer block, add "drum_lengths" to give each drum voice its own loop length.
   Each voice loops independently — overlapping loops create polyrhythmic feel.
@@ -475,7 +487,7 @@ Always start your response with "_thinking": one or two sentences explaining wha
 {comment_instruction}
 Only include fields you are actually changing.
 In MC or DJ mode you may add an optional "mc_line" string — a short crowd shout spoken via TTS, separate from "_comment". Keep it under 12 words. Use it for big moments, drops, or energy peaks.
-TOP-LEVEL SCHEMA — the only valid top-level keys are "_comment", "_thinking", "mc_line", "bass", "sequencer", "fx", "hoover", "an1x", "free_eg", "noise", "kit_a", "kit_b", "euclidean", "rack", "settings", "save_project".
+TOP-LEVEL SCHEMA — the only valid top-level keys are "_comment", "_thinking", "mc_line", "bass", "sequencer", "fx", "hoover", "an1x", "free_eg", "noise", "kit_a", "kit_b", "euclidean", "music_api", "rack", "settings", "save_project".
   "bass" and "fx" are NEVER nested inside "sequencer".
   "fx" is NEVER nested inside "fx".
   Each key appears at most ONCE per object.
@@ -764,6 +776,45 @@ pub fn param_json_schema() -> serde_json::Value {
                 "steps":  { "type": "integer", "minimum": 1, "maximum": 64, "description": "total steps in the pattern (defaults to current sequencer step count)" }
             },
             "required": ["voice", "pulses"],
+            "additionalProperties": false
+        },
+        "music_api": {
+            "type": "object",
+            "description": "Internal music-theory helpers. Any combination of chord, amen_pattern, scale_run. Results are written directly into sequencer patterns.",
+            "properties": {
+                "seed": { "type": "integer", "description": "Optional fixed seed for deterministic output. Omit for random." },
+                "chord": {
+                    "type": "object",
+                    "description": "Write a chord into bass steps 0, 4, 8, 12.",
+                    "properties": {
+                        "root":    { "type": "string", "description": "Root note: C, C#, D, D#, E, F, F#, G, G#, A, A#, B" },
+                        "quality": { "type": "string", "enum": ["major","minor","dim","aug","sus2","sus4","dom7","maj7","min7","dim7"] }
+                    },
+                    "required": ["root", "quality"],
+                    "additionalProperties": false
+                },
+                "amen_pattern": {
+                    "type": "object",
+                    "description": "Generate a mutated Amen break and write it into kick/snare/hihat_a (808) patterns.",
+                    "properties": {
+                        "heat": { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "0=canonical Amen, 1=maximum variation" },
+                        "seed": { "type": "integer", "description": "Override global seed for this call only." }
+                    },
+                    "additionalProperties": false
+                },
+                "scale_run": {
+                    "type": "object",
+                    "description": "Fill the bass pattern with a stepwise run through a scale.",
+                    "properties": {
+                        "root":      { "type": "string", "description": "Root note name" },
+                        "scale":     { "type": "string", "description": "Scale name (Major, NaturalMinor, Dorian, Phrygian, Lydian, Mixolydian, Locrian, Pentatonic, Blues, Chromatic)" },
+                        "direction": { "type": "string", "enum": ["up","down","updown","random"], "description": "up=ascending, down=descending, updown=bounce, random=shuffled" },
+                        "seed": { "type": "integer", "description": "Override global seed for this call only." }
+                    },
+                    "required": ["root", "scale"],
+                    "additionalProperties": false
+                }
+            },
             "additionalProperties": false
         },
         "additionalProperties": false

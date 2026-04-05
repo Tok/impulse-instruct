@@ -4,5 +4,6 @@
 //      ./run-tests.sh --coverage
 
 mod llm_tests;
+mod music_api_tests;
 mod seq_tests;
 mod state_tests;

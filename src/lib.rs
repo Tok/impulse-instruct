@@ -16,6 +16,7 @@ pub mod llm_suite_style;
 #[cfg(all(test, feature = "llm-tests"))]
 pub mod llm_suite_theory;
 pub mod midi;
+pub mod music_api;
 pub mod osc;
 pub mod sequencer;
 pub mod state;
