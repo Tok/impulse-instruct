@@ -13,6 +13,7 @@
 # creates unversioned symlinks in /usr/local/bin automatically when they're missing.
 # ──────────────────────────────────────────────────────────────────────────────
 set -euo pipefail
+printf "\n  \033[38;2;110;110;110m▁▂▄▅▇██▇▅▄▂▁▁▂▄▅▇█\033[38;2;160;160;160m I M P U L S E • I N S T R U C T \033[38;2;110;110;110m█▇▅▄▂▁▁▂▄▅▇██▇▅▄▂▁\033[0m\n\n"
 cd "$(dirname "$0")/.."
 
 FEATURES="${FEATURES:-}"  # pass FEATURES=llm to include real LLM inference
