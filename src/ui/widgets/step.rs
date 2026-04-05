@@ -30,8 +30,10 @@ pub fn step_button(
         let inner = rect.shrink(1.0);
 
         if active {
-            // Pressed look — neutral chrome fill regardless of dot_color
-            painter.rect_filled(inner, r, Color32::from_gray(48));
+            // Pressed / debossed look
+            // Outer fill — slightly brighter than the inset so the depth reads
+            painter.rect_filled(inner, r, Color32::from_gray(52));
+            // Inverted edge highlights: dark top-left (pressed in), bright bottom-right
             painter.line_segment(
                 [inner.left_top(), inner.right_top()],
                 Stroke::new(1.0, Color32::from_gray(8)),
@@ -48,18 +50,21 @@ pub fn step_button(
                 [inner.right_top(), inner.right_bottom()],
                 Stroke::new(1.0, Color32::from_gray(80)),
             );
+            // Inset shadow rect — the debossed inner well
+            let inset = inner.shrink(2.0);
+            painter.rect_filled(inset, r, Color32::from_gray(22));
 
-            // Dot or full-fill indicator
+            // Dot or full-fill indicator (drawn over the inset well)
             if let Some(col) = dot_color {
                 // Small coloured dot — subtle note-pitch indicator
                 let dot_r = (size_px * 0.18).max(2.5);
-                let dot_pos = Pos2::new(inner.center().x, inner.max.y - dot_r - 2.0);
+                let dot_pos = Pos2::new(inset.center().x, inset.max.y - dot_r - 1.0);
                 painter.circle_filled(dot_pos, dot_r, col);
             } else {
-                // Drum mode: white bloom tint over the active fill
+                // Drum mode: velocity bloom over the inset well
                 let dim = 0.35_f32 + vel * 0.65;
                 let g = (200.0 * dim) as u8;
-                painter.rect_filled(inner, r, Color32::from_rgba_unmultiplied(g, g, g, 60));
+                painter.rect_filled(inset, r, Color32::from_rgba_unmultiplied(g, g, g, 70));
             }
         } else {
             // Raised look
@@ -93,8 +98,9 @@ pub fn step_button(
             }
         }
 
-        // Current-step cursor: white bloom glow + bright border
+        // Current-step cursor: outer bloom glow + bright border + inner ring
         if current {
+            // Outer bloom halos
             for i in 1..=3u8 {
                 let expand = i as f32 * 1.5;
                 let alpha = 40u8.saturating_sub(i * 12);
@@ -104,7 +110,14 @@ pub fn step_button(
                     Color32::from_rgba_unmultiplied(220, 220, 220, alpha),
                 );
             }
+            // Bright outer border
             painter.rect_stroke(rect.shrink(0.5), r, Stroke::new(1.5, theme::CHALK));
+            // Subtle inner ring — reinforces the "lit up" face
+            painter.rect_stroke(
+                inner.shrink(1.5),
+                r,
+                Stroke::new(1.0, Color32::from_rgba_unmultiplied(200, 200, 200, 45)),
+            );
         }
     }
 
@@ -196,7 +209,7 @@ pub fn huth_note_cell(
             }
         }
 
-        // Current-step cursor — same halo as step_button
+        // Current-step cursor — outer bloom + bright border + inner ring
         if current {
             let r = egui::Rounding::same(2.0);
             for i in 1..=3u8 {
@@ -209,6 +222,11 @@ pub fn huth_note_cell(
                 );
             }
             painter.rect_stroke(rect.shrink(0.5), r, Stroke::new(1.5, theme::CHALK));
+            painter.rect_stroke(
+                rect.shrink(2.5),
+                r,
+                Stroke::new(1.0, Color32::from_rgba_unmultiplied(200, 200, 200, 45)),
+            );
         }
     }
 

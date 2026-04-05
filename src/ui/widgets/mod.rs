@@ -157,9 +157,23 @@ fn draw_knob(painter: &Painter, rect: Rect, value: f32, mode: ParamMode, hovered
     let center = rect.center();
     let radius = rect.width() * 0.45;
 
-    // Background circle
+    // Well shadow — dark drop shadow offset slightly down-right
+    painter.circle_filled(
+        center + Vec2::new(0.5, 1.0),
+        radius + 1.5,
+        Color32::from_gray(8),
+    );
+
+    // Body
     let bg = if hovered { theme::SLATE } else { theme::PIT };
     painter.circle_filled(center, radius, bg);
+
+    // Catch-light: short bright line toward top-left, simulates overhead lamp
+    let cl_angle = std::f32::consts::PI * 1.25; // ~10 o'clock
+    let cl_a = center + Vec2::new(cl_angle.cos(), cl_angle.sin()) * (radius * 0.25);
+    let cl_b = center + Vec2::new(cl_angle.cos(), cl_angle.sin()) * (radius * 0.60);
+    painter.line_segment([cl_a, cl_b], Stroke::new(1.5, Color32::from_gray(100)));
+
     let ring_col = match mode {
         ParamMode::UserOwned => theme::IRON,
         ParamMode::LlmFocus => mode_color(ParamMode::LlmFocus),
@@ -200,12 +214,17 @@ fn draw_knob(painter: &Painter, rect: Rect, value: f32, mode: ParamMode, hovered
         );
     }
 
-    // Pointer dot
+    // Pointer line from near-centre to near-rim (replaces dot — clearer read)
     let end_angle = start_angle + filled_sweep;
-    let dot_pos = center + Vec2::new(end_angle.cos(), end_angle.sin()) * (radius * 0.58);
-    painter.circle_filled(dot_pos, 2.5, arc_color);
+    let ptr_a = center + Vec2::new(end_angle.cos(), end_angle.sin()) * (radius * 0.18);
+    let ptr_b = center + Vec2::new(end_angle.cos(), end_angle.sin()) * (radius * 0.75);
+    painter.line_segment(
+        [ptr_a + Vec2::new(0.5, 0.5), ptr_b + Vec2::new(0.5, 0.5)],
+        Stroke::new(1.0, Color32::from_gray(8)),
+    );
+    painter.line_segment([ptr_a, ptr_b], Stroke::new(1.5, arc_color));
 
-    // Mode indicator — centre of knob, always rendered, colour signals state.
+    // Mode indicator — centre dot, colour signals state
     painter.text(
         center,
         egui::Align2::CENTER_CENTER,
@@ -360,11 +379,19 @@ pub fn led(ui: &mut Ui, active: bool) {
 
 pub fn section_header(ui: &mut Ui, label: &str) {
     ui.add_space(4.0);
-    ui.label(
+    let resp = ui.label(
         egui::RichText::new(label)
             .monospace()
             .size(9.5)
             .color(theme::SMOKE),
+    );
+    // 1px rule line below — sub-panel separator cue
+    let rule_y = resp.rect.max.y + 1.0;
+    let rule_x0 = resp.rect.min.x;
+    let rule_x1 = ui.max_rect().max.x;
+    ui.painter().line_segment(
+        [Pos2::new(rule_x0, rule_y), Pos2::new(rule_x1, rule_y)],
+        Stroke::new(1.0, theme::SLATE),
     );
     ui.add_space(2.0);
 }
