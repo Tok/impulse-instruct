@@ -547,12 +547,12 @@ impl ImpulseApp {
                             });
                         }
 
-                        // Spacing before MON slider — handle radius is ~0.4×height ≈ 6px;
-                        // add buffer so handle doesn't visually clip into VRAM bars.
-                        ui.add_space(10.0);
+                        ui.add_space(4.0);
 
-                        // Monitor volume — compact right-side, labelled MON to distinguish
-                        // from the master output module (this is listen-only, not export volume).
+                        // Monitor volume.
+                        // allocate_exact_size advances the RTL cursor correctly;
+                        // ui.put renders the slider at that rect without re-entering the layout.
+                        // (add_sized modifies max_rect before placing, which breaks RTL flow.)
                         let vol_color = if self.ui_volume < 0.4 {
                             theme::ASH
                         } else if self.ui_volume < 0.75 {
@@ -560,10 +560,15 @@ impl ImpulseApp {
                         } else {
                             theme::FOG
                         };
+                        let (vol_rect, _) = ui.allocate_exact_size(
+                            egui::vec2(60.0, 14.0),
+                            egui::Sense::hover(),
+                        );
                         if ui
-                            .add_sized(
-                                [52.0, 14.0],
-                                egui::Slider::new(&mut self.ui_volume, 0.0..=1.0).show_value(false),
+                            .put(
+                                vol_rect,
+                                egui::Slider::new(&mut self.ui_volume, 0.0..=1.0)
+                                    .show_value(false),
                             )
                             .changed()
                         {
@@ -571,8 +576,6 @@ impl ImpulseApp {
                                 .audio_tx
                                 .push(AudioCommand::SetMonitorVolume(self.ui_volume));
                         }
-                        // Buffer between slider left handle and MON label.
-                        ui.add_space(8.0);
                         ui.label(
                             egui::RichText::new("MON")
                                 .color(vol_color)
@@ -655,19 +658,24 @@ impl ImpulseApp {
                             }
                         }
                         // Heat slider — fills remaining space.
-                        // add_space(10) on both sides buffers the grab handle (~7px radius)
-                        // so it never visually clips into the pct/tier labels or HEAT text.
-                        let heat_handle_buf = 10.0;
-                        ui.add_space(heat_handle_buf); // gap: tier right edge → slider right handle
+                        // Same allocate_exact_size + ui.put pattern as MON slider above.
                         let heat_label_w = 44.0;
-                        let heat_w = (ui.available_width() - heat_label_w - heat_handle_buf).max(60.0);
-                        let slider = egui::Slider::new(&mut heat, 0.0..=1.0)
-                            .show_value(false)
-                            .trailing_fill(true);
-                        if ui.add_sized([heat_w, 18.0], slider).changed() {
+                        let heat_w = (ui.available_width() - heat_label_w).max(60.0);
+                        let (heat_rect, _) = ui.allocate_exact_size(
+                            egui::vec2(heat_w, 18.0),
+                            egui::Sense::hover(),
+                        );
+                        if ui
+                            .put(
+                                heat_rect,
+                                egui::Slider::new(&mut heat, 0.0..=1.0)
+                                    .show_value(false)
+                                    .trailing_fill(true),
+                            )
+                            .changed()
+                        {
                             self.state.write().llm.heat = heat;
                         }
-                        ui.add_space(heat_handle_buf); // gap: slider left handle → HEAT text
                         {
                             let (r, resp) = ui.allocate_exact_size(
                                 egui::vec2(heat_label_w, row_h),
