@@ -79,7 +79,7 @@ pub fn cycle_param_mode(state: AppState, path: &str) -> AppState {
 }
 
 pub mod ui_prefs;
-pub use ui_prefs::{KnobSize, KnobStyle, PadSize, UiPrefs};
+pub use ui_prefs::{HuthStyle, KnobSize, KnobStyle, PadSize, UiPrefs};
 
 pub mod rack;
 pub use rack::{

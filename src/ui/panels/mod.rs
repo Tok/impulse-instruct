@@ -10,6 +10,7 @@ pub mod lfo;
 pub mod piano;
 pub mod sequencer;
 pub mod sequencer_chain;
+pub(super) mod sequencer_drums;
 
 pub use an1x::draw_an1x;
 pub use bass::draw_bass;

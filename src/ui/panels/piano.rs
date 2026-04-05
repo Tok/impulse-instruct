@@ -52,9 +52,10 @@ pub fn draw_piano(app: &mut ImpulseApp, ui: &mut egui::Ui, ctx: &egui::Context) 
     let mut clicked_note: Option<u8> = None;
 
     // Key / scale for degree highlighting
-    let (root_note, seq_scale) = {
+    let (root_note, seq_scale, huth_on) = {
         let s = app.state.read();
-        (s.sequencer.root_note, s.sequencer.scale)
+        let huth_on = s.ui_prefs.huth_style != crate::state::HuthStyle::Off;
+        (s.sequencer.root_note, s.sequencer.scale, huth_on)
     };
 
     // Sequencer cursor note (for highlighting)
@@ -114,11 +115,23 @@ pub fn draw_piano(app: &mut ImpulseApp, ui: &mut egui::Ui, ctx: &egui::Context) 
         let seq_active = seq_note == Some(note);
         let active = pressed || seq_active;
 
-        let hue = theme::note_color(note);
-        let fill = if active {
-            theme::lerp_color(hue, theme::CHALK, 0.35)
+        let hue = if huth_on {
+            theme::note_color(note)
         } else {
-            theme::lerp_color(hue, Color32::from_rgb(48, 48, 48), 0.60)
+            Color32::from_gray(200)
+        };
+        let fill = if active {
+            if huth_on {
+                theme::lerp_color(hue, theme::CHALK, 0.35)
+            } else {
+                Color32::from_gray(240)
+            }
+        } else {
+            if huth_on {
+                theme::lerp_color(hue, Color32::from_rgb(48, 48, 48), 0.60)
+            } else {
+                Color32::from_gray(200)
+            }
         };
 
         if active {
@@ -242,11 +255,23 @@ pub fn draw_piano(app: &mut ImpulseApp, ui: &mut egui::Ui, ctx: &egui::Context) 
             let seq_active = seq_note == Some(note);
             let active = pressed || seq_active;
 
-            let bk_hue = theme::note_color(note);
-            let fill = if active {
-                theme::lerp_color(bk_hue, theme::CHALK, 0.22)
+            let bk_hue = if huth_on {
+                theme::note_color(note)
             } else {
-                theme::lerp_color(bk_hue, theme::PIT, 0.72)
+                Color32::from_gray(30)
+            };
+            let fill = if active {
+                if huth_on {
+                    theme::lerp_color(bk_hue, theme::CHALK, 0.22)
+                } else {
+                    Color32::from_gray(80)
+                }
+            } else {
+                if huth_on {
+                    theme::lerp_color(bk_hue, theme::PIT, 0.72)
+                } else {
+                    Color32::from_gray(22)
+                }
             };
 
             let bk_rounding = egui::Rounding {

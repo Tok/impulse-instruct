@@ -72,6 +72,18 @@ impl PadSize {
     }
 }
 
+/// How much Huth *Farbige Noten* color theory is applied to the UI.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum HuthStyle {
+    /// Huth colors only on the piano keyboard (existing behavior).
+    #[default]
+    PianoOnly,
+    /// Piano + sequencer melodic note cells rendered as Huth U-shapes.
+    Full,
+    /// All UI chrome is monochrome; piano uses standard black/white.
+    Off,
+}
+
 /// Persistent UI preferences stored in AppState so they survive across sessions.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct UiPrefs {
@@ -83,6 +95,8 @@ pub struct UiPrefs {
     pub pad_size: PadSize,
     /// When true, panels render horizontal sliders instead of knobs.
     pub use_sliders: bool,
+    /// How broadly Huth *Farbige Noten* colors are applied.
+    pub huth_style: HuthStyle,
     /// Post-process bloom glow on note highlights (future: needs wgpu pass).
     pub bloom_enabled: bool,
     /// Bloom intensity 0–1.
@@ -98,6 +112,7 @@ impl Default for UiPrefs {
             knob_size: KnobSize::Small,
             pad_size: PadSize::Normal,
             use_sliders: false,
+            huth_style: HuthStyle::PianoOnly,
             bloom_enabled: false,
             bloom_intensity: 0.5,
             log_level_idx: 2, // Info

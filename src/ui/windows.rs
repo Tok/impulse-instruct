@@ -646,6 +646,41 @@ impl ImpulseApp {
 
                     // ── Tab 2: Display ────────────────────────────────────────
                     2 => {
+                        use crate::state::HuthStyle;
+
+                        widgets::section_header(ui, "HUTH FARBIGE NOTEN");
+                        ui.label(
+                            egui::RichText::new(
+                                "Color system by Ch. A. B. Huth (Hamburg, 1888). Each semitone\n\
+                                 maps to a unique color counter-clockwise around the RYB wheel.",
+                            )
+                            .monospace()
+                            .size(8.0)
+                            .color(theme::IRON),
+                        );
+                        ui.add_space(6.0);
+
+                        let cur = self.state.read().ui_prefs.huth_style;
+                        for (style, label, hint) in [
+                            (HuthStyle::Off, "OFF", "Monochrome piano, grayscale sequencer"),
+                            (HuthStyle::PianoOnly, "PIANO", "Huth colors on the piano keyboard only (default)"),
+                            (HuthStyle::Full, "FULL", "Piano + sequencer melodic rows as Huth U-cups"),
+                        ] {
+                            ui.horizontal(|ui| {
+                                let selected = cur == style;
+                                let label_color = if selected { theme::CHALK } else { theme::SMOKE };
+                                if ui.add(egui::Button::new(
+                                    egui::RichText::new(label).monospace().size(9.5).color(label_color),
+                                ).frame(selected)).clicked() && !selected {
+                                    self.state.write().ui_prefs.huth_style = style;
+                                }
+                                ui.label(
+                                    egui::RichText::new(hint).monospace().size(8.0).color(theme::IRON),
+                                );
+                            });
+                        }
+
+                        ui.add_space(8.0);
                         widgets::section_header(ui, "PIANO DISPLAY");
                         ui.horizontal(|ui| {
                             ui.label(
@@ -666,7 +701,7 @@ impl ImpulseApp {
                             );
                         });
                         ui.label(
-                            egui::RichText::new("Note colors always on — active keys bloom.")
+                            egui::RichText::new("Active keys always bloom in Huth color.")
                                 .monospace()
                                 .size(8.0)
                                 .color(theme::IRON),
