@@ -277,17 +277,13 @@ slow down between cycles — every 4 bars
 
 ## Known Limitations
 
-These are current synthesis/tuning gaps. The LLM understands the intent behind each of these styles; the synth engine just doesn't yet fully deliver on that intent.
+The LLM understands musical intent well. The gap between what PULSE asks for and what you actually hear is almost always a synthesis or tuning issue, not a model issue.
 
-| Area | Status | Details |
-|------|--------|---------|
-| **Acid bass** | Working well | Ladder filter, env mod, resonance, slide — jam loop produces convincing acid at medium–high heat. This is the most reliable voice for live use. |
-| **Hoover lead** | Incomplete | Produces a lead sound but not the classic Dominator screech. Needs resonant sweep shape work. |
-| **Jungle / DnB Amen** | No sampler | The Amen break is synthesised step-by-step, not played from a sample. Close but not the same. |
-| **Dub Techno FX routing** | Limited | Full per-voice FX bussing infrastructure exists but the DSP wiring for separate FX sends isn't finished. |
-| **Live crowd MC mode** | Unpredictable | PULSE can narrate and hype, but timing and content are model-driven — not synced to the music. |
-| **Gabber kick** | Done but rough | Pitch envelope + hard clipper works; tuning at high tempos needs attention. |
-| **Ambient slow sweeps** | Almost | LFO automation is wired; attack/decay range could be longer for true glacial movement. |
+A few things to be aware of: the hoover lead exists but doesn't yet sound like a hoover — it's more of a lead synth than the vacuum-cleaner screech from *Dominator*. The Amen break is synthesised step-by-step rather than sampled. Some genre textures (dub techno FX sends, glacial ambient sweeps) are partially wired but not finished.
+
+On the other hand, acid jamming can work really well when the parameters are dialled in. The ladder filter, env mod, resonance, and slide are all solid — give it some heat and the right prompt and it will do acid.
+
+A lot of what you get depends on how you prompt it, and on the style and system prompt definitions in `src/llm/styles.json` and `src/llm/prompt.rs`. These are plain text and JSON — you're encouraged to edit them, tune the style entries for the genres you care about, and experiment. The model will follow a good system prompt surprisingly faithfully.
 
 ---
 
