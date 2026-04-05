@@ -18,7 +18,7 @@ pub use params::AudioParams;
 use voices::*;
 
 use crate::sequencer::TriggerEvent;
-use crate::state::{DrumVoice, FxPlan, FxStep};
+use crate::state::{DrumVoice, FxPlan, FxStep, ModuleKind};
 
 // ─── Fast tanh approximation (used by LadderFilter and Bass303) ───────────────
 
@@ -267,10 +267,21 @@ pub struct DspState {
     // Gated reverb envelope: 1.0 = open, 0.0 = closed. Tracks transient
     // detection; decays to 0 at a rate set by p.reverb_gate_time.
     reverb_gate_env: f32,
+    // TTS ring buffer consumer (lock-free; popped one sample per frame).
+    tts_consumer: rtrb::Consumer<f32>,
+    // Duck envelope: smoothly attenuates synth when TTS is active.
+    tts_duck: f32,
+    duck_attack: f32,
+    duck_release: f32,
 }
 
 impl DspState {
-    pub fn new(sample_rate: f32, params: AudioParams, fx_plan: FxPlan) -> Self {
+    pub fn new(
+        sample_rate: f32,
+        params: AudioParams,
+        fx_plan: FxPlan,
+        tts_consumer: rtrb::Consumer<f32>,
+    ) -> Self {
         let mut p = params;
         p.sample_rate = sample_rate;
         Self {
@@ -313,11 +324,127 @@ impl DspState {
             sample_rate,
             fx_plan,
             reverb_gate_env: 1.0,
+            tts_consumer,
+            tts_duck: 1.0,
+            duck_attack: 1.0 - (-8.0_f32 / sample_rate).exp(),
+            duck_release: 1.0 - (-2.0_f32 / sample_rate).exp(),
         }
     }
 
     pub fn set_fx_plan(&mut self, plan: FxPlan) {
         self.fx_plan = plan;
+    }
+
+    /// Apply one FX step to `sig` and return the result.
+    /// Must not hold any borrow on `self.fx_plan` when called.
+    fn apply_fx_step(
+        &mut self,
+        step: FxStep,
+        sig: f32,
+        p: &AudioParams,
+        delay_samples: usize,
+        sr: f32,
+        gate_env: f32,
+    ) -> f32 {
+        match step {
+            FxStep::Waveshaper => {
+                if p.waveshaper_mix > 0.001 {
+                    let drive = p.waveshaper_drive * 8.0 + 1.0;
+                    let shaped = tanh(sig * drive) / tanh(drive);
+                    sig * (1.0 - p.waveshaper_mix) + shaped * p.waveshaper_mix
+                } else {
+                    sig
+                }
+            }
+            FxStep::Reverb => {
+                if p.reverb_mix > 0.001 {
+                    let wet = self.reverb.process(sig, p.reverb_size, p.reverb_damp);
+                    sig * (1.0 - p.reverb_mix) + wet * p.reverb_mix * gate_env
+                } else {
+                    sig
+                }
+            }
+            FxStep::Delay => {
+                let wet = self.delay.process(sig, delay_samples, p.delay_feedback);
+                sig * (1.0 - p.delay_mix) + wet * p.delay_mix
+            }
+            FxStep::Bitcrush => {
+                if p.bitcrush_mix > 0.01 {
+                    let hold_frames = (1.0 + p.bitcrush_rate * 15.0) as u32;
+                    if self.bitcrush_counter == 0 {
+                        let bits = (1.0 + p.bitcrush_bits * 15.0).round().max(1.0);
+                        let scale = (1u32 << (bits as u32 - 1)) as f32;
+                        self.bitcrush_held = (sig * scale).round() / scale;
+                        self.bitcrush_counter = hold_frames;
+                    } else {
+                        self.bitcrush_counter -= 1;
+                    }
+                    sig * (1.0 - p.bitcrush_mix) + self.bitcrush_held * p.bitcrush_mix
+                } else {
+                    sig
+                }
+            }
+            FxStep::Chorus => {
+                self.chorus
+                    .process(sig, p.chorus_rate, p.chorus_depth, p.chorus_mix, sr)
+            }
+            FxStep::Phaser => {
+                self.phaser
+                    .process(sig, p.phaser_rate, p.phaser_depth, p.phaser_mix, sr)
+            }
+            FxStep::RingMod => {
+                if p.ring_mod_mix > 0.001 {
+                    let freq_hz = 50.0 + p.ring_mod_freq * 450.0;
+                    self.ring_mod_phase += freq_hz / sr;
+                    if self.ring_mod_phase >= 1.0 {
+                        self.ring_mod_phase -= 1.0;
+                    }
+                    let carrier = (self.ring_mod_phase * std::f32::consts::TAU).sin();
+                    let ring = sig * carrier;
+                    sig * (1.0 - p.ring_mod_mix) + ring * p.ring_mod_mix
+                } else {
+                    sig
+                }
+            }
+            FxStep::Eq => self
+                .eq
+                .process(sig, p.eq_low_gain, p.eq_mid_gain, p.eq_hi_gain),
+            FxStep::Compressor => self.compressor.process(
+                sig,
+                p.compressor_threshold,
+                p.compressor_ratio,
+                p.compressor_mix,
+                sr,
+            ),
+            FxStep::TapeSat => {
+                self.tape_sat
+                    .process(sig, p.tape_drive, p.tape_mix, p.tape_flutter, sr)
+            }
+            FxStep::Drive => {
+                if p.distortion_drive > 0.01 {
+                    let drive = p.distortion_drive * 6.0 + 1.0;
+                    let dist = tanh(sig * drive);
+                    sig * (1.0 - p.distortion_mix) + dist * p.distortion_mix
+                } else {
+                    sig
+                }
+            }
+        }
+    }
+
+    fn apply_fx_chain(
+        &mut self,
+        mut sig: f32,
+        chain: &[FxStep],
+        p: &AudioParams,
+        delay_samples: usize,
+        sr: f32,
+        gate_env: f32,
+    ) -> f32 {
+        for &step in chain {
+            sig = self.apply_fx_step(step, sig, p, delay_samples, sr, gate_env);
+        }
+        sig
     }
 
     pub fn update_params(&mut self, p: AudioParams) {
@@ -522,6 +649,41 @@ impl DspState {
         let delay_samples =
             (p.delay_time * sr * 1.0).clamp(1.0, MAX_DELAY_SAMPLES as f32 - 1.0) as usize;
 
+        // Snapshot FX chains into stack arrays before the per-frame loop.
+        // This releases the immutable borrow on self.fx_plan so that apply_fx_step
+        // (&mut self) can be called without a borrow conflict.
+        const MAX_CHAIN: usize = 16;
+        let mut global_chain = [FxStep::Waveshaper; MAX_CHAIN];
+        let mut global_len = 0usize;
+        for (i, &s) in self.fx_plan.steps.iter().enumerate().take(MAX_CHAIN) {
+            global_chain[i] = s;
+            global_len += 1;
+        }
+
+        // Per-voice route snapshots — copy from HashMap (all Copy, no allocation).
+        let snap_route = |kind: ModuleKind| -> ([FxStep; MAX_CHAIN], usize) {
+            let mut arr = [FxStep::Waveshaper; MAX_CHAIN];
+            let mut len = 0usize;
+            if let Some(steps) = self.fx_plan.voice_routes.get(&kind) {
+                for (i, &s) in steps.iter().enumerate().take(MAX_CHAIN) {
+                    arr[i] = s;
+                    len += 1;
+                }
+            }
+            (arr, len)
+        };
+        let (chain_bass, bass_len) = snap_route(ModuleKind::AcidBass);
+        let (chain_808, d808_len) = snap_route(ModuleKind::DrumKit808);
+        let (chain_909, d909_len) = snap_route(ModuleKind::DrumKit909);
+        let (chain_hoover, hov_len) = snap_route(ModuleKind::HooverLead);
+        let (chain_an1x, an1x_len) = snap_route(ModuleKind::An1xVoice);
+        let (chain_amen, amen_len) = snap_route(ModuleKind::AmenSampler);
+        let (chain_noise, noise_len) = snap_route(ModuleKind::NoiseVoice);
+        let (chain_tts, tts_len) = snap_route(ModuleKind::EspeakNgTts);
+        let have_voice_routes = !self.fx_plan.voice_routes.is_empty();
+        // Release the immutable borrow on self (via fx_plan) before the mutable frame loop.
+        let _ = snap_route;
+
         for frame in output.chunks_mut(channels) {
             // Mix all voices to mono
             let bass_out = self.bass.process(&p);
@@ -607,136 +769,185 @@ impl DspState {
             };
             let amen_out = self.amen.process(p.amen_pitch, p.amen_volume, p.amen_loop);
 
-            // Scale mix to prevent clipping — summing voices without gain staging
-            // causes hard clipping even with moderate individual volumes
-            let dry = (bass_out
-                + k808 * dv[0]
+            // Per-voice bus sums (scaled to prevent clipping)
+            let bus_bass = bass_out;
+            let bus_808 = k808 * dv[0]
                 + s808 * dv[1]
                 + hh808c * dv[2]
                 + hh808o * dv[3]
                 + th808 * dv[4]
                 + tm808 * dv[5]
-                + tl808 * dv[6]
-                + k909 * dv[7]
+                + tl808 * dv[6];
+            let bus_909 = k909 * dv[7]
                 + s909 * dv[8]
                 + hh909c * dv[9]
                 + hh909o * dv[10]
                 + clap * dv[11]
-                + rim * dv[12]
-                + noise_out
-                + hoover_out
-                + an1x_out
-                + amen_out * dv[13])
-                * 0.60;
+                + rim * dv[12];
+            let bus_hoover = hoover_out;
+            let bus_an1x = an1x_out;
+            let bus_amen = amen_out * dv[13];
+            let bus_noise = noise_out;
 
             // Gated reverb: detect transient from pre-FX dry signal.
             // When gate_time > 0, re-open gate on transients; close exponentially.
+            let detection_sum =
+                (bus_bass + bus_808 + bus_909 + bus_hoover + bus_an1x + bus_amen + bus_noise)
+                    * 0.60;
             if p.reverb_gate_time > 0.001 {
-                if dry.abs() > 0.08 {
-                    // Transient detected — open gate immediately
+                if detection_sum.abs() > 0.08 {
                     self.reverb_gate_env = 1.0;
                 } else {
-                    // Decay toward 0 at rate 1/(gate_time * sr)
                     let decay = (-1.0 / (p.reverb_gate_time * sr)).exp();
                     self.reverb_gate_env *= decay;
                 }
             } else {
-                self.reverb_gate_env = 1.0; // gate off → always open
+                self.reverb_gate_env = 1.0;
             }
             let gate_env = self.reverb_gate_env;
 
-            // FX chain — driven by compiled plan (see compile_fx_plan in state/rack.rs).
-            // Each step transforms `sig` in place; steps that are not in the plan are skipped.
-            let mut sig = dry;
-            for step in &self.fx_plan.steps {
-                sig = match step {
-                    FxStep::Waveshaper => {
-                        if p.waveshaper_mix > 0.001 {
-                            let drive = p.waveshaper_drive * 8.0 + 1.0;
-                            let shaped = tanh(sig * drive) / tanh(drive);
-                            sig * (1.0 - p.waveshaper_mix) + shaped * p.waveshaper_mix
-                        } else {
-                            sig
-                        }
-                    }
-                    FxStep::Reverb => {
-                        if p.reverb_mix > 0.001 {
-                            let wet = self.reverb.process(sig, p.reverb_size, p.reverb_damp);
-                            // Apply gate envelope to the wet reverb signal
-                            sig * (1.0 - p.reverb_mix) + wet * p.reverb_mix * gate_env
-                        } else {
-                            sig
-                        }
-                    }
-                    FxStep::Delay => {
-                        let wet = self.delay.process(sig, delay_samples, p.delay_feedback);
-                        sig * (1.0 - p.delay_mix) + wet * p.delay_mix
-                    }
-                    FxStep::Bitcrush => {
-                        if p.bitcrush_mix > 0.01 {
-                            let hold_frames = (1.0 + p.bitcrush_rate * 15.0) as u32;
-                            if self.bitcrush_counter == 0 {
-                                let bits = (1.0 + p.bitcrush_bits * 15.0).round().max(1.0);
-                                let scale = (1u32 << (bits as u32 - 1)) as f32;
-                                self.bitcrush_held = (sig * scale).round() / scale;
-                                self.bitcrush_counter = hold_frames;
-                            } else {
-                                self.bitcrush_counter -= 1;
-                            }
-                            sig * (1.0 - p.bitcrush_mix) + self.bitcrush_held * p.bitcrush_mix
-                        } else {
-                            sig
-                        }
-                    }
-                    FxStep::Chorus => {
-                        self.chorus
-                            .process(sig, p.chorus_rate, p.chorus_depth, p.chorus_mix, sr)
-                    }
-                    FxStep::Phaser => {
-                        self.phaser
-                            .process(sig, p.phaser_rate, p.phaser_depth, p.phaser_mix, sr)
-                    }
-                    FxStep::RingMod => {
-                        if p.ring_mod_mix > 0.001 {
-                            let freq_hz = 50.0 + p.ring_mod_freq * 450.0;
-                            self.ring_mod_phase += freq_hz / sr;
-                            if self.ring_mod_phase >= 1.0 {
-                                self.ring_mod_phase -= 1.0;
-                            }
-                            let carrier = (self.ring_mod_phase * std::f32::consts::TAU).sin();
-                            let ring = sig * carrier;
-                            sig * (1.0 - p.ring_mod_mix) + ring * p.ring_mod_mix
-                        } else {
-                            sig
-                        }
-                    }
-                    FxStep::Eq => self
-                        .eq
-                        .process(sig, p.eq_low_gain, p.eq_mid_gain, p.eq_hi_gain),
-                    FxStep::Compressor => self.compressor.process(
-                        sig,
-                        p.compressor_threshold,
-                        p.compressor_ratio,
-                        p.compressor_mix,
+            // Route voices through FX chains and sum to output.
+            // Fast path: no voice routes → apply global chain to full dry mix (unchanged behaviour).
+            // Per-voice path: each bus through its own chain, then sum, then global chain.
+            let synth_out = if !have_voice_routes {
+                let dry = detection_sum; // already scaled 0.60 above
+                self.apply_fx_chain(
+                    dry,
+                    &global_chain[..global_len],
+                    &p,
+                    delay_samples,
+                    sr,
+                    gate_env,
+                )
+            } else {
+                let routed_bass = if bass_len > 0 {
+                    self.apply_fx_chain(
+                        bus_bass,
+                        &chain_bass[..bass_len],
+                        &p,
+                        delay_samples,
                         sr,
-                    ),
-                    FxStep::TapeSat => {
-                        self.tape_sat
-                            .process(sig, p.tape_drive, p.tape_mix, p.tape_flutter, sr)
-                    }
-                    FxStep::Drive => {
-                        if p.distortion_drive > 0.01 {
-                            let drive = p.distortion_drive * 6.0 + 1.0;
-                            let dist = tanh(sig * drive);
-                            sig * (1.0 - p.distortion_mix) + dist * p.distortion_mix
-                        } else {
-                            sig
-                        }
-                    }
+                        gate_env,
+                    )
+                } else {
+                    bus_bass
                 };
-            }
+                let routed_808 = if d808_len > 0 {
+                    self.apply_fx_chain(
+                        bus_808,
+                        &chain_808[..d808_len],
+                        &p,
+                        delay_samples,
+                        sr,
+                        gate_env,
+                    )
+                } else {
+                    bus_808
+                };
+                let routed_909 = if d909_len > 0 {
+                    self.apply_fx_chain(
+                        bus_909,
+                        &chain_909[..d909_len],
+                        &p,
+                        delay_samples,
+                        sr,
+                        gate_env,
+                    )
+                } else {
+                    bus_909
+                };
+                let routed_hoover = if hov_len > 0 {
+                    self.apply_fx_chain(
+                        bus_hoover,
+                        &chain_hoover[..hov_len],
+                        &p,
+                        delay_samples,
+                        sr,
+                        gate_env,
+                    )
+                } else {
+                    bus_hoover
+                };
+                let routed_an1x = if an1x_len > 0 {
+                    self.apply_fx_chain(
+                        bus_an1x,
+                        &chain_an1x[..an1x_len],
+                        &p,
+                        delay_samples,
+                        sr,
+                        gate_env,
+                    )
+                } else {
+                    bus_an1x
+                };
+                let routed_amen = if amen_len > 0 {
+                    self.apply_fx_chain(
+                        bus_amen,
+                        &chain_amen[..amen_len],
+                        &p,
+                        delay_samples,
+                        sr,
+                        gate_env,
+                    )
+                } else {
+                    bus_amen
+                };
+                let routed_noise = if noise_len > 0 {
+                    self.apply_fx_chain(
+                        bus_noise,
+                        &chain_noise[..noise_len],
+                        &p,
+                        delay_samples,
+                        sr,
+                        gate_env,
+                    )
+                } else {
+                    bus_noise
+                };
+                let mixed = (routed_bass
+                    + routed_808
+                    + routed_909
+                    + routed_hoover
+                    + routed_an1x
+                    + routed_amen
+                    + routed_noise)
+                    * 0.60;
+                // Global chain after per-voice mixing
+                self.apply_fx_chain(
+                    mixed,
+                    &global_chain[..global_len],
+                    &p,
+                    delay_samples,
+                    sr,
+                    gate_env,
+                )
+            };
 
-            let out = (sig * p.master_volume).clamp(-1.0, 1.0);
+            // TTS bus: pop one sample, apply TTS voice chain, duck synth and mix.
+            let tts_raw = self.tts_consumer.pop().unwrap_or(0.0);
+            let tts_sig = if tts_raw != 0.0 && tts_len > 0 {
+                self.apply_fx_chain(
+                    tts_raw,
+                    &chain_tts[..tts_len],
+                    &p,
+                    delay_samples,
+                    sr,
+                    gate_env,
+                )
+            } else {
+                tts_raw
+            };
+            // Smooth duck envelope: attenuate synth when TTS active
+            let tts_active = tts_raw != 0.0 || self.tts_consumer.slots() > 0;
+            let duck_target = if tts_active { 0.35_f32 } else { 1.0 };
+            let coeff = if self.tts_duck > duck_target {
+                self.duck_attack
+            } else {
+                self.duck_release
+            };
+            self.tts_duck += (duck_target - self.tts_duck) * coeff;
+
+            let out = ((synth_out * self.tts_duck + tts_sig) * p.master_volume).clamp(-1.0, 1.0);
 
             for s in frame.iter_mut() {
                 *s = out;

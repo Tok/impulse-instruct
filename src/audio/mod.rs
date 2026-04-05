@@ -74,7 +74,7 @@ impl AudioEngine {
         let (mut capture_tx, capture_rx) = rtrb::RingBuffer::<f32>::new(441_000);
 
         // Ring buffer: TTS processed audio → audio thread mix (≈6s @ 44100Hz)
-        let (tts_producer, mut tts_consumer) = rtrb::RingBuffer::<f32>::new(262144);
+        let (tts_producer, tts_consumer) = rtrb::RingBuffer::<f32>::new(262144);
         let tts_tx = Arc::new(Mutex::new(tts_producer));
 
         // Ring buffer: audio thread → MIDI clock output thread (1 byte per tick, 24 PPQN)
@@ -85,17 +85,12 @@ impl AudioEngine {
             let s = state.read();
             (AudioParams::from_app_state(&s), compile_fx_plan(&s.rack))
         };
-        let mut dsp = DspState::new(sample_rate, initial_params, initial_fx_plan);
+        let mut dsp = DspState::new(sample_rate, initial_params, initial_fx_plan, tts_consumer);
         let mut clock = ClockState::default();
         let mut monitor_vol = 1.0_f32;
         // MIDI clock out: accumulator tracks fractional samples until next 0xF8 tick
         let mut midi_clock_acc = 0.0_f64;
         let mut midi_clock_running = false; // tracks sequencer running state for Start/Stop
-        // TTS duck envelope: 1.0 = full synth, 0.3 = ducked under TTS voice
-        let mut tts_duck = 1.0_f32;
-        let duck_target = 0.35_f32; // synth level when TTS is speaking
-        let duck_attack = 1.0 - (-8.0_f32 / sample_rate).exp(); // ~fast
-        let duck_release = 1.0 - (-2.0_f32 / sample_rate).exp(); // ~slow
 
         let state_clone = Arc::clone(&state);
 
@@ -188,34 +183,11 @@ impl AudioEngine {
                         }
                     }
 
-                    // Generate audio, then apply monitor gain
+                    // Generate audio (TTS duck + mix now handled inside process_block).
                     dsp.process_block(output, channels);
                     if monitor_vol != 1.0 {
                         for s in output.iter_mut() {
                             *s *= monitor_vol;
-                        }
-                    }
-
-                    // Duck synth and mix in TTS audio (lock-free pop per frame)
-                    let tts_active = tts_consumer.slots() > 0;
-                    for frame in output.chunks_mut(channels) {
-                        // Smooth duck gain toward target
-                        let target = if tts_active { duck_target } else { 1.0 };
-                        let coeff = if tts_duck > target {
-                            duck_attack
-                        } else {
-                            duck_release
-                        };
-                        tts_duck += (target - tts_duck) * coeff;
-                        // Apply duck to synth frame
-                        for ch in frame.iter_mut() {
-                            *ch *= tts_duck;
-                        }
-                        // Add TTS sample
-                        if let Ok(tts_s) = tts_consumer.pop() {
-                            for ch in frame.iter_mut() {
-                                *ch += tts_s;
-                            }
                         }
                     }
 
