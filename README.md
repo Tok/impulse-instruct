@@ -1,6 +1,4 @@
-<p align="center">
-  <img src="docs/header.svg" alt="Impulse Instruct" width="800"/>
-</p>
+# Impulse Instruct
 
 [![CI](https://github.com/Tok/impulse-instruct/actions/workflows/ci.yml/badge.svg)](https://github.com/Tok/impulse-instruct/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/Tok/impulse-instruct/branch/main/graph/badge.svg)](https://codecov.io/gh/Tok/impulse-instruct)
@@ -12,6 +10,10 @@ You talk to it the way you'd talk to a collaborator in the studio. Say "make it 
 PULSE runs a continuous jam loop in the background, evolving the sound between prompts at a rate you control with the **HEAT** slider. At low heat it nudges filters and rhythm details. At full heat it rewrites the pattern, swaps instruments, and restructures the FX chain constantly. You can lock any parameter you've dialled in - touch a knob and PULSE will not overwrite it, even at full heat.
 
 The synthesis engine runs entirely offline: no cloud calls, no subscriptions, no latency waiting on a remote server. The LLM runs locally via llama-server, the audio engine runs in a dedicated real-time thread, and the two communicate through a lock-free ring buffer. Nothing leaves your machine.
+
+<p align="center">
+  <img src="docs/header.svg" alt="Impulse Instruct" width="800"/>
+</p>
 
 > **Requires an NVIDIA GPU (CUDA).** A model must be downloaded before first run - see [Getting started](#getting-started).
 
