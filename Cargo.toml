@@ -64,3 +64,23 @@ llm-tests = []
 [profile.release]
 opt-level = 3
 lto = "thin"
+
+# Coverage config — excludes hardware-dependent I/O layers that cannot run
+# in CI (egui rendering, cpal audio callback, MIDI, HTTP, TTS subprocess).
+# Only the testable pure-function core is measured: state, sequencer, DSP
+# math, LLM prompt building, music API, audio analysis.
+[package.metadata.tarpaulin]
+exclude-files = [
+    "src/main.rs",
+    "src/banner.rs",
+    "src/bin/*",
+    "src/ui/*",
+    "src/audio/mod.rs",
+    "src/api/*",
+    "src/midi/*",
+    "src/osc.rs",
+    "src/llm/tts.rs",
+    "src/export.rs",
+]
+timeout = 120
+out = ["Xml"]

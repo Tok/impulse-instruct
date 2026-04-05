@@ -59,13 +59,8 @@ jobs:
         run: cargo install cargo-tarpaulin --locked
 
       - name: Coverage
-        run: |
-          cargo tarpaulin \
-            --out Xml \
-            --exclude-files "src/main.rs" \
-            --exclude-files "src/banner.rs" \
-            --exclude-files "src/bin/*" \
-            --timeout 120
+        run: cargo tarpaulin
+        # Exclusions and output format are in [package.metadata.tarpaulin] in Cargo.toml
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v5
