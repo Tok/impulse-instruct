@@ -144,7 +144,7 @@ fn show_startup_error(msg: &str) {
     #[cfg(windows)]
     {
         #[link(name = "user32")]
-        extern "system" {
+        unsafe extern "system" {
             fn MessageBoxA(
                 hwnd: *mut core::ffi::c_void,
                 text: *const u8,
