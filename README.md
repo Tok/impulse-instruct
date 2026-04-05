@@ -17,6 +17,7 @@ A synthesizer with a tiny LLM living inside of it. **PULSE** runs locally and ha
 - **Not ready for hyped live crowds.** PULSE is agentic - it makes its own creative decisions. That's delightful in the studio and potentially awkward in front of 300 people waiting for someone to shout "jungle selector massive!!". We can't currently guarantee it will shout the right thing at the right moment.
 - **PULSE is not an undo button.** Full heat means it rewrites your track. The same prompt at the same heat will produce different results each run. That's the point - but the output is not deterministic.
 - **The synthesis is more limited than the LLM's vocabulary.** The gap between what PULSE intends and what the synth engine produces is where most of the roughness lives - not in the model's musical understanding.
+- **Windows build is untested.** The cross-compile produces a binary but it hasn't been run on real hardware yet. Linux is the only verified platform for this release.
 
 See [Known Limitations](#known-limitations) for specifics on what works and what doesn't yet.
 
@@ -26,8 +27,8 @@ See [Known Limitations](#known-limitations) for specifics on what works and what
 
 Pre-built binaries are available on the releases page:
 
-- `impulse-instruct-linux-x86_64` - Linux (Ubuntu 22.04+)
-- `impulse-instruct-windows-x86_64.exe` - Windows 10/11
+- `impulse-instruct-linux-x86_64` - Linux (Ubuntu 22.04+) - primary development platform, tested
+- `impulse-instruct-windows-x86_64.exe` - Windows 10/11 - cross-compiled, **untested in this release**
 
 **No installation required.** Download, make executable (Linux: `chmod +x`), and run.
 
