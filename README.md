@@ -12,7 +12,7 @@ PULSE runs a continuous jam loop in the background, evolving the sound between p
 The synthesis engine runs entirely offline: no cloud calls, no subscriptions, no latency waiting on a remote server. The LLM runs locally via llama-server, the audio engine runs in a dedicated real-time thread, and the two communicate through a lock-free ring buffer. Nothing leaves your machine.
 
 <p align="center">
-  <img src="docs/header.svg" alt="Impulse Instruct" width="800"/>
+  <img src="assets/header.svg" alt="Impulse Instruct" width="800"/>
 </p>
 
 > **Requires an NVIDIA GPU (CUDA).** A model must be downloaded before first run - see [Getting started](#getting-started).
@@ -29,6 +29,12 @@ The synthesis engine runs entirely offline: no cloud calls, no subscriptions, no
 - **Windows build is untested.** The cross-compile produces a binary but it hasn't been run on real hardware yet. Linux is the only verified platform for this release.
 
 See [Known Limitations](#known-limitations) for specifics on what works and what doesn't yet.
+
+---
+
+<p align="center">
+  <img src="assets/screenshots/Screenshot-0.5.6.png" alt="Impulse Instruct v0.5.6" width="900"/>
+</p>
 
 ---
 

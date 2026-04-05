@@ -332,7 +332,7 @@ fn run() -> anyhow::Result<()> {
 }
 
 /// Generate the window icon pixel buffer.
-/// Matches docs/icon.svg: 256×256, "IMPULSE INSTRUCT" title, Huth-colored octave,
+/// Matches assets/icon.svg: 256×256, "IMPULSE INSTRUCT" title, Huth-colored octave,
 /// black 1px borders on every key (white and black).
 fn make_window_icon() -> egui::IconData {
     const W: u32 = 256;
