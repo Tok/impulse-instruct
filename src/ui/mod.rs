@@ -197,6 +197,12 @@ pub struct ImpulseApp {
     audio_tx: rtrb::Producer<AudioCommand>,
     scope_rx: rtrb::Consumer<f32>,
     scope_buf: Vec<f32>,
+    capture_rx: rtrb::Consumer<f32>,
+    /// Most-recent audio analysis snapshot. None until the user clicks Listen.
+    audio_analysis: Option<crate::audio::analysis::AudioAnalysis>,
+    /// True when the most-recently-sent prompt came from the Listen button —
+    /// used to label the LLM response as "LISTEN →" in the log.
+    listen_pending: bool,
     llm_tx: Sender<LlmInput>,
     llm_rx: Receiver<LlmOutput>,
     midi_rx: Receiver<MidiEvent>,
@@ -257,6 +263,7 @@ impl ImpulseApp {
         state: Arc<RwLock<AppState>>,
         mut audio_tx: rtrb::Producer<AudioCommand>,
         scope_rx: rtrb::Consumer<f32>,
+        capture_rx: rtrb::Consumer<f32>,
         llm_tx: Sender<LlmInput>,
         llm_rx: Receiver<LlmOutput>,
         midi_rx: Receiver<MidiEvent>,
@@ -322,6 +329,9 @@ impl ImpulseApp {
             audio_tx,
             scope_rx,
             scope_buf: Vec::new(),
+            capture_rx,
+            audio_analysis: None,
+            listen_pending: false,
             llm_tx,
             llm_rx,
             midi_rx,
@@ -431,8 +441,13 @@ impl ImpulseApp {
                 } else {
                     out.text.clone()
                 };
-                // Append thinking indicator when present
-                let persona = self.state.read().llm.persona_name.clone();
+                // Append thinking indicator when present; tag audio-feedback responses
+                let persona = if self.listen_pending {
+                    self.listen_pending = false;
+                    "LISTEN".to_string()
+                } else {
+                    self.state.read().llm.persona_name.clone()
+                };
                 let line = if out.thinking.as_ref().is_some_and(|t| !t.is_empty()) {
                     format!("{} → {} [think]\n", persona, display)
                 } else {

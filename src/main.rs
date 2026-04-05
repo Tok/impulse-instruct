@@ -228,6 +228,7 @@ fn main() -> anyhow::Result<()> {
     let state_for_ui = Arc::clone(&app_state);
     let audio_tx = audio_engine.params_tx;
     let scope_rx = audio_engine.scope_rx;
+    let capture_rx = audio_engine.capture_rx;
 
     let native_options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
@@ -248,6 +249,7 @@ fn main() -> anyhow::Result<()> {
                 state_for_ui,
                 audio_tx,
                 scope_rx,
+                capture_rx,
                 llm_tx,
                 llm_out_rx,
                 midi_rx,

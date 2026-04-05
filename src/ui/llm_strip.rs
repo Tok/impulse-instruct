@@ -5,6 +5,7 @@
 //   TOP row  — LEFT: style + instructions  |  RIGHT: log (fills height)
 //   BOTTOM row — full-width prompt input + ASK button (vertically centred)
 
+use crate::audio::analysis::{analyse_audio, format_snapshot};
 use crate::llm::LlmInput;
 use crate::llm::styles::StyleCatalog;
 use crate::state::apply_llm_update;
@@ -236,6 +237,57 @@ impl ImpulseApp {
                             });
                     });
                 }); // end top row
+
+                // ── LISTEN bar: capture + analysis display ────────────────────
+                ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
+                    // Listen button — drains capture ring buffer, runs analysis
+                    if ui.add(
+                        egui::Button::new(
+                            egui::RichText::new("LISTEN")
+                                .monospace()
+                                .size(8.5)
+                                .color(theme::ASH),
+                        )
+                        .fill(egui::Color32::TRANSPARENT)
+                        .min_size(egui::vec2(0.0, 14.0)),
+                    ).clicked() {
+                        // Drain up to 441 000 samples (~10 s) from the capture buffer
+                        let mut captured: Vec<f32> = Vec::with_capacity(441_000);
+                        while let Ok(s) = self.capture_rx.pop() {
+                            captured.push(s);
+                        }
+                        if !captured.is_empty() {
+                            let analysis = analyse_audio(&captured, 44100.0);
+                            let snapshot = format_snapshot(&analysis);
+                            // Auto-trigger LLM with the snapshot prepended
+                            let prompt = format!(
+                                "{}\nYou are listening to the audio you just produced. React — correct any mix or arrangement issues. Respond in JSON.",
+                                snapshot
+                            );
+                            self.log_text.push_str("LISTEN → analysing…\n");
+                            let _ = self.llm_tx.try_send(LlmInput::Infer { prompt, one_shot: true });
+                            self.audio_analysis = Some(analysis);
+                            self.listen_pending = true;
+                        } else {
+                            self.log_text.push_str("LISTEN → no audio captured yet\n");
+                        }
+                    }
+
+                    // Show snapshot stats if available
+                    if let Some(ref a) = self.audio_analysis {
+                        ui.add_space(6.0);
+                        ui.label(
+                            egui::RichText::new(format!(
+                                "sub {:+.0}  low {:+.0}  mid {:+.0}  hi {:+.0}  pk {:+.1}  crest {:.0}dB  ~{:.0}tr/bar",
+                                a.sub_rms_db, a.low_rms_db, a.mid_rms_db, a.high_rms_db,
+                                a.peak_db, a.crest_db, a.transients_per_bar
+                            ))
+                            .monospace()
+                            .size(8.0)
+                            .color(theme::IRON),
+                        );
+                    }
+                });
 
                 // ── BOTTOM row: full-width prompt + Enter (vertically centred) ──
                 ui.with_layout(

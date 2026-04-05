@@ -2,6 +2,7 @@
 // Audio engine: owns the cpal stream, DSP state, and sequencer clock.
 // The audio callback is real-time safe: no allocations, no locks.
 
+pub mod analysis;
 pub mod dsp;
 
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
@@ -33,6 +34,9 @@ pub enum AudioCommand {
 pub struct AudioEngine {
     pub params_tx: Producer<AudioCommand>,
     pub scope_rx: Consumer<f32>,
+    /// Audio capture ring buffer — same samples as scope but larger window
+    /// (~10 s). Drain in the UI thread and pass to `analysis::analyse_audio`.
+    pub capture_rx: Consumer<f32>,
     /// TTS processed audio pushed by the LLM thread, mixed into the output.
     pub tts_tx: Arc<Mutex<Producer<f32>>>,
     /// MIDI clock bytes (0xF8/0xFA/0xFC) produced by the audio thread.
@@ -62,6 +66,9 @@ impl AudioEngine {
 
         // Ring buffer: audio thread → scope display
         let (mut scope_tx, scope_rx) = rtrb::RingBuffer::<f32>::new(4096);
+
+        // Ring buffer: audio thread → capture/analysis (≈10 s @ 44100 Hz)
+        let (mut capture_tx, capture_rx) = rtrb::RingBuffer::<f32>::new(441_000);
 
         // Ring buffer: TTS processed audio → audio thread mix (≈6s @ 44100Hz)
         let (tts_producer, mut tts_consumer) = rtrb::RingBuffer::<f32>::new(262144);
@@ -208,9 +215,10 @@ impl AudioEngine {
                         }
                     }
 
-                    // Write first channel of each frame to scope ring buffer
+                    // Write first channel of each frame to scope + capture ring buffers
                     for frame in output.chunks(channels) {
                         scope_tx.push(frame[0]).ok(); // non-blocking, drop if full
+                        capture_tx.push(frame[0]).ok(); // same — overshoots silently dropped
                     }
                 },
                 |err| log::error!("Audio stream error: {}", err),
@@ -227,6 +235,7 @@ impl AudioEngine {
         Ok(Self {
             params_tx,
             scope_rx,
+            capture_rx,
             tts_tx,
             midi_clock_rx,
             _stream: stream,

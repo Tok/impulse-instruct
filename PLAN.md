@@ -5,6 +5,26 @@ PULSE listens, jams, evolves, and shouts at the crowd.
 
 ---
 
+## Audio Feedback Loop — "PULSE Listens to Itself"
+
+**Phase 1 is implemented.** The LISTEN button in the LLM strip captures up
+to 10 seconds of audio, runs a per-band RMS + transient analysis
+(`src/audio/analysis.rs`), shows the stats inline, and prepends a structured
+text snapshot to the inference prompt. Responses are labelled **LISTEN →**
+in the log.
+
+**Phase 2 (real audio input to the model) is on hold.** As of April 2026,
+llama.cpp does not support Gemma 4's audio encoder — and even when it does,
+the encoder was trained on speech only, so musical audio may yield poor
+results anyway. The text descriptor approach is likely the better fit for
+mix/arrangement feedback regardless.
+
+See **[docs/audio-feedback.md](docs/audio-feedback.md)** for full research
+findings, PR numbers to watch, the API format once support lands, and an
+alternative Ultravox-as-secondary-listener sketch.
+
+---
+
 ## What's Built
 
 ### Core synth
@@ -33,12 +53,16 @@ PULSE listens, jams, evolves, and shouts at the crowd.
 ### Intelligence
 - LLM runs locally via llama-server subprocess (official llama.cpp for Gemma/Qwen; PrismML fork for Bonsai 1-bit)
 - Mock mode when no model present — keyword-based, synth still fully functional
-- Jam mode — PULSE evolves the pattern autonomously
+- Jam mode — PULSE evolves the pattern autonomously; heat slider 0–100% gates/throttles jam rate
 - Lock system — touch a knob to claim it; LLM won't override it
 - Compact step arrays: index list `[0,4,8,12]` or inline `[1,0,0,0,…]` or clear `[]`
 - Music theory grounding — root note + scale in system prompt, scale-snap on bass notes
 - Instruction set — pre-written JSON templates for common phrases ("make an amen break", "remove claps", etc.)
 - LFO dot-notation sanitization — handles malformed LLM output gracefully
+- Sampling params exposed in settings: top_k, top_p, min_p, repeat_penalty, frequency_penalty, seed
+- Reasoning (thinking) blocks shown in log (toggle in settings)
+- **Audio feedback (Phase 1)** — LISTEN button captures audio, runs per-band RMS + transient analysis,
+  prepends structured snapshot to prompt; response logged as `LISTEN →`
 
 ### TTS / MC mode
 - espeak-ng backend — speaks PULSE's `mc_line` field as a jungle MC
@@ -62,13 +86,15 @@ PULSE listens, jams, evolves, and shouts at the crowd.
 - XY pads (CUT×RES, ENV×DEC, REVERB mix×size, DELAY mix×feedback, 808 PITCH×DECAY)
 - Oscilloscope strip (rolling 512-sample waveform)
 - ADSR envelope visualizer (interactive — drag zones)
-- Piano display — Huth *Farbige Noten* (1888) 12-color theory, C2–C5
+- Piano display — Huth *Farbige Noten* (1888) 12-color theory, C2–C5; Off/Piano/Full setting
+- Huth sequencer cells (Full mode) — colored U-cup notation on bass/hoover/AN1X rows; gate-proportional height
 - Model selector — scan `models/`, hot-swap without restart
-- Reasoning toggle (Qwen3 `/think` mode)
+- Reasoning toggle; thinking blocks shown in log (toggle)
 - AI persona name — editable, used in system prompt
+- LLM strip: LISTEN button + live audio analysis display (sub/low/mid/high RMS, peak, crest, transients)
 
 ### Testing & build
-- 86 unit tests across 4 submodules (`seq_tests`, `state_tests`, `llm_tests`, split at 1000-line limit)
+- 92 unit tests across 4 submodules (`seq_tests`, `state_tests`, `llm_tests`, `audio::analysis`, split at 1000-line limit)
 - 39 LLM integration tests in 3 suites: `llm_suite` (core), `llm_suite_style` (artist refs), `llm_suite_theory` (music theory + producer lingo)
 - Pre-commit hook: fmt + clippy + tests + 1000-line LOC limit
 - `scripts/run-tests.sh --coverage` → HTML coverage report (lcov)
@@ -82,6 +108,30 @@ PULSE listens, jams, evolves, and shouts at the crowd.
 ## What's Left
 
 Ordered by value — tackle roughly from top to bottom.
+
+### Next session — pick from here
+
+- [ ] **FX routing: modular slots** — highest-value unfinished item. Rack canvas
+      is done; next step is wiring the visual cable model into actual DSP routing.
+      Entry point: `compile_fx_plan()` in `src/state/transitions.rs`, DSP pool
+      in `src/audio/dsp/mod.rs`. See Known Gaps table — this unblocks dub techno,
+      gabber, and ambient styles.
+
+- [ ] **Audio feedback improvements** — Phase 1 is live. Low-hanging next steps:
+      - Stereo width metric (L-R energy ratio; audio is currently mono — add stereo capture)
+      - Auto-listen mode: re-trigger LISTEN every N jam cycles
+      - Per-voice amplitude from state (we have the numbers without audio capture)
+      - Watch llama.cpp #21325 for Gemma 4 audio encoder PR; test when it lands
+        (details in `docs/audio-feedback.md`)
+
+- [ ] **Gabber kick voice** — pitch envelope + hard clipper on kick output. Self-contained
+      DSP addition in `src/audio/dsp/voices.rs`; no routing prerequisite.
+
+- [ ] **XY pad improvements** — param name tooltip on cursor; arbitrary param pair selection.
+      Low complexity, good polish.
+
+- [ ] **Coqui TTS** — higher quality MC voice. Python subprocess or REST call; espeak-ng stays
+      as fallback.
 
 ### Immediate
 
