@@ -129,15 +129,21 @@ fn assert_gate(
     heat: f32,
     check: impl Fn(&Value) -> bool,
 ) {
-    let passes = (0..RUNS)
-        .filter(|_| {
-            infer_json(backend, system, prompt, heat)
-                .map(|v| check(&v))
-                .unwrap_or(false)
-        })
-        .count();
+    let mut passes = 0usize;
+    let mut total_ms = 0u128;
+    for _ in 0..RUNS {
+        let t0 = std::time::Instant::now();
+        let ok = infer_json(backend, system, prompt, heat)
+            .map(|v| check(&v))
+            .unwrap_or(false);
+        total_ms += t0.elapsed().as_millis();
+        if ok {
+            passes += 1;
+        }
+    }
+    let avg_ms = total_ms / RUNS as u128;
     let gate_label = if passes >= REQUIRED { "✓" } else { "✗" };
-    eprint!("  {gate_label} {passes}/{RUNS} (need ≥{REQUIRED})  ");
+    eprint!("  {gate_label} {passes}/{RUNS} (need ≥{REQUIRED}) ~{avg_ms}ms/req  ");
     assert!(
         passes >= REQUIRED,
         "[llm-theory] '{}': {}/{} runs passed (need {})\n\

@@ -281,7 +281,9 @@ def shorten(name):
 
 short = [shorten(n) for n in names]
 
-# Parse test output: lines like "test module::test_name ...  ✓ 7/10 ...  ok"
+# Parse test output lines:
+#   "test module::test_name ...  ✓ 7/10 (need ≥7) ~850ms/req  ok"
+# results[test_name] = (passes, total, passed, avg_ms)
 all_results = []
 for f in files:
     results = {}
@@ -293,18 +295,20 @@ for f in files:
                     continue
                 test_name = m.group(1)
                 sm = re.search(r'(\d+)/(\d+)', line)
-                if sm:
-                    passes = int(sm.group(1))
-                    total  = int(sm.group(2))
-                    # Determine pass/fail from trailing status word
-                    tail = line.split('...', 1)[-1] if '...' in line else line
-                    passed = tail.strip().endswith('ok')
-                    results[test_name] = (passes, total, passed)
+                if not sm:
+                    continue
+                passes = int(sm.group(1))
+                total  = int(sm.group(2))
+                tail   = line.split('...', 1)[-1] if '...' in line else line
+                passed = tail.strip().endswith('ok')
+                tm     = re.search(r'~(\d+)ms/req', line)
+                avg_ms = int(tm.group(1)) if tm else None
+                results[test_name] = (passes, total, passed, avg_ms)
     except Exception:
         pass
     all_results.append(results)
 
-# Collect ordered test list
+# Ordered test list (preserves first-seen order across all models)
 all_tests = []
 seen = set()
 for r in all_results:
@@ -318,13 +322,13 @@ if not all_tests:
     sys.exit(0)
 
 NAME_W = max(len(t) for t in all_tests) + 2
-COL_W  = max(max(len(s) for s in short), 10) + 4
+COL_W  = max(max(len(s) for s in short), 10) + 6  # extra room for timing
 
 sep = '  ' + '─' * (NAME_W + (COL_W + 2) * n)
 
 print()
 print('══════════════════════════════════════════════════════════════════')
-print(f'  Model comparison  [suite detected from output]')
+print('  Model comparison')
 print('══════════════════════════════════════════════════════════════════')
 print()
 
@@ -335,16 +339,22 @@ for s in short:
 print(hdr)
 print(sep)
 
-totals    = [0] * n
-max_total = [0] * n
+totals      = [0] * n
+max_total   = [0] * n
+timing_sums = [0] * n   # sum of avg_ms across tests that have timing
+timing_cnt  = [0] * n   # count of tests with timing data
 
 for test in all_tests:
     row = '  ' + test.ljust(NAME_W)
     for i, r in enumerate(all_results):
         if test in r:
-            passes, total, ok = r[test]
+            passes, total, ok, avg_ms = r[test]
             cell = f'{passes}/{total}'
             cell += ' ✓' if ok else ' ✗'
+            if avg_ms is not None:
+                cell += f' ~{avg_ms}ms'
+                timing_sums[i] += avg_ms
+                timing_cnt[i]  += 1
             totals[i]    += passes
             max_total[i] += total
         else:
@@ -353,26 +363,61 @@ for test in all_tests:
     print(row)
 
 print(sep)
+
+# Totals row
 total_row = '  ' + 'TOTAL'.ljust(NAME_W)
 for i in range(n):
-    mx = max_total[i] or 1
+    mx  = max_total[i] or 1
     pct = totals[i] / mx * 100
     cell = f'{totals[i]}/{max_total[i]} ({pct:.0f}%)'
     total_row += '  ' + cell.ljust(COL_W)
 print(total_row)
 
-# ASCII bar chart
+# Avg response time row (only if any model has timing data)
+if any(timing_cnt):
+    time_row = '  ' + 'avg ms/req'.ljust(NAME_W)
+    for i in range(n):
+        if timing_cnt[i]:
+            avg = timing_sums[i] // timing_cnt[i]
+            cell = f'~{avg}ms'
+        else:
+            cell = '—'
+        time_row += '  ' + cell.ljust(COL_W)
+    print(time_row)
+
+# ASCII bar chart — accuracy
 BARS = 32
 print()
 print('──────────────────────────────────────────────────────────────────')
+print('  Accuracy')
 for i in range(n):
-    mx = max_total[i] or 1
-    pct = totals[i] / mx
+    mx     = max_total[i] or 1
+    pct    = totals[i] / mx
     filled = round(pct * BARS)
-    bar = '█' * filled + '░' * (BARS - filled)
-    label = short[i].ljust(20)
-    score = f'{totals[i]}/{max_total[i]} ({pct*100:.0f}%)'
+    bar    = '█' * filled + '░' * (BARS - filled)
+    label  = short[i].ljust(20)
+    score  = f'{totals[i]}/{max_total[i]} ({pct*100:.0f}%)'
     print(f'  {label}  [{bar}]  {score}')
+
+# ASCII bar chart — speed (lower is better, invert the bar)
+if any(timing_cnt):
+    all_avgs = [timing_sums[i] // timing_cnt[i] if timing_cnt[i] else None for i in range(n)]
+    valid    = [a for a in all_avgs if a is not None]
+    if valid:
+        max_ms = max(valid)
+        print()
+        print('  Speed  (longer bar = faster)')
+        for i in range(n):
+            if all_avgs[i] is None:
+                continue
+            avg    = all_avgs[i]
+            pct    = 1.0 - (avg / max_ms) if max_ms > 0 else 0.0
+            filled = round(pct * BARS)
+            # Clamp so even the slowest model shows at least a sliver
+            filled = max(filled, round(BARS * 0.05))
+            bar    = '█' * filled + '░' * (BARS - filled)
+            label  = short[i].ljust(20)
+            print(f'  {label}  [{bar}]  ~{avg}ms/req')
 print()
 PYEOF
 fi

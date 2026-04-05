@@ -97,15 +97,21 @@ fn assert_gate(
     required: usize,
     check: impl Fn(&Value) -> bool,
 ) {
-    let passes = (0..RUNS)
-        .filter(|_| {
-            infer_json(backend, system, prompt, heat)
-                .map(|v| check(&v))
-                .unwrap_or(false)
-        })
-        .count();
+    let mut passes = 0usize;
+    let mut total_ms = 0u128;
+    for _ in 0..RUNS {
+        let t0 = std::time::Instant::now();
+        let ok = infer_json(backend, system, prompt, heat)
+            .map(|v| check(&v))
+            .unwrap_or(false);
+        total_ms += t0.elapsed().as_millis();
+        if ok {
+            passes += 1;
+        }
+    }
+    let avg_ms = total_ms / RUNS as u128;
     let gate_label = if passes >= required { "✓" } else { "✗" };
-    eprint!("  {gate_label} {passes}/{RUNS} (need ≥{required})  ");
+    eprint!("  {gate_label} {passes}/{RUNS} (need ≥{required}) ~{avg_ms}ms/req  ");
     assert!(
         passes >= required,
         "[llm-style] '{}': {}/{} runs passed (need {})\n\
