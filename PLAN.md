@@ -186,14 +186,9 @@ Ordered by value — tackle roughly from top to bottom.
       The current `tts_engine` field + UI settings panel become a migration shim until rack
       adoption is complete.
 
-- [ ] **LLM jam tools** — internal helpers that aren't user-facing but make the LLM more
-      capable during autonomous jamming:
-      - **Ramp scheduling**: `{"ramp": {"param": "fx.reverb_mix", "from": 0.0, "to": 0.6, "bars": 8}}`
-        — LLM can schedule smooth transitions over multiple bars instead of hard jumps.
-      - **Behaviour templates**: named presets the LLM can invoke to express intent
-        ("build", "drop", "breakdown", "full_energy") that expand to a set of param changes.
-      - **Heat-aware mutation rules**: at heat < 0.3 only rhythmic variation; at heat > 0.7
-        allow timbre + FX sweeps; at heat = 1.0 anything goes.
+- [x] **LLM jam tools** — done: ramp scheduling (`"ramp"` key), behaviour templates
+      ("build", "drop", "breakdown", "tension", "euphoric"), heat-aware guidance in prompt.
+      19 tests in `jam_tools_tests.rs`.
 
 - [x] **Internal music API** — `src/music_api/mod.rs`; all 10 ChordQuality variants,
       amen_pattern(heat, seed), scale_run(root, scale, direction, seed),
