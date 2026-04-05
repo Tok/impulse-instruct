@@ -263,7 +263,7 @@ slow down between cycles - every 4 bars
 
 ## Known Limitations
 
-The LLM understands musical intent well. The gap between what PULSE asks for and what you actually hear is almost always a synthesis or tuning issue, not a model issue.
+The LLM understands musical intent well. When a style doesn't land, the cause is usually the synth not being able to fully deliver it, or the system prompt not guiding PULSE specifically enough - not the model failing to understand the genre.
 
 **What works well:** acid bass. The ladder filter, env mod, resonance, and slide are all solid - give it some heat and the right prompt and it will do acid convincingly.
 
