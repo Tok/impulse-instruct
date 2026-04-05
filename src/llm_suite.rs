@@ -1,18 +1,22 @@
 // ─── llm_suite.rs ─────────────────────────────────────────────────────────────
-// Real Bonsai integration tests.
+// Core LLM integration tests — directional parameter and pattern clearing.
 //
 // Each test fires the same prompt RUNS times and passes if at least REQUIRED
 // responses satisfy the assertion — a probabilistic gate that tolerates LLM
 // variance without being brittle.
 //
-//   Heat 0.2–0.3  →  use REQUIRED = 9  (low variance, tight assertions)
-//   Heat 0.5      →  use REQUIRED = 7  (moderate — directional but not rigid)
+//   Heat 0.2–0.3  →  REQUIRED_TIGHT = 9  (deterministic ops: "remove kick")
+//   Heat 0.3      →  REQUIRED_LOOSE = 7  (directional: "more acid")
 //
-// If the gate fails it means the model needs better tuning or the system
-// prompt needs adjustment, not that the test needs softening.
+// Suites:
+//   llm_suite        — basic parameter direction + pattern clearing + schema
+//   llm_suite_style  — artist/genre reference comprehension (Aphex, Bach, etc.)
+//   llm_suite_theory — music theory + producer lingo (triads, backbeat, Reese)
 //
-// Run:   ./run-llm-tests.sh
-//        cargo test --features llm-tests
+// Run:   ./scripts/run-llm-tests.sh          # all three suites
+//        ./scripts/run-llm-style.sh           # style suite only
+//        ./scripts/run-llm-theory.sh          # theory suite only
+//        cargo test --features llm-tests      # all (needs LLAMA_SERVER_URL)
 //
 // Requires: libclang-dev cmake (for llama-cpp-2) + ./download-models.sh
 // Skip:     if model file not present, all tests pass silently.
@@ -272,234 +276,6 @@ fn clear_all_drums_clears_all_voices() {
             && all_false(j, "sequencer.hihat_a_steps")
             && all_false(j, "sequencer.clap_b_steps")
     });
-}
-
-// ── Artist / cultural reference comprehension (REQUIRED_LOOSE) ───────────────
-//
-// These tests check whether Bonsai maps cultural references to the right
-// sonic parameter space.  A consistent FAIL means the reference is not in the
-// model's training data and the description in styles.json should be rewritten
-// as a plain sonic brief instead.
-//
-// Artist tiers for Bonsai 8B (likely trained on web text up to ~2023):
-//   ✅ Probably known: Aphex Twin, Autechre, Daft Punk, Kraftwerk, Tangerine Dream
-//   🟡 Possibly known: Phuture/DJ Pierre, Basic Channel, Venetian Snares, Plastikman
-//   ❓ Uncertain: Neophyte, Drexciya, Mixmaster Morris, Gost, Enduser
-//
-// If a test here fails, update styles.json to drop the name and describe the sound.
-
-/// Classic acid should set high resonance — the squelch IS the point.
-/// Phuture and DJ Pierre are foundational acid house; if Bonsai knows "acid house"
-/// at all it should know these names.
-#[test]
-fn classic_acid_phuture_sets_high_resonance() {
-    let Some((mut b, sys)) = setup() else { return };
-    assert_gate(
-        &mut b,
-        &sys,
-        "classic Chicago acid house — think Phuture, DJ Pierre, Trax Records, pure 303 squelch",
-        0.3,
-        REQUIRED_LOOSE,
-        |j| num(j, "bass.resonance") >= 0.65,
-    );
-}
-
-/// Classic acid should stay dry — barely any FX.
-#[test]
-fn classic_acid_phuture_stays_dry() {
-    let Some((mut b, sys)) = setup() else { return };
-    assert_gate(
-        &mut b,
-        &sys,
-        "classic acid, Phuture style — raw and dry, no reverb, no delay",
-        0.3,
-        REQUIRED_LOOSE,
-        |j| {
-            let rmix = at(j, "fx.reverb_mix")
-                .and_then(|v| v.as_f64())
-                .unwrap_or(0.0);
-            let dmix = at(j, "fx.delay_mix")
-                .and_then(|v| v.as_f64())
-                .unwrap_or(0.0);
-            rmix <= 0.2 && dmix <= 0.15
-        },
-    );
-}
-
-/// Autechre = IDM, so kick should NOT be strict four-on-the-floor.
-/// This is one of the most famous IDM acts — if Bonsai knows any IDM, it knows Autechre.
-#[test]
-fn autechre_idm_breaks_four_on_the_floor() {
-    let four_floor = serde_json::json!([
-        true, false, false, false, true, false, false, false, true, false, false, false, true,
-        false, false, false
-    ]);
-    let Some((mut b, sys)) = setup() else { return };
-    assert_gate(
-        &mut b,
-        &sys,
-        "go full Autechre IDM — irregular kick, subvert the grid, nothing four-on-the-floor",
-        0.3,
-        REQUIRED_LOOSE,
-        |j| {
-            match at(j, "sequencer.kick_a_steps") {
-                None => true,                    // no kick at all = fine for IDM
-                Some(arr) => arr != &four_floor, // anything but pure 4-on-the-floor
-            }
-        },
-    );
-}
-
-/// Aphex Twin Selected Ambient Works Vol 2 = spacious, heavy reverb.
-#[test]
-fn aphex_twin_ambient_uses_reverb() {
-    let Some((mut b, sys)) = setup() else { return };
-    assert_gate(
-        &mut b,
-        &sys,
-        "ambient Aphex Twin mood — Selected Ambient Works Vol 2, spacious and ethereal",
-        0.3,
-        REQUIRED_LOOSE,
-        |j| num(j, "fx.reverb_mix") >= 0.25,
-    );
-}
-
-/// Basic Channel dub techno = FX-heavy (reverb + delay are the music).
-/// If Bonsai doesn't know Basic Channel, "dub techno" alone should still trigger FX.
-#[test]
-fn basic_channel_dub_techno_uses_heavy_fx() {
-    let Some((mut b, sys)) = setup() else { return };
-    assert_gate(
-        &mut b,
-        &sys,
-        "dub techno in the style of Basic Channel — maximum reverb, ghost delay echoes",
-        0.3,
-        REQUIRED_LOOSE,
-        |j| num(j, "fx.reverb_mix") >= 0.3 || num(j, "fx.delay_mix") >= 0.2,
-    );
-}
-
-/// Berlin techno = dark filter, deep bass, not much melody.
-/// Richie Hawtin / Berghain refs — model should understand "Berlin" if not the names.
-#[test]
-fn berlin_techno_sets_dark_filter() {
-    let Some((mut b, sys)) = setup() else { return };
-    assert_gate(
-        &mut b,
-        &sys,
-        "Berlin techno — Berghain floor, deep dark kick, filter nearly closed, Richie Hawtin",
-        0.3,
-        REQUIRED_LOOSE,
-        |j| num(j, "bass.cutoff") <= 0.35,
-    );
-}
-
-/// Venetian Snares breakcore = very high BPM (if the model touches BPM at all).
-/// If Bonsai doesn't know Venetian Snares, this tells us to drop the name.
-#[test]
-fn venetian_snares_sets_high_bpm() {
-    let Some((mut b, sys)) = setup() else { return };
-    // Only meaningful if BPM is in the output at all
-    assert_gate(
-        &mut b,
-        &sys,
-        "breakcore chaos, Venetian Snares energy — shredded Amen, extreme BPM",
-        0.3,
-        REQUIRED_LOOSE,
-        |j| {
-            match at(j, "sequencer.bpm").and_then(|v| v.as_f64()) {
-                None => true, // didn't touch BPM — inconclusive, not a failure
-                Some(bpm) => bpm >= 160.0,
-            }
-        },
-    );
-}
-
-// ── Baroque / Bach style (REQUIRED_LOOSE) ────────────────────────────────────
-//
-// These test whether the model understands classical melodic structure:
-// stepwise voice leading, correct tempo range, no drums, piano-like voice.
-// A consistent FAIL means the model has no Baroque knowledge — the style
-// description in styles.json should be rewritten as explicit param instructions.
-
-/// A Bach melody should move mostly by step (conjunct motion ≤5 semitones).
-/// An acid line or random drum pattern fails; a genuine diatonic melody passes.
-#[test]
-fn bach_melody_is_mostly_stepwise() {
-    let Some((mut b, sys)) = setup() else { return };
-    assert_gate(
-        &mut b,
-        &sys,
-        "compose a Bach-style Baroque melody in D minor — \
-         dense stepwise piano melody, no drums, no bass",
-        0.3,
-        REQUIRED_LOOSE,
-        |j| {
-            // Accept notes from AN1X or bass melody voices
-            let notes_arr = at(j, "an1x.an1x_notes")
-                .or_else(|| at(j, "sequencer.bass_notes"))
-                .or_else(|| at(j, "hoover.hoover_notes"))
-                .and_then(|v| v.as_array());
-
-            let Some(arr) = notes_arr else {
-                return false; // no melody produced
-            };
-            let notes: Vec<u8> = arr
-                .iter()
-                .filter_map(|n| n.as_u64().map(|v| v as u8))
-                .collect();
-            if notes.len() < 3 {
-                return false; // need at least a short phrase
-            }
-            // Stepwise: consecutive interval ≤ 5 semitones (a 4th)
-            let stepwise = notes
-                .windows(2)
-                .filter(|w| (w[0] as i16 - w[1] as i16).unsigned_abs() <= 5)
-                .count();
-            stepwise as f64 / (notes.len() - 1) as f64 >= 0.55
-        },
-    );
-}
-
-/// Baroque Bach should NOT be at club tempo.
-/// If the model sets BPM at all, it must be ≤140.  Not setting BPM is fine.
-#[test]
-fn bach_not_club_tempo() {
-    let Some((mut b, sys)) = setup() else { return };
-    assert_gate(
-        &mut b,
-        &sys,
-        "compose a Bach-style Baroque melody in D minor",
-        0.3,
-        REQUIRED_LOOSE,
-        |j| match at(j, "sequencer.bpm").and_then(|v| v.as_f64()) {
-            None => true, // didn't touch BPM — fine for a melodic request
-            Some(bpm) => bpm <= 140.0,
-        },
-    );
-}
-
-/// Bach piano needs AN1X enabled; bass should be silent or absent.
-#[test]
-fn bach_enables_an1x_not_bass() {
-    let Some((mut b, sys)) = setup() else { return };
-    assert_gate(
-        &mut b,
-        &sys,
-        "FULL RESET to Baroque Bach piano — dense D minor melody, no drums, no bass",
-        0.3,
-        REQUIRED_LOOSE,
-        |j| {
-            let an1x_on = at(j, "an1x.enabled")
-                .and_then(|v| v.as_bool())
-                .unwrap_or(false);
-            // bass.volume should be zero or absent; reverb should be light
-            let bass_silent = at(j, "bass.volume")
-                .and_then(|v| v.as_f64())
-                .map_or(true, |v| v <= 0.1);
-            an1x_on && bass_silent
-        },
-    );
 }
 
 // ── Schema compliance (REQUIRED_TIGHT) ───────────────────────────────────────

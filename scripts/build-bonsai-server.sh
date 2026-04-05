@@ -11,7 +11,7 @@
 # Requires: git cmake build-essential (cmake usually already present)
 # ──────────────────────────────────────────────────────────────────────────────
 set -euo pipefail
-cd "$(dirname "$0")"
+cd "$(dirname "$0")/.."
 
 SRC_DIR=".llama-src-prismml"
 BUILD_DIR=".llama-build"

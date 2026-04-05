@@ -11,7 +11,7 @@
 #   sudo apt install clang lld cmake ninja-build
 # ──────────────────────────────────────────────────────────────────────────────
 set -euo pipefail
-cd "$(dirname "$0")"
+cd "$(dirname "$0")/.."
 
 FEATURES="${FEATURES:-}"  # pass FEATURES=llm to include real LLM inference
 FEATURE_FLAGS=""

@@ -9,7 +9,7 @@
 #   ./start.sh --dev         # debug build + verbose logging
 # ──────────────────────────────────────────────────────────────────────────────
 set -euo pipefail
-cd "$(dirname "$0")"
+cd "$(dirname "$0")/.."
 
 BUILD_MODE="release"
 CARGO_FEATURES=""

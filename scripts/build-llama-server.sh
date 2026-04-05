@@ -13,7 +13,7 @@
 # Requires: git cmake build-essential cuda-toolkit-12-x
 # ──────────────────────────────────────────────────────────────────────────────
 set -euo pipefail
-cd "$(dirname "$0")"
+cd "$(dirname "$0")/.."
 
 SRC_DIR=".llama-src-official"
 BUILD_DIR=".llama-official-build"

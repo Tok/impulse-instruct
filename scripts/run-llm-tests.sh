@@ -15,19 +15,28 @@
 # the model needs better tuning or the system prompt needs adjustment.
 #
 # Prerequisites:
-#   ./build-bonsai-server.sh   (builds .llama-build/bin/llama-server, PrismML fork)
-#   ./build-llama-server.sh    (builds .llama-official-build/bin/llama-server, standard)
-#   ./download-models.sh       (downloads models/Bonsai-8B.gguf)
+#   ./scripts/build-bonsai-server.sh   (builds .llama-build/bin/llama-server, PrismML fork)
+#   ./scripts/build-llama-server.sh    (builds .llama-official-build/bin/llama-server, standard)
+#   ./scripts/download-models.sh       (downloads models/Bonsai-8B.gguf)
 #
 # Usage:
-#   ./run-llm-tests.sh                                    # all models in models/
-#   ./run-llm-tests.sh models/Bonsai-8B.gguf              # single model
-#   ./run-llm-tests.sh models/Bonsai-8B.gguf acid         # single model + filter
-#   ./run-llm-tests.sh "" darker                          # all models + filter
-#   ./run-llm-tests.sh --verbose                          # full JSON, no truncation
+#   ./scripts/run-llm-tests.sh                                    # all models, all suites
+#   ./scripts/run-llm-tests.sh models/Bonsai-8B.gguf              # single model
+#   ./scripts/run-llm-tests.sh models/Bonsai-8B.gguf acid         # single model + filter
+#   ./scripts/run-llm-tests.sh "" darker                          # all models + filter
+#   ./scripts/run-llm-tests.sh --verbose                          # full JSON, no truncation
+#   ./scripts/run-llm-style.sh                                    # style suite only
+#   ./scripts/run-llm-theory.sh                                   # theory suite only
 # ──────────────────────────────────────────────────────────────────────────────
 set -euo pipefail
-cd "$(dirname "$0")"
+cd "$(dirname "$0")/.."
+
+# ── Suite selection ───────────────────────────────────────────────────────────
+# LLM_SUITE env selects which test module to run (prefix-matched by cargo test):
+#   llm_suite          → all three suites (llm_suite + llm_suite_style + llm_suite_theory)
+#   llm_suite_style    → artist/genre reference tests only
+#   llm_suite_theory   → music theory + producer lingo tests only
+SUITE="${LLM_SUITE:-llm_suite}"
 
 # ── Args ──────────────────────────────────────────────────────────────────────
 MODEL_ARG="${1:-}"   # specific model path, "" = all, or a flag
@@ -76,7 +85,7 @@ server_label() {
 }
 
 echo "══════════════════════════════════════════"
-echo "  LLM integration suite"
+echo "  LLM integration suite  [suite: ${SUITE}]"
 echo "  models to test: ${#MODELS[@]}"
 echo "══════════════════════════════════════════"
 printf "  %-40s  %-8s  %s\n" "Model" "Size" "Server"
@@ -184,10 +193,10 @@ for MODEL in "${MODELS[@]}"; do
     || echo "   (no GPU lines)"
   echo ""
 
-  # Run only llm_suite tests (unit tests already passed at compile time)
-  echo "→ Running llm_suite tests…"
+  # Run test suite (unit tests already passed at compile time)
+  echo "→ Running ${SUITE} tests…"
   echo ""
-  if cargo test --features llm-tests -- llm_suite --nocapture --test-threads 1 \
+  if cargo test --features llm-tests -- "$SUITE" --nocapture --test-threads 1 \
        ${FILTER:+$FILTER} 2>&1; then
     SUMMARY_LINES+=("  ✓ PASS  $MODEL_NAME")
   else

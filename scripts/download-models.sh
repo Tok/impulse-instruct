@@ -14,7 +14,7 @@
 #   Then log in: huggingface-cli login
 # ──────────────────────────────────────────────────────────────────────────────
 set -euo pipefail
-cd "$(dirname "$0")"
+cd "$(dirname "$0")/.."
 
 MODEL_DIR="models"
 mkdir -p "$MODEL_DIR"

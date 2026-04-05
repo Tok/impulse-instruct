@@ -9,10 +9,13 @@ cargo run                            # run (mock LLM, no model needed)
 cargo run -- --api                   # enable HTTP API on :8765
 cargo run -- --api --model models/x.gguf --log debug
 cargo run --features llm --release   # real LLM inference (needs libclang-dev)
-cargo test                           # 75 unit tests (split across src/tests/)
-./run-tests.sh --coverage            # HTML coverage report
-./build-all.sh                       # Linux + Windows EXE → dist/
-./download-models.sh                 # fetch Bonsai 8B GGUF (~1.1 GB 1-bit model, needs HF account)
+cargo test                           # unit tests (split across src/tests/)
+./scripts/run-tests.sh --coverage    # HTML coverage report
+./scripts/build-all.sh               # Linux + Windows EXE → dist/
+./scripts/download-models.sh         # fetch Bonsai 8B GGUF (~1.1 GB 1-bit model, needs HF account)
+./scripts/run-llm-tests.sh           # all LLM integration suites (needs running model)
+./scripts/run-llm-style.sh           # artist/genre reference tests only
+./scripts/run-llm-theory.sh          # music theory + producer lingo tests only
 ```
 
 ## Architecture — what lives where

@@ -19,7 +19,7 @@
 #            rustup component add llvm-tools-preview
 # ──────────────────────────────────────────────────────────────────────────────
 set -euo pipefail
-cd "$(dirname "$0")"
+cd "$(dirname "$0")/.."
 
 COVERAGE=false
 WATCH=false
