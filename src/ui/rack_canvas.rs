@@ -97,10 +97,25 @@ fn draw_cable(
         Stroke::new(1.0, Color32::from_white_alpha(110)),
     ));
 
-    // ── Signal flow dots — 3 evenly spaced, travel from→to at ~0.65 Hz ─────────
+    // ── Signal flow dots — speed and spacing normalised to cable arc length ──────
+    // Arc length from the already-sampled points (free, no extra Bezier evals).
     if animate_flow {
-        for i in 0u8..3 {
-            let t_dot = (time * 0.65 + phase_offset * 0.3 + i as f32 / 3.0) % 1.0;
+        let arc_len: f32 = points
+            .windows(2)
+            .map(|w| w[0].distance(w[1]))
+            .sum::<f32>()
+            .max(1.0);
+
+        // Target: ~170 px/s travel speed regardless of cable length.
+        // Clamp so very short or very long cables stay in a sensible range.
+        let speed = (170.0 / arc_len).clamp(0.25, 2.5);
+
+        // Dot spacing: one dot per ~130 px of cable; min 2, max 5.
+        let num_dots = ((arc_len / 130.0).round() as u8).clamp(2, 5);
+        let spacing = 1.0 / num_dots as f32;
+
+        for i in 0..num_dots {
+            let t_dot = (time * speed + phase_offset * 0.3 + i as f32 * spacing) % 1.0;
             let dot = bezier(from, cp1, cp2, to, t_dot);
             painter.circle_filled(dot, 5.0, Color32::from_white_alpha(35));
             painter.circle_filled(dot, 2.5, Color32::from_gray(240));
