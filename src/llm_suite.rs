@@ -69,9 +69,9 @@ fn setup() -> Option<(LlamaServerBackend, String)> {
 
     if !backend.is_live() {
         eprintln!(
-            "\n[llm-suite] SKIP — Bonsai server not available \
+            "\n[llm-suite] SKIP — LLM server not available \
              (model: '{}')\n\
-             Run ./run-llm-tests.sh, or set LLAMA_SERVER_URL to a running instance.\n",
+             Run ./scripts/run-llm-tests.sh, or set LLAMA_SERVER_URL to a running instance.\n",
             state.llm.model_path
         );
         return None;

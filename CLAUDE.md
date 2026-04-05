@@ -179,7 +179,6 @@ Models (ranked by test suite results):
 - **Gemma 4 E4B Q4_K_M** — default, 4.6 GB, best accuracy, passes all 39 integration tests
 - **Bonsai 8B Q1_0_g128** — 1.1 GB fallback, no chain-of-thought, requires PrismML llama-server fork
 - **Qwen3-8B / 14B** — optional, chain-of-thought capable, slower but no accuracy advantage
-- ~~Llama 3.1 8B~~ — removed, OOM crash under load
 
 Server selection: Bonsai uses `.llama-build/bin/llama-server` (PrismML fork, Q1_0_g128 format).
 All other models use `.llama-official-build/bin/llama-server` (standard llama.cpp).

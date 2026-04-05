@@ -1,14 +1,19 @@
 @echo off
+setlocal enabledelayedexpansion
 rem ─── scripts\run-llm-tests.bat ───────────────────────────────────────────────
 rem Run the LLM integration suite against one or all models.
 rem
-rem Server binary selection (mirrors what the app does on model switch):
+rem Default model set: Gemma 4 E4B + Bonsai 8B (the evaluated defaults).
+rem Qwen and other models skipped by default. Models with "llama" in filename excluded.
+rem
+rem Server binary selection:
 rem   Bonsai / *bonsai* -> .llama-build\bin\llama-server.exe          (PrismML fork)
 rem   All other models  -> .llama-official-build\bin\llama-server.exe  (official)
 rem   fallback          -> llama-server from PATH
 rem
 rem Usage:
-rem   scripts\run-llm-tests.bat                                # all models, all suites
+rem   scripts\run-llm-tests.bat                                # Gemma + Bonsai, all suites
+rem   scripts\run-llm-tests.bat --all-models                   # all *.gguf in models\
 rem   scripts\run-llm-tests.bat models\Bonsai-8B.gguf          # single model
 rem   scripts\run-llm-tests.bat models\Bonsai-8B.gguf acid     # single model + filter
 rem   scripts\run-llm-style.bat                                # style suite only
@@ -18,23 +23,21 @@ cd /d "%~dp0.."
 
 if "%LLM_SUITE%"=="" set LLM_SUITE=llm_suite
 
-set MODEL_ARG=%~1
-set FILTER=%~2
+set MODEL_ARG=
+set FILTER=
+set ALL_MODELS=0
 
-rem ── Resolve model list ────────────────────────────────────────────────────────
-if "%MODEL_ARG%"=="" (
-    rem Scan models\ directory
-    set MODELS_FOUND=0
-    for %%f in (models\*.gguf) do set MODELS_FOUND=1
-    if "!MODELS_FOUND!"=="0" (
-        echo ERROR: no *.gguf files found in models\ -- run scripts\download-models.bat
-        exit /b 1
-    )
-) else (
-    rem Single model specified
-    if not exist "%MODEL_ARG%" (
-        echo ERROR: model file not found: %MODEL_ARG%
-        exit /b 1
+rem Parse args
+for %%a in (%*) do (
+    if "%%a"=="--all-models" (
+        set ALL_MODELS=1
+    ) else if "%%a"=="--verbose" (
+        set LLM_SUITE_VERBOSE=1
+        echo -^> Verbose mode: full JSON output (no truncation)
+    ) else if "!MODEL_ARG!"=="" (
+        set MODEL_ARG=%%a
+    ) else (
+        set FILTER=%%a
     )
 )
 
@@ -52,9 +55,38 @@ set OVERALL_EXIT=0
 
 rem ── Per-model loop ─────────────────────────────────────────────────────────────
 if not "%MODEL_ARG%"=="" (
+    rem Single explicit model path
+    if not exist "%MODEL_ARG%" (
+        echo ERROR: model file not found: %MODEL_ARG%
+        exit /b 1
+    )
     call :run_model "%MODEL_ARG%"
 ) else (
-    for %%f in (models\*.gguf) do call :run_model "%%f"
+    rem Scan models\ — filter by default unless --all-models
+    set MODELS_RAN=0
+    for %%f in (models\*.gguf) do (
+        set FNAME=%%~nxf
+        set SKIP=0
+
+        rem Always skip dropped models (llama)
+        echo !FNAME! | findstr /i "llama" >nul
+        if not errorlevel 1 set SKIP=1
+
+        rem Skip qwen unless --all-models
+        if "!ALL_MODELS!"=="0" (
+            echo !FNAME! | findstr /i "qwen" >nul
+            if not errorlevel 1 set SKIP=1
+        )
+
+        if "!SKIP!"=="0" (
+            set MODELS_RAN=1
+            call :run_model "%%f"
+        )
+    )
+    if "!MODELS_RAN!"=="0" (
+        echo ERROR: no default models found (gemma/bonsai). Use --all-models to include Qwen.
+        exit /b 1
+    )
 )
 
 exit /b %OVERALL_EXIT%
@@ -113,7 +145,7 @@ start /b "" "%SERVER_BIN%" --model "%MODEL_PATH%" --host 127.0.0.1 --port %PORT%
 rem Wait for server ready (up to 120s)
 echo -^> Waiting for server to be ready...
 set READY=0
-for /l %%i in (1,1,240) do (
+for /l %%i in (1,1,120) do (
     if "!READY!"=="0" (
         curl -sf "%LLAMA_SERVER_URL%/health" 2>nul | findstr /c:"\"ok\"" >nul 2>&1
         if not errorlevel 1 (

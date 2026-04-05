@@ -89,7 +89,7 @@ const LLAMA_PORT: u16 = 8766;
 ///   (.llama-build/bin/llama-server)
 /// - All other standard GGUF models: prefer the official build
 ///   (.llama-official-build/bin/llama-server) then fall back to PrismML fork
-///   (which handles Qwen3, Llama 3.1, etc.) then $PATH
+///   (which handles Qwen3, Gemma 4, etc.) then $PATH
 fn pick_server_binary(model_path: &str) -> Option<&'static str> {
     let is_bonsai = model_path.to_lowercase().contains("bonsai");
 
@@ -144,8 +144,8 @@ impl LlamaServerBackend {
 
         let Some(bin) = bin else {
             log::error!(
-                "llama-server binary not found — run ./build-bonsai-server.sh (Bonsai) \
-                 or ./build-llama-server.sh (all other models)."
+                "llama-server binary not found — run ./scripts/build-llama-server.sh \
+                 (or ./scripts/build-bonsai-server.sh for the 1-bit Bonsai fork)."
             );
             return Self {
                 child: None,
@@ -410,11 +410,10 @@ impl LlmBackend for LlamaServerBackend {
         let temperature = 0.1_f64 + (heat as f64).clamp(0.0, 1.0) * 1.1;
 
         // json_object mode keeps the server honest about emitting valid JSON.
-        // max_tokens: Bonsai often emits full-reset responses (all voices + FX + LFO) which
-        // exceed 1200 tokens and truncate mid-JSON, making them unparseable.  2400 gives
-        // headroom for the largest possible complete response.
+        // max_tokens: full-reset responses (all voices + FX + LFO) can exceed 1200 tokens
+        // and truncate mid-JSON.  2400 gives headroom for the largest possible response.
         let body = serde_json::json!({
-            "model": "bonsai",
+            "model": "local",
             "messages": [
                 { "role": "system",  "content": system },
                 { "role": "user",    "content": user   }
@@ -571,8 +570,8 @@ pub fn run_llm_loop(
         }
         log::error!(
             "LLM server unavailable and --mock not passed. \
-             Build the server: ./build-bonsai-server.sh \
-             Download a model: ./download-models.sh \
+             Build: ./scripts/build-llama-server.sh  \
+             Download: ./scripts/download-models.sh  \
              Then restart. Pass --mock to run without a model."
         );
         std::thread::sleep(std::time::Duration::from_secs(1));

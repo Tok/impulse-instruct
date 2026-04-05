@@ -6,9 +6,9 @@
 // model's training data — update styles.json to use a plain sonic description
 // instead of the artist name.
 //
-// Artist tiers for Bonsai 8B (likely trained on web text up to ~2023):
-//   ✅ Probably known: Aphex Twin, Autechre, Daft Punk, Kraftwerk, Tangerine Dream
-//   🟡 Possibly known: Phuture/DJ Pierre, Basic Channel, Venetian Snares, Plastikman
+// Artist reference tiers (roughly by training-data prevalence across models):
+//   ✅ Broadly known: Aphex Twin, Autechre, Daft Punk, Kraftwerk, Tangerine Dream
+//   🟡 Niche but common: Phuture/DJ Pierre, Basic Channel, Venetian Snares, Plastikman
 //   ❓ Uncertain: Neophyte, Drexciya, Mixmaster Morris, Gost, Enduser
 //
 // Run:   ./scripts/run-llm-style.sh
@@ -121,8 +121,8 @@ fn assert_gate(
 // ── Artist / cultural reference tests ────────────────────────────────────────
 
 /// Classic acid should set high resonance — the squelch IS the point.
-/// Phuture and DJ Pierre are foundational acid house; if Bonsai knows "acid house"
-/// at all it should know these names.
+/// Phuture and DJ Pierre are foundational acid house; any model that knows "acid house"
+/// should know these names.
 #[test]
 fn classic_acid_phuture_sets_high_resonance() {
     let Some((mut b, sys)) = setup() else { return };
@@ -159,7 +159,7 @@ fn classic_acid_phuture_stays_dry() {
 }
 
 /// Autechre = IDM, so kick should NOT be strict four-on-the-floor.
-/// This is one of the most famous IDM acts — if Bonsai knows any IDM, it knows Autechre.
+/// One of the most famous IDM acts — any model with IDM knowledge should know Autechre.
 #[test]
 fn autechre_idm_breaks_four_on_the_floor() {
     let four_floor = serde_json::json!([
@@ -195,7 +195,7 @@ fn aphex_twin_ambient_uses_reverb() {
 }
 
 /// Basic Channel dub techno = FX-heavy (reverb + delay are the music).
-/// If Bonsai doesn't know Basic Channel, "dub techno" alone should still trigger FX.
+/// If the model doesn't know Basic Channel, "dub techno" alone should still trigger FX.
 #[test]
 fn basic_channel_dub_techno_uses_heavy_fx() {
     let Some((mut b, sys)) = setup() else { return };

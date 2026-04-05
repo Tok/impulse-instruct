@@ -302,7 +302,7 @@ impl ImpulseApp {
                             ui.label(egui::RichText::new("!").color(egui::Color32::from_rgb(255, 100, 60)).size(12.0).monospace().strong());
                             ui.vertical(|ui| {
                                 ui.label(egui::RichText::new("MOCK MODE").color(egui::Color32::from_rgb(255, 100, 60)).size(10.0).monospace().strong());
-                                ui.label(egui::RichText::new("no model  —  ./build-bonsai-server.sh + ./download-models.sh").color(egui::Color32::from_rgb(200, 80, 40)).size(8.0).monospace());
+                                ui.label(egui::RichText::new("no model  —  ./scripts/build-llama-server.sh + ./scripts/download-models.sh").color(egui::Color32::from_rgb(200, 80, 40)).size(8.0).monospace());
                             });
                         } else {
                             let inf_color = if inferring { theme::CHALK } else { theme::IRON };

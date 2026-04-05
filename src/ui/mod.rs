@@ -241,7 +241,7 @@ pub struct ImpulseApp {
     ui_volume: f32, // monitor-only gain; never written to state or export
     // Piano preferences
     piano_show_labels: bool,
-    // Last chain-of-thought from Bonsai (shown collapsible below the log)
+    // Last chain-of-thought from the LLM (shown collapsible below the log)
     last_thinking: Option<String>,
     show_thinking: bool,
     // Control layout preference — derived from AppState.ui_prefs each frame
