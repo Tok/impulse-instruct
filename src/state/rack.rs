@@ -518,6 +518,61 @@ pub struct FxPlan {
     pub voice_routes: HashMap<ModuleKind, Vec<FxStep>>,
 }
 
+// ─── LLM rack helpers ─────────────────────────────────────────────────────────
+
+/// Returns the `PortKind` emitted on a module's primary output.
+/// CV sources (LFO, Sequencer) use `Cv`; everything else uses `Audio`.
+/// The destination port kind always matches the source.
+pub(crate) fn rack_out_port_kind(kind: ModuleKind) -> PortKind {
+    match kind {
+        ModuleKind::LfoModule | ModuleKind::StepSequencer => PortKind::Cv,
+        _ => PortKind::Audio,
+    }
+}
+
+/// Match a module kind against a flexible name string from the LLM.
+pub(crate) fn rack_kind_name_matches(kind: ModuleKind, name: &str) -> bool {
+    let n = name.to_lowercase();
+    match kind {
+        ModuleKind::FxBitcrush => matches!(
+            n.as_str(),
+            "bitcrush" | "bit_crush" | "bit crush" | "lofi" | "lo-fi"
+        ),
+        ModuleKind::FxReverb => matches!(n.as_str(), "reverb" | "verb"),
+        ModuleKind::FxDelay => matches!(n.as_str(), "delay" | "echo"),
+        ModuleKind::FxChorus => matches!(n.as_str(), "chorus" | "ensemble"),
+        ModuleKind::FxPhaser => matches!(n.as_str(), "phaser" | "phase"),
+        ModuleKind::FxRingMod => {
+            matches!(n.as_str(), "ringmod" | "ring_mod" | "ring mod" | "ring")
+        }
+        ModuleKind::FxWaveshaper => {
+            matches!(n.as_str(), "waveshaper" | "wave_shaper" | "shaper")
+        }
+        ModuleKind::FxEq => matches!(n.as_str(), "eq" | "equalizer" | "equaliser"),
+        ModuleKind::FxCompressor => matches!(n.as_str(), "compressor" | "comp"),
+        ModuleKind::FxTapeSat => matches!(
+            n.as_str(),
+            "tapesat" | "tape_sat" | "tape sat" | "tape" | "saturation"
+        ),
+        ModuleKind::FxDrive => matches!(n.as_str(), "drive" | "overdrive" | "distortion"),
+        ModuleKind::LfoModule => matches!(n.as_str(), "lfo"),
+        ModuleKind::AcidBass => matches!(n.as_str(), "bass" | "acid" | "303"),
+        ModuleKind::DrumKit808 => matches!(n.as_str(), "808" | "kit_a" | "drum_a" | "drums_a"),
+        ModuleKind::DrumKit909 => matches!(n.as_str(), "909" | "kit_b" | "drum_b" | "drums_b"),
+        ModuleKind::HooverLead => matches!(n.as_str(), "hoover" | "lead"),
+        ModuleKind::An1xVoice => matches!(n.as_str(), "an1x" | "an-1x" | "pad" | "synth"),
+        ModuleKind::AmenSampler => matches!(n.as_str(), "amen" | "sampler" | "break"),
+        ModuleKind::NoiseVoice => matches!(n.as_str(), "noise"),
+        ModuleKind::EspeakNgTts | ModuleKind::CoquiTts => {
+            matches!(n.as_str(), "espeak" | "coqui" | "tts" | "mc" | "voice")
+        }
+        ModuleKind::MasterOutput => {
+            matches!(n.as_str(), "master" | "master_out" | "out" | "output")
+        }
+        ModuleKind::StepSequencer => matches!(n.as_str(), "sequencer" | "seq"),
+    }
+}
+
 fn kind_to_fx_step(kind: ModuleKind) -> Option<FxStep> {
     match kind {
         ModuleKind::FxWaveshaper => Some(FxStep::Waveshaper),

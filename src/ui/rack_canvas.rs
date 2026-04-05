@@ -97,14 +97,14 @@ fn draw_cable(
         Stroke::new(1.0, Color32::from_white_alpha(110)),
     ));
 
-    // ── Signal flow dot — travels from→to at ~0.45 Hz ────────────────────────
+    // ── Signal flow dots — 3 evenly spaced, travel from→to at ~0.65 Hz ─────────
     if animate_flow {
-        let t_dot = (time * 0.45 + phase_offset * 0.3) % 1.0;
-        let dot = bezier(from, cp1, cp2, to, t_dot);
-        // Outer glow
-        painter.circle_filled(dot, 5.0, Color32::from_white_alpha(40));
-        // Core bright dot
-        painter.circle_filled(dot, 2.5, Color32::from_gray(240));
+        for i in 0u8..3 {
+            let t_dot = (time * 0.65 + phase_offset * 0.3 + i as f32 / 3.0) % 1.0;
+            let dot = bezier(from, cp1, cp2, to, t_dot);
+            painter.circle_filled(dot, 5.0, Color32::from_white_alpha(35));
+            painter.circle_filled(dot, 2.5, Color32::from_gray(240));
+        }
     }
 }
 

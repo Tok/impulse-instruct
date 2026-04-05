@@ -4,7 +4,7 @@
 use super::llm_helpers::{
     apply_an1x_update, apply_bass_update, apply_fx_update, apply_hoover_update, unlocked_f32,
 };
-use super::rack::{ModuleKind, PortDir, PortKind, PortRef};
+use super::rack::{PortDir, PortRef};
 use super::{
     AppState, DrumVoice, FilterMode, LfoTarget, LfoWaveform, MAX_STEPS, Scale, Waveform,
     snap_to_scale,
@@ -710,19 +710,19 @@ pub fn apply_llm_update(state: AppState, update: &serde_json::Value) -> AppState
                 let from_name = v.get("from").and_then(|v| v.as_str());
                 let to_name = v.get("to").and_then(|v| v.as_str());
                 if let (Some(fn_), Some(tn)) = (from_name, to_name) {
-                    let from_id = s
+                    let from_mod = s
                         .rack
                         .modules
                         .iter()
                         .find(|m| rack_kind_name_matches(m.kind, fn_))
-                        .map(|m| m.id);
-                    let to_id = s
+                        .map(|m| (m.id, m.kind));
+                    let to_mod = s
                         .rack
                         .modules
                         .iter()
                         .find(|m| rack_kind_name_matches(m.kind, tn))
-                        .map(|m| m.id);
-                    if let (Some(fid), Some(tid)) = (from_id, to_id) {
+                        .map(|m| (m.id, m.kind));
+                    if let (Some((fid, fkind)), Some((tid, _tkind))) = (from_mod, to_mod) {
                         // Don't duplicate an existing cable
                         let exists = s
                             .rack
@@ -730,17 +730,18 @@ pub fn apply_llm_update(state: AppState, update: &serde_json::Value) -> AppState
                             .iter()
                             .any(|c| c.from.module_id == fid && c.to.module_id == tid);
                         if !exists {
+                            let port_kind = rack_out_port_kind(fkind);
                             s.rack.connect(
                                 PortRef {
                                     module_id: fid,
                                     dir: PortDir::Out,
-                                    kind: PortKind::Audio,
+                                    kind: port_kind,
                                     index: 0,
                                 },
                                 PortRef {
                                     module_id: tid,
                                     dir: PortDir::In,
-                                    kind: PortKind::Audio,
+                                    kind: port_kind,
                                     index: 0,
                                 },
                             );
@@ -754,29 +755,30 @@ pub fn apply_llm_update(state: AppState, update: &serde_json::Value) -> AppState
                 let from_name = v.get("from").and_then(|v| v.as_str());
                 let to_name = v.get("to").and_then(|v| v.as_str());
                 if let (Some(fn_), Some(tn)) = (from_name, to_name) {
-                    let from_id = s
+                    let from_mod = s
                         .rack
                         .modules
                         .iter()
                         .find(|m| rack_kind_name_matches(m.kind, fn_))
-                        .map(|m| m.id);
+                        .map(|m| (m.id, m.kind));
                     let to_id = s
                         .rack
                         .modules
                         .iter()
                         .find(|m| rack_kind_name_matches(m.kind, tn))
                         .map(|m| m.id);
-                    if let (Some(fid), Some(tid)) = (from_id, to_id) {
+                    if let (Some((fid, fkind)), Some(tid)) = (from_mod, to_id) {
+                        let port_kind = rack_out_port_kind(fkind);
                         let from_ref = PortRef {
                             module_id: fid,
                             dir: PortDir::Out,
-                            kind: PortKind::Audio,
+                            kind: port_kind,
                             index: 0,
                         };
                         let to_ref = PortRef {
                             module_id: tid,
                             dir: PortDir::In,
-                            kind: PortKind::Audio,
+                            kind: port_kind,
                             index: 0,
                         };
                         s.rack.disconnect(&from_ref, &to_ref);
@@ -789,44 +791,7 @@ pub fn apply_llm_update(state: AppState, update: &serde_json::Value) -> AppState
     s
 }
 
-/// Match a module kind against a flexible name string from the LLM.
-fn rack_kind_name_matches(kind: ModuleKind, name: &str) -> bool {
-    let n = name.to_lowercase();
-    match kind {
-        ModuleKind::FxBitcrush => matches!(
-            n.as_str(),
-            "bitcrush" | "bit_crush" | "bit crush" | "lofi" | "lo-fi"
-        ),
-        ModuleKind::FxReverb => matches!(n.as_str(), "reverb" | "verb"),
-        ModuleKind::FxDelay => matches!(n.as_str(), "delay" | "echo"),
-        ModuleKind::FxChorus => matches!(n.as_str(), "chorus" | "ensemble"),
-        ModuleKind::FxPhaser => matches!(n.as_str(), "phaser" | "phase"),
-        ModuleKind::FxRingMod => matches!(n.as_str(), "ringmod" | "ring_mod" | "ring mod" | "ring"),
-        ModuleKind::FxWaveshaper => matches!(n.as_str(), "waveshaper" | "wave_shaper" | "shaper"),
-        ModuleKind::FxEq => matches!(n.as_str(), "eq" | "equalizer" | "equaliser"),
-        ModuleKind::FxCompressor => matches!(n.as_str(), "compressor" | "comp"),
-        ModuleKind::FxTapeSat => matches!(
-            n.as_str(),
-            "tapesat" | "tape_sat" | "tape sat" | "tape" | "saturation"
-        ),
-        ModuleKind::FxDrive => matches!(n.as_str(), "drive" | "overdrive" | "distortion"),
-        ModuleKind::LfoModule => matches!(n.as_str(), "lfo"),
-        ModuleKind::AcidBass => matches!(n.as_str(), "bass" | "acid" | "303"),
-        ModuleKind::DrumKit808 => matches!(n.as_str(), "808" | "kit_a" | "drum_a" | "drums_a"),
-        ModuleKind::DrumKit909 => matches!(n.as_str(), "909" | "kit_b" | "drum_b" | "drums_b"),
-        ModuleKind::HooverLead => matches!(n.as_str(), "hoover" | "lead"),
-        ModuleKind::An1xVoice => matches!(n.as_str(), "an1x" | "an-1x" | "pad" | "synth"),
-        ModuleKind::AmenSampler => matches!(n.as_str(), "amen" | "sampler" | "break"),
-        ModuleKind::NoiseVoice => matches!(n.as_str(), "noise"),
-        ModuleKind::EspeakNgTts | ModuleKind::CoquiTts => {
-            matches!(n.as_str(), "espeak" | "coqui" | "tts" | "mc" | "voice")
-        }
-        ModuleKind::MasterOutput => {
-            matches!(n.as_str(), "master" | "master_out" | "out" | "output")
-        }
-        ModuleKind::StepSequencer => matches!(n.as_str(), "sequencer" | "seq"),
-    }
-}
+use crate::state::rack::{rack_kind_name_matches, rack_out_port_kind};
 
 // ─── Step-array parser ────────────────────────────────────────────────────────
 
