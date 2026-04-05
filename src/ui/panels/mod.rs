@@ -11,6 +11,7 @@ pub mod piano;
 pub mod sequencer;
 pub mod sequencer_chain;
 pub(super) mod sequencer_drums;
+pub mod tts;
 
 pub use an1x::draw_an1x;
 pub use bass::draw_bass;
@@ -20,3 +21,4 @@ pub use hoover::draw_hoover;
 pub use lfo::{draw_lfo, draw_lfo_slot};
 pub use piano::draw_piano;
 pub use sequencer::draw_sequencer;
+pub use tts::draw_tts;
