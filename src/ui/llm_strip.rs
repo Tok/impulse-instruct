@@ -16,7 +16,7 @@ impl ImpulseApp {
     pub(super) fn draw_llm_strip(&mut self, ctx: &egui::Context) {
         TopBottomPanel::top("llm_strip")
             .frame(Frame::none().fill(theme::PIT).inner_margin(egui::Margin::symmetric(8.0, 4.0)))
-            .exact_height(82.0)
+            .exact_height(108.0)
             .show(ctx, |ui| {
                 ui.horizontal(|ui| {
                     // ── LEFT column: controls ─────────────────────────────────
@@ -170,26 +170,37 @@ impl ImpulseApp {
                             }
                         }
 
-                        // Prompt input + ASK button
+                        // Prompt input (multiline — Enter submits, Shift+Enter newline)
+                        // + ASK button aligned to the right of the text area.
                         ui.horizontal(|ui| {
                             let prompt_w = left_w - 46.0;
                             let response = ui.add(
-                                egui::TextEdit::singleline(&mut self.prompt_input)
+                                egui::TextEdit::multiline(&mut self.prompt_input)
                                     .hint_text("prompt the model…")
                                     .desired_width(prompt_w)
-                                    .font(egui::FontId::monospace(10.5)),
+                                    .desired_rows(2)
+                                    .font(egui::FontId::monospace(10.0)),
                             );
                             let submit = ui
                                 .add_sized(
-                                    [40.0, 20.0],
+                                    [40.0, 36.0],
                                     egui::Button::new(
                                         egui::RichText::new("ASK").monospace().size(10.0),
                                     ),
                                 )
                                 .clicked();
 
-                            let enter_pressed = response.lost_focus()
-                                && ctx.input(|i| i.key_pressed(egui::Key::Enter));
+                            // Enter (without Shift) submits; trim the trailing newline first.
+                            let enter_pressed = response.has_focus()
+                                && ctx.input(|i| {
+                                    i.key_pressed(egui::Key::Enter) && !i.modifiers.shift
+                                });
+                            if enter_pressed {
+                                // Strip the newline that Enter just inserted before submitting.
+                                if self.prompt_input.ends_with('\n') {
+                                    self.prompt_input.pop();
+                                }
+                            }
 
                             if submit || enter_pressed {
                                 let typed = self.prompt_input.trim().to_string();

@@ -24,53 +24,88 @@ use crate::ui::{ImpulseApp, module_card};
 // ─── Cable drawing ───────────────────────────────────────────────────────────
 
 /// Draw a single patch cable as a 3D bezier tube (two bezier passes).
-fn draw_cable(painter: &egui::Painter, from: Pos2, to: Pos2, color: Color32) {
-    // Gravity sag: proportional to horizontal span, clamped so short cables
-    // droop gently and very long cables don't go off-screen.
-    // When cable goes upward the sag still pulls down (catenary under gravity).
-    let dx = (to.x - from.x).abs();
-    let dy = to.y - from.y; // positive = going downward
-    // Base sag from horizontal span; add a fraction of upward travel so cables
-    // going up still form a relaxed arc rather than a taut line.
-    let sag = (dx * 0.28 + (-dy).max(0.0) * 0.18).clamp(20.0, 160.0);
-    let cp1 = from + Vec2::new(0.0, sag);
-    let cp2 = to + Vec2::new(0.0, sag);
+/// Evaluate a cubic bezier at parameter t ∈ [0,1].
+fn bezier(from: Pos2, cp1: Pos2, cp2: Pos2, to: Pos2, t: f32) -> Pos2 {
+    let mt = 1.0 - t;
+    Pos2::new(
+        mt * mt * mt * from.x
+            + 3.0 * mt * mt * t * cp1.x
+            + 3.0 * mt * t * t * cp2.x
+            + t * t * t * to.x,
+        mt * mt * mt * from.y
+            + 3.0 * mt * mt * t * cp1.y
+            + 3.0 * mt * t * t * cp2.y
+            + t * t * t * to.y,
+    )
+}
 
-    let points: Vec<Pos2> = (0..=32)
-        .map(|i| {
-            let t = i as f32 / 32.0;
-            let mt = 1.0 - t;
-            // Cubic bezier
-            Pos2::new(
-                mt * mt * mt * from.x
-                    + 3.0 * mt * mt * t * cp1.x
-                    + 3.0 * mt * t * t * cp2.x
-                    + t * t * t * to.x,
-                mt * mt * mt * from.y
-                    + 3.0 * mt * mt * t * cp1.y
-                    + 3.0 * mt * t * t * cp2.y
-                    + t * t * t * to.y,
-            )
-        })
+/// Draw a patch cable.
+/// `time`         — wall-clock seconds (for wobble + signal animation).
+/// `phase_offset` — per-cable phase so cables don't all sway together.
+/// `animate_flow` — when true, draw a traveling signal dot from→to.
+fn draw_cable(
+    painter: &egui::Painter,
+    from: Pos2,
+    to: Pos2,
+    time: f32,
+    phase_offset: f32,
+    animate_flow: bool,
+) {
+    // ── Gravity sag ───────────────────────────────────────────────────────────
+    let dx = (to.x - from.x).abs();
+    let dy = to.y - from.y;
+    let sag = (dx * 0.28 + (-dy).max(0.0) * 0.18).clamp(20.0, 160.0);
+
+    // ── Gentle wobble — each cable sways at its own phase ────────────────────
+    // Horizontal oscillation of the control points; keeps amplitude small so
+    // cables look alive but not distracting.
+    let wobble = ((time * 1.1 + phase_offset) * std::f32::consts::TAU).sin() * 2.5;
+    let cp1 = from + Vec2::new(wobble, sag);
+    let cp2 = to + Vec2::new(-wobble * 0.8, sag);
+
+    // ── Sample curve points (48 segments for smooth 3D tube) ─────────────────
+    let n = 48usize;
+    let points: Vec<Pos2> = (0..=n)
+        .map(|i| bezier(from, cp1, cp2, to, i as f32 / n as f32))
         .collect();
 
-    // Shadow pass (3px dark, offset down 1.5px)
-    let shadow: Vec<Pos2> = points.iter().map(|p| *p + Vec2::new(0.0, 1.5)).collect();
+    // ── 3D tube rendering — 4 passes ─────────────────────────────────────────
+    // 1. Wide dark drop shadow
+    let shadow: Vec<Pos2> = points.iter().map(|p| *p + Vec2::new(0.5, 2.5)).collect();
     painter.add(egui::Shape::line(
         shadow,
-        Stroke::new(3.5, Color32::from_black_alpha(120)),
+        Stroke::new(5.5, Color32::from_black_alpha(90)),
     ));
 
-    // Main colour pass (3px)
-    painter.add(egui::Shape::line(points.clone(), Stroke::new(3.0, color)));
-
-    // Specular highlight pass (1px white, offset up 1px — creates 3D tube illusion)
-    let highlight_color = Color32::from_white_alpha(80);
-    let highlight: Vec<Pos2> = points.iter().map(|p| *p + Vec2::new(0.0, -1.0)).collect();
+    // 2. Cable body — bright gray
+    let cable_col = Color32::from_gray(155);
     painter.add(egui::Shape::line(
-        highlight,
-        Stroke::new(1.0, highlight_color),
+        points.clone(),
+        Stroke::new(4.5, cable_col),
     ));
+
+    // 3. Core — slightly lighter, narrower (depth gradient)
+    painter.add(egui::Shape::line(
+        points.clone(),
+        Stroke::new(2.5, Color32::from_gray(185)),
+    ));
+
+    // 4. Specular highlight — thin bright line along the top edge
+    let hilight: Vec<Pos2> = points.iter().map(|p| *p + Vec2::new(0.0, -1.5)).collect();
+    painter.add(egui::Shape::line(
+        hilight,
+        Stroke::new(1.0, Color32::from_white_alpha(110)),
+    ));
+
+    // ── Signal flow dot — travels from→to at ~0.45 Hz ────────────────────────
+    if animate_flow {
+        let t_dot = (time * 0.45 + phase_offset * 0.3) % 1.0;
+        let dot = bezier(from, cp1, cp2, to, t_dot);
+        // Outer glow
+        painter.circle_filled(dot, 5.0, Color32::from_white_alpha(40));
+        // Core bright dot
+        painter.circle_filled(dot, 2.5, Color32::from_gray(240));
+    }
 }
 
 // ─── In-progress cable drag state ────────────────────────────────────────────
@@ -133,31 +168,35 @@ pub fn draw_rack(app: &mut ImpulseApp, ctx: &egui::Context, ui: &mut egui::Ui) {
 
     // ── Cable overlay (Tab to show/hide) ──────────────────────────────────────
     {
+        let time = ctx.input(|i| i.time) as f32;
         let painter = ctx.layer_painter(egui::LayerId::new(
             egui::Order::Foreground,
             egui::Id::new("cables"),
         ));
 
-        // In-progress drag cable is always drawn regardless of show_cables,
-        // so users get immediate feedback when starting a connection.
+        // In-progress drag: no flow dot, neutral phase.
         if let Some(ref drag) = app.cable_drag
             && let Some(pointer) = ctx.pointer_latest_pos()
         {
-            draw_cable(&painter, drag.from_screen, pointer, Color32::from_gray(200));
+            draw_cable(&painter, drag.from_screen, pointer, time, 0.0, false);
         }
 
         if app.show_cables {
             let cables = app.state.read().rack.cables.clone();
-            for cable in &cables {
+            for (ci, cable) in cables.iter().enumerate() {
                 let from_pos = ports
                     .iter()
                     .find(|p| p.port == cable.from)
                     .map(|p| p.center);
                 let to_pos = ports.iter().find(|p| p.port == cable.to).map(|p| p.center);
                 if let (Some(from), Some(to)) = (from_pos, to_pos) {
-                    draw_cable(&painter, from, to, cable.color.egui_color());
+                    // Spread phase offsets by golden ratio so cables wobble independently.
+                    let phase = ci as f32 * 2.399;
+                    draw_cable(&painter, from, to, time, phase, true);
                 }
             }
+            // Animate continuously while cables are visible.
+            ctx.request_repaint();
         }
     }
 
