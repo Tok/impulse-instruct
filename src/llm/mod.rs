@@ -879,8 +879,6 @@ pub fn run_llm_loop(
                         tts_amplitude,
                         voice_char,
                         randomise,
-                        rev_mix,
-                        bitcrush,
                         pitch_snap,
                         root_note,
                         tts_scale,
@@ -895,8 +893,6 @@ pub fn run_llm_loop(
                             s.llm.tts_amplitude,
                             s.llm.tts_voice_char.clone(),
                             s.llm.tts_randomise,
-                            s.llm.tts_reverb_mix,
-                            s.llm.tts_bitcrush,
                             s.llm.tts_pitch_snap,
                             s.sequencer.root_note,
                             s.sequencer.scale,
@@ -908,37 +904,19 @@ pub fn run_llm_loop(
                         use crate::state::TtsEngine;
                         let tts_text = output.mc_line.as_deref().unwrap_or(comment);
                         log::info!("[TTS] {}", tts_text);
+                        let tp = tts::TtsParams {
+                            pitch: tts_pitch,
+                            speed: tts_speed,
+                            amplitude: tts_amplitude,
+                            voice_char: &voice_char,
+                            randomise,
+                            pitch_snap,
+                            root_note,
+                            scale: tts_scale,
+                        };
                         match tts_engine {
-                            TtsEngine::CoquiTts => speak_coqui(
-                                tts_text,
-                                &mode,
-                                tts_pitch,
-                                tts_speed,
-                                tts_amplitude,
-                                &voice_char,
-                                randomise,
-                                rev_mix,
-                                bitcrush,
-                                pitch_snap,
-                                root_note,
-                                tts_scale,
-                                &tts_tx,
-                            ),
-                            TtsEngine::EspeakNg => speak_fx(
-                                tts_text,
-                                &mode,
-                                tts_pitch,
-                                tts_speed,
-                                tts_amplitude,
-                                &voice_char,
-                                randomise,
-                                rev_mix,
-                                bitcrush,
-                                pitch_snap,
-                                root_note,
-                                tts_scale,
-                                &tts_tx,
-                            ),
+                            TtsEngine::CoquiTts => speak_coqui(tts_text, &mode, &tp, &tts_tx),
+                            TtsEngine::EspeakNg => speak_fx(tts_text, &mode, &tp, &tts_tx),
                         }
                     }
                 }
@@ -980,4 +958,4 @@ pub fn run_llm_loop(
 }
 
 pub mod tts;
-pub use tts::{speak_coqui, speak_fx};
+pub use tts::{TtsParams, speak_coqui, speak_fx};

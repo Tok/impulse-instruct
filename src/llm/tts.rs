@@ -1,13 +1,26 @@
 // ─── llm/tts.rs ───────────────────────────────────────────────────────────────
 // TTS output via espeak-ng.
 //   speak()    — detached background process, no FX, lowest latency.
-//   speak_fx() — renders to WAV, applies reverb/bitcrush, feeds the audio ring buffer.
+//   speak_fx() — renders to WAV, applies pitch-snap, pushes raw samples to ring buffer.
+//                FX (reverb, bitcrush, etc.) are applied by the DSP via rack cables.
 
 use parking_lot::Mutex;
 use rtrb::Producer;
 use std::sync::Arc;
 
 use crate::state::{ConversationMode, McVoiceChar};
+
+/// Voice rendering parameters shared between espeak and coqui paths.
+pub struct TtsParams<'a> {
+    pub pitch: u8,     // 0 = mode default; 1–99 override
+    pub speed: u16,    // 0 = mode default; words/min override
+    pub amplitude: u8, // 0 = default (100); 1–200 override
+    pub voice_char: &'a McVoiceChar,
+    pub randomise: bool,  // ±10% pitch/speed jitter per utterance
+    pub pitch_snap: bool, // snap to nearest in-key note after rendering
+    pub root_note: u8,
+    pub scale: crate::state::Scale,
+}
 
 /// Speak `text` via espeak-ng in a detached background process.
 /// `pitch` 0–99, `speed` words/min (80–500), `amplitude` 0–200 (100=default).
@@ -90,30 +103,29 @@ pub fn speak(
         .spawn();
 }
 
-// ─── FX path: render → WAV → reverb/bitcrush → audio ring buffer ─────────────
+// ─── FX path: render → WAV → optional pitch-snap → audio ring buffer ──────────
 
-/// Like `speak()` but routes processed audio through the main audio ring buffer.
-/// When all FX are inactive this falls back to `speak()` (lower latency).
-/// `pitch_snap` shifts the rendered voice to the nearest note in `root_note`/`scale`.
-#[allow(clippy::too_many_arguments)]
+/// Like `speak()` but renders to a WAV, optionally pitch-snaps, and pushes raw
+/// samples to the audio ring buffer. FX (reverb, etc.) are applied downstream
+/// by the DSP via the EspeakNgTts rack voice route. Falls back to `speak()` when
+/// pitch-snap is off (lower latency, no temp-file round-trip).
 pub fn speak_fx(
     text: &str,
     mode: &ConversationMode,
-    pitch: u8,
-    speed: u16,
-    amplitude: u8,
-    voice_char: &McVoiceChar,
-    randomise: bool,
-    reverb_mix: f32,
-    bitcrush: f32,
-    pitch_snap: bool,
-    root_note: u8,
-    scale: crate::state::Scale,
+    p: &TtsParams<'_>,
     tts_tx: &Arc<Mutex<Producer<f32>>>,
 ) {
-    // Fall back to direct playback when no FX are active.
-    if reverb_mix <= 0.01 && bitcrush <= 0.01 && !pitch_snap {
-        speak(text, mode, pitch, speed, amplitude, voice_char, randomise);
+    // Fall back to direct playback when pitch-snap is off.
+    if !p.pitch_snap {
+        speak(
+            text,
+            mode,
+            p.pitch,
+            p.speed,
+            p.amplitude,
+            p.voice_char,
+            p.randomise,
+        );
         return;
     }
 
@@ -132,7 +144,7 @@ pub fn speak_fx(
         ConversationMode::Producer => (50, 120, "en+m5"),
         ConversationMode::Off => return,
     };
-    let voice = match voice_char {
+    let voice = match p.voice_char {
         McVoiceChar::Auto => mode_voice,
         McVoiceChar::JungleMc => "en+m3",
         McVoiceChar::RaveAnnouncer => "en+m2",
@@ -140,11 +152,11 @@ pub fn speak_fx(
         McVoiceChar::SmoothDj => "en+m4",
     };
 
-    let p = if pitch == 0 { default_pitch } else { pitch };
-    let s = if speed == 0 { default_speed } else { speed };
-    let a = if amplitude == 0 { 100u8 } else { amplitude };
+    let ep = if p.pitch == 0 { default_pitch } else { p.pitch };
+    let es = if p.speed == 0 { default_speed } else { p.speed };
+    let ea = if p.amplitude == 0 { 100u8 } else { p.amplitude };
 
-    let (p, s) = if randomise {
+    let (ep, es) = if p.randomise {
         let nanos = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap_or_default()
@@ -152,11 +164,11 @@ pub fn speak_fx(
         let r1 = ((nanos & 0xFFFF) as f32 / 0xFFFF as f32) * 2.0 - 1.0;
         let r2 = ((nanos >> 16) as f32 / 0xFFFF as f32) * 2.0 - 1.0;
         (
-            ((p as f32) * (1.0 + r1 * 0.10)).clamp(1.0, 99.0) as u8,
-            ((s as f32) * (1.0 + r2 * 0.10)).clamp(80.0, 500.0) as u16,
+            ((ep as f32) * (1.0 + r1 * 0.10)).clamp(1.0, 99.0) as u8,
+            ((es as f32) * (1.0 + r2 * 0.10)).clamp(80.0, 500.0) as u16,
         )
     } else {
-        (p, s)
+        (ep, es)
     };
 
     // Render to a temp WAV file.
@@ -169,11 +181,11 @@ pub fn speak_fx(
     let render_ok = std::process::Command::new("espeak-ng")
         .args([
             "-p",
-            &p.to_string(),
+            &ep.to_string(),
             "-s",
-            &s.to_string(),
+            &es.to_string(),
             "-a",
-            &a.to_string(),
+            &ea.to_string(),
             "-v",
             voice,
             "-w",
@@ -193,17 +205,15 @@ pub fn speak_fx(
     // Decode WAV and apply FX.
     if let Some(mut samples) = read_wav_f32(&tmp_path) {
         // Pitch-snap: shift voice to nearest in-key note (T-Pain / jungle MC effect).
-        if pitch_snap && let Some(hz) = detect_pitch_hz(&samples, 44100.0) {
+        if p.pitch_snap
+            && let Some(hz) = detect_pitch_hz(&samples, 44100.0)
+        {
             let detected_midi = (12.0 * (hz / 440.0).log2() + 69.0).round() as u8;
-            let snapped_midi = crate::state::snap_to_scale(detected_midi, root_note, scale);
+            let snapped_midi = crate::state::snap_to_scale(detected_midi, p.root_note, p.scale);
             let shift = snapped_midi as f32 - detected_midi as f32;
             samples = resample_pitch_shift(&samples, shift);
         }
-        tts_apply_reverb(&mut samples, reverb_mix);
-        if bitcrush > 0.01 {
-            tts_apply_bitcrush(&mut samples, bitcrush);
-        }
-        // Push to ring buffer — non-blocking; drops silently if buffer full.
+        // Push raw samples — FX applied by the DSP via EspeakNgTts rack voice route.
         let mut tx = tts_tx.lock();
         for s in &samples {
             let _ = tx.push(*s);
@@ -222,20 +232,10 @@ pub fn speak_fx(
 ///
 /// Coqui TTS CLI usage: `tts --text "…" --out_path /tmp/out.wav`
 /// Uses the default model that ships with Coqui TTS.
-#[allow(clippy::too_many_arguments)]
 pub fn speak_coqui(
     text: &str,
     mode: &ConversationMode,
-    pitch: u8,
-    speed: u16,
-    amplitude: u8,
-    voice_char: &McVoiceChar,
-    randomise: bool,
-    reverb_mix: f32,
-    bitcrush: f32,
-    pitch_snap: bool,
-    root_note: u8,
-    scale: crate::state::Scale,
+    p: &TtsParams<'_>,
     tts_tx: &Arc<Mutex<Producer<f32>>>,
 ) {
     let clean: String = text
@@ -253,7 +253,6 @@ pub fn speak_coqui(
         .subsec_nanos();
     let tmp_path = format!("/tmp/impulse_coqui_{}.wav", nanos);
 
-    // Attempt Coqui TTS synthesis.
     let coqui_ok = std::process::Command::new("tts")
         .args(["--text", &clean, "--out_path", &tmp_path])
         .stdin(std::process::Stdio::null())
@@ -264,27 +263,20 @@ pub fn speak_coqui(
         .unwrap_or(false);
 
     if !coqui_ok {
-        // Binary not found or synthesis failed — fall back to espeak-ng FX path.
         log::debug!("Coqui TTS unavailable — falling back to espeak-ng");
-        speak_fx(
-            text, mode, pitch, speed, amplitude, voice_char, randomise, reverb_mix, bitcrush,
-            pitch_snap, root_note, scale, tts_tx,
-        );
+        speak_fx(text, mode, p, tts_tx);
         let _ = std::fs::remove_file(&tmp_path);
         return;
     }
 
-    // Decode and apply FX (same pipeline as speak_fx).
     if let Some(mut samples) = read_wav_f32(&tmp_path) {
-        if pitch_snap && let Some(hz) = detect_pitch_hz(&samples, 44100.0) {
+        if p.pitch_snap
+            && let Some(hz) = detect_pitch_hz(&samples, 44100.0)
+        {
             let detected_midi = (12.0 * (hz / 440.0).log2() + 69.0).round() as u8;
-            let snapped_midi = crate::state::snap_to_scale(detected_midi, root_note, scale);
+            let snapped_midi = crate::state::snap_to_scale(detected_midi, p.root_note, p.scale);
             let shift = snapped_midi as f32 - detected_midi as f32;
             samples = resample_pitch_shift(&samples, shift);
-        }
-        tts_apply_reverb(&mut samples, reverb_mix);
-        if bitcrush > 0.01 {
-            tts_apply_bitcrush(&mut samples, bitcrush);
         }
         let mut tx = tts_tx.lock();
         for s in &samples {
@@ -366,41 +358,6 @@ fn read_wav_f32(path: &str) -> Option<Vec<f32>> {
     }
 
     Some(mono)
-}
-
-/// Simple multi-comb reverb for TTS hall effect.
-fn tts_apply_reverb(samples: &mut [f32], mix: f32) {
-    if mix <= 0.0 || samples.is_empty() {
-        return;
-    }
-    // Four comb filters in parallel (prime-length delay lines).
-    const LENS: [usize; 4] = [1116, 1356, 1557, 1617];
-    const FB: f32 = 0.72;
-    let mut combs: [Vec<f32>; 4] = LENS.map(|l| vec![0.0f32; l]);
-    let mut ptrs = [0usize; 4];
-
-    let dry = 1.0 - mix;
-    for s in samples.iter_mut() {
-        let input = *s;
-        let mut wet = 0.0f32;
-        for k in 0..4 {
-            let p = ptrs[k];
-            let delayed = combs[k][p];
-            combs[k][p] = input + delayed * FB;
-            ptrs[k] = (p + 1) % LENS[k];
-            wet += delayed;
-        }
-        *s = input * dry + (wet * 0.25) * mix;
-    }
-}
-
-/// Quantise samples to `bits` bits (maps bitcrush 0→1 to 16→4 bit depth).
-fn tts_apply_bitcrush(samples: &mut [f32], amount: f32) {
-    let bits = 16.0 - amount * 12.0; // 0→16 bit, 1→4 bit
-    let levels = 2.0_f32.powf(bits);
-    for s in samples.iter_mut() {
-        *s = (*s * levels).round() / levels;
-    }
 }
 
 /// Detect the dominant fundamental frequency (Hz) of `samples` at `sample_rate` Hz.

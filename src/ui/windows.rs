@@ -401,45 +401,7 @@ impl ImpulseApp {
                                     },
                                 );
                             });
-                            // FX: reverb and bitcrush
-                            ui.horizontal(|ui| {
-                                ui.label(
-                                    egui::RichText::new("Reverb mix")
-                                        .monospace()
-                                        .size(9.5)
-                                        .color(theme::FOG),
-                                );
-                                let mut v = self.state.read().llm.tts_reverb_mix;
-                                if ui
-                                    .add(
-                                        egui::Slider::new(&mut v, 0.0..=1.0)
-                                            .fixed_decimals(2)
-                                            .trailing_fill(true),
-                                    )
-                                    .changed()
-                                {
-                                    self.state.write().llm.tts_reverb_mix = v;
-                                }
-                            });
-                            ui.horizontal(|ui| {
-                                ui.label(
-                                    egui::RichText::new("Bitcrush  ")
-                                        .monospace()
-                                        .size(9.5)
-                                        .color(theme::FOG),
-                                );
-                                let mut v = self.state.read().llm.tts_bitcrush;
-                                if ui
-                                    .add(
-                                        egui::Slider::new(&mut v, 0.0..=1.0)
-                                            .fixed_decimals(2)
-                                            .trailing_fill(true),
-                                    )
-                                    .changed()
-                                {
-                                    self.state.write().llm.tts_bitcrush = v;
-                                }
-                            });
+                            // FX via rack cables (TTS → Reverb by default).
                             ui.horizontal(|ui| {
                                 ui.label(
                                     egui::RichText::new("Pitch snap")
