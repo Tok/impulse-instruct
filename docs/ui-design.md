@@ -166,3 +166,5 @@ Text colors:
 - **No colored text.** Even error states use `CHALK` or `GHOST` brightness, not red.
 - **No hover hue shift.** Hover states increase brightness only - `ASH → SMOKE`, `IRON → ASH`, etc.
 - **No note colors on non-note elements.** Don't reuse Huth colors for FX states, LFO indicators, or anything outside the pitch domain.
+- **No emojis.** Labels, tooltips, panel headers, and status messages use plain ASCII text only. The aesthetic is studio hardware, not a web app.
+- **No em dashes.** Use ` - ` (space-hyphen-space) instead of `—`. This applies to all user-visible strings and all documentation in this repo.
