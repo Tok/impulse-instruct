@@ -161,12 +161,12 @@ pub struct LlamaServerBackend {
 /// Kill any leftover llama-server processes from a previous run.
 /// Called before spawning a new instance so stale processes don't compete for
 /// GPU memory or hold the fixed port.
-fn kill_leaked_servers(bin_path: &str) {
+fn kill_leaked_servers(_bin_path: &str) {
     #[cfg(unix)]
     {
         // Match on the full binary path to avoid killing unrelated processes.
         let _ = std::process::Command::new("pkill")
-            .args(["-KILL", "-f", &format!("{} --model", bin_path)])
+            .args(["-KILL", "-f", &format!("{} --model", _bin_path)])
             .status();
         // Brief pause so the OS reclaims the port before we try to bind it.
         std::thread::sleep(std::time::Duration::from_millis(400));

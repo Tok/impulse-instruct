@@ -60,15 +60,31 @@ else
   # cc-rs (used by ring and other C deps) looks for llvm-lib and llvm-dlltool without
   # a version suffix. Ubuntu installs them as llvm-lib-18 etc. Create unversioned
   # symlinks in /usr/local/bin if they're missing so cc-rs can find them.
+  missing_symlinks=()
   for tool in llvm-lib llvm-dlltool llvm-ar; do
     if ! command -v "$tool" &>/dev/null; then
       versioned=$(ls /usr/bin/${tool}-* 2>/dev/null | sort -V | tail -1)
       if [[ -n "$versioned" ]]; then
-        echo "  Symlinking $versioned -> /usr/local/bin/$tool"
-        sudo ln -sf "$versioned" "/usr/local/bin/$tool"
+        if sudo ln -sf "$versioned" "/usr/local/bin/$tool" 2>/dev/null; then
+          echo "  Symlinking $versioned -> /usr/local/bin/$tool"
+        else
+          missing_symlinks+=("sudo ln -sf $versioned /usr/local/bin/$tool")
+        fi
       fi
     fi
   done
+  if [[ ${#missing_symlinks[@]} -gt 0 ]]; then
+    echo ""
+    echo "  ERROR: Windows build requires unversioned LLVM tool aliases."
+    echo "  Ubuntu installs them as llvm-lib-18 etc. but cc-rs expects plain names."
+    echo "  Run these once, then re-run build-all.sh:"
+    echo ""
+    for cmd in "${missing_symlinks[@]}"; do
+      echo "    $cmd"
+    done
+    echo ""
+    exit 1
+  fi
 
   cargo xwin build --release --target "$WIN_TARGET" $FEATURE_FLAGS
 

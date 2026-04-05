@@ -206,6 +206,21 @@ cargo install cargo-xwin
 # → dist/impulse-instruct-windows-x86_64.exe
 ```
 
+**Ubuntu LLVM symlink note:** Ubuntu installs LLVM tools with version suffixes
+(`llvm-lib-18`, `llvm-dlltool-18`, etc.) but does not create plain-name aliases.
+`cc-rs` (used by the `ring` crate) looks for `llvm-lib` without a suffix and will
+fail with `failed to find tool "llvm-lib"`. Create the aliases once:
+
+```bash
+sudo ln -sf /usr/bin/llvm-lib-18     /usr/local/bin/llvm-lib
+sudo ln -sf /usr/bin/llvm-dlltool-18 /usr/local/bin/llvm-dlltool
+sudo ln -sf /usr/bin/llvm-ar-18      /usr/local/bin/llvm-ar
+```
+
+`build-all.sh` attempts this automatically and prints the exact commands if it
+can't (e.g. no sudo in CI). Adjust the version suffix to match whatever
+`ls /usr/bin/llvm-lib-*` returns on your machine.
+
 ---
 
 ## Models
