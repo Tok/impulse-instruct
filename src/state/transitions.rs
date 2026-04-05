@@ -818,6 +818,9 @@ fn rack_kind_name_matches(kind: ModuleKind, name: &str) -> bool {
         ModuleKind::An1xVoice => matches!(n.as_str(), "an1x" | "an-1x" | "pad" | "synth"),
         ModuleKind::AmenSampler => matches!(n.as_str(), "amen" | "sampler" | "break"),
         ModuleKind::NoiseVoice => matches!(n.as_str(), "noise"),
+        ModuleKind::EspeakNgTts | ModuleKind::CoquiTts => {
+            matches!(n.as_str(), "espeak" | "coqui" | "tts" | "mc" | "voice")
+        }
         ModuleKind::MasterOutput => {
             matches!(n.as_str(), "master" | "master_out" | "out" | "output")
         }
@@ -829,13 +832,8 @@ fn rack_kind_name_matches(kind: ModuleKind, name: &str) -> bool {
 
 /// Apply a JSON step array to a mutable pattern slice.
 ///
-/// Accepts three compact formats from the LLM:
-///   `[]`           — clear: set every step to `false`
-///   `[0, 4, 8]`    — index list (< 16 elements): clear all, then activate listed indices
-///   `[1,0,1,0,…]`  — inline 0/1 or true/false (≥ 16 elements): write element-by-element
-///
-/// `set_active` is called once per step and must update `active` plus any default fields
-/// (e.g. initialise `velocity` on first activation).
+/// Accepts: `[]` clear, `[0,4,8]` index list (< 16), `[1,0,…]` inline 0/1 (≥ 16).
+/// `set_active` must update `active` plus any default fields.
 pub fn apply_llm_step_array<T, F>(
     arr: &[serde_json::Value],
     items: &mut [T],

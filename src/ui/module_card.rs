@@ -34,6 +34,7 @@ fn title_fill(kind: ModuleKind) -> Color32 {
         | ModuleKind::AmenSampler
         | ModuleKind::NoiseVoice => 24,
         ModuleKind::An1xVoice => 28,
+        ModuleKind::EspeakNgTts | ModuleKind::CoquiTts => 26,
         ModuleKind::FxReverb
         | ModuleKind::FxDelay
         | ModuleKind::FxChorus

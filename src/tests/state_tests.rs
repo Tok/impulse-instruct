@@ -527,13 +527,19 @@ mod fx_plan_tests {
     }
 
     #[test]
-    fn default_rack_has_no_voice_routes() {
-        // Default rack has Voice→Master cables only, no Voice→FX cables.
+    fn default_rack_tts_has_reverb_route() {
+        // Default rack wires EspeakNgTts → FxReverb, so TTS gets its own voice route.
         let rack = RackState::default();
         let plan = compile_fx_plan(&rack);
+        let tts_route = plan.voice_routes.get(&ModuleKind::EspeakNgTts);
         assert!(
-            plan.voice_routes.is_empty(),
-            "default rack: no explicit voice routes expected"
+            tts_route.is_some(),
+            "default rack: EspeakNgTts should have a voice route via reverb cable"
+        );
+        // Instrument voices (AcidBass etc.) have no explicit routes — global chain only.
+        assert!(
+            !plan.voice_routes.contains_key(&ModuleKind::AcidBass),
+            "default rack: AcidBass should not have an explicit voice route"
         );
     }
 

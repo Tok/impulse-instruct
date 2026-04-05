@@ -109,6 +109,9 @@ pub enum ModuleKind {
     An1xVoice,
     AmenSampler,
     NoiseVoice,
+    // ── TTS / MC voice modules ────────────────────────────────────────────────
+    EspeakNgTts,
+    CoquiTts,
     // ── Sequencer ─────────────────────────────────────────────────────────────
     /// Main step sequencer — drives all voice modules.
     StepSequencer,
@@ -141,6 +144,8 @@ impl ModuleKind {
             Self::An1xVoice => "AN1X",
             Self::AmenSampler => "AMEN",
             Self::NoiseVoice => "NOISE",
+            Self::EspeakNgTts => "TTS ESPEAK",
+            Self::CoquiTts => "TTS COQUI",
             Self::StepSequencer => "SEQUENCER",
             Self::FxReverb => "REVERB",
             Self::FxDelay => "DELAY",
@@ -168,7 +173,9 @@ impl ModuleKind {
             | Self::HooverLead
             | Self::An1xVoice
             | Self::AmenSampler
-            | Self::NoiseVoice => Zone::Voice,
+            | Self::NoiseVoice
+            | Self::EspeakNgTts
+            | Self::CoquiTts => Zone::Voice,
             Self::FxReverb
             | Self::FxDelay
             | Self::FxChorus
@@ -331,6 +338,7 @@ impl Default for RackState {
         rack.add_module(ModuleKind::HooverLead);
         rack.add_module(ModuleKind::An1xVoice);
         rack.add_module(ModuleKind::AmenSampler);
+        rack.add_module(ModuleKind::EspeakNgTts);
 
         // ── FX + Mod zone — order matches the fixed chain in process_block ───
         rack.add_module(ModuleKind::FxWaveshaper);
@@ -370,6 +378,10 @@ impl Default for RackState {
         .filter_map(|&k| find(k))
         .collect();
 
+        // TTS default cable: EspeakNgTts → FxReverb (bypasses master bus).
+        let tts_id = find(ModuleKind::EspeakNgTts);
+        let reverb_id = find(ModuleKind::FxReverb);
+
         // Serial FX chain (mirrors the hardcoded process_block order).
         let fx_chain: &[ModuleKind] = &[
             ModuleKind::FxWaveshaper,
@@ -386,6 +398,24 @@ impl Default for RackState {
         ];
         let fx_ids: Vec<u32> = fx_chain.iter().filter_map(|&k| find(k)).collect();
         let _ = find; // end closure borrow before mutable connect() calls
+
+        // TTS → FxReverb
+        if let (Some(tid), Some(rid)) = (tts_id, reverb_id) {
+            rack.connect(
+                PortRef {
+                    module_id: tid,
+                    dir: PortDir::Out,
+                    kind: PortKind::Audio,
+                    index: 0,
+                },
+                PortRef {
+                    module_id: rid,
+                    dir: PortDir::In,
+                    kind: PortKind::Audio,
+                    index: 0,
+                },
+            );
+        }
 
         // Voice → master bus
         if let Some(mid) = master_id {
@@ -462,9 +492,8 @@ pub struct FxPlan {
     /// Key = voice module kind (AcidBass, DrumKit808, DrumKit909, AmenSampler, …).
     /// Value = ordered FX steps reachable from that voice's explicit cables.
     ///
-    /// When non-empty for a voice, the DSP should route that bus through its own
-    /// chain instead of the global chain.  Currently informational — full DSP
-    /// wiring is a follow-up step.
+    /// When non-empty for a voice, the DSP routes that bus through its own
+    /// chain instead of the global chain.
     pub voice_routes: HashMap<ModuleKind, Vec<FxStep>>,
 }
 
@@ -570,6 +599,8 @@ pub fn compile_fx_plan(rack: &RackState) -> FxPlan {
         ModuleKind::An1xVoice,
         ModuleKind::AmenSampler,
         ModuleKind::NoiseVoice,
+        ModuleKind::EspeakNgTts,
+        ModuleKind::CoquiTts,
     ];
 
     // Map voice module id → kind for quick lookup.
