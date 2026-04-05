@@ -178,10 +178,12 @@ pub fn draw_rack(app: &mut ImpulseApp, ctx: &egui::Context, ui: &mut egui::Ui) {
     // ── Cable overlay (Tab to show/hide) ──────────────────────────────────────
     {
         let time = ctx.input(|i| i.time) as f32;
-        let painter = ctx.layer_painter(egui::LayerId::new(
+        let mut painter = ctx.layer_painter(egui::LayerId::new(
             egui::Order::Foreground,
             egui::Id::new("cables"),
         ));
+        // Clip cables to the rack canvas only — keeps header, footer, and piano on top.
+        painter.set_clip_rect(canvas_rect);
 
         // In-progress drag: no flow dot, neutral phase.
         if let Some(ref drag) = app.cable_drag
@@ -569,9 +571,11 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
                     {
                         m.enabled = !en;
                     }
+                    app.push_fx_plan();
                 }
                 if resp.remove_clicked {
                     app.state.write().rack.remove_module(*id);
+                    app.push_fx_plan();
                 }
                 let drop_pos = ctx_ref.pointer_latest_pos().unwrap_or_default();
                 if handle_title_drag(app, &ctx_ref, *id, &resp) {
@@ -647,9 +651,11 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
                     {
                         m.enabled = !en;
                     }
+                    app.push_fx_plan();
                 }
                 if resp.remove_clicked {
                     app.state.write().rack.remove_module(*id);
+                    app.push_fx_plan();
                 }
                 let drop_pos = ctx_ref.pointer_latest_pos().unwrap_or_default();
                 if handle_title_drag(app, &ctx_ref, *id, &resp) {

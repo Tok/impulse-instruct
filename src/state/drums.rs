@@ -14,6 +14,10 @@ pub struct KickParams {
     pub volume: f32,          // 0–1
     pub pitch_env_depth: f32, // 0–1 → 1×–10× pitch drop height
     pub pitch_env_time: f32,  // 0–1 → 10ms–200ms pitch drop decay
+    /// Hard-clip drive for gabber character.
+    /// 0 = clean, 1 = maximum hard clip (10× boost then clamp to ±1).
+    #[serde(default)]
+    pub clip: f32,
 }
 
 impl Default for KickParams {
@@ -26,6 +30,7 @@ impl Default for KickParams {
             volume: 0.65,
             pitch_env_depth: 0.5, // 5.5× → close to hardcoded 6×
             pitch_env_time: 0.2,  // 48ms → close to hardcoded 40ms
+            clip: 0.0,
         }
     }
 }
@@ -166,6 +171,7 @@ impl Default for DrumKit909 {
                 volume: 0.65,
                 pitch_env_depth: 0.5,
                 pitch_env_time: 0.2,
+                clip: 0.0,
             },
             snare: SnareParams {
                 tone: 0.55,

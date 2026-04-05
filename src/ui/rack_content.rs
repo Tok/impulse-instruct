@@ -328,6 +328,7 @@ pub(super) fn handle_cable_drag(
             (target.port.clone(), drag.from_port)
         };
         app.state.write().rack.connect(from, to);
+        app.push_fx_plan();
     }
 }
 

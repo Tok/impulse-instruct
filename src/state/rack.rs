@@ -9,6 +9,8 @@
 // still uses the existing fixed chain; cable state drives the visual routing
 // overlay and will be wired into `compile_fx_plan` in a follow-up.
 
+use std::collections::HashMap;
+
 use serde::{Deserialize, Serialize};
 
 // ─── Port types ───────────────────────────────────────────────────────────────
@@ -330,30 +332,32 @@ impl Default for RackState {
         rack.add_module(ModuleKind::An1xVoice);
         rack.add_module(ModuleKind::AmenSampler);
 
-        // ── FX + Mod zone ────────────────────────────────────────────────────
+        // ── FX + Mod zone — order matches the fixed chain in process_block ───
+        rack.add_module(ModuleKind::FxWaveshaper);
         rack.add_module(ModuleKind::FxReverb);
         rack.add_module(ModuleKind::FxDelay);
+        rack.add_module(ModuleKind::FxBitcrush);
         rack.add_module(ModuleKind::FxChorus);
         rack.add_module(ModuleKind::FxPhaser);
+        rack.add_module(ModuleKind::FxRingMod);
         rack.add_module(ModuleKind::FxEq);
         rack.add_module(ModuleKind::FxCompressor);
         rack.add_module(ModuleKind::FxTapeSat);
         rack.add_module(ModuleKind::FxDrive);
-        rack.add_module(ModuleKind::FxWaveshaper);
-        rack.add_module(ModuleKind::FxBitcrush);
-        rack.add_module(ModuleKind::FxRingMod);
         // Default 4 LFO slots.
         rack.add_module(ModuleKind::LfoModule);
         rack.add_module(ModuleKind::LfoModule);
         rack.add_module(ModuleKind::LfoModule);
         rack.add_module(ModuleKind::LfoModule);
 
-        // ── Default cables — every voice wired to master out ─────────────────
+        // ── Default cables ────────────────────────────────────────────────────
         // Collect IDs first (no borrow conflict with connect()).
         let find = |kind: ModuleKind| -> Option<u32> {
             rack.modules.iter().find(|m| m.kind == kind).map(|m| m.id)
         };
         let master_id = find(ModuleKind::MasterOutput);
+
+        // Voice → MasterOutput (voice mix bus).
         let voice_ids: Vec<u32> = [
             ModuleKind::AcidBass,
             ModuleKind::DrumKit808,
@@ -365,8 +369,25 @@ impl Default for RackState {
         .iter()
         .filter_map(|&k| find(k))
         .collect();
+
+        // Serial FX chain (mirrors the hardcoded process_block order).
+        let fx_chain: &[ModuleKind] = &[
+            ModuleKind::FxWaveshaper,
+            ModuleKind::FxReverb,
+            ModuleKind::FxDelay,
+            ModuleKind::FxBitcrush,
+            ModuleKind::FxChorus,
+            ModuleKind::FxPhaser,
+            ModuleKind::FxRingMod,
+            ModuleKind::FxEq,
+            ModuleKind::FxCompressor,
+            ModuleKind::FxTapeSat,
+            ModuleKind::FxDrive,
+        ];
+        let fx_ids: Vec<u32> = fx_chain.iter().filter_map(|&k| find(k)).collect();
         let _ = find; // end closure borrow before mutable connect() calls
 
+        // Voice → master bus
         if let Some(mid) = master_id {
             for vid in voice_ids {
                 rack.connect(
@@ -386,6 +407,144 @@ impl Default for RackState {
             }
         }
 
+        // FX serial chain: each FX out → next FX in
+        for pair in fx_ids.windows(2) {
+            rack.connect(
+                PortRef {
+                    module_id: pair[0],
+                    dir: PortDir::Out,
+                    kind: PortKind::Audio,
+                    index: 0,
+                },
+                PortRef {
+                    module_id: pair[1],
+                    dir: PortDir::In,
+                    kind: PortKind::Audio,
+                    index: 0,
+                },
+            );
+        }
+
         rack
     }
+}
+
+// ─── FX routing plan ──────────────────────────────────────────────────────────
+
+/// One processing step in the compiled FX routing plan.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum FxStep {
+    Waveshaper,
+    Reverb,
+    Delay,
+    Bitcrush,
+    Chorus,
+    Phaser,
+    RingMod,
+    Eq,
+    Compressor,
+    TapeSat,
+    Drive,
+}
+
+/// Compiled FX processing order derived from the rack cable graph.
+///
+/// Computed outside the audio thread and sent via `AudioCommand::SetFxPlan`
+/// whenever the rack topology changes.  The audio thread stores this in
+/// `DspState` and iterates it in `process_block()`.
+#[derive(Clone, Debug, Default)]
+pub struct FxPlan {
+    /// Ordered list of FX steps to apply to the mixed dry signal.
+    pub steps: Vec<FxStep>,
+}
+
+fn kind_to_fx_step(kind: ModuleKind) -> Option<FxStep> {
+    match kind {
+        ModuleKind::FxWaveshaper => Some(FxStep::Waveshaper),
+        ModuleKind::FxReverb => Some(FxStep::Reverb),
+        ModuleKind::FxDelay => Some(FxStep::Delay),
+        ModuleKind::FxBitcrush => Some(FxStep::Bitcrush),
+        ModuleKind::FxChorus => Some(FxStep::Chorus),
+        ModuleKind::FxPhaser => Some(FxStep::Phaser),
+        ModuleKind::FxRingMod => Some(FxStep::RingMod),
+        ModuleKind::FxEq => Some(FxStep::Eq),
+        ModuleKind::FxCompressor => Some(FxStep::Compressor),
+        ModuleKind::FxTapeSat => Some(FxStep::TapeSat),
+        ModuleKind::FxDrive => Some(FxStep::Drive),
+        _ => None,
+    }
+}
+
+/// Build an `FxPlan` from the rack cable graph using a topological sort
+/// (Kahn's algorithm) over FX-to-FX audio cable connections.
+///
+/// Only enabled FX modules that are connected to at least one other FX
+/// module (or are solo in the graph) are included.  Modules with no
+/// FX-to-FX cables are excluded so the plan is empty when nothing is patched.
+pub fn compile_fx_plan(rack: &RackState) -> FxPlan {
+    // Collect enabled FX module id → kind.
+    let fx_map: HashMap<u32, ModuleKind> = rack
+        .modules
+        .iter()
+        .filter(|m| m.enabled && kind_to_fx_step(m.kind).is_some())
+        .map(|m| (m.id, m.kind))
+        .collect();
+
+    if fx_map.is_empty() {
+        return FxPlan::default();
+    }
+
+    // Build adjacency and in-degree over FX→FX audio cables only.
+    let mut adj: HashMap<u32, Vec<u32>> = HashMap::new();
+    let mut in_degree: HashMap<u32, usize> = fx_map.keys().map(|&id| (id, 0)).collect();
+
+    for cable in &rack.cables {
+        if cable.from.kind != PortKind::Audio {
+            continue;
+        }
+        let from_fx = fx_map.contains_key(&cable.from.module_id);
+        let to_fx = fx_map.contains_key(&cable.to.module_id);
+        if from_fx && to_fx {
+            adj.entry(cable.from.module_id)
+                .or_default()
+                .push(cable.to.module_id);
+            *in_degree.entry(cable.to.module_id).or_insert(0) += 1;
+        }
+    }
+
+    // Kahn's topological sort — stable ordering via sorted initial queue.
+    let mut queue: Vec<u32> = {
+        let mut q: Vec<u32> = in_degree
+            .iter()
+            .filter(|(_, deg)| **deg == 0)
+            .map(|(id, _)| *id)
+            .collect();
+        q.sort_unstable();
+        q
+    };
+
+    let mut ordered: Vec<FxStep> = Vec::with_capacity(fx_map.len());
+    while !queue.is_empty() {
+        let id = queue.remove(0);
+        if let Some(&kind) = fx_map.get(&id)
+            && let Some(step) = kind_to_fx_step(kind)
+        {
+            ordered.push(step);
+        }
+        if let Some(neighbors) = adj.get(&id) {
+            let mut next_ready: Vec<u32> = Vec::new();
+            for &nid in neighbors {
+                if let Some(deg) = in_degree.get_mut(&nid) {
+                    *deg -= 1;
+                    if *deg == 0 {
+                        next_ready.push(nid);
+                    }
+                }
+            }
+            next_ready.sort_unstable();
+            queue.extend(next_ready);
+        }
+    }
+
+    FxPlan { steps: ordered }
 }

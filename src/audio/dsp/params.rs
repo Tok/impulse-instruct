@@ -45,6 +45,7 @@ pub struct AudioParams {
     pub kick808_volume: f32,
     pub kick808_pitch_env_depth: f32,
     pub kick808_pitch_env_time: f32,
+    pub kick808_clip: f32,
     // 808 snare
     pub snare808_tone: f32,
     pub snare808_snappy: f32,
@@ -61,6 +62,7 @@ pub struct AudioParams {
     pub kick909_volume: f32,
     pub kick909_pitch_env_depth: f32,
     pub kick909_pitch_env_time: f32,
+    pub kick909_clip: f32,
     // 909 snare
     pub snare909_tone: f32,
     pub snare909_snappy: f32,
@@ -216,6 +218,7 @@ impl AudioParams {
             kick808_volume: s.kit_a.kick.volume,
             kick808_pitch_env_depth: s.kit_a.kick.pitch_env_depth,
             kick808_pitch_env_time: s.kit_a.kick.pitch_env_time,
+            kick808_clip: s.kit_a.kick.clip,
             snare808_tone: s.kit_a.snare.tone,
             snare808_snappy: s.kit_a.snare.snappy,
             snare808_decay: s.kit_a.snare.decay,
@@ -229,6 +232,7 @@ impl AudioParams {
             kick909_volume: s.kit_b.kick.volume,
             kick909_pitch_env_depth: s.kit_b.kick.pitch_env_depth,
             kick909_pitch_env_time: s.kit_b.kick.pitch_env_time,
+            kick909_clip: s.kit_b.kick.clip,
             snare909_tone: s.kit_b.snare.tone,
             snare909_snappy: s.kit_b.snare.snappy,
             snare909_decay: s.kit_b.snare.decay,

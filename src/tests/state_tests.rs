@@ -438,3 +438,91 @@ mod bank_chain_tests {
         assert_eq!(state.chain_pos, 0, "disabling chain should reset position");
     }
 }
+
+// ─── compile_fx_plan tests ───────────────────────────────────────────────────
+
+#[cfg(test)]
+mod fx_plan_tests {
+    use crate::state::{
+        FxStep, ModuleKind, PortDir, PortKind, PortRef, RackState, compile_fx_plan,
+    };
+
+    #[test]
+    fn default_rack_compiles_full_chain_in_order() {
+        let rack = RackState::default();
+        let plan = compile_fx_plan(&rack);
+        // Default rack wires FX serially: Waveshaper→Reverb→Delay→Bitcrush→
+        // Chorus→Phaser→RingMod→Eq→Compressor→TapeSat→Drive
+        assert_eq!(plan.steps.len(), 11);
+        assert_eq!(plan.steps[0], FxStep::Waveshaper);
+        assert_eq!(plan.steps[1], FxStep::Reverb);
+        assert_eq!(plan.steps[2], FxStep::Delay);
+        assert_eq!(plan.steps[3], FxStep::Bitcrush);
+        assert_eq!(plan.steps[4], FxStep::Chorus);
+        assert_eq!(plan.steps[5], FxStep::Phaser);
+        assert_eq!(plan.steps[6], FxStep::RingMod);
+        assert_eq!(plan.steps[7], FxStep::Eq);
+        assert_eq!(plan.steps[8], FxStep::Compressor);
+        assert_eq!(plan.steps[9], FxStep::TapeSat);
+        assert_eq!(plan.steps[10], FxStep::Drive);
+    }
+
+    #[test]
+    fn empty_rack_returns_empty_plan() {
+        let rack = RackState {
+            modules: Vec::new(),
+            cables: Vec::new(),
+            next_id: 0,
+        };
+        let plan = compile_fx_plan(&rack);
+        assert!(plan.steps.is_empty());
+    }
+
+    #[test]
+    fn disabled_fx_module_excluded_from_plan() {
+        let mut rack = RackState::default();
+        // Disable the Reverb module
+        if let Some(m) = rack
+            .modules
+            .iter_mut()
+            .find(|m| m.kind == ModuleKind::FxReverb)
+        {
+            m.enabled = false;
+        }
+        let plan = compile_fx_plan(&rack);
+        assert!(
+            !plan.steps.contains(&FxStep::Reverb),
+            "disabled module must not appear in plan"
+        );
+        // Rest of chain still intact (10 steps, not 11)
+        assert_eq!(plan.steps.len(), 10);
+    }
+
+    #[test]
+    fn two_fx_custom_chain_compiles_in_correct_order() {
+        // Minimal rack: two FX modules wired A → B
+        let mut rack = RackState {
+            modules: Vec::new(),
+            cables: Vec::new(),
+            next_id: 1,
+        };
+        let rev_id = rack.add_module(ModuleKind::FxReverb);
+        let del_id = rack.add_module(ModuleKind::FxDelay);
+        rack.connect(
+            PortRef {
+                module_id: rev_id,
+                dir: PortDir::Out,
+                kind: PortKind::Audio,
+                index: 0,
+            },
+            PortRef {
+                module_id: del_id,
+                dir: PortDir::In,
+                kind: PortKind::Audio,
+                index: 0,
+            },
+        );
+        let plan = compile_fx_plan(&rack);
+        assert_eq!(plan.steps, vec![FxStep::Reverb, FxStep::Delay]);
+    }
+}

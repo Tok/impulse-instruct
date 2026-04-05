@@ -12,7 +12,7 @@ use rtrb::{Consumer, Producer};
 use std::sync::Arc;
 
 use crate::sequencer::{ClockState, TriggerEvent, advance_clock};
-use crate::state::AppState;
+use crate::state::{AppState, FxPlan, compile_fx_plan};
 
 pub use dsp::{AudioParams, DspState};
 
@@ -27,6 +27,9 @@ pub enum AudioCommand {
     /// Load new sample data into the amen/WAV sampler voice.
     /// The Arc is just a pointer copy — allocation-free in the audio callback.
     LoadSampler(Arc<Vec<f32>>),
+    /// Updated FX routing plan derived from the rack cable graph.
+    /// Sent whenever the rack topology changes (connect/disconnect/enable).
+    SetFxPlan(FxPlan),
 }
 
 // ─── Audio Engine ─────────────────────────────────────────────────────────────
@@ -78,11 +81,11 @@ impl AudioEngine {
         let (mut midi_clock_tx, midi_clock_rx) = rtrb::RingBuffer::<u8>::new(512);
 
         // Audio-thread-local DSP state
-        let initial_params = {
+        let (initial_params, initial_fx_plan) = {
             let s = state.read();
-            AudioParams::from_app_state(&s)
+            (AudioParams::from_app_state(&s), compile_fx_plan(&s.rack))
         };
-        let mut dsp = DspState::new(sample_rate, initial_params);
+        let mut dsp = DspState::new(sample_rate, initial_params, initial_fx_plan);
         let mut clock = ClockState::default();
         let mut monitor_vol = 1.0_f32;
         // MIDI clock out: accumulator tracks fractional samples until next 0xF8 tick
@@ -107,6 +110,7 @@ impl AudioEngine {
                             AudioCommand::Trigger(e) => dsp.handle_trigger(&e),
                             AudioCommand::SetMonitorVolume(v) => monitor_vol = v,
                             AudioCommand::LoadSampler(data) => dsp.load_amen(data),
+                            AudioCommand::SetFxPlan(plan) => dsp.set_fx_plan(plan),
                         }
                     }
 

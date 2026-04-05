@@ -83,7 +83,8 @@ pub use ui_prefs::{HuthStyle, KnobSize, KnobStyle, PadSize, UiPrefs};
 
 pub mod rack;
 pub use rack::{
-    Cable, CableColor, ModuleKind, PortDir, PortKind, PortRef, RackModule, RackState, Zone,
+    Cable, CableColor, FxPlan, FxStep, ModuleKind, PortDir, PortKind, PortRef, RackModule,
+    RackState, Zone, compile_fx_plan,
 };
 
 // ─── Amen / WAV sampler voice state ──────────────────────────────────────────

@@ -70,7 +70,7 @@ use crate::audio::{AudioCommand, AudioParams};
 use crate::llm::{LlmInput, LlmOutput};
 use crate::midi::MidiEvent;
 use crate::sequencer::TriggerEvent;
-use crate::state::{AppState, ConversationMode};
+use crate::state::{AppState, ConversationMode, compile_fx_plan};
 
 pub(super) const LOG_LEVELS: &[(&str, log::LevelFilter)] = &[
     ("ERROR", log::LevelFilter::Error),
@@ -391,6 +391,17 @@ impl ImpulseApp {
         let _ = self
             .audio_tx
             .push(AudioCommand::UpdateParams(Box::new(params)));
+    }
+
+    /// Recompile the FX routing plan from the current rack cable graph and
+    /// send it to the audio thread.  Call whenever rack topology changes
+    /// (cable connect/disconnect, module enable/disable, module remove).
+    pub(crate) fn push_fx_plan(&mut self) {
+        let plan = {
+            let s = self.state.read();
+            compile_fx_plan(&s.rack)
+        };
+        let _ = self.audio_tx.push(AudioCommand::SetFxPlan(plan));
     }
 
     /// Drain LLM output messages.

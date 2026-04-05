@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 
 use crate::audio::dsp::{AudioParams, DspState};
 use crate::sequencer::{ClockState, advance_clock};
-use crate::state::{AppState, DrumVoice};
+use crate::state::{AppState, DrumVoice, compile_fx_plan};
 
 const EXPORT_SR: f32 = 44100.0;
 const BLOCK_SIZE: usize = 512;
@@ -19,7 +19,7 @@ fn render_bars(state: &AppState, bars: u32) -> Vec<f32> {
     let mut params = AudioParams::from_app_state(state);
     params.sample_rate = EXPORT_SR;
 
-    let mut dsp = DspState::new(EXPORT_SR, params);
+    let mut dsp = DspState::new(EXPORT_SR, params, compile_fx_plan(&state.rack));
     let mut clock = ClockState::default();
 
     // Force sequencer running for export regardless of UI play state

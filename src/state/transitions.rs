@@ -488,6 +488,8 @@ pub fn apply_llm_update(state: AppState, update: &serde_json::Value) -> AppState
             "kit_a.kick.pitch_env_time",
             locked,
         );
+        s.kit_a.kick.clip =
+            unlocked_f32(s.kit_a.kick.clip, kick, "clip", "kit_a.kick.clip", locked);
     }
 
     if let Some(kit_b) = update.get("kit_b").and_then(|v| v.as_object())
@@ -507,6 +509,8 @@ pub fn apply_llm_update(state: AppState, update: &serde_json::Value) -> AppState
             "kit_b.kick.pitch_env_time",
             locked,
         );
+        s.kit_b.kick.clip =
+            unlocked_f32(s.kit_b.kick.clip, kick, "clip", "kit_b.kick.clip", locked);
     }
 
     if let Some(fx) = update.get("fx").and_then(|v| v.as_object()) {

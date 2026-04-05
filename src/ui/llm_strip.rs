@@ -239,7 +239,7 @@ impl ImpulseApp {
                 }); // end top row
 
                 // ── LISTEN bar: capture + analysis display ────────────────────
-                ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
+                ui.horizontal(|ui| {
                     // Listen button — drains capture ring buffer, runs analysis
                     if ui.add(
                         egui::Button::new(

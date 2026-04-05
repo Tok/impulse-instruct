@@ -18,7 +18,7 @@ pub use params::AudioParams;
 use voices::*;
 
 use crate::sequencer::TriggerEvent;
-use crate::state::DrumVoice;
+use crate::state::{DrumVoice, FxPlan, FxStep};
 
 // ─── Fast tanh approximation (used by LadderFilter and Bass303) ───────────────
 
@@ -262,10 +262,12 @@ pub struct DspState {
     // Current params
     params: AudioParams,
     sample_rate: f32,
+    // Compiled FX routing plan (updated via AudioCommand::SetFxPlan)
+    fx_plan: FxPlan,
 }
 
 impl DspState {
-    pub fn new(sample_rate: f32, params: AudioParams) -> Self {
+    pub fn new(sample_rate: f32, params: AudioParams, fx_plan: FxPlan) -> Self {
         let mut p = params;
         p.sample_rate = sample_rate;
         Self {
@@ -306,7 +308,12 @@ impl DspState {
             prev_running: false,
             params: p,
             sample_rate,
+            fx_plan,
         }
+    }
+
+    pub fn set_fx_plan(&mut self, plan: FxPlan) {
+        self.fx_plan = plan;
     }
 
     pub fn update_params(&mut self, p: AudioParams) {
@@ -518,6 +525,7 @@ impl DspState {
                 p.kick808_volume,
                 p.kick808_pitch_env_depth,
                 p.kick808_pitch_env_time,
+                p.kick808_clip,
                 sr,
             );
             let s808 = self.snare808.process(
@@ -533,9 +541,15 @@ impl DspState {
             let hh808o =
                 self.hihat_open808
                     .process(p.hihat_open808_decay, 0.75, p.hihat808_volume, sr);
-            let th808 = self.tom_hi808.process(0.7, 0.4, 0.6, 0.7, 0.5, 0.2, sr);
-            let tm808 = self.tom_mid808.process(0.5, 0.45, 0.6, 0.7, 0.5, 0.2, sr);
-            let tl808 = self.tom_lo808.process(0.3, 0.5, 0.6, 0.7, 0.5, 0.2, sr);
+            let th808 = self
+                .tom_hi808
+                .process(0.7, 0.4, 0.6, 0.7, 0.5, 0.2, 0.0, sr);
+            let tm808 = self
+                .tom_mid808
+                .process(0.5, 0.45, 0.6, 0.7, 0.5, 0.2, 0.0, sr);
+            let tl808 = self
+                .tom_lo808
+                .process(0.3, 0.5, 0.6, 0.7, 0.5, 0.2, 0.0, sr);
 
             let k909 = self.kick909.process(
                 p.kick909_pitch,
@@ -544,6 +558,7 @@ impl DspState {
                 p.kick909_volume,
                 p.kick909_pitch_env_depth,
                 p.kick909_pitch_env_time,
+                p.kick909_clip,
                 sr,
             );
             let s909 = self.snare909.process(
@@ -605,96 +620,93 @@ impl DspState {
                 + amen_out * dv[13])
                 * 0.60;
 
-            // Waveshaper — pre-FX insert, adds harmonic saturation before time-based FX
-            let dry = if p.waveshaper_mix > 0.001 {
-                let drive = p.waveshaper_drive * 8.0 + 1.0;
-                let shaped = tanh(dry * drive) / tanh(drive);
-                dry * (1.0 - p.waveshaper_mix) + shaped * p.waveshaper_mix
-            } else {
-                dry
-            };
+            // FX chain — driven by compiled plan (see compile_fx_plan in state/rack.rs).
+            // Each step transforms `sig` in place; steps that are not in the plan are skipped.
+            let mut sig = dry;
+            for step in &self.fx_plan.steps {
+                sig = match step {
+                    FxStep::Waveshaper => {
+                        if p.waveshaper_mix > 0.001 {
+                            let drive = p.waveshaper_drive * 8.0 + 1.0;
+                            let shaped = tanh(sig * drive) / tanh(drive);
+                            sig * (1.0 - p.waveshaper_mix) + shaped * p.waveshaper_mix
+                        } else {
+                            sig
+                        }
+                    }
+                    FxStep::Reverb => {
+                        let wet = self.reverb.process(sig, p.reverb_size, p.reverb_damp);
+                        sig * (1.0 - p.reverb_mix) + wet * p.reverb_mix
+                    }
+                    FxStep::Delay => {
+                        let wet = self.delay.process(sig, delay_samples, p.delay_feedback);
+                        sig * (1.0 - p.delay_mix) + wet * p.delay_mix
+                    }
+                    FxStep::Bitcrush => {
+                        if p.bitcrush_mix > 0.01 {
+                            let hold_frames = (1.0 + p.bitcrush_rate * 15.0) as u32;
+                            if self.bitcrush_counter == 0 {
+                                let bits = (1.0 + p.bitcrush_bits * 15.0).round().max(1.0);
+                                let scale = (1u32 << (bits as u32 - 1)) as f32;
+                                self.bitcrush_held = (sig * scale).round() / scale;
+                                self.bitcrush_counter = hold_frames;
+                            } else {
+                                self.bitcrush_counter -= 1;
+                            }
+                            sig * (1.0 - p.bitcrush_mix) + self.bitcrush_held * p.bitcrush_mix
+                        } else {
+                            sig
+                        }
+                    }
+                    FxStep::Chorus => {
+                        self.chorus
+                            .process(sig, p.chorus_rate, p.chorus_depth, p.chorus_mix, sr)
+                    }
+                    FxStep::Phaser => {
+                        self.phaser
+                            .process(sig, p.phaser_rate, p.phaser_depth, p.phaser_mix, sr)
+                    }
+                    FxStep::RingMod => {
+                        if p.ring_mod_mix > 0.001 {
+                            let freq_hz = 50.0 + p.ring_mod_freq * 450.0;
+                            self.ring_mod_phase += freq_hz / sr;
+                            if self.ring_mod_phase >= 1.0 {
+                                self.ring_mod_phase -= 1.0;
+                            }
+                            let carrier = (self.ring_mod_phase * std::f32::consts::TAU).sin();
+                            let ring = sig * carrier;
+                            sig * (1.0 - p.ring_mod_mix) + ring * p.ring_mod_mix
+                        } else {
+                            sig
+                        }
+                    }
+                    FxStep::Eq => self
+                        .eq
+                        .process(sig, p.eq_low_gain, p.eq_mid_gain, p.eq_hi_gain),
+                    FxStep::Compressor => self.compressor.process(
+                        sig,
+                        p.compressor_threshold,
+                        p.compressor_ratio,
+                        p.compressor_mix,
+                        sr,
+                    ),
+                    FxStep::TapeSat => {
+                        self.tape_sat
+                            .process(sig, p.tape_drive, p.tape_mix, p.tape_flutter, sr)
+                    }
+                    FxStep::Drive => {
+                        if p.distortion_drive > 0.01 {
+                            let drive = p.distortion_drive * 6.0 + 1.0;
+                            let dist = tanh(sig * drive);
+                            sig * (1.0 - p.distortion_mix) + dist * p.distortion_mix
+                        } else {
+                            sig
+                        }
+                    }
+                };
+            }
 
-            // FX chain
-            let reverb_wet = self.reverb.process(dry, p.reverb_size, p.reverb_damp);
-            let reverbed = dry * (1.0 - p.reverb_mix) + reverb_wet * p.reverb_mix;
-
-            let delay_wet = self
-                .delay
-                .process(reverbed, delay_samples, p.delay_feedback);
-            let delayed = reverbed * (1.0 - p.delay_mix) + delay_wet * p.delay_mix;
-
-            // Bitcrush (bit depth reduction + sample rate decimation)
-            let delayed = if p.bitcrush_mix > 0.01 {
-                // Sample rate decimation: hold sample for N frames
-                let hold_frames = (1.0 + p.bitcrush_rate * 15.0) as u32;
-                if self.bitcrush_counter == 0 {
-                    // Bit depth reduction
-                    let bits = (1.0 + p.bitcrush_bits * 15.0).round().max(1.0);
-                    let scale = (1u32 << (bits as u32 - 1)) as f32;
-                    self.bitcrush_held = (delayed * scale).round() / scale;
-                    self.bitcrush_counter = hold_frames;
-                } else {
-                    self.bitcrush_counter -= 1;
-                }
-                let crushed = self.bitcrush_held;
-                delayed * (1.0 - p.bitcrush_mix) + crushed * p.bitcrush_mix
-            } else {
-                delayed
-            };
-
-            // Chorus / ensemble
-            let delayed =
-                self.chorus
-                    .process(delayed, p.chorus_rate, p.chorus_depth, p.chorus_mix, sr);
-
-            // Phaser
-            let delayed =
-                self.phaser
-                    .process(delayed, p.phaser_rate, p.phaser_depth, p.phaser_mix, sr);
-
-            // Ring modulator
-            let delayed = if p.ring_mod_mix > 0.001 {
-                let freq_hz = 50.0 + p.ring_mod_freq * 450.0;
-                self.ring_mod_phase += freq_hz / sr;
-                if self.ring_mod_phase >= 1.0 {
-                    self.ring_mod_phase -= 1.0;
-                }
-                let carrier = (self.ring_mod_phase * std::f32::consts::TAU).sin();
-                let ring = delayed * carrier;
-                delayed * (1.0 - p.ring_mod_mix) + ring * p.ring_mod_mix
-            } else {
-                delayed
-            };
-
-            // 3-band EQ
-            let delayed = self
-                .eq
-                .process(delayed, p.eq_low_gain, p.eq_mid_gain, p.eq_hi_gain);
-
-            // Compressor
-            let delayed = self.compressor.process(
-                delayed,
-                p.compressor_threshold,
-                p.compressor_ratio,
-                p.compressor_mix,
-                sr,
-            );
-
-            // Tape saturation
-            let delayed =
-                self.tape_sat
-                    .process(delayed, p.tape_drive, p.tape_mix, p.tape_flutter, sr);
-
-            // Master drive (soft clip)
-            let driven = if p.distortion_drive > 0.01 {
-                let drive = p.distortion_drive * 6.0 + 1.0;
-                let dist = tanh(delayed * drive);
-                delayed * (1.0 - p.distortion_mix) + dist * p.distortion_mix
-            } else {
-                delayed
-            };
-
-            let out = (driven * p.master_volume).clamp(-1.0, 1.0);
+            let out = (sig * p.master_volume).clamp(-1.0, 1.0);
 
             for s in frame.iter_mut() {
                 *s = out;

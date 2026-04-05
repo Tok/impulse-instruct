@@ -94,7 +94,7 @@ alternative Ultravox-as-secondary-listener sketch.
 - LLM strip: LISTEN button + live audio analysis display (sub/low/mid/high RMS, peak, crest, transients)
 
 ### Testing & build
-- 92 unit tests across 4 submodules (`seq_tests`, `state_tests`, `llm_tests`, `audio::analysis`, split at 1000-line limit)
+- 96 unit tests across 4 submodules (`seq_tests`, `state_tests`, `llm_tests`, `audio::analysis`, split at 1000-line limit)
 - 39 LLM integration tests in 3 suites: `llm_suite` (core), `llm_suite_style` (artist refs), `llm_suite_theory` (music theory + producer lingo)
 - Pre-commit hook: fmt + clippy + tests + 1000-line LOC limit
 - `scripts/run-tests.sh --coverage` → HTML coverage report (lcov)
@@ -111,11 +111,10 @@ Ordered by value — tackle roughly from top to bottom.
 
 ### Next session — pick from here
 
-- [ ] **FX routing: modular slots** — highest-value unfinished item. Rack canvas
-      is done; next step is wiring the visual cable model into actual DSP routing.
-      Entry point: `compile_fx_plan()` in `src/state/transitions.rs`, DSP pool
-      in `src/audio/dsp/mod.rs`. See Known Gaps table — this unblocks dub techno,
-      gabber, and ambient styles.
+- [ ] **FX routing: per-voice buses** — `compile_fx_plan()` now drives the global
+      FX chain order from the rack cable graph. Next step: per-voice FX sends
+      (route bass to reverb, drums dry). Requires splitting the mono voice mix
+      into separate buses before the FX stage in `process_block()`.
 
 - [ ] **Audio feedback improvements** — Phase 1 is live. Low-hanging next steps:
       - Stereo width metric (L-R energy ratio; audio is currently mono — add stereo capture)
@@ -124,8 +123,9 @@ Ordered by value — tackle roughly from top to bottom.
       - Watch llama.cpp #21325 for Gemma 4 audio encoder PR; test when it lands
         (details in `docs/audio-feedback.md`)
 
-- [ ] **Gabber kick voice** — pitch envelope + hard clipper on kick output. Self-contained
-      DSP addition in `src/audio/dsp/voices.rs`; no routing prerequisite.
+- [x] **Gabber kick voice** — `clip` param (0–1) on both kicks: `(raw * (1 + clip*9)).clamp(-1,1)`.
+      Hard flat-top distortion. CLIP knob in Kit A + Kit B panels, LLM-addressable via
+      `kit_a.kick.clip` / `kit_b.kick.clip`. `#[serde(default)]` for backwards compat.
 
 - [ ] **XY pad improvements** — param name tooltip on cursor; arbitrary param pair selection.
       Low complexity, good polish.
@@ -168,11 +168,13 @@ Ordered by value — tackle roughly from top to bottom.
       with screw holes. Bezier cable overlay with 3D tube rendering (shadow + colour + specular).
       Drag-to-connect port interaction. No horizontal scroll — cards wrap to next row.
 
-- [ ] **FX routing: modular slots** — replace fixed chain with assignable FX nodes. Unlocks dub techno (FX as instrument), gabber (pitch env + clipper on kick), and ambient (slow filter automation).
-      *Prerequisite: rack canvas is done. Next step: compile_fx_plan() + DSP pool to wire
-      the visual cable model into actual audio routing.*
+- [x] **FX routing: modular slots** — `compile_fx_plan()` topologically sorts FX cable
+      graph → `FxPlan` sent to audio thread via `AudioCommand::SetFxPlan`. `process_block()`
+      iterates the plan instead of a fixed chain. Default rack cables mirror the original
+      serial order. Enable/disable/remove/connect/disconnect all recompile the plan live.
+      Next step: per-voice FX buses (route individual voices to separate FX).
 
-- [ ] **Gabber kick voice** — pitch envelope + hard clipper on kick output. Needed for gabber/hardcore styles where the kick IS the bass.
+- [x] **Gabber kick voice** — CLIP knob on both kicks. Hard-clip drive: boost then clamp to ±1.
 
 - [ ] **Multiple voices** — `Vec<SynthVoice>`, each with its own sequencer + oscillator + filter. LLM can target "voice 2, more acid".
 
@@ -196,7 +198,7 @@ Ordered by value — tackle roughly from top to bottom.
 |-------|-----------------|----------------------|
 | Jungle / DnB | Amen break energy | Sampler voice |
 | Dub Techno | FX IS the music | Modular FX routing |
-| Gabber | Kick IS the bass | Gabber kick voice (pitch env + clipper) |
+| Gabber | Kick IS the bass | ~~Gabber kick voice (pitch env + clipper)~~ done — CLIP knob on both kicks |
 | Synthwave | Gated reverb snare | Reverb gate / envelope on drum channel |
 | Vaporwave | Pitch-shifted, woozy | Pitch control on output, pitch drift LFO on master |
 | Ambient | Glacial filter sweeps | LFO automation is wired; needs longer attack/decay times |

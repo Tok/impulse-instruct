@@ -727,7 +727,8 @@ pub fn param_json_schema() -> serde_json::Value {
                         "type": "object",
                         "properties": {
                             "pitch_env_depth": { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "kick pitch drop height: 0=subtle 1=extreme" },
-                            "pitch_env_time":  { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "kick pitch drop decay time: 0=10ms 1=200ms" }
+                            "pitch_env_time":  { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "kick pitch drop decay time: 0=10ms 1=200ms" },
+                            "clip":            { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "gabber hard-clip drive: 0=clean 1=full distortion (flat-top sine)" }
                         },
                         "additionalProperties": false
                     }
@@ -741,7 +742,8 @@ pub fn param_json_schema() -> serde_json::Value {
                         "type": "object",
                         "properties": {
                             "pitch_env_depth": { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "kick pitch drop height: 0=subtle 1=extreme" },
-                            "pitch_env_time":  { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "kick pitch drop decay time: 0=10ms 1=200ms" }
+                            "pitch_env_time":  { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "kick pitch drop decay time: 0=10ms 1=200ms" },
+                            "clip":            { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "gabber hard-clip drive: 0=clean 1=full distortion (flat-top sine)" }
                         },
                         "additionalProperties": false
                     }

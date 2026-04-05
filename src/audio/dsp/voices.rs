@@ -122,6 +122,7 @@ impl Kick {
         volume: f32,
         pitch_env_depth: f32,
         pitch_env_time: f32,
+        clip: f32,
         sr: f32,
     ) -> f32 {
         let base_hz = 40.0 + base_pitch * 40.0; // 40–80 Hz
@@ -142,8 +143,18 @@ impl Kick {
 
         let sine = (self.phase * std::f32::consts::TAU).sin();
         let click = self.noise_gen.next() * punch_amp * punch;
+        let raw = sine * amp + click * 0.3;
 
-        (sine * amp + click * 0.3) * volume
+        // Hard-clip gabber drive: boost then clamp to ±1.
+        // clip=0 → clean; clip=1 → 10× boost, flat-topped waveform.
+        let clipped = if clip > 0.001 {
+            let drive = 1.0 + clip * 9.0;
+            (raw * drive).clamp(-1.0, 1.0)
+        } else {
+            raw
+        };
+
+        clipped * volume
     }
 }
 
