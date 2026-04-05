@@ -368,7 +368,7 @@ All passing on Gemma 4 E4B Q4_K_M.
 - Hoover voice tuning - if you know the original Dominator signal chain
 - Sub-genre coverage we're missing (UK hardcore, footwork, dungeon synth, cumbia, etc.)
 
-See [docs/contributions.md](docs/contributions.md) for detail on how to add styles, write tests, and what's most useful right now.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for detail on how to add styles, write tests, and what's most useful right now.
 
 ---
 
@@ -413,6 +413,6 @@ Bonsai 8B model: Apache 2.0 - credit to [prism-ml](https://huggingface.co/prism-
 |---|---|
 | [docs/dev-setup.md](docs/dev-setup.md) | Build from source, architecture, HTTP API reference, parameter schema, Windows cross-compile |
 | [docs/features.md](docs/features.md) | Detailed list of all implemented features |
-| [docs/contributions.md](docs/contributions.md) | How to contribute styles, tests, model benchmarks, and voice tuning |
+| [CONTRIBUTING.md](CONTRIBUTING.md) | How to contribute styles, tests, model benchmarks, and voice tuning |
 | [docs/colorful-notes.md](docs/colorful-notes.md) | Full Huth *Farbige Noten* color theory - intervals, complementary pairs, historical context |
 | [docs/ui-design.md](docs/ui-design.md) | UI design principles, grayscale palette, widget system |

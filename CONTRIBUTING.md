@@ -186,6 +186,54 @@ curl http://localhost:8765/api/schema | python3 -m json.tool | less
 
 ---
 
+### LLM integration test suites
+
+Three test suites run against a real model and assert on specific parameter outcomes. These are the best way to verify that a style entry or instruction actually works end-to-end:
+
+| Suite | File | What it tests |
+|-------|------|---------------|
+| Core | `src/llm_suite.rs` | Parameter targeting - does "make it acid" change the right knobs? |
+| Style | `src/llm_suite_style.rs` | Genre and artist references - BoC, jungle, gabber, dark techno, ambient |
+| Theory | `src/llm_suite_theory.rs` | Producer terminology - "more tension", "drop the root", "euclidean 5/16" |
+
+```bash
+./scripts/run-llm-tests.sh      # all suites (needs a running model + GPU)
+./scripts/run-llm-style.sh      # style tests only
+./scripts/run-llm-theory.sh     # theory tests only
+```
+
+**When a test fails**, the cause is usually one of two things: the style description or system prompt isn't specific enough, or the synth can't actually produce what's being asked for. The model's musical knowledge is generally solid - it knows what jungle or dub techno should sound like. The gaps are in the prompt telling it which parameters to reach for, and in the synth engine's ability to deliver once it does. Before writing off a genre as unsupported, try tightening the `description` field and re-running - but also check whether the voices involved can actually produce the texture you're testing for.
+
+New tests for producer terminology or genre references are among the most useful contributions.
+
+---
+
+### Benchmarking other GGUF models
+
+The test suites run against whatever model is loaded, so they double as a benchmark for any GGUF you want to evaluate.
+
+1. Download the GGUF and place it in `models/`
+2. Launch the app and select the model in Prefs, or start the server manually (see `docs/dev-setup.md`)
+3. Run all three suites and note the pass rates
+
+Useful things to include in a benchmark report:
+- Model name, quant format, and file size
+- Pass/fail count per suite (the runner prints a summary at the end)
+- Any patterns in what it gets wrong - certain genres, certain parameters, certain prompt types
+- Hardware: GPU model, VRAM used, tokens/second at that quant
+
+The default model (Gemma 4 E4B Q4_K_M) passes all 39 integration tests. If you find a smaller model that gets close, or a larger one that improves style accuracy, open an issue or PR with your results. Even partial results (one suite, one genre) are useful.
+
+---
+
+### Synth voice tuning
+
+Some voices are rough. The hoover lead is the most obvious gap - it doesn't yet sound like the classic Human Resource / Dominator vacuum-cleaner screech. Getting it there requires tuning the supersaw to highpass sweep to pitch LFO chain, and probably a dedicated resonant sweep shape.
+
+If you know the original signal chain, the relevant code is in `src/audio/dsp/voices/` and parameter ranges are in `src/state/mod.rs` under `HooverState`.
+
+---
+
 ## 🤖 For AI Contributors (Claude, GPT, etc.)
 
 **This section is for AI coding assistants and autonomous agents.**
