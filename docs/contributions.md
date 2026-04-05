@@ -24,6 +24,8 @@ The style catalog lives in `src/llm/styles.json`. Each entry has:
 
 The `full` field is injected into the system prompt when the style is active. Good `full` entries are specific about sound design decisions, not just vibes - they tell the LLM *which parameters* to move and *why*.
 
+**When a test fails, check the system prompt first.** A failing style or theory test often means the style description or the base system prompt in `src/llm/prompt.rs` isn't specific enough - not that the model doesn't understand the intent. The model's musical knowledge is usually fine; the prompt is the lever. Before writing off a genre as "unsupported", try tightening the style entry's `full` field and re-running the test.
+
 ### Music theory test suite
 
 `src/llm_suite_theory.rs` tests PULSE's understanding of producer terminology:
@@ -32,7 +34,7 @@ The `full` field is injected into the system prompt when the style is active. Go
 - "add tension" → specific EQ / FX / sequence choices
 - "drop the root on beat 1" → specific step placement
 
-New tests here help the model stay coherent across updates and identify gaps in the system prompt.
+New tests here help the model stay coherent across updates and identify gaps in the system prompt. Again - if a test fails, the most likely fix is refining the prompt or style entry, not the model or the code.
 
 To run the suites:
 ```bash
