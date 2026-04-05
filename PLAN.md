@@ -50,6 +50,8 @@ Ordered by value.
 
 - [ ] **UI/UX rework** - Full layout and interaction quality pass. See **[docs/ui-rework.md](docs/ui-rework.md)** for the full issue list. Highest-priority items: (1) cables must not occlude module controls, (2) voice module cards are too narrow, (3) LLM strip needs collapse, (4) module panel internals need skeuomorphic depth — knobs, pads, sliders as physical objects not flat rectangles.
 
+- [ ] **LLM tuning tab in Preferences** - The current settings panel mixes model/context/sampling/personality into a single scrollable list. Split into named tabs: Model, Sampling, Personality, TTS. The Sampling tab exposes ctx_size, top_k, top_p, min_p, repeat_penalty, freq_penalty, seed as an "Advanced / experimental" section, replacing the scroll-through layout. Useful for power users experimenting with different models whose defaults differ from Gemma.
+
 - [ ] **Bloom post-process / UI polish** - Bloom (egui to wgpu render pass, Gaussian blur on bright pixels, additive blend) is GPU-expensive and may not add much over existing chrome finish. Evaluate after the ui-rework pass.
 
 ---

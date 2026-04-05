@@ -177,7 +177,7 @@ impl LlamaServerBackend {
     /// Spawn `llama-server` with the given model file.
     /// Returns `live: false` (hard-fail path) if binary or model are missing —
     /// the caller (`run_llm_loop`) decides whether to exit or continue in mock.
-    pub fn new(model_path: &str) -> Self {
+    pub fn new(model_path: &str, ctx_size: usize) -> Self {
         let bin = pick_server_binary(model_path);
 
         let Some(bin) = bin else {
@@ -269,7 +269,7 @@ impl LlamaServerBackend {
                 "--port",
                 &port.to_string(),
                 "--ctx-size",
-                "16384",
+                &ctx_size.to_string(),
                 "--n-gpu-layers",
                 "99",
                 "--flash-attn",
@@ -640,7 +640,8 @@ pub fn run_llm_loop(
     }
 
     let model_path = state.read().llm.model_path.clone();
-    let mut backend = LlamaServerBackend::new(&model_path);
+    let ctx_size = state.read().llm.context_max;
+    let mut backend = LlamaServerBackend::new(&model_path, ctx_size);
 
     if !backend.is_live() {
         {
@@ -705,7 +706,8 @@ pub fn run_llm_loop(
                 backend.shutdown();
                 state.write().llm.model_path = new_path.clone();
                 state.write().llm.context_used = 0;
-                backend = LlamaServerBackend::new(&new_path);
+                let ctx_size = state.read().llm.context_max;
+                backend = LlamaServerBackend::new(&new_path, ctx_size);
                 {
                     let mut s = state.write();
                     s.llm.is_mock = !backend.is_live();
@@ -740,7 +742,8 @@ pub fn run_llm_loop(
                 log::info!("LLM: resetting context (restart with same model)");
                 backend.shutdown();
                 state.write().llm.context_used = 0;
-                backend = LlamaServerBackend::new(&model_path);
+                let ctx_size = state.read().llm.context_max;
+                backend = LlamaServerBackend::new(&model_path, ctx_size);
                 {
                     let mut s = state.write();
                     s.llm.is_mock = !backend.is_live();
@@ -856,9 +859,10 @@ pub fn run_llm_loop(
                             pct * 100.0
                         );
                         let model_path = state.read().llm.model_path.clone();
+                        let ctx_size = state.read().llm.context_max;
                         backend.shutdown();
                         state.write().llm.context_used = 0;
-                        backend = LlamaServerBackend::new(&model_path);
+                        backend = LlamaServerBackend::new(&model_path, ctx_size);
                         state.write().llm.is_mock = !backend.is_live();
                         let _ = output_tx.try_send(LlmOutput {
                             text: "[ Context auto-compacted ]".to_string(),

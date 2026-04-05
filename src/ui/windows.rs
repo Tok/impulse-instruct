@@ -194,7 +194,21 @@ impl ImpulseApp {
                                 }
                             });
                         });
-                        ui.label(egui::RichText::new("-1 = random each call; fixed seed → reproducible outputs").monospace().size(7.5).color(theme::IRON));
+                        ui.label(egui::RichText::new("-1 = random each call; fixed seed - reproducible outputs").monospace().size(7.5).color(theme::IRON));
+                        // context size
+                        ui.horizontal(|ui| {
+                            ui.label(egui::RichText::new("ctx_size").monospace().size(9.0).color(theme::FOG));
+                            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                                let mut v = self.state.read().llm.context_max;
+                                if ui.add(egui::DragValue::new(&mut v).range(4096..=131072).speed(256)).changed() {
+                                    // round to nearest 256
+                                    v = (v / 256) * 256;
+                                    if v < 4096 { v = 4096; }
+                                    self.state.write().llm.context_max = v;
+                                }
+                            });
+                        });
+                        ui.label(egui::RichText::new("tokens; takes effect on next model restart - more VRAM needed for larger values").monospace().size(7.5).color(theme::IRON));
                         ui.add_space(8.0);
 
                         widgets::section_header(ui, "PERSONALITY");

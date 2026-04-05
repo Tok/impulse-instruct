@@ -584,7 +584,7 @@ impl Default for LlmState {
             completion_tokens: 0,
             thinking_tokens: 0,
             context_used: 0,
-            context_max: 16384,
+            context_max: 32768,
             locked_params: HashSet::new(),
             focused_params: HashSet::new(),
             auto_jam: true,
