@@ -222,10 +222,10 @@ impl ImpulseApp {
             )
             .show(ctx, |ui| {
                 ui.horizontal(|ui| {
-                    // ── LOGO + MODEL  (fixed 188px) ───────────────────────────
+                    // ── LOGO + MODEL  (fixed 180px) ───────────────────────────
                     ui.scope(|ui| {
-                        ui.set_min_width(188.0);
-                        ui.set_max_width(188.0);
+                        ui.set_min_width(180.0);
+                        ui.set_max_width(180.0);
                         let (cur_model, initializing) = {
                             let s = self.state.read();
                             (s.llm.model_path.clone(), s.llm.llm_initializing)
@@ -247,11 +247,8 @@ impl ImpulseApp {
                                     .strong(),
                             );
                             ui.add_enabled_ui(!initializing, |ui| {
-                                let label_color = if initializing {
-                                    theme::ASH
-                                } else {
-                                    theme::SMOKE
-                                };
+                                let label_color =
+                                    if initializing { theme::ASH } else { theme::SMOKE };
                                 egui::ComboBox::from_id_source("model_dropdown")
                                     .selected_text(
                                         egui::RichText::new(&cur_short)
@@ -259,7 +256,7 @@ impl ImpulseApp {
                                             .size(8.5)
                                             .monospace(),
                                     )
-                                    .width(176.0)
+                                    .width(168.0)
                                     .show_ui(ui, |ui: &mut egui::Ui| {
                                         for path in &self.available_models.clone() {
                                             let short = std::path::Path::new(path)
@@ -271,11 +268,7 @@ impl ImpulseApp {
                                             let text = egui::RichText::new(&short)
                                                 .monospace()
                                                 .size(9.5)
-                                                .color(if selected {
-                                                    theme::CHALK
-                                                } else {
-                                                    theme::FOG
-                                                });
+                                                .color(if selected { theme::CHALK } else { theme::FOG });
                                             if ui.selectable_label(selected, text).clicked()
                                                 && !selected
                                             {
@@ -292,10 +285,10 @@ impl ImpulseApp {
 
                     ui.separator();
 
-                    // ── MODEL STATUS  (fixed 240px) ───────────────────────────
+                    // ── MODEL STATUS  (fixed 190px) ───────────────────────────
                     ui.scope(|ui| {
-                        ui.set_min_width(240.0);
-                        ui.set_max_width(240.0);
+                        ui.set_min_width(190.0);
+                        ui.set_max_width(190.0);
 
                         let s = self.state.read();
                         let inferring = s.llm.is_inferring;
@@ -334,12 +327,10 @@ impl ImpulseApp {
                                             .strong(),
                                     );
                                     ui.label(
-                                        egui::RichText::new(
-                                            "run download-models.sh then select in Prefs",
-                                        )
-                                        .color(egui::Color32::from_rgb(180, 70, 40))
-                                        .size(8.0)
-                                        .monospace(),
+                                        egui::RichText::new("run download-models.sh")
+                                            .color(egui::Color32::from_rgb(180, 70, 40))
+                                            .size(8.0)
+                                            .monospace(),
                                     );
                                 });
                             } else if is_mock {
@@ -352,12 +343,10 @@ impl ImpulseApp {
                                             .strong(),
                                     );
                                     ui.label(
-                                        egui::RichText::new(
-                                            "build-llama-server.sh + download-models.sh",
-                                        )
-                                        .color(egui::Color32::from_rgb(180, 70, 40))
-                                        .size(8.0)
-                                        .monospace(),
+                                        egui::RichText::new("build-llama-server.sh")
+                                            .color(egui::Color32::from_rgb(180, 70, 40))
+                                            .size(8.0)
+                                            .monospace(),
                                     );
                                 });
                             } else {
@@ -372,40 +361,35 @@ impl ImpulseApp {
                                         egui::Color32::from_rgb(220, 80, 50)
                                     };
                                     ui.horizontal(|ui| {
-                                        let tps_str = format!("{:.0}t/s", tps);
                                         ui.label(
-                                            egui::RichText::new(tps_str)
+                                            egui::RichText::new(format!("{:.0}t/s", tps))
                                                 .color(theme::SMOKE)
                                                 .size(9.0)
                                                 .monospace(),
                                         );
                                         ui.add_sized(
-                                            [44.0, 6.0],
+                                            [38.0, 6.0],
                                             egui::ProgressBar::new(ctx_pct / 100.0),
                                         );
-                                        let ctx_label = format!("{}/{}", ctx_used, ctx_max);
                                         ui.label(
-                                            egui::RichText::new(ctx_label)
+                                            egui::RichText::new(format!("{ctx_used}/{ctx_max}"))
                                                 .color(ctx_color)
                                                 .size(8.0)
                                                 .monospace(),
                                         );
                                     });
-                                    if ptok > 0 || ctok > 0 {
-                                        let line2 = if tthink > 0 {
-                                            format!("in:{} out:{} think:~{}", ptok, ctok, tthink)
-                                        } else {
-                                            format!("in:{}  out:{}", ptok, ctok)
-                                        };
-                                        ui.label(
-                                            egui::RichText::new(line2)
-                                                .color(theme::ASH)
-                                                .size(8.5)
-                                                .monospace(),
-                                        );
-                                    }
+                                    let line2 = if tthink > 0 {
+                                        format!("in:{ptok} out:{ctok} ~{tthink}t")
+                                    } else {
+                                        format!("in:{ptok}  out:{ctok}")
+                                    };
+                                    ui.label(
+                                        egui::RichText::new(line2)
+                                            .color(theme::ASH)
+                                            .size(8.0)
+                                            .monospace(),
+                                    );
                                 });
-
                                 let reset_color = if ctx_pct >= 85.0 {
                                     egui::Color32::from_rgb(220, 80, 50)
                                 } else {
@@ -426,12 +410,7 @@ impl ImpulseApp {
                                 {
                                     let _ = self.llm_tx.try_send(LlmInput::ResetContext);
                                 }
-
-                                let ac_color = if auto_compact {
-                                    theme::SMOKE
-                                } else {
-                                    theme::ASH
-                                };
+                                let ac_color = if auto_compact { theme::SMOKE } else { theme::ASH };
                                 if ui
                                     .add(
                                         egui::Button::new(
@@ -442,7 +421,7 @@ impl ImpulseApp {
                                         )
                                         .fill(egui::Color32::TRANSPARENT),
                                     )
-                                    .on_hover_text("Auto-compact when context > 85%")
+                                    .on_hover_text("Auto-compact context when > 85% full")
                                     .clicked()
                                 {
                                     self.state.write().llm.auto_compact = !auto_compact;
@@ -453,21 +432,18 @@ impl ImpulseApp {
 
                     ui.separator();
 
-                    // ── TRANSPORT  (fixed 200px) ──────────────────────────────
+                    // ── TRANSPORT  (fixed 150px) ──────────────────────────────
                     ui.scope(|ui| {
-                        ui.set_min_width(200.0);
-                        ui.set_max_width(200.0);
-
+                        ui.set_min_width(150.0);
+                        ui.set_max_width(150.0);
                         let (running, bpm, live_record) = {
                             let s = self.state.read();
                             (s.sequencer.running, s.sequencer.bpm, s.live_record)
                         };
-
                         ui.horizontal(|ui| {
-                            // BPM — fixed 56px so value changes don't shift neighbors
                             ui.scope(|ui| {
-                                ui.set_min_width(56.0);
-                                ui.set_max_width(56.0);
+                                ui.set_min_width(50.0);
+                                ui.set_max_width(50.0);
                                 let run_color = if running { theme::CHALK } else { theme::ASH };
                                 ui.label(
                                     egui::RichText::new(format!("{:.0} BPM", bpm))
@@ -476,14 +452,10 @@ impl ImpulseApp {
                                         .monospace(),
                                 );
                             });
-
-                            ui.add_space(4.0);
-
-                            // PLAY / STOP — fixed size so "▶ PLAY" ↔ "■ STOP" don't shift
                             let play_label = if running { "■ STOP" } else { "▶ PLAY" };
                             if ui
                                 .add_sized(
-                                    [60.0, 20.0],
+                                    [56.0, 20.0],
                                     egui::Button::new(
                                         egui::RichText::new(play_label).monospace().size(10.0),
                                     ),
@@ -495,15 +467,7 @@ impl ImpulseApp {
                                 );
                                 *self.state.write() = next;
                             }
-
-                            ui.add_space(2.0);
-
-                            // REC
-                            let rec_col = if live_record && running {
-                                theme::CHALK
-                            } else {
-                                theme::ASH
-                            };
+                            let rec_col = if live_record && running { theme::CHALK } else { theme::ASH };
                             let rec_fill = if live_record && running {
                                 egui::Color32::from_gray(60)
                             } else {
@@ -512,9 +476,9 @@ impl ImpulseApp {
                             if ui
                                 .add(
                                     egui::Button::new(
-                                        egui::RichText::new("⏺ REC")
+                                        egui::RichText::new("REC")
                                             .monospace()
-                                            .size(10.0)
+                                            .size(9.5)
                                             .color(rec_col),
                                     )
                                     .fill(rec_fill),
@@ -530,79 +494,12 @@ impl ImpulseApp {
 
                     ui.separator();
 
-                    // ── CONTROLS  (fixed 220px) ───────────────────────────────
-                    ui.scope(|ui| {
-                        ui.set_min_width(260.0);
-                        ui.set_max_width(260.0);
-
-                        ui.horizontal(|ui| {
-                            // Heat
-                            let mut heat = self.state.read().llm.heat;
-                            let heat_pct = (heat * 100.0).round() as u32;
-                            let heat_color = if heat < 0.3 {
-                                theme::ASH
-                            } else if heat < 0.6 {
-                                theme::SMOKE
-                            } else if heat < 0.85 {
-                                theme::FOG
-                            } else {
-                                theme::CHALK
-                            };
-                            ui.label(
-                                egui::RichText::new("HEAT")
-                                    .color(heat_color)
-                                    .monospace()
-                                    .size(9.0),
-                            );
-                            let slider = egui::Slider::new(&mut heat, 0.0..=1.0)
-                                .show_value(false)
-                                .custom_formatter(|v, _| format!("{:.0}%", v * 100.0));
-                            if ui.add_sized([110.0, 18.0], slider).changed() {
-                                self.state.write().llm.heat = heat;
-                            }
-                            ui.label(
-                                egui::RichText::new(format!("{heat_pct}%"))
-                                    .color(heat_color)
-                                    .monospace()
-                                    .size(9.0),
-                            );
-
-                            ui.add_space(4.0);
-
-                            ui.add_space(2.0);
-
-                            // Knobs / Sliders toggle — fixed size
-                            let use_sliders = self.state.read().ui_prefs.use_sliders;
-                            let color = if use_sliders {
-                                theme::CHALK
-                            } else {
-                                theme::ASH
-                            };
-                            if ui
-                                .add_sized(
-                                    [58.0, 18.0],
-                                    egui::Button::new(
-                                        egui::RichText::new(if use_sliders {
-                                            "SLIDERS"
-                                        } else {
-                                            "KNOBS  "
-                                        })
-                                        .color(color)
-                                        .monospace()
-                                        .size(9.0),
-                                    ),
-                                )
-                                .clicked()
-                            {
-                                self.state.write().ui_prefs.use_sliders = !use_sliders;
-                            }
-                        });
-                    });
-
-                    // ── RIGHT-ALIGNED: VOL + VRAM/RAM + API ───────────────────
+                    // ── HEAT + RIGHT-ALIGNED controls ─────────────────────────
+                    // Right-to-left: draw fixed right items first, then heat fills remaining.
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        // API badge (rightmost)
                         if let Some(port) = self.api_port {
-                            let api_label = format!("API :{}", port);
+                            let api_label = format!(":{}", port);
                             let btn = ui.add(
                                 egui::Button::new(
                                     egui::RichText::new(&api_label)
@@ -617,10 +514,43 @@ impl ImpulseApp {
                                 let url = format!("http://localhost:{}/api/schema", port);
                                 let _ = webbrowser_open(&url);
                             }
-                            ui.add_space(6.0);
+                            ui.add_space(2.0);
                         }
 
-                        // Monitor volume
+                        // VRAM / RAM bars
+                        if let Ok(si) = self.sys_info.lock() {
+                            ui.vertical(|ui| {
+                                if si.vram_total_mb > 0 {
+                                    let frac = si.vram_used_mb as f32 / si.vram_total_mb as f32;
+                                    ui.horizontal(|ui| {
+                                        ui.add_sized([48.0, 6.0], egui::ProgressBar::new(frac));
+                                        ui.label(
+                                            egui::RichText::new("VRAM")
+                                                .color(theme::ASH)
+                                                .monospace()
+                                                .size(8.0),
+                                        );
+                                    });
+                                }
+                                if si.ram_total_mb > 0 {
+                                    let frac = si.ram_used_mb as f32 / si.ram_total_mb as f32;
+                                    ui.horizontal(|ui| {
+                                        ui.add_sized([48.0, 6.0], egui::ProgressBar::new(frac));
+                                        ui.label(
+                                            egui::RichText::new("RAM ")
+                                                .color(theme::ASH)
+                                                .monospace()
+                                                .size(8.0),
+                                        );
+                                    });
+                                }
+                            });
+                        }
+
+                        ui.add_space(4.0);
+
+                        // Monitor volume — compact right-side, labelled MON to distinguish
+                        // from the master output module (this is listen-only, not export volume).
                         let vol_color = if self.ui_volume < 0.4 {
                             theme::ASH
                         } else if self.ui_volume < 0.75 {
@@ -628,15 +558,9 @@ impl ImpulseApp {
                         } else {
                             theme::FOG
                         };
-                        ui.label(
-                            egui::RichText::new(format!("{:.0}%", self.ui_volume * 100.0))
-                                .color(vol_color)
-                                .monospace()
-                                .size(9.0),
-                        );
                         if ui
                             .add_sized(
-                                [64.0, 16.0],
+                                [52.0, 14.0],
                                 egui::Slider::new(&mut self.ui_volume, 0.0..=1.0).show_value(false),
                             )
                             .changed()
@@ -646,59 +570,92 @@ impl ImpulseApp {
                                 .push(AudioCommand::SetMonitorVolume(self.ui_volume));
                         }
                         ui.label(
-                            egui::RichText::new("VOL")
+                            egui::RichText::new("MON")
                                 .color(vol_color)
                                 .monospace()
-                                .size(9.0),
+                                .size(8.5),
+                        )
+                        .on_hover_text(
+                            "Monitor volume — controls listening level only, not export volume",
                         );
 
-                        ui.add_space(6.0);
+                        ui.separator();
 
-                        // VRAM / RAM bars
-                        if let Ok(si) = self.sys_info.lock() {
-                            ui.vertical(|ui| {
-                                if si.vram_total_mb > 0 {
-                                    let frac = si.vram_used_mb as f32 / si.vram_total_mb as f32;
-                                    ui.horizontal(|ui| {
-                                        ui.label(
-                                            egui::RichText::new("VRAM")
-                                                .color(theme::ASH)
-                                                .monospace()
-                                                .size(8.0),
-                                        );
-                                        ui.add_sized([54.0, 6.0], egui::ProgressBar::new(frac));
-                                        ui.label(
-                                            egui::RichText::new(
-                                                crate::sysinfo::fmt_mb(si.vram_used_mb).to_string(),
-                                            )
-                                            .color(theme::ASH)
-                                            .monospace()
-                                            .size(8.0),
-                                        );
-                                    });
-                                }
-                                if si.ram_total_mb > 0 {
-                                    let frac = si.ram_used_mb as f32 / si.ram_total_mb as f32;
-                                    ui.horizontal(|ui| {
-                                        ui.label(
-                                            egui::RichText::new("RAM ")
-                                                .color(theme::ASH)
-                                                .monospace()
-                                                .size(8.0),
-                                        );
-                                        ui.add_sized([54.0, 6.0], egui::ProgressBar::new(frac));
-                                        ui.label(
-                                            egui::RichText::new(
-                                                crate::sysinfo::fmt_mb(si.ram_used_mb).to_string(),
-                                            )
-                                            .color(theme::ASH)
-                                            .monospace()
-                                            .size(8.0),
-                                        );
-                                    });
-                                }
-                            });
+                        // KNOBS / SLIDERS toggle
+                        let use_sliders = self.state.read().ui_prefs.use_sliders;
+                        let ks_color = if use_sliders { theme::SMOKE } else { theme::ASH };
+                        if ui
+                            .add(
+                                egui::Button::new(
+                                    egui::RichText::new(if use_sliders { "SLIDERS" } else { "KNOBS" })
+                                        .color(ks_color)
+                                        .monospace()
+                                        .size(8.5),
+                                )
+                                .fill(egui::Color32::TRANSPARENT),
+                            )
+                            .clicked()
+                        {
+                            self.state.write().ui_prefs.use_sliders = !use_sliders;
                         }
+
+                        ui.separator();
+
+                        // ── HEAT — fills all remaining width ─────────────────
+                        let mut heat = self.state.read().llm.heat;
+                        let heat_pct = (heat * 100.0).round() as u32;
+                        // Tier colors: cool (ASH) → warm (SMOKE) → hot (FOG) → chaos (CHALK)
+                        let (heat_color, heat_tier) = if heat < 0.3 {
+                            (theme::ASH, "COOL")
+                        } else if heat < 0.6 {
+                            (theme::SMOKE, "WARM")
+                        } else if heat < 0.85 {
+                            (theme::FOG, "HOT")
+                        } else if heat < 0.95 {
+                            (theme::CHALK, "FIRE")
+                        } else {
+                            (egui::Color32::WHITE, "CHAOS")
+                        };
+                        // Pct label — fixed width so slider doesn't shift
+                        ui.scope(|ui| {
+                            ui.set_min_width(36.0);
+                            ui.set_max_width(36.0);
+                            ui.label(
+                                egui::RichText::new(format!("{heat_pct}%"))
+                                    .color(heat_color)
+                                    .monospace()
+                                    .size(9.0),
+                            );
+                        });
+                        // Tier label — fixed width
+                        ui.scope(|ui| {
+                            ui.set_min_width(40.0);
+                            ui.set_max_width(40.0);
+                            ui.label(
+                                egui::RichText::new(heat_tier)
+                                    .color(heat_color)
+                                    .monospace()
+                                    .size(8.5)
+                                    .strong(),
+                            );
+                        });
+                        // Heat slider — fills all remaining space
+                        let heat_w = ui.available_width().max(80.0) - 44.0;
+                        let slider = egui::Slider::new(&mut heat, 0.0..=1.0)
+                            .show_value(false)
+                            .trailing_fill(true);
+                        if ui.add_sized([heat_w, 18.0], slider).changed() {
+                            self.state.write().llm.heat = heat;
+                        }
+                        ui.label(
+                            egui::RichText::new("HEAT")
+                                .color(heat_color)
+                                .monospace()
+                                .size(9.0),
+                        )
+                        .on_hover_text(
+                            "Jam energy and LLM creativity. CHAOS (100%) = maximum disorder, extreme settings, unpredictable mutations.",
+                        );
                     });
                 });
             });

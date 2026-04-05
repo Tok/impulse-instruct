@@ -450,8 +450,12 @@ impl LlmBackend for LlamaServerBackend {
         }
 
         let url = format!("{}/v1/chat/completions", self.base_url);
-        // heat 0.0 → temp 0.1 (near-deterministic), heat 1.0 → temp 1.2 (creative)
-        let temperature = 0.1_f64 + (sampling.heat as f64).clamp(0.0, 1.0) * 1.1;
+        // heat 0.0 → temp 0.1 (near-deterministic), heat 1.0 → temp 1.7 (chaotic)
+        let heat_f = (sampling.heat as f64).clamp(0.0, 1.0);
+        let temperature = 0.1_f64 + heat_f * 1.6;
+        // At high heat, widen top_p to allow more creative token choices.
+        let top_p =
+            (sampling.top_p as f64 + heat_f * (1.0 - sampling.top_p as f64) * 0.6).clamp(0.0, 1.0);
 
         // json_object mode keeps the server honest about emitting valid JSON.
         // max_tokens: full-reset responses (all voices + FX + LFO) can exceed 1200 tokens
@@ -464,7 +468,7 @@ impl LlmBackend for LlamaServerBackend {
             ],
             "temperature": temperature,
             "top_k": sampling.top_k,
-            "top_p": sampling.top_p as f64,
+            "top_p": top_p,
             "min_p": sampling.min_p as f64,
             "repeat_penalty": sampling.repeat_penalty as f64,
             "frequency_penalty": sampling.frequency_penalty as f64,

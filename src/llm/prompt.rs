@@ -37,7 +37,10 @@ pub fn build_system_prompt(state: &AppState) -> String {
         h if h < 0.25 => "cold — subtle incremental changes only, no pattern mutations",
         h if h < 0.5 => "warm — moderate evolution, occasional step changes",
         h if h < 0.75 => "hot — bold sweeps, pattern mutations, noticeable style shifts",
-        _ => "fire — anything goes, dramatic mutations, surprise",
+        h if h < 0.9 => "fire — anything goes, dramatic mutations, surprise",
+        _ => {
+            "CHAOS — maximum disorder; shatter patterns, use extreme settings, ignore convention, be completely unpredictable"
+        }
     };
 
     // Summarise active bass steps so the LLM can see what's playing
