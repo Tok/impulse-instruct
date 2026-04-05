@@ -116,19 +116,18 @@ Ordered by value — tackle roughly from top to bottom.
       (route bass to reverb, drums dry). Requires splitting the mono voice mix
       into separate buses before the FX stage in `process_block()`.
 
-- [ ] **Audio feedback improvements** — Phase 1 is live. Low-hanging next steps:
-      - Stereo width metric (L-R energy ratio; audio is currently mono — add stereo capture)
-      - Auto-listen mode: re-trigger LISTEN every N jam cycles
-      - Per-voice amplitude from state (we have the numbers without audio capture)
-      - Watch llama.cpp #21325 for Gemma 4 audio encoder PR; test when it lands
-        (details in `docs/audio-feedback.md`)
+- [x] **Audio feedback improvements** — Phase 1 is live. Done in Phase 2:
+      - Auto-listen mode: AUTO toggle in LISTEN bar, fires every 4 jam cycles when heat > 0.
+      - Per-voice level bars: 8 mini bars (BAS/K-A/S-A/HH/K-B/S-B/CLP/AMN) from state volume params.
+      - Stereo width metric: deferred — audio is mono; needs stereo capture pipeline first.
+      - Watch llama.cpp #21325 for Gemma 4 audio encoder PR; test when it lands.
 
 - [x] **Gabber kick voice** — `clip` param (0–1) on both kicks: `(raw * (1 + clip*9)).clamp(-1,1)`.
       Hard flat-top distortion. CLIP knob in Kit A + Kit B panels, LLM-addressable via
       `kit_a.kick.clip` / `kit_b.kick.clip`. `#[serde(default)]` for backwards compat.
 
-- [ ] **XY pad improvements** — param name tooltip on cursor; arbitrary param pair selection.
-      Low complexity, good polish.
+- [x] **XY pad improvements** — param name tooltip on cursor; arbitrary param pair selection.
+      Right-click cycles pairs stored in egui temp memory; pair indicator (n/N) in corner.
 
 - [ ] **Coqui TTS** — higher quality MC voice. Python subprocess or REST call; espeak-ng stays
       as fallback.

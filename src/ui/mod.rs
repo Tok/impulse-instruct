@@ -255,6 +255,10 @@ pub struct ImpulseApp {
     session_dirty: bool,
     // Track last-saved rack cable/module count to detect changes.
     last_saved_rack_sig: (usize, usize),
+    // Auto-listen: when enabled, trigger LISTEN automatically every N jam cycles.
+    auto_listen: bool,
+    // Counts jam cycles since the last auto-listen trigger.
+    auto_listen_counter: u32,
 }
 
 impl ImpulseApp {
@@ -371,6 +375,8 @@ impl ImpulseApp {
             module_drag: None,
             session_dirty: false,
             last_saved_rack_sig: (0, 0),
+            auto_listen: false,
+            auto_listen_counter: 0,
         }
     }
 
@@ -402,6 +408,33 @@ impl ImpulseApp {
             compile_fx_plan(&s.rack)
         };
         let _ = self.audio_tx.push(AudioCommand::SetFxPlan(plan));
+    }
+
+    /// Drain the audio capture buffer, run analysis, and fire a one-shot LLM
+    /// prompt with the results. No-op if no audio has been captured yet.
+    pub(crate) fn trigger_listen(&mut self) {
+        use crate::audio::analysis::{analyse_audio, format_snapshot};
+        let mut captured: Vec<f32> = Vec::with_capacity(441_000);
+        while let Ok(s) = self.capture_rx.pop() {
+            captured.push(s);
+        }
+        if !captured.is_empty() {
+            let analysis = analyse_audio(&captured, 44100.0);
+            let snapshot = format_snapshot(&analysis);
+            let prompt = format!(
+                "{}\nYou are listening to the audio you just produced. React — correct any mix or arrangement issues. Respond in JSON.",
+                snapshot
+            );
+            self.log_text.push_str("LISTEN → analysing…\n");
+            let _ = self.llm_tx.try_send(LlmInput::Infer {
+                prompt,
+                one_shot: true,
+            });
+            self.audio_analysis = Some(analysis);
+            self.listen_pending = true;
+        } else {
+            self.log_text.push_str("LISTEN → no audio captured yet\n");
+        }
     }
 
     /// Drain LLM output messages.
@@ -472,6 +505,14 @@ impl ImpulseApp {
             }
             // Jam re-triggers unless heat is at zero (model is parked).
             if out.text == "[jam_cycle_done]" && self.state.read().llm.heat > 0.0 {
+                // Auto-listen: every 4 jam cycles, inject an audio snapshot.
+                if self.auto_listen {
+                    self.auto_listen_counter += 1;
+                    if self.auto_listen_counter >= 4 {
+                        self.auto_listen_counter = 0;
+                        self.trigger_listen();
+                    }
+                }
                 let _ = self.llm_tx.try_send(LlmInput::Infer {
                     prompt: "continue jamming, evolve the pattern".to_string(),
                     one_shot: false,

@@ -5,7 +5,6 @@
 //   TOP row  — LEFT: style + instructions  |  RIGHT: log (fills height)
 //   BOTTOM row — full-width prompt input + ASK button (vertically centred)
 
-use crate::audio::analysis::{analyse_audio, format_snapshot};
 use crate::llm::LlmInput;
 use crate::llm::styles::StyleCatalog;
 use crate::state::apply_llm_update;
@@ -251,31 +250,63 @@ impl ImpulseApp {
                         .fill(egui::Color32::TRANSPARENT)
                         .min_size(egui::vec2(0.0, 14.0)),
                     ).clicked() {
-                        // Drain up to 441 000 samples (~10 s) from the capture buffer
-                        let mut captured: Vec<f32> = Vec::with_capacity(441_000);
-                        while let Ok(s) = self.capture_rx.pop() {
-                            captured.push(s);
-                        }
-                        if !captured.is_empty() {
-                            let analysis = analyse_audio(&captured, 44100.0);
-                            let snapshot = format_snapshot(&analysis);
-                            // Auto-trigger LLM with the snapshot prepended
-                            let prompt = format!(
-                                "{}\nYou are listening to the audio you just produced. React — correct any mix or arrangement issues. Respond in JSON.",
-                                snapshot
-                            );
-                            self.log_text.push_str("LISTEN → analysing…\n");
-                            let _ = self.llm_tx.try_send(LlmInput::Infer { prompt, one_shot: true });
-                            self.audio_analysis = Some(analysis);
-                            self.listen_pending = true;
-                        } else {
-                            self.log_text.push_str("LISTEN → no audio captured yet\n");
-                        }
+                        self.trigger_listen();
+                    }
+
+                    // AUTO toggle — re-triggers LISTEN every 4 jam cycles
+                    let auto_color = if self.auto_listen { theme::FOG } else { theme::SMOKE };
+                    if ui.add(
+                        egui::Button::new(
+                            egui::RichText::new("AUTO")
+                                .monospace()
+                                .size(8.0)
+                                .color(auto_color),
+                        )
+                        .fill(egui::Color32::TRANSPARENT)
+                        .min_size(egui::vec2(0.0, 14.0)),
+                    ).clicked() {
+                        self.auto_listen = !self.auto_listen;
+                        self.auto_listen_counter = 0;
                     }
 
                     // Show snapshot stats if available
-                    if let Some(ref a) = self.audio_analysis {
+                    // Per-voice level bars derived from volume params in state
+                    {
+                        let s = self.state.read();
+                        let levels: &[(&str, f32)] = &[
+                            ("BAS", s.bass.volume),
+                            ("K-A", s.kit_a.kick.volume),
+                            ("S-A", s.kit_a.snare.volume),
+                            ("HH", s.kit_a.hihat_closed.volume),
+                            ("K-B", s.kit_b.kick.volume),
+                            ("S-B", s.kit_b.snare.volume),
+                            ("CLP", s.kit_b.clap.volume),
+                            ("AMN", s.amen.volume),
+                        ];
                         ui.add_space(6.0);
+                        for (label, vol) in levels {
+                            let bar_h = 10.0_f32;
+                            let bar_w = 3.0_f32;
+                            let fill_h = (vol * bar_h).clamp(0.0, bar_h);
+                            let (resp, painter) = ui.allocate_painter(
+                                egui::vec2(bar_w + 1.0, bar_h),
+                                egui::Sense::hover(),
+                            );
+                            let rect = resp.rect;
+                            // Background
+                            painter.rect_filled(rect, 0.0, theme::VOID);
+                            // Fill from bottom
+                            let fill_rect = egui::Rect::from_min_max(
+                                egui::pos2(rect.min.x, rect.max.y - fill_h),
+                                rect.max,
+                            );
+                            painter.rect_filled(fill_rect, 0.0, theme::IRON);
+                            resp.on_hover_text(format!("{} {:.0}%", label, vol * 100.0));
+                        }
+                    }
+
+                    if let Some(ref a) = self.audio_analysis {
+                        ui.add_space(4.0);
                         ui.label(
                             egui::RichText::new(format!(
                                 "sub {:+.0}  low {:+.0}  mid {:+.0}  hi {:+.0}  pk {:+.1}  crest {:.0}dB  ~{:.0}tr/bar",
