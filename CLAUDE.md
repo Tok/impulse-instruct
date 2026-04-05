@@ -10,12 +10,27 @@ cargo run -- --api                   # enable HTTP API on :8765
 cargo run -- --api --model models/x.gguf --log debug
 cargo run --features llm --release   # real LLM inference (needs libclang-dev)
 cargo test                           # unit tests (split across src/tests/)
+./start.sh                           # build + launch (release, mock LLM)
+./start.sh --dev                     # build + launch (debug + verbose)
 ./scripts/run-tests.sh --coverage    # HTML coverage report
 ./scripts/build-all.sh               # Linux + Windows EXE → dist/
 ./scripts/download-models.sh         # fetch Gemma 4 E4B GGUF (~4.6 GB, default, needs HF account)
 ./scripts/run-llm-tests.sh           # all LLM integration suites (needs running model)
 ./scripts/run-llm-style.sh           # artist/genre reference tests only
 ./scripts/run-llm-theory.sh          # music theory + producer lingo tests only
+```
+
+Windows equivalents (`.bat` files mirror every `.sh` script):
+```
+start.bat                            # build + launch
+scripts\run-tests.bat
+scripts\build-all.bat
+scripts\download-models.bat
+scripts\build-llama-server.bat
+scripts\build-bonsai-server.bat
+scripts\run-llm-tests.bat
+scripts\run-llm-style.bat
+scripts\run-llm-theory.bat
 ```
 
 ## Architecture — what lives where

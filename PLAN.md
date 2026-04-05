@@ -75,6 +75,7 @@ PULSE listens, jams, evolves, and shouts at the crowd.
 - `scripts/run-llm-tests.sh` / `run-llm-style.sh` / `run-llm-theory.sh` — LLM test runners
 - Cross-compile to Windows EXE via `cargo-xwin` + `scripts/build-all.sh`
 - `scripts/download-models.sh` — Gemma 4 E4B (default), Bonsai 8B, Qwen3-8B, Qwen3-14B
+- Windows `.bat` equivalents for all scripts (`start.bat`, `scripts/*.bat`)
 
 ---
 
@@ -127,7 +128,7 @@ Ordered by value — tackle roughly from top to bottom.
 
 - [ ] **Coqui TTS** — higher quality voice (Python subprocess or REST). Alternative to espeak-ng.
 
-- [ ] **Windows native scripts** — `start.bat`, `build.bat` for users who don't have WSL.
+- [x] **Windows native scripts** — `start.bat`, `scripts/build-all.bat`, `scripts/run-tests.bat`, `scripts/run-llm-tests.bat`, `scripts/run-llm-style.bat`, `scripts/run-llm-theory.bat`, `scripts/download-models.bat`, `scripts/build-bonsai-server.bat`, `scripts/build-llama-server.bat`.
 
 ---
 
