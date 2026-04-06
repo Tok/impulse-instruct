@@ -513,11 +513,11 @@ impl ImpulseApp {
 
                     ui.separator();
 
-                    // ── HEAT + RIGHT-ALIGNED controls ─────────────────────────
-                    // Right controls are absolutely positioned at the panel's right
-                    // edge using allocate_ui_at_rect, so the heat slider can fill
-                    // exactly the remaining left space without fragile pixel-counting.
-                    // RTL layout in egui 0.28 is broken for sliders, hence this approach.
+                    // ── HEAT + TEMP sliders + RIGHT controls ─────────────────
+                    // Two-row vertical: HEAT slider (row 1) + TEMP slider (row 2).
+                    // Right controls sit to the right of row 1 only.
+                    // Two-frame width approach: right controls' actual width is
+                    // stored in egui memory; the NEXT frame uses that to size sliders.
                     {
                         let (has_vram, has_ram, vram_used, vram_total, ram_used, ram_total) = self
                             .sys_info
@@ -533,19 +533,16 @@ impl ImpulseApp {
                                 )
                             })
                             .unwrap_or((false, false, 0, 0, 0, 0));
-                        // Two-frame approach: right controls are drawn after the slider
-                        // in normal LTR order.  Their actual rendered width is stored in
-                        // egui memory each frame; the NEXT frame uses that measurement to
-                        // size the slider.  Converges in one frame; no pixel-counting.
                         let right_w_id = egui::Id::new("header_right_w");
                         let right_w: f32 =
-                            ctx.memory(|m| m.data.get_temp(right_w_id)).unwrap_or(420.0);
+                            ctx.memory(|m| m.data.get_temp(right_w_id)).unwrap_or(380.0);
 
                         const MON_W: f32 = 180.0;
                         const BAR_W: f32 = 80.0;
                         const BAR_H: f32 = 5.0;
 
                         let mut heat = self.state.read().llm.heat;
+                        let mut temp = self.state.read().llm.temperature;
                         let (heat_color, heat_tier) = if heat < 0.3 {
                             (theme::ASH, "COOL")
                         } else if heat < 0.6 {
@@ -558,215 +555,278 @@ impl ImpulseApp {
                             (egui::Color32::WHITE, "CHAOS")
                         };
 
-                        // ── HEAT slider — fills available width minus right panel ─
-                        let heat_w = (ui.available_width() - right_w).max(60.0);
-                        let heat_resp = ui
-                            .scope(|ui| {
-                                ui.spacing_mut().slider_width = heat_w;
-                                ui.add(
-                                    egui::Slider::new(&mut heat, 0.0..=1.0)
-                                        .show_value(false)
-                                        .trailing_fill(true),
-                                )
-                            })
-                            .inner;
-                        if heat_resp.changed() {
-                            self.state.write().llm.heat = heat;
-                        }
-                        let heat_rect = heat_resp.rect;
-                        heat_resp.on_hover_text(
-                            "Jam energy and LLM creativity. CHAOS (100%) = maximum disorder.",
-                        );
-                        if ui.is_rect_visible(heat_rect) {
-                            ui.painter().text(
-                                heat_rect.left_center() + egui::vec2(6.0, 0.0),
-                                egui::Align2::LEFT_CENTER,
-                                heat_tier,
-                                egui::FontId::monospace(8.5),
-                                heat_color,
-                            );
-                        }
+                        // Pre-compute slider width (same for both rows).
+                        let full_w = ui.available_width();
+                        let slider_w = (full_w - right_w).max(60.0);
 
-                        // ── Right controls (measure actual width each frame) ───
-                        let right_resp = ui
-                            .scope(|ui| {
-                                ui.spacing_mut().button_padding = egui::vec2(4.0, 1.0);
-                                ui.spacing_mut().item_spacing.x = 4.0;
-                                ui.horizontal_centered(|ui| {
-                                    // HEAT % DragValue
-                                    let mut pct = heat * 100.0;
-                                    if ui
-                                        .add_sized(
-                                            [48.0, 18.0],
-                                            egui::DragValue::new(&mut pct)
-                                                .range(0.0..=100.0)
-                                                .speed(0.5)
-                                                .suffix("%")
-                                                .fixed_decimals(0),
+                        ui.vertical(|ui| {
+                            // ── Row 1: HEAT slider + right controls ──────────────
+                            ui.horizontal(|ui| {
+                                let heat_resp = ui
+                                    .scope(|ui| {
+                                        ui.spacing_mut().slider_width = slider_w;
+                                        ui.add(
+                                            egui::Slider::new(&mut heat, 0.0..=1.0)
+                                                .show_value(false)
+                                                .trailing_fill(true),
                                         )
-                                        .changed()
-                                    {
-                                        self.state.write().llm.heat = pct / 100.0;
-                                    }
-
-                                    ui.separator();
-
-                                    // KNOBS / SLIDERS toggle
-                                    let use_sliders = self.state.read().ui_prefs.use_sliders;
-                                    let ks_col = if use_sliders {
-                                        theme::SMOKE
-                                    } else {
-                                        theme::ASH
-                                    };
-                                    if ui
-                                        .add(
-                                            egui::Button::new(
-                                                egui::RichText::new(if use_sliders {
-                                                    "SLIDERS"
-                                                } else {
-                                                    "KNOBS"
-                                                })
-                                                .color(ks_col)
-                                                .monospace()
-                                                .size(8.5),
-                                            )
-                                            .fill(egui::Color32::TRANSPARENT),
-                                        )
-                                        .clicked()
-                                    {
-                                        self.state.write().ui_prefs.use_sliders = !use_sliders;
-                                    }
-
-                                    ui.separator();
-
-                                    // Monitor volume
-                                    let vol_col = if self.ui_volume < 0.4 {
-                                        theme::ASH
-                                    } else if self.ui_volume < 0.75 {
-                                        theme::SMOKE
-                                    } else {
-                                        theme::FOG
-                                    };
-                                    ui.label(
-                                        egui::RichText::new("MON")
-                                            .color(vol_col)
-                                            .monospace()
-                                            .size(8.5),
-                                    )
-                                    .on_hover_text(
-                                        "Monitor volume — listen only, not export volume",
+                                    })
+                                    .inner;
+                                if heat_resp.changed() {
+                                    self.state.write().llm.heat = heat;
+                                }
+                                let heat_rect = heat_resp.rect;
+                                heat_resp.on_hover_text(
+                                    "Jam energy — mutation rate. CHAOS (100%) = maximum parameter rewriting.",
+                                );
+                                if ui.is_rect_visible(heat_rect) {
+                                    ui.painter().text(
+                                        heat_rect.left_center() + egui::vec2(6.0, 0.0),
+                                        egui::Align2::LEFT_CENTER,
+                                        heat_tier,
+                                        egui::FontId::monospace(8.5),
+                                        heat_color,
                                     );
-                                    if ui
-                                        .scope(|ui| {
-                                            ui.spacing_mut().slider_width = MON_W;
-                                            ui.add(
-                                                egui::Slider::new(&mut self.ui_volume, 0.0..=1.0)
-                                                    .show_value(false),
-                                            )
-                                        })
-                                        .inner
-                                        .changed()
-                                    {
-                                        let _ = self
-                                            .audio_tx
-                                            .push(AudioCommand::SetMonitorVolume(self.ui_volume));
-                                    }
+                                }
 
-                                    // VRAM / RAM bars
-                                    if has_vram || has_ram {
-                                        const TRACK: egui::Color32 = egui::Color32::from_gray(38);
-                                        ui.add_space(8.0);
-                                        ui.vertical(|ui| {
-                                            let draw_bar = |ui: &mut egui::Ui,
-                                                            label: &str,
-                                                            frac: f32,
-                                                            fill: egui::Color32| {
-                                                ui.horizontal(|ui| {
-                                                    ui.label(
-                                                        egui::RichText::new(label)
-                                                            .color(theme::ASH)
-                                                            .monospace()
-                                                            .size(8.0),
-                                                    );
-                                                    let (br, _) = ui.allocate_exact_size(
-                                                        egui::vec2(BAR_W, BAR_H),
-                                                        egui::Sense::hover(),
-                                                    );
-                                                    let p = ui.painter();
-                                                    p.rect_filled(br, 1.0, TRACK);
-                                                    let fw = (br.width()
-                                                        * frac.clamp(0.0, 1.0))
-                                                    .max(0.0);
-                                                    if fw > 0.0 {
-                                                        p.rect_filled(
-                                                            egui::Rect::from_min_size(
-                                                                br.min,
-                                                                egui::vec2(fw, br.height()),
-                                                            ),
-                                                            1.0,
-                                                            fill,
-                                                        );
-                                                    }
-                                                });
+                                // ── Right controls ───────────────────────────────
+                                let right_resp = ui
+                                    .scope(|ui| {
+                                        ui.spacing_mut().button_padding = egui::vec2(4.0, 1.0);
+                                        ui.spacing_mut().item_spacing.x = 4.0;
+                                        ui.horizontal_centered(|ui| {
+                                            // HEAT % DragValue
+                                            let mut pct = heat * 100.0;
+                                            if ui
+                                                .add_sized(
+                                                    [48.0, 18.0],
+                                                    egui::DragValue::new(&mut pct)
+                                                        .range(0.0..=100.0)
+                                                        .speed(0.5)
+                                                        .suffix("%")
+                                                        .fixed_decimals(0),
+                                                )
+                                                .changed()
+                                            {
+                                                self.state.write().llm.heat = pct / 100.0;
+                                            }
+
+                                            ui.separator();
+
+                                            // KNOBS / SLIDERS toggle
+                                            let use_sliders =
+                                                self.state.read().ui_prefs.use_sliders;
+                                            let ks_col = if use_sliders {
+                                                theme::SMOKE
+                                            } else {
+                                                theme::ASH
                                             };
-                                            if has_vram {
-                                                let frac = vram_used as f32 / vram_total as f32;
-                                                draw_bar(
-                                                    ui,
-                                                    "VRAM",
-                                                    frac,
-                                                    egui::Color32::from_gray(if frac > 0.85 {
-                                                        160
-                                                    } else {
-                                                        90
-                                                    }),
-                                                );
+                                            if ui
+                                                .add(
+                                                    egui::Button::new(
+                                                        egui::RichText::new(if use_sliders {
+                                                            "SLIDERS"
+                                                        } else {
+                                                            "KNOBS"
+                                                        })
+                                                        .color(ks_col)
+                                                        .monospace()
+                                                        .size(8.5),
+                                                    )
+                                                    .fill(egui::Color32::TRANSPARENT),
+                                                )
+                                                .clicked()
+                                            {
+                                                self.state.write().ui_prefs.use_sliders =
+                                                    !use_sliders;
                                             }
-                                            if has_ram {
-                                                let frac = ram_used as f32 / ram_total as f32;
-                                                draw_bar(
-                                                    ui,
-                                                    "RAM ",
-                                                    frac,
-                                                    egui::Color32::from_gray(if frac > 0.85 {
-                                                        160
-                                                    } else {
-                                                        90
-                                                    }),
-                                                );
-                                            }
-                                        });
-                                    }
 
-                                    // API badge
-                                    if let Some(port) = self.api_port {
-                                        ui.add_space(2.0);
-                                        let api_label = format!(":{port}");
-                                        let btn = ui.add(
-                                            egui::Button::new(
-                                                egui::RichText::new(&api_label)
-                                                    .color(theme::SMOKE)
+                                            ui.separator();
+
+                                            // Monitor volume
+                                            let vol_col = if self.ui_volume < 0.4 {
+                                                theme::ASH
+                                            } else if self.ui_volume < 0.75 {
+                                                theme::SMOKE
+                                            } else {
+                                                theme::FOG
+                                            };
+                                            ui.label(
+                                                egui::RichText::new("MON")
+                                                    .color(vol_col)
                                                     .monospace()
                                                     .size(8.5),
                                             )
-                                            .fill(theme::VOID)
-                                            .stroke(egui::Stroke::new(1.0, theme::SLATE)),
-                                        );
-                                        if btn.clicked() {
-                                            let url = format!("http://localhost:{port}/api/schema");
-                                            let _ = webbrowser_open(&url);
-                                        }
-                                    }
-                                });
-                            })
-                            .response;
+                                            .on_hover_text(
+                                                "Monitor volume — listen only, not export volume",
+                                            );
+                                            if ui
+                                                .scope(|ui| {
+                                                    ui.spacing_mut().slider_width = MON_W;
+                                                    ui.add(
+                                                        egui::Slider::new(
+                                                            &mut self.ui_volume,
+                                                            0.0..=1.0,
+                                                        )
+                                                        .show_value(false),
+                                                    )
+                                                })
+                                                .inner
+                                                .changed()
+                                            {
+                                                let _ = self.audio_tx.push(
+                                                    AudioCommand::SetMonitorVolume(self.ui_volume),
+                                                );
+                                            }
 
-                        // Store width for next frame (include item_spacing gap).
-                        ctx.memory_mut(|m| {
-                            m.data.insert_temp(
-                                right_w_id,
-                                right_resp.rect.width() + ui.spacing().item_spacing.x,
-                            );
+                                            // VRAM / RAM bars
+                                            if has_vram || has_ram {
+                                                const TRACK: egui::Color32 =
+                                                    egui::Color32::from_gray(38);
+                                                ui.add_space(8.0);
+                                                ui.vertical(|ui| {
+                                                    let draw_bar = |ui: &mut egui::Ui,
+                                                                    label: &str,
+                                                                    frac: f32,
+                                                                    fill: egui::Color32| {
+                                                        ui.horizontal(|ui| {
+                                                            ui.label(
+                                                                egui::RichText::new(label)
+                                                                    .color(theme::ASH)
+                                                                    .monospace()
+                                                                    .size(8.0),
+                                                            );
+                                                            let (br, _) =
+                                                                ui.allocate_exact_size(
+                                                                    egui::vec2(BAR_W, BAR_H),
+                                                                    egui::Sense::hover(),
+                                                                );
+                                                            let p = ui.painter();
+                                                            p.rect_filled(br, 1.0, TRACK);
+                                                            let fw = (br.width()
+                                                                * frac.clamp(0.0, 1.0))
+                                                            .max(0.0);
+                                                            if fw > 0.0 {
+                                                                p.rect_filled(
+                                                                    egui::Rect::from_min_size(
+                                                                        br.min,
+                                                                        egui::vec2(
+                                                                            fw,
+                                                                            br.height(),
+                                                                        ),
+                                                                    ),
+                                                                    1.0,
+                                                                    fill,
+                                                                );
+                                                            }
+                                                        });
+                                                    };
+                                                    if has_vram {
+                                                        let frac =
+                                                            vram_used as f32 / vram_total as f32;
+                                                        draw_bar(
+                                                            ui,
+                                                            "VRAM",
+                                                            frac,
+                                                            egui::Color32::from_gray(
+                                                                if frac > 0.85 { 160 } else { 90 },
+                                                            ),
+                                                        );
+                                                    }
+                                                    if has_ram {
+                                                        let frac =
+                                                            ram_used as f32 / ram_total as f32;
+                                                        draw_bar(
+                                                            ui,
+                                                            "RAM ",
+                                                            frac,
+                                                            egui::Color32::from_gray(
+                                                                if frac > 0.85 { 160 } else { 90 },
+                                                            ),
+                                                        );
+                                                    }
+                                                });
+                                            }
+
+                                            // API badge
+                                            if let Some(port) = self.api_port {
+                                                ui.add_space(2.0);
+                                                let api_label = format!(":{port}");
+                                                let btn = ui.add(
+                                                    egui::Button::new(
+                                                        egui::RichText::new(&api_label)
+                                                            .color(theme::SMOKE)
+                                                            .monospace()
+                                                            .size(8.5),
+                                                    )
+                                                    .fill(theme::VOID)
+                                                    .stroke(egui::Stroke::new(
+                                                        1.0,
+                                                        theme::SLATE,
+                                                    )),
+                                                );
+                                                if btn.clicked() {
+                                                    let url = format!(
+                                                        "http://localhost:{port}/api/schema"
+                                                    );
+                                                    let _ = webbrowser_open(&url);
+                                                }
+                                            }
+                                        });
+                                    })
+                                    .response;
+
+                                // Store width for next frame.
+                                ctx.memory_mut(|m| {
+                                    m.data.insert_temp(
+                                        right_w_id,
+                                        right_resp.rect.width() + ui.spacing().item_spacing.x,
+                                    );
+                                });
+                            });
+
+                            // ── Row 2: TEMP slider ───────────────────────────────
+                            ui.horizontal(|ui| {
+                                ui.spacing_mut().item_spacing.x = 4.0;
+                                ui.label(
+                                    egui::RichText::new("TEMP")
+                                        .color(theme::ASH)
+                                        .monospace()
+                                        .size(8.5),
+                                );
+                                let label_w = 32.0;
+                                let drag_w = 48.0;
+                                let spacings = ui.spacing().item_spacing.x * 2.0;
+                                let temp_slider_w =
+                                    (slider_w - label_w - drag_w - spacings).max(40.0);
+                                let temp_resp = ui
+                                    .scope(|ui| {
+                                        ui.spacing_mut().slider_width = temp_slider_w;
+                                        ui.add(
+                                            egui::Slider::new(&mut temp, 0.0..=2.0)
+                                                .show_value(false),
+                                        )
+                                    })
+                                    .inner;
+                                if temp_resp.changed() {
+                                    self.state.write().llm.temperature = temp;
+                                }
+                                temp_resp.on_hover_text(
+                                    "LLM sampling temperature (0–2). Higher = more varied output.",
+                                );
+                                if ui
+                                    .add_sized(
+                                        [drag_w, 18.0],
+                                        egui::DragValue::new(&mut temp)
+                                            .range(0.0..=2.0)
+                                            .speed(0.01)
+                                            .fixed_decimals(2),
+                                    )
+                                    .changed()
+                                {
+                                    self.state.write().llm.temperature = temp;
+                                }
+                            });
                         });
                     }
                 });

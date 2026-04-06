@@ -117,11 +117,12 @@ A detailed log of what's built. The roadmap lives in [PLAN.md](../PLAN.md).
 - **Autosave interval setting** — Preferences → System tab; Immediate / 5s / 30s / Manual; throttled via `last_save_time`; persisted in session.json
 - **Even control spacing** — `even_group_width()` + `glass_group_fill()` helpers distribute glass groups evenly across panel width; applied to drum panels (Kit A/B) and FX panel (max 4 cols)
 - **Hoover LP+BP mix** — Chamberlin SVF now mixes lowpass (body) with bandpass (resonant peak); amount scales with resonance param; tanh soft-clip prevents harshness; tighter q curve
-- **Separate LLM temperature** — `llm_temp_override: Option<f32>` decouples inference temperature from jam heat; `None` follows heat formula, `Some(v)` pins it; toggle + drag in Preferences → Sampling
+- **Separate LLM temperature slider** — `llm.temperature: f32` (0–2, default 0.9) is now a first-class field decoupled from `llm.heat` (mutation rate); temperature is sent directly to llama-server; TEMP DragValue appears in the LLM strip header alongside the HEAT slider
 
 ## Intelligence
 
-- Heat chaos amplification: temperature 0.1 + heat×1.6 (max 1.7); top_p widens with heat; CHAOS tier (≥90%) adds explicit "maximum disorder" instruction to system prompt
+- Heat controls mutation rate and top_p widening (top_p widens with heat); CHAOS tier (≥90%) adds explicit "maximum disorder" instruction to system prompt
+- TEMP slider (0–2) controls inference sampling temperature independently of heat; default 0.9
 
 ## Testing and build
 

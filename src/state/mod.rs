@@ -653,10 +653,8 @@ pub struct LlmState {
     pub focused_params: HashSet<String>, // LlmFocus: LLM should prioritize these
     pub auto_jam: bool,                 // LLM continuously generates pattern variations
     pub heat: f32,                      // 0–1: jam mutation intensity (low=subtle, high=wild)
-    /// When `Some`, overrides the LLM inference temperature independently of `heat`.
-    /// `None` (default) = temperature follows heat (0.1 + heat × 1.6).
-    #[serde(default)]
-    pub llm_temp_override: Option<f32>,
+    #[serde(default = "LlmState::default_temperature")]
+    pub temperature: f32, // 0–2: inference sampling temperature sent to llama-server (decoupled from heat)
     pub conversation_mode: ConversationMode,
     pub active_style: Option<String>, // style id from styles.json, "__free__", "__custom__", or None
     pub custom_style_text: String,    // used when active_style == Some("__custom__")
@@ -696,6 +694,12 @@ pub struct LlmState {
     pub jam_cycle_count: u32, // total jam cycles completed (display only)
 }
 
+impl LlmState {
+    fn default_temperature() -> f32 {
+        0.9
+    }
+}
+
 impl Default for LlmState {
     fn default() -> Self {
         Self {
@@ -713,7 +717,7 @@ impl Default for LlmState {
             focused_params: HashSet::new(),
             auto_jam: true,
             heat: 0.4,
-            llm_temp_override: None,
+            temperature: 0.9,
             conversation_mode: ConversationMode::Producer,
             active_style: None,
             custom_style_text: String::new(),

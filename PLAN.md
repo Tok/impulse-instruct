@@ -41,17 +41,14 @@ All items shipped in this sprint are documented in [docs/features.md](docs/featu
 
 ### Next sprint — v0.6.0 queue
 
-- [ ] **Separate LLM heat slider** — decouple "LLM temperature" (inference
-  sampling temperature) from "jam energy / mutation rate" (how aggressively
-  PULSE rewrites params between cycles).  Currently both read from the single
-  `llm.heat` value.  Add a second knob/slider: `llm.temperature` (float 0–2,
-  default 0.9) stored in `LlmState`, sent to llama-server's `temperature`
-  field; `llm.heat` remains the mutation-rate control.  UI: two separate
-  controls in the LLM strip.
+- [x] **Separate LLM heat slider** — `llm.temperature: f32` (0–2, default 0.9)
+  added to `LlmState`; sent directly to llama-server; `llm.heat` remains the
+  mutation-rate / top_p-widening control.  TEMP DragValue now appears in the
+  LLM strip header.
 
-- [ ] **Even control spacing — extend to remaining panels** — `even_group_width()`
-  / `glass_group_fill()` already applied to bass, hoover, an1x.  Remaining:
-  drums (808/909 TUNE/CHAR/ENV groups), FX panel knob rows.
+- [x] **Even control spacing — extend to remaining panels** — all panels
+  (drums Kit A/B, FX) already use `even_group_width()` / `glass_group_fill()`.
+  Item was completed in a prior sprint.
 
 ---
 

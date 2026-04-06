@@ -161,7 +161,8 @@ pub fn draw_rack(app: &mut ImpulseApp, ctx: &egui::Context, ui: &mut egui::Ui) {
         })
         .unwrap_or(false);
     let dragging_cable = app.cable_drag.is_some();
-    ScrollArea::vertical()
+    let scroll_id = egui::Id::new("rack_scroll");
+    let scroll_out = ScrollArea::vertical()
         .id_source("rack_scroll")
         .drag_to_scroll(!dragging_cable && !pointer_near_port)
         .auto_shrink([false; 2])
@@ -170,6 +171,28 @@ pub fn draw_rack(app: &mut ImpulseApp, ctx: &egui::Context, ui: &mut egui::Ui) {
             ui.set_min_width(ui.available_width());
             draw_rack_inner(app, ui, &mut ports);
         });
+
+    // ── Arrow-key scrolling (fast, held = continuous) ─────────────────────────
+    // Only scroll when no text widget has focus (avoid stealing arrow keys
+    // from text inputs like the prompt field).
+    let nothing_focused = ctx.memory(|m| m.focused()).is_none();
+    if nothing_focused {
+        let scroll_speed = 60.0;
+        let up = ctx.input(|i| i.key_down(egui::Key::ArrowUp));
+        let down = ctx.input(|i| i.key_down(egui::Key::ArrowDown));
+        if up || down {
+            let max_y = (scroll_out.content_size.y - scroll_out.inner_rect.height()).max(0.0);
+            let mut state = scroll_out.state;
+            if down {
+                state.offset.y = (state.offset.y + scroll_speed).min(max_y);
+            }
+            if up {
+                state.offset.y = (state.offset.y - scroll_speed).max(0.0);
+            }
+            state.store(ctx, scroll_id);
+            ctx.request_repaint();
+        }
+    }
 
     // Persist ports for the next frame's scroll-lock check.
     ctx.memory_mut(|m| m.data.insert_temp(ports_mem_id, ports.clone()));
