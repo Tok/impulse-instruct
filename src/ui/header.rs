@@ -555,16 +555,33 @@ impl ImpulseApp {
                             (egui::Color32::WHITE, "CHAOS")
                         };
 
-                        // Pre-compute slider width (same for both rows).
+                        // Pre-compute shared grid column widths for both rows.
+                        const LABEL_W: f32 = 36.0;
+                        const DRAG_W: f32 = 48.0;
                         let full_w = ui.available_width();
-                        let slider_w = (full_w - right_w).max(60.0);
+                        let left_w = (full_w - right_w).max(60.0);
+                        let item_sp = ui.spacing().item_spacing.x;
+                        let track_w = (left_w - LABEL_W - DRAG_W - item_sp * 2.0).max(40.0);
 
                         ui.vertical(|ui| {
-                            // ── Row 1: HEAT slider + right controls ──────────────
+                            // ── Row 1: HEAT label + slider + value + right controls
                             ui.horizontal(|ui| {
+                                ui.spacing_mut().item_spacing.x = 4.0;
+                                // Label
+                                ui.add_sized(
+                                    [LABEL_W, 18.0],
+                                    egui::Label::new(
+                                        egui::RichText::new("HEAT")
+                                            .color(heat_color)
+                                            .monospace()
+                                            .size(8.5),
+                                    ),
+                                )
+                                .on_hover_text(heat_tier);
+                                // Slider
                                 let heat_resp = ui
                                     .scope(|ui| {
-                                        ui.spacing_mut().slider_width = slider_w;
+                                        ui.spacing_mut().slider_width = track_w;
                                         ui.add(
                                             egui::Slider::new(&mut heat, 0.0..=1.0)
                                                 .show_value(false)
@@ -575,18 +592,23 @@ impl ImpulseApp {
                                 if heat_resp.changed() {
                                     self.state.write().llm.heat = heat;
                                 }
-                                let heat_rect = heat_resp.rect;
                                 heat_resp.on_hover_text(
-                                    "Jam energy — mutation rate. CHAOS (100%) = maximum parameter rewriting.",
+                                    "Jam energy — mutation rate. CHAOS = maximum rewriting.",
                                 );
-                                if ui.is_rect_visible(heat_rect) {
-                                    ui.painter().text(
-                                        heat_rect.left_center() + egui::vec2(6.0, 0.0),
-                                        egui::Align2::LEFT_CENTER,
-                                        heat_tier,
-                                        egui::FontId::monospace(8.5),
-                                        heat_color,
-                                    );
+                                // Value
+                                let mut pct = heat * 100.0;
+                                if ui
+                                    .add_sized(
+                                        [DRAG_W, 18.0],
+                                        egui::DragValue::new(&mut pct)
+                                            .range(0.0..=100.0)
+                                            .speed(0.5)
+                                            .suffix("%")
+                                            .fixed_decimals(0),
+                                    )
+                                    .changed()
+                                {
+                                    self.state.write().llm.heat = pct / 100.0;
                                 }
 
                                 // ── Right controls ───────────────────────────────
@@ -595,24 +617,6 @@ impl ImpulseApp {
                                         ui.spacing_mut().button_padding = egui::vec2(4.0, 1.0);
                                         ui.spacing_mut().item_spacing.x = 4.0;
                                         ui.horizontal_centered(|ui| {
-                                            // HEAT % DragValue
-                                            let mut pct = heat * 100.0;
-                                            if ui
-                                                .add_sized(
-                                                    [48.0, 18.0],
-                                                    egui::DragValue::new(&mut pct)
-                                                        .range(0.0..=100.0)
-                                                        .speed(0.5)
-                                                        .suffix("%")
-                                                        .fixed_decimals(0),
-                                                )
-                                                .changed()
-                                            {
-                                                self.state.write().llm.heat = pct / 100.0;
-                                            }
-
-                                            ui.separator();
-
                                             // KNOBS / SLIDERS toggle
                                             let use_sliders =
                                                 self.state.read().ui_prefs.use_sliders;
@@ -760,10 +764,7 @@ impl ImpulseApp {
                                                             .size(8.5),
                                                     )
                                                     .fill(theme::VOID)
-                                                    .stroke(egui::Stroke::new(
-                                                        1.0,
-                                                        theme::SLATE,
-                                                    )),
+                                                    .stroke(egui::Stroke::new(1.0, theme::SLATE)),
                                                 );
                                                 if btn.clicked() {
                                                     let url = format!(
@@ -785,23 +786,23 @@ impl ImpulseApp {
                                 });
                             });
 
-                            // ── Row 2: TEMP slider ───────────────────────────────
+                            // ── Row 2: TEMP label + slider + value ───────────────
                             ui.horizontal(|ui| {
                                 ui.spacing_mut().item_spacing.x = 4.0;
-                                ui.label(
-                                    egui::RichText::new("TEMP")
-                                        .color(theme::ASH)
-                                        .monospace()
-                                        .size(8.5),
+                                // Label (same width as HEAT)
+                                ui.add_sized(
+                                    [LABEL_W, 18.0],
+                                    egui::Label::new(
+                                        egui::RichText::new("TEMP")
+                                            .color(theme::ASH)
+                                            .monospace()
+                                            .size(8.5),
+                                    ),
                                 );
-                                let label_w = 32.0;
-                                let drag_w = 48.0;
-                                let spacings = ui.spacing().item_spacing.x * 2.0;
-                                let temp_slider_w =
-                                    (slider_w - label_w - drag_w - spacings).max(40.0);
+                                // Slider (same track width as HEAT)
                                 let temp_resp = ui
                                     .scope(|ui| {
-                                        ui.spacing_mut().slider_width = temp_slider_w;
+                                        ui.spacing_mut().slider_width = track_w;
                                         ui.add(
                                             egui::Slider::new(&mut temp, 0.0..=2.0)
                                                 .show_value(false),
@@ -814,9 +815,10 @@ impl ImpulseApp {
                                 temp_resp.on_hover_text(
                                     "LLM sampling temperature (0–2). Higher = more varied output.",
                                 );
+                                // Value (same width as HEAT)
                                 if ui
                                     .add_sized(
-                                        [drag_w, 18.0],
+                                        [DRAG_W, 18.0],
                                         egui::DragValue::new(&mut temp)
                                             .range(0.0..=2.0)
                                             .speed(0.01)
