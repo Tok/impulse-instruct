@@ -379,14 +379,16 @@ pub fn module_card<R>(
             let inner_resp = content_frame.show(ui, |ui| {
                 ui.spacing_mut().item_spacing = Vec2::new(2.0, 2.0);
                 // Clamp content width to the card width (minus horizontal margin×2).
-                // This prevents wide content (e.g. many knobs, long labels) from
-                // pushing the card beyond its allocated slot.
                 ui.set_max_width(card_w - 12.0);
-                if enabled {
-                    content(ui)
-                } else {
-                    ui.add_enabled_ui(false, |ui| content(ui)).inner
-                }
+                // Center content horizontally so knobs/sliders don't cluster left.
+                ui.with_layout(egui::Layout::top_down(egui::Align::Center), |ui| {
+                    if enabled {
+                        content(ui)
+                    } else {
+                        ui.add_enabled_ui(false, |ui| content(ui)).inner
+                    }
+                })
+                .inner
             });
             inner_resp.inner
         })

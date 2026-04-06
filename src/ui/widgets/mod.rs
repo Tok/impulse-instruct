@@ -437,7 +437,7 @@ pub fn glass_group<R>(
             // Force vertical stacking regardless of parent layout, and cap the width
             // so groups don't expand to fill the entire horizontal_wrapped row.
             ui.set_max_width(max_width);
-            ui.with_layout(egui::Layout::top_down(egui::Align::LEFT), content)
+            ui.with_layout(egui::Layout::top_down(egui::Align::Center), content)
                 .inner
         });
 

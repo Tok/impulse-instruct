@@ -4,12 +4,15 @@
 mod header;
 mod llm_strip;
 pub mod module_card;
+mod note;
 pub mod panels;
 pub mod rack_canvas;
 pub(crate) mod rack_content;
 pub mod theme;
 pub mod widgets;
 mod windows;
+
+pub(crate) use note::{ansi_colorize_notes, note_name};
 
 /// Convert a dot-path + float value into a nested JSON object.
 /// "bass.cutoff", 0.4  →  {"bass": {"cutoff": 0.4}}
@@ -20,20 +23,6 @@ fn dot_path_to_json(path: &str, value: f32) -> serde_json::Value {
         .iter()
         .rev()
         .fold(leaf, |acc, &key| serde_json::json!({ key: acc }))
-}
-
-/// Short note name for a MIDI note number (e.g. 60 → "C4").
-pub(crate) fn note_name(midi: u8) -> &'static str {
-    const NAMES: &[&str] = &[
-        "C1", "C#1", "D1", "D#1", "E1", "F1", "F#1", "G1", "G#1", "A1", "A#1", "B1", "C2", "C#2",
-        "D2", "D#2", "E2", "F2", "F#2", "G2", "G#2", "A2", "A#2", "B2", "C3", "C#3", "D3", "D#3",
-        "E3", "F3", "F#3", "G3", "G#3", "A3", "A#3", "B3", "C4", "C#4", "D4", "D#4", "E4", "F4",
-        "F#4", "G4", "G#4", "A4", "A#4", "B4", "C5", "C#5", "D5", "D#5", "E5", "F5", "F#5", "G5",
-        "G#5", "A5", "A#5", "B5", "C6",
-    ];
-    // MIDI 24 = C1
-    let idx = midi.saturating_sub(24) as usize;
-    NAMES.get(idx).copied().unwrap_or("?")
 }
 
 /// Scan for .gguf model files. Checks:
@@ -487,7 +476,11 @@ impl ImpulseApp {
             {
                 self.last_thinking = Some(thinking.clone());
                 let think_persona = self.state.read().llm.persona_name.clone();
-                log::info!("{} (think): {}", think_persona, thinking);
+                log::info!(
+                    "{} (think): {}",
+                    think_persona,
+                    ansi_colorize_notes(thinking)
+                );
                 if self.state.read().llm.show_thinking_in_log {
                     self.log_text
                         .push_str(&format!("{} (think): {}\n", think_persona, thinking));
@@ -541,6 +534,7 @@ impl ImpulseApp {
                 } else {
                     format!("{} → {}\n", persona, display)
                 };
+                log::info!("{}", ansi_colorize_notes(line.trim_end()));
                 self.log_text.push_str(&line);
                 // MC line: shown separately with a marker so it's visually distinct
                 if let Some(ref mc) = out.mc_line {
