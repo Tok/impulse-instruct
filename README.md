@@ -33,7 +33,7 @@ See [Known Limitations](#known-limitations) for specifics on what works and what
 ---
 
 <p align="center">
-  <img src="assets/screenshots/Screenshot-0.5.8.png" alt="Impulse Instruct v0.5.8" width="900"/>
+  <img src="assets/screenshots/Screenshot-0.5.9.png" alt="Impulse Instruct v0.5.9" width="900"/>
 </p>
 
 ---
