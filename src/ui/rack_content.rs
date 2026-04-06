@@ -348,6 +348,23 @@ pub(super) fn handle_cable_drag(
         app.state.write().rack.connect(from, to);
         app.push_fx_plan();
     }
+
+    // Right-click a port to disconnect all cables attached to it.
+    let secondary_released = ctx.input(|i| i.pointer.secondary_released());
+    if secondary_released
+        && app.cable_drag.is_none()
+        && let Some(pp) = hovered_port
+    {
+        let prev_len = app.state.read().rack.cables.len();
+        app.state
+            .write()
+            .rack
+            .cables
+            .retain(|c| c.from != pp.port && c.to != pp.port);
+        if app.state.read().rack.cables.len() != prev_len {
+            app.push_fx_plan();
+        }
+    }
 }
 
 fn draw_noise_stub(app: &mut ImpulseApp, ui: &mut egui::Ui) {

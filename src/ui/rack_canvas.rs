@@ -15,132 +15,16 @@
 // Cables are drawn as a Painter overlay after all cards are placed, using
 // screen positions collected during card rendering.
 
-use egui::{Color32, Pos2, ScrollArea, Stroke, Vec2};
+use egui::{Color32, ScrollArea, Vec2};
 
 use crate::state::rack::lfo_target_module_kind;
 use crate::state::{LfoTarget, ModuleKind, PortDir, PortKind, PortRef, Zone};
 use crate::ui::module_card::PortPos;
+use crate::ui::rack_cables::draw_cable;
 use crate::ui::{ImpulseApp, module_card};
 
-// ─── Cable drawing ───────────────────────────────────────────────────────────
-
-/// Draw a single patch cable as a 3D bezier tube (two bezier passes).
-/// Evaluate a cubic bezier at parameter t ∈ [0,1].
-fn bezier(from: Pos2, cp1: Pos2, cp2: Pos2, to: Pos2, t: f32) -> Pos2 {
-    let mt = 1.0 - t;
-    Pos2::new(
-        mt * mt * mt * from.x
-            + 3.0 * mt * mt * t * cp1.x
-            + 3.0 * mt * t * t * cp2.x
-            + t * t * t * to.x,
-        mt * mt * mt * from.y
-            + 3.0 * mt * mt * t * cp1.y
-            + 3.0 * mt * t * t * cp2.y
-            + t * t * t * to.y,
-    )
-}
-
-/// Draw a patch cable.
-/// `time`         — wall-clock seconds (for wobble + signal animation).
-/// `phase_offset` — per-cable phase so cables don't all sway together.
-/// `animate_flow` — when true, draw a traveling signal dot from→to.
-fn draw_cable(
-    painter: &egui::Painter,
-    from: Pos2,
-    to: Pos2,
-    time: f32,
-    phase_offset: f32,
-    animate_flow: bool,
-) {
-    // ── Gravity sag ───────────────────────────────────────────────────────────
-    let dx = (to.x - from.x).abs();
-    let dy = to.y - from.y;
-    let sag = (dx * 0.28 + (-dy).max(0.0) * 0.18).clamp(20.0, 160.0);
-
-    // ── Gentle wobble — each cable sways at its own phase ────────────────────
-    // Horizontal oscillation of the control points; keeps amplitude small so
-    // cables look alive but not distracting.
-    let wobble = ((time * 1.1 + phase_offset) * std::f32::consts::TAU).sin() * 2.5;
-    let cp1 = from + Vec2::new(wobble, sag);
-    let cp2 = to + Vec2::new(-wobble * 0.8, sag);
-
-    // ── Sample curve points (48 segments for smooth 3D tube) ─────────────────
-    let n = 48usize;
-    let points: Vec<Pos2> = (0..=n)
-        .map(|i| bezier(from, cp1, cp2, to, i as f32 / n as f32))
-        .collect();
-
-    // ── 3D tube rendering — 4 passes ─────────────────────────────────────────
-    // 1. Wide dark drop shadow
-    let shadow: Vec<Pos2> = points.iter().map(|p| *p + Vec2::new(0.5, 2.5)).collect();
-    painter.add(egui::Shape::line(
-        shadow,
-        Stroke::new(5.5, Color32::from_black_alpha(90)),
-    ));
-
-    // 2. Cable body — bright gray
-    let cable_col = Color32::from_gray(155);
-    painter.add(egui::Shape::line(
-        points.clone(),
-        Stroke::new(4.5, cable_col),
-    ));
-
-    // 3. Core — slightly lighter, narrower (depth gradient)
-    painter.add(egui::Shape::line(
-        points.clone(),
-        Stroke::new(2.5, Color32::from_gray(185)),
-    ));
-
-    // 4. Specular highlight — thin bright line along the top edge
-    let hilight: Vec<Pos2> = points.iter().map(|p| *p + Vec2::new(0.0, -1.5)).collect();
-    painter.add(egui::Shape::line(
-        hilight,
-        Stroke::new(1.0, Color32::from_white_alpha(110)),
-    ));
-
-    // ── Signal flow dots — speed and spacing normalised to cable arc length ──────
-    // Arc length from the already-sampled points (free, no extra Bezier evals).
-    if animate_flow {
-        let arc_len: f32 = points
-            .windows(2)
-            .map(|w| w[0].distance(w[1]))
-            .sum::<f32>()
-            .max(1.0);
-
-        // Target: ~170 px/s travel speed regardless of cable length.
-        // Clamp so very short or very long cables stay in a sensible range.
-        let speed = (170.0 / arc_len).clamp(0.25, 2.5);
-
-        // Dot spacing: one dot per ~130 px of cable; min 2, max 5.
-        let num_dots = ((arc_len / 130.0).round() as u8).clamp(2, 5);
-        let spacing = 1.0 / num_dots as f32;
-
-        for i in 0..num_dots {
-            let t_dot = (time * speed + phase_offset * 0.3 + i as f32 * spacing) % 1.0;
-            let dot = bezier(from, cp1, cp2, to, t_dot);
-            painter.circle_filled(dot, 5.0, Color32::from_white_alpha(35));
-            painter.circle_filled(dot, 2.5, Color32::from_gray(240));
-        }
-    }
-}
-
-// ─── In-progress cable drag state ────────────────────────────────────────────
-
-/// UI-local state for a cable currently being dragged.
-#[derive(Clone, Debug)]
-pub struct CableDrag {
-    pub from_port: crate::state::PortRef,
-    pub from_screen: Pos2,
-}
-
-// ─── Module drag state ────────────────────────────────────────────────────────
-
-/// State for a module title bar being dragged to reorder it in the rack.
-#[derive(Clone, Debug)]
-pub struct ModuleDrag {
-    pub module_id: u32,
-    pub pointer: Pos2,
-}
+// Re-export so callers referencing `rack_canvas::CableDrag` keep working.
+pub use crate::ui::rack_cables::{CableDrag, ModuleDrag};
 
 // ─── Available module kinds per zone (for add menus) ─────────────────────────
 
@@ -260,18 +144,35 @@ pub fn draw_rack(app: &mut ImpulseApp, ctx: &egui::Context, ui: &mut egui::Ui) {
     // context menu can cover the entire rack area with a single interact region.
     let canvas_rect = ui.available_rect_before_wrap();
 
-    // Disable drag-to-scroll only while a cable is being dragged, so normal
-    // two-finger/trackpad scroll works when not patching.
+    // Disable drag-to-scroll when the pointer is near a port (so the scroll
+    // area doesn't steal the press that begins a cable drag) or while a cable
+    // is already being dragged.  Port positions are from the previous frame —
+    // one frame of latency is imperceptible.
+    let ports_mem_id = egui::Id::new("rack_port_positions");
+    let prev_ports: Vec<PortPos> = ctx
+        .memory(|m| m.data.get_temp(ports_mem_id))
+        .unwrap_or_default();
+    let pointer_near_port = ctx
+        .pointer_latest_pos()
+        .map(|p| {
+            prev_ports
+                .iter()
+                .any(|pp| pp.center.distance(p) <= module_card::PORT_RADIUS + 6.0)
+        })
+        .unwrap_or(false);
     let dragging_cable = app.cable_drag.is_some();
     ScrollArea::vertical()
         .id_source("rack_scroll")
-        .drag_to_scroll(!dragging_cable)
+        .drag_to_scroll(!dragging_cable && !pointer_near_port)
         .auto_shrink([false; 2])
         .scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::AlwaysVisible)
         .show(ui, |ui| {
             ui.set_min_width(ui.available_width());
             draw_rack_inner(app, ui, &mut ports);
         });
+
+    // Persist ports for the next frame's scroll-lock check.
+    ctx.memory_mut(|m| m.data.insert_temp(ports_mem_id, ports.clone()));
 
     // ── Cable overlay (Tab to show/hide) ──────────────────────────────────────
     {
@@ -366,6 +267,63 @@ pub fn draw_rack(app: &mut ImpulseApp, ctx: &egui::Context, ui: &mut egui::Ui) {
 
             // Animate continuously while cables are visible.
             ctx.request_repaint();
+        }
+    }
+
+    // ── Port hover / drag-target highlights ──────────────────────────────────
+    // Painted on the same Foreground layer as cables, after cables so glows
+    // appear on top of cable lines but below the in-progress drag cable.
+    if let Some(pointer) = ctx.pointer_latest_pos() {
+        let mut overlay = ctx.layer_painter(egui::LayerId::new(
+            egui::Order::Foreground,
+            egui::Id::new("port_highlights"),
+        ));
+        overlay.set_clip_rect(canvas_rect);
+
+        for pp in &ports {
+            let dist = pp.center.distance(pointer);
+            let is_hovered = dist <= module_card::PORT_RADIUS + 6.0;
+
+            if let Some(ref drag) = app.cable_drag {
+                let is_source = pp.port == drag.from_port;
+                let is_compatible = pp.port.dir != drag.from_port.dir
+                    && pp.port.kind == drag.from_port.kind
+                    && pp.port.module_id != drag.from_port.module_id;
+                if is_source {
+                    // Pulsing white ring around the drag source
+                    overlay.circle_stroke(
+                        pp.center,
+                        module_card::PORT_RADIUS + 3.5,
+                        egui::Stroke::new(1.5, egui::Color32::from_white_alpha(200)),
+                    );
+                } else if is_compatible {
+                    // Green ring — valid drop target; brighter when hovered
+                    let alpha = if is_hovered { 230 } else { 90 };
+                    overlay.circle_stroke(
+                        pp.center,
+                        module_card::PORT_RADIUS + 3.5,
+                        egui::Stroke::new(
+                            1.5,
+                            egui::Color32::from_rgba_unmultiplied(80, 210, 100, alpha),
+                        ),
+                    );
+                }
+                // Incompatible ports: no extra decoration, they fade naturally
+            } else if is_hovered {
+                // Idle hover: subtle white glow
+                overlay.circle_stroke(
+                    pp.center,
+                    module_card::PORT_RADIUS + 2.5,
+                    egui::Stroke::new(1.0, egui::Color32::from_white_alpha(120)),
+                );
+            }
+        }
+
+        // Cursor feedback
+        if dragging_cable {
+            ctx.set_cursor_icon(egui::CursorIcon::Crosshair);
+        } else if pointer_near_port {
+            ctx.set_cursor_icon(egui::CursorIcon::PointingHand);
         }
     }
 

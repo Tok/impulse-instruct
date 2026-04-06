@@ -6,6 +6,7 @@ mod llm_strip;
 pub mod module_card;
 mod note;
 pub mod panels;
+pub mod rack_cables;
 pub mod rack_canvas;
 pub(crate) mod rack_content;
 pub mod theme;

@@ -63,6 +63,8 @@ Ordered by value.  Branch: **`develop`** (merge to `main` only for tagged releas
 ### Next — pre-release queue
 
 - [x] **Huth coloring in synth panels** — apply `theme::note_color()` to note name labels wherever they appear in bass/drum/AN1X panels and oscilloscope readouts.  CLI terminal output (the `log::info!` etc.) should also emit ANSI escape codes for note names when stdout is a TTY.
+- [x] **Huth false-positive fix** — `colorize_log` in `llm_strip.rs` now has the same `safe_before`/`safe_after` bare-note guards as `ansi_colorize_notes`; D&B, E-flat etc. no longer get colored. Off-by-one bounds fix (quality-word extension at end-of-string). 9 new tests.
+- [x] **Header slider fill** — heat and MON sliders now use `spacing_mut().slider_width` instead of `allocate_exact_size+put`; `put()` was silently ignoring the rect for sliders.
 
 - [ ] **Rack cable drag-to-patch** — wire up the existing `CableDrag` infrastructure into a usable patch interaction: click+drag from any port circle to another to create a cable; right-click a cable to delete it.  The overlay already draws cables; the missing piece is the hit-test interaction layer.
 
