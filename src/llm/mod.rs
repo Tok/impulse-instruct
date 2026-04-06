@@ -899,9 +899,7 @@ pub fn run_llm_loop(
                         .and_then(|v| v.as_str())
                         .unwrap_or(&output.text);
                     let persona = state.read().llm.persona_name.clone();
-                    if one_shot {
-                        log::info!("{} -> {}", persona, comment);
-                    } else {
+                    if !one_shot {
                         log::debug!("{} (jam) -> {}", persona, comment);
                     }
 

@@ -481,13 +481,13 @@ impl ImpulseApp {
                 self.last_thinking = Some(thinking.clone());
                 let think_persona = self.state.read().llm.persona_name.clone();
                 log::info!(
-                    "{} (think): {}",
+                    "{} (thinking): {}",
                     think_persona,
                     ansi_colorize_notes(thinking)
                 );
                 if self.state.read().llm.show_thinking_in_log {
                     self.log_text
-                        .push_str(&format!("{} (think): {}\n", think_persona, thinking));
+                        .push_str(&format!("{} (thinking): {}\n", think_persona, thinking));
                 }
             }
 
@@ -534,9 +534,9 @@ impl ImpulseApp {
                     self.state.read().llm.persona_name.clone()
                 };
                 let line = if out.thinking.as_ref().is_some_and(|t| !t.is_empty()) {
-                    format!("{} → {} [think]\n", persona, display)
+                    format!("{} -> {} [think]\n", persona, display)
                 } else {
-                    format!("{} → {}\n", persona, display)
+                    format!("{} -> {}\n", persona, display)
                 };
                 log::info!("{}", ansi_colorize_notes(line.trim_end()));
                 self.log_text.push_str(&line);
