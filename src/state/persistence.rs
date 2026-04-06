@@ -50,6 +50,8 @@ pub struct SessionData {
     pub use_sliders: Option<bool>,
     pub ui_scale: Option<f32>,
     pub log_level_idx: Option<usize>,
+    #[serde(default)]
+    pub autosave_interval: Option<crate::state::AutosaveInterval>,
 }
 
 /// Save session data extracted from current AppState.
@@ -68,6 +70,7 @@ pub fn save_session(state: &AppState, show_cables: bool) {
         use_sliders: Some(state.ui_prefs.use_sliders),
         ui_scale: Some(state.ui_prefs.ui_scale),
         log_level_idx: Some(state.ui_prefs.log_level_idx),
+        autosave_interval: Some(state.ui_prefs.autosave_interval),
     };
     match serde_json::to_string_pretty(&data) {
         Ok(json) => {
@@ -124,6 +127,9 @@ pub fn apply_session(state: &mut AppState, data: SessionData) {
     }
     if let Some(v) = data.log_level_idx {
         state.ui_prefs.log_level_idx = v;
+    }
+    if let Some(v) = data.autosave_interval {
+        state.ui_prefs.autosave_interval = v;
     }
 }
 

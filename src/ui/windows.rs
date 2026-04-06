@@ -1,7 +1,7 @@
 // ─── ui/windows.rs ────────────────────────────────────────────────────────────
 // Floating windows: Preferences, About, System Info.
 
-use crate::state::{ConversationMode, McVoiceChar, StyleVerbosity};
+use crate::state::{AutosaveInterval, ConversationMode, McVoiceChar, StyleVerbosity};
 use crate::ui::LOG_LEVELS;
 use crate::ui::{ImpulseApp, theme, widgets};
 
@@ -743,36 +743,7 @@ impl ImpulseApp {
                     }
 
                     // ── Tab 3: System ─────────────────────────────────────────
-                    _ => {
-                        widgets::section_header(ui, "LOG VERBOSITY");
-                        ui.label(
-                            egui::RichText::new("Controls what appears in the terminal log.")
-                                .monospace()
-                                .size(8.0)
-                                .color(theme::IRON),
-                        );
-                        ui.add_space(4.0);
-                        let cur_idx = self.state.read().ui_prefs.log_level_idx;
-                        for (i, (label, filter)) in LOG_LEVELS.iter().enumerate() {
-                            let selected = cur_idx == i;
-                            let text = egui::RichText::new(*label)
-                                .monospace()
-                                .size(10.0)
-                                .color(if selected { theme::CHALK } else { theme::FOG });
-                            if ui.selectable_label(selected, text).clicked() && !selected {
-                                self.state.write().ui_prefs.log_level_idx = i;
-                                log::set_max_level(*filter);
-                            }
-                        }
-                        ui.label(
-                            egui::RichText::new(
-                                "  Current: applies immediately, persisted across sessions.",
-                            )
-                            .monospace()
-                            .size(8.0)
-                            .color(theme::IRON),
-                        );
-                    }
+                    _ => self.draw_system_tab(ui),
                 }
 
                 ui.add_space(10.0);
@@ -784,6 +755,58 @@ impl ImpulseApp {
                     }
                 });
             });
+    }
+
+    fn draw_system_tab(&mut self, ui: &mut egui::Ui) {
+        let hint = |ui: &mut egui::Ui, text: &str| {
+            ui.label(
+                egui::RichText::new(text)
+                    .monospace()
+                    .size(8.0)
+                    .color(theme::IRON),
+            );
+        };
+        widgets::section_header(ui, "LOG VERBOSITY");
+        hint(ui, "Controls what appears in the terminal log.");
+        ui.add_space(4.0);
+        let cur_idx = self.state.read().ui_prefs.log_level_idx;
+        for (i, (label, filter)) in LOG_LEVELS.iter().enumerate() {
+            let selected = cur_idx == i;
+            let text = egui::RichText::new(*label)
+                .monospace()
+                .size(10.0)
+                .color(if selected { theme::CHALK } else { theme::FOG });
+            if ui.selectable_label(selected, text).clicked() && !selected {
+                self.state.write().ui_prefs.log_level_idx = i;
+                log::set_max_level(*filter);
+            }
+        }
+        hint(
+            ui,
+            "  Current: applies immediately, persisted across sessions.",
+        );
+        ui.add_space(8.0);
+        widgets::section_header(ui, "AUTOSAVE");
+        hint(ui, "How often session state is written to session.json.");
+        ui.add_space(4.0);
+        let cur_interval = self.state.read().ui_prefs.autosave_interval;
+        for interval in [
+            AutosaveInterval::Immediate,
+            AutosaveInterval::FiveSec,
+            AutosaveInterval::ThirtySec,
+            AutosaveInterval::Manual,
+        ] {
+            let selected = cur_interval == interval;
+            let text = egui::RichText::new(interval.label())
+                .monospace()
+                .size(10.0)
+                .color(if selected { theme::CHALK } else { theme::FOG });
+            if ui.selectable_label(selected, text).clicked() && !selected {
+                self.state.write().ui_prefs.autosave_interval = interval;
+                self.session_dirty = true;
+            }
+        }
+        hint(ui, "  Manual: use File → Save Project to persist state.");
     }
 
     fn draw_about_window(&mut self, ctx: &egui::Context) {

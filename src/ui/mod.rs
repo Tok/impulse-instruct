@@ -266,6 +266,8 @@ pub struct ImpulseApp {
     pub(crate) session_dirty: bool,
     // Track last-saved rack cable/module count to detect changes.
     last_saved_rack_sig: (usize, usize),
+    // Timestamp of the most recent actual save (for interval throttling).
+    last_save_time: std::time::Instant,
     // Auto-listen: when enabled, trigger LISTEN automatically every N jam cycles.
     auto_listen: bool,
     // Counts jam cycles since the last auto-listen trigger.
@@ -399,6 +401,7 @@ impl ImpulseApp {
             module_drag: None,
             session_dirty: false,
             last_saved_rack_sig: (0, 0),
+            last_save_time: std::time::Instant::now(),
             auto_listen: false,
             auto_listen_counter: 0,
             jam_next_fire: None,
@@ -782,9 +785,22 @@ impl eframe::App for ImpulseApp {
             }
         }
         if self.session_dirty {
-            let state = self.state.read().clone();
-            crate::state::save_session(&state, self.show_cables);
-            self.session_dirty = false;
+            use crate::state::AutosaveInterval;
+            let interval = self.state.read().ui_prefs.autosave_interval;
+            let should_save = match interval {
+                AutosaveInterval::Manual => false,
+                AutosaveInterval::Immediate => true,
+                _ => interval
+                    .duration()
+                    .map(|d| self.last_save_time.elapsed() >= d)
+                    .unwrap_or(false),
+            };
+            if should_save {
+                let state = self.state.read().clone();
+                crate::state::save_session(&state, self.show_cables);
+                self.session_dirty = false;
+                self.last_save_time = std::time::Instant::now();
+            }
         }
 
         // ── Undo / redo (Ctrl+Z / Ctrl+Y or Ctrl+Shift+Z) ────────────────────
