@@ -46,27 +46,28 @@ impl KnobSize {
     }
 }
 
-/// Step-button and XY-pad size.
+/// Step-button and XY-pad size.  Steps mirror the KnobSize Fibonacci series
+/// so pad and knob sizes stay proportionally consistent when both are changed.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum PadSize {
-    /// 26 px — compact; 16 steps take ~430 px.
+    /// 34 px — compact; 16 steps fit in ~560 px.
     Small,
-    /// 44 px — default; generous spacing, good on most displays.
+    /// 55 px — default; matches KnobSize::Normal, good on most displays.
     #[default]
     Normal,
-    /// 58 px — large; 16 steps take ~950 px.
+    /// 89 px — large; generous detail on wide/high-DPI displays.
     Large,
-    /// 76 px — XL; best on wide/high-DPI displays.
+    /// 144 px — XL; presentation / accessibility mode.
     XL,
 }
 
 impl PadSize {
     pub fn px(self) -> f32 {
         match self {
-            Self::Small => 26.0,
-            Self::Normal => 44.0,
-            Self::Large => 58.0,
-            Self::XL => 76.0,
+            Self::Small => 34.0,
+            Self::Normal => 55.0,
+            Self::Large => 89.0,
+            Self::XL => 144.0,
         }
     }
 }
