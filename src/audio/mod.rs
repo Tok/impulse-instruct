@@ -114,12 +114,17 @@ impl AudioEngine {
                     // Advance sequencer — snapshot seq state (no lock held during DSP)
                     let (seq_snap, chain_snap, chain_enabled, chain_pos_snap) = {
                         let s = state_clone.read();
-                        (
-                            s.sequencer.clone(),
-                            s.chain.clone(),
-                            s.chain_enabled,
-                            s.chain_pos,
-                        )
+                        let mut seq = s.sequencer.clone();
+                        // Sync voice-enabled flags from AppState.bass_voices into the snapshot.
+                        for (i, v) in s
+                            .bass_voices
+                            .iter()
+                            .enumerate()
+                            .take(crate::state::MAX_BASS_VOICES)
+                        {
+                            seq.bass_voice_enabled[i] = v.enabled;
+                        }
+                        (seq, s.chain.clone(), s.chain_enabled, s.chain_pos)
                     };
 
                     let prev_loop_count = clock.loop_count;

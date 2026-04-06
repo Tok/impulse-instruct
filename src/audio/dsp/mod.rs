@@ -220,7 +220,7 @@ impl Bass303 {
 
 pub struct DspState {
     // Voices
-    bass: Bass303,
+    bass: [Bass303; crate::state::MAX_BASS_VOICES],
     kick808: Kick,
     snare808: Snare,
     hihat_closed808: HiHat,
@@ -286,7 +286,7 @@ impl DspState {
         let mut p = params;
         p.sample_rate = sample_rate;
         Self {
-            bass: Bass303::default(),
+            bass: std::array::from_fn(|_| Bass303::default()),
             kick808: Kick::new(0x1234),
             snare808: Snare::new(0x5678),
             hihat_closed808: HiHat::new(0x9abc),
@@ -506,18 +506,19 @@ impl DspState {
                 }
             }
             BassTrigger {
+                voice_idx,
                 note,
                 accent,
                 slide,
                 gate_samples: _,
             } => {
-                if self.params.rack_bass {
-                    self.bass.trigger(*note, *accent, *slide);
+                if self.params.rack_bass && *voice_idx < crate::state::MAX_BASS_VOICES {
+                    self.bass[*voice_idx].trigger(*note, *accent, *slide);
                 }
             }
-            BassGateOff => {
-                if self.params.rack_bass {
-                    self.bass.gate_off();
+            BassGateOff { voice_idx } => {
+                if self.params.rack_bass && *voice_idx < crate::state::MAX_BASS_VOICES {
+                    self.bass[*voice_idx].gate_off();
                 }
             }
             HooverTrigger { note } => {
@@ -691,7 +692,7 @@ impl DspState {
 
         for frame in output.chunks_mut(channels) {
             // Mix all voices to mono
-            let bass_out = self.bass.process(&p);
+            let bass_out = self.bass.iter_mut().map(|v| v.process(&p)).sum::<f32>();
 
             let dv = &self.drum_velocity;
             let k808 = self.kick808.process(

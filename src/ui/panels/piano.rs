@@ -377,6 +377,7 @@ pub fn draw_piano(app: &mut ImpulseApp, ui: &mut egui::Ui, ctx: &egui::Context) 
             let _ = app
                 .audio_tx
                 .push(AudioCommand::Trigger(TriggerEvent::BassTrigger {
+                    voice_idx: 0,
                     note,
                     accent: false,
                     slide: false,
@@ -401,6 +402,8 @@ pub fn draw_piano(app: &mut ImpulseApp, ui: &mut egui::Ui, ctx: &egui::Context) 
         }
         let _ = app
             .audio_tx
-            .push(AudioCommand::Trigger(TriggerEvent::BassGateOff));
+            .push(AudioCommand::Trigger(TriggerEvent::BassGateOff {
+                voice_idx: 0,
+            }));
     }
 }

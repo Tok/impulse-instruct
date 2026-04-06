@@ -645,7 +645,9 @@ impl ImpulseApp {
                     self.pressed_notes.remove(&note);
                     let _ = self
                         .audio_tx
-                        .push(AudioCommand::Trigger(TriggerEvent::BassGateOff));
+                        .push(AudioCommand::Trigger(TriggerEvent::BassGateOff {
+                            voice_idx: 0,
+                        }));
                 }
 
                 MidiEvent::NoteOn { note, velocity, .. } => {
@@ -655,6 +657,7 @@ impl ImpulseApp {
                     let _ = self
                         .audio_tx
                         .push(AudioCommand::Trigger(TriggerEvent::BassTrigger {
+                            voice_idx: 0,
                             note,
                             accent: vel > 0.8,
                             slide: false,
@@ -677,7 +680,9 @@ impl ImpulseApp {
                     self.pressed_notes.remove(&note);
                     let _ = self
                         .audio_tx
-                        .push(AudioCommand::Trigger(TriggerEvent::BassGateOff));
+                        .push(AudioCommand::Trigger(TriggerEvent::BassGateOff {
+                            voice_idx: 0,
+                        }));
                 }
 
                 // CC → synth params via the standard mapping table.

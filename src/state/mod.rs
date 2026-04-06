@@ -326,6 +326,12 @@ fn default_bass_voice_steps() -> Vec<usize> {
     vec![16usize; MAX_BASS_VOICES]
 }
 
+fn default_bass_voice_enabled() -> [bool; MAX_BASS_VOICES] {
+    let mut arr = [false; MAX_BASS_VOICES];
+    arr[0] = true;
+    arr
+}
+
 // ─── Sequencer ───────────────────────────────────────────────────────────────
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq)]
@@ -411,6 +417,9 @@ pub struct SequencerState {
     /// When true, BPM is slaved to incoming MIDI clock pulses (0xF8).
     #[serde(default)]
     pub midi_clock_sync: bool,
+    /// Which bass voices are enabled for sequencing. Synced from AppState.bass_voices[i].enabled.
+    #[serde(default = "default_bass_voice_enabled")]
+    pub bass_voice_enabled: [bool; MAX_BASS_VOICES],
 }
 
 impl Default for SequencerState {
@@ -482,6 +491,7 @@ impl Default for SequencerState {
                 pats
             },
             bass_voice_steps: vec![16usize; MAX_BASS_VOICES],
+            bass_voice_enabled: default_bass_voice_enabled(),
         }
     }
 }
