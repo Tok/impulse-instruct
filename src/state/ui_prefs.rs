@@ -46,28 +46,29 @@ impl KnobSize {
     }
 }
 
-/// Step-button and XY-pad size.  Steps mirror the KnobSize Fibonacci series
-/// so pad and knob sizes stay proportionally consistent when both are changed.
+/// Step-button and XY-pad size.  Steps follow the Fibonacci series so each
+/// level is ~φ× the previous.  Shifted one step below KnobSize so that
+/// Normal pads (34 px) and Normal knobs (55 px) look balanced side-by-side.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum PadSize {
-    /// 34 px — compact; 16 steps fit in ~560 px.
+    /// 21 px — very compact; 16 steps fit in ~340 px.
     Small,
-    /// 55 px — default; matches KnobSize::Normal, good on most displays.
+    /// 34 px — default; 16 steps take ~545 px, comfortable on 1080p+.
     #[default]
     Normal,
-    /// 89 px — large; generous detail on wide/high-DPI displays.
+    /// 55 px — large; generous detail on wide/high-DPI displays.
     Large,
-    /// 144 px — XL; presentation / accessibility mode.
+    /// 89 px — XL; accessibility / presentation mode.
     XL,
 }
 
 impl PadSize {
     pub fn px(self) -> f32 {
         match self {
-            Self::Small => 34.0,
-            Self::Normal => 55.0,
-            Self::Large => 89.0,
-            Self::XL => 144.0,
+            Self::Small => 21.0,
+            Self::Normal => 34.0,
+            Self::Large => 55.0,
+            Self::XL => 89.0,
         }
     }
 }
@@ -91,8 +92,20 @@ pub struct UiPrefs {
     pub knob_style: KnobStyle,
     /// Knob body size following Fibonacci steps.
     pub knob_size: KnobSize,
-    /// Step button and XY pad size.
+    /// Custom knob body size in pixels, overrides `knob_size` when `Some`.
+    #[serde(default)]
+    pub custom_knob_px: Option<f32>,
+    /// Step button and XY pad size (enum preset for both, individually overrideable).
     pub pad_size: PadSize,
+    /// Custom sequencer step button size in pixels, overrides `pad_size` when `Some`.
+    #[serde(default)]
+    pub custom_pad_px: Option<f32>,
+    /// Custom XY control pad size in pixels, overrides the derived size when `Some`.
+    #[serde(default)]
+    pub custom_xy_px: Option<f32>,
+    /// Custom envelope/ADSR display height in pixels, overrides the derived height when `Some`.
+    #[serde(default)]
+    pub custom_env_h: Option<f32>,
     /// When true, panels render horizontal sliders instead of knobs.
     pub use_sliders: bool,
     /// How broadly Huth *Farbige Noten* colors are applied.
@@ -107,12 +120,48 @@ pub struct UiPrefs {
     pub ui_scale: f32,
 }
 
+impl UiPrefs {
+    /// Effective knob body size in pixels — custom override when set, else enum step.
+    pub fn effective_knob_px(&self) -> f32 {
+        self.custom_knob_px
+            .unwrap_or_else(|| self.knob_size.body_px())
+            .clamp(12.0, 200.0)
+    }
+
+    /// Effective sequencer step button size in pixels.
+    pub fn effective_pad_px(&self) -> f32 {
+        self.custom_pad_px
+            .unwrap_or_else(|| self.pad_size.px())
+            .clamp(10.0, 150.0)
+    }
+
+    /// Effective XY control pad size in pixels.
+    /// Defaults to `pad_size.px() × 3.38` (legacy formula) when not overridden.
+    pub fn effective_xy_px(&self) -> f32 {
+        self.custom_xy_px
+            .unwrap_or_else(|| self.pad_size.px() * (88.0 / 26.0))
+            .clamp(40.0, 400.0)
+    }
+
+    /// Effective envelope/ADSR display height in pixels.
+    /// Defaults to 30% of the XY pad size, minimum 28 px.
+    pub fn effective_env_h(&self) -> f32 {
+        self.custom_env_h
+            .unwrap_or_else(|| (self.effective_xy_px() * 0.30).max(28.0))
+            .clamp(16.0, 200.0)
+    }
+}
+
 impl Default for UiPrefs {
     fn default() -> Self {
         Self {
             knob_style: KnobStyle::Chrome,
             knob_size: KnobSize::Normal,
+            custom_knob_px: None,
             pad_size: PadSize::Normal,
+            custom_pad_px: None,
+            custom_xy_px: None,
+            custom_env_h: None,
             use_sliders: false,
             huth_style: HuthStyle::PianoOnly,
             bloom_enabled: false,

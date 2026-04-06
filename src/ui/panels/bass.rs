@@ -57,7 +57,7 @@ pub fn draw_bass(app: &mut ImpulseApp, ui: &mut egui::Ui) {
     let mut changed = false;
 
     let ctrl = widgets::ControlPrefs::from_prefs(&app.state.read().ui_prefs);
-    let xy_size = app.state.read().ui_prefs.pad_size.px() * (88.0 / 26.0);
+    let xy_size = app.state.read().ui_prefs.effective_xy_px();
 
     // Helper macro — avoids repeating the changed/cycle boilerplate 13 times.
     // Not a real macro here; we use a local closure that borrows changed/cycle_paths.
@@ -461,7 +461,7 @@ pub fn draw_bass(app: &mut ImpulseApp, ui: &mut egui::Ui) {
     // Decay envelope visualiser — shows the 303's decay-only filter envelope shape.
     // Width spans both pads (2×xy_size + spacing); height scales with pad size.
     let env_w = (xy_size * 2.0 + 14.0).max(200.0);
-    let env_h = (xy_size * 0.30).max(28.0);
+    let env_h = app.state.read().ui_prefs.effective_env_h();
     ui.horizontal(|ui| {
         ui.label(
             egui::RichText::new("ENV")

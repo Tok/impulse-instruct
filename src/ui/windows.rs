@@ -450,7 +450,7 @@ impl ImpulseApp {
                                 });
                             }
 
-                            // Knob size — fibonacci steps: 34 / 55 / 89 / 144 px
+                            // Knob size — fibonacci steps + optional custom px
                             ui.add_space(4.0);
                             widgets::section_header(ui, "KNOB SIZE");
                             ui.horizontal(|ui| {
@@ -461,7 +461,8 @@ impl ImpulseApp {
                                     ("L", KnobSize::Large),
                                     ("XL", KnobSize::XL),
                                 ] {
-                                    let active = prefs.knob_size == size;
+                                    let active = prefs.knob_size == size
+                                        && prefs.custom_knob_px.is_none();
                                     let col = if active { theme::CHALK } else { theme::ASH };
                                     let fill = if active { theme::IRON } else { theme::PIT };
                                     if ui
@@ -475,18 +476,36 @@ impl ImpulseApp {
                                             .fill(fill)
                                             .min_size(egui::vec2(28.0, 18.0)),
                                         )
+                                        .on_hover_text(format!("{:.0} px", size.body_px()))
                                         .clicked()
-                                        && !active
                                     {
                                         prefs.knob_size = size;
+                                        prefs.custom_knob_px = None;
                                         dirty = true;
                                     }
                                 }
+                                // Custom px spinbox
+                                let mut custom_knob = prefs.custom_knob_px.unwrap_or(prefs.effective_knob_px());
+                                if ui.add(
+                                    egui::DragValue::new(&mut custom_knob)
+                                        .range(12.0..=200.0)
+                                        .speed(1.0)
+                                        .suffix(" px"),
+                                ).changed() {
+                                    prefs.custom_knob_px = Some(custom_knob);
+                                    dirty = true;
+                                }
+                                if prefs.custom_knob_px.is_some()
+                                    && ui.small_button(egui::RichText::new("↺").color(theme::ASH)).clicked()
+                                {
+                                    prefs.custom_knob_px = None;
+                                    dirty = true;
+                                }
                             });
 
-                            // Pad / step button size
+                            // Sequencer step size
                             ui.add_space(4.0);
-                            widgets::section_header(ui, "PAD SIZE");
+                            widgets::section_header(ui, "SEQ STEP SIZE");
                             ui.horizontal(|ui| {
                                 use crate::state::PadSize;
                                 for (label, size) in [
@@ -495,7 +514,8 @@ impl ImpulseApp {
                                     ("L", PadSize::Large),
                                     ("XL", PadSize::XL),
                                 ] {
-                                    let active = prefs.pad_size == size;
+                                    let active = prefs.pad_size == size
+                                        && prefs.custom_pad_px.is_none();
                                     let col = if active { theme::CHALK } else { theme::ASH };
                                     let fill = if active { theme::IRON } else { theme::PIT };
                                     if ui
@@ -509,13 +529,76 @@ impl ImpulseApp {
                                             .fill(fill)
                                             .min_size(egui::vec2(28.0, 18.0)),
                                         )
+                                        .on_hover_text(format!("{:.0} px", size.px()))
                                         .clicked()
-                                        && !active
                                     {
                                         prefs.pad_size = size;
+                                        prefs.custom_pad_px = None;
                                         dirty = true;
                                     }
                                 }
+                                let mut custom_pad = prefs.custom_pad_px.unwrap_or(prefs.effective_pad_px());
+                                if ui.add(
+                                    egui::DragValue::new(&mut custom_pad)
+                                        .range(10.0..=150.0)
+                                        .speed(1.0)
+                                        .suffix(" px"),
+                                ).changed() {
+                                    prefs.custom_pad_px = Some(custom_pad);
+                                    dirty = true;
+                                }
+                                if prefs.custom_pad_px.is_some()
+                                    && ui.small_button(egui::RichText::new("↺").color(theme::ASH)).clicked()
+                                {
+                                    prefs.custom_pad_px = None;
+                                    dirty = true;
+                                }
+                            });
+
+                            // XY control pad size
+                            ui.add_space(4.0);
+                            widgets::section_header(ui, "XY PAD SIZE");
+                            ui.horizontal(|ui| {
+                                let mut custom_xy = prefs.custom_xy_px.unwrap_or(prefs.effective_xy_px());
+                                if ui.add(
+                                    egui::DragValue::new(&mut custom_xy)
+                                        .range(40.0..=400.0)
+                                        .speed(1.0)
+                                        .suffix(" px"),
+                                ).changed() {
+                                    prefs.custom_xy_px = Some(custom_xy);
+                                    dirty = true;
+                                }
+                                if prefs.custom_xy_px.is_some()
+                                    && ui.small_button(egui::RichText::new("↺").color(theme::ASH)).clicked()
+                                {
+                                    prefs.custom_xy_px = None;
+                                    dirty = true;
+                                }
+                                ui.label(egui::RichText::new("(↺ = auto from step size)").color(theme::IRON).monospace().size(8.0));
+                            });
+
+                            // Envelope/ADSR display height
+                            ui.add_space(4.0);
+                            widgets::section_header(ui, "ENV HEIGHT");
+                            ui.horizontal(|ui| {
+                                let mut custom_env = prefs.custom_env_h.unwrap_or(prefs.effective_env_h());
+                                if ui.add(
+                                    egui::DragValue::new(&mut custom_env)
+                                        .range(16.0..=200.0)
+                                        .speed(1.0)
+                                        .suffix(" px"),
+                                ).changed() {
+                                    prefs.custom_env_h = Some(custom_env);
+                                    dirty = true;
+                                }
+                                if prefs.custom_env_h.is_some()
+                                    && ui.small_button(egui::RichText::new("↺").color(theme::ASH)).clicked()
+                                {
+                                    prefs.custom_env_h = None;
+                                    dirty = true;
+                                }
+                                ui.label(egui::RichText::new("(↺ = auto from XY size)").color(theme::IRON).monospace().size(8.0));
                             });
 
                             // UI scale

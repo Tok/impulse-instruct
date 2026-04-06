@@ -53,7 +53,7 @@ impl ControlPrefs {
         };
         Self {
             style,
-            knob_size: prefs.knob_size.body_px(),
+            knob_size: prefs.effective_knob_px(),
         }
     }
 

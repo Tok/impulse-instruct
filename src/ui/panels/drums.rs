@@ -44,7 +44,7 @@ pub fn draw_kit_a(app: &mut ImpulseApp, ui: &mut egui::Ui) {
     let mut changed = false;
 
     let ctrl = widgets::ControlPrefs::from_prefs(&app.state.read().ui_prefs);
-    let xy_size = app.state.read().ui_prefs.pad_size.px() * (88.0 / 26.0);
+    let xy_size = app.state.read().ui_prefs.effective_xy_px();
     ui.horizontal_wrapped(|ui| {
         widgets::glass_group(ui, ctrl.group_max_width(), |ui| {
             ui.label(
