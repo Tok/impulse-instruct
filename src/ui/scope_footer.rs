@@ -4,8 +4,8 @@
 
 use crate::ui::theme;
 
-/// Draw oscilloscope waveform from the scope sample buffer.
-pub fn draw_scope(ui: &mut egui::Ui, buf: &[f32]) {
+/// Draw oscilloscope waveform with phosphor persistence (older frames fade).
+pub fn draw_scope(ui: &mut egui::Ui, buf: &[f32], history: &std::collections::VecDeque<Vec<f32>>) {
     let (rect, _) =
         ui.allocate_exact_size(egui::vec2(ui.available_width(), 40.0), egui::Sense::hover());
     if !ui.is_rect_visible(rect) {
@@ -19,29 +19,40 @@ pub fn draw_scope(ui: &mut egui::Ui, buf: &[f32]) {
         egui::Stroke::new(1.0, theme::SLATE),
     );
 
-    let n = buf.len();
-    if n < 2 {
-        return;
-    }
     let w = rect.width();
     let mid = rect.center().y;
     let amp = rect.height() * 0.45;
 
-    let points: Vec<egui::Pos2> = buf
-        .iter()
-        .enumerate()
-        .map(|(i, &s)| {
+    // Draw older frames with fading brightness (phosphor persistence)
+    let hist_len = history.len();
+    for (age, frame) in history.iter().enumerate() {
+        let n = frame.len();
+        if n < 2 {
+            continue;
+        }
+        // Older frames are dimmer: brightness ramps from ~20 to ~60
+        let brightness = 20 + (age as u32 * 40 / hist_len.max(1) as u32).min(60);
+        let col = egui::Color32::from_gray(brightness as u8);
+        let mut prev = egui::Pos2::new(rect.min.x, mid - frame[0].clamp(-1.0, 1.0) * amp);
+        for (i, &s) in frame.iter().enumerate().skip(1) {
             let x = rect.min.x + (i as f32 / (n - 1) as f32) * w;
-            let y = mid - s.clamp(-1.0, 1.0) * amp;
-            egui::Pos2::new(x, y)
-        })
-        .collect();
+            let cur = egui::Pos2::new(x, mid - s.clamp(-1.0, 1.0) * amp);
+            painter.line_segment([prev, cur], egui::Stroke::new(1.0, col));
+            prev = cur;
+        }
+    }
 
-    for i in 0..points.len().saturating_sub(1) {
-        painter.line_segment(
-            [points[i], points[i + 1]],
-            egui::Stroke::new(1.0, theme::CHALK),
-        );
+    // Draw current frame at full brightness
+    let n = buf.len();
+    if n < 2 {
+        return;
+    }
+    let mut prev = egui::Pos2::new(rect.min.x, mid - buf[0].clamp(-1.0, 1.0) * amp);
+    for (i, &s) in buf.iter().enumerate().skip(1) {
+        let x = rect.min.x + (i as f32 / (n - 1) as f32) * w;
+        let cur = egui::Pos2::new(x, mid - s.clamp(-1.0, 1.0) * amp);
+        painter.line_segment([prev, cur], egui::Stroke::new(1.0, theme::CHALK));
+        prev = cur;
     }
 }
 

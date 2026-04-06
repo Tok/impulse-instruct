@@ -208,6 +208,7 @@ pub struct ImpulseApp {
     audio_tx: rtrb::Producer<AudioCommand>,
     scope_rx: rtrb::Consumer<f32>,
     scope_buf: Vec<f32>,
+    scope_history: std::collections::VecDeque<Vec<f32>>,
     capture_rx: rtrb::Consumer<f32>,
     dsp_load_rx: rtrb::Consumer<f32>,
     dsp_load_buf: Vec<f32>,
@@ -367,6 +368,7 @@ impl ImpulseApp {
             audio_tx: audio.params_tx,
             scope_rx: audio.scope_rx,
             scope_buf: Vec::new(),
+            scope_history: std::collections::VecDeque::with_capacity(8),
             capture_rx: audio.capture_rx,
             dsp_load_rx: audio.dsp_load_rx,
             dsp_load_buf: Vec::with_capacity(64),
@@ -886,6 +888,13 @@ impl eframe::App for ImpulseApp {
             let drain = self.scope_buf.len() - 512;
             self.scope_buf.drain(..drain);
         }
+        // Phosphor persistence: push current frame into history ring
+        if self.scope_buf.len() >= 64 {
+            self.scope_history.push_back(self.scope_buf.clone());
+            if self.scope_history.len() > 6 {
+                self.scope_history.pop_front();
+            }
+        }
 
         // ── Drain DSP load ring buffer ───────────────────────────────────────
         while let Ok(load) = self.dsp_load_rx.pop() {
@@ -914,7 +923,7 @@ impl eframe::App for ImpulseApp {
             )
             .exact_height(48.0)
             .show(ctx, |ui| {
-                scope_footer::draw_scope(ui, &self.scope_buf);
+                scope_footer::draw_scope(ui, &self.scope_buf, &self.scope_history);
             });
 
         // ── Footer ────────────────────────────────────────────────────────────
