@@ -72,6 +72,8 @@ Ordered by value.  Branch: **`develop`** (merge to `main` only for tagged releas
 
 - [ ] **Session autosave interval setting** — currently saves on every state change (throttled); add a Preferences option: immediate / 5 s / 30 s / manual only.
 
+- [ ] **Even control spacing / responsive layout** — knobs and sliders in mixed rows should distribute remaining width evenly rather than left-aligning with gaps. egui 0.28 has no built-in flex; requires a pre-pass that computes per-control width from `ui.available_width()` before the draw pass. Must remain consistent when switching knob↔slider mode and across all pad/knob size settings.
+
 ---
 
 ### Post-release backlog
