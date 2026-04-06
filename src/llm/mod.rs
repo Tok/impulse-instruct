@@ -4,7 +4,7 @@
 // Communicates with UI via crossbeam channels.
 
 pub mod instructions;
-mod json_repair;
+pub mod json_repair;
 pub mod mock;
 pub mod prompt;
 pub mod styles;
@@ -42,6 +42,38 @@ pub enum LlmAction {
     SetPersona(String),
     SetConversationMode(String),
     SetJamBars(f32),
+}
+
+/// Extract `LlmAction`s from the mutable JSON map, consuming "save_project"
+/// and "settings" keys.  Pure function — no side effects.
+pub fn extract_llm_actions(obj: &mut serde_json::Map<String, serde_json::Value>) -> Vec<LlmAction> {
+    let mut actions = Vec::new();
+    if obj
+        .remove("save_project")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false)
+    {
+        actions.push(LlmAction::SaveProject);
+    }
+    if let Some(s) = obj.get("settings").and_then(|v| v.as_object()).cloned() {
+        if let Some(h) = s.get("heat").and_then(|v| v.as_f64()) {
+            actions.push(LlmAction::SetHeat((h as f32).clamp(0.0, 1.0)));
+        }
+        if let Some(st) = s.get("style").and_then(|v| v.as_str()) {
+            actions.push(LlmAction::SetStyle(st.to_string()));
+        }
+        if let Some(p) = s.get("persona").and_then(|v| v.as_str()) {
+            actions.push(LlmAction::SetPersona(p.to_string()));
+        }
+        if let Some(m) = s.get("conversation_mode").and_then(|v| v.as_str()) {
+            actions.push(LlmAction::SetConversationMode(m.to_string()));
+        }
+        if let Some(j) = s.get("jam_bars").and_then(|v| v.as_f64()) {
+            actions.push(LlmAction::SetJamBars((j as f32).max(0.0)));
+        }
+    }
+    obj.remove("settings");
+    actions
 }
 
 #[derive(Clone, Debug)]
@@ -557,35 +589,11 @@ impl LlmBackend for LlamaServerBackend {
             .filter(|s| !s.is_empty());
 
         // Extract actions from "save_project" and "settings" keys.
-        let mut actions = Vec::new();
-        if let Some(obj) = param_update.as_object_mut() {
-            if obj
-                .remove("save_project")
-                .and_then(|v| v.as_bool())
-                .unwrap_or(false)
-            {
-                actions.push(LlmAction::SaveProject);
-            }
-            if let Some(s) = obj.get("settings").and_then(|v| v.as_object()).cloned() {
-                if let Some(h) = s.get("heat").and_then(|v| v.as_f64()) {
-                    actions.push(LlmAction::SetHeat((h as f32).clamp(0.0, 1.0)));
-                }
-                if let Some(st) = s.get("style").and_then(|v| v.as_str()) {
-                    actions.push(LlmAction::SetStyle(st.to_string()));
-                }
-                if let Some(p) = s.get("persona").and_then(|v| v.as_str()) {
-                    actions.push(LlmAction::SetPersona(p.to_string()));
-                }
-                if let Some(m) = s.get("conversation_mode").and_then(|v| v.as_str()) {
-                    actions.push(LlmAction::SetConversationMode(m.to_string()));
-                }
-                if let Some(j) = s.get("jam_bars").and_then(|v| v.as_f64()) {
-                    actions.push(LlmAction::SetJamBars((j as f32).max(0.0)));
-                }
-            }
-            // Don't pass "settings" to apply_llm_update - remove it
-            obj.remove("settings");
-        }
+        let actions = if let Some(obj) = param_update.as_object_mut() {
+            extract_llm_actions(obj)
+        } else {
+            Vec::new()
+        };
 
         Ok(LlmOutput {
             text: json_text,

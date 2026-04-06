@@ -465,3 +465,248 @@ mod dsp_tests {
         assert!((c5 / c4 - 2.0).abs() < 0.001);
     }
 }
+
+// ─── extract_llm_actions tests ───────────────────────────────────────────────
+
+mod action_extraction {
+    use crate::llm::{LlmAction, extract_llm_actions};
+    use serde_json::json;
+
+    #[test]
+    fn empty_object_yields_no_actions() {
+        let mut obj = serde_json::Map::new();
+        assert!(extract_llm_actions(&mut obj).is_empty());
+    }
+
+    #[test]
+    fn save_project_true() {
+        let mut obj = json!({"save_project": true}).as_object().unwrap().clone();
+        let actions = extract_llm_actions(&mut obj);
+        assert!(matches!(actions[0], LlmAction::SaveProject));
+        assert!(!obj.contains_key("save_project"));
+    }
+
+    #[test]
+    fn save_project_false_ignored() {
+        let mut obj = json!({"save_project": false}).as_object().unwrap().clone();
+        assert!(extract_llm_actions(&mut obj).is_empty());
+    }
+
+    #[test]
+    fn heat_clamped_to_0_1() {
+        let mut obj = json!({"settings": {"heat": 2.5}})
+            .as_object()
+            .unwrap()
+            .clone();
+        let actions = extract_llm_actions(&mut obj);
+        match &actions[0] {
+            LlmAction::SetHeat(h) => assert_eq!(*h, 1.0),
+            _ => panic!("expected SetHeat"),
+        }
+    }
+
+    #[test]
+    fn heat_negative_clamped() {
+        let mut obj = json!({"settings": {"heat": -0.5}})
+            .as_object()
+            .unwrap()
+            .clone();
+        let actions = extract_llm_actions(&mut obj);
+        match &actions[0] {
+            LlmAction::SetHeat(h) => assert_eq!(*h, 0.0),
+            _ => panic!("expected SetHeat"),
+        }
+    }
+
+    #[test]
+    fn style_extracted() {
+        let mut obj = json!({"settings": {"style": "acid_house"}})
+            .as_object()
+            .unwrap()
+            .clone();
+        let actions = extract_llm_actions(&mut obj);
+        match &actions[0] {
+            LlmAction::SetStyle(s) => assert_eq!(s, "acid_house"),
+            _ => panic!("expected SetStyle"),
+        }
+    }
+
+    #[test]
+    fn all_settings_extracted() {
+        let mut obj = json!({
+            "settings": {
+                "heat": 0.7, "style": "techno", "persona": "DJ",
+                "conversation_mode": "mc", "jam_bars": 4.0
+            }
+        })
+        .as_object()
+        .unwrap()
+        .clone();
+        let actions = extract_llm_actions(&mut obj);
+        assert_eq!(actions.len(), 5);
+        assert!(!obj.contains_key("settings")); // consumed
+    }
+
+    #[test]
+    fn jam_bars_negative_clamped() {
+        let mut obj = json!({"settings": {"jam_bars": -2.0}})
+            .as_object()
+            .unwrap()
+            .clone();
+        let actions = extract_llm_actions(&mut obj);
+        match &actions[0] {
+            LlmAction::SetJamBars(j) => assert_eq!(*j, 0.0),
+            _ => panic!("expected SetJamBars"),
+        }
+    }
+
+    #[test]
+    fn settings_key_removed_even_when_empty() {
+        let mut obj = json!({"settings": {}}).as_object().unwrap().clone();
+        extract_llm_actions(&mut obj);
+        assert!(!obj.contains_key("settings"));
+    }
+}
+
+// ─── json_repair tests ──────────────────────────────────────────────────────
+
+mod json_repair_tests {
+    use crate::llm::json_repair::{repair_json, sanitize_json_structure, split_thinking};
+    use serde_json::json;
+
+    // ── repair_json ─────────────────────────────────────────────────────
+
+    #[test]
+    fn valid_json_passes_through() {
+        let v = repair_json(r#"{"bass": {"cutoff": 0.5}}"#).unwrap();
+        assert_eq!(v["bass"]["cutoff"], 0.5);
+    }
+
+    #[test]
+    fn truncated_object_repaired() {
+        // Simulates max_tokens cutting mid-object
+        let v = repair_json(r#"{"bass": {"cutoff": 0.5}"#).unwrap();
+        assert_eq!(v["bass"]["cutoff"], 0.5);
+    }
+
+    #[test]
+    fn truncated_array_repaired() {
+        let v = repair_json(r#"{"steps": [1, 2, 3"#).unwrap();
+        assert_eq!(v["steps"].as_array().unwrap().len(), 3);
+    }
+
+    #[test]
+    fn completely_invalid_returns_none() {
+        assert!(repair_json("this is not json at all !!!").is_none());
+    }
+
+    #[test]
+    fn trailing_comma_handled() {
+        let v = repair_json(r#"{"bass": {"cutoff": 0.5,}"#);
+        // May or may not parse depending on repair — at minimum shouldn't panic
+        let _ = v;
+    }
+
+    // ── sanitize_json_structure ──────────────────────────────────────────
+
+    #[test]
+    fn bass_lifted_from_sequencer() {
+        let v = json!({"sequencer": {"bass": {"cutoff": 0.3}, "bpm": 120}});
+        let s = sanitize_json_structure(v);
+        assert_eq!(s["bass"]["cutoff"], 0.3);
+        assert!(s["sequencer"]["bass"].is_null());
+        assert_eq!(s["sequencer"]["bpm"], 120);
+    }
+
+    #[test]
+    fn fx_lifted_from_sequencer() {
+        let v = json!({"sequencer": {"fx": {"reverb_mix": 0.4}}});
+        let s = sanitize_json_structure(v);
+        assert_eq!(s["fx"]["reverb_mix"], 0.4);
+    }
+
+    #[test]
+    fn nested_fx_stripped() {
+        let v = json!({"fx": {"reverb_mix": 0.3, "fx": {"delay_mix": 0.2}}});
+        let s = sanitize_json_structure(v);
+        assert_eq!(s["fx"]["reverb_mix"], 0.3);
+        assert!(s["fx"]["fx"].is_null());
+    }
+
+    #[test]
+    fn hallucinated_keys_stripped() {
+        let v = json!({"bass": {}, "drum_ratchets": [1,2], "patterns": {}});
+        let s = sanitize_json_structure(v);
+        assert!(s["drum_ratchets"].is_null());
+        assert!(s["patterns"].is_null());
+        assert!(s["bass"].is_object());
+    }
+
+    #[test]
+    fn dot_notation_lfo_converted_to_array() {
+        let v = json!({
+            "lfo": {
+                "lfo[0].enabled": true,
+                "lfo[0].rate": 0.5,
+                "lfo[1].enabled": false
+            }
+        });
+        let s = sanitize_json_structure(v);
+        let arr = s["lfo"].as_array().unwrap();
+        assert_eq!(arr.len(), 4);
+        assert_eq!(arr[0]["enabled"], true);
+        assert_eq!(arr[0]["rate"], 0.5);
+        assert_eq!(arr[1]["enabled"], false);
+    }
+
+    #[test]
+    fn named_slot_lfo_converted_to_array() {
+        let v = json!({
+            "lfo": {
+                "lfo_0": {"enabled": true, "rate": 0.3},
+                "lfo_2": {"depth": 0.8}
+            }
+        });
+        let s = sanitize_json_structure(v);
+        let arr = s["lfo"].as_array().unwrap();
+        assert_eq!(arr.len(), 4);
+        assert_eq!(arr[0]["rate"], 0.3);
+        assert_eq!(arr[2]["depth"], 0.8);
+    }
+
+    #[test]
+    fn non_object_passes_through() {
+        let v = json!("just a string");
+        let s = sanitize_json_structure(v);
+        assert_eq!(s, "just a string");
+    }
+
+    // ── split_thinking ──────────────────────────────────────────────────
+
+    #[test]
+    fn thinking_block_extracted() {
+        let (think, rest) = split_thinking("<think>planning</think>{\"bass\": {}}");
+        assert_eq!(think.unwrap(), "planning");
+        assert_eq!(rest, "{\"bass\": {}}");
+    }
+
+    #[test]
+    fn no_thinking_block() {
+        let (think, rest) = split_thinking("{\"bass\": {}}");
+        assert!(think.is_none());
+        assert_eq!(rest, "{\"bass\": {}}");
+    }
+
+    #[test]
+    fn empty_thinking_block_returns_none() {
+        let (think, rest) = split_thinking("<think>  </think>remainder");
+        assert!(think.is_none());
+        assert_eq!(rest, "remainder");
+    }
+
+    #[test]
+    fn whitespace_around_thinking_trimmed() {
+        let (think, _) = split_thinking("  <think> hello world </think>  rest  ");
+        assert_eq!(think.unwrap(), "hello world");
+    }
+}
