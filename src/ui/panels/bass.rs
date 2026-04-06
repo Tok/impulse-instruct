@@ -458,7 +458,10 @@ pub fn draw_bass(app: &mut ImpulseApp, ui: &mut egui::Ui) {
 
     ui.add_space(2.0);
 
-    // Decay envelope visualiser — shows the 303's decay-only filter envelope shape
+    // Decay envelope visualiser — shows the 303's decay-only filter envelope shape.
+    // Width spans both pads (2×xy_size + spacing); height scales with pad size.
+    let env_w = (xy_size * 2.0 + 14.0).max(200.0);
+    let env_h = (xy_size * 0.30).max(28.0);
     ui.horizontal(|ui| {
         ui.label(
             egui::RichText::new("ENV")
@@ -466,7 +469,7 @@ pub fn draw_bass(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                 .monospace()
                 .size(9.0),
         );
-        if widgets::decay_display(ui, &mut decay, env_mod, 100.0, 28.0) {
+        if widgets::decay_display(ui, &mut decay, env_mod, env_w, env_h) {
             let mut snap = app.state.read().clone();
             snap.bass.decay = decay;
             *app.state.write() = snap;

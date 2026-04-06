@@ -26,67 +26,48 @@ pub fn step_button(
 
     if ui.is_rect_visible(rect) {
         let painter = ui.painter();
-        let r = egui::Rounding::same((size_px * 0.12).max(2.0));
-        let inner = rect.shrink(1.0);
+        // Generous rounding — no hard square corners visible
+        let r = egui::Rounding::same((size_px * 0.22).max(4.0));
+        let inner = rect.shrink(1.5);
 
         if active {
-            // Pressed / debossed look
-            // Outer fill — slightly brighter than the inset so the depth reads
-            painter.rect_filled(inner, r, Color32::from_gray(52));
-            // Inverted edge highlights: dark top-left (pressed in), bright bottom-right
-            painter.line_segment(
-                [inner.left_top(), inner.right_top()],
-                Stroke::new(1.0, Color32::from_gray(8)),
+            // Debossed / pressed look:
+            // Dark inset shadow frame, slightly brighter outer ring, deep inner well.
+            painter.rect_filled(inner, r, Color32::from_gray(18));
+            // Bright bottom-right rim (light bounces off raised surround)
+            painter.rect_stroke(
+                inner.shrink(0.5),
+                r,
+                Stroke::new(1.0, Color32::from_gray(60)),
             );
-            painter.line_segment(
-                [inner.left_top(), inner.left_bottom()],
-                Stroke::new(1.0, Color32::from_gray(8)),
-            );
-            painter.line_segment(
-                [inner.left_bottom(), inner.right_bottom()],
-                Stroke::new(1.0, Color32::from_gray(80)),
-            );
-            painter.line_segment(
-                [inner.right_top(), inner.right_bottom()],
-                Stroke::new(1.0, Color32::from_gray(80)),
-            );
-            // Inset shadow rect — the debossed inner well
-            let inset = inner.shrink(2.0);
+            // Dark top-left rim (pressed inward — shadow side)
+            painter.rect_stroke(inner, r, Stroke::new(1.0, Color32::from_gray(8)));
+            // Inset well
+            let inset = inner.shrink(2.5);
             painter.rect_filled(inset, r, Color32::from_gray(22));
 
-            // Dot or full-fill indicator (drawn over the inset well)
             if let Some(col) = dot_color {
-                // Small coloured dot — subtle note-pitch indicator
                 let dot_r = (size_px * 0.18).max(2.5);
                 let dot_pos = Pos2::new(inset.center().x, inset.max.y - dot_r - 1.0);
                 painter.circle_filled(dot_pos, dot_r, col);
             } else {
-                // Drum mode: velocity bloom over the inset well
                 let dim = 0.35_f32 + vel * 0.65;
                 let g = (200.0 * dim) as u8;
                 painter.rect_filled(inset, r, Color32::from_rgba_unmultiplied(g, g, g, 70));
             }
         } else {
-            // Raised look
-            painter.rect_filled(inner, r, Color32::from_gray(30));
-            painter.line_segment(
-                [inner.left_top(), inner.right_top()],
-                Stroke::new(1.0, Color32::from_gray(62)),
-            );
-            painter.line_segment(
-                [inner.left_top(), inner.left_bottom()],
-                Stroke::new(1.0, Color32::from_gray(62)),
-            );
-            painter.line_segment(
-                [inner.left_bottom(), inner.right_bottom()],
-                Stroke::new(1.0, Color32::from_gray(10)),
-            );
-            painter.line_segment(
-                [inner.right_top(), inner.right_bottom()],
+            // Raised look:
+            // Bright top-left rim, dark bottom-right — classic emboss.
+            painter.rect_filled(inner, r, Color32::from_gray(32));
+            // Top-left highlight
+            painter.rect_stroke(inner, r, Stroke::new(1.0, Color32::from_gray(58)));
+            // Bottom-right shadow (slightly inset to overlay only bottom/right)
+            painter.rect_stroke(
+                inner.shrink(0.5),
+                r,
                 Stroke::new(1.0, Color32::from_gray(10)),
             );
 
-            // Inactive bass step with assigned note: faint dot
             if let Some(col) = dot_color {
                 let dot_r = (size_px * 0.14).max(2.0);
                 let dot_pos = Pos2::new(inner.center().x, inner.max.y - dot_r - 2.0);
