@@ -150,7 +150,7 @@ wgpu integration once and implement all effects in that pass.
 - [ ] **Windows code-signing** — unsigned `.exe` triggers SmartScreen.
   Requires EV certificate.  Low priority until meaningful Windows user base.
 
-- [ ] **Smooth style transitions** — when the user changes style in the dropdown,
+- [x] **Smooth style transitions** — when the user changes style in the dropdown,
   parameters should ramp/lerp to new values instead of jumping instantly.  The
   `ParamRamp` / `active_ramps` infrastructure already exists; extend it to
   cover style preset application.  This applies to LLM-driven style changes

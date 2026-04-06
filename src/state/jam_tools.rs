@@ -56,6 +56,77 @@ pub fn schedule_ramp(state: AppState, ramp: ParamRamp) -> AppState {
     s
 }
 
+/// Schedule ramps for all f32 params in a style baseline JSON.
+/// Non-f32 values (arrays, strings, objects) are collected into a remainder
+/// JSON that the caller should apply immediately via `apply_llm_update`.
+/// `cycles` controls how many jam cycles the transition takes (e.g. 8 ≈ 2 bars).
+pub fn schedule_baseline_ramps(
+    state: AppState,
+    baseline: &serde_json::Value,
+    cycles: f32,
+) -> (AppState, serde_json::Value) {
+    let mut s = state;
+    let mut remainder = serde_json::Map::new();
+
+    if let Some(obj) = baseline.as_object() {
+        for (section, values) in obj {
+            if let Some(inner) = values.as_object() {
+                let mut section_remainder = serde_json::Map::new();
+                for (key, val) in inner {
+                    if let Some(target) = val.as_f64() {
+                        let path = format!("{section}.{key}");
+                        let current = current_param_value(&s, &path);
+                        let target_f = target as f32;
+                        if (current - target_f).abs() > 0.001 && cycles > 0.0 {
+                            let step = (target_f - current) / cycles;
+                            s = schedule_ramp(
+                                s,
+                                ParamRamp {
+                                    param: path,
+                                    current,
+                                    target: target_f,
+                                    step_per_cycle: step,
+                                },
+                            );
+                        }
+                    } else {
+                        // Non-f32 (arrays, strings, etc.) → apply immediately
+                        section_remainder.insert(key.clone(), val.clone());
+                    }
+                }
+                if !section_remainder.is_empty() {
+                    remainder.insert(
+                        section.clone(),
+                        serde_json::Value::Object(section_remainder),
+                    );
+                }
+            } else if !values.is_f64() {
+                // Top-level non-object, non-f32 (e.g. "sequencer": {...} with mixed content)
+                remainder.insert(section.clone(), values.clone());
+            } else {
+                // Top-level f32 (e.g. BPM) — schedule ramp
+                let path = section.clone();
+                let current = current_param_value(&s, &path);
+                let target_f = values.as_f64().unwrap() as f32;
+                if (current - target_f).abs() > 0.001 && cycles > 0.0 {
+                    let step = (target_f - current) / cycles;
+                    s = schedule_ramp(
+                        s,
+                        ParamRamp {
+                            param: path,
+                            current,
+                            target: target_f,
+                            step_per_cycle: step,
+                        },
+                    );
+                }
+            }
+        }
+    }
+
+    (s, serde_json::Value::Object(remainder))
+}
+
 /// Parse a ramp JSON object and schedule it.
 /// JSON: { "param": "fx.reverb_mix", "from": 0.0, "to": 0.6, "cycles": 8 }
 /// "cycles" defaults to 4 (one LLM jam cycle ≈ one bar at typical BPM).

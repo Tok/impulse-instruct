@@ -445,7 +445,21 @@ impl ImpulseApp {
                                             .unwrap_or_default();
                                         if let Some(ref bp) = baseline {
                                             let current = self.state.read().clone();
-                                            *self.state.write() = apply_llm_update(current, bp);
+                                            // Smooth transition: ramp f32 params over 8 jam cycles,
+                                            // apply non-f32 (patterns, etc.) immediately.
+                                            let (ramped, remainder) =
+                                                crate::state::jam_tools::schedule_baseline_ramps(
+                                                    current, bp, 8.0,
+                                                );
+                                            let next = if remainder
+                                                .as_object()
+                                                .is_some_and(|o| !o.is_empty())
+                                            {
+                                                apply_llm_update(ramped, &remainder)
+                                            } else {
+                                                ramped
+                                            };
+                                            *self.state.write() = next;
                                         }
                                         self.state.write().llm.active_style = Some(id);
                                         let _ = self.llm_tx.try_send(LlmInput::ResetContext);
