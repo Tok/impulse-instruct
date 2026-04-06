@@ -418,6 +418,24 @@ pub use adsr::{adsr_display, decay_display};
 
 // ─── Glass Group ─────────────────────────────────────────────────────────────
 
+/// Compute the per-group width for an evenly-distributed row of `n` glass panels.
+/// Call this before the `ui.horizontal()` that contains the groups.
+///
+/// ```rust
+/// let gw = widgets::even_group_width(ui, 3);
+/// ui.horizontal(|ui| {
+///     widgets::glass_group_fill(ui, gw, gw, |ui| { … });
+///     widgets::glass_group_fill(ui, gw, gw, |ui| { … });
+///     widgets::glass_group_fill(ui, gw, gw, |ui| { … });
+/// });
+/// ```
+pub fn even_group_width(ui: &Ui, n: usize) -> f32 {
+    let spacing = ui.spacing().item_spacing.x;
+    let avail = ui.available_width();
+    let total_gaps = spacing * (n.saturating_sub(1)) as f32;
+    ((avail - total_gaps) / n.max(1) as f32).max(40.0)
+}
+
 /// Neumorphic smoked-glass group panel — dark fill, bright top edge, dark bottom edge.
 ///
 /// `max_width` constrains the group so it sizes to content rather than expanding to
@@ -428,15 +446,26 @@ pub fn glass_group<R>(
     max_width: f32,
     content: impl FnOnce(&mut Ui) -> R,
 ) -> egui::InnerResponse<R> {
+    glass_group_fill(ui, max_width, max_width, content)
+}
+
+/// Like `glass_group` but sets an exact width (both min and max), so the panel fills
+/// its allocated share when used in an evenly distributed row.
+/// Compute `width` with `even_group_width(ui, n_groups)` before the horizontal.
+pub fn glass_group_fill<R>(
+    ui: &mut Ui,
+    min_width: f32,
+    max_width: f32,
+    content: impl FnOnce(&mut Ui) -> R,
+) -> egui::InnerResponse<R> {
     let resp = egui::Frame::none()
         .fill(Color32::from_gray(15))
         .stroke(Stroke::new(1.0, Color32::from_gray(28)))
         .inner_margin(egui::Margin::same(6.0))
         .rounding(egui::Rounding::same(3.0))
         .show(ui, |ui| {
-            // Force vertical stacking regardless of parent layout, and cap the width
-            // so groups don't expand to fill the entire horizontal_wrapped row.
-            ui.set_max_width(max_width);
+            ui.set_min_width(min_width - 14.0); // subtract inner margin × 2
+            ui.set_max_width(max_width - 14.0);
             ui.with_layout(egui::Layout::top_down(egui::Align::Center), content)
                 .inner
         });

@@ -45,8 +45,9 @@ pub fn draw_kit_a(app: &mut ImpulseApp, ui: &mut egui::Ui) {
 
     let ctrl = widgets::ControlPrefs::from_prefs(&app.state.read().ui_prefs);
     let xy_size = app.state.read().ui_prefs.effective_xy_px();
-    ui.horizontal_wrapped(|ui| {
-        widgets::glass_group(ui, ctrl.group_max_width(), |ui| {
+    let gw = widgets::even_group_width(ui, 3);
+    ui.horizontal(|ui| {
+        widgets::glass_group_fill(ui, gw, gw, |ui| {
             ui.label(
                 egui::RichText::new("KICK")
                     .color(theme::FOG)
@@ -75,8 +76,7 @@ pub fn draw_kit_a(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                 changed = true;
             }
         });
-        ui.add_space(4.0);
-        widgets::glass_group(ui, ctrl.group_max_width(), |ui| {
+        widgets::glass_group_fill(ui, gw, gw, |ui| {
             ui.label(
                 egui::RichText::new("SNARE")
                     .color(theme::FOG)
@@ -96,8 +96,7 @@ pub fn draw_kit_a(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                 changed = true;
             }
         });
-        ui.add_space(4.0);
-        widgets::glass_group(ui, ctrl.group_max_width(), |ui| {
+        widgets::glass_group_fill(ui, gw, gw, |ui| {
             ui.label(
                 egui::RichText::new("HIHAT")
                     .color(theme::FOG)
@@ -205,8 +204,9 @@ pub fn draw_kit_b(app: &mut ImpulseApp, ui: &mut egui::Ui) {
     let mut changed = false;
 
     let ctrl = widgets::ControlPrefs::from_prefs(&app.state.read().ui_prefs);
-    ui.horizontal_wrapped(|ui| {
-        widgets::glass_group(ui, ctrl.group_max_width(), |ui| {
+    let gw = widgets::even_group_width(ui, 3);
+    ui.horizontal(|ui| {
+        widgets::glass_group_fill(ui, gw, gw, |ui| {
             ui.label(
                 egui::RichText::new("KICK")
                     .color(theme::FOG)
@@ -235,8 +235,7 @@ pub fn draw_kit_b(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                 changed = true;
             }
         });
-        ui.add_space(4.0);
-        widgets::glass_group(ui, ctrl.group_max_width(), |ui| {
+        widgets::glass_group_fill(ui, gw, gw, |ui| {
             ui.label(
                 egui::RichText::new("SNARE")
                     .color(theme::FOG)
@@ -256,8 +255,7 @@ pub fn draw_kit_b(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                 changed = true;
             }
         });
-        ui.add_space(4.0);
-        widgets::glass_group(ui, ctrl.group_max_width(), |ui| {
+        widgets::glass_group_fill(ui, gw, gw, |ui| {
             ui.label(
                 egui::RichText::new("CLAP / RIM")
                     .color(theme::FOG)
