@@ -41,11 +41,7 @@ All items shipped in this sprint are documented in [docs/features.md](docs/featu
 
 ### Next sprint — v0.6.0 queue
 
-- [ ] **Separate LLM heat slider** — decouple "LLM temperature" from "jam energy / mutation rate".
-
-- [ ] **Hoover resonant sweep tuning** — the vacuum-cleaner screech needs more aggressive resonant peak shape.
-
-- [ ] **Even control spacing — extend to all panels** — `even_group_width()` / `glass_group_fill()` already applied to drum panels; extend the same pattern to an1x, hoover, bass, and fx panels.
+- [ ] **Even control spacing — extend to bass/hoover/an1x** — `even_group_width()` / `glass_group_fill()` applied to drums + fx panels; extend to bass synth, hoover, and an1x glass_group rows.
 
 ---
 
