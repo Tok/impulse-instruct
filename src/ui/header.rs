@@ -560,17 +560,20 @@ impl ImpulseApp {
 
                         // ── HEAT slider — fills available width minus right panel ─
                         let heat_w = (ui.available_width() - right_w).max(60.0);
-                        let (heat_rect, _) =
-                            ui.allocate_exact_size(egui::vec2(heat_w, 18.0), egui::Sense::hover());
-                        let heat_resp = ui.put(
-                            heat_rect,
-                            egui::Slider::new(&mut heat, 0.0..=1.0)
-                                .show_value(false)
-                                .trailing_fill(true),
-                        );
+                        let heat_resp = ui
+                            .scope(|ui| {
+                                ui.spacing_mut().slider_width = heat_w;
+                                ui.add(
+                                    egui::Slider::new(&mut heat, 0.0..=1.0)
+                                        .show_value(false)
+                                        .trailing_fill(true),
+                                )
+                            })
+                            .inner;
                         if heat_resp.changed() {
                             self.state.write().llm.heat = heat;
                         }
+                        let heat_rect = heat_resp.rect;
                         heat_resp.on_hover_text(
                             "Jam energy and LLM creativity. CHAOS (100%) = maximum disorder.",
                         );
@@ -653,16 +656,15 @@ impl ImpulseApp {
                                     .on_hover_text(
                                         "Monitor volume — listen only, not export volume",
                                     );
-                                    let (vol_rect, _) = ui.allocate_exact_size(
-                                        egui::vec2(MON_W, 14.0),
-                                        egui::Sense::hover(),
-                                    );
                                     if ui
-                                        .put(
-                                            vol_rect,
-                                            egui::Slider::new(&mut self.ui_volume, 0.0..=1.0)
-                                                .show_value(false),
-                                        )
+                                        .scope(|ui| {
+                                            ui.spacing_mut().slider_width = MON_W;
+                                            ui.add(
+                                                egui::Slider::new(&mut self.ui_volume, 0.0..=1.0)
+                                                    .show_value(false),
+                                            )
+                                        })
+                                        .inner
                                         .changed()
                                     {
                                         let _ = self

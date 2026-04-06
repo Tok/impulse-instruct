@@ -133,7 +133,7 @@ pub(crate) fn ansi_colorize_notes(text: &str) -> std::borrow::Cow<'_, str> {
                         }
                         // If followed by a space + music quality word, color the whole
                         // expression (e.g. "A minor", "G major", "D diminished").
-                        if next_char == b' ' {
+                        if next_char == b' ' && j < len {
                             const QUALITIES: &[&[u8]] = &[
                                 b"major",
                                 b"minor",

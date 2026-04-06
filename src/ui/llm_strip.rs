@@ -158,8 +158,91 @@ fn colorize_log(text: &str, default_color: egui::Color32) -> egui::text::LayoutJ
                 let next_ok = j >= len || !bytes[j].is_ascii_alphabetic();
                 if next_ok && let Some(st) = note_semitone(note_char, acc) {
                     // Optionally consume a trailing octave digit (makes C4, A#3 etc.)
-                    if j < len && bytes[j].is_ascii_digit() {
+                    let has_octave = j < len && bytes[j].is_ascii_digit();
+                    if has_octave {
                         j += 1;
+                    }
+                    // For bare notes (no accidental, no octave), require safe punctuation
+                    // on both sides — prevents "D" in "D&B", "E" in "E-flat", etc.
+                    let bare = acc.is_none() && !has_octave;
+                    if bare {
+                        let prev_char = if pos > 0 { bytes[pos - 1] } else { b' ' };
+                        let safe_before = matches!(
+                            prev_char,
+                            b' ' | b'\t'
+                                | b'\n'
+                                | b'\r'
+                                | b'('
+                                | b'['
+                                | b'{'
+                                | b'"'
+                                | b'\''
+                                | b'`'
+                                | b'/'
+                        );
+                        let next_char = if j < len { bytes[j] } else { b' ' };
+                        let safe_after = matches!(
+                            next_char,
+                            b' ' | b'\t'
+                                | b'\n'
+                                | b'\r'
+                                | b')'
+                                | b']'
+                                | b'}'
+                                | b','
+                                | b'.'
+                                | b':'
+                                | b';'
+                                | b'"'
+                                | b'\''
+                                | b'`'
+                                | b'/'
+                        );
+                        if !safe_before || !safe_after {
+                            pos += 1;
+                            continue;
+                        }
+                        // Extend span to cover "A minor", "G major", etc.
+                        if next_char == b' ' && j < len {
+                            const QUALITIES: &[&[u8]] = &[
+                                b"major",
+                                b"minor",
+                                b"maj",
+                                b"min",
+                                b"diminished",
+                                b"dim",
+                                b"augmented",
+                                b"aug",
+                                b"sus",
+                                b"suspended",
+                                b"dorian",
+                                b"phrygian",
+                                b"lydian",
+                                b"mixolydian",
+                                b"locrian",
+                                b"aeolian",
+                                b"melodic",
+                                b"harmonic",
+                                b"pentatonic",
+                                b"chromatic",
+                            ];
+                            let rest = &bytes[j + 1..];
+                            for q in QUALITIES {
+                                let qlen = q.len();
+                                if rest.len() >= qlen {
+                                    let matches_ci = rest[..qlen]
+                                        .iter()
+                                        .zip(*q)
+                                        .all(|(a, b)| a.to_ascii_lowercase() == *b);
+                                    let word_end =
+                                        rest.len() == qlen || !rest[qlen].is_ascii_alphabetic();
+                                    if matches_ci && word_end {
+                                        j += 1 + qlen;
+                                        break;
+                                    }
+                                }
+                            }
+                        }
                     }
                     colored!(pos, j, st);
                     continue;
@@ -688,5 +771,99 @@ impl ImpulseApp {
                     }
                     });
             });
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::colorize_log;
+    use crate::ui::theme;
+
+    /// Collect all distinct colors used in the LayoutJob (excluding the default FOG).
+    fn colored_spans(text: &str) -> Vec<(String, egui::Color32)> {
+        let job = colorize_log(text, theme::FOG);
+        job.sections
+            .iter()
+            .filter(|s| s.format.color != theme::FOG && s.format.color != theme::SMOKE)
+            .map(|s| {
+                let range = s.byte_range.clone();
+                (text[range].to_string(), s.format.color)
+            })
+            .collect()
+    }
+
+    fn has_note_color(text: &str) -> bool {
+        let job = colorize_log(text, theme::FOG);
+        job.sections
+            .iter()
+            .any(|s| theme::NOTE_COLORS.iter().any(|&nc| nc == s.format.color))
+    }
+
+    #[test]
+    fn dnb_not_colored() {
+        assert!(
+            !has_note_color("D&B is a genre"),
+            "D in D&B must not be colored"
+        );
+        assert!(
+            !has_note_color("listen to D&B"),
+            "D in D&B must not be colored"
+        );
+    }
+
+    #[test]
+    fn e_flat_not_colored() {
+        assert!(!has_note_color("E-flat"), "E in E-flat must not be colored");
+    }
+
+    #[test]
+    fn note_with_accidental_is_colored() {
+        assert!(has_note_color("play D#3"), "D#3 should be colored");
+        assert!(has_note_color("root is Gb"), "Gb should be colored");
+    }
+
+    #[test]
+    fn note_with_octave_is_colored() {
+        assert!(has_note_color("note C4"), "C4 should be colored");
+    }
+
+    #[test]
+    fn bare_note_at_word_boundary_is_colored() {
+        assert!(
+            has_note_color("root note is G"),
+            "bare G at end should be colored"
+        );
+        assert!(
+            has_note_color("key of D major"),
+            "D in D major should be colored"
+        );
+    }
+
+    #[test]
+    fn quality_expression_colored_as_one_span() {
+        let spans = colored_spans("key of A minor");
+        assert_eq!(spans.len(), 1, "A minor should be one colored span");
+        assert_eq!(spans[0].0, "A minor");
+    }
+
+    #[test]
+    fn bare_note_before_punctuation_is_colored() {
+        assert!(
+            has_note_color("chord: G,"),
+            "G before comma should be colored"
+        );
+        assert!(has_note_color("(G)"), "G in parens should be colored");
+    }
+
+    #[test]
+    fn hz_is_colored() {
+        assert!(has_note_color("440 Hz"), "440 Hz should be colored");
+        assert!(has_note_color("440Hz"), "440Hz should be colored");
+    }
+
+    #[test]
+    fn midi_context_is_colored() {
+        assert!(has_note_color("note 60"), "note 60 should be colored");
+        assert!(has_note_color("midi 69"), "midi 69 should be colored");
     }
 }
