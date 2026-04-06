@@ -39,15 +39,13 @@ All items shipped in this sprint are documented in [docs/features.md](docs/featu
 
 ---
 
-### Next sprint — v0.5.9 queue
+### Next sprint — v0.6.0 queue
 
-- [ ] **Sequencer piano-roll note names** — melodic step rows (bass, hoover, AN1X) should show the note name (`C4`, `A#3`) inside each active step cell (or as a tooltip), colored with Huth.
+- [ ] **Separate LLM heat slider** — decouple "LLM temperature" from "jam energy / mutation rate".
 
-- [ ] **Per-voice FX send UI** — surface the voice→FX cable routing in a compact matrix view (voice rows × FX columns, checkbox grid), so users can easily route individual voices to specific FX without navigating the full rack overlay.
+- [ ] **Hoover resonant sweep tuning** — the vacuum-cleaner screech needs more aggressive resonant peak shape.
 
-- [ ] **Session autosave interval setting** — currently saves on every state change (throttled); add a Preferences option: immediate / 5 s / 30 s / manual only.
-
-- [ ] **Even control spacing / responsive layout** — knobs and sliders in mixed rows should distribute remaining width evenly rather than left-aligning with gaps. egui 0.28 has no built-in flex; requires a pre-pass that computes per-control width from `ui.available_width()` before the draw pass. Must remain consistent when switching knob↔slider mode and across all pad/knob size settings.
+- [ ] **Even control spacing — extend to all panels** — `even_group_width()` / `glass_group_fill()` already applied to drum panels; extend the same pattern to an1x, hoover, bass, and fx panels.
 
 ---
 
