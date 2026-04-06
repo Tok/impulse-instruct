@@ -9,6 +9,7 @@ pub mod panels;
 pub mod rack_cables;
 pub mod rack_canvas;
 pub(crate) mod rack_content;
+mod scope_footer;
 pub mod theme;
 pub mod widgets;
 mod windows;
@@ -208,6 +209,8 @@ pub struct ImpulseApp {
     scope_rx: rtrb::Consumer<f32>,
     scope_buf: Vec<f32>,
     capture_rx: rtrb::Consumer<f32>,
+    dsp_load_rx: rtrb::Consumer<f32>,
+    dsp_load_buf: Vec<f32>,
     /// Most-recent audio analysis snapshot. None until the user clicks Listen.
     audio_analysis: Option<crate::audio::analysis::AudioAnalysis>,
     /// True when the most-recently-sent prompt came from the Listen button —
@@ -286,13 +289,19 @@ pub struct ImpulseApp {
     pub(crate) zone_fxmod_collapsed: bool,
 }
 
+/// Audio channels bundled to keep `ImpulseApp::new` under the arg limit.
+pub struct AudioChannels {
+    pub params_tx: rtrb::Producer<AudioCommand>,
+    pub scope_rx: rtrb::Consumer<f32>,
+    pub capture_rx: rtrb::Consumer<f32>,
+    pub dsp_load_rx: rtrb::Consumer<f32>,
+}
+
 impl ImpulseApp {
     pub fn new(
         cc: &eframe::CreationContext<'_>,
         state: Arc<RwLock<AppState>>,
-        mut audio_tx: rtrb::Producer<AudioCommand>,
-        scope_rx: rtrb::Consumer<f32>,
-        capture_rx: rtrb::Consumer<f32>,
+        mut audio: AudioChannels,
         llm_tx: Sender<LlmInput>,
         llm_rx: Receiver<LlmOutput>,
         midi_rx: Receiver<MidiEvent>,
@@ -337,7 +346,7 @@ impl ImpulseApp {
             if !path.is_empty()
                 && let Some(data) = crate::audio::load_wav_to_44100(&path)
             {
-                let _ = audio_tx.push(AudioCommand::LoadSampler(data));
+                let _ = audio.params_tx.push(AudioCommand::LoadSampler(data));
             }
         }
 
@@ -355,10 +364,12 @@ impl ImpulseApp {
         }
         Self {
             state,
-            audio_tx,
-            scope_rx,
+            audio_tx: audio.params_tx,
+            scope_rx: audio.scope_rx,
             scope_buf: Vec::new(),
-            capture_rx,
+            capture_rx: audio.capture_rx,
+            dsp_load_rx: audio.dsp_load_rx,
+            dsp_load_buf: Vec::with_capacity(64),
             audio_analysis: None,
             listen_pending: false,
             llm_tx,
@@ -876,6 +887,15 @@ impl eframe::App for ImpulseApp {
             self.scope_buf.drain(..drain);
         }
 
+        // ── Drain DSP load ring buffer ───────────────────────────────────────
+        while let Ok(load) = self.dsp_load_rx.pop() {
+            self.dsp_load_buf.push(load);
+        }
+        if self.dsp_load_buf.len() > 64 {
+            let drain = self.dsp_load_buf.len() - 64;
+            self.dsp_load_buf.drain(..drain);
+        }
+
         // ── Floating windows (prefs / about / sysinfo) ────────────────────────
         self.draw_windows(ctx);
 
@@ -894,7 +914,7 @@ impl eframe::App for ImpulseApp {
             )
             .exact_height(48.0)
             .show(ctx, |ui| {
-                self.draw_scope(ui);
+                scope_footer::draw_scope(ui, &self.scope_buf);
             });
 
         // ── Footer ────────────────────────────────────────────────────────────
@@ -917,6 +937,7 @@ impl eframe::App for ImpulseApp {
                             .monospace()
                             .size(9.0),
                     );
+                    scope_footer::draw_dsp_sparkline(ui, &self.dsp_load_buf);
                 });
             });
 
@@ -944,52 +965,8 @@ impl eframe::App for ImpulseApp {
     }
 }
 
-// ─── Panel drawing ────────────────────────────────────────────────────────────
-
 impl ImpulseApp {
-    fn draw_scope(&self, ui: &mut egui::Ui) {
-        let (rect, _) =
-            ui.allocate_exact_size(egui::vec2(ui.available_width(), 40.0), egui::Sense::hover());
-        if !ui.is_rect_visible(rect) {
-            return;
-        }
-        let painter = ui.painter();
-        painter.rect_filled(rect, egui::Rounding::ZERO, theme::PIT);
-        painter.rect_stroke(
-            rect,
-            egui::Rounding::ZERO,
-            egui::Stroke::new(1.0, theme::SLATE),
-        );
-
-        let n = self.scope_buf.len();
-        if n < 2 {
-            return;
-        }
-        let w = rect.width();
-        let h = rect.height();
-        let mid = rect.center().y;
-        let amp = h * 0.45;
-
-        let points: Vec<egui::Pos2> = self
-            .scope_buf
-            .iter()
-            .enumerate()
-            .map(|(i, &s)| {
-                let x = rect.min.x + (i as f32 / (n - 1) as f32) * w;
-                let y = mid - s.clamp(-1.0, 1.0) * amp;
-                egui::Pos2::new(x, y)
-            })
-            .collect();
-
-        for i in 0..points.len().saturating_sub(1) {
-            painter.line_segment(
-                [points[i], points[i + 1]],
-                egui::Stroke::new(1.0, theme::CHALK),
-            );
-        }
-    }
-
-    #[allow(dead_code)] // used when panels get individual frames
+    #[allow(dead_code)]
     fn panel_frame() -> Frame {
         Frame::none()
             .fill(theme::PIT)

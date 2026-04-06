@@ -294,9 +294,12 @@ fn run() -> anyhow::Result<()> {
 
     // ── UI (blocks this thread) ───────────────────────────────────────────────
     let state_for_ui = Arc::clone(&app_state);
-    let audio_tx = audio_engine.params_tx;
-    let scope_rx = audio_engine.scope_rx;
-    let capture_rx = audio_engine.capture_rx;
+    let audio_channels = ui::AudioChannels {
+        params_tx: audio_engine.params_tx,
+        scope_rx: audio_engine.scope_rx,
+        capture_rx: audio_engine.capture_rx,
+        dsp_load_rx: audio_engine.dsp_load_rx,
+    };
 
     let native_options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
@@ -315,9 +318,7 @@ fn run() -> anyhow::Result<()> {
             Ok(Box::new(ui::ImpulseApp::new(
                 cc,
                 state_for_ui,
-                audio_tx,
-                scope_rx,
-                capture_rx,
+                audio_channels,
                 llm_tx,
                 llm_out_rx,
                 midi_rx,
