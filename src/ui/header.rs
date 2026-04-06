@@ -579,10 +579,12 @@ impl ImpulseApp {
                         // Pre-compute shared grid column widths for both rows.
                         const LABEL_W: f32 = 36.0;
                         const DRAG_W: f32 = 48.0;
+                        const RESET_W: f32 = 16.0;
                         let full_w = ui.available_width();
                         let left_w = (full_w - right_w).max(60.0);
                         let item_sp = ui.spacing().item_spacing.x;
-                        let track_w = (left_w - LABEL_W - DRAG_W - item_sp * 2.0).max(40.0);
+                        let track_w =
+                            (left_w - LABEL_W - DRAG_W - RESET_W - item_sp * 3.0).max(40.0);
 
                         ui.vertical(|ui| {
                             ui.spacing_mut().item_spacing.y = 1.0;
@@ -631,6 +633,20 @@ impl ImpulseApp {
                                     .changed()
                                 {
                                     self.state.write().llm.heat = pct / 100.0;
+                                }
+                                // Reset
+                                if ui
+                                    .add_sized(
+                                        [RESET_W, 18.0],
+                                        egui::Button::new(
+                                            egui::RichText::new("↺").color(theme::ASH).size(9.0),
+                                        )
+                                        .fill(egui::Color32::TRANSPARENT),
+                                    )
+                                    .on_hover_text("Reset heat to 40%")
+                                    .clicked()
+                                {
+                                    self.state.write().llm.heat = 0.4;
                                 }
 
                                 // ── Right controls ───────────────────────────────
@@ -849,6 +865,20 @@ impl ImpulseApp {
                                     .changed()
                                 {
                                     self.state.write().llm.temperature = temp;
+                                }
+                                // Reset
+                                if ui
+                                    .add_sized(
+                                        [RESET_W, 18.0],
+                                        egui::Button::new(
+                                            egui::RichText::new("↺").color(theme::ASH).size(9.0),
+                                        )
+                                        .fill(egui::Color32::TRANSPARENT),
+                                    )
+                                    .on_hover_text("Reset temperature to 0.90")
+                                    .clicked()
+                                {
+                                    self.state.write().llm.temperature = 0.9;
                                 }
                             });
                         });
