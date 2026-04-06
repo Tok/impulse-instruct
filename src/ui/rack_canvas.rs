@@ -274,6 +274,7 @@ pub fn draw_rack(app: &mut ImpulseApp, ctx: &egui::Context, ui: &mut egui::Ui) {
     // Painted on the same Foreground layer as cables, after cables so glows
     // appear on top of cable lines but below the in-progress drag cable.
     if let Some(pointer) = ctx.pointer_latest_pos() {
+        let time = ctx.input(|i| i.time) as f32;
         let mut overlay = ctx.layer_painter(egui::LayerId::new(
             egui::Order::Foreground,
             egui::Id::new("port_highlights"),
@@ -290,31 +291,32 @@ pub fn draw_rack(app: &mut ImpulseApp, ctx: &egui::Context, ui: &mut egui::Ui) {
                     && pp.port.kind == drag.from_port.kind
                     && pp.port.module_id != drag.from_port.module_id;
                 if is_source {
-                    // Pulsing white ring around the drag source
+                    // Steady bright ring on the drag source port
                     overlay.circle_stroke(
                         pp.center,
                         module_card::PORT_RADIUS + 3.5,
                         egui::Stroke::new(1.5, egui::Color32::from_white_alpha(200)),
                     );
                 } else if is_compatible {
-                    // Green ring — valid drop target; brighter when hovered
-                    let alpha = if is_hovered { 230 } else { 90 };
+                    // Pulsing ring on valid targets — faster pulse when hovered.
+                    // Strictly grayscale (R=G=B) per ui-design.md.
+                    let freq = if is_hovered { 4.0 } else { 2.0 };
+                    let pulse = (time * freq * std::f32::consts::TAU).sin() * 0.5 + 0.5;
+                    let base_alpha = if is_hovered { 160u8 } else { 80u8 };
+                    let alpha = (base_alpha as f32 + pulse * 80.0) as u8;
                     overlay.circle_stroke(
                         pp.center,
                         module_card::PORT_RADIUS + 3.5,
-                        egui::Stroke::new(
-                            1.5,
-                            egui::Color32::from_rgba_unmultiplied(80, 210, 100, alpha),
-                        ),
+                        egui::Stroke::new(1.5, egui::Color32::from_white_alpha(alpha)),
                     );
                 }
-                // Incompatible ports: no extra decoration, they fade naturally
+                // Incompatible ports: no decoration
             } else if is_hovered {
-                // Idle hover: subtle white glow
+                // Idle hover: subtle static ring
                 overlay.circle_stroke(
                     pp.center,
                     module_card::PORT_RADIUS + 2.5,
-                    egui::Stroke::new(1.0, egui::Color32::from_white_alpha(120)),
+                    egui::Stroke::new(1.0, egui::Color32::from_white_alpha(110)),
                 );
             }
         }

@@ -240,15 +240,6 @@ mod tests {
         out
     }
 
-    fn has_color(input: &str) -> bool {
-        // Force-test even on non-TTY: wrap around private helper via a
-        // round-trip: if the output differs from input, color was applied.
-        // ansi_colorize_notes returns Borrowed when not a TTY, so we test
-        // the logic directly by checking the output contains ESC sequences.
-        let result = ansi_colorize_notes(input);
-        result.contains('\x1b')
-    }
-
     #[test]
     fn bare_note_followed_by_ampersand_not_colored() {
         // "D&B" — D and B should NOT be colored
