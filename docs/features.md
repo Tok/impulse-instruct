@@ -100,6 +100,17 @@ A detailed log of what's built. The roadmap lives in [PLAN.md](../PLAN.md).
 - **Preferences AI sub-tabs** - AI tab split into Model / Sampling / Personality / TTS sub-tabs; Sampling labelled "experimental"
 - **Huth note coloring in log** - in-UI log colorizes note names (C4, A#3), frequencies (440Hz), MIDI context (note 60) with Huth palette; `colorize_log()` in `llm_strip.rs`; text remains selectable/copy-paste-able
 - **Log level persistence** - `log_level_idx` persisted in `session.json`; survives restarts
+- **Skeuomorphic XY pad** — thick beveled outer frame (raised panel, inset rubber well), corner tick marks, rubber nub cursor with layered dome, specular catch-light, and hover glow ring; Y axis label/value overlaid inside pad; no left label strip
+- **Centered module layout** — knobs and controls center-align horizontally within glass groups and rack module cards (no more left-clustering dead space)
+- **Custom size overrides** — Preferences now exposes separate pixel DragValues for KNOB SIZE, SEQ STEP SIZE, XY PAD SIZE, and ENV HEIGHT; S/M/L/XL presets remain as quick-picks with ↺ reset; PadSize Fibonacci-aligned (S=21 / M=34 / L=55 / XL=89 px)
+- **Rounded sequencer step buttons** — rounding increased to 22% of pad size; neumorphic bevel uses rect_stroke pairs so highlights follow the rounded shape
+- **Scaled envelope display** — decay/ADSR height scales with XY pad size (30% of xy_size, configurable via ENV HEIGHT override); width spans both pads
+- **Huth ANSI terminal output** — `log::info!` LLM response lines and thinking tokens emit ANSI 24-bit color escape codes for note names, frequencies, and MIDI numbers when stdout is a TTY; matches in-UI log colorization
+- **Huth piano key labels** — white and black key labels on the piano display use their Huth chromatic color instead of a flat gray
+- **Header heat slider width** — heat slider fills all available header width; tier name (COOL/WARM/HOT/FIRE/CHAOS) and percentage painted as overlays on the slider rather than consuming separate fixed allocations
+- **VRAM/RAM bar visibility** — memory bars drawn with an explicit gray-38 track so the full bar extent is always visible on the dark background; fill brightens to gray-160 above 85% usage
+- **show_cables default on** — rack cables shown by default for new sessions
+- **Thinking token UX** — toggle button label shows `{persona} (think)`; thinking lines rendered in a darker gray in the in-UI log; thinking forwarded to console via `log::info!`
 
 ## Intelligence
 
