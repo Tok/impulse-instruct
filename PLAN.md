@@ -35,38 +35,11 @@ Ordered by value.  Branch: **`develop`** (merge to `main` only for tagged releas
 
 ### Completed this sprint (develop, not yet merged to main)
 
-- [x] **TTS rack module UI panel** — `src/ui/panels/tts.rs`, EspeakNgTts / CoquiTts cards wired into `draw_voice_content()`.
-- [x] **Audio feedback Phase 2** — AUTO toggle fires every 4 jam cycles; 8 per-voice level bars in LISTEN strip.
-- [x] **LLM cable visual sync** — LFO→target and Sequencer→voice cables now synthesised from state in the rack overlay; PortKind mismatch fixed.
-- [x] **Cable signal animation** — speed and dot count normalised to arc length (no longer length-dependent).
-- [x] **Skeuomorphic widget depth** — step buttons get inset well + inverted edge highlights; flat knob gets well shadow + catch-light; section headers get a 1px rule line.
-- [x] **Responsive voice card grid** — columns adapt to window width (1/2/3 at 420px min per column).
-- [x] **LLM strip collapse** — ▲/▼ toggle collapses strip to prompt row only.
-- [x] **Central touch-paint mode** — `· / U / F` toolbar row replaces broken right-click per-knob cycling (context menus conflicted); cables toggle also lives here.
-- [x] **UI scale setting** — `UiPrefs.ui_scale` DragValue in Preferences, applied via `pixels_per_point`, persisted in session.
-- [x] **Pad size M = 44px default** (was 26px); knob default bumped to M (55px).
-- [x] **All UI prefs persisted** — `pad_size`, `knob_size`, `ui_scale` all survive restarts.
-- [x] **Header responsive rework** — heat slider fills remaining width; COOL/WARM/HOT/FIRE/CHAOS tier labels; monitor volume relabelled MON; right_to_left layout.
-- [x] **Heat chaos amplification** — temperature range 0.1–1.7 (was 1.2); top_p widens with heat; CHAOS tier in system prompt at ≥90%.
-- [x] **CI/CD supply-chain security** — `release` job builds Linux+Windows in GH Actions on `v*` tags; SHA-256 sidecars + SLSA level-2 attestation; codecov now runs on `develop` too.
-- [x] **Banner symmetry** — wave and tagline centred correctly.
-- [x] **Snapshot versioning** — `Cargo.toml` bumped to `0.5.8-alpha.1`; `scripts/bump-version.sh` added (commit + release tag on clean semver).
-- [x] **LLM tuning tab in Preferences** — AI tab split into four sub-tabs: **Model** (ctx_size, seed, inference/thinking), **Sampling** (top_k/p/min_p/repeat/freq — labelled "experimental"), **Personality** (persona, voice mode, style verbosity, system prompt override), **TTS** (engine, voice shape, character).
-- [x] **Zone visual hierarchy** — zone rails distinct gray backgrounds (Global 24, Voices 18, FX+Mod 14); module card content 6px/8px margin; 3-dot drag affordance in title bar.
-- [x] **Autotune FX module** — `ModuleKind::FxAutotune`; grain-based pitch shifter in `fx.rs` (two-head overlap-add, pre-allocated 4096-sample buffer); wired into FxStep, FxPlan, AudioParams, rack add-menu, LLM schema.
-- [x] **Per-zone collapse** — each zone rail has a ▶/▼ toggle; Voice, FX+Mod, Global collapse independently.
-- [x] **Log level persistence fix** — `log_level_idx` added to `SessionData`; survives restarts.
-- [x] **Huth note coloring in log** — in-UI log parses note names (`C4`, `A#3`), frequencies (`440Hz`), and MIDI context (`note 60`) and renders them in their Huth chromatic color; `colorize_log()` in `llm_strip.rs`; uses `egui::Label::selectable(true)` + `LayoutJob` so text remains copy-paste-able.
+All items shipped in this sprint are documented in [docs/features.md](docs/features.md).
 
 ---
 
-### Next — pre-release queue
-
-- [x] **Huth coloring in synth panels** — apply `theme::note_color()` to note name labels wherever they appear in bass/drum/AN1X panels and oscilloscope readouts.  CLI terminal output (the `log::info!` etc.) should also emit ANSI escape codes for note names when stdout is a TTY.
-- [x] **Huth false-positive fix** — `colorize_log` in `llm_strip.rs` now has the same `safe_before`/`safe_after` bare-note guards as `ansi_colorize_notes`; D&B, E-flat etc. no longer get colored. Off-by-one bounds fix (quality-word extension at end-of-string). 9 new tests.
-- [x] **Header slider fill** — heat and MON sliders now use `spacing_mut().slider_width` instead of `allocate_exact_size+put`; `put()` was silently ignoring the rect for sliders.
-
-- [ ] **Rack cable drag-to-patch** — wire up the existing `CableDrag` infrastructure into a usable patch interaction: click+drag from any port circle to another to create a cable; right-click a cable to delete it.  The overlay already draws cables; the missing piece is the hit-test interaction layer.
+### Next sprint — v0.5.9 queue
 
 - [ ] **Sequencer piano-roll note names** — melodic step rows (bass, hoover, AN1X) should show the note name (`C4`, `A#3`) inside each active step cell (or as a tooltip), colored with Huth.
 
@@ -84,7 +57,7 @@ Ordered by value.  Branch: **`develop`** (merge to `main` only for tagged releas
 
 - [ ] **Multiple LLM instances** — one LLM per voice, or a routing matrix.
 
-- [ ] **Modular cable UI** (Reason-style rack flip) — Tab flips to back panel showing I/O ports + Bezier cables.  Infrastructure exists; needs a dedicated drag-to-patch interaction layer.
+- [ ] **Modular cable UI** (Reason-style rack flip) — Tab flips to back panel showing I/O ports + Bezier cables.  Drag-to-patch interaction is now live; remaining work is the visual back-panel flip.
 
 - [ ] **Separate LLM heat slider** — decouple "LLM temperature" from "jam energy / mutation rate" so they can be tuned independently.  Currently both are driven by the single heat value.
 

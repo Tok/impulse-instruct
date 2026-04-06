@@ -111,7 +111,7 @@ Switch models at any time via **Prefs -> Model**. The app restarts the inference
 - Reverb, delay (echo), chorus/ensemble, 4-stage phaser, ring modulator
 - Waveshaper (pre-FX tanh saturation), bitcrush (bit depth + rate), 3-band EQ, tape saturation, master drive
 - Master compressor/limiter
-- Modular rack: connect voices to FX modules with Bezier cables; per-voice FX buses; topology compiled live
+- Modular rack: drag-to-patch cable connections between voices and FX modules; right-click a port to disconnect; animated Bezier cables with signal flow dots; per-voice FX buses; topology compiled live
 - 4-slot LFO matrix - any waveform, BPM-syncable, wireable to any parameter
 
 **Intelligence**
@@ -216,7 +216,7 @@ The **HEAT** slider in the header controls how aggressively PULSE mutates the so
 | **~60-75%** | Active rearrangement - new patterns, instrument swaps, FX edits every few bars. |
 | **100%** | Full chaos. PULSE rewrites everything it can reach, constantly. |
 
-Heat maps to LLM temperature (`0.1` at 0% -> `1.2` at 100%).
+Heat maps to LLM temperature (`0.1` at 0% -> `1.7` at 100%).
 
 ### Jam mode
 
