@@ -12,3 +12,4 @@
 llama-server.log
 settings.json
 cobertura.xml
+.claude/

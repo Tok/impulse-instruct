@@ -421,12 +421,12 @@ pub use adsr::{adsr_display, decay_display};
 /// Compute the per-group width for an evenly-distributed row of `n` glass panels.
 /// Call this before the `ui.horizontal()` that contains the groups.
 ///
-/// ```rust
+/// ```ignore
 /// let gw = widgets::even_group_width(ui, 3);
 /// ui.horizontal(|ui| {
-///     widgets::glass_group_fill(ui, gw, gw, |ui| { … });
-///     widgets::glass_group_fill(ui, gw, gw, |ui| { … });
-///     widgets::glass_group_fill(ui, gw, gw, |ui| { … });
+///     widgets::glass_group_fill(ui, gw, gw, |ui| { /* group 1 */ });
+///     widgets::glass_group_fill(ui, gw, gw, |ui| { /* group 2 */ });
+///     widgets::glass_group_fill(ui, gw, gw, |ui| { /* group 3 */ });
 /// });
 /// ```
 pub fn even_group_width(ui: &Ui, n: usize) -> f32 {

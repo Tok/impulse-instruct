@@ -41,25 +41,117 @@ All items shipped in this sprint are documented in [docs/features.md](docs/featu
 
 ### Next sprint — v0.6.0 queue
 
-- [ ] **Even control spacing — extend to bass/hoover/an1x** — `even_group_width()` / `glass_group_fill()` applied to drums + fx panels; extend to bass synth, hoover, and an1x glass_group rows.
+- [ ] **Separate LLM heat slider** — decouple "LLM temperature" (inference
+  sampling temperature) from "jam energy / mutation rate" (how aggressively
+  PULSE rewrites params between cycles).  Currently both read from the single
+  `llm.heat` value.  Add a second knob/slider: `llm.temperature` (float 0–2,
+  default 0.9) stored in `LlmState`, sent to llama-server's `temperature`
+  field; `llm.heat` remains the mutation-rate control.  UI: two separate
+  controls in the LLM strip.
+
+- [ ] **Even control spacing — extend to remaining panels** — `even_group_width()`
+  / `glass_group_fill()` already applied to bass, hoover, an1x.  Remaining:
+  drums (808/909 TUNE/CHAR/ENV groups), FX panel knob rows.
 
 ---
 
 ### Post-release backlog
 
-- [ ] **Multiple voices** — `Vec<SynthVoice>`, each with its own sequencer + oscillator + filter.  LLM can target "voice 2, more acid".
+#### Rack & modular UI
 
-- [ ] **Multiple LLM instances** — one LLM per voice, or a routing matrix.
+- [ ] **Reason-style rack flip + modular cable UI** — Tab flips the view to a
+  back panel.  Each module exposes labelled I/O ports (audio, CV, trigger,
+  LLM-signal — see below).  Bezier cables drag between ports.  The cable graph
+  already exists (`src/state/rack.rs`); the remaining work is:
+  - Back-panel layout pass: position ports relative to module bounding boxes
+  - Bezier cable renderer (egui `Painter` + cubic Bezier)
+  - Drag-to-patch mouse interaction (port hover → highlight compatible ports,
+    drag → preview cable, drop → `rack.connect()`)
+  - Cable colours by signal type (audio = white, CV = amber, trigger = cyan,
+    LLM = soft blue)
 
-- [ ] **Modular cable UI** (Reason-style rack flip) — Tab flips to back panel showing I/O ports + Bezier cables.  Drag-to-patch interaction is now live; remaining work is the visual back-panel flip.
+#### Multiple LLM instances (rackable LLM module)
 
-- [ ] **Separate LLM heat slider** — decouple "LLM temperature" from "jam energy / mutation rate" so they can be tuned independently.  Currently both are driven by the single heat value.
+The current LLM is a singleton fixed in the header.  The goal is to make it
+a **rackable module** so multiple instances can run in parallel, each with
+its own prompt focus and its own set of wired targets.
 
-- [ ] **Bloom post-process** — Gaussian blur + additive blend on bright pixels.  Needs custom wgpu render pass; GPU-expensive.  Evaluate after ui-rework pass.
+Design sketch (to be detailed with sequential-thinking MCP before
+implementation):
 
-- [ ] **Windows code-signing** — unsigned `.exe` triggers SmartScreen.  Requires EV certificate.  Low priority until meaningful Windows user base.
+- **`LlmModule` as a rack module kind** (`ModuleKind::LlmAgent`) — same
+  cable graph, new port type `PortKind::LlmSignal`.
+- Each `LlmModule` has:
+  - A **scope** field: which instrument keys it is allowed to write
+    (e.g. `["bass", "kit_a"]` or `["fx", "lfo[0]"]`).  Locked params still
+    respected.
+  - Its own **prompt context** / persona string (e.g. "you control only the
+    bass line").
+  - Its own **temperature** and **heat** knobs.
+  - Its own **jam cycle** cadence (can differ from the global beat).
+- **LLM-signal cables** connect an `LlmModule` output to the parameter-input
+  port of another module.  The cable encodes which JSON key subtree the LLM
+  output is routed into.  This replaces the current single `apply_llm_update`
+  fan-out with a per-instance scoped apply.
+- **Inference threading**: each `LlmModule` gets its own channel pair to the
+  LLM worker thread (or a pool of workers if multiple models are loaded).
+  The existing mock/real inference path is reused; scheduling is round-robin
+  or priority-weighted.
+- **UI**: the front panel shows a compact "PULSE mini" card per instance
+  (persona name, heat, last output snippet).  The back panel shows LLM-signal
+  ports alongside audio/CV ports.
 
-- [ ] **Alternate tuning tables** — gamelan slendro, just intonation, etc.  Data-modelled; not wired into DSP.
+This requires fleshing out with sequential-thinking MCP before coding.  Key
+questions: single shared model vs. per-instance model weights, cable conflict
+resolution (two LLMs targeting same param), UI real-estate for many instances.
+
+#### Visualization & statistics modules
+
+Current oscilloscope and note-colour log are a start.  Planned additions:
+
+- [ ] **Spectrum analyser** — real-time FFT magnitude display (log-frequency
+  x-axis, dB y-axis) as a rackable module.  Data fed from the existing
+  capture ring buffer.
+- [ ] **Stereo correlation meter** — phase correlation + L/R balance bar,
+  rackable or always-on in the FX panel.
+- [ ] **Pattern heatmap** — step-grid overlay showing how often each step fires
+  (running average), useful for spotting probability drift.
+- [ ] **LLM activity timeline** — scrolling log of which module fired, what
+  param it changed, and by how much.  Replaces the flat text log with a
+  structured, filterable view.
+- [ ] **CPU / DSP load meter** — audio callback duration as a sparkline.
+
+#### Visual treatment (post-process pass)
+
+Bloom alone is not enough — a full post-process layer is needed to make the
+UI feel alive at performance brightness:
+
+- [ ] **Bloom** — Gaussian blur on bright (>threshold) pixels, additively
+  blended back.  Needs a custom `wgpu` render pass outside egui's painter.
+  GPU cost: one downsample + two separable blur passes.  Evaluate at 1080p
+  on integrated GPU before committing.
+- [ ] **Scan-line / CRT vignette** — subtle horizontal scan-line overlay and
+  radial darkening at edges.  Can be a cheap fullscreen quad shader pass.
+- [ ] **LED glow on active steps** — per-step additive glow ring around
+  active step buttons.  Can be approximated in egui with layered circles if
+  custom wgpu pass is too expensive.
+- [ ] **Phosphor persistence on oscilloscope** — decay buffer so the waveform
+  fades out rather than clearing each frame.
+
+All of the above share the same custom render pass infrastructure.  Plan the
+wgpu integration once and implement all effects in that pass.
+
+#### Other
+
+- [ ] **Multiple voices (per-voice DSP params)** — voices 1-3 currently share
+  synth params (cutoff/resonance/etc.) with voice 0.  Next step: per-voice
+  `AudioParams` snapshot so each voice can have independent timbre.
+
+- [ ] **Gabber kick voice** — pitch-envelope ramp + hard clipper.  No existing
+  voice fits; needs a new `GabberKick` struct in `src/audio/dsp/voices.rs`.
+
+- [ ] **Windows code-signing** — unsigned `.exe` triggers SmartScreen.
+  Requires EV certificate.  Low priority until meaningful Windows user base.
 
 ---
 
