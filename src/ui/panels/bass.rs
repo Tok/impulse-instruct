@@ -159,122 +159,175 @@ pub fn draw_bass(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             }
         });
     } else {
-        // ── Knob mode: 4-column grid ──────────────────────────────────────────
-        // Row layout:  CUT  | RES  | ENV  | DEC
-        //              ACC  | DRV  | VOL  | SUB
-        //              GLD  | NSE  | FMD  | FMR
-        egui::Grid::new("bass_knobs")
-            .num_columns(4)
-            .spacing([4.0, 2.0])
-            .show(ui, |ui| {
-                macro_rules! k {
-                    ($label:expr, $val:expr, $mode:expr, $path:expr) => {{
-                        let (ch, cy) = widgets::param_control(ui, $label, &mut $val, $mode, ctrl);
-                        if ch {
-                            changed = true;
-                        }
-                        if cy {
-                            cycle_paths.push($path);
-                        }
-                    }};
-                    // FM params with no lock path
-                    ($label:expr, $val:expr) => {{
-                        let (ch, _) =
-                            widgets::param_control(ui, $label, &mut $val, ParamMode::Free, ctrl);
-                        if ch {
-                            changed = true;
-                        }
-                    }};
-                }
-                // Row 1 — filter core
-                k!(
+        // ── Knob mode: 3 equal-width glass groups ─────────────────────────────
+        let gw = widgets::even_group_width(ui, 3);
+        ui.horizontal(|ui| {
+            // FILTER group: CUT, RES, ENV, DEC
+            widgets::glass_group_fill(ui, gw, gw, |ui| {
+                ui.label(
+                    egui::RichText::new("FILTER")
+                        .color(theme::FOG)
+                        .monospace()
+                        .size(9.5),
+                );
+                let (ch, cy) = widgets::param_control(
+                    ui,
                     "CUT",
-                    cutoff,
+                    &mut cutoff,
                     param_mode("bass.cutoff", &locked, &focused),
-                    "bass.cutoff"
+                    ctrl,
                 );
-                k!(
+                if ch {
+                    changed = true;
+                }
+                if cy {
+                    cycle_paths.push("bass.cutoff");
+                }
+                let (ch, cy) = widgets::param_control(
+                    ui,
                     "RES",
-                    resonance,
+                    &mut resonance,
                     param_mode("bass.resonance", &locked, &focused),
-                    "bass.resonance"
+                    ctrl,
                 );
-                k!(
+                if ch {
+                    changed = true;
+                }
+                if cy {
+                    cycle_paths.push("bass.resonance");
+                }
+                let (ch, cy) = widgets::param_control(
+                    ui,
                     "ENV",
-                    env_mod,
+                    &mut env_mod,
                     param_mode("bass.env_mod", &locked, &focused),
-                    "bass.env_mod"
+                    ctrl,
                 );
-                k!(
+                if ch {
+                    changed = true;
+                }
+                if cy {
+                    cycle_paths.push("bass.env_mod");
+                }
+                let (ch, cy) = widgets::param_control(
+                    ui,
                     "DEC",
-                    decay,
+                    &mut decay,
                     param_mode("bass.decay", &locked, &focused),
-                    "bass.decay"
+                    ctrl,
                 );
-                ui.end_row();
-                // Row 2 — character
-                k!(
-                    "ACC",
-                    accent,
-                    param_mode("bass.accent_level", &locked, &focused),
-                    "bass.accent_level"
-                );
-                k!(
-                    "DRV",
-                    dist,
-                    param_mode("bass.distortion", &locked, &focused),
-                    "bass.distortion"
-                );
-                k!(
-                    "VOL",
-                    vol,
-                    param_mode("bass.volume", &locked, &focused),
-                    "bass.volume"
-                );
-                k!(
-                    "SUB",
-                    sub_osc_level,
-                    param_mode("bass.sub_osc_level", &locked, &focused),
-                    "bass.sub_osc_level"
-                );
-                ui.end_row();
-                // Row 3 — modulation
-                k!(
-                    "GLD",
-                    portamento_time,
-                    param_mode("bass.portamento_time", &locked, &focused),
-                    "bass.portamento_time"
-                );
-                k!(
-                    "NSE",
-                    noise_mix,
-                    param_mode("bass.noise_mix", &locked, &focused),
-                    "bass.noise_mix"
-                );
-                {
-                    let (ch, cy) =
-                        widgets::param_control(ui, "FMD", &mut fm_depth, ParamMode::Free, ctrl);
-                    if ch {
-                        changed = true;
-                    }
-                    if cy {
-                        cycle_paths.push("bass.fm_depth");
-                    }
+                if ch {
+                    changed = true;
                 }
-                {
-                    let (ch, cy) =
-                        widgets::param_control(ui, "FMR", &mut fm_ratio, ParamMode::Free, ctrl);
-                    if ch {
-                        changed = true;
-                    }
-                    if cy {
-                        cycle_paths.push("bass.fm_ratio");
-                    }
+                if cy {
+                    cycle_paths.push("bass.decay");
                 }
-                ui.end_row();
             });
+            // CHARACTER group: ACC, DRV, VOL, SUB
+            widgets::glass_group_fill(ui, gw, gw, |ui| {
+                ui.label(
+                    egui::RichText::new("CHARACTER")
+                        .color(theme::FOG)
+                        .monospace()
+                        .size(9.5),
+                );
+                let (ch, cy) = widgets::param_control(
+                    ui,
+                    "ACC",
+                    &mut accent,
+                    param_mode("bass.accent_level", &locked, &focused),
+                    ctrl,
+                );
+                if ch {
+                    changed = true;
+                }
+                if cy {
+                    cycle_paths.push("bass.accent_level");
+                }
+                let (ch, cy) = widgets::param_control(
+                    ui,
+                    "DRV",
+                    &mut dist,
+                    param_mode("bass.distortion", &locked, &focused),
+                    ctrl,
+                );
+                if ch {
+                    changed = true;
+                }
+                if cy {
+                    cycle_paths.push("bass.distortion");
+                }
+                let (ch, cy) = widgets::param_control(
+                    ui,
+                    "VOL",
+                    &mut vol,
+                    param_mode("bass.volume", &locked, &focused),
+                    ctrl,
+                );
+                if ch {
+                    changed = true;
+                }
+                if cy {
+                    cycle_paths.push("bass.volume");
+                }
+                let (ch, cy) = widgets::param_control(
+                    ui,
+                    "SUB",
+                    &mut sub_osc_level,
+                    param_mode("bass.sub_osc_level", &locked, &focused),
+                    ctrl,
+                );
+                if ch {
+                    changed = true;
+                }
+                if cy {
+                    cycle_paths.push("bass.sub_osc_level");
+                }
+            });
+            // MOD group: GLD, NSE, FMD, FMR
+            widgets::glass_group_fill(ui, gw, gw, |ui| {
+                ui.label(
+                    egui::RichText::new("MOD")
+                        .color(theme::FOG)
+                        .monospace()
+                        .size(9.5),
+                );
+                let (ch, cy) = widgets::param_control(
+                    ui,
+                    "GLD",
+                    &mut portamento_time,
+                    param_mode("bass.portamento_time", &locked, &focused),
+                    ctrl,
+                );
+                if ch {
+                    changed = true;
+                }
+                if cy {
+                    cycle_paths.push("bass.portamento_time");
+                }
+                let (ch, cy) = widgets::param_control(
+                    ui,
+                    "NSE",
+                    &mut noise_mix,
+                    param_mode("bass.noise_mix", &locked, &focused),
+                    ctrl,
+                );
+                if ch {
+                    changed = true;
+                }
+                if cy {
+                    cycle_paths.push("bass.noise_mix");
+                }
+                if widgets::param_control(ui, "FMD", &mut fm_depth, ParamMode::Free, ctrl).0 {
+                    changed = true;
+                }
+                if widgets::param_control(ui, "FMR", &mut fm_ratio, ParamMode::Free, ctrl).0 {
+                    changed = true;
+                }
+            });
+        });
 
-        // Detune: bipolar DragValue — one compact row below the grid
+        // Detune: bipolar DragValue — one compact row below the groups
         ui.horizontal(|ui| {
             ui.label(
                 egui::RichText::new("DETUNE")
