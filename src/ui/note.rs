@@ -89,13 +89,26 @@ pub(crate) fn ansi_colorize_notes(text: &str) -> std::borrow::Cow<'_, str> {
                     if has_octave {
                         j += 1;
                     }
-                    // For bare notes (no accidental, no octave digit), require that
-                    // the following character is whitespace or safe punctuation — not
-                    // symbols like '&', '+', '-', '=', '@', '%', etc.  This prevents
-                    // false positives like "D&B", "E-flat" (written with hyphen), or
-                    // version strings like "B2B".
+                    // For bare notes (no accidental, no octave digit), both the
+                    // preceding and following characters must be word boundaries or
+                    // safe punctuation.  This prevents "B" in "D&B", "E" in "E-flat",
+                    // etc. from being colored.
                     let bare = acc.is_none() && !has_octave;
                     if bare {
+                        let prev_char = if pos > 0 { bytes[pos - 1] } else { b' ' };
+                        let safe_before = matches!(
+                            prev_char,
+                            b' ' | b'\t'
+                                | b'\n'
+                                | b'\r'
+                                | b'('
+                                | b'['
+                                | b'{'
+                                | b'"'
+                                | b'\''
+                                | b'`'
+                                | b'/'
+                        );
                         let next_char = if j < len { bytes[j] } else { b' ' };
                         let safe_after = matches!(
                             next_char,
@@ -114,9 +127,51 @@ pub(crate) fn ansi_colorize_notes(text: &str) -> std::borrow::Cow<'_, str> {
                                 | b'`'
                                 | b'/' // chord slash: D/F#
                         );
-                        if !safe_after {
+                        if !safe_before || !safe_after {
                             pos += 1;
                             continue;
+                        }
+                        // If followed by a space + music quality word, color the whole
+                        // expression (e.g. "A minor", "G major", "D diminished").
+                        if next_char == b' ' {
+                            const QUALITIES: &[&[u8]] = &[
+                                b"major",
+                                b"minor",
+                                b"maj",
+                                b"min",
+                                b"diminished",
+                                b"dim",
+                                b"augmented",
+                                b"aug",
+                                b"sus",
+                                b"suspended",
+                                b"dorian",
+                                b"phrygian",
+                                b"lydian",
+                                b"mixolydian",
+                                b"locrian",
+                                b"aeolian",
+                                b"melodic",
+                                b"harmonic",
+                                b"pentatonic",
+                                b"chromatic",
+                            ];
+                            let rest = &bytes[j + 1..];
+                            for q in QUALITIES {
+                                let qlen = q.len();
+                                if rest.len() >= qlen {
+                                    let matches_ci = rest[..qlen]
+                                        .iter()
+                                        .zip(*q)
+                                        .all(|(a, b)| a.to_ascii_lowercase() == *b);
+                                    let word_end =
+                                        rest.len() == qlen || !rest[qlen].is_ascii_alphabetic();
+                                    if matches_ci && word_end {
+                                        j += 1 + qlen; // include space + quality
+                                        break;
+                                    }
+                                }
+                            }
                         }
                     }
                     paint!(pos, j, st);
