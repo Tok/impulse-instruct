@@ -478,23 +478,32 @@ impl HooverVoice {
         }
         let osc = osc_sum / n as f32 * 1.4;
 
-        // Chamberlin SVF — lowpass output
-        // LP cutoff starts wide open (bright) and sweeps DOWN as filt_env decays.
-        // High resonance creates a moving resonant peak sweeping from bright to dark —
-        // the authentic dominator hoover "oooh" character.
+        // Chamberlin SVF — LP + BP mix for authentic resonant sweep.
+        //
+        // The LP provides the low-frequency body; the BP adds the moving resonant
+        // peak that gives the classic hoover its "singing" character. Mixing them
+        // (controlled by resonance) recreates the Human Resource / Dominator
+        // "oooh→dark" sweep without needing a separate BP-mix parameter.
         let lp_norm = (p.hoover_filter_start * self.filt_env).clamp(0.0, 1.0);
-        // Exponential map: 0 → ~100 Hz (very dark/closed), 1 → ~12 kHz (wide open)
-        let lp_hz = (100.0_f32 * 120.0_f32.powf(lp_norm)).min(sr * 0.45);
+        // Exponential map: 0 → ~120 Hz (closed), 1 → ~12 kHz (open)
+        let lp_hz = (120.0_f32 * 100.0_f32.powf(lp_norm)).min(sr * 0.45);
         let f = (std::f32::consts::PI * lp_hz / sr).clamp(0.001, 0.49);
-        // q = damping; low q = high resonance. Clamp at 0.05 to prevent blowup.
-        let q = (1.0 - p.hoover_resonance * 0.95).max(0.05);
+        // q = damping; low q = high resonance. 0.97 tightens the peak vs 0.95.
+        let q = (1.0 - p.hoover_resonance * 0.97).max(0.03);
         let high = osc - self.svf_low - q * self.svf_band;
         let band_new = f * high + self.svf_band;
         let low_new = f * band_new + self.svf_low;
         self.svf_band = band_new;
         self.svf_low = low_new;
 
-        low_new * self.amp_env * p.hoover_volume
+        // Mix LP (body) with BP (resonant peak).  At resonance=0.82, bp_amount≈0.49
+        // — enough peak to make the sweep sing without overpowering the bass.
+        let bp_amount = (p.hoover_resonance * 0.6).clamp(0.0, 0.75);
+        let mixed = low_new * (1.0 - bp_amount) + band_new * bp_amount;
+        // Soft saturation via tanh to round off harsh clipping at high resonance
+        let saturated = mixed.tanh() * 1.15;
+
+        saturated * self.amp_env * p.hoover_volume
     }
 }
 

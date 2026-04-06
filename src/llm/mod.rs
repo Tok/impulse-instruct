@@ -67,19 +67,21 @@ pub struct LlmOutput {
 
 #[derive(Clone, Debug)]
 pub struct SamplingParams {
-    pub heat: f32,              // maps to temperature via 0.1 + heat * 1.1
-    pub top_k: i32,             // 0 = disabled; Gemma default 64
-    pub top_p: f32,             // 0.0–1.0 nucleus; Gemma default 0.95
-    pub min_p: f32,             // 0.0–1.0 min prob floor; llama.cpp default 0.05
-    pub repeat_penalty: f32,    // 1.0 = off; >1.0 penalises repeats
-    pub frequency_penalty: f32, // 0.0 = off (OpenAI-compat)
-    pub seed: i64,              // -1 = random
+    pub heat: f32, // 0–1: jam mutation intensity; drives temperature when temp_override is None
+    pub temp_override: Option<f32>, // explicit temperature (0.0–2.0); bypasses heat→temp formula when Some
+    pub top_k: i32,                 // 0 = disabled; Gemma default 64
+    pub top_p: f32,                 // 0.0–1.0 nucleus; Gemma default 0.95
+    pub min_p: f32,                 // 0.0–1.0 min prob floor; llama.cpp default 0.05
+    pub repeat_penalty: f32,        // 1.0 = off; >1.0 penalises repeats
+    pub frequency_penalty: f32,     // 0.0 = off (OpenAI-compat)
+    pub seed: i64,                  // -1 = random
 }
 
 impl Default for SamplingParams {
     fn default() -> Self {
         Self {
             heat: 0.4,
+            temp_override: None,
             top_k: 64,
             top_p: 0.95,
             min_p: 0.05,
@@ -450,12 +452,18 @@ impl LlmBackend for LlamaServerBackend {
         }
 
         let url = format!("{}/v1/chat/completions", self.base_url);
-        // heat 0.0 → temp 0.1 (near-deterministic), heat 1.0 → temp 1.7 (chaotic)
         let heat_f = (sampling.heat as f64).clamp(0.0, 1.0);
-        let temperature = 0.1_f64 + heat_f * 1.6;
-        // At high heat, widen top_p to allow more creative token choices.
-        let top_p =
-            (sampling.top_p as f64 + heat_f * (1.0 - sampling.top_p as f64) * 0.6).clamp(0.0, 1.0);
+        // Temperature: use explicit override when set, otherwise follow heat formula.
+        let temperature = sampling
+            .temp_override
+            .map(|t| t as f64)
+            .unwrap_or_else(|| 0.1 + heat_f * 1.6);
+        // At high heat (and when not pinned), widen top_p for more creative choices.
+        let top_p = if sampling.temp_override.is_some() {
+            sampling.top_p as f64
+        } else {
+            (sampling.top_p as f64 + heat_f * (1.0 - sampling.top_p as f64) * 0.6).clamp(0.0, 1.0)
+        };
 
         // json_object mode keeps the server honest about emitting valid JSON.
         // max_tokens: full-reset responses (all voices + FX + LFO) can exceed 1200 tokens
@@ -796,6 +804,7 @@ pub fn run_llm_loop(
             let s = state.read();
             SamplingParams {
                 heat: s.llm.heat,
+                temp_override: s.llm.llm_temp_override,
                 top_k: s.llm.top_k,
                 top_p: s.llm.top_p,
                 min_p: s.llm.min_p,

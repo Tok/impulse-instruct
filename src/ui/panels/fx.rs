@@ -236,9 +236,13 @@ pub fn draw_fx(app: &mut ImpulseApp, ui: &mut egui::Ui) {
     };
 
     egui::ScrollArea::vertical().show(ui, |ui| {
+        // 9 FX groups — compute equal width so they fill the panel without dead space.
+        // Use at most 4 columns so groups don't grow excessively wide on large screens.
+        let n_cols = ((ui.available_width() / ctrl.group_max_width()) as usize).clamp(1, 4);
+        let gw = widgets::even_group_width(ui, n_cols);
         ui.horizontal_wrapped(|ui| {
             // ── REVERB ──────────────────────────────────────────────────────────
-            widgets::glass_group(ui, ctrl.group_max_width(), |ui| {
+            widgets::glass_group_fill(ui, gw, gw, |ui| {
                 ui.label(
                     egui::RichText::new("REVERB")
                         .color(theme::FOG)
@@ -271,7 +275,7 @@ pub fn draw_fx(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             });
 
             // ── DELAY ───────────────────────────────────────────────────────────
-            widgets::glass_group(ui, ctrl.group_max_width(), |ui| {
+            widgets::glass_group_fill(ui, gw, gw, |ui| {
                 ui.label(
                     egui::RichText::new("DELAY")
                         .color(theme::FOG)
@@ -290,7 +294,7 @@ pub fn draw_fx(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             });
 
             // ── CHORUS ──────────────────────────────────────────────────────────
-            widgets::glass_group(ui, ctrl.group_max_width(), |ui| {
+            widgets::glass_group_fill(ui, gw, gw, |ui| {
                 ui.label(
                     egui::RichText::new("CHORUS")
                         .color(theme::FOG)
@@ -309,7 +313,7 @@ pub fn draw_fx(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             });
 
             // ── PHASER ──────────────────────────────────────────────────────────
-            widgets::glass_group(ui, ctrl.group_max_width(), |ui| {
+            widgets::glass_group_fill(ui, gw, gw, |ui| {
                 ui.label(
                     egui::RichText::new("PHASER")
                         .color(theme::FOG)
@@ -328,7 +332,7 @@ pub fn draw_fx(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             });
 
             // ── SHAPE: waveshaper + ring mod combined ───────────────────────────
-            widgets::glass_group(ui, ctrl.group_max_width(), |ui| {
+            widgets::glass_group_fill(ui, gw, gw, |ui| {
                 ui.label(
                     egui::RichText::new("SHAPE")
                         .color(theme::FOG)
@@ -350,7 +354,7 @@ pub fn draw_fx(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             });
 
             // ── EQ ──────────────────────────────────────────────────────────────
-            widgets::glass_group(ui, ctrl.group_max_width(), |ui| {
+            widgets::glass_group_fill(ui, gw, gw, |ui| {
                 ui.label(
                     egui::RichText::new("EQ")
                         .color(theme::FOG)
@@ -369,7 +373,7 @@ pub fn draw_fx(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             });
 
             // ── COMPRESSOR ──────────────────────────────────────────────────────
-            widgets::glass_group(ui, ctrl.group_max_width(), |ui| {
+            widgets::glass_group_fill(ui, gw, gw, |ui| {
                 ui.label(
                     egui::RichText::new("COMP")
                         .color(theme::FOG)
@@ -388,7 +392,7 @@ pub fn draw_fx(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             });
 
             // ── TAPE ────────────────────────────────────────────────────────────
-            widgets::glass_group(ui, ctrl.group_max_width(), |ui| {
+            widgets::glass_group_fill(ui, gw, gw, |ui| {
                 ui.label(
                     egui::RichText::new("TAPE")
                         .color(theme::FOG)
@@ -408,7 +412,7 @@ pub fn draw_fx(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             });
 
             // ── MASTER ──────────────────────────────────────────────────────────
-            widgets::glass_group(ui, ctrl.group_max_width(), |ui| {
+            widgets::glass_group_fill(ui, gw, gw, |ui| {
                 ui.label(
                     egui::RichText::new("MASTER")
                         .color(theme::FOG)
