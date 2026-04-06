@@ -4,12 +4,15 @@
 mod header;
 mod llm_strip;
 pub mod module_card;
+mod note;
 pub mod panels;
 pub mod rack_canvas;
 pub(crate) mod rack_content;
 pub mod theme;
 pub mod widgets;
 mod windows;
+
+pub(crate) use note::{ansi_colorize_notes, note_name};
 
 /// Convert a dot-path + float value into a nested JSON object.
 /// "bass.cutoff", 0.4  →  {"bass": {"cutoff": 0.4}}
@@ -20,20 +23,6 @@ fn dot_path_to_json(path: &str, value: f32) -> serde_json::Value {
         .iter()
         .rev()
         .fold(leaf, |acc, &key| serde_json::json!({ key: acc }))
-}
-
-/// Short note name for a MIDI note number (e.g. 60 → "C4").
-pub(crate) fn note_name(midi: u8) -> &'static str {
-    const NAMES: &[&str] = &[
-        "C1", "C#1", "D1", "D#1", "E1", "F1", "F#1", "G1", "G#1", "A1", "A#1", "B1", "C2", "C#2",
-        "D2", "D#2", "E2", "F2", "F#2", "G2", "G#2", "A2", "A#2", "B2", "C3", "C#3", "D3", "D#3",
-        "E3", "F3", "F#3", "G3", "G#3", "A3", "A#3", "B3", "C4", "C#4", "D4", "D#4", "E4", "F4",
-        "F#4", "G4", "G#4", "A4", "A#4", "B4", "C5", "C#5", "D5", "D#5", "E5", "F5", "F#5", "G5",
-        "G#5", "A5", "A#5", "B5", "C6",
-    ];
-    // MIDI 24 = C1
-    let idx = midi.saturating_sub(24) as usize;
-    NAMES.get(idx).copied().unwrap_or("?")
 }
 
 /// Scan for .gguf model files. Checks:
@@ -234,7 +223,7 @@ pub struct ImpulseApp {
     log_text: String,
     api_port: Option<u16>,
     show_about: bool,
-    show_prefs: bool,
+    pub(crate) show_prefs: bool,
     export_bars: u32,
     ui_volume: f32, // monitor-only gain; never written to state or export
     // Piano preferences
@@ -256,6 +245,7 @@ pub struct ImpulseApp {
     show_sysinfo: bool,
     // Preferences
     prefs_tab: usize,
+    llm_tab: usize,
     // log_level_idx now persisted in AppState.ui_prefs.log_level_idx
     // Startup hook: fire a prompt once the LLM transitions from initializing to ready
     startup_done: bool,
@@ -272,7 +262,7 @@ pub struct ImpulseApp {
     // Module being dragged by its title bar (id + current pointer position).
     pub(crate) module_drag: Option<rack_canvas::ModuleDrag>,
     // Auto-save: set when rack or session-worthy state changes; saved next frame.
-    session_dirty: bool,
+    pub(crate) session_dirty: bool,
     // Track last-saved rack cable/module count to detect changes.
     last_saved_rack_sig: (usize, usize),
     // Auto-listen: when enabled, trigger LISTEN automatically every N jam cycles.
@@ -281,6 +271,16 @@ pub struct ImpulseApp {
     auto_listen_counter: u32,
     // When jam_bars > 0, this holds the Instant when the next jam cycle should fire.
     jam_next_fire: Option<std::time::Instant>,
+    // When true the LLM strip collapses to show only the prompt row.
+    pub(crate) llm_strip_collapsed: bool,
+    // Native pixels_per_point at startup — used as base for ui_scale.
+    native_ppp: f32,
+    /// Central lock-paint mode: None = normal drag, Some(mode) = click paints that mode.
+    pub(crate) touch_mode: Option<crate::state::ParamMode>,
+    // Per-zone collapse state.
+    pub(crate) zone_global_collapsed: bool,
+    pub(crate) zone_voice_collapsed: bool,
+    pub(crate) zone_fxmod_collapsed: bool,
 }
 
 impl ImpulseApp {
@@ -386,6 +386,7 @@ impl ImpulseApp {
             },
             show_sysinfo: false,
             prefs_tab: 0,
+            llm_tab: 0,
             startup_done: false,
             midi_clock_tracker: MidiClockTracker::new(),
             history: StateHistory::new(),
@@ -400,6 +401,12 @@ impl ImpulseApp {
             auto_listen: false,
             auto_listen_counter: 0,
             jam_next_fire: None,
+            llm_strip_collapsed: false,
+            native_ppp: 0.0, // captured on first frame after DPI is established
+            touch_mode: None,
+            zone_global_collapsed: false,
+            zone_voice_collapsed: false,
+            zone_fxmod_collapsed: false,
         }
     }
 
@@ -468,8 +475,15 @@ impl ImpulseApp {
                 && !thinking.is_empty()
             {
                 self.last_thinking = Some(thinking.clone());
+                let think_persona = self.state.read().llm.persona_name.clone();
+                log::info!(
+                    "{} (think): {}",
+                    think_persona,
+                    ansi_colorize_notes(thinking)
+                );
                 if self.state.read().llm.show_thinking_in_log {
-                    self.log_text.push_str(&format!("think → {}\n", thinking));
+                    self.log_text
+                        .push_str(&format!("{} (think): {}\n", think_persona, thinking));
                 }
             }
 
@@ -520,6 +534,7 @@ impl ImpulseApp {
                 } else {
                     format!("{} → {}\n", persona, display)
                 };
+                log::info!("{}", ansi_colorize_notes(line.trim_end()));
                 self.log_text.push_str(&line);
                 // MC line: shown separately with a marker so it's visually distinct
                 if let Some(ref mc) = out.mc_line {
@@ -715,6 +730,22 @@ impl eframe::App for ImpulseApp {
     }
 
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        // Capture the system's native pixels_per_point on the first real frame,
+        // after the window is shown and DPI is known.
+        if self.native_ppp <= 0.0 {
+            self.native_ppp = ctx.pixels_per_point();
+        }
+        // Apply persisted UI scale — only override when the user has changed it.
+        let ui_scale = self.state.read().ui_prefs.ui_scale;
+        if (ui_scale - 1.0).abs() > 0.005 {
+            ctx.set_pixels_per_point(self.native_ppp * ui_scale);
+        }
+
+        // Publish touch_mode so widgets can read it without signature changes.
+        ctx.data_mut(|d| {
+            d.insert_temp(egui::Id::new("touch_mode"), self.touch_mode);
+        });
+
         self.drain_llm_outputs();
         self.drain_midi_events();
 

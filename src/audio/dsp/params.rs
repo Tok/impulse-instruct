@@ -107,6 +107,9 @@ pub struct AudioParams {
     pub eq_low_gain: f32,
     pub eq_mid_gain: f32,
     pub eq_hi_gain: f32,
+    // Autotune pitch shifter
+    pub autotune_amount: f32,
+    pub autotune_mix: f32,
     // Compressor
     pub compressor_threshold: f32,
     pub compressor_ratio: f32,
@@ -270,6 +273,8 @@ impl AudioParams {
             eq_low_gain: s.fx.eq_low_gain,
             eq_mid_gain: s.fx.eq_mid_gain,
             eq_hi_gain: s.fx.eq_hi_gain,
+            autotune_amount: s.fx.autotune_amount,
+            autotune_mix: s.fx.autotune_mix,
             compressor_threshold: s.fx.compressor_threshold,
             compressor_ratio: s.fx.compressor_ratio,
             compressor_mix: s.fx.compressor_mix,

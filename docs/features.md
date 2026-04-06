@@ -36,6 +36,7 @@ A detailed log of what's built. The roadmap lives in [PLAN.md](../PLAN.md).
 - **Per-voice FX buses** - voice mix split into 7 buses (AcidBass, DrumKit808, DrumKit909, HooverLead, An1xVoice, AmenSampler, NoiseVoice) + TTS bus; each routed through its compiled chain before the global chain
 - **Gated reverb** - `fx.reverb_gate_time` (0-2 s), GATE knob in FX panel
 - **Master pitch offset** - `fx.master_pitch_st` (+-12 st), PITCH knob in MASTER group
+- **Autotune FX module** - `ModuleKind::FxAutotune`; two-head grain overlap-add pitch shifter (`fx.autotune_amount` 0–1 → 0..+12 st, `fx.autotune_mix`); pre-allocated 4096-sample ring buffer (no audio-thread allocations); LLM-addressable via `fx.autotune_amount` / `fx.autotune_mix`
 
 ## Intelligence
 
@@ -78,24 +79,51 @@ A detailed log of what's built. The roadmap lives in [PLAN.md](../PLAN.md).
 
 - 5 panels: Sequencer / Bass (303) / 808 / 909 / FX; AN1X and Hoover in sequencer area
 - Chrome knobs, glass sliders, embossed buttons (neumorphic grayscale)
+- **Skeuomorphic step buttons** - active inset well (debossed 2px) with inverted edge highlights; velocity bloom over inset; chrome knob well shadow + catch-light
 - Velocity lanes below each step row (drag bars)
-- XY pads (CUT x RES, ENV x DEC, REVERB mix x size, DELAY mix x feedback, 808 PITCH x DECAY); right-click to cycle pairs; pair indicator in corner
+- XY pads (CUT x RES, ENV x DEC, REVERB mix x size, DELAY mix x feedback, 808 PITCH x DECAY); pair indicator in corner
 - Oscilloscope strip (rolling 512-sample waveform)
 - ADSR envelope visualizer (interactive - drag zones)
 - Piano display - Huth *Farbige Noten* (1888) 12-color theory, C2-C5; Off/Piano/Full setting
 - Huth sequencer cells (Full mode) - colored U-cup notation on bass/hoover/AN1X rows; gate-proportional height
 - Model selector - scan `models/`, hot-swap without restart
 - Reasoning toggle; thinking blocks shown in log
-- LLM strip: LISTEN button + live audio analysis display (sub/low/mid/high RMS, peak, crest, transients)
-- Rack canvas - zone-based horizontal module cards with Bezier cable overlay
+- LLM strip: LISTEN button + live audio analysis display (sub/low/mid/high RMS, peak, crest, transients); collapsible to prompt row only (▲/▼ toggle)
+- **Rack canvas** - zone-based horizontal module cards with Bezier cable overlay; responsive voice card grid (1/2/3 columns adaptive); Tab/toolbar toggle for cables
+- **Cable signal animation** - normalised to arc length (constant perceived speed regardless of cable length); 2-5 dots per cable based on length
+- **LFO visual cables** - active LFO slots synthesise rack cables from state (lfo.target → ModuleKind mapping) so LFO connections show without needing a rack cable entry
+- **Central touch-paint mode** - `· / U / F` toolbar row; clicking a knob paints its param mode when mode is active; replaces broken right-click cycling
+- **UI preferences** - knob style (Chrome/Flat), knob size (S/M/L/XL, default M=55px), pad size (S/M/L/XL, default M=44px), UI scale (0.5–3.0×, instant via pixels_per_point); all persisted in session.json
+- **Responsive header** - heat slider fills remaining width; COOL/WARM/HOT/FIRE/CHAOS tier labels with color ramp; monitor volume labelled MON (listen-only, not export)
+- **Zone visual hierarchy** - zone rails (Global/Voices/FX+Mod) have distinct gray backgrounds (24/18/14); module cards have 6px side + 8px top/bottom inner margin; 3-dot drag handle in every title bar
+- **Per-zone collapse** - each zone rail has ▶/▼ toggle; collapses all cards in that zone to recover screen space
+- **Preferences AI sub-tabs** - AI tab split into Model / Sampling / Personality / TTS sub-tabs; Sampling labelled "experimental"
+- **Huth note coloring in log** - in-UI log colorizes note names (C4, A#3), frequencies (440Hz), MIDI context (note 60) with Huth palette; `colorize_log()` in `llm_strip.rs`; text remains selectable/copy-paste-able
+- **Log level persistence** - `log_level_idx` persisted in `session.json`; survives restarts
+- **Skeuomorphic XY pad** — thick beveled outer frame (raised panel, inset rubber well), corner tick marks, rubber nub cursor with layered dome, specular catch-light, and hover glow ring; Y axis label/value overlaid inside pad; no left label strip
+- **Centered module layout** — knobs and controls center-align horizontally within glass groups and rack module cards (no more left-clustering dead space)
+- **Custom size overrides** — Preferences now exposes separate pixel DragValues for KNOB SIZE, SEQ STEP SIZE, XY PAD SIZE, and ENV HEIGHT; S/M/L/XL presets remain as quick-picks with ↺ reset; PadSize Fibonacci-aligned (S=21 / M=34 / L=55 / XL=89 px)
+- **Rounded sequencer step buttons** — rounding increased to 22% of pad size; neumorphic bevel uses rect_stroke pairs so highlights follow the rounded shape
+- **Scaled envelope display** — decay/ADSR height scales with XY pad size (30% of xy_size, configurable via ENV HEIGHT override); width spans both pads
+- **Huth ANSI terminal output** — `log::info!` LLM response lines and thinking tokens emit ANSI 24-bit color escape codes for note names, frequencies, and MIDI numbers when stdout is a TTY; matches in-UI log colorization
+- **Huth piano key labels** — white and black key labels on the piano display use their Huth chromatic color instead of a flat gray
+- **Header heat slider width** — heat slider fills all available header width; tier name (COOL/WARM/HOT/FIRE/CHAOS) and percentage painted as overlays on the slider rather than consuming separate fixed allocations
+- **VRAM/RAM bar visibility** — memory bars drawn with an explicit gray-38 track so the full bar extent is always visible on the dark background; fill brightens to gray-160 above 85% usage
+- **show_cables default on** — rack cables shown by default for new sessions
+- **Thinking token UX** — toggle button label shows `{persona} (think)`; thinking lines rendered in a darker gray in the in-UI log; thinking forwarded to console via `log::info!`
+
+## Intelligence
+
+- Heat chaos amplification: temperature 0.1 + heat×1.6 (max 1.7); top_p widens with heat; CHAOS tier (≥90%) adds explicit "maximum disorder" instruction to system prompt
 
 ## Testing and build
 
 - Unit tests across submodules (seq_tests, state_tests, llm_tests, audio::analysis, jam_tools_tests, music_api_tests), split at 1000-line limit per file
+- 207 unit tests total (as of v0.5.8-alpha.1)
 - 39 LLM integration tests in 3 suites: `llm_suite` (core), `llm_suite_style` (artist refs), `llm_suite_theory` (music theory + producer lingo)
 - Pre-commit hook: fmt + clippy + tests + 1000-line LOC limit
 - `scripts/run-tests.sh --coverage` - HTML coverage report (lcov)
 - Cross-compile to Windows EXE via `cargo-xwin` + `scripts/build-all.sh`
 - `scripts/download-models.sh` - Gemma 4 E4B (default), Bonsai 8B, Qwen3-8B, Qwen3-14B
 - Windows `.bat` equivalents for all scripts (`start.bat`, `scripts/*.bat`)
-- Codecov integration - `.github/workflows/ci.yml` runs tests + tarpaulin + uploads lcov.info
+- **CI/CD security** - `ci.yml` runs tests + tarpaulin + Codecov on `main` and `develop`; `release` job on `v*` tags builds Linux+Windows in GH Actions (no local builds), attaches `.sha256` sidecars and SLSA level-2 build provenance attestation

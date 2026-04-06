@@ -2,16 +2,17 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, develop]
   pull_request:
-    branches: [main]
+    branches: [main, develop]
 
 env:
   CARGO_TERM_COLOR: always
 
 jobs:
+  # ── Test + coverage (runs on every push/PR to main and develop) ────────────
   test:
-    name: Unit tests
+    name: Unit tests & coverage
     runs-on: ubuntu-latest
 
     steps:
@@ -66,3 +67,99 @@ jobs:
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           fail_ci_if_error: false
+
+  # ── Release build + SHA-256 attestation (runs on tagged releases only) ─────
+  #
+  # Security model: binaries are built entirely in GitHub's infrastructure,
+  # never touched by a maintainer's local machine.  Each artifact is
+  # accompanied by a .sha256 checksum file so users can verify what they
+  # downloaded matches what CI produced.  The build provenance is recorded
+  # via actions/attest-build-provenance (SLSA level 2), giving a signed
+  # attestation that links the artifact back to this exact commit and workflow
+  # run.  Users can verify with: `gh attestation verify <file> --repo Tok/impulse-instruct`
+  #
+  # This directly addresses the class of supply-chain attack where a
+  # maintainer swaps a pre-built binary for a malicious one before publishing.
+  release:
+    name: Release build (${{ matrix.target }})
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: write   # upload release assets
+      id-token:  write  # needed by attest-build-provenance (OIDC token)
+      attestations: write
+
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            binary: impulse-instruct
+            asset_name: impulse-instruct-linux-x86_64
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            binary: impulse-instruct.exe
+            asset_name: impulse-instruct-windows-x86_64.exe
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install system dependencies (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y --no-install-recommends \
+            libasound2-dev \
+            libxcb-xfixes0-dev \
+            libxcb-shape0-dev \
+            libxcb-xkb-dev \
+            libxkbcommon-dev \
+            pkg-config
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-release-${{ matrix.target }}-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-release-${{ matrix.target }}-
+
+      - name: Build release binary
+        run: cargo build --release --target ${{ matrix.target }}
+
+      - name: Rename binary
+        shell: bash
+        run: |
+          cp target/${{ matrix.target }}/release/${{ matrix.binary }} ${{ matrix.asset_name }}
+
+      - name: Generate SHA-256 checksum
+        shell: bash
+        run: |
+          if [[ "$RUNNER_OS" == "Windows" ]]; then
+            certutil -hashfile ${{ matrix.asset_name }} SHA256 | grep -v "^SHA" | tr -d ' \r\n' > ${{ matrix.asset_name }}.sha256
+            echo "  ${{ matrix.asset_name }}" >> ${{ matrix.asset_name }}.sha256
+          else
+            sha256sum ${{ matrix.asset_name }} > ${{ matrix.asset_name }}.sha256
+          fi
+          echo "=== SHA-256 ==="
+          cat ${{ matrix.asset_name }}.sha256
+
+      - name: Attest build provenance (SLSA)
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: ${{ matrix.asset_name }}
+
+      - name: Upload to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            ${{ matrix.asset_name }}
+            ${{ matrix.asset_name }}.sha256

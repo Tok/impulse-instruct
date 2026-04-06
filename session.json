@@ -59,104 +59,111 @@
       },
       {
         "id": 108,
-        "kind": "FxReverb",
+        "kind": "EspeakNgTts",
+        "enabled": true,
+        "zone": "Voice",
+        "slot": 6
+      },
+      {
+        "id": 109,
+        "kind": "FxWaveshaper",
         "enabled": true,
         "zone": "FxMod",
         "slot": 0
       },
       {
-        "id": 109,
-        "kind": "FxDelay",
+        "id": 110,
+        "kind": "FxReverb",
         "enabled": true,
         "zone": "FxMod",
         "slot": 1
       },
       {
-        "id": 110,
-        "kind": "FxChorus",
+        "id": 111,
+        "kind": "FxDelay",
         "enabled": true,
         "zone": "FxMod",
         "slot": 2
       },
       {
-        "id": 111,
-        "kind": "FxPhaser",
+        "id": 112,
+        "kind": "FxBitcrush",
         "enabled": true,
         "zone": "FxMod",
         "slot": 3
       },
       {
-        "id": 112,
-        "kind": "FxEq",
+        "id": 113,
+        "kind": "FxChorus",
         "enabled": true,
         "zone": "FxMod",
         "slot": 4
       },
       {
-        "id": 113,
-        "kind": "FxCompressor",
+        "id": 114,
+        "kind": "FxPhaser",
         "enabled": true,
         "zone": "FxMod",
         "slot": 5
       },
       {
-        "id": 114,
-        "kind": "FxTapeSat",
+        "id": 115,
+        "kind": "FxRingMod",
         "enabled": true,
         "zone": "FxMod",
         "slot": 6
       },
       {
-        "id": 115,
-        "kind": "FxDrive",
+        "id": 116,
+        "kind": "FxEq",
         "enabled": true,
         "zone": "FxMod",
         "slot": 7
       },
       {
-        "id": 116,
-        "kind": "FxWaveshaper",
+        "id": 117,
+        "kind": "FxCompressor",
         "enabled": true,
         "zone": "FxMod",
         "slot": 8
       },
       {
-        "id": 117,
-        "kind": "FxBitcrush",
+        "id": 118,
+        "kind": "FxTapeSat",
         "enabled": true,
         "zone": "FxMod",
         "slot": 9
       },
       {
-        "id": 118,
-        "kind": "FxRingMod",
+        "id": 119,
+        "kind": "FxDrive",
         "enabled": true,
         "zone": "FxMod",
         "slot": 10
-      },
-      {
-        "id": 119,
-        "kind": "LfoModule",
-        "enabled": true,
-        "zone": "FxMod",
-        "slot": 11
       },
       {
         "id": 120,
         "kind": "LfoModule",
         "enabled": true,
         "zone": "FxMod",
-        "slot": 12
+        "slot": 11
       },
       {
         "id": 121,
         "kind": "LfoModule",
         "enabled": true,
         "zone": "FxMod",
-        "slot": 13
+        "slot": 12
       },
       {
         "id": 122,
+        "kind": "LfoModule",
+        "enabled": true,
+        "zone": "FxMod",
+        "slot": 13
+      },
+      {
+        "id": 123,
         "kind": "LfoModule",
         "enabled": true,
         "zone": "FxMod",
@@ -164,6 +171,111 @@
       }
     ],
     "cables": [
+      {
+        "from": {
+          "module_id": 100,
+          "dir": "Out",
+          "kind": "Cv",
+          "index": 0
+        },
+        "to": {
+          "module_id": 102,
+          "dir": "In",
+          "kind": "Cv",
+          "index": 0
+        },
+        "color": "Teal"
+      },
+      {
+        "from": {
+          "module_id": 100,
+          "dir": "Out",
+          "kind": "Cv",
+          "index": 0
+        },
+        "to": {
+          "module_id": 103,
+          "dir": "In",
+          "kind": "Cv",
+          "index": 0
+        },
+        "color": "Amber"
+      },
+      {
+        "from": {
+          "module_id": 100,
+          "dir": "Out",
+          "kind": "Cv",
+          "index": 0
+        },
+        "to": {
+          "module_id": 104,
+          "dir": "In",
+          "kind": "Cv",
+          "index": 0
+        },
+        "color": "Rose"
+      },
+      {
+        "from": {
+          "module_id": 100,
+          "dir": "Out",
+          "kind": "Cv",
+          "index": 0
+        },
+        "to": {
+          "module_id": 105,
+          "dir": "In",
+          "kind": "Cv",
+          "index": 0
+        },
+        "color": "Violet"
+      },
+      {
+        "from": {
+          "module_id": 100,
+          "dir": "Out",
+          "kind": "Cv",
+          "index": 0
+        },
+        "to": {
+          "module_id": 106,
+          "dir": "In",
+          "kind": "Cv",
+          "index": 0
+        },
+        "color": "Lime"
+      },
+      {
+        "from": {
+          "module_id": 100,
+          "dir": "Out",
+          "kind": "Cv",
+          "index": 0
+        },
+        "to": {
+          "module_id": 107,
+          "dir": "In",
+          "kind": "Cv",
+          "index": 0
+        },
+        "color": "Cyan"
+      },
+      {
+        "from": {
+          "module_id": 108,
+          "dir": "Out",
+          "kind": "Audio",
+          "index": 0
+        },
+        "to": {
+          "module_id": 110,
+          "dir": "In",
+          "kind": "Audio",
+          "index": 0
+        },
+        "color": "Orange"
+      },
       {
         "from": {
           "module_id": 102,
@@ -177,7 +289,7 @@
           "kind": "Audio",
           "index": 0
         },
-        "color": "Teal"
+        "color": "Pink"
       },
       {
         "from": {
@@ -192,7 +304,7 @@
           "kind": "Audio",
           "index": 0
         },
-        "color": "Amber"
+        "color": "Teal"
       },
       {
         "from": {
@@ -207,7 +319,7 @@
           "kind": "Audio",
           "index": 0
         },
-        "color": "Rose"
+        "color": "Amber"
       },
       {
         "from": {
@@ -222,7 +334,7 @@
           "kind": "Audio",
           "index": 0
         },
-        "color": "Violet"
+        "color": "Rose"
       },
       {
         "from": {
@@ -237,7 +349,7 @@
           "kind": "Audio",
           "index": 0
         },
-        "color": "Lime"
+        "color": "Violet"
       },
       {
         "from": {
@@ -252,17 +364,32 @@
           "kind": "Audio",
           "index": 0
         },
-        "color": "Cyan"
+        "color": "Lime"
       },
       {
         "from": {
-          "module_id": 102,
+          "module_id": 109,
           "dir": "Out",
           "kind": "Audio",
           "index": 0
         },
         "to": {
-          "module_id": 113,
+          "module_id": 110,
+          "dir": "In",
+          "kind": "Audio",
+          "index": 0
+        },
+        "color": "Cyan"
+      },
+      {
+        "from": {
+          "module_id": 110,
+          "dir": "Out",
+          "kind": "Audio",
+          "index": 0
+        },
+        "to": {
+          "module_id": 111,
           "dir": "In",
           "kind": "Audio",
           "index": 0
@@ -271,29 +398,137 @@
       },
       {
         "from": {
+          "module_id": 111,
+          "dir": "Out",
+          "kind": "Audio",
+          "index": 0
+        },
+        "to": {
+          "module_id": 112,
+          "dir": "In",
+          "kind": "Audio",
+          "index": 0
+        },
+        "color": "Pink"
+      },
+      {
+        "from": {
+          "module_id": 112,
+          "dir": "Out",
+          "kind": "Audio",
+          "index": 0
+        },
+        "to": {
+          "module_id": 113,
+          "dir": "In",
+          "kind": "Audio",
+          "index": 0
+        },
+        "color": "Teal"
+      },
+      {
+        "from": {
           "module_id": 113,
           "dir": "Out",
           "kind": "Audio",
           "index": 0
         },
         "to": {
-          "module_id": 101,
+          "module_id": 114,
           "dir": "In",
           "kind": "Audio",
           "index": 0
         },
-        "color": "Pink"
+        "color": "Amber"
+      },
+      {
+        "from": {
+          "module_id": 114,
+          "dir": "Out",
+          "kind": "Audio",
+          "index": 0
+        },
+        "to": {
+          "module_id": 115,
+          "dir": "In",
+          "kind": "Audio",
+          "index": 0
+        },
+        "color": "Rose"
+      },
+      {
+        "from": {
+          "module_id": 115,
+          "dir": "Out",
+          "kind": "Audio",
+          "index": 0
+        },
+        "to": {
+          "module_id": 116,
+          "dir": "In",
+          "kind": "Audio",
+          "index": 0
+        },
+        "color": "Violet"
+      },
+      {
+        "from": {
+          "module_id": 116,
+          "dir": "Out",
+          "kind": "Audio",
+          "index": 0
+        },
+        "to": {
+          "module_id": 117,
+          "dir": "In",
+          "kind": "Audio",
+          "index": 0
+        },
+        "color": "Lime"
+      },
+      {
+        "from": {
+          "module_id": 117,
+          "dir": "Out",
+          "kind": "Audio",
+          "index": 0
+        },
+        "to": {
+          "module_id": 118,
+          "dir": "In",
+          "kind": "Audio",
+          "index": 0
+        },
+        "color": "Cyan"
+      },
+      {
+        "from": {
+          "module_id": 118,
+          "dir": "Out",
+          "kind": "Audio",
+          "index": 0
+        },
+        "to": {
+          "module_id": 119,
+          "dir": "In",
+          "kind": "Audio",
+          "index": 0
+        },
+        "color": "Orange"
       }
     ],
-    "next_id": 123
+    "next_id": 124
   },
   "active_style": null,
   "custom_style_text": "",
   "user_instructions": "",
   "persona_name": "PULSE",
   "model_path": "models/gemma-4-E4B-it-Q4_K_M.gguf",
-  "show_cables": true,
+  "show_cables": false,
   "knob_style": "Chrome",
-  "knob_size": "Small",
-  "use_sliders": false
+  "knob_size": "Large",
+  "pad_size": "Large",
+  "use_sliders": false,
+  "ui_scale": 1.0,
+  "log_level_idx": 2
 }

@@ -45,337 +45,306 @@ impl ImpulseApp {
                 match self.prefs_tab {
                     // ── Tab 0: AI ─────────────────────────────────────────────
                     0 => {
-                        widgets::section_header(ui, "PERSONA");
+                        // ── AI sub-tab strip ──────────────────────────────────
+                        let ai_tabs = ["Model", "Sampling", "Personality", "TTS"];
                         ui.horizontal(|ui| {
-                            ui.label(
-                                egui::RichText::new("Name")
+                            for (i, label) in ai_tabs.iter().enumerate() {
+                                let active = self.llm_tab == i;
+                                let color = if active { theme::CHALK } else { theme::SLATE };
+                                let text = egui::RichText::new(*label)
                                     .monospace()
                                     .size(9.5)
-                                    .color(theme::FOG),
-                            );
-                            let mut name = self.state.read().llm.persona_name.clone();
-                            let resp = ui.add(
-                                egui::TextEdit::singleline(&mut name)
-                                    .desired_width(120.0)
-                                    .font(egui::TextStyle::Monospace),
-                            );
-                            if resp.changed() {
-                                self.state.write().llm.persona_name = name;
+                                    .color(color);
+                                if ui.selectable_label(active, text).clicked() {
+                                    self.llm_tab = i;
+                                }
                             }
-                            ui.label(
-                                egui::RichText::new("(injected into system prompt)")
-                                    .monospace()
-                                    .size(8.0)
-                                    .color(theme::IRON),
-                            );
                         });
-                        ui.add_space(8.0);
+                        ui.add_space(6.0);
 
-                        widgets::section_header(ui, "INFERENCE");
-                        let is_mock = self.state.read().llm.is_mock;
-                        ui.add_enabled_ui(!is_mock, |ui| {
-                            ui.horizontal(|ui| {
+                        match self.llm_tab {
+                            // ── Model ─────────────────────────────────────────
+                            0 => {
+                                widgets::section_header(ui, "MODEL");
                                 ui.label(
-                                    egui::RichText::new("Reasoning mode (/think)")
+                                    egui::RichText::new("Selected in the header dropdown. Restart required for path changes.")
                                         .monospace()
-                                        .size(9.5)
-                                        .color(if is_mock { theme::IRON } else { theme::FOG }),
+                                        .size(8.0)
+                                        .color(theme::IRON),
                                 );
-                                ui.with_layout(
-                                    egui::Layout::right_to_left(egui::Align::Center),
-                                    |ui| {
-                                        let mut thinking = self.state.read().llm.enable_thinking;
-                                        if widgets::toggle_button(
-                                            ui,
-                                            if thinking { "ON" } else { "OFF" },
-                                            &mut thinking,
-                                        ) {
-                                            self.state.write().llm.enable_thinking = thinking;
-                                        }
-                                    },
-                                );
-                            });
-                            ui.label(
-                                egui::RichText::new(
-                                    "Qwen3: slower, deeper reasoning — off for quick commands",
-                                )
-                                .monospace()
-                                .size(8.0)
-                                .color(theme::IRON),
-                            );
-                        });
-                        ui.add_space(4.0);
-                        ui.horizontal(|ui| {
-                            ui.label(
-                                egui::RichText::new("Show reasoning in log")
-                                    .monospace()
-                                    .size(9.5)
-                                    .color(theme::FOG),
-                            );
-                            ui.with_layout(
-                                egui::Layout::right_to_left(egui::Align::Center),
-                                |ui| {
-                                    let mut show = self.state.read().llm.show_thinking_in_log;
-                                    if widgets::toggle_button(
-                                        ui,
-                                        if show { "ON" } else { "OFF" },
-                                        &mut show,
-                                    ) {
-                                        self.state.write().llm.show_thinking_in_log = show;
-                                    }
-                                },
-                            );
-                        });
-                        if is_mock {
-                            ui.label(
-                                egui::RichText::new("  (unavailable in mock mode)")
-                                    .monospace()
-                                    .size(8.0)
-                                    .color(theme::IRON),
-                            );
-                        }
-                        ui.add_space(8.0);
+                                ui.add_space(6.0);
 
-                        widgets::section_header(ui, "SAMPLING");
-                        ui.label(
-                            egui::RichText::new("Gemma defaults: top_k 64, top_p 0.95 · Bonsai: top_k 20, top_p 0.9, temp ×0.5")
-                                .monospace()
-                                .size(8.0)
-                                .color(theme::IRON),
-                        );
-                        ui.add_space(4.0);
-                        // Helper macro: labelled drag slider for a sampling param
-                        macro_rules! sampling_row {
-                            ($label:expr, $field:ident, $min:expr, $max:expr, $speed:expr, $hint:expr) => {
+                                // ctx_size
                                 ui.horizontal(|ui| {
-                                    ui.label(
-                                        egui::RichText::new($label)
-                                            .monospace()
-                                            .size(9.0)
-                                            .color(theme::FOG),
-                                    );
+                                    ui.label(egui::RichText::new("ctx_size").monospace().size(9.0).color(theme::FOG));
                                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                                        let mut v = self.state.read().llm.$field;
-                                        let drag = egui::DragValue::new(&mut v)
-                                            .range($min..=$max)
-                                            .speed($speed)
-                                            .max_decimals(3);
-                                        if ui.add(drag).changed() {
-                                            self.state.write().llm.$field = v;
+                                        let mut v = self.state.read().llm.context_max;
+                                        if ui.add(egui::DragValue::new(&mut v).range(4096..=131072).speed(256)).changed() {
+                                            v = (v / 256) * 256;
+                                            if v < 4096 { v = 4096; }
+                                            self.state.write().llm.context_max = v;
                                         }
                                     });
                                 });
-                                ui.label(
-                                    egui::RichText::new($hint).monospace().size(7.5).color(theme::IRON),
-                                );
-                            };
-                        }
-                        // top_k as i32 — use a separate block
-                        ui.horizontal(|ui| {
-                            ui.label(egui::RichText::new("top_k").monospace().size(9.0).color(theme::FOG));
-                            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                                let mut v = self.state.read().llm.top_k;
-                                if ui.add(egui::DragValue::new(&mut v).range(0..=200).speed(1)).changed() {
-                                    self.state.write().llm.top_k = v;
-                                }
-                            });
-                        });
-                        ui.label(egui::RichText::new("0 = disabled; Gemma 64, Bonsai 20").monospace().size(7.5).color(theme::IRON));
-                        sampling_row!("top_p", top_p, 0.0_f32, 1.0_f32, 0.01, "nucleus cutoff — Gemma 0.95, Bonsai 0.90");
-                        sampling_row!("min_p", min_p, 0.0_f32, 0.5_f32, 0.005, "min-prob floor — 0.05 default, 0 to disable");
-                        sampling_row!("repeat_penalty", repeat_penalty, 1.0_f32, 2.0_f32, 0.01, "1.0 = off; >1.0 penalises repeated tokens");
-                        sampling_row!("freq_penalty", frequency_penalty, 0.0_f32, 2.0_f32, 0.01, "0.0 = off; reduces repetitive phrasing");
-                        ui.horizontal(|ui| {
-                            ui.label(egui::RichText::new("seed").monospace().size(9.0).color(theme::FOG));
-                            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                                let mut v = self.state.read().llm.seed;
-                                if ui.add(egui::DragValue::new(&mut v).range(-1..=i64::MAX).speed(1)).changed() {
-                                    self.state.write().llm.seed = v;
-                                }
-                            });
-                        });
-                        ui.label(egui::RichText::new("-1 = random each call; fixed seed - reproducible outputs").monospace().size(7.5).color(theme::IRON));
-                        // context size
-                        ui.horizontal(|ui| {
-                            ui.label(egui::RichText::new("ctx_size").monospace().size(9.0).color(theme::FOG));
-                            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                                let mut v = self.state.read().llm.context_max;
-                                if ui.add(egui::DragValue::new(&mut v).range(4096..=131072).speed(256)).changed() {
-                                    // round to nearest 256
-                                    v = (v / 256) * 256;
-                                    if v < 4096 { v = 4096; }
-                                    self.state.write().llm.context_max = v;
-                                }
-                            });
-                        });
-                        ui.label(egui::RichText::new("tokens; takes effect on next model restart - more VRAM needed for larger values").monospace().size(7.5).color(theme::IRON));
-                        ui.add_space(8.0);
+                                ui.label(egui::RichText::new("tokens; takes effect on next model restart — more VRAM for larger values").monospace().size(7.5).color(theme::IRON));
 
-                        widgets::section_header(ui, "PERSONALITY");
-                        ui.label(
-                            egui::RichText::new("How the AI narrates its moves")
-                                .monospace()
-                                .size(8.5)
-                                .color(theme::IRON),
-                        );
-                        ui.add_space(4.0);
-                        let cur_mode = self.state.read().llm.conversation_mode.clone();
-                        for (label, mode, hint) in &[
-                            ("Off", ConversationMode::Off, "no commentary"),
-                            (
-                                "Producer",
-                                ConversationMode::Producer,
-                                "what & why (default)",
-                            ),
-                            ("DJ", ConversationMode::Dj, "hype party energy"),
-                            ("MC", ConversationMode::Mc, "jungle/rave MC"),
-                        ] {
-                            ui.horizontal(|ui| {
-                                let selected = cur_mode == *mode;
-                                let text = egui::RichText::new(*label)
-                                    .monospace()
-                                    .size(10.0)
-                                    .color(if selected { theme::CHALK } else { theme::FOG });
-                                if ui.selectable_label(selected, text).clicked() && !selected {
-                                    self.state.write().llm.conversation_mode = mode.clone();
+                                // seed
+                                ui.horizontal(|ui| {
+                                    ui.label(egui::RichText::new("seed").monospace().size(9.0).color(theme::FOG));
+                                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                                        let mut v = self.state.read().llm.seed;
+                                        if ui.add(egui::DragValue::new(&mut v).range(-1..=i64::MAX).speed(1)).changed() {
+                                            self.state.write().llm.seed = v;
+                                        }
+                                    });
+                                });
+                                ui.label(egui::RichText::new("-1 = random each call; fixed seed gives reproducible outputs").monospace().size(7.5).color(theme::IRON));
+                                ui.add_space(8.0);
+
+                                widgets::section_header(ui, "INFERENCE");
+                                let is_mock = self.state.read().llm.is_mock;
+                                ui.add_enabled_ui(!is_mock, |ui| {
+                                    ui.horizontal(|ui| {
+                                        ui.label(
+                                            egui::RichText::new("Reasoning mode (/think)")
+                                                .monospace()
+                                                .size(9.5)
+                                                .color(if is_mock { theme::IRON } else { theme::FOG }),
+                                        );
+                                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                                            let mut thinking = self.state.read().llm.enable_thinking;
+                                            if widgets::toggle_button(ui, if thinking { "ON" } else { "OFF" }, &mut thinking) {
+                                                self.state.write().llm.enable_thinking = thinking;
+                                            }
+                                        });
+                                    });
+                                    ui.label(
+                                        egui::RichText::new("Qwen3: slower, deeper reasoning — off for quick commands")
+                                            .monospace()
+                                            .size(8.0)
+                                            .color(theme::IRON),
+                                    );
+                                });
+                                ui.add_space(4.0);
+                                ui.horizontal(|ui| {
+                                    ui.label(egui::RichText::new("Show reasoning in log").monospace().size(9.5).color(theme::FOG));
+                                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                                        let mut show = self.state.read().llm.show_thinking_in_log;
+                                        if widgets::toggle_button(ui, if show { "ON" } else { "OFF" }, &mut show) {
+                                            self.state.write().llm.show_thinking_in_log = show;
+                                        }
+                                    });
+                                });
+                                if is_mock {
+                                    ui.label(
+                                        egui::RichText::new("  (unavailable in mock mode)")
+                                            .monospace()
+                                            .size(8.0)
+                                            .color(theme::IRON),
+                                    );
                                 }
+                            }
+
+                            // ── Sampling ──────────────────────────────────────
+                            1 => {
+                                widgets::section_header(ui, "SAMPLING  [experimental]");
                                 ui.label(
-                                    egui::RichText::new(*hint)
+                                    egui::RichText::new("Gemma defaults: top_k 64, top_p 0.95 · Bonsai: top_k 20, top_p 0.9, temp ×0.5")
+                                        .monospace()
+                                        .size(8.0)
+                                        .color(theme::IRON),
+                                );
+                                ui.add_space(4.0);
+
+                                macro_rules! sampling_row {
+                                    ($label:expr, $field:ident, $min:expr, $max:expr, $speed:expr, $hint:expr) => {
+                                        ui.horizontal(|ui| {
+                                            ui.label(egui::RichText::new($label).monospace().size(9.0).color(theme::FOG));
+                                            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                                                let mut v = self.state.read().llm.$field;
+                                                if ui.add(egui::DragValue::new(&mut v).range($min..=$max).speed($speed).max_decimals(3)).changed() {
+                                                    self.state.write().llm.$field = v;
+                                                }
+                                            });
+                                        });
+                                        ui.label(egui::RichText::new($hint).monospace().size(7.5).color(theme::IRON));
+                                    };
+                                }
+
+                                ui.horizontal(|ui| {
+                                    ui.label(egui::RichText::new("top_k").monospace().size(9.0).color(theme::FOG));
+                                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                                        let mut v = self.state.read().llm.top_k;
+                                        if ui.add(egui::DragValue::new(&mut v).range(0..=200).speed(1)).changed() {
+                                            self.state.write().llm.top_k = v;
+                                        }
+                                    });
+                                });
+                                ui.label(egui::RichText::new("0 = disabled; Gemma 64, Bonsai 20").monospace().size(7.5).color(theme::IRON));
+                                sampling_row!("top_p", top_p, 0.0_f32, 1.0_f32, 0.01, "nucleus cutoff — Gemma 0.95, Bonsai 0.90");
+                                sampling_row!("min_p", min_p, 0.0_f32, 0.5_f32, 0.005, "min-prob floor — 0.05 default, 0 to disable");
+                                sampling_row!("repeat_penalty", repeat_penalty, 1.0_f32, 2.0_f32, 0.01, "1.0 = off; >1.0 penalises repeated tokens");
+                                sampling_row!("freq_penalty", frequency_penalty, 0.0_f32, 2.0_f32, 0.01, "0.0 = off; reduces repetitive phrasing");
+                            }
+
+                            // ── Personality ───────────────────────────────────
+                            2 => {
+                                widgets::section_header(ui, "PERSONA");
+                                ui.horizontal(|ui| {
+                                    ui.label(egui::RichText::new("Name").monospace().size(9.5).color(theme::FOG));
+                                    let mut name = self.state.read().llm.persona_name.clone();
+                                    let resp = ui.add(
+                                        egui::TextEdit::singleline(&mut name)
+                                            .desired_width(120.0)
+                                            .font(egui::TextStyle::Monospace),
+                                    );
+                                    if resp.changed() {
+                                        self.state.write().llm.persona_name = name;
+                                    }
+                                    ui.label(egui::RichText::new("(injected into system prompt)").monospace().size(8.0).color(theme::IRON));
+                                });
+                                ui.add_space(8.0);
+
+                                widgets::section_header(ui, "VOICE MODE");
+                                ui.label(
+                                    egui::RichText::new("How the AI narrates its moves")
                                         .monospace()
                                         .size(8.5)
                                         .color(theme::IRON),
                                 );
-                            });
-                        }
-                        ui.add_space(6.0);
-                        ui.horizontal(|ui| {
-                            ui.label(
-                                egui::RichText::new("TTS voice")
-                                    .monospace()
-                                    .size(9.5)
-                                    .color(theme::FOG),
-                            );
-                            ui.with_layout(
-                                egui::Layout::right_to_left(egui::Align::Center),
-                                |ui| {
-                                    let mut tts = self.state.read().llm.tts_enabled;
-                                    if widgets::toggle_button(
-                                        ui,
-                                        if tts { "ON" } else { "OFF" },
-                                        &mut tts,
-                                    ) {
-                                        self.state.write().llm.tts_enabled = tts;
-                                    }
-                                },
-                            );
-                        });
-                        // TTS engine selector
-                        ui.horizontal(|ui| {
-                            ui.label(
-                                egui::RichText::new("TTS engine")
-                                    .monospace()
-                                    .size(9.0)
-                                    .color(theme::SMOKE),
-                            );
-                            ui.with_layout(
-                                egui::Layout::right_to_left(egui::Align::Center),
-                                |ui| {
-                                    use crate::state::TtsEngine;
-                                    let cur = self.state.read().llm.tts_engine.clone();
-                                    for (label, variant) in &[
-                                        ("espeak-ng", TtsEngine::EspeakNg),
-                                        ("Coqui TTS", TtsEngine::CoquiTts),
-                                    ] {
-                                        let active = cur == *variant;
-                                        let color =
-                                            if active { theme::FOG } else { theme::IRON };
-                                        if ui
-                                            .add(
-                                                egui::Button::new(
-                                                    egui::RichText::new(*label)
-                                                        .monospace()
-                                                        .size(9.0)
-                                                        .color(color),
-                                                )
-                                                .fill(egui::Color32::TRANSPARENT),
-                                            )
-                                            .clicked()
-                                        {
-                                            self.state.write().llm.tts_engine =
-                                                variant.clone();
-                                        }
-                                    }
-                                },
-                            );
-                        })
-                        .response
-                        .on_hover_text(
-                            "Coqui TTS: neural voice (requires `tts` CLI in PATH). Falls back to espeak-ng if unavailable.",
-                        );
-                        // TTS pitch / speed / amplitude sliders (shown when TTS is on)
-                        if self.state.read().llm.tts_enabled {
-                            for (label, hint) in &[
-                                ("TTS pitch  (0=auto)", "1–99; 0=use mode default"),
-                                ("TTS speed  (0=auto)", "words/min; 0=use mode default"),
-                                ("TTS volume (0=auto)", "0–200; 0=default (100)"),
-                            ] {
-                                ui.horizontal(|ui| {
-                                    ui.label(
-                                        egui::RichText::new(*label)
+                                ui.add_space(4.0);
+                                let cur_mode = self.state.read().llm.conversation_mode.clone();
+                                for (label, mode, hint) in &[
+                                    ("Off", ConversationMode::Off, "no commentary"),
+                                    ("Producer", ConversationMode::Producer, "what & why (default)"),
+                                    ("DJ", ConversationMode::Dj, "hype party energy"),
+                                    ("MC", ConversationMode::Mc, "jungle/rave MC"),
+                                ] {
+                                    ui.horizontal(|ui| {
+                                        let selected = cur_mode == *mode;
+                                        let text = egui::RichText::new(*label)
                                             .monospace()
-                                            .size(9.5)
-                                            .color(theme::FOG),
-                                    );
-                                    ui.with_layout(
-                                        egui::Layout::right_to_left(egui::Align::Center),
-                                        |ui| {
-                                            ui.label(
-                                                egui::RichText::new(*hint)
-                                                    .monospace()
-                                                    .size(8.0)
-                                                    .color(theme::IRON),
-                                            );
-                                        },
-                                    );
+                                            .size(10.0)
+                                            .color(if selected { theme::CHALK } else { theme::FOG });
+                                        if ui.selectable_label(selected, text).clicked() && !selected {
+                                            self.state.write().llm.conversation_mode = mode.clone();
+                                        }
+                                        ui.label(egui::RichText::new(*hint).monospace().size(8.5).color(theme::IRON));
+                                    });
+                                }
+                                ui.add_space(6.0);
+
+                                ui.horizontal(|ui| {
+                                    ui.label(egui::RichText::new("Style description").monospace().size(9.5).color(theme::FOG));
+                                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                                        let mut is_full = self.state.read().llm.style_verbosity == StyleVerbosity::Full;
+                                        if widgets::toggle_button(ui, if is_full { "FULL" } else { "BRIEF" }, &mut is_full) {
+                                            self.state.write().llm.style_verbosity = if is_full {
+                                                StyleVerbosity::Full
+                                            } else {
+                                                StyleVerbosity::Brief
+                                            };
+                                        }
+                                    });
                                 });
-                                if label.contains("pitch") {
+                                ui.add_space(8.0);
+
+                                widgets::section_header(ui, "SYSTEM PROMPT");
+                                ui.label(
+                                    egui::RichText::new("Override: replaces the generated prompt entirely.")
+                                        .monospace()
+                                        .size(8.0)
+                                        .color(theme::IRON),
+                                );
+                                ui.add_space(2.0);
+                                let mut sp_override = self.state.read().llm.system_prompt_override.clone();
+                                let sp_resp = ui.add(
+                                    egui::TextEdit::multiline(&mut sp_override)
+                                        .desired_rows(4)
+                                        .desired_width(f32::INFINITY)
+                                        .font(egui::TextStyle::Monospace)
+                                        .hint_text("Leave empty for auto-generated system prompt…"),
+                                );
+                                if sp_resp.changed() {
+                                    self.state.write().llm.system_prompt_override = sp_override;
+                                }
+                            }
+
+                            // ── TTS ───────────────────────────────────────────
+                            _ => {
+                                widgets::section_header(ui, "TEXT-TO-SPEECH");
+                                ui.horizontal(|ui| {
+                                    ui.label(egui::RichText::new("TTS voice").monospace().size(9.5).color(theme::FOG));
+                                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                                        let mut tts = self.state.read().llm.tts_enabled;
+                                        if widgets::toggle_button(ui, if tts { "ON" } else { "OFF" }, &mut tts) {
+                                            self.state.write().llm.tts_enabled = tts;
+                                        }
+                                    });
+                                });
+                                ui.add_space(4.0);
+
+                                // TTS engine selector
+                                ui.horizontal(|ui| {
+                                    ui.label(egui::RichText::new("Engine").monospace().size(9.0).color(theme::SMOKE));
+                                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                                        use crate::state::TtsEngine;
+                                        let cur = self.state.read().llm.tts_engine.clone();
+                                        for (label, variant) in &[
+                                            ("espeak-ng", TtsEngine::EspeakNg),
+                                            ("Coqui TTS", TtsEngine::CoquiTts),
+                                        ] {
+                                            let active = cur == *variant;
+                                            let color = if active { theme::FOG } else { theme::IRON };
+                                            if ui.add(egui::Button::new(
+                                                egui::RichText::new(*label).monospace().size(9.0).color(color),
+                                            ).fill(egui::Color32::TRANSPARENT)).clicked() {
+                                                self.state.write().llm.tts_engine = variant.clone();
+                                            }
+                                        }
+                                    });
+                                });
+                                ui.label(egui::RichText::new("Coqui: neural voice (needs `tts` in PATH) — falls back to espeak-ng").monospace().size(7.5).color(theme::IRON));
+                                ui.add_space(6.0);
+
+                                // Pitch / speed / amplitude
+                                widgets::section_header(ui, "VOICE SHAPE");
+                                {
                                     let mut v = self.state.read().llm.tts_pitch as f32;
-                                    if ui
-                                        .add(egui::Slider::new(&mut v, 0.0..=99.0).integer())
-                                        .changed()
-                                    {
+                                    ui.horizontal(|ui| {
+                                        ui.label(egui::RichText::new("Pitch  (0=auto)").monospace().size(9.0).color(theme::FOG));
+                                        ui.label(egui::RichText::new("1–99; 0=mode default").monospace().size(7.5).color(theme::IRON));
+                                    });
+                                    if ui.add(egui::Slider::new(&mut v, 0.0..=99.0).integer()).changed() {
                                         self.state.write().llm.tts_pitch = v as u8;
                                     }
-                                } else if label.contains("speed") {
+                                }
+                                {
                                     let mut v = self.state.read().llm.tts_speed as f32;
-                                    if ui
-                                        .add(egui::Slider::new(&mut v, 0.0..=500.0).integer())
-                                        .changed()
-                                    {
+                                    ui.horizontal(|ui| {
+                                        ui.label(egui::RichText::new("Speed  (0=auto)").monospace().size(9.0).color(theme::FOG));
+                                        ui.label(egui::RichText::new("wpm; 0=mode default").monospace().size(7.5).color(theme::IRON));
+                                    });
+                                    if ui.add(egui::Slider::new(&mut v, 0.0..=500.0).integer()).changed() {
                                         self.state.write().llm.tts_speed = v as u16;
                                     }
-                                } else {
+                                }
+                                {
                                     let mut v = self.state.read().llm.tts_amplitude as f32;
-                                    if ui
-                                        .add(egui::Slider::new(&mut v, 0.0..=200.0).integer())
-                                        .changed()
-                                    {
+                                    ui.horizontal(|ui| {
+                                        ui.label(egui::RichText::new("Volume (0=auto)").monospace().size(9.0).color(theme::FOG));
+                                        ui.label(egui::RichText::new("0–200; 0=default(100)").monospace().size(7.5).color(theme::IRON));
+                                    });
+                                    if ui.add(egui::Slider::new(&mut v, 0.0..=200.0).integer()).changed() {
                                         self.state.write().llm.tts_amplitude = v as u8;
                                     }
                                 }
-                            }
-                            // Voice character selector + randomise toggle
-                            ui.add_space(4.0);
-                            ui.horizontal(|ui| {
-                                ui.label(
-                                    egui::RichText::new("Voice character")
-                                        .monospace()
-                                        .size(9.5)
-                                        .color(theme::FOG),
-                                );
-                                ui.with_layout(
-                                    egui::Layout::right_to_left(egui::Align::Center),
-                                    |ui| {
+                                ui.add_space(6.0);
+
+                                widgets::section_header(ui, "CHARACTER");
+                                ui.horizontal(|ui| {
+                                    ui.label(egui::RichText::new("Voice character").monospace().size(9.5).color(theme::FOG));
+                                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                                         let chars = [
                                             (McVoiceChar::Auto, "AUTO"),
                                             (McVoiceChar::JungleMc, "JUNGLE MC"),
@@ -384,108 +353,32 @@ impl ImpulseApp {
                                             (McVoiceChar::SmoothDj, "SMOOTH DJ"),
                                         ];
                                         let cur = self.state.read().llm.tts_voice_char.clone();
-                                        let cur_idx =
-                                            chars.iter().position(|(c, _)| *c == cur).unwrap_or(0);
+                                        let cur_idx = chars.iter().position(|(c, _)| *c == cur).unwrap_or(0);
                                         let next_idx = (cur_idx + 1) % chars.len();
                                         if ui.small_button(chars[cur_idx].1).clicked() {
-                                            self.state.write().llm.tts_voice_char =
-                                                chars[next_idx].0.clone();
+                                            self.state.write().llm.tts_voice_char = chars[next_idx].0.clone();
                                         }
-                                    },
-                                );
-                            });
-                            ui.horizontal(|ui| {
-                                ui.label(
-                                    egui::RichText::new("Pitch/speed jitter")
-                                        .monospace()
-                                        .size(9.5)
-                                        .color(theme::FOG),
-                                );
-                                ui.with_layout(
-                                    egui::Layout::right_to_left(egui::Align::Center),
-                                    |ui| {
+                                    });
+                                });
+                                ui.horizontal(|ui| {
+                                    ui.label(egui::RichText::new("Pitch/speed jitter").monospace().size(9.5).color(theme::FOG));
+                                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                                         let mut rand = self.state.read().llm.tts_randomise;
-                                        if widgets::toggle_button(
-                                            ui,
-                                            if rand { "ON" } else { "OFF" },
-                                            &mut rand,
-                                        ) {
+                                        if widgets::toggle_button(ui, if rand { "ON" } else { "OFF" }, &mut rand) {
                                             self.state.write().llm.tts_randomise = rand;
                                         }
-                                    },
-                                );
-                            });
-                            // FX via rack cables (TTS → Reverb by default).
-                            ui.horizontal(|ui| {
-                                ui.label(
-                                    egui::RichText::new("Pitch snap")
-                                        .monospace()
-                                        .size(9.5)
-                                        .color(theme::FOG),
-                                );
-                                ui.with_layout(
-                                    egui::Layout::right_to_left(egui::Align::Center),
-                                    |ui| {
+                                    });
+                                });
+                                ui.horizontal(|ui| {
+                                    ui.label(egui::RichText::new("Pitch snap").monospace().size(9.5).color(theme::FOG));
+                                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                                         let mut ps = self.state.read().llm.tts_pitch_snap;
-                                        if widgets::toggle_button(
-                                            ui,
-                                            if ps { "ON" } else { "OFF" },
-                                            &mut ps,
-                                        ) {
+                                        if widgets::toggle_button(ui, if ps { "ON" } else { "OFF" }, &mut ps) {
                                             self.state.write().llm.tts_pitch_snap = ps;
                                         }
-                                    },
-                                );
-                            });
-                        }
-                        ui.horizontal(|ui| {
-                            ui.label(
-                                egui::RichText::new("Style description")
-                                    .monospace()
-                                    .size(9.5)
-                                    .color(theme::FOG),
-                            );
-                            ui.with_layout(
-                                egui::Layout::right_to_left(egui::Align::Center),
-                                |ui| {
-                                    let mut is_full = self.state.read().llm.style_verbosity
-                                        == StyleVerbosity::Full;
-                                    if widgets::toggle_button(
-                                        ui,
-                                        if is_full { "FULL" } else { "BRIEF" },
-                                        &mut is_full,
-                                    ) {
-                                        self.state.write().llm.style_verbosity = if is_full {
-                                            StyleVerbosity::Full
-                                        } else {
-                                            StyleVerbosity::Brief
-                                        };
-                                    }
-                                },
-                            );
-                        });
-                        ui.add_space(8.0);
-
-                        widgets::section_header(ui, "SYSTEM PROMPT");
-                        ui.label(
-                            egui::RichText::new(
-                                "Override: replaces the generated prompt entirely.",
-                            )
-                            .monospace()
-                            .size(8.0)
-                            .color(theme::IRON),
-                        );
-                        ui.add_space(2.0);
-                        let mut sp_override = self.state.read().llm.system_prompt_override.clone();
-                        let sp_resp = ui.add(
-                            egui::TextEdit::multiline(&mut sp_override)
-                                .desired_rows(4)
-                                .desired_width(f32::INFINITY)
-                                .font(egui::TextStyle::Monospace)
-                                .hint_text("Leave empty for auto-generated system prompt…"),
-                        );
-                        if sp_resp.changed() {
-                            self.state.write().llm.system_prompt_override = sp_override;
+                                    });
+                                });
+                            }
                         }
                     }
 
@@ -557,7 +450,7 @@ impl ImpulseApp {
                                 });
                             }
 
-                            // Knob size — fibonacci steps: 34 / 55 / 89 / 144 px
+                            // Knob size — fibonacci steps + optional custom px
                             ui.add_space(4.0);
                             widgets::section_header(ui, "KNOB SIZE");
                             ui.horizontal(|ui| {
@@ -568,7 +461,8 @@ impl ImpulseApp {
                                     ("L", KnobSize::Large),
                                     ("XL", KnobSize::XL),
                                 ] {
-                                    let active = prefs.knob_size == size;
+                                    let active = prefs.knob_size == size
+                                        && prefs.custom_knob_px.is_none();
                                     let col = if active { theme::CHALK } else { theme::ASH };
                                     let fill = if active { theme::IRON } else { theme::PIT };
                                     if ui
@@ -582,18 +476,36 @@ impl ImpulseApp {
                                             .fill(fill)
                                             .min_size(egui::vec2(28.0, 18.0)),
                                         )
+                                        .on_hover_text(format!("{:.0} px", size.body_px()))
                                         .clicked()
-                                        && !active
                                     {
                                         prefs.knob_size = size;
+                                        prefs.custom_knob_px = None;
                                         dirty = true;
                                     }
                                 }
+                                // Custom px spinbox
+                                let mut custom_knob = prefs.custom_knob_px.unwrap_or(prefs.effective_knob_px());
+                                if ui.add(
+                                    egui::DragValue::new(&mut custom_knob)
+                                        .range(12.0..=200.0)
+                                        .speed(1.0)
+                                        .suffix(" px"),
+                                ).changed() {
+                                    prefs.custom_knob_px = Some(custom_knob);
+                                    dirty = true;
+                                }
+                                if prefs.custom_knob_px.is_some()
+                                    && ui.small_button(egui::RichText::new("↺").color(theme::ASH)).clicked()
+                                {
+                                    prefs.custom_knob_px = None;
+                                    dirty = true;
+                                }
                             });
 
-                            // Pad / step button size
+                            // Sequencer step size
                             ui.add_space(4.0);
-                            widgets::section_header(ui, "PAD SIZE");
+                            widgets::section_header(ui, "SEQ STEP SIZE");
                             ui.horizontal(|ui| {
                                 use crate::state::PadSize;
                                 for (label, size) in [
@@ -602,7 +514,8 @@ impl ImpulseApp {
                                     ("L", PadSize::Large),
                                     ("XL", PadSize::XL),
                                 ] {
-                                    let active = prefs.pad_size == size;
+                                    let active = prefs.pad_size == size
+                                        && prefs.custom_pad_px.is_none();
                                     let col = if active { theme::CHALK } else { theme::ASH };
                                     let fill = if active { theme::IRON } else { theme::PIT };
                                     if ui
@@ -616,17 +529,119 @@ impl ImpulseApp {
                                             .fill(fill)
                                             .min_size(egui::vec2(28.0, 18.0)),
                                         )
+                                        .on_hover_text(format!("{:.0} px", size.px()))
                                         .clicked()
-                                        && !active
                                     {
                                         prefs.pad_size = size;
+                                        prefs.custom_pad_px = None;
                                         dirty = true;
                                     }
+                                }
+                                let mut custom_pad = prefs.custom_pad_px.unwrap_or(prefs.effective_pad_px());
+                                if ui.add(
+                                    egui::DragValue::new(&mut custom_pad)
+                                        .range(10.0..=150.0)
+                                        .speed(1.0)
+                                        .suffix(" px"),
+                                ).changed() {
+                                    prefs.custom_pad_px = Some(custom_pad);
+                                    dirty = true;
+                                }
+                                if prefs.custom_pad_px.is_some()
+                                    && ui.small_button(egui::RichText::new("↺").color(theme::ASH)).clicked()
+                                {
+                                    prefs.custom_pad_px = None;
+                                    dirty = true;
+                                }
+                            });
+
+                            // XY control pad size
+                            ui.add_space(4.0);
+                            widgets::section_header(ui, "XY PAD SIZE");
+                            ui.horizontal(|ui| {
+                                let mut custom_xy = prefs.custom_xy_px.unwrap_or(prefs.effective_xy_px());
+                                if ui.add(
+                                    egui::DragValue::new(&mut custom_xy)
+                                        .range(40.0..=400.0)
+                                        .speed(1.0)
+                                        .suffix(" px"),
+                                ).changed() {
+                                    prefs.custom_xy_px = Some(custom_xy);
+                                    dirty = true;
+                                }
+                                if prefs.custom_xy_px.is_some()
+                                    && ui.small_button(egui::RichText::new("↺").color(theme::ASH)).clicked()
+                                {
+                                    prefs.custom_xy_px = None;
+                                    dirty = true;
+                                }
+                                ui.label(egui::RichText::new("(↺ = auto from step size)").color(theme::IRON).monospace().size(8.0));
+                            });
+
+                            // Envelope/ADSR display height
+                            ui.add_space(4.0);
+                            widgets::section_header(ui, "ENV HEIGHT");
+                            ui.horizontal(|ui| {
+                                let mut custom_env = prefs.custom_env_h.unwrap_or(prefs.effective_env_h());
+                                if ui.add(
+                                    egui::DragValue::new(&mut custom_env)
+                                        .range(16.0..=200.0)
+                                        .speed(1.0)
+                                        .suffix(" px"),
+                                ).changed() {
+                                    prefs.custom_env_h = Some(custom_env);
+                                    dirty = true;
+                                }
+                                if prefs.custom_env_h.is_some()
+                                    && ui.small_button(egui::RichText::new("↺").color(theme::ASH)).clicked()
+                                {
+                                    prefs.custom_env_h = None;
+                                    dirty = true;
+                                }
+                                ui.label(egui::RichText::new("(↺ = auto from XY size)").color(theme::IRON).monospace().size(8.0));
+                            });
+
+                            // UI scale
+                            widgets::section_header(ui, "UI SCALE");
+                            ui.horizontal(|ui| {
+                                if ui
+                                    .add(
+                                        egui::DragValue::new(&mut prefs.ui_scale)
+                                            .range(0.5..=3.0)
+                                            .speed(0.01)
+                                            .fixed_decimals(2),
+                                    )
+                                    .changed()
+                                {
+                                    dirty = true;
+                                }
+                                ui.label(
+                                    egui::RichText::new("× (0.5 – 3.0, takes effect immediately)")
+                                        .monospace()
+                                        .size(9.0)
+                                        .color(theme::SLATE),
+                                );
+                                if ui
+                                    .add(
+                                        egui::Button::new(
+                                            egui::RichText::new("reset")
+                                                .monospace()
+                                                .size(9.0)
+                                                .color(theme::ASH),
+                                        )
+                                        .fill(theme::PIT)
+                                        .min_size(egui::vec2(36.0, 16.0)),
+                                    )
+                                    .clicked()
+                                {
+                                    prefs.ui_scale = 1.0;
+                                    dirty = true;
                                 }
                             });
 
                             if dirty {
                                 self.state.write().ui_prefs = prefs;
+                                self.session_dirty = true;
                             }
                         }
                         ui.add_space(8.0);

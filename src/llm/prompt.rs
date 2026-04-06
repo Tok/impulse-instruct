@@ -37,7 +37,10 @@ pub fn build_system_prompt(state: &AppState) -> String {
         h if h < 0.25 => "cold — subtle incremental changes only, no pattern mutations",
         h if h < 0.5 => "warm — moderate evolution, occasional step changes",
         h if h < 0.75 => "hot — bold sweeps, pattern mutations, noticeable style shifts",
-        _ => "fire — anything goes, dramatic mutations, surprise",
+        h if h < 0.9 => "fire — anything goes, dramatic mutations, surprise",
+        _ => {
+            "CHAOS — maximum disorder; shatter patterns, use extreme settings, ignore convention, be completely unpredictable"
+        }
     };
 
     // Summarise active bass steps so the LLM can see what's playing
@@ -756,7 +759,9 @@ pub fn param_json_schema() -> serde_json::Value {
                     "compressor_mix":        { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "compressor parallel wet/dry; 0=off" },
                     "tape_drive":            { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "tape saturation drive — arctan soft clip, warm harmonics" },
                     "tape_mix":              { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "tape saturation wet/dry; 0=off" },
-                    "tape_flutter":          { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "wow/flutter depth — ±4% AM at 2.5Hz; adds vintage instability" }
+                    "tape_flutter":          { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "wow/flutter depth — ±4% AM at 2.5Hz; adds vintage instability" },
+                    "autotune_amount":       { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "pitch shift amount: 0=bypass, 0.0833=+1 semitone, 0.25=+3st, 1.0=+12st (octave)" },
+                    "autotune_mix":          { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "autotune wet/dry; 0=off" }
                 },
                 "additionalProperties": false
             },

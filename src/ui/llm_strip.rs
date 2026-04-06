@@ -11,17 +11,237 @@ use crate::state::apply_llm_update;
 use crate::ui::{ImpulseApp, theme};
 use egui::{Frame, TopBottomPanel};
 
+// ─── Huth note colorizer ──────────────────────────────────────────────────────
+
+/// Parse `text` and return a LayoutJob where note references are colored with
+/// Huth *Farbige Noten* colors.
+///
+/// Recognized patterns:
+/// • Note+octave: `C4`, `A#3`, `Bb2` etc.  (`[A-G][#b]?\d`)
+/// • Plain note name at a word boundary: `C`, `G#`, `Bb` etc.
+///   (only when the note letter is NOT surrounded by other letters)
+/// • Frequency: `440Hz`, `261.6 Hz` etc. — mapped to nearest chromatic semitone
+/// • MIDI number context: `note 60`, `midi 72`, `pitch 48`
+fn colorize_log(text: &str, default_color: egui::Color32) -> egui::text::LayoutJob {
+    use egui::text::{LayoutJob, TextFormat};
+
+    let mut job = LayoutJob::default();
+    let font = egui::FontId::monospace(9.0);
+    // Thinking lines render in SMOKE (darker than default FOG) to visually separate them.
+    let think_color = theme::SMOKE;
+
+    // Returns the base color for the line starting at byte offset `p`.
+    let line_color_at = |p: usize, bytes: &[u8], text: &str| -> egui::Color32 {
+        let end = bytes[p..]
+            .iter()
+            .position(|&b| b == b'\n')
+            .map(|i| p + i)
+            .unwrap_or(bytes.len());
+        if text[p..end].contains("(think):") {
+            think_color
+        } else {
+            default_color
+        }
+    };
+
+    // Semitone index 0..12 for a note letter + optional accidental.
+    let note_semitone = |c: char, acc: Option<char>| -> Option<u8> {
+        let base: i8 = match c {
+            'C' => 0,
+            'D' => 2,
+            'E' => 4,
+            'F' => 5,
+            'G' => 7,
+            'A' => 9,
+            'B' => 11,
+            _ => return None,
+        };
+        let offset: i8 = match acc {
+            Some('#') => 1,
+            Some('b') => -1,
+            _ => 0,
+        };
+        Some(((base + offset).rem_euclid(12)) as u8)
+    };
+
+    // Hz → chromatic semitone 0..12
+    let freq_semitone = |hz: f64| -> u8 {
+        let midi = 69.0 + 12.0 * (hz / 440.0_f64).log2();
+        (midi.round() as i64).rem_euclid(12) as u8
+    };
+
+    // MIDI note number → chromatic semitone 0..12
+    let midi_semitone = |n: u8| -> u8 { n % 12 };
+
+    let bytes = text.as_bytes();
+    let len = bytes.len();
+    let mut pos = 0usize; // current byte offset
+    let mut seg = 0usize; // start of pending plain segment
+    // Base color for the current line (updated on each newline).
+    let mut cur_line_color = line_color_at(0, bytes, text);
+
+    // Flush a plain segment from `seg` to `end` using the current line color.
+    macro_rules! flush {
+        ($end:expr) => {
+            if seg < $end {
+                job.append(
+                    &text[seg..$end],
+                    0.0,
+                    TextFormat {
+                        font_id: font.clone(),
+                        color: cur_line_color,
+                        ..Default::default()
+                    },
+                );
+                seg = $end;
+            }
+        };
+    }
+
+    // Append a colored span (Huth color), preceded by any pending plain segment.
+    // Inlines the flush to avoid a seg write that would be immediately overwritten.
+    macro_rules! colored {
+        ($start:expr, $end:expr, $semitone:expr) => {
+            if seg < $start {
+                job.append(
+                    &text[seg..$start],
+                    0.0,
+                    TextFormat {
+                        font_id: font.clone(),
+                        color: cur_line_color,
+                        ..Default::default()
+                    },
+                );
+            }
+            job.append(
+                &text[$start..$end],
+                0.0,
+                TextFormat {
+                    font_id: font.clone(),
+                    color: theme::NOTE_COLORS[$semitone as usize],
+                    ..Default::default()
+                },
+            );
+            seg = $end;
+            pos = $end;
+        };
+    }
+
+    while pos < len {
+        let b = bytes[pos];
+
+        // On newline, flush the current line and update color for the next line.
+        if b == b'\n' {
+            flush!(pos + 1);
+            pos += 1;
+            if pos < len {
+                cur_line_color = line_color_at(pos, bytes, text);
+            }
+            continue;
+        }
+
+        // ── Note name (ASCII A–G) ─────────────────────────────────────────────
+        if b.is_ascii_uppercase() && matches!(b, b'A'..=b'G') {
+            // Require word-start: pos==0 or previous byte not alphabetic
+            let prev_ok = pos == 0 || !bytes[pos - 1].is_ascii_alphabetic();
+            if prev_ok {
+                let note_char = b as char;
+                let mut j = pos + 1;
+                // Optional accidental (lowercase b for flat, # for sharp)
+                let acc = if j < len && (bytes[j] == b'#' || bytes[j] == b'b') {
+                    j += 1;
+                    Some(bytes[j - 1] as char)
+                } else {
+                    None
+                };
+                // Word-end required: next byte must not be alphabetic (handles CTRL, BPM etc.)
+                let next_ok = j >= len || !bytes[j].is_ascii_alphabetic();
+                if next_ok && let Some(st) = note_semitone(note_char, acc) {
+                    // Optionally consume a trailing octave digit (makes C4, A#3 etc.)
+                    if j < len && bytes[j].is_ascii_digit() {
+                        j += 1;
+                    }
+                    colored!(pos, j, st);
+                    continue;
+                }
+            }
+        }
+
+        // ── Frequency: digits (optional dot+digits) optionally space then Hz ─
+        if b.is_ascii_digit() {
+            let mut j = pos;
+            while j < len && (bytes[j].is_ascii_digit() || bytes[j] == b'.') {
+                j += 1;
+            }
+            let num_str = &text[pos..j];
+            let mut k = j;
+            if k < len && bytes[k] == b' ' {
+                k += 1;
+            }
+            if k + 2 <= len
+                && bytes[k..k + 2].eq_ignore_ascii_case(b"Hz")
+                && let Ok(hz) = num_str.parse::<f64>()
+                && (20.0..=20_000.0).contains(&hz)
+            {
+                let st = freq_semitone(hz);
+                colored!(pos, k + 2, st);
+                continue;
+            }
+            // ── MIDI number context: "note 60", "midi 72", "pitch 48" ─────────
+            let prefix_end = pos;
+            let prefix_start = pos.saturating_sub(7);
+            let prefix = &text[prefix_start..prefix_end];
+            let is_midi_ctx = ["note ", "midi ", "pitch ", "step "]
+                .iter()
+                .any(|kw| prefix.ends_with(kw));
+            if is_midi_ctx && let Ok(n) = num_str.parse::<u8>() {
+                let st = midi_semitone(n);
+                colored!(pos, j, st);
+                continue;
+            }
+        }
+
+        pos += 1;
+    }
+    flush!(len);
+    let _ = seg; // last flush writes seg but nothing reads it after
+    job
+}
+
 impl ImpulseApp {
     /// Style selector, prompt input, log, and thinking display.
     pub(super) fn draw_llm_strip(&mut self, ctx: &egui::Context) {
         // Compact default: style row ~22px + instructions ~22px + prompt ~34px + top margin 4px ≈ 82px.
         // User can drag the bottom border down to reveal more log lines.
+        let collapsed = self.llm_strip_collapsed;
         TopBottomPanel::top("llm_strip")
             .frame(Frame::none().fill(theme::PIT).inner_margin(egui::Margin { left: 8.0, right: 8.0, top: 4.0, bottom: 0.0 }))
-            .resizable(true)
-            .min_height(70.0)
-            .default_height(95.0)
+            .resizable(!collapsed)
+            .min_height(if collapsed { 36.0 } else { 70.0 })
+            .max_height(if collapsed { 36.0 } else { f32::INFINITY })
+            .default_height(if collapsed { 36.0 } else { 95.0 })
             .show(ctx, |ui| {
+                // ── Collapse toggle (top-right corner) ───────────────────────
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::TOP), |ui| {
+                    let icon = if collapsed { "▼" } else { "▲" };
+                    if ui
+                        .add(
+                            egui::Button::new(
+                                egui::RichText::new(icon).monospace().size(9.0).color(theme::IRON),
+                            )
+                            .frame(false),
+                        )
+                        .on_hover_text(if collapsed { "Expand LLM strip" } else { "Collapse LLM strip" })
+                        .clicked()
+                    {
+                        self.llm_strip_collapsed = !self.llm_strip_collapsed;
+                    }
+                });
+
+                if collapsed {
+                    // Collapsed: show only the prompt row
+                } else {
+
                 // ── TOP row: style + instructions | log ───────────────────────
                 ui.horizontal(|ui| {
                     // ── LEFT column: style + instructions ─────────────────────
@@ -184,8 +404,13 @@ impl ImpulseApp {
                     ui.vertical(|ui| {
                         // Thinking toggle (compact, one line)
                         if let Some(ref thinking) = self.last_thinking.clone() {
-                            let label =
-                                if self.show_thinking { "▾ think" } else { "▸ think" };
+                            let think_persona = self.state.read().llm.persona_name.clone();
+                            let label = if self.show_thinking {
+                                format!("▾ {} (think)", think_persona)
+                            } else {
+                                format!("▸ {} (think)", think_persona)
+                            };
+                            let label = label.as_str();
                             if ui
                                 .add(
                                     egui::Button::new(
@@ -219,19 +444,16 @@ impl ImpulseApp {
                             }
                         }
 
-                        // Log fills remaining height
+                        // Log fills remaining height — colored note refs via Huth palette
                         egui::ScrollArea::vertical()
                             .id_source("log_scroll")
                             .stick_to_bottom(true)
                             .auto_shrink([false; 2])
                             .show(ui, |ui: &mut egui::Ui| {
+                                let job = colorize_log(&self.log_text, theme::FOG);
                                 ui.add(
-                                    egui::TextEdit::multiline(&mut self.log_text)
-                                        .desired_width(f32::INFINITY)
-                                        .font(egui::FontId::monospace(9.0))
-                                        .text_color(theme::FOG)
-                                        .frame(false)
-                                        .interactive(true),
+                                    egui::Label::new(job)
+                                        .selectable(true),
                                 );
                             });
                     });
@@ -401,6 +623,8 @@ impl ImpulseApp {
                     }
                 });
 
+                } // end !collapsed block
+
                 // ── BOTTOM row: full-width prompt + Enter (vertically centred) ──
                 ui.with_layout(
                     egui::Layout::left_to_right(egui::Align::Center),
@@ -446,7 +670,7 @@ impl ImpulseApp {
                                 }
                                 None => "do something interesting — evolve the pattern and sound".to_string(),
                             };
-                            (p, "YOU → ✦\n".to_string())
+                            (p, "YOU → [evolve]\n".to_string())
                         } else {
                             let lower = typed.to_lowercase();
                             let catalog = StyleCatalog::get();

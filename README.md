@@ -19,7 +19,7 @@ The synthesis engine runs entirely offline: no cloud calls, no subscriptions, no
 
 ---
 
-## ⚠️ Alpha - Work in Progress (v0.5.6)
+## ⚠️ Alpha - Work in Progress (v0.5.8)
 
 **This is pre-release software.** It works and makes sound, but expect rough edges. A few things worth knowing before you dive in:
 
@@ -33,7 +33,7 @@ See [Known Limitations](#known-limitations) for specifics on what works and what
 ---
 
 <p align="center">
-  <img src="assets/screenshots/Screenshot-0.5.6.png" alt="Impulse Instruct v0.5.6" width="900"/>
+  <img src="assets/screenshots/Screenshot-0.5.8.png" alt="Impulse Instruct v0.5.8" width="900"/>
 </p>
 
 ---

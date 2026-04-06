@@ -127,6 +127,7 @@ pub enum ModuleKind {
     FxCompressor,
     FxTapeSat,
     FxDrive,
+    FxAutotune,
     // ── Modulation ────────────────────────────────────────────────────────────
     LfoModule,
     // ── Utility ───────────────────────────────────────────────────────────────
@@ -158,6 +159,7 @@ impl ModuleKind {
             Self::FxCompressor => "COMPRESSOR",
             Self::FxTapeSat => "TAPE SAT",
             Self::FxDrive => "DRIVE",
+            Self::FxAutotune => "AUTOTUNE",
             Self::LfoModule => "LFO",
             Self::MasterOutput => "MASTER",
         }
@@ -187,6 +189,7 @@ impl ModuleKind {
             | Self::FxCompressor
             | Self::FxTapeSat
             | Self::FxDrive
+            | Self::FxAutotune
             | Self::LfoModule => Zone::FxMod,
         }
     }
@@ -206,6 +209,7 @@ impl ModuleKind {
                 | Self::FxCompressor
                 | Self::FxTapeSat
                 | Self::FxDrive
+                | Self::FxAutotune
                 | Self::LfoModule
         )
     }
@@ -352,6 +356,7 @@ impl Default for RackState {
         rack.add_module(ModuleKind::FxCompressor);
         rack.add_module(ModuleKind::FxTapeSat);
         rack.add_module(ModuleKind::FxDrive);
+        rack.add_module(ModuleKind::FxAutotune);
         // Default 4 LFO slots.
         rack.add_module(ModuleKind::LfoModule);
         rack.add_module(ModuleKind::LfoModule);
@@ -364,6 +369,7 @@ impl Default for RackState {
             rack.modules.iter().find(|m| m.kind == kind).map(|m| m.id)
         };
         let master_id = find(ModuleKind::MasterOutput);
+        let seq_id = find(ModuleKind::StepSequencer);
 
         // Voice → MasterOutput (voice mix bus).
         let voice_ids: Vec<u32> = [
@@ -395,9 +401,30 @@ impl Default for RackState {
             ModuleKind::FxCompressor,
             ModuleKind::FxTapeSat,
             ModuleKind::FxDrive,
+            ModuleKind::FxAutotune,
         ];
         let fx_ids: Vec<u32> = fx_chain.iter().filter_map(|&k| find(k)).collect();
         let _ = find; // end closure borrow before mutable connect() calls
+
+        // StepSequencer → each voice (gate/CV)
+        if let Some(sid) = seq_id {
+            for vid in &voice_ids {
+                rack.connect(
+                    PortRef {
+                        module_id: sid,
+                        dir: PortDir::Out,
+                        kind: PortKind::Cv,
+                        index: 0,
+                    },
+                    PortRef {
+                        module_id: *vid,
+                        dir: PortDir::In,
+                        kind: PortKind::Cv,
+                        index: 0,
+                    },
+                );
+            }
+        }
 
         // TTS → FxReverb
         if let (Some(tid), Some(rid)) = (tts_id, reverb_id) {
@@ -475,6 +502,7 @@ pub enum FxStep {
     Compressor,
     TapeSat,
     Drive,
+    Autotune,
 }
 
 /// Compiled FX processing order derived from the rack cable graph.
@@ -497,6 +525,83 @@ pub struct FxPlan {
     pub voice_routes: HashMap<ModuleKind, Vec<FxStep>>,
 }
 
+// ─── LLM rack helpers ─────────────────────────────────────────────────────────
+
+/// Maps an `LfoTarget` to the rack `ModuleKind` it modulates.
+/// Used to synthesise visual cables for active LFO slots.
+/// Returns `None` for `LfoTarget::None` or targets without a matching module kind.
+pub(crate) fn lfo_target_module_kind(target: crate::state::LfoTarget) -> Option<ModuleKind> {
+    use crate::state::LfoTarget;
+    match target {
+        LfoTarget::None => None,
+        LfoTarget::BassCutoff
+        | LfoTarget::BassResonance
+        | LfoTarget::BassPitch
+        | LfoTarget::BassVolume => Some(ModuleKind::AcidBass),
+        LfoTarget::Kick808Pitch => Some(ModuleKind::DrumKit808),
+        LfoTarget::ReverbMix => Some(ModuleKind::FxReverb),
+        LfoTarget::DelayTime | LfoTarget::DelayFeedback => Some(ModuleKind::FxDelay),
+        LfoTarget::ChorusMix | LfoTarget::ChorusRate => Some(ModuleKind::FxChorus),
+    }
+}
+
+/// Returns the `PortKind` emitted on a module's primary output.
+/// CV sources (LFO, Sequencer) use `Cv`; everything else uses `Audio`.
+/// The destination port kind always matches the source.
+pub(crate) fn rack_out_port_kind(kind: ModuleKind) -> PortKind {
+    match kind {
+        ModuleKind::LfoModule | ModuleKind::StepSequencer => PortKind::Cv,
+        _ => PortKind::Audio,
+    }
+}
+
+/// Match a module kind against a flexible name string from the LLM.
+pub(crate) fn rack_kind_name_matches(kind: ModuleKind, name: &str) -> bool {
+    let n = name.to_lowercase();
+    match kind {
+        ModuleKind::FxBitcrush => matches!(
+            n.as_str(),
+            "bitcrush" | "bit_crush" | "bit crush" | "lofi" | "lo-fi"
+        ),
+        ModuleKind::FxReverb => matches!(n.as_str(), "reverb" | "verb"),
+        ModuleKind::FxDelay => matches!(n.as_str(), "delay" | "echo"),
+        ModuleKind::FxChorus => matches!(n.as_str(), "chorus" | "ensemble"),
+        ModuleKind::FxPhaser => matches!(n.as_str(), "phaser" | "phase"),
+        ModuleKind::FxRingMod => {
+            matches!(n.as_str(), "ringmod" | "ring_mod" | "ring mod" | "ring")
+        }
+        ModuleKind::FxWaveshaper => {
+            matches!(n.as_str(), "waveshaper" | "wave_shaper" | "shaper")
+        }
+        ModuleKind::FxEq => matches!(n.as_str(), "eq" | "equalizer" | "equaliser"),
+        ModuleKind::FxCompressor => matches!(n.as_str(), "compressor" | "comp"),
+        ModuleKind::FxTapeSat => matches!(
+            n.as_str(),
+            "tapesat" | "tape_sat" | "tape sat" | "tape" | "saturation"
+        ),
+        ModuleKind::FxDrive => matches!(n.as_str(), "drive" | "overdrive" | "distortion"),
+        ModuleKind::FxAutotune => matches!(
+            n.as_str(),
+            "autotune" | "auto_tune" | "pitch_correct" | "tune"
+        ),
+        ModuleKind::LfoModule => matches!(n.as_str(), "lfo"),
+        ModuleKind::AcidBass => matches!(n.as_str(), "bass" | "acid" | "303"),
+        ModuleKind::DrumKit808 => matches!(n.as_str(), "808" | "kit_a" | "drum_a" | "drums_a"),
+        ModuleKind::DrumKit909 => matches!(n.as_str(), "909" | "kit_b" | "drum_b" | "drums_b"),
+        ModuleKind::HooverLead => matches!(n.as_str(), "hoover" | "lead"),
+        ModuleKind::An1xVoice => matches!(n.as_str(), "an1x" | "an-1x" | "pad" | "synth"),
+        ModuleKind::AmenSampler => matches!(n.as_str(), "amen" | "sampler" | "break"),
+        ModuleKind::NoiseVoice => matches!(n.as_str(), "noise"),
+        ModuleKind::EspeakNgTts | ModuleKind::CoquiTts => {
+            matches!(n.as_str(), "espeak" | "coqui" | "tts" | "mc" | "voice")
+        }
+        ModuleKind::MasterOutput => {
+            matches!(n.as_str(), "master" | "master_out" | "out" | "output")
+        }
+        ModuleKind::StepSequencer => matches!(n.as_str(), "sequencer" | "seq"),
+    }
+}
+
 fn kind_to_fx_step(kind: ModuleKind) -> Option<FxStep> {
     match kind {
         ModuleKind::FxWaveshaper => Some(FxStep::Waveshaper),
@@ -510,6 +615,7 @@ fn kind_to_fx_step(kind: ModuleKind) -> Option<FxStep> {
         ModuleKind::FxCompressor => Some(FxStep::Compressor),
         ModuleKind::FxTapeSat => Some(FxStep::TapeSat),
         ModuleKind::FxDrive => Some(FxStep::Drive),
+        ModuleKind::FxAutotune => Some(FxStep::Autotune),
         _ => None,
     }
 }

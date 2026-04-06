@@ -15,6 +15,14 @@ use std::f32::consts::TAU;
 use super::theme;
 use crate::state::{KnobStyle, ParamMode, UiPrefs};
 
+/// Read the active touch-paint mode from the shared egui context data.
+/// Returns `None` when the user is in normal (drag) mode.
+fn touch_mode(ui: &Ui) -> Option<ParamMode> {
+    ui.ctx()
+        .data(|d| d.get_temp::<Option<ParamMode>>(egui::Id::new("touch_mode")))
+        .flatten()
+}
+
 // ─── Control preferences ──────────────────────────────────────────────────────
 
 /// Combined rendering mode derived from `UiPrefs`.
@@ -45,7 +53,7 @@ impl ControlPrefs {
         };
         Self {
             style,
-            knob_size: prefs.knob_size.body_px(),
+            knob_size: prefs.effective_knob_px(),
         }
     }
 
@@ -109,7 +117,8 @@ fn mode_tooltip(mode: ParamMode) -> &'static str {
 
 /// A rotary knob widget.
 /// Returns `(value_changed, mode_cycled)`.
-/// Left-drag changes the value; right-click cycles the param mode.
+/// Left-drag changes the value.  When a touch-paint mode is active, a primary
+/// click paints that mode instead of dragging; otherwise no mode change occurs.
 pub fn knob(ui: &mut Ui, label: &str, value: &mut f32, mode: ParamMode, size: f32) -> (bool, bool) {
     let label_h = (size * 0.28).max(14.0).round();
     let (rect, response) =
@@ -123,9 +132,11 @@ pub fn knob(ui: &mut Ui, label: &str, value: &mut f32, mode: ParamMode, size: f3
     );
     let label_font_size = (size * 0.175).clamp(8.0, 13.0);
 
+    let tmode = touch_mode(ui);
     let mut changed = false;
 
-    if response.dragged() {
+    // Only drag-to-change when no touch-paint mode is active.
+    if tmode.is_none() && response.dragged() {
         let delta = response.drag_delta();
         *value = (*value - delta.y * 0.005 + delta.x * 0.003).clamp(0.0, 1.0);
         changed = true;
@@ -147,9 +158,10 @@ pub fn knob(ui: &mut Ui, label: &str, value: &mut f32, mode: ParamMode, size: f3
         );
     }
 
-    // Right-click = cycle mode; tooltip explains the states on hover.
     let response = response.on_hover_text(mode_tooltip(mode));
-    let mode_cycled = response.secondary_clicked();
+    // Touch-paint mode: primary click sets mode. Normal mode: no auto-cycle
+    // (right-click is reserved for context menus).
+    let mode_cycled = tmode.is_some() && response.clicked();
     (changed, mode_cycled)
 }
 
@@ -157,9 +169,23 @@ fn draw_knob(painter: &Painter, rect: Rect, value: f32, mode: ParamMode, hovered
     let center = rect.center();
     let radius = rect.width() * 0.45;
 
-    // Background circle
+    // Well shadow — dark drop shadow offset slightly down-right
+    painter.circle_filled(
+        center + Vec2::new(0.5, 1.0),
+        radius + 1.5,
+        Color32::from_gray(8),
+    );
+
+    // Body
     let bg = if hovered { theme::SLATE } else { theme::PIT };
     painter.circle_filled(center, radius, bg);
+
+    // Catch-light: short bright line toward top-left, simulates overhead lamp
+    let cl_angle = std::f32::consts::PI * 1.25; // ~10 o'clock
+    let cl_a = center + Vec2::new(cl_angle.cos(), cl_angle.sin()) * (radius * 0.25);
+    let cl_b = center + Vec2::new(cl_angle.cos(), cl_angle.sin()) * (radius * 0.60);
+    painter.line_segment([cl_a, cl_b], Stroke::new(1.5, Color32::from_gray(100)));
+
     let ring_col = match mode {
         ParamMode::UserOwned => theme::IRON,
         ParamMode::LlmFocus => mode_color(ParamMode::LlmFocus),
@@ -200,12 +226,17 @@ fn draw_knob(painter: &Painter, rect: Rect, value: f32, mode: ParamMode, hovered
         );
     }
 
-    // Pointer dot
+    // Pointer line from near-centre to near-rim (replaces dot — clearer read)
     let end_angle = start_angle + filled_sweep;
-    let dot_pos = center + Vec2::new(end_angle.cos(), end_angle.sin()) * (radius * 0.58);
-    painter.circle_filled(dot_pos, 2.5, arc_color);
+    let ptr_a = center + Vec2::new(end_angle.cos(), end_angle.sin()) * (radius * 0.18);
+    let ptr_b = center + Vec2::new(end_angle.cos(), end_angle.sin()) * (radius * 0.75);
+    painter.line_segment(
+        [ptr_a + Vec2::new(0.5, 0.5), ptr_b + Vec2::new(0.5, 0.5)],
+        Stroke::new(1.0, Color32::from_gray(8)),
+    );
+    painter.line_segment([ptr_a, ptr_b], Stroke::new(1.5, arc_color));
 
-    // Mode indicator — centre of knob, always rendered, colour signals state.
+    // Mode indicator — centre dot, colour signals state
     painter.text(
         center,
         egui::Align2::CENTER_CENTER,
@@ -360,218 +391,26 @@ pub fn led(ui: &mut Ui, active: bool) {
 
 pub fn section_header(ui: &mut Ui, label: &str) {
     ui.add_space(4.0);
-    ui.label(
+    let resp = ui.label(
         egui::RichText::new(label)
             .monospace()
             .size(9.5)
             .color(theme::SMOKE),
     );
+    // 1px rule line below — sub-panel separator cue
+    let rule_y = resp.rect.max.y + 1.0;
+    let rule_x0 = resp.rect.min.x;
+    let rule_x1 = ui.max_rect().max.x;
+    ui.painter().line_segment(
+        [Pos2::new(rule_x0, rule_y), Pos2::new(rule_x1, rule_y)],
+        Stroke::new(1.0, theme::SLATE),
+    );
     ui.add_space(2.0);
 }
 
 // ─── XY Pad ──────────────────────────────────────────────────────────────────
-
-/// An XY pad controlling two parameters simultaneously.
-/// Returns true when a value changed.
-/// `locked` follows the UserOwned convention — pad is read-only when true.
-/// Return the currently selected pair index for an XY pad identified by `pad_id`.
-/// Call this *before* `xy_pad` to dispatch the correct `&mut f32` values on every frame.
-/// Return the currently selected pair index for an XY pad with the given `pad_id`.
-/// Call this *before* `xy_pad` on each frame to dispatch the correct `&mut f32` values.
-pub fn xy_pad_pair(ctx: &egui::Context, pad_id: &str) -> usize {
-    ctx.data(|d| d.get_temp(egui::Id::new(pad_id)).unwrap_or(0usize))
-}
-
-/// XY pad with optional pair cycling.
-///
-/// - `num_pairs` — how many param pairs this pad cycles through (1 = fixed, no cycle indicator).
-///   The active pair index is persisted in egui temp-memory keyed by the widget's allocated id.
-///   Right-click cycles to the next pair.
-///
-/// Returns `(changed, pair_index)`.  When `changed` is true the caller should write back
-/// the new `x`/`y` values.  The caller should use `pair_index` on every frame to decide
-/// which param pair to pass in as `x`/`y`.
-pub fn xy_pad(
-    ui: &mut Ui,
-    pad_id: &str,
-    label_x: &str,
-    label_y: &str,
-    x: &mut f32,
-    y: &mut f32,
-    size: f32,
-    locked: bool,
-    num_pairs: usize,
-) -> (bool, usize) {
-    let label_h = 13.0_f32;
-    let label_w = 12.0_f32;
-    let total = Vec2::new(label_w + size + 2.0, size + label_h + 2.0);
-    let (outer, response) = ui.allocate_exact_size(total, Sense::click_and_drag());
-
-    let pad_rect = Rect::from_min_size(
-        Pos2::new(outer.min.x + label_w, outer.min.y),
-        Vec2::splat(size),
-    );
-
-    // ── Pair cycling (right-click) ────────────────────────────────────────────
-    let mem_id = egui::Id::new(pad_id);
-    let pair: usize = ui.ctx().data(|d| d.get_temp(mem_id).unwrap_or(0usize));
-    if num_pairs > 1 && response.secondary_clicked() {
-        let next = (pair + 1) % num_pairs;
-        ui.ctx().data_mut(|d| d.insert_temp(mem_id, next));
-    }
-
-    let mut changed = false;
-
-    if !locked
-        && (response.dragged() || response.clicked())
-        && let Some(pos) = response.interact_pointer_pos()
-    {
-        *x = ((pos.x - pad_rect.min.x) / pad_rect.width()).clamp(0.0, 1.0);
-        *y = (1.0 - (pos.y - pad_rect.min.y) / pad_rect.height()).clamp(0.0, 1.0);
-        changed = true;
-    }
-
-    // ── Hover tooltip (shown inline after all drawing) ────────────────────────
-    let show_tooltip = response.hovered();
-    let tooltip_text = format!("{}: {:.3}   {}: {:.3}", label_x, *x, label_y, *y);
-
-    if ui.is_rect_visible(outer) {
-        let painter = ui.painter();
-
-        // Glass panel background — recessed dark fill, bright top edge
-        painter.rect_filled(pad_rect, egui::Rounding::same(3.0), Color32::from_gray(12));
-        painter.rect_stroke(
-            pad_rect,
-            egui::Rounding::same(3.0),
-            Stroke::new(1.0, Color32::from_gray(if locked { 28 } else { 40 })),
-        );
-        if response.hovered() && !locked {
-            painter.rect_stroke(
-                pad_rect,
-                egui::Rounding::same(3.0),
-                Stroke::new(1.0, Color32::from_gray(70)),
-            );
-        }
-        // Bright top edge — glass surface sheen
-        painter.line_segment(
-            [
-                pad_rect.left_top() + Vec2::new(2.0, 0.0),
-                pad_rect.right_top() - Vec2::new(2.0, 0.0),
-            ],
-            Stroke::new(1.0, Color32::from_gray(55)),
-        );
-
-        // Grid crosshairs
-        let grid_col = Color32::from_gray(22);
-        for t in [0.25_f32, 0.5, 0.75] {
-            let gx = pad_rect.min.x + pad_rect.width() * t;
-            let gy = pad_rect.min.y + pad_rect.height() * t;
-            painter.line_segment(
-                [Pos2::new(gx, pad_rect.min.y), Pos2::new(gx, pad_rect.max.y)],
-                Stroke::new(0.5, grid_col),
-            );
-            painter.line_segment(
-                [Pos2::new(pad_rect.min.x, gy), Pos2::new(pad_rect.max.x, gy)],
-                Stroke::new(0.5, grid_col),
-            );
-        }
-
-        let cx = pad_rect.min.x + pad_rect.width() * x.clamp(0.0, 1.0);
-        let cy = pad_rect.min.y + pad_rect.height() * (1.0 - y.clamp(0.0, 1.0));
-        // Guide lines (dim crosshair through cursor)
-        painter.line_segment(
-            [Pos2::new(cx, pad_rect.min.y), Pos2::new(cx, pad_rect.max.y)],
-            Stroke::new(0.5, Color32::from_gray(35)),
-        );
-        painter.line_segment(
-            [Pos2::new(pad_rect.min.x, cy), Pos2::new(pad_rect.max.x, cy)],
-            Stroke::new(0.5, Color32::from_gray(35)),
-        );
-
-        // Chrome dome cursor — same language as the slider thumb
-        let dot_r = (size * 0.065).max(4.0);
-        let dot_pos = Pos2::new(cx, cy);
-        if !locked {
-            // Shadow
-            painter.circle_filled(
-                dot_pos + Vec2::new(0.5, 0.5),
-                dot_r + 0.5,
-                Color32::from_gray(6),
-            );
-            // Body
-            painter.circle_filled(dot_pos, dot_r, Color32::from_gray(55));
-            painter.circle_filled(dot_pos, dot_r * 0.6, Color32::from_gray(32));
-            // Specular rim
-            painter.circle_stroke(dot_pos, dot_r, Stroke::new(1.0, Color32::from_gray(140)));
-        } else {
-            painter.circle_filled(dot_pos, dot_r, Color32::from_gray(40));
-            painter.circle_stroke(dot_pos, dot_r, Stroke::new(1.0, Color32::from_gray(55)));
-        }
-
-        if locked {
-            painter.text(
-                pad_rect.center(),
-                egui::Align2::CENTER_CENTER,
-                "U",
-                egui::FontId::monospace(8.0),
-                theme::IRON,
-            );
-        }
-
-        // Pair-cycle indicator — small "⇄ n/N" in top-right corner when multiple pairs.
-        if num_pairs > 1 {
-            let ind_text = format!("{}/{}", pair + 1, num_pairs);
-            painter.text(
-                pad_rect.right_top() + Vec2::new(-2.0, 3.0),
-                egui::Align2::RIGHT_TOP,
-                ind_text,
-                egui::FontId::monospace(6.5),
-                if response.hovered() {
-                    Color32::from_gray(110)
-                } else {
-                    Color32::from_gray(55)
-                },
-            );
-        }
-
-        let x_label_rect = Rect::from_min_size(
-            Pos2::new(pad_rect.min.x, pad_rect.max.y + 1.0),
-            Vec2::new(pad_rect.width(), label_h),
-        );
-        let col = if locked { theme::IRON } else { theme::SMOKE };
-        painter.text(
-            x_label_rect.center(),
-            egui::Align2::CENTER_CENTER,
-            format!("{} {:.2}", label_x, x),
-            egui::FontId::monospace(8.0),
-            col,
-        );
-
-        let y_label_center = Pos2::new(outer.min.x + label_w * 0.5, pad_rect.center().y);
-        painter.text(
-            y_label_center,
-            egui::Align2::CENTER_CENTER,
-            format!("{:.2}", y),
-            egui::FontId::monospace(7.5),
-            col,
-        );
-        painter.text(
-            Pos2::new(outer.min.x + label_w * 0.5, pad_rect.min.y + 5.0),
-            egui::Align2::CENTER_CENTER,
-            label_y,
-            egui::FontId::monospace(7.0),
-            col,
-        );
-    }
-
-    if show_tooltip {
-        response.on_hover_ui(|ui| {
-            ui.label(egui::RichText::new(&tooltip_text).monospace().size(9.5));
-        });
-    }
-
-    (changed, pair)
-}
+mod xy_pad;
+pub use xy_pad::{xy_pad, xy_pad_pair};
 
 // ─── ADSR Envelope Visualiser ────────────────────────────────────────────────
 mod adsr;
@@ -598,7 +437,7 @@ pub fn glass_group<R>(
             // Force vertical stacking regardless of parent layout, and cap the width
             // so groups don't expand to fill the entire horizontal_wrapped row.
             ui.set_max_width(max_width);
-            ui.with_layout(egui::Layout::top_down(egui::Align::LEFT), content)
+            ui.with_layout(egui::Layout::top_down(egui::Align::Center), content)
                 .inner
         });
 
@@ -750,8 +589,9 @@ pub fn knob_chrome(
     );
     let label_font_size = (size * 0.175).clamp(8.0, 13.0);
 
+    let tmode = touch_mode(ui);
     let mut changed = false;
-    if response.dragged() {
+    if tmode.is_none() && response.dragged() {
         let delta = response.drag_delta();
         *value = (*value - delta.y * 0.005 + delta.x * 0.003).clamp(0.0, 1.0);
         changed = true;
@@ -775,7 +615,7 @@ pub fn knob_chrome(
     }
 
     let response = response.on_hover_text(mode_tooltip(mode));
-    let mode_cycled = response.secondary_clicked();
+    let mode_cycled = tmode.is_some() && response.clicked();
     (changed, mode_cycled)
 }
 

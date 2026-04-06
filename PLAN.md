@@ -29,30 +29,68 @@ alternative Ultravox-as-secondary-listener sketch.
 
 ## What's Left
 
-Ordered by value.
+Ordered by value.  Branch: **`develop`** (merge to `main` only for tagged releases).
 
-### In progress / next
+---
 
-- [ ] **TTS rack module UI panel** - module card for EspeakNgTts/CoquiTts in the rack canvas showing voice/speed/pitch controls inline. Currently TTS is configured via the settings panel only; it should also surface in the rack like other modules.
+### Completed this sprint (develop, not yet merged to main)
 
-- [ ] **Audio feedback Phase 2 improvements**
-  - Auto-listen mode: AUTO toggle in LISTEN bar, fires every 4 jam cycles when heat > 0
-  - Per-voice level bars: 8 mini bars (BAS/K-A/S-A/HH/K-B/S-B/CLP/AMN) from state volume params
-  - Watch llama.cpp #21325 for Gemma 4 audio encoder PR; test when it lands
+- [x] **TTS rack module UI panel** — `src/ui/panels/tts.rs`, EspeakNgTts / CoquiTts cards wired into `draw_voice_content()`.
+- [x] **Audio feedback Phase 2** — AUTO toggle fires every 4 jam cycles; 8 per-voice level bars in LISTEN strip.
+- [x] **LLM cable visual sync** — LFO→target and Sequencer→voice cables now synthesised from state in the rack overlay; PortKind mismatch fixed.
+- [x] **Cable signal animation** — speed and dot count normalised to arc length (no longer length-dependent).
+- [x] **Skeuomorphic widget depth** — step buttons get inset well + inverted edge highlights; flat knob gets well shadow + catch-light; section headers get a 1px rule line.
+- [x] **Responsive voice card grid** — columns adapt to window width (1/2/3 at 420px min per column).
+- [x] **LLM strip collapse** — ▲/▼ toggle collapses strip to prompt row only.
+- [x] **Central touch-paint mode** — `· / U / F` toolbar row replaces broken right-click per-knob cycling (context menus conflicted); cables toggle also lives here.
+- [x] **UI scale setting** — `UiPrefs.ui_scale` DragValue in Preferences, applied via `pixels_per_point`, persisted in session.
+- [x] **Pad size M = 44px default** (was 26px); knob default bumped to M (55px).
+- [x] **All UI prefs persisted** — `pad_size`, `knob_size`, `ui_scale` all survive restarts.
+- [x] **Header responsive rework** — heat slider fills remaining width; COOL/WARM/HOT/FIRE/CHAOS tier labels; monitor volume relabelled MON; right_to_left layout.
+- [x] **Heat chaos amplification** — temperature range 0.1–1.7 (was 1.2); top_p widens with heat; CHAOS tier in system prompt at ≥90%.
+- [x] **CI/CD supply-chain security** — `release` job builds Linux+Windows in GH Actions on `v*` tags; SHA-256 sidecars + SLSA level-2 attestation; codecov now runs on `develop` too.
+- [x] **Banner symmetry** — wave and tagline centred correctly.
+- [x] **Snapshot versioning** — `Cargo.toml` bumped to `0.5.8-alpha.1`; `scripts/bump-version.sh` added (commit + release tag on clean semver).
+- [x] **LLM tuning tab in Preferences** — AI tab split into four sub-tabs: **Model** (ctx_size, seed, inference/thinking), **Sampling** (top_k/p/min_p/repeat/freq — labelled "experimental"), **Personality** (persona, voice mode, style verbosity, system prompt override), **TTS** (engine, voice shape, character).
+- [x] **Zone visual hierarchy** — zone rails distinct gray backgrounds (Global 24, Voices 18, FX+Mod 14); module card content 6px/8px margin; 3-dot drag affordance in title bar.
+- [x] **Autotune FX module** — `ModuleKind::FxAutotune`; grain-based pitch shifter in `fx.rs` (two-head overlap-add, pre-allocated 4096-sample buffer); wired into FxStep, FxPlan, AudioParams, rack add-menu, LLM schema.
+- [x] **Per-zone collapse** — each zone rail has a ▶/▼ toggle; Voice, FX+Mod, Global collapse independently.
+- [x] **Log level persistence fix** — `log_level_idx` added to `SessionData`; survives restarts.
+- [x] **Huth note coloring in log** — in-UI log parses note names (`C4`, `A#3`), frequencies (`440Hz`), and MIDI context (`note 60`) and renders them in their Huth chromatic color; `colorize_log()` in `llm_strip.rs`; uses `egui::Label::selectable(true)` + `LayoutJob` so text remains copy-paste-able.
 
-### Post-release
+---
 
-- [ ] **Multiple voices** - `Vec<SynthVoice>`, each with its own sequencer + oscillator + filter. LLM can target "voice 2, more acid".
+### Next — pre-release queue
 
-- [ ] **Multiple LLM instances** - one LLM per voice, or a routing matrix.
+- [x] **Huth coloring in synth panels** — apply `theme::note_color()` to note name labels wherever they appear in bass/drum/AN1X panels and oscilloscope readouts.  CLI terminal output (the `log::info!` etc.) should also emit ANSI escape codes for note names when stdout is a TTY.
 
-- [ ] **Modular cable UI** (Reason-style rack flip) - Tab flips to back panel showing I/O ports + Bezier cables. Infrastructure exists; needs a dedicated interaction layer.
+- [ ] **Rack cable drag-to-patch** — wire up the existing `CableDrag` infrastructure into a usable patch interaction: click+drag from any port circle to another to create a cable; right-click a cable to delete it.  The overlay already draws cables; the missing piece is the hit-test interaction layer.
 
-- [ ] **UI/UX rework** - Full layout and interaction quality pass. See **[docs/ui-rework.md](docs/ui-rework.md)** for the full issue list. Highest-priority items: (1) cables must not occlude module controls, (2) voice module cards are too narrow, (3) LLM strip needs collapse, (4) module panel internals need skeuomorphic depth — knobs, pads, sliders as physical objects not flat rectangles.
+- [ ] **Sequencer piano-roll note names** — melodic step rows (bass, hoover, AN1X) should show the note name (`C4`, `A#3`) inside each active step cell (or as a tooltip), colored with Huth.
 
-- [ ] **LLM tuning tab in Preferences** - The current settings panel mixes model/context/sampling/personality into a single scrollable list. Split into named tabs: Model, Sampling, Personality, TTS. The Sampling tab exposes ctx_size, top_k, top_p, min_p, repeat_penalty, freq_penalty, seed as an "Advanced / experimental" section, replacing the scroll-through layout. Useful for power users experimenting with different models whose defaults differ from Gemma.
+- [ ] **Per-voice FX send UI** — surface the voice→FX cable routing in a compact matrix view (voice rows × FX columns, checkbox grid), so users can easily route individual voices to specific FX without navigating the full rack overlay.
 
-- [ ] **Bloom post-process / UI polish** - Bloom (egui to wgpu render pass, Gaussian blur on bright pixels, additive blend) is GPU-expensive and may not add much over existing chrome finish. Evaluate after the ui-rework pass.
+- [ ] **Session autosave interval setting** — currently saves on every state change (throttled); add a Preferences option: immediate / 5 s / 30 s / manual only.
+
+- [ ] **Even control spacing / responsive layout** — knobs and sliders in mixed rows should distribute remaining width evenly rather than left-aligning with gaps. egui 0.28 has no built-in flex; requires a pre-pass that computes per-control width from `ui.available_width()` before the draw pass. Must remain consistent when switching knob↔slider mode and across all pad/knob size settings.
+
+---
+
+### Post-release backlog
+
+- [ ] **Multiple voices** — `Vec<SynthVoice>`, each with its own sequencer + oscillator + filter.  LLM can target "voice 2, more acid".
+
+- [ ] **Multiple LLM instances** — one LLM per voice, or a routing matrix.
+
+- [ ] **Modular cable UI** (Reason-style rack flip) — Tab flips to back panel showing I/O ports + Bezier cables.  Infrastructure exists; needs a dedicated drag-to-patch interaction layer.
+
+- [ ] **Separate LLM heat slider** — decouple "LLM temperature" from "jam energy / mutation rate" so they can be tuned independently.  Currently both are driven by the single heat value.
+
+- [ ] **Bloom post-process** — Gaussian blur + additive blend on bright pixels.  Needs custom wgpu render pass; GPU-expensive.  Evaluate after ui-rework pass.
+
+- [ ] **Windows code-signing** — unsigned `.exe` triggers SmartScreen.  Requires EV certificate.  Low priority until meaningful Windows user base.
+
+- [ ] **Alternate tuning tables** — gamelan slendro, just intonation, etc.  Data-modelled; not wired into DSP.
 
 ---
 

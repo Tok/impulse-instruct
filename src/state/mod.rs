@@ -78,6 +78,26 @@ pub fn cycle_param_mode(state: AppState, path: &str) -> AppState {
     s
 }
 
+/// Set a param to a specific mode (Free clears both sets; pure function).
+pub fn set_param_mode(state: AppState, path: &str, mode: ParamMode) -> AppState {
+    let mut s = state;
+    match mode {
+        ParamMode::Free => {
+            s.llm.locked_params.remove(path);
+            s.llm.focused_params.remove(path);
+        }
+        ParamMode::UserOwned => {
+            s.llm.focused_params.remove(path);
+            s.llm.locked_params.insert(path.to_string());
+        }
+        ParamMode::LlmFocus => {
+            s.llm.locked_params.remove(path);
+            s.llm.focused_params.insert(path.to_string());
+        }
+    }
+    s
+}
+
 pub mod ui_prefs;
 pub use ui_prefs::{HuthStyle, KnobSize, KnobStyle, PadSize, UiPrefs};
 
@@ -421,6 +441,10 @@ pub struct FxState {
     pub eq_low_gain: f32, // -1..+1 → -12..+12 dB low shelf (~200 Hz)
     pub eq_mid_gain: f32, // -1..+1 → -12..+12 dB mid peak (~1 kHz)
     pub eq_hi_gain: f32,  // -1..+1 → -12..+12 dB high shelf (~5 kHz)
+    #[serde(default)]
+    pub autotune_amount: f32, // 0–1 → 0..+12 semitones upward pitch shift
+    #[serde(default)]
+    pub autotune_mix: f32, // 0–1 wet/dry
 }
 
 impl Default for FxState {
@@ -459,6 +483,8 @@ impl Default for FxState {
             eq_low_gain: 0.0,
             eq_mid_gain: 0.0,
             eq_hi_gain: 0.0,
+            autotune_amount: 0.0,
+            autotune_mix: 0.0,
         }
     }
 }

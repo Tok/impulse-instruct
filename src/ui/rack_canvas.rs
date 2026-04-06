@@ -17,7 +17,8 @@
 
 use egui::{Color32, Pos2, ScrollArea, Stroke, Vec2};
 
-use crate::state::{ModuleKind, Zone};
+use crate::state::rack::lfo_target_module_kind;
+use crate::state::{LfoTarget, ModuleKind, PortDir, PortKind, PortRef, Zone};
 use crate::ui::module_card::PortPos;
 use crate::ui::{ImpulseApp, module_card};
 
@@ -97,14 +98,29 @@ fn draw_cable(
         Stroke::new(1.0, Color32::from_white_alpha(110)),
     ));
 
-    // ── Signal flow dot — travels from→to at ~0.45 Hz ────────────────────────
+    // ── Signal flow dots — speed and spacing normalised to cable arc length ──────
+    // Arc length from the already-sampled points (free, no extra Bezier evals).
     if animate_flow {
-        let t_dot = (time * 0.45 + phase_offset * 0.3) % 1.0;
-        let dot = bezier(from, cp1, cp2, to, t_dot);
-        // Outer glow
-        painter.circle_filled(dot, 5.0, Color32::from_white_alpha(40));
-        // Core bright dot
-        painter.circle_filled(dot, 2.5, Color32::from_gray(240));
+        let arc_len: f32 = points
+            .windows(2)
+            .map(|w| w[0].distance(w[1]))
+            .sum::<f32>()
+            .max(1.0);
+
+        // Target: ~170 px/s travel speed regardless of cable length.
+        // Clamp so very short or very long cables stay in a sensible range.
+        let speed = (170.0 / arc_len).clamp(0.25, 2.5);
+
+        // Dot spacing: one dot per ~130 px of cable; min 2, max 5.
+        let num_dots = ((arc_len / 130.0).round() as u8).clamp(2, 5);
+        let spacing = 1.0 / num_dots as f32;
+
+        for i in 0..num_dots {
+            let t_dot = (time * speed + phase_offset * 0.3 + i as f32 * spacing) % 1.0;
+            let dot = bezier(from, cp1, cp2, to, t_dot);
+            painter.circle_filled(dot, 5.0, Color32::from_white_alpha(35));
+            painter.circle_filled(dot, 2.5, Color32::from_gray(240));
+        }
     }
 }
 
@@ -147,6 +163,7 @@ const FXMOD_KINDS: &[ModuleKind] = &[
     ModuleKind::FxCompressor,
     ModuleKind::FxTapeSat,
     ModuleKind::FxDrive,
+    ModuleKind::FxAutotune,
     ModuleKind::FxWaveshaper,
     ModuleKind::FxBitcrush,
     ModuleKind::FxRingMod,
@@ -156,6 +173,86 @@ const FXMOD_KINDS: &[ModuleKind] = &[
 // ─── Main rack canvas ─────────────────────────────────────────────────────────
 
 pub fn draw_rack(app: &mut ImpulseApp, ctx: &egui::Context, ui: &mut egui::Ui) {
+    // ── Mode toolbar ─────────────────────────────────────────────────────────
+    // Touch-paint mode (· / U / F) + cable visibility toggle.
+    ui.horizontal(|ui| {
+        ui.label(
+            egui::RichText::new("MODE")
+                .monospace()
+                .size(8.5)
+                .color(Color32::from_gray(80)),
+        );
+        for (label, mode_opt, tip) in [
+            ("·", None, "Normal — drag knobs to change value"),
+            (
+                "U",
+                Some(crate::state::ParamMode::UserOwned),
+                "Lock mode — click a knob to lock it (user-owned)",
+            ),
+            (
+                "F",
+                Some(crate::state::ParamMode::LlmFocus),
+                "Focus mode — click a knob to set LLM focus",
+            ),
+        ] {
+            let active = app.touch_mode == mode_opt;
+            let col = if active {
+                Color32::from_gray(220)
+            } else {
+                Color32::from_gray(110)
+            };
+            let fill = if active {
+                Color32::from_gray(55)
+            } else {
+                Color32::from_gray(22)
+            };
+            if ui
+                .add(
+                    egui::Button::new(egui::RichText::new(label).monospace().size(10.0).color(col))
+                        .fill(fill)
+                        .min_size(egui::vec2(22.0, 18.0)),
+                )
+                .on_hover_text(tip)
+                .clicked()
+            {
+                app.touch_mode = mode_opt;
+            }
+        }
+
+        ui.add_space(8.0);
+        ui.separator();
+        ui.add_space(4.0);
+
+        let cable_col = if app.show_cables {
+            Color32::from_gray(220)
+        } else {
+            Color32::from_gray(90)
+        };
+        let cable_fill = if app.show_cables {
+            Color32::from_gray(55)
+        } else {
+            Color32::from_gray(22)
+        };
+        if ui
+            .add(
+                egui::Button::new(
+                    egui::RichText::new("CABLES")
+                        .monospace()
+                        .size(8.5)
+                        .color(cable_col),
+                )
+                .fill(cable_fill)
+                .min_size(egui::vec2(50.0, 18.0)),
+            )
+            .on_hover_text("Toggle patch cable overlay  [Tab]")
+            .clicked()
+        {
+            app.show_cables = !app.show_cables;
+            app.session_dirty = true;
+        }
+    });
+    ui.add_space(2.0);
+
     // Collect port positions during this frame's render pass.
     let mut ports: Vec<PortPos> = Vec::new();
 
@@ -163,11 +260,12 @@ pub fn draw_rack(app: &mut ImpulseApp, ctx: &egui::Context, ui: &mut egui::Ui) {
     // context menu can cover the entire rack area with a single interact region.
     let canvas_rect = ui.available_rect_before_wrap();
 
-    // Disable drag-to-scroll so cable dragging across the rack doesn't pan it.
-    // Users scroll via mouse wheel or the always-visible scrollbar.
+    // Disable drag-to-scroll only while a cable is being dragged, so normal
+    // two-finger/trackpad scroll works when not patching.
+    let dragging_cable = app.cable_drag.is_some();
     ScrollArea::vertical()
         .id_source("rack_scroll")
-        .drag_to_scroll(false)
+        .drag_to_scroll(!dragging_cable)
         .auto_shrink([false; 2])
         .scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::AlwaysVisible)
         .show(ui, |ui| {
@@ -192,7 +290,7 @@ pub fn draw_rack(app: &mut ImpulseApp, ctx: &egui::Context, ui: &mut egui::Ui) {
             draw_cable(&painter, drag.from_screen, pointer, time, 0.0, false);
         }
 
-        if app.show_cables {
+        if app.show_cables && !app.show_prefs {
             let cables = app.state.read().rack.cables.clone();
             for (ci, cable) in cables.iter().enumerate() {
                 let from_pos = ports
@@ -206,6 +304,66 @@ pub fn draw_rack(app: &mut ImpulseApp, ctx: &egui::Context, ui: &mut egui::Ui) {
                     draw_cable(&painter, from, to, time, phase, true);
                 }
             }
+
+            // Synthesise visual cables for active LFO slots.
+            // The LFO→param connection is a state param (lfo.target), not a rack
+            // cable, so we derive the cable position from current state here.
+            {
+                let state = app.state.read();
+                let lfo_ids: Vec<u32> = state
+                    .rack
+                    .modules
+                    .iter()
+                    .filter(|m| m.kind == ModuleKind::LfoModule)
+                    .map(|m| m.id)
+                    .collect();
+                for (i, lfo_slot) in state.lfo.iter().enumerate() {
+                    if !lfo_slot.enabled || lfo_slot.target == LfoTarget::None {
+                        continue;
+                    }
+                    let Some(&lfo_id) = lfo_ids.get(i) else {
+                        continue;
+                    };
+                    let Some(tgt_kind) = lfo_target_module_kind(lfo_slot.target) else {
+                        continue;
+                    };
+                    let Some(tgt_id) = state
+                        .rack
+                        .modules
+                        .iter()
+                        .find(|m| m.kind == tgt_kind)
+                        .map(|m| m.id)
+                    else {
+                        continue;
+                    };
+                    // Skip if a real rack cable already covers this pair.
+                    if cables
+                        .iter()
+                        .any(|c| c.from.module_id == lfo_id && c.to.module_id == tgt_id)
+                    {
+                        continue;
+                    }
+                    let from_ref = PortRef {
+                        module_id: lfo_id,
+                        dir: PortDir::Out,
+                        kind: PortKind::Cv,
+                        index: 0,
+                    };
+                    let to_ref = PortRef {
+                        module_id: tgt_id,
+                        dir: PortDir::In,
+                        kind: PortKind::Cv,
+                        index: 0,
+                    };
+                    let from_pos = ports.iter().find(|p| p.port == from_ref).map(|p| p.center);
+                    let to_pos = ports.iter().find(|p| p.port == to_ref).map(|p| p.center);
+                    if let (Some(from), Some(to)) = (from_pos, to_pos) {
+                        let phase = (cables.len() + i) as f32 * 2.399;
+                        draw_cable(&painter, from, to, time, phase, true);
+                    }
+                }
+            }
+
             // Animate continuously while cables are visible.
             ctx.request_repaint();
         }
@@ -385,20 +543,59 @@ fn draw_add_menu(app: &mut ImpulseApp, ctx: &egui::Context) {
 }
 
 // Golden-ratio width tiers.  Each module picks one; the layout never recomputes
-// widths based on how many modules are present — this keeps the grid stable.
+// Slot widths use a responsive grid:
 //
-//   full   = available_w           (1 per row — global / sequencer / master)
-//   wide   = available_w / φ       ≈ 61.8 %   (1 per row — complex voices, AN1X)
-//   narrow = available_w / φ²      ≈ 38.2 %   (2 per row — simple voices, FX, LFO)
+//   Global (Sequencer, Master): always full width.
 //
-// Two narrow modules take 76.4 % of the row; three take 114.6 % → wraps to 2+1.
-const PHI: f32 = 1.618034;
+//   Voice modules: minimum 420 px; how many fit per row depends on available_w:
+//     < 840 px  → 1 per row (fills full width)
+//     840-1259  → 2 per row (each ≈ half)
+//     ≥ 1260 px → 3 per row (each ≈ third)
+//   AN1X is "wide" — always takes 2 columns worth (or full width when 1-per-row).
+//
+//   FX / LFO: fixed ~220 px, 4-5 per row.
+
+const VOICE_MIN_W: f32 = 420.0;
+const FX_SLOT_W: f32 = 220.0;
 
 fn module_slot_w(kind: ModuleKind, full_w: f32) -> f32 {
     match kind {
         ModuleKind::StepSequencer | ModuleKind::MasterOutput => full_w,
-        ModuleKind::An1xVoice => full_w / PHI,
-        _ => full_w / (PHI * PHI),
+        // FX and LFO: fixed compact width
+        ModuleKind::FxReverb
+        | ModuleKind::FxDelay
+        | ModuleKind::FxChorus
+        | ModuleKind::FxPhaser
+        | ModuleKind::FxRingMod
+        | ModuleKind::FxWaveshaper
+        | ModuleKind::FxBitcrush
+        | ModuleKind::FxEq
+        | ModuleKind::FxCompressor
+        | ModuleKind::FxTapeSat
+        | ModuleKind::FxDrive
+        | ModuleKind::LfoModule => FX_SLOT_W.min(full_w),
+        // AN1X: wide — 2 voice columns or full width
+        ModuleKind::An1xVoice => {
+            let cols = voice_cols(full_w);
+            if cols >= 2 {
+                (full_w / cols as f32) * 2.0
+            } else {
+                full_w
+            }
+        }
+        // All other voice modules: fill evenly by column count
+        _ => full_w / voice_cols(full_w) as f32,
+    }
+}
+
+/// How many voice columns fit in `full_w` while respecting VOICE_MIN_W.
+fn voice_cols(full_w: f32) -> usize {
+    if full_w >= VOICE_MIN_W * 3.0 {
+        3
+    } else if full_w >= VOICE_MIN_W * 2.0 {
+        2
+    } else {
+        1
     }
 }
 
@@ -431,242 +628,267 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
     let available_w = (ui.available_width() - 8.0).max(200.0);
 
     // ── GLOBAL ZONE — sequencer + master, full width ──────────────────────────
-    module_card::zone_rail(ui, "GLOBAL", false);
-
-    // Sequencer — full available width
     {
-        let seq_id = app
-            .state
-            .read()
-            .rack
-            .modules
-            .iter()
-            .find(|m| m.kind == ModuleKind::StepSequencer)
-            .map(|m| m.id)
-            .unwrap_or(100);
-        let enabled = app
-            .state
-            .read()
-            .rack
-            .modules
-            .iter()
-            .find(|m| m.id == seq_id)
-            .map(|m| m.enabled)
-            .unwrap_or(true);
-
-        let (resp, _) = module_card::module_card(
-            ui,
-            seq_id,
-            ModuleKind::StepSequencer,
-            enabled,
-            Some(available_w - 2.0),
-            ports,
-            |ui| {
-                crate::ui::panels::draw_sequencer(app, ui);
-            },
-        );
-        if resp.toggle_clicked
-            && let Some(m) = app
-                .state
-                .write()
-                .rack
-                .modules
-                .iter_mut()
-                .find(|m| m.id == seq_id)
-        {
-            m.enabled = !m.enabled;
+        let (_, toggle) =
+            module_card::zone_rail(ui, "GLOBAL", false, 24, app.zone_global_collapsed);
+        if toggle {
+            app.zone_global_collapsed = !app.zone_global_collapsed;
         }
     }
 
-    ui.add_space(2.0);
-
-    // Master output card — compact strip showing master volume + per-voice info
-    {
-        let master_id = app
-            .state
-            .read()
-            .rack
-            .modules
-            .iter()
-            .find(|m| m.kind == ModuleKind::MasterOutput)
-            .map(|m| m.id)
-            .unwrap_or(101);
-        let (resp, _) = module_card::module_card(
-            ui,
-            master_id,
-            ModuleKind::MasterOutput,
-            true,
-            Some(available_w - 2.0),
-            ports,
-            |ui| {
-                draw_master_content(app, ui);
-            },
-        );
-        let _ = resp;
-    }
-
-    ui.add_space(2.0);
-
-    // ── VOICE ZONE ────────────────────────────────────────────────────────────
-    if module_card::zone_rail(ui, "VOICES", true) {
-        app.add_menu_zone = Some(Zone::Voice);
-    }
-
-    // Collect voice modules in slot order.
-    let voice_ids: Vec<(u32, ModuleKind, bool)> = {
-        let mut v: Vec<_> = app
-            .state
-            .read()
-            .rack
-            .modules
-            .iter()
-            .filter(|m| m.zone == Zone::Voice)
-            .map(|m| (m.id, m.kind, m.enabled))
-            .collect();
-        v.sort_by_key(|&(id, _, _)| {
-            app.state
+    if !app.zone_global_collapsed {
+        // Sequencer — full available width
+        {
+            let seq_id = app
+                .state
                 .read()
                 .rack
                 .modules
                 .iter()
-                .find(|m| m.id == id)
-                .map(|m| m.slot)
-                .unwrap_or(0)
-        });
-        v
-    };
+                .find(|m| m.kind == ModuleKind::StepSequencer)
+                .map(|m| m.id)
+                .unwrap_or(100);
+            let enabled = app
+                .state
+                .read()
+                .rack
+                .modules
+                .iter()
+                .find(|m| m.id == seq_id)
+                .map(|m| m.enabled)
+                .unwrap_or(true);
 
+            let (resp, _) = module_card::module_card(
+                ui,
+                seq_id,
+                ModuleKind::StepSequencer,
+                enabled,
+                Some(available_w - 2.0),
+                ports,
+                |ui| {
+                    crate::ui::panels::draw_sequencer(app, ui);
+                },
+            );
+            if resp.toggle_clicked
+                && let Some(m) = app
+                    .state
+                    .write()
+                    .rack
+                    .modules
+                    .iter_mut()
+                    .find(|m| m.id == seq_id)
+            {
+                m.enabled = !m.enabled;
+            }
+        }
+
+        ui.add_space(2.0);
+
+        // Master output card — compact strip showing master volume + per-voice info
+        {
+            let master_id = app
+                .state
+                .read()
+                .rack
+                .modules
+                .iter()
+                .find(|m| m.kind == ModuleKind::MasterOutput)
+                .map(|m| m.id)
+                .unwrap_or(101);
+            let (resp, _) = module_card::module_card(
+                ui,
+                master_id,
+                ModuleKind::MasterOutput,
+                true,
+                Some(available_w - 2.0),
+                ports,
+                |ui| {
+                    draw_master_content(app, ui);
+                },
+            );
+            let _ = resp;
+        }
+
+        ui.add_space(2.0);
+    } // end zone_global_collapsed guard
+
+    // ── VOICE ZONE ────────────────────────────────────────────────────────────
+    {
+        let (add, toggle) =
+            module_card::zone_rail(ui, "VOICES", true, 18, app.zone_voice_collapsed);
+        if toggle {
+            app.zone_voice_collapsed = !app.zone_voice_collapsed;
+        }
+        if add {
+            app.add_menu_zone = Some(Zone::Voice);
+        }
+    }
     // Shared ctx clone for drag handling across both zones.
     let ctx_ref = ui.ctx().clone();
 
-    // Voice modules — manual row grouping prevents any module from going off-screen.
-    for row in group_into_rows(&voice_ids, available_w, 4.0) {
-        ui.horizontal(|ui| {
-            ui.spacing_mut().item_spacing = Vec2::new(4.0, 0.0);
-            for (id, kind, enabled) in &row {
-                let slot_w = module_slot_w(*kind, available_w);
-                // Dim the card ghost while it's being dragged
-                let is_dragging = app.module_drag.as_ref().map(|d| d.module_id) == Some(*id);
-                let eff_enabled = if is_dragging { false } else { *enabled };
-                let (resp, _) = module_card::module_card(
-                    ui,
-                    *id,
-                    *kind,
-                    eff_enabled,
-                    Some(slot_w),
-                    ports,
-                    |ui| {
-                        draw_voice_content(app, ui, *kind);
-                    },
-                );
-                if resp.toggle_clicked && !is_dragging {
-                    let en = *enabled;
-                    if let Some(m) = app
-                        .state
-                        .write()
-                        .rack
-                        .modules
-                        .iter_mut()
-                        .find(|m| m.id == *id)
-                    {
-                        m.enabled = !en;
-                    }
-                    app.push_fx_plan();
-                }
-                if resp.remove_clicked {
-                    app.state.write().rack.remove_module(*id);
-                    app.push_fx_plan();
-                }
-                let drop_pos = ctx_ref.pointer_latest_pos().unwrap_or_default();
-                if handle_title_drag(app, &ctx_ref, *id, &resp) {
-                    reorder_module_by_drop(app, *id, drop_pos, Zone::Voice);
-                }
-            }
-        });
-        ui.add_space(4.0);
-    }
-
-    ui.add_space(2.0);
-
-    // ── FX + MOD ZONE ─────────────────────────────────────────────────────────
-    if module_card::zone_rail(ui, "FX + MODULATION", true) {
-        app.add_menu_zone = Some(Zone::FxMod);
-    }
-
-    let fxmod_ids: Vec<(u32, ModuleKind, bool)> = {
-        let mut v: Vec<_> = app
-            .state
-            .read()
-            .rack
-            .modules
-            .iter()
-            .filter(|m| m.zone == Zone::FxMod)
-            .map(|m| (m.id, m.kind, m.enabled))
-            .collect();
-        v.sort_by_key(|&(id, _, _)| {
-            app.state
+    if !app.zone_voice_collapsed {
+        // Collect voice modules in slot order.
+        let voice_ids: Vec<(u32, ModuleKind, bool)> = {
+            let mut v: Vec<_> = app
+                .state
                 .read()
                 .rack
                 .modules
                 .iter()
-                .find(|m| m.id == id)
-                .map(|m| m.slot)
-                .unwrap_or(0)
-        });
-        v
-    };
+                .filter(|m| m.zone == Zone::Voice)
+                .map(|m| (m.id, m.kind, m.enabled))
+                .collect();
+            v.sort_by_key(|&(id, _, _)| {
+                app.state
+                    .read()
+                    .rack
+                    .modules
+                    .iter()
+                    .find(|m| m.id == id)
+                    .map(|m| m.slot)
+                    .unwrap_or(0)
+            });
+            v
+        };
 
-    // FX + Mod modules — manual row grouping, same as voice zone.
-    for row in group_into_rows(&fxmod_ids, available_w, 4.0) {
-        ui.horizontal(|ui| {
-            ui.spacing_mut().item_spacing = Vec2::new(4.0, 0.0);
-            for (id, kind, enabled) in &row {
-                let slot_w = module_slot_w(*kind, available_w);
-                let is_dragging = app.module_drag.as_ref().map(|d| d.module_id) == Some(*id);
-                let eff_enabled = if is_dragging { false } else { *enabled };
-                let (resp, _) = module_card::module_card(
-                    ui,
-                    *id,
-                    *kind,
-                    eff_enabled,
-                    Some(slot_w),
-                    ports,
-                    |ui| {
-                        if *kind == ModuleKind::LfoModule {
-                            draw_lfo_content(app, ui, *id);
-                        } else {
-                            draw_fx_content(app, ui, *kind);
+        // Voice modules — manual row grouping prevents any module from going off-screen.
+        for row in group_into_rows(&voice_ids, available_w, 4.0) {
+            ui.horizontal(|ui| {
+                ui.spacing_mut().item_spacing = Vec2::new(4.0, 0.0);
+                for (id, kind, enabled) in &row {
+                    let slot_w = module_slot_w(*kind, available_w);
+                    // Dim the card ghost while it's being dragged
+                    let is_dragging = app.module_drag.as_ref().map(|d| d.module_id) == Some(*id);
+                    let eff_enabled = if is_dragging { false } else { *enabled };
+                    let (resp, _) = module_card::module_card(
+                        ui,
+                        *id,
+                        *kind,
+                        eff_enabled,
+                        Some(slot_w),
+                        ports,
+                        |ui| {
+                            draw_voice_content(app, ui, *kind);
+                        },
+                    );
+                    if resp.toggle_clicked && !is_dragging {
+                        let en = *enabled;
+                        if let Some(m) = app
+                            .state
+                            .write()
+                            .rack
+                            .modules
+                            .iter_mut()
+                            .find(|m| m.id == *id)
+                        {
+                            m.enabled = !en;
                         }
-                    },
-                );
-                if resp.toggle_clicked && !is_dragging {
-                    let en = *enabled;
-                    if let Some(m) = app
-                        .state
-                        .write()
-                        .rack
-                        .modules
-                        .iter_mut()
-                        .find(|m| m.id == *id)
-                    {
-                        m.enabled = !en;
+                        app.push_fx_plan();
                     }
-                    app.push_fx_plan();
+                    if resp.remove_clicked {
+                        app.state.write().rack.remove_module(*id);
+                        app.push_fx_plan();
+                    }
+                    let drop_pos = ctx_ref.pointer_latest_pos().unwrap_or_default();
+                    if handle_title_drag(app, &ctx_ref, *id, &resp) {
+                        reorder_module_by_drop(app, *id, drop_pos, Zone::Voice);
+                    }
                 }
-                if resp.remove_clicked {
-                    app.state.write().rack.remove_module(*id);
-                    app.push_fx_plan();
-                }
-                let drop_pos = ctx_ref.pointer_latest_pos().unwrap_or_default();
-                if handle_title_drag(app, &ctx_ref, *id, &resp) {
-                    reorder_module_by_drop(app, *id, drop_pos, Zone::FxMod);
-                }
-            }
-        });
-        ui.add_space(4.0);
+            });
+            ui.add_space(4.0);
+        }
+
+        ui.add_space(2.0);
+    } // end zone_voice_collapsed guard
+
+    // ── FX + MOD ZONE ─────────────────────────────────────────────────────────
+    {
+        let (add, toggle) =
+            module_card::zone_rail(ui, "FX + MODULATION", true, 14, app.zone_fxmod_collapsed);
+        if toggle {
+            app.zone_fxmod_collapsed = !app.zone_fxmod_collapsed;
+        }
+        if add {
+            app.add_menu_zone = Some(Zone::FxMod);
+        }
     }
 
-    ui.add_space(4.0);
+    if !app.zone_fxmod_collapsed {
+        let fxmod_ids: Vec<(u32, ModuleKind, bool)> = {
+            let mut v: Vec<_> = app
+                .state
+                .read()
+                .rack
+                .modules
+                .iter()
+                .filter(|m| m.zone == Zone::FxMod)
+                .map(|m| (m.id, m.kind, m.enabled))
+                .collect();
+            v.sort_by_key(|&(id, _, _)| {
+                app.state
+                    .read()
+                    .rack
+                    .modules
+                    .iter()
+                    .find(|m| m.id == id)
+                    .map(|m| m.slot)
+                    .unwrap_or(0)
+            });
+            v
+        };
+
+        // FX + Mod modules — manual row grouping, same as voice zone.
+        for row in group_into_rows(&fxmod_ids, available_w, 4.0) {
+            ui.horizontal(|ui| {
+                ui.spacing_mut().item_spacing = Vec2::new(4.0, 0.0);
+                for (id, kind, enabled) in &row {
+                    let slot_w = module_slot_w(*kind, available_w);
+                    let is_dragging = app.module_drag.as_ref().map(|d| d.module_id) == Some(*id);
+                    let eff_enabled = if is_dragging { false } else { *enabled };
+                    let (resp, _) = module_card::module_card(
+                        ui,
+                        *id,
+                        *kind,
+                        eff_enabled,
+                        Some(slot_w),
+                        ports,
+                        |ui| {
+                            if *kind == ModuleKind::LfoModule {
+                                draw_lfo_content(app, ui, *id);
+                            } else {
+                                draw_fx_content(app, ui, *kind);
+                            }
+                        },
+                    );
+                    if resp.toggle_clicked && !is_dragging {
+                        let en = *enabled;
+                        if let Some(m) = app
+                            .state
+                            .write()
+                            .rack
+                            .modules
+                            .iter_mut()
+                            .find(|m| m.id == *id)
+                        {
+                            m.enabled = !en;
+                        }
+                        app.push_fx_plan();
+                    }
+                    if resp.remove_clicked {
+                        app.state.write().rack.remove_module(*id);
+                        app.push_fx_plan();
+                    }
+                    let drop_pos = ctx_ref.pointer_latest_pos().unwrap_or_default();
+                    if handle_title_drag(app, &ctx_ref, *id, &resp) {
+                        reorder_module_by_drop(app, *id, drop_pos, Zone::FxMod);
+                    }
+                }
+            });
+            ui.add_space(4.0);
+        }
+
+        ui.add_space(4.0);
+    } // end zone_fxmod_collapsed guard
 }
 
 // ─── Module drag helpers ──────────────────────────────────────────────────────

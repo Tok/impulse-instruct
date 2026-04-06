@@ -1,7 +1,7 @@
 // ─── ui/panels/bass.rs ────────────────────────────────────────────────────────
 // Bass synthesizer panel.
 
-use crate::state::{FilterMode, ParamMode, Waveform, cycle_param_mode, param_mode};
+use crate::state::{FilterMode, ParamMode, Waveform, cycle_param_mode, param_mode, set_param_mode};
 use crate::ui::{ImpulseApp, theme, widgets};
 
 pub fn draw_bass(app: &mut ImpulseApp, ui: &mut egui::Ui) {
@@ -57,7 +57,7 @@ pub fn draw_bass(app: &mut ImpulseApp, ui: &mut egui::Ui) {
     let mut changed = false;
 
     let ctrl = widgets::ControlPrefs::from_prefs(&app.state.read().ui_prefs);
-    let xy_size = app.state.read().ui_prefs.pad_size.px() * (88.0 / 26.0);
+    let xy_size = app.state.read().ui_prefs.effective_xy_px();
 
     // Helper macro — avoids repeating the changed/cycle boilerplate 13 times.
     // Not a real macro here; we use a local closure that borrows changed/cycle_paths.
@@ -339,8 +339,14 @@ pub fn draw_bass(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                 }
             }
         }
+        // Touch-paint mode: set to the active mode; otherwise cycle Free→U→F→Free.
+        let tmode = app.touch_mode;
         for path in &cycle_paths {
-            snap = cycle_param_mode(snap, path);
+            snap = if let Some(m) = tmode {
+                set_param_mode(snap, path, m)
+            } else {
+                cycle_param_mode(snap, path)
+            };
         }
         *app.state.write() = snap;
         if changed {
@@ -452,7 +458,10 @@ pub fn draw_bass(app: &mut ImpulseApp, ui: &mut egui::Ui) {
 
     ui.add_space(2.0);
 
-    // Decay envelope visualiser — shows the 303's decay-only filter envelope shape
+    // Decay envelope visualiser — shows the 303's decay-only filter envelope shape.
+    // Width spans both pads (2×xy_size + spacing); height scales with pad size.
+    let env_w = (xy_size * 2.0 + 14.0).max(200.0);
+    let env_h = app.state.read().ui_prefs.effective_env_h();
     ui.horizontal(|ui| {
         ui.label(
             egui::RichText::new("ENV")
@@ -460,7 +469,7 @@ pub fn draw_bass(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                 .monospace()
                 .size(9.0),
         );
-        if widgets::decay_display(ui, &mut decay, env_mod, 100.0, 28.0) {
+        if widgets::decay_display(ui, &mut decay, env_mod, env_w, env_h) {
             let mut snap = app.state.read().clone();
             snap.bass.decay = decay;
             *app.state.write() = snap;

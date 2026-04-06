@@ -27,7 +27,7 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             s.sequencer.running,
             s.sequencer.steps,
             s.sequencer.time_sig_num as usize,
-            s.ui_prefs.pad_size.px(),
+            s.ui_prefs.effective_pad_px(),
             s.sequencer.root_note,
             s.sequencer.scale,
             s.sequencer.scale_snap,
