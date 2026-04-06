@@ -581,27 +581,43 @@ impl ImpulseApp {
                     });
                 }
             }
-            // Handle actions extracted from the LLM JSON (save_project, heat, settings).
+            use crate::llm::LlmAction;
             for action in &out.actions {
                 match action {
-                    crate::llm::LlmAction::SaveProject => {
-                        let state = self.state.read().clone();
-                        match crate::state::save_project(&state) {
-                            Ok(path) => self
-                                .log_text
-                                .push_str(&format!("Project saved → {}\n", path.display())),
-                            Err(e) => self.log_text.push_str(&format!("Save failed: {}\n", e)),
-                        }
+                    LlmAction::SaveProject => {
+                        let msg = match crate::state::save_project(&self.state.read().clone()) {
+                            Ok(p) => format!("Saved → {}\n", p.display()),
+                            Err(e) => format!("Save failed: {e}\n"),
+                        };
+                        self.log_text.push_str(&msg);
                     }
-                    crate::llm::LlmAction::SetHeat(h) => {
+                    LlmAction::SetHeat(h) if !out.is_jam => {
                         self.state.write().llm.heat = *h;
                         self.session_dirty = true;
                     }
-                    crate::llm::LlmAction::SetPersona(p) => {
+                    LlmAction::SetStyle(sid) if !out.is_jam => {
+                        use crate::llm::styles::StyleCatalog;
+                        let cat = StyleCatalog::get();
+                        let resolved = cat
+                            .find_by_id(sid)
+                            .or_else(|| {
+                                let lo = sid.to_lowercase();
+                                cat.styles().iter().find(|s| {
+                                    s.id.to_lowercase() == lo || s.name.to_lowercase() == lo
+                                })
+                            })
+                            .map(|s| s.id.clone());
+                        if let Some(id) = resolved {
+                            self.state.write().llm.active_style = Some(id);
+                        }
+                        self.session_dirty = true;
+                    }
+                    LlmAction::SetHeat(_) | LlmAction::SetStyle(_) => {} // jam: ignore
+                    LlmAction::SetPersona(p) => {
                         self.state.write().llm.persona_name = p.clone();
                         self.session_dirty = true;
                     }
-                    crate::llm::LlmAction::SetConversationMode(m) => {
+                    LlmAction::SetConversationMode(m) => {
                         use crate::state::ConversationMode;
                         let mode = match m.to_lowercase().as_str() {
                             "off" => ConversationMode::Off,
@@ -612,7 +628,7 @@ impl ImpulseApp {
                         self.state.write().llm.conversation_mode = mode;
                         self.session_dirty = true;
                     }
-                    crate::llm::LlmAction::SetJamBars(b) => {
+                    LlmAction::SetJamBars(b) => {
                         self.state.write().llm.jam_bars = *b;
                         self.session_dirty = true;
                     }

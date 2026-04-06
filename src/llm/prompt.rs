@@ -501,12 +501,14 @@ RACK ROUTING — enable/disable modules and wire cables between them:
 SETTINGS — change only when explicitly asked:
   {{"settings": {{
     "heat": 0.3,                 ← jam mutation intensity 0–1 (0=subtle, 1=anything goes)
+    "style": "acid_house",       ← switch active style (use style id from the style list)
     "jam_bars": 4,               ← bars between jam cycles (0=continuous, 1/2/4/8 common values)
     "persona": "PULSE",          ← AI name shown in UI
     "conversation_mode": "producer"  ← "off" | "producer" | "dj" | "mc"
   }}}}
   "save_project": true           ← save current state to project-[timestamp].json
   Only output these when directly commanded. Always acknowledge in _comment what you did.
+  When you set parameters that clearly match a known style, also set "style" to that id.
 
 ═══ OUTPUT FORMAT ═══
 

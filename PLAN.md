@@ -150,6 +150,23 @@ wgpu integration once and implement all effects in that pass.
 - [ ] **Windows code-signing** — unsigned `.exe` triggers SmartScreen.
   Requires EV certificate.  Low priority until meaningful Windows user base.
 
+- [ ] **Smooth style transitions** — when the user changes style in the dropdown,
+  parameters should ramp/lerp to new values instead of jumping instantly.  The
+  `ParamRamp` / `active_ramps` infrastructure already exists; extend it to
+  cover style preset application.  This applies to LLM-driven style changes
+  (`settings.style`) as well as user-initiated dropdown changes.
+
+- [ ] **Bipolar param_control variant** — `param_control` only handles 0–1
+  normalised values.  Controls like `bass.osc_detune` (-1..+1 semitones) bypass
+  the lock/focus system because they don't fit.  Add a bipolar mode to
+  `param_control` (or a new `param_control_bipolar`) so all synth knobs support
+  lock/focus/free toggle uniformly.
+
+- [ ] **Event queue ring visualisation** — render the rtrb audio command ring
+  buffer as a circular display with moving read/write heads, showing fill level
+  and throughput.  Could be a rackable module or an always-on diagnostic in the
+  footer/header.
+
 ---
 
 ## Known Gaps (styles vs synth reality)

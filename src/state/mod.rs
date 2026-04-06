@@ -724,7 +724,7 @@ impl Default for LlmState {
             user_instructions: String::new(),
             persona_name: String::from("PULSE"),
             system_prompt_override: String::new(),
-            enable_thinking: false,
+            enable_thinking: true,
             show_thinking_in_log: true,
             top_k: 64,
             top_p: 0.95,

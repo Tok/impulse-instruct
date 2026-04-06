@@ -141,6 +141,18 @@ pub fn knob(ui: &mut Ui, label: &str, value: &mut f32, mode: ParamMode, size: f3
         *value = (*value - delta.y * 0.005 + delta.x * 0.003).clamp(0.0, 1.0);
         changed = true;
     }
+    // Arrow-key fine adjustment when hovered.
+    if response.hovered() && tmode.is_none() {
+        let step = 0.01;
+        if ui.input(|i| i.key_down(egui::Key::ArrowRight)) {
+            *value = (*value + step).clamp(0.0, 1.0);
+            changed = true;
+        }
+        if ui.input(|i| i.key_down(egui::Key::ArrowLeft)) {
+            *value = (*value - step).clamp(0.0, 1.0);
+            changed = true;
+        }
+    }
 
     if ui.is_rect_visible(rect) {
         let painter = ui.painter();
@@ -528,6 +540,18 @@ pub fn slider_glass(ui: &mut Ui, label: &str, value: &mut f32, mode: ParamMode) 
             *value = ((pos.x - track.min.x) / track.width()).clamp(0.0, 1.0);
             changed = true;
         }
+        // Arrow-key fine adjustment when hovered.
+        if response.hovered() {
+            let step = 0.01;
+            if ui.input(|i| i.key_down(egui::Key::ArrowRight)) {
+                *value = (*value + step).clamp(0.0, 1.0);
+                changed = true;
+            }
+            if ui.input(|i| i.key_down(egui::Key::ArrowLeft)) {
+                *value = (*value - step).clamp(0.0, 1.0);
+                changed = true;
+            }
+        }
 
         if ui.is_rect_visible(track_rect) {
             let painter = ui.painter();
@@ -624,6 +648,18 @@ pub fn knob_chrome(
         let delta = response.drag_delta();
         *value = (*value - delta.y * 0.005 + delta.x * 0.003).clamp(0.0, 1.0);
         changed = true;
+    }
+    // Arrow-key fine adjustment when hovered.
+    if response.hovered() && tmode.is_none() {
+        let step = 0.01;
+        if ui.input(|i| i.key_down(egui::Key::ArrowRight)) {
+            *value = (*value + step).clamp(0.0, 1.0);
+            changed = true;
+        }
+        if ui.input(|i| i.key_down(egui::Key::ArrowLeft)) {
+            *value = (*value - step).clamp(0.0, 1.0);
+            changed = true;
+        }
     }
 
     if ui.is_rect_visible(rect) {

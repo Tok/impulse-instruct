@@ -38,6 +38,7 @@ pub enum LlmInput {
 pub enum LlmAction {
     SaveProject,
     SetHeat(f32),
+    SetStyle(String),
     SetPersona(String),
     SetConversationMode(String),
     SetJamBars(f32),
@@ -568,6 +569,9 @@ impl LlmBackend for LlamaServerBackend {
             if let Some(s) = obj.get("settings").and_then(|v| v.as_object()).cloned() {
                 if let Some(h) = s.get("heat").and_then(|v| v.as_f64()) {
                     actions.push(LlmAction::SetHeat((h as f32).clamp(0.0, 1.0)));
+                }
+                if let Some(st) = s.get("style").and_then(|v| v.as_str()) {
+                    actions.push(LlmAction::SetStyle(st.to_string()));
                 }
                 if let Some(p) = s.get("persona").and_then(|v| v.as_str()) {
                     actions.push(LlmAction::SetPersona(p.to_string()));
