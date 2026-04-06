@@ -83,6 +83,7 @@ jobs:
   # maintainer swaps a pre-built binary for a malicious one before publishing.
   release:
     name: Release build (${{ matrix.target }})
+    needs: test
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ${{ matrix.os }}
     permissions:
@@ -141,6 +142,26 @@ jobs:
         run: |
           cp target/${{ matrix.target }}/release/${{ matrix.binary }} ${{ matrix.asset_name }}
 
+      - name: Bundle config + data files
+        shell: bash
+        run: |
+          # Create a zip containing the binary + required runtime files so
+          # users don't need to clone the repo to get the default configs.
+          mkdir -p bundle/models
+          cp ${{ matrix.asset_name }} bundle/
+          for f in config.json instructions.json styles.json; do
+            [ -f "$f" ] && cp "$f" bundle/
+          done
+          # models/ placeholder so the path exists and the model selector works
+          echo "# Place .gguf model files here. See README for download instructions." > bundle/models/README.md
+          cd bundle
+          if [[ "$RUNNER_OS" == "Windows" ]]; then
+            7z a ../${{ matrix.asset_name }}.zip .
+          else
+            zip -r ../${{ matrix.asset_name }}.zip .
+          fi
+          cd ..
+
       - name: Generate SHA-256 checksum
         shell: bash
         run: |
@@ -161,6 +182,35 @@ jobs:
       - name: Upload to GitHub Release
         uses: softprops/action-gh-release@v2
         with:
+          generate_release_notes: true
+          body: |
+            ## Impulse Instruct ${{ github.ref_name }}
+
+            AI-driven acid/techno sequencer with 303 bass, 808/909 drums, and real-time LLM control.
+
+            ### Quick start
+            1. Download the `.zip` bundle for your platform (includes binary + default configs)
+            2. Extract and place a `.gguf` model file in the `models/` folder (or run `scripts/download-models.sh`)
+            3. Run `impulse-instruct` — the LLM server starts automatically
+
+            ### Verify the binary
+            ```
+            # Check SHA-256 matches the .sha256 file
+            sha256sum impulse-instruct-linux-x86_64
+
+            # Verify SLSA build provenance (requires gh CLI)
+            gh attestation verify impulse-instruct-linux-x86_64 --repo Tok/impulse-instruct
+            ```
+
+            ### System requirements
+            - **Linux**: `libasound2`, `libxcb` (standard on most distros)
+            - **Windows**: Windows 10+ x64, MSVC runtime (usually pre-installed)
+            - **LLM inference**: NVIDIA GPU recommended; CPU inference works but is slow
+
+            ### Recommended models
+            - **Gemma 4 E4B Q4_K_M** (~4.6 GB) — best accuracy, default
+            - **Bonsai 8B Q1_0_g128** (~1.1 GB) — lightweight, requires PrismML llama-server fork
           files: |
             ${{ matrix.asset_name }}
             ${{ matrix.asset_name }}.sha256
+            ${{ matrix.asset_name }}.zip

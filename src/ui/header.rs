@@ -522,14 +522,15 @@ impl ImpulseApp {
                         let api_shown = self.api_port.is_some();
 
                         // Approximate pixel width of every item drawn AFTER the heat slider:
-                        //   sep(12) + KNOBS(70) + sep(12)
+                        //   heat%-dragvalue(44) + sep(8) + KNOBS/SLIDERS-btn(60) + sep(8)
                         //   + MON-label(28) + MON-slider(60) + gap(4)
-                        //   + [VRAM bar+label+RAM bar+label](110) + gap(2)
-                        //   + [API badge](56)
-                        // Tier and pct are painted as overlay on the slider, not separate items.
-                        let fixed_right_w = 12.0
-                            + 70.0
-                            + 12.0
+                        //   + [VRAM bar+label+RAM bar+label](112) + gap(2)
+                        //   + [API badge](58)
+                        // Tier name is painted as overlay on the slider.
+                        let fixed_right_w = 44.0
+                            + 8.0
+                            + 60.0
+                            + 8.0
                             + 28.0
                             + 60.0
                             + 4.0
@@ -537,7 +538,6 @@ impl ImpulseApp {
                             + if api_shown { 58.0 } else { 0.0 };
 
                         let mut heat = self.state.read().llm.heat;
-                        let heat_pct = (heat * 100.0).round() as u32;
                         let (heat_color, heat_tier) = if heat < 0.3 {
                             (theme::ASH, "COOL")
                         } else if heat < 0.6 {
@@ -550,51 +550,52 @@ impl ImpulseApp {
                             (egui::Color32::WHITE, "CHAOS")
                         };
 
-                        // ── HEAT label ────────────────────────────────────────
-                        ui.label(
-                            egui::RichText::new("HEAT")
-                                .color(heat_color)
-                                .monospace()
-                                .size(9.0),
-                        )
-                        .on_hover_text(
-                            "Jam energy and LLM creativity. CHAOS (100%) = maximum disorder.",
-                        );
-
                         // ── HEAT slider — fills all remaining space ───────────
-                        // Tier name and percentage are painted as overlays on the
-                        // slider rect so they don't eat into its width.
+                        // Tier name is painted as an overlay on the left of the
+                        // slider rect; precise % editing is via the DragValue after.
                         let heat_w = (ui.available_width() - fixed_right_w).max(60.0);
                         let (heat_rect, _) =
                             ui.allocate_exact_size(egui::vec2(heat_w, 18.0), egui::Sense::hover());
-                        if ui
-                            .put(
-                                heat_rect,
-                                egui::Slider::new(&mut heat, 0.0..=1.0)
-                                    .show_value(false)
-                                    .trailing_fill(true),
-                            )
-                            .changed()
-                        {
+                        let heat_resp = ui.put(
+                            heat_rect,
+                            egui::Slider::new(&mut heat, 0.0..=1.0)
+                                .show_value(false)
+                                .trailing_fill(true),
+                        );
+                        if heat_resp.changed() {
                             self.state.write().llm.heat = heat;
                         }
-                        // Overlay tier name (left-aligned) and pct (right-aligned).
+                        heat_resp.on_hover_text(
+                            "Jam energy and LLM creativity. CHAOS (100%) = maximum disorder.",
+                        );
+                        // Overlay tier name on left side of slider.
                         if ui.is_rect_visible(heat_rect) {
-                            let p = ui.painter();
-                            p.text(
+                            ui.painter().text(
                                 heat_rect.left_center() + egui::vec2(6.0, 0.0),
                                 egui::Align2::LEFT_CENTER,
                                 heat_tier,
                                 egui::FontId::monospace(8.5),
                                 heat_color,
                             );
-                            p.text(
-                                heat_rect.right_center() - egui::vec2(6.0, 0.0),
-                                egui::Align2::RIGHT_CENTER,
-                                format!("{heat_pct}%"),
-                                egui::FontId::monospace(8.5),
-                                heat_color,
-                            );
+                        }
+
+                        // ── HEAT % DragValue (precise tuning) ─────────────────
+                        let (dv_rect, _) =
+                            ui.allocate_exact_size(egui::vec2(44.0, 18.0), egui::Sense::hover());
+                        let mut heat_pct_f = heat * 100.0;
+                        if ui
+                            .put(
+                                dv_rect,
+                                egui::DragValue::new(&mut heat_pct_f)
+                                    .range(0.0..=100.0)
+                                    .speed(0.5)
+                                    .suffix("%")
+                                    .fixed_decimals(0),
+                            )
+                            .changed()
+                        {
+                            heat = heat_pct_f / 100.0;
+                            self.state.write().llm.heat = heat;
                         }
 
                         ui.separator();
