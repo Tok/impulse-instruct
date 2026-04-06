@@ -296,6 +296,8 @@ impl ImpulseApp {
                     ui.scope(|ui| {
                         ui.set_min_width(190.0);
                         ui.set_max_width(190.0);
+                        ui.spacing_mut().button_padding = egui::vec2(4.0, 1.0);
+                        ui.spacing_mut().item_spacing.x = 4.0;
 
                         let s = self.state.read();
                         let inferring = s.llm.is_inferring;
@@ -447,6 +449,8 @@ impl ImpulseApp {
                     ui.scope(|ui| {
                         ui.set_min_width(150.0);
                         ui.set_max_width(150.0);
+                        ui.spacing_mut().button_padding = egui::vec2(4.0, 1.0);
+                        ui.spacing_mut().item_spacing.x = 4.0;
                         let (running, bpm, live_record) = {
                             let s = self.state.read();
                             (s.sequencer.running, s.sequencer.bpm, s.live_record)
@@ -599,6 +603,9 @@ impl ImpulseApp {
                         // Reserve the rect so egui won't re-use this area.
                         ui.allocate_rect(right_rect, egui::Sense::hover());
                         ui.allocate_ui_at_rect(right_rect, |ui| {
+                            // Tighter button padding for the compact header strip.
+                            ui.spacing_mut().button_padding = egui::vec2(4.0, 1.0);
+                            ui.spacing_mut().item_spacing.x = 4.0;
                             ui.horizontal_centered(|ui| {
                                 // ── HEAT % DragValue ─────────────────────────
                                 let mut heat_pct_f = heat * 100.0;
