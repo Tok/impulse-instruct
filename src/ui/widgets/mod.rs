@@ -23,6 +23,16 @@ fn touch_mode(ui: &Ui) -> Option<ParamMode> {
         .flatten()
 }
 
+/// Check if a directional key is held, including WASD if `wasd_as_arrows` is set.
+/// Reads the flag from egui temp data (written by the update loop each frame).
+fn dir_key_down(ui: &Ui, arrow: egui::Key, wasd: egui::Key) -> bool {
+    let wasd_on = ui
+        .ctx()
+        .data(|d| d.get_temp::<bool>(egui::Id::new("wasd_as_arrows")))
+        .unwrap_or(false);
+    ui.input(|i| i.key_down(arrow) || (wasd_on && i.key_down(wasd)))
+}
+
 // ─── Control preferences ──────────────────────────────────────────────────────
 
 /// Combined rendering mode derived from `UiPrefs`.
@@ -144,11 +154,11 @@ pub fn knob(ui: &mut Ui, label: &str, value: &mut f32, mode: ParamMode, size: f3
     // Arrow-key fine adjustment when hovered.
     if response.hovered() && tmode.is_none() {
         let step = 0.01;
-        if ui.input(|i| i.key_down(egui::Key::ArrowRight)) {
+        if dir_key_down(ui, egui::Key::ArrowRight, egui::Key::D) {
             *value = (*value + step).clamp(0.0, 1.0);
             changed = true;
         }
-        if ui.input(|i| i.key_down(egui::Key::ArrowLeft)) {
+        if dir_key_down(ui, egui::Key::ArrowLeft, egui::Key::A) {
             *value = (*value - step).clamp(0.0, 1.0);
             changed = true;
         }
@@ -652,11 +662,11 @@ pub fn knob_chrome(
     // Arrow-key fine adjustment when hovered.
     if response.hovered() && tmode.is_none() {
         let step = 0.01;
-        if ui.input(|i| i.key_down(egui::Key::ArrowRight)) {
+        if dir_key_down(ui, egui::Key::ArrowRight, egui::Key::D) {
             *value = (*value + step).clamp(0.0, 1.0);
             changed = true;
         }
-        if ui.input(|i| i.key_down(egui::Key::ArrowLeft)) {
+        if dir_key_down(ui, egui::Key::ArrowLeft, egui::Key::A) {
             *value = (*value - step).clamp(0.0, 1.0);
             changed = true;
         }

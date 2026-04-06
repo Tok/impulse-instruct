@@ -464,61 +464,52 @@ impl ImpulseApp {
     }
 
     fn draw_controls_tab(&mut self, ui: &mut egui::Ui) {
-        widgets::section_header(ui, "KNOB LAYOUT");
-        let mut prefs = self.state.read().ui_prefs.clone();
-        let mut dirty = false;
-        // Sliders vs Knobs toggle
-        ui.horizontal(|ui| {
-            ui.label(
-                egui::RichText::new("Control style")
-                    .monospace()
-                    .size(9.5)
-                    .color(theme::FOG),
-            );
-            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                if widgets::toggle_button(
-                    ui,
-                    if prefs.use_sliders {
-                        "SLIDERS"
-                    } else {
-                        "KNOBS"
-                    },
-                    &mut prefs.use_sliders,
-                ) {
-                    dirty = true;
-                }
-            });
-        });
-
-        // Knob style: Flat vs Chrome (only relevant when not using sliders)
-        if !prefs.use_sliders {
+        // Compact helper: label on left, toggle button on right.
+        let toggle_row = |ui: &mut egui::Ui,
+                          label: &str,
+                          on_label: &str,
+                          off_label: &str,
+                          val: &mut bool|
+         -> bool {
             ui.horizontal(|ui| {
                 ui.label(
-                    egui::RichText::new("Knob style")
+                    egui::RichText::new(label)
                         .monospace()
                         .size(9.5)
                         .color(theme::FOG),
                 );
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    use crate::state::KnobStyle;
-                    if widgets::toggle_button(
-                        ui,
-                        if prefs.knob_style == KnobStyle::Chrome {
-                            "CHROME"
-                        } else {
-                            "FLAT"
-                        },
-                        &mut (prefs.knob_style == KnobStyle::Chrome),
-                    ) {
-                        prefs.knob_style = if prefs.knob_style == KnobStyle::Chrome {
-                            KnobStyle::Flat
-                        } else {
-                            KnobStyle::Chrome
-                        };
-                        dirty = true;
-                    }
-                });
-            });
+                    widgets::toggle_button(ui, if *val { on_label } else { off_label }, val)
+                })
+                .inner
+            })
+            .inner
+        };
+
+        widgets::section_header(ui, "KNOB LAYOUT");
+        let mut prefs = self.state.read().ui_prefs.clone();
+        let mut dirty = false;
+        if toggle_row(
+            ui,
+            "Control style",
+            "SLIDERS",
+            "KNOBS",
+            &mut prefs.use_sliders,
+        ) {
+            dirty = true;
+        }
+
+        if !prefs.use_sliders {
+            use crate::state::KnobStyle;
+            let mut chrome = prefs.knob_style == KnobStyle::Chrome;
+            if toggle_row(ui, "Knob style", "CHROME", "FLAT", &mut chrome) {
+                prefs.knob_style = if chrome {
+                    KnobStyle::Chrome
+                } else {
+                    KnobStyle::Flat
+                };
+                dirty = true;
+            }
         }
 
         // Knob size — fibonacci steps + optional custom px
@@ -731,26 +722,30 @@ impl ImpulseApp {
             }
         });
 
+        ui.add_space(4.0);
+        widgets::section_header(ui, "KEYBOARD");
+        if toggle_row(
+            ui,
+            "WASD as arrow keys",
+            "ON",
+            "OFF",
+            &mut prefs.wasd_as_arrows,
+        ) {
+            dirty = true;
+        }
+
         if dirty {
             self.state.write().ui_prefs = prefs;
             self.session_dirty = true;
         }
         ui.add_space(8.0);
         widgets::section_header(ui, "LOCK BEHAVIOUR");
-        ui.horizontal(|ui| {
-            ui.label(
-                egui::RichText::new("Auto-lock on touch")
-                    .monospace()
-                    .size(9.5)
-                    .color(theme::FOG),
-            );
-            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                let mut alt = self.state.read().llm.auto_lock_on_touch;
-                if widgets::toggle_button(ui, if alt { "ON" } else { "OFF" }, &mut alt) {
-                    self.state.write().llm.auto_lock_on_touch = alt;
-                }
-            });
-        });
+        {
+            let mut alt = self.state.read().llm.auto_lock_on_touch;
+            if toggle_row(ui, "Auto-lock on touch", "ON", "OFF", &mut alt) {
+                self.state.write().llm.auto_lock_on_touch = alt;
+            }
+        }
         ui.label(
             egui::RichText::new("  Off: knobs are free — click knob to toggle lock")
                 .monospace()

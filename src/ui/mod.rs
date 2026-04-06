@@ -779,9 +779,13 @@ impl eframe::App for ImpulseApp {
             ctx.set_pixels_per_point(self.native_ppp * ui_scale);
         }
 
-        // Publish touch_mode so widgets can read it without signature changes.
+        // Publish touch_mode + WASD flag so widgets can read them without signature changes.
         ctx.data_mut(|d| {
             d.insert_temp(egui::Id::new("touch_mode"), self.touch_mode);
+            d.insert_temp(
+                egui::Id::new("wasd_as_arrows"),
+                self.state.read().ui_prefs.wasd_as_arrows,
+            );
         });
 
         self.drain_llm_outputs();

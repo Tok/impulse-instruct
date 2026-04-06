@@ -178,8 +178,13 @@ pub fn draw_rack(app: &mut ImpulseApp, ctx: &egui::Context, ui: &mut egui::Ui) {
     let nothing_focused = ctx.memory(|m| m.focused()).is_none();
     if nothing_focused {
         let scroll_speed = 60.0;
-        let up = ctx.input(|i| i.key_down(egui::Key::ArrowUp));
-        let down = ctx.input(|i| i.key_down(egui::Key::ArrowDown));
+        let wasd = ctx
+            .data(|d| d.get_temp::<bool>(egui::Id::new("wasd_as_arrows")))
+            .unwrap_or(false);
+        let up =
+            ctx.input(|i| i.key_down(egui::Key::ArrowUp) || (wasd && i.key_down(egui::Key::W)));
+        let down =
+            ctx.input(|i| i.key_down(egui::Key::ArrowDown) || (wasd && i.key_down(egui::Key::S)));
         if up || down {
             let max_y = (scroll_out.content_size.y - scroll_out.inner_rect.height()).max(0.0);
             let mut state = scroll_out.state;

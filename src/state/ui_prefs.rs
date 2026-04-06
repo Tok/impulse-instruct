@@ -155,6 +155,9 @@ pub struct UiPrefs {
     /// How often the session is auto-saved.
     #[serde(default)]
     pub autosave_interval: AutosaveInterval,
+    /// When true, WASD keys act as arrow keys (scroll rack, turn knobs).
+    #[serde(default)]
+    pub wasd_as_arrows: bool,
 }
 
 impl UiPrefs {
@@ -206,6 +209,7 @@ impl Default for UiPrefs {
             log_level_idx: 2, // Info
             ui_scale: 1.0,
             autosave_interval: AutosaveInterval::Immediate,
+            wasd_as_arrows: false,
         }
     }
 }

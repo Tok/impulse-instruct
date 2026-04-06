@@ -53,6 +53,8 @@ pub struct SessionData {
     #[serde(default)]
     pub autosave_interval: Option<crate::state::AutosaveInterval>,
     #[serde(default)]
+    pub wasd_as_arrows: Option<bool>,
+    #[serde(default)]
     pub enable_thinking: Option<bool>,
     #[serde(default)]
     pub show_thinking_in_log: Option<bool>,
@@ -77,6 +79,7 @@ pub fn save_session(state: &AppState, show_cables: bool) {
         ui_scale: Some(state.ui_prefs.ui_scale),
         log_level_idx: Some(state.ui_prefs.log_level_idx),
         autosave_interval: Some(state.ui_prefs.autosave_interval),
+        wasd_as_arrows: Some(state.ui_prefs.wasd_as_arrows),
         enable_thinking: Some(state.llm.enable_thinking),
         show_thinking_in_log: Some(state.llm.show_thinking_in_log),
         temperature: Some(state.llm.temperature),
@@ -139,6 +142,9 @@ pub fn apply_session(state: &mut AppState, data: SessionData) {
     }
     if let Some(v) = data.autosave_interval {
         state.ui_prefs.autosave_interval = v;
+    }
+    if let Some(v) = data.wasd_as_arrows {
+        state.ui_prefs.wasd_as_arrows = v;
     }
     if let Some(v) = data.enable_thinking {
         state.llm.enable_thinking = v;
