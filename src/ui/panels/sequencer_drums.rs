@@ -264,7 +264,7 @@ pub(super) fn draw_drum_rows(
                 let is_current = abs == voice_cursor;
                 let vel = pattern.get(i).map(|s| s.velocity).unwrap_or(0.0);
                 ui.add_enabled_ui(abs < voice_steps, |ui| {
-                    if widgets::step_button(ui, is_active, is_current, vel, None, pad_px) {
+                    if widgets::step_button(ui, is_active, is_current, vel, None, None, pad_px) {
                         toggled = Some(abs);
                     }
                 });

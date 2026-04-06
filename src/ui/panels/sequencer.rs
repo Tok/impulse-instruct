@@ -385,12 +385,20 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                             let gate = step.map(|s| s.gate).unwrap_or(0.5);
                             widgets::huth_note_cell(ui, note, gate, is_active, is_current, pad_px)
                         } else {
+                            let note = step.map(|s| s.note).unwrap_or(36);
                             let note_col = if is_active {
-                                step.map(|s| theme::note_color(s.note))
+                                Some(theme::note_color(note))
                             } else {
                                 None
                             };
-                            widgets::step_button(ui, is_active, is_current, 1.0, note_col, pad_px)
+                            let label = if is_active {
+                                Some(crate::ui::note_name(note))
+                            } else {
+                                None
+                            };
+                            widgets::step_button(
+                                ui, is_active, is_current, 1.0, note_col, label, pad_px,
+                            )
                         };
                         if clicked {
                             let s = app.state.read().clone();
@@ -521,12 +529,20 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                             let gate = step.map(|s| s.gate).unwrap_or(0.5);
                             widgets::huth_note_cell(ui, note, gate, is_active, is_current, pad_px)
                         } else {
+                            let note = step.map(|s| s.note).unwrap_or(36);
                             let note_col = if is_active {
-                                step.map(|s| theme::note_color(s.note))
+                                Some(theme::note_color(note))
                             } else {
                                 None
                             };
-                            widgets::step_button(ui, is_active, is_current, 1.0, note_col, pad_px)
+                            let label = if is_active {
+                                Some(crate::ui::note_name(note))
+                            } else {
+                                None
+                            };
+                            widgets::step_button(
+                                ui, is_active, is_current, 1.0, note_col, label, pad_px,
+                            )
                         };
                         if clicked {
                             let s = app.state.read().clone();
@@ -587,12 +603,20 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                             let gate = step.map(|s| s.gate).unwrap_or(0.5);
                             widgets::huth_note_cell(ui, note, gate, is_active, is_current, pad_px)
                         } else {
+                            let note = step.map(|s| s.note).unwrap_or(36);
                             let note_col = if is_active {
-                                step.map(|s| theme::note_color(s.note))
+                                Some(theme::note_color(note))
                             } else {
                                 None
                             };
-                            widgets::step_button(ui, is_active, is_current, 1.0, note_col, pad_px)
+                            let label = if is_active {
+                                Some(crate::ui::note_name(note))
+                            } else {
+                                None
+                            };
+                            widgets::step_button(
+                                ui, is_active, is_current, 1.0, note_col, label, pad_px,
+                            )
                         };
                         if clicked {
                             let s = app.state.read().clone();

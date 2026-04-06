@@ -12,6 +12,8 @@ use crate::ui::theme;
 /// `vel` tints the fill when active (0 = dim, 1 = full bright).
 /// `dot_color`: when Some, the button body stays neutral and only a small
 ///   coloured dot is drawn — used for bass steps so the palette stays subtle.
+/// `note_label`: when Some, a tiny note name (e.g. "C4") is drawn in
+///   `dot_color` inside the cell, above the dot. Ignored for drum rows.
 /// `size_px` comes from `UiPrefs.pad_size.px()`.
 pub fn step_button(
     ui: &mut Ui,
@@ -19,6 +21,7 @@ pub fn step_button(
     current: bool,
     vel: f32,
     dot_color: Option<Color32>,
+    note_label: Option<&str>,
     size_px: f32,
 ) -> bool {
     let sz = Vec2::splat(size_px);
@@ -50,6 +53,20 @@ pub fn step_button(
                 let dot_r = (size_px * 0.18).max(2.5);
                 let dot_pos = Pos2::new(inset.center().x, inset.max.y - dot_r - 1.0);
                 painter.circle_filled(dot_pos, dot_r, col);
+                // Note name label above the dot (only when cell is large enough)
+                if let Some(label) = note_label
+                    && size_px >= 26.0
+                {
+                    let font_sz = (size_px * 0.22).clamp(7.0, 10.0);
+                    let text_pos = Pos2::new(inset.center().x, inset.min.y + font_sz * 0.5 + 1.0);
+                    painter.text(
+                        text_pos,
+                        egui::Align2::CENTER_CENTER,
+                        label,
+                        egui::FontId::monospace(font_sz),
+                        col,
+                    );
+                }
             } else {
                 let dim = 0.35_f32 + vel * 0.65;
                 let g = (200.0 * dim) as u8;
@@ -188,6 +205,20 @@ pub fn huth_note_cell(
                     );
                 }
             }
+        }
+
+        // Note name label — top-center of cell, over the Huth fill
+        if active && size_px >= 26.0 {
+            let font_sz = (size_px * 0.22).clamp(7.0, 10.0);
+            let text_pos = Pos2::new(rect.center().x, rect.min.y + font_sz * 0.5 + 2.0);
+            let label = crate::ui::note_name(note);
+            painter.text(
+                text_pos,
+                egui::Align2::CENTER_CENTER,
+                label,
+                egui::FontId::monospace(font_sz),
+                Color32::from_white_alpha(200),
+            );
         }
 
         // Current-step cursor — outer bloom + bright border + inner ring
