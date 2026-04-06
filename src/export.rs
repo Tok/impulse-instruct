@@ -154,7 +154,9 @@ pub fn render_stems(state: &AppState, bars: u32) -> Vec<Stem> {
 
     // Helper: zero all melodic voice volumes in a state clone.
     let silence_melodic = |mut s: AppState| -> AppState {
-        s.bass.volume = 0.0;
+        for v in &mut s.bass_voices {
+            v.synth.volume = 0.0;
+        }
         s.noise_voice.volume = 0.0;
         s.hoover.volume = 0.0;
         s.an1x.volume = 0.0;
@@ -163,7 +165,7 @@ pub fn render_stems(state: &AppState, bars: u32) -> Vec<Stem> {
     };
 
     // ── Bass (TB-303) ─────────────────────────────────────────────────────────
-    if state.bass.volume > 0.01 {
+    if state.bass_voices[0].synth.volume > 0.01 {
         let mut s = silence_drums(state.clone());
         s.noise_voice.volume = 0.0;
         s.hoover.volume = 0.0;
@@ -241,7 +243,9 @@ pub fn render_stems(state: &AppState, bars: u32) -> Vec<Stem> {
     // ── Noise voice ───────────────────────────────────────────────────────────
     if state.noise_voice.enabled && state.noise_voice.volume > 0.01 {
         let mut s = silence_drums(state.clone());
-        s.bass.volume = 0.0;
+        for v in &mut s.bass_voices {
+            v.synth.volume = 0.0;
+        }
         s.hoover.volume = 0.0;
         s.an1x.volume = 0.0;
         s.amen.volume = 0.0;
@@ -254,7 +258,9 @@ pub fn render_stems(state: &AppState, bars: u32) -> Vec<Stem> {
     // ── Hoover ────────────────────────────────────────────────────────────────
     if state.hoover.enabled && state.hoover.volume > 0.01 {
         let mut s = silence_drums(state.clone());
-        s.bass.volume = 0.0;
+        for v in &mut s.bass_voices {
+            v.synth.volume = 0.0;
+        }
         s.noise_voice.volume = 0.0;
         s.an1x.volume = 0.0;
         s.amen.volume = 0.0;
@@ -267,7 +273,9 @@ pub fn render_stems(state: &AppState, bars: u32) -> Vec<Stem> {
     // ── AN1X ─────────────────────────────────────────────────────────────────
     if state.an1x.enabled && state.an1x.volume > 0.01 {
         let mut s = silence_drums(state.clone());
-        s.bass.volume = 0.0;
+        for v in &mut s.bass_voices {
+            v.synth.volume = 0.0;
+        }
         s.noise_voice.volume = 0.0;
         s.hoover.volume = 0.0;
         s.amen.volume = 0.0;

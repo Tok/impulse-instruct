@@ -530,5 +530,6 @@
   "pad_size": "Large",
   "use_sliders": false,
   "ui_scale": 1.0,
-  "log_level_idx": 2
+  "log_level_idx": 2,
+  "autosave_interval": "Immediate"
 }

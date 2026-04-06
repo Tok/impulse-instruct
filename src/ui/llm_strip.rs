@@ -660,7 +660,7 @@ impl ImpulseApp {
                     {
                         let s = self.state.read();
                         let levels: &[(&str, f32)] = &[
-                            ("BAS", s.bass.volume),
+                            ("BAS", s.bass_voices[0].synth.volume),
                             ("K-A", s.kit_a.kick.volume),
                             ("S-A", s.kit_a.snare.volume),
                             ("HH", s.kit_a.hihat_closed.volume),

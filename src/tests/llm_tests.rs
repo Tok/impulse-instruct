@@ -19,7 +19,7 @@ mod prompt_tests {
     #[test]
     fn build_system_prompt_reflects_current_cutoff() {
         let mut state = AppState::default();
-        state.bass.cutoff = 0.5; // exact f32 representation
+        state.bass_voices[0].synth.cutoff = 0.5; // exact f32 representation
         let prompt = build_system_prompt(&state);
         assert!(
             prompt.contains("0.5"),
@@ -291,14 +291,14 @@ mod style_tests {
     fn acid_classic_baseline_is_acid_character() {
         let state = apply_baseline("acid_classic");
         assert!(
-            state.bass.resonance >= 0.7,
+            state.bass_voices[0].synth.resonance >= 0.7,
             "acid needs high resonance (≥0.7), got {}",
-            state.bass.resonance
+            state.bass_voices[0].synth.resonance
         );
         assert!(
-            state.bass.env_mod >= 0.6,
+            state.bass_voices[0].synth.env_mod >= 0.6,
             "acid needs high env_mod (≥0.6), got {}",
-            state.bass.env_mod
+            state.bass_voices[0].synth.env_mod
         );
         assert!(
             state.sequencer.bpm >= 112.0 && state.sequencer.bpm <= 130.0,

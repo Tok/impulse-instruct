@@ -64,15 +64,15 @@ pub fn build_system_prompt(state: &AppState) -> String {
 
     let current_json = serde_json::to_string_pretty(&serde_json::json!({
         "bass": {
-            "cutoff": state.bass.cutoff,
-            "resonance": state.bass.resonance,
-            "env_mod": state.bass.env_mod,
-            "decay": state.bass.decay,
-            "accent_level": state.bass.accent_level,
-            "waveform": format!("{:?}", state.bass.waveform),
-            "filter_mode": format!("{:?}", state.bass.filter_mode),
-            "distortion": state.bass.distortion,
-            "volume": state.bass.volume
+            "cutoff": state.bass_voices[0].synth.cutoff,
+            "resonance": state.bass_voices[0].synth.resonance,
+            "env_mod": state.bass_voices[0].synth.env_mod,
+            "decay": state.bass_voices[0].synth.decay,
+            "accent_level": state.bass_voices[0].synth.accent_level,
+            "waveform": format!("{:?}", state.bass_voices[0].synth.waveform),
+            "filter_mode": format!("{:?}", state.bass_voices[0].synth.filter_mode),
+            "distortion": state.bass_voices[0].synth.distortion,
+            "volume": state.bass_voices[0].synth.volume
         },
         "sequencer": {
             "bpm": state.sequencer.bpm,

@@ -31,6 +31,7 @@ pub mod an1x;
 pub use an1x::{An1xLfoTarget, An1xState, An1xWave};
 
 pub const MAX_STEPS: usize = 64;
+pub const MAX_BASS_VOICES: usize = 4;
 
 // ─── Param control mode (tristate) ───────────────────────────────────────────
 
@@ -140,7 +141,12 @@ fn default_pattern_bank() -> Vec<SequencerState> {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct AppState {
-    pub bass: BassState,
+    /// All bass synth voices (1 active minimum; up to MAX_BASS_VOICES).
+    #[serde(default = "default_bass_voices")]
+    pub bass_voices: Vec<BassVoiceState>,
+    /// Which voice index is currently selected in the UI / being edited.
+    #[serde(default)]
+    pub active_voice: usize,
     pub kit_a: DrumKit808,
     pub kit_b: DrumKit909,
     pub sequencer: SequencerState,
@@ -186,7 +192,8 @@ pub struct AppState {
 impl Default for AppState {
     fn default() -> Self {
         Self {
-            bass: Default::default(),
+            bass_voices: default_bass_voices(),
+            active_voice: 0,
             kit_a: Default::default(),
             kit_b: Default::default(),
             sequencer: Default::default(),
@@ -255,6 +262,68 @@ impl Default for BassState {
             fm_depth: 0.0,
         }
     }
+}
+
+// ─── Multi-voice bass ─────────────────────────────────────────────────────────
+
+/// One bass voice slot: a `BassState` synth engine + per-voice musical context.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct BassVoiceState {
+    /// Synth parameters for this voice (identical layout to the legacy `BassState`).
+    pub synth: BassState,
+    /// Tonic note override (0=C … 11=B). Only used when `lock_key` is false.
+    pub root_note: u8,
+    /// Scale override. Only used when `lock_key` is false.
+    pub scale: Scale,
+    /// When true, use the global `sequencer.root_note` / `sequencer.scale` instead.
+    pub lock_key: bool,
+    /// Whether this voice is active. Voice 0 is always on; voices 1-3 can be toggled.
+    pub enabled: bool,
+}
+
+impl Default for BassVoiceState {
+    fn default() -> Self {
+        Self {
+            synth: BassState::default(),
+            root_note: 9, // A — matches the default starter pattern
+            scale: Scale::NaturalMinor,
+            lock_key: true, // follow the global key by default
+            enabled: false, // voices 1-3 start disabled; voice 0 is always enabled
+        }
+    }
+}
+
+fn default_bass_voices() -> Vec<BassVoiceState> {
+    let mut voices: Vec<BassVoiceState> = (0..MAX_BASS_VOICES)
+        .map(|_| BassVoiceState::default())
+        .collect();
+    // Voice 0 is always enabled
+    voices[0].enabled = true;
+    voices
+}
+
+fn default_bass_patterns() -> Vec<Vec<TB303Step>> {
+    // Voice 0 gets the same starter pattern as `bass_pattern`; voices 1-3 are silent.
+    let mut patterns = Vec::with_capacity(MAX_BASS_VOICES);
+
+    // Voice 0: A minor starter pattern (mirrors SequencerState default)
+    let mut p0 = vec![TB303Step::default(); MAX_STEPS];
+    let bass_notes: &[(usize, u8)] = &[(0, 45), (6, 48), (12, 52)];
+    for &(step, note) in bass_notes {
+        p0[step].active = true;
+        p0[step].note = note;
+    }
+    patterns.push(p0);
+
+    // Voices 1-3: silent
+    for _ in 1..MAX_BASS_VOICES {
+        patterns.push(vec![TB303Step::default(); MAX_STEPS]);
+    }
+    patterns
+}
+
+fn default_bass_voice_steps() -> Vec<usize> {
+    vec![16usize; MAX_BASS_VOICES]
 }
 
 // ─── Sequencer ───────────────────────────────────────────────────────────────
@@ -329,6 +398,12 @@ pub struct SequencerState {
     pub bass_steps: usize,
     pub hoover_steps: usize,
     pub an1x_steps: usize,
+    /// Per-voice bass patterns for multi-voice support. Voice 0 mirrors `bass_pattern`.
+    #[serde(default = "default_bass_patterns")]
+    pub bass_patterns: Vec<Vec<TB303Step>>,
+    /// Per-voice step counts for bass voices. Voice 0 mirrors `bass_steps`.
+    #[serde(default = "default_bass_voice_steps")]
+    pub bass_voice_steps: Vec<usize>,
     /// Drum voices that are muted (never trigger regardless of pattern).
     pub muted_drums: std::collections::HashSet<DrumVoice>,
     /// Drum voices in solo mode. When non-empty, only these voices trigger.
@@ -385,7 +460,7 @@ impl Default for SequencerState {
             swing: 0.0,
             time_sig_num: 4,
             drum_patterns,
-            bass_pattern,
+            bass_pattern: bass_pattern.clone(),
             hoover_pattern: vec![TB303Step::default(); MAX_STEPS],
             an1x_pattern: vec![TB303Step::default(); MAX_STEPS],
             root_note: 9, // A — the starter pattern is A minor
@@ -398,6 +473,15 @@ impl Default for SequencerState {
             muted_drums: std::collections::HashSet::new(),
             soloed_drums: std::collections::HashSet::new(),
             midi_clock_sync: false,
+            bass_patterns: {
+                // Voice 0 = same starter pattern; voices 1-3 = silent
+                let mut pats = vec![bass_pattern];
+                for _ in 1..MAX_BASS_VOICES {
+                    pats.push(vec![TB303Step::default(); MAX_STEPS]);
+                }
+                pats
+            },
+            bass_voice_steps: vec![16usize; MAX_BASS_VOICES],
         }
     }
 }
@@ -656,6 +740,7 @@ impl Default for LlmState {
 }
 
 pub mod jam_tools;
+pub mod llm_apply;
 pub(crate) mod llm_helpers;
 pub mod transitions;
 

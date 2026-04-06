@@ -101,8 +101,12 @@ pub fn build_style_specs() -> Vec<StyleSpec> {
             prompt: "FULL RESET to classic acid — TB-303, squelchy resonance, hypnotic pattern",
             checks: vec![
                 Check::bpm("bpm 112–130", 112.0, 130.0),
-                Check::ge("resonance ≥0.68", |s| s.bass.resonance, 0.68),
-                Check::ge("env_mod ≥0.55", |s| s.bass.env_mod, 0.55),
+                Check::ge(
+                    "resonance ≥0.68",
+                    |s| s.bass_voices[0].synth.resonance,
+                    0.68,
+                ),
+                Check::ge("env_mod ≥0.55", |s| s.bass_voices[0].synth.env_mod, 0.55),
                 Check::bool_eq("hoover off", |s| s.hoover.enabled, false),
                 Check::new("reverb low (acid is dry)", |s| {
                     if s.fx.reverb_mix <= 0.2 {
@@ -121,8 +125,12 @@ pub fn build_style_specs() -> Vec<StyleSpec> {
             prompt: "FULL RESET to acid techno — harder and faster than acid house, more industrial edge",
             checks: vec![
                 Check::bpm("bpm 128–148", 128.0, 148.0),
-                Check::ge("resonance ≥0.72", |s| s.bass.resonance, 0.72),
-                Check::ge("env_mod ≥0.60", |s| s.bass.env_mod, 0.60),
+                Check::ge(
+                    "resonance ≥0.72",
+                    |s| s.bass_voices[0].synth.resonance,
+                    0.72,
+                ),
+                Check::ge("env_mod ≥0.60", |s| s.bass_voices[0].synth.env_mod, 0.60),
             ],
         },
         StyleSpec {
@@ -203,7 +211,7 @@ pub fn build_style_specs() -> Vec<StyleSpec> {
                 Check::bpm("bpm ≤125", 0.0, 125.0),
                 Check::ge("reverb_mix ≥0.60", |s| s.fx.reverb_mix, 0.60),
                 Check::ge("reverb_size ≥0.75", |s| s.fx.reverb_size, 0.75),
-                Check::ge("bass.decay ≥0.60", |s| s.bass.decay, 0.60),
+                Check::ge("bass.decay ≥0.60", |s| s.bass_voices[0].synth.decay, 0.60),
                 Check::bool_eq("an1x pad enabled", |s| s.an1x.enabled, true),
             ],
         },
@@ -243,7 +251,11 @@ pub fn build_style_specs() -> Vec<StyleSpec> {
             checks: vec![
                 Check::ge("reverb_mix ≥0.75", |s| s.fx.reverb_mix, 0.75),
                 Check::ge("reverb_size ≥0.88", |s| s.fx.reverb_size, 0.88),
-                Check::ge("bass.decay ≥0.80 (slow drone)", |s| s.bass.decay, 0.80),
+                Check::ge(
+                    "bass.decay ≥0.80 (slow drone)",
+                    |s| s.bass_voices[0].synth.decay,
+                    0.80,
+                ),
                 Check::bool_eq("an1x pad enabled", |s| s.an1x.enabled, true),
                 Check::new("no kick drums", |s| {
                     let kicks = s
@@ -274,7 +286,7 @@ pub fn build_style_specs() -> Vec<StyleSpec> {
                 Check::bpm("bpm ≤80", 0.0, 80.0),
                 Check::ge("reverb_mix ≥0.70", |s| s.fx.reverb_mix, 0.70),
                 Check::ge("reverb_size ≥0.85", |s| s.fx.reverb_size, 0.85),
-                Check::ge("bass.decay ≥0.75", |s| s.bass.decay, 0.75),
+                Check::ge("bass.decay ≥0.75", |s| s.bass_voices[0].synth.decay, 0.75),
                 Check::new("no kick or hihat", |s| {
                     let active = |voice: DrumVoice| {
                         s.sequencer
@@ -353,7 +365,7 @@ pub fn build_style_specs() -> Vec<StyleSpec> {
                      intricate hihats, deep Reese sub bass, no 4-on-floor kick",
             checks: vec![
                 Check::bpm("bpm 165–185", 165.0, 185.0),
-                Check::ge("bass volume ≥0.75", |s| s.bass.volume, 0.75),
+                Check::ge("bass volume ≥0.75", |s| s.bass_voices[0].synth.volume, 0.75),
                 Check::new("kick NOT 4-on-floor (DnB two-step)", |s| {
                     // Pure 4-on-floor = steps 0,4,8,12 only — DnB should deviate
                     let p = s.sequencer.drum_patterns.get(&DrumVoice::Kick808);
@@ -429,7 +441,7 @@ pub fn build_style_specs() -> Vec<StyleSpec> {
                 Check::bpm("bpm 155–175", 155.0, 175.0),
                 Check::ge(
                     "bass.decay ≤0.45 (tight, punchy)",
-                    |s| 0.45 - s.bass.decay,
+                    |s| 0.45 - s.bass_voices[0].synth.decay,
                     0.0,
                 ),
                 Check::new("kick NOT 4-on-floor (jungle is syncopated)", |s| {
@@ -507,12 +519,12 @@ pub fn build_style_specs() -> Vec<StyleSpec> {
                 Check::bpm("bpm 70–130 (baroque range)", 70.0, 130.0),
                 Check::bool_eq("an1x enabled (piano voice)", |s| s.an1x.enabled, true),
                 Check::new("bass silent (no bass in baroque)", |s| {
-                    if s.bass.volume <= 0.05 {
+                    if s.bass_voices[0].synth.volume <= 0.05 {
                         CheckResult::Pass
                     } else {
                         CheckResult::Fail(format!(
                             "bass.volume={:.2} — baroque piano should have no bass line",
-                            s.bass.volume
+                            s.bass_voices[0].synth.volume
                         ))
                     }
                 }),
@@ -575,7 +587,7 @@ pub fn build_style_specs() -> Vec<StyleSpec> {
                 Check::bool_eq("hoover off", |s| s.hoover.enabled, false),
                 Check::ge(
                     "bass.decay ≥0.40 (longer than acid)",
-                    |s| s.bass.decay,
+                    |s| s.bass_voices[0].synth.decay,
                     0.40,
                 ),
             ],

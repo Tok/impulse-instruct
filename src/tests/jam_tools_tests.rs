@@ -272,8 +272,11 @@ fn behaviour_aliases_work() {
 #[test]
 fn behaviour_tension_lowers_cutoff() {
     let state = AppState::default();
-    let before = state.bass.cutoff;
+    let before = state.bass_voices[0].synth.cutoff;
     let out = apply_behaviour(state, "tension", 0.5);
     // tension lowers cutoff
-    assert!(out.bass.cutoff < before, "tension should lower bass cutoff");
+    assert!(
+        out.bass_voices[0].synth.cutoff < before,
+        "tension should lower bass cutoff"
+    );
 }
