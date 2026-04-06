@@ -376,10 +376,31 @@ impl ImpulseApp {
                                                 .size(9.0)
                                                 .monospace(),
                                         );
-                                        ui.add_sized(
-                                            [38.0, 6.0],
-                                            egui::ProgressBar::new(ctx_pct / 100.0),
+                                        // Context bar (same style as VRAM/RAM bars)
+                                        ui.label(
+                                            egui::RichText::new("CTX")
+                                                .color(ctx_color)
+                                                .monospace()
+                                                .size(8.0),
                                         );
+                                        let ctx_frac = (ctx_pct / 100.0).clamp(0.0, 1.0);
+                                        let (br, _) = ui.allocate_exact_size(
+                                            egui::vec2(80.0, 5.0),
+                                            egui::Sense::hover(),
+                                        );
+                                        let p = ui.painter();
+                                        p.rect_filled(br, 1.0, egui::Color32::from_gray(38));
+                                        let fw = (br.width() * ctx_frac).max(0.0);
+                                        if fw > 0.0 {
+                                            p.rect_filled(
+                                                egui::Rect::from_min_size(
+                                                    br.min,
+                                                    egui::vec2(fw, br.height()),
+                                                ),
+                                                1.0,
+                                                ctx_color,
+                                            );
+                                        }
                                         ui.label(
                                             egui::RichText::new(format!("{ctx_used}/{ctx_max}"))
                                                 .color(ctx_color)
@@ -564,6 +585,7 @@ impl ImpulseApp {
                         let track_w = (left_w - LABEL_W - DRAG_W - item_sp * 2.0).max(40.0);
 
                         ui.vertical(|ui| {
+                            ui.spacing_mut().item_spacing.y = 1.0;
                             // ── Row 1: HEAT label + slider + value + right controls
                             ui.horizontal(|ui| {
                                 ui.spacing_mut().item_spacing.x = 4.0;
