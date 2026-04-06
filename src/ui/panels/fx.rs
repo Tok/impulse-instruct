@@ -2,10 +2,156 @@
 // FX chain panel — all groups in a horizontal_wrapped flow inside a ScrollArea.
 
 use crate::state::ParamMode;
+use crate::state::rack::{ModuleKind, PortDir, PortKind, PortRef};
 use crate::ui::{ImpulseApp, theme, widgets};
+
+// Voice sources and FX destinations shown in the send matrix.
+const VOICE_KINDS: &[ModuleKind] = &[
+    ModuleKind::AcidBass,
+    ModuleKind::DrumKit808,
+    ModuleKind::DrumKit909,
+    ModuleKind::HooverLead,
+    ModuleKind::An1xVoice,
+    ModuleKind::AmenSampler,
+    ModuleKind::NoiseVoice,
+];
+const VOICE_LABELS: &[&str] = &["BASS", "808", "909", "HOV", "AN1X", "AMEN", "NOISE"];
+const FX_KINDS: &[ModuleKind] = &[
+    ModuleKind::FxReverb,
+    ModuleKind::FxDelay,
+    ModuleKind::FxChorus,
+    ModuleKind::FxPhaser,
+    ModuleKind::FxWaveshaper,
+    ModuleKind::FxBitcrush,
+    ModuleKind::FxEq,
+    ModuleKind::FxCompressor,
+    ModuleKind::FxTapeSat,
+    ModuleKind::FxDrive,
+    ModuleKind::FxRingMod,
+    ModuleKind::FxAutotune,
+];
+const FX_LABELS: &[&str] = &[
+    "REV", "DLY", "CHR", "PHS", "WVS", "BIT", "EQ", "CMP", "TAPE", "DRV", "RING", "AUTO",
+];
+
+fn draw_send_matrix(app: &mut ImpulseApp, ui: &mut egui::Ui) {
+    let rack = app.state.read().rack.clone();
+
+    // Build a lookup: ModuleKind → module_id (first match)
+    let id_of = |kind: ModuleKind| -> Option<u32> {
+        rack.modules.iter().find(|m| m.kind == kind).map(|m| m.id)
+    };
+
+    // Check if a voice→fx cable exists
+    let has_cable = |v_id: u32, fx_id: u32| -> bool {
+        rack.cables.iter().any(|c| {
+            c.from.module_id == v_id
+                && c.from.dir == PortDir::Out
+                && c.to.module_id == fx_id
+                && c.to.dir == PortDir::In
+        })
+    };
+
+    ui.add_space(2.0);
+
+    // Header row: FX column labels
+    egui::Grid::new("fx_send_matrix")
+        .spacing([1.0, 1.0])
+        .show(ui, |ui| {
+            // Top-left corner cell
+            ui.label(
+                egui::RichText::new("")
+                    .monospace()
+                    .size(7.0)
+                    .color(theme::PIT),
+            );
+            for &fx_label in FX_LABELS {
+                ui.label(
+                    egui::RichText::new(fx_label)
+                        .monospace()
+                        .size(7.0)
+                        .color(theme::PIT),
+                );
+            }
+            ui.end_row();
+
+            // One row per voice
+            let mut toggle: Option<(u32, u32, bool)> = None; // (v_id, fx_id, currently_connected)
+            for (vi, &vkind) in VOICE_KINDS.iter().enumerate() {
+                let Some(v_id) = id_of(vkind) else {
+                    ui.end_row();
+                    continue;
+                };
+                ui.label(
+                    egui::RichText::new(VOICE_LABELS[vi])
+                        .monospace()
+                        .size(7.0)
+                        .color(theme::SMOKE),
+                );
+                for &fxkind in FX_KINDS {
+                    let Some(fx_id) = id_of(fxkind) else {
+                        ui.label("");
+                        continue;
+                    };
+                    let connected = has_cable(v_id, fx_id);
+                    let dot = if connected { "◼" } else { "◻" };
+                    let col = if connected { theme::FOG } else { theme::PIT };
+                    let resp = ui.add(
+                        egui::Label::new(egui::RichText::new(dot).monospace().size(9.0).color(col))
+                            .sense(egui::Sense::click()),
+                    );
+                    if resp.clicked() {
+                        toggle = Some((v_id, fx_id, connected));
+                    }
+                }
+                ui.end_row();
+            }
+
+            // Apply toggle after the immutable borrow of rack is done
+            if let Some((v_id, fx_id, was_connected)) = toggle {
+                let mut s = app.state.write();
+                if was_connected {
+                    let from = PortRef {
+                        module_id: v_id,
+                        dir: PortDir::Out,
+                        kind: PortKind::Audio,
+                        index: 0,
+                    };
+                    let to = PortRef {
+                        module_id: fx_id,
+                        dir: PortDir::In,
+                        kind: PortKind::Audio,
+                        index: 0,
+                    };
+                    s.rack.disconnect(&from, &to);
+                } else {
+                    let from = PortRef {
+                        module_id: v_id,
+                        dir: PortDir::Out,
+                        kind: PortKind::Audio,
+                        index: 0,
+                    };
+                    let to = PortRef {
+                        module_id: fx_id,
+                        dir: PortDir::In,
+                        kind: PortKind::Audio,
+                        index: 0,
+                    };
+                    s.rack.connect(from, to);
+                }
+                drop(s);
+                app.push_fx_plan();
+            }
+        });
+
+    ui.add_space(2.0);
+    ui.separator();
+    ui.add_space(2.0);
+}
 
 pub fn draw_fx(app: &mut ImpulseApp, ui: &mut egui::Ui) {
     widgets::section_header(ui, "FX CHAIN");
+    draw_send_matrix(app, ui);
 
     // Snapshot all FX values before any widget call
     let (
