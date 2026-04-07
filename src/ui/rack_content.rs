@@ -310,83 +310,195 @@ pub(super) fn draw_master_content(app: &mut ImpulseApp, ui: &mut egui::Ui) {
 pub(super) fn draw_llm_agent_content(app: &mut ImpulseApp, ui: &mut egui::Ui, module_id: u32) {
     use crate::ui::theme;
 
-    let (persona, heat, temp, jam_bars, last_resp, tps, cycles, inferring) = {
+    let agent_idx = {
         let s = app.state.read();
-        let agent = s.llm_agents.iter().find(|a| a.id == module_id);
-        match agent {
-            Some(a) => (
-                a.persona_name.clone(),
-                a.heat,
-                a.temperature,
-                a.jam_bars,
-                a.last_response.clone(),
-                a.tokens_per_sec,
-                a.jam_cycle_count,
-                a.is_inferring,
-            ),
-            None => return,
-        }
+        s.llm_agents.iter().position(|a| a.id == module_id)
+    };
+    let Some(idx) = agent_idx else { return };
+
+    // Snapshot mutable fields for editing
+    let (mut persona, mut heat, mut temp, mut jam_bars, last_resp, tps, cycles, inferring, scope) = {
+        let s = app.state.read();
+        let a = &s.llm_agents[idx];
+        (
+            a.persona_name.clone(),
+            a.heat,
+            a.temperature,
+            a.jam_bars,
+            a.last_response.clone(),
+            a.tokens_per_sec,
+            a.jam_cycle_count,
+            a.is_inferring,
+            a.scope.clone(),
+        )
     };
 
+    // ── Persona name + inference indicator ───────────────────────────────
     ui.horizontal(|ui| {
         let inf_col = if inferring { theme::CHALK } else { theme::ASH };
         ui.label(egui::RichText::new("●").color(inf_col).size(10.0));
-        ui.label(
-            egui::RichText::new(&persona)
-                .color(theme::FOG)
-                .monospace()
-                .size(10.0),
+        let resp = ui.add(
+            egui::TextEdit::singleline(&mut persona)
+                .desired_width(120.0)
+                .font(egui::FontId::monospace(9.5))
+                .text_color(theme::FOG),
         );
+        if resp.changed() {
+            app.state.write().llm_agents[idx].persona_name = persona;
+        }
     });
+
+    // ── Heat / Temp / Bars controls ──────────────────────────────────────
     ui.horizontal(|ui| {
+        ui.spacing_mut().item_spacing.x = 4.0;
         ui.label(
-            egui::RichText::new(format!("HEAT {:.0}%", heat * 100.0))
+            egui::RichText::new("H")
                 .color(theme::ASH)
                 .monospace()
-                .size(8.5),
+                .size(8.0),
         );
+        if ui
+            .add(
+                egui::DragValue::new(&mut heat)
+                    .range(0.0..=1.0)
+                    .speed(0.01)
+                    .fixed_decimals(2),
+            )
+            .changed()
+        {
+            app.state.write().llm_agents[idx].heat = heat;
+        }
         ui.label(
-            egui::RichText::new(format!("TEMP {:.2}", temp))
+            egui::RichText::new("T")
                 .color(theme::ASH)
                 .monospace()
-                .size(8.5),
+                .size(8.0),
         );
+        if ui
+            .add(
+                egui::DragValue::new(&mut temp)
+                    .range(0.0..=2.0)
+                    .speed(0.01)
+                    .fixed_decimals(2),
+            )
+            .changed()
+        {
+            app.state.write().llm_agents[idx].temperature = temp;
+        }
         ui.label(
-            egui::RichText::new(format!(
-                "BARS {}",
-                if jam_bars == 0.0 {
-                    "∞".to_string()
-                } else {
-                    format!("{:.0}", jam_bars)
-                }
-            ))
-            .color(theme::ASH)
-            .monospace()
-            .size(8.5),
+            egui::RichText::new("B")
+                .color(theme::ASH)
+                .monospace()
+                .size(8.0),
         );
+        if ui
+            .add(
+                egui::DragValue::new(&mut jam_bars)
+                    .range(0.0..=16.0)
+                    .speed(0.5)
+                    .fixed_decimals(0),
+            )
+            .on_hover_text("Bars between jam cycles (0 = continuous)")
+            .changed()
+        {
+            app.state.write().llm_agents[idx].jam_bars = jam_bars;
+        }
     });
-    // Last response snippet
+
+    // ── Scope checkboxes ─────────────────────────────────────────────────
+    const SCOPE_KEYS: &[(&str, &str)] = &[
+        ("bass", "BASS"),
+        ("kit_a", "808"),
+        ("kit_b", "909"),
+        ("hoover", "HOV"),
+        ("an1x", "AN1X"),
+        ("fx", "FX"),
+        ("sequencer", "SEQ"),
+        ("noise", "NSE"),
+        ("lfo", "LFO"),
+    ];
+    ui.horizontal_wrapped(|ui| {
+        ui.spacing_mut().item_spacing = egui::vec2(2.0, 1.0);
+        let all = scope.is_empty();
+        // "ALL" toggle
+        let all_col = if all { theme::CHALK } else { theme::ASH };
+        let all_fill = if all {
+            egui::Color32::from_gray(50)
+        } else {
+            egui::Color32::from_gray(18)
+        };
+        if ui
+            .add(
+                egui::Button::new(
+                    egui::RichText::new("ALL")
+                        .monospace()
+                        .size(7.5)
+                        .color(all_col),
+                )
+                .fill(all_fill)
+                .min_size(egui::vec2(24.0, 14.0)),
+            )
+            .clicked()
+        {
+            app.state.write().llm_agents[idx].scope.clear();
+        }
+        for (key, label) in SCOPE_KEYS {
+            let active = all || scope.iter().any(|s| s == *key);
+            let col = if active {
+                theme::FOG
+            } else {
+                egui::Color32::from_gray(45)
+            };
+            let fill = if active && !all {
+                egui::Color32::from_gray(40)
+            } else {
+                egui::Color32::from_gray(18)
+            };
+            if ui
+                .add(
+                    egui::Button::new(egui::RichText::new(*label).monospace().size(7.5).color(col))
+                        .fill(fill)
+                        .min_size(egui::vec2(28.0, 14.0)),
+                )
+                .clicked()
+            {
+                let mut s = app.state.write();
+                let sc = &mut s.llm_agents[idx].scope;
+                if sc.is_empty() {
+                    // Switch from "all" to specific: add all EXCEPT this one
+                    *sc = SCOPE_KEYS
+                        .iter()
+                        .map(|(k, _)| k.to_string())
+                        .filter(|k| k != key)
+                        .collect();
+                } else if let Some(pos) = sc.iter().position(|s| s == *key) {
+                    sc.remove(pos);
+                    if sc.is_empty() {
+                        // Last one removed → back to "all"
+                    }
+                } else {
+                    sc.push(key.to_string());
+                }
+            }
+        }
+    });
+
+    // ── Stats + last response ────────────────────────────────────────────
     if !last_resp.is_empty() {
         let snippet: String = last_resp.chars().take(80).collect();
         ui.label(
             egui::RichText::new(snippet)
                 .color(theme::SMOKE)
                 .monospace()
-                .size(8.0),
+                .size(7.5),
         );
     }
     ui.horizontal(|ui| {
         ui.label(
-            egui::RichText::new(format!("{:.1} tok/s", tps))
+            egui::RichText::new(format!("{:.1} t/s  #{}", tps, cycles))
                 .color(theme::ASH)
                 .monospace()
-                .size(8.0),
-        );
-        ui.label(
-            egui::RichText::new(format!("cycle #{}", cycles))
-                .color(theme::ASH)
-                .monospace()
-                .size(8.0),
+                .size(7.5),
         );
     });
 }
