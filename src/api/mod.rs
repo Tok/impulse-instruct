@@ -84,7 +84,7 @@ async fn post_params(
     AxumState(api): AxumState<ApiState>,
     Json(req): Json<ParamsRequest>,
 ) -> Json<OkResponse> {
-    let next = apply_llm_update(api.app_state.read().clone(), &req.params);
+    let next = apply_llm_update(api.app_state.read().clone(), &req.params, &[]);
     *api.app_state.write() = next;
     Json(OkResponse {
         ok: true,

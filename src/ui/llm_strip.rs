@@ -455,7 +455,7 @@ impl ImpulseApp {
                                                 .as_object()
                                                 .is_some_and(|o| !o.is_empty())
                                             {
-                                                apply_llm_update(ramped, &remainder)
+                                                apply_llm_update(ramped, &remainder, &[])
                                             } else {
                                                 ramped
                                             };
@@ -626,7 +626,7 @@ impl ImpulseApp {
                         ).on_hover_text(format!("{} active ramp{}", active_ramps, if active_ramps > 1 { "s" } else { "" }));
                     }
                     // Countdown when waiting between cycles
-                    if let Some(fire_at) = self.jam_next_fire {
+                    if let Some((fire_at, _)) = self.jam_next_fire {
                         let remaining = fire_at.duration_since(std::time::Instant::now());
                         ui.label(
                             egui::RichText::new(format!("in {:.1}s", remaining.as_secs_f32()))

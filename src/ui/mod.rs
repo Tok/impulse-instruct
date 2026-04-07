@@ -92,13 +92,10 @@ pub(super) const LOG_LEVELS: &[(&str, log::LevelFilter)] = &[
 
 // Startup prompts live in config.json and are loaded via crate::config.
 
-// ─── Sequencer row layout ─────────────────────────────────────────────────────
 pub(crate) const SEQ_LABEL_W: f32 = 72.0;
 pub(crate) const SEQ_LABEL_H: f32 = 22.0;
 pub(crate) const SEQ_VOL_W: f32 = 52.0;
 pub(crate) const SEQ_VOL_H: f32 = 14.0;
-
-// ─── MIDI clock BPM tracker ──────────────────────────────────────────────────
 
 /// Derives BPM from incoming MIDI clock pulses (24 per quarter note).
 /// Averages the last 8 inter-pulse intervals for stability.
@@ -147,8 +144,6 @@ impl MidiClockTracker {
         self.head = 0;
     }
 }
-
-// ─── Undo / redo history ─────────────────────────────────────────────────────
 
 const HISTORY_DEPTH: usize = 50;
 
@@ -278,8 +273,10 @@ pub struct ImpulseApp {
     auto_listen: bool,
     // Counts jam cycles since the last auto-listen trigger.
     auto_listen_counter: u32,
-    // When jam_bars > 0, this holds the Instant when the next jam cycle should fire.
-    jam_next_fire: Option<std::time::Instant>,
+    // When jam_bars > 0: (fire_time, agent_id) for the next scheduled jam cycle.
+    jam_next_fire: Option<(std::time::Instant, Option<u32>)>,
+    // Round-robin index for multi-agent jam dispatch.
+    jam_next_agent: usize,
     // When true the LLM strip collapses to show only the prompt row.
     pub(crate) llm_strip_collapsed: bool,
     // Native pixels_per_point at startup — used as base for ui_scale.
@@ -423,6 +420,7 @@ impl ImpulseApp {
             auto_listen: false,
             auto_listen_counter: 0,
             jam_next_fire: None,
+            jam_next_agent: 0,
             llm_strip_collapsed: false,
             native_ppp: 0.0, // captured on first frame after DPI is established
             touch_mode: None,
@@ -489,8 +487,6 @@ impl ImpulseApp {
             self.log_text.push_str("LISTEN → no audio captured yet\n");
         }
     }
-
-    /// Drain LLM output messages.
     fn drain_llm_outputs(&mut self) {
         while let Ok(out) = self.llm_rx.try_recv() {
             // Store thinking tokens for display; also echo to log if enabled.
@@ -566,16 +562,13 @@ impl ImpulseApp {
             }
             // Jam re-triggers unless heat is at zero (model is parked).
             if out.text == "[jam_cycle_done]" && self.state.read().llm.heat > 0.0 {
-                // Advance any scheduled param ramps by one cycle.
                 {
                     let cur = self.state.read().clone();
                     let next = crate::state::jam_tools::advance_ramps(cur);
                     *self.state.write() = next;
                 }
-                // Increment cycle count.
                 self.state.write().llm.jam_cycle_count =
                     self.state.read().llm.jam_cycle_count.saturating_add(1);
-                // Auto-listen: every 4 jam cycles, inject an audio snapshot.
                 if self.auto_listen {
                     self.auto_listen_counter += 1;
                     if self.auto_listen_counter >= 4 {
@@ -583,21 +576,35 @@ impl ImpulseApp {
                         self.trigger_listen();
                     }
                 }
-                // Schedule next cycle: immediately if jam_bars == 0, else after N bars.
-                let (jam_bars, bpm) = {
+                // Round-robin: pick next enabled agent
+                let (next_id, jam_bars, bpm) = {
                     let s = self.state.read();
-                    (s.llm.jam_bars, s.sequencer.bpm)
+                    let agents = &s.llm_agents;
+                    let enabled: Vec<_> = agents
+                        .iter()
+                        .enumerate()
+                        .filter(|(_, a)| s.rack.modules.iter().any(|m| m.id == a.id && m.enabled))
+                        .collect();
+                    if enabled.is_empty() {
+                        (None, s.llm.jam_bars, s.sequencer.bpm)
+                    } else {
+                        let idx = self.jam_next_agent % enabled.len();
+                        self.jam_next_agent = idx + 1;
+                        let agent = enabled[idx].1;
+                        (Some(agent.id), agent.jam_bars, s.sequencer.bpm)
+                    }
                 };
                 if jam_bars > 0.0 && bpm > 0.0 {
                     let delay_ms = (jam_bars * 240_000.0 / bpm) as u64;
-                    self.jam_next_fire = Some(
+                    self.jam_next_fire = Some((
                         std::time::Instant::now() + std::time::Duration::from_millis(delay_ms),
-                    );
-                } else {
+                        next_id,
+                    ));
+                } else if let Some(aid) = next_id {
                     let _ = self.llm_tx.try_send(LlmInput::Infer {
                         prompt: "continue jamming, evolve the pattern".to_string(),
                         one_shot: false,
-                        agent_id: None,
+                        agent_id: Some(aid),
                     });
                 }
             }
@@ -728,7 +735,7 @@ impl ImpulseApp {
                     if let Some((path, scale)) = cc_to_param_path(cc) {
                         let scaled = scale(value);
                         let update = dot_path_to_json(path, scaled);
-                        let next = apply_llm_update(self.state.read().clone(), &update);
+                        let next = apply_llm_update(self.state.read().clone(), &update, &[]);
                         *self.state.write() = next;
                         self.push_audio_params();
                     }
@@ -764,7 +771,6 @@ impl ImpulseApp {
         }
     }
 }
-
 impl eframe::App for ImpulseApp {
     /// Persist synth state so the next launch resumes from the same session.
     fn save(&mut self, storage: &mut dyn eframe::Storage) {
@@ -800,14 +806,14 @@ impl eframe::App for ImpulseApp {
         crate::state::sync_default_agent(&mut self.state.write()); // Phase 1 agent↔singleton
 
         // ── Jam timer: fire delayed jam cycle when the bar-count delay elapses ──
-        if let Some(fire_at) = self.jam_next_fire {
+        if let Some((fire_at, pending_agent)) = self.jam_next_fire {
             if std::time::Instant::now() >= fire_at {
                 self.jam_next_fire = None;
                 if self.state.read().llm.heat > 0.0 {
                     let _ = self.llm_tx.try_send(LlmInput::Infer {
                         prompt: "continue jamming, evolve the pattern".to_string(),
                         one_shot: false,
-                        agent_id: None,
+                        agent_id: pending_agent,
                     });
                 }
             } else {
@@ -893,8 +899,7 @@ impl eframe::App for ImpulseApp {
         }
 
         ctx.request_repaint_after(std::time::Duration::from_millis(16));
-
-        // ── Drain scope ring buffer ────────────────────────────────────────────
+        // ── Drain scope + DSP load ring buffers ──────────────────────────────
         while let Ok(s) = self.scope_rx.pop() {
             self.scope_buf.push(s);
         }
@@ -902,15 +907,13 @@ impl eframe::App for ImpulseApp {
             let drain = self.scope_buf.len() - 512;
             self.scope_buf.drain(..drain);
         }
-        // Phosphor persistence: push current frame into history ring
         if self.scope_buf.len() >= 64 {
+            // phosphor persistence
             self.scope_history.push_back(self.scope_buf.clone());
             if self.scope_history.len() > 6 {
                 self.scope_history.pop_front();
             }
         }
-
-        // ── Drain DSP load ring buffer ───────────────────────────────────────
         while let Ok(load) = self.dsp_load_rx.pop() {
             self.dsp_load_buf.push(load);
         }
@@ -919,13 +922,8 @@ impl eframe::App for ImpulseApp {
             self.dsp_load_buf.drain(..drain);
         }
 
-        // ── Floating windows (prefs / about / sysinfo) ────────────────────────
         self.draw_windows(ctx);
-
-        // ── Menu bar + Header ─────────────────────────────────────────────────
         self.draw_menu_and_header(ctx);
-
-        // ── LLM interaction strip ────────────────────────────────────────────
         self.draw_llm_strip(ctx);
 
         // ── Oscilloscope strip ────────────────────────────────────────────────

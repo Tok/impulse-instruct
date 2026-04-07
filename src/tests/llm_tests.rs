@@ -6,7 +6,7 @@ mod prompt_tests {
     #[test]
     fn build_system_prompt_contains_json_only_instruction() {
         let state = AppState::default();
-        let prompt = build_system_prompt(&state);
+        let prompt = build_system_prompt(&state, &[]);
         assert!(
             prompt.contains("Output ONLY valid JSON")
                 || prompt.contains("ONLY valid JSON")
@@ -20,7 +20,7 @@ mod prompt_tests {
     fn build_system_prompt_reflects_current_cutoff() {
         let mut state = AppState::default();
         state.bass_voices[0].synth.cutoff = 0.5; // exact f32 representation
-        let prompt = build_system_prompt(&state);
+        let prompt = build_system_prompt(&state, &[]);
         assert!(
             prompt.contains("0.5"),
             "prompt should embed current cutoff value"
@@ -31,7 +31,7 @@ mod prompt_tests {
     fn build_system_prompt_lists_locked_params() {
         use crate::state::lock_param;
         let state = lock_param(AppState::default(), "bass.cutoff");
-        let prompt = build_system_prompt(&state);
+        let prompt = build_system_prompt(&state, &[]);
         assert!(
             prompt.contains("bass.cutoff"),
             "locked params should appear in prompt"
@@ -232,7 +232,7 @@ mod music_theory_tests {
         state.sequencer.scale_snap = true;
         // C# (49) should snap to C (48) or D (50) in C major
         let update = serde_json::json!({ "sequencer": { "bass_notes": [49] } });
-        let new_state = apply_llm_update(state, &update);
+        let new_state = apply_llm_update(state, &update, &[]);
         let note = new_state.sequencer.bass_pattern[0].note;
         assert!(
             note == 48 || note == 50,
@@ -248,7 +248,7 @@ mod music_theory_tests {
         state.sequencer.scale = Scale::Major;
         state.sequencer.scale_snap = false;
         let update = serde_json::json!({ "sequencer": { "bass_notes": [49] } });
-        let new_state = apply_llm_update(state, &update);
+        let new_state = apply_llm_update(state, &update, &[]);
         assert_eq!(new_state.sequencer.bass_pattern[0].note, 49);
     }
 }
@@ -266,7 +266,7 @@ mod style_tests {
             .unwrap_or_else(|| panic!("style '{}' not found in catalog", style_id));
         let state = AppState::default();
         match &style.baseline_params {
-            Some(bp) => apply_llm_update(state, bp),
+            Some(bp) => apply_llm_update(state, bp, &[]),
             None => state,
         }
     }
@@ -436,7 +436,7 @@ mod style_tests {
         use crate::llm::build_system_prompt;
         let mut state = AppState::default();
         state.llm.active_style = Some("acid_classic".to_string());
-        let prompt = build_system_prompt(&state);
+        let prompt = build_system_prompt(&state, &[]);
         assert!(
             prompt.contains("RESET") || prompt.contains("from scratch"),
             "style prompt should say RESET or 'from scratch', not 'evolve'"

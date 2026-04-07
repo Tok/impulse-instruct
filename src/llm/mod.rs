@@ -22,8 +22,6 @@ use std::time::Instant;
 use crate::state::{AppState, ConversationMode, apply_llm_update};
 use json_repair::{repair_json, split_thinking};
 
-// ─── Messages ─────────────────────────────────────────────────────────────────
-
 #[derive(Clone, Debug)]
 pub enum LlmInput {
     Infer {
@@ -46,37 +44,7 @@ pub enum LlmAction {
     SetJamBars(f32),
 }
 
-/// Extract `LlmAction`s from the mutable JSON map, consuming "save_project"
-/// and "settings" keys.  Pure function — no side effects.
-pub fn extract_llm_actions(obj: &mut serde_json::Map<String, serde_json::Value>) -> Vec<LlmAction> {
-    let mut actions = Vec::new();
-    if obj
-        .remove("save_project")
-        .and_then(|v| v.as_bool())
-        .unwrap_or(false)
-    {
-        actions.push(LlmAction::SaveProject);
-    }
-    if let Some(s) = obj.get("settings").and_then(|v| v.as_object()).cloned() {
-        if let Some(h) = s.get("heat").and_then(|v| v.as_f64()) {
-            actions.push(LlmAction::SetHeat((h as f32).clamp(0.0, 1.0)));
-        }
-        if let Some(st) = s.get("style").and_then(|v| v.as_str()) {
-            actions.push(LlmAction::SetStyle(st.to_string()));
-        }
-        if let Some(p) = s.get("persona").and_then(|v| v.as_str()) {
-            actions.push(LlmAction::SetPersona(p.to_string()));
-        }
-        if let Some(m) = s.get("conversation_mode").and_then(|v| v.as_str()) {
-            actions.push(LlmAction::SetConversationMode(m.to_string()));
-        }
-        if let Some(j) = s.get("jam_bars").and_then(|v| v.as_f64()) {
-            actions.push(LlmAction::SetJamBars((j as f32).max(0.0)));
-        }
-    }
-    obj.remove("settings");
-    actions
-}
+pub use json_repair::extract_llm_actions;
 
 #[derive(Clone, Debug)]
 pub struct LlmOutput {
@@ -96,9 +64,10 @@ pub struct LlmOutput {
     pub before_state: Option<Box<AppState>>,
     /// Actions extracted from the JSON response (save_project, heat, settings changes).
     pub actions: Vec<LlmAction>,
+    /// Which agent produced this output (None = singleton/legacy).
+    pub agent_id: Option<u32>,
 }
 
-// ─── Sampling parameters (passed through to llama-server) ────────────────────
 #[derive(Clone, Debug)]
 pub struct SamplingParams {
     pub heat: f32, // 0–1: jam mutation intensity (used for top_p widening and mock responses)
@@ -126,20 +95,11 @@ impl Default for SamplingParams {
     }
 }
 
-// ─── LLM backend trait (swappable) ────────────────────────────────────────────
-
 pub trait LlmBackend: Send {
     fn infer(&mut self, system: &str, user: &str, sampling: &SamplingParams) -> Result<LlmOutput>;
 }
 
-// ─── LLM server backend ───────────────────────────────────────────────────────
-// Spawns llama-server as a child process and talks to it over HTTP.
-// Falls back to mock if the server binary or model file is not found.
 //
-// Default model (Gemma 4 E4B): ./scripts/build-llama-server.sh
-//                               ./scripts/download-models.sh
-// Bonsai fallback (1-bit):      ./scripts/build-bonsai-server.sh
-//                               ./scripts/download-models.sh bonsai
 
 /// Candidate paths for the llama-server binary.
 /// Checked in order — PrismML fork first (required for Bonsai 1-bit),
@@ -151,19 +111,10 @@ const SERVER_BINARY_CANDIDATES: &[&str] = &[
     "llama-server",                  // $PATH
 ];
 
-/// Fixed port for llama-server.  Using a fixed port prevents the process-leak
-/// problem that occurs with random ports: each restart now lands on the same
-/// address so the OS rejects a second bind, and we can detect + reuse an
-/// already-running healthy server.
+/// Fixed port — prevents process leak and enables server reuse detection.
 const LLAMA_PORT: u16 = 8766;
 
-/// Pick the right llama-server binary for the given model path.
-///
-/// - Bonsai 8B (Q1_0_g128): requires the PrismML fork
-///   (.llama-build/bin/llama-server)
-/// - All other standard GGUF models: prefer the official build
-///   (.llama-official-build/bin/llama-server) then fall back to PrismML fork
-///   (which handles Qwen3, Gemma 4, etc.) then $PATH
+/// Pick the right llama-server binary (Bonsai → PrismML fork, else official → fork → $PATH).
 fn pick_server_binary(model_path: &str) -> Option<&'static str> {
     let is_bonsai = model_path.to_lowercase().contains("bonsai");
 
@@ -608,11 +559,10 @@ impl LlmBackend for LlamaServerBackend {
             mc_line,
             before_state: None, // set by run_llm_loop after apply_llm_update
             actions,
+            agent_id: None, // set by run_llm_loop
         })
     }
 }
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 /// Best-effort JSON repair for truncated or structurally confused LLM output.
 /// 1. Try parsing as-is.
@@ -623,8 +573,6 @@ fn which_in_path(name: &str) -> bool {
         .map(|paths| std::env::split_paths(&paths).any(|dir| dir.join(name).exists()))
         .unwrap_or(false)
 }
-
-// ─── LLM thread loop ──────────────────────────────────────────────────────────
 
 pub fn run_llm_loop(
     state: Arc<RwLock<AppState>>,
@@ -652,6 +600,7 @@ pub fn run_llm_loop(
             mc_line: None,
             before_state: None,
             actions: vec![],
+            agent_id: None,
         });
         run_mock_loop(state, input_rx, output_tx);
         return;
@@ -689,6 +638,7 @@ pub fn run_llm_loop(
             mc_line: None,
             before_state: None,
             actions: vec![],
+            agent_id: None,
         });
         run_mock_loop(state, input_rx, output_tx);
         return;
@@ -712,6 +662,7 @@ pub fn run_llm_loop(
         mc_line: None,
         before_state: None,
         actions: vec![],
+        agent_id: None,
     });
 
     while let Ok(input) = input_rx.recv() {
@@ -752,6 +703,7 @@ pub fn run_llm_loop(
                     mc_line: None,
                     before_state: None,
                     actions: vec![],
+                    agent_id: None,
                 });
                 continue;
             }
@@ -779,6 +731,7 @@ pub fn run_llm_loop(
                     mc_line: None,
                     before_state: None,
                     actions: vec![],
+                    agent_id: None,
                 });
                 continue;
             }
@@ -788,7 +741,7 @@ pub fn run_llm_loop(
         let LlmInput::Infer {
             ref prompt,
             one_shot,
-            ..
+            agent_id,
         } = input
         else {
             continue;
@@ -800,18 +753,37 @@ pub fn run_llm_loop(
             log::debug!("YOU (jam) -> {}", prompt);
         }
 
-        let system = build_system_prompt(&state.read().clone());
+        // Look up agent state; fall back to singleton for agent_id=None or not found.
+        let (agent_heat, agent_temp, agent_scope, agent_enable_thinking) = {
+            let s = state.read();
+            if let Some(aid) = agent_id {
+                if let Some(a) = s.llm_agents.iter().find(|a| a.id == aid) {
+                    (a.heat, a.temperature, a.scope.clone(), a.enable_thinking)
+                } else {
+                    (s.llm.heat, s.llm.temperature, vec![], s.llm.enable_thinking)
+                }
+            } else {
+                (s.llm.heat, s.llm.temperature, vec![], s.llm.enable_thinking)
+            }
+        };
+
+        let system = build_system_prompt(&state.read().clone(), &agent_scope);
         {
             let mut s = state.write();
             s.llm.is_inferring = true;
             s.llm.last_prompt = prompt.clone();
+            if let Some(aid) = agent_id
+                && let Some(a) = s.llm_agents.iter_mut().find(|a| a.id == aid)
+            {
+                a.is_inferring = true;
+            }
         }
 
         let sampling = {
             let s = state.read();
             SamplingParams {
-                heat: s.llm.heat,
-                temperature: s.llm.temperature,
+                heat: agent_heat,
+                temperature: agent_temp,
                 top_k: s.llm.top_k,
                 top_p: s.llm.top_p,
                 min_p: s.llm.min_p,
@@ -820,7 +792,7 @@ pub fn run_llm_loop(
                 seed: s.llm.seed,
             }
         };
-        let enable_thinking = state.read().llm.enable_thinking;
+        let enable_thinking = agent_enable_thinking;
         let think_prompt = format!(
             "{} {}",
             prompt,
@@ -845,7 +817,7 @@ pub fn run_llm_loop(
                 let before_state = if let Some(ref update) = output.param_update {
                     let current = state.read().clone();
                     let before = Box::new(current.clone());
-                    let next = apply_llm_update(current, update);
+                    let next = apply_llm_update(current, update, &agent_scope);
                     *state.write() = next;
                     Some(before)
                 } else {
@@ -896,6 +868,7 @@ pub fn run_llm_loop(
                             mc_line: None,
                             before_state: None,
                             actions: vec![],
+                            agent_id: None,
                         });
                     }
                 }
@@ -962,6 +935,17 @@ pub fn run_llm_loop(
                 let mut output = output;
                 output.is_jam = !one_shot;
                 output.before_state = before_state;
+                output.agent_id = agent_id;
+                // Write stats back to agent
+                if let Some(aid) = agent_id {
+                    let mut s = state.write();
+                    if let Some(a) = s.llm_agents.iter_mut().find(|a| a.id == aid) {
+                        a.is_inferring = false;
+                        a.tokens_per_sec = output.tokens_per_sec;
+                        a.last_response = output.text.clone();
+                        a.jam_cycle_count = a.jam_cycle_count.saturating_add(1);
+                    }
+                }
                 let _ = output_tx.try_send(output);
                 log::debug!("inference complete in {:.2}s", elapsed);
             }
@@ -970,6 +954,11 @@ pub fn run_llm_loop(
                 let mut s = state.write();
                 s.llm.is_inferring = false;
                 s.llm.last_response = format!("Error: {}", e);
+                if let Some(aid) = agent_id
+                    && let Some(a) = s.llm_agents.iter_mut().find(|a| a.id == aid)
+                {
+                    a.is_inferring = false;
+                }
             }
         }
 
@@ -989,6 +978,7 @@ pub fn run_llm_loop(
                 mc_line: None,
                 before_state: None,
                 actions: vec![],
+                agent_id: None,
             });
         }
     }

@@ -45,7 +45,7 @@ fn setup() -> Option<(LlamaServerBackend, String)> {
         );
         return None;
     }
-    let system = build_system_prompt(&state);
+    let system = build_system_prompt(&state, &[]);
     Some((backend, system))
 }
 

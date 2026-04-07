@@ -170,3 +170,38 @@ pub fn split_thinking(s: &str) -> (Option<String>, String) {
     }
     (None, s.to_string())
 }
+
+/// Extract `LlmAction`s from the mutable JSON map, consuming "save_project"
+/// and "settings" keys.  Pure function — no side effects.
+pub fn extract_llm_actions(
+    obj: &mut serde_json::Map<String, serde_json::Value>,
+) -> Vec<super::LlmAction> {
+    use super::LlmAction;
+    let mut actions = Vec::new();
+    if obj
+        .remove("save_project")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false)
+    {
+        actions.push(LlmAction::SaveProject);
+    }
+    if let Some(s) = obj.get("settings").and_then(|v| v.as_object()).cloned() {
+        if let Some(h) = s.get("heat").and_then(|v| v.as_f64()) {
+            actions.push(LlmAction::SetHeat((h as f32).clamp(0.0, 1.0)));
+        }
+        if let Some(st) = s.get("style").and_then(|v| v.as_str()) {
+            actions.push(LlmAction::SetStyle(st.to_string()));
+        }
+        if let Some(p) = s.get("persona").and_then(|v| v.as_str()) {
+            actions.push(LlmAction::SetPersona(p.to_string()));
+        }
+        if let Some(m) = s.get("conversation_mode").and_then(|v| v.as_str()) {
+            actions.push(LlmAction::SetConversationMode(m.to_string()));
+        }
+        if let Some(j) = s.get("jam_bars").and_then(|v| v.as_f64()) {
+            actions.push(LlmAction::SetJamBars((j as f32).max(0.0)));
+        }
+    }
+    obj.remove("settings");
+    actions
+}

@@ -7,7 +7,7 @@ mod state_tests {
     fn apply_llm_update_sets_cutoff() {
         let state = AppState::default();
         let update = serde_json::json!({ "bass": { "cutoff": 0.9 } });
-        let next = apply_llm_update(state, &update);
+        let next = apply_llm_update(state, &update, &[]);
         assert!((next.bass_voices[0].synth.cutoff - 0.9).abs() < 1e-4);
     }
 
@@ -15,7 +15,7 @@ mod state_tests {
     fn apply_llm_update_clamps_to_unit_range() {
         let state = AppState::default();
         let update = serde_json::json!({ "bass": { "cutoff": 1.5 } });
-        let next = apply_llm_update(state, &update);
+        let next = apply_llm_update(state, &update, &[]);
         assert!(next.bass_voices[0].synth.cutoff <= 1.0);
     }
 
@@ -26,7 +26,7 @@ mod state_tests {
         let state = lock_param(state, "bass.cutoff");
 
         let update = serde_json::json!({ "bass": { "cutoff": 0.99 } });
-        let next = apply_llm_update(state, &update);
+        let next = apply_llm_update(state, &update, &[]);
         assert_eq!(
             next.bass_voices[0].synth.cutoff, original_cutoff,
             "locked param should be untouched"
@@ -51,7 +51,7 @@ mod state_tests {
         // BPM is locked by default — must explicitly unlock first
         let state = crate::state::unlock_param(AppState::default(), "sequencer.bpm");
         let update = serde_json::json!({ "sequencer": { "bpm": 175.0 } });
-        let next = apply_llm_update(state, &update);
+        let next = apply_llm_update(state, &update, &[]);
         assert!((next.sequencer.bpm - 175.0).abs() < 0.01);
     }
 
@@ -59,7 +59,7 @@ mod state_tests {
     fn bpm_clamped_to_valid_range() {
         let state = AppState::default();
         let update = serde_json::json!({ "sequencer": { "bpm": 999.0 } });
-        let next = apply_llm_update(state, &update);
+        let next = apply_llm_update(state, &update, &[]);
         assert!(next.sequencer.bpm <= 250.0, "bpm should be clamped");
     }
 }

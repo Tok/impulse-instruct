@@ -146,7 +146,7 @@ fn dispatch(action: OscAction, state: &Arc<RwLock<AppState>>, llm_tx: &Sender<Ll
     match action {
         OscAction::ParamUpdate(update) => {
             let snapshot = state.read().clone();
-            let next = apply_llm_update(snapshot, &update);
+            let next = apply_llm_update(snapshot, &update, &[]);
             *state.write() = next;
         }
         OscAction::Play => {

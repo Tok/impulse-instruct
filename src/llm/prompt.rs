@@ -6,7 +6,7 @@ use crate::state::{AppState, ConversationMode, ROOT_NAMES, StyleVerbosity};
 
 /// Returns the system prompt. If the user has set a non-empty `system_prompt_override`,
 /// that is returned verbatim — giving full control over the model's grounding.
-pub fn build_system_prompt(state: &AppState) -> String {
+pub fn build_system_prompt(state: &AppState, scope: &[String]) -> String {
     if !state.llm.system_prompt_override.trim().is_empty() {
         return state.llm.system_prompt_override.clone();
     }
@@ -166,6 +166,15 @@ pub fn build_system_prompt(state: &AppState) -> String {
     let persona = state.llm.persona_name.trim();
     let persona = if persona.is_empty() { "PULSE" } else { persona };
 
+    let scope_section = if scope.is_empty() {
+        String::new()
+    } else {
+        format!(
+            "\n═══ SCOPE CONSTRAINT ═══\nYou control ONLY: {}. Do NOT emit top-level keys outside your scope.\n",
+            scope.join(", ")
+        )
+    };
+
     // Music theory context — computed once, embedded in the prompt
     let root_note = state.sequencer.root_note;
     let root_name = ROOT_NAMES[root_note as usize % 12];
@@ -184,7 +193,7 @@ pub fn build_system_prompt(state: &AppState) -> String {
     format!(
         r#"You are {persona} — the AI intelligence inside Impulse Instruct, a hardware-style synthesizer.
 Output ONLY valid JSON. No prose, no markdown, no explanation outside the "_comment" field.
-{style_section}{user_instructions_section}
+{style_section}{user_instructions_section}{scope_section}
 CURRENT STATE:
 {current_json}
 {bass_info}
@@ -542,6 +551,7 @@ Example — "more acid":
         persona = persona,
         user_instructions_section = user_instructions_section,
         style_section = style_section,
+        scope_section = scope_section,
         current_json = current_json,
         bass_info = bass_info,
         locked_str = locked_str,

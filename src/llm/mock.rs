@@ -35,6 +35,7 @@ pub fn mock_response(prompt: &str, heat: f32) -> Result<LlmOutput> {
             mc_line: None,
             before_state: None,
             actions: vec![],
+            agent_id: None,
         });
     }
 
@@ -212,6 +213,7 @@ pub fn mock_response(prompt: &str, heat: f32) -> Result<LlmOutput> {
         mc_line: None,
         before_state: None,
         actions: vec![],
+        agent_id: None,
     })
 }
 
@@ -251,7 +253,7 @@ pub fn run_mock_loop(
             Ok(output) => {
                 if let Some(ref update) = output.param_update {
                     let current = state.read().clone();
-                    let next = apply_llm_update(current, update);
+                    let next = apply_llm_update(current, update, &[]);
                     *state.write() = next;
                     let comment = update
                         .get("_comment")
@@ -285,6 +287,7 @@ pub fn run_mock_loop(
                         mc_line: None,
                         before_state: None,
                         actions: vec![],
+                        agent_id: None,
                     });
                 }
             }

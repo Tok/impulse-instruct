@@ -174,7 +174,7 @@ pub fn apply_behaviour(state: AppState, name: &str, heat: f32) -> AppState {
     if json.is_null() {
         return state;
     }
-    super::transitions::apply_llm_update(state, &json)
+    super::transitions::apply_llm_update(state, &json, &[])
 }
 
 /// Return the param-change JSON for a named behaviour at the given heat level.
@@ -291,5 +291,5 @@ fn apply_param_by_path(state: AppState, path: &str, value: f32) -> AppState {
         [key] => serde_json::json!({ *key: value }),
         _ => return state,
     };
-    super::transitions::apply_llm_update(state, &json)
+    super::transitions::apply_llm_update(state, &json, &[])
 }

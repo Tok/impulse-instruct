@@ -13,16 +13,23 @@ use crate::sequencer::euclidean_rhythm;
 
 /// Apply an LLM-generated partial update, respecting locked params.
 /// Returns the new state (caller replaces old state with this).
-pub fn apply_llm_update(state: AppState, update: &serde_json::Value) -> AppState {
+pub fn apply_llm_update(state: AppState, update: &serde_json::Value, scope: &[String]) -> AppState {
     let mut s = state;
     let locked = &s.llm.locked_params.clone();
 
+    // Scope helper: empty scope = unrestricted
+    let in_scope = |key: &str| scope.is_empty() || scope.iter().any(|s| s == key);
+
     // Legacy "bass" key → voice 0
-    if let Some(b) = update.get("bass").and_then(|v| v.as_object()) {
+    if in_scope("bass")
+        && let Some(b) = update.get("bass").and_then(|v| v.as_object())
+    {
         apply_bass_update(&mut s, b, locked, 0);
     }
     // "bass_voices": [{...}, null, {...}, ...] — per-voice updates; null skips that slot
-    if let Some(arr) = update.get("bass_voices").and_then(|v| v.as_array()) {
+    if in_scope("bass")
+        && let Some(arr) = update.get("bass_voices").and_then(|v| v.as_array())
+    {
         for (idx, voice_update) in arr.iter().enumerate().take(crate::state::MAX_BASS_VOICES) {
             if voice_update.is_null() {
                 continue;
@@ -33,7 +40,9 @@ pub fn apply_llm_update(state: AppState, update: &serde_json::Value) -> AppState
         }
     }
 
-    if let Some(seq) = update.get("sequencer").and_then(|v| v.as_object()) {
+    if in_scope("sequencer")
+        && let Some(seq) = update.get("sequencer").and_then(|v| v.as_object())
+    {
         if !locked.contains("sequencer.bpm")
             && let Some(bpm) = seq.get("bpm").and_then(|v| v.as_f64())
         {
@@ -188,7 +197,8 @@ pub fn apply_llm_update(state: AppState, update: &serde_json::Value) -> AppState
         }
     }
 
-    if let Some(kit_a) = update.get("kit_a").and_then(|v| v.as_object())
+    if in_scope("kit_a")
+        && let Some(kit_a) = update.get("kit_a").and_then(|v| v.as_object())
         && let Some(kick) = kit_a.get("kick").and_then(|v| v.as_object())
     {
         s.kit_a.kick.pitch_env_depth = unlocked_f32(
@@ -209,7 +219,8 @@ pub fn apply_llm_update(state: AppState, update: &serde_json::Value) -> AppState
             unlocked_f32(s.kit_a.kick.clip, kick, "clip", "kit_a.kick.clip", locked);
     }
 
-    if let Some(kit_b) = update.get("kit_b").and_then(|v| v.as_object())
+    if in_scope("kit_b")
+        && let Some(kit_b) = update.get("kit_b").and_then(|v| v.as_object())
         && let Some(kick) = kit_b.get("kick").and_then(|v| v.as_object())
     {
         s.kit_b.kick.pitch_env_depth = unlocked_f32(
@@ -230,11 +241,15 @@ pub fn apply_llm_update(state: AppState, update: &serde_json::Value) -> AppState
             unlocked_f32(s.kit_b.kick.clip, kick, "clip", "kit_b.kick.clip", locked);
     }
 
-    if let Some(fx) = update.get("fx").and_then(|v| v.as_object()) {
+    if in_scope("fx")
+        && let Some(fx) = update.get("fx").and_then(|v| v.as_object())
+    {
         apply_fx_update(&mut s, fx, locked);
     }
 
-    if let Some(lfo_arr) = update.get("lfo").and_then(|v| v.as_array()) {
+    if in_scope("lfo")
+        && let Some(lfo_arr) = update.get("lfo").and_then(|v| v.as_array())
+    {
         for (i, slot_val) in lfo_arr.iter().enumerate().take(4) {
             let path_prefix = format!("lfo[{}]", i);
             if locked.contains(&path_prefix) {
@@ -282,7 +297,8 @@ pub fn apply_llm_update(state: AppState, update: &serde_json::Value) -> AppState
         }
     }
 
-    if let Some(eg) = update.get("free_eg").and_then(|v| v.as_object())
+    if in_scope("free_eg")
+        && let Some(eg) = update.get("free_eg").and_then(|v| v.as_object())
         && !locked.contains("free_eg")
     {
         if let Some(v) = eg.get("enabled").and_then(|v| v.as_bool()) {
@@ -321,7 +337,9 @@ pub fn apply_llm_update(state: AppState, update: &serde_json::Value) -> AppState
         }
     }
 
-    if let Some(n) = update.get("noise").and_then(|v| v.as_object()) {
+    if in_scope("noise")
+        && let Some(n) = update.get("noise").and_then(|v| v.as_object())
+    {
         if !locked.contains("noise.enabled")
             && let Some(v) = n.get("enabled").and_then(|v| v.as_bool())
         {
@@ -334,17 +352,23 @@ pub fn apply_llm_update(state: AppState, update: &serde_json::Value) -> AppState
             unlocked_f32(s.noise_voice.cutoff, n, "cutoff", "noise.cutoff", locked);
     }
 
-    if let Some(h) = update.get("hoover").and_then(|v| v.as_object()) {
+    if in_scope("hoover")
+        && let Some(h) = update.get("hoover").and_then(|v| v.as_object())
+    {
         apply_hoover_update(&mut s, h, locked);
     }
 
-    if let Some(a) = update.get("an1x").and_then(|v| v.as_object()) {
+    if in_scope("an1x")
+        && let Some(a) = update.get("an1x").and_then(|v| v.as_object())
+    {
         apply_an1x_update(&mut s, a, locked);
     }
 
     // ── Euclidean rhythm ──────────────────────────────────────────────────────
     // JSON: { "euclidean": { "voice": "kick_a", "pulses": 5, "steps": 16 } }
-    if let Some(e) = update.get("euclidean").and_then(|v| v.as_object()) {
+    if in_scope("euclidean")
+        && let Some(e) = update.get("euclidean").and_then(|v| v.as_object())
+    {
         let voice_str = e.get("voice").and_then(|v| v.as_str()).unwrap_or("");
         let pulses = e.get("pulses").and_then(|v| v.as_u64()).unwrap_or(4) as usize;
         let n_steps = e
