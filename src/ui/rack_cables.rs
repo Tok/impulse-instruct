@@ -170,6 +170,16 @@ pub fn draw_cable_overlay(
     use crate::state::rack::lfo_target_module_kind;
     use crate::state::{LfoTarget, ModuleKind, PortDir, PortKind, PortRef};
 
+    let alt_held = ctx.input(|i| i.modifiers.alt);
+    let show_cables = app.rack_flipped && !alt_held && !app.show_prefs;
+    let has_drag = app.cable_drag.is_some();
+
+    // Only create the foreground painter when we actually need to draw cables.
+    // Creating it unconditionally can interfere with widget input (ComboBox popups).
+    if !show_cables && !has_drag {
+        return;
+    }
+
     let time = ctx.input(|i| i.time) as f32;
     let mut painter = ctx.layer_painter(egui::LayerId::new(
         egui::Order::Foreground,
@@ -184,8 +194,7 @@ pub fn draw_cable_overlay(
         draw_cable(&painter, drag.from_screen, pointer, time, 0.0, false);
     }
 
-    let alt_held = ctx.input(|i| i.modifiers.alt);
-    if app.rack_flipped && !alt_held && !app.show_prefs {
+    if show_cables {
         let cables = app.state.read().rack.cables.clone();
         // Draw control cables FIRST (behind audio/CV cables)
         for (ci, cable) in cables.iter().enumerate() {
