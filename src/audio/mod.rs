@@ -4,6 +4,7 @@
 
 pub mod analysis;
 pub mod dsp;
+pub mod spectrum;
 
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use cpal::{Device, SampleFormat, Stream, StreamConfig};

@@ -139,6 +139,23 @@ fn default_pattern_bank() -> Vec<SequencerState> {
     vec![SequencerState::default(); 8]
 }
 
+/// Spectrum analyser display parameters.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct SpectrumAnalyzerState {
+    /// Exponential smoothing factor (0.0 = instant, 0.95 = very smooth).
+    pub smoothing: f32,
+    /// Show peak-hold markers.
+    pub peak_hold: bool,
+}
+impl Default for SpectrumAnalyzerState {
+    fn default() -> Self {
+        Self {
+            smoothing: 0.7,
+            peak_hold: false,
+        }
+    }
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct AppState {
     /// All bass synth voices (1 active minimum; up to MAX_BASS_VOICES).
@@ -184,6 +201,9 @@ pub struct AppState {
     /// When true, piano/MIDI note-ons while running write into the bass pattern.
     #[serde(default)]
     pub live_record: bool,
+    /// Spectrum analyser parameters.
+    #[serde(default)]
+    pub spectrum: SpectrumAnalyzerState,
     /// Modular rack — which modules are visible and how they are cabled.
     #[serde(default)]
     pub rack: RackState,
@@ -215,6 +235,7 @@ impl Default for AppState {
             chain_enabled: false,
             chain_pos: 0,
             live_record: false,
+            spectrum: Default::default(),
             rack: Default::default(),
             llm_agents: Vec::new(),
         };
