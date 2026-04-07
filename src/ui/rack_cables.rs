@@ -91,7 +91,7 @@ pub fn draw_cable(
         Stroke::new(1.0, Color32::from_white_alpha(110)),
     ));
 
-    // ── Signal flow dots — speed and spacing normalised to cable arc length ───
+    // ── Signal flow dots — speed and spacing normalised to cable arc length ──
     if animate_flow {
         let arc_len: f32 = points
             .windows(2)
@@ -108,6 +108,42 @@ pub fn draw_cable(
             painter.circle_filled(dot, 2.5, Color32::from_gray(240));
         }
     }
+}
+
+/// Draw a thin, dark control cable (LLM agent → target module).
+pub fn draw_control_cable(
+    painter: &egui::Painter,
+    from: Pos2,
+    to: Pos2,
+    time: f32,
+    phase_offset: f32,
+) {
+    let dx = (to.x - from.x).abs();
+    let dy = to.y - from.y;
+    let sag = (dx * 0.20 + (-dy).max(0.0) * 0.12).clamp(12.0, 100.0);
+    let wobble = ((time * 0.8 + phase_offset) * std::f32::consts::TAU).sin() * 1.5;
+    let cp1 = from + Vec2::new(wobble, sag);
+    let cp2 = to + Vec2::new(-wobble * 0.7, sag);
+    let n = 32usize;
+    let points: Vec<Pos2> = (0..=n)
+        .map(|i| bezier(from, cp1, cp2, to, i as f32 / n as f32))
+        .collect();
+    // Subtle shadow
+    let shadow: Vec<Pos2> = points.iter().map(|p| *p + Vec2::new(0.3, 1.5)).collect();
+    painter.add(egui::Shape::line(
+        shadow,
+        Stroke::new(2.5, Color32::from_black_alpha(50)),
+    ));
+    // Body — dark gray
+    painter.add(egui::Shape::line(
+        points.clone(),
+        Stroke::new(2.0, Color32::from_gray(90)),
+    ));
+    // Core — slightly lighter
+    painter.add(egui::Shape::line(
+        points,
+        Stroke::new(1.0, Color32::from_gray(120)),
+    ));
 }
 
 /// Draw the full cable overlay: in-progress drag, rack cables, and synthesised LFO cables.
@@ -145,7 +181,11 @@ pub fn draw_cable_overlay(
             let to_pos = ports.iter().find(|p| p.port == cable.to).map(|p| p.center);
             if let (Some(from), Some(to)) = (from_pos, to_pos) {
                 let phase = ci as f32 * 2.399;
-                draw_cable(&painter, from, to, time, phase, true);
+                if cable.from.kind == PortKind::Control {
+                    draw_control_cable(&painter, from, to, time, phase);
+                } else {
+                    draw_cable(&painter, from, to, time, phase, true);
+                }
             }
         }
 

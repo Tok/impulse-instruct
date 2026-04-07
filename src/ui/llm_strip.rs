@@ -21,7 +21,7 @@ use crate::ui::{ImpulseApp, theme};
 ///   (only when the note letter is NOT surrounded by other letters)
 /// • Frequency: `440Hz`, `261.6 Hz` etc. — mapped to nearest chromatic semitone
 /// • MIDI number context: `note 60`, `midi 72`, `pitch 48`
-fn colorize_log(text: &str, default_color: egui::Color32) -> egui::text::LayoutJob {
+pub(super) fn colorize_log(text: &str, default_color: egui::Color32) -> egui::text::LayoutJob {
     use egui::text::{LayoutJob, TextFormat};
 
     let mut job = LayoutJob::default();
@@ -321,239 +321,252 @@ impl ImpulseApp {
 
     /// LLM console content — rendered inside a rackable module card.
     /// Contains: style selector, instructions, log, JAM timing, LISTEN, prompt input.
+    fn apply_style_selection(&mut self, maybe_id: Option<String>) {
+        match maybe_id {
+            None => {
+                self.state.write().llm.active_style = None;
+                self.log_text.push_str("Style cleared\n");
+            }
+            Some(ref id) if id == "__free__" => {
+                self.state.write().llm.active_style = Some(id.clone());
+                self.log_text.push_str("Style → Free\n");
+                let _ = self.llm_tx.try_send(LlmInput::Infer {
+                    prompt: "we're going free — be creative and unpredictable, surprise me".into(),
+                    one_shot: true,
+                    agent_id: None,
+                });
+            }
+            Some(ref id) if id == "__custom__" => {
+                self.state.write().llm.active_style = Some(id.clone());
+                self.log_text.push_str("Style → Custom\n");
+            }
+            Some(id) => {
+                let catalog = StyleCatalog::get();
+                let (name, baseline) = catalog
+                    .find_by_id(&id)
+                    .map(|s| (s.name.clone(), s.baseline_params.clone()))
+                    .unwrap_or_default();
+                if let Some(ref bp) = baseline {
+                    let current = self.state.read().clone();
+                    let (ramped, remainder) =
+                        crate::state::jam_tools::schedule_baseline_ramps(current, bp, 8.0);
+                    let next = if remainder.as_object().is_some_and(|o| !o.is_empty()) {
+                        apply_llm_update(ramped, &remainder, &[])
+                    } else {
+                        ramped
+                    };
+                    *self.state.write() = next;
+                }
+                self.state.write().llm.active_style = Some(id);
+                let _ = self.llm_tx.try_send(LlmInput::ResetContext);
+                self.log_text
+                    .push_str(&format!("Style → {} (reset)\n", name));
+                let _ = self.llm_tx.try_send(LlmInput::Infer {
+                    prompt: format!(
+                        "FULL RESET to {} — generate all parameters from scratch.",
+                        name
+                    ),
+                    one_shot: true,
+                    agent_id: None,
+                });
+            }
+        }
+    }
+
     pub(super) fn draw_llm_console_content(&mut self, ui: &mut egui::Ui) {
-        // ── TOP row: style + instructions | log ───────────────────────
+        // ── Model selector + context bar ─────────────────────────────
         ui.horizontal(|ui| {
-                    // ── LEFT column: style + instructions ─────────────────────
-                    let left_w = (ui.available_width() * 0.36).clamp(270.0, 420.0);
-
-                    ui.scope(|ui| {
-                        ui.set_min_width(left_w);
-                        ui.set_max_width(left_w);
-
-                        // Style selector row
-                        ui.horizontal(|ui| {
-                            ui.label(
-                                egui::RichText::new("STYLE")
+            // Model dropdown (global default)
+            if self.available_models.is_empty() {
+                self.available_models = super::scan_models();
+            }
+            let (cur_model, ctx_used, ctx_max, is_mock) = {
+                let s = self.state.read();
+                (
+                    s.llm.model_path.clone(),
+                    s.llm.context_used,
+                    s.llm.context_max,
+                    s.llm.is_mock,
+                )
+            };
+            let cur_short = std::path::Path::new(&cur_model)
+                .file_stem()
+                .and_then(|s| s.to_str())
+                .unwrap_or("unknown")
+                .to_string();
+            ui.label(
+                egui::RichText::new("MODEL")
+                    .monospace()
+                    .size(8.0)
+                    .color(theme::ASH),
+            );
+            egui::ComboBox::from_id_source("console_model")
+                .selected_text(
+                    egui::RichText::new(&cur_short)
+                        .monospace()
+                        .size(8.5)
+                        .color(theme::SMOKE),
+                )
+                .width(180.0)
+                .show_ui(ui, |ui| {
+                    for path in &self.available_models.clone() {
+                        let short = std::path::Path::new(path)
+                            .file_stem()
+                            .and_then(|s| s.to_str())
+                            .unwrap_or(path)
+                            .to_string();
+                        let selected = *path == cur_model;
+                        if ui
+                            .selectable_label(
+                                selected,
+                                egui::RichText::new(&short)
                                     .monospace()
                                     .size(9.0)
-                                    .color(theme::ASH),
-                            );
-                            ui.add_space(4.0);
-
-                            let cur_style = self.state.read().llm.active_style.clone();
-                            let catalog = StyleCatalog::get();
-                            let cur_name = match cur_style.as_deref() {
-                                None               => "None",
-                                Some("__free__")   => "Free",
-                                Some("__custom__") => "Custom",
-                                Some(id) => catalog.find_by_id(id)
-                                    .map(|s| s.name.as_str())
-                                    .unwrap_or("None"),
-                            };
-
-                            let mut new_style_selection: Option<Option<String>> = None;
-
-                            egui::ComboBox::from_id_source("style_selector")
-                                .selected_text(
-                                    egui::RichText::new(cur_name).monospace().size(9.5),
-                                )
-                                .width(140.0)
-                                .show_ui(ui, |ui| {
-                                    if ui.selectable_label(
-                                        cur_style.is_none(),
-                                        egui::RichText::new("None").monospace().size(9.5),
-                                    ).clicked() {
-                                        new_style_selection = Some(None);
-                                    }
-                                    if ui.selectable_label(
-                                        cur_style.as_deref() == Some("__free__"),
-                                        egui::RichText::new("Free").monospace().size(9.5),
-                                    ).clicked() {
-                                        new_style_selection = Some(Some("__free__".to_string()));
-                                    }
-                                    if ui.selectable_label(
-                                        cur_style.as_deref() == Some("__custom__"),
-                                        egui::RichText::new("Custom...").monospace().size(9.5),
-                                    ).clicked() {
-                                        new_style_selection = Some(Some("__custom__".to_string()));
-                                    }
-                                    ui.separator();
-                                    for style in catalog.styles() {
-                                        let active =
-                                            cur_style.as_deref() == Some(style.id.as_str());
-                                        if ui.selectable_label(
-                                            active,
-                                            egui::RichText::new(&style.name)
-                                                .monospace()
-                                                .size(9.5),
-                                        ).clicked() {
-                                            new_style_selection = Some(Some(style.id.clone()));
-                                        }
-                                    }
-                                });
-
-                            // Inline custom brief when __custom__ is active
-                            if cur_style.as_deref() == Some("__custom__") {
-                                let mut custom_text =
-                                    self.state.read().llm.custom_style_text.clone();
-                                let r = ui.add(
-                                    egui::TextEdit::singleline(&mut custom_text)
-                                        .hint_text("style brief…")
-                                        .desired_width(ui.available_width() - 4.0)
-                                        .font(egui::FontId::monospace(9.5)),
-                                );
-                                if r.changed() {
-                                    self.state.write().llm.custom_style_text = custom_text.clone();
-                                }
-                                if r.lost_focus()
-                                    && ui.input(|i| i.key_pressed(egui::Key::Enter))
-                                    && !custom_text.trim().is_empty()
-                                {
-                                    self.log_text.push_str("Custom style brief updated\n");
-                                    let _ = self.llm_tx.try_send(LlmInput::Infer {
-                                        prompt: "apply the active style brief — update sound and rhythm accordingly".to_string(),
-                                        one_shot: true, agent_id: None,
-                                    });
-                                }
-                            }
-
-                            if let Some(maybe_id) = new_style_selection {
-                                match maybe_id {
-                                    None => {
-                                        self.state.write().llm.active_style = None;
-                                        self.log_text.push_str("Style cleared\n");
-                                    }
-                                    Some(ref id) if id == "__free__" => {
-                                        self.state.write().llm.active_style = Some(id.clone());
-                                        self.log_text.push_str("Style → Free\n");
-                                        let _ = self.llm_tx.try_send(LlmInput::Infer {
-                                            prompt: "we're going free — be creative and unpredictable, surprise me".to_string(),
-                                            one_shot: true, agent_id: None,
-                                        });
-                                    }
-                                    Some(ref id) if id == "__custom__" => {
-                                        self.state.write().llm.active_style = Some(id.clone());
-                                        self.log_text.push_str("Style → Custom\n");
-                                    }
-                                    Some(id) => {
-                                        let (name, baseline) = catalog.find_by_id(&id)
-                                            .map(|s| (s.name.clone(), s.baseline_params.clone()))
-                                            .unwrap_or_default();
-                                        if let Some(ref bp) = baseline {
-                                            let current = self.state.read().clone();
-                                            // Smooth transition: ramp f32 params over 8 jam cycles,
-                                            // apply non-f32 (patterns, etc.) immediately.
-                                            let (ramped, remainder) =
-                                                crate::state::jam_tools::schedule_baseline_ramps(
-                                                    current, bp, 8.0,
-                                                );
-                                            let next = if remainder
-                                                .as_object()
-                                                .is_some_and(|o| !o.is_empty())
-                                            {
-                                                apply_llm_update(ramped, &remainder, &[])
-                                            } else {
-                                                ramped
-                                            };
-                                            *self.state.write() = next;
-                                        }
-                                        self.state.write().llm.active_style = Some(id);
-                                        let _ = self.llm_tx.try_send(LlmInput::ResetContext);
-                                        let prompt = format!(
-                                            "FULL RESET to {} — generate all parameters from scratch.",
-                                            name
-                                        );
-                                        self.log_text
-                                            .push_str(&format!("Style → {} (reset)\n", name));
-                                        let _ = self.llm_tx.try_send(LlmInput::Infer {
-                                            prompt,
-                                            one_shot: true, agent_id: None,
-                                        });
-                                    }
-                                }
-                            }
-                        });
-
-                        // Persistent instructions
+                                    .color(if selected { theme::CHALK } else { theme::FOG }),
+                            )
+                            .clicked()
+                            && !selected
                         {
-                            let mut instr = self.state.read().llm.user_instructions.clone();
-                            let r = ui.add(
-                                egui::TextEdit::singleline(&mut instr)
-                                    .hint_text("persistent instructions…")
-                                    .desired_width(left_w - 4.0)
-                                    .font(egui::FontId::monospace(9.5)),
-                            );
-                            if r.changed() {
-                                self.state.write().llm.user_instructions = instr;
-                            }
+                            let _ = self.llm_tx.try_send(LlmInput::SwitchModel(path.clone()));
+                            self.state.write().llm.llm_initializing = true;
                         }
-                    }); // end left scope
+                    }
+                });
+            ui.separator();
+            // Context bar
+            let pct = if ctx_max > 0 {
+                ctx_used as f32 / ctx_max as f32
+            } else {
+                0.0
+            };
+            ui.label(
+                egui::RichText::new(format!("CTX {:.0}%", pct * 100.0))
+                    .monospace()
+                    .size(8.0)
+                    .color(if pct > 0.85 { theme::FOG } else { theme::ASH }),
+            );
+            let (bar_rect, _) = ui.allocate_exact_size(egui::vec2(80.0, 6.0), egui::Sense::hover());
+            let p = ui.painter();
+            p.rect_filled(bar_rect, 1.0, egui::Color32::from_gray(38));
+            let fill_w = (bar_rect.width() * pct.clamp(0.0, 1.0)).max(0.0);
+            if fill_w > 0.0 {
+                p.rect_filled(
+                    egui::Rect::from_min_size(bar_rect.min, egui::vec2(fill_w, bar_rect.height())),
+                    1.0,
+                    egui::Color32::from_gray(if pct > 0.85 { 160 } else { 90 }),
+                );
+            }
+            // Reset button
+            if ui
+                .add(
+                    egui::Button::new(
+                        egui::RichText::new("RST")
+                            .monospace()
+                            .size(7.5)
+                            .color(theme::IRON),
+                    )
+                    .fill(egui::Color32::TRANSPARENT),
+                )
+                .on_hover_text("Reset context (restart server)")
+                .clicked()
+            {
+                let _ = self.llm_tx.try_send(LlmInput::ResetContext);
+            }
+            if is_mock {
+                ui.label(
+                    egui::RichText::new("MOCK")
+                        .monospace()
+                        .size(8.0)
+                        .color(theme::IRON),
+                );
+            }
+        });
 
-                    ui.add_space(4.0);
+        // ── Style selector + instructions ────────────────────────────
+        ui.horizontal(|ui| {
+            ui.label(
+                egui::RichText::new("STYLE")
+                    .monospace()
+                    .size(9.0)
+                    .color(theme::ASH),
+            );
+            ui.add_space(4.0);
+            let cur_style = self.state.read().llm.active_style.clone();
+            let catalog = StyleCatalog::get();
+            let cur_name = match cur_style.as_deref() {
+                None => "None",
+                Some("__free__") => "Free",
+                Some("__custom__") => "Custom",
+                Some(id) => catalog
+                    .find_by_id(id)
+                    .map(|s| s.name.as_str())
+                    .unwrap_or("None"),
+            };
+            let mut new_sel: Option<Option<String>> = None;
+            egui::ComboBox::from_id_source("style_selector")
+                .selected_text(egui::RichText::new(cur_name).monospace().size(9.5))
+                .width(140.0)
+                .show_ui(ui, |ui| {
+                    if ui
+                        .selectable_label(
+                            cur_style.is_none(),
+                            egui::RichText::new("None").monospace().size(9.5),
+                        )
+                        .clicked()
+                    {
+                        new_sel = Some(None);
+                    }
+                    if ui
+                        .selectable_label(
+                            cur_style.as_deref() == Some("__free__"),
+                            egui::RichText::new("Free").monospace().size(9.5),
+                        )
+                        .clicked()
+                    {
+                        new_sel = Some(Some("__free__".into()));
+                    }
+                    if ui
+                        .selectable_label(
+                            cur_style.as_deref() == Some("__custom__"),
+                            egui::RichText::new("Custom...").monospace().size(9.5),
+                        )
+                        .clicked()
+                    {
+                        new_sel = Some(Some("__custom__".into()));
+                    }
                     ui.separator();
-                    ui.add_space(4.0);
-
-                    // ── RIGHT column: log + thinking ──────────────────────────
-                    ui.vertical(|ui| {
-                        // Thinking toggle (compact, one line)
-                        if let Some(ref thinking) = self.last_thinking.clone() {
-                            let think_persona = self.state.read().llm.persona_name.clone();
-                            let label = if self.show_thinking {
-                                format!("▾ {} (think)", think_persona)
-                            } else {
-                                format!("▸ {} (think)", think_persona)
-                            };
-                            let label = label.as_str();
-                            if ui
-                                .add(
-                                    egui::Button::new(
-                                        egui::RichText::new(label)
-                                            .color(theme::IRON)
-                                            .monospace()
-                                            .size(8.5),
-                                    )
-                                    .frame(false),
-                                )
-                                .clicked()
-                            {
-                                self.show_thinking = !self.show_thinking;
-                            }
-                            if self.show_thinking {
-                                egui::ScrollArea::vertical()
-                                    .id_source("thinking_scroll")
-                                    .max_height(30.0)
-                                    .auto_shrink([false; 2])
-                                    .show(ui, |ui| {
-                                        let mut t = thinking.clone();
-                                        ui.add(
-                                            egui::TextEdit::multiline(&mut t)
-                                                .desired_width(f32::INFINITY)
-                                                .font(egui::FontId::monospace(8.5))
-                                                .text_color(theme::ASH)
-                                                .frame(false)
-                                                .interactive(false),
-                                        );
-                                    });
-                            }
+                    for s in catalog.styles() {
+                        if ui
+                            .selectable_label(
+                                cur_style.as_deref() == Some(s.id.as_str()),
+                                egui::RichText::new(&s.name).monospace().size(9.5),
+                            )
+                            .clicked()
+                        {
+                            new_sel = Some(Some(s.id.clone()));
                         }
+                    }
+                });
+            if let Some(maybe_id) = new_sel {
+                self.apply_style_selection(maybe_id);
+            }
+            ui.separator();
+            // Instructions
+            let mut instr = self.state.read().llm.user_instructions.clone();
+            if ui
+                .add(
+                    egui::TextEdit::singleline(&mut instr)
+                        .hint_text("persistent instructions…")
+                        .desired_width(ui.available_width())
+                        .font(egui::FontId::monospace(9.5)),
+                )
+                .changed()
+            {
+                self.state.write().llm.user_instructions = instr;
+            }
+        });
 
-                        // Log fills remaining height — colored note refs via Huth palette
-                        egui::ScrollArea::vertical()
-                            .id_source("log_scroll")
-                            .stick_to_bottom(true)
-                            .auto_shrink([false; 2])
-                            .show(ui, |ui: &mut egui::Ui| {
-                                let job = colorize_log(&self.log_text, theme::FOG);
-                                ui.add(
-                                    egui::Label::new(job)
-                                        .selectable(true),
-                                );
-                            });
-                    });
-                }); // end top row
-
-        // ── JAM timing row ────────────────────────────────────────────
+        // ── JAM timing row ───────────────────────────────────────────
         ui.horizontal(|ui| {
             ui.label(
                 egui::RichText::new("JAM")
@@ -561,8 +574,7 @@ impl ImpulseApp {
                     .size(8.5)
                     .color(theme::ASH),
             );
-            // Interval selector: CONT | 1 | 2 | 4 | 8 bars
-            let (jam_bars, cycle_count, bpm, is_inferring, active_ramps, tps) = {
+            let (jam_bars, cycle_count, _bpm, is_inferring, active_ramps, tps) = {
                 let s = self.state.read();
                 (
                     s.llm.jam_bars,
@@ -590,31 +602,18 @@ impl ImpulseApp {
                         .fill(egui::Color32::TRANSPARENT)
                         .min_size(egui::vec2(0.0, 12.0)),
                     )
-                    .on_hover_text(if *bars == 0.0 {
-                        "Fire next cycle immediately after inference".to_string()
-                    } else {
-                        format!(
-                            "Wait {} bar{} (~{:.0}s) between cycles",
-                            bars,
-                            if *bars > 1.0 { "s" } else { "" },
-                            bars * 240.0 / bpm
-                        )
-                    })
                     .clicked()
                 {
                     self.state.write().llm.jam_bars = *bars;
                 }
             }
             ui.add_space(6.0);
-            // Cycle counter
             ui.label(
                 egui::RichText::new(format!("#{}", cycle_count))
                     .monospace()
                     .size(8.0)
                     .color(theme::IRON),
-            )
-            .on_hover_text("Total jam cycles completed");
-            // Inference indicator + tokens/sec
+            );
             if is_inferring {
                 ui.label(egui::RichText::new("▶").size(8.0).color(theme::FOG))
                     .on_hover_text(format!("{:.1} tok/s", tps));
@@ -624,24 +623,16 @@ impl ImpulseApp {
                         .monospace()
                         .size(7.5)
                         .color(theme::IRON),
-                )
-                .on_hover_text("Tokens per second (last inference)");
+                );
             }
-            // Active ramps indicator
             if active_ramps > 0 {
                 ui.label(
                     egui::RichText::new(format!("~{}", active_ramps))
                         .monospace()
                         .size(7.5)
                         .color(theme::IRON),
-                )
-                .on_hover_text(format!(
-                    "{} active ramp{}",
-                    active_ramps,
-                    if active_ramps > 1 { "s" } else { "" }
-                ));
+                );
             }
-            // Countdown when waiting between cycles
             if let Some((fire_at, _)) = self.jam_next_fire {
                 let remaining = fire_at.duration_since(std::time::Instant::now());
                 ui.label(
@@ -649,95 +640,11 @@ impl ImpulseApp {
                         .monospace()
                         .size(7.5)
                         .color(theme::ASH),
-                )
-                .on_hover_text("Next jam cycle fires after this delay");
+                );
             }
         });
 
-        // ── LISTEN bar: capture + analysis display ────────────────────
-        ui.horizontal(|ui| {
-                    // Listen button — drains capture ring buffer, runs analysis
-                    if ui.add(
-                        egui::Button::new(
-                            egui::RichText::new("LISTEN")
-                                .monospace()
-                                .size(8.5)
-                                .color(theme::ASH),
-                        )
-                        .fill(egui::Color32::TRANSPARENT)
-                        .min_size(egui::vec2(0.0, 14.0)),
-                    ).clicked() {
-                        self.trigger_listen();
-                    }
-
-                    // AUTO toggle — re-triggers LISTEN every 4 jam cycles
-                    let auto_color = if self.auto_listen { theme::FOG } else { theme::SMOKE };
-                    if ui.add(
-                        egui::Button::new(
-                            egui::RichText::new("AUTO")
-                                .monospace()
-                                .size(8.0)
-                                .color(auto_color),
-                        )
-                        .fill(egui::Color32::TRANSPARENT)
-                        .min_size(egui::vec2(0.0, 14.0)),
-                    ).clicked() {
-                        self.auto_listen = !self.auto_listen;
-                        self.auto_listen_counter = 0;
-                    }
-
-                    // Show snapshot stats if available
-                    // Per-voice level bars derived from volume params in state
-                    {
-                        let s = self.state.read();
-                        let levels: &[(&str, f32)] = &[
-                            ("BAS", s.bass_voices[0].synth.volume),
-                            ("K-A", s.kit_a.kick.volume),
-                            ("S-A", s.kit_a.snare.volume),
-                            ("HH", s.kit_a.hihat_closed.volume),
-                            ("K-B", s.kit_b.kick.volume),
-                            ("S-B", s.kit_b.snare.volume),
-                            ("CLP", s.kit_b.clap.volume),
-                            ("AMN", s.amen.volume),
-                        ];
-                        ui.add_space(6.0);
-                        for (label, vol) in levels {
-                            let bar_h = 10.0_f32;
-                            let bar_w = 3.0_f32;
-                            let fill_h = (vol * bar_h).clamp(0.0, bar_h);
-                            let (resp, painter) = ui.allocate_painter(
-                                egui::vec2(bar_w + 1.0, bar_h),
-                                egui::Sense::hover(),
-                            );
-                            let rect = resp.rect;
-                            // Background
-                            painter.rect_filled(rect, 0.0, theme::VOID);
-                            // Fill from bottom
-                            let fill_rect = egui::Rect::from_min_max(
-                                egui::pos2(rect.min.x, rect.max.y - fill_h),
-                                rect.max,
-                            );
-                            painter.rect_filled(fill_rect, 0.0, theme::IRON);
-                            resp.on_hover_text(format!("{} {:.0}%", label, vol * 100.0));
-                        }
-                    }
-
-                    if let Some(ref a) = self.audio_analysis {
-                        ui.add_space(4.0);
-                        ui.label(
-                            egui::RichText::new(format!(
-                                "sub {:+.0}  low {:+.0}  mid {:+.0}  hi {:+.0}  pk {:+.1}  crest {:.0}dB  ~{:.0}tr/bar",
-                                a.sub_rms_db, a.low_rms_db, a.mid_rms_db, a.high_rms_db,
-                                a.peak_db, a.crest_db, a.transients_per_bar
-                            ))
-                            .monospace()
-                            .size(8.0)
-                            .color(theme::IRON),
-                        );
-                    }
-                });
-
-        // ── BOTTOM row: full-width prompt + Enter (vertically centred) ──
+        // ── Prompt input + ASK ───────────────────────────────────────
         ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
             let avail = ui.available_width();
             let prompt_w = avail - 50.0;

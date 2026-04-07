@@ -540,103 +540,7 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
     }
 
     if !app.zone_global_collapsed {
-        // Sequencer — full available width
-        {
-            let seq_id = app
-                .state
-                .read()
-                .rack
-                .modules
-                .iter()
-                .find(|m| m.kind == ModuleKind::StepSequencer)
-                .map(|m| m.id)
-                .unwrap_or(100);
-            let enabled = app
-                .state
-                .read()
-                .rack
-                .modules
-                .iter()
-                .find(|m| m.id == seq_id)
-                .map(|m| m.enabled)
-                .unwrap_or(true);
-
-            let resp = if app.rack_flipped {
-                module_card::module_card_back(
-                    ui,
-                    seq_id,
-                    ModuleKind::StepSequencer,
-                    enabled,
-                    Some(available_w - 2.0),
-                    ports,
-                )
-            } else {
-                module_card::module_card(
-                    ui,
-                    seq_id,
-                    ModuleKind::StepSequencer,
-                    enabled,
-                    Some(available_w - 2.0),
-                    ports,
-                    |ui| {
-                        crate::ui::panels::draw_sequencer(app, ui);
-                    },
-                )
-                .0
-            };
-            if resp.toggle_clicked
-                && let Some(m) = app
-                    .state
-                    .write()
-                    .rack
-                    .modules
-                    .iter_mut()
-                    .find(|m| m.id == seq_id)
-            {
-                m.enabled = !m.enabled;
-            }
-        }
-
-        ui.add_space(2.0);
-
-        // Master output card — compact strip showing master volume + per-voice info
-        {
-            let master_id = app
-                .state
-                .read()
-                .rack
-                .modules
-                .iter()
-                .find(|m| m.kind == ModuleKind::MasterOutput)
-                .map(|m| m.id)
-                .unwrap_or(101);
-            let resp = if app.rack_flipped {
-                module_card::module_card_back(
-                    ui,
-                    master_id,
-                    ModuleKind::MasterOutput,
-                    true,
-                    Some(available_w - 2.0),
-                    ports,
-                )
-            } else {
-                module_card::module_card(
-                    ui,
-                    master_id,
-                    ModuleKind::MasterOutput,
-                    true,
-                    Some(available_w - 2.0),
-                    ports,
-                    |ui| {
-                        draw_master_content(app, ui);
-                    },
-                )
-                .0
-            };
-            let _ = resp;
-        }
-
-        // LLM Console — style, log, prompt, JAM, LISTEN (singleton, full-width)
+        // LLM Console — style, prompt, JAM (singleton, full-width, always first)
         {
             let console_id = app
                 .state
@@ -747,6 +651,101 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
                     app.push_fx_plan();
                 }
             }
+        }
+
+        // Sequencer — full available width
+        {
+            let seq_id = app
+                .state
+                .read()
+                .rack
+                .modules
+                .iter()
+                .find(|m| m.kind == ModuleKind::StepSequencer)
+                .map(|m| m.id)
+                .unwrap_or(100);
+            let enabled = app
+                .state
+                .read()
+                .rack
+                .modules
+                .iter()
+                .find(|m| m.id == seq_id)
+                .map(|m| m.enabled)
+                .unwrap_or(true);
+            ui.add_space(2.0);
+            let resp = if app.rack_flipped {
+                module_card::module_card_back(
+                    ui,
+                    seq_id,
+                    ModuleKind::StepSequencer,
+                    enabled,
+                    Some(available_w - 2.0),
+                    ports,
+                )
+            } else {
+                module_card::module_card(
+                    ui,
+                    seq_id,
+                    ModuleKind::StepSequencer,
+                    enabled,
+                    Some(available_w - 2.0),
+                    ports,
+                    |ui| {
+                        crate::ui::panels::draw_sequencer(app, ui);
+                    },
+                )
+                .0
+            };
+            if resp.toggle_clicked
+                && let Some(m) = app
+                    .state
+                    .write()
+                    .rack
+                    .modules
+                    .iter_mut()
+                    .find(|m| m.id == seq_id)
+            {
+                m.enabled = !m.enabled;
+            }
+        }
+
+        // Master output
+        {
+            let master_id = app
+                .state
+                .read()
+                .rack
+                .modules
+                .iter()
+                .find(|m| m.kind == ModuleKind::MasterOutput)
+                .map(|m| m.id)
+                .unwrap_or(101);
+            ui.add_space(2.0);
+            let resp = if app.rack_flipped {
+                module_card::module_card_back(
+                    ui,
+                    master_id,
+                    ModuleKind::MasterOutput,
+                    true,
+                    Some(available_w - 2.0),
+                    ports,
+                )
+            } else {
+                module_card::module_card(
+                    ui,
+                    master_id,
+                    ModuleKind::MasterOutput,
+                    true,
+                    Some(available_w - 2.0),
+                    ports,
+                    |ui| {
+                        draw_master_content(app, ui);
+                    },
+                )
+                .0
+            };
+            let _ = resp;
         }
 
         ui.add_space(2.0);

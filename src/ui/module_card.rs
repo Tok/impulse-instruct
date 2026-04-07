@@ -59,21 +59,36 @@ fn title_fill(kind: ModuleKind) -> Color32 {
 pub const PORT_RADIUS: f32 = 5.5;
 const PORT_HOLE: f32 = 2.2;
 
+/// Port radius for a given kind — Control ports are smaller.
+pub fn port_radius(kind: PortKind) -> f32 {
+    if kind == PortKind::Control {
+        3.5
+    } else {
+        PORT_RADIUS
+    }
+}
+
 /// Draw a jack port circle and return its centre.
 pub fn draw_port_circle(painter: &egui::Painter, center: Pos2, kind: PortKind, dir: PortDir) {
-    // Outer ring — bright grey
-    let ring_color = Color32::from_gray(100);
-    painter.circle_filled(center, PORT_RADIUS + 1.5, Color32::from_gray(12));
-    painter.circle_filled(center, PORT_RADIUS, ring_color);
-    // Inner fill — direction-coded lightness
-    let inner = match dir {
-        PortDir::Out => Color32::from_gray(60),
-        PortDir::In => Color32::from_gray(30),
+    let r = port_radius(kind);
+    let hole = if kind == PortKind::Control {
+        1.2
+    } else {
+        PORT_HOLE
     };
-    painter.circle_filled(center, PORT_RADIUS - 1.5, inner);
-    // Centre hole
-    painter.circle_filled(center, PORT_HOLE, Color32::from_gray(8));
-    // CV ports get a small bright dot in the hole
+    let ring_color = if kind == PortKind::Control {
+        Color32::from_gray(70)
+    } else {
+        Color32::from_gray(100)
+    };
+    painter.circle_filled(center, r + 1.5, Color32::from_gray(12));
+    painter.circle_filled(center, r, ring_color);
+    let inner = match dir {
+        PortDir::Out => Color32::from_gray(if kind == PortKind::Control { 45 } else { 60 }),
+        PortDir::In => Color32::from_gray(if kind == PortKind::Control { 25 } else { 30 }),
+    };
+    painter.circle_filled(center, r - 1.5, inner);
+    painter.circle_filled(center, hole, Color32::from_gray(8));
     if kind == PortKind::Cv {
         painter.circle_filled(center, 0.8, Color32::from_gray(180));
     }

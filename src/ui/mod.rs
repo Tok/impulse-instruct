@@ -182,7 +182,6 @@ pub struct ImpulseApp {
     piano_show_labels: bool,
     // Last chain-of-thought from the LLM (shown collapsible below the log)
     last_thinking: Option<String>,
-    show_thinking: bool,
     // Control layout preference — derived from AppState.ui_prefs each frame
     // Sequencer page (for >16 step patterns)
     seq_page: usize,
@@ -339,7 +338,6 @@ impl ImpulseApp {
             ui_volume: 1.0,
             piano_show_labels: true,
             last_thinking: None,
-            show_thinking: false,
             seq_page: 0,
             expanded_seq_voices: std::collections::HashSet::new(),
             drum_clipboard: None,
@@ -611,6 +609,40 @@ impl ImpulseApp {
                                 agent.model_path = Some(m.clone());
                             }
                             self.state.write().llm_agents.push(agent);
+                            // Auto-wire control cables from scope
+                            {
+                                use crate::state::{
+                                    PortDir, PortKind, PortRef, rack_kind_name_matches,
+                                };
+                                let targets: Vec<u32> = self
+                                    .state
+                                    .read()
+                                    .rack
+                                    .modules
+                                    .iter()
+                                    .filter(|m| {
+                                        scope.iter().any(|s| rack_kind_name_matches(m.kind, s))
+                                    })
+                                    .map(|m| m.id)
+                                    .collect();
+                                let mut s = self.state.write();
+                                for (i, tid) in targets.iter().enumerate() {
+                                    s.rack.connect(
+                                        PortRef {
+                                            module_id: id,
+                                            dir: PortDir::Out,
+                                            kind: PortKind::Control,
+                                            index: i as u8,
+                                        },
+                                        PortRef {
+                                            module_id: *tid,
+                                            dir: PortDir::In,
+                                            kind: PortKind::Control,
+                                            index: 0,
+                                        },
+                                    );
+                                }
+                            }
                             self.log_text
                                 .push_str(&format!("Agent spawned: {} ({:?})\n", persona, scope));
                             self.session_dirty = true;
@@ -862,7 +894,6 @@ impl eframe::App for ImpulseApp {
                 self.push_audio_params();
             }
         }
-
         // ── Tab: flip rack (front ↔ back panel) ─────────────────────────────
         if ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Tab)) {
             self.rack_flipped = !self.rack_flipped;
@@ -882,7 +913,6 @@ impl eframe::App for ImpulseApp {
                 log::info!("Startup prompt: {}", prompt);
             }
         }
-
         ctx.request_repaint_after(std::time::Duration::from_millis(16));
         // ── Drain scope + DSP load ring buffers ──────────────────────────────
         while let Ok(s) = self.scope_rx.pop() {
@@ -909,7 +939,6 @@ impl eframe::App for ImpulseApp {
 
         self.draw_windows(ctx);
         self.draw_menu_and_header(ctx);
-
         // ── Oscilloscope strip ────────────────────────────────────────────────
         TopBottomPanel::top("scope")
             .frame(

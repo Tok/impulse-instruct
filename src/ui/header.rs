@@ -8,10 +8,35 @@ use crate::ui::{ImpulseApp, theme, webbrowser_open};
 use egui::{Frame, TopBottomPanel};
 
 impl ImpulseApp {
-    /// Menu bar + header transport strip.
+    /// Menu bar + header transport strip + global log.
     pub(super) fn draw_menu_and_header(&mut self, ctx: &egui::Context) {
         self.draw_menu_bar(ctx);
         self.draw_header_bar(ctx);
+        self.draw_log_strip(ctx);
+    }
+
+    /// Global log strip — shared across all agents, below the header.
+    fn draw_log_strip(&mut self, ctx: &egui::Context) {
+        TopBottomPanel::top("log_strip")
+            .frame(Frame::none().fill(theme::PIT).inner_margin(egui::Margin {
+                left: 8.0,
+                right: 8.0,
+                top: 2.0,
+                bottom: 2.0,
+            }))
+            .resizable(true)
+            .min_height(20.0)
+            .default_height(50.0)
+            .show(ctx, |ui| {
+                egui::ScrollArea::vertical()
+                    .id_source("global_log")
+                    .stick_to_bottom(true)
+                    .auto_shrink([false; 2])
+                    .show(ui, |ui: &mut egui::Ui| {
+                        let job = super::llm_strip::colorize_log(&self.log_text, theme::FOG);
+                        ui.add(egui::Label::new(job).selectable(true));
+                    });
+            });
     }
 
     fn draw_menu_bar(&mut self, ctx: &egui::Context) {

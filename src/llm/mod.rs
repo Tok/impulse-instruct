@@ -310,7 +310,7 @@ pub fn run_llm_loop(
                     (
                         a.heat,
                         a.temperature,
-                        a.scope.clone(),
+                        crate::state::scope_from_control_cables(&s.rack, aid),
                         a.enable_thinking,
                         model,
                         Some(a.conversation_mode.clone()),

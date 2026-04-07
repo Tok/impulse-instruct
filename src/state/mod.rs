@@ -105,7 +105,7 @@ pub use ui_prefs::{AutosaveInterval, HuthStyle, KnobSize, KnobStyle, PadSize, Ui
 pub mod rack;
 pub use rack::{
     Cable, CableColor, FxPlan, FxStep, ModuleKind, PortDir, PortKind, PortRef, RackModule,
-    RackState, Zone, compile_fx_plan,
+    RackState, Zone, compile_fx_plan, rack_kind_name_matches, scope_from_control_cables,
 };
 
 // ─── Amen / WAV sampler voice state ──────────────────────────────────────────

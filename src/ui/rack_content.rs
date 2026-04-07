@@ -325,7 +325,6 @@ pub(super) fn draw_llm_agent_content(app: &mut ImpulseApp, ui: &mut egui::Ui, mo
         tps,
         cycles,
         inferring,
-        scope,
         agent_model,
         conv_mode,
         active_style,
@@ -346,7 +345,6 @@ pub(super) fn draw_llm_agent_content(app: &mut ImpulseApp, ui: &mut egui::Ui, mo
             a.tokens_per_sec,
             a.jam_cycle_count,
             a.is_inferring,
-            a.scope.clone(),
             a.model_path.clone(),
             a.conversation_mode.clone(),
             a.active_style.clone(),
@@ -478,83 +476,22 @@ pub(super) fn draw_llm_agent_content(app: &mut ImpulseApp, ui: &mut egui::Ui, mo
         }
     });
 
-    // ── Scope checkboxes ─────────────────────────────────────────────────
-    const SCOPE_KEYS: &[(&str, &str)] = &[
-        ("bass", "BASS"),
-        ("kit_a", "808"),
-        ("kit_b", "909"),
-        ("hoover", "HOV"),
-        ("an1x", "AN1X"),
-        ("fx", "FX"),
-        ("sequencer", "SEQ"),
-        ("noise", "NSE"),
-        ("lfo", "LFO"),
-    ];
-    ui.horizontal_wrapped(|ui| {
-        ui.spacing_mut().item_spacing = egui::vec2(2.0, 1.0);
-        let all = scope.is_empty();
-        // "ALL" toggle
-        let all_col = if all { theme::CHALK } else { theme::ASH };
-        let all_fill = if all {
-            egui::Color32::from_gray(50)
+    // ── Scope (derived from control cables) ────────────────────────────
+    {
+        let cable_scope =
+            crate::state::scope_from_control_cables(&app.state.read().rack, module_id);
+        let label = if cable_scope.is_empty() {
+            "SCOPE: ALL".to_string()
         } else {
-            egui::Color32::from_gray(18)
+            format!("SCOPE: {}", cable_scope.join(" "))
         };
-        if ui
-            .add(
-                egui::Button::new(
-                    egui::RichText::new("ALL")
-                        .monospace()
-                        .size(7.5)
-                        .color(all_col),
-                )
-                .fill(all_fill)
-                .min_size(egui::vec2(24.0, 14.0)),
-            )
-            .clicked()
-        {
-            app.state.write().llm_agents[idx].scope.clear();
-        }
-        for (key, label) in SCOPE_KEYS {
-            let active = all || scope.iter().any(|s| s == *key);
-            let col = if active {
-                theme::FOG
-            } else {
-                egui::Color32::from_gray(45)
-            };
-            let fill = if active && !all {
-                egui::Color32::from_gray(40)
-            } else {
-                egui::Color32::from_gray(18)
-            };
-            if ui
-                .add(
-                    egui::Button::new(egui::RichText::new(*label).monospace().size(7.5).color(col))
-                        .fill(fill)
-                        .min_size(egui::vec2(28.0, 14.0)),
-                )
-                .clicked()
-            {
-                let mut s = app.state.write();
-                let sc = &mut s.llm_agents[idx].scope;
-                if sc.is_empty() {
-                    // Switch from "all" to specific: add all EXCEPT this one
-                    *sc = SCOPE_KEYS
-                        .iter()
-                        .map(|(k, _)| k.to_string())
-                        .filter(|k| k != key)
-                        .collect();
-                } else if let Some(pos) = sc.iter().position(|s| s == *key) {
-                    sc.remove(pos);
-                    if sc.is_empty() {
-                        // Last one removed → back to "all"
-                    }
-                } else {
-                    sc.push(key.to_string());
-                }
-            }
-        }
-    });
+        ui.label(
+            egui::RichText::new(label)
+                .monospace()
+                .size(7.5)
+                .color(theme::IRON),
+        );
+    }
 
     // ── Conversation mode + thinking ───────────────────────────────────
     ui.horizontal(|ui| {
