@@ -209,6 +209,44 @@ impl ImpulseApp {
                         }
                     });
 
+                    ui.menu_button(egui::RichText::new("View").monospace().size(10.0), |ui| {
+                        if ui
+                            .button(egui::RichText::new("Compact All").monospace().size(10.0))
+                            .clicked()
+                        {
+                            for m in &self.state.read().rack.modules {
+                                self.module_scales.insert(m.id, 0.6);
+                            }
+                            self.session_dirty = true;
+                            ui.close_menu();
+                        }
+                        if ui
+                            .button(egui::RichText::new("Expand All").monospace().size(10.0))
+                            .clicked()
+                        {
+                            self.module_scales.clear();
+                            self.session_dirty = true;
+                            ui.close_menu();
+                        }
+                        if ui
+                            .button(egui::RichText::new("Arrange").monospace().size(10.0))
+                            .clicked()
+                        {
+                            self.state.write().rack.arrange_canonical();
+                            self.session_dirty = true;
+                            ui.close_menu();
+                        }
+                        if ui
+                            .button(egui::RichText::new("Reset Layout").monospace().size(10.0))
+                            .clicked()
+                        {
+                            self.module_scales.clear();
+                            self.state.write().rack.arrange_canonical();
+                            self.session_dirty = true;
+                            ui.close_menu();
+                        }
+                    });
+
                     ui.menu_button(egui::RichText::new("Help").monospace().size(10.0), |ui| {
                         if ui
                             .button(egui::RichText::new("Preferences…").monospace().size(10.0))

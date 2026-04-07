@@ -66,6 +66,8 @@ pub struct SessionData {
     pub temperature: Option<f32>,
     #[serde(default)]
     pub wizard_done: Option<bool>,
+    #[serde(default)]
+    pub module_scales: Option<std::collections::HashMap<u32, f32>>,
 }
 
 /// Save session data extracted from current AppState.
@@ -102,6 +104,7 @@ pub fn save_session_ext(
         show_thinking_in_log: Some(state.llm.show_thinking_in_log),
         temperature: Some(state.llm.temperature),
         wizard_done,
+        module_scales: None, // populated by caller when available
     };
     match serde_json::to_string_pretty(&data) {
         Ok(json) => {

@@ -67,6 +67,13 @@ impl ControlPrefs {
         }
     }
 
+    /// Like `from_prefs` but with a per-module scale factor applied to knob size.
+    pub fn from_prefs_scaled(prefs: &UiPrefs, scale: f32) -> Self {
+        let mut cp = Self::from_prefs(prefs);
+        cp.knob_size = (cp.knob_size * scale).max(20.0);
+        cp
+    }
+
     /// Suggested max-width for a glass panel group containing controls of this style.
     /// Used by panels to constrain group widths so `horizontal_wrapped` can flow them.
     pub fn group_max_width(self) -> f32 {

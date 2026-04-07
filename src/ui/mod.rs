@@ -1,6 +1,4 @@
-// ─── ui/mod.rs ────────────────────────────────────────────────────────────────
-// Main egui application.
-
+// ─── ui/mod.rs — Main egui application ───────────────────────────────────────
 mod header;
 mod llm_strip;
 pub mod module_card;
@@ -47,8 +45,6 @@ pub(super) const LOG_LEVELS: &[(&str, log::LevelFilter)] = &[
     ("INFO", log::LevelFilter::Info),
     ("DEBUG", log::LevelFilter::Debug),
 ];
-
-// Startup prompts live in config.json and are loaded via crate::config.
 
 pub(crate) const SEQ_LABEL_W: f32 = 72.0;
 pub(crate) const SEQ_LABEL_H: f32 = 22.0;
@@ -105,8 +101,6 @@ impl MidiClockTracker {
 
 mod undo;
 use undo::StateHistory;
-
-// ─── ImpulseApp ───────────────────────────────────────────────────────────────
 
 pub struct ImpulseApp {
     state: Arc<RwLock<AppState>>,
@@ -181,6 +175,8 @@ pub struct ImpulseApp {
     last_saved_rack_sig: (usize, usize),
     // Timestamp of the most recent actual save (for interval throttling).
     last_save_time: std::time::Instant,
+    // Per-module UI scale factors (module_id → scale, default 1.0, range 0.5–2.0).
+    pub(crate) module_scales: std::collections::HashMap<u32, f32>,
     // Auto-listen: when enabled, trigger LISTEN automatically every N jam cycles.
     auto_listen: bool,
     // Counts jam cycles since the last auto-listen trigger.
@@ -334,6 +330,9 @@ impl ImpulseApp {
             session_dirty: false,
             last_saved_rack_sig: (0, 0),
             last_save_time: std::time::Instant::now(),
+            module_scales: crate::state::load_session()
+                .and_then(|s| s.module_scales)
+                .unwrap_or_default(),
             auto_listen: false,
             auto_listen_counter: 0,
             jam_next_fire: None,
@@ -351,6 +350,11 @@ impl ImpulseApp {
     pub(crate) fn push_history(&mut self) {
         let snapshot = self.state.read().clone();
         self.history.push(snapshot);
+    }
+
+    /// Effective scale for a module (1.0 if unset).
+    pub(crate) fn module_scale(&self, id: u32) -> f32 {
+        self.module_scales.get(&id).copied().unwrap_or(1.0)
     }
 
     fn push_audio_params(&mut self) {
@@ -783,10 +787,18 @@ impl eframe::App for ImpulseApp {
         if self.native_ppp <= 0.0 {
             self.native_ppp = ctx.pixels_per_point();
         }
-        // Ctrl+MouseWheel zoom — adjusts ui_scale (0.5–3.0) → pixels_per_point.
-        if let Some(new_scale) = util::ctrl_scroll_zoom(ctx, self.state.read().ui_prefs.ui_scale) {
-            self.state.write().ui_prefs.ui_scale = new_scale;
-            self.session_dirty = true;
+        // Context-sensitive Ctrl+MW zoom: per-module over cards, global elsewhere.
+        let cg = self.state.read().ui_prefs.ui_scale;
+        match util::detect_ctrl_zoom(ctx, &self.module_scales, cg) {
+            Some(util::ZoomTarget::Module(id, s)) => {
+                self.module_scales.insert(id, s);
+                self.session_dirty = true;
+            }
+            Some(util::ZoomTarget::Global(s)) => {
+                self.state.write().ui_prefs.ui_scale = s;
+                self.session_dirty = true;
+            }
+            None => {}
         }
         ctx.set_pixels_per_point(self.native_ppp * self.state.read().ui_prefs.ui_scale);
 

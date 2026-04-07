@@ -33,9 +33,21 @@ pub(crate) fn scan_models() -> Vec<String> {
     found
 }
 
-/// Ctrl+MouseWheel zoom: returns `Some(new_scale)` when the user scrolls
-/// with Ctrl held, or `None` if no zoom change occurred.
-pub(crate) fn ctrl_scroll_zoom(ctx: &egui::Context, current_scale: f32) -> Option<f32> {
+/// Result of context-sensitive Ctrl+MW zoom detection.
+pub(crate) enum ZoomTarget {
+    /// Per-module zoom: (module_id, new_scale).
+    Module(u32, f32),
+    /// Global UI zoom: caller should apply step to `ui_prefs.ui_scale`.
+    Global(f32),
+}
+
+/// Detect Ctrl+MW zoom and return the appropriate target.
+/// Reads card rects + per-module scales from egui temp memory.
+pub(crate) fn detect_ctrl_zoom(
+    ctx: &egui::Context,
+    module_scales: &std::collections::HashMap<u32, f32>,
+    current_global: f32,
+) -> Option<ZoomTarget> {
     let delta = ctx.input(|i| {
         if i.modifiers.ctrl {
             i.raw_scroll_delta.y
@@ -43,11 +55,24 @@ pub(crate) fn ctrl_scroll_zoom(ctx: &egui::Context, current_scale: f32) -> Optio
             0.0
         }
     });
-    if delta.abs() > 0.1 {
-        let step = (delta / 120.0).clamp(-0.5, 0.5) * 0.1;
-        Some((current_scale + step).clamp(0.5, 3.0))
+    if delta.abs() <= 0.1 {
+        return None;
+    }
+    let step = (delta / 120.0).clamp(-0.5, 0.5) * 0.1;
+    let card_rects: Vec<(u32, egui::Rect)> = ctx
+        .memory(|m| m.data.get_temp(egui::Id::new("module_card_rects")))
+        .unwrap_or_default();
+    let hovered = ctx.pointer_latest_pos().and_then(|p| {
+        card_rects
+            .iter()
+            .find(|(_, r)| r.contains(p))
+            .map(|&(id, _)| id)
+    });
+    if let Some(mid) = hovered {
+        let cur = module_scales.get(&mid).copied().unwrap_or(1.0);
+        Some(ZoomTarget::Module(mid, (cur + step).clamp(0.5, 2.0)))
     } else {
-        None
+        Some(ZoomTarget::Global((current_global + step).clamp(0.5, 3.0)))
     }
 }
 

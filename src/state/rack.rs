@@ -319,6 +319,53 @@ impl RackState {
             .retain(|c| c.from.module_id != id && c.to.module_id != id);
     }
 
+    /// Sort modules within each zone into a canonical order and reassign slot indices.
+    pub fn arrange_canonical(&mut self) {
+        fn order(kind: ModuleKind) -> u8 {
+            match kind {
+                ModuleKind::LlmConsole => 0,
+                ModuleKind::LlmAgent => 1,
+                ModuleKind::StepSequencer => 2,
+                ModuleKind::MasterOutput => 3,
+                ModuleKind::AcidBass => 10,
+                ModuleKind::DrumKit808 => 11,
+                ModuleKind::DrumKit909 => 12,
+                ModuleKind::HooverLead => 13,
+                ModuleKind::An1xVoice => 14,
+                ModuleKind::AmenSampler => 15,
+                ModuleKind::NoiseVoice => 16,
+                ModuleKind::EspeakNgTts | ModuleKind::CoquiTts => 17,
+                ModuleKind::FxWaveshaper => 20,
+                ModuleKind::FxReverb => 21,
+                ModuleKind::FxDelay => 22,
+                ModuleKind::FxBitcrush => 23,
+                ModuleKind::FxChorus => 24,
+                ModuleKind::FxPhaser => 25,
+                ModuleKind::FxRingMod => 26,
+                ModuleKind::FxEq => 27,
+                ModuleKind::FxCompressor => 28,
+                ModuleKind::FxTapeSat => 29,
+                ModuleKind::FxDrive => 30,
+                ModuleKind::FxAutotune => 31,
+                ModuleKind::LfoModule => 32,
+            }
+        }
+        for zone in [Zone::Global, Zone::Voice, Zone::FxMod] {
+            let mut ids: Vec<(u32, u8)> = self
+                .modules
+                .iter()
+                .filter(|m| m.zone == zone)
+                .map(|m| (m.id, order(m.kind)))
+                .collect();
+            ids.sort_by_key(|&(_, o)| o);
+            for (slot, &(id, _)) in ids.iter().enumerate() {
+                if let Some(m) = self.modules.iter_mut().find(|m| m.id == id) {
+                    m.slot = slot as u8;
+                }
+            }
+        }
+    }
+
     /// Add a cable between two ports (no duplicate check — caller ensures validity).
     pub fn connect(&mut self, from: PortRef, to: PortRef) {
         let color = self.next_cable_color();
