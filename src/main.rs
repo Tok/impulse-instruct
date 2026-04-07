@@ -299,6 +299,7 @@ fn run() -> anyhow::Result<()> {
         scope_rx: audio_engine.scope_rx,
         capture_rx: audio_engine.capture_rx,
         dsp_load_rx: audio_engine.dsp_load_rx,
+        stereo_rx: audio_engine.stereo_rx,
     };
 
     let native_options = eframe::NativeOptions {

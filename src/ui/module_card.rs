@@ -47,7 +47,8 @@ fn title_fill(kind: ModuleKind) -> Color32 {
         | ModuleKind::FxTapeSat
         | ModuleKind::FxDrive
         | ModuleKind::FxAutotune
-        | ModuleKind::SpectrumAnalyzer => 20,
+        | ModuleKind::SpectrumAnalyzer
+        | ModuleKind::StereoMeter => 20,
         ModuleKind::LfoModule => 18,
         ModuleKind::LlmAgent => 30,
         ModuleKind::LlmConsole => 28,

@@ -186,6 +186,47 @@ fn to_db(linear: f32) -> f32 {
     (20.0 * linear.log10()).max(-96.0)
 }
 
+// ─── Stereo correlation ──────────────────────────────────────────────────────
+
+/// Compute stereo phase correlation (-1..+1) and L/R balance (-1..+1) from
+/// interleaved stereo samples [L0, R0, L1, R1, ...].
+///
+/// Correlation: +1 = mono (L==R), 0 = uncorrelated, -1 = out of phase (L==-R).
+/// Balance: -1 = full left, 0 = center, +1 = full right.
+pub fn stereo_correlation(interleaved: &[f32]) -> (f32, f32) {
+    let frames = interleaved.len() / 2;
+    if frames == 0 {
+        return (0.0, 0.0);
+    }
+    let mut sum_lr = 0.0_f64;
+    let mut sum_ll = 0.0_f64;
+    let mut sum_rr = 0.0_f64;
+    let mut sum_l = 0.0_f64;
+    let mut sum_r = 0.0_f64;
+    for i in 0..frames {
+        let l = interleaved[i * 2] as f64;
+        let r = interleaved[i * 2 + 1] as f64;
+        sum_lr += l * r;
+        sum_ll += l * l;
+        sum_rr += r * r;
+        sum_l += l.abs();
+        sum_r += r.abs();
+    }
+    let denom = (sum_ll * sum_rr).sqrt();
+    let corr = if denom > 1e-12 {
+        (sum_lr / denom) as f32
+    } else {
+        0.0
+    };
+    let total = sum_l + sum_r;
+    let balance = if total > 1e-12 {
+        ((sum_r - sum_l) / total) as f32
+    } else {
+        0.0
+    };
+    (corr.clamp(-1.0, 1.0), balance.clamp(-1.0, 1.0))
+}
+
 // ─── Tests ────────────────────────────────────────────────────────────────────
 
 #[cfg(test)]
@@ -258,5 +299,43 @@ mod tests {
     fn to_db_clamps_at_minus_96() {
         assert_eq!(to_db(0.0), -96.0);
         assert_eq!(to_db(1e-12), -96.0);
+    }
+
+    #[test]
+    fn stereo_correlation_mono_is_one() {
+        // Identical L and R → correlation = 1.0
+        let interleaved: Vec<f32> = (0..200)
+            .flat_map(|i| {
+                let v = (i as f32 * 0.1).sin();
+                [v, v]
+            })
+            .collect();
+        let (corr, bal) = super::stereo_correlation(&interleaved);
+        assert!((corr - 1.0).abs() < 0.01, "corr={corr}");
+        assert!(bal.abs() < 0.1, "bal={bal}");
+    }
+
+    #[test]
+    fn stereo_correlation_inverted_is_minus_one() {
+        let interleaved: Vec<f32> = (0..200)
+            .flat_map(|i| {
+                let v = (i as f32 * 0.1).sin();
+                [v, -v]
+            })
+            .collect();
+        let (corr, _bal) = super::stereo_correlation(&interleaved);
+        assert!((corr - (-1.0)).abs() < 0.01, "corr={corr}");
+    }
+
+    #[test]
+    fn stereo_balance_panned_right() {
+        let interleaved: Vec<f32> = (0..200)
+            .flat_map(|i| {
+                let v = (i as f32 * 0.1).sin();
+                [v * 0.2, v * 0.8] // mostly right
+            })
+            .collect();
+        let (_corr, bal) = super::stereo_correlation(&interleaved);
+        assert!(bal > 0.3, "bal={bal} should be positive (right-heavy)");
     }
 }

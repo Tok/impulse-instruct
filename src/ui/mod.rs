@@ -135,6 +135,11 @@ pub struct ImpulseApp {
     // Spectrum analyser: smoothed magnitude bins + peak-hold values.
     pub(crate) spectrum_magnitudes: Vec<f32>,
     pub(crate) spectrum_peaks: Vec<f32>,
+    // Stereo correlation meter
+    stereo_rx: rtrb::Consumer<f32>,
+    stereo_buf: Vec<f32>,
+    pub(crate) stereo_corr: f32,    // -1..+1 phase correlation
+    pub(crate) stereo_balance: f32, // -1..+1 L/R balance
     // Last chain-of-thought from the LLM (shown collapsible below the log)
     last_thinking: Option<String>,
     // Control layout preference — derived from AppState.ui_prefs each frame
@@ -206,6 +211,7 @@ pub struct AudioChannels {
     pub scope_rx: rtrb::Consumer<f32>,
     pub capture_rx: rtrb::Consumer<f32>,
     pub dsp_load_rx: rtrb::Consumer<f32>,
+    pub stereo_rx: rtrb::Consumer<f32>,
 }
 
 impl ImpulseApp {
@@ -300,6 +306,10 @@ impl ImpulseApp {
             piano_show_labels: true,
             spectrum_magnitudes: Vec::new(),
             spectrum_peaks: Vec::new(),
+            stereo_rx: audio.stereo_rx,
+            stereo_buf: Vec::with_capacity(4096),
+            stereo_corr: 0.0,
+            stereo_balance: 0.0,
             last_thinking: None,
             seq_page: 0,
             expanded_seq_voices: std::collections::HashSet::new(),
@@ -869,6 +879,18 @@ impl eframe::App for ImpulseApp {
             }
         }
         self.update_spectrum();
+        // Stereo correlation meter
+        while let Ok(s) = self.stereo_rx.pop() {
+            self.stereo_buf.push(s);
+        }
+        if self.stereo_buf.len() > 4096 {
+            self.stereo_buf.drain(..self.stereo_buf.len() - 4096);
+        }
+        if self.stereo_buf.len() >= 200 {
+            let (c, b) = crate::audio::analysis::stereo_correlation(&self.stereo_buf);
+            self.stereo_corr = self.stereo_corr * 0.8 + c * 0.2;
+            self.stereo_balance = self.stereo_balance * 0.8 + b * 0.2;
+        }
         while let Ok(load) = self.dsp_load_rx.pop() {
             self.dsp_load_buf.push(load);
         }

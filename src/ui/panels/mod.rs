@@ -13,6 +13,7 @@ pub mod sequencer;
 pub mod sequencer_chain;
 pub(super) mod sequencer_drums;
 pub mod spectrum;
+pub mod stereo_meter;
 pub mod tts;
 
 pub use an1x::draw_an1x;
@@ -25,4 +26,5 @@ pub use noise::draw_noise;
 pub use piano::draw_piano;
 pub use sequencer::draw_sequencer;
 pub use spectrum::draw_spectrum;
+pub use stereo_meter::draw_stereo_meter;
 pub use tts::draw_tts;

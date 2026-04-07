@@ -132,6 +132,7 @@ pub enum ModuleKind {
     FxAutotune,
     // ── Analysis ──────────────────────────────────────────────────────────────
     SpectrumAnalyzer,
+    StereoMeter,
     // ── Modulation ────────────────────────────────────────────────────────────
     LfoModule,
     LlmAgent,
@@ -168,6 +169,7 @@ impl ModuleKind {
             Self::FxDrive => "DRIVE",
             Self::FxAutotune => "AUTOTUNE",
             Self::SpectrumAnalyzer => "SPECTRUM",
+            Self::StereoMeter => "STEREO METER",
             Self::LfoModule => "LFO",
             Self::LlmAgent => "LLM AGENT",
             Self::LlmConsole => "LLM CONSOLE",
@@ -203,6 +205,7 @@ impl ModuleKind {
             | Self::FxDrive
             | Self::FxAutotune
             | Self::SpectrumAnalyzer
+            | Self::StereoMeter
             | Self::LfoModule => Zone::FxMod,
         }
     }
@@ -352,7 +355,8 @@ impl RackState {
                 ModuleKind::FxDrive => 30,
                 ModuleKind::FxAutotune => 31,
                 ModuleKind::SpectrumAnalyzer => 32,
-                ModuleKind::LfoModule => 33,
+                ModuleKind::StereoMeter => 33,
+                ModuleKind::LfoModule => 34,
             }
         }
         for zone in [Zone::Global, Zone::Voice, Zone::FxMod] {
@@ -761,6 +765,7 @@ pub fn rack_kind_name_matches(kind: ModuleKind, name: &str) -> bool {
         ModuleKind::LlmAgent => matches!(n.as_str(), "llm" | "agent" | "ai" | "llm_agent"),
         ModuleKind::LlmConsole => matches!(n.as_str(), "console" | "llm_console"),
         ModuleKind::SpectrumAnalyzer => matches!(n.as_str(), "spectrum" | "analyser" | "analyzer"),
+        ModuleKind::StereoMeter => matches!(n.as_str(), "stereo" | "correlation" | "meter"),
     }
 }
 
