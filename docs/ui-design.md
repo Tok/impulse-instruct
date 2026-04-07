@@ -77,11 +77,12 @@ These values must not be modified without updating `docs/colorful-notes.md`.
 See that file for the full color theory and mapping rationale.
 
 **Current usage:**
-- Active bass sequencer steps show their note's Huth color as a dot inside the step button.
+- Active bass/hoover/AN1X sequencer steps show note name in Huth color above the velocity dot.
+- Piano display keys use their Huth chromatic color for labels.
+- LLM log output colorizes note names (C4, A#3), frequencies (440 Hz), and MIDI numbers
+  using Huth colors - both in-UI and via ANSI 24-bit terminal escape codes.
 - The window icon (`make_window_icon()` in `main.rs`) uses Huth colors for the keyboard keys.
 - Drum steps always pass `note_color: None` - no note tint on drum rows.
-
-**Future usage:** piano roll rows, scope signal color (pitch-detected), chord grid, MIDI CC output.
 
 ---
 
@@ -155,6 +156,44 @@ Text colors:
 - `button_padding`: `(6, 3)` - compact but not cramped.
 - `window_margin`: `8 px` uniform.
 - All panels are dark (`DEEP`). No light-mode support - this is studio equipment.
+
+---
+
+## Parameter Lock States
+
+Knobs and sliders reflect their lock mode visually, entirely in grayscale:
+
+| Mode | Knob body | Arc / fill | Catch-light / rim | Animation |
+|------|-----------|------------|-------------------|-----------|
+| **Free** (default) | Normal (`PIT` / `SLATE`) | `FOG` | Normal (100) | None |
+| **User-owned (U)** | Darker (body -12) | `IRON` dim | Dimmed (60) | None - feels "locked down" |
+| **LLM Focus (F)** | Brighter (body +15) | `CHALK` bright | Shimmering (120-200, 1 Hz) | Slow pulse - "hot" |
+
+The visual contrast tells users at a glance which knobs the LLM will touch (Free),
+which are protected (U), and which the LLM is actively targeting (F).
+
+**Interaction:** Alt+click any knob or slider to cycle through Free / U / F.
+
+---
+
+## Footer Mode Indicators
+
+The footer strip shows three modifier indicators on the left:
+
+- **Ctrl** - highlights when held; Ctrl+scroll wheel zooms (global or per-module)
+- **Alt** - highlights when held; Alt+click cycles knob/slider lock mode
+- **Tab:BACK** - highlights when rack is flipped to back panel view
+
+All indicators have hover tooltips. The indicators light up from `IRON` (idle)
+to `CHALK` (active), strictly grayscale.
+
+---
+
+## Agent Status in Header
+
+The header bar shows a compact round-robin display after the HEAT slider: each
+enabled agent appears as a dot + persona name. The active (inferring) agent
+has a pulsing bright dot and `CHALK` text; idle agents show `IRON`.
 
 ---
 

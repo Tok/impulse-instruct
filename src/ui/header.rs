@@ -387,6 +387,53 @@ impl ImpulseApp {
 
                     ui.separator();
 
+                    // ── AGENT STATUS (compact round-robin display) ──────────
+                    {
+                        let s = self.state.read();
+                        let agents = &s.llm_agents;
+                        if !agents.is_empty() {
+                            let time = ctx.input(|i| i.time) as f32;
+                            for a in agents {
+                                let enabled = s
+                                    .rack
+                                    .modules
+                                    .iter()
+                                    .any(|m| m.id == a.id && m.enabled);
+                                if !enabled {
+                                    continue;
+                                }
+                                let dot_col = if a.is_inferring {
+                                    // Pulsing bright when active
+                                    let p = (time * 4.0 * std::f32::consts::TAU).sin() * 0.3 + 0.7;
+                                    egui::Color32::from_gray((220.0 * p) as u8)
+                                } else {
+                                    egui::Color32::from_gray(60)
+                                };
+                                ui.label(
+                                    egui::RichText::new("●")
+                                        .color(dot_col)
+                                        .size(8.0),
+                                );
+                                let name_col = if a.is_inferring {
+                                    theme::CHALK
+                                } else {
+                                    theme::IRON
+                                };
+                                ui.label(
+                                    egui::RichText::new(&a.persona_name)
+                                        .color(name_col)
+                                        .monospace()
+                                        .size(8.0),
+                                );
+                            }
+                            if agents.iter().any(|a| a.is_inferring) {
+                                ctx.request_repaint();
+                            }
+                        }
+                    }
+
+                    ui.separator();
+
                     // ── RIGHT controls (KNOBS, MON, VRAM/RAM, API) ─────────
                     {
                         let (has_vram, has_ram, vram_used, vram_total, ram_used, ram_total) = self

@@ -173,7 +173,18 @@ pub fn knob(ui: &mut Ui, label: &str, value: &mut f32, mode: ParamMode, size: f3
 
     if ui.is_rect_visible(rect) {
         let painter = ui.painter();
-        draw_knob(painter, knob_rect, *value, mode, response.hovered());
+        let anim_time = ui.ctx().input(|i| i.time) as f32;
+        draw_knob(
+            painter,
+            knob_rect,
+            *value,
+            mode,
+            response.hovered(),
+            anim_time,
+        );
+        if mode == ParamMode::LlmFocus {
+            ui.ctx().request_repaint(); // keep Focus shimmer animating
+        }
         painter.text(
             label_rect.center(),
             egui::Align2::CENTER_CENTER,
@@ -196,7 +207,7 @@ pub fn knob(ui: &mut Ui, label: &str, value: &mut f32, mode: ParamMode, size: f3
     (changed, mode_cycled)
 }
 
-fn draw_knob(painter: &Painter, rect: Rect, value: f32, mode: ParamMode, hovered: bool) {
+fn draw_knob(painter: &Painter, rect: Rect, value: f32, mode: ParamMode, hovered: bool, time: f32) {
     let center = rect.center();
     let radius = rect.width() * 0.45;
 
@@ -221,13 +232,18 @@ fn draw_knob(painter: &Painter, rect: Rect, value: f32, mode: ParamMode, hovered
     };
     painter.circle_filled(center, radius, bg);
 
-    // Catch-light: short bright line toward top-left, simulates overhead lamp
+    // Catch-light: short bright line toward top-left, simulates overhead lamp.
+    // Focus knobs shimmer slowly to signal "hot" status.
     let cl_angle = std::f32::consts::PI * 1.25; // ~10 o'clock
     let cl_a = center + Vec2::new(cl_angle.cos(), cl_angle.sin()) * (radius * 0.25);
     let cl_b = center + Vec2::new(cl_angle.cos(), cl_angle.sin()) * (radius * 0.60);
-    let cl_bright = match mode {
+    let cl_bright: u8 = match mode {
         ParamMode::UserOwned => 60,
-        ParamMode::LlmFocus => 140,
+        ParamMode::LlmFocus => {
+            // Slow shimmer (1 Hz sine pulse between 120 and 200)
+            let pulse = (time * TAU).sin() * 0.5 + 0.5;
+            (120.0 + pulse * 80.0) as u8
+        }
         ParamMode::Free => 100,
     };
     painter.line_segment(
@@ -713,7 +729,18 @@ pub fn knob_chrome(
 
     if ui.is_rect_visible(rect) {
         let painter = ui.painter();
-        draw_knob_chrome(painter, knob_rect, *value, mode, response.hovered());
+        let anim_time = ui.ctx().input(|i| i.time) as f32;
+        draw_knob_chrome(
+            painter,
+            knob_rect,
+            *value,
+            mode,
+            response.hovered(),
+            anim_time,
+        );
+        if mode == ParamMode::LlmFocus {
+            ui.ctx().request_repaint();
+        }
         let label_col = if mode == ParamMode::UserOwned {
             theme::ASH
         } else {
@@ -735,7 +762,14 @@ pub fn knob_chrome(
     (changed, mode_cycled)
 }
 
-fn draw_knob_chrome(painter: &Painter, rect: Rect, value: f32, mode: ParamMode, hovered: bool) {
+fn draw_knob_chrome(
+    painter: &Painter,
+    rect: Rect,
+    value: f32,
+    mode: ParamMode,
+    hovered: bool,
+    time: f32,
+) {
     let center = rect.center();
     // Smaller body leaves room for value arc + scale marks outside
     let radius = rect.width() * 0.38;
@@ -800,8 +834,20 @@ fn draw_knob_chrome(painter: &Painter, rect: Rect, value: f32, mode: ParamMode, 
         Stroke::new(1.0, Color32::from_gray(14)),
     );
 
-    // Bright outer rim — the "polished edge" (brightens slightly on hover)
-    let rim_col = if hovered { 180u8 } else { 120u8 };
+    // Bright outer rim — polished edge; Focus mode shimmers
+    let rim_col = match mode {
+        ParamMode::LlmFocus => {
+            let pulse = (time * TAU).sin() * 0.5 + 0.5;
+            (130.0 + pulse * 70.0) as u8
+        }
+        _ => {
+            if hovered {
+                180u8
+            } else {
+                120u8
+            }
+        }
+    };
     painter.circle_stroke(
         center,
         radius,

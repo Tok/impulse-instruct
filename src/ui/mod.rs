@@ -895,7 +895,8 @@ impl eframe::App for ImpulseApp {
 
         // ── Startup hook ──────────────────────────────────────────────────────
         // Fire once — right after the LLM transitions from initializing to ready.
-        if !self.startup_done && !self.state.read().llm.llm_initializing {
+        // Deferred while the setup wizard is visible so nothing plays before the user chooses.
+        if !self.startup_done && !self.show_wizard && !self.state.read().llm.llm_initializing {
             self.startup_done = true;
             if let Some(prompt) = crate::config::random_startup_prompt() {
                 // Send startup prompt to the first enabled agent.
@@ -981,6 +982,8 @@ impl eframe::App for ImpulseApp {
             });
 
         // ── Rack canvas (replaces tab panels) ────────────────────────────────
+        // When the startup wizard is visible, show an empty central panel
+        // so the rack doesn't load and nothing plays in the background.
         CentralPanel::default()
             .frame(
                 Frame::none()
@@ -988,7 +991,9 @@ impl eframe::App for ImpulseApp {
                     .inner_margin(egui::Margin::same(4.0)),
             )
             .show(ctx, |ui| {
-                rack_canvas::draw_rack(self, ctx, ui);
+                if !self.show_wizard {
+                    rack_canvas::draw_rack(self, ctx, ui);
+                }
             });
     }
 }
