@@ -118,92 +118,47 @@ horizontal bands (one per note) across five octaves.
 
 ## Integration in Impulse Instruct
 
-The Huth palette is live in `src/ui/theme.rs` as `NOTE_COLORS: [Color32; 12]`
+The Huth palette is defined in `src/ui/theme.rs` as `NOTE_COLORS: [Color32; 12]`
 and the helper `note_color(midi_note: u8) -> Color32`.
 
-### Current usage
+### Sequencer step cells
 
-**Bass sequencer row** (`src/ui/mod.rs` → `draw_sequencer()`):
-Each active bass step shows its note's Huth color as a dot indicator inside
-the step button. The color gives instant visual feedback about the melody
-shape before you even listen - an interval of a fifth apart produces
-complementary colors (tritone = exact opposite on the wheel).
+Active bass, hoover, and AN1X step buttons show the note name (e.g. "C4") in
+its Huth color above the velocity dot.  The color gives instant visual feedback
+about the melody shape before you listen — an interval of a fifth apart produces
+complementary colors (tritone = exact opposite on the wheel).  Implemented in
+`huth_note_cell()` in `src/ui/widgets/step.rs`; only shown when pad size >= 26px.
 
-**Widget layer** (`src/ui/widgets.rs` → `step_button()`):
-The `note_color: Option<Color32>` parameter passes the Huth tint through.
-Drum steps pass `None`; bass steps pass `Some(theme::note_color(note))`.
+### Piano display
 
-### Planned usage
+The piano keyboard at the bottom of the UI uses Huth colors for both white and
+black key labels.  Each key's label is rendered in its chromatic color rather than
+flat gray.  Modes: Off / Piano / Full (Full shows Huth-colored U-cup notation on
+melodic sequencer rows).
 
-**Piano roll / note editor:**
-When a per-step note editor opens (click-and-drag to change pitch), each
-semitone row in the mini piano roll could be tinted with its Huth color.
-This makes interval relationships visible at a glance.
+### Log output (UI and terminal)
 
-**LLM context:**
-The system prompt could describe the current melody in terms of Huth color
-names ("the line moves from Blue (C) through Orange (F#) - a tritone jump").
-This gives the model a richer, non-numeric vocabulary for melodic motion.
+Note names (C4, A#3), frequencies (440 Hz), and MIDI numbers (note 60) in the
+LLM response log are highlighted with their Huth color.  This applies both to
+the in-UI log (`colorize_log()` in `src/ui/llm_strip.rs`) and to the terminal
+via ANSI 24-bit color escape codes (`ansi_colorize_notes()` in
+`src/ui/note.rs`).  Word-boundary guards prevent false positives on strings like
+"D&B" or "E-flat"; quality-word extensions color "A minor" and "G major" as
+single spans.
 
-**Waveform display:**
-If a scope / waveform visualiser is added, the signal color could be mapped
-to the dominant pitch via pitch-detection - live Huth coloring of the audio.
+### Future possibilities
 
-**Chord grid (TAFEL IV style):**
-Huth's chord grids show which color triads are "harmonisch" (complementary
-tritone) vs. consonant (thirds and fifths). A future chord-mode panel could
-use these color relationships to suggest note choices to the LLM.
-
-**MIDI output:**
-MIDI note-on events could carry the Huth color data as a CC (e.g. CC 16–27)
-so downstream software (Ableton clip colors, Max/MSP, etc.) can color-code
-notes to match.
+- **Piano roll note editor** — tint each semitone row with its Huth color
+- **Waveform display** — map dominant pitch to Huth color via pitch detection
+- **Chord grid (TAFEL IV style)** — visualise harmonic color triads
+- **MIDI CC output** — send Huth color data as CC values for downstream
+  color-coding in Ableton, Max/MSP, etc.
 
 ---
 
-## Code Reference
+## Original Source
 
-```rust
-// src/ui/theme.rs
-pub const NOTE_COLORS: [Color32; 12] = [ /* C through B */ ];
-pub fn note_color(midi_note: u8) -> Color32 {
-    NOTE_COLORS[(midi_note % 12) as usize]
-}
+Ch. A. B. Huth, *Farbige Noten*, Hamburg 1888–1889.  Three volumes held at
+the International Music Score Library Project:
 
-// Usage in sequencer bass row
-let color = theme::note_color(bass_pattern[i].note);
-widgets::step_button(ui, is_active, is_current, 1.0, Some(color));
-```
-
----
-
-## Modular Instrument System
-
-Alongside the color work, Impulse Instruct moves away from fixed TB-303 /
-TR-808 / TR-909 tabs toward a **data-driven instrument slot system**:
-
-```rust
-// src/ui/mod.rs
-enum InstrumentKind { AcidBass, DrumKit808, DrumKit909 }
-struct InstrumentSlot { label: &'static str, kind: InstrumentKind }
-
-// ImpulseApp.instruments: Vec<InstrumentSlot>
-// Panel::Instrument(usize) - index into the list
-```
-
-The tab bar is generated dynamically from `self.instruments`. Adding a new
-synth means pushing to that Vec and providing a `draw_` function for its
-`InstrumentKind`. No enum variants need changing.
-
-**State naming convention** (post-rename):
-| Old | New | Notes |
-|-----|-----|-------|
-| `AppState.tb303: TB303State` | `AppState.bass: BassState` | JSON key: `"bass"` |
-| `AppState.tr808: TR808State` | `AppState.kit_a: DrumKit808` | - |
-| `AppState.tr909: TR909State` | `AppState.kit_b: DrumKit909` | - |
-
-**Future extension points:**
-- Second bass synth: push `InstrumentSlot { label: "BASS B", kind: InstrumentKind::AcidBass2 }`
-  and add a `bass_b: BassState` field with a new draw function
-- Sampler slot: `InstrumentKind::Sampler` with its own state struct and panel
-- Dynamic add/remove from UI: right-click tab → remove, + button → add instrument picker
+[IMSLP: Farbige Noten (Huth, Ch. A. B.)](https://imslp.org/wiki/Farbige_Noten_(Huth,_Ch._A._B.))

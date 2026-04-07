@@ -886,10 +886,18 @@ impl eframe::App for ImpulseApp {
         if !self.startup_done && !self.state.read().llm.llm_initializing {
             self.startup_done = true;
             if let Some(prompt) = crate::config::random_startup_prompt() {
+                // Send startup prompt to the first enabled agent.
+                let first_agent = {
+                    let s = self.state.read();
+                    s.llm_agents
+                        .iter()
+                        .find(|a| s.rack.modules.iter().any(|m| m.id == a.id && m.enabled))
+                        .map(|a| a.id)
+                };
                 let _ = self.llm_tx.try_send(LlmInput::Infer {
                     prompt: prompt.to_string(),
                     one_shot: true,
-                    agent_id: None,
+                    agent_id: first_agent,
                 });
                 log::info!("Startup prompt: {}", prompt);
             }

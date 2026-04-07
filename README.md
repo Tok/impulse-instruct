@@ -445,8 +445,9 @@ Bonsai 8B model: Apache 2.0 - credit to [prism-ml](https://huggingface.co/prism-
 
 | | |
 |---|---|
+| [docs/multi-agent.md](docs/multi-agent.md) | Multi-agent jamming: setup, presets, control cables, round-robin scheduling |
 | [docs/dev-setup.md](docs/dev-setup.md) | Build from source, architecture, HTTP API reference, parameter schema, Windows cross-compile |
 | [docs/features.md](docs/features.md) | Detailed list of all implemented features |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | How to contribute styles, tests, model benchmarks, and voice tuning |
-| [docs/colorful-notes.md](docs/colorful-notes.md) | Full Huth *Farbige Noten* color theory - intervals, complementary pairs, historical context |
+| [docs/colorful-notes.md](docs/colorful-notes.md) | Huth *Farbige Noten* color theory - intervals, complementary pairs, historical context |
 | [docs/ui-design.md](docs/ui-design.md) | UI design principles, grayscale palette, widget system |

@@ -374,6 +374,14 @@ impl ImpulseApp {
     }
 
     pub(super) fn draw_llm_console_content(&mut self, ui: &mut egui::Ui) {
+        // Override the centered layout from module_card — console needs full-width
+        // text fields, log area, and prompt input that fill the card.
+        ui.with_layout(egui::Layout::top_down(egui::Align::Min), |ui| {
+            self.draw_llm_console_inner(ui);
+        });
+    }
+
+    fn draw_llm_console_inner(&mut self, ui: &mut egui::Ui) {
         // ── Model selector + context bar ─────────────────────────────
         ui.horizontal(|ui| {
             // Model dropdown (global default)
@@ -697,19 +705,31 @@ impl ImpulseApp {
                     (typed.clone(), format!("YOU → {}\n", typed))
                 };
                 self.log_text.push_str(&log_line);
-                // Route to the first enabled agent (or None for singleton fallback).
-                let target_agent = {
+                // Broadcast to all enabled agents so the full team responds.
+                let enabled_agents: Vec<u32> = {
                     let s = self.state.read();
                     s.llm_agents
                         .iter()
-                        .find(|a| s.rack.modules.iter().any(|m| m.id == a.id && m.enabled))
+                        .filter(|a| s.rack.modules.iter().any(|m| m.id == a.id && m.enabled))
                         .map(|a| a.id)
+                        .collect()
                 };
-                let _ = self.llm_tx.try_send(LlmInput::Infer {
-                    prompt,
-                    one_shot: true,
-                    agent_id: target_agent,
-                });
+                if enabled_agents.is_empty() {
+                    // No agents — fall back to singleton
+                    let _ = self.llm_tx.try_send(LlmInput::Infer {
+                        prompt,
+                        one_shot: true,
+                        agent_id: None,
+                    });
+                } else {
+                    for aid in enabled_agents {
+                        let _ = self.llm_tx.try_send(LlmInput::Infer {
+                            prompt: prompt.clone(),
+                            one_shot: true,
+                            agent_id: Some(aid),
+                        });
+                    }
+                }
                 self.prompt_input.clear();
             }
         });
