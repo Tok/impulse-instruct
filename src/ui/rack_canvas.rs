@@ -164,7 +164,7 @@ pub fn draw_rack(app: &mut ImpulseApp, ctx: &egui::Context, ui: &mut egui::Ui) {
     let scroll_id = egui::Id::new("rack_scroll");
     let scroll_out = ScrollArea::vertical()
         .id_source("rack_scroll")
-        .drag_to_scroll(!dragging_cable && !pointer_near_port)
+        .drag_to_scroll(false)
         .auto_shrink([false; 2])
         .scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::AlwaysVisible)
         .show(ui, |ui| {

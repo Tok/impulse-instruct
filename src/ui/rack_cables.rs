@@ -141,9 +141,23 @@ pub fn draw_control_cable(
     ));
     // Core — slightly lighter
     painter.add(egui::Shape::line(
-        points,
+        points.clone(),
         Stroke::new(1.0, Color32::from_gray(120)),
     ));
+    // Slow signal dots
+    let arc_len: f32 = points
+        .windows(2)
+        .map(|w| w[0].distance(w[1]))
+        .sum::<f32>()
+        .max(1.0);
+    let speed = (80.0 / arc_len).clamp(0.1, 1.0);
+    let num_dots = ((arc_len / 200.0).round() as u8).clamp(1, 3);
+    let spacing = 1.0 / num_dots as f32;
+    for i in 0..num_dots {
+        let t_dot = (time * speed + phase_offset * 0.3 + i as f32 * spacing) % 1.0;
+        let dot = bezier(from, cp1, cp2, to, t_dot);
+        painter.circle_filled(dot, 2.5, Color32::from_gray(160));
+    }
 }
 
 /// Draw the full cable overlay: in-progress drag, rack cables, and synthesised LFO cables.
@@ -173,19 +187,32 @@ pub fn draw_cable_overlay(
     let alt_held = ctx.input(|i| i.modifiers.alt);
     if app.rack_flipped && !alt_held && !app.show_prefs {
         let cables = app.state.read().rack.cables.clone();
+        // Draw control cables FIRST (behind audio/CV cables)
         for (ci, cable) in cables.iter().enumerate() {
+            if cable.from.kind != PortKind::Control {
+                continue;
+            }
             let from_pos = ports
                 .iter()
                 .find(|p| p.port == cable.from)
                 .map(|p| p.center);
             let to_pos = ports.iter().find(|p| p.port == cable.to).map(|p| p.center);
             if let (Some(from), Some(to)) = (from_pos, to_pos) {
-                let phase = ci as f32 * 2.399;
-                if cable.from.kind == PortKind::Control {
-                    draw_control_cable(&painter, from, to, time, phase);
-                } else {
-                    draw_cable(&painter, from, to, time, phase, true);
-                }
+                draw_control_cable(&painter, from, to, time, ci as f32 * 2.399);
+            }
+        }
+        // Then audio/CV cables on top
+        for (ci, cable) in cables.iter().enumerate() {
+            if cable.from.kind == PortKind::Control {
+                continue;
+            }
+            let from_pos = ports
+                .iter()
+                .find(|p| p.port == cable.from)
+                .map(|p| p.center);
+            let to_pos = ports.iter().find(|p| p.port == cable.to).map(|p| p.center);
+            if let (Some(from), Some(to)) = (from_pos, to_pos) {
+                draw_cable(&painter, from, to, time, ci as f32 * 2.399, true);
             }
         }
 

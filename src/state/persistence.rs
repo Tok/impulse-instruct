@@ -186,7 +186,84 @@ pub fn apply_session(state: &mut AppState, data: SessionData) {
         let id = state.rack.add_module(ModuleKind::LlmAgent);
         let agent = super::LlmAgentState::from_singleton(id, &state.llm);
         state.llm_agents.push(agent);
-        log::info!("Migration: added default LlmAgent module to rack");
+        // Wire control cables to all controllable modules
+        let targets: Vec<u32> = state
+            .rack
+            .modules
+            .iter()
+            .filter(|m| {
+                !matches!(
+                    m.kind,
+                    ModuleKind::MasterOutput | ModuleKind::LlmAgent | ModuleKind::LlmConsole
+                )
+            })
+            .map(|m| m.id)
+            .collect();
+        for (i, tid) in targets.iter().enumerate() {
+            state.rack.connect(
+                super::PortRef {
+                    module_id: id,
+                    dir: super::PortDir::Out,
+                    kind: super::PortKind::Control,
+                    index: i as u8,
+                },
+                super::PortRef {
+                    module_id: *tid,
+                    dir: super::PortDir::In,
+                    kind: super::PortKind::Control,
+                    index: 0,
+                },
+            );
+        }
+        log::info!("Migration: added default LlmAgent + control cables");
+    }
+
+    // Ensure existing agents have control cables (migration for sessions that
+    // were saved before control cables existed).
+    let agent_ids: Vec<u32> = state
+        .rack
+        .modules
+        .iter()
+        .filter(|m| m.kind == ModuleKind::LlmAgent)
+        .map(|m| m.id)
+        .collect();
+    for aid in &agent_ids {
+        let has_any_control = state
+            .rack
+            .cables
+            .iter()
+            .any(|c| c.from.module_id == *aid && c.from.kind == super::PortKind::Control);
+        if !has_any_control {
+            let targets: Vec<u32> = state
+                .rack
+                .modules
+                .iter()
+                .filter(|m| {
+                    !matches!(
+                        m.kind,
+                        ModuleKind::MasterOutput | ModuleKind::LlmAgent | ModuleKind::LlmConsole
+                    )
+                })
+                .map(|m| m.id)
+                .collect();
+            for (i, tid) in targets.iter().enumerate() {
+                state.rack.connect(
+                    super::PortRef {
+                        module_id: *aid,
+                        dir: super::PortDir::Out,
+                        kind: super::PortKind::Control,
+                        index: i as u8,
+                    },
+                    super::PortRef {
+                        module_id: *tid,
+                        dir: super::PortDir::In,
+                        kind: super::PortKind::Control,
+                        index: 0,
+                    },
+                );
+            }
+            log::info!("Migration: wired control cables for agent {}", aid);
+        }
     }
 }
 
