@@ -59,24 +59,23 @@ support Gemma 4's audio encoder. See [docs/audio-feedback.md](docs/audio-feedbac
 
 #### Visualization & statistics modules
 
-- [ ] **Spectrum analyser** — real-time FFT magnitude display (rackable module)
+- [x] **Spectrum analyser** — 1024-point FFT, 64 log bands, smoothing + peak hold
 - [ ] **Stereo correlation meter** — phase correlation + L/R balance bar
-- [ ] **Pattern heatmap** — step-grid overlay showing fire frequency
+- [x] **Pattern heatmap** — probability indicator on step buttons (corner dot)
 - [ ] **LLM activity timeline** — structured, filterable agent activity log
 
 #### Visual treatment (post-process pass)
 
 - [ ] **Bloom** — Gaussian blur on bright pixels, additive blend (needs wgpu)
 - [ ] **Scan-line / CRT vignette** — cheap fullscreen quad shader
-- [ ] **LED glow on active steps** — per-step additive glow ring
-  (can approximate in egui with layered circles if wgpu too expensive)
+- [x] **LED glow on active steps** — velocity heat fill + probability dot on step buttons
 
 #### Other
 
 - [ ] **Multiple voices (per-voice DSP params)** — voices 1-3 currently share
   synth params with voice 0; next step: per-voice `AudioParams` snapshot
 
-- [ ] **Gabber kick voice** — pitch-envelope ramp + hard clipper
+- [x] **Gabber kick preset** — extreme pitch env + hard clip on 808 Kit A
 
 - [ ] **Windows code-signing** — unsigned `.exe` triggers SmartScreen
 
