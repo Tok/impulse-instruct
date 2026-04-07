@@ -50,58 +50,35 @@ Ordered by value.  Branch: **`develop`** (merge to `main` only for tagged releas
 - [x] **25 new tests** — json_repair, split_thinking, extract_llm_actions, baseline ramps
 - [x] **Refactored** — `extract_llm_actions()` pure function, `AudioChannels` struct,
   `scope_footer.rs` extracted, cable overlay extracted to `rack_cables.rs`
+- [x] **Multi-model server pool (Phase 1)** — `LlamaServerPool` manages N
+  llama-server processes on ports 8766+, ref-counted per model, per-agent
+  `model_path: Option<String>` with dropdown on agent card, 10 new tests
 
 ---
 
-### Next sprint — Multi-model agent infrastructure
+### Next sprint — Multi-model agent infrastructure (Phase 2–3)
 
-This is the big remaining piece: enabling multiple llama-server instances so
-agents can run different models in parallel.
+Phase 1 (server pool + per-agent model) is done.  Remaining:
 
-#### Multi-server architecture
+#### VRAM budget + startup wizard (Phase 2)
 
-Currently one llama-server on fixed port 8766, one model at a time.  Goal:
-each `LlmAgent` rack module can optionally run its own server instance with
-its own model.
-
-Design requirements:
-
-- **Server pool** — `LlamaServerPool` manages N server processes, each on a
-  unique port (8766, 8767, 8768…).  Each server loads one GGUF model.
 - **VRAM budget** — detect available GPU memory (nvidia-smi / rocm-smi),
   compute how many models fit.  Typical configs:
   - 8 GB VRAM → 1× Gemma 4 E4B (~6 GB)
   - 12 GB → 1× Gemma + 2× Bonsai (~6+2+2 = 10 GB)
   - 16 GB → 2× Gemma or 1× Gemma + 4× Bonsai
   - 24 GB → 2× Gemma + 4× Bonsai or 1× 14B + 2× Bonsai
-- **Per-agent model selection** — each `LlmAgentState` gets a `model_path`
-  field.  When an agent is added, it connects to an available server (or
-  spawns a new one if VRAM allows).
-- **Shared server reuse** — agents using the same model share one server
-  (round-robin inference on that server).  Only different models need
-  separate processes.
 - **Startup wizard** — on first launch (or when no agents exist), show a
   modal: "How many agents? Which models?" with VRAM indicator.  Presets:
   "Solo (1× Gemma)", "Duo (2× Gemma)", "Swarm (1× Gemma + 3× Bonsai)".
 
-#### Dynamic agent spawning
+#### Dynamic agent spawning (Phase 3)
 
 - Agents can request more agents via the `settings` JSON key:
   `{ "settings": { "spawn_agent": { "persona": "BASS BRAIN", "scope": ["bass"], "model": "bonsai" } } }`
 - The UI creates a new `LlmAgent` rack module + `LlmAgentState` from this.
 - Agents can also dismiss themselves: `{ "settings": { "dismiss": true } }`
 - MC/DJ mode should be a separate agent instance with its own persona.
-
-#### Key files to change
-
-| File | Changes |
-|------|---------|
-| `src/llm/mod.rs` | `LlamaServerPool` replacing single `LlamaServerBackend` |
-| `src/llm/mod.rs` | `run_llm_loop` dispatches to pool by agent's model |
-| `src/state/mod.rs` | `LlmAgentState.model_path` field |
-| `src/state/mod.rs` | VRAM detection helper (nvidia-smi parsing) |
-| `src/ui/rack_content.rs` | Model selector per agent card |
-| `src/ui/windows.rs` | Startup wizard modal |
 
 #### Cable-driven scope (Phase 3 stretch)
 

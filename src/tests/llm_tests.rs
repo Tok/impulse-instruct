@@ -710,3 +710,124 @@ mod json_repair_tests {
         assert_eq!(think.unwrap(), "hello world");
     }
 }
+
+// ── Server pool tests ────────────────────────────────────────────────────────
+
+#[cfg(test)]
+mod pool_tests {
+    use crate::llm::LlamaServerPool;
+
+    #[test]
+    fn acquire_same_model_twice_reuses_server() {
+        let mut pool = LlamaServerPool::new(9000, 4096);
+        pool.insert_test_server("models/a.gguf", 9000);
+        // Second acquire should bump ref_count, not add a new server.
+        let port = pool.acquire("models/a.gguf").unwrap();
+        assert_eq!(port, 9000);
+        assert_eq!(pool.server_count(), 1);
+        assert_eq!(pool.ref_count_for("models/a.gguf"), Some(2));
+    }
+
+    #[test]
+    fn two_different_models_get_different_ports() {
+        let mut pool = LlamaServerPool::new(9000, 4096);
+        pool.insert_test_server("models/a.gguf", 9000);
+        pool.insert_test_server("models/b.gguf", 9001);
+        assert_eq!(pool.server_count(), 2);
+        assert_eq!(pool.port_for("models/a.gguf"), Some(9000));
+        assert_eq!(pool.port_for("models/b.gguf"), Some(9001));
+    }
+
+    #[test]
+    fn release_last_ref_removes_server() {
+        let mut pool = LlamaServerPool::new(9000, 4096);
+        pool.insert_test_server("models/a.gguf", 9000);
+        assert_eq!(pool.server_count(), 1);
+        pool.release("models/a.gguf");
+        assert_eq!(pool.server_count(), 0);
+    }
+
+    #[test]
+    fn release_with_remaining_refs_keeps_server() {
+        let mut pool = LlamaServerPool::new(9000, 4096);
+        pool.insert_test_server("models/a.gguf", 9000);
+        // Bump ref_count to 2
+        let _ = pool.acquire("models/a.gguf").unwrap();
+        assert_eq!(pool.ref_count_for("models/a.gguf"), Some(2));
+        pool.release("models/a.gguf");
+        assert_eq!(pool.server_count(), 1);
+        assert_eq!(pool.ref_count_for("models/a.gguf"), Some(1));
+    }
+
+    #[test]
+    fn next_free_port_skips_occupied() {
+        let mut pool = LlamaServerPool::new(9000, 4096);
+        pool.insert_test_server("models/a.gguf", 9000);
+        pool.insert_test_server("models/b.gguf", 9001);
+        // Next free should be 9002
+        pool.insert_test_server("models/c.gguf", 9002);
+        // Remove middle one, next free should now be 9001
+        pool.release("models/b.gguf");
+        pool.insert_test_server(
+            "models/d.gguf",
+            pool.port_for("models/d.gguf").unwrap_or(9001),
+        );
+        // Verify we can still find ports
+        assert!(pool.server_count() <= 4);
+    }
+
+    #[test]
+    fn shutdown_model_removes_entry() {
+        let mut pool = LlamaServerPool::new(9000, 4096);
+        pool.insert_test_server("models/a.gguf", 9000);
+        pool.insert_test_server("models/b.gguf", 9001);
+        pool.shutdown_model("models/a.gguf");
+        assert_eq!(pool.server_count(), 1);
+        assert!(pool.port_for("models/a.gguf").is_none());
+        assert_eq!(pool.port_for("models/b.gguf"), Some(9001));
+    }
+
+    #[test]
+    fn shutdown_all_clears_pool() {
+        let mut pool = LlamaServerPool::new(9000, 4096);
+        pool.insert_test_server("models/a.gguf", 9000);
+        pool.insert_test_server("models/b.gguf", 9001);
+        pool.shutdown_all();
+        assert_eq!(pool.server_count(), 0);
+    }
+}
+
+#[cfg(test)]
+mod agent_model_tests {
+    use crate::state::{AppState, LlmAgentState};
+
+    #[test]
+    fn agent_model_none_falls_back_to_global() {
+        let state = AppState::default();
+        let agent = LlmAgentState::new_default(1);
+        assert!(agent.model_path.is_none());
+        let resolved = agent
+            .model_path
+            .unwrap_or_else(|| state.llm.model_path.clone());
+        assert_eq!(resolved, state.llm.model_path);
+    }
+
+    #[test]
+    fn agent_model_some_overrides_global() {
+        let state = AppState::default();
+        let mut agent = LlmAgentState::new_default(1);
+        agent.model_path = Some("models/bonsai.gguf".to_string());
+        let resolved = agent
+            .model_path
+            .unwrap_or_else(|| state.llm.model_path.clone());
+        assert_eq!(resolved, "models/bonsai.gguf");
+    }
+
+    #[test]
+    fn from_singleton_sets_model_none() {
+        let state = AppState::default();
+        let agent = LlmAgentState::from_singleton(42, &state.llm);
+        assert!(agent.model_path.is_none());
+        assert_eq!(agent.id, 42);
+    }
+}

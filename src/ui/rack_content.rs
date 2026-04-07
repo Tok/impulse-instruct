@@ -317,7 +317,18 @@ pub(super) fn draw_llm_agent_content(app: &mut ImpulseApp, ui: &mut egui::Ui, mo
     let Some(idx) = agent_idx else { return };
 
     // Snapshot mutable fields for editing
-    let (mut persona, mut heat, mut temp, mut jam_bars, last_resp, tps, cycles, inferring, scope) = {
+    let (
+        mut persona,
+        mut heat,
+        mut temp,
+        mut jam_bars,
+        last_resp,
+        tps,
+        cycles,
+        inferring,
+        scope,
+        agent_model,
+    ) = {
         let s = app.state.read();
         let a = &s.llm_agents[idx];
         (
@@ -330,6 +341,7 @@ pub(super) fn draw_llm_agent_content(app: &mut ImpulseApp, ui: &mut egui::Ui, mo
             a.jam_cycle_count,
             a.is_inferring,
             a.scope.clone(),
+            a.model_path.clone(),
         )
     };
 
@@ -347,6 +359,70 @@ pub(super) fn draw_llm_agent_content(app: &mut ImpulseApp, ui: &mut egui::Ui, mo
             app.state.write().llm_agents[idx].persona_name = persona;
         }
     });
+
+    // ── Model selector ───────────────────────────────────────────────────
+    {
+        if app.available_models.is_empty() {
+            app.available_models = super::scan_models();
+        }
+        let display_name = match &agent_model {
+            Some(p) => std::path::Path::new(p)
+                .file_stem()
+                .and_then(|s| s.to_str())
+                .unwrap_or(p)
+                .to_string(),
+            None => "(Default)".to_string(),
+        };
+        let combo_id = ui.id().with("agent_model").with(module_id);
+        egui::ComboBox::from_id_source(combo_id)
+            .selected_text(
+                egui::RichText::new(&display_name)
+                    .color(theme::SMOKE)
+                    .size(7.5)
+                    .monospace(),
+            )
+            .width(ui.available_width().min(140.0))
+            .show_ui(ui, |ui| {
+                // "(Default)" entry — inherit from global LlmState.model_path
+                let is_default = agent_model.is_none();
+                if ui
+                    .selectable_label(
+                        is_default,
+                        egui::RichText::new("(Default)")
+                            .monospace()
+                            .size(8.0)
+                            .color(if is_default {
+                                theme::CHALK
+                            } else {
+                                theme::SMOKE
+                            }),
+                    )
+                    .clicked()
+                {
+                    app.state.write().llm_agents[idx].model_path = None;
+                }
+                for path in &app.available_models.clone() {
+                    let short = std::path::Path::new(path)
+                        .file_stem()
+                        .and_then(|s| s.to_str())
+                        .unwrap_or(path)
+                        .to_string();
+                    let selected = agent_model.as_deref() == Some(path.as_str());
+                    if ui
+                        .selectable_label(
+                            selected,
+                            egui::RichText::new(&short)
+                                .monospace()
+                                .size(8.0)
+                                .color(if selected { theme::CHALK } else { theme::SMOKE }),
+                        )
+                        .clicked()
+                    {
+                        app.state.write().llm_agents[idx].model_path = Some(path.clone());
+                    }
+                }
+            });
+    }
 
     // ── Heat / Temp / Bars controls ──────────────────────────────────────
     ui.horizontal(|ui| {

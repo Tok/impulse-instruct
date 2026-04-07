@@ -70,7 +70,7 @@ fn run_model(model_path: &str, specs: &[&StyleSpec], timeout_secs: u64) -> Model
     eprintln!("\n▶  Model: {model_name}");
     eprintln!("   Loading server…");
 
-    let mut backend = LlamaServerBackend::new(model_path, 32768);
+    let mut backend = LlamaServerBackend::new(model_path, 32768, 8766);
     let t_start = Instant::now();
     let mut style_results = Vec::new();
 

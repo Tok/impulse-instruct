@@ -783,6 +783,9 @@ pub struct LlmAgentState {
     pub custom_style_text: String,
     pub user_instructions: String,
     pub enable_thinking: bool,
+    /// Per-agent model override. `None` = inherit from global `LlmState.model_path`.
+    #[serde(default)]
+    pub model_path: Option<String>,
     // Display-only (updated by inference thread)
     #[serde(default)]
     pub is_inferring: bool,
@@ -808,6 +811,7 @@ impl LlmAgentState {
             custom_style_text: String::new(),
             user_instructions: String::new(),
             enable_thinking: true,
+            model_path: None,
             is_inferring: false,
             last_response: String::new(),
             tokens_per_sec: 0.0,
@@ -829,6 +833,7 @@ impl LlmAgentState {
             custom_style_text: llm.custom_style_text.clone(),
             user_instructions: llm.user_instructions.clone(),
             enable_thinking: llm.enable_thinking,
+            model_path: None,
             is_inferring: false,
             last_response: String::new(),
             tokens_per_sec: 0.0,
