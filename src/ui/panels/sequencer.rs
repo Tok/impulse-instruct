@@ -397,7 +397,7 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                                 None
                             };
                             widgets::step_button(
-                                ui, is_active, is_current, 1.0, note_col, label, pad_px,
+                                ui, is_active, is_current, 1.0, 1.0, note_col, label, pad_px,
                             )
                         };
                         if clicked {
@@ -541,7 +541,7 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                                 None
                             };
                             widgets::step_button(
-                                ui, is_active, is_current, 1.0, note_col, label, pad_px,
+                                ui, is_active, is_current, 1.0, 1.0, note_col, label, pad_px,
                             )
                         };
                         if clicked {
@@ -615,7 +615,7 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                                 None
                             };
                             widgets::step_button(
-                                ui, is_active, is_current, 1.0, note_col, label, pad_px,
+                                ui, is_active, is_current, 1.0, 1.0, note_col, label, pad_px,
                             )
                         };
                         if clicked {
