@@ -59,6 +59,8 @@ Ordered by value.  Branch: **`develop`** (merge to `main` only for tagged releas
   per-agent system prompt override (collapsible), inference loop patches all
   per-agent overrides (persona, mode, style, instructions, prompt override)
   into system prompt snapshot
+- [x] **Compact agent cards** — LlmAgent ~220px, side-by-side layout; console
+  prompt singleline; style IDs scoped; Control ports on back panel (CTL label)
 - [x] **Control cables** — `PortKind::Control` connects agents to modules they
   control; thin dark-gray Bezier cables on back panel; `scope_from_control_cables()`
   derives scope from cable graph; default agent wired to all; auto-wire on spawn
