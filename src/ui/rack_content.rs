@@ -351,7 +351,7 @@ pub(super) fn draw_llm_agent_content(app: &mut ImpulseApp, ui: &mut egui::Ui, mo
             a.enable_thinking,
             a.user_instructions.clone(),
             a.system_prompt_override.clone(),
-            a.role.clone(),
+            a.role,
             a.can_spawn,
             a.can_dismiss,
         )
@@ -434,6 +434,16 @@ pub(super) fn draw_llm_agent_content(app: &mut ImpulseApp, ui: &mut egui::Ui, mo
                     }
                 }
             });
+        // VRAM estimate
+        let global_model = app.state.read().llm.model_path.clone();
+        let effective_model = agent_model.as_deref().unwrap_or(&global_model);
+        let vram_est = crate::llm::vram::estimate_vram(effective_model);
+        ui.label(
+            egui::RichText::new(format!("~{:.1}G VRAM", vram_est as f64 / 1024.0))
+                .monospace()
+                .size(7.0)
+                .color(theme::IRON),
+        );
     }
 
     // ── Temp / Bars controls ───────────────────────────────────────────

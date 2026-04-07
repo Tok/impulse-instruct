@@ -779,7 +779,7 @@ impl Default for LlmState {
 // ─── Per-agent LLM state (rackable LLM modules) ─────────────────────────────
 
 /// Agent role — affects personality flavor in system prompt.
-#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum AgentRole {
     #[default]
     Producer,
@@ -908,5 +908,6 @@ pub use transitions::*;
 
 pub mod persistence;
 pub use persistence::{
-    apply_session, load_model_setting, load_session, save_model_setting, save_project, save_session,
+    apply_session, load_model_setting, load_session, save_model_setting, save_project,
+    save_session, save_session_ext,
 };

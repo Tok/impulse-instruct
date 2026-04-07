@@ -64,10 +64,22 @@ pub struct SessionData {
     pub show_thinking_in_log: Option<bool>,
     #[serde(default)]
     pub temperature: Option<f32>,
+    #[serde(default)]
+    pub wizard_done: Option<bool>,
 }
 
 /// Save session data extracted from current AppState.
 pub fn save_session(state: &AppState, show_cables: bool, rack_flipped: bool) {
+    save_session_ext(state, show_cables, rack_flipped, None)
+}
+
+/// Extended save with optional wizard_done flag.
+pub fn save_session_ext(
+    state: &AppState,
+    show_cables: bool,
+    rack_flipped: bool,
+    wizard_done: Option<bool>,
+) {
     let data = SessionData {
         rack: Some(state.rack.clone()),
         active_style: state.llm.active_style.clone(),
@@ -89,6 +101,7 @@ pub fn save_session(state: &AppState, show_cables: bool, rack_flipped: bool) {
         enable_thinking: Some(state.llm.enable_thinking),
         show_thinking_in_log: Some(state.llm.show_thinking_in_log),
         temperature: Some(state.llm.temperature),
+        wizard_done,
     };
     match serde_json::to_string_pretty(&data) {
         Ok(json) => {

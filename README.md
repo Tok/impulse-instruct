@@ -3,13 +3,13 @@
 [![CI](https://github.com/Tok/impulse-instruct/actions/workflows/ci.yml/badge.svg)](https://github.com/Tok/impulse-instruct/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/Tok/impulse-instruct/branch/main/graph/badge.svg)](https://codecov.io/gh/Tok/impulse-instruct)
 
-A **smart synthesizer** - a full-featured software synth with a locally-running language model built directly into the instrument. **PULSE** is the AI inside: it reads the entire parameter schema of the synth, understands music theory and genre vocabulary, and has direct write access to every knob and every step in the pattern.
+A **smart synthesizer** with a virtual production team living inside it. Multiple locally-running language models collaborate as AI agents — each with its own persona, scope, and model — to write patterns, shape sound, and evolve a track in real time. One agent handles bass, another drums, a third sculpts FX, and a conductor coordinates the session. Or run a single agent that controls everything. You decide the lineup.
 
-You talk to it the way you'd talk to a collaborator in the studio. Say "make it acid" and it adjusts the ladder filter, env mod, resonance, and note density to get there. Say "dark techno, sparse, 132 BPM" and it restructures the pattern and tightens the FX routing to match. Say "keep the kick but change everything else" and it respects that boundary.
+You talk to them the way you'd talk to collaborators in the studio. Say "make it acid" and the bass agent adjusts the ladder filter, env mod, resonance, and note density. Say "dark techno, sparse, 132 BPM" and the agents restructure patterns and tighten FX routing to match. Say "keep the kick but change everything else" and the lock system protects what you've dialled in.
 
-PULSE runs a continuous jam loop in the background, evolving the sound between prompts at a rate you control with the **HEAT** slider. At low heat it nudges filters and rhythm details. At full heat it rewrites the pattern, swaps instruments, and restructures the FX chain constantly. You can lock any parameter you've dialled in - touch a knob and PULSE will not overwrite it, even at full heat.
+The agents run a continuous jam loop, evolving the sound between prompts at a rate you control with the **HEAT** slider. At low heat they nudge filters and rhythm details. At full heat they rewrite patterns, swap instruments, and restructure the FX chain constantly. Agents take turns in round-robin, each bringing its own creative perspective.
 
-The synthesis engine runs entirely offline: no cloud calls, no subscriptions, no latency waiting on a remote server. The LLM runs locally via llama-server, the audio engine runs in a dedicated real-time thread, and the two communicate through a lock-free ring buffer. Nothing leaves your machine.
+Everything runs entirely offline: no cloud calls, no subscriptions, no latency. Multiple LLM instances run locally via llama-server (one per model, ref-counted and shared across agents), the audio engine runs in a dedicated real-time thread, and they communicate through lock-free ring buffers. Nothing leaves your machine.
 
 <p align="center">
   <img src="assets/header.svg" alt="Impulse Instruct" width="800"/>
@@ -19,13 +19,13 @@ The synthesis engine runs entirely offline: no cloud calls, no subscriptions, no
 
 ---
 
-## ⚠️ Alpha - Work in Progress (v0.5.8)
+## ⚠️ Alpha - Work in Progress (v0.5.9)
 
 **This is pre-release software.** It works and makes sound, but expect rough edges. A few things worth knowing before you dive in:
 
-- **Not ready for hyped live crowds.** PULSE is agentic - it makes its own creative decisions. That's delightful in the studio and potentially awkward in front of 300 people waiting for someone to shout "jungle selector massive!!". We can't currently guarantee it will shout the right thing at the right moment.
-- **PULSE is not an undo button.** Full heat means it rewrites your track. The same prompt at the same heat will produce different results each run. That's the point - but the output is not deterministic.
-- **The synthesis is more limited than the LLM's vocabulary.** The gap between what PULSE intends and what the synth engine produces is where most of the roughness lives - not in the model's musical understanding.
+- **Not ready for hyped live crowds.** The agents are agentic - they make their own creative decisions. That's delightful in the studio and potentially awkward in front of 300 people waiting for someone to shout "jungle selector massive!!".
+- **Full heat means full rewrite.** The same prompt at the same heat will produce different results each run. That's the point - but the output is not deterministic.
+- **The synthesis is more limited than the LLM's vocabulary.** The gap between what agents intend and what the synth engine produces is where most of the roughness lives - not in the model's musical understanding.
 - **Windows build is untested.** The cross-compile produces a binary but it hasn't been run on real hardware yet. Linux is the only verified platform for this release.
 
 See [Known Limitations](#known-limitations) for specifics on what works and what doesn't yet.
@@ -83,9 +83,21 @@ The app auto-detects the model in `models/` and connects to it. The model select
 | Model | Size | VRAM | Notes |
 |-------|------|------|-------|
 | **Gemma 4 E4B Q4_K_M** | ~4.6 GB | ~6 GB | **Recommended.** Best JSON accuracy, passes all integration tests. |
-| **Bonsai 8B Q1_0_g128** | ~1.1 GB | ~2 GB | Lightweight fallback. Fits in 2 GB VRAM. Misses style/theory tests more often, no chain-of-thought, uses a separate server binary. |
+| **Bonsai 8B Q1_0_g128** | ~1.1 GB | ~2 GB | Lightweight agent. Fits in 2 GB VRAM. Great for specialist agents in a multi-model team. |
+| **DeepSeek-R1-Distill-Qwen-7B** | ~5 GB | ~7 GB | Chain-of-thought capable, Qwen2.5 base. |
+| **DeepSeek-R1-Distill-Qwen-14B** | ~9 GB | ~11 GB | Higher quality CoT, needs 12+ GB VRAM. |
 
-Switch models at any time via **Prefs -> Model**. The app restarts the inference server automatically.
+Each agent can run a different model. A `LlamaServerPool` manages server processes — agents sharing the same model share a single server (ref-counted). Typical multi-agent VRAM budgets:
+
+| Setup | Agents | VRAM |
+|-------|--------|------|
+| **Solo** | 1x Gemma | ~6 GB |
+| **Duo** | 2x Gemma (shared server) | ~6 GB |
+| **Band** | 1x Gemma conductor + 4x Bonsai players | ~8 GB |
+| **Swarm** | 1x Gemma + 3x Bonsai | ~8 GB |
+| **Lite** | 1x Bonsai | ~2 GB |
+
+A **startup wizard** on first launch detects your GPU, shows available VRAM, and suggests a configuration. Switch models per-agent at any time via the agent card dropdown.
 
 ---
 
@@ -114,11 +126,16 @@ Switch models at any time via **Prefs -> Model**. The app restarts the inference
 - Modular rack: drag-to-patch cable connections between voices and FX modules; right-click a port to disconnect; animated Bezier cables with signal flow dots; per-voice FX buses; topology compiled live
 - 4-slot LFO matrix - any waveform, BPM-syncable, wireable to any parameter
 
-**Intelligence**
-- Local LLM via llama-server; no cloud calls; model swappable at runtime without restart
+**Intelligence — multi-agent production team**
+- Multiple LLM agents, each with its own persona, model, scope, heat, temperature, and style
+- Agents take turns in round-robin; each agent only controls the modules it's wired to via control cables
+- Server pool: `LlamaServerPool` manages N llama-server processes, ref-counted per model — agents sharing a model share a single server
+- Startup wizard: detects GPU VRAM, suggests configurations (Solo, Duo, Band, Swarm, Voices, Lite)
+- Dynamic spawning: agents can request new agents or dismiss themselves via JSON actions
+- Cable-driven scope: control cables from agent to module define what each agent can touch; removing a cable restricts scope
 - Jam mode: continuous autonomous loop, rate and intensity controlled by HEAT slider (0-100%)
 - Behaviour templates: "build", "drop", "breakdown", "tension", "euphoric"
-- Lock system: touch any knob to claim it; LLM will not overwrite user-owned parameters
+- Lock system: touch any knob to claim it; agents will not overwrite user-owned parameters
 - Scale and root note in system prompt; bass notes snapped to current scale
 - Instruction set: pre-written JSON templates for common phrases ("make an amen break", etc.)
 - Context-aware: rolling conversation history, auto-restart when approaching token limit
@@ -183,26 +200,37 @@ Switch models at any time via **Prefs -> Model**. The app restarts the inference
 
 ---
 
-## Talking to PULSE
+## Talking to the agents
 
-PULSE is the AI inside. It reads the full parameter schema, listens to what you type, and writes back structured JSON that gets applied to the synth in real time. Talk to it like a producer collaborator - it understands music terminology, genre references, mixing decisions, and routing commands.
+Prompts typed in the LLM console go to the first active agent. Each agent reads the full parameter schema, understands music terminology and genre vocabulary, and writes back structured JSON applied to the synth in real time. In multi-agent setups, each agent only controls the modules it's wired to.
 
-### PULSE is an agent, not a knob
+### Agents are collaborators, not knobs
 
-PULSE doesn't execute instructions like a script - it interprets them. "Make it more acidic" at heat 60% will produce a different result every time, informed by the conversation so far, the current state of the synth, and whatever the model considers musically coherent in that context.
+Agents don't execute instructions like a script - they interpret them. "Make it more acidic" at heat 60% will produce a different result every time, informed by the conversation so far, the current state of the synth, and whatever the model considers musically coherent in that context.
 
 **What to expect:**
-- High creativity, especially on style and genre prompts - it has strong opinions
+- High creativity, especially on style and genre prompts - agents have strong opinions
 - Occasional wild interpretations of ambiguous requests
 - Cumulative drift over long jam sessions as the context fills up
-- Sometimes it will change something you didn't ask it to change, because it thought it was the right call
+- Agents may change something you didn't ask them to change, because they thought it was the right call
+- In multi-agent setups, agents evolve their scoped instruments independently — sometimes creating unexpected interplay
 
 **What not to expect:**
 - Exact repeatability - this is a generative system, not a deterministic one
-- Perfect parameter targeting every time - it misses occasionally, especially on complex multi-parameter prompts
+- Perfect parameter targeting every time - agents miss occasionally, especially on complex multi-parameter prompts
 - Reliable MC / crowd-hype performance in live settings
 
 To constrain behaviour: drag heat down, lock the parameters you care about, or be more specific in your prompts. The lock system is the most reliable tool for protecting patches you've dialled in.
+
+### Multi-agent setups
+
+On first launch, the **startup wizard** suggests configurations based on your GPU VRAM. You can also build your own team:
+
+- Add agents from the **[+ ADD]** button in the Global rack zone
+- Each agent card has: model selector, persona name, style, temperature, instructions
+- Wire agents to modules via **control cables** on the back panel (Tab to flip)
+- Agents only control what they're wired to — disconnect a cable to restrict scope
+- Agents can spawn or dismiss other agents autonomously (when `agent_autonomy` is enabled)
 
 ### Heat - the jam intensity dial
 

@@ -5,11 +5,12 @@ use crate::ui::LOG_LEVELS;
 use crate::ui::{ImpulseApp, theme, widgets};
 
 impl ImpulseApp {
-    /// Draw all floating overlay windows (prefs, about, sysinfo).
+    /// Draw all floating overlay windows (prefs, about, sysinfo, wizard).
     pub(super) fn draw_windows(&mut self, ctx: &egui::Context) {
         self.draw_prefs_window(ctx);
         self.draw_about_window(ctx);
         self.draw_sysinfo_window(ctx);
+        self.draw_wizard_window(ctx);
     }
 
     fn draw_prefs_window(&mut self, ctx: &egui::Context) {
@@ -993,3 +994,6 @@ impl ImpulseApp {
             });
     }
 }
+
+// Wizard extracted to wizard.rs to stay under 1000-line limit.
+// draw_wizard_window is called from draw_windows above.

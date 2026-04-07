@@ -697,10 +697,18 @@ impl ImpulseApp {
                     (typed.clone(), format!("YOU → {}\n", typed))
                 };
                 self.log_text.push_str(&log_line);
+                // Route to the first enabled agent (or None for singleton fallback).
+                let target_agent = {
+                    let s = self.state.read();
+                    s.llm_agents
+                        .iter()
+                        .find(|a| s.rack.modules.iter().any(|m| m.id == a.id && m.enabled))
+                        .map(|a| a.id)
+                };
                 let _ = self.llm_tx.try_send(LlmInput::Infer {
                     prompt,
                     one_shot: true,
-                    agent_id: None,
+                    agent_id: target_agent,
                 });
                 self.prompt_input.clear();
             }

@@ -11,8 +11,11 @@ pub mod rack_canvas;
 pub(crate) mod rack_content;
 mod scope_footer;
 pub mod theme;
+mod util;
 pub mod widgets;
+use util::{scan_models, webbrowser_open};
 mod windows;
+mod wizard;
 
 pub(crate) use note::{ansi_colorize_notes, note_name};
 
@@ -25,51 +28,6 @@ fn dot_path_to_json(path: &str, value: f32) -> serde_json::Value {
         .iter()
         .rev()
         .fold(leaf, |acc, &key| serde_json::json!({ key: acc }))
-}
-
-/// Scan for .gguf model files. Checks:
-///   1. models/ relative to CWD (dev: cargo run from repo root)
-///   2. models/ next to the binary (dist: user unpacked the release)
-///   3. The repo root itself (for convenience when a .gguf is dropped there)
-pub(super) fn scan_models() -> Vec<String> {
-    let mut dirs: Vec<std::path::PathBuf> = vec![std::path::PathBuf::from("models")];
-    if let Ok(exe) = std::env::current_exe()
-        && let Some(parent) = exe.parent()
-    {
-        let sibling = parent.join("models");
-        if sibling != std::path::Path::new("models") {
-            dirs.push(sibling);
-        }
-    }
-    let mut found: Vec<String> = dirs
-        .into_iter()
-        .flat_map(|dir| {
-            std::fs::read_dir(&dir)
-                .into_iter()
-                .flatten()
-                .filter_map(|e| e.ok())
-                .map(|e| e.path())
-                .filter(|p| p.extension().map(|x| x == "gguf").unwrap_or(false))
-                .map(|p| p.to_string_lossy().into_owned())
-                .collect::<Vec<_>>()
-        })
-        .collect();
-    found.sort();
-    found.dedup();
-    found
-}
-
-/// Open a URL in the system browser (cross-platform, no extra dep).
-pub(super) fn webbrowser_open(url: &str) -> std::io::Result<()> {
-    #[cfg(target_os = "linux")]
-    std::process::Command::new("xdg-open").arg(url).spawn()?;
-    #[cfg(target_os = "macos")]
-    std::process::Command::new("open").arg(url).spawn()?;
-    #[cfg(target_os = "windows")]
-    std::process::Command::new("cmd")
-        .args(["/c", "start", url])
-        .spawn()?;
-    Ok(())
 }
 
 use crossbeam_channel::{Receiver, Sender};
@@ -194,6 +152,9 @@ pub struct ImpulseApp {
     // System info (GPU/VRAM/RAM) — polled in background thread
     sys_info: std::sync::Arc<std::sync::Mutex<crate::sysinfo::SysInfo>>,
     show_sysinfo: bool,
+    // Startup wizard (first-launch agent setup)
+    pub(crate) show_wizard: bool,
+    pub(crate) wizard_selected: usize,
     // Preferences
     prefs_tab: usize,
     llm_tab: usize,
@@ -349,6 +310,15 @@ impl ImpulseApp {
                 shared
             },
             show_sysinfo: false,
+            show_wizard: {
+                let sess = crate::state::load_session();
+                let done = sess.as_ref().and_then(|s| s.wizard_done).unwrap_or(false);
+                // Show wizard when not explicitly dismissed. Existing sessions
+                // (pre-wizard) will see it once with "Resume" as the default.
+                !done
+            },
+            wizard_selected: usize::MAX, // MAX = "Resume last session" sentinel
+
             prefs_tab: 0,
             llm_tab: 0,
             startup_done: false,
@@ -408,12 +378,24 @@ impl ImpulseApp {
 
     fn drain_llm_outputs(&mut self) {
         while let Ok(out) = self.llm_rx.try_recv() {
+            // Resolve persona: agent-specific name when available, else singleton.
+            let persona_name = out
+                .agent_id
+                .and_then(|aid| {
+                    let s = self.state.read();
+                    s.llm_agents
+                        .iter()
+                        .find(|a| a.id == aid)
+                        .map(|a| a.persona_name.clone())
+                })
+                .unwrap_or_else(|| self.state.read().llm.persona_name.clone());
+
             // Store thinking tokens for display; also echo to log if enabled.
             if let Some(ref thinking) = out.thinking
                 && !thinking.is_empty()
             {
                 self.last_thinking = Some(thinking.clone());
-                let think_persona = self.state.read().llm.persona_name.clone();
+                let think_persona = persona_name.clone();
                 log::info!(
                     "{} (thinking): {}",
                     think_persona,
@@ -465,7 +447,7 @@ impl ImpulseApp {
                     self.listen_pending = false;
                     "LISTEN".to_string()
                 } else {
-                    self.state.read().llm.persona_name.clone()
+                    persona_name.clone()
                 };
                 let line = if out.thinking.as_ref().is_some_and(|t| !t.is_empty()) {
                     format!("{} -> {} [think]\n", persona, display)

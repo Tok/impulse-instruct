@@ -1,7 +1,7 @@
 # Impulse Instruct - Roadmap
 
-A synthesizer with a tiny LLM living inside it that actually understands music.
-PULSE listens, jams, evolves, and shouts at the crowd.
+A smart synthesizer with a virtual production team inside. Multiple LLM agents
+collaborate to write patterns, shape sound, and evolve tracks in real time.
 
 What's already built is documented in [docs/features.md](docs/features.md).
 
@@ -72,35 +72,22 @@ Ordered by value.  Branch: **`develop`** (merge to `main` only for tagged releas
 
 ---
 
-### Next sprint — Multi-model agent infrastructure (Phase 2–3)
+### Multi-model agent infrastructure (Phase 2–3) — completed
 
-Phase 1 (server pool + per-agent model) is done.  Remaining:
-
-#### VRAM budget + startup wizard (Phase 2)
-
-- **VRAM budget** — detect available GPU memory (nvidia-smi / rocm-smi),
-  compute how many models fit.  Typical configs:
-  - 8 GB VRAM → 1× Gemma 4 E4B (~6 GB)
-  - 12 GB → 1× Gemma + 2× Bonsai (~6+2+2 = 10 GB)
-  - 16 GB → 2× Gemma or 1× Gemma + 4× Bonsai
-  - 24 GB → 2× Gemma + 4× Bonsai or 1× 14B + 2× Bonsai
-- **Startup wizard** — on first launch (or when no agents exist), show a
-  modal: "How many agents? Which models?" with VRAM indicator.  Presets:
-  "Solo (1× Gemma)", "Duo (2× Gemma)", "Swarm (1× Gemma + 3× Bonsai)".
-
-#### Dynamic agent spawning (Phase 3)
-
-- Agents can request more agents via the `settings` JSON key:
-  `{ "settings": { "spawn_agent": { "persona": "BASS BRAIN", "scope": ["bass"], "model": "bonsai" } } }`
-- The UI creates a new `LlmAgent` rack module + `LlmAgentState` from this.
-- Agents can also dismiss themselves: `{ "settings": { "dismiss": true } }`
-- MC/DJ mode should be a separate agent instance with its own persona.
-
-#### Cable-driven scope (Phase 3 stretch)
-
-- Drawing a CV cable from LlmAgent to AcidBass auto-adds "bass" to scope
-- Removing the cable removes from scope
-- Visual: cable colours encode scope (blue = LLM signal)
+- [x] **Phase 1 — Server pool + per-agent model** — `LlamaServerPool` manages
+  ref-counted llama-server processes; agents have `model_path: Option<String>`
+- [x] **Phase 2 — VRAM budget + startup wizard** — `src/llm/vram.rs` model
+  profiles + presets (Solo/Duo/Swarm/Band/Voices/Lite); startup wizard on
+  first launch detects GPU, shows VRAM budget, offers "Resume last session"
+  or fresh preset; VRAM estimate on agent cards; `wizard_done` persisted
+- [x] **Phase 3 — Dynamic agent spawning** — `LlmAction::SpawnAgent` /
+  `DismissAgent` with full handlers; `scope_from_control_cables()` derives
+  scope from cable graph at inference time; auto-wire on spawn; gated by
+  `agent_autonomy` flag
+- [x] **Phase 3 — Cable-driven scope** — Control cables from LlmAgent to
+  modules define scope; removing cables restricts scope; scope displayed
+  on agent cards as read-only text; system prompt tells agent its scope
+  constraint; `apply_llm_update()` enforces scope
 
 ---
 

@@ -8,6 +8,7 @@ pub mod json_repair;
 pub mod mock;
 pub mod prompt;
 pub mod styles;
+pub mod vram;
 pub use mock::mock_response;
 use mock::run_mock_loop;
 pub use prompt::build_system_prompt;

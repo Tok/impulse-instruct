@@ -56,6 +56,20 @@ A detailed log of what's built. The roadmap lives in [PLAN.md](../PLAN.md).
 - **Internal music API** - `src/music_api/mod.rs`; all 10 ChordQuality variants, amen_pattern, scale_run, random_diatonic_chord; LLM dispatches via `"music_api"` JSON block
 - **Audio feedback (Phase 1)** - LISTEN button captures audio, runs per-band RMS + transient analysis, prepends structured snapshot to prompt; response logged as `LISTEN ->`
 
+## Multi-agent production team
+
+- **Multiple LLM agents** - each agent has its own persona, model, scope, heat, temperature, conversation mode, style, and user instructions
+- **Multi-model server pool** - `LlamaServerPool` manages N llama-server processes (ports 8766+), ref-counted per model; agents sharing a model share a single server
+- **Per-agent model selector** - dropdown on each agent card; `None` inherits global default
+- **Round-robin scheduling** - agents take turns during jam cycles; only enabled rack modules participate
+- **Cable-driven scope** - `PortKind::Control` cables from agent to module define what each agent may control; `scope_from_control_cables()` resolves scope at inference time; empty scope = agent controls everything
+- **Dynamic spawning** - agents can request new agents (`LlmAction::SpawnAgent`) or dismiss themselves (`LlmAction::DismissAgent`) via JSON; gated by `agent_autonomy` flag; auto-wire control cables on spawn
+- **VRAM budget module** - `src/llm/vram.rs` with model profiles (Gemma, Bonsai, DeepSeek, Qwen3), VRAM estimates, and preset configurations
+- **Startup wizard** - first-launch modal detects GPU VRAM, shows preset selector (Solo/Duo/Swarm/Band/Voices/Lite) with budget bar; "Resume last session" as default when prior session exists; persists `wizard_done` in session.json
+- **VRAM estimate on agent cards** - shows `~X.XG VRAM` below model selector
+- **Agent persona in log** - output and thinking lines show the correct agent persona name, not the global singleton
+- **Console routes to agents** - typed prompts go to the first enabled agent instead of bypassing the agent system
+
 ## TTS / MC mode
 
 - espeak-ng backend - speaks PULSE's `mc_line` field as a jungle MC
