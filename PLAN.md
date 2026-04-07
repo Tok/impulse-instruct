@@ -60,9 +60,9 @@ support Gemma 4's audio encoder. See [docs/audio-feedback.md](docs/audio-feedbac
 #### Visualization & statistics modules
 
 - [x] **Spectrum analyser** — 1024-point FFT, 64 log bands, smoothing + peak hold
-- [ ] **Stereo correlation meter** — phase correlation + L/R balance bar
+- [x] **Stereo correlation meter** — phase correlation + L/R balance bar (rackable)
 - [x] **Pattern heatmap** — probability indicator on step buttons (corner dot)
-- [ ] **LLM activity timeline** — structured, filterable agent activity log
+- [x] **LLM activity timeline** — rackable module with timestamped, tagged entries
 
 #### Visual treatment (post-process pass)
 
@@ -79,8 +79,8 @@ support Gemma 4's audio encoder. See [docs/audio-feedback.md](docs/audio-feedbac
 
 - [ ] **Windows code-signing** — unsigned `.exe` triggers SmartScreen
 
-- [ ] **Bipolar param_control variant** — for `bass.osc_detune` (-1..+1 st)
-  and similar bipolar controls that bypass lock/focus
+- [x] **Bipolar param_control variant** — `param_control_bipolar()` maps -1..+1;
+  bass osc_detune now uses knob instead of DragValue
 
 - [ ] **Event queue ring visualisation** — render the rtrb ring buffer as a
   circular display with moving read/write heads
