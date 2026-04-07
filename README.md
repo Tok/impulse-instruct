@@ -5,21 +5,33 @@
 
 A **smart synthesizer** with a virtual production team living inside it. Multiple locally-running language models collaborate as AI agents — each with its own persona, scope, and model — to write patterns, shape sound, and evolve a track in real time. One agent handles bass, another drums, a third sculpts FX, and a conductor coordinates the session. Or run a single agent that controls everything. You decide the lineup.
 
+<p align="center">
+  <img src="assets/header.svg" alt="Impulse Instruct" width="800"/>
+</p>
+
 You talk to them the way you'd talk to collaborators in the studio. Say "make it acid" and the bass agent adjusts the ladder filter, env mod, resonance, and note density. Say "dark techno, sparse, 132 BPM" and the agents restructure patterns and tighten FX routing to match. Say "keep the kick but change everything else" and the lock system protects what you've dialled in.
 
 The agents run a continuous jam loop, evolving the sound between prompts at a rate you control with the **HEAT** slider. At low heat they nudge filters and rhythm details. At full heat they rewrite patterns, swap instruments, and restructure the FX chain constantly. Agents take turns in round-robin, each bringing its own creative perspective.
 
 Everything runs entirely offline: no cloud calls, no subscriptions, no latency. Multiple LLM instances run locally via llama-server (one per model, ref-counted and shared across agents), the audio engine runs in a dedicated real-time thread, and they communicate through lock-free ring buffers. Nothing leaves your machine.
 
-<p align="center">
-  <img src="assets/header.svg" alt="Impulse Instruct" width="800"/>
-</p>
-
 > **Requires an NVIDIA GPU (CUDA).** A model must be downloaded before first run - see [Getting started](#getting-started).
 
 ---
 
-## ⚠️ Alpha - Work in Progress (v0.5.9)
+<p align="center">
+  <img src="assets/screenshots/Screenshot_1_setup_wizard_0.6.0.png" alt="Startup wizard — GPU detection and agent preset selector" width="900"/>
+</p>
+<p align="center">
+  <img src="assets/screenshots/Screenshot_2_back_view_0.6.0.png" alt="Back panel — control cables connecting agents to modules" width="900"/>
+</p>
+<p align="center">
+  <img src="assets/screenshots/Screenshot_3_kobs_0.6.0.png" alt="Front panel — knobs, sequencer, and FX chain" width="900"/>
+</p>
+
+---
+
+## ⚠️ Alpha - Work in Progress (v0.6.0)
 
 **This is pre-release software.** It works and makes sound, but expect rough edges. A few things worth knowing before you dive in:
 
@@ -29,12 +41,6 @@ Everything runs entirely offline: no cloud calls, no subscriptions, no latency. 
 - **Windows build is untested.** The cross-compile produces a binary but it hasn't been run on real hardware yet. Linux is the only verified platform for this release.
 
 See [Known Limitations](#known-limitations) for specifics on what works and what doesn't yet.
-
----
-
-<p align="center">
-  <img src="assets/screenshots/Screenshot-0.5.9.png" alt="Impulse Instruct v0.5.9" width="900"/>
-</p>
 
 ---
 
