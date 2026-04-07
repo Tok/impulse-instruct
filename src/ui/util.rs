@@ -33,6 +33,24 @@ pub(crate) fn scan_models() -> Vec<String> {
     found
 }
 
+/// Ctrl+MouseWheel zoom: returns `Some(new_scale)` when the user scrolls
+/// with Ctrl held, or `None` if no zoom change occurred.
+pub(crate) fn ctrl_scroll_zoom(ctx: &egui::Context, current_scale: f32) -> Option<f32> {
+    let delta = ctx.input(|i| {
+        if i.modifiers.ctrl {
+            i.raw_scroll_delta.y
+        } else {
+            0.0
+        }
+    });
+    if delta.abs() > 0.1 {
+        let step = (delta / 120.0).clamp(-0.5, 0.5) * 0.1;
+        Some((current_scale + step).clamp(0.5, 3.0))
+    } else {
+        None
+    }
+}
+
 /// Open a URL in the system browser (cross-platform, no extra dep).
 pub(crate) fn webbrowser_open(url: &str) -> std::io::Result<()> {
     #[cfg(target_os = "linux")]
