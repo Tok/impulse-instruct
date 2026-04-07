@@ -265,6 +265,19 @@ pub fn apply_reese_preset(state: AppState) -> AppState {
     s
 }
 
+/// Gabber kick preset: extreme pitch envelope + hard clip for distorted swooping kick.
+pub fn apply_gabber_kick_preset(state: AppState) -> AppState {
+    let mut s = state;
+    s.kit_a.kick.pitch = 0.35; // lower base pitch
+    s.kit_a.kick.decay = 0.7; // long tail
+    s.kit_a.kick.punch = 0.9; // maximum transient
+    s.kit_a.kick.pitch_env_depth = 0.9; // extreme pitch sweep
+    s.kit_a.kick.pitch_env_time = 0.6; // long sweep time — the gabber "swooop"
+    s.kit_a.kick.clip = 0.8; // heavy hard clipping
+    s.kit_a.kick.volume = 0.85;
+    s
+}
+
 /// Set a hoover sequencer step.
 pub fn set_hoover_step(state: AppState, step: usize, note: u8, active: bool) -> AppState {
     let mut s = state;
