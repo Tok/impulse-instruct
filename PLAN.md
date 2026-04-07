@@ -7,13 +7,11 @@ What's already built is documented in [docs/features.md](docs/features.md).
 
 ---
 
-## v0.6.0 — Multi-agent release (in progress)
+## v0.6.0 / v0.6.1 — Multi-agent release
 
-All core multi-agent features are implemented.  Remaining before tagging:
-
-- [ ] Merge `develop` into `main` (55 commits ahead, rebase to resolve 2 behind)
-- [ ] Update `Cargo.toml` version to `0.6.0`
-- [ ] Tag `v0.6.0` and push
+Released.  v0.6.1 hotfixes: removed `sync_default_agent` (broke per-agent
+state), server-acquire error feedback, console Enter key fix, prompt broadcast
+to all agents, wizard clean-slate preset application, round-robin visualization.
 
 ---
 

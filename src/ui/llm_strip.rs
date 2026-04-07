@@ -666,11 +666,17 @@ impl ImpulseApp {
                 .button(egui::RichText::new("↵").monospace().size(10.0))
                 .clicked();
 
-            // Enter (without Shift) submits; trim the trailing newline first.
-            let enter_pressed = response.has_focus()
-                && ui.input(|i| i.key_pressed(egui::Key::Enter) && !i.modifiers.shift);
-            if enter_pressed && self.prompt_input.ends_with('\n') {
-                self.prompt_input.pop();
+            // Enter submits: egui's singleline TextEdit loses focus on Enter,
+            // so we detect "lost focus + Enter key" which is the standard pattern.
+            let enter_pressed =
+                response.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
+            if enter_pressed {
+                // Strip trailing newline the TextEdit may have appended.
+                if self.prompt_input.ends_with('\n') {
+                    self.prompt_input.pop();
+                }
+                // Re-acquire focus so the user can type the next prompt immediately.
+                response.request_focus();
             }
 
             if submit || enter_pressed {
