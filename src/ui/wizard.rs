@@ -283,7 +283,13 @@ impl ImpulseApp {
                         .unwrap_or(false);
 
                 ui.horizontal(|ui| {
-                    let label = if is_resume { "Resume" } else { "Apply" };
+                    let label = if is_resume {
+                        "Resume"
+                    } else if has_prior_agents {
+                        "Apply"
+                    } else {
+                        "Start"
+                    };
                     if ui
                         .add_enabled(
                             can_apply,
@@ -293,7 +299,7 @@ impl ImpulseApp {
                                     .size(10.0)
                                     .color(if can_apply { theme::CHALK } else { theme::IRON }),
                             )
-                            .min_size(egui::vec2(80.0, 24.0)),
+                            .min_size(egui::vec2(100.0, 26.0)),
                         )
                         .clicked()
                     {
@@ -302,21 +308,6 @@ impl ImpulseApp {
                         } else {
                             self.apply_wizard_preset(self.wizard_selected);
                         }
-                        self.show_wizard = false;
-                    }
-                    if ui
-                        .add(
-                            egui::Button::new(
-                                egui::RichText::new("Skip")
-                                    .monospace()
-                                    .size(10.0)
-                                    .color(theme::FOG),
-                            )
-                            .min_size(egui::vec2(80.0, 24.0)),
-                        )
-                        .clicked()
-                    {
-                        self.mark_wizard_done();
                         self.show_wizard = false;
                     }
                 });

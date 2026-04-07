@@ -307,14 +307,18 @@ impl ImpulseApp {
                 shared
             },
             show_sysinfo: false,
-            show_wizard: {
-                let sess = crate::state::load_session();
-                let done = sess.as_ref().and_then(|s| s.wizard_done).unwrap_or(false);
-                // Show wizard when not explicitly dismissed. Existing sessions
-                // (pre-wizard) will see it once with "Resume" as the default.
-                !done
+            show_wizard: !crate::state::load_session()
+                .and_then(|s| s.wizard_done)
+                .unwrap_or(false),
+            wizard_selected: if crate::state::load_session()
+                .and_then(|s| s.llm_agents)
+                .map(|a| a.is_empty())
+                .unwrap_or(true)
+            {
+                usize::MAX - 1
+            } else {
+                usize::MAX
             },
-            wizard_selected: usize::MAX, // MAX = "Resume last session" sentinel
 
             prefs_tab: 0,
             llm_tab: 0,
@@ -680,7 +684,6 @@ impl ImpulseApp {
     fn drain_midi_events(&mut self) {
         use crate::midi::cc_to_param_path;
         use crate::state::{apply_llm_update, toggle_sequencer_running};
-
         while let Ok(event) = self.midi_rx.try_recv() {
             match event {
                 MidiEvent::NoteOn {
@@ -694,7 +697,6 @@ impl ImpulseApp {
                             voice_idx: 0,
                         }));
                 }
-
                 MidiEvent::NoteOn { note, velocity, .. } => {
                     self.pressed_notes.insert(note);
                     let vel = velocity as f32 / 127.0;
@@ -708,7 +710,6 @@ impl ImpulseApp {
                             slide: false,
                             gate_samples: 22050, // ~0.5 s at 44100 Hz
                         }));
-
                     // Write note into current step so you can step-program live.
                     let step = self.state.read().sequencer.current_step;
                     let s = self.state.read().clone();
