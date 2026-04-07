@@ -800,7 +800,8 @@ impl eframe::App for ImpulseApp {
 
         self.drain_llm_outputs();
         self.drain_midi_events();
-        crate::state::sync_default_agent(&mut self.state.write()); // Phase 1 agent↔singleton
+        // Phase 1 had sync_default_agent() here — removed in v0.6.0.
+        // Each agent now owns its own persona/heat/temp/state independently.
 
         // ── Jam timer: fire delayed jam cycle when the bar-count delay elapses ──
         if let Some((fire_at, pending_agent)) = self.jam_next_fire {

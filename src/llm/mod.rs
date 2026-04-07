@@ -52,7 +52,7 @@ pub enum LlmAction {
 
 pub use json_repair::extract_llm_actions;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct LlmOutput {
     pub text: String,
     pub param_update: Option<serde_json::Value>,
@@ -358,7 +358,7 @@ pub fn run_llm_loop(
             Ok(port) => port,
             Err(e) => {
                 log::error!("Pool: cannot acquire server for {}: {}", agent_model, e);
-                // Clear inferring state and skip this request.
+                // Clear inferring state and send error to UI so the user sees feedback.
                 let mut s = state.write();
                 s.llm.is_inferring = false;
                 if let Some(aid) = agent_id
@@ -366,6 +366,11 @@ pub fn run_llm_loop(
                 {
                     a.is_inferring = false;
                 }
+                let _ = output_tx.try_send(LlmOutput {
+                    text: format!("[server error: {}]", e),
+                    agent_id,
+                    ..LlmOutput::default()
+                });
                 continue;
             }
         };

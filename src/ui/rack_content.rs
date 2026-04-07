@@ -359,16 +359,44 @@ pub(super) fn draw_llm_agent_content(app: &mut ImpulseApp, ui: &mut egui::Ui, mo
 
     // ── Persona name + inference indicator ───────────────────────────────
     ui.horizontal(|ui| {
-        let inf_col = if inferring { theme::CHALK } else { theme::ASH };
-        ui.label(egui::RichText::new("●").color(inf_col).size(10.0));
+        if inferring {
+            // Pulsing dot while inferring — animated brightness
+            let t = ui.ctx().input(|i| i.time) as f32;
+            let pulse = (t * 4.0 * std::f32::consts::TAU).sin() * 0.3 + 0.7;
+            let g = (220.0 * pulse) as u8;
+            ui.label(
+                egui::RichText::new("●")
+                    .color(egui::Color32::from_gray(g))
+                    .size(10.0),
+            );
+            ui.ctx().request_repaint();
+        } else {
+            ui.label(egui::RichText::new("●").color(theme::ASH).size(10.0));
+        }
         let resp = ui.add(
             egui::TextEdit::singleline(&mut persona)
-                .desired_width(120.0)
+                .desired_width(100.0)
                 .font(egui::FontId::monospace(9.5))
                 .text_color(theme::FOG),
         );
         if resp.changed() {
             app.state.write().llm_agents[idx].persona_name = persona;
+        }
+        // Show tok/s and cycle count inline when active
+        if inferring {
+            ui.label(
+                egui::RichText::new(format!("{:.0} t/s", tps))
+                    .color(theme::FOG)
+                    .monospace()
+                    .size(7.5),
+            );
+        } else if cycles > 0 {
+            ui.label(
+                egui::RichText::new(format!("#{}", cycles))
+                    .color(theme::IRON)
+                    .monospace()
+                    .size(7.5),
+            );
         }
     });
 
