@@ -408,6 +408,7 @@ pub(super) fn module_slot_w(kind: ModuleKind, full_w: f32) -> f32 {
         | ModuleKind::FxCompressor
         | ModuleKind::FxTapeSat
         | ModuleKind::FxDrive
+        | ModuleKind::FxAutotune
         | ModuleKind::LfoModule
         | ModuleKind::LlmAgent => FX_SLOT_W.min(full_w),
         // LLM Console + global modules: full width
@@ -459,6 +460,31 @@ fn group_into_rows(
         rows.last_mut().unwrap().push(item);
     }
     rows
+}
+
+/// For a row of modules, compute an expansion factor and left-padding so modules
+/// fill the available width.  When expansion would be excessive (>1.4×), keep
+/// modules at their nominal width and center the row instead.
+fn row_expand_and_pad(row: &[(u32, ModuleKind, bool)], available_w: f32, gap: f32) -> (f32, f32) {
+    let n = row.len() as f32;
+    let total_gap = (n - 1.0).max(0.0) * gap;
+    let nominal: f32 = row
+        .iter()
+        .map(|(_, k, _)| module_slot_w(*k, available_w))
+        .sum();
+    let fill_w = available_w - total_gap;
+    if nominal <= 0.0 {
+        return (1.0, 0.0);
+    }
+    let ratio = fill_w / nominal;
+    if ratio <= 1.4 {
+        // Expand proportionally so the row fills the available width.
+        (ratio, 0.0)
+    } else {
+        // Would stretch too far — center at nominal widths instead.
+        let pad = ((available_w - nominal - total_gap) / 2.0).max(0.0);
+        (1.0, pad)
+    }
 }
 
 fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<PortPos>) {
@@ -735,10 +761,14 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
 
         // Voice modules — manual row grouping prevents any module from going off-screen.
         for row in group_into_rows(&voice_ids, available_w, 4.0) {
+            let (expand, pad) = row_expand_and_pad(&row, available_w, 4.0);
             ui.horizontal(|ui| {
                 ui.spacing_mut().item_spacing = Vec2::new(4.0, 0.0);
+                if pad > 1.0 {
+                    ui.add_space(pad);
+                }
                 for (id, kind, enabled) in &row {
-                    let slot_w = module_slot_w(*kind, available_w);
+                    let slot_w = module_slot_w(*kind, available_w) * expand;
                     // Dim the card ghost while it's being dragged
                     let is_dragging = app.module_drag.as_ref().map(|d| d.module_id) == Some(*id);
                     let eff_enabled = if is_dragging { false } else { *enabled };
@@ -833,10 +863,14 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
 
         // FX + Mod modules — manual row grouping, same as voice zone.
         for row in group_into_rows(&fxmod_ids, available_w, 4.0) {
+            let (expand, pad) = row_expand_and_pad(&row, available_w, 4.0);
             ui.horizontal(|ui| {
                 ui.spacing_mut().item_spacing = Vec2::new(4.0, 0.0);
+                if pad > 1.0 {
+                    ui.add_space(pad);
+                }
                 for (id, kind, enabled) in &row {
-                    let slot_w = module_slot_w(*kind, available_w);
+                    let slot_w = module_slot_w(*kind, available_w) * expand;
                     let is_dragging = app.module_drag.as_ref().map(|d| d.module_id) == Some(*id);
                     let eff_enabled = if is_dragging { false } else { *enabled };
                     let resp = if app.rack_flipped {

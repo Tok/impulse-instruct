@@ -358,9 +358,7 @@ impl ImpulseApp {
             show_cables: crate::state::load_session()
                 .and_then(|s| s.show_cables)
                 .unwrap_or(true),
-            rack_flipped: crate::state::load_session()
-                .and_then(|s| s.rack_flipped)
-                .unwrap_or(false),
+            rack_flipped: false, // volatile — always start in front view
             add_menu_zone: None,
             module_drag: None,
             session_dirty: false,
