@@ -473,7 +473,10 @@ pub(super) fn module_slot_w(kind: ModuleKind, full_w: f32) -> f32 {
         | ModuleKind::FxCompressor
         | ModuleKind::FxTapeSat
         | ModuleKind::FxDrive
-        | ModuleKind::LfoModule => FX_SLOT_W.min(full_w),
+        | ModuleKind::LfoModule
+        | ModuleKind::LlmAgent => FX_SLOT_W.min(full_w),
+        // LLM Console + global modules: full width
+        ModuleKind::LlmConsole => full_w,
         // AN1X: wide — 2 voice columns or full width
         ModuleKind::An1xVoice => {
             let cols = voice_cols(full_w);
@@ -598,7 +601,7 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
             }
         }
 
-        // LLM agent cards (Global zone)
+        // LLM agent cards (compact, side-by-side)
         {
             let agent_ids: Vec<(u32, bool)> = app
                 .state
@@ -609,47 +612,52 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
                 .filter(|m| m.kind == ModuleKind::LlmAgent)
                 .map(|m| (m.id, m.enabled))
                 .collect();
-            for (id, enabled) in agent_ids {
+            if !agent_ids.is_empty() {
                 ui.add_space(2.0);
-                let resp = if app.rack_flipped {
-                    module_card::module_card_back(
-                        ui,
-                        id,
-                        ModuleKind::LlmAgent,
-                        enabled,
-                        Some(available_w - 2.0),
-                        ports,
-                    )
-                } else {
-                    module_card::module_card(
-                        ui,
-                        id,
-                        ModuleKind::LlmAgent,
-                        enabled,
-                        Some(available_w - 2.0),
-                        ports,
-                        |ui| {
-                            draw_llm_agent_content(app, ui, id);
-                        },
-                    )
-                    .0
-                };
-                if resp.toggle_clicked
-                    && let Some(m) = app
-                        .state
-                        .write()
-                        .rack
-                        .modules
-                        .iter_mut()
-                        .find(|m| m.id == id)
-                {
-                    m.enabled = !m.enabled;
-                }
-                if resp.remove_clicked {
-                    app.state.write().rack.remove_module(id);
-                    app.state.write().llm_agents.retain(|a| a.id != id);
-                    app.push_fx_plan();
-                }
+                ui.horizontal_wrapped(|ui| {
+                    let slot_w = FX_SLOT_W.min(available_w);
+                    for (id, enabled) in &agent_ids {
+                        let resp = if app.rack_flipped {
+                            module_card::module_card_back(
+                                ui,
+                                *id,
+                                ModuleKind::LlmAgent,
+                                *enabled,
+                                Some(slot_w),
+                                ports,
+                            )
+                        } else {
+                            module_card::module_card(
+                                ui,
+                                *id,
+                                ModuleKind::LlmAgent,
+                                *enabled,
+                                Some(slot_w),
+                                ports,
+                                |ui| {
+                                    draw_llm_agent_content(app, ui, *id);
+                                },
+                            )
+                            .0
+                        };
+                        if resp.toggle_clicked
+                            && let Some(m) = app
+                                .state
+                                .write()
+                                .rack
+                                .modules
+                                .iter_mut()
+                                .find(|m| m.id == *id)
+                        {
+                            m.enabled = !m.enabled;
+                        }
+                        if resp.remove_clicked {
+                            app.state.write().rack.remove_module(*id);
+                            app.state.write().llm_agents.retain(|a| a.id != *id);
+                            app.push_fx_plan();
+                        }
+                    }
+                });
             }
         }
 

@@ -461,6 +461,11 @@ pub fn module_card_back(
                     | ModuleKind::MasterOutput
             );
             let has_cv_out = matches!(kind, ModuleKind::LfoModule | ModuleKind::StepSequencer);
+            let has_control_out = matches!(kind, ModuleKind::LlmAgent);
+            let has_control_in = !matches!(
+                kind,
+                ModuleKind::MasterOutput | ModuleKind::LlmAgent | ModuleKind::LlmConsole
+            );
             let has_cv_in = matches!(
                 kind,
                 ModuleKind::AcidBass
@@ -528,6 +533,27 @@ pub fn module_card_back(
                     Sense::hover(),
                 )
                 .on_hover_text("CV / Gate In");
+                in_y += 20.0;
+            }
+            if has_control_in {
+                let pos = Pos2::new(left_x, in_y);
+                draw_port_circle(&sp, pos, PortKind::Control, PortDir::In);
+                ports.push(PortPos {
+                    port: PortRef {
+                        module_id,
+                        dir: PortDir::In,
+                        kind: PortKind::Control,
+                        index: 0,
+                    },
+                    center: pos,
+                });
+                sp.text(
+                    pos + Vec2::new(10.0, 0.0),
+                    egui::Align2::LEFT_CENTER,
+                    "CTL",
+                    label_font.clone(),
+                    label_col,
+                );
             }
 
             // ── RIGHT side: output ports ────────────────────────────────────
@@ -575,7 +601,7 @@ pub fn module_card_back(
                     pos + Vec2::new(-10.0, 0.0),
                     egui::Align2::RIGHT_CENTER,
                     "CV",
-                    label_font,
+                    label_font.clone(),
                     label_col,
                 );
                 ui.interact(
@@ -584,6 +610,27 @@ pub fn module_card_back(
                     Sense::hover(),
                 )
                 .on_hover_text("CV Out");
+                out_y += 20.0;
+            }
+            if has_control_out {
+                let pos = Pos2::new(right_x, out_y);
+                draw_port_circle(&sp, pos, PortKind::Control, PortDir::Out);
+                ports.push(PortPos {
+                    port: PortRef {
+                        module_id,
+                        dir: PortDir::Out,
+                        kind: PortKind::Control,
+                        index: 0,
+                    },
+                    center: pos,
+                });
+                sp.text(
+                    pos + Vec2::new(-10.0, 0.0),
+                    egui::Align2::RIGHT_CENTER,
+                    "CTL",
+                    label_font,
+                    label_col,
+                );
             }
         });
     });

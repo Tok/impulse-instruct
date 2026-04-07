@@ -503,7 +503,7 @@ impl ImpulseApp {
                     .unwrap_or("None"),
             };
             let mut new_sel: Option<Option<String>> = None;
-            egui::ComboBox::from_id_source("style_selector")
+            egui::ComboBox::from_id_source(ui.id().with("console_style"))
                 .selected_text(egui::RichText::new(cur_name).monospace().size(9.5))
                 .width(140.0)
                 .show_ui(ui, |ui| {
@@ -645,21 +645,17 @@ impl ImpulseApp {
         });
 
         // ── Prompt input + ASK ───────────────────────────────────────
-        ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
+        ui.horizontal(|ui| {
             let avail = ui.available_width();
-            let prompt_w = avail - 50.0;
+            let prompt_w = avail - 40.0;
             let response = ui.add(
-                egui::TextEdit::multiline(&mut self.prompt_input)
+                egui::TextEdit::singleline(&mut self.prompt_input)
                     .hint_text("prompt the model…")
                     .desired_width(prompt_w)
-                    .desired_rows(2)
-                    .font(egui::FontId::monospace(11.5)),
+                    .font(egui::FontId::monospace(9.5)),
             );
             let submit = ui
-                .add_sized(
-                    [44.0, response.rect.height()],
-                    egui::Button::new(egui::RichText::new("↵").monospace().size(14.0)),
-                )
+                .button(egui::RichText::new("↵").monospace().size(10.0))
                 .clicked();
 
             // Enter (without Shift) submits; trim the trailing newline first.
