@@ -49,6 +49,7 @@ fn title_fill(kind: ModuleKind) -> Color32 {
         | ModuleKind::FxAutotune => 20,
         ModuleKind::LfoModule => 18,
         ModuleKind::LlmAgent => 30,
+        ModuleKind::LlmConsole => 28,
     };
     Color32::from_gray(v)
 }

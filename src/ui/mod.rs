@@ -278,7 +278,6 @@ pub struct ImpulseApp {
     // Round-robin index for multi-agent jam dispatch.
     jam_next_agent: usize,
     // When true the LLM strip collapses to show only the prompt row.
-    pub(crate) llm_strip_collapsed: bool,
     // Native pixels_per_point at startup — used as base for ui_scale.
     native_ppp: f32,
     /// Central lock-paint mode: None = normal drag, Some(mode) = click paints that mode.
@@ -421,7 +420,6 @@ impl ImpulseApp {
             auto_listen_counter: 0,
             jam_next_fire: None,
             jam_next_agent: 0,
-            llm_strip_collapsed: false,
             native_ppp: 0.0, // captured on first frame after DPI is established
             touch_mode: None,
             zone_global_collapsed: false,
@@ -924,7 +922,6 @@ impl eframe::App for ImpulseApp {
 
         self.draw_windows(ctx);
         self.draw_menu_and_header(ctx);
-        self.draw_llm_strip(ctx);
 
         // ── Oscilloscope strip ────────────────────────────────────────────────
         TopBottomPanel::top("scope")

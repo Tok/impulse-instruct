@@ -36,6 +36,8 @@ const VOICE_KINDS: &[ModuleKind] = &[
     ModuleKind::NoiseVoice,
 ];
 
+const GLOBAL_KINDS: &[ModuleKind] = &[ModuleKind::LlmConsole, ModuleKind::LlmAgent];
+
 const FXMOD_KINDS: &[ModuleKind] = &[
     ModuleKind::FxReverb,
     ModuleKind::FxDelay,
@@ -378,7 +380,6 @@ fn draw_add_menu(app: &mut ImpulseApp, ctx: &egui::Context) {
         Some(z) => z,
         None => return,
     };
-    const GLOBAL_KINDS: &[ModuleKind] = &[ModuleKind::LlmAgent];
     let kinds: &[ModuleKind] = match zone {
         crate::state::Zone::Voice => VOICE_KINDS,
         crate::state::Zone::FxMod => FXMOD_KINDS,
@@ -457,7 +458,7 @@ fn draw_add_menu(app: &mut ImpulseApp, ctx: &egui::Context) {
 const VOICE_MIN_W: f32 = 420.0;
 const FX_SLOT_W: f32 = 220.0;
 
-fn module_slot_w(kind: ModuleKind, full_w: f32) -> f32 {
+pub(super) fn module_slot_w(kind: ModuleKind, full_w: f32) -> f32 {
     match kind {
         ModuleKind::StepSequencer | ModuleKind::MasterOutput => full_w,
         // FX and LFO: fixed compact width
@@ -633,6 +634,64 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
                 .0
             };
             let _ = resp;
+        }
+
+        // LLM Console — style, log, prompt, JAM, LISTEN (singleton, full-width)
+        {
+            let console_id = app
+                .state
+                .read()
+                .rack
+                .modules
+                .iter()
+                .find(|m| m.kind == ModuleKind::LlmConsole)
+                .map(|m| m.id);
+            if let Some(id) = console_id {
+                let enabled = app
+                    .state
+                    .read()
+                    .rack
+                    .modules
+                    .iter()
+                    .find(|m| m.id == id)
+                    .map(|m| m.enabled)
+                    .unwrap_or(true);
+                ui.add_space(2.0);
+                let resp = if app.rack_flipped {
+                    module_card::module_card_back(
+                        ui,
+                        id,
+                        ModuleKind::LlmConsole,
+                        enabled,
+                        Some(available_w - 2.0),
+                        ports,
+                    )
+                } else {
+                    module_card::module_card(
+                        ui,
+                        id,
+                        ModuleKind::LlmConsole,
+                        enabled,
+                        Some(available_w - 2.0),
+                        ports,
+                        |ui| {
+                            app.draw_llm_console_content(ui);
+                        },
+                    )
+                    .0
+                };
+                if resp.toggle_clicked
+                    && let Some(m) = app
+                        .state
+                        .write()
+                        .rack
+                        .modules
+                        .iter_mut()
+                        .find(|m| m.id == id)
+                {
+                    m.enabled = !m.enabled;
+                }
+            }
         }
 
         // LLM agent cards (Global zone)
@@ -898,96 +957,9 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
 
 // ─── Module drag helpers ──────────────────────────────────────────────────────
 
-/// Process drag start/stop from a card response and update app.module_drag.
-/// Returns true if this card was just dropped (so caller can reorder slots).
-fn handle_title_drag(
-    app: &mut ImpulseApp,
-    ctx: &egui::Context,
-    id: u32,
-    resp: &module_card::CardResponse,
-) -> bool {
-    if resp.title_dragged {
-        if app.module_drag.as_ref().map(|d| d.module_id) != Some(id) {
-            app.module_drag = Some(ModuleDrag {
-                module_id: id,
-                pointer: ctx.pointer_latest_pos().unwrap_or_default(),
-            });
-        } else if let Some(ref mut drag) = app.module_drag {
-            drag.pointer = ctx.pointer_latest_pos().unwrap_or(drag.pointer);
-        }
-    }
-    if resp.title_drag_released && app.module_drag.as_ref().map(|d| d.module_id) == Some(id) {
-        app.module_drag = None;
-        return true;
-    }
-    false
-}
-
-/// After a drop, reorder module slots so dragged module ends up at the position
-/// closest to `drop_pos` within its zone's ordered list.
-fn reorder_module_by_drop(
-    app: &mut ImpulseApp,
-    dragged_id: u32,
-    drop_pos: egui::Pos2,
-    zone: crate::state::Zone,
-) {
-    // Use 1200px as a reasonable default — drop position is proportional, not exact.
-    let available_w = 1200.0f32;
-    // Get ordered IDs + their widths for this zone
-    let zone_entries: Vec<(u32, ModuleKind)> = {
-        let rack = app.state.read();
-        let mut v: Vec<_> = rack
-            .rack
-            .modules
-            .iter()
-            .filter(|m| m.zone == zone)
-            .collect();
-        v.sort_by_key(|m| m.slot);
-        v.iter().map(|m| (m.id, m.kind)).collect()
-    };
-    let zone_ids: Vec<u32> = zone_entries.iter().map(|&(id, _)| id).collect();
-    // Find dragged module's current index
-    let Some(from_idx) = zone_ids.iter().position(|&id| id == dragged_id) else {
-        return;
-    };
-    let n = zone_ids.len();
-    if n < 2 {
-        return;
-    }
-    // Estimate target index: walk cumulative widths to find which slot drop_pos.x falls in.
-    // drop_pos.x is in screen space; subtract a small left margin approximation (8px).
-    let x = (drop_pos.x - 8.0).max(0.0);
-    let gap = 4.0f32;
-    let mut cursor = 0.0f32;
-    let mut to_idx = 0usize;
-    for (i, &(_, kind)) in zone_entries.iter().enumerate() {
-        let w = module_slot_w(kind, available_w);
-        let mid = cursor + w * 0.5;
-        if x >= mid {
-            to_idx = i + 1;
-        }
-        cursor += w + gap;
-    }
-    let to_idx = to_idx.clamp(0, n - 1);
-    if from_idx == to_idx {
-        return;
-    }
-    // Reorder: move dragged to to_idx, shift others
-    let mut ids = zone_ids;
-    let removed = ids.remove(from_idx);
-    ids.insert(to_idx, removed);
-    // Write new slot values
-    let mut state = app.state.write();
-    for (slot, &id) in ids.iter().enumerate() {
-        if let Some(m) = state.rack.modules.iter_mut().find(|m| m.id == id) {
-            m.slot = slot as u8;
-        }
-    }
-}
-
 // ─── Content dispatchers (implementation in rack_content.rs) ─────────────────
 
 use super::rack_content::{
     draw_fx_content, draw_lfo_content, draw_llm_agent_content, draw_master_content,
-    draw_voice_content, handle_cable_drag,
+    draw_voice_content, handle_cable_drag, handle_title_drag, reorder_module_by_drop,
 };

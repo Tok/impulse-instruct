@@ -300,6 +300,30 @@ impl ImpulseApp {
 
                     ui.separator();
 
+                    // ── HEAT (global jam intensity) ──────────────────────────
+                    {
+                        let mut heat = self.state.read().llm.heat;
+                        ui.label(
+                            egui::RichText::new("HEAT")
+                                .color(theme::ASH)
+                                .monospace()
+                                .size(8.5),
+                        );
+                        if ui
+                            .add(
+                                egui::DragValue::new(&mut heat)
+                                    .range(0.0..=1.0)
+                                    .speed(0.01)
+                                    .fixed_decimals(2),
+                            )
+                            .changed()
+                        {
+                            self.state.write().llm.heat = heat;
+                        }
+                    }
+
+                    ui.separator();
+
                     // ── RIGHT controls (KNOBS, MON, VRAM/RAM, API) ─────────
                     {
                         let (has_vram, has_ram, vram_used, vram_total, ram_used, ram_total) = self

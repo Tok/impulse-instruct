@@ -9,7 +9,6 @@ use crate::llm::LlmInput;
 use crate::llm::styles::StyleCatalog;
 use crate::state::apply_llm_update;
 use crate::ui::{ImpulseApp, theme};
-use egui::{Frame, TopBottomPanel};
 
 // ─── Huth note colorizer ──────────────────────────────────────────────────────
 
@@ -292,41 +291,11 @@ fn colorize_log(text: &str, default_color: egui::Color32) -> egui::text::LayoutJ
 }
 
 impl ImpulseApp {
-    /// Style selector, prompt input, log, and thinking display.
-    pub(super) fn draw_llm_strip(&mut self, ctx: &egui::Context) {
-        // Compact default: style row ~22px + instructions ~22px + prompt ~34px + top margin 4px ≈ 82px.
-        // User can drag the bottom border down to reveal more log lines.
-        let collapsed = self.llm_strip_collapsed;
-        TopBottomPanel::top("llm_strip")
-            .frame(Frame::none().fill(theme::PIT).inner_margin(egui::Margin { left: 8.0, right: 8.0, top: 4.0, bottom: 0.0 }))
-            .resizable(!collapsed)
-            .min_height(if collapsed { 36.0 } else { 70.0 })
-            .max_height(if collapsed { 36.0 } else { f32::INFINITY })
-            .default_height(if collapsed { 36.0 } else { 95.0 })
-            .show(ctx, |ui| {
-                // ── Collapse toggle (top-right corner) ───────────────────────
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::TOP), |ui| {
-                    let icon = if collapsed { "▼" } else { "▲" };
-                    if ui
-                        .add(
-                            egui::Button::new(
-                                egui::RichText::new(icon).monospace().size(9.0).color(theme::IRON),
-                            )
-                            .frame(false),
-                        )
-                        .on_hover_text(if collapsed { "Expand LLM strip" } else { "Collapse LLM strip" })
-                        .clicked()
-                    {
-                        self.llm_strip_collapsed = !self.llm_strip_collapsed;
-                    }
-                });
-
-                if collapsed {
-                    // Collapsed: show only the prompt row
-                } else {
-
-                // ── TOP row: style + instructions | log ───────────────────────
-                ui.horizontal(|ui| {
+    /// LLM console content — rendered inside a rackable module card.
+    /// Contains: style selector, instructions, log, JAM timing, LISTEN, prompt input.
+    pub(super) fn draw_llm_console_content(&mut self, ui: &mut egui::Ui) {
+        // ── TOP row: style + instructions | log ───────────────────────
+        ui.horizontal(|ui| {
                     // ── LEFT column: style + instructions ─────────────────────
                     let left_w = (ui.available_width() * 0.36).clamp(270.0, 420.0);
 
@@ -556,89 +525,109 @@ impl ImpulseApp {
                     });
                 }); // end top row
 
-                // ── JAM timing row ────────────────────────────────────────────
-                ui.horizontal(|ui| {
-                    ui.label(
-                        egui::RichText::new("JAM")
-                            .monospace()
-                            .size(8.5)
-                            .color(theme::ASH),
-                    );
-                    // Interval selector: CONT | 1 | 2 | 4 | 8 bars
-                    let (jam_bars, cycle_count, bpm, is_inferring, active_ramps, tps) = {
-                        let s = self.state.read();
-                        (
-                            s.llm.jam_bars,
-                            s.llm.jam_cycle_count,
-                            s.sequencer.bpm,
-                            s.llm.is_inferring,
-                            s.llm.active_ramps.len(),
-                            s.llm.tokens_per_sec,
+        // ── JAM timing row ────────────────────────────────────────────
+        ui.horizontal(|ui| {
+            ui.label(
+                egui::RichText::new("JAM")
+                    .monospace()
+                    .size(8.5)
+                    .color(theme::ASH),
+            );
+            // Interval selector: CONT | 1 | 2 | 4 | 8 bars
+            let (jam_bars, cycle_count, bpm, is_inferring, active_ramps, tps) = {
+                let s = self.state.read();
+                (
+                    s.llm.jam_bars,
+                    s.llm.jam_cycle_count,
+                    s.sequencer.bpm,
+                    s.llm.is_inferring,
+                    s.llm.active_ramps.len(),
+                    s.llm.tokens_per_sec,
+                )
+            };
+            for (label, bars) in &[
+                ("CONT", 0.0f32),
+                ("1", 1.0),
+                ("2", 2.0),
+                ("4", 4.0),
+                ("8", 8.0),
+            ] {
+                let active = (jam_bars - bars).abs() < 0.01;
+                let col = if active { theme::FOG } else { theme::SMOKE };
+                if ui
+                    .add(
+                        egui::Button::new(
+                            egui::RichText::new(*label).monospace().size(8.0).color(col),
                         )
-                    };
-                    for (label, bars) in &[("CONT", 0.0f32), ("1", 1.0), ("2", 2.0), ("4", 4.0), ("8", 8.0)] {
-                        let active = (jam_bars - bars).abs() < 0.01;
-                        let col = if active { theme::FOG } else { theme::SMOKE };
-                        if ui.add(
-                            egui::Button::new(
-                                egui::RichText::new(*label).monospace().size(8.0).color(col),
-                            )
-                            .fill(egui::Color32::TRANSPARENT)
-                            .min_size(egui::vec2(0.0, 12.0)),
-                        ).on_hover_text(if *bars == 0.0 {
-                            "Fire next cycle immediately after inference".to_string()
-                        } else {
-                            format!("Wait {} bar{} (~{:.0}s) between cycles",
-                                bars, if *bars > 1.0 { "s" } else { "" },
-                                bars * 240.0 / bpm)
-                        }).clicked() {
-                            self.state.write().llm.jam_bars = *bars;
-                        }
-                    }
-                    ui.add_space(6.0);
-                    // Cycle counter
-                    ui.label(
-                        egui::RichText::new(format!("#{}", cycle_count))
-                            .monospace()
-                            .size(8.0)
-                            .color(theme::IRON),
-                    ).on_hover_text("Total jam cycles completed");
-                    // Inference indicator + tokens/sec
-                    if is_inferring {
-                        ui.label(
-                            egui::RichText::new("▶").size(8.0).color(theme::FOG),
-                        ).on_hover_text(format!("{:.1} tok/s", tps));
-                    } else if tps > 0.0 {
-                        ui.label(
-                            egui::RichText::new(format!("{:.1}t/s", tps))
-                                .monospace()
-                                .size(7.5)
-                                .color(theme::IRON),
-                        ).on_hover_text("Tokens per second (last inference)");
-                    }
-                    // Active ramps indicator
-                    if active_ramps > 0 {
-                        ui.label(
-                            egui::RichText::new(format!("~{}", active_ramps))
-                                .monospace()
-                                .size(7.5)
-                                .color(theme::IRON),
-                        ).on_hover_text(format!("{} active ramp{}", active_ramps, if active_ramps > 1 { "s" } else { "" }));
-                    }
-                    // Countdown when waiting between cycles
-                    if let Some((fire_at, _)) = self.jam_next_fire {
-                        let remaining = fire_at.duration_since(std::time::Instant::now());
-                        ui.label(
-                            egui::RichText::new(format!("in {:.1}s", remaining.as_secs_f32()))
-                                .monospace()
-                                .size(7.5)
-                                .color(theme::ASH),
-                        ).on_hover_text("Next jam cycle fires after this delay");
-                    }
-                });
+                        .fill(egui::Color32::TRANSPARENT)
+                        .min_size(egui::vec2(0.0, 12.0)),
+                    )
+                    .on_hover_text(if *bars == 0.0 {
+                        "Fire next cycle immediately after inference".to_string()
+                    } else {
+                        format!(
+                            "Wait {} bar{} (~{:.0}s) between cycles",
+                            bars,
+                            if *bars > 1.0 { "s" } else { "" },
+                            bars * 240.0 / bpm
+                        )
+                    })
+                    .clicked()
+                {
+                    self.state.write().llm.jam_bars = *bars;
+                }
+            }
+            ui.add_space(6.0);
+            // Cycle counter
+            ui.label(
+                egui::RichText::new(format!("#{}", cycle_count))
+                    .monospace()
+                    .size(8.0)
+                    .color(theme::IRON),
+            )
+            .on_hover_text("Total jam cycles completed");
+            // Inference indicator + tokens/sec
+            if is_inferring {
+                ui.label(egui::RichText::new("▶").size(8.0).color(theme::FOG))
+                    .on_hover_text(format!("{:.1} tok/s", tps));
+            } else if tps > 0.0 {
+                ui.label(
+                    egui::RichText::new(format!("{:.1}t/s", tps))
+                        .monospace()
+                        .size(7.5)
+                        .color(theme::IRON),
+                )
+                .on_hover_text("Tokens per second (last inference)");
+            }
+            // Active ramps indicator
+            if active_ramps > 0 {
+                ui.label(
+                    egui::RichText::new(format!("~{}", active_ramps))
+                        .monospace()
+                        .size(7.5)
+                        .color(theme::IRON),
+                )
+                .on_hover_text(format!(
+                    "{} active ramp{}",
+                    active_ramps,
+                    if active_ramps > 1 { "s" } else { "" }
+                ));
+            }
+            // Countdown when waiting between cycles
+            if let Some((fire_at, _)) = self.jam_next_fire {
+                let remaining = fire_at.duration_since(std::time::Instant::now());
+                ui.label(
+                    egui::RichText::new(format!("in {:.1}s", remaining.as_secs_f32()))
+                        .monospace()
+                        .size(7.5)
+                        .color(theme::ASH),
+                )
+                .on_hover_text("Next jam cycle fires after this delay");
+            }
+        });
 
-                // ── LISTEN bar: capture + analysis display ────────────────────
-                ui.horizontal(|ui| {
+        // ── LISTEN bar: capture + analysis display ────────────────────
+        ui.horizontal(|ui| {
                     // Listen button — drains capture ring buffer, runs analysis
                     if ui.add(
                         egui::Button::new(
@@ -720,71 +709,71 @@ impl ImpulseApp {
                     }
                 });
 
-                } // end !collapsed block
+        // ── BOTTOM row: full-width prompt + Enter (vertically centred) ──
+        ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
+            let avail = ui.available_width();
+            let prompt_w = avail - 50.0;
+            let response = ui.add(
+                egui::TextEdit::multiline(&mut self.prompt_input)
+                    .hint_text("prompt the model…")
+                    .desired_width(prompt_w)
+                    .desired_rows(2)
+                    .font(egui::FontId::monospace(11.5)),
+            );
+            let submit = ui
+                .add_sized(
+                    [44.0, response.rect.height()],
+                    egui::Button::new(egui::RichText::new("↵").monospace().size(14.0)),
+                )
+                .clicked();
 
-                // ── BOTTOM row: full-width prompt + Enter (vertically centred) ──
-                ui.with_layout(
-                    egui::Layout::left_to_right(egui::Align::Center),
-                    |ui| {
-                    let avail = ui.available_width();
-                    let prompt_w = avail - 50.0;
-                    let response = ui.add(
-                        egui::TextEdit::multiline(&mut self.prompt_input)
-                            .hint_text("prompt the model…")
-                            .desired_width(prompt_w)
-                            .desired_rows(2)
-                            .font(egui::FontId::monospace(11.5)),
-                    );
-                    let submit = ui
-                        .add_sized(
-                            [44.0, response.rect.height()],
-                            egui::Button::new(
-                                egui::RichText::new("↵").monospace().size(14.0),
-                            ),
-                        )
-                        .clicked();
+            // Enter (without Shift) submits; trim the trailing newline first.
+            let enter_pressed = response.has_focus()
+                && ui.input(|i| i.key_pressed(egui::Key::Enter) && !i.modifiers.shift);
+            if enter_pressed && self.prompt_input.ends_with('\n') {
+                self.prompt_input.pop();
+            }
 
-                    // Enter (without Shift) submits; trim the trailing newline first.
-                    let enter_pressed = response.has_focus()
-                        && ctx.input(|i| {
-                            i.key_pressed(egui::Key::Enter) && !i.modifiers.shift
-                        });
-                    if enter_pressed && self.prompt_input.ends_with('\n') {
-                        self.prompt_input.pop();
+            if submit || enter_pressed {
+                let typed = self.prompt_input.trim().to_string();
+                let (prompt, log_line) = if typed.is_empty() {
+                    let active_style = self.state.read().llm.active_style.clone();
+                    let p = match active_style.as_deref() {
+                        Some(id) => {
+                            let name = StyleCatalog::get()
+                                .find_by_id(id)
+                                .map(|s| s.name.as_str())
+                                .unwrap_or(id);
+                            format!("do something fresh in the {} style", name)
+                        }
+                        None => {
+                            "do something interesting — evolve the pattern and sound".to_string()
+                        }
+                    };
+                    (p, "YOU → [evolve]\n".to_string())
+                } else {
+                    let lower = typed.to_lowercase();
+                    let catalog = StyleCatalog::get();
+                    if let Some(matched) = catalog.styles().iter().find(|s| {
+                        s.keywords
+                            .iter()
+                            .any(|kw| lower.contains(&kw.to_lowercase()))
+                    }) {
+                        self.state.write().llm.active_style = Some(matched.id.clone());
+                        self.log_text
+                            .push_str(&format!("Style → {}\n", matched.name));
                     }
-
-                    if submit || enter_pressed {
-                        let typed = self.prompt_input.trim().to_string();
-                        let (prompt, log_line) = if typed.is_empty() {
-                            let active_style = self.state.read().llm.active_style.clone();
-                            let p = match active_style.as_deref() {
-                                Some(id) => {
-                                    let name = StyleCatalog::get()
-                                        .find_by_id(id)
-                                        .map(|s| s.name.as_str())
-                                        .unwrap_or(id);
-                                    format!("do something fresh in the {} style", name)
-                                }
-                                None => "do something interesting — evolve the pattern and sound".to_string(),
-                            };
-                            (p, "YOU → [evolve]\n".to_string())
-                        } else {
-                            let lower = typed.to_lowercase();
-                            let catalog = StyleCatalog::get();
-                            if let Some(matched) = catalog.styles().iter().find(|s| {
-                                s.keywords.iter().any(|kw| lower.contains(&kw.to_lowercase()))
-                            }) {
-                                self.state.write().llm.active_style = Some(matched.id.clone());
-                                self.log_text.push_str(&format!("Style → {}\n", matched.name));
-                            }
-                            (typed.clone(), format!("YOU → {}\n", typed))
-                        };
-                        self.log_text.push_str(&log_line);
-                        let _ = self.llm_tx.try_send(LlmInput::Infer { prompt, one_shot: true, agent_id: None });
-                        self.prompt_input.clear();
-                    }
-                    });
-            });
+                    (typed.clone(), format!("YOU → {}\n", typed))
+                };
+                self.log_text.push_str(&log_line);
+                let _ = self.llm_tx.try_send(LlmInput::Infer {
+                    prompt,
+                    one_shot: true,
+                    agent_id: None,
+                });
+                self.prompt_input.clear();
+            }
+        });
     }
 }
 

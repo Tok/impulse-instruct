@@ -59,6 +59,11 @@ Ordered by value.  Branch: **`develop`** (merge to `main` only for tagged releas
   per-agent system prompt override (collapsible), inference loop patches all
   per-agent overrides (persona, mode, style, instructions, prompt override)
   into system prompt snapshot
+- [x] **LLM Console rackable module** — moved LLM strip (style selector,
+  instructions, log, JAM timing, LISTEN/AUTO, prompt input) from fixed bottom
+  panel into `ModuleKind::LlmConsole` in the Global rack zone; added HEAT
+  slider to header as global control; header is now slim (logo + transport +
+  heat + monitors)
 
 ---
 

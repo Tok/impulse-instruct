@@ -874,3 +874,89 @@ fn draw_noise_stub(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         app.push_audio_params();
     }
 }
+
+// ─── Drag helpers (moved from rack_canvas.rs to stay under 1000-line limit) ──
+
+use crate::ui::rack_cables::ModuleDrag;
+
+/// Process drag start/stop from a card response and update app.module_drag.
+/// Returns true if this card was just dropped (so caller can reorder slots).
+pub(super) fn handle_title_drag(
+    app: &mut ImpulseApp,
+    ctx: &egui::Context,
+    id: u32,
+    resp: &module_card::CardResponse,
+) -> bool {
+    if resp.title_dragged {
+        if app.module_drag.as_ref().map(|d| d.module_id) != Some(id) {
+            app.module_drag = Some(ModuleDrag {
+                module_id: id,
+                pointer: ctx.pointer_latest_pos().unwrap_or_default(),
+            });
+        } else if let Some(ref mut drag) = app.module_drag {
+            drag.pointer = ctx.pointer_latest_pos().unwrap_or(drag.pointer);
+        }
+    }
+    if resp.title_drag_released && app.module_drag.as_ref().map(|d| d.module_id) == Some(id) {
+        app.module_drag = None;
+        return true;
+    }
+    false
+}
+
+/// After a drop, reorder module slots so dragged module ends up at the position
+/// closest to `drop_pos` within its zone's ordered list.
+pub(super) fn reorder_module_by_drop(
+    app: &mut ImpulseApp,
+    dragged_id: u32,
+    drop_pos: egui::Pos2,
+    zone: crate::state::Zone,
+) {
+    use super::rack_canvas::module_slot_w;
+    // Use 1200px as a reasonable default — drop position is proportional, not exact.
+    let available_w = 1200.0f32;
+    let zone_entries: Vec<(u32, ModuleKind)> = {
+        let rack = app.state.read();
+        let mut v: Vec<_> = rack
+            .rack
+            .modules
+            .iter()
+            .filter(|m| m.zone == zone)
+            .collect();
+        v.sort_by_key(|m| m.slot);
+        v.iter().map(|m| (m.id, m.kind)).collect()
+    };
+    let zone_ids: Vec<u32> = zone_entries.iter().map(|&(id, _)| id).collect();
+    let Some(from_idx) = zone_ids.iter().position(|&id| id == dragged_id) else {
+        return;
+    };
+    let n = zone_ids.len();
+    if n < 2 {
+        return;
+    }
+    let x = (drop_pos.x - 8.0).max(0.0);
+    let gap = 4.0f32;
+    let mut cursor = 0.0f32;
+    let mut to_idx = 0usize;
+    for (i, &(_, kind)) in zone_entries.iter().enumerate() {
+        let w = module_slot_w(kind, available_w);
+        let mid = cursor + w * 0.5;
+        if x >= mid {
+            to_idx = i + 1;
+        }
+        cursor += w + gap;
+    }
+    let to_idx = to_idx.clamp(0, n - 1);
+    if from_idx == to_idx {
+        return;
+    }
+    let mut ids = zone_ids;
+    let removed = ids.remove(from_idx);
+    ids.insert(to_idx, removed);
+    let mut state = app.state.write();
+    for (slot, &id) in ids.iter().enumerate() {
+        if let Some(m) = state.rack.modules.iter_mut().find(|m| m.id == id) {
+            m.slot = slot as u8;
+        }
+    }
+}

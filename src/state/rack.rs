@@ -131,6 +131,8 @@ pub enum ModuleKind {
     // ── Modulation ────────────────────────────────────────────────────────────
     LfoModule,
     LlmAgent,
+    // ── LLM console (singleton, Global zone) ──────────────────────────────
+    LlmConsole,
     //── Utility ───────────────────────────────────────────────────────────────
     MasterOutput,
 }
@@ -163,6 +165,7 @@ impl ModuleKind {
             Self::FxAutotune => "AUTOTUNE",
             Self::LfoModule => "LFO",
             Self::LlmAgent => "LLM AGENT",
+            Self::LlmConsole => "LLM CONSOLE",
             Self::MasterOutput => "MASTER",
         }
     }
@@ -170,7 +173,9 @@ impl ModuleKind {
     /// Which zone this module belongs to by default.
     pub fn default_zone(self) -> Zone {
         match self {
-            Self::StepSequencer | Self::MasterOutput | Self::LlmAgent => Zone::Global,
+            Self::StepSequencer | Self::MasterOutput | Self::LlmAgent | Self::LlmConsole => {
+                Zone::Global
+            }
             Self::AcidBass
             | Self::DrumKit808
             | Self::DrumKit909
@@ -337,6 +342,7 @@ impl Default for RackState {
         // ── Global zone ──────────────────────────────────────────────────────
         rack.add_module(ModuleKind::StepSequencer);
         rack.add_module(ModuleKind::MasterOutput);
+        rack.add_module(ModuleKind::LlmConsole);
 
         // ── Voice zone ───────────────────────────────────────────────────────
         rack.add_module(ModuleKind::AcidBass);
@@ -605,6 +611,7 @@ pub(crate) fn rack_kind_name_matches(kind: ModuleKind, name: &str) -> bool {
         }
         ModuleKind::StepSequencer => matches!(n.as_str(), "sequencer" | "seq"),
         ModuleKind::LlmAgent => matches!(n.as_str(), "llm" | "agent" | "ai" | "llm_agent"),
+        ModuleKind::LlmConsole => matches!(n.as_str(), "console" | "llm_console"),
     }
 }
 
