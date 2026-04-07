@@ -102,6 +102,26 @@ impl MidiClockTracker {
 mod undo;
 use undo::StateHistory;
 
+/// A single entry in the structured activity log.
+#[derive(Clone)]
+pub(crate) struct ActivityEntry {
+    pub timestamp: std::time::Instant,
+    pub persona: String,
+    pub action: ActivityAction,
+    pub detail: String,
+}
+#[derive(Clone, PartialEq)]
+#[allow(dead_code)] // variants populated incrementally as more log sources are wired
+pub(crate) enum ActivityAction {
+    Response,    // normal LLM response
+    Thinking,    // chain-of-thought
+    ParamUpdate, // parameter change applied
+    Spawn,       // agent spawned
+    Dismiss,     // agent dismissed
+    UserPrompt,  // user typed a prompt
+    System,      // system message (startup, error)
+}
+
 pub struct ImpulseApp {
     state: Arc<RwLock<AppState>>,
     audio_tx: rtrb::Producer<AudioCommand>,
@@ -127,6 +147,8 @@ pub struct ImpulseApp {
     log_text: String,
     api_port: Option<u16>,
     show_about: bool,
+    // Structured activity log for timeline display
+    pub(crate) activity_log: Vec<ActivityEntry>,
     pub(crate) show_prefs: bool,
     export_bars: u32,
     ui_volume: f32, // monitor-only gain; never written to state or export
@@ -300,6 +322,7 @@ impl ImpulseApp {
             log_text,
             api_port,
             show_about: false,
+            activity_log: Vec::new(),
             show_prefs: false,
             export_bars: 8,
             ui_volume: 1.0,
@@ -499,6 +522,20 @@ impl ImpulseApp {
                 };
                 log::info!("{}", ansi_colorize_notes(line.trim_end()));
                 self.log_text.push_str(&line);
+                let action = if out.param_update.is_some() {
+                    ActivityAction::ParamUpdate
+                } else {
+                    ActivityAction::Response
+                };
+                self.activity_log.push(ActivityEntry {
+                    timestamp: std::time::Instant::now(),
+                    persona: persona.clone(),
+                    action,
+                    detail: display,
+                });
+                if self.activity_log.len() > 500 {
+                    self.activity_log.drain(..100);
+                }
                 // MC line: shown separately with a marker so it's visually distinct
                 if let Some(ref mc) = out.mc_line {
                     self.log_text.push_str(&format!("◆ {}\n", mc));
