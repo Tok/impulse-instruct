@@ -199,13 +199,13 @@ pub fn apply_session(state: &mut AppState, data: SessionData) {
             })
             .map(|m| m.id)
             .collect();
-        for (i, tid) in targets.iter().enumerate() {
+        for tid in &targets {
             state.rack.connect(
                 super::PortRef {
                     module_id: id,
                     dir: super::PortDir::Out,
                     kind: super::PortKind::Control,
-                    index: i as u8,
+                    index: 0,
                 },
                 super::PortRef {
                     module_id: *tid,
@@ -246,13 +246,13 @@ pub fn apply_session(state: &mut AppState, data: SessionData) {
                 })
                 .map(|m| m.id)
                 .collect();
-            for (i, tid) in targets.iter().enumerate() {
+            for tid in &targets {
                 state.rack.connect(
                     super::PortRef {
                         module_id: *aid,
                         dir: super::PortDir::Out,
                         kind: super::PortKind::Control,
-                        index: i as u8,
+                        index: 0,
                     },
                     super::PortRef {
                         module_id: *tid,

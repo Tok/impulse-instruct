@@ -513,13 +513,13 @@ impl Default for RackState {
                 })
                 .map(|m| m.id)
                 .collect();
-            for (i, target_id) in controllable.iter().enumerate() {
+            for target_id in &controllable {
                 rack.connect(
                     PortRef {
                         module_id: agent_id,
                         dir: PortDir::Out,
                         kind: PortKind::Control,
-                        index: i as u8,
+                        index: 0,
                     },
                     PortRef {
                         module_id: *target_id,

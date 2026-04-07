@@ -626,13 +626,13 @@ impl ImpulseApp {
                                     .map(|m| m.id)
                                     .collect();
                                 let mut s = self.state.write();
-                                for (i, tid) in targets.iter().enumerate() {
+                                for tid in &targets {
                                     s.rack.connect(
                                         PortRef {
                                             module_id: id,
                                             dir: PortDir::Out,
                                             kind: PortKind::Control,
-                                            index: i as u8,
+                                            index: 0,
                                         },
                                         PortRef {
                                             module_id: *tid,

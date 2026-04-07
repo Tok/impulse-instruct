@@ -275,8 +275,7 @@ pub fn module_card<R>(
                 ui.spacing_mut().item_spacing = Vec2::new(2.0, 2.0);
                 // Clamp content width to the card width (minus horizontal margin×2).
                 ui.set_max_width(card_w - 12.0);
-                // Center content horizontally so knobs/sliders don't cluster left.
-                ui.with_layout(egui::Layout::top_down(egui::Align::Center), |ui| {
+                ui.with_layout(egui::Layout::top_down(egui::Align::Min), |ui| {
                     if enabled {
                         content(ui)
                     } else {
