@@ -7,91 +7,57 @@ What's already built is documented in [docs/features.md](docs/features.md).
 
 ---
 
-## Audio Feedback Loop - "PULSE Listens to Itself"
+## v0.6.0 — Multi-agent release (in progress)
 
-**Phase 1 is implemented.** The LISTEN button in the LLM strip captures up
-to 10 seconds of audio, runs a per-band RMS + transient analysis
-(`src/audio/analysis.rs`), shows the stats inline, and prepends a structured
-text snapshot to the inference prompt. Responses are labelled **LISTEN ->**
-in the log.
+All core multi-agent features are implemented.  Remaining before tagging:
 
-**Phase 2 (real audio input to the model) is on hold.** As of April 2026,
-llama.cpp does not support Gemma 4's audio encoder - and even when it does,
-the encoder was trained on speech only, so musical audio may yield poor
-results anyway. The text descriptor approach is likely the better fit for
-mix/arrangement feedback regardless.
-
-See **[docs/audio-feedback.md](docs/audio-feedback.md)** for full research
-findings, PR numbers to watch, the API format once support lands, and an
-alternative Ultravox-as-secondary-listener sketch.
+- [ ] Merge `develop` into `main` (55 commits ahead, rebase to resolve 2 behind)
+- [ ] Update `Cargo.toml` version to `0.6.0`
+- [ ] Tag `v0.6.0` and push
 
 ---
 
-## What's Left
+## Completed in v0.6.0 cycle
 
-Ordered by value.  Branch: **`develop`** (merge to `main` only for tagged releases).
+### Multi-model agent infrastructure (Phase 1–3)
 
----
+- [x] **Server pool** — `LlamaServerPool` manages N llama-server processes,
+  ref-counted per model; per-agent `model_path: Option<String>`
+- [x] **VRAM budget + startup wizard** — `src/llm/vram.rs` model profiles +
+  6 presets (Solo/Duo/Swarm/Band/Voices/Lite); first-launch wizard with GPU
+  detection, VRAM budget bar, "Resume last session" default
+- [x] **Dynamic agent spawning** — `LlmAction::SpawnAgent` / `DismissAgent`;
+  auto-wire control cables on spawn; gated by `agent_autonomy`
+- [x] **Cable-driven scope** — Control cables define agent scope; system
+  prompt constraint + `apply_llm_update()` enforcement
+- [x] **Agent cards** — self-contained: model selector, persona, style,
+  conversation mode, thinking toggle, user instructions, VRAM estimate
+- [x] **Console → agent routing** — prompts go to first enabled agent;
+  log shows per-agent persona names
 
-### Recently completed (develop, not yet merged to main)
+### Other v0.6.0 features
 
-- [x] **Separate LLM heat/temperature sliders** — per-agent heat + temp controls
-- [x] **Even control spacing** — all panels use `even_group_width()` / `glass_group_fill()`
-- [x] **Reason-style rack flip** — Tab flips front (knobs) ↔ back (ports + Bezier cables)
-- [x] **Rackable LLM agents (Phase 1–3)** — `ModuleKind::LlmAgent`, per-agent state,
-  round-robin scheduling, scoped prompts, scoped `apply_llm_update`, interactive
-  scope editor (checkbox grid), editable persona/heat/temp/bars on the card
-- [x] **Header simplified** — LLM status/heat/temp removed (now per-agent in rack)
-- [x] **DSP load meter** — sparkline in footer
-- [x] **Phosphor persistence** — oscilloscope waveform decay trail
-- [x] **Smooth style transitions** — `schedule_baseline_ramps()` via ParamRamp
-- [x] **WASD as arrow keys** — setting in Preferences → Controls → Keyboard
-- [x] **Knob arrow-key control** — left/right cursors adjust hovered knobs/sliders
-- [x] **25 new tests** — json_repair, split_thinking, extract_llm_actions, baseline ramps
-- [x] **Refactored** — `extract_llm_actions()` pure function, `AudioChannels` struct,
-  `scope_footer.rs` extracted, cable overlay extracted to `rack_cables.rs`
-- [x] **Multi-model server pool (Phase 1)** — `LlamaServerPool` manages N
-  llama-server processes on ports 8766+, ref-counted per model, per-agent
-  `model_path: Option<String>` with dropdown on agent card, 10 new tests
-- [x] **Self-contained LLM agent cards** — removed global model dropdown from
-  header; agent cards now have: model selector, conversation mode (OFF/PRD/DJ/MC),
-  style selector (full catalog), thinking toggle, user instructions text area;
-  per-agent system prompt override (collapsible), inference loop patches all
-  per-agent overrides (persona, mode, style, instructions, prompt override)
-  into system prompt snapshot
-- [x] **Compact agent cards** — LlmAgent ~220px, side-by-side layout; console
-  prompt singleline; style IDs scoped; Control ports on back panel (CTL label)
-- [x] **Control cables** — `PortKind::Control` connects agents to modules they
-  control; thin dark-gray Bezier cables on back panel; `scope_from_control_cables()`
-  derives scope from cable graph; default agent wired to all; auto-wire on spawn
-- [x] **LLM Console rackable module** — moved LLM strip (style selector,
-  instructions, log, JAM timing, LISTEN/AUTO, prompt input) from fixed bottom
-  panel into `ModuleKind::LlmConsole` in the Global rack zone; added HEAT
-  slider to header as global control; header is now slim (logo + transport +
-  heat + monitors)
+- [x] Rackable LLM agents + LLM Console module
+- [x] Rack flip (front knobs / back cables)
+- [x] Separate heat/temperature sliders
+- [x] Smooth style transitions via `ParamRamp`
+- [x] DSP load sparkline, phosphor oscilloscope
+- [x] Centered module card layout, row fill/centering
+- [x] Volatile rack_flipped (always starts front view)
 
 ---
 
-### Multi-model agent infrastructure (Phase 2–3) — completed
+## Audio Feedback Loop
 
-- [x] **Phase 1 — Server pool + per-agent model** — `LlamaServerPool` manages
-  ref-counted llama-server processes; agents have `model_path: Option<String>`
-- [x] **Phase 2 — VRAM budget + startup wizard** — `src/llm/vram.rs` model
-  profiles + presets (Solo/Duo/Swarm/Band/Voices/Lite); startup wizard on
-  first launch detects GPU, shows VRAM budget, offers "Resume last session"
-  or fresh preset; VRAM estimate on agent cards; `wizard_done` persisted
-- [x] **Phase 3 — Dynamic agent spawning** — `LlmAction::SpawnAgent` /
-  `DismissAgent` with full handlers; `scope_from_control_cables()` derives
-  scope from cable graph at inference time; auto-wire on spawn; gated by
-  `agent_autonomy` flag
-- [x] **Phase 3 — Cable-driven scope** — Control cables from LlmAgent to
-  modules define scope; removing cables restricts scope; scope displayed
-  on agent cards as read-only text; system prompt tells agent its scope
-  constraint; `apply_llm_update()` enforces scope
+**Phase 1 is implemented.** LISTEN button captures audio, runs per-band RMS +
+transient analysis, prepends structured snapshot to prompt.
+
+**Phase 2 (real audio input to the model) is on hold.** llama.cpp does not yet
+support Gemma 4's audio encoder. See [docs/audio-feedback.md](docs/audio-feedback.md).
 
 ---
 
-### Post-release backlog
+## Future (v0.6.1+)
 
 #### Visualization & statistics modules
 
