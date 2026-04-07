@@ -26,7 +26,7 @@ Everything runs entirely offline: no cloud calls, no subscriptions, no latency. 
   <img src="assets/screenshots/Screenshot_2_back_view_0.6.0.png" alt="Back panel — control cables connecting agents to modules" width="900"/>
 </p>
 <p align="center">
-  <img src="assets/screenshots/Screenshot_3_kobs_0.6.0.png" alt="Front panel — knobs, sequencer, and FX chain" width="900"/>
+  <img src="assets/screenshots/Screenshot_3_knobs_0.6.0.png" alt="Front panel — knobs, sequencer, and FX chain" width="900"/>
 </p>
 
 ---
