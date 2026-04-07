@@ -1,9 +1,8 @@
 // ─── ui/header.rs ─────────────────────────────────────────────────────────────
-// Menu bar and header panel (BPM, transport, HEAT, JAM, vol, VRAM/RAM).
+// Menu bar and header panel (logo, transport, monitor vol, VRAM/RAM).
 
 use crate::audio::AudioCommand;
 use crate::export::{export_mp3, export_stems, export_wav};
-use crate::llm::LlmInput;
 use crate::state::save_project;
 use crate::ui::{ImpulseApp, theme, webbrowser_open};
 use egui::{Frame, TopBottomPanel};
@@ -222,73 +221,14 @@ impl ImpulseApp {
             )
             .show(ctx, |ui| {
                 ui.horizontal(|ui| {
-                    // ── LOGO + MODEL  (fixed 180px) ───────────────────────────
-                    ui.scope(|ui| {
-                        ui.set_min_width(180.0);
-                        ui.set_max_width(180.0);
-                        let (cur_model, initializing) = {
-                            let s = self.state.read();
-                            (s.llm.model_path.clone(), s.llm.llm_initializing)
-                        };
-                        let cur_short = std::path::Path::new(&cur_model)
-                            .file_stem()
-                            .and_then(|s| s.to_str())
-                            .unwrap_or("unknown")
-                            .to_string();
-                        if self.available_models.is_empty() {
-                            self.available_models = super::scan_models();
-                        }
-                        ui.vertical(|ui| {
-                            ui.label(
-                                egui::RichText::new("◆ IMPULSE INSTRUCT")
-                                    .color(theme::CHALK)
-                                    .size(12.0)
-                                    .monospace()
-                                    .strong(),
-                            );
-                            ui.add_enabled_ui(!initializing, |ui| {
-                                let label_color = if initializing {
-                                    theme::ASH
-                                } else {
-                                    theme::SMOKE
-                                };
-                                egui::ComboBox::from_id_source("model_dropdown")
-                                    .selected_text(
-                                        egui::RichText::new(&cur_short)
-                                            .color(label_color)
-                                            .size(8.5)
-                                            .monospace(),
-                                    )
-                                    .width(168.0)
-                                    .show_ui(ui, |ui: &mut egui::Ui| {
-                                        for path in &self.available_models.clone() {
-                                            let short = std::path::Path::new(path)
-                                                .file_stem()
-                                                .and_then(|s| s.to_str())
-                                                .unwrap_or(path)
-                                                .to_string();
-                                            let selected = *path == cur_model;
-                                            let text = egui::RichText::new(&short)
-                                                .monospace()
-                                                .size(9.5)
-                                                .color(if selected {
-                                                    theme::CHALK
-                                                } else {
-                                                    theme::FOG
-                                                });
-                                            if ui.selectable_label(selected, text).clicked()
-                                                && !selected
-                                            {
-                                                let _ = self
-                                                    .llm_tx
-                                                    .try_send(LlmInput::SwitchModel(path.clone()));
-                                                self.state.write().llm.llm_initializing = true;
-                                            }
-                                        }
-                                    });
-                            });
-                        });
-                    });
+                    // ── LOGO ─────────────────────────────────────────────────
+                    ui.label(
+                        egui::RichText::new("◆ IMPULSE INSTRUCT")
+                            .color(theme::CHALK)
+                            .size(12.0)
+                            .monospace()
+                            .strong(),
+                    );
 
                     ui.separator();
 

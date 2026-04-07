@@ -328,6 +328,11 @@ pub(super) fn draw_llm_agent_content(app: &mut ImpulseApp, ui: &mut egui::Ui, mo
         inferring,
         scope,
         agent_model,
+        conv_mode,
+        active_style,
+        enable_thinking,
+        mut user_instructions,
+        mut prompt_override,
     ) = {
         let s = app.state.read();
         let a = &s.llm_agents[idx];
@@ -342,6 +347,11 @@ pub(super) fn draw_llm_agent_content(app: &mut ImpulseApp, ui: &mut egui::Ui, mo
             a.is_inferring,
             a.scope.clone(),
             a.model_path.clone(),
+            a.conversation_mode.clone(),
+            a.active_style.clone(),
+            a.enable_thinking,
+            a.user_instructions.clone(),
+            a.system_prompt_override.clone(),
         )
     };
 
@@ -556,6 +566,190 @@ pub(super) fn draw_llm_agent_content(app: &mut ImpulseApp, ui: &mut egui::Ui, mo
                     sc.push(key.to_string());
                 }
             }
+        }
+    });
+
+    // ── Conversation mode + thinking ───────────────────────────────────
+    ui.horizontal(|ui| {
+        ui.spacing_mut().item_spacing.x = 2.0;
+        use crate::state::ConversationMode;
+        for (label, mode) in &[
+            ("OFF", ConversationMode::Off),
+            ("PRD", ConversationMode::Producer),
+            ("DJ", ConversationMode::Dj),
+            ("MC", ConversationMode::Mc),
+        ] {
+            let active = conv_mode == *mode;
+            let col = if active { theme::FOG } else { theme::SMOKE };
+            let fill = if active {
+                egui::Color32::from_gray(40)
+            } else {
+                egui::Color32::from_gray(18)
+            };
+            if ui
+                .add(
+                    egui::Button::new(egui::RichText::new(*label).monospace().size(7.5).color(col))
+                        .fill(fill)
+                        .min_size(egui::vec2(22.0, 14.0)),
+                )
+                .on_hover_text(match mode {
+                    ConversationMode::Off => "No commentary",
+                    ConversationMode::Producer => "Technical descriptions",
+                    ConversationMode::Dj => "Hype DJ energy",
+                    ConversationMode::Mc => "Jungle/rave MC",
+                })
+                .clicked()
+            {
+                app.state.write().llm_agents[idx].conversation_mode = mode.clone();
+            }
+        }
+        ui.separator();
+        // Thinking toggle
+        let think_col = if enable_thinking {
+            theme::FOG
+        } else {
+            theme::SMOKE
+        };
+        let think_fill = if enable_thinking {
+            egui::Color32::from_gray(40)
+        } else {
+            egui::Color32::from_gray(18)
+        };
+        if ui
+            .add(
+                egui::Button::new(
+                    egui::RichText::new("THK")
+                        .monospace()
+                        .size(7.5)
+                        .color(think_col),
+                )
+                .fill(think_fill)
+                .min_size(egui::vec2(22.0, 14.0)),
+            )
+            .on_hover_text(if enable_thinking {
+                "Reasoning ON (/think)"
+            } else {
+                "Reasoning OFF (/no_think)"
+            })
+            .clicked()
+        {
+            app.state.write().llm_agents[idx].enable_thinking = !enable_thinking;
+        }
+    });
+
+    // ── Style selector ──────────────────────────────────────────────────
+    {
+        use crate::llm::styles::StyleCatalog;
+        let cat = StyleCatalog::get();
+        let display = match &active_style {
+            None => "No style".to_string(),
+            Some(s) if s == "__free__" => "Free".to_string(),
+            Some(s) if s == "__custom__" => "Custom".to_string(),
+            Some(s) => cat
+                .find_by_id(s)
+                .map(|e| e.name.to_string())
+                .unwrap_or_else(|| s.clone()),
+        };
+        let combo_id = ui.id().with("agent_style").with(module_id);
+        egui::ComboBox::from_id_source(combo_id)
+            .selected_text(
+                egui::RichText::new(&display)
+                    .color(theme::SMOKE)
+                    .size(7.5)
+                    .monospace(),
+            )
+            .width(ui.available_width().min(140.0))
+            .show_ui(ui, |ui| {
+                // No style
+                if ui
+                    .selectable_label(
+                        active_style.is_none(),
+                        egui::RichText::new("No style")
+                            .monospace()
+                            .size(8.0)
+                            .color(theme::SMOKE),
+                    )
+                    .clicked()
+                {
+                    app.state.write().llm_agents[idx].active_style = None;
+                }
+                // Free
+                if ui
+                    .selectable_label(
+                        active_style.as_deref() == Some("__free__"),
+                        egui::RichText::new("Free")
+                            .monospace()
+                            .size(8.0)
+                            .color(theme::SMOKE),
+                    )
+                    .clicked()
+                {
+                    app.state.write().llm_agents[idx].active_style = Some("__free__".to_string());
+                }
+                // Catalog entries
+                for entry in cat.styles() {
+                    let selected = active_style.as_deref() == Some(entry.id.as_str());
+                    if ui
+                        .selectable_label(
+                            selected,
+                            egui::RichText::new(&entry.name)
+                                .monospace()
+                                .size(8.0)
+                                .color(if selected { theme::CHALK } else { theme::SMOKE }),
+                        )
+                        .clicked()
+                    {
+                        app.state.write().llm_agents[idx].active_style = Some(entry.id.to_string());
+                    }
+                }
+            });
+    }
+
+    // ── User instructions ───────────────────────────────────────────────
+    let instr_resp = ui.add(
+        egui::TextEdit::multiline(&mut user_instructions)
+            .desired_rows(2)
+            .desired_width(ui.available_width())
+            .font(egui::FontId::monospace(7.5))
+            .text_color(theme::FOG)
+            .hint_text("Instructions…"),
+    );
+    if instr_resp.changed() {
+        app.state.write().llm_agents[idx].user_instructions = user_instructions;
+    }
+
+    // ── System prompt override ──────────────────────────────────────────
+    let has_override = !prompt_override.is_empty();
+    let ovr_header = if has_override {
+        "▸ Prompt override (active)"
+    } else {
+        "▸ Prompt override"
+    };
+    let header_col = if has_override {
+        theme::FOG
+    } else {
+        theme::IRON
+    };
+    let collapse_id = ui.id().with("prompt_ovr").with(module_id);
+    egui::CollapsingHeader::new(
+        egui::RichText::new(ovr_header)
+            .monospace()
+            .size(7.5)
+            .color(header_col),
+    )
+    .id_source(collapse_id)
+    .default_open(false)
+    .show(ui, |ui| {
+        let ovr_resp = ui.add(
+            egui::TextEdit::multiline(&mut prompt_override)
+                .desired_rows(3)
+                .desired_width(ui.available_width())
+                .font(egui::FontId::monospace(7.5))
+                .text_color(theme::FOG)
+                .hint_text("Leave empty for auto-generated prompt…"),
+        );
+        if ovr_resp.changed() {
+            app.state.write().llm_agents[idx].system_prompt_override = prompt_override;
         }
     });
 

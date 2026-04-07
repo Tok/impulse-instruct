@@ -279,7 +279,21 @@ pub fn run_llm_loop(
         }
 
         // Look up agent state; fall back to singleton for agent_id=None or not found.
-        let (agent_heat, agent_temp, agent_scope, agent_enable_thinking, agent_model) = {
+        // Also capture per-agent overrides for the system prompt.
+        #[allow(clippy::type_complexity)]
+        let (
+            agent_heat,
+            agent_temp,
+            agent_scope,
+            agent_enable_thinking,
+            agent_model,
+            agent_conv_mode,
+            agent_style,
+            agent_custom_style,
+            agent_instructions,
+            agent_persona,
+            agent_prompt_override,
+        ) = {
             let s = state.read();
             if let Some(aid) = agent_id {
                 if let Some(a) = s.llm_agents.iter().find(|a| a.id == aid) {
@@ -293,6 +307,12 @@ pub fn run_llm_loop(
                         a.scope.clone(),
                         a.enable_thinking,
                         model,
+                        Some(a.conversation_mode.clone()),
+                        Some(a.active_style.clone()),
+                        Some(a.custom_style_text.clone()),
+                        Some(a.user_instructions.clone()),
+                        Some(a.persona_name.clone()),
+                        Some(a.system_prompt_override.clone()),
                     )
                 } else {
                     (
@@ -301,6 +321,12 @@ pub fn run_llm_loop(
                         vec![],
                         s.llm.enable_thinking,
                         s.llm.model_path.clone(),
+                        None,
+                        None,
+                        None,
+                        None,
+                        None,
+                        None,
                     )
                 }
             } else {
@@ -310,6 +336,12 @@ pub fn run_llm_loop(
                     vec![],
                     s.llm.enable_thinking,
                     s.llm.model_path.clone(),
+                    None,
+                    None,
+                    None,
+                    None,
+                    None,
+                    None,
                 )
             }
         };
@@ -331,7 +363,32 @@ pub fn run_llm_loop(
             }
         };
 
-        let system = build_system_prompt(&state.read().clone(), &agent_scope);
+        // Build system prompt with per-agent overrides patched in.
+        let system = {
+            let mut snap = state.read().clone();
+            if let Some(mode) = agent_conv_mode {
+                snap.llm.conversation_mode = mode;
+            }
+            if let Some(style) = agent_style {
+                snap.llm.active_style = style;
+            }
+            if let Some(custom) = agent_custom_style {
+                snap.llm.custom_style_text = custom;
+            }
+            if let Some(instr) = agent_instructions {
+                snap.llm.user_instructions = instr;
+            }
+            if let Some(persona) = agent_persona.clone() {
+                snap.llm.persona_name = persona;
+            }
+            if let Some(override_text) = agent_prompt_override
+                && !override_text.is_empty()
+            {
+                snap.llm.system_prompt_override = override_text;
+            }
+            snap.llm.heat = agent_heat;
+            build_system_prompt(&snap, &agent_scope)
+        };
         {
             let mut s = state.write();
             s.llm.is_inferring = true;
@@ -441,7 +498,9 @@ pub fn run_llm_loop(
                         .get("_comment")
                         .and_then(|v| v.as_str())
                         .unwrap_or(&output.text);
-                    let persona = state.read().llm.persona_name.clone();
+                    let persona = agent_persona
+                        .clone()
+                        .unwrap_or_else(|| state.read().llm.persona_name.clone());
                     if !one_shot {
                         log::debug!("{} (jam) -> {}", persona, comment);
                     }

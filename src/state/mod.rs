@@ -783,6 +783,9 @@ pub struct LlmAgentState {
     pub custom_style_text: String,
     pub user_instructions: String,
     pub enable_thinking: bool,
+    /// Per-agent system prompt override. Empty = use auto-generated prompt.
+    #[serde(default)]
+    pub system_prompt_override: String,
     /// Per-agent model override. `None` = inherit from global `LlmState.model_path`.
     #[serde(default)]
     pub model_path: Option<String>,
@@ -811,6 +814,7 @@ impl LlmAgentState {
             custom_style_text: String::new(),
             user_instructions: String::new(),
             enable_thinking: true,
+            system_prompt_override: String::new(),
             model_path: None,
             is_inferring: false,
             last_response: String::new(),
@@ -833,6 +837,7 @@ impl LlmAgentState {
             custom_style_text: llm.custom_style_text.clone(),
             user_instructions: llm.user_instructions.clone(),
             enable_thinking: llm.enable_thinking,
+            system_prompt_override: String::new(),
             model_path: None,
             is_inferring: false,
             last_response: String::new(),

@@ -53,6 +53,12 @@ Ordered by value.  Branch: **`develop`** (merge to `main` only for tagged releas
 - [x] **Multi-model server pool (Phase 1)** — `LlamaServerPool` manages N
   llama-server processes on ports 8766+, ref-counted per model, per-agent
   `model_path: Option<String>` with dropdown on agent card, 10 new tests
+- [x] **Self-contained LLM agent cards** — removed global model dropdown from
+  header; agent cards now have: model selector, conversation mode (OFF/PRD/DJ/MC),
+  style selector (full catalog), thinking toggle, user instructions text area;
+  per-agent system prompt override (collapsible), inference loop patches all
+  per-agent overrides (persona, mode, style, instructions, prompt override)
+  into system prompt snapshot
 
 ---
 
