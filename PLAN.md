@@ -56,7 +56,7 @@ All items shipped in this sprint are documented in [docs/features.md](docs/featu
 
 #### Rack & modular UI
 
-- [ ] **Reason-style rack flip + modular cable UI** — Tab flips the view to a
+- [x] **Reason-style rack flip + modular cable UI** — Tab flips the view to a
   back panel.  Each module exposes labelled I/O ports (audio, CV, trigger,
   LLM-signal — see below).  Bezier cables drag between ports.  The cable graph
   already exists (`src/state/rack.rs`); the remaining work is:

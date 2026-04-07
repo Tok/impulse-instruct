@@ -71,6 +71,7 @@ async fn post_prompt(
         .try_send(LlmInput::Infer {
             prompt: req.prompt,
             one_shot: req.one_shot,
+            agent_id: None,
         })
         .map_err(|_| StatusCode::SERVICE_UNAVAILABLE)?;
     Ok(Json(OkResponse {

@@ -416,7 +416,7 @@ impl ImpulseApp {
                                     self.log_text.push_str("Custom style brief updated\n");
                                     let _ = self.llm_tx.try_send(LlmInput::Infer {
                                         prompt: "apply the active style brief — update sound and rhythm accordingly".to_string(),
-                                        one_shot: true,
+                                        one_shot: true, agent_id: None,
                                     });
                                 }
                             }
@@ -432,7 +432,7 @@ impl ImpulseApp {
                                         self.log_text.push_str("Style → Free\n");
                                         let _ = self.llm_tx.try_send(LlmInput::Infer {
                                             prompt: "we're going free — be creative and unpredictable, surprise me".to_string(),
-                                            one_shot: true,
+                                            one_shot: true, agent_id: None,
                                         });
                                     }
                                     Some(ref id) if id == "__custom__" => {
@@ -471,7 +471,7 @@ impl ImpulseApp {
                                             .push_str(&format!("Style → {} (reset)\n", name));
                                         let _ = self.llm_tx.try_send(LlmInput::Infer {
                                             prompt,
-                                            one_shot: true,
+                                            one_shot: true, agent_id: None,
                                         });
                                     }
                                 }
@@ -780,7 +780,7 @@ impl ImpulseApp {
                             (typed.clone(), format!("YOU → {}\n", typed))
                         };
                         self.log_text.push_str(&log_line);
-                        let _ = self.llm_tx.try_send(LlmInput::Infer { prompt, one_shot: true });
+                        let _ = self.llm_tx.try_send(LlmInput::Infer { prompt, one_shot: true, agent_id: None });
                         self.prompt_input.clear();
                     }
                     });

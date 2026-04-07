@@ -55,6 +55,8 @@ pub struct SessionData {
     #[serde(default)]
     pub autosave_interval: Option<crate::state::AutosaveInterval>,
     #[serde(default)]
+    pub llm_agents: Option<Vec<super::LlmAgentState>>,
+    #[serde(default)]
     pub wasd_as_arrows: Option<bool>,
     #[serde(default)]
     pub enable_thinking: Option<bool>,
@@ -75,6 +77,7 @@ pub fn save_session(state: &AppState, show_cables: bool, rack_flipped: bool) {
         model_path: Some(state.llm.model_path.clone()),
         show_cables: Some(show_cables),
         rack_flipped: Some(rack_flipped),
+        llm_agents: Some(state.llm_agents.clone()),
         knob_style: Some(state.ui_prefs.knob_style),
         knob_size: Some(state.ui_prefs.knob_size),
         pad_size: Some(state.ui_prefs.pad_size),
@@ -145,6 +148,11 @@ pub fn apply_session(state: &mut AppState, data: SessionData) {
     }
     if let Some(v) = data.autosave_interval {
         state.ui_prefs.autosave_interval = v;
+    }
+    if let Some(agents) = data.llm_agents
+        && !agents.is_empty()
+    {
+        state.llm_agents = agents;
     }
     if let Some(v) = data.wasd_as_arrows {
         state.ui_prefs.wasd_as_arrows = v;

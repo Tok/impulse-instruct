@@ -234,6 +234,7 @@ pub fn run_mock_loop(
         let LlmInput::Infer {
             ref prompt,
             one_shot,
+            ..
         } = input
         else {
             continue;

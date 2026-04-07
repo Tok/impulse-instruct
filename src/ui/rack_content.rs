@@ -305,6 +305,92 @@ pub(super) fn draw_master_content(app: &mut ImpulseApp, ui: &mut egui::Ui) {
     });
 }
 
+// ─── LLM agent card content ──────────────────────────────────────────────────
+
+pub(super) fn draw_llm_agent_content(app: &mut ImpulseApp, ui: &mut egui::Ui, module_id: u32) {
+    use crate::ui::theme;
+
+    let (persona, heat, temp, jam_bars, last_resp, tps, cycles, inferring) = {
+        let s = app.state.read();
+        let agent = s.llm_agents.iter().find(|a| a.id == module_id);
+        match agent {
+            Some(a) => (
+                a.persona_name.clone(),
+                a.heat,
+                a.temperature,
+                a.jam_bars,
+                a.last_response.clone(),
+                a.tokens_per_sec,
+                a.jam_cycle_count,
+                a.is_inferring,
+            ),
+            None => return,
+        }
+    };
+
+    ui.horizontal(|ui| {
+        let inf_col = if inferring { theme::CHALK } else { theme::ASH };
+        ui.label(egui::RichText::new("●").color(inf_col).size(10.0));
+        ui.label(
+            egui::RichText::new(&persona)
+                .color(theme::FOG)
+                .monospace()
+                .size(10.0),
+        );
+    });
+    ui.horizontal(|ui| {
+        ui.label(
+            egui::RichText::new(format!("HEAT {:.0}%", heat * 100.0))
+                .color(theme::ASH)
+                .monospace()
+                .size(8.5),
+        );
+        ui.label(
+            egui::RichText::new(format!("TEMP {:.2}", temp))
+                .color(theme::ASH)
+                .monospace()
+                .size(8.5),
+        );
+        ui.label(
+            egui::RichText::new(format!(
+                "BARS {}",
+                if jam_bars == 0.0 {
+                    "∞".to_string()
+                } else {
+                    format!("{:.0}", jam_bars)
+                }
+            ))
+            .color(theme::ASH)
+            .monospace()
+            .size(8.5),
+        );
+    });
+    // Last response snippet
+    if !last_resp.is_empty() {
+        let snippet: String = last_resp.chars().take(80).collect();
+        ui.label(
+            egui::RichText::new(snippet)
+                .color(theme::SMOKE)
+                .monospace()
+                .size(8.0),
+        );
+    }
+    ui.horizontal(|ui| {
+        ui.label(
+            egui::RichText::new(format!("{:.1} tok/s", tps))
+                .color(theme::ASH)
+                .monospace()
+                .size(8.0),
+        );
+        ui.label(
+            egui::RichText::new(format!("cycle #{}", cycles))
+                .color(theme::ASH)
+                .monospace()
+                .size(8.0),
+        );
+    });
+}
+
 // ─── Cable drag interaction ───────────────────────────────────────────────────
 
 pub(super) fn handle_cable_drag(

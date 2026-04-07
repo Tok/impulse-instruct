@@ -187,11 +187,14 @@ pub struct AppState {
     /// Modular rack — which modules are visible and how they are cabled.
     #[serde(default)]
     pub rack: RackState,
+    /// Per-agent LLM state for rackable LLM modules.
+    #[serde(default)]
+    pub llm_agents: Vec<LlmAgentState>,
 }
 
 impl Default for AppState {
     fn default() -> Self {
-        Self {
+        let mut s = Self {
             bass_voices: default_bass_voices(),
             active_voice: 0,
             kit_a: Default::default(),
@@ -213,7 +216,19 @@ impl Default for AppState {
             chain_pos: 0,
             live_record: false,
             rack: Default::default(),
+            llm_agents: Vec::new(),
+        };
+        // Create a default agent for the LlmAgent rack module.
+        if let Some(agent_id) = s
+            .rack
+            .modules
+            .iter()
+            .find(|m| m.kind == ModuleKind::LlmAgent)
+            .map(|m| m.id)
+        {
+            s.llm_agents.push(LlmAgentState::new_default(agent_id));
         }
+        s
     }
 }
 
@@ -749,6 +764,94 @@ impl Default for LlmState {
             active_ramps: Vec::new(),
             jam_bars: 0.0,
             jam_cycle_count: 0,
+        }
+    }
+}
+
+// ─── Per-agent LLM state (rackable LLM modules) ─────────────────────────────
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct LlmAgentState {
+    pub id: u32, // matches RackModule.id
+    pub persona_name: String,
+    pub heat: f32,
+    pub temperature: f32,
+    pub scope: Vec<String>, // top-level keys this agent may write (empty = all)
+    pub jam_bars: f32,
+    pub conversation_mode: ConversationMode,
+    pub active_style: Option<String>,
+    pub custom_style_text: String,
+    pub user_instructions: String,
+    pub enable_thinking: bool,
+    // Display-only (updated by inference thread)
+    #[serde(default)]
+    pub is_inferring: bool,
+    #[serde(default)]
+    pub last_response: String,
+    #[serde(default)]
+    pub tokens_per_sec: f32,
+    #[serde(default)]
+    pub jam_cycle_count: u32,
+}
+
+impl LlmAgentState {
+    pub fn new_default(id: u32) -> Self {
+        Self {
+            id,
+            persona_name: "PULSE".to_string(),
+            heat: 0.4,
+            temperature: 0.9,
+            scope: Vec::new(),
+            jam_bars: 0.0,
+            conversation_mode: ConversationMode::Producer,
+            active_style: None,
+            custom_style_text: String::new(),
+            user_instructions: String::new(),
+            enable_thinking: true,
+            is_inferring: false,
+            last_response: String::new(),
+            tokens_per_sec: 0.0,
+            jam_cycle_count: 0,
+        }
+    }
+
+    /// Create an agent from the current singleton LlmState values.
+    pub fn from_singleton(id: u32, llm: &LlmState) -> Self {
+        Self {
+            id,
+            persona_name: llm.persona_name.clone(),
+            heat: llm.heat,
+            temperature: llm.temperature,
+            scope: Vec::new(),
+            jam_bars: llm.jam_bars,
+            conversation_mode: llm.conversation_mode.clone(),
+            active_style: llm.active_style.clone(),
+            custom_style_text: llm.custom_style_text.clone(),
+            user_instructions: llm.user_instructions.clone(),
+            enable_thinking: llm.enable_thinking,
+            is_inferring: false,
+            last_response: String::new(),
+            tokens_per_sec: 0.0,
+            jam_cycle_count: 0,
+        }
+    }
+}
+
+/// Sync the default (first) LlmAgentState with the global LlmState.
+/// Keeps header controls and the singleton inference loop working while
+/// the rackable agent UI is being built out.
+pub fn sync_default_agent(state: &mut AppState) {
+    if let Some(agent) = state.llm_agents.first_mut() {
+        // Singleton → agent (header controls are authoritative in Phase 1)
+        agent.persona_name = state.llm.persona_name.clone();
+        agent.heat = state.llm.heat;
+        agent.temperature = state.llm.temperature;
+        agent.jam_bars = state.llm.jam_bars;
+        agent.is_inferring = state.llm.is_inferring;
+        agent.tokens_per_sec = state.llm.tokens_per_sec;
+        agent.jam_cycle_count = state.llm.jam_cycle_count;
+        if !state.llm.last_response.is_empty() {
+            agent.last_response = state.llm.last_response.clone();
         }
     }
 }

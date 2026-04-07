@@ -130,7 +130,8 @@ pub enum ModuleKind {
     FxAutotune,
     // ── Modulation ────────────────────────────────────────────────────────────
     LfoModule,
-    // ── Utility ───────────────────────────────────────────────────────────────
+    LlmAgent,
+    //── Utility ───────────────────────────────────────────────────────────────
     MasterOutput,
 }
 
@@ -161,6 +162,7 @@ impl ModuleKind {
             Self::FxDrive => "DRIVE",
             Self::FxAutotune => "AUTOTUNE",
             Self::LfoModule => "LFO",
+            Self::LlmAgent => "LLM AGENT",
             Self::MasterOutput => "MASTER",
         }
     }
@@ -168,7 +170,7 @@ impl ModuleKind {
     /// Which zone this module belongs to by default.
     pub fn default_zone(self) -> Zone {
         match self {
-            Self::StepSequencer | Self::MasterOutput => Zone::Global,
+            Self::StepSequencer | Self::MasterOutput | Self::LlmAgent => Zone::Global,
             Self::AcidBass
             | Self::DrumKit808
             | Self::DrumKit909
@@ -211,6 +213,7 @@ impl ModuleKind {
                 | Self::FxDrive
                 | Self::FxAutotune
                 | Self::LfoModule
+                | Self::LlmAgent
         )
     }
 }
@@ -362,6 +365,8 @@ impl Default for RackState {
         rack.add_module(ModuleKind::LfoModule);
         rack.add_module(ModuleKind::LfoModule);
         rack.add_module(ModuleKind::LfoModule);
+        // Default LLM agent
+        rack.add_module(ModuleKind::LlmAgent);
 
         // ── Default cables ────────────────────────────────────────────────────
         // Collect IDs first (no borrow conflict with connect()).
@@ -550,7 +555,7 @@ pub(crate) fn lfo_target_module_kind(target: crate::state::LfoTarget) -> Option<
 /// The destination port kind always matches the source.
 pub(crate) fn rack_out_port_kind(kind: ModuleKind) -> PortKind {
     match kind {
-        ModuleKind::LfoModule | ModuleKind::StepSequencer => PortKind::Cv,
+        ModuleKind::LfoModule | ModuleKind::StepSequencer | ModuleKind::LlmAgent => PortKind::Cv,
         _ => PortKind::Audio,
     }
 }
@@ -599,6 +604,7 @@ pub(crate) fn rack_kind_name_matches(kind: ModuleKind, name: &str) -> bool {
             matches!(n.as_str(), "master" | "master_out" | "out" | "output")
         }
         ModuleKind::StepSequencer => matches!(n.as_str(), "sequencer" | "seq"),
+        ModuleKind::LlmAgent => matches!(n.as_str(), "llm" | "agent" | "ai" | "llm_agent"),
     }
 }
 

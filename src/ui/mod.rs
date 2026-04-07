@@ -481,6 +481,7 @@ impl ImpulseApp {
             let _ = self.llm_tx.try_send(LlmInput::Infer {
                 prompt,
                 one_shot: true,
+                agent_id: None,
             });
             self.audio_analysis = Some(analysis);
             self.listen_pending = true;
@@ -596,6 +597,7 @@ impl ImpulseApp {
                     let _ = self.llm_tx.try_send(LlmInput::Infer {
                         prompt: "continue jamming, evolve the pattern".to_string(),
                         one_shot: false,
+                        agent_id: None,
                     });
                 }
             }
@@ -795,6 +797,7 @@ impl eframe::App for ImpulseApp {
 
         self.drain_llm_outputs();
         self.drain_midi_events();
+        crate::state::sync_default_agent(&mut self.state.write()); // Phase 1 agent↔singleton
 
         // ── Jam timer: fire delayed jam cycle when the bar-count delay elapses ──
         if let Some(fire_at) = self.jam_next_fire {
@@ -804,6 +807,7 @@ impl eframe::App for ImpulseApp {
                     let _ = self.llm_tx.try_send(LlmInput::Infer {
                         prompt: "continue jamming, evolve the pattern".to_string(),
                         one_shot: false,
+                        agent_id: None,
                     });
                 }
             } else {
@@ -882,6 +886,7 @@ impl eframe::App for ImpulseApp {
                 let _ = self.llm_tx.try_send(LlmInput::Infer {
                     prompt: prompt.to_string(),
                     one_shot: true,
+                    agent_id: None,
                 });
                 log::info!("Startup prompt: {}", prompt);
             }

@@ -159,6 +159,7 @@ fn dispatch(action: OscAction, state: &Arc<RwLock<AppState>>, llm_tx: &Sender<Ll
             let _ = llm_tx.try_send(LlmInput::Infer {
                 prompt: text,
                 one_shot: false,
+                agent_id: None,
             });
         }
     }

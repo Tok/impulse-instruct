@@ -26,11 +26,13 @@ use json_repair::{repair_json, split_thinking};
 
 #[derive(Clone, Debug)]
 pub enum LlmInput {
-    /// Run inference with a user prompt.
-    Infer { prompt: String, one_shot: bool },
-    /// Kill the current server and restart with a new model file.
+    Infer {
+        prompt: String,
+        one_shot: bool,
+        #[allow(dead_code)]
+        agent_id: Option<u32>,
+    },
     SwitchModel(String),
-    /// Kill and restart the server with the same model (clears KV cache / context window).
     ResetContext,
 }
 
@@ -97,7 +99,6 @@ pub struct LlmOutput {
 }
 
 // ─── Sampling parameters (passed through to llama-server) ────────────────────
-
 #[derive(Clone, Debug)]
 pub struct SamplingParams {
     pub heat: f32, // 0–1: jam mutation intensity (used for top_p widening and mock responses)
@@ -787,6 +788,7 @@ pub fn run_llm_loop(
         let LlmInput::Infer {
             ref prompt,
             one_shot,
+            ..
         } = input
         else {
             continue;

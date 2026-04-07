@@ -378,10 +378,11 @@ fn draw_add_menu(app: &mut ImpulseApp, ctx: &egui::Context) {
         Some(z) => z,
         None => return,
     };
+    const GLOBAL_KINDS: &[ModuleKind] = &[ModuleKind::LlmAgent];
     let kinds: &[ModuleKind] = match zone {
         crate::state::Zone::Voice => VOICE_KINDS,
         crate::state::Zone::FxMod => FXMOD_KINDS,
-        crate::state::Zone::Global => return,
+        crate::state::Zone::Global => GLOBAL_KINDS,
     };
 
     let mut open = true;
@@ -418,7 +419,12 @@ fn draw_add_menu(app: &mut ImpulseApp, ctx: &egui::Context) {
                     .button(egui::RichText::new(kind.label()).monospace().size(9.5))
                     .clicked()
                 {
-                    app.state.write().rack.add_module(*kind);
+                    let id = app.state.write().rack.add_module(*kind);
+                    if *kind == ModuleKind::LlmAgent {
+                        let agent =
+                            crate::state::LlmAgentState::from_singleton(id, &app.state.read().llm);
+                        app.state.write().llm_agents.push(agent);
+                    }
                     close = true;
                 }
             }
@@ -522,10 +528,13 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
 
     // ── GLOBAL ZONE — sequencer + master, full width ──────────────────────────
     {
-        let (_, toggle) =
-            module_card::zone_rail(ui, "GLOBAL", false, 24, app.zone_global_collapsed);
+        let (add, toggle) =
+            module_card::zone_rail(ui, "GLOBAL", true, 24, app.zone_global_collapsed);
         if toggle {
             app.zone_global_collapsed = !app.zone_global_collapsed;
+        }
+        if add {
+            app.add_menu_zone = Some(crate::state::Zone::Global);
         }
     }
 
@@ -624,6 +633,61 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
                 .0
             };
             let _ = resp;
+        }
+
+        // LLM agent cards (Global zone)
+        {
+            let agent_ids: Vec<(u32, bool)> = app
+                .state
+                .read()
+                .rack
+                .modules
+                .iter()
+                .filter(|m| m.kind == ModuleKind::LlmAgent)
+                .map(|m| (m.id, m.enabled))
+                .collect();
+            for (id, enabled) in agent_ids {
+                ui.add_space(2.0);
+                let resp = if app.rack_flipped {
+                    module_card::module_card_back(
+                        ui,
+                        id,
+                        ModuleKind::LlmAgent,
+                        enabled,
+                        Some(available_w - 2.0),
+                        ports,
+                    )
+                } else {
+                    module_card::module_card(
+                        ui,
+                        id,
+                        ModuleKind::LlmAgent,
+                        enabled,
+                        Some(available_w - 2.0),
+                        ports,
+                        |ui| {
+                            draw_llm_agent_content(app, ui, id);
+                        },
+                    )
+                    .0
+                };
+                if resp.toggle_clicked
+                    && let Some(m) = app
+                        .state
+                        .write()
+                        .rack
+                        .modules
+                        .iter_mut()
+                        .find(|m| m.id == id)
+                {
+                    m.enabled = !m.enabled;
+                }
+                if resp.remove_clicked {
+                    app.state.write().rack.remove_module(id);
+                    app.state.write().llm_agents.retain(|a| a.id != id);
+                    app.push_fx_plan();
+                }
+            }
         }
 
         ui.add_space(2.0);
@@ -924,5 +988,6 @@ fn reorder_module_by_drop(
 // ─── Content dispatchers (implementation in rack_content.rs) ─────────────────
 
 use super::rack_content::{
-    draw_fx_content, draw_lfo_content, draw_master_content, draw_voice_content, handle_cable_drag,
+    draw_fx_content, draw_lfo_content, draw_llm_agent_content, draw_master_content,
+    draw_voice_content, handle_cable_drag,
 };
