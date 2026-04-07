@@ -109,3 +109,98 @@ pub fn draw_cable(
         }
     }
 }
+
+/// Draw the full cable overlay: in-progress drag, rack cables, and synthesised LFO cables.
+pub fn draw_cable_overlay(
+    app: &crate::ui::ImpulseApp,
+    ctx: &egui::Context,
+    ports: &[crate::ui::module_card::PortPos],
+    canvas_rect: egui::Rect,
+) {
+    use crate::state::rack::lfo_target_module_kind;
+    use crate::state::{LfoTarget, ModuleKind, PortDir, PortKind, PortRef};
+
+    let time = ctx.input(|i| i.time) as f32;
+    let mut painter = ctx.layer_painter(egui::LayerId::new(
+        egui::Order::Foreground,
+        egui::Id::new("cables"),
+    ));
+    painter.set_clip_rect(canvas_rect);
+
+    // In-progress drag
+    if let Some(ref drag) = app.cable_drag
+        && let Some(pointer) = ctx.pointer_latest_pos()
+    {
+        draw_cable(&painter, drag.from_screen, pointer, time, 0.0, false);
+    }
+
+    if (app.show_cables || app.rack_flipped) && !app.show_prefs {
+        let cables = app.state.read().rack.cables.clone();
+        for (ci, cable) in cables.iter().enumerate() {
+            let from_pos = ports
+                .iter()
+                .find(|p| p.port == cable.from)
+                .map(|p| p.center);
+            let to_pos = ports.iter().find(|p| p.port == cable.to).map(|p| p.center);
+            if let (Some(from), Some(to)) = (from_pos, to_pos) {
+                let phase = ci as f32 * 2.399;
+                draw_cable(&painter, from, to, time, phase, true);
+            }
+        }
+
+        // Synthesised LFO cables
+        let state = app.state.read();
+        let lfo_ids: Vec<u32> = state
+            .rack
+            .modules
+            .iter()
+            .filter(|m| m.kind == ModuleKind::LfoModule)
+            .map(|m| m.id)
+            .collect();
+        for (i, lfo_slot) in state.lfo.iter().enumerate() {
+            if !lfo_slot.enabled || lfo_slot.target == LfoTarget::None {
+                continue;
+            }
+            let Some(&lfo_id) = lfo_ids.get(i) else {
+                continue;
+            };
+            let Some(tgt_kind) = lfo_target_module_kind(lfo_slot.target) else {
+                continue;
+            };
+            let Some(tgt_id) = state
+                .rack
+                .modules
+                .iter()
+                .find(|m| m.kind == tgt_kind)
+                .map(|m| m.id)
+            else {
+                continue;
+            };
+            if cables
+                .iter()
+                .any(|c| c.from.module_id == lfo_id && c.to.module_id == tgt_id)
+            {
+                continue;
+            }
+            let from_ref = PortRef {
+                module_id: lfo_id,
+                dir: PortDir::Out,
+                kind: PortKind::Cv,
+                index: 0,
+            };
+            let to_ref = PortRef {
+                module_id: tgt_id,
+                dir: PortDir::In,
+                kind: PortKind::Cv,
+                index: 0,
+            };
+            let from_pos = ports.iter().find(|p| p.port == from_ref).map(|p| p.center);
+            let to_pos = ports.iter().find(|p| p.port == to_ref).map(|p| p.center);
+            if let (Some(from), Some(to)) = (from_pos, to_pos) {
+                let phase = (cables.len() + i) as f32 * 2.399;
+                draw_cable(&painter, from, to, time, phase, true);
+            }
+        }
+        ctx.request_repaint();
+    }
+}

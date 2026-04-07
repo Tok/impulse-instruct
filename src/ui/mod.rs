@@ -262,6 +262,8 @@ pub struct ImpulseApp {
     pub(crate) cable_drag: Option<rack_canvas::CableDrag>,
     // When true, patch cables are drawn over the rack. Tab to toggle.
     pub(crate) show_cables: bool,
+    // When true, rack shows back panel (ports + cables) instead of front (knobs).
+    pub(crate) rack_flipped: bool,
     // Zone whose [+ ADD] popup is currently open.
     pub(crate) add_menu_zone: Option<crate::state::Zone>,
     // Module being dragged by its title bar (id + current pointer position).
@@ -410,6 +412,9 @@ impl ImpulseApp {
             show_cables: crate::state::load_session()
                 .and_then(|s| s.show_cables)
                 .unwrap_or(true),
+            rack_flipped: crate::state::load_session()
+                .and_then(|s| s.rack_flipped)
+                .unwrap_or(false),
             add_menu_zone: None,
             module_drag: None,
             session_dirty: false,
@@ -835,7 +840,7 @@ impl eframe::App for ImpulseApp {
             };
             if should_save {
                 let state = self.state.read().clone();
-                crate::state::save_session(&state, self.show_cables);
+                crate::state::save_session(&state, self.show_cables, self.rack_flipped);
                 self.session_dirty = false;
                 self.last_save_time = std::time::Instant::now();
             }
@@ -866,6 +871,11 @@ impl eframe::App for ImpulseApp {
         // ── Tab: toggle cable visibility ──────────────────────────────────────
         if ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Tab)) {
             self.show_cables = !self.show_cables;
+            self.session_dirty = true;
+        }
+        // ── Backtick: flip rack (front ↔ back panel) ─────────────────────────
+        if ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Backtick)) {
+            self.rack_flipped = !self.rack_flipped;
             self.session_dirty = true;
         }
 

@@ -17,11 +17,9 @@
 
 use egui::{Color32, ScrollArea, Vec2};
 
-use crate::state::rack::lfo_target_module_kind;
-use crate::state::{LfoTarget, ModuleKind, PortDir, PortKind, PortRef, Zone};
+use crate::state::{ModuleKind, Zone};
 use crate::ui::module_card::PortPos;
-use crate::ui::rack_cables::draw_cable;
-use crate::ui::{ImpulseApp, module_card};
+use crate::ui::{ImpulseApp, module_card, rack_cables};
 
 // Re-export so callers referencing `rack_canvas::CableDrag` keep working.
 pub use crate::ui::rack_cables::{CableDrag, ModuleDrag};
@@ -134,6 +132,35 @@ pub fn draw_rack(app: &mut ImpulseApp, ctx: &egui::Context, ui: &mut egui::Ui) {
             app.show_cables = !app.show_cables;
             app.session_dirty = true;
         }
+
+        ui.add_space(4.0);
+        let flip_col = if app.rack_flipped {
+            Color32::from_gray(220)
+        } else {
+            Color32::from_gray(90)
+        };
+        let flip_fill = if app.rack_flipped {
+            Color32::from_gray(55)
+        } else {
+            Color32::from_gray(22)
+        };
+        if ui
+            .add(
+                egui::Button::new(
+                    egui::RichText::new(if app.rack_flipped { "FRONT" } else { "BACK" })
+                        .monospace()
+                        .size(8.5)
+                        .color(flip_col),
+                )
+                .fill(flip_fill)
+                .min_size(egui::vec2(42.0, 18.0)),
+            )
+            .on_hover_text("Flip rack: front panel ↔ back panel  [`]")
+            .clicked()
+        {
+            app.rack_flipped = !app.rack_flipped;
+            app.session_dirty = true;
+        }
     });
     ui.add_space(2.0);
 
@@ -202,106 +229,13 @@ pub fn draw_rack(app: &mut ImpulseApp, ctx: &egui::Context, ui: &mut egui::Ui) {
     // Persist ports for the next frame's scroll-lock check.
     ctx.memory_mut(|m| m.data.insert_temp(ports_mem_id, ports.clone()));
 
-    // ── Cable overlay (Tab to show/hide) ──────────────────────────────────────
+    // ── Cable overlay (extracted to rack_cables.rs) ────────────────────────────
+    rack_cables::draw_cable_overlay(app, ctx, &ports, canvas_rect);
+
+    // ── Port hover / drag-target highlights (back panel only) ─────────────────
+    if (app.rack_flipped || app.cable_drag.is_some())
+        && let Some(pointer) = ctx.pointer_latest_pos()
     {
-        let time = ctx.input(|i| i.time) as f32;
-        let mut painter = ctx.layer_painter(egui::LayerId::new(
-            egui::Order::Foreground,
-            egui::Id::new("cables"),
-        ));
-        // Clip cables to the rack canvas only — keeps header, footer, and piano on top.
-        painter.set_clip_rect(canvas_rect);
-
-        // In-progress drag: no flow dot, neutral phase.
-        if let Some(ref drag) = app.cable_drag
-            && let Some(pointer) = ctx.pointer_latest_pos()
-        {
-            draw_cable(&painter, drag.from_screen, pointer, time, 0.0, false);
-        }
-
-        if app.show_cables && !app.show_prefs {
-            let cables = app.state.read().rack.cables.clone();
-            for (ci, cable) in cables.iter().enumerate() {
-                let from_pos = ports
-                    .iter()
-                    .find(|p| p.port == cable.from)
-                    .map(|p| p.center);
-                let to_pos = ports.iter().find(|p| p.port == cable.to).map(|p| p.center);
-                if let (Some(from), Some(to)) = (from_pos, to_pos) {
-                    // Spread phase offsets by golden ratio so cables wobble independently.
-                    let phase = ci as f32 * 2.399;
-                    draw_cable(&painter, from, to, time, phase, true);
-                }
-            }
-
-            // Synthesise visual cables for active LFO slots.
-            // The LFO→param connection is a state param (lfo.target), not a rack
-            // cable, so we derive the cable position from current state here.
-            {
-                let state = app.state.read();
-                let lfo_ids: Vec<u32> = state
-                    .rack
-                    .modules
-                    .iter()
-                    .filter(|m| m.kind == ModuleKind::LfoModule)
-                    .map(|m| m.id)
-                    .collect();
-                for (i, lfo_slot) in state.lfo.iter().enumerate() {
-                    if !lfo_slot.enabled || lfo_slot.target == LfoTarget::None {
-                        continue;
-                    }
-                    let Some(&lfo_id) = lfo_ids.get(i) else {
-                        continue;
-                    };
-                    let Some(tgt_kind) = lfo_target_module_kind(lfo_slot.target) else {
-                        continue;
-                    };
-                    let Some(tgt_id) = state
-                        .rack
-                        .modules
-                        .iter()
-                        .find(|m| m.kind == tgt_kind)
-                        .map(|m| m.id)
-                    else {
-                        continue;
-                    };
-                    // Skip if a real rack cable already covers this pair.
-                    if cables
-                        .iter()
-                        .any(|c| c.from.module_id == lfo_id && c.to.module_id == tgt_id)
-                    {
-                        continue;
-                    }
-                    let from_ref = PortRef {
-                        module_id: lfo_id,
-                        dir: PortDir::Out,
-                        kind: PortKind::Cv,
-                        index: 0,
-                    };
-                    let to_ref = PortRef {
-                        module_id: tgt_id,
-                        dir: PortDir::In,
-                        kind: PortKind::Cv,
-                        index: 0,
-                    };
-                    let from_pos = ports.iter().find(|p| p.port == from_ref).map(|p| p.center);
-                    let to_pos = ports.iter().find(|p| p.port == to_ref).map(|p| p.center);
-                    if let (Some(from), Some(to)) = (from_pos, to_pos) {
-                        let phase = (cables.len() + i) as f32 * 2.399;
-                        draw_cable(&painter, from, to, time, phase, true);
-                    }
-                }
-            }
-
-            // Animate continuously while cables are visible.
-            ctx.request_repaint();
-        }
-    }
-
-    // ── Port hover / drag-target highlights ──────────────────────────────────
-    // Painted on the same Foreground layer as cables, after cables so glows
-    // appear on top of cable lines but below the in-progress drag cable.
-    if let Some(pointer) = ctx.pointer_latest_pos() {
         let time = ctx.input(|i| i.time) as f32;
         let mut overlay = ctx.layer_painter(egui::LayerId::new(
             egui::Order::Foreground,
@@ -463,6 +397,18 @@ pub fn draw_rack(app: &mut ImpulseApp, ctx: &egui::Context, ui: &mut egui::Ui) {
                 .clicked()
             {
                 app.show_cables = !app.show_cables;
+                ui.close_menu();
+            }
+            let flip_label = if app.rack_flipped {
+                "Show front panel  [`]"
+            } else {
+                "Show back panel  [`]"
+            };
+            if ui
+                .button(egui::RichText::new(flip_label).monospace().size(9.5))
+                .clicked()
+            {
+                app.rack_flipped = !app.rack_flipped;
                 ui.close_menu();
             }
         });
@@ -646,17 +592,29 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
                 .map(|m| m.enabled)
                 .unwrap_or(true);
 
-            let (resp, _) = module_card::module_card(
-                ui,
-                seq_id,
-                ModuleKind::StepSequencer,
-                enabled,
-                Some(available_w - 2.0),
-                ports,
-                |ui| {
-                    crate::ui::panels::draw_sequencer(app, ui);
-                },
-            );
+            let resp = if app.rack_flipped {
+                module_card::module_card_back(
+                    ui,
+                    seq_id,
+                    ModuleKind::StepSequencer,
+                    enabled,
+                    Some(available_w - 2.0),
+                    ports,
+                )
+            } else {
+                module_card::module_card(
+                    ui,
+                    seq_id,
+                    ModuleKind::StepSequencer,
+                    enabled,
+                    Some(available_w - 2.0),
+                    ports,
+                    |ui| {
+                        crate::ui::panels::draw_sequencer(app, ui);
+                    },
+                )
+                .0
+            };
             if resp.toggle_clicked
                 && let Some(m) = app
                     .state
@@ -683,17 +641,29 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
                 .find(|m| m.kind == ModuleKind::MasterOutput)
                 .map(|m| m.id)
                 .unwrap_or(101);
-            let (resp, _) = module_card::module_card(
-                ui,
-                master_id,
-                ModuleKind::MasterOutput,
-                true,
-                Some(available_w - 2.0),
-                ports,
-                |ui| {
-                    draw_master_content(app, ui);
-                },
-            );
+            let resp = if app.rack_flipped {
+                module_card::module_card_back(
+                    ui,
+                    master_id,
+                    ModuleKind::MasterOutput,
+                    true,
+                    Some(available_w - 2.0),
+                    ports,
+                )
+            } else {
+                module_card::module_card(
+                    ui,
+                    master_id,
+                    ModuleKind::MasterOutput,
+                    true,
+                    Some(available_w - 2.0),
+                    ports,
+                    |ui| {
+                        draw_master_content(app, ui);
+                    },
+                )
+                .0
+            };
             let _ = resp;
         }
 
@@ -748,17 +718,29 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
                     // Dim the card ghost while it's being dragged
                     let is_dragging = app.module_drag.as_ref().map(|d| d.module_id) == Some(*id);
                     let eff_enabled = if is_dragging { false } else { *enabled };
-                    let (resp, _) = module_card::module_card(
-                        ui,
-                        *id,
-                        *kind,
-                        eff_enabled,
-                        Some(slot_w),
-                        ports,
-                        |ui| {
-                            draw_voice_content(app, ui, *kind);
-                        },
-                    );
+                    let resp = if app.rack_flipped {
+                        module_card::module_card_back(
+                            ui,
+                            *id,
+                            *kind,
+                            eff_enabled,
+                            Some(slot_w),
+                            ports,
+                        )
+                    } else {
+                        module_card::module_card(
+                            ui,
+                            *id,
+                            *kind,
+                            eff_enabled,
+                            Some(slot_w),
+                            ports,
+                            |ui| {
+                                draw_voice_content(app, ui, *kind);
+                            },
+                        )
+                        .0
+                    };
                     if resp.toggle_clicked && !is_dragging {
                         let en = *enabled;
                         if let Some(m) = app
@@ -833,21 +815,33 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
                     let slot_w = module_slot_w(*kind, available_w);
                     let is_dragging = app.module_drag.as_ref().map(|d| d.module_id) == Some(*id);
                     let eff_enabled = if is_dragging { false } else { *enabled };
-                    let (resp, _) = module_card::module_card(
-                        ui,
-                        *id,
-                        *kind,
-                        eff_enabled,
-                        Some(slot_w),
-                        ports,
-                        |ui| {
-                            if *kind == ModuleKind::LfoModule {
-                                draw_lfo_content(app, ui, *id);
-                            } else {
-                                draw_fx_content(app, ui, *kind);
-                            }
-                        },
-                    );
+                    let resp = if app.rack_flipped {
+                        module_card::module_card_back(
+                            ui,
+                            *id,
+                            *kind,
+                            eff_enabled,
+                            Some(slot_w),
+                            ports,
+                        )
+                    } else {
+                        module_card::module_card(
+                            ui,
+                            *id,
+                            *kind,
+                            eff_enabled,
+                            Some(slot_w),
+                            ports,
+                            |ui| {
+                                if *kind == ModuleKind::LfoModule {
+                                    draw_lfo_content(app, ui, *id);
+                                } else {
+                                    draw_fx_content(app, ui, *kind);
+                                }
+                            },
+                        )
+                        .0
+                    };
                     if resp.toggle_clicked && !is_dragging {
                         let en = *enabled;
                         if let Some(m) = app

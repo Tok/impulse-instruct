@@ -312,6 +312,10 @@ pub(super) fn handle_cable_drag(
     ctx: &egui::Context,
     ports: &[module_card::PortPos],
 ) {
+    // Cable patching only in back-panel view (allow in-progress drags to complete)
+    if !app.rack_flipped && app.cable_drag.is_none() {
+        return;
+    }
     let pointer = match ctx.pointer_latest_pos() {
         Some(p) => p,
         None => return,

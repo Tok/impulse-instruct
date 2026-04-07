@@ -43,6 +43,8 @@ pub struct SessionData {
     pub persona_name: Option<String>,
     pub model_path: Option<String>,
     pub show_cables: Option<bool>,
+    #[serde(default)]
+    pub rack_flipped: Option<bool>,
     // UI prefs subset
     pub knob_style: Option<crate::state::KnobStyle>,
     pub knob_size: Option<crate::state::KnobSize>,
@@ -63,7 +65,7 @@ pub struct SessionData {
 }
 
 /// Save session data extracted from current AppState.
-pub fn save_session(state: &AppState, show_cables: bool) {
+pub fn save_session(state: &AppState, show_cables: bool, rack_flipped: bool) {
     let data = SessionData {
         rack: Some(state.rack.clone()),
         active_style: state.llm.active_style.clone(),
@@ -72,6 +74,7 @@ pub fn save_session(state: &AppState, show_cables: bool) {
         persona_name: Some(state.llm.persona_name.clone()),
         model_path: Some(state.llm.model_path.clone()),
         show_cables: Some(show_cables),
+        rack_flipped: Some(rack_flipped),
         knob_style: Some(state.ui_prefs.knob_style),
         knob_size: Some(state.ui_prefs.knob_size),
         pad_size: Some(state.ui_prefs.pad_size),
