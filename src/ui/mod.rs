@@ -960,19 +960,7 @@ impl eframe::App for ImpulseApp {
             )
             .exact_height(18.0)
             .show(ctx, |ui| {
-                ui.horizontal(|ui| {
-                    let midi_text = match &self.midi_port {
-                        Some(port) => format!("MIDI: {}", port.trim()),
-                        None => "MIDI: no device".to_string(),
-                    };
-                    ui.label(
-                        egui::RichText::new(midi_text)
-                            .color(theme::ASH)
-                            .monospace()
-                            .size(9.0),
-                    );
-                    scope_footer::draw_dsp_sparkline(ui, &self.dsp_load_buf);
-                });
+                scope_footer::draw_footer_status(ui, &self.midi_port, &self.dsp_load_buf);
             });
 
         TopBottomPanel::bottom("piano")

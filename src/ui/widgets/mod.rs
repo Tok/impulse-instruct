@@ -188,9 +188,10 @@ pub fn knob(ui: &mut Ui, label: &str, value: &mut f32, mode: ParamMode, size: f3
     }
 
     let response = response.on_hover_text(mode_tooltip(mode));
-    // Touch-paint mode: primary click sets mode. Normal mode: no auto-cycle
-    // (right-click is reserved for context menus).
-    let mode_cycled = tmode.is_some() && response.clicked();
+    // Touch-paint mode: primary click sets mode.
+    // Alt+click: cycle lock mode (Free → UserOwned → LlmFocus → Free).
+    let alt_click = response.clicked() && response.ctx.input(|i| i.modifiers.alt);
+    let mode_cycled = alt_click || (tmode.is_some() && response.clicked());
     (changed, mode_cycled)
 }
 
