@@ -1,7 +1,7 @@
 // ─── state/persistence.rs ────────────────────────────────────────────────────
 // Project save / load — pure I/O, no state mutation.
 
-use super::AppState;
+use super::{AppState, ModuleKind};
 use serde::{Deserialize, Serialize};
 
 const SETTINGS_PATH: &str = "settings.json";
@@ -165,6 +165,28 @@ pub fn apply_session(state: &mut AppState, data: SessionData) {
     }
     if let Some(v) = data.temperature {
         state.llm.temperature = v;
+    }
+
+    // ── Migration: ensure LlmConsole + at least one LlmAgent exist ───────
+    if !state
+        .rack
+        .modules
+        .iter()
+        .any(|m| m.kind == ModuleKind::LlmConsole)
+    {
+        state.rack.add_module(ModuleKind::LlmConsole);
+        log::info!("Migration: added LlmConsole module to rack");
+    }
+    if !state
+        .rack
+        .modules
+        .iter()
+        .any(|m| m.kind == ModuleKind::LlmAgent)
+    {
+        let id = state.rack.add_module(ModuleKind::LlmAgent);
+        let agent = super::LlmAgentState::from_singleton(id, &state.llm);
+        state.llm_agents.push(agent);
+        log::info!("Migration: added default LlmAgent module to rack");
     }
 }
 

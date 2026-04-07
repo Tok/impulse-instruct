@@ -319,7 +319,6 @@ pub(super) fn draw_llm_agent_content(app: &mut ImpulseApp, ui: &mut egui::Ui, mo
     // Snapshot mutable fields for editing
     let (
         mut persona,
-        mut heat,
         mut temp,
         mut jam_bars,
         last_resp,
@@ -338,7 +337,6 @@ pub(super) fn draw_llm_agent_content(app: &mut ImpulseApp, ui: &mut egui::Ui, mo
         let a = &s.llm_agents[idx];
         (
             a.persona_name.clone(),
-            a.heat,
             a.temperature,
             a.jam_bars,
             a.last_response.clone(),
@@ -434,26 +432,9 @@ pub(super) fn draw_llm_agent_content(app: &mut ImpulseApp, ui: &mut egui::Ui, mo
             });
     }
 
-    // ── Heat / Temp / Bars controls ──────────────────────────────────────
+    // ── Temp / Bars controls ───────────────────────────────────────────
     ui.horizontal(|ui| {
         ui.spacing_mut().item_spacing.x = 4.0;
-        ui.label(
-            egui::RichText::new("H")
-                .color(theme::ASH)
-                .monospace()
-                .size(8.0),
-        );
-        if ui
-            .add(
-                egui::DragValue::new(&mut heat)
-                    .range(0.0..=1.0)
-                    .speed(0.01)
-                    .fixed_decimals(2),
-            )
-            .changed()
-        {
-            app.state.write().llm_agents[idx].heat = heat;
-        }
         ui.label(
             egui::RichText::new("T")
                 .color(theme::ASH)

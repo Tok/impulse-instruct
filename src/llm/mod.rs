@@ -41,6 +41,12 @@ pub enum LlmAction {
     SetPersona(String),
     SetConversationMode(String),
     SetJamBars(f32),
+    SpawnAgent {
+        persona: String,
+        scope: Vec<String>,
+        model: Option<String>,
+    },
+    DismissAgent,
 }
 
 pub use json_repair::extract_llm_actions;

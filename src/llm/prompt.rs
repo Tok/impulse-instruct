@@ -514,10 +514,18 @@ SETTINGS — change only when explicitly asked:
     "jam_bars": 4,               ← bars between jam cycles (0=continuous, 1/2/4/8 common values)
     "persona": "PULSE",          ← AI name shown in UI
     "conversation_mode": "producer"  ← "off" | "producer" | "dj" | "mc"
+    "spawn_agent": {{               ← spawn a new LLM agent module in the rack
+      "persona": "BASS BRAIN",      ← name shown on the agent card
+      "scope": ["bass", "fx"],      ← which modules this agent controls (empty = all)
+      "model": null                  ← model override (null = use default model)
+    }},
+    "dismiss": true                  ← this agent removes itself from the rack
   }}}}
   "save_project": true           ← save current state to project-[timestamp].json
   Only output these when directly commanded. Always acknowledge in _comment what you did.
   When you set parameters that clearly match a known style, also set "style" to that id.
+  spawn_agent: use when asked to add specialist agents (e.g. "add an MC", "spawn a bass agent").
+  dismiss: use only when asked to remove yourself. Cannot dismiss the last remaining agent.
 
 ═══ OUTPUT FORMAT ═══
 

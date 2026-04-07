@@ -291,6 +291,34 @@ fn colorize_log(text: &str, default_color: egui::Color32) -> egui::text::LayoutJ
 }
 
 impl ImpulseApp {
+    /// Drain the audio capture buffer, run analysis, and fire a one-shot LLM
+    /// prompt with the results. No-op if no audio has been captured yet.
+    pub(crate) fn trigger_listen(&mut self) {
+        use crate::audio::analysis::{analyse_audio, format_snapshot};
+        let mut captured: Vec<f32> = Vec::with_capacity(441_000);
+        while let Ok(s) = self.capture_rx.pop() {
+            captured.push(s);
+        }
+        if !captured.is_empty() {
+            let analysis = analyse_audio(&captured, 44100.0);
+            let snapshot = format_snapshot(&analysis);
+            let prompt = format!(
+                "{}\nYou are listening to the audio you just produced. React — correct any mix or arrangement issues. Respond in JSON.",
+                snapshot
+            );
+            self.log_text.push_str("LISTEN → analysing…\n");
+            let _ = self.llm_tx.try_send(LlmInput::Infer {
+                prompt,
+                one_shot: true,
+                agent_id: None,
+            });
+            self.audio_analysis = Some(analysis);
+            self.listen_pending = true;
+        } else {
+            self.log_text.push_str("LISTEN → no audio captured yet\n");
+        }
+    }
+
     /// LLM console content — rendered inside a rackable module card.
     /// Contains: style selector, instructions, log, JAM timing, LISTEN, prompt input.
     pub(super) fn draw_llm_console_content(&mut self, ui: &mut egui::Ui) {

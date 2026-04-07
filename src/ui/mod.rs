@@ -458,33 +458,6 @@ impl ImpulseApp {
         let _ = self.audio_tx.push(AudioCommand::SetFxPlan(plan));
     }
 
-    /// Drain the audio capture buffer, run analysis, and fire a one-shot LLM
-    /// prompt with the results. No-op if no audio has been captured yet.
-    pub(crate) fn trigger_listen(&mut self) {
-        use crate::audio::analysis::{analyse_audio, format_snapshot};
-        let mut captured: Vec<f32> = Vec::with_capacity(441_000);
-        while let Ok(s) = self.capture_rx.pop() {
-            captured.push(s);
-        }
-        if !captured.is_empty() {
-            let analysis = analyse_audio(&captured, 44100.0);
-            let snapshot = format_snapshot(&analysis);
-            let prompt = format!(
-                "{}\nYou are listening to the audio you just produced. React — correct any mix or arrangement issues. Respond in JSON.",
-                snapshot
-            );
-            self.log_text.push_str("LISTEN → analysing…\n");
-            let _ = self.llm_tx.try_send(LlmInput::Infer {
-                prompt,
-                one_shot: true,
-                agent_id: None,
-            });
-            self.audio_analysis = Some(analysis);
-            self.listen_pending = true;
-        } else {
-            self.log_text.push_str("LISTEN → no audio captured yet\n");
-        }
-    }
     fn drain_llm_outputs(&mut self) {
         while let Ok(out) = self.llm_rx.try_recv() {
             // Store thinking tokens for display; also echo to log if enabled.
@@ -656,6 +629,42 @@ impl ImpulseApp {
                     LlmAction::SetJamBars(b) => {
                         self.state.write().llm.jam_bars = *b;
                         self.session_dirty = true;
+                    }
+                    LlmAction::SpawnAgent {
+                        persona,
+                        scope,
+                        model,
+                    } => {
+                        let id = self
+                            .state
+                            .write()
+                            .rack
+                            .add_module(crate::state::ModuleKind::LlmAgent);
+                        let mut agent =
+                            crate::state::LlmAgentState::from_singleton(id, &self.state.read().llm);
+                        agent.persona_name = persona.clone();
+                        agent.scope = scope.clone();
+                        if let Some(m) = model {
+                            agent.model_path = Some(m.clone());
+                        }
+                        self.state.write().llm_agents.push(agent);
+                        self.log_text.push_str(&format!(
+                            "Agent spawned: {} (scope: {:?})\n",
+                            persona, scope
+                        ));
+                        self.session_dirty = true;
+                    }
+                    LlmAction::DismissAgent => {
+                        // Only dismiss if more than 1 agent exists
+                        if let Some(aid) = out.agent_id {
+                            let agent_count = self.state.read().llm_agents.len();
+                            if agent_count > 1 {
+                                self.state.write().rack.remove_module(aid);
+                                self.state.write().llm_agents.retain(|a| a.id != aid);
+                                self.log_text.push_str("Agent dismissed itself\n");
+                                self.session_dirty = true;
+                            }
+                        }
                     }
                 }
             }
@@ -980,16 +989,5 @@ impl eframe::App for ImpulseApp {
             .show(ctx, |ui| {
                 rack_canvas::draw_rack(self, ctx, ui);
             });
-    }
-}
-
-impl ImpulseApp {
-    #[allow(dead_code)]
-    fn panel_frame() -> Frame {
-        Frame::none()
-            .fill(theme::PIT)
-            .stroke(egui::Stroke::new(1.0, theme::SLATE))
-            .rounding(egui::Rounding::same(3.0))
-            .inner_margin(egui::Margin::same(8.0))
     }
 }

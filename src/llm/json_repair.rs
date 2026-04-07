@@ -201,6 +201,36 @@ pub fn extract_llm_actions(
         if let Some(j) = s.get("jam_bars").and_then(|v| v.as_f64()) {
             actions.push(LlmAction::SetJamBars((j as f32).max(0.0)));
         }
+        // spawn_agent: { persona, scope, model }
+        if let Some(spawn) = s.get("spawn_agent").and_then(|v| v.as_object()) {
+            let persona = spawn
+                .get("persona")
+                .and_then(|v| v.as_str())
+                .unwrap_or("AGENT")
+                .to_string();
+            let scope = spawn
+                .get("scope")
+                .and_then(|v| v.as_array())
+                .map(|a| {
+                    a.iter()
+                        .filter_map(|v| v.as_str().map(String::from))
+                        .collect()
+                })
+                .unwrap_or_default();
+            let model = spawn
+                .get("model")
+                .and_then(|v| v.as_str())
+                .map(String::from);
+            actions.push(LlmAction::SpawnAgent {
+                persona,
+                scope,
+                model,
+            });
+        }
+        // dismiss: true — the agent that produced this output dismisses itself
+        if s.get("dismiss").and_then(|v| v.as_bool()).unwrap_or(false) {
+            actions.push(LlmAction::DismissAgent);
+        }
     }
     obj.remove("settings");
     actions
