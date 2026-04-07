@@ -33,139 +33,114 @@ Ordered by value.  Branch: **`develop`** (merge to `main` only for tagged releas
 
 ---
 
-### Completed this sprint (develop, not yet merged to main)
+### Recently completed (develop, not yet merged to main)
 
-All items shipped in this sprint are documented in [docs/features.md](docs/features.md).
+- [x] **Separate LLM heat/temperature sliders** — per-agent heat + temp controls
+- [x] **Even control spacing** — all panels use `even_group_width()` / `glass_group_fill()`
+- [x] **Reason-style rack flip** — Tab flips front (knobs) ↔ back (ports + Bezier cables)
+- [x] **Rackable LLM agents (Phase 1–3)** — `ModuleKind::LlmAgent`, per-agent state,
+  round-robin scheduling, scoped prompts, scoped `apply_llm_update`, interactive
+  scope editor (checkbox grid), editable persona/heat/temp/bars on the card
+- [x] **Header simplified** — LLM status/heat/temp removed (now per-agent in rack)
+- [x] **DSP load meter** — sparkline in footer
+- [x] **Phosphor persistence** — oscilloscope waveform decay trail
+- [x] **Smooth style transitions** — `schedule_baseline_ramps()` via ParamRamp
+- [x] **WASD as arrow keys** — setting in Preferences → Controls → Keyboard
+- [x] **Knob arrow-key control** — left/right cursors adjust hovered knobs/sliders
+- [x] **25 new tests** — json_repair, split_thinking, extract_llm_actions, baseline ramps
+- [x] **Refactored** — `extract_llm_actions()` pure function, `AudioChannels` struct,
+  `scope_footer.rs` extracted, cable overlay extracted to `rack_cables.rs`
 
 ---
 
-### Next sprint — v0.6.0 queue
+### Next sprint — Multi-model agent infrastructure
 
-- [x] **Separate LLM heat slider** — `llm.temperature: f32` (0–2, default 0.9)
-  added to `LlmState`; sent directly to llama-server; `llm.heat` remains the
-  mutation-rate / top_p-widening control.  TEMP DragValue now appears in the
-  LLM strip header.
+This is the big remaining piece: enabling multiple llama-server instances so
+agents can run different models in parallel.
 
-- [x] **Even control spacing — extend to remaining panels** — all panels
-  (drums Kit A/B, FX) already use `even_group_width()` / `glass_group_fill()`.
-  Item was completed in a prior sprint.
+#### Multi-server architecture
+
+Currently one llama-server on fixed port 8766, one model at a time.  Goal:
+each `LlmAgent` rack module can optionally run its own server instance with
+its own model.
+
+Design requirements:
+
+- **Server pool** — `LlamaServerPool` manages N server processes, each on a
+  unique port (8766, 8767, 8768…).  Each server loads one GGUF model.
+- **VRAM budget** — detect available GPU memory (nvidia-smi / rocm-smi),
+  compute how many models fit.  Typical configs:
+  - 8 GB VRAM → 1× Gemma 4 E4B (~6 GB)
+  - 12 GB → 1× Gemma + 2× Bonsai (~6+2+2 = 10 GB)
+  - 16 GB → 2× Gemma or 1× Gemma + 4× Bonsai
+  - 24 GB → 2× Gemma + 4× Bonsai or 1× 14B + 2× Bonsai
+- **Per-agent model selection** — each `LlmAgentState` gets a `model_path`
+  field.  When an agent is added, it connects to an available server (or
+  spawns a new one if VRAM allows).
+- **Shared server reuse** — agents using the same model share one server
+  (round-robin inference on that server).  Only different models need
+  separate processes.
+- **Startup wizard** — on first launch (or when no agents exist), show a
+  modal: "How many agents? Which models?" with VRAM indicator.  Presets:
+  "Solo (1× Gemma)", "Duo (2× Gemma)", "Swarm (1× Gemma + 3× Bonsai)".
+
+#### Dynamic agent spawning
+
+- Agents can request more agents via the `settings` JSON key:
+  `{ "settings": { "spawn_agent": { "persona": "BASS BRAIN", "scope": ["bass"], "model": "bonsai" } } }`
+- The UI creates a new `LlmAgent` rack module + `LlmAgentState` from this.
+- Agents can also dismiss themselves: `{ "settings": { "dismiss": true } }`
+- MC/DJ mode should be a separate agent instance with its own persona.
+
+#### Key files to change
+
+| File | Changes |
+|------|---------|
+| `src/llm/mod.rs` | `LlamaServerPool` replacing single `LlamaServerBackend` |
+| `src/llm/mod.rs` | `run_llm_loop` dispatches to pool by agent's model |
+| `src/state/mod.rs` | `LlmAgentState.model_path` field |
+| `src/state/mod.rs` | VRAM detection helper (nvidia-smi parsing) |
+| `src/ui/rack_content.rs` | Model selector per agent card |
+| `src/ui/windows.rs` | Startup wizard modal |
+
+#### Cable-driven scope (Phase 3 stretch)
+
+- Drawing a CV cable from LlmAgent to AcidBass auto-adds "bass" to scope
+- Removing the cable removes from scope
+- Visual: cable colours encode scope (blue = LLM signal)
 
 ---
 
 ### Post-release backlog
 
-#### Rack & modular UI
-
-- [x] **Reason-style rack flip + modular cable UI** — Tab flips the view to a
-  back panel.  Each module exposes labelled I/O ports (audio, CV, trigger,
-  LLM-signal — see below).  Bezier cables drag between ports.  The cable graph
-  already exists (`src/state/rack.rs`); the remaining work is:
-  - Back-panel layout pass: position ports relative to module bounding boxes
-  - Bezier cable renderer (egui `Painter` + cubic Bezier)
-  - Drag-to-patch mouse interaction (port hover → highlight compatible ports,
-    drag → preview cable, drop → `rack.connect()`)
-  - Cable colours by signal type (audio = white, CV = amber, trigger = cyan,
-    LLM = soft blue)
-
-#### Multiple LLM instances (rackable LLM module)
-
-The current LLM is a singleton fixed in the header.  The goal is to make it
-a **rackable module** so multiple instances can run in parallel, each with
-its own prompt focus and its own set of wired targets.
-
-Design sketch (to be detailed with sequential-thinking MCP before
-implementation):
-
-- **`LlmModule` as a rack module kind** (`ModuleKind::LlmAgent`) — same
-  cable graph, new port type `PortKind::LlmSignal`.
-- Each `LlmModule` has:
-  - A **scope** field: which instrument keys it is allowed to write
-    (e.g. `["bass", "kit_a"]` or `["fx", "lfo[0]"]`).  Locked params still
-    respected.
-  - Its own **prompt context** / persona string (e.g. "you control only the
-    bass line").
-  - Its own **temperature** and **heat** knobs.
-  - Its own **jam cycle** cadence (can differ from the global beat).
-- **LLM-signal cables** connect an `LlmModule` output to the parameter-input
-  port of another module.  The cable encodes which JSON key subtree the LLM
-  output is routed into.  This replaces the current single `apply_llm_update`
-  fan-out with a per-instance scoped apply.
-- **Inference threading**: each `LlmModule` gets its own channel pair to the
-  LLM worker thread (or a pool of workers if multiple models are loaded).
-  The existing mock/real inference path is reused; scheduling is round-robin
-  or priority-weighted.
-- **UI**: the front panel shows a compact "PULSE mini" card per instance
-  (persona name, heat, last output snippet).  The back panel shows LLM-signal
-  ports alongside audio/CV ports.
-
-This requires fleshing out with sequential-thinking MCP before coding.  Key
-questions: single shared model vs. per-instance model weights, cable conflict
-resolution (two LLMs targeting same param), UI real-estate for many instances.
-
 #### Visualization & statistics modules
 
-Current oscilloscope and note-colour log are a start.  Planned additions:
-
-- [ ] **Spectrum analyser** — real-time FFT magnitude display (log-frequency
-  x-axis, dB y-axis) as a rackable module.  Data fed from the existing
-  capture ring buffer.
-- [ ] **Stereo correlation meter** — phase correlation + L/R balance bar,
-  rackable or always-on in the FX panel.
-- [ ] **Pattern heatmap** — step-grid overlay showing how often each step fires
-  (running average), useful for spotting probability drift.
-- [ ] **LLM activity timeline** — scrolling log of which module fired, what
-  param it changed, and by how much.  Replaces the flat text log with a
-  structured, filterable view.
-- [ ] **CPU / DSP load meter** — audio callback duration as a sparkline.
+- [ ] **Spectrum analyser** — real-time FFT magnitude display (rackable module)
+- [ ] **Stereo correlation meter** — phase correlation + L/R balance bar
+- [ ] **Pattern heatmap** — step-grid overlay showing fire frequency
+- [ ] **LLM activity timeline** — structured, filterable agent activity log
 
 #### Visual treatment (post-process pass)
 
-Bloom alone is not enough — a full post-process layer is needed to make the
-UI feel alive at performance brightness:
-
-- [ ] **Bloom** — Gaussian blur on bright (>threshold) pixels, additively
-  blended back.  Needs a custom `wgpu` render pass outside egui's painter.
-  GPU cost: one downsample + two separable blur passes.  Evaluate at 1080p
-  on integrated GPU before committing.
-- [ ] **Scan-line / CRT vignette** — subtle horizontal scan-line overlay and
-  radial darkening at edges.  Can be a cheap fullscreen quad shader pass.
-- [ ] **LED glow on active steps** — per-step additive glow ring around
-  active step buttons.  Can be approximated in egui with layered circles if
-  custom wgpu pass is too expensive.
-- [ ] **Phosphor persistence on oscilloscope** — decay buffer so the waveform
-  fades out rather than clearing each frame.
-
-All of the above share the same custom render pass infrastructure.  Plan the
-wgpu integration once and implement all effects in that pass.
+- [ ] **Bloom** — Gaussian blur on bright pixels, additive blend (needs wgpu)
+- [ ] **Scan-line / CRT vignette** — cheap fullscreen quad shader
+- [ ] **LED glow on active steps** — per-step additive glow ring
+  (can approximate in egui with layered circles if wgpu too expensive)
 
 #### Other
 
 - [ ] **Multiple voices (per-voice DSP params)** — voices 1-3 currently share
-  synth params (cutoff/resonance/etc.) with voice 0.  Next step: per-voice
-  `AudioParams` snapshot so each voice can have independent timbre.
+  synth params with voice 0; next step: per-voice `AudioParams` snapshot
 
-- [ ] **Gabber kick voice** — pitch-envelope ramp + hard clipper.  No existing
-  voice fits; needs a new `GabberKick` struct in `src/audio/dsp/voices.rs`.
+- [ ] **Gabber kick voice** — pitch-envelope ramp + hard clipper
 
-- [ ] **Windows code-signing** — unsigned `.exe` triggers SmartScreen.
-  Requires EV certificate.  Low priority until meaningful Windows user base.
+- [ ] **Windows code-signing** — unsigned `.exe` triggers SmartScreen
 
-- [x] **Smooth style transitions** — when the user changes style in the dropdown,
-  parameters should ramp/lerp to new values instead of jumping instantly.  The
-  `ParamRamp` / `active_ramps` infrastructure already exists; extend it to
-  cover style preset application.  This applies to LLM-driven style changes
-  (`settings.style`) as well as user-initiated dropdown changes.
+- [ ] **Bipolar param_control variant** — for `bass.osc_detune` (-1..+1 st)
+  and similar bipolar controls that bypass lock/focus
 
-- [ ] **Bipolar param_control variant** — `param_control` only handles 0–1
-  normalised values.  Controls like `bass.osc_detune` (-1..+1 semitones) bypass
-  the lock/focus system because they don't fit.  Add a bipolar mode to
-  `param_control` (or a new `param_control_bipolar`) so all synth knobs support
-  lock/focus/free toggle uniformly.
-
-- [ ] **Event queue ring visualisation** — render the rtrb audio command ring
-  buffer as a circular display with moving read/write heads, showing fill level
-  and throughput.  Could be a rackable module or an always-on diagnostic in the
-  footer/header.
+- [ ] **Event queue ring visualisation** — render the rtrb ring buffer as a
+  circular display with moving read/write heads
 
 ---
 
