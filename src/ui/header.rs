@@ -215,7 +215,7 @@ impl ImpulseApp {
                             .clicked()
                         {
                             for m in &self.state.read().rack.modules {
-                                self.module_scales.insert(m.id, 0.6);
+                                self.module_scales.insert(m.kind, 0.6);
                             }
                             self.session_dirty = true;
                             ui.close_menu();

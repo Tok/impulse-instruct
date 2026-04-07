@@ -67,7 +67,7 @@ pub struct SessionData {
     #[serde(default)]
     pub wizard_done: Option<bool>,
     #[serde(default)]
-    pub module_scales: Option<std::collections::HashMap<u32, f32>>,
+    pub module_scales: Option<std::collections::HashMap<crate::state::ModuleKind, f32>>,
 }
 
 /// Save session data extracted from current AppState.

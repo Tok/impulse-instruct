@@ -164,8 +164,8 @@ pub fn module_card<R>(
             ui.set_min_width(card_w);
             ui.set_max_width(card_w);
 
-            // ── Title bar ─────────────────────────────────────────────────────
-            let title_h = (22.0 * scale).max(16.0);
+            // ── Title bar — fixed height, not affected by per-module scale ──
+            let title_h = 22.0_f32;
             // Use card_w explicitly — avoids inheriting stale available_width from
             // the horizontal_wrapped parent when the content hasn't settled yet.
             let (title_rect, _) =
@@ -186,8 +186,8 @@ pub fn module_card<R>(
             );
 
             // Module kind label (embossed: shadow 1px below, then bright text)
-            let label_font = (9.5 * scale).max(7.0);
-            let label_pos = title_rect.left_center() + Vec2::new(10.0 * scale, 0.0);
+            let label_font = 9.5;
+            let label_pos = title_rect.left_center() + Vec2::new(10.0, 0.0);
             painter.text(
                 label_pos + Vec2::new(0.0, 1.0),
                 egui::Align2::LEFT_CENTER,
@@ -322,7 +322,7 @@ pub fn module_card_back(
     kind: ModuleKind,
     enabled: bool,
     min_width: Option<f32>,
-    scale: f32,
+    _scale: f32,
     ports: &mut Vec<PortPos>,
 ) -> CardResponse {
     let fill = Color32::from_gray(14);
@@ -349,8 +349,8 @@ pub fn module_card_back(
             ui.set_min_width(card_w);
             ui.set_max_width(card_w);
 
-            // ── Title bar (same as front, but NO port circles) ──────────────
-            let title_h = (22.0 * scale).max(16.0);
+            // ── Title bar — fixed height, same as front ────────────────────
+            let title_h = 22.0_f32;
             let (title_rect, _) =
                 ui.allocate_exact_size(Vec2::new(card_w, title_h), Sense::hover());
             let painter = ui.painter_at(title_rect);
@@ -363,8 +363,8 @@ pub fn module_card_back(
                 [title_rect.left_bottom(), title_rect.right_bottom()],
                 Stroke::new(1.0, Color32::from_gray(8)),
             );
-            let label_font = (9.5 * scale).max(7.0);
-            let label_pos = title_rect.left_center() + Vec2::new(10.0 * scale, 0.0);
+            let label_font = 9.5;
+            let label_pos = title_rect.left_center() + Vec2::new(10.0, 0.0);
             painter.text(
                 label_pos + Vec2::new(0.0, 1.0),
                 egui::Align2::LEFT_CENTER,
@@ -381,8 +381,8 @@ pub fn module_card_back(
             );
             // LED toggle
             let led_rect = Rect::from_center_size(
-                Pos2::new(title_rect.left() + 4.0 * scale, title_rect.center().y),
-                Vec2::splat(5.0 * scale),
+                Pos2::new(title_rect.left() + 4.0, title_rect.center().y),
+                Vec2::splat(5.0),
             );
             if ui
                 .interact(led_rect, ui.id().with("led"), Sense::click())

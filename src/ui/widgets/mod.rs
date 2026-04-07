@@ -188,10 +188,11 @@ pub fn knob(ui: &mut Ui, label: &str, value: &mut f32, mode: ParamMode, size: f3
     }
 
     let response = response.on_hover_text(mode_tooltip(mode));
+    // Alt+click: cycle lock mode. Uses clicked_by to distinguish from drag.
     // Touch-paint mode: primary click sets mode.
-    // Alt+click: cycle lock mode (Free → UserOwned → LlmFocus → Free).
-    let alt_click = response.clicked() && response.ctx.input(|i| i.modifiers.alt);
-    let mode_cycled = alt_click || (tmode.is_some() && response.clicked());
+    let alt_held = response.ctx.input(|i| i.modifiers.alt);
+    let primary_click = response.clicked_by(egui::PointerButton::Primary);
+    let mode_cycled = primary_click && (alt_held || tmode.is_some());
     (changed, mode_cycled)
 }
 

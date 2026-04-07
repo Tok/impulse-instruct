@@ -33,19 +33,21 @@ pub(crate) fn scan_models() -> Vec<String> {
     found
 }
 
+use crate::state::ModuleKind;
+
 /// Result of context-sensitive Ctrl+MW zoom detection.
 pub(crate) enum ZoomTarget {
-    /// Per-module zoom: (module_id, new_scale).
-    Module(u32, f32),
-    /// Global UI zoom: caller should apply step to `ui_prefs.ui_scale`.
+    /// Per-kind zoom: (kind, new_scale).  All modules of this kind scale together.
+    Kind(ModuleKind, f32),
+    /// Global UI zoom.
     Global(f32),
 }
 
 /// Detect Ctrl+MW zoom and return the appropriate target.
-/// Reads card rects + per-module scales from egui temp memory.
+/// Card rects (kind + rect) are read from egui temp memory (set during rack render).
 pub(crate) fn detect_ctrl_zoom(
     ctx: &egui::Context,
-    module_scales: &std::collections::HashMap<u32, f32>,
+    kind_scales: &std::collections::HashMap<ModuleKind, f32>,
     current_global: f32,
 ) -> Option<ZoomTarget> {
     let delta = ctx.input(|i| {
@@ -59,18 +61,18 @@ pub(crate) fn detect_ctrl_zoom(
         return None;
     }
     let step = (delta / 120.0).clamp(-0.5, 0.5) * 0.1;
-    let card_rects: Vec<(u32, egui::Rect)> = ctx
+    let card_rects: Vec<(ModuleKind, egui::Rect)> = ctx
         .memory(|m| m.data.get_temp(egui::Id::new("module_card_rects")))
         .unwrap_or_default();
     let hovered = ctx.pointer_latest_pos().and_then(|p| {
         card_rects
             .iter()
             .find(|(_, r)| r.contains(p))
-            .map(|&(id, _)| id)
+            .map(|&(k, _)| k)
     });
-    if let Some(mid) = hovered {
-        let cur = module_scales.get(&mid).copied().unwrap_or(1.0);
-        Some(ZoomTarget::Module(mid, (cur + step).clamp(0.5, 2.0)))
+    if let Some(kind) = hovered {
+        let cur = kind_scales.get(&kind).copied().unwrap_or(1.0);
+        Some(ZoomTarget::Kind(kind, (cur + step).clamp(0.5, 2.0)))
     } else {
         Some(ZoomTarget::Global((current_global + step).clamp(0.5, 3.0)))
     }

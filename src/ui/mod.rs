@@ -175,8 +175,9 @@ pub struct ImpulseApp {
     last_saved_rack_sig: (usize, usize),
     // Timestamp of the most recent actual save (for interval throttling).
     last_save_time: std::time::Instant,
-    // Per-module UI scale factors (module_id → scale, default 1.0, range 0.5–2.0).
-    pub(crate) module_scales: std::collections::HashMap<u32, f32>,
+    // Per-kind UI scale factors (ModuleKind → scale, default 1.0, range 0.5–2.0).
+    // All modules of the same kind share a scale (e.g. all LlmAgent cards scale together).
+    pub(crate) module_scales: std::collections::HashMap<crate::state::ModuleKind, f32>,
     // Auto-listen: when enabled, trigger LISTEN automatically every N jam cycles.
     auto_listen: bool,
     // Counts jam cycles since the last auto-listen trigger.
@@ -352,9 +353,9 @@ impl ImpulseApp {
         self.history.push(snapshot);
     }
 
-    /// Effective scale for a module (1.0 if unset).
-    pub(crate) fn module_scale(&self, id: u32) -> f32 {
-        self.module_scales.get(&id).copied().unwrap_or(1.0)
+    /// Effective scale for a module kind (1.0 if unset).
+    pub(crate) fn kind_scale(&self, kind: crate::state::ModuleKind) -> f32 {
+        self.module_scales.get(&kind).copied().unwrap_or(1.0)
     }
 
     fn push_audio_params(&mut self) {
@@ -790,8 +791,8 @@ impl eframe::App for ImpulseApp {
         // Context-sensitive Ctrl+MW zoom: per-module over cards, global elsewhere.
         let cg = self.state.read().ui_prefs.ui_scale;
         match util::detect_ctrl_zoom(ctx, &self.module_scales, cg) {
-            Some(util::ZoomTarget::Module(id, s)) => {
-                self.module_scales.insert(id, s);
+            Some(util::ZoomTarget::Kind(kind, s)) => {
+                self.module_scales.insert(kind, s);
                 self.session_dirty = true;
             }
             Some(util::ZoomTarget::Global(s)) => {
@@ -960,7 +961,12 @@ impl eframe::App for ImpulseApp {
             )
             .exact_height(18.0)
             .show(ctx, |ui| {
-                scope_footer::draw_footer_status(ui, &self.midi_port, &self.dsp_load_buf);
+                scope_footer::draw_footer_status(
+                    ui,
+                    &self.midi_port,
+                    &self.dsp_load_buf,
+                    self.rack_flipped,
+                );
             });
 
         TopBottomPanel::bottom("piano")

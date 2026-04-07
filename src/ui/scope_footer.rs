@@ -104,8 +104,13 @@ pub fn draw_dsp_sparkline(ui: &mut egui::Ui, buf: &[f32]) {
     });
 }
 
-/// Draw modifier key indicators (Ctrl/Alt) + MIDI status in the footer strip.
-pub fn draw_footer_status(ui: &mut egui::Ui, midi_port: &Option<String>, dsp_buf: &[f32]) {
+/// Draw mode indicators (Zoom/Lock/Flip) + MIDI status in the footer strip.
+pub fn draw_footer_status(
+    ui: &mut egui::Ui,
+    midi_port: &Option<String>,
+    dsp_buf: &[f32],
+    rack_flipped: bool,
+) {
     ui.horizontal(|ui| {
         let ctrl = ui.input(|i| i.modifiers.ctrl);
         let alt = ui.input(|i| i.modifiers.alt);
@@ -136,6 +141,16 @@ pub fn draw_footer_status(ui: &mut egui::Ui, midi_port: &Option<String>, dsp_buf
             .sense(egui::Sense::hover()),
         )
         .on_hover_text("Alt + click knob: cycle lock mode (Free / User / Focus)");
+        ui.add(
+            egui::Label::new(
+                egui::RichText::new(if rack_flipped { "Tab:BACK" } else { "Tab" })
+                    .monospace()
+                    .size(8.0)
+                    .color(c(rack_flipped)),
+            )
+            .sense(egui::Sense::hover()),
+        )
+        .on_hover_text("Tab: flip rack (front knobs / back cables)");
         ui.separator();
         let midi_text = match midi_port {
             Some(port) => format!("MIDI: {}", port.trim()),
