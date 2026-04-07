@@ -783,11 +783,12 @@ impl eframe::App for ImpulseApp {
         if self.native_ppp <= 0.0 {
             self.native_ppp = ctx.pixels_per_point();
         }
-        // Apply persisted UI scale — only override when the user has changed it.
-        let ui_scale = self.state.read().ui_prefs.ui_scale;
-        if (ui_scale - 1.0).abs() > 0.005 {
-            ctx.set_pixels_per_point(self.native_ppp * ui_scale);
+        // Ctrl+MouseWheel zoom — adjusts ui_scale (0.5–3.0) → pixels_per_point.
+        if let Some(new_scale) = util::ctrl_scroll_zoom(ctx, self.state.read().ui_prefs.ui_scale) {
+            self.state.write().ui_prefs.ui_scale = new_scale;
+            self.session_dirty = true;
         }
+        ctx.set_pixels_per_point(self.native_ppp * self.state.read().ui_prefs.ui_scale);
 
         // Publish touch_mode + WASD flag so widgets can read them without signature changes.
         ctx.data_mut(|d| {
@@ -800,8 +801,6 @@ impl eframe::App for ImpulseApp {
 
         self.drain_llm_outputs();
         self.drain_midi_events();
-        // Phase 1 had sync_default_agent() here — removed in v0.6.0.
-        // Each agent now owns its own persona/heat/temp/state independently.
 
         // ── Jam timer: fire delayed jam cycle when the bar-count delay elapses ──
         if let Some((fire_at, pending_agent)) = self.jam_next_fire {
