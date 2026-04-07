@@ -48,6 +48,8 @@ fn title_fill(kind: ModuleKind) -> Color32 {
         | ModuleKind::FxDrive
         | ModuleKind::FxAutotune => 20,
         ModuleKind::LfoModule => 18,
+        ModuleKind::LlmAgent => 30,
+        ModuleKind::LlmConsole => 28,
     };
     Color32::from_gray(v)
 }
@@ -57,21 +59,36 @@ fn title_fill(kind: ModuleKind) -> Color32 {
 pub const PORT_RADIUS: f32 = 5.5;
 const PORT_HOLE: f32 = 2.2;
 
+/// Port radius for a given kind — Control ports are smaller.
+pub fn port_radius(kind: PortKind) -> f32 {
+    if kind == PortKind::Control {
+        3.5
+    } else {
+        PORT_RADIUS
+    }
+}
+
 /// Draw a jack port circle and return its centre.
 pub fn draw_port_circle(painter: &egui::Painter, center: Pos2, kind: PortKind, dir: PortDir) {
-    // Outer ring — bright grey
-    let ring_color = Color32::from_gray(100);
-    painter.circle_filled(center, PORT_RADIUS + 1.5, Color32::from_gray(12));
-    painter.circle_filled(center, PORT_RADIUS, ring_color);
-    // Inner fill — direction-coded lightness
-    let inner = match dir {
-        PortDir::Out => Color32::from_gray(60),
-        PortDir::In => Color32::from_gray(30),
+    let r = port_radius(kind);
+    let hole = if kind == PortKind::Control {
+        1.2
+    } else {
+        PORT_HOLE
     };
-    painter.circle_filled(center, PORT_RADIUS - 1.5, inner);
-    // Centre hole
-    painter.circle_filled(center, PORT_HOLE, Color32::from_gray(8));
-    // CV ports get a small bright dot in the hole
+    let ring_color = if kind == PortKind::Control {
+        Color32::from_gray(70)
+    } else {
+        Color32::from_gray(100)
+    };
+    painter.circle_filled(center, r + 1.5, Color32::from_gray(12));
+    painter.circle_filled(center, r, ring_color);
+    let inner = match dir {
+        PortDir::Out => Color32::from_gray(if kind == PortKind::Control { 45 } else { 60 }),
+        PortDir::In => Color32::from_gray(if kind == PortKind::Control { 25 } else { 30 }),
+    };
+    painter.circle_filled(center, r - 1.5, inner);
+    painter.circle_filled(center, hole, Color32::from_gray(8));
     if kind == PortKind::Cv {
         painter.circle_filled(center, 0.8, Color32::from_gray(180));
     }
@@ -99,11 +116,11 @@ pub struct CardResponse {
 /// `min_width` — minimum card width in pixels; `None` → fill available.
 pub fn module_card<R>(
     ui: &mut egui::Ui,
-    module_id: u32,
+    _module_id: u32,
     kind: ModuleKind,
     enabled: bool,
     min_width: Option<f32>,
-    ports: &mut Vec<PortPos>,
+    _ports: &mut Vec<PortPos>,
     content: impl FnOnce(&mut egui::Ui) -> R,
 ) -> (CardResponse, R) {
     let fill = Color32::from_gray(14);
@@ -177,131 +194,6 @@ pub fn module_card<R>(
                 Color32::from_gray(if enabled { 200 } else { 80 }),
             );
 
-            // ── Port circles on right side of title bar ───────────────────────
-            // Helper: register a port, draw its circle, and add a hover tooltip.
-            let port_hit_r = PORT_RADIUS + 4.0;
-            let port_size = Vec2::splat(port_hit_r * 2.0);
-
-            let audio_out_x = title_rect.right() - 12.0;
-            let audio_out_y = title_rect.center().y;
-            let audio_out_pos = Pos2::new(audio_out_x, audio_out_y);
-            draw_port_circle(&painter, audio_out_pos, PortKind::Audio, PortDir::Out);
-            ports.push(PortPos {
-                port: PortRef {
-                    module_id,
-                    dir: PortDir::Out,
-                    kind: PortKind::Audio,
-                    index: 0,
-                },
-                center: audio_out_pos,
-            });
-            ui.interact(
-                Rect::from_center_size(audio_out_pos, port_size),
-                ui.id().with("port_audio_out"),
-                Sense::hover(),
-            )
-            .on_hover_text("Audio Out — drag to connect");
-
-            // Audio in (FX and master output modules only)
-            let has_audio_in = matches!(
-                kind,
-                ModuleKind::FxReverb
-                    | ModuleKind::FxDelay
-                    | ModuleKind::FxChorus
-                    | ModuleKind::FxPhaser
-                    | ModuleKind::FxRingMod
-                    | ModuleKind::FxWaveshaper
-                    | ModuleKind::FxBitcrush
-                    | ModuleKind::FxEq
-                    | ModuleKind::FxCompressor
-                    | ModuleKind::FxTapeSat
-                    | ModuleKind::FxDrive
-                    | ModuleKind::FxAutotune
-                    | ModuleKind::MasterOutput
-            );
-            if has_audio_in {
-                let audio_in_x = audio_out_x - 18.0;
-                let audio_in_pos = Pos2::new(audio_in_x, audio_out_y);
-                draw_port_circle(&painter, audio_in_pos, PortKind::Audio, PortDir::In);
-                ports.push(PortPos {
-                    port: PortRef {
-                        module_id,
-                        dir: PortDir::In,
-                        kind: PortKind::Audio,
-                        index: 0,
-                    },
-                    center: audio_in_pos,
-                });
-                ui.interact(
-                    Rect::from_center_size(audio_in_pos, port_size),
-                    ui.id().with("port_audio_in"),
-                    Sense::hover(),
-                )
-                .on_hover_text("Audio In — drag to connect");
-            }
-
-            // CV out: LFO and StepSequencer both send CV/gate
-            let has_cv_out = matches!(kind, ModuleKind::LfoModule | ModuleKind::StepSequencer);
-            if has_cv_out {
-                let cv_out_x = audio_out_x - 18.0;
-                let cv_out_pos = Pos2::new(cv_out_x, audio_out_y);
-                draw_port_circle(&painter, cv_out_pos, PortKind::Cv, PortDir::Out);
-                ports.push(PortPos {
-                    port: PortRef {
-                        module_id,
-                        dir: PortDir::Out,
-                        kind: PortKind::Cv,
-                        index: 0,
-                    },
-                    center: cv_out_pos,
-                });
-                let hover = if kind == ModuleKind::StepSequencer {
-                    "Gate/Clock Out — connect to a voice CV In"
-                } else {
-                    "CV Out — drag to connect to a CV In"
-                };
-                ui.interact(
-                    Rect::from_center_size(cv_out_pos, port_size),
-                    ui.id().with("port_cv_out"),
-                    Sense::hover(),
-                )
-                .on_hover_text(hover);
-            }
-
-            // CV in: voice modules accept gate/clock from the sequencer
-            let has_cv_in = matches!(
-                kind,
-                ModuleKind::AcidBass
-                    | ModuleKind::DrumKit808
-                    | ModuleKind::DrumKit909
-                    | ModuleKind::HooverLead
-                    | ModuleKind::An1xVoice
-                    | ModuleKind::AmenSampler
-                    | ModuleKind::NoiseVoice
-                    | ModuleKind::EspeakNgTts
-                    | ModuleKind::CoquiTts
-            );
-            if has_cv_in {
-                let cv_in_x = audio_out_x - 18.0;
-                let cv_in_pos = Pos2::new(cv_in_x, audio_out_y);
-                draw_port_circle(&painter, cv_in_pos, PortKind::Cv, PortDir::In);
-                ports.push(PortPos {
-                    port: PortRef {
-                        module_id,
-                        dir: PortDir::In,
-                        kind: PortKind::Cv,
-                        index: 0,
-                    },
-                    center: cv_in_pos,
-                });
-                ui.interact(
-                    Rect::from_center_size(cv_in_pos, port_size),
-                    ui.id().with("port_cv_in"),
-                    Sense::hover(),
-                )
-                .on_hover_text("Gate In — connect from sequencer CV Out");
-            }
-
             // ── Enable toggle (small square LED left of label) ────────────────
             let led_rect = Rect::from_center_size(
                 Pos2::new(title_rect.left() + 4.0, title_rect.center().y),
@@ -352,7 +244,10 @@ pub fn module_card<R>(
                 Vec2::splat(10.0),
             );
             // Only show for removable modules
-            let is_core = matches!(kind, ModuleKind::StepSequencer | ModuleKind::MasterOutput);
+            let is_core = matches!(
+                kind,
+                ModuleKind::StepSequencer | ModuleKind::MasterOutput | ModuleKind::LlmConsole
+            );
             if !is_core {
                 let rm_resp = ui.interact(rm_rect, ui.id().with("rm"), Sense::click());
                 if rm_resp.clicked() {
@@ -380,7 +275,6 @@ pub fn module_card<R>(
                 ui.spacing_mut().item_spacing = Vec2::new(2.0, 2.0);
                 // Clamp content width to the card width (minus horizontal margin×2).
                 ui.set_max_width(card_w - 12.0);
-                // Center content horizontally so knobs/sliders don't cluster left.
                 ui.with_layout(egui::Layout::top_down(egui::Align::Center), |ui| {
                     if enabled {
                         content(ui)
@@ -404,6 +298,348 @@ pub fn module_card<R>(
         },
         inner.inner,
     )
+}
+
+// ─── Back-panel card ─────────────────────────────────────────────────────────
+// Simplified card for the rack's back panel: title bar + port strip, no content.
+
+/// Draw a back-panel module card showing only ports (inputs left, outputs right)
+/// and a faint module name watermark. Used when the rack is flipped.
+pub fn module_card_back(
+    ui: &mut egui::Ui,
+    module_id: u32,
+    kind: ModuleKind,
+    enabled: bool,
+    min_width: Option<f32>,
+    ports: &mut Vec<PortPos>,
+) -> CardResponse {
+    let fill = Color32::from_gray(14);
+    let title_bg = title_fill(kind);
+
+    if let Some(min_w) = min_width {
+        ui.set_min_width(min_w);
+    }
+
+    let frame = Frame::none()
+        .fill(fill)
+        .inner_margin(Margin::ZERO)
+        .rounding(Rounding::same(4.0))
+        .stroke(Stroke::new(1.0, Color32::from_gray(38)));
+
+    let mut toggle_clicked = false;
+    let mut remove_clicked = false;
+    let mut title_dragged = false;
+    let mut title_drag_released = false;
+
+    frame.show(ui, |ui| {
+        ui.with_layout(egui::Layout::top_down(egui::Align::LEFT), |ui| {
+            let card_w = min_width.unwrap_or_else(|| ui.available_width());
+            ui.set_min_width(card_w);
+            ui.set_max_width(card_w);
+
+            // ── Title bar (same as front, but NO port circles) ──────────────
+            let title_h = 22.0_f32;
+            let (title_rect, _) =
+                ui.allocate_exact_size(Vec2::new(card_w, title_h), Sense::hover());
+            let painter = ui.painter_at(title_rect);
+            painter.rect_filled(title_rect, Rounding::same(0.0), title_bg);
+            painter.line_segment(
+                [title_rect.left_top(), title_rect.right_top()],
+                Stroke::new(1.0, Color32::from_gray(60)),
+            );
+            painter.line_segment(
+                [title_rect.left_bottom(), title_rect.right_bottom()],
+                Stroke::new(1.0, Color32::from_gray(8)),
+            );
+            let label_pos = title_rect.left_center() + Vec2::new(10.0, 0.0);
+            painter.text(
+                label_pos + Vec2::new(0.0, 1.0),
+                egui::Align2::LEFT_CENTER,
+                kind.label(),
+                egui::FontId::monospace(9.5),
+                Color32::from_gray(8),
+            );
+            painter.text(
+                label_pos,
+                egui::Align2::LEFT_CENTER,
+                kind.label(),
+                egui::FontId::monospace(9.5),
+                Color32::from_gray(if enabled { 200 } else { 80 }),
+            );
+            // LED toggle
+            let led_rect = Rect::from_center_size(
+                Pos2::new(title_rect.left() + 4.0, title_rect.center().y),
+                Vec2::splat(5.0),
+            );
+            if ui
+                .interact(led_rect, ui.id().with("led"), Sense::click())
+                .clicked()
+            {
+                toggle_clicked = true;
+            }
+            painter.rect_filled(
+                led_rect,
+                Rounding::same(1.0),
+                Color32::from_gray(if enabled { 220 } else { 32 }),
+            );
+            // Drag zone
+            let drag_rect = Rect::from_min_max(
+                Pos2::new(title_rect.left() + 20.0, title_rect.min.y),
+                Pos2::new(title_rect.right() - 30.0, title_rect.max.y),
+            );
+            let drag_resp = ui.interact(drag_rect, ui.id().with("title_drag"), Sense::drag());
+            title_dragged = drag_resp.dragged();
+            title_drag_released = drag_resp.drag_stopped();
+            if drag_resp.hovered() || drag_resp.dragged() {
+                ui.ctx().set_cursor_icon(egui::CursorIcon::Grab);
+            }
+            // Remove button
+            let is_core = matches!(
+                kind,
+                ModuleKind::StepSequencer | ModuleKind::MasterOutput | ModuleKind::LlmConsole
+            );
+            if !is_core {
+                let rm_rect = Rect::from_center_size(
+                    Pos2::new(title_rect.right() - 12.0, title_rect.center().y),
+                    Vec2::splat(10.0),
+                );
+                let rm_resp = ui.interact(rm_rect, ui.id().with("rm"), Sense::click());
+                if rm_resp.clicked() {
+                    remove_clicked = true;
+                }
+                let rm_col = if rm_resp.hovered() {
+                    Color32::from_gray(200)
+                } else {
+                    Color32::from_gray(60)
+                };
+                painter.text(
+                    rm_rect.center(),
+                    egui::Align2::CENTER_CENTER,
+                    "×",
+                    egui::FontId::monospace(10.0),
+                    rm_col,
+                );
+            }
+
+            // ── Port strip (inputs left, outputs right) ─────────────────────
+            let strip_h = 52.0;
+            let (strip_rect, _) =
+                ui.allocate_exact_size(Vec2::new(card_w, strip_h), Sense::hover());
+            let sp = ui.painter_at(strip_rect);
+            // Faint module name watermark
+            sp.text(
+                strip_rect.center(),
+                egui::Align2::CENTER_CENTER,
+                kind.label(),
+                egui::FontId::monospace(11.0),
+                Color32::from_gray(28),
+            );
+
+            let port_hit_r = PORT_RADIUS + 4.0;
+            let port_size = Vec2::splat(port_hit_r * 2.0);
+            let left_x = strip_rect.left() + 16.0;
+            let right_x = strip_rect.right() - 16.0;
+            let label_font = egui::FontId::monospace(7.0);
+            let label_col = Color32::from_gray(60);
+
+            // Determine which ports this module has
+            let has_audio_in = matches!(
+                kind,
+                ModuleKind::FxReverb
+                    | ModuleKind::FxDelay
+                    | ModuleKind::FxChorus
+                    | ModuleKind::FxPhaser
+                    | ModuleKind::FxRingMod
+                    | ModuleKind::FxWaveshaper
+                    | ModuleKind::FxBitcrush
+                    | ModuleKind::FxEq
+                    | ModuleKind::FxCompressor
+                    | ModuleKind::FxTapeSat
+                    | ModuleKind::FxDrive
+                    | ModuleKind::FxAutotune
+                    | ModuleKind::MasterOutput
+            );
+            let has_cv_out = matches!(kind, ModuleKind::LfoModule | ModuleKind::StepSequencer);
+            let has_control_out = matches!(kind, ModuleKind::LlmAgent);
+            let has_control_in = !matches!(
+                kind,
+                ModuleKind::MasterOutput | ModuleKind::LlmAgent | ModuleKind::LlmConsole
+            );
+            let has_cv_in = matches!(
+                kind,
+                ModuleKind::AcidBass
+                    | ModuleKind::DrumKit808
+                    | ModuleKind::DrumKit909
+                    | ModuleKind::HooverLead
+                    | ModuleKind::An1xVoice
+                    | ModuleKind::AmenSampler
+                    | ModuleKind::NoiseVoice
+                    | ModuleKind::EspeakNgTts
+                    | ModuleKind::CoquiTts
+            );
+
+            // ── LEFT side: input ports ──────────────────────────────────────
+            let mut in_y = strip_rect.center().y - 10.0;
+            if has_audio_in {
+                let pos = Pos2::new(left_x, in_y);
+                draw_port_circle(&sp, pos, PortKind::Audio, PortDir::In);
+                ports.push(PortPos {
+                    port: PortRef {
+                        module_id,
+                        dir: PortDir::In,
+                        kind: PortKind::Audio,
+                        index: 0,
+                    },
+                    center: pos,
+                });
+                sp.text(
+                    pos + Vec2::new(10.0, 0.0),
+                    egui::Align2::LEFT_CENTER,
+                    "AUD",
+                    label_font.clone(),
+                    label_col,
+                );
+                ui.interact(
+                    Rect::from_center_size(pos, port_size),
+                    ui.id().with("bp_ain"),
+                    Sense::hover(),
+                )
+                .on_hover_text("Audio In");
+                in_y += 20.0;
+            }
+            if has_cv_in {
+                let pos = Pos2::new(left_x, in_y);
+                draw_port_circle(&sp, pos, PortKind::Cv, PortDir::In);
+                ports.push(PortPos {
+                    port: PortRef {
+                        module_id,
+                        dir: PortDir::In,
+                        kind: PortKind::Cv,
+                        index: 0,
+                    },
+                    center: pos,
+                });
+                sp.text(
+                    pos + Vec2::new(10.0, 0.0),
+                    egui::Align2::LEFT_CENTER,
+                    "CV",
+                    label_font.clone(),
+                    label_col,
+                );
+                ui.interact(
+                    Rect::from_center_size(pos, port_size),
+                    ui.id().with("bp_cin"),
+                    Sense::hover(),
+                )
+                .on_hover_text("CV / Gate In");
+                in_y += 20.0;
+            }
+            if has_control_in {
+                let pos = Pos2::new(left_x, in_y);
+                draw_port_circle(&sp, pos, PortKind::Control, PortDir::In);
+                ports.push(PortPos {
+                    port: PortRef {
+                        module_id,
+                        dir: PortDir::In,
+                        kind: PortKind::Control,
+                        index: 0,
+                    },
+                    center: pos,
+                });
+                sp.text(
+                    pos + Vec2::new(10.0, 0.0),
+                    egui::Align2::LEFT_CENTER,
+                    "CTL",
+                    label_font.clone(),
+                    label_col,
+                );
+            }
+
+            // ── RIGHT side: output ports ────────────────────────────────────
+            let mut out_y = strip_rect.center().y - 10.0;
+            {
+                let pos = Pos2::new(right_x, out_y);
+                draw_port_circle(&sp, pos, PortKind::Audio, PortDir::Out);
+                ports.push(PortPos {
+                    port: PortRef {
+                        module_id,
+                        dir: PortDir::Out,
+                        kind: PortKind::Audio,
+                        index: 0,
+                    },
+                    center: pos,
+                });
+                sp.text(
+                    pos + Vec2::new(-10.0, 0.0),
+                    egui::Align2::RIGHT_CENTER,
+                    "AUD",
+                    label_font.clone(),
+                    label_col,
+                );
+                ui.interact(
+                    Rect::from_center_size(pos, port_size),
+                    ui.id().with("bp_aout"),
+                    Sense::hover(),
+                )
+                .on_hover_text("Audio Out");
+                out_y += 20.0;
+            }
+            if has_cv_out {
+                let pos = Pos2::new(right_x, out_y);
+                draw_port_circle(&sp, pos, PortKind::Cv, PortDir::Out);
+                ports.push(PortPos {
+                    port: PortRef {
+                        module_id,
+                        dir: PortDir::Out,
+                        kind: PortKind::Cv,
+                        index: 0,
+                    },
+                    center: pos,
+                });
+                sp.text(
+                    pos + Vec2::new(-10.0, 0.0),
+                    egui::Align2::RIGHT_CENTER,
+                    "CV",
+                    label_font.clone(),
+                    label_col,
+                );
+                ui.interact(
+                    Rect::from_center_size(pos, port_size),
+                    ui.id().with("bp_cout"),
+                    Sense::hover(),
+                )
+                .on_hover_text("CV Out");
+                out_y += 20.0;
+            }
+            if has_control_out {
+                let pos = Pos2::new(right_x, out_y);
+                draw_port_circle(&sp, pos, PortKind::Control, PortDir::Out);
+                ports.push(PortPos {
+                    port: PortRef {
+                        module_id,
+                        dir: PortDir::Out,
+                        kind: PortKind::Control,
+                        index: 0,
+                    },
+                    center: pos,
+                });
+                sp.text(
+                    pos + Vec2::new(-10.0, 0.0),
+                    egui::Align2::RIGHT_CENTER,
+                    "CTL",
+                    label_font,
+                    label_col,
+                );
+            }
+        });
+    });
+
+    CardResponse {
+        toggle_clicked,
+        remove_clicked,
+        title_dragged,
+        title_drag_released,
+    }
 }
 
 // ─── Zone rail ────────────────────────────────────────────────────────────────

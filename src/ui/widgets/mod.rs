@@ -23,6 +23,16 @@ fn touch_mode(ui: &Ui) -> Option<ParamMode> {
         .flatten()
 }
 
+/// Check if a directional key is held, including WASD if `wasd_as_arrows` is set.
+/// Reads the flag from egui temp data (written by the update loop each frame).
+fn dir_key_down(ui: &Ui, arrow: egui::Key, wasd: egui::Key) -> bool {
+    let wasd_on = ui
+        .ctx()
+        .data(|d| d.get_temp::<bool>(egui::Id::new("wasd_as_arrows")))
+        .unwrap_or(false);
+    ui.input(|i| i.key_down(arrow) || (wasd_on && i.key_down(wasd)))
+}
+
 // ─── Control preferences ──────────────────────────────────────────────────────
 
 /// Combined rendering mode derived from `UiPrefs`.
@@ -140,6 +150,18 @@ pub fn knob(ui: &mut Ui, label: &str, value: &mut f32, mode: ParamMode, size: f3
         let delta = response.drag_delta();
         *value = (*value - delta.y * 0.005 + delta.x * 0.003).clamp(0.0, 1.0);
         changed = true;
+    }
+    // Arrow-key fine adjustment when hovered.
+    if response.hovered() && tmode.is_none() {
+        let step = 0.01;
+        if dir_key_down(ui, egui::Key::ArrowRight, egui::Key::D) {
+            *value = (*value + step).clamp(0.0, 1.0);
+            changed = true;
+        }
+        if dir_key_down(ui, egui::Key::ArrowLeft, egui::Key::A) {
+            *value = (*value - step).clamp(0.0, 1.0);
+            changed = true;
+        }
     }
 
     if ui.is_rect_visible(rect) {
@@ -418,6 +440,24 @@ pub use adsr::{adsr_display, decay_display};
 
 // ─── Glass Group ─────────────────────────────────────────────────────────────
 
+/// Compute the per-group width for an evenly-distributed row of `n` glass panels.
+/// Call this before the `ui.horizontal()` that contains the groups.
+///
+/// ```ignore
+/// let gw = widgets::even_group_width(ui, 3);
+/// ui.horizontal(|ui| {
+///     widgets::glass_group_fill(ui, gw, gw, |ui| { /* group 1 */ });
+///     widgets::glass_group_fill(ui, gw, gw, |ui| { /* group 2 */ });
+///     widgets::glass_group_fill(ui, gw, gw, |ui| { /* group 3 */ });
+/// });
+/// ```
+pub fn even_group_width(ui: &Ui, n: usize) -> f32 {
+    let spacing = ui.spacing().item_spacing.x;
+    let avail = ui.available_width();
+    let total_gaps = spacing * (n.saturating_sub(1)) as f32;
+    ((avail - total_gaps) / n.max(1) as f32).max(40.0)
+}
+
 /// Neumorphic smoked-glass group panel — dark fill, bright top edge, dark bottom edge.
 ///
 /// `max_width` constrains the group so it sizes to content rather than expanding to
@@ -428,15 +468,26 @@ pub fn glass_group<R>(
     max_width: f32,
     content: impl FnOnce(&mut Ui) -> R,
 ) -> egui::InnerResponse<R> {
+    glass_group_fill(ui, max_width, max_width, content)
+}
+
+/// Like `glass_group` but sets an exact width (both min and max), so the panel fills
+/// its allocated share when used in an evenly distributed row.
+/// Compute `width` with `even_group_width(ui, n_groups)` before the horizontal.
+pub fn glass_group_fill<R>(
+    ui: &mut Ui,
+    min_width: f32,
+    max_width: f32,
+    content: impl FnOnce(&mut Ui) -> R,
+) -> egui::InnerResponse<R> {
     let resp = egui::Frame::none()
         .fill(Color32::from_gray(15))
         .stroke(Stroke::new(1.0, Color32::from_gray(28)))
         .inner_margin(egui::Margin::same(6.0))
         .rounding(egui::Rounding::same(3.0))
         .show(ui, |ui| {
-            // Force vertical stacking regardless of parent layout, and cap the width
-            // so groups don't expand to fill the entire horizontal_wrapped row.
-            ui.set_max_width(max_width);
+            ui.set_min_width(min_width - 14.0); // subtract inner margin × 2
+            ui.set_max_width(max_width - 14.0);
             ui.with_layout(egui::Layout::top_down(egui::Align::Center), content)
                 .inner
         });
@@ -498,6 +549,18 @@ pub fn slider_glass(ui: &mut Ui, label: &str, value: &mut f32, mode: ParamMode) 
         {
             *value = ((pos.x - track.min.x) / track.width()).clamp(0.0, 1.0);
             changed = true;
+        }
+        // Arrow-key fine adjustment when hovered.
+        if response.hovered() {
+            let step = 0.01;
+            if ui.input(|i| i.key_down(egui::Key::ArrowRight)) {
+                *value = (*value + step).clamp(0.0, 1.0);
+                changed = true;
+            }
+            if ui.input(|i| i.key_down(egui::Key::ArrowLeft)) {
+                *value = (*value - step).clamp(0.0, 1.0);
+                changed = true;
+            }
         }
 
         if ui.is_rect_visible(track_rect) {
@@ -595,6 +658,18 @@ pub fn knob_chrome(
         let delta = response.drag_delta();
         *value = (*value - delta.y * 0.005 + delta.x * 0.003).clamp(0.0, 1.0);
         changed = true;
+    }
+    // Arrow-key fine adjustment when hovered.
+    if response.hovered() && tmode.is_none() {
+        let step = 0.01;
+        if dir_key_down(ui, egui::Key::ArrowRight, egui::Key::D) {
+            *value = (*value + step).clamp(0.0, 1.0);
+            changed = true;
+        }
+        if dir_key_down(ui, egui::Key::ArrowLeft, egui::Key::A) {
+            *value = (*value - step).clamp(0.0, 1.0);
+            changed = true;
+        }
     }
 
     if ui.is_rect_visible(rect) {

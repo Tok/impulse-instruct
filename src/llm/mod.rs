@@ -4,10 +4,11 @@
 // Communicates with UI via crossbeam channels.
 
 pub mod instructions;
-mod json_repair;
+pub mod json_repair;
 pub mod mock;
 pub mod prompt;
 pub mod styles;
+pub mod vram;
 pub use mock::mock_response;
 use mock::run_mock_loop;
 pub use prompt::build_system_prompt;
@@ -20,17 +21,16 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use crate::state::{AppState, ConversationMode, apply_llm_update};
-use json_repair::{repair_json, split_thinking};
-
-// ─── Messages ─────────────────────────────────────────────────────────────────
 
 #[derive(Clone, Debug)]
 pub enum LlmInput {
-    /// Run inference with a user prompt.
-    Infer { prompt: String, one_shot: bool },
-    /// Kill the current server and restart with a new model file.
+    Infer {
+        prompt: String,
+        one_shot: bool,
+        #[allow(dead_code)]
+        agent_id: Option<u32>,
+    },
     SwitchModel(String),
-    /// Kill and restart the server with the same model (clears KV cache / context window).
     ResetContext,
 }
 
@@ -38,10 +38,19 @@ pub enum LlmInput {
 pub enum LlmAction {
     SaveProject,
     SetHeat(f32),
+    SetStyle(String),
     SetPersona(String),
     SetConversationMode(String),
     SetJamBars(f32),
+    SpawnAgent {
+        persona: String,
+        scope: Vec<String>,
+        model: Option<String>,
+    },
+    DismissAgent,
 }
+
+pub use json_repair::extract_llm_actions;
 
 #[derive(Clone, Debug)]
 pub struct LlmOutput {
@@ -61,25 +70,27 @@ pub struct LlmOutput {
     pub before_state: Option<Box<AppState>>,
     /// Actions extracted from the JSON response (save_project, heat, settings changes).
     pub actions: Vec<LlmAction>,
+    /// Which agent produced this output (None = singleton/legacy).
+    pub agent_id: Option<u32>,
 }
-
-// ─── Sampling parameters (passed through to llama-server) ────────────────────
 
 #[derive(Clone, Debug)]
 pub struct SamplingParams {
-    pub heat: f32,              // maps to temperature via 0.1 + heat * 1.1
-    pub top_k: i32,             // 0 = disabled; Gemma default 64
-    pub top_p: f32,             // 0.0–1.0 nucleus; Gemma default 0.95
-    pub min_p: f32,             // 0.0–1.0 min prob floor; llama.cpp default 0.05
-    pub repeat_penalty: f32,    // 1.0 = off; >1.0 penalises repeats
+    pub heat: f32, // 0–1: jam mutation intensity (used for top_p widening and mock responses)
+    pub temperature: f32, // 0–2: inference sampling temperature sent directly to llama-server
+    pub top_k: i32, // 0 = disabled; Gemma default 64
+    pub top_p: f32, // 0.0–1.0 nucleus; Gemma default 0.95
+    pub min_p: f32, // 0.0–1.0 min prob floor; llama.cpp default 0.05
+    pub repeat_penalty: f32, // 1.0 = off; >1.0 penalises repeats
     pub frequency_penalty: f32, // 0.0 = off (OpenAI-compat)
-    pub seed: i64,              // -1 = random
+    pub seed: i64, // -1 = random
 }
 
 impl Default for SamplingParams {
     fn default() -> Self {
         Self {
             heat: 0.4,
+            temperature: 0.9,
             top_k: 64,
             top_p: 0.95,
             min_p: 0.05,
@@ -90,527 +101,12 @@ impl Default for SamplingParams {
     }
 }
 
-// ─── LLM backend trait (swappable) ────────────────────────────────────────────
-
 pub trait LlmBackend: Send {
     fn infer(&mut self, system: &str, user: &str, sampling: &SamplingParams) -> Result<LlmOutput>;
 }
 
-// ─── LLM server backend ───────────────────────────────────────────────────────
-// Spawns llama-server as a child process and talks to it over HTTP.
-// Falls back to mock if the server binary or model file is not found.
-//
-// Default model (Gemma 4 E4B): ./scripts/build-llama-server.sh
-//                               ./scripts/download-models.sh
-// Bonsai fallback (1-bit):      ./scripts/build-bonsai-server.sh
-//                               ./scripts/download-models.sh bonsai
-
-/// Candidate paths for the llama-server binary.
-/// Checked in order — PrismML fork first (required for Bonsai 1-bit),
-/// then official llama.cpp build (required for Gemma 4 / newer architectures),
-/// then $PATH fallback.
-const SERVER_BINARY_CANDIDATES: &[&str] = &[
-    ".llama-build/bin/llama-server", // PrismML fork — build-bonsai-server.sh
-    ".llama-official-build/bin/llama-server", // official llama.cpp — build-llama-server.sh
-    "llama-server",                  // $PATH
-];
-
-/// Fixed port for llama-server.  Using a fixed port prevents the process-leak
-/// problem that occurs with random ports: each restart now lands on the same
-/// address so the OS rejects a second bind, and we can detect + reuse an
-/// already-running healthy server.
-const LLAMA_PORT: u16 = 8766;
-
-/// Pick the right llama-server binary for the given model path.
-///
-/// - Bonsai 8B (Q1_0_g128): requires the PrismML fork
-///   (.llama-build/bin/llama-server)
-/// - All other standard GGUF models: prefer the official build
-///   (.llama-official-build/bin/llama-server) then fall back to PrismML fork
-///   (which handles Qwen3, Gemma 4, etc.) then $PATH
-fn pick_server_binary(model_path: &str) -> Option<&'static str> {
-    let is_bonsai = model_path.to_lowercase().contains("bonsai");
-
-    if is_bonsai {
-        // Bonsai requires the PrismML fork — try it first
-        SERVER_BINARY_CANDIDATES
-            .iter()
-            .copied()
-            .find(|&p| std::path::Path::new(p).exists() || which_in_path(p))
-    } else {
-        // For standard GGUF models prefer the official build, then PrismML fork, then $PATH.
-        // Official build handles newer architectures (Gemma 4, etc.) that the fork may not.
-        let preference: &[&str] = &[
-            ".llama-official-build/bin/llama-server",
-            ".llama-build/bin/llama-server",
-            "llama-server",
-        ];
-        preference
-            .iter()
-            .copied()
-            .find(|&p| std::path::Path::new(p).exists() || which_in_path(p))
-    }
-}
-
-pub struct LlamaServerBackend {
-    child: Option<std::process::Child>,
-    base_url: String,
-    live: bool,
-}
-
-/// Kill any leftover llama-server processes from a previous run.
-/// Called before spawning a new instance so stale processes don't compete for
-/// GPU memory or hold the fixed port.
-fn kill_leaked_servers(_bin_path: &str) {
-    #[cfg(unix)]
-    {
-        // Match on the full binary path to avoid killing unrelated processes.
-        let _ = std::process::Command::new("pkill")
-            .args(["-KILL", "-f", &format!("{} --model", _bin_path)])
-            .status();
-        // Brief pause so the OS reclaims the port before we try to bind it.
-        std::thread::sleep(std::time::Duration::from_millis(400));
-    }
-}
-
-impl LlamaServerBackend {
-    /// Spawn `llama-server` with the given model file.
-    /// Returns `live: false` (hard-fail path) if binary or model are missing —
-    /// the caller (`run_llm_loop`) decides whether to exit or continue in mock.
-    pub fn new(model_path: &str, ctx_size: usize) -> Self {
-        let bin = pick_server_binary(model_path);
-
-        let Some(bin) = bin else {
-            log::error!(
-                "llama-server binary not found — run ./scripts/build-llama-server.sh \
-                 (or ./scripts/build-bonsai-server.sh for the 1-bit Bonsai fork)."
-            );
-            return Self {
-                child: None,
-                base_url: String::new(),
-                live: false,
-            };
-        };
-
-        if !std::path::Path::new(model_path).exists() {
-            log::error!(
-                "Model not found at '{}' — run ./download-models.sh.",
-                model_path
-            );
-            return Self {
-                child: None,
-                base_url: String::new(),
-                live: false,
-            };
-        }
-
-        let port = LLAMA_PORT;
-        let base_url = format!("http://127.0.0.1:{}", port);
-
-        // Reuse an already-healthy server (e.g. user restarted the UI without
-        // killing the server) — avoids a 30–90 s reload of the model.
-        let health_url = format!("{}/health", base_url);
-        if ureq::get(&health_url)
-            .call()
-            .map(|r| r.status() == 200)
-            .unwrap_or(false)
-        {
-            log::info!(
-                "Reusing existing llama-server on port {} (already healthy)",
-                port
-            );
-            return Self {
-                child: None,
-                base_url,
-                live: true,
-            };
-        }
-
-        // Kill any leaked process from a previous run that holds the port.
-        kill_leaked_servers(bin);
-
-        // Log free VRAM so OOM failures are immediately diagnosable.
-        if let Ok(out) = std::process::Command::new("nvidia-smi")
-            .args([
-                "--query-gpu=memory.free,memory.total",
-                "--format=csv,noheader,nounits",
-            ])
-            .output()
-        {
-            let s = String::from_utf8_lossy(&out.stdout);
-            let parts: Vec<&str> = s.trim().splitn(2, ", ").collect();
-            if let (Some(free), Some(total)) = (parts.first(), parts.get(1)) {
-                log::info!("VRAM: {} MB free / {} MB total", free.trim(), total.trim());
-            }
-        }
-
-        log::info!(
-            "Spawning llama-server ({}) on port {} with model {}",
-            bin,
-            port,
-            model_path
-        );
-
-        // Redirect server stderr to a log file so crashes are diagnosable.
-        let stderr_log = std::fs::OpenOptions::new()
-            .create(true)
-            .write(true)
-            .truncate(true)
-            .open("llama-server.log")
-            .map(std::process::Stdio::from)
-            .unwrap_or(std::process::Stdio::null());
-
-        let child = std::process::Command::new(bin)
-            .args([
-                "--model",
-                model_path,
-                "--host",
-                "127.0.0.1",
-                "--port",
-                &port.to_string(),
-                "--ctx-size",
-                &ctx_size.to_string(),
-                "--n-gpu-layers",
-                "99",
-                "--flash-attn",
-                "on",             // ~30% faster on CUDA; auto-detected if unsupported
-                "--cache-type-k", // KV cache quantization: less VRAM, faster
-                "q8_0",
-                "--cache-type-v",
-                "q8_0",
-                "--log-disable", // reduce noise; we log our own status
-            ])
-            .stdout(std::process::Stdio::null())
-            .stderr(stderr_log)
-            .spawn();
-
-        match child {
-            Err(e) => {
-                log::error!(
-                    "Failed to spawn llama-server: {} — falling back to mock.",
-                    e
-                );
-                Self {
-                    child: None,
-                    base_url: String::new(),
-                    live: false,
-                }
-            }
-            Ok(child) => {
-                let mut backend = Self {
-                    child: Some(child),
-                    base_url,
-                    live: false,
-                };
-                backend.wait_for_ready();
-                backend
-            }
-        }
-    }
-
-    /// Connect to an already-running llama-server without spawning a new process.
-    #[allow(dead_code)] // used by llm-tests feature (llm_suite.rs)
-    /// Used by the LLM test suite when `LLAMA_SERVER_URL` is set.
-    pub fn connect(base_url: &str) -> Self {
-        let url = format!("{}/health", base_url);
-        let live = ureq::get(&url)
-            .call()
-            .map(|r| {
-                if r.status() != 200 {
-                    return false;
-                }
-                // Some llama-server builds return HTTP 200 while still loading the model
-                // (body: {"status":"loading model"}).  Only treat as live when body has "ok".
-                r.into_string()
-                    .map(|body| body.contains("\"ok\""))
-                    .unwrap_or(false)
-            })
-            .unwrap_or(false);
-        if !live {
-            log::warn!(
-                "LlamaServerBackend::connect: server at {} not ready (not ok)",
-                base_url
-            );
-        }
-        Self {
-            child: None,
-            base_url: base_url.to_string(),
-            live,
-        }
-    }
-
-    pub fn is_live(&self) -> bool {
-        self.live
-    }
-
-    /// Poll /health until the server is ready (up to ~120 s).
-    /// llama-server can take a while to load a large model into VRAM.
-    /// Bails out immediately if the child process exits (crashed).
-    fn wait_for_ready(&mut self) {
-        let url = format!("{}/health", self.base_url);
-        for attempt in 0..240 {
-            // Check if the child crashed before the health endpoint came up.
-            if let Some(ref mut child) = self.child {
-                match child.try_wait() {
-                    Ok(Some(status)) => {
-                        // Read the tail of llama-server.log for the actual error.
-                        let detail = std::fs::read_to_string("llama-server.log")
-                            .ok()
-                            .map(|s| {
-                                // Last non-empty line is usually the most useful.
-                                s.lines()
-                                    .rfind(|l| !l.trim().is_empty())
-                                    .unwrap_or("")
-                                    .trim()
-                                    .to_string()
-                            })
-                            .filter(|s| !s.is_empty());
-                        if let Some(msg) = detail {
-                            log::error!("llama-server exited early ({}): {}", status, msg);
-                        } else {
-                            log::error!(
-                                "llama-server exited early ({}) — see llama-server.log for details.",
-                                status
-                            );
-                        }
-                        self.child = None;
-                        return;
-                    }
-                    Ok(None) => {} // still running — continue polling
-                    Err(_) => {}
-                }
-            }
-            std::thread::sleep(std::time::Duration::from_millis(500));
-            match ureq::get(&url).call() {
-                Ok(resp) if resp.status() == 200 => {
-                    log::info!("LLM server ready after {}ms", (attempt + 1) * 500);
-                    self.live = true;
-                    return;
-                }
-                _ => {}
-            }
-        }
-        log::error!("LLM server did not become ready within 120s — falling back to mock.");
-    }
-}
-
-impl LlamaServerBackend {
-    /// Kill the running server immediately (both owned child and any leaked process on the
-    /// fixed port). Used before a model switch or context reset so `new()` always spawns
-    /// fresh rather than hitting the "already healthy" reuse path.
-    pub fn shutdown(&mut self) {
-        if let Some(mut child) = self.child.take() {
-            #[cfg(unix)]
-            {
-                let pid = child.id() as i32;
-                unsafe { libc::kill(pid, libc::SIGKILL) };
-            }
-            #[cfg(not(unix))]
-            let _ = child.kill();
-            let _ = child.wait();
-        }
-        // Also kill any detached server that was reused without owning the child PID.
-        // Try both builds — either could be holding the port.
-        for &bin in SERVER_BINARY_CANDIDATES {
-            if std::path::Path::new(bin).exists() || which_in_path(bin) {
-                kill_leaked_servers(bin);
-            }
-        }
-        self.live = false;
-        log::info!("LLM server stopped.");
-    }
-}
-
-impl Drop for LlamaServerBackend {
-    fn drop(&mut self) {
-        if let Some(mut child) = self.child.take() {
-            // llama-server can ignore SIGTERM while in CPU/GPU kernel work — use SIGKILL.
-            #[cfg(unix)]
-            {
-                let pid = child.id() as i32;
-                unsafe {
-                    libc::kill(pid, libc::SIGKILL);
-                }
-            }
-            #[cfg(not(unix))]
-            let _ = child.kill();
-            let _ = child.wait();
-            log::info!("LLM server stopped.");
-        }
-    }
-}
-
-/// Timeout for a single inference call.  8B models on CPU can take 60–90 s.
-const INFER_TIMEOUT_SECS: u64 = 180;
-
-impl LlmBackend for LlamaServerBackend {
-    fn infer(&mut self, system: &str, user: &str, sampling: &SamplingParams) -> Result<LlmOutput> {
-        if !self.live {
-            return mock_response(user, sampling.heat);
-        }
-
-        let url = format!("{}/v1/chat/completions", self.base_url);
-        // heat 0.0 → temp 0.1 (near-deterministic), heat 1.0 → temp 1.7 (chaotic)
-        let heat_f = (sampling.heat as f64).clamp(0.0, 1.0);
-        let temperature = 0.1_f64 + heat_f * 1.6;
-        // At high heat, widen top_p to allow more creative token choices.
-        let top_p =
-            (sampling.top_p as f64 + heat_f * (1.0 - sampling.top_p as f64) * 0.6).clamp(0.0, 1.0);
-
-        // json_object mode keeps the server honest about emitting valid JSON.
-        // max_tokens: full-reset responses (all voices + FX + LFO) can exceed 1200 tokens
-        // and truncate mid-JSON.  2400 gives headroom for the largest possible response.
-        let body = serde_json::json!({
-            "model": "local",
-            "messages": [
-                { "role": "system",  "content": system },
-                { "role": "user",    "content": user   }
-            ],
-            "temperature": temperature,
-            "top_k": sampling.top_k,
-            "top_p": top_p,
-            "min_p": sampling.min_p as f64,
-            "repeat_penalty": sampling.repeat_penalty as f64,
-            "frequency_penalty": sampling.frequency_penalty as f64,
-            "seed": sampling.seed,
-            "max_tokens": 2400,
-            "response_format": { "type": "json_object" }
-        });
-
-        let agent = ureq::AgentBuilder::new()
-            .timeout(std::time::Duration::from_secs(INFER_TIMEOUT_SECS))
-            .build();
-
-        let t0 = std::time::Instant::now();
-        let resp = agent
-            .post(&url)
-            .set("Content-Type", "application/json")
-            .send_json(&body)
-            .map_err(|e| match e {
-                ureq::Error::Status(code, response) => {
-                    let body = response.into_string().unwrap_or_default();
-                    anyhow::anyhow!("llama-server request failed: status code {code}\nbody: {body}")
-                }
-                other => anyhow::anyhow!("llama-server request failed: {other}"),
-            })?;
-
-        let elapsed = t0.elapsed().as_secs_f32();
-
-        let resp_text = resp
-            .into_string()
-            .map_err(|e| anyhow::anyhow!("failed to read server response body: {}", e))?;
-
-        let resp_json: serde_json::Value = serde_json::from_str(&resp_text)
-            .map_err(|e| anyhow::anyhow!("failed to parse server JSON: {e}\nraw: {resp_text}"))?;
-
-        let raw_content = resp_json["choices"][0]["message"]["content"]
-            .as_str()
-            .unwrap_or("")
-            .to_string();
-
-        if raw_content.is_empty() {
-            log::warn!("llama-server returned empty content; full response: {resp_text}");
-        }
-
-        // Strip <think>…</think> if the model emits it (Qwen3-style), otherwise pass through.
-        let (tag_thinking, json_text) = split_thinking(&raw_content);
-
-        let usage = &resp_json["usage"];
-        let prompt_tok = usage["prompt_tokens"].as_u64().unwrap_or(0) as usize;
-        let compl_tok = usage["completion_tokens"].as_u64().unwrap_or(0) as usize;
-        let tps = if elapsed > 0.0 {
-            compl_tok as f32 / elapsed
-        } else {
-            0.0
-        };
-        let ctx_used = usage["total_tokens"].as_u64().unwrap_or(0) as usize;
-
-        let mut param_update = repair_json(json_text.trim()).ok_or_else(|| {
-            anyhow::anyhow!("JSON parse and repair both failed\nraw: {json_text}")
-        })?;
-
-        // Extract _thinking from the JSON itself (our prompted reasoning field).
-        // Prefer tag-based thinking if the model produced it; fall back to _thinking field.
-        let thinking = tag_thinking.or_else(|| {
-            param_update
-                .as_object_mut()
-                .and_then(|o| o.remove("_thinking"))
-                .and_then(|v| v.as_str().map(|s| s.to_string()))
-                .filter(|s| !s.is_empty())
-        });
-
-        if let Some(ref t) = thinking {
-            log::debug!(
-                "LLM thinking ({} chars): {}",
-                t.len(),
-                &t[..t.len().min(120)]
-            );
-        }
-
-        // Extract mc_line — crowd-facing shout for MC/DJ mode TTS.
-        let mc_line = param_update
-            .as_object_mut()
-            .and_then(|o| o.remove("mc_line"))
-            .and_then(|v| v.as_str().map(|s| s.to_string()))
-            .filter(|s| !s.is_empty());
-
-        // Extract actions from "save_project" and "settings" keys.
-        let mut actions = Vec::new();
-        if let Some(obj) = param_update.as_object_mut() {
-            if obj
-                .remove("save_project")
-                .and_then(|v| v.as_bool())
-                .unwrap_or(false)
-            {
-                actions.push(LlmAction::SaveProject);
-            }
-            if let Some(s) = obj.get("settings").and_then(|v| v.as_object()).cloned() {
-                if let Some(h) = s.get("heat").and_then(|v| v.as_f64()) {
-                    actions.push(LlmAction::SetHeat((h as f32).clamp(0.0, 1.0)));
-                }
-                if let Some(p) = s.get("persona").and_then(|v| v.as_str()) {
-                    actions.push(LlmAction::SetPersona(p.to_string()));
-                }
-                if let Some(m) = s.get("conversation_mode").and_then(|v| v.as_str()) {
-                    actions.push(LlmAction::SetConversationMode(m.to_string()));
-                }
-                if let Some(j) = s.get("jam_bars").and_then(|v| v.as_f64()) {
-                    actions.push(LlmAction::SetJamBars((j as f32).max(0.0)));
-                }
-            }
-            // Don't pass "settings" to apply_llm_update - remove it
-            obj.remove("settings");
-        }
-
-        Ok(LlmOutput {
-            text: json_text,
-            param_update: Some(param_update),
-            tokens_per_sec: tps,
-            prompt_tokens: prompt_tok,
-            completion_tokens: compl_tok,
-            context_used: ctx_used,
-            is_jam: false,
-            thinking,
-            mc_line,
-            before_state: None, // set by run_llm_loop after apply_llm_update
-            actions,
-        })
-    }
-}
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-/// Best-effort JSON repair for truncated or structurally confused LLM output.
-/// 1. Try parsing as-is.
-/// 2. Close unclosed brackets and retry.
-/// 3. Sanitize the resulting structure (lift misplaced keys, remove nested fx loops).
-fn which_in_path(name: &str) -> bool {
-    std::env::var_os("PATH")
-        .map(|paths| std::env::split_paths(&paths).any(|dir| dir.join(name).exists()))
-        .unwrap_or(false)
-}
-
-// ─── LLM thread loop ──────────────────────────────────────────────────────────
+pub mod server_pool;
+pub use server_pool::{LLAMA_BASE_PORT, LlamaServerBackend, LlamaServerPool};
 
 pub fn run_llm_loop(
     state: Arc<RwLock<AppState>>,
@@ -638,6 +134,7 @@ pub fn run_llm_loop(
             mc_line: None,
             before_state: None,
             actions: vec![],
+            agent_id: None,
         });
         run_mock_loop(state, input_rx, output_tx);
         return;
@@ -645,9 +142,10 @@ pub fn run_llm_loop(
 
     let model_path = state.read().llm.model_path.clone();
     let ctx_size = state.read().llm.context_max;
-    let mut backend = LlamaServerBackend::new(&model_path, ctx_size);
+    let mut pool = LlamaServerPool::new(LLAMA_BASE_PORT, ctx_size);
+    let _ = pool.acquire(&model_path);
 
-    if !backend.is_live() {
+    if !pool.is_any_live() {
         {
             let mut s = state.write();
             s.llm.is_mock = true;
@@ -675,6 +173,7 @@ pub fn run_llm_loop(
             mc_line: None,
             before_state: None,
             actions: vec![],
+            agent_id: None,
         });
         run_mock_loop(state, input_rx, output_tx);
         return;
@@ -698,29 +197,28 @@ pub fn run_llm_loop(
         mc_line: None,
         before_state: None,
         actions: vec![],
+        agent_id: None,
     });
 
     while let Ok(input) = input_rx.recv() {
         match &input {
             LlmInput::SwitchModel(new_path) => {
                 let new_path = new_path.clone();
-                log::info!("LLM: switching model -> {}", new_path);
-                // Kill the running server BEFORE calling new() so the health-check
-                // reuse path in new() doesn't silently keep the old model loaded.
-                backend.shutdown();
+                let old_path = state.read().llm.model_path.clone();
+                log::info!("LLM: switching global model {} -> {}", old_path, new_path);
+                pool.release(&old_path);
                 state.write().llm.model_path = new_path.clone();
                 state.write().llm.context_used = 0;
-                let ctx_size = state.read().llm.context_max;
-                backend = LlamaServerBackend::new(&new_path, ctx_size);
+                let live = pool.acquire(&new_path).is_ok() && pool.is_any_live();
                 {
                     let mut s = state.write();
-                    s.llm.is_mock = !backend.is_live();
+                    s.llm.is_mock = !live;
                     s.llm.llm_initializing = false;
                 }
-                if backend.is_live() {
+                if live {
                     crate::state::save_model_setting(&new_path);
                 }
-                let status = if backend.is_live() {
+                let status = if live {
                     format!("[ Model loaded: {} ]", new_path)
                 } else {
                     format!("[ Model not found: {} — check path and restart ]", new_path)
@@ -738,19 +236,19 @@ pub fn run_llm_loop(
                     mc_line: None,
                     before_state: None,
                     actions: vec![],
+                    agent_id: None,
                 });
                 continue;
             }
             LlmInput::ResetContext => {
                 let model_path = state.read().llm.model_path.clone();
                 log::info!("LLM: resetting context (restart with same model)");
-                backend.shutdown();
+                pool.shutdown_model(&model_path);
                 state.write().llm.context_used = 0;
-                let ctx_size = state.read().llm.context_max;
-                backend = LlamaServerBackend::new(&model_path, ctx_size);
+                let live = pool.acquire(&model_path).is_ok() && pool.is_any_live();
                 {
                     let mut s = state.write();
-                    s.llm.is_mock = !backend.is_live();
+                    s.llm.is_mock = !live;
                     s.llm.llm_initializing = false;
                 }
                 let _ = output_tx.try_send(LlmOutput {
@@ -765,6 +263,7 @@ pub fn run_llm_loop(
                     mc_line: None,
                     before_state: None,
                     actions: vec![],
+                    agent_id: None,
                 });
                 continue;
             }
@@ -774,6 +273,7 @@ pub fn run_llm_loop(
         let LlmInput::Infer {
             ref prompt,
             one_shot,
+            agent_id,
         } = input
         else {
             continue;
@@ -785,17 +285,133 @@ pub fn run_llm_loop(
             log::debug!("YOU (jam) -> {}", prompt);
         }
 
-        let system = build_system_prompt(&state.read().clone());
+        // Look up agent state; fall back to singleton for agent_id=None or not found.
+        // Also capture per-agent overrides for the system prompt.
+        #[allow(clippy::type_complexity)]
+        let (
+            agent_heat,
+            agent_temp,
+            agent_scope,
+            agent_enable_thinking,
+            agent_model,
+            agent_conv_mode,
+            agent_style,
+            agent_custom_style,
+            agent_instructions,
+            agent_persona,
+            agent_prompt_override,
+        ) = {
+            let s = state.read();
+            if let Some(aid) = agent_id {
+                if let Some(a) = s.llm_agents.iter().find(|a| a.id == aid) {
+                    let model = a
+                        .model_path
+                        .clone()
+                        .unwrap_or_else(|| s.llm.model_path.clone());
+                    (
+                        a.heat,
+                        a.temperature,
+                        crate::state::scope_from_control_cables(&s.rack, aid),
+                        a.enable_thinking,
+                        model,
+                        Some(a.conversation_mode.clone()),
+                        Some(a.active_style.clone()),
+                        Some(a.custom_style_text.clone()),
+                        Some(a.user_instructions.clone()),
+                        Some(a.persona_name.clone()),
+                        Some(a.system_prompt_override.clone()),
+                    )
+                } else {
+                    (
+                        s.llm.heat,
+                        s.llm.temperature,
+                        vec![],
+                        s.llm.enable_thinking,
+                        s.llm.model_path.clone(),
+                        None,
+                        None,
+                        None,
+                        None,
+                        None,
+                        None,
+                    )
+                }
+            } else {
+                (
+                    s.llm.heat,
+                    s.llm.temperature,
+                    vec![],
+                    s.llm.enable_thinking,
+                    s.llm.model_path.clone(),
+                    None,
+                    None,
+                    None,
+                    None,
+                    None,
+                    None,
+                )
+            }
+        };
+
+        // Ensure the agent's model has a server in the pool.
+        let infer_port = match pool.acquire(&agent_model) {
+            Ok(port) => port,
+            Err(e) => {
+                log::error!("Pool: cannot acquire server for {}: {}", agent_model, e);
+                // Clear inferring state and skip this request.
+                let mut s = state.write();
+                s.llm.is_inferring = false;
+                if let Some(aid) = agent_id
+                    && let Some(a) = s.llm_agents.iter_mut().find(|a| a.id == aid)
+                {
+                    a.is_inferring = false;
+                }
+                continue;
+            }
+        };
+
+        // Build system prompt with per-agent overrides patched in.
+        let system = {
+            let mut snap = state.read().clone();
+            if let Some(mode) = agent_conv_mode {
+                snap.llm.conversation_mode = mode;
+            }
+            if let Some(style) = agent_style {
+                snap.llm.active_style = style;
+            }
+            if let Some(custom) = agent_custom_style {
+                snap.llm.custom_style_text = custom;
+            }
+            if let Some(instr) = agent_instructions {
+                snap.llm.user_instructions = instr;
+            }
+            if let Some(persona) = agent_persona.clone() {
+                snap.llm.persona_name = persona;
+            }
+            if let Some(override_text) = agent_prompt_override
+                && !override_text.is_empty()
+            {
+                snap.llm.system_prompt_override = override_text;
+            }
+            snap.llm.heat = agent_heat;
+            build_system_prompt(&snap, &agent_scope)
+        };
         {
             let mut s = state.write();
             s.llm.is_inferring = true;
             s.llm.last_prompt = prompt.clone();
+            if let Some(aid) = agent_id
+                && let Some(a) = s.llm_agents.iter_mut().find(|a| a.id == aid)
+            {
+                a.is_inferring = true;
+            }
         }
 
         let sampling = {
             let s = state.read();
             SamplingParams {
-                heat: s.llm.heat,
+                heat: agent_heat,
+                temperature: agent_temp,
                 top_k: s.llm.top_k,
                 top_p: s.llm.top_p,
                 min_p: s.llm.min_p,
@@ -804,7 +420,7 @@ pub fn run_llm_loop(
                 seed: s.llm.seed,
             }
         };
-        let enable_thinking = state.read().llm.enable_thinking;
+        let enable_thinking = agent_enable_thinking;
         let think_prompt = format!(
             "{} {}",
             prompt,
@@ -815,7 +431,7 @@ pub fn run_llm_loop(
             }
         );
         let t0 = Instant::now();
-        let result = backend.infer(&system, &think_prompt, &sampling);
+        let result = pool.infer(infer_port, &system, &think_prompt, &sampling);
         let elapsed = t0.elapsed().as_secs_f32();
 
         match result {
@@ -829,7 +445,7 @@ pub fn run_llm_loop(
                 let before_state = if let Some(ref update) = output.param_update {
                     let current = state.read().clone();
                     let before = Box::new(current.clone());
-                    let next = apply_llm_update(current, update);
+                    let next = apply_llm_update(current, update, &agent_scope);
                     *state.write() = next;
                     Some(before)
                 } else {
@@ -859,15 +475,14 @@ pub fn run_llm_loop(
                     if s.llm.auto_compact && pct >= 0.85 {
                         drop(s);
                         log::info!(
-                            "LLM: context {:.0}% full — auto-compact: restarting server",
-                            pct * 100.0
+                            "LLM: context {:.0}% full — auto-compact: restarting server for {}",
+                            pct * 100.0,
+                            agent_model,
                         );
-                        let model_path = state.read().llm.model_path.clone();
-                        let ctx_size = state.read().llm.context_max;
-                        backend.shutdown();
+                        pool.shutdown_model(&agent_model);
                         state.write().llm.context_used = 0;
-                        backend = LlamaServerBackend::new(&model_path, ctx_size);
-                        state.write().llm.is_mock = !backend.is_live();
+                        let live = pool.acquire(&agent_model).is_ok() && pool.is_any_live();
+                        state.write().llm.is_mock = !live;
                         let _ = output_tx.try_send(LlmOutput {
                             text: "[ Context auto-compacted ]".to_string(),
                             param_update: None,
@@ -880,6 +495,7 @@ pub fn run_llm_loop(
                             mc_line: None,
                             before_state: None,
                             actions: vec![],
+                            agent_id: None,
                         });
                     }
                 }
@@ -889,10 +505,10 @@ pub fn run_llm_loop(
                         .get("_comment")
                         .and_then(|v| v.as_str())
                         .unwrap_or(&output.text);
-                    let persona = state.read().llm.persona_name.clone();
-                    if one_shot {
-                        log::info!("{} -> {}", persona, comment);
-                    } else {
+                    let persona = agent_persona
+                        .clone()
+                        .unwrap_or_else(|| state.read().llm.persona_name.clone());
+                    if !one_shot {
                         log::debug!("{} (jam) -> {}", persona, comment);
                     }
 
@@ -948,6 +564,17 @@ pub fn run_llm_loop(
                 let mut output = output;
                 output.is_jam = !one_shot;
                 output.before_state = before_state;
+                output.agent_id = agent_id;
+                // Write stats back to agent
+                if let Some(aid) = agent_id {
+                    let mut s = state.write();
+                    if let Some(a) = s.llm_agents.iter_mut().find(|a| a.id == aid) {
+                        a.is_inferring = false;
+                        a.tokens_per_sec = output.tokens_per_sec;
+                        a.last_response = output.text.clone();
+                        a.jam_cycle_count = a.jam_cycle_count.saturating_add(1);
+                    }
+                }
                 let _ = output_tx.try_send(output);
                 log::debug!("inference complete in {:.2}s", elapsed);
             }
@@ -956,6 +583,11 @@ pub fn run_llm_loop(
                 let mut s = state.write();
                 s.llm.is_inferring = false;
                 s.llm.last_response = format!("Error: {}", e);
+                if let Some(aid) = agent_id
+                    && let Some(a) = s.llm_agents.iter_mut().find(|a| a.id == aid)
+                {
+                    a.is_inferring = false;
+                }
             }
         }
 
@@ -975,6 +607,7 @@ pub fn run_llm_loop(
                 mc_line: None,
                 before_state: None,
                 actions: vec![],
+                agent_id: None,
             });
         }
     }

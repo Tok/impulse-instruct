@@ -7,28 +7,28 @@ mod state_tests {
     fn apply_llm_update_sets_cutoff() {
         let state = AppState::default();
         let update = serde_json::json!({ "bass": { "cutoff": 0.9 } });
-        let next = apply_llm_update(state, &update);
-        assert!((next.bass.cutoff - 0.9).abs() < 1e-4);
+        let next = apply_llm_update(state, &update, &[]);
+        assert!((next.bass_voices[0].synth.cutoff - 0.9).abs() < 1e-4);
     }
 
     #[test]
     fn apply_llm_update_clamps_to_unit_range() {
         let state = AppState::default();
         let update = serde_json::json!({ "bass": { "cutoff": 1.5 } });
-        let next = apply_llm_update(state, &update);
-        assert!(next.bass.cutoff <= 1.0);
+        let next = apply_llm_update(state, &update, &[]);
+        assert!(next.bass_voices[0].synth.cutoff <= 1.0);
     }
 
     #[test]
     fn locked_param_not_overwritten_by_llm() {
         let state = AppState::default();
-        let original_cutoff = state.bass.cutoff;
+        let original_cutoff = state.bass_voices[0].synth.cutoff;
         let state = lock_param(state, "bass.cutoff");
 
         let update = serde_json::json!({ "bass": { "cutoff": 0.99 } });
-        let next = apply_llm_update(state, &update);
+        let next = apply_llm_update(state, &update, &[]);
         assert_eq!(
-            next.bass.cutoff, original_cutoff,
+            next.bass_voices[0].synth.cutoff, original_cutoff,
             "locked param should be untouched"
         );
     }
@@ -51,7 +51,7 @@ mod state_tests {
         // BPM is locked by default — must explicitly unlock first
         let state = crate::state::unlock_param(AppState::default(), "sequencer.bpm");
         let update = serde_json::json!({ "sequencer": { "bpm": 175.0 } });
-        let next = apply_llm_update(state, &update);
+        let next = apply_llm_update(state, &update, &[]);
         assert!((next.sequencer.bpm - 175.0).abs() < 0.01);
     }
 
@@ -59,7 +59,7 @@ mod state_tests {
     fn bpm_clamped_to_valid_range() {
         let state = AppState::default();
         let update = serde_json::json!({ "sequencer": { "bpm": 999.0 } });
-        let next = apply_llm_update(state, &update);
+        let next = apply_llm_update(state, &update, &[]);
         assert!(next.sequencer.bpm <= 250.0, "bpm should be clamped");
     }
 }
@@ -284,10 +284,10 @@ mod transition_tests {
     fn apply_reese_preset_sets_supersaw_and_highpass() {
         let state = apply_reese_preset(AppState::default());
         use crate::state::{FilterMode, Waveform};
-        assert_eq!(state.bass.waveform, Waveform::Supersaw);
-        assert_eq!(state.bass.supersaw_voices, 2);
-        assert_eq!(state.bass.filter_mode, FilterMode::Highpass);
-        assert!(state.bass.sub_osc_level > 0.0);
+        assert_eq!(state.bass_voices[0].synth.waveform, Waveform::Supersaw);
+        assert_eq!(state.bass_voices[0].synth.supersaw_voices, 2);
+        assert_eq!(state.bass_voices[0].synth.filter_mode, FilterMode::Highpass);
+        assert!(state.bass_voices[0].synth.sub_osc_level > 0.0);
     }
 
     #[test]
@@ -736,7 +736,7 @@ mod transition_coverage_tests {
     fn apply_reese_preset_sets_waveform() {
         let s = apply_reese_preset(AppState::default());
         assert_eq!(
-            s.bass.waveform,
+            s.bass_voices[0].synth.waveform,
             Waveform::Supersaw,
             "Reese preset must use supersaw"
         );

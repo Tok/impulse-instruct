@@ -23,82 +23,111 @@ pub(super) fn unlocked_f32(
         .unwrap_or(current)
 }
 
-/// Apply bass synth fields from an LLM JSON update object.
+/// Apply bass synth fields from an LLM JSON update object for a given voice index.
+/// The lock path prefix is "bass" for voice 0 (legacy compat) or "bass_voices.N" for N>0.
 pub(super) fn apply_bass_update(
     s: &mut AppState,
     b: &serde_json::Map<String, serde_json::Value>,
     locked: &HashSet<String>,
+    voice_idx: usize,
 ) {
-    s.bass.cutoff = unlocked_f32(s.bass.cutoff, b, "cutoff", "bass.cutoff", locked);
-    s.bass.resonance = unlocked_f32(s.bass.resonance, b, "resonance", "bass.resonance", locked);
-    s.bass.env_mod = unlocked_f32(s.bass.env_mod, b, "env_mod", "bass.env_mod", locked);
-    s.bass.decay = unlocked_f32(s.bass.decay, b, "decay", "bass.decay", locked);
-    s.bass.accent_level = unlocked_f32(
-        s.bass.accent_level,
-        b,
-        "accent_level",
-        "bass.accent_level",
-        locked,
-    );
-    s.bass.distortion = unlocked_f32(
-        s.bass.distortion,
-        b,
-        "distortion",
-        "bass.distortion",
-        locked,
-    );
-    s.bass.volume = unlocked_f32(s.bass.volume, b, "volume", "bass.volume", locked);
-    s.bass.supersaw_detune = unlocked_f32(
-        s.bass.supersaw_detune,
-        b,
-        "supersaw_detune",
-        "bass.supersaw_detune",
-        locked,
-    );
-    if let Some(v) = b.get("supersaw_voices").and_then(|v| v.as_u64())
-        && !locked.contains("bass.supersaw_voices")
-    {
-        s.bass.supersaw_voices = (v as u8).clamp(2, 7);
+    if voice_idx >= s.bass_voices.len() {
+        return;
     }
-    if !locked.contains("bass.sub_osc_level")
+    // Use "bass" prefix for voice 0 (legacy compat), "bass_voices.N" for others
+    let prefix = if voice_idx == 0 {
+        "bass".to_string()
+    } else {
+        format!("bass_voices.{}", voice_idx)
+    };
+    let bp = format!("{}.cutoff", prefix);
+    let v = s.bass_voices[voice_idx].synth.cutoff;
+    s.bass_voices[voice_idx].synth.cutoff = unlocked_f32(v, b, "cutoff", &bp, locked);
+    let bp = format!("{}.resonance", prefix);
+    let v = s.bass_voices[voice_idx].synth.resonance;
+    s.bass_voices[voice_idx].synth.resonance = unlocked_f32(v, b, "resonance", &bp, locked);
+    let bp = format!("{}.env_mod", prefix);
+    let v = s.bass_voices[voice_idx].synth.env_mod;
+    s.bass_voices[voice_idx].synth.env_mod = unlocked_f32(v, b, "env_mod", &bp, locked);
+    let bp = format!("{}.decay", prefix);
+    let v = s.bass_voices[voice_idx].synth.decay;
+    s.bass_voices[voice_idx].synth.decay = unlocked_f32(v, b, "decay", &bp, locked);
+    let bp = format!("{}.accent_level", prefix);
+    let v = s.bass_voices[voice_idx].synth.accent_level;
+    s.bass_voices[voice_idx].synth.accent_level = unlocked_f32(v, b, "accent_level", &bp, locked);
+    let bp = format!("{}.distortion", prefix);
+    let v = s.bass_voices[voice_idx].synth.distortion;
+    s.bass_voices[voice_idx].synth.distortion = unlocked_f32(v, b, "distortion", &bp, locked);
+    let bp = format!("{}.volume", prefix);
+    let v = s.bass_voices[voice_idx].synth.volume;
+    s.bass_voices[voice_idx].synth.volume = unlocked_f32(v, b, "volume", &bp, locked);
+    let bp = format!("{}.supersaw_detune", prefix);
+    let v = s.bass_voices[voice_idx].synth.supersaw_detune;
+    s.bass_voices[voice_idx].synth.supersaw_detune =
+        unlocked_f32(v, b, "supersaw_detune", &bp, locked);
+    let bp = format!("{}.supersaw_voices", prefix);
+    if let Some(v) = b.get("supersaw_voices").and_then(|v| v.as_u64())
+        && !locked.contains(&bp)
+    {
+        s.bass_voices[voice_idx].synth.supersaw_voices = (v as u8).clamp(2, 7);
+    }
+    let bp = format!("{}.sub_osc_level", prefix);
+    if !locked.contains(&bp)
         && let Some(v) = b.get("sub_osc_level").and_then(|v| v.as_f64())
     {
-        s.bass.sub_osc_level = (v as f32).clamp(0.0, 1.0);
+        s.bass_voices[voice_idx].synth.sub_osc_level = (v as f32).clamp(0.0, 1.0);
     }
-    if !locked.contains("bass.portamento_time")
+    let bp = format!("{}.portamento_time", prefix);
+    if !locked.contains(&bp)
         && let Some(v) = b.get("portamento_time").and_then(|v| v.as_f64())
     {
-        s.bass.portamento_time = (v as f32).clamp(0.0, 1.0);
+        s.bass_voices[voice_idx].synth.portamento_time = (v as f32).clamp(0.0, 1.0);
     }
-    if !locked.contains("bass.noise_mix")
+    let bp = format!("{}.noise_mix", prefix);
+    if !locked.contains(&bp)
         && let Some(v) = b.get("noise_mix").and_then(|v| v.as_f64())
     {
-        s.bass.noise_mix = (v as f32).clamp(0.0, 1.0);
+        s.bass_voices[voice_idx].synth.noise_mix = (v as f32).clamp(0.0, 1.0);
     }
-    if !locked.contains("bass.osc_detune")
+    let bp = format!("{}.osc_detune", prefix);
+    if !locked.contains(&bp)
         && let Some(v) = b.get("osc_detune").and_then(|v| v.as_f64())
     {
-        s.bass.osc_detune = (v as f32).clamp(-1.0, 1.0);
+        s.bass_voices[voice_idx].synth.osc_detune = (v as f32).clamp(-1.0, 1.0);
     }
-    s.bass.fm_ratio = unlocked_f32(s.bass.fm_ratio, b, "fm_ratio", "bass.fm_ratio", locked);
-    s.bass.fm_depth = unlocked_f32(s.bass.fm_depth, b, "fm_depth", "bass.fm_depth", locked);
-    if !locked.contains("bass.waveform")
+    let bp = format!("{}.fm_ratio", prefix);
+    let v = s.bass_voices[voice_idx].synth.fm_ratio;
+    s.bass_voices[voice_idx].synth.fm_ratio = unlocked_f32(v, b, "fm_ratio", &bp, locked);
+    let bp = format!("{}.fm_depth", prefix);
+    let v = s.bass_voices[voice_idx].synth.fm_depth;
+    s.bass_voices[voice_idx].synth.fm_depth = unlocked_f32(v, b, "fm_depth", &bp, locked);
+    let bp = format!("{}.waveform", prefix);
+    if !locked.contains(&bp)
         && let Some(w) = b.get("waveform").and_then(|v| v.as_str())
     {
-        s.bass.waveform = match w {
+        s.bass_voices[voice_idx].synth.waveform = match w {
             "Square" => Waveform::Square,
             "Supersaw" => Waveform::Supersaw,
             _ => Waveform::Saw,
         };
     }
-    if !locked.contains("bass.filter_mode")
+    let bp = format!("{}.filter_mode", prefix);
+    if !locked.contains(&bp)
         && let Some(m) = b.get("filter_mode").and_then(|v| v.as_str())
     {
-        s.bass.filter_mode = match m {
+        s.bass_voices[voice_idx].synth.filter_mode = match m {
             "Highpass" | "HP" => FilterMode::Highpass,
             "Bandpass" | "BP" => FilterMode::Bandpass,
             _ => FilterMode::Lowpass,
         };
+    }
+    // Handle enabled flag for voices 1-3
+    let bp = format!("{}.enabled", prefix);
+    if voice_idx > 0
+        && !locked.contains(&bp)
+        && let Some(v) = b.get("enabled").and_then(|v| v.as_bool())
+    {
+        s.bass_voices[voice_idx].enabled = v;
     }
 }
 

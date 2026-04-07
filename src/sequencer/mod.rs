@@ -14,12 +14,15 @@ pub enum TriggerEvent {
         velocity: f32, // reserved for per-step velocity routing
     },
     BassTrigger {
+        voice_idx: usize,
         note: u8,
         accent: bool,
         slide: bool,
         gate_samples: u32, // reserved for gate-off timing
     },
-    BassGateOff,
+    BassGateOff {
+        voice_idx: usize,
+    },
     HooverTrigger {
         note: u8,
     },
@@ -40,7 +43,7 @@ pub struct ClockState {
     pub sample_accumulator: f64, // fractional samples since last step
     pub current_step: usize,
     pub loop_count: u32, // increments each full pattern loop (used for probability RNG)
-    pub gate_counter: u32, // samples remaining in bass gate
+    pub gate_counters: [u32; crate::state::MAX_BASS_VOICES], // samples remaining per bass voice
     pub gate_counter_hoover: u32, // samples remaining in hoover gate
     pub gate_counter_an1x: u32, // samples remaining in AN1X gate
     // Ratchet sub-hit tracking — fixed arrays, no allocation
@@ -56,7 +59,7 @@ impl Default for ClockState {
             sample_accumulator: 0.0,
             current_step: 0,
             loop_count: 0,
-            gate_counter: 0,
+            gate_counters: [0; crate::state::MAX_BASS_VOICES],
             gate_counter_hoover: 0,
             gate_counter_an1x: 0,
             ratchet_remaining: [0; NUM_DRUM_VOICES],
@@ -92,7 +95,7 @@ pub fn advance_clock(
     let mut acc = clock.sample_accumulator + block_size as f64;
     let mut step = clock.current_step;
     let mut loop_count = clock.loop_count;
-    let mut gate_counter = clock.gate_counter;
+    let mut gate_counters = clock.gate_counters;
     let mut gate_counter_hoover = clock.gate_counter_hoover;
     let mut gate_counter_an1x = clock.gate_counter_an1x;
     let mut ratchet_remaining = clock.ratchet_remaining;
@@ -117,13 +120,15 @@ pub fn advance_clock(
         }
     }
 
-    // Handle gate-off for bass
-    if gate_counter > 0 {
-        if block_size as u32 >= gate_counter {
-            events.push(TriggerEvent::BassGateOff);
-            gate_counter = 0;
-        } else {
-            gate_counter -= block_size as u32;
+    // Handle gate-off for bass voices
+    for (vi, gc) in gate_counters.iter_mut().enumerate() {
+        if *gc > 0 {
+            if block_size as u32 >= *gc {
+                events.push(TriggerEvent::BassGateOff { voice_idx: vi });
+                *gc = 0;
+            } else {
+                *gc -= block_size as u32;
+            }
         }
     }
 
@@ -207,18 +212,39 @@ pub fn advance_clock(
             }
         }
 
-        // Bass trigger — independent step length
-        let bstep = step % seq.bass_steps.max(1);
-        let bs = seq.bass_pattern.get(bstep).copied().unwrap_or_default();
-        if bs.active {
-            let gate_samples = (sps * bs.gate as f64) as u32;
-            gate_counter = gate_samples;
-            events.push(TriggerEvent::BassTrigger {
-                note: bs.note,
-                accent: bs.accent,
-                slide: bs.slide,
-                gate_samples,
-            });
+        // Bass triggers — one per enabled voice, each with its own pattern and step length
+        #[allow(clippy::needless_range_loop)]
+        for vi in 0..crate::state::MAX_BASS_VOICES {
+            if !seq.bass_voice_enabled[vi] {
+                continue;
+            }
+            let vsteps = seq
+                .bass_voice_steps
+                .get(vi)
+                .copied()
+                .unwrap_or(seq.bass_steps)
+                .max(1);
+            let bstep = step % vsteps;
+            let pattern = if vi == 0 {
+                seq.bass_pattern.as_slice()
+            } else {
+                seq.bass_patterns
+                    .get(vi)
+                    .map(|p| p.as_slice())
+                    .unwrap_or(&[])
+            };
+            let bs = pattern.get(bstep).copied().unwrap_or_default();
+            if bs.active {
+                let gate_samples = (sps * bs.gate as f64) as u32;
+                gate_counters[vi] = gate_samples;
+                events.push(TriggerEvent::BassTrigger {
+                    voice_idx: vi,
+                    note: bs.note,
+                    accent: bs.accent,
+                    slide: bs.slide,
+                    gate_samples,
+                });
+            }
         }
 
         // Hoover trigger — independent step length
@@ -244,7 +270,7 @@ pub fn advance_clock(
         sample_accumulator: acc,
         current_step: step,
         loop_count,
-        gate_counter,
+        gate_counters,
         gate_counter_hoover,
         gate_counter_an1x,
         ratchet_remaining,

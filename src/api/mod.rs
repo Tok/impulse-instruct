@@ -71,6 +71,7 @@ async fn post_prompt(
         .try_send(LlmInput::Infer {
             prompt: req.prompt,
             one_shot: req.one_shot,
+            agent_id: None,
         })
         .map_err(|_| StatusCode::SERVICE_UNAVAILABLE)?;
     Ok(Json(OkResponse {
@@ -83,7 +84,7 @@ async fn post_params(
     AxumState(api): AxumState<ApiState>,
     Json(req): Json<ParamsRequest>,
 ) -> Json<OkResponse> {
-    let next = apply_llm_update(api.app_state.read().clone(), &req.params);
+    let next = apply_llm_update(api.app_state.read().clone(), &req.params, &[]);
     *api.app_state.write() = next;
     Json(OkResponse {
         ok: true,

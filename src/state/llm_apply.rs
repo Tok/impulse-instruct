@@ -1,0 +1,580 @@
+// ─── state/llm_apply.rs ──────────────────────────────────────────────────────
+// LLM update application extracted from transitions.rs to keep LOC under 1000.
+
+use super::llm_helpers::{
+    apply_an1x_update, apply_bass_update, apply_fx_update, apply_hoover_update, unlocked_f32,
+};
+use super::rack::{PortDir, PortRef, rack_kind_name_matches, rack_out_port_kind};
+use super::transitions::{
+    expand_sequencer_steps, set_drum_step_ratchet, set_drum_voice_steps, set_lane_steps,
+};
+use super::{AppState, DrumVoice, LfoTarget, LfoWaveform, MAX_STEPS, Scale, snap_to_scale};
+use crate::sequencer::euclidean_rhythm;
+
+/// Apply an LLM-generated partial update, respecting locked params.
+/// Returns the new state (caller replaces old state with this).
+pub fn apply_llm_update(state: AppState, update: &serde_json::Value, scope: &[String]) -> AppState {
+    let mut s = state;
+    let locked = &s.llm.locked_params.clone();
+
+    // Scope helper: empty scope = unrestricted
+    let in_scope = |key: &str| scope.is_empty() || scope.iter().any(|s| s == key);
+
+    // Legacy "bass" key → voice 0
+    if in_scope("bass")
+        && let Some(b) = update.get("bass").and_then(|v| v.as_object())
+    {
+        apply_bass_update(&mut s, b, locked, 0);
+    }
+    // "bass_voices": [{...}, null, {...}, ...] — per-voice updates; null skips that slot
+    if in_scope("bass")
+        && let Some(arr) = update.get("bass_voices").and_then(|v| v.as_array())
+    {
+        for (idx, voice_update) in arr.iter().enumerate().take(crate::state::MAX_BASS_VOICES) {
+            if voice_update.is_null() {
+                continue;
+            }
+            if let Some(b) = voice_update.as_object() {
+                apply_bass_update(&mut s, b, locked, idx);
+            }
+        }
+    }
+
+    if in_scope("sequencer")
+        && let Some(seq) = update.get("sequencer").and_then(|v| v.as_object())
+    {
+        if !locked.contains("sequencer.bpm")
+            && let Some(bpm) = seq.get("bpm").and_then(|v| v.as_f64())
+        {
+            s.sequencer.bpm = (bpm as f32).clamp(40.0, 250.0);
+        }
+        if !locked.contains("sequencer.swing")
+            && let Some(v) = seq.get("swing").and_then(|v| v.as_f64())
+        {
+            s.sequencer.swing = (v as f32).clamp(0.0, 1.0);
+        }
+        if !locked.contains("sequencer.steps")
+            && let Some(steps) = seq.get("steps").and_then(|v| v.as_u64())
+        {
+            s = expand_sequencer_steps(s, steps as usize);
+        }
+        if !locked.contains("sequencer.time_sig_num")
+            && let Some(v) = seq.get("time_sig_num").and_then(|v| v.as_u64())
+        {
+            s.sequencer.time_sig_num = (v as u8).clamp(2, 9);
+        }
+        // Polyrhythm: per-voice step-count overrides.
+        if !locked.contains("sequencer.drum_lengths")
+            && let Some(obj) = seq.get("drum_lengths").and_then(|v| v.as_object())
+        {
+            use DrumVoice::*;
+            for (key, voice) in &[
+                ("kick_a", Kick808),
+                ("snare_a", Snare808),
+                ("hihat_a", HihatClosed808),
+                ("hihat_a_open", HihatOpen808),
+                ("kick_b", Kick909),
+                ("snare_b", Snare909),
+                ("hihat_b", HihatClosed909),
+                ("hihat_b_open", HihatOpen909),
+                ("clap_b", Clap909),
+            ] {
+                if let Some(n) = obj.get(*key).and_then(|v| v.as_u64()) {
+                    s = set_drum_voice_steps(s, *voice, n as usize);
+                }
+            }
+        }
+        // Ratchet: per-voice per-step sub-hit counts.
+        if !locked.contains("sequencer.drum_ratchets")
+            && let Some(obj) = seq.get("drum_ratchets").and_then(|v| v.as_object())
+        {
+            use DrumVoice::*;
+            for (key, voice) in &[
+                ("kick_a", Kick808),
+                ("snare_a", Snare808),
+                ("hihat_a", HihatClosed808),
+                ("hihat_a_open", HihatOpen808),
+                ("kick_b", Kick909),
+                ("snare_b", Snare909),
+                ("hihat_b", HihatClosed909),
+                ("hihat_b_open", HihatOpen909),
+                ("clap_b", Clap909),
+            ] {
+                if let Some(arr) = obj.get(*key).and_then(|v| v.as_array()) {
+                    for (step, val) in arr.iter().enumerate().take(MAX_STEPS) {
+                        if let Some(r) = val.as_u64() {
+                            s = set_drum_step_ratchet(s, *voice, step, r as u8);
+                        }
+                    }
+                }
+            }
+        }
+        if !locked.contains("sequencer.bass_len")
+            && let Some(n) = seq.get("bass_len").and_then(|v| v.as_u64())
+        {
+            s = set_lane_steps(s, "bass", n as usize);
+        }
+        if !locked.contains("sequencer.hoover_len")
+            && let Some(n) = seq.get("hoover_len").and_then(|v| v.as_u64())
+        {
+            s = set_lane_steps(s, "hoover", n as usize);
+        }
+        if !locked.contains("sequencer.an1x_len")
+            && let Some(n) = seq.get("an1x_len").and_then(|v| v.as_u64())
+        {
+            s = set_lane_steps(s, "an1x", n as usize);
+        }
+        if !locked.contains("sequencer.bass_steps")
+            && let Some(arr) = seq.get("bass_steps").and_then(|v| v.as_array())
+        {
+            apply_llm_step_array(arr, &mut s.sequencer.bass_pattern, MAX_STEPS, |step, a| {
+                step.active = a;
+            });
+            // Keep voice 0 pattern in sync
+            let bass_pattern_clone = s.sequencer.bass_pattern.clone();
+            if let Some(pat) = s.sequencer.bass_patterns.get_mut(0) {
+                *pat = bass_pattern_clone;
+            }
+        }
+        if !locked.contains("sequencer.root_note")
+            && let Some(v) = seq.get("root_note").and_then(|v| v.as_u64())
+        {
+            s.sequencer.root_note = (v as u8).clamp(0, 11);
+        }
+        if !locked.contains("sequencer.scale")
+            && let Some(v) = seq.get("scale").and_then(|v| v.as_str())
+            && let Some(sc) = Scale::from_str(v)
+        {
+            s.sequencer.scale = sc;
+        }
+        if !locked.contains("sequencer.bass_notes")
+            && let Some(arr) = seq.get("bass_notes").and_then(|v| v.as_array())
+        {
+            let snap = s.sequencer.scale_snap;
+            let root = s.sequencer.root_note;
+            let scale = s.sequencer.scale;
+            for (i, val) in arr.iter().enumerate().take(MAX_STEPS) {
+                if let Some(note) = val.as_u64() {
+                    let note = note.clamp(0, 127) as u8;
+                    let snapped = if snap {
+                        snap_to_scale(note, root, scale)
+                    } else {
+                        note
+                    };
+                    s.sequencer.bass_pattern[i].note = snapped;
+                    // Keep voice 0 pattern in sync
+                    if let Some(pat) = s.sequencer.bass_patterns.get_mut(0) {
+                        pat[i].note = snapped;
+                    }
+                }
+            }
+        }
+        let drum_step_fields: &[(&str, DrumVoice, f32)] = &[
+            ("kick_a_steps", DrumVoice::Kick808, 1.0),
+            ("hihat_a_steps", DrumVoice::HihatClosed808, 0.7),
+            ("snare_a_steps", DrumVoice::Snare808, 1.0),
+            ("kick_b_steps", DrumVoice::Kick909, 1.0),
+            ("snare_b_steps", DrumVoice::Snare909, 1.0),
+            ("clap_b_steps", DrumVoice::Clap909, 1.0),
+            ("hihat_b_steps", DrumVoice::HihatClosed909, 0.7),
+        ];
+        for &(field, voice, default_vel) in drum_step_fields {
+            let lock_key = format!("sequencer.{}", field);
+            if !locked.contains(&lock_key)
+                && let Some(arr) = seq.get(field).and_then(|v| v.as_array())
+            {
+                // Collect indices first to avoid split-borrow issues with drum_patterns
+                let arr: Vec<_> = arr.clone();
+                if let Some(pattern) = s.sequencer.drum_patterns.get_mut(&voice) {
+                    apply_llm_step_array(&arr, pattern, MAX_STEPS, |step, active| {
+                        step.active = active;
+                        if active && step.velocity == 0.0 {
+                            step.velocity = default_vel;
+                        }
+                    });
+                }
+            }
+        }
+    }
+
+    if in_scope("kit_a")
+        && let Some(kit_a) = update.get("kit_a").and_then(|v| v.as_object())
+        && let Some(kick) = kit_a.get("kick").and_then(|v| v.as_object())
+    {
+        s.kit_a.kick.pitch_env_depth = unlocked_f32(
+            s.kit_a.kick.pitch_env_depth,
+            kick,
+            "pitch_env_depth",
+            "kit_a.kick.pitch_env_depth",
+            locked,
+        );
+        s.kit_a.kick.pitch_env_time = unlocked_f32(
+            s.kit_a.kick.pitch_env_time,
+            kick,
+            "pitch_env_time",
+            "kit_a.kick.pitch_env_time",
+            locked,
+        );
+        s.kit_a.kick.clip =
+            unlocked_f32(s.kit_a.kick.clip, kick, "clip", "kit_a.kick.clip", locked);
+    }
+
+    if in_scope("kit_b")
+        && let Some(kit_b) = update.get("kit_b").and_then(|v| v.as_object())
+        && let Some(kick) = kit_b.get("kick").and_then(|v| v.as_object())
+    {
+        s.kit_b.kick.pitch_env_depth = unlocked_f32(
+            s.kit_b.kick.pitch_env_depth,
+            kick,
+            "pitch_env_depth",
+            "kit_b.kick.pitch_env_depth",
+            locked,
+        );
+        s.kit_b.kick.pitch_env_time = unlocked_f32(
+            s.kit_b.kick.pitch_env_time,
+            kick,
+            "pitch_env_time",
+            "kit_b.kick.pitch_env_time",
+            locked,
+        );
+        s.kit_b.kick.clip =
+            unlocked_f32(s.kit_b.kick.clip, kick, "clip", "kit_b.kick.clip", locked);
+    }
+
+    if in_scope("fx")
+        && let Some(fx) = update.get("fx").and_then(|v| v.as_object())
+    {
+        apply_fx_update(&mut s, fx, locked);
+    }
+
+    if in_scope("lfo")
+        && let Some(lfo_arr) = update.get("lfo").and_then(|v| v.as_array())
+    {
+        for (i, slot_val) in lfo_arr.iter().enumerate().take(4) {
+            let path_prefix = format!("lfo[{}]", i);
+            if locked.contains(&path_prefix) {
+                continue;
+            }
+            if let Some(obj) = slot_val.as_object() {
+                if let Some(v) = obj.get("enabled").and_then(|v| v.as_bool()) {
+                    s.lfo[i].enabled = v;
+                }
+                if let Some(v) = obj.get("rate").and_then(|v| v.as_f64()) {
+                    s.lfo[i].rate = (v as f32).clamp(0.0, 1.0);
+                }
+                if let Some(v) = obj.get("depth").and_then(|v| v.as_f64()) {
+                    s.lfo[i].depth = (v as f32).clamp(0.0, 1.0);
+                }
+                if let Some(v) = obj.get("phase_offset").and_then(|v| v.as_f64()) {
+                    s.lfo[i].phase_offset = (v as f32).clamp(0.0, 1.0);
+                }
+                if let Some(v) = obj.get("waveform").and_then(|v| v.as_str()) {
+                    s.lfo[i].waveform = match v {
+                        "Triangle" => LfoWaveform::Triangle,
+                        "Saw" => LfoWaveform::Saw,
+                        "InvSaw" => LfoWaveform::InvSaw,
+                        "Square" => LfoWaveform::Square,
+                        "SampleAndHold" | "S&H" => LfoWaveform::SampleAndHold,
+                        _ => LfoWaveform::Sine,
+                    };
+                }
+                if let Some(v) = obj.get("target").and_then(|v| v.as_str()) {
+                    s.lfo[i].target = match v {
+                        "BassCutoff" => LfoTarget::BassCutoff,
+                        "BassResonance" => LfoTarget::BassResonance,
+                        "BassPitch" => LfoTarget::BassPitch,
+                        "BassVolume" => LfoTarget::BassVolume,
+                        "ReverbMix" => LfoTarget::ReverbMix,
+                        "DelayTime" => LfoTarget::DelayTime,
+                        "DelayFeedback" => LfoTarget::DelayFeedback,
+                        "ChorusMix" => LfoTarget::ChorusMix,
+                        "ChorusRate" => LfoTarget::ChorusRate,
+                        "Kick808Pitch" => LfoTarget::Kick808Pitch,
+                        _ => LfoTarget::None,
+                    };
+                }
+            }
+        }
+    }
+
+    if in_scope("free_eg")
+        && let Some(eg) = update.get("free_eg").and_then(|v| v.as_object())
+        && !locked.contains("free_eg")
+    {
+        if let Some(v) = eg.get("enabled").and_then(|v| v.as_bool()) {
+            s.free_eg.enabled = v;
+        }
+        if let Some(v) = eg.get("period").and_then(|v| v.as_f64()) {
+            s.free_eg.period = (v as f32).clamp(0.0, 1.0);
+        }
+        if let Some(v) = eg.get("depth").and_then(|v| v.as_f64()) {
+            s.free_eg.depth = (v as f32).clamp(0.0, 1.0);
+        }
+        if let Some(v) = eg.get("loop_mode").and_then(|v| v.as_bool()) {
+            s.free_eg.loop_mode = v;
+        }
+        if let Some(v) = eg.get("target").and_then(|v| v.as_str()) {
+            s.free_eg.target = match v {
+                "BassCutoff" => LfoTarget::BassCutoff,
+                "BassResonance" => LfoTarget::BassResonance,
+                "BassPitch" => LfoTarget::BassPitch,
+                "BassVolume" => LfoTarget::BassVolume,
+                "ReverbMix" => LfoTarget::ReverbMix,
+                "DelayTime" => LfoTarget::DelayTime,
+                "DelayFeedback" => LfoTarget::DelayFeedback,
+                "ChorusMix" => LfoTarget::ChorusMix,
+                "ChorusRate" => LfoTarget::ChorusRate,
+                "Kick808Pitch" => LfoTarget::Kick808Pitch,
+                _ => LfoTarget::None,
+            };
+        }
+        if let Some(arr) = eg.get("values").and_then(|v| v.as_array()) {
+            for (i, val) in arr.iter().enumerate().take(8) {
+                if let Some(v) = val.as_f64() {
+                    s.free_eg.values[i] = (v as f32).clamp(0.0, 1.0);
+                }
+            }
+        }
+    }
+
+    if in_scope("noise")
+        && let Some(n) = update.get("noise").and_then(|v| v.as_object())
+    {
+        if !locked.contains("noise.enabled")
+            && let Some(v) = n.get("enabled").and_then(|v| v.as_bool())
+        {
+            s.noise_voice.enabled = v;
+        }
+        s.noise_voice.volume =
+            unlocked_f32(s.noise_voice.volume, n, "volume", "noise.volume", locked);
+        s.noise_voice.color = unlocked_f32(s.noise_voice.color, n, "color", "noise.color", locked);
+        s.noise_voice.cutoff =
+            unlocked_f32(s.noise_voice.cutoff, n, "cutoff", "noise.cutoff", locked);
+    }
+
+    if in_scope("hoover")
+        && let Some(h) = update.get("hoover").and_then(|v| v.as_object())
+    {
+        apply_hoover_update(&mut s, h, locked);
+    }
+
+    if in_scope("an1x")
+        && let Some(a) = update.get("an1x").and_then(|v| v.as_object())
+    {
+        apply_an1x_update(&mut s, a, locked);
+    }
+
+    // ── Euclidean rhythm ──────────────────────────────────────────────────────
+    // JSON: { "euclidean": { "voice": "kick_a", "pulses": 5, "steps": 16 } }
+    if in_scope("euclidean")
+        && let Some(e) = update.get("euclidean").and_then(|v| v.as_object())
+    {
+        let voice_str = e.get("voice").and_then(|v| v.as_str()).unwrap_or("");
+        let pulses = e.get("pulses").and_then(|v| v.as_u64()).unwrap_or(4) as usize;
+        let n_steps = e
+            .get("steps")
+            .and_then(|v| v.as_u64())
+            .unwrap_or(s.sequencer.steps as u64) as usize;
+        let drum_voice = match voice_str {
+            "kick_a" => Some(DrumVoice::Kick808),
+            "snare_a" => Some(DrumVoice::Snare808),
+            "hihat_a" | "closed_hat_a" => Some(DrumVoice::HihatClosed808),
+            "hihat_a_open" | "open_hat_a" => Some(DrumVoice::HihatOpen808),
+            "kick_b" => Some(DrumVoice::Kick909),
+            "snare_b" => Some(DrumVoice::Snare909),
+            "hihat_b" | "closed_hat_b" => Some(DrumVoice::HihatClosed909),
+            "hihat_b_open" | "open_hat_b" => Some(DrumVoice::HihatOpen909),
+            "clap_b" => Some(DrumVoice::Clap909),
+            _ => None,
+        };
+        if let Some(voice) = drum_voice {
+            let lock_path = format!("sequencer.{}_steps", voice_str);
+            if !locked.contains(&lock_path) {
+                let pattern = euclidean_rhythm(pulses, n_steps);
+                if let Some(row) = s.sequencer.drum_patterns.get_mut(&voice) {
+                    for (i, &active) in pattern.iter().enumerate().take(row.len()) {
+                        row[i].active = active;
+                    }
+                }
+            }
+        }
+    }
+
+    // ── Internal music API ────────────────────────────────────────────────────
+    // JSON: { "music_api": { "chord": {...}, "amen_pattern": {...}, "scale_run": {...} } }
+    if let Some(api) = update.get("music_api").and_then(|v| v.as_object()) {
+        s = crate::music_api::apply_music_api(s, api);
+    }
+
+    // ── Ramp scheduling ───────────────────────────────────────────────────────
+    // JSON: { "ramp": { "param": "fx.reverb_mix", "to": 0.6, "cycles": 8 } }
+    if let Some(obj) = update.get("ramp").and_then(|v| v.as_object()) {
+        s = crate::state::jam_tools::parse_and_schedule_ramp(s, obj);
+    }
+
+    // ── Behaviour templates ───────────────────────────────────────────────────
+    // JSON: { "behaviour": "build" }
+    if let Some(name) = update.get("behaviour").and_then(|v| v.as_str()) {
+        let heat = s.llm.heat;
+        s = crate::state::jam_tools::apply_behaviour(s, name, heat);
+    }
+
+    // ── Rack routing (enable/disable modules, add/remove cables) ─────────────
+    // JSON: { "rack": { "enable": ["bitcrush"], "disable": ["reverb"],
+    //                   "connect": [{"from": "bitcrush", "to": "master"}],
+    //                   "disconnect": [{"from": "bitcrush", "to": "master"}] } }
+    if let Some(rack_upd) = update.get("rack").and_then(|v| v.as_object()) {
+        if let Some(arr) = rack_upd.get("enable").and_then(|v| v.as_array()) {
+            for v in arr {
+                if let Some(name) = v.as_str() {
+                    for m in &mut s.rack.modules {
+                        if rack_kind_name_matches(m.kind, name) {
+                            m.enabled = true;
+                        }
+                    }
+                }
+            }
+        }
+        if let Some(arr) = rack_upd.get("disable").and_then(|v| v.as_array()) {
+            for v in arr {
+                if let Some(name) = v.as_str() {
+                    for m in &mut s.rack.modules {
+                        if rack_kind_name_matches(m.kind, name) {
+                            m.enabled = false;
+                        }
+                    }
+                }
+            }
+        }
+        if let Some(arr) = rack_upd.get("connect").and_then(|v| v.as_array()) {
+            for v in arr {
+                let from_name = v.get("from").and_then(|v| v.as_str());
+                let to_name = v.get("to").and_then(|v| v.as_str());
+                if let (Some(fn_), Some(tn)) = (from_name, to_name) {
+                    let from_mod = s
+                        .rack
+                        .modules
+                        .iter()
+                        .find(|m| rack_kind_name_matches(m.kind, fn_))
+                        .map(|m| (m.id, m.kind));
+                    let to_mod = s
+                        .rack
+                        .modules
+                        .iter()
+                        .find(|m| rack_kind_name_matches(m.kind, tn))
+                        .map(|m| (m.id, m.kind));
+                    if let (Some((fid, fkind)), Some((tid, _tkind))) = (from_mod, to_mod) {
+                        // Don't duplicate an existing cable
+                        let exists = s
+                            .rack
+                            .cables
+                            .iter()
+                            .any(|c| c.from.module_id == fid && c.to.module_id == tid);
+                        if !exists {
+                            let port_kind = rack_out_port_kind(fkind);
+                            s.rack.connect(
+                                PortRef {
+                                    module_id: fid,
+                                    dir: PortDir::Out,
+                                    kind: port_kind,
+                                    index: 0,
+                                },
+                                PortRef {
+                                    module_id: tid,
+                                    dir: PortDir::In,
+                                    kind: port_kind,
+                                    index: 0,
+                                },
+                            );
+                        }
+                    }
+                }
+            }
+        }
+        if let Some(arr) = rack_upd.get("disconnect").and_then(|v| v.as_array()) {
+            for v in arr {
+                let from_name = v.get("from").and_then(|v| v.as_str());
+                let to_name = v.get("to").and_then(|v| v.as_str());
+                if let (Some(fn_), Some(tn)) = (from_name, to_name) {
+                    let from_mod = s
+                        .rack
+                        .modules
+                        .iter()
+                        .find(|m| rack_kind_name_matches(m.kind, fn_))
+                        .map(|m| (m.id, m.kind));
+                    let to_id = s
+                        .rack
+                        .modules
+                        .iter()
+                        .find(|m| rack_kind_name_matches(m.kind, tn))
+                        .map(|m| m.id);
+                    if let (Some((fid, fkind)), Some(tid)) = (from_mod, to_id) {
+                        let port_kind = rack_out_port_kind(fkind);
+                        let from_ref = PortRef {
+                            module_id: fid,
+                            dir: PortDir::Out,
+                            kind: port_kind,
+                            index: 0,
+                        };
+                        let to_ref = PortRef {
+                            module_id: tid,
+                            dir: PortDir::In,
+                            kind: port_kind,
+                            index: 0,
+                        };
+                        s.rack.disconnect(&from_ref, &to_ref);
+                    }
+                }
+            }
+        }
+    }
+
+    s
+}
+
+// ─── Step-array parser ────────────────────────────────────────────────────────
+
+/// Apply a JSON step array to a mutable pattern slice.
+///
+/// Accepts: `[]` clear, `[0,4,8]` index list (< 16), `[1,0,…]` inline 0/1 (≥ 16).
+/// `set_active` must update `active` plus any default fields.
+pub fn apply_llm_step_array<T, F>(
+    arr: &[serde_json::Value],
+    items: &mut [T],
+    max_write: usize,
+    mut set_active: F,
+) where
+    F: FnMut(&mut T, bool),
+{
+    let n = items.len().min(max_write);
+    if arr.is_empty() {
+        // [] = clear all
+        for item in items[..n].iter_mut() {
+            set_active(item, false);
+        }
+        return;
+    }
+    if arr.len() < 16 {
+        // Index list: clear everything, then activate listed positions
+        for item in items[..n].iter_mut() {
+            set_active(item, false);
+        }
+        for val in arr {
+            if let Some(idx) = val.as_u64().map(|i| i as usize)
+                && idx < n
+            {
+                set_active(&mut items[idx], true);
+            }
+        }
+        return;
+    }
+    // Inline: element-by-element (0/1 integers accepted alongside true/false)
+    for (i, val) in arr.iter().enumerate().take(n) {
+        let active = match val {
+            serde_json::Value::Bool(b) => *b,
+            serde_json::Value::Number(num) => num.as_u64().unwrap_or(0) != 0,
+            _ => continue,
+        };
+        set_active(&mut items[i], active);
+    }
+}

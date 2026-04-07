@@ -85,6 +85,40 @@ pub enum HuthStyle {
     Off,
 }
 
+/// How often the session is auto-saved to `session.json`.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum AutosaveInterval {
+    /// Save immediately on every state change (original behaviour).
+    #[default]
+    Immediate,
+    /// Save at most once every 5 seconds.
+    FiveSec,
+    /// Save at most once every 30 seconds.
+    ThirtySec,
+    /// Never auto-save — user must trigger a manual project save.
+    Manual,
+}
+
+impl AutosaveInterval {
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Immediate => "Immediate",
+            Self::FiveSec => "5 seconds",
+            Self::ThirtySec => "30 seconds",
+            Self::Manual => "Manual only",
+        }
+    }
+
+    /// Returns `None` for Immediate/Manual (handled separately), or a `Duration`.
+    pub fn duration(self) -> Option<std::time::Duration> {
+        match self {
+            Self::Immediate | Self::Manual => None,
+            Self::FiveSec => Some(std::time::Duration::from_secs(5)),
+            Self::ThirtySec => Some(std::time::Duration::from_secs(30)),
+        }
+    }
+}
+
 /// Persistent UI preferences stored in AppState so they survive across sessions.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct UiPrefs {
@@ -118,6 +152,12 @@ pub struct UiPrefs {
     pub log_level_idx: usize,
     /// Global UI scale multiplier applied via pixels_per_point (0.5–3.0, default 1.0).
     pub ui_scale: f32,
+    /// How often the session is auto-saved.
+    #[serde(default)]
+    pub autosave_interval: AutosaveInterval,
+    /// When true, WASD keys act as arrow keys (scroll rack, turn knobs).
+    #[serde(default)]
+    pub wasd_as_arrows: bool,
 }
 
 impl UiPrefs {
@@ -168,6 +208,8 @@ impl Default for UiPrefs {
             bloom_intensity: 0.5,
             log_level_idx: 2, // Info
             ui_scale: 1.0,
+            autosave_interval: AutosaveInterval::Immediate,
+            wasd_as_arrows: false,
         }
     }
 }

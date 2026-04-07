@@ -199,24 +199,26 @@ pub struct AudioParams {
 
 impl AudioParams {
     pub fn from_app_state(s: &AppState) -> Self {
+        // Use voice 0 (always enabled) for the single-voice bass params
+        let bass = &s.bass_voices[0].synth;
         Self {
-            cutoff: s.bass.cutoff,
-            resonance: s.bass.resonance,
-            env_mod: s.bass.env_mod,
-            decay_303: s.bass.decay,
-            accent_level: s.bass.accent_level,
-            waveform_saw: s.bass.waveform == crate::state::Waveform::Saw,
-            waveform_supersaw: s.bass.waveform == crate::state::Waveform::Supersaw,
-            supersaw_detune: s.bass.supersaw_detune,
-            supersaw_voices: s.bass.supersaw_voices,
-            sub_osc_level: s.bass.sub_osc_level,
-            portamento_time_303: s.bass.portamento_time,
-            noise_mix_303: s.bass.noise_mix,
-            osc_detune_303: s.bass.osc_detune,
-            fm_ratio_303: s.bass.fm_ratio,
-            fm_depth_303: s.bass.fm_depth,
-            distortion_303: s.bass.distortion,
-            volume_303: s.bass.volume,
+            cutoff: bass.cutoff,
+            resonance: bass.resonance,
+            env_mod: bass.env_mod,
+            decay_303: bass.decay,
+            accent_level: bass.accent_level,
+            waveform_saw: bass.waveform == crate::state::Waveform::Saw,
+            waveform_supersaw: bass.waveform == crate::state::Waveform::Supersaw,
+            supersaw_detune: bass.supersaw_detune,
+            supersaw_voices: bass.supersaw_voices,
+            sub_osc_level: bass.sub_osc_level,
+            portamento_time_303: bass.portamento_time,
+            noise_mix_303: bass.noise_mix,
+            osc_detune_303: bass.osc_detune,
+            fm_ratio_303: bass.fm_ratio,
+            fm_depth_303: bass.fm_depth,
+            distortion_303: bass.distortion,
+            volume_303: bass.volume,
             kick808_pitch: s.kit_a.kick.pitch,
             kick808_decay: s.kit_a.kick.decay,
             kick808_punch: s.kit_a.kick.punch,
@@ -282,7 +284,7 @@ impl AudioParams {
             tape_mix: s.fx.tape_mix,
             tape_flutter: s.fx.tape_flutter,
             master_pitch_st: s.fx.master_pitch_st,
-            filter_mode: match s.bass.filter_mode {
+            filter_mode: match bass.filter_mode {
                 FilterMode::Lowpass => 0,
                 FilterMode::Highpass => 1,
                 FilterMode::Bandpass => 2,

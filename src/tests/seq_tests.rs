@@ -196,7 +196,7 @@ mod step_array_tests {
         let update = serde_json::json!({
             "sequencer": { "kick_a_steps": [0, 4, 8, 12] }
         });
-        let state = apply_llm_update(state, &update);
+        let state = apply_llm_update(state, &update, &[]);
         assert_eq!(kick_active(&state), vec![0, 4, 8, 12]);
     }
 
@@ -207,7 +207,7 @@ mod step_array_tests {
         let update = serde_json::json!({
             "sequencer": { "kick_a_steps": [2, 6] }
         });
-        let state = apply_llm_update(state, &update);
+        let state = apply_llm_update(state, &update, &[]);
         assert_eq!(kick_active(&state), vec![2, 6]);
     }
 
@@ -217,7 +217,7 @@ mod step_array_tests {
         let update = serde_json::json!({
             "sequencer": { "kick_a_steps": [] }
         });
-        let state = apply_llm_update(state, &update);
+        let state = apply_llm_update(state, &update, &[]);
         assert!(
             kick_active(&state).is_empty(),
             "empty array should clear all kick steps"
@@ -230,7 +230,7 @@ mod step_array_tests {
         let update = serde_json::json!({
             "sequencer": { "kick_a_steps": [1,0,0,0,1,0,0,0,1,0,0,0,1,0,0,0] }
         });
-        let state = apply_llm_update(state, &update);
+        let state = apply_llm_update(state, &update, &[]);
         assert_eq!(kick_active(&state), vec![0, 4, 8, 12]);
     }
 
@@ -240,7 +240,7 @@ mod step_array_tests {
         let update = serde_json::json!({
             "sequencer": { "bass_steps": [0, 3, 7, 11] }
         });
-        let state = apply_llm_update(state, &update);
+        let state = apply_llm_update(state, &update, &[]);
         assert_eq!(bass_active(&state), vec![0, 3, 7, 11]);
     }
 
@@ -250,7 +250,7 @@ mod step_array_tests {
         let update = serde_json::json!({
             "sequencer": { "bass_steps": [] }
         });
-        let state = apply_llm_update(state, &update);
+        let state = apply_llm_update(state, &update, &[]);
         assert!(bass_active(&state).is_empty());
     }
 }

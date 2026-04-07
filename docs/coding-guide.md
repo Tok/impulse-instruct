@@ -207,7 +207,14 @@ fn toggle_drum_step_flips_on_and_off() {
 | `src/tests/llm_tests.rs` | Prompt building, instruction matching, music theory, DSP math |
 
 Each file has a **1000-line limit** enforced by the pre-commit hook.
-When a file approaches that limit, split it into a new submodule and add it to `src/tests/mod.rs`.
+
+**Split proactively, not reactively.** When a file reaches ~700 lines, or when you're
+adding a cohesive block of functionality (a new wizard, a new panel, a new test suite),
+create a new file immediately rather than appending to an existing one and waiting for
+the hook to reject the commit.  A file that's 400 + 400 lines across two modules is
+easier to navigate than an 800-line file that will need emergency surgery at 1000.
+
+When splitting tests, add the new file to `src/tests/mod.rs`.
 
 **What needs a test:**
 
@@ -280,9 +287,16 @@ fn toggle_live_record_flips_flag() {
 ## Abstraction rules
 
 - Don't create a trait for something that only has one implementation.
-- Don't extract a helper for code that is used in fewer than three genuinely distinct places.
-- Three similar lines of code are better than a premature abstraction.
 - Don't add `Option<>` wrappers or config flags for hypothetical future requirements.
+- **Do** extract a helper when the same structural pattern appears in 2+ places and
+  the abstraction is obvious (same types, same shape, same intent).  Don't wait for
+  a third occurrence if the duplication is already causing maintenance burden.
+- **Do** extract helpers that reduce boilerplate when the pattern is noisy enough to
+  obscure the logic.  Example: `rack.connect_control(from_id, to_id)` is worth
+  creating even at 2 call sites if each call site expands to 8 lines of PortRef
+  construction.
+- Three similar lines of code are fine.  Fifteen similar lines repeated across
+  four files is not — that's a missed abstraction, not a premature one.
 
 ---
 
@@ -293,7 +307,7 @@ Before every commit, verify:
 - [ ] `cargo fmt` applied to all changed files
 - [ ] `cargo clippy -- -D warnings` reports 0 errors
 - [ ] `cargo clippy --tests -- -D warnings` reports 0 errors
-- [ ] `cargo test` passes (207+ tests, all green)
+- [ ] `cargo test` passes (274+ tests, all green)
 - [ ] New pure functions have a test in `src/tests/`
 - [ ] No test file exceeds 1000 lines
 - [ ] No allocations inside `process_block()` or the cpal callback

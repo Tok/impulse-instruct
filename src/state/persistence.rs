@@ -1,7 +1,7 @@
 // ─── state/persistence.rs ────────────────────────────────────────────────────
 // Project save / load — pure I/O, no state mutation.
 
-use super::AppState;
+use super::{AppState, ModuleKind};
 use serde::{Deserialize, Serialize};
 
 const SETTINGS_PATH: &str = "settings.json";
@@ -43,6 +43,8 @@ pub struct SessionData {
     pub persona_name: Option<String>,
     pub model_path: Option<String>,
     pub show_cables: Option<bool>,
+    #[serde(default)]
+    pub rack_flipped: Option<bool>,
     // UI prefs subset
     pub knob_style: Option<crate::state::KnobStyle>,
     pub knob_size: Option<crate::state::KnobSize>,
@@ -50,10 +52,34 @@ pub struct SessionData {
     pub use_sliders: Option<bool>,
     pub ui_scale: Option<f32>,
     pub log_level_idx: Option<usize>,
+    #[serde(default)]
+    pub autosave_interval: Option<crate::state::AutosaveInterval>,
+    #[serde(default)]
+    pub llm_agents: Option<Vec<super::LlmAgentState>>,
+    #[serde(default)]
+    pub wasd_as_arrows: Option<bool>,
+    #[serde(default)]
+    pub enable_thinking: Option<bool>,
+    #[serde(default)]
+    pub show_thinking_in_log: Option<bool>,
+    #[serde(default)]
+    pub temperature: Option<f32>,
+    #[serde(default)]
+    pub wizard_done: Option<bool>,
 }
 
 /// Save session data extracted from current AppState.
-pub fn save_session(state: &AppState, show_cables: bool) {
+pub fn save_session(state: &AppState, show_cables: bool, rack_flipped: bool) {
+    save_session_ext(state, show_cables, rack_flipped, None)
+}
+
+/// Extended save with optional wizard_done flag.
+pub fn save_session_ext(
+    state: &AppState,
+    show_cables: bool,
+    rack_flipped: bool,
+    wizard_done: Option<bool>,
+) {
     let data = SessionData {
         rack: Some(state.rack.clone()),
         active_style: state.llm.active_style.clone(),
@@ -62,12 +88,20 @@ pub fn save_session(state: &AppState, show_cables: bool) {
         persona_name: Some(state.llm.persona_name.clone()),
         model_path: Some(state.llm.model_path.clone()),
         show_cables: Some(show_cables),
+        rack_flipped: Some(rack_flipped),
+        llm_agents: Some(state.llm_agents.clone()),
         knob_style: Some(state.ui_prefs.knob_style),
         knob_size: Some(state.ui_prefs.knob_size),
         pad_size: Some(state.ui_prefs.pad_size),
         use_sliders: Some(state.ui_prefs.use_sliders),
         ui_scale: Some(state.ui_prefs.ui_scale),
         log_level_idx: Some(state.ui_prefs.log_level_idx),
+        autosave_interval: Some(state.ui_prefs.autosave_interval),
+        wasd_as_arrows: Some(state.ui_prefs.wasd_as_arrows),
+        enable_thinking: Some(state.llm.enable_thinking),
+        show_thinking_in_log: Some(state.llm.show_thinking_in_log),
+        temperature: Some(state.llm.temperature),
+        wizard_done,
     };
     match serde_json::to_string_pretty(&data) {
         Ok(json) => {
@@ -124,6 +158,125 @@ pub fn apply_session(state: &mut AppState, data: SessionData) {
     }
     if let Some(v) = data.log_level_idx {
         state.ui_prefs.log_level_idx = v;
+    }
+    if let Some(v) = data.autosave_interval {
+        state.ui_prefs.autosave_interval = v;
+    }
+    if let Some(agents) = data.llm_agents
+        && !agents.is_empty()
+    {
+        state.llm_agents = agents;
+    }
+    if let Some(v) = data.wasd_as_arrows {
+        state.ui_prefs.wasd_as_arrows = v;
+    }
+    if let Some(v) = data.enable_thinking {
+        state.llm.enable_thinking = v;
+    }
+    if let Some(v) = data.show_thinking_in_log {
+        state.llm.show_thinking_in_log = v;
+    }
+    if let Some(v) = data.temperature {
+        state.llm.temperature = v;
+    }
+
+    // ── Migration: ensure LlmConsole + at least one LlmAgent exist ───────
+    if !state
+        .rack
+        .modules
+        .iter()
+        .any(|m| m.kind == ModuleKind::LlmConsole)
+    {
+        state.rack.add_module(ModuleKind::LlmConsole);
+        log::info!("Migration: added LlmConsole module to rack");
+    }
+    if !state
+        .rack
+        .modules
+        .iter()
+        .any(|m| m.kind == ModuleKind::LlmAgent)
+    {
+        let id = state.rack.add_module(ModuleKind::LlmAgent);
+        let agent = super::LlmAgentState::from_singleton(id, &state.llm);
+        state.llm_agents.push(agent);
+        // Wire control cables to all controllable modules
+        let targets: Vec<u32> = state
+            .rack
+            .modules
+            .iter()
+            .filter(|m| {
+                !matches!(
+                    m.kind,
+                    ModuleKind::MasterOutput | ModuleKind::LlmAgent | ModuleKind::LlmConsole
+                )
+            })
+            .map(|m| m.id)
+            .collect();
+        for tid in &targets {
+            state.rack.connect(
+                super::PortRef {
+                    module_id: id,
+                    dir: super::PortDir::Out,
+                    kind: super::PortKind::Control,
+                    index: 0,
+                },
+                super::PortRef {
+                    module_id: *tid,
+                    dir: super::PortDir::In,
+                    kind: super::PortKind::Control,
+                    index: 0,
+                },
+            );
+        }
+        log::info!("Migration: added default LlmAgent + control cables");
+    }
+
+    // Ensure existing agents have control cables (migration for sessions that
+    // were saved before control cables existed).
+    let agent_ids: Vec<u32> = state
+        .rack
+        .modules
+        .iter()
+        .filter(|m| m.kind == ModuleKind::LlmAgent)
+        .map(|m| m.id)
+        .collect();
+    for aid in &agent_ids {
+        let has_any_control = state
+            .rack
+            .cables
+            .iter()
+            .any(|c| c.from.module_id == *aid && c.from.kind == super::PortKind::Control);
+        if !has_any_control {
+            let targets: Vec<u32> = state
+                .rack
+                .modules
+                .iter()
+                .filter(|m| {
+                    !matches!(
+                        m.kind,
+                        ModuleKind::MasterOutput | ModuleKind::LlmAgent | ModuleKind::LlmConsole
+                    )
+                })
+                .map(|m| m.id)
+                .collect();
+            for tid in &targets {
+                state.rack.connect(
+                    super::PortRef {
+                        module_id: *aid,
+                        dir: super::PortDir::Out,
+                        kind: super::PortKind::Control,
+                        index: 0,
+                    },
+                    super::PortRef {
+                        module_id: *tid,
+                        dir: super::PortDir::In,
+                        kind: super::PortKind::Control,
+                        index: 0,
+                    },
+                );
+            }
+            log::info!("Migration: wired control cables for agent {}", aid);
+        }
     }
 }
 

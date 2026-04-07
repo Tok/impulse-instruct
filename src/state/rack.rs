@@ -22,6 +22,8 @@ pub enum PortKind {
     Audio,
     /// Mono CV signal (0–1).  Used for LFO targets, gate, pitch CV, etc.
     Cv,
+    /// LLM control link — connects an LLM agent to modules it may control.
+    Control,
 }
 
 /// Direction of a port relative to its module.
@@ -130,7 +132,10 @@ pub enum ModuleKind {
     FxAutotune,
     // ── Modulation ────────────────────────────────────────────────────────────
     LfoModule,
-    // ── Utility ───────────────────────────────────────────────────────────────
+    LlmAgent,
+    // ── LLM console (singleton, Global zone) ──────────────────────────────
+    LlmConsole,
+    //── Utility ───────────────────────────────────────────────────────────────
     MasterOutput,
 }
 
@@ -161,6 +166,8 @@ impl ModuleKind {
             Self::FxDrive => "DRIVE",
             Self::FxAutotune => "AUTOTUNE",
             Self::LfoModule => "LFO",
+            Self::LlmAgent => "LLM AGENT",
+            Self::LlmConsole => "LLM CONSOLE",
             Self::MasterOutput => "MASTER",
         }
     }
@@ -168,7 +175,9 @@ impl ModuleKind {
     /// Which zone this module belongs to by default.
     pub fn default_zone(self) -> Zone {
         match self {
-            Self::StepSequencer | Self::MasterOutput => Zone::Global,
+            Self::StepSequencer | Self::MasterOutput | Self::LlmAgent | Self::LlmConsole => {
+                Zone::Global
+            }
             Self::AcidBass
             | Self::DrumKit808
             | Self::DrumKit909
@@ -211,6 +220,7 @@ impl ModuleKind {
                 | Self::FxDrive
                 | Self::FxAutotune
                 | Self::LfoModule
+                | Self::LlmAgent
         )
     }
 }
@@ -334,6 +344,7 @@ impl Default for RackState {
         // ── Global zone ──────────────────────────────────────────────────────
         rack.add_module(ModuleKind::StepSequencer);
         rack.add_module(ModuleKind::MasterOutput);
+        rack.add_module(ModuleKind::LlmConsole);
 
         // ── Voice zone ───────────────────────────────────────────────────────
         rack.add_module(ModuleKind::AcidBass);
@@ -362,6 +373,8 @@ impl Default for RackState {
         rack.add_module(ModuleKind::LfoModule);
         rack.add_module(ModuleKind::LfoModule);
         rack.add_module(ModuleKind::LfoModule);
+        // Default LLM agent
+        rack.add_module(ModuleKind::LlmAgent);
 
         // ── Default cables ────────────────────────────────────────────────────
         // Collect IDs first (no borrow conflict with connect()).
@@ -482,6 +495,42 @@ impl Default for RackState {
             );
         }
 
+        // LLM Agent → all controllable modules (Control cables)
+        let agent_id = rack
+            .modules
+            .iter()
+            .find(|m| m.kind == ModuleKind::LlmAgent)
+            .map(|m| m.id);
+        if let Some(agent_id) = agent_id {
+            let controllable: Vec<u32> = rack
+                .modules
+                .iter()
+                .filter(|m| {
+                    !matches!(
+                        m.kind,
+                        ModuleKind::MasterOutput | ModuleKind::LlmAgent | ModuleKind::LlmConsole
+                    )
+                })
+                .map(|m| m.id)
+                .collect();
+            for target_id in &controllable {
+                rack.connect(
+                    PortRef {
+                        module_id: agent_id,
+                        dir: PortDir::Out,
+                        kind: PortKind::Control,
+                        index: 0,
+                    },
+                    PortRef {
+                        module_id: *target_id,
+                        dir: PortDir::In,
+                        kind: PortKind::Control,
+                        index: 0,
+                    },
+                );
+            }
+        }
+
         rack
     }
 }
@@ -550,13 +599,71 @@ pub(crate) fn lfo_target_module_kind(target: crate::state::LfoTarget) -> Option<
 /// The destination port kind always matches the source.
 pub(crate) fn rack_out_port_kind(kind: ModuleKind) -> PortKind {
     match kind {
+        ModuleKind::LlmAgent => PortKind::Control,
         ModuleKind::LfoModule | ModuleKind::StepSequencer => PortKind::Cv,
         _ => PortKind::Audio,
     }
 }
 
+/// Derive an agent's scope from its outgoing Control cables.
+/// Returns the scope strings (e.g. ["bass", "kit_a", "fx"]) for the target modules.
+/// Empty result means no control cables → agent controls everything.
+pub fn scope_from_control_cables(rack: &RackState, agent_id: u32) -> Vec<String> {
+    let targets: Vec<u32> = rack
+        .cables
+        .iter()
+        .filter(|c| {
+            c.from.module_id == agent_id
+                && c.from.kind == PortKind::Control
+                && c.from.dir == PortDir::Out
+        })
+        .map(|c| c.to.module_id)
+        .collect();
+    if targets.is_empty() {
+        return Vec::new(); // no cables = controls everything
+    }
+    let mut scope = Vec::new();
+    for tid in &targets {
+        if let Some(m) = rack.modules.iter().find(|m| m.id == *tid)
+            && let Some(name) = kind_to_scope_name(m.kind)
+            && !scope.contains(&name)
+        {
+            scope.push(name);
+        }
+    }
+    scope
+}
+
+/// Map a ModuleKind to the scope string used by apply_llm_update.
+fn kind_to_scope_name(kind: ModuleKind) -> Option<String> {
+    match kind {
+        ModuleKind::AcidBass => Some("bass".to_string()),
+        ModuleKind::DrumKit808 => Some("kit_a".to_string()),
+        ModuleKind::DrumKit909 => Some("kit_b".to_string()),
+        ModuleKind::HooverLead => Some("hoover".to_string()),
+        ModuleKind::An1xVoice => Some("an1x".to_string()),
+        ModuleKind::AmenSampler => Some("amen".to_string()),
+        ModuleKind::NoiseVoice => Some("noise".to_string()),
+        ModuleKind::StepSequencer => Some("sequencer".to_string()),
+        ModuleKind::FxReverb
+        | ModuleKind::FxDelay
+        | ModuleKind::FxChorus
+        | ModuleKind::FxPhaser
+        | ModuleKind::FxRingMod
+        | ModuleKind::FxWaveshaper
+        | ModuleKind::FxBitcrush
+        | ModuleKind::FxEq
+        | ModuleKind::FxCompressor
+        | ModuleKind::FxTapeSat
+        | ModuleKind::FxDrive
+        | ModuleKind::FxAutotune => Some("fx".to_string()),
+        ModuleKind::LfoModule => Some("lfo".to_string()),
+        _ => None,
+    }
+}
+
 /// Match a module kind against a flexible name string from the LLM.
-pub(crate) fn rack_kind_name_matches(kind: ModuleKind, name: &str) -> bool {
+pub fn rack_kind_name_matches(kind: ModuleKind, name: &str) -> bool {
     let n = name.to_lowercase();
     match kind {
         ModuleKind::FxBitcrush => matches!(
@@ -599,6 +706,8 @@ pub(crate) fn rack_kind_name_matches(kind: ModuleKind, name: &str) -> bool {
             matches!(n.as_str(), "master" | "master_out" | "out" | "output")
         }
         ModuleKind::StepSequencer => matches!(n.as_str(), "sequencer" | "seq"),
+        ModuleKind::LlmAgent => matches!(n.as_str(), "llm" | "agent" | "ai" | "llm_agent"),
+        ModuleKind::LlmConsole => matches!(n.as_str(), "console" | "llm_console"),
     }
 }
 

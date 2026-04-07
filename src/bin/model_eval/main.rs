@@ -70,7 +70,7 @@ fn run_model(model_path: &str, specs: &[&StyleSpec], timeout_secs: u64) -> Model
     eprintln!("\n▶  Model: {model_name}");
     eprintln!("   Loading server…");
 
-    let mut backend = LlamaServerBackend::new(model_path, 32768);
+    let mut backend = LlamaServerBackend::new(model_path, 32768, 8766);
     let t_start = Instant::now();
     let mut style_results = Vec::new();
 
@@ -91,12 +91,12 @@ fn run_model(model_path: &str, specs: &[&StyleSpec], timeout_secs: u64) -> Model
             let mut s = AppState::default();
             s.llm.active_style = Some(spec.id.to_string());
             if let Some(bp) = &style.baseline_params {
-                s = apply_llm_update(s, bp);
+                s = apply_llm_update(s, bp, &[]);
             }
             s
         };
 
-        let system = build_system_prompt(&base_state);
+        let system = build_system_prompt(&base_state, &[]);
 
         // Override the inference timeout so a slow model doesn't hang forever.
         let _ = timeout_secs; // LlamaServerBackend uses its own INFER_TIMEOUT_SECS constant;
@@ -113,7 +113,7 @@ fn run_model(model_path: &str, specs: &[&StyleSpec], timeout_secs: u64) -> Model
         let (final_state, json_valid) = match output {
             Ok(out) => {
                 if let Some(ref update) = out.param_update {
-                    let s = apply_llm_update(base_state, update);
+                    let s = apply_llm_update(base_state, update, &[]);
                     (s, true)
                 } else {
                     (base_state, false)

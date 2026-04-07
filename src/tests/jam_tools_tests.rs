@@ -272,8 +272,47 @@ fn behaviour_aliases_work() {
 #[test]
 fn behaviour_tension_lowers_cutoff() {
     let state = AppState::default();
-    let before = state.bass.cutoff;
+    let before = state.bass_voices[0].synth.cutoff;
     let out = apply_behaviour(state, "tension", 0.5);
     // tension lowers cutoff
-    assert!(out.bass.cutoff < before, "tension should lower bass cutoff");
+    assert!(
+        out.bass_voices[0].synth.cutoff < before,
+        "tension should lower bass cutoff"
+    );
+}
+
+// ─── schedule_baseline_ramps tests ──────────────────────────────────────────
+
+use crate::state::jam_tools::schedule_baseline_ramps;
+
+#[test]
+fn baseline_ramps_schedule_f32_params() {
+    let state = AppState::default();
+    let baseline = serde_json::json!({
+        "fx": { "reverb_mix": 0.8, "delay_mix": 0.5 }
+    });
+    let (out, remainder) = schedule_baseline_ramps(state, &baseline, 4.0);
+    assert_eq!(out.llm.active_ramps.len(), 2);
+    assert!(remainder.as_object().unwrap().is_empty());
+}
+
+#[test]
+fn baseline_ramps_pass_through_non_f32() {
+    let state = AppState::default();
+    let baseline = serde_json::json!({
+        "fx": { "reverb_mix": 0.8 },
+        "sequencer": { "bass_steps": [0, 4, 8] }
+    });
+    let (out, remainder) = schedule_baseline_ramps(state, &baseline, 4.0);
+    assert_eq!(out.llm.active_ramps.len(), 1); // only reverb_mix
+    assert!(remainder["sequencer"]["bass_steps"].is_array()); // passed through
+}
+
+#[test]
+fn baseline_ramps_skip_unchanged_params() {
+    let mut state = AppState::default();
+    state.fx.reverb_mix = 0.3;
+    let baseline = serde_json::json!({"fx": {"reverb_mix": 0.3}});
+    let (out, _) = schedule_baseline_ramps(state, &baseline, 4.0);
+    assert!(out.llm.active_ramps.is_empty()); // no change needed
 }

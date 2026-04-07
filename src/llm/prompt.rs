@@ -6,7 +6,7 @@ use crate::state::{AppState, ConversationMode, ROOT_NAMES, StyleVerbosity};
 
 /// Returns the system prompt. If the user has set a non-empty `system_prompt_override`,
 /// that is returned verbatim — giving full control over the model's grounding.
-pub fn build_system_prompt(state: &AppState) -> String {
+pub fn build_system_prompt(state: &AppState, scope: &[String]) -> String {
     if !state.llm.system_prompt_override.trim().is_empty() {
         return state.llm.system_prompt_override.clone();
     }
@@ -64,15 +64,15 @@ pub fn build_system_prompt(state: &AppState) -> String {
 
     let current_json = serde_json::to_string_pretty(&serde_json::json!({
         "bass": {
-            "cutoff": state.bass.cutoff,
-            "resonance": state.bass.resonance,
-            "env_mod": state.bass.env_mod,
-            "decay": state.bass.decay,
-            "accent_level": state.bass.accent_level,
-            "waveform": format!("{:?}", state.bass.waveform),
-            "filter_mode": format!("{:?}", state.bass.filter_mode),
-            "distortion": state.bass.distortion,
-            "volume": state.bass.volume
+            "cutoff": state.bass_voices[0].synth.cutoff,
+            "resonance": state.bass_voices[0].synth.resonance,
+            "env_mod": state.bass_voices[0].synth.env_mod,
+            "decay": state.bass_voices[0].synth.decay,
+            "accent_level": state.bass_voices[0].synth.accent_level,
+            "waveform": format!("{:?}", state.bass_voices[0].synth.waveform),
+            "filter_mode": format!("{:?}", state.bass_voices[0].synth.filter_mode),
+            "distortion": state.bass_voices[0].synth.distortion,
+            "volume": state.bass_voices[0].synth.volume
         },
         "sequencer": {
             "bpm": state.sequencer.bpm,
@@ -166,6 +166,26 @@ pub fn build_system_prompt(state: &AppState) -> String {
     let persona = state.llm.persona_name.trim();
     let persona = if persona.is_empty() { "PULSE" } else { persona };
 
+    let scope_section = if scope.is_empty() {
+        String::new()
+    } else {
+        format!(
+            "\n═══ SCOPE CONSTRAINT ═══\nYou control ONLY: {}. Do NOT emit top-level keys outside your scope.\n",
+            scope.join(", ")
+        )
+    };
+
+    let autonomy_section = if state.llm.agent_autonomy {
+        "\n═══ AUTONOMY ═══\n\
+         You may use spawn_agent to invite a friend (another AI agent) to help — \
+         announce it in _comment first (e.g. \"bringing in a bass specialist\").\n\
+         You may use dismiss to sign off when you feel done — say goodbye in _comment first.\n\
+         The last remaining agent cannot dismiss itself.\n"
+            .to_string()
+    } else {
+        String::new()
+    };
+
     // Music theory context — computed once, embedded in the prompt
     let root_note = state.sequencer.root_note;
     let root_name = ROOT_NAMES[root_note as usize % 12];
@@ -184,7 +204,7 @@ pub fn build_system_prompt(state: &AppState) -> String {
     format!(
         r#"You are {persona} — the AI intelligence inside Impulse Instruct, a hardware-style synthesizer.
 Output ONLY valid JSON. No prose, no markdown, no explanation outside the "_comment" field.
-{style_section}{user_instructions_section}
+{style_section}{user_instructions_section}{scope_section}{autonomy_section}
 CURRENT STATE:
 {current_json}
 {bass_info}
@@ -501,12 +521,22 @@ RACK ROUTING — enable/disable modules and wire cables between them:
 SETTINGS — change only when explicitly asked:
   {{"settings": {{
     "heat": 0.3,                 ← jam mutation intensity 0–1 (0=subtle, 1=anything goes)
+    "style": "acid_house",       ← switch active style (use style id from the style list)
     "jam_bars": 4,               ← bars between jam cycles (0=continuous, 1/2/4/8 common values)
     "persona": "PULSE",          ← AI name shown in UI
     "conversation_mode": "producer"  ← "off" | "producer" | "dj" | "mc"
+    "spawn_agent": {{               ← spawn a new LLM agent module in the rack
+      "persona": "BASS BRAIN",      ← name shown on the agent card
+      "scope": ["bass", "fx"],      ← which modules this agent controls (empty = all)
+      "model": null                  ← model override (null = use default model)
+    }},
+    "dismiss": true                  ← this agent removes itself from the rack
   }}}}
   "save_project": true           ← save current state to project-[timestamp].json
   Only output these when directly commanded. Always acknowledge in _comment what you did.
+  When you set parameters that clearly match a known style, also set "style" to that id.
+  spawn_agent: use when asked to add specialist agents (e.g. "add an MC", "spawn a bass agent").
+  dismiss: use only when asked to remove yourself. Cannot dismiss the last remaining agent.
 
 ═══ OUTPUT FORMAT ═══
 
@@ -540,6 +570,8 @@ Example — "more acid":
         persona = persona,
         user_instructions_section = user_instructions_section,
         style_section = style_section,
+        scope_section = scope_section,
+        autonomy_section = autonomy_section,
         current_json = current_json,
         bass_info = bass_info,
         locked_str = locked_str,

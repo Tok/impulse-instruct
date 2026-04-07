@@ -45,6 +45,9 @@ pub struct AudioEngine {
     /// MIDI clock bytes (0xF8/0xFA/0xFC) produced by the audio thread.
     /// Drain this in a dedicated thread and forward to a MIDI output port.
     pub midi_clock_rx: Consumer<u8>,
+    /// DSP load fraction (0.0–1.0) per callback invocation.
+    /// Drain in UI thread for sparkline display.
+    pub dsp_load_rx: Consumer<f32>,
     _stream: Stream, // kept alive
 }
 
@@ -80,6 +83,9 @@ impl AudioEngine {
         // Ring buffer: audio thread → MIDI clock output thread (1 byte per tick, 24 PPQN)
         let (mut midi_clock_tx, midi_clock_rx) = rtrb::RingBuffer::<u8>::new(512);
 
+        // Ring buffer: audio thread → UI DSP load meter (one f32 per callback)
+        let (mut dsp_load_tx, dsp_load_rx) = rtrb::RingBuffer::<f32>::new(256);
+
         // Audio-thread-local DSP state
         let (initial_params, initial_fx_plan) = {
             let s = state.read();
@@ -114,12 +120,17 @@ impl AudioEngine {
                     // Advance sequencer — snapshot seq state (no lock held during DSP)
                     let (seq_snap, chain_snap, chain_enabled, chain_pos_snap) = {
                         let s = state_clone.read();
-                        (
-                            s.sequencer.clone(),
-                            s.chain.clone(),
-                            s.chain_enabled,
-                            s.chain_pos,
-                        )
+                        let mut seq = s.sequencer.clone();
+                        // Sync voice-enabled flags from AppState.bass_voices into the snapshot.
+                        for (i, v) in s
+                            .bass_voices
+                            .iter()
+                            .enumerate()
+                            .take(crate::state::MAX_BASS_VOICES)
+                        {
+                            seq.bass_voice_enabled[i] = v.enabled;
+                        }
+                        (seq, s.chain.clone(), s.chain_enabled, s.chain_pos)
                     };
 
                     let prev_loop_count = clock.loop_count;
@@ -184,7 +195,14 @@ impl AudioEngine {
                     }
 
                     // Generate audio (TTS duck + mix now handled inside process_block).
+                    let t0 = std::time::Instant::now();
                     dsp.process_block(output, channels);
+                    let dsp_us = t0.elapsed().as_micros() as f32;
+                    // Budget = block_duration in µs
+                    let budget_us = block as f32 / sample_rate * 1_000_000.0;
+                    if budget_us > 0.0 {
+                        dsp_load_tx.push((dsp_us / budget_us).min(2.0)).ok();
+                    }
                     if monitor_vol != 1.0 {
                         for s in output.iter_mut() {
                             *s *= monitor_vol;
@@ -214,6 +232,7 @@ impl AudioEngine {
             capture_rx,
             tts_tx,
             midi_clock_rx,
+            dsp_load_rx,
             _stream: stream,
         })
     }

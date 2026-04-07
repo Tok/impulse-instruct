@@ -31,6 +31,7 @@ pub mod an1x;
 pub use an1x::{An1xLfoTarget, An1xState, An1xWave};
 
 pub const MAX_STEPS: usize = 64;
+pub const MAX_BASS_VOICES: usize = 4;
 
 // ─── Param control mode (tristate) ───────────────────────────────────────────
 
@@ -99,12 +100,12 @@ pub fn set_param_mode(state: AppState, path: &str, mode: ParamMode) -> AppState 
 }
 
 pub mod ui_prefs;
-pub use ui_prefs::{HuthStyle, KnobSize, KnobStyle, PadSize, UiPrefs};
+pub use ui_prefs::{AutosaveInterval, HuthStyle, KnobSize, KnobStyle, PadSize, UiPrefs};
 
 pub mod rack;
 pub use rack::{
     Cable, CableColor, FxPlan, FxStep, ModuleKind, PortDir, PortKind, PortRef, RackModule,
-    RackState, Zone, compile_fx_plan,
+    RackState, Zone, compile_fx_plan, rack_kind_name_matches, scope_from_control_cables,
 };
 
 // ─── Amen / WAV sampler voice state ──────────────────────────────────────────
@@ -140,7 +141,12 @@ fn default_pattern_bank() -> Vec<SequencerState> {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct AppState {
-    pub bass: BassState,
+    /// All bass synth voices (1 active minimum; up to MAX_BASS_VOICES).
+    #[serde(default = "default_bass_voices")]
+    pub bass_voices: Vec<BassVoiceState>,
+    /// Which voice index is currently selected in the UI / being edited.
+    #[serde(default)]
+    pub active_voice: usize,
     pub kit_a: DrumKit808,
     pub kit_b: DrumKit909,
     pub sequencer: SequencerState,
@@ -181,12 +187,16 @@ pub struct AppState {
     /// Modular rack — which modules are visible and how they are cabled.
     #[serde(default)]
     pub rack: RackState,
+    /// Per-agent LLM state for rackable LLM modules.
+    #[serde(default)]
+    pub llm_agents: Vec<LlmAgentState>,
 }
 
 impl Default for AppState {
     fn default() -> Self {
-        Self {
-            bass: Default::default(),
+        let mut s = Self {
+            bass_voices: default_bass_voices(),
+            active_voice: 0,
             kit_a: Default::default(),
             kit_b: Default::default(),
             sequencer: Default::default(),
@@ -206,7 +216,19 @@ impl Default for AppState {
             chain_pos: 0,
             live_record: false,
             rack: Default::default(),
+            llm_agents: Vec::new(),
+        };
+        // Create a default agent for the LlmAgent rack module.
+        if let Some(agent_id) = s
+            .rack
+            .modules
+            .iter()
+            .find(|m| m.kind == ModuleKind::LlmAgent)
+            .map(|m| m.id)
+        {
+            s.llm_agents.push(LlmAgentState::new_default(agent_id));
         }
+        s
     }
 }
 
@@ -255,6 +277,74 @@ impl Default for BassState {
             fm_depth: 0.0,
         }
     }
+}
+
+// ─── Multi-voice bass ─────────────────────────────────────────────────────────
+
+/// One bass voice slot: a `BassState` synth engine + per-voice musical context.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct BassVoiceState {
+    /// Synth parameters for this voice (identical layout to the legacy `BassState`).
+    pub synth: BassState,
+    /// Tonic note override (0=C … 11=B). Only used when `lock_key` is false.
+    pub root_note: u8,
+    /// Scale override. Only used when `lock_key` is false.
+    pub scale: Scale,
+    /// When true, use the global `sequencer.root_note` / `sequencer.scale` instead.
+    pub lock_key: bool,
+    /// Whether this voice is active. Voice 0 is always on; voices 1-3 can be toggled.
+    pub enabled: bool,
+}
+
+impl Default for BassVoiceState {
+    fn default() -> Self {
+        Self {
+            synth: BassState::default(),
+            root_note: 9, // A — matches the default starter pattern
+            scale: Scale::NaturalMinor,
+            lock_key: true, // follow the global key by default
+            enabled: false, // voices 1-3 start disabled; voice 0 is always enabled
+        }
+    }
+}
+
+fn default_bass_voices() -> Vec<BassVoiceState> {
+    let mut voices: Vec<BassVoiceState> = (0..MAX_BASS_VOICES)
+        .map(|_| BassVoiceState::default())
+        .collect();
+    // Voice 0 is always enabled
+    voices[0].enabled = true;
+    voices
+}
+
+fn default_bass_patterns() -> Vec<Vec<TB303Step>> {
+    // Voice 0 gets the same starter pattern as `bass_pattern`; voices 1-3 are silent.
+    let mut patterns = Vec::with_capacity(MAX_BASS_VOICES);
+
+    // Voice 0: A minor starter pattern (mirrors SequencerState default)
+    let mut p0 = vec![TB303Step::default(); MAX_STEPS];
+    let bass_notes: &[(usize, u8)] = &[(0, 45), (6, 48), (12, 52)];
+    for &(step, note) in bass_notes {
+        p0[step].active = true;
+        p0[step].note = note;
+    }
+    patterns.push(p0);
+
+    // Voices 1-3: silent
+    for _ in 1..MAX_BASS_VOICES {
+        patterns.push(vec![TB303Step::default(); MAX_STEPS]);
+    }
+    patterns
+}
+
+fn default_bass_voice_steps() -> Vec<usize> {
+    vec![16usize; MAX_BASS_VOICES]
+}
+
+fn default_bass_voice_enabled() -> [bool; MAX_BASS_VOICES] {
+    let mut arr = [false; MAX_BASS_VOICES];
+    arr[0] = true;
+    arr
 }
 
 // ─── Sequencer ───────────────────────────────────────────────────────────────
@@ -329,6 +419,12 @@ pub struct SequencerState {
     pub bass_steps: usize,
     pub hoover_steps: usize,
     pub an1x_steps: usize,
+    /// Per-voice bass patterns for multi-voice support. Voice 0 mirrors `bass_pattern`.
+    #[serde(default = "default_bass_patterns")]
+    pub bass_patterns: Vec<Vec<TB303Step>>,
+    /// Per-voice step counts for bass voices. Voice 0 mirrors `bass_steps`.
+    #[serde(default = "default_bass_voice_steps")]
+    pub bass_voice_steps: Vec<usize>,
     /// Drum voices that are muted (never trigger regardless of pattern).
     pub muted_drums: std::collections::HashSet<DrumVoice>,
     /// Drum voices in solo mode. When non-empty, only these voices trigger.
@@ -336,6 +432,9 @@ pub struct SequencerState {
     /// When true, BPM is slaved to incoming MIDI clock pulses (0xF8).
     #[serde(default)]
     pub midi_clock_sync: bool,
+    /// Which bass voices are enabled for sequencing. Synced from AppState.bass_voices[i].enabled.
+    #[serde(default = "default_bass_voice_enabled")]
+    pub bass_voice_enabled: [bool; MAX_BASS_VOICES],
 }
 
 impl Default for SequencerState {
@@ -385,7 +484,7 @@ impl Default for SequencerState {
             swing: 0.0,
             time_sig_num: 4,
             drum_patterns,
-            bass_pattern,
+            bass_pattern: bass_pattern.clone(),
             hoover_pattern: vec![TB303Step::default(); MAX_STEPS],
             an1x_pattern: vec![TB303Step::default(); MAX_STEPS],
             root_note: 9, // A — the starter pattern is A minor
@@ -398,6 +497,16 @@ impl Default for SequencerState {
             muted_drums: std::collections::HashSet::new(),
             soloed_drums: std::collections::HashSet::new(),
             midi_clock_sync: false,
+            bass_patterns: {
+                // Voice 0 = same starter pattern; voices 1-3 = silent
+                let mut pats = vec![bass_pattern];
+                for _ in 1..MAX_BASS_VOICES {
+                    pats.push(vec![TB303Step::default(); MAX_STEPS]);
+                }
+                pats
+            },
+            bass_voice_steps: vec![16usize; MAX_BASS_VOICES],
+            bass_voice_enabled: default_bass_voice_enabled(),
         }
     }
 }
@@ -559,6 +668,8 @@ pub struct LlmState {
     pub focused_params: HashSet<String>, // LlmFocus: LLM should prioritize these
     pub auto_jam: bool,                 // LLM continuously generates pattern variations
     pub heat: f32,                      // 0–1: jam mutation intensity (low=subtle, high=wild)
+    #[serde(default = "LlmState::default_temperature")]
+    pub temperature: f32, // 0–2: inference sampling temperature sent to llama-server (decoupled from heat)
     pub conversation_mode: ConversationMode,
     pub active_style: Option<String>, // style id from styles.json, "__free__", "__custom__", or None
     pub custom_style_text: String,    // used when active_style == Some("__custom__")
@@ -596,6 +707,19 @@ pub struct LlmState {
     pub jam_bars: f32, // 0.0 = continuous (fire immediately); N = wait N bars before re-triggering
     #[serde(default)]
     pub jam_cycle_count: u32, // total jam cycles completed (display only)
+    /// Global toggle: allow agents to autonomously spawn new agents during jam.
+    #[serde(default = "default_true")]
+    pub agent_autonomy: bool,
+}
+
+fn default_true() -> bool {
+    true
+}
+
+impl LlmState {
+    fn default_temperature() -> f32 {
+        0.9
+    }
 }
 
 impl Default for LlmState {
@@ -615,13 +739,14 @@ impl Default for LlmState {
             focused_params: HashSet::new(),
             auto_jam: true,
             heat: 0.4,
+            temperature: 0.9,
             conversation_mode: ConversationMode::Producer,
             active_style: None,
             custom_style_text: String::new(),
             user_instructions: String::new(),
             persona_name: String::from("PULSE"),
             system_prompt_override: String::new(),
-            enable_thinking: false,
+            enable_thinking: true,
             show_thinking_in_log: true,
             top_k: 64,
             top_p: 0.95,
@@ -646,11 +771,136 @@ impl Default for LlmState {
             active_ramps: Vec::new(),
             jam_bars: 0.0,
             jam_cycle_count: 0,
+            agent_autonomy: true,
+        }
+    }
+}
+
+// ─── Per-agent LLM state (rackable LLM modules) ─────────────────────────────
+
+/// Agent role — affects personality flavor in system prompt.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum AgentRole {
+    #[default]
+    Producer,
+    Mc,
+    Dj,
+    Specialist,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct LlmAgentState {
+    pub id: u32, // matches RackModule.id
+    pub persona_name: String,
+    pub heat: f32,
+    pub temperature: f32,
+    pub scope: Vec<String>, // top-level keys this agent may write (empty = all)
+    /// Agent role — affects system prompt personality flavor.
+    #[serde(default)]
+    pub role: AgentRole,
+    /// Whether this agent may spawn new agents during jam cycles.
+    #[serde(default)]
+    pub can_spawn: bool,
+    /// Whether this agent may dismiss itself during jam cycles.
+    #[serde(default)]
+    pub can_dismiss: bool,
+    pub jam_bars: f32,
+    pub conversation_mode: ConversationMode,
+    pub active_style: Option<String>,
+    pub custom_style_text: String,
+    pub user_instructions: String,
+    pub enable_thinking: bool,
+    /// Per-agent system prompt override. Empty = use auto-generated prompt.
+    #[serde(default)]
+    pub system_prompt_override: String,
+    /// Per-agent model override. `None` = inherit from global `LlmState.model_path`.
+    #[serde(default)]
+    pub model_path: Option<String>,
+    // Display-only (updated by inference thread)
+    #[serde(default)]
+    pub is_inferring: bool,
+    #[serde(default)]
+    pub last_response: String,
+    #[serde(default)]
+    pub tokens_per_sec: f32,
+    #[serde(default)]
+    pub jam_cycle_count: u32,
+}
+
+impl LlmAgentState {
+    pub fn new_default(id: u32) -> Self {
+        Self {
+            id,
+            persona_name: "PULSE".to_string(),
+            heat: 0.4,
+            temperature: 0.9,
+            scope: Vec::new(),
+            role: AgentRole::Producer,
+            can_spawn: true,
+            can_dismiss: true,
+            jam_bars: 0.0,
+            conversation_mode: ConversationMode::Producer,
+            active_style: None,
+            custom_style_text: String::new(),
+            user_instructions: String::new(),
+            enable_thinking: true,
+            system_prompt_override: String::new(),
+            model_path: None,
+            is_inferring: false,
+            last_response: String::new(),
+            tokens_per_sec: 0.0,
+            jam_cycle_count: 0,
+        }
+    }
+
+    /// Create an agent from the current singleton LlmState values.
+    pub fn from_singleton(id: u32, llm: &LlmState) -> Self {
+        Self {
+            id,
+            persona_name: llm.persona_name.clone(),
+            heat: llm.heat,
+            temperature: llm.temperature,
+            scope: Vec::new(),
+            role: AgentRole::Producer,
+            can_spawn: true,
+            can_dismiss: true,
+            jam_bars: llm.jam_bars,
+            conversation_mode: llm.conversation_mode.clone(),
+            active_style: llm.active_style.clone(),
+            custom_style_text: llm.custom_style_text.clone(),
+            user_instructions: llm.user_instructions.clone(),
+            enable_thinking: llm.enable_thinking,
+            system_prompt_override: String::new(),
+            model_path: None,
+            is_inferring: false,
+            last_response: String::new(),
+            tokens_per_sec: 0.0,
+            jam_cycle_count: 0,
+        }
+    }
+}
+
+/// Sync the default (first) LlmAgentState with the global LlmState.
+/// Keeps header controls and the singleton inference loop working while
+/// the rackable agent UI is being built out.
+pub fn sync_default_agent(state: &mut AppState) {
+    if let Some(agent) = state.llm_agents.first_mut() {
+        // Singleton → agent (header controls are authoritative in Phase 1)
+        agent.persona_name = state.llm.persona_name.clone();
+        agent.heat = state.llm.heat;
+        agent.temperature = state.llm.temperature;
+        agent.jam_bars = state.llm.jam_bars;
+        agent.is_inferring = state.llm.is_inferring;
+        agent.tokens_per_sec = state.llm.tokens_per_sec;
+        agent.jam_cycle_count = state.llm.jam_cycle_count;
+        if !state.llm.last_response.is_empty() {
+            agent.last_response = state.llm.last_response.clone();
         }
     }
 }
 
 pub mod jam_tools;
+pub mod llm_apply;
 pub(crate) mod llm_helpers;
 pub mod transitions;
 
@@ -658,5 +908,6 @@ pub use transitions::*;
 
 pub mod persistence;
 pub use persistence::{
-    apply_session, load_model_setting, load_session, save_model_setting, save_project, save_session,
+    apply_session, load_model_setting, load_session, save_model_setting, save_project,
+    save_session, save_session_ext,
 };

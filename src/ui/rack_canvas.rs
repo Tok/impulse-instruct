@@ -15,132 +15,14 @@
 // Cables are drawn as a Painter overlay after all cards are placed, using
 // screen positions collected during card rendering.
 
-use egui::{Color32, Pos2, ScrollArea, Stroke, Vec2};
+use egui::{Color32, ScrollArea, Vec2};
 
-use crate::state::rack::lfo_target_module_kind;
-use crate::state::{LfoTarget, ModuleKind, PortDir, PortKind, PortRef, Zone};
+use crate::state::{ModuleKind, Zone};
 use crate::ui::module_card::PortPos;
-use crate::ui::{ImpulseApp, module_card};
+use crate::ui::{ImpulseApp, module_card, rack_cables};
 
-// ─── Cable drawing ───────────────────────────────────────────────────────────
-
-/// Draw a single patch cable as a 3D bezier tube (two bezier passes).
-/// Evaluate a cubic bezier at parameter t ∈ [0,1].
-fn bezier(from: Pos2, cp1: Pos2, cp2: Pos2, to: Pos2, t: f32) -> Pos2 {
-    let mt = 1.0 - t;
-    Pos2::new(
-        mt * mt * mt * from.x
-            + 3.0 * mt * mt * t * cp1.x
-            + 3.0 * mt * t * t * cp2.x
-            + t * t * t * to.x,
-        mt * mt * mt * from.y
-            + 3.0 * mt * mt * t * cp1.y
-            + 3.0 * mt * t * t * cp2.y
-            + t * t * t * to.y,
-    )
-}
-
-/// Draw a patch cable.
-/// `time`         — wall-clock seconds (for wobble + signal animation).
-/// `phase_offset` — per-cable phase so cables don't all sway together.
-/// `animate_flow` — when true, draw a traveling signal dot from→to.
-fn draw_cable(
-    painter: &egui::Painter,
-    from: Pos2,
-    to: Pos2,
-    time: f32,
-    phase_offset: f32,
-    animate_flow: bool,
-) {
-    // ── Gravity sag ───────────────────────────────────────────────────────────
-    let dx = (to.x - from.x).abs();
-    let dy = to.y - from.y;
-    let sag = (dx * 0.28 + (-dy).max(0.0) * 0.18).clamp(20.0, 160.0);
-
-    // ── Gentle wobble — each cable sways at its own phase ────────────────────
-    // Horizontal oscillation of the control points; keeps amplitude small so
-    // cables look alive but not distracting.
-    let wobble = ((time * 1.1 + phase_offset) * std::f32::consts::TAU).sin() * 2.5;
-    let cp1 = from + Vec2::new(wobble, sag);
-    let cp2 = to + Vec2::new(-wobble * 0.8, sag);
-
-    // ── Sample curve points (48 segments for smooth 3D tube) ─────────────────
-    let n = 48usize;
-    let points: Vec<Pos2> = (0..=n)
-        .map(|i| bezier(from, cp1, cp2, to, i as f32 / n as f32))
-        .collect();
-
-    // ── 3D tube rendering — 4 passes ─────────────────────────────────────────
-    // 1. Wide dark drop shadow
-    let shadow: Vec<Pos2> = points.iter().map(|p| *p + Vec2::new(0.5, 2.5)).collect();
-    painter.add(egui::Shape::line(
-        shadow,
-        Stroke::new(5.5, Color32::from_black_alpha(90)),
-    ));
-
-    // 2. Cable body — bright gray
-    let cable_col = Color32::from_gray(155);
-    painter.add(egui::Shape::line(
-        points.clone(),
-        Stroke::new(4.5, cable_col),
-    ));
-
-    // 3. Core — slightly lighter, narrower (depth gradient)
-    painter.add(egui::Shape::line(
-        points.clone(),
-        Stroke::new(2.5, Color32::from_gray(185)),
-    ));
-
-    // 4. Specular highlight — thin bright line along the top edge
-    let hilight: Vec<Pos2> = points.iter().map(|p| *p + Vec2::new(0.0, -1.5)).collect();
-    painter.add(egui::Shape::line(
-        hilight,
-        Stroke::new(1.0, Color32::from_white_alpha(110)),
-    ));
-
-    // ── Signal flow dots — speed and spacing normalised to cable arc length ──────
-    // Arc length from the already-sampled points (free, no extra Bezier evals).
-    if animate_flow {
-        let arc_len: f32 = points
-            .windows(2)
-            .map(|w| w[0].distance(w[1]))
-            .sum::<f32>()
-            .max(1.0);
-
-        // Target: ~170 px/s travel speed regardless of cable length.
-        // Clamp so very short or very long cables stay in a sensible range.
-        let speed = (170.0 / arc_len).clamp(0.25, 2.5);
-
-        // Dot spacing: one dot per ~130 px of cable; min 2, max 5.
-        let num_dots = ((arc_len / 130.0).round() as u8).clamp(2, 5);
-        let spacing = 1.0 / num_dots as f32;
-
-        for i in 0..num_dots {
-            let t_dot = (time * speed + phase_offset * 0.3 + i as f32 * spacing) % 1.0;
-            let dot = bezier(from, cp1, cp2, to, t_dot);
-            painter.circle_filled(dot, 5.0, Color32::from_white_alpha(35));
-            painter.circle_filled(dot, 2.5, Color32::from_gray(240));
-        }
-    }
-}
-
-// ─── In-progress cable drag state ────────────────────────────────────────────
-
-/// UI-local state for a cable currently being dragged.
-#[derive(Clone, Debug)]
-pub struct CableDrag {
-    pub from_port: crate::state::PortRef,
-    pub from_screen: Pos2,
-}
-
-// ─── Module drag state ────────────────────────────────────────────────────────
-
-/// State for a module title bar being dragged to reorder it in the rack.
-#[derive(Clone, Debug)]
-pub struct ModuleDrag {
-    pub module_id: u32,
-    pub pointer: Pos2,
-}
+// Re-export so callers referencing `rack_canvas::CableDrag` keep working.
+pub use crate::ui::rack_cables::{CableDrag, ModuleDrag};
 
 // ─── Available module kinds per zone (for add menus) ─────────────────────────
 
@@ -153,6 +35,8 @@ const VOICE_KINDS: &[ModuleKind] = &[
     ModuleKind::AmenSampler,
     ModuleKind::NoiseVoice,
 ];
+
+const GLOBAL_KINDS: &[ModuleKind] = &[ModuleKind::LlmConsole, ModuleKind::LlmAgent];
 
 const FXMOD_KINDS: &[ModuleKind] = &[
     ModuleKind::FxReverb,
@@ -223,12 +107,12 @@ pub fn draw_rack(app: &mut ImpulseApp, ctx: &egui::Context, ui: &mut egui::Ui) {
         ui.separator();
         ui.add_space(4.0);
 
-        let cable_col = if app.show_cables {
+        let flip_col = if app.rack_flipped {
             Color32::from_gray(220)
         } else {
             Color32::from_gray(90)
         };
-        let cable_fill = if app.show_cables {
+        let flip_fill = if app.rack_flipped {
             Color32::from_gray(55)
         } else {
             Color32::from_gray(22)
@@ -236,18 +120,18 @@ pub fn draw_rack(app: &mut ImpulseApp, ctx: &egui::Context, ui: &mut egui::Ui) {
         if ui
             .add(
                 egui::Button::new(
-                    egui::RichText::new("CABLES")
+                    egui::RichText::new(if app.rack_flipped { "FRONT" } else { "BACK" })
                         .monospace()
                         .size(8.5)
-                        .color(cable_col),
+                        .color(flip_col),
                 )
-                .fill(cable_fill)
-                .min_size(egui::vec2(50.0, 18.0)),
+                .fill(flip_fill)
+                .min_size(egui::vec2(42.0, 18.0)),
             )
-            .on_hover_text("Toggle patch cable overlay  [Tab]")
+            .on_hover_text("Flip rack  [Tab]  —  hold Alt to hide cables")
             .clicked()
         {
-            app.show_cables = !app.show_cables;
+            app.rack_flipped = !app.rack_flipped;
             app.session_dirty = true;
         }
     });
@@ -260,12 +144,27 @@ pub fn draw_rack(app: &mut ImpulseApp, ctx: &egui::Context, ui: &mut egui::Ui) {
     // context menu can cover the entire rack area with a single interact region.
     let canvas_rect = ui.available_rect_before_wrap();
 
-    // Disable drag-to-scroll only while a cable is being dragged, so normal
-    // two-finger/trackpad scroll works when not patching.
+    // Disable drag-to-scroll when the pointer is near a port (so the scroll
+    // area doesn't steal the press that begins a cable drag) or while a cable
+    // is already being dragged.  Port positions are from the previous frame —
+    // one frame of latency is imperceptible.
+    let ports_mem_id = egui::Id::new("rack_port_positions");
+    let prev_ports: Vec<PortPos> = ctx
+        .memory(|m| m.data.get_temp(ports_mem_id))
+        .unwrap_or_default();
+    let pointer_near_port = ctx
+        .pointer_latest_pos()
+        .map(|p| {
+            prev_ports
+                .iter()
+                .any(|pp| pp.center.distance(p) <= module_card::PORT_RADIUS + 6.0)
+        })
+        .unwrap_or(false);
     let dragging_cable = app.cable_drag.is_some();
-    ScrollArea::vertical()
+    let scroll_id = egui::Id::new("rack_scroll");
+    let scroll_out = ScrollArea::vertical()
         .id_source("rack_scroll")
-        .drag_to_scroll(!dragging_cable)
+        .drag_to_scroll(false)
         .auto_shrink([false; 2])
         .scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::AlwaysVisible)
         .show(ui, |ui| {
@@ -273,99 +172,95 @@ pub fn draw_rack(app: &mut ImpulseApp, ctx: &egui::Context, ui: &mut egui::Ui) {
             draw_rack_inner(app, ui, &mut ports);
         });
 
-    // ── Cable overlay (Tab to show/hide) ──────────────────────────────────────
+    // ── Arrow-key scrolling (fast, held = continuous) ─────────────────────────
+    // Only scroll when no text widget has focus (avoid stealing arrow keys
+    // from text inputs like the prompt field).
+    let nothing_focused = ctx.memory(|m| m.focused()).is_none();
+    if nothing_focused {
+        let scroll_speed = 60.0;
+        let wasd = ctx
+            .data(|d| d.get_temp::<bool>(egui::Id::new("wasd_as_arrows")))
+            .unwrap_or(false);
+        let up =
+            ctx.input(|i| i.key_down(egui::Key::ArrowUp) || (wasd && i.key_down(egui::Key::W)));
+        let down =
+            ctx.input(|i| i.key_down(egui::Key::ArrowDown) || (wasd && i.key_down(egui::Key::S)));
+        if up || down {
+            let max_y = (scroll_out.content_size.y - scroll_out.inner_rect.height()).max(0.0);
+            let mut state = scroll_out.state;
+            if down {
+                state.offset.y = (state.offset.y + scroll_speed).min(max_y);
+            }
+            if up {
+                state.offset.y = (state.offset.y - scroll_speed).max(0.0);
+            }
+            state.store(ctx, scroll_id);
+            ctx.request_repaint();
+        }
+    }
+
+    // Persist ports for the next frame's scroll-lock check.
+    ctx.memory_mut(|m| m.data.insert_temp(ports_mem_id, ports.clone()));
+
+    // ── Cable overlay (extracted to rack_cables.rs) ────────────────────────────
+    rack_cables::draw_cable_overlay(app, ctx, &ports, canvas_rect);
+
+    // ── Port hover / drag-target highlights (back panel only) ─────────────────
+    if (app.rack_flipped || app.cable_drag.is_some())
+        && let Some(pointer) = ctx.pointer_latest_pos()
     {
         let time = ctx.input(|i| i.time) as f32;
-        let mut painter = ctx.layer_painter(egui::LayerId::new(
+        let mut overlay = ctx.layer_painter(egui::LayerId::new(
             egui::Order::Foreground,
-            egui::Id::new("cables"),
+            egui::Id::new("port_highlights"),
         ));
-        // Clip cables to the rack canvas only — keeps header, footer, and piano on top.
-        painter.set_clip_rect(canvas_rect);
+        overlay.set_clip_rect(canvas_rect);
 
-        // In-progress drag: no flow dot, neutral phase.
-        if let Some(ref drag) = app.cable_drag
-            && let Some(pointer) = ctx.pointer_latest_pos()
-        {
-            draw_cable(&painter, drag.from_screen, pointer, time, 0.0, false);
+        for pp in &ports {
+            let dist = pp.center.distance(pointer);
+            let is_hovered = dist <= module_card::PORT_RADIUS + 6.0;
+
+            if let Some(ref drag) = app.cable_drag {
+                let is_source = pp.port == drag.from_port;
+                let is_compatible = pp.port.dir != drag.from_port.dir
+                    && pp.port.kind == drag.from_port.kind
+                    && pp.port.module_id != drag.from_port.module_id;
+                if is_source {
+                    // Steady bright ring on the drag source port
+                    overlay.circle_stroke(
+                        pp.center,
+                        module_card::PORT_RADIUS + 3.5,
+                        egui::Stroke::new(1.5, egui::Color32::from_white_alpha(200)),
+                    );
+                } else if is_compatible {
+                    // Pulsing ring on valid targets — faster pulse when hovered.
+                    // Strictly grayscale (R=G=B) per ui-design.md.
+                    let freq = if is_hovered { 4.0 } else { 2.0 };
+                    let pulse = (time * freq * std::f32::consts::TAU).sin() * 0.5 + 0.5;
+                    let base_alpha = if is_hovered { 160u8 } else { 80u8 };
+                    let alpha = (base_alpha as f32 + pulse * 80.0) as u8;
+                    overlay.circle_stroke(
+                        pp.center,
+                        module_card::PORT_RADIUS + 3.5,
+                        egui::Stroke::new(1.5, egui::Color32::from_white_alpha(alpha)),
+                    );
+                }
+                // Incompatible ports: no decoration
+            } else if is_hovered {
+                // Idle hover: subtle static ring
+                overlay.circle_stroke(
+                    pp.center,
+                    module_card::PORT_RADIUS + 2.5,
+                    egui::Stroke::new(1.0, egui::Color32::from_white_alpha(110)),
+                );
+            }
         }
 
-        if app.show_cables && !app.show_prefs {
-            let cables = app.state.read().rack.cables.clone();
-            for (ci, cable) in cables.iter().enumerate() {
-                let from_pos = ports
-                    .iter()
-                    .find(|p| p.port == cable.from)
-                    .map(|p| p.center);
-                let to_pos = ports.iter().find(|p| p.port == cable.to).map(|p| p.center);
-                if let (Some(from), Some(to)) = (from_pos, to_pos) {
-                    // Spread phase offsets by golden ratio so cables wobble independently.
-                    let phase = ci as f32 * 2.399;
-                    draw_cable(&painter, from, to, time, phase, true);
-                }
-            }
-
-            // Synthesise visual cables for active LFO slots.
-            // The LFO→param connection is a state param (lfo.target), not a rack
-            // cable, so we derive the cable position from current state here.
-            {
-                let state = app.state.read();
-                let lfo_ids: Vec<u32> = state
-                    .rack
-                    .modules
-                    .iter()
-                    .filter(|m| m.kind == ModuleKind::LfoModule)
-                    .map(|m| m.id)
-                    .collect();
-                for (i, lfo_slot) in state.lfo.iter().enumerate() {
-                    if !lfo_slot.enabled || lfo_slot.target == LfoTarget::None {
-                        continue;
-                    }
-                    let Some(&lfo_id) = lfo_ids.get(i) else {
-                        continue;
-                    };
-                    let Some(tgt_kind) = lfo_target_module_kind(lfo_slot.target) else {
-                        continue;
-                    };
-                    let Some(tgt_id) = state
-                        .rack
-                        .modules
-                        .iter()
-                        .find(|m| m.kind == tgt_kind)
-                        .map(|m| m.id)
-                    else {
-                        continue;
-                    };
-                    // Skip if a real rack cable already covers this pair.
-                    if cables
-                        .iter()
-                        .any(|c| c.from.module_id == lfo_id && c.to.module_id == tgt_id)
-                    {
-                        continue;
-                    }
-                    let from_ref = PortRef {
-                        module_id: lfo_id,
-                        dir: PortDir::Out,
-                        kind: PortKind::Cv,
-                        index: 0,
-                    };
-                    let to_ref = PortRef {
-                        module_id: tgt_id,
-                        dir: PortDir::In,
-                        kind: PortKind::Cv,
-                        index: 0,
-                    };
-                    let from_pos = ports.iter().find(|p| p.port == from_ref).map(|p| p.center);
-                    let to_pos = ports.iter().find(|p| p.port == to_ref).map(|p| p.center);
-                    if let (Some(from), Some(to)) = (from_pos, to_pos) {
-                        let phase = (cables.len() + i) as f32 * 2.399;
-                        draw_cable(&painter, from, to, time, phase, true);
-                    }
-                }
-            }
-
-            // Animate continuously while cables are visible.
-            ctx.request_repaint();
+        // Cursor feedback
+        if dragging_cable {
+            ctx.set_cursor_icon(egui::CursorIcon::Crosshair);
+        } else if pointer_near_port {
+            ctx.set_cursor_icon(egui::CursorIcon::PointingHand);
         }
     }
 
@@ -413,71 +308,6 @@ pub fn draw_rack(app: &mut ImpulseApp, ctx: &egui::Context, ui: &mut egui::Ui) {
 
     // ── Add module popup ──────────────────────────────────────────────────────
     draw_add_menu(app, ctx);
-
-    // ── Right-click context menu ──────────────────────────────────────────────
-    ui.interact(canvas_rect, ui.id().with("ctx_menu"), egui::Sense::hover())
-        .context_menu(|ui| {
-            ui.label(
-                egui::RichText::new("ADD MODULE")
-                    .monospace()
-                    .size(8.5)
-                    .color(Color32::from_gray(100)),
-            );
-            ui.separator();
-            ui.menu_button("Voice", |ui| {
-                for kind in VOICE_KINDS {
-                    if !kind.allows_multiple() {
-                        let exists = app
-                            .state
-                            .read()
-                            .rack
-                            .modules
-                            .iter()
-                            .any(|m| m.kind == *kind);
-                        if exists {
-                            ui.add_enabled(
-                                false,
-                                egui::Button::new(
-                                    egui::RichText::new(kind.label()).monospace().size(9.5),
-                                ),
-                            );
-                            continue;
-                        }
-                    }
-                    if ui
-                        .button(egui::RichText::new(kind.label()).monospace().size(9.5))
-                        .clicked()
-                    {
-                        app.state.write().rack.add_module(*kind);
-                        ui.close_menu();
-                    }
-                }
-            });
-            ui.menu_button("FX + Mod", |ui| {
-                for kind in FXMOD_KINDS {
-                    if ui
-                        .button(egui::RichText::new(kind.label()).monospace().size(9.5))
-                        .clicked()
-                    {
-                        app.state.write().rack.add_module(*kind);
-                        ui.close_menu();
-                    }
-                }
-            });
-            ui.separator();
-            let cable_label = if app.show_cables {
-                "Hide cables  [Tab]"
-            } else {
-                "Show cables  [Tab]"
-            };
-            if ui
-                .button(egui::RichText::new(cable_label).monospace().size(9.5))
-                .clicked()
-            {
-                app.show_cables = !app.show_cables;
-                ui.close_menu();
-            }
-        });
 }
 
 fn draw_add_menu(app: &mut ImpulseApp, ctx: &egui::Context) {
@@ -488,7 +318,7 @@ fn draw_add_menu(app: &mut ImpulseApp, ctx: &egui::Context) {
     let kinds: &[ModuleKind] = match zone {
         crate::state::Zone::Voice => VOICE_KINDS,
         crate::state::Zone::FxMod => FXMOD_KINDS,
-        crate::state::Zone::Global => return,
+        crate::state::Zone::Global => GLOBAL_KINDS,
     };
 
     let mut open = true;
@@ -525,7 +355,12 @@ fn draw_add_menu(app: &mut ImpulseApp, ctx: &egui::Context) {
                     .button(egui::RichText::new(kind.label()).monospace().size(9.5))
                     .clicked()
                 {
-                    app.state.write().rack.add_module(*kind);
+                    let id = app.state.write().rack.add_module(*kind);
+                    if *kind == ModuleKind::LlmAgent {
+                        let agent =
+                            crate::state::LlmAgentState::from_singleton(id, &app.state.read().llm);
+                        app.state.write().llm_agents.push(agent);
+                    }
                     close = true;
                 }
             }
@@ -558,7 +393,7 @@ fn draw_add_menu(app: &mut ImpulseApp, ctx: &egui::Context) {
 const VOICE_MIN_W: f32 = 420.0;
 const FX_SLOT_W: f32 = 220.0;
 
-fn module_slot_w(kind: ModuleKind, full_w: f32) -> f32 {
+pub(super) fn module_slot_w(kind: ModuleKind, full_w: f32) -> f32 {
     match kind {
         ModuleKind::StepSequencer | ModuleKind::MasterOutput => full_w,
         // FX and LFO: fixed compact width
@@ -573,7 +408,11 @@ fn module_slot_w(kind: ModuleKind, full_w: f32) -> f32 {
         | ModuleKind::FxCompressor
         | ModuleKind::FxTapeSat
         | ModuleKind::FxDrive
-        | ModuleKind::LfoModule => FX_SLOT_W.min(full_w),
+        | ModuleKind::FxAutotune
+        | ModuleKind::LfoModule
+        | ModuleKind::LlmAgent => FX_SLOT_W.min(full_w),
+        // LLM Console + global modules: full width
+        ModuleKind::LlmConsole => full_w,
         // AN1X: wide — 2 voice columns or full width
         ModuleKind::An1xVoice => {
             let cols = voice_cols(full_w);
@@ -623,20 +462,166 @@ fn group_into_rows(
     rows
 }
 
+/// For a row of modules, compute an expansion factor and left-padding so modules
+/// fill the available width.  When expansion would be excessive (>1.4×), keep
+/// modules at their nominal width and center the row instead.
+fn row_expand_and_pad(row: &[(u32, ModuleKind, bool)], available_w: f32, gap: f32) -> (f32, f32) {
+    let n = row.len() as f32;
+    let total_gap = (n - 1.0).max(0.0) * gap;
+    let nominal: f32 = row
+        .iter()
+        .map(|(_, k, _)| module_slot_w(*k, available_w))
+        .sum();
+    let fill_w = available_w - total_gap;
+    if nominal <= 0.0 {
+        return (1.0, 0.0);
+    }
+    let ratio = fill_w / nominal;
+    if ratio <= 1.4 {
+        // Expand proportionally so the row fills the available width.
+        (ratio, 0.0)
+    } else {
+        // Would stretch too far — center at nominal widths instead.
+        let pad = ((available_w - nominal - total_gap) / 2.0).max(0.0);
+        (1.0, pad)
+    }
+}
+
 fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<PortPos>) {
     // Subtract a small gutter so modules never touch the scrollbar.
     let available_w = (ui.available_width() - 8.0).max(200.0);
 
     // ── GLOBAL ZONE — sequencer + master, full width ──────────────────────────
     {
-        let (_, toggle) =
-            module_card::zone_rail(ui, "GLOBAL", false, 24, app.zone_global_collapsed);
+        let (add, toggle) =
+            module_card::zone_rail(ui, "GLOBAL", true, 24, app.zone_global_collapsed);
         if toggle {
             app.zone_global_collapsed = !app.zone_global_collapsed;
+        }
+        if add {
+            app.add_menu_zone = Some(crate::state::Zone::Global);
         }
     }
 
     if !app.zone_global_collapsed {
+        // LLM Console — style, prompt, JAM (singleton, full-width, always first)
+        {
+            let console_id = app
+                .state
+                .read()
+                .rack
+                .modules
+                .iter()
+                .find(|m| m.kind == ModuleKind::LlmConsole)
+                .map(|m| m.id);
+            if let Some(id) = console_id {
+                let enabled = app
+                    .state
+                    .read()
+                    .rack
+                    .modules
+                    .iter()
+                    .find(|m| m.id == id)
+                    .map(|m| m.enabled)
+                    .unwrap_or(true);
+                ui.add_space(2.0);
+                let resp = if app.rack_flipped {
+                    module_card::module_card_back(
+                        ui,
+                        id,
+                        ModuleKind::LlmConsole,
+                        enabled,
+                        Some(available_w - 2.0),
+                        ports,
+                    )
+                } else {
+                    module_card::module_card(
+                        ui,
+                        id,
+                        ModuleKind::LlmConsole,
+                        enabled,
+                        Some(available_w - 2.0),
+                        ports,
+                        |ui| {
+                            app.draw_llm_console_content(ui);
+                        },
+                    )
+                    .0
+                };
+                if resp.toggle_clicked
+                    && let Some(m) = app
+                        .state
+                        .write()
+                        .rack
+                        .modules
+                        .iter_mut()
+                        .find(|m| m.id == id)
+                {
+                    m.enabled = !m.enabled;
+                }
+            }
+        }
+
+        // LLM agent cards (compact, side-by-side)
+        {
+            let agent_ids: Vec<(u32, bool)> = app
+                .state
+                .read()
+                .rack
+                .modules
+                .iter()
+                .filter(|m| m.kind == ModuleKind::LlmAgent)
+                .map(|m| (m.id, m.enabled))
+                .collect();
+            if !agent_ids.is_empty() {
+                ui.add_space(2.0);
+                ui.horizontal_wrapped(|ui| {
+                    let slot_w = FX_SLOT_W.min(available_w);
+                    for (id, enabled) in &agent_ids {
+                        let resp = if app.rack_flipped {
+                            module_card::module_card_back(
+                                ui,
+                                *id,
+                                ModuleKind::LlmAgent,
+                                *enabled,
+                                Some(slot_w),
+                                ports,
+                            )
+                        } else {
+                            module_card::module_card(
+                                ui,
+                                *id,
+                                ModuleKind::LlmAgent,
+                                *enabled,
+                                Some(slot_w),
+                                ports,
+                                |ui| {
+                                    draw_llm_agent_content(app, ui, *id);
+                                },
+                            )
+                            .0
+                        };
+                        if resp.toggle_clicked
+                            && let Some(m) = app
+                                .state
+                                .write()
+                                .rack
+                                .modules
+                                .iter_mut()
+                                .find(|m| m.id == *id)
+                        {
+                            m.enabled = !m.enabled;
+                        }
+                        if resp.remove_clicked {
+                            app.state.write().rack.remove_module(*id);
+                            app.state.write().llm_agents.retain(|a| a.id != *id);
+                            app.push_fx_plan();
+                        }
+                    }
+                });
+            }
+        }
+
         // Sequencer — full available width
         {
             let seq_id = app
@@ -657,18 +642,30 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
                 .find(|m| m.id == seq_id)
                 .map(|m| m.enabled)
                 .unwrap_or(true);
-
-            let (resp, _) = module_card::module_card(
-                ui,
-                seq_id,
-                ModuleKind::StepSequencer,
-                enabled,
-                Some(available_w - 2.0),
-                ports,
-                |ui| {
-                    crate::ui::panels::draw_sequencer(app, ui);
-                },
-            );
+            ui.add_space(2.0);
+            let resp = if app.rack_flipped {
+                module_card::module_card_back(
+                    ui,
+                    seq_id,
+                    ModuleKind::StepSequencer,
+                    enabled,
+                    Some(available_w - 2.0),
+                    ports,
+                )
+            } else {
+                module_card::module_card(
+                    ui,
+                    seq_id,
+                    ModuleKind::StepSequencer,
+                    enabled,
+                    Some(available_w - 2.0),
+                    ports,
+                    |ui| {
+                        crate::ui::panels::draw_sequencer(app, ui);
+                    },
+                )
+                .0
+            };
             if resp.toggle_clicked
                 && let Some(m) = app
                     .state
@@ -682,9 +679,7 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
             }
         }
 
-        ui.add_space(2.0);
-
-        // Master output card — compact strip showing master volume + per-voice info
+        // Master output
         {
             let master_id = app
                 .state
@@ -695,17 +690,30 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
                 .find(|m| m.kind == ModuleKind::MasterOutput)
                 .map(|m| m.id)
                 .unwrap_or(101);
-            let (resp, _) = module_card::module_card(
-                ui,
-                master_id,
-                ModuleKind::MasterOutput,
-                true,
-                Some(available_w - 2.0),
-                ports,
-                |ui| {
-                    draw_master_content(app, ui);
-                },
-            );
+            ui.add_space(2.0);
+            let resp = if app.rack_flipped {
+                module_card::module_card_back(
+                    ui,
+                    master_id,
+                    ModuleKind::MasterOutput,
+                    true,
+                    Some(available_w - 2.0),
+                    ports,
+                )
+            } else {
+                module_card::module_card(
+                    ui,
+                    master_id,
+                    ModuleKind::MasterOutput,
+                    true,
+                    Some(available_w - 2.0),
+                    ports,
+                    |ui| {
+                        draw_master_content(app, ui);
+                    },
+                )
+                .0
+            };
             let _ = resp;
         }
 
@@ -753,24 +761,40 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
 
         // Voice modules — manual row grouping prevents any module from going off-screen.
         for row in group_into_rows(&voice_ids, available_w, 4.0) {
+            let (expand, pad) = row_expand_and_pad(&row, available_w, 4.0);
             ui.horizontal(|ui| {
                 ui.spacing_mut().item_spacing = Vec2::new(4.0, 0.0);
+                if pad > 1.0 {
+                    ui.add_space(pad);
+                }
                 for (id, kind, enabled) in &row {
-                    let slot_w = module_slot_w(*kind, available_w);
+                    let slot_w = module_slot_w(*kind, available_w) * expand;
                     // Dim the card ghost while it's being dragged
                     let is_dragging = app.module_drag.as_ref().map(|d| d.module_id) == Some(*id);
                     let eff_enabled = if is_dragging { false } else { *enabled };
-                    let (resp, _) = module_card::module_card(
-                        ui,
-                        *id,
-                        *kind,
-                        eff_enabled,
-                        Some(slot_w),
-                        ports,
-                        |ui| {
-                            draw_voice_content(app, ui, *kind);
-                        },
-                    );
+                    let resp = if app.rack_flipped {
+                        module_card::module_card_back(
+                            ui,
+                            *id,
+                            *kind,
+                            eff_enabled,
+                            Some(slot_w),
+                            ports,
+                        )
+                    } else {
+                        module_card::module_card(
+                            ui,
+                            *id,
+                            *kind,
+                            eff_enabled,
+                            Some(slot_w),
+                            ports,
+                            |ui| {
+                                draw_voice_content(app, ui, *kind);
+                            },
+                        )
+                        .0
+                    };
                     if resp.toggle_clicked && !is_dragging {
                         let en = *enabled;
                         if let Some(m) = app
@@ -839,27 +863,43 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
 
         // FX + Mod modules — manual row grouping, same as voice zone.
         for row in group_into_rows(&fxmod_ids, available_w, 4.0) {
+            let (expand, pad) = row_expand_and_pad(&row, available_w, 4.0);
             ui.horizontal(|ui| {
                 ui.spacing_mut().item_spacing = Vec2::new(4.0, 0.0);
+                if pad > 1.0 {
+                    ui.add_space(pad);
+                }
                 for (id, kind, enabled) in &row {
-                    let slot_w = module_slot_w(*kind, available_w);
+                    let slot_w = module_slot_w(*kind, available_w) * expand;
                     let is_dragging = app.module_drag.as_ref().map(|d| d.module_id) == Some(*id);
                     let eff_enabled = if is_dragging { false } else { *enabled };
-                    let (resp, _) = module_card::module_card(
-                        ui,
-                        *id,
-                        *kind,
-                        eff_enabled,
-                        Some(slot_w),
-                        ports,
-                        |ui| {
-                            if *kind == ModuleKind::LfoModule {
-                                draw_lfo_content(app, ui, *id);
-                            } else {
-                                draw_fx_content(app, ui, *kind);
-                            }
-                        },
-                    );
+                    let resp = if app.rack_flipped {
+                        module_card::module_card_back(
+                            ui,
+                            *id,
+                            *kind,
+                            eff_enabled,
+                            Some(slot_w),
+                            ports,
+                        )
+                    } else {
+                        module_card::module_card(
+                            ui,
+                            *id,
+                            *kind,
+                            eff_enabled,
+                            Some(slot_w),
+                            ports,
+                            |ui| {
+                                if *kind == ModuleKind::LfoModule {
+                                    draw_lfo_content(app, ui, *id);
+                                } else {
+                                    draw_fx_content(app, ui, *kind);
+                                }
+                            },
+                        )
+                        .0
+                    };
                     if resp.toggle_clicked && !is_dragging {
                         let en = *enabled;
                         if let Some(m) = app
@@ -893,95 +933,9 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
 
 // ─── Module drag helpers ──────────────────────────────────────────────────────
 
-/// Process drag start/stop from a card response and update app.module_drag.
-/// Returns true if this card was just dropped (so caller can reorder slots).
-fn handle_title_drag(
-    app: &mut ImpulseApp,
-    ctx: &egui::Context,
-    id: u32,
-    resp: &module_card::CardResponse,
-) -> bool {
-    if resp.title_dragged {
-        if app.module_drag.as_ref().map(|d| d.module_id) != Some(id) {
-            app.module_drag = Some(ModuleDrag {
-                module_id: id,
-                pointer: ctx.pointer_latest_pos().unwrap_or_default(),
-            });
-        } else if let Some(ref mut drag) = app.module_drag {
-            drag.pointer = ctx.pointer_latest_pos().unwrap_or(drag.pointer);
-        }
-    }
-    if resp.title_drag_released && app.module_drag.as_ref().map(|d| d.module_id) == Some(id) {
-        app.module_drag = None;
-        return true;
-    }
-    false
-}
-
-/// After a drop, reorder module slots so dragged module ends up at the position
-/// closest to `drop_pos` within its zone's ordered list.
-fn reorder_module_by_drop(
-    app: &mut ImpulseApp,
-    dragged_id: u32,
-    drop_pos: egui::Pos2,
-    zone: crate::state::Zone,
-) {
-    // Use 1200px as a reasonable default — drop position is proportional, not exact.
-    let available_w = 1200.0f32;
-    // Get ordered IDs + their widths for this zone
-    let zone_entries: Vec<(u32, ModuleKind)> = {
-        let rack = app.state.read();
-        let mut v: Vec<_> = rack
-            .rack
-            .modules
-            .iter()
-            .filter(|m| m.zone == zone)
-            .collect();
-        v.sort_by_key(|m| m.slot);
-        v.iter().map(|m| (m.id, m.kind)).collect()
-    };
-    let zone_ids: Vec<u32> = zone_entries.iter().map(|&(id, _)| id).collect();
-    // Find dragged module's current index
-    let Some(from_idx) = zone_ids.iter().position(|&id| id == dragged_id) else {
-        return;
-    };
-    let n = zone_ids.len();
-    if n < 2 {
-        return;
-    }
-    // Estimate target index: walk cumulative widths to find which slot drop_pos.x falls in.
-    // drop_pos.x is in screen space; subtract a small left margin approximation (8px).
-    let x = (drop_pos.x - 8.0).max(0.0);
-    let gap = 4.0f32;
-    let mut cursor = 0.0f32;
-    let mut to_idx = 0usize;
-    for (i, &(_, kind)) in zone_entries.iter().enumerate() {
-        let w = module_slot_w(kind, available_w);
-        let mid = cursor + w * 0.5;
-        if x >= mid {
-            to_idx = i + 1;
-        }
-        cursor += w + gap;
-    }
-    let to_idx = to_idx.clamp(0, n - 1);
-    if from_idx == to_idx {
-        return;
-    }
-    // Reorder: move dragged to to_idx, shift others
-    let mut ids = zone_ids;
-    let removed = ids.remove(from_idx);
-    ids.insert(to_idx, removed);
-    // Write new slot values
-    let mut state = app.state.write();
-    for (slot, &id) in ids.iter().enumerate() {
-        if let Some(m) = state.rack.modules.iter_mut().find(|m| m.id == id) {
-            m.slot = slot as u8;
-        }
-    }
-}
-
 // ─── Content dispatchers (implementation in rack_content.rs) ─────────────────
 
 use super::rack_content::{
-    draw_fx_content, draw_lfo_content, draw_master_content, draw_voice_content, handle_cable_drag,
+    draw_fx_content, draw_lfo_content, draw_llm_agent_content, draw_master_content,
+    draw_voice_content, handle_cable_drag, handle_title_drag, reorder_module_by_drop,
 };
