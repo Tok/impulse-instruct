@@ -707,6 +707,13 @@ pub struct LlmState {
     pub jam_bars: f32, // 0.0 = continuous (fire immediately); N = wait N bars before re-triggering
     #[serde(default)]
     pub jam_cycle_count: u32, // total jam cycles completed (display only)
+    /// Global toggle: allow agents to autonomously spawn new agents during jam.
+    #[serde(default = "default_true")]
+    pub agent_autonomy: bool,
+}
+
+fn default_true() -> bool {
+    true
 }
 
 impl LlmState {
@@ -764,11 +771,22 @@ impl Default for LlmState {
             active_ramps: Vec::new(),
             jam_bars: 0.0,
             jam_cycle_count: 0,
+            agent_autonomy: true,
         }
     }
 }
 
 // ─── Per-agent LLM state (rackable LLM modules) ─────────────────────────────
+
+/// Agent role — affects personality flavor in system prompt.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum AgentRole {
+    #[default]
+    Producer,
+    Mc,
+    Dj,
+    Specialist,
+}
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct LlmAgentState {
@@ -777,6 +795,15 @@ pub struct LlmAgentState {
     pub heat: f32,
     pub temperature: f32,
     pub scope: Vec<String>, // top-level keys this agent may write (empty = all)
+    /// Agent role — affects system prompt personality flavor.
+    #[serde(default)]
+    pub role: AgentRole,
+    /// Whether this agent may spawn new agents during jam cycles.
+    #[serde(default)]
+    pub can_spawn: bool,
+    /// Whether this agent may dismiss itself during jam cycles.
+    #[serde(default)]
+    pub can_dismiss: bool,
     pub jam_bars: f32,
     pub conversation_mode: ConversationMode,
     pub active_style: Option<String>,
@@ -808,6 +835,9 @@ impl LlmAgentState {
             heat: 0.4,
             temperature: 0.9,
             scope: Vec::new(),
+            role: AgentRole::Producer,
+            can_spawn: true,
+            can_dismiss: true,
             jam_bars: 0.0,
             conversation_mode: ConversationMode::Producer,
             active_style: None,
@@ -831,6 +861,9 @@ impl LlmAgentState {
             heat: llm.heat,
             temperature: llm.temperature,
             scope: Vec::new(),
+            role: AgentRole::Producer,
+            can_spawn: true,
+            can_dismiss: true,
             jam_bars: llm.jam_bars,
             conversation_mode: llm.conversation_mode.clone(),
             active_style: llm.active_style.clone(),

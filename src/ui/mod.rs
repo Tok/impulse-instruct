@@ -145,56 +145,8 @@ impl MidiClockTracker {
     }
 }
 
-const HISTORY_DEPTH: usize = 50;
-
-/// Ring-buffer undo/redo stack for `AppState` snapshots.
-struct StateHistory {
-    past: std::collections::VecDeque<crate::state::AppState>,
-    future: Vec<crate::state::AppState>,
-}
-
-impl StateHistory {
-    fn new() -> Self {
-        Self {
-            past: std::collections::VecDeque::with_capacity(HISTORY_DEPTH),
-            future: Vec::new(),
-        }
-    }
-
-    /// Record a snapshot before a mutation. Clears redo stack.
-    fn push(&mut self, snapshot: crate::state::AppState) {
-        if self.past.len() >= HISTORY_DEPTH {
-            self.past.pop_front();
-        }
-        self.past.push_back(snapshot);
-        self.future.clear();
-    }
-
-    /// Undo: restore previous state, push current to redo stack.
-    /// Returns the state to restore, or None if nothing to undo.
-    fn undo(&mut self, current: crate::state::AppState) -> Option<crate::state::AppState> {
-        let prev = self.past.pop_back()?;
-        self.future.push(current);
-        Some(prev)
-    }
-
-    /// Redo: re-apply a previously undone change.
-    fn redo(&mut self, current: crate::state::AppState) -> Option<crate::state::AppState> {
-        let next = self.future.pop()?;
-        if self.past.len() >= HISTORY_DEPTH {
-            self.past.pop_front();
-        }
-        self.past.push_back(current);
-        Some(next)
-    }
-
-    fn can_undo(&self) -> bool {
-        !self.past.is_empty()
-    }
-    fn can_redo(&self) -> bool {
-        !self.future.is_empty()
-    }
-}
+mod undo;
+use undo::StateHistory;
 
 // ─── ImpulseApp ───────────────────────────────────────────────────────────────
 
@@ -635,33 +587,59 @@ impl ImpulseApp {
                         scope,
                         model,
                     } => {
-                        let id = self
-                            .state
-                            .write()
-                            .rack
-                            .add_module(crate::state::ModuleKind::LlmAgent);
-                        let mut agent =
-                            crate::state::LlmAgentState::from_singleton(id, &self.state.read().llm);
-                        agent.persona_name = persona.clone();
-                        agent.scope = scope.clone();
-                        if let Some(m) = model {
-                            agent.model_path = Some(m.clone());
+                        let s = self.state.read();
+                        let ok = s.llm.agent_autonomy
+                            && out
+                                .agent_id
+                                .and_then(|aid| s.llm_agents.iter().find(|a| a.id == aid))
+                                .map(|a| a.can_spawn)
+                                .unwrap_or(true);
+                        drop(s);
+                        if ok {
+                            let id = self
+                                .state
+                                .write()
+                                .rack
+                                .add_module(crate::state::ModuleKind::LlmAgent);
+                            let mut agent = crate::state::LlmAgentState::from_singleton(
+                                id,
+                                &self.state.read().llm,
+                            );
+                            agent.persona_name = persona.clone();
+                            agent.scope = scope.clone();
+                            if let Some(m) = model {
+                                agent.model_path = Some(m.clone());
+                            }
+                            self.state.write().llm_agents.push(agent);
+                            self.log_text
+                                .push_str(&format!("Agent spawned: {} ({:?})\n", persona, scope));
+                            self.session_dirty = true;
                         }
-                        self.state.write().llm_agents.push(agent);
-                        self.log_text.push_str(&format!(
-                            "Agent spawned: {} (scope: {:?})\n",
-                            persona, scope
-                        ));
-                        self.session_dirty = true;
                     }
                     LlmAction::DismissAgent => {
-                        // Only dismiss if more than 1 agent exists
                         if let Some(aid) = out.agent_id {
-                            let agent_count = self.state.read().llm_agents.len();
-                            if agent_count > 1 {
+                            let s = self.state.read();
+                            let ok = s.llm.agent_autonomy
+                                && s.llm_agents
+                                    .iter()
+                                    .find(|a| a.id == aid)
+                                    .map(|a| a.can_dismiss)
+                                    .unwrap_or(false);
+                            let count = s.llm_agents.len();
+                            let name = s
+                                .llm_agents
+                                .iter()
+                                .find(|a| a.id == aid)
+                                .map(|a| a.persona_name.clone())
+                                .unwrap_or_default();
+                            drop(s);
+                            if ok && count > 1 {
                                 self.state.write().rack.remove_module(aid);
                                 self.state.write().llm_agents.retain(|a| a.id != aid);
-                                self.log_text.push_str("Agent dismissed itself\n");
+                                self.log_text.push_str(&format!("{} signed off\n", name));
+                                if self.state.read().llm_agents.len() == 1 {
+                                    self.state.write().llm_agents[0].scope.clear();
+                                }
                                 self.session_dirty = true;
                             }
                         }

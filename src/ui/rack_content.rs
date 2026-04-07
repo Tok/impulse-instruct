@@ -13,7 +13,7 @@ pub(super) fn draw_voice_content(app: &mut ImpulseApp, ui: &mut egui::Ui, kind: 
         ModuleKind::HooverLead => crate::ui::panels::draw_hoover(app, ui),
         ModuleKind::An1xVoice => crate::ui::panels::draw_an1x(app, ui),
         ModuleKind::AmenSampler => crate::ui::panels::draw_amen(app, ui),
-        ModuleKind::NoiseVoice => draw_noise_stub(app, ui),
+        ModuleKind::NoiseVoice => crate::ui::panels::draw_noise(app, ui),
         ModuleKind::EspeakNgTts | ModuleKind::CoquiTts => crate::ui::panels::draw_tts(app, ui),
         _ => {}
     }
@@ -332,6 +332,9 @@ pub(super) fn draw_llm_agent_content(app: &mut ImpulseApp, ui: &mut egui::Ui, mo
         enable_thinking,
         mut user_instructions,
         mut prompt_override,
+        role,
+        can_spawn,
+        can_dismiss,
     ) = {
         let s = app.state.read();
         let a = &s.llm_agents[idx];
@@ -350,6 +353,9 @@ pub(super) fn draw_llm_agent_content(app: &mut ImpulseApp, ui: &mut egui::Ui, mo
             a.enable_thinking,
             a.user_instructions.clone(),
             a.system_prompt_override.clone(),
+            a.role.clone(),
+            a.can_spawn,
+            a.can_dismiss,
         )
     };
 
@@ -618,6 +624,59 @@ pub(super) fn draw_llm_agent_content(app: &mut ImpulseApp, ui: &mut egui::Ui, mo
         }
     });
 
+    // ── Role + autonomy permissions ─────────────────────────────────────
+    ui.horizontal(|ui| {
+        ui.spacing_mut().item_spacing.x = 2.0;
+        use crate::state::AgentRole;
+        let role_btn = |ui: &mut egui::Ui, label, r: &AgentRole| -> bool {
+            let active = role == *r;
+            let col = if active { theme::FOG } else { theme::SMOKE };
+            let fill = egui::Color32::from_gray(if active { 40 } else { 18 });
+            ui.add(
+                egui::Button::new(egui::RichText::new(label).monospace().size(7.5).color(col))
+                    .fill(fill)
+                    .min_size(egui::vec2(22.0, 14.0)),
+            )
+            .clicked()
+        };
+        if role_btn(ui, "PRD", &AgentRole::Producer) {
+            app.state.write().llm_agents[idx].role = AgentRole::Producer;
+        }
+        if role_btn(ui, "MC", &AgentRole::Mc) {
+            app.state.write().llm_agents[idx].role = AgentRole::Mc;
+        }
+        if role_btn(ui, "DJ", &AgentRole::Dj) {
+            app.state.write().llm_agents[idx].role = AgentRole::Dj;
+        }
+        if role_btn(ui, "SPC", &AgentRole::Specialist) {
+            app.state.write().llm_agents[idx].role = AgentRole::Specialist;
+        }
+        ui.separator();
+        let perm_btn = |ui: &mut egui::Ui, label, on: bool, tip_on: &str, tip_off: &str| -> bool {
+            let col = if on { theme::FOG } else { theme::IRON };
+            let fill = egui::Color32::from_gray(if on { 35 } else { 18 });
+            ui.add(
+                egui::Button::new(egui::RichText::new(label).monospace().size(7.0).color(col))
+                    .fill(fill)
+                    .min_size(egui::vec2(24.0, 14.0)),
+            )
+            .on_hover_text(if on { tip_on } else { tip_off })
+            .clicked()
+        };
+        if perm_btn(
+            ui,
+            "+AG",
+            can_spawn,
+            "Can spawn agents",
+            "Cannot spawn agents",
+        ) {
+            app.state.write().llm_agents[idx].can_spawn = !can_spawn;
+        }
+        if perm_btn(ui, "BYE", can_dismiss, "Can sign off", "Cannot sign off") {
+            app.state.write().llm_agents[idx].can_dismiss = !can_dismiss;
+        }
+    });
+
     // ── Style selector ──────────────────────────────────────────────────
     {
         use crate::llm::styles::StyleCatalog;
@@ -817,42 +876,6 @@ pub(super) fn handle_cable_drag(
         if app.state.read().rack.cables.len() != prev_len {
             app.push_fx_plan();
         }
-    }
-}
-
-fn draw_noise_stub(app: &mut ImpulseApp, ui: &mut egui::Ui) {
-    use crate::ui::widgets;
-    let ctrl = widgets::ControlPrefs::from_prefs(&app.state.read().ui_prefs);
-    let locked = app.state.read().llm.locked_params.clone();
-    let focused = app.state.read().llm.focused_params.clone();
-    let pm = |path: &str| crate::state::param_mode(path, &locked, &focused);
-
-    let (mut vol, mut color, mut cutoff) = {
-        let s = app.state.read();
-        (
-            s.noise_voice.volume,
-            s.noise_voice.color,
-            s.noise_voice.cutoff,
-        )
-    };
-    let mut changed = false;
-    if widgets::param_control(ui, "VOLUME", &mut vol, pm("noise_voice.volume"), ctrl).0 {
-        changed = true;
-    }
-    if widgets::param_control(ui, "COLOR", &mut color, pm("noise_voice.color"), ctrl).0 {
-        changed = true;
-    }
-    if widgets::param_control(ui, "CUTOFF", &mut cutoff, pm("noise_voice.cutoff"), ctrl).0 {
-        changed = true;
-    }
-    if changed {
-        {
-            let mut s = app.state.write();
-            s.noise_voice.volume = vol;
-            s.noise_voice.color = color;
-            s.noise_voice.cutoff = cutoff;
-        }
-        app.push_audio_params();
     }
 }
 

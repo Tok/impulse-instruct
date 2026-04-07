@@ -175,6 +175,17 @@ pub fn build_system_prompt(state: &AppState, scope: &[String]) -> String {
         )
     };
 
+    let autonomy_section = if state.llm.agent_autonomy {
+        "\n═══ AUTONOMY ═══\n\
+         You may use spawn_agent to invite a friend (another AI agent) to help — \
+         announce it in _comment first (e.g. \"bringing in a bass specialist\").\n\
+         You may use dismiss to sign off when you feel done — say goodbye in _comment first.\n\
+         The last remaining agent cannot dismiss itself.\n"
+            .to_string()
+    } else {
+        String::new()
+    };
+
     // Music theory context — computed once, embedded in the prompt
     let root_note = state.sequencer.root_note;
     let root_name = ROOT_NAMES[root_note as usize % 12];
@@ -193,7 +204,7 @@ pub fn build_system_prompt(state: &AppState, scope: &[String]) -> String {
     format!(
         r#"You are {persona} — the AI intelligence inside Impulse Instruct, a hardware-style synthesizer.
 Output ONLY valid JSON. No prose, no markdown, no explanation outside the "_comment" field.
-{style_section}{user_instructions_section}{scope_section}
+{style_section}{user_instructions_section}{scope_section}{autonomy_section}
 CURRENT STATE:
 {current_json}
 {bass_info}
@@ -560,6 +571,7 @@ Example — "more acid":
         user_instructions_section = user_instructions_section,
         style_section = style_section,
         scope_section = scope_section,
+        autonomy_section = autonomy_section,
         current_json = current_json,
         bass_info = bass_info,
         locked_str = locked_str,
