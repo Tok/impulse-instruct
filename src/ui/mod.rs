@@ -349,8 +349,6 @@ impl ImpulseApp {
             zone_fxmod_collapsed: false,
         }
     }
-
-    /// Push any pending audio param snapshot to the audio thread.
     /// Record the current state to the undo history before a mutation.
     pub(crate) fn push_history(&mut self) {
         let snapshot = self.state.read().clone();
@@ -721,7 +719,6 @@ impl ImpulseApp {
                         .unwrap_or(false);
                     *self.state.write() = crate::state::set_bass_step(s, step, note, was_active);
                 }
-
                 MidiEvent::NoteOff { note, .. } => {
                     self.pressed_notes.remove(&note);
                     let _ = self
@@ -730,7 +727,6 @@ impl ImpulseApp {
                             voice_idx: 0,
                         }));
                 }
-
                 // CC → synth params via the standard mapping table.
                 // Builds a partial JSON update matching the dot-path and feeds it
                 // through apply_llm_update so locked params are respected.
@@ -759,8 +755,6 @@ impl ImpulseApp {
                         *self.state.write() = toggle_sequencer_running(s);
                     }
                 }
-
-                // MIDI clock — derive BPM from pulse timing when sync is on.
                 MidiEvent::Clock => {
                     let sync_on = self.state.read().sequencer.midi_clock_sync;
                     if sync_on && let Some(bpm) = self.midi_clock_tracker.on_clock() {
@@ -774,8 +768,8 @@ impl ImpulseApp {
         }
     }
 }
+
 impl eframe::App for ImpulseApp {
-    /// Persist synth state so the next launch resumes from the same session.
     fn save(&mut self, storage: &mut dyn eframe::Storage) {
         let s = self.state.read().clone();
         if let Ok(json) = serde_json::to_string(&s) {
@@ -788,6 +782,11 @@ impl eframe::App for ImpulseApp {
         // after the window is shown and DPI is known.
         if self.native_ppp <= 0.0 {
             self.native_ppp = ctx.pixels_per_point();
+            // Stop sequencer while wizard is visible so no sound plays before user decides.
+            if self.show_wizard && self.state.read().sequencer.running {
+                self.state.write().sequencer.running = false;
+                self.push_audio_params();
+            }
         }
         // Context-sensitive Ctrl+MW zoom: per-module over cards, global elsewhere.
         let cg = self.state.read().ui_prefs.ui_scale;
