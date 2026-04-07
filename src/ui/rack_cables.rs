@@ -134,7 +134,8 @@ pub fn draw_cable_overlay(
         draw_cable(&painter, drag.from_screen, pointer, time, 0.0, false);
     }
 
-    if (app.show_cables || app.rack_flipped) && !app.show_prefs {
+    let alt_held = ctx.input(|i| i.modifiers.alt);
+    if app.rack_flipped && !alt_held && !app.show_prefs {
         let cables = app.state.read().rack.cables.clone();
         for (ci, cable) in cables.iter().enumerate() {
             let from_pos = ports

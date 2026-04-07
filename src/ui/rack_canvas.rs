@@ -105,35 +105,6 @@ pub fn draw_rack(app: &mut ImpulseApp, ctx: &egui::Context, ui: &mut egui::Ui) {
         ui.separator();
         ui.add_space(4.0);
 
-        let cable_col = if app.show_cables {
-            Color32::from_gray(220)
-        } else {
-            Color32::from_gray(90)
-        };
-        let cable_fill = if app.show_cables {
-            Color32::from_gray(55)
-        } else {
-            Color32::from_gray(22)
-        };
-        if ui
-            .add(
-                egui::Button::new(
-                    egui::RichText::new("CABLES")
-                        .monospace()
-                        .size(8.5)
-                        .color(cable_col),
-                )
-                .fill(cable_fill)
-                .min_size(egui::vec2(50.0, 18.0)),
-            )
-            .on_hover_text("Toggle patch cable overlay  [Tab]")
-            .clicked()
-        {
-            app.show_cables = !app.show_cables;
-            app.session_dirty = true;
-        }
-
-        ui.add_space(4.0);
         let flip_col = if app.rack_flipped {
             Color32::from_gray(220)
         } else {
@@ -155,7 +126,7 @@ pub fn draw_rack(app: &mut ImpulseApp, ctx: &egui::Context, ui: &mut egui::Ui) {
                 .fill(flip_fill)
                 .min_size(egui::vec2(42.0, 18.0)),
             )
-            .on_hover_text("Flip rack: front panel ↔ back panel  [`]")
+            .on_hover_text("Flip rack  [Tab]  —  hold Alt to hide cables")
             .clicked()
         {
             app.rack_flipped = !app.rack_flipped;
@@ -387,22 +358,10 @@ pub fn draw_rack(app: &mut ImpulseApp, ctx: &egui::Context, ui: &mut egui::Ui) {
                 }
             });
             ui.separator();
-            let cable_label = if app.show_cables {
-                "Hide cables  [Tab]"
-            } else {
-                "Show cables  [Tab]"
-            };
-            if ui
-                .button(egui::RichText::new(cable_label).monospace().size(9.5))
-                .clicked()
-            {
-                app.show_cables = !app.show_cables;
-                ui.close_menu();
-            }
             let flip_label = if app.rack_flipped {
-                "Show front panel  [`]"
+                "Show front panel  [Tab]"
             } else {
-                "Show back panel  [`]"
+                "Show back panel  [Tab]"
             };
             if ui
                 .button(egui::RichText::new(flip_label).monospace().size(9.5))

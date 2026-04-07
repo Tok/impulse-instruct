@@ -99,11 +99,11 @@ pub struct CardResponse {
 /// `min_width` — minimum card width in pixels; `None` → fill available.
 pub fn module_card<R>(
     ui: &mut egui::Ui,
-    module_id: u32,
+    _module_id: u32,
     kind: ModuleKind,
     enabled: bool,
     min_width: Option<f32>,
-    ports: &mut Vec<PortPos>,
+    _ports: &mut Vec<PortPos>,
     content: impl FnOnce(&mut egui::Ui) -> R,
 ) -> (CardResponse, R) {
     let fill = Color32::from_gray(14);
@@ -176,131 +176,6 @@ pub fn module_card<R>(
                 egui::FontId::monospace(9.5),
                 Color32::from_gray(if enabled { 200 } else { 80 }),
             );
-
-            // ── Port circles on right side of title bar ───────────────────────
-            // Helper: register a port, draw its circle, and add a hover tooltip.
-            let port_hit_r = PORT_RADIUS + 4.0;
-            let port_size = Vec2::splat(port_hit_r * 2.0);
-
-            let audio_out_x = title_rect.right() - 12.0;
-            let audio_out_y = title_rect.center().y;
-            let audio_out_pos = Pos2::new(audio_out_x, audio_out_y);
-            draw_port_circle(&painter, audio_out_pos, PortKind::Audio, PortDir::Out);
-            ports.push(PortPos {
-                port: PortRef {
-                    module_id,
-                    dir: PortDir::Out,
-                    kind: PortKind::Audio,
-                    index: 0,
-                },
-                center: audio_out_pos,
-            });
-            ui.interact(
-                Rect::from_center_size(audio_out_pos, port_size),
-                ui.id().with("port_audio_out"),
-                Sense::hover(),
-            )
-            .on_hover_text("Audio Out — drag to connect");
-
-            // Audio in (FX and master output modules only)
-            let has_audio_in = matches!(
-                kind,
-                ModuleKind::FxReverb
-                    | ModuleKind::FxDelay
-                    | ModuleKind::FxChorus
-                    | ModuleKind::FxPhaser
-                    | ModuleKind::FxRingMod
-                    | ModuleKind::FxWaveshaper
-                    | ModuleKind::FxBitcrush
-                    | ModuleKind::FxEq
-                    | ModuleKind::FxCompressor
-                    | ModuleKind::FxTapeSat
-                    | ModuleKind::FxDrive
-                    | ModuleKind::FxAutotune
-                    | ModuleKind::MasterOutput
-            );
-            if has_audio_in {
-                let audio_in_x = audio_out_x - 18.0;
-                let audio_in_pos = Pos2::new(audio_in_x, audio_out_y);
-                draw_port_circle(&painter, audio_in_pos, PortKind::Audio, PortDir::In);
-                ports.push(PortPos {
-                    port: PortRef {
-                        module_id,
-                        dir: PortDir::In,
-                        kind: PortKind::Audio,
-                        index: 0,
-                    },
-                    center: audio_in_pos,
-                });
-                ui.interact(
-                    Rect::from_center_size(audio_in_pos, port_size),
-                    ui.id().with("port_audio_in"),
-                    Sense::hover(),
-                )
-                .on_hover_text("Audio In — drag to connect");
-            }
-
-            // CV out: LFO and StepSequencer both send CV/gate
-            let has_cv_out = matches!(kind, ModuleKind::LfoModule | ModuleKind::StepSequencer);
-            if has_cv_out {
-                let cv_out_x = audio_out_x - 18.0;
-                let cv_out_pos = Pos2::new(cv_out_x, audio_out_y);
-                draw_port_circle(&painter, cv_out_pos, PortKind::Cv, PortDir::Out);
-                ports.push(PortPos {
-                    port: PortRef {
-                        module_id,
-                        dir: PortDir::Out,
-                        kind: PortKind::Cv,
-                        index: 0,
-                    },
-                    center: cv_out_pos,
-                });
-                let hover = if kind == ModuleKind::StepSequencer {
-                    "Gate/Clock Out — connect to a voice CV In"
-                } else {
-                    "CV Out — drag to connect to a CV In"
-                };
-                ui.interact(
-                    Rect::from_center_size(cv_out_pos, port_size),
-                    ui.id().with("port_cv_out"),
-                    Sense::hover(),
-                )
-                .on_hover_text(hover);
-            }
-
-            // CV in: voice modules accept gate/clock from the sequencer
-            let has_cv_in = matches!(
-                kind,
-                ModuleKind::AcidBass
-                    | ModuleKind::DrumKit808
-                    | ModuleKind::DrumKit909
-                    | ModuleKind::HooverLead
-                    | ModuleKind::An1xVoice
-                    | ModuleKind::AmenSampler
-                    | ModuleKind::NoiseVoice
-                    | ModuleKind::EspeakNgTts
-                    | ModuleKind::CoquiTts
-            );
-            if has_cv_in {
-                let cv_in_x = audio_out_x - 18.0;
-                let cv_in_pos = Pos2::new(cv_in_x, audio_out_y);
-                draw_port_circle(&painter, cv_in_pos, PortKind::Cv, PortDir::In);
-                ports.push(PortPos {
-                    port: PortRef {
-                        module_id,
-                        dir: PortDir::In,
-                        kind: PortKind::Cv,
-                        index: 0,
-                    },
-                    center: cv_in_pos,
-                });
-                ui.interact(
-                    Rect::from_center_size(cv_in_pos, port_size),
-                    ui.id().with("port_cv_in"),
-                    Sense::hover(),
-                )
-                .on_hover_text("Gate In — connect from sequencer CV Out");
-            }
 
             // ── Enable toggle (small square LED left of label) ────────────────
             let led_rect = Rect::from_center_size(

@@ -868,13 +868,8 @@ impl eframe::App for ImpulseApp {
             }
         }
 
-        // ── Tab: toggle cable visibility ──────────────────────────────────────
+        // ── Tab: flip rack (front ↔ back panel) ─────────────────────────────
         if ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Tab)) {
-            self.show_cables = !self.show_cables;
-            self.session_dirty = true;
-        }
-        // ── Backtick: flip rack (front ↔ back panel) ─────────────────────────
-        if ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Backtick)) {
             self.rack_flipped = !self.rack_flipped;
             self.session_dirty = true;
         }
