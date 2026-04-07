@@ -209,6 +209,44 @@ impl ImpulseApp {
                         }
                     });
 
+                    ui.menu_button(egui::RichText::new("View").monospace().size(10.0), |ui| {
+                        if ui
+                            .button(egui::RichText::new("Compact All").monospace().size(10.0))
+                            .clicked()
+                        {
+                            for m in &self.state.read().rack.modules {
+                                self.module_scales.insert(m.kind, 0.6);
+                            }
+                            self.session_dirty = true;
+                            ui.close_menu();
+                        }
+                        if ui
+                            .button(egui::RichText::new("Expand All").monospace().size(10.0))
+                            .clicked()
+                        {
+                            self.module_scales.clear();
+                            self.session_dirty = true;
+                            ui.close_menu();
+                        }
+                        if ui
+                            .button(egui::RichText::new("Arrange").monospace().size(10.0))
+                            .clicked()
+                        {
+                            self.state.write().rack.arrange_canonical();
+                            self.session_dirty = true;
+                            ui.close_menu();
+                        }
+                        if ui
+                            .button(egui::RichText::new("Reset Layout").monospace().size(10.0))
+                            .clicked()
+                        {
+                            self.module_scales.clear();
+                            self.state.write().rack.arrange_canonical();
+                            self.session_dirty = true;
+                            ui.close_menu();
+                        }
+                    });
+
                     ui.menu_button(egui::RichText::new("Help").monospace().size(10.0), |ui| {
                         if ui
                             .button(egui::RichText::new("Preferences…").monospace().size(10.0))
@@ -344,6 +382,53 @@ impl ImpulseApp {
                             .changed()
                         {
                             self.state.write().llm.heat = heat;
+                        }
+                    }
+
+                    ui.separator();
+
+                    // ── AGENT STATUS (compact round-robin display) ──────────
+                    {
+                        let s = self.state.read();
+                        let agents = &s.llm_agents;
+                        if !agents.is_empty() {
+                            let time = ctx.input(|i| i.time) as f32;
+                            for a in agents {
+                                let enabled = s
+                                    .rack
+                                    .modules
+                                    .iter()
+                                    .any(|m| m.id == a.id && m.enabled);
+                                if !enabled {
+                                    continue;
+                                }
+                                let dot_col = if a.is_inferring {
+                                    // Pulsing bright when active
+                                    let p = (time * 4.0 * std::f32::consts::TAU).sin() * 0.3 + 0.7;
+                                    egui::Color32::from_gray((220.0 * p) as u8)
+                                } else {
+                                    egui::Color32::from_gray(60)
+                                };
+                                ui.label(
+                                    egui::RichText::new("●")
+                                        .color(dot_col)
+                                        .size(8.0),
+                                );
+                                let name_col = if a.is_inferring {
+                                    theme::CHALK
+                                } else {
+                                    theme::IRON
+                                };
+                                ui.label(
+                                    egui::RichText::new(&a.persona_name)
+                                        .color(name_col)
+                                        .monospace()
+                                        .size(8.0),
+                                );
+                            }
+                            if agents.iter().any(|a| a.is_inferring) {
+                                ctx.request_repaint();
+                            }
                         }
                     }
 

@@ -105,6 +105,8 @@ pub struct CardResponse {
     pub title_dragged: bool,
     /// Whether the title bar drag was just released.
     pub title_drag_released: bool,
+    /// Screen rect of the entire card (used for hit-testing Ctrl+MW zoom).
+    pub card_rect: Rect,
 }
 
 /// Draw a module card around `content`, registering port positions into `ports`.
@@ -114,15 +116,21 @@ pub struct CardResponse {
 /// `kind`      — determines colour, title, and port configuration.
 /// `enabled`   — if false, card content is dimmed.
 /// `min_width` — minimum card width in pixels; `None` → fill available.
+/// `scale`     — per-module UI scale factor (1.0 = default).
 pub fn module_card<R>(
     ui: &mut egui::Ui,
     _module_id: u32,
     kind: ModuleKind,
     enabled: bool,
     min_width: Option<f32>,
+    scale: f32,
     _ports: &mut Vec<PortPos>,
     content: impl FnOnce(&mut egui::Ui) -> R,
 ) -> (CardResponse, R) {
+    // Publish scale so content draw functions can read it without signature changes.
+    ui.ctx()
+        .data_mut(|d| d.insert_temp(egui::Id::new("module_scale"), scale));
+
     let fill = Color32::from_gray(14);
     let title_bg = title_fill(kind);
 
@@ -156,8 +164,8 @@ pub fn module_card<R>(
             ui.set_min_width(card_w);
             ui.set_max_width(card_w);
 
-            // ── Title bar ─────────────────────────────────────────────────────
-            let title_h = 22.0_f32.max(20.0); // min 20px per design spec
+            // ── Title bar — fixed height, not affected by per-module scale ──
+            let title_h = 22.0_f32;
             // Use card_w explicitly — avoids inheriting stale available_width from
             // the horizontal_wrapped parent when the content hasn't settled yet.
             let (title_rect, _) =
@@ -178,19 +186,20 @@ pub fn module_card<R>(
             );
 
             // Module kind label (embossed: shadow 1px below, then bright text)
+            let label_font = 9.5;
             let label_pos = title_rect.left_center() + Vec2::new(10.0, 0.0);
             painter.text(
                 label_pos + Vec2::new(0.0, 1.0),
                 egui::Align2::LEFT_CENTER,
                 kind.label(),
-                egui::FontId::monospace(9.5),
+                egui::FontId::monospace(label_font),
                 Color32::from_gray(8),
             );
             painter.text(
                 label_pos,
                 egui::Align2::LEFT_CENTER,
                 kind.label(),
-                egui::FontId::monospace(9.5),
+                egui::FontId::monospace(label_font),
                 Color32::from_gray(if enabled { 200 } else { 80 }),
             );
 
@@ -270,9 +279,9 @@ pub fn module_card<R>(
             // ── Content ───────────────────────────────────────────────────────
             let content_frame = Frame::none()
                 .fill(fill)
-                .inner_margin(Margin::symmetric(6.0, 8.0));
+                .inner_margin(Margin::symmetric(6.0 * scale, 8.0 * scale));
             let inner_resp = content_frame.show(ui, |ui| {
-                ui.spacing_mut().item_spacing = Vec2::new(2.0, 2.0);
+                ui.spacing_mut().item_spacing = Vec2::new(2.0 * scale, 2.0 * scale);
                 // Clamp content width to the card width (minus horizontal margin×2).
                 ui.set_max_width(card_w - 12.0);
                 ui.with_layout(egui::Layout::top_down(egui::Align::Center), |ui| {
@@ -289,12 +298,14 @@ pub fn module_card<R>(
         .inner
     });
 
+    let card_rect = inner.response.rect;
     (
         CardResponse {
             toggle_clicked,
             remove_clicked,
             title_dragged,
             title_drag_released,
+            card_rect,
         },
         inner.inner,
     )
@@ -311,6 +322,7 @@ pub fn module_card_back(
     kind: ModuleKind,
     enabled: bool,
     min_width: Option<f32>,
+    _scale: f32,
     ports: &mut Vec<PortPos>,
 ) -> CardResponse {
     let fill = Color32::from_gray(14);
@@ -331,13 +343,13 @@ pub fn module_card_back(
     let mut title_dragged = false;
     let mut title_drag_released = false;
 
-    frame.show(ui, |ui| {
+    let outer = frame.show(ui, |ui| {
         ui.with_layout(egui::Layout::top_down(egui::Align::LEFT), |ui| {
             let card_w = min_width.unwrap_or_else(|| ui.available_width());
             ui.set_min_width(card_w);
             ui.set_max_width(card_w);
 
-            // ── Title bar (same as front, but NO port circles) ──────────────
+            // ── Title bar — fixed height, same as front ────────────────────
             let title_h = 22.0_f32;
             let (title_rect, _) =
                 ui.allocate_exact_size(Vec2::new(card_w, title_h), Sense::hover());
@@ -351,19 +363,20 @@ pub fn module_card_back(
                 [title_rect.left_bottom(), title_rect.right_bottom()],
                 Stroke::new(1.0, Color32::from_gray(8)),
             );
+            let label_font = 9.5;
             let label_pos = title_rect.left_center() + Vec2::new(10.0, 0.0);
             painter.text(
                 label_pos + Vec2::new(0.0, 1.0),
                 egui::Align2::LEFT_CENTER,
                 kind.label(),
-                egui::FontId::monospace(9.5),
+                egui::FontId::monospace(label_font),
                 Color32::from_gray(8),
             );
             painter.text(
                 label_pos,
                 egui::Align2::LEFT_CENTER,
                 kind.label(),
-                egui::FontId::monospace(9.5),
+                egui::FontId::monospace(label_font),
                 Color32::from_gray(if enabled { 200 } else { 80 }),
             );
             // LED toggle
@@ -639,6 +652,7 @@ pub fn module_card_back(
         remove_clicked,
         title_dragged,
         title_drag_released,
+        card_rect: outer.response.rect,
     }
 }
 

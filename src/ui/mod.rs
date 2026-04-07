@@ -1,6 +1,4 @@
-// ─── ui/mod.rs ────────────────────────────────────────────────────────────────
-// Main egui application.
-
+// ─── ui/mod.rs — Main egui application ───────────────────────────────────────
 mod header;
 mod llm_strip;
 pub mod module_card;
@@ -47,8 +45,6 @@ pub(super) const LOG_LEVELS: &[(&str, log::LevelFilter)] = &[
     ("INFO", log::LevelFilter::Info),
     ("DEBUG", log::LevelFilter::Debug),
 ];
-
-// Startup prompts live in config.json and are loaded via crate::config.
 
 pub(crate) const SEQ_LABEL_W: f32 = 72.0;
 pub(crate) const SEQ_LABEL_H: f32 = 22.0;
@@ -105,8 +101,6 @@ impl MidiClockTracker {
 
 mod undo;
 use undo::StateHistory;
-
-// ─── ImpulseApp ───────────────────────────────────────────────────────────────
 
 pub struct ImpulseApp {
     state: Arc<RwLock<AppState>>,
@@ -181,6 +175,9 @@ pub struct ImpulseApp {
     last_saved_rack_sig: (usize, usize),
     // Timestamp of the most recent actual save (for interval throttling).
     last_save_time: std::time::Instant,
+    // Per-kind UI scale factors (ModuleKind → scale, default 1.0, range 0.5–2.0).
+    // All modules of the same kind share a scale (e.g. all LlmAgent cards scale together).
+    pub(crate) module_scales: std::collections::HashMap<crate::state::ModuleKind, f32>,
     // Auto-listen: when enabled, trigger LISTEN automatically every N jam cycles.
     auto_listen: bool,
     // Counts jam cycles since the last auto-listen trigger.
@@ -310,14 +307,18 @@ impl ImpulseApp {
                 shared
             },
             show_sysinfo: false,
-            show_wizard: {
-                let sess = crate::state::load_session();
-                let done = sess.as_ref().and_then(|s| s.wizard_done).unwrap_or(false);
-                // Show wizard when not explicitly dismissed. Existing sessions
-                // (pre-wizard) will see it once with "Resume" as the default.
-                !done
+            show_wizard: !crate::state::load_session()
+                .and_then(|s| s.wizard_done)
+                .unwrap_or(false),
+            wizard_selected: if crate::state::load_session()
+                .and_then(|s| s.llm_agents)
+                .map(|a| a.is_empty())
+                .unwrap_or(true)
+            {
+                usize::MAX - 1
+            } else {
+                usize::MAX
             },
-            wizard_selected: usize::MAX, // MAX = "Resume last session" sentinel
 
             prefs_tab: 0,
             llm_tab: 0,
@@ -334,6 +335,9 @@ impl ImpulseApp {
             session_dirty: false,
             last_saved_rack_sig: (0, 0),
             last_save_time: std::time::Instant::now(),
+            module_scales: crate::state::load_session()
+                .and_then(|s| s.module_scales)
+                .unwrap_or_default(),
             auto_listen: false,
             auto_listen_counter: 0,
             jam_next_fire: None,
@@ -345,12 +349,15 @@ impl ImpulseApp {
             zone_fxmod_collapsed: false,
         }
     }
-
-    /// Push any pending audio param snapshot to the audio thread.
     /// Record the current state to the undo history before a mutation.
     pub(crate) fn push_history(&mut self) {
         let snapshot = self.state.read().clone();
         self.history.push(snapshot);
+    }
+
+    /// Effective scale for a module kind (1.0 if unset).
+    pub(crate) fn kind_scale(&self, kind: crate::state::ModuleKind) -> f32 {
+        self.module_scales.get(&kind).copied().unwrap_or(1.0)
     }
 
     fn push_audio_params(&mut self) {
@@ -675,7 +682,6 @@ impl ImpulseApp {
     fn drain_midi_events(&mut self) {
         use crate::midi::cc_to_param_path;
         use crate::state::{apply_llm_update, toggle_sequencer_running};
-
         while let Ok(event) = self.midi_rx.try_recv() {
             match event {
                 MidiEvent::NoteOn {
@@ -689,7 +695,6 @@ impl ImpulseApp {
                             voice_idx: 0,
                         }));
                 }
-
                 MidiEvent::NoteOn { note, velocity, .. } => {
                     self.pressed_notes.insert(note);
                     let vel = velocity as f32 / 127.0;
@@ -703,7 +708,6 @@ impl ImpulseApp {
                             slide: false,
                             gate_samples: 22050, // ~0.5 s at 44100 Hz
                         }));
-
                     // Write note into current step so you can step-program live.
                     let step = self.state.read().sequencer.current_step;
                     let s = self.state.read().clone();
@@ -715,7 +719,6 @@ impl ImpulseApp {
                         .unwrap_or(false);
                     *self.state.write() = crate::state::set_bass_step(s, step, note, was_active);
                 }
-
                 MidiEvent::NoteOff { note, .. } => {
                     self.pressed_notes.remove(&note);
                     let _ = self
@@ -724,7 +727,6 @@ impl ImpulseApp {
                             voice_idx: 0,
                         }));
                 }
-
                 // CC → synth params via the standard mapping table.
                 // Builds a partial JSON update matching the dot-path and feeds it
                 // through apply_llm_update so locked params are respected.
@@ -753,8 +755,6 @@ impl ImpulseApp {
                         *self.state.write() = toggle_sequencer_running(s);
                     }
                 }
-
-                // MIDI clock — derive BPM from pulse timing when sync is on.
                 MidiEvent::Clock => {
                     let sync_on = self.state.read().sequencer.midi_clock_sync;
                     if sync_on && let Some(bpm) = self.midi_clock_tracker.on_clock() {
@@ -768,8 +768,8 @@ impl ImpulseApp {
         }
     }
 }
+
 impl eframe::App for ImpulseApp {
-    /// Persist synth state so the next launch resumes from the same session.
     fn save(&mut self, storage: &mut dyn eframe::Storage) {
         let s = self.state.read().clone();
         if let Ok(json) = serde_json::to_string(&s) {
@@ -782,11 +782,24 @@ impl eframe::App for ImpulseApp {
         // after the window is shown and DPI is known.
         if self.native_ppp <= 0.0 {
             self.native_ppp = ctx.pixels_per_point();
+            // Stop sequencer while wizard is visible so no sound plays before user decides.
+            if self.show_wizard && self.state.read().sequencer.running {
+                self.state.write().sequencer.running = false;
+                self.push_audio_params();
+            }
         }
-        // Ctrl+MouseWheel zoom — adjusts ui_scale (0.5–3.0) → pixels_per_point.
-        if let Some(new_scale) = util::ctrl_scroll_zoom(ctx, self.state.read().ui_prefs.ui_scale) {
-            self.state.write().ui_prefs.ui_scale = new_scale;
-            self.session_dirty = true;
+        // Context-sensitive Ctrl+MW zoom: per-module over cards, global elsewhere.
+        let cg = self.state.read().ui_prefs.ui_scale;
+        match util::detect_ctrl_zoom(ctx, &self.module_scales, cg) {
+            Some(util::ZoomTarget::Kind(kind, s)) => {
+                self.module_scales.insert(kind, s);
+                self.session_dirty = true;
+            }
+            Some(util::ZoomTarget::Global(s)) => {
+                self.state.write().ui_prefs.ui_scale = s;
+                self.session_dirty = true;
+            }
+            None => {}
         }
         ctx.set_pixels_per_point(self.native_ppp * self.state.read().ui_prefs.ui_scale);
 
@@ -882,7 +895,8 @@ impl eframe::App for ImpulseApp {
 
         // ── Startup hook ──────────────────────────────────────────────────────
         // Fire once — right after the LLM transitions from initializing to ready.
-        if !self.startup_done && !self.state.read().llm.llm_initializing {
+        // Deferred while the setup wizard is visible so nothing plays before the user chooses.
+        if !self.startup_done && !self.show_wizard && !self.state.read().llm.llm_initializing {
             self.startup_done = true;
             if let Some(prompt) = crate::config::random_startup_prompt() {
                 // Send startup prompt to the first enabled agent.
@@ -948,19 +962,12 @@ impl eframe::App for ImpulseApp {
             )
             .exact_height(18.0)
             .show(ctx, |ui| {
-                ui.horizontal(|ui| {
-                    let midi_text = match &self.midi_port {
-                        Some(port) => format!("MIDI: {}", port.trim()),
-                        None => "MIDI: no device".to_string(),
-                    };
-                    ui.label(
-                        egui::RichText::new(midi_text)
-                            .color(theme::ASH)
-                            .monospace()
-                            .size(9.0),
-                    );
-                    scope_footer::draw_dsp_sparkline(ui, &self.dsp_load_buf);
-                });
+                scope_footer::draw_footer_status(
+                    ui,
+                    &self.midi_port,
+                    &self.dsp_load_buf,
+                    self.rack_flipped,
+                );
             });
 
         TopBottomPanel::bottom("piano")
@@ -975,6 +982,8 @@ impl eframe::App for ImpulseApp {
             });
 
         // ── Rack canvas (replaces tab panels) ────────────────────────────────
+        // When the startup wizard is visible, show an empty central panel
+        // so the rack doesn't load and nothing plays in the background.
         CentralPanel::default()
             .frame(
                 Frame::none()
@@ -982,7 +991,9 @@ impl eframe::App for ImpulseApp {
                     .inner_margin(egui::Margin::same(4.0)),
             )
             .show(ctx, |ui| {
-                rack_canvas::draw_rack(self, ctx, ui);
+                if !self.show_wizard {
+                    rack_canvas::draw_rack(self, ctx, ui);
+                }
             });
     }
 }

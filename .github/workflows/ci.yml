@@ -145,14 +145,20 @@ jobs:
       - name: Bundle config + data files
         shell: bash
         run: |
-          # Create a zip containing the binary + required runtime files so
-          # users don't need to clone the repo to get the default configs.
-          mkdir -p bundle/models
+          # Create a zip containing binary + configs + start scripts.
+          # This is the primary distribution — users extract and run.
+          mkdir -p bundle/models bundle/scripts
           cp ${{ matrix.asset_name }} bundle/
           for f in config.json instructions.json styles.json; do
             [ -f "$f" ] && cp "$f" bundle/
           done
-          # models/ placeholder so the path exists and the model selector works
+          # Start scripts so users get terminal log output
+          [ -f start.sh ] && cp start.sh bundle/
+          [ -f start.bat ] && cp start.bat bundle/
+          # Download helper scripts
+          for f in scripts/download-models.sh scripts/download-models.bat; do
+            [ -f "$f" ] && cp "$f" bundle/scripts/
+          done
           echo "# Place .gguf model files here. See README for download instructions." > bundle/models/README.md
           cd bundle
           if [[ "$RUNNER_OS" == "Windows" ]]; then
@@ -186,19 +192,17 @@ jobs:
           body: |
             ## Impulse Instruct ${{ github.ref_name }}
 
-            AI-driven acid/techno sequencer with 303 bass, 808/909 drums, and real-time LLM control.
+            A smart synthesizer with a virtual production team inside — multiple LLM agents collaborate to write patterns, shape sound, and evolve tracks in real time.
 
             ### Quick start
-            1. Download the `.zip` bundle for your platform (includes binary + default configs)
-            2. Extract and place a `.gguf` model file in the `models/` folder (or run `scripts/download-models.sh`)
-            3. Run `impulse-instruct` — the LLM server starts automatically
+            1. Download the `.zip` for your platform
+            2. Extract — you'll get the binary, configs, start scripts, and a `models/` folder
+            3. Run `scripts/download-models.sh` (or `.bat`) to fetch Gemma 4 E4B (~4.6 GB)
+            4. Run `./start.sh` (Linux) or `start.bat` (Windows) — this launches the app with terminal logging
 
-            ### Verify the binary
+            ### Verify
             ```
-            # Check SHA-256 matches the .sha256 file
             sha256sum impulse-instruct-linux-x86_64
-
-            # Verify SLSA build provenance (requires gh CLI)
             gh attestation verify impulse-instruct-linux-x86_64 --repo Tok/impulse-instruct
             ```
 
@@ -208,9 +212,8 @@ jobs:
             - **LLM inference**: NVIDIA GPU recommended; CPU inference works but is slow
 
             ### Recommended models
-            - **Gemma 4 E4B Q4_K_M** (~4.6 GB) — best accuracy, default
-            - **Bonsai 8B Q1_0_g128** (~1.1 GB) — lightweight, requires PrismML llama-server fork
+            - **Gemma 4 E4B Q4_K_M** (~4.6 GB) — best accuracy, default; needed for all presets
+            - **Bonsai 8B Q1_0_g128** (~1.1 GB) — lightweight agent for multi-model teams
           files: |
-            ${{ matrix.asset_name }}
-            ${{ matrix.asset_name }}.sha256
             ${{ matrix.asset_name }}.zip
+            ${{ matrix.asset_name }}.sha256

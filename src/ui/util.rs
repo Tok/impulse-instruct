@@ -33,9 +33,23 @@ pub(crate) fn scan_models() -> Vec<String> {
     found
 }
 
-/// Ctrl+MouseWheel zoom: returns `Some(new_scale)` when the user scrolls
-/// with Ctrl held, or `None` if no zoom change occurred.
-pub(crate) fn ctrl_scroll_zoom(ctx: &egui::Context, current_scale: f32) -> Option<f32> {
+use crate::state::ModuleKind;
+
+/// Result of context-sensitive Ctrl+MW zoom detection.
+pub(crate) enum ZoomTarget {
+    /// Per-kind zoom: (kind, new_scale).  All modules of this kind scale together.
+    Kind(ModuleKind, f32),
+    /// Global UI zoom.
+    Global(f32),
+}
+
+/// Detect Ctrl+MW zoom and return the appropriate target.
+/// Card rects (kind + rect) are read from egui temp memory (set during rack render).
+pub(crate) fn detect_ctrl_zoom(
+    ctx: &egui::Context,
+    kind_scales: &std::collections::HashMap<ModuleKind, f32>,
+    current_global: f32,
+) -> Option<ZoomTarget> {
     let delta = ctx.input(|i| {
         if i.modifiers.ctrl {
             i.raw_scroll_delta.y
@@ -43,11 +57,24 @@ pub(crate) fn ctrl_scroll_zoom(ctx: &egui::Context, current_scale: f32) -> Optio
             0.0
         }
     });
-    if delta.abs() > 0.1 {
-        let step = (delta / 120.0).clamp(-0.5, 0.5) * 0.1;
-        Some((current_scale + step).clamp(0.5, 3.0))
+    if delta.abs() <= 0.1 {
+        return None;
+    }
+    let step = (delta / 120.0).clamp(-0.5, 0.5) * 0.1;
+    let card_rects: Vec<(ModuleKind, egui::Rect)> = ctx
+        .memory(|m| m.data.get_temp(egui::Id::new("module_card_rects")))
+        .unwrap_or_default();
+    let hovered = ctx.pointer_latest_pos().and_then(|p| {
+        card_rects
+            .iter()
+            .find(|(_, r)| r.contains(p))
+            .map(|&(k, _)| k)
+    });
+    if let Some(kind) = hovered {
+        let cur = kind_scales.get(&kind).copied().unwrap_or(1.0);
+        Some(ZoomTarget::Kind(kind, (cur + step).clamp(0.5, 2.0)))
     } else {
-        None
+        Some(ZoomTarget::Global((current_global + step).clamp(0.5, 3.0)))
     }
 }
 

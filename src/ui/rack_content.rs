@@ -22,7 +22,11 @@ pub(super) fn draw_voice_content(app: &mut ImpulseApp, ui: &mut egui::Ui, kind: 
 pub(super) fn draw_fx_content(app: &mut ImpulseApp, ui: &mut egui::Ui, kind: ModuleKind) {
     use crate::ui::widgets;
 
-    let ctrl = widgets::ControlPrefs::from_prefs(&app.state.read().ui_prefs);
+    let scale: f32 = ui
+        .ctx()
+        .data(|d| d.get_temp(egui::Id::new("module_scale")))
+        .unwrap_or(1.0);
+    let ctrl = widgets::ControlPrefs::from_prefs_scaled(&app.state.read().ui_prefs, scale);
     let locked = app.state.read().llm.locked_params.clone();
     let focused = app.state.read().llm.focused_params.clone();
     let pm = |path: &str| crate::state::param_mode(path, &locked, &focused);

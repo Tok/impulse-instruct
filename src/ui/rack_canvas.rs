@@ -490,6 +490,8 @@ fn row_expand_and_pad(row: &[(u32, ModuleKind, bool)], available_w: f32, gap: f3
 fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<PortPos>) {
     // Subtract a small gutter so modules never touch the scrollbar.
     let available_w = (ui.available_width() - 8.0).max(200.0);
+    // Collect card rects for Ctrl+MW hit-testing (stored in egui temp at end).
+    let mut card_rects: Vec<(ModuleKind, egui::Rect)> = Vec::new();
 
     // ── GLOBAL ZONE — sequencer + master, full width ──────────────────────────
     {
@@ -532,6 +534,7 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
                         ModuleKind::LlmConsole,
                         enabled,
                         Some(available_w - 2.0),
+                        app.kind_scale(ModuleKind::LlmConsole),
                         ports,
                     )
                 } else {
@@ -541,6 +544,7 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
                         ModuleKind::LlmConsole,
                         enabled,
                         Some(available_w - 2.0),
+                        app.kind_scale(ModuleKind::LlmConsole),
                         ports,
                         |ui| {
                             app.draw_llm_console_content(ui);
@@ -548,6 +552,7 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
                     )
                     .0
                 };
+                card_rects.push((ModuleKind::LlmConsole, resp.card_rect));
                 if resp.toggle_clicked
                     && let Some(m) = app
                         .state
@@ -585,6 +590,7 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
                                 ModuleKind::LlmAgent,
                                 *enabled,
                                 Some(slot_w),
+                                app.kind_scale(ModuleKind::LlmAgent),
                                 ports,
                             )
                         } else {
@@ -594,6 +600,7 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
                                 ModuleKind::LlmAgent,
                                 *enabled,
                                 Some(slot_w),
+                                app.kind_scale(ModuleKind::LlmAgent),
                                 ports,
                                 |ui| {
                                     draw_llm_agent_content(app, ui, *id);
@@ -601,6 +608,7 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
                             )
                             .0
                         };
+                        card_rects.push((ModuleKind::LlmAgent, resp.card_rect));
                         if resp.toggle_clicked
                             && let Some(m) = app
                                 .state
@@ -650,6 +658,7 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
                     ModuleKind::StepSequencer,
                     enabled,
                     Some(available_w - 2.0),
+                    app.kind_scale(ModuleKind::StepSequencer),
                     ports,
                 )
             } else {
@@ -659,6 +668,7 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
                     ModuleKind::StepSequencer,
                     enabled,
                     Some(available_w - 2.0),
+                    app.kind_scale(ModuleKind::StepSequencer),
                     ports,
                     |ui| {
                         crate::ui::panels::draw_sequencer(app, ui);
@@ -666,6 +676,7 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
                 )
                 .0
             };
+            card_rects.push((ModuleKind::StepSequencer, resp.card_rect));
             if resp.toggle_clicked
                 && let Some(m) = app
                     .state
@@ -698,6 +709,7 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
                     ModuleKind::MasterOutput,
                     true,
                     Some(available_w - 2.0),
+                    app.kind_scale(ModuleKind::MasterOutput),
                     ports,
                 )
             } else {
@@ -707,6 +719,7 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
                     ModuleKind::MasterOutput,
                     true,
                     Some(available_w - 2.0),
+                    app.kind_scale(ModuleKind::MasterOutput),
                     ports,
                     |ui| {
                         draw_master_content(app, ui);
@@ -714,7 +727,7 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
                 )
                 .0
             };
-            let _ = resp;
+            card_rects.push((ModuleKind::MasterOutput, resp.card_rect));
         }
 
         ui.add_space(2.0);
@@ -779,6 +792,7 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
                             *kind,
                             eff_enabled,
                             Some(slot_w),
+                            app.kind_scale(*kind),
                             ports,
                         )
                     } else {
@@ -788,6 +802,7 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
                             *kind,
                             eff_enabled,
                             Some(slot_w),
+                            app.kind_scale(*kind),
                             ports,
                             |ui| {
                                 draw_voice_content(app, ui, *kind);
@@ -795,6 +810,7 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
                         )
                         .0
                     };
+                    card_rects.push((*kind, resp.card_rect));
                     if resp.toggle_clicked && !is_dragging {
                         let en = *enabled;
                         if let Some(m) = app
@@ -880,6 +896,7 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
                             *kind,
                             eff_enabled,
                             Some(slot_w),
+                            app.kind_scale(*kind),
                             ports,
                         )
                     } else {
@@ -889,6 +906,7 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
                             *kind,
                             eff_enabled,
                             Some(slot_w),
+                            app.kind_scale(*kind),
                             ports,
                             |ui| {
                                 if *kind == ModuleKind::LfoModule {
@@ -900,6 +918,7 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
                         )
                         .0
                     };
+                    card_rects.push((*kind, resp.card_rect));
                     if resp.toggle_clicked && !is_dragging {
                         let en = *enabled;
                         if let Some(m) = app
@@ -929,6 +948,12 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
 
         ui.add_space(4.0);
     } // end zone_fxmod_collapsed guard
+
+    // Store card rects for Ctrl+MW hit-testing in the next frame.
+    ui.ctx().memory_mut(|m| {
+        m.data
+            .insert_temp(egui::Id::new("module_card_rects"), card_rects)
+    });
 }
 
 // ─── Module drag helpers ──────────────────────────────────────────────────────
