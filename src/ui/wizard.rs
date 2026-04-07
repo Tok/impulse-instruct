@@ -343,7 +343,15 @@ impl ImpulseApp {
             None => return,
         };
 
-        let existing_agents = self.state.read().llm_agents.len();
+        // Remove all existing agents — wizard applies a clean setup.
+        {
+            let old_ids: Vec<u32> = self.state.read().llm_agents.iter().map(|a| a.id).collect();
+            let mut s = self.state.write();
+            for id in &old_ids {
+                s.rack.remove_module(*id);
+            }
+            s.llm_agents.clear();
+        }
 
         for pa in preset.agents {
             let model_path = find_model(pa.model_pattern, &self.available_models);
@@ -422,16 +430,6 @@ impl ImpulseApp {
                         },
                     );
                 }
-            }
-        }
-
-        // Remove the original default agent if we just created new ones
-        // and there was exactly 1 default agent before.
-        if preset.agents.len() > 1 && existing_agents == 1 {
-            let first_agent_id = self.state.read().llm_agents.first().map(|a| a.id);
-            if let Some(old_id) = first_agent_id {
-                self.state.write().rack.remove_module(old_id);
-                self.state.write().llm_agents.retain(|a| a.id != old_id);
             }
         }
 
