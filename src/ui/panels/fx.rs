@@ -539,6 +539,23 @@ pub fn draw_fx(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                 {
                     changed = true;
                 }
+                // Tuning system selector
+                let tuning_names = ["12-TET", "Just", "Slendro", "Pelog"];
+                let mut tuning_idx = app.state.read().fx.tuning as usize;
+                if tuning_idx >= tuning_names.len() {
+                    tuning_idx = 0;
+                }
+                egui::ComboBox::from_id_source("tuning_sel")
+                    .width(60.0)
+                    .selected_text(tuning_names[tuning_idx])
+                    .show_ui(ui, |ui| {
+                        for (i, name) in tuning_names.iter().enumerate() {
+                            if ui.selectable_label(tuning_idx == i, *name).clicked() {
+                                app.state.write().fx.tuning = i as u8;
+                                changed = true;
+                            }
+                        }
+                    });
             });
         });
     });
@@ -584,10 +601,6 @@ pub fn draw_fx(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         s.fx.stereo_width = stereo_w;
         s.fx.reverb_freeze = rev_freeze;
         drop(s);
-        app.push_audio_params_with_learning(&[
-            ("fx.reverb_mix", rm),
-            ("fx.delay_mix", dm),
-            ("fx.distortion_drive", dd),
-        ]);
+        app.push_audio_params();
     }
 }

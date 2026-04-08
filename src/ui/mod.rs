@@ -427,27 +427,29 @@ impl ImpulseApp {
     }
 
     fn push_audio_params(&mut self) {
-        let params = {
-            let s = self.state.read();
-            let mut p = AudioParams::from_app_state(&s);
-            p.sample_rate = 44100.0; // will be overwritten by engine
-            p
-        };
-        let _ = self
-            .audio_tx
-            .push(AudioCommand::UpdateParams(Box::new(params)));
-    }
+        let s = self.state.read();
+        let mut p = AudioParams::from_app_state(&s);
+        p.sample_rate = 44100.0; // will be overwritten by engine
 
-    /// Push audio params AND record style observations for key params.
-    /// Call this instead of push_audio_params when the user directly edits a knob.
-    pub(crate) fn push_audio_params_with_learning(&mut self, edits: &[(&str, f32)]) {
-        self.push_audio_params();
+        // Auto-observe key params for style learning
+        let edits: [(&str, f32); 6] = [
+            ("bass.cutoff", s.bass_voices[0].synth.cutoff),
+            ("bass.resonance", s.bass_voices[0].synth.resonance),
+            ("fx.reverb_mix", s.fx.reverb_mix),
+            ("fx.delay_mix", s.fx.delay_mix),
+            ("an1x.filter_cutoff", s.an1x.filter_cutoff),
+            ("hoover.resonance", s.hoover.resonance),
+        ];
+        drop(s);
+
+        let _ = self.audio_tx.push(AudioCommand::UpdateParams(Box::new(p)));
+
         let snapshot = self.state.read().clone();
-        let mut s = snapshot;
-        for &(path, value) in edits {
-            s = crate::state::observe_user_edit(s, path, value);
+        let mut st = snapshot;
+        for &(path, value) in &edits {
+            st = crate::state::observe_user_edit(st, path, value);
         }
-        *self.state.write() = s;
+        *self.state.write() = st;
     }
 
     /// Recompile the FX routing plan from the current rack cable graph and

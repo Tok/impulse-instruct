@@ -702,6 +702,17 @@ pub fn observe_user_edit(state: AppState, param_path: &str, value: f32) -> AppSt
     s
 }
 
+/// Propagate a style change to all agents whose style is not locked.
+pub fn propagate_style(state: AppState, style_id: &str) -> AppState {
+    let mut s = state;
+    for agent in &mut s.llm_agents {
+        if !agent.style_locked {
+            agent.active_style = Some(style_id.to_string());
+        }
+    }
+    s
+}
+
 /// Push a memory snippet to an agent's persistent memory, capping at AGENT_MEMORY_MAX.
 pub fn push_agent_memory(state: AppState, agent_id: u32, snippet: String) -> AppState {
     let mut s = state;

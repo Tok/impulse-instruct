@@ -436,6 +436,8 @@ impl Default for RackState {
         rack.add_module(ModuleKind::HooverLead);
         rack.add_module(ModuleKind::An1xVoice);
         rack.add_module(ModuleKind::AmenSampler);
+        rack.add_module(ModuleKind::NoiseVoice);
+        rack.add_module(ModuleKind::GranularTexture);
         rack.add_module(ModuleKind::EspeakNgTts);
 
         // ── FX + Mod zone — order matches the fixed chain in process_block ───
@@ -475,6 +477,8 @@ impl Default for RackState {
             ModuleKind::HooverLead,
             ModuleKind::An1xVoice,
             ModuleKind::AmenSampler,
+            ModuleKind::NoiseVoice,
+            ModuleKind::GranularTexture,
         ]
         .iter()
         .filter_map(|&k| find(k))

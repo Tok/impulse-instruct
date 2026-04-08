@@ -269,8 +269,6 @@ pub fn draw_rack(app: &mut ImpulseApp, ctx: &egui::Context, ui: &mut egui::Ui) {
 
     // ── Cable drag — always active, no mode required ──────────────────────────
     handle_cable_drag(app, ctx, &ports);
-
-    // ── Module drag ghost overlay ─────────────────────────────────────────────
     if let Some(ref drag) = app.module_drag
         && let Some(pointer) = ctx.pointer_latest_pos()
     {
@@ -848,7 +846,13 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
                     }
                     let drop_pos = ctx_ref.pointer_latest_pos().unwrap_or_default();
                     if handle_title_drag(app, &ctx_ref, *id, &resp) {
-                        reorder_module_by_drop(app, *id, drop_pos, Zone::Voice);
+                        reorder_module_by_drop(
+                            app,
+                            *id,
+                            drop_pos,
+                            Zone::Voice,
+                            ctx_ref.screen_rect().width(),
+                        );
                     }
                 }
             });
@@ -962,7 +966,13 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
                     }
                     let drop_pos = ctx_ref.pointer_latest_pos().unwrap_or_default();
                     if handle_title_drag(app, &ctx_ref, *id, &resp) {
-                        reorder_module_by_drop(app, *id, drop_pos, Zone::FxMod);
+                        reorder_module_by_drop(
+                            app,
+                            *id,
+                            drop_pos,
+                            Zone::FxMod,
+                            ctx_ref.screen_rect().width(),
+                        );
                     }
                 }
             });

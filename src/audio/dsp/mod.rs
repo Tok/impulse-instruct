@@ -839,12 +839,17 @@ impl DspState {
 
             let out = ((synth_out * self.tts_duck + tts_sig) * p.master_volume).clamp(-1.0, 1.0);
 
-            // Stereo width: 0=mono, 0.5=normal (identical L/R), 1=wide (Haas-style)
-            if channels >= 2 && (p.stereo_width - 0.5).abs() > 0.01 {
+            // Stereo width + granular spray: 0=mono, 0.5=normal, 1=wide
+            let effective_width = p.stereo_width
+                + if p.granular_enabled {
+                    p.granular_spray * 0.3
+                } else {
+                    0.0
+                };
+            if channels >= 2 && (effective_width - 0.5).abs() > 0.01 {
                 let mid = out;
-                // Use chorus delay line as a subtle decorrelator for "side" content
                 let side = self.chorus.read_tap(0.4) * 0.3;
-                let w = p.stereo_width * 2.0; // 0→0 (mono), 1→1 (normal), 2→2 (wide)
+                let w = effective_width * 2.0;
                 let left = (mid + side * w).clamp(-1.0, 1.0);
                 let right = (mid - side * w).clamp(-1.0, 1.0);
                 frame[0] = left;

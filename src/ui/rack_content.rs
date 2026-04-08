@@ -895,10 +895,10 @@ pub(super) fn reorder_module_by_drop(
     dragged_id: u32,
     drop_pos: egui::Pos2,
     zone: crate::state::Zone,
+    screen_width: f32,
 ) {
     use super::rack_canvas::module_slot_w;
-    // Use 1200px as a reasonable default — drop position is proportional, not exact.
-    let available_w = 1200.0f32;
+    let available_w = screen_width.max(400.0);
     let zone_entries: Vec<(u32, ModuleKind)> = {
         let rack = app.state.read();
         let mut v: Vec<_> = rack

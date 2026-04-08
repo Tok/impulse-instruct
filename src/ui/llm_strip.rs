@@ -371,6 +371,11 @@ impl ImpulseApp {
                 });
             }
         }
+        // Propagate style to all sub-agents that don't have style_locked
+        if let Some(ref style_id) = self.state.read().llm.active_style {
+            let snapshot = self.state.read().clone();
+            *self.state.write() = crate::state::propagate_style(snapshot, style_id);
+        }
     }
 
     pub(super) fn draw_llm_console_content(&mut self, ui: &mut egui::Ui) {

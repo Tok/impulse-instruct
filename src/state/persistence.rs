@@ -184,14 +184,16 @@ pub fn apply_session(state: &mut AppState, data: SessionData) {
     }
 
     // ── Migration: ensure LlmConsole + at least one LlmAgent exist ───────
-    if !state
-        .rack
-        .modules
-        .iter()
-        .any(|m| m.kind == ModuleKind::LlmConsole)
-    {
-        state.rack.add_module(ModuleKind::LlmConsole);
-        log::info!("Migration: added LlmConsole module to rack");
+    // Migration: add modules that were introduced in later versions
+    for kind in [
+        ModuleKind::LlmConsole,
+        ModuleKind::NoiseVoice,
+        ModuleKind::GranularTexture,
+    ] {
+        if !state.rack.modules.iter().any(|m| m.kind == kind) {
+            state.rack.add_module(kind);
+            log::info!("Migration: added {:?} module to rack", kind);
+        }
     }
     if !state
         .rack

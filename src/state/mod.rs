@@ -896,6 +896,10 @@ pub struct LlmAgentState {
     /// Pending hints from other agents, consumed on next inference.
     #[serde(default)]
     pub pending_hints: Vec<String>,
+    /// When true, this agent's style is independent and won't change when the
+    /// global style is changed. When false (default), style syncs with global.
+    #[serde(default)]
+    pub style_locked: bool,
 }
 
 /// Maximum number of memory entries per agent.
@@ -929,6 +933,7 @@ impl LlmAgentState {
             memory: Vec::new(),
             style_observations: Vec::new(),
             pending_hints: Vec::new(),
+            style_locked: false,
         }
     }
 
@@ -958,6 +963,7 @@ impl LlmAgentState {
             memory: Vec::new(),
             style_observations: Vec::new(),
             pending_hints: Vec::new(),
+            style_locked: false,
         }
     }
 }
