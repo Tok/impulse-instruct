@@ -108,6 +108,11 @@ impl AudioEngine {
 
         let state_clone = Arc::clone(&state);
 
+        log::info!(
+            "Opening audio stream ({} Hz, {} ch)… (if stuck, kill stale impulse-instruct processes)",
+            sample_rate,
+            channels
+        );
         let stream = match supported.sample_format() {
             SampleFormat::F32 => device.build_output_stream(
                 &config,
