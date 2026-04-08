@@ -385,6 +385,25 @@ impl RackState {
         self.cables.push(Cable { from, to, color });
     }
 
+    /// Connect a control cable from `from_id` (Out) to `to_id` (In).
+    /// Shorthand for the 8-line PortRef boilerplate used when wiring LLM agents.
+    pub fn connect_control(&mut self, from_id: u32, to_id: u32) {
+        self.connect(
+            PortRef {
+                module_id: from_id,
+                dir: PortDir::Out,
+                kind: PortKind::Control,
+                index: 0,
+            },
+            PortRef {
+                module_id: to_id,
+                dir: PortDir::In,
+                kind: PortKind::Control,
+                index: 0,
+            },
+        );
+    }
+
     /// Remove the cable connecting the given two ports (if any).
     pub fn disconnect(&mut self, from: &PortRef, to: &PortRef) {
         self.cables.retain(|c| !(&c.from == from && &c.to == to));
@@ -574,20 +593,7 @@ impl Default for RackState {
                 .map(|m| m.id)
                 .collect();
             for target_id in &controllable {
-                rack.connect(
-                    PortRef {
-                        module_id: agent_id,
-                        dir: PortDir::Out,
-                        kind: PortKind::Control,
-                        index: 0,
-                    },
-                    PortRef {
-                        module_id: *target_id,
-                        dir: PortDir::In,
-                        kind: PortKind::Control,
-                        index: 0,
-                    },
-                );
+                rack.connect_control(agent_id, *target_id);
             }
         }
 

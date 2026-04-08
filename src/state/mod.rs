@@ -902,24 +902,6 @@ impl LlmAgentState {
 }
 
 /// Sync the default (first) LlmAgentState with the global LlmState.
-/// Keeps header controls and the singleton inference loop working while
-/// the rackable agent UI is being built out.
-pub fn sync_default_agent(state: &mut AppState) {
-    if let Some(agent) = state.llm_agents.first_mut() {
-        // Singleton → agent (header controls are authoritative in Phase 1)
-        agent.persona_name = state.llm.persona_name.clone();
-        agent.heat = state.llm.heat;
-        agent.temperature = state.llm.temperature;
-        agent.jam_bars = state.llm.jam_bars;
-        agent.is_inferring = state.llm.is_inferring;
-        agent.tokens_per_sec = state.llm.tokens_per_sec;
-        agent.jam_cycle_count = state.llm.jam_cycle_count;
-        if !state.llm.last_response.is_empty() {
-            agent.last_response = state.llm.last_response.clone();
-        }
-    }
-}
-
 pub mod jam_tools;
 pub mod llm_apply;
 pub(crate) mod llm_helpers;

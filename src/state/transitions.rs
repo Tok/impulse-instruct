@@ -3,7 +3,10 @@
 
 pub use super::llm_apply::{apply_llm_step_array, apply_llm_update};
 
-use super::{AppState, DrumVoice, FilterMode, MAX_STEPS, Scale, Waveform};
+use super::{
+    AgentRole, AppState, ConversationMode, DrumVoice, FilterMode, LlmAgentState, MAX_STEPS,
+    ModuleKind, Scale, Waveform, rack_kind_name_matches,
+};
 
 /// Set the active step count, tiling existing patterns into the new slots when expanding.
 ///
@@ -475,4 +478,90 @@ pub fn record_bass_note(state: AppState, step: usize, note: u8) -> AppState {
         s.sequencer.bass_pattern[step].note = note;
     }
     s
+}
+
+/// Spawn an LLM agent: add rack module, create agent state, wire control cables.
+///
+/// Empty scope wires to all controllable modules; non-empty scope wires only
+/// to modules whose kind matches one of the scope strings.
+/// Returns `(new_state, agent_module_id)`.
+pub fn spawn_agent(
+    state: AppState,
+    persona: &str,
+    scope: &[String],
+    role: AgentRole,
+    model: Option<String>,
+) -> (AppState, u32) {
+    let mut s = state;
+    let id = s.rack.add_module(ModuleKind::LlmAgent);
+
+    let mut agent = LlmAgentState::from_singleton(id, &s.llm);
+    agent.persona_name = persona.to_string();
+    agent.scope = scope.to_vec();
+    agent.role = role;
+    if let Some(m) = model {
+        agent.model_path = Some(m);
+    }
+    s.llm_agents.push(agent);
+
+    // Wire control cables
+    let targets: Vec<u32> = if scope.is_empty() {
+        s.rack
+            .modules
+            .iter()
+            .filter(|m| {
+                !matches!(
+                    m.kind,
+                    ModuleKind::MasterOutput | ModuleKind::LlmAgent | ModuleKind::LlmConsole
+                )
+            })
+            .map(|m| m.id)
+            .collect()
+    } else {
+        s.rack
+            .modules
+            .iter()
+            .filter(|m| scope.iter().any(|sc| rack_kind_name_matches(m.kind, sc)))
+            .map(|m| m.id)
+            .collect()
+    };
+    for tid in &targets {
+        s.rack.connect_control(id, *tid);
+    }
+
+    (s, id)
+}
+
+/// Format an LLM response for display in the log.
+///
+/// Returns the user-visible summary text:
+/// - `ConversationMode::Off` → just the changed keys ("updated bass, fx")
+/// - Otherwise → the `_comment` field if present, else keys
+/// - If no param update → returns the raw text unchanged
+pub fn format_llm_display(
+    param_update: Option<&serde_json::Value>,
+    text: &str,
+    conversation_mode: &ConversationMode,
+) -> String {
+    match param_update {
+        Some(update) => {
+            let keys: Vec<&str> = update
+                .as_object()
+                .map(|o| {
+                    o.keys()
+                        .filter(|k| *k != "_comment")
+                        .map(|k| k.as_str())
+                        .collect()
+                })
+                .unwrap_or_default();
+            if *conversation_mode == ConversationMode::Off {
+                format!("updated {}", keys.join(", "))
+            } else if let Some(comment) = update.get("_comment").and_then(|v| v.as_str()) {
+                comment.to_string()
+            } else {
+                format!("updated {}", keys.join(", "))
+            }
+        }
+        None => text.to_string(),
+    }
 }

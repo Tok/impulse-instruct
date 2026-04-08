@@ -37,7 +37,7 @@ use std::sync::Arc;
 use crate::audio::{AudioCommand, AudioParams};
 use crate::llm::{LlmInput, LlmOutput};
 use crate::midi::MidiEvent;
-use crate::state::{AppState, ConversationMode, compile_fx_plan};
+use crate::state::{AppState, compile_fx_plan};
 
 pub(super) const LOG_LEVELS: &[(&str, log::LevelFilter)] = &[
     ("ERROR", log::LevelFilter::Error),
@@ -478,36 +478,11 @@ impl ImpulseApp {
                     || (!out.text.is_empty() && !out.text.starts_with('[')))
             {
                 let conv_mode = self.state.read().llm.conversation_mode.clone();
-                let display = if let Some(ref update) = out.param_update {
-                    if conv_mode == ConversationMode::Off {
-                        // Off: show only what keys changed, no commentary
-                        let keys: Vec<&str> = update
-                            .as_object()
-                            .map(|o| {
-                                o.keys()
-                                    .filter(|k| *k != "_comment")
-                                    .map(|k| k.as_str())
-                                    .collect()
-                            })
-                            .unwrap_or_default();
-                        format!("updated {}", keys.join(", "))
-                    } else if let Some(comment) = update.get("_comment").and_then(|v| v.as_str()) {
-                        comment.to_string()
-                    } else {
-                        let keys: Vec<&str> = update
-                            .as_object()
-                            .map(|o| {
-                                o.keys()
-                                    .filter(|k| *k != "_comment")
-                                    .map(|k| k.as_str())
-                                    .collect()
-                            })
-                            .unwrap_or_default();
-                        format!("updated {}", keys.join(", "))
-                    }
-                } else {
-                    out.text.clone()
-                };
+                let display = crate::state::format_llm_display(
+                    out.param_update.as_ref(),
+                    &out.text,
+                    &conv_mode,
+                );
                 // Append thinking indicator when present; tag audio-feedback responses
                 let persona = if self.listen_pending {
                     self.listen_pending = false;
@@ -654,55 +629,15 @@ impl ImpulseApp {
                                 .unwrap_or(true);
                         drop(s);
                         if ok {
-                            let id = self
-                                .state
-                                .write()
-                                .rack
-                                .add_module(crate::state::ModuleKind::LlmAgent);
-                            let mut agent = crate::state::LlmAgentState::from_singleton(
-                                id,
-                                &self.state.read().llm,
+                            let snapshot = self.state.read().clone();
+                            let (new_state, _id) = crate::state::spawn_agent(
+                                snapshot,
+                                persona,
+                                scope,
+                                crate::state::AgentRole::Producer,
+                                model.clone(),
                             );
-                            agent.persona_name = persona.clone();
-                            agent.scope = scope.clone();
-                            if let Some(m) = model {
-                                agent.model_path = Some(m.clone());
-                            }
-                            self.state.write().llm_agents.push(agent);
-                            // Auto-wire control cables from scope
-                            {
-                                use crate::state::{
-                                    PortDir, PortKind, PortRef, rack_kind_name_matches,
-                                };
-                                let targets: Vec<u32> = self
-                                    .state
-                                    .read()
-                                    .rack
-                                    .modules
-                                    .iter()
-                                    .filter(|m| {
-                                        scope.iter().any(|s| rack_kind_name_matches(m.kind, s))
-                                    })
-                                    .map(|m| m.id)
-                                    .collect();
-                                let mut s = self.state.write();
-                                for tid in &targets {
-                                    s.rack.connect(
-                                        PortRef {
-                                            module_id: id,
-                                            dir: PortDir::Out,
-                                            kind: PortKind::Control,
-                                            index: 0,
-                                        },
-                                        PortRef {
-                                            module_id: *tid,
-                                            dir: PortDir::In,
-                                            kind: PortKind::Control,
-                                            index: 0,
-                                        },
-                                    );
-                                }
-                            }
+                            *self.state.write() = new_state;
                             self.log_text
                                 .push_str(&format!("Agent spawned: {} ({:?})\n", persona, scope));
                             self.session_dirty = true;

@@ -216,20 +216,7 @@ pub fn apply_session(state: &mut AppState, data: SessionData) {
             .map(|m| m.id)
             .collect();
         for tid in &targets {
-            state.rack.connect(
-                super::PortRef {
-                    module_id: id,
-                    dir: super::PortDir::Out,
-                    kind: super::PortKind::Control,
-                    index: 0,
-                },
-                super::PortRef {
-                    module_id: *tid,
-                    dir: super::PortDir::In,
-                    kind: super::PortKind::Control,
-                    index: 0,
-                },
-            );
+            state.rack.connect_control(id, *tid);
         }
         log::info!("Migration: added default LlmAgent + control cables");
     }
@@ -263,20 +250,7 @@ pub fn apply_session(state: &mut AppState, data: SessionData) {
                 .map(|m| m.id)
                 .collect();
             for tid in &targets {
-                state.rack.connect(
-                    super::PortRef {
-                        module_id: *aid,
-                        dir: super::PortDir::Out,
-                        kind: super::PortKind::Control,
-                        index: 0,
-                    },
-                    super::PortRef {
-                        module_id: *tid,
-                        dir: super::PortDir::In,
-                        kind: super::PortKind::Control,
-                        index: 0,
-                    },
-                );
+                state.rack.connect_control(*aid, *tid);
             }
             log::info!("Migration: wired control cables for agent {}", aid);
         }

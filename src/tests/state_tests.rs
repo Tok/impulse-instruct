@@ -802,6 +802,21 @@ mod transition_coverage_tests {
         assert!(!s.chain_enabled);
         assert_eq!(s.chain_pos, 0);
     }
+
+    #[test]
+    fn apply_gabber_kick_preset_sets_extreme_params() {
+        let s = crate::state::apply_gabber_kick_preset(AppState::default());
+        assert!(
+            s.kit_a.kick.pitch_env_depth > 0.8,
+            "gabber kick needs extreme pitch sweep"
+        );
+        assert!(s.kit_a.kick.clip > 0.5, "gabber kick needs hard clipping");
+        assert!(
+            s.kit_a.kick.pitch_env_time > 0.4,
+            "gabber kick needs long sweep time"
+        );
+        assert!(s.kit_a.kick.punch > 0.8, "gabber kick needs max transient");
+    }
 }
 
 // ─── Schema and rack tests ─────────────────────────────────────────────────────
