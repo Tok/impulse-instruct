@@ -69,15 +69,29 @@ drone, and textural work. These additions would close that gap:
 - [ ] **Inter-agent messaging** — agents can send structured hints to each other
   ("drums agent: I'm building, raise the hat density")
 
+### Refactor and test coverage (37% codecov - red badge)
+
+Priority order — each item is a self-contained session task:
+
+- [ ] **llm_apply.rs tests** — 580 lines, zero tests; pure functions that apply
+  LLM JSON to AppState; test each top-level key (bass, kit_a, fx, sequencer...)
+  with known JSON input and assert output state
+- [ ] **persistence.rs tests** — save/load round-trip: serialize AppState,
+  deserialize, compare fields
+- [ ] **transitions.rs tests** — many preset/toggle functions lack tests;
+  apply_gabber_kick_preset, set_hoover_step, etc.
+- [ ] **Cable wiring helper** — `rack.connect_control(from_id, to_id)` to
+  replace 8-line PortRef boilerplate in wizard.rs, mod.rs, rack.rs (4+ sites)
+- [ ] **Agent spawn helper** — extract shared logic from wizard.rs and
+  SpawnAgent handler; single function with persona/scope/model/wiring
+- [ ] **Sweep state/ for impure code** — any `&mut AppState` methods should be
+  refactored to pure `fn(AppState, ...) -> AppState` per coding-guide.md
+- [ ] **Extract pure logic from UI** — drain_llm_outputs has display formatting
+  and jam scheduling that could be pure functions
+
 ### Infrastructure
 
-- [ ] **Test coverage for llm_apply.rs** — 580 lines, zero tests; critical for
-  LLM update correctness
 - [ ] **Windows code-signing** — unsigned `.exe` triggers SmartScreen
-- [ ] **Refactor: cable wiring helper** — `rack.connect_control(from, to)` to
-  reduce 8-line PortRef boilerplate across 4+ files
-- [ ] **Refactor: agent spawn helper** — extract shared logic from wizard.rs
-  and SpawnAgent handler in mod.rs
 
 ---
 
