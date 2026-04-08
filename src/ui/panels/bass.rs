@@ -507,9 +507,14 @@ pub fn draw_bass(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                 cycle_param_mode(snap, path)
             };
         }
+        let cutoff_val = snap.bass_voices[0].synth.cutoff;
+        let res_val = snap.bass_voices[0].synth.resonance;
         *app.state.write() = snap;
         if changed {
-            app.push_audio_params();
+            app.push_audio_params_with_learning(&[
+                ("bass.cutoff", cutoff_val),
+                ("bass.resonance", res_val),
+            ]);
         }
     }
 

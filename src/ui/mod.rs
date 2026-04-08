@@ -438,6 +438,18 @@ impl ImpulseApp {
             .push(AudioCommand::UpdateParams(Box::new(params)));
     }
 
+    /// Push audio params AND record style observations for key params.
+    /// Call this instead of push_audio_params when the user directly edits a knob.
+    pub(crate) fn push_audio_params_with_learning(&mut self, edits: &[(&str, f32)]) {
+        self.push_audio_params();
+        let snapshot = self.state.read().clone();
+        let mut s = snapshot;
+        for &(path, value) in edits {
+            s = crate::state::observe_user_edit(s, path, value);
+        }
+        *self.state.write() = s;
+    }
+
     /// Recompile the FX routing plan from the current rack cable graph and
     /// send it to the audio thread.  Call whenever rack topology changes
     /// (cable connect/disconnect, module enable/disable, module remove).
