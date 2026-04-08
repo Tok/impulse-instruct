@@ -25,6 +25,15 @@ fn touch_mode(ui: &Ui) -> Option<ParamMode> {
 
 /// Check if a directional key is held, including WASD if `wasd_as_arrows` is set.
 /// Reads the flag from egui temp data (written by the update loop each frame).
+/// Check if Alt is effectively held — physical key OR footer lock.
+fn alt_effective(ctx: &egui::Context) -> bool {
+    let key = ctx.input(|i| i.modifiers.alt);
+    let locked = ctx
+        .data(|d| d.get_temp::<bool>(egui::Id::new("alt_locked")))
+        .unwrap_or(false);
+    key || locked
+}
+
 fn dir_key_down(ui: &Ui, arrow: egui::Key, wasd: egui::Key) -> bool {
     let wasd_on = ui
         .ctx()
@@ -201,7 +210,7 @@ pub fn knob(ui: &mut Ui, label: &str, value: &mut f32, mode: ParamMode, size: f3
     let response = response.on_hover_text(mode_tooltip(mode));
     // Alt+click: cycle lock mode. Uses clicked_by to distinguish from drag.
     // Touch-paint mode: primary click sets mode.
-    let alt_held = response.ctx.input(|i| i.modifiers.alt);
+    let alt_held = alt_effective(&response.ctx);
     let primary_click = response.clicked_by(egui::PointerButton::Primary);
     let mode_cycled = primary_click && (alt_held || tmode.is_some());
     (changed, mode_cycled)
@@ -774,7 +783,7 @@ pub fn knob_chrome(
     }
 
     let response = response.on_hover_text(mode_tooltip(mode));
-    let alt_held = response.ctx.input(|i| i.modifiers.alt);
+    let alt_held = alt_effective(&response.ctx);
     let primary_click = response.clicked_by(egui::PointerButton::Primary);
     let mode_cycled = primary_click && (alt_held || tmode.is_some());
     (changed, mode_cycled)

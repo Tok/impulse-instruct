@@ -105,52 +105,68 @@ pub fn draw_dsp_sparkline(ui: &mut egui::Ui, buf: &[f32]) {
 }
 
 /// Draw mode indicators (Zoom/Lock/Flip) + MIDI status in the footer strip.
+/// Double-click an indicator to lock that mode on without holding the key.
 pub fn draw_footer_status(
     ui: &mut egui::Ui,
     midi_port: &Option<String>,
     dsp_buf: &[f32],
-    rack_flipped: bool,
+    rack_flipped: &mut bool,
+    ctrl_locked: &mut bool,
+    alt_locked: &mut bool,
 ) {
     ui.horizontal(|ui| {
-        let ctrl = ui.input(|i| i.modifiers.ctrl);
-        let alt = ui.input(|i| i.modifiers.alt);
-        let c = |on| {
-            if on {
+        let ctrl_key = ui.input(|i| i.modifiers.ctrl);
+        let alt_key = ui.input(|i| i.modifiers.alt);
+        let ctrl = ctrl_key || *ctrl_locked;
+        let alt = alt_key || *alt_locked;
+        let c = |on, locked| {
+            if locked {
                 super::theme::CHALK
+            } else if on {
+                egui::Color32::from_gray(180)
             } else {
                 super::theme::IRON
             }
         };
-        ui.add(
+        let ctrl_resp = ui.add(
             egui::Label::new(
-                egui::RichText::new("Ctrl")
+                egui::RichText::new(if *ctrl_locked { "Ctrl●" } else { "Ctrl" })
                     .monospace()
                     .size(8.0)
-                    .color(c(ctrl)),
+                    .color(c(ctrl, *ctrl_locked)),
             )
-            .sense(egui::Sense::hover()),
-        )
-        .on_hover_text("Ctrl + scroll wheel: zoom (global or per-module)");
-        ui.add(
+            .sense(egui::Sense::click()),
+        );
+        if ctrl_resp.double_clicked() {
+            *ctrl_locked = !*ctrl_locked;
+        }
+        ctrl_resp.on_hover_text("Ctrl + scroll: zoom. Double-click to lock.");
+        let alt_resp = ui.add(
             egui::Label::new(
-                egui::RichText::new("Alt")
+                egui::RichText::new(if *alt_locked { "Alt●" } else { "Alt" })
                     .monospace()
                     .size(8.0)
-                    .color(c(alt)),
+                    .color(c(alt, *alt_locked)),
             )
-            .sense(egui::Sense::hover()),
-        )
-        .on_hover_text("Alt + click knob: cycle lock mode (Free / User / Focus)");
-        ui.add(
+            .sense(egui::Sense::click()),
+        );
+        if alt_resp.double_clicked() {
+            *alt_locked = !*alt_locked;
+        }
+        alt_resp.on_hover_text("Alt + click knob: lock mode. Double-click to lock.");
+        let tab_resp = ui.add(
             egui::Label::new(
-                egui::RichText::new(if rack_flipped { "Tab:BACK" } else { "Tab" })
+                egui::RichText::new(if *rack_flipped { "Tab:BACK" } else { "Tab" })
                     .monospace()
                     .size(8.0)
-                    .color(c(rack_flipped)),
+                    .color(c(*rack_flipped, *rack_flipped)),
             )
-            .sense(egui::Sense::hover()),
-        )
-        .on_hover_text("Tab: flip rack (front knobs / back cables)");
+            .sense(egui::Sense::click()),
+        );
+        if tab_resp.double_clicked() {
+            *rack_flipped = !*rack_flipped;
+        }
+        tab_resp.on_hover_text("Tab: flip rack. Double-click to toggle.");
         ui.separator();
         let midi_text = match midi_port {
             Some(port) => format!("MIDI: {}", port.trim()),

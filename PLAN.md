@@ -48,10 +48,10 @@ drone, and textural work. These additions would close that gap:
 
 ### UI / UX
 
-- [ ] **Clickable footer mode toggles** — double-click [Ctrl]/[Alt]/[Tab]
-  indicators to lock that mode on (zoom mode, lock mode, flip mode)
-- [ ] **Per-module collapse** — click title bar to collapse a module card to
-  just the title (saves vertical space in the rack)
+- [x] **Clickable footer mode toggles** — double-click Ctrl/Alt/Tab indicators
+  to lock mode on; locks stored in egui temp data, read by widgets/zoom/cables
+- [x] **Per-module collapse** — click title bar drag zone to collapse/expand;
+  state stored per-module in egui temp data; content hidden when collapsed
 - [ ] **Module drag reorder** — drag modules within a zone to reorder (partially
   implemented via title bar drag, needs polish)
 - [ ] **Keyboard shortcuts help overlay** — ? key shows all shortcuts

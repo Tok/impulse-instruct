@@ -101,15 +101,11 @@ pub fn draw_port_circle(painter: &egui::Painter, center: Pos2, kind: PortKind, d
 // ─── Card draw ────────────────────────────────────────────────────────────────
 
 pub struct CardResponse {
-    /// Whether the enabled toggle was clicked.
     pub toggle_clicked: bool,
-    /// Whether the remove button was clicked.
     pub remove_clicked: bool,
-    /// Whether the title bar is being dragged (for module reorder).
     pub title_dragged: bool,
-    /// Whether the title bar drag was just released.
     pub title_drag_released: bool,
-    /// Screen rect of the entire card (used for hit-testing Ctrl+MW zoom).
+    pub collapse_clicked: bool,
     pub card_rect: Rect,
 }
 
@@ -130,7 +126,13 @@ pub fn module_card<R>(
     scale: f32,
     _ports: &mut Vec<PortPos>,
     content: impl FnOnce(&mut egui::Ui) -> R,
-) -> (CardResponse, R) {
+) -> (CardResponse, Option<R>) {
+    // Per-module collapse: stored in egui persistent data keyed by module id
+    let collapse_id = egui::Id::new("collapsed").with(_module_id);
+    let collapsed = ui
+        .ctx()
+        .data(|d| d.get_temp::<bool>(collapse_id))
+        .unwrap_or(false);
     // Publish scale so content draw functions can read it without signature changes.
     ui.ctx()
         .data_mut(|d| d.insert_temp(egui::Id::new("module_scale"), scale));
@@ -156,6 +158,7 @@ pub fn module_card<R>(
     let mut remove_clicked = false;
     let mut title_dragged = false;
     let mut title_drag_released = false;
+    let mut collapse_clicked = false;
 
     let inner = frame.show(ui, |ui| {
         // Module cards are always vertical (title bar on top, content below),
@@ -229,14 +232,21 @@ pub fn module_card<R>(
                 Pos2::new(title_rect.left() + 20.0, title_rect.min.y),
                 Pos2::new(title_rect.right() - 60.0, title_rect.max.y),
             );
-            let drag_resp = ui.interact(drag_rect, ui.id().with("title_drag"), Sense::drag());
+            let drag_resp = ui.interact(
+                drag_rect,
+                ui.id().with("title_drag"),
+                Sense::click_and_drag(),
+            );
             title_dragged = drag_resp.dragged();
             title_drag_released = drag_resp.drag_stopped();
-            // Show grab cursor while hovering the drag zone
+            if drag_resp.clicked() {
+                collapse_clicked = true;
+                ui.ctx()
+                    .data_mut(|d| d.insert_temp(collapse_id, !collapsed));
+            }
             if drag_resp.hovered() || drag_resp.dragged() {
                 ui.ctx().set_cursor_icon(egui::CursorIcon::Grab);
             }
-            // 3-dot drag affordance: three small circles near the right of the drag zone
             {
                 let dot_col = if drag_resp.hovered() || drag_resp.dragged() {
                     Color32::from_gray(140)
@@ -280,24 +290,27 @@ pub fn module_card<R>(
                 );
             }
 
-            // ── Content ───────────────────────────────────────────────────────
-            let content_frame = Frame::none()
-                .fill(fill)
-                .inner_margin(Margin::symmetric(6.0 * scale, 8.0 * scale));
-            let inner_resp = content_frame.show(ui, |ui| {
-                ui.spacing_mut().item_spacing = Vec2::new(2.0 * scale, 2.0 * scale);
-                // Clamp content width to the card width (minus horizontal margin×2).
-                ui.set_max_width(card_w - 12.0);
-                ui.with_layout(egui::Layout::top_down(egui::Align::Center), |ui| {
-                    if enabled {
-                        content(ui)
-                    } else {
-                        ui.add_enabled_ui(false, |ui| content(ui)).inner
-                    }
-                })
-                .inner
-            });
-            inner_resp.inner
+            // ── Content (hidden when collapsed) ──────────────────────────────
+            if collapsed {
+                None
+            } else {
+                let content_frame = Frame::none()
+                    .fill(fill)
+                    .inner_margin(Margin::symmetric(6.0 * scale, 8.0 * scale));
+                let inner_resp = content_frame.show(ui, |ui| {
+                    ui.spacing_mut().item_spacing = Vec2::new(2.0 * scale, 2.0 * scale);
+                    ui.set_max_width(card_w - 12.0);
+                    ui.with_layout(egui::Layout::top_down(egui::Align::Center), |ui| {
+                        if enabled {
+                            content(ui)
+                        } else {
+                            ui.add_enabled_ui(false, |ui| content(ui)).inner
+                        }
+                    })
+                    .inner
+                });
+                Some(inner_resp.inner)
+            }
         })
         .inner
     });
@@ -309,6 +322,7 @@ pub fn module_card<R>(
             remove_clicked,
             title_dragged,
             title_drag_released,
+            collapse_clicked,
             card_rect,
         },
         inner.inner,
@@ -656,6 +670,7 @@ pub fn module_card_back(
         remove_clicked,
         title_dragged,
         title_drag_released,
+        collapse_clicked: false,
         card_rect: outer.response.rect,
     }
 }

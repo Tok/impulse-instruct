@@ -195,6 +195,9 @@ pub struct ImpulseApp {
     pub(crate) show_cables: bool,
     // When true, rack shows back panel (ports + cables) instead of front (knobs).
     pub(crate) rack_flipped: bool,
+    // Mode locks: double-click footer indicator to keep modifier active without holding key
+    pub(crate) ctrl_locked: bool,
+    pub(crate) alt_locked: bool,
     // Zone whose [+ ADD] popup is currently open.
     pub(crate) add_menu_zone: Option<crate::state::Zone>,
     // Module being dragged by its title bar (id + current pointer position).
@@ -368,6 +371,8 @@ impl ImpulseApp {
                 .and_then(|s| s.show_cables)
                 .unwrap_or(true),
             rack_flipped: false, // volatile — always start in front view
+            ctrl_locked: false,
+            alt_locked: false,
             add_menu_zone: None,
             module_drag: None,
             session_dirty: false,
@@ -729,6 +734,8 @@ impl eframe::App for ImpulseApp {
                 egui::Id::new("wasd_as_arrows"),
                 self.state.read().ui_prefs.wasd_as_arrows,
             );
+            d.insert_temp(egui::Id::new("alt_locked"), self.alt_locked);
+            d.insert_temp(egui::Id::new("ctrl_locked"), self.ctrl_locked);
         });
 
         self.drain_llm_outputs();
@@ -898,7 +905,9 @@ impl eframe::App for ImpulseApp {
                     ui,
                     &self.midi_port,
                     &self.dsp_load_buf,
-                    self.rack_flipped,
+                    &mut self.rack_flipped,
+                    &mut self.ctrl_locked,
+                    &mut self.alt_locked,
                 );
             });
 
