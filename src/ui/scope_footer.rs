@@ -303,12 +303,4 @@ pub fn draw_ring_scope(ui: &mut egui::Ui, buf: &[f32], size: f32) {
         points,
         egui::Stroke::new(1.0, egui::Color32::from_gray(140)),
     )));
-
-    // Read/write head indicators (simulated: based on buffer position)
-    let write_angle = -std::f32::consts::FRAC_PI_2; // top = write head
-    let write_pos = egui::pos2(
-        center.x + write_angle.cos() * (outer_r + 4.0),
-        center.y + write_angle.sin() * (outer_r + 4.0),
-    );
-    painter.circle_filled(write_pos, 2.5, egui::Color32::from_gray(220));
 }
