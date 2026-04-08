@@ -141,7 +141,7 @@ A detailed log of what's built. The roadmap lives in [PLAN.md](../PLAN.md).
 ## Testing and build
 
 - Unit tests across submodules (seq_tests, state_tests, llm_tests, audio::analysis, jam_tools_tests, music_api_tests, ui::note, ui::llm_strip), split at 1000-line limit per file
-- 221 unit tests total (as of v0.5.9)
+- 285 unit tests total (as of v0.6.4)
 - 39 LLM integration tests in 3 suites: `llm_suite` (core), `llm_suite_style` (artist refs), `llm_suite_theory` (music theory + producer lingo)
 - Pre-commit hook: fmt + clippy + tests + 1000-line LOC limit
 - `scripts/run-tests.sh --coverage` - HTML coverage report (lcov)
@@ -149,3 +149,42 @@ A detailed log of what's built. The roadmap lives in [PLAN.md](../PLAN.md).
 - `scripts/download-models.sh` - Gemma 4 E4B (default), Bonsai 8B, Qwen3-8B, Qwen3-14B
 - Windows `.bat` equivalents for all scripts (`start.bat`, `scripts/*.bat`)
 - **CI/CD security** - `ci.yml` runs tests + tarpaulin + Codecov on `main` and `develop`; `release` job on `v*` tags builds Linux+Windows in GH Actions (no local builds), attaches `.sha256` sidecars and SLSA level-2 build provenance attestation
+- Release zips include start scripts (`start.sh`/`start.bat`) and download helpers
+
+## v0.6.x additions
+
+### Analysis modules (rackable, FxMod zone)
+
+- **Spectrum analyser** (`ModuleKind::SpectrumAnalyzer`) - 1024-point FFT via rustfft, 64 logarithmic frequency bands (20 Hz - 20 kHz), exponential smoothing knob, peak-hold markers with slow decay, grayscale bar display, 320px wide
+- **Stereo correlation meter** (`ModuleKind::StereoMeter`) - phase correlation bar (-1 to +1) and L/R balance indicator; stereo ring buffer from audio callback; `stereo_correlation()` pure function in analysis.rs
+- **Activity timeline** (`ModuleKind::ActivityTimeline`) - structured scrollable log of agent actions with relative timestamps, action tags (RSP/THK/UPD/NEW/DEL/YOU/SYS), persona names, 500-entry rolling buffer
+
+### Presets and controls
+
+- **Gabber kick preset** - `apply_gabber_kick_preset()`: extreme pitch sweep (0.9 depth, 0.6 time), heavy clip (0.8), button in Kit A panel
+- **Bipolar param_control** - `param_control_bipolar()` maps -1..+1 to 0..1 for knob display; bass osc_detune now uses knob instead of DragValue
+- **Step probability indicator** - active step buttons show a corner dot when probability < 100%; brightness scales with probability
+
+### Per-module scaling and layout
+
+- **Context-sensitive Ctrl+MW zoom** - over a module card: scales all modules of that kind; over empty space: global UI scale; `detect_ctrl_zoom()` with `ZoomTarget` enum
+- **Per-kind scale storage** - `HashMap<ModuleKind, f32>` on ImpulseApp; scale affects content (knobs, margins, spacing) but not title bar height
+- **View menu** - Compact All (0.6x), Expand All (1.0x), Arrange (canonical order), Reset Layout (clear + arrange); `arrange_canonical()` on RackState
+
+### Lock state visualization
+
+- **Knob mode visuals** - body darker when UserOwned, brighter when LlmFocus; catch-light and chrome rim shimmer at 1 Hz on Focus knobs (grayscale animated)
+- **Slider mode tinting** - track background darker (U) / brighter (F); fill color varies per mode
+- **Alt+click cycling** - Alt+click on flat knobs, chrome knobs, and slider tracks cycles Free / User / Focus
+
+### Footer and header
+
+- **Footer mode indicators** - [Ctrl] [Alt] [Tab:BACK] with tooltips; highlight when active
+- **Header agent status** - compact round-robin display after HEAT slider; pulsing dot + persona name per enabled agent; bright when inferring, dim when idle
+
+### Wizard improvements
+
+- Removed redundant Skip button; "Resume" shown only with prior session
+- Fresh install requires preset selection ("Start" disabled until chosen)
+- Rack hidden + sequencer stopped while wizard is visible
+- Clean-slate preset application (removes all existing agents first)

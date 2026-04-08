@@ -7,83 +7,77 @@ What's already built is documented in [docs/features.md](docs/features.md).
 
 ---
 
-## v0.6.0 / v0.6.1 — Multi-agent release
+## Next up
 
-Released.  v0.6.1 hotfixes: removed `sync_default_agent` (broke per-agent
-state), server-acquire error feedback, console Enter key fix, prompt broadcast
-to all agents, wizard clean-slate preset application, round-robin visualization.
+Ordered roughly by value. Branch: `develop`.
 
----
+### Ambient / textural synthesis tools
 
-## Completed in v0.6.0 cycle
+The synth engine is strong on acid, techno, and breakbeat but weak on ambient,
+drone, and textural work. These additions would close that gap:
 
-### Multi-model agent infrastructure (Phase 1–3)
+- [ ] **Long attack/release envelopes** — AN1X and bass ADSR max times are too
+  short for glacial pads; extend max attack to 10s, release to 30s
+- [ ] **Granular texture module** — new voice: loads a WAV and plays overlapping
+  grains with jitter, density, size, pitch scatter; great for ambient beds
+- [ ] **Tape delay with modulation** — current delay is clean; add wow/flutter
+  modulation, tape saturation on feedback, and longer max time (2s+)
+- [ ] **Reverb freeze / infinite hold** — button or param that freezes the
+  reverb tail indefinitely (feedback = 1.0), useful for drone/ambient pads
+- [ ] **Pad presets** — AN1X presets for warm pad, evolving texture, glass pad,
+  sub drone; LLM style entries for "ambient", "drone", "meditation"
+- [ ] **Noise voice improvements** — envelope (attack/release), filter LFO,
+  sample-and-hold modulation for rhythmic texture
+- [ ] **Cross-modulation** — FM between voices (bass → AN1X pitch, noise →
+  filter cutoff) for complex evolving textures
 
-- [x] **Server pool** — `LlamaServerPool` manages N llama-server processes,
-  ref-counted per model; per-agent `model_path: Option<String>`
-- [x] **VRAM budget + startup wizard** — `src/llm/vram.rs` model profiles +
-  6 presets (Solo/Duo/Swarm/Band/Voices/Lite); first-launch wizard with GPU
-  detection, VRAM budget bar, "Resume last session" default
-- [x] **Dynamic agent spawning** — `LlmAction::SpawnAgent` / `DismissAgent`;
-  auto-wire control cables on spawn; gated by `agent_autonomy`
-- [x] **Cable-driven scope** — Control cables define agent scope; system
-  prompt constraint + `apply_llm_update()` enforcement
-- [x] **Agent cards** — self-contained: model selector, persona, style,
-  conversation mode, thinking toggle, user instructions, VRAM estimate
-- [x] **Console → agent routing** — prompts go to first enabled agent;
-  log shows per-agent persona names
+### DSP improvements
 
-### Other v0.6.0 features
+- [ ] **Per-voice DSP params** — voices 1-3 currently share synth params with
+  voice 0; next step: per-voice `AudioParams` snapshot
+- [ ] **Sidechain compression** — duck bass/pad under kick; configurable
+  attack/release/ratio on the compressor with sidechain input
+- [ ] **Multiband compressor** — split into 3 bands before compression for
+  more controlled master bus processing
+- [ ] **Stereo width control** — mid/side processing on master output
 
-- [x] Rackable LLM agents + LLM Console module
-- [x] Rack flip (front knobs / back cables)
-- [x] Separate heat/temperature sliders
-- [x] Smooth style transitions via `ParamRamp`
-- [x] DSP load sparkline, phosphor oscilloscope
-- [x] Centered module card layout, row fill/centering
-- [x] Volatile rack_flipped (always starts front view)
+### UI / UX
 
----
+- [ ] **Clickable footer mode toggles** — double-click [Ctrl]/[Alt]/[Tab]
+  indicators to lock that mode on (zoom mode, lock mode, flip mode)
+- [ ] **Per-module collapse** — click title bar to collapse a module card to
+  just the title (saves vertical space in the rack)
+- [ ] **Module drag reorder** — drag modules within a zone to reorder (partially
+  implemented via title bar drag, needs polish)
+- [ ] **Keyboard shortcuts help overlay** — ? key shows all shortcuts
+- [ ] **Undo for agent changes** — agent spawn/dismiss/config changes should
+  push to undo history
 
-## Audio Feedback Loop
+### Visualization
 
-**Phase 1 is implemented.** LISTEN button captures audio, runs per-band RMS +
-transient analysis, prepends structured snapshot to prompt.
+- [ ] **Bloom / CRT post-process** — Gaussian blur on bright pixels, scan-line
+  overlay (needs wgpu render pass or egui approximation)
+- [ ] **Event queue ring** — render the rtrb ring buffer as a circular display
+  with moving read/write heads (diagnostic, low priority)
 
-**Phase 2 (real audio input to the model) is on hold.** llama.cpp does not yet
-support Gemma 4's audio encoder. See [docs/audio-feedback.md](docs/audio-feedback.md).
+### Intelligence
 
----
+- [ ] **Agent memory** — agents remember previous session context; persist
+  conversation snippets across restarts
+- [ ] **Style learning** — agent observes user edits and adapts its style
+  preferences over time
+- [ ] **Inter-agent messaging** — agents can send structured hints to each other
+  ("drums agent: I'm building, raise the hat density")
 
-## Future (v0.6.1+)
+### Infrastructure
 
-#### Visualization & statistics modules
-
-- [x] **Spectrum analyser** — 1024-point FFT, 64 log bands, smoothing + peak hold
-- [x] **Stereo correlation meter** — phase correlation + L/R balance bar (rackable)
-- [x] **Pattern heatmap** — probability indicator on step buttons (corner dot)
-- [x] **LLM activity timeline** — rackable module with timestamped, tagged entries
-
-#### Visual treatment (post-process pass)
-
-- [ ] **Bloom** — Gaussian blur on bright pixels, additive blend (needs wgpu)
-- [ ] **Scan-line / CRT vignette** — cheap fullscreen quad shader
-- [x] **LED glow on active steps** — velocity heat fill + probability dot on step buttons
-
-#### Other
-
-- [ ] **Multiple voices (per-voice DSP params)** — voices 1-3 currently share
-  synth params with voice 0; next step: per-voice `AudioParams` snapshot
-
-- [x] **Gabber kick preset** — extreme pitch env + hard clip on 808 Kit A
-
+- [ ] **Test coverage for llm_apply.rs** — 580 lines, zero tests; critical for
+  LLM update correctness
 - [ ] **Windows code-signing** — unsigned `.exe` triggers SmartScreen
-
-- [x] **Bipolar param_control variant** — `param_control_bipolar()` maps -1..+1;
-  bass osc_detune now uses knob instead of DragValue
-
-- [ ] **Event queue ring visualisation** — render the rtrb ring buffer as a
-  circular display with moving read/write heads
+- [ ] **Refactor: cable wiring helper** — `rack.connect_control(from, to)` to
+  reduce 8-line PortRef boilerplate across 4+ files
+- [ ] **Refactor: agent spawn helper** — extract shared logic from wizard.rs
+  and SpawnAgent handler in mod.rs
 
 ---
 
@@ -92,10 +86,9 @@ support Gemma 4's audio encoder. See [docs/audio-feedback.md](docs/audio-feedbac
 | Style | What it promises | What's still missing |
 |-------|-----------------|----------------------|
 | Hoover lead | Classic Human Resource vacuum-cleaner screech | Resonant sweep shape needs tuning |
-| Ambient | Glacial filter sweeps, very slow LFO movement | Long attack/decay times; LFO automation wired but not reliable |
+| Ambient | Glacial filter sweeps, very slow LFO movement | Long envelopes, granular texture, reverb freeze |
 | Dub techno | FX IS the music - send/return model | Per-voice FX buses wired; dedicated send/return workflow not yet surfaced |
-
-Acid bass works well. 808/909 drums work well. The gap between what PULSE intends and what the synth produces is where most roughness lives.
+| Drone | Sustained evolving textures | Granular module, cross-modulation, infinite reverb |
 
 ---
 
