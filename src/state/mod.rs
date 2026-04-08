@@ -27,6 +27,9 @@ pub use hoover::HooverState;
 pub mod noise;
 pub use noise::NoiseVoiceState;
 
+pub mod granular;
+pub use granular::GranularState;
+
 pub mod an1x;
 pub use an1x::{An1xLfoTarget, An1xState, An1xWave};
 
@@ -176,6 +179,8 @@ pub struct AppState {
     #[serde(default)]
     pub noise_voice: NoiseVoiceState,
     #[serde(default)]
+    pub granular: GranularState,
+    #[serde(default)]
     pub hoover: HooverState,
     #[serde(default)]
     pub an1x: An1xState,
@@ -225,6 +230,7 @@ impl Default for AppState {
             lfo: Default::default(),
             free_eg: Default::default(),
             noise_voice: Default::default(),
+            granular: Default::default(),
             hoover: Default::default(),
             an1x: Default::default(),
             amen: Default::default(),
@@ -541,9 +547,13 @@ pub struct FxState {
     pub reverb_mix: f32,  // 0–1 wet/dry
     #[serde(default)]
     pub reverb_gate_time: f32, // 0 = no gate; 0.01–2.0 s gate close time (gated reverb)
-    pub delay_time: f32,  // 0–1 → 0–1000 ms
+    pub delay_time: f32,  // 0–1 → 0–2000 ms
     pub delay_feedback: f32, // 0–1
     pub delay_mix: f32,   // 0–1 wet/dry
+    #[serde(default)]
+    pub delay_wow_flutter: f32, // 0–1 tape wow/flutter depth
+    #[serde(default)]
+    pub delay_saturation: f32, // 0–1 tape saturation on feedback
     pub distortion_drive: f32, // 0–1
     pub distortion_mix: f32, // 0–1 wet/dry
     pub compressor_threshold: f32, // 0–1 → -40–0 dB
@@ -587,6 +597,8 @@ impl Default for FxState {
             delay_time: 0.375,
             delay_feedback: 0.4,
             delay_mix: 0.0,
+            delay_wow_flutter: 0.0,
+            delay_saturation: 0.0,
             distortion_drive: 0.0,
             distortion_mix: 0.0,
             compressor_threshold: 0.7,

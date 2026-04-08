@@ -408,6 +408,16 @@ pub(super) fn apply_fx_update(
     u!(s.fx.delay_feedback, "delay_feedback", "fx.delay_feedback");
     u!(s.fx.delay_mix, "delay_mix", "fx.delay_mix");
     u!(
+        s.fx.delay_wow_flutter,
+        "delay_wow_flutter",
+        "fx.delay_wow_flutter"
+    );
+    u!(
+        s.fx.delay_saturation,
+        "delay_saturation",
+        "fx.delay_saturation"
+    );
+    u!(
         s.fx.distortion_drive,
         "distortion_drive",
         "fx.distortion_drive"

@@ -1,5 +1,4 @@
 // ─── Low-level voice state machines ──────────────────────────────────────────
-use std::sync::Arc;
 // Pure numeric DSP structs — no allocations.
 
 /// Moog-style 4-pole ladder filter state.
@@ -519,10 +518,15 @@ enum AdsrPhase {
     Release,
 }
 
-/// Maps a 0–1 ADSR time knob to samples. Exponential: 0→1ms, 1→8000ms.
+// ADSR max times (ms). Attack and release are longer for glacial pads.
+const ADSR_MAX_ATTACK_MS: f32 = 10_000.0; // 10 s
+const ADSR_MAX_DECAY_MS: f32 = 8_000.0; // 8 s
+const ADSR_MAX_RELEASE_MS: f32 = 30_000.0; // 30 s
+
+/// Maps a 0–1 ADSR time knob to samples. Quadratic curve: 0→1ms, 1→max_ms.
 #[inline]
-fn adsr_samples(v: f32, sr: f32) -> f32 {
-    let ms = 1.0 + v * v * 7999.0;
+fn adsr_samples(v: f32, sr: f32, max_ms: f32) -> f32 {
+    let ms = 1.0 + v * v * (max_ms - 1.0);
     (ms * 0.001 * sr).max(1.0)
 }
 
@@ -544,7 +548,7 @@ fn adsr_tick(
         AdsrPhase::Idle => {}
         AdsrPhase::Attack => {
             let target = 1.0_f32;
-            let coeff = (-1.0 / adsr_samples(attack, sr)).exp();
+            let coeff = (-1.0 / adsr_samples(attack, sr, ADSR_MAX_ATTACK_MS)).exp();
             *val = target - (target - *val) * coeff;
             if *val >= 0.9999 {
                 *val = 1.0;
@@ -552,7 +556,7 @@ fn adsr_tick(
             }
         }
         AdsrPhase::Decay => {
-            let coeff = (-1.0 / adsr_samples(decay, sr)).exp();
+            let coeff = (-1.0 / adsr_samples(decay, sr, ADSR_MAX_DECAY_MS)).exp();
             *val = sustain + (*val - sustain) * coeff;
             if (*val - sustain).abs() < 0.001 {
                 *val = sustain;
@@ -566,7 +570,7 @@ fn adsr_tick(
             }
         }
         AdsrPhase::Release => {
-            let coeff = (-1.0 / adsr_samples(release, sr)).exp();
+            let coeff = (-1.0 / adsr_samples(release, sr, ADSR_MAX_RELEASE_MS)).exp();
             *val *= coeff;
             if *val < 0.0001 {
                 *val = 0.0;
@@ -888,62 +892,4 @@ pub(super) fn drum_voice_idx(voice: &crate::state::DrumVoice) -> usize {
     }
 }
 
-// ─── Amen / WAV sampler voice ─────────────────────────────────────────────────
-
-/// Plays back a pre-loaded mono f32 WAV at variable pitch via linear-interpolation
-/// resampling. Allocation-free during playback — the sample data is held in an Arc.
-pub(super) struct AmenVoice {
-    samples: Option<Arc<Vec<f32>>>,
-    pos: f32,
-    playing: bool,
-}
-
-impl AmenVoice {
-    pub(super) fn new() -> Self {
-        Self {
-            samples: None,
-            pos: 0.0,
-            playing: false,
-        }
-    }
-
-    /// Replace the sample data (called from the audio command handler, not process_block).
-    pub(super) fn load(&mut self, data: Arc<Vec<f32>>) {
-        self.samples = Some(data);
-        self.playing = false;
-        self.pos = 0.0;
-    }
-
-    pub(super) fn trigger(&mut self) {
-        if self.samples.is_some() {
-            self.pos = 0.0;
-            self.playing = true;
-        }
-    }
-
-    /// Render one sample. `pitch_semitones` shifts playback speed (±24 st);
-    /// positive = faster/higher, negative = slower/lower.
-    pub(super) fn process(&mut self, pitch_semitones: f32, volume: f32, loop_mode: bool) -> f32 {
-        let samples = match &self.samples {
-            Some(s) => s,
-            None => return 0.0,
-        };
-        if !self.playing {
-            return 0.0;
-        }
-        let rate = 2.0_f32.powf(pitch_semitones / 12.0);
-        let idx = self.pos as usize;
-        if idx + 1 >= samples.len() {
-            if loop_mode {
-                self.pos = 0.0;
-            } else {
-                self.playing = false;
-            }
-            return 0.0;
-        }
-        let frac = self.pos - idx as f32;
-        let out = samples[idx] + (samples[idx + 1] - samples[idx]) * frac;
-        self.pos += rate;
-        out * volume
-    }
-}
+// Amen/WAV and Granular voices are in samplers.rs (split for line-count limit).

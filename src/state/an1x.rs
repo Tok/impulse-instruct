@@ -76,16 +76,16 @@ pub struct An1xState {
     pub filter_key_track: f32, // 0–1 → 0%, 50%, 100% key tracking
     /// Filter envelope amount. 0–1, where 0.5 = zero, <0.5 = negative polarity.
     pub filter_env_amount: f32,
-    pub filter_attack: f32,  // 0–1 → 1ms–8 s
+    pub filter_attack: f32,  // 0–1 → 1ms–10 s
     pub filter_decay: f32,   // 0–1 → 1ms–8 s
     pub filter_sustain: f32, // 0–1 sustain level
-    pub filter_release: f32, // 0–1 → 1ms–8 s
+    pub filter_release: f32, // 0–1 → 1ms–30 s
 
     // ── Amplitude envelope (ADSR) ──────────────────────────────────────────
-    pub amp_attack: f32,  // 0–1 → 1ms–8 s
+    pub amp_attack: f32,  // 0–1 → 1ms–10 s
     pub amp_decay: f32,   // 0–1 → 1ms–8 s
     pub amp_sustain: f32, // 0–1
-    pub amp_release: f32, // 0–1 → 1ms–8 s
+    pub amp_release: f32, // 0–1 → 1ms–30 s
 
     // ── LFO (single, slow) ────────────────────────────────────────────────
     /// Free rate: 0.01–20 Hz. Ignored when lfo_bpm_sync is on.

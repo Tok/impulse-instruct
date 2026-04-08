@@ -28,6 +28,8 @@ pub enum AudioCommand {
     /// Load new sample data into the amen/WAV sampler voice.
     /// The Arc is just a pointer copy — allocation-free in the audio callback.
     LoadSampler(Arc<Vec<f32>>),
+    /// Load sample data into the granular texture voice.
+    LoadGranular(Arc<Vec<f32>>),
     /// Updated FX routing plan derived from the rack cable graph.
     /// Sent whenever the rack topology changes (connect/disconnect/enable).
     SetFxPlan(FxPlan),
@@ -117,6 +119,7 @@ impl AudioEngine {
                             AudioCommand::Trigger(e) => dsp.handle_trigger(&e),
                             AudioCommand::SetMonitorVolume(v) => monitor_vol = v,
                             AudioCommand::LoadSampler(data) => dsp.load_amen(data),
+                            AudioCommand::LoadGranular(data) => dsp.load_granular(data),
                             AudioCommand::SetFxPlan(plan) => dsp.set_fx_plan(plan),
                         }
                     }

@@ -217,7 +217,7 @@ BASS SYNTHESIZER (all 0.0–1.0):
   bass.cutoff       — filter frequency (0=very dark/closed, 0.5=mid, 1=fully open)
   bass.resonance    — filter resonance / squelch (0.7–0.9 = classic acid character)
   bass.env_mod      — how much the envelope opens the filter (high = dramatic sweep)
-  bass.decay        — filter envelope decay time (low=punchy, high=slow sweep)
+  bass.decay        — filter envelope decay time 0–1 → 0.1–5s (low=punchy, high=slow sweep)
   bass.accent_level — accent intensity boost
   bass.waveform          — "Saw" (smooth, warm), "Square" (hollow, buzzy), or "Supersaw" (thick unison)
   bass.filter_mode       — "Lowpass" (default, warm), "Highpass" (thin, cutting), or "Bandpass" (nasal, mid-focus)
@@ -259,7 +259,9 @@ FX (all 0.0–1.0):  ← ONLY valid inside "fx": {{…}}, never inside "sequence
   fx.reverb_size      — reverb room size
   fx.reverb_gate_time — gated reverb gate close time in seconds (0=off, 0.1–0.5=80s snare effect)
   fx.master_pitch_st  — global pitch offset in semitones for melodic voices (-12..+12; vaporwave drift)
-  fx.delay_time       — delay time (0.375 = dotted 8th at ~130 BPM)
+  fx.delay_time       — delay time 0–1 → 0–2s (0.375 = dotted 8th at ~130 BPM)
+  fx.delay_wow_flutter — tape wow/flutter modulation (0=clean digital, 0.3=subtle tape, 1=wobbly)
+  fx.delay_saturation — tape saturation on feedback (0=clean, 0.5=warm, 1=heavy breakup)
   fx.delay_feedback   — delay repeats
   fx.delay_mix        — delay wet amount
   fx.distortion_drive — master bus saturation drive
@@ -358,9 +360,9 @@ AN1X VOICE (warm VA pads / leads — Boards of Canada aesthetic):
   an1x.filter_cutoff    — 0–1 (0.3=dark, 0.6=open, 1.0=bright)
   an1x.filter_resonance — 0–1
   an1x.filter_env_amount — 0.5=none, >0.5=positive mod (filter opens on note), <0.5=negative
-  an1x.filter_attack/decay/sustain/release — filter ADSR, 0–1 → 1ms–8s
-  an1x.amp_attack       — 0–1; 0=instant, 0.3=~300ms pad attack, 0.6=slow swell
-  an1x.amp_decay/sustain/release — amplitude ADSR
+  an1x.filter_attack/decay/sustain/release — filter ADSR, 0–1 (attack→10s, decay→8s, release→30s)
+  an1x.amp_attack       — 0–1; 0=instant, 0.3=~300ms pad attack, 0.8+=glacial pad swell (up to 10s)
+  an1x.amp_decay/sustain/release — amplitude ADSR (release up to 30s for ambient tails)
   an1x.hard_sync        — OSC2 phase resets each OSC1 cycle: harsh harmonic sweep when detuned
   an1x.lfo_bpm_sync     — snap LFO rate to a musical division of current BPM
   an1x.lfo_sync_beats   — division: 4.0=bar, 2.0=half, 1.0=quarter, 0.5=8th, 0.25=16th
@@ -508,7 +510,7 @@ RACK ROUTING — enable/disable modules and wire cables between them:
                    {{"from": "bitcrush", "to": "master"}}],   ← add patch cables
     "disconnect": [{{"from": "bitcrush", "to": "master"}}]    ← remove a cable
   }}}}
-  Module names: "bass", "808", "909", "hoover", "an1x", "amen", "noise",
+  Module names: "bass", "808", "909", "hoover", "an1x", "amen", "noise", "granular",
                 "bitcrush", "reverb", "delay", "chorus", "phaser", "drive",
                 "eq", "compressor", "tapesat", "waveshaper", "ringmod",
                 "lfo", "master", "sequencer"
@@ -544,7 +546,7 @@ Always start your response with "_thinking": one or two sentences explaining wha
 {comment_instruction}
 Only include fields you are actually changing.
 In MC or DJ mode you may add an optional "mc_line" string — a short crowd shout spoken via TTS, separate from "_comment". Keep it under 12 words. Use it for big moments, drops, or energy peaks.
-TOP-LEVEL SCHEMA — the only valid top-level keys are "_comment", "_thinking", "mc_line", "bass", "sequencer", "fx", "hoover", "an1x", "free_eg", "noise", "kit_a", "kit_b", "euclidean", "music_api", "ramp", "behaviour", "rack", "settings", "save_project".
+TOP-LEVEL SCHEMA — the only valid top-level keys are "_comment", "_thinking", "mc_line", "bass", "sequencer", "fx", "hoover", "an1x", "free_eg", "noise", "granular", "kit_a", "kit_b", "euclidean", "music_api", "ramp", "behaviour", "rack", "settings", "save_project".
   "bass" and "fx" are NEVER nested inside "sequencer".
   "fx" is NEVER nested inside "fx".
   Each key appears at most ONCE per object.
@@ -690,6 +692,21 @@ pub fn param_json_schema() -> serde_json::Value {
                 },
                 "additionalProperties": false
             },
+            "granular": {
+                "type": "object",
+                "description": "Granular texture voice — overlapping micro-grains from a loaded WAV",
+                "properties": {
+                    "enabled":          { "type": "boolean" },
+                    "volume":           { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+                    "density":          { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "grain spawn rate: 0=sparse, 1=dense cloud" },
+                    "grain_size":       { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "10-500ms per grain" },
+                    "position":         { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "playback position in WAV" },
+                    "position_jitter":  { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "random spread around position" },
+                    "pitch_scatter":    { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "random pitch per grain, ±12st at max" },
+                    "spray":            { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "stereo spread (0=mono, 1=full width)" }
+                },
+                "additionalProperties": false
+            },
             "free_eg": {
                 "type": "object",
                 "properties": {
@@ -715,14 +732,14 @@ pub fn param_json_schema() -> serde_json::Value {
                     "filter_cutoff":      { "type": "number", "minimum": 0.0, "maximum": 1.0 },
                     "filter_resonance":   { "type": "number", "minimum": 0.0, "maximum": 1.0 },
                     "filter_env_amount":  { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "filter env mod: 0.5=none, <0.5=negative, >0.5=positive" },
-                    "filter_attack":      { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "filter ADSR attack 0-1 → 1ms-8s" },
+                    "filter_attack":      { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "filter ADSR attack 0-1 → 1ms-10s" },
                     "filter_decay":       { "type": "number", "minimum": 0.0, "maximum": 1.0 },
                     "filter_sustain":     { "type": "number", "minimum": 0.0, "maximum": 1.0 },
-                    "filter_release":     { "type": "number", "minimum": 0.0, "maximum": 1.0 },
-                    "amp_attack":         { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "amp ADSR attack 0-1 → 1ms-8s. Use high values for slow pad attacks." },
+                    "filter_release":     { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "filter release 0-1 → 1ms-30s" },
+                    "amp_attack":         { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "amp attack 0-1 → 1ms-10s. Use high values for glacial pad swells." },
                     "amp_decay":          { "type": "number", "minimum": 0.0, "maximum": 1.0 },
                     "amp_sustain":        { "type": "number", "minimum": 0.0, "maximum": 1.0 },
-                    "amp_release":        { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+                    "amp_release":        { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "amp release 0-1 → 1ms-30s for ambient tails" },
                     "hard_sync":          { "type": "boolean", "description": "OSC2 hard sync to OSC1: harsh harmonic content when OSC2 is detuned above" },
                     "lfo_bpm_sync":       { "type": "boolean", "description": "snap LFO rate to musical division of current BPM" },
                     "lfo_sync_beats":     { "type": "number", "description": "LFO division in beats: 4=bar, 2=half, 1=quarter, 0.5=8th, 0.25=16th" },
@@ -768,6 +785,8 @@ pub fn param_json_schema() -> serde_json::Value {
                     "delay_time":       { "type": "number", "minimum": 0.0, "maximum": 1.0 },
                     "delay_feedback":   { "type": "number", "minimum": 0.0, "maximum": 1.0 },
                     "delay_mix":        { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+                    "delay_wow_flutter": { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "tape wow/flutter on delay (0=clean, 1=wobbly tape)" },
+                    "delay_saturation": { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "tape saturation on delay feedback (warm breakup)" },
                     "distortion_drive": { "type": "number", "minimum": 0.0, "maximum": 1.0 },
                     "distortion_mix":   { "type": "number", "minimum": 0.0, "maximum": 1.0 },
                     "bitcrush_bits": { "type": "number", "minimum": 0.0, "maximum": 1.0 },

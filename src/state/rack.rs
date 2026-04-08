@@ -111,6 +111,7 @@ pub enum ModuleKind {
     An1xVoice,
     AmenSampler,
     NoiseVoice,
+    GranularTexture,
     // ── TTS / MC voice modules ────────────────────────────────────────────────
     EspeakNgTts,
     CoquiTts,
@@ -154,6 +155,7 @@ impl ModuleKind {
             Self::An1xVoice => "AN1X",
             Self::AmenSampler => "AMEN",
             Self::NoiseVoice => "NOISE",
+            Self::GranularTexture => "GRANULAR",
             Self::EspeakNgTts => "TTS ESPEAK",
             Self::CoquiTts => "TTS COQUI",
             Self::StepSequencer => "SEQUENCER",
@@ -192,6 +194,7 @@ impl ModuleKind {
             | Self::An1xVoice
             | Self::AmenSampler
             | Self::NoiseVoice
+            | Self::GranularTexture
             | Self::EspeakNgTts
             | Self::CoquiTts => Zone::Voice,
             Self::FxReverb
@@ -344,7 +347,8 @@ impl RackState {
                 ModuleKind::An1xVoice => 14,
                 ModuleKind::AmenSampler => 15,
                 ModuleKind::NoiseVoice => 16,
-                ModuleKind::EspeakNgTts | ModuleKind::CoquiTts => 17,
+                ModuleKind::GranularTexture => 17,
+                ModuleKind::EspeakNgTts | ModuleKind::CoquiTts => 18,
                 ModuleKind::FxWaveshaper => 20,
                 ModuleKind::FxReverb => 21,
                 ModuleKind::FxDelay => 22,
@@ -710,6 +714,7 @@ fn kind_to_scope_name(kind: ModuleKind) -> Option<String> {
         ModuleKind::An1xVoice => Some("an1x".to_string()),
         ModuleKind::AmenSampler => Some("amen".to_string()),
         ModuleKind::NoiseVoice => Some("noise".to_string()),
+        ModuleKind::GranularTexture => Some("granular".to_string()),
         ModuleKind::StepSequencer => Some("sequencer".to_string()),
         ModuleKind::FxReverb
         | ModuleKind::FxDelay
@@ -765,6 +770,7 @@ pub fn rack_kind_name_matches(kind: ModuleKind, name: &str) -> bool {
         ModuleKind::An1xVoice => matches!(n.as_str(), "an1x" | "an-1x" | "pad" | "synth"),
         ModuleKind::AmenSampler => matches!(n.as_str(), "amen" | "sampler" | "break"),
         ModuleKind::NoiseVoice => matches!(n.as_str(), "noise"),
+        ModuleKind::GranularTexture => matches!(n.as_str(), "granular" | "grain" | "texture"),
         ModuleKind::EspeakNgTts | ModuleKind::CoquiTts => {
             matches!(n.as_str(), "espeak" | "coqui" | "tts" | "mc" | "voice")
         }
@@ -883,6 +889,7 @@ pub fn compile_fx_plan(rack: &RackState) -> FxPlan {
         ModuleKind::An1xVoice,
         ModuleKind::AmenSampler,
         ModuleKind::NoiseVoice,
+        ModuleKind::GranularTexture,
         ModuleKind::EspeakNgTts,
         ModuleKind::CoquiTts,
     ];

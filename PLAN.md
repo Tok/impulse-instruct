@@ -16,12 +16,14 @@ Ordered roughly by value. Branch: `develop`.
 The synth engine is strong on acid, techno, and breakbeat but weak on ambient,
 drone, and textural work. These additions would close that gap:
 
-- [ ] **Long attack/release envelopes** — AN1X and bass ADSR max times are too
-  short for glacial pads; extend max attack to 10s, release to 30s
-- [ ] **Granular texture module** — new voice: loads a WAV and plays overlapping
-  grains with jitter, density, size, pitch scatter; great for ambient beds
-- [ ] **Tape delay with modulation** — current delay is clean; add wow/flutter
-  modulation, tape saturation on feedback, and longer max time (2s+)
+- [x] **Long attack/release envelopes** — AN1X ADSR: attack up to 10s, release
+  up to 30s, decay 8s; bass 303 decay extended to 5s; LLM schema updated
+- [x] **Granular texture module** — new voice: loads WAV via AudioCommand, plays
+  overlapping grains (up to 32) with Hann window, density/size/position/jitter/
+  pitch scatter/spray params; full state/DSP/UI/LLM schema/rack integration
+- [x] **Tape delay with modulation** — wow/flutter LFO modulates delay read
+  position, tape saturation soft-clips feedback, max time extended to 2s;
+  new params: delay_wow_flutter, delay_saturation
 - [ ] **Reverb freeze / infinite hold** — button or param that freezes the
   reverb tail indefinitely (feedback = 1.0), useful for drone/ambient pads
 - [ ] **Pad presets** — AN1X presets for warm pad, evolving texture, glass pad,

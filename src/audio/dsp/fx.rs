@@ -70,6 +70,8 @@ impl Reverb {
 pub(super) struct DelayLine {
     pub(super) buf: Vec<f32>,
     pub(super) ptr: usize,
+    wow_phase: f32,     // slow sine LFO for wow (0–1)
+    flutter_phase: f32, // faster LFO for flutter (0–1)
 }
 
 impl DelayLine {
@@ -77,14 +79,53 @@ impl DelayLine {
         Self {
             buf: vec![0.0; MAX_DELAY_SAMPLES],
             ptr: 0,
+            wow_phase: 0.0,
+            flutter_phase: 0.0,
         }
     }
 
-    pub(super) fn process(&mut self, input: f32, delay_samples: usize, feedback: f32) -> f32 {
-        let delay_samples = delay_samples.clamp(1, MAX_DELAY_SAMPLES - 1);
-        let read_ptr = (self.ptr + MAX_DELAY_SAMPLES - delay_samples) % MAX_DELAY_SAMPLES;
-        let delayed = self.buf[read_ptr];
-        self.buf[self.ptr] = input + delayed * feedback;
+    /// Tape-style delay with wow/flutter modulation and feedback saturation.
+    /// `wow_flutter`: 0–1 depth of pitch wobble. `sat`: 0–1 tape saturation on feedback.
+    pub(super) fn process_tape(
+        &mut self,
+        input: f32,
+        delay_samples: usize,
+        feedback: f32,
+        wow_flutter: f32,
+        sat: f32,
+        sr: f32,
+    ) -> f32 {
+        let max = MAX_DELAY_SAMPLES - 2; // leave room for interpolation
+        let base_delay = (delay_samples as f32).clamp(1.0, max as f32);
+
+        // Wow: slow ~0.5 Hz sine, Flutter: faster ~6 Hz sine
+        let wow_rate = 0.5 / sr;
+        let flutter_rate = 6.0 / sr;
+        self.wow_phase = (self.wow_phase + wow_rate) % 1.0;
+        self.flutter_phase = (self.flutter_phase + flutter_rate) % 1.0;
+
+        let mod_depth = wow_flutter * base_delay * 0.003; // up to 0.3% of delay time
+        let wow = (self.wow_phase * std::f32::consts::TAU).sin() * mod_depth;
+        let flutter = (self.flutter_phase * std::f32::consts::TAU).sin() * mod_depth * 0.3;
+        let modulated_delay = (base_delay + wow + flutter).clamp(1.0, max as f32);
+
+        // Fractional read with linear interpolation
+        let read_pos = (self.ptr as f32 + MAX_DELAY_SAMPLES as f32 - modulated_delay)
+            % MAX_DELAY_SAMPLES as f32;
+        let idx = read_pos as usize % MAX_DELAY_SAMPLES;
+        let frac = read_pos - read_pos.floor();
+        let next = (idx + 1) % MAX_DELAY_SAMPLES;
+        let delayed = self.buf[idx] + (self.buf[next] - self.buf[idx]) * frac;
+
+        // Tape saturation on feedback — soft clip
+        let fb_signal = if sat > 0.001 {
+            let drive = 1.0 + sat * 3.0;
+            super::tanh(delayed * drive * feedback) / drive
+        } else {
+            delayed * feedback
+        };
+
+        self.buf[self.ptr] = input + fb_signal;
         self.ptr = (self.ptr + 1) % MAX_DELAY_SAMPLES;
         delayed
     }

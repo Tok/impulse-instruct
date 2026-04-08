@@ -1,31 +1,19 @@
-// ─── audio/dsp/mod.rs ─────────────────────────────────────────────────────────
-// Pure DSP — all synthesis happens here.
-// No allocations inside process_block(). State machines, not globals.
-//
-// Synthesis approach:
-//   TB-303: saw/square osc → Moog-style ladder filter → VCA
-//   808 Kick: sine w/ exponential pitch drop + punch transient
-//   808 Snare: tuned tone + filtered noise
-//   808 HiHat: high-passed noise
-//   909 variants: same architecture, different tuning/character
-//   FX: simple reverb (Schroeder), echo delay, waveshaper drive
+// ─── audio/dsp/mod.rs ── Pure DSP synthesis, no allocations in process_block()
 
+mod dsp_util;
 mod fx;
 mod params;
+mod samplers;
 mod voices;
+pub use dsp_util::midi_to_hz;
+use dsp_util::*;
 use fx::*;
 pub use params::AudioParams;
+use samplers::*;
 use voices::*;
 
 use crate::sequencer::TriggerEvent;
 use crate::state::{DrumVoice, FxPlan, FxStep, ModuleKind};
-
-// ─── Fast tanh approximation (used by LadderFilter and Bass303) ───────────────
-
-pub(crate) fn tanh(x: f32) -> f32 {
-    let x2 = x * x;
-    x * (27.0 + x2) / (27.0 + 9.0 * x2)
-}
 
 // ─── TB-303 voice ─────────────────────────────────────────────────────────────
 
@@ -166,7 +154,7 @@ impl Bass303 {
             1.0
         };
         let env_decay_coeff = {
-            let t = p.decay_303 * 1.9 + 0.1; // 0.1–2.0 s decay
+            let t = p.decay_303 * 4.9 + 0.1; // 0.1–5.0 s decay
             (-1.0 / (sr * t)).exp()
         };
 
@@ -248,6 +236,7 @@ pub struct DspState {
     ring_mod_phase: f32,
     eq: EqBands,
     noise_voice: NoiseVoice,
+    granular: GranularVoice,
     hoover: HooverVoice,
     an1x: An1xVoice,
     amen: AmenVoice,
@@ -312,6 +301,7 @@ impl DspState {
             bitcrush_held: 0.0,
             bitcrush_counter: 0,
             noise_voice: NoiseVoice::new(0x4015_EB3D),
+            granular: GranularVoice::new(0xBEEF_CAFE),
             hoover: HooverVoice::new(),
             an1x: An1xVoice::new(),
             amen: AmenVoice::new(),
@@ -367,7 +357,14 @@ impl DspState {
                 }
             }
             FxStep::Delay => {
-                let wet = self.delay.process(sig, delay_samples, p.delay_feedback);
+                let wet = self.delay.process_tape(
+                    sig,
+                    delay_samples,
+                    p.delay_feedback,
+                    p.delay_wow_flutter,
+                    p.delay_saturation,
+                    sr,
+                );
                 sig * (1.0 - p.delay_mix) + wet * p.delay_mix
             }
             FxStep::Bitcrush => {
@@ -462,6 +459,10 @@ impl DspState {
     /// (outside process_block) when the user picks a new WAV file.
     pub fn load_amen(&mut self, data: std::sync::Arc<Vec<f32>>) {
         self.amen.load(data);
+    }
+
+    pub fn load_granular(&mut self, data: std::sync::Arc<Vec<f32>>) {
+        self.granular.load(data);
     }
 
     pub fn handle_trigger(&mut self, event: &TriggerEvent) {
@@ -653,7 +654,7 @@ impl DspState {
         }
 
         let delay_samples =
-            (p.delay_time * sr * 1.0).clamp(1.0, MAX_DELAY_SAMPLES as f32 - 1.0) as usize;
+            (p.delay_time * sr * 2.0).clamp(1.0, MAX_DELAY_SAMPLES as f32 - 2.0) as usize;
 
         // Snapshot FX chains into stack arrays before the per-frame loop.
         // This releases the immutable borrow on self.fx_plan so that apply_fx_step
@@ -685,6 +686,7 @@ impl DspState {
         let (chain_an1x, an1x_len) = snap_route(ModuleKind::An1xVoice);
         let (chain_amen, amen_len) = snap_route(ModuleKind::AmenSampler);
         let (chain_noise, noise_len) = snap_route(ModuleKind::NoiseVoice);
+        let (chain_granular, gran_len) = snap_route(ModuleKind::GranularTexture);
         let (chain_tts, tts_len) = snap_route(ModuleKind::EspeakNgTts);
         let have_voice_routes = !self.fx_plan.voice_routes.is_empty();
         // Release the immutable borrow on self (via fx_plan) before the mutable frame loop.
@@ -774,6 +776,19 @@ impl DspState {
                 0.0
             };
             let amen_out = self.amen.process(p.amen_pitch, p.amen_volume, p.amen_loop);
+            let granular_out = if p.granular_enabled {
+                self.granular.process(
+                    p.granular_volume,
+                    p.granular_density,
+                    p.granular_grain_size,
+                    p.granular_position,
+                    p.granular_position_jitter,
+                    p.granular_pitch_scatter,
+                    sr,
+                )
+            } else {
+                0.0
+            };
 
             // Per-voice bus sums (scaled to prevent clipping)
             let bus_bass = bass_out;
@@ -794,12 +809,19 @@ impl DspState {
             let bus_an1x = an1x_out;
             let bus_amen = amen_out * dv[13];
             let bus_noise = noise_out;
+            let bus_granular = granular_out;
 
             // Gated reverb: detect transient from pre-FX dry signal.
             // When gate_time > 0, re-open gate on transients; close exponentially.
-            let detection_sum =
-                (bus_bass + bus_808 + bus_909 + bus_hoover + bus_an1x + bus_amen + bus_noise)
-                    * 0.60;
+            let detection_sum = (bus_bass
+                + bus_808
+                + bus_909
+                + bus_hoover
+                + bus_an1x
+                + bus_amen
+                + bus_noise
+                + bus_granular)
+                * 0.60;
             if p.reverb_gate_time > 0.001 {
                 if detection_sum.abs() > 0.08 {
                     self.reverb_gate_env = 1.0;
@@ -910,13 +932,26 @@ impl DspState {
                 } else {
                     bus_noise
                 };
+                let routed_granular = if gran_len > 0 {
+                    self.apply_fx_chain(
+                        bus_granular,
+                        &chain_granular[..gran_len],
+                        &p,
+                        delay_samples,
+                        sr,
+                        gate_env,
+                    )
+                } else {
+                    bus_granular
+                };
                 let mixed = (routed_bass
                     + routed_808
                     + routed_909
                     + routed_hoover
                     + routed_an1x
                     + routed_amen
-                    + routed_noise)
+                    + routed_noise
+                    + routed_granular)
                     * 0.60;
                 // Global chain after per-voice mixing
                 self.apply_fx_chain(
@@ -960,10 +995,4 @@ impl DspState {
             }
         }
     }
-}
-
-// ─── Utilities ────────────────────────────────────────────────────────────────
-
-pub fn midi_to_hz(note: u8) -> f32 {
-    440.0 * 2.0f32.powf((note as f32 - 69.0) / 12.0)
 }
