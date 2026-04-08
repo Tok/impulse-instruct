@@ -252,6 +252,7 @@ impl ImpulseApp {
         api_port: Option<u16>,
     ) -> Self {
         theme::apply(&cc.egui_ctx);
+        log::info!("ImpulseApp::new — creating UI…");
 
         // ── Load last session from eframe's persistent storage ────────────────
         if let Some(storage) = cc.storage
