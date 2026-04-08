@@ -3,11 +3,14 @@
 // Run: ./run-tests.sh
 //      ./run-tests.sh --coverage
 
+mod fx_plan_tests;
 mod helpers_tests;
 mod jam_tools_tests;
+mod llm_apply_extra_tests;
 mod llm_apply_tests;
 mod llm_tests;
 mod music_api_tests;
+mod music_tests;
 mod persistence_tests;
 mod seq_tests;
 mod state_tests;
