@@ -198,6 +198,7 @@ pub struct ImpulseApp {
     // Mode locks: double-click footer indicator to keep modifier active without holding key
     pub(crate) ctrl_locked: bool,
     pub(crate) alt_locked: bool,
+    pub(crate) show_shortcuts: bool,
     // Zone whose [+ ADD] popup is currently open.
     pub(crate) add_menu_zone: Option<crate::state::Zone>,
     // Module being dragged by its title bar (id + current pointer position).
@@ -373,6 +374,7 @@ impl ImpulseApp {
             rack_flipped: false, // volatile — always start in front view
             ctrl_locked: false,
             alt_locked: false,
+            show_shortcuts: false,
             add_menu_zone: None,
             module_drag: None,
             session_dirty: false,
@@ -634,6 +636,7 @@ impl ImpulseApp {
                                 .unwrap_or(true);
                         drop(s);
                         if ok {
+                            self.push_history();
                             let snapshot = self.state.read().clone();
                             let (new_state, _id) = crate::state::spawn_agent(
                                 snapshot,
@@ -666,6 +669,7 @@ impl ImpulseApp {
                                 .unwrap_or_default();
                             drop(s);
                             if ok && count > 1 {
+                                self.push_history();
                                 self.state.write().rack.remove_module(aid);
                                 self.state.write().llm_agents.retain(|a| a.id != aid);
                                 self.log_text.push_str(&format!("{} signed off\n", name));
@@ -818,6 +822,13 @@ impl eframe::App for ImpulseApp {
             self.rack_flipped = !self.rack_flipped;
             self.session_dirty = true;
         }
+        // ── ? key: toggle shortcuts help overlay ────────────────────────────
+        if ctx.input_mut(|i| {
+            i.consume_key(egui::Modifiers::SHIFT, egui::Key::Slash) // Shift+/ = ?
+                || i.consume_key(egui::Modifiers::NONE, egui::Key::F1)
+        }) {
+            self.show_shortcuts = !self.show_shortcuts;
+        }
 
         // ── Startup hook ──────────────────────────────────────────────────────
         // Fire once — right after the LLM transitions from initializing to ready.
@@ -936,5 +947,52 @@ impl eframe::App for ImpulseApp {
                     rack_canvas::draw_rack(self, ctx, ui);
                 }
             });
+
+        // ── Keyboard shortcuts help overlay ─────────────────────────────────
+        if self.show_shortcuts {
+            egui::Area::new(egui::Id::new("shortcuts_overlay"))
+                .fixed_pos(egui::pos2(40.0, 40.0))
+                .order(egui::Order::Foreground)
+                .show(ctx, |ui| {
+                    egui::Frame::popup(ui.style())
+                        .fill(egui::Color32::from_rgba_premultiplied(18, 18, 18, 240))
+                        .rounding(egui::Rounding::same(8.0))
+                        .inner_margin(egui::Margin::same(16.0))
+                        .show(ui, |ui| {
+                            ui.heading(
+                                egui::RichText::new("Keyboard Shortcuts")
+                                    .color(egui::Color32::from_gray(200))
+                                    .monospace(),
+                            );
+                            ui.add_space(8.0);
+                            let row = |ui: &mut egui::Ui, key: &str, desc: &str| {
+                                ui.horizontal(|ui| {
+                                    ui.label(
+                                        egui::RichText::new(format!("{:<16}", key))
+                                            .monospace()
+                                            .color(egui::Color32::from_gray(180)),
+                                    );
+                                    ui.label(
+                                        egui::RichText::new(desc)
+                                            .monospace()
+                                            .color(egui::Color32::from_gray(120)),
+                                    );
+                                });
+                            };
+                            row(ui, "Space", "Play / Stop sequencer");
+                            row(ui, "Tab", "Flip rack (front / back)");
+                            row(ui, "Ctrl+Z", "Undo");
+                            row(ui, "Ctrl+Y", "Redo");
+                            row(ui, "Ctrl+Scroll", "Zoom (global or per-module)");
+                            row(ui, "Alt+Click", "Cycle param lock mode");
+                            row(ui, "Arrow keys", "Navigate / adjust focused knob");
+                            row(ui, "? / F1", "Toggle this help overlay");
+                            ui.add_space(8.0);
+                            if ui.button("Close").clicked() {
+                                self.show_shortcuts = false;
+                            }
+                        });
+                });
+        }
     }
 }

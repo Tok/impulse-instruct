@@ -54,9 +54,10 @@ drone, and textural work. These additions would close that gap:
   state stored per-module in egui temp data; content hidden when collapsed
 - [ ] **Module drag reorder** — drag modules within a zone to reorder (partially
   implemented via title bar drag, needs polish)
-- [ ] **Keyboard shortcuts help overlay** — ? key shows all shortcuts
-- [ ] **Undo for agent changes** — agent spawn/dismiss/config changes should
-  push to undo history
+- [x] **Keyboard shortcuts help overlay** — ? or F1 toggles a foreground overlay
+  listing all keyboard shortcuts; close button or re-press to dismiss
+- [x] **Undo for agent changes** — push_history() called before agent spawn
+  and dismiss mutations, enabling Ctrl+Z to restore previous agent state
 
 ### Visualization
 
