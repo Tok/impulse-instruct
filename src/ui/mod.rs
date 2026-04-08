@@ -427,29 +427,15 @@ impl ImpulseApp {
     }
 
     fn push_audio_params(&mut self) {
-        let s = self.state.read();
-        let mut p = AudioParams::from_app_state(&s);
-        p.sample_rate = 44100.0; // will be overwritten by engine
-
-        // Auto-observe key params for style learning
-        let edits: [(&str, f32); 6] = [
-            ("bass.cutoff", s.bass_voices[0].synth.cutoff),
-            ("bass.resonance", s.bass_voices[0].synth.resonance),
-            ("fx.reverb_mix", s.fx.reverb_mix),
-            ("fx.delay_mix", s.fx.delay_mix),
-            ("an1x.filter_cutoff", s.an1x.filter_cutoff),
-            ("hoover.resonance", s.hoover.resonance),
-        ];
-        drop(s);
-
-        let _ = self.audio_tx.push(AudioCommand::UpdateParams(Box::new(p)));
-
-        let snapshot = self.state.read().clone();
-        let mut st = snapshot;
-        for &(path, value) in &edits {
-            st = crate::state::observe_user_edit(st, path, value);
-        }
-        *self.state.write() = st;
+        let params = {
+            let s = self.state.read();
+            let mut p = AudioParams::from_app_state(&s);
+            p.sample_rate = 44100.0;
+            p
+        };
+        let _ = self
+            .audio_tx
+            .push(AudioCommand::UpdateParams(Box::new(params)));
     }
 
     /// Recompile the FX routing plan from the current rack cable graph and

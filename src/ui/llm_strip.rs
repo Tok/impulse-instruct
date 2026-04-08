@@ -499,11 +499,7 @@ impl ImpulseApp {
         // ── Style selector + instructions ────────────────────────────
         ui.horizontal(|ui| {
             let style_locked = self.state.read().llm.style_lock;
-            let lock_label = if style_locked {
-                "STYLE \u{1f512}"
-            } else {
-                "STYLE"
-            };
+            let lock_label = if style_locked { "STYLE [L]" } else { "STYLE" };
             let lock_col = if style_locked { theme::FOG } else { theme::ASH };
             if ui
                 .add(
