@@ -4,24 +4,7 @@ What's already built is documented in [docs/features.md](docs/features.md).
 
 ---
 
-## v0.7.0 — released
-
-- [x] Verify app starts after reboot (cyclic cable fix)
-- [x] VRAM budget guard
-- [x] 431 tests, all green
-- [x] Merge develop → main
-
----
-
 ## v0.7.1 — next release
-
-### Polish — done
-
-- [x] **CRT overlay performance** — line_spacing 3→6, halves draw calls
-- [x] **Ring scope** — single Shape::Path polyline (was 256 line_segments), re-enabled
-- [x] **Granular true stereo** — per-grain pan, mid/side split at output
-- [x] **Session migration: auto-wire voice modules** — NoiseVoice/GranularTexture → MasterOutput
-- [x] **observe_user_edit in bass panel** — LLM agents learn from extreme knob positions
 
 ### DSP
 
@@ -58,6 +41,8 @@ What's already built is documented in [docs/features.md](docs/features.md).
   could also be in Preferences for discoverability
 - [ ] **Touch mode improvements** — touch-paint mode for mobile/tablet;
   gesture support for zoom/scroll
+- [ ] **observe_user_edit in remaining panels** — currently only bass panel;
+  extend to 808, 909, hoover, AN1X, noise, granular, FX panels
 
 ### Infrastructure
 
@@ -75,40 +60,4 @@ What's already built is documented in [docs/features.md](docs/features.md).
 | Issue | Cause | Status |
 |-------|-------|--------|
 | Wizard always shows on startup | By design — resume or start fresh | Working as intended |
-| Agents override user's style choice | Agent sends SetStyle action | Fixed: `style_lock` (default: on) |
 | Hoover doesn't sound like a hoover | DSP tuning, not a code bug | Needs filter sweep shape tuning |
-
----
-
-## v0.7.0 changelog
-
-### Refactor & coverage
-- llm_apply_tests (68), persistence_tests (25), helpers_tests, music_tests (13),
-  dsp_tests (16), fx_plan_tests, vram_tests (9) — 431 tests total
-- `connect_control`, `spawn_agent`, `format_llm_display`, `propagate_style` helpers
-- Bass303, samplers, dsp_util, fx_plan extracted to separate files
-
-### Ambient / textural synthesis
-- Long envelopes (10s attack, 30s release), granular voice (32 grains, WAV load),
-  tape delay (wow/flutter + saturation), reverb freeze, 4 pad presets,
-  noise improvements (AR env, filter LFO, S&H), cross-modulation
-
-### DSP improvements
-- Per-voice bass params, sidechain compression, multiband compressor, stereo width
-
-### UI / UX
-- Footer mode locks, module collapse, shortcuts overlay, undo for agents,
-  heat slider, % displays (HEAT/MON/VRAM/RAM), style lock
-- Grayscale cable colors (R=G=B), wizard always shows on startup
-
-### Visualization
-- CRT scan-line overlay, ring scope (disabled for performance)
-
-### Intelligence
-- Agent memory (20 snippets), style learning, inter-agent messaging (SendHint)
-- VRAM budget guard (estimate_total_vram, would_exceed_vram, pool acquire_with_vram)
-
-### Infrastructure
-- Version bump to v0.7.0, Windows code-signing in build script
-- Cyclic cable detection (connect rejects, session strips, compile_fx_plan safe)
-- 5s audio timeout, startup diagnostic logging
