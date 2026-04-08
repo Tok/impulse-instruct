@@ -175,12 +175,8 @@ pub fn draw_rack(app: &mut ImpulseApp, ctx: &egui::Context, ui: &mut egui::Ui) {
             draw_rack_inner(app, ui, &mut ports);
         });
 
-    // ── Arrow-key scrolling (fast, held = continuous) ─────────────────────────
-    // Only scroll when no text widget has focus (avoid stealing arrow keys
-    // from text inputs like the prompt field).
-    let nothing_focused = ctx.memory(|m| m.focused()).is_none();
-    if nothing_focused {
-        let scroll_speed = 60.0;
+    {
+        let scroll_speed = 180.0;
         let wasd = ctx
             .data(|d| d.get_temp::<bool>(egui::Id::new("wasd_as_arrows")))
             .unwrap_or(false);
@@ -202,13 +198,22 @@ pub fn draw_rack(app: &mut ImpulseApp, ctx: &egui::Context, ui: &mut egui::Ui) {
         }
     }
 
-    // Persist ports for the next frame's scroll-lock check.
-    ctx.memory_mut(|m| m.data.insert_temp(ports_mem_id, ports.clone()));
+    {
+        // Mouse scroll amplifier (3x)
+        let extra_scroll = ctx.input(|i| i.smooth_scroll_delta.y) * 2.0; // 2x extra = 3x total
+        if extra_scroll.abs() > 0.1 {
+            let max_y = (scroll_out.content_size.y - scroll_out.inner_rect.height()).max(0.0);
+            let mut state = scroll_out.state;
+            state.offset.y = (state.offset.y - extra_scroll).clamp(0.0, max_y);
+            state.store(ctx, scroll_id);
+        }
+    }
 
-    // ── Cable overlay (extracted to rack_cables.rs) ────────────────────────────
+    ctx.memory_mut(|m| m.data.insert_temp(ports_mem_id, ports.clone()));
+    // Cable overlay
     rack_cables::draw_cable_overlay(app, ctx, &ports, canvas_rect);
 
-    // ── Port hover / drag-target highlights (back panel only) ─────────────────
+    // Port hover / drag-target highlights (back panel only)
     if (app.rack_flipped || app.cable_drag.is_some())
         && let Some(pointer) = ctx.pointer_latest_pos()
     {
@@ -266,8 +271,6 @@ pub fn draw_rack(app: &mut ImpulseApp, ctx: &egui::Context, ui: &mut egui::Ui) {
             ctx.set_cursor_icon(egui::CursorIcon::PointingHand);
         }
     }
-
-    // ── Cable drag — always active, no mode required ──────────────────────────
     handle_cable_drag(app, ctx, &ports);
     if let Some(ref drag) = app.module_drag
         && let Some(pointer) = ctx.pointer_latest_pos()
@@ -316,8 +319,6 @@ pub fn draw_rack(app: &mut ImpulseApp, ctx: &egui::Context, ui: &mut egui::Ui) {
             ctx.request_repaint();
         }
     }
-
-    // ── Add module popup ──────────────────────────────────────────────────────
     draw_add_menu(app, ctx);
 }
 
