@@ -97,7 +97,8 @@ Priority order — each item is a self-contained session task:
 
 ### Infrastructure
 
-- [ ] **Windows code-signing** — unsigned `.exe` triggers SmartScreen
+- [x] **Windows code-signing** — signtool step added to build-all.bat; set
+  SIGN_CERT + SIGN_PASS env vars to sign (certificate procurement is external)
 
 ---
 
