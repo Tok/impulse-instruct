@@ -733,6 +733,9 @@ pub struct LlmState {
     pub conversation_mode: ConversationMode,
     pub active_style: Option<String>, // style id from styles.json, "__free__", "__custom__", or None
     pub custom_style_text: String,    // used when active_style == Some("__custom__")
+    /// When true (default), agents cannot override the user-selected style via SetStyle action.
+    #[serde(default = "default_true")]
+    pub style_lock: bool,
     pub user_instructions: String, // persistent user instructions injected into every system prompt
     pub persona_name: String,      // AI persona name shown in UI and used in system prompt
     pub system_prompt_override: String, // if non-empty, replaces the generated system prompt entirely
@@ -803,6 +806,7 @@ impl Default for LlmState {
             conversation_mode: ConversationMode::Producer,
             active_style: None,
             custom_style_text: String::new(),
+            style_lock: true,
             user_instructions: String::new(),
             persona_name: String::from("PULSE"),
             system_prompt_override: String::new(),
