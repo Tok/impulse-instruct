@@ -414,6 +414,24 @@ pub fn param_control(
     }
 }
 
+/// Bipolar param control (-1.0 to +1.0). Internally maps to 0–1 for the knob,
+/// converts back on output. Supports lock/focus modes like the unipolar variant.
+pub fn param_control_bipolar(
+    ui: &mut Ui,
+    label: &str,
+    value: &mut f32,
+    mode: ParamMode,
+    prefs: ControlPrefs,
+) -> (bool, bool) {
+    // Map -1..+1 → 0..1 for the knob widget, then convert back.
+    let mut norm = (*value + 1.0) * 0.5;
+    let (changed, cycled) = param_control(ui, label, &mut norm, mode, prefs);
+    if changed {
+        *value = (norm * 2.0 - 1.0).clamp(-1.0, 1.0);
+    }
+    (changed, cycled)
+}
+
 // ─── Toggle Button ───────────────────────────────────────────────────────────
 
 /// A stateful on/off button.  Flips `active` and returns true on click.

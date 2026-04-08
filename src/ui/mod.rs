@@ -1,6 +1,7 @@
 // ─── ui/mod.rs — Main egui application ───────────────────────────────────────
 mod header;
 mod llm_strip;
+mod midi_handler;
 pub mod module_card;
 mod note;
 pub mod panels;
@@ -36,7 +37,6 @@ use std::sync::Arc;
 use crate::audio::{AudioCommand, AudioParams};
 use crate::llm::{LlmInput, LlmOutput};
 use crate::midi::MidiEvent;
-use crate::sequencer::TriggerEvent;
 use crate::state::{AppState, ConversationMode, compile_fx_plan};
 
 pub(super) const LOG_LEVELS: &[(&str, log::LevelFilter)] = &[
@@ -102,6 +102,26 @@ impl MidiClockTracker {
 mod undo;
 use undo::StateHistory;
 
+/// A single entry in the structured activity log.
+#[derive(Clone)]
+pub(crate) struct ActivityEntry {
+    pub timestamp: std::time::Instant,
+    pub persona: String,
+    pub action: ActivityAction,
+    pub detail: String,
+}
+#[derive(Clone, PartialEq)]
+#[allow(dead_code)] // variants populated incrementally as more log sources are wired
+pub(crate) enum ActivityAction {
+    Response,    // normal LLM response
+    Thinking,    // chain-of-thought
+    ParamUpdate, // parameter change applied
+    Spawn,       // agent spawned
+    Dismiss,     // agent dismissed
+    UserPrompt,  // user typed a prompt
+    System,      // system message (startup, error)
+}
+
 pub struct ImpulseApp {
     state: Arc<RwLock<AppState>>,
     audio_tx: rtrb::Producer<AudioCommand>,
@@ -127,11 +147,21 @@ pub struct ImpulseApp {
     log_text: String,
     api_port: Option<u16>,
     show_about: bool,
+    // Structured activity log for timeline display
+    pub(crate) activity_log: Vec<ActivityEntry>,
     pub(crate) show_prefs: bool,
     export_bars: u32,
     ui_volume: f32, // monitor-only gain; never written to state or export
     // Piano preferences
     piano_show_labels: bool,
+    // Spectrum analyser: smoothed magnitude bins + peak-hold values.
+    pub(crate) spectrum_magnitudes: Vec<f32>,
+    pub(crate) spectrum_peaks: Vec<f32>,
+    // Stereo correlation meter
+    stereo_rx: rtrb::Consumer<f32>,
+    stereo_buf: Vec<f32>,
+    pub(crate) stereo_corr: f32,    // -1..+1 phase correlation
+    pub(crate) stereo_balance: f32, // -1..+1 L/R balance
     // Last chain-of-thought from the LLM (shown collapsible below the log)
     last_thinking: Option<String>,
     // Control layout preference — derived from AppState.ui_prefs each frame
@@ -203,6 +233,7 @@ pub struct AudioChannels {
     pub scope_rx: rtrb::Consumer<f32>,
     pub capture_rx: rtrb::Consumer<f32>,
     pub dsp_load_rx: rtrb::Consumer<f32>,
+    pub stereo_rx: rtrb::Consumer<f32>,
 }
 
 impl ImpulseApp {
@@ -291,10 +322,17 @@ impl ImpulseApp {
             log_text,
             api_port,
             show_about: false,
+            activity_log: Vec::new(),
             show_prefs: false,
             export_bars: 8,
             ui_volume: 1.0,
             piano_show_labels: true,
+            spectrum_magnitudes: Vec::new(),
+            spectrum_peaks: Vec::new(),
+            stereo_rx: audio.stereo_rx,
+            stereo_buf: Vec::with_capacity(4096),
+            stereo_corr: 0.0,
+            stereo_balance: 0.0,
             last_thinking: None,
             seq_page: 0,
             expanded_seq_voices: std::collections::HashSet::new(),
@@ -353,6 +391,27 @@ impl ImpulseApp {
     pub(crate) fn push_history(&mut self) {
         let snapshot = self.state.read().clone();
         self.history.push(snapshot);
+    }
+    fn update_spectrum(&mut self) {
+        if self.scope_buf.len() < 256 {
+            return;
+        }
+        let raw = crate::audio::spectrum::compute_spectrum(&self.scope_buf, 44100.0);
+        let alpha = self.state.read().spectrum.smoothing;
+        if self.spectrum_magnitudes.len() != raw.magnitudes.len() {
+            self.spectrum_magnitudes = raw.magnitudes.clone();
+            self.spectrum_peaks = raw.magnitudes;
+        } else {
+            for (i, &r) in raw.magnitudes.iter().enumerate() {
+                self.spectrum_magnitudes[i] =
+                    self.spectrum_magnitudes[i] * alpha + r * (1.0 - alpha);
+                if r > self.spectrum_peaks[i] {
+                    self.spectrum_peaks[i] = r;
+                } else {
+                    self.spectrum_peaks[i] -= 0.3;
+                }
+            }
+        }
     }
 
     /// Effective scale for a module kind (1.0 if unset).
@@ -463,6 +522,20 @@ impl ImpulseApp {
                 };
                 log::info!("{}", ansi_colorize_notes(line.trim_end()));
                 self.log_text.push_str(&line);
+                let action = if out.param_update.is_some() {
+                    ActivityAction::ParamUpdate
+                } else {
+                    ActivityAction::Response
+                };
+                self.activity_log.push(ActivityEntry {
+                    timestamp: std::time::Instant::now(),
+                    persona: persona.clone(),
+                    action,
+                    detail: display,
+                });
+                if self.activity_log.len() > 500 {
+                    self.activity_log.drain(..100);
+                }
                 // MC line: shown separately with a marker so it's visually distinct
                 if let Some(ref mc) = out.mc_line {
                     self.log_text.push_str(&format!("◆ {}\n", mc));
@@ -677,96 +750,7 @@ impl ImpulseApp {
             }
         }
     }
-
-    /// Drain incoming MIDI events, update pressed_notes, trigger DSP.
-    fn drain_midi_events(&mut self) {
-        use crate::midi::cc_to_param_path;
-        use crate::state::{apply_llm_update, toggle_sequencer_running};
-        while let Ok(event) = self.midi_rx.try_recv() {
-            match event {
-                MidiEvent::NoteOn {
-                    note, velocity: 0, ..
-                } => {
-                    // NoteOn with vel=0 is standard MIDI running-status NoteOff
-                    self.pressed_notes.remove(&note);
-                    let _ = self
-                        .audio_tx
-                        .push(AudioCommand::Trigger(TriggerEvent::BassGateOff {
-                            voice_idx: 0,
-                        }));
-                }
-                MidiEvent::NoteOn { note, velocity, .. } => {
-                    self.pressed_notes.insert(note);
-                    let vel = velocity as f32 / 127.0;
-
-                    let _ = self
-                        .audio_tx
-                        .push(AudioCommand::Trigger(TriggerEvent::BassTrigger {
-                            voice_idx: 0,
-                            note,
-                            accent: vel > 0.8,
-                            slide: false,
-                            gate_samples: 22050, // ~0.5 s at 44100 Hz
-                        }));
-                    // Write note into current step so you can step-program live.
-                    let step = self.state.read().sequencer.current_step;
-                    let s = self.state.read().clone();
-                    let was_active = s
-                        .sequencer
-                        .bass_pattern
-                        .get(step)
-                        .map(|b| b.active)
-                        .unwrap_or(false);
-                    *self.state.write() = crate::state::set_bass_step(s, step, note, was_active);
-                }
-                MidiEvent::NoteOff { note, .. } => {
-                    self.pressed_notes.remove(&note);
-                    let _ = self
-                        .audio_tx
-                        .push(AudioCommand::Trigger(TriggerEvent::BassGateOff {
-                            voice_idx: 0,
-                        }));
-                }
-                // CC → synth params via the standard mapping table.
-                // Builds a partial JSON update matching the dot-path and feeds it
-                // through apply_llm_update so locked params are respected.
-                MidiEvent::ControlChange { cc, value, .. } => {
-                    if let Some((path, scale)) = cc_to_param_path(cc) {
-                        let scaled = scale(value);
-                        let update = dot_path_to_json(path, scaled);
-                        let next = apply_llm_update(self.state.read().clone(), &update, &[]);
-                        *self.state.write() = next;
-                        self.push_audio_params();
-                    }
-                }
-
-                // MIDI transport — Start/Stop control the sequencer.
-                MidiEvent::Start => {
-                    self.midi_clock_tracker.reset();
-                    let s = self.state.read().clone();
-                    if !s.sequencer.running {
-                        *self.state.write() = toggle_sequencer_running(s);
-                    }
-                }
-                MidiEvent::Stop => {
-                    self.midi_clock_tracker.reset();
-                    let s = self.state.read().clone();
-                    if s.sequencer.running {
-                        *self.state.write() = toggle_sequencer_running(s);
-                    }
-                }
-                MidiEvent::Clock => {
-                    let sync_on = self.state.read().sequencer.midi_clock_sync;
-                    if sync_on && let Some(bpm) = self.midi_clock_tracker.on_clock() {
-                        self.state.write().sequencer.bpm = bpm.clamp(20.0, 300.0);
-                        self.push_audio_params();
-                    }
-                }
-
-                _ => {}
-            }
-        }
-    }
+    // drain_midi_events extracted to midi_handler.rs
 }
 
 impl eframe::App for ImpulseApp {
@@ -930,6 +914,19 @@ impl eframe::App for ImpulseApp {
             if self.scope_history.len() > 6 {
                 self.scope_history.pop_front();
             }
+        }
+        self.update_spectrum();
+        // Stereo correlation meter
+        while let Ok(s) = self.stereo_rx.pop() {
+            self.stereo_buf.push(s);
+        }
+        if self.stereo_buf.len() > 4096 {
+            self.stereo_buf.drain(..self.stereo_buf.len() - 4096);
+        }
+        if self.stereo_buf.len() >= 200 {
+            let (c, b) = crate::audio::analysis::stereo_correlation(&self.stereo_buf);
+            self.stereo_corr = self.stereo_corr * 0.8 + c * 0.2;
+            self.stereo_balance = self.stereo_balance * 0.8 + b * 0.2;
         }
         while let Ok(load) = self.dsp_load_rx.pop() {
             self.dsp_load_buf.push(load);

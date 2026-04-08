@@ -4,6 +4,7 @@
 
 pub mod analysis;
 pub mod dsp;
+pub mod spectrum;
 
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use cpal::{Device, SampleFormat, Stream, StreamConfig};
@@ -48,6 +49,8 @@ pub struct AudioEngine {
     /// DSP load fraction (0.0–1.0) per callback invocation.
     /// Drain in UI thread for sparkline display.
     pub dsp_load_rx: Consumer<f32>,
+    /// Interleaved L,R stereo samples for correlation meter.
+    pub stereo_rx: Consumer<f32>,
     _stream: Stream, // kept alive
 }
 
@@ -75,6 +78,9 @@ impl AudioEngine {
 
         // Ring buffer: audio thread → capture/analysis (≈10 s @ 44100 Hz)
         let (mut capture_tx, capture_rx) = rtrb::RingBuffer::<f32>::new(441_000);
+
+        // Ring buffer: audio thread → stereo correlation meter (interleaved L,R pairs)
+        let (mut stereo_tx, stereo_rx) = rtrb::RingBuffer::<f32>::new(8192);
 
         // Ring buffer: TTS processed audio → audio thread mix (≈6s @ 44100Hz)
         let (tts_producer, tts_consumer) = rtrb::RingBuffer::<f32>::new(262144);
@@ -209,10 +215,14 @@ impl AudioEngine {
                         }
                     }
 
-                    // Write first channel of each frame to scope + capture ring buffers
+                    // Write first channel to scope + capture; both channels to stereo meter.
                     for frame in output.chunks(channels) {
-                        scope_tx.push(frame[0]).ok(); // non-blocking, drop if full
-                        capture_tx.push(frame[0]).ok(); // same — overshoots silently dropped
+                        scope_tx.push(frame[0]).ok();
+                        capture_tx.push(frame[0]).ok();
+                        if channels >= 2 {
+                            stereo_tx.push(frame[0]).ok();
+                            stereo_tx.push(frame[1]).ok();
+                        }
                     }
                 },
                 |err| log::error!("Audio stream error: {}", err),
@@ -233,6 +243,7 @@ impl AudioEngine {
             tts_tx,
             midi_clock_rx,
             dsp_load_rx,
+            stereo_rx,
             _stream: stream,
         })
     }

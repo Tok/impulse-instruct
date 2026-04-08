@@ -166,6 +166,26 @@ pub fn draw_kit_a(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             app.push_audio_params();
         }
     });
+
+    // Gabber kick preset
+    ui.add_space(2.0);
+    if ui
+        .add(
+            egui::Button::new(
+                egui::RichText::new("GABBER KICK")
+                    .monospace()
+                    .size(8.0)
+                    .color(theme::FOG),
+            )
+            .fill(egui::Color32::from_gray(22)),
+        )
+        .on_hover_text("Extreme pitch sweep + hard clip - gabber/hardcore kick")
+        .clicked()
+    {
+        let s = app.state.read().clone();
+        *app.state.write() = crate::state::apply_gabber_kick_preset(s);
+        app.push_audio_params();
+    }
 }
 
 pub fn draw_kit_b(app: &mut ImpulseApp, ui: &mut egui::Ui) {

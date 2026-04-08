@@ -275,26 +275,9 @@ pub fn draw_bass(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         );
         p!("FM DEPTH", fm_depth, ParamMode::Free, "bass.fm_depth");
         p!("FM RATIO", fm_ratio, ParamMode::Free, "bass.fm_ratio");
-        ui.horizontal(|ui| {
-            ui.label(
-                egui::RichText::new("DETUNE")
-                    .color(theme::SMOKE)
-                    .monospace()
-                    .size(9.0),
-            );
-            if ui
-                .add(
-                    egui::DragValue::new(&mut osc_detune)
-                        .range(-1.0..=1.0)
-                        .speed(0.01)
-                        .fixed_decimals(2)
-                        .suffix(" st"),
-                )
-                .changed()
-            {
-                changed = true;
-            }
-        });
+        if widgets::param_control_bipolar(ui, "DETUNE", &mut osc_detune, ParamMode::Free, ctrl).0 {
+            changed = true;
+        }
     } else {
         // ── Knob mode: 3 equal-width glass groups ─────────────────────────────
         let gw = widgets::even_group_width(ui, 3);
@@ -465,26 +448,9 @@ pub fn draw_bass(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         });
 
         // Detune: bipolar DragValue — one compact row below the groups
-        ui.horizontal(|ui| {
-            ui.label(
-                egui::RichText::new("DETUNE")
-                    .color(theme::SMOKE)
-                    .monospace()
-                    .size(9.0),
-            );
-            if ui
-                .add(
-                    egui::DragValue::new(&mut osc_detune)
-                        .range(-1.0..=1.0)
-                        .speed(0.01)
-                        .fixed_decimals(2)
-                        .suffix(" st"),
-                )
-                .changed()
-            {
-                changed = true;
-            }
-        });
+        if widgets::param_control_bipolar(ui, "DETUNE", &mut osc_detune, ParamMode::Free, ctrl).0 {
+            changed = true;
+        }
     }
 
     // Apply all changes in a single brief write, using pure state transitions

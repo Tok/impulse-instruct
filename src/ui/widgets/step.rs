@@ -15,11 +15,13 @@ use crate::ui::theme;
 /// `note_label`: when Some, a tiny note name (e.g. "C4") is drawn in
 ///   `dot_color` inside the cell, above the dot. Ignored for drum rows.
 /// `size_px` comes from `UiPrefs.pad_size.px()`.
+/// `probability` — 0.0–1.0, shown as a dim ring when < 1.0 to indicate uncertainty.
 pub fn step_button(
     ui: &mut Ui,
     active: bool,
     current: bool,
     vel: f32,
+    probability: f32,
     dot_color: Option<Color32>,
     note_label: Option<&str>,
     size_px: f32,
@@ -68,9 +70,17 @@ pub fn step_button(
                     );
                 }
             } else {
+                // Velocity heat fill — brighter = louder
                 let dim = 0.35_f32 + vel * 0.65;
                 let g = (200.0 * dim) as u8;
                 painter.rect_filled(inset, r, Color32::from_rgba_unmultiplied(g, g, g, 70));
+            }
+            // Probability indicator: small corner dot when < 100%
+            if probability < 0.99 {
+                let prob_g = (40.0 + probability * 80.0) as u8;
+                let dot_r = (size_px * 0.08).max(1.5);
+                let pos = Pos2::new(inset.right() - dot_r - 1.0, inset.top() + dot_r + 1.0);
+                painter.circle_filled(pos, dot_r, Color32::from_gray(prob_g));
             }
         } else {
             // Raised look:

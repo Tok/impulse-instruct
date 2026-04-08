@@ -51,6 +51,9 @@ const FXMOD_KINDS: &[ModuleKind] = &[
     ModuleKind::FxWaveshaper,
     ModuleKind::FxBitcrush,
     ModuleKind::FxRingMod,
+    ModuleKind::SpectrumAnalyzer,
+    ModuleKind::StereoMeter,
+    ModuleKind::ActivityTimeline,
     ModuleKind::LfoModule,
 ];
 
@@ -411,6 +414,10 @@ pub(super) fn module_slot_w(kind: ModuleKind, full_w: f32) -> f32 {
         | ModuleKind::FxAutotune
         | ModuleKind::LfoModule
         | ModuleKind::LlmAgent => FX_SLOT_W.min(full_w),
+        // Analysis modules: wider for better resolution
+        ModuleKind::SpectrumAnalyzer => 320.0_f32.min(full_w),
+        ModuleKind::StereoMeter => FX_SLOT_W.min(full_w),
+        ModuleKind::ActivityTimeline => 400.0_f32.min(full_w),
         // LLM Console + global modules: full width
         ModuleKind::LlmConsole => full_w,
         // AN1X: wide — 2 voice columns or full width
@@ -911,6 +918,12 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
                             |ui| {
                                 if *kind == ModuleKind::LfoModule {
                                     draw_lfo_content(app, ui, *id);
+                                } else if *kind == ModuleKind::SpectrumAnalyzer {
+                                    crate::ui::panels::draw_spectrum(app, ui);
+                                } else if *kind == ModuleKind::StereoMeter {
+                                    crate::ui::panels::draw_stereo_meter(app, ui);
+                                } else if *kind == ModuleKind::ActivityTimeline {
+                                    crate::ui::panels::draw_timeline(app, ui);
                                 } else {
                                     draw_fx_content(app, ui, *kind);
                                 }
