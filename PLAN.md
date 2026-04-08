@@ -68,12 +68,12 @@ drone, and textural work. These additions would close that gap:
 
 ### Intelligence
 
-- [ ] **Agent memory** — agents remember previous session context; persist
-  conversation snippets across restarts
-- [ ] **Style learning** — agent observes user edits and adapts its style
-  preferences over time
-- [ ] **Inter-agent messaging** — agents can send structured hints to each other
-  ("drums agent: I'm building, raise the hat density")
+- [x] **Agent memory** — agents persist _comment snippets in memory[] (max 20);
+  memory injected into system prompt; survives session restart via session.json
+- [x] **Style learning** — observe_user_edit() records "user prefers high/low X"
+  into style_observations[]; injected into prompt as learned preferences
+- [x] **Inter-agent messaging** — SendHint action via JSON `send_hint` field;
+  hints queued in target's pending_hints[], injected into prompt on next cycle
 
 ### Refactor and test coverage (37% codecov - red badge)
 

@@ -680,6 +680,20 @@ impl ImpulseApp {
                             }
                         }
                     }
+                    LlmAction::SendHint { to, hint } => {
+                        let mut s = self.state.write();
+                        if let Some(target) = s
+                            .llm_agents
+                            .iter_mut()
+                            .find(|a| a.persona_name.eq_ignore_ascii_case(to))
+                        {
+                            target.pending_hints.push(hint.clone());
+                            // Cap at 5 pending hints
+                            if target.pending_hints.len() > 5 {
+                                target.pending_hints.drain(..target.pending_hints.len() - 5);
+                            }
+                        }
+                    }
                 }
             }
             // Push updated params after LLM changed state; record the pre-update
@@ -946,51 +960,8 @@ impl eframe::App for ImpulseApp {
                 }
             });
 
-        // ── Keyboard shortcuts help overlay ─────────────────────────────────
-        if self.show_shortcuts {
-            egui::Area::new(egui::Id::new("shortcuts_overlay"))
-                .fixed_pos(egui::pos2(40.0, 40.0))
-                .order(egui::Order::Foreground)
-                .show(ctx, |ui| {
-                    egui::Frame::popup(ui.style())
-                        .fill(egui::Color32::from_rgba_premultiplied(18, 18, 18, 240))
-                        .rounding(egui::Rounding::same(8.0))
-                        .inner_margin(egui::Margin::same(16.0))
-                        .show(ui, |ui| {
-                            ui.heading(
-                                egui::RichText::new("Keyboard Shortcuts")
-                                    .color(egui::Color32::from_gray(200))
-                                    .monospace(),
-                            );
-                            ui.add_space(8.0);
-                            let row = |ui: &mut egui::Ui, key: &str, desc: &str| {
-                                ui.horizontal(|ui| {
-                                    ui.label(
-                                        egui::RichText::new(format!("{:<16}", key))
-                                            .monospace()
-                                            .color(egui::Color32::from_gray(180)),
-                                    );
-                                    ui.label(
-                                        egui::RichText::new(desc)
-                                            .monospace()
-                                            .color(egui::Color32::from_gray(120)),
-                                    );
-                                });
-                            };
-                            row(ui, "Space", "Play / Stop sequencer");
-                            row(ui, "Tab", "Flip rack (front / back)");
-                            row(ui, "Ctrl+Z", "Undo");
-                            row(ui, "Ctrl+Y", "Redo");
-                            row(ui, "Ctrl+Scroll", "Zoom (global or per-module)");
-                            row(ui, "Alt+Click", "Cycle param lock mode");
-                            row(ui, "Arrow keys", "Navigate / adjust focused knob");
-                            row(ui, "? / F1", "Toggle this help overlay");
-                            ui.add_space(8.0);
-                            if ui.button("Close").clicked() {
-                                self.show_shortcuts = false;
-                            }
-                        });
-                });
+        if self.show_shortcuts && scope_footer::draw_shortcuts_overlay(ctx) {
+            self.show_shortcuts = false;
         }
 
         if self.state.read().ui_prefs.crt_effect {

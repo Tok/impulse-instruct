@@ -7,6 +7,26 @@ use crate::state::{AppState, ConversationMode, ROOT_NAMES, StyleVerbosity};
 /// Returns the system prompt. If the user has set a non-empty `system_prompt_override`,
 /// that is returned verbatim — giving full control over the model's grounding.
 pub fn build_system_prompt(state: &AppState, scope: &[String]) -> String {
+    build_system_prompt_with_memory(state, scope, &[])
+}
+
+/// Build a system prompt with optional agent memory injected.
+pub fn build_system_prompt_with_memory(
+    state: &AppState,
+    scope: &[String],
+    memory: &[String],
+) -> String {
+    // Find style observations for this agent (passed alongside memory from the caller)
+    build_system_prompt_full(state, scope, memory, &[])
+}
+
+/// Build system prompt with memory and style observations.
+pub fn build_system_prompt_full(
+    state: &AppState,
+    scope: &[String],
+    memory: &[String],
+    style_obs: &[String],
+) -> String {
     if !state.llm.system_prompt_override.trim().is_empty() {
         return state.llm.system_prompt_override.clone();
     }
@@ -163,6 +183,26 @@ pub fn build_system_prompt(state: &AppState, scope: &[String]) -> String {
         }
     };
 
+    let memory_section = {
+        let mut parts = Vec::new();
+        if !memory.is_empty() {
+            let entries: Vec<&str> = memory.iter().map(|s| s.as_str()).collect();
+            parts.push(format!("Session memory:\n{}", entries.join("\n")));
+        }
+        if !style_obs.is_empty() {
+            let entries: Vec<&str> = style_obs.iter().map(|s| s.as_str()).collect();
+            parts.push(format!(
+                "Learned user preferences (adapt your choices accordingly):\n{}",
+                entries.join("\n")
+            ));
+        }
+        if parts.is_empty() {
+            String::new()
+        } else {
+            format!("\n═══ MEMORY ═══\n{}\n", parts.join("\n\n"))
+        }
+    };
+
     let persona = state.llm.persona_name.trim();
     let persona = if persona.is_empty() { "PULSE" } else { persona };
 
@@ -204,7 +244,7 @@ pub fn build_system_prompt(state: &AppState, scope: &[String]) -> String {
     format!(
         r#"You are {persona} — the AI intelligence inside Impulse Instruct, a hardware-style synthesizer.
 Output ONLY valid JSON. No prose, no markdown, no explanation outside the "_comment" field.
-{style_section}{user_instructions_section}{scope_section}{autonomy_section}
+{style_section}{user_instructions_section}{memory_section}{scope_section}{autonomy_section}
 CURRENT STATE:
 {current_json}
 {bass_info}
@@ -572,6 +612,7 @@ Example — "more acid":
 "#,
         persona = persona,
         user_instructions_section = user_instructions_section,
+        memory_section = memory_section,
         style_section = style_section,
         scope_section = scope_section,
         autonomy_section = autonomy_section,

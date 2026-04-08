@@ -677,3 +677,41 @@ pub fn format_llm_display(
         None => text.to_string(),
     }
 }
+
+/// Record a style observation for all agents (e.g. "user raised reverb_mix to 0.8").
+/// Caps at STYLE_OBS_MAX. Deduplicates by param path prefix.
+pub fn observe_user_edit(state: AppState, param_path: &str, value: f32) -> AppState {
+    let mut s = state;
+    let obs = if value > 0.7 {
+        format!("user prefers high {} ({:.1})", param_path, value)
+    } else if value < 0.3 {
+        format!("user prefers low {} ({:.1})", param_path, value)
+    } else {
+        return s; // mid-range edits aren't interesting
+    };
+    for agent in &mut s.llm_agents {
+        // Remove old observation for the same param
+        agent.style_observations.retain(|o| !o.contains(param_path));
+        agent.style_observations.push(obs.clone());
+        if agent.style_observations.len() > super::STYLE_OBS_MAX {
+            agent
+                .style_observations
+                .drain(..agent.style_observations.len() - super::STYLE_OBS_MAX);
+        }
+    }
+    s
+}
+
+/// Push a memory snippet to an agent's persistent memory, capping at AGENT_MEMORY_MAX.
+pub fn push_agent_memory(state: AppState, agent_id: u32, snippet: String) -> AppState {
+    let mut s = state;
+    if let Some(agent) = s.llm_agents.iter_mut().find(|a| a.id == agent_id) {
+        agent.memory.push(snippet);
+        if agent.memory.len() > super::AGENT_MEMORY_MAX {
+            agent
+                .memory
+                .drain(..agent.memory.len() - super::AGENT_MEMORY_MAX);
+        }
+    }
+    s
+}

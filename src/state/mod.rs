@@ -882,7 +882,23 @@ pub struct LlmAgentState {
     pub tokens_per_sec: f32,
     #[serde(default)]
     pub jam_cycle_count: u32,
+    /// Persistent memory: conversation snippets preserved across sessions.
+    /// Injected into the system prompt so the agent remembers prior context.
+    #[serde(default)]
+    pub memory: Vec<String>,
+    /// Style learning: user preference observations (e.g. "user likes high reverb").
+    /// Accumulated from UI edits; injected into system prompt alongside memory.
+    #[serde(default)]
+    pub style_observations: Vec<String>,
+    /// Pending hints from other agents, consumed on next inference.
+    #[serde(default)]
+    pub pending_hints: Vec<String>,
 }
+
+/// Maximum number of memory entries per agent.
+pub const AGENT_MEMORY_MAX: usize = 20;
+/// Maximum number of style observations.
+pub const STYLE_OBS_MAX: usize = 10;
 
 impl LlmAgentState {
     pub fn new_default(id: u32) -> Self {
@@ -907,6 +923,9 @@ impl LlmAgentState {
             last_response: String::new(),
             tokens_per_sec: 0.0,
             jam_cycle_count: 0,
+            memory: Vec::new(),
+            style_observations: Vec::new(),
+            pending_hints: Vec::new(),
         }
     }
 
@@ -933,6 +952,9 @@ impl LlmAgentState {
             last_response: String::new(),
             tokens_per_sec: 0.0,
             jam_cycle_count: 0,
+            memory: Vec::new(),
+            style_observations: Vec::new(),
+            pending_hints: Vec::new(),
         }
     }
 }
