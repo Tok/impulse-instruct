@@ -118,7 +118,8 @@ impl GranularVoice {
         }
     }
 
-    /// Render one mono sample from all active grains.
+    /// Render one stereo sample pair from all active grains.
+    /// Per-grain pan values are applied using equal-power panning.
     pub(super) fn process(
         &mut self,
         volume: f32,
@@ -128,13 +129,13 @@ impl GranularVoice {
         jitter: f32,
         pitch_scatter: f32,
         sr: f32,
-    ) -> f32 {
+    ) -> (f32, f32) {
         let samples = match &self.samples {
             Some(s) if !s.is_empty() => s,
-            _ => return 0.0,
+            _ => return (0.0, 0.0),
         };
         if volume < 0.001 {
-            return 0.0;
+            return (0.0, 0.0);
         }
 
         let buf_len = samples.len() as f32;
@@ -165,8 +166,8 @@ impl GranularVoice {
             }
         }
 
-        // Mix all active grains
-        let mut out = 0.0_f32;
+        // Mix all active grains with per-grain panning
+        let (mut out_l, mut out_r) = (0.0_f32, 0.0_f32);
         for g in &mut self.grains {
             if !g.active {
                 continue;
@@ -182,7 +183,12 @@ impl GranularVoice {
             if idx + 1 < samples.len() {
                 let frac = g.pos - idx as f32;
                 let sample = samples[idx] + (samples[idx + 1] - samples[idx]) * frac;
-                out += sample * window;
+                let amp = sample * window;
+                // Equal-power pan: pan ∈ -1..+1 → L/R gain
+                let pan_r = (g.pan + 1.0) * 0.5; // 0..1
+                let pan_l = 1.0 - pan_r;
+                out_l += amp * pan_l;
+                out_r += amp * pan_r;
             }
             g.pos = (g.pos + g.rate).rem_euclid(buf_len);
             g.age += g.inv_len;
@@ -191,6 +197,7 @@ impl GranularVoice {
             }
         }
 
-        out * volume * 0.3 // scale down — many overlapping grains can be loud
+        let gain = volume * 0.3; // scale down — many overlapping grains can be loud
+        (out_l * gain, out_r * gain)
     }
 }

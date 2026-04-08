@@ -425,6 +425,13 @@ impl ImpulseApp {
         self.module_scales.get(&kind).copied().unwrap_or(1.0)
     }
 
+    pub(crate) fn observe_edits(&mut self, edits: &[(&str, f32)]) {
+        for &(path, val) in edits {
+            let s = self.state.read().clone();
+            *self.state.write() = crate::state::observe_user_edit(s, path, val);
+        }
+    }
+
     fn push_audio_params(&mut self) {
         let params = {
             let s = self.state.read();
@@ -936,6 +943,7 @@ impl eframe::App for ImpulseApp {
             .exact_height(48.0)
             .show(ctx, |ui| {
                 scope_footer::draw_scope(ui, &self.scope_buf, &self.scope_history);
+                scope_footer::draw_ring_scope(ui, &self.scope_buf, 40.0);
             });
 
         // ── Footer ────────────────────────────────────────────────────────────
@@ -982,11 +990,9 @@ impl eframe::App for ImpulseApp {
                     rack_canvas::draw_rack(self, ctx, ui);
                 }
             });
-
         if self.show_shortcuts && scope_footer::draw_shortcuts_overlay(ctx) {
             self.show_shortcuts = false;
         }
-
         if self.state.read().ui_prefs.crt_effect {
             scope_footer::draw_crt_overlay(ctx);
         }

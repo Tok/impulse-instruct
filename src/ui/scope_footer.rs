@@ -238,13 +238,14 @@ pub fn draw_crt_overlay(ctx: &egui::Context) {
         egui::Order::Foreground,
         egui::Id::new("crt_overlay"),
     ));
-    // Scan lines: every 3rd row gets a semi-transparent dark line
-    let line_spacing = 3.0;
+    // Scan lines: semi-transparent dark lines at regular intervals
+    let line_spacing = 6.0;
+    let stroke = egui::Stroke::new(1.0, egui::Color32::from_rgba_premultiplied(0, 0, 0, 18));
     let mut y = screen.min.y;
     while y < screen.max.y {
         painter.line_segment(
             [egui::pos2(screen.min.x, y), egui::pos2(screen.max.x, y)],
-            egui::Stroke::new(1.0, egui::Color32::from_rgba_premultiplied(0, 0, 0, 25)),
+            stroke,
         );
         y += line_spacing;
     }
@@ -268,8 +269,6 @@ pub fn draw_crt_overlay(ctx: &egui::Context) {
 
 /// Draw the scope buffer as a circular ring — a diagnostic/aesthetic display.
 /// `buf` is the most recent scope samples; `size` is the widget diameter.
-/// Currently unused (removed from footer for performance); kept for future use.
-#[allow(dead_code)]
 pub fn draw_ring_scope(ui: &mut egui::Ui, buf: &[f32], size: f32) {
     let (rect, _) = ui.allocate_exact_size(egui::vec2(size, size), egui::Sense::hover());
     if !ui.is_rect_visible(rect) || buf.is_empty() {
@@ -300,10 +299,10 @@ pub fn draw_ring_scope(ui: &mut egui::Ui, buf: &[f32], size: f32) {
     if let Some(&first) = points.first() {
         points.push(first); // close the ring
     }
-    let stroke = egui::Stroke::new(1.0, egui::Color32::from_gray(140));
-    for w in points.windows(2) {
-        painter.line_segment([w[0], w[1]], stroke);
-    }
+    painter.add(egui::Shape::Path(egui::epaint::PathShape::line(
+        points,
+        egui::Stroke::new(1.0, egui::Color32::from_gray(140)),
+    )));
 
     // Read/write head indicators (simulated: based on buffer position)
     let write_angle = -std::f32::consts::FRAC_PI_2; // top = write head

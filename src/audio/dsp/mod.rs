@@ -602,8 +602,8 @@ impl DspState {
                 0.0
             };
             let amen_out = self.amen.process(p.amen_pitch, p.amen_volume, p.amen_loop);
-            let granular_out = if p.granular_enabled {
-                self.granular.process(
+            let (granular_out, granular_side) = if p.granular_enabled {
+                let (gl, gr) = self.granular.process(
                     p.granular_volume,
                     p.granular_density,
                     p.granular_grain_size,
@@ -611,9 +611,10 @@ impl DspState {
                     p.granular_position_jitter,
                     p.granular_pitch_scatter,
                     sr,
-                )
+                );
+                ((gl + gr) * 0.5, (gl - gr) * 0.5)
             } else {
-                0.0
+                (0.0, 0.0)
             };
 
             // Per-voice bus sums (scaled to prevent clipping)
@@ -839,19 +840,21 @@ impl DspState {
 
             let out = ((synth_out * self.tts_duck + tts_sig) * p.master_volume).clamp(-1.0, 1.0);
 
-            // Stereo width + granular spray: 0=mono, 0.5=normal, 1=wide
-            let effective_width = p.stereo_width
-                + if p.granular_enabled {
-                    p.granular_spray * 0.3
+            // Stereo width + granular true stereo
+            let has_stereo = (p.stereo_width - 0.5).abs() > 0.01 || granular_side.abs() > 0.001;
+            if channels >= 2 && has_stereo {
+                let mid = out;
+                let chorus_side = self.chorus.read_tap(0.4) * 0.3;
+                let w = p.stereo_width * 2.0;
+                // Granular spray controls how much of the per-grain stereo is mixed in
+                let gran_w = if p.granular_enabled {
+                    p.granular_spray
                 } else {
                     0.0
                 };
-            if channels >= 2 && (effective_width - 0.5).abs() > 0.01 {
-                let mid = out;
-                let side = self.chorus.read_tap(0.4) * 0.3;
-                let w = effective_width * 2.0;
-                let left = (mid + side * w).clamp(-1.0, 1.0);
-                let right = (mid - side * w).clamp(-1.0, 1.0);
+                let side = chorus_side * w + granular_side * gran_w;
+                let left = (mid + side).clamp(-1.0, 1.0);
+                let right = (mid - side).clamp(-1.0, 1.0);
                 frame[0] = left;
                 frame[1] = right;
                 for s in frame.iter_mut().skip(2) {

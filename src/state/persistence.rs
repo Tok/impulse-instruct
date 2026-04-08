@@ -195,8 +195,33 @@ pub fn apply_session(state: &mut AppState, data: SessionData) {
         ModuleKind::GranularTexture,
     ] {
         if !state.rack.modules.iter().any(|m| m.kind == kind) {
-            state.rack.add_module(kind);
+            let id = state.rack.add_module(kind);
             log::info!("Migration: added {:?} module to rack", kind);
+            // Wire voice modules to MasterOutput (audio) like the default rack
+            if matches!(kind, ModuleKind::NoiseVoice | ModuleKind::GranularTexture)
+                && let Some(master_id) = state
+                    .rack
+                    .modules
+                    .iter()
+                    .find(|m| m.kind == ModuleKind::MasterOutput)
+                    .map(|m| m.id)
+            {
+                state.rack.connect(
+                    super::PortRef {
+                        module_id: id,
+                        dir: super::PortDir::Out,
+                        kind: super::PortKind::Audio,
+                        index: 0,
+                    },
+                    super::PortRef {
+                        module_id: master_id,
+                        dir: super::PortDir::In,
+                        kind: super::PortKind::Audio,
+                        index: 0,
+                    },
+                );
+                log::info!("Migration: wired {:?} → MasterOutput", kind);
+            }
         }
     }
     if !state
