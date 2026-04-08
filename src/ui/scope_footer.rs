@@ -303,4 +303,13 @@ pub fn draw_ring_scope(ui: &mut egui::Ui, buf: &[f32], size: f32) {
         points,
         egui::Stroke::new(1.0, egui::Color32::from_gray(140)),
     )));
+
+    // Write-head dot: tracks the newest sample position on the ring
+    let head_frac = (n.saturating_sub(1)) as f32 / n as f32;
+    let head_angle = head_frac * std::f32::consts::TAU - std::f32::consts::FRAC_PI_2;
+    let head_pos = egui::pos2(
+        center.x + head_angle.cos() * (outer_r + 3.0),
+        center.y + head_angle.sin() * (outer_r + 3.0),
+    );
+    painter.circle_filled(head_pos, 1.5, egui::Color32::from_gray(200));
 }
