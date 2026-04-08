@@ -181,3 +181,38 @@ pub fn draw_footer_status(
         draw_dsp_sparkline(ui, dsp_buf);
     });
 }
+
+/// CRT scan-line overlay + edge vignette.
+pub fn draw_crt_overlay(ctx: &egui::Context) {
+    let screen = ctx.screen_rect();
+    let painter = ctx.layer_painter(egui::LayerId::new(
+        egui::Order::Foreground,
+        egui::Id::new("crt_overlay"),
+    ));
+    // Scan lines: every 3rd row gets a semi-transparent dark line
+    let line_spacing = 3.0;
+    let mut y = screen.min.y;
+    while y < screen.max.y {
+        painter.line_segment(
+            [egui::pos2(screen.min.x, y), egui::pos2(screen.max.x, y)],
+            egui::Stroke::new(1.0, egui::Color32::from_rgba_premultiplied(0, 0, 0, 25)),
+        );
+        y += line_spacing;
+    }
+    // Vignette: darkened edges
+    let vig_size = screen.width().min(screen.height()) * 0.15;
+    let vig_alpha = 60u8;
+    painter.rect_filled(
+        egui::Rect::from_min_size(screen.min, egui::vec2(screen.width(), vig_size)),
+        0.0,
+        egui::Color32::from_rgba_premultiplied(0, 0, 0, vig_alpha),
+    );
+    painter.rect_filled(
+        egui::Rect::from_min_size(
+            egui::pos2(screen.min.x, screen.max.y - vig_size),
+            egui::vec2(screen.width(), vig_size),
+        ),
+        0.0,
+        egui::Color32::from_rgba_premultiplied(0, 0, 0, vig_alpha),
+    );
+}

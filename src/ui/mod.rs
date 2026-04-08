@@ -817,12 +817,10 @@ impl eframe::App for ImpulseApp {
                 self.push_audio_params();
             }
         }
-        // ── Tab: flip rack (front ↔ back panel) ─────────────────────────────
         if ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Tab)) {
             self.rack_flipped = !self.rack_flipped;
             self.session_dirty = true;
         }
-        // ── ? key: toggle shortcuts help overlay ────────────────────────────
         if ctx.input_mut(|i| {
             i.consume_key(egui::Modifiers::SHIFT, egui::Key::Slash) // Shift+/ = ?
                 || i.consume_key(egui::Modifiers::NONE, egui::Key::F1)
@@ -993,6 +991,10 @@ impl eframe::App for ImpulseApp {
                             }
                         });
                 });
+        }
+
+        if self.state.read().ui_prefs.crt_effect {
+            scope_footer::draw_crt_overlay(ctx);
         }
     }
 }

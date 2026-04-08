@@ -158,6 +158,9 @@ pub struct UiPrefs {
     /// When true, WASD keys act as arrow keys (scroll rack, turn knobs).
     #[serde(default)]
     pub wasd_as_arrows: bool,
+    /// CRT scan-line overlay and vignette effect.
+    #[serde(default)]
+    pub crt_effect: bool,
 }
 
 impl UiPrefs {
@@ -210,6 +213,7 @@ impl Default for UiPrefs {
             ui_scale: 1.0,
             autosave_interval: AutosaveInterval::Immediate,
             wasd_as_arrows: false,
+            crt_effect: false,
         }
     }
 }

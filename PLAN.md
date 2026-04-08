@@ -61,10 +61,10 @@ drone, and textural work. These additions would close that gap:
 
 ### Visualization
 
-- [ ] **Bloom / CRT post-process** — Gaussian blur on bright pixels, scan-line
-  overlay (needs wgpu render pass or egui approximation)
-- [ ] **Event queue ring** — render the rtrb ring buffer as a circular display
-  with moving read/write heads (diagnostic, low priority)
+- [x] **Bloom / CRT post-process** — egui approximation: scan-line overlay
+  (3px spacing, alpha 25) + edge vignette; toggled via crt_effect in UiPrefs
+- [ ] **Event queue ring** — deferred: rtrb doesn't expose read/write positions;
+  would need shared atomics or a diagnostic channel (low priority)
 
 ### Intelligence
 
