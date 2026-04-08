@@ -15,20 +15,13 @@ What's already built is documented in [docs/features.md](docs/features.md).
 
 ## v0.7.1 — next release
 
-### Polish — quick wins
+### Polish — done
 
-- [ ] **Wire observe_user_edit into panel code** — currently reverted from
-  push_audio_params (caused deadlock); needs a separate call path that only
-  fires from direct knob edits, not system code
-- [ ] **Granular spray as true stereo** — currently adds to stereo_width;
-  ideally the GranularVoice returns (L, R) pair using per-grain pan values
-- [ ] **Session migration: auto-wire new voice modules** — NoiseVoice and
-  GranularTexture get added to rack by migration but don't get FX cables
-  wired (only control cables are auto-wired)
-- [ ] **CRT overlay performance** — scan-line overlay draws ~360 lines/frame;
-  consider rendering to texture or reducing line density
-- [ ] **Ring scope** — disabled for performance (256 line segments/frame);
-  rewrite with a single polyline or texture-based approach
+- [x] **CRT overlay performance** — line_spacing 3→6, halves draw calls
+- [x] **Ring scope** — single Shape::Path polyline (was 256 line_segments), re-enabled
+- [x] **Granular true stereo** — per-grain pan, mid/side split at output
+- [x] **Session migration: auto-wire voice modules** — NoiseVoice/GranularTexture → MasterOutput
+- [x] **observe_user_edit in bass panel** — LLM agents learn from extreme knob positions
 
 ### DSP
 
