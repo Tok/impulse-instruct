@@ -459,6 +459,12 @@ pub(super) fn apply_fx_update(
         "fx.compressor_ratio"
     );
     u!(s.fx.compressor_mix, "compressor_mix", "fx.compressor_mix");
+    u!(
+        s.fx.compressor_multiband,
+        "compressor_multiband",
+        "fx.compressor_multiband"
+    );
+    u!(s.fx.stereo_width, "stereo_width", "fx.stereo_width");
     u!(s.fx.tape_drive, "tape_drive", "fx.tape_drive");
     u!(s.fx.tape_mix, "tape_mix", "fx.tape_mix");
     u!(s.fx.tape_flutter, "tape_flutter", "fx.tape_flutter");
@@ -478,5 +484,20 @@ pub(super) fn apply_fx_update(
         s.fx.xmod_noise_to_filter,
         "xmod_noise_to_filter",
         "fx.xmod_noise_to_filter"
+    );
+    u!(
+        s.fx.sidechain_amount,
+        "sidechain_amount",
+        "fx.sidechain_amount"
+    );
+    u!(
+        s.fx.sidechain_attack,
+        "sidechain_attack",
+        "fx.sidechain_attack"
+    );
+    u!(
+        s.fx.sidechain_release,
+        "sidechain_release",
+        "fx.sidechain_release"
     );
 }

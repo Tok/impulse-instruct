@@ -189,6 +189,14 @@ impl Chorus {
 
         input * (1.0 - mix) + wet * mix
     }
+
+    /// Read a sample at a fractional delay position (0–1 → 0–MAX_CHORUS_SIZE).
+    /// Used for stereo decorrelation.
+    pub(super) fn read_tap(&self, pos: f32) -> f32 {
+        let off = ((pos * MAX_CHORUS_SIZE as f32) as usize).clamp(1, MAX_CHORUS_SIZE - 1);
+        let r = (self.write + MAX_CHORUS_SIZE - off) % MAX_CHORUS_SIZE;
+        self.buf[r]
+    }
 }
 
 // ─── 3-band parametric EQ (biquad shelves + peak) ─────────────────────────────
@@ -338,50 +346,87 @@ impl EqBands {
 
 pub(super) struct Compressor {
     env: f32, // peak envelope follower state
+    // Multiband: per-band envelope followers + crossover filter state
+    band_env: [f32; 3],
+    lp_state: [f32; 2], // 2-pole LP for low band
+    hp_state: [f32; 2], // 2-pole HP for high band
 }
 
 impl Compressor {
     pub(super) fn new() -> Self {
-        Self { env: 0.0 }
+        Self {
+            env: 0.0,
+            band_env: [0.0; 3],
+            lp_state: [0.0; 2],
+            hp_state: [0.0; 2],
+        }
+    }
+
+    /// Single-band compressor (static — no &self to avoid borrow conflicts).
+    fn compress_band(input: f32, env: &mut f32, threshold: f32, ratio: f32, sr: f32) -> f32 {
+        let thresh_db = -40.0 * (1.0 - threshold);
+        let ratio_val = 1.0 + ratio * 19.0;
+        let level = input.abs();
+        let att = (-1.0 / (sr * 0.001)).exp();
+        let rel = (-1.0 / (sr * 0.08)).exp();
+        *env = if level > *env {
+            *env * att + level * (1.0 - att)
+        } else {
+            *env * rel + level * (1.0 - rel)
+        };
+        let env_db = 20.0 * env.max(1e-9).log10();
+        let gain_db = if env_db > thresh_db {
+            (env_db - thresh_db) * (1.0 - 1.0 / ratio_val)
+        } else {
+            0.0
+        };
+        input * 10.0f32.powf(-gain_db / 20.0)
     }
 
     /// `threshold`: 0–1 → −40..0 dB. `ratio`: 0–1 → 1:1..20:1. `mix`: 0–1 wet/dry.
+    /// `multiband`: 0 = single band, >0 = 3-band split (low/mid/high).
     pub(super) fn process(
         &mut self,
         input: f32,
         threshold: f32,
         ratio: f32,
         mix: f32,
+        multiband: f32,
         sr: f32,
     ) -> f32 {
         if mix < 0.001 {
             return input;
         }
-        // Map params
-        let thresh_db = -40.0 * (1.0 - threshold); // 0→−40 dB, 1→0 dB
-        let ratio_val = 1.0 + ratio * 19.0; // 0→1:1, 1→20:1
 
-        // Peak envelope follower: fast attack (1 ms), medium release (80 ms)
-        let level = input.abs();
-        let att = (-1.0 / (sr * 0.001)).exp();
-        let rel = (-1.0 / (sr * 0.08)).exp();
-        self.env = if level > self.env {
-            self.env * att + level * (1.0 - att)
+        let compressed = if multiband > 0.001 {
+            // 3-band crossover: LP at 200 Hz, HP at 3000 Hz, mid = input - low - high
+            let lp_fc = 200.0 / sr;
+            let hp_fc = 3000.0 / sr;
+            let lp_a = (std::f32::consts::TAU * lp_fc).min(0.99);
+            let hp_a = (std::f32::consts::TAU * hp_fc).min(0.99);
+
+            // 2-pole LP
+            self.lp_state[0] += lp_a * (input - self.lp_state[0]);
+            self.lp_state[1] += lp_a * (self.lp_state[0] - self.lp_state[1]);
+            let low = self.lp_state[1];
+
+            // 2-pole HP
+            self.hp_state[0] += hp_a * (input - self.hp_state[0]);
+            self.hp_state[1] += hp_a * (self.hp_state[0] - self.hp_state[1]);
+            let high = input - self.hp_state[1];
+
+            let mid = input - low - high;
+
+            // Compress each band independently
+            let c_low = Self::compress_band(low, &mut self.band_env[0], threshold, ratio, sr);
+            let c_mid = Self::compress_band(mid, &mut self.band_env[1], threshold, ratio, sr);
+            let c_high = Self::compress_band(high, &mut self.band_env[2], threshold, ratio, sr);
+
+            c_low + c_mid + c_high
         } else {
-            self.env * rel + level * (1.0 - rel)
+            Self::compress_band(input, &mut self.env, threshold, ratio, sr)
         };
 
-        // Gain computer
-        let env_db = 20.0 * self.env.max(1e-9).log10();
-        let gain_db = if env_db > thresh_db {
-            (env_db - thresh_db) * (1.0 - 1.0 / ratio_val)
-        } else {
-            0.0
-        };
-        let gain = 10.0f32.powf(-gain_db / 20.0);
-        let compressed = input * gain;
-
-        // Parallel compression (mix = 1 → fully compressed, 0 → dry)
         input * (1.0 - mix) + compressed * mix
     }
 }

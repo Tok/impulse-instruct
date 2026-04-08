@@ -36,13 +36,15 @@ drone, and textural work. These additions would close that gap:
 
 ### DSP improvements
 
-- [ ] **Per-voice DSP params** — voices 1-3 currently share synth params with
-  voice 0; next step: per-voice `AudioParams` snapshot
-- [ ] **Sidechain compression** — duck bass/pad under kick; configurable
-  attack/release/ratio on the compressor with sidechain input
-- [ ] **Multiband compressor** — split into 3 bands before compression for
-  more controlled master bus processing
-- [ ] **Stereo width control** — mid/side processing on master output
+- [x] **Per-voice DSP params** — `BassVoiceParams` struct snapshotted per voice
+  in AudioParams; Bass303::process takes per-voice params; voice 0 syncs
+  with LFO/free-EG modulated values before processing
+- [x] **Sidechain compression** — kick (808+909) ducks bass/pad/hoover/granular;
+  sidechain_amount, sidechain_attack (0.1–50ms), sidechain_release (10–500ms)
+- [x] **Multiband compressor** — 3-band crossover (200 Hz / 3 kHz) with
+  independent per-band envelope followers; compressor_multiband param
+- [x] **Stereo width control** — chorus-based decorrelation for stereo
+  expansion; 0=mono, 0.5=normal, 1=wide; stereo_width param
 
 ### UI / UX
 

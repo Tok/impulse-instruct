@@ -561,11 +561,21 @@ pub struct FxState {
     pub compressor_threshold: f32, // 0–1 → -40–0 dB
     pub compressor_ratio: f32, // 0–1 → 1:1–20:1
     pub compressor_mix: f32, // 0–1 wet/dry (0 = bypassed)
+    #[serde(default)]
+    pub compressor_multiband: f32, // 0 = single band, >0 = 3-band (low/mid/high)
     pub master_volume: f32, // 0–1
+    #[serde(default)]
+    pub stereo_width: f32, // 0–1: 0=mono, 0.5=normal, 1=wide
     #[serde(default)]
     pub xmod_bass_to_an1x_pitch: f32, // 0–1 bass osc → AN1X pitch FM depth
     #[serde(default)]
     pub xmod_noise_to_filter: f32, // 0–1 noise → bass filter cutoff mod depth
+    #[serde(default)]
+    pub sidechain_amount: f32, // 0–1 sidechain compression depth (kick ducks bass/pad)
+    #[serde(default)]
+    pub sidechain_attack: f32, // 0–1 → 0.1–50 ms attack
+    #[serde(default)]
+    pub sidechain_release: f32, // 0–1 → 10–500 ms release
     pub tape_drive: f32,  // 0–1 saturation amount
     pub tape_mix: f32,    // 0–1 wet/dry
     pub tape_flutter: f32, // 0–1 wow/flutter depth
@@ -611,9 +621,14 @@ impl Default for FxState {
             compressor_threshold: 0.7,
             compressor_ratio: 0.3,
             compressor_mix: 0.0,
+            compressor_multiband: 0.0,
             master_volume: 0.85,
+            stereo_width: 0.5,
             xmod_bass_to_an1x_pitch: 0.0,
             xmod_noise_to_filter: 0.0,
+            sidechain_amount: 0.0,
+            sidechain_attack: 0.1,
+            sidechain_release: 0.3,
             tape_drive: 0.3,
             tape_mix: 0.0,
             tape_flutter: 0.2,

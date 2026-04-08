@@ -18,9 +18,62 @@ pub struct LfoParamsCopy {
                            // 5=ReverbMix 6=DelayTime 7=DelayFeedback 8=ChorusMix 9=ChorusRate 10=Kick808Pitch
 }
 
+/// Per-voice bass synth params — one per Bass303 instance.
 #[derive(Clone, Copy, Debug)]
+pub struct BassVoiceParams {
+    pub cutoff: f32,
+    pub resonance: f32,
+    pub env_mod: f32,
+    pub decay: f32,
+    pub accent_level: f32,
+    pub waveform_saw: bool,
+    pub waveform_supersaw: bool,
+    pub supersaw_detune: f32,
+    pub supersaw_voices: u8,
+    pub sub_osc_level: f32,
+    pub portamento_time: f32,
+    pub noise_mix: f32,
+    pub osc_detune: f32,
+    pub fm_ratio: f32,
+    pub fm_depth: f32,
+    pub distortion: f32,
+    pub volume: f32,
+    pub filter_mode: u8, // 0=LP, 1=HP, 2=BP
+}
+
+impl BassVoiceParams {
+    fn from_bass_state(b: &crate::state::BassState) -> Self {
+        use crate::state::{FilterMode, Waveform};
+        Self {
+            cutoff: b.cutoff,
+            resonance: b.resonance,
+            env_mod: b.env_mod,
+            decay: b.decay,
+            accent_level: b.accent_level,
+            waveform_saw: b.waveform == Waveform::Saw,
+            waveform_supersaw: b.waveform == Waveform::Supersaw,
+            supersaw_detune: b.supersaw_detune,
+            supersaw_voices: b.supersaw_voices,
+            sub_osc_level: b.sub_osc_level,
+            portamento_time: b.portamento_time,
+            noise_mix: b.noise_mix,
+            osc_detune: b.osc_detune,
+            fm_ratio: b.fm_ratio,
+            fm_depth: b.fm_depth,
+            distortion: b.distortion,
+            volume: b.volume,
+            filter_mode: match b.filter_mode {
+                FilterMode::Lowpass => 0,
+                FilterMode::Highpass => 1,
+                FilterMode::Bandpass => 2,
+            },
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
 pub struct AudioParams {
-    // 303
+    // 303 — voice 0 params kept for LFO/free-EG modulation targets
     pub cutoff: f32,
     pub resonance: f32,
     pub env_mod: f32,
@@ -38,6 +91,8 @@ pub struct AudioParams {
     pub fm_depth_303: f32,        // 0–1 FM depth; 0 = off
     pub distortion_303: f32,
     pub volume_303: f32,
+    // Per-voice bass params (voices 0–3)
+    pub bass_voice_params: [BassVoiceParams; crate::state::MAX_BASS_VOICES],
     // 808 kick
     pub kick808_pitch: f32,
     pub kick808_decay: f32,
@@ -91,6 +146,12 @@ pub struct AudioParams {
     // Cross-modulation
     pub xmod_bass_to_an1x_pitch: f32,
     pub xmod_noise_to_filter: f32,
+    // Sidechain compression (kick ducks bass/pad)
+    pub sidechain_amount: f32,
+    pub sidechain_attack: f32,
+    pub sidechain_release: f32,
+    pub compressor_multiband: f32,
+    pub stereo_width: f32, // 0=mono, 0.5=normal, 1=wide
     // Bitcrush
     pub bitcrush_bits: f32,
     pub bitcrush_rate: f32,
@@ -220,8 +281,9 @@ pub struct AudioParams {
 
 impl AudioParams {
     pub fn from_app_state(s: &AppState) -> Self {
-        // Use voice 0 (always enabled) for the single-voice bass params
         let bass = &s.bass_voices[0].synth;
+        let bvp: [BassVoiceParams; crate::state::MAX_BASS_VOICES] =
+            std::array::from_fn(|i| BassVoiceParams::from_bass_state(&s.bass_voices[i].synth));
         Self {
             cutoff: bass.cutoff,
             resonance: bass.resonance,
@@ -240,6 +302,7 @@ impl AudioParams {
             fm_depth_303: bass.fm_depth,
             distortion_303: bass.distortion,
             volume_303: bass.volume,
+            bass_voice_params: bvp,
             kick808_pitch: s.kit_a.kick.pitch,
             kick808_decay: s.kit_a.kick.decay,
             kick808_punch: s.kit_a.kick.punch,
@@ -285,6 +348,11 @@ impl AudioParams {
             master_volume: s.fx.master_volume,
             xmod_bass_to_an1x_pitch: s.fx.xmod_bass_to_an1x_pitch,
             xmod_noise_to_filter: s.fx.xmod_noise_to_filter,
+            sidechain_amount: s.fx.sidechain_amount,
+            sidechain_attack: s.fx.sidechain_attack,
+            sidechain_release: s.fx.sidechain_release,
+            compressor_multiband: s.fx.compressor_multiband,
+            stereo_width: s.fx.stereo_width,
             bitcrush_bits: s.fx.bitcrush_bits,
             bitcrush_rate: s.fx.bitcrush_rate,
             bitcrush_mix: s.fx.bitcrush_mix,

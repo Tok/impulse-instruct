@@ -1,10 +1,12 @@
 // ─── audio/dsp/mod.rs ── Pure DSP synthesis, no allocations in process_block()
 
+mod bass303;
 mod dsp_util;
 mod fx;
 mod params;
 mod samplers;
 mod voices;
+use bass303::Bass303;
 pub use dsp_util::midi_to_hz;
 use dsp_util::*;
 use fx::*;
@@ -14,195 +16,6 @@ use voices::*;
 
 use crate::sequencer::TriggerEvent;
 use crate::state::{DrumVoice, FxPlan, FxStep, ModuleKind};
-
-// ─── TB-303 voice ─────────────────────────────────────────────────────────────
-
-#[derive(Clone)]
-struct Bass303 {
-    phase: f32,              // oscillator phase 0-1 (voice 0)
-    sub_phase: f32,          // sub-oscillator phase (one octave below)
-    fm_phase: f32,           // FM modulator phase
-    unison_phases: [f32; 6], // phases for voices 1–6 (supersaw)
-    freq: f32,               // current freq Hz
-    target_freq: f32,        // slide target
-    amp_env: f32,            // VCA envelope
-    filt_env: f32,           // filter envelope
-    gate: bool,
-    accent: bool,
-    slide: bool,
-    filter: LadderFilter,
-    svf_low: f32,  // Chamberlin SVF low-pass state
-    svf_band: f32, // Chamberlin SVF band-pass state
-    noise_gen: NoiseGen,
-}
-
-impl Default for Bass303 {
-    fn default() -> Self {
-        Self {
-            phase: 0.0,
-            sub_phase: 0.0,
-            fm_phase: 0.0,
-            unison_phases: [0.0, 0.142, 0.285, 0.428, 0.571, 0.714], // spread across cycle
-            freq: 110.0,
-            target_freq: 110.0,
-            amp_env: 0.0,
-            filt_env: 0.0,
-            gate: false,
-            accent: false,
-            slide: false,
-            filter: LadderFilter::default(),
-            svf_low: 0.0,
-            svf_band: 0.0,
-            noise_gen: NoiseGen::new(0xBAD_C0DE),
-        }
-    }
-}
-
-impl Bass303 {
-    fn trigger(&mut self, note: u8, accent: bool, slide: bool) {
-        let new_freq = midi_to_hz(note);
-        if !self.slide {
-            self.freq = new_freq;
-        }
-        self.target_freq = new_freq;
-        self.accent = accent;
-        self.slide = slide;
-        self.gate = true;
-        if !slide {
-            self.amp_env = if accent { 1.0 } else { 0.8 };
-            self.filt_env = 1.0;
-        }
-    }
-
-    fn gate_off(&mut self) {
-        self.gate = false;
-    }
-
-    fn process(&mut self, p: &AudioParams) -> f32 {
-        let sr = p.sample_rate;
-
-        // Slide: portamento toward target; time 0–1 → 10ms–500ms
-        if self.slide {
-            let slide_time = 0.01 + p.portamento_time_303 * 0.49;
-            let slide_coeff = (-1.0 / (sr * slide_time)).exp();
-            self.freq = self.freq + (self.target_freq - self.freq) * (1.0 - slide_coeff);
-        }
-
-        // Pitch modulation: LFO + oscillator detune (both in semitones)
-        let freq_mod = 2.0f32.powf((p.lfo_pitch_mod_st + p.osc_detune_303) / 12.0);
-
-        // FM modulator: sine wave at carrier × ratio; adds to carrier phase increment
-        let fm_mod = if p.fm_depth_303 > 0.001 {
-            let mod_ratio = 0.5 + p.fm_ratio_303 * 7.5; // 0.5–8.0
-            self.fm_phase += self.freq * freq_mod * mod_ratio / sr;
-            if self.fm_phase >= 1.0 {
-                self.fm_phase -= 1.0;
-            }
-            (self.fm_phase * std::f32::consts::TAU).sin() * p.fm_depth_303
-        } else {
-            0.0
-        };
-
-        // Oscillator — FM shifts the phase increment each sample
-        self.phase += self.freq * freq_mod * (1.0 + fm_mod) / sr;
-        if self.phase >= 1.0 {
-            self.phase -= 1.0;
-        }
-
-        let osc = if p.waveform_supersaw {
-            // Supersaw: N detuned saws mixed and normalised
-            let n = p.supersaw_voices.clamp(2, 7) as usize;
-            // Detune spread: 0–1 maps to 0–1 semitone total spread
-            // Each voice is offset by i / (n-1) semitones from -spread/2 to +spread/2
-            let spread_semitones = p.supersaw_detune; // 0–1 semitone range
-            let mut sum = self.phase * 2.0 - 1.0; // voice 0 at centre pitch
-            for i in 0..(n - 1) {
-                let t = if n > 2 {
-                    i as f32 / (n as f32 - 2.0)
-                } else {
-                    0.5
-                };
-                let detune_st = (t - 0.5) * spread_semitones;
-                let ratio = 2.0f32.powf(detune_st / 12.0);
-                self.unison_phases[i] += self.freq * freq_mod * ratio / sr;
-                if self.unison_phases[i] >= 1.0 {
-                    self.unison_phases[i] -= 1.0;
-                }
-                sum += self.unison_phases[i] * 2.0 - 1.0;
-            }
-            (sum / n as f32) * 1.4 // slight gain boost to compensate cancellation
-        } else if p.waveform_saw {
-            self.phase * 2.0 - 1.0
-        } else {
-            // Square with slight PWM
-            if self.phase < 0.5 { 1.0 } else { -1.0 }
-        };
-
-        // Sub-oscillator: sine one octave below, mixed before filter
-        self.sub_phase += self.freq * freq_mod * 0.5 / sr;
-        if self.sub_phase >= 1.0 {
-            self.sub_phase -= 1.0;
-        }
-        let sub = (self.sub_phase * std::f32::consts::TAU).sin();
-        let noise = self.noise_gen.next();
-        let osc = osc + sub * p.sub_osc_level + noise * p.noise_mix_303;
-
-        // Envelope decay coefficients
-        let accent_mult = if self.accent {
-            p.accent_level * 0.4 + 0.8
-        } else {
-            1.0
-        };
-        let env_decay_coeff = {
-            let t = p.decay_303 * 4.9 + 0.1; // 0.1–5.0 s decay
-            (-1.0 / (sr * t)).exp()
-        };
-
-        // AMP envelope
-        if !self.gate {
-            self.amp_env *= 0.9995;
-        }
-
-        // Filter envelope
-        self.filt_env *= env_decay_coeff;
-
-        // Dynamic cutoff: 0-1 → 200-8000 Hz (exponential) → per-stage coefficient g
-        let cutoff_env = (p.cutoff + self.filt_env * p.env_mod * accent_mult).clamp(0.0, 1.0);
-        let cutoff_hz = 200.0 * (40.0f32).powf(cutoff_env); // 200 Hz at 0 → 8000 Hz at 1
-        let g = {
-            let w = cutoff_hz / sr;
-            (w / (1.0 + w)).clamp(0.001, 0.99)
-        };
-
-        // Filter — LP uses Moog ladder, HP/BP use Chamberlin SVF
-        let filtered = if p.filter_mode == 0 {
-            self.filter.process(osc, g, p.resonance * 0.97)
-        } else {
-            // Chamberlin State Variable Filter
-            // f = 2*sin(pi*fc/sr), clamped to avoid instability
-            let f = (std::f32::consts::PI * cutoff_hz / sr).sin().min(0.95);
-            let q = 1.0 - p.resonance * 0.95; // q=1 = no resonance, q≈0 = self-oscillation
-            self.svf_low += f * self.svf_band;
-            let high = osc - self.svf_low - q * self.svf_band;
-            self.svf_band += f * high;
-            if p.filter_mode == 1 {
-                high
-            } else {
-                self.svf_band
-            } // 1=HP, 2=BP
-        };
-
-        // Soft clip distortion
-        let dist = if p.distortion_303 > 0.01 {
-            let drive = p.distortion_303 * 8.0 + 1.0;
-            tanh(filtered * drive) / tanh(drive)
-        } else {
-            filtered
-        };
-
-        dist * self.amp_env * p.volume_303 * accent_mult
-    }
-}
 
 // ─── Full DSP state ───────────────────────────────────────────────────────────
 
@@ -257,6 +70,7 @@ pub struct DspState {
     // Gated reverb envelope: 1.0 = open, 0.0 = closed. Tracks transient
     // detection; decays to 0 at a rate set by p.reverb_gate_time.
     reverb_gate_env: f32,
+    sidechain_env: f32, // 0–1 sidechain gain reduction envelope
     // TTS ring buffer consumer (lock-free; popped one sample per frame).
     tts_consumer: rtrb::Consumer<f32>,
     // Duck envelope: smoothly attenuates synth when TTS is active.
@@ -316,6 +130,7 @@ impl DspState {
             sample_rate,
             fx_plan,
             reverb_gate_env: 1.0,
+            sidechain_env: 0.0,
             tts_consumer,
             tts_duck: 1.0,
             duck_attack: 1.0 - (-8.0_f32 / sample_rate).exp(),
@@ -419,6 +234,7 @@ impl DspState {
                 p.compressor_threshold,
                 p.compressor_ratio,
                 p.compressor_mix,
+                p.compressor_multiband,
                 sr,
             ),
             FxStep::TapeSat => {
@@ -657,6 +473,10 @@ impl DspState {
             p.lfo_pitch_mod_st += p.master_pitch_st;
         }
 
+        // Sync voice 0's per-voice params with LFO/free-EG modulated values
+        p.bass_voice_params[0].cutoff = p.cutoff;
+        p.bass_voice_params[0].resonance = p.resonance;
+
         let delay_samples =
             (p.delay_time * sr * 2.0).clamp(1.0, MAX_DELAY_SAMPLES as f32 - 2.0) as usize;
 
@@ -696,7 +516,12 @@ impl DspState {
 
         for frame in output.chunks_mut(channels) {
             // Mix all voices to mono
-            let bass_out = self.bass.iter_mut().map(|v| v.process(&p)).sum::<f32>();
+            let bass_out = self
+                .bass
+                .iter_mut()
+                .enumerate()
+                .map(|(i, v)| v.process(&p, &p.bass_voice_params[i]))
+                .sum::<f32>();
 
             let dv = &self.drum_velocity;
             let k808 = self.kick808.process(
@@ -811,6 +636,29 @@ impl DspState {
             let bus_amen = amen_out * dv[13];
             let bus_noise = noise_out;
             let bus_granular = granular_out;
+
+            // Sidechain compression: kick ducks bass/pad/hoover/granular
+            let (bus_bass, bus_an1x, bus_hoover, bus_granular) = if p.sidechain_amount > 0.001 {
+                let kick_level = (k808 * dv[0]).abs() + (k909 * dv[7]).abs();
+                let att_ms = 0.1 + p.sidechain_attack * 49.9; // 0.1–50 ms
+                let rel_ms = 10.0 + p.sidechain_release * 490.0; // 10–500 ms
+                let att_coeff = (-1.0 / (att_ms * 0.001 * sr)).exp();
+                let rel_coeff = (-1.0 / (rel_ms * 0.001 * sr)).exp();
+                if kick_level > self.sidechain_env {
+                    self.sidechain_env = kick_level + (self.sidechain_env - kick_level) * att_coeff;
+                } else {
+                    self.sidechain_env *= rel_coeff;
+                }
+                let duck = 1.0 - (self.sidechain_env * p.sidechain_amount * 4.0).min(1.0);
+                (
+                    bus_bass * duck,
+                    bus_an1x * duck,
+                    bus_hoover * duck,
+                    bus_granular * duck,
+                )
+            } else {
+                (bus_bass, bus_an1x, bus_hoover, bus_granular)
+            };
 
             // Gated reverb: detect transient from pre-FX dry signal.
             // When gate_time > 0, re-open gate on transients; close exponentially.
@@ -991,8 +839,23 @@ impl DspState {
 
             let out = ((synth_out * self.tts_duck + tts_sig) * p.master_volume).clamp(-1.0, 1.0);
 
-            for s in frame.iter_mut() {
-                *s = out;
+            // Stereo width: 0=mono, 0.5=normal (identical L/R), 1=wide (Haas-style)
+            if channels >= 2 && (p.stereo_width - 0.5).abs() > 0.01 {
+                let mid = out;
+                // Use chorus delay line as a subtle decorrelator for "side" content
+                let side = self.chorus.read_tap(0.4) * 0.3;
+                let w = p.stereo_width * 2.0; // 0→0 (mono), 1→1 (normal), 2→2 (wide)
+                let left = (mid + side * w).clamp(-1.0, 1.0);
+                let right = (mid - side * w).clamp(-1.0, 1.0);
+                frame[0] = left;
+                frame[1] = right;
+                for s in frame.iter_mut().skip(2) {
+                    *s = out;
+                }
+            } else {
+                for s in frame.iter_mut() {
+                    *s = out;
+                }
             }
         }
     }
