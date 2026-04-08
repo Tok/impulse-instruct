@@ -881,3 +881,44 @@ mod schema_and_rack_tests {
         assert_eq!(after_cycle, first);
     }
 }
+
+// ─── Pad preset tests ────────────────────────────────────────────────────────
+#[cfg(test)]
+mod pad_preset_tests {
+    use crate::state::{
+        AppState, apply_evolving_texture_preset, apply_glass_pad_preset, apply_sub_drone_preset,
+        apply_warm_pad_preset,
+    };
+
+    #[test]
+    fn warm_pad_enables_an1x_with_slow_attack() {
+        let s = apply_warm_pad_preset(AppState::default());
+        assert!(s.an1x.enabled);
+        assert!(s.an1x.amp_attack > 0.3, "warm pad needs slow attack");
+    }
+
+    #[test]
+    fn evolving_texture_has_lfo_on_filter() {
+        let s = apply_evolving_texture_preset(AppState::default());
+        assert!(s.an1x.enabled);
+        assert!(s.an1x.lfo_depth > 0.1, "evolving texture needs LFO depth");
+        assert!(s.an1x.drift > 0.1, "evolving texture needs drift");
+    }
+
+    #[test]
+    fn glass_pad_uses_hard_sync() {
+        let s = apply_glass_pad_preset(AppState::default());
+        assert!(s.an1x.enabled);
+        assert!(s.an1x.hard_sync);
+        assert!(s.an1x.filter_cutoff > 0.5, "glass pad should be bright");
+    }
+
+    #[test]
+    fn sub_drone_has_long_envelopes() {
+        let s = apply_sub_drone_preset(AppState::default());
+        assert!(s.an1x.enabled);
+        assert!(s.an1x.amp_attack > 0.5, "drone needs very slow attack");
+        assert!(s.an1x.amp_release > 0.9, "drone needs very long release");
+        assert!(s.an1x.sub_level > 0.4, "drone needs deep sub");
+    }
+}

@@ -350,6 +350,33 @@ pub fn apply_llm_update(state: AppState, update: &serde_json::Value, scope: &[St
         s.noise_voice.color = unlocked_f32(s.noise_voice.color, n, "color", "noise.color", locked);
         s.noise_voice.cutoff =
             unlocked_f32(s.noise_voice.cutoff, n, "cutoff", "noise.cutoff", locked);
+        s.noise_voice.attack =
+            unlocked_f32(s.noise_voice.attack, n, "attack", "noise.attack", locked);
+        s.noise_voice.release =
+            unlocked_f32(s.noise_voice.release, n, "release", "noise.release", locked);
+        s.noise_voice.filter_lfo_rate = unlocked_f32(
+            s.noise_voice.filter_lfo_rate,
+            n,
+            "filter_lfo_rate",
+            "noise.filter_lfo_rate",
+            locked,
+        );
+        s.noise_voice.filter_lfo_depth = unlocked_f32(
+            s.noise_voice.filter_lfo_depth,
+            n,
+            "filter_lfo_depth",
+            "noise.filter_lfo_depth",
+            locked,
+        );
+        s.noise_voice.sh_rate =
+            unlocked_f32(s.noise_voice.sh_rate, n, "sh_rate", "noise.sh_rate", locked);
+        s.noise_voice.sh_depth = unlocked_f32(
+            s.noise_voice.sh_depth,
+            n,
+            "sh_depth",
+            "noise.sh_depth",
+            locked,
+        );
     }
 
     if in_scope("granular")

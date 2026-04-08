@@ -26,12 +26,13 @@ drone, and textural work. These additions would close that gap:
   new params: delay_wow_flutter, delay_saturation
 - [x] **Reverb freeze / infinite hold** — `reverb_freeze` bool sets feedback=1.0
   and input=0.0, freezing the tail indefinitely for drone/ambient
-- [ ] **Pad presets** — AN1X presets for warm pad, evolving texture, glass pad,
-  sub drone; LLM style entries for "ambient", "drone", "meditation"
-- [ ] **Noise voice improvements** — envelope (attack/release), filter LFO,
-  sample-and-hold modulation for rhythmic texture
-- [ ] **Cross-modulation** — FM between voices (bass → AN1X pitch, noise →
-  filter cutoff) for complex evolving textures
+- [x] **Pad presets** — 4 AN1X presets (warm pad, evolving texture, glass pad,
+  sub drone); meditation style added; dark/space ambient baselines now enable
+  AN1X with pad settings and tape delay wow/flutter
+- [x] **Noise voice improvements** — AR envelope (attack 5s, release 10s),
+  filter LFO (0.05–10 Hz), sample-and-hold modulation (0.5–20 Hz)
+- [x] **Cross-modulation** — bass → AN1X pitch FM (±24 st), noise → bass filter
+  cutoff; params xmod_bass_to_an1x_pitch, xmod_noise_to_filter in FxState
 
 ### DSP improvements
 

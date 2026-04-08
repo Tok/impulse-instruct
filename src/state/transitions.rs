@@ -357,6 +357,118 @@ pub fn apply_boc_preset(state: AppState) -> AppState {
     s
 }
 
+/// Warm Pad preset — lush, slow-moving, classic analog pad sound.
+pub fn apply_warm_pad_preset(state: AppState) -> AppState {
+    let mut s = state;
+    s.an1x.enabled = true;
+    s.an1x.osc1_wave = crate::state::An1xWave::Saw;
+    s.an1x.osc2_wave = crate::state::An1xWave::Saw;
+    s.an1x.osc1_level = 0.75;
+    s.an1x.osc2_level = 0.7;
+    s.an1x.osc2_detune = 0.52;
+    s.an1x.sub_level = 0.3;
+    s.an1x.filter_cutoff = 0.35;
+    s.an1x.filter_resonance = 0.15;
+    s.an1x.filter_env_amount = 0.55;
+    s.an1x.filter_attack = 0.4;
+    s.an1x.filter_decay = 0.6;
+    s.an1x.filter_sustain = 0.4;
+    s.an1x.filter_release = 0.55;
+    s.an1x.amp_attack = 0.45;
+    s.an1x.amp_decay = 0.5;
+    s.an1x.amp_sustain = 0.7;
+    s.an1x.amp_release = 0.6;
+    s.an1x.drift = 0.08;
+    s.an1x.volume = 0.7;
+    s
+}
+
+/// Evolving Texture preset — slowly morphing sound with LFO on filter.
+pub fn apply_evolving_texture_preset(state: AppState) -> AppState {
+    let mut s = state;
+    s.an1x.enabled = true;
+    s.an1x.osc1_wave = crate::state::An1xWave::Saw;
+    s.an1x.osc2_wave = crate::state::An1xWave::Triangle;
+    s.an1x.osc1_level = 0.6;
+    s.an1x.osc2_level = 0.8;
+    s.an1x.osc2_detune = 0.54;
+    s.an1x.filter_cutoff = 0.5;
+    s.an1x.filter_resonance = 0.35;
+    s.an1x.filter_env_amount = 0.6;
+    s.an1x.filter_attack = 0.3;
+    s.an1x.filter_decay = 0.7;
+    s.an1x.filter_sustain = 0.3;
+    s.an1x.filter_release = 0.7;
+    s.an1x.amp_attack = 0.5;
+    s.an1x.amp_decay = 0.6;
+    s.an1x.amp_sustain = 0.55;
+    s.an1x.amp_release = 0.75;
+    s.an1x.lfo_rate = 0.06;
+    s.an1x.lfo_depth = 0.25;
+    s.an1x.lfo_target = crate::state::An1xLfoTarget::FilterCutoff;
+    s.an1x.lfo_delay = 0.5;
+    s.an1x.drift = 0.2;
+    s.an1x.volume = 0.65;
+    s
+}
+
+/// Glass Pad preset — bright, crystalline, shimmering pad.
+pub fn apply_glass_pad_preset(state: AppState) -> AppState {
+    let mut s = state;
+    s.an1x.enabled = true;
+    s.an1x.osc1_wave = crate::state::An1xWave::Triangle;
+    s.an1x.osc2_wave = crate::state::An1xWave::Sine;
+    s.an1x.osc1_level = 0.9;
+    s.an1x.osc2_level = 0.5;
+    s.an1x.osc2_detune = 0.53;
+    s.an1x.osc2_octave = 1;
+    s.an1x.filter_cutoff = 0.7;
+    s.an1x.filter_resonance = 0.4;
+    s.an1x.filter_env_amount = 0.62;
+    s.an1x.filter_attack = 0.2;
+    s.an1x.filter_decay = 0.5;
+    s.an1x.filter_sustain = 0.5;
+    s.an1x.filter_release = 0.65;
+    s.an1x.amp_attack = 0.35;
+    s.an1x.amp_decay = 0.45;
+    s.an1x.amp_sustain = 0.6;
+    s.an1x.amp_release = 0.8;
+    s.an1x.hard_sync = true;
+    s.an1x.drift = 0.05;
+    s.an1x.volume = 0.6;
+    s
+}
+
+/// Sub Drone preset — deep, sustained, barely audible movement.
+pub fn apply_sub_drone_preset(state: AppState) -> AppState {
+    let mut s = state;
+    s.an1x.enabled = true;
+    s.an1x.osc1_wave = crate::state::An1xWave::Sine;
+    s.an1x.osc2_wave = crate::state::An1xWave::Triangle;
+    s.an1x.osc1_level = 0.9;
+    s.an1x.osc2_level = 0.4;
+    s.an1x.osc2_detune = 0.505;
+    s.an1x.osc2_octave = -1;
+    s.an1x.sub_level = 0.6;
+    s.an1x.filter_cutoff = 0.2;
+    s.an1x.filter_resonance = 0.1;
+    s.an1x.filter_env_amount = 0.5;
+    s.an1x.filter_attack = 0.6;
+    s.an1x.filter_decay = 0.8;
+    s.an1x.filter_sustain = 0.6;
+    s.an1x.filter_release = 0.9;
+    s.an1x.amp_attack = 0.7;
+    s.an1x.amp_decay = 0.7;
+    s.an1x.amp_sustain = 0.8;
+    s.an1x.amp_release = 0.95;
+    s.an1x.lfo_rate = 0.03;
+    s.an1x.lfo_depth = 0.08;
+    s.an1x.lfo_target = crate::state::An1xLfoTarget::Pitch;
+    s.an1x.drift = 0.25;
+    s.an1x.volume = 0.7;
+    s
+}
+
 // ─── LLM state update — see llm_apply.rs ─────────────────────────────────────
 
 // ─── Pattern bank & chain ─────────────────────────────────────────────────────

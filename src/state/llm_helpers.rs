@@ -469,4 +469,14 @@ pub(super) fn apply_fx_update(
     );
     u!(s.fx.autotune_mix, "autotune_mix", "fx.autotune_mix");
     u!(s.fx.master_volume, "master_volume", "fx.master_volume");
+    u!(
+        s.fx.xmod_bass_to_an1x_pitch,
+        "xmod_bass_to_an1x_pitch",
+        "fx.xmod_bass_to_an1x_pitch"
+    );
+    u!(
+        s.fx.xmod_noise_to_filter,
+        "xmod_noise_to_filter",
+        "fx.xmod_noise_to_filter"
+    );
 }

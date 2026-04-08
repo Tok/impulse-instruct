@@ -757,21 +757,20 @@ impl DspState {
                     .process(p.hihat_open909_decay, 0.8, p.hihat909_volume, sr);
             let clap = self.clap909.process(p.clap909_decay, p.clap909_volume, sr);
             let rim = self.rim909.process(0.7, 0.3, 0.15, 0.75, sr);
-            let noise_out = if p.noise_voice_enabled {
-                self.noise_voice.process(
-                    p.noise_voice_volume,
-                    p.noise_voice_color,
-                    p.noise_voice_cutoff,
-                    sr,
-                )
-            } else {
-                0.0
-            };
+            let noise_out = self.noise_voice.process(sr, &p);
             let hoover_out = if p.hoover_enabled {
                 self.hoover.process(sr, &p)
             } else {
                 0.0
             };
+            // Cross-modulation: bass → AN1X pitch (one-sample delay via bass_out)
+            if p.xmod_bass_to_an1x_pitch > 0.001 {
+                p.lfo_pitch_mod_st += bass_out * p.xmod_bass_to_an1x_pitch * 24.0;
+            }
+            // Cross-modulation: noise → bass filter cutoff (for next frame)
+            if p.xmod_noise_to_filter > 0.001 {
+                p.cutoff = (p.cutoff + noise_out * p.xmod_noise_to_filter * 0.5).clamp(0.0, 1.0);
+            }
             let an1x_out = if p.an1x_enabled {
                 self.an1x.process(sr, &p)
             } else {
