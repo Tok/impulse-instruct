@@ -397,6 +397,11 @@ pub(super) fn apply_fx_update(
         "reverb_gate_time",
         "fx.reverb_gate_time"
     );
+    if !locked.contains("fx.reverb_freeze")
+        && let Some(v) = fx.get("reverb_freeze").and_then(|v| v.as_bool())
+    {
+        s.fx.reverb_freeze = v;
+    }
     // master_pitch_st: -12..+12 stored raw; unlocked_f32 clamp is applied via min/max
     if let Some(v) = fx.get("master_pitch_st").and_then(|v| v.as_f64()) {
         let path = "fx.master_pitch_st";

@@ -31,8 +31,13 @@ impl Reverb {
         }
     }
 
-    pub(super) fn process(&mut self, input: f32, room_size: f32, damp: f32) -> f32 {
-        let feedback = room_size * 0.28 + 0.7; // 0.7–0.98
+    pub(super) fn process(&mut self, input: f32, room_size: f32, damp: f32, freeze: bool) -> f32 {
+        // Freeze: feedback = 1.0, no new input → reverb tail holds indefinitely
+        let (feedback, input) = if freeze {
+            (1.0, 0.0)
+        } else {
+            (room_size * 0.28 + 0.7, input) // 0.7–0.98
+        };
         let damp1 = damp * 0.4;
         let damp2 = 1.0 - damp1;
 

@@ -547,6 +547,8 @@ pub struct FxState {
     pub reverb_mix: f32,  // 0–1 wet/dry
     #[serde(default)]
     pub reverb_gate_time: f32, // 0 = no gate; 0.01–2.0 s gate close time (gated reverb)
+    #[serde(default)]
+    pub reverb_freeze: bool, // true = infinite hold, tail loops indefinitely
     pub delay_time: f32,  // 0–1 → 0–2000 ms
     pub delay_feedback: f32, // 0–1
     pub delay_mix: f32,   // 0–1 wet/dry
@@ -594,6 +596,7 @@ impl Default for FxState {
             reverb_damp: 0.5,
             reverb_mix: 0.0,
             reverb_gate_time: 0.0,
+            reverb_freeze: false,
             delay_time: 0.375,
             delay_feedback: 0.4,
             delay_mix: 0.0,

@@ -24,8 +24,8 @@ drone, and textural work. These additions would close that gap:
 - [x] **Tape delay with modulation** — wow/flutter LFO modulates delay read
   position, tape saturation soft-clips feedback, max time extended to 2s;
   new params: delay_wow_flutter, delay_saturation
-- [ ] **Reverb freeze / infinite hold** — button or param that freezes the
-  reverb tail indefinitely (feedback = 1.0), useful for drone/ambient pads
+- [x] **Reverb freeze / infinite hold** — `reverb_freeze` bool sets feedback=1.0
+  and input=0.0, freezing the tail indefinitely for drone/ambient
 - [ ] **Pad presets** — AN1X presets for warm pad, evolving texture, glass pad,
   sub drone; LLM style entries for "ambient", "drone", "meditation"
 - [ ] **Noise voice improvements** — envelope (attack/release), filter LFO,

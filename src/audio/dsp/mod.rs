@@ -349,9 +349,15 @@ impl DspState {
                 }
             }
             FxStep::Reverb => {
-                if p.reverb_mix > 0.001 {
-                    let wet = self.reverb.process(sig, p.reverb_size, p.reverb_damp);
-                    sig * (1.0 - p.reverb_mix) + wet * p.reverb_mix * gate_env
+                if p.reverb_mix > 0.001 || p.reverb_freeze {
+                    let wet =
+                        self.reverb
+                            .process(sig, p.reverb_size, p.reverb_damp, p.reverb_freeze);
+                    if p.reverb_freeze {
+                        wet // freeze: output only the frozen tail
+                    } else {
+                        sig * (1.0 - p.reverb_mix) + wet * p.reverb_mix * gate_env
+                    }
                 } else {
                     sig
                 }
@@ -630,7 +636,6 @@ impl DspState {
             let v0 = p_base.free_eg_values[idx.min(7)];
             let v1 = p_base.free_eg_values[(idx + 1).min(7)];
             let level = v0 + (v1 - v0) * frac; // 0..1
-            // Convert to bipolar mod: depth=0.5 → no mod; depth=1 → full positive; depth=0 → full negative
             let bipolar_depth = (p_base.free_eg_depth - 0.5) * 2.0; // -1..+1
             let mod_val = level * bipolar_depth;
             match p_base.free_eg_target {
@@ -648,7 +653,6 @@ impl DspState {
             }
         }
 
-        // Apply master pitch offset to melodic voices via lfo_pitch_mod_st accumulator.
         if p.master_pitch_st.abs() > 0.001 {
             p.lfo_pitch_mod_st += p.master_pitch_st;
         }
@@ -656,9 +660,7 @@ impl DspState {
         let delay_samples =
             (p.delay_time * sr * 2.0).clamp(1.0, MAX_DELAY_SAMPLES as f32 - 2.0) as usize;
 
-        // Snapshot FX chains into stack arrays before the per-frame loop.
-        // This releases the immutable borrow on self.fx_plan so that apply_fx_step
-        // (&mut self) can be called without a borrow conflict.
+        // Snapshot FX chains into stack arrays (releases borrow on self.fx_plan).
         const MAX_CHAIN: usize = 16;
         let mut global_chain = [FxStep::Waveshaper; MAX_CHAIN];
         let mut global_len = 0usize;
