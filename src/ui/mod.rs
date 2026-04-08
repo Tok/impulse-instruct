@@ -933,7 +933,6 @@ impl eframe::App for ImpulseApp {
 
         self.draw_windows(ctx);
         self.draw_menu_and_header(ctx);
-        // ── Oscilloscope strip ────────────────────────────────────────────────
         TopBottomPanel::top("scope")
             .frame(
                 Frame::none()
@@ -942,11 +941,11 @@ impl eframe::App for ImpulseApp {
             )
             .exact_height(48.0)
             .show(ctx, |ui| {
-                scope_footer::draw_scope(ui, &self.scope_buf, &self.scope_history);
-                scope_footer::draw_ring_scope(ui, &self.scope_buf, 40.0);
+                ui.horizontal(|ui| {
+                    scope_footer::draw_ring_scope(ui, &self.scope_buf, 40.0);
+                    scope_footer::draw_scope(ui, &self.scope_buf, &self.scope_history);
+                });
             });
-
-        // ── Footer ────────────────────────────────────────────────────────────
         TopBottomPanel::bottom("footer")
             .frame(
                 Frame::none()
