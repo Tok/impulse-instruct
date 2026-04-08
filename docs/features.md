@@ -34,6 +34,7 @@ A detailed log of what's built.
 - **Modular rack** - zone-based module cards (Global/Voice/FxMod zones), RackState + Cable + PortRef, Bezier cable overlay with 3D tube rendering
 - **Cable drag-to-patch** - click+drag from any port to create a cable; right-click a port to disconnect all cables on it; port hover glow (white halo idle, pulsing ring on valid targets, faster pulse when hovered); PointingHand/Crosshair cursor feedback; scroll area disabled near ports so drag never gets stolen
 - **FX plan compilation** - `compile_fx_plan()` topologically sorts the cable graph into a `FxPlan`; `process_block()` iterates the plan instead of a fixed chain; default rack cables mirror the original serial order
+- **Cable cycle detection** - `connect()` rejects audio cables that would create cycles (BFS reachability check); `strip_audio_cycles()` sanitizes session data on load; grayscale cable colors (R=G=B)
 - **Per-voice FX buses** - voice mix split into 8 buses (AcidBass, DrumKit808, DrumKit909, HooverLead, An1xVoice, AmenSampler, NoiseVoice, GranularTexture) + TTS bus; each routed through its compiled chain before the global chain
 - **Gated reverb** - `fx.reverb_gate_time` (0-2 s), GATE knob in FX panel
 - **Master pitch offset** - `fx.master_pitch_st` (+-12 st), PITCH knob in MASTER group
@@ -65,7 +66,8 @@ A detailed log of what's built.
 - **Cable-driven scope** - `PortKind::Control` cables from agent to module define what each agent may control; `scope_from_control_cables()` resolves scope at inference time; empty scope = agent controls everything
 - **Dynamic spawning** - agents can request new agents (`LlmAction::SpawnAgent`) or dismiss themselves (`LlmAction::DismissAgent`) via JSON; gated by `agent_autonomy` flag; auto-wire control cables on spawn
 - **VRAM budget module** - `src/llm/vram.rs` with model profiles (Gemma, Bonsai, DeepSeek, Qwen3), VRAM estimates, and preset configurations
-- **Startup wizard** - first-launch modal detects GPU VRAM, shows preset selector (Solo/Duo/Swarm/Band/Voices/Lite) with budget bar; "Resume last session" as default when prior session exists; persists `wizard_done` in session.json
+- **VRAM budget guard** - `would_exceed_vram()` rejects agent spawns that would exceed GPU memory; checked at SpawnAgent action + server pool acquire; prevents silent OOM crashes
+- **Startup wizard** - always shows on startup; resume last session or start fresh with a preset (Solo/Duo/Swarm/Band/Voices/Lite); GPU VRAM detection + budget bar
 - **VRAM estimate on agent cards** - shows `~X.XG VRAM` below model selector
 - **Agent persona in log** - output and thinking lines show the correct agent persona name, not the global singleton
 - **Console routes to agents** - typed prompts go to the first enabled agent instead of bypassing the agent system
@@ -141,7 +143,7 @@ A detailed log of what's built.
 ## Testing and build
 
 - Unit tests across submodules (seq_tests, state_tests, llm_tests, audio::analysis, jam_tools_tests, music_api_tests, ui::note, ui::llm_strip), split at 1000-line limit per file
-- 390 unit tests total
+- 431 unit tests total
 - 39 LLM integration tests in 3 suites: `llm_suite` (core), `llm_suite_style` (artist refs), `llm_suite_theory` (music theory + producer lingo)
 - Pre-commit hook: fmt + clippy + tests + 1000-line LOC limit
 - `scripts/run-tests.sh --coverage` - HTML coverage report (lcov)

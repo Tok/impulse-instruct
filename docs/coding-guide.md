@@ -307,7 +307,7 @@ Before every commit, verify:
 - [ ] `cargo fmt` applied to all changed files
 - [ ] `cargo clippy -- -D warnings` reports 0 errors
 - [ ] `cargo clippy --tests -- -D warnings` reports 0 errors
-- [ ] `cargo test` passes (274+ tests, all green)
+- [ ] `cargo test` passes (431+ tests, all green)
 - [ ] New pure functions have a test in `src/tests/`
 - [ ] No test file exceeds 1000 lines
 - [ ] No allocations inside `process_block()` or the cpal callback
