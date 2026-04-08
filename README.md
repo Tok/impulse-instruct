@@ -115,7 +115,8 @@ A **startup wizard** on first launch detects your GPU, shows available VRAM, and
 - 909-style drum machine - kick, snare, two hihats, clap, rim
 - AN1X-style virtual analog voice - dual oscillator, hard sync, ring mod, two independent ADSRs, two per-voice LFOs, pitch envelope, free EG (8-step drawable envelope)
 - Hoover lead synth - supersaw into aggressive highpass sweep
-- Standalone noise voice - white/pink/brown with filter
+- Standalone noise voice - white/pink/brown with AR envelope, filter LFO, sample-and-hold modulation
+- Granular texture voice - overlapping micro-grains from loaded WAV with density, size, position jitter, pitch scatter
 - Amen break sampler voice - loop-playback with pitch control
 
 **Sequencer**
@@ -128,7 +129,9 @@ A **startup wizard** on first launch detects your GPU, shows available VRAM, and
 **FX and modulation**
 - Reverb, delay (echo), chorus/ensemble, 4-stage phaser, ring modulator
 - Waveshaper (pre-FX tanh saturation), bitcrush (bit depth + rate), 3-band EQ, tape saturation, master drive
-- Master compressor/limiter
+- Master compressor/limiter; multiband mode (3-band crossover); sidechain compression (kick ducks bass/pad)
+- Tape delay with wow/flutter modulation and feedback saturation; reverb freeze (infinite hold)
+- Stereo width control (mid/side decorrelation); cross-modulation (bass→AN1X pitch FM, noise→filter)
 - Modular rack: drag-to-patch cable connections between voices and FX modules; right-click a port to disconnect; animated Bezier cables with signal flow dots; per-voice FX buses; topology compiled live
 - 4-slot LFO matrix - any waveform, BPM-syncable, wireable to any parameter
 
@@ -144,6 +147,8 @@ A **startup wizard** on first launch detects your GPU, shows available VRAM, and
 - Lock system: touch any knob to claim it; agents will not overwrite user-owned parameters
 - Scale and root note in system prompt; bass notes snapped to current scale
 - Instruction set: pre-written JSON templates for common phrases ("make an amen break", etc.)
+- Agent memory: conversation snippets persist across sessions; style learning adapts to user edits
+- Inter-agent messaging: agents send structured hints to each other via JSON
 - Context-aware: rolling conversation history, auto-restart when approaching token limit
 - Adjustable sampling params (temperature, top_k, top_p, min_p, repeat penalty, seed)
 - Chain-of-thought reasoning visible in the log (toggle)
@@ -371,7 +376,9 @@ The LLM understands musical intent well. When a style doesn't land, the cause is
 
 **What works well:** acid bass. The ladder filter, env mod, resonance, and slide are all solid - give it some heat and the right prompt and it will do acid convincingly.
 
-**What doesn't yet:** the hoover lead exists but doesn't sound like a hoover - it's more of a lead synth than the vacuum-cleaner screech from *Dominator*. The Amen break is synthesised step-by-step rather than sampled. True ambient - glacial sweeps, very slow LFO movement, long attack/release textures - is partially wired but not reliably delivered. Some genre textures (dub techno FX sends) are partially wired but not finished.
+**What doesn't yet:** the hoover lead exists but doesn't sound like a hoover - it's more of a lead synth than the vacuum-cleaner screech from *Dominator*. The Amen break is synthesised step-by-step rather than sampled. Some genre textures (dub techno FX sends) are partially wired but not finished.
+
+**What's improved:** ambient and drone now have dedicated tools - long envelopes (10s attack, 30s release), granular texture voice, reverb freeze, cross-modulation, and four AN1X pad presets. The meditation, dark ambient, and space ambient styles work well.
 
 A lot of what you get depends on how you prompt it, and on the style and system prompt definitions in `src/llm/styles.json` and `src/llm/prompt.rs`. These are plain text and JSON - you're encouraged to edit them, tune the style entries for the genres you care about, and experiment. The model will follow a good system prompt surprisingly faithfully.
 

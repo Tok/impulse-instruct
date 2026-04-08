@@ -1,6 +1,6 @@
 # Impulse Instruct - Implemented Features
 
-A detailed log of what's built. The roadmap lives in [PLAN.md](../PLAN.md).
+A detailed log of what's built.
 
 ---
 
@@ -10,7 +10,7 @@ A detailed log of what's built. The roadmap lives in [PLAN.md](../PLAN.md).
 - **Hoover lead** - supersaw into aggressive highpass sweep, pitch LFO, dedicated voice in UI
 - **AN1X-style VA voice** - dual OSC (saw/square/tri/sin/noise), OSC2 coarse+fine detune, hard sync, ring mod, sub-osc, 3 filter modes, ADSR x 2, pitch envelope, per-voice LFO x 2 with delay/fade, pitch drift, free EG (8-step drawable envelope)
 - **Drum machines** - Kit A (808-style: kick with pitch envelope, snare, hihat x 2, toms) + Kit B (909-style: kick, snare, hihat x 2, clap, rim)
-- **Standalone noise voice** - white/pink/brown, volume + color + cutoff, LLM-addressable
+- **Standalone noise voice** - white/pink/brown, volume + color + cutoff, AR envelope (5s attack, 10s release), filter LFO (0.05-10 Hz), sample-and-hold modulation (0.5-20 Hz), LLM-addressable
 - **Amen break sampler voice** - DrumVoice::Amen in sequencer, linear-interp playback, AudioCommand::LoadSampler, AMEN tab with path/pitch/volume/loop UI
 - **Gabber kick** - CLIP knob on both kicks: hard flat-top distortion, LLM-addressable via `kit_a.kick.clip` / `kit_b.kick.clip`
 - **LFO matrix** - 4 independent slots, any waveform, wireable to any parameter, BPM sync, phase reset on transport start
@@ -34,7 +34,7 @@ A detailed log of what's built. The roadmap lives in [PLAN.md](../PLAN.md).
 - **Modular rack** - zone-based module cards (Global/Voice/FxMod zones), RackState + Cable + PortRef, Bezier cable overlay with 3D tube rendering
 - **Cable drag-to-patch** - click+drag from any port to create a cable; right-click a port to disconnect all cables on it; port hover glow (white halo idle, pulsing ring on valid targets, faster pulse when hovered); PointingHand/Crosshair cursor feedback; scroll area disabled near ports so drag never gets stolen
 - **FX plan compilation** - `compile_fx_plan()` topologically sorts the cable graph into a `FxPlan`; `process_block()` iterates the plan instead of a fixed chain; default rack cables mirror the original serial order
-- **Per-voice FX buses** - voice mix split into 7 buses (AcidBass, DrumKit808, DrumKit909, HooverLead, An1xVoice, AmenSampler, NoiseVoice) + TTS bus; each routed through its compiled chain before the global chain
+- **Per-voice FX buses** - voice mix split into 8 buses (AcidBass, DrumKit808, DrumKit909, HooverLead, An1xVoice, AmenSampler, NoiseVoice, GranularTexture) + TTS bus; each routed through its compiled chain before the global chain
 - **Gated reverb** - `fx.reverb_gate_time` (0-2 s), GATE knob in FX panel
 - **Master pitch offset** - `fx.master_pitch_st` (+-12 st), PITCH knob in MASTER group
 - **Autotune FX module** - `ModuleKind::FxAutotune`; two-head grain overlap-add pitch shifter (`fx.autotune_amount` 0–1 → 0..+12 st, `fx.autotune_mix`); pre-allocated 4096-sample ring buffer (no audio-thread allocations); LLM-addressable via `fx.autotune_amount` / `fx.autotune_mix`
@@ -141,7 +141,7 @@ A detailed log of what's built. The roadmap lives in [PLAN.md](../PLAN.md).
 ## Testing and build
 
 - Unit tests across submodules (seq_tests, state_tests, llm_tests, audio::analysis, jam_tools_tests, music_api_tests, ui::note, ui::llm_strip), split at 1000-line limit per file
-- 285 unit tests total (as of v0.6.4)
+- 390 unit tests total
 - 39 LLM integration tests in 3 suites: `llm_suite` (core), `llm_suite_style` (artist refs), `llm_suite_theory` (music theory + producer lingo)
 - Pre-commit hook: fmt + clippy + tests + 1000-line LOC limit
 - `scripts/run-tests.sh --coverage` - HTML coverage report (lcov)
@@ -188,3 +188,52 @@ A detailed log of what's built. The roadmap lives in [PLAN.md](../PLAN.md).
 - Fresh install requires preset selection ("Start" disabled until chosen)
 - Rack hidden + sequencer stopped while wizard is visible
 - Clean-slate preset application (removes all existing agents first)
+
+### Ambient / textural synthesis
+
+- **Long envelopes** - AN1X ADSR attack up to 10s, release up to 30s for glacial pads; bass 303 decay extended to 5s
+- **Granular texture module** (`ModuleKind::GranularTexture`) - new voice: loads WAV via `AudioCommand::LoadGranular`, plays up to 32 overlapping Hann-windowed grains with density, size, position, jitter, pitch scatter, spray params; full rack/UI/LLM integration
+- **Tape delay with modulation** - wow/flutter LFO modulates delay read position (fractional interpolation), soft-clip tape saturation on feedback, max time extended to 2s; `delay_wow_flutter`, `delay_saturation` params
+- **Reverb freeze** - `reverb_freeze` bool sets comb feedback to 1.0 and input to 0.0; tail holds indefinitely for drone/ambient
+- **Pad presets** - 4 AN1X presets: warm pad, evolving texture, glass pad, sub drone; meditation style in styles.json; dark/space ambient baselines now enable AN1X with pad settings
+- **Noise voice improvements** - AR envelope (attack 5s, release 10s), filter LFO (0.05-10 Hz), sample-and-hold modulation (0.5-20 Hz) for rhythmic texture
+- **Cross-modulation** - bass osc → AN1X pitch FM (±24 st), noise → bass filter cutoff; `xmod_bass_to_an1x_pitch`, `xmod_noise_to_filter` params
+
+### DSP improvements
+
+- **Per-voice bass params** - `BassVoiceParams` struct snapshotted independently for all 4 bass voices; each voice reads its own cutoff/resonance/waveform/filter mode; voice 0 synced with LFO/free-EG modulation
+- **Sidechain compression** - kick (808+909) ducks bass/pad/hoover/granular; `sidechain_amount`, `sidechain_attack` (0.1-50ms), `sidechain_release` (10-500ms)
+- **Multiband compressor** - 3-band crossover at 200 Hz / 3 kHz with independent per-band envelope followers; `compressor_multiband` param toggles mode
+- **Stereo width control** - chorus-based decorrelation on master output; `stereo_width` (0=mono, 0.5=normal, 1=wide)
+
+### UI/UX improvements
+
+- **Clickable footer mode toggles** - double-click Ctrl/Alt/Tab indicators to lock mode on without holding key; locks stored in egui temp data, read by zoom/widgets/cables
+- **Per-module collapse** - click title bar drag zone to collapse/expand module cards; state stored in egui temp data per module ID
+- **Module drag reorder polish** - insertion line indicator during drag; undo support on reorder
+- **Keyboard shortcuts help overlay** - ? or F1 toggles foreground overlay listing all shortcuts
+- **Undo for agent changes** - `push_history()` before agent spawn/dismiss mutations
+
+### Visualization
+
+- **CRT scan-line overlay** - scan lines (3px spacing, alpha 25) + edge vignette; toggled via `crt_effect` in UiPrefs
+- **Ring scope** - polar waveform plot of scope buffer with simulated write-head marker; displayed alongside linear oscilloscope
+
+### Intelligence improvements
+
+- **Agent memory** - `_comment` snippets persisted in per-agent `memory[]` (max 20); injected into system prompt section; survives session restart via session.json serialization
+- **Style learning** - `observe_user_edit()` records "user prefers high/low X" into `style_observations[]` (max 10); injected as learned preferences in system prompt
+- **Inter-agent messaging** - `SendHint` LlmAction via JSON `send_hint` field; hints queued in target agent's `pending_hints[]` (max 5); consumed on next inference cycle and injected into prompt
+
+### Refactoring and test coverage
+
+- **390 unit tests** (up from 285); new test suites: `llm_apply_tests` (68), `persistence_tests` (25), `helpers_tests` (7)
+- **`rack.connect_control(from_id, to_id)`** - replaces 8-line PortRef boilerplate at 6 call sites
+- **`spawn_agent()` pure function** - transitions.rs; wizard.rs and SpawnAgent handler refactored to use it
+- **`format_llm_display()` pure function** - extracted from drain_llm_outputs into transitions.rs
+- **`BassVoiceParams` struct** - per-voice AudioParams snapshot
+- **Bass303 extracted** to `src/audio/dsp/bass303.rs` (line-limit split)
+- **DSP utilities extracted** to `src/audio/dsp/dsp_util.rs` (midi_to_hz, tanh)
+- **Samplers extracted** to `src/audio/dsp/samplers.rs` (AmenVoice, GranularVoice)
+- **Dead code removed** - `sync_default_agent`
+- **Windows code-signing** - signtool step in `build-all.bat` (set SIGN_CERT + SIGN_PASS)
