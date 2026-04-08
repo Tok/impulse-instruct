@@ -350,7 +350,11 @@ impl ImpulseApp {
             },
             show_sysinfo: false,
             show_wizard: !crate::state::load_session()
-                .and_then(|s| s.wizard_done)
+                .map(|s| {
+                    // Treat as done if wizard_done is set OR if agents exist (old session)
+                    s.wizard_done.unwrap_or(false)
+                        || s.llm_agents.as_ref().is_some_and(|a| !a.is_empty())
+                })
                 .unwrap_or(false),
             wizard_selected: if crate::state::load_session()
                 .and_then(|s| s.llm_agents)
