@@ -105,10 +105,12 @@ pub fn set_param_mode(state: AppState, path: &str, mode: ParamMode) -> AppState 
 pub mod ui_prefs;
 pub use ui_prefs::{AutosaveInterval, HuthStyle, KnobSize, KnobStyle, PadSize, UiPrefs};
 
+mod fx_plan;
 pub mod rack;
+pub use fx_plan::compile_fx_plan;
 pub use rack::{
     Cable, CableColor, FxPlan, FxStep, ModuleKind, PortDir, PortKind, PortRef, RackModule,
-    RackState, Zone, compile_fx_plan, rack_kind_name_matches, scope_from_control_cables,
+    RackState, Zone, rack_kind_name_matches, scope_from_control_cables,
 };
 
 // ─── Amen / WAV sampler voice state ──────────────────────────────────────────

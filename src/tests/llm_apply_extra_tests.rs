@@ -42,29 +42,31 @@ mod llm_apply_rack_tests {
     fn rack_connect_creates_cable() {
         let s = AppState::default();
         let initial_cables = s.rack.cables.len();
+        // Use a forward-direction connection (waveshaper→eq) that doesn't
+        // already exist as a direct cable and won't create a cycle.
         let update = serde_json::json!({
-            "rack": { "connect": [{ "from": "bitcrush", "to": "delay" }] }
+            "rack": { "connect": [{ "from": "waveshaper", "to": "eq" }] }
         });
         let s = apply_llm_update(s, &update, &[]);
         assert!(
             s.rack.cables.len() > initial_cables || {
-                let bc_id = s
+                let ws_id = s
                     .rack
                     .modules
                     .iter()
-                    .find(|m| m.kind == ModuleKind::FxBitcrush)
+                    .find(|m| m.kind == ModuleKind::FxWaveshaper)
                     .map(|m| m.id);
-                let del_id = s
+                let eq_id = s
                     .rack
                     .modules
                     .iter()
-                    .find(|m| m.kind == ModuleKind::FxDelay)
+                    .find(|m| m.kind == ModuleKind::FxEq)
                     .map(|m| m.id);
-                if let (Some(b), Some(d)) = (bc_id, del_id) {
+                if let (Some(w), Some(e)) = (ws_id, eq_id) {
                     s.rack
                         .cables
                         .iter()
-                        .any(|c| c.from.module_id == b && c.to.module_id == d)
+                        .any(|c| c.from.module_id == w && c.to.module_id == e)
                 } else {
                     false
                 }

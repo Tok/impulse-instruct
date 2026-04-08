@@ -124,7 +124,11 @@ pub fn load_session() -> Option<SessionData> {
 
 /// Apply loaded session data onto a mutable AppState.
 pub fn apply_session(state: &mut AppState, data: SessionData) {
-    if let Some(rack) = data.rack {
+    if let Some(mut rack) = data.rack {
+        let removed = rack.strip_audio_cycles();
+        if removed > 0 {
+            log::warn!("Session: removed {removed} cyclic audio cable(s) from rack");
+        }
         state.rack = rack;
     }
     if let Some(v) = data.active_style {

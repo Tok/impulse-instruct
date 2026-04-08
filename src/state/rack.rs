@@ -9,7 +9,7 @@
 // still uses the existing fixed chain; cable state drives the visual routing
 // overlay and will be wired into `compile_fx_plan` in a follow-up.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet, VecDeque};
 
 use serde::{Deserialize, Serialize};
 
@@ -52,40 +52,40 @@ pub struct PortRef {
 /// A colour assigned to a patch cable for visual differentiation.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum CableColor {
-    Teal,
-    Amber,
-    Rose,
-    Violet,
-    Lime,
-    Cyan,
-    Orange,
-    Pink,
+    Gray,
+    Slate,
+    Silver,
+    Ash,
+    Stone,
+    Iron,
+    Pewter,
+    Smoke,
 }
 
 impl CableColor {
     /// All variants in a cycle-friendly order.
     pub const ALL: &'static [Self] = &[
-        Self::Teal,
-        Self::Amber,
-        Self::Rose,
-        Self::Violet,
-        Self::Lime,
-        Self::Cyan,
-        Self::Orange,
-        Self::Pink,
+        Self::Gray,
+        Self::Slate,
+        Self::Silver,
+        Self::Ash,
+        Self::Stone,
+        Self::Iron,
+        Self::Pewter,
+        Self::Smoke,
     ];
 
     /// egui RGBA colour for rendering.
     pub fn egui_color(self) -> egui::Color32 {
         match self {
-            Self::Teal => egui::Color32::from_rgb(0, 200, 180),
-            Self::Amber => egui::Color32::from_rgb(255, 190, 40),
-            Self::Rose => egui::Color32::from_rgb(240, 80, 110),
-            Self::Violet => egui::Color32::from_rgb(180, 80, 240),
-            Self::Lime => egui::Color32::from_rgb(140, 220, 60),
-            Self::Cyan => egui::Color32::from_rgb(60, 200, 255),
-            Self::Orange => egui::Color32::from_rgb(255, 140, 30),
-            Self::Pink => egui::Color32::from_rgb(255, 130, 200),
+            Self::Gray => egui::Color32::from_rgb(90, 90, 90),
+            Self::Slate => egui::Color32::from_rgb(120, 120, 120),
+            Self::Silver => egui::Color32::from_rgb(160, 160, 160),
+            Self::Ash => egui::Color32::from_rgb(140, 140, 140),
+            Self::Stone => egui::Color32::from_rgb(100, 100, 100),
+            Self::Iron => egui::Color32::from_rgb(75, 75, 75),
+            Self::Pewter => egui::Color32::from_rgb(110, 110, 110),
+            Self::Smoke => egui::Color32::from_rgb(130, 130, 130),
         }
     }
 }
@@ -383,10 +383,77 @@ impl RackState {
         }
     }
 
-    /// Add a cable between two ports (no duplicate check — caller ensures validity).
-    pub fn connect(&mut self, from: PortRef, to: PortRef) {
+    /// Remove audio cables that participate in cycles.  Non-audio cables are
+    /// kept unconditionally.  Returns the number of cables removed.
+    pub fn strip_audio_cycles(&mut self) -> usize {
+        let before = self.cables.len();
+        // Rebuild cables, keeping only those that don't create a cycle when
+        // added incrementally (same logic as connect()).
+        let old_cables = std::mem::take(&mut self.cables);
+        for cable in old_cables {
+            if cable.from.kind == PortKind::Audio
+                && self.would_create_audio_cycle(cable.from.module_id, cable.to.module_id)
+            {
+                log::warn!(
+                    "Stripped cyclic audio cable {} → {} during load",
+                    cable.from.module_id,
+                    cable.to.module_id
+                );
+                continue;
+            }
+            self.cables.push(cable);
+        }
+        before - self.cables.len()
+    }
+
+    /// Returns true if adding an audio cable from → to would create a cycle.
+    pub fn would_create_audio_cycle(&self, from_id: u32, to_id: u32) -> bool {
+        if from_id == to_id {
+            return true;
+        }
+        // Build adjacency from existing audio cables, then check if to_id can
+        // already reach from_id (i.e. adding from→to would close a cycle).
+        let mut adj: HashMap<u32, Vec<u32>> = HashMap::new();
+        for c in &self.cables {
+            if c.from.kind == PortKind::Audio {
+                adj.entry(c.from.module_id)
+                    .or_default()
+                    .push(c.to.module_id);
+            }
+        }
+        // BFS from to_id — can we reach from_id?
+        let mut visited = HashSet::new();
+        let mut queue = VecDeque::new();
+        queue.push_back(to_id);
+        while let Some(node) = queue.pop_front() {
+            if node == from_id {
+                return true;
+            }
+            if visited.insert(node)
+                && let Some(neighbors) = adj.get(&node)
+            {
+                queue.extend(neighbors);
+            }
+        }
+        false
+    }
+
+    /// Add a cable between two ports. Rejects audio cables that would create a
+    /// cycle in the signal graph. Returns `true` if the cable was added.
+    pub fn connect(&mut self, from: PortRef, to: PortRef) -> bool {
+        if from.kind == PortKind::Audio
+            && self.would_create_audio_cycle(from.module_id, to.module_id)
+        {
+            log::warn!(
+                "Rejected audio cable {} → {}: would create a cycle",
+                from.module_id,
+                to.module_id
+            );
+            return false;
+        }
         let color = self.next_cable_color();
         self.cables.push(Cable { from, to, color });
+        true
     }
 
     /// Connect a control cable from `from_id` (Out) to `to_id` (In).
@@ -787,170 +854,5 @@ pub fn rack_kind_name_matches(kind: ModuleKind, name: &str) -> bool {
         ModuleKind::SpectrumAnalyzer => matches!(n.as_str(), "spectrum" | "analyser" | "analyzer"),
         ModuleKind::StereoMeter => matches!(n.as_str(), "stereo" | "correlation" | "meter"),
         ModuleKind::ActivityTimeline => matches!(n.as_str(), "timeline" | "activity" | "log"),
-    }
-}
-
-fn kind_to_fx_step(kind: ModuleKind) -> Option<FxStep> {
-    match kind {
-        ModuleKind::FxWaveshaper => Some(FxStep::Waveshaper),
-        ModuleKind::FxReverb => Some(FxStep::Reverb),
-        ModuleKind::FxDelay => Some(FxStep::Delay),
-        ModuleKind::FxBitcrush => Some(FxStep::Bitcrush),
-        ModuleKind::FxChorus => Some(FxStep::Chorus),
-        ModuleKind::FxPhaser => Some(FxStep::Phaser),
-        ModuleKind::FxRingMod => Some(FxStep::RingMod),
-        ModuleKind::FxEq => Some(FxStep::Eq),
-        ModuleKind::FxCompressor => Some(FxStep::Compressor),
-        ModuleKind::FxTapeSat => Some(FxStep::TapeSat),
-        ModuleKind::FxDrive => Some(FxStep::Drive),
-        ModuleKind::FxAutotune => Some(FxStep::Autotune),
-        _ => None,
-    }
-}
-
-/// Build an `FxPlan` from the rack cable graph using a topological sort
-/// (Kahn's algorithm) over FX-to-FX audio cable connections.
-///
-/// Only enabled FX modules that are connected to at least one other FX
-/// module (or are solo in the graph) are included.  Modules with no
-/// FX-to-FX cables are excluded so the plan is empty when nothing is patched.
-pub fn compile_fx_plan(rack: &RackState) -> FxPlan {
-    // Collect enabled FX module id → kind.
-    let fx_map: HashMap<u32, ModuleKind> = rack
-        .modules
-        .iter()
-        .filter(|m| m.enabled && kind_to_fx_step(m.kind).is_some())
-        .map(|m| (m.id, m.kind))
-        .collect();
-
-    if fx_map.is_empty() {
-        return FxPlan::default();
-    }
-
-    // Build adjacency and in-degree over FX→FX audio cables only.
-    let mut adj: HashMap<u32, Vec<u32>> = HashMap::new();
-    let mut in_degree: HashMap<u32, usize> = fx_map.keys().map(|&id| (id, 0)).collect();
-
-    for cable in &rack.cables {
-        if cable.from.kind != PortKind::Audio {
-            continue;
-        }
-        let from_fx = fx_map.contains_key(&cable.from.module_id);
-        let to_fx = fx_map.contains_key(&cable.to.module_id);
-        if from_fx && to_fx {
-            adj.entry(cable.from.module_id)
-                .or_default()
-                .push(cable.to.module_id);
-            *in_degree.entry(cable.to.module_id).or_insert(0) += 1;
-        }
-    }
-
-    // Kahn's topological sort — stable ordering via sorted initial queue.
-    let mut queue: Vec<u32> = {
-        let mut q: Vec<u32> = in_degree
-            .iter()
-            .filter(|(_, deg)| **deg == 0)
-            .map(|(id, _)| *id)
-            .collect();
-        q.sort_unstable();
-        q
-    };
-
-    let mut ordered: Vec<FxStep> = Vec::with_capacity(fx_map.len());
-    while !queue.is_empty() {
-        let id = queue.remove(0);
-        if let Some(&kind) = fx_map.get(&id)
-            && let Some(step) = kind_to_fx_step(kind)
-        {
-            ordered.push(step);
-        }
-        if let Some(neighbors) = adj.get(&id) {
-            let mut next_ready: Vec<u32> = Vec::new();
-            for &nid in neighbors {
-                if let Some(deg) = in_degree.get_mut(&nid) {
-                    *deg -= 1;
-                    if *deg == 0 {
-                        next_ready.push(nid);
-                    }
-                }
-            }
-            next_ready.sort_unstable();
-            queue.extend(next_ready);
-        }
-    }
-
-    // ── Per-voice FX routes (Voice→FX cables) ────────────────────────────────
-    // Build a map: voice module kind → ordered list of FX steps reachable via
-    // explicit Voice→FX audio cables.  A voice without such cables has no entry
-    // here and falls through to the global chain in the DSP.
-
-    // Voice module kinds that map to DSP buses.
-    const VOICE_KINDS: &[ModuleKind] = &[
-        ModuleKind::AcidBass,
-        ModuleKind::DrumKit808,
-        ModuleKind::DrumKit909,
-        ModuleKind::HooverLead,
-        ModuleKind::An1xVoice,
-        ModuleKind::AmenSampler,
-        ModuleKind::NoiseVoice,
-        ModuleKind::GranularTexture,
-        ModuleKind::EspeakNgTts,
-        ModuleKind::CoquiTts,
-    ];
-
-    // Map voice module id → kind for quick lookup.
-    let voice_id_map: HashMap<u32, ModuleKind> = rack
-        .modules
-        .iter()
-        .filter(|m| m.enabled && VOICE_KINDS.contains(&m.kind))
-        .map(|m| (m.id, m.kind))
-        .collect();
-
-    let mut voice_routes: HashMap<ModuleKind, Vec<FxStep>> = HashMap::new();
-
-    for cable in &rack.cables {
-        if cable.from.kind != PortKind::Audio {
-            continue;
-        }
-        let voice_kind = match voice_id_map.get(&cable.from.module_id) {
-            Some(&k) => k,
-            None => continue,
-        };
-        let first_fx = match fx_map.get(&cable.to.module_id) {
-            Some(&k) => k,
-            None => continue,
-        };
-        // BFS/DFS from first_fx through FX→FX adjacency to collect the sub-chain
-        // reachable from this voice.
-        let first_step = match kind_to_fx_step(first_fx) {
-            Some(s) => s,
-            None => continue,
-        };
-        let mut chain: Vec<FxStep> = vec![first_step];
-        // Walk adj from first FX module id.
-        let mut cur_id = cable.to.module_id;
-        // Follow the single-output chain (linear adjacency).
-        loop {
-            let next_ids = adj.get(&cur_id).map(|v| v.as_slice()).unwrap_or(&[]);
-            match next_ids {
-                [next_id] => {
-                    if let Some(&kind) = fx_map.get(next_id)
-                        && let Some(step) = kind_to_fx_step(kind)
-                    {
-                        chain.push(step);
-                        cur_id = *next_id;
-                    } else {
-                        break;
-                    }
-                }
-                _ => break, // fan-out or end of chain
-            }
-        }
-        voice_routes.entry(voice_kind).or_insert(chain);
-    }
-
-    FxPlan {
-        steps: ordered,
-        voice_routes,
     }
 }

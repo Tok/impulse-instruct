@@ -175,4 +175,157 @@ mod fx_plan_tests {
             .expect("should have a route");
         assert_eq!(bass_route, &[FxStep::Reverb]);
     }
+
+    #[test]
+    fn cycle_rejected_by_connect() {
+        let mut rack = RackState {
+            modules: Vec::new(),
+            cables: Vec::new(),
+            next_id: 1,
+        };
+        let a = rack.add_module(ModuleKind::FxDelay);
+        let b = rack.add_module(ModuleKind::FxReverb);
+        // A → B: fine
+        assert!(rack.connect(
+            PortRef {
+                module_id: a,
+                dir: PortDir::Out,
+                kind: PortKind::Audio,
+                index: 0
+            },
+            PortRef {
+                module_id: b,
+                dir: PortDir::In,
+                kind: PortKind::Audio,
+                index: 0
+            },
+        ));
+        // B → A: would create a cycle, must be rejected
+        assert!(!rack.connect(
+            PortRef {
+                module_id: b,
+                dir: PortDir::Out,
+                kind: PortKind::Audio,
+                index: 0
+            },
+            PortRef {
+                module_id: a,
+                dir: PortDir::In,
+                kind: PortKind::Audio,
+                index: 0
+            },
+        ));
+        assert_eq!(rack.cables.len(), 1);
+    }
+
+    #[test]
+    fn compile_fx_plan_handles_cyclic_cables_gracefully() {
+        // Manually inject a cycle (bypassing connect validation) and verify
+        // compile_fx_plan terminates without hanging.
+        let mut rack = RackState {
+            modules: Vec::new(),
+            cables: Vec::new(),
+            next_id: 1,
+        };
+        let a = rack.add_module(ModuleKind::FxDelay);
+        let b = rack.add_module(ModuleKind::FxReverb);
+        // Force a cycle by pushing cables directly
+        rack.cables.push(crate::state::Cable {
+            from: PortRef {
+                module_id: a,
+                dir: PortDir::Out,
+                kind: PortKind::Audio,
+                index: 0,
+            },
+            to: PortRef {
+                module_id: b,
+                dir: PortDir::In,
+                kind: PortKind::Audio,
+                index: 0,
+            },
+            color: crate::state::CableColor::Gray,
+        });
+        rack.cables.push(crate::state::Cable {
+            from: PortRef {
+                module_id: b,
+                dir: PortDir::Out,
+                kind: PortKind::Audio,
+                index: 0,
+            },
+            to: PortRef {
+                module_id: a,
+                dir: PortDir::In,
+                kind: PortKind::Audio,
+                index: 0,
+            },
+            color: crate::state::CableColor::Gray,
+        });
+        // Must terminate (Kahn's sort handles cycles, voice walk has visited set)
+        let plan = compile_fx_plan(&rack);
+        // Kahn's topo-sort produces empty output for nodes in cycles
+        assert!(plan.steps.is_empty());
+    }
+
+    #[test]
+    fn strip_audio_cycles_removes_cycle() {
+        let mut rack = RackState {
+            modules: Vec::new(),
+            cables: Vec::new(),
+            next_id: 1,
+        };
+        let a = rack.add_module(ModuleKind::FxDelay);
+        let b = rack.add_module(ModuleKind::FxReverb);
+        let c = rack.add_module(ModuleKind::FxChorus);
+        // Linear chain A → B → C (no cycle)
+        rack.cables.push(crate::state::Cable {
+            from: PortRef {
+                module_id: a,
+                dir: PortDir::Out,
+                kind: PortKind::Audio,
+                index: 0,
+            },
+            to: PortRef {
+                module_id: b,
+                dir: PortDir::In,
+                kind: PortKind::Audio,
+                index: 0,
+            },
+            color: crate::state::CableColor::Gray,
+        });
+        rack.cables.push(crate::state::Cable {
+            from: PortRef {
+                module_id: b,
+                dir: PortDir::Out,
+                kind: PortKind::Audio,
+                index: 0,
+            },
+            to: PortRef {
+                module_id: c,
+                dir: PortDir::In,
+                kind: PortKind::Audio,
+                index: 0,
+            },
+            color: crate::state::CableColor::Gray,
+        });
+        // Add cycle: C → A
+        rack.cables.push(crate::state::Cable {
+            from: PortRef {
+                module_id: c,
+                dir: PortDir::Out,
+                kind: PortKind::Audio,
+                index: 0,
+            },
+            to: PortRef {
+                module_id: a,
+                dir: PortDir::In,
+                kind: PortKind::Audio,
+                index: 0,
+            },
+            color: crate::state::CableColor::Gray,
+        });
+        assert_eq!(rack.cables.len(), 3);
+        let removed = rack.strip_audio_cycles();
+        assert_eq!(removed, 1); // C → A removed
+        assert_eq!(rack.cables.len(), 2); // A → B and B → C kept
+    }
 }
