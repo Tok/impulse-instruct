@@ -567,6 +567,8 @@ pub struct FxState {
     #[serde(default)]
     pub stereo_width: f32, // 0–1: 0=mono, 0.5=normal, 1=wide
     #[serde(default)]
+    pub tuning: u8, // 0=12-TET, 1=just intonation, 2=slendro, 3=pelog
+    #[serde(default)]
     pub xmod_bass_to_an1x_pitch: f32, // 0–1 bass osc → AN1X pitch FM depth
     #[serde(default)]
     pub xmod_noise_to_filter: f32, // 0–1 noise → bass filter cutoff mod depth
@@ -624,6 +626,7 @@ impl Default for FxState {
             compressor_multiband: 0.0,
             master_volume: 0.85,
             stereo_width: 0.5,
+            tuning: 0,
             xmod_bass_to_an1x_pitch: 0.0,
             xmod_noise_to_filter: 0.0,
             sidechain_amount: 0.0,

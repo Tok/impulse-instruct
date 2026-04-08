@@ -2,7 +2,7 @@
 // Extracted from mod.rs to stay under the 1000-line limit.
 
 use super::AudioParams;
-use super::dsp_util::{midi_to_hz, tanh};
+use super::dsp_util::tanh;
 use super::params;
 use super::voices::{LadderFilter, NoiseGen};
 
@@ -48,8 +48,8 @@ impl Default for Bass303 {
 }
 
 impl Bass303 {
-    pub(super) fn trigger(&mut self, note: u8, accent: bool, slide: bool) {
-        let new_freq = midi_to_hz(note);
+    pub(super) fn trigger(&mut self, note: u8, accent: bool, slide: bool, tuning: u8) {
+        let new_freq = super::dsp_util::midi_to_hz_tuned(note, tuning);
         if !self.slide {
             self.freq = new_freq;
         }

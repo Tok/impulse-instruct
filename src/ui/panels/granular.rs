@@ -1,9 +1,33 @@
 // ─── ui/panels/granular.rs ───────────────────────────────────────────────────
 // Granular texture voice panel — density, grain size, position, jitter, pitch scatter.
 
+use crate::audio::{AudioCommand, load_wav_to_44100};
 use crate::ui::{ImpulseApp, widgets};
 
 pub fn draw_granular(app: &mut ImpulseApp, ui: &mut egui::Ui) {
+    // WAV file loader
+    let mut path = app.state.read().granular.path.clone();
+    ui.horizontal(|ui| {
+        let resp = ui.add(
+            egui::TextEdit::singleline(&mut path)
+                .hint_text("path/to/texture.wav")
+                .desired_width(ui.available_width() - 60.0),
+        );
+        if resp.changed() {
+            app.state.write().granular.path = path.clone();
+        }
+        if ui.button("Load").clicked() {
+            match load_wav_to_44100(&path) {
+                Some(data) => {
+                    let _ = app.audio_tx.push(AudioCommand::LoadGranular(data));
+                    log::info!("Granular: loaded '{}'", path);
+                }
+                None => {
+                    log::warn!("Granular: could not load '{}'", path);
+                }
+            }
+        }
+    });
     let ctrl = widgets::ControlPrefs::from_prefs(&app.state.read().ui_prefs);
     let locked = app.state.read().llm.locked_params.clone();
     let focused = app.state.read().llm.focused_params.clone();

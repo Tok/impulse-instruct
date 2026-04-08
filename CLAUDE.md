@@ -133,9 +133,5 @@ POST /api/sequencer/stop
 
 ## Not yet implemented
 
-- Rack UI cable patching (cable graph exists, patch bay interaction in progress)
-- CV routing: LFO → parameter target (data-modeled, not yet wired into DSP)
-- Gabber kick voice (pitch env + hard clipper)
-- Bloom post-process (needs custom wgpu render pass)
-- Multiple voices / multiple LLM instances
-- Alternate tuning tables (gamelan slendro etc.)
+- Rack CV cables driving LFO targets (cables are visual; LFO targets set via state field)
+- Multiple LLM instances per inference (multi-turn within one cycle)

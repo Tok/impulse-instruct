@@ -152,6 +152,7 @@ pub struct AudioParams {
     pub sidechain_release: f32,
     pub compressor_multiband: f32,
     pub stereo_width: f32, // 0=mono, 0.5=normal, 1=wide
+    pub tuning: u8,        // 0=12-TET, 1=just, 2=slendro, 3=pelog
     // Bitcrush
     pub bitcrush_bits: f32,
     pub bitcrush_rate: f32,
@@ -353,6 +354,7 @@ impl AudioParams {
             sidechain_release: s.fx.sidechain_release,
             compressor_multiband: s.fx.compressor_multiband,
             stereo_width: s.fx.stereo_width,
+            tuning: s.fx.tuning,
             bitcrush_bits: s.fx.bitcrush_bits,
             bitcrush_rate: s.fx.bitcrush_rate,
             bitcrush_mix: s.fx.bitcrush_mix,

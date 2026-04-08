@@ -31,7 +31,7 @@ Everything runs entirely offline: no cloud calls, no subscriptions, no latency. 
 
 ---
 
-## ⚠️ Alpha - Work in Progress (v0.6.0)
+## ⚠️ Alpha - Work in Progress (v0.7.0)
 
 **This is pre-release software.** It works and makes sound, but expect rough edges. A few things worth knowing before you dive in:
 

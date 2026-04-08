@@ -465,6 +465,11 @@ pub(super) fn apply_fx_update(
         "fx.compressor_multiband"
     );
     u!(s.fx.stereo_width, "stereo_width", "fx.stereo_width");
+    if !locked.contains("fx.tuning")
+        && let Some(v) = fx.get("tuning").and_then(|v| v.as_u64())
+    {
+        s.fx.tuning = (v as u8).min(3);
+    }
     u!(s.fx.tape_drive, "tape_drive", "fx.tape_drive");
     u!(s.fx.tape_mix, "tape_mix", "fx.tape_mix");
     u!(s.fx.tape_flutter, "tape_flutter", "fx.tape_flutter");

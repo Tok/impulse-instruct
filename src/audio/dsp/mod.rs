@@ -336,7 +336,7 @@ impl DspState {
                 gate_samples: _,
             } => {
                 if self.params.rack_bass && *voice_idx < crate::state::MAX_BASS_VOICES {
-                    self.bass[*voice_idx].trigger(*note, *accent, *slide);
+                    self.bass[*voice_idx].trigger(*note, *accent, *slide, self.params.tuning);
                 }
             }
             BassGateOff { voice_idx } => {
@@ -346,7 +346,7 @@ impl DspState {
             }
             HooverTrigger { note } => {
                 if self.params.rack_hoover {
-                    self.hoover.trigger(*note);
+                    self.hoover.trigger(*note, self.params.tuning);
                 }
             }
             HooverGateOff => {

@@ -462,8 +462,8 @@ impl HooverVoice {
         }
     }
 
-    pub(super) fn trigger(&mut self, note: u8) {
-        self.freq = super::midi_to_hz(note);
+    pub(super) fn trigger(&mut self, note: u8, tuning: u8) {
+        self.freq = super::dsp_util::midi_to_hz_tuned(note, tuning);
         self.gate = true;
         self.amp_env = 0.0; // will rise on fast attack
         self.filt_env = 1.0; // start wide open (LP fully bright)
@@ -812,7 +812,7 @@ impl An1xVoice {
             0.0
         }; // ±2 st
         let pitch_st = self.current_pitch + drift_st + pitch_lfo_st + pitch_env_st;
-        let base_freq = super::midi_to_hz(pitch_st.round() as u8)
+        let base_freq = super::dsp_util::midi_to_hz_tuned(pitch_st.round() as u8, p.tuning)
             * 2.0_f32.powf((pitch_st - pitch_st.round()) / 12.0);
 
         let osc2_detune_st = (p.an1x_osc2_detune - 0.5) * 48.0; // -24..+24 semitones
