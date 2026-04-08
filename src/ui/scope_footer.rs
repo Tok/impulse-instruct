@@ -265,3 +265,49 @@ pub fn draw_crt_overlay(ctx: &egui::Context) {
         egui::Color32::from_rgba_premultiplied(0, 0, 0, vig_alpha),
     );
 }
+
+/// Draw the scope buffer as a circular ring — a diagnostic/aesthetic display.
+/// `buf` is the most recent scope samples; `size` is the widget diameter.
+pub fn draw_ring_scope(ui: &mut egui::Ui, buf: &[f32], size: f32) {
+    let (rect, _) = ui.allocate_exact_size(egui::vec2(size, size), egui::Sense::hover());
+    if !ui.is_rect_visible(rect) || buf.is_empty() {
+        return;
+    }
+    let painter = ui.painter();
+    let center = rect.center();
+    let outer_r = size * 0.45;
+    let inner_r = outer_r * 0.4;
+
+    // Background circle
+    painter.circle_stroke(center, outer_r, egui::Stroke::new(1.0, theme::SLATE));
+    painter.circle_stroke(center, inner_r, egui::Stroke::new(0.5, theme::IRON));
+
+    // Draw waveform as a polar plot
+    let n = buf.len().min(256);
+    let step = buf.len() / n;
+    let mut points = Vec::with_capacity(n + 1);
+    for i in 0..n {
+        let sample = buf[i * step];
+        let angle = (i as f32 / n as f32) * std::f32::consts::TAU - std::f32::consts::FRAC_PI_2;
+        let r = inner_r + (outer_r - inner_r) * (0.5 + sample.clamp(-0.5, 0.5));
+        points.push(egui::pos2(
+            center.x + angle.cos() * r,
+            center.y + angle.sin() * r,
+        ));
+    }
+    if let Some(&first) = points.first() {
+        points.push(first); // close the ring
+    }
+    let stroke = egui::Stroke::new(1.0, egui::Color32::from_gray(140));
+    for w in points.windows(2) {
+        painter.line_segment([w[0], w[1]], stroke);
+    }
+
+    // Read/write head indicators (simulated: based on buffer position)
+    let write_angle = -std::f32::consts::FRAC_PI_2; // top = write head
+    let write_pos = egui::pos2(
+        center.x + write_angle.cos() * (outer_r + 4.0),
+        center.y + write_angle.sin() * (outer_r + 4.0),
+    );
+    painter.circle_filled(write_pos, 2.5, egui::Color32::from_gray(220));
+}

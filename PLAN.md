@@ -52,8 +52,8 @@ drone, and textural work. These additions would close that gap:
   to lock mode on; locks stored in egui temp data, read by widgets/zoom/cables
 - [x] **Per-module collapse** — click title bar drag zone to collapse/expand;
   state stored per-module in egui temp data; content hidden when collapsed
-- [ ] **Module drag reorder** — drag modules within a zone to reorder (partially
-  implemented via title bar drag, needs polish)
+- [x] **Module drag reorder** — drag ghost + insertion line indicator; undo
+  support on reorder; core slot-swap logic was already working
 - [x] **Keyboard shortcuts help overlay** — ? or F1 toggles a foreground overlay
   listing all keyboard shortcuts; close button or re-press to dismiss
 - [x] **Undo for agent changes** — push_history() called before agent spawn
@@ -63,8 +63,8 @@ drone, and textural work. These additions would close that gap:
 
 - [x] **Bloom / CRT post-process** — egui approximation: scan-line overlay
   (3px spacing, alpha 25) + edge vignette; toggled via crt_effect in UiPrefs
-- [ ] **Event queue ring** — deferred: rtrb doesn't expose read/write positions;
-  would need shared atomics or a diagnostic channel (low priority)
+- [x] **Event queue ring** — scope ring: polar waveform plot of scope buffer
+  with simulated write head marker; displayed next to linear oscilloscope
 
 ### Intelligence
 

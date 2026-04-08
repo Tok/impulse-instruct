@@ -168,6 +168,20 @@
         "enabled": true,
         "zone": "FxMod",
         "slot": 14
+      },
+      {
+        "id": 124,
+        "kind": "LlmConsole",
+        "enabled": true,
+        "zone": "Global",
+        "slot": 2
+      },
+      {
+        "id": 125,
+        "kind": "LlmAgent",
+        "enabled": true,
+        "zone": "Global",
+        "slot": 3
       }
     ],
     "cables": [
@@ -515,9 +529,354 @@
           "index": 0
         },
         "color": "Orange"
+      },
+      {
+        "from": {
+          "module_id": 125,
+          "dir": "Out",
+          "kind": "Control",
+          "index": 0
+        },
+        "to": {
+          "module_id": 100,
+          "dir": "In",
+          "kind": "Control",
+          "index": 0
+        },
+        "color": "Pink"
+      },
+      {
+        "from": {
+          "module_id": 125,
+          "dir": "Out",
+          "kind": "Control",
+          "index": 0
+        },
+        "to": {
+          "module_id": 102,
+          "dir": "In",
+          "kind": "Control",
+          "index": 0
+        },
+        "color": "Teal"
+      },
+      {
+        "from": {
+          "module_id": 125,
+          "dir": "Out",
+          "kind": "Control",
+          "index": 0
+        },
+        "to": {
+          "module_id": 103,
+          "dir": "In",
+          "kind": "Control",
+          "index": 0
+        },
+        "color": "Amber"
+      },
+      {
+        "from": {
+          "module_id": 125,
+          "dir": "Out",
+          "kind": "Control",
+          "index": 0
+        },
+        "to": {
+          "module_id": 104,
+          "dir": "In",
+          "kind": "Control",
+          "index": 0
+        },
+        "color": "Rose"
+      },
+      {
+        "from": {
+          "module_id": 125,
+          "dir": "Out",
+          "kind": "Control",
+          "index": 0
+        },
+        "to": {
+          "module_id": 105,
+          "dir": "In",
+          "kind": "Control",
+          "index": 0
+        },
+        "color": "Violet"
+      },
+      {
+        "from": {
+          "module_id": 125,
+          "dir": "Out",
+          "kind": "Control",
+          "index": 0
+        },
+        "to": {
+          "module_id": 106,
+          "dir": "In",
+          "kind": "Control",
+          "index": 0
+        },
+        "color": "Lime"
+      },
+      {
+        "from": {
+          "module_id": 125,
+          "dir": "Out",
+          "kind": "Control",
+          "index": 0
+        },
+        "to": {
+          "module_id": 107,
+          "dir": "In",
+          "kind": "Control",
+          "index": 0
+        },
+        "color": "Cyan"
+      },
+      {
+        "from": {
+          "module_id": 125,
+          "dir": "Out",
+          "kind": "Control",
+          "index": 0
+        },
+        "to": {
+          "module_id": 108,
+          "dir": "In",
+          "kind": "Control",
+          "index": 0
+        },
+        "color": "Orange"
+      },
+      {
+        "from": {
+          "module_id": 125,
+          "dir": "Out",
+          "kind": "Control",
+          "index": 0
+        },
+        "to": {
+          "module_id": 109,
+          "dir": "In",
+          "kind": "Control",
+          "index": 0
+        },
+        "color": "Pink"
+      },
+      {
+        "from": {
+          "module_id": 125,
+          "dir": "Out",
+          "kind": "Control",
+          "index": 0
+        },
+        "to": {
+          "module_id": 110,
+          "dir": "In",
+          "kind": "Control",
+          "index": 0
+        },
+        "color": "Teal"
+      },
+      {
+        "from": {
+          "module_id": 125,
+          "dir": "Out",
+          "kind": "Control",
+          "index": 0
+        },
+        "to": {
+          "module_id": 111,
+          "dir": "In",
+          "kind": "Control",
+          "index": 0
+        },
+        "color": "Amber"
+      },
+      {
+        "from": {
+          "module_id": 125,
+          "dir": "Out",
+          "kind": "Control",
+          "index": 0
+        },
+        "to": {
+          "module_id": 112,
+          "dir": "In",
+          "kind": "Control",
+          "index": 0
+        },
+        "color": "Rose"
+      },
+      {
+        "from": {
+          "module_id": 125,
+          "dir": "Out",
+          "kind": "Control",
+          "index": 0
+        },
+        "to": {
+          "module_id": 113,
+          "dir": "In",
+          "kind": "Control",
+          "index": 0
+        },
+        "color": "Violet"
+      },
+      {
+        "from": {
+          "module_id": 125,
+          "dir": "Out",
+          "kind": "Control",
+          "index": 0
+        },
+        "to": {
+          "module_id": 114,
+          "dir": "In",
+          "kind": "Control",
+          "index": 0
+        },
+        "color": "Lime"
+      },
+      {
+        "from": {
+          "module_id": 125,
+          "dir": "Out",
+          "kind": "Control",
+          "index": 0
+        },
+        "to": {
+          "module_id": 115,
+          "dir": "In",
+          "kind": "Control",
+          "index": 0
+        },
+        "color": "Cyan"
+      },
+      {
+        "from": {
+          "module_id": 125,
+          "dir": "Out",
+          "kind": "Control",
+          "index": 0
+        },
+        "to": {
+          "module_id": 116,
+          "dir": "In",
+          "kind": "Control",
+          "index": 0
+        },
+        "color": "Orange"
+      },
+      {
+        "from": {
+          "module_id": 125,
+          "dir": "Out",
+          "kind": "Control",
+          "index": 0
+        },
+        "to": {
+          "module_id": 117,
+          "dir": "In",
+          "kind": "Control",
+          "index": 0
+        },
+        "color": "Pink"
+      },
+      {
+        "from": {
+          "module_id": 125,
+          "dir": "Out",
+          "kind": "Control",
+          "index": 0
+        },
+        "to": {
+          "module_id": 118,
+          "dir": "In",
+          "kind": "Control",
+          "index": 0
+        },
+        "color": "Teal"
+      },
+      {
+        "from": {
+          "module_id": 125,
+          "dir": "Out",
+          "kind": "Control",
+          "index": 0
+        },
+        "to": {
+          "module_id": 119,
+          "dir": "In",
+          "kind": "Control",
+          "index": 0
+        },
+        "color": "Amber"
+      },
+      {
+        "from": {
+          "module_id": 125,
+          "dir": "Out",
+          "kind": "Control",
+          "index": 0
+        },
+        "to": {
+          "module_id": 120,
+          "dir": "In",
+          "kind": "Control",
+          "index": 0
+        },
+        "color": "Rose"
+      },
+      {
+        "from": {
+          "module_id": 125,
+          "dir": "Out",
+          "kind": "Control",
+          "index": 0
+        },
+        "to": {
+          "module_id": 121,
+          "dir": "In",
+          "kind": "Control",
+          "index": 0
+        },
+        "color": "Violet"
+      },
+      {
+        "from": {
+          "module_id": 125,
+          "dir": "Out",
+          "kind": "Control",
+          "index": 0
+        },
+        "to": {
+          "module_id": 122,
+          "dir": "In",
+          "kind": "Control",
+          "index": 0
+        },
+        "color": "Lime"
+      },
+      {
+        "from": {
+          "module_id": 125,
+          "dir": "Out",
+          "kind": "Control",
+          "index": 0
+        },
+        "to": {
+          "module_id": 123,
+          "dir": "In",
+          "kind": "Control",
+          "index": 0
+        },
+        "color": "Cyan"
       }
     ],
-    "next_id": 124
+    "next_id": 126
   },
   "active_style": "acid_classic",
   "custom_style_text": "",
@@ -525,11 +884,70 @@
   "persona_name": "PULSE",
   "model_path": "models/gemma-4-E4B-it-Q4_K_M.gguf",
   "show_cables": true,
+  "rack_flipped": false,
   "knob_style": "Chrome",
   "knob_size": "Large",
   "pad_size": "Large",
   "use_sliders": false,
   "ui_scale": 1.0,
   "log_level_idx": 2,
-  "autosave_interval": "Immediate"
+  "autosave_interval": "Immediate",
+  "llm_agents": [
+    {
+      "id": 126,
+      "persona_name": "PULSE",
+      "heat": 0.4,
+      "temperature": 0.9,
+      "scope": [],
+      "role": "Producer",
+      "can_spawn": true,
+      "can_dismiss": true,
+      "jam_bars": 0.0,
+      "conversation_mode": "Producer",
+      "active_style": null,
+      "custom_style_text": "",
+      "user_instructions": "",
+      "enable_thinking": true,
+      "system_prompt_override": "",
+      "model_path": null,
+      "is_inferring": false,
+      "last_response": "",
+      "tokens_per_sec": 0.0,
+      "jam_cycle_count": 0,
+      "memory": [],
+      "style_observations": [],
+      "pending_hints": []
+    },
+    {
+      "id": 125,
+      "persona_name": "PULSE",
+      "heat": 0.4,
+      "temperature": 0.9,
+      "scope": [],
+      "role": "Producer",
+      "can_spawn": true,
+      "can_dismiss": true,
+      "jam_bars": 0.0,
+      "conversation_mode": "Producer",
+      "active_style": "acid_classic",
+      "custom_style_text": "",
+      "user_instructions": "",
+      "enable_thinking": true,
+      "system_prompt_override": "",
+      "model_path": null,
+      "is_inferring": false,
+      "last_response": "",
+      "tokens_per_sec": 0.0,
+      "jam_cycle_count": 0,
+      "memory": [],
+      "style_observations": [],
+      "pending_hints": []
+    }
+  ],
+  "wasd_as_arrows": false,
+  "enable_thinking": true,
+  "show_thinking_in_log": true,
+  "temperature": 0.9,
+  "wizard_done": null,
+  "module_scales": null
 }

@@ -934,6 +934,7 @@ pub(super) fn reorder_module_by_drop(
     if from_idx == to_idx {
         return;
     }
+    app.push_history();
     let mut ids = zone_ids;
     let removed = ids.remove(from_idx);
     ids.insert(to_idx, removed);

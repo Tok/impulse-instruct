@@ -305,6 +305,16 @@ pub fn draw_rack(app: &mut ImpulseApp, ctx: &egui::Context, ui: &mut egui::Ui) {
                 egui::FontId::monospace(9.5),
                 Color32::from_gray(200),
             );
+            // Draw a bright insertion line at the drop target position
+            let drop_x = pointer.x;
+            let screen = ctx.screen_rect();
+            painter.line_segment(
+                [
+                    egui::pos2(drop_x, screen.min.y + 40.0),
+                    egui::pos2(drop_x, screen.max.y - 40.0),
+                ],
+                egui::Stroke::new(2.0, Color32::from_gray(160)),
+            );
             ctx.request_repaint();
         }
     }
