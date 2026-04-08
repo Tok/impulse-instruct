@@ -372,9 +372,10 @@ impl ImpulseApp {
             }
         }
         // Propagate style to all sub-agents that don't have style_locked
-        if let Some(ref style_id) = self.state.read().llm.active_style {
+        let style_id = self.state.read().llm.active_style.clone();
+        if let Some(sid) = style_id {
             let snapshot = self.state.read().clone();
-            *self.state.write() = crate::state::propagate_style(snapshot, style_id);
+            *self.state.write() = crate::state::propagate_style(snapshot, &sid);
         }
     }
 

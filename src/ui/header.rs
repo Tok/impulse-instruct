@@ -366,19 +366,27 @@ impl ImpulseApp {
                     // ── HEAT (global jam intensity) ──────────────────────────
                     {
                         let mut heat = self.state.read().llm.heat;
+                        let heat_col = if heat < 0.3 {
+                            theme::ASH
+                        } else if heat < 0.6 {
+                            theme::SMOKE
+                        } else {
+                            theme::FOG
+                        };
                         ui.label(
                             egui::RichText::new("HEAT")
-                                .color(theme::ASH)
+                                .color(heat_col)
                                 .monospace()
                                 .size(8.5),
                         );
                         if ui
-                            .add(
-                                egui::DragValue::new(&mut heat)
-                                    .range(0.0..=1.0)
-                                    .speed(0.01)
-                                    .fixed_decimals(2),
-                            )
+                            .scope(|ui| {
+                                ui.spacing_mut().slider_width = 180.0;
+                                ui.add(
+                                    egui::Slider::new(&mut heat, 0.0..=1.0).show_value(false),
+                                )
+                            })
+                            .inner
                             .changed()
                         {
                             self.state.write().llm.heat = heat;

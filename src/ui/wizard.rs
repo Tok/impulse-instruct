@@ -309,6 +309,11 @@ impl ImpulseApp {
                             self.apply_wizard_preset(self.wizard_selected);
                         }
                         self.show_wizard = false;
+                        // Auto-play: start the sequencer after wizard completes
+                        if !self.state.read().sequencer.running {
+                            let s = self.state.read().clone();
+                            *self.state.write() = crate::state::toggle_sequencer_running(s);
+                        }
                     }
                 });
 

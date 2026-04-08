@@ -177,11 +177,39 @@
         "slot": 2
       },
       {
-        "id": 125,
+        "id": 127,
+        "kind": "GranularTexture",
+        "enabled": true,
+        "zone": "Voice",
+        "slot": 8
+      },
+      {
+        "id": 128,
         "kind": "LlmAgent",
         "enabled": true,
         "zone": "Global",
         "slot": 3
+      },
+      {
+        "id": 129,
+        "kind": "LlmAgent",
+        "enabled": true,
+        "zone": "Global",
+        "slot": 4
+      },
+      {
+        "id": 130,
+        "kind": "LlmAgent",
+        "enabled": true,
+        "zone": "Global",
+        "slot": 5
+      },
+      {
+        "id": 131,
+        "kind": "LlmAgent",
+        "enabled": true,
+        "zone": "Global",
+        "slot": 6
       }
     ],
     "cables": [
@@ -532,7 +560,7 @@
       },
       {
         "from": {
-          "module_id": 125,
+          "module_id": 128,
           "dir": "Out",
           "kind": "Control",
           "index": 0
@@ -547,7 +575,7 @@
       },
       {
         "from": {
-          "module_id": 125,
+          "module_id": 128,
           "dir": "Out",
           "kind": "Control",
           "index": 0
@@ -562,7 +590,7 @@
       },
       {
         "from": {
-          "module_id": 125,
+          "module_id": 128,
           "dir": "Out",
           "kind": "Control",
           "index": 0
@@ -577,7 +605,7 @@
       },
       {
         "from": {
-          "module_id": 125,
+          "module_id": 128,
           "dir": "Out",
           "kind": "Control",
           "index": 0
@@ -592,7 +620,7 @@
       },
       {
         "from": {
-          "module_id": 125,
+          "module_id": 128,
           "dir": "Out",
           "kind": "Control",
           "index": 0
@@ -607,7 +635,7 @@
       },
       {
         "from": {
-          "module_id": 125,
+          "module_id": 128,
           "dir": "Out",
           "kind": "Control",
           "index": 0
@@ -622,7 +650,7 @@
       },
       {
         "from": {
-          "module_id": 125,
+          "module_id": 128,
           "dir": "Out",
           "kind": "Control",
           "index": 0
@@ -637,7 +665,7 @@
       },
       {
         "from": {
-          "module_id": 125,
+          "module_id": 128,
           "dir": "Out",
           "kind": "Control",
           "index": 0
@@ -652,7 +680,7 @@
       },
       {
         "from": {
-          "module_id": 125,
+          "module_id": 128,
           "dir": "Out",
           "kind": "Control",
           "index": 0
@@ -667,7 +695,7 @@
       },
       {
         "from": {
-          "module_id": 125,
+          "module_id": 128,
           "dir": "Out",
           "kind": "Control",
           "index": 0
@@ -682,7 +710,7 @@
       },
       {
         "from": {
-          "module_id": 125,
+          "module_id": 128,
           "dir": "Out",
           "kind": "Control",
           "index": 0
@@ -697,7 +725,7 @@
       },
       {
         "from": {
-          "module_id": 125,
+          "module_id": 128,
           "dir": "Out",
           "kind": "Control",
           "index": 0
@@ -712,7 +740,7 @@
       },
       {
         "from": {
-          "module_id": 125,
+          "module_id": 128,
           "dir": "Out",
           "kind": "Control",
           "index": 0
@@ -727,7 +755,7 @@
       },
       {
         "from": {
-          "module_id": 125,
+          "module_id": 128,
           "dir": "Out",
           "kind": "Control",
           "index": 0
@@ -742,7 +770,7 @@
       },
       {
         "from": {
-          "module_id": 125,
+          "module_id": 128,
           "dir": "Out",
           "kind": "Control",
           "index": 0
@@ -757,7 +785,7 @@
       },
       {
         "from": {
-          "module_id": 125,
+          "module_id": 128,
           "dir": "Out",
           "kind": "Control",
           "index": 0
@@ -772,7 +800,7 @@
       },
       {
         "from": {
-          "module_id": 125,
+          "module_id": 128,
           "dir": "Out",
           "kind": "Control",
           "index": 0
@@ -787,7 +815,7 @@
       },
       {
         "from": {
-          "module_id": 125,
+          "module_id": 128,
           "dir": "Out",
           "kind": "Control",
           "index": 0
@@ -802,7 +830,7 @@
       },
       {
         "from": {
-          "module_id": 125,
+          "module_id": 128,
           "dir": "Out",
           "kind": "Control",
           "index": 0
@@ -817,7 +845,7 @@
       },
       {
         "from": {
-          "module_id": 125,
+          "module_id": 128,
           "dir": "Out",
           "kind": "Control",
           "index": 0
@@ -832,7 +860,7 @@
       },
       {
         "from": {
-          "module_id": 125,
+          "module_id": 128,
           "dir": "Out",
           "kind": "Control",
           "index": 0
@@ -847,7 +875,7 @@
       },
       {
         "from": {
-          "module_id": 125,
+          "module_id": 128,
           "dir": "Out",
           "kind": "Control",
           "index": 0
@@ -862,7 +890,7 @@
       },
       {
         "from": {
-          "module_id": 125,
+          "module_id": 128,
           "dir": "Out",
           "kind": "Control",
           "index": 0
@@ -874,9 +902,69 @@
           "index": 0
         },
         "color": "Cyan"
+      },
+      {
+        "from": {
+          "module_id": 128,
+          "dir": "Out",
+          "kind": "Control",
+          "index": 0
+        },
+        "to": {
+          "module_id": 127,
+          "dir": "In",
+          "kind": "Control",
+          "index": 0
+        },
+        "color": "Orange"
+      },
+      {
+        "from": {
+          "module_id": 129,
+          "dir": "Out",
+          "kind": "Control",
+          "index": 0
+        },
+        "to": {
+          "module_id": 102,
+          "dir": "In",
+          "kind": "Control",
+          "index": 0
+        },
+        "color": "Pink"
+      },
+      {
+        "from": {
+          "module_id": 130,
+          "dir": "Out",
+          "kind": "Control",
+          "index": 0
+        },
+        "to": {
+          "module_id": 103,
+          "dir": "In",
+          "kind": "Control",
+          "index": 0
+        },
+        "color": "Teal"
+      },
+      {
+        "from": {
+          "module_id": 130,
+          "dir": "Out",
+          "kind": "Control",
+          "index": 0
+        },
+        "to": {
+          "module_id": 104,
+          "dir": "In",
+          "kind": "Control",
+          "index": 0
+        },
+        "color": "Amber"
       }
     ],
-    "next_id": 126
+    "next_id": 132
   },
   "active_style": "space_ambient",
   "custom_style_text": "",
@@ -894,32 +982,7 @@
   "autosave_interval": "Immediate",
   "llm_agents": [
     {
-      "id": 126,
-      "persona_name": "PULSE",
-      "heat": 0.4,
-      "temperature": 0.9,
-      "scope": [],
-      "role": "Producer",
-      "can_spawn": true,
-      "can_dismiss": true,
-      "jam_bars": 0.0,
-      "conversation_mode": "Producer",
-      "active_style": null,
-      "custom_style_text": "",
-      "user_instructions": "",
-      "enable_thinking": true,
-      "system_prompt_override": "",
-      "model_path": null,
-      "is_inferring": false,
-      "last_response": "",
-      "tokens_per_sec": 0.0,
-      "jam_cycle_count": 0,
-      "memory": [],
-      "style_observations": [],
-      "pending_hints": []
-    },
-    {
-      "id": 125,
+      "id": 128,
       "persona_name": "PULSE",
       "heat": 0.4,
       "temperature": 0.9,
@@ -934,20 +997,115 @@
       "user_instructions": "",
       "enable_thinking": true,
       "system_prompt_override": "",
-      "model_path": null,
+      "model_path": "models/gemma-4-E4B-it-Q4_K_M.gguf",
       "is_inferring": false,
-      "last_response": "{\n  \"_thinking\": \"The user requested a shift towards Dark Ambient, which requires slowing the tempo, stripping back the drums, deepening the bass, and maximizing reverb and atmospheric texture. I will lower the BPM, increase the reverb mix drastically, enable infinite reverb freezing, and configure the bass for a slow, evolving drone using a glacial filter sweep via Free EG.\",\n  \"_comment\": \"Shifting to Dark Ambient by drastically lowering the tempo, maximizing reverb for infinite space, and introducing a glacial filter sweep to create vast, weightless sound.\",\n  \"sequencer\": {\n    \"bpm\": 60.0,\n    \"root_note\": 9,\n    \"scale\": \"Minor\",\n    \"scale_snap\": false,\n    \"swing\": 0.0,\n    \"bass_steps\": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],\n    \"bass_notes\": [45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45],\n    \"kick_a_steps\": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],\n    \"snare_a_steps\": [],\n    \"hihat_a_steps\": [],\n    \"kick_b_steps\": [],\n    \"snare_b_steps\": [],\n    \"clap_b_steps\": [],\n    \"hihat_b_steps\": []\n  },\n  \"bass\": {\n    \"accent_level\": 0.1000000014901161,\n    \"cutoff\": 0.1500000059604644,\n    \"decay\": 3.0,\n    \"distortion\": 0.0,\n    \"env_mod\": 0.1,\n    \"filter_mode\": \"Lowpass\",\n    \"resonance\": 0.5,\n    \"volume\": 0.85,\n    \"waveform\": \"Saw\",\n    \"sub_osc_level\": 0.8,\n    \"noise_mix\": 0.05,\n    \"osc_detune\": 0.0,\n    \"fm_depth\": 0.0,\n    \"fm_ratio\": 0.0\n  },\n  \"fx\": {\n    \"chorus_mix\": 0.0,\n    \"delay_mix\": 0.0,\n    \"distortion_drive\": 0.0,\n    \"distortion_mix\": 0.0,\n    \"reverb_mix\": 0.9,\n    \"reverb_size\": 1.0,\n    \"reverb_gate_time\": 0.0,\n    \"reverb_freeze\": true\n  },\n  \"free_eg\": {\n    \"depth\": 0.8,\n    \"enabled\": true,\n    \"loop_mode\": true,\n    \"period\": 0.9,\n    \"target\": \"BassCutoff\",\n    \"values\": [\n      0.1,\n      0.15,\n      0.2,\n      0.3,\n      0.4,\n      0.5,\n      0.6,\n      0.7,\n      0.8,\n      0.9,\n      0.9,\n      0.8,\n      0.7,\n      0.6,\n      0.5,\n      0.4\n    ]\n  },\n  \"settings\": {\n    \"style\": \"space_ambient\"\n  }\n}",
-      "tokens_per_sec": 98.30638,
-      "jam_cycle_count": 5,
+      "last_response": "{\n  \"_thinking\": \"The user requested something 'fresh' while maintaining the established Space Ambient style. To achieve this, I will introduce the AN1X pad, which is ideal for vast, cosmic textures. I will set its parameters for a slow, drifting, warm sound, and subtly increase the reverb to enhance the sense of infinite space.\",\n  \"_comment\": \"Introducing a foundational, slow-moving AN1X pad to give the track that enormous, weightless expanse characteristic of Space Ambient.\",\n  \"settings\": {\n    \"style\": \"Space Ambient\"\n  },\n  \"an1x\": {\n    \"enabled\": true,\n    \"volume\": 0.6,\n    \"osc1_level\": 0.8,\n    \"osc2_level\": 0.4,\n    \"osc2_detune\": 0.52,\n    \"sub_level\": 0.1,\n    \"filter_cutoff\": 0.4,\n    \"filter_resonance\": 0.5,\n    \"filter_env_amount\": 0.2,\n    \"amp_attack\": 0.8,\n    \"amp_decay\": 0.1,\n    \"amp_sustain\": 0.7,\n    \"amp_release\": 0.3,\n    \"hard_sync\": false,\n    \"lfo_bpm_sync\": true,\n    \"lfo_sync_beats\": 4.0,\n    \"lfo_rate\": 0.05,\n    \"lfo_depth\": 0.3,\n    \"lfo_delay\": 0.5,\n    \"glide_legato\": true,\n    \"pitch_env_attack\": 0.1,\n    \"pitch_env_decay\": 0.2,\n    \"pitch_env_amount\": 0.1,\n    \"drift\": 0.1,\n    \"glide_time\": 0.3,\n    \"an1x_steps\": [\n      true,\n      false,\n      false,\n      false,\n      true,\n      false,\n      false,\n      false,\n      true,\n      false,\n      false,\n      false,\n      true,\n      false,\n      false,\n      false\n    ],\n    \"an1x_notes\": [\n      48,\n      0,\n      0,\n      0,\n      48,\n      0,\n      0,\n      0,\n      48,\n      0,\n      0,\n      0,\n      48,\n      0,\n      0,\n      0\n    ]\n  },\n  \"fx\": {\n    \"delay_mix\": 0.15,\n    \"reverb_mix\": 0.38\n  }\n}",
+      "tokens_per_sec": 90.35232,
+      "jam_cycle_count": 2,
       "memory": [
-        "Laying down the foundational Acid House groove with 4/4 kick, offbeat hats, a tight snare, and a sparse, hypnotic A minor bass hook.",
-        "Increasing resonance, envelope modulation, and tightening the decay for a more aggressive, classic acid squelch.",
-        "I've introduced a new, more syncopated bass hook to keep the groove fresh while maintaining the core aggressive acid timbre.",
-        "Shifting to Dark Ambient: lowering BPM, clearing most drums, deepening the bass drone, and flooding the soundscape with heavy reverb and slow filter sweeps for a murky, evolving texture.",
-        "Shifting to Dark Ambient by drastically lowering the tempo, maximizing reverb for infinite space, and introducing a glacial filter sweep to create vast, weightless sound."
+        "Resetting parameters for Space Ambient: setting a slow 90 BPM, C Major tonality, and implementing minimal, sparse percussion with a sustained root bass note.",
+        "Introducing a foundational, slow-moving AN1X pad to give the track that enormous, weightless expanse characteristic of Space Ambient."
       ],
-      "style_observations": [],
-      "pending_hints": []
+      "style_observations": [
+        "user prefers low fx.delay_mix (0.2)",
+        "user prefers high hoover.resonance (0.8)"
+      ],
+      "pending_hints": [],
+      "style_locked": false
+    },
+    {
+      "id": 129,
+      "persona_name": "ACID",
+      "heat": 0.4,
+      "temperature": 0.9,
+      "scope": [
+        "bass"
+      ],
+      "role": "Specialist",
+      "can_spawn": true,
+      "can_dismiss": true,
+      "jam_bars": 0.0,
+      "conversation_mode": "Producer",
+      "active_style": "space_ambient",
+      "custom_style_text": "",
+      "user_instructions": "",
+      "enable_thinking": true,
+      "system_prompt_override": "",
+      "model_path": "models/Bonsai-8B.gguf",
+      "is_inferring": false,
+      "last_response": "",
+      "tokens_per_sec": 0.0,
+      "jam_cycle_count": 0,
+      "memory": [],
+      "style_observations": [
+        "user prefers low fx.delay_mix (0.2)",
+        "user prefers high hoover.resonance (0.8)"
+      ],
+      "pending_hints": [],
+      "style_locked": false
+    },
+    {
+      "id": 130,
+      "persona_name": "DRUMS",
+      "heat": 0.4,
+      "temperature": 0.9,
+      "scope": [
+        "kit_a",
+        "kit_b"
+      ],
+      "role": "Specialist",
+      "can_spawn": true,
+      "can_dismiss": true,
+      "jam_bars": 0.0,
+      "conversation_mode": "Producer",
+      "active_style": "space_ambient",
+      "custom_style_text": "",
+      "user_instructions": "",
+      "enable_thinking": true,
+      "system_prompt_override": "",
+      "model_path": "models/Bonsai-8B.gguf",
+      "is_inferring": false,
+      "last_response": "",
+      "tokens_per_sec": 0.0,
+      "jam_cycle_count": 0,
+      "memory": [],
+      "style_observations": [
+        "user prefers low fx.delay_mix (0.2)",
+        "user prefers high hoover.resonance (0.8)"
+      ],
+      "pending_hints": [],
+      "style_locked": false
+    },
+    {
+      "id": 131,
+      "persona_name": "FX",
+      "heat": 0.4,
+      "temperature": 0.9,
+      "scope": [
+        "fx"
+      ],
+      "role": "Specialist",
+      "can_spawn": true,
+      "can_dismiss": true,
+      "jam_bars": 0.0,
+      "conversation_mode": "Producer",
+      "active_style": "space_ambient",
+      "custom_style_text": "",
+      "user_instructions": "",
+      "enable_thinking": true,
+      "system_prompt_override": "",
+      "model_path": "models/Bonsai-8B.gguf",
+      "is_inferring": false,
+      "last_response": "",
+      "tokens_per_sec": 0.0,
+      "jam_cycle_count": 0,
+      "memory": [],
+      "style_observations": [
+        "user prefers low fx.delay_mix (0.2)",
+        "user prefers high hoover.resonance (0.8)"
+      ],
+      "pending_hints": [],
+      "style_locked": false
     }
   ],
   "wasd_as_arrows": false,
