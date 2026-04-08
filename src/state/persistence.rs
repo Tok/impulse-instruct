@@ -124,7 +124,11 @@ pub fn load_session() -> Option<SessionData> {
 
 /// Apply loaded session data onto a mutable AppState.
 pub fn apply_session(state: &mut AppState, data: SessionData) {
-    if let Some(rack) = data.rack {
+    if let Some(mut rack) = data.rack {
+        let removed = rack.strip_audio_cycles();
+        if removed > 0 {
+            log::warn!("Session: removed {removed} cyclic audio cable(s) from rack");
+        }
         state.rack = rack;
     }
     if let Some(v) = data.active_style {
@@ -184,14 +188,41 @@ pub fn apply_session(state: &mut AppState, data: SessionData) {
     }
 
     // ── Migration: ensure LlmConsole + at least one LlmAgent exist ───────
-    if !state
-        .rack
-        .modules
-        .iter()
-        .any(|m| m.kind == ModuleKind::LlmConsole)
-    {
-        state.rack.add_module(ModuleKind::LlmConsole);
-        log::info!("Migration: added LlmConsole module to rack");
+    // Migration: add modules that were introduced in later versions
+    for kind in [
+        ModuleKind::LlmConsole,
+        ModuleKind::NoiseVoice,
+        ModuleKind::GranularTexture,
+    ] {
+        if !state.rack.modules.iter().any(|m| m.kind == kind) {
+            let id = state.rack.add_module(kind);
+            log::info!("Migration: added {:?} module to rack", kind);
+            // Wire voice modules to MasterOutput (audio) like the default rack
+            if matches!(kind, ModuleKind::NoiseVoice | ModuleKind::GranularTexture)
+                && let Some(master_id) = state
+                    .rack
+                    .modules
+                    .iter()
+                    .find(|m| m.kind == ModuleKind::MasterOutput)
+                    .map(|m| m.id)
+            {
+                state.rack.connect(
+                    super::PortRef {
+                        module_id: id,
+                        dir: super::PortDir::Out,
+                        kind: super::PortKind::Audio,
+                        index: 0,
+                    },
+                    super::PortRef {
+                        module_id: master_id,
+                        dir: super::PortDir::In,
+                        kind: super::PortKind::Audio,
+                        index: 0,
+                    },
+                );
+                log::info!("Migration: wired {:?} → MasterOutput", kind);
+            }
+        }
     }
     if !state
         .rack
@@ -216,20 +247,7 @@ pub fn apply_session(state: &mut AppState, data: SessionData) {
             .map(|m| m.id)
             .collect();
         for tid in &targets {
-            state.rack.connect(
-                super::PortRef {
-                    module_id: id,
-                    dir: super::PortDir::Out,
-                    kind: super::PortKind::Control,
-                    index: 0,
-                },
-                super::PortRef {
-                    module_id: *tid,
-                    dir: super::PortDir::In,
-                    kind: super::PortKind::Control,
-                    index: 0,
-                },
-            );
+            state.rack.connect_control(id, *tid);
         }
         log::info!("Migration: added default LlmAgent + control cables");
     }
@@ -263,20 +281,7 @@ pub fn apply_session(state: &mut AppState, data: SessionData) {
                 .map(|m| m.id)
                 .collect();
             for tid in &targets {
-                state.rack.connect(
-                    super::PortRef {
-                        module_id: *aid,
-                        dir: super::PortDir::Out,
-                        kind: super::PortKind::Control,
-                        index: 0,
-                    },
-                    super::PortRef {
-                        module_id: *tid,
-                        dir: super::PortDir::In,
-                        kind: super::PortKind::Control,
-                        index: 0,
-                    },
-                );
+                state.rack.connect_control(*aid, *tid);
             }
             log::info!("Migration: wired control cables for agent {}", aid);
         }

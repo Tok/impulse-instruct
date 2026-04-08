@@ -1,5 +1,4 @@
 // ─── Low-level voice state machines ──────────────────────────────────────────
-use std::sync::Arc;
 // Pure numeric DSP structs — no allocations.
 
 /// Moog-style 4-pole ladder filter state.
@@ -315,10 +314,12 @@ pub(super) struct NoiseVoice {
     b3: f32,
     b4: f32,
     b5: f32,
-    // Brown noise state
-    brown: f32,
-    // 1-pole LP filter state
-    lp_state: f32,
+    brown: f32,     // Brown noise integrator
+    lp_state: f32,  // 1-pole LP filter state
+    env: f32,       // amplitude envelope level
+    lfo_phase: f32, // filter LFO phase (0–1)
+    sh_phase: f32,  // S&H clock phase (0–1)
+    sh_held: f32,   // current S&H value (-1..+1)
 }
 
 impl NoiseVoice {
@@ -333,12 +334,48 @@ impl NoiseVoice {
             b5: 0.0,
             brown: 0.0,
             lp_state: 0.0,
+            env: 0.0,
+            lfo_phase: 0.0,
+            sh_phase: 0.0,
+            sh_held: 0.0,
         }
     }
 
-    /// `color`: 0=white, 0.5=pink, 1=brown. `cutoff`: 0–1 LP filter (200–20000 Hz).
-    pub(super) fn process(&mut self, volume: f32, color: f32, cutoff: f32, sr: f32) -> f32 {
-        if volume < 0.001 {
+    /// Full noise voice with envelope, filter LFO, and S&H modulation.
+    pub(super) fn process(&mut self, sr: f32, p: &super::AudioParams) -> f32 {
+        let volume = if p.noise_voice_enabled {
+            p.noise_voice_volume
+        } else {
+            0.0
+        };
+        let color = p.noise_voice_color;
+        let cutoff = p.noise_voice_cutoff;
+        let attack = p.noise_attack;
+        let release = p.noise_release;
+        let lfo_rate = p.noise_filter_lfo_rate;
+        let lfo_depth = p.noise_filter_lfo_depth;
+        let sh_rate = p.noise_sh_rate;
+        let sh_depth = p.noise_sh_depth;
+
+        // AR envelope: ramp up during attack, hold at 1.0, ramp down on release
+        let attack_coeff = if attack > 0.001 {
+            let ms = 1.0 + attack * attack * 4999.0; // 1ms–5s
+            (-1.0 / (ms * 0.001 * sr)).exp()
+        } else {
+            0.0 // instant attack
+        };
+        let release_coeff = {
+            let ms = 1.0 + release * release * 9999.0; // 1ms–10s
+            (-1.0 / (ms * 0.001 * sr)).exp()
+        };
+        if volume > 0.001 {
+            // Attack: ramp toward 1.0
+            self.env = 1.0 - (1.0 - self.env) * attack_coeff;
+        } else {
+            // Release: decay toward 0.0
+            self.env *= release_coeff;
+        }
+        if self.env < 0.0001 {
             return 0.0;
         }
 
@@ -367,12 +404,27 @@ impl NoiseVoice {
             pink * (1.0 - t) + brown * t
         };
 
-        // 1-pole LP filter: cutoff 0–1 → 200–20000 Hz
-        let fc = (200.0 * (100.0f32).powf(cutoff)).min(sr * 0.45);
+        // Filter LFO: slow sine modulation on cutoff
+        let lfo_hz = 0.05 + lfo_rate * 9.95; // 0.05–10 Hz
+        self.lfo_phase = (self.lfo_phase + lfo_hz / sr) % 1.0;
+        let lfo_mod = (self.lfo_phase * std::f32::consts::TAU).sin() * lfo_depth * 0.4;
+
+        // S&H: sample a new random value at the S&H rate
+        let sh_hz = 0.5 + sh_rate * 19.5; // 0.5–20 Hz
+        self.sh_phase += sh_hz / sr;
+        if self.sh_phase >= 1.0 {
+            self.sh_phase -= 1.0;
+            self.sh_held = self.rng.next(); // -1..+1
+        }
+        let sh_mod = self.sh_held * sh_depth * 0.4;
+
+        // 1-pole LP filter with modulation
+        let mod_cutoff = (cutoff + lfo_mod + sh_mod).clamp(0.0, 1.0);
+        let fc = (200.0 * (100.0f32).powf(mod_cutoff)).min(sr * 0.45);
         let a = 1.0 - (-std::f32::consts::TAU * fc / sr).exp();
         self.lp_state += a * (out - self.lp_state);
 
-        self.lp_state * volume
+        self.lp_state * self.env * volume
     }
 }
 
@@ -410,8 +462,8 @@ impl HooverVoice {
         }
     }
 
-    pub(super) fn trigger(&mut self, note: u8) {
-        self.freq = super::midi_to_hz(note);
+    pub(super) fn trigger(&mut self, note: u8, tuning: u8) {
+        self.freq = super::dsp_util::midi_to_hz_tuned(note, tuning);
         self.gate = true;
         self.amp_env = 0.0; // will rise on fast attack
         self.filt_env = 1.0; // start wide open (LP fully bright)
@@ -519,10 +571,15 @@ enum AdsrPhase {
     Release,
 }
 
-/// Maps a 0–1 ADSR time knob to samples. Exponential: 0→1ms, 1→8000ms.
+// ADSR max times (ms). Attack and release are longer for glacial pads.
+const ADSR_MAX_ATTACK_MS: f32 = 10_000.0; // 10 s
+const ADSR_MAX_DECAY_MS: f32 = 8_000.0; // 8 s
+const ADSR_MAX_RELEASE_MS: f32 = 30_000.0; // 30 s
+
+/// Maps a 0–1 ADSR time knob to samples. Quadratic curve: 0→1ms, 1→max_ms.
 #[inline]
-fn adsr_samples(v: f32, sr: f32) -> f32 {
-    let ms = 1.0 + v * v * 7999.0;
+fn adsr_samples(v: f32, sr: f32, max_ms: f32) -> f32 {
+    let ms = 1.0 + v * v * (max_ms - 1.0);
     (ms * 0.001 * sr).max(1.0)
 }
 
@@ -544,7 +601,7 @@ fn adsr_tick(
         AdsrPhase::Idle => {}
         AdsrPhase::Attack => {
             let target = 1.0_f32;
-            let coeff = (-1.0 / adsr_samples(attack, sr)).exp();
+            let coeff = (-1.0 / adsr_samples(attack, sr, ADSR_MAX_ATTACK_MS)).exp();
             *val = target - (target - *val) * coeff;
             if *val >= 0.9999 {
                 *val = 1.0;
@@ -552,7 +609,7 @@ fn adsr_tick(
             }
         }
         AdsrPhase::Decay => {
-            let coeff = (-1.0 / adsr_samples(decay, sr)).exp();
+            let coeff = (-1.0 / adsr_samples(decay, sr, ADSR_MAX_DECAY_MS)).exp();
             *val = sustain + (*val - sustain) * coeff;
             if (*val - sustain).abs() < 0.001 {
                 *val = sustain;
@@ -566,7 +623,7 @@ fn adsr_tick(
             }
         }
         AdsrPhase::Release => {
-            let coeff = (-1.0 / adsr_samples(release, sr)).exp();
+            let coeff = (-1.0 / adsr_samples(release, sr, ADSR_MAX_RELEASE_MS)).exp();
             *val *= coeff;
             if *val < 0.0001 {
                 *val = 0.0;
@@ -755,7 +812,7 @@ impl An1xVoice {
             0.0
         }; // ±2 st
         let pitch_st = self.current_pitch + drift_st + pitch_lfo_st + pitch_env_st;
-        let base_freq = super::midi_to_hz(pitch_st.round() as u8)
+        let base_freq = super::dsp_util::midi_to_hz_tuned(pitch_st.round() as u8, p.tuning)
             * 2.0_f32.powf((pitch_st - pitch_st.round()) / 12.0);
 
         let osc2_detune_st = (p.an1x_osc2_detune - 0.5) * 48.0; // -24..+24 semitones
@@ -888,62 +945,4 @@ pub(super) fn drum_voice_idx(voice: &crate::state::DrumVoice) -> usize {
     }
 }
 
-// ─── Amen / WAV sampler voice ─────────────────────────────────────────────────
-
-/// Plays back a pre-loaded mono f32 WAV at variable pitch via linear-interpolation
-/// resampling. Allocation-free during playback — the sample data is held in an Arc.
-pub(super) struct AmenVoice {
-    samples: Option<Arc<Vec<f32>>>,
-    pos: f32,
-    playing: bool,
-}
-
-impl AmenVoice {
-    pub(super) fn new() -> Self {
-        Self {
-            samples: None,
-            pos: 0.0,
-            playing: false,
-        }
-    }
-
-    /// Replace the sample data (called from the audio command handler, not process_block).
-    pub(super) fn load(&mut self, data: Arc<Vec<f32>>) {
-        self.samples = Some(data);
-        self.playing = false;
-        self.pos = 0.0;
-    }
-
-    pub(super) fn trigger(&mut self) {
-        if self.samples.is_some() {
-            self.pos = 0.0;
-            self.playing = true;
-        }
-    }
-
-    /// Render one sample. `pitch_semitones` shifts playback speed (±24 st);
-    /// positive = faster/higher, negative = slower/lower.
-    pub(super) fn process(&mut self, pitch_semitones: f32, volume: f32, loop_mode: bool) -> f32 {
-        let samples = match &self.samples {
-            Some(s) => s,
-            None => return 0.0,
-        };
-        if !self.playing {
-            return 0.0;
-        }
-        let rate = 2.0_f32.powf(pitch_semitones / 12.0);
-        let idx = self.pos as usize;
-        if idx + 1 >= samples.len() {
-            if loop_mode {
-                self.pos = 0.0;
-            } else {
-                self.playing = false;
-            }
-            return 0.0;
-        }
-        let frac = self.pos - idx as f32;
-        let out = samples[idx] + (samples[idx + 1] - samples[idx]) * frac;
-        self.pos += rate;
-        out * volume
-    }
-}
+// Amen/WAV and Granular voices are in samplers.rs (split for line-count limit).

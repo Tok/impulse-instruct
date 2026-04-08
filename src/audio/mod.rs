@@ -28,6 +28,8 @@ pub enum AudioCommand {
     /// Load new sample data into the amen/WAV sampler voice.
     /// The Arc is just a pointer copy — allocation-free in the audio callback.
     LoadSampler(Arc<Vec<f32>>),
+    /// Load sample data into the granular texture voice.
+    LoadGranular(Arc<Vec<f32>>),
     /// Updated FX routing plan derived from the rack cable graph.
     /// Sent whenever the rack topology changes (connect/disconnect/enable).
     SetFxPlan(FxPlan),
@@ -56,12 +58,31 @@ pub struct AudioEngine {
 
 impl AudioEngine {
     pub fn new(state: Arc<parking_lot::RwLock<AppState>>) -> anyhow::Result<Self> {
+        log::info!("  cpal: getting default host…");
         let host = cpal::default_host();
+        log::info!("  cpal: getting default output device…");
         let device: Device = host
             .default_output_device()
             .ok_or_else(|| anyhow::anyhow!("No audio output device found"))?;
-
-        let supported = device.default_output_config()?;
+        log::info!("  cpal: querying output config…");
+        // default_output_config can hang on PipeWire — run with timeout
+        let supported = {
+            let (tx, rx) = std::sync::mpsc::channel();
+            let dev = device.clone();
+            std::thread::spawn(move || {
+                let _ = tx.send(dev.default_output_config());
+            });
+            match rx.recv_timeout(std::time::Duration::from_secs(5)) {
+                Ok(Ok(cfg)) => cfg,
+                Ok(Err(e)) => return Err(anyhow::anyhow!("Audio config error: {e}")),
+                Err(_) => {
+                    return Err(anyhow::anyhow!(
+                        "Audio device timed out (5s). PipeWire/PulseAudio may be unresponsive. \
+                     Try: systemctl --user restart pipewire"
+                    ));
+                }
+            }
+        };
         let config = StreamConfig {
             channels: supported.channels(),
             sample_rate: supported.sample_rate(),
@@ -106,6 +127,11 @@ impl AudioEngine {
 
         let state_clone = Arc::clone(&state);
 
+        log::info!(
+            "Opening audio stream ({} Hz, {} ch)… (if stuck, kill stale impulse-instruct processes)",
+            sample_rate,
+            channels
+        );
         let stream = match supported.sample_format() {
             SampleFormat::F32 => device.build_output_stream(
                 &config,
@@ -117,6 +143,7 @@ impl AudioEngine {
                             AudioCommand::Trigger(e) => dsp.handle_trigger(&e),
                             AudioCommand::SetMonitorVolume(v) => monitor_vol = v,
                             AudioCommand::LoadSampler(data) => dsp.load_amen(data),
+                            AudioCommand::LoadGranular(data) => dsp.load_granular(data),
                             AudioCommand::SetFxPlan(plan) => dsp.set_fx_plan(plan),
                         }
                     }

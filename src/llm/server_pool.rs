@@ -514,6 +514,12 @@ impl LlamaServerPool {
     /// exists, bumps its ref_count.  Otherwise spawns a new server on the next
     /// free port (if under MAX_SERVERS).
     pub fn acquire(&mut self, model_path: &str) -> Result<u16> {
+        self.acquire_with_vram(model_path, 0)
+    }
+
+    /// Like `acquire`, but rejects new model loads that would exceed `vram_total_mb`.
+    /// Pass 0 to skip the VRAM check (CPU mode or unknown).
+    pub fn acquire_with_vram(&mut self, model_path: &str, vram_total_mb: u64) -> Result<u16> {
         // Reuse existing server for the same model.
         if let Some(inst) = self.servers.iter_mut().find(|s| s.model_path == model_path) {
             inst.ref_count += 1;
@@ -531,6 +537,24 @@ impl LlamaServerPool {
                 self.servers.len(),
                 MAX_SERVERS,
             );
+        }
+        // VRAM budget check before spawning a new server.
+        if vram_total_mb > 0 {
+            let loaded: u64 = self
+                .servers
+                .iter()
+                .map(|s| crate::llm::vram::estimate_vram(&s.model_path))
+                .sum();
+            let candidate = crate::llm::vram::estimate_vram(model_path);
+            if loaded + candidate > vram_total_mb {
+                anyhow::bail!(
+                    "VRAM budget exceeded: loaded {}MB + {}MB for {} > {}MB total",
+                    loaded,
+                    candidate,
+                    model_path,
+                    vram_total_mb,
+                );
+            }
         }
         let port = self.next_free_port();
         log::info!(

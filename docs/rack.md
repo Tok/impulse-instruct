@@ -117,12 +117,19 @@ A **Cable** connects one output port to one input port:
 pub struct Cable {
     pub from: PortRef,
     pub to: PortRef,
-    pub color: CableColor,  // Auto-assigned, cycles through 8 colors
+    pub color: CableColor,  // Auto-assigned, cycles through 8 grayscale shades
 }
 ```
 
-**CableColor** cycles through: Teal, Amber, Rose, Violet, Lime, Cyan, Orange, Pink.
-`RackState::next_cable_color()` returns the next color based on `cables.len() % 8`.
+**CableColor** cycles through: Gray, Slate, Silver, Ash, Stone, Iron, Pewter, Smoke.
+All cable colors are strictly grayscale (R=G=B) per `docs/ui-design.md`.
+`RackState::next_cable_color()` returns the next shade based on `cables.len() % 8`.
+
+Audio cables are validated on insertion: `connect()` rejects cables that would
+create a cycle in the signal graph (BFS reachability check). On session load,
+`strip_audio_cycles()` removes any cyclic audio cables that slipped in from
+older versions. `compile_fx_plan()` also handles cycles gracefully via Kahn's
+topological sort (cyclic nodes produce empty output).
 
 ### RackState
 

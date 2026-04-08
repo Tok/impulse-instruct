@@ -3,7 +3,10 @@
 
 pub use super::llm_apply::{apply_llm_step_array, apply_llm_update};
 
-use super::{AppState, DrumVoice, FilterMode, MAX_STEPS, Scale, Waveform};
+use super::{
+    AgentRole, AppState, ConversationMode, DrumVoice, FilterMode, LlmAgentState, MAX_STEPS,
+    ModuleKind, Scale, Waveform, rack_kind_name_matches,
+};
 
 /// Set the active step count, tiling existing patterns into the new slots when expanding.
 ///
@@ -354,6 +357,118 @@ pub fn apply_boc_preset(state: AppState) -> AppState {
     s
 }
 
+/// Warm Pad preset — lush, slow-moving, classic analog pad sound.
+pub fn apply_warm_pad_preset(state: AppState) -> AppState {
+    let mut s = state;
+    s.an1x.enabled = true;
+    s.an1x.osc1_wave = crate::state::An1xWave::Saw;
+    s.an1x.osc2_wave = crate::state::An1xWave::Saw;
+    s.an1x.osc1_level = 0.75;
+    s.an1x.osc2_level = 0.7;
+    s.an1x.osc2_detune = 0.52;
+    s.an1x.sub_level = 0.3;
+    s.an1x.filter_cutoff = 0.35;
+    s.an1x.filter_resonance = 0.15;
+    s.an1x.filter_env_amount = 0.55;
+    s.an1x.filter_attack = 0.4;
+    s.an1x.filter_decay = 0.6;
+    s.an1x.filter_sustain = 0.4;
+    s.an1x.filter_release = 0.55;
+    s.an1x.amp_attack = 0.45;
+    s.an1x.amp_decay = 0.5;
+    s.an1x.amp_sustain = 0.7;
+    s.an1x.amp_release = 0.6;
+    s.an1x.drift = 0.08;
+    s.an1x.volume = 0.7;
+    s
+}
+
+/// Evolving Texture preset — slowly morphing sound with LFO on filter.
+pub fn apply_evolving_texture_preset(state: AppState) -> AppState {
+    let mut s = state;
+    s.an1x.enabled = true;
+    s.an1x.osc1_wave = crate::state::An1xWave::Saw;
+    s.an1x.osc2_wave = crate::state::An1xWave::Triangle;
+    s.an1x.osc1_level = 0.6;
+    s.an1x.osc2_level = 0.8;
+    s.an1x.osc2_detune = 0.54;
+    s.an1x.filter_cutoff = 0.5;
+    s.an1x.filter_resonance = 0.35;
+    s.an1x.filter_env_amount = 0.6;
+    s.an1x.filter_attack = 0.3;
+    s.an1x.filter_decay = 0.7;
+    s.an1x.filter_sustain = 0.3;
+    s.an1x.filter_release = 0.7;
+    s.an1x.amp_attack = 0.5;
+    s.an1x.amp_decay = 0.6;
+    s.an1x.amp_sustain = 0.55;
+    s.an1x.amp_release = 0.75;
+    s.an1x.lfo_rate = 0.06;
+    s.an1x.lfo_depth = 0.25;
+    s.an1x.lfo_target = crate::state::An1xLfoTarget::FilterCutoff;
+    s.an1x.lfo_delay = 0.5;
+    s.an1x.drift = 0.2;
+    s.an1x.volume = 0.65;
+    s
+}
+
+/// Glass Pad preset — bright, crystalline, shimmering pad.
+pub fn apply_glass_pad_preset(state: AppState) -> AppState {
+    let mut s = state;
+    s.an1x.enabled = true;
+    s.an1x.osc1_wave = crate::state::An1xWave::Triangle;
+    s.an1x.osc2_wave = crate::state::An1xWave::Sine;
+    s.an1x.osc1_level = 0.9;
+    s.an1x.osc2_level = 0.5;
+    s.an1x.osc2_detune = 0.53;
+    s.an1x.osc2_octave = 1;
+    s.an1x.filter_cutoff = 0.7;
+    s.an1x.filter_resonance = 0.4;
+    s.an1x.filter_env_amount = 0.62;
+    s.an1x.filter_attack = 0.2;
+    s.an1x.filter_decay = 0.5;
+    s.an1x.filter_sustain = 0.5;
+    s.an1x.filter_release = 0.65;
+    s.an1x.amp_attack = 0.35;
+    s.an1x.amp_decay = 0.45;
+    s.an1x.amp_sustain = 0.6;
+    s.an1x.amp_release = 0.8;
+    s.an1x.hard_sync = true;
+    s.an1x.drift = 0.05;
+    s.an1x.volume = 0.6;
+    s
+}
+
+/// Sub Drone preset — deep, sustained, barely audible movement.
+pub fn apply_sub_drone_preset(state: AppState) -> AppState {
+    let mut s = state;
+    s.an1x.enabled = true;
+    s.an1x.osc1_wave = crate::state::An1xWave::Sine;
+    s.an1x.osc2_wave = crate::state::An1xWave::Triangle;
+    s.an1x.osc1_level = 0.9;
+    s.an1x.osc2_level = 0.4;
+    s.an1x.osc2_detune = 0.505;
+    s.an1x.osc2_octave = -1;
+    s.an1x.sub_level = 0.6;
+    s.an1x.filter_cutoff = 0.2;
+    s.an1x.filter_resonance = 0.1;
+    s.an1x.filter_env_amount = 0.5;
+    s.an1x.filter_attack = 0.6;
+    s.an1x.filter_decay = 0.8;
+    s.an1x.filter_sustain = 0.6;
+    s.an1x.filter_release = 0.9;
+    s.an1x.amp_attack = 0.7;
+    s.an1x.amp_decay = 0.7;
+    s.an1x.amp_sustain = 0.8;
+    s.an1x.amp_release = 0.95;
+    s.an1x.lfo_rate = 0.03;
+    s.an1x.lfo_depth = 0.08;
+    s.an1x.lfo_target = crate::state::An1xLfoTarget::Pitch;
+    s.an1x.drift = 0.25;
+    s.an1x.volume = 0.7;
+    s
+}
+
 // ─── LLM state update — see llm_apply.rs ─────────────────────────────────────
 
 // ─── Pattern bank & chain ─────────────────────────────────────────────────────
@@ -473,6 +588,141 @@ pub fn record_bass_note(state: AppState, step: usize, note: u8) -> AppState {
     if step < s.sequencer.bass_pattern.len() {
         s.sequencer.bass_pattern[step].active = true;
         s.sequencer.bass_pattern[step].note = note;
+    }
+    s
+}
+
+/// Spawn an LLM agent: add rack module, create agent state, wire control cables.
+///
+/// Empty scope wires to all controllable modules; non-empty scope wires only
+/// to modules whose kind matches one of the scope strings.
+/// Returns `(new_state, agent_module_id)`.
+pub fn spawn_agent(
+    state: AppState,
+    persona: &str,
+    scope: &[String],
+    role: AgentRole,
+    model: Option<String>,
+) -> (AppState, u32) {
+    let mut s = state;
+    let id = s.rack.add_module(ModuleKind::LlmAgent);
+
+    let mut agent = LlmAgentState::from_singleton(id, &s.llm);
+    agent.persona_name = persona.to_string();
+    agent.scope = scope.to_vec();
+    agent.role = role;
+    if let Some(m) = model {
+        agent.model_path = Some(m);
+    }
+    s.llm_agents.push(agent);
+
+    // Wire control cables
+    let targets: Vec<u32> = if scope.is_empty() {
+        s.rack
+            .modules
+            .iter()
+            .filter(|m| {
+                !matches!(
+                    m.kind,
+                    ModuleKind::MasterOutput | ModuleKind::LlmAgent | ModuleKind::LlmConsole
+                )
+            })
+            .map(|m| m.id)
+            .collect()
+    } else {
+        s.rack
+            .modules
+            .iter()
+            .filter(|m| scope.iter().any(|sc| rack_kind_name_matches(m.kind, sc)))
+            .map(|m| m.id)
+            .collect()
+    };
+    for tid in &targets {
+        s.rack.connect_control(id, *tid);
+    }
+
+    (s, id)
+}
+
+/// Format an LLM response for display in the log.
+///
+/// Returns the user-visible summary text:
+/// - `ConversationMode::Off` → just the changed keys ("updated bass, fx")
+/// - Otherwise → the `_comment` field if present, else keys
+/// - If no param update → returns the raw text unchanged
+pub fn format_llm_display(
+    param_update: Option<&serde_json::Value>,
+    text: &str,
+    conversation_mode: &ConversationMode,
+) -> String {
+    match param_update {
+        Some(update) => {
+            let keys: Vec<&str> = update
+                .as_object()
+                .map(|o| {
+                    o.keys()
+                        .filter(|k| *k != "_comment")
+                        .map(|k| k.as_str())
+                        .collect()
+                })
+                .unwrap_or_default();
+            if *conversation_mode == ConversationMode::Off {
+                format!("updated {}", keys.join(", "))
+            } else if let Some(comment) = update.get("_comment").and_then(|v| v.as_str()) {
+                comment.to_string()
+            } else {
+                format!("updated {}", keys.join(", "))
+            }
+        }
+        None => text.to_string(),
+    }
+}
+
+/// Record a style observation for all agents (e.g. "user raised reverb_mix to 0.8").
+/// Caps at STYLE_OBS_MAX. Deduplicates by param path prefix.
+pub fn observe_user_edit(state: AppState, param_path: &str, value: f32) -> AppState {
+    let mut s = state;
+    let obs = if value > 0.7 {
+        format!("user prefers high {} ({:.1})", param_path, value)
+    } else if value < 0.3 {
+        format!("user prefers low {} ({:.1})", param_path, value)
+    } else {
+        return s; // mid-range edits aren't interesting
+    };
+    for agent in &mut s.llm_agents {
+        // Remove old observation for the same param
+        agent.style_observations.retain(|o| !o.contains(param_path));
+        agent.style_observations.push(obs.clone());
+        if agent.style_observations.len() > super::STYLE_OBS_MAX {
+            agent
+                .style_observations
+                .drain(..agent.style_observations.len() - super::STYLE_OBS_MAX);
+        }
+    }
+    s
+}
+
+/// Propagate a style change to all agents whose style is not locked.
+pub fn propagate_style(state: AppState, style_id: &str) -> AppState {
+    let mut s = state;
+    for agent in &mut s.llm_agents {
+        if !agent.style_locked {
+            agent.active_style = Some(style_id.to_string());
+        }
+    }
+    s
+}
+
+/// Push a memory snippet to an agent's persistent memory, capping at AGENT_MEMORY_MAX.
+pub fn push_agent_memory(state: AppState, agent_id: u32, snippet: String) -> AppState {
+    let mut s = state;
+    if let Some(agent) = s.llm_agents.iter_mut().find(|a| a.id == agent_id) {
+        agent.memory.push(snippet);
+        if agent.memory.len() > super::AGENT_MEMORY_MAX {
+            agent
+                .memory
+                .drain(..agent.memory.len() - super::AGENT_MEMORY_MAX);
+        }
     }
     s
 }

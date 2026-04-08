@@ -98,6 +98,49 @@ pub fn model_label(model_path: &str) -> String {
         .unwrap_or_else(|| model_path.to_string())
 }
 
+// ─── Budget estimation ──────────────────────────────────────────────────────
+
+/// Estimate total VRAM (MB) for all running agents plus an optional candidate.
+/// Agents sharing the same model share one server, so each unique model is
+/// counted only once.
+pub fn estimate_total_vram(
+    agents: &[crate::state::LlmAgentState],
+    global_model: &str,
+    candidate: Option<&str>,
+) -> u64 {
+    let mut unique = std::collections::HashSet::new();
+    for a in agents {
+        let model = a.model_path.as_deref().unwrap_or(global_model);
+        if !model.is_empty() {
+            unique.insert(model.to_string());
+        }
+    }
+    if let Some(c) = candidate {
+        if !c.is_empty() {
+            unique.insert(c.to_string());
+        }
+    } else if !global_model.is_empty() {
+        // Candidate uses global model
+        unique.insert(global_model.to_string());
+    }
+    unique.iter().map(|m| estimate_vram(m)).sum()
+}
+
+/// Returns true if spawning one more agent (with the given model) would exceed
+/// `vram_total_mb`.  Returns false (allow) when `vram_total_mb` is 0 (CPU mode).
+pub fn would_exceed_vram(
+    agents: &[crate::state::LlmAgentState],
+    global_model: &str,
+    candidate_model: Option<&str>,
+    vram_total_mb: u64,
+) -> bool {
+    if vram_total_mb == 0 {
+        return false; // CPU mode — no VRAM limit
+    }
+    let needed = estimate_total_vram(agents, global_model, candidate_model);
+    needed > vram_total_mb
+}
+
 // ─── Agent presets ───────────────────────────────────────────────────────────
 
 /// One agent in a preset configuration.

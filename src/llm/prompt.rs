@@ -7,6 +7,26 @@ use crate::state::{AppState, ConversationMode, ROOT_NAMES, StyleVerbosity};
 /// Returns the system prompt. If the user has set a non-empty `system_prompt_override`,
 /// that is returned verbatim — giving full control over the model's grounding.
 pub fn build_system_prompt(state: &AppState, scope: &[String]) -> String {
+    build_system_prompt_with_memory(state, scope, &[])
+}
+
+/// Build a system prompt with optional agent memory injected.
+pub fn build_system_prompt_with_memory(
+    state: &AppState,
+    scope: &[String],
+    memory: &[String],
+) -> String {
+    // Find style observations for this agent (passed alongside memory from the caller)
+    build_system_prompt_full(state, scope, memory, &[])
+}
+
+/// Build system prompt with memory and style observations.
+pub fn build_system_prompt_full(
+    state: &AppState,
+    scope: &[String],
+    memory: &[String],
+    style_obs: &[String],
+) -> String {
     if !state.llm.system_prompt_override.trim().is_empty() {
         return state.llm.system_prompt_override.clone();
     }
@@ -163,6 +183,26 @@ pub fn build_system_prompt(state: &AppState, scope: &[String]) -> String {
         }
     };
 
+    let memory_section = {
+        let mut parts = Vec::new();
+        if !memory.is_empty() {
+            let entries: Vec<&str> = memory.iter().map(|s| s.as_str()).collect();
+            parts.push(format!("Session memory:\n{}", entries.join("\n")));
+        }
+        if !style_obs.is_empty() {
+            let entries: Vec<&str> = style_obs.iter().map(|s| s.as_str()).collect();
+            parts.push(format!(
+                "Learned user preferences (adapt your choices accordingly):\n{}",
+                entries.join("\n")
+            ));
+        }
+        if parts.is_empty() {
+            String::new()
+        } else {
+            format!("\n═══ MEMORY ═══\n{}\n", parts.join("\n\n"))
+        }
+    };
+
     let persona = state.llm.persona_name.trim();
     let persona = if persona.is_empty() { "PULSE" } else { persona };
 
@@ -204,7 +244,7 @@ pub fn build_system_prompt(state: &AppState, scope: &[String]) -> String {
     format!(
         r#"You are {persona} — the AI intelligence inside Impulse Instruct, a hardware-style synthesizer.
 Output ONLY valid JSON. No prose, no markdown, no explanation outside the "_comment" field.
-{style_section}{user_instructions_section}{scope_section}{autonomy_section}
+{style_section}{user_instructions_section}{memory_section}{scope_section}{autonomy_section}
 CURRENT STATE:
 {current_json}
 {bass_info}
@@ -217,7 +257,7 @@ BASS SYNTHESIZER (all 0.0–1.0):
   bass.cutoff       — filter frequency (0=very dark/closed, 0.5=mid, 1=fully open)
   bass.resonance    — filter resonance / squelch (0.7–0.9 = classic acid character)
   bass.env_mod      — how much the envelope opens the filter (high = dramatic sweep)
-  bass.decay        — filter envelope decay time (low=punchy, high=slow sweep)
+  bass.decay        — filter envelope decay time 0–1 → 0.1–5s (low=punchy, high=slow sweep)
   bass.accent_level — accent intensity boost
   bass.waveform          — "Saw" (smooth, warm), "Square" (hollow, buzzy), or "Supersaw" (thick unison)
   bass.filter_mode       — "Lowpass" (default, warm), "Highpass" (thin, cutting), or "Bandpass" (nasal, mid-focus)
@@ -258,8 +298,11 @@ FX (all 0.0–1.0):  ← ONLY valid inside "fx": {{…}}, never inside "sequence
   fx.reverb_mix       — reverb wet amount (0=off, 0.3=noticeable)
   fx.reverb_size      — reverb room size
   fx.reverb_gate_time — gated reverb gate close time in seconds (0=off, 0.1–0.5=80s snare effect)
+  fx.reverb_freeze    — true = infinite hold, reverb tail loops forever (drone/ambient pads)
   fx.master_pitch_st  — global pitch offset in semitones for melodic voices (-12..+12; vaporwave drift)
-  fx.delay_time       — delay time (0.375 = dotted 8th at ~130 BPM)
+  fx.delay_time       — delay time 0–1 → 0–2s (0.375 = dotted 8th at ~130 BPM)
+  fx.delay_wow_flutter — tape wow/flutter modulation (0=clean digital, 0.3=subtle tape, 1=wobbly)
+  fx.delay_saturation — tape saturation on feedback (0=clean, 0.5=warm, 1=heavy breakup)
   fx.delay_feedback   — delay repeats
   fx.delay_mix        — delay wet amount
   fx.distortion_drive — master bus saturation drive
@@ -358,9 +401,9 @@ AN1X VOICE (warm VA pads / leads — Boards of Canada aesthetic):
   an1x.filter_cutoff    — 0–1 (0.3=dark, 0.6=open, 1.0=bright)
   an1x.filter_resonance — 0–1
   an1x.filter_env_amount — 0.5=none, >0.5=positive mod (filter opens on note), <0.5=negative
-  an1x.filter_attack/decay/sustain/release — filter ADSR, 0–1 → 1ms–8s
-  an1x.amp_attack       — 0–1; 0=instant, 0.3=~300ms pad attack, 0.6=slow swell
-  an1x.amp_decay/sustain/release — amplitude ADSR
+  an1x.filter_attack/decay/sustain/release — filter ADSR, 0–1 (attack→10s, decay→8s, release→30s)
+  an1x.amp_attack       — 0–1; 0=instant, 0.3=~300ms pad attack, 0.8+=glacial pad swell (up to 10s)
+  an1x.amp_decay/sustain/release — amplitude ADSR (release up to 30s for ambient tails)
   an1x.hard_sync        — OSC2 phase resets each OSC1 cycle: harsh harmonic sweep when detuned
   an1x.lfo_bpm_sync     — snap LFO rate to a musical division of current BPM
   an1x.lfo_sync_beats   — division: 4.0=bar, 2.0=half, 1.0=quarter, 0.5=8th, 0.25=16th
@@ -508,7 +551,7 @@ RACK ROUTING — enable/disable modules and wire cables between them:
                    {{"from": "bitcrush", "to": "master"}}],   ← add patch cables
     "disconnect": [{{"from": "bitcrush", "to": "master"}}]    ← remove a cable
   }}}}
-  Module names: "bass", "808", "909", "hoover", "an1x", "amen", "noise",
+  Module names: "bass", "808", "909", "hoover", "an1x", "amen", "noise", "granular",
                 "bitcrush", "reverb", "delay", "chorus", "phaser", "drive",
                 "eq", "compressor", "tapesat", "waveshaper", "ringmod",
                 "lfo", "master", "sequencer"
@@ -544,7 +587,7 @@ Always start your response with "_thinking": one or two sentences explaining wha
 {comment_instruction}
 Only include fields you are actually changing.
 In MC or DJ mode you may add an optional "mc_line" string — a short crowd shout spoken via TTS, separate from "_comment". Keep it under 12 words. Use it for big moments, drops, or energy peaks.
-TOP-LEVEL SCHEMA — the only valid top-level keys are "_comment", "_thinking", "mc_line", "bass", "sequencer", "fx", "hoover", "an1x", "free_eg", "noise", "kit_a", "kit_b", "euclidean", "music_api", "ramp", "behaviour", "rack", "settings", "save_project".
+TOP-LEVEL SCHEMA — the only valid top-level keys are "_comment", "_thinking", "mc_line", "bass", "sequencer", "fx", "hoover", "an1x", "free_eg", "noise", "granular", "kit_a", "kit_b", "euclidean", "music_api", "ramp", "behaviour", "rack", "settings", "save_project".
   "bass" and "fx" are NEVER nested inside "sequencer".
   "fx" is NEVER nested inside "fx".
   Each key appears at most ONCE per object.
@@ -569,6 +612,7 @@ Example — "more acid":
 "#,
         persona = persona,
         user_instructions_section = user_instructions_section,
+        memory_section = memory_section,
         style_section = style_section,
         scope_section = scope_section,
         autonomy_section = autonomy_section,
@@ -686,7 +730,28 @@ pub fn param_json_schema() -> serde_json::Value {
                     "enabled": { "type": "boolean" },
                     "volume":  { "type": "number", "minimum": 0.0, "maximum": 1.0 },
                     "color":   { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "0=white, 0.5=pink, 1=brown" },
-                    "cutoff":  { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "LP filter cutoff, 0=200Hz, 1=20kHz" }
+                    "cutoff":  { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "LP filter cutoff, 0=200Hz, 1=20kHz" },
+                    "attack":  { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "amplitude attack 0-1 → 1ms-5s" },
+                    "release": { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "amplitude release 0-1 → 1ms-10s" },
+                    "filter_lfo_rate":  { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "filter mod LFO rate 0.05-10Hz" },
+                    "filter_lfo_depth": { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "filter mod depth" },
+                    "sh_rate":  { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "sample-and-hold rate 0.5-20Hz for rhythmic texture" },
+                    "sh_depth": { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "S&H modulation depth on filter" }
+                },
+                "additionalProperties": false
+            },
+            "granular": {
+                "type": "object",
+                "description": "Granular texture voice — overlapping micro-grains from a loaded WAV",
+                "properties": {
+                    "enabled":          { "type": "boolean" },
+                    "volume":           { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+                    "density":          { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "grain spawn rate: 0=sparse, 1=dense cloud" },
+                    "grain_size":       { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "10-500ms per grain" },
+                    "position":         { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "playback position in WAV" },
+                    "position_jitter":  { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "random spread around position" },
+                    "pitch_scatter":    { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "random pitch per grain, ±12st at max" },
+                    "spray":            { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "stereo spread (0=mono, 1=full width)" }
                 },
                 "additionalProperties": false
             },
@@ -715,14 +780,14 @@ pub fn param_json_schema() -> serde_json::Value {
                     "filter_cutoff":      { "type": "number", "minimum": 0.0, "maximum": 1.0 },
                     "filter_resonance":   { "type": "number", "minimum": 0.0, "maximum": 1.0 },
                     "filter_env_amount":  { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "filter env mod: 0.5=none, <0.5=negative, >0.5=positive" },
-                    "filter_attack":      { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "filter ADSR attack 0-1 → 1ms-8s" },
+                    "filter_attack":      { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "filter ADSR attack 0-1 → 1ms-10s" },
                     "filter_decay":       { "type": "number", "minimum": 0.0, "maximum": 1.0 },
                     "filter_sustain":     { "type": "number", "minimum": 0.0, "maximum": 1.0 },
-                    "filter_release":     { "type": "number", "minimum": 0.0, "maximum": 1.0 },
-                    "amp_attack":         { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "amp ADSR attack 0-1 → 1ms-8s. Use high values for slow pad attacks." },
+                    "filter_release":     { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "filter release 0-1 → 1ms-30s" },
+                    "amp_attack":         { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "amp attack 0-1 → 1ms-10s. Use high values for glacial pad swells." },
                     "amp_decay":          { "type": "number", "minimum": 0.0, "maximum": 1.0 },
                     "amp_sustain":        { "type": "number", "minimum": 0.0, "maximum": 1.0 },
-                    "amp_release":        { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+                    "amp_release":        { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "amp release 0-1 → 1ms-30s for ambient tails" },
                     "hard_sync":          { "type": "boolean", "description": "OSC2 hard sync to OSC1: harsh harmonic content when OSC2 is detuned above" },
                     "lfo_bpm_sync":       { "type": "boolean", "description": "snap LFO rate to musical division of current BPM" },
                     "lfo_sync_beats":     { "type": "number", "description": "LFO division in beats: 4=bar, 2=half, 1=quarter, 0.5=8th, 0.25=16th" },
@@ -764,10 +829,13 @@ pub fn param_json_schema() -> serde_json::Value {
                     "reverb_size":      { "type": "number", "minimum": 0.0, "maximum": 1.0 },
                     "reverb_mix":       { "type": "number", "minimum": 0.0, "maximum": 1.0 },
                     "reverb_gate_time": { "type": "number", "minimum": 0.0, "maximum": 2.0, "description": "gated reverb: 0=no gate, 0.1–2.0s = gate close time (80s snare effect)" },
+                    "reverb_freeze":    { "type": "boolean", "description": "true = infinite reverb hold, tail loops forever (drone/ambient)" },
                     "master_pitch_st": { "type": "number", "minimum": -12.0, "maximum": 12.0, "description": "global semitone offset for melodic voices (vaporwave pitch drift)" },
                     "delay_time":       { "type": "number", "minimum": 0.0, "maximum": 1.0 },
                     "delay_feedback":   { "type": "number", "minimum": 0.0, "maximum": 1.0 },
                     "delay_mix":        { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+                    "delay_wow_flutter": { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "tape wow/flutter on delay (0=clean, 1=wobbly tape)" },
+                    "delay_saturation": { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "tape saturation on delay feedback (warm breakup)" },
                     "distortion_drive": { "type": "number", "minimum": 0.0, "maximum": 1.0 },
                     "distortion_mix":   { "type": "number", "minimum": 0.0, "maximum": 1.0 },
                     "bitcrush_bits": { "type": "number", "minimum": 0.0, "maximum": 1.0 },
@@ -793,7 +861,15 @@ pub fn param_json_schema() -> serde_json::Value {
                     "tape_mix":              { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "tape saturation wet/dry; 0=off" },
                     "tape_flutter":          { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "wow/flutter depth — ±4% AM at 2.5Hz; adds vintage instability" },
                     "autotune_amount":       { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "pitch shift amount: 0=bypass, 0.0833=+1 semitone, 0.25=+3st, 1.0=+12st (octave)" },
-                    "autotune_mix":          { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "autotune wet/dry; 0=off" }
+                    "autotune_mix":          { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "autotune wet/dry; 0=off" },
+                    "xmod_bass_to_an1x_pitch": { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "cross-mod: bass osc → AN1X pitch (FM for evolving textures)" },
+                    "xmod_noise_to_filter":    { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "cross-mod: noise → bass filter cutoff (random filter movement)" },
+                    "sidechain_amount":  { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "sidechain compression: kick ducks bass/pad (0=off, 0.5=pumping, 1=hard duck)" },
+                    "sidechain_attack":  { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "sidechain attack 0.1-50ms" },
+                    "sidechain_release": { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "sidechain release 10-500ms (longer=more pumping)" },
+                    "compressor_multiband": { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "0=single-band, >0=3-band split (low/mid/high) compression" },
+                    "stereo_width": { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "stereo width: 0=mono, 0.5=normal, 1=wide" },
+                    "tuning": { "type": "integer", "minimum": 0, "maximum": 3, "description": "tuning system: 0=12-TET (default), 1=just intonation, 2=slendro (gamelan), 3=pelog (gamelan)" }
                 },
                 "additionalProperties": false
             },

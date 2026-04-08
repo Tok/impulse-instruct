@@ -185,6 +185,14 @@ pub fn draw_fx(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         mut tape_mix,
         mut tape_flutter,
         mut master_pitch,
+        mut delay_wow,
+        mut delay_sat,
+        mut sc_amount,
+        mut sc_attack,
+        mut sc_release,
+        mut comp_mb,
+        mut stereo_w,
+        mut rev_freeze,
         locked,
     ) = {
         let s = app.state.read();
@@ -219,6 +227,14 @@ pub fn draw_fx(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             s.fx.tape_mix,
             s.fx.tape_flutter,
             s.fx.master_pitch_st,
+            s.fx.delay_wow_flutter,
+            s.fx.delay_saturation,
+            s.fx.sidechain_amount,
+            s.fx.sidechain_attack,
+            s.fx.sidechain_release,
+            s.fx.compressor_multiband,
+            s.fx.stereo_width,
+            s.fx.reverb_freeze,
             s.llm.locked_params.clone(),
         )
     };
@@ -272,6 +288,13 @@ pub fn draw_fx(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                     rgt = rgt_norm * 2.0;
                     changed = true;
                 }
+                if ui
+                    .add(egui::SelectableLabel::new(rev_freeze, "FREEZE"))
+                    .clicked()
+                {
+                    rev_freeze = !rev_freeze;
+                    changed = true;
+                }
             });
 
             // ── DELAY ───────────────────────────────────────────────────────────
@@ -289,6 +312,28 @@ pub fn draw_fx(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                     changed = true;
                 }
                 if widgets::param_control(ui, "FDBK", &mut df, pm("fx.delay_feedback"), ctrl).0 {
+                    changed = true;
+                }
+                if widgets::param_control(
+                    ui,
+                    "WOW",
+                    &mut delay_wow,
+                    pm("fx.delay_wow_flutter"),
+                    ctrl,
+                )
+                .0
+                {
+                    changed = true;
+                }
+                if widgets::param_control(
+                    ui,
+                    "SAT",
+                    &mut delay_sat,
+                    pm("fx.delay_saturation"),
+                    ctrl,
+                )
+                .0
+                {
                     changed = true;
                 }
             });
@@ -389,6 +434,60 @@ pub fn draw_fx(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                 if widgets::param_control(ui, "RATIO", &mut comp_ratio, ParamMode::Free, ctrl).0 {
                     changed = true;
                 }
+                if widgets::param_control(
+                    ui,
+                    "MULTI",
+                    &mut comp_mb,
+                    pm("fx.compressor_multiband"),
+                    ctrl,
+                )
+                .0
+                {
+                    changed = true;
+                }
+            });
+
+            // ── SIDECHAIN ──────────────────────────────────────────────────────
+            widgets::glass_group_fill(ui, gw, gw, |ui| {
+                ui.label(
+                    egui::RichText::new("SIDECHAIN")
+                        .color(theme::FOG)
+                        .monospace()
+                        .size(9.5),
+                );
+                if widgets::param_control(
+                    ui,
+                    "AMOUNT",
+                    &mut sc_amount,
+                    pm("fx.sidechain_amount"),
+                    ctrl,
+                )
+                .0
+                {
+                    changed = true;
+                }
+                if widgets::param_control(
+                    ui,
+                    "ATK",
+                    &mut sc_attack,
+                    pm("fx.sidechain_attack"),
+                    ctrl,
+                )
+                .0
+                {
+                    changed = true;
+                }
+                if widgets::param_control(
+                    ui,
+                    "REL",
+                    &mut sc_release,
+                    pm("fx.sidechain_release"),
+                    ctrl,
+                )
+                .0
+                {
+                    changed = true;
+                }
             });
 
             // ── TAPE ────────────────────────────────────────────────────────────
@@ -436,6 +535,27 @@ pub fn draw_fx(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                     master_pitch = mp_norm * 24.0 - 12.0;
                     changed = true;
                 }
+                if widgets::param_control(ui, "WIDTH", &mut stereo_w, pm("fx.stereo_width"), ctrl).0
+                {
+                    changed = true;
+                }
+                // Tuning system selector
+                let tuning_names = ["12-TET", "Just", "Slendro", "Pelog"];
+                let mut tuning_idx = app.state.read().fx.tuning as usize;
+                if tuning_idx >= tuning_names.len() {
+                    tuning_idx = 0;
+                }
+                egui::ComboBox::from_id_source("tuning_sel")
+                    .width(60.0)
+                    .selected_text(tuning_names[tuning_idx])
+                    .show_ui(ui, |ui| {
+                        for (i, name) in tuning_names.iter().enumerate() {
+                            if ui.selectable_label(tuning_idx == i, *name).clicked() {
+                                app.state.write().fx.tuning = i as u8;
+                                changed = true;
+                            }
+                        }
+                    });
             });
         });
     });
@@ -472,6 +592,14 @@ pub fn draw_fx(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         s.fx.tape_mix = tape_mix;
         s.fx.tape_flutter = tape_flutter;
         s.fx.master_pitch_st = master_pitch;
+        s.fx.delay_wow_flutter = delay_wow;
+        s.fx.delay_saturation = delay_sat;
+        s.fx.sidechain_amount = sc_amount;
+        s.fx.sidechain_attack = sc_attack;
+        s.fx.sidechain_release = sc_release;
+        s.fx.compressor_multiband = comp_mb;
+        s.fx.stereo_width = stereo_w;
+        s.fx.reverb_freeze = rev_freeze;
         drop(s);
         app.push_audio_params();
     }

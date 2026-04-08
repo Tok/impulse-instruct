@@ -204,6 +204,7 @@ fn run() -> anyhow::Result<()> {
     }
 
     // Apply --model override, falling back to the last-used model from session / settings.json
+    log::debug!("Resolving model path…");
     if let Some(ref model_path) = args.model {
         app_state.write().llm.model_path = model_path.clone();
     } else if app_state.read().llm.model_path.is_empty()
@@ -211,15 +212,23 @@ fn run() -> anyhow::Result<()> {
     {
         app_state.write().llm.model_path = saved;
     }
+    log::debug!(
+        "Model path: {:?}, agents: {}",
+        app_state.read().llm.model_path,
+        app_state.read().llm_agents.len()
+    );
 
     // ── Channels ─────────────────────────────────────────────────────────────
     let (llm_tx, llm_rx) = crossbeam_channel::bounded::<LlmInput>(16);
     let (llm_out_tx, llm_out_rx) = crossbeam_channel::bounded::<llm::LlmOutput>(32);
 
     // ── Audio engine (before LLM thread so we can share tts_tx) ─────────────
+    log::info!("Starting audio engine…");
     let audio_engine = AudioEngine::new(Arc::clone(&app_state))?;
+    log::info!("Audio engine started");
 
     // ── LLM thread ────────────────────────────────────────────────────────────
+    log::info!("Spawning LLM thread…");
     {
         let state = Arc::clone(&app_state);
         let out_tx = llm_out_tx.clone();
@@ -231,6 +240,7 @@ fn run() -> anyhow::Result<()> {
             .spawn(move || run_llm_loop(state, llm_rx, out_tx, mock, tts_tx))
             .expect("failed to spawn LLM thread");
     }
+    log::info!("LLM thread spawned");
 
     // ── HTTP API thread (on by default; disabled by --no-api) ────────────────
     let api_port = if !args.no_api { Some(args.port) } else { None };
@@ -302,6 +312,7 @@ fn run() -> anyhow::Result<()> {
         stereo_rx: audio_engine.stereo_rx,
     };
 
+    log::info!("Launching UI window…");
     let native_options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_title("Impulse Instruct")

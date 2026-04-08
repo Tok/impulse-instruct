@@ -27,6 +27,9 @@ pub use hoover::HooverState;
 pub mod noise;
 pub use noise::NoiseVoiceState;
 
+pub mod granular;
+pub use granular::GranularState;
+
 pub mod an1x;
 pub use an1x::{An1xLfoTarget, An1xState, An1xWave};
 
@@ -102,10 +105,12 @@ pub fn set_param_mode(state: AppState, path: &str, mode: ParamMode) -> AppState 
 pub mod ui_prefs;
 pub use ui_prefs::{AutosaveInterval, HuthStyle, KnobSize, KnobStyle, PadSize, UiPrefs};
 
+mod fx_plan;
 pub mod rack;
+pub use fx_plan::compile_fx_plan;
 pub use rack::{
     Cable, CableColor, FxPlan, FxStep, ModuleKind, PortDir, PortKind, PortRef, RackModule,
-    RackState, Zone, compile_fx_plan, rack_kind_name_matches, scope_from_control_cables,
+    RackState, Zone, rack_kind_name_matches, scope_from_control_cables,
 };
 
 // ─── Amen / WAV sampler voice state ──────────────────────────────────────────
@@ -176,6 +181,8 @@ pub struct AppState {
     #[serde(default)]
     pub noise_voice: NoiseVoiceState,
     #[serde(default)]
+    pub granular: GranularState,
+    #[serde(default)]
     pub hoover: HooverState,
     #[serde(default)]
     pub an1x: An1xState,
@@ -225,6 +232,7 @@ impl Default for AppState {
             lfo: Default::default(),
             free_eg: Default::default(),
             noise_voice: Default::default(),
+            granular: Default::default(),
             hoover: Default::default(),
             an1x: Default::default(),
             amen: Default::default(),
@@ -541,15 +549,37 @@ pub struct FxState {
     pub reverb_mix: f32,  // 0–1 wet/dry
     #[serde(default)]
     pub reverb_gate_time: f32, // 0 = no gate; 0.01–2.0 s gate close time (gated reverb)
-    pub delay_time: f32,  // 0–1 → 0–1000 ms
+    #[serde(default)]
+    pub reverb_freeze: bool, // true = infinite hold, tail loops indefinitely
+    pub delay_time: f32,  // 0–1 → 0–2000 ms
     pub delay_feedback: f32, // 0–1
     pub delay_mix: f32,   // 0–1 wet/dry
+    #[serde(default)]
+    pub delay_wow_flutter: f32, // 0–1 tape wow/flutter depth
+    #[serde(default)]
+    pub delay_saturation: f32, // 0–1 tape saturation on feedback
     pub distortion_drive: f32, // 0–1
     pub distortion_mix: f32, // 0–1 wet/dry
     pub compressor_threshold: f32, // 0–1 → -40–0 dB
     pub compressor_ratio: f32, // 0–1 → 1:1–20:1
     pub compressor_mix: f32, // 0–1 wet/dry (0 = bypassed)
+    #[serde(default)]
+    pub compressor_multiband: f32, // 0 = single band, >0 = 3-band (low/mid/high)
     pub master_volume: f32, // 0–1
+    #[serde(default)]
+    pub stereo_width: f32, // 0–1: 0=mono, 0.5=normal, 1=wide
+    #[serde(default)]
+    pub tuning: u8, // 0=12-TET, 1=just intonation, 2=slendro, 3=pelog
+    #[serde(default)]
+    pub xmod_bass_to_an1x_pitch: f32, // 0–1 bass osc → AN1X pitch FM depth
+    #[serde(default)]
+    pub xmod_noise_to_filter: f32, // 0–1 noise → bass filter cutoff mod depth
+    #[serde(default)]
+    pub sidechain_amount: f32, // 0–1 sidechain compression depth (kick ducks bass/pad)
+    #[serde(default)]
+    pub sidechain_attack: f32, // 0–1 → 0.1–50 ms attack
+    #[serde(default)]
+    pub sidechain_release: f32, // 0–1 → 10–500 ms release
     pub tape_drive: f32,  // 0–1 saturation amount
     pub tape_mix: f32,    // 0–1 wet/dry
     pub tape_flutter: f32, // 0–1 wow/flutter depth
@@ -584,15 +614,26 @@ impl Default for FxState {
             reverb_damp: 0.5,
             reverb_mix: 0.0,
             reverb_gate_time: 0.0,
+            reverb_freeze: false,
             delay_time: 0.375,
             delay_feedback: 0.4,
             delay_mix: 0.0,
+            delay_wow_flutter: 0.0,
+            delay_saturation: 0.0,
             distortion_drive: 0.0,
             distortion_mix: 0.0,
             compressor_threshold: 0.7,
             compressor_ratio: 0.3,
             compressor_mix: 0.0,
+            compressor_multiband: 0.0,
             master_volume: 0.85,
+            stereo_width: 0.5,
+            tuning: 0,
+            xmod_bass_to_an1x_pitch: 0.0,
+            xmod_noise_to_filter: 0.0,
+            sidechain_amount: 0.0,
+            sidechain_attack: 0.1,
+            sidechain_release: 0.3,
             tape_drive: 0.3,
             tape_mix: 0.0,
             tape_flutter: 0.2,
@@ -694,6 +735,9 @@ pub struct LlmState {
     pub conversation_mode: ConversationMode,
     pub active_style: Option<String>, // style id from styles.json, "__free__", "__custom__", or None
     pub custom_style_text: String,    // used when active_style == Some("__custom__")
+    /// When true (default), agents cannot override the user-selected style via SetStyle action.
+    #[serde(default = "default_true")]
+    pub style_lock: bool,
     pub user_instructions: String, // persistent user instructions injected into every system prompt
     pub persona_name: String,      // AI persona name shown in UI and used in system prompt
     pub system_prompt_override: String, // if non-empty, replaces the generated system prompt entirely
@@ -764,6 +808,7 @@ impl Default for LlmState {
             conversation_mode: ConversationMode::Producer,
             active_style: None,
             custom_style_text: String::new(),
+            style_lock: true,
             user_instructions: String::new(),
             persona_name: String::from("PULSE"),
             system_prompt_override: String::new(),
@@ -846,7 +891,27 @@ pub struct LlmAgentState {
     pub tokens_per_sec: f32,
     #[serde(default)]
     pub jam_cycle_count: u32,
+    /// Persistent memory: conversation snippets preserved across sessions.
+    /// Injected into the system prompt so the agent remembers prior context.
+    #[serde(default)]
+    pub memory: Vec<String>,
+    /// Style learning: user preference observations (e.g. "user likes high reverb").
+    /// Accumulated from UI edits; injected into system prompt alongside memory.
+    #[serde(default)]
+    pub style_observations: Vec<String>,
+    /// Pending hints from other agents, consumed on next inference.
+    #[serde(default)]
+    pub pending_hints: Vec<String>,
+    /// When true, this agent's style is independent and won't change when the
+    /// global style is changed. When false (default), style syncs with global.
+    #[serde(default)]
+    pub style_locked: bool,
 }
+
+/// Maximum number of memory entries per agent.
+pub const AGENT_MEMORY_MAX: usize = 20;
+/// Maximum number of style observations.
+pub const STYLE_OBS_MAX: usize = 10;
 
 impl LlmAgentState {
     pub fn new_default(id: u32) -> Self {
@@ -871,6 +936,10 @@ impl LlmAgentState {
             last_response: String::new(),
             tokens_per_sec: 0.0,
             jam_cycle_count: 0,
+            memory: Vec::new(),
+            style_observations: Vec::new(),
+            pending_hints: Vec::new(),
+            style_locked: false,
         }
     }
 
@@ -897,29 +966,15 @@ impl LlmAgentState {
             last_response: String::new(),
             tokens_per_sec: 0.0,
             jam_cycle_count: 0,
+            memory: Vec::new(),
+            style_observations: Vec::new(),
+            pending_hints: Vec::new(),
+            style_locked: false,
         }
     }
 }
 
 /// Sync the default (first) LlmAgentState with the global LlmState.
-/// Keeps header controls and the singleton inference loop working while
-/// the rackable agent UI is being built out.
-pub fn sync_default_agent(state: &mut AppState) {
-    if let Some(agent) = state.llm_agents.first_mut() {
-        // Singleton → agent (header controls are authoritative in Phase 1)
-        agent.persona_name = state.llm.persona_name.clone();
-        agent.heat = state.llm.heat;
-        agent.temperature = state.llm.temperature;
-        agent.jam_bars = state.llm.jam_bars;
-        agent.is_inferring = state.llm.is_inferring;
-        agent.tokens_per_sec = state.llm.tokens_per_sec;
-        agent.jam_cycle_count = state.llm.jam_cycle_count;
-        if !state.llm.last_response.is_empty() {
-            agent.last_response = state.llm.last_response.clone();
-        }
-    }
-}
-
 pub mod jam_tools;
 pub mod llm_apply;
 pub(crate) mod llm_helpers;

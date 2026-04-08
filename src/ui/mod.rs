@@ -37,7 +37,7 @@ use std::sync::Arc;
 use crate::audio::{AudioCommand, AudioParams};
 use crate::llm::{LlmInput, LlmOutput};
 use crate::midi::MidiEvent;
-use crate::state::{AppState, ConversationMode, compile_fx_plan};
+use crate::state::{AppState, compile_fx_plan};
 
 pub(super) const LOG_LEVELS: &[(&str, log::LevelFilter)] = &[
     ("ERROR", log::LevelFilter::Error),
@@ -195,6 +195,10 @@ pub struct ImpulseApp {
     pub(crate) show_cables: bool,
     // When true, rack shows back panel (ports + cables) instead of front (knobs).
     pub(crate) rack_flipped: bool,
+    // Mode locks: double-click footer indicator to keep modifier active without holding key
+    pub(crate) ctrl_locked: bool,
+    pub(crate) alt_locked: bool,
+    pub(crate) show_shortcuts: bool,
     // Zone whose [+ ADD] popup is currently open.
     pub(crate) add_menu_zone: Option<crate::state::Zone>,
     // Module being dragged by its title bar (id + current pointer position).
@@ -248,6 +252,7 @@ impl ImpulseApp {
         api_port: Option<u16>,
     ) -> Self {
         theme::apply(&cc.egui_ctx);
+        log::info!("ImpulseApp::new — creating UI…");
 
         // ── Load last session from eframe's persistent storage ────────────────
         if let Some(storage) = cc.storage
@@ -345,9 +350,7 @@ impl ImpulseApp {
                 shared
             },
             show_sysinfo: false,
-            show_wizard: !crate::state::load_session()
-                .and_then(|s| s.wizard_done)
-                .unwrap_or(false),
+            show_wizard: true,
             wizard_selected: if crate::state::load_session()
                 .and_then(|s| s.llm_agents)
                 .map(|a| a.is_empty())
@@ -368,6 +371,9 @@ impl ImpulseApp {
                 .and_then(|s| s.show_cables)
                 .unwrap_or(true),
             rack_flipped: false, // volatile — always start in front view
+            ctrl_locked: false,
+            alt_locked: false,
+            show_shortcuts: false,
             add_menu_zone: None,
             module_drag: None,
             session_dirty: false,
@@ -419,11 +425,18 @@ impl ImpulseApp {
         self.module_scales.get(&kind).copied().unwrap_or(1.0)
     }
 
+    pub(crate) fn observe_edits(&mut self, edits: &[(&str, f32)]) {
+        for &(path, val) in edits {
+            let s = self.state.read().clone();
+            *self.state.write() = crate::state::observe_user_edit(s, path, val);
+        }
+    }
+
     fn push_audio_params(&mut self) {
         let params = {
             let s = self.state.read();
             let mut p = AudioParams::from_app_state(&s);
-            p.sample_rate = 44100.0; // will be overwritten by engine
+            p.sample_rate = 44100.0;
             p
         };
         let _ = self
@@ -478,36 +491,11 @@ impl ImpulseApp {
                     || (!out.text.is_empty() && !out.text.starts_with('[')))
             {
                 let conv_mode = self.state.read().llm.conversation_mode.clone();
-                let display = if let Some(ref update) = out.param_update {
-                    if conv_mode == ConversationMode::Off {
-                        // Off: show only what keys changed, no commentary
-                        let keys: Vec<&str> = update
-                            .as_object()
-                            .map(|o| {
-                                o.keys()
-                                    .filter(|k| *k != "_comment")
-                                    .map(|k| k.as_str())
-                                    .collect()
-                            })
-                            .unwrap_or_default();
-                        format!("updated {}", keys.join(", "))
-                    } else if let Some(comment) = update.get("_comment").and_then(|v| v.as_str()) {
-                        comment.to_string()
-                    } else {
-                        let keys: Vec<&str> = update
-                            .as_object()
-                            .map(|o| {
-                                o.keys()
-                                    .filter(|k| *k != "_comment")
-                                    .map(|k| k.as_str())
-                                    .collect()
-                            })
-                            .unwrap_or_default();
-                        format!("updated {}", keys.join(", "))
-                    }
-                } else {
-                    out.text.clone()
-                };
+                let display = crate::state::format_llm_display(
+                    out.param_update.as_ref(),
+                    &out.text,
+                    &conv_mode,
+                );
                 // Append thinking indicator when present; tag audio-feedback responses
                 let persona = if self.listen_pending {
                     self.listen_pending = false;
@@ -604,21 +592,24 @@ impl ImpulseApp {
                         self.session_dirty = true;
                     }
                     LlmAction::SetStyle(sid) if !out.is_jam => {
-                        use crate::llm::styles::StyleCatalog;
-                        let cat = StyleCatalog::get();
-                        let resolved = cat
-                            .find_by_id(sid)
-                            .or_else(|| {
-                                let lo = sid.to_lowercase();
-                                cat.styles().iter().find(|s| {
-                                    s.id.to_lowercase() == lo || s.name.to_lowercase() == lo
+                        // Respect style lock — agents can't override user-selected style
+                        if !self.state.read().llm.style_lock {
+                            use crate::llm::styles::StyleCatalog;
+                            let cat = StyleCatalog::get();
+                            let resolved = cat
+                                .find_by_id(sid)
+                                .or_else(|| {
+                                    let lo = sid.to_lowercase();
+                                    cat.styles().iter().find(|s| {
+                                        s.id.to_lowercase() == lo || s.name.to_lowercase() == lo
+                                    })
                                 })
-                            })
-                            .map(|s| s.id.clone());
-                        if let Some(id) = resolved {
-                            self.state.write().llm.active_style = Some(id);
+                                .map(|s| s.id.clone());
+                            if let Some(id) = resolved {
+                                self.state.write().llm.active_style = Some(id);
+                            }
+                            self.session_dirty = true;
                         }
-                        self.session_dirty = true;
                     }
                     LlmAction::SetHeat(_) | LlmAction::SetStyle(_) => {} // jam: ignore
                     LlmAction::SetPersona(p) => {
@@ -652,57 +643,39 @@ impl ImpulseApp {
                                 .and_then(|aid| s.llm_agents.iter().find(|a| a.id == aid))
                                 .map(|a| a.can_spawn)
                                 .unwrap_or(true);
-                        drop(s);
-                        if ok {
-                            let id = self
-                                .state
-                                .write()
-                                .rack
-                                .add_module(crate::state::ModuleKind::LlmAgent);
-                            let mut agent = crate::state::LlmAgentState::from_singleton(
-                                id,
-                                &self.state.read().llm,
+                        // VRAM budget check
+                        let vram_ok = !ok || {
+                            let vram_total = self
+                                .sys_info
+                                .lock()
+                                .ok()
+                                .map(|si| si.vram_total_mb)
+                                .unwrap_or(0);
+                            !crate::llm::vram::would_exceed_vram(
+                                &s.llm_agents,
+                                &s.llm.model_path,
+                                model.as_deref(),
+                                vram_total,
+                            )
+                        };
+                        if !vram_ok {
+                            log::warn!(
+                                "Rejected agent spawn '{}': would exceed VRAM budget",
+                                persona
                             );
-                            agent.persona_name = persona.clone();
-                            agent.scope = scope.clone();
-                            if let Some(m) = model {
-                                agent.model_path = Some(m.clone());
-                            }
-                            self.state.write().llm_agents.push(agent);
-                            // Auto-wire control cables from scope
-                            {
-                                use crate::state::{
-                                    PortDir, PortKind, PortRef, rack_kind_name_matches,
-                                };
-                                let targets: Vec<u32> = self
-                                    .state
-                                    .read()
-                                    .rack
-                                    .modules
-                                    .iter()
-                                    .filter(|m| {
-                                        scope.iter().any(|s| rack_kind_name_matches(m.kind, s))
-                                    })
-                                    .map(|m| m.id)
-                                    .collect();
-                                let mut s = self.state.write();
-                                for tid in &targets {
-                                    s.rack.connect(
-                                        PortRef {
-                                            module_id: id,
-                                            dir: PortDir::Out,
-                                            kind: PortKind::Control,
-                                            index: 0,
-                                        },
-                                        PortRef {
-                                            module_id: *tid,
-                                            dir: PortDir::In,
-                                            kind: PortKind::Control,
-                                            index: 0,
-                                        },
-                                    );
-                                }
-                            }
+                        }
+                        drop(s);
+                        if ok && vram_ok {
+                            self.push_history();
+                            let snapshot = self.state.read().clone();
+                            let (new_state, _id) = crate::state::spawn_agent(
+                                snapshot,
+                                persona,
+                                scope,
+                                crate::state::AgentRole::Producer,
+                                model.clone(),
+                            );
+                            *self.state.write() = new_state;
                             self.log_text
                                 .push_str(&format!("Agent spawned: {} ({:?})\n", persona, scope));
                             self.session_dirty = true;
@@ -726,6 +699,7 @@ impl ImpulseApp {
                                 .unwrap_or_default();
                             drop(s);
                             if ok && count > 1 {
+                                self.push_history();
                                 self.state.write().rack.remove_module(aid);
                                 self.state.write().llm_agents.retain(|a| a.id != aid);
                                 self.log_text.push_str(&format!("{} signed off\n", name));
@@ -733,6 +707,20 @@ impl ImpulseApp {
                                     self.state.write().llm_agents[0].scope.clear();
                                 }
                                 self.session_dirty = true;
+                            }
+                        }
+                    }
+                    LlmAction::SendHint { to, hint } => {
+                        let mut s = self.state.write();
+                        if let Some(target) = s
+                            .llm_agents
+                            .iter_mut()
+                            .find(|a| a.persona_name.eq_ignore_ascii_case(to))
+                        {
+                            target.pending_hints.push(hint.clone());
+                            // Cap at 5 pending hints
+                            if target.pending_hints.len() > 5 {
+                                target.pending_hints.drain(..target.pending_hints.len() - 5);
                             }
                         }
                     }
@@ -794,6 +782,8 @@ impl eframe::App for ImpulseApp {
                 egui::Id::new("wasd_as_arrows"),
                 self.state.read().ui_prefs.wasd_as_arrows,
             );
+            d.insert_temp(egui::Id::new("alt_locked"), self.alt_locked);
+            d.insert_temp(egui::Id::new("ctrl_locked"), self.ctrl_locked);
         });
 
         self.drain_llm_outputs();
@@ -871,10 +861,15 @@ impl eframe::App for ImpulseApp {
                 self.push_audio_params();
             }
         }
-        // ── Tab: flip rack (front ↔ back panel) ─────────────────────────────
         if ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Tab)) {
             self.rack_flipped = !self.rack_flipped;
             self.session_dirty = true;
+        }
+        if ctx.input_mut(|i| {
+            i.consume_key(egui::Modifiers::SHIFT, egui::Key::Slash) // Shift+/ = ?
+                || i.consume_key(egui::Modifiers::NONE, egui::Key::F1)
+        }) {
+            self.show_shortcuts = !self.show_shortcuts;
         }
 
         // ── Startup hook ──────────────────────────────────────────────────────
@@ -938,7 +933,6 @@ impl eframe::App for ImpulseApp {
 
         self.draw_windows(ctx);
         self.draw_menu_and_header(ctx);
-        // ── Oscilloscope strip ────────────────────────────────────────────────
         TopBottomPanel::top("scope")
             .frame(
                 Frame::none()
@@ -947,10 +941,11 @@ impl eframe::App for ImpulseApp {
             )
             .exact_height(48.0)
             .show(ctx, |ui| {
-                scope_footer::draw_scope(ui, &self.scope_buf, &self.scope_history);
+                ui.horizontal(|ui| {
+                    scope_footer::draw_ring_scope(ui, &self.scope_buf, 40.0);
+                    scope_footer::draw_scope(ui, &self.scope_buf, &self.scope_history);
+                });
             });
-
-        // ── Footer ────────────────────────────────────────────────────────────
         TopBottomPanel::bottom("footer")
             .frame(
                 Frame::none()
@@ -963,7 +958,9 @@ impl eframe::App for ImpulseApp {
                     ui,
                     &self.midi_port,
                     &self.dsp_load_buf,
-                    self.rack_flipped,
+                    &mut self.rack_flipped,
+                    &mut self.ctrl_locked,
+                    &mut self.alt_locked,
                 );
             });
 
@@ -992,5 +989,11 @@ impl eframe::App for ImpulseApp {
                     rack_canvas::draw_rack(self, ctx, ui);
                 }
             });
+        if self.show_shortcuts && scope_footer::draw_shortcuts_overlay(ctx) {
+            self.show_shortcuts = false;
+        }
+        if self.state.read().ui_prefs.crt_effect {
+            scope_footer::draw_crt_overlay(ctx);
+        }
     }
 }

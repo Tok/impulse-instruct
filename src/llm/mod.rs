@@ -48,6 +48,11 @@ pub enum LlmAction {
         model: Option<String>,
     },
     DismissAgent,
+    /// Send a structured hint to another agent by persona name.
+    SendHint {
+        to: String,
+        hint: String,
+    },
 }
 
 pub use json_repair::extract_llm_actions;
@@ -399,7 +404,29 @@ pub fn run_llm_loop(
                 snap.llm.system_prompt_override = override_text;
             }
             snap.llm.heat = agent_heat;
-            build_system_prompt(&snap, &agent_scope)
+            let (agent_memory, style_obs, hints) = agent_id
+                .and_then(|aid| snap.llm_agents.iter().find(|a| a.id == aid))
+                .map(|a| {
+                    (
+                        a.memory.clone(),
+                        a.style_observations.clone(),
+                        a.pending_hints.clone(),
+                    )
+                })
+                .unwrap_or_default();
+            // Clear pending hints after reading
+            if let Some(aid) = agent_id {
+                let mut s = state.write();
+                if let Some(a) = s.llm_agents.iter_mut().find(|a| a.id == aid) {
+                    a.pending_hints.clear();
+                }
+            }
+            // Combine memory with hints for the prompt
+            let mut full_memory = agent_memory;
+            for h in &hints {
+                full_memory.push(format!("[hint from another agent] {}", h));
+            }
+            prompt::build_system_prompt_full(&snap, &agent_scope, &full_memory, &style_obs)
         };
         {
             let mut s = state.write();
@@ -578,6 +605,16 @@ pub fn run_llm_loop(
                         a.tokens_per_sec = output.tokens_per_sec;
                         a.last_response = output.text.clone();
                         a.jam_cycle_count = a.jam_cycle_count.saturating_add(1);
+                        // Persist a memory snippet from this response
+                        if let Some(ref update) = output.param_update
+                            && let Some(comment) = update.get("_comment").and_then(|v| v.as_str())
+                        {
+                            a.memory.push(comment.to_string());
+                            if a.memory.len() > crate::state::AGENT_MEMORY_MAX {
+                                a.memory
+                                    .drain(..a.memory.len() - crate::state::AGENT_MEMORY_MAX);
+                            }
+                        }
                     }
                 }
                 let _ = output_tx.try_send(output);

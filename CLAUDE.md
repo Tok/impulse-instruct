@@ -47,7 +47,9 @@ scripts\run-llm-theory.bat
 | `src/midi/mod.rs` | midir input (CC→param mapping, NoteOn/Off → live record) + MIDI clock output (MidiClockOutput struct). |
 | `src/ui/mod.rs` | egui app: 5 panels (Sequencer / 303 / 808 / 909 / FX) + AN1X + Hoover sub-panels. |
 | `src/ui/theme.rs` | Grayscale palette - **all UI colors must satisfy R=G=B** (no tint). Huth *Farbige Noten* colors are the only exception (note highlights). See `docs/ui-design.md`. |
-| `src/state/rack.rs` | Modular rack: `ModuleKind`, `RackModule`, `Cable`, `FxPlan`, `compile_fx_plan()`. See `docs/rack.md`. |
+| `src/state/rack.rs` | Modular rack: `ModuleKind`, `RackModule`, `Cable`, `FxPlan`, cycle detection. See `docs/rack.md`. |
+| `src/state/fx_plan.rs` | `compile_fx_plan()` — Kahn's topo-sort over FX cable graph into `FxPlan`. |
+| `src/llm/vram.rs` | VRAM budget: model profiles, `estimate_vram()`, `would_exceed_vram()`, agent presets. |
 | `src/ui/widgets.rs` | Chrome knob, glass slider, embossed button, step button, LED, XY pad, oscilloscope, ADSR visualizer. |
 | `src/ui/panels/` | One file per synth panel (bass, 808, 909, hoover, an1x, fx, sequencer). |
 | `src/state/transitions.rs` | Pure state transition functions (all the `toggle_*`, `set_*`, `apply_*`, `bank_*`, `chain_*` fns). |
@@ -103,7 +105,7 @@ Quick summary of the key rules:
 ## LLM integration
 
 Models (ranked by test suite results):
-- **Gemma 4 E4B Q4_K_M** - default, 4.6 GB, best accuracy, passes all 39 integration tests
+- **Gemma 4 E4B Q4_K_M** - default, 4.6 GB, best accuracy, passes all 39 LLM integration tests
 - **Bonsai 8B Q1_0_g128** - 1.1 GB lightweight fallback, no chain-of-thought, requires PrismML llama-server fork
 - **Qwen3-8B / 14B** - optional, chain-of-thought capable; not recommended as default (heavier, no accuracy gain over Gemma 4)
 - **Other GGUF models** (e.g. Llama variants) - technically compatible with llama-server but not evaluated; system prompt is not tuned for them. Users are free to experiment.
@@ -133,9 +135,5 @@ POST /api/sequencer/stop
 
 ## Not yet implemented
 
-- Rack UI cable patching (cable graph exists, patch bay interaction in progress)
-- CV routing: LFO → parameter target (data-modeled, not yet wired into DSP)
-- Gabber kick voice (pitch env + hard clipper)
-- Bloom post-process (needs custom wgpu render pass)
-- Multiple voices / multiple LLM instances
-- Alternate tuning tables (gamelan slendro etc.)
+- Rack CV cables driving LFO targets (cables are visual; LFO targets set via state field)
+- Multiple LLM instances per inference (multi-turn within one cycle)

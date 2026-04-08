@@ -18,9 +18,62 @@ pub struct LfoParamsCopy {
                            // 5=ReverbMix 6=DelayTime 7=DelayFeedback 8=ChorusMix 9=ChorusRate 10=Kick808Pitch
 }
 
+/// Per-voice bass synth params — one per Bass303 instance.
 #[derive(Clone, Copy, Debug)]
+pub struct BassVoiceParams {
+    pub cutoff: f32,
+    pub resonance: f32,
+    pub env_mod: f32,
+    pub decay: f32,
+    pub accent_level: f32,
+    pub waveform_saw: bool,
+    pub waveform_supersaw: bool,
+    pub supersaw_detune: f32,
+    pub supersaw_voices: u8,
+    pub sub_osc_level: f32,
+    pub portamento_time: f32,
+    pub noise_mix: f32,
+    pub osc_detune: f32,
+    pub fm_ratio: f32,
+    pub fm_depth: f32,
+    pub distortion: f32,
+    pub volume: f32,
+    pub filter_mode: u8, // 0=LP, 1=HP, 2=BP
+}
+
+impl BassVoiceParams {
+    fn from_bass_state(b: &crate::state::BassState) -> Self {
+        use crate::state::{FilterMode, Waveform};
+        Self {
+            cutoff: b.cutoff,
+            resonance: b.resonance,
+            env_mod: b.env_mod,
+            decay: b.decay,
+            accent_level: b.accent_level,
+            waveform_saw: b.waveform == Waveform::Saw,
+            waveform_supersaw: b.waveform == Waveform::Supersaw,
+            supersaw_detune: b.supersaw_detune,
+            supersaw_voices: b.supersaw_voices,
+            sub_osc_level: b.sub_osc_level,
+            portamento_time: b.portamento_time,
+            noise_mix: b.noise_mix,
+            osc_detune: b.osc_detune,
+            fm_ratio: b.fm_ratio,
+            fm_depth: b.fm_depth,
+            distortion: b.distortion,
+            volume: b.volume,
+            filter_mode: match b.filter_mode {
+                FilterMode::Lowpass => 0,
+                FilterMode::Highpass => 1,
+                FilterMode::Bandpass => 2,
+            },
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
 pub struct AudioParams {
-    // 303
+    // 303 — voice 0 params kept for LFO/free-EG modulation targets
     pub cutoff: f32,
     pub resonance: f32,
     pub env_mod: f32,
@@ -38,6 +91,8 @@ pub struct AudioParams {
     pub fm_depth_303: f32,        // 0–1 FM depth; 0 = off
     pub distortion_303: f32,
     pub volume_303: f32,
+    // Per-voice bass params (voices 0–3)
+    pub bass_voice_params: [BassVoiceParams; crate::state::MAX_BASS_VOICES],
     // 808 kick
     pub kick808_pitch: f32,
     pub kick808_decay: f32,
@@ -79,12 +134,25 @@ pub struct AudioParams {
     pub reverb_damp: f32,
     pub reverb_mix: f32,
     pub reverb_gate_time: f32, // 0 = no gate; gate close time in seconds
+    pub reverb_freeze: bool,
     pub delay_time: f32,
     pub delay_feedback: f32,
     pub delay_mix: f32,
+    pub delay_wow_flutter: f32,
+    pub delay_saturation: f32,
     pub distortion_drive: f32,
     pub distortion_mix: f32,
     pub master_volume: f32,
+    // Cross-modulation
+    pub xmod_bass_to_an1x_pitch: f32,
+    pub xmod_noise_to_filter: f32,
+    // Sidechain compression (kick ducks bass/pad)
+    pub sidechain_amount: f32,
+    pub sidechain_attack: f32,
+    pub sidechain_release: f32,
+    pub compressor_multiband: f32,
+    pub stereo_width: f32, // 0=mono, 0.5=normal, 1=wide
+    pub tuning: u8,        // 0=12-TET, 1=just, 2=slendro, 3=pelog
     // Bitcrush
     pub bitcrush_bits: f32,
     pub bitcrush_rate: f32,
@@ -139,6 +207,21 @@ pub struct AudioParams {
     pub noise_voice_volume: f32,
     pub noise_voice_color: f32,
     pub noise_voice_cutoff: f32,
+    pub noise_attack: f32,
+    pub noise_release: f32,
+    pub noise_filter_lfo_rate: f32,
+    pub noise_filter_lfo_depth: f32,
+    pub noise_sh_rate: f32,
+    pub noise_sh_depth: f32,
+    // Granular texture
+    pub granular_enabled: bool,
+    pub granular_volume: f32,
+    pub granular_density: f32,
+    pub granular_grain_size: f32,
+    pub granular_position: f32,
+    pub granular_position_jitter: f32,
+    pub granular_pitch_scatter: f32,
+    pub granular_spray: f32,
     // Hoover lead
     pub hoover_enabled: bool,
     pub hoover_filter_start: f32,
@@ -199,8 +282,9 @@ pub struct AudioParams {
 
 impl AudioParams {
     pub fn from_app_state(s: &AppState) -> Self {
-        // Use voice 0 (always enabled) for the single-voice bass params
         let bass = &s.bass_voices[0].synth;
+        let bvp: [BassVoiceParams; crate::state::MAX_BASS_VOICES] =
+            std::array::from_fn(|i| BassVoiceParams::from_bass_state(&s.bass_voices[i].synth));
         Self {
             cutoff: bass.cutoff,
             resonance: bass.resonance,
@@ -219,6 +303,7 @@ impl AudioParams {
             fm_depth_303: bass.fm_depth,
             distortion_303: bass.distortion,
             volume_303: bass.volume,
+            bass_voice_params: bvp,
             kick808_pitch: s.kit_a.kick.pitch,
             kick808_decay: s.kit_a.kick.decay,
             kick808_punch: s.kit_a.kick.punch,
@@ -253,12 +338,23 @@ impl AudioParams {
             reverb_damp: s.fx.reverb_damp,
             reverb_mix: s.fx.reverb_mix,
             reverb_gate_time: s.fx.reverb_gate_time,
+            reverb_freeze: s.fx.reverb_freeze,
             delay_time: s.fx.delay_time,
             delay_feedback: s.fx.delay_feedback,
             delay_mix: s.fx.delay_mix,
+            delay_wow_flutter: s.fx.delay_wow_flutter,
+            delay_saturation: s.fx.delay_saturation,
             distortion_drive: s.fx.distortion_drive,
             distortion_mix: s.fx.distortion_mix,
             master_volume: s.fx.master_volume,
+            xmod_bass_to_an1x_pitch: s.fx.xmod_bass_to_an1x_pitch,
+            xmod_noise_to_filter: s.fx.xmod_noise_to_filter,
+            sidechain_amount: s.fx.sidechain_amount,
+            sidechain_attack: s.fx.sidechain_attack,
+            sidechain_release: s.fx.sidechain_release,
+            compressor_multiband: s.fx.compressor_multiband,
+            stereo_width: s.fx.stereo_width,
+            tuning: s.fx.tuning,
             bitcrush_bits: s.fx.bitcrush_bits,
             bitcrush_rate: s.fx.bitcrush_rate,
             bitcrush_mix: s.fx.bitcrush_mix,
@@ -354,6 +450,20 @@ impl AudioParams {
             noise_voice_volume: s.noise_voice.volume,
             noise_voice_color: s.noise_voice.color,
             noise_voice_cutoff: s.noise_voice.cutoff,
+            noise_attack: s.noise_voice.attack,
+            noise_release: s.noise_voice.release,
+            noise_filter_lfo_rate: s.noise_voice.filter_lfo_rate,
+            noise_filter_lfo_depth: s.noise_voice.filter_lfo_depth,
+            noise_sh_rate: s.noise_voice.sh_rate,
+            noise_sh_depth: s.noise_voice.sh_depth,
+            granular_enabled: s.granular.enabled,
+            granular_volume: s.granular.volume,
+            granular_density: s.granular.density,
+            granular_grain_size: s.granular.grain_size,
+            granular_position: s.granular.position,
+            granular_position_jitter: s.granular.position_jitter,
+            granular_pitch_scatter: s.granular.pitch_scatter,
+            granular_spray: s.granular.spray,
             hoover_enabled: s.hoover.enabled,
             hoover_filter_start: s.hoover.filter_start,
             hoover_sweep_time: s.hoover.sweep_time.clamp(0.1, 4.0),

@@ -175,12 +175,8 @@ pub fn draw_rack(app: &mut ImpulseApp, ctx: &egui::Context, ui: &mut egui::Ui) {
             draw_rack_inner(app, ui, &mut ports);
         });
 
-    // ── Arrow-key scrolling (fast, held = continuous) ─────────────────────────
-    // Only scroll when no text widget has focus (avoid stealing arrow keys
-    // from text inputs like the prompt field).
-    let nothing_focused = ctx.memory(|m| m.focused()).is_none();
-    if nothing_focused {
-        let scroll_speed = 60.0;
+    {
+        let scroll_speed = 180.0;
         let wasd = ctx
             .data(|d| d.get_temp::<bool>(egui::Id::new("wasd_as_arrows")))
             .unwrap_or(false);
@@ -202,13 +198,11 @@ pub fn draw_rack(app: &mut ImpulseApp, ctx: &egui::Context, ui: &mut egui::Ui) {
         }
     }
 
-    // Persist ports for the next frame's scroll-lock check.
     ctx.memory_mut(|m| m.data.insert_temp(ports_mem_id, ports.clone()));
-
-    // ── Cable overlay (extracted to rack_cables.rs) ────────────────────────────
+    // Cable overlay
     rack_cables::draw_cable_overlay(app, ctx, &ports, canvas_rect);
 
-    // ── Port hover / drag-target highlights (back panel only) ─────────────────
+    // Port hover / drag-target highlights (back panel only)
     if (app.rack_flipped || app.cable_drag.is_some())
         && let Some(pointer) = ctx.pointer_latest_pos()
     {
@@ -266,11 +260,7 @@ pub fn draw_rack(app: &mut ImpulseApp, ctx: &egui::Context, ui: &mut egui::Ui) {
             ctx.set_cursor_icon(egui::CursorIcon::PointingHand);
         }
     }
-
-    // ── Cable drag — always active, no mode required ──────────────────────────
     handle_cable_drag(app, ctx, &ports);
-
-    // ── Module drag ghost overlay ─────────────────────────────────────────────
     if let Some(ref drag) = app.module_drag
         && let Some(pointer) = ctx.pointer_latest_pos()
     {
@@ -305,11 +295,19 @@ pub fn draw_rack(app: &mut ImpulseApp, ctx: &egui::Context, ui: &mut egui::Ui) {
                 egui::FontId::monospace(9.5),
                 Color32::from_gray(200),
             );
+            // Draw a bright insertion line at the drop target position
+            let drop_x = pointer.x;
+            let screen = ctx.screen_rect();
+            painter.line_segment(
+                [
+                    egui::pos2(drop_x, screen.min.y + 40.0),
+                    egui::pos2(drop_x, screen.max.y - 40.0),
+                ],
+                egui::Stroke::new(2.0, Color32::from_gray(160)),
+            );
             ctx.request_repaint();
         }
     }
-
-    // ── Add module popup ──────────────────────────────────────────────────────
     draw_add_menu(app, ctx);
 }
 
@@ -838,7 +836,13 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
                     }
                     let drop_pos = ctx_ref.pointer_latest_pos().unwrap_or_default();
                     if handle_title_drag(app, &ctx_ref, *id, &resp) {
-                        reorder_module_by_drop(app, *id, drop_pos, Zone::Voice);
+                        reorder_module_by_drop(
+                            app,
+                            *id,
+                            drop_pos,
+                            Zone::Voice,
+                            ctx_ref.screen_rect().width(),
+                        );
                     }
                 }
             });
@@ -952,7 +956,13 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
                     }
                     let drop_pos = ctx_ref.pointer_latest_pos().unwrap_or_default();
                     if handle_title_drag(app, &ctx_ref, *id, &resp) {
-                        reorder_module_by_drop(app, *id, drop_pos, Zone::FxMod);
+                        reorder_module_by_drop(
+                            app,
+                            *id,
+                            drop_pos,
+                            Zone::FxMod,
+                            ctx_ref.screen_rect().width(),
+                        );
                     }
                 }
             });

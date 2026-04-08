@@ -1,117 +1,63 @@
 # Impulse Instruct - Roadmap
 
-A smart synthesizer with a virtual production team inside. Multiple LLM agents
-collaborate to write patterns, shape sound, and evolve tracks in real time.
-
 What's already built is documented in [docs/features.md](docs/features.md).
 
 ---
 
-## v0.6.0 / v0.6.1 — Multi-agent release
+## v0.7.1 — next release
 
-Released.  v0.6.1 hotfixes: removed `sync_default_agent` (broke per-agent
-state), server-acquire error feedback, console Enter key fix, prompt broadcast
-to all agents, wizard clean-slate preset application, round-robin visualization.
+### DSP
 
----
+- [ ] **Gabber kick voice** — dedicated voice (not just preset on 808 kick);
+  extreme pitch envelope, hard clipper, layered transient
+- [ ] **Per-voice FX sends** — route individual voices to specific FX modules
+  via rack cables (data model exists, DSP routing partially wired)
+- [ ] **Dub techno send/return** — dedicated send/return FX workflow for
+  dub-style infinite delay feedback chains
 
-## Completed in v0.6.0 cycle
+### Sequencer
 
-### Multi-model agent infrastructure (Phase 1–3)
+- [ ] **Pattern probability per step** — already implemented but LLM doesn't
+  use it well; improve prompt guidance for probability-based patterns
+- [ ] **Song mode** — chain patterns with per-chain tempo/style transitions
+- [ ] **MIDI export** — export sequencer pattern as .mid file
 
-- [x] **Server pool** — `LlamaServerPool` manages N llama-server processes,
-  ref-counted per model; per-agent `model_path: Option<String>`
-- [x] **VRAM budget + startup wizard** — `src/llm/vram.rs` model profiles +
-  6 presets (Solo/Duo/Swarm/Band/Voices/Lite); first-launch wizard with GPU
-  detection, VRAM budget bar, "Resume last session" default
-- [x] **Dynamic agent spawning** — `LlmAction::SpawnAgent` / `DismissAgent`;
-  auto-wire control cables on spawn; gated by `agent_autonomy`
-- [x] **Cable-driven scope** — Control cables define agent scope; system
-  prompt constraint + `apply_llm_update()` enforcement
-- [x] **Agent cards** — self-contained: model selector, persona, style,
-  conversation mode, thinking toggle, user instructions, VRAM estimate
-- [x] **Console → agent routing** — prompts go to first enabled agent;
-  log shows per-agent persona names
+### Intelligence
 
-### Other v0.6.0 features
+- [ ] **Agent conversation history** — multi-turn within a single jam cycle;
+  agent sees its own previous outputs for coherent evolution
+- [ ] **Prompt templates per style** — styles can define custom prompt
+  templates that replace the generic "generate all parameters" jam prompt
+- [ ] **VRAM-aware model fallback** — when spawn is rejected, auto-suggest or
+  auto-select a lighter model that fits the remaining VRAM budget
 
-- [x] Rackable LLM agents + LLM Console module
-- [x] Rack flip (front knobs / back cables)
-- [x] Separate heat/temperature sliders
-- [x] Smooth style transitions via `ParamRamp`
-- [x] DSP load sparkline, phosphor oscilloscope
-- [x] Centered module card layout, row fill/centering
-- [x] Volatile rack_flipped (always starts front view)
+### UI / UX
 
----
+- [ ] **Module drag reorder** — insertion point indicator works; needs better
+  width calculation (now uses screen width, was hardcoded 1200px)
+- [ ] **Rack CV cables driving LFO targets** — cables are visual only; wiring
+  them to actually change LFO target at DSP level
+- [ ] **Preferences: tuning selector** — ComboBox exists in FX MASTER group;
+  could also be in Preferences for discoverability
+- [ ] **Touch mode improvements** — touch-paint mode for mobile/tablet;
+  gesture support for zoom/scroll
+- [ ] **observe_user_edit in remaining panels** — currently only bass panel;
+  extend to 808, 909, hoover, AN1X, noise, granular, FX panels
 
-## Audio Feedback Loop
+### Infrastructure
 
-**Phase 1 is implemented.** LISTEN button captures audio, runs per-band RMS +
-transient analysis, prepends structured snapshot to prompt.
-
-**Phase 2 (real audio input to the model) is on hold.** llama.cpp does not yet
-support Gemma 4's audio encoder. See [docs/audio-feedback.md](docs/audio-feedback.md).
-
----
-
-## Future (v0.6.1+)
-
-#### Visualization & statistics modules
-
-- [x] **Spectrum analyser** — 1024-point FFT, 64 log bands, smoothing + peak hold
-- [x] **Stereo correlation meter** — phase correlation + L/R balance bar (rackable)
-- [x] **Pattern heatmap** — probability indicator on step buttons (corner dot)
-- [x] **LLM activity timeline** — rackable module with timestamped, tagged entries
-
-#### Visual treatment (post-process pass)
-
-- [ ] **Bloom** — Gaussian blur on bright pixels, additive blend (needs wgpu)
-- [ ] **Scan-line / CRT vignette** — cheap fullscreen quad shader
-- [x] **LED glow on active steps** — velocity heat fill + probability dot on step buttons
-
-#### Other
-
-- [ ] **Multiple voices (per-voice DSP params)** — voices 1-3 currently share
-  synth params with voice 0; next step: per-voice `AudioParams` snapshot
-
-- [x] **Gabber kick preset** — extreme pitch env + hard clip on 808 Kit A
-
-- [ ] **Windows code-signing** — unsigned `.exe` triggers SmartScreen
-
-- [x] **Bipolar param_control variant** — `param_control_bipolar()` maps -1..+1;
-  bass osc_detune now uses knob instead of DragValue
-
-- [ ] **Event queue ring visualisation** — render the rtrb ring buffer as a
-  circular display with moving read/write heads
+- [ ] **CI: run LLM integration tests on release** — currently manual;
+  automate in GitHub Actions with a Gemma model cache
+- [ ] **Codecov improvement** — currently ~37%; new test suites should push
+  it higher once CI runs
+- [ ] **Graceful shutdown** — catch SIGINT/SIGTERM, drop audio stream cleanly
+  to prevent PipeWire resource leaks
 
 ---
 
-## Known Gaps (styles vs synth reality)
+## Known issues
 
-| Style | What it promises | What's still missing |
-|-------|-----------------|----------------------|
-| Hoover lead | Classic Human Resource vacuum-cleaner screech | Resonant sweep shape needs tuning |
-| Ambient | Glacial filter sweeps, very slow LFO movement | Long attack/decay times; LFO automation wired but not reliable |
-| Dub techno | FX IS the music - send/return model | Per-voice FX buses wired; dedicated send/return workflow not yet surfaced |
-
-Acid bass works well. 808/909 drums work well. The gap between what PULSE intends and what the synth produces is where most roughness lives.
-
----
-
-## Model Options
-
-The llama-server backend is model-agnostic - swap the GGUF and update the model selector.
-Gemma 4 E4B is the default: best test scores (39/39 integration tests), fast, compact.
-
-| Model | Download | Size | VRAM | Notes |
-|-------|----------|------|------|-------|
-| **Gemma 4 E4B Q4_K_M** | `./scripts/download-models.sh` | ~4.6 GB | ~6 GB | **Default**; best accuracy, 39/39 tests |
-| **Bonsai-8B Q1_0_g128** | `./scripts/download-models.sh bonsai` | ~1.1 GB | ~2 GB | Lightweight fallback; no CoT, needs PrismML server fork |
-| **DeepSeek-R1-Distill-Qwen-7B** | `./scripts/download-models.sh deepseek-r1-7b` | ~5 GB | ~7 GB | CoT capable, Qwen2.5 base; MIT license |
-| **DeepSeek-R1-Distill-Qwen-14B** | `./scripts/download-models.sh deepseek-r1-14b` | ~9 GB | ~11 GB | CoT, higher quality; needs 12 GB VRAM |
-| **Qwen3-8B Q4_K_M** | `./scripts/download-models.sh qwen3` | ~5 GB | ~7 GB | Optional; chain-of-thought; not recommended (heavier, no accuracy gain over Gemma 4) |
-| **Qwen3-14B Q4_K_M** | `./scripts/download-models.sh qwen3-14b` | ~9 GB | ~11 GB | Optional large; needs 12 GB VRAM |
-| Any other GGUF | drop in `models/` | varies | varies | Technically compatible; prompt not tuned for most. See [docs/contributions.md](docs/contributions.md) for how to benchmark. |
-
-All models require a free HuggingFace account (`huggingface-cli login`).
+| Issue | Cause | Status |
+|-------|-------|--------|
+| Wizard always shows on startup | By design — resume or start fresh | Working as intended |
+| Hoover doesn't sound like a hoover | DSP tuning, not a code bug | Needs filter sweep shape tuning |

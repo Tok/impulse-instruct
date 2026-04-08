@@ -50,8 +50,11 @@ pub(crate) fn detect_ctrl_zoom(
     kind_scales: &std::collections::HashMap<ModuleKind, f32>,
     current_global: f32,
 ) -> Option<ZoomTarget> {
+    let ctrl_locked = ctx
+        .data(|d| d.get_temp::<bool>(egui::Id::new("ctrl_locked")))
+        .unwrap_or(false);
     let delta = ctx.input(|i| {
-        if i.modifiers.ctrl {
+        if i.modifiers.ctrl || ctrl_locked {
             i.raw_scroll_delta.y
         } else {
             0.0

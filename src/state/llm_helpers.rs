@@ -397,6 +397,11 @@ pub(super) fn apply_fx_update(
         "reverb_gate_time",
         "fx.reverb_gate_time"
     );
+    if !locked.contains("fx.reverb_freeze")
+        && let Some(v) = fx.get("reverb_freeze").and_then(|v| v.as_bool())
+    {
+        s.fx.reverb_freeze = v;
+    }
     // master_pitch_st: -12..+12 stored raw; unlocked_f32 clamp is applied via min/max
     if let Some(v) = fx.get("master_pitch_st").and_then(|v| v.as_f64()) {
         let path = "fx.master_pitch_st";
@@ -407,6 +412,16 @@ pub(super) fn apply_fx_update(
     u!(s.fx.delay_time, "delay_time", "fx.delay_time");
     u!(s.fx.delay_feedback, "delay_feedback", "fx.delay_feedback");
     u!(s.fx.delay_mix, "delay_mix", "fx.delay_mix");
+    u!(
+        s.fx.delay_wow_flutter,
+        "delay_wow_flutter",
+        "fx.delay_wow_flutter"
+    );
+    u!(
+        s.fx.delay_saturation,
+        "delay_saturation",
+        "fx.delay_saturation"
+    );
     u!(
         s.fx.distortion_drive,
         "distortion_drive",
@@ -444,6 +459,17 @@ pub(super) fn apply_fx_update(
         "fx.compressor_ratio"
     );
     u!(s.fx.compressor_mix, "compressor_mix", "fx.compressor_mix");
+    u!(
+        s.fx.compressor_multiband,
+        "compressor_multiband",
+        "fx.compressor_multiband"
+    );
+    u!(s.fx.stereo_width, "stereo_width", "fx.stereo_width");
+    if !locked.contains("fx.tuning")
+        && let Some(v) = fx.get("tuning").and_then(|v| v.as_u64())
+    {
+        s.fx.tuning = (v as u8).min(3);
+    }
     u!(s.fx.tape_drive, "tape_drive", "fx.tape_drive");
     u!(s.fx.tape_mix, "tape_mix", "fx.tape_mix");
     u!(s.fx.tape_flutter, "tape_flutter", "fx.tape_flutter");
@@ -454,4 +480,29 @@ pub(super) fn apply_fx_update(
     );
     u!(s.fx.autotune_mix, "autotune_mix", "fx.autotune_mix");
     u!(s.fx.master_volume, "master_volume", "fx.master_volume");
+    u!(
+        s.fx.xmod_bass_to_an1x_pitch,
+        "xmod_bass_to_an1x_pitch",
+        "fx.xmod_bass_to_an1x_pitch"
+    );
+    u!(
+        s.fx.xmod_noise_to_filter,
+        "xmod_noise_to_filter",
+        "fx.xmod_noise_to_filter"
+    );
+    u!(
+        s.fx.sidechain_amount,
+        "sidechain_amount",
+        "fx.sidechain_amount"
+    );
+    u!(
+        s.fx.sidechain_attack,
+        "sidechain_attack",
+        "fx.sidechain_attack"
+    );
+    u!(
+        s.fx.sidechain_release,
+        "sidechain_release",
+        "fx.sidechain_release"
+    );
 }

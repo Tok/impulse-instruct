@@ -510,6 +510,15 @@ pub fn draw_bass(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         *app.state.write() = snap;
         if changed {
             app.push_audio_params();
+            app.observe_edits(&[
+                ("bass.cutoff", cutoff),
+                ("bass.resonance", resonance),
+                ("bass.env_mod", env_mod),
+                ("bass.decay", decay),
+                ("bass.accent_level", accent),
+                ("bass.distortion", dist),
+                ("bass.volume", vol),
+            ]);
         }
     }
 

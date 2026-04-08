@@ -366,23 +366,37 @@ impl ImpulseApp {
                     // ── HEAT (global jam intensity) ──────────────────────────
                     {
                         let mut heat = self.state.read().llm.heat;
+                        let heat_col = if heat < 0.3 {
+                            theme::ASH
+                        } else if heat < 0.6 {
+                            theme::SMOKE
+                        } else {
+                            theme::FOG
+                        };
                         ui.label(
                             egui::RichText::new("HEAT")
-                                .color(theme::ASH)
+                                .color(heat_col)
                                 .monospace()
                                 .size(8.5),
                         );
                         if ui
-                            .add(
-                                egui::DragValue::new(&mut heat)
-                                    .range(0.0..=1.0)
-                                    .speed(0.01)
-                                    .fixed_decimals(2),
-                            )
+                            .scope(|ui| {
+                                ui.spacing_mut().slider_width = 180.0;
+                                ui.add(
+                                    egui::Slider::new(&mut heat, 0.0..=1.0).show_value(false),
+                                )
+                            })
+                            .inner
                             .changed()
                         {
                             self.state.write().llm.heat = heat;
                         }
+                        ui.label(
+                            egui::RichText::new(format!("{}%", (heat * 100.0) as u32))
+                                .color(heat_col)
+                                .monospace()
+                                .size(8.5),
+                        );
                     }
 
                     ui.separator();
@@ -469,6 +483,8 @@ impl ImpulseApp {
                             }).inner.changed() {
                                 let _ = self.audio_tx.push(AudioCommand::SetMonitorVolume(self.ui_volume));
                             }
+                            ui.label(egui::RichText::new(format!("{}%", (self.ui_volume * 100.0) as u32))
+                                .color(vol_col).monospace().size(8.5));
                             // VRAM / RAM bars
                             if has_vram || has_ram {
                                 const TRACK: egui::Color32 = egui::Color32::from_gray(38);
@@ -484,6 +500,8 @@ impl ImpulseApp {
                                             if fw > 0.0 {
                                                 p.rect_filled(egui::Rect::from_min_size(br.min, egui::vec2(fw, br.height())), 1.0, fill);
                                             }
+                                            ui.label(egui::RichText::new(format!("{}%", (frac * 100.0) as u32))
+                                                .color(theme::ASH).monospace().size(7.0));
                                         });
                                     };
                                     if has_vram {

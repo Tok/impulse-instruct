@@ -14,6 +14,7 @@ pub(super) fn draw_voice_content(app: &mut ImpulseApp, ui: &mut egui::Ui, kind: 
         ModuleKind::An1xVoice => crate::ui::panels::draw_an1x(app, ui),
         ModuleKind::AmenSampler => crate::ui::panels::draw_amen(app, ui),
         ModuleKind::NoiseVoice => crate::ui::panels::draw_noise(app, ui),
+        ModuleKind::GranularTexture => crate::ui::panels::draw_granular(app, ui),
         ModuleKind::EspeakNgTts | ModuleKind::CoquiTts => crate::ui::panels::draw_tts(app, ui),
         _ => {}
     }
@@ -894,10 +895,10 @@ pub(super) fn reorder_module_by_drop(
     dragged_id: u32,
     drop_pos: egui::Pos2,
     zone: crate::state::Zone,
+    screen_width: f32,
 ) {
     use super::rack_canvas::module_slot_w;
-    // Use 1200px as a reasonable default — drop position is proportional, not exact.
-    let available_w = 1200.0f32;
+    let available_w = screen_width.max(400.0);
     let zone_entries: Vec<(u32, ModuleKind)> = {
         let rack = app.state.read();
         let mut v: Vec<_> = rack
@@ -933,6 +934,7 @@ pub(super) fn reorder_module_by_drop(
     if from_idx == to_idx {
         return;
     }
+    app.push_history();
     let mut ids = zone_ids;
     let removed = ids.remove(from_idx);
     ids.insert(to_idx, removed);

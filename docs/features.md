@@ -1,6 +1,6 @@
 # Impulse Instruct - Implemented Features
 
-A detailed log of what's built. The roadmap lives in [PLAN.md](../PLAN.md).
+A detailed log of what's built.
 
 ---
 
@@ -10,7 +10,7 @@ A detailed log of what's built. The roadmap lives in [PLAN.md](../PLAN.md).
 - **Hoover lead** - supersaw into aggressive highpass sweep, pitch LFO, dedicated voice in UI
 - **AN1X-style VA voice** - dual OSC (saw/square/tri/sin/noise), OSC2 coarse+fine detune, hard sync, ring mod, sub-osc, 3 filter modes, ADSR x 2, pitch envelope, per-voice LFO x 2 with delay/fade, pitch drift, free EG (8-step drawable envelope)
 - **Drum machines** - Kit A (808-style: kick with pitch envelope, snare, hihat x 2, toms) + Kit B (909-style: kick, snare, hihat x 2, clap, rim)
-- **Standalone noise voice** - white/pink/brown, volume + color + cutoff, LLM-addressable
+- **Standalone noise voice** - white/pink/brown, volume + color + cutoff, AR envelope (5s attack, 10s release), filter LFO (0.05-10 Hz), sample-and-hold modulation (0.5-20 Hz), LLM-addressable
 - **Amen break sampler voice** - DrumVoice::Amen in sequencer, linear-interp playback, AudioCommand::LoadSampler, AMEN tab with path/pitch/volume/loop UI
 - **Gabber kick** - CLIP knob on both kicks: hard flat-top distortion, LLM-addressable via `kit_a.kick.clip` / `kit_b.kick.clip`
 - **LFO matrix** - 4 independent slots, any waveform, wireable to any parameter, BPM sync, phase reset on transport start
@@ -34,7 +34,8 @@ A detailed log of what's built. The roadmap lives in [PLAN.md](../PLAN.md).
 - **Modular rack** - zone-based module cards (Global/Voice/FxMod zones), RackState + Cable + PortRef, Bezier cable overlay with 3D tube rendering
 - **Cable drag-to-patch** - click+drag from any port to create a cable; right-click a port to disconnect all cables on it; port hover glow (white halo idle, pulsing ring on valid targets, faster pulse when hovered); PointingHand/Crosshair cursor feedback; scroll area disabled near ports so drag never gets stolen
 - **FX plan compilation** - `compile_fx_plan()` topologically sorts the cable graph into a `FxPlan`; `process_block()` iterates the plan instead of a fixed chain; default rack cables mirror the original serial order
-- **Per-voice FX buses** - voice mix split into 7 buses (AcidBass, DrumKit808, DrumKit909, HooverLead, An1xVoice, AmenSampler, NoiseVoice) + TTS bus; each routed through its compiled chain before the global chain
+- **Cable cycle detection** - `connect()` rejects audio cables that would create cycles (BFS reachability check); `strip_audio_cycles()` sanitizes session data on load; grayscale cable colors (R=G=B)
+- **Per-voice FX buses** - voice mix split into 8 buses (AcidBass, DrumKit808, DrumKit909, HooverLead, An1xVoice, AmenSampler, NoiseVoice, GranularTexture) + TTS bus; each routed through its compiled chain before the global chain
 - **Gated reverb** - `fx.reverb_gate_time` (0-2 s), GATE knob in FX panel
 - **Master pitch offset** - `fx.master_pitch_st` (+-12 st), PITCH knob in MASTER group
 - **Autotune FX module** - `ModuleKind::FxAutotune`; two-head grain overlap-add pitch shifter (`fx.autotune_amount` 0–1 → 0..+12 st, `fx.autotune_mix`); pre-allocated 4096-sample ring buffer (no audio-thread allocations); LLM-addressable via `fx.autotune_amount` / `fx.autotune_mix`
@@ -65,7 +66,8 @@ A detailed log of what's built. The roadmap lives in [PLAN.md](../PLAN.md).
 - **Cable-driven scope** - `PortKind::Control` cables from agent to module define what each agent may control; `scope_from_control_cables()` resolves scope at inference time; empty scope = agent controls everything
 - **Dynamic spawning** - agents can request new agents (`LlmAction::SpawnAgent`) or dismiss themselves (`LlmAction::DismissAgent`) via JSON; gated by `agent_autonomy` flag; auto-wire control cables on spawn
 - **VRAM budget module** - `src/llm/vram.rs` with model profiles (Gemma, Bonsai, DeepSeek, Qwen3), VRAM estimates, and preset configurations
-- **Startup wizard** - first-launch modal detects GPU VRAM, shows preset selector (Solo/Duo/Swarm/Band/Voices/Lite) with budget bar; "Resume last session" as default when prior session exists; persists `wizard_done` in session.json
+- **VRAM budget guard** - `would_exceed_vram()` rejects agent spawns that would exceed GPU memory; checked at SpawnAgent action + server pool acquire; prevents silent OOM crashes
+- **Startup wizard** - always shows on startup; resume last session or start fresh with a preset (Solo/Duo/Swarm/Band/Voices/Lite); GPU VRAM detection + budget bar
 - **VRAM estimate on agent cards** - shows `~X.XG VRAM` below model selector
 - **Agent persona in log** - output and thinking lines show the correct agent persona name, not the global singleton
 - **Console routes to agents** - typed prompts go to the first enabled agent instead of bypassing the agent system
@@ -97,7 +99,7 @@ A detailed log of what's built. The roadmap lives in [PLAN.md](../PLAN.md).
 - **Skeuomorphic step buttons** - active inset well (debossed 2px) with inverted edge highlights; velocity bloom over inset; chrome knob well shadow + catch-light
 - Velocity lanes below each step row (drag bars)
 - XY pads (CUT x RES, ENV x DEC, REVERB mix x size, DELAY mix x feedback, 808 PITCH x DECAY); pair indicator in corner
-- Oscilloscope strip (rolling 512-sample waveform)
+- Oscilloscope strip (rolling 512-sample waveform) + ring scope (polar plot, single-polyline, write-head dot)
 - ADSR envelope visualizer (interactive - drag zones)
 - Piano display - Huth *Farbige Noten* (1888) 12-color theory, C2-C5; Off/Piano/Full setting
 - Huth sequencer cells (Full mode) - colored U-cup notation on bass/hoover/AN1X rows; gate-proportional height
@@ -141,7 +143,7 @@ A detailed log of what's built. The roadmap lives in [PLAN.md](../PLAN.md).
 ## Testing and build
 
 - Unit tests across submodules (seq_tests, state_tests, llm_tests, audio::analysis, jam_tools_tests, music_api_tests, ui::note, ui::llm_strip), split at 1000-line limit per file
-- 221 unit tests total (as of v0.5.9)
+- 431 unit tests total
 - 39 LLM integration tests in 3 suites: `llm_suite` (core), `llm_suite_style` (artist refs), `llm_suite_theory` (music theory + producer lingo)
 - Pre-commit hook: fmt + clippy + tests + 1000-line LOC limit
 - `scripts/run-tests.sh --coverage` - HTML coverage report (lcov)
@@ -149,3 +151,91 @@ A detailed log of what's built. The roadmap lives in [PLAN.md](../PLAN.md).
 - `scripts/download-models.sh` - Gemma 4 E4B (default), Bonsai 8B, Qwen3-8B, Qwen3-14B
 - Windows `.bat` equivalents for all scripts (`start.bat`, `scripts/*.bat`)
 - **CI/CD security** - `ci.yml` runs tests + tarpaulin + Codecov on `main` and `develop`; `release` job on `v*` tags builds Linux+Windows in GH Actions (no local builds), attaches `.sha256` sidecars and SLSA level-2 build provenance attestation
+- Release zips include start scripts (`start.sh`/`start.bat`) and download helpers
+
+## v0.6.x additions
+
+### Analysis modules (rackable, FxMod zone)
+
+- **Spectrum analyser** (`ModuleKind::SpectrumAnalyzer`) - 1024-point FFT via rustfft, 64 logarithmic frequency bands (20 Hz - 20 kHz), exponential smoothing knob, peak-hold markers with slow decay, grayscale bar display, 320px wide
+- **Stereo correlation meter** (`ModuleKind::StereoMeter`) - phase correlation bar (-1 to +1) and L/R balance indicator; stereo ring buffer from audio callback; `stereo_correlation()` pure function in analysis.rs
+- **Activity timeline** (`ModuleKind::ActivityTimeline`) - structured scrollable log of agent actions with relative timestamps, action tags (RSP/THK/UPD/NEW/DEL/YOU/SYS), persona names, 500-entry rolling buffer
+
+### Presets and controls
+
+- **Gabber kick preset** - `apply_gabber_kick_preset()`: extreme pitch sweep (0.9 depth, 0.6 time), heavy clip (0.8), button in Kit A panel
+- **Bipolar param_control** - `param_control_bipolar()` maps -1..+1 to 0..1 for knob display; bass osc_detune now uses knob instead of DragValue
+- **Step probability indicator** - active step buttons show a corner dot when probability < 100%; brightness scales with probability
+
+### Per-module scaling and layout
+
+- **Context-sensitive Ctrl+MW zoom** - over a module card: scales all modules of that kind; over empty space: global UI scale; `detect_ctrl_zoom()` with `ZoomTarget` enum
+- **Per-kind scale storage** - `HashMap<ModuleKind, f32>` on ImpulseApp; scale affects content (knobs, margins, spacing) but not title bar height
+- **View menu** - Compact All (0.6x), Expand All (1.0x), Arrange (canonical order), Reset Layout (clear + arrange); `arrange_canonical()` on RackState
+
+### Lock state visualization
+
+- **Knob mode visuals** - body darker when UserOwned, brighter when LlmFocus; catch-light and chrome rim shimmer at 1 Hz on Focus knobs (grayscale animated)
+- **Slider mode tinting** - track background darker (U) / brighter (F); fill color varies per mode
+- **Alt+click cycling** - Alt+click on flat knobs, chrome knobs, and slider tracks cycles Free / User / Focus
+
+### Footer and header
+
+- **Footer mode indicators** - [Ctrl] [Alt] [Tab:BACK] with tooltips; highlight when active
+- **Header agent status** - compact round-robin display after HEAT slider; pulsing dot + persona name per enabled agent; bright when inferring, dim when idle
+
+### Wizard improvements
+
+- Removed redundant Skip button; "Resume" shown only with prior session
+- Fresh install requires preset selection ("Start" disabled until chosen)
+- Rack hidden + sequencer stopped while wizard is visible
+- Clean-slate preset application (removes all existing agents first)
+
+### Ambient / textural synthesis
+
+- **Long envelopes** - AN1X ADSR attack up to 10s, release up to 30s for glacial pads; bass 303 decay extended to 5s
+- **Granular texture module** (`ModuleKind::GranularTexture`) - new voice: loads WAV via `AudioCommand::LoadGranular`, plays up to 32 overlapping Hann-windowed grains with density, size, position, jitter, pitch scatter, spray params; true stereo output with per-grain pan law; full rack/UI/LLM integration
+- **Tape delay with modulation** - wow/flutter LFO modulates delay read position (fractional interpolation), soft-clip tape saturation on feedback, max time extended to 2s; `delay_wow_flutter`, `delay_saturation` params
+- **Reverb freeze** - `reverb_freeze` bool sets comb feedback to 1.0 and input to 0.0; tail holds indefinitely for drone/ambient
+- **Pad presets** - 4 AN1X presets: warm pad, evolving texture, glass pad, sub drone; meditation style in styles.json; dark/space ambient baselines now enable AN1X with pad settings
+- **Noise voice improvements** - AR envelope (attack 5s, release 10s), filter LFO (0.05-10 Hz), sample-and-hold modulation (0.5-20 Hz) for rhythmic texture
+- **Cross-modulation** - bass osc → AN1X pitch FM (±24 st), noise → bass filter cutoff; `xmod_bass_to_an1x_pitch`, `xmod_noise_to_filter` params
+
+### DSP improvements
+
+- **Per-voice bass params** - `BassVoiceParams` struct snapshotted independently for all 4 bass voices; each voice reads its own cutoff/resonance/waveform/filter mode; voice 0 synced with LFO/free-EG modulation
+- **Sidechain compression** - kick (808+909) ducks bass/pad/hoover/granular; `sidechain_amount`, `sidechain_attack` (0.1-50ms), `sidechain_release` (10-500ms)
+- **Multiband compressor** - 3-band crossover at 200 Hz / 3 kHz with independent per-band envelope followers; `compressor_multiband` param toggles mode
+- **Stereo width control** - chorus-based decorrelation on master output; `stereo_width` (0=mono, 0.5=normal, 1=wide)
+
+### UI/UX improvements
+
+- **Clickable footer mode toggles** - double-click Ctrl/Alt/Tab indicators to lock mode on without holding key; locks stored in egui temp data, read by zoom/widgets/cables
+- **Per-module collapse** - click title bar drag zone to collapse/expand module cards; state stored in egui temp data per module ID
+- **Module drag reorder polish** - insertion line indicator during drag; undo support on reorder
+- **Keyboard shortcuts help overlay** - ? or F1 toggles foreground overlay listing all shortcuts
+- **Undo for agent changes** - `push_history()` before agent spawn/dismiss mutations
+
+### Visualization
+
+- **CRT scan-line overlay** - scan lines (6px spacing, alpha 18) + edge vignette; toggled via `crt_effect` in UiPrefs
+- **Ring scope** - polar waveform plot of scope buffer with simulated write-head marker; displayed alongside linear oscilloscope
+
+### Intelligence improvements
+
+- **Agent memory** - `_comment` snippets persisted in per-agent `memory[]` (max 20); injected into system prompt section; survives session restart via session.json serialization
+- **Style learning** - `observe_user_edit()` records "user prefers high/low X" into `style_observations[]` (max 10); injected as learned preferences in system prompt; wired into bass panel (fires on extreme knob positions >0.7 or <0.3)
+- **Inter-agent messaging** - `SendHint` LlmAction via JSON `send_hint` field; hints queued in target agent's `pending_hints[]` (max 5); consumed on next inference cycle and injected into prompt
+
+### Refactoring and test coverage
+
+- **431 unit tests**; suites: `llm_apply_tests` (68), `persistence_tests` (25), `helpers_tests` (7), `music_tests` (13), `dsp_tests` (16), `fx_plan_tests` (7), `vram_tests` (9)
+- **`rack.connect_control(from_id, to_id)`** - replaces 8-line PortRef boilerplate at 6 call sites
+- **`spawn_agent()` pure function** - transitions.rs; wizard.rs and SpawnAgent handler refactored to use it
+- **`format_llm_display()` pure function** - extracted from drain_llm_outputs into transitions.rs
+- **`BassVoiceParams` struct** - per-voice AudioParams snapshot
+- **Bass303 extracted** to `src/audio/dsp/bass303.rs` (line-limit split)
+- **DSP utilities extracted** to `src/audio/dsp/dsp_util.rs` (midi_to_hz, tanh)
+- **Samplers extracted** to `src/audio/dsp/samplers.rs` (AmenVoice, GranularVoice)
+- **Dead code removed** - `sync_default_agent`
+- **Windows code-signing** - signtool step in `build-all.bat` (set SIGN_CERT + SIGN_PASS)

@@ -371,6 +371,12 @@ impl ImpulseApp {
                 });
             }
         }
+        // Propagate style to all sub-agents that don't have style_locked
+        let style_id = self.state.read().llm.active_style.clone();
+        if let Some(sid) = style_id {
+            let snapshot = self.state.read().clone();
+            *self.state.write() = crate::state::propagate_style(snapshot, &sid);
+        }
     }
 
     pub(super) fn draw_llm_console_content(&mut self, ui: &mut egui::Ui) {
@@ -492,12 +498,28 @@ impl ImpulseApp {
 
         // ── Style selector + instructions ────────────────────────────
         ui.horizontal(|ui| {
-            ui.label(
-                egui::RichText::new("STYLE")
-                    .monospace()
-                    .size(9.0)
-                    .color(theme::ASH),
-            );
+            let style_locked = self.state.read().llm.style_lock;
+            let lock_label = if style_locked { "STYLE [L]" } else { "STYLE" };
+            let lock_col = if style_locked { theme::FOG } else { theme::ASH };
+            if ui
+                .add(
+                    egui::Button::new(
+                        egui::RichText::new(lock_label)
+                            .monospace()
+                            .size(9.0)
+                            .color(lock_col),
+                    )
+                    .fill(egui::Color32::TRANSPARENT),
+                )
+                .on_hover_text(if style_locked {
+                    "Style locked — agents cannot change it. Click to unlock."
+                } else {
+                    "Style unlocked — agents may change it. Click to lock."
+                })
+                .clicked()
+            {
+                self.state.write().llm.style_lock = !style_locked;
+            }
             ui.add_space(4.0);
             let cur_style = self.state.read().llm.active_style.clone();
             let catalog = StyleCatalog::get();

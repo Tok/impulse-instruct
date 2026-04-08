@@ -309,6 +309,11 @@ impl ImpulseApp {
                             self.apply_wizard_preset(self.wizard_selected);
                         }
                         self.show_wizard = false;
+                        // Auto-play: start the sequencer after wizard completes
+                        if !self.state.read().sequencer.running {
+                            let s = self.state.read().clone();
+                            *self.state.write() = crate::state::toggle_sequencer_running(s);
+                        }
                     }
                 });
 
@@ -325,10 +330,6 @@ impl ImpulseApp {
     /// Apply a wizard preset: spawn agents with the right models/personas/scopes.
     fn apply_wizard_preset(&mut self, preset_idx: usize) {
         use crate::llm::vram::{PRESETS, find_model};
-        use crate::state::{
-            LlmAgentState, ModuleKind, PortDir, PortKind, PortRef, rack_kind_name_matches,
-        };
-
         let preset = match PRESETS.get(preset_idx) {
             Some(p) => p,
             None => return,
@@ -346,82 +347,12 @@ impl ImpulseApp {
 
         for pa in preset.agents {
             let model_path = find_model(pa.model_pattern, &self.available_models);
-
-            let id = self.state.write().rack.add_module(ModuleKind::LlmAgent);
-
-            let mut agent = LlmAgentState::from_singleton(id, &self.state.read().llm);
-            agent.persona_name = pa.persona.to_string();
-            agent.scope = pa.scope.iter().map(|s| s.to_string()).collect();
-            agent.role = pa.role;
-            if let Some(m) = model_path {
-                agent.model_path = Some(m);
-            }
-            self.state.write().llm_agents.push(agent);
-
-            // Auto-wire control cables from scope
             let scope: Vec<String> = pa.scope.iter().map(|s| s.to_string()).collect();
-            if scope.is_empty() {
-                let targets: Vec<u32> = self
-                    .state
-                    .read()
-                    .rack
-                    .modules
-                    .iter()
-                    .filter(|m| {
-                        !matches!(
-                            m.kind,
-                            ModuleKind::MasterOutput
-                                | ModuleKind::LlmAgent
-                                | ModuleKind::LlmConsole
-                        )
-                    })
-                    .map(|m| m.id)
-                    .collect();
-                let mut s = self.state.write();
-                for tid in &targets {
-                    s.rack.connect(
-                        PortRef {
-                            module_id: id,
-                            dir: PortDir::Out,
-                            kind: PortKind::Control,
-                            index: 0,
-                        },
-                        PortRef {
-                            module_id: *tid,
-                            dir: PortDir::In,
-                            kind: PortKind::Control,
-                            index: 0,
-                        },
-                    );
-                }
-            } else {
-                let targets: Vec<u32> = self
-                    .state
-                    .read()
-                    .rack
-                    .modules
-                    .iter()
-                    .filter(|m| scope.iter().any(|s| rack_kind_name_matches(m.kind, s)))
-                    .map(|m| m.id)
-                    .collect();
-                let mut s = self.state.write();
-                for tid in &targets {
-                    s.rack.connect(
-                        PortRef {
-                            module_id: id,
-                            dir: PortDir::Out,
-                            kind: PortKind::Control,
-                            index: 0,
-                        },
-                        PortRef {
-                            module_id: *tid,
-                            dir: PortDir::In,
-                            kind: PortKind::Control,
-                            index: 0,
-                        },
-                    );
-                }
-            }
+
+            let snapshot = self.state.read().clone();
+            let (new_state, _id) =
+                crate::state::spawn_agent(snapshot, pa.persona, &scope, pa.role, model_path);
+            *self.state.write() = new_state;
         }
 
         self.mark_wizard_done();

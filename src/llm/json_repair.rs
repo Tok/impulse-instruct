@@ -231,6 +231,18 @@ pub fn extract_llm_actions(
         if s.get("dismiss").and_then(|v| v.as_bool()).unwrap_or(false) {
             actions.push(LlmAction::DismissAgent);
         }
+        // send_hint: { "to": "AgentName", "hint": "..." }
+        if let Some(hint_obj) = s.get("send_hint").and_then(|v| v.as_object())
+            && let (Some(to), Some(hint)) = (
+                hint_obj.get("to").and_then(|v| v.as_str()),
+                hint_obj.get("hint").and_then(|v| v.as_str()),
+            )
+        {
+            actions.push(LlmAction::SendHint {
+                to: to.to_string(),
+                hint: hint.to_string(),
+            });
+        }
     }
     obj.remove("settings");
     actions
