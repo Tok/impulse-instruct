@@ -636,8 +636,29 @@ impl ImpulseApp {
                                 .and_then(|aid| s.llm_agents.iter().find(|a| a.id == aid))
                                 .map(|a| a.can_spawn)
                                 .unwrap_or(true);
+                        // VRAM budget check
+                        let vram_ok = !ok || {
+                            let vram_total = self
+                                .sys_info
+                                .lock()
+                                .ok()
+                                .map(|si| si.vram_total_mb)
+                                .unwrap_or(0);
+                            !crate::llm::vram::would_exceed_vram(
+                                &s.llm_agents,
+                                &s.llm.model_path,
+                                model.as_deref(),
+                                vram_total,
+                            )
+                        };
+                        if !vram_ok {
+                            log::warn!(
+                                "Rejected agent spawn '{}': would exceed VRAM budget",
+                                persona
+                            );
+                        }
                         drop(s);
-                        if ok {
+                        if ok && vram_ok {
                             self.push_history();
                             let snapshot = self.state.read().clone();
                             let (new_state, _id) = crate::state::spawn_agent(

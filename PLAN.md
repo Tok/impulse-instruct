@@ -6,13 +6,14 @@ What's already built is documented in [docs/features.md](docs/features.md).
 
 ## Immediate — before v0.7.0 release
 
-- [ ] **Verify app starts after reboot** — PipeWire hang was from crashed
-  instances; reboot + `systemctl --user restart pipewire` should clear it;
-  5s timeout on audio device config now prevents indefinite hangs
-- [ ] **VRAM budget guard** — prevent spawning agents when estimated VRAM
-  exceeds available; check at wizard preset apply + LlmAction::SpawnAgent;
-  use existing model profiles in `src/llm/vram.rs` for size estimates
-- [ ] **Merge develop → main** — 35 commits, 419 tests, all green
+- [x] **Verify app starts after reboot** — root cause was cyclic audio cables
+  in session.json causing `compile_fx_plan()` to loop forever; fixed with
+  cycle detection in voice chain walk, `connect()` rejection, and session
+  strip on load
+- [x] **VRAM budget guard** — `would_exceed_vram()` in `src/llm/vram.rs`;
+  gates `LlmAction::SpawnAgent` in UI handler; `acquire_with_vram()` as
+  secondary check in server pool
+- [ ] **Merge develop → main** — 431 tests, all green
 
 ## Polish — quick fixes
 
@@ -82,8 +83,8 @@ What's already built is documented in [docs/features.md](docs/features.md).
 
 | Issue | Cause | Workaround |
 |-------|-------|------------|
-| App hangs on "Starting audio engine" | PipeWire unresponsive (stale cpal stream) | `systemctl --user restart pipewire pipewire-pulse wireplumber` or reboot |
-| Wizard shows for existing sessions | Old session.json missing `wizard_done` | Fixed: treats sessions with agents as wizard-done |
+| App hangs on "Starting audio engine" | Cyclic audio cables in session.json caused infinite loop in `compile_fx_plan()` | Fixed: cycle detection + session strip on load |
+| Wizard always shows on startup | By design — lets user choose "Resume" or start fresh | Select Resume to keep session |
 | Agents override user's style choice | Agent sends SetStyle action | Fixed: `style_lock` on LLM console (default: on) |
 | Hoover doesn't sound like a hoover | DSP tuning, not a code bug | Needs manual filter sweep shape tuning |
 
@@ -118,3 +119,7 @@ What's already built is documented in [docs/features.md](docs/features.md).
 ### Infrastructure
 - Version bump to v0.7.0, Windows code-signing in build script,
   5s audio timeout, startup diagnostic logging
+- Cyclic cable detection (connect rejects, session strips, compile_fx_plan safe)
+- VRAM budget guard (estimate_total_vram, would_exceed_vram, pool acquire_with_vram)
+- Grayscale cable colors (R=G=B), wizard always shows, fx_plan.rs extraction
+- 431 tests total

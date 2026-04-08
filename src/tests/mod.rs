@@ -15,3 +15,4 @@ mod music_tests;
 mod persistence_tests;
 mod seq_tests;
 mod state_tests;
+mod vram_tests;
