@@ -198,17 +198,6 @@ pub fn draw_rack(app: &mut ImpulseApp, ctx: &egui::Context, ui: &mut egui::Ui) {
         }
     }
 
-    {
-        // Mouse scroll amplifier (3x)
-        let extra_scroll = ctx.input(|i| i.smooth_scroll_delta.y) * 2.0; // 2x extra = 3x total
-        if extra_scroll.abs() > 0.1 {
-            let max_y = (scroll_out.content_size.y - scroll_out.inner_rect.height()).max(0.0);
-            let mut state = scroll_out.state;
-            state.offset.y = (state.offset.y - extra_scroll).clamp(0.0, max_y);
-            state.store(ctx, scroll_id);
-        }
-    }
-
     ctx.memory_mut(|m| m.data.insert_temp(ports_mem_id, ports.clone()));
     // Cable overlay
     rack_cables::draw_cable_overlay(app, ctx, &ports, canvas_rect);

@@ -915,10 +915,7 @@ impl eframe::App for ImpulseApp {
             )
             .exact_height(48.0)
             .show(ctx, |ui| {
-                ui.horizontal(|ui| {
-                    scope_footer::draw_ring_scope(ui, &self.scope_buf, 44.0);
-                    scope_footer::draw_scope(ui, &self.scope_buf, &self.scope_history);
-                });
+                scope_footer::draw_scope(ui, &self.scope_buf, &self.scope_history);
             });
 
         // ── Footer ────────────────────────────────────────────────────────────

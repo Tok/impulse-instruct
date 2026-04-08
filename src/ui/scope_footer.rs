@@ -268,6 +268,8 @@ pub fn draw_crt_overlay(ctx: &egui::Context) {
 
 /// Draw the scope buffer as a circular ring — a diagnostic/aesthetic display.
 /// `buf` is the most recent scope samples; `size` is the widget diameter.
+/// Currently unused (removed from footer for performance); kept for future use.
+#[allow(dead_code)]
 pub fn draw_ring_scope(ui: &mut egui::Ui, buf: &[f32], size: f32) {
     let (rect, _) = ui.allocate_exact_size(egui::vec2(size, size), egui::Sense::hover());
     if !ui.is_rect_visible(rect) || buf.is_empty() {
