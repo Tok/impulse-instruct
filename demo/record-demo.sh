@@ -444,49 +444,66 @@ if [ "$SKIP_VIDEO" -eq 0 ]; then
     echo "  Raw video: $(du -h "$RAW_VIDEO" 2>/dev/null | cut -f1)"
 
     # Base name for output variants
-    local base="${BATCH_DIR}/${BASENAME}"
+    BASE="${BATCH_DIR}/${BASENAME}"
 
     # Always generate SRT if narration entries exist (even with --no-tts)
     SRT_FILE=""
     if [ -f "$NARRATION_LIST" ] && [ -s "$NARRATION_LIST" ]; then
-        SRT_NAME="${base}.srt" generate_srt >/dev/null
-        SRT_FILE="${base}.srt"
+        SRT_NAME="${BASE}.srt" generate_srt >/dev/null
+        SRT_FILE="${BASE}.srt"
         echo "  Subtitles: $SRT_FILE"
     else
         echo "  Subtitles: none (no narration entries)"
     fi
-    FINAL_VIDEO="${base}.mp4"
-    FINAL_VIDEO_SUBS="${base}_subs.mp4"
+    FINAL_VIDEO="${BASE}.mp4"
+    FINAL_VIDEO_SUBS="${BASE}-subs.mp4"
 
     echo "  Encoding videos (this may take a minute)..."
     [ "$TRIM_START" -gt 0 ] 2>/dev/null && echo "  Trimming first ${TRIM_START}s"
 
     # ── Trim + encode args ────────────────────────────────────────────
-    local trim_args=""
-    [ "$TRIM_START" -gt 0 ] 2>/dev/null && trim_args="-ss $TRIM_START"
+    TRIM_ARGS=""
+    [ "$TRIM_START" -gt 0 ] 2>/dev/null && TRIM_ARGS="-ss $TRIM_START"
 
-    local audio_args=""
+    ENCODE_AUDIO=""
     if [ "$AUDIO_COUNT" -gt 0 ]; then
-        audio_args="$trim_args -i $APP_AUDIO -c:a aac -b:a 192k -map 0:v:0 -map 1:a:0 -shortest"
+        ENCODE_AUDIO="$TRIM_ARGS -i $APP_AUDIO -c:a aac -b:a 192k -map 0:v:0 -map 1:a:0 -shortest"
     fi
 
     # ── Video without embedded subtitles (for YouTube — upload SRT separately)
+    echo -n "  Encoding clean video..."
     ffmpeg -y \
-        $trim_args -i "$RAW_VIDEO" \
-        $audio_args \
+        $TRIM_ARGS -i "$RAW_VIDEO" \
+        $ENCODE_AUDIO \
         -c:v h264_nvenc -preset p4 -cq 22 \
         "$FINAL_VIDEO" \
-        </dev/null 2>/dev/null
+        </dev/null 2>/dev/null || \
+    ffmpeg -y \
+        $TRIM_ARGS -i "$RAW_VIDEO" \
+        $ENCODE_AUDIO \
+        -c:v libx264 -preset fast -crf 23 \
+        "$FINAL_VIDEO" \
+        </dev/null 2>/dev/null || true
+    [ -f "$FINAL_VIDEO" ] && echo " OK" || echo " FAIL"
 
     # ── Video with burned-in subtitles (for Telegram, social media)
     if [ -n "$SRT_FILE" ] && [ -f "$SRT_FILE" ]; then
+        echo -n "  Encoding subtitled video..."
         ffmpeg -y \
-            $trim_args -i "$RAW_VIDEO" \
-            $audio_args \
+            $TRIM_ARGS -i "$RAW_VIDEO" \
+            $ENCODE_AUDIO \
             -vf "subtitles=${SRT_FILE}:force_style='FontSize=22,FontName=monospace,PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,Outline=2,MarginV=40'" \
             -c:v h264_nvenc -preset p4 -cq 22 \
             "$FINAL_VIDEO_SUBS" \
-            </dev/null 2>/dev/null
+            </dev/null 2>/dev/null || \
+        ffmpeg -y \
+            $TRIM_ARGS -i "$RAW_VIDEO" \
+            $ENCODE_AUDIO \
+            -vf "subtitles=${SRT_FILE}:force_style='FontSize=22,FontName=monospace'" \
+            -c:v libx264 -preset fast -crf 23 \
+            "$FINAL_VIDEO_SUBS" \
+            </dev/null 2>/dev/null || true
+        [ -f "$FINAL_VIDEO_SUBS" ] && echo " OK" || echo " FAIL"
     fi
 
     echo ""
