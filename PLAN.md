@@ -81,26 +81,63 @@ What's already built is documented in [docs/features.md](docs/features.md).
 - [ ] **observe_user_edit in remaining panels** — currently only bass panel;
   extend to 808, 909, hoover, AN1X, noise, granular, FX panels
 
-### Demo recording
+### Demo recording — next implementation priority
 
-- [ ] **CoquiTTS for narration** — switch demo `tts_generate()` from espeak-ng
-  to CoquiTTS (the `tts` CLI) with espeak fallback. Higher quality for YouTube.
-- [ ] **Scenario directory** — restructure `demo/scenario.sh` into
-  `demo/scenarios/intro.sh` + dedicated scripts. `record-demo.sh --scenario X`
-  selects which to run. `--skip-video` runs headless for verification only.
-- [ ] **Style demo: Drum & Bass** — typical D&B setup (fast breaks, reese bass,
-  rolling hats). Doubles as style verification test.
-- [ ] **Style demo: Ambient** — pads, slow filter sweeps, long reverb tails.
-  Tests ramp system + FX depth.
-- [ ] **Style demo: Acid house** — 303 squelch, 808/909, classic acid patterns.
-- [ ] **Setup demo: Jungle MC + Singer** — TTS MC agent + TTS Singer agent
-  through autotune. Non-deterministic, 100% agent-controlled. Shows creative
-  potential of multi-agent + TTS + pitch-snap pipeline.
-- [ ] **Demo: ADSR scene** — show an agent shaping bass envelope (attack/decay)
-- [ ] **Demo: LFO assignment scene** — agent schedules a filter sweep via LFO
-- [ ] **Demo: parameter ramp scene** — show gradual cutoff sweep over bars
-- [ ] **Minimal rack wizard preset** — start with only seq + master + console
-  (no default instruments), available as a wizard option
+#### Infrastructure (do first)
+
+- [ ] **CoquiTTS for narration** — in `demo/lib.sh`, make `tts_generate()` try
+  CoquiTTS first (`tts --text "..." --out_path $outfile`), fall back to espeak-ng.
+  CoquiTTS produces much better narration for YouTube-grade demos.
+- [ ] **Scenario directory** — create `demo/scenarios/`, move current `scenario.sh`
+  to `demo/scenarios/intro.sh`. Update `record-demo.sh` to accept `--scenario X`
+  flag (default: intro). Each scenario is a self-contained bash script sourced by
+  `record-demo.sh` after app launch.
+- [ ] **`--skip-video` flag** — run scenario without ffmpeg recording, for headless
+  style verification. Useful for CI or quick iteration. App still launches, API
+  calls execute, but no screen capture / encoding.
+- [ ] **`--skip-narration` rename** — current `--no-tts` flag should work with
+  `--skip-video` for silent verification runs.
+
+#### Style demo scripts (tutorial + verification)
+
+Each style demo follows a template:
+1. Reset rack → add instruments appropriate for the style
+2. Narrate what we're building and why
+3. Send prompts to agents with style-specific instructions
+4. Show the agents working (wait for inference, scroll to instruments)
+5. Demonstrate key features (ramps, LFO, filter sweeps)
+6. Use `POST /api/scroll { "target": "bass", "collapse_others": true }` to focus
+7. End with a jam session showing the style in action
+
+Scripts to create:
+- [ ] **`demo/scenarios/style-acid.sh`** — 303 squelch, 808/909 kicks, classic acid.
+  Tests: bass cutoff sweep, resonance, accent patterns, filter response viz.
+- [ ] **`demo/scenarios/style-dnb.sh`** — fast breaks (170 BPM), reese bass, rolling
+  hats. Tests: high BPM, amen sampler, fast patterns, multi-voice bass.
+- [ ] **`demo/scenarios/style-ambient.sh`** — AN1X pads, slow filter sweeps, long
+  reverb. Tests: ramp system, LFO assignment, ADSR shaping, FX depth.
+- [ ] **`demo/scenarios/style-techno.sh`** — 808 kick, industrial bass, minimal hats.
+  Tests: kick pitch envelope, distortion drive, sidechain compression.
+
+#### Setup demo scripts (capability showcase)
+
+- [ ] **`demo/scenarios/setup-mc-singer.sh`** — Jungle MC + TTS Singer through
+  autotune. Non-deterministic, 100% agent-controlled. Shows: multi-agent, TTS
+  pitch-snap pipeline, creative potential. Narrated as "watch what happens."
+- [ ] **`demo/scenarios/setup-multi-agent.sh`** — BASS + DRUMS + FX specialist
+  agents with Bonsai models. Shows: per-agent scoping, round-robin, cable wiring,
+  independent evolution, creative direction via prompts.
+- [ ] **`demo/scenarios/setup-ramp-lfo.sh`** — Parameter ramps + LFO assignment.
+  Shows: "slowly open filter over 4 bars" ramp, LFO wobble on cutoff, tremolo
+  on volume, event stream visualization reacting in real time.
+
+#### Feature demo scenes (can be standalone or embedded)
+
+- [ ] **ADSR scene** — agent shaping bass envelope (attack/decay)
+- [ ] **LFO assignment scene** — agent schedules filter sweep via LFO
+- [ ] **Parameter ramp scene** — gradual cutoff sweep over bars
+- [ ] **Event stream scene** — Huth-colored note history scrolling in real time
+- [ ] **Collapse/focus scene** — API collapse_others to isolate a section
 
 ### Infrastructure
 

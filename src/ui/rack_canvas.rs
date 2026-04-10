@@ -72,7 +72,7 @@ pub fn draw_rack(app: &mut ImpulseApp, ctx: &egui::Context, ui: &mut egui::Ui) {
         app.zone_voice_collapsed = v;
         app.zone_fxmod_collapsed = f;
     }
-    ui.horizontal(|ui| {
+    ui.horizontal_wrapped(|ui| {
         ui.label(
             egui::RichText::new("MODE")
                 .monospace()
