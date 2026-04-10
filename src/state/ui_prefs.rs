@@ -161,6 +161,19 @@ pub struct UiPrefs {
     /// CRT scan-line overlay and vignette effect.
     #[serde(default)]
     pub crt_effect: bool,
+    /// Oscilloscope phosphor persistence: number of history frames (2–20, default 10).
+    #[serde(default = "default_phosphor_frames")]
+    pub phosphor_frames: usize,
+    /// Oscilloscope phosphor glow intensity (0.0–1.0, default 0.6).
+    #[serde(default = "default_phosphor_intensity")]
+    pub phosphor_intensity: f32,
+}
+
+fn default_phosphor_frames() -> usize {
+    10
+}
+fn default_phosphor_intensity() -> f32 {
+    0.6
 }
 
 impl UiPrefs {
@@ -214,6 +227,8 @@ impl Default for UiPrefs {
             autosave_interval: AutosaveInterval::Immediate,
             wasd_as_arrows: false,
             crt_effect: false,
+            phosphor_frames: default_phosphor_frames(),
+            phosphor_intensity: default_phosphor_intensity(),
         }
     }
 }

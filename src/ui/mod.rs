@@ -915,9 +915,10 @@ impl eframe::App for ImpulseApp {
             self.scope_buf.drain(..drain);
         }
         if self.scope_buf.len() >= 64 {
-            // phosphor persistence
+            // phosphor persistence — frame count from preferences
             self.scope_history.push_back(self.scope_buf.clone());
-            if self.scope_history.len() > 6 {
+            let max_frames = self.state.read().ui_prefs.phosphor_frames.clamp(2, 20);
+            if self.scope_history.len() > max_frames {
                 self.scope_history.pop_front();
             }
         }

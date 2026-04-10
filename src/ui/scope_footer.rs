@@ -5,7 +5,6 @@
 use crate::ui::theme;
 
 /// Draw oscilloscope with explicit width and height.
-#[allow(dead_code)]
 pub fn draw_scope_sized(
     ui: &mut egui::Ui,
     buf: &[f32],
@@ -36,14 +35,17 @@ pub fn draw_scope_sized(
         if n < 2 {
             continue;
         }
-        // Older frames are dimmer: brightness ramps from ~20 to ~60
-        let brightness = 20 + (age as u32 * 40 / hist_len.max(1) as u32).min(60);
-        let col = egui::Color32::from_gray(brightness as u8);
+        // Older frames are dimmer: brightness ramps from ~15 to ~90
+        // More pronounced phosphor glow — recent trails are clearly visible
+        let t = age as f32 / hist_len.max(1) as f32;
+        let brightness = (15.0 + t * 75.0) as u8;
+        let thickness = 1.0 + t * 0.8; // trails get slightly thicker toward recent
+        let col = egui::Color32::from_gray(brightness);
         let mut prev = egui::Pos2::new(rect.min.x, mid - frame[0].clamp(-1.0, 1.0) * amp);
         for (i, &s) in frame.iter().enumerate().skip(1) {
             let x = rect.min.x + (i as f32 / (n - 1) as f32) * w;
             let cur = egui::Pos2::new(x, mid - s.clamp(-1.0, 1.0) * amp);
-            painter.line_segment([prev, cur], egui::Stroke::new(1.0, col));
+            painter.line_segment([prev, cur], egui::Stroke::new(thickness, col));
             prev = cur;
         }
     }
@@ -305,9 +307,14 @@ pub fn draw_ring_scope(ui: &mut egui::Ui, buf: &[f32], size: f32) {
     if let Some(&first) = points.first() {
         points.push(first); // close the ring
     }
+    // Phosphor glow: draw a thicker dim layer underneath, then the bright trace on top
+    painter.add(egui::Shape::Path(egui::epaint::PathShape::line(
+        points.clone(),
+        egui::Stroke::new(3.0, egui::Color32::from_gray(35)),
+    )));
     painter.add(egui::Shape::Path(egui::epaint::PathShape::line(
         points,
-        egui::Stroke::new(1.0, egui::Color32::from_gray(140)),
+        egui::Stroke::new(1.5, egui::Color32::from_gray(160)),
     )));
 
     // Write-head dot: tracks the newest sample position on the ring

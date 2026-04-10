@@ -55,14 +55,26 @@ impl ImpulseApp {
             .show(ctx, |ui| {
                 let full_w = ui.available_width();
                 let ring_w = scope_h;
-                let stream_w = (full_w - ring_w - 8.0).max(80.0);
+                let content_w = (full_w - ring_w - 12.0).max(120.0);
+                // φ : 1 split — oscilloscope gets 61.8%, event stream gets 38.2%
+                let osc_w = content_w * (1.618 / 2.618);
+                let stream_w = content_w - osc_w - 4.0;
                 let h = scope_h - 4.0;
                 ui.horizontal_top(|ui| {
-                    // Event stream (note history + ramps + beat grid)
+                    // Linear oscilloscope (left)
+                    super::scope_footer::draw_scope_sized(
+                        ui,
+                        &self.scope_buf,
+                        &self.scope_history,
+                        osc_w,
+                        h,
+                    );
+                    // Event stream (center)
                     {
                         let state = self.state.read();
                         super::widgets::event_stream(ui, &state, stream_w, h);
                     }
+                    // Ring scope (right)
                     super::scope_footer::draw_ring_scope(ui, &self.scope_buf, h);
                 });
             });

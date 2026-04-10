@@ -279,7 +279,7 @@ pub(super) fn draw_drum_rows(
 
         // ── Velocity / Probability / Ratchet lanes (tight spacing) ─────────
         let saved_spacing = ui.spacing().item_spacing;
-        ui.spacing_mut().item_spacing = egui::vec2(0.0, 0.0);
+        ui.spacing_mut().item_spacing = egui::vec2(saved_spacing.x, 1.0);
         ui.horizontal(|ui| {
             ui.spacing_mut().item_spacing = egui::vec2(0.0, 0.0);
             let row_left = ui.cursor().min.x;
