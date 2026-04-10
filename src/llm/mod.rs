@@ -605,52 +605,65 @@ pub fn run_llm_loop(
                         log::debug!("{} (jam) -> {}", persona, comment);
                     }
 
-                    let (
-                        tts_on,
-                        mode,
-                        tts_pitch,
-                        tts_speed,
-                        tts_amplitude,
-                        voice_char,
-                        randomise,
-                        pitch_snap,
-                        root_note,
-                        tts_scale,
-                        tts_engine,
-                    ) = {
-                        let s = state.read();
-                        (
-                            s.llm.tts_enabled,
-                            s.llm.conversation_mode.clone(),
-                            s.llm.tts_pitch,
-                            s.llm.tts_speed,
-                            s.llm.tts_amplitude,
-                            s.llm.tts_voice_char.clone(),
-                            s.llm.tts_randomise,
-                            s.llm.tts_pitch_snap,
-                            s.sequencer.root_note,
-                            s.sequencer.scale,
-                            s.llm.tts_engine.clone(),
-                        )
+                    // ── TTS via rack cable ────────────────────────────────
+                    // Find TTS modules connected to this agent via control
+                    // cables.  Read settings from the TTS module, not global.
+                    let mode = if let Some(aid) = agent_id {
+                        state
+                            .read()
+                            .llm_agents
+                            .iter()
+                            .find(|a| a.id == aid)
+                            .map(|a| a.conversation_mode.clone())
+                            .unwrap_or_default()
+                    } else {
+                        state.read().llm.conversation_mode.clone()
                     };
                     let tts_mode = matches!(mode, ConversationMode::Mc | ConversationMode::Dj);
-                    if tts_on && tts_mode {
-                        use crate::state::TtsEngine;
-                        let tts_text = output.mc_line.as_deref().unwrap_or(comment);
-                        log::info!("[TTS] {}", tts_text);
-                        let tp = tts::TtsParams {
-                            pitch: tts_pitch,
-                            speed: tts_speed,
-                            amplitude: tts_amplitude,
-                            voice_char: &voice_char,
-                            randomise,
-                            pitch_snap,
-                            root_note,
-                            scale: tts_scale,
-                        };
-                        match tts_engine {
-                            TtsEngine::CoquiTts => speak_coqui(tts_text, &mode, &tp, &tts_tx),
-                            TtsEngine::EspeakNg => speak_fx(tts_text, &mode, &tp, &tts_tx),
+                    if tts_mode {
+                        let s = state.read();
+                        let src_id = agent_id.unwrap_or(0);
+                        // Find a TTS module wired from this agent
+                        let tts_mod = s.rack.cables.iter().find_map(|c| {
+                            if c.from.module_id == src_id
+                                && c.from.kind == crate::state::PortKind::Control
+                            {
+                                let target = c.to.module_id;
+                                if s.rack.modules.iter().any(|m| {
+                                    m.id == target
+                                        && matches!(
+                                            m.kind,
+                                            crate::state::ModuleKind::EspeakNgTts
+                                                | crate::state::ModuleKind::CoquiTts
+                                        )
+                                        && m.enabled
+                                }) {
+                                    s.tts_modules.iter().find(|t| t.id == target)
+                                } else {
+                                    None
+                                }
+                            } else {
+                                None
+                            }
+                        });
+                        if let Some(tts_mod) = tts_mod {
+                            use crate::state::TtsEngine;
+                            let tts_text = output.mc_line.as_deref().unwrap_or(comment);
+                            log::info!("[TTS] {}", tts_text);
+                            let tp = tts::TtsParams {
+                                pitch: tts_mod.pitch,
+                                speed: tts_mod.speed,
+                                amplitude: tts_mod.amplitude,
+                                voice_char: &tts_mod.voice_char,
+                                randomise: tts_mod.randomise,
+                                pitch_snap: tts_mod.pitch_snap,
+                                root_note: s.sequencer.root_note,
+                                scale: s.sequencer.scale,
+                            };
+                            match tts_mod.engine {
+                                TtsEngine::CoquiTts => speak_coqui(tts_text, &mode, &tp, &tts_tx),
+                                TtsEngine::EspeakNg => speak_fx(tts_text, &mode, &tp, &tts_tx),
+                            }
                         }
                     }
                 }

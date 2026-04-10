@@ -61,24 +61,20 @@ What's already built is documented in [docs/features.md](docs/features.md).
 
 ### TTS as rack module (refactor)
 
-- [ ] **Remove global `tts_enabled`** — TTS is no longer a global toggle on
-  `LlmState`. Instead, TTS happens through a TTS rack module (EspeakNgTts
-  or CoquiTts) that an agent is wired to via a control cable.
-- [ ] **TTS settings per module** — move `tts_pitch`, `tts_speed`,
-  `tts_amplitude`, `tts_voice_char`, `tts_randomise`, `tts_pitch_snap`,
-  `tts_engine` from `LlmState` to per-module state on the TTS rack module.
-  Multiple TTS modules can have different voices.
-- [ ] **Agent → TTS routing** — in the inference path (`src/llm/mod.rs` ~L637),
-  replace `if tts_on && tts_mode` with: find TTS modules connected to this
-  agent via control cables in `rack.cables`. Read settings from the connected
-  TTS module. No cable = no speech.
+- [x] **TTS settings per module** — `TtsModuleState` struct with engine, pitch,
+  speed, amplitude, voice_char, randomise, pitch_snap. Stored in
+  `AppState.tts_modules`, keyed by rack module id.
+- [x] **Agent → TTS routing** — inference path checks for control cables from
+  agent to TTS modules. No cable = no speech. Settings read from module.
+- [x] **Global TTS fields deprecated** — legacy `tts_*` fields on `LlmState`
+  kept for session.json backward compat (serde default), ignored at runtime.
+  TTS panel reads/writes module state.
+- [x] **API `tts: true`** — auto-adds a TTS module and wires a control cable
+  from the agent.
 - [ ] **Agent self-add TTS module** — if an agent is in MC/DJ mode and has no
   TTS module connected, it can add one to the rack and wire itself to it
   (unless restricted by scope or a `can_modify_rack: false` flag). This is
   a rack tool-use action, not implicit — the agent requests it via JSON.
-- [ ] **Clean up global TTS fields** — remove `tts_*` fields from `LlmState`,
-  remove `tts_enabled` from API agent request. TTS panel reads from module
-  state instead.
 
 ### Feedback & awareness
 

@@ -16,14 +16,13 @@ add_instrument 808
 add_effect reverb
 add_effect delay
 add_effect chorus
-add_instrument tts
 
-say "Bass, AN1X for pads, eight oh eight, chorus, reverb, delay, and a TTS voice module."
+say "Bass, AN1X for pads, eight oh eight, chorus, reverb, delay."
 
 # Main agent for the music
 add_agent SYNTH gemma
 
-# MC agent in MC mode with TTS — will generate cheesy synthwave lines
+# MC agent in MC mode with TTS — auto-adds a TTS module and wires it
 add_agent NEON bonsai "" mc tts
 
 wait_for_model

@@ -5,7 +5,12 @@
 use crate::state::ModuleKind;
 use crate::ui::{ImpulseApp, module_card};
 
-pub(super) fn draw_voice_content(app: &mut ImpulseApp, ui: &mut egui::Ui, kind: ModuleKind) {
+pub(super) fn draw_voice_content(
+    app: &mut ImpulseApp,
+    ui: &mut egui::Ui,
+    kind: ModuleKind,
+    module_id: u32,
+) {
     match kind {
         ModuleKind::AcidBass => crate::ui::panels::draw_bass(app, ui),
         ModuleKind::DrumKit808 => crate::ui::panels::draw_kit_a(app, ui),
@@ -15,7 +20,9 @@ pub(super) fn draw_voice_content(app: &mut ImpulseApp, ui: &mut egui::Ui, kind: 
         ModuleKind::AmenSampler => crate::ui::panels::draw_amen(app, ui),
         ModuleKind::NoiseVoice => crate::ui::panels::draw_noise(app, ui),
         ModuleKind::GranularTexture => crate::ui::panels::draw_granular(app, ui),
-        ModuleKind::EspeakNgTts | ModuleKind::CoquiTts => crate::ui::panels::draw_tts(app, ui),
+        ModuleKind::EspeakNgTts | ModuleKind::CoquiTts => {
+            crate::ui::panels::draw_tts(app, ui, module_id)
+        }
         _ => {}
     }
 }

@@ -98,7 +98,7 @@ pub struct RackAgentRequest {
     /// Conversation mode: "off", "producer", "dj", "mc". Default: "producer".
     #[serde(default)]
     pub mode: Option<String>,
-    /// Enable TTS voice output for this agent (requires MC or DJ mode).
+    /// If true, auto-add a TTS module and wire a control cable from this agent.
     #[serde(default)]
     pub tts: Option<bool>,
 }
@@ -484,6 +484,17 @@ async fn post_rack_add(
             },
         );
     }
+    // Create per-module state for TTS modules.
+    if matches!(
+        kind,
+        crate::state::ModuleKind::EspeakNgTts | crate::state::ModuleKind::CoquiTts
+    ) {
+        let mut tts_state = crate::state::TtsModuleState::new(id);
+        if kind == crate::state::ModuleKind::CoquiTts {
+            tts_state.engine = crate::state::TtsEngine::CoquiTts;
+        }
+        s.tts_modules.push(tts_state);
+    }
     // Auto-scroll to the new module so it's visible.
     s.scroll_target = Some(req.kind.clone());
     drop(s);
@@ -520,7 +531,11 @@ async fn post_rack_agent(
             };
         }
         if req.tts == Some(true) {
-            s.llm.tts_enabled = true;
+            // Add a TTS module and wire a control cable from this agent.
+            let tts_id = s.rack.add_module(crate::state::ModuleKind::EspeakNgTts);
+            s.tts_modules
+                .push(crate::state::TtsModuleState::new(tts_id));
+            s.rack.connect_control(id, tts_id);
         }
 
         // Wire control cables to modules matching the scope
@@ -609,6 +624,7 @@ async fn post_rack_remove(
     let mut s = api.app_state.write();
     s.rack.remove_module(req.id);
     s.llm_agents.retain(|a| a.id != req.id);
+    s.tts_modules.retain(|t| t.id != req.id);
     drop(s);
     api_log(&api, format!("[API] rack: removed module {}", req.id));
     Json(OkResponse {
@@ -639,6 +655,7 @@ async fn post_rack_reset(AxumState(api): AxumState<ApiState>) -> Json<OkResponse
         .cables
         .retain(|c| keep.contains(&c.from.module_id) && keep.contains(&c.to.module_id));
     s.llm_agents.clear();
+    s.tts_modules.clear();
     drop(s);
     api_log(
         &api,

@@ -825,7 +825,7 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
                             app.kind_scale(*kind),
                             ports,
                             |ui| {
-                                draw_voice_content(app, ui, *kind);
+                                draw_voice_content(app, ui, *kind, *id);
                             },
                         )
                         .0
