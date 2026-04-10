@@ -253,6 +253,7 @@ pub(super) fn draw_drum_rows(
             }
 
             let mut toggled = None;
+            steps_x = ui.cursor().min.x; // track for sub-lane alignment
             for i in 0..16usize {
                 let abs = page_start + i;
                 beat_div(ui, i);
@@ -260,9 +261,6 @@ pub(super) fn draw_drum_rows(
                 let is_current = abs == voice_cursor;
                 let vel = pattern.get(i).map(|s| s.velocity).unwrap_or(0.0);
                 ui.add_enabled_ui(abs < voice_steps, |ui| {
-                    if i == 0 {
-                        steps_x = ui.cursor().min.x;
-                    }
                     let prob = pattern.get(i).map(|s| s.probability).unwrap_or(1.0);
                     if widgets::step_button(
                         ui, is_active, is_current, vel, prob, None, None, pad_px,
@@ -279,7 +277,7 @@ pub(super) fn draw_drum_rows(
 
         // ── Velocity / Probability / Ratchet lanes (tight spacing) ─────────
         let saved_spacing = ui.spacing().item_spacing;
-        ui.spacing_mut().item_spacing = egui::vec2(saved_spacing.x, 1.0);
+        ui.spacing_mut().item_spacing = egui::vec2(saved_spacing.x, 0.0);
         ui.horizontal(|ui| {
             ui.spacing_mut().item_spacing = egui::vec2(0.0, 0.0);
             let row_left = ui.cursor().min.x;

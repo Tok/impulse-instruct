@@ -382,13 +382,12 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                 s.sequencer.bass_pattern[page_start..end].to_vec()
             };
 
-            // Bass note row
+            // Bass note row — track where step buttons start for accent/slide alignment
+            let label_spacer = 10.0 + 10.0 + (SEQ_LABEL_W - 20.0) + SEQ_VOL_W + 18.0;
+            let mut bass_steps_x = label_spacer; // fallback; updated below
             ui.horizontal(|ui| {
                 ui.add_sized(
-                    [
-                        10.0 + 10.0 + (SEQ_LABEL_W - 20.0) + SEQ_VOL_W + 18.0 + 4.0 * 8.0,
-                        SEQ_LABEL_H,
-                    ],
+                    [label_spacer, SEQ_LABEL_H],
                     egui::Label::new(
                         egui::RichText::new("BASS")
                             .color(theme::SMOKE)
@@ -396,6 +395,7 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                             .size(8.5),
                     ),
                 );
+                bass_steps_x = ui.cursor().min.x - ui.min_rect().min.x;
                 for i in 0..16usize {
                     let abs = page_start + i;
                     beat_div(ui, i);
@@ -443,18 +443,16 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                 }
             });
 
-            // Accent row
+            // Accent row — buttons match step pad width for grid alignment
+            let marker_h = (pad_px * 0.35).clamp(10.0, 16.0);
             ui.horizontal(|ui| {
                 ui.add_sized(
-                    [
-                        10.0 + 10.0 + (SEQ_LABEL_W - 20.0) + SEQ_VOL_W + 18.0 + 4.0 * 8.0,
-                        14.0,
-                    ],
+                    [bass_steps_x, marker_h],
                     egui::Label::new(
-                        egui::RichText::new("ACCENT")
+                        egui::RichText::new("ACC")
                             .color(theme::IRON)
                             .monospace()
-                            .size(7.5),
+                            .size(7.0),
                     ),
                 );
                 for i in 0..16usize {
@@ -463,10 +461,10 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                     let is_accent = bass_page.get(i).map(|s| s.accent).unwrap_or(false);
                     ui.add_enabled_ui(abs < seq_steps, |ui| {
                         let color = if is_accent { theme::CHALK } else { theme::PIT };
-                        let text = egui::RichText::new("A").monospace().size(7.5).color(color);
+                        let text = egui::RichText::new("A").monospace().size(7.0).color(color);
                         if ui
                             .add_sized(
-                                [14.0, 14.0],
+                                [pad_px, marker_h],
                                 egui::Button::new(text).fill(egui::Color32::TRANSPARENT),
                             )
                             .clicked()
@@ -481,15 +479,12 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             // Slide row
             ui.horizontal(|ui| {
                 ui.add_sized(
-                    [
-                        10.0 + 10.0 + (SEQ_LABEL_W - 20.0) + SEQ_VOL_W + 18.0 + 4.0 * 8.0,
-                        14.0,
-                    ],
+                    [bass_steps_x, marker_h],
                     egui::Label::new(
-                        egui::RichText::new("SLIDE")
+                        egui::RichText::new("SLD")
                             .color(theme::IRON)
                             .monospace()
-                            .size(7.5),
+                            .size(7.0),
                     ),
                 );
                 for i in 0..16usize {
@@ -498,10 +493,10 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                     let is_slide = bass_page.get(i).map(|s| s.slide).unwrap_or(false);
                     ui.add_enabled_ui(abs < seq_steps, |ui| {
                         let color = if is_slide { theme::CHALK } else { theme::PIT };
-                        let text = egui::RichText::new("S").monospace().size(7.5).color(color);
+                        let text = egui::RichText::new("S").monospace().size(7.0).color(color);
                         if ui
                             .add_sized(
-                                [14.0, 14.0],
+                                [pad_px, marker_h],
                                 egui::Button::new(text).fill(egui::Color32::TRANSPARENT),
                             )
                             .clicked()
