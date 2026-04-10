@@ -175,10 +175,7 @@ narrate --wait "s07_tweak_prompt" \
 pause 0.5
 
 api_prompt "set bass cutoff to 0.3 and resonance to 0.85, make the bass line acid and squelchy"
-pause 8
-
-# Ensure the filter visibly moves even if the LLM didn't fully comply
-api_params '{"bass": {"cutoff": 0.35, "resonance": 0.8}}'
+pause 10
 
 api_scroll "bass"
 pause 0.5
