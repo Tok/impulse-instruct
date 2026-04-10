@@ -338,15 +338,12 @@ start_pw_capture() {
     node_id=$(find_app_pw_node)
 
     if [ -n "$node_id" ]; then
-        echo "  Capturing audio from PipeWire node $node_id"
+        echo "  Capturing audio from PipeWire node $node_id (isolated)"
         pw-record --target "$node_id" "$outfile" &
         echo $!
     else
-        echo "  WARNING: App PipeWire node not found, capturing default output" >&2
-        local sink
-        sink=$(pactl info 2>/dev/null | awk -F: '/Default Sink:/{gsub(/^[ \t]+/,"",$2); print $2".monitor"}')
-        pw-record --target "${sink:-default}" "$outfile" &
-        echo $!
+        echo "  WARNING: App PipeWire node not found — skipping audio capture" >&2
+        echo ""
     fi
 }
 

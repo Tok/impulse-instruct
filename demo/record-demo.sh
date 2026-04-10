@@ -258,28 +258,36 @@ if [ "$SKIP_VIDEO" -eq 0 ]; then
     NARRATION_AUDIO="$OUTPUT_DIR/narration_${TIMESTAMP}.wav"
     FINAL_VIDEO="$OUTPUT_DIR/impulse_demo_${SCENARIO}_${TIMESTAMP}.mp4"
 
-    # Try to find the app's PipeWire node for isolated audio capture
+    # Find the app's PipeWire node for ISOLATED audio capture.
+    # We only capture the app's audio — never the default sink (which would
+    # include YouTube, system sounds, etc.)
     APP_PW_NODE=$(find_app_pw_node)
     if [ -n "$APP_PW_NODE" ]; then
-        echo "  App audio: PipeWire node $APP_PW_NODE (isolated capture)"
+        echo "  App audio: PipeWire node $APP_PW_NODE (isolated)"
         pw-record --target "$APP_PW_NODE" "$APP_AUDIO" &
         PW_RECORD_PID=$!
     else
-        echo "  App audio: PipeWire node not found yet."
-        echo "  Will retry after sequencer starts (app creates audio output on first sound)."
+        echo "  App audio: PipeWire node not found yet (app hasn't produced sound)."
+        echo "  Will retry after sequencer starts."
     fi
 
     # ─── Start screen recording ──────────────────────────────────────────
 
     echo ""
     echo "[5/6] Recording demo..."
-    echo "  Capturing ${GRAB_W}x${GRAB_H} from +${GRAB_X},${GRAB_Y}"
+    echo "  Capturing window $APP_WINDOW_ID (${GRAB_W}x${GRAB_H})"
+    echo "  Window capture mode — app can be in background, other tabs won't interfere"
     echo "  Raw output: $RAW_VIDEO"
 
+    # Convert hex window ID to decimal for ffmpeg -window_id
+    WINDOW_ID_DEC=$(printf '%d' "$APP_WINDOW_ID")
+
     ffmpeg -y \
-        -video_size "${GRAB_W}x${GRAB_H}" \
+        -f x11grab \
+        -window_id "$WINDOW_ID_DEC" \
         -framerate 30 \
-        -f x11grab -i "${DISPLAY}+${GRAB_X},${GRAB_Y}" \
+        -draw_mouse 0 \
+        -i "${DISPLAY}" \
         -c:v h264_nvenc -preset p4 -cq 20 \
         -pix_fmt yuv420p \
         -an \
