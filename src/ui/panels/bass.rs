@@ -292,7 +292,7 @@ pub fn draw_bass(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                         .monospace()
                         .size(9.5),
                 );
-                ui.horizontal(|ui| {
+                widgets::centered_row(ui, |ui| {
                     let (ch, cy) = widgets::param_control(
                         ui,
                         "CUT",
@@ -320,7 +320,7 @@ pub fn draw_bass(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                         cycle_paths.push("bass.resonance");
                     }
                 });
-                ui.horizontal(|ui| {
+                widgets::centered_row(ui, |ui| {
                     let (ch, cy) = widgets::param_control(
                         ui,
                         "ENV",
@@ -357,7 +357,7 @@ pub fn draw_bass(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                         .monospace()
                         .size(9.5),
                 );
-                ui.horizontal(|ui| {
+                widgets::centered_row(ui, |ui| {
                     let (ch, cy) = widgets::param_control(
                         ui,
                         "ACC",
@@ -385,7 +385,7 @@ pub fn draw_bass(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                         cycle_paths.push("bass.distortion");
                     }
                 });
-                ui.horizontal(|ui| {
+                widgets::centered_row(ui, |ui| {
                     let (ch, cy) = widgets::param_control(
                         ui,
                         "VOL",
@@ -422,7 +422,7 @@ pub fn draw_bass(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                         .monospace()
                         .size(9.5),
                 );
-                ui.horizontal(|ui| {
+                widgets::centered_row(ui, |ui| {
                     let (ch, cy) = widgets::param_control(
                         ui,
                         "GLD",
@@ -450,7 +450,7 @@ pub fn draw_bass(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                         cycle_paths.push("bass.noise_mix");
                     }
                 });
-                ui.horizontal(|ui| {
+                widgets::centered_row(ui, |ui| {
                     if widgets::param_control(ui, "FMD", &mut fm_depth, ParamMode::Free, ctrl_sm).0
                     {
                         changed = true;

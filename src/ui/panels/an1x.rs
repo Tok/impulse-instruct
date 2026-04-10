@@ -225,7 +225,7 @@ pub fn draw_an1x(app: &mut ImpulseApp, ui: &mut Ui) {
                         .monospace()
                         .size(9.5),
                 );
-                ui.horizontal(|ui| {
+                widgets::centered_row(ui, |ui| {
                     ak!(ui, "O1", osc1_level);
                     ak!(ui, "O2", osc2_level);
                     ak!(ui, "SUB", sub_level);
@@ -238,11 +238,11 @@ pub fn draw_an1x(app: &mut ImpulseApp, ui: &mut Ui) {
                         .monospace()
                         .size(9.5),
                 );
-                ui.horizontal(|ui| {
+                widgets::centered_row(ui, |ui| {
                     ak!(ui, "CUT", filter_cutoff);
                     ak!(ui, "RES", filter_resonance);
                 });
-                ui.horizontal(|ui| {
+                widgets::centered_row(ui, |ui| {
                     ak!(ui, "ENV", filter_env_amount);
                     ak!(ui, "KEY", filter_key_track);
                 });
@@ -254,11 +254,11 @@ pub fn draw_an1x(app: &mut ImpulseApp, ui: &mut Ui) {
                         .monospace()
                         .size(9.5),
                 );
-                ui.horizontal(|ui| {
+                widgets::centered_row(ui, |ui| {
                     ak!(ui, "ATK", filter_attack);
                     ak!(ui, "DEC", filter_decay);
                 });
-                ui.horizontal(|ui| {
+                widgets::centered_row(ui, |ui| {
                     ak!(ui, "SUS", filter_sustain);
                     ak!(ui, "REL", filter_release);
                 });
@@ -277,7 +277,7 @@ pub fn draw_an1x(app: &mut ImpulseApp, ui: &mut Ui) {
                         .monospace()
                         .size(9.5),
                 );
-                ui.horizontal(|ui| {
+                widgets::centered_row(ui, |ui| {
                     ak!(ui, "DET", osc2_detune);
                     let oct = app.state.read().an1x.osc2_octave;
                     ui.label(
@@ -296,7 +296,7 @@ pub fn draw_an1x(app: &mut ImpulseApp, ui: &mut Ui) {
                         app.push_audio_params();
                     }
                 });
-                ui.horizontal(|ui| {
+                widgets::centered_row(ui, |ui| {
                     let ring = app.state.read().an1x.ring_mod;
                     if ui
                         .add(
@@ -344,12 +344,12 @@ pub fn draw_an1x(app: &mut ImpulseApp, ui: &mut Ui) {
                         .monospace()
                         .size(9.5),
                 );
-                ui.horizontal(|ui| {
+                widgets::centered_row(ui, |ui| {
                     ak!(ui, "ATK", amp_attack);
                     ak!(ui, "DEC", amp_decay);
                     ak!(ui, "VOL", volume);
                 });
-                ui.horizontal(|ui| {
+                widgets::centered_row(ui, |ui| {
                     ak!(ui, "SUS", amp_sustain);
                     ak!(ui, "REL", amp_release);
                 });
@@ -361,7 +361,7 @@ pub fn draw_an1x(app: &mut ImpulseApp, ui: &mut Ui) {
                         .monospace()
                         .size(9.5),
                 );
-                ui.horizontal(|ui| {
+                widgets::centered_row(ui, |ui| {
                     ak!(ui, "ATK", pitch_env_attack);
                     ak!(ui, "DEC", pitch_env_decay);
                     ak!(ui, "AMT", pitch_env_amount);

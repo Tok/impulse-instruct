@@ -18,7 +18,7 @@ pub fn draw_noise(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         )
     };
     let mut changed = false;
-    ui.horizontal(|ui| {
+    widgets::centered_row(ui, |ui| {
         if widgets::param_control(ui, "VOL", &mut vol, pm("noise_voice.volume"), ctrl).0 {
             changed = true;
         }

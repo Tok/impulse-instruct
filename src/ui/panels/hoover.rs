@@ -54,7 +54,7 @@ pub fn draw_hoover(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                     .monospace()
                     .size(9.5),
             );
-            ui.horizontal(|ui| {
+            widgets::centered_row(ui, |ui| {
                 {
                     let mut v = app.state.read().hoover.filter_start;
                     if widgets::param_control(ui, "START", &mut v, ParamMode::Free, ctrl).0 {
@@ -87,7 +87,7 @@ pub fn draw_hoover(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                     .monospace()
                     .size(9.5),
             );
-            ui.horizontal(|ui| {
+            widgets::centered_row(ui, |ui| {
                 {
                     let mut v = app.state.read().hoover.detune;
                     if widgets::param_control(ui, "DETUNE", &mut v, ParamMode::Free, ctrl).0 {
@@ -103,7 +103,7 @@ pub fn draw_hoover(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                     }
                 }
             });
-            ui.horizontal(|ui| {
+            widgets::centered_row(ui, |ui| {
                 let voices = app.state.read().hoover.voices;
                 ui.label(
                     egui::RichText::new(format!("V:{}", voices))
@@ -129,7 +129,7 @@ pub fn draw_hoover(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                     .monospace()
                     .size(9.5),
             );
-            ui.horizontal(|ui| {
+            widgets::centered_row(ui, |ui| {
                 {
                     let raw = app.state.read().hoover.pitch_lfo_rate;
                     let mut v = raw / 8.0;

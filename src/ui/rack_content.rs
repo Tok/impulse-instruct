@@ -36,7 +36,7 @@ pub(super) fn draw_fx_content(app: &mut ImpulseApp, ui: &mut egui::Ui, kind: Mod
     // Helper: horizontal row of knobs
     macro_rules! hk {
         ($ui:expr, $( ($label:expr, $val:expr, $pm:expr) ),+ $(,)?) => {
-            $ui.horizontal(|ui| {
+            widgets::centered_row($ui, |ui| {
                 $( if widgets::param_control(ui, $label, $val, $pm, ctrl).0 { changed = true; } )+
             });
         }

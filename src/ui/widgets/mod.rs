@@ -561,6 +561,21 @@ pub fn glass_group<R>(
     glass_group_fill(ui, max_width, max_width, content)
 }
 
+/// A horizontal row that doesn't stretch to fill its parent — stays as wide as its
+/// content so that a center-aligned parent can center it.  Use inside `glass_group_fill`
+/// to get centered knob rows.
+pub fn centered_row<R>(
+    ui: &mut Ui,
+    add_contents: impl FnOnce(&mut Ui) -> R,
+) -> egui::InnerResponse<R> {
+    // Use a horizontal layout that wraps in a scope with min_width=0 so it only
+    // occupies the width its children need.
+    ui.scope(|ui| {
+        ui.set_min_width(0.0);
+        ui.horizontal(add_contents).inner
+    })
+}
+
 /// Like `glass_group` but sets an exact width (both min and max), so the panel fills
 /// its allocated share when used in an evenly distributed row.
 /// Compute `width` with `even_group_width(ui, n_groups)` before the horizontal.

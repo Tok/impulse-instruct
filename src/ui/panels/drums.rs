@@ -54,7 +54,7 @@ pub fn draw_kit_a(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                     .monospace()
                     .size(9.5),
             );
-            ui.horizontal(|ui| {
+            widgets::centered_row(ui, |ui| {
                 if widgets::param_control(ui, "PITCH", &mut kp, ParamMode::Free, ctrl).0 {
                     changed = true;
                 }
@@ -68,7 +68,7 @@ pub fn draw_kit_a(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                     changed = true;
                 }
             });
-            ui.horizontal(|ui| {
+            widgets::centered_row(ui, |ui| {
                 if widgets::param_control(ui, "P.DPT", &mut kped, ParamMode::Free, ctrl).0 {
                     changed = true;
                 }
@@ -87,7 +87,7 @@ pub fn draw_kit_a(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                     .monospace()
                     .size(9.5),
             );
-            ui.horizontal(|ui| {
+            widgets::centered_row(ui, |ui| {
                 if widgets::param_control(ui, "TONE", &mut st, ParamMode::Free, ctrl).0 {
                     changed = true;
                 }
@@ -95,7 +95,7 @@ pub fn draw_kit_a(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                     changed = true;
                 }
             });
-            ui.horizontal(|ui| {
+            widgets::centered_row(ui, |ui| {
                 if widgets::param_control(ui, "DECAY", &mut sd, ParamMode::Free, ctrl).0 {
                     changed = true;
                 }
@@ -111,7 +111,7 @@ pub fn draw_kit_a(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                     .monospace()
                     .size(9.5),
             );
-            ui.horizontal(|ui| {
+            widgets::centered_row(ui, |ui| {
                 if widgets::param_control(ui, "CLSD", &mut hcd, ParamMode::Free, ctrl).0 {
                     changed = true;
                 }
@@ -245,7 +245,7 @@ pub fn draw_kit_b(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                     .monospace()
                     .size(9.5),
             );
-            ui.horizontal(|ui| {
+            widgets::centered_row(ui, |ui| {
                 if widgets::param_control(ui, "PITCH", &mut kp, ParamMode::Free, ctrl).0 {
                     changed = true;
                 }
@@ -259,7 +259,7 @@ pub fn draw_kit_b(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                     changed = true;
                 }
             });
-            ui.horizontal(|ui| {
+            widgets::centered_row(ui, |ui| {
                 if widgets::param_control(ui, "P.DPT", &mut kped, ParamMode::Free, ctrl).0 {
                     changed = true;
                 }
@@ -278,7 +278,7 @@ pub fn draw_kit_b(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                     .monospace()
                     .size(9.5),
             );
-            ui.horizontal(|ui| {
+            widgets::centered_row(ui, |ui| {
                 if widgets::param_control(ui, "TONE", &mut st, ParamMode::Free, ctrl).0 {
                     changed = true;
                 }
@@ -286,7 +286,7 @@ pub fn draw_kit_b(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                     changed = true;
                 }
             });
-            ui.horizontal(|ui| {
+            widgets::centered_row(ui, |ui| {
                 if widgets::param_control(ui, "DECAY", &mut sd, ParamMode::Free, ctrl).0 {
                     changed = true;
                 }
@@ -302,7 +302,7 @@ pub fn draw_kit_b(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                     .monospace()
                     .size(9.5),
             );
-            ui.horizontal(|ui| {
+            widgets::centered_row(ui, |ui| {
                 if widgets::param_control(ui, "C.DEC", &mut cd, ParamMode::Free, ctrl).0 {
                     changed = true;
                 }
