@@ -211,16 +211,21 @@ pub fn event_stream(ui: &mut Ui, state: &AppState, smooth_step: f64, width: f32,
 
                     let fill =
                         Color32::from_rgba_unmultiplied(color.r(), color.g(), color.b(), alpha);
-                    let r = if step.accent {
-                        circle_r * 1.3
-                    } else {
-                        circle_r
-                    };
+                    // Size: accent = 1.4x, gate scales 0.7x–1.0x
+                    let gate_scale = 0.7 + step.gate * 0.3;
+                    let r = circle_r * gate_scale * if step.accent { 1.4 } else { 1.0 };
                     painter.circle_filled(Pos2::new(x, y), r, fill);
+                    // Accent: brighter outline
+                    let stroke_w = if step.accent { 2.0 } else { 1.0 };
+                    let stroke_a = if step.accent {
+                        alpha
+                    } else {
+                        (alpha as f32 * 0.5) as u8
+                    };
                     painter.circle_stroke(
                         Pos2::new(x, y),
                         r,
-                        Stroke::new(1.5, Color32::from_rgba_unmultiplied(0, 0, 0, alpha)),
+                        Stroke::new(stroke_w, Color32::from_rgba_unmultiplied(0, 0, 0, stroke_a)),
                     );
 
                     // Slide: line to next note

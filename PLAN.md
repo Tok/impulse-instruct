@@ -98,6 +98,15 @@ What's already built is documented in [docs/features.md](docs/features.md).
   side of scope strip, enlarged from 40px to 80px. Panel height 48→88px.
 - [x] **Round-robin indicator → log strip** — agent schedule display moved to
   right side of log strip in 2-row layout. More visible, near console output.
+- [ ] **Event stream Huth notation (Vol. 3)** — replace dots with U-shapes
+  per Huth *Farbige Noten* theory: outer U is the note color, inner white U
+  for sharps/flats. Longer notes stretch horizontally. Dot size correlates
+  to velocity/volume. ADSR visualized via note shape (attack = left slope,
+  decay = fill gradient, sustain = width, release = right fade).
+- [ ] **Event stream stereo/pan layer** — L/R balance line or stereo width
+  indicator. "no stereo difference" alert when L≈R (bland/mono mix).
+- [ ] **Sequencer step markers table layout** — accent/slide markers properly
+  aligned to step buttons in a compact table. Reduce vertical spacing.
 - [ ] **Module drag reorder** — insertion point indicator works; needs better
   width calculation (now uses screen width, was hardcoded 1200px)
 - [ ] **Rack CV cables driving LFO targets** — cables are visual only; wiring

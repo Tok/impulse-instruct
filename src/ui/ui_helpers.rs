@@ -66,14 +66,21 @@ impl ImpulseApp {
                 // Pattern/mix alerts from sequencer state
                 let pat_alerts = crate::audio::analysis::pattern_alerts(&self.state.read());
                 all_alerts.extend(pat_alerts);
+                // Stereo alert
+                if self.stereo_corr > 0.98 && analysis.peak_db > -30.0 {
+                    all_alerts.push("mono mix".into());
+                }
+                // Build snapshot with stereo info
+                let stereo_str = format!(
+                    " st:{:+.0}% w:{:.0}%",
+                    self.stereo_balance * 100.0,
+                    (1.0 - self.stereo_corr.abs()) * 100.0
+                );
+                let base = format!("{}{}", analysis.one_line_summary(), stereo_str);
                 let snap = if all_alerts.is_empty() {
-                    analysis.one_line_summary()
+                    base
                 } else {
-                    format!(
-                        "{} !! {}",
-                        analysis.one_line_summary(),
-                        all_alerts.join(", ")
-                    )
+                    format!("{} !! {}", base, all_alerts.join(", "))
                 };
                 self.state.write().audio_snapshot = snap;
                 self.audio_analysis = Some(analysis);
