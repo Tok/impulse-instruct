@@ -20,12 +20,9 @@ use egui::{Color32, ScrollArea, Vec2};
 use crate::state::{ModuleKind, Zone};
 use crate::ui::module_card::PortPos;
 use crate::ui::{ImpulseApp, module_card, rack_cables};
-
 // Re-export so callers referencing `rack_canvas::CableDrag` keep working.
 pub use crate::ui::rack_cables::{CableDrag, ModuleDrag};
-
 // ─── Available module kinds per zone (for add menus) ─────────────────────────
-
 const VOICE_KINDS: &[ModuleKind] = &[
     ModuleKind::AcidBass,
     ModuleKind::DrumKit808,
@@ -35,9 +32,7 @@ const VOICE_KINDS: &[ModuleKind] = &[
     ModuleKind::AmenSampler,
     ModuleKind::NoiseVoice,
 ];
-
 const GLOBAL_KINDS: &[ModuleKind] = &[ModuleKind::LlmConsole, ModuleKind::LlmAgent];
-
 const FXMOD_KINDS: &[ModuleKind] = &[
     ModuleKind::FxReverb,
     ModuleKind::FxDelay,
@@ -60,8 +55,8 @@ const FXMOD_KINDS: &[ModuleKind] = &[
 // ─── Main rack canvas ─────────────────────────────────────────────────────────
 
 pub fn draw_rack(app: &mut ImpulseApp, ctx: &egui::Context, ui: &mut egui::Ui) {
-    // Publish agent persona names so module_card_back can show them.
     {
+        // publish agent persona names
         let s = app.state.read();
         for agent in &s.llm_agents {
             ctx.data_mut(|d| {
@@ -72,9 +67,11 @@ pub fn draw_rack(app: &mut ImpulseApp, ctx: &egui::Context, ui: &mut egui::Ui) {
             });
         }
     }
-
-    // ── Mode toolbar ─────────────────────────────────────────────────────────
-    // Touch-paint mode (· / U / F) + cable visibility toggle.
+    if let Some((g, v, f)) = app.state.write().collapse_requested.take() {
+        app.zone_global_collapsed = g;
+        app.zone_voice_collapsed = v;
+        app.zone_fxmod_collapsed = f;
+    }
     ui.horizontal(|ui| {
         ui.label(
             egui::RichText::new("MODE")
@@ -118,11 +115,9 @@ pub fn draw_rack(app: &mut ImpulseApp, ctx: &egui::Context, ui: &mut egui::Ui) {
                 app.touch_mode = mode_opt;
             }
         }
-
         ui.add_space(8.0);
         ui.separator();
         ui.add_space(4.0);
-
         let flip_col = if app.rack_flipped {
             Color32::from_gray(220)
         } else {
@@ -150,20 +145,42 @@ pub fn draw_rack(app: &mut ImpulseApp, ctx: &egui::Context, ui: &mut egui::Ui) {
             app.rack_flipped = !app.rack_flipped;
             app.session_dirty = true;
         }
+        ui.separator();
+        // Collapse All / Expand All + Zone jumps
+        let tbtn = |ui: &mut egui::Ui, label: &str| -> bool {
+            ui.add(
+                egui::Button::new(
+                    egui::RichText::new(label)
+                        .monospace()
+                        .size(7.5)
+                        .color(Color32::from_gray(90)),
+                )
+                .fill(Color32::from_gray(22))
+                .min_size(egui::vec2(16.0, 16.0)),
+            )
+            .clicked()
+        };
+        if tbtn(ui, "▼▼") {
+            app.zone_global_collapsed = false;
+            app.zone_voice_collapsed = false;
+            app.zone_fxmod_collapsed = false;
+        }
+        if tbtn(ui, "▶▶") {
+            app.zone_global_collapsed = true;
+            app.zone_voice_collapsed = true;
+            app.zone_fxmod_collapsed = true;
+        }
+        ui.separator();
+        for (label, target) in [("GLB", "global"), ("VOI", "voice"), ("FX", "fxmod")] {
+            if tbtn(ui, label) {
+                app.state.write().scroll_target = Some(target.to_string());
+            }
+        }
     });
     ui.add_space(2.0);
-
-    // Collect port positions during this frame's render pass.
     let mut ports: Vec<PortPos> = Vec::new();
-
-    // Capture the full canvas rect BEFORE allocating any content, so the
-    // context menu can cover the entire rack area with a single interact region.
     let canvas_rect = ui.available_rect_before_wrap();
 
-    // Disable drag-to-scroll when the pointer is near a port (so the scroll
-    // area doesn't steal the press that begins a cable drag) or while a cable
-    // is already being dragged.  Port positions are from the previous frame —
-    // one frame of latency is imperceptible.
     let ports_mem_id = egui::Id::new("rack_port_positions");
     let prev_ports: Vec<PortPos> = ctx
         .memory(|m| m.data.get_temp(ports_mem_id))
@@ -177,10 +194,8 @@ pub fn draw_rack(app: &mut ImpulseApp, ctx: &egui::Context, ui: &mut egui::Ui) {
         })
         .unwrap_or(false);
     let dragging_cable = app.cable_drag.is_some();
-    // Consume scroll target BEFORE the scroll area.
     let scroll_target: Option<String> = app.state.write().scroll_target.take();
 
-    // Set focus highlight for the target module.
     if let Some(ref t) = scroll_target
         && let Some(kind) = super::rack_scroll::resolve_focus_kind(t)
     {
@@ -198,15 +213,12 @@ pub fn draw_rack(app: &mut ImpulseApp, ctx: &egui::Context, ui: &mut egui::Ui) {
             draw_rack_inner(app, ui, &mut ports);
         });
 
-    // Keyboard + API scroll handling (extracted to rack_scroll.rs).
     super::rack_scroll::handle_scroll(app, ctx, &scroll_target, &scroll_out);
     super::rack_scroll::publish_focus(app, ctx);
 
     ctx.memory_mut(|m| m.data.insert_temp(ports_mem_id, ports.clone()));
-    // Cable overlay
     rack_cables::draw_cable_overlay(app, ctx, &ports, canvas_rect);
 
-    // Port hover / drag-target highlights (back panel only)
     if (app.rack_flipped || app.cable_drag.is_some())
         && let Some(pointer) = ctx.pointer_latest_pos()
     {
@@ -497,15 +509,11 @@ fn row_expand_and_pad(row: &[(u32, ModuleKind, bool)], available_w: f32, gap: f3
 }
 
 fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<PortPos>) {
-    // Subtract a small gutter so modules never touch the scrollbar.
     let available_w = (ui.available_width() - 8.0).max(200.0);
-    // Collect card rects for Ctrl+MW hit-testing (stored in egui temp at end).
     let mut card_rects: Vec<(ModuleKind, egui::Rect)> = Vec::new();
 
-    // Track zone Y offsets (relative to content top) for API scroll-to.
     let content_top = ui.cursor().top();
 
-    // ── GLOBAL ZONE — sequencer + master, full width ──────────────────────────
     app.zone_y[0] = ui.cursor().top() - content_top;
     {
         let (add, toggle) =
@@ -746,7 +754,6 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
         ui.add_space(2.0);
     } // end zone_global_collapsed guard
 
-    // ── VOICE ZONE ────────────────────────────────────────────────────────────
     app.zone_y[1] = ui.cursor().top() - content_top;
     {
         let (add, toggle) =
@@ -758,7 +765,6 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
             app.add_menu_zone = Some(Zone::Voice);
         }
     }
-    // Shared ctx clone for drag handling across both zones.
     let ctx_ref = ui.ctx().clone();
 
     if !app.zone_voice_collapsed {
@@ -861,7 +867,6 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
         ui.add_space(2.0);
     } // end zone_voice_collapsed guard
 
-    // ── FX + MOD ZONE ─────────────────────────────────────────────────────────
     app.zone_y[2] = ui.cursor().top() - content_top;
     {
         let (add, toggle) =
@@ -982,17 +987,13 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
         ui.add_space(4.0);
     } // end zone_fxmod_collapsed guard
 
-    // Store card rects for Ctrl+MW hit-testing in the next frame.
     ui.ctx().memory_mut(|m| {
         m.data
             .insert_temp(egui::Id::new("module_card_rects"), card_rects)
     });
 }
-
 // ─── Module drag helpers ──────────────────────────────────────────────────────
-
 // ─── Content dispatchers (implementation in rack_content.rs) ─────────────────
-
 use super::rack_content::{
     draw_fx_content, draw_lfo_content, draw_llm_agent_content, draw_master_content,
     draw_voice_content, handle_cable_drag, handle_title_drag, reorder_module_by_drop,

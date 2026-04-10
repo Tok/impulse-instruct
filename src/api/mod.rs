@@ -56,6 +56,15 @@ pub struct ScrollRequest {
     /// Target to scroll to: zone name ("global", "voice", "fxmod") or
     /// module kind ("AcidBass", "DrumKit808", "FxReverb", etc.)
     pub target: String,
+    /// Optional: collapse other zones when scrolling to focus on the target.
+    #[serde(default)]
+    pub collapse_others: bool,
+}
+
+#[derive(Deserialize)]
+pub struct CollapseRequest {
+    /// "all", "none", "global", "voice", "fxmod"
+    pub action: String,
 }
 
 #[derive(Deserialize)]
@@ -250,11 +259,42 @@ async fn post_scroll(
     AxumState(api): AxumState<ApiState>,
     Json(req): Json<ScrollRequest>,
 ) -> Json<OkResponse> {
+    if req.collapse_others {
+        let is_global = req.target == "global" || req.target == "sequencer";
+        let is_voice = req.target == "voice"
+            || req.target == "bass"
+            || req.target == "808"
+            || req.target == "909";
+        let is_fx = req.target == "fxmod" || req.target == "fx";
+        api.app_state.write().collapse_requested = Some((!is_global, !is_voice, !is_fx));
+    }
     api.app_state.write().scroll_target = Some(req.target.clone());
     api_log(&api, format!("[API] scroll → {}", req.target));
     Json(OkResponse {
         ok: true,
         message: Some(format!("scrolling to {}", req.target)),
+    })
+}
+
+async fn post_collapse(
+    AxumState(api): AxumState<ApiState>,
+    Json(req): Json<CollapseRequest>,
+) -> Json<OkResponse> {
+    let collapse = match req.action.as_str() {
+        "all" => Some((true, true, true)),
+        "none" => Some((false, false, false)),
+        "global" => Some((true, false, false)),
+        "voice" => Some((false, true, false)),
+        "fxmod" => Some((false, false, true)),
+        _ => None,
+    };
+    if let Some(c) = collapse {
+        api.app_state.write().collapse_requested = Some(c);
+    }
+    api_log(&api, format!("[API] collapse → {}", req.action));
+    Json(OkResponse {
+        ok: true,
+        message: Some(format!("collapse {}", req.action)),
     })
 }
 
@@ -611,6 +651,7 @@ pub fn build_router(api_state: ApiState) -> Router {
         .route("/api/rack/cable", post(post_rack_cable))
         .route("/api/rack/remove", post(post_rack_remove))
         .route("/api/rack/reset", post(post_rack_reset))
+        .route("/api/rack/collapse", post(post_collapse))
         .layer(cors)
         .with_state(api_state)
 }

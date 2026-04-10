@@ -227,6 +227,9 @@ pub struct AppState {
     /// `current_step` advances. Used for bar-based ramp timing.
     #[serde(skip)]
     pub global_step_count: u64,
+    /// API-requested zone collapse: (global, voice, fxmod). None = no change.
+    #[serde(skip)]
+    pub collapse_requested: Option<(bool, bool, bool)>,
 }
 
 impl Default for AppState {
@@ -259,6 +262,7 @@ impl Default for AppState {
             scroll_target: None,
             rack_flip_requested: None,
             global_step_count: 0,
+            collapse_requested: None,
         };
         // Create a default agent for the LlmAgent rack module.
         if let Some(agent_id) = s
