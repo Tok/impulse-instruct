@@ -170,8 +170,24 @@ pub struct UiPrefs {
     /// When true, oscilloscope waveform is Huth-colored based on detected frequency.
     #[serde(default)]
     pub huth_oscilloscope: bool,
+    // ── Event stream display layers ─────────────────────────────────────────
+    /// Show bass note events (Huth-colored circles).
+    #[serde(default = "default_true_pref")]
+    pub stream_bass_notes: bool,
+    /// Show drum hits (small dots — kick white, hihat gray, clap bright).
+    #[serde(default)]
+    pub stream_drums: bool,
+    /// Show Hz frequency scale on the Y axis.
+    #[serde(default = "default_true_pref")]
+    pub stream_hz_scale: bool,
+    /// Show active ramp indicators.
+    #[serde(default = "default_true_pref")]
+    pub stream_ramps: bool,
 }
 
+fn default_true_pref() -> bool {
+    true
+}
 fn default_phosphor_frames() -> usize {
     10
 }
@@ -233,6 +249,10 @@ impl Default for UiPrefs {
             phosphor_frames: default_phosphor_frames(),
             phosphor_intensity: default_phosphor_intensity(),
             huth_oscilloscope: false,
+            stream_bass_notes: true,
+            stream_drums: false,
+            stream_hz_scale: true,
+            stream_ramps: true,
         }
     }
 }
