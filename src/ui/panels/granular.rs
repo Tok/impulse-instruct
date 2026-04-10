@@ -46,35 +46,33 @@ pub fn draw_granular(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         )
     };
     let mut changed = false;
-    if widgets::param_control(ui, "VOLUME", &mut vol, pm("granular.volume"), ctrl).0 {
-        changed = true;
-    }
-    if widgets::param_control(ui, "DENSITY", &mut density, pm("granular.density"), ctrl).0 {
-        changed = true;
-    }
-    if widgets::param_control(ui, "SIZE", &mut grain_size, pm("granular.grain_size"), ctrl).0 {
-        changed = true;
-    }
-    if widgets::param_control(ui, "POSITION", &mut position, pm("granular.position"), ctrl).0 {
-        changed = true;
-    }
-    if widgets::param_control(
-        ui,
-        "JITTER",
-        &mut jitter,
-        pm("granular.position_jitter"),
-        ctrl,
-    )
-    .0
-    {
-        changed = true;
-    }
-    if widgets::param_control(ui, "PITCH", &mut pitch, pm("granular.pitch_scatter"), ctrl).0 {
-        changed = true;
-    }
-    if widgets::param_control(ui, "SPRAY", &mut spray, pm("granular.spray"), ctrl).0 {
-        changed = true;
-    }
+    ui.horizontal(|ui| {
+        if widgets::param_control(ui, "VOL", &mut vol, pm("granular.volume"), ctrl).0 {
+            changed = true;
+        }
+        if widgets::param_control(ui, "DENS", &mut density, pm("granular.density"), ctrl).0 {
+            changed = true;
+        }
+        if widgets::param_control(ui, "SIZE", &mut grain_size, pm("granular.grain_size"), ctrl).0 {
+            changed = true;
+        }
+    });
+    ui.horizontal(|ui| {
+        if widgets::param_control(ui, "POS", &mut position, pm("granular.position"), ctrl).0 {
+            changed = true;
+        }
+        if widgets::param_control(ui, "JIT", &mut jitter, pm("granular.position_jitter"), ctrl).0 {
+            changed = true;
+        }
+    });
+    ui.horizontal(|ui| {
+        if widgets::param_control(ui, "PITCH", &mut pitch, pm("granular.pitch_scatter"), ctrl).0 {
+            changed = true;
+        }
+        if widgets::param_control(ui, "SPRAY", &mut spray, pm("granular.spray"), ctrl).0 {
+            changed = true;
+        }
+    });
     if changed {
         {
             let mut s = app.state.write();

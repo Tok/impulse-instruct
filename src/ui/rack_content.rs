@@ -362,10 +362,9 @@ pub(super) fn draw_llm_agent_content(app: &mut ImpulseApp, ui: &mut egui::Ui, mo
         )
     };
 
-    // ── Persona name + inference indicator ───────────────────────────────
+    // ── Persona + model + status (single line) ────────────────────────────
     ui.horizontal(|ui| {
         if inferring {
-            // Pulsing dot while inferring — animated brightness
             let t = ui.ctx().input(|i| i.time) as f32;
             let pulse = (t * 4.0 * std::f32::consts::TAU).sin() * 0.3 + 0.7;
             let g = (220.0 * pulse) as u8;
@@ -380,17 +379,79 @@ pub(super) fn draw_llm_agent_content(app: &mut ImpulseApp, ui: &mut egui::Ui, mo
         }
         let resp = ui.add(
             egui::TextEdit::singleline(&mut persona)
-                .desired_width(100.0)
+                .desired_width(80.0)
                 .font(egui::FontId::monospace(9.5))
                 .text_color(theme::FOG),
         );
         if resp.changed() {
             app.state.write().llm_agents[idx].persona_name = persona;
         }
-        // Show tok/s and cycle count inline when active
+        // Model dropdown (inline)
+        {
+            if app.available_models.is_empty() {
+                app.available_models = super::scan_models();
+            }
+            let display_name = match &agent_model {
+                Some(p) => std::path::Path::new(p)
+                    .file_stem()
+                    .and_then(|s| s.to_str())
+                    .unwrap_or(p)
+                    .to_string(),
+                None => "(Def)".to_string(),
+            };
+            let combo_id = ui.id().with("agent_model").with(module_id);
+            egui::ComboBox::from_id_source(combo_id)
+                .selected_text(
+                    egui::RichText::new(&display_name)
+                        .color(theme::SMOKE)
+                        .size(7.5)
+                        .monospace(),
+                )
+                .width(ui.available_width().min(100.0))
+                .show_ui(ui, |ui| {
+                    let is_default = agent_model.is_none();
+                    if ui
+                        .selectable_label(
+                            is_default,
+                            egui::RichText::new("(Default)")
+                                .monospace()
+                                .size(8.0)
+                                .color(if is_default {
+                                    theme::CHALK
+                                } else {
+                                    theme::SMOKE
+                                }),
+                        )
+                        .clicked()
+                    {
+                        app.state.write().llm_agents[idx].model_path = None;
+                    }
+                    for path in &app.available_models.clone() {
+                        let short = std::path::Path::new(path)
+                            .file_stem()
+                            .and_then(|s| s.to_str())
+                            .unwrap_or(path)
+                            .to_string();
+                        let selected = agent_model.as_deref() == Some(path.as_str());
+                        if ui
+                            .selectable_label(
+                                selected,
+                                egui::RichText::new(&short)
+                                    .monospace()
+                                    .size(8.0)
+                                    .color(if selected { theme::CHALK } else { theme::SMOKE }),
+                            )
+                            .clicked()
+                        {
+                            app.state.write().llm_agents[idx].model_path = Some(path.clone());
+                        }
+                    }
+                });
+        }
+        // Status: tok/s or cycle count
         if inferring {
             ui.label(
-                egui::RichText::new(format!("{:.0} t/s", tps))
+                egui::RichText::new(format!("{:.0}t/s", tps))
                     .color(theme::FOG)
                     .monospace()
                     .size(7.5),
@@ -404,80 +465,6 @@ pub(super) fn draw_llm_agent_content(app: &mut ImpulseApp, ui: &mut egui::Ui, mo
             );
         }
     });
-
-    // ── Model selector ───────────────────────────────────────────────────
-    {
-        if app.available_models.is_empty() {
-            app.available_models = super::scan_models();
-        }
-        let display_name = match &agent_model {
-            Some(p) => std::path::Path::new(p)
-                .file_stem()
-                .and_then(|s| s.to_str())
-                .unwrap_or(p)
-                .to_string(),
-            None => "(Default)".to_string(),
-        };
-        let combo_id = ui.id().with("agent_model").with(module_id);
-        egui::ComboBox::from_id_source(combo_id)
-            .selected_text(
-                egui::RichText::new(&display_name)
-                    .color(theme::SMOKE)
-                    .size(7.5)
-                    .monospace(),
-            )
-            .width(ui.available_width().min(140.0))
-            .show_ui(ui, |ui| {
-                // "(Default)" entry — inherit from global LlmState.model_path
-                let is_default = agent_model.is_none();
-                if ui
-                    .selectable_label(
-                        is_default,
-                        egui::RichText::new("(Default)")
-                            .monospace()
-                            .size(8.0)
-                            .color(if is_default {
-                                theme::CHALK
-                            } else {
-                                theme::SMOKE
-                            }),
-                    )
-                    .clicked()
-                {
-                    app.state.write().llm_agents[idx].model_path = None;
-                }
-                for path in &app.available_models.clone() {
-                    let short = std::path::Path::new(path)
-                        .file_stem()
-                        .and_then(|s| s.to_str())
-                        .unwrap_or(path)
-                        .to_string();
-                    let selected = agent_model.as_deref() == Some(path.as_str());
-                    if ui
-                        .selectable_label(
-                            selected,
-                            egui::RichText::new(&short)
-                                .monospace()
-                                .size(8.0)
-                                .color(if selected { theme::CHALK } else { theme::SMOKE }),
-                        )
-                        .clicked()
-                    {
-                        app.state.write().llm_agents[idx].model_path = Some(path.clone());
-                    }
-                }
-            });
-        // VRAM estimate
-        let global_model = app.state.read().llm.model_path.clone();
-        let effective_model = agent_model.as_deref().unwrap_or(&global_model);
-        let vram_est = crate::llm::vram::estimate_vram(effective_model);
-        ui.label(
-            egui::RichText::new(format!("~{:.1}G VRAM", vram_est as f64 / 1024.0))
-                .monospace()
-                .size(7.0)
-                .color(theme::IRON),
-        );
-    }
 
     // ── Temp / Bars controls ───────────────────────────────────────────
     ui.horizontal(|ui| {

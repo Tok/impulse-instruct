@@ -182,7 +182,7 @@ impl UiPrefs {
     /// Defaults to `pad_size.px() × 3.38` (legacy formula) when not overridden.
     pub fn effective_xy_px(&self) -> f32 {
         self.custom_xy_px
-            .unwrap_or_else(|| self.pad_size.px() * (88.0 / 26.0))
+            .unwrap_or_else(|| self.pad_size.px() * (176.0 / 26.0))
             .clamp(40.0, 400.0)
     }
 
@@ -190,7 +190,7 @@ impl UiPrefs {
     /// Defaults to 30% of the XY pad size, minimum 28 px.
     pub fn effective_env_h(&self) -> f32 {
         self.custom_env_h
-            .unwrap_or_else(|| (self.effective_xy_px() * 0.30).max(28.0))
+            .unwrap_or_else(|| (self.effective_xy_px() * 0.45).max(60.0))
             .clamp(16.0, 200.0)
     }
 }

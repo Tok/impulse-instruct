@@ -259,7 +259,7 @@ pub fn draw_an1x(app: &mut ImpulseApp, ui: &mut Ui) {
                 st.an1x.filter_release,
             )
         };
-        if widgets::adsr_display(ui, &mut a, &mut d, &mut s, &mut r, 140.0, 36.0) {
+        if widgets::adsr_display(ui, &mut a, &mut d, &mut s, &mut r, 280.0, 100.0) {
             let mut st = app.state.write();
             st.an1x.filter_attack = a;
             st.an1x.filter_decay = d;
@@ -336,7 +336,7 @@ pub fn draw_an1x(app: &mut ImpulseApp, ui: &mut Ui) {
                 st.an1x.amp_release,
             )
         };
-        if widgets::adsr_display(ui, &mut a, &mut d, &mut s, &mut r, 140.0, 36.0) {
+        if widgets::adsr_display(ui, &mut a, &mut d, &mut s, &mut r, 280.0, 100.0) {
             let mut st = app.state.write();
             st.an1x.amp_attack = a;
             st.an1x.amp_decay = d;

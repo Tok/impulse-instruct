@@ -6,6 +6,7 @@ use crate::ui::{ImpulseApp, theme};
 
 const SLOT_NAMES: [&str; 8] = ["A", "B", "C", "D", "E", "F", "G", "H"];
 
+/// Compact bank + chain on a single horizontal line.
 pub fn draw_pattern_chain(app: &mut ImpulseApp, ui: &mut egui::Ui) {
     let (pattern_edit, chain, chain_enabled, chain_pos) = {
         let s = app.state.read();
@@ -17,118 +18,108 @@ pub fn draw_pattern_chain(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         )
     };
 
-    // ── Bank row ──────────────────────────────────────────────────────────────
-    ui.horizontal(|ui| {
-        ui.label(
-            egui::RichText::new("BANK")
-                .color(theme::SMOKE)
-                .monospace()
-                .size(9.0),
-        );
-        for (slot, &name) in SLOT_NAMES.iter().enumerate() {
-            let is_edit = slot == pattern_edit;
-            let col = if is_edit { theme::CHALK } else { theme::PIT };
-            let fill = if is_edit {
-                egui::Color32::from_gray(45)
-            } else {
-                egui::Color32::TRANSPARENT
-            };
-            let resp = ui.add_sized(
-                [20.0, 16.0],
-                egui::Button::new(egui::RichText::new(name).monospace().size(9.0).color(col))
-                    .fill(fill),
-            );
-            if resp.clicked() {
-                // Save current edits to old slot, then load this slot.
-                let s = app.state.read().clone();
-                *app.state.write() = bank_swap(s, slot);
-            }
-            if resp.secondary_clicked() {
-                // Right-click: save current to this slot without switching.
-                let s = app.state.read().clone();
-                *app.state.write() = bank_write(s, slot);
-            }
-        }
-        ui.label(
-            egui::RichText::new("  click=switch  r-click=save")
-                .color(theme::IRON)
-                .monospace()
-                .size(7.0),
-        );
-    });
-
-    // ── Chain row ─────────────────────────────────────────────────────────────
-    ui.horizontal(|ui| {
-        ui.label(
-            egui::RichText::new("CHAIN")
-                .color(theme::SMOKE)
-                .monospace()
-                .size(9.0),
-        );
-        for pos in 0..8usize {
-            let label = chain.get(pos).map(|&s| SLOT_NAMES[s % 8]).unwrap_or("·");
-            let cursor_here = chain_enabled && !chain.is_empty() && chain_pos % chain.len() == pos;
-            let fill = if cursor_here {
-                egui::Color32::from_gray(70)
-            } else {
-                egui::Color32::TRANSPARENT
-            };
-            let col = if chain.get(pos).is_some() {
-                theme::FOG
-            } else {
-                theme::IRON
-            };
-            ui.add_sized(
-                [20.0, 16.0],
-                egui::Button::new(egui::RichText::new(label).monospace().size(9.0).color(col))
-                    .fill(fill),
-            );
-        }
-        let small_btn = |ui: &mut egui::Ui, label: &str| {
-            ui.add_sized(
-                [16.0, 16.0],
-                egui::Button::new(
-                    egui::RichText::new(label)
-                        .monospace()
-                        .size(9.0)
-                        .color(theme::FOG),
-                ),
-            )
-            .clicked()
-        };
-        if small_btn(ui, "+") {
-            let s = app.state.read().clone();
-            *app.state.write() = chain_push(s, pattern_edit);
-        }
-        if small_btn(ui, "−") {
-            let s = app.state.read().clone();
-            *app.state.write() = chain_pop(s);
-        }
-        let on_col = if chain_enabled {
-            theme::CHALK
-        } else {
-            theme::IRON
-        };
-        let on_fill = if chain_enabled {
-            egui::Color32::from_gray(50)
+    // Bank slots
+    ui.label(
+        egui::RichText::new("BNK")
+            .color(theme::SMOKE)
+            .monospace()
+            .size(8.0),
+    );
+    for (slot, &name) in SLOT_NAMES.iter().enumerate() {
+        let is_edit = slot == pattern_edit;
+        let col = if is_edit { theme::CHALK } else { theme::PIT };
+        let fill = if is_edit {
+            egui::Color32::from_gray(45)
         } else {
             egui::Color32::TRANSPARENT
         };
-        if ui
-            .add_sized(
-                [28.0, 16.0],
-                egui::Button::new(
-                    egui::RichText::new(if chain_enabled { "ON" } else { "OFF" })
-                        .monospace()
-                        .size(9.0)
-                        .color(on_col),
-                )
-                .fill(on_fill),
-            )
-            .clicked()
-        {
+        let resp = ui.add_sized(
+            [16.0, 14.0],
+            egui::Button::new(egui::RichText::new(name).monospace().size(8.0).color(col))
+                .fill(fill),
+        );
+        if resp.clicked() {
             let s = app.state.read().clone();
-            *app.state.write() = set_chain_enabled(s, !chain_enabled);
+            *app.state.write() = bank_swap(s, slot);
         }
-    });
+        if resp.secondary_clicked() {
+            let s = app.state.read().clone();
+            *app.state.write() = bank_write(s, slot);
+        }
+    }
+
+    ui.separator();
+
+    // Chain slots (compact)
+    ui.label(
+        egui::RichText::new("CHN")
+            .color(theme::SMOKE)
+            .monospace()
+            .size(8.0),
+    );
+    for pos in 0..8usize {
+        let label = chain.get(pos).map(|&s| SLOT_NAMES[s % 8]).unwrap_or("·");
+        let cursor_here = chain_enabled && !chain.is_empty() && chain_pos % chain.len() == pos;
+        let fill = if cursor_here {
+            egui::Color32::from_gray(70)
+        } else {
+            egui::Color32::TRANSPARENT
+        };
+        let col = if chain.get(pos).is_some() {
+            theme::FOG
+        } else {
+            theme::IRON
+        };
+        ui.add_sized(
+            [16.0, 14.0],
+            egui::Button::new(egui::RichText::new(label).monospace().size(8.0).color(col))
+                .fill(fill),
+        );
+    }
+    let small_btn = |ui: &mut egui::Ui, label: &str| {
+        ui.add_sized(
+            [14.0, 14.0],
+            egui::Button::new(
+                egui::RichText::new(label)
+                    .monospace()
+                    .size(8.0)
+                    .color(theme::FOG),
+            ),
+        )
+        .clicked()
+    };
+    if small_btn(ui, "+") {
+        let s = app.state.read().clone();
+        *app.state.write() = chain_push(s, pattern_edit);
+    }
+    if small_btn(ui, "−") {
+        let s = app.state.read().clone();
+        *app.state.write() = chain_pop(s);
+    }
+    let on_col = if chain_enabled {
+        theme::CHALK
+    } else {
+        theme::IRON
+    };
+    let on_fill = if chain_enabled {
+        egui::Color32::from_gray(50)
+    } else {
+        egui::Color32::TRANSPARENT
+    };
+    if ui
+        .add_sized(
+            [22.0, 14.0],
+            egui::Button::new(
+                egui::RichText::new(if chain_enabled { "ON" } else { "OF" })
+                    .monospace()
+                    .size(8.0)
+                    .color(on_col),
+            )
+            .fill(on_fill),
+        )
+        .clicked()
+    {
+        let s = app.state.read().clone();
+        *app.state.write() = set_chain_enabled(s, !chain_enabled);
+    }
 }
