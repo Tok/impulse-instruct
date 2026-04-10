@@ -674,6 +674,54 @@ impl ImpulseApp {
             }
         });
 
+        // ── Agent round-robin status ────────────────────────────────
+        {
+            let s = self.state.read();
+            let agents = &s.llm_agents;
+            let enabled: Vec<_> = agents
+                .iter()
+                .filter(|a| s.rack.modules.iter().any(|m| m.id == a.id && m.enabled))
+                .collect();
+            if !enabled.is_empty() {
+                let time = ui.ctx().input(|i| i.time) as f32;
+                for a in &enabled {
+                    ui.horizontal(|ui| {
+                        let dot_col = if a.is_inferring {
+                            let p = (time * 4.0 * std::f32::consts::TAU).sin() * 0.3 + 0.7;
+                            egui::Color32::from_gray((220.0 * p) as u8)
+                        } else {
+                            egui::Color32::from_gray(60)
+                        };
+                        ui.label(egui::RichText::new("●").color(dot_col).size(8.0));
+                        let name_col = if a.is_inferring {
+                            theme::CHALK
+                        } else {
+                            theme::IRON
+                        };
+                        ui.label(
+                            egui::RichText::new(&a.persona_name)
+                                .color(name_col)
+                                .monospace()
+                                .size(8.0),
+                        );
+                        // Show agent scope
+                        let scope_str = a.scope.join(",");
+                        if !scope_str.is_empty() {
+                            ui.label(
+                                egui::RichText::new(format!("[{}]", scope_str))
+                                    .color(theme::IRON)
+                                    .monospace()
+                                    .size(7.0),
+                            );
+                        }
+                    });
+                }
+                if agents.iter().any(|a| a.is_inferring) {
+                    ui.ctx().request_repaint();
+                }
+            }
+        }
+
         // ── Prompt input + ASK ───────────────────────────────────────
         ui.horizontal(|ui| {
             let avail = ui.available_width();
