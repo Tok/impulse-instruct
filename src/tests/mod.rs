@@ -3,6 +3,7 @@
 // Run: ./run-tests.sh
 //      ./run-tests.sh --coverage
 
+mod analysis_tests;
 mod dsp_tests;
 mod fx_plan_tests;
 mod helpers_tests;

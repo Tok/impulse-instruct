@@ -170,6 +170,72 @@ pub fn format_snapshot(a: &AudioAnalysis) -> String {
     )
 }
 
+/// Musical pattern observations from sequencer/mix state.
+/// Returns short warnings that inform the user and nudge agents.
+pub fn pattern_alerts(state: &crate::state::AppState) -> Vec<String> {
+    let mut out = Vec::new();
+    let seq = &state.sequencer;
+    let steps = seq.steps;
+
+    // Bass density
+    let bass_active = seq
+        .bass_pattern
+        .iter()
+        .take(steps)
+        .filter(|s| s.active)
+        .count();
+    let density = if steps > 0 {
+        bass_active as f32 / steps as f32
+    } else {
+        0.0
+    };
+    if bass_active > 0 && density > 0.8 {
+        out.push("bass very dense".into());
+    } else if seq.running && bass_active == 0 {
+        out.push("no bass notes".into());
+    } else if bass_active > 0 && bass_active <= 2 && steps >= 16 {
+        out.push("bass sparse".into());
+    }
+
+    // Monotone bass
+    if bass_active >= 4 {
+        let notes: Vec<u8> = seq
+            .bass_pattern
+            .iter()
+            .take(steps)
+            .filter(|s| s.active)
+            .map(|s| s.note)
+            .collect();
+        if notes.iter().all(|n| *n == notes[0]) {
+            out.push("bass monotone".into());
+        }
+    }
+
+    // Kick check
+    if let Some(kick_pat) = seq.drum_patterns.get(&crate::state::DrumVoice::Kick808) {
+        let kick_active = kick_pat.iter().take(steps).filter(|s| s.active).count();
+        if seq.running && kick_active == 0 {
+            out.push("no kick".into());
+        }
+    }
+
+    // FX extremes
+    if state.fx.reverb_mix > 0.5 {
+        out.push(format!("reverb high ({:.0}%)", state.fx.reverb_mix * 100.0));
+    }
+    if state.fx.delay_feedback > 0.6 {
+        out.push(format!(
+            "delay fb high ({:.0}%)",
+            state.fx.delay_feedback * 100.0
+        ));
+    }
+    if state.fx.distortion_mix > 0.5 && state.fx.distortion_drive > 0.5 {
+        out.push("heavy distortion".into());
+    }
+
+    out
+}
+
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 /// One-pole IIR low-pass filter applied to `samples`. Returns a new Vec.

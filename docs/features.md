@@ -100,6 +100,27 @@ A detailed log of what's built.
 
 `mc_lines` and `themes` are injected into the system prompt — mc_lines only for MC/DJ conversation modes, themes for all modes. Styles that don't suit vocal content (minimal techno, IDM) omit these fields.
 
+## Real-time mix observer
+
+Continuous audio + pattern analysis running every ~2s. Results shown in the header bar and injected into every LLM system prompt as `AUDIO: ...` context. Agents see the mix state and can self-correct.
+
+**Audio-level checks:**
+- CLIPPING (peak > -1dB), near clip (peak > -3dB)
+- sub overload, harsh highs, mid overload (band RMS thresholds)
+- muddy low end (low >> mid by 20dB)
+- over-compressed (crest < 3dB)
+- near silence (peak < -40dB)
+- snare rush (high RMS + fast transients)
+
+**Pattern/mix checks:**
+- bass very dense (>80% steps active)
+- bass sparse (≤2 steps in 16)
+- bass monotone (all active notes identical)
+- no bass notes / no kick (while sequencer running)
+- reverb high / delay feedback high / heavy distortion (FX extremes)
+
+Alerts cycle in the header (2 at a time, rotating each second). Multiple alerts joined in LLM context with `!!` prefix.
+
 ## I/O
 
 - MIDI in - NoteOn/Off to bass synth + live record; CC to synth params; Start/Stop to transport; MIDI clock in with 8-pulse rolling average BPM sync

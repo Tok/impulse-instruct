@@ -343,32 +343,46 @@ impl ImpulseApp {
             .show(ctx, |ui| {
                 ui.horizontal(|ui| {
                     // ── LOGO ─────────────────────────────────────────────────
-                    ui.vertical(|ui| {
-                        ui.label(
-                            egui::RichText::new("◆ IMPULSE INSTRUCT")
-                                .color(theme::CHALK)
-                                .size(12.0)
-                                .monospace()
-                                .strong(),
-                        );
-                        if let Some(ref analysis) = self.audio_analysis {
+                    ui.scope(|ui| {
+                        ui.set_min_width(280.0);
+                        ui.vertical(|ui| {
                             ui.label(
-                                egui::RichText::new(analysis.one_line_summary())
-                                    .color(theme::IRON)
-                                    .size(7.0)
-                                    .monospace(),
+                                egui::RichText::new("◆ IMPULSE INSTRUCT")
+                                    .color(theme::CHALK)
+                                    .size(12.0)
+                                    .monospace()
+                                    .strong(),
                             );
-                            let alerts = analysis.alerts();
-                            if !alerts.is_empty() {
+                            if let Some(ref analysis) = self.audio_analysis {
                                 ui.label(
-                                    egui::RichText::new(alerts.join(" | "))
+                                    egui::RichText::new(analysis.one_line_summary())
+                                        .color(theme::IRON)
+                                        .size(7.0)
+                                        .monospace(),
+                                );
+                            }
+                            // Combined alerts (audio + pattern) from state snapshot
+                            let snap = self.state.read().audio_snapshot.clone();
+                            if let Some(alert_part) = snap.split("!! ").nth(1) {
+                                // Cycle through alerts if >2, one per second
+                                let parts: Vec<&str> = alert_part.split(", ").collect();
+                                let display = if parts.len() <= 2 {
+                                    alert_part.to_string()
+                                } else {
+                                    let t = ui.ctx().input(|i| i.time) as usize;
+                                    let idx = t % parts.len();
+                                    let next = (idx + 1) % parts.len();
+                                    format!("{} | {}", parts[idx], parts[next])
+                                };
+                                ui.label(
+                                    egui::RichText::new(display)
                                         .color(theme::CHALK)
                                         .size(8.0)
                                         .monospace()
                                         .strong(),
                                 );
                             }
-                        }
+                        });
                     });
 
                     ui.separator();

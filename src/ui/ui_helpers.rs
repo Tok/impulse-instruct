@@ -61,11 +61,19 @@ impl ImpulseApp {
             if !captured.is_empty() {
                 let analysis = crate::audio::analysis::analyse_audio(&captured, 44100.0);
                 // Compact snapshot for LLM context (injected into every system prompt)
-                let alerts = analysis.alerts();
-                let snap = if alerts.is_empty() {
+                let mut all_alerts: Vec<String> =
+                    analysis.alerts().iter().map(|s| s.to_string()).collect();
+                // Pattern/mix alerts from sequencer state
+                let pat_alerts = crate::audio::analysis::pattern_alerts(&self.state.read());
+                all_alerts.extend(pat_alerts);
+                let snap = if all_alerts.is_empty() {
                     analysis.one_line_summary()
                 } else {
-                    format!("{} !! {}", analysis.one_line_summary(), alerts.join(", "))
+                    format!(
+                        "{} !! {}",
+                        analysis.one_line_summary(),
+                        all_alerts.join(", ")
+                    )
                 };
                 self.state.write().audio_snapshot = snap;
                 self.audio_analysis = Some(analysis);
