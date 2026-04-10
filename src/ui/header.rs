@@ -495,8 +495,8 @@ impl ImpulseApp {
 
                     ui.separator();
 
-                    // ── RIGHT controls (KNOBS, MON, VRAM/RAM, API) ─────────
-                    {
+                    // ── RIGHT-justified controls (KNOBS, MON, VRAM/RAM, API) ──
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         let (has_vram, has_ram, vram_used, vram_total, ram_used, ram_total) = self
                             .sys_info
                             .lock()
@@ -571,7 +571,7 @@ impl ImpulseApp {
                                 }
                             }
                         });
-                    }
+                    });
                 });
             });
     }

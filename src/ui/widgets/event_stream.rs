@@ -37,9 +37,9 @@ pub fn event_stream(ui: &mut Ui, state: &AppState, smooth_step: f64, width: f32,
     let time_sig = seq.time_sig_num as usize;
     let current_step = seq.current_step;
 
-    // Only show notes after the sequencer has advanced at least one step.
-    // Prevents phantom notes before any audio has been produced.
-    let has_played = state.global_step_count > 0;
+    // Only show notes while running or after at least one step has played.
+    // Also track whether we should show future notes (upcoming) or only past.
+    let is_playing = seq.running && state.global_step_count > 0;
 
     // Timing: how many steps fit in the display width
     let display_steps = steps as f32 * 2.0; // show 2 full patterns
@@ -130,9 +130,8 @@ pub fn event_stream(ui: &mut Ui, state: &AppState, smooth_step: f64, width: f32,
     );
 
     // ── Bass note events (all voices) ───────────────────────────────────────
-    // Skip rendering if sequencer hasn't played yet (prevents phantom notes)
-    if !has_played {
-        // Still show the grid and cursor, just no notes
+    // Skip rendering entirely if sequencer hasn't produced any sound yet
+    if !is_playing && state.global_step_count == 0 {
         if seq.running {
             ui.ctx().request_repaint();
         }
@@ -168,6 +167,11 @@ pub fn event_stream(ui: &mut Ui, state: &AppState, smooth_step: f64, width: f32,
             for &off in &offsets {
                 let x = now_x + off * step_w;
                 if x < inner.min.x - circle_r || x > inner.max.x + circle_r {
+                    continue;
+                }
+                // Only show notes that have already been played (left of now cursor).
+                // A small margin (2px) allows the note right at "now" to be visible.
+                if x > now_x + 2.0 {
                     continue;
                 }
                 let y = note_y(note);
