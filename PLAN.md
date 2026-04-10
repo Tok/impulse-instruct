@@ -54,8 +54,23 @@ What's already built is documented in [docs/features.md](docs/features.md).
 - [ ] **Jam-via-API** — currently API prompts are always one_shot (no jam loop).
   Need safe jam support that doesn't do full-state replacement.
 
+### Feedback & awareness
+
+- [ ] **Auto-listen always on** — listen function (audio analysis → text)
+  should default to ON, continuously describing what's playing. Detects
+  extremes (snare rushes, heavy reverb, clipping) and makes them visible
+  as text context to all agents. Self-correcting feedback loop instead of
+  hard-banning patterns.
+- [ ] **LLM console: 8+ visible lines** — currently ~5 lines visible; give
+  the console more vertical space (horizontal is plenty). Important for
+  demo visibility and agent context.
+
 ### UI / UX
 
+- [ ] **Oscilloscope ring → header** — move the ring scope to the right side
+  of the header bar, make it 2–3× bigger. Frees vertical rack space.
+- [ ] **Round-robin indicator → header** — move agent schedule display to
+  top-right header next to the scope. Currently hard to find.
 - [ ] **Module drag reorder** — insertion point indicator works; needs better
   width calculation (now uses screen width, was hardcoded 1200px)
 - [ ] **Rack CV cables driving LFO targets** — cables are visual only; wiring
