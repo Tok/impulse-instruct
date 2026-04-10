@@ -91,8 +91,8 @@ impl ImpulseApp {
                         let smooth = self.last_seq_step as f64 + frac;
                         super::widgets::event_stream(ui, &state, smooth, stream_w, h);
                     }
-                    // Ring scope (right)
-                    super::scope_footer::draw_ring_scope(ui, &self.scope_buf, h);
+                    // Ring scope (right) — same Huth color as linear scope
+                    super::scope_footer::draw_ring_scope_colored(ui, &self.scope_buf, h, huth_col);
                 });
             });
     }

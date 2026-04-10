@@ -320,7 +320,18 @@ pub fn draw_crt_overlay(ctx: &egui::Context) {
 
 /// Draw the scope buffer as a circular ring — a diagnostic/aesthetic display.
 /// `buf` is the most recent scope samples; `size` is the widget diameter.
+#[allow(dead_code)]
 pub fn draw_ring_scope(ui: &mut egui::Ui, buf: &[f32], size: f32) {
+    draw_ring_scope_colored(ui, buf, size, None);
+}
+
+/// Ring scope with optional Huth color override.
+pub fn draw_ring_scope_colored(
+    ui: &mut egui::Ui,
+    buf: &[f32],
+    size: f32,
+    huth_color: Option<egui::Color32>,
+) {
     let (rect, _) = ui.allocate_exact_size(egui::vec2(size, size), egui::Sense::hover());
     if !ui.is_rect_visible(rect) || buf.is_empty() {
         return;
@@ -350,14 +361,20 @@ pub fn draw_ring_scope(ui: &mut egui::Ui, buf: &[f32], size: f32) {
     if let Some(&first) = points.first() {
         points.push(first); // close the ring
     }
-    // Phosphor glow: draw a thicker dim layer underneath, then the bright trace on top
+    // Phosphor glow: thicker dim layer underneath, then bright trace on top
+    let trace_col = huth_color.unwrap_or(egui::Color32::from_gray(160));
+    let glow_col = if huth_color.is_some() {
+        egui::Color32::from_rgba_unmultiplied(trace_col.r(), trace_col.g(), trace_col.b(), 60)
+    } else {
+        egui::Color32::from_gray(35)
+    };
     painter.add(egui::Shape::Path(egui::epaint::PathShape::line(
         points.clone(),
-        egui::Stroke::new(3.0, egui::Color32::from_gray(35)),
+        egui::Stroke::new(3.0, glow_col),
     )));
     painter.add(egui::Shape::Path(egui::epaint::PathShape::line(
         points,
-        egui::Stroke::new(1.5, egui::Color32::from_gray(160)),
+        egui::Stroke::new(1.5, trace_col),
     )));
 
     // Write-head dot: tracks the newest sample position on the ring
