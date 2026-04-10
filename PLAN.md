@@ -11,9 +11,9 @@ What's already built is documented in [docs/features.md](docs/features.md).
 - [ ] **LFO-as-tool for agents** — agents can schedule an LFO on any target
   (cutoff, resonance, reverb mix, etc.) to introduce changes gradually
   instead of jumping to a value. JSON schema: `"lfo_assign": {"target": "bass.cutoff", "rate": 0.5, "depth": 0.3}`
-- [ ] **Parameter ramps** — agents can set a target value + ramp duration
-  (e.g. "move cutoff from 0.3 to 0.8 over 4 bars"). DSP interpolates.
-  JSON schema: `"ramp": {"path": "bass.cutoff", "to": 0.8, "bars": 4}`
+- [x] **Parameter ramps** — agents can set a target value + ramp duration
+  (e.g. "move cutoff from 0.3 to 0.8 over 4 bars"). Interpolated per UI frame.
+  JSON: `"ramp": {"param": "bass.cutoff", "to": 0.8, "bars": 4}` or `"ramps": [...]`
 - [ ] **XY pad control** — expose cutoff/resonance pad as a first-class
   tool the agent can move. Currently agents set values but the pad
   position doesn't visually track mid-change
@@ -61,16 +61,15 @@ What's already built is documented in [docs/features.md](docs/features.md).
   extremes (snare rushes, heavy reverb, clipping) and makes them visible
   as text context to all agents. Self-correcting feedback loop instead of
   hard-banning patterns.
-- [ ] **LLM console: 8+ visible lines** — currently ~5 lines visible; give
-  the console more vertical space (horizontal is plenty). Important for
-  demo visibility and agent context.
+- [x] **LLM console: 8+ visible lines** — default height increased from 50px
+  to 100px (~8 lines visible). Still resizable.
 
 ### UI / UX
 
-- [ ] **Oscilloscope ring → header** — move the ring scope to the right side
-  of the header bar, make it 2–3× bigger. Frees vertical rack space.
-- [ ] **Round-robin indicator → header** — move agent schedule display to
-  top-right header next to the scope. Currently hard to find.
+- [x] **Oscilloscope ring → right of scope strip** — ring scope moved to right
+  side of scope strip, enlarged from 40px to 80px. Panel height 48→88px.
+- [x] **Round-robin indicator → log strip** — agent schedule display moved to
+  right side of log strip in 2-row layout. More visible, near console output.
 - [ ] **Module drag reorder** — insertion point indicator works; needs better
   width calculation (now uses screen width, was hardcoded 1200px)
 - [ ] **Rack CV cables driving LFO targets** — cables are visual only; wiring

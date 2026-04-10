@@ -38,4 +38,14 @@ impl ImpulseApp {
         };
         let _ = self.audio_tx.push(AudioCommand::SetFxPlan(plan));
     }
+
+    /// Advance any active bar-based parameter ramps and push updated params.
+    pub(crate) fn tick_ramps(&mut self) {
+        let s = self.state.read().clone();
+        if !s.llm.active_ramps.is_empty() {
+            let next = crate::state::jam_tools::tick_bar_ramps(s);
+            *self.state.write() = next;
+            self.push_audio_params();
+        }
+    }
 }

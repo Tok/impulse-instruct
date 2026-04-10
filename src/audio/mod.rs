@@ -174,6 +174,10 @@ impl AudioEngine {
                     // Propagate current_step back; advance chain on each loop boundary.
                     {
                         let mut s = state_clone.write();
+                        // Increment monotonic step counter when the step advances.
+                        if clock.current_step != s.sequencer.current_step {
+                            s.global_step_count += 1;
+                        }
                         s.sequencer.current_step = clock.current_step;
                         if clock.loop_count != prev_loop_count
                             && chain_enabled

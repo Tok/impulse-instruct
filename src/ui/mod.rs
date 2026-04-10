@@ -443,8 +443,7 @@ impl ImpulseApp {
     pub(crate) fn kind_scale(&self, kind: crate::state::ModuleKind) -> f32 {
         self.module_scales.get(&kind).copied().unwrap_or(1.0)
     }
-
-    // observe_edits, push_audio_params, push_fx_plan extracted to ui_helpers.rs
+    // observe_edits, push_audio_params, push_fx_plan, tick_ramps → ui_helpers.rs
 
     fn drain_llm_outputs(&mut self) {
         while let Ok(out) = self.llm_rx.try_recv() {
@@ -746,8 +745,7 @@ impl ImpulseApp {
         }
         log::trace!("UI: drain_llm_outputs complete");
     }
-    // drain_midi_events extracted to midi_handler.rs
-    // drain_api_log extracted to api_log_handler.rs
+    // drain_midi_events → midi_handler.rs, drain_api_log → api_log_handler.rs
 }
 
 impl eframe::App for ImpulseApp {
@@ -931,6 +929,7 @@ impl eframe::App for ImpulseApp {
             self.dsp_load_buf.drain(..drain);
         }
 
+        self.tick_ramps();
         self.draw_windows(ctx);
         self.draw_menu_and_header(ctx);
         TopBottomPanel::top("scope")
@@ -939,11 +938,13 @@ impl eframe::App for ImpulseApp {
                     .fill(theme::PIT)
                     .inner_margin(egui::Margin::symmetric(8.0, 4.0)),
             )
-            .exact_height(48.0)
+            .exact_height(88.0)
             .show(ctx, |ui| {
                 ui.horizontal(|ui| {
-                    scope_footer::draw_ring_scope(ui, &self.scope_buf, 40.0);
+                    // Linear scope fills remaining width
                     scope_footer::draw_scope(ui, &self.scope_buf, &self.scope_history);
+                    // Ring scope on the right, enlarged
+                    scope_footer::draw_ring_scope(ui, &self.scope_buf, 80.0);
                 });
             });
         TopBottomPanel::bottom("footer")

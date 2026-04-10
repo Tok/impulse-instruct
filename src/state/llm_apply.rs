@@ -476,9 +476,17 @@ pub fn apply_llm_update(state: AppState, update: &serde_json::Value, scope: &[St
     }
 
     // ── Ramp scheduling ───────────────────────────────────────────────────────
-    // JSON: { "ramp": { "param": "fx.reverb_mix", "to": 0.6, "cycles": 8 } }
+    // Singular: { "ramp": { "param": "fx.reverb_mix", "to": 0.6, "bars": 4 } }
     if let Some(obj) = update.get("ramp").and_then(|v| v.as_object()) {
         s = crate::state::jam_tools::parse_and_schedule_ramp(s, obj);
+    }
+    // Plural: { "ramps": [{ "param": "bass.cutoff", "to": 0.8, "bars": 4 }, ...] }
+    if let Some(arr) = update.get("ramps").and_then(|v| v.as_array()) {
+        for item in arr {
+            if let Some(obj) = item.as_object() {
+                s = crate::state::jam_tools::parse_and_schedule_ramp(s, obj);
+            }
+        }
     }
 
     // ── Behaviour templates ───────────────────────────────────────────────────

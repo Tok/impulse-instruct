@@ -223,6 +223,10 @@ pub struct AppState {
     /// true = show back (cables), false = show front (knobs), None = no change.
     #[serde(skip)]
     pub rack_flip_requested: Option<bool>,
+    /// Monotonic step counter — incremented by the audio thread each time
+    /// `current_step` advances. Used for bar-based ramp timing.
+    #[serde(skip)]
+    pub global_step_count: u64,
 }
 
 impl Default for AppState {
@@ -254,6 +258,7 @@ impl Default for AppState {
             llm_agents: Vec::new(),
             scroll_target: None,
             rack_flip_requested: None,
+            global_step_count: 0,
         };
         // Create a default agent for the LlmAgent rack module.
         if let Some(agent_id) = s
@@ -680,13 +685,28 @@ pub enum StyleVerbosity {
 
 /// TTS backend selection.
 /// A smooth parameter transition scheduled by the LLM.
-/// `current` converges toward `target` by `step_per_cycle` each jam cycle.
+///
+/// Two timing modes:
+/// - **Cycle-based** (legacy): `step_per_cycle != 0`, `total_global_steps == 0`.
+///   `current` converges toward `target` by `step_per_cycle` each jam cycle.
+/// - **Bar-based**: `total_global_steps > 0`.  Ticked per UI frame using
+///   `global_step_count`.  Progress = `(now - start_global_step) / total_global_steps`.
+///   Value = `lerp(from, target, progress)`.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ParamRamp {
     pub param: String, // dot-path, e.g. "fx.reverb_mix"
-    pub current: f32,
+    pub current: f32,  // cycle-based: running value.  bar-based: unused (use `from`).
     pub target: f32,
-    pub step_per_cycle: f32, // added to current each cycle until target is reached
+    pub step_per_cycle: f32, // cycle-based: added to current each cycle.  bar-based: 0.
+    /// Bar-based ramp: original value at ramp creation.
+    #[serde(default)]
+    pub from: f32,
+    /// Bar-based ramp: `global_step_count` when the ramp was created (0 = cycle-based).
+    #[serde(default)]
+    pub start_global_step: u64,
+    /// Bar-based ramp: duration in sequencer steps (0 = cycle-based).
+    #[serde(default)]
+    pub total_global_steps: u64,
 }
 
 /// EspeakNg: always available, low quality, zero setup.

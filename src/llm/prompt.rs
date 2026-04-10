@@ -342,12 +342,16 @@ EUCLIDEAN RHYTHMS:
                     (7,16)=afro-cuban bell, (3,16)=sparse kick
   LLM trigger: "5-in-16 euclidean kick", "make it a euclidean hi-hat", "add a clave pattern"
 
-RAMP SCHEDULING (smooth transitions over multiple jam cycles):
-  Use "ramp" to schedule a smooth transition for a single parameter.
-  {{ "ramp": {{ "param": "fx.reverb_mix", "to": 0.6, "cycles": 8 }} }}
-  "from" is optional (defaults to current value). "cycles" is how many jam cycles to spread over (default 4).
+RAMP SCHEDULING (smooth transitions):
+  Use "ramp" for a single param, or "ramps" for multiple at once.
+  Bar-based (preferred — smooth real-time interpolation):
+    {{ "ramp": {{ "param": "fx.reverb_mix", "to": 0.6, "bars": 4 }} }}
+    {{ "ramps": [{{ "param": "bass.cutoff", "to": 0.8, "bars": 4 }}, {{ "param": "fx.delay_mix", "to": 0.3, "bars": 2 }}] }}
+  Cycle-based (legacy — steps once per jam cycle):
+    {{ "ramp": {{ "param": "fx.reverb_mix", "to": 0.6, "cycles": 8 }} }}
+  "from" is optional (defaults to current value). "bars" is preferred over "cycles".
   Supported params: any dot-path in the fx.*, bass.*, or sequencer.bpm/swing namespaces.
-  LLM trigger: "slowly fade in reverb over 8 bars", "ramp up the decay", "ease to full volume"
+  LLM trigger: "slowly fade in reverb over 4 bars", "ramp up the decay", "ease to full volume"
 
 BEHAVIOUR TEMPLATES (pre-defined energy moods):
   {{ "behaviour": "build" }}     — rising tension: longer reverb, swing, mounting energy
@@ -587,7 +591,7 @@ Always start your response with "_thinking": one or two sentences explaining wha
 {comment_instruction}
 Only include fields you are actually changing.
 In MC or DJ mode you may add an optional "mc_line" string — a short crowd shout spoken via TTS, separate from "_comment". Keep it under 12 words. Use it for big moments, drops, or energy peaks.
-TOP-LEVEL SCHEMA — the only valid top-level keys are "_comment", "_thinking", "mc_line", "bass", "sequencer", "fx", "hoover", "an1x", "free_eg", "noise", "granular", "kit_a", "kit_b", "euclidean", "music_api", "ramp", "behaviour", "rack", "settings", "save_project".
+TOP-LEVEL SCHEMA — the only valid top-level keys are "_comment", "_thinking", "mc_line", "bass", "sequencer", "fx", "hoover", "an1x", "free_eg", "noise", "granular", "kit_a", "kit_b", "euclidean", "music_api", "ramp", "ramps", "behaviour", "rack", "settings", "save_project".
   "bass" and "fx" are NEVER nested inside "sequencer".
   "fx" is NEVER nested inside "fx".
   Each key appears at most ONCE per object.
@@ -917,15 +921,31 @@ pub fn param_json_schema() -> serde_json::Value {
         },
         "ramp": {
             "type": "object",
-            "description": "Schedule a smooth parameter transition over N jam cycles. The value moves from 'from' (or current) to 'to' linearly.",
+            "description": "Schedule a smooth parameter transition. Use 'bars' for real-time bar-synced interpolation, or 'cycles' for jam-cycle pacing.",
             "properties": {
                 "param":  { "type": "string", "description": "Dot-path of the parameter, e.g. 'fx.reverb_mix', 'bass.cutoff', 'sequencer.bpm'" },
                 "to":     { "type": "number", "description": "Target value to ramp toward" },
                 "from":   { "type": "number", "description": "Starting value (optional, defaults to current param value)" },
-                "cycles": { "type": "number", "minimum": 1, "description": "Number of jam cycles to spread the transition over (default 4; 'bars' is accepted as an alias)" }
+                "bars":   { "type": "number", "minimum": 1, "description": "Duration in musical bars — smoothly interpolated at frame rate (preferred)" },
+                "cycles": { "type": "number", "minimum": 1, "description": "Duration in jam cycles (legacy; use 'bars' for smoother results)" }
             },
             "required": ["param", "to"],
             "additionalProperties": false
+        },
+        "ramps": {
+            "type": "array",
+            "description": "Schedule multiple smooth parameter transitions at once. Each element has the same format as 'ramp'.",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "param":  { "type": "string" },
+                    "to":     { "type": "number" },
+                    "from":   { "type": "number" },
+                    "bars":   { "type": "number", "minimum": 1 },
+                    "cycles": { "type": "number", "minimum": 1 }
+                },
+                "required": ["param", "to"]
+            }
         },
         "behaviour": {
             "type": "string",
