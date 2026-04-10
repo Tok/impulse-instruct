@@ -1,6 +1,6 @@
 // ─── ui/windows.rs ────────────────────────────────────────────────────────────
 // Floating windows: Preferences, About, System Info.
-use crate::state::{AutosaveInterval, ConversationMode, McVoiceChar, StyleVerbosity};
+use crate::state::{AutosaveInterval, ConversationMode, StyleVerbosity};
 use crate::ui::LOG_LEVELS;
 use crate::ui::{ImpulseApp, theme, widgets};
 
@@ -273,111 +273,10 @@ impl ImpulseApp {
                             // ── TTS ───────────────────────────────────────────
                             _ => {
                                 widgets::section_header(ui, "TEXT-TO-SPEECH");
-                                ui.horizontal(|ui| {
-                                    ui.label(egui::RichText::new("TTS voice").monospace().size(9.5).color(theme::FOG));
-                                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                                        let mut tts = self.state.read().llm.tts_enabled;
-                                        if widgets::toggle_button(ui, if tts { "ON" } else { "OFF" }, &mut tts) {
-                                            self.state.write().llm.tts_enabled = tts;
-                                        }
-                                    });
-                                });
-                                ui.add_space(4.0);
-
-                                // TTS engine selector
-                                ui.horizontal(|ui| {
-                                    ui.label(egui::RichText::new("Engine").monospace().size(9.0).color(theme::SMOKE));
-                                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                                        use crate::state::TtsEngine;
-                                        let cur = self.state.read().llm.tts_engine.clone();
-                                        for (label, variant) in &[
-                                            ("espeak-ng", TtsEngine::EspeakNg),
-                                            ("Coqui TTS", TtsEngine::CoquiTts),
-                                        ] {
-                                            let active = cur == *variant;
-                                            let color = if active { theme::FOG } else { theme::IRON };
-                                            if ui.add(egui::Button::new(
-                                                egui::RichText::new(*label).monospace().size(9.0).color(color),
-                                            ).fill(egui::Color32::TRANSPARENT)).clicked() {
-                                                self.state.write().llm.tts_engine = variant.clone();
-                                            }
-                                        }
-                                    });
-                                });
-                                ui.label(egui::RichText::new("Coqui: neural voice (needs `tts` in PATH) — falls back to espeak-ng").monospace().size(7.5).color(theme::IRON));
-                                ui.add_space(6.0);
-
-                                // Pitch / speed / amplitude
-                                widgets::section_header(ui, "VOICE SHAPE");
-                                {
-                                    let mut v = self.state.read().llm.tts_pitch as f32;
-                                    ui.horizontal(|ui| {
-                                        ui.label(egui::RichText::new("Pitch  (0=auto)").monospace().size(9.0).color(theme::FOG));
-                                        ui.label(egui::RichText::new("1–99; 0=mode default").monospace().size(7.5).color(theme::IRON));
-                                    });
-                                    if ui.add(egui::Slider::new(&mut v, 0.0..=99.0).integer()).changed() {
-                                        self.state.write().llm.tts_pitch = v as u8;
-                                    }
-                                }
-                                {
-                                    let mut v = self.state.read().llm.tts_speed as f32;
-                                    ui.horizontal(|ui| {
-                                        ui.label(egui::RichText::new("Speed  (0=auto)").monospace().size(9.0).color(theme::FOG));
-                                        ui.label(egui::RichText::new("wpm; 0=mode default").monospace().size(7.5).color(theme::IRON));
-                                    });
-                                    if ui.add(egui::Slider::new(&mut v, 0.0..=500.0).integer()).changed() {
-                                        self.state.write().llm.tts_speed = v as u16;
-                                    }
-                                }
-                                {
-                                    let mut v = self.state.read().llm.tts_amplitude as f32;
-                                    ui.horizontal(|ui| {
-                                        ui.label(egui::RichText::new("Volume (0=auto)").monospace().size(9.0).color(theme::FOG));
-                                        ui.label(egui::RichText::new("0–200; 0=default(100)").monospace().size(7.5).color(theme::IRON));
-                                    });
-                                    if ui.add(egui::Slider::new(&mut v, 0.0..=200.0).integer()).changed() {
-                                        self.state.write().llm.tts_amplitude = v as u8;
-                                    }
-                                }
-                                ui.add_space(6.0);
-
-                                widgets::section_header(ui, "CHARACTER");
-                                ui.horizontal(|ui| {
-                                    ui.label(egui::RichText::new("Voice character").monospace().size(9.5).color(theme::FOG));
-                                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                                        let chars = [
-                                            (McVoiceChar::Auto, "AUTO"),
-                                            (McVoiceChar::JungleMc, "JUNGLE MC"),
-                                            (McVoiceChar::RaveAnnouncer, "RAVE"),
-                                            (McVoiceChar::Robot, "ROBOT"),
-                                            (McVoiceChar::SmoothDj, "SMOOTH DJ"),
-                                        ];
-                                        let cur = self.state.read().llm.tts_voice_char.clone();
-                                        let cur_idx = chars.iter().position(|(c, _)| *c == cur).unwrap_or(0);
-                                        let next_idx = (cur_idx + 1) % chars.len();
-                                        if ui.small_button(chars[cur_idx].1).clicked() {
-                                            self.state.write().llm.tts_voice_char = chars[next_idx].0.clone();
-                                        }
-                                    });
-                                });
-                                ui.horizontal(|ui| {
-                                    ui.label(egui::RichText::new("Pitch/speed jitter").monospace().size(9.5).color(theme::FOG));
-                                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                                        let mut rand = self.state.read().llm.tts_randomise;
-                                        if widgets::toggle_button(ui, if rand { "ON" } else { "OFF" }, &mut rand) {
-                                            self.state.write().llm.tts_randomise = rand;
-                                        }
-                                    });
-                                });
-                                ui.horizontal(|ui| {
-                                    ui.label(egui::RichText::new("Pitch snap").monospace().size(9.5).color(theme::FOG));
-                                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                                        let mut ps = self.state.read().llm.tts_pitch_snap;
-                                        if widgets::toggle_button(ui, if ps { "ON" } else { "OFF" }, &mut ps) {
-                                            self.state.write().llm.tts_pitch_snap = ps;
-                                        }
-                                    });
-                                });
+                                ui.label(
+                                    egui::RichText::new("TTS voice settings are on the TTS rack module panel.")
+                                        .monospace().size(9.0).color(theme::IRON),
+                                );
                             }
                         }
                     }
@@ -420,6 +319,23 @@ impl ImpulseApp {
                                 );
                             });
                         }
+
+                        // Huth oscilloscope toggle
+                        ui.horizontal(|ui| {
+                            let mut huth_osc = self.state.read().ui_prefs.huth_oscilloscope;
+                            if ui.add(egui::Button::new(
+                                egui::RichText::new(if huth_osc { "OSC ●" } else { "OSC ○" })
+                                    .monospace().size(9.5)
+                                    .color(if huth_osc { theme::CHALK } else { theme::SMOKE }),
+                            ).frame(huth_osc)).clicked() {
+                                huth_osc = !huth_osc;
+                                self.state.write().ui_prefs.huth_oscilloscope = huth_osc;
+                            }
+                            ui.label(
+                                egui::RichText::new("Color oscilloscope waveform by detected frequency")
+                                    .monospace().size(8.0).color(theme::IRON),
+                            );
+                        });
 
                         ui.add_space(8.0);
                         widgets::section_header(ui, "PIANO DISPLAY");
