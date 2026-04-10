@@ -164,7 +164,17 @@ pub fn draw_rack(app: &mut ImpulseApp, ctx: &egui::Context, ui: &mut egui::Ui) {
         })
         .unwrap_or(false);
     let dragging_cable = app.cable_drag.is_some();
-    let scroll_id = egui::Id::new("rack_scroll");
+    // Consume scroll target BEFORE the scroll area.
+    let scroll_target: Option<String> = app.state.write().scroll_target.take();
+
+    // Set focus highlight for the target module.
+    if let Some(ref t) = scroll_target
+        && let Some(kind) = super::rack_scroll::resolve_focus_kind(t)
+    {
+        app.focused_module = Some(kind);
+        app.focus_time = std::time::Instant::now();
+    }
+
     let scroll_out = ScrollArea::vertical()
         .id_source("rack_scroll")
         .drag_to_scroll(false)
@@ -175,28 +185,9 @@ pub fn draw_rack(app: &mut ImpulseApp, ctx: &egui::Context, ui: &mut egui::Ui) {
             draw_rack_inner(app, ui, &mut ports);
         });
 
-    {
-        let scroll_speed = 180.0;
-        let wasd = ctx
-            .data(|d| d.get_temp::<bool>(egui::Id::new("wasd_as_arrows")))
-            .unwrap_or(false);
-        let up =
-            ctx.input(|i| i.key_down(egui::Key::ArrowUp) || (wasd && i.key_down(egui::Key::W)));
-        let down =
-            ctx.input(|i| i.key_down(egui::Key::ArrowDown) || (wasd && i.key_down(egui::Key::S)));
-        if up || down {
-            let max_y = (scroll_out.content_size.y - scroll_out.inner_rect.height()).max(0.0);
-            let mut state = scroll_out.state;
-            if down {
-                state.offset.y = (state.offset.y + scroll_speed).min(max_y);
-            }
-            if up {
-                state.offset.y = (state.offset.y - scroll_speed).max(0.0);
-            }
-            state.store(ctx, scroll_id);
-            ctx.request_repaint();
-        }
-    }
+    // Keyboard + API scroll handling (extracted to rack_scroll.rs).
+    super::rack_scroll::handle_scroll(app, ctx, &scroll_target, &scroll_out);
+    super::rack_scroll::publish_focus(app, ctx);
 
     ctx.memory_mut(|m| m.data.insert_temp(ports_mem_id, ports.clone()));
     // Cable overlay
@@ -498,7 +489,11 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
     // Collect card rects for Ctrl+MW hit-testing (stored in egui temp at end).
     let mut card_rects: Vec<(ModuleKind, egui::Rect)> = Vec::new();
 
+    // Track zone Y offsets (relative to content top) for API scroll-to.
+    let content_top = ui.cursor().top();
+
     // ── GLOBAL ZONE — sequencer + master, full width ──────────────────────────
+    app.zone_y[0] = ui.cursor().top() - content_top;
     {
         let (add, toggle) =
             module_card::zone_rail(ui, "GLOBAL", true, 24, app.zone_global_collapsed);
@@ -739,6 +734,7 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
     } // end zone_global_collapsed guard
 
     // ── VOICE ZONE ────────────────────────────────────────────────────────────
+    app.zone_y[1] = ui.cursor().top() - content_top;
     {
         let (add, toggle) =
             module_card::zone_rail(ui, "VOICES", true, 18, app.zone_voice_collapsed);
@@ -853,6 +849,7 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
     } // end zone_voice_collapsed guard
 
     // ── FX + MOD ZONE ─────────────────────────────────────────────────────────
+    app.zone_y[2] = ui.cursor().top() - content_top;
     {
         let (add, toggle) =
             module_card::zone_rail(ui, "FX + MODULATION", true, 14, app.zone_fxmod_collapsed);

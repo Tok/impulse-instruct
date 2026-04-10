@@ -36,6 +36,7 @@ struct Args {
     log_level: String,
     mock: bool,
     osc_port: Option<u16>, // None = disabled; Some(port) = OSC listener enabled
+    skip_wizard: bool,
 }
 
 impl Args {
@@ -48,6 +49,7 @@ impl Args {
             log_level: "info".into(),
             mock: false,
             osc_port: None,
+            skip_wizard: false,
         };
 
         let mut i = 1;
@@ -55,6 +57,7 @@ impl Args {
             match args[i].as_str() {
                 "--no-api" => result.no_api = true,
                 "--mock" => result.mock = true,
+                "--skip-wizard" => result.skip_wizard = true,
                 "--port" => {
                     i += 1;
                     if let Some(v) = args.get(i) {
@@ -87,6 +90,7 @@ impl Args {
                     println!("  --model <path>     GGUF model path");
                     println!("  --log <level>      Log level (default: info)");
                     println!("  --mock             Run without LLM (mock responses only)");
+                    println!("  --skip-wizard      Skip the setup wizard on launch");
                     println!("  --osc              Enable OSC input on port 57120 (UDP)");
                     println!("  --osc-port <N>     Enable OSC input on port N (UDP)");
                     std::process::exit(0);
@@ -336,6 +340,7 @@ fn run() -> anyhow::Result<()> {
                 midi_rx,
                 midi_port,
                 api_port,
+                args.skip_wizard,
             )))
         }),
     )

@@ -13,3 +13,5 @@ llama-server.log
 settings.json
 cobertura.xml
 .claude/
+/demo/output/
+/demo/tts_cache/

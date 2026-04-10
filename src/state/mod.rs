@@ -1,11 +1,8 @@
-// ─── state/mod.rs ────────────────────────────────────────────────────────────
-#![allow(dead_code)] // many transition fns are called via API/MIDI, not yet wired in UI
-// Single source of truth for all synth parameters.
-// Pure data only — no methods that mutate in-place.
-// All state transitions happen via the named functions at the bottom.
-
+// ─── state/mod.rs ── single source of truth for all synth parameters ─────────
+// Pure data only — no methods that mutate in-place. Transitions at the bottom.
+#![allow(dead_code)]
 use serde::{Deserialize, Serialize};
-use std::collections::HashSet;
+use std::collections::{HashSet, VecDeque};
 
 pub mod drums;
 pub use drums::*;
@@ -217,6 +214,17 @@ pub struct AppState {
     /// Per-agent LLM state for rackable LLM modules.
     #[serde(default)]
     pub llm_agents: Vec<LlmAgentState>,
+    /// Messages from the HTTP API that the UI should display in the log.
+    #[serde(skip)]
+    pub api_log: VecDeque<String>,
+    /// Scroll target — the UI scrolls to bring this zone/module into view, then clears.
+    /// Format: zone name ("global", "voice", "fxmod") or module kind ("AcidBass", "DrumKit808", etc.)
+    #[serde(skip)]
+    pub scroll_target: Option<String>,
+    /// When Some, the UI toggles or sets rack flip state, then clears.
+    /// true = show back (cables), false = show front (knobs), None = no change.
+    #[serde(skip)]
+    pub rack_flip_requested: Option<bool>,
 }
 
 impl Default for AppState {
@@ -246,6 +254,9 @@ impl Default for AppState {
             spectrum: Default::default(),
             rack: Default::default(),
             llm_agents: Vec::new(),
+            api_log: VecDeque::new(),
+            scroll_target: None,
+            rack_flip_requested: None,
         };
         // Create a default agent for the LlmAgent rack module.
         if let Some(agent_id) = s

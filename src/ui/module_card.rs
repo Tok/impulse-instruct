@@ -58,6 +58,61 @@ fn title_fill(kind: ModuleKind) -> Color32 {
     Color32::from_gray(v)
 }
 
+/// Resolve the effective title background for a module, applying focus highlight
+/// if the module kind matches the currently focused module.
+fn focused_title_bg(ctx: &egui::Context, kind: ModuleKind) -> Color32 {
+    let base = title_fill(kind);
+    let focus_info: Option<(ModuleKind, f32)> = ctx
+        .data(|d| d.get_temp(egui::Id::new("focused_module")))
+        .flatten();
+    match focus_info {
+        Some((fk, elapsed)) if fk == kind => {
+            let v = base.r();
+            // Steady bright lift while focused
+            let lift = 30u8;
+            // Shine pulse: bright flash that decays over ~1.5s
+            let shine = (80.0 * (-elapsed * 2.5).exp()) as u8;
+            Color32::from_gray(v.saturating_add(lift).saturating_add(shine))
+        }
+        _ => base,
+    }
+}
+
+/// Draw a sweeping shine overlay on a focused module's title bar.
+/// The sweep moves left-to-right over ~0.8s then fades.
+fn draw_focus_shine(
+    painter: &egui::Painter,
+    title_rect: Rect,
+    kind: ModuleKind,
+    ctx: &egui::Context,
+) {
+    let focus_info: Option<(ModuleKind, f32)> = ctx
+        .data(|d| d.get_temp(egui::Id::new("focused_module")))
+        .flatten();
+    if let Some((fk, elapsed)) = focus_info
+        && fk == kind
+        && elapsed < 1.2
+    {
+        // Sweep a bright band across the title bar
+        let t = (elapsed / 0.8).min(1.0); // 0..1 over 0.8s
+        let sweep_x = title_rect.left() + t * title_rect.width();
+        let band_w = title_rect.width() * 0.15;
+        let alpha = ((1.0 - elapsed / 1.2) * 60.0) as u8;
+        let shine_rect = Rect::from_x_y_ranges(
+            (sweep_x - band_w)..=(sweep_x + band_w),
+            title_rect.y_range(),
+        )
+        .intersect(title_rect);
+        if shine_rect.width() > 0.0 {
+            painter.rect_filled(
+                shine_rect,
+                egui::Rounding::ZERO,
+                Color32::from_white_alpha(alpha),
+            );
+        }
+    }
+}
+
 // ─── Port circle helpers ──────────────────────────────────────────────────────
 
 pub const PORT_RADIUS: f32 = 5.5;
@@ -138,7 +193,7 @@ pub fn module_card<R>(
         .data_mut(|d| d.insert_temp(egui::Id::new("module_scale"), scale));
 
     let fill = Color32::from_gray(14);
-    let title_bg = title_fill(kind);
+    let title_bg = focused_title_bg(ui.ctx(), kind);
 
     // Honor caller's minimum width request (e.g. full-width global cards).
     // For cards placed inside horizontal_wrapped the CALLER is responsible for
@@ -191,6 +246,8 @@ pub fn module_card<R>(
                 [title_rect.left_bottom(), title_rect.right_bottom()],
                 Stroke::new(1.0, Color32::from_gray(8)),
             );
+            // Focus shine sweep overlay
+            draw_focus_shine(&painter, title_rect, kind, ui.ctx());
 
             // Module kind label (embossed: shadow 1px below, then bright text)
             let label_font = 9.5;
@@ -344,7 +401,7 @@ pub fn module_card_back(
     ports: &mut Vec<PortPos>,
 ) -> CardResponse {
     let fill = Color32::from_gray(14);
-    let title_bg = title_fill(kind);
+    let title_bg = focused_title_bg(ui.ctx(), kind);
 
     if let Some(min_w) = min_width {
         ui.set_min_width(min_w);
@@ -381,6 +438,7 @@ pub fn module_card_back(
                 [title_rect.left_bottom(), title_rect.right_bottom()],
                 Stroke::new(1.0, Color32::from_gray(8)),
             );
+            draw_focus_shine(&painter, title_rect, kind, ui.ctx());
             let label_font = 9.5;
             let label_pos = title_rect.left_center() + Vec2::new(10.0, 0.0);
             painter.text(

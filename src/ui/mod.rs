@@ -1,4 +1,5 @@
 // ─── ui/mod.rs — Main egui application ───────────────────────────────────────
+mod api_log_handler;
 mod header;
 mod llm_strip;
 mod midi_handler;
@@ -8,11 +9,14 @@ pub mod panels;
 pub mod rack_cables;
 pub mod rack_canvas;
 pub(crate) mod rack_content;
+mod rack_scroll;
 mod scope_footer;
 pub mod theme;
+mod ui_helpers;
 mod util;
 pub mod widgets;
-use util::{scan_models, webbrowser_open};
+pub(crate) use util::scan_models;
+use util::webbrowser_open;
 mod windows;
 mod wizard;
 
@@ -34,10 +38,10 @@ use egui::{CentralPanel, Frame, TopBottomPanel};
 use parking_lot::RwLock;
 use std::sync::Arc;
 
-use crate::audio::{AudioCommand, AudioParams};
+use crate::audio::AudioCommand;
 use crate::llm::{LlmInput, LlmOutput};
 use crate::midi::MidiEvent;
-use crate::state::{AppState, compile_fx_plan};
+use crate::state::AppState;
 
 pub(super) const LOG_LEVELS: &[(&str, log::LevelFilter)] = &[
     ("ERROR", log::LevelFilter::Error),
@@ -205,6 +209,12 @@ pub struct ImpulseApp {
     pub(crate) module_drag: Option<rack_canvas::ModuleDrag>,
     // Auto-save: set when rack or session-worthy state changes; saved next frame.
     pub(crate) session_dirty: bool,
+    /// Zone Y offsets (relative to scroll content top), updated each frame by rack_canvas.
+    pub(crate) zone_y: [f32; 3], // [global, voice, fxmod]
+    /// Focused module kind — highlighted in the rack (set by API scroll or click).
+    pub(crate) focused_module: Option<crate::state::ModuleKind>,
+    /// Instant when the focused module was set (for shine animation).
+    pub(crate) focus_time: std::time::Instant,
     // Track last-saved rack cable/module count to detect changes.
     last_saved_rack_sig: (usize, usize),
     // Timestamp of the most recent actual save (for interval throttling).
@@ -250,6 +260,7 @@ impl ImpulseApp {
         midi_rx: Receiver<MidiEvent>,
         midi_port: Option<String>,
         api_port: Option<u16>,
+        skip_wizard: bool,
     ) -> Self {
         theme::apply(&cc.egui_ctx);
         log::info!("ImpulseApp::new — creating UI…");
@@ -350,7 +361,7 @@ impl ImpulseApp {
                 shared
             },
             show_sysinfo: false,
-            show_wizard: true,
+            show_wizard: !skip_wizard,
             wizard_selected: if crate::state::load_session()
                 .and_then(|s| s.llm_agents)
                 .map(|a| a.is_empty())
@@ -377,6 +388,9 @@ impl ImpulseApp {
             add_menu_zone: None,
             module_drag: None,
             session_dirty: false,
+            zone_y: [0.0; 3],
+            focused_module: None,
+            focus_time: std::time::Instant::now(),
             last_saved_rack_sig: (0, 0),
             last_save_time: std::time::Instant::now(),
             module_scales: crate::state::load_session()
@@ -425,35 +439,7 @@ impl ImpulseApp {
         self.module_scales.get(&kind).copied().unwrap_or(1.0)
     }
 
-    pub(crate) fn observe_edits(&mut self, edits: &[(&str, f32)]) {
-        for &(path, val) in edits {
-            let s = self.state.read().clone();
-            *self.state.write() = crate::state::observe_user_edit(s, path, val);
-        }
-    }
-
-    fn push_audio_params(&mut self) {
-        let params = {
-            let s = self.state.read();
-            let mut p = AudioParams::from_app_state(&s);
-            p.sample_rate = 44100.0;
-            p
-        };
-        let _ = self
-            .audio_tx
-            .push(AudioCommand::UpdateParams(Box::new(params)));
-    }
-
-    /// Recompile the FX routing plan from the current rack cable graph and
-    /// send it to the audio thread.  Call whenever rack topology changes
-    /// (cable connect/disconnect, module enable/disable, module remove).
-    pub(crate) fn push_fx_plan(&mut self) {
-        let plan = {
-            let s = self.state.read();
-            compile_fx_plan(&s.rack)
-        };
-        let _ = self.audio_tx.push(AudioCommand::SetFxPlan(plan));
-    }
+    // observe_edits, push_audio_params, push_fx_plan extracted to ui_helpers.rs
 
     fn drain_llm_outputs(&mut self) {
         while let Ok(out) = self.llm_rx.try_recv() {
@@ -739,6 +725,7 @@ impl ImpulseApp {
         }
     }
     // drain_midi_events extracted to midi_handler.rs
+    // drain_api_log extracted to api_log_handler.rs
 }
 
 impl eframe::App for ImpulseApp {
@@ -787,6 +774,7 @@ impl eframe::App for ImpulseApp {
         });
 
         self.drain_llm_outputs();
+        self.drain_api_log();
         self.drain_midi_events();
 
         // ── Jam timer: fire delayed jam cycle when the bar-count delay elapses ──
@@ -863,6 +851,11 @@ impl eframe::App for ImpulseApp {
         }
         if ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Tab)) {
             self.rack_flipped = !self.rack_flipped;
+            self.session_dirty = true;
+        }
+        // API-driven rack flip
+        if let Some(show_back) = self.state.write().rack_flip_requested.take() {
+            self.rack_flipped = show_back;
             self.session_dirty = true;
         }
         if ctx.input_mut(|i| {
