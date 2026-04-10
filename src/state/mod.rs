@@ -233,6 +233,10 @@ pub struct AppState {
     /// API-requested zone collapse: (global, voice, fxmod). None = no change.
     #[serde(skip)]
     pub collapse_requested: Option<(bool, bool, bool)>,
+    /// Compact audio analysis text, auto-updated by the UI every ~2s.
+    /// Injected into every LLM system prompt as global context.
+    #[serde(skip)]
+    pub audio_snapshot: String,
 }
 
 impl Default for AppState {
@@ -267,6 +271,7 @@ impl Default for AppState {
             rack_flip_requested: None,
             global_step_count: 0,
             collapse_requested: None,
+            audio_snapshot: String::new(),
         };
         // Create a default agent for the LlmAgent rack module.
         if let Some(agent_id) = s

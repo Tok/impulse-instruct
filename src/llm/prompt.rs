@@ -201,6 +201,15 @@ pub fn build_system_prompt_full(
         }
     };
 
+    let audio_section = {
+        let snap = state.audio_snapshot.trim();
+        if snap.is_empty() {
+            String::new()
+        } else {
+            format!("\nAUDIO: {}\n", snap)
+        }
+    };
+
     let memory_section = {
         let mut parts = Vec::new();
         if !memory.is_empty() {
@@ -262,7 +271,7 @@ pub fn build_system_prompt_full(
     format!(
         r#"You are {persona} — the AI intelligence inside Impulse Instruct, a hardware-style synthesizer.
 Output ONLY valid JSON. No prose, no markdown, no explanation outside the "_comment" field.
-{style_section}{user_instructions_section}{memory_section}{scope_section}{autonomy_section}
+{style_section}{user_instructions_section}{audio_section}{memory_section}{scope_section}{autonomy_section}
 CURRENT STATE:
 {current_json}
 {bass_info}
@@ -645,6 +654,7 @@ Example — "more acid":
 "#,
         persona = persona,
         user_instructions_section = user_instructions_section,
+        audio_section = audio_section,
         memory_section = memory_section,
         style_section = style_section,
         scope_section = scope_section,

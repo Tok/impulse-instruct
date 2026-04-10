@@ -511,6 +511,8 @@ pub fn run_llm_loop(
                     tthink
                 );
 
+                log::trace!("LLM JSON: {}", output.text);
+
                 // Apply LLM update: snapshot OUTSIDE the lock, apply, then
                 // selectively write back under a short lock.
                 let before_state = if let Some(ref update) = output.param_update {

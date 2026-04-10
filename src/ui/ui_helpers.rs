@@ -59,8 +59,10 @@ impl ImpulseApp {
                 captured.push(s);
             }
             if !captured.is_empty() {
-                self.audio_analysis =
-                    Some(crate::audio::analysis::analyse_audio(&captured, 44100.0));
+                let analysis = crate::audio::analysis::analyse_audio(&captured, 44100.0);
+                // Compact snapshot for LLM context (injected into every system prompt)
+                self.state.write().audio_snapshot = analysis.one_line_summary();
+                self.audio_analysis = Some(analysis);
             }
         }
     }

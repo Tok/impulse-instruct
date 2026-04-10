@@ -81,11 +81,10 @@ What's already built is documented in [docs/features.md](docs/features.md).
 
 ### Feedback & awareness
 
-- [ ] **Auto-listen always on** — listen function (audio analysis → text)
-  should default to ON, continuously describing what's playing. Detects
-  extremes (snare rushes, heavy reverb, clipping) and makes them visible
-  as text context to all agents. Self-correcting feedback loop instead of
-  hard-banning patterns.
+- [x] **Auto-listen always on** — audio analysis runs every ~2s, compact
+  snapshot (`AUDIO: sub:-20 low:-12 mid:-18 hi:-24 pk:-8dB`) injected
+  into every LLM system prompt as global context. Agents see mix state
+  and can self-correct. Also shown in header bar.
 - [x] **LLM console: 8+ visible lines** — default height increased from 50px
   to 100px (~8 lines visible). Still resizable.
 
