@@ -279,22 +279,26 @@ pub(super) fn draw_drum_rows(
         });
 
         // ── Velocity / Probability / Ratchet lanes (tight spacing) ─────────
-        ui.spacing_mut().item_spacing.y = 0.0;
+        let saved_spacing = ui.spacing().item_spacing;
+        ui.spacing_mut().item_spacing = egui::vec2(0.0, 0.0);
         ui.horizontal(|ui| {
+            ui.spacing_mut().item_spacing = egui::vec2(0.0, 0.0);
             let row_left = ui.cursor().min.x;
             let spacer = (steps_x - row_left).max(0.0);
             if spacer > 0.0 {
                 ui.add_space(spacer);
             }
-            let bar_h = 5.0_f32;
+            let bar_h = 4.0_f32;
             let mut vel_changed: Option<(usize, f32)> = None;
             for i in 0..16usize {
-                beat_div(ui, i);
+                if i > 0 {
+                    beat_div(ui, i);
+                }
                 let abs = page_start + i;
                 let vel = pattern.get(i).map(|s| s.velocity).unwrap_or(1.0);
                 let is_active = pattern.get(i).map(|s| s.active).unwrap_or(false);
                 let (rect, resp) =
-                    ui.allocate_exact_size(egui::vec2(pad_px, bar_h + 2.0), egui::Sense::drag());
+                    ui.allocate_exact_size(egui::vec2(pad_px, bar_h), egui::Sense::drag());
                 if ui.is_rect_visible(rect) {
                     let bar_rect = egui::Rect::from_min_size(
                         egui::pos2(rect.min.x, rect.max.y - bar_h * vel),
@@ -320,22 +324,24 @@ pub(super) fn draw_drum_rows(
             }
         });
 
-        // ── Probability lane ──────────────────────────────────────────────────
         ui.horizontal(|ui| {
+            ui.spacing_mut().item_spacing = egui::vec2(0.0, 0.0);
             let row_left = ui.cursor().min.x;
             let spacer = (steps_x - row_left).max(0.0);
             if spacer > 0.0 {
                 ui.add_space(spacer);
             }
-            let bar_h = 3.0_f32;
+            let bar_h = 2.0_f32;
             let mut prob_changed: Option<(usize, f32)> = None;
             for i in 0..16usize {
-                beat_div(ui, i);
+                if i > 0 {
+                    beat_div(ui, i);
+                }
                 let abs = page_start + i;
                 let prob = pattern.get(i).map(|s| s.probability).unwrap_or(1.0);
                 let is_active = pattern.get(i).map(|s| s.active).unwrap_or(false);
                 let (rect, resp) =
-                    ui.allocate_exact_size(egui::vec2(pad_px, bar_h + 2.0), egui::Sense::drag());
+                    ui.allocate_exact_size(egui::vec2(pad_px, bar_h), egui::Sense::drag());
                 if ui.is_rect_visible(rect) {
                     let bar_rect = egui::Rect::from_min_size(
                         egui::pos2(rect.min.x, rect.max.y - bar_h * prob),
@@ -361,8 +367,8 @@ pub(super) fn draw_drum_rows(
             }
         });
 
-        // ── Ratchet lane ──────────────────────────────────────────────────────
         ui.horizontal(|ui| {
+            ui.spacing_mut().item_spacing = egui::vec2(0.0, 0.0);
             let row_left = ui.cursor().min.x;
             let spacer = (steps_x - row_left).max(0.0);
             if spacer > 0.0 {
@@ -371,12 +377,14 @@ pub(super) fn draw_drum_rows(
             let cell_h = 4.0_f32;
             let mut ratchet_changed: Option<(usize, u8)> = None;
             for i in 0..16usize {
-                beat_div(ui, i);
+                if i > 0 {
+                    beat_div(ui, i);
+                }
                 let abs = page_start + i;
                 let ratchet = pattern.get(i).map(|s| s.ratchet).unwrap_or(1);
                 let is_active = pattern.get(i).map(|s| s.active).unwrap_or(false);
                 let (rect, resp) =
-                    ui.allocate_exact_size(egui::vec2(pad_px, cell_h + 2.0), egui::Sense::click());
+                    ui.allocate_exact_size(egui::vec2(pad_px, cell_h), egui::Sense::click());
                 if ui.is_rect_visible(rect) {
                     let tick_w = (pad_px - 1.0) / 4.0;
                     for t in 0..4u8 {
@@ -407,6 +415,6 @@ pub(super) fn draw_drum_rows(
             }
         });
         // Restore normal spacing after tight lanes
-        ui.spacing_mut().item_spacing.y = 2.0;
+        ui.spacing_mut().item_spacing = saved_spacing;
     }
 }
