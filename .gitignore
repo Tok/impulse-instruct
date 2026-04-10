@@ -11,6 +11,7 @@
 .llama-official-build
 llama-server.log
 settings.json
+session.json
 cobertura.xml
 .claude/
 /demo/output/
