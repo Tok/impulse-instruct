@@ -366,15 +366,20 @@ echo ""
 if [ "$SKIP_VIDEO" -eq 0 ]; then
     api_play() {
         curl -sf -X POST "$API/api/sequencer/play" >/dev/null 2>&1
-        # If we haven't started per-app audio yet, try now
-        if [ -z "$PW_RECORD_PID" ]; then
-            sleep 0.5  # give cpal a moment to create the PW node
-            APP_PW_NODE=$(find_app_pw_node)
-            if [ -n "$APP_PW_NODE" ]; then
-                echo "  [auto] Starting per-app audio capture (node $APP_PW_NODE)"
-                pw-record --target "$APP_PW_NODE" "$APP_AUDIO" &
-                PW_RECORD_PID=$!
-            fi
+        # If we haven't started per-app audio yet, try harder
+        if [ -z "${PW_RECORD_PID:-}" ]; then
+            # Retry up to 5 times — cpal may take a moment to register
+            for _try in 1 2 3 4 5; do
+                sleep 1
+                APP_PW_NODE=$(find_app_pw_node)
+                if [ -n "$APP_PW_NODE" ]; then
+                    echo "  [auto] Starting per-app audio capture (node $APP_PW_NODE)"
+                    pw-record --target "$APP_PW_NODE" "$APP_AUDIO" &
+                    PW_RECORD_PID=$!
+                    break
+                fi
+            done
+            [ -z "${PW_RECORD_PID:-}" ] && echo "  [auto] Audio node still not found after 5 retries"
         fi
     }
 fi

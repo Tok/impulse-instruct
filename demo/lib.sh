@@ -326,23 +326,11 @@ x.mouse_up(1, window=$APP_WINDOW_ID)
 # ─── PipeWire per-app audio helpers ───────────────────────────────────────────
 
 find_app_pw_node() {
-    # Find the app's PipeWire playback stream node by application name.
-    # Uses wpctl (WirePlumber) if available, falls back to pw-cli.
-    if command -v wpctl >/dev/null 2>&1; then
-        wpctl status 2>/dev/null | awk '
-            /Playback/,/^$/ {
-                if (/[Ii]mpulse/) {
-                    gsub(/[^0-9]/, "", $1)
-                    if ($1+0 > 0) { print $1; exit }
-                }
-            }
-        '
-    else
-        pw-cli ls Node 2>/dev/null | awk '
-            /^[[:space:]]*id [0-9]+/ { id=$2; gsub(/,/,"",id) }
-            /application.name.*[Ii]mpulse/ || /node.name.*impulse/ { print id; exit }
-        '
-    fi
+    # Find the app's PipeWire playback node by application name.
+    pw-cli ls Node 2>/dev/null | awk '
+        /^[[:space:]]*id [0-9]+/ { id=$2; gsub(/,/,"",id) }
+        /application.name.*[Ii]mpulse/ || /node.name.*impulse/ { print id; exit }
+    '
 }
 
 start_pw_capture() {
