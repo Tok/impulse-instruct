@@ -83,6 +83,19 @@ What's already built is documented in [docs/features.md](docs/features.md).
 
 ### Demo recording
 
+- [ ] **CoquiTTS for narration** — switch demo `tts_generate()` from espeak-ng
+  to CoquiTTS (the `tts` CLI) with espeak fallback. Higher quality for YouTube.
+- [ ] **Scenario directory** — restructure `demo/scenario.sh` into
+  `demo/scenarios/intro.sh` + dedicated scripts. `record-demo.sh --scenario X`
+  selects which to run. `--skip-video` runs headless for verification only.
+- [ ] **Style demo: Drum & Bass** — typical D&B setup (fast breaks, reese bass,
+  rolling hats). Doubles as style verification test.
+- [ ] **Style demo: Ambient** — pads, slow filter sweeps, long reverb tails.
+  Tests ramp system + FX depth.
+- [ ] **Style demo: Acid house** — 303 squelch, 808/909, classic acid patterns.
+- [ ] **Setup demo: Jungle MC + Singer** — TTS MC agent + TTS Singer agent
+  through autotune. Non-deterministic, 100% agent-controlled. Shows creative
+  potential of multi-agent + TTS + pitch-snap pipeline.
 - [ ] **Demo: ADSR scene** — show an agent shaping bass envelope (attack/decay)
 - [ ] **Demo: LFO assignment scene** — agent schedules a filter sweep via LFO
 - [ ] **Demo: parameter ramp scene** — show gradual cutoff sweep over bars

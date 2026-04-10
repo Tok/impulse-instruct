@@ -33,15 +33,18 @@ impl ImpulseApp {
                     // ── Log scroll area (fills remaining width) ──────────
                     let agent_panel_width = 120.0;
                     let avail = ui.available_width() - agent_panel_width - 8.0;
-                    ui.allocate_ui(egui::vec2(avail.max(100.0), ui.available_height()), |ui| {
+                    let log_w = avail.max(100.0);
+                    ui.allocate_ui(egui::vec2(log_w, ui.available_height()), |ui| {
+                        ui.set_max_width(log_w);
                         egui::ScrollArea::vertical()
                             .id_source("global_log")
                             .stick_to_bottom(true)
                             .auto_shrink([false; 2])
                             .show(ui, |ui: &mut egui::Ui| {
+                                ui.set_max_width(log_w);
                                 let job =
                                     super::llm_strip::colorize_log(&self.log_text, theme::FOG);
-                                ui.add(egui::Label::new(job).selectable(true));
+                                ui.add(egui::Label::new(job).wrap().selectable(true));
                             });
                     });
 
