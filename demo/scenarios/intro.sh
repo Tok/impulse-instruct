@@ -55,11 +55,11 @@ scene "Acid filter sweep"
 focus_on bass
 wait_seconds 1
 
-say "The cutoff and resonance pad. This is the acid sound."
+say "The filter. Cutoff and resonance. This is the acid sound."
 
-sweep_pad 5
+sweep_pad 6
 
-say "Filter movement in real time."
+say "That's what the three oh three does."
 wait_seconds 1
 
 # ── Scene 5: Ramp the filter via AI ────────────────────────────────────────
@@ -132,9 +132,9 @@ scene "Band jam"
 play
 wait_seconds 1
 
-ask "acid bass, squelchy, syncopated" BASS
-ask "four on the floor, off-beat hats, clap on two and four" DRUMS
-ask "subtle reverb and short delay" FX
+ask "acid bass, squelchy, syncopated, cutoff low, resonance high" BASS
+ask "kick on steps 0,4,8,12. hihat on 2,6,10,14. clap on 4,12. open hihat on 6,14" DRUMS
+ask "reverb mix 0.12, reverb size 0.5, delay mix 0.08, delay time 0.375" FX
 
 wait_seconds 3
 
@@ -168,8 +168,8 @@ wait_seconds 4
 scene "Live filter"
 
 focus_on bass
-sweep_pad 4
-wait_seconds 2
+sweep_pad 6
+wait_seconds 1
 
 # ── Scene 13: Outro ───────────────────────────────────────────────────────
 

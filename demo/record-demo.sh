@@ -181,9 +181,20 @@ PW_RECORD_PID=""
 cleanup() {
     echo ""
     echo "Cleaning up..."
-    [ -n "$FFMPEG_PID" ]    && kill "$FFMPEG_PID"    2>/dev/null && wait "$FFMPEG_PID"    2>/dev/null
-    [ -n "$PW_RECORD_PID" ] && kill "$PW_RECORD_PID" 2>/dev/null && wait "$PW_RECORD_PID" 2>/dev/null
-    [ -n "$APP_PID" ]       && kill "$APP_PID"       2>/dev/null && wait "$APP_PID"       2>/dev/null
+    # ffmpeg needs SIGINT to finalize, then SIGKILL if stuck
+    if [ -n "$FFMPEG_PID" ]; then
+        kill -INT "$FFMPEG_PID" 2>/dev/null
+        sleep 1
+        kill -9 "$FFMPEG_PID" 2>/dev/null
+        wait "$FFMPEG_PID" 2>/dev/null
+    fi
+    if [ -n "$PW_RECORD_PID" ]; then
+        kill -INT "$PW_RECORD_PID" 2>/dev/null
+        sleep 1
+        kill -9 "$PW_RECORD_PID" 2>/dev/null
+        wait "$PW_RECORD_PID" 2>/dev/null
+    fi
+    [ -n "$APP_PID" ] && kill "$APP_PID" 2>/dev/null && wait "$APP_PID" 2>/dev/null
     rm -f "$NARRATION_LIST"
     echo "Done."
 }

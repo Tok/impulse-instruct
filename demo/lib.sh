@@ -623,20 +623,39 @@ use_preset() {
 # ── Filter pad sweep (animate cutoff/resonance) ─────────────────────────────
 
 sweep_pad() {
-    # Animate cutoff and resonance through a sequence of values.
-    # Simulates moving the XY pad for a few seconds of acid squelch.
+    # Animate cutoff and resonance dramatically for acid demo.
+    # Big sweeps across the full range — this IS the acid sound.
     # Usage: sweep_pad [seconds]
-    local duration="${1:-4}"
-    local steps=8
+    local duration="${1:-5}"
+    local steps=20
     local interval
-    interval=$(echo "scale=2; $duration / $steps" | bc)
-    # Sweep through a figure-8 pattern
-    for i in $(seq 0 $((steps - 1))); do
-        local t
-        t=$(echo "scale=3; $i / $steps" | bc)
+    interval=$(echo "scale=3; $duration / $steps" | bc)
+    # Dramatic sweep: low→high cutoff with resonance pumping
+    local sequence=(
+        "0.10 0.85"   # low cut, high res — squelch
+        "0.15 0.90"
+        "0.25 0.80"
+        "0.40 0.70"
+        "0.55 0.85"   # opening up
+        "0.70 0.90"
+        "0.80 0.75"
+        "0.90 0.60"   # wide open, less res
+        "0.75 0.80"   # pulling back
+        "0.60 0.90"
+        "0.45 0.85"
+        "0.30 0.95"   # peak squelch
+        "0.15 0.90"
+        "0.10 0.80"
+        "0.20 0.95"   # another spike
+        "0.50 0.70"
+        "0.70 0.85"
+        "0.85 0.60"
+        "0.40 0.90"
+        "0.20 0.80"   # settle back
+    )
+    for pair in "${sequence[@]}"; do
         local cut res
-        cut=$(echo "scale=3; 0.15 + 0.6 * (0.5 + 0.5 * s(6.28 * $t))" | bc -l)
-        res=$(echo "scale=3; 0.4 + 0.5 * (0.5 + 0.5 * c(6.28 * $t))" | bc -l)
+        read -r cut res <<< "$pair"
         set_params "{\"bass\": {\"cutoff\": $cut, \"resonance\": $res}}"
         sleep "$interval"
     done
