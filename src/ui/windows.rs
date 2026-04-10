@@ -693,6 +693,7 @@ impl ImpulseApp {
             if ui.selectable_label(selected, text).clicked() && !selected {
                 self.state.write().ui_prefs.log_level_idx = i;
                 log::set_max_level(*filter);
+                log::info!("Log level changed to {}", label);
             }
         }
         hint(

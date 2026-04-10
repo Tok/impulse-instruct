@@ -140,8 +140,10 @@ pub struct ImpulseApp {
     capture_rx: rtrb::Consumer<f32>,
     dsp_load_rx: rtrb::Consumer<f32>,
     dsp_load_buf: Vec<f32>,
-    /// Most-recent audio analysis snapshot. None until the user clicks Listen.
+    /// Most-recent audio analysis snapshot. Auto-updated every ~2s.
     audio_analysis: Option<crate::audio::analysis::AudioAnalysis>,
+    /// Last time we ran auto-analysis (seconds since epoch, from ctx.input.time).
+    last_analysis_time: f64,
     /// True when the most-recently-sent prompt came from the Listen button —
     /// used to label the LLM response as "LISTEN →" in the log.
     listen_pending: bool,
@@ -316,6 +318,7 @@ impl ImpulseApp {
             dsp_load_rx: audio.dsp_load_rx,
             dsp_load_buf: Vec::with_capacity(64),
             audio_analysis: None,
+            last_analysis_time: 0.0,
             listen_pending: false,
             llm_tx,
             llm_rx,
@@ -939,6 +942,7 @@ impl eframe::App for ImpulseApp {
             }
         }
 
+        self.update_audio_analysis(ctx);
         self.tick_ramps();
         self.draw_windows(ctx);
         self.draw_menu_and_header(ctx);

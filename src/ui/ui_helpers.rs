@@ -48,4 +48,20 @@ impl ImpulseApp {
             self.push_audio_params();
         }
     }
+
+    /// Auto-analyse captured audio every ~2s for the header display.
+    pub(crate) fn update_audio_analysis(&mut self, ctx: &egui::Context) {
+        let now = ctx.input(|i| i.time);
+        if now - self.last_analysis_time > 2.0 {
+            self.last_analysis_time = now;
+            let mut captured: Vec<f32> = Vec::with_capacity(88200);
+            while let Ok(s) = self.capture_rx.pop() {
+                captured.push(s);
+            }
+            if !captured.is_empty() {
+                self.audio_analysis =
+                    Some(crate::audio::analysis::analyse_audio(&captured, 44100.0));
+            }
+        }
+    }
 }
