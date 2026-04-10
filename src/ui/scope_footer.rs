@@ -4,11 +4,15 @@
 
 use crate::ui::theme;
 
-/// Draw oscilloscope waveform with phosphor persistence (older frames fade).
-pub fn draw_scope(ui: &mut egui::Ui, buf: &[f32], history: &std::collections::VecDeque<Vec<f32>>) {
-    let h = ui.available_height().max(20.0);
-    let (rect, _) =
-        ui.allocate_exact_size(egui::vec2(ui.available_width(), h), egui::Sense::hover());
+/// Draw oscilloscope with explicit width and height.
+pub fn draw_scope_sized(
+    ui: &mut egui::Ui,
+    buf: &[f32],
+    history: &std::collections::VecDeque<Vec<f32>>,
+    w: f32,
+    h: f32,
+) {
+    let (rect, _) = ui.allocate_exact_size(egui::vec2(w, h), egui::Sense::hover());
     if !ui.is_rect_visible(rect) {
         return;
     }

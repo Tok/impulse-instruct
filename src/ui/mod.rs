@@ -886,11 +886,24 @@ impl eframe::App for ImpulseApp {
             self.show_shortcuts = !self.show_shortcuts;
         }
 
-        // ── Startup hook (disabled) ───────────────────────────────────────────
-        // The synth starts silent — no auto-play, no startup prompt.
-        // The user (or the demo script) decides when and what to play.
+        // ── Startup hook — auto-prompt after wizard closes ──────────────────
+        // Once the wizard is dismissed and the LLM is ready, send a one-shot
+        // prompt to get a basic pattern going so the track isn't silent.
         if !self.startup_done && !self.show_wizard && !self.state.read().llm.llm_initializing {
             self.startup_done = true;
+            let has_agents = !self.state.read().llm_agents.is_empty();
+            if has_agents {
+                let _ = self.llm_tx.try_send(crate::llm::LlmInput::Infer {
+                    prompt: "Start simple — pick a style that suits the current setup \
+                             and create a basic pattern. Keep it minimal: a steady kick, \
+                             a simple hi-hat pattern, and a short bass line. \
+                             We'll build from here."
+                        .into(),
+                    one_shot: true,
+                    agent_id: None,
+                });
+                self.log_text.push_str("AUTO → startup prompt sent\n");
+            }
         }
         ctx.request_repaint_after(std::time::Duration::from_millis(16));
         // ── Drain scope + DSP load ring buffers ──────────────────────────────

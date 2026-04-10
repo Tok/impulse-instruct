@@ -68,9 +68,18 @@ impl ImpulseApp {
                 ui.add_space(2.0);
 
                 // ── Scope (bottom portion, fixed height) ────────────────
-                ui.allocate_ui(egui::vec2(ui.available_width(), scope_h), |ui| {
-                    ui.horizontal(|ui| {
-                        super::scope_footer::draw_scope(ui, &self.scope_buf, &self.scope_history);
+                let full_w = ui.available_width();
+                let ring_w = scope_h; // ring is square
+                let linear_w = (full_w - ring_w - 8.0).max(40.0);
+                ui.allocate_ui(egui::vec2(full_w, scope_h), |ui| {
+                    ui.horizontal_top(|ui| {
+                        super::scope_footer::draw_scope_sized(
+                            ui,
+                            &self.scope_buf,
+                            &self.scope_history,
+                            linear_w,
+                            scope_h,
+                        );
                         super::scope_footer::draw_ring_scope(ui, &self.scope_buf, scope_h);
                     });
                 });
