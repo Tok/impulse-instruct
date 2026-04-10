@@ -217,6 +217,11 @@ pub fn apply_llm_update(state: AppState, update: &serde_json::Value, scope: &[St
         );
         s.kit_a.kick.clip =
             unlocked_f32(s.kit_a.kick.clip, kick, "clip", "kit_a.kick.clip", locked);
+        if !locked.contains("kit_a.kick.pan")
+            && let Some(v) = kick.get("pan").and_then(|v| v.as_f64())
+        {
+            s.kit_a.kick.pan = (v as f32).clamp(-1.0, 1.0);
+        }
     }
 
     if in_scope("kit_b")
@@ -239,6 +244,11 @@ pub fn apply_llm_update(state: AppState, update: &serde_json::Value, scope: &[St
         );
         s.kit_b.kick.clip =
             unlocked_f32(s.kit_b.kick.clip, kick, "clip", "kit_b.kick.clip", locked);
+        if !locked.contains("kit_b.kick.pan")
+            && let Some(v) = kick.get("pan").and_then(|v| v.as_f64())
+        {
+            s.kit_b.kick.pan = (v as f32).clamp(-1.0, 1.0);
+        }
     }
 
     if in_scope("fx")
@@ -377,6 +387,11 @@ pub fn apply_llm_update(state: AppState, update: &serde_json::Value, scope: &[St
             "noise.sh_depth",
             locked,
         );
+        if !locked.contains("noise.pan")
+            && let Some(v) = n.get("pan").and_then(|v| v.as_f64())
+        {
+            s.noise_voice.pan = (v as f32).clamp(-1.0, 1.0);
+        }
     }
 
     if in_scope("granular")

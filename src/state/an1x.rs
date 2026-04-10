@@ -121,6 +121,9 @@ pub struct An1xState {
     /// When true, glide only activates when a new note is struck while another
     /// is already held (legato). When false, glide always applies.
     pub glide_legato: bool,
+    /// Stereo pan position: -1.0 = hard left, 0.0 = center, 1.0 = hard right.
+    #[serde(default)]
+    pub pan: f32,
 }
 
 impl Default for An1xState {
@@ -163,6 +166,7 @@ impl Default for An1xState {
             drift: 0.12,         // subtle pitch imperfection
             glide_time: 0.2,
             glide_legato: true,
+            pan: 0.0,
         }
     }
 }

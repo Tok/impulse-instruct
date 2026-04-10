@@ -101,6 +101,12 @@ pub(super) fn apply_bass_update(
     let bp = format!("{}.fm_depth", prefix);
     let v = s.bass_voices[voice_idx].synth.fm_depth;
     s.bass_voices[voice_idx].synth.fm_depth = unlocked_f32(v, b, "fm_depth", &bp, locked);
+    let bp = format!("{}.pan", prefix);
+    if !locked.contains(&bp)
+        && let Some(v) = b.get("pan").and_then(|v| v.as_f64())
+    {
+        s.bass_voices[voice_idx].synth.pan = (v as f32).clamp(-1.0, 1.0);
+    }
     let bp = format!("{}.waveform", prefix);
     if !locked.contains(&bp)
         && let Some(w) = b.get("waveform").and_then(|v| v.as_str())
@@ -165,6 +171,11 @@ pub(super) fn apply_hoover_update(
     );
     s.hoover.detune = unlocked_f32(s.hoover.detune, h, "detune", "hoover.detune", locked);
     s.hoover.volume = unlocked_f32(s.hoover.volume, h, "volume", "hoover.volume", locked);
+    if !locked.contains("hoover.pan")
+        && let Some(v) = h.get("pan").and_then(|v| v.as_f64())
+    {
+        s.hoover.pan = (v as f32).clamp(-1.0, 1.0);
+    }
     s.hoover.pitch_lfo_rate = unlocked_f32(
         s.hoover.pitch_lfo_rate,
         h,
@@ -216,6 +227,11 @@ pub(super) fn apply_an1x_update(
         s.an1x.enabled = v;
     }
     s.an1x.volume = unlocked_f32(s.an1x.volume, a, "volume", "an1x.volume", locked);
+    if !locked.contains("an1x.pan")
+        && let Some(v) = a.get("pan").and_then(|v| v.as_f64())
+    {
+        s.an1x.pan = (v as f32).clamp(-1.0, 1.0);
+    }
     s.an1x.osc1_level = unlocked_f32(
         s.an1x.osc1_level,
         a,

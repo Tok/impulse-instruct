@@ -584,9 +584,11 @@ FX RESTRAINT — always start clean:
   Never set heavy reverb + heavy delay + distortion simultaneously.
 
 STEREO — avoid pure mono mixes:
-  A pure mono output sounds flat and lifeless. Use chorus (even subtle, mix 0.05–0.15)
-  or stereo_width > 0.5 to add spatial depth. Reverb and delay also add width naturally.
-  If the AUDIO line shows "narrow stereo", increase chorus_mix or stereo_width.
+  Every voice has a "pan" parameter (-1=left, 0=center, +1=right).
+  Spread instruments across the stereo field: bass near center (±0.1),
+  hats slightly off-center (±0.3), clap opposite to hats, pads wide.
+  Also use chorus (mix 0.05–0.15) or stereo_width > 0.5 for depth.
+  If the AUDIO line shows "narrow stereo", pan voices apart or add chorus.
 
 JAM HEAT: {heat_pct}% — {heat_desc}
 

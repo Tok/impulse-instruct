@@ -18,6 +18,9 @@ pub struct KickParams {
     /// 0 = clean, 1 = maximum hard clip (10× boost then clamp to ±1).
     #[serde(default)]
     pub clip: f32,
+    /// Stereo pan position: -1.0 = hard left, 0.0 = center, 1.0 = hard right.
+    #[serde(default)]
+    pub pan: f32,
 }
 
 impl Default for KickParams {
@@ -31,6 +34,7 @@ impl Default for KickParams {
             pitch_env_depth: 0.5, // 5.5× → close to hardcoded 6×
             pitch_env_time: 0.2,  // 48ms → close to hardcoded 40ms
             clip: 0.0,
+            pan: 0.0,
         }
     }
 }
@@ -41,6 +45,9 @@ pub struct SnareParams {
     pub snappy: f32, // 0–1 noise amount
     pub decay: f32,  // 0–1
     pub volume: f32,
+    /// Stereo pan position: -1.0 = hard left, 0.0 = center, 1.0 = hard right.
+    #[serde(default)]
+    pub pan: f32,
 }
 
 impl Default for SnareParams {
@@ -50,6 +57,7 @@ impl Default for SnareParams {
             snappy: 0.6,
             decay: 0.4,
             volume: 0.60,
+            pan: 0.0,
         }
     }
 }
@@ -59,6 +67,9 @@ pub struct HihatParams {
     pub decay: f32, // 0–1 (open hat = higher)
     pub tone: f32,  // 0–1 filter cutoff
     pub volume: f32,
+    /// Stereo pan position: -1.0 = hard left, 0.0 = center, 1.0 = hard right.
+    #[serde(default)]
+    pub pan: f32,
 }
 
 impl Default for HihatParams {
@@ -67,6 +78,7 @@ impl Default for HihatParams {
             decay: 0.2,
             tone: 0.7,
             volume: 0.75,
+            pan: 0.0,
         }
     }
 }
@@ -76,6 +88,9 @@ pub struct TomParams {
     pub pitch: f32,
     pub decay: f32,
     pub volume: f32,
+    /// Stereo pan position: -1.0 = hard left, 0.0 = center, 1.0 = hard right.
+    #[serde(default)]
+    pub pan: f32,
 }
 
 impl Default for TomParams {
@@ -84,6 +99,7 @@ impl Default for TomParams {
             pitch: 0.5,
             decay: 0.5,
             volume: 0.7,
+            pan: 0.0,
         }
     }
 }
@@ -108,26 +124,31 @@ impl Default for DrumKit808 {
                 decay: 0.08,
                 tone: 0.8,
                 volume: 0.55,
+                pan: 0.0,
             },
             hihat_open: HihatParams {
                 decay: 0.4,
                 tone: 0.75,
                 volume: 0.55,
+                pan: 0.0,
             },
             tom_hi: TomParams {
                 pitch: 0.7,
                 decay: 0.4,
                 volume: 0.65,
+                pan: 0.0,
             },
             tom_mid: TomParams {
                 pitch: 0.5,
                 decay: 0.45,
                 volume: 0.65,
+                pan: 0.0,
             },
             tom_lo: TomParams {
                 pitch: 0.3,
                 decay: 0.5,
                 volume: 0.65,
+                pan: 0.0,
             },
         }
     }
@@ -139,6 +160,9 @@ impl Default for DrumKit808 {
 pub struct ClapParams {
     pub decay: f32,
     pub volume: f32,
+    /// Stereo pan position: -1.0 = hard left, 0.0 = center, 1.0 = hard right.
+    #[serde(default)]
+    pub pan: f32,
 }
 
 impl Default for ClapParams {
@@ -146,6 +170,7 @@ impl Default for ClapParams {
         Self {
             decay: 0.3,
             volume: 0.8,
+            pan: 0.0,
         }
     }
 }
@@ -172,32 +197,38 @@ impl Default for DrumKit909 {
                 pitch_env_depth: 0.5,
                 pitch_env_time: 0.2,
                 clip: 0.0,
+                pan: 0.0,
             },
             snare: SnareParams {
                 tone: 0.55,
                 snappy: 0.7,
                 decay: 0.35,
                 volume: 0.60,
+                pan: 0.0,
             },
             hihat_closed: HihatParams {
                 decay: 0.06,
                 tone: 0.85,
                 volume: 0.55,
+                pan: 0.0,
             },
             hihat_open: HihatParams {
                 decay: 0.45,
                 tone: 0.8,
                 volume: 0.55,
+                pan: 0.0,
             },
             clap: ClapParams {
                 decay: 0.3,
                 volume: 0.60,
+                pan: 0.0,
             },
             rim: SnareParams {
                 tone: 0.7,
                 snappy: 0.3,
                 decay: 0.15,
                 volume: 0.55,
+                pan: 0.0,
             },
         }
     }

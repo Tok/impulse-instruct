@@ -1,6 +1,5 @@
 // ─── state/mod.rs ── single source of truth for all synth parameters ─────────
 // Pure data only — no methods that mutate in-place. Transitions at the bottom.
-#![allow(dead_code)]
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 
@@ -318,6 +317,8 @@ pub struct BassState {
     pub osc_detune: f32,         // semitone offset -1..+1, shifts entire oscillator pitch
     pub fm_ratio: f32,           // 0–1 → modulator/carrier ratio 0.5–8.0
     pub fm_depth: f32,           // 0–1 FM modulation depth; 0 = off (pure additive)
+    #[serde(default)]
+    pub pan: f32, // -1.0 (left) to +1.0 (right), 0.0 = center
 }
 
 impl Default for BassState {
@@ -340,6 +341,7 @@ impl Default for BassState {
             osc_detune: 0.0,
             fm_ratio: 0.0,
             fm_depth: 0.0,
+            pan: 0.0,
         }
     }
 }

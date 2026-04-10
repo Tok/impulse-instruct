@@ -31,6 +31,9 @@ pub struct HooverState {
     pub pitch_lfo_depth: f32,
     /// Output volume (0–1).
     pub volume: f32,
+    /// Stereo pan position: -1.0 = hard left, 0.0 = center, 1.0 = hard right.
+    #[serde(default)]
+    pub pan: f32,
 }
 
 impl Default for HooverState {
@@ -45,6 +48,7 @@ impl Default for HooverState {
             pitch_lfo_rate: 1.2,   // 1.2 Hz — slow wail
             pitch_lfo_depth: 0.15, // ±0.15 semitones
             volume: 0.72,
+            pan: 0.0,
         }
     }
 }

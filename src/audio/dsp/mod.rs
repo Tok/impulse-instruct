@@ -535,7 +535,7 @@ impl DspState {
                 .map(|(i, v)| v.process(&p, &p.bass_voice_params[i]))
                 .sum::<f32>();
 
-            let dv = &self.drum_velocity;
+            let dv = self.drum_velocity; // copy, not borrow (avoids lifetime conflict with &mut self)
             let k808 = self.kick808.process(
                 p.kick808_pitch,
                 p.kick808_decay,
@@ -852,19 +852,31 @@ impl DspState {
 
             let out = ((synth_out * self.tts_duck + tts_sig) * p.master_volume).clamp(-1.0, 1.0);
 
-            // Stereo width + granular true stereo
-            let has_stereo = (p.stereo_width - 0.5).abs() > 0.01 || granular_side.abs() > 0.001;
+            // Per-voice pan → side signal (computed before FX borrows self)
+            let pan_side = bus_bass * p.pan_303 * 0.5
+                + k808 * dv[0] * p.pan_kick808 * 0.5
+                + s808 * dv[1] * p.pan_snare808 * 0.5
+                + (hh808c * dv[2] + hh808o * dv[3]) * p.pan_hihat808 * 0.5
+                + k909 * dv[7] * p.pan_kick909 * 0.5
+                + s909 * dv[8] * p.pan_snare909 * 0.5
+                + (hh909c * dv[9] + hh909o * dv[10]) * p.pan_hihat909 * 0.5
+                + clap * dv[11] * p.pan_clap909 * 0.5
+                + hoover_out * p.pan_hoover * 0.5
+                + an1x_out * p.pan_an1x * 0.5
+                + noise_out * p.pan_noise * 0.5;
+            let has_stereo = (p.stereo_width - 0.5).abs() > 0.01
+                || granular_side.abs() > 0.001
+                || pan_side.abs() > 0.0001;
             if channels >= 2 && has_stereo {
                 let mid = out;
                 let chorus_side = self.chorus.read_tap(0.4) * 0.3;
                 let w = p.stereo_width * 2.0;
-                // Granular spray controls how much of the per-grain stereo is mixed in
                 let gran_w = if p.granular_enabled {
                     p.granular_spray
                 } else {
                     0.0
                 };
-                let side = chorus_side * w + granular_side * gran_w;
+                let side = chorus_side * w + granular_side * gran_w + pan_side;
                 let left = (mid + side).clamp(-1.0, 1.0);
                 let right = (mid - side).clamp(-1.0, 1.0);
                 frame[0] = left;
