@@ -252,18 +252,17 @@ pub(super) fn draw_drum_rows(
                 *app.state.write() = set_drum_voice_steps(s, *voice, seq_steps);
             }
 
-            steps_x = ui.cursor().min.x;
             let mut toggled = None;
             for i in 0..16usize {
                 let abs = page_start + i;
                 beat_div(ui, i);
-                if i == 0 {
-                    steps_x = ui.cursor().min.x;
-                }
                 let is_active = pattern.get(i).map(|s| s.active).unwrap_or(false);
                 let is_current = abs == voice_cursor;
                 let vel = pattern.get(i).map(|s| s.velocity).unwrap_or(0.0);
                 ui.add_enabled_ui(abs < voice_steps, |ui| {
+                    if i == 0 {
+                        steps_x = ui.cursor().min.x;
+                    }
                     let prob = pattern.get(i).map(|s| s.probability).unwrap_or(1.0);
                     if widgets::step_button(
                         ui, is_active, is_current, vel, prob, None, None, pad_px,

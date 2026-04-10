@@ -280,6 +280,8 @@ pub fn draw_bass(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         }
     } else {
         // ── Knob mode: 3 equal-width glass groups ─────────────────────────────
+        let ctrl_big = ctrl.phi_bigger(); // primary: cutoff, resonance
+        let ctrl_sm = ctrl.phi_smaller(); // secondary: glide, noise, FM
         let gw = widgets::even_group_width(ui, 3);
         ui.horizontal(|ui| {
             // FILTER group: 2×2 grid (CUT/RES, ENV/DEC)
@@ -296,7 +298,7 @@ pub fn draw_bass(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                         "CUT",
                         &mut cutoff,
                         param_mode("bass.cutoff", &locked, &focused),
-                        ctrl,
+                        ctrl_big,
                     );
                     if ch {
                         changed = true;
@@ -309,7 +311,7 @@ pub fn draw_bass(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                         "RES",
                         &mut resonance,
                         param_mode("bass.resonance", &locked, &focused),
-                        ctrl,
+                        ctrl_big,
                     );
                     if ch {
                         changed = true;
@@ -426,7 +428,7 @@ pub fn draw_bass(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                         "GLD",
                         &mut portamento_time,
                         param_mode("bass.portamento_time", &locked, &focused),
-                        ctrl,
+                        ctrl_sm,
                     );
                     if ch {
                         changed = true;
@@ -439,7 +441,7 @@ pub fn draw_bass(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                         "NSE",
                         &mut noise_mix,
                         param_mode("bass.noise_mix", &locked, &focused),
-                        ctrl,
+                        ctrl_sm,
                     );
                     if ch {
                         changed = true;
@@ -449,15 +451,23 @@ pub fn draw_bass(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                     }
                 });
                 ui.horizontal(|ui| {
-                    if widgets::param_control(ui, "FMD", &mut fm_depth, ParamMode::Free, ctrl).0 {
+                    if widgets::param_control(ui, "FMD", &mut fm_depth, ParamMode::Free, ctrl_sm).0
+                    {
                         changed = true;
                     }
-                    if widgets::param_control(ui, "FMR", &mut fm_ratio, ParamMode::Free, ctrl).0 {
+                    if widgets::param_control(ui, "FMR", &mut fm_ratio, ParamMode::Free, ctrl_sm).0
+                    {
                         changed = true;
                     }
                 });
-                if widgets::param_control_bipolar(ui, "DTN", &mut osc_detune, ParamMode::Free, ctrl)
-                    .0
+                if widgets::param_control_bipolar(
+                    ui,
+                    "DTN",
+                    &mut osc_detune,
+                    ParamMode::Free,
+                    ctrl_sm,
+                )
+                .0
                 {
                     changed = true;
                 }

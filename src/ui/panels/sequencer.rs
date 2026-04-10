@@ -10,6 +10,27 @@ use crate::state::{
 use crate::ui::{ImpulseApp, SEQ_LABEL_H, SEQ_LABEL_W, SEQ_VOL_W, theme, widgets};
 
 pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
+    // Dynamic min height: 2 header lines + space for ~3 voice lanes when empty,
+    // grows with actual content when voices are present.
+    let n_voices = {
+        let s = app.state.read();
+        let pad = s.ui_prefs.effective_pad_px();
+        let voice_h = pad + 12.0; // step buttons + vel/prob/ratchet lanes
+        let n = s
+            .rack
+            .modules
+            .iter()
+            .filter(|m| {
+                matches!(
+                    m.kind,
+                    crate::state::ModuleKind::DrumKit808 | crate::state::ModuleKind::DrumKit909
+                )
+            })
+            .count();
+        let lanes = if n > 0 { n * 4 } else { 3 }; // ~4 voices per kit, or 3 placeholder
+        (lanes as f32 * voice_h + 60.0).max(180.0)
+    };
+    ui.set_min_height(n_voices);
     let (
         current_step,
         running,

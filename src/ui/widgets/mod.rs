@@ -83,6 +83,22 @@ impl ControlPrefs {
         cp
     }
 
+    /// Return a copy with knob size scaled by √φ (area × φ) — for primary params.
+    pub fn phi_bigger(self) -> Self {
+        Self {
+            knob_size: (self.knob_size * 1.272).max(20.0),
+            ..self
+        }
+    }
+
+    /// Return a copy with knob size scaled by √(1/φ) (area / φ) — for secondary params.
+    pub fn phi_smaller(self) -> Self {
+        Self {
+            knob_size: (self.knob_size * 0.786).max(16.0),
+            ..self
+        }
+    }
+
     /// Suggested max-width for a glass panel group containing controls of this style.
     /// Used by panels to constrain group widths so `horizontal_wrapped` can flow them.
     pub fn group_max_width(self) -> f32 {
