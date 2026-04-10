@@ -37,7 +37,10 @@ pub fn event_stream(ui: &mut Ui, state: &AppState, smooth_step: f64, width: f32,
     let time_sig = seq.time_sig_num as usize;
     let current_step = seq.current_step;
 
-    // smooth_step passed in from caller (interpolated between discrete steps)
+    // Only show notes when the sequencer has actually run.
+    // This prevents phantom notes at arbitrary scroll positions on startup
+    // or when a new pattern is loaded.
+    let has_played = seq.running || current_step > 0;
 
     // Timing: how many steps fit in the display width
     let display_steps = steps as f32 * 2.0; // show 2 full patterns
@@ -90,8 +93,13 @@ pub fn event_stream(ui: &mut Ui, state: &AppState, smooth_step: f64, width: f32,
 
     // ── Beat / bar grid ─────────────────────────────────────────────────────
     let steps_per_beat = (steps as f32 / time_sig as f32).max(1.0);
-    // Position within the current pattern cycle (0..steps, fractional)
-    let pos_in_pattern = (smooth_step as f32).rem_euclid(steps as f32);
+    // Position within the current pattern cycle (0..steps, fractional).
+    // When stopped, snap to current_step (no interpolation drift).
+    let pos_in_pattern = if seq.running {
+        (smooth_step as f32).rem_euclid(steps as f32)
+    } else {
+        current_step as f32
+    };
     for i in 0..(display_steps as usize + 2) {
         let step_offset = i as f32 - pos_in_pattern;
         let x = now_x + step_offset * step_w;
@@ -123,6 +131,14 @@ pub fn event_stream(ui: &mut Ui, state: &AppState, smooth_step: f64, width: f32,
     );
 
     // ── Bass note events (all voices) ───────────────────────────────────────
+    // Skip rendering if sequencer hasn't played yet (prevents phantom notes)
+    if !has_played {
+        // Still show the grid and cursor, just no notes
+        if seq.running {
+            ui.ctx().request_repaint();
+        }
+        return;
+    }
     let circle_r = (inner_h * 0.08).clamp(3.0, 8.0);
     for (vi, voice) in state.bass_voices.iter().enumerate() {
         if !voice.enabled {
@@ -235,7 +251,7 @@ pub fn event_stream(ui: &mut Ui, state: &AppState, smooth_step: f64, width: f32,
     painter.text(
         inner.left_top() + Vec2::new(2.0, 1.0),
         egui::Align2::LEFT_TOP,
-        format!("{:.0}bpm #{}", bpm, current_step),
+        format!("{:.0}bpm {}/{} #{}", bpm, time_sig, 4, current_step),
         font.clone(),
         Color32::from_gray(50),
     );
