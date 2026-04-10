@@ -36,6 +36,9 @@ pub struct PromptRequest {
     pub prompt: String,
     #[serde(default)]
     pub one_shot: bool,
+    /// Target agent by persona name (e.g. "BASS", "DRUMS"). Omit for global/first agent.
+    #[serde(default)]
+    pub agent: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -140,14 +143,30 @@ async fn post_prompt(
     AxumState(api): AxumState<ApiState>,
     Json(req): Json<PromptRequest>,
 ) -> Result<Json<OkResponse>, StatusCode> {
-    api_log(&api, format!("[API] prompt: {}", req.prompt));
-    // Always one_shot for API prompts — the jam loop's full-state replacement
-    // corrupts rack/agent state set up via the API.
+    // Resolve agent by persona name (case-insensitive).
+    let agent_id = req.agent.as_ref().and_then(|name| {
+        let s = api.app_state.read();
+        s.llm_agents
+            .iter()
+            .find(|a| a.persona_name.eq_ignore_ascii_case(name))
+            .map(|a| a.id)
+    });
+    let target = agent_id
+        .and_then(|id| {
+            api.app_state
+                .read()
+                .llm_agents
+                .iter()
+                .find(|a| a.id == id)
+                .map(|a| a.persona_name.clone())
+        })
+        .unwrap_or_else(|| "global".into());
+    api_log(&api, format!("[API] prompt → {}: {}", target, req.prompt));
     api.llm_tx
         .try_send(LlmInput::Infer {
             prompt: req.prompt,
             one_shot: true,
-            agent_id: None,
+            agent_id,
         })
         .map_err(|_| StatusCode::SERVICE_UNAVAILABLE)?;
     Ok(Json(OkResponse {
@@ -384,8 +403,35 @@ async fn post_rack_add(
     AxumState(api): AxumState<ApiState>,
     Json(req): Json<RackAddRequest>,
 ) -> Result<Json<serde_json::Value>, StatusCode> {
+    use crate::state::{PortDir, PortKind, PortRef};
     let kind = parse_module_kind(&req.kind).ok_or(StatusCode::BAD_REQUEST)?;
-    let id = api.app_state.write().rack.add_module(kind);
+    let mut s = api.app_state.write();
+    let id = s.rack.add_module(kind);
+    // Auto-wire voice and FX modules to MasterOutput with an audio cable.
+    if kind.default_zone() != crate::state::Zone::Global
+        && let Some(master_id) = s
+            .rack
+            .modules
+            .iter()
+            .find(|m| m.kind == crate::state::ModuleKind::MasterOutput)
+            .map(|m| m.id)
+    {
+        s.rack.connect(
+            PortRef {
+                module_id: id,
+                dir: PortDir::Out,
+                kind: PortKind::Audio,
+                index: 0,
+            },
+            PortRef {
+                module_id: master_id,
+                dir: PortDir::In,
+                kind: PortKind::Audio,
+                index: 0,
+            },
+        );
+    }
+    drop(s);
     api_log(&api, format!("[API] rack: added {:?} (id={})", kind, id));
     Ok(Json(serde_json::json!({ "ok": true, "id": id })))
 }

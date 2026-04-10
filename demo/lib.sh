@@ -31,9 +31,16 @@ api_params() {
 
 api_prompt() {
     # Usage: api_prompt "make it acid"
+    #        api_prompt "make it acid" "BASS"   (target specific agent)
+    local prompt="$1"
+    local agent="${2:-}"
+    local agent_json=""
+    if [ -n "$agent" ]; then
+        agent_json=", \"agent\": \"$agent\""
+    fi
     curl -sf -X POST "$API/api/prompt" \
         -H "Content-Type: application/json" \
-        -d "{\"prompt\": \"$1\"}" >/dev/null 2>&1 || true
+        -d "{\"prompt\": \"$prompt\" $agent_json}" >/dev/null 2>&1 || true
 }
 
 api_lock() {

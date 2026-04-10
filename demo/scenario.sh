@@ -339,32 +339,42 @@ pause 0.5
 api_play
 pause 2
 
-api_prompt "build a deep house groove, mellow bass with warm reverb"
-pause 10
+# Send prompts to EACH agent individually so they all respond
+api_prompt "lay down a deep mellow bass line" "BASS"
+pause 8
+
+api_prompt "build a four on the floor kick with off-beat hats" "DRUMS"
+pause 8
+
+api_prompt "add warm reverb and a gentle delay" "FX"
+pause 8
 
 narrate --wait "s12_jam_playing" \
-    "Each agent handles its own part. The bass agent shapes the synth. The drum agent builds the beat."
-pause 4
+    "Each agent handled its own part. Bass laid down a line. Drums built the beat. FX added space."
+pause 3
 
 # ─── Scene 13: Watch agents work ─────────────────────────────────────────────
 
 echo "  [Scene 13/16] agents_working — agents evolving their parts..."
 
-api_prompt "evolve the pattern, each agent add your own flavor"
-pause 12
-
 api_scroll "bass"
-pause 1
+pause 0.5
 
-narrate --wait "s13_bass_changes" \
-    "The bass agent is working within its scope, only touching the three oh three."
-pause 4
+narrate --wait "s13_bass_intro" \
+    "Let's tell each agent to evolve independently."
+pause 0.5
+
+api_prompt "make the bass more acid, add some slides" "BASS"
+pause 8
 
 api_scroll "808"
 pause 0.5
 
-narrate --wait "s13_drum_changes" \
-    "The drum agent evolves the beat independently."
+api_prompt "add a clap on two and four, vary the hat pattern" "DRUMS"
+pause 8
+
+narrate --wait "s13_agents_done" \
+    "Each agent responds within its scope. Bass only touches the three oh three. Drums only the kits."
 pause 3
 
 # ─── Scene 14: Creative direction ────────────────────────────────────────────
@@ -375,18 +385,21 @@ api_scroll "console"
 pause 0.5
 
 narrate --wait "s14_creative" \
-    "Let's give the whole band a creative direction."
+    "Now let's give each agent a creative direction."
 pause 0.5
 
-api_prompt "acid breakdown, filter sweep on the bass, open the hats, reverb wash"
-pause 10
+api_prompt "acid filter sweep, drop the cutoff low then sweep up" "BASS"
+pause 8
 
-api_scroll "bass"
-pause 0.5
+api_prompt "open the hats, add some fills" "DRUMS"
+pause 8
+
+api_prompt "crank the reverb, add heavy delay feedback" "FX"
+pause 8
 
 narrate --wait "s14_result" \
-    "Each agent interpreted the prompt for its own instruments."
-pause 4
+    "Each specialist shaped its own instruments based on the same creative vision."
+pause 3
 
 # ─── Scene 15: Speed it up ───────────────────────────────────────────────────
 
@@ -399,7 +412,7 @@ narrate --wait "s15_tempo" \
     "Let's push the tempo."
 pause 0.5
 
-api_prompt "speed it up to 140 B P M, peak-time energy"
+api_prompt "speed it up to 140 BPM, peak-time energy"
 pause 8
 
 narrate --wait "s15_tempo_result" \

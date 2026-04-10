@@ -331,15 +331,16 @@ echo "  Raw video: $RAW_VIDEO"
 echo ""
 echo "[6/6] Post-processing..."
 
-# Build ffmpeg filter for combining audio tracks
-AUDIO_INPUTS=""
-AUDIO_FILTER=""
+# Check what we have
 AUDIO_COUNT=0
-
-if [ -f "$APP_AUDIO" ]; then
-    AUDIO_INPUTS="$AUDIO_INPUTS -i $APP_AUDIO"
-    AUDIO_COUNT=$((AUDIO_COUNT + 1))
+if [ -f "$APP_AUDIO" ] && [ -s "$APP_AUDIO" ]; then
+    AUDIO_COUNT=1
+    echo "  App audio: $APP_AUDIO ($(du -h "$APP_AUDIO" | cut -f1))"
+else
+    echo "  App audio: not captured"
 fi
+echo "  Raw video: $(du -h "$RAW_VIDEO" 2>/dev/null | cut -f1)"
+echo "  Encoding final video (this may take a minute)..."
 
 # Check if we have narration clips logged — merge them into one track
 if [ "$NO_TTS" -eq 0 ] && [ -f "$NARRATION_LIST" ]; then
