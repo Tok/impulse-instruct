@@ -215,19 +215,47 @@ fn run() -> anyhow::Result<()> {
     }
 
     // Apply --model override, falling back to the last-used model from session / settings.json
-    log::debug!("Resolving model path…");
     if let Some(ref model_path) = args.model {
         app_state.write().llm.model_path = model_path.clone();
+        log::info!("Model (CLI): {}", model_path);
     } else if app_state.read().llm.model_path.is_empty()
         && let Some(saved) = impulse_instruct::state::load_model_setting()
     {
-        app_state.write().llm.model_path = saved;
+        app_state.write().llm.model_path = saved.clone();
+        log::info!("Model (settings): {}", saved);
     }
-    log::debug!(
-        "Model path: {:?}, agents: {}",
-        app_state.read().llm.model_path,
-        app_state.read().llm_agents.len()
-    );
+    {
+        let s = app_state.read();
+        log::info!(
+            "Model: {}",
+            if s.llm.model_path.is_empty() {
+                "(none — mock mode)".to_string()
+            } else {
+                s.llm.model_path.clone()
+            }
+        );
+        log::info!(
+            "Rack: {} modules, {} cables, {} agents, {} TTS modules",
+            s.rack.modules.len(),
+            s.rack.cables.len(),
+            s.llm_agents.len(),
+            s.tts_modules.len()
+        );
+        if !s.llm_agents.is_empty() {
+            for a in &s.llm_agents {
+                log::info!(
+                    "  Agent {}: {} scope={:?} model={:?}",
+                    a.id,
+                    a.persona_name,
+                    a.scope,
+                    a.model_path
+                );
+            }
+        }
+        if let Some(ref style) = s.llm.active_style {
+            log::info!("Style: {}", style);
+        }
+    }
 
     // ── Channels ─────────────────────────────────────────────────────────────
     let (llm_tx, llm_rx) = crossbeam_channel::bounded::<LlmInput>(16);
@@ -236,7 +264,10 @@ fn run() -> anyhow::Result<()> {
     // ── Audio engine (before LLM thread so we can share tts_tx) ─────────────
     log::info!("Starting audio engine…");
     let audio_engine = AudioEngine::new(Arc::clone(&app_state))?;
-    log::info!("Audio engine started");
+    log::info!(
+        "Audio engine started (sample_rate={}Hz)",
+        audio_engine.sample_rate
+    );
 
     // ── LLM thread ────────────────────────────────────────────────────────────
     log::info!("Spawning LLM thread…");

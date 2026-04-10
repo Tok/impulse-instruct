@@ -138,9 +138,11 @@ fn snapshot(state: &Arc<RwLock<AppState>>) -> AppState {
     state.read().clone()
 }
 
-/// Push a log message via the lock-free channel (no write lock on AppState).
+/// Push a log message to the UI console + stderr log.
 fn api_log(api: &ApiState, msg: impl Into<String>) {
-    let _ = api.api_log_tx.try_send(msg.into());
+    let s = msg.into();
+    log::debug!("{}", s);
+    let _ = api.api_log_tx.try_send(s);
 }
 
 // ─── Handlers ─────────────────────────────────────────────────────────────────

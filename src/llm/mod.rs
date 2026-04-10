@@ -393,6 +393,12 @@ pub fn run_llm_loop(
         }
 
         // Build system prompt with per-agent overrides patched in.
+        let agent_label = agent_persona.clone().unwrap_or_else(|| "default".into());
+        log::info!(
+            "LLM: infer start (agent={}, one_shot={})",
+            agent_label,
+            one_shot
+        );
         log::debug!("LLM: building system prompt...");
         let system = {
             let mut snap = state.read().clone();
@@ -495,6 +501,15 @@ pub fn run_llm_loop(
                 let ctok = output.completion_tokens;
                 let ctx = output.context_used;
                 let tthink = output.thinking.as_ref().map(|t| t.len() / 4).unwrap_or(0);
+                log::info!(
+                    "LLM: infer done (agent={}, {:.1}t/s, prompt={}, completion={}, ctx={}, think~{})",
+                    agent_label,
+                    tps,
+                    ptok,
+                    ctok,
+                    ctx,
+                    tthink
+                );
 
                 // Apply LLM update: snapshot OUTSIDE the lock, apply, then
                 // selectively write back under a short lock.
@@ -650,7 +665,12 @@ pub fn run_llm_loop(
                         if let Some(tts_mod) = tts_mod {
                             use crate::state::TtsEngine;
                             let tts_text = output.mc_line.as_deref().unwrap_or(comment);
-                            log::info!("[TTS] {}", tts_text);
+                            log::info!(
+                                "[TTS] module={} engine={:?}: {}",
+                                tts_mod.id,
+                                tts_mod.engine,
+                                tts_text
+                            );
                             let tp = tts::TtsParams {
                                 pitch: tts_mod.pitch,
                                 speed: tts_mod.speed,

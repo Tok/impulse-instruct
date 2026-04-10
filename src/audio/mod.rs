@@ -53,6 +53,10 @@ pub struct AudioEngine {
     pub dsp_load_rx: Consumer<f32>,
     /// Interleaved L,R stereo samples for correlation meter.
     pub stereo_rx: Consumer<f32>,
+    /// Negotiated sample rate (Hz).
+    pub sample_rate: u32,
+    /// Audio callback block size (frames).
+    pub block_size: u32,
     _stream: Stream, // kept alive
 }
 
@@ -275,6 +279,8 @@ impl AudioEngine {
             midi_clock_rx,
             dsp_load_rx,
             stereo_rx,
+            sample_rate: config.sample_rate.0,
+            block_size: 0, // determined at runtime in callback
             _stream: stream,
         })
     }

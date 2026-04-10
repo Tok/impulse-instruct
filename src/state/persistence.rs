@@ -108,8 +108,10 @@ pub fn save_session_ext(
     };
     match serde_json::to_string_pretty(&data) {
         Ok(json) => {
-            if let Err(e) = std::fs::write(SESSION_PATH, json) {
+            if let Err(e) = std::fs::write(SESSION_PATH, &json) {
                 log::warn!("Could not write {SESSION_PATH}: {e}");
+            } else {
+                log::debug!("Session saved ({} bytes)", json.len());
             }
         }
         Err(e) => log::warn!("Could not serialise session: {e}"),
