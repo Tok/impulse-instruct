@@ -456,13 +456,13 @@ pub fn draw_bass(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                         changed = true;
                     }
                 });
+                if widgets::param_control_bipolar(ui, "DTN", &mut osc_detune, ParamMode::Free, ctrl)
+                    .0
+                {
+                    changed = true;
+                }
             });
         });
-
-        // Detune: bipolar DragValue — one compact row below the groups
-        if widgets::param_control_bipolar(ui, "DETUNE", &mut osc_detune, ParamMode::Free, ctrl).0 {
-            changed = true;
-        }
     }
 
     // Apply all changes in a single brief write, using pure state transitions
