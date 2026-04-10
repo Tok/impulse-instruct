@@ -106,27 +106,8 @@ impl MidiClockTracker {
 }
 
 mod undo;
+pub(crate) use api_log_handler::{ActivityAction, ActivityEntry};
 use undo::StateHistory;
-
-/// A single entry in the structured activity log.
-#[derive(Clone)]
-pub(crate) struct ActivityEntry {
-    pub timestamp: std::time::Instant,
-    pub persona: String,
-    pub action: ActivityAction,
-    pub detail: String,
-}
-#[derive(Clone, PartialEq)]
-#[allow(dead_code)] // variants populated incrementally as more log sources are wired
-pub(crate) enum ActivityAction {
-    Response,    // normal LLM response
-    Thinking,    // chain-of-thought
-    ParamUpdate, // parameter change applied
-    Spawn,       // agent spawned
-    Dismiss,     // agent dismissed
-    UserPrompt,  // user typed a prompt
-    System,      // system message (startup, error)
-}
 
 pub struct ImpulseApp {
     state: Arc<RwLock<AppState>>,
@@ -159,6 +140,9 @@ pub struct ImpulseApp {
     api_port: Option<u16>,
     /// Lock-free receiver for API→UI log messages (sender is in ApiState).
     api_log_rx: crossbeam_channel::Receiver<String>,
+    /// UI log dedup: last line content and repeat count.
+    last_log_line: String,
+    log_repeat_count: u32,
     show_about: bool,
     pub(crate) activity_log: Vec<ActivityEntry>,
     pub(crate) show_prefs: bool,
@@ -330,6 +314,8 @@ impl ImpulseApp {
             log_text,
             api_port,
             api_log_rx,
+            last_log_line: String::new(),
+            log_repeat_count: 0,
             show_about: false,
             activity_log: Vec::new(),
             show_prefs: false,

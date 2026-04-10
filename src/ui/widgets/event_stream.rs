@@ -37,10 +37,9 @@ pub fn event_stream(ui: &mut Ui, state: &AppState, smooth_step: f64, width: f32,
     let time_sig = seq.time_sig_num as usize;
     let current_step = seq.current_step;
 
-    // Only show notes when the sequencer has actually run.
-    // This prevents phantom notes at arbitrary scroll positions on startup
-    // or when a new pattern is loaded.
-    let has_played = seq.running || current_step > 0;
+    // Only show notes after the sequencer has advanced at least one step.
+    // Prevents phantom notes before any audio has been produced.
+    let has_played = state.global_step_count > 0;
 
     // Timing: how many steps fit in the display width
     let display_steps = steps as f32 * 2.0; // show 2 full patterns

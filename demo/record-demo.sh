@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-set -euo pipefail
+set -u  # warn on unset vars, but don't exit on errors (kills return non-zero)
 # ─── demo/record-demo.sh ── main orchestrator ────────────────────────────────
 #
 # Usage:
@@ -387,13 +387,15 @@ trap 'echo "  !! FAILED at line $LINENO: $BASH_COMMAND (exit $?)" >&2' ERR
 source "$SCENARIO_FILE"
 SCENARIO_EXIT=$?
 trap - ERR
-set -euo pipefail
+# Stay in relaxed mode — kills, waits, ffprobe all return non-zero legitimately
 
 if [ "$SCENARIO_EXIT" -ne 0 ]; then
     echo "  WARNING: Scenario exited with code $SCENARIO_EXIT"
 fi
 
-wait_narration
+# Wait for any narration audio playback to finish (NOT bare `wait` which
+# would also block on the tee subprocess from exec)
+sleep 2
 
 echo ""
 echo "  Scenario complete."
