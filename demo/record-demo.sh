@@ -311,13 +311,18 @@ echo "  Scenario complete. Stopping recording..."
 
 sleep 1
 
-# Stop screen recording
-kill "$FFMPEG_PID" 2>/dev/null
+# Stop screen recording — send SIGINT (like Ctrl+C) so ffmpeg finalizes the file.
+# SIGTERM doesn't work reliably with ffmpeg; it may keep writing.
+kill -INT "$FFMPEG_PID" 2>/dev/null
+sleep 2  # give ffmpeg time to flush and write trailer
+kill "$FFMPEG_PID" 2>/dev/null  # force kill if still running
 wait "$FFMPEG_PID" 2>/dev/null || true
 FFMPEG_PID=""
 
 # Stop audio recording
 if [ -n "$PW_RECORD_PID" ]; then
+    kill -INT "$PW_RECORD_PID" 2>/dev/null
+    sleep 1
     kill "$PW_RECORD_PID" 2>/dev/null
     wait "$PW_RECORD_PID" 2>/dev/null || true
     PW_RECORD_PID=""

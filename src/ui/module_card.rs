@@ -441,17 +441,31 @@ pub fn module_card_back(
             draw_focus_shine(&painter, title_rect, kind, ui.ctx());
             let label_font = 9.5;
             let label_pos = title_rect.left_center() + Vec2::new(10.0, 0.0);
+            // For LlmAgent modules, show persona name (e.g. "LLM AGENT · BASS")
+            let label = if kind == ModuleKind::LlmAgent {
+                let persona: String = ui
+                    .ctx()
+                    .data(|d| d.get_temp(egui::Id::new("agent_persona").with(module_id)))
+                    .unwrap_or_default();
+                if persona.is_empty() {
+                    kind.label().to_string()
+                } else {
+                    format!("{} · {}", kind.label(), persona)
+                }
+            } else {
+                kind.label().to_string()
+            };
             painter.text(
                 label_pos + Vec2::new(0.0, 1.0),
                 egui::Align2::LEFT_CENTER,
-                kind.label(),
+                &label,
                 egui::FontId::monospace(label_font),
                 Color32::from_gray(8),
             );
             painter.text(
                 label_pos,
                 egui::Align2::LEFT_CENTER,
-                kind.label(),
+                &label,
                 egui::FontId::monospace(label_font),
                 Color32::from_gray(if enabled { 200 } else { 80 }),
             );

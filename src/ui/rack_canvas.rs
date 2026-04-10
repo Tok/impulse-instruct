@@ -60,6 +60,19 @@ const FXMOD_KINDS: &[ModuleKind] = &[
 // ─── Main rack canvas ─────────────────────────────────────────────────────────
 
 pub fn draw_rack(app: &mut ImpulseApp, ctx: &egui::Context, ui: &mut egui::Ui) {
+    // Publish agent persona names so module_card_back can show them.
+    {
+        let s = app.state.read();
+        for agent in &s.llm_agents {
+            ctx.data_mut(|d| {
+                d.insert_temp(
+                    egui::Id::new("agent_persona").with(agent.id),
+                    agent.persona_name.clone(),
+                );
+            });
+        }
+    }
+
     // ── Mode toolbar ─────────────────────────────────────────────────────────
     // Touch-paint mode (· / U / F) + cable visibility toggle.
     ui.horizontal(|ui| {
