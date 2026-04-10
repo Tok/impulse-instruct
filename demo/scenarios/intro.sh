@@ -28,20 +28,21 @@ wait_for_model
 scene "First sound"
 
 look_at sequencer
+
+# Send prompt BEFORE playing — pattern loads while sequencer is stopped,
+# so no stale notes from a previous session appear in the event stream.
+ask "acid groove, kick and hats, short bass line — just 3 or 4 notes with gaps, leave room"
+
 play
-wait_seconds 1
-
-ask "acid house groove, four on the floor, melodic bass line with at least 4 different notes, set the filter interesting"
-
 wait_seconds 3
 
-say "One sentence. The AI programmed a full pattern."
+say "The AI built a pattern. Now let's add to it."
 
 # ── Scene 3: Tighten the beat ───────────────────────────────────────────────
 
 scene "Tighten the beat"
 
-ask "add a clap on two and four, rearrange the hi-hats, more groove"
+ask "add a clap on two and four, a couple more bass notes, set an accent on beat one"
 
 focus_on 808
 wait_seconds 3
