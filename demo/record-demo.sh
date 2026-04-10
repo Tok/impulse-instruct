@@ -215,7 +215,7 @@ if [ "${GRAB_W:-0}" -ge "${SCREEN_W:-9999}" ] 2>/dev/null; then
     # For maximized windows, use the frame extents to trim decorations
 fi
 
-# Ensure even dimensions (required by libx264)
+# Ensure even dimensions (required by h264_nvenc)
 GRAB_W=$(( GRAB_W / 2 * 2 ))
 GRAB_H=$(( GRAB_H / 2 * 2 ))
 
@@ -251,7 +251,7 @@ ffmpeg -y \
     -video_size "${GRAB_W}x${GRAB_H}" \
     -framerate 30 \
     -f x11grab -i "${DISPLAY}+${GRAB_X},${GRAB_Y}" \
-    -c:v libx264 -preset ultrafast -crf 18 \
+    -c:v h264_nvenc -preset p4 -cq 20 \
     -pix_fmt yuv420p \
     -an \
     "$RAW_VIDEO" \
@@ -355,7 +355,7 @@ if [ "$AUDIO_COUNT" -gt 0 ]; then
             -i "$RAW_VIDEO" \
             -i "$APP_AUDIO" \
             -vf "subtitles=${SRT_FILE}:force_style='FontSize=22,FontName=monospace,PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,Outline=2,MarginV=40'" \
-            -c:v libx264 -preset medium -crf 20 \
+            -c:v h264_nvenc -preset p4 -cq 22 \
             -c:a aac -b:a 192k \
             -map 0:v:0 -map 1:a:0 \
             -shortest \
@@ -365,7 +365,7 @@ if [ "$AUDIO_COUNT" -gt 0 ]; then
         ffmpeg -y \
             -i "$RAW_VIDEO" \
             -i "$APP_AUDIO" \
-            -c:v libx264 -preset medium -crf 20 \
+            -c:v h264_nvenc -preset p4 -cq 22 \
             -c:a aac -b:a 192k \
             -map 0:v:0 -map 1:a:0 \
             -shortest \
@@ -378,12 +378,12 @@ else
         ffmpeg -y \
             -i "$RAW_VIDEO" \
             -vf "subtitles=${SRT_FILE}:force_style='FontSize=22,FontName=monospace,PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,Outline=2,MarginV=40'" \
-            -c:v libx264 -preset medium -crf 20 \
+            -c:v h264_nvenc -preset p4 -cq 22 \
             "$FINAL_VIDEO" \
             </dev/null 2>/dev/null
     else
         ffmpeg -y -i "$RAW_VIDEO" \
-            -c:v libx264 -preset medium -crf 20 \
+            -c:v h264_nvenc -preset p4 -cq 22 \
             "$FINAL_VIDEO" \
             </dev/null 2>/dev/null
     fi
