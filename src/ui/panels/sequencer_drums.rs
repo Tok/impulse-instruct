@@ -406,5 +406,7 @@ pub(super) fn draw_drum_rows(
                 *app.state.write() = set_drum_step_ratchet(s, *voice, step, new_ratchet);
             }
         });
+        // Restore normal spacing after tight lanes
+        ui.spacing_mut().item_spacing.y = 2.0;
     }
 }

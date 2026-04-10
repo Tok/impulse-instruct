@@ -147,35 +147,37 @@ pub fn draw_kit_a(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         app.push_audio_params();
     }
 
-    // PITCH × DECAY XY pad for quick kick shaping
+    // PITCH × DECAY XY pad for quick kick shaping (centered)
     ui.add_space(2.0);
-    ui.label(
-        egui::RichText::new("KICK: PITCH × DECAY")
-            .color(theme::SMOKE)
-            .monospace()
-            .size(9.0),
-    );
-    ui.horizontal(|ui| {
-        if widgets::xy_pad(
-            ui,
-            "drums_kick_xy",
-            "PIT",
-            "DEC",
-            &mut kp,
-            &mut kd,
-            xy_size,
-            false,
-            1,
-        )
-        .0
-        {
-            let mut s = app.state.write();
-            s.kit_a.kick.pitch = kp;
-            s.kit_a.kick.decay = kd;
-            drop(s);
-            app.push_audio_params();
-        }
-    });
+    ui.vertical_centered(|ui| {
+        ui.label(
+            egui::RichText::new("KICK: PITCH × DECAY")
+                .color(theme::SMOKE)
+                .monospace()
+                .size(9.0),
+        );
+        ui.horizontal(|ui| {
+            if widgets::xy_pad(
+                ui,
+                "drums_kick_xy",
+                "PIT",
+                "DEC",
+                &mut kp,
+                &mut kd,
+                xy_size,
+                false,
+                1,
+            )
+            .0
+            {
+                let mut s = app.state.write();
+                s.kit_a.kick.pitch = kp;
+                s.kit_a.kick.decay = kd;
+                drop(s);
+                app.push_audio_params();
+            }
+        });
+    }); // close vertical_centered
 
     // Gabber kick preset
     ui.add_space(2.0);

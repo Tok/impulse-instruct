@@ -125,7 +125,7 @@ pub fn draw_an1x(app: &mut ImpulseApp, ui: &mut Ui) {
     {
         let gw = widgets::even_group_width(ui, 2);
         ui.horizontal(|ui| {
-            // LEVELS group: O1 LVL, O2 LVL, SUB
+            // LEVELS group: O1 LVL, O2 LVL, SUB (horizontal)
             widgets::glass_group_fill(ui, gw, gw, |ui| {
                 ui.label(
                     egui::RichText::new("LEVELS")
@@ -133,34 +133,31 @@ pub fn draw_an1x(app: &mut ImpulseApp, ui: &mut Ui) {
                         .monospace()
                         .size(9.5),
                 );
-                {
-                    let mut v = app.state.read().an1x.osc1_level;
-                    let (ch, _) =
-                        widgets::param_control(ui, "O1 LVL", &mut v, ParamMode::Free, ctrl);
-                    if ch {
-                        app.state.write().an1x.osc1_level = v;
-                        app.push_audio_params();
+                ui.horizontal(|ui| {
+                    {
+                        let mut v = app.state.read().an1x.osc1_level;
+                        if widgets::param_control(ui, "O1", &mut v, ParamMode::Free, ctrl).0 {
+                            app.state.write().an1x.osc1_level = v;
+                            app.push_audio_params();
+                        }
                     }
-                }
-                {
-                    let mut v = app.state.read().an1x.osc2_level;
-                    let (ch, _) =
-                        widgets::param_control(ui, "O2 LVL", &mut v, ParamMode::Free, ctrl);
-                    if ch {
-                        app.state.write().an1x.osc2_level = v;
-                        app.push_audio_params();
+                    {
+                        let mut v = app.state.read().an1x.osc2_level;
+                        if widgets::param_control(ui, "O2", &mut v, ParamMode::Free, ctrl).0 {
+                            app.state.write().an1x.osc2_level = v;
+                            app.push_audio_params();
+                        }
                     }
-                }
-                {
-                    let mut v = app.state.read().an1x.sub_level;
-                    let (ch, _) = widgets::param_control(ui, "SUB", &mut v, ParamMode::Free, ctrl);
-                    if ch {
-                        app.state.write().an1x.sub_level = v;
-                        app.push_audio_params();
+                    {
+                        let mut v = app.state.read().an1x.sub_level;
+                        if widgets::param_control(ui, "SUB", &mut v, ParamMode::Free, ctrl).0 {
+                            app.state.write().an1x.sub_level = v;
+                            app.push_audio_params();
+                        }
                     }
-                }
+                });
             });
-            // TUNE group: O2 DET, O2 OCT stepper, RING×, SYNC
+            // TUNE group: O2 DET + OCT + RING× + SYNC (compact)
             widgets::glass_group_fill(ui, gw, gw, |ui| {
                 ui.label(
                     egui::RichText::new("TUNE")
@@ -168,33 +165,32 @@ pub fn draw_an1x(app: &mut ImpulseApp, ui: &mut Ui) {
                         .monospace()
                         .size(9.5),
                 );
-                {
-                    let mut v = app.state.read().an1x.osc2_detune;
-                    let (ch, _) =
-                        widgets::param_control(ui, "O2 DET", &mut v, ParamMode::Free, ctrl);
-                    if ch {
-                        app.state.write().an1x.osc2_detune = v;
+                ui.horizontal(|ui| {
+                    {
+                        let mut v = app.state.read().an1x.osc2_detune;
+                        if widgets::param_control(ui, "DET", &mut v, ParamMode::Free, ctrl).0 {
+                            app.state.write().an1x.osc2_detune = v;
+                            app.push_audio_params();
+                        }
+                    }
+                    let oct = app.state.read().an1x.osc2_octave;
+                    ui.label(
+                        egui::RichText::new("OCT")
+                            .color(theme::SMOKE)
+                            .size(8.0)
+                            .monospace(),
+                    );
+                    if ui.small_button("-").clicked() && oct > -2 {
+                        app.state.write().an1x.osc2_octave = oct - 1;
                         app.push_audio_params();
                     }
-                }
-                {
-                    let oct = app.state.read().an1x.osc2_octave;
-                    ui.vertical(|ui| {
-                        ui.label(egui::RichText::new("O2 OCT").color(theme::SMOKE).small());
-                        ui.horizontal(|ui| {
-                            if ui.small_button("-").clicked() && oct > -2 {
-                                app.state.write().an1x.osc2_octave = oct - 1;
-                                app.push_audio_params();
-                            }
-                            ui.label(egui::RichText::new(format!("{:+}", oct)).color(theme::CHALK));
-                            if ui.small_button("+").clicked() && oct < 2 {
-                                app.state.write().an1x.osc2_octave = oct + 1;
-                                app.push_audio_params();
-                            }
-                        });
-                    });
-                }
-                {
+                    ui.label(egui::RichText::new(format!("{:+}", oct)).color(theme::CHALK));
+                    if ui.small_button("+").clicked() && oct < 2 {
+                        app.state.write().an1x.osc2_octave = oct + 1;
+                        app.push_audio_params();
+                    }
+                });
+                ui.horizontal(|ui| {
                     let ring = app.state.read().an1x.ring_mod;
                     if ui
                         .add(
@@ -209,14 +205,11 @@ pub fn draw_an1x(app: &mut ImpulseApp, ui: &mut Ui) {
                                 theme::PIT
                             }),
                         )
-                        .on_hover_text("Ring modulation: OSC1 × OSC2")
                         .clicked()
                     {
                         app.state.write().an1x.ring_mod = !ring;
                         app.push_audio_params();
                     }
-                }
-                {
                     let sync = app.state.read().an1x.hard_sync;
                     if ui
                         .add(
@@ -231,13 +224,12 @@ pub fn draw_an1x(app: &mut ImpulseApp, ui: &mut Ui) {
                                 theme::PIT
                             }),
                         )
-                        .on_hover_text("Hard sync: OSC2 phase resets on each OSC1 cycle")
                         .clicked()
                     {
                         app.state.write().an1x.hard_sync = !sync;
                         app.push_audio_params();
                     }
-                }
+                });
             });
         });
     }
@@ -309,20 +301,22 @@ pub fn draw_an1x(app: &mut ImpulseApp, ui: &mut Ui) {
                         .size(9.5),
                 );
                 macro_rules! k {
-                    ($lbl:expr, $fld:ident) => {{
+                    ($ui:expr, $lbl:expr, $fld:ident) => {{
                         let mut v = app.state.read().an1x.$fld;
-                        let (ch, _) =
-                            widgets::param_control(ui, $lbl, &mut v, ParamMode::Free, ctrl);
-                        if ch {
+                        if widgets::param_control($ui, $lbl, &mut v, ParamMode::Free, ctrl).0 {
                             app.state.write().an1x.$fld = v;
                             app.push_audio_params();
                         }
                     }};
                 }
-                k!("CUTOFF", filter_cutoff);
-                k!("RESO", filter_resonance);
-                k!("ENV", filter_env_amount);
-                k!("KEY", filter_key_track);
+                ui.horizontal(|ui| {
+                    k!(ui, "CUT", filter_cutoff);
+                    k!(ui, "RES", filter_resonance);
+                });
+                ui.horizontal(|ui| {
+                    k!(ui, "ENV", filter_env_amount);
+                    k!(ui, "KEY", filter_key_track);
+                });
             });
             widgets::glass_group_fill(ui, gw, gw, |ui| {
                 ui.label(
@@ -332,20 +326,22 @@ pub fn draw_an1x(app: &mut ImpulseApp, ui: &mut Ui) {
                         .size(9.5),
                 );
                 macro_rules! k {
-                    ($lbl:expr, $fld:ident) => {{
+                    ($ui:expr, $lbl:expr, $fld:ident) => {{
                         let mut v = app.state.read().an1x.$fld;
-                        let (ch, _) =
-                            widgets::param_control(ui, $lbl, &mut v, ParamMode::Free, ctrl);
-                        if ch {
+                        if widgets::param_control($ui, $lbl, &mut v, ParamMode::Free, ctrl).0 {
                             app.state.write().an1x.$fld = v;
                             app.push_audio_params();
                         }
                     }};
                 }
-                k!("ATCK", filter_attack);
-                k!("DCAY", filter_decay);
-                k!("SUST", filter_sustain);
-                k!("REL", filter_release);
+                ui.horizontal(|ui| {
+                    k!(ui, "ATK", filter_attack);
+                    k!(ui, "DEC", filter_decay);
+                });
+                ui.horizontal(|ui| {
+                    k!(ui, "SUS", filter_sustain);
+                    k!(ui, "REL", filter_release);
+                });
             });
         });
     }
@@ -386,21 +382,23 @@ pub fn draw_an1x(app: &mut ImpulseApp, ui: &mut Ui) {
                         .size(9.5),
                 );
                 macro_rules! k {
-                    ($lbl:expr, $fld:ident) => {{
+                    ($ui:expr, $lbl:expr, $fld:ident) => {{
                         let mut v = app.state.read().an1x.$fld;
-                        let (ch, _) =
-                            widgets::param_control(ui, $lbl, &mut v, ParamMode::Free, ctrl);
-                        if ch {
+                        if widgets::param_control($ui, $lbl, &mut v, ParamMode::Free, ctrl).0 {
                             app.state.write().an1x.$fld = v;
                             app.push_audio_params();
                         }
                     }};
                 }
-                k!("ATCK", amp_attack);
-                k!("DCAY", amp_decay);
-                k!("SUST", amp_sustain);
-                k!("REL", amp_release);
-                k!("VOL", volume);
+                ui.horizontal(|ui| {
+                    k!(ui, "ATK", amp_attack);
+                    k!(ui, "DEC", amp_decay);
+                    k!(ui, "VOL", volume);
+                });
+                ui.horizontal(|ui| {
+                    k!(ui, "SUS", amp_sustain);
+                    k!(ui, "REL", amp_release);
+                });
             });
             widgets::glass_group_fill(ui, gw, gw, |ui| {
                 ui.label(
@@ -410,19 +408,19 @@ pub fn draw_an1x(app: &mut ImpulseApp, ui: &mut Ui) {
                         .size(9.5),
                 );
                 macro_rules! k {
-                    ($lbl:expr, $fld:ident) => {{
+                    ($ui:expr, $lbl:expr, $fld:ident) => {{
                         let mut v = app.state.read().an1x.$fld;
-                        let (ch, _) =
-                            widgets::param_control(ui, $lbl, &mut v, ParamMode::Free, ctrl);
-                        if ch {
+                        if widgets::param_control($ui, $lbl, &mut v, ParamMode::Free, ctrl).0 {
                             app.state.write().an1x.$fld = v;
                             app.push_audio_params();
                         }
                     }};
                 }
-                k!("ATCK", pitch_env_attack);
-                k!("DCAY", pitch_env_decay);
-                k!("AMT", pitch_env_amount);
+                ui.horizontal(|ui| {
+                    k!(ui, "ATK", pitch_env_attack);
+                    k!(ui, "DEC", pitch_env_decay);
+                    k!(ui, "AMT", pitch_env_amount);
+                });
             });
         });
     }
