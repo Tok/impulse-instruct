@@ -2,7 +2,6 @@
 // Tests for rack module management, cable routing, cycle detection, and guards.
 
 use crate::state::rack::*;
-use crate::state::*;
 
 /// Empty rack with no modules or cables — avoids default rack's 50+ cables.
 fn empty_rack() -> RackState {
