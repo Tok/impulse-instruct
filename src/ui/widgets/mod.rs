@@ -83,18 +83,18 @@ impl ControlPrefs {
         cp
     }
 
-    /// Return a copy with knob size scaled by √φ (area × φ) — for primary params.
+    /// Return a copy with knob radius scaled by φ — for primary params (cutoff, resonance).
     pub fn phi_bigger(self) -> Self {
         Self {
-            knob_size: (self.knob_size * 1.272).max(20.0),
+            knob_size: (self.knob_size * 1.618).max(20.0),
             ..self
         }
     }
 
-    /// Return a copy with knob size scaled by √(1/φ) (area / φ) — for secondary params.
+    /// Return a copy with knob radius scaled by 1/φ — for secondary params (glide, FM).
     pub fn phi_smaller(self) -> Self {
         Self {
-            knob_size: (self.knob_size * 0.786).max(16.0),
+            knob_size: (self.knob_size * 0.618).max(16.0),
             ..self
         }
     }
@@ -568,12 +568,9 @@ pub fn centered_row<R>(
     ui: &mut Ui,
     add_contents: impl FnOnce(&mut Ui) -> R,
 ) -> egui::InnerResponse<R> {
-    // Use a horizontal layout that wraps in a scope with min_width=0 so it only
-    // occupies the width its children need.
-    ui.scope(|ui| {
-        ui.set_min_width(0.0);
-        ui.horizontal(add_contents).inner
-    })
+    // Center a horizontal knob row by using horizontal_wrapped which respects
+    // the parent's center alignment better than horizontal (which stretches).
+    ui.horizontal_wrapped(add_contents)
 }
 
 /// Like `glass_group` but sets an exact width (both min and max), so the panel fills
