@@ -45,6 +45,10 @@ What's already built is documented in [docs/features.md](docs/features.md).
 
 ### Intelligence
 
+- [ ] **Total smart randomization** — one-click random setup: pick a random
+  style, add appropriate instruments, set random (but musically coherent)
+  parameters, generate a pattern. Useful for quick demos, inspiration,
+  and testing. API: `POST /api/randomize`. CLI: `--randomize`.
 - [ ] **Agent conversation history** — multi-turn within a single jam cycle;
   agent sees its own previous outputs for coherent evolution
 - [ ] **Prompt templates per style** — styles can define custom prompt

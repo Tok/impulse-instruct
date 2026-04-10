@@ -181,11 +181,10 @@ PW_RECORD_PID=""
 cleanup() {
     echo ""
     echo "Cleaning up..."
-    # ffmpeg needs SIGINT to finalize, then SIGKILL if stuck
     if [ -n "$FFMPEG_PID" ]; then
         kill -INT "$FFMPEG_PID" 2>/dev/null
         sleep 1
-        kill -9 "$FFMPEG_PID" 2>/dev/null
+        kill -9 -"$FFMPEG_PID" 2>/dev/null || kill -9 "$FFMPEG_PID" 2>/dev/null
         wait "$FFMPEG_PID" 2>/dev/null
     fi
     if [ -n "$PW_RECORD_PID" ]; then
@@ -310,12 +309,15 @@ if [ "$SKIP_VIDEO" -eq 0 ]; then
     # Convert hex window ID to decimal for ffmpeg -window_id
     WINDOW_ID_DEC=$(printf '%d' "$APP_WINDOW_ID")
 
-    ffmpeg -y \
+    # setsid puts ffmpeg in its own process group — ensures kill -9 works
+    # -t 600 is a 10-minute safety net in case SIGINT fails
+    setsid ffmpeg -y \
         -f x11grab \
         -window_id "$WINDOW_ID_DEC" \
         -framerate 30 \
         -draw_mouse 0 \
         -i "${DISPLAY}" \
+        -t 600 \
         -c:v h264_nvenc -preset p4 -cq 20 \
         -pix_fmt yuv420p \
         -an \
@@ -385,10 +387,11 @@ if [ "$SKIP_VIDEO" -eq 0 ]; then
 
     sleep 1
 
-    # Stop screen recording — SIGINT to finalize, SIGKILL if stuck
+    # Stop screen recording — try graceful 'q' via proc, then SIGKILL group
     kill -INT "$FFMPEG_PID" 2>/dev/null
     sleep 2
-    kill -9 "$FFMPEG_PID" 2>/dev/null
+    # Kill entire process group (setsid gives ffmpeg its own)
+    kill -9 -"$FFMPEG_PID" 2>/dev/null || kill -9 "$FFMPEG_PID" 2>/dev/null
     wait "$FFMPEG_PID" 2>/dev/null || true
     FFMPEG_PID=""
 
