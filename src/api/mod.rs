@@ -431,6 +431,8 @@ async fn post_rack_add(
             },
         );
     }
+    // Auto-scroll to the new module so it's visible.
+    s.scroll_target = Some(req.kind.clone());
     drop(s);
     api_log(&api, format!("[API] rack: added {:?} (id={})", kind, id));
     Ok(Json(serde_json::json!({ "ok": true, "id": id })))

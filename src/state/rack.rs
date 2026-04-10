@@ -810,28 +810,33 @@ pub fn rack_kind_name_matches(kind: ModuleKind, name: &str) -> bool {
     match kind {
         ModuleKind::FxBitcrush => matches!(
             n.as_str(),
-            "bitcrush" | "bit_crush" | "bit crush" | "lofi" | "lo-fi"
+            "bitcrush" | "bit_crush" | "bit crush" | "lofi" | "lo-fi" | "fx"
         ),
-        ModuleKind::FxReverb => matches!(n.as_str(), "reverb" | "verb"),
-        ModuleKind::FxDelay => matches!(n.as_str(), "delay" | "echo"),
-        ModuleKind::FxChorus => matches!(n.as_str(), "chorus" | "ensemble"),
-        ModuleKind::FxPhaser => matches!(n.as_str(), "phaser" | "phase"),
+        ModuleKind::FxReverb => matches!(n.as_str(), "reverb" | "verb" | "fx"),
+        ModuleKind::FxDelay => matches!(n.as_str(), "delay" | "echo" | "fx"),
+        ModuleKind::FxChorus => matches!(n.as_str(), "chorus" | "ensemble" | "fx"),
+        ModuleKind::FxPhaser => matches!(n.as_str(), "phaser" | "phase" | "fx"),
         ModuleKind::FxRingMod => {
-            matches!(n.as_str(), "ringmod" | "ring_mod" | "ring mod" | "ring")
+            matches!(
+                n.as_str(),
+                "ringmod" | "ring_mod" | "ring mod" | "ring" | "fx"
+            )
         }
         ModuleKind::FxWaveshaper => {
-            matches!(n.as_str(), "waveshaper" | "wave_shaper" | "shaper")
+            matches!(n.as_str(), "waveshaper" | "wave_shaper" | "shaper" | "fx")
         }
-        ModuleKind::FxEq => matches!(n.as_str(), "eq" | "equalizer" | "equaliser"),
-        ModuleKind::FxCompressor => matches!(n.as_str(), "compressor" | "comp"),
+        ModuleKind::FxEq => matches!(n.as_str(), "eq" | "equalizer" | "equaliser" | "fx"),
+        ModuleKind::FxCompressor => matches!(n.as_str(), "compressor" | "comp" | "fx"),
         ModuleKind::FxTapeSat => matches!(
             n.as_str(),
-            "tapesat" | "tape_sat" | "tape sat" | "tape" | "saturation"
+            "tapesat" | "tape_sat" | "tape sat" | "tape" | "saturation" | "fx"
         ),
-        ModuleKind::FxDrive => matches!(n.as_str(), "drive" | "overdrive" | "distortion"),
+        ModuleKind::FxDrive => {
+            matches!(n.as_str(), "drive" | "overdrive" | "distortion" | "fx")
+        }
         ModuleKind::FxAutotune => matches!(
             n.as_str(),
-            "autotune" | "auto_tune" | "pitch_correct" | "tune"
+            "autotune" | "auto_tune" | "pitch_correct" | "tune" | "fx"
         ),
         ModuleKind::LfoModule => matches!(n.as_str(), "lfo"),
         ModuleKind::AcidBass => matches!(n.as_str(), "bass" | "acid" | "303"),
