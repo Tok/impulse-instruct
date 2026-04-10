@@ -3,14 +3,14 @@ set -euo pipefail
 # ─── demo/record-demo.sh ── main orchestrator ────────────────────────────────
 #
 # Usage:
-#   ./demo/record-demo.sh                          # build + record full demo (intro)
+#   ./demo/record-demo.sh                          # record intro (auto-detects running app)
 #   ./demo/record-demo.sh --scenario style-acid    # run a specific scenario
+#   ./demo/record-demo.sh --trim-start 5           # cut first 5s (default: 3s)
+#   ./demo/record-demo.sh --no-trim                # keep full recording
 #   ./demo/record-demo.sh --skip-build             # skip cargo build
 #   ./demo/record-demo.sh --skip-video             # run scenario without recording
 #   ./demo/record-demo.sh --skip-narration         # run without TTS narration
-#   ./demo/record-demo.sh --no-tts                 # alias for --skip-narration
-#   ./demo/record-demo.sh --no-subtitles           # skip subtitle burn-in
-#   ./demo/record-demo.sh --app-running            # don't launch app (already running)
+#   ./demo/record-demo.sh --app-running            # force skip build+launch
 #   ./demo/record-demo.sh --dry-run                # just pre-generate TTS, don't record
 #
 # Output: demo/output/impulse_demo_<timestamp>.mp4
@@ -29,6 +29,7 @@ APP_RUNNING=0
 DRY_RUN=0
 SKIP_VIDEO=0
 SCENARIO="intro"
+TRIM_START=3        # seconds to cut from the beginning of the final video
 
 for arg in "$@"; do
     case "$arg" in
@@ -39,6 +40,9 @@ for arg in "$@"; do
         --no-subtitles)    NO_SUBTITLES=1 ;;
         --app-running)     APP_RUNNING=1 ;;
         --dry-run)         DRY_RUN=1 ;;
+        --trim-start)      :  ;;  # value handled below
+        --trim-start=*)    TRIM_START="${arg#*=}" ;;
+        --no-trim)         TRIM_START=0 ;;
         --scenario)        :  ;;  # value handled below
         --scenario=*)      SCENARIO="${arg#*=}" ;;
         -h|--help)
@@ -46,8 +50,10 @@ for arg in "$@"; do
             exit 0
             ;;
         *)
-            # Check if previous arg was --scenario
-            if [ "${prev_arg:-}" = "--scenario" ]; then
+            # Check if previous arg was --scenario or --trim-start
+            if [ "${prev_arg:-}" = "--trim-start" ]; then
+                TRIM_START="$arg"
+            elif [ "${prev_arg:-}" = "--scenario" ]; then
                 SCENARIO="$arg"
             else
                 echo "Unknown flag: $arg" >&2; exit 1
@@ -64,7 +70,16 @@ if [ ! -f "$SCENARIO_FILE" ]; then
     ls "$DEMO_DIR/scenarios/"*.sh 2>/dev/null | sed 's|.*/||; s|\.sh$||' | sed 's/^/  /' >&2
     exit 1
 fi
+
+# Auto-detect running app — skip build+launch if API is reachable
+if [ "$APP_RUNNING" -eq 0 ] && curl -sf "http://127.0.0.1:8765/api/state" >/dev/null 2>&1; then
+    echo "App already running (API reachable) — skipping build+launch"
+    APP_RUNNING=1
+    SKIP_BUILD=1
+fi
+
 echo "Scenario: $SCENARIO ($SCENARIO_FILE)"
+echo "Trim start: ${TRIM_START}s"
 
 # ─── Source helpers ───────────────────────────────────────────────────────────
 
@@ -439,15 +454,20 @@ if [ "$SKIP_VIDEO" -eq 0 ]; then
     FINAL_VIDEO_SUBS="${base}_subs.mp4"
 
     echo "  Encoding videos (this may take a minute)..."
+    [ "$TRIM_START" -gt 0 ] 2>/dev/null && echo "  Trimming first ${TRIM_START}s"
 
-    # ── Video without embedded subtitles (for YouTube — upload SRT separately)
+    # ── Trim + encode args ────────────────────────────────────────────
+    local trim_args=""
+    [ "$TRIM_START" -gt 0 ] 2>/dev/null && trim_args="-ss $TRIM_START"
+
     local audio_args=""
     if [ "$AUDIO_COUNT" -gt 0 ]; then
-        audio_args="-i $APP_AUDIO -c:a aac -b:a 192k -map 0:v:0 -map 1:a:0 -shortest"
+        audio_args="$trim_args -i $APP_AUDIO -c:a aac -b:a 192k -map 0:v:0 -map 1:a:0 -shortest"
     fi
 
+    # ── Video without embedded subtitles (for YouTube — upload SRT separately)
     ffmpeg -y \
-        -i "$RAW_VIDEO" \
+        $trim_args -i "$RAW_VIDEO" \
         $audio_args \
         -c:v h264_nvenc -preset p4 -cq 22 \
         "$FINAL_VIDEO" \
@@ -456,7 +476,7 @@ if [ "$SKIP_VIDEO" -eq 0 ]; then
     # ── Video with burned-in subtitles (for Telegram, social media)
     if [ -n "$SRT_FILE" ] && [ -f "$SRT_FILE" ]; then
         ffmpeg -y \
-            -i "$RAW_VIDEO" \
+            $trim_args -i "$RAW_VIDEO" \
             $audio_args \
             -vf "subtitles=${SRT_FILE}:force_style='FontSize=22,FontName=monospace,PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,Outline=2,MarginV=40'" \
             -c:v h264_nvenc -preset p4 -cq 22 \
