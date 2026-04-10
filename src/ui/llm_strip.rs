@@ -494,6 +494,128 @@ impl ImpulseApp {
                         .color(theme::IRON),
                 );
             }
+
+            ui.separator();
+
+            // ── JAM timing (same line as model/ctx) ─────────────────
+            ui.label(
+                egui::RichText::new("JAM")
+                    .monospace()
+                    .size(8.0)
+                    .color(theme::ASH),
+            );
+            let (jam_bars, cycle_count, is_inferring, active_ramps, tps) = {
+                let s = self.state.read();
+                (
+                    s.llm.jam_bars,
+                    s.llm.jam_cycle_count,
+                    s.llm.is_inferring,
+                    s.llm.active_ramps.len(),
+                    s.llm.tokens_per_sec,
+                )
+            };
+            for (label, bars) in &[
+                ("C", 0.0f32),
+                ("1", 1.0),
+                ("2", 2.0),
+                ("4", 4.0),
+                ("8", 8.0),
+            ] {
+                let active = (jam_bars - bars).abs() < 0.01;
+                let col = if active { theme::FOG } else { theme::SMOKE };
+                if ui
+                    .add(
+                        egui::Button::new(
+                            egui::RichText::new(*label).monospace().size(7.5).color(col),
+                        )
+                        .fill(egui::Color32::TRANSPARENT)
+                        .min_size(egui::vec2(0.0, 12.0)),
+                    )
+                    .clicked()
+                {
+                    self.state.write().llm.jam_bars = *bars;
+                }
+            }
+            ui.label(
+                egui::RichText::new(format!("#{}", cycle_count))
+                    .monospace()
+                    .size(7.0)
+                    .color(theme::IRON),
+            );
+            if is_inferring {
+                ui.label(egui::RichText::new("▶").size(7.5).color(theme::FOG))
+                    .on_hover_text(format!("{:.1} tok/s", tps));
+            } else if tps > 0.0 {
+                ui.label(
+                    egui::RichText::new(format!("{:.0}t/s", tps))
+                        .monospace()
+                        .size(7.0)
+                        .color(theme::IRON),
+                );
+            }
+            if active_ramps > 0 {
+                ui.label(
+                    egui::RichText::new(format!("~{}", active_ramps))
+                        .monospace()
+                        .size(7.0)
+                        .color(theme::IRON),
+                );
+            }
+            if let Some((fire_at, _)) = self.jam_next_fire {
+                let remaining = fire_at.duration_since(std::time::Instant::now());
+                ui.label(
+                    egui::RichText::new(format!("{:.1}s", remaining.as_secs_f32()))
+                        .monospace()
+                        .size(7.0)
+                        .color(theme::ASH),
+                );
+            }
+
+            // ── Agent round-robin (right-justified on same line) ────
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                let s = self.state.read();
+                let agents = &s.llm_agents;
+                let enabled: Vec<_> = agents
+                    .iter()
+                    .filter(|a| s.rack.modules.iter().any(|m| m.id == a.id && m.enabled))
+                    .collect();
+                if !enabled.is_empty() {
+                    let time = ui.ctx().input(|i| i.time) as f32;
+                    // Right-to-left: draw in reverse so they appear left-to-right
+                    for a in enabled.iter().rev() {
+                        let scope_str = a.scope.join(",");
+                        if !scope_str.is_empty() {
+                            ui.label(
+                                egui::RichText::new(format!("[{}]", scope_str))
+                                    .color(theme::IRON)
+                                    .monospace()
+                                    .size(6.5),
+                            );
+                        }
+                        let name_col = if a.is_inferring {
+                            theme::CHALK
+                        } else {
+                            theme::IRON
+                        };
+                        ui.label(
+                            egui::RichText::new(&a.persona_name)
+                                .color(name_col)
+                                .monospace()
+                                .size(7.5),
+                        );
+                        let dot_col = if a.is_inferring {
+                            let p = (time * 4.0 * std::f32::consts::TAU).sin() * 0.3 + 0.7;
+                            egui::Color32::from_gray((220.0 * p) as u8)
+                        } else {
+                            egui::Color32::from_gray(60)
+                        };
+                        ui.label(egui::RichText::new("●").color(dot_col).size(7.5));
+                    }
+                    if agents.iter().any(|a| a.is_inferring) {
+                        ui.ctx().request_repaint();
+                    }
+                }
+            });
         });
 
         // ── Style selector + instructions ────────────────────────────
@@ -596,131 +718,7 @@ impl ImpulseApp {
             }
         });
 
-        // ── JAM timing row ───────────────────────────────────────────
-        ui.horizontal(|ui| {
-            ui.label(
-                egui::RichText::new("JAM")
-                    .monospace()
-                    .size(8.5)
-                    .color(theme::ASH),
-            );
-            let (jam_bars, cycle_count, _bpm, is_inferring, active_ramps, tps) = {
-                let s = self.state.read();
-                (
-                    s.llm.jam_bars,
-                    s.llm.jam_cycle_count,
-                    s.sequencer.bpm,
-                    s.llm.is_inferring,
-                    s.llm.active_ramps.len(),
-                    s.llm.tokens_per_sec,
-                )
-            };
-            for (label, bars) in &[
-                ("CONT", 0.0f32),
-                ("1", 1.0),
-                ("2", 2.0),
-                ("4", 4.0),
-                ("8", 8.0),
-            ] {
-                let active = (jam_bars - bars).abs() < 0.01;
-                let col = if active { theme::FOG } else { theme::SMOKE };
-                if ui
-                    .add(
-                        egui::Button::new(
-                            egui::RichText::new(*label).monospace().size(8.0).color(col),
-                        )
-                        .fill(egui::Color32::TRANSPARENT)
-                        .min_size(egui::vec2(0.0, 12.0)),
-                    )
-                    .clicked()
-                {
-                    self.state.write().llm.jam_bars = *bars;
-                }
-            }
-            ui.add_space(6.0);
-            ui.label(
-                egui::RichText::new(format!("#{}", cycle_count))
-                    .monospace()
-                    .size(8.0)
-                    .color(theme::IRON),
-            );
-            if is_inferring {
-                ui.label(egui::RichText::new("▶").size(8.0).color(theme::FOG))
-                    .on_hover_text(format!("{:.1} tok/s", tps));
-            } else if tps > 0.0 {
-                ui.label(
-                    egui::RichText::new(format!("{:.1}t/s", tps))
-                        .monospace()
-                        .size(7.5)
-                        .color(theme::IRON),
-                );
-            }
-            if active_ramps > 0 {
-                ui.label(
-                    egui::RichText::new(format!("~{}", active_ramps))
-                        .monospace()
-                        .size(7.5)
-                        .color(theme::IRON),
-                );
-            }
-            if let Some((fire_at, _)) = self.jam_next_fire {
-                let remaining = fire_at.duration_since(std::time::Instant::now());
-                ui.label(
-                    egui::RichText::new(format!("in {:.1}s", remaining.as_secs_f32()))
-                        .monospace()
-                        .size(7.5)
-                        .color(theme::ASH),
-                );
-            }
-        });
-
-        // ── Agent round-robin status ────────────────────────────────
-        {
-            let s = self.state.read();
-            let agents = &s.llm_agents;
-            let enabled: Vec<_> = agents
-                .iter()
-                .filter(|a| s.rack.modules.iter().any(|m| m.id == a.id && m.enabled))
-                .collect();
-            if !enabled.is_empty() {
-                let time = ui.ctx().input(|i| i.time) as f32;
-                for a in &enabled {
-                    ui.horizontal(|ui| {
-                        let dot_col = if a.is_inferring {
-                            let p = (time * 4.0 * std::f32::consts::TAU).sin() * 0.3 + 0.7;
-                            egui::Color32::from_gray((220.0 * p) as u8)
-                        } else {
-                            egui::Color32::from_gray(60)
-                        };
-                        ui.label(egui::RichText::new("●").color(dot_col).size(8.0));
-                        let name_col = if a.is_inferring {
-                            theme::CHALK
-                        } else {
-                            theme::IRON
-                        };
-                        ui.label(
-                            egui::RichText::new(&a.persona_name)
-                                .color(name_col)
-                                .monospace()
-                                .size(8.0),
-                        );
-                        // Show agent scope
-                        let scope_str = a.scope.join(",");
-                        if !scope_str.is_empty() {
-                            ui.label(
-                                egui::RichText::new(format!("[{}]", scope_str))
-                                    .color(theme::IRON)
-                                    .monospace()
-                                    .size(7.0),
-                            );
-                        }
-                    });
-                }
-                if agents.iter().any(|a| a.is_inferring) {
-                    ui.ctx().request_repaint();
-                }
-            }
-        }
+        // JAM + agent status now merged into line 1 (model/ctx row above)
 
         // ── Prompt input + ASK ───────────────────────────────────────
         ui.horizontal(|ui| {
