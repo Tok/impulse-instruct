@@ -278,7 +278,8 @@ pub(super) fn draw_drum_rows(
             }
         });
 
-        // ── Velocity lane ─────────────────────────────────────────────────────
+        // ── Velocity / Probability / Ratchet lanes (tight spacing) ─────────
+        ui.spacing_mut().item_spacing.y = 0.0;
         ui.horizontal(|ui| {
             let row_left = ui.cursor().min.x;
             let spacer = (steps_x - row_left).max(0.0);

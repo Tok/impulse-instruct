@@ -54,27 +54,31 @@ pub fn draw_kit_a(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                     .monospace()
                     .size(9.5),
             );
-            if widgets::param_control(ui, "PITCH", &mut kp, ParamMode::Free, ctrl).0 {
-                changed = true;
-            }
-            if widgets::param_control(ui, "DECAY", &mut kd, ParamMode::Free, ctrl).0 {
-                changed = true;
-            }
-            if widgets::param_control(ui, "PUNCH", &mut kpu, ParamMode::Free, ctrl).0 {
-                changed = true;
-            }
-            if widgets::param_control(ui, "LEVEL", &mut kv, ParamMode::Free, ctrl).0 {
-                changed = true;
-            }
-            if widgets::param_control(ui, "P.DEPTH", &mut kped, ParamMode::Free, ctrl).0 {
-                changed = true;
-            }
-            if widgets::param_control(ui, "P.TIME", &mut kpet, ParamMode::Free, ctrl).0 {
-                changed = true;
-            }
-            if widgets::param_control(ui, "CLIP", &mut kclip, ParamMode::Free, ctrl).0 {
-                changed = true;
-            }
+            ui.horizontal(|ui| {
+                if widgets::param_control(ui, "PITCH", &mut kp, ParamMode::Free, ctrl).0 {
+                    changed = true;
+                }
+                if widgets::param_control(ui, "DECAY", &mut kd, ParamMode::Free, ctrl).0 {
+                    changed = true;
+                }
+                if widgets::param_control(ui, "PUNCH", &mut kpu, ParamMode::Free, ctrl).0 {
+                    changed = true;
+                }
+                if widgets::param_control(ui, "LEVEL", &mut kv, ParamMode::Free, ctrl).0 {
+                    changed = true;
+                }
+            });
+            ui.horizontal(|ui| {
+                if widgets::param_control(ui, "P.DPT", &mut kped, ParamMode::Free, ctrl).0 {
+                    changed = true;
+                }
+                if widgets::param_control(ui, "P.TIM", &mut kpet, ParamMode::Free, ctrl).0 {
+                    changed = true;
+                }
+                if widgets::param_control(ui, "CLIP", &mut kclip, ParamMode::Free, ctrl).0 {
+                    changed = true;
+                }
+            });
         });
         widgets::glass_group_fill(ui, gw, gw, |ui| {
             ui.label(
@@ -83,18 +87,22 @@ pub fn draw_kit_a(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                     .monospace()
                     .size(9.5),
             );
-            if widgets::param_control(ui, "TONE", &mut st, ParamMode::Free, ctrl).0 {
-                changed = true;
-            }
-            if widgets::param_control(ui, "SNAPPY", &mut ssn, ParamMode::Free, ctrl).0 {
-                changed = true;
-            }
-            if widgets::param_control(ui, "DECAY", &mut sd, ParamMode::Free, ctrl).0 {
-                changed = true;
-            }
-            if widgets::param_control(ui, "LEVEL", &mut sv, ParamMode::Free, ctrl).0 {
-                changed = true;
-            }
+            ui.horizontal(|ui| {
+                if widgets::param_control(ui, "TONE", &mut st, ParamMode::Free, ctrl).0 {
+                    changed = true;
+                }
+                if widgets::param_control(ui, "SNAP", &mut ssn, ParamMode::Free, ctrl).0 {
+                    changed = true;
+                }
+            });
+            ui.horizontal(|ui| {
+                if widgets::param_control(ui, "DECAY", &mut sd, ParamMode::Free, ctrl).0 {
+                    changed = true;
+                }
+                if widgets::param_control(ui, "LEVEL", &mut sv, ParamMode::Free, ctrl).0 {
+                    changed = true;
+                }
+            });
         });
         widgets::glass_group_fill(ui, gw, gw, |ui| {
             ui.label(
@@ -103,15 +111,17 @@ pub fn draw_kit_a(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                     .monospace()
                     .size(9.5),
             );
-            if widgets::param_control(ui, "CLOSED", &mut hcd, ParamMode::Free, ctrl).0 {
-                changed = true;
-            }
-            if widgets::param_control(ui, "OPEN", &mut hod, ParamMode::Free, ctrl).0 {
-                changed = true;
-            }
-            if widgets::param_control(ui, "LEVEL", &mut hv, ParamMode::Free, ctrl).0 {
-                changed = true;
-            }
+            ui.horizontal(|ui| {
+                if widgets::param_control(ui, "CLSD", &mut hcd, ParamMode::Free, ctrl).0 {
+                    changed = true;
+                }
+                if widgets::param_control(ui, "OPEN", &mut hod, ParamMode::Free, ctrl).0 {
+                    changed = true;
+                }
+                if widgets::param_control(ui, "LVL", &mut hv, ParamMode::Free, ctrl).0 {
+                    changed = true;
+                }
+            });
         });
     });
 
@@ -233,27 +243,31 @@ pub fn draw_kit_b(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                     .monospace()
                     .size(9.5),
             );
-            if widgets::param_control(ui, "PITCH", &mut kp, ParamMode::Free, ctrl).0 {
-                changed = true;
-            }
-            if widgets::param_control(ui, "DECAY", &mut kd, ParamMode::Free, ctrl).0 {
-                changed = true;
-            }
-            if widgets::param_control(ui, "PUNCH", &mut kpu, ParamMode::Free, ctrl).0 {
-                changed = true;
-            }
-            if widgets::param_control(ui, "LEVEL", &mut kv, ParamMode::Free, ctrl).0 {
-                changed = true;
-            }
-            if widgets::param_control(ui, "P.DEPTH", &mut kped, ParamMode::Free, ctrl).0 {
-                changed = true;
-            }
-            if widgets::param_control(ui, "P.TIME", &mut kpet, ParamMode::Free, ctrl).0 {
-                changed = true;
-            }
-            if widgets::param_control(ui, "CLIP", &mut kclip, ParamMode::Free, ctrl).0 {
-                changed = true;
-            }
+            ui.horizontal(|ui| {
+                if widgets::param_control(ui, "PITCH", &mut kp, ParamMode::Free, ctrl).0 {
+                    changed = true;
+                }
+                if widgets::param_control(ui, "DECAY", &mut kd, ParamMode::Free, ctrl).0 {
+                    changed = true;
+                }
+                if widgets::param_control(ui, "PUNCH", &mut kpu, ParamMode::Free, ctrl).0 {
+                    changed = true;
+                }
+                if widgets::param_control(ui, "LEVEL", &mut kv, ParamMode::Free, ctrl).0 {
+                    changed = true;
+                }
+            });
+            ui.horizontal(|ui| {
+                if widgets::param_control(ui, "P.DPT", &mut kped, ParamMode::Free, ctrl).0 {
+                    changed = true;
+                }
+                if widgets::param_control(ui, "P.TIM", &mut kpet, ParamMode::Free, ctrl).0 {
+                    changed = true;
+                }
+                if widgets::param_control(ui, "CLIP", &mut kclip, ParamMode::Free, ctrl).0 {
+                    changed = true;
+                }
+            });
         });
         widgets::glass_group_fill(ui, gw, gw, |ui| {
             ui.label(
@@ -262,18 +276,22 @@ pub fn draw_kit_b(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                     .monospace()
                     .size(9.5),
             );
-            if widgets::param_control(ui, "TONE", &mut st, ParamMode::Free, ctrl).0 {
-                changed = true;
-            }
-            if widgets::param_control(ui, "SNAPPY", &mut ssn, ParamMode::Free, ctrl).0 {
-                changed = true;
-            }
-            if widgets::param_control(ui, "DECAY", &mut sd, ParamMode::Free, ctrl).0 {
-                changed = true;
-            }
-            if widgets::param_control(ui, "LEVEL", &mut sv, ParamMode::Free, ctrl).0 {
-                changed = true;
-            }
+            ui.horizontal(|ui| {
+                if widgets::param_control(ui, "TONE", &mut st, ParamMode::Free, ctrl).0 {
+                    changed = true;
+                }
+                if widgets::param_control(ui, "SNAP", &mut ssn, ParamMode::Free, ctrl).0 {
+                    changed = true;
+                }
+            });
+            ui.horizontal(|ui| {
+                if widgets::param_control(ui, "DECAY", &mut sd, ParamMode::Free, ctrl).0 {
+                    changed = true;
+                }
+                if widgets::param_control(ui, "LEVEL", &mut sv, ParamMode::Free, ctrl).0 {
+                    changed = true;
+                }
+            });
         });
         widgets::glass_group_fill(ui, gw, gw, |ui| {
             ui.label(
@@ -282,12 +300,14 @@ pub fn draw_kit_b(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                     .monospace()
                     .size(9.5),
             );
-            if widgets::param_control(ui, "CLAP DEC", &mut cd, ParamMode::Free, ctrl).0 {
-                changed = true;
-            }
-            if widgets::param_control(ui, "CLAP LVL", &mut cv, ParamMode::Free, ctrl).0 {
-                changed = true;
-            }
+            ui.horizontal(|ui| {
+                if widgets::param_control(ui, "C.DEC", &mut cd, ParamMode::Free, ctrl).0 {
+                    changed = true;
+                }
+                if widgets::param_control(ui, "C.LVL", &mut cv, ParamMode::Free, ctrl).0 {
+                    changed = true;
+                }
+            });
         });
     });
 
@@ -357,31 +377,18 @@ pub fn draw_amen(app: &mut ImpulseApp, ui: &mut egui::Ui) {
     };
     let mut changed = false;
 
-    widgets::glass_group(ui, ctrl.group_max_width(), |ui| {
-        ui.horizontal_wrapped(|ui| {
-            if widgets::param_control(ui, "VOLUME", &mut vol, ParamMode::Free, ctrl).0 {
-                changed = true;
-            }
-            let mut pitch_norm = (pitch + 24.0) / 48.0; // -24..+24 → 0..1
-            if widgets::param_control(ui, "PITCH", &mut pitch_norm, ParamMode::Free, ctrl).0 {
-                pitch = pitch_norm * 48.0 - 24.0;
-                changed = true;
-            }
-        });
-        ui.horizontal(|ui| {
-            ui.label(
-                egui::RichText::new("Loop")
-                    .monospace()
-                    .size(9.5)
-                    .color(theme::FOG),
-            );
-            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                if widgets::toggle_button(ui, if loop_mode { "ON" } else { "OFF" }, &mut loop_mode)
-                {
-                    changed = true;
-                }
-            });
-        });
+    ui.horizontal(|ui| {
+        if widgets::param_control(ui, "VOLUME", &mut vol, ParamMode::Free, ctrl).0 {
+            changed = true;
+        }
+        let mut pitch_norm = (pitch + 24.0) / 48.0; // -24..+24 → 0..1
+        if widgets::param_control(ui, "PITCH", &mut pitch_norm, ParamMode::Free, ctrl).0 {
+            pitch = pitch_norm * 48.0 - 24.0;
+            changed = true;
+        }
+        if widgets::toggle_button(ui, if loop_mode { "LOOP" } else { "1×" }, &mut loop_mode) {
+            changed = true;
+        }
     });
 
     if changed {

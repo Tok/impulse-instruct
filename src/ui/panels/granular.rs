@@ -56,16 +56,12 @@ pub fn draw_granular(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         if widgets::param_control(ui, "SIZE", &mut grain_size, pm("granular.grain_size"), ctrl).0 {
             changed = true;
         }
-    });
-    ui.horizontal(|ui| {
         if widgets::param_control(ui, "POS", &mut position, pm("granular.position"), ctrl).0 {
             changed = true;
         }
         if widgets::param_control(ui, "JIT", &mut jitter, pm("granular.position_jitter"), ctrl).0 {
             changed = true;
         }
-    });
-    ui.horizontal(|ui| {
         if widgets::param_control(ui, "PITCH", &mut pitch, pm("granular.pitch_scatter"), ctrl).0 {
             changed = true;
         }

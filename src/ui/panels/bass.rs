@@ -542,105 +542,108 @@ pub fn draw_bass(app: &mut ImpulseApp, ui: &mut egui::Ui) {
     let xy2_locked = param_mode("bass.env_mod", &locked, &focused) == ParamMode::UserOwned
         || param_mode("bass.decay", &locked, &focused) == ParamMode::UserOwned;
 
-    ui.horizontal(|ui| {
-        // Pad 1 — cycles: CUT×RES | ACCENT×VOL | DIST×SUB
-        let p1 = widgets::xy_pad_pair(ui.ctx(), "bass_xy1");
-        let (lx1, ly1, mut vx1, mut vy1) = match p1 {
-            1 => ("ACCENT", "VOL", accent, vol),
-            2 => ("DIST", "SUB", dist, sub_osc_level),
-            _ => ("CUT", "RES", cutoff, resonance),
-        };
-        let xy1_locked_cur = match p1 {
-            1 => {
-                param_mode("bass.accent_level", &locked, &focused) == ParamMode::UserOwned
-                    || param_mode("bass.volume", &locked, &focused) == ParamMode::UserOwned
-            }
-            2 => {
-                param_mode("bass.distortion", &locked, &focused) == ParamMode::UserOwned
-                    || param_mode("bass.sub_osc_level", &locked, &focused) == ParamMode::UserOwned
-            }
-            _ => xy1_locked,
-        };
-        if let (true, _) = widgets::xy_pad(
-            ui,
-            "bass_xy1",
-            lx1,
-            ly1,
-            &mut vx1,
-            &mut vy1,
-            xy_size,
-            xy1_locked_cur,
-            3,
-        ) {
-            let mut snap = app.state.read().clone();
-            let av = snap
-                .active_voice
-                .min(snap.bass_voices.len().saturating_sub(1));
-            match p1 {
+    ui.vertical_centered(|ui| {
+        ui.horizontal(|ui| {
+            // Pad 1 — cycles: CUT×RES | ACCENT×VOL | DIST×SUB
+            let p1 = widgets::xy_pad_pair(ui.ctx(), "bass_xy1");
+            let (lx1, ly1, mut vx1, mut vy1) = match p1 {
+                1 => ("ACCENT", "VOL", accent, vol),
+                2 => ("DIST", "SUB", dist, sub_osc_level),
+                _ => ("CUT", "RES", cutoff, resonance),
+            };
+            let xy1_locked_cur = match p1 {
                 1 => {
-                    snap.bass_voices[av].synth.accent_level = vx1;
-                    snap.bass_voices[av].synth.volume = vy1;
+                    param_mode("bass.accent_level", &locked, &focused) == ParamMode::UserOwned
+                        || param_mode("bass.volume", &locked, &focused) == ParamMode::UserOwned
                 }
                 2 => {
-                    snap.bass_voices[av].synth.distortion = vx1;
-                    snap.bass_voices[av].synth.sub_osc_level = vy1;
+                    param_mode("bass.distortion", &locked, &focused) == ParamMode::UserOwned
+                        || param_mode("bass.sub_osc_level", &locked, &focused)
+                            == ParamMode::UserOwned
                 }
-                _ => {
-                    snap.bass_voices[av].synth.cutoff = vx1;
-                    snap.bass_voices[av].synth.resonance = vy1;
+                _ => xy1_locked,
+            };
+            if let (true, _) = widgets::xy_pad(
+                ui,
+                "bass_xy1",
+                lx1,
+                ly1,
+                &mut vx1,
+                &mut vy1,
+                xy_size,
+                xy1_locked_cur,
+                3,
+            ) {
+                let mut snap = app.state.read().clone();
+                let av = snap
+                    .active_voice
+                    .min(snap.bass_voices.len().saturating_sub(1));
+                match p1 {
+                    1 => {
+                        snap.bass_voices[av].synth.accent_level = vx1;
+                        snap.bass_voices[av].synth.volume = vy1;
+                    }
+                    2 => {
+                        snap.bass_voices[av].synth.distortion = vx1;
+                        snap.bass_voices[av].synth.sub_osc_level = vy1;
+                    }
+                    _ => {
+                        snap.bass_voices[av].synth.cutoff = vx1;
+                        snap.bass_voices[av].synth.resonance = vy1;
+                    }
                 }
+                *app.state.write() = snap;
+                app.push_audio_params();
             }
-            *app.state.write() = snap;
-            app.push_audio_params();
-        }
 
-        ui.add_space(6.0);
+            ui.add_space(6.0);
 
-        // Pad 2 — cycles: ENV×DEC | FM.D×FM.R | NOISE×GLIDE
-        let p2 = widgets::xy_pad_pair(ui.ctx(), "bass_xy2");
-        let (lx2, ly2, mut vx2, mut vy2) = match p2 {
-            1 => ("FM.D", "FM.R", fm_depth, fm_ratio),
-            2 => ("NOISE", "GLIDE", noise_mix, portamento_time),
-            _ => ("ENV", "DEC", env_mod, decay),
-        };
-        let xy2_locked_cur = match p2 {
-            1 => false,
-            2 => false,
-            _ => xy2_locked,
-        };
-        if let (true, _) = widgets::xy_pad(
-            ui,
-            "bass_xy2",
-            lx2,
-            ly2,
-            &mut vx2,
-            &mut vy2,
-            xy_size,
-            xy2_locked_cur,
-            3,
-        ) {
-            let mut snap = app.state.read().clone();
-            let av = snap
-                .active_voice
-                .min(snap.bass_voices.len().saturating_sub(1));
-            match p2 {
-                1 => {
-                    snap.bass_voices[av].synth.fm_depth = vx2;
-                    snap.bass_voices[av].synth.fm_ratio = vy2;
+            // Pad 2 — cycles: ENV×DEC | FM.D×FM.R | NOISE×GLIDE
+            let p2 = widgets::xy_pad_pair(ui.ctx(), "bass_xy2");
+            let (lx2, ly2, mut vx2, mut vy2) = match p2 {
+                1 => ("FM.D", "FM.R", fm_depth, fm_ratio),
+                2 => ("NOISE", "GLIDE", noise_mix, portamento_time),
+                _ => ("ENV", "DEC", env_mod, decay),
+            };
+            let xy2_locked_cur = match p2 {
+                1 => false,
+                2 => false,
+                _ => xy2_locked,
+            };
+            if let (true, _) = widgets::xy_pad(
+                ui,
+                "bass_xy2",
+                lx2,
+                ly2,
+                &mut vx2,
+                &mut vy2,
+                xy_size,
+                xy2_locked_cur,
+                3,
+            ) {
+                let mut snap = app.state.read().clone();
+                let av = snap
+                    .active_voice
+                    .min(snap.bass_voices.len().saturating_sub(1));
+                match p2 {
+                    1 => {
+                        snap.bass_voices[av].synth.fm_depth = vx2;
+                        snap.bass_voices[av].synth.fm_ratio = vy2;
+                    }
+                    2 => {
+                        snap.bass_voices[av].synth.noise_mix = vx2;
+                        snap.bass_voices[av].synth.portamento_time = vy2;
+                    }
+                    _ => {
+                        snap.bass_voices[av].synth.env_mod = vx2;
+                        snap.bass_voices[av].synth.decay = vy2;
+                    }
                 }
-                2 => {
-                    snap.bass_voices[av].synth.noise_mix = vx2;
-                    snap.bass_voices[av].synth.portamento_time = vy2;
-                }
-                _ => {
-                    snap.bass_voices[av].synth.env_mod = vx2;
-                    snap.bass_voices[av].synth.decay = vy2;
-                }
+                *app.state.write() = snap;
+                app.push_audio_params();
             }
-            *app.state.write() = snap;
-            app.push_audio_params();
-        }
-    });
+        });
+    }); // close horizontal + vertical_centered for XY pads
 
     ui.add_space(2.0);
 
@@ -648,39 +651,41 @@ pub fn draw_bass(app: &mut ImpulseApp, ui: &mut egui::Ui) {
     // Width spans both pads (2×xy_size + spacing); height scales with pad size.
     let env_w = (xy_size * 2.0 + 14.0).max(200.0);
     let env_h = app.state.read().ui_prefs.effective_env_h();
-    ui.horizontal(|ui| {
-        ui.label(
-            egui::RichText::new("ENV")
-                .color(theme::SMOKE)
-                .monospace()
-                .size(9.0),
-        );
-        if widgets::decay_display(ui, &mut decay, env_mod, env_w, env_h) {
-            let mut snap = app.state.read().clone();
-            let av = snap
-                .active_voice
-                .min(snap.bass_voices.len().saturating_sub(1));
-            snap.bass_voices[av].synth.decay = decay;
-            *app.state.write() = snap;
-            app.push_audio_params();
-        }
-    });
-
-    // Filter response curve — shows the ladder filter shape reacting to CUT/RES knobs.
-    ui.horizontal(|ui| {
-        ui.label(
-            egui::RichText::new("FLT")
-                .color(theme::SMOKE)
-                .monospace()
-                .size(9.0),
-        );
-        let fm = match filter_mode {
-            FilterMode::Highpass => 1u8,
-            FilterMode::Bandpass => 2,
-            _ => 0,
-        };
-        widgets::filter_response(ui, cutoff, resonance, fm, env_w, env_h);
-    });
+    ui.vertical_centered(|ui| {
+        ui.horizontal(|ui| {
+            ui.label(
+                egui::RichText::new("ENV")
+                    .color(theme::SMOKE)
+                    .monospace()
+                    .size(9.0),
+            );
+            if widgets::decay_display(ui, &mut decay, env_mod, env_w, env_h) {
+                let mut snap = app.state.read().clone();
+                let av = snap
+                    .active_voice
+                    .min(snap.bass_voices.len().saturating_sub(1));
+                snap.bass_voices[av].synth.decay = decay;
+                *app.state.write() = snap;
+                app.push_audio_params();
+            }
+        });
+        ui.add_space(4.0);
+        // Filter response curve
+        ui.horizontal(|ui| {
+            ui.label(
+                egui::RichText::new("FLT")
+                    .color(theme::SMOKE)
+                    .monospace()
+                    .size(9.0),
+            );
+            let fm = match filter_mode {
+                FilterMode::Highpass => 1u8,
+                FilterMode::Bandpass => 2,
+                _ => 0,
+            };
+            widgets::filter_response(ui, cutoff, resonance, fm, env_w, env_h);
+        });
+    }); // end vertical_centered
 
     ui.add_space(2.0);
 
