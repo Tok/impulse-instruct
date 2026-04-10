@@ -4,13 +4,26 @@
 
 use crate::ui::theme;
 
-/// Draw oscilloscope with explicit width and height.
+/// Draw oscilloscope with explicit width and height (convenience wrapper).
+#[allow(dead_code)]
 pub fn draw_scope_sized(
     ui: &mut egui::Ui,
     buf: &[f32],
     history: &std::collections::VecDeque<Vec<f32>>,
     w: f32,
     h: f32,
+) {
+    draw_scope_colored(ui, buf, history, w, h, None);
+}
+
+/// Draw oscilloscope with optional Huth color override for the waveform.
+pub fn draw_scope_colored(
+    ui: &mut egui::Ui,
+    buf: &[f32],
+    history: &std::collections::VecDeque<Vec<f32>>,
+    w: f32,
+    h: f32,
+    huth_color: Option<egui::Color32>,
 ) {
     let (rect, _) = ui.allocate_exact_size(egui::vec2(w, h), egui::Sense::hover());
     if !ui.is_rect_visible(rect) {
@@ -55,13 +68,43 @@ pub fn draw_scope_sized(
     if n < 2 {
         return;
     }
+    let wave_col = huth_color.unwrap_or(theme::CHALK);
     let mut prev = egui::Pos2::new(rect.min.x, mid - buf[0].clamp(-1.0, 1.0) * amp);
     for (i, &s) in buf.iter().enumerate().skip(1) {
         let x = rect.min.x + (i as f32 / (n - 1) as f32) * w;
         let cur = egui::Pos2::new(x, mid - s.clamp(-1.0, 1.0) * amp);
-        painter.line_segment([prev, cur], egui::Stroke::new(1.0, theme::CHALK));
+        painter.line_segment([prev, cur], egui::Stroke::new(1.5, wave_col));
         prev = cur;
     }
+}
+
+/// Detect dominant frequency from a waveform buffer via zero-crossing rate.
+/// Returns the estimated MIDI note number, or None if signal is too quiet.
+pub fn detect_note(buf: &[f32], sample_rate: f32) -> Option<u8> {
+    if buf.len() < 64 {
+        return None;
+    }
+    // RMS check — skip if signal is too quiet
+    let rms = (buf.iter().map(|s| s * s).sum::<f32>() / buf.len() as f32).sqrt();
+    if rms < 0.01 {
+        return None;
+    }
+    // Zero-crossing count
+    let mut crossings = 0u32;
+    for w in buf.windows(2) {
+        if (w[0] >= 0.0) != (w[1] >= 0.0) {
+            crossings += 1;
+        }
+    }
+    // Each full cycle has 2 crossings
+    let duration_s = buf.len() as f32 / sample_rate;
+    let freq = crossings as f32 / (2.0 * duration_s);
+    if !(20.0..=8000.0).contains(&freq) {
+        return None;
+    }
+    // Frequency to MIDI note: note = 12 * log2(freq / 440) + 69
+    let midi = (12.0 * (freq / 440.0).log2() + 69.0).round() as i32;
+    Some(midi.clamp(0, 127) as u8)
 }
 
 /// Draw a right-aligned DSP load sparkline + percentage label.

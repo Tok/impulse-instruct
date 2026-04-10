@@ -167,6 +167,9 @@ pub struct UiPrefs {
     /// Oscilloscope phosphor glow intensity (0.0–1.0, default 0.6).
     #[serde(default = "default_phosphor_intensity")]
     pub phosphor_intensity: f32,
+    /// When true, oscilloscope waveform is Huth-colored based on detected frequency.
+    #[serde(default)]
+    pub huth_oscilloscope: bool,
 }
 
 fn default_phosphor_frames() -> usize {
@@ -229,6 +232,7 @@ impl Default for UiPrefs {
             crt_effect: false,
             phosphor_frames: default_phosphor_frames(),
             phosphor_intensity: default_phosphor_intensity(),
+            huth_oscilloscope: false,
         }
     }
 }

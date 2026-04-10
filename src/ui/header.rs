@@ -61,13 +61,20 @@ impl ImpulseApp {
                 let stream_w = content_w - osc_w - 4.0;
                 let h = scope_h - 4.0;
                 ui.horizontal_top(|ui| {
-                    // Linear oscilloscope (left)
-                    super::scope_footer::draw_scope_sized(
+                    // Linear oscilloscope (left) — with optional Huth coloring
+                    let huth_col = if self.state.read().ui_prefs.huth_oscilloscope {
+                        super::scope_footer::detect_note(&self.scope_buf, 44100.0)
+                            .map(theme::note_color)
+                    } else {
+                        None
+                    };
+                    super::scope_footer::draw_scope_colored(
                         ui,
                         &self.scope_buf,
                         &self.scope_history,
                         osc_w,
                         h,
+                        huth_col,
                     );
                     // Event stream (center)
                     {
