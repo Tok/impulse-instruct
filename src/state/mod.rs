@@ -482,30 +482,8 @@ impl Default for SequencerState {
             drum_patterns.insert(*v, vec![Step::default(); MAX_STEPS]);
         }
 
-        // Starter beat: 4-on-the-floor kick + offbeat closed hi-hats.
-        let kick_steps = [1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0usize];
-        let hat_steps = [0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0usize];
-        if let Some(p) = drum_patterns.get_mut(&DrumVoice::Kick808) {
-            for (i, &on) in kick_steps.iter().enumerate() {
-                p[i].active = on == 1;
-                p[i].velocity = 1.0;
-            }
-        }
-        if let Some(p) = drum_patterns.get_mut(&DrumVoice::HihatClosed808) {
-            for (i, &on) in hat_steps.iter().enumerate() {
-                p[i].active = on == 1;
-                p[i].velocity = 0.7;
-            }
-        }
-
-        // Starter bass: A minor chord tones spread across the bar.
-        // A2 (45) on beat 1 · C3 (48) between beats 2–3 · E3 (52) on beat 4.
-        let mut bass_pattern = vec![TB303Step::default(); MAX_STEPS];
-        let bass_notes: &[(usize, u8)] = &[(0, 45), (6, 48), (12, 52)];
-        for &(step, note) in bass_notes {
-            bass_pattern[step].active = true;
-            bass_pattern[step].note = note;
-        }
+        // All patterns start blank — the AI builds everything from scratch.
+        let bass_pattern = vec![TB303Step::default(); MAX_STEPS];
 
         // Default: all drum voices use the global `steps` length.
         let mut drum_steps = std::collections::HashMap::new();
@@ -524,7 +502,7 @@ impl Default for SequencerState {
             bass_pattern: bass_pattern.clone(),
             hoover_pattern: vec![TB303Step::default(); MAX_STEPS],
             an1x_pattern: vec![TB303Step::default(); MAX_STEPS],
-            root_note: 9, // A — the starter pattern is A minor
+            root_note: 9, // A
             scale: Scale::NaturalMinor,
             scale_snap: false,
             drum_steps,
@@ -535,7 +513,6 @@ impl Default for SequencerState {
             soloed_drums: std::collections::HashSet::new(),
             midi_clock_sync: false,
             bass_patterns: {
-                // Voice 0 = same starter pattern; voices 1-3 = silent
                 let mut pats = vec![bass_pattern];
                 for _ in 1..MAX_BASS_VOICES {
                     pats.push(vec![TB303Step::default(); MAX_STEPS]);

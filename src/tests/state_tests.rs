@@ -95,8 +95,11 @@ mod expand_steps_tests {
 
     #[test]
     fn expand_16_to_64_tiles_four_copies() {
-        let state = AppState::default();
-        // Default has kick on steps 0, 4, 8, 12
+        // Set up a kick on steps 0, 4, 8, 12 (default is blank)
+        let mut state = AppState::default();
+        for step in [0, 4, 8, 12] {
+            state = toggle_drum_step(state, DrumVoice::Kick808, step);
+        }
         let state = expand_sequencer_steps(state, 64);
         assert_eq!(state.sequencer.steps, 64);
         let kick = &state.sequencer.drum_patterns[&DrumVoice::Kick808];
