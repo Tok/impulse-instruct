@@ -33,19 +33,27 @@ pub(super) fn draw_fx_content(app: &mut ImpulseApp, ui: &mut egui::Ui, kind: Mod
     let pm = |path: &str| crate::state::param_mode(path, &locked, &focused);
     let mut changed = false;
 
+    // Helper: horizontal row of knobs
+    macro_rules! hk {
+        ($ui:expr, $( ($label:expr, $val:expr, $pm:expr) ),+ $(,)?) => {
+            $ui.horizontal(|ui| {
+                $( if widgets::param_control(ui, $label, $val, $pm, ctrl).0 { changed = true; } )+
+            });
+        }
+    }
+
     match kind {
         ModuleKind::FxReverb => {
             let (mut rs, mut rd, mut rm) = {
                 let s = app.state.read();
                 (s.fx.reverb_size, s.fx.reverb_damp, s.fx.reverb_mix)
             };
-            widgets::param_control(ui, "SIZE", &mut rs, pm("fx.reverb_size"), ctrl);
-            if widgets::param_control(ui, "DAMP", &mut rd, pm("fx.reverb_damp"), ctrl).0 {
-                changed = true;
-            }
-            if widgets::param_control(ui, "MIX", &mut rm, pm("fx.reverb_mix"), ctrl).0 {
-                changed = true;
-            }
+            hk!(
+                ui,
+                ("SIZE", &mut rs, pm("fx.reverb_size")),
+                ("DAMP", &mut rd, pm("fx.reverb_damp")),
+                ("MIX", &mut rm, pm("fx.reverb_mix"))
+            );
             if changed || rs != app.state.read().fx.reverb_size {
                 let mut s = app.state.write();
                 s.fx.reverb_size = rs;
@@ -58,11 +66,12 @@ pub(super) fn draw_fx_content(app: &mut ImpulseApp, ui: &mut egui::Ui, kind: Mod
                 let s = app.state.read();
                 (s.fx.delay_time, s.fx.delay_feedback, s.fx.delay_mix)
             };
-            widgets::param_control(ui, "TIME", &mut dt, pm("fx.delay_time"), ctrl);
-            widgets::param_control(ui, "FDBK", &mut df, pm("fx.delay_feedback"), ctrl);
-            if widgets::param_control(ui, "MIX", &mut dm, pm("fx.delay_mix"), ctrl).0 {
-                changed = true;
-            }
+            hk!(
+                ui,
+                ("TIME", &mut dt, pm("fx.delay_time")),
+                ("FDBK", &mut df, pm("fx.delay_feedback")),
+                ("MIX", &mut dm, pm("fx.delay_mix"))
+            );
             if changed || dt != app.state.read().fx.delay_time {
                 let mut s = app.state.write();
                 s.fx.delay_time = dt;
@@ -75,11 +84,12 @@ pub(super) fn draw_fx_content(app: &mut ImpulseApp, ui: &mut egui::Ui, kind: Mod
                 let s = app.state.read();
                 (s.fx.chorus_rate, s.fx.chorus_depth, s.fx.chorus_mix)
             };
-            widgets::param_control(ui, "RATE", &mut r, pm("fx.chorus_rate"), ctrl);
-            widgets::param_control(ui, "DEPTH", &mut d, pm("fx.chorus_depth"), ctrl);
-            if widgets::param_control(ui, "MIX", &mut m, pm("fx.chorus_mix"), ctrl).0 {
-                changed = true;
-            }
+            hk!(
+                ui,
+                ("RATE", &mut r, pm("fx.chorus_rate")),
+                ("DEPTH", &mut d, pm("fx.chorus_depth")),
+                ("MIX", &mut m, pm("fx.chorus_mix"))
+            );
             if changed || r != app.state.read().fx.chorus_rate {
                 let mut s = app.state.write();
                 s.fx.chorus_rate = r;
@@ -92,11 +102,12 @@ pub(super) fn draw_fx_content(app: &mut ImpulseApp, ui: &mut egui::Ui, kind: Mod
                 let s = app.state.read();
                 (s.fx.phaser_rate, s.fx.phaser_depth, s.fx.phaser_mix)
             };
-            widgets::param_control(ui, "RATE", &mut r, pm("fx.phaser_rate"), ctrl);
-            widgets::param_control(ui, "DEPTH", &mut d, pm("fx.phaser_depth"), ctrl);
-            if widgets::param_control(ui, "MIX", &mut m, pm("fx.phaser_mix"), ctrl).0 {
-                changed = true;
-            }
+            hk!(
+                ui,
+                ("RATE", &mut r, pm("fx.phaser_rate")),
+                ("DEPTH", &mut d, pm("fx.phaser_depth")),
+                ("MIX", &mut m, pm("fx.phaser_mix"))
+            );
             if changed || r != app.state.read().fx.phaser_rate {
                 let mut s = app.state.write();
                 s.fx.phaser_rate = r;
@@ -109,11 +120,12 @@ pub(super) fn draw_fx_content(app: &mut ImpulseApp, ui: &mut egui::Ui, kind: Mod
                 let s = app.state.read();
                 (s.fx.eq_low_gain, s.fx.eq_mid_gain, s.fx.eq_hi_gain)
             };
-            widgets::param_control(ui, "LOW", &mut lo, pm("fx.eq_low_gain"), ctrl);
-            widgets::param_control(ui, "MID", &mut mi, pm("fx.eq_mid_gain"), ctrl);
-            if widgets::param_control(ui, "HIGH", &mut hi, pm("fx.eq_hi_gain"), ctrl).0 {
-                changed = true;
-            }
+            hk!(
+                ui,
+                ("LOW", &mut lo, pm("fx.eq_low_gain")),
+                ("MID", &mut mi, pm("fx.eq_mid_gain")),
+                ("HIGH", &mut hi, pm("fx.eq_hi_gain"))
+            );
             if changed || lo != app.state.read().fx.eq_low_gain {
                 let mut s = app.state.write();
                 s.fx.eq_low_gain = lo;
@@ -130,11 +142,12 @@ pub(super) fn draw_fx_content(app: &mut ImpulseApp, ui: &mut egui::Ui, kind: Mod
                     s.fx.compressor_mix,
                 )
             };
-            widgets::param_control(ui, "THRESH", &mut th, pm("fx.compressor_threshold"), ctrl);
-            widgets::param_control(ui, "RATIO", &mut ra, pm("fx.compressor_ratio"), ctrl);
-            if widgets::param_control(ui, "MIX", &mut mi, pm("fx.compressor_mix"), ctrl).0 {
-                changed = true;
-            }
+            hk!(
+                ui,
+                ("THR", &mut th, pm("fx.compressor_threshold")),
+                ("RAT", &mut ra, pm("fx.compressor_ratio")),
+                ("MIX", &mut mi, pm("fx.compressor_mix"))
+            );
             if changed || th != app.state.read().fx.compressor_threshold {
                 let mut s = app.state.write();
                 s.fx.compressor_threshold = th;
@@ -147,11 +160,12 @@ pub(super) fn draw_fx_content(app: &mut ImpulseApp, ui: &mut egui::Ui, kind: Mod
                 let s = app.state.read();
                 (s.fx.tape_drive, s.fx.tape_flutter, s.fx.tape_mix)
             };
-            widgets::param_control(ui, "DRIVE", &mut dr, pm("fx.tape_drive"), ctrl);
-            widgets::param_control(ui, "FLUTTER", &mut fl, pm("fx.tape_flutter"), ctrl);
-            if widgets::param_control(ui, "MIX", &mut mi, pm("fx.tape_mix"), ctrl).0 {
-                changed = true;
-            }
+            hk!(
+                ui,
+                ("DRV", &mut dr, pm("fx.tape_drive")),
+                ("FLTR", &mut fl, pm("fx.tape_flutter")),
+                ("MIX", &mut mi, pm("fx.tape_mix"))
+            );
             if changed || dr != app.state.read().fx.tape_drive {
                 let mut s = app.state.write();
                 s.fx.tape_drive = dr;
@@ -164,12 +178,11 @@ pub(super) fn draw_fx_content(app: &mut ImpulseApp, ui: &mut egui::Ui, kind: Mod
                 let s = app.state.read();
                 (s.fx.distortion_drive, s.fx.distortion_mix)
             };
-            if widgets::param_control(ui, "DRIVE", &mut dr, pm("fx.distortion_drive"), ctrl).0 {
-                changed = true;
-            }
-            if widgets::param_control(ui, "MIX", &mut mi, pm("fx.distortion_mix"), ctrl).0 {
-                changed = true;
-            }
+            hk!(
+                ui,
+                ("DRV", &mut dr, pm("fx.distortion_drive")),
+                ("MIX", &mut mi, pm("fx.distortion_mix"))
+            );
             if changed {
                 let mut s = app.state.write();
                 s.fx.distortion_drive = dr;
@@ -181,12 +194,11 @@ pub(super) fn draw_fx_content(app: &mut ImpulseApp, ui: &mut egui::Ui, kind: Mod
                 let s = app.state.read();
                 (s.fx.autotune_amount, s.fx.autotune_mix)
             };
-            if widgets::param_control(ui, "AMOUNT", &mut amt, pm("fx.autotune_amount"), ctrl).0 {
-                changed = true;
-            }
-            if widgets::param_control(ui, "MIX", &mut mi, pm("fx.autotune_mix"), ctrl).0 {
-                changed = true;
-            }
+            hk!(
+                ui,
+                ("AMT", &mut amt, pm("fx.autotune_amount")),
+                ("MIX", &mut mi, pm("fx.autotune_mix"))
+            );
             if changed {
                 let mut s = app.state.write();
                 s.fx.autotune_amount = amt;
@@ -198,12 +210,11 @@ pub(super) fn draw_fx_content(app: &mut ImpulseApp, ui: &mut egui::Ui, kind: Mod
                 let s = app.state.read();
                 (s.fx.waveshaper_drive, s.fx.waveshaper_mix)
             };
-            if widgets::param_control(ui, "DRIVE", &mut dr, pm("fx.waveshaper_drive"), ctrl).0 {
-                changed = true;
-            }
-            if widgets::param_control(ui, "MIX", &mut mi, pm("fx.waveshaper_mix"), ctrl).0 {
-                changed = true;
-            }
+            hk!(
+                ui,
+                ("DRV", &mut dr, pm("fx.waveshaper_drive")),
+                ("MIX", &mut mi, pm("fx.waveshaper_mix"))
+            );
             if changed {
                 let mut s = app.state.write();
                 s.fx.waveshaper_drive = dr;
@@ -215,11 +226,12 @@ pub(super) fn draw_fx_content(app: &mut ImpulseApp, ui: &mut egui::Ui, kind: Mod
                 let s = app.state.read();
                 (s.fx.bitcrush_bits, s.fx.bitcrush_rate, s.fx.bitcrush_mix)
             };
-            widgets::param_control(ui, "BITS", &mut bi, pm("fx.bitcrush_bits"), ctrl);
-            widgets::param_control(ui, "RATE", &mut ra, pm("fx.bitcrush_rate"), ctrl);
-            if widgets::param_control(ui, "MIX", &mut mi, pm("fx.bitcrush_mix"), ctrl).0 {
-                changed = true;
-            }
+            hk!(
+                ui,
+                ("BITS", &mut bi, pm("fx.bitcrush_bits")),
+                ("RATE", &mut ra, pm("fx.bitcrush_rate")),
+                ("MIX", &mut mi, pm("fx.bitcrush_mix"))
+            );
             if changed || bi != app.state.read().fx.bitcrush_bits {
                 let mut s = app.state.write();
                 s.fx.bitcrush_bits = bi;
@@ -232,12 +244,11 @@ pub(super) fn draw_fx_content(app: &mut ImpulseApp, ui: &mut egui::Ui, kind: Mod
                 let s = app.state.read();
                 (s.fx.ring_mod_freq, s.fx.ring_mod_mix)
             };
-            if widgets::param_control(ui, "FREQ", &mut fr, pm("fx.ring_mod_freq"), ctrl).0 {
-                changed = true;
-            }
-            if widgets::param_control(ui, "MIX", &mut mi, pm("fx.ring_mod_mix"), ctrl).0 {
-                changed = true;
-            }
+            hk!(
+                ui,
+                ("FREQ", &mut fr, pm("fx.ring_mod_freq")),
+                ("MIX", &mut mi, pm("fx.ring_mod_mix"))
+            );
             if changed {
                 let mut s = app.state.write();
                 s.fx.ring_mod_freq = fr;
