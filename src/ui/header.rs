@@ -44,7 +44,7 @@ impl ImpulseApp {
                     });
             });
 
-        // ── Scope panel (fixed height, not resizable) ───────────────
+        // ── Scope + event stream panel (fixed height) ──────────────
         TopBottomPanel::top("scope_panel")
             .frame(
                 Frame::none()
@@ -55,16 +55,15 @@ impl ImpulseApp {
             .show(ctx, |ui| {
                 let full_w = ui.available_width();
                 let ring_w = scope_h;
-                let linear_w = (full_w - ring_w - 8.0).max(40.0);
+                let stream_w = (full_w - ring_w - 8.0).max(80.0);
+                let h = scope_h - 4.0;
                 ui.horizontal_top(|ui| {
-                    super::scope_footer::draw_scope_sized(
-                        ui,
-                        &self.scope_buf,
-                        &self.scope_history,
-                        linear_w,
-                        scope_h - 4.0,
-                    );
-                    super::scope_footer::draw_ring_scope(ui, &self.scope_buf, scope_h - 4.0);
+                    // Event stream (note history + ramps + beat grid)
+                    {
+                        let state = self.state.read();
+                        super::widgets::event_stream(ui, &state, stream_w, h);
+                    }
+                    super::scope_footer::draw_ring_scope(ui, &self.scope_buf, h);
                 });
             });
     }

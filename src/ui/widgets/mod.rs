@@ -528,6 +528,9 @@ pub use adsr::{adsr_display, decay_display, filter_response};
 mod waveform_viz;
 pub use waveform_viz::{lfo_preview, waveform_icon};
 
+mod event_stream;
+pub use event_stream::event_stream;
+
 // ─── Glass Group ─────────────────────────────────────────────────────────────
 
 /// Compute the per-group width for an evenly-distributed row of `n` glass panels.

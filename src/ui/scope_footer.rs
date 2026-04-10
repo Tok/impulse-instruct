@@ -5,6 +5,7 @@
 use crate::ui::theme;
 
 /// Draw oscilloscope with explicit width and height.
+#[allow(dead_code)]
 pub fn draw_scope_sized(
     ui: &mut egui::Ui,
     buf: &[f32],
