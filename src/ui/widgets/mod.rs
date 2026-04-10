@@ -507,7 +507,7 @@ pub use xy_pad::{xy_pad, xy_pad_pair};
 
 // ─── ADSR Envelope Visualiser ────────────────────────────────────────────────
 mod adsr;
-pub use adsr::{adsr_display, decay_display};
+pub use adsr::{adsr_display, decay_display, filter_response};
 
 // ─── Glass Group ─────────────────────────────────────────────────────────────
 

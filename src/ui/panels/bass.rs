@@ -666,6 +666,22 @@ pub fn draw_bass(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         }
     });
 
+    // Filter response curve — shows the ladder filter shape reacting to CUT/RES knobs.
+    ui.horizontal(|ui| {
+        ui.label(
+            egui::RichText::new("FLT")
+                .color(theme::SMOKE)
+                .monospace()
+                .size(9.0),
+        );
+        let fm = match filter_mode {
+            FilterMode::Highpass => 1u8,
+            FilterMode::Bandpass => 2,
+            _ => 0,
+        };
+        widgets::filter_response(ui, cutoff, resonance, fm, env_w, env_h);
+    });
+
     ui.add_space(2.0);
 
     // Waveform toggle
