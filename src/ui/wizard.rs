@@ -249,7 +249,7 @@ impl ImpulseApp {
                             0.0
                         };
                         ui.label(
-                            egui::RichText::new("Budget:")
+                            egui::RichText::new("VRAM:")
                                 .color(theme::SMOKE)
                                 .monospace()
                                 .size(9.5),
