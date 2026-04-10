@@ -384,10 +384,10 @@ if [ "$SKIP_VIDEO" -eq 0 ]; then
 
     sleep 1
 
-    # Stop screen recording — send SIGINT (like Ctrl+C) so ffmpeg finalizes the file.
+    # Stop screen recording — SIGINT to finalize, SIGKILL if stuck
     kill -INT "$FFMPEG_PID" 2>/dev/null
-    sleep 2  # give ffmpeg time to flush and write trailer
-    kill "$FFMPEG_PID" 2>/dev/null  # force kill if still running
+    sleep 2
+    kill -9 "$FFMPEG_PID" 2>/dev/null
     wait "$FFMPEG_PID" 2>/dev/null || true
     FFMPEG_PID=""
 

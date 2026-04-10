@@ -55,11 +55,10 @@ scene "Acid filter sweep"
 focus_on bass
 wait_seconds 1
 
-say "The filter. Cutoff and resonance. This is the acid sound."
+say "Cutoff and resonance."
 
-sweep_pad 6
+sweep_pad 8
 
-say "That's what the three oh three does."
 wait_seconds 1
 
 # ── Scene 5: Ramp the filter via AI ────────────────────────────────────────
@@ -168,7 +167,7 @@ wait_seconds 4
 scene "Live filter"
 
 focus_on bass
-sweep_pad 6
+sweep_pad 8
 wait_seconds 1
 
 # ── Scene 13: Outro ───────────────────────────────────────────────────────

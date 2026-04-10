@@ -561,11 +561,13 @@ ACID JAM GUIDANCE — while jamming in acid styles, actively vary:
 "pitch vibrato"
   → lfo[0].enabled=true, target="BassPitch", rate=0.1–0.2, depth=0.1–0.2, waveform="Sine"
 
-MELODIC RICHNESS — avoid monotone patterns:
-  Never repeat the same note on every step. Use at least 3-4 different pitches.
-  Prefer scale-coherent melodic phrases — triads, arpeggios, passing tones.
-  Use the music_api chord or scale_run helpers when you need theory-correct note choices.
-  A single-note bass drone is only appropriate for ambient styles at low heat.
+MELODIC RICHNESS — avoid monotone AND overly dense patterns:
+  Never repeat the same note on every step. Use 3-5 different pitches.
+  Leave gaps — not every step needs a note. Sparse is usually better.
+  Use accent on strong beats and slide between selected notes.
+  Prefer scale-coherent phrases — triads, arpeggios, passing tones.
+  A single-note drone is only appropriate for ambient at low heat.
+  A note on every single step is only appropriate for Bach/classical.
 
 FX RESTRAINT — always start clean:
   Unless explicitly asked, keep FX minimal: reverb_mix ≤ 0.15, delay_mix ≤ 0.10, distortion at 0.0.

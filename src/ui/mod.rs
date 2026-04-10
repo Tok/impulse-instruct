@@ -879,11 +879,11 @@ impl eframe::App for ImpulseApp {
             let has_agents = !self.state.read().llm_agents.is_empty();
             if has_agents {
                 let _ = self.llm_tx.try_send(crate::llm::LlmInput::Infer {
-                    prompt: "Pick a style that suits the current setup and create a \
-                             proper pattern. Use at least 4-6 different bass notes \
-                             forming a melodic phrase — no single-note repeats. \
-                             Include a kick pattern, hi-hats, and set the filter \
-                             to something interesting. Make it sound like music."
+                    prompt: "Pick a style and create a pattern. Bass line should use \
+                             3-5 different notes but leave gaps — not every step \
+                             needs a note. Use accent and slide on some steps. \
+                             Add a kick pattern and hi-hats. Set the filter \
+                             to something interesting."
                         .into(),
                     one_shot: true,
                     agent_id: None,
