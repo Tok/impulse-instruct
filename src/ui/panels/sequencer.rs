@@ -10,8 +10,6 @@ use crate::state::{
 use crate::ui::{ImpulseApp, SEQ_LABEL_H, SEQ_LABEL_W, SEQ_VOL_W, theme, widgets};
 
 pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
-    // Ensure the sequencer card gets enough vertical space for drum patterns.
-    ui.set_min_height(400.0);
     let (
         current_step,
         running,
