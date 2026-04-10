@@ -9,7 +9,8 @@ use egui::{Color32, Pos2, Rect, Sense, Stroke, Ui, Vec2};
 
 /// Draw the event stream visualization.
 /// Shows recent and upcoming note events scrolling right-to-left at tempo.
-pub fn event_stream(ui: &mut Ui, state: &AppState, width: f32, height: f32) {
+/// `smooth_step`: fractional step position for sub-step smooth scrolling.
+pub fn event_stream(ui: &mut Ui, state: &AppState, smooth_step: f64, width: f32, height: f32) {
     let size = Vec2::new(width, height);
     let (rect, _) = ui.allocate_exact_size(size, Sense::hover());
     if !ui.is_rect_visible(rect) {
@@ -36,9 +37,7 @@ pub fn event_stream(ui: &mut Ui, state: &AppState, width: f32, height: f32) {
     let time_sig = seq.time_sig_num as usize;
     let current_step = seq.current_step;
 
-    // Use the discrete step position directly — perfectly synced with the
-    // sequencer, no wall-clock drift or jitter from blending two time sources.
-    let smooth_step = current_step as f64;
+    // smooth_step passed in from caller (interpolated between discrete steps)
 
     // Timing: how many steps fit in the display width
     let display_steps = steps as f32 * 2.0; // show 2 full patterns

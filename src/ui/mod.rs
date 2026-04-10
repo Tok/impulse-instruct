@@ -132,6 +132,9 @@ pub struct ImpulseApp {
     scope_rx: rtrb::Consumer<f32>,
     scope_buf: Vec<f32>,
     scope_history: std::collections::VecDeque<Vec<f32>>,
+    /// For smooth event stream: last observed current_step + time it changed.
+    last_seq_step: usize,
+    last_step_time: f64,
     capture_rx: rtrb::Consumer<f32>,
     dsp_load_rx: rtrb::Consumer<f32>,
     dsp_load_buf: Vec<f32>,
@@ -153,59 +156,37 @@ pub struct ImpulseApp {
     /// Lock-free receiver for API→UI log messages (sender is in ApiState).
     api_log_rx: crossbeam_channel::Receiver<String>,
     show_about: bool,
-    // Structured activity log for timeline display
     pub(crate) activity_log: Vec<ActivityEntry>,
     pub(crate) show_prefs: bool,
     export_bars: u32,
-    ui_volume: f32, // monitor-only gain; never written to state or export
-    // Piano preferences
+    ui_volume: f32,
     piano_show_labels: bool,
-    // Spectrum analyser: smoothed magnitude bins + peak-hold values.
     pub(crate) spectrum_magnitudes: Vec<f32>,
     pub(crate) spectrum_peaks: Vec<f32>,
-    // Stereo correlation meter
     stereo_rx: rtrb::Consumer<f32>,
     stereo_buf: Vec<f32>,
-    pub(crate) stereo_corr: f32,    // -1..+1 phase correlation
-    pub(crate) stereo_balance: f32, // -1..+1 L/R balance
-    // Last chain-of-thought from the LLM (shown collapsible below the log)
+    pub(crate) stereo_corr: f32,
+    pub(crate) stereo_balance: f32,
     last_thinking: Option<String>,
-    // Control layout preference — derived from AppState.ui_prefs each frame
-    // Sequencer page (for >16 step patterns)
     seq_page: usize,
-    // Voices manually expanded in the sequencer even if they have no active steps
     expanded_seq_voices: std::collections::HashSet<crate::state::DrumVoice>,
-    // Copy/paste clipboard for drum patterns (voice → step slice)
     drum_clipboard: Option<(crate::state::DrumVoice, Vec<crate::state::Step>)>,
-    // Model selector
     available_models: Vec<String>,
-    // System info (GPU/VRAM/RAM) — polled in background thread
     sys_info: std::sync::Arc<std::sync::Mutex<crate::sysinfo::SysInfo>>,
     show_sysinfo: bool,
-    // Startup wizard (first-launch agent setup)
     pub(crate) show_wizard: bool,
     pub(crate) wizard_selected: usize,
-    // Preferences
     prefs_tab: usize,
     llm_tab: usize,
-    // log_level_idx now persisted in AppState.ui_prefs.log_level_idx
-    // Startup hook: fire a prompt once the LLM transitions from initializing to ready
     startup_done: bool,
-    // MIDI clock BPM tracker — averages recent pulse intervals to derive tempo.
     midi_clock_tracker: MidiClockTracker,
-    // Undo/redo history — ring buffer of recent AppState snapshots.
     history: StateHistory,
-    // In-progress cable drag in the rack patch view.
     pub(crate) cable_drag: Option<rack_canvas::CableDrag>,
-    // When true, patch cables are drawn over the rack. Tab to toggle.
     pub(crate) show_cables: bool,
-    // When true, rack shows back panel (ports + cables) instead of front (knobs).
     pub(crate) rack_flipped: bool,
-    // Mode locks: double-click footer indicator to keep modifier active without holding key
     pub(crate) ctrl_locked: bool,
     pub(crate) alt_locked: bool,
     pub(crate) show_shortcuts: bool,
-    // Zone whose [+ ADD] popup is currently open.
     pub(crate) add_menu_zone: Option<crate::state::Zone>,
     // Module being dragged by its title bar (id + current pointer position).
     pub(crate) module_drag: Option<rack_canvas::ModuleDrag>,
@@ -326,7 +307,9 @@ impl ImpulseApp {
             audio_tx: audio.params_tx,
             scope_rx: audio.scope_rx,
             scope_buf: Vec::new(),
-            scope_history: std::collections::VecDeque::with_capacity(8),
+            scope_history: std::collections::VecDeque::with_capacity(12),
+            last_seq_step: usize::MAX,
+            last_step_time: 0.0,
             capture_rx: audio.capture_rx,
             dsp_load_rx: audio.dsp_load_rx,
             dsp_load_buf: Vec::with_capacity(64),
@@ -941,6 +924,15 @@ impl eframe::App for ImpulseApp {
         if self.dsp_load_buf.len() > 64 {
             let drain = self.dsp_load_buf.len() - 64;
             self.dsp_load_buf.drain(..drain);
+        }
+
+        // Track step changes for smooth event stream interpolation
+        {
+            let step = self.state.read().sequencer.current_step;
+            if step != self.last_seq_step {
+                self.last_seq_step = step;
+                self.last_step_time = ctx.input(|i| i.time);
+            }
         }
 
         self.tick_ramps();

@@ -76,10 +76,20 @@ impl ImpulseApp {
                         h,
                         huth_col,
                     );
-                    // Event stream (center)
+                    // Event stream (center) — smooth sub-step interpolation
                     {
                         let state = self.state.read();
-                        super::widgets::event_stream(ui, &state, stream_w, h);
+                        let now = ctx.input(|i| i.time);
+                        // Compute fractional step from time elapsed since last step change
+                        let secs_per_step = 60.0 / (state.sequencer.bpm as f64 * 4.0);
+                        let elapsed = (now - self.last_step_time).max(0.0);
+                        let frac = if state.sequencer.running && secs_per_step > 0.001 {
+                            (elapsed / secs_per_step).clamp(0.0, 0.99)
+                        } else {
+                            0.0
+                        };
+                        let smooth = self.last_seq_step as f64 + frac;
+                        super::widgets::event_stream(ui, &state, smooth, stream_w, h);
                     }
                     // Ring scope (right)
                     super::scope_footer::draw_ring_scope(ui, &self.scope_buf, h);
