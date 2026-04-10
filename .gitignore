@@ -16,3 +16,9 @@ cobertura.xml
 .claude/
 /demo/output/
 /demo/tts_cache/
+# Stray media files in root (from broken output paths)
+/*.mp4
+/*.mkv
+/*.wav
+/*.srt
+project-*.json
