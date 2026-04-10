@@ -149,8 +149,8 @@ impl ModuleKind {
     pub fn label(self) -> &'static str {
         match self {
             Self::AcidBass => "BASS SYNTH",
-            Self::DrumKit808 => "DRUM KIT A",
-            Self::DrumKit909 => "DRUM KIT B",
+            Self::DrumKit808 => "808 KIT",
+            Self::DrumKit909 => "909 KIT",
             Self::HooverLead => "HOOVER",
             Self::An1xVoice => "AN1X",
             Self::AmenSampler => "AMEN",
