@@ -321,7 +321,9 @@ LFO (global wireable modulators, 4 slots indexed 0–3):
   lfo[N].depth       — 0–1 bipolar mod depth
   lfo[N].target      — "BassCutoff" | "BassResonance" | "BassPitch" | "BassVolume"
                        "ReverbMix" | "DelayTime" | "DelayFeedback" | "ChorusMix" | "ChorusRate"
-                       "Kick808Pitch" | "None"
+                       "Kick808Pitch" | "PhaserRate" | "PhaserDepth" | "DistortionDrive"
+                       "MasterVolume" | "An1xCutoff" | "An1xPitch" | "None"
+  Patterns: tremolo(BassVolume,Sine,r0.3,d0.3) vibrato(BassPitch,Sine,r0.4,d0.1) wobble(BassCutoff,Tri,r0.2,d0.5) sweep(BassCutoff,Saw,r0.08,d0.7)
 
 FREE EG (drawable arbitrary-shape modulator — 8 draggable levels, looped slowly):
   free_eg.enabled    — true/false
@@ -766,7 +768,7 @@ pub fn param_json_schema() -> serde_json::Value {
                     "loop_mode": { "type": "boolean", "description": "true=loop, false=one-shot" },
                     "period":    { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "0=0.5s, 0.35≈2s, 0.5≈4s, 0.75≈11s, 1.0=32s" },
                     "depth":     { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "0.5=no mod, 1.0=full positive, 0.0=full negative" },
-                    "target":    { "type": "string", "enum": ["None","BassCutoff","BassResonance","BassPitch","BassVolume","ReverbMix","DelayTime","DelayFeedback","ChorusMix","ChorusRate","Kick808Pitch"] },
+                    "target":    { "type": "string", "enum": ["None","BassCutoff","BassResonance","BassPitch","BassVolume","ReverbMix","DelayTime","DelayFeedback","ChorusMix","ChorusRate","Kick808Pitch","PhaserRate","PhaserDepth","DistortionDrive","MasterVolume","An1xCutoff","An1xPitch"] },
                     "values":    { "type": "array", "items": { "type": "number", "minimum": 0.0, "maximum": 1.0 }, "minItems": 8, "maxItems": 8, "description": "8 envelope levels 0-1" }
                 },
                 "additionalProperties": false

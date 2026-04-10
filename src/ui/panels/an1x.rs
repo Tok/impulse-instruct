@@ -93,6 +93,34 @@ pub fn draw_an1x(app: &mut ImpulseApp, ui: &mut Ui) {
                 }
             });
         }
+        // Animated waveform previews for OSC1 and OSC2
+        let wave_to_kind = |w: An1xWave| -> u8 {
+            match w {
+                An1xWave::Saw => 0,
+                An1xWave::Square => 1,
+                An1xWave::Triangle => 4,
+                An1xWave::Sine => 3,
+                An1xWave::Noise => 5, // reuse S&H-like animation
+            }
+        };
+        ui.vertical(|ui| {
+            ui.label(
+                egui::RichText::new("O1")
+                    .color(theme::SMOKE)
+                    .size(7.0)
+                    .monospace(),
+            );
+            widgets::waveform_icon(ui, wave_to_kind(osc1w), 50.0, 24.0);
+        });
+        ui.vertical(|ui| {
+            ui.label(
+                egui::RichText::new("O2")
+                    .color(theme::SMOKE)
+                    .size(7.0)
+                    .monospace(),
+            );
+            widgets::waveform_icon(ui, wave_to_kind(osc2w), 50.0, 24.0);
+        });
     });
     {
         let gw = widgets::even_group_width(ui, 2);

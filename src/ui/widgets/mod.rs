@@ -509,6 +509,9 @@ pub use xy_pad::{xy_pad, xy_pad_pair};
 mod adsr;
 pub use adsr::{adsr_display, decay_display, filter_response};
 
+mod waveform_viz;
+pub use waveform_viz::{lfo_preview, waveform_icon};
+
 // ─── Glass Group ─────────────────────────────────────────────────────────────
 
 /// Compute the per-group width for an evenly-distributed row of `n` glass panels.

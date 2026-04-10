@@ -59,6 +59,12 @@ pub enum LfoTarget {
     ChorusMix,
     ChorusRate,
     Kick808Pitch,
+    PhaserRate,
+    PhaserDepth,
+    DistortionDrive,
+    MasterVolume,
+    An1xCutoff,
+    An1xPitch,
 }
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]

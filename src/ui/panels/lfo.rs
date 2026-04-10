@@ -18,6 +18,12 @@ const TARGET_LABELS: &[(&str, LfoTarget)] = &[
     ("CHR.MX", LfoTarget::ChorusMix),
     ("CHR.RT", LfoTarget::ChorusRate),
     ("K808P", LfoTarget::Kick808Pitch),
+    ("PHS.RT", LfoTarget::PhaserRate),
+    ("PHS.D", LfoTarget::PhaserDepth),
+    ("DIST", LfoTarget::DistortionDrive),
+    ("MSTR", LfoTarget::MasterVolume),
+    ("AN.CUT", LfoTarget::An1xCutoff),
+    ("AN.PIT", LfoTarget::An1xPitch),
 ];
 
 fn target_label(t: &LfoTarget) -> &'static str {
@@ -167,6 +173,17 @@ fn draw_lfo_slot_row(app: &mut ImpulseApp, ui: &mut egui::Ui, i: usize, slot: &L
             app.state.write().lfo[i].target = next;
             app.push_audio_params();
         }
+
+        // Animated LFO waveform preview
+        let shape = match slot.waveform {
+            LfoWaveform::Sine => 0u8,
+            LfoWaveform::Triangle => 1,
+            LfoWaveform::Saw => 2,
+            LfoWaveform::InvSaw => 3,
+            LfoWaveform::Square => 4,
+            LfoWaveform::SampleAndHold => 5,
+        };
+        widgets::lfo_preview(ui, shape, rate, depth, t_label, 80.0, 28.0);
     });
 }
 
@@ -282,6 +299,19 @@ pub fn draw_lfo_slot(app: &mut ImpulseApp, ui: &mut egui::Ui, slot_idx: usize) {
             app.push_audio_params();
         }
     });
+
+    // Animated LFO waveform preview
+    let shape = match slot.waveform {
+        LfoWaveform::Sine => 0u8,
+        LfoWaveform::Triangle => 1,
+        LfoWaveform::Saw => 2,
+        LfoWaveform::InvSaw => 3,
+        LfoWaveform::Square => 4,
+        LfoWaveform::SampleAndHold => 5,
+    };
+    let t_label = target_label(&slot.target);
+    let viz_w = ui.available_width().min(140.0);
+    widgets::lfo_preview(ui, shape, rate, depth, t_label, viz_w, 36.0);
 }
 
 // ─── Free EG ─────────────────────────────────────────────────────────────────

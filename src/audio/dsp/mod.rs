@@ -428,6 +428,12 @@ impl DspState {
                 8 => p.chorus_mix = (p.chorus_mix + mod_val).clamp(0.0, 1.0),
                 9 => p.chorus_rate = (p.chorus_rate + mod_val).clamp(0.0, 1.0),
                 10 => p.kick808_pitch = (p.kick808_pitch + mod_val * 0.5).clamp(0.0, 1.0),
+                11 => p.phaser_rate = (p.phaser_rate + mod_val).clamp(0.0, 1.0),
+                12 => p.phaser_depth = (p.phaser_depth + mod_val).clamp(0.0, 1.0),
+                13 => p.distortion_drive = (p.distortion_drive + mod_val * 0.5).clamp(0.0, 1.0),
+                14 => p.master_volume = (p.master_volume + mod_val * 0.3).clamp(0.0, 1.5),
+                15 => p.an1x_filter_cutoff = (p.an1x_filter_cutoff + mod_val).clamp(0.0, 1.0),
+                16 => {} // AN1X pitch: no direct pitch field in AudioParams yet
                 _ => {}
             }
         }
@@ -465,6 +471,12 @@ impl DspState {
                 8 => p.chorus_mix = (p.chorus_mix + mod_val).clamp(0.0, 1.0),
                 9 => p.chorus_rate = (p.chorus_rate + mod_val).clamp(0.0, 1.0),
                 10 => p.kick808_pitch = (p.kick808_pitch + mod_val * 0.5).clamp(0.0, 1.0),
+                11 => p.phaser_rate = (p.phaser_rate + mod_val).clamp(0.0, 1.0),
+                12 => p.phaser_depth = (p.phaser_depth + mod_val).clamp(0.0, 1.0),
+                13 => p.distortion_drive = (p.distortion_drive + mod_val * 0.5).clamp(0.0, 1.0),
+                14 => p.master_volume = (p.master_volume + mod_val * 0.3).clamp(0.0, 1.5),
+                15 => p.an1x_filter_cutoff = (p.an1x_filter_cutoff + mod_val).clamp(0.0, 1.0),
+                16 => {} // AN1X pitch: no direct pitch field in AudioParams yet
                 _ => {}
             }
         }

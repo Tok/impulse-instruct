@@ -732,6 +732,10 @@ pub(crate) fn lfo_target_module_kind(target: crate::state::LfoTarget) -> Option<
         LfoTarget::ReverbMix => Some(ModuleKind::FxReverb),
         LfoTarget::DelayTime | LfoTarget::DelayFeedback => Some(ModuleKind::FxDelay),
         LfoTarget::ChorusMix | LfoTarget::ChorusRate => Some(ModuleKind::FxChorus),
+        LfoTarget::PhaserRate | LfoTarget::PhaserDepth => Some(ModuleKind::FxPhaser),
+        LfoTarget::DistortionDrive => Some(ModuleKind::FxWaveshaper),
+        LfoTarget::MasterVolume => Some(ModuleKind::MasterOutput),
+        LfoTarget::An1xCutoff | LfoTarget::An1xPitch => Some(ModuleKind::An1xVoice),
     }
 }
 

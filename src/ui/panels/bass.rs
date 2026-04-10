@@ -684,7 +684,7 @@ pub fn draw_bass(app: &mut ImpulseApp, ui: &mut egui::Ui) {
 
     ui.add_space(2.0);
 
-    // Waveform toggle
+    // Waveform toggle + animated preview
     ui.horizontal(|ui| {
         ui.label(
             egui::RichText::new("WAVE")
@@ -710,6 +710,14 @@ pub fn draw_bass(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             app.state.write().bass_voices[av].synth.waveform = Waveform::Supersaw;
             app.push_audio_params();
         }
+        // Animated waveform preview
+        let wave_kind = match waveform {
+            Waveform::Saw => 0,
+            Waveform::Square => 1,
+            Waveform::Supersaw => 2,
+        };
+        let viz_h = env_h.min(40.0);
+        widgets::waveform_icon(ui, wave_kind, env_w * 0.4, viz_h);
     });
 
     // Filter mode toggle
