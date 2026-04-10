@@ -107,6 +107,15 @@ fi
 
 mkdir -p "$OUTPUT_DIR"
 
+# ─── Log file ────────────────────────────────────────────────────────────────
+LOGFILE="$OUTPUT_DIR/demo_${SCENARIO}_${TIMESTAMP}.log"
+exec > >(tee -a "$LOGFILE") 2>&1
+echo "=== Log: $LOGFILE ==="
+echo "  Date: $(date)"
+echo "  Scenario: $SCENARIO"
+echo "  Flags: skip_build=$SKIP_BUILD no_tts=$NO_TTS skip_video=$SKIP_VIDEO"
+echo ""
+
 # ─── Pre-generate TTS clips ──────────────────────────────────────────────────
 
 echo "[1/6] Pre-generating TTS clips..."
@@ -132,7 +141,15 @@ if [ "$NO_TTS" -eq 0 ]; then
     echo "  TTS clips cached in $TTS_DIR"
 else
     echo "  Skipped (--no-tts)"
-    narrate() { :; }
+    # Override narrate to still log subtitles but skip audio playback
+    narrate() {
+        local blocking=0
+        if [ "$1" = "--wait" ]; then shift; fi
+        local id="$1" text="$2"
+        local start_sec
+        start_sec=$(demo_elapsed 2>/dev/null || echo "0")
+        echo "${start_sec}|2.0|${text}" >> "$NARRATION_LIST"
+    }
     wait_narration() { :; }
 fi
 
@@ -395,12 +412,14 @@ if [ "$SKIP_VIDEO" -eq 0 ]; then
     # Base name for output variants
     local base="${OUTPUT_DIR}/impulse_demo_${SCENARIO}_${TIMESTAMP}"
 
-    # Always generate SRT if narration was recorded
+    # Always generate SRT if narration entries exist (even with --no-tts)
     SRT_FILE=""
-    if [ "$NO_TTS" -eq 0 ] && [ -f "$NARRATION_LIST" ]; then
-        OUTPUT_DIR="$OUTPUT_DIR" SRT_NAME="${base}.srt" generate_srt
+    if [ -f "$NARRATION_LIST" ] && [ -s "$NARRATION_LIST" ]; then
+        SRT_NAME="${base}.srt" generate_srt >/dev/null
         SRT_FILE="${base}.srt"
         echo "  Subtitles: $SRT_FILE"
+    else
+        echo "  Subtitles: none (no narration entries)"
     fi
     FINAL_VIDEO="${base}.mp4"
     FINAL_VIDEO_SUBS="${base}_subs.mp4"
