@@ -636,42 +636,54 @@ use_preset() {
 # ── Filter pad sweep (animate cutoff/resonance) ─────────────────────────────
 
 sweep_pad() {
-    # Animate cutoff and resonance dramatically for acid demo.
-    # Big sweeps across the full range — this IS the acid sound.
+    # Smooth acid filter sweep via many small interpolated steps.
+    # Keyframes define the shape, intermediate values are lerped.
     # Usage: sweep_pad [seconds]
-    local duration="${1:-5}"
-    local steps=20
-    local interval
-    interval=$(echo "scale=3; $duration / $steps" | bc)
-    # Dramatic sweep: low→high cutoff with resonance pumping
-    local sequence=(
-        "0.10 0.85"   # low cut, high res — squelch
-        "0.15 0.90"
-        "0.25 0.80"
-        "0.40 0.70"
-        "0.55 0.85"   # opening up
-        "0.70 0.90"
-        "0.80 0.75"
-        "0.90 0.60"   # wide open, less res
-        "0.75 0.80"   # pulling back
-        "0.60 0.90"
-        "0.45 0.85"
-        "0.30 0.95"   # peak squelch
-        "0.15 0.90"
-        "0.10 0.80"
-        "0.20 0.95"   # another spike
-        "0.50 0.70"
-        "0.70 0.85"
-        "0.85 0.60"
-        "0.40 0.90"
-        "0.20 0.80"   # settle back
+    local duration="${1:-8}"
+    # Keyframes: cutoff resonance (smooth acid arc)
+    local keys=(
+        "0.12 0.85"
+        "0.20 0.90"
+        "0.35 0.80"
+        "0.55 0.75"
+        "0.75 0.85"
+        "0.88 0.65"
+        "0.70 0.80"
+        "0.50 0.90"
+        "0.30 0.95"
+        "0.15 0.88"
+        "0.25 0.92"
+        "0.60 0.75"
+        "0.80 0.65"
+        "0.45 0.88"
+        "0.20 0.82"
     )
-    for pair in "${sequence[@]}"; do
-        local cut res
-        read -r cut res <<< "$pair"
-        set_params "{\"bass\": {\"cutoff\": $cut, \"resonance\": $res}}"
-        sleep "$interval"
-    done
+    local nkeys=${#keys[@]}
+    # ~60 updates per 8 seconds ≈ 7.5fps — smooth enough for visible knob motion
+    local total_steps=60
+    local interval
+    interval=$(echo "scale=4; $duration / $total_steps" | bc)
+    python3 -c "
+import time, subprocess, sys
+keys = [tuple(map(float, k.split())) for k in '''$(printf '%s\n' "${keys[@]}")'''.strip().split('\n')]
+n = len(keys)
+total = $total_steps
+dt = float('$interval')
+for i in range(total):
+    t = i / (total - 1) * (n - 1)
+    idx = int(t)
+    frac = t - idx
+    if idx >= n - 1:
+        c, r = keys[-1]
+    else:
+        c = keys[idx][0] + (keys[idx+1][0] - keys[idx][0]) * frac
+        r = keys[idx][1] + (keys[idx+1][1] - keys[idx][1]) * frac
+    subprocess.run(['curl', '-sf', '-X', 'POST', '$API/api/params',
+        '-H', 'Content-Type: application/json',
+        '-d', '{\"params\":{\"bass\":{\"cutoff\":%.3f,\"resonance\":%.3f}}}' % (c, r)],
+        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    time.sleep(dt)
+" 2>/dev/null
 }
 
 # ── Screenshots ──────────────────────────────────────────────────────────────

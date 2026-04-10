@@ -46,7 +46,7 @@ ask "add a clap on two and four, rearrange the hi-hats, more groove"
 focus_on 808
 wait_seconds 3
 
-say "Drums refined. Now let's work the filter."
+say "Drums refined. Now the filter."
 
 # ── Scene 4: Acid pad — cutoff/resonance sweep ─────────────────────────────
 
@@ -70,29 +70,37 @@ ask "slowly sweep the filter open over 4 bars" 14
 say "The AI ramps parameters over bars. Smooth, tempo-synced."
 wait_seconds 2
 
-# ── Scene 6: Show cables — brief ───────────────────────────────────────────
+# ── Scene 6: Show cables — after wiring is visible ─────────────────────────
 
 scene "Control cables"
 
+# Scroll to console area where the agent sits, then flip
+look_at console
+wait_seconds 1
 show_cables
 wait_seconds 3
-say "Back panel. The agent is wired to every instrument."
+say "Back panel. Control cables from the agent to each instrument."
 show_knobs
 wait_seconds 1
 
-# ── Scene 7: Parameter locking ──────────────────────────────────────────────
+# ── Scene 7: Parameter locking — scroll to bass first ──────────────────────
 
 scene "Parameter lock"
 
-show_all
-look_at console
+focus_on bass
+wait_seconds 1
 
 lock "sequencer.bass_steps" "tb303.cutoff"
 
+say "Locking bass cutoff and pattern."
+
+look_at console
 ask "strip it back, minimal techno, different drums"
 
-say "Bass is locked. Only drums changed."
+focus_on bass
 wait_seconds 2
+
+say "Bass stayed locked. Only drums changed."
 
 unlock "sequencer.bass_steps" "tb303.cutoff"
 
@@ -109,18 +117,29 @@ say "Split the AI into specialists. Each one controls its own instruments."
 
 reset_rack
 add_instrument bass
+look_at bass
+wait_seconds 0.5
 add_instrument 808
 add_instrument 909
+look_at 808
+wait_seconds 0.5
 add_effect reverb
 add_effect delay
+
+# Add agents and scroll to console to show them appearing
+look_at console
+wait_seconds 0.5
 add_agent BASS bonsai bass
+wait_seconds 0.5
 add_agent DRUMS bonsai "kit_a,kit_b"
+wait_seconds 0.5
 add_agent FX bonsai fx
 wait_for_model
 
-# Brief cable view
+# Brief cable view — agents are now wired, so cables are visible
 show_cables
-wait_seconds 2
+wait_seconds 3
+say "Each agent has its own control cables."
 show_knobs
 wait_seconds 1
 
@@ -131,10 +150,11 @@ scene "Band jam"
 play
 wait_seconds 1
 
-ask "acid bass, squelchy, syncopated, cutoff low, resonance high" BASS
+ask "acid bass, squelchy, cutoff low, resonance high" BASS
 ask "kick on steps 0,4,8,12. hihat on 2,6,10,14. clap on 4,12. open hihat on 6,14" DRUMS
 ask "reverb mix 0.12, reverb size 0.5, delay mix 0.08, delay time 0.375" FX
 
+look_at console
 wait_seconds 3
 
 say "Three agents. Each handled its own part."
@@ -143,12 +163,12 @@ say "Three agents. Each handled its own part."
 
 scene "Scoped control"
 
-ask "more resonance, darker" BASS
+ask "more resonance, darker, add slide" BASS
 
 focus_on bass
 wait_seconds 2
 
-say "Bass changed. Drums and FX untouched. That's agent scoping."
+say "Bass changed. Drums and FX untouched."
 
 # ── Scene 11: Creative direction ──────────────────────────────────────────
 
@@ -162,7 +182,7 @@ ask "bigger space" FX 10
 
 wait_seconds 4
 
-# ── Scene 12: Acid pad with band ──────────────────────────────────────────
+# ── Scene 12: Live filter with the band ──────────────────────────────────
 
 scene "Live filter"
 
