@@ -33,7 +33,7 @@ struct Args {
     no_api: bool,
     port: u16,
     model: Option<String>,
-    log_level: String,
+    log_level: Option<String>, // None = use persisted setting; Some = CLI override
     mock: bool,
     osc_port: Option<u16>, // None = disabled; Some(port) = OSC listener enabled
     skip_wizard: bool,
@@ -46,7 +46,7 @@ impl Args {
             no_api: false,
             port: 8765,
             model: None,
-            log_level: "info".into(),
+            log_level: None,
             mock: false,
             osc_port: None,
             skip_wizard: false,
@@ -70,9 +70,7 @@ impl Args {
                 }
                 "--log" => {
                     i += 1;
-                    if let Some(v) = args.get(i) {
-                        result.log_level = v.clone();
-                    }
+                    result.log_level = args.get(i).cloned();
                 }
                 "--osc" => result.osc_port = Some(57120),
                 "--osc-port" => {
@@ -181,12 +179,27 @@ fn run() -> anyhow::Result<()> {
 
     let args = Args::parse();
 
-    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or(&args.log_level))
+    // Resolve log level: CLI --log overrides persisted setting, which overrides "info"
+    let persisted_level = impulse_instruct::state::load_session()
+        .as_ref()
+        .and_then(|s| s.log_level_idx)
+        .and_then(|idx| {
+            ["error", "warn", "info", "debug", "trace"]
+                .get(idx)
+                .copied()
+        });
+    let effective_level = args
+        .log_level
+        .as_deref()
+        .or(persisted_level)
+        .unwrap_or("info");
+    // Init env_logger with max filter (trace) — runtime level controlled by
+    // log::set_max_level (from UI prefs or --log flag). This lets the user
+    // change log level at runtime without restarting.
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("trace"))
         .format(|buf, record| {
             use std::io::Write;
             let ts = buf.timestamp_millis();
-            // Replace the default ISO8601/UTC 'T'+'Z' format with a plain
-            // human-readable timestamp: "2026-04-03 22:00:04.123 INFO ..."
             let ts_str = format!("{}", ts)
                 .replace('T', " ")
                 .trim_end_matches('Z')
@@ -194,6 +207,15 @@ fn run() -> anyhow::Result<()> {
             writeln!(buf, "{} {:5} {}", ts_str, record.level(), record.args())
         })
         .init();
+    // Apply the effective log level as the global gate
+    let level_filter = match effective_level {
+        "error" => log::LevelFilter::Error,
+        "warn" => log::LevelFilter::Warn,
+        "debug" => log::LevelFilter::Debug,
+        "trace" => log::LevelFilter::Trace,
+        _ => log::LevelFilter::Info,
+    };
+    log::set_max_level(level_filter);
 
     banner::print_banner();
 

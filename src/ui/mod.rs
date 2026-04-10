@@ -45,10 +45,11 @@ use crate::midi::MidiEvent;
 use crate::state::AppState;
 
 pub(super) const LOG_LEVELS: &[(&str, log::LevelFilter)] = &[
-    ("ERROR", log::LevelFilter::Error),
-    ("WARN", log::LevelFilter::Warn),
-    ("INFO", log::LevelFilter::Info),
-    ("DEBUG", log::LevelFilter::Debug),
+    ("error", log::LevelFilter::Error),
+    ("warn", log::LevelFilter::Warn),
+    ("info", log::LevelFilter::Info),
+    ("debug", log::LevelFilter::Debug),
+    ("trace", log::LevelFilter::Trace),
 ];
 
 pub(crate) const SEQ_LABEL_W: f32 = 72.0;
