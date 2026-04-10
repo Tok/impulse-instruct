@@ -103,6 +103,19 @@ pub fn draw_hoover(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                     }
                 }
             });
+            ui.horizontal(|ui| {
+                ui.label(
+                    egui::RichText::new("PAN")
+                        .color(theme::SMOKE)
+                        .monospace()
+                        .size(7.5),
+                );
+                let mut pan = app.state.read().hoover.pan;
+                if widgets::pan_slider(ui, &mut pan, 60.0) {
+                    app.state.write().hoover.pan = pan;
+                    app.push_audio_params();
+                }
+            });
             widgets::centered_row(ui, |ui| {
                 let voices = app.state.read().hoover.voices;
                 ui.label(

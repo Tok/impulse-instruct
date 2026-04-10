@@ -353,6 +353,19 @@ pub fn draw_an1x(app: &mut ImpulseApp, ui: &mut Ui) {
                     ak!(ui, "SUS", amp_sustain);
                     ak!(ui, "REL", amp_release);
                 });
+                ui.horizontal(|ui| {
+                    ui.label(
+                        egui::RichText::new("PAN")
+                            .color(theme::SMOKE)
+                            .monospace()
+                            .size(7.5),
+                    );
+                    let mut pan = app.state.read().an1x.pan;
+                    if widgets::pan_slider(ui, &mut pan, 60.0) {
+                        app.state.write().an1x.pan = pan;
+                        app.push_audio_params();
+                    }
+                });
             });
             widgets::glass_group_fill(ui, gw, gw, |ui| {
                 ui.label(

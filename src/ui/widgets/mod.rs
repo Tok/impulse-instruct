@@ -3,8 +3,10 @@
 // Custom widgets: rotary knob, step button, LED indicator.
 
 pub mod emboss;
+pub mod pan;
 #[allow(unused_imports)]
 pub use emboss::button_emboss;
+pub use pan::pan_slider;
 
 pub mod step;
 pub use step::{huth_note_cell, step_button};

@@ -15,6 +15,7 @@ pub fn draw_kit_a(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         mut kped,
         mut kpet,
         mut kclip,
+        mut kpan_a,
         mut st,
         mut ssn,
         mut sd,
@@ -32,6 +33,7 @@ pub fn draw_kit_a(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             s.kit_a.kick.pitch_env_depth,
             s.kit_a.kick.pitch_env_time,
             s.kit_a.kick.clip,
+            s.kit_a.kick.pan,
             s.kit_a.snare.tone,
             s.kit_a.snare.snappy,
             s.kit_a.snare.decay,
@@ -76,6 +78,17 @@ pub fn draw_kit_a(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                     changed = true;
                 }
                 if widgets::param_control(ui, "CLIP", &mut kclip, ParamMode::Free, ctrl).0 {
+                    changed = true;
+                }
+            });
+            ui.horizontal(|ui| {
+                ui.label(
+                    egui::RichText::new("PAN")
+                        .color(theme::SMOKE)
+                        .monospace()
+                        .size(7.5),
+                );
+                if widgets::pan_slider(ui, &mut kpan_a, 60.0) {
                     changed = true;
                 }
             });
@@ -135,6 +148,7 @@ pub fn draw_kit_a(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         s.kit_a.kick.pitch_env_depth = kped;
         s.kit_a.kick.pitch_env_time = kpet;
         s.kit_a.kick.clip = kclip;
+        s.kit_a.kick.pan = kpan_a;
         s.kit_a.snare.tone = st;
         s.kit_a.snare.snappy = ssn;
         s.kit_a.snare.decay = sd;
@@ -209,6 +223,7 @@ pub fn draw_kit_b(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         mut kped,
         mut kpet,
         mut kclip,
+        mut kpan_b,
         mut st,
         mut ssn,
         mut sd,
@@ -225,6 +240,7 @@ pub fn draw_kit_b(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             s.kit_b.kick.pitch_env_depth,
             s.kit_b.kick.pitch_env_time,
             s.kit_b.kick.clip,
+            s.kit_b.kick.pan,
             s.kit_b.snare.tone,
             s.kit_b.snare.snappy,
             s.kit_b.snare.decay,
@@ -267,6 +283,17 @@ pub fn draw_kit_b(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                     changed = true;
                 }
                 if widgets::param_control(ui, "CLIP", &mut kclip, ParamMode::Free, ctrl).0 {
+                    changed = true;
+                }
+            });
+            ui.horizontal(|ui| {
+                ui.label(
+                    egui::RichText::new("PAN")
+                        .color(theme::SMOKE)
+                        .monospace()
+                        .size(7.5),
+                );
+                if widgets::pan_slider(ui, &mut kpan_b, 60.0) {
                     changed = true;
                 }
             });
@@ -322,6 +349,7 @@ pub fn draw_kit_b(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         s.kit_b.kick.pitch_env_depth = kped;
         s.kit_b.kick.pitch_env_time = kpet;
         s.kit_b.kick.clip = kclip;
+        s.kit_b.kick.pan = kpan_b;
         s.kit_b.snare.tone = st;
         s.kit_b.snare.snappy = ssn;
         s.kit_b.snare.decay = sd;

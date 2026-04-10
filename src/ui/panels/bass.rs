@@ -544,6 +544,26 @@ pub fn draw_bass(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         }
     }
 
+    // Pan slider
+    {
+        let mut pan = app.state.read().bass_voices
+            [active_voice.min(app.state.read().bass_voices.len().saturating_sub(1))]
+        .synth
+        .pan;
+        ui.horizontal(|ui| {
+            ui.label(
+                egui::RichText::new("PAN")
+                    .monospace()
+                    .size(8.0)
+                    .color(theme::SMOKE),
+            );
+            if widgets::pan_slider(ui, &mut pan, 80.0) {
+                let av = active_voice.min(app.state.read().bass_voices.len().saturating_sub(1));
+                app.state.write().bass_voices[av].synth.pan = pan;
+                app.push_audio_params();
+            }
+        });
+    }
     ui.add_space(2.0);
 
     // XY Control Squares — two 2D pads for the core acid parameters

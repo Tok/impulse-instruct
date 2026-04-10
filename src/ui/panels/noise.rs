@@ -9,12 +9,13 @@ pub fn draw_noise(app: &mut ImpulseApp, ui: &mut egui::Ui) {
     let focused = app.state.read().llm.focused_params.clone();
     let pm = |path: &str| crate::state::param_mode(path, &locked, &focused);
 
-    let (mut vol, mut color, mut cutoff) = {
+    let (mut vol, mut color, mut cutoff, mut pan) = {
         let s = app.state.read();
         (
             s.noise_voice.volume,
             s.noise_voice.color,
             s.noise_voice.cutoff,
+            s.noise_voice.pan,
         )
     };
     let mut changed = false;
@@ -29,12 +30,24 @@ pub fn draw_noise(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             changed = true;
         }
     });
+    ui.horizontal(|ui| {
+        ui.label(
+            egui::RichText::new("PAN")
+                .color(crate::ui::theme::SMOKE)
+                .monospace()
+                .size(7.5),
+        );
+        if widgets::pan_slider(ui, &mut pan, 60.0) {
+            changed = true;
+        }
+    });
     if changed {
         {
             let mut s = app.state.write();
             s.noise_voice.volume = vol;
             s.noise_voice.color = color;
             s.noise_voice.cutoff = cutoff;
+            s.noise_voice.pan = pan;
         }
         app.push_audio_params();
     }
