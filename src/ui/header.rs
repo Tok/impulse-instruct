@@ -20,7 +20,7 @@ impl ImpulseApp {
     pub(super) fn draw_log_and_scope(&mut self, ctx: &egui::Context) {
         let scope_h = 80.0;
         let screen_h = ctx.screen_rect().height();
-        TopBottomPanel::top("log_scope_panel")
+        TopBottomPanel::top("log_scope_v2")
             .frame(Frame::none().fill(theme::PIT).inner_margin(egui::Margin {
                 left: 8.0,
                 right: 8.0,
@@ -32,41 +32,44 @@ impl ImpulseApp {
             .max_height(screen_h * 0.6)
             .default_height(scope_h + 100.0)
             .show(ctx, |ui| {
-                let total_h = ui.available_height();
-                let log_h = (total_h - scope_h - 4.0).max(20.0);
                 let full_w = ui.available_width();
 
-                // ── Log (top portion, full width) ───────────────────────
-                ui.allocate_ui(egui::vec2(full_w, log_h), |ui| {
-                    ui.set_max_height(log_h);
-                    egui::ScrollArea::vertical()
-                        .id_source("global_log")
-                        .stick_to_bottom(true)
-                        .max_height(log_h)
-                        .auto_shrink([false; 2])
-                        .show(ui, |ui: &mut egui::Ui| {
-                            let job = super::llm_strip::colorize_log(&self.log_text, theme::FOG);
-                            ui.add(egui::Label::new(job).wrap().selectable(true));
-                        });
-                });
-
-                ui.add_space(2.0);
-
-                // ── Scope (bottom portion, fixed height) ────────────────
+                // ── Scope (pinned at the bottom via bottom_up layout) ───
+                // Reserve scope space from the bottom so it doesn't
+                // influence the panel's minimum content height.
+                let scope_rect = {
+                    let panel_rect = ui.max_rect();
+                    egui::Rect::from_min_size(
+                        egui::pos2(panel_rect.min.x, panel_rect.max.y - scope_h),
+                        egui::vec2(full_w, scope_h),
+                    )
+                };
                 let ring_w = scope_h;
                 let linear_w = (full_w - ring_w - 8.0).max(40.0);
-                ui.allocate_ui(egui::vec2(full_w, scope_h), |ui| {
-                    ui.horizontal_top(|ui| {
-                        super::scope_footer::draw_scope_sized(
-                            ui,
-                            &self.scope_buf,
-                            &self.scope_history,
-                            linear_w,
-                            scope_h,
-                        );
-                        super::scope_footer::draw_ring_scope(ui, &self.scope_buf, scope_h);
+                let mut scope_ui = ui.child_ui(
+                    scope_rect,
+                    egui::Layout::left_to_right(egui::Align::TOP),
+                    None,
+                );
+                super::scope_footer::draw_scope_sized(
+                    &mut scope_ui,
+                    &self.scope_buf,
+                    &self.scope_history,
+                    linear_w,
+                    scope_h,
+                );
+                super::scope_footer::draw_ring_scope(&mut scope_ui, &self.scope_buf, scope_h);
+
+                // ── Log (fills everything above the scope) ──────────────
+                let log_h = (ui.available_height() - scope_h - 4.0).max(20.0);
+                egui::ScrollArea::vertical()
+                    .id_source("global_log")
+                    .stick_to_bottom(true)
+                    .max_height(log_h)
+                    .show(ui, |ui: &mut egui::Ui| {
+                        let job = super::llm_strip::colorize_log(&self.log_text, theme::FOG);
+                        ui.add(egui::Label::new(job).wrap().selectable(true));
                     });
-                });
             });
     }
 
