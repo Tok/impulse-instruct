@@ -10,6 +10,7 @@ pub mod rack_cables;
 pub mod rack_canvas;
 pub(crate) mod rack_content;
 mod rack_scroll;
+mod rack_toolbar;
 mod scope_footer;
 pub mod theme;
 mod ui_helpers;

@@ -13,6 +13,8 @@ mod llm_tests;
 mod music_api_tests;
 mod music_tests;
 mod persistence_tests;
+mod rack_tests;
 mod seq_tests;
 mod state_tests;
+mod tts_tests;
 mod vram_tests;

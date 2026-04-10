@@ -438,9 +438,13 @@ impl RackState {
         false
     }
 
-    /// Add a cable between two ports. Rejects audio cables that would create a
-    /// cycle in the signal graph. Returns `true` if the cable was added.
+    /// Add a cable between two ports. Rejects duplicates and audio cables that
+    /// would create a cycle in the signal graph. Returns `true` if the cable was added.
     pub fn connect(&mut self, from: PortRef, to: PortRef) -> bool {
+        // Reject duplicate cables (same from/to port pair)
+        if self.cables.iter().any(|c| c.from == from && c.to == to) {
+            return false;
+        }
         if from.kind == PortKind::Audio
             && self.would_create_audio_cycle(from.module_id, to.module_id)
         {
