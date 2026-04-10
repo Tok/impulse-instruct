@@ -358,6 +358,16 @@ impl ImpulseApp {
                                     .size(7.0)
                                     .monospace(),
                             );
+                            let alerts = analysis.alerts();
+                            if !alerts.is_empty() {
+                                ui.label(
+                                    egui::RichText::new(alerts.join(" | "))
+                                        .color(theme::CHALK)
+                                        .size(8.0)
+                                        .monospace()
+                                        .strong(),
+                                );
+                            }
                         }
                     });
 

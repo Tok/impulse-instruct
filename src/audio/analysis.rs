@@ -45,12 +45,45 @@ impl Default for AudioAnalysis {
 }
 
 impl AudioAnalysis {
-    /// Short one-line summary for the header bar.
+    /// Fixed-width summary for the header bar (no jitter).
     pub fn one_line_summary(&self) -> String {
         format!(
-            "sub:{:.0} low:{:.0} mid:{:.0} hi:{:.0} pk:{:.0}dB",
+            "sub:{:>4.0} low:{:>4.0} mid:{:>4.0} hi:{:>4.0} pk:{:>4.0}dB",
             self.sub_rms_db, self.low_rms_db, self.mid_rms_db, self.high_rms_db, self.peak_db
         )
+    }
+
+    /// Alert strings for extreme/unusual conditions. Empty vec if normal.
+    pub fn alerts(&self) -> Vec<&'static str> {
+        let mut out = Vec::new();
+        if self.peak_db > -1.0 {
+            out.push("CLIPPING");
+        }
+        if self.peak_db > -3.0 && self.peak_db <= -1.0 {
+            out.push("near clip");
+        }
+        if self.high_rms_db > -8.0 && self.transients_per_bar > 6.0 {
+            out.push("snare rush");
+        }
+        if self.sub_rms_db > -6.0 {
+            out.push("sub overload");
+        }
+        if self.low_rms_db - self.mid_rms_db > 20.0 {
+            out.push("muddy low end");
+        }
+        if self.high_rms_db > -6.0 {
+            out.push("harsh highs");
+        }
+        if self.crest_db < 3.0 && self.peak_db > -20.0 {
+            out.push("over-compressed");
+        }
+        if self.mid_rms_db > -4.0 {
+            out.push("mid overload");
+        }
+        if self.peak_db < -40.0 {
+            out.push("near silence");
+        }
+        out
     }
 }
 

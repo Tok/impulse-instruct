@@ -61,7 +61,13 @@ impl ImpulseApp {
             if !captured.is_empty() {
                 let analysis = crate::audio::analysis::analyse_audio(&captured, 44100.0);
                 // Compact snapshot for LLM context (injected into every system prompt)
-                self.state.write().audio_snapshot = analysis.one_line_summary();
+                let alerts = analysis.alerts();
+                let snap = if alerts.is_empty() {
+                    analysis.one_line_summary()
+                } else {
+                    format!("{} !! {}", analysis.one_line_summary(), alerts.join(", "))
+                };
+                self.state.write().audio_snapshot = snap;
                 self.audio_analysis = Some(analysis);
             }
         }
