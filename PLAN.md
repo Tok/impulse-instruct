@@ -6,6 +6,25 @@ What's already built is documented in [docs/features.md](docs/features.md).
 
 ## v0.7.1 — next release
 
+### Agent tooling — gradual control & expressiveness
+
+- [ ] **LFO-as-tool for agents** — agents can schedule an LFO on any target
+  (cutoff, resonance, reverb mix, etc.) to introduce changes gradually
+  instead of jumping to a value. JSON schema: `"lfo_assign": {"target": "bass.cutoff", "rate": 0.5, "depth": 0.3}`
+- [ ] **Parameter ramps** — agents can set a target value + ramp duration
+  (e.g. "move cutoff from 0.3 to 0.8 over 4 bars"). DSP interpolates.
+  JSON schema: `"ramp": {"path": "bass.cutoff", "to": 0.8, "bars": 4}`
+- [ ] **XY pad control** — expose cutoff/resonance pad as a first-class
+  tool the agent can move. Currently agents set values but the pad
+  position doesn't visually track mid-change
+- [ ] **ADSR envelope shaping** — expose attack/decay/sustain/release as
+  agent-controllable parameters with the same ramp/LFO tooling
+- [ ] **Moderate defaults in system prompt** — discourage extreme values
+  (reverb mix > 0.5, delay feedback > 0.6, etc.) unless explicitly
+  asked. Guide agents toward musical subtlety over dramatic resets
+- [ ] **Velocity/volume awareness** — prompt guidance to keep drum volumes
+  balanced; prevent clap/snare rush at uncomfortable levels
+
 ### DSP
 
 - [ ] **Gabber kick voice** — dedicated voice (not just preset on 808 kick);
@@ -14,6 +33,8 @@ What's already built is documented in [docs/features.md](docs/features.md).
   via rack cables (data model exists, DSP routing partially wired)
 - [ ] **Dub techno send/return** — dedicated send/return FX workflow for
   dub-style infinite delay feedback chains
+- [ ] **Audio cables gate signal** — currently DSP processes voices regardless
+  of cable routing. Audio cables should actually control signal flow.
 
 ### Sequencer
 
@@ -30,6 +51,8 @@ What's already built is documented in [docs/features.md](docs/features.md).
   templates that replace the generic "generate all parameters" jam prompt
 - [ ] **VRAM-aware model fallback** — when spawn is rejected, auto-suggest or
   auto-select a lighter model that fits the remaining VRAM budget
+- [ ] **Jam-via-API** — currently API prompts are always one_shot (no jam loop).
+  Need safe jam support that doesn't do full-state replacement.
 
 ### UI / UX
 
@@ -43,6 +66,14 @@ What's already built is documented in [docs/features.md](docs/features.md).
   gesture support for zoom/scroll
 - [ ] **observe_user_edit in remaining panels** — currently only bass panel;
   extend to 808, 909, hoover, AN1X, noise, granular, FX panels
+
+### Demo recording
+
+- [ ] **Demo: ADSR scene** — show an agent shaping bass envelope (attack/decay)
+- [ ] **Demo: LFO assignment scene** — agent schedules a filter sweep via LFO
+- [ ] **Demo: parameter ramp scene** — show gradual cutoff sweep over bars
+- [ ] **Minimal rack wizard preset** — start with only seq + master + console
+  (no default instruments), available as a wizard option
 
 ### Infrastructure
 
@@ -61,3 +92,4 @@ What's already built is documented in [docs/features.md](docs/features.md).
 |-------|-------|--------|
 | Wizard always shows on startup | By design — resume or start fresh | Working as intended |
 | Hoover doesn't sound like a hoover | DSP tuning, not a code bug | Needs filter sweep shape tuning |
+| Audio cables decorative only | DSP processes voices directly from state | Needs signal-path gating |
