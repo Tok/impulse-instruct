@@ -24,6 +24,9 @@ use crate::state::{AppState, apply_llm_update, lock_params, unlock_params};
 pub struct ApiState {
     pub app_state: Arc<RwLock<AppState>>,
     pub llm_tx: Sender<LlmInput>,
+    /// Lock-free channel for API→UI log messages.
+    /// Avoids taking a write lock on AppState just to push log strings.
+    pub api_log_tx: Sender<String>,
 }
 
 // ─── Request / response types ─────────────────────────────────────────────────
@@ -117,9 +120,9 @@ fn snapshot(state: &Arc<RwLock<AppState>>) -> AppState {
     state.read().clone()
 }
 
-/// Push a log message that the UI will pick up and display.
-fn api_log(state: &Arc<RwLock<AppState>>, msg: impl Into<String>) {
-    state.write().api_log.push_back(msg.into());
+/// Push a log message via the lock-free channel (no write lock on AppState).
+fn api_log(api: &ApiState, msg: impl Into<String>) {
+    let _ = api.api_log_tx.try_send(msg.into());
 }
 
 // ─── Handlers ─────────────────────────────────────────────────────────────────
@@ -137,7 +140,7 @@ async fn post_prompt(
     AxumState(api): AxumState<ApiState>,
     Json(req): Json<PromptRequest>,
 ) -> Result<Json<OkResponse>, StatusCode> {
-    api_log(&api.app_state, format!("[API] prompt: {}", req.prompt));
+    api_log(&api, format!("[API] prompt: {}", req.prompt));
     api.llm_tx
         .try_send(LlmInput::Infer {
             prompt: req.prompt,
@@ -158,18 +161,13 @@ async fn post_params(
     // Snapshot first, then release read lock before acquiring write lock.
     let current = snapshot(&api.app_state);
     let next = apply_llm_update(current, &req.params, &[]);
-    {
-        let mut s = api.app_state.write();
-        // Summarize what changed for the UI log.
-        let keys: Vec<&str> = req
-            .params
-            .as_object()
-            .map(|o| o.keys().map(|k| k.as_str()).collect())
-            .unwrap_or_default();
-        s.api_log
-            .push_back(format!("[API] params: {}", keys.join(", ")));
-        *s = next;
-    }
+    let keys: Vec<&str> = req
+        .params
+        .as_object()
+        .map(|o| o.keys().map(|k| k.as_str()).collect())
+        .unwrap_or_default();
+    api_log(&api, format!("[API] params: {}", keys.join(", ")));
+    *api.app_state.write() = next;
     Json(OkResponse {
         ok: true,
         message: Some("params updated".into()),
@@ -183,10 +181,7 @@ async fn post_lock(
     let refs: Vec<&str> = req.paths.iter().map(String::as_str).collect();
     let current = snapshot(&api.app_state);
     let next = lock_params(current, &refs);
-    api_log(
-        &api.app_state,
-        format!("[API] locked: {}", req.paths.join(", ")),
-    );
+    api_log(&api, format!("[API] locked: {}", req.paths.join(", ")));
     *api.app_state.write() = next;
     Json(OkResponse {
         ok: true,
@@ -201,10 +196,7 @@ async fn post_unlock(
     let refs: Vec<&str> = req.paths.iter().map(String::as_str).collect();
     let current = snapshot(&api.app_state);
     let next = unlock_params(current, &refs);
-    api_log(
-        &api.app_state,
-        format!("[API] unlocked: {}", req.paths.join(", ")),
-    );
+    api_log(&api, format!("[API] unlocked: {}", req.paths.join(", ")));
     *api.app_state.write() = next;
     Json(OkResponse {
         ok: true,
@@ -213,15 +205,11 @@ async fn post_unlock(
 }
 
 async fn post_play(AxumState(api): AxumState<ApiState>) -> Json<OkResponse> {
-    let current = snapshot(&api.app_state);
-    let next = crate::state::toggle_sequencer_running(current);
     {
         let mut s = api.app_state.write();
-        // Ensure it ends up running regardless of current state
-        *s = next;
         s.sequencer.running = true;
-        s.api_log.push_back("[API] sequencer: play".into());
     }
+    api_log(&api, "[API] sequencer: play");
     Json(OkResponse {
         ok: true,
         message: None,
@@ -229,11 +217,8 @@ async fn post_play(AxumState(api): AxumState<ApiState>) -> Json<OkResponse> {
 }
 
 async fn post_stop(AxumState(api): AxumState<ApiState>) -> Json<OkResponse> {
-    {
-        let mut s = api.app_state.write();
-        s.sequencer.running = false;
-        s.api_log.push_back("[API] sequencer: stop".into());
-    }
+    api.app_state.write().sequencer.running = false;
+    api_log(&api, "[API] sequencer: stop");
     Json(OkResponse {
         ok: true,
         message: None,
@@ -244,12 +229,8 @@ async fn post_scroll(
     AxumState(api): AxumState<ApiState>,
     Json(req): Json<ScrollRequest>,
 ) -> Json<OkResponse> {
-    {
-        let mut s = api.app_state.write();
-        s.scroll_target = Some(req.target.clone());
-        s.api_log
-            .push_back(format!("[API] scroll → {}", req.target));
-    }
+    api.app_state.write().scroll_target = Some(req.target.clone());
+    api_log(&api, format!("[API] scroll → {}", req.target));
     Json(OkResponse {
         ok: true,
         message: Some(format!("scrolling to {}", req.target)),
@@ -261,48 +242,77 @@ async fn post_preset(
     Json(req): Json<PresetRequest>,
 ) -> Result<Json<OkResponse>, StatusCode> {
     use crate::llm::vram::{PRESETS, find_model};
-    use crate::state::spawn_agent;
 
     let preset = PRESETS
         .iter()
         .find(|p| p.name.eq_ignore_ascii_case(&req.name))
         .ok_or(StatusCode::NOT_FOUND)?;
 
-    // Scan for available model files
     let available_models = crate::ui::scan_models();
 
-    // Remove all existing agents
+    // Do everything in a single write lock — no snapshot+swap race.
+    let mut agent_names = Vec::new();
     {
-        let old_ids: Vec<u32> = api
-            .app_state
-            .read()
-            .llm_agents
-            .iter()
-            .map(|a| a.id)
-            .collect();
         let mut s = api.app_state.write();
+
+        // Remove all existing agents
+        let old_ids: Vec<u32> = s.llm_agents.iter().map(|a| a.id).collect();
         for id in &old_ids {
             s.rack.remove_module(*id);
         }
         s.llm_agents.clear();
-    }
 
-    // Spawn agents from the preset
-    let mut agent_names = Vec::new();
-    for pa in preset.agents {
-        let model_path = find_model(pa.model_pattern, &available_models);
-        let scope: Vec<String> = pa.scope.iter().map(|s| s.to_string()).collect();
-        let current = snapshot(&api.app_state);
-        let (new_state, _id) = spawn_agent(current, pa.persona, &scope, pa.role, model_path);
-        *api.app_state.write() = new_state;
-        agent_names.push(pa.persona);
-    }
+        // Spawn agents from the preset (inline, no full-state swap)
+        for pa in preset.agents {
+            let model_path = find_model(pa.model_pattern, &available_models);
+            let scope: Vec<String> = pa.scope.iter().map(|sc| sc.to_string()).collect();
 
-    // Also set the main model path from the first agent (if it has one)
-    if let Some(first) = preset.agents.first()
-        && let Some(model) = find_model(first.model_pattern, &available_models)
-    {
-        api.app_state.write().llm.model_path = model;
+            let id = s.rack.add_module(crate::state::ModuleKind::LlmAgent);
+            let mut agent = crate::state::LlmAgentState::from_singleton(id, &s.llm);
+            agent.persona_name = pa.persona.to_string();
+            agent.scope = scope.clone();
+            agent.role = pa.role;
+            agent.model_path = model_path.clone();
+
+            let targets: Vec<u32> = if scope.is_empty() {
+                s.rack
+                    .modules
+                    .iter()
+                    .filter(|m| {
+                        !matches!(
+                            m.kind,
+                            crate::state::ModuleKind::MasterOutput
+                                | crate::state::ModuleKind::LlmAgent
+                                | crate::state::ModuleKind::LlmConsole
+                        )
+                    })
+                    .map(|m| m.id)
+                    .collect()
+            } else {
+                s.rack
+                    .modules
+                    .iter()
+                    .filter(|m| {
+                        scope
+                            .iter()
+                            .any(|sc| crate::state::rack_kind_name_matches(m.kind, sc))
+                    })
+                    .map(|m| m.id)
+                    .collect()
+            };
+            for tid in &targets {
+                s.rack.connect_control(id, *tid);
+            }
+            s.llm_agents.push(agent);
+            agent_names.push(pa.persona);
+        }
+
+        // Set the main model path from the first agent
+        if let Some(first) = preset.agents.first()
+            && let Some(model) = find_model(first.model_pattern, &available_models)
+        {
+            s.llm.model_path = model;
+        }
     }
 
     let msg = format!(
@@ -311,7 +321,7 @@ async fn post_preset(
         agent_names.len(),
         agent_names.join(", ")
     );
-    api_log(&api.app_state, msg.clone());
+    api_log(&api, msg.clone());
 
     Ok(Json(OkResponse {
         ok: true,
@@ -328,11 +338,8 @@ async fn post_flip(
     } else {
         "front (knobs)"
     };
-    {
-        let mut s = api.app_state.write();
-        s.rack_flip_requested = Some(req.show_back);
-        s.api_log.push_back(format!("[API] rack flip → {}", label));
-    }
+    api.app_state.write().rack_flip_requested = Some(req.show_back);
+    api_log(&api, format!("[API] rack flip → {}", label));
     Json(OkResponse {
         ok: true,
         message: Some(format!("rack: {}", label)),
@@ -377,10 +384,7 @@ async fn post_rack_add(
 ) -> Result<Json<serde_json::Value>, StatusCode> {
     let kind = parse_module_kind(&req.kind).ok_or(StatusCode::BAD_REQUEST)?;
     let id = api.app_state.write().rack.add_module(kind);
-    api_log(
-        &api.app_state,
-        format!("[API] rack: added {:?} (id={})", kind, id),
-    );
+    api_log(&api, format!("[API] rack: added {:?} (id={})", kind, id));
     Ok(Json(serde_json::json!({ "ok": true, "id": id })))
 }
 
@@ -394,19 +398,53 @@ async fn post_rack_agent(
         .as_deref()
         .and_then(|pat| crate::llm::vram::find_model(pat, &available_models));
 
-    // Use spawn_agent which handles rack module + control cable wiring.
-    let current = snapshot(&api.app_state);
-    let (new_state, id) = crate::state::spawn_agent(
-        current,
-        &req.persona,
-        &req.scope,
-        crate::state::AgentRole::Specialist,
-        model_path,
-    );
-    *api.app_state.write() = new_state;
+    // Add agent directly on the locked state — DO NOT snapshot+swap the entire
+    // AppState, as that races with the audio thread writing current_step.
+    let id = {
+        let mut s = api.app_state.write();
+        let id = s.rack.add_module(crate::state::ModuleKind::LlmAgent);
+        let mut agent = crate::state::LlmAgentState::from_singleton(id, &s.llm);
+        agent.persona_name = req.persona.clone();
+        agent.scope = req.scope.clone();
+        agent.role = crate::state::AgentRole::Specialist;
+        agent.model_path = model_path;
+
+        // Wire control cables to modules matching the scope
+        let targets: Vec<u32> = if req.scope.is_empty() {
+            s.rack
+                .modules
+                .iter()
+                .filter(|m| {
+                    !matches!(
+                        m.kind,
+                        crate::state::ModuleKind::MasterOutput
+                            | crate::state::ModuleKind::LlmAgent
+                            | crate::state::ModuleKind::LlmConsole
+                    )
+                })
+                .map(|m| m.id)
+                .collect()
+        } else {
+            s.rack
+                .modules
+                .iter()
+                .filter(|m| {
+                    req.scope
+                        .iter()
+                        .any(|sc| crate::state::rack_kind_name_matches(m.kind, sc))
+                })
+                .map(|m| m.id)
+                .collect()
+        };
+        for tid in &targets {
+            s.rack.connect_control(id, *tid);
+        }
+        s.llm_agents.push(agent);
+        id
+    };
 
     api_log(
-        &api.app_state,
+        &api,
         format!(
             "[API] rack: added agent {} (id={}, scope={:?})",
             req.persona, id, req.scope
@@ -439,10 +477,11 @@ async fn post_rack_cable(
             },
         );
     }
-    s.api_log.push_back(format!(
-        "[API] rack: cable {} → {} ({})",
-        req.from, req.to, req.kind
-    ));
+    drop(s);
+    api_log(
+        &api,
+        format!("[API] rack: cable {} → {} ({})", req.from, req.to, req.kind),
+    );
     Json(OkResponse {
         ok: true,
         message: Some(format!("cable {} → {}", req.from, req.to)),
@@ -456,8 +495,8 @@ async fn post_rack_remove(
     let mut s = api.app_state.write();
     s.rack.remove_module(req.id);
     s.llm_agents.retain(|a| a.id != req.id);
-    s.api_log
-        .push_back(format!("[API] rack: removed module {}", req.id));
+    drop(s);
+    api_log(&api, format!("[API] rack: removed module {}", req.id));
     Json(OkResponse {
         ok: true,
         message: Some(format!("removed {}", req.id)),
@@ -486,8 +525,11 @@ async fn post_rack_reset(AxumState(api): AxumState<ApiState>) -> Json<OkResponse
         .cables
         .retain(|c| keep.contains(&c.from.module_id) && keep.contains(&c.to.module_id));
     s.llm_agents.clear();
-    s.api_log
-        .push_back("[API] rack: reset to minimal (seq + master + console)".into());
+    drop(s);
+    api_log(
+        &api,
+        "[API] rack: reset to minimal (seq + master + console)",
+    );
     Json(OkResponse {
         ok: true,
         message: Some("rack reset".into()),

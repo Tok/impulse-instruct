@@ -2,7 +2,7 @@
 // Pure data only — no methods that mutate in-place. Transitions at the bottom.
 #![allow(dead_code)]
 use serde::{Deserialize, Serialize};
-use std::collections::{HashSet, VecDeque};
+use std::collections::HashSet;
 
 pub mod drums;
 pub use drums::*;
@@ -214,9 +214,7 @@ pub struct AppState {
     /// Per-agent LLM state for rackable LLM modules.
     #[serde(default)]
     pub llm_agents: Vec<LlmAgentState>,
-    /// Messages from the HTTP API that the UI should display in the log.
-    #[serde(skip)]
-    pub api_log: VecDeque<String>,
+    // api_log moved to a lock-free crossbeam channel (ApiState.api_log_tx → UI receiver)
     /// Scroll target — the UI scrolls to bring this zone/module into view, then clears.
     /// Format: zone name ("global", "voice", "fxmod") or module kind ("AcidBass", "DrumKit808", etc.)
     #[serde(skip)]
@@ -254,7 +252,6 @@ impl Default for AppState {
             spectrum: Default::default(),
             rack: Default::default(),
             llm_agents: Vec::new(),
-            api_log: VecDeque::new(),
             scroll_target: None,
             rack_flip_requested: None,
         };

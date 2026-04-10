@@ -1,16 +1,12 @@
 // ─── ui/api_log_handler.rs ── drain API log messages into the UI ─────────────
-// Extracted from mod.rs to stay under the 1000-line limit.
+// Uses a lock-free crossbeam channel (no write lock on AppState).
 
 use super::{ActivityAction, ActivityEntry, ImpulseApp};
 
 impl ImpulseApp {
-    /// Drain log messages pushed by the HTTP API and display them in the UI log.
+    /// Drain log messages from the API→UI channel and display them in the log.
     pub(crate) fn drain_api_log(&mut self) {
-        let messages: Vec<String> = {
-            let mut s = self.state.write();
-            s.api_log.drain(..).collect()
-        };
-        for msg in messages {
+        while let Ok(msg) = self.api_log_rx.try_recv() {
             log::info!("{}", msg);
             self.log_text.push_str(&msg);
             self.log_text.push('\n');

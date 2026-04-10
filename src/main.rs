@@ -246,11 +246,15 @@ fn run() -> anyhow::Result<()> {
     }
     log::info!("LLM thread spawned");
 
+    // ── API log channel (lock-free, API→UI) ────────────────────────────────
+    let (api_log_tx, api_log_rx) = crossbeam_channel::bounded::<String>(128);
+
     // ── HTTP API thread (on by default; disabled by --no-api) ────────────────
     let api_port = if !args.no_api { Some(args.port) } else { None };
     if let Some(port) = api_port {
         let state = Arc::clone(&app_state);
         let llm_tx_http = llm_tx.clone();
+        let log_tx = api_log_tx.clone();
         std::thread::Builder::new()
             .name("http".into())
             .spawn(move || {
@@ -263,6 +267,7 @@ fn run() -> anyhow::Result<()> {
                     let api_state = api::ApiState {
                         app_state: state,
                         llm_tx: llm_tx_http,
+                        api_log_tx: log_tx,
                     };
                     if let Err(e) = api::run_server(api_state, port).await {
                         log::error!("HTTP server error: {}", e);
@@ -339,6 +344,7 @@ fn run() -> anyhow::Result<()> {
                 llm_out_rx,
                 midi_rx,
                 midi_port,
+                api_log_rx,
                 api_port,
                 args.skip_wizard,
             )))

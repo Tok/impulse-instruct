@@ -150,6 +150,8 @@ pub struct ImpulseApp {
     prompt_input: String,
     log_text: String,
     api_port: Option<u16>,
+    /// Lock-free receiver for API→UI log messages (sender is in ApiState).
+    api_log_rx: crossbeam_channel::Receiver<String>,
     show_about: bool,
     // Structured activity log for timeline display
     pub(crate) activity_log: Vec<ActivityEntry>,
@@ -259,6 +261,7 @@ impl ImpulseApp {
         llm_rx: Receiver<LlmOutput>,
         midi_rx: Receiver<MidiEvent>,
         midi_port: Option<String>,
+        api_log_rx: crossbeam_channel::Receiver<String>,
         api_port: Option<u16>,
         skip_wizard: bool,
     ) -> Self {
@@ -289,10 +292,11 @@ impl ImpulseApp {
             }
         }
 
-        // Auto-start sequencer so there's always audio from the first frame.
+        // Don't auto-start the sequencer — let the user or AI start it.
+        // The whole point is the AI builds the pattern fresh each time.
         {
             let mut s = state.write();
-            s.sequencer.running = true;
+            s.sequencer.running = false;
         }
 
         // Pre-load amen WAV if path is set in restored session.
@@ -337,6 +341,7 @@ impl ImpulseApp {
             prompt_input: String::new(),
             log_text,
             api_port,
+            api_log_rx,
             show_about: false,
             activity_log: Vec::new(),
             show_prefs: false,
@@ -865,27 +870,11 @@ impl eframe::App for ImpulseApp {
             self.show_shortcuts = !self.show_shortcuts;
         }
 
-        // ── Startup hook ──────────────────────────────────────────────────────
-        // Fire once — right after the LLM transitions from initializing to ready.
-        // Deferred while the setup wizard is visible so nothing plays before the user chooses.
+        // ── Startup hook (disabled) ───────────────────────────────────────────
+        // The synth starts silent — no auto-play, no startup prompt.
+        // The user (or the demo script) decides when and what to play.
         if !self.startup_done && !self.show_wizard && !self.state.read().llm.llm_initializing {
             self.startup_done = true;
-            if let Some(prompt) = crate::config::random_startup_prompt() {
-                // Send startup prompt to the first enabled agent.
-                let first_agent = {
-                    let s = self.state.read();
-                    s.llm_agents
-                        .iter()
-                        .find(|a| s.rack.modules.iter().any(|m| m.id == a.id && m.enabled))
-                        .map(|a| a.id)
-                };
-                let _ = self.llm_tx.try_send(LlmInput::Infer {
-                    prompt: prompt.to_string(),
-                    one_shot: true,
-                    agent_id: first_agent,
-                });
-                log::info!("Startup prompt: {}", prompt);
-            }
         }
         ctx.request_repaint_after(std::time::Duration::from_millis(16));
         // ── Drain scope + DSP load ring buffers ──────────────────────────────
