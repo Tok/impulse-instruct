@@ -7,6 +7,7 @@ pub mod instructions;
 pub mod json_repair;
 pub mod mock;
 pub mod prompt;
+pub mod schema;
 pub mod styles;
 pub mod vram;
 pub use mock::mock_response;

@@ -125,6 +125,14 @@ pub struct Style {
     /// Establishes a style baseline so the LLM doesn't inherit a previous style's settings.
     #[serde(default)]
     pub baseline_params: Option<serde_json::Value>,
+    /// Example MC/DJ lines for this style. Fed to MC-mode agents as examples
+    /// of what to say. Not spoken directly — the model uses them as reference.
+    #[serde(default)]
+    pub mc_lines: Vec<String>,
+    /// Topic words/themes for singer/rapper agents. Gives creative direction
+    /// about what to sing or rap about in this style.
+    #[serde(default)]
+    pub themes: Vec<String>,
 }
 
 pub struct StyleCatalog(Vec<Style>);

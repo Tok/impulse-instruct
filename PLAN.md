@@ -53,6 +53,9 @@ What's already built is documented in [docs/features.md](docs/features.md).
   auto-select a lighter model that fits the remaining VRAM budget
 - [ ] **Jam-via-API** — currently API prompts are always one_shot (no jam loop).
   Need safe jam support that doesn't do full-state replacement.
+- [ ] **Style mc_lines/themes UI editor** — allow editing mc_lines and themes
+  per style from the UI preferences, so users don't need to modify styles.json
+  directly. Store overrides in session.json.
 - [ ] **Style → rack auto-setup** — add `rack_modules` field to `styles.json`
   entries, listing which modules to add and how to wire them when a style is
   selected. E.g. `"rack_modules": ["bass", "808", "reverb", "delay"]` for acid,

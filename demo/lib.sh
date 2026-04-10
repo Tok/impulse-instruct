@@ -413,6 +413,46 @@ get_window_geometry() {
     '
 }
 
+# ─── Screenshot capture ──────────────────────────────────────────────────────
+
+SCREENSHOT_DIR="${DEMO_DIR}/../assets/screenshots"
+
+capture_screenshot() {
+    # Capture the app window to a PNG file.
+    # Usage: capture_screenshot "v0.7.1-rack-backside"
+    local name="$1"
+    local outfile="$SCREENSHOT_DIR/${name}.png"
+    mkdir -p "$SCREENSHOT_DIR"
+
+    local wid="${APP_WINDOW_ID:-}"
+    if [ -z "$wid" ] || [ "$wid" = "0" ]; then
+        wid=$(find_app_window)
+    fi
+    if [ -z "$wid" ] || [ "$wid" = "0" ]; then
+        echo "  WARNING: No app window for screenshot" >&2
+        return 1
+    fi
+
+    # Use import (ImageMagick) for window capture — handles decorations well
+    if command -v import >/dev/null 2>&1; then
+        import -window "$wid" "$outfile" 2>/dev/null
+    elif command -v scrot >/dev/null 2>&1; then
+        # scrot fallback — focused window mode
+        wmctrl -i -a "$wid" 2>/dev/null
+        sleep 0.3
+        scrot -u "$outfile" 2>/dev/null
+    elif command -v gnome-screenshot >/dev/null 2>&1; then
+        wmctrl -i -a "$wid" 2>/dev/null
+        sleep 0.3
+        gnome-screenshot -w -f "$outfile" 2>/dev/null
+    else
+        echo "  WARNING: No screenshot tool found (install imagemagick)" >&2
+        return 1
+    fi
+
+    echo "  Screenshot: $outfile"
+}
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # High-level scenario DSL
 #
@@ -578,4 +618,13 @@ set_params() {
 use_preset() {
     # Apply an agent preset: Solo, Duo, Swarm, Band, Voices, Lite
     api_preset "$1"
+}
+
+# ── Screenshots ──────────────────────────────────────────────────────────────
+
+screenshot() {
+    # Capture the app window to assets/screenshots/<name>.png.
+    # Usage: screenshot "v0.7.1-rack-backside"
+    pause 0.5
+    capture_screenshot "$1"
 }

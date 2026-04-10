@@ -383,58 +383,58 @@ if [ "$SKIP_VIDEO" -eq 0 ]; then
         echo "  App audio: not captured"
     fi
     echo "  Raw video: $(du -h "$RAW_VIDEO" 2>/dev/null | cut -f1)"
-    echo "  Encoding final video (this may take a minute)..."
 
+    # Always generate SRT if narration was recorded
+    SRT_FILE=""
     if [ "$NO_TTS" -eq 0 ] && [ -f "$NARRATION_LIST" ]; then
         SRT_FILE=$(generate_srt)
         echo "  Subtitles: $SRT_FILE"
     fi
 
+    # Base name for output variants
+    local base="${OUTPUT_DIR}/impulse_demo_${SCENARIO}_${TIMESTAMP}"
+    FINAL_VIDEO="${base}.mp4"
+    FINAL_VIDEO_SUBS="${base}_subs.mp4"
+
+    echo "  Encoding videos (this may take a minute)..."
+
+    # ── Video without embedded subtitles (for YouTube — upload SRT separately)
+    local audio_args=""
     if [ "$AUDIO_COUNT" -gt 0 ]; then
-        if [ "$NO_SUBTITLES" -eq 0 ] && [ -f "${SRT_FILE:-}" ]; then
-            ffmpeg -y \
-                -i "$RAW_VIDEO" \
-                -i "$APP_AUDIO" \
-                -vf "subtitles=${SRT_FILE}:force_style='FontSize=22,FontName=monospace,PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,Outline=2,MarginV=40'" \
-                -c:v h264_nvenc -preset p4 -cq 22 \
-                -c:a aac -b:a 192k \
-                -map 0:v:0 -map 1:a:0 \
-                -shortest \
-                "$FINAL_VIDEO" \
-                </dev/null
-        else
-            ffmpeg -y \
-                -i "$RAW_VIDEO" \
-                -i "$APP_AUDIO" \
-                -c:v h264_nvenc -preset p4 -cq 22 \
-                -c:a aac -b:a 192k \
-                -map 0:v:0 -map 1:a:0 \
-                -shortest \
-                "$FINAL_VIDEO" \
-                </dev/null
-        fi
-    else
-        if [ "$NO_SUBTITLES" -eq 0 ] && [ -f "${SRT_FILE:-}" ]; then
-            ffmpeg -y \
-                -i "$RAW_VIDEO" \
-                -vf "subtitles=${SRT_FILE}:force_style='FontSize=22,FontName=monospace,PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,Outline=2,MarginV=40'" \
-                -c:v h264_nvenc -preset p4 -cq 22 \
-                "$FINAL_VIDEO" \
-                </dev/null
-        else
-            ffmpeg -y -i "$RAW_VIDEO" \
-                -c:v h264_nvenc -preset p4 -cq 22 \
-                "$FINAL_VIDEO" \
-                </dev/null
-        fi
+        audio_args="-i $APP_AUDIO -c:a aac -b:a 192k -map 0:v:0 -map 1:a:0 -shortest"
+    fi
+
+    ffmpeg -y \
+        -i "$RAW_VIDEO" \
+        $audio_args \
+        -c:v h264_nvenc -preset p4 -cq 22 \
+        "$FINAL_VIDEO" \
+        </dev/null 2>/dev/null
+
+    # ── Video with burned-in subtitles (for Telegram, social media)
+    if [ -n "$SRT_FILE" ] && [ -f "$SRT_FILE" ]; then
+        ffmpeg -y \
+            -i "$RAW_VIDEO" \
+            $audio_args \
+            -vf "subtitles=${SRT_FILE}:force_style='FontSize=22,FontName=monospace,PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,Outline=2,MarginV=40'" \
+            -c:v h264_nvenc -preset p4 -cq 22 \
+            "$FINAL_VIDEO_SUBS" \
+            </dev/null 2>/dev/null
     fi
 
     echo ""
     echo "=== Demo recording complete ==="
-    echo "  Output: $FINAL_VIDEO"
-    ls -lh "$FINAL_VIDEO" 2>/dev/null | awk '{print "  Size:  "$5}'
+    echo "  Clean video: $FINAL_VIDEO"
+    ls -lh "$FINAL_VIDEO" 2>/dev/null | awk '{print "  Size:       "$5}'
+    if [ -f "$FINAL_VIDEO_SUBS" ]; then
+        echo "  With subs:   $FINAL_VIDEO_SUBS"
+        ls -lh "$FINAL_VIDEO_SUBS" 2>/dev/null | awk '{print "  Size:       "$5}'
+    fi
+    if [ -n "$SRT_FILE" ] && [ -f "$SRT_FILE" ]; then
+        echo "  SRT file:    $SRT_FILE"
+    fi
     ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 \
-        "$FINAL_VIDEO" 2>/dev/null | awk '{printf "  Duration: %.1fs\n", $1}'
+        "$FINAL_VIDEO" 2>/dev/null | awk '{printf "  Duration:    %.1fs\n", $1}'
 else
     echo ""
     echo "=== Scenario run complete (no video) ==="
