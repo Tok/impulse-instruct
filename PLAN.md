@@ -29,6 +29,18 @@ What's already built is documented in [docs/features.md](docs/features.md).
 
 - [ ] **Gabber kick voice** — dedicated voice (not just preset on 808 kick);
   extreme pitch envelope, hard clipper, layered transient
+- [ ] **Per-voice pan** — each voice (bass, 808, 909, hoover, AN1X, noise) gets
+  a pan knob (-1 L to +1 R, default 0 center). Applied before the FX chain.
+  LLM-addressable: `"bass": {"pan": -0.3}`, `"kit_a": {"kick": {"pan": 0.1}}`.
+  Displayed as a simple L/R slider on each voice card.
+- [ ] **Pan FX module** — insertable rack module for per-chain stereo placement.
+  Can be wired between any two modules. Knobs: pan position, width, auto-pan
+  rate (LFO). Enables off-center placement of specific FX returns.
+- [ ] **Pan in sequencer** — per-step pan value for bass voice (like velocity but
+  L/R). Notation: 0 = center (default), -1 = full left, +1 = full right.
+  Could be visualized as horizontal position of the note dot in event stream.
+- [ ] **LFO target: StereoWidth** — add StereoWidth to LfoTarget enum so agents
+  can modulate stereo width over time (auto-pan effect).
 - [ ] **Per-voice FX sends** — route individual voices to specific FX modules
   via rack cables (data model exists, DSP routing partially wired)
 - [ ] **Dub techno send/return** — dedicated send/return FX workflow for

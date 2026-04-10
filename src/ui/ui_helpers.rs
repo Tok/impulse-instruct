@@ -66,14 +66,9 @@ impl ImpulseApp {
                 // Pattern/mix alerts from sequencer state
                 let pat_alerts = crate::audio::analysis::pattern_alerts(&self.state.read());
                 all_alerts.extend(pat_alerts);
-                // Stereo alert — only warn if stereo FX are active but output is still mono
-                {
-                    let s = self.state.read();
-                    let has_stereo_fx =
-                        s.fx.chorus_mix > 0.05 || s.fx.reverb_mix > 0.1 || s.fx.delay_mix > 0.05;
-                    if self.stereo_corr > 0.98 && analysis.peak_db > -30.0 && has_stereo_fx {
-                        all_alerts.push("mono mix".into());
-                    }
+                // Stereo alerts
+                if self.stereo_corr > 0.95 && analysis.peak_db > -30.0 {
+                    all_alerts.push("narrow stereo".into());
                 }
                 // Build snapshot with stereo info
                 let stereo_str = format!(

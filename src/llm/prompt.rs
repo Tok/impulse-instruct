@@ -583,6 +583,11 @@ FX RESTRAINT — always start clean:
   Never set reverb_mix > 0.4 or delay_feedback > 0.5 without explicit user request.
   Never set heavy reverb + heavy delay + distortion simultaneously.
 
+STEREO — avoid pure mono mixes:
+  A pure mono output sounds flat and lifeless. Use chorus (even subtle, mix 0.05–0.15)
+  or stereo_width > 0.5 to add spatial depth. Reverb and delay also add width naturally.
+  If the AUDIO line shows "narrow stereo", increase chorus_mix or stereo_width.
+
 JAM HEAT: {heat_pct}% — {heat_desc}
 
 RACK ROUTING — enable/disable modules and wire cables between them:
