@@ -9,10 +9,11 @@ NARRATION_LIST="$DEMO_DIR/.narration_playlist"
 XDO="python3 $DEMO_DIR/xdo.py"
 
 # TTS settings — CoquiTTS preferred, espeak-ng fallback
-TTS_MODEL="${TTS_MODEL:-}"      # CoquiTTS model (empty = default)
-TTS_VOICE="${TTS_VOICE:-en-us+f3}"  # espeak-ng voice (fallback)
-TTS_SPEED="${TTS_SPEED:-155}"   # espeak-ng words per minute
-TTS_PITCH="${TTS_PITCH:-45}"    # espeak-ng pitch
+# CoquiTTS: pip install TTS; best model: tts_models/en/ljspeech/tacotron2-DDC
+TTS_MODEL="${TTS_MODEL:-tts_models/en/ljspeech/tacotron2-DDC}"
+TTS_VOICE="${TTS_VOICE:-en+f4}"     # espeak-ng: female, clear
+TTS_SPEED="${TTS_SPEED:-165}"       # espeak-ng words per minute (brisk)
+TTS_PITCH="${TTS_PITCH:-48}"        # espeak-ng pitch (slightly higher female)
 
 # Window ID — set by record-demo.sh after finding the app
 APP_WINDOW_ID="${APP_WINDOW_ID:-0}"
@@ -495,8 +496,10 @@ wait_seconds() {
 
 reset_rack() {
     # Clear the rack to minimal (sequencer + master + console).
+    # Also ensure clean visual state: front side, all zones expanded.
     api_rack_reset
     api_flip_front
+    api_collapse "none"
     pause 1
 }
 
@@ -618,6 +621,28 @@ set_params() {
 use_preset() {
     # Apply an agent preset: Solo, Duo, Swarm, Band, Voices, Lite
     api_preset "$1"
+}
+
+# ── Filter pad sweep (animate cutoff/resonance) ─────────────────────────────
+
+sweep_pad() {
+    # Animate cutoff and resonance through a sequence of values.
+    # Simulates moving the XY pad for a few seconds of acid squelch.
+    # Usage: sweep_pad [seconds]
+    local duration="${1:-4}"
+    local steps=8
+    local interval
+    interval=$(echo "scale=2; $duration / $steps" | bc)
+    # Sweep through a figure-8 pattern
+    for i in $(seq 0 $((steps - 1))); do
+        local t
+        t=$(echo "scale=3; $i / $steps" | bc)
+        local cut res
+        cut=$(echo "scale=3; 0.15 + 0.6 * (0.5 + 0.5 * s(6.28 * $t))" | bc -l)
+        res=$(echo "scale=3; 0.4 + 0.5 * (0.5 + 0.5 * c(6.28 * $t))" | bc -l)
+        set_params "{\"bass\": {\"cutoff\": $cut, \"resonance\": $res}}"
+        sleep "$interval"
+    done
 }
 
 # ── Screenshots ──────────────────────────────────────────────────────────────
