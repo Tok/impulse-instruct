@@ -141,10 +141,12 @@ async fn post_prompt(
     Json(req): Json<PromptRequest>,
 ) -> Result<Json<OkResponse>, StatusCode> {
     api_log(&api, format!("[API] prompt: {}", req.prompt));
+    // Always one_shot for API prompts — the jam loop's full-state replacement
+    // corrupts rack/agent state set up via the API.
     api.llm_tx
         .try_send(LlmInput::Infer {
             prompt: req.prompt,
-            one_shot: req.one_shot,
+            one_shot: true,
             agent_id: None,
         })
         .map_err(|_| StatusCode::SERVICE_UNAVAILABLE)?;

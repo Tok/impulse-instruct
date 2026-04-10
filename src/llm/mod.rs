@@ -381,8 +381,10 @@ pub fn run_llm_loop(
         };
 
         // Build system prompt with per-agent overrides patched in.
+        log::debug!("LLM: building system prompt...");
         let system = {
             let mut snap = state.read().clone();
+            log::debug!("LLM: state snapshot done");
             if let Some(mode) = agent_conv_mode {
                 snap.llm.conversation_mode = mode;
             }
@@ -426,10 +428,15 @@ pub fn run_llm_loop(
             for h in &hints {
                 full_memory.push(format!("[hint from another agent] {}", h));
             }
-            prompt::build_system_prompt_full(&snap, &agent_scope, &full_memory, &style_obs)
+            log::debug!("LLM: calling build_system_prompt_full...");
+            let result =
+                prompt::build_system_prompt_full(&snap, &agent_scope, &full_memory, &style_obs);
+            log::debug!("LLM: system prompt built ({} chars)", result.len());
+            result
         };
         {
             let mut s = state.write();
+            log::debug!("LLM: setting is_inferring=true");
             s.llm.is_inferring = true;
             s.llm.last_prompt = prompt.clone();
             if let Some(aid) = agent_id
@@ -462,9 +469,20 @@ pub fn run_llm_loop(
                 "/no_think"
             }
         );
+        log::info!(
+            "LLM: sending inference to port {} ({} system chars, {} prompt chars)",
+            infer_port,
+            system.len(),
+            think_prompt.len()
+        );
         let t0 = Instant::now();
         let result = pool.infer(infer_port, &system, &think_prompt, &sampling);
         let elapsed = t0.elapsed().as_secs_f32();
+        log::info!(
+            "LLM: inference returned after {:.1}s (ok={})",
+            elapsed,
+            result.is_ok()
+        );
 
         match result {
             Ok(output) => {
@@ -474,18 +492,58 @@ pub fn run_llm_loop(
                 let ctx = output.context_used;
                 let tthink = output.thinking.as_ref().map(|t| t.len() / 4).unwrap_or(0);
 
+                // Apply LLM update: snapshot OUTSIDE the lock, apply, then
+                // selectively write back under a short lock.
                 let before_state = if let Some(ref update) = output.param_update {
+                    let t0 = Instant::now();
+                    // Snapshot outside the write lock to minimize hold time.
                     let current = state.read().clone();
                     let before = Box::new(current.clone());
+                    log::info!(
+                        "LLM apply: snapshot took {:.1}ms",
+                        t0.elapsed().as_secs_f64() * 1000.0
+                    );
+
+                    let t1 = Instant::now();
                     let next = apply_llm_update(current, update, &agent_scope);
-                    *state.write() = next;
+                    log::info!(
+                        "LLM apply: apply_llm_update took {:.1}ms",
+                        t1.elapsed().as_secs_f64() * 1000.0
+                    );
+
+                    // Short write lock: only copy synth-parameter fields.
+                    let t2 = Instant::now();
+                    {
+                        let mut s = state.write();
+                        let step = s.sequencer.current_step;
+                        s.bass_voices = next.bass_voices;
+                        s.kit_a = next.kit_a;
+                        s.kit_b = next.kit_b;
+                        s.sequencer = next.sequencer;
+                        s.sequencer.current_step = step;
+                        s.fx = next.fx;
+                        s.hoover = next.hoover;
+                        s.an1x = next.an1x;
+                        s.noise_voice = next.noise_voice;
+                        s.lfo = next.lfo;
+                    } // write lock released here
+                    log::info!(
+                        "LLM apply: write-back took {:.1}ms",
+                        t2.elapsed().as_secs_f64() * 1000.0
+                    );
+
                     Some(before)
                 } else {
                     None
                 };
 
+                log::info!(
+                    "LLM apply: update done, has_param_update={}",
+                    output.param_update.is_some()
+                );
                 {
                     let mut s = state.write();
+                    log::debug!("LLM: setting is_inferring=false");
                     s.llm.is_inferring = false;
                     s.llm.tokens_per_sec = tps;
                     s.llm.prompt_tokens = ptok;

@@ -448,6 +448,11 @@ impl ImpulseApp {
 
     fn drain_llm_outputs(&mut self) {
         while let Ok(out) = self.llm_rx.try_recv() {
+            log::info!(
+                "UI: drain_llm_output received (has_update={}, text_len={})",
+                out.param_update.is_some(),
+                out.text.len()
+            );
             // Resolve persona: agent-specific name when available, else singleton.
             let persona_name = out
                 .agent_id
@@ -523,9 +528,19 @@ impl ImpulseApp {
             // Jam re-triggers unless heat is at zero (model is parked).
             if out.text == "[jam_cycle_done]" && self.state.read().llm.heat > 0.0 {
                 {
+                    // Advance ramps selectively — do NOT replace the full state,
+                    // as that overwrites rack/agent changes made by the API.
                     let cur = self.state.read().clone();
                     let next = crate::state::jam_tools::advance_ramps(cur);
-                    *self.state.write() = next;
+                    let mut s = self.state.write();
+                    let step = s.sequencer.current_step;
+                    s.bass_voices = next.bass_voices;
+                    s.kit_a = next.kit_a;
+                    s.kit_b = next.kit_b;
+                    s.sequencer = next.sequencer;
+                    s.sequencer.current_step = step;
+                    s.fx = next.fx;
+                    s.lfo = next.lfo;
                 }
                 self.state.write().llm.jam_cycle_count =
                     self.state.read().llm.jam_cycle_count.saturating_add(1);
@@ -726,8 +741,10 @@ impl ImpulseApp {
                     self.push_history(); // fallback: snapshot current state
                 }
                 self.push_audio_params();
+                log::debug!("UI: LLM output processed, audio params pushed");
             }
         }
+        log::trace!("UI: drain_llm_outputs complete");
     }
     // drain_midi_events extracted to midi_handler.rs
     // drain_api_log extracted to api_log_handler.rs
@@ -782,7 +799,8 @@ impl eframe::App for ImpulseApp {
         self.drain_api_log();
         self.drain_midi_events();
 
-        // ── Jam timer: fire delayed jam cycle when the bar-count delay elapses ──
+        // ── Auto-save: write session.json if the state changed ──────────────
+        // (moved here to diagnose hang — see if save blocks)
         if let Some((fire_at, pending_agent)) = self.jam_next_fire {
             if std::time::Instant::now() >= fire_at {
                 self.jam_next_fire = None;

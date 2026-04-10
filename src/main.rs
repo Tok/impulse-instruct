@@ -172,6 +172,13 @@ fn show_startup_error(msg: &str) {
 }
 
 fn run() -> anyhow::Result<()> {
+    // Catch panics from ALL threads and log them before exit.
+    std::panic::set_hook(Box::new(|info| {
+        let bt = std::backtrace::Backtrace::force_capture();
+        eprintln!("\n!!! PANIC !!!\n{}\nBacktrace:\n{}", info, bt);
+        log::error!("PANIC: {}\n{}", info, bt);
+    }));
+
     let args = Args::parse();
 
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or(&args.log_level))
@@ -350,7 +357,11 @@ fn run() -> anyhow::Result<()> {
             )))
         }),
     )
-    .map_err(|e| anyhow::anyhow!("UI error: {}", e))?;
+    .map_err(|e| {
+        log::error!("eframe exited with error: {}", e);
+        anyhow::anyhow!("UI error: {}", e)
+    })?;
+    log::info!("eframe::run_native returned — window closed normally");
 
     Ok(())
 }
