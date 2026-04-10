@@ -13,13 +13,16 @@ scene "Setup"
 
 reset_rack
 
-say "Impulse Instruct. AI agents controlling synthesizers in real time."
+say "Impulse Instruct. AI-controlled synthesizers. Let's build a rack."
 
 add_instrument bass
 add_instrument 808
 add_instrument 909
 add_effect reverb
 add_effect delay
+
+say "Bass, drums, reverb, delay. Adding an AI agent."
+
 add_agent PULSE gemma
 wait_for_model
 
@@ -29,14 +32,13 @@ scene "First sound"
 
 look_at sequencer
 
-# Send prompt BEFORE playing — pattern loads while sequencer is stopped,
-# so no stale notes from a previous session appear in the event stream.
+say "Asking the agent for a pattern."
+
+# Send prompt BEFORE playing — pattern loads while sequencer is stopped.
 ask "acid groove, kick and hats, short bass line — just 3 or 4 notes with gaps, leave room"
 
 play
 wait_seconds 3
-
-say "The AI built a pattern. Now let's add to it."
 
 # ── Scene 3: Tighten the beat ───────────────────────────────────────────────
 

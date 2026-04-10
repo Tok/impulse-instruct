@@ -509,7 +509,7 @@ impl ImpulseApp {
                                 )
                             })
                             .unwrap_or((false, false, 0, 0, 0, 0));
-                        const MON_W: f32 = 180.0;
+                        const MON_W: f32 = 100.0;
                         const BAR_W: f32 = 80.0;
                         const BAR_H: f32 = 5.0;
                         ui.scope(|ui| {
