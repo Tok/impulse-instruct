@@ -343,13 +343,23 @@ impl ImpulseApp {
             .show(ctx, |ui| {
                 ui.horizontal(|ui| {
                     // ── LOGO ─────────────────────────────────────────────────
-                    ui.label(
-                        egui::RichText::new("◆ IMPULSE INSTRUCT")
-                            .color(theme::CHALK)
-                            .size(12.0)
-                            .monospace()
-                            .strong(),
-                    );
+                    ui.vertical(|ui| {
+                        ui.label(
+                            egui::RichText::new("◆ IMPULSE INSTRUCT")
+                                .color(theme::CHALK)
+                                .size(12.0)
+                                .monospace()
+                                .strong(),
+                        );
+                        if let Some(ref analysis) = self.audio_analysis {
+                            ui.label(
+                                egui::RichText::new(analysis.one_line_summary())
+                                    .color(theme::IRON)
+                                    .size(7.0)
+                                    .monospace(),
+                            );
+                        }
+                    });
 
                     ui.separator();
 

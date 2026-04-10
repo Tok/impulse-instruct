@@ -358,7 +358,7 @@ pause() {
 # ─── Subtitle generation ─────────────────────────────────────────────────────
 
 generate_srt() {
-    local outfile="$DEMO_DIR/demo_subtitles.srt"
+    local outfile="${SRT_NAME:-${OUTPUT_DIR:-$DEMO_DIR}/demo_subtitles.srt}"
     local idx=0
 
     if [ ! -f "$NARRATION_LIST" ]; then

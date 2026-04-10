@@ -44,6 +44,16 @@ impl Default for AudioAnalysis {
     }
 }
 
+impl AudioAnalysis {
+    /// Short one-line summary for the header bar.
+    pub fn one_line_summary(&self) -> String {
+        format!(
+            "sub:{:.0} low:{:.0} mid:{:.0} hi:{:.0} pk:{:.0}dB",
+            self.sub_rms_db, self.low_rms_db, self.mid_rms_db, self.high_rms_db, self.peak_db
+        )
+    }
+}
+
 // ─── Core analysis ────────────────────────────────────────────────────────────
 
 /// Analyse a mono f32 PCM buffer (any length, any sample rate).

@@ -90,16 +90,18 @@ pub fn event_stream(ui: &mut Ui, state: &AppState, smooth_step: f64, width: f32,
 
     // ── Beat / bar grid ─────────────────────────────────────────────────────
     let steps_per_beat = (steps as f32 / time_sig as f32).max(1.0);
-    let smooth_frac = smooth_step as f32;
+    // Position within the current pattern cycle (0..steps, fractional)
+    let pos_in_pattern = (smooth_step as f32).rem_euclid(steps as f32);
     for i in 0..(display_steps as usize + 2) {
-        let step_offset = i as f32 - (smooth_frac % display_steps);
+        let step_offset = i as f32 - pos_in_pattern;
         let x = now_x + step_offset * step_w;
         if x < inner.min.x - 1.0 || x > inner.max.x + 1.0 {
             continue;
         }
         // Determine absolute step index to check bar/beat alignment
-        let is_bar = i % steps == ((steps - smooth_frac as usize % steps) % steps);
-        let is_beat = (step_offset.rem_euclid(steps_per_beat)).abs() < 0.5;
+        let abs_step = i % steps;
+        let is_bar = abs_step == 0;
+        let is_beat = (abs_step as f32 % steps_per_beat).abs() < 0.5;
 
         if is_bar {
             painter.line_segment(
@@ -141,8 +143,8 @@ pub fn event_stream(ui: &mut Ui, state: &AppState, smooth_step: f64, width: f32,
             let note = step.note;
             let color = theme::note_color(note);
 
-            // Position: step relative to smooth current position
-            let step_offset = step_idx as f32 - smooth_frac;
+            // Position: step relative to smooth current position within pattern
+            let step_offset = step_idx as f32 - pos_in_pattern;
             let offsets = [
                 step_offset,
                 step_offset + steps as f32,

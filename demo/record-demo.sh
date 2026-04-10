@@ -384,15 +384,16 @@ if [ "$SKIP_VIDEO" -eq 0 ]; then
     fi
     echo "  Raw video: $(du -h "$RAW_VIDEO" 2>/dev/null | cut -f1)"
 
+    # Base name for output variants
+    local base="${OUTPUT_DIR}/impulse_demo_${SCENARIO}_${TIMESTAMP}"
+
     # Always generate SRT if narration was recorded
     SRT_FILE=""
     if [ "$NO_TTS" -eq 0 ] && [ -f "$NARRATION_LIST" ]; then
-        SRT_FILE=$(generate_srt)
+        OUTPUT_DIR="$OUTPUT_DIR" SRT_NAME="${base}.srt" generate_srt
+        SRT_FILE="${base}.srt"
         echo "  Subtitles: $SRT_FILE"
     fi
-
-    # Base name for output variants
-    local base="${OUTPUT_DIR}/impulse_demo_${SCENARIO}_${TIMESTAMP}"
     FINAL_VIDEO="${base}.mp4"
     FINAL_VIDEO_SUBS="${base}_subs.mp4"
 

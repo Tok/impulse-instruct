@@ -1,445 +1,169 @@
 #!/usr/bin/env bash
-# ─── demo/scenario.sh ── the demo sequence ───────────────────────────────────
-# Sourced by record-demo.sh after the app is running and recording has started.
-#
-# Demo structure:
-#   Part 1 — Build up from minimal rack: add instruments, wire an AI agent
-#   Part 2 — Multi-agent band: add specialist agents, show control cables
-# ─────────────────────────────────────────────────────────────────────────────
+# ─── Intro Demo ─────────────────────────────────────────────────────────────
+# Quick overview of Impulse Instruct. Sound within 30 seconds.
+# Two parts: single agent, then multi-agent band.
+
+scene_count 12
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# PART 1: BUILD UP — from empty rack to AI-controlled acid house
+# PART 1: Quick start — rack + agent + sound
 # ═══════════════════════════════════════════════════════════════════════════════
 
-echo ""
-echo "  ┌────────────────────────────────────────────────────┐"
-echo "  │  PART 1: Building the rack from scratch            │"
-echo "  └────────────────────────────────────────────────────┘"
+scene "Setup"
 
-# ─── Scene 1: Intro + reset to minimal rack ──────────────────────────────────
+reset_rack
 
-echo "  [Scene 1/16] intro — reset rack, wait for Gemma 4..."
+say "Impulse Instruct. AI agents controlling synthesizers in real time."
 
-api_rack_reset
-api_flip_front
-pause 1
+# Add everything at once — no one-by-one ceremony
+add_instrument bass
+add_instrument 808
+add_instrument 909
+add_effect reverb
+add_effect delay
+add_agent PULSE gemma
+wait_for_model
 
-api_scroll "sequencer"
-pause 0.5
+# ── Scene 2: Start playing immediately ──────────────────────────────────────
 
-narrate --wait "s01_welcome" \
-    "Welcome to Impulse Instruct. A smart synthesizer with a virtual production team inside it."
-pause 1
+scene "First sound"
 
-narrate --wait "s01_minimal" \
-    "We're starting with a minimal rack. Just a sequencer, master output, and the AI console."
-pause 1
+play
+wait_seconds 1
 
-wait_for_llm 120
+ask "acid house groove, four on the floor, melodic bass line with at least 4 different notes, set the filter interesting"
 
-# ─── Scene 2: Add instruments ────────────────────────────────────────────────
+look_at sequencer
+wait_seconds 3
 
-echo "  [Scene 2/16] add_instruments — adding three oh three, eight oh eight, nine oh nine..."
+say "One sentence. The AI built a full pattern."
 
-narrate --wait "s02_add_intro" \
-    "Let's add some instruments. First, a three oh three acid bass."
-pause 0.5
+# ── Scene 3: Show the bass detail + filter movement ─────────────────────────
 
-BASS_ID=$(api_rack_add "bass")
-pause 1
+scene "Filter in motion"
 
-api_scroll "bass"
-pause 0.5
+focus_on bass
+wait_seconds 1
 
-narrate --wait "s02_bass_added" \
-    "The three oh three appears in the voice zone. Now an eight oh eight drum machine."
-pause 0.5
+ask "slowly sweep the filter open over 4 bars, ramp cutoff up" 14
 
-KICK_ID=$(api_rack_add "808")
-pause 1
+say "The filter is ramping. Visible on the knob."
+wait_seconds 2
 
-narrate --wait "s02_808_added" \
-    "And a nine oh nine for claps and percussion."
-pause 0.5
+# ── Scene 4: Flip to back — show cables ─────────────────────────────────────
 
-CLAP_ID=$(api_rack_add "909")
-pause 1
+scene "Control cables"
 
-api_scroll "808"
-pause 0.5
+show_all
+show_cables
 
-narrate --wait "s02_instruments_ready" \
-    "Three classic instruments, ready to be wired up."
-pause 2
+say "The back panel shows how the agent is wired to each instrument."
+wait_seconds 3
 
-# ─── Scene 3: Add an LLM agent ───────────────────────────────────────────────
+show_knobs
 
-echo "  [Scene 3/16] add_agent — adding PULSE agent with Gemma 4..."
+# ── Scene 5: Tweak via prompt ──────────────────────────────────────────────
 
-api_scroll "console"
-pause 0.5
+scene "Natural language control"
 
-narrate --wait "s03_agent_intro" \
-    "Now the magic. Let's add an AI agent to control everything."
-pause 0.5
+ask "more acid, push the resonance, syncopate the bass"
 
-AGENT_ID=$(api_rack_agent "PULSE" '[]' "gemma")
-pause 1
+focus_on bass
+wait_seconds 3
 
-narrate --wait "s03_agent_added" \
-    "Agent PULSE is connected. With an empty scope, it controls all instruments."
-pause 1
+say "Every parameter is addressable by description."
 
-# ─── Scene 4: Show the wiring — flip to back panel ───────────────────────────
+# ── Scene 6: Parameter locking ──────────────────────────────────────────────
 
-echo "  [Scene 4/16] show_wiring — flip rack to show control cables..."
+scene "Parameter lock"
 
-narrate --wait "s04_flip_intro" \
-    "Let's flip the rack to see how the agent is wired."
-pause 0.5
+lock "sequencer.bass_steps" "tb303.cutoff"
 
-api_flip_back
-pause 1
+ask "strip it back, minimal, different drums"
 
-api_scroll "console"
-pause 0.5
+say "Bass locked. Drums changed. That's parameter locking."
+wait_seconds 2
 
-narrate --wait "s04_control_cables" \
-    "The thin cables are control links. They connect PULSE to every instrument in its scope."
-pause 3
-
-api_scroll "bass"
-pause 0.5
-
-narrate --wait "s04_cable_detail" \
-    "Each control cable defines what the agent can drive. This is unique to Impulse Instruct."
-pause 3
-
-api_flip_front
-pause 1
-
-# ─── Scene 5: Start the sequencer and send first prompt ──────────────────────
-
-echo "  [Scene 5/16] first_prompt — start sequencer, ask AI to build a pattern..."
-
-api_scroll "sequencer"
-pause 0.5
-
-narrate --wait "s05_start_seq" \
-    "Let's start the sequencer and ask the AI to build us a pattern."
-pause 0.5
-
-api_play
-pause 2
-
-api_scroll "console"
-pause 0.5
-
-api_prompt "set up a classic acid house groove with a driving bass line, four on the floor kick, and off-beat hats"
-pause 8
-
-api_scroll "sequencer"
-pause 0.5
-
-narrate --wait "s05_pattern_done" \
-    "The AI programmed a full pattern from a single sentence."
-pause 4
-
-# ─── Scene 6: Show voice changes ─────────────────────────────────────────────
-
-echo "  [Scene 6/16] voice_changes — scroll to bass to show AI changes..."
-
-api_scroll "bass"
-pause 0.5
-
-narrate --wait "s06_bass_view" \
-    "The three oh three has a bass line with filter settings the AI chose."
-pause 3
-
-api_scroll "808"
-pause 0.5
-
-narrate --wait "s06_drums_view" \
-    "The eight oh eight has a kick and hat pattern."
-pause 2
-
-# ─── Scene 7: Tweak via LLM ──────────────────────────────────────────────────
-
-echo "  [Scene 7/16] acid_tweak — making it more acid..."
-
-api_scroll "console"
-pause 0.5
-
-narrate --wait "s07_tweak_prompt" \
-    "Let's push the sound harder."
-pause 0.5
-
-api_prompt "set bass cutoff to 0.3 and resonance to 0.85, make the bass line acid and squelchy"
-pause 10
-
-api_scroll "bass"
-pause 0.5
-
-narrate --wait "s07_tweak_result" \
-    "The filter resonance jumped. That's the classic acid sound."
-pause 3
-
-# ─── Scene 8: Add FX modules ─────────────────────────────────────────────────
-
-echo "  [Scene 8/16] add_fx — adding reverb and delay..."
-
-narrate --wait "s08_fx_intro" \
-    "Let's add some effects. Reverb and delay."
-pause 0.5
-
-api_rack_add "reverb"
-api_rack_add "delay"
-pause 1
-
-api_scroll "reverb"
-pause 0.5
-
-narrate --wait "s08_fx_added" \
-    "Two new modules in the effects zone. Let's ask the AI to use them."
-pause 1
-
-api_scroll "console"
-pause 0.5
-
-api_prompt "add some spacious reverb and a synced delay to the bass"
-pause 8
-
-api_scroll "reverb"
-pause 0.5
-
-narrate --wait "s08_fx_active" \
-    "The AI activated the effects and dialed in settings."
-pause 3
-
-# ─── Scene 9: Parameter locking ──────────────────────────────────────────────
-
-echo "  [Scene 9/16] param_locking — lock kick, send conflicting prompt..."
-
-api_scroll "808"
-pause 0.5
-
-narrate --wait "s09_lock_intro" \
-    "You can lock parameters so the AI can't change them. Let's lock the kick."
-pause 0.5
-
-api_lock "sequencer.kick_a_steps"
-pause 0.5
-
-api_scroll "console"
-pause 0.5
-
-api_prompt "switch to a minimal techno style, strip everything back"
-pause 8
-
-api_scroll "808"
-pause 0.5
-
-narrate --wait "s09_lock_result" \
-    "The kick stayed locked while the AI changed everything else."
-pause 2
-
-api_unlock "sequencer.kick_a_steps"
+unlock "sequencer.bass_steps" "tb303.cutoff"
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# PART 2: MULTI-AGENT — specialist agents with control cables
+# PART 2: Multi-agent band
 # ═══════════════════════════════════════════════════════════════════════════════
 
-echo ""
-echo "  ┌────────────────────────────────────────────────────┐"
-echo "  │  PART 2: Multi-agent band — specialist AI agents   │"
-echo "  └────────────────────────────────────────────────────┘"
+scene "Multi-agent setup"
 
-# ─── Scene 10: Remove PULSE, add specialist agents ────────────────────────────
+stop
+wait_seconds 1
 
-echo "  [Scene 10/16] add_specialists — replacing single agent with band..."
+say "Now split the AI into specialists. Each controls its own instruments."
 
-api_stop
-pause 1
+# Remove single agent, add specialists
+reset_rack
+add_instrument bass
+add_instrument 808
+add_instrument 909
+add_effect reverb
+add_effect delay
+add_agent BASS bonsai bass
+add_agent DRUMS bonsai "kit_a,kit_b"
+add_agent FX bonsai fx
+wait_for_model
 
-api_scroll "console"
-pause 0.5
+# ── Scene 8: Show wiring ───────────────────────────────────────────────────
 
-narrate --wait "s10_band_intro" \
-    "Now let's split the AI into specialist agents. Each one controls its own instruments."
-pause 1
+scene "Agent wiring"
 
-# Remove the PULSE agent
-if [ -n "$AGENT_ID" ]; then
-    api_rack_remove "$AGENT_ID"
-    pause 0.5
-fi
+show_cables
+look_at console
+wait_seconds 2
 
-narrate --wait "s10_add_bass_agent" \
-    "A bass agent running Bonsai, a lightweight model, just for the three oh three."
-pause 0.5
+say "Each agent has separate control cables. BASS only touches the three oh three."
 
-BASS_AGENT=$(api_rack_agent "BASS" '["bass"]' "bonsai")
-pause 1
+show_knobs
 
-narrate --wait "s10_add_drum_agent" \
-    "A drum agent for the eight oh eight and nine oh nine."
-pause 0.5
+# ── Scene 9: Band jam ─────────────────────────────────────────────────────
 
-DRUM_AGENT=$(api_rack_agent "DRUMS" '["kit_a", "kit_b"]' "bonsai")
-pause 1
+scene "Band jam"
 
-narrate --wait "s10_add_fx_agent" \
-    "And an effects agent to manage reverb and delay."
-pause 0.5
+play
+wait_seconds 1
 
-FX_AGENT=$(api_rack_agent "FX" '["fx"]' "bonsai")
-pause 1
+ask "acid bass, squelchy, syncopated" BASS
+ask "four on the floor, off-beat hats, clap on two and four" DRUMS
+ask "subtle reverb and short delay" FX
 
-wait_for_llm 90
+look_at console
+wait_seconds 3
 
-narrate --wait "s10_band_ready" \
-    "Three specialist agents, each running Bonsai. They share one lightweight model server."
-pause 1
+say "Three agents. Each handled its own part."
 
-# ─── Scene 11: Show agent wiring ─────────────────────────────────────────────
+# ── Scene 10: Independent evolution ───────────────────────────────────────
 
-echo "  [Scene 11/16] agent_wiring — flip rack to show control cables..."
+scene "Scoped control"
 
-api_flip_back
-pause 1
+ask "more resonance, darker, add slide" BASS
 
-api_scroll "console"
-pause 0.5
+focus_on bass
+wait_seconds 2
 
-narrate --wait "s11_wiring_overview" \
-    "On the back panel, each agent has its own control cables. BASS connects to the three oh three only."
-pause 3
+say "Bass changed. Drums and FX untouched."
 
-api_scroll "bass"
-pause 0.5
+# ── Scene 11: Creative direction ──────────────────────────────────────────
 
-narrate --wait "s11_wiring_detail" \
-    "DRUMS connects to the eight oh eight and nine oh nine. FX to the effects modules."
-pause 3
+scene "Creative direction"
 
-api_flip_front
-pause 1
+show_all
 
-# ─── Scene 12: Band jam ──────────────────────────────────────────────────────
+ask "more energy" BASS
+ask "more energy, busier" DRUMS
+ask "bigger space" FX 10
 
-echo "  [Scene 12/16] band_jam — starting multi-agent jam..."
+wait_seconds 4
 
-api_scroll "console"
-pause 0.5
+# ── Scene 12: Outro ───────────────────────────────────────────────────────
 
-narrate --wait "s12_jam_start" \
-    "Let's start playing and give the band a direction."
-pause 0.5
+scene "End"
 
-api_play
-pause 2
+say "Impulse Instruct. Build your rack, wire AI agents, make music with words. Everything runs locally."
 
-# Send prompts to EACH agent individually — be very explicit for Bonsai
-api_prompt "set cutoff to 0.5, resonance to 0.6, program a bass pattern on steps 0,3,6,8,11,14" "BASS"
-pause 10
-
-api_prompt "program kick on steps 0,4,8,12. hihat on steps 2,6,10,14. clap on steps 4,12" "DRUMS"
-pause 10
-
-api_prompt "set reverb mix to 0.3, reverb size to 0.6, delay mix to 0.2, delay time to 0.375" "FX"
-pause 10
-
-narrate --wait "s12_jam_playing" \
-    "Each agent handled its own part. Bass laid down a line. Drums built the beat. FX added space."
-pause 3
-
-# ─── Scene 13: Watch agents work ─────────────────────────────────────────────
-
-echo "  [Scene 13/16] agents_working — agents evolving their parts..."
-
-api_scroll "bass"
-pause 0.5
-
-narrate --wait "s13_bass_intro" \
-    "Let's tell each agent to evolve independently."
-pause 0.5
-
-api_prompt "increase resonance to 0.9, lower cutoff to 0.2, add accent on step 0 and 8" "BASS"
-pause 10
-
-api_scroll "808"
-pause 0.5
-
-api_prompt "add open hihat on step 6 and 14, add snare on step 4 and 12" "DRUMS"
-pause 10
-
-narrate --wait "s13_agents_done" \
-    "Each agent responds within its scope. Bass only touches the three oh three. Drums only the kits."
-pause 3
-
-# ─── Scene 14: Creative direction ────────────────────────────────────────────
-
-echo "  [Scene 14/16] creative_direction — acid breakdown..."
-
-api_scroll "console"
-pause 0.5
-
-narrate --wait "s14_creative" \
-    "Now let's give each agent a creative direction."
-pause 0.5
-
-api_prompt "set cutoff to 0.15, resonance to 0.95 for maximum acid squelch" "BASS"
-pause 10
-
-api_prompt "add open hihat on every other step, remove some kicks for breakdown feel" "DRUMS"
-pause 10
-
-api_prompt "set reverb mix to 0.5, reverb size to 0.9, delay feedback to 0.6 for big wash" "FX"
-pause 10
-
-narrate --wait "s14_result" \
-    "Each specialist shaped its own instruments based on the same creative vision."
-pause 3
-
-# ─── Scene 15: Speed it up ───────────────────────────────────────────────────
-
-echo "  [Scene 15/16] tempo_push — speeding up..."
-
-api_scroll "sequencer"
-pause 0.5
-
-narrate --wait "s15_tempo" \
-    "Let's push the tempo."
-pause 0.5
-
-api_prompt "speed it up to 140 BPM, peak-time energy"
-pause 8
-
-narrate --wait "s15_tempo_result" \
-    "140 B P M. The full band driving together."
-pause 3
-
-# ─── Scene 16: Outro ─────────────────────────────────────────────────────────
-
-echo "  [Scene 16/16] outro..."
-
-api_scroll "sequencer"
-pause 0.5
-
-narrate --wait "s16_summary" \
-    "That's Impulse Instruct. Build your rack, wire up AI agents, and make music with natural language."
-pause 1
-
-narrate --wait "s16_modes" \
-    "One agent or a full band. Each with its own scope and model. Everything runs locally."
-pause 1
-
-narrate --wait "s16_thanks" \
-    "Thanks for watching."
-pause 2
-
-api_stop
-pause 1
-
-echo ""
-echo "  All 16 scenes complete."
+stop
