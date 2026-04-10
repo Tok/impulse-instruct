@@ -198,7 +198,7 @@ impl UiPrefs {
     /// Defaults to `pad_size.px() × 3.38` (legacy formula) when not overridden.
     pub fn effective_xy_px(&self) -> f32 {
         self.custom_xy_px
-            .unwrap_or_else(|| self.pad_size.px() * (176.0 / 26.0))
+            .unwrap_or_else(|| self.pad_size.px() * (132.0 / 26.0))
             .clamp(40.0, 400.0)
     }
 

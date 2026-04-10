@@ -36,21 +36,9 @@ pub fn event_stream(ui: &mut Ui, state: &AppState, width: f32, height: f32) {
     let time_sig = seq.time_sig_num as usize;
     let current_step = seq.current_step;
 
-    // ── Smooth fractional position using wall-clock time ────────────────────
-    // Compute a smooth fractional step position from BPM and elapsed time.
-    // This gives sub-step precision for fluid scrolling at any frame rate.
-    let time = ui.ctx().input(|i| i.time);
-    let steps_per_sec = bpm as f64 / 60.0 * 4.0; // 16th notes per second
-    let smooth_step = if seq.running {
-        // Use wall time modulated by step rate for smooth interpolation
-        let fractional = (time * steps_per_sec) % (steps as f64);
-        // Blend with discrete current_step to stay in sync
-        let discrete = current_step as f64;
-        // Take the fractional part from time, integer part from sequencer
-        discrete + (fractional - fractional.floor())
-    } else {
-        current_step as f64
-    };
+    // Use the discrete step position directly — perfectly synced with the
+    // sequencer, no wall-clock drift or jitter from blending two time sources.
+    let smooth_step = current_step as f64;
 
     // Timing: how many steps fit in the display width
     let display_steps = steps as f32 * 2.0; // show 2 full patterns
