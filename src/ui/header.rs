@@ -8,16 +8,17 @@ use crate::ui::{ImpulseApp, theme, webbrowser_open};
 use egui::{Frame, TopBottomPanel};
 
 impl ImpulseApp {
-    /// Menu bar + header transport strip + global log.
+    /// Menu bar + header transport strip + log/scope combined panel.
     pub(super) fn draw_menu_and_header(&mut self, ctx: &egui::Context) {
         self.draw_menu_bar(ctx);
         self.draw_header_bar(ctx);
-        self.draw_log_strip(ctx);
+        self.draw_log_and_scope(ctx);
     }
 
-    /// Global log strip — shared across all agents, below the header.
-    /// Agent round-robin indicator on the right side (2 rows).
-    fn draw_log_strip(&mut self, ctx: &egui::Context) {
+    /// Combined panel: log strip (with agent indicators) on top, scope at bottom.
+    /// Single resizable panel — dragging the bottom edge grows/shrinks the log.
+    pub(super) fn draw_log_and_scope(&mut self, ctx: &egui::Context) {
+        let scope_h = 80.0; // fixed scope height (ring is 80×80)
         TopBottomPanel::top("log_strip")
             .frame(Frame::none().fill(theme::PIT).inner_margin(egui::Margin {
                 left: 8.0,
@@ -26,88 +27,111 @@ impl ImpulseApp {
                 bottom: 2.0,
             }))
             .resizable(true)
-            .min_height(20.0)
-            .default_height(100.0)
+            .min_height(scope_h + 40.0)
+            .default_height(scope_h + 100.0)
             .show(ctx, |ui| {
-                ui.horizontal(|ui| {
-                    // ── Log scroll area (fills remaining width) ──────────
-                    let agent_panel_width = 120.0;
-                    let avail = ui.available_width() - agent_panel_width - 8.0;
-                    let log_w = avail.max(100.0);
-                    ui.allocate_ui(egui::vec2(log_w, ui.available_height()), |ui| {
-                        ui.set_max_width(log_w);
-                        egui::ScrollArea::vertical()
-                            .id_source("global_log")
-                            .stick_to_bottom(true)
-                            .auto_shrink([false; 2])
-                            .show(ui, |ui: &mut egui::Ui| {
-                                ui.set_max_width(log_w);
-                                let job =
-                                    super::llm_strip::colorize_log(&self.log_text, theme::FOG);
-                                ui.add(egui::Label::new(job).wrap().selectable(true));
-                            });
+                let total_h = ui.available_height();
+                let log_h = (total_h - scope_h - 4.0).max(20.0);
+
+                // ── Log + agents (top portion) ──────────────────────────
+                ui.allocate_ui(egui::vec2(ui.available_width(), log_h), |ui| {
+                    ui.horizontal(|ui| {
+                        let agent_panel_width = 120.0;
+                        let avail = ui.available_width() - agent_panel_width - 8.0;
+                        let log_w = avail.max(100.0);
+                        ui.allocate_ui(egui::vec2(log_w, ui.available_height()), |ui| {
+                            ui.set_max_width(log_w);
+                            egui::ScrollArea::vertical()
+                                .id_source("global_log")
+                                .stick_to_bottom(true)
+                                .auto_shrink([false; 2])
+                                .show(ui, |ui: &mut egui::Ui| {
+                                    ui.set_max_width(log_w);
+                                    let job =
+                                        super::llm_strip::colorize_log(&self.log_text, theme::FOG);
+                                    ui.add(egui::Label::new(job).wrap().selectable(true));
+                                });
+                        });
+
+                        ui.separator();
+
+                        // Agent status (right side, 2-row layout)
+                        ui.allocate_ui(
+                            egui::vec2(agent_panel_width, ui.available_height()),
+                            |ui| {
+                                Self::draw_agent_status(ui, ctx, &self.state);
+                            },
+                        );
                     });
+                });
 
-                    ui.separator();
+                ui.add_space(2.0);
 
-                    // ── Agent status (right side, 2-row vertical layout) ─
-                    ui.allocate_ui(egui::vec2(agent_panel_width, ui.available_height()), |ui| {
-                        let s = self.state.read();
-                        let agents = &s.llm_agents;
-                        if agents.is_empty() {
-                            ui.label(
-                                egui::RichText::new("no agents")
-                                    .color(theme::IRON)
-                                    .monospace()
-                                    .size(8.0),
-                            );
-                            return;
-                        }
-                        let time = ctx.input(|i| i.time) as f32;
-                        let enabled_agents: Vec<_> = agents
-                            .iter()
-                            .filter(|a| s.rack.modules.iter().any(|m| m.id == a.id && m.enabled))
-                            .collect();
-                        if enabled_agents.is_empty() {
-                            return;
-                        }
-
-                        // Split into 2 rows using a grid
-                        let half = enabled_agents.len().div_ceil(2);
-                        for (row_idx, chunk) in enabled_agents.chunks(half).enumerate() {
-                            if row_idx > 0 {
-                                ui.add_space(2.0);
-                            }
-                            ui.horizontal(|ui| {
-                                for a in chunk {
-                                    let dot_col = if a.is_inferring {
-                                        let p =
-                                            (time * 4.0 * std::f32::consts::TAU).sin() * 0.3 + 0.7;
-                                        egui::Color32::from_gray((220.0 * p) as u8)
-                                    } else {
-                                        egui::Color32::from_gray(60)
-                                    };
-                                    ui.label(egui::RichText::new("●").color(dot_col).size(8.0));
-                                    let name_col = if a.is_inferring {
-                                        theme::CHALK
-                                    } else {
-                                        theme::IRON
-                                    };
-                                    ui.label(
-                                        egui::RichText::new(&a.persona_name)
-                                            .color(name_col)
-                                            .monospace()
-                                            .size(8.0),
-                                    );
-                                }
-                            });
-                        }
-                        if agents.iter().any(|a| a.is_inferring) {
-                            ctx.request_repaint();
-                        }
+                // ── Scope (bottom portion, fixed height) ────────────────
+                ui.allocate_ui(egui::vec2(ui.available_width(), scope_h), |ui| {
+                    ui.horizontal(|ui| {
+                        super::scope_footer::draw_scope(ui, &self.scope_buf, &self.scope_history);
+                        super::scope_footer::draw_ring_scope(ui, &self.scope_buf, scope_h);
                     });
                 });
             });
+    }
+
+    fn draw_agent_status(
+        ui: &mut egui::Ui,
+        ctx: &egui::Context,
+        state: &parking_lot::RwLock<crate::state::AppState>,
+    ) {
+        let s = state.read();
+        let agents = &s.llm_agents;
+        if agents.is_empty() {
+            ui.label(
+                egui::RichText::new("no agents")
+                    .color(theme::IRON)
+                    .monospace()
+                    .size(8.0),
+            );
+            return;
+        }
+        let time = ctx.input(|i| i.time) as f32;
+        let enabled_agents: Vec<_> = agents
+            .iter()
+            .filter(|a| s.rack.modules.iter().any(|m| m.id == a.id && m.enabled))
+            .collect();
+        if enabled_agents.is_empty() {
+            return;
+        }
+        let half = enabled_agents.len().div_ceil(2);
+        for (row_idx, chunk) in enabled_agents.chunks(half).enumerate() {
+            if row_idx > 0 {
+                ui.add_space(2.0);
+            }
+            ui.horizontal(|ui| {
+                for a in chunk {
+                    let dot_col = if a.is_inferring {
+                        let p = (time * 4.0 * std::f32::consts::TAU).sin() * 0.3 + 0.7;
+                        egui::Color32::from_gray((220.0 * p) as u8)
+                    } else {
+                        egui::Color32::from_gray(60)
+                    };
+                    ui.label(egui::RichText::new("●").color(dot_col).size(8.0));
+                    let name_col = if a.is_inferring {
+                        theme::CHALK
+                    } else {
+                        theme::IRON
+                    };
+                    ui.label(
+                        egui::RichText::new(&a.persona_name)
+                            .color(name_col)
+                            .monospace()
+                            .size(8.0),
+                    );
+                }
+            });
+        }
+        if agents.iter().any(|a| a.is_inferring) {
+            ctx.request_repaint();
+        }
     }
 
     fn draw_menu_bar(&mut self, ctx: &egui::Context) {

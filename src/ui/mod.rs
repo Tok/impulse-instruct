@@ -932,21 +932,7 @@ impl eframe::App for ImpulseApp {
         self.tick_ramps();
         self.draw_windows(ctx);
         self.draw_menu_and_header(ctx);
-        TopBottomPanel::top("scope")
-            .frame(
-                Frame::none()
-                    .fill(theme::PIT)
-                    .inner_margin(egui::Margin::symmetric(8.0, 4.0)),
-            )
-            .exact_height(88.0)
-            .show(ctx, |ui| {
-                ui.horizontal(|ui| {
-                    // Linear scope fills remaining width
-                    scope_footer::draw_scope(ui, &self.scope_buf, &self.scope_history);
-                    // Ring scope on the right, enlarged
-                    scope_footer::draw_ring_scope(ui, &self.scope_buf, 80.0);
-                });
-            });
+        // Scope is now integrated into draw_log_and_scope (header.rs)
         TopBottomPanel::bottom("footer")
             .frame(
                 Frame::none()
