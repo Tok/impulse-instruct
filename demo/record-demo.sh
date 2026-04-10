@@ -106,6 +106,7 @@ if [ "$SKIP_VIDEO" -eq 0 ]; then
 fi
 
 mkdir -p "$OUTPUT_DIR"
+TIMESTAMP=$(date +%Y%m%d_%H%M%S)
 
 # ─── Log file ────────────────────────────────────────────────────────────────
 LOGFILE="$OUTPUT_DIR/demo_${SCENARIO}_${TIMESTAMP}.log"
@@ -187,8 +188,6 @@ cleanup() {
     echo "Done."
 }
 trap cleanup EXIT
-
-TIMESTAMP=$(date +%Y%m%d_%H%M%S)
 
 # ─── Launch the app ──────────────────────────────────────────────────────────
 
