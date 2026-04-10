@@ -360,7 +360,7 @@ if [ "$AUDIO_COUNT" -gt 0 ]; then
             -map 0:v:0 -map 1:a:0 \
             -shortest \
             "$FINAL_VIDEO" \
-            </dev/null 2>/dev/null
+            </dev/null
     else
         ffmpeg -y \
             -i "$RAW_VIDEO" \
@@ -370,7 +370,7 @@ if [ "$AUDIO_COUNT" -gt 0 ]; then
             -map 0:v:0 -map 1:a:0 \
             -shortest \
             "$FINAL_VIDEO" \
-            </dev/null 2>/dev/null
+            </dev/null
     fi
 else
     # No separate audio — just re-encode video (+ subtitles)
@@ -380,12 +380,12 @@ else
             -vf "subtitles=${SRT_FILE}:force_style='FontSize=22,FontName=monospace,PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,Outline=2,MarginV=40'" \
             -c:v h264_nvenc -preset p4 -cq 22 \
             "$FINAL_VIDEO" \
-            </dev/null 2>/dev/null
+            </dev/null
     else
         ffmpeg -y -i "$RAW_VIDEO" \
             -c:v h264_nvenc -preset p4 -cq 22 \
             "$FINAL_VIDEO" \
-            </dev/null 2>/dev/null
+            </dev/null
     fi
 fi
 

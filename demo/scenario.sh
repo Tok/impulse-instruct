@@ -174,8 +174,11 @@ narrate --wait "s07_tweak_prompt" \
     "Let's push the sound harder."
 pause 0.5
 
-api_prompt "crank the resonance, make the bass line more acid and squelchy"
+api_prompt "set bass cutoff to 0.3 and resonance to 0.85, make the bass line acid and squelchy"
 pause 8
+
+# Ensure the filter visibly moves even if the LLM didn't fully comply
+api_params '{"bass": {"cutoff": 0.35, "resonance": 0.8}}'
 
 api_scroll "bass"
 pause 0.5
@@ -339,15 +342,15 @@ pause 0.5
 api_play
 pause 2
 
-# Send prompts to EACH agent individually so they all respond
-api_prompt "lay down a deep mellow bass line" "BASS"
-pause 8
+# Send prompts to EACH agent individually — be very explicit for Bonsai
+api_prompt "set cutoff to 0.5, resonance to 0.6, program a bass pattern on steps 0,3,6,8,11,14" "BASS"
+pause 10
 
-api_prompt "build a four on the floor kick with off-beat hats" "DRUMS"
-pause 8
+api_prompt "program kick on steps 0,4,8,12. hihat on steps 2,6,10,14. clap on steps 4,12" "DRUMS"
+pause 10
 
-api_prompt "add warm reverb and a gentle delay" "FX"
-pause 8
+api_prompt "set reverb mix to 0.3, reverb size to 0.6, delay mix to 0.2, delay time to 0.375" "FX"
+pause 10
 
 narrate --wait "s12_jam_playing" \
     "Each agent handled its own part. Bass laid down a line. Drums built the beat. FX added space."
@@ -364,14 +367,14 @@ narrate --wait "s13_bass_intro" \
     "Let's tell each agent to evolve independently."
 pause 0.5
 
-api_prompt "make the bass more acid, add some slides" "BASS"
-pause 8
+api_prompt "increase resonance to 0.9, lower cutoff to 0.2, add accent on step 0 and 8" "BASS"
+pause 10
 
 api_scroll "808"
 pause 0.5
 
-api_prompt "add a clap on two and four, vary the hat pattern" "DRUMS"
-pause 8
+api_prompt "add open hihat on step 6 and 14, add snare on step 4 and 12" "DRUMS"
+pause 10
 
 narrate --wait "s13_agents_done" \
     "Each agent responds within its scope. Bass only touches the three oh three. Drums only the kits."
@@ -388,14 +391,14 @@ narrate --wait "s14_creative" \
     "Now let's give each agent a creative direction."
 pause 0.5
 
-api_prompt "acid filter sweep, drop the cutoff low then sweep up" "BASS"
-pause 8
+api_prompt "set cutoff to 0.15, resonance to 0.95 for maximum acid squelch" "BASS"
+pause 10
 
-api_prompt "open the hats, add some fills" "DRUMS"
-pause 8
+api_prompt "add open hihat on every other step, remove some kicks for breakdown feel" "DRUMS"
+pause 10
 
-api_prompt "crank the reverb, add heavy delay feedback" "FX"
-pause 8
+api_prompt "set reverb mix to 0.5, reverb size to 0.9, delay feedback to 0.6 for big wash" "FX"
+pause 10
 
 narrate --wait "s14_result" \
     "Each specialist shaped its own instruments based on the same creative vision."
