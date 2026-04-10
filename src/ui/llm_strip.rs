@@ -271,7 +271,11 @@ pub(super) fn colorize_log(text: &str, default_color: egui::Color32) -> egui::te
             }
             // ── MIDI number context: "note 60", "midi 72", "pitch 48" ─────────
             let prefix_end = pos;
-            let prefix_start = pos.saturating_sub(7);
+            let mut prefix_start = pos.saturating_sub(7);
+            // Ensure we don't slice inside a multi-byte UTF-8 character
+            while prefix_start > 0 && !text.is_char_boundary(prefix_start) {
+                prefix_start -= 1;
+            }
             let prefix = &text[prefix_start..prefix_end];
             let is_midi_ctx = ["note ", "midi ", "pitch ", "step "]
                 .iter()
