@@ -137,7 +137,7 @@ POST /api/preset         { "name": "Band" }     (Solo/Duo/Swarm/Band/Voices/Lite
 POST /api/flip           { "show_back": true }   (true=cables, false=knobs)
 POST /api/rack/reset                              strip to sequencer + master + console
 POST /api/rack/add       { "kind": "808" }        add module, returns { "id": N }
-POST /api/rack/agent     { "persona": "BASS", "scope": ["bass"], "model": "bonsai" }
+POST /api/rack/agent     { "persona": "BASS", "scope": ["bass"], "model": "bonsai", "mode": "mc", "tts": true }
 POST /api/rack/cable     { "from": 1, "to": 5 }  connect modules (default: control cable)
 POST /api/rack/remove    { "id": 5 }              remove module + its cables
 POST /api/rack/collapse  { "action": "all" }      all/none/global/voice/fxmod

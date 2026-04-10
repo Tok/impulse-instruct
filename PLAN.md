@@ -53,6 +53,32 @@ What's already built is documented in [docs/features.md](docs/features.md).
   auto-select a lighter model that fits the remaining VRAM budget
 - [ ] **Jam-via-API** — currently API prompts are always one_shot (no jam loop).
   Need safe jam support that doesn't do full-state replacement.
+- [ ] **Style → rack auto-setup** — add `rack_modules` field to `styles.json`
+  entries, listing which modules to add and how to wire them when a style is
+  selected. E.g. `"rack_modules": ["bass", "808", "reverb", "delay"]` for acid,
+  `"rack_modules": ["an1x", "reverb"]` for baroque. Selecting a style resets
+  the rack and adds the listed modules automatically.
+
+### TTS as rack module (refactor)
+
+- [ ] **Remove global `tts_enabled`** — TTS is no longer a global toggle on
+  `LlmState`. Instead, TTS happens through a TTS rack module (EspeakNgTts
+  or CoquiTts) that an agent is wired to via a control cable.
+- [ ] **TTS settings per module** — move `tts_pitch`, `tts_speed`,
+  `tts_amplitude`, `tts_voice_char`, `tts_randomise`, `tts_pitch_snap`,
+  `tts_engine` from `LlmState` to per-module state on the TTS rack module.
+  Multiple TTS modules can have different voices.
+- [ ] **Agent → TTS routing** — in the inference path (`src/llm/mod.rs` ~L637),
+  replace `if tts_on && tts_mode` with: find TTS modules connected to this
+  agent via control cables in `rack.cables`. Read settings from the connected
+  TTS module. No cable = no speech.
+- [ ] **Agent self-add TTS module** — if an agent is in MC/DJ mode and has no
+  TTS module connected, it can add one to the rack and wire itself to it
+  (unless restricted by scope or a `can_modify_rack: false` flag). This is
+  a rack tool-use action, not implicit — the agent requests it via JSON.
+- [ ] **Clean up global TTS fields** — remove `tts_*` fields from `LlmState`,
+  remove `tts_enabled` from API agent request. TTS panel reads from module
+  state instead.
 
 ### Feedback & awareness
 
@@ -85,18 +111,14 @@ What's already built is documented in [docs/features.md](docs/features.md).
 
 #### Infrastructure (do first)
 
-- [ ] **CoquiTTS for narration** — in `demo/lib.sh`, make `tts_generate()` try
-  CoquiTTS first (`tts --text "..." --out_path $outfile`), fall back to espeak-ng.
-  CoquiTTS produces much better narration for YouTube-grade demos.
-- [ ] **Scenario directory** — create `demo/scenarios/`, move current `scenario.sh`
-  to `demo/scenarios/intro.sh`. Update `record-demo.sh` to accept `--scenario X`
-  flag (default: intro). Each scenario is a self-contained bash script sourced by
-  `record-demo.sh` after app launch.
-- [ ] **`--skip-video` flag** — run scenario without ffmpeg recording, for headless
-  style verification. Useful for CI or quick iteration. App still launches, API
-  calls execute, but no screen capture / encoding.
-- [ ] **`--skip-narration` rename** — current `--no-tts` flag should work with
-  `--skip-video` for silent verification runs.
+- [x] **CoquiTTS for narration** — `tts_generate()` tries CoquiTTS first, falls
+  back to espeak-ng. Configurable via `TTS_MODEL` env var.
+- [x] **Scenario directory** — `demo/scenarios/` with `--scenario X` flag on
+  `record-demo.sh` (default: intro). High-level DSL in `lib.sh` for readable scripts.
+- [x] **`--skip-video` flag** — run scenario without ffmpeg recording, for headless
+  style verification.
+- [x] **`--skip-narration` rename** — `--skip-narration` alias added alongside
+  `--no-tts`.
 
 #### Style demo scripts (tutorial + verification)
 
@@ -110,26 +132,25 @@ Each style demo follows a template:
 7. End with a jam session showing the style in action
 
 Scripts to create:
-- [ ] **`demo/scenarios/style-acid.sh`** — 303 squelch, 808/909 kicks, classic acid.
-  Tests: bass cutoff sweep, resonance, accent patterns, filter response viz.
-- [ ] **`demo/scenarios/style-dnb.sh`** — fast breaks (170 BPM), reese bass, rolling
-  hats. Tests: high BPM, amen sampler, fast patterns, multi-voice bass.
-- [ ] **`demo/scenarios/style-ambient.sh`** — AN1X pads, slow filter sweeps, long
-  reverb. Tests: ramp system, LFO assignment, ADSR shaping, FX depth.
-- [ ] **`demo/scenarios/style-techno.sh`** — 808 kick, industrial bass, minimal hats.
-  Tests: kick pitch envelope, distortion drive, sidechain compression.
+- [x] **`demo/scenarios/style-acid.sh`** — raw acid: 303 squelch, 808 percussion,
+  ramps, parameter locking. 8 scenes.
+- [x] **`demo/scenarios/style-dnb.sh`** — 170 BPM, reese bass, rolling hats. 7 scenes.
+- [x] **`demo/scenarios/style-ambient.sh`** — AN1X pads, deep reverb, slow ramps. 6 scenes.
+- [x] **`demo/scenarios/style-techno.sh`** — kick-driven, minimal, tension/release. 7 scenes.
+- [x] **`demo/scenarios/style-bach.sh`** — AN1X only, no drums, classical counterpoint,
+  cathedral reverb. 7 scenes.
 
 #### Setup demo scripts (capability showcase)
 
 - [ ] **`demo/scenarios/setup-mc-singer.sh`** — Jungle MC + TTS Singer through
   autotune. Non-deterministic, 100% agent-controlled. Shows: multi-agent, TTS
   pitch-snap pipeline, creative potential. Narrated as "watch what happens."
-- [ ] **`demo/scenarios/setup-multi-agent.sh`** — BASS + DRUMS + FX specialist
-  agents with Bonsai models. Shows: per-agent scoping, round-robin, cable wiring,
-  independent evolution, creative direction via prompts.
-- [ ] **`demo/scenarios/setup-ramp-lfo.sh`** — Parameter ramps + LFO assignment.
-  Shows: "slowly open filter over 4 bars" ramp, LFO wobble on cutoff, tremolo
-  on volume, event stream visualization reacting in real time.
+- [x] **`demo/scenarios/setup-multi-agent.sh`** — BASS + DRUMS + FX specialist
+  agents with Bonsai models. 8 scenes: scoping, cable wiring, independent evolution.
+- [x] **`demo/scenarios/style-synthwave.sh`** — AN1X pads, arpeggiated bass, 808,
+  TTS MC agent spitting neon poetry via Bonsai. 8 scenes.
+- [x] **`demo/scenarios/setup-ramp-lfo.sh`** — Parameter ramps: single, multiple,
+  build/drop dynamics. 6 scenes.
 
 #### Feature demo scenes (can be standalone or embedded)
 

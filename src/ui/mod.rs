@@ -885,7 +885,8 @@ impl eframe::App for ImpulseApp {
                     one_shot: true,
                     agent_id: None,
                 });
-                self.log_text.push_str("AUTO → startup prompt sent\n");
+                self.log_text
+                    .push_str("AUTO → startup prompt sent, generating initial pattern…\n");
             }
         }
         ctx.request_repaint_after(std::time::Duration::from_millis(16));

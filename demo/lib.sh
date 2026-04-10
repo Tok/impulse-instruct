@@ -8,10 +8,11 @@ TTS_DIR="$DEMO_DIR/tts_cache"
 NARRATION_LIST="$DEMO_DIR/.narration_playlist"
 XDO="python3 $DEMO_DIR/xdo.py"
 
-# TTS settings — female US English voice, slightly fast for demo pacing
-TTS_VOICE="${TTS_VOICE:-en-us+f3}"
-TTS_SPEED="${TTS_SPEED:-155}"   # words per minute (faster than default 140)
-TTS_PITCH="${TTS_PITCH:-45}"
+# TTS settings — CoquiTTS preferred, espeak-ng fallback
+TTS_MODEL="${TTS_MODEL:-}"      # CoquiTTS model (empty = default)
+TTS_VOICE="${TTS_VOICE:-en-us+f3}"  # espeak-ng voice (fallback)
+TTS_SPEED="${TTS_SPEED:-155}"   # espeak-ng words per minute
+TTS_PITCH="${TTS_PITCH:-45}"    # espeak-ng pitch
 
 # Window ID — set by record-demo.sh after finding the app
 APP_WINDOW_ID="${APP_WINDOW_ID:-0}"
@@ -71,6 +72,22 @@ api_scroll() {
     curl -sf -X POST "$API/api/scroll" \
         -H "Content-Type: application/json" \
         -d "{\"target\": \"$1\"}" >/dev/null 2>&1 || true
+}
+
+api_focus() {
+    # Scroll to a zone/module AND collapse others for focus mode.
+    # Usage: api_focus "bass"  |  api_focus "808"
+    curl -sf -X POST "$API/api/scroll" \
+        -H "Content-Type: application/json" \
+        -d "{\"target\": \"$1\", \"collapse_others\": true}" >/dev/null 2>&1 || true
+}
+
+api_collapse() {
+    # Collapse/expand zones.
+    # Usage: api_collapse "all" | api_collapse "none" | api_collapse "voice"
+    curl -sf -X POST "$API/api/rack/collapse" \
+        -H "Content-Type: application/json" \
+        -d "{\"action\": \"$1\"}" >/dev/null 2>&1 || true
 }
 
 api_flip_back() {
@@ -188,13 +205,22 @@ wait_for_api() {
 
 tts_generate() {
     # Pre-generate a TTS clip. Returns the wav path.
+    # Tries CoquiTTS first (better quality), falls back to espeak-ng.
     # Usage: tts_generate "clip_id" "Text to speak"
     local id="$1" text="$2"
     local outfile="$TTS_DIR/${id}.wav"
     mkdir -p "$TTS_DIR"
     if [ ! -f "$outfile" ]; then
-        espeak-ng -v "$TTS_VOICE" -s "$TTS_SPEED" -p "$TTS_PITCH" \
-            -w "$outfile" "$text" 2>/dev/null
+        if command -v tts >/dev/null 2>&1; then
+            # CoquiTTS — high-quality neural TTS
+            tts --text "$text" --out_path "$outfile" \
+                ${TTS_MODEL:+--model_name "$TTS_MODEL"} 2>/dev/null
+        fi
+        # Fallback to espeak-ng if CoquiTTS failed or isn't installed
+        if [ ! -f "$outfile" ]; then
+            espeak-ng -v "$TTS_VOICE" -s "$TTS_SPEED" -p "$TTS_PITCH" \
+                -w "$outfile" "$text" 2>/dev/null
+        fi
     fi
     echo "$outfile"
 }
@@ -385,4 +411,171 @@ get_window_geometry() {
         /Height:/ {h=$NF}
         END {print x, y, w, h}
     '
+}
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# High-level scenario DSL
+#
+# These functions let demo scripts read like a screenplay.
+# Scenarios should use ONLY these — no curl, no raw API calls.
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# Internal scene counter
+_scene_num=0
+_scene_total=0
+
+scene_count() {
+    # Declare total scene count at the top of a scenario.
+    _scene_total=$1
+}
+
+# ── Scene structure ──────────────────────────────────────────────────────────
+
+scene() {
+    # Start a named scene. Usage: scene "Building the acid pattern"
+    _scene_num=$((_scene_num + 1))
+    echo "  [Scene ${_scene_num}/${_scene_total:-?}] $1"
+}
+
+say() {
+    # Narrate a line (blocking — waits until speech finishes).
+    # Usage: say "The filter creates that classic squelch."
+    local id
+    id="auto_$(printf '%03d' $_scene_num)_$(echo "$1" | tr ' ' '_' | tr -cd 'a-zA-Z0-9_' | head -c 30)"
+    narrate --wait "$id" "$1"
+    pause 1
+}
+
+wait_seconds() {
+    # Pause for N seconds (let the music play, let inference finish).
+    pause "$1"
+}
+
+# ── Rack setup ───────────────────────────────────────────────────────────────
+
+reset_rack() {
+    # Clear the rack to minimal (sequencer + master + console).
+    api_rack_reset
+    api_flip_front
+    pause 1
+}
+
+add_instrument() {
+    # Add an instrument module.  Usage: add_instrument bass
+    # Returns the module ID (capture with: id=$(add_instrument bass))
+    api_rack_add "$1"
+}
+
+add_effect() {
+    # Add an effect module.  Usage: add_effect reverb
+    api_rack_add "$1"
+}
+
+add_agent() {
+    # Add an AI agent.
+    # Usage: add_agent ACID gemma
+    #        add_agent BASS bonsai bass
+    #        add_agent DRUMS bonsai "kit_a,kit_b"
+    #        add_agent MC bonsai "" mc tts    (MC mode with TTS enabled)
+    local persona="$1"
+    local model="${2:-gemma}"
+    local scope_csv="${3:-}"
+    local mode="${4:-}"
+    local tts="${5:-}"
+    local scope_json="[]"
+    if [ -n "$scope_csv" ]; then
+        scope_json=$(echo "$scope_csv" | tr ',' '\n' | sed 's/^/"/;s/$/"/' | paste -sd, | sed 's/^/[/;s/$/]/')
+    fi
+    local extra=""
+    if [ -n "$mode" ]; then
+        extra="$extra, \"mode\": \"$mode\""
+    fi
+    if [ "$tts" = "tts" ]; then
+        extra="$extra, \"tts\": true"
+    fi
+    curl -sf -X POST "$API/api/rack/agent" \
+        -H "Content-Type: application/json" \
+        -d "{\"persona\": \"$persona\", \"scope\": $scope_json, \"model\": \"$model\" $extra}" \
+        2>/dev/null | python3 -c "import sys,json; print(json.load(sys.stdin).get('id',''))" 2>/dev/null || echo ""
+}
+
+wait_for_model() {
+    # Wait until the LLM model server is ready.
+    wait_for_llm "${1:-120}"
+}
+
+# ── Playback ─────────────────────────────────────────────────────────────────
+
+play()  { api_play; }
+stop()  { api_stop; }
+
+# ── AI prompts ───────────────────────────────────────────────────────────────
+
+ask() {
+    # Send a natural language prompt to the AI and wait for it to respond.
+    # Usage: ask "make it acid"
+    #        ask "set cutoff to 0.3" BASS
+    local prompt="$1"
+    local agent="${2:-}"
+    api_prompt "$prompt" "$agent"
+    pause "${3:-10}"
+}
+
+# ── View control ─────────────────────────────────────────────────────────────
+
+look_at() {
+    # Scroll the UI to show a section.
+    # Usage: look_at sequencer | look_at bass | look_at 808 | look_at console
+    api_scroll "$1"
+    pause 0.5
+}
+
+focus_on() {
+    # Scroll to a section AND collapse everything else.
+    # Usage: focus_on bass
+    api_focus "$1"
+    pause 0.5
+}
+
+show_all() {
+    # Expand all zones.
+    api_collapse "none"
+    pause 0.5
+}
+
+show_cables() {
+    # Flip rack to show back panel (cables).
+    api_flip_back
+    pause 1
+}
+
+show_knobs() {
+    # Flip rack to show front panel (knobs).
+    api_flip_front
+    pause 1
+}
+
+# ── Parameter control ────────────────────────────────────────────────────────
+
+lock() {
+    # Lock parameters so the AI can't change them.
+    # Usage: lock "tb303.cutoff" "tb303.resonance"
+    api_lock "$@"
+}
+
+unlock() {
+    # Unlock parameters.
+    # Usage: unlock "tb303.cutoff" "tb303.resonance"
+    api_unlock "$@"
+}
+
+set_params() {
+    # Set parameters directly (JSON).
+    # Usage: set_params '{"tb303": {"cutoff": 0.3}}'
+    api_params "$1"
+}
+
+use_preset() {
+    # Apply an agent preset: Solo, Duo, Swarm, Band, Voices, Lite
+    api_preset "$1"
 }

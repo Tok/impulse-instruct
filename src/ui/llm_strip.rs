@@ -394,13 +394,14 @@ impl ImpulseApp {
             if self.available_models.is_empty() {
                 self.available_models = super::scan_models();
             }
-            let (cur_model, ctx_used, ctx_max, is_mock) = {
+            let (cur_model, ctx_used, ctx_max, is_mock, is_initializing) = {
                 let s = self.state.read();
                 (
                     s.llm.model_path.clone(),
                     s.llm.context_used,
                     s.llm.context_max,
                     s.llm.is_mock,
+                    s.llm.llm_initializing,
                 )
             };
             let cur_short = std::path::Path::new(&cur_model)
@@ -493,6 +494,24 @@ impl ImpulseApp {
                         .size(8.0)
                         .color(theme::IRON),
                 );
+            }
+            if is_initializing {
+                let t = ui.ctx().input(|i| i.time) as f32;
+                let dots = match ((t * 2.0) as usize) % 4 {
+                    0 => "   ",
+                    1 => ".  ",
+                    2 => ".. ",
+                    _ => "...",
+                };
+                let pulse = (t * 3.0 * std::f32::consts::TAU).sin() * 0.3 + 0.7;
+                let g = (140.0 * pulse) as u8;
+                ui.label(
+                    egui::RichText::new(format!("Loading{}", dots))
+                        .monospace()
+                        .size(8.0)
+                        .color(egui::Color32::from_gray(g)),
+                );
+                ui.ctx().request_repaint();
             }
 
             ui.separator();

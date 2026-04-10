@@ -380,6 +380,17 @@ pub fn run_llm_loop(
             }
         };
 
+        // Set is_inferring early so the UI shows activity immediately
+        {
+            let mut s = state.write();
+            s.llm.is_inferring = true;
+            if let Some(aid) = agent_id
+                && let Some(a) = s.llm_agents.iter_mut().find(|a| a.id == aid)
+            {
+                a.is_inferring = true;
+            }
+        }
+
         // Build system prompt with per-agent overrides patched in.
         log::debug!("LLM: building system prompt...");
         let system = {
@@ -435,15 +446,7 @@ pub fn run_llm_loop(
             result
         };
         {
-            let mut s = state.write();
-            log::debug!("LLM: setting is_inferring=true");
-            s.llm.is_inferring = true;
-            s.llm.last_prompt = prompt.clone();
-            if let Some(aid) = agent_id
-                && let Some(a) = s.llm_agents.iter_mut().find(|a| a.id == aid)
-            {
-                a.is_inferring = true;
-            }
+            state.write().llm.last_prompt = prompt.clone();
         }
 
         let sampling = {

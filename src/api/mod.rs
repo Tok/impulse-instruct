@@ -95,6 +95,12 @@ pub struct RackAgentRequest {
     /// Model pattern to match (e.g. "gemma", "bonsai"). Omit to inherit default.
     #[serde(default)]
     pub model: Option<String>,
+    /// Conversation mode: "off", "producer", "dj", "mc". Default: "producer".
+    #[serde(default)]
+    pub mode: Option<String>,
+    /// Enable TTS voice output for this agent (requires MC or DJ mode).
+    #[serde(default)]
+    pub tts: Option<bool>,
 }
 
 #[derive(Deserialize)]
@@ -432,9 +438,16 @@ fn parse_module_kind(name: &str) -> Option<crate::state::ModuleKind> {
         "fxcompressor" | "compressor" => Some(FxCompressor),
         "fxtapesat" | "tapesat" => Some(FxTapeSat),
         "fxdrive" | "drive" => Some(FxDrive),
+        "fxautotune" | "autotune" => Some(FxAutotune),
+        "fxwaveshaper" | "waveshaper" => Some(FxWaveshaper),
+        "fxbitcrush" | "bitcrush" => Some(FxBitcrush),
+        "fxringmod" | "ringmod" => Some(FxRingMod),
         "lfomodule" | "lfo" => Some(LfoModule),
         "spectrumanalyzer" | "spectrum" => Some(SpectrumAnalyzer),
         "stereometer" => Some(StereoMeter),
+        "activitytimeline" | "timeline" => Some(ActivityTimeline),
+        "espeakngtts" | "espeak" | "tts" => Some(EspeakNgTts),
+        "coquitts" | "coqui" => Some(CoquiTts),
         _ => None,
     }
 }
@@ -498,6 +511,17 @@ async fn post_rack_agent(
         agent.scope = req.scope.clone();
         agent.role = crate::state::AgentRole::Specialist;
         agent.model_path = model_path;
+        if let Some(ref mode_str) = req.mode {
+            agent.conversation_mode = match mode_str.to_ascii_lowercase().as_str() {
+                "off" => crate::state::ConversationMode::Off,
+                "dj" => crate::state::ConversationMode::Dj,
+                "mc" => crate::state::ConversationMode::Mc,
+                _ => crate::state::ConversationMode::Producer,
+            };
+        }
+        if req.tts == Some(true) {
+            s.llm.tts_enabled = true;
+        }
 
         // Wire control cables to modules matching the scope
         let targets: Vec<u32> = if req.scope.is_empty() {
