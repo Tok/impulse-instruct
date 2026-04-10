@@ -120,11 +120,15 @@ if [ "$SKIP_VIDEO" -eq 0 ]; then
     fi
 fi
 
-mkdir -p "$OUTPUT_DIR"
+# ─── Batch output directory ──────────────────────────────────────────────────
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+VERSION=$(grep '^version' "$PROJECT_DIR/Cargo.toml" | head -1 | sed 's/.*"\(.*\)"/\1/')
+BATCH_DIR="$OUTPUT_DIR/${TIMESTAMP}"
+BASENAME="v${VERSION}-${SCENARIO}"
+mkdir -p "$BATCH_DIR"
 
 # ─── Log file ────────────────────────────────────────────────────────────────
-LOGFILE="$OUTPUT_DIR/demo_${SCENARIO}_${TIMESTAMP}.log"
+LOGFILE="$BATCH_DIR/${BASENAME}.log"
 exec > >(tee -a "$LOGFILE") 2>&1
 echo "=== Log: $LOGFILE ==="
 echo "  Date: $(date)"
@@ -295,10 +299,9 @@ if [ "$SKIP_VIDEO" -eq 0 ]; then
 
     # ─── Start per-app audio capture via PipeWire ────────────────────────
 
-    APP_AUDIO="$OUTPUT_DIR/app_audio_${TIMESTAMP}.wav"
-    RAW_VIDEO="$OUTPUT_DIR/raw_${TIMESTAMP}.mkv"
-    NARRATION_AUDIO="$OUTPUT_DIR/narration_${TIMESTAMP}.wav"
-    FINAL_VIDEO="$OUTPUT_DIR/impulse_demo_${SCENARIO}_${TIMESTAMP}.mp4"
+    APP_AUDIO="$BATCH_DIR/${BASENAME}-audio.wav"
+    RAW_VIDEO="$BATCH_DIR/${BASENAME}-raw.mkv"
+    NARRATION_AUDIO="$BATCH_DIR/${BASENAME}-narration.wav"
 
     # Find the app's PipeWire node for ISOLATED audio capture.
     # We only capture the app's audio — never the default sink (which would
@@ -439,7 +442,7 @@ if [ "$SKIP_VIDEO" -eq 0 ]; then
     echo "  Raw video: $(du -h "$RAW_VIDEO" 2>/dev/null | cut -f1)"
 
     # Base name for output variants
-    local base="${OUTPUT_DIR}/impulse_demo_${SCENARIO}_${TIMESTAMP}"
+    local base="${BATCH_DIR}/${BASENAME}"
 
     # Always generate SRT if narration entries exist (even with --no-tts)
     SRT_FILE=""

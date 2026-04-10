@@ -12,6 +12,9 @@ DEMO_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(cd "$DEMO_DIR/.." && pwd)"
 OUTPUT_DIR="$DEMO_DIR/output"
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+VERSION=$(grep '^version' "$PROJECT_DIR/Cargo.toml" | head -1 | sed 's/.*"\(.*\)"/\1/')
+BATCH_DIR="$OUTPUT_DIR/${TIMESTAMP}"
+BASENAME="v${VERSION}-test"
 
 source "$DEMO_DIR/lib.sh"
 
@@ -24,7 +27,7 @@ if [ "$APP_RUNNING" -eq 0 ] && curl -sf "$API/api/state" >/dev/null 2>&1; then
     APP_RUNNING=1
 fi
 
-mkdir -p "$OUTPUT_DIR"
+mkdir -p "$BATCH_DIR"
 
 echo "=== Recording Pipeline Test ==="
 echo ""
@@ -81,7 +84,7 @@ echo "  Geometry: ${GRAB_W}x${GRAB_H}"
 
 # ── Step 3: Start video capture ──────────────────────────────────────────────
 
-RAW_VIDEO="$OUTPUT_DIR/test_raw_${TIMESTAMP}.mkv"
+RAW_VIDEO="$BATCH_DIR/${BASENAME}-raw.mkv"
 echo "[3/7] Starting video capture → $(basename "$RAW_VIDEO")"
 
 # -t 15 hard stops after 15s even if SIGINT fails
@@ -123,7 +126,7 @@ echo "  ffmpeg PID: $FFMPEG_PID"
 
 # ── Step 4: Start audio capture ──────────────────────────────────────────────
 
-APP_AUDIO="$OUTPUT_DIR/test_audio_${TIMESTAMP}.wav"
+APP_AUDIO="$BATCH_DIR/${BASENAME}-audio.wav"
 echo "[4/7] Starting audio capture..."
 
 api_play
@@ -189,12 +192,12 @@ set -eu
 echo "[7/7] Encoding + verification..."
 
 # SRT
-SRT_FILE="$OUTPUT_DIR/test_${TIMESTAMP}.srt"
+SRT_FILE="$BATCH_DIR/${BASENAME}.srt"
 SRT_NAME="$SRT_FILE" generate_srt >/dev/null 2>&1 || true
 [ -f "$SRT_FILE" ] && echo "  SRT: OK ($(wc -l < "$SRT_FILE") lines)" || echo "  SRT: FAIL"
 
-FINAL="$OUTPUT_DIR/test_${TIMESTAMP}.mp4"
-FINAL_SUBS="$OUTPUT_DIR/test_${TIMESTAMP}_subs.mp4"
+FINAL="$BATCH_DIR/${BASENAME}.mp4"
+FINAL_SUBS="$BATCH_DIR/${BASENAME}-subs.mp4"
 
 HAS_AUDIO=0
 [ -f "$APP_AUDIO" ] && [ -s "$APP_AUDIO" ] && HAS_AUDIO=1
