@@ -20,7 +20,7 @@ impl ImpulseApp {
     pub(super) fn draw_log_and_scope(&mut self, ctx: &egui::Context) {
         let scope_h = 80.0;
         let screen_h = ctx.screen_rect().height();
-        TopBottomPanel::top("log_strip")
+        TopBottomPanel::top("log_scope_panel")
             .frame(Frame::none().fill(theme::PIT).inner_margin(egui::Margin {
                 left: 8.0,
                 right: 8.0,
@@ -38,9 +38,11 @@ impl ImpulseApp {
 
                 // ── Log (top portion, full width) ───────────────────────
                 ui.allocate_ui(egui::vec2(full_w, log_h), |ui| {
+                    ui.set_max_height(log_h);
                     egui::ScrollArea::vertical()
                         .id_source("global_log")
                         .stick_to_bottom(true)
+                        .max_height(log_h)
                         .auto_shrink([false; 2])
                         .show(ui, |ui: &mut egui::Ui| {
                             let job = super::llm_strip::colorize_log(&self.log_text, theme::FOG);
