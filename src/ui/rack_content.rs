@@ -343,10 +343,12 @@ pub(super) fn draw_master_content(app: &mut ImpulseApp, ui: &mut egui::Ui) {
 // ─── LLM agent card content ──────────────────────────────────────────────────
 
 pub(super) fn draw_llm_agent_content(app: &mut ImpulseApp, ui: &mut egui::Ui, module_id: u32) {
-    // Wrap in a scroll area so multiline text fields don't grow the card
+    // Fixed-height agent panel — scroll if content overflows
+    let agent_h = 330.0;
+    ui.set_min_height(agent_h);
     egui::ScrollArea::vertical()
         .id_source(ui.id().with("agent_scroll").with(module_id))
-        .max_height(330.0)
+        .max_height(agent_h)
         .auto_shrink([false; 2])
         .show(ui, |ui| {
             draw_llm_agent_inner(app, ui, module_id);

@@ -8,7 +8,10 @@ pub fn centered_row<R>(
     ui: &mut Ui,
     add_contents: impl FnOnce(&mut Ui) -> R,
 ) -> egui::InnerResponse<R> {
-    let row_id = ui.id().with("centered_row_w");
+    // Use cursor Y position as salt so each row in the same parent gets its
+    // own cached width (ui.id() alone is identical for sibling rows).
+    let y_salt = (ui.cursor().top() * 100.0) as i32;
+    let row_id = ui.id().with("centered_row_w").with(y_salt);
     let prev_w: f32 = ui.ctx().data(|d| d.get_temp(row_id).unwrap_or(0.0));
     let avail = ui.available_width();
     let spacer = ((avail - prev_w) / 2.0).max(0.0);
