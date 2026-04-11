@@ -301,7 +301,7 @@ fn draw_add_menu(app: &mut ImpulseApp, ctx: &egui::Context) {
 // columns defined in `ModuleKind::grid_span()`.  Heights auto-size to content.
 
 pub(super) const RACK_GAP: f32 = 4.0;
-const GRID_COLS: u8 = 12;
+pub(crate) const GRID_COLS: u8 = 12;
 
 /// Size of one grid column.
 pub(super) fn grid_col_w(available_w: f32) -> f32 {
@@ -313,6 +313,25 @@ pub(super) fn grid_col_w(available_w: f32) -> f32 {
 pub(super) fn module_grid_w(kind: ModuleKind, col_w: f32) -> f32 {
     let (c, _) = kind.grid_span(GRID_COLS);
     c as f32 * col_w + (c as f32 - 1.0).max(0.0) * RACK_GAP
+}
+
+/// Width spanning `n` grid columns (including internal gaps).
+#[allow(dead_code)]
+pub(crate) fn span_w(n: u8, col_w: f32) -> f32 {
+    n as f32 * col_w + (n as f32 - 1.0).max(0.0) * RACK_GAP
+}
+
+/// Published grid column width — readable from any panel via egui temp data.
+/// Stored by `draw_rack_inner`, read via `grid_unit()`.
+const GRID_COL_W_ID: &str = "rack_grid_col_w";
+
+/// Read the current grid column width from egui temp data.
+/// Panels can use this to size sub-elements to grid multiples.
+/// Returns 0.0 if called outside the rack draw cycle.
+#[allow(dead_code)]
+pub(crate) fn grid_unit(ctx: &egui::Context) -> f32 {
+    ctx.data(|d| d.get_temp::<f32>(egui::Id::new(GRID_COL_W_ID)))
+        .unwrap_or(0.0)
 }
 
 /// Group modules into rows that fit within `available_w`.
@@ -385,6 +404,9 @@ fn draw_grid_dots(ui: &mut egui::Ui, col_w: f32) {
 fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<PortPos>) {
     let available_w = (ui.available_width() - 8.0).max(200.0);
     let col_w = grid_col_w(available_w);
+    // Publish col_w so panels can read it via grid_unit()
+    ui.ctx()
+        .data_mut(|d| d.insert_temp(egui::Id::new(GRID_COL_W_ID), col_w));
 
     // Draw grid dots behind all content
     draw_grid_dots(ui, col_w);

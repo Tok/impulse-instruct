@@ -236,12 +236,11 @@ fn module_card_inner<R>(
     let fill = Color32::from_gray(14);
     let title_bg = focused_title_bg(ui.ctx(), kind);
 
-    // Honor caller's minimum width request (e.g. full-width global cards).
-    // For cards placed inside horizontal_wrapped the CALLER is responsible for
-    // calling this inside an `allocate_ui` block that constrains both width
-    // and clip rect — do NOT set max_width here.
-    if let Some(min_w) = min_width {
-        ui.set_min_width(min_w);
+    // Pin the outer UI to the requested width so the frame doesn't overflow
+    // the grid slot.  Both min and max are set to prevent shrinking or growing.
+    if let Some(w) = min_width {
+        ui.set_min_width(w);
+        ui.set_max_width(w);
     }
 
     let frame = Frame::none()
