@@ -236,41 +236,33 @@ pub fn draw_footer_status(
         draw_dsp_sparkline(ui, dsp_buf);
 
         ui.separator();
-
-        // ── Session stats ──
         let mins = uptime_secs / 60;
         let secs = uptime_secs % 60;
         ui.label(
             egui::RichText::new(format!(
-                "Modules: {}  Agents: {}  Cables: {}  Session: {}:{:02}",
+                "Modules: {}  Agents: {}  Cables: {}  {}:{:02}",
                 n_modules, n_agents, n_cables, mins, secs
             ))
             .monospace()
             .size(8.0)
             .color(super::theme::ASH),
         );
-
-        // ── GitHub (right-justified) ──
-        let right_rect = ui.available_rect_before_wrap();
-        ui.allocate_ui_at_rect(right_rect, |ui| {
-            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                if ui
-                    .add(
-                        egui::Label::new(
-                            egui::RichText::new("GitHub ↗")
-                                .monospace()
-                                .size(8.0)
-                                .color(super::theme::FOG),
-                        )
-                        .sense(egui::Sense::click()),
-                    )
-                    .on_hover_text("github.com/Tok/impulse-instruct")
-                    .clicked()
-                {
-                    let _ = super::webbrowser_open("https://github.com/Tok/impulse-instruct");
-                }
-            });
-        });
+        ui.separator();
+        if ui
+            .add(
+                egui::Label::new(
+                    egui::RichText::new("GitHub ↗")
+                        .monospace()
+                        .size(8.0)
+                        .color(super::theme::FOG),
+                )
+                .sense(egui::Sense::click()),
+            )
+            .on_hover_text("github.com/Tok/impulse-instruct")
+            .clicked()
+        {
+            let _ = super::webbrowser_open("https://github.com/Tok/impulse-instruct");
+        }
     });
 }
 

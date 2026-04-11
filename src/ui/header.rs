@@ -491,192 +491,106 @@ impl ImpulseApp {
 
                     // (Agent status moved to log strip right side)
 
-                    // ── Right side: KNOBS | MON | VRAM/API ─────────────
-                    // allocate_ui_with_layout uses the REMAINING available rect
-                    let right_rect = ui.available_rect_before_wrap();
-                    ui.allocate_ui_at_rect(right_rect, |ui| {
-                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                            let (has_vram, has_ram, vram_used, vram_total, ram_used, ram_total) =
-                                self.sys_info
-                                    .lock()
-                                    .map(|si| {
-                                        (
-                                            si.vram_total_mb > 0,
-                                            si.ram_total_mb > 0,
-                                            si.vram_used_mb,
-                                            si.vram_total_mb,
-                                            si.ram_used_mb,
-                                            si.ram_total_mb,
-                                        )
+                    // ── KNOBS ──
+                    ui.separator();
+                    let use_sliders = self.state.read().ui_prefs.use_sliders;
+                    if ui
+                        .add(
+                            egui::Button::new(
+                                egui::RichText::new(if use_sliders { "SLDR" } else { "KNOB" })
+                                    .color(if use_sliders {
+                                        theme::SMOKE
+                                    } else {
+                                        theme::ASH
                                     })
-                                    .unwrap_or((false, false, 0, 0, 0, 0));
-                            const BAR_W: f32 = 60.0;
-                            const BAR_H: f32 = 5.0;
-                            const TRACK: egui::Color32 = egui::Color32::from_gray(38);
-                            ui.vertical(|ui| {
-                                ui.spacing_mut().item_spacing.y = 1.0;
-                                let draw_bar =
-                                    |ui: &mut egui::Ui,
-                                     label: &str,
-                                     frac: f32,
-                                     fill: egui::Color32| {
-                                        ui.horizontal(|ui| {
-                                            ui.label(
-                                                egui::RichText::new(label)
-                                                    .color(theme::ASH)
-                                                    .monospace()
-                                                    .size(7.0),
-                                            );
-                                            let (br, _) = ui.allocate_exact_size(
-                                                egui::vec2(BAR_W, BAR_H),
-                                                egui::Sense::hover(),
-                                            );
-                                            let p = ui.painter();
-                                            p.rect_filled(br, 1.0, TRACK);
-                                            let fw = (br.width() * frac.clamp(0.0, 1.0)).max(0.0);
-                                            if fw > 0.0 {
-                                                p.rect_filled(
-                                                    egui::Rect::from_min_size(
-                                                        br.min,
-                                                        egui::vec2(fw, br.height()),
-                                                    ),
-                                                    1.0,
-                                                    fill,
-                                                );
-                                            }
-                                            ui.label(
-                                                egui::RichText::new(format!(
-                                                    "{}%",
-                                                    (frac * 100.0) as u32
-                                                ))
-                                                .color(theme::ASH)
-                                                .monospace()
-                                                .size(6.5),
-                                            );
-                                        });
-                                    };
-                                if has_vram {
-                                    let frac = vram_used as f32 / vram_total as f32;
-                                    draw_bar(
-                                        ui,
-                                        "VRAM",
-                                        frac,
-                                        egui::Color32::from_gray(if frac > 0.85 {
-                                            160
-                                        } else {
-                                            90
-                                        }),
-                                    );
-                                }
-                                if has_ram {
-                                    let frac = ram_used as f32 / ram_total as f32;
-                                    draw_bar(
-                                        ui,
-                                        "RAM",
-                                        frac,
-                                        egui::Color32::from_gray(if frac > 0.85 {
-                                            160
-                                        } else {
-                                            90
-                                        }),
-                                    );
-                                }
-                                if let Some(port) = self.api_port
-                                    && ui
-                                        .add(
-                                            egui::Button::new(
-                                                egui::RichText::new(format!("API :{port}"))
-                                                    .color(theme::SMOKE)
-                                                    .monospace()
-                                                    .size(7.0),
-                                            )
-                                            .fill(egui::Color32::TRANSPARENT),
-                                        )
-                                        .on_hover_text(format!(
-                                            "http://localhost:{port}/api/schema"
-                                        ))
-                                        .clicked()
-                                {
-                                    let _ = webbrowser_open(&format!(
-                                        "http://localhost:{port}/api/schema"
-                                    ));
-                                }
-                            });
-
-                            ui.separator();
-
-                            // ── MON slider (left of VRAM in right_to_left) ──
-                            {
-                                let vol_col = if self.ui_volume < 0.4 {
-                                    theme::ASH
-                                } else if self.ui_volume < 0.75 {
-                                    theme::SMOKE
-                                } else {
-                                    theme::FOG
-                                };
-                                ui.label(
-                                    egui::RichText::new(format!(
-                                        "{}%",
-                                        (self.ui_volume * 100.0) as u32
-                                    ))
-                                    .color(vol_col)
                                     .monospace()
-                                    .size(7.5),
-                                );
-                                if ui
-                                    .scope(|ui| {
-                                        ui.spacing_mut().slider_width = 80.0;
-                                        ui.add(
-                                            egui::Slider::new(&mut self.ui_volume, 0.0..=1.0)
-                                                .show_value(false),
-                                        )
-                                    })
-                                    .inner
-                                    .changed()
-                                {
-                                    let _ = self
-                                        .audio_tx
-                                        .push(AudioCommand::SetMonitorVolume(self.ui_volume));
-                                }
-                                ui.label(
-                                    egui::RichText::new("MON")
-                                        .color(vol_col)
+                                    .size(8.0),
+                            )
+                            .fill(egui::Color32::TRANSPARENT),
+                        )
+                        .clicked()
+                    {
+                        self.state.write().ui_prefs.use_sliders = !use_sliders;
+                    }
+
+                    // ── MON ──
+                    ui.separator();
+                    let vol_col = if self.ui_volume < 0.5 {
+                        theme::ASH
+                    } else {
+                        theme::SMOKE
+                    };
+                    ui.label(
+                        egui::RichText::new("MON")
+                            .color(vol_col)
+                            .monospace()
+                            .size(8.0),
+                    );
+                    if ui
+                        .scope(|ui| {
+                            ui.spacing_mut().slider_width = 60.0;
+                            ui.add(
+                                egui::Slider::new(&mut self.ui_volume, 0.0..=1.0).show_value(false),
+                            )
+                        })
+                        .inner
+                        .changed()
+                    {
+                        let _ = self
+                            .audio_tx
+                            .push(AudioCommand::SetMonitorVolume(self.ui_volume));
+                    }
+
+                    // ── VRAM / RAM / API ──
+                    ui.separator();
+                    let (has_vram, has_ram, vram_used, vram_total, ram_used, ram_total) = self
+                        .sys_info
+                        .lock()
+                        .map(|si| {
+                            (
+                                si.vram_total_mb > 0,
+                                si.ram_total_mb > 0,
+                                si.vram_used_mb,
+                                si.vram_total_mb,
+                                si.ram_used_mb,
+                                si.ram_total_mb,
+                            )
+                        })
+                        .unwrap_or((false, false, 0, 0, 0, 0));
+                    if has_vram {
+                        let pct = (vram_used as f32 / vram_total as f32 * 100.0) as u32;
+                        ui.label(
+                            egui::RichText::new(format!("VRAM {}%", pct))
+                                .color(theme::ASH)
+                                .monospace()
+                                .size(7.0),
+                        );
+                    }
+                    if has_ram {
+                        let pct = (ram_used as f32 / ram_total as f32 * 100.0) as u32;
+                        ui.label(
+                            egui::RichText::new(format!("RAM {}%", pct))
+                                .color(theme::ASH)
+                                .monospace()
+                                .size(7.0),
+                        );
+                    }
+                    if let Some(port) = self.api_port
+                        && ui
+                            .add(
+                                egui::Button::new(
+                                    egui::RichText::new(format!(":{port}"))
+                                        .color(theme::SMOKE)
                                         .monospace()
-                                        .size(8.0),
-                                );
-                            }
-
-                            ui.separator();
-
-                            // ── KNOBS toggle (leftmost in RTL) ──
-                            {
-                                let use_sliders = self.state.read().ui_prefs.use_sliders;
-                                let ks_col = if use_sliders {
-                                    theme::SMOKE
-                                } else {
-                                    theme::ASH
-                                };
-                                if ui
-                                    .add(
-                                        egui::Button::new(
-                                            egui::RichText::new(if use_sliders {
-                                                "SLIDERS"
-                                            } else {
-                                                "KNOBS"
-                                            })
-                                            .color(ks_col)
-                                            .monospace()
-                                            .size(8.5),
-                                        )
-                                        .fill(egui::Color32::TRANSPARENT),
-                                    )
-                                    .clicked()
-                                {
-                                    self.state.write().ui_prefs.use_sliders = !use_sliders;
-                                }
-                            }
-                        });
-                    });
+                                        .size(7.0),
+                                )
+                                .fill(egui::Color32::TRANSPARENT),
+                            )
+                            .on_hover_text(format!("http://localhost:{port}/api/schema"))
+                            .clicked()
+                    {
+                        let _ = webbrowser_open(&format!("http://localhost:{port}/api/schema"));
+                    }
                 });
             });
     }

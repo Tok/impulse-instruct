@@ -281,10 +281,10 @@ pub(super) fn draw_drum_rows(
 
         // ── Vel / Prob / Ratchet — single combined row (no vertical gaps) ──
         // All three indicators painted into one horizontal allocation per step.
-        let vel_h = 4.0_f32;
-        let prob_h = 2.0_f32;
-        let ratch_h = 3.0_f32;
-        let gap = 1.0_f32;
+        let vel_h = 5.0_f32;
+        let prob_h = 3.0_f32;
+        let ratch_h = 4.0_f32;
+        let gap = 2.0_f32;
         let combined_h = vel_h + gap + prob_h + gap + ratch_h;
         let mut vel_changed: Option<(usize, f32)> = None;
         let mut ratchet_changed: Option<(usize, u8)> = None;
