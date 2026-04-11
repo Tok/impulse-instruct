@@ -8,12 +8,17 @@ TTS_DIR="$DEMO_DIR/tts_cache"
 NARRATION_LIST="$DEMO_DIR/.narration_playlist"
 XDO="python3 $DEMO_DIR/xdo.py"
 
-# TTS settings — CoquiTTS preferred, espeak-ng fallback
-# CoquiTTS: pip install TTS; best model: tts_models/en/ljspeech/tacotron2-DDC
+# TTS settings — CoquiTTS for demo narration
+# CoquiTTS requires Python <3.12; use .tts-venv if available.
+# Setup: python3.11 -m venv .tts-venv && .tts-venv/bin/pip install TTS
 TTS_MODEL="${TTS_MODEL:-tts_models/en/ljspeech/tacotron2-DDC}"
-TTS_VOICE="${TTS_VOICE:-en+f4}"     # espeak-ng: female, clear
-TTS_SPEED="${TTS_SPEED:-165}"       # espeak-ng words per minute (brisk)
-TTS_PITCH="${TTS_PITCH:-48}"        # espeak-ng pitch (slightly higher female)
+PROJECT_DIR="${DEMO_DIR}/.."
+TTS_VENV_BIN="${PROJECT_DIR}/.tts-venv/bin"
+if [ -x "${TTS_VENV_BIN}/tts" ]; then
+    TTS_CMD="${TTS_VENV_BIN}/tts"
+else
+    TTS_CMD="tts"  # fall back to system PATH
+fi
 
 # Window ID — set by record-demo.sh after finding the app
 APP_WINDOW_ID="${APP_WINDOW_ID:-0}"
@@ -211,7 +216,7 @@ tts_generate() {
     local outfile="$TTS_DIR/${id}.wav"
     mkdir -p "$TTS_DIR"
     if [ ! -f "$outfile" ]; then
-        tts --text "$text" --out_path "$outfile" \
+        "$TTS_CMD" --text "$text" --out_path "$outfile" \
             ${TTS_MODEL:+--model_name "$TTS_MODEL"} 2>/dev/null
         if [ ! -f "$outfile" ]; then
             echo "  ERROR: CoquiTTS failed to generate: $text" >&2

@@ -16,3 +16,4 @@ cobertura.xml
 .claude/
 /demo/output/
 /demo/tts_cache/
+.tts-venv/
