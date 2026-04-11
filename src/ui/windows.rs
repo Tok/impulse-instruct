@@ -363,6 +363,59 @@ impl ImpulseApp {
                                 .size(8.0)
                                 .color(theme::IRON),
                         );
+
+                        ui.add_space(8.0);
+                        widgets::section_header(ui, "HEADER VISUALIZATIONS");
+                        ui.label(
+                            egui::RichText::new(
+                                "Toggle header info panels. Remaining panels reclaim the space.",
+                            )
+                            .monospace()
+                            .size(8.0)
+                            .color(theme::IRON),
+                        );
+                        ui.add_space(4.0);
+                        {
+                            let viz_toggle = |ui: &mut egui::Ui, label: &str, val: bool| -> bool {
+                                let mut out = val;
+                                ui.horizontal(|ui| {
+                                    ui.label(
+                                        egui::RichText::new(label)
+                                            .monospace()
+                                            .size(9.5)
+                                            .color(theme::FOG),
+                                    );
+                                    ui.with_layout(
+                                        egui::Layout::right_to_left(egui::Align::Center),
+                                        |ui| {
+                                            widgets::toggle_button(
+                                                ui,
+                                                if out { "ON" } else { "OFF" },
+                                                &mut out,
+                                            );
+                                        },
+                                    );
+                                });
+                                out
+                            };
+                            let prefs = self.state.read().ui_prefs.clone();
+                            let bar = viz_toggle(ui, "Bar oscilloscope", prefs.show_bar_oscilloscope);
+                            let ring = viz_toggle(ui, "Ring oscilloscope", prefs.show_ring_oscilloscope);
+                            let stream = viz_toggle(ui, "Event stream", prefs.show_event_stream);
+                            let stereo = viz_toggle(ui, "Stereo pan layer", prefs.stream_stereo);
+                            if bar != prefs.show_bar_oscilloscope {
+                                self.state.write().ui_prefs.show_bar_oscilloscope = bar;
+                            }
+                            if ring != prefs.show_ring_oscilloscope {
+                                self.state.write().ui_prefs.show_ring_oscilloscope = ring;
+                            }
+                            if stream != prefs.show_event_stream {
+                                self.state.write().ui_prefs.show_event_stream = stream;
+                            }
+                            if stereo != prefs.stream_stereo {
+                                self.state.write().ui_prefs.stream_stereo = stereo;
+                            }
+                        }
                     }
 
                     // ── Tab 3: System ─────────────────────────────────────────

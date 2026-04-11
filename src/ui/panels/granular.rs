@@ -81,5 +81,13 @@ pub fn draw_granular(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             s.granular.spray = spray;
         }
         app.push_audio_params();
+        app.observe_edits(&[
+            ("granular.volume", vol),
+            ("granular.density", density),
+            ("granular.grain_size", grain_size),
+            ("granular.position", position),
+            ("granular.pitch_scatter", pitch),
+            ("granular.spray", spray),
+        ]);
     }
 }

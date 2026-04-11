@@ -267,6 +267,18 @@ pub(super) fn draw_fx_content(app: &mut ImpulseApp, ui: &mut egui::Ui, kind: Mod
 
     if changed {
         app.push_audio_params();
+        // Observe key FX params for style tracking
+        let fx = &app.state.read().fx.clone();
+        app.observe_edits(&[
+            ("fx.reverb_mix", fx.reverb_mix),
+            ("fx.delay_mix", fx.delay_mix),
+            ("fx.delay_feedback", fx.delay_feedback),
+            ("fx.chorus_mix", fx.chorus_mix),
+            ("fx.compressor_threshold", fx.compressor_threshold),
+            ("fx.distortion_drive", fx.distortion_drive),
+            ("fx.master_volume", fx.master_volume),
+            ("fx.stereo_width", fx.stereo_width),
+        ]);
     }
 }
 
@@ -331,6 +343,17 @@ pub(super) fn draw_master_content(app: &mut ImpulseApp, ui: &mut egui::Ui) {
 // ─── LLM agent card content ──────────────────────────────────────────────────
 
 pub(super) fn draw_llm_agent_content(app: &mut ImpulseApp, ui: &mut egui::Ui, module_id: u32) {
+    // Wrap in a scroll area so multiline text fields don't grow the card
+    egui::ScrollArea::vertical()
+        .id_source(ui.id().with("agent_scroll").with(module_id))
+        .max_height(330.0)
+        .auto_shrink([false; 2])
+        .show(ui, |ui| {
+            draw_llm_agent_inner(app, ui, module_id);
+        });
+}
+
+fn draw_llm_agent_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, module_id: u32) {
     use crate::ui::theme;
 
     let agent_idx = {

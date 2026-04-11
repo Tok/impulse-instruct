@@ -15,14 +15,19 @@ impl ImpulseApp {
         self.draw_log_and_scope(ctx);
     }
 
-    /// Resizable log panel + fixed scope panel below it.
-    /// Dragging the handle between them grows/shrinks the log.
+    /// Combined log + visualizations panel.
+    ///
+    /// Single resizable `TopBottomPanel` with a 3-column internal layout:
+    ///   Left:   LLM log (golden-ratio width, full height)
+    ///   Center: event stream + bar oscilloscope stacked vertically
+    ///   Right:  ring oscilloscope (square, full height)
+    ///
+    /// Each visualization can be toggled off in Preferences → Display.
+    /// Disabled columns are reclaimed by the remaining elements.
     pub(super) fn draw_log_and_scope(&mut self, ctx: &egui::Context) {
-        let scope_h = 80.0;
         let screen_h = ctx.screen_rect().height();
 
-        // ── Log panel (resizable) ───────────────────────────────────
-        TopBottomPanel::top("log_panel")
+        TopBottomPanel::top("header_info")
             .frame(Frame::none().fill(theme::PIT).inner_margin(egui::Margin {
                 left: 8.0,
                 right: 8.0,
@@ -30,69 +35,103 @@ impl ImpulseApp {
                 bottom: 2.0,
             }))
             .resizable(true)
-            .min_height(40.0)
+            .min_height(60.0)
             .max_height(screen_h * 0.5)
-            .default_height(100.0)
+            .default_height(160.0)
             .show(ctx, |ui| {
-                egui::ScrollArea::vertical()
-                    .id_source("global_log")
-                    .stick_to_bottom(true)
-                    .auto_shrink([false; 2])
-                    .show(ui, |ui: &mut egui::Ui| {
-                        let job = super::llm_strip::colorize_log(&self.log_text, theme::FOG);
-                        ui.add(egui::Label::new(job).wrap().selectable(true));
-                    });
-            });
-
-        // ── Scope + event stream panel (fixed height) ──────────────
-        TopBottomPanel::top("scope_panel")
-            .frame(
-                Frame::none()
-                    .fill(theme::PIT)
-                    .inner_margin(egui::Margin::symmetric(8.0, 2.0)),
-            )
-            .exact_height(scope_h)
-            .show(ctx, |ui| {
+                let (show_bar, show_ring, show_stream) = {
+                    let p = &self.state.read().ui_prefs;
+                    (
+                        p.show_bar_oscilloscope,
+                        p.show_ring_oscilloscope,
+                        p.show_event_stream,
+                    )
+                };
+                let any_center = show_bar || show_stream;
                 let full_w = ui.available_width();
-                let ring_w = scope_h;
-                let content_w = (full_w - ring_w - 12.0).max(120.0);
-                // φ : 1 split — oscilloscope gets 61.8%, event stream gets 38.2%
-                let osc_w = content_w * (1.618 / 2.618);
-                let stream_w = content_w - osc_w - 4.0;
-                let h = scope_h - 4.0;
+                let total_h = ui.available_height();
+                let gap = 4.0;
+
+                // Column widths
+                let ring_w = if show_ring { total_h } else { 0.0 };
+                let ring_gap = if show_ring { gap } else { 0.0 };
+                let remaining_w = (full_w - ring_w - ring_gap).max(80.0);
+                let (log_w, center_w) = if any_center {
+                    let lw = remaining_w * (1.618 / 2.618);
+                    (lw, remaining_w - lw - gap)
+                } else {
+                    (remaining_w, 0.0)
+                };
+
+                // Huth color detection (shared by bar and ring scopes)
+                let huth_col = if self.state.read().ui_prefs.huth_oscilloscope {
+                    super::scope_footer::detect_note(&self.scope_buf, 44100.0)
+                        .map(theme::note_color)
+                } else {
+                    None
+                };
+
                 ui.horizontal_top(|ui| {
-                    // Linear oscilloscope (left) — with optional Huth coloring
-                    let huth_col = if self.state.read().ui_prefs.huth_oscilloscope {
-                        super::scope_footer::detect_note(&self.scope_buf, 44100.0)
-                            .map(theme::note_color)
-                    } else {
-                        None
-                    };
-                    super::scope_footer::draw_scope_colored(
-                        ui,
-                        &self.scope_buf,
-                        &self.scope_history,
-                        osc_w,
-                        h,
-                        huth_col,
-                    );
-                    // Event stream (center) — smooth sub-step interpolation
-                    {
-                        let state = self.state.read();
-                        let now = ctx.input(|i| i.time);
-                        // Compute fractional step from time elapsed since last step change
-                        let secs_per_step = 60.0 / (state.sequencer.bpm as f64 * 4.0);
-                        let elapsed = (now - self.last_step_time).max(0.0);
-                        let frac = if state.sequencer.running && secs_per_step > 0.001 {
-                            (elapsed / secs_per_step).clamp(0.0, 0.99)
-                        } else {
-                            0.0
-                        };
-                        let smooth = self.last_seq_step as f64 + frac;
-                        super::widgets::event_stream(ui, &state, smooth, stream_w, h);
+                    ui.spacing_mut().item_spacing.x = gap;
+
+                    // ── Left: LLM log (full height) ─────────────────────
+                    ui.allocate_ui(egui::vec2(log_w, total_h), |ui| {
+                        egui::ScrollArea::vertical()
+                            .id_source("global_log")
+                            .stick_to_bottom(true)
+                            .auto_shrink([false; 2])
+                            .show(ui, |ui: &mut egui::Ui| {
+                                let job =
+                                    super::llm_strip::colorize_log(&self.log_text, theme::FOG);
+                                ui.add(egui::Label::new(job).wrap().selectable(true));
+                            });
+                    });
+
+                    // ── Center: event stream + bar oscilloscope stacked ──
+                    if any_center {
+                        let both = show_bar && show_stream;
+                        let half_h = if both { (total_h - gap) / 2.0 } else { total_h };
+                        ui.allocate_ui(egui::vec2(center_w, total_h), |ui| {
+                            ui.vertical(|ui| {
+                                ui.spacing_mut().item_spacing.y = gap;
+                                if show_stream {
+                                    let state = self.state.read();
+                                    let now = ctx.input(|i| i.time);
+                                    let secs_per_step = 60.0 / (state.sequencer.bpm as f64 * 4.0);
+                                    let elapsed = (now - self.last_step_time).max(0.0);
+                                    let frac = if state.sequencer.running && secs_per_step > 0.001 {
+                                        (elapsed / secs_per_step).clamp(0.0, 0.99)
+                                    } else {
+                                        0.0
+                                    };
+                                    let smooth = self.last_seq_step as f64 + frac;
+                                    super::widgets::event_stream(
+                                        ui, &state, smooth, center_w, half_h,
+                                    );
+                                }
+                                if show_bar {
+                                    super::scope_footer::draw_scope_colored(
+                                        ui,
+                                        &self.scope_buf,
+                                        &self.scope_history,
+                                        center_w,
+                                        half_h,
+                                        huth_col,
+                                    );
+                                }
+                            });
+                        });
                     }
-                    // Ring scope (right) — same Huth color as linear scope
-                    super::scope_footer::draw_ring_scope_colored(ui, &self.scope_buf, h, huth_col);
+
+                    // ── Right: ring oscilloscope (square) ───────────────
+                    if show_ring {
+                        super::scope_footer::draw_ring_scope_colored(
+                            ui,
+                            &self.scope_buf,
+                            total_h,
+                            huth_col,
+                        );
+                    }
                 });
             });
     }

@@ -471,8 +471,10 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                 }
             });
 
-            // Accent row — buttons match step pad width for grid alignment
+            // Accent + slide rows — compact vertical spacing
             let marker_h = (pad_px * 0.35).clamp(10.0, 16.0);
+            let prev_spacing = ui.spacing().item_spacing.y;
+            ui.spacing_mut().item_spacing.y = 0.0;
             ui.horizontal(|ui| {
                 ui.add_sized(
                     [prefix_w, marker_h],
@@ -535,6 +537,7 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                     });
                 }
             });
+            ui.spacing_mut().item_spacing.y = prev_spacing;
         } // end if rack_has_bass
 
         // ── Hoover row — only shown when HooverLead is in the rack ────────────

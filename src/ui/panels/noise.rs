@@ -50,5 +50,10 @@ pub fn draw_noise(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             s.noise_voice.pan = pan;
         }
         app.push_audio_params();
+        app.observe_edits(&[
+            ("noise_voice.volume", vol),
+            ("noise_voice.color", color),
+            ("noise_voice.cutoff", cutoff),
+        ]);
     }
 }

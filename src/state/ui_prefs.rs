@@ -187,6 +187,19 @@ pub struct UiPrefs {
     /// Off by default — mainly useful for demo recordings.
     #[serde(default)]
     pub llm_auto_scroll: bool,
+    // ── Header visualization toggles ────────────────────────────────────────
+    /// Show the linear (bar) oscilloscope in the header.
+    #[serde(default = "default_true_pref")]
+    pub show_bar_oscilloscope: bool,
+    /// Show the ring (circular) oscilloscope in the header.
+    #[serde(default = "default_true_pref")]
+    pub show_ring_oscilloscope: bool,
+    /// Show the event stream (note/drum history) in the header.
+    #[serde(default = "default_true_pref")]
+    pub show_event_stream: bool,
+    /// Show stereo/pan position indicator in the event stream.
+    #[serde(default)]
+    pub stream_stereo: bool,
 }
 
 fn default_true_pref() -> bool {
@@ -258,6 +271,10 @@ impl Default for UiPrefs {
             stream_hz_scale: true,
             stream_ramps: true,
             llm_auto_scroll: false,
+            show_bar_oscilloscope: true,
+            show_ring_oscilloscope: true,
+            show_event_stream: true,
+            stream_stereo: false,
         }
     }
 }

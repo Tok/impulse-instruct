@@ -328,8 +328,9 @@ pub(super) fn module_slot_w(kind: ModuleKind, full_w: f32) -> f32 {
         | ModuleKind::FxTapeSat
         | ModuleKind::FxDrive
         | ModuleKind::FxAutotune
-        | ModuleKind::LfoModule
-        | ModuleKind::LlmAgent => FX_SLOT_W.min(full_w),
+        | ModuleKind::LfoModule => FX_SLOT_W.min(full_w),
+        // Agent cards: ~1/4 of rack width, minimum FX_SLOT_W
+        ModuleKind::LlmAgent => (full_w / 4.0).max(FX_SLOT_W).min(full_w),
         // Analysis modules: wider for better resolution
         ModuleKind::SpectrumAnalyzer => 320.0_f32.min(full_w),
         ModuleKind::StereoMeter => FX_SLOT_W.min(full_w),
@@ -759,13 +760,7 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
                     }
                     let drop_pos = ctx_ref.pointer_latest_pos().unwrap_or_default();
                     if handle_title_drag(app, &ctx_ref, *id, &resp) {
-                        reorder_module_by_drop(
-                            app,
-                            *id,
-                            drop_pos,
-                            Zone::Voice,
-                            ctx_ref.screen_rect().width(),
-                        );
+                        reorder_module_by_drop(app, *id, drop_pos, Zone::Voice, available_w);
                     }
                 }
             });
@@ -879,13 +874,7 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
                     }
                     let drop_pos = ctx_ref.pointer_latest_pos().unwrap_or_default();
                     if handle_title_drag(app, &ctx_ref, *id, &resp) {
-                        reorder_module_by_drop(
-                            app,
-                            *id,
-                            drop_pos,
-                            Zone::FxMod,
-                            ctx_ref.screen_rect().width(),
-                        );
+                        reorder_module_by_drop(app, *id, drop_pos, Zone::FxMod, available_w);
                     }
                 }
             });

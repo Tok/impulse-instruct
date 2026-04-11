@@ -4,8 +4,35 @@
 // active ramps as gradient bars, and beat/bar grid lines.
 
 use crate::state::AppState;
+use crate::state::ui_prefs::HuthStyle;
 use crate::ui::theme;
 use egui::{Color32, Pos2, Rect, Sense, Stroke, Ui, Vec2};
+
+/// Draw a Huth U-cup (open-top cup shape) centered at `center`.
+/// Width = 2r, height = 1.6r. Three sides: left, bottom, right.
+fn draw_u_cup(
+    painter: &egui::Painter,
+    center: Pos2,
+    r: f32,
+    fill: Color32,
+    stroke_w: f32,
+    stroke_color: Color32,
+) {
+    let hw = r; // half width
+    let hh = r * 0.8; // half height
+    let tl = Pos2::new(center.x - hw, center.y - hh);
+    let br = Pos2::new(center.x + hw, center.y + hh);
+    let cup = Rect::from_min_max(tl, br);
+
+    // Filled interior (no top edge — paint full rect, the open top is just the stroke)
+    painter.rect_filled(cup, egui::Rounding::ZERO, fill);
+
+    // Three-sided stroke: left, bottom, right (no top)
+    let stroke = Stroke::new(stroke_w, stroke_color);
+    painter.line_segment([cup.left_top(), cup.left_bottom()], stroke);
+    painter.line_segment([cup.left_bottom(), cup.right_bottom()], stroke);
+    painter.line_segment([cup.right_bottom(), cup.right_top()], stroke);
+}
 
 /// Draw the event stream visualization.
 /// Shows recent and upcoming note events scrolling right-to-left at tempo.
@@ -166,6 +193,7 @@ pub fn event_stream(ui: &mut Ui, state: &AppState, smooth_step: f64, width: f32,
         return;
     }
     let circle_r = (inner_h * 0.08).clamp(3.0, 8.0);
+    let use_u_cups = state.ui_prefs.huth_style == HuthStyle::Full;
     if state.ui_prefs.stream_bass_notes {
         for (vi, voice) in state.bass_voices.iter().enumerate() {
             if !voice.enabled {
@@ -208,19 +236,21 @@ pub fn event_stream(ui: &mut Ui, state: &AppState, smooth_step: f64, width: f32,
                     // Size: accent = 1.4x, gate scales 0.7x–1.0x
                     let gate_scale = 0.7 + step.gate * 0.3;
                     let r = circle_r * gate_scale * if step.accent { 1.4 } else { 1.0 };
-                    painter.circle_filled(Pos2::new(x, y), r, fill);
-                    // Accent: brighter outline
+                    let pos = Pos2::new(x, y);
                     let stroke_w = if step.accent { 2.0 } else { 1.0 };
                     let stroke_a = if step.accent {
                         alpha
                     } else {
                         (alpha as f32 * 0.5) as u8
                     };
-                    painter.circle_stroke(
-                        Pos2::new(x, y),
-                        r,
-                        Stroke::new(stroke_w, Color32::from_rgba_unmultiplied(0, 0, 0, stroke_a)),
-                    );
+                    let stroke_col = Color32::from_rgba_unmultiplied(0, 0, 0, stroke_a);
+
+                    if use_u_cups {
+                        draw_u_cup(&painter, pos, r, fill, stroke_w, stroke_col);
+                    } else {
+                        painter.circle_filled(pos, r, fill);
+                        painter.circle_stroke(pos, r, Stroke::new(stroke_w, stroke_col));
+                    }
 
                     // Slide: line to next note
                     if step.slide
@@ -288,6 +318,56 @@ pub fn event_stream(ui: &mut Ui, state: &AppState, smooth_step: f64, width: f32,
                 }
             }
         }
+    }
+
+    // ── Stereo/pan position indicators ────────────────────────────────────
+    if state.ui_prefs.stream_stereo {
+        let band_h = 8.0_f32;
+        let band_top = inner.max.y - 16.0;
+        let band_mid = band_top + band_h * 0.5;
+        let center_x = (inner.min.x + inner.max.x) * 0.5;
+        // Center line (faint)
+        painter.line_segment(
+            [
+                Pos2::new(center_x, band_top),
+                Pos2::new(center_x, band_top + band_h),
+            ],
+            Stroke::new(0.5, Color32::from_gray(30)),
+        );
+        // Bass voice pans
+        for voice in &state.bass_voices {
+            if !voice.enabled {
+                continue;
+            }
+            let pan_x = center_x + voice.synth.pan * (inner.width() * 0.4);
+            painter.circle_filled(
+                Pos2::new(pan_x, band_mid - 1.5),
+                1.5,
+                Color32::from_gray(70),
+            );
+        }
+        // Drum kit pans (kick and snare only for readability)
+        let kit_pan = |p: f32, y_off: f32| {
+            let px = center_x + p * (inner.width() * 0.4);
+            painter.circle_filled(Pos2::new(px, band_mid + y_off), 1.0, Color32::from_gray(50));
+        };
+        kit_pan(state.kit_a.kick.pan, 1.5);
+        kit_pan(state.kit_a.snare.pan, 1.5);
+        // L/R labels
+        painter.text(
+            Pos2::new(inner.min.x + 2.0, band_top),
+            egui::Align2::LEFT_TOP,
+            "L",
+            egui::FontId::monospace(5.5),
+            Color32::from_gray(35),
+        );
+        painter.text(
+            Pos2::new(inner.max.x - 2.0, band_top),
+            egui::Align2::RIGHT_TOP,
+            "R",
+            egui::FontId::monospace(5.5),
+            Color32::from_gray(35),
+        );
     }
 
     // ── Active ramps ────────────────────────────────────────────────────────

@@ -133,32 +133,33 @@ What's already built is documented in [docs/features.md](docs/features.md).
   side of scope strip, enlarged from 40px to 80px. Panel height 48→88px.
 - [x] **Round-robin indicator → log strip** — agent schedule display moved to
   right side of log strip in 2-row layout. More visible, near console output.
-- [ ] **FX knob layout per group** — evaluate each FX group for 2×2 grid vs
-  horizontal row. Groups with 4+ knobs (delay, compressor) suit 2×2; smaller
-  groups (chorus, phaser) stay as rows. Adds visual variety and reduces
-  horizontal cramping. Requires per-group layout in fx.rs hknobs! macro.
-- [ ] **Knob centering in glass groups** — egui's horizontal always takes full
-  width, preventing Align::Center from working. Needs two-pass render or
-  pre-calculated content width with spacer. Affects all panels.
-- [ ] **Event stream Huth notation (Vol. 3)** — replace dots with U-shapes
-  per Huth *Farbige Noten* theory: outer U is the note color, inner white U
-  for sharps/flats. Longer notes stretch horizontally. Dot size correlates
-  to velocity/volume. ADSR visualized via note shape (attack = left slope,
-  decay = fill gradient, sustain = width, release = right fade).
-- [ ] **Event stream stereo/pan layer** — L/R balance line or stereo width
-  indicator. "no stereo difference" alert when L≈R (bland/mono mix).
-- [ ] **Sequencer step markers table layout** — accent/slide markers properly
-  aligned to step buttons in a compact table. Reduce vertical spacing.
-- [ ] **Module drag reorder** — insertion point indicator works; needs better
-  width calculation (now uses screen width, was hardcoded 1200px)
+- [x] **FX knob layout per group** — already implemented: 4+ knob groups
+  use multi-row layouts, 3-knob groups stay as single rows.
+- [x] **Knob centering in glass groups** — already implemented via
+  `centered_row` two-pass centering in `widgets/centered.rs`.
+- [x] **Event stream Huth notation (Vol. 3)** — U-cup shapes replace circles
+  when HuthStyle::Full is active. Accent/gate scaling preserved.
+- [x] **Event stream stereo/pan layer** — L/R pan position indicators for
+  bass voices and drum kit. Toggle via `stream_stereo` in Preferences.
+- [x] **Sequencer step markers table layout** — accent/slide markers aligned
+  with step buttons (shared `pad_px` + `beat_div`). Vertical spacing
+  reduced to 0 between marker rows.
+- [x] **Module drag reorder** — uses actual rack `available_w` instead of
+  screen width for accurate drop positioning.
+- [x] **Header redesign** — merged log + visualizations into single resizable
+  panel. 3-column layout: log (golden ratio) | viz stack | ring scope.
+  Three toggles (bar osc, ring osc, event stream) in Preferences → Display.
+  Dynamic space reclamation when components are toggled off.
+- [x] **Panel fixed height** — LLM Agent panels capped at 220px max height
+  via ScrollArea, preventing text field expansion.
+- [x] **observe_user_edit in remaining panels** — added to drums (808/909),
+  hoover, AN1X, noise, granular, and FX panels.
 - [ ] **Rack CV cables driving LFO targets** — cables are visual only; wiring
   them to actually change LFO target at DSP level
 - [ ] **Preferences: tuning selector** — ComboBox exists in FX MASTER group;
   could also be in Preferences for discoverability
 - [ ] **Touch mode improvements** — touch-paint mode for mobile/tablet;
   gesture support for zoom/scroll
-- [ ] **observe_user_edit in remaining panels** — currently only bass panel;
-  extend to 808, 909, hoover, AN1X, noise, granular, FX panels
 
 ### Demo recording — next implementation priority
 

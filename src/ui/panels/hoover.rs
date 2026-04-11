@@ -184,4 +184,15 @@ pub fn draw_hoover(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         *app.state.write() = crate::state::apply_hoover_preset(s);
         app.push_audio_params();
     }
+    // Observe edits for style tracking (snapshot then observe)
+    let (fs, res, det, vol) = {
+        let h = &app.state.read().hoover;
+        (h.filter_start, h.resonance, h.detune, h.volume)
+    };
+    app.observe_edits(&[
+        ("hoover.filter_start", fs),
+        ("hoover.resonance", res),
+        ("hoover.detune", det),
+        ("hoover.volume", vol),
+    ]);
 }

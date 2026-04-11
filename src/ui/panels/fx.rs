@@ -402,5 +402,15 @@ pub fn draw_fx(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         s.fx.reverb_freeze = rev_freeze;
         drop(s);
         app.push_audio_params();
+        app.observe_edits(&[
+            ("fx.reverb_mix", rm),
+            ("fx.delay_mix", dm),
+            ("fx.delay_feedback", df),
+            ("fx.chorus_mix", ch_mix),
+            ("fx.compressor_threshold", comp_thresh),
+            ("fx.distortion_drive", dd),
+            ("fx.master_volume", mv),
+            ("fx.stereo_width", stereo_w),
+        ]);
     }
 }

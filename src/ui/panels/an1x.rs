@@ -505,4 +505,14 @@ pub fn draw_an1x(app: &mut ImpulseApp, ui: &mut Ui) {
         *app.state.write() = apply_boc_preset(s);
         app.push_audio_params();
     }
+    // Observe edits for style tracking (snapshot key params)
+    let (cut, reso, vol) = {
+        let a = &app.state.read().an1x;
+        (a.filter_cutoff, a.filter_resonance, a.volume)
+    };
+    app.observe_edits(&[
+        ("an1x.filter_cutoff", cut),
+        ("an1x.filter_resonance", reso),
+        ("an1x.volume", vol),
+    ]);
 }

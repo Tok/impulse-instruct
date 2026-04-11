@@ -159,6 +159,18 @@ pub fn draw_kit_a(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         s.kit_a.hihat_open.volume = hv;
         drop(s);
         app.push_audio_params();
+        app.observe_edits(&[
+            ("kit_a.kick.pitch", kp),
+            ("kit_a.kick.decay", kd),
+            ("kit_a.kick.punch", kpu),
+            ("kit_a.kick.volume", kv),
+            ("kit_a.snare.tone", st),
+            ("kit_a.snare.snappy", ssn),
+            ("kit_a.snare.decay", sd),
+            ("kit_a.snare.volume", sv),
+            ("kit_a.hihat_closed.decay", hcd),
+            ("kit_a.hihat_closed.volume", hv),
+        ]);
     }
 
     // PITCH × DECAY XY pad for quick kick shaping (centered)
@@ -360,6 +372,18 @@ pub fn draw_kit_b(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         s.kit_b.clap.volume = cv;
         drop(s);
         app.push_audio_params();
+        app.observe_edits(&[
+            ("kit_b.kick.pitch", kp),
+            ("kit_b.kick.decay", kd),
+            ("kit_b.kick.punch", kpu),
+            ("kit_b.kick.volume", kv),
+            ("kit_b.snare.tone", st),
+            ("kit_b.snare.snappy", ssn),
+            ("kit_b.snare.decay", sd),
+            ("kit_b.snare.volume", sv),
+            ("kit_b.clap.decay", cd),
+            ("kit_b.clap.volume", cv),
+        ]);
     }
 }
 
