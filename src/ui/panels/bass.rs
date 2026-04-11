@@ -288,7 +288,8 @@ pub fn draw_bass(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         let gw_main = ((avail - spacing * 2.0) * 0.40).floor();
         let gw_mod = avail - gw_main * 2.0 - spacing * 2.0;
         // Fixed height so all three glass groups match
-        let group_h = ctrl.knob_size * 2.0 + 50.0; // 2 knob rows + label + spacing
+        // Height based on the largest knobs (FILTER uses ctrl_big)
+        let group_h = ctrl_big.knob_size * 2.0 + 50.0;
         ui.horizontal(|ui| {
             // FILTER group: 2×2 grid (CUT/RES, ENV/DEC)
             widgets::glass_group_fill(ui, gw_main, gw_main, |ui| {
@@ -839,7 +840,8 @@ pub fn draw_bass(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                 }
             });
         });
-        // Right column: waveform display
+        // Right column: waveform display (with left padding)
+        ui.add_space(8.0);
         widgets::waveform_icon(ui, wave_kind, viz_w, viz_total_h);
     });
 

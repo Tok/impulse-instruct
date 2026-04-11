@@ -190,7 +190,7 @@ impl ModuleKind {
             Self::StepSequencer => (grid_cols, 4),
             Self::LlmConsole => (grid_cols, 1),
             Self::MasterOutput => (grid_cols, 1),
-            Self::AcidBass => (4, 8),
+            Self::AcidBass => (4, 7),
             Self::DrumKit808 => (4, 4),
             Self::DrumKit909 => (4, 4),
             Self::HooverLead => (4, 2),
