@@ -167,6 +167,10 @@ wait_seconds 3
 
 say "Three agents. Each handled its own part."
 
+# Show FX briefly so effects are visible
+focus_on reverb
+wait_seconds 2
+
 # ── Scene 10: Scoped control ─────────────────────────────────────────────
 
 scene "Scoped control"

@@ -575,6 +575,8 @@ async fn post_rack_agent(
             s.rack.connect_control(id, *tid);
         }
         s.llm_agents.push(agent);
+        // Auto-scroll to the console area so the new agent is visible.
+        s.scroll_target = Some("console".to_string());
         id
     };
 
@@ -662,7 +664,11 @@ async fn post_rack_reset(AxumState(api): AxumState<ApiState>) -> Json<OkResponse
         .retain(|c| keep.contains(&c.from.module_id) && keep.contains(&c.to.module_id));
     s.llm_agents.clear();
     s.tts_modules.clear();
+    // Reset sequencer to clean defaults (clears stale patterns from prior sessions)
+    s.sequencer = crate::state::SequencerState::default();
     drop(s);
+    api.params_dirty
+        .store(true, std::sync::atomic::Ordering::Relaxed);
     api_log(
         &api,
         "[API] rack: reset to minimal (seq + master + console)",

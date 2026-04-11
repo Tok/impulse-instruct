@@ -25,6 +25,31 @@ pub(super) fn draw_drum_rows(
         ui.add_space(2.0);
         ui.separator();
         ui.add_space(2.0);
+
+        // Measure prefix width by rendering invisible widgets matching the drum row layout.
+        // This runs every frame so bass/hoover/an1x rows always have an accurate prefix_w.
+        if app.seq_prefix_width <= 0.0 {
+            ui.horizontal(|ui| {
+                ui.set_height(0.0);
+                ui.add(
+                    egui::Button::new(egui::RichText::new("M").monospace().size(7.5))
+                        .min_size(egui::vec2(10.0, 0.0))
+                        .fill(egui::Color32::TRANSPARENT),
+                );
+                ui.add(
+                    egui::Button::new(egui::RichText::new("S").monospace().size(7.5))
+                        .min_size(egui::vec2(10.0, 0.0))
+                        .fill(egui::Color32::TRANSPARENT),
+                );
+                ui.allocate_space(egui::vec2(SEQ_LABEL_W - 20.0, 0.0));
+                ui.allocate_space(egui::vec2(SEQ_VOL_W, 0.0));
+                ui.allocate_space(egui::vec2(18.0, 0.0));
+                let rel_x = ui.cursor().min.x - ui.min_rect().min.x;
+                if rel_x > 0.0 {
+                    app.seq_prefix_width = rel_x;
+                }
+            });
+        }
     }
 
     // Inactive + not-expanded voices → one compact horizontal chip strip.
