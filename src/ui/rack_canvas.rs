@@ -304,10 +304,10 @@ fn draw_add_menu(app: &mut ImpulseApp, ctx: &egui::Context) {
 
 pub(super) const RACK_GAP: f32 = 4.0;
 
-/// Size of one grid column.
+/// Size of one grid column (floored to whole pixels for crisp alignment).
 pub(super) fn grid_col_w(available_w: f32) -> f32 {
     let n = GRID_COLS as f32;
-    (available_w - (n - 1.0) * RACK_GAP) / n
+    ((available_w - (n - 1.0) * RACK_GAP) / n).floor()
 }
 
 /// Pixel width for a module's grid column span.
