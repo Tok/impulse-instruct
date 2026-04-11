@@ -455,6 +455,7 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
                     kind,
                     enabled,
                     Some(slot_w),
+                    Some(slot_h),
                     app.kind_scale(kind),
                     ports,
                 )
@@ -567,6 +568,7 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
                     kind,
                     eff_enabled,
                     Some(slot_w),
+                    Some(slot_h),
                     app.kind_scale(kind),
                     ports,
                 )
@@ -667,6 +669,7 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
                     kind,
                     eff_enabled,
                     Some(slot_w),
+                    Some(slot_h),
                     app.kind_scale(kind),
                     ports,
                 )

@@ -473,6 +473,7 @@ pub fn module_card_back(
     kind: ModuleKind,
     enabled: bool,
     min_width: Option<f32>,
+    min_height: Option<f32>,
     _scale: f32,
     ports: &mut Vec<PortPos>,
 ) -> CardResponse {
@@ -500,6 +501,10 @@ pub fn module_card_back(
             let card_w = min_width.unwrap_or_else(|| ui.available_width());
             ui.set_min_width(card_w);
             ui.set_max_width(card_w);
+            // Match the front panel's grid height
+            if let Some(mh) = min_height {
+                ui.set_min_height(mh);
+            }
 
             // ── Title bar — fixed height, same as front ────────────────────
             let title_h = 22.0_f32;
