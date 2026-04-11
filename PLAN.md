@@ -133,6 +133,13 @@ What's already built is documented in [docs/features.md](docs/features.md).
   side of scope strip, enlarged from 40px to 80px. Panel height 48→88px.
 - [x] **Round-robin indicator → log strip** — agent schedule display moved to
   right side of log strip in 2-row layout. More visible, near console output.
+- [ ] **FX knob layout per group** — evaluate each FX group for 2×2 grid vs
+  horizontal row. Groups with 4+ knobs (delay, compressor) suit 2×2; smaller
+  groups (chorus, phaser) stay as rows. Adds visual variety and reduces
+  horizontal cramping. Requires per-group layout in fx.rs hknobs! macro.
+- [ ] **Knob centering in glass groups** — egui's horizontal always takes full
+  width, preventing Align::Center from working. Needs two-pass render or
+  pre-calculated content width with spacer. Affects all panels.
 - [ ] **Event stream Huth notation (Vol. 3)** — replace dots with U-shapes
   per Huth *Farbige Noten* theory: outer U is the note color, inner white U
   for sharps/flats. Longer notes stretch horizontally. Dot size correlates
