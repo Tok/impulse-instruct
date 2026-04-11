@@ -105,6 +105,10 @@ pub fn draw_toolbar(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             app.zone_voice_collapsed = true;
             app.zone_fxmod_collapsed = true;
         }
+        if tbtn(ui, "ARR") {
+            app.state.write().rack.arrange_canonical();
+            app.session_dirty = true;
+        }
         ui.separator();
         for (label, target) in [("GLB", "global"), ("VOI", "voice"), ("FX", "fxmod")] {
             if tbtn(ui, label) {

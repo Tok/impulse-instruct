@@ -402,20 +402,38 @@ fn module_card_inner<R>(
             if collapsed {
                 None
             } else {
+                // When grid_height is set, compute the content area budget
+                // (total height minus title bar and margins).
+                let title_h = 22.0;
+                let margin_y = 8.0 * scale * 2.0;
+                let content_budget = _grid_height.map(|gh| (gh - title_h - margin_y).max(20.0));
+
                 let content_frame = Frame::none()
                     .fill(fill)
                     .inner_margin(Margin::symmetric(6.0 * scale, 8.0 * scale));
                 let inner_resp = content_frame.show(ui, |ui| {
                     ui.spacing_mut().item_spacing = Vec2::new(2.0 * scale, 2.0 * scale);
                     ui.set_max_width(card_w - 12.0);
-                    ui.with_layout(egui::Layout::top_down(egui::Align::Center), |ui| {
-                        if enabled {
-                            content(ui)
-                        } else {
-                            ui.add_enabled_ui(false, |ui| content(ui)).inner
-                        }
-                    })
-                    .inner
+                    let draw = |ui: &mut egui::Ui| {
+                        ui.with_layout(egui::Layout::top_down(egui::Align::Center), |ui| {
+                            if enabled {
+                                content(ui)
+                            } else {
+                                ui.add_enabled_ui(false, |ui| content(ui)).inner
+                            }
+                        })
+                        .inner
+                    };
+                    if let Some(budget) = content_budget {
+                        // Fixed height: scroll if content exceeds budget
+                        egui::ScrollArea::vertical()
+                            .max_height(budget)
+                            .auto_shrink([false; 2])
+                            .show(ui, draw)
+                            .inner
+                    } else {
+                        draw(ui)
+                    }
                 });
                 Some(inner_resp.inner)
             }

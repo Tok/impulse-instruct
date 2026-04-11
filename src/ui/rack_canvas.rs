@@ -315,6 +315,26 @@ pub(super) fn module_grid_w(kind: ModuleKind, col_w: f32) -> f32 {
     c as f32 * col_w + (c as f32 - 1.0).max(0.0) * RACK_GAP
 }
 
+/// Fixed pixel height for a module card. Based on col_w multiples so
+/// panels have consistent grid-snapped dimensions.
+pub(super) fn module_grid_h(kind: ModuleKind, col_w: f32) -> f32 {
+    // Height in "rows" where 1 row = col_w.  Voice modules need ~4 rows
+    // for their knob groups + XY pads; FX need ~2 rows for a few knobs.
+    let rows: f32 = match kind {
+        ModuleKind::An1xVoice => 5.0,
+        ModuleKind::AcidBass => 5.0,
+        ModuleKind::DrumKit808 | ModuleKind::DrumKit909 => 4.0,
+        ModuleKind::HooverLead | ModuleKind::AmenSampler => 3.0,
+        ModuleKind::NoiseVoice | ModuleKind::GranularTexture => 2.5,
+        ModuleKind::LlmAgent => 3.0,
+        ModuleKind::EspeakNgTts | ModuleKind::CoquiTts => 2.0,
+        ModuleKind::SpectrumAnalyzer | ModuleKind::ActivityTimeline => 2.0,
+        // FX, LFO, analysis — compact
+        _ => 2.0,
+    };
+    rows * col_w + (rows.ceil() - 1.0).max(0.0) * RACK_GAP
+}
+
 /// Width spanning `n` grid columns (including internal gaps).
 #[allow(dead_code)]
 pub(crate) fn span_w(n: u8, col_w: f32) -> f32 {
@@ -504,6 +524,7 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
                 ui.add_space(2.0);
                 ui.horizontal_wrapped(|ui| {
                     let slot_w = module_grid_w(ModuleKind::LlmAgent, col_w);
+                    let agent_h = module_grid_h(ModuleKind::LlmAgent, col_w);
                     // Center agent cards
                     let total_w = agent_ids.len() as f32 * (slot_w + ui.spacing().item_spacing.x);
                     let pad = ((available_w - total_w) / 2.0).max(0.0);
@@ -529,7 +550,7 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
                                 ModuleKind::LlmAgent,
                                 *enabled,
                                 Some(slot_w),
-                                None,
+                                Some(agent_h),
                                 app.kind_scale(ModuleKind::LlmAgent),
                                 ports,
                                 |ui| {
@@ -711,11 +732,12 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
                 }
                 for (id, kind, enabled) in &row {
                     let slot_w = module_grid_w(*kind, col_w) * expand;
+                    let slot_h = module_grid_h(*kind, col_w);
                     let is_dragging = app.module_drag.as_ref().map(|d| d.module_id) == Some(*id);
                     let eff_enabled = if is_dragging { false } else { *enabled };
                     // allocate_ui constrains the card to exactly slot_w
                     let card_resp = ui
-                        .allocate_ui(Vec2::new(slot_w, ui.available_height()), |ui| {
+                        .allocate_ui(Vec2::new(slot_w, slot_h), |ui| {
                             if app.rack_flipped {
                                 module_card::module_card_back(
                                     ui,
@@ -733,7 +755,7 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
                                     *kind,
                                     eff_enabled,
                                     Some(slot_w),
-                                    None,
+                                    Some(slot_h),
                                     app.kind_scale(*kind),
                                     ports,
                                     |ui| {
@@ -821,10 +843,11 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
                 }
                 for (id, kind, enabled) in &row {
                     let slot_w = module_grid_w(*kind, col_w) * expand;
+                    let slot_h = module_grid_h(*kind, col_w);
                     let is_dragging = app.module_drag.as_ref().map(|d| d.module_id) == Some(*id);
                     let eff_enabled = if is_dragging { false } else { *enabled };
                     let card_resp = ui
-                        .allocate_ui(Vec2::new(slot_w, ui.available_height()), |ui| {
+                        .allocate_ui(Vec2::new(slot_w, slot_h), |ui| {
                             if app.rack_flipped {
                                 module_card::module_card_back(
                                     ui,
@@ -842,7 +865,7 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
                                     *kind,
                                     eff_enabled,
                                     Some(slot_w),
-                                    None,
+                                    Some(slot_h),
                                     app.kind_scale(*kind),
                                     ports,
                                     |ui| {
