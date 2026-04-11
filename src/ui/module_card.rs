@@ -302,12 +302,10 @@ pub fn module_card_sized<R>(
                 se: 0.0,
             };
             painter.rect_filled(title_rect, title_rounding, title_bg);
-            // 1px specular line at very top
-            painter.line_segment(
-                [title_rect.left_top(), title_rect.right_top()],
-                Stroke::new(1.0, Color32::from_gray(60)),
-            );
-            // 1px shadow at bottom
+            // 1px specular highlight at top — follows rounded corners
+            let top_edge = Rect::from_min_size(title_rect.min, Vec2::new(title_rect.width(), 1.0));
+            painter.rect_filled(top_edge, title_rounding, Color32::from_gray(60));
+            // 1px shadow at bottom (flat — meets content area)
             painter.line_segment(
                 [title_rect.left_bottom(), title_rect.right_bottom()],
                 Stroke::new(1.0, Color32::from_gray(8)),
