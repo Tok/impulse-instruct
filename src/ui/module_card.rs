@@ -293,17 +293,25 @@ pub fn module_card_sized<R>(
                 ui.allocate_exact_size(Vec2::new(card_w, title_h), Sense::hover());
             let painter = ui.painter_at(title_rect);
 
-            // Background gradient: slightly lighter at top (simulated overhead light)
-            // Round top corners to match the card frame; bottom stays flat
+            // Round top corners — inner radius = outer rounding minus the 1px frame stroke.
+            let inner_r = (card_rounding - 1.0).max(0.0);
             let title_rounding = Rounding {
-                nw: card_rounding,
-                ne: card_rounding,
+                nw: inner_r,
+                ne: inner_r,
                 sw: 0.0,
                 se: 0.0,
             };
-            painter.rect_filled(title_rect, title_rounding, title_bg);
-            // 1px specular highlight at top — follows rounded corners
-            let top_edge = Rect::from_min_size(title_rect.min, Vec2::new(title_rect.width(), 1.0));
+            // Inset the title fill by the frame stroke so it doesn't overwrite the
+            // rounded border.  The frame draws its 1px stroke on the card boundary;
+            // the title fill should sit just inside it.
+            let inset = title_rect.shrink(1.0);
+            let inset_top = Rect::from_min_max(
+                egui::Pos2::new(inset.left(), title_rect.top() + 1.0),
+                inset.right_bottom(),
+            );
+            painter.rect_filled(inset_top, title_rounding, title_bg);
+            // 1px specular highlight at inner top edge — follows rounded corners
+            let top_edge = Rect::from_min_size(inset_top.min, Vec2::new(inset_top.width(), 1.0));
             painter.rect_filled(top_edge, title_rounding, Color32::from_gray(60));
             // 1px shadow at bottom (flat — meets content area)
             painter.line_segment(
