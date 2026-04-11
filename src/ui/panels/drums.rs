@@ -56,6 +56,7 @@ pub fn draw_kit_a(app: &mut ImpulseApp, ui: &mut egui::Ui) {
     ui.horizontal(|ui| {
         widgets::glass_group_fill(ui, gw, gw, |ui| {
             ui.set_min_height(group_h);
+            ui.spacing_mut().item_spacing.x = 8.0;
             ui.label(
                 egui::RichText::new("KICK")
                     .color(theme::FOG)
@@ -135,6 +136,7 @@ pub fn draw_kit_a(app: &mut ImpulseApp, ui: &mut egui::Ui) {
     ui.horizontal(|ui| {
         widgets::glass_group_fill(ui, gw, gw, |ui| {
             ui.set_min_height(group_h);
+            ui.spacing_mut().item_spacing.x = 8.0;
             ui.label(
                 egui::RichText::new("SNARE")
                     .color(theme::FOG)
@@ -145,7 +147,7 @@ pub fn draw_kit_a(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                 if widgets::param_control(ui, "TONE", &mut st, ParamMode::Free, ctrl).0 {
                     changed = true;
                 }
-                if widgets::param_control(ui, "SNAP", &mut ssn, ParamMode::Free, ctrl).0 {
+                if widgets::param_control(ui, "SNAPPY", &mut ssn, ParamMode::Free, ctrl).0 {
                     changed = true;
                 }
             });
@@ -160,6 +162,7 @@ pub fn draw_kit_a(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         });
         widgets::glass_group_fill(ui, gw, gw, |ui| {
             ui.set_min_height(group_h);
+            ui.spacing_mut().item_spacing.x = 8.0;
             ui.label(
                 egui::RichText::new("HIHAT")
                     .color(theme::FOG)
@@ -167,13 +170,15 @@ pub fn draw_kit_a(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                     .size(9.5),
             );
             widgets::centered_row(ui, |ui| {
-                if widgets::param_control(ui, "CLSD", &mut hcd, ParamMode::Free, ctrl).0 {
+                if widgets::param_control(ui, "CLOSED", &mut hcd, ParamMode::Free, ctrl).0 {
                     changed = true;
                 }
                 if widgets::param_control(ui, "OPEN", &mut hod, ParamMode::Free, ctrl).0 {
                     changed = true;
                 }
-                if widgets::param_control(ui, "LVL", &mut hv, ParamMode::Free, ctrl).0 {
+            });
+            widgets::centered_row(ui, |ui| {
+                if widgets::param_control(ui, "LEVEL", &mut hv, ParamMode::Free, ctrl).0 {
                     changed = true;
                 }
             });
