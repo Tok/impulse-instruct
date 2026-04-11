@@ -47,6 +47,8 @@ ask "make it acid and squelchy, syncopated bass line"
 say "The agent adjusted cutoff, resonance, and accent. We didn't specify values."
 wait_seconds 3
 
+screenshot "v${VERSION}-acid-bass"
+
 # ── Scene 4: Filter sweep ──────────────────────────────────────────────────
 
 scene "Filter ramp"

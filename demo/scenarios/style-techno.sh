@@ -67,6 +67,8 @@ ask "build tension, slowly open the filter, add delay, stretch it over 8 bars" 1
 say "Filter and delay rising over eight bars."
 wait_seconds 3
 
+screenshot "v${VERSION}-techno-tension"
+
 # ── Scene 6: Release ─────────────────────────────────────────────────────
 
 scene "Release"

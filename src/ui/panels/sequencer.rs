@@ -401,7 +401,10 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             };
 
             // Bass note row — track where step buttons start for accent/slide alignment
-            let label_spacer = 10.0 + 10.0 + (SEQ_LABEL_W - 20.0) + SEQ_VOL_W + 18.0;
+            // Match drum rows: M(10) + S(10) + label(SEQ_LABEL_W-20) + vol(SEQ_VOL_W) + steps(18)
+            // Drum rows render 5 separate widgets → 4 inter-widget spacing gaps (4.0px each)
+            let drum_spacing = ui.spacing().item_spacing.x * 4.0;
+            let label_spacer = 10.0 + 10.0 + (SEQ_LABEL_W - 20.0) + SEQ_VOL_W + 18.0 + drum_spacing;
             let mut bass_steps_x = label_spacer; // fallback; updated below
             ui.horizontal(|ui| {
                 ui.add_sized(

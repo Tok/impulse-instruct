@@ -282,6 +282,9 @@ impl ImpulseApp {
                         .map(|s| s.fits_vram && s.models_available)
                         .unwrap_or(false);
 
+                // Enter key submits the wizard with current selection
+                let enter_pressed = ctx.input(|i| i.key_pressed(egui::Key::Enter));
+
                 ui.horizontal(|ui| {
                     let label = if is_resume {
                         "Resume"
@@ -290,7 +293,7 @@ impl ImpulseApp {
                     } else {
                         "Start"
                     };
-                    if ui
+                    let clicked = ui
                         .add_enabled(
                             can_apply,
                             egui::Button::new(
@@ -301,8 +304,8 @@ impl ImpulseApp {
                             )
                             .min_size(egui::vec2(100.0, 26.0)),
                         )
-                        .clicked()
-                    {
+                        .clicked();
+                    if clicked || (enter_pressed && can_apply) {
                         if is_resume {
                             self.mark_wizard_done();
                         } else {

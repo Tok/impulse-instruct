@@ -348,9 +348,9 @@ impl ImpulseApp {
                 .map(|a| a.is_empty())
                 .unwrap_or(true)
             {
-                usize::MAX - 1
+                0 // default to first preset (Solo) when no prior session
             } else {
-                usize::MAX
+                usize::MAX // WIZARD_RESUME
             },
 
             prefs_tab: 0,

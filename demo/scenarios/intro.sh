@@ -40,6 +40,8 @@ ask "acid groove, kick and hats, short bass line with gaps. set pan positions fo
 play
 wait_seconds 3
 
+screenshot "v${VERSION}-intro-sequencer"
+
 # ── Scene 3: Tighten the beat ───────────────────────────────────────────────
 
 scene "Tighten the beat"
@@ -64,6 +66,8 @@ sweep_pad 8
 
 wait_seconds 1
 
+screenshot "v${VERSION}-intro-bass-detail"
+
 # ── Scene 5: Ramp the filter via AI ────────────────────────────────────────
 
 scene "AI-controlled ramp"
@@ -83,6 +87,7 @@ wait_seconds 1
 show_cables
 wait_seconds 3
 say "Back panel. Control cables from the agent to each instrument."
+screenshot "v${VERSION}-intro-cables"
 show_knobs
 wait_seconds 1
 
