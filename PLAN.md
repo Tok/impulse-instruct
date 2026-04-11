@@ -224,6 +224,17 @@ Scripts to create:
 - [ ] **Event stream scene** — Huth-colored note history scrolling in real time
 - [ ] **Collapse/focus scene** — API collapse_others to isolate a section
 
+### UI polish — next session
+
+- [ ] **PAN slider right-justified** — all voice panels (bass, 808, 909,
+  hoover, AN1X) should right-justify their PAN slider using
+  `Layout::right_to_left` or a spacer. Currently left-aligned.
+- [ ] **Module remove (×) with confirmation** — the × button on module
+  card headers should ask for confirmation, then disconnect cables and
+  remove the module from the rack. Currently × only shows on
+  `allows_multiple` modules (FX, LFO, agents). Should also show on
+  voice modules for rack customization.
+
 ### Refactoring — magic numbers and hardcoded literals
 
 - [ ] **Panel typography constants** — font sizes (7.0, 7.5, 8.0, 8.5, 9.0,
