@@ -315,19 +315,9 @@ pub fn module_card_sized<R>(
             // Focus shine sweep overlay
             draw_focus_shine(&painter, title_rect, kind, ui.ctx());
 
-            // Collapse indicator arrow
-            let arrow = if collapsed { "▶" } else { "▼" };
-            painter.text(
-                title_rect.left_center() + Vec2::new(10.0, 0.0),
-                egui::Align2::LEFT_CENTER,
-                arrow,
-                egui::FontId::monospace(7.0),
-                Color32::from_gray(if enabled { 100 } else { 40 }),
-            );
-
             // Module kind label (embossed: shadow 1px below, then bright text)
             let label_font = 9.5;
-            let label_pos = title_rect.left_center() + Vec2::new(20.0, 0.0);
+            let label_pos = title_rect.left_center() + Vec2::new(10.0, 0.0);
             painter.text(
                 label_pos + Vec2::new(0.0, 1.0),
                 egui::Align2::LEFT_CENTER,
