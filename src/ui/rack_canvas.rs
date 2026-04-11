@@ -329,8 +329,8 @@ pub(super) fn module_slot_w(kind: ModuleKind, full_w: f32) -> f32 {
         | ModuleKind::FxDrive
         | ModuleKind::FxAutotune
         | ModuleKind::LfoModule => FX_SLOT_W.min(full_w),
-        // Agent cards: ~1/4 of rack width, minimum FX_SLOT_W
-        ModuleKind::LlmAgent => (full_w / 4.0).max(FX_SLOT_W).min(full_w),
+        // Agent cards: wider than FX modules for readability
+        ModuleKind::LlmAgent => 300.0_f32.min(full_w),
         // Analysis modules: wider for better resolution
         ModuleKind::SpectrumAnalyzer => 320.0_f32.min(full_w),
         ModuleKind::StereoMeter => FX_SLOT_W.min(full_w),
