@@ -386,18 +386,19 @@ fn draw_grid_dots(ui: &mut egui::Ui, col_w: f32) {
         return;
     }
     let painter = ui.painter();
-    let dot_color = Color32::from_gray(22);
+    let dot_color = Color32::from_gray(35);
     let step = col_w + RACK_GAP;
     let left = rect.min.x;
-    // Draw dots at column boundaries, spaced vertically every 3 columns worth
-    let row_step = step * 3.0; // don't overdraw — every 3 cols vertically
+    // Vertical spacing: use col_w so dots form a square grid
     let mut y = rect.min.y;
-    while y <= rect.max.y {
+    while y <= rect.max.y + step {
         for c in 0..=GRID_COLS {
             let x = left + c as f32 * step;
-            painter.circle_filled(egui::Pos2::new(x, y), 1.0, dot_color);
+            if x <= rect.max.x + 1.0 {
+                painter.circle_filled(egui::Pos2::new(x, y), 1.0, dot_color);
+            }
         }
-        y += row_step;
+        y += step;
     }
 }
 
