@@ -280,6 +280,7 @@ pub(super) fn draw_drum_rows(
         });
 
         // ── Velocity / Probability / Ratchet lanes ─────────────────────────
+        // Velocity
         ui.horizontal(|ui| {
             // Match the label column from the step button row
             let row_left = ui.cursor().min.x;
