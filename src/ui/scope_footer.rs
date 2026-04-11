@@ -235,42 +235,41 @@ pub fn draw_footer_status(
         );
         draw_dsp_sparkline(ui, dsp_buf);
 
-        // ── Session stats + GitHub (right-justified) ──
-        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            // GitHub link
-            if ui
-                .add(
-                    egui::Label::new(
-                        egui::RichText::new("GitHub")
-                            .monospace()
-                            .size(7.5)
-                            .color(super::theme::IRON),
+        ui.separator();
+
+        // ── Session stats ──
+        let mins = uptime_secs / 60;
+        let secs = uptime_secs % 60;
+        ui.label(
+            egui::RichText::new(format!(
+                "Modules: {}  Agents: {}  Cables: {}  Session: {}:{:02}",
+                n_modules, n_agents, n_cables, mins, secs
+            ))
+            .monospace()
+            .size(8.0)
+            .color(super::theme::ASH),
+        );
+
+        // ── GitHub (right-justified) ──
+        let right_rect = ui.available_rect_before_wrap();
+        ui.allocate_ui_at_rect(right_rect, |ui| {
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                if ui
+                    .add(
+                        egui::Label::new(
+                            egui::RichText::new("GitHub ↗")
+                                .monospace()
+                                .size(8.0)
+                                .color(super::theme::FOG),
+                        )
+                        .sense(egui::Sense::click()),
                     )
-                    .sense(egui::Sense::click()),
-                )
-                .on_hover_text("github.com/Tok/impulse-instruct")
-                .clicked()
-            {
-                let _ = super::webbrowser_open("https://github.com/Tok/impulse-instruct");
-            }
-            ui.label(
-                egui::RichText::new("·")
-                    .monospace()
-                    .size(7.5)
-                    .color(super::theme::PIT),
-            );
-            // Session stats
-            let mins = uptime_secs / 60;
-            let secs = uptime_secs % 60;
-            ui.label(
-                egui::RichText::new(format!(
-                    "{}mod {}agt {}cab  {:.0}:{:02}",
-                    n_modules, n_agents, n_cables, mins, secs
-                ))
-                .monospace()
-                .size(7.5)
-                .color(super::theme::ASH),
-            );
+                    .on_hover_text("github.com/Tok/impulse-instruct")
+                    .clicked()
+                {
+                    let _ = super::webbrowser_open("https://github.com/Tok/impulse-instruct");
+                }
+            });
         });
     });
 }
