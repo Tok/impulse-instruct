@@ -334,7 +334,11 @@ pub fn module_card_sized<R>(
                 Pos2::new(title_rect.left() + 4.0, title_rect.center().y),
                 Vec2::splat(5.0),
             );
-            let led_resp = ui.interact(led_rect, ui.id().with("led"), Sense::click());
+            let led_resp = ui.interact(
+                led_rect,
+                ui.id().with("led").with(_module_id),
+                Sense::click(),
+            );
             if led_resp.clicked() {
                 toggle_clicked = true;
             }
@@ -354,7 +358,7 @@ pub fn module_card_sized<R>(
             );
             let drag_resp = ui.interact(
                 drag_rect,
-                ui.id().with("title_drag"),
+                ui.id().with("title_drag").with(_module_id),
                 Sense::click_and_drag(),
             );
             title_dragged = drag_resp.dragged();
@@ -387,7 +391,8 @@ pub fn module_card_sized<R>(
                 Vec2::splat(10.0),
             );
             if kind.allows_multiple() || kind == ModuleKind::LlmAgent {
-                let rm_resp = ui.interact(rm_rect, ui.id().with("rm"), Sense::click());
+                let rm_resp =
+                    ui.interact(rm_rect, ui.id().with("rm").with(_module_id), Sense::click());
                 if rm_resp.clicked() {
                     remove_clicked = true;
                 }
@@ -560,7 +565,11 @@ pub fn module_card_back(
                 Vec2::splat(5.0),
             );
             if ui
-                .interact(led_rect, ui.id().with("led"), Sense::click())
+                .interact(
+                    led_rect,
+                    ui.id().with("led").with(module_id),
+                    Sense::click(),
+                )
                 .clicked()
             {
                 toggle_clicked = true;
@@ -587,7 +596,8 @@ pub fn module_card_back(
                     Pos2::new(title_rect.right() - 12.0, title_rect.center().y),
                     Vec2::splat(10.0),
                 );
-                let rm_resp = ui.interact(rm_rect, ui.id().with("rm"), Sense::click());
+                let rm_resp =
+                    ui.interact(rm_rect, ui.id().with("rm").with(module_id), Sense::click());
                 if rm_resp.clicked() {
                     remove_clicked = true;
                 }
