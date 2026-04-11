@@ -190,18 +190,16 @@ impl ModuleKind {
             Self::StepSequencer | Self::LlmConsole | Self::MasterOutput => (grid_cols, 1),
             // Wide voice — 6 of 12 columns (half width)
             Self::An1xVoice => (6, 1),
-            // Standard voice modules — 4 of 12 columns (third width, 3 fit per row)
-            Self::AcidBass
-            | Self::DrumKit808
-            | Self::DrumKit909
-            | Self::HooverLead
-            | Self::AmenSampler => (4, 1),
-            // Compact voice modules — 3 of 12
-            Self::NoiseVoice | Self::GranularTexture => (3, 1),
-            // Agent — 4 of 12 (third width)
+            // Standard voice modules — 4 of 12 (3 fit per row)
+            Self::AcidBass | Self::DrumKit808 | Self::DrumKit909 | Self::HooverLead => (4, 1),
+            // Compact voice — 3 of 12
+            Self::AmenSampler | Self::GranularTexture => (3, 1),
+            // Noise — 2 of 12
+            Self::NoiseVoice => (2, 1),
+            // Agent — 4 of 12
             Self::LlmAgent => (4, 1),
-            // TTS voice modules — 3 of 12
-            Self::EspeakNgTts | Self::CoquiTts => (3, 1),
+            // TTS voice modules — 2 of 12
+            Self::EspeakNgTts | Self::CoquiTts => (2, 1),
             // Analysis — wider for resolution
             Self::SpectrumAnalyzer | Self::ActivityTimeline => (4, 1),
             // Everything else (FX, LFO, stereo meter) — 2 of 12

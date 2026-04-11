@@ -327,15 +327,17 @@ pub(super) fn module_grid_w(kind: ModuleKind, col_w: f32) -> f32 {
 /// Content that exceeds this just grows — this is a minimum, not a cap.
 fn grid_row_count(kind: ModuleKind) -> u8 {
     match kind {
-        ModuleKind::AcidBass => 6,
-        ModuleKind::An1xVoice => 5,
-        ModuleKind::DrumKit808 | ModuleKind::DrumKit909 => 3,
-        ModuleKind::HooverLead | ModuleKind::AmenSampler => 3,
+        ModuleKind::AcidBass => 8,
+        ModuleKind::An1xVoice => 6,
+        ModuleKind::DrumKit808 | ModuleKind::DrumKit909 => 4,
+        ModuleKind::HooverLead => 2,
         ModuleKind::LlmAgent => 3,
+        ModuleKind::AmenSampler => 1,
         ModuleKind::NoiseVoice | ModuleKind::GranularTexture => 1,
         ModuleKind::EspeakNgTts | ModuleKind::CoquiTts => 2,
         ModuleKind::SpectrumAnalyzer | ModuleKind::ActivityTimeline => 2,
-        // FX, LFO, stereo meter — 1 cell
+        ModuleKind::LfoModule => 2,
+        // FX, stereo meter — 1 cell
         _ => 1,
     }
 }
