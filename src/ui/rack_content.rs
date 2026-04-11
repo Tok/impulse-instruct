@@ -919,10 +919,9 @@ pub(super) fn reorder_module_by_drop(
     zone: crate::state::Zone,
     screen_width: f32,
 ) {
-    use super::rack_canvas::{RACK_GAP, grid_cell, module_grid_size};
+    use super::rack_canvas::{RACK_GAP, grid_col_w, module_grid_w};
     let available_w = screen_width.max(400.0);
-    let grid_cols = app.state.read().ui_prefs.rack_grid_cols.clamp(3, 6);
-    let cell = grid_cell(available_w, grid_cols);
+    let col_w = grid_col_w(available_w);
     let zone_entries: Vec<(u32, ModuleKind)> = {
         let rack = app.state.read();
         let mut v: Vec<_> = rack
@@ -947,7 +946,7 @@ pub(super) fn reorder_module_by_drop(
     let mut cursor = 0.0f32;
     let mut to_idx = 0usize;
     for (i, &(_, kind)) in zone_entries.iter().enumerate() {
-        let w = module_grid_size(kind, grid_cols, cell).0;
+        let w = module_grid_w(kind, col_w);
         let mid = cursor + w * 0.5;
         if x >= mid {
             to_idx = i + 1;

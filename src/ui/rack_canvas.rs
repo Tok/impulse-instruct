@@ -297,49 +297,34 @@ fn draw_add_menu(app: &mut ImpulseApp, ctx: &egui::Context) {
 }
 
 // ─── Grid-based rack layout ──────────────────────────────────────────────────
-// Modules snap to a uniform grid.  Cell size = available_w / grid_cols.
-// Each ModuleKind has a (cols, rows) span defined in `ModuleKind::grid_span()`.
+// Fixed 12-column grid (like CSS/Bootstrap).  Each module spans a number of
+// columns defined in `ModuleKind::grid_span()`.  Heights auto-size to content.
 
 pub(super) const RACK_GAP: f32 = 4.0;
+const GRID_COLS: u8 = 12;
 
-/// Size of one grid cell (square).
-pub(super) fn grid_cell(available_w: f32, grid_cols: u8) -> f32 {
-    let n = grid_cols as f32;
+/// Size of one grid column.
+pub(super) fn grid_col_w(available_w: f32) -> f32 {
+    let n = GRID_COLS as f32;
     (available_w - (n - 1.0) * RACK_GAP) / n
 }
 
-/// Pixel size (w, h) for a module's grid span.
-pub(super) fn module_grid_size(kind: ModuleKind, grid_cols: u8, cell: f32) -> (f32, f32) {
-    let (c, r) = kind.grid_span(grid_cols);
-    let w = c as f32 * cell + (c as f32 - 1.0).max(0.0) * RACK_GAP;
-    let h = r as f32 * cell + (r as f32 - 1.0).max(0.0) * RACK_GAP;
-    (w, h)
+/// Pixel width for a module's grid span.
+pub(super) fn module_grid_w(kind: ModuleKind, col_w: f32) -> f32 {
+    let (c, _) = kind.grid_span(GRID_COLS);
+    c as f32 * col_w + (c as f32 - 1.0).max(0.0) * RACK_GAP
 }
 
-/// Snap a content height up to the nearest grid cell multiple.
-#[allow(dead_code)]
-pub(super) fn snap_height(h: f32, cell: f32) -> f32 {
-    if cell <= 0.0 {
-        return h;
-    }
-    let step = cell + RACK_GAP;
-    let rows = ((h + RACK_GAP) / step).ceil().max(1.0);
-    rows * cell + (rows - 1.0) * RACK_GAP
-}
-
-/// Group items into rows so each row fits within `available_w`.
-/// Returns rows; each row is a slice of items that fits without overflow.
 /// Group modules into rows that fit within `available_w`.
 fn group_into_rows(
     items: &[(u32, ModuleKind, bool)],
     available_w: f32,
-    grid_cols: u8,
-    cell: f32,
+    col_w: f32,
 ) -> Vec<Vec<(u32, ModuleKind, bool)>> {
     let mut rows: Vec<Vec<(u32, ModuleKind, bool)>> = vec![vec![]];
     let mut row_w = 0.0f32;
     for &item in items {
-        let w = module_grid_size(item.1, grid_cols, cell).0;
+        let w = module_grid_w(item.1, col_w);
         if row_w > 0.0 && row_w + RACK_GAP + w > available_w + 0.5 {
             rows.push(vec![]);
             row_w = 0.0;
@@ -353,62 +338,56 @@ fn group_into_rows(
     rows
 }
 
-/// For a row of modules, compute an expansion factor and left-padding so modules
-/// fill the available width.  With grid layout, modules should fit exactly, so
-/// expansion is rarely needed — centering handles partial rows.
-fn row_expand_and_pad(
-    row: &[(u32, ModuleKind, bool)],
-    available_w: f32,
-    grid_cols: u8,
-    cell: f32,
-) -> (f32, f32) {
+/// For a row of modules, compute an expansion factor and left-padding.
+/// With the 12-col grid, partial rows get centered instead of stretched.
+fn row_expand_and_pad(row: &[(u32, ModuleKind, bool)], available_w: f32, col_w: f32) -> (f32, f32) {
     let n = row.len() as f32;
     let total_gap = (n - 1.0).max(0.0) * RACK_GAP;
-    let nominal: f32 = row
-        .iter()
-        .map(|(_, k, _)| module_grid_size(*k, grid_cols, cell).0)
-        .sum();
+    let nominal: f32 = row.iter().map(|(_, k, _)| module_grid_w(*k, col_w)).sum();
     let fill_w = available_w - total_gap;
     if nominal <= 0.0 {
         return (1.0, 0.0);
     }
     let ratio = fill_w / nominal;
-    if ratio <= 1.4 {
+    if ratio <= 1.15 {
+        // Small expansion to fill — keeps grid alignment
         (ratio, 0.0)
     } else {
+        // Partial row — center at nominal widths
         let pad = ((available_w - nominal - total_gap) / 2.0).max(0.0);
         (1.0, pad)
     }
 }
 
 /// Paint subtle dots at grid intersections on the rack background.
-fn draw_grid_dots(ui: &mut egui::Ui, _available_w: f32, cell: f32, grid_cols: u8) {
+/// Paint subtle dots at grid column boundaries on the rack background.
+fn draw_grid_dots(ui: &mut egui::Ui, col_w: f32) {
     let rect = ui.available_rect_before_wrap();
-    if !ui.is_rect_visible(rect) || cell < 10.0 {
+    if !ui.is_rect_visible(rect) || col_w < 5.0 {
         return;
     }
     let painter = ui.painter();
     let dot_color = Color32::from_gray(22);
-    let step = cell + RACK_GAP;
+    let step = col_w + RACK_GAP;
     let left = rect.min.x;
-    // Draw vertical column dots at grid boundaries
+    // Draw dots at column boundaries, spaced vertically every 3 columns worth
+    let row_step = step * 3.0; // don't overdraw — every 3 cols vertically
     let mut y = rect.min.y;
     while y <= rect.max.y {
-        for c in 0..=grid_cols {
+        for c in 0..=GRID_COLS {
             let x = left + c as f32 * step;
             painter.circle_filled(egui::Pos2::new(x, y), 1.0, dot_color);
         }
-        y += step;
+        y += row_step;
     }
 }
 
 fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<PortPos>) {
     let available_w = (ui.available_width() - 8.0).max(200.0);
-    let grid_cols = app.state.read().ui_prefs.rack_grid_cols.clamp(3, 6);
-    let cell = grid_cell(available_w, grid_cols);
+    let col_w = grid_col_w(available_w);
 
     // Draw grid dots behind all content
-    draw_grid_dots(ui, available_w, cell, grid_cols);
+    draw_grid_dots(ui, col_w);
 
     let mut card_rects: Vec<(ModuleKind, egui::Rect)> = Vec::new();
 
@@ -502,14 +481,14 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
             if !agent_ids.is_empty() {
                 ui.add_space(2.0);
                 ui.horizontal_wrapped(|ui| {
-                    let slot_w = module_grid_size(ModuleKind::LlmAgent, grid_cols, cell).0;
+                    let slot_w = module_grid_w(ModuleKind::LlmAgent, col_w);
                     // Center agent cards
                     let total_w = agent_ids.len() as f32 * (slot_w + ui.spacing().item_spacing.x);
                     let pad = ((available_w - total_w) / 2.0).max(0.0);
                     if pad > 0.0 {
                         ui.add_space(pad);
                     }
-                    let agent_h = module_grid_size(ModuleKind::LlmAgent, grid_cols, cell).1;
+
                     for (id, enabled) in &agent_ids {
                         let resp = if app.rack_flipped {
                             module_card::module_card_back(
@@ -528,7 +507,7 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
                                 ModuleKind::LlmAgent,
                                 *enabled,
                                 Some(slot_w),
-                                Some(agent_h),
+                                None,
                                 app.kind_scale(ModuleKind::LlmAgent),
                                 ports,
                                 |ui| {
@@ -701,16 +680,15 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
         };
 
         // Voice modules — manual row grouping prevents any module from going off-screen.
-        for row in group_into_rows(&voice_ids, available_w, grid_cols, cell) {
-            let (expand, pad) = row_expand_and_pad(&row, available_w, grid_cols, cell);
+        for row in group_into_rows(&voice_ids, available_w, col_w) {
+            let (expand, pad) = row_expand_and_pad(&row, available_w, col_w);
             ui.horizontal(|ui| {
                 ui.spacing_mut().item_spacing = Vec2::new(RACK_GAP, 0.0);
                 if pad > 1.0 {
                     ui.add_space(pad);
                 }
                 for (id, kind, enabled) in &row {
-                    let (slot_w_raw, slot_h) = module_grid_size(*kind, grid_cols, cell);
-                    let slot_w = slot_w_raw * expand;
+                    let slot_w = module_grid_w(*kind, col_w) * expand;
                     // Dim the card ghost while it's being dragged
                     let is_dragging = app.module_drag.as_ref().map(|d| d.module_id) == Some(*id);
                     let eff_enabled = if is_dragging { false } else { *enabled };
@@ -731,7 +709,7 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
                             *kind,
                             eff_enabled,
                             Some(slot_w),
-                            Some(slot_h),
+                            None,
                             app.kind_scale(*kind),
                             ports,
                             |ui| {
@@ -808,16 +786,15 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
         };
 
         // FX + Mod modules — manual row grouping, same as voice zone.
-        for row in group_into_rows(&fxmod_ids, available_w, grid_cols, cell) {
-            let (expand, pad) = row_expand_and_pad(&row, available_w, grid_cols, cell);
+        for row in group_into_rows(&fxmod_ids, available_w, col_w) {
+            let (expand, pad) = row_expand_and_pad(&row, available_w, col_w);
             ui.horizontal(|ui| {
                 ui.spacing_mut().item_spacing = Vec2::new(RACK_GAP, 0.0);
                 if pad > 1.0 {
                     ui.add_space(pad);
                 }
                 for (id, kind, enabled) in &row {
-                    let (slot_w_raw, slot_h) = module_grid_size(*kind, grid_cols, cell);
-                    let slot_w = slot_w_raw * expand;
+                    let slot_w = module_grid_w(*kind, col_w) * expand;
                     let is_dragging = app.module_drag.as_ref().map(|d| d.module_id) == Some(*id);
                     let eff_enabled = if is_dragging { false } else { *enabled };
                     let resp = if app.rack_flipped {
@@ -837,7 +814,7 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
                             *kind,
                             eff_enabled,
                             Some(slot_w),
-                            Some(slot_h),
+                            None,
                             app.kind_scale(*kind),
                             ports,
                             |ui| {

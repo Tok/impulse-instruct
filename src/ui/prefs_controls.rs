@@ -293,43 +293,5 @@ impl ImpulseApp {
                 .size(8.0)
                 .color(theme::IRON),
         );
-
-        ui.add_space(8.0);
-        widgets::section_header(ui, "RACK GRID");
-        ui.label(
-            egui::RichText::new("Module columns — determines cell size for the grid layout.")
-                .monospace()
-                .size(8.0)
-                .color(theme::IRON),
-        );
-        ui.add_space(4.0);
-        ui.horizontal(|ui| {
-            let cur = self.state.read().ui_prefs.rack_grid_cols;
-            for n in 3u8..=6 {
-                let active = cur == n;
-                let col = if active { theme::CHALK } else { theme::SMOKE };
-                let fill = if active {
-                    egui::Color32::from_gray(40)
-                } else {
-                    egui::Color32::from_gray(18)
-                };
-                if ui
-                    .add(
-                        egui::Button::new(
-                            egui::RichText::new(format!("{}", n))
-                                .monospace()
-                                .size(10.0)
-                                .color(col),
-                        )
-                        .fill(fill)
-                        .min_size(egui::vec2(28.0, 18.0)),
-                    )
-                    .clicked()
-                    && !active
-                {
-                    self.state.write().ui_prefs.rack_grid_cols = n;
-                }
-            }
-        });
     }
 }

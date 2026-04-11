@@ -181,26 +181,31 @@ impl ModuleKind {
         }
     }
 
-    /// Grid span in (columns, rows) for the rack grid layout.
-    /// Full-width modules span all `grid_cols` columns.
+    /// Grid span in (columns, rows) for the 12-column rack grid.
+    /// Returns (col_span, row_hint) — row_hint is informational only,
+    /// actual height auto-sizes to content.
     pub fn grid_span(self, grid_cols: u8) -> (u8, u8) {
         match self {
-            // Full-width modules span all columns, 1 row (height snapped separately)
+            // Full-width modules span all 12 columns
             Self::StepSequencer | Self::LlmConsole | Self::MasterOutput => (grid_cols, 1),
-            // Wide voice
-            Self::An1xVoice => (2, 2),
-            // Standard voice modules — 1 col, 2 rows
+            // Wide voice — 6 of 12 columns (half width)
+            Self::An1xVoice => (6, 1),
+            // Standard voice modules — 3 of 12 columns (quarter width)
             Self::AcidBass
             | Self::DrumKit808
             | Self::DrumKit909
             | Self::HooverLead
             | Self::AmenSampler
             | Self::NoiseVoice
-            | Self::GranularTexture => (1, 2),
-            // Agent — same as voice
-            Self::LlmAgent => (1, 2),
-            // Everything else (FX, LFO, analysis, TTS) — 1×1
-            _ => (1, 1),
+            | Self::GranularTexture => (3, 1),
+            // Agent — 4 of 12 (third width)
+            Self::LlmAgent => (4, 1),
+            // TTS voice modules — 3 of 12
+            Self::EspeakNgTts | Self::CoquiTts => (3, 1),
+            // Analysis — wider for resolution
+            Self::SpectrumAnalyzer | Self::ActivityTimeline => (4, 1),
+            // Everything else (FX, LFO, stereo meter) — 2 of 12
+            _ => (2, 1),
         }
     }
 

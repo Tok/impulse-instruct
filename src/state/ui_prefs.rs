@@ -206,7 +206,7 @@ pub struct UiPrefs {
 }
 
 fn default_grid_cols() -> u8 {
-    4
+    5
 }
 
 fn default_true_pref() -> bool {
@@ -282,7 +282,7 @@ impl Default for UiPrefs {
             show_ring_oscilloscope: true,
             show_event_stream: true,
             stream_stereo: false,
-            rack_grid_cols: default_grid_cols(),
+            rack_grid_cols: 5,
         }
     }
 }
