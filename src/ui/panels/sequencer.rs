@@ -14,8 +14,8 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
     {
         let s = app.state.read();
         let pad = s.ui_prefs.effective_pad_px();
-        let row_h = pad + 16.0; // step buttons + combined sub-lane
-        let header_h = 50.0; // transport + header controls
+        let row_h = pad + 22.0; // step buttons + combined sub-lane + margins
+        let header_h = 65.0; // transport + header controls + separators
 
         let has_bass = s
             .rack
