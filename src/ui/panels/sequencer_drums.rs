@@ -2,8 +2,8 @@
 // Drum row rendering — split from sequencer.rs to stay under the 1000-line limit.
 
 use crate::state::{
-    DrumVoice, MAX_STEPS, Step, set_drum_step_probability, set_drum_step_ratchet,
-    set_drum_step_velocity, set_drum_voice_steps, toggle_drum_step,
+    DrumVoice, MAX_STEPS, Step, set_drum_step_ratchet, set_drum_step_velocity,
+    set_drum_voice_steps, toggle_drum_step,
 };
 use crate::ui::{ImpulseApp, SEQ_LABEL_H, SEQ_LABEL_W, SEQ_VOL_H, SEQ_VOL_W, theme, widgets};
 
@@ -279,144 +279,102 @@ pub(super) fn draw_drum_rows(
             }
         });
 
-        // ── Velocity / Probability / Ratchet lanes ─────────────────────────
-        ui.add_space(-1.0); // pull tight against step buttons
-        // Velocity
+        // ── Vel / Prob / Ratchet — single combined row (no vertical gaps) ──
+        // All three indicators painted into one horizontal allocation per step.
+        let vel_h = 4.0_f32;
+        let prob_h = 2.0_f32;
+        let ratch_h = 3.0_f32;
+        let combined_h = vel_h + prob_h + ratch_h;
+        let mut vel_changed: Option<(usize, f32)> = None;
+        let mut ratchet_changed: Option<(usize, u8)> = None;
         ui.horizontal(|ui| {
-            // Match the label column from the step button row
             let row_left = ui.cursor().min.x;
             let spacer = (steps_x - row_left).max(0.0);
             if spacer > 0.0 {
                 ui.add_space(spacer);
             }
-            let bar_h = 4.0_f32;
-            let mut vel_changed: Option<(usize, f32)> = None;
             for i in 0..16usize {
                 beat_div(ui, i);
                 let abs = page_start + i;
                 let vel = pattern.get(i).map(|s| s.velocity).unwrap_or(1.0);
-                let is_active = pattern.get(i).map(|s| s.active).unwrap_or(false);
-                // Wrap in add_enabled_ui to match step button row alignment
-                let (rect, resp) = ui
-                    .add_enabled_ui(abs < voice_steps, |ui| {
-                        ui.allocate_exact_size(egui::vec2(pad_px, bar_h), egui::Sense::drag())
-                    })
-                    .inner;
-                if ui.is_rect_visible(rect) {
-                    let bar_rect = egui::Rect::from_min_size(
-                        egui::pos2(rect.min.x, rect.max.y - bar_h * vel),
-                        egui::vec2(pad_px - 1.0, bar_h * vel),
-                    );
-                    let col = if is_active {
-                        egui::Color32::from_gray(70)
-                    } else {
-                        egui::Color32::from_gray(28)
-                    };
-                    ui.painter()
-                        .rect_filled(bar_rect, egui::Rounding::ZERO, col);
-                }
-                if resp.dragged() && abs < voice_steps {
-                    let delta = -resp.drag_delta().y / (bar_h * 8.0);
-                    let new_vel = (vel + delta).clamp(0.05, 1.0);
-                    vel_changed = Some((abs, new_vel));
-                }
-            }
-            if let Some((step, new_vel)) = vel_changed {
-                let s = app.state.read().clone();
-                *app.state.write() = set_drum_step_velocity(s, *voice, step, new_vel);
-            }
-        });
-
-        ui.horizontal(|ui| {
-            let row_left = ui.cursor().min.x;
-            let spacer = (steps_x - row_left).max(0.0);
-            if spacer > 0.0 {
-                ui.add_space(spacer);
-            }
-            let bar_h = 2.0_f32;
-            let mut prob_changed: Option<(usize, f32)> = None;
-            for i in 0..16usize {
-                beat_div(ui, i);
-                let abs = page_start + i;
                 let prob = pattern.get(i).map(|s| s.probability).unwrap_or(1.0);
-                let is_active = pattern.get(i).map(|s| s.active).unwrap_or(false);
-                let (rect, resp) = ui
-                    .add_enabled_ui(abs < voice_steps, |ui| {
-                        ui.allocate_exact_size(egui::vec2(pad_px, bar_h), egui::Sense::drag())
-                    })
-                    .inner;
-                if ui.is_rect_visible(rect) {
-                    let bar_rect = egui::Rect::from_min_size(
-                        egui::pos2(rect.min.x, rect.max.y - bar_h * prob),
-                        egui::vec2(pad_px - 1.0, bar_h * prob),
-                    );
-                    let col = if is_active {
-                        egui::Color32::from_gray(50)
-                    } else {
-                        egui::Color32::from_gray(20)
-                    };
-                    ui.painter()
-                        .rect_filled(bar_rect, egui::Rounding::ZERO, col);
-                }
-                if resp.dragged() && abs < voice_steps {
-                    let delta = -resp.drag_delta().y / (bar_h * 8.0);
-                    let new_prob = (prob + delta).clamp(0.0, 1.0);
-                    prob_changed = Some((abs, new_prob));
-                }
-            }
-            if let Some((step, new_prob)) = prob_changed {
-                let s = app.state.read().clone();
-                *app.state.write() = set_drum_step_probability(s, *voice, step, new_prob);
-            }
-        });
-
-        ui.horizontal(|ui| {
-            let row_left = ui.cursor().min.x;
-            let spacer = (steps_x - row_left).max(0.0);
-            if spacer > 0.0 {
-                ui.add_space(spacer);
-            }
-            let cell_h = 4.0_f32;
-            let mut ratchet_changed: Option<(usize, u8)> = None;
-            for i in 0..16usize {
-                beat_div(ui, i);
-                let abs = page_start + i;
                 let ratchet = pattern.get(i).map(|s| s.ratchet).unwrap_or(1);
                 let is_active = pattern.get(i).map(|s| s.active).unwrap_or(false);
                 let (rect, resp) = ui
                     .add_enabled_ui(abs < voice_steps, |ui| {
-                        ui.allocate_exact_size(egui::vec2(pad_px, cell_h), egui::Sense::click())
+                        ui.allocate_exact_size(
+                            egui::vec2(pad_px, combined_h),
+                            egui::Sense::click_and_drag(),
+                        )
                     })
                     .inner;
                 if ui.is_rect_visible(rect) {
-                    let tick_w = (pad_px - 1.0) / 4.0;
+                    let p = ui.painter();
+                    let x = rect.min.x;
+                    let w = pad_px - 1.0;
+                    // Velocity bar (top)
+                    let vy = rect.min.y;
+                    let vcol = if is_active { 70u8 } else { 28 };
+                    p.rect_filled(
+                        egui::Rect::from_min_size(
+                            egui::pos2(x, vy + vel_h * (1.0 - vel)),
+                            egui::vec2(w, vel_h * vel),
+                        ),
+                        egui::Rounding::ZERO,
+                        egui::Color32::from_gray(vcol),
+                    );
+                    // Probability bar (middle)
+                    let py = vy + vel_h;
+                    let pcol = if is_active { 50u8 } else { 20 };
+                    p.rect_filled(
+                        egui::Rect::from_min_size(
+                            egui::pos2(x, py + prob_h * (1.0 - prob)),
+                            egui::vec2(w, prob_h * prob),
+                        ),
+                        egui::Rounding::ZERO,
+                        egui::Color32::from_gray(pcol),
+                    );
+                    // Ratchet ticks (bottom)
+                    let ry = py + prob_h;
+                    let tick_w = w / 4.0;
                     for t in 0..4u8 {
                         let lit = t < ratchet;
                         let col = if lit && is_active {
-                            egui::Color32::from_gray(90)
+                            90u8
                         } else if lit {
-                            egui::Color32::from_gray(40)
+                            40
                         } else {
-                            egui::Color32::from_gray(15)
+                            15
                         };
-                        let tick_rect = egui::Rect::from_min_size(
-                            egui::pos2(rect.min.x + t as f32 * tick_w, rect.min.y + 1.0),
-                            egui::vec2((tick_w - 1.0).max(1.0), cell_h),
+                        p.rect_filled(
+                            egui::Rect::from_min_size(
+                                egui::pos2(x + t as f32 * tick_w, ry),
+                                egui::vec2((tick_w - 1.0).max(1.0), ratch_h),
+                            ),
+                            egui::Rounding::ZERO,
+                            egui::Color32::from_gray(col),
                         );
-                        ui.painter()
-                            .rect_filled(tick_rect, egui::Rounding::ZERO, col);
                     }
                 }
-                if resp.clicked() && abs < voice_cursor {
+                // Drag = velocity, click = ratchet cycle
+                if resp.dragged() && abs < voice_steps {
+                    let delta = -resp.drag_delta().y / (combined_h * 4.0);
+                    vel_changed = Some((abs, (vel + delta).clamp(0.05, 1.0)));
+                }
+                if resp.clicked() && abs < voice_steps {
                     let next = if ratchet >= 4 { 1 } else { ratchet + 1 };
                     ratchet_changed = Some((abs, next));
                 }
             }
-            if let Some((step, new_ratchet)) = ratchet_changed {
-                let s = app.state.read().clone();
-                *app.state.write() = set_drum_step_ratchet(s, *voice, step, new_ratchet);
-            }
         });
+        if let Some((step, v)) = vel_changed {
+            let s = app.state.read().clone();
+            *app.state.write() = set_drum_step_velocity(s, *voice, step, v);
+        }
+        if let Some((step, r)) = ratchet_changed {
+            let s = app.state.read().clone();
+            *app.state.write() = set_drum_step_ratchet(s, *voice, step, r);
+        }
         // Restore normal vertical spacing between voices
         ui.spacing_mut().item_spacing = outer_spacing;
     }

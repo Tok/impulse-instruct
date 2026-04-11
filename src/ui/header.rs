@@ -491,37 +491,9 @@ impl ImpulseApp {
 
                     // (Agent status moved to log strip right side)
 
-                    ui.separator();
-
-                    // ── KNOBS toggle ──────────────────────────────────────
-                    {
-                        let use_sliders = self.state.read().ui_prefs.use_sliders;
-                        let ks_col = if use_sliders {
-                            theme::SMOKE
-                        } else {
-                            theme::ASH
-                        };
-                        if ui
-                            .add(
-                                egui::Button::new(
-                                    egui::RichText::new(if use_sliders {
-                                        "SLIDERS"
-                                    } else {
-                                        "KNOBS"
-                                    })
-                                    .color(ks_col)
-                                    .monospace()
-                                    .size(8.5),
-                                )
-                                .fill(egui::Color32::TRANSPARENT),
-                            )
-                            .clicked()
-                        {
-                            self.state.write().ui_prefs.use_sliders = !use_sliders;
-                        }
-                    }
-
-                    // ── RIGHT side: VRAM/RAM/API + MON ────────────────────
+                    // ── Everything after HEAT: right-justified ────────────
+                    // Uses right_to_left to push MON + VRAM/API to the right edge.
+                    // In RTL, first rendered = rightmost.
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         let (has_vram, has_ram, vram_used, vram_total, ram_used, ram_total) = self
                             .sys_info
@@ -657,6 +629,36 @@ impl ImpulseApp {
                                     .monospace()
                                     .size(8.0),
                             );
+                        }
+
+                        ui.separator();
+
+                        // ── KNOBS toggle (leftmost in RTL) ──
+                        {
+                            let use_sliders = self.state.read().ui_prefs.use_sliders;
+                            let ks_col = if use_sliders {
+                                theme::SMOKE
+                            } else {
+                                theme::ASH
+                            };
+                            if ui
+                                .add(
+                                    egui::Button::new(
+                                        egui::RichText::new(if use_sliders {
+                                            "SLIDERS"
+                                        } else {
+                                            "KNOBS"
+                                        })
+                                        .color(ks_col)
+                                        .monospace()
+                                        .size(8.5),
+                                    )
+                                    .fill(egui::Color32::TRANSPARENT),
+                                )
+                                .clicked()
+                            {
+                                self.state.write().ui_prefs.use_sliders = !use_sliders;
+                            }
                         }
                     });
                 });
