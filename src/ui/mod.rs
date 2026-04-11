@@ -393,27 +393,7 @@ impl ImpulseApp {
         let snapshot = self.state.read().clone();
         self.history.push(snapshot);
     }
-    fn update_spectrum(&mut self) {
-        if self.scope_buf.len() < 256 {
-            return;
-        }
-        let raw = crate::audio::spectrum::compute_spectrum(&self.scope_buf, 44100.0);
-        let alpha = self.state.read().spectrum.smoothing;
-        if self.spectrum_magnitudes.len() != raw.magnitudes.len() {
-            self.spectrum_magnitudes = raw.magnitudes.clone();
-            self.spectrum_peaks = raw.magnitudes;
-        } else {
-            for (i, &r) in raw.magnitudes.iter().enumerate() {
-                self.spectrum_magnitudes[i] =
-                    self.spectrum_magnitudes[i] * alpha + r * (1.0 - alpha);
-                if r > self.spectrum_peaks[i] {
-                    self.spectrum_peaks[i] = r;
-                } else {
-                    self.spectrum_peaks[i] -= 0.3;
-                }
-            }
-        }
-    }
+    // update_spectrum → ui_helpers.rs
 
     /// Effective scale for a module kind (1.0 if unset).
     pub(crate) fn kind_scale(&self, kind: crate::state::ModuleKind) -> f32 {
@@ -944,12 +924,14 @@ impl eframe::App for ImpulseApp {
             )
             .exact_height(18.0)
             .show(ctx, |ui| {
-                let s = self.state.read();
-                let n_modules = s.rack.modules.len();
-                let n_agents = s.llm_agents.len();
-                let n_cables = s.rack.cables.len();
-                let uptime_secs = self.session_start.elapsed().as_secs();
-                drop(s);
+                let (nm, na, nc) = {
+                    let s = self.state.read();
+                    (
+                        s.rack.modules.len(),
+                        s.llm_agents.len(),
+                        s.rack.cables.len(),
+                    )
+                };
                 scope_footer::draw_footer_status(
                     ui,
                     &self.midi_port,
@@ -957,10 +939,13 @@ impl eframe::App for ImpulseApp {
                     &mut self.rack_flipped,
                     &mut self.ctrl_locked,
                     &mut self.alt_locked,
-                    n_modules,
-                    n_agents,
-                    n_cables,
-                    uptime_secs,
+                    scope_footer::FooterStats {
+                        n_modules: nm,
+                        n_agents: na,
+                        n_cables: nc,
+                        uptime_secs: self.session_start.elapsed().as_secs(),
+                        api_port: self.api_port,
+                    },
                 );
             });
 

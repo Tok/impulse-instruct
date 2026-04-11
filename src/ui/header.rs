@@ -4,7 +4,7 @@
 use crate::audio::AudioCommand;
 use crate::export::{export_mp3, export_stems, export_wav};
 use crate::state::save_project;
-use crate::ui::{ImpulseApp, theme, webbrowser_open};
+use crate::ui::{ImpulseApp, theme};
 use egui::{Frame, TopBottomPanel};
 
 impl ImpulseApp {
@@ -544,7 +544,7 @@ impl ImpulseApp {
                             .push(AudioCommand::SetMonitorVolume(self.ui_volume));
                     }
 
-                    // ── VRAM / RAM / API ──
+                    // ── VRAM / RAM (stacked progress bars) ──
                     ui.separator();
                     let (has_vram, has_ram, vram_used, vram_total, ram_used, ram_total) = self
                         .sys_info
@@ -560,39 +560,53 @@ impl ImpulseApp {
                             )
                         })
                         .unwrap_or((false, false, 0, 0, 0, 0));
-                    if has_vram {
-                        let pct = (vram_used as f32 / vram_total as f32 * 100.0) as u32;
-                        ui.label(
-                            egui::RichText::new(format!("VRAM {}%", pct))
-                                .color(theme::ASH)
-                                .monospace()
-                                .size(7.0),
-                        );
-                    }
-                    if has_ram {
-                        let pct = (ram_used as f32 / ram_total as f32 * 100.0) as u32;
-                        ui.label(
-                            egui::RichText::new(format!("RAM {}%", pct))
-                                .color(theme::ASH)
-                                .monospace()
-                                .size(7.0),
-                        );
-                    }
-                    if let Some(port) = self.api_port
-                        && ui
-                            .add(
-                                egui::Button::new(
-                                    egui::RichText::new(format!(":{port}"))
-                                        .color(theme::SMOKE)
-                                        .monospace()
-                                        .size(7.0),
-                                )
-                                .fill(egui::Color32::TRANSPARENT),
-                            )
-                            .on_hover_text(format!("http://localhost:{port}/api/schema"))
-                            .clicked()
-                    {
-                        let _ = webbrowser_open(&format!("http://localhost:{port}/api/schema"));
+                    if has_vram || has_ram {
+                        ui.vertical(|ui| {
+                            ui.spacing_mut().item_spacing.y = 1.0;
+                            let bar = |ui: &mut egui::Ui, label: &str, frac: f32| {
+                                ui.horizontal(|ui| {
+                                    ui.label(
+                                        egui::RichText::new(label)
+                                            .color(theme::ASH)
+                                            .monospace()
+                                            .size(7.0),
+                                    );
+                                    let (br, _) = ui.allocate_exact_size(
+                                        egui::vec2(50.0, 5.0),
+                                        egui::Sense::hover(),
+                                    );
+                                    let p = ui.painter();
+                                    p.rect_filled(br, 1.0, egui::Color32::from_gray(30));
+                                    let fw = (br.width() * frac.clamp(0.0, 1.0)).max(0.0);
+                                    if fw > 0.0 {
+                                        p.rect_filled(
+                                            egui::Rect::from_min_size(
+                                                br.min,
+                                                egui::vec2(fw, br.height()),
+                                            ),
+                                            1.0,
+                                            egui::Color32::from_gray(if frac > 0.85 {
+                                                160
+                                            } else {
+                                                80
+                                            }),
+                                        );
+                                    }
+                                    ui.label(
+                                        egui::RichText::new(format!("{}%", (frac * 100.0) as u32))
+                                            .color(theme::ASH)
+                                            .monospace()
+                                            .size(6.5),
+                                    );
+                                });
+                            };
+                            if has_vram {
+                                bar(ui, "VRAM", vram_used as f32 / vram_total as f32);
+                            }
+                            if has_ram {
+                                bar(ui, "RAM ", ram_used as f32 / ram_total as f32);
+                            }
+                        });
                     }
                 });
             });

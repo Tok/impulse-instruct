@@ -87,4 +87,26 @@ impl ImpulseApp {
             }
         }
     }
+
+    pub(crate) fn update_spectrum(&mut self) {
+        if self.scope_buf.len() < 256 {
+            return;
+        }
+        let raw = crate::audio::spectrum::compute_spectrum(&self.scope_buf, 44100.0);
+        let alpha = self.state.read().spectrum.smoothing;
+        if self.spectrum_magnitudes.len() != raw.magnitudes.len() {
+            self.spectrum_magnitudes = raw.magnitudes.clone();
+            self.spectrum_peaks = raw.magnitudes;
+        } else {
+            for (i, &r) in raw.magnitudes.iter().enumerate() {
+                self.spectrum_magnitudes[i] =
+                    self.spectrum_magnitudes[i] * alpha + r * (1.0 - alpha);
+                if r > self.spectrum_peaks[i] {
+                    self.spectrum_peaks[i] = r;
+                } else {
+                    self.spectrum_peaks[i] -= 0.3;
+                }
+            }
+        }
+    }
 }

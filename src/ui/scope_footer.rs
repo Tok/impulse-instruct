@@ -112,51 +112,58 @@ pub fn draw_dsp_sparkline(ui: &mut egui::Ui, buf: &[f32]) {
     if buf.is_empty() {
         return;
     }
-    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-        let avg = buf.iter().sum::<f32>() / buf.len() as f32;
-        let peak = buf.iter().cloned().fold(0.0_f32, f32::max);
-        let col = if peak > 0.8 {
+    let avg = buf.iter().sum::<f32>() / buf.len() as f32;
+    let peak = buf.iter().cloned().fold(0.0_f32, f32::max);
+    let col = if peak > 0.8 {
+        egui::Color32::from_gray(160)
+    } else {
+        theme::ASH
+    };
+    // Sparkline: up to 64 bars × 10px high, fixed width
+    let bar_w = 1.5_f32;
+    let h = 10.0_f32;
+    let n = buf.len().min(32);
+    let total_w = n as f32 * bar_w;
+    let (rect, _) = ui.allocate_exact_size(egui::vec2(total_w, h), egui::Sense::hover());
+    let p = ui.painter();
+    let start = buf.len().saturating_sub(n);
+    for (i, &load) in buf[start..].iter().enumerate() {
+        let x = rect.min.x + i as f32 * bar_w;
+        let bar_h = (load.clamp(0.0, 1.0) * h).max(1.0);
+        let bar_col = if load > 0.8 {
             egui::Color32::from_gray(160)
+        } else if load > 0.5 {
+            theme::SMOKE
         } else {
-            theme::ASH
+            egui::Color32::from_gray(45)
         };
-        ui.label(
-            egui::RichText::new(format!("DSP {:.0}%", avg * 100.0))
-                .color(col)
-                .monospace()
-                .size(9.0),
+        p.rect_filled(
+            egui::Rect::from_min_size(
+                egui::pos2(x, rect.max.y - bar_h),
+                egui::vec2(bar_w - 0.5, bar_h),
+            ),
+            0.0,
+            bar_col,
         );
-        // Sparkline: up to 64 bars × 12px high
-        let bar_w = 1.5_f32;
-        let h = 12.0_f32;
-        let n = buf.len();
-        let total_w = n as f32 * bar_w;
-        let (rect, _) = ui.allocate_exact_size(egui::vec2(total_w, h), egui::Sense::hover());
-        let p = ui.painter();
-        for (i, &load) in buf.iter().enumerate() {
-            let x = rect.right() - (n - i) as f32 * bar_w;
-            let bar_h = (load.clamp(0.0, 1.0) * h).max(1.0);
-            let bar_col = if load > 0.8 {
-                egui::Color32::from_gray(160)
-            } else if load > 0.5 {
-                theme::SMOKE
-            } else {
-                egui::Color32::from_gray(45)
-            };
-            p.rect_filled(
-                egui::Rect::from_min_size(
-                    egui::pos2(x, rect.max.y - bar_h),
-                    egui::vec2(bar_w - 0.5, bar_h),
-                ),
-                0.0,
-                bar_col,
-            );
-        }
-    });
+    }
+    ui.label(
+        egui::RichText::new(format!("{:.0}%", avg * 100.0))
+            .color(col)
+            .monospace()
+            .size(7.5),
+    );
 }
 
 /// Draw mode indicators (Zoom/Lock/Flip) + MIDI status in the footer strip.
 /// Double-click an indicator to lock that mode on without holding the key.
+pub struct FooterStats {
+    pub n_modules: usize,
+    pub n_agents: usize,
+    pub n_cables: usize,
+    pub uptime_secs: u64,
+    pub api_port: Option<u16>,
+}
+
 pub fn draw_footer_status(
     ui: &mut egui::Ui,
     midi_port: &Option<String>,
@@ -164,10 +171,7 @@ pub fn draw_footer_status(
     rack_flipped: &mut bool,
     ctrl_locked: &mut bool,
     alt_locked: &mut bool,
-    n_modules: usize,
-    n_agents: usize,
-    n_cables: usize,
-    uptime_secs: u64,
+    stats: FooterStats,
 ) {
     ui.horizontal(|ui| {
         let ctrl_key = ui.input(|i| i.modifiers.ctrl);
@@ -236,17 +240,35 @@ pub fn draw_footer_status(
         draw_dsp_sparkline(ui, dsp_buf);
 
         ui.separator();
-        let mins = uptime_secs / 60;
-        let secs = uptime_secs % 60;
+        let mins = stats.uptime_secs / 60;
+        let secs = stats.uptime_secs % 60;
         ui.label(
             egui::RichText::new(format!(
                 "Modules: {}  Agents: {}  Cables: {}  {}:{:02}",
-                n_modules, n_agents, n_cables, mins, secs
+                stats.n_modules, stats.n_agents, stats.n_cables, mins, secs
             ))
             .monospace()
             .size(8.0)
             .color(super::theme::ASH),
         );
+        if let Some(port) = stats.api_port {
+            ui.separator();
+            if ui
+                .add(
+                    egui::Label::new(
+                        egui::RichText::new(format!("API :{port}"))
+                            .color(super::theme::SMOKE)
+                            .monospace()
+                            .size(8.0),
+                    )
+                    .sense(egui::Sense::click()),
+                )
+                .on_hover_text(format!("http://localhost:{port}/api/schema"))
+                .clicked()
+            {
+                let _ = super::webbrowser_open(&format!("http://localhost:{port}/api/schema"));
+            }
+        }
         ui.separator();
         if ui
             .add(

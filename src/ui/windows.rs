@@ -779,10 +779,11 @@ impl ImpulseApp {
                     if ui
                         .add(
                             egui::Label::new(
-                                egui::RichText::new("github.com/Tok/impulse-instruct")
+                                egui::RichText::new("↗ github.com/Tok/impulse-instruct")
                                     .monospace()
                                     .size(9.0)
-                                    .color(theme::FOG),
+                                    .color(theme::FOG)
+                                    .underline(),
                             )
                             .sense(egui::Sense::click()),
                         )
