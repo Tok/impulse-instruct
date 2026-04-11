@@ -381,17 +381,12 @@ pub fn module_card_sized<R>(
                 }
             }
 
-            // ── Remove button (×) on far right, before ports ──────────────────
+            // ── Remove button (×) — only for modules that allow multiple instances
             let rm_rect = Rect::from_center_size(
                 Pos2::new(title_rect.right() - 44.0, title_rect.center().y),
                 Vec2::splat(10.0),
             );
-            // Only show for removable modules
-            let is_core = matches!(
-                kind,
-                ModuleKind::StepSequencer | ModuleKind::MasterOutput | ModuleKind::LlmConsole
-            );
-            if !is_core {
+            if kind.allows_multiple() || kind == ModuleKind::LlmAgent {
                 let rm_resp = ui.interact(rm_rect, ui.id().with("rm"), Sense::click());
                 if rm_resp.clicked() {
                     remove_clicked = true;
@@ -581,12 +576,8 @@ pub fn module_card_back(
             if drag_resp.hovered() || drag_resp.dragged() {
                 ui.ctx().set_cursor_icon(egui::CursorIcon::Grab);
             }
-            // Remove button
-            let is_core = matches!(
-                kind,
-                ModuleKind::StepSequencer | ModuleKind::MasterOutput | ModuleKind::LlmConsole
-            );
-            if !is_core {
+            // Remove button — only for multi-instance modules
+            if kind.allows_multiple() || kind == ModuleKind::LlmAgent {
                 let rm_rect = Rect::from_center_size(
                     Pos2::new(title_rect.right() - 12.0, title_rect.center().y),
                     Vec2::splat(10.0),
