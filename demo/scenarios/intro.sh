@@ -24,6 +24,8 @@ add_effect delay
 say "Bass, drums, reverb, delay. Adding an AI agent."
 
 add_agent PULSE gemma
+look_at console
+wait_seconds 2
 wait_for_model
 
 # ── Scene 2: First sound ────────────────────────────────────────────────────

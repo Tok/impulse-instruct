@@ -19,7 +19,7 @@ pub(crate) fn resolve_focus_kind(target: &str) -> Option<ModuleKind> {
         "delay" => Some(ModuleKind::FxDelay),
         "chorus" => Some(ModuleKind::FxChorus),
         "lfo" => Some(ModuleKind::LfoModule),
-        "console" | "llm" => Some(ModuleKind::LlmConsole),
+        "console" | "llm" | "agent" => Some(ModuleKind::LlmConsole),
         "spectrum" => Some(ModuleKind::SpectrumAnalyzer),
         "master" => Some(ModuleKind::MasterOutput),
         _ => None,
@@ -116,6 +116,10 @@ pub(crate) fn handle_scroll(
                 state.offset.y,
                 max_y
             );
+        } else if module_kind.is_some() {
+            // Module not in card_rects yet (just added this frame) — retry next frame
+            app.state.write().scroll_target = Some(t.clone());
+            ctx.request_repaint();
         }
     }
 }
