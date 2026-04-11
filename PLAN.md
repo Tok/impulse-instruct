@@ -42,6 +42,11 @@ What's already built is documented in [docs/features.md](docs/features.md).
   position doesn't visually track mid-change
 - [ ] **ADSR envelope shaping** — expose attack/decay/sustain/release as
   agent-controllable parameters with the same ramp/LFO tooling
+- [ ] **Pan as LFO/ramp target** — all voice pan parameters (bass, 808,
+  909, hoover, AN1X, noise) must be addressable as LFO targets and ramp
+  targets. Currently pan is set directly but not modulatable. Add
+  `LfoTarget::Pan` variants and ensure `apply_llm_update` handles
+  `"bass.pan"`, `"kit_a.kick.pan"`, etc. **High priority — next session.**
 - [ ] **Moderate defaults in system prompt** — discourage extreme values
   (reverb mix > 0.5, delay feedback > 0.6, etc.) unless explicitly
   asked. Guide agents toward musical subtlety over dramatic resets
