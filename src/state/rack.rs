@@ -181,29 +181,42 @@ impl ModuleKind {
         }
     }
 
-    /// Grid span in (columns, rows) for the 12-column rack grid.
-    /// Returns (col_span, row_hint) — row_hint is informational only,
-    /// actual height auto-sizes to content.
-    pub fn grid_span(self, grid_cols: u8) -> (u8, u8) {
+    /// Grid size in (columns, rows) for the 12-column rack grid.
+    /// Full-width modules use `grid_cols` for width; all others are fixed.
+    /// Height is enforced as a minimum — content taller than this grows naturally.
+    pub fn grid_size(self, grid_cols: u8) -> (u8, u8) {
         match self {
-            // Full-width modules span all 12 columns
-            Self::StepSequencer | Self::LlmConsole | Self::MasterOutput => (grid_cols, 1),
-            // Wide voice — 6 of 12 columns (half width)
-            Self::An1xVoice => (6, 1),
-            // Standard voice modules — 4 of 12 (3 fit per row)
-            Self::AcidBass | Self::DrumKit808 | Self::DrumKit909 | Self::HooverLead => (4, 1),
-            // Compact voice — 3 of 12
-            Self::AmenSampler | Self::GranularTexture => (3, 1),
-            // Noise — 2 of 12
+            //                                     W     H
+            Self::StepSequencer => (grid_cols, 4),
+            Self::LlmConsole => (grid_cols, 1),
+            Self::MasterOutput => (grid_cols, 1),
+            Self::AcidBass => (4, 8),
+            Self::DrumKit808 => (4, 4),
+            Self::DrumKit909 => (4, 4),
+            Self::HooverLead => (4, 2),
+            Self::An1xVoice => (6, 6),
+            Self::AmenSampler => (3, 1),
             Self::NoiseVoice => (2, 1),
-            // Agent — 4 of 12
-            Self::LlmAgent => (4, 1),
-            // TTS voice modules — 2 of 12
-            Self::EspeakNgTts | Self::CoquiTts => (2, 1),
-            // Analysis — wider for resolution
-            Self::SpectrumAnalyzer | Self::ActivityTimeline => (4, 1),
-            // Everything else (FX, LFO, stereo meter) — 2 of 12
-            _ => (2, 1),
+            Self::GranularTexture => (3, 1),
+            Self::LlmAgent => (4, 3),
+            Self::EspeakNgTts | Self::CoquiTts => (2, 2),
+            Self::SpectrumAnalyzer => (4, 2),
+            Self::ActivityTimeline => (4, 2),
+            Self::StereoMeter => (2, 1),
+            Self::LfoModule => (2, 2),
+            // FX modules — exhaustive so new variants cause a compile error
+            Self::FxReverb
+            | Self::FxDelay
+            | Self::FxChorus
+            | Self::FxPhaser
+            | Self::FxRingMod
+            | Self::FxWaveshaper
+            | Self::FxBitcrush
+            | Self::FxEq
+            | Self::FxCompressor
+            | Self::FxTapeSat
+            | Self::FxDrive
+            | Self::FxAutotune => (2, 1),
         }
     }
 

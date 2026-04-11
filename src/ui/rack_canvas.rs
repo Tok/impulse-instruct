@@ -306,7 +306,7 @@ fn draw_add_menu(app: &mut ImpulseApp, ctx: &egui::Context) {
 
 // ─── Grid-based rack layout ──────────────────────────────────────────────────
 // Fixed 12-column grid (like CSS/Bootstrap).  Each module spans a number of
-// columns defined in `ModuleKind::grid_span()`.  Heights auto-size to content.
+// columns and rows defined in `ModuleKind::grid_size()`.
 
 pub(super) const RACK_GAP: f32 = 4.0;
 pub(crate) const GRID_COLS: u8 = 12;
@@ -317,34 +317,16 @@ pub(super) fn grid_col_w(available_w: f32) -> f32 {
     (available_w - (n - 1.0) * RACK_GAP) / n
 }
 
-/// Pixel width for a module's grid span.
+/// Pixel width for a module's grid column span.
 pub(super) fn module_grid_w(kind: ModuleKind, col_w: f32) -> f32 {
-    let (c, _) = kind.grid_span(GRID_COLS);
+    let (c, _) = kind.grid_size(GRID_COLS);
     c as f32 * col_w + (c as f32 - 1.0).max(0.0) * RACK_GAP
 }
 
-/// Grid height in whole cells for each module kind.
-/// Content that exceeds this just grows — this is a minimum, not a cap.
-fn grid_row_count(kind: ModuleKind) -> u8 {
-    match kind {
-        ModuleKind::AcidBass => 8,
-        ModuleKind::An1xVoice => 6,
-        ModuleKind::DrumKit808 | ModuleKind::DrumKit909 => 4,
-        ModuleKind::HooverLead => 2,
-        ModuleKind::LlmAgent => 3,
-        ModuleKind::AmenSampler => 1,
-        ModuleKind::NoiseVoice | ModuleKind::GranularTexture => 1,
-        ModuleKind::EspeakNgTts | ModuleKind::CoquiTts => 2,
-        ModuleKind::SpectrumAnalyzer | ModuleKind::ActivityTimeline => 2,
-        ModuleKind::LfoModule => 2,
-        // FX, stereo meter — 1 cell
-        _ => 1,
-    }
-}
-
-/// Pixel height for a module's grid row span (whole cells only).
+/// Pixel height for a module's grid row span.
 pub(super) fn module_grid_h(kind: ModuleKind, col_w: f32) -> f32 {
-    let r = grid_row_count(kind) as f32;
+    let (_, r) = kind.grid_size(GRID_COLS);
+    let r = r as f32;
     r * col_w + (r - 1.0).max(0.0) * RACK_GAP
 }
 
