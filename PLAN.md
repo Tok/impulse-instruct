@@ -235,6 +235,26 @@ Scripts to create:
   `allows_multiple` modules (FX, LFO, agents). Should also show on
   voice modules for rack customization.
 
+### Sequencer panel overhaul
+
+- [ ] **BPM/SWING sliders** — 3× wider, aligned vertically. Sliders are
+  on the right side. Move SYNC button left of the BPM slider so slider
+  is rightmost and both sliders align. Full word labels: BPM, SWING.
+- [ ] **Top section padding** — add consistent spacing between controls.
+- [ ] **Step button alignment** — top (bass) and bottom (drum) step rows
+  must use identical sizing, padding, and style. Currently they look
+  slightly different (different padding/offset). Unify.
+- [ ] **ACCENT/SLIDE rows** — write out fully: ACCENT, SLIDE. Fix vertical
+  misalignment — first ~2 accent/slide buttons are ~3px too high.
+- [ ] **Colored step dots** — add a thin black circle (`circle_stroke`)
+  around the Huth-colored note dots on active steps.
+- [ ] **Bottom drum sliders** — 2× wider, labels below sliders instead
+  of left. Full words: CLOSED HIHAT, OPEN HIHAT, etc.
+- [ ] **Pattern alignment** — right-justify all step pattern grids (top
+  and bottom) so they align on the right edge. More space available on
+  the left for controls.
+- [ ] **Full labels** — BNK→BANK, CHN→CHAIN, etc. throughout.
+
 ### Refactoring — magic numbers and hardcoded literals
 
 - [ ] **Panel typography constants** — font sizes (7.0, 7.5, 8.0, 8.5, 9.0,
