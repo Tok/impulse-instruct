@@ -130,6 +130,7 @@ unlock "sequencer.bass_steps" "tb303.cutoff"
 
 scene "Multi-agent setup"
 
+wait_seconds 4
 stop
 wait_seconds 1
 
