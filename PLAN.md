@@ -224,6 +224,31 @@ Scripts to create:
 - [ ] **Event stream scene** — Huth-colored note history scrolling in real time
 - [ ] **Collapse/focus scene** — API collapse_others to isolate a section
 
+### Refactoring — magic numbers and hardcoded literals
+
+- [ ] **Panel typography constants** — font sizes (7.0, 7.5, 8.0, 8.5, 9.0,
+  9.5) are hardcoded across all panels. Define named constants in
+  `panels/mod.rs`:
+  `FONT_XS` (7.0), `FONT_SM` (8.0), `FONT_MD` (9.0), `FONT_LG` (9.5),
+  `FONT_LABEL` (8.5). Replace all hardcoded `.size(N.N)` calls.
+- [ ] **Panel spacing constants** — `add_space(2.0/4.0/8.0/12.0)` scattered
+  across panels. Define `SPACING_SM` (2), `SPACING_MD` (4), `SPACING_LG` (8),
+  `SPACING_XL` (12) and replace all hardcoded values.
+- [ ] **Glass group label pattern** — every glass group starts with
+  `ui.label(RichText::new("LABEL").color(FOG).monospace().size(9.5))`.
+  Extract to `fn glass_label(ui, text)` or a macro.
+- [ ] **Fixed-width label pattern** — many panels use
+  `ui.add_sized([50.0, 18.0], Label::new(...))` for label alignment.
+  Define `LABEL_W` (50) and `LABEL_H` (18) constants.
+- [ ] **Title bar height** — `22.0` hardcoded in module_card.rs (2 places).
+  Define `TITLE_BAR_H`.
+- [ ] **Card rounding** — `8.0` hardcoded in module_card.rs (front + back).
+  Define `CARD_ROUNDING`.
+- [ ] **Glass group rounding** — `5.0` in widgets/mod.rs. Define
+  `GLASS_ROUNDING`.
+- [ ] **group_h formula** — `ctrl.knob_size * 2.0 + 50.0` repeated in
+  bass/808/AN1X. Extract to a `fn glass_group_height(ctrl)` helper.
+
 ### Infrastructure
 
 - [ ] **CI: run LLM integration tests on release** — currently manual;
