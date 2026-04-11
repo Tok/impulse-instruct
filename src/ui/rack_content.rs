@@ -343,7 +343,7 @@ pub(super) fn draw_master_content(app: &mut ImpulseApp, ui: &mut egui::Ui) {
 // ─── LLM agent card content ──────────────────────────────────────────────────
 
 pub(super) fn draw_llm_agent_content(app: &mut ImpulseApp, ui: &mut egui::Ui, module_id: u32) {
-    // Grid height enforcement is handled by module_card_grid — just draw content.
+    // Width is constrained by the grid; height auto-sizes to content.
     draw_llm_agent_inner(app, ui, module_id);
 }
 
