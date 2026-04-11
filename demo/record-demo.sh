@@ -213,6 +213,8 @@ cleanup() {
         wait "$PW_RECORD_PID" 2>/dev/null
     fi
     [ -n "$APP_PID" ] && kill "$APP_PID" 2>/dev/null && wait "$APP_PID" 2>/dev/null
+    # Clean up virtual recording sink
+    destroy_recording_sink 2>/dev/null
     rm -f "$NARRATION_LIST"
     echo "Done."
 }
@@ -297,23 +299,34 @@ if [ "$SKIP_VIDEO" -eq 0 ]; then
     GRAB_W=$(( GRAB_W / 2 * 2 ))
     GRAB_H=$(( GRAB_H / 2 * 2 ))
 
-    # ─── Start per-app audio capture via PipeWire ────────────────────────
+    # ─── Start ISOLATED per-app audio capture via virtual PipeWire sink ──
+    #
+    # Strategy: create a dedicated virtual sink, capture from its monitor.
+    # The app gets routed to this sink after sequencer starts (via api_play
+    # hook). This guarantees NO browser/system audio leaks into the recording.
 
     APP_AUDIO="$BATCH_DIR/${BASENAME}-audio.wav"
     RAW_VIDEO="$BATCH_DIR/${BASENAME}-raw.mkv"
     NARRATION_AUDIO="$BATCH_DIR/${BASENAME}-narration.wav"
+    RECORDING_SINK_ID=""
 
-    # Find the app's PipeWire node for ISOLATED audio capture.
-    # We only capture the app's audio — never the default sink (which would
-    # include YouTube, system sounds, etc.)
-    APP_PW_NODE=$(find_app_pw_node)
-    if [ -n "$APP_PW_NODE" ]; then
-        echo "  App audio: PipeWire node $APP_PW_NODE (isolated)"
-        pw-record --target "$APP_PW_NODE" "$APP_AUDIO" &
+    # Try to create a virtual recording sink
+    RECORDING_SINK_ID=$(create_recording_sink)
+    if [ -n "$RECORDING_SINK_ID" ]; then
+        echo "  Recording sink: node $RECORDING_SINK_ID (isolated virtual sink)"
+        # Record from the sink's monitor
+        pw-record --target "$RECORDING_SINK_ID" "$APP_AUDIO" &
         PW_RECORD_PID=$!
     else
-        echo "  App audio: PipeWire node not found yet (app hasn't produced sound)."
-        echo "  Will retry after sequencer starts."
+        echo "  WARN: Could not create virtual sink — trying direct capture"
+        APP_PW_NODE=$(find_app_pw_node)
+        if [ -n "$APP_PW_NODE" ]; then
+            echo "  App audio: PipeWire stream $APP_PW_NODE"
+            pw-record --target "$APP_PW_NODE" "$APP_AUDIO" &
+            PW_RECORD_PID=$!
+        else
+            echo "  App audio: not available yet, will retry after play"
+        fi
     fi
 
     # ─── Start screen recording ──────────────────────────────────────────
@@ -364,22 +377,29 @@ echo ""
 
 # Hook: after api_play, try to start per-app capture if we don't have it yet
 if [ "$SKIP_VIDEO" -eq 0 ]; then
+    _app_routed=0
     api_play() {
         curl -sf -X POST "$API/api/sequencer/play" >/dev/null 2>&1
-        # If we haven't started per-app audio yet, try harder
-        if [ -z "${PW_RECORD_PID:-}" ]; then
-            # Retry up to 5 times — cpal may take a moment to register
+        # Route app to our recording sink on first play
+        if [ "$_app_routed" -eq 0 ]; then
+            sleep 1  # give cpal time to create the PW stream
             for _try in 1 2 3 4 5; do
-                sleep 1
                 APP_PW_NODE=$(find_app_pw_node)
                 if [ -n "$APP_PW_NODE" ]; then
-                    echo "  [auto] Starting per-app audio capture (node $APP_PW_NODE)"
-                    pw-record --target "$APP_PW_NODE" "$APP_AUDIO" &
-                    PW_RECORD_PID=$!
+                    if [ -n "${RECORDING_SINK_ID:-}" ]; then
+                        route_app_to_sink "$APP_PW_NODE" "$RECORDING_SINK_ID"
+                        echo "  [auto] Routed app stream $APP_PW_NODE → recording sink $RECORDING_SINK_ID"
+                    elif [ -z "${PW_RECORD_PID:-}" ]; then
+                        echo "  [auto] Direct capture from stream $APP_PW_NODE"
+                        pw-record --target "$APP_PW_NODE" "$APP_AUDIO" &
+                        PW_RECORD_PID=$!
+                    fi
+                    _app_routed=1
                     break
                 fi
+                sleep 1
             done
-            [ -z "${PW_RECORD_PID:-}" ] && echo "  [auto] Audio node still not found after 5 retries"
+            [ "$_app_routed" -eq 0 ] && echo "  [auto] Could not find app stream after 5 retries"
         fi
     }
 fi

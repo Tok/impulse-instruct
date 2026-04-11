@@ -326,11 +326,49 @@ x.mouse_up(1, window=$APP_WINDOW_ID)
 # ─── PipeWire per-app audio helpers ───────────────────────────────────────────
 
 find_app_pw_node() {
-    # Find the app's PipeWire playback node by application name.
+    # Find the app's PipeWire playback STREAM node by application name.
+    # Filters to Stream/Output (playback) nodes only — never matches sinks/monitors.
+    pw-cli ls Node 2>/dev/null | awk '
+        /^[[:space:]]*id [0-9]+/ { id=$2; gsub(/,/,"",id); is_stream=0; is_impulse=0 }
+        /media.class.*Stream\/Output/ { is_stream=1 }
+        /application.name.*[Ii]mpulse/ || /node.name.*impulse/ { is_impulse=1 }
+        is_stream && is_impulse { print id; exit }
+    '
+}
+
+# Create an isolated virtual sink for recording.
+# Returns the sink node ID. The app is routed to this sink via pw-link.
+create_recording_sink() {
+    # Create a null sink dedicated to recording
+    pw-cli create-node adapter \
+        "{ factory.name=support.null-audio-sink node.name=impulse-record media.class=Audio/Sink audio.position=[FL,FR] }" \
+        2>/dev/null
+    sleep 0.5
+    # Find the new sink's node ID
     pw-cli ls Node 2>/dev/null | awk '
         /^[[:space:]]*id [0-9]+/ { id=$2; gsub(/,/,"",id) }
-        /application.name.*[Ii]mpulse/ || /node.name.*impulse/ { print id; exit }
+        /node.name.*impulse-record/ { print id; exit }
     '
+}
+
+# Route the app's output to our recording sink
+route_app_to_sink() {
+    local app_node="$1"
+    local sink_node="$2"
+    # Link app output ports to sink input ports
+    pw-link "${app_node}:output_FL" "${sink_node}:input_FL" 2>/dev/null
+    pw-link "${app_node}:output_FR" "${sink_node}:input_FR" 2>/dev/null
+}
+
+# Destroy the recording sink
+destroy_recording_sink() {
+    # Find and destroy our recording sink
+    local sink_id
+    sink_id=$(pw-cli ls Node 2>/dev/null | awk '
+        /^[[:space:]]*id [0-9]+/ { id=$2; gsub(/,/,"",id) }
+        /node.name.*impulse-record/ { print id; exit }
+    ')
+    [ -n "$sink_id" ] && pw-cli destroy "$sink_id" 2>/dev/null
 }
 
 start_pw_capture() {
