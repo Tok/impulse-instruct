@@ -110,7 +110,7 @@ pub fn draw_an1x(app: &mut ImpulseApp, ui: &mut Ui) {
                     .size(7.0)
                     .monospace(),
             );
-            widgets::waveform_icon(ui, wave_to_kind(osc1w), 50.0, 24.0);
+            widgets::waveform_icon(ui, wave_to_kind(osc1w), 100.0, 48.0);
         });
         ui.vertical(|ui| {
             ui.label(
@@ -119,7 +119,7 @@ pub fn draw_an1x(app: &mut ImpulseApp, ui: &mut Ui) {
                     .size(7.0)
                     .monospace(),
             );
-            widgets::waveform_icon(ui, wave_to_kind(osc2w), 50.0, 24.0);
+            widgets::waveform_icon(ui, wave_to_kind(osc2w), 100.0, 48.0);
         });
     });
     // ── Filter mode + ADSR vizzes (compact header row) ─────────────────────
@@ -164,7 +164,8 @@ pub fn draw_an1x(app: &mut ImpulseApp, ui: &mut Ui) {
                     .monospace()
                     .size(7.0),
             );
-            if widgets::adsr_display(ui, &mut a, &mut d, &mut s, &mut r, 140.0, 50.0) {
+            ui.add_space(4.0);
+            if widgets::adsr_display(ui, &mut a, &mut d, &mut s, &mut r, 280.0, 100.0) {
                 let mut st = app.state.write();
                 st.an1x.filter_attack = a;
                 st.an1x.filter_decay = d;
@@ -191,7 +192,8 @@ pub fn draw_an1x(app: &mut ImpulseApp, ui: &mut Ui) {
                     .monospace()
                     .size(7.0),
             );
-            if widgets::adsr_display(ui, &mut a, &mut d, &mut s, &mut r, 140.0, 50.0) {
+            ui.add_space(4.0);
+            if widgets::adsr_display(ui, &mut a, &mut d, &mut s, &mut r, 280.0, 100.0) {
                 let mut st = app.state.write();
                 st.an1x.amp_attack = a;
                 st.an1x.amp_decay = d;
@@ -214,11 +216,16 @@ pub fn draw_an1x(app: &mut ImpulseApp, ui: &mut Ui) {
         }};
     }
 
+    // Consistent glass group height across both rows
+    let group_h = ctrl.knob_size * 2.0 + 50.0;
+
     // ── Row 1 (3 cols): LEVELS | FILTER | F.ADSR ────────────────────────
     {
         let gw = widgets::even_group_width(ui, 3);
         ui.horizontal(|ui| {
             widgets::glass_group_fill(ui, gw, gw, |ui| {
+                ui.set_min_height(group_h);
+                ui.spacing_mut().item_spacing.x = 8.0;
                 ui.label(
                     egui::RichText::new("LEVELS")
                         .color(theme::FOG)
@@ -232,6 +239,8 @@ pub fn draw_an1x(app: &mut ImpulseApp, ui: &mut Ui) {
                 });
             });
             widgets::glass_group_fill(ui, gw, gw, |ui| {
+                ui.set_min_height(group_h);
+                ui.spacing_mut().item_spacing.x = 8.0;
                 ui.label(
                     egui::RichText::new("FILTER")
                         .color(theme::FOG)
@@ -248,6 +257,8 @@ pub fn draw_an1x(app: &mut ImpulseApp, ui: &mut Ui) {
                 });
             });
             widgets::glass_group_fill(ui, gw, gw, |ui| {
+                ui.set_min_height(group_h);
+                ui.spacing_mut().item_spacing.x = 8.0;
                 ui.label(
                     egui::RichText::new("F.ADSR")
                         .color(theme::FOG)
@@ -271,6 +282,8 @@ pub fn draw_an1x(app: &mut ImpulseApp, ui: &mut Ui) {
         let gw = widgets::even_group_width(ui, 3);
         ui.horizontal(|ui| {
             widgets::glass_group_fill(ui, gw, gw, |ui| {
+                ui.set_min_height(group_h);
+                ui.spacing_mut().item_spacing.x = 8.0;
                 ui.label(
                     egui::RichText::new("TUNE")
                         .color(theme::FOG)
@@ -338,6 +351,8 @@ pub fn draw_an1x(app: &mut ImpulseApp, ui: &mut Ui) {
                 });
             });
             widgets::glass_group_fill(ui, gw, gw, |ui| {
+                ui.set_min_height(group_h);
+                ui.spacing_mut().item_spacing.x = 8.0;
                 ui.label(
                     egui::RichText::new("A.ADSR")
                         .color(theme::FOG)
@@ -361,13 +376,15 @@ pub fn draw_an1x(app: &mut ImpulseApp, ui: &mut Ui) {
                             .size(7.5),
                     );
                     let mut pan = app.state.read().an1x.pan;
-                    if widgets::pan_slider(ui, &mut pan, 60.0) {
+                    if widgets::pan_slider(ui, &mut pan, super::PAN_SLIDER_W) {
                         app.state.write().an1x.pan = pan;
                         app.push_audio_params();
                     }
                 });
             });
             widgets::glass_group_fill(ui, gw, gw, |ui| {
+                ui.set_min_height(group_h);
+                ui.spacing_mut().item_spacing.x = 8.0;
                 ui.label(
                     egui::RichText::new("PITCH ENV")
                         .color(theme::FOG)
@@ -385,110 +402,121 @@ pub fn draw_an1x(app: &mut ImpulseApp, ui: &mut Ui) {
     ui.add_space(4.0);
 
     // ── LFO + TEXTURE ────────────────────────────────────────────────────────
-    widgets::section_header(ui, "LFO  /  TEXTURE");
-    ui.horizontal_wrapped(|ui| {
-        let target = app.state.read().an1x.lfo_target;
-        if ui
-            .add(
-                egui::Button::new(
-                    egui::RichText::new(format!("-> {}", target.label())).color(theme::CHALK),
-                )
-                .fill(theme::SLATE),
-            )
-            .clicked()
-        {
-            app.state.write().an1x.lfo_target = target.next();
-            app.push_audio_params();
-        }
-        macro_rules! k {
-            ($lbl:expr, $fld:ident) => {{
-                let mut v = app.state.read().an1x.$fld;
-                let (ch, _) = widgets::param_control(ui, $lbl, &mut v, ParamMode::Free, ctrl);
-                if ch {
-                    app.state.write().an1x.$fld = v;
-                    app.push_audio_params();
-                }
-            }};
-        }
-        // BPM sync toggle
-        {
-            let synced = app.state.read().an1x.lfo_bpm_sync;
-            if ui
-                .add(
-                    egui::Button::new(egui::RichText::new("BPM").color(if synced {
-                        theme::CHALK
-                    } else {
-                        theme::IRON
-                    }))
-                    .fill(if synced { theme::SLATE } else { theme::PIT }),
-                )
-                .on_hover_text("Snap LFO rate to a musical division of the current BPM")
-                .clicked()
-            {
-                app.state.write().an1x.lfo_bpm_sync = !synced;
-                app.push_audio_params();
-            }
-        }
-        if app.state.read().an1x.lfo_bpm_sync {
-            // Division selector: 4, 2, 1, 0.5, 0.25 beats
-            let cur_beats = app.state.read().an1x.lfo_sync_beats;
-            for (label, beats) in &[
-                ("1/1", 4.0_f32),
-                ("1/2", 2.0),
-                ("1/4", 1.0),
-                ("1/8", 0.5),
-                ("1/16", 0.25),
-            ] {
-                let active = (cur_beats - beats).abs() < 0.01;
-                if ui
-                    .add(
-                        egui::Button::new(
-                            egui::RichText::new(*label)
-                                .monospace()
-                                .size(8.5)
-                                .color(if active { theme::CHALK } else { theme::IRON }),
-                        )
-                        .fill(if active { theme::SLATE } else { theme::PIT })
-                        .min_size(egui::vec2(28.0, 16.0)),
-                    )
-                    .clicked()
-                {
-                    app.state.write().an1x.lfo_sync_beats = *beats;
-                    app.push_audio_params();
-                }
-            }
-        } else {
-            k!("RATE", lfo_rate);
-        }
-        k!("DEPTH", lfo_depth);
-        k!("DELAY", lfo_delay);
-        k!("DRIFT", drift);
-        // Glide controls
-        k!("GLIDE", glide_time);
-        {
-            let legato = app.state.read().an1x.glide_legato;
+    ui.scope(|ui| {
+        ui.with_layout(egui::Layout::top_down(egui::Align::LEFT), |ui| {
+            widgets::section_header(ui, "LFO  /  TEXTURE");
+        });
+    });
+    ui.with_layout(
+        egui::Layout::left_to_right(egui::Align::TOP).with_main_wrap(true),
+        |ui| {
+            let target = app.state.read().an1x.lfo_target;
             if ui
                 .add(
                     egui::Button::new(
-                        egui::RichText::new(if legato { "LEG" } else { "ALWYS" })
-                            .monospace()
-                            .size(8.5)
-                            .color(theme::CHALK),
+                        egui::RichText::new(format!("-> {}", target.label())).color(theme::CHALK),
                     )
                     .fill(theme::SLATE),
                 )
-                .on_hover_text(if legato {
-                    "Legato glide: only when notes overlap"
-                } else {
-                    "Always glide: even from silence"
-                })
                 .clicked()
             {
-                app.state.write().an1x.glide_legato = !legato;
+                app.state.write().an1x.lfo_target = target.next();
                 app.push_audio_params();
             }
-        }
-    });
+            macro_rules! k {
+                ($lbl:expr, $fld:ident) => {{
+                    let mut v = app.state.read().an1x.$fld;
+                    let (ch, _) = widgets::param_control(ui, $lbl, &mut v, ParamMode::Free, ctrl);
+                    if ch {
+                        app.state.write().an1x.$fld = v;
+                        app.push_audio_params();
+                    }
+                }};
+            }
+            // BPM sync toggle
+            {
+                let synced = app.state.read().an1x.lfo_bpm_sync;
+                if ui
+                    .add(
+                        egui::Button::new(egui::RichText::new("BPM").color(if synced {
+                            theme::CHALK
+                        } else {
+                            theme::IRON
+                        }))
+                        .fill(if synced {
+                            theme::SLATE
+                        } else {
+                            theme::PIT
+                        }),
+                    )
+                    .on_hover_text("Snap LFO rate to a musical division of the current BPM")
+                    .clicked()
+                {
+                    app.state.write().an1x.lfo_bpm_sync = !synced;
+                    app.push_audio_params();
+                }
+            }
+            if app.state.read().an1x.lfo_bpm_sync {
+                // Division selector: 4, 2, 1, 0.5, 0.25 beats
+                let cur_beats = app.state.read().an1x.lfo_sync_beats;
+                for (label, beats) in &[
+                    ("1/1", 4.0_f32),
+                    ("1/2", 2.0),
+                    ("1/4", 1.0),
+                    ("1/8", 0.5),
+                    ("1/16", 0.25),
+                ] {
+                    let active = (cur_beats - beats).abs() < 0.01;
+                    if ui
+                        .add(
+                            egui::Button::new(
+                                egui::RichText::new(*label)
+                                    .monospace()
+                                    .size(8.5)
+                                    .color(if active { theme::CHALK } else { theme::IRON }),
+                            )
+                            .fill(if active { theme::SLATE } else { theme::PIT })
+                            .min_size(egui::vec2(28.0, 16.0)),
+                        )
+                        .clicked()
+                    {
+                        app.state.write().an1x.lfo_sync_beats = *beats;
+                        app.push_audio_params();
+                    }
+                }
+            } else {
+                k!("RATE", lfo_rate);
+            }
+            k!("DEPTH", lfo_depth);
+            k!("DELAY", lfo_delay);
+            k!("DRIFT", drift);
+            // Glide controls
+            k!("GLIDE", glide_time);
+            {
+                let legato = app.state.read().an1x.glide_legato;
+                if ui
+                    .add(
+                        egui::Button::new(
+                            egui::RichText::new(if legato { "LEG" } else { "ALWYS" })
+                                .monospace()
+                                .size(8.5)
+                                .color(theme::CHALK),
+                        )
+                        .fill(theme::SLATE),
+                    )
+                    .on_hover_text(if legato {
+                        "Legato glide: only when notes overlap"
+                    } else {
+                        "Always glide: even from silence"
+                    })
+                    .clicked()
+                {
+                    app.state.write().an1x.glide_legato = !legato;
+                    app.push_audio_params();
+                }
+            }
+        },
+    );
     ui.add_space(4.0);
 
     // ── WARM PRESET ──────────────────────────────────────────────────────────
