@@ -40,19 +40,6 @@ impl ImpulseApp {
             dirty = true;
         }
 
-        if !prefs.use_sliders {
-            use crate::state::KnobStyle;
-            let mut chrome = prefs.knob_style == KnobStyle::Chrome;
-            if toggle_row(ui, "Knob style", "CHROME", "FLAT", &mut chrome) {
-                prefs.knob_style = if chrome {
-                    KnobStyle::Chrome
-                } else {
-                    KnobStyle::Flat
-                };
-                dirty = true;
-            }
-        }
-
         // Knob size — fibonacci steps + optional custom px
         ui.add_space(4.0);
         widgets::section_header(ui, "KNOB SIZE");

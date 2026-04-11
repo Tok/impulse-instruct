@@ -15,7 +15,15 @@ use egui::{Color32, Painter, Pos2, Rect, Sense, Stroke, Ui, Vec2};
 use std::f32::consts::TAU;
 
 use super::theme;
-use crate::state::{KnobStyle, ParamMode, UiPrefs};
+use crate::state::{ParamMode, UiPrefs};
+
+// ─── Knob geometry constants ────────────────────────────────────────────────
+/// Body radius as fraction of widget half-width (same for flat and chrome).
+const KNOB_BODY_R: f32 = 0.38;
+/// Value arc radius as fraction of body radius (outside the body circle).
+const KNOB_ARC_R: f32 = 1.055;
+/// φ — golden ratio for proportional knob sizing.
+const PHI: f32 = 1.618;
 
 /// Read the active touch-paint mode from the shared egui context data.
 /// Returns `None` when the user is in normal (drag) mode.
@@ -67,10 +75,8 @@ impl ControlPrefs {
     pub fn from_prefs(prefs: &UiPrefs) -> Self {
         let style = if prefs.use_sliders {
             ControlStyle::Sliders
-        } else if prefs.knob_style == KnobStyle::Chrome {
-            ControlStyle::KnobChrome
         } else {
-            ControlStyle::KnobFlat
+            ControlStyle::KnobChrome
         };
         Self {
             style,
@@ -86,9 +92,20 @@ impl ControlPrefs {
     }
 
     /// Return a copy with knob radius scaled by φ — for primary params (cutoff, resonance).
+    /// Return a copy with knob radius scaled by φ and flat style — for primary
+    /// params (cutoff, resonance) that should visually stand out.
     pub fn phi_bigger(self) -> Self {
         Self {
-            knob_size: (self.knob_size * 1.618).max(20.0),
+            style: ControlStyle::KnobFlat,
+            knob_size: (self.knob_size * PHI).max(20.0),
+        }
+    }
+
+    /// Return a copy using the flat knob style — for accent/highlight knobs
+    /// that should visually stand out from the default chrome knobs.
+    pub fn flat(self) -> Self {
+        Self {
+            style: ControlStyle::KnobFlat,
             ..self
         }
     }
@@ -96,7 +113,7 @@ impl ControlPrefs {
     /// Return a copy with knob radius scaled by 1/φ — for secondary params (glide, FM).
     pub fn phi_smaller(self) -> Self {
         Self {
-            knob_size: (self.knob_size * 0.618).max(16.0),
+            knob_size: (self.knob_size / PHI).max(16.0),
             ..self
         }
     }
@@ -236,7 +253,7 @@ pub fn knob(ui: &mut Ui, label: &str, value: &mut f32, mode: ParamMode, size: f3
 
 fn draw_knob(painter: &Painter, rect: Rect, value: f32, mode: ParamMode, hovered: bool, time: f32) {
     let center = rect.center();
-    let radius = rect.width() * 0.40;
+    let radius = rect.width() * KNOB_BODY_R;
 
     // Well shadow — dark drop shadow offset slightly down-right
     painter.circle_filled(
@@ -289,7 +306,7 @@ fn draw_knob(painter: &Painter, rect: Rect, value: f32, mode: ParamMode, hovered
     // Range ring (270° sweep) — outer arc showing full knob range
     let start_angle: f32 = std::f32::consts::FRAC_PI_2 + std::f32::consts::FRAC_PI_4 * 3.0;
     let sweep = TAU * 0.75;
-    let ring_r = rect.width() * 0.47; // fits inside allocated rect
+    let ring_r = radius * KNOB_ARC_R;
     let filled_sweep = sweep * value;
 
     // Full range track — dim white ring
@@ -817,7 +834,7 @@ fn draw_knob_chrome(
 ) {
     let center = rect.center();
     // Smaller body leaves room for value arc + scale marks outside
-    let radius = rect.width() * 0.38;
+    let radius = rect.width() * KNOB_BODY_R;
 
     let start_angle: f32 = std::f32::consts::FRAC_PI_2 + std::f32::consts::FRAC_PI_4 * 3.0;
     let sweep = TAU * 0.75;
@@ -915,7 +932,7 @@ fn draw_knob_chrome(
     }
 
     // ── Value arc ring (outside body, inside scale marks) ─────────────────────
-    let arc_r = radius * 1.055;
+    let arc_r = radius * KNOB_ARC_R;
     draw_arc(
         painter,
         center,
