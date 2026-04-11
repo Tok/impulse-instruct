@@ -222,55 +222,24 @@ pub fn draw_lfo_slot(app: &mut ImpulseApp, ui: &mut egui::Ui, slot_idx: usize) {
         }
     });
 
-    // Rate row
+    // Rate + Depth knobs
+    let ctrl = widgets::ControlPrefs::from_prefs(&app.state.read().ui_prefs);
     ui.horizontal(|ui| {
-        ui.label(
-            egui::RichText::new("RATE ")
-                .color(theme::SMOKE)
-                .monospace()
-                .size(9.0),
-        );
-        if ui
-            .add(
-                egui::DragValue::new(&mut rate)
-                    .range(0.0..=1.0)
-                    .speed(0.005)
-                    .fixed_decimals(2),
-            )
-            .changed()
-        {
+        if widgets::param_control(ui, "RATE", &mut rate, crate::state::ParamMode::Free, ctrl).0 {
             app.state.write().lfo[i].rate = rate;
+            app.push_audio_params();
+        }
+        if widgets::param_control(ui, "DEPTH", &mut depth, crate::state::ParamMode::Free, ctrl).0 {
+            app.state.write().lfo[i].depth = depth;
             app.push_audio_params();
         }
         let hz = 0.01 + rate * 19.99;
         ui.label(
-            egui::RichText::new(format!("{:.2}Hz", hz))
+            egui::RichText::new(format!("{:.1}Hz", hz))
                 .color(theme::IRON)
                 .monospace()
-                .size(9.0),
+                .size(8.0),
         );
-    });
-
-    // Depth row
-    ui.horizontal(|ui| {
-        ui.label(
-            egui::RichText::new("DEPTH")
-                .color(theme::SMOKE)
-                .monospace()
-                .size(9.0),
-        );
-        if ui
-            .add(
-                egui::DragValue::new(&mut depth)
-                    .range(0.0..=1.0)
-                    .speed(0.005)
-                    .fixed_decimals(2),
-            )
-            .changed()
-        {
-            app.state.write().lfo[i].depth = depth;
-            app.push_audio_params();
-        }
     });
 
     // Target row
