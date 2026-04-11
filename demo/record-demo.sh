@@ -226,6 +226,8 @@ if [ "$APP_RUNNING" -eq 0 ]; then
     echo ""
     echo "[3/6] Launching app with --skip-wizard..."
     cd "$PROJECT_DIR"
+    # Remove stale session so the app starts with a clean rack
+    rm -f session.json
     # Real LLM mode — llama-server starts automatically for the configured model.
     # Pass --model explicitly to ensure Gemma 4 is loaded (session.json may be stale).
     # The API is on by default (port 8765).

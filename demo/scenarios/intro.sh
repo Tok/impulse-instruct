@@ -16,10 +16,16 @@ reset_rack
 say "Impulse Instruct. AI-controlled synthesizers. Let's build a rack."
 
 add_instrument bass
+look_at bass
+wait_seconds 0.5
 add_instrument 808
 add_instrument 909
+look_at 808
+wait_seconds 0.5
 add_effect reverb
 add_effect delay
+look_at reverb
+wait_seconds 0.5
 
 say "Bass, drums, reverb, delay. Adding an AI agent."
 
