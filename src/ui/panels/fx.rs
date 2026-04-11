@@ -256,7 +256,6 @@ pub fn draw_fx(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         // Use at most 4 columns so groups don't grow excessively wide on large screens.
         let n_cols = ((ui.available_width() / ctrl.group_max_width()) as usize).clamp(1, 4);
         let gw = widgets::even_group_width(ui, n_cols);
-        ui.vertical_centered(|ui| {
         ui.horizontal_wrapped(|ui| {
             // Macro: horizontal row of knobs inside a group
             macro_rules! hknobs {
@@ -359,7 +358,6 @@ pub fn draw_fx(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                     });
             });
         });
-        }); // vertical_centered
     });
 
     if changed {

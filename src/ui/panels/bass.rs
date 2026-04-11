@@ -574,6 +574,10 @@ pub fn draw_bass(app: &mut ImpulseApp, ui: &mut egui::Ui) {
 
     ui.vertical_centered(|ui| {
         ui.horizontal(|ui| {
+            // Center the two pads
+            let pads_w = xy_size * 2.0 + 24.0; // two pads + spacing
+            let pad_spacer = ((ui.available_width() - pads_w) / 2.0).max(0.0);
+            ui.add_space(pad_spacer);
             // Pad 1 — cycles: CUT×RES | ACCENT×VOL | DIST×SUB
             let p1 = widgets::xy_pad_pair(ui.ctx(), "bass_xy1");
             let (lx1, ly1, mut vx1, mut vy1) = match p1 {
@@ -683,6 +687,10 @@ pub fn draw_bass(app: &mut ImpulseApp, ui: &mut egui::Ui) {
     let env_h = app.state.read().ui_prefs.effective_env_h();
     ui.vertical_centered(|ui| {
         ui.horizontal(|ui| {
+            // Center the env/filter displays
+            let disp_w = env_w + 60.0; // display + label
+            let disp_spacer = ((ui.available_width() - disp_w) / 2.0).max(0.0);
+            ui.add_space(disp_spacer);
             ui.label(
                 egui::RichText::new("ENV")
                     .color(theme::SMOKE)
@@ -702,6 +710,8 @@ pub fn draw_bass(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         ui.add_space(4.0);
         // Filter response curve
         ui.horizontal(|ui| {
+            let disp_spacer2 = ((ui.available_width() - env_w - 60.0) / 2.0).max(0.0);
+            ui.add_space(disp_spacer2);
             ui.label(
                 egui::RichText::new("FLT")
                     .color(theme::SMOKE)
