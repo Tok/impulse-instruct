@@ -308,6 +308,7 @@ fn run() -> anyhow::Result<()> {
 
     // ── API log channel (lock-free, API→UI) ────────────────────────────────
     let (api_log_tx, api_log_rx) = crossbeam_channel::bounded::<String>(128);
+    let api_params_dirty = Arc::new(std::sync::atomic::AtomicBool::new(false));
 
     // ── HTTP API thread (on by default; disabled by --no-api) ────────────────
     let api_port = if !args.no_api { Some(args.port) } else { None };
@@ -315,6 +316,7 @@ fn run() -> anyhow::Result<()> {
         let state = Arc::clone(&app_state);
         let llm_tx_http = llm_tx.clone();
         let log_tx = api_log_tx.clone();
+        let dirty = Arc::clone(&api_params_dirty);
         std::thread::Builder::new()
             .name("http".into())
             .spawn(move || {
@@ -328,6 +330,7 @@ fn run() -> anyhow::Result<()> {
                         app_state: state,
                         llm_tx: llm_tx_http,
                         api_log_tx: log_tx,
+                        params_dirty: dirty,
                     };
                     if let Err(e) = api::run_server(api_state, port).await {
                         log::error!("HTTP server error: {}", e);
@@ -407,6 +410,7 @@ fn run() -> anyhow::Result<()> {
                 api_log_rx,
                 api_port,
                 args.skip_wizard,
+                api_params_dirty,
             )))
         }),
     )

@@ -207,6 +207,8 @@ pub struct ImpulseApp {
     // When true the LLM strip collapses to show only the prompt row.
     // Native pixels_per_point at startup — used as base for ui_scale.
     native_ppp: f32,
+    /// Set by API when params change — UI polls this and pushes to audio thread.
+    api_params_dirty: Arc<std::sync::atomic::AtomicBool>,
     /// Central lock-paint mode: None = normal drag, Some(mode) = click paints that mode.
     pub(crate) touch_mode: Option<crate::state::ParamMode>,
     // Per-zone collapse state.
@@ -225,6 +227,7 @@ pub struct AudioChannels {
 }
 
 impl ImpulseApp {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         cc: &eframe::CreationContext<'_>,
         state: Arc<RwLock<AppState>>,
@@ -236,6 +239,7 @@ impl ImpulseApp {
         api_log_rx: crossbeam_channel::Receiver<String>,
         api_port: Option<u16>,
         skip_wizard: bool,
+        api_params_dirty: Arc<std::sync::atomic::AtomicBool>,
     ) -> Self {
         theme::apply(&cc.egui_ctx);
         log::info!("ImpulseApp::new — creating UI…");
@@ -385,6 +389,7 @@ impl ImpulseApp {
             jam_next_fire: None,
             jam_next_agent: 0,
             native_ppp: 0.0, // captured on first frame after DPI is established
+            api_params_dirty,
             touch_mode: None,
             zone_global_collapsed: false,
             zone_voice_collapsed: false,
@@ -755,6 +760,14 @@ impl eframe::App for ImpulseApp {
         self.drain_llm_outputs();
         self.drain_api_log();
         self.drain_midi_events();
+
+        // Poll API params_dirty flag — push audio params when API changed state
+        if self
+            .api_params_dirty
+            .swap(false, std::sync::atomic::Ordering::Relaxed)
+        {
+            self.push_audio_params();
+        }
 
         // ── Auto-save: write session.json if the state changed ──────────────
         // (moved here to diagnose hang — see if save blocks)

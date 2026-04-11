@@ -488,6 +488,11 @@ capture_screenshot() {
     fi
 
     echo "  Screenshot: $outfile"
+
+    # Also copy to the batch output dir if recording
+    if [ -n "${BATCH_DIR:-}" ] && [ -d "${BATCH_DIR:-}" ] && [ -f "$outfile" ]; then
+        cp "$outfile" "$BATCH_DIR/${name}.png"
+    fi
 }
 
 # ═══════════════════════════════════════════════════════════════════════════════

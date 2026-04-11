@@ -27,6 +27,8 @@ pub struct ApiState {
     /// Lock-free channel for API→UI log messages.
     /// Avoids taking a write lock on AppState just to push log strings.
     pub api_log_tx: Sender<String>,
+    /// Set by API when params change — UI polls this and pushes to audio thread.
+    pub params_dirty: Arc<std::sync::atomic::AtomicBool>,
 }
 
 // ─── Request / response types ─────────────────────────────────────────────────
@@ -206,6 +208,8 @@ async fn post_params(
         .unwrap_or_default();
     api_log(&api, format!("[API] params: {}", keys.join(", ")));
     *api.app_state.write() = next;
+    api.params_dirty
+        .store(true, std::sync::atomic::Ordering::Relaxed);
     Json(OkResponse {
         ok: true,
         message: Some("params updated".into()),

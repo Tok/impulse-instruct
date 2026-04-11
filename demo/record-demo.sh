@@ -29,7 +29,7 @@ APP_RUNNING=0
 DRY_RUN=0
 SKIP_VIDEO=0
 SCENARIO="intro"
-TRIM_START=3        # seconds to cut from the beginning of the final video
+TRIM_START=0        # seconds to cut from the beginning (0 = no trim)
 
 for arg in "$@"; do
     case "$arg" in
