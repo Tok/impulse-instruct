@@ -356,6 +356,41 @@ fn arrange_grid_modules_within_bounds() {
     }
 }
 
+#[test]
+fn arrange_grid_full_preset_no_overlap() {
+    use crate::state::RACK_PRESETS;
+    // Test the "Full" preset specifically (index 3)
+    let rack = RackState::from_preset(&RACK_PRESETS[3]);
+    for zone in [Zone::Global, Zone::Voice, Zone::FxMod] {
+        let mods: Vec<_> = rack.modules.iter().filter(|m| m.zone == zone).collect();
+        for (i, a) in mods.iter().enumerate() {
+            let (aw, ah) = a.kind.grid_size(GRID_COLS);
+            for b in &mods[i + 1..] {
+                let (bw, bh) = b.kind.grid_size(GRID_COLS);
+                let overlaps = a.grid_col < b.grid_col + bw
+                    && b.grid_col < a.grid_col + aw
+                    && a.grid_row < b.grid_row + bh
+                    && b.grid_row < a.grid_row + ah;
+                assert!(
+                    !overlaps,
+                    "Full preset: {:?}@({},{}) {}x{} overlaps {:?}@({},{}) {}x{} in {:?}",
+                    a.kind,
+                    a.grid_col,
+                    a.grid_row,
+                    aw,
+                    ah,
+                    b.kind,
+                    b.grid_col,
+                    b.grid_row,
+                    bw,
+                    bh,
+                    zone,
+                );
+            }
+        }
+    }
+}
+
 // ── Module zone placement ──────────────────────────────────────────────────
 
 #[test]

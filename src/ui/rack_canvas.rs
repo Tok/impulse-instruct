@@ -275,6 +275,8 @@ fn draw_add_menu(app: &mut ImpulseApp, ctx: &egui::Context) {
                     .clicked()
                 {
                     let id = app.state.write().rack.add_module(*kind);
+                    // Place the new module on the grid
+                    app.state.write().rack.arrange_grid();
                     if *kind == ModuleKind::LlmAgent {
                         let agent =
                             crate::state::LlmAgentState::from_singleton(id, &app.state.read().llm);

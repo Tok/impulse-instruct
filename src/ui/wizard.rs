@@ -441,6 +441,9 @@ impl ImpulseApp {
             *self.state.write() = new_state;
         }
 
+        // Re-run grid placement so newly spawned agents get valid positions
+        self.state.write().rack.arrange_grid();
+
         self.mark_wizard_done();
         self.push_fx_plan();
         self.session_dirty = true;
