@@ -174,25 +174,28 @@ pub struct CardResponse {
 /// `scale`     — per-module UI scale factor (1.0 = default).
 pub fn module_card<R>(
     ui: &mut egui::Ui,
-    _module_id: u32,
+    module_id: u32,
     kind: ModuleKind,
     enabled: bool,
     min_width: Option<f32>,
     scale: f32,
-    _ports: &mut Vec<PortPos>,
+    ports: &mut Vec<PortPos>,
     content: impl FnOnce(&mut egui::Ui) -> R,
 ) -> (CardResponse, Option<R>) {
-    module_card_inner(
-        ui, _module_id, kind, enabled, min_width, scale, _ports, content,
+    module_card_sized(
+        ui, module_id, kind, enabled, min_width, None, scale, ports, content,
     )
 }
 
-fn module_card_inner<R>(
+/// Module card with explicit min_height for grid conformance.
+/// Only sets `set_min_height` — content taller than this just grows naturally.
+pub fn module_card_sized<R>(
     ui: &mut egui::Ui,
     _module_id: u32,
     kind: ModuleKind,
     enabled: bool,
     min_width: Option<f32>,
+    min_height: Option<f32>,
     scale: f32,
     _ports: &mut Vec<PortPos>,
     content: impl FnOnce(&mut egui::Ui) -> R,
@@ -382,6 +385,12 @@ fn module_card_inner<R>(
                 let inner_resp = content_frame.show(ui, |ui| {
                     ui.spacing_mut().item_spacing = Vec2::new(2.0 * scale, 2.0 * scale);
                     ui.set_max_width(card_w - 12.0);
+                    // Grid height: ensure card fills its grid row(s)
+                    if let Some(mh) = min_height {
+                        let title_h = 22.0;
+                        let margin_y = 8.0 * scale * 2.0;
+                        ui.set_min_height((mh - title_h - margin_y).max(0.0));
+                    }
                     ui.with_layout(egui::Layout::top_down(egui::Align::Center), |ui| {
                         if enabled {
                             content(ui)

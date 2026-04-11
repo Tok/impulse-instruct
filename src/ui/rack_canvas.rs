@@ -315,6 +315,29 @@ pub(super) fn module_grid_w(kind: ModuleKind, col_w: f32) -> f32 {
     c as f32 * col_w + (c as f32 - 1.0).max(0.0) * RACK_GAP
 }
 
+/// Grid height in cells for each module kind.
+/// Content that exceeds this just grows — this is a minimum, not a cap.
+fn grid_row_count(kind: ModuleKind) -> f32 {
+    match kind {
+        ModuleKind::AcidBass => 6.0,
+        ModuleKind::An1xVoice => 5.0,
+        ModuleKind::DrumKit808 | ModuleKind::DrumKit909 => 3.0,
+        ModuleKind::HooverLead | ModuleKind::AmenSampler => 2.5,
+        ModuleKind::LlmAgent => 2.5,
+        ModuleKind::NoiseVoice | ModuleKind::GranularTexture => 1.0,
+        ModuleKind::EspeakNgTts | ModuleKind::CoquiTts => 1.5,
+        ModuleKind::SpectrumAnalyzer | ModuleKind::ActivityTimeline => 1.5,
+        // FX, LFO, stereo meter — 1 cell
+        _ => 1.0,
+    }
+}
+
+/// Pixel height for a module's grid row span.
+pub(super) fn module_grid_h(kind: ModuleKind, col_w: f32) -> f32 {
+    let rows = grid_row_count(kind);
+    rows * col_w + (rows.ceil() - 1.0).max(0.0) * RACK_GAP
+}
+
 /// Width spanning `n` grid columns (including internal gaps).
 #[allow(dead_code)]
 pub(crate) fn span_w(n: u8, col_w: f32) -> f32 {
@@ -524,12 +547,14 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
                                 ports,
                             )
                         } else {
-                            module_card::module_card(
+                            let agent_h = module_grid_h(ModuleKind::LlmAgent, col_w);
+                            module_card::module_card_sized(
                                 ui,
                                 *id,
                                 ModuleKind::LlmAgent,
                                 *enabled,
                                 Some(slot_w),
+                                Some(agent_h),
                                 app.kind_scale(ModuleKind::LlmAgent),
                                 ports,
                                 |ui| {
@@ -711,6 +736,7 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
                 }
                 for (id, kind, enabled) in &row {
                     let slot_w = module_grid_w(*kind, col_w) * expand;
+                    let slot_h = module_grid_h(*kind, col_w);
                     let is_dragging = app.module_drag.as_ref().map(|d| d.module_id) == Some(*id);
                     let eff_enabled = if is_dragging { false } else { *enabled };
                     let resp = if app.rack_flipped {
@@ -724,12 +750,13 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
                             ports,
                         )
                     } else {
-                        module_card::module_card(
+                        module_card::module_card_sized(
                             ui,
                             *id,
                             *kind,
                             eff_enabled,
                             Some(slot_w),
+                            Some(slot_h),
                             app.kind_scale(*kind),
                             ports,
                             |ui| {
@@ -815,6 +842,7 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
                 }
                 for (id, kind, enabled) in &row {
                     let slot_w = module_grid_w(*kind, col_w) * expand;
+                    let slot_h = module_grid_h(*kind, col_w);
                     let is_dragging = app.module_drag.as_ref().map(|d| d.module_id) == Some(*id);
                     let eff_enabled = if is_dragging { false } else { *enabled };
                     let resp = if app.rack_flipped {
@@ -828,12 +856,13 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
                             ports,
                         )
                     } else {
-                        module_card::module_card(
+                        module_card::module_card_sized(
                             ui,
                             *id,
                             *kind,
                             eff_enabled,
                             Some(slot_w),
+                            Some(slot_h),
                             app.kind_scale(*kind),
                             ports,
                             |ui| {
