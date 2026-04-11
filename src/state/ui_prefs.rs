@@ -219,35 +219,31 @@ fn default_phosphor_intensity() -> f32 {
     0.6
 }
 
+/// Fixed knob body size (M = 55px).
+pub const KNOB_PX: f32 = 55.0;
+/// Fixed sequencer step button size (M = 34px).
+pub const PAD_PX: f32 = 34.0;
+/// Fixed XY control pad size (derived from PAD_PX).
+pub const XY_PX: f32 = PAD_PX * (132.0 / 26.0);
+/// Fixed envelope/ADSR display height (derived from XY_PX).
+pub const ENV_H: f32 = XY_PX * 0.45;
+
 impl UiPrefs {
-    /// Effective knob body size in pixels — custom override when set, else enum step.
+    /// Knob body size in pixels (fixed at M = 55px).
     pub fn effective_knob_px(&self) -> f32 {
-        self.custom_knob_px
-            .unwrap_or_else(|| self.knob_size.body_px())
-            .clamp(12.0, 200.0)
+        KNOB_PX
     }
-
-    /// Effective sequencer step button size in pixels.
+    /// Sequencer step button size in pixels (fixed at M = 34px).
     pub fn effective_pad_px(&self) -> f32 {
-        self.custom_pad_px
-            .unwrap_or_else(|| self.pad_size.px())
-            .clamp(10.0, 150.0)
+        PAD_PX
     }
-
-    /// Effective XY control pad size in pixels.
-    /// Defaults to `pad_size.px() × 3.38` (legacy formula) when not overridden.
+    /// XY control pad size in pixels.
     pub fn effective_xy_px(&self) -> f32 {
-        self.custom_xy_px
-            .unwrap_or_else(|| self.pad_size.px() * (132.0 / 26.0))
-            .clamp(40.0, 400.0)
+        XY_PX
     }
-
-    /// Effective envelope/ADSR display height in pixels.
-    /// Defaults to 30% of the XY pad size, minimum 28 px.
+    /// Envelope/ADSR display height in pixels.
     pub fn effective_env_h(&self) -> f32 {
-        self.custom_env_h
-            .unwrap_or_else(|| (self.effective_xy_px() * 0.45).max(60.0))
-            .clamp(16.0, 200.0)
+        ENV_H
     }
 }
 

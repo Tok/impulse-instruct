@@ -529,31 +529,9 @@ impl ImpulseApp {
                     }
 
                     // ── Push remaining controls to the right edge ──
-                    let right_w = 300.0; // approximate width needed for KNOB+MON+VRAM
+                    let right_w = 260.0; // approximate width needed for MON+VRAM+status
                     let spacer = (ui.available_width() - right_w).max(0.0);
                     ui.add_space(spacer);
-
-                    // ── KNOBS ──
-                    ui.separator();
-                    let use_sliders = self.state.read().ui_prefs.use_sliders;
-                    if ui
-                        .add(
-                            egui::Button::new(
-                                egui::RichText::new(if use_sliders { "SLDR" } else { "KNOB" })
-                                    .color(if use_sliders {
-                                        theme::SMOKE
-                                    } else {
-                                        theme::ASH
-                                    })
-                                    .monospace()
-                                    .size(8.0),
-                            )
-                            .fill(egui::Color32::TRANSPARENT),
-                        )
-                        .clicked()
-                    {
-                        self.state.write().ui_prefs.use_sliders = !use_sliders;
-                    }
 
                     // ── MON ──
                     ui.separator();

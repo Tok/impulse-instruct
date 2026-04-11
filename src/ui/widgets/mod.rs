@@ -73,13 +73,8 @@ pub struct ControlPrefs {
 
 impl ControlPrefs {
     pub fn from_prefs(prefs: &UiPrefs) -> Self {
-        let style = if prefs.use_sliders {
-            ControlStyle::Sliders
-        } else {
-            ControlStyle::KnobChrome
-        };
         Self {
-            style,
+            style: ControlStyle::KnobChrome,
             knob_size: prefs.effective_knob_px(),
         }
     }
