@@ -4,10 +4,11 @@
 use crate::ui::{ImpulseApp, theme, widgets};
 
 pub fn draw_noise_section(app: &mut ImpulseApp, ui: &mut egui::Ui) {
-    ui.add_space(8.0);
+    ui.add_space(12.0);
     // Force left alignment — the card's centered layout would center the header
     ui.with_layout(egui::Layout::top_down(egui::Align::LEFT), |ui| {
         widgets::section_header(ui, "NOISE VOICE");
+        ui.add_space(4.0);
 
         let (noise_enabled, mut noise_volume, mut noise_color, mut noise_cutoff) = {
             let s = app.state.read();

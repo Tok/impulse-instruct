@@ -5,12 +5,18 @@ use crate::state::{FilterMode, ParamMode, Waveform, cycle_param_mode, param_mode
 use crate::ui::{ImpulseApp, theme, widgets};
 
 pub fn draw_bass(app: &mut ImpulseApp, ui: &mut egui::Ui) {
-    // ── Voice selector ────────────────────────────────────────────────────────
+    // ── Voice selector + Global Key + Pan — single row ─────────────────────
     {
         let (active, _, voice_enabled) = {
             let s = app.state.read();
             let enabled: Vec<bool> = s.bass_voices.iter().map(|v| v.enabled).collect();
             (s.active_voice, s.bass_voices.len(), enabled)
+        };
+        let (lock_key, voice_root_note, voice_scale) = {
+            let s = app.state.read();
+            let av = s.active_voice.min(s.bass_voices.len().saturating_sub(1));
+            let v = &s.bass_voices[av];
+            (v.lock_key, v.root_note, v.scale)
         };
         ui.horizontal(|ui| {
             ui.label(
@@ -50,7 +56,6 @@ pub fn draw_bass(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                     app.state.write().active_voice = i;
                 }
             }
-            // Enable toggle for voices 1-3 (voice 0 is always on)
             if active > 0 {
                 let enabled = voice_enabled[active];
                 let btn_text = if enabled { "ON" } else { "OFF" };
@@ -78,15 +83,8 @@ pub fn draw_bass(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                     app.state.write().bass_voices[av].enabled = !cur;
                 }
             }
-        });
-        // Per-voice key: checkbox to lock to global, and selectors when unlocked
-        let (lock_key, voice_root_note, voice_scale) = {
-            let s = app.state.read();
-            let av = s.active_voice.min(s.bass_voices.len().saturating_sub(1));
-            let v = &s.bass_voices[av];
-            (v.lock_key, v.root_note, v.scale)
-        };
-        ui.horizontal(|ui| {
+            ui.separator();
+            // GLOBAL KEY checkbox
             let mut lk = lock_key;
             if ui
                 .checkbox(
@@ -101,9 +99,27 @@ pub fn draw_bass(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                 let av = app.state.read().active_voice;
                 app.state.write().bass_voices[av].lock_key = lk;
             }
-            if !lock_key {
-                // Root note buttons (C through B)
-                ui.separator();
+            ui.separator();
+            // PAN slider
+            ui.label(
+                egui::RichText::new("PAN")
+                    .monospace()
+                    .size(8.0)
+                    .color(theme::SMOKE),
+            );
+            let mut pan = app.state.read().bass_voices
+                [active.min(app.state.read().bass_voices.len().saturating_sub(1))]
+            .synth
+            .pan;
+            if widgets::pan_slider(ui, &mut pan, 120.0) {
+                let av = active.min(app.state.read().bass_voices.len().saturating_sub(1));
+                app.state.write().bass_voices[av].synth.pan = pan;
+                app.push_audio_params();
+            }
+        });
+        // Note buttons when GLOBAL KEY is unchecked (own row)
+        if !lock_key {
+            ui.horizontal(|ui| {
                 let note_names = [
                     "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B",
                 ];
@@ -133,10 +149,9 @@ pub fn draw_bass(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                         app.state.write().bass_voices[av].root_note = n as u8;
                     }
                 }
-                let _ = voice_scale; // used for future scale selector UI
-            }
-        });
-        ui.add_space(2.0);
+                let _ = voice_scale;
+            });
+        }
     }
 
     // Snapshot everything needed for rendering — lock released before any widget call
@@ -294,6 +309,7 @@ pub fn draw_bass(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             // FILTER group: 2×2 grid (CUT/RES, ENV/DEC)
             widgets::glass_group_fill(ui, gw_main, gw_main, |ui| {
                 ui.set_min_height(group_h);
+                ui.spacing_mut().item_spacing.x = 8.0;
                 ui.label(
                     egui::RichText::new("FILTER")
                         .color(theme::FOG)
@@ -360,6 +376,7 @@ pub fn draw_bass(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             // CHARACTER group: ACC, DRV, VOL, SUB
             widgets::glass_group_fill(ui, gw_main, gw_main, |ui| {
                 ui.set_min_height(group_h);
+                ui.spacing_mut().item_spacing.x = 8.0;
                 ui.label(
                     egui::RichText::new("CHARACTER")
                         .color(theme::FOG)
@@ -426,6 +443,7 @@ pub fn draw_bass(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             // MOD group: GLD, NSE, FMD, FMR (compact)
             widgets::glass_group_fill(ui, gw_mod, gw_mod, |ui| {
                 ui.set_min_height(group_h);
+                ui.spacing_mut().item_spacing.x = 8.0;
                 ui.label(
                     egui::RichText::new("MOD")
                         .color(theme::FOG)
@@ -554,27 +572,7 @@ pub fn draw_bass(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         }
     }
 
-    // Pan slider
-    {
-        let mut pan = app.state.read().bass_voices
-            [active_voice.min(app.state.read().bass_voices.len().saturating_sub(1))]
-        .synth
-        .pan;
-        ui.horizontal(|ui| {
-            ui.label(
-                egui::RichText::new("PAN")
-                    .monospace()
-                    .size(8.0)
-                    .color(theme::SMOKE),
-            );
-            if widgets::pan_slider(ui, &mut pan, 200.0) {
-                let av = active_voice.min(app.state.read().bass_voices.len().saturating_sub(1));
-                app.state.write().bass_voices[av].synth.pan = pan;
-                app.push_audio_params();
-            }
-        });
-    }
-    ui.add_space(2.0);
+    // PAN slider is now in the voice selector row above.
 
     // XY Control Squares — two 2D pads for the core acid parameters
     let xy1_locked = param_mode("bass.cutoff", &locked, &focused) == ParamMode::UserOwned
