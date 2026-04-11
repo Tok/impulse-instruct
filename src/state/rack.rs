@@ -190,14 +190,14 @@ impl ModuleKind {
             Self::StepSequencer | Self::LlmConsole | Self::MasterOutput => (grid_cols, 1),
             // Wide voice — 6 of 12 columns (half width)
             Self::An1xVoice => (6, 1),
-            // Standard voice modules — 3 of 12 columns (quarter width)
+            // Standard voice modules — 4 of 12 columns (third width, 3 fit per row)
             Self::AcidBass
             | Self::DrumKit808
             | Self::DrumKit909
             | Self::HooverLead
-            | Self::AmenSampler
-            | Self::NoiseVoice
-            | Self::GranularTexture => (3, 1),
+            | Self::AmenSampler => (4, 1),
+            // Compact voice modules — 3 of 12
+            Self::NoiseVoice | Self::GranularTexture => (3, 1),
             // Agent — 4 of 12 (third width)
             Self::LlmAgent => (4, 1),
             // TTS voice modules — 3 of 12
