@@ -4,10 +4,28 @@
 
 use crate::ui::theme;
 
-/// Draw oscilloscope waveform with phosphor persistence (older frames fade).
-pub fn draw_scope(ui: &mut egui::Ui, buf: &[f32], history: &std::collections::VecDeque<Vec<f32>>) {
-    let (rect, _) =
-        ui.allocate_exact_size(egui::vec2(ui.available_width(), 40.0), egui::Sense::hover());
+/// Draw oscilloscope with explicit width and height (convenience wrapper).
+#[allow(dead_code)]
+pub fn draw_scope_sized(
+    ui: &mut egui::Ui,
+    buf: &[f32],
+    history: &std::collections::VecDeque<Vec<f32>>,
+    w: f32,
+    h: f32,
+) {
+    draw_scope_colored(ui, buf, history, w, h, None);
+}
+
+/// Draw oscilloscope with optional Huth color override for the waveform.
+pub fn draw_scope_colored(
+    ui: &mut egui::Ui,
+    buf: &[f32],
+    history: &std::collections::VecDeque<Vec<f32>>,
+    w: f32,
+    h: f32,
+    huth_color: Option<egui::Color32>,
+) {
+    let (rect, _) = ui.allocate_exact_size(egui::vec2(w, h), egui::Sense::hover());
     if !ui.is_rect_visible(rect) {
         return;
     }
@@ -30,14 +48,17 @@ pub fn draw_scope(ui: &mut egui::Ui, buf: &[f32], history: &std::collections::Ve
         if n < 2 {
             continue;
         }
-        // Older frames are dimmer: brightness ramps from ~20 to ~60
-        let brightness = 20 + (age as u32 * 40 / hist_len.max(1) as u32).min(60);
-        let col = egui::Color32::from_gray(brightness as u8);
+        // Older frames are dimmer: brightness ramps from ~15 to ~90
+        // More pronounced phosphor glow — recent trails are clearly visible
+        let t = age as f32 / hist_len.max(1) as f32;
+        let brightness = (15.0 + t * 75.0) as u8;
+        let thickness = 1.0 + t * 0.8; // trails get slightly thicker toward recent
+        let col = egui::Color32::from_gray(brightness);
         let mut prev = egui::Pos2::new(rect.min.x, mid - frame[0].clamp(-1.0, 1.0) * amp);
         for (i, &s) in frame.iter().enumerate().skip(1) {
             let x = rect.min.x + (i as f32 / (n - 1) as f32) * w;
             let cur = egui::Pos2::new(x, mid - s.clamp(-1.0, 1.0) * amp);
-            painter.line_segment([prev, cur], egui::Stroke::new(1.0, col));
+            painter.line_segment([prev, cur], egui::Stroke::new(thickness, col));
             prev = cur;
         }
     }
@@ -47,13 +68,43 @@ pub fn draw_scope(ui: &mut egui::Ui, buf: &[f32], history: &std::collections::Ve
     if n < 2 {
         return;
     }
+    let wave_col = huth_color.unwrap_or(theme::CHALK);
     let mut prev = egui::Pos2::new(rect.min.x, mid - buf[0].clamp(-1.0, 1.0) * amp);
     for (i, &s) in buf.iter().enumerate().skip(1) {
         let x = rect.min.x + (i as f32 / (n - 1) as f32) * w;
         let cur = egui::Pos2::new(x, mid - s.clamp(-1.0, 1.0) * amp);
-        painter.line_segment([prev, cur], egui::Stroke::new(1.0, theme::CHALK));
+        painter.line_segment([prev, cur], egui::Stroke::new(1.5, wave_col));
         prev = cur;
     }
+}
+
+/// Detect dominant frequency from a waveform buffer via zero-crossing rate.
+/// Returns the estimated MIDI note number, or None if signal is too quiet.
+pub fn detect_note(buf: &[f32], sample_rate: f32) -> Option<u8> {
+    if buf.len() < 64 {
+        return None;
+    }
+    // RMS check — skip if signal is too quiet
+    let rms = (buf.iter().map(|s| s * s).sum::<f32>() / buf.len() as f32).sqrt();
+    if rms < 0.01 {
+        return None;
+    }
+    // Zero-crossing count
+    let mut crossings = 0u32;
+    for w in buf.windows(2) {
+        if (w[0] >= 0.0) != (w[1] >= 0.0) {
+            crossings += 1;
+        }
+    }
+    // Each full cycle has 2 crossings
+    let duration_s = buf.len() as f32 / sample_rate;
+    let freq = crossings as f32 / (2.0 * duration_s);
+    if !(20.0..=8000.0).contains(&freq) {
+        return None;
+    }
+    // Frequency to MIDI note: note = 12 * log2(freq / 440) + 69
+    let midi = (12.0 * (freq / 440.0).log2() + 69.0).round() as i32;
+    Some(midi.clamp(0, 127) as u8)
 }
 
 /// Draw a right-aligned DSP load sparkline + percentage label.
@@ -61,51 +112,58 @@ pub fn draw_dsp_sparkline(ui: &mut egui::Ui, buf: &[f32]) {
     if buf.is_empty() {
         return;
     }
-    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-        let avg = buf.iter().sum::<f32>() / buf.len() as f32;
-        let peak = buf.iter().cloned().fold(0.0_f32, f32::max);
-        let col = if peak > 0.8 {
+    let avg = buf.iter().sum::<f32>() / buf.len() as f32;
+    let peak = buf.iter().cloned().fold(0.0_f32, f32::max);
+    let col = if peak > 0.8 {
+        egui::Color32::from_gray(160)
+    } else {
+        theme::ASH
+    };
+    // Sparkline: up to 64 bars × 10px high, fixed width
+    let bar_w = 1.5_f32;
+    let h = 10.0_f32;
+    let n = buf.len().min(32);
+    let total_w = n as f32 * bar_w;
+    let (rect, _) = ui.allocate_exact_size(egui::vec2(total_w, h), egui::Sense::hover());
+    let p = ui.painter();
+    let start = buf.len().saturating_sub(n);
+    for (i, &load) in buf[start..].iter().enumerate() {
+        let x = rect.min.x + i as f32 * bar_w;
+        let bar_h = (load.clamp(0.0, 1.0) * h).max(1.0);
+        let bar_col = if load > 0.8 {
             egui::Color32::from_gray(160)
+        } else if load > 0.5 {
+            theme::SMOKE
         } else {
-            theme::ASH
+            egui::Color32::from_gray(45)
         };
-        ui.label(
-            egui::RichText::new(format!("DSP {:.0}%", avg * 100.0))
-                .color(col)
-                .monospace()
-                .size(9.0),
+        p.rect_filled(
+            egui::Rect::from_min_size(
+                egui::pos2(x, rect.max.y - bar_h),
+                egui::vec2(bar_w - 0.5, bar_h),
+            ),
+            0.0,
+            bar_col,
         );
-        // Sparkline: up to 64 bars × 12px high
-        let bar_w = 1.5_f32;
-        let h = 12.0_f32;
-        let n = buf.len();
-        let total_w = n as f32 * bar_w;
-        let (rect, _) = ui.allocate_exact_size(egui::vec2(total_w, h), egui::Sense::hover());
-        let p = ui.painter();
-        for (i, &load) in buf.iter().enumerate() {
-            let x = rect.right() - (n - i) as f32 * bar_w;
-            let bar_h = (load.clamp(0.0, 1.0) * h).max(1.0);
-            let bar_col = if load > 0.8 {
-                egui::Color32::from_gray(160)
-            } else if load > 0.5 {
-                theme::SMOKE
-            } else {
-                egui::Color32::from_gray(45)
-            };
-            p.rect_filled(
-                egui::Rect::from_min_size(
-                    egui::pos2(x, rect.max.y - bar_h),
-                    egui::vec2(bar_w - 0.5, bar_h),
-                ),
-                0.0,
-                bar_col,
-            );
-        }
-    });
+    }
+    ui.label(
+        egui::RichText::new(format!("{:.0}%", avg * 100.0))
+            .color(col)
+            .monospace()
+            .size(7.5),
+    );
 }
 
 /// Draw mode indicators (Zoom/Lock/Flip) + MIDI status in the footer strip.
 /// Double-click an indicator to lock that mode on without holding the key.
+pub struct FooterStats {
+    pub n_modules: usize,
+    pub n_agents: usize,
+    pub n_cables: usize,
+    pub uptime_secs: u64,
+    pub api_port: Option<u16>,
+}
+
 pub fn draw_footer_status(
     ui: &mut egui::Ui,
     midi_port: &Option<String>,
@@ -113,6 +171,7 @@ pub fn draw_footer_status(
     rack_flipped: &mut bool,
     ctrl_locked: &mut bool,
     alt_locked: &mut bool,
+    stats: FooterStats,
 ) {
     ui.horizontal(|ui| {
         let ctrl_key = ui.input(|i| i.modifiers.ctrl);
@@ -167,18 +226,89 @@ pub fn draw_footer_status(
             *rack_flipped = !*rack_flipped;
         }
         tab_resp.on_hover_text("Tab: flip rack. Double-click to toggle.");
+
+        // ── LEFT: MIDI status ──
         ui.separator();
         let midi_text = match midi_port {
             Some(port) => format!("MIDI: {}", port.trim()),
-            None => "MIDI: no device".to_string(),
+            None => "MIDI: –".to_string(),
         };
         ui.label(
             egui::RichText::new(midi_text)
                 .color(super::theme::ASH)
                 .monospace()
-                .size(9.0),
+                .size(8.0),
         );
+
+        // ── CENTER: session stats (pushed via spacer) ──
+        ui.separator();
+        let mins = stats.uptime_secs / 60;
+        let secs = stats.uptime_secs % 60;
+        let center_text = format!(
+            "{}mod  {}agt  {}cab  {}:{:02}",
+            stats.n_modules, stats.n_agents, stats.n_cables, mins, secs
+        );
+        // Estimate right-side width and center the stats
+        let right_w = 180.0; // DSP sparkline + API + GitHub
+        let center_w = ui.fonts(|f| {
+            f.layout_no_wrap(
+                center_text.clone(),
+                egui::FontId::monospace(8.0),
+                super::theme::ASH,
+            )
+            .size()
+            .x
+        });
+        let avail = ui.available_width();
+        let spacer_l = ((avail - center_w - right_w) / 2.0).max(0.0);
+        ui.add_space(spacer_l);
+        ui.label(
+            egui::RichText::new(center_text)
+                .color(super::theme::ASH)
+                .monospace()
+                .size(8.0),
+        );
+
+        // ── RIGHT: DSP + API + GitHub (pushed via spacer) ──
+        let spacer_r = (ui.available_width() - right_w).max(0.0);
+        ui.add_space(spacer_r);
+
         draw_dsp_sparkline(ui, dsp_buf);
+
+        if let Some(port) = stats.api_port {
+            ui.separator();
+            if ui
+                .add(
+                    egui::Label::new(
+                        egui::RichText::new(format!("API :{port}"))
+                            .color(super::theme::SMOKE)
+                            .monospace()
+                            .size(7.5),
+                    )
+                    .sense(egui::Sense::click()),
+                )
+                .on_hover_text(format!("http://localhost:{port}/api/schema"))
+                .clicked()
+            {
+                let _ = super::webbrowser_open(&format!("http://localhost:{port}/api/schema"));
+            }
+        }
+        ui.separator();
+        if ui
+            .add(
+                egui::Label::new(
+                    egui::RichText::new("GitHub ↗")
+                        .monospace()
+                        .size(7.5)
+                        .color(super::theme::FOG),
+                )
+                .sense(egui::Sense::click()),
+            )
+            .on_hover_text("github.com/Tok/impulse-instruct")
+            .clicked()
+        {
+            let _ = super::webbrowser_open("https://github.com/Tok/impulse-instruct");
+        }
     });
 }
 
@@ -269,7 +399,18 @@ pub fn draw_crt_overlay(ctx: &egui::Context) {
 
 /// Draw the scope buffer as a circular ring — a diagnostic/aesthetic display.
 /// `buf` is the most recent scope samples; `size` is the widget diameter.
+#[allow(dead_code)]
 pub fn draw_ring_scope(ui: &mut egui::Ui, buf: &[f32], size: f32) {
+    draw_ring_scope_colored(ui, buf, size, None);
+}
+
+/// Ring scope with optional Huth color override.
+pub fn draw_ring_scope_colored(
+    ui: &mut egui::Ui,
+    buf: &[f32],
+    size: f32,
+    huth_color: Option<egui::Color32>,
+) {
     let (rect, _) = ui.allocate_exact_size(egui::vec2(size, size), egui::Sense::hover());
     if !ui.is_rect_visible(rect) || buf.is_empty() {
         return;
@@ -299,9 +440,20 @@ pub fn draw_ring_scope(ui: &mut egui::Ui, buf: &[f32], size: f32) {
     if let Some(&first) = points.first() {
         points.push(first); // close the ring
     }
+    // Phosphor glow: thicker dim layer underneath, then bright trace on top
+    let trace_col = huth_color.unwrap_or(egui::Color32::from_gray(160));
+    let glow_col = if huth_color.is_some() {
+        egui::Color32::from_rgba_unmultiplied(trace_col.r(), trace_col.g(), trace_col.b(), 60)
+    } else {
+        egui::Color32::from_gray(35)
+    };
+    painter.add(egui::Shape::Path(egui::epaint::PathShape::line(
+        points.clone(),
+        egui::Stroke::new(3.0, glow_col),
+    )));
     painter.add(egui::Shape::Path(egui::epaint::PathShape::line(
         points,
-        egui::Stroke::new(1.0, egui::Color32::from_gray(140)),
+        egui::Stroke::new(1.5, trace_col),
     )));
 
     // Write-head dot: tracks the newest sample position on the ring

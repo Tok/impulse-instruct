@@ -46,7 +46,7 @@ pub fn draw_hoover(app: &mut ImpulseApp, ui: &mut egui::Ui) {
     // ── Three equal-width glass groups ────────────────────────────────────────
     let gw = widgets::even_group_width(ui, 3);
     ui.horizontal(|ui| {
-        // FILTER group: START, SWEEP, RESO
+        // FILTER group: START, SWEEP, RESO (horizontal)
         widgets::glass_group_fill(ui, gw, gw, |ui| {
             ui.label(
                 egui::RichText::new("FILTER")
@@ -54,34 +54,32 @@ pub fn draw_hoover(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                     .monospace()
                     .size(9.5),
             );
-            {
-                let mut v = app.state.read().hoover.filter_start;
-                let (ch, _) = widgets::param_control(ui, "START", &mut v, ParamMode::Free, ctrl);
-                if ch {
-                    app.state.write().hoover.filter_start = v;
-                    app.push_audio_params();
+            widgets::centered_row(ui, |ui| {
+                {
+                    let mut v = app.state.read().hoover.filter_start;
+                    if widgets::param_control(ui, "START", &mut v, ParamMode::Free, ctrl).0 {
+                        app.state.write().hoover.filter_start = v;
+                        app.push_audio_params();
+                    }
                 }
-            }
-            {
-                // sweep_time: 0.1–4.0 s, normalized to 0–1 for knob
-                let raw = app.state.read().hoover.sweep_time;
-                let mut v = (raw - 0.1) / (4.0 - 0.1);
-                let (ch, _) = widgets::param_control(ui, "SWEEP", &mut v, ParamMode::Free, ctrl);
-                if ch {
-                    app.state.write().hoover.sweep_time = v * (4.0 - 0.1) + 0.1;
-                    app.push_audio_params();
+                {
+                    let raw = app.state.read().hoover.sweep_time;
+                    let mut v = (raw - 0.1) / (4.0 - 0.1);
+                    if widgets::param_control(ui, "SWEEP", &mut v, ParamMode::Free, ctrl).0 {
+                        app.state.write().hoover.sweep_time = v * (4.0 - 0.1) + 0.1;
+                        app.push_audio_params();
+                    }
                 }
-            }
-            {
-                let mut v = app.state.read().hoover.resonance;
-                let (ch, _) = widgets::param_control(ui, "RESO", &mut v, ParamMode::Free, ctrl);
-                if ch {
-                    app.state.write().hoover.resonance = v;
-                    app.push_audio_params();
+                {
+                    let mut v = app.state.read().hoover.resonance;
+                    if widgets::param_control(ui, "RESO", &mut v, ParamMode::Free, ctrl).0 {
+                        app.state.write().hoover.resonance = v;
+                        app.push_audio_params();
+                    }
                 }
-            }
+            });
         });
-        // OSC group: DETUNE, VOICES stepper, VOL
+        // OSC group: DETUNE + VOL horizontal, VOICES stepper
         widgets::glass_group_fill(ui, gw, gw, |ui| {
             ui.label(
                 egui::RichText::new("OSC")
@@ -89,44 +87,54 @@ pub fn draw_hoover(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                     .monospace()
                     .size(9.5),
             );
-            {
-                let mut v = app.state.read().hoover.detune;
-                let (ch, _) = widgets::param_control(ui, "DETUNE", &mut v, ParamMode::Free, ctrl);
-                if ch {
-                    app.state.write().hoover.detune = v;
+            widgets::centered_row(ui, |ui| {
+                {
+                    let mut v = app.state.read().hoover.detune;
+                    if widgets::param_control(ui, "DETUNE", &mut v, ParamMode::Free, ctrl).0 {
+                        app.state.write().hoover.detune = v;
+                        app.push_audio_params();
+                    }
+                }
+                {
+                    let mut v = app.state.read().hoover.volume;
+                    if widgets::param_control(ui, "VOL", &mut v, ParamMode::Free, ctrl).0 {
+                        app.state.write().hoover.volume = v;
+                        app.push_audio_params();
+                    }
+                }
+            });
+            ui.horizontal(|ui| {
+                ui.label(
+                    egui::RichText::new("PAN")
+                        .color(theme::SMOKE)
+                        .monospace()
+                        .size(7.5),
+                );
+                let mut pan = app.state.read().hoover.pan;
+                if widgets::pan_slider(ui, &mut pan, 60.0) {
+                    app.state.write().hoover.pan = pan;
                     app.push_audio_params();
                 }
-            }
-            // Voice count stepper
-            ui.vertical(|ui| {
+            });
+            widgets::centered_row(ui, |ui| {
                 let voices = app.state.read().hoover.voices;
                 ui.label(
-                    egui::RichText::new(format!("VOICES: {}", voices))
+                    egui::RichText::new(format!("V:{}", voices))
                         .color(theme::SMOKE)
                         .monospace()
                         .size(8.5),
                 );
-                ui.horizontal(|ui| {
-                    if ui.small_button("-").clicked() && voices > 2 {
-                        app.state.write().hoover.voices = voices - 1;
-                        app.push_audio_params();
-                    }
-                    if ui.small_button("+").clicked() && voices < 7 {
-                        app.state.write().hoover.voices = voices + 1;
-                        app.push_audio_params();
-                    }
-                });
-            });
-            {
-                let mut v = app.state.read().hoover.volume;
-                let (ch, _) = widgets::param_control(ui, "VOL", &mut v, ParamMode::Free, ctrl);
-                if ch {
-                    app.state.write().hoover.volume = v;
+                if ui.small_button("-").clicked() && voices > 2 {
+                    app.state.write().hoover.voices = voices - 1;
                     app.push_audio_params();
                 }
-            }
+                if ui.small_button("+").clicked() && voices < 7 {
+                    app.state.write().hoover.voices = voices + 1;
+                    app.push_audio_params();
+                }
+            });
         });
-        // LFO group: RATE, DEPTH
+        // LFO group: RATE + DEPTH horizontal
         widgets::glass_group_fill(ui, gw, gw, |ui| {
             ui.label(
                 egui::RichText::new("PITCH LFO")
@@ -134,26 +142,24 @@ pub fn draw_hoover(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                     .monospace()
                     .size(9.5),
             );
-            {
-                // pitch_lfo_rate: 0–8 Hz, normalized to 0–1
-                let raw = app.state.read().hoover.pitch_lfo_rate;
-                let mut v = raw / 8.0;
-                let (ch, _) = widgets::param_control(ui, "RATE", &mut v, ParamMode::Free, ctrl);
-                if ch {
-                    app.state.write().hoover.pitch_lfo_rate = v * 8.0;
-                    app.push_audio_params();
+            widgets::centered_row(ui, |ui| {
+                {
+                    let raw = app.state.read().hoover.pitch_lfo_rate;
+                    let mut v = raw / 8.0;
+                    if widgets::param_control(ui, "RATE", &mut v, ParamMode::Free, ctrl).0 {
+                        app.state.write().hoover.pitch_lfo_rate = v * 8.0;
+                        app.push_audio_params();
+                    }
                 }
-            }
-            {
-                // pitch_lfo_depth: 0–2 semitones, normalized to 0–1
-                let raw = app.state.read().hoover.pitch_lfo_depth;
-                let mut v = raw / 2.0;
-                let (ch, _) = widgets::param_control(ui, "DEPTH", &mut v, ParamMode::Free, ctrl);
-                if ch {
-                    app.state.write().hoover.pitch_lfo_depth = v * 2.0;
-                    app.push_audio_params();
+                {
+                    let raw = app.state.read().hoover.pitch_lfo_depth;
+                    let mut v = raw / 2.0;
+                    if widgets::param_control(ui, "DEPTH", &mut v, ParamMode::Free, ctrl).0 {
+                        app.state.write().hoover.pitch_lfo_depth = v * 2.0;
+                        app.push_audio_params();
+                    }
                 }
-            }
+            });
         });
     });
 

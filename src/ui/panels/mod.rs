@@ -3,6 +3,7 @@
 
 pub mod an1x;
 pub mod bass;
+mod bass_noise;
 pub mod drums;
 pub mod fx;
 pub mod granular;

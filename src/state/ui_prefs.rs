@@ -161,6 +161,42 @@ pub struct UiPrefs {
     /// CRT scan-line overlay and vignette effect.
     #[serde(default)]
     pub crt_effect: bool,
+    /// Oscilloscope phosphor persistence: number of history frames (2–20, default 10).
+    #[serde(default = "default_phosphor_frames")]
+    pub phosphor_frames: usize,
+    /// Oscilloscope phosphor glow intensity (0.0–1.0, default 0.6).
+    #[serde(default = "default_phosphor_intensity")]
+    pub phosphor_intensity: f32,
+    /// When true, oscilloscope waveform is Huth-colored based on detected frequency.
+    #[serde(default)]
+    pub huth_oscilloscope: bool,
+    // ── Event stream display layers ─────────────────────────────────────────
+    /// Show bass note events (Huth-colored circles).
+    #[serde(default = "default_true_pref")]
+    pub stream_bass_notes: bool,
+    /// Show drum hits (small dots — kick white, hihat gray, clap bright).
+    #[serde(default)]
+    pub stream_drums: bool,
+    /// Show Hz frequency scale on the Y axis.
+    #[serde(default = "default_true_pref")]
+    pub stream_hz_scale: bool,
+    /// Show active ramp indicators.
+    #[serde(default = "default_true_pref")]
+    pub stream_ramps: bool,
+    /// When true, LLM responses auto-scroll to the affected module.
+    /// Off by default — mainly useful for demo recordings.
+    #[serde(default)]
+    pub llm_auto_scroll: bool,
+}
+
+fn default_true_pref() -> bool {
+    true
+}
+fn default_phosphor_frames() -> usize {
+    10
+}
+fn default_phosphor_intensity() -> f32 {
+    0.6
 }
 
 impl UiPrefs {
@@ -182,7 +218,7 @@ impl UiPrefs {
     /// Defaults to `pad_size.px() × 3.38` (legacy formula) when not overridden.
     pub fn effective_xy_px(&self) -> f32 {
         self.custom_xy_px
-            .unwrap_or_else(|| self.pad_size.px() * (88.0 / 26.0))
+            .unwrap_or_else(|| self.pad_size.px() * (132.0 / 26.0))
             .clamp(40.0, 400.0)
     }
 
@@ -190,7 +226,7 @@ impl UiPrefs {
     /// Defaults to 30% of the XY pad size, minimum 28 px.
     pub fn effective_env_h(&self) -> f32 {
         self.custom_env_h
-            .unwrap_or_else(|| (self.effective_xy_px() * 0.30).max(28.0))
+            .unwrap_or_else(|| (self.effective_xy_px() * 0.45).max(60.0))
             .clamp(16.0, 200.0)
     }
 }
@@ -214,6 +250,14 @@ impl Default for UiPrefs {
             autosave_interval: AutosaveInterval::Immediate,
             wasd_as_arrows: false,
             crt_effect: false,
+            phosphor_frames: default_phosphor_frames(),
+            phosphor_intensity: default_phosphor_intensity(),
+            huth_oscilloscope: false,
+            stream_bass_notes: true,
+            stream_drums: false,
+            stream_hz_scale: true,
+            stream_ramps: true,
+            llm_auto_scroll: false,
         }
     }
 }

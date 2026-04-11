@@ -280,9 +280,11 @@ pub fn draw_bass(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         }
     } else {
         // ── Knob mode: 3 equal-width glass groups ─────────────────────────────
+        let ctrl_big = ctrl.phi_bigger(); // primary: cutoff, resonance
+        let ctrl_sm = ctrl.phi_smaller(); // secondary: glide, noise, FM
         let gw = widgets::even_group_width(ui, 3);
         ui.horizontal(|ui| {
-            // FILTER group: CUT, RES, ENV, DEC
+            // FILTER group: 2×2 grid (CUT/RES, ENV/DEC)
             widgets::glass_group_fill(ui, gw, gw, |ui| {
                 ui.label(
                     egui::RichText::new("FILTER")
@@ -290,58 +292,62 @@ pub fn draw_bass(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                         .monospace()
                         .size(9.5),
                 );
-                let (ch, cy) = widgets::param_control(
-                    ui,
-                    "CUT",
-                    &mut cutoff,
-                    param_mode("bass.cutoff", &locked, &focused),
-                    ctrl,
-                );
-                if ch {
-                    changed = true;
-                }
-                if cy {
-                    cycle_paths.push("bass.cutoff");
-                }
-                let (ch, cy) = widgets::param_control(
-                    ui,
-                    "RES",
-                    &mut resonance,
-                    param_mode("bass.resonance", &locked, &focused),
-                    ctrl,
-                );
-                if ch {
-                    changed = true;
-                }
-                if cy {
-                    cycle_paths.push("bass.resonance");
-                }
-                let (ch, cy) = widgets::param_control(
-                    ui,
-                    "ENV",
-                    &mut env_mod,
-                    param_mode("bass.env_mod", &locked, &focused),
-                    ctrl,
-                );
-                if ch {
-                    changed = true;
-                }
-                if cy {
-                    cycle_paths.push("bass.env_mod");
-                }
-                let (ch, cy) = widgets::param_control(
-                    ui,
-                    "DEC",
-                    &mut decay,
-                    param_mode("bass.decay", &locked, &focused),
-                    ctrl,
-                );
-                if ch {
-                    changed = true;
-                }
-                if cy {
-                    cycle_paths.push("bass.decay");
-                }
+                widgets::centered_row(ui, |ui| {
+                    let (ch, cy) = widgets::param_control(
+                        ui,
+                        "CUT",
+                        &mut cutoff,
+                        param_mode("bass.cutoff", &locked, &focused),
+                        ctrl_big,
+                    );
+                    if ch {
+                        changed = true;
+                    }
+                    if cy {
+                        cycle_paths.push("bass.cutoff");
+                    }
+                    let (ch, cy) = widgets::param_control(
+                        ui,
+                        "RES",
+                        &mut resonance,
+                        param_mode("bass.resonance", &locked, &focused),
+                        ctrl_big,
+                    );
+                    if ch {
+                        changed = true;
+                    }
+                    if cy {
+                        cycle_paths.push("bass.resonance");
+                    }
+                });
+                widgets::centered_row(ui, |ui| {
+                    let (ch, cy) = widgets::param_control(
+                        ui,
+                        "ENV",
+                        &mut env_mod,
+                        param_mode("bass.env_mod", &locked, &focused),
+                        ctrl,
+                    );
+                    if ch {
+                        changed = true;
+                    }
+                    if cy {
+                        cycle_paths.push("bass.env_mod");
+                    }
+                    let (ch, cy) = widgets::param_control(
+                        ui,
+                        "DEC",
+                        &mut decay,
+                        param_mode("bass.decay", &locked, &focused),
+                        ctrl,
+                    );
+                    if ch {
+                        changed = true;
+                    }
+                    if cy {
+                        cycle_paths.push("bass.decay");
+                    }
+                });
             });
             // CHARACTER group: ACC, DRV, VOL, SUB
             widgets::glass_group_fill(ui, gw, gw, |ui| {
@@ -351,58 +357,62 @@ pub fn draw_bass(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                         .monospace()
                         .size(9.5),
                 );
-                let (ch, cy) = widgets::param_control(
-                    ui,
-                    "ACC",
-                    &mut accent,
-                    param_mode("bass.accent_level", &locked, &focused),
-                    ctrl,
-                );
-                if ch {
-                    changed = true;
-                }
-                if cy {
-                    cycle_paths.push("bass.accent_level");
-                }
-                let (ch, cy) = widgets::param_control(
-                    ui,
-                    "DRV",
-                    &mut dist,
-                    param_mode("bass.distortion", &locked, &focused),
-                    ctrl,
-                );
-                if ch {
-                    changed = true;
-                }
-                if cy {
-                    cycle_paths.push("bass.distortion");
-                }
-                let (ch, cy) = widgets::param_control(
-                    ui,
-                    "VOL",
-                    &mut vol,
-                    param_mode("bass.volume", &locked, &focused),
-                    ctrl,
-                );
-                if ch {
-                    changed = true;
-                }
-                if cy {
-                    cycle_paths.push("bass.volume");
-                }
-                let (ch, cy) = widgets::param_control(
-                    ui,
-                    "SUB",
-                    &mut sub_osc_level,
-                    param_mode("bass.sub_osc_level", &locked, &focused),
-                    ctrl,
-                );
-                if ch {
-                    changed = true;
-                }
-                if cy {
-                    cycle_paths.push("bass.sub_osc_level");
-                }
+                widgets::centered_row(ui, |ui| {
+                    let (ch, cy) = widgets::param_control(
+                        ui,
+                        "ACC",
+                        &mut accent,
+                        param_mode("bass.accent_level", &locked, &focused),
+                        ctrl,
+                    );
+                    if ch {
+                        changed = true;
+                    }
+                    if cy {
+                        cycle_paths.push("bass.accent_level");
+                    }
+                    let (ch, cy) = widgets::param_control(
+                        ui,
+                        "DRV",
+                        &mut dist,
+                        param_mode("bass.distortion", &locked, &focused),
+                        ctrl,
+                    );
+                    if ch {
+                        changed = true;
+                    }
+                    if cy {
+                        cycle_paths.push("bass.distortion");
+                    }
+                });
+                widgets::centered_row(ui, |ui| {
+                    let (ch, cy) = widgets::param_control(
+                        ui,
+                        "VOL",
+                        &mut vol,
+                        param_mode("bass.volume", &locked, &focused),
+                        ctrl,
+                    );
+                    if ch {
+                        changed = true;
+                    }
+                    if cy {
+                        cycle_paths.push("bass.volume");
+                    }
+                    let (ch, cy) = widgets::param_control(
+                        ui,
+                        "SUB",
+                        &mut sub_osc_level,
+                        param_mode("bass.sub_osc_level", &locked, &focused),
+                        ctrl,
+                    );
+                    if ch {
+                        changed = true;
+                    }
+                    if cy {
+                        cycle_paths.push("bass.sub_osc_level");
+                    }
+                });
             });
             // MOD group: GLD, NSE, FMD, FMR
             widgets::glass_group_fill(ui, gw, gw, |ui| {
@@ -412,45 +422,57 @@ pub fn draw_bass(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                         .monospace()
                         .size(9.5),
                 );
-                let (ch, cy) = widgets::param_control(
+                widgets::centered_row(ui, |ui| {
+                    let (ch, cy) = widgets::param_control(
+                        ui,
+                        "GLD",
+                        &mut portamento_time,
+                        param_mode("bass.portamento_time", &locked, &focused),
+                        ctrl_sm,
+                    );
+                    if ch {
+                        changed = true;
+                    }
+                    if cy {
+                        cycle_paths.push("bass.portamento_time");
+                    }
+                    let (ch, cy) = widgets::param_control(
+                        ui,
+                        "NSE",
+                        &mut noise_mix,
+                        param_mode("bass.noise_mix", &locked, &focused),
+                        ctrl_sm,
+                    );
+                    if ch {
+                        changed = true;
+                    }
+                    if cy {
+                        cycle_paths.push("bass.noise_mix");
+                    }
+                });
+                widgets::centered_row(ui, |ui| {
+                    if widgets::param_control(ui, "FMD", &mut fm_depth, ParamMode::Free, ctrl_sm).0
+                    {
+                        changed = true;
+                    }
+                    if widgets::param_control(ui, "FMR", &mut fm_ratio, ParamMode::Free, ctrl_sm).0
+                    {
+                        changed = true;
+                    }
+                });
+                if widgets::param_control_bipolar(
                     ui,
-                    "GLD",
-                    &mut portamento_time,
-                    param_mode("bass.portamento_time", &locked, &focused),
-                    ctrl,
-                );
-                if ch {
-                    changed = true;
-                }
-                if cy {
-                    cycle_paths.push("bass.portamento_time");
-                }
-                let (ch, cy) = widgets::param_control(
-                    ui,
-                    "NSE",
-                    &mut noise_mix,
-                    param_mode("bass.noise_mix", &locked, &focused),
-                    ctrl,
-                );
-                if ch {
-                    changed = true;
-                }
-                if cy {
-                    cycle_paths.push("bass.noise_mix");
-                }
-                if widgets::param_control(ui, "FMD", &mut fm_depth, ParamMode::Free, ctrl).0 {
-                    changed = true;
-                }
-                if widgets::param_control(ui, "FMR", &mut fm_ratio, ParamMode::Free, ctrl).0 {
+                    "DTN",
+                    &mut osc_detune,
+                    ParamMode::Free,
+                    ctrl_sm,
+                )
+                .0
+                {
                     changed = true;
                 }
             });
         });
-
-        // Detune: bipolar DragValue — one compact row below the groups
-        if widgets::param_control_bipolar(ui, "DETUNE", &mut osc_detune, ParamMode::Free, ctrl).0 {
-            changed = true;
-        }
     }
 
     // Apply all changes in a single brief write, using pure state transitions
@@ -522,6 +544,26 @@ pub fn draw_bass(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         }
     }
 
+    // Pan slider
+    {
+        let mut pan = app.state.read().bass_voices
+            [active_voice.min(app.state.read().bass_voices.len().saturating_sub(1))]
+        .synth
+        .pan;
+        ui.horizontal(|ui| {
+            ui.label(
+                egui::RichText::new("PAN")
+                    .monospace()
+                    .size(8.0)
+                    .color(theme::SMOKE),
+            );
+            if widgets::pan_slider(ui, &mut pan, 80.0) {
+                let av = active_voice.min(app.state.read().bass_voices.len().saturating_sub(1));
+                app.state.write().bass_voices[av].synth.pan = pan;
+                app.push_audio_params();
+            }
+        });
+    }
     ui.add_space(2.0);
 
     // XY Control Squares — two 2D pads for the core acid parameters
@@ -530,105 +572,112 @@ pub fn draw_bass(app: &mut ImpulseApp, ui: &mut egui::Ui) {
     let xy2_locked = param_mode("bass.env_mod", &locked, &focused) == ParamMode::UserOwned
         || param_mode("bass.decay", &locked, &focused) == ParamMode::UserOwned;
 
-    ui.horizontal(|ui| {
-        // Pad 1 — cycles: CUT×RES | ACCENT×VOL | DIST×SUB
-        let p1 = widgets::xy_pad_pair(ui.ctx(), "bass_xy1");
-        let (lx1, ly1, mut vx1, mut vy1) = match p1 {
-            1 => ("ACCENT", "VOL", accent, vol),
-            2 => ("DIST", "SUB", dist, sub_osc_level),
-            _ => ("CUT", "RES", cutoff, resonance),
-        };
-        let xy1_locked_cur = match p1 {
-            1 => {
-                param_mode("bass.accent_level", &locked, &focused) == ParamMode::UserOwned
-                    || param_mode("bass.volume", &locked, &focused) == ParamMode::UserOwned
-            }
-            2 => {
-                param_mode("bass.distortion", &locked, &focused) == ParamMode::UserOwned
-                    || param_mode("bass.sub_osc_level", &locked, &focused) == ParamMode::UserOwned
-            }
-            _ => xy1_locked,
-        };
-        if let (true, _) = widgets::xy_pad(
-            ui,
-            "bass_xy1",
-            lx1,
-            ly1,
-            &mut vx1,
-            &mut vy1,
-            xy_size,
-            xy1_locked_cur,
-            3,
-        ) {
-            let mut snap = app.state.read().clone();
-            let av = snap
-                .active_voice
-                .min(snap.bass_voices.len().saturating_sub(1));
-            match p1 {
+    ui.vertical_centered(|ui| {
+        ui.horizontal(|ui| {
+            // Center the two pads
+            let pads_w = xy_size * 2.0 + 24.0; // two pads + spacing
+            let pad_spacer = ((ui.available_width() - pads_w) / 2.0).max(0.0);
+            ui.add_space(pad_spacer);
+            // Pad 1 — cycles: CUT×RES | ACCENT×VOL | DIST×SUB
+            let p1 = widgets::xy_pad_pair(ui.ctx(), "bass_xy1");
+            let (lx1, ly1, mut vx1, mut vy1) = match p1 {
+                1 => ("ACCENT", "VOL", accent, vol),
+                2 => ("DIST", "SUB", dist, sub_osc_level),
+                _ => ("CUT", "RES", cutoff, resonance),
+            };
+            let xy1_locked_cur = match p1 {
                 1 => {
-                    snap.bass_voices[av].synth.accent_level = vx1;
-                    snap.bass_voices[av].synth.volume = vy1;
+                    param_mode("bass.accent_level", &locked, &focused) == ParamMode::UserOwned
+                        || param_mode("bass.volume", &locked, &focused) == ParamMode::UserOwned
                 }
                 2 => {
-                    snap.bass_voices[av].synth.distortion = vx1;
-                    snap.bass_voices[av].synth.sub_osc_level = vy1;
+                    param_mode("bass.distortion", &locked, &focused) == ParamMode::UserOwned
+                        || param_mode("bass.sub_osc_level", &locked, &focused)
+                            == ParamMode::UserOwned
                 }
-                _ => {
-                    snap.bass_voices[av].synth.cutoff = vx1;
-                    snap.bass_voices[av].synth.resonance = vy1;
+                _ => xy1_locked,
+            };
+            if let (true, _) = widgets::xy_pad(
+                ui,
+                "bass_xy1",
+                lx1,
+                ly1,
+                &mut vx1,
+                &mut vy1,
+                xy_size,
+                xy1_locked_cur,
+                3,
+            ) {
+                let mut snap = app.state.read().clone();
+                let av = snap
+                    .active_voice
+                    .min(snap.bass_voices.len().saturating_sub(1));
+                match p1 {
+                    1 => {
+                        snap.bass_voices[av].synth.accent_level = vx1;
+                        snap.bass_voices[av].synth.volume = vy1;
+                    }
+                    2 => {
+                        snap.bass_voices[av].synth.distortion = vx1;
+                        snap.bass_voices[av].synth.sub_osc_level = vy1;
+                    }
+                    _ => {
+                        snap.bass_voices[av].synth.cutoff = vx1;
+                        snap.bass_voices[av].synth.resonance = vy1;
+                    }
                 }
+                *app.state.write() = snap;
+                app.push_audio_params();
             }
-            *app.state.write() = snap;
-            app.push_audio_params();
-        }
 
-        ui.add_space(6.0);
+            ui.add_space(6.0);
 
-        // Pad 2 — cycles: ENV×DEC | FM.D×FM.R | NOISE×GLIDE
-        let p2 = widgets::xy_pad_pair(ui.ctx(), "bass_xy2");
-        let (lx2, ly2, mut vx2, mut vy2) = match p2 {
-            1 => ("FM.D", "FM.R", fm_depth, fm_ratio),
-            2 => ("NOISE", "GLIDE", noise_mix, portamento_time),
-            _ => ("ENV", "DEC", env_mod, decay),
-        };
-        let xy2_locked_cur = match p2 {
-            1 => false,
-            2 => false,
-            _ => xy2_locked,
-        };
-        if let (true, _) = widgets::xy_pad(
-            ui,
-            "bass_xy2",
-            lx2,
-            ly2,
-            &mut vx2,
-            &mut vy2,
-            xy_size,
-            xy2_locked_cur,
-            3,
-        ) {
-            let mut snap = app.state.read().clone();
-            let av = snap
-                .active_voice
-                .min(snap.bass_voices.len().saturating_sub(1));
-            match p2 {
-                1 => {
-                    snap.bass_voices[av].synth.fm_depth = vx2;
-                    snap.bass_voices[av].synth.fm_ratio = vy2;
+            // Pad 2 — cycles: ENV×DEC | FM.D×FM.R | NOISE×GLIDE
+            let p2 = widgets::xy_pad_pair(ui.ctx(), "bass_xy2");
+            let (lx2, ly2, mut vx2, mut vy2) = match p2 {
+                1 => ("FM.D", "FM.R", fm_depth, fm_ratio),
+                2 => ("NOISE", "GLIDE", noise_mix, portamento_time),
+                _ => ("ENV", "DEC", env_mod, decay),
+            };
+            let xy2_locked_cur = match p2 {
+                1 => false,
+                2 => false,
+                _ => xy2_locked,
+            };
+            if let (true, _) = widgets::xy_pad(
+                ui,
+                "bass_xy2",
+                lx2,
+                ly2,
+                &mut vx2,
+                &mut vy2,
+                xy_size,
+                xy2_locked_cur,
+                3,
+            ) {
+                let mut snap = app.state.read().clone();
+                let av = snap
+                    .active_voice
+                    .min(snap.bass_voices.len().saturating_sub(1));
+                match p2 {
+                    1 => {
+                        snap.bass_voices[av].synth.fm_depth = vx2;
+                        snap.bass_voices[av].synth.fm_ratio = vy2;
+                    }
+                    2 => {
+                        snap.bass_voices[av].synth.noise_mix = vx2;
+                        snap.bass_voices[av].synth.portamento_time = vy2;
+                    }
+                    _ => {
+                        snap.bass_voices[av].synth.env_mod = vx2;
+                        snap.bass_voices[av].synth.decay = vy2;
+                    }
                 }
-                2 => {
-                    snap.bass_voices[av].synth.noise_mix = vx2;
-                    snap.bass_voices[av].synth.portamento_time = vy2;
-                }
-                _ => {
-                    snap.bass_voices[av].synth.env_mod = vx2;
-                    snap.bass_voices[av].synth.decay = vy2;
-                }
+                *app.state.write() = snap;
+                app.push_audio_params();
             }
-            *app.state.write() = snap;
-            app.push_audio_params();
-        }
-    });
+        });
+    }); // close horizontal + vertical_centered for XY pads
 
     ui.add_space(2.0);
 
@@ -636,27 +685,51 @@ pub fn draw_bass(app: &mut ImpulseApp, ui: &mut egui::Ui) {
     // Width spans both pads (2×xy_size + spacing); height scales with pad size.
     let env_w = (xy_size * 2.0 + 14.0).max(200.0);
     let env_h = app.state.read().ui_prefs.effective_env_h();
-    ui.horizontal(|ui| {
-        ui.label(
-            egui::RichText::new("ENV")
-                .color(theme::SMOKE)
-                .monospace()
-                .size(9.0),
-        );
-        if widgets::decay_display(ui, &mut decay, env_mod, env_w, env_h) {
-            let mut snap = app.state.read().clone();
-            let av = snap
-                .active_voice
-                .min(snap.bass_voices.len().saturating_sub(1));
-            snap.bass_voices[av].synth.decay = decay;
-            *app.state.write() = snap;
-            app.push_audio_params();
-        }
-    });
+    ui.vertical_centered(|ui| {
+        ui.horizontal(|ui| {
+            // Center the env/filter displays
+            let disp_w = env_w + 60.0; // display + label
+            let disp_spacer = ((ui.available_width() - disp_w) / 2.0).max(0.0);
+            ui.add_space(disp_spacer);
+            ui.label(
+                egui::RichText::new("ENV")
+                    .color(theme::SMOKE)
+                    .monospace()
+                    .size(9.0),
+            );
+            if widgets::decay_display(ui, &mut decay, env_mod, env_w, env_h) {
+                let mut snap = app.state.read().clone();
+                let av = snap
+                    .active_voice
+                    .min(snap.bass_voices.len().saturating_sub(1));
+                snap.bass_voices[av].synth.decay = decay;
+                *app.state.write() = snap;
+                app.push_audio_params();
+            }
+        });
+        ui.add_space(4.0);
+        // Filter response curve
+        ui.horizontal(|ui| {
+            let disp_spacer2 = ((ui.available_width() - env_w - 60.0) / 2.0).max(0.0);
+            ui.add_space(disp_spacer2);
+            ui.label(
+                egui::RichText::new("FLT")
+                    .color(theme::SMOKE)
+                    .monospace()
+                    .size(9.0),
+            );
+            let fm = match filter_mode {
+                FilterMode::Highpass => 1u8,
+                FilterMode::Bandpass => 2,
+                _ => 0,
+            };
+            widgets::filter_response(ui, cutoff, resonance, fm, env_w, env_h);
+        });
+    }); // end vertical_centered
 
-    ui.add_space(2.0);
+    ui.add_space(8.0);
 
-    // Waveform toggle
+    // Waveform toggle + animated preview
     ui.horizontal(|ui| {
         ui.label(
             egui::RichText::new("WAVE")
@@ -682,6 +755,14 @@ pub fn draw_bass(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             app.state.write().bass_voices[av].synth.waveform = Waveform::Supersaw;
             app.push_audio_params();
         }
+        // Animated waveform preview
+        let wave_kind = match waveform {
+            Waveform::Saw => 0,
+            Waveform::Square => 1,
+            Waveform::Supersaw => 2,
+        };
+        let viz_h = env_h.min(40.0);
+        widgets::waveform_icon(ui, wave_kind, env_w * 0.4, viz_h);
     });
 
     // Filter mode toggle
@@ -831,117 +912,5 @@ pub fn draw_bass(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         }
     });
 
-    ui.add_space(4.0);
-    widgets::section_header(ui, "NOISE VOICE");
-
-    let (noise_enabled, mut noise_volume, mut noise_color, mut noise_cutoff) = {
-        let s = app.state.read();
-        (
-            s.noise_voice.enabled,
-            s.noise_voice.volume,
-            s.noise_voice.color,
-            s.noise_voice.cutoff,
-        )
-    };
-
-    ui.horizontal(|ui| {
-        // ON toggle
-        let on_color = if noise_enabled {
-            theme::CHALK
-        } else {
-            theme::IRON
-        };
-        let on_fill = if noise_enabled {
-            egui::Color32::from_gray(50)
-        } else {
-            egui::Color32::TRANSPARENT
-        };
-        if ui
-            .add_sized(
-                [28.0, 18.0],
-                egui::Button::new(
-                    egui::RichText::new("ON")
-                        .monospace()
-                        .size(9.0)
-                        .color(on_color),
-                )
-                .fill(on_fill),
-            )
-            .clicked()
-        {
-            app.state.write().noise_voice.enabled = !noise_enabled;
-            app.push_audio_params();
-        }
-
-        ui.label(
-            egui::RichText::new("VOL")
-                .color(theme::SMOKE)
-                .monospace()
-                .size(9.0),
-        );
-        if ui
-            .add(
-                egui::Slider::new(&mut noise_volume, 0.0..=1.0)
-                    .show_value(false)
-                    .trailing_fill(true),
-            )
-            .changed()
-        {
-            app.state.write().noise_voice.volume = noise_volume;
-            app.push_audio_params();
-        }
-    });
-
-    ui.horizontal(|ui| {
-        ui.label(
-            egui::RichText::new("COLOR (WHITE→BROWN)")
-                .color(theme::SMOKE)
-                .monospace()
-                .size(9.0),
-        );
-        if ui
-            .add(
-                egui::Slider::new(&mut noise_color, 0.0..=1.0)
-                    .show_value(false)
-                    .trailing_fill(true),
-            )
-            .changed()
-        {
-            app.state.write().noise_voice.color = noise_color;
-            app.push_audio_params();
-        }
-        let color_label = if noise_color < 0.25 {
-            "WHITE"
-        } else if noise_color < 0.75 {
-            "PINK"
-        } else {
-            "BROWN"
-        };
-        ui.label(
-            egui::RichText::new(color_label)
-                .color(theme::FOG)
-                .monospace()
-                .size(9.0),
-        );
-    });
-
-    ui.horizontal(|ui| {
-        ui.label(
-            egui::RichText::new("CUTOFF")
-                .color(theme::SMOKE)
-                .monospace()
-                .size(9.0),
-        );
-        if ui
-            .add(
-                egui::Slider::new(&mut noise_cutoff, 0.0..=1.0)
-                    .show_value(false)
-                    .trailing_fill(true),
-            )
-            .changed()
-        {
-            app.state.write().noise_voice.cutoff = noise_cutoff;
-            app.push_audio_params();
-        }
-    });
+    super::bass_noise::draw_noise_section(app, ui);
 }

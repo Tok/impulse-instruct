@@ -1,9 +1,5 @@
-// ─── state/mod.rs ────────────────────────────────────────────────────────────
-#![allow(dead_code)] // many transition fns are called via API/MIDI, not yet wired in UI
-// Single source of truth for all synth parameters.
-// Pure data only — no methods that mutate in-place.
-// All state transitions happen via the named functions at the bottom.
-
+// ─── state/mod.rs ── single source of truth for all synth parameters ─────────
+// Pure data only — no methods that mutate in-place. Transitions at the bottom.
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 
@@ -217,6 +213,29 @@ pub struct AppState {
     /// Per-agent LLM state for rackable LLM modules.
     #[serde(default)]
     pub llm_agents: Vec<LlmAgentState>,
+    /// Per-module TTS state, keyed by TTS rack module id.
+    #[serde(default)]
+    pub tts_modules: Vec<TtsModuleState>,
+    // api_log moved to a lock-free crossbeam channel (ApiState.api_log_tx → UI receiver)
+    /// Scroll target — the UI scrolls to bring this zone/module into view, then clears.
+    /// Format: zone name ("global", "voice", "fxmod") or module kind ("AcidBass", "DrumKit808", etc.)
+    #[serde(skip)]
+    pub scroll_target: Option<String>,
+    /// When Some, the UI toggles or sets rack flip state, then clears.
+    /// true = show back (cables), false = show front (knobs), None = no change.
+    #[serde(skip)]
+    pub rack_flip_requested: Option<bool>,
+    /// Monotonic step counter — incremented by the audio thread each time
+    /// `current_step` advances. Used for bar-based ramp timing.
+    #[serde(skip)]
+    pub global_step_count: u64,
+    /// API-requested zone collapse: (global, voice, fxmod). None = no change.
+    #[serde(skip)]
+    pub collapse_requested: Option<(bool, bool, bool)>,
+    /// Compact audio analysis text, auto-updated by the UI every ~2s.
+    /// Injected into every LLM system prompt as global context.
+    #[serde(skip)]
+    pub audio_snapshot: String,
 }
 
 impl Default for AppState {
@@ -246,6 +265,12 @@ impl Default for AppState {
             spectrum: Default::default(),
             rack: Default::default(),
             llm_agents: Vec::new(),
+            tts_modules: Vec::new(),
+            scroll_target: None,
+            rack_flip_requested: None,
+            global_step_count: 0,
+            collapse_requested: None,
+            audio_snapshot: String::new(),
         };
         // Create a default agent for the LlmAgent rack module.
         if let Some(agent_id) = s
@@ -256,6 +281,16 @@ impl Default for AppState {
             .map(|m| m.id)
         {
             s.llm_agents.push(LlmAgentState::new_default(agent_id));
+        }
+        // Create TTS module state for any TTS modules in the default rack.
+        for m in &s.rack.modules {
+            if matches!(m.kind, ModuleKind::EspeakNgTts | ModuleKind::CoquiTts) {
+                let mut tts = TtsModuleState::new(m.id);
+                if m.kind == ModuleKind::CoquiTts {
+                    tts.engine = TtsEngine::CoquiTts;
+                }
+                s.tts_modules.push(tts);
+            }
         }
         s
     }
@@ -282,6 +317,8 @@ pub struct BassState {
     pub osc_detune: f32,         // semitone offset -1..+1, shifts entire oscillator pitch
     pub fm_ratio: f32,           // 0–1 → modulator/carrier ratio 0.5–8.0
     pub fm_depth: f32,           // 0–1 FM modulation depth; 0 = off (pure additive)
+    #[serde(default)]
+    pub pan: f32, // -1.0 (left) to +1.0 (right), 0.0 = center
 }
 
 impl Default for BassState {
@@ -304,6 +341,7 @@ impl Default for BassState {
             osc_detune: 0.0,
             fm_ratio: 0.0,
             fm_depth: 0.0,
+            pan: 0.0,
         }
     }
 }
@@ -474,40 +512,18 @@ impl Default for SequencerState {
             drum_patterns.insert(*v, vec![Step::default(); MAX_STEPS]);
         }
 
-        // Starter beat: 4-on-the-floor kick + offbeat closed hi-hats.
-        let kick_steps = [1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0usize];
-        let hat_steps = [0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0usize];
-        if let Some(p) = drum_patterns.get_mut(&DrumVoice::Kick808) {
-            for (i, &on) in kick_steps.iter().enumerate() {
-                p[i].active = on == 1;
-                p[i].velocity = 1.0;
-            }
-        }
-        if let Some(p) = drum_patterns.get_mut(&DrumVoice::HihatClosed808) {
-            for (i, &on) in hat_steps.iter().enumerate() {
-                p[i].active = on == 1;
-                p[i].velocity = 0.7;
-            }
-        }
-
-        // Starter bass: A minor chord tones spread across the bar.
-        // A2 (45) on beat 1 · C3 (48) between beats 2–3 · E3 (52) on beat 4.
-        let mut bass_pattern = vec![TB303Step::default(); MAX_STEPS];
-        let bass_notes: &[(usize, u8)] = &[(0, 45), (6, 48), (12, 52)];
-        for &(step, note) in bass_notes {
-            bass_pattern[step].active = true;
-            bass_pattern[step].note = note;
-        }
+        // All patterns start blank — the AI builds everything from scratch.
+        let bass_pattern = vec![TB303Step::default(); MAX_STEPS];
 
         // Default: all drum voices use the global `steps` length.
         let mut drum_steps = std::collections::HashMap::new();
         for v in DrumVoice::ALL {
-            drum_steps.insert(*v, 16usize);
+            drum_steps.insert(*v, 32usize);
         }
 
         Self {
             bpm: 120.0,
-            steps: 16,
+            steps: 32,
             current_step: 0,
             running: false,
             swing: 0.0,
@@ -516,25 +532,24 @@ impl Default for SequencerState {
             bass_pattern: bass_pattern.clone(),
             hoover_pattern: vec![TB303Step::default(); MAX_STEPS],
             an1x_pattern: vec![TB303Step::default(); MAX_STEPS],
-            root_note: 9, // A — the starter pattern is A minor
+            root_note: 9, // A
             scale: Scale::NaturalMinor,
             scale_snap: false,
             drum_steps,
-            bass_steps: 16,
-            hoover_steps: 16,
-            an1x_steps: 16,
+            bass_steps: 32,
+            hoover_steps: 32,
+            an1x_steps: 32,
             muted_drums: std::collections::HashSet::new(),
             soloed_drums: std::collections::HashSet::new(),
             midi_clock_sync: false,
             bass_patterns: {
-                // Voice 0 = same starter pattern; voices 1-3 = silent
                 let mut pats = vec![bass_pattern];
                 for _ in 1..MAX_BASS_VOICES {
                     pats.push(vec![TB303Step::default(); MAX_STEPS]);
                 }
                 pats
             },
-            bass_voice_steps: vec![16usize; MAX_BASS_VOICES],
+            bass_voice_steps: vec![32usize; MAX_BASS_VOICES],
             bass_voice_enabled: default_bass_voice_enabled(),
         }
     }
@@ -662,27 +677,9 @@ impl Default for FxState {
 
 // ─── LLM ─────────────────────────────────────────────────────────────────────
 
-/// How the AI persona presents itself in the `_comment` field.
-#[derive(Clone, Debug, PartialEq, Default, Serialize, Deserialize)]
-pub enum ConversationMode {
-    Off, // no commentary shown; brief technical label only
-    #[default]
-    Producer, // candid — what changed and why it serves the music
-    Dj,  // hype DJ persona, cheesy party energy
-    Mc,  // jungle/rave MC — "selector!", "junglist massive!", "rewind!"
-}
-
-/// espeak-ng voice character preset for TTS output.
-/// Auto = follow ConversationMode's default. Others override the voice selection.
-#[derive(Clone, Debug, PartialEq, Default, Serialize, Deserialize)]
-pub enum McVoiceChar {
-    #[default]
-    Auto, // follow ConversationMode defaults
-    JungleMc,      // fast, high-pitched ragga MC (en+m3)
-    RaveAnnouncer, // loud, rapid hype announcer (en+m2)
-    Robot,         // robotic, flat, low (en+m7)
-    SmoothDj,      // mid-low smooth DJ (en+m4)
-}
+// ConversationMode, McVoiceChar, TtsEngine, TtsModuleState → state/tts.rs
+pub mod tts_types;
+pub use tts_types::{ConversationMode, McVoiceChar, TtsEngine, TtsModuleState};
 
 /// Whether to use the short `brief` or full `description` from styles.json.
 /// Brief (~50 tokens) suits smaller/faster models; Full (~150 tokens) for capable models.
@@ -695,23 +692,28 @@ pub enum StyleVerbosity {
 
 /// TTS backend selection.
 /// A smooth parameter transition scheduled by the LLM.
-/// `current` converges toward `target` by `step_per_cycle` each jam cycle.
+///
+/// Two timing modes:
+/// - **Cycle-based** (legacy): `step_per_cycle != 0`, `total_global_steps == 0`.
+///   `current` converges toward `target` by `step_per_cycle` each jam cycle.
+/// - **Bar-based**: `total_global_steps > 0`.  Ticked per UI frame using
+///   `global_step_count`.  Progress = `(now - start_global_step) / total_global_steps`.
+///   Value = `lerp(from, target, progress)`.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ParamRamp {
     pub param: String, // dot-path, e.g. "fx.reverb_mix"
-    pub current: f32,
+    pub current: f32,  // cycle-based: running value.  bar-based: unused (use `from`).
     pub target: f32,
-    pub step_per_cycle: f32, // added to current each cycle until target is reached
-}
-
-/// EspeakNg: always available, low quality, zero setup.
-/// CoquiTts: higher quality neural voice; requires `tts` CLI in PATH. Falls
-///           back to espeak-ng automatically if the binary is not found.
-#[derive(Clone, Debug, PartialEq, Default, Serialize, Deserialize)]
-pub enum TtsEngine {
-    #[default]
-    EspeakNg,
-    CoquiTts,
+    pub step_per_cycle: f32, // cycle-based: added to current each cycle.  bar-based: 0.
+    /// Bar-based ramp: original value at ramp creation.
+    #[serde(default)]
+    pub from: f32,
+    /// Bar-based ramp: `global_step_count` when the ramp was created (0 = cycle-based).
+    #[serde(default)]
+    pub start_global_step: u64,
+    /// Bar-based ramp: duration in sequencer steps (0 = cycle-based).
+    #[serde(default)]
+    pub total_global_steps: u64,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -744,25 +746,34 @@ pub struct LlmState {
     pub enable_thinking: bool,          // append /think or /no_think to prompt (Qwen3)
     pub show_thinking_in_log: bool,     // display reasoning blocks inline in the log
     // ── Sampling params (passed to llama-server on every inference call) ──────
-    pub top_k: i32,                  // 0 = disabled; Gemma default 64
-    pub top_p: f32,                  // nucleus sampling; Gemma default 0.95
-    pub min_p: f32,                  // min-prob floor; default 0.05
-    pub repeat_penalty: f32,         // 1.0 = off; >1.0 penalises repeated tokens
-    pub frequency_penalty: f32,      // OpenAI-compat; 0.0 = off
-    pub seed: i64,                   // -1 = random each call
-    pub tts_enabled: bool,           // speak MC/DJ content via espeak-ng when true
-    pub tts_pitch: u8,               // 0 = mode default; 1–99 override
-    pub tts_speed: u16,              // 0 = mode default; words/min override
-    pub tts_amplitude: u8,           // 0 = default (100); 1–200 override
-    pub tts_voice_char: McVoiceChar, // voice character preset (Auto = follow mode)
-    pub tts_randomise: bool,         // ±10% pitch/speed jitter per utterance
-    pub tts_pitch_snap: bool,        // snap TTS voice to nearest in-key note (T-Pain effect)
+    pub top_k: i32,             // 0 = disabled; Gemma default 64
+    pub top_p: f32,             // nucleus sampling; Gemma default 0.95
+    pub min_p: f32,             // min-prob floor; default 0.05
+    pub repeat_penalty: f32,    // 1.0 = off; >1.0 penalises repeated tokens
+    pub frequency_penalty: f32, // OpenAI-compat; 0.0 = off
+    pub seed: i64,              // -1 = random each call
+    // TTS settings moved to per-module TtsModuleState (AppState.tts_modules).
+    // Legacy fields kept for session.json backward compat (serde default, ignored at runtime).
     #[serde(default)]
-    pub tts_engine: TtsEngine, // EspeakNg (default) or CoquiTts (falls back if not installed)
+    pub tts_enabled: bool,
+    #[serde(default)]
+    pub tts_pitch: u8,
+    #[serde(default)]
+    pub tts_speed: u16,
+    #[serde(default)]
+    pub tts_amplitude: u8,
+    #[serde(default)]
+    pub tts_voice_char: McVoiceChar,
+    #[serde(default)]
+    pub tts_randomise: bool,
+    #[serde(default)]
+    pub tts_pitch_snap: bool,
+    #[serde(default)]
+    pub tts_engine: TtsEngine,
     pub style_verbosity: StyleVerbosity, // Brief = ~50 token brief, Full = ~150 token description
-    pub auto_lock_on_touch: bool,    // if true, touching a knob locks it to user-only control
-    pub auto_compact: bool,          // restart server automatically when context > 85% full
-    pub is_mock: bool,               // true when running without a real model (no llama-server)
+    pub auto_lock_on_touch: bool,        // if true, touching a knob locks it to user-only control
+    pub auto_compact: bool,              // restart server automatically when context > 85% full
+    pub is_mock: bool,                   // true when running without a real model (no llama-server)
     pub llm_initializing: bool, // true while wait_for_ready is running (suppress false mock warning)
     #[serde(default)]
     pub model_missing: bool, // no model file found on startup — prompt user to download

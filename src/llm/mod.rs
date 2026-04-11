@@ -7,6 +7,7 @@ pub mod instructions;
 pub mod json_repair;
 pub mod mock;
 pub mod prompt;
+pub mod schema;
 pub mod styles;
 pub mod vram;
 pub use mock::mock_response;
@@ -380,9 +381,28 @@ pub fn run_llm_loop(
             }
         };
 
+        // Set is_inferring early so the UI shows activity immediately
+        {
+            let mut s = state.write();
+            s.llm.is_inferring = true;
+            if let Some(aid) = agent_id
+                && let Some(a) = s.llm_agents.iter_mut().find(|a| a.id == aid)
+            {
+                a.is_inferring = true;
+            }
+        }
+
         // Build system prompt with per-agent overrides patched in.
+        let agent_label = agent_persona.clone().unwrap_or_else(|| "default".into());
+        log::info!(
+            "LLM: infer start (agent={}, one_shot={})",
+            agent_label,
+            one_shot
+        );
+        log::debug!("LLM: building system prompt...");
         let system = {
             let mut snap = state.read().clone();
+            log::debug!("LLM: state snapshot done");
             if let Some(mode) = agent_conv_mode {
                 snap.llm.conversation_mode = mode;
             }
@@ -426,17 +446,14 @@ pub fn run_llm_loop(
             for h in &hints {
                 full_memory.push(format!("[hint from another agent] {}", h));
             }
-            prompt::build_system_prompt_full(&snap, &agent_scope, &full_memory, &style_obs)
+            log::debug!("LLM: calling build_system_prompt_full...");
+            let result =
+                prompt::build_system_prompt_full(&snap, &agent_scope, &full_memory, &style_obs);
+            log::debug!("LLM: system prompt built ({} chars)", result.len());
+            result
         };
         {
-            let mut s = state.write();
-            s.llm.is_inferring = true;
-            s.llm.last_prompt = prompt.clone();
-            if let Some(aid) = agent_id
-                && let Some(a) = s.llm_agents.iter_mut().find(|a| a.id == aid)
-            {
-                a.is_inferring = true;
-            }
+            state.write().llm.last_prompt = prompt.clone();
         }
 
         let sampling = {
@@ -462,9 +479,20 @@ pub fn run_llm_loop(
                 "/no_think"
             }
         );
+        log::info!(
+            "LLM: sending inference to port {} ({} system chars, {} prompt chars)",
+            infer_port,
+            system.len(),
+            think_prompt.len()
+        );
         let t0 = Instant::now();
         let result = pool.infer(infer_port, &system, &think_prompt, &sampling);
         let elapsed = t0.elapsed().as_secs_f32();
+        log::info!(
+            "LLM: inference returned after {:.1}s (ok={})",
+            elapsed,
+            result.is_ok()
+        );
 
         match result {
             Ok(output) => {
@@ -473,19 +501,70 @@ pub fn run_llm_loop(
                 let ctok = output.completion_tokens;
                 let ctx = output.context_used;
                 let tthink = output.thinking.as_ref().map(|t| t.len() / 4).unwrap_or(0);
+                log::info!(
+                    "LLM: infer done (agent={}, {:.1}t/s, prompt={}, completion={}, ctx={}, think~{})",
+                    agent_label,
+                    tps,
+                    ptok,
+                    ctok,
+                    ctx,
+                    tthink
+                );
 
+                log::trace!("LLM JSON: {}", output.text);
+
+                // Apply LLM update: snapshot OUTSIDE the lock, apply, then
+                // selectively write back under a short lock.
                 let before_state = if let Some(ref update) = output.param_update {
+                    let t0 = Instant::now();
+                    // Snapshot outside the write lock to minimize hold time.
                     let current = state.read().clone();
                     let before = Box::new(current.clone());
+                    log::info!(
+                        "LLM apply: snapshot took {:.1}ms",
+                        t0.elapsed().as_secs_f64() * 1000.0
+                    );
+
+                    let t1 = Instant::now();
                     let next = apply_llm_update(current, update, &agent_scope);
-                    *state.write() = next;
+                    log::info!(
+                        "LLM apply: apply_llm_update took {:.1}ms",
+                        t1.elapsed().as_secs_f64() * 1000.0
+                    );
+
+                    // Short write lock: only copy synth-parameter fields.
+                    let t2 = Instant::now();
+                    {
+                        let mut s = state.write();
+                        let step = s.sequencer.current_step;
+                        s.bass_voices = next.bass_voices;
+                        s.kit_a = next.kit_a;
+                        s.kit_b = next.kit_b;
+                        s.sequencer = next.sequencer;
+                        s.sequencer.current_step = step;
+                        s.fx = next.fx;
+                        s.hoover = next.hoover;
+                        s.an1x = next.an1x;
+                        s.noise_voice = next.noise_voice;
+                        s.lfo = next.lfo;
+                    } // write lock released here
+                    log::info!(
+                        "LLM apply: write-back took {:.1}ms",
+                        t2.elapsed().as_secs_f64() * 1000.0
+                    );
+
                     Some(before)
                 } else {
                     None
                 };
 
+                log::info!(
+                    "LLM apply: update done, has_param_update={}",
+                    output.param_update.is_some()
+                );
                 {
                     let mut s = state.write();
+                    log::debug!("LLM: setting is_inferring=false");
                     s.llm.is_inferring = false;
                     s.llm.tokens_per_sec = tps;
                     s.llm.prompt_tokens = ptok;
@@ -544,52 +623,70 @@ pub fn run_llm_loop(
                         log::debug!("{} (jam) -> {}", persona, comment);
                     }
 
-                    let (
-                        tts_on,
-                        mode,
-                        tts_pitch,
-                        tts_speed,
-                        tts_amplitude,
-                        voice_char,
-                        randomise,
-                        pitch_snap,
-                        root_note,
-                        tts_scale,
-                        tts_engine,
-                    ) = {
-                        let s = state.read();
-                        (
-                            s.llm.tts_enabled,
-                            s.llm.conversation_mode.clone(),
-                            s.llm.tts_pitch,
-                            s.llm.tts_speed,
-                            s.llm.tts_amplitude,
-                            s.llm.tts_voice_char.clone(),
-                            s.llm.tts_randomise,
-                            s.llm.tts_pitch_snap,
-                            s.sequencer.root_note,
-                            s.sequencer.scale,
-                            s.llm.tts_engine.clone(),
-                        )
+                    // ── TTS via rack cable ────────────────────────────────
+                    // Find TTS modules connected to this agent via control
+                    // cables.  Read settings from the TTS module, not global.
+                    let mode = if let Some(aid) = agent_id {
+                        state
+                            .read()
+                            .llm_agents
+                            .iter()
+                            .find(|a| a.id == aid)
+                            .map(|a| a.conversation_mode.clone())
+                            .unwrap_or_default()
+                    } else {
+                        state.read().llm.conversation_mode.clone()
                     };
                     let tts_mode = matches!(mode, ConversationMode::Mc | ConversationMode::Dj);
-                    if tts_on && tts_mode {
-                        use crate::state::TtsEngine;
-                        let tts_text = output.mc_line.as_deref().unwrap_or(comment);
-                        log::info!("[TTS] {}", tts_text);
-                        let tp = tts::TtsParams {
-                            pitch: tts_pitch,
-                            speed: tts_speed,
-                            amplitude: tts_amplitude,
-                            voice_char: &voice_char,
-                            randomise,
-                            pitch_snap,
-                            root_note,
-                            scale: tts_scale,
-                        };
-                        match tts_engine {
-                            TtsEngine::CoquiTts => speak_coqui(tts_text, &mode, &tp, &tts_tx),
-                            TtsEngine::EspeakNg => speak_fx(tts_text, &mode, &tp, &tts_tx),
+                    if tts_mode {
+                        let s = state.read();
+                        let src_id = agent_id.unwrap_or(0);
+                        // Find a TTS module wired from this agent
+                        let tts_mod = s.rack.cables.iter().find_map(|c| {
+                            if c.from.module_id == src_id
+                                && c.from.kind == crate::state::PortKind::Control
+                            {
+                                let target = c.to.module_id;
+                                if s.rack.modules.iter().any(|m| {
+                                    m.id == target
+                                        && matches!(
+                                            m.kind,
+                                            crate::state::ModuleKind::EspeakNgTts
+                                                | crate::state::ModuleKind::CoquiTts
+                                        )
+                                        && m.enabled
+                                }) {
+                                    s.tts_modules.iter().find(|t| t.id == target)
+                                } else {
+                                    None
+                                }
+                            } else {
+                                None
+                            }
+                        });
+                        if let Some(tts_mod) = tts_mod {
+                            use crate::state::TtsEngine;
+                            let tts_text = output.mc_line.as_deref().unwrap_or(comment);
+                            log::info!(
+                                "[TTS] module={} engine={:?}: {}",
+                                tts_mod.id,
+                                tts_mod.engine,
+                                tts_text
+                            );
+                            let tp = tts::TtsParams {
+                                pitch: tts_mod.pitch,
+                                speed: tts_mod.speed,
+                                amplitude: tts_mod.amplitude,
+                                voice_char: &tts_mod.voice_char,
+                                randomise: tts_mod.randomise,
+                                pitch_snap: tts_mod.pitch_snap,
+                                root_note: s.sequencer.root_note,
+                                scale: s.sequencer.scale,
+                            };
+                            match tts_mod.engine {
+                                TtsEngine::CoquiTts => speak_coqui(tts_text, &mode, &tp, &tts_tx),
+                                TtsEngine::EspeakNg => speak_fx(tts_text, &mode, &tp, &tts_tx),
+                            }
                         }
                     }
                 }

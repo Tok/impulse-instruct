@@ -24,6 +24,11 @@ use crate::state::{AppState, apply_llm_update, lock_params, unlock_params};
 pub struct ApiState {
     pub app_state: Arc<RwLock<AppState>>,
     pub llm_tx: Sender<LlmInput>,
+    /// Lock-free channel for API→UI log messages.
+    /// Avoids taking a write lock on AppState just to push log strings.
+    pub api_log_tx: Sender<String>,
+    /// Set by API when params change — UI polls this and pushes to audio thread.
+    pub params_dirty: Arc<std::sync::atomic::AtomicBool>,
 }
 
 // ─── Request / response types ─────────────────────────────────────────────────
@@ -33,6 +38,9 @@ pub struct PromptRequest {
     pub prompt: String,
     #[serde(default)]
     pub one_shot: bool,
+    /// Target agent by persona name (e.g. "BASS", "DRUMS"). Omit for global/first agent.
+    #[serde(default)]
+    pub agent: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -45,6 +53,79 @@ pub struct LockRequest {
     pub paths: Vec<String>,
 }
 
+#[derive(Deserialize)]
+pub struct ScrollRequest {
+    /// Target to scroll to: zone name ("global", "voice", "fxmod") or
+    /// module kind ("AcidBass", "DrumKit808", "FxReverb", etc.)
+    pub target: String,
+    /// Optional: collapse other zones when scrolling to focus on the target.
+    #[serde(default)]
+    pub collapse_others: bool,
+}
+
+#[derive(Deserialize)]
+pub struct CollapseRequest {
+    /// "all", "none", "global", "voice", "fxmod"
+    pub action: String,
+}
+
+#[derive(Deserialize)]
+pub struct PresetRequest {
+    /// Preset name: "Solo", "Duo", "Swarm", "Band", "Voices", "Lite"
+    pub name: String,
+}
+
+#[derive(Deserialize)]
+pub struct FlipRequest {
+    /// true = show back (cables), false = show front (knobs).
+    pub show_back: bool,
+}
+
+#[derive(Deserialize)]
+pub struct RackAddRequest {
+    /// Module kind: "AcidBass", "DrumKit808", "DrumKit909", "FxReverb", "FxDelay", etc.
+    pub kind: String,
+}
+
+#[derive(Deserialize)]
+pub struct RackAgentRequest {
+    /// Agent persona name (e.g. "BASS", "DRUMS", "FX")
+    pub persona: String,
+    /// Scope — what the agent controls (e.g. ["bass"], ["kit_a", "kit_b"])
+    #[serde(default)]
+    pub scope: Vec<String>,
+    /// Model pattern to match (e.g. "gemma", "bonsai"). Omit to inherit default.
+    #[serde(default)]
+    pub model: Option<String>,
+    /// Conversation mode: "off", "producer", "dj", "mc". Default: "producer".
+    #[serde(default)]
+    pub mode: Option<String>,
+    /// If true, auto-add a TTS module and wire a control cable from this agent.
+    #[serde(default)]
+    pub tts: Option<bool>,
+}
+
+#[derive(Deserialize)]
+pub struct RackCableRequest {
+    /// Source module ID
+    pub from: u32,
+    /// Target module ID
+    pub to: u32,
+    /// Cable type: "control" or "audio" (default: "control")
+    #[serde(default = "default_cable_kind")]
+    pub kind: String,
+}
+
+fn default_cable_kind() -> String {
+    "control".into()
+}
+
+#[derive(Deserialize)]
+pub struct RackRemoveRequest {
+    /// Module ID to remove
+    pub id: u32,
+}
+
 #[derive(Serialize)]
 pub struct OkResponse {
     pub ok: bool,
@@ -52,10 +133,24 @@ pub struct OkResponse {
     pub message: Option<String>,
 }
 
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+/// Clone the app state without holding the read lock longer than necessary.
+fn snapshot(state: &Arc<RwLock<AppState>>) -> AppState {
+    state.read().clone()
+}
+
+/// Push a log message to the UI console + stderr log.
+fn api_log(api: &ApiState, msg: impl Into<String>) {
+    let s = msg.into();
+    log::debug!("{}", s);
+    let _ = api.api_log_tx.try_send(s);
+}
+
 // ─── Handlers ─────────────────────────────────────────────────────────────────
 
 async fn get_state(AxumState(api): AxumState<ApiState>) -> Json<serde_json::Value> {
-    let state = api.app_state.read().clone();
+    let state = snapshot(&api.app_state);
     Json(serde_json::to_value(&state).unwrap_or(serde_json::Value::Null))
 }
 
@@ -67,11 +162,30 @@ async fn post_prompt(
     AxumState(api): AxumState<ApiState>,
     Json(req): Json<PromptRequest>,
 ) -> Result<Json<OkResponse>, StatusCode> {
+    // Resolve agent by persona name (case-insensitive).
+    let agent_id = req.agent.as_ref().and_then(|name| {
+        let s = api.app_state.read();
+        s.llm_agents
+            .iter()
+            .find(|a| a.persona_name.eq_ignore_ascii_case(name))
+            .map(|a| a.id)
+    });
+    let target = agent_id
+        .and_then(|id| {
+            api.app_state
+                .read()
+                .llm_agents
+                .iter()
+                .find(|a| a.id == id)
+                .map(|a| a.persona_name.clone())
+        })
+        .unwrap_or_else(|| "global".into());
+    api_log(&api, format!("[API] prompt → {}: {}", target, req.prompt));
     api.llm_tx
         .try_send(LlmInput::Infer {
             prompt: req.prompt,
-            one_shot: req.one_shot,
-            agent_id: None,
+            one_shot: true,
+            agent_id,
         })
         .map_err(|_| StatusCode::SERVICE_UNAVAILABLE)?;
     Ok(Json(OkResponse {
@@ -84,8 +198,18 @@ async fn post_params(
     AxumState(api): AxumState<ApiState>,
     Json(req): Json<ParamsRequest>,
 ) -> Json<OkResponse> {
-    let next = apply_llm_update(api.app_state.read().clone(), &req.params, &[]);
+    // Snapshot first, then release read lock before acquiring write lock.
+    let current = snapshot(&api.app_state);
+    let next = apply_llm_update(current, &req.params, &[]);
+    let keys: Vec<&str> = req
+        .params
+        .as_object()
+        .map(|o| o.keys().map(|k| k.as_str()).collect())
+        .unwrap_or_default();
+    api_log(&api, format!("[API] params: {}", keys.join(", ")));
     *api.app_state.write() = next;
+    api.params_dirty
+        .store(true, std::sync::atomic::Ordering::Relaxed);
     Json(OkResponse {
         ok: true,
         message: Some("params updated".into()),
@@ -97,7 +221,9 @@ async fn post_lock(
     Json(req): Json<LockRequest>,
 ) -> Json<OkResponse> {
     let refs: Vec<&str> = req.paths.iter().map(String::as_str).collect();
-    let next = lock_params(api.app_state.read().clone(), &refs);
+    let current = snapshot(&api.app_state);
+    let next = lock_params(current, &refs);
+    api_log(&api, format!("[API] locked: {}", req.paths.join(", ")));
     *api.app_state.write() = next;
     Json(OkResponse {
         ok: true,
@@ -110,7 +236,9 @@ async fn post_unlock(
     Json(req): Json<LockRequest>,
 ) -> Json<OkResponse> {
     let refs: Vec<&str> = req.paths.iter().map(String::as_str).collect();
-    let next = unlock_params(api.app_state.read().clone(), &refs);
+    let current = snapshot(&api.app_state);
+    let next = unlock_params(current, &refs);
+    api_log(&api, format!("[API] unlocked: {}", req.paths.join(", ")));
     *api.app_state.write() = next;
     Json(OkResponse {
         ok: true,
@@ -119,11 +247,10 @@ async fn post_unlock(
 }
 
 async fn post_play(AxumState(api): AxumState<ApiState>) -> Json<OkResponse> {
-    let next = crate::state::toggle_sequencer_running(api.app_state.read().clone());
-    // Ensure it ends up running regardless of current state
-    let mut s = next;
-    s.sequencer.running = true;
-    *api.app_state.write() = s;
+    api.app_state.write().sequencer.running = true;
+    api.params_dirty
+        .store(true, std::sync::atomic::Ordering::Relaxed);
+    api_log(&api, "[API] sequencer: play");
     Json(OkResponse {
         ok: true,
         message: None,
@@ -131,12 +258,421 @@ async fn post_play(AxumState(api): AxumState<ApiState>) -> Json<OkResponse> {
 }
 
 async fn post_stop(AxumState(api): AxumState<ApiState>) -> Json<OkResponse> {
-    let mut next = api.app_state.read().clone();
-    next.sequencer.running = false;
-    *api.app_state.write() = next;
+    api.app_state.write().sequencer.running = false;
+    api.params_dirty
+        .store(true, std::sync::atomic::Ordering::Relaxed);
+    api_log(&api, "[API] sequencer: stop");
     Json(OkResponse {
         ok: true,
         message: None,
+    })
+}
+
+async fn post_scroll(
+    AxumState(api): AxumState<ApiState>,
+    Json(req): Json<ScrollRequest>,
+) -> Json<OkResponse> {
+    if req.collapse_others {
+        let is_global = req.target == "global" || req.target == "sequencer";
+        let is_voice = req.target == "voice"
+            || req.target == "bass"
+            || req.target == "808"
+            || req.target == "909";
+        let is_fx = req.target == "fxmod" || req.target == "fx";
+        api.app_state.write().collapse_requested = Some((!is_global, !is_voice, !is_fx));
+    }
+    api.app_state.write().scroll_target = Some(req.target.clone());
+    api_log(&api, format!("[API] scroll → {}", req.target));
+    Json(OkResponse {
+        ok: true,
+        message: Some(format!("scrolling to {}", req.target)),
+    })
+}
+
+async fn post_collapse(
+    AxumState(api): AxumState<ApiState>,
+    Json(req): Json<CollapseRequest>,
+) -> Json<OkResponse> {
+    let collapse = match req.action.as_str() {
+        "all" => Some((true, true, true)),
+        "none" => Some((false, false, false)),
+        "global" => Some((true, false, false)),
+        "voice" => Some((false, true, false)),
+        "fxmod" => Some((false, false, true)),
+        _ => None,
+    };
+    if let Some(c) = collapse {
+        api.app_state.write().collapse_requested = Some(c);
+    }
+    api_log(&api, format!("[API] collapse → {}", req.action));
+    Json(OkResponse {
+        ok: true,
+        message: Some(format!("collapse {}", req.action)),
+    })
+}
+
+async fn post_preset(
+    AxumState(api): AxumState<ApiState>,
+    Json(req): Json<PresetRequest>,
+) -> Result<Json<OkResponse>, StatusCode> {
+    use crate::llm::vram::{PRESETS, find_model};
+
+    let preset = PRESETS
+        .iter()
+        .find(|p| p.name.eq_ignore_ascii_case(&req.name))
+        .ok_or(StatusCode::NOT_FOUND)?;
+
+    let available_models = crate::ui::scan_models();
+
+    // Do everything in a single write lock — no snapshot+swap race.
+    let mut agent_names = Vec::new();
+    {
+        let mut s = api.app_state.write();
+
+        // Remove all existing agents
+        let old_ids: Vec<u32> = s.llm_agents.iter().map(|a| a.id).collect();
+        for id in &old_ids {
+            s.rack.remove_module(*id);
+        }
+        s.llm_agents.clear();
+
+        // Spawn agents from the preset (inline, no full-state swap)
+        for pa in preset.agents {
+            let model_path = find_model(pa.model_pattern, &available_models);
+            let scope: Vec<String> = pa.scope.iter().map(|sc| sc.to_string()).collect();
+
+            let id = s.rack.add_module(crate::state::ModuleKind::LlmAgent);
+            let mut agent = crate::state::LlmAgentState::from_singleton(id, &s.llm);
+            agent.persona_name = pa.persona.to_string();
+            agent.scope = scope.clone();
+            agent.role = pa.role;
+            agent.model_path = model_path.clone();
+
+            let targets: Vec<u32> = if scope.is_empty() {
+                s.rack
+                    .modules
+                    .iter()
+                    .filter(|m| {
+                        !matches!(
+                            m.kind,
+                            crate::state::ModuleKind::MasterOutput
+                                | crate::state::ModuleKind::LlmAgent
+                                | crate::state::ModuleKind::LlmConsole
+                        )
+                    })
+                    .map(|m| m.id)
+                    .collect()
+            } else {
+                s.rack
+                    .modules
+                    .iter()
+                    .filter(|m| {
+                        scope
+                            .iter()
+                            .any(|sc| crate::state::rack_kind_name_matches(m.kind, sc))
+                    })
+                    .map(|m| m.id)
+                    .collect()
+            };
+            for tid in &targets {
+                s.rack.connect_control(id, *tid);
+            }
+            s.llm_agents.push(agent);
+            agent_names.push(pa.persona);
+        }
+
+        // Set the main model path from the first agent
+        if let Some(first) = preset.agents.first()
+            && let Some(model) = find_model(first.model_pattern, &available_models)
+        {
+            s.llm.model_path = model;
+        }
+    }
+
+    let msg = format!(
+        "[API] preset '{}': {} agents ({})",
+        preset.name,
+        agent_names.len(),
+        agent_names.join(", ")
+    );
+    api_log(&api, msg.clone());
+
+    Ok(Json(OkResponse {
+        ok: true,
+        message: Some(msg),
+    }))
+}
+
+async fn post_flip(
+    AxumState(api): AxumState<ApiState>,
+    Json(req): Json<FlipRequest>,
+) -> Json<OkResponse> {
+    let label = if req.show_back {
+        "back (cables)"
+    } else {
+        "front (knobs)"
+    };
+    api.app_state.write().rack_flip_requested = Some(req.show_back);
+    api_log(&api, format!("[API] rack flip → {}", label));
+    Json(OkResponse {
+        ok: true,
+        message: Some(format!("rack: {}", label)),
+    })
+}
+
+// ─── Rack manipulation endpoints ─────────────────────────────────────────────
+
+/// Parse a module kind from a string name.
+fn parse_module_kind(name: &str) -> Option<crate::state::ModuleKind> {
+    use crate::state::ModuleKind::*;
+    match name
+        .to_ascii_lowercase()
+        .replace(['-', '_', ' '], "")
+        .as_str()
+    {
+        "acidbass" | "bass" | "303" => Some(AcidBass),
+        "drumkit808" | "808" => Some(DrumKit808),
+        "drumkit909" | "909" => Some(DrumKit909),
+        "hooverlead" | "hoover" => Some(HooverLead),
+        "an1xvoice" | "an1x" => Some(An1xVoice),
+        "amensampler" | "amen" => Some(AmenSampler),
+        "noisevoice" | "noise" => Some(NoiseVoice),
+        "fxreverb" | "reverb" => Some(FxReverb),
+        "fxdelay" | "delay" => Some(FxDelay),
+        "fxchorus" | "chorus" => Some(FxChorus),
+        "fxphaser" | "phaser" => Some(FxPhaser),
+        "fxeq" | "eq" => Some(FxEq),
+        "fxcompressor" | "compressor" => Some(FxCompressor),
+        "fxtapesat" | "tapesat" => Some(FxTapeSat),
+        "fxdrive" | "drive" => Some(FxDrive),
+        "fxautotune" | "autotune" => Some(FxAutotune),
+        "fxwaveshaper" | "waveshaper" => Some(FxWaveshaper),
+        "fxbitcrush" | "bitcrush" => Some(FxBitcrush),
+        "fxringmod" | "ringmod" => Some(FxRingMod),
+        "lfomodule" | "lfo" => Some(LfoModule),
+        "spectrumanalyzer" | "spectrum" => Some(SpectrumAnalyzer),
+        "stereometer" => Some(StereoMeter),
+        "activitytimeline" | "timeline" => Some(ActivityTimeline),
+        "espeakngtts" | "espeak" | "tts" => Some(EspeakNgTts),
+        "coquitts" | "coqui" => Some(CoquiTts),
+        _ => None,
+    }
+}
+
+async fn post_rack_add(
+    AxumState(api): AxumState<ApiState>,
+    Json(req): Json<RackAddRequest>,
+) -> Result<Json<serde_json::Value>, StatusCode> {
+    use crate::state::{PortDir, PortKind, PortRef};
+    let kind = parse_module_kind(&req.kind).ok_or(StatusCode::BAD_REQUEST)?;
+    let mut s = api.app_state.write();
+    let id = s.rack.add_module(kind);
+    // Auto-wire voice and FX modules to MasterOutput with an audio cable.
+    if kind.default_zone() != crate::state::Zone::Global
+        && let Some(master_id) = s
+            .rack
+            .modules
+            .iter()
+            .find(|m| m.kind == crate::state::ModuleKind::MasterOutput)
+            .map(|m| m.id)
+    {
+        s.rack.connect(
+            PortRef {
+                module_id: id,
+                dir: PortDir::Out,
+                kind: PortKind::Audio,
+                index: 0,
+            },
+            PortRef {
+                module_id: master_id,
+                dir: PortDir::In,
+                kind: PortKind::Audio,
+                index: 0,
+            },
+        );
+    }
+    // Create per-module state for TTS modules.
+    if matches!(
+        kind,
+        crate::state::ModuleKind::EspeakNgTts | crate::state::ModuleKind::CoquiTts
+    ) {
+        let mut tts_state = crate::state::TtsModuleState::new(id);
+        if kind == crate::state::ModuleKind::CoquiTts {
+            tts_state.engine = crate::state::TtsEngine::CoquiTts;
+        }
+        s.tts_modules.push(tts_state);
+    }
+    // Auto-scroll to the new module so it's visible.
+    s.scroll_target = Some(req.kind.clone());
+    drop(s);
+    api_log(&api, format!("[API] rack: added {:?} (id={})", kind, id));
+    Ok(Json(serde_json::json!({ "ok": true, "id": id })))
+}
+
+async fn post_rack_agent(
+    AxumState(api): AxumState<ApiState>,
+    Json(req): Json<RackAgentRequest>,
+) -> Json<serde_json::Value> {
+    let available_models = crate::ui::scan_models();
+    let model_path = req
+        .model
+        .as_deref()
+        .and_then(|pat| crate::llm::vram::find_model(pat, &available_models));
+
+    // Add agent directly on the locked state — DO NOT snapshot+swap the entire
+    // AppState, as that races with the audio thread writing current_step.
+    let id = {
+        let mut s = api.app_state.write();
+        let id = s.rack.add_module(crate::state::ModuleKind::LlmAgent);
+        let mut agent = crate::state::LlmAgentState::from_singleton(id, &s.llm);
+        agent.persona_name = req.persona.clone();
+        agent.scope = req.scope.clone();
+        agent.role = crate::state::AgentRole::Specialist;
+        agent.model_path = model_path;
+        if let Some(ref mode_str) = req.mode {
+            agent.conversation_mode = match mode_str.to_ascii_lowercase().as_str() {
+                "off" => crate::state::ConversationMode::Off,
+                "dj" => crate::state::ConversationMode::Dj,
+                "mc" => crate::state::ConversationMode::Mc,
+                _ => crate::state::ConversationMode::Producer,
+            };
+        }
+        if req.tts == Some(true) {
+            // Add a TTS module and wire a control cable from this agent.
+            let tts_id = s.rack.add_module(crate::state::ModuleKind::EspeakNgTts);
+            s.tts_modules
+                .push(crate::state::TtsModuleState::new(tts_id));
+            s.rack.connect_control(id, tts_id);
+        }
+
+        // Wire control cables to modules matching the scope
+        let targets: Vec<u32> = if req.scope.is_empty() {
+            s.rack
+                .modules
+                .iter()
+                .filter(|m| {
+                    !matches!(
+                        m.kind,
+                        crate::state::ModuleKind::MasterOutput
+                            | crate::state::ModuleKind::LlmAgent
+                            | crate::state::ModuleKind::LlmConsole
+                    )
+                })
+                .map(|m| m.id)
+                .collect()
+        } else {
+            s.rack
+                .modules
+                .iter()
+                .filter(|m| {
+                    req.scope
+                        .iter()
+                        .any(|sc| crate::state::rack_kind_name_matches(m.kind, sc))
+                })
+                .map(|m| m.id)
+                .collect()
+        };
+        for tid in &targets {
+            s.rack.connect_control(id, *tid);
+        }
+        s.llm_agents.push(agent);
+        // Auto-scroll to the console area so the new agent is visible.
+        s.scroll_target = Some("console".to_string());
+        id
+    };
+
+    api_log(
+        &api,
+        format!(
+            "[API] rack: added agent {} (id={}, scope={:?})",
+            req.persona, id, req.scope
+        ),
+    );
+    Json(serde_json::json!({ "ok": true, "id": id }))
+}
+
+async fn post_rack_cable(
+    AxumState(api): AxumState<ApiState>,
+    Json(req): Json<RackCableRequest>,
+) -> Json<OkResponse> {
+    let mut s = api.app_state.write();
+    if req.kind == "control" {
+        s.rack.connect_control(req.from, req.to);
+    } else {
+        use crate::state::{PortDir, PortKind, PortRef};
+        s.rack.connect(
+            PortRef {
+                module_id: req.from,
+                dir: PortDir::Out,
+                kind: PortKind::Audio,
+                index: 0,
+            },
+            PortRef {
+                module_id: req.to,
+                dir: PortDir::In,
+                kind: PortKind::Audio,
+                index: 0,
+            },
+        );
+    }
+    drop(s);
+    api_log(
+        &api,
+        format!("[API] rack: cable {} → {} ({})", req.from, req.to, req.kind),
+    );
+    Json(OkResponse {
+        ok: true,
+        message: Some(format!("cable {} → {}", req.from, req.to)),
+    })
+}
+
+async fn post_rack_remove(
+    AxumState(api): AxumState<ApiState>,
+    Json(req): Json<RackRemoveRequest>,
+) -> Json<OkResponse> {
+    let mut s = api.app_state.write();
+    s.rack.remove_module(req.id);
+    s.llm_agents.retain(|a| a.id != req.id);
+    s.tts_modules.retain(|t| t.id != req.id);
+    drop(s);
+    api_log(&api, format!("[API] rack: removed module {}", req.id));
+    Json(OkResponse {
+        ok: true,
+        message: Some(format!("removed {}", req.id)),
+    })
+}
+
+/// Clear the rack to a minimal setup: just sequencer + master + LLM console.
+async fn post_rack_reset(AxumState(api): AxumState<ApiState>) -> Json<OkResponse> {
+    use crate::state::ModuleKind;
+    let mut s = api.app_state.write();
+    // Keep only Sequencer, MasterOutput, LlmConsole
+    let keep: Vec<u32> = s
+        .rack
+        .modules
+        .iter()
+        .filter(|m| {
+            matches!(
+                m.kind,
+                ModuleKind::StepSequencer | ModuleKind::MasterOutput | ModuleKind::LlmConsole
+            )
+        })
+        .map(|m| m.id)
+        .collect();
+    s.rack.modules.retain(|m| keep.contains(&m.id));
+    s.rack
+        .cables
+        .retain(|c| keep.contains(&c.from.module_id) && keep.contains(&c.to.module_id));
+    s.llm_agents.clear();
+    s.tts_modules.clear();
+    drop(s);
+    api_log(
+        &api,
+        "[API] rack: reset to minimal (seq + master + console)",
+    );
+    Json(OkResponse {
+        ok: true,
+        message: Some("rack reset".into()),
     })
 }
 
@@ -157,6 +693,15 @@ pub fn build_router(api_state: ApiState) -> Router {
         .route("/api/unlock", post(post_unlock))
         .route("/api/sequencer/play", post(post_play))
         .route("/api/sequencer/stop", post(post_stop))
+        .route("/api/scroll", post(post_scroll))
+        .route("/api/preset", post(post_preset))
+        .route("/api/flip", post(post_flip))
+        .route("/api/rack/add", post(post_rack_add))
+        .route("/api/rack/agent", post(post_rack_agent))
+        .route("/api/rack/cable", post(post_rack_cable))
+        .route("/api/rack/remove", post(post_rack_remove))
+        .route("/api/rack/reset", post(post_rack_reset))
+        .route("/api/rack/collapse", post(post_collapse))
         .layer(cors)
         .with_state(api_state)
 }

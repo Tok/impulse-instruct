@@ -3,8 +3,10 @@
 // Custom widgets: rotary knob, step button, LED indicator.
 
 pub mod emboss;
+pub mod pan;
 #[allow(unused_imports)]
 pub use emboss::button_emboss;
+pub use pan::pan_slider;
 
 pub mod step;
 pub use step::{huth_note_cell, step_button};
@@ -81,6 +83,22 @@ impl ControlPrefs {
         let mut cp = Self::from_prefs(prefs);
         cp.knob_size = (cp.knob_size * scale).max(20.0);
         cp
+    }
+
+    /// Return a copy with knob radius scaled by φ — for primary params (cutoff, resonance).
+    pub fn phi_bigger(self) -> Self {
+        Self {
+            knob_size: (self.knob_size * 1.618).max(20.0),
+            ..self
+        }
+    }
+
+    /// Return a copy with knob radius scaled by 1/φ — for secondary params (glide, FM).
+    pub fn phi_smaller(self) -> Self {
+        Self {
+            knob_size: (self.knob_size * 0.618).max(16.0),
+            ..self
+        }
     }
 
     /// Suggested max-width for a glass panel group containing controls of this style.
@@ -507,7 +525,13 @@ pub use xy_pad::{xy_pad, xy_pad_pair};
 
 // ─── ADSR Envelope Visualiser ────────────────────────────────────────────────
 mod adsr;
-pub use adsr::{adsr_display, decay_display};
+pub use adsr::{adsr_display, decay_display, filter_response};
+
+mod waveform_viz;
+pub use waveform_viz::{lfo_preview, waveform_icon};
+
+mod event_stream;
+pub use event_stream::event_stream;
 
 // ─── Glass Group ─────────────────────────────────────────────────────────────
 
@@ -541,6 +565,11 @@ pub fn glass_group<R>(
 ) -> egui::InnerResponse<R> {
     glass_group_fill(ui, max_width, max_width, content)
 }
+
+/// A horizontal row of controls. Inside a `glass_group_fill` (which uses
+/// `top_down(Center)`), this row is centered as a block.
+mod centered;
+pub use centered::centered_row;
 
 /// Like `glass_group` but sets an exact width (both min and max), so the panel fills
 /// its allocated share when used in an evenly distributed row.

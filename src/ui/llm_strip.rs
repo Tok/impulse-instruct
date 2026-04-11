@@ -271,7 +271,11 @@ pub(super) fn colorize_log(text: &str, default_color: egui::Color32) -> egui::te
             }
             // ── MIDI number context: "note 60", "midi 72", "pitch 48" ─────────
             let prefix_end = pos;
-            let prefix_start = pos.saturating_sub(7);
+            let mut prefix_start = pos.saturating_sub(7);
+            // Ensure we don't slice inside a multi-byte UTF-8 character
+            while prefix_start > 0 && !text.is_char_boundary(prefix_start) {
+                prefix_start -= 1;
+            }
             let prefix = &text[prefix_start..prefix_end];
             let is_midi_ctx = ["note ", "midi ", "pitch ", "step "]
                 .iter()
@@ -394,13 +398,14 @@ impl ImpulseApp {
             if self.available_models.is_empty() {
                 self.available_models = super::scan_models();
             }
-            let (cur_model, ctx_used, ctx_max, is_mock) = {
+            let (cur_model, ctx_used, ctx_max, is_mock, is_initializing) = {
                 let s = self.state.read();
                 (
                     s.llm.model_path.clone(),
                     s.llm.context_used,
                     s.llm.context_max,
                     s.llm.is_mock,
+                    s.llm.llm_initializing,
                 )
             };
             let cur_short = std::path::Path::new(&cur_model)
@@ -494,6 +499,146 @@ impl ImpulseApp {
                         .color(theme::IRON),
                 );
             }
+            if is_initializing {
+                let t = ui.ctx().input(|i| i.time) as f32;
+                let dots = match ((t * 2.0) as usize) % 4 {
+                    0 => "   ",
+                    1 => ".  ",
+                    2 => ".. ",
+                    _ => "...",
+                };
+                let pulse = (t * 3.0 * std::f32::consts::TAU).sin() * 0.3 + 0.7;
+                let g = (140.0 * pulse) as u8;
+                ui.label(
+                    egui::RichText::new(format!("Loading{}", dots))
+                        .monospace()
+                        .size(8.0)
+                        .color(egui::Color32::from_gray(g)),
+                );
+                ui.ctx().request_repaint();
+            }
+
+            ui.separator();
+
+            // ── JAM timing (same line as model/ctx) ─────────────────
+            ui.label(
+                egui::RichText::new("JAM")
+                    .monospace()
+                    .size(8.0)
+                    .color(theme::ASH),
+            );
+            let (jam_bars, cycle_count, is_inferring, active_ramps, tps) = {
+                let s = self.state.read();
+                (
+                    s.llm.jam_bars,
+                    s.llm.jam_cycle_count,
+                    s.llm.is_inferring,
+                    s.llm.active_ramps.len(),
+                    s.llm.tokens_per_sec,
+                )
+            };
+            for (label, bars) in &[
+                ("C", 0.0f32),
+                ("1", 1.0),
+                ("2", 2.0),
+                ("4", 4.0),
+                ("8", 8.0),
+            ] {
+                let active = (jam_bars - bars).abs() < 0.01;
+                let col = if active { theme::FOG } else { theme::SMOKE };
+                if ui
+                    .add(
+                        egui::Button::new(
+                            egui::RichText::new(*label).monospace().size(7.5).color(col),
+                        )
+                        .fill(egui::Color32::TRANSPARENT)
+                        .min_size(egui::vec2(0.0, 12.0)),
+                    )
+                    .clicked()
+                {
+                    self.state.write().llm.jam_bars = *bars;
+                }
+            }
+            ui.label(
+                egui::RichText::new(format!("#{}", cycle_count))
+                    .monospace()
+                    .size(7.0)
+                    .color(theme::IRON),
+            );
+            if is_inferring {
+                ui.label(egui::RichText::new("▶").size(7.5).color(theme::FOG))
+                    .on_hover_text(format!("{:.1} tok/s", tps));
+            } else if tps > 0.0 {
+                ui.label(
+                    egui::RichText::new(format!("{:.0}t/s", tps))
+                        .monospace()
+                        .size(7.0)
+                        .color(theme::IRON),
+                );
+            }
+            if active_ramps > 0 {
+                ui.label(
+                    egui::RichText::new(format!("~{}", active_ramps))
+                        .monospace()
+                        .size(7.0)
+                        .color(theme::IRON),
+                );
+            }
+            if let Some((fire_at, _)) = self.jam_next_fire {
+                let remaining = fire_at.duration_since(std::time::Instant::now());
+                ui.label(
+                    egui::RichText::new(format!("{:.1}s", remaining.as_secs_f32()))
+                        .monospace()
+                        .size(7.0)
+                        .color(theme::ASH),
+                );
+            }
+
+            // ── Agent round-robin (right-justified on same line) ────
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                let s = self.state.read();
+                let agents = &s.llm_agents;
+                let enabled: Vec<_> = agents
+                    .iter()
+                    .filter(|a| s.rack.modules.iter().any(|m| m.id == a.id && m.enabled))
+                    .collect();
+                if !enabled.is_empty() {
+                    let time = ui.ctx().input(|i| i.time) as f32;
+                    // Right-to-left: draw in reverse so they appear left-to-right
+                    for a in enabled.iter().rev() {
+                        let scope_str = a.scope.join(",");
+                        if !scope_str.is_empty() {
+                            ui.label(
+                                egui::RichText::new(format!("[{}]", scope_str))
+                                    .color(theme::IRON)
+                                    .monospace()
+                                    .size(6.5),
+                            );
+                        }
+                        let name_col = if a.is_inferring {
+                            theme::CHALK
+                        } else {
+                            theme::IRON
+                        };
+                        ui.label(
+                            egui::RichText::new(&a.persona_name)
+                                .color(name_col)
+                                .monospace()
+                                .size(7.5),
+                        );
+                        let dot_col = if a.is_inferring {
+                            let p = (time * 4.0 * std::f32::consts::TAU).sin() * 0.3 + 0.7;
+                            egui::Color32::from_gray((220.0 * p) as u8)
+                        } else {
+                            egui::Color32::from_gray(60)
+                        };
+                        ui.label(egui::RichText::new("●").color(dot_col).size(7.5));
+                    }
+                    if agents.iter().any(|a| a.is_inferring) {
+                        ui.ctx().request_repaint();
+                    }
+                }
+            });
         });
 
         // ── Style selector + instructions ────────────────────────────
@@ -596,96 +741,32 @@ impl ImpulseApp {
             }
         });
 
-        // ── JAM timing row ───────────────────────────────────────────
-        ui.horizontal(|ui| {
-            ui.label(
-                egui::RichText::new("JAM")
-                    .monospace()
-                    .size(8.5)
-                    .color(theme::ASH),
-            );
-            let (jam_bars, cycle_count, _bpm, is_inferring, active_ramps, tps) = {
-                let s = self.state.read();
-                (
-                    s.llm.jam_bars,
-                    s.llm.jam_cycle_count,
-                    s.sequencer.bpm,
-                    s.llm.is_inferring,
-                    s.llm.active_ramps.len(),
-                    s.llm.tokens_per_sec,
-                )
-            };
-            for (label, bars) in &[
-                ("CONT", 0.0f32),
-                ("1", 1.0),
-                ("2", 2.0),
-                ("4", 4.0),
-                ("8", 8.0),
-            ] {
-                let active = (jam_bars - bars).abs() < 0.01;
-                let col = if active { theme::FOG } else { theme::SMOKE };
-                if ui
-                    .add(
-                        egui::Button::new(
-                            egui::RichText::new(*label).monospace().size(8.0).color(col),
-                        )
-                        .fill(egui::Color32::TRANSPARENT)
-                        .min_size(egui::vec2(0.0, 12.0)),
-                    )
-                    .clicked()
-                {
-                    self.state.write().llm.jam_bars = *bars;
-                }
-            }
-            ui.add_space(6.0);
-            ui.label(
-                egui::RichText::new(format!("#{}", cycle_count))
-                    .monospace()
-                    .size(8.0)
-                    .color(theme::IRON),
-            );
-            if is_inferring {
-                ui.label(egui::RichText::new("▶").size(8.0).color(theme::FOG))
-                    .on_hover_text(format!("{:.1} tok/s", tps));
-            } else if tps > 0.0 {
-                ui.label(
-                    egui::RichText::new(format!("{:.1}t/s", tps))
-                        .monospace()
-                        .size(7.5)
-                        .color(theme::IRON),
-                );
-            }
-            if active_ramps > 0 {
-                ui.label(
-                    egui::RichText::new(format!("~{}", active_ramps))
-                        .monospace()
-                        .size(7.5)
-                        .color(theme::IRON),
-                );
-            }
-            if let Some((fire_at, _)) = self.jam_next_fire {
-                let remaining = fire_at.duration_since(std::time::Instant::now());
-                ui.label(
-                    egui::RichText::new(format!("in {:.1}s", remaining.as_secs_f32()))
-                        .monospace()
-                        .size(7.5)
-                        .color(theme::ASH),
-                );
-            }
-        });
+        // JAM + agent status now merged into line 1 (model/ctx row above)
 
         // ── Prompt input + ASK ───────────────────────────────────────
+        ui.add_space(2.0);
         ui.horizontal(|ui| {
             let avail = ui.available_width();
             let prompt_w = avail - 40.0;
+
+            // Subtle highlight frame around the prompt row
+            let prompt_rect =
+                egui::Rect::from_min_size(ui.cursor().min, egui::vec2(prompt_w + 40.0, 24.0));
+            ui.painter().rect_stroke(
+                prompt_rect.shrink(1.0),
+                egui::Rounding::same(3.0),
+                egui::Stroke::new(1.0, egui::Color32::from_gray(45)),
+            );
+
             let response = ui.add(
                 egui::TextEdit::singleline(&mut self.prompt_input)
                     .hint_text("prompt the model…")
                     .desired_width(prompt_w)
-                    .font(egui::FontId::monospace(9.5)),
+                    .min_size(egui::vec2(0.0, 22.0))
+                    .font(egui::FontId::monospace(11.0)),
             );
             let submit = ui
-                .button(egui::RichText::new("↵").monospace().size(10.0))
+                .button(egui::RichText::new("↵").monospace().size(11.0))
                 .clicked();
 
             // Enter submits: egui's singleline TextEdit loses focus on Enter,

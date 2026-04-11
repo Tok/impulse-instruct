@@ -74,13 +74,52 @@ A detailed log of what's built.
 
 ## TTS / MC mode
 
-- espeak-ng backend - speaks PULSE's `mc_line` field as a jungle MC
-- Coqui TTS backend - higher quality synthesis; auto-falls back to espeak-ng if binary not found; engine toggle in TTS settings
-- Per-character pitch/speed +-10% - avoids robotic monotone
-- TTS settings: pitch, speed, amplitude sliders
-- MC voice characters: Jungle MC, Rave Announcer, Robot, Smooth DJ
-- Autotune/pitch-snap - pitch-quantize espeak-ng output to current key/scale
-- TTS as rack modules - EspeakNgTts and CoquiTts are ModuleKind variants with audio output ports; default rack wires EspeakNgTts to FxReverb; duck envelope in DspState
+- espeak-ng backend - speaks agent `mc_line` field via TTS rack module
+- Coqui TTS backend - higher quality synthesis; auto-falls back to espeak-ng if binary not found
+- **TTS as rack module** - agents speak through TTS modules connected via control cables; no cable = no speech; per-module settings (engine, pitch, speed, amplitude, voice char, jitter, pitch snap)
+- MC voice characters: Jungle MC, Rave Announcer, Robot, Smooth DJ (per-module)
+- Autotune/pitch-snap - pitch-quantize output to current key/scale
+- API `"tts": true` on agent creation auto-adds a TTS module and wires it
+
+## Style catalog (`styles.json`)
+
+29 genre styles with the following fields (all user-editable):
+
+| Field | Description |
+|-------|-------------|
+| `id`, `name` | Identifier and display name |
+| `keywords` | Trigger words for auto-detection from prompts |
+| `bpm_range` | Informational BPM range |
+| `brief` | Short creative brief (~50 tokens) for smaller models |
+| `description` | Full creative brief (~150 tokens) |
+| `seed_patterns` | 16-step starter patterns (kick, snare, hihat, bass) |
+| `suggested_root`, `suggested_scale` | Tonic and scale suggestion |
+| `baseline_params` | Parameter reset applied when style is selected |
+| `mc_lines` | Example MC/DJ lines for this style (optional, fed to MC-mode agents as reference) |
+| `themes` | Topic words for singer/rapper agents (optional, gives creative direction) |
+
+`mc_lines` and `themes` are injected into the system prompt — mc_lines only for MC/DJ conversation modes, themes for all modes. Styles that don't suit vocal content (minimal techno, IDM) omit these fields.
+
+## Real-time mix observer
+
+Continuous audio + pattern analysis running every ~2s. Results shown in the header bar and injected into every LLM system prompt as `AUDIO: ...` context. Agents see the mix state and can self-correct.
+
+**Audio-level checks:**
+- CLIPPING (peak > -1dB), near clip (peak > -3dB)
+- sub overload, harsh highs, mid overload (band RMS thresholds)
+- muddy low end (low >> mid by 20dB)
+- over-compressed (crest < 3dB)
+- near silence (peak < -40dB)
+- snare rush (high RMS + fast transients)
+
+**Pattern/mix checks:**
+- bass very dense (>80% steps active)
+- bass sparse (≤2 steps in 16)
+- bass monotone (all active notes identical)
+- no bass notes / no kick (while sequencer running)
+- reverb high / delay feedback high / heavy distortion (FX extremes)
+
+Alerts cycle in the header (2 at a time, rotating each second). Multiple alerts joined in LLM context with `!!` prefix.
 
 ## I/O
 

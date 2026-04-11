@@ -93,131 +93,36 @@ pub fn draw_an1x(app: &mut ImpulseApp, ui: &mut Ui) {
                 }
             });
         }
-    });
-    {
-        let gw = widgets::even_group_width(ui, 2);
-        ui.horizontal(|ui| {
-            // LEVELS group: O1 LVL, O2 LVL, SUB
-            widgets::glass_group_fill(ui, gw, gw, |ui| {
-                ui.label(
-                    egui::RichText::new("LEVELS")
-                        .color(theme::FOG)
-                        .monospace()
-                        .size(9.5),
-                );
-                {
-                    let mut v = app.state.read().an1x.osc1_level;
-                    let (ch, _) =
-                        widgets::param_control(ui, "O1 LVL", &mut v, ParamMode::Free, ctrl);
-                    if ch {
-                        app.state.write().an1x.osc1_level = v;
-                        app.push_audio_params();
-                    }
-                }
-                {
-                    let mut v = app.state.read().an1x.osc2_level;
-                    let (ch, _) =
-                        widgets::param_control(ui, "O2 LVL", &mut v, ParamMode::Free, ctrl);
-                    if ch {
-                        app.state.write().an1x.osc2_level = v;
-                        app.push_audio_params();
-                    }
-                }
-                {
-                    let mut v = app.state.read().an1x.sub_level;
-                    let (ch, _) = widgets::param_control(ui, "SUB", &mut v, ParamMode::Free, ctrl);
-                    if ch {
-                        app.state.write().an1x.sub_level = v;
-                        app.push_audio_params();
-                    }
-                }
-            });
-            // TUNE group: O2 DET, O2 OCT stepper, RING×, SYNC
-            widgets::glass_group_fill(ui, gw, gw, |ui| {
-                ui.label(
-                    egui::RichText::new("TUNE")
-                        .color(theme::FOG)
-                        .monospace()
-                        .size(9.5),
-                );
-                {
-                    let mut v = app.state.read().an1x.osc2_detune;
-                    let (ch, _) =
-                        widgets::param_control(ui, "O2 DET", &mut v, ParamMode::Free, ctrl);
-                    if ch {
-                        app.state.write().an1x.osc2_detune = v;
-                        app.push_audio_params();
-                    }
-                }
-                {
-                    let oct = app.state.read().an1x.osc2_octave;
-                    ui.vertical(|ui| {
-                        ui.label(egui::RichText::new("O2 OCT").color(theme::SMOKE).small());
-                        ui.horizontal(|ui| {
-                            if ui.small_button("-").clicked() && oct > -2 {
-                                app.state.write().an1x.osc2_octave = oct - 1;
-                                app.push_audio_params();
-                            }
-                            ui.label(egui::RichText::new(format!("{:+}", oct)).color(theme::CHALK));
-                            if ui.small_button("+").clicked() && oct < 2 {
-                                app.state.write().an1x.osc2_octave = oct + 1;
-                                app.push_audio_params();
-                            }
-                        });
-                    });
-                }
-                {
-                    let ring = app.state.read().an1x.ring_mod;
-                    if ui
-                        .add(
-                            egui::Button::new(egui::RichText::new("RING×").color(if ring {
-                                theme::CHALK
-                            } else {
-                                theme::IRON
-                            }))
-                            .fill(if ring {
-                                theme::SLATE
-                            } else {
-                                theme::PIT
-                            }),
-                        )
-                        .on_hover_text("Ring modulation: OSC1 × OSC2")
-                        .clicked()
-                    {
-                        app.state.write().an1x.ring_mod = !ring;
-                        app.push_audio_params();
-                    }
-                }
-                {
-                    let sync = app.state.read().an1x.hard_sync;
-                    if ui
-                        .add(
-                            egui::Button::new(egui::RichText::new("SYNC").color(if sync {
-                                theme::CHALK
-                            } else {
-                                theme::IRON
-                            }))
-                            .fill(if sync {
-                                theme::SLATE
-                            } else {
-                                theme::PIT
-                            }),
-                        )
-                        .on_hover_text("Hard sync: OSC2 phase resets on each OSC1 cycle")
-                        .clicked()
-                    {
-                        app.state.write().an1x.hard_sync = !sync;
-                        app.push_audio_params();
-                    }
-                }
-            });
+        // Animated waveform previews for OSC1 and OSC2
+        let wave_to_kind = |w: An1xWave| -> u8 {
+            match w {
+                An1xWave::Saw => 0,
+                An1xWave::Square => 1,
+                An1xWave::Triangle => 4,
+                An1xWave::Sine => 3,
+                An1xWave::Noise => 5, // reuse S&H-like animation
+            }
+        };
+        ui.vertical(|ui| {
+            ui.label(
+                egui::RichText::new("O1")
+                    .color(theme::SMOKE)
+                    .size(7.0)
+                    .monospace(),
+            );
+            widgets::waveform_icon(ui, wave_to_kind(osc1w), 50.0, 24.0);
         });
-    }
-    ui.add_space(4.0);
-
-    // ── FILTER ───────────────────────────────────────────────────────────────
-    widgets::section_header(ui, "FILTER");
-    // Filter mode buttons — full width
+        ui.vertical(|ui| {
+            ui.label(
+                egui::RichText::new("O2")
+                    .color(theme::SMOKE)
+                    .size(7.0)
+                    .monospace(),
+            );
+            widgets::waveform_icon(ui, wave_to_kind(osc2w), 50.0, 24.0);
+        });
+    });
+    // ── Filter mode + ADSR vizzes (compact header row) ─────────────────────
     ui.horizontal(|ui| {
         let fmode = app.state.read().an1x.filter_mode;
         for (label, mode) in &[
@@ -228,13 +133,13 @@ pub fn draw_an1x(app: &mut ImpulseApp, ui: &mut Ui) {
             let active = fmode == *mode;
             if ui
                 .add(
-                    egui::Button::new(egui::RichText::new(*label).color(if active {
-                        theme::CHALK
-                    } else {
-                        theme::IRON
-                    }))
+                    egui::Button::new(
+                        egui::RichText::new(*label)
+                            .color(if active { theme::CHALK } else { theme::IRON })
+                            .size(8.0),
+                    )
                     .fill(if active { theme::SLATE } else { theme::PIT })
-                    .min_size(egui::vec2(26.0, 16.0)),
+                    .min_size(egui::vec2(22.0, 14.0)),
                 )
                 .clicked()
             {
@@ -242,37 +147,90 @@ pub fn draw_an1x(app: &mut ImpulseApp, ui: &mut Ui) {
                 app.push_audio_params();
             }
         }
-    });
-    // Filter ADSR visualiser — interactive, drag to edit (full width)
-    ui.label(
-        egui::RichText::new("Filter ADSR")
-            .color(theme::IRON)
-            .small(),
-    );
-    {
-        let (mut a, mut d, mut s, mut r) = {
-            let st = app.state.read();
-            (
-                st.an1x.filter_attack,
-                st.an1x.filter_decay,
-                st.an1x.filter_sustain,
-                st.an1x.filter_release,
-            )
-        };
-        if widgets::adsr_display(ui, &mut a, &mut d, &mut s, &mut r, 140.0, 36.0) {
-            let mut st = app.state.write();
-            st.an1x.filter_attack = a;
-            st.an1x.filter_decay = d;
-            st.an1x.filter_sustain = s;
-            st.an1x.filter_release = r;
-            drop(st);
-            app.push_audio_params();
+        ui.separator();
+        {
+            let (mut a, mut d, mut s, mut r) = {
+                let st = app.state.read();
+                (
+                    st.an1x.filter_attack,
+                    st.an1x.filter_decay,
+                    st.an1x.filter_sustain,
+                    st.an1x.filter_release,
+                )
+            };
+            ui.label(
+                egui::RichText::new("F.ENV")
+                    .color(theme::IRON)
+                    .monospace()
+                    .size(7.0),
+            );
+            if widgets::adsr_display(ui, &mut a, &mut d, &mut s, &mut r, 140.0, 50.0) {
+                let mut st = app.state.write();
+                st.an1x.filter_attack = a;
+                st.an1x.filter_decay = d;
+                st.an1x.filter_sustain = s;
+                st.an1x.filter_release = r;
+                drop(st);
+                app.push_audio_params();
+            }
         }
+        ui.separator();
+        {
+            let (mut a, mut d, mut s, mut r) = {
+                let st = app.state.read();
+                (
+                    st.an1x.amp_attack,
+                    st.an1x.amp_decay,
+                    st.an1x.amp_sustain,
+                    st.an1x.amp_release,
+                )
+            };
+            ui.label(
+                egui::RichText::new("A.ENV")
+                    .color(theme::IRON)
+                    .monospace()
+                    .size(7.0),
+            );
+            if widgets::adsr_display(ui, &mut a, &mut d, &mut s, &mut r, 140.0, 50.0) {
+                let mut st = app.state.write();
+                st.an1x.amp_attack = a;
+                st.an1x.amp_decay = d;
+                st.an1x.amp_sustain = s;
+                st.an1x.amp_release = r;
+                drop(st);
+                app.push_audio_params();
+            }
+        }
+    });
+
+    // AN1X knob macro
+    macro_rules! ak {
+        ($ui:expr, $lbl:expr, $fld:ident) => {{
+            let mut v = app.state.read().an1x.$fld;
+            if widgets::param_control($ui, $lbl, &mut v, ParamMode::Free, ctrl).0 {
+                app.state.write().an1x.$fld = v;
+                app.push_audio_params();
+            }
+        }};
     }
-    // Filter knobs in 2 glass groups: FILTER (cutoff/reso/env/key) and F.ADSR (attack/decay/sust/rel)
+
+    // ── Row 1 (3 cols): LEVELS | FILTER | F.ADSR ────────────────────────
     {
-        let gw = widgets::even_group_width(ui, 2);
+        let gw = widgets::even_group_width(ui, 3);
         ui.horizontal(|ui| {
+            widgets::glass_group_fill(ui, gw, gw, |ui| {
+                ui.label(
+                    egui::RichText::new("LEVELS")
+                        .color(theme::FOG)
+                        .monospace()
+                        .size(9.5),
+                );
+                widgets::centered_row(ui, |ui| {
+                    ak!(ui, "O1", osc1_level);
+                    ak!(ui, "O2", osc2_level);
+                    ak!(ui, "SUB", sub_level);
+                });
+            });
             widgets::glass_group_fill(ui, gw, gw, |ui| {
                 ui.label(
                     egui::RichText::new("FILTER")
@@ -280,21 +238,14 @@ pub fn draw_an1x(app: &mut ImpulseApp, ui: &mut Ui) {
                         .monospace()
                         .size(9.5),
                 );
-                macro_rules! k {
-                    ($lbl:expr, $fld:ident) => {{
-                        let mut v = app.state.read().an1x.$fld;
-                        let (ch, _) =
-                            widgets::param_control(ui, $lbl, &mut v, ParamMode::Free, ctrl);
-                        if ch {
-                            app.state.write().an1x.$fld = v;
-                            app.push_audio_params();
-                        }
-                    }};
-                }
-                k!("CUTOFF", filter_cutoff);
-                k!("RESO", filter_resonance);
-                k!("ENV", filter_env_amount);
-                k!("KEY", filter_key_track);
+                widgets::centered_row(ui, |ui| {
+                    ak!(ui, "CUT", filter_cutoff);
+                    ak!(ui, "RES", filter_resonance);
+                });
+                widgets::centered_row(ui, |ui| {
+                    ak!(ui, "ENV", filter_env_amount);
+                    ak!(ui, "KEY", filter_key_track);
+                });
             });
             widgets::glass_group_fill(ui, gw, gw, |ui| {
                 ui.label(
@@ -303,53 +254,89 @@ pub fn draw_an1x(app: &mut ImpulseApp, ui: &mut Ui) {
                         .monospace()
                         .size(9.5),
                 );
-                macro_rules! k {
-                    ($lbl:expr, $fld:ident) => {{
-                        let mut v = app.state.read().an1x.$fld;
-                        let (ch, _) =
-                            widgets::param_control(ui, $lbl, &mut v, ParamMode::Free, ctrl);
-                        if ch {
-                            app.state.write().an1x.$fld = v;
-                            app.push_audio_params();
-                        }
-                    }};
-                }
-                k!("ATCK", filter_attack);
-                k!("DCAY", filter_decay);
-                k!("SUST", filter_sustain);
-                k!("REL", filter_release);
+                widgets::centered_row(ui, |ui| {
+                    ak!(ui, "ATK", filter_attack);
+                    ak!(ui, "DEC", filter_decay);
+                });
+                widgets::centered_row(ui, |ui| {
+                    ak!(ui, "SUS", filter_sustain);
+                    ak!(ui, "REL", filter_release);
+                });
             });
         });
     }
-    ui.add_space(4.0);
 
-    // ── AMP ADSR + PITCH ENV ─────────────────────────────────────────────────
-    widgets::section_header(ui, "AMP ADSR");
-    // Amp ADSR visualiser — full width
+    // ── Row 2 (3 cols): TUNE | A.ADSR | PITCH ENV ──────────────────────
     {
-        let (mut a, mut d, mut s, mut r) = {
-            let st = app.state.read();
-            (
-                st.an1x.amp_attack,
-                st.an1x.amp_decay,
-                st.an1x.amp_sustain,
-                st.an1x.amp_release,
-            )
-        };
-        if widgets::adsr_display(ui, &mut a, &mut d, &mut s, &mut r, 140.0, 36.0) {
-            let mut st = app.state.write();
-            st.an1x.amp_attack = a;
-            st.an1x.amp_decay = d;
-            st.an1x.amp_sustain = s;
-            st.an1x.amp_release = r;
-            drop(st);
-            app.push_audio_params();
-        }
-    }
-    // Amp knobs + Pitch env knobs in 2 glass groups: A.ADSR and PITCH ENV
-    {
-        let gw = widgets::even_group_width(ui, 2);
+        let gw = widgets::even_group_width(ui, 3);
         ui.horizontal(|ui| {
+            widgets::glass_group_fill(ui, gw, gw, |ui| {
+                ui.label(
+                    egui::RichText::new("TUNE")
+                        .color(theme::FOG)
+                        .monospace()
+                        .size(9.5),
+                );
+                widgets::centered_row(ui, |ui| {
+                    ak!(ui, "DET", osc2_detune);
+                    let oct = app.state.read().an1x.osc2_octave;
+                    ui.label(
+                        egui::RichText::new("OCT")
+                            .color(theme::SMOKE)
+                            .size(7.5)
+                            .monospace(),
+                    );
+                    if ui.small_button("-").clicked() && oct > -2 {
+                        app.state.write().an1x.osc2_octave = oct - 1;
+                        app.push_audio_params();
+                    }
+                    ui.label(egui::RichText::new(format!("{:+}", oct)).color(theme::CHALK));
+                    if ui.small_button("+").clicked() && oct < 2 {
+                        app.state.write().an1x.osc2_octave = oct + 1;
+                        app.push_audio_params();
+                    }
+                });
+                widgets::centered_row(ui, |ui| {
+                    let ring = app.state.read().an1x.ring_mod;
+                    if ui
+                        .add(
+                            egui::Button::new(
+                                egui::RichText::new("RING×")
+                                    .color(if ring { theme::CHALK } else { theme::IRON })
+                                    .size(8.0),
+                            )
+                            .fill(if ring {
+                                theme::SLATE
+                            } else {
+                                theme::PIT
+                            }),
+                        )
+                        .clicked()
+                    {
+                        app.state.write().an1x.ring_mod = !ring;
+                        app.push_audio_params();
+                    }
+                    let sync = app.state.read().an1x.hard_sync;
+                    if ui
+                        .add(
+                            egui::Button::new(
+                                egui::RichText::new("SYNC")
+                                    .color(if sync { theme::CHALK } else { theme::IRON })
+                                    .size(8.0),
+                            )
+                            .fill(if sync {
+                                theme::SLATE
+                            } else {
+                                theme::PIT
+                            }),
+                        )
+                        .clicked()
+                    {
+                        app.state.write().an1x.hard_sync = !sync;
+                        app.push_audio_params();
+                    }
+                });
+            });
             widgets::glass_group_fill(ui, gw, gw, |ui| {
                 ui.label(
                     egui::RichText::new("A.ADSR")
@@ -357,22 +344,28 @@ pub fn draw_an1x(app: &mut ImpulseApp, ui: &mut Ui) {
                         .monospace()
                         .size(9.5),
                 );
-                macro_rules! k {
-                    ($lbl:expr, $fld:ident) => {{
-                        let mut v = app.state.read().an1x.$fld;
-                        let (ch, _) =
-                            widgets::param_control(ui, $lbl, &mut v, ParamMode::Free, ctrl);
-                        if ch {
-                            app.state.write().an1x.$fld = v;
-                            app.push_audio_params();
-                        }
-                    }};
-                }
-                k!("ATCK", amp_attack);
-                k!("DCAY", amp_decay);
-                k!("SUST", amp_sustain);
-                k!("REL", amp_release);
-                k!("VOL", volume);
+                widgets::centered_row(ui, |ui| {
+                    ak!(ui, "ATK", amp_attack);
+                    ak!(ui, "DEC", amp_decay);
+                    ak!(ui, "VOL", volume);
+                });
+                widgets::centered_row(ui, |ui| {
+                    ak!(ui, "SUS", amp_sustain);
+                    ak!(ui, "REL", amp_release);
+                });
+                ui.horizontal(|ui| {
+                    ui.label(
+                        egui::RichText::new("PAN")
+                            .color(theme::SMOKE)
+                            .monospace()
+                            .size(7.5),
+                    );
+                    let mut pan = app.state.read().an1x.pan;
+                    if widgets::pan_slider(ui, &mut pan, 60.0) {
+                        app.state.write().an1x.pan = pan;
+                        app.push_audio_params();
+                    }
+                });
             });
             widgets::glass_group_fill(ui, gw, gw, |ui| {
                 ui.label(
@@ -381,20 +374,11 @@ pub fn draw_an1x(app: &mut ImpulseApp, ui: &mut Ui) {
                         .monospace()
                         .size(9.5),
                 );
-                macro_rules! k {
-                    ($lbl:expr, $fld:ident) => {{
-                        let mut v = app.state.read().an1x.$fld;
-                        let (ch, _) =
-                            widgets::param_control(ui, $lbl, &mut v, ParamMode::Free, ctrl);
-                        if ch {
-                            app.state.write().an1x.$fld = v;
-                            app.push_audio_params();
-                        }
-                    }};
-                }
-                k!("ATCK", pitch_env_attack);
-                k!("DCAY", pitch_env_decay);
-                k!("AMT", pitch_env_amount);
+                widgets::centered_row(ui, |ui| {
+                    ak!(ui, "ATK", pitch_env_attack);
+                    ak!(ui, "DEC", pitch_env_decay);
+                    ak!(ui, "AMT", pitch_env_amount);
+                });
             });
         });
     }

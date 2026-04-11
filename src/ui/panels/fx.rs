@@ -257,302 +257,102 @@ pub fn draw_fx(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         let n_cols = ((ui.available_width() / ctrl.group_max_width()) as usize).clamp(1, 4);
         let gw = widgets::even_group_width(ui, n_cols);
         ui.horizontal_wrapped(|ui| {
-            // ── REVERB ──────────────────────────────────────────────────────────
+            // Macro: horizontal row of knobs inside a group
+            macro_rules! hknobs {
+                ($ui:expr, $( ($label:expr, $val:expr, $pm:expr) ),+ $(,)?) => {
+                    widgets::centered_row($ui, |ui| {
+                        $( if widgets::param_control(ui, $label, $val, $pm, ctrl).0 { changed = true; } )+
+                    });
+                }
+            }
+
+            // ── REVERB (3+2 rows) ──────────────────────────────────────────────
             widgets::glass_group_fill(ui, gw, gw, |ui| {
-                ui.label(
-                    egui::RichText::new("REVERB")
-                        .color(theme::FOG)
-                        .monospace()
-                        .size(9.5),
-                );
-                if widgets::param_control(ui, "MIX", &mut rm, pm("fx.reverb_mix"), ctrl).0 {
-                    changed = true;
-                }
-                if widgets::param_control(ui, "SIZE", &mut rs, pm("fx.reverb_size"), ctrl).0 {
-                    changed = true;
-                }
-                if widgets::param_control(ui, "DAMP", &mut rd, ParamMode::Free, ctrl).0 {
-                    changed = true;
-                }
-                // Normalize gate_time 0–2s → 0–1 for the knob, convert back on write
-                let mut rgt_norm = rgt / 2.0;
-                if widgets::param_control(
-                    ui,
-                    "GATE",
-                    &mut rgt_norm,
-                    pm("fx.reverb_gate_time"),
-                    ctrl,
-                )
-                .0
-                {
-                    rgt = rgt_norm * 2.0;
-                    changed = true;
-                }
-                if ui
-                    .add(egui::SelectableLabel::new(rev_freeze, "FREEZE"))
-                    .clicked()
-                {
-                    rev_freeze = !rev_freeze;
-                    changed = true;
-                }
+                ui.label(egui::RichText::new("REVERB").color(theme::FOG).monospace().size(9.5));
+                hknobs!(ui, ("MIX", &mut rm, pm("fx.reverb_mix")), ("SIZE", &mut rs, pm("fx.reverb_size")), ("DAMP", &mut rd, ParamMode::Free));
+                ui.horizontal(|ui| {
+                    let mut rgt_norm = rgt / 2.0;
+                    if widgets::param_control(ui, "GATE", &mut rgt_norm, pm("fx.reverb_gate_time"), ctrl).0 {
+                        rgt = rgt_norm * 2.0; changed = true;
+                    }
+                    if ui.add(egui::SelectableLabel::new(rev_freeze, "FREEZE")).clicked() {
+                        rev_freeze = !rev_freeze; changed = true;
+                    }
+                });
             });
 
-            // ── DELAY ───────────────────────────────────────────────────────────
+            // ── DELAY (3+2 rows) ───────────────────────────────────────────────
             widgets::glass_group_fill(ui, gw, gw, |ui| {
-                ui.label(
-                    egui::RichText::new("DELAY")
-                        .color(theme::FOG)
-                        .monospace()
-                        .size(9.5),
-                );
-                if widgets::param_control(ui, "MIX", &mut dm, pm("fx.delay_mix"), ctrl).0 {
-                    changed = true;
-                }
-                if widgets::param_control(ui, "TIME", &mut dt, ParamMode::Free, ctrl).0 {
-                    changed = true;
-                }
-                if widgets::param_control(ui, "FDBK", &mut df, pm("fx.delay_feedback"), ctrl).0 {
-                    changed = true;
-                }
-                if widgets::param_control(
-                    ui,
-                    "WOW",
-                    &mut delay_wow,
-                    pm("fx.delay_wow_flutter"),
-                    ctrl,
-                )
-                .0
-                {
-                    changed = true;
-                }
-                if widgets::param_control(
-                    ui,
-                    "SAT",
-                    &mut delay_sat,
-                    pm("fx.delay_saturation"),
-                    ctrl,
-                )
-                .0
-                {
-                    changed = true;
-                }
+                ui.label(egui::RichText::new("DELAY").color(theme::FOG).monospace().size(9.5));
+                hknobs!(ui, ("MIX", &mut dm, pm("fx.delay_mix")), ("TIME", &mut dt, ParamMode::Free), ("FDBK", &mut df, pm("fx.delay_feedback")));
+                hknobs!(ui, ("WOW", &mut delay_wow, pm("fx.delay_wow_flutter")), ("SAT", &mut delay_sat, pm("fx.delay_saturation")));
             });
 
-            // ── CHORUS ──────────────────────────────────────────────────────────
+            // ── CHORUS (1 row) ─────────────────────────────────────────────────
             widgets::glass_group_fill(ui, gw, gw, |ui| {
-                ui.label(
-                    egui::RichText::new("CHORUS")
-                        .color(theme::FOG)
-                        .monospace()
-                        .size(9.5),
-                );
-                if widgets::param_control(ui, "MIX", &mut ch_mix, ParamMode::Free, ctrl).0 {
-                    changed = true;
-                }
-                if widgets::param_control(ui, "RATE", &mut ch_rate, ParamMode::Free, ctrl).0 {
-                    changed = true;
-                }
-                if widgets::param_control(ui, "DEPTH", &mut ch_depth, ParamMode::Free, ctrl).0 {
-                    changed = true;
-                }
+                ui.label(egui::RichText::new("CHORUS").color(theme::FOG).monospace().size(9.5));
+                hknobs!(ui, ("MIX", &mut ch_mix, ParamMode::Free), ("RATE", &mut ch_rate, ParamMode::Free), ("DEPTH", &mut ch_depth, ParamMode::Free));
             });
 
-            // ── PHASER ──────────────────────────────────────────────────────────
+            // ── PHASER (1 row) ─────────────────────────────────────────────────
             widgets::glass_group_fill(ui, gw, gw, |ui| {
-                ui.label(
-                    egui::RichText::new("PHASER")
-                        .color(theme::FOG)
-                        .monospace()
-                        .size(9.5),
-                );
-                if widgets::param_control(ui, "MIX", &mut ph_mix, ParamMode::Free, ctrl).0 {
-                    changed = true;
-                }
-                if widgets::param_control(ui, "RATE", &mut ph_rate, ParamMode::Free, ctrl).0 {
-                    changed = true;
-                }
-                if widgets::param_control(ui, "DEPTH", &mut ph_depth, ParamMode::Free, ctrl).0 {
-                    changed = true;
-                }
+                ui.label(egui::RichText::new("PHASER").color(theme::FOG).monospace().size(9.5));
+                hknobs!(ui, ("MIX", &mut ph_mix, ParamMode::Free), ("RATE", &mut ph_rate, ParamMode::Free), ("DEPTH", &mut ph_depth, ParamMode::Free));
             });
 
-            // ── SHAPE: waveshaper + ring mod combined ───────────────────────────
+            // ── SHAPE: waveshaper + ring mod (2×2) ─────────────────────────────
             widgets::glass_group_fill(ui, gw, gw, |ui| {
-                ui.label(
-                    egui::RichText::new("SHAPE")
-                        .color(theme::FOG)
-                        .monospace()
-                        .size(9.5),
-                );
-                if widgets::param_control(ui, "WS MIX", &mut ws_mix, ParamMode::Free, ctrl).0 {
-                    changed = true;
-                }
-                if widgets::param_control(ui, "WS DRV", &mut ws_drive, ParamMode::Free, ctrl).0 {
-                    changed = true;
-                }
-                if widgets::param_control(ui, "RM MIX", &mut rm_mix, ParamMode::Free, ctrl).0 {
-                    changed = true;
-                }
-                if widgets::param_control(ui, "RM FREQ", &mut rm_freq, ParamMode::Free, ctrl).0 {
-                    changed = true;
-                }
+                ui.label(egui::RichText::new("SHAPE").color(theme::FOG).monospace().size(9.5));
+                hknobs!(ui, ("WS MIX", &mut ws_mix, ParamMode::Free), ("WS DRV", &mut ws_drive, ParamMode::Free));
+                hknobs!(ui, ("RM MIX", &mut rm_mix, ParamMode::Free), ("RM FRQ", &mut rm_freq, ParamMode::Free));
             });
 
-            // ── EQ ──────────────────────────────────────────────────────────────
+            // ── EQ (1 row) ─────────────────────────────────────────────────────
             widgets::glass_group_fill(ui, gw, gw, |ui| {
-                ui.label(
-                    egui::RichText::new("EQ")
-                        .color(theme::FOG)
-                        .monospace()
-                        .size(9.5),
-                );
-                if widgets::param_control(ui, "LOW", &mut eq_low, ParamMode::Free, ctrl).0 {
-                    changed = true;
-                }
-                if widgets::param_control(ui, "MID", &mut eq_mid, ParamMode::Free, ctrl).0 {
-                    changed = true;
-                }
-                if widgets::param_control(ui, "HI", &mut eq_hi, ParamMode::Free, ctrl).0 {
-                    changed = true;
-                }
+                ui.label(egui::RichText::new("EQ").color(theme::FOG).monospace().size(9.5));
+                hknobs!(ui, ("LOW", &mut eq_low, ParamMode::Free), ("MID", &mut eq_mid, ParamMode::Free), ("HI", &mut eq_hi, ParamMode::Free));
             });
 
-            // ── COMPRESSOR ──────────────────────────────────────────────────────
+            // ── COMPRESSOR (2×2) ───────────────────────────────────────────────
             widgets::glass_group_fill(ui, gw, gw, |ui| {
-                ui.label(
-                    egui::RichText::new("COMP")
-                        .color(theme::FOG)
-                        .monospace()
-                        .size(9.5),
-                );
-                if widgets::param_control(ui, "MIX", &mut comp_mix, ParamMode::Free, ctrl).0 {
-                    changed = true;
-                }
-                if widgets::param_control(ui, "THRESH", &mut comp_thresh, ParamMode::Free, ctrl).0 {
-                    changed = true;
-                }
-                if widgets::param_control(ui, "RATIO", &mut comp_ratio, ParamMode::Free, ctrl).0 {
-                    changed = true;
-                }
-                if widgets::param_control(
-                    ui,
-                    "MULTI",
-                    &mut comp_mb,
-                    pm("fx.compressor_multiband"),
-                    ctrl,
-                )
-                .0
-                {
-                    changed = true;
-                }
+                ui.label(egui::RichText::new("COMP").color(theme::FOG).monospace().size(9.5));
+                hknobs!(ui, ("MIX", &mut comp_mix, ParamMode::Free), ("THRESH", &mut comp_thresh, ParamMode::Free));
+                hknobs!(ui, ("RATIO", &mut comp_ratio, ParamMode::Free), ("MULTI", &mut comp_mb, pm("fx.compressor_multiband")));
             });
 
-            // ── SIDECHAIN ──────────────────────────────────────────────────────
+            // ── SIDECHAIN (1 row) ──────────────────────────────────────────────
             widgets::glass_group_fill(ui, gw, gw, |ui| {
-                ui.label(
-                    egui::RichText::new("SIDECHAIN")
-                        .color(theme::FOG)
-                        .monospace()
-                        .size(9.5),
-                );
-                if widgets::param_control(
-                    ui,
-                    "AMOUNT",
-                    &mut sc_amount,
-                    pm("fx.sidechain_amount"),
-                    ctrl,
-                )
-                .0
-                {
-                    changed = true;
-                }
-                if widgets::param_control(
-                    ui,
-                    "ATK",
-                    &mut sc_attack,
-                    pm("fx.sidechain_attack"),
-                    ctrl,
-                )
-                .0
-                {
-                    changed = true;
-                }
-                if widgets::param_control(
-                    ui,
-                    "REL",
-                    &mut sc_release,
-                    pm("fx.sidechain_release"),
-                    ctrl,
-                )
-                .0
-                {
-                    changed = true;
-                }
+                ui.label(egui::RichText::new("SIDECHAIN").color(theme::FOG).monospace().size(9.5));
+                hknobs!(ui, ("AMT", &mut sc_amount, pm("fx.sidechain_amount")), ("ATK", &mut sc_attack, pm("fx.sidechain_attack")), ("REL", &mut sc_release, pm("fx.sidechain_release")));
             });
 
-            // ── TAPE ────────────────────────────────────────────────────────────
+            // ── TAPE (1 row) ───────────────────────────────────────────────────
             widgets::glass_group_fill(ui, gw, gw, |ui| {
-                ui.label(
-                    egui::RichText::new("TAPE")
-                        .color(theme::FOG)
-                        .monospace()
-                        .size(9.5),
-                );
-                if widgets::param_control(ui, "MIX", &mut tape_mix, ParamMode::Free, ctrl).0 {
-                    changed = true;
-                }
-                if widgets::param_control(ui, "DRIVE", &mut tape_drive, ParamMode::Free, ctrl).0 {
-                    changed = true;
-                }
-                if widgets::param_control(ui, "FLUTTER", &mut tape_flutter, ParamMode::Free, ctrl).0
-                {
-                    changed = true;
-                }
+                ui.label(egui::RichText::new("TAPE").color(theme::FOG).monospace().size(9.5));
+                hknobs!(ui, ("MIX", &mut tape_mix, ParamMode::Free), ("DRV", &mut tape_drive, ParamMode::Free), ("FLTR", &mut tape_flutter, ParamMode::Free));
             });
 
-            // ── MASTER ──────────────────────────────────────────────────────────
+            // ── MASTER (3+2+tuning) ────────────────────────────────────────────
             widgets::glass_group_fill(ui, gw, gw, |ui| {
-                ui.label(
-                    egui::RichText::new("MASTER")
-                        .color(theme::FOG)
-                        .monospace()
-                        .size(9.5),
-                );
-                if widgets::param_control(ui, "DRIVE", &mut dd, ParamMode::Free, ctrl).0 {
-                    changed = true;
-                }
-                if widgets::param_control(ui, "MIX", &mut dx, ParamMode::Free, ctrl).0 {
-                    changed = true;
-                }
-                if widgets::param_control(ui, "VOLUME", &mut mv, ParamMode::Free, ctrl).0 {
-                    changed = true;
-                }
-                // PITCH: -12..+12 semitones → normalize to 0..1 for knob, convert back on write
-                let mut mp_norm = (master_pitch + 12.0) / 24.0;
-                if widgets::param_control(ui, "PITCH", &mut mp_norm, pm("fx.master_pitch_st"), ctrl)
-                    .0
-                {
-                    master_pitch = mp_norm * 24.0 - 12.0;
-                    changed = true;
-                }
-                if widgets::param_control(ui, "WIDTH", &mut stereo_w, pm("fx.stereo_width"), ctrl).0
-                {
-                    changed = true;
-                }
-                // Tuning system selector
+                ui.label(egui::RichText::new("MASTER").color(theme::FOG).monospace().size(9.5));
+                hknobs!(ui, ("DRV", &mut dd, ParamMode::Free), ("MIX", &mut dx, ParamMode::Free), ("VOL", &mut mv, ParamMode::Free));
+                ui.horizontal(|ui| {
+                    let mut mp_norm = (master_pitch + 12.0) / 24.0;
+                    if widgets::param_control(ui, "PITCH", &mut mp_norm, pm("fx.master_pitch_st"), ctrl).0 {
+                        master_pitch = mp_norm * 24.0 - 12.0; changed = true;
+                    }
+                    if widgets::param_control(ui, "WIDTH", &mut stereo_w, pm("fx.stereo_width"), ctrl).0 { changed = true; }
+                });
                 let tuning_names = ["12-TET", "Just", "Slendro", "Pelog"];
                 let mut tuning_idx = app.state.read().fx.tuning as usize;
-                if tuning_idx >= tuning_names.len() {
-                    tuning_idx = 0;
-                }
+                if tuning_idx >= tuning_names.len() { tuning_idx = 0; }
                 egui::ComboBox::from_id_source("tuning_sel")
                     .width(60.0)
                     .selected_text(tuning_names[tuning_idx])
                     .show_ui(ui, |ui| {
                         for (i, name) in tuning_names.iter().enumerate() {
                             if ui.selectable_label(tuning_idx == i, *name).clicked() {
-                                app.state.write().fx.tuning = i as u8;
-                                changed = true;
+                                app.state.write().fx.tuning = i as u8; changed = true;
                             }
                         }
                     });

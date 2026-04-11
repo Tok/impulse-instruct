@@ -13,6 +13,9 @@ pub struct NoiseVoiceState {
     pub filter_lfo_depth: f32, // 0-1 filter mod depth
     pub sh_rate: f32,          // 0-1 → 0.5–20 Hz sample-and-hold rate
     pub sh_depth: f32,         // 0-1 S&H modulation depth on filter
+    /// Stereo pan position: -1.0 = hard left, 0.0 = center, 1.0 = hard right.
+    #[serde(default)]
+    pub pan: f32,
 }
 
 impl Default for NoiseVoiceState {
@@ -28,6 +31,7 @@ impl Default for NoiseVoiceState {
             filter_lfo_depth: 0.0,
             sh_rate: 0.0,
             sh_depth: 0.0,
+            pan: 0.0,
         }
     }
 }

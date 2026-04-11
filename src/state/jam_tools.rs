@@ -13,10 +13,12 @@ use super::{AppState, ParamRamp};
 
 // ─── Ramp scheduling ─────────────────────────────────────────────────────────
 
-/// Advance all active ramps by one jam cycle.
+/// Advance all active **cycle-based** ramps by one jam cycle.
 /// Each ramp's `current` moves toward `target` by `step_per_cycle`.
 /// Completed ramps (within ε of target) are removed.
 /// The interpolated value is written to `state` via `apply_llm_update`.
+/// Bar-based ramps (total_global_steps > 0) are left untouched — they are
+/// ticked per-frame by `tick_bar_ramps`.
 pub fn advance_ramps(state: AppState) -> AppState {
     if state.llm.active_ramps.is_empty() {
         return state;
@@ -26,7 +28,13 @@ pub fn advance_ramps(state: AppState) -> AppState {
     let mut next_ramps: Vec<ParamRamp> = Vec::with_capacity(s.llm.active_ramps.len());
 
     for mut ramp in std::mem::take(&mut s.llm.active_ramps) {
-        // Advance
+        // Skip bar-based ramps — they're handled by tick_bar_ramps.
+        if ramp.total_global_steps > 0 {
+            next_ramps.push(ramp);
+            continue;
+        }
+
+        // Advance cycle-based ramp
         let remaining = ramp.target - ramp.current;
         if remaining.abs() <= ramp.step_per_cycle.abs() + f32::EPSILON {
             ramp.current = ramp.target;
@@ -39,6 +47,52 @@ pub fn advance_ramps(state: AppState) -> AppState {
 
         // Keep if not yet complete
         if (ramp.current - ramp.target).abs() > f32::EPSILON {
+            next_ramps.push(ramp);
+        }
+    }
+
+    s.llm.active_ramps = next_ramps;
+    s
+}
+
+/// Advance all active **bar-based** ramps using the global step counter.
+/// Called every UI frame.  Computes progress from `global_step_count`,
+/// writes the interpolated value, and removes completed ramps.
+/// Cycle-based ramps (total_global_steps == 0) are left untouched.
+pub fn tick_bar_ramps(state: AppState) -> AppState {
+    if state.llm.active_ramps.is_empty() {
+        return state;
+    }
+
+    let now = state.global_step_count;
+    let locked = state.llm.locked_params.clone();
+
+    let mut s = state;
+    let mut next_ramps: Vec<ParamRamp> = Vec::with_capacity(s.llm.active_ramps.len());
+
+    for ramp in std::mem::take(&mut s.llm.active_ramps) {
+        // Skip cycle-based ramps.
+        if ramp.total_global_steps == 0 {
+            next_ramps.push(ramp);
+            continue;
+        }
+
+        // Cancel ramp if param was locked mid-ramp.
+        if locked.contains(&ramp.param) {
+            continue;
+        }
+
+        let elapsed = now.saturating_sub(ramp.start_global_step);
+        let t = if ramp.total_global_steps > 0 {
+            (elapsed as f32 / ramp.total_global_steps as f32).clamp(0.0, 1.0)
+        } else {
+            1.0
+        };
+
+        let value = lerp(ramp.from, ramp.target, t);
+        s = apply_param_by_path(s, &ramp.param, value);
+
+        if t < 1.0 {
             next_ramps.push(ramp);
         }
     }
@@ -86,6 +140,9 @@ pub fn schedule_baseline_ramps(
                                     current,
                                     target: target_f,
                                     step_per_cycle: step,
+                                    from: 0.0,
+                                    start_global_step: 0,
+                                    total_global_steps: 0,
                                 },
                             );
                         }
@@ -117,6 +174,9 @@ pub fn schedule_baseline_ramps(
                             current,
                             target: target_f,
                             step_per_cycle: step,
+                            from: 0.0,
+                            start_global_step: 0,
+                            total_global_steps: 0,
                         },
                     );
                 }
@@ -128,8 +188,13 @@ pub fn schedule_baseline_ramps(
 }
 
 /// Parse a ramp JSON object and schedule it.
-/// JSON: { "param": "fx.reverb_mix", "from": 0.0, "to": 0.6, "cycles": 8 }
-/// "cycles" defaults to 4 (one LLM jam cycle ≈ one bar at typical BPM).
+///
+/// Cycle-based: `{ "param": "fx.reverb_mix", "to": 0.6, "cycles": 8 }`
+/// Bar-based:   `{ "param": "fx.reverb_mix", "to": 0.6, "bars": 4 }`
+///
+/// When `"bars"` is present, creates a bar-based ramp that ticks per UI frame
+/// using `global_step_count`.  Otherwise creates a cycle-based ramp (legacy).
+/// `"cycles"` defaults to 4 when neither key is present.
 pub fn parse_and_schedule_ramp(
     state: AppState,
     obj: &serde_json::Map<String, serde_json::Value>,
@@ -148,9 +213,27 @@ pub fn parse_and_schedule_ramp(
         .and_then(|v| v.as_f64())
         .map(|v| v as f32)
         .unwrap_or_else(|| current_param_value(&state, &param));
+
+    // Bar-based ramp: { "bars": 4 }  →  smooth interpolation over N bars.
+    if let Some(bars) = obj.get("bars").and_then(|v| v.as_f64()) {
+        let bars = bars.max(1.0) as u64;
+        let steps_per_bar = state.sequencer.steps as u64; // 1 pattern = 1 bar
+        let total_global_steps = bars * steps_per_bar;
+        let ramp = ParamRamp {
+            param,
+            current: from,
+            target: to,
+            step_per_cycle: 0.0,
+            from,
+            start_global_step: state.global_step_count,
+            total_global_steps,
+        };
+        return schedule_ramp(state, ramp);
+    }
+
+    // Cycle-based ramp (legacy): { "cycles": 8 }
     let cycles = obj
         .get("cycles")
-        .or_else(|| obj.get("bars"))
         .and_then(|v| v.as_f64())
         .unwrap_or(4.0)
         .max(1.0) as f32;
@@ -161,6 +244,9 @@ pub fn parse_and_schedule_ramp(
         current: from,
         target: to,
         step_per_cycle,
+        from: 0.0,
+        start_global_step: 0,
+        total_global_steps: 0,
     };
     schedule_ramp(state, ramp)
 }

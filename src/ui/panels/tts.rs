@@ -1,54 +1,59 @@
 // ─── ui/panels/tts.rs ─────────────────────────────────────────────────────────
 // Rack module panel for EspeakNgTts and CoquiTts voice cards.
-// Both engines share the same controls; the engine is toggled inline.
+// Settings are per-module (stored in AppState.tts_modules).
 
-use crate::state::McVoiceChar;
+use crate::state::{McVoiceChar, TtsModuleState};
 use crate::ui::{ImpulseApp, theme, widgets};
 
-pub fn draw_tts(app: &mut ImpulseApp, ui: &mut egui::Ui) {
-    // ── snapshot ──────────────────────────────────────────────────────────────
-    let (enabled, engine, pitch, speed, amplitude, voice_char, randomise, pitch_snap) = {
+/// Mutate the TtsModuleState for `mid` inside `app`.
+fn with_tts(app: &mut ImpulseApp, mid: u32, f: impl FnOnce(&mut TtsModuleState)) {
+    if let Some(t) = app
+        .state
+        .write()
+        .tts_modules
+        .iter_mut()
+        .find(|t| t.id == mid)
+    {
+        f(t);
+    }
+}
+
+pub fn draw_tts(app: &mut ImpulseApp, ui: &mut egui::Ui, module_id: u32) {
+    // ── Ensure module state exists ──────────────────────────────────────────
+    {
         let s = app.state.read();
+        if !s.tts_modules.iter().any(|t| t.id == module_id) {
+            drop(s);
+            let tts = TtsModuleState::new(module_id);
+            app.state.write().tts_modules.push(tts);
+        }
+    }
+
+    // ── Snapshot ─────────────────────────────────────────────────────────────
+    let (engine, pitch, speed, amplitude, voice_char, randomise, pitch_snap, enabled) = {
+        let s = app.state.read();
+        let t = s.tts_modules.iter().find(|t| t.id == module_id).unwrap();
+        let mod_enabled = s
+            .rack
+            .modules
+            .iter()
+            .find(|m| m.id == module_id)
+            .map(|m| m.enabled)
+            .unwrap_or(false);
         (
-            s.llm.tts_enabled,
-            s.llm.tts_engine.clone(),
-            s.llm.tts_pitch,
-            s.llm.tts_speed,
-            s.llm.tts_amplitude,
-            s.llm.tts_voice_char.clone(),
-            s.llm.tts_randomise,
-            s.llm.tts_pitch_snap,
+            t.engine.clone(),
+            t.pitch,
+            t.speed,
+            t.amplitude,
+            t.voice_char.clone(),
+            t.randomise,
+            t.pitch_snap,
+            mod_enabled,
         )
     };
 
-    // ── enable / engine row ───────────────────────────────────────────────────
+    // ── Engine toggle ───────────────────────────────────────────────────────
     ui.horizontal(|ui| {
-        let btn_text = if enabled { "ON" } else { "OFF" };
-        let btn_color = if enabled { theme::CHALK } else { theme::IRON };
-        let btn_fill = if enabled {
-            egui::Color32::from_gray(55)
-        } else {
-            egui::Color32::from_gray(22)
-        };
-        if ui
-            .add_sized(
-                [32.0, 18.0],
-                egui::Button::new(
-                    egui::RichText::new(btn_text)
-                        .monospace()
-                        .size(8.5)
-                        .color(btn_color),
-                )
-                .fill(btn_fill),
-            )
-            .clicked()
-        {
-            app.state.write().llm.tts_enabled = !enabled;
-        }
-
-        ui.add_space(4.0);
-
-        // Engine toggle: espeak / coqui
         use crate::state::TtsEngine;
         for (label, variant) in &[("ESP", TtsEngine::EspeakNg), ("COQ", TtsEngine::CoquiTts)] {
             let active = engine == *variant;
@@ -69,7 +74,8 @@ pub fn draw_tts(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                 .fill(fill),
             );
             if resp.clicked() {
-                app.state.write().llm.tts_engine = variant.clone();
+                let v = variant.clone();
+                with_tts(app, module_id, |t| t.engine = v);
             }
             let hover = match variant {
                 TtsEngine::EspeakNg => "espeak-ng: always available, robotic character",
@@ -82,7 +88,7 @@ pub fn draw_tts(app: &mut ImpulseApp, ui: &mut egui::Ui) {
     if !enabled {
         ui.add_space(2.0);
         ui.label(
-            egui::RichText::new("TTS off - enable to configure")
+            egui::RichText::new("Module disabled")
                 .monospace()
                 .size(7.5)
                 .color(theme::PIT),
@@ -93,7 +99,7 @@ pub fn draw_tts(app: &mut ImpulseApp, ui: &mut egui::Ui) {
     ui.add_space(3.0);
     widgets::section_header(ui, "VOICE");
 
-    // ── voice character cycle button ──────────────────────────────────────────
+    // ── Voice character cycle button ────────────────────────────────────────
     ui.horizontal(|ui| {
         ui.label(
             egui::RichText::new("CHAR")
@@ -121,7 +127,8 @@ pub fn draw_tts(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                     .color(theme::FOG),
             );
             if resp.clicked() {
-                app.state.write().llm.tts_voice_char = chars[next_idx].0.clone();
+                let vc = chars[next_idx].0.clone();
+                with_tts(app, module_id, |t| t.voice_char = vc);
             }
             resp.on_hover_text("Click to cycle voice character");
         });
@@ -130,7 +137,6 @@ pub fn draw_tts(app: &mut ImpulseApp, ui: &mut egui::Ui) {
     ui.add_space(2.0);
     widgets::section_header(ui, "PARAMS  (0 = mode default)");
 
-    // ── pitch / speed / volume ────────────────────────────────────────────────
     let small_label = |text: &str| {
         egui::RichText::new(text)
             .monospace()
@@ -138,6 +144,7 @@ pub fn draw_tts(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             .color(theme::SMOKE)
     };
 
+    // ── Pitch ───────────────────────────────────────────────────────────────
     ui.horizontal(|ui| {
         ui.label(small_label("PITCH"));
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
@@ -146,7 +153,8 @@ pub fn draw_tts(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                 .add(egui::DragValue::new(&mut v).range(0..=99).speed(1))
                 .changed()
             {
-                app.state.write().llm.tts_pitch = v as u8;
+                let val = v as u8;
+                with_tts(app, module_id, |t| t.pitch = val);
             }
         });
     });
@@ -157,6 +165,7 @@ pub fn draw_tts(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             .color(theme::PIT),
     );
 
+    // ── Speed ───────────────────────────────────────────────────────────────
     ui.horizontal(|ui| {
         ui.label(small_label("SPEED"));
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
@@ -165,7 +174,8 @@ pub fn draw_tts(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                 .add(egui::DragValue::new(&mut v).range(0..=500).speed(2))
                 .changed()
             {
-                app.state.write().llm.tts_speed = v as u16;
+                let val = v as u16;
+                with_tts(app, module_id, |t| t.speed = val);
             }
         });
     });
@@ -176,6 +186,7 @@ pub fn draw_tts(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             .color(theme::PIT),
     );
 
+    // ── Volume ──────────────────────────────────────────────────────────────
     ui.horizontal(|ui| {
         ui.label(small_label("VOL"));
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
@@ -184,7 +195,8 @@ pub fn draw_tts(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                 .add(egui::DragValue::new(&mut v).range(0..=200).speed(2))
                 .changed()
             {
-                app.state.write().llm.tts_amplitude = v as u8;
+                let val = v as u8;
+                with_tts(app, module_id, |t| t.amplitude = val);
             }
         });
     });
@@ -198,13 +210,13 @@ pub fn draw_tts(app: &mut ImpulseApp, ui: &mut egui::Ui) {
     ui.add_space(3.0);
     widgets::section_header(ui, "FX");
 
-    // ── jitter + pitch snap ───────────────────────────────────────────────────
+    // ── Jitter ──────────────────────────────────────────────────────────────
     ui.horizontal(|ui| {
         ui.label(small_label("JITTER"));
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             let mut r = randomise;
             if widgets::toggle_button(ui, if r { "ON" } else { "OFF" }, &mut r) {
-                app.state.write().llm.tts_randomise = r;
+                with_tts(app, module_id, |t| t.randomise = r);
             }
         });
     });
@@ -215,12 +227,13 @@ pub fn draw_tts(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             .color(theme::PIT),
     );
 
+    // ── Pitch snap ──────────────────────────────────────────────────────────
     ui.horizontal(|ui| {
         ui.label(small_label("PITCH SNAP"));
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             let mut ps = pitch_snap;
             if widgets::toggle_button(ui, if ps { "ON" } else { "OFF" }, &mut ps) {
-                app.state.write().llm.tts_pitch_snap = ps;
+                with_tts(app, module_id, |t| t.pitch_snap = ps);
             }
         });
     });

@@ -1,4 +1,5 @@
 // ─── ui/mod.rs — Main egui application ───────────────────────────────────────
+mod api_log_handler;
 mod header;
 mod llm_strip;
 mod midi_handler;
@@ -8,11 +9,15 @@ pub mod panels;
 pub mod rack_cables;
 pub mod rack_canvas;
 pub(crate) mod rack_content;
+mod rack_scroll;
+mod rack_toolbar;
 mod scope_footer;
 pub mod theme;
+mod ui_helpers;
 mod util;
 pub mod widgets;
-use util::{scan_models, webbrowser_open};
+pub(crate) use util::scan_models;
+use util::webbrowser_open;
 mod windows;
 mod wizard;
 
@@ -34,16 +39,17 @@ use egui::{CentralPanel, Frame, TopBottomPanel};
 use parking_lot::RwLock;
 use std::sync::Arc;
 
-use crate::audio::{AudioCommand, AudioParams};
+use crate::audio::AudioCommand;
 use crate::llm::{LlmInput, LlmOutput};
 use crate::midi::MidiEvent;
-use crate::state::{AppState, compile_fx_plan};
+use crate::state::AppState;
 
 pub(super) const LOG_LEVELS: &[(&str, log::LevelFilter)] = &[
-    ("ERROR", log::LevelFilter::Error),
-    ("WARN", log::LevelFilter::Warn),
-    ("INFO", log::LevelFilter::Info),
-    ("DEBUG", log::LevelFilter::Debug),
+    ("error", log::LevelFilter::Error),
+    ("warn", log::LevelFilter::Warn),
+    ("info", log::LevelFilter::Info),
+    ("debug", log::LevelFilter::Debug),
+    ("trace", log::LevelFilter::Trace),
 ];
 
 pub(crate) const SEQ_LABEL_W: f32 = 72.0;
@@ -100,27 +106,8 @@ impl MidiClockTracker {
 }
 
 mod undo;
+pub(crate) use api_log_handler::{ActivityAction, ActivityEntry};
 use undo::StateHistory;
-
-/// A single entry in the structured activity log.
-#[derive(Clone)]
-pub(crate) struct ActivityEntry {
-    pub timestamp: std::time::Instant,
-    pub persona: String,
-    pub action: ActivityAction,
-    pub detail: String,
-}
-#[derive(Clone, PartialEq)]
-#[allow(dead_code)] // variants populated incrementally as more log sources are wired
-pub(crate) enum ActivityAction {
-    Response,    // normal LLM response
-    Thinking,    // chain-of-thought
-    ParamUpdate, // parameter change applied
-    Spawn,       // agent spawned
-    Dismiss,     // agent dismissed
-    UserPrompt,  // user typed a prompt
-    System,      // system message (startup, error)
-}
 
 pub struct ImpulseApp {
     state: Arc<RwLock<AppState>>,
@@ -128,11 +115,17 @@ pub struct ImpulseApp {
     scope_rx: rtrb::Consumer<f32>,
     scope_buf: Vec<f32>,
     scope_history: std::collections::VecDeque<Vec<f32>>,
+    /// For smooth event stream: last observed current_step + time it changed.
+    last_seq_step: usize,
+    session_start: std::time::Instant,
+    last_step_time: f64,
     capture_rx: rtrb::Consumer<f32>,
     dsp_load_rx: rtrb::Consumer<f32>,
     dsp_load_buf: Vec<f32>,
-    /// Most-recent audio analysis snapshot. None until the user clicks Listen.
+    /// Most-recent audio analysis snapshot. Auto-updated every ~2s.
     audio_analysis: Option<crate::audio::analysis::AudioAnalysis>,
+    /// Last time we ran auto-analysis (seconds since epoch, from ctx.input.time).
+    last_analysis_time: f64,
     /// True when the most-recently-sent prompt came from the Listen button —
     /// used to label the LLM response as "LISTEN →" in the log.
     listen_pending: bool,
@@ -146,86 +139,65 @@ pub struct ImpulseApp {
     prompt_input: String,
     log_text: String,
     api_port: Option<u16>,
+    /// Lock-free receiver for API→UI log messages (sender is in ApiState).
+    api_log_rx: crossbeam_channel::Receiver<String>,
+    /// UI log dedup: last line content and repeat count.
+    last_log_line: String,
+    log_repeat_count: u32,
     show_about: bool,
-    // Structured activity log for timeline display
     pub(crate) activity_log: Vec<ActivityEntry>,
     pub(crate) show_prefs: bool,
     export_bars: u32,
-    ui_volume: f32, // monitor-only gain; never written to state or export
-    // Piano preferences
+    ui_volume: f32,
     piano_show_labels: bool,
-    // Spectrum analyser: smoothed magnitude bins + peak-hold values.
     pub(crate) spectrum_magnitudes: Vec<f32>,
     pub(crate) spectrum_peaks: Vec<f32>,
-    // Stereo correlation meter
     stereo_rx: rtrb::Consumer<f32>,
     stereo_buf: Vec<f32>,
-    pub(crate) stereo_corr: f32,    // -1..+1 phase correlation
-    pub(crate) stereo_balance: f32, // -1..+1 L/R balance
-    // Last chain-of-thought from the LLM (shown collapsible below the log)
+    pub(crate) stereo_corr: f32,
+    pub(crate) stereo_balance: f32,
     last_thinking: Option<String>,
-    // Control layout preference — derived from AppState.ui_prefs each frame
-    // Sequencer page (for >16 step patterns)
     seq_page: usize,
-    // Voices manually expanded in the sequencer even if they have no active steps
+    pub(crate) seq_prefix_width: f32,
     expanded_seq_voices: std::collections::HashSet<crate::state::DrumVoice>,
-    // Copy/paste clipboard for drum patterns (voice → step slice)
     drum_clipboard: Option<(crate::state::DrumVoice, Vec<crate::state::Step>)>,
-    // Model selector
     available_models: Vec<String>,
-    // System info (GPU/VRAM/RAM) — polled in background thread
     sys_info: std::sync::Arc<std::sync::Mutex<crate::sysinfo::SysInfo>>,
     show_sysinfo: bool,
-    // Startup wizard (first-launch agent setup)
     pub(crate) show_wizard: bool,
     pub(crate) wizard_selected: usize,
-    // Preferences
     prefs_tab: usize,
     llm_tab: usize,
-    // log_level_idx now persisted in AppState.ui_prefs.log_level_idx
-    // Startup hook: fire a prompt once the LLM transitions from initializing to ready
     startup_done: bool,
-    // MIDI clock BPM tracker — averages recent pulse intervals to derive tempo.
     midi_clock_tracker: MidiClockTracker,
-    // Undo/redo history — ring buffer of recent AppState snapshots.
     history: StateHistory,
-    // In-progress cable drag in the rack patch view.
     pub(crate) cable_drag: Option<rack_canvas::CableDrag>,
-    // When true, patch cables are drawn over the rack. Tab to toggle.
     pub(crate) show_cables: bool,
-    // When true, rack shows back panel (ports + cables) instead of front (knobs).
     pub(crate) rack_flipped: bool,
-    // Mode locks: double-click footer indicator to keep modifier active without holding key
     pub(crate) ctrl_locked: bool,
     pub(crate) alt_locked: bool,
     pub(crate) show_shortcuts: bool,
-    // Zone whose [+ ADD] popup is currently open.
     pub(crate) add_menu_zone: Option<crate::state::Zone>,
     // Module being dragged by its title bar (id + current pointer position).
     pub(crate) module_drag: Option<rack_canvas::ModuleDrag>,
     // Auto-save: set when rack or session-worthy state changes; saved next frame.
     pub(crate) session_dirty: bool,
-    // Track last-saved rack cable/module count to detect changes.
+    /// Zone Y offsets (relative to scroll content top), updated each frame by rack_canvas.
+    pub(crate) zone_y: [f32; 3], // [global, voice, fxmod]
+    /// Focused module kind — highlighted in the rack (set by API scroll or click).
+    pub(crate) focused_module: Option<crate::state::ModuleKind>,
+    /// Instant when the focused module was set (for shine animation).
+    pub(crate) focus_time: std::time::Instant,
     last_saved_rack_sig: (usize, usize),
-    // Timestamp of the most recent actual save (for interval throttling).
     last_save_time: std::time::Instant,
-    // Per-kind UI scale factors (ModuleKind → scale, default 1.0, range 0.5–2.0).
-    // All modules of the same kind share a scale (e.g. all LlmAgent cards scale together).
     pub(crate) module_scales: std::collections::HashMap<crate::state::ModuleKind, f32>,
-    // Auto-listen: when enabled, trigger LISTEN automatically every N jam cycles.
     auto_listen: bool,
-    // Counts jam cycles since the last auto-listen trigger.
     auto_listen_counter: u32,
-    // When jam_bars > 0: (fire_time, agent_id) for the next scheduled jam cycle.
     jam_next_fire: Option<(std::time::Instant, Option<u32>)>,
-    // Round-robin index for multi-agent jam dispatch.
     jam_next_agent: usize,
-    // When true the LLM strip collapses to show only the prompt row.
-    // Native pixels_per_point at startup — used as base for ui_scale.
     native_ppp: f32,
-    /// Central lock-paint mode: None = normal drag, Some(mode) = click paints that mode.
+    api_params_dirty: Arc<std::sync::atomic::AtomicBool>,
     pub(crate) touch_mode: Option<crate::state::ParamMode>,
-    // Per-zone collapse state.
     pub(crate) zone_global_collapsed: bool,
     pub(crate) zone_voice_collapsed: bool,
     pub(crate) zone_fxmod_collapsed: bool,
@@ -241,6 +213,7 @@ pub struct AudioChannels {
 }
 
 impl ImpulseApp {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         cc: &eframe::CreationContext<'_>,
         state: Arc<RwLock<AppState>>,
@@ -249,13 +222,19 @@ impl ImpulseApp {
         llm_rx: Receiver<LlmOutput>,
         midi_rx: Receiver<MidiEvent>,
         midi_port: Option<String>,
+        api_log_rx: crossbeam_channel::Receiver<String>,
         api_port: Option<u16>,
+        skip_wizard: bool,
+        api_params_dirty: Arc<std::sync::atomic::AtomicBool>,
     ) -> Self {
         theme::apply(&cc.egui_ctx);
         log::info!("ImpulseApp::new — creating UI…");
 
         // ── Load last session from eframe's persistent storage ────────────────
-        if let Some(storage) = cc.storage
+        // Only restore if session.json also exists — deleting session.json
+        // signals a clean start (e.g. demo recording).
+        if std::path::Path::new("session.json").exists()
+            && let Some(storage) = cc.storage
             && let Some(json) = storage.get_string("session")
             && let Ok(mut loaded) = serde_json::from_str::<AppState>(&json)
         {
@@ -278,10 +257,11 @@ impl ImpulseApp {
             }
         }
 
-        // Auto-start sequencer so there's always audio from the first frame.
+        // Don't auto-start the sequencer — let the user or AI start it.
+        // The whole point is the AI builds the pattern fresh each time.
         {
             let mut s = state.write();
-            s.sequencer.running = true;
+            s.sequencer.running = false;
         }
 
         // Pre-load amen WAV if path is set in restored session.
@@ -311,11 +291,15 @@ impl ImpulseApp {
             audio_tx: audio.params_tx,
             scope_rx: audio.scope_rx,
             scope_buf: Vec::new(),
-            scope_history: std::collections::VecDeque::with_capacity(8),
+            scope_history: std::collections::VecDeque::with_capacity(12),
+            last_seq_step: usize::MAX,
+            session_start: std::time::Instant::now(),
+            last_step_time: 0.0,
             capture_rx: audio.capture_rx,
             dsp_load_rx: audio.dsp_load_rx,
             dsp_load_buf: Vec::with_capacity(64),
             audio_analysis: None,
+            last_analysis_time: 0.0,
             listen_pending: false,
             llm_tx,
             llm_rx,
@@ -326,6 +310,9 @@ impl ImpulseApp {
             prompt_input: String::new(),
             log_text,
             api_port,
+            api_log_rx,
+            last_log_line: String::new(),
+            log_repeat_count: 0,
             show_about: false,
             activity_log: Vec::new(),
             show_prefs: false,
@@ -340,6 +327,7 @@ impl ImpulseApp {
             stereo_balance: 0.0,
             last_thinking: None,
             seq_page: 0,
+            seq_prefix_width: 0.0,
             expanded_seq_voices: std::collections::HashSet::new(),
             drum_clipboard: None,
             available_models: Vec::new(),
@@ -350,15 +338,15 @@ impl ImpulseApp {
                 shared
             },
             show_sysinfo: false,
-            show_wizard: true,
+            show_wizard: !skip_wizard,
             wizard_selected: if crate::state::load_session()
                 .and_then(|s| s.llm_agents)
                 .map(|a| a.is_empty())
                 .unwrap_or(true)
             {
-                usize::MAX - 1
+                0 // default to first preset (Solo) when no prior session
             } else {
-                usize::MAX
+                usize::MAX // WIZARD_RESUME
             },
 
             prefs_tab: 0,
@@ -377,6 +365,9 @@ impl ImpulseApp {
             add_menu_zone: None,
             module_drag: None,
             session_dirty: false,
+            zone_y: [0.0; 3],
+            focused_module: None,
+            focus_time: std::time::Instant::now(),
             last_saved_rack_sig: (0, 0),
             last_save_time: std::time::Instant::now(),
             module_scales: crate::state::load_session()
@@ -387,6 +378,7 @@ impl ImpulseApp {
             jam_next_fire: None,
             jam_next_agent: 0,
             native_ppp: 0.0, // captured on first frame after DPI is established
+            api_params_dirty,
             touch_mode: None,
             zone_global_collapsed: false,
             zone_voice_collapsed: false,
@@ -398,65 +390,19 @@ impl ImpulseApp {
         let snapshot = self.state.read().clone();
         self.history.push(snapshot);
     }
-    fn update_spectrum(&mut self) {
-        if self.scope_buf.len() < 256 {
-            return;
-        }
-        let raw = crate::audio::spectrum::compute_spectrum(&self.scope_buf, 44100.0);
-        let alpha = self.state.read().spectrum.smoothing;
-        if self.spectrum_magnitudes.len() != raw.magnitudes.len() {
-            self.spectrum_magnitudes = raw.magnitudes.clone();
-            self.spectrum_peaks = raw.magnitudes;
-        } else {
-            for (i, &r) in raw.magnitudes.iter().enumerate() {
-                self.spectrum_magnitudes[i] =
-                    self.spectrum_magnitudes[i] * alpha + r * (1.0 - alpha);
-                if r > self.spectrum_peaks[i] {
-                    self.spectrum_peaks[i] = r;
-                } else {
-                    self.spectrum_peaks[i] -= 0.3;
-                }
-            }
-        }
-    }
 
     /// Effective scale for a module kind (1.0 if unset).
     pub(crate) fn kind_scale(&self, kind: crate::state::ModuleKind) -> f32 {
         self.module_scales.get(&kind).copied().unwrap_or(1.0)
     }
 
-    pub(crate) fn observe_edits(&mut self, edits: &[(&str, f32)]) {
-        for &(path, val) in edits {
-            let s = self.state.read().clone();
-            *self.state.write() = crate::state::observe_user_edit(s, path, val);
-        }
-    }
-
-    fn push_audio_params(&mut self) {
-        let params = {
-            let s = self.state.read();
-            let mut p = AudioParams::from_app_state(&s);
-            p.sample_rate = 44100.0;
-            p
-        };
-        let _ = self
-            .audio_tx
-            .push(AudioCommand::UpdateParams(Box::new(params)));
-    }
-
-    /// Recompile the FX routing plan from the current rack cable graph and
-    /// send it to the audio thread.  Call whenever rack topology changes
-    /// (cable connect/disconnect, module enable/disable, module remove).
-    pub(crate) fn push_fx_plan(&mut self) {
-        let plan = {
-            let s = self.state.read();
-            compile_fx_plan(&s.rack)
-        };
-        let _ = self.audio_tx.push(AudioCommand::SetFxPlan(plan));
-    }
-
     fn drain_llm_outputs(&mut self) {
         while let Ok(out) = self.llm_rx.try_recv() {
+            log::info!(
+                "UI: drain_llm_output received (has_update={}, text_len={})",
+                out.param_update.is_some(),
+                out.text.len()
+            );
             // Resolve persona: agent-specific name when available, else singleton.
             let persona_name = out
                 .agent_id
@@ -532,9 +478,19 @@ impl ImpulseApp {
             // Jam re-triggers unless heat is at zero (model is parked).
             if out.text == "[jam_cycle_done]" && self.state.read().llm.heat > 0.0 {
                 {
+                    // Advance ramps selectively — do NOT replace the full state,
+                    // as that overwrites rack/agent changes made by the API.
                     let cur = self.state.read().clone();
                     let next = crate::state::jam_tools::advance_ramps(cur);
-                    *self.state.write() = next;
+                    let mut s = self.state.write();
+                    let step = s.sequencer.current_step;
+                    s.bass_voices = next.bass_voices;
+                    s.kit_a = next.kit_a;
+                    s.kit_b = next.kit_b;
+                    s.sequencer = next.sequencer;
+                    s.sequencer.current_step = step;
+                    s.fx = next.fx;
+                    s.lfo = next.lfo;
                 }
                 self.state.write().llm.jam_cycle_count =
                     self.state.read().llm.jam_cycle_count.saturating_add(1);
@@ -735,10 +691,25 @@ impl ImpulseApp {
                     self.push_history(); // fallback: snapshot current state
                 }
                 self.push_audio_params();
+                log::debug!("UI: LLM output processed, audio params pushed");
+
+                // Highlight (and optionally scroll to) the module affected by this update.
+                if let Some(kind) = ui_helpers::llm_update_focus_kind(out.param_update.as_ref()) {
+                    self.focused_module = Some(kind);
+                    self.focus_time = std::time::Instant::now();
+                    if self.state.read().ui_prefs.llm_auto_scroll {
+                        let scroll_name = match kind.default_zone() {
+                            crate::state::Zone::Global => "global",
+                            crate::state::Zone::Voice => "voice",
+                            crate::state::Zone::FxMod => "fxmod",
+                        };
+                        self.state.write().scroll_target = Some(scroll_name.to_string());
+                    }
+                }
             }
         }
+        log::trace!("UI: drain_llm_outputs complete");
     }
-    // drain_midi_events extracted to midi_handler.rs
 }
 
 impl eframe::App for ImpulseApp {
@@ -787,9 +758,19 @@ impl eframe::App for ImpulseApp {
         });
 
         self.drain_llm_outputs();
+        self.drain_api_log();
         self.drain_midi_events();
 
-        // ── Jam timer: fire delayed jam cycle when the bar-count delay elapses ──
+        // Poll API params_dirty flag — push audio params when API changed state
+        if self
+            .api_params_dirty
+            .swap(false, std::sync::atomic::Ordering::Relaxed)
+        {
+            self.push_audio_params();
+        }
+
+        // ── Auto-save: write session.json if the state changed ──────────────
+        // (moved here to diagnose hang — see if save blocks)
         if let Some((fire_at, pending_agent)) = self.jam_next_fire {
             if std::time::Instant::now() >= fire_at {
                 self.jam_next_fire = None;
@@ -865,6 +846,11 @@ impl eframe::App for ImpulseApp {
             self.rack_flipped = !self.rack_flipped;
             self.session_dirty = true;
         }
+        // API-driven rack flip
+        if let Some(show_back) = self.state.write().rack_flip_requested.take() {
+            self.rack_flipped = show_back;
+            self.session_dirty = true;
+        }
         if ctx.input_mut(|i| {
             i.consume_key(egui::Modifiers::SHIFT, egui::Key::Slash) // Shift+/ = ?
                 || i.consume_key(egui::Modifiers::NONE, egui::Key::F1)
@@ -872,26 +858,26 @@ impl eframe::App for ImpulseApp {
             self.show_shortcuts = !self.show_shortcuts;
         }
 
-        // ── Startup hook ──────────────────────────────────────────────────────
-        // Fire once — right after the LLM transitions from initializing to ready.
-        // Deferred while the setup wizard is visible so nothing plays before the user chooses.
+        // ── Startup hook — auto-prompt after wizard closes ──────────────────
+        // Once the wizard is dismissed and the LLM is ready, send a one-shot
+        // prompt to get a basic pattern going so the track isn't silent.
         if !self.startup_done && !self.show_wizard && !self.state.read().llm.llm_initializing {
             self.startup_done = true;
-            if let Some(prompt) = crate::config::random_startup_prompt() {
-                // Send startup prompt to the first enabled agent.
-                let first_agent = {
-                    let s = self.state.read();
-                    s.llm_agents
-                        .iter()
-                        .find(|a| s.rack.modules.iter().any(|m| m.id == a.id && m.enabled))
-                        .map(|a| a.id)
-                };
-                let _ = self.llm_tx.try_send(LlmInput::Infer {
-                    prompt: prompt.to_string(),
+            let has_agents = !self.state.read().llm_agents.is_empty();
+            if has_agents {
+                let _ = self.llm_tx.try_send(crate::llm::LlmInput::Infer {
+                    prompt: "Pick a style and create a pattern. Bass line should use \
+                             3-5 different notes but leave gaps — not every step \
+                             needs a note. Use accent and slide on some steps. \
+                             Add a kick pattern and hi-hats. Set the filter \
+                             to something interesting. Set pan positions for \
+                             stereo width and add subtle chorus."
+                        .into(),
                     one_shot: true,
-                    agent_id: first_agent,
+                    agent_id: None,
                 });
-                log::info!("Startup prompt: {}", prompt);
+                self.log_text
+                    .push_str("AUTO → startup prompt sent, generating initial pattern…\n");
             }
         }
         ctx.request_repaint_after(std::time::Duration::from_millis(16));
@@ -904,9 +890,10 @@ impl eframe::App for ImpulseApp {
             self.scope_buf.drain(..drain);
         }
         if self.scope_buf.len() >= 64 {
-            // phosphor persistence
+            // phosphor persistence — frame count from preferences
             self.scope_history.push_back(self.scope_buf.clone());
-            if self.scope_history.len() > 6 {
+            let max_frames = self.state.read().ui_prefs.phosphor_frames.clamp(2, 20);
+            if self.scope_history.len() > max_frames {
                 self.scope_history.pop_front();
             }
         }
@@ -931,21 +918,20 @@ impl eframe::App for ImpulseApp {
             self.dsp_load_buf.drain(..drain);
         }
 
+        // Track step changes for smooth event stream interpolation
+        {
+            let step = self.state.read().sequencer.current_step;
+            if step != self.last_seq_step {
+                self.last_seq_step = step;
+                self.last_step_time = ctx.input(|i| i.time);
+            }
+        }
+
+        self.update_audio_analysis(ctx);
+        self.tick_ramps();
         self.draw_windows(ctx);
         self.draw_menu_and_header(ctx);
-        TopBottomPanel::top("scope")
-            .frame(
-                Frame::none()
-                    .fill(theme::PIT)
-                    .inner_margin(egui::Margin::symmetric(8.0, 4.0)),
-            )
-            .exact_height(48.0)
-            .show(ctx, |ui| {
-                ui.horizontal(|ui| {
-                    scope_footer::draw_ring_scope(ui, &self.scope_buf, 40.0);
-                    scope_footer::draw_scope(ui, &self.scope_buf, &self.scope_history);
-                });
-            });
+        // Scope is now integrated into draw_log_and_scope (header.rs)
         TopBottomPanel::bottom("footer")
             .frame(
                 Frame::none()
@@ -954,6 +940,14 @@ impl eframe::App for ImpulseApp {
             )
             .exact_height(18.0)
             .show(ctx, |ui| {
+                let (nm, na, nc) = {
+                    let s = self.state.read();
+                    (
+                        s.rack.modules.len(),
+                        s.llm_agents.len(),
+                        s.rack.cables.len(),
+                    )
+                };
                 scope_footer::draw_footer_status(
                     ui,
                     &self.midi_port,
@@ -961,6 +955,13 @@ impl eframe::App for ImpulseApp {
                     &mut self.rack_flipped,
                     &mut self.ctrl_locked,
                     &mut self.alt_locked,
+                    scope_footer::FooterStats {
+                        n_modules: nm,
+                        n_agents: na,
+                        n_cables: nc,
+                        uptime_secs: self.session_start.elapsed().as_secs(),
+                        api_port: self.api_port,
+                    },
                 );
             });
 

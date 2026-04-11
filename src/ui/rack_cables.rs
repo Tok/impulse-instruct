@@ -200,21 +200,7 @@ pub fn draw_cable_overlay(
 
     if show_cables {
         let cables = app.state.read().rack.cables.clone();
-        // Draw control cables FIRST (behind audio/CV cables)
-        for (ci, cable) in cables.iter().enumerate() {
-            if cable.from.kind != PortKind::Control {
-                continue;
-            }
-            let from_pos = ports
-                .iter()
-                .find(|p| p.port == cable.from)
-                .map(|p| p.center);
-            let to_pos = ports.iter().find(|p| p.port == cable.to).map(|p| p.center);
-            if let (Some(from), Some(to)) = (from_pos, to_pos) {
-                draw_control_cable(&painter, from, to, time, ci as f32 * 2.399);
-            }
-        }
-        // Then audio/CV cables on top
+        // Draw audio/CV cables FIRST (behind control cables)
         for (ci, cable) in cables.iter().enumerate() {
             if cable.from.kind == PortKind::Control {
                 continue;
@@ -226,6 +212,20 @@ pub fn draw_cable_overlay(
             let to_pos = ports.iter().find(|p| p.port == cable.to).map(|p| p.center);
             if let (Some(from), Some(to)) = (from_pos, to_pos) {
                 draw_cable(&painter, from, to, time, ci as f32 * 2.399, true);
+            }
+        }
+        // Then control cables ON TOP (thinner, more important to see clearly)
+        for (ci, cable) in cables.iter().enumerate() {
+            if cable.from.kind != PortKind::Control {
+                continue;
+            }
+            let from_pos = ports
+                .iter()
+                .find(|p| p.port == cable.from)
+                .map(|p| p.center);
+            let to_pos = ports.iter().find(|p| p.port == cable.to).map(|p| p.center);
+            if let (Some(from), Some(to)) = (from_pos, to_pos) {
+                draw_control_cable(&painter, from, to, time, ci as f32 * 2.399);
             }
         }
 

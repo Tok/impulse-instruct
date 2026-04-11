@@ -17,6 +17,9 @@ fn schedule_ramp_adds_to_active_list() {
         current: 0.0,
         target: 0.6,
         step_per_cycle: 0.1,
+        from: 0.0,
+        start_global_step: 0,
+        total_global_steps: 0,
     };
     let out = schedule_ramp(state, ramp);
     assert_eq!(out.llm.active_ramps.len(), 1);
@@ -31,12 +34,18 @@ fn schedule_ramp_replaces_existing_same_param() {
         current: 0.0,
         target: 0.5,
         step_per_cycle: 0.1,
+        from: 0.0,
+        start_global_step: 0,
+        total_global_steps: 0,
     };
     let ramp2 = ParamRamp {
         param: "fx.reverb_mix".into(),
         current: 0.0,
         target: 0.9,
         step_per_cycle: 0.2,
+        from: 0.0,
+        start_global_step: 0,
+        total_global_steps: 0,
     };
     let state = schedule_ramp(state, ramp1);
     let state = schedule_ramp(state, ramp2);
@@ -56,12 +65,18 @@ fn schedule_ramp_different_params_both_kept() {
         current: 0.0,
         target: 0.5,
         step_per_cycle: 0.1,
+        from: 0.0,
+        start_global_step: 0,
+        total_global_steps: 0,
     };
     let r2 = ParamRamp {
         param: "fx.delay_mix".into(),
         current: 0.0,
         target: 0.3,
         step_per_cycle: 0.05,
+        from: 0.0,
+        start_global_step: 0,
+        total_global_steps: 0,
     };
     let state = schedule_ramp(state, r1);
     let state = schedule_ramp(state, r2);
@@ -87,6 +102,9 @@ fn advance_ramps_moves_current_toward_target() {
         current: 0.0,
         target: 0.5,
         step_per_cycle: 0.1,
+        from: 0.0,
+        start_global_step: 0,
+        total_global_steps: 0,
     };
     let state = schedule_ramp(state, ramp);
     let out = advance_ramps(state);
@@ -104,6 +122,9 @@ fn advance_ramps_removes_completed_ramp() {
         current: 0.45,
         target: 0.5,
         step_per_cycle: 0.1, // one step overshoots
+        from: 0.0,
+        start_global_step: 0,
+        total_global_steps: 0,
     };
     let state = schedule_ramp(state, ramp);
     let out = advance_ramps(state);
@@ -123,6 +144,9 @@ fn advance_ramps_multiple_steps_converge() {
         current: 0.0,
         target: 0.4,
         step_per_cycle: 0.1,
+        from: 0.0,
+        start_global_step: 0,
+        total_global_steps: 0,
     };
     state = schedule_ramp(state, ramp);
     for _ in 0..4 {
@@ -147,6 +171,9 @@ fn advance_ramps_downward_ramp() {
         current: 0.8,
         target: 0.2,
         step_per_cycle: -0.1,
+        from: 0.0,
+        start_global_step: 0,
+        total_global_steps: 0,
     };
     state = schedule_ramp(state, ramp);
     state = advance_ramps(state);
@@ -169,7 +196,7 @@ fn parse_ramp_basic() {
 }
 
 #[test]
-fn parse_ramp_bars_alias_for_cycles() {
+fn parse_ramp_bars_creates_bar_based_ramp() {
     let state = AppState::default();
     let obj = serde_json::from_str::<serde_json::Value>(
         r#"{ "param": "fx.delay_mix", "to": 0.4, "bars": 4 }"#,
@@ -177,6 +204,13 @@ fn parse_ramp_bars_alias_for_cycles() {
     .unwrap();
     let out = parse_and_schedule_ramp(state, obj.as_object().unwrap());
     assert_eq!(out.llm.active_ramps.len(), 1);
+    let r = &out.llm.active_ramps[0];
+    assert!(r.total_global_steps > 0, "should be bar-based");
+    assert_eq!(r.total_global_steps, 4 * out.sequencer.steps as u64);
+    assert!(
+        (r.step_per_cycle).abs() < f32::EPSILON,
+        "cycle step should be 0 for bar-based"
+    );
 }
 
 #[test]
@@ -205,6 +239,123 @@ fn parse_ramp_explicit_from() {
     let out = parse_and_schedule_ramp(state, obj.as_object().unwrap());
     assert!((out.llm.active_ramps[0].current - 0.1).abs() < 0.001);
     assert!((out.llm.active_ramps[0].step_per_cycle - 0.1).abs() < 0.001);
+}
+
+// ─── tick_bar_ramps ──────────────────────────────────────────────────────────
+
+use crate::state::jam_tools::tick_bar_ramps;
+
+#[test]
+fn tick_bar_ramps_noop_when_empty() {
+    let state = AppState::default();
+    let out = tick_bar_ramps(state);
+    assert!(out.llm.active_ramps.is_empty());
+}
+
+#[test]
+fn tick_bar_ramps_interpolates_midway() {
+    let mut state = AppState::default();
+    state.global_step_count = 100;
+    state.llm.active_ramps.push(ParamRamp {
+        param: "fx.reverb_mix".into(),
+        current: 0.0,
+        target: 1.0,
+        step_per_cycle: 0.0,
+        from: 0.0,
+        start_global_step: 100,
+        total_global_steps: 16,
+    });
+    // Advance half the steps
+    state.global_step_count = 108;
+    let out = tick_bar_ramps(state);
+    assert!((out.fx.reverb_mix - 0.5).abs() < 0.01, "should be ~50%");
+    assert_eq!(out.llm.active_ramps.len(), 1, "ramp still active");
+}
+
+#[test]
+fn tick_bar_ramps_completes_and_removes() {
+    let mut state = AppState::default();
+    state.global_step_count = 100;
+    state.llm.active_ramps.push(ParamRamp {
+        param: "fx.reverb_mix".into(),
+        current: 0.0,
+        target: 0.8,
+        step_per_cycle: 0.0,
+        from: 0.0,
+        start_global_step: 100,
+        total_global_steps: 16,
+    });
+    // Past the end
+    state.global_step_count = 120;
+    let out = tick_bar_ramps(state);
+    assert!(
+        (out.fx.reverb_mix - 0.8).abs() < 0.01,
+        "should be at target"
+    );
+    assert!(out.llm.active_ramps.is_empty(), "completed ramp removed");
+}
+
+#[test]
+fn tick_bar_ramps_cancels_locked_param() {
+    let mut state = AppState::default();
+    state.global_step_count = 100;
+    state.llm.active_ramps.push(ParamRamp {
+        param: "fx.reverb_mix".into(),
+        current: 0.0,
+        target: 0.8,
+        step_per_cycle: 0.0,
+        from: 0.0,
+        start_global_step: 100,
+        total_global_steps: 16,
+    });
+    // Lock the param mid-ramp
+    state.llm.locked_params.insert("fx.reverb_mix".into());
+    state.global_step_count = 108;
+    let out = tick_bar_ramps(state);
+    assert!(
+        out.llm.active_ramps.is_empty(),
+        "locked ramp should be cancelled"
+    );
+}
+
+#[test]
+fn tick_bar_ramps_skips_cycle_based() {
+    let mut state = AppState::default();
+    // Add a cycle-based ramp (total_global_steps == 0)
+    state.llm.active_ramps.push(ParamRamp {
+        param: "fx.delay_mix".into(),
+        current: 0.0,
+        target: 0.5,
+        step_per_cycle: 0.1,
+        from: 0.0,
+        start_global_step: 0,
+        total_global_steps: 0,
+    });
+    let out = tick_bar_ramps(state);
+    assert_eq!(out.llm.active_ramps.len(), 1, "cycle-based ramp untouched");
+    assert!((out.fx.delay_mix).abs() < f32::EPSILON, "value not changed");
+}
+
+#[test]
+fn advance_ramps_skips_bar_based() {
+    let mut state = AppState::default();
+    state.global_step_count = 100;
+    // Add a bar-based ramp
+    state.llm.active_ramps.push(ParamRamp {
+        param: "fx.reverb_mix".into(),
+        current: 0.0,
+        target: 0.8,
+        step_per_cycle: 0.0,
+        from: 0.0,
+        start_global_step: 100,
+        total_global_steps: 16,
+    });
+    let out = advance_ramps(state);
+    assert_eq!(
+        out.llm.active_ramps.len(),
+        1,
+        "bar-based ramp untouched by advance_ramps"
+    );
 }
 
 // ─── apply_behaviour ─────────────────────────────────────────────────────────

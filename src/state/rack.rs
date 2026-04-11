@@ -149,8 +149,8 @@ impl ModuleKind {
     pub fn label(self) -> &'static str {
         match self {
             Self::AcidBass => "BASS SYNTH",
-            Self::DrumKit808 => "DRUM KIT A",
-            Self::DrumKit909 => "DRUM KIT B",
+            Self::DrumKit808 => "808 KIT",
+            Self::DrumKit909 => "909 KIT",
             Self::HooverLead => "HOOVER",
             Self::An1xVoice => "AN1X",
             Self::AmenSampler => "AMEN",
@@ -438,9 +438,13 @@ impl RackState {
         false
     }
 
-    /// Add a cable between two ports. Rejects audio cables that would create a
-    /// cycle in the signal graph. Returns `true` if the cable was added.
+    /// Add a cable between two ports. Rejects duplicates and audio cables that
+    /// would create a cycle in the signal graph. Returns `true` if the cable was added.
     pub fn connect(&mut self, from: PortRef, to: PortRef) -> bool {
+        // Reject duplicate cables (same from/to port pair)
+        if self.cables.iter().any(|c| c.from == from && c.to == to) {
+            return false;
+        }
         if from.kind == PortKind::Audio
             && self.would_create_audio_cycle(from.module_id, to.module_id)
         {
@@ -732,6 +736,10 @@ pub(crate) fn lfo_target_module_kind(target: crate::state::LfoTarget) -> Option<
         LfoTarget::ReverbMix => Some(ModuleKind::FxReverb),
         LfoTarget::DelayTime | LfoTarget::DelayFeedback => Some(ModuleKind::FxDelay),
         LfoTarget::ChorusMix | LfoTarget::ChorusRate => Some(ModuleKind::FxChorus),
+        LfoTarget::PhaserRate | LfoTarget::PhaserDepth => Some(ModuleKind::FxPhaser),
+        LfoTarget::DistortionDrive => Some(ModuleKind::FxWaveshaper),
+        LfoTarget::MasterVolume => Some(ModuleKind::MasterOutput),
+        LfoTarget::An1xCutoff | LfoTarget::An1xPitch => Some(ModuleKind::An1xVoice),
     }
 }
 
@@ -810,28 +818,33 @@ pub fn rack_kind_name_matches(kind: ModuleKind, name: &str) -> bool {
     match kind {
         ModuleKind::FxBitcrush => matches!(
             n.as_str(),
-            "bitcrush" | "bit_crush" | "bit crush" | "lofi" | "lo-fi"
+            "bitcrush" | "bit_crush" | "bit crush" | "lofi" | "lo-fi" | "fx"
         ),
-        ModuleKind::FxReverb => matches!(n.as_str(), "reverb" | "verb"),
-        ModuleKind::FxDelay => matches!(n.as_str(), "delay" | "echo"),
-        ModuleKind::FxChorus => matches!(n.as_str(), "chorus" | "ensemble"),
-        ModuleKind::FxPhaser => matches!(n.as_str(), "phaser" | "phase"),
+        ModuleKind::FxReverb => matches!(n.as_str(), "reverb" | "verb" | "fx"),
+        ModuleKind::FxDelay => matches!(n.as_str(), "delay" | "echo" | "fx"),
+        ModuleKind::FxChorus => matches!(n.as_str(), "chorus" | "ensemble" | "fx"),
+        ModuleKind::FxPhaser => matches!(n.as_str(), "phaser" | "phase" | "fx"),
         ModuleKind::FxRingMod => {
-            matches!(n.as_str(), "ringmod" | "ring_mod" | "ring mod" | "ring")
+            matches!(
+                n.as_str(),
+                "ringmod" | "ring_mod" | "ring mod" | "ring" | "fx"
+            )
         }
         ModuleKind::FxWaveshaper => {
-            matches!(n.as_str(), "waveshaper" | "wave_shaper" | "shaper")
+            matches!(n.as_str(), "waveshaper" | "wave_shaper" | "shaper" | "fx")
         }
-        ModuleKind::FxEq => matches!(n.as_str(), "eq" | "equalizer" | "equaliser"),
-        ModuleKind::FxCompressor => matches!(n.as_str(), "compressor" | "comp"),
+        ModuleKind::FxEq => matches!(n.as_str(), "eq" | "equalizer" | "equaliser" | "fx"),
+        ModuleKind::FxCompressor => matches!(n.as_str(), "compressor" | "comp" | "fx"),
         ModuleKind::FxTapeSat => matches!(
             n.as_str(),
-            "tapesat" | "tape_sat" | "tape sat" | "tape" | "saturation"
+            "tapesat" | "tape_sat" | "tape sat" | "tape" | "saturation" | "fx"
         ),
-        ModuleKind::FxDrive => matches!(n.as_str(), "drive" | "overdrive" | "distortion"),
+        ModuleKind::FxDrive => {
+            matches!(n.as_str(), "drive" | "overdrive" | "distortion" | "fx")
+        }
         ModuleKind::FxAutotune => matches!(
             n.as_str(),
-            "autotune" | "auto_tune" | "pitch_correct" | "tune"
+            "autotune" | "auto_tune" | "pitch_correct" | "tune" | "fx"
         ),
         ModuleKind::LfoModule => matches!(n.as_str(), "lfo"),
         ModuleKind::AcidBass => matches!(n.as_str(), "bass" | "acid" | "303"),
