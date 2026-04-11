@@ -347,6 +347,18 @@ pub(crate) fn grid_unit(ctx: &egui::Context) -> f32 {
         .unwrap_or(0.0)
 }
 
+/// Compute card X position — mirrored horizontally when the rack is flipped.
+fn card_x(zone_left: f32, gc: u8, col_span: u8, step: f32, flipped: bool) -> f32 {
+    if flipped {
+        // Mirror: a card at column gc with width col_span maps to
+        // column (GRID_COLS - gc - col_span) from the left.
+        let mirror_col = GRID_COLS.saturating_sub(gc + col_span);
+        zone_left + mirror_col as f32 * step
+    } else {
+        zone_left + gc as f32 * step
+    }
+}
+
 /// Paint subtle dots at grid intersections within a zone's content area.
 /// Called per-zone so each collapsible section gets its own aligned grid.
 /// `zone_left` is the X where modules actually start (cursor X at zone start).
@@ -430,7 +442,8 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
         for &(id, kind, enabled, gc, gr) in &global_mods {
             let slot_w = module_grid_w(kind, col_w);
             let slot_h = module_grid_h(kind, col_w);
-            let x = zone_rect.min.x + gc as f32 * step;
+            let (col_span, _) = kind.grid_size(GRID_COLS);
+            let x = card_x(zone_rect.min.x, gc, col_span, step, app.rack_flipped);
             let y = zone_rect.min.y + gr as f32 * step;
             let card_rect =
                 egui::Rect::from_min_size(egui::Pos2::new(x, y), egui::Vec2::new(slot_w, slot_h));
@@ -539,7 +552,8 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
         for &(id, kind, enabled, gc, gr) in &voice_mods {
             let slot_w = module_grid_w(kind, col_w);
             let slot_h = module_grid_h(kind, col_w);
-            let x = zone_rect.min.x + gc as f32 * step;
+            let (col_span, _) = kind.grid_size(GRID_COLS);
+            let x = card_x(zone_rect.min.x, gc, col_span, step, app.rack_flipped);
             let y = zone_rect.min.y + gr as f32 * step;
             let card_rect =
                 egui::Rect::from_min_size(egui::Pos2::new(x, y), egui::Vec2::new(slot_w, slot_h));
@@ -638,7 +652,8 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
         for &(id, kind, enabled, gc, gr) in &fx_mods {
             let slot_w = module_grid_w(kind, col_w);
             let slot_h = module_grid_h(kind, col_w);
-            let x = zone_rect.min.x + gc as f32 * step;
+            let (col_span, _) = kind.grid_size(GRID_COLS);
+            let x = card_x(zone_rect.min.x, gc, col_span, step, app.rack_flipped);
             let y = zone_rect.min.y + gr as f32 * step;
             let card_rect =
                 egui::Rect::from_min_size(egui::Pos2::new(x, y), egui::Vec2::new(slot_w, slot_h));
