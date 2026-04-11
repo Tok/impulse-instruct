@@ -236,7 +236,7 @@ pub fn knob(ui: &mut Ui, label: &str, value: &mut f32, mode: ParamMode, size: f3
 
 fn draw_knob(painter: &Painter, rect: Rect, value: f32, mode: ParamMode, hovered: bool, time: f32) {
     let center = rect.center();
-    let radius = rect.width() * 0.45;
+    let radius = rect.width() * 0.40;
 
     // Well shadow — dark drop shadow offset slightly down-right
     painter.circle_filled(
@@ -286,22 +286,24 @@ fn draw_knob(painter: &Painter, rect: Rect, value: f32, mode: ParamMode, hovered
     };
     painter.circle_stroke(center, radius, Stroke::new(1.0, ring_col));
 
-    // Arc track (270° sweep, starting bottom-left)
+    // Range ring (270° sweep) — outer arc showing full knob range
     let start_angle: f32 = std::f32::consts::FRAC_PI_2 + std::f32::consts::FRAC_PI_4 * 3.0;
     let sweep = TAU * 0.75;
-    let track_r = radius * 0.72;
+    let ring_r = rect.width() * 0.47; // fits inside allocated rect
+    let filled_sweep = sweep * value;
 
+    // Full range track — dim white ring
     draw_arc(
         painter,
         center,
-        track_r,
+        ring_r,
         start_angle,
         sweep,
-        1.0,
-        theme::SLATE,
+        2.0,
+        Color32::from_gray(35),
     );
 
-    let filled_sweep = sweep * value;
+    // Filled portion — bright, from start up to current value
     let arc_color = match mode {
         ParamMode::UserOwned => theme::IRON,
         ParamMode::LlmFocus => mode_color(ParamMode::LlmFocus),
@@ -311,15 +313,15 @@ fn draw_knob(painter: &Painter, rect: Rect, value: f32, mode: ParamMode, hovered
         draw_arc(
             painter,
             center,
-            track_r,
+            ring_r,
             start_angle,
             filled_sweep,
-            2.0,
+            2.5,
             arc_color,
         );
     }
 
-    // Pointer line from near-centre to near-rim (replaces dot — clearer read)
+    // Pointer line from near-centre to near-rim
     let end_angle = start_angle + filled_sweep;
     let ptr_a = center + Vec2::new(end_angle.cos(), end_angle.sin()) * (radius * 0.18);
     let ptr_b = center + Vec2::new(end_angle.cos(), end_angle.sin()) * (radius * 0.75);
@@ -920,8 +922,8 @@ fn draw_knob_chrome(
         arc_r,
         start_angle,
         sweep,
-        2.0,
-        Color32::from_gray(16),
+        2.5,
+        Color32::from_gray(35),
     );
 
     let arc_color = match mode {
