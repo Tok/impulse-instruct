@@ -76,10 +76,6 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             s.ui_prefs.huth_style == crate::state::HuthStyle::Full,
         )
     };
-    // Only highlight the cursor when the sequencer is actually playing;
-    // usize::MAX guarantees no step matches when stopped.
-    let cursor = if running { current_step } else { usize::MAX };
-
     // ── Line 1: Bank | Chain | Steps | ← right: BPM SYNC ──────────────
     ui.horizontal(|ui| {
         draw_pattern_chain(app, ui);
@@ -338,8 +334,9 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
     let total_pages = seq_steps.div_ceil(STEPS_PER_PAGE);
 
     // Auto-follow cursor when playing
-    if running && cursor != usize::MAX {
-        let cursor_page = cursor / STEPS_PER_PAGE;
+    if running {
+        let wrapped = current_step % seq_steps.max(1);
+        let cursor_page = wrapped / STEPS_PER_PAGE;
         if app.seq_page != cursor_page {
             app.seq_page = cursor_page;
         }
@@ -406,6 +403,12 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
 
         // ── Bass rows — only shown when AcidBass is in the rack ───────────────
         if rack_has_bass {
+            let bass_steps = app.state.read().sequencer.bass_steps;
+            let bass_cursor = if running {
+                current_step % bass_steps.max(1)
+            } else {
+                usize::MAX
+            };
             let bass_page: Vec<crate::state::TB303Step> = {
                 let s = app.state.read();
                 let end = (page_start + STEPS_PER_PAGE).min(s.sequencer.bass_pattern.len());
@@ -426,8 +429,8 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                     beat_div(ui, i);
                     let step = bass_page.get(i).copied();
                     let is_active = step.map(|s| s.active).unwrap_or(false);
-                    let is_current = abs == cursor;
-                    ui.add_enabled_ui(abs < seq_steps, |ui| {
+                    let is_current = abs == bass_cursor;
+                    ui.add_enabled_ui(abs < bass_steps, |ui| {
                         let clicked = if huth_full {
                             let note = step.map(|s| s.note).unwrap_or(36);
                             let gate = step.map(|s| s.gate).unwrap_or(0.5);
@@ -484,7 +487,7 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                     let abs = page_start + i;
                     beat_div(ui, i);
                     let is_accent = bass_page.get(i).map(|s| s.accent).unwrap_or(false);
-                    ui.add_enabled_ui(abs < seq_steps, |ui| {
+                    ui.add_enabled_ui(abs < bass_steps, |ui| {
                         let color = if is_accent { theme::CHALK } else { theme::PIT };
                         let text = egui::RichText::new("A").monospace().size(7.0).color(color);
                         if ui
@@ -516,7 +519,7 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                     let abs = page_start + i;
                     beat_div(ui, i);
                     let is_slide = bass_page.get(i).map(|s| s.slide).unwrap_or(false);
-                    ui.add_enabled_ui(abs < seq_steps, |ui| {
+                    ui.add_enabled_ui(abs < bass_steps, |ui| {
                         let color = if is_slide { theme::CHALK } else { theme::PIT };
                         let text = egui::RichText::new("S").monospace().size(7.0).color(color);
                         if ui
@@ -536,7 +539,15 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
 
         // ── Hoover row — only shown when HooverLead is in the rack ────────────
         if rack_has_hoover {
-            let hoover_enabled = app.state.read().hoover.enabled;
+            let (hoover_enabled, hoover_steps) = {
+                let s = app.state.read();
+                (s.hoover.enabled, s.sequencer.hoover_steps)
+            };
+            let hoover_cursor = if running {
+                current_step % hoover_steps.max(1)
+            } else {
+                usize::MAX
+            };
             let hoover_page: Vec<crate::state::TB303Step> = {
                 let s = app.state.read();
                 let end = (page_start + STEPS_PER_PAGE).min(s.sequencer.hoover_pattern.len());
@@ -562,8 +573,8 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                     beat_div(ui, i);
                     let step = hoover_page.get(i).copied();
                     let is_active = step.map(|s| s.active).unwrap_or(false);
-                    let is_current = abs == cursor;
-                    ui.add_enabled_ui(abs < seq_steps, |ui| {
+                    let is_current = abs == hoover_cursor;
+                    ui.add_enabled_ui(abs < hoover_steps, |ui| {
                         let clicked = if huth_full {
                             let note = step.map(|s| s.note).unwrap_or(57);
                             let gate = step.map(|s| s.gate).unwrap_or(0.5);
@@ -607,7 +618,15 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
 
         // ── AN1X row — only shown when An1xVoice is in the rack ───────────────
         if rack_has_an1x {
-            let an1x_enabled = app.state.read().an1x.enabled;
+            let (an1x_enabled, an1x_steps) = {
+                let s = app.state.read();
+                (s.an1x.enabled, s.sequencer.an1x_steps)
+            };
+            let an1x_cursor = if running {
+                current_step % an1x_steps.max(1)
+            } else {
+                usize::MAX
+            };
             let an1x_page: Vec<crate::state::TB303Step> = {
                 let s = app.state.read();
                 let end = (page_start + STEPS_PER_PAGE).min(s.sequencer.an1x_pattern.len());
@@ -633,8 +652,8 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                     beat_div(ui, i);
                     let step = an1x_page.get(i).copied();
                     let is_active = step.map(|s| s.active).unwrap_or(false);
-                    let is_current = abs == cursor;
-                    ui.add_enabled_ui(abs < seq_steps, |ui| {
+                    let is_current = abs == an1x_cursor;
+                    ui.add_enabled_ui(abs < an1x_steps, |ui| {
                         let clicked = if huth_full {
                             let note = step.map(|s| s.note).unwrap_or(57);
                             let gate = step.map(|s| s.gate).unwrap_or(0.5);
