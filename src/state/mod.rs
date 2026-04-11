@@ -104,8 +104,8 @@ pub mod rack;
 mod rack_presets;
 pub use fx_plan::compile_fx_plan;
 pub use rack::{
-    Cable, CableColor, FxPlan, FxStep, ModuleKind, PortDir, PortKind, PortRef, RackModule,
-    RackState, Zone, rack_kind_name_matches, scope_from_control_cables,
+    Cable, CableColor, FxPlan, FxStep, GRID_COLS, ModuleKind, PortDir, PortKind, PortRef,
+    RackModule, RackState, Zone, rack_kind_name_matches, scope_from_control_cables,
 };
 pub use rack_presets::RACK_PRESETS;
 

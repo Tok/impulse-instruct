@@ -17,7 +17,7 @@
 
 use egui::{Color32, ScrollArea};
 
-use crate::state::{ModuleKind, Zone};
+use crate::state::{ModuleKind, Zone, rack::GRID_COLS};
 use crate::ui::module_card::PortPos;
 use crate::ui::{ImpulseApp, module_card, rack_cables};
 // Re-export so callers referencing `rack_canvas::CableDrag` keep working.
@@ -301,7 +301,6 @@ fn draw_add_menu(app: &mut ImpulseApp, ctx: &egui::Context) {
 // columns and rows defined in `ModuleKind::grid_size()`.
 
 pub(super) const RACK_GAP: f32 = 4.0;
-pub(crate) const GRID_COLS: u8 = 12;
 
 /// Size of one grid column.
 pub(super) fn grid_col_w(available_w: f32) -> f32 {

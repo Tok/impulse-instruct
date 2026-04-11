@@ -279,6 +279,9 @@ impl ModuleKind {
 
 // ─── Zone ────────────────────────────────────────────────────────────────────
 
+/// Fixed grid column count for the rack layout.
+pub const GRID_COLS: u8 = 12;
+
 /// The vertical zone a module lives in.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Zone {
@@ -304,6 +307,12 @@ pub struct RackModule {
     pub zone: Zone,
     /// Position within the zone (left-to-right ordering).  Lower = further left.
     pub slot: u8,
+    /// Grid column (0-based) in the zone's 12-column grid.
+    #[serde(default)]
+    pub grid_col: u8,
+    /// Grid row (0-based) in the zone's grid.
+    #[serde(default)]
+    pub grid_row: u8,
 }
 
 impl RackModule {
@@ -314,6 +323,8 @@ impl RackModule {
             enabled: true,
             zone: kind.default_zone(),
             slot: 0,
+            grid_col: 0,
+            grid_row: 0,
         }
     }
 }
@@ -371,9 +382,18 @@ impl RackState {
             .retain(|c| c.from.module_id != id && c.to.module_id != id);
     }
 
-    /// Sort modules within each zone into a canonical order and reassign slot indices.
+    /// Sort modules into canonical order and pack onto the grid.
     pub fn arrange_canonical(&mut self) {
+        // Canonical sort + grid bin-packing in one call.
+        self.arrange_grid();
+    }
+
+    /// Bin-pack modules onto the 12-column grid within each zone.
+    /// Scans top-to-bottom, left-to-right for the first position where
+    /// the module's (w, h) span fits without overlapping existing modules.
+    pub fn arrange_grid(&mut self) {
         fn order(kind: ModuleKind) -> u8 {
+            // Same canonical order as arrange_canonical
             match kind {
                 ModuleKind::LlmConsole => 0,
                 ModuleKind::LlmAgent => 1,
@@ -406,17 +426,57 @@ impl RackState {
                 ModuleKind::LfoModule => 35,
             }
         }
+        let cols = GRID_COLS as usize;
+        let max_rows = 64usize; // generous upper bound
+
         for zone in [Zone::Global, Zone::Voice, Zone::FxMod] {
-            let mut ids: Vec<(u32, u8)> = self
+            // Collect and sort by canonical order
+            let mut ids: Vec<(u32, ModuleKind)> = self
                 .modules
                 .iter()
                 .filter(|m| m.zone == zone)
-                .map(|m| (m.id, order(m.kind)))
+                .map(|m| (m.id, m.kind))
                 .collect();
-            ids.sort_by_key(|&(_, o)| o);
-            for (slot, &(id, _)) in ids.iter().enumerate() {
-                if let Some(m) = self.modules.iter_mut().find(|m| m.id == id) {
-                    m.slot = slot as u8;
+            ids.sort_by_key(|&(_, k)| order(k));
+
+            // 2D occupancy grid
+            let mut occ = vec![vec![false; cols]; max_rows];
+
+            for (slot_idx, &(id, kind)) in ids.iter().enumerate() {
+                let (w, h) = kind.grid_size(GRID_COLS);
+                let w = w as usize;
+                let h = h as usize;
+
+                // Find first free position (top-to-bottom, left-to-right)
+                let mut placed = false;
+                'scan: for r in 0..max_rows - h {
+                    for c in 0..=cols - w {
+                        // Check if w×h block is free
+                        let fits = (0..h).all(|dr| (0..w).all(|dc| !occ[r + dr][c + dc]));
+                        if fits {
+                            // Mark occupied
+                            for dr in 0..h {
+                                for dc in 0..w {
+                                    occ[r + dr][c + dc] = true;
+                                }
+                            }
+                            if let Some(m) = self.modules.iter_mut().find(|m| m.id == id) {
+                                m.grid_col = c as u8;
+                                m.grid_row = r as u8;
+                                m.slot = slot_idx as u8;
+                            }
+                            placed = true;
+                            break 'scan;
+                        }
+                    }
+                }
+                if !placed {
+                    // Shouldn't happen with 64 rows, but fallback to (0, 0)
+                    if let Some(m) = self.modules.iter_mut().find(|m| m.id == id) {
+                        m.grid_col = 0;
+                        m.grid_row = 0;
+                        m.slot = slot_idx as u8;
+                    }
                 }
             }
         }
