@@ -204,25 +204,28 @@ pub fn draw_lfo_slot(app: &mut ImpulseApp, ui: &mut egui::Ui, slot_idx: usize) {
 
     // Row 1: ON | → [TARGET] | waveform selectors
     ui.horizontal(|ui| {
-        ui.spacing_mut().item_spacing.x = super::KNOB_SPACING;
+        ui.spacing_mut().item_spacing.x = 4.0;
         if ui.selectable_label(enabled, "ON").clicked() {
             enabled = !enabled;
             app.state.write().lfo[i].enabled = enabled;
             app.push_audio_params();
         }
         ui.separator();
-        // Target button
+        // Target button — fixed width to prevent layout shift
         let t_label = target_label(&slot.target);
         if ui
-            .button(
-                egui::RichText::new(format!("→ {}", t_label))
-                    .color(if slot.target == LfoTarget::None {
-                        theme::IRON
-                    } else {
-                        theme::CHALK
-                    })
-                    .monospace()
-                    .size(9.5),
+            .add_sized(
+                [60.0, 18.0],
+                egui::Button::new(
+                    egui::RichText::new(format!("→{}", t_label))
+                        .color(if slot.target == LfoTarget::None {
+                            theme::IRON
+                        } else {
+                            theme::CHALK
+                        })
+                        .monospace()
+                        .size(8.5),
+                ),
             )
             .clicked()
         {
@@ -230,7 +233,7 @@ pub fn draw_lfo_slot(app: &mut ImpulseApp, ui: &mut egui::Ui, slot_idx: usize) {
             app.push_audio_params();
         }
         ui.separator();
-        // Waveform selectors
+        // Waveform selectors — tighter spacing
         for (label, wave) in [
             ("SIN", LfoWaveform::Sine),
             ("TRI", LfoWaveform::Triangle),
@@ -297,7 +300,7 @@ pub fn draw_lfo_slot(app: &mut ImpulseApp, ui: &mut egui::Ui, slot_idx: usize) {
         LfoWaveform::SampleAndHold => 5,
     };
     let t_label = target_label(&slot.target);
-    let viz_w = ui.available_width();
+    let viz_w = (ui.available_width() - 4.0).max(40.0); // slight inset to avoid overflow
     let viz_h = ui.available_height().max(50.0);
     widgets::lfo_preview(ui, shape, rate, depth, t_label, viz_w, viz_h);
 }
