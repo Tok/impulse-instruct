@@ -225,7 +225,7 @@ pub fn draw_an1x(app: &mut ImpulseApp, ui: &mut Ui) {
         ui.horizontal(|ui| {
             widgets::glass_group_fill(ui, gw, gw, |ui| {
                 ui.set_min_height(group_h);
-                ui.spacing_mut().item_spacing.x = 8.0;
+                ui.spacing_mut().item_spacing.x = super::KNOB_SPACING;
                 ui.label(
                     egui::RichText::new("LEVELS")
                         .color(theme::FOG)
@@ -240,7 +240,7 @@ pub fn draw_an1x(app: &mut ImpulseApp, ui: &mut Ui) {
             });
             widgets::glass_group_fill(ui, gw, gw, |ui| {
                 ui.set_min_height(group_h);
-                ui.spacing_mut().item_spacing.x = 8.0;
+                ui.spacing_mut().item_spacing.x = super::KNOB_SPACING;
                 ui.label(
                     egui::RichText::new("FILTER")
                         .color(theme::FOG)
@@ -258,7 +258,7 @@ pub fn draw_an1x(app: &mut ImpulseApp, ui: &mut Ui) {
             });
             widgets::glass_group_fill(ui, gw, gw, |ui| {
                 ui.set_min_height(group_h);
-                ui.spacing_mut().item_spacing.x = 8.0;
+                ui.spacing_mut().item_spacing.x = super::KNOB_SPACING;
                 ui.label(
                     egui::RichText::new("F.ADSR")
                         .color(theme::FOG)
@@ -283,7 +283,7 @@ pub fn draw_an1x(app: &mut ImpulseApp, ui: &mut Ui) {
         ui.horizontal(|ui| {
             widgets::glass_group_fill(ui, gw, gw, |ui| {
                 ui.set_min_height(group_h);
-                ui.spacing_mut().item_spacing.x = 8.0;
+                ui.spacing_mut().item_spacing.x = super::KNOB_SPACING;
                 ui.label(
                     egui::RichText::new("TUNE")
                         .color(theme::FOG)
@@ -352,7 +352,7 @@ pub fn draw_an1x(app: &mut ImpulseApp, ui: &mut Ui) {
             });
             widgets::glass_group_fill(ui, gw, gw, |ui| {
                 ui.set_min_height(group_h);
-                ui.spacing_mut().item_spacing.x = 8.0;
+                ui.spacing_mut().item_spacing.x = super::KNOB_SPACING;
                 ui.label(
                     egui::RichText::new("A.ADSR")
                         .color(theme::FOG)
@@ -384,7 +384,7 @@ pub fn draw_an1x(app: &mut ImpulseApp, ui: &mut Ui) {
             });
             widgets::glass_group_fill(ui, gw, gw, |ui| {
                 ui.set_min_height(group_h);
-                ui.spacing_mut().item_spacing.x = 8.0;
+                ui.spacing_mut().item_spacing.x = super::KNOB_SPACING;
                 ui.label(
                     egui::RichText::new("PITCH ENV")
                         .color(theme::FOG)

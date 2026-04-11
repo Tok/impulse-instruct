@@ -4,6 +4,9 @@
 /// Standard PAN slider width shared across voice panels.
 pub(super) const PAN_SLIDER_W: f32 = 140.0;
 
+/// Standard horizontal spacing between knobs inside glass groups and FX panels.
+pub(super) const KNOB_SPACING: f32 = 8.0;
+
 pub mod an1x;
 pub mod bass;
 mod bass_noise;

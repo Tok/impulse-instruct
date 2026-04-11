@@ -70,7 +70,7 @@ pub fn draw_kit_a(app: &mut ImpulseApp, ui: &mut egui::Ui) {
     ui.horizontal(|ui| {
         widgets::glass_group_fill(ui, gw, gw, |ui| {
             ui.set_min_height(group_h);
-            ui.spacing_mut().item_spacing.x = 8.0;
+            ui.spacing_mut().item_spacing.x = super::KNOB_SPACING;
             ui.label(
                 egui::RichText::new("KICK")
                     .color(theme::FOG)
@@ -142,7 +142,7 @@ pub fn draw_kit_a(app: &mut ImpulseApp, ui: &mut egui::Ui) {
     ui.horizontal(|ui| {
         widgets::glass_group_fill(ui, gw, gw, |ui| {
             ui.set_min_height(group_h);
-            ui.spacing_mut().item_spacing.x = 8.0;
+            ui.spacing_mut().item_spacing.x = super::KNOB_SPACING;
             ui.label(
                 egui::RichText::new("SNARE")
                     .color(theme::FOG)
@@ -168,7 +168,7 @@ pub fn draw_kit_a(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         });
         widgets::glass_group_fill(ui, gw, gw, |ui| {
             ui.set_min_height(group_h);
-            ui.spacing_mut().item_spacing.x = 8.0;
+            ui.spacing_mut().item_spacing.x = super::KNOB_SPACING;
             ui.label(
                 egui::RichText::new("HIHAT")
                     .color(theme::FOG)
@@ -285,7 +285,7 @@ pub fn draw_kit_b(app: &mut ImpulseApp, ui: &mut egui::Ui) {
 
     // Row 1: KICK — full width, bigger knobs (most important for 909)
     widgets::glass_group_fill(ui, avail, avail, |ui| {
-        ui.spacing_mut().item_spacing.x = 10.0;
+        ui.spacing_mut().item_spacing.x = super::KNOB_SPACING;
         ui.label(
             egui::RichText::new("KICK")
                 .color(theme::FOG)
@@ -322,7 +322,7 @@ pub fn draw_kit_b(app: &mut ImpulseApp, ui: &mut egui::Ui) {
     // Row 2: SNARE (left) + CLAP/RIM (right) — all knobs single row each
     ui.horizontal(|ui| {
         widgets::glass_group_fill(ui, gw_half, gw_half, |ui| {
-            ui.spacing_mut().item_spacing.x = 8.0;
+            ui.spacing_mut().item_spacing.x = super::KNOB_SPACING;
             ui.label(
                 egui::RichText::new("SNARE")
                     .color(theme::FOG)
@@ -345,7 +345,7 @@ pub fn draw_kit_b(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             });
         });
         widgets::glass_group_fill(ui, gw_half, gw_half, |ui| {
-            ui.spacing_mut().item_spacing.x = 8.0;
+            ui.spacing_mut().item_spacing.x = super::KNOB_SPACING;
             ui.label(
                 egui::RichText::new("CLAP / RIM")
                     .color(theme::FOG)

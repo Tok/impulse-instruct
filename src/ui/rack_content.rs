@@ -35,16 +35,26 @@ pub(super) fn draw_fx_content(app: &mut ImpulseApp, ui: &mut egui::Ui, kind: Mod
         .data(|d| d.get_temp(egui::Id::new("module_scale")))
         .unwrap_or(1.0);
     let ctrl = widgets::ControlPrefs::from_prefs_scaled(&app.state.read().ui_prefs, scale);
+    let ctrl_lg = ctrl.phi_bigger();
     let locked = app.state.read().llm.locked_params.clone();
     let focused = app.state.read().llm.focused_params.clone();
     let pm = |path: &str| crate::state::param_mode(path, &locked, &focused);
     let mut changed = false;
+    ui.spacing_mut().item_spacing.x = crate::ui::panels::KNOB_SPACING;
 
-    // Helper: horizontal row of knobs
+    // Helper macros for knob rows at different sizes
     macro_rules! hk {
         ($ui:expr, $( ($label:expr, $val:expr, $pm:expr) ),+ $(,)?) => {
             widgets::centered_row($ui, |ui| {
                 $( if widgets::param_control(ui, $label, $val, $pm, ctrl).0 { changed = true; } )+
+            });
+        }
+    }
+    // Large knobs (2-param FX that have space to fill)
+    macro_rules! hk_lg {
+        ($ui:expr, $( ($label:expr, $val:expr, $pm:expr) ),+ $(,)?) => {
+            widgets::centered_row($ui, |ui| {
+                $( if widgets::param_control(ui, $label, $val, $pm, ctrl_lg).0 { changed = true; } )+
             });
         }
     }
@@ -185,9 +195,9 @@ pub(super) fn draw_fx_content(app: &mut ImpulseApp, ui: &mut egui::Ui, kind: Mod
                 let s = app.state.read();
                 (s.fx.distortion_drive, s.fx.distortion_mix)
             };
-            hk!(
+            hk_lg!(
                 ui,
-                ("DRV", &mut dr, pm("fx.distortion_drive")),
+                ("DRIVE", &mut dr, pm("fx.distortion_drive")),
                 ("MIX", &mut mi, pm("fx.distortion_mix"))
             );
             if changed {
@@ -201,9 +211,9 @@ pub(super) fn draw_fx_content(app: &mut ImpulseApp, ui: &mut egui::Ui, kind: Mod
                 let s = app.state.read();
                 (s.fx.autotune_amount, s.fx.autotune_mix)
             };
-            hk!(
+            hk_lg!(
                 ui,
-                ("AMT", &mut amt, pm("fx.autotune_amount")),
+                ("AMOUNT", &mut amt, pm("fx.autotune_amount")),
                 ("MIX", &mut mi, pm("fx.autotune_mix"))
             );
             if changed {
@@ -217,9 +227,9 @@ pub(super) fn draw_fx_content(app: &mut ImpulseApp, ui: &mut egui::Ui, kind: Mod
                 let s = app.state.read();
                 (s.fx.waveshaper_drive, s.fx.waveshaper_mix)
             };
-            hk!(
+            hk_lg!(
                 ui,
-                ("DRV", &mut dr, pm("fx.waveshaper_drive")),
+                ("DRIVE", &mut dr, pm("fx.waveshaper_drive")),
                 ("MIX", &mut mi, pm("fx.waveshaper_mix"))
             );
             if changed {
@@ -251,7 +261,7 @@ pub(super) fn draw_fx_content(app: &mut ImpulseApp, ui: &mut egui::Ui, kind: Mod
                 let s = app.state.read();
                 (s.fx.ring_mod_freq, s.fx.ring_mod_mix)
             };
-            hk!(
+            hk_lg!(
                 ui,
                 ("FREQ", &mut fr, pm("fx.ring_mod_freq")),
                 ("MIX", &mut mi, pm("fx.ring_mod_mix"))

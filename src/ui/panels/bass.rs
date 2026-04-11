@@ -309,7 +309,7 @@ pub fn draw_bass(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             // FILTER group: 2×2 grid (CUT/RES, ENV/DEC)
             widgets::glass_group_fill(ui, gw_main, gw_main, |ui| {
                 ui.set_min_height(group_h);
-                ui.spacing_mut().item_spacing.x = 8.0;
+                ui.spacing_mut().item_spacing.x = super::KNOB_SPACING;
                 ui.label(
                     egui::RichText::new("FILTER")
                         .color(theme::FOG)
@@ -376,7 +376,7 @@ pub fn draw_bass(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             // CHARACTER group: ACC, DRV, VOL, SUB
             widgets::glass_group_fill(ui, gw_main, gw_main, |ui| {
                 ui.set_min_height(group_h);
-                ui.spacing_mut().item_spacing.x = 8.0;
+                ui.spacing_mut().item_spacing.x = super::KNOB_SPACING;
                 ui.label(
                     egui::RichText::new("CHARACTER")
                         .color(theme::FOG)
@@ -443,7 +443,7 @@ pub fn draw_bass(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             // MOD group: GLD, NSE, FMD, FMR (compact)
             widgets::glass_group_fill(ui, gw_mod, gw_mod, |ui| {
                 ui.set_min_height(group_h);
-                ui.spacing_mut().item_spacing.x = 8.0;
+                ui.spacing_mut().item_spacing.x = super::KNOB_SPACING;
                 ui.label(
                     egui::RichText::new("MOD")
                         .color(theme::FOG)
