@@ -727,7 +727,7 @@ pub fn draw_bass(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         });
     }); // end vertical_centered
 
-    ui.add_space(2.0);
+    ui.add_space(8.0);
 
     // Waveform toggle + animated preview
     ui.horizontal(|ui| {

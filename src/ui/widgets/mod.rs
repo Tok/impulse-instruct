@@ -572,7 +572,12 @@ pub fn centered_row<R>(
     ui: &mut Ui,
     add_contents: impl FnOnce(&mut Ui) -> R,
 ) -> egui::InnerResponse<R> {
-    ui.horizontal(add_contents)
+    ui.with_layout(
+        egui::Layout::left_to_right(egui::Align::Center)
+            .with_main_wrap(true)
+            .with_cross_justify(false),
+        add_contents,
+    )
 }
 
 /// Like `glass_group` but sets an exact width (both min and max), so the panel fills

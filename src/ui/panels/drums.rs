@@ -171,6 +171,8 @@ pub fn draw_kit_a(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                 .size(9.0),
         );
         ui.horizontal(|ui| {
+            let pad_spacer = ((ui.available_width() - xy_size - 10.0) / 2.0).max(0.0);
+            ui.add_space(pad_spacer);
             if widgets::xy_pad(
                 ui,
                 "drums_kick_xy",
