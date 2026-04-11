@@ -26,6 +26,9 @@ impl ImpulseApp {
 
         let statuses = crate::llm::vram::check_presets(si.vram_total_mb, &self.available_models);
 
+        // Check Enter key at ctx level — works regardless of widget focus
+        let enter_pressed = ctx.input(|i| i.key_pressed(egui::Key::Enter));
+
         // Does the current state already have agents from a prior session?
         let has_prior_agents = !self.state.read().llm_agents.is_empty();
         let prior_agent_count = self.state.read().llm_agents.len();
@@ -281,9 +284,6 @@ impl ImpulseApp {
                         .get(self.wizard_selected)
                         .map(|s| s.fits_vram && s.models_available)
                         .unwrap_or(false);
-
-                // Enter key submits the wizard with current selection
-                let enter_pressed = ctx.input(|i| i.key_pressed(egui::Key::Enter));
 
                 ui.horizontal(|ui| {
                     let label = if is_resume {

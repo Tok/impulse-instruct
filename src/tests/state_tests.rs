@@ -70,31 +70,31 @@ mod expand_steps_tests {
 
     #[test]
     fn expand_tiles_drum_pattern_into_new_slots() {
-        // Snare808 starts silent; turn on step 0 and step 3, then expand 16 → 32
+        // Snare808 starts silent; turn on step 0 and step 3, then expand 32 → 64
         let state = AppState::default();
         let state = toggle_drum_step(state, DrumVoice::Snare808, 0);
         let state = toggle_drum_step(state, DrumVoice::Snare808, 3);
         assert!(state.sequencer.drum_patterns[&DrumVoice::Snare808][0].active);
-        assert!(!state.sequencer.drum_patterns[&DrumVoice::Snare808][16].active);
+        assert!(!state.sequencer.drum_patterns[&DrumVoice::Snare808][32].active);
 
-        let state = expand_sequencer_steps(state, 32);
-        assert_eq!(state.sequencer.steps, 32);
-        // Step 16 should mirror step 0 (active)
+        let state = expand_sequencer_steps(state, 64);
+        assert_eq!(state.sequencer.steps, 64);
+        // Step 32 should mirror step 0 (active)
         assert!(
-            state.sequencer.drum_patterns[&DrumVoice::Snare808][16].active,
-            "step 16 should be tiled from step 0"
+            state.sequencer.drum_patterns[&DrumVoice::Snare808][32].active,
+            "step 32 should be tiled from step 0"
         );
-        // Step 19 should mirror step 3 (active)
+        // Step 35 should mirror step 3 (active)
         assert!(
-            state.sequencer.drum_patterns[&DrumVoice::Snare808][19].active,
-            "step 19 should be tiled from step 3"
+            state.sequencer.drum_patterns[&DrumVoice::Snare808][35].active,
+            "step 35 should be tiled from step 3"
         );
-        // Step 17 should mirror step 1 (inactive)
-        assert!(!state.sequencer.drum_patterns[&DrumVoice::Snare808][17].active);
+        // Step 33 should mirror step 1 (inactive)
+        assert!(!state.sequencer.drum_patterns[&DrumVoice::Snare808][33].active);
     }
 
     #[test]
-    fn expand_16_to_64_tiles_four_copies() {
+    fn expand_32_to_64_tiles_two_copies() {
         // Set up a kick on steps 0, 4, 8, 12 (default is blank)
         let mut state = AppState::default();
         for step in [0, 4, 8, 12] {
@@ -103,13 +103,13 @@ mod expand_steps_tests {
         let state = expand_sequencer_steps(state, 64);
         assert_eq!(state.sequencer.steps, 64);
         let kick = &state.sequencer.drum_patterns[&DrumVoice::Kick808];
-        // Each bank of 16 should repeat the same pattern
-        for bank in 0..4 {
-            assert!(kick[bank * 16].active, "kick missing at step {}", bank * 16);
+        // Each bank of 32 should repeat the same pattern
+        for bank in 0..2 {
+            assert!(kick[bank * 32].active, "kick missing at step {}", bank * 32);
             assert!(
-                kick[bank * 16 + 4].active,
+                kick[bank * 32 + 4].active,
                 "kick missing at step {}",
-                bank * 16 + 4
+                bank * 32 + 4
             );
         }
     }

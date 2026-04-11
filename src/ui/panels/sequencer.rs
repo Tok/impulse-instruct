@@ -9,6 +9,9 @@ use crate::state::{
 };
 use crate::ui::{ImpulseApp, SEQ_LABEL_H, SEQ_LABEL_W, SEQ_VOL_W, theme, widgets};
 
+/// Number of step buttons visible per page.
+pub(super) const STEPS_PER_PAGE: usize = 32;
+
 pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
     // Dynamic height: count actual visible rows (bass + expanded drums + hoover + an1x)
     {
@@ -331,18 +334,18 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
 
     ui.add_space(4.0);
 
-    let page_start = app.seq_page * 16;
-    let total_pages = seq_steps.div_ceil(16);
+    let page_start = app.seq_page * STEPS_PER_PAGE;
+    let total_pages = seq_steps.div_ceil(STEPS_PER_PAGE);
 
     // Auto-follow cursor when playing
     if running && cursor != usize::MAX {
-        let cursor_page = cursor / 16;
+        let cursor_page = cursor / STEPS_PER_PAGE;
         if app.seq_page != cursor_page {
             app.seq_page = cursor_page;
         }
     }
 
-    // Page nav (only shown when steps > 16)
+    // Page nav (only shown when steps > page size)
     if total_pages > 1 {
         ui.horizontal(|ui| {
             if ui.small_button("<").clicked() && app.seq_page > 0 {
@@ -392,23 +395,25 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
     };
 
     egui::ScrollArea::vertical().show(ui, |ui| {
+        // Prefix width cached from drum rows — ensures bass/hoover/an1x step
+        // buttons align with drum step buttons across all rows.
+        let prefix_w = if app.seq_prefix_width > 0.0 {
+            app.seq_prefix_width
+        } else {
+            // Approximate fallback for the very first frame
+            10.0 + 10.0 + (SEQ_LABEL_W - 20.0) + SEQ_VOL_W + 18.0 + 32.0
+        };
+
         // ── Bass rows — only shown when AcidBass is in the rack ───────────────
         if rack_has_bass {
             let bass_page: Vec<crate::state::TB303Step> = {
                 let s = app.state.read();
-                let end = (page_start + 16).min(s.sequencer.bass_pattern.len());
+                let end = (page_start + STEPS_PER_PAGE).min(s.sequencer.bass_pattern.len());
                 s.sequencer.bass_pattern[page_start..end].to_vec()
             };
-
-            // Bass note row — track where step buttons start for accent/slide alignment
-            // Match drum rows: M(10) + S(10) + label(SEQ_LABEL_W-20) + vol(SEQ_VOL_W) + steps(18)
-            // Drum rows render 5 separate widgets → 4 inter-widget spacing gaps (4.0px each)
-            let drum_spacing = ui.spacing().item_spacing.x * 4.0;
-            let label_spacer = 10.0 + 10.0 + (SEQ_LABEL_W - 20.0) + SEQ_VOL_W + 18.0 + drum_spacing;
-            let mut bass_steps_x = label_spacer; // fallback; updated below
             ui.horizontal(|ui| {
                 ui.add_sized(
-                    [label_spacer, SEQ_LABEL_H],
+                    [prefix_w, SEQ_LABEL_H],
                     egui::Label::new(
                         egui::RichText::new("BASS")
                             .color(theme::SMOKE)
@@ -416,8 +421,7 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                             .size(8.5),
                     ),
                 );
-                bass_steps_x = ui.cursor().min.x - ui.min_rect().min.x;
-                for i in 0..16usize {
+                for i in 0..STEPS_PER_PAGE {
                     let abs = page_start + i;
                     beat_div(ui, i);
                     let step = bass_page.get(i).copied();
@@ -468,7 +472,7 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             let marker_h = (pad_px * 0.35).clamp(10.0, 16.0);
             ui.horizontal(|ui| {
                 ui.add_sized(
-                    [bass_steps_x, marker_h],
+                    [prefix_w, marker_h],
                     egui::Label::new(
                         egui::RichText::new("ACC")
                             .color(theme::IRON)
@@ -476,7 +480,7 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                             .size(7.0),
                     ),
                 );
-                for i in 0..16usize {
+                for i in 0..STEPS_PER_PAGE {
                     let abs = page_start + i;
                     beat_div(ui, i);
                     let is_accent = bass_page.get(i).map(|s| s.accent).unwrap_or(false);
@@ -500,7 +504,7 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             // Slide row
             ui.horizontal(|ui| {
                 ui.add_sized(
-                    [bass_steps_x, marker_h],
+                    [prefix_w, marker_h],
                     egui::Label::new(
                         egui::RichText::new("SLD")
                             .color(theme::IRON)
@@ -508,7 +512,7 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                             .size(7.0),
                     ),
                 );
-                for i in 0..16usize {
+                for i in 0..STEPS_PER_PAGE {
                     let abs = page_start + i;
                     beat_div(ui, i);
                     let is_slide = bass_page.get(i).map(|s| s.slide).unwrap_or(false);
@@ -535,7 +539,7 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             let hoover_enabled = app.state.read().hoover.enabled;
             let hoover_page: Vec<crate::state::TB303Step> = {
                 let s = app.state.read();
-                let end = (page_start + 16).min(s.sequencer.hoover_pattern.len());
+                let end = (page_start + STEPS_PER_PAGE).min(s.sequencer.hoover_pattern.len());
                 s.sequencer.hoover_pattern[page_start..end].to_vec()
             };
             ui.horizontal(|ui| {
@@ -545,10 +549,7 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                     theme::PIT
                 };
                 ui.add_sized(
-                    [
-                        10.0 + 10.0 + (SEQ_LABEL_W - 20.0) + SEQ_VOL_W + 18.0 + 4.0 * 8.0,
-                        SEQ_LABEL_H,
-                    ],
+                    [prefix_w, SEQ_LABEL_H],
                     egui::Label::new(
                         egui::RichText::new("HOOVER")
                             .color(label_color)
@@ -556,7 +557,7 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                             .size(8.5),
                     ),
                 );
-                for i in 0..16usize {
+                for i in 0..STEPS_PER_PAGE {
                     let abs = page_start + i;
                     beat_div(ui, i);
                     let step = hoover_page.get(i).copied();
@@ -609,7 +610,7 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             let an1x_enabled = app.state.read().an1x.enabled;
             let an1x_page: Vec<crate::state::TB303Step> = {
                 let s = app.state.read();
-                let end = (page_start + 16).min(s.sequencer.an1x_pattern.len());
+                let end = (page_start + STEPS_PER_PAGE).min(s.sequencer.an1x_pattern.len());
                 s.sequencer.an1x_pattern[page_start..end].to_vec()
             };
             ui.horizontal(|ui| {
@@ -619,10 +620,7 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                     theme::PIT
                 };
                 ui.add_sized(
-                    [
-                        10.0 + 10.0 + (SEQ_LABEL_W - 20.0) + SEQ_VOL_W + 18.0 + 4.0 * 8.0,
-                        SEQ_LABEL_H,
-                    ],
+                    [prefix_w, SEQ_LABEL_H],
                     egui::Label::new(
                         egui::RichText::new("AN1X")
                             .color(label_color)
@@ -630,7 +628,7 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                             .size(8.5),
                     ),
                 );
-                for i in 0..16usize {
+                for i in 0..STEPS_PER_PAGE {
                     let abs = page_start + i;
                     beat_div(ui, i);
                     let step = an1x_page.get(i).copied();

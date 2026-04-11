@@ -158,6 +158,8 @@ pub struct ImpulseApp {
     pub(crate) stereo_balance: f32,
     last_thinking: Option<String>,
     seq_page: usize,
+    /// Cached x-offset where step buttons start (measured from drum rows, used next frame).
+    pub(crate) seq_prefix_width: f32,
     expanded_seq_voices: std::collections::HashSet<crate::state::DrumVoice>,
     drum_clipboard: Option<(crate::state::DrumVoice, Vec<crate::state::Step>)>,
     available_models: Vec<String>,
@@ -332,6 +334,7 @@ impl ImpulseApp {
             stereo_balance: 0.0,
             last_thinking: None,
             seq_page: 0,
+            seq_prefix_width: 0.0,
             expanded_seq_voices: std::collections::HashSet::new(),
             drum_clipboard: None,
             available_models: Vec::new(),

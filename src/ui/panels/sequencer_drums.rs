@@ -1,6 +1,7 @@
 // ─── ui/panels/sequencer_drums.rs ────────────────────────────────────────────
 // Drum row rendering — split from sequencer.rs to stay under the 1000-line limit.
 
+use super::sequencer::STEPS_PER_PAGE;
 use crate::state::{
     DrumVoice, MAX_STEPS, Step, set_drum_step_ratchet, set_drum_step_velocity,
     set_drum_voice_steps, toggle_drum_step,
@@ -108,7 +109,7 @@ pub(super) fn draw_drum_rows(
             s.sequencer
                 .drum_patterns
                 .get(voice)
-                .map(|p| p[page_start..(page_start + 16).min(p.len())].to_vec())
+                .map(|p| p[page_start..(page_start + STEPS_PER_PAGE).min(p.len())].to_vec())
                 .unwrap_or_else(|| vec![Step::default(); 16])
         };
 
@@ -258,7 +259,12 @@ pub(super) fn draw_drum_rows(
 
             let mut toggled = None;
             steps_x = ui.cursor().min.x; // track for sub-lane alignment
-            for i in 0..16usize {
+            // Cache prefix width for cross-row alignment (bass, hoover, an1x use this next frame)
+            let rel_x = steps_x - ui.min_rect().min.x;
+            if rel_x > 0.0 {
+                app.seq_prefix_width = rel_x;
+            }
+            for i in 0..STEPS_PER_PAGE {
                 let abs = page_start + i;
                 beat_div(ui, i);
                 let is_active = pattern.get(i).map(|s| s.active).unwrap_or(false);
@@ -294,7 +300,7 @@ pub(super) fn draw_drum_rows(
             if spacer > 0.0 {
                 ui.add_space(spacer);
             }
-            for i in 0..16usize {
+            for i in 0..STEPS_PER_PAGE {
                 beat_div(ui, i);
                 let abs = page_start + i;
                 let vel = pattern.get(i).map(|s| s.velocity).unwrap_or(1.0);

@@ -75,8 +75,9 @@ fn over_compressed_detected() {
 fn dense_bass_detected() {
     let mut s = AppState::default();
     s.sequencer.running = true;
-    // Activate 14 of 16 steps
-    for step in s.sequencer.bass_pattern.iter_mut().take(14) {
+    // Activate >80% of steps to trigger dense detection
+    let threshold = (s.sequencer.bass_steps as f32 * 0.85) as usize;
+    for step in s.sequencer.bass_pattern.iter_mut().take(threshold) {
         step.active = true;
         step.note = 45;
     }

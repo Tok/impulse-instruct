@@ -518,12 +518,12 @@ impl Default for SequencerState {
         // Default: all drum voices use the global `steps` length.
         let mut drum_steps = std::collections::HashMap::new();
         for v in DrumVoice::ALL {
-            drum_steps.insert(*v, 16usize);
+            drum_steps.insert(*v, 32usize);
         }
 
         Self {
             bpm: 120.0,
-            steps: 16,
+            steps: 32,
             current_step: 0,
             running: false,
             swing: 0.0,
@@ -536,9 +536,9 @@ impl Default for SequencerState {
             scale: Scale::NaturalMinor,
             scale_snap: false,
             drum_steps,
-            bass_steps: 16,
-            hoover_steps: 16,
-            an1x_steps: 16,
+            bass_steps: 32,
+            hoover_steps: 32,
+            an1x_steps: 32,
             muted_drums: std::collections::HashSet::new(),
             soloed_drums: std::collections::HashSet::new(),
             midi_clock_sync: false,
@@ -549,7 +549,7 @@ impl Default for SequencerState {
                 }
                 pats
             },
-            bass_voice_steps: vec![16usize; MAX_BASS_VOICES],
+            bass_voice_steps: vec![32usize; MAX_BASS_VOICES],
             bass_voice_enabled: default_bass_voice_enabled(),
         }
     }
