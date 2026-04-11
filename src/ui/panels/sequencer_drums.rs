@@ -112,6 +112,10 @@ pub(super) fn draw_drum_rows(
                 .unwrap_or_else(|| vec![Step::default(); 16])
         };
 
+        // Tight vertical spacing for the entire voice block
+        let outer_spacing = ui.spacing().item_spacing;
+        ui.spacing_mut().item_spacing.y = 0.0;
+
         // ── Step buttons row ──────────────────────────────────────────────────
         let mut steps_x = 0.0f32;
         ui.horizontal(|ui| {
@@ -275,9 +279,7 @@ pub(super) fn draw_drum_rows(
             }
         });
 
-        // ── Velocity / Probability / Ratchet lanes (tight spacing) ─────────
-        let saved_spacing = ui.spacing().item_spacing;
-        ui.spacing_mut().item_spacing = egui::vec2(saved_spacing.x, 0.0);
+        // ── Velocity / Probability / Ratchet lanes ─────────────────────────
         ui.horizontal(|ui| {
             // Match the label column from the step button row
             let row_left = ui.cursor().min.x;
@@ -413,7 +415,7 @@ pub(super) fn draw_drum_rows(
                 *app.state.write() = set_drum_step_ratchet(s, *voice, step, new_ratchet);
             }
         });
-        // Restore normal spacing after tight lanes
-        ui.spacing_mut().item_spacing = saved_spacing;
+        // Restore normal vertical spacing between voices
+        ui.spacing_mut().item_spacing = outer_spacing;
     }
 }

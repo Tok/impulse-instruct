@@ -514,9 +514,9 @@ impl ImpulseApp {
                         const BAR_H: f32 = 5.0;
                         ui.scope(|ui| {
                             ui.spacing_mut().button_padding = egui::vec2(4.0, 1.0);
-                            ui.spacing_mut().item_spacing.x = 4.0;
-                            // In right_to_left layout: first rendered = rightmost
-                            // Order: VRAM/API (right) → MON (middle) → KNOBS (left)
+                            ui.spacing_mut().item_spacing.x = 6.0;
+                            // right_to_left: first = rightmost
+                            // VRAM/API (right) | MON (middle) | KNOBS (left)
 
                             // ── VRAM / RAM / API (rightmost) ────────────
                             {
@@ -641,45 +641,48 @@ impl ImpulseApp {
                                 self.state.write().ui_prefs.use_sliders = !use_sliders;
                             }
                             ui.separator();
-                            // Monitor volume
-                            let vol_col = if self.ui_volume < 0.4 {
-                                theme::ASH
-                            } else if self.ui_volume < 0.75 {
-                                theme::SMOKE
-                            } else {
-                                theme::FOG
-                            };
-                            ui.label(
-                                egui::RichText::new("MON")
+                            // Monitor volume — fixed width to prevent overflow
+                            ui.scope(|ui| {
+                                ui.set_max_width(160.0);
+                                let vol_col = if self.ui_volume < 0.4 {
+                                    theme::ASH
+                                } else if self.ui_volume < 0.75 {
+                                    theme::SMOKE
+                                } else {
+                                    theme::FOG
+                                };
+                                ui.label(
+                                    egui::RichText::new("MON")
+                                        .color(vol_col)
+                                        .monospace()
+                                        .size(8.5),
+                                )
+                                .on_hover_text("Monitor volume");
+                                if ui
+                                    .scope(|ui| {
+                                        ui.spacing_mut().slider_width = MON_W;
+                                        ui.add(
+                                            egui::Slider::new(&mut self.ui_volume, 0.0..=1.0)
+                                                .show_value(false),
+                                        )
+                                    })
+                                    .inner
+                                    .changed()
+                                {
+                                    let _ = self
+                                        .audio_tx
+                                        .push(AudioCommand::SetMonitorVolume(self.ui_volume));
+                                }
+                                ui.label(
+                                    egui::RichText::new(format!(
+                                        "{}%",
+                                        (self.ui_volume * 100.0) as u32
+                                    ))
                                     .color(vol_col)
                                     .monospace()
                                     .size(8.5),
-                            )
-                            .on_hover_text("Monitor volume");
-                            if ui
-                                .scope(|ui| {
-                                    ui.spacing_mut().slider_width = MON_W;
-                                    ui.add(
-                                        egui::Slider::new(&mut self.ui_volume, 0.0..=1.0)
-                                            .show_value(false),
-                                    )
-                                })
-                                .inner
-                                .changed()
-                            {
-                                let _ = self
-                                    .audio_tx
-                                    .push(AudioCommand::SetMonitorVolume(self.ui_volume));
-                            }
-                            ui.label(
-                                egui::RichText::new(format!(
-                                    "{}%",
-                                    (self.ui_volume * 100.0) as u32
-                                ))
-                                .color(vol_col)
-                                .monospace()
-                                .size(8.5),
-                            );
+                                );
+                            }); // end MON scope
                         });
                     });
                 });
