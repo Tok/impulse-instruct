@@ -5,8 +5,8 @@
 /// JSON Schema for grammar-constrained generation (used by llama-cpp-2).
 pub fn param_json_schema() -> serde_json::Value {
     let bool_array =
-        serde_json::json!({ "type": "array", "items": { "type": "boolean" }, "maxItems": 16 });
-    let note_array = serde_json::json!({ "type": "array", "items": { "type": "integer", "minimum": 0, "maximum": 127 }, "maxItems": 16 });
+        serde_json::json!({ "type": "array", "items": { "type": "boolean" }, "maxItems": 64 });
+    let note_array = serde_json::json!({ "type": "array", "items": { "type": "integer", "minimum": 0, "maximum": 127 }, "maxItems": 64 });
     serde_json::json!({
         "$schema": "http://json-schema.org/draft-07/schema",
         "type": "object",
@@ -41,11 +41,28 @@ pub fn param_json_schema() -> serde_json::Value {
                 "type": "object",
                 "properties": {
                     "bpm":           { "type": "number", "minimum": 40.0, "maximum": 250.0 },
-                    "steps":         { "type": "integer", "minimum": 8, "maximum": 64, "multipleOf": 8 },
+                    "steps":         { "type": "integer", "minimum": 1, "maximum": 64 },
                     "swing":         { "type": "number", "minimum": 0.0, "maximum": 1.0 },
                     "time_sig_num":  { "type": "integer", "minimum": 2, "maximum": 9 },
                     "root_note": { "type": "integer", "minimum": 0, "maximum": 11, "description": "tonic: 0=C 1=C# 2=D 3=D# 4=E 5=F 6=F# 7=G 8=G# 9=A 10=A# 11=B" },
                     "scale": { "type": "string", "enum": ["Major","Minor","Dorian","Phrygian","Lydian","Mixolydian","Locrian","Pentatonic","Blues","Chromatic"] },
+                    "bass_len":      { "type": "integer", "minimum": 1, "maximum": 64, "description": "bass pattern length (independent of global steps)" },
+                    "hoover_len":    { "type": "integer", "minimum": 1, "maximum": 64, "description": "hoover pattern length" },
+                    "an1x_len":      { "type": "integer", "minimum": 1, "maximum": 64, "description": "an1x pattern length" },
+                    "drum_lengths":  {
+                        "type": "object",
+                        "description": "per-voice drum pattern lengths for polyrhythm",
+                        "properties": {
+                            "kick_a":  { "type": "integer", "minimum": 1, "maximum": 64 },
+                            "snare_a": { "type": "integer", "minimum": 1, "maximum": 64 },
+                            "hihat_a": { "type": "integer", "minimum": 1, "maximum": 64 },
+                            "kick_b":  { "type": "integer", "minimum": 1, "maximum": 64 },
+                            "snare_b": { "type": "integer", "minimum": 1, "maximum": 64 },
+                            "clap_b":  { "type": "integer", "minimum": 1, "maximum": 64 },
+                            "hihat_b": { "type": "integer", "minimum": 1, "maximum": 64 }
+                        },
+                        "additionalProperties": false
+                    },
                     "bass_steps":    bool_array.clone(),
                     "bass_notes":    note_array,
                     "kick_a_steps":  bool_array.clone(),

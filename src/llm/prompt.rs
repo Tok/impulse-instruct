@@ -96,6 +96,8 @@ pub fn build_system_prompt_full(
         },
         "sequencer": {
             "bpm": state.sequencer.bpm,
+            "steps": state.sequencer.steps,
+            "bass_len": state.sequencer.bass_steps,
             "swing": state.sequencer.swing,
             "root_note": state.sequencer.root_note,
             "scale": state.sequencer.scale.name(),
@@ -151,7 +153,7 @@ pub fn build_system_prompt_full(
                     _ => s.description.as_str(),
                 };
                 let seed = if !s.seed_patterns.is_empty() {
-                    format!("\nSeed patterns (concrete starting point — adapt freely):\n{}\n", s.seed_patterns.to_prompt_lines())
+                    format!("\nSeed patterns (16-step starting point — extend to fill sequencer.steps, adapt freely):\n{}\n", s.seed_patterns.to_prompt_lines())
                 } else {
                     String::new()
                 };
@@ -300,19 +302,29 @@ BASS SYNTHESIZER (all 0.0–1.0):
   REESE BASS PRESET: set waveform="Supersaw", supersaw_voices=2, supersaw_detune=0.3,
                      sub_osc_level=0.5, filter_mode="Highpass", cutoff=0.25
 
-STEP SEQUENCER (16 steps = one 4/4 bar of 16th notes):
-  sequencer.steps         — total loop length in steps (8/16/32/64, default 16)
+STEP SEQUENCER (default 32 steps = two 4/4 bars of 16th notes):
+  sequencer.steps         — total loop length in steps (1–64, default 32)
   sequencer.swing         — 0–1 rhythmic swing (0=straight, 0.5=strong shuffle/triplet feel)
+  sequencer.time_sig_num  — beats per bar (2–9, default 4; use 5 or 7 for odd time)
   sequencer.root_note     — tonic: 0=C, 1=C#, 2=D, 3=D#, 4=E, 5=F, 6=F#, 7=G, 8=G#, 9=A, 10=A#, 11=B
   sequencer.scale         — "Major"|"Minor"|"Dorian"|"Phrygian"|"Lydian"|"Mixolydian"|"Locrian"|"Pentatonic"|"Blues"|"Chromatic"
 
+  PATTERN LENGTHS — each voice can have an independent length for polyrhythm:
+  sequencer.bass_len      — bass pattern length (1–64, independent of global steps)
+  sequencer.hoover_len    — hoover pattern length
+  sequencer.an1x_len      — an1x pattern length
+  sequencer.drum_lengths  — per-voice drum lengths: {{ "kick_a": 16, "hihat_a": 12 }}
+
   STEP ARRAYS — two compact formats (prefer index lists to save tokens):
     Index list  [0,4,8,12]   — active step indices; all others cleared. SAVES TOKENS — use this.
-    Inline      [1,0,0,0,…]  — 16 values, 0/1 (or false/true). Use only when most steps are on.
+    Inline      [1,0,0,0,…]  — up to 64 values, 0/1 (or false/true). Use only when most steps are on.
     Clear       []           — silence all steps for that voice.
+  IMPORTANT: Spread ALL patterns (bass, drums, hoover, an1x) across the ENTIRE length.
+    Check sequencer.steps and per-voice lengths in CURRENT STATE. Use the full range evenly.
+    Example: 32-step kick = [0,4,8,12,16,20,24,28], NOT just [0,4,8,12].
 
   sequencer.bass_steps    — step array for 303 bass trigger
-  sequencer.bass_notes    — 16-element MIDI note array (24=C1, 36=C2, 48=C3; acid range 33–48)
+  sequencer.bass_notes    — MIDI note array (24=C1, 36=C2, 48=C3; acid range 33–48)
   sequencer.kick_a_steps  — Kit A kick steps
   sequencer.snare_a_steps — Kit A snare steps
   sequencer.hihat_a_steps — Kit A closed hihat steps
@@ -449,8 +461,8 @@ AN1X VOICE (warm VA pads / leads — Boards of Canada aesthetic):
   an1x.pitch_env_amount — 0–1 (0.5=none, >0.5=up, <0.5=down, ±24 st max)
   an1x.drift            — 0–1 pitch instability; 0.12=subtle analogue feel
   an1x.glide_time       — 0–1 → 0–500ms pitch glide between notes
-  an1x.an1x_steps       — 16-element bool array: which steps trigger the AN1X
-  an1x.an1x_notes       — 16-element int array: MIDI note per step
+  an1x.an1x_steps       — bool array: which steps trigger the AN1X (length = an1x_len)
+  an1x.an1x_notes       — int array: MIDI note per step
   LLM triggers: "add a pad", "warm lead", "BoC", "ambient melody", "detuned synth", "slow attack"
 
 HOOVER LEAD (supersaw + resonant LP filter sweep — dominator/rave character):
@@ -463,19 +475,20 @@ HOOVER LEAD (supersaw + resonant LP filter sweep — dominator/rave character):
   hoover.detune         — supersaw spread semitones (0=mono, 0.45=lush shimmer)
   hoover.voices         — unison count 2–7 (5 is standard)
   hoover.volume         — 0–1
-  hoover.hoover_steps   — 16-element bool array: which steps trigger the Hoover
-  hoover.hoover_notes   — 16-element int array: MIDI note per step
+  hoover.hoover_steps   — bool array: which steps trigger the Hoover (length = hoover_len)
+  hoover.hoover_notes   — int array: MIDI note per step
   AUTHENTIC DOMINATOR: enabled=true, filter_start=0.88, resonance=0.82, sweep_time=0.2, detune=0.45, voices=5
   LLM triggers: "add a hoover", "rave lead", "dominator", "hardcore lead", "early rave"
 
 ═══ RHYTHM BASICS ═══
 
-Minimal 4/4 foundation — use index list format (compact, preferred):
-  kick_a_steps 4-on-floor:   [0,4,8,12]
-  hihat_a_steps offbeat 8ths:[2,6,10,14]
-  snare_a_steps on 2 and 4:  [4,12]
-  clap_b_steps on 2 and 4:   [4,12]
+Minimal 4/4 foundation (32 steps = 2 bars) — use index list format (compact, preferred):
+  kick_a_steps 4-on-floor:   [0,4,8,12,16,20,24,28]
+  hihat_a_steps offbeat 8ths:[2,6,10,14,18,22,26,30]
+  snare_a_steps on 2 and 4:  [4,12,20,28]
+  clap_b_steps on 2 and 4:   [4,12,20,28]
 Build from there — add syncopation and gaps. Never fill every step with the same drum.
+Spread hits evenly across ALL steps — check sequencer.steps in CURRENT STATE.
 
 IMPORTANT — drum_ratchets takes INTEGERS 1–4 only, never booleans:
   CORRECT: {{"drum_ratchets": {{"hihat_a": [1,1,2,1,1,1,4,1,1,1,2,1,1,1,1,1]}}}}
@@ -510,7 +523,7 @@ APPLYING THE KEY — when setting bass_notes:
 ═══ HOW TO INTERPRET INSTRUCTIONS ═══
 
 "change the melody" / "different pattern" / "new notes"
-  → Set bass_steps to a new 16-step pattern, set bass_notes to MIDI pitches
+  → Set bass_steps to a new pattern across the full bass_len, set bass_notes to MIDI pitches
 
 "add claps" / "add snare"
   → Set clap_b_steps or snare_a_steps to a useful drum pattern

@@ -13,23 +13,24 @@ const DEFAULT_JSON: &str = include_str!("../../styles.json");
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-/// Typical 16-step drum + bass grid for a style — used as a seed suggestion in the prompt.
+/// Drum + bass seed pattern for a style — used as a seed suggestion in the prompt.
+/// Arrays can be any length (typically 16 or 32 steps). The LLM adapts to the active step count.
 /// All fields are optional; absent voices are left at the model's discretion.
 #[derive(Debug, Clone, Deserialize, Serialize, Default)]
 pub struct SeedPatterns {
-    /// 16-element 0/1 array for 808-style kick.
+    /// 0/1 array for 808-style kick.
     #[serde(default)]
     pub kick: Vec<u8>,
-    /// 16-element 0/1 array for 808-style snare.
+    /// 0/1 array for 808-style snare.
     #[serde(default)]
     pub snare: Vec<u8>,
-    /// 16-element 0/1 array for closed hi-hat.
+    /// 0/1 array for closed hi-hat.
     #[serde(default)]
     pub hihat: Vec<u8>,
-    /// 16-element 0/1 array for bass sequencer gate (which steps trigger bass).
+    /// 0/1 array for bass sequencer gate (which steps trigger bass).
     #[serde(default)]
     pub bass_steps: Vec<u8>,
-    /// 16-element MIDI note array for bass sequencer (0 = not used on that step).
+    /// MIDI note array for bass sequencer (0 = not used on that step).
     #[serde(default)]
     pub bass_notes: Vec<u8>,
 }
