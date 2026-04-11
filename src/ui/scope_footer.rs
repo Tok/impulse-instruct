@@ -226,31 +226,55 @@ pub fn draw_footer_status(
             *rack_flipped = !*rack_flipped;
         }
         tab_resp.on_hover_text("Tab: flip rack. Double-click to toggle.");
+
+        // ── LEFT: MIDI status ──
         ui.separator();
         let midi_text = match midi_port {
             Some(port) => format!("MIDI: {}", port.trim()),
-            None => "MIDI: no device".to_string(),
+            None => "MIDI: –".to_string(),
         };
         ui.label(
             egui::RichText::new(midi_text)
                 .color(super::theme::ASH)
                 .monospace()
-                .size(9.0),
+                .size(8.0),
         );
-        draw_dsp_sparkline(ui, dsp_buf);
 
+        // ── CENTER: session stats (pushed via spacer) ──
         ui.separator();
         let mins = stats.uptime_secs / 60;
         let secs = stats.uptime_secs % 60;
-        ui.label(
-            egui::RichText::new(format!(
-                "Modules: {}  Agents: {}  Cables: {}  {}:{:02}",
-                stats.n_modules, stats.n_agents, stats.n_cables, mins, secs
-            ))
-            .monospace()
-            .size(8.0)
-            .color(super::theme::ASH),
+        let center_text = format!(
+            "{}mod  {}agt  {}cab  {}:{:02}",
+            stats.n_modules, stats.n_agents, stats.n_cables, mins, secs
         );
+        // Estimate right-side width and center the stats
+        let right_w = 180.0; // DSP sparkline + API + GitHub
+        let center_w = ui.fonts(|f| {
+            f.layout_no_wrap(
+                center_text.clone(),
+                egui::FontId::monospace(8.0),
+                super::theme::ASH,
+            )
+            .size()
+            .x
+        });
+        let avail = ui.available_width();
+        let spacer_l = ((avail - center_w - right_w) / 2.0).max(0.0);
+        ui.add_space(spacer_l);
+        ui.label(
+            egui::RichText::new(center_text)
+                .color(super::theme::ASH)
+                .monospace()
+                .size(8.0),
+        );
+
+        // ── RIGHT: DSP + API + GitHub (pushed via spacer) ──
+        let spacer_r = (ui.available_width() - right_w).max(0.0);
+        ui.add_space(spacer_r);
+
+        draw_dsp_sparkline(ui, dsp_buf);
+
         if let Some(port) = stats.api_port {
             ui.separator();
             if ui
@@ -259,7 +283,7 @@ pub fn draw_footer_status(
                         egui::RichText::new(format!("API :{port}"))
                             .color(super::theme::SMOKE)
                             .monospace()
-                            .size(8.0),
+                            .size(7.5),
                     )
                     .sense(egui::Sense::click()),
                 )
@@ -275,7 +299,7 @@ pub fn draw_footer_status(
                 egui::Label::new(
                     egui::RichText::new("GitHub ↗")
                         .monospace()
-                        .size(8.0)
+                        .size(7.5)
                         .color(super::theme::FOG),
                 )
                 .sense(egui::Sense::click()),
