@@ -91,23 +91,64 @@ fn draw_focus_shine(
         .flatten();
     if let Some((fk, elapsed)) = focus_info
         && fk == kind
-        && elapsed < 1.2
+        && elapsed < 1.5
     {
-        // Sweep a bright band across the title bar
+        // Gradient wave expanding outward from the center of the title bar.
         let t = (elapsed / 0.8).min(1.0); // 0..1 over 0.8s
-        let sweep_x = title_rect.left() + t * title_rect.width();
-        let band_w = title_rect.width() * 0.15;
-        let alpha = ((1.0 - elapsed / 1.2) * 60.0) as u8;
-        let shine_rect = Rect::from_x_y_ranges(
-            (sweep_x - band_w)..=(sweep_x + band_w),
-            title_rect.y_range(),
-        )
-        .intersect(title_rect);
-        if shine_rect.width() > 0.0 {
-            painter.rect_filled(
-                shine_rect,
-                egui::Rounding::ZERO,
-                Color32::from_white_alpha(alpha),
+        let fade = (1.0 - elapsed / 1.5).max(0.0); // overall fade over 1.5s
+        let half_w = title_rect.width() * 0.5;
+        let spread = t * half_w; // how far the wave has spread from center
+        let cx = title_rect.center().x;
+        let top = title_rect.top();
+        let bot = title_rect.bottom();
+
+        // Draw gradient in slices — brighter at the wave front, fading behind it.
+        let slices = 12;
+        for i in 0..slices {
+            let frac = i as f32 / slices as f32;
+            let next_frac = (i + 1) as f32 / slices as f32;
+            let dist = frac * spread;
+            let next_dist = next_frac * spread;
+            // Brightness peaks at the wave front (frac ≈ 1.0)
+            let intensity = frac * frac; // quadratic ramp — brighter at edge
+            let alpha = (intensity * fade * 50.0) as u8;
+            if alpha == 0 {
+                continue;
+            }
+            let col = Color32::from_white_alpha(alpha);
+            // Right half
+            let r = Rect::from_x_y_ranges(
+                (cx + dist)..=(cx + next_dist).min(title_rect.right()),
+                top..=bot,
+            )
+            .intersect(title_rect);
+            if r.width() > 0.0 {
+                painter.rect_filled(r, Rounding::ZERO, col);
+            }
+            // Left half (mirror)
+            let l = Rect::from_x_y_ranges(
+                (cx - next_dist).max(title_rect.left())..=(cx - dist),
+                top..=bot,
+            )
+            .intersect(title_rect);
+            if l.width() > 0.0 {
+                painter.rect_filled(l, Rounding::ZERO, col);
+            }
+        }
+
+        // Subtle border pulse on the entire card (same fade timing)
+        let border_alpha = (fade * 25.0) as u8;
+        if border_alpha > 0 {
+            // Expand title_rect down to approximate the full card border
+            let card_bottom = title_rect.bottom() + 200.0; // rough; clips to painter
+            let card_rect = Rect::from_min_max(
+                title_rect.left_top(),
+                egui::Pos2::new(title_rect.right(), card_bottom),
+            );
+            painter.rect_stroke(
+                card_rect,
+                Rounding::same(8.0),
+                Stroke::new(1.0, Color32::from_white_alpha(border_alpha)),
             );
         }
     }
@@ -220,10 +261,11 @@ pub fn module_card_sized<R>(
         ui.set_min_width(w);
     }
 
+    let card_rounding = 8.0;
     let frame = Frame::none()
         .fill(fill)
         .inner_margin(Margin::ZERO)
-        .rounding(Rounding::same(4.0))
+        .rounding(Rounding::same(card_rounding))
         .stroke(Stroke::new(1.0, Color32::from_gray(38)));
 
     let mut toggle_clicked = false;
@@ -252,7 +294,14 @@ pub fn module_card_sized<R>(
             let painter = ui.painter_at(title_rect);
 
             // Background gradient: slightly lighter at top (simulated overhead light)
-            painter.rect_filled(title_rect, Rounding::same(0.0), title_bg);
+            // Round top corners to match the card frame; bottom stays flat
+            let title_rounding = Rounding {
+                nw: card_rounding,
+                ne: card_rounding,
+                sw: 0.0,
+                se: 0.0,
+            };
+            painter.rect_filled(title_rect, title_rounding, title_bg);
             // 1px specular line at very top
             painter.line_segment(
                 [title_rect.left_top(), title_rect.right_top()],
@@ -452,10 +501,11 @@ pub fn module_card_back(
         ui.set_min_width(min_w);
     }
 
+    let card_rounding = 8.0;
     let frame = Frame::none()
         .fill(fill)
         .inner_margin(Margin::ZERO)
-        .rounding(Rounding::same(4.0))
+        .rounding(Rounding::same(card_rounding))
         .stroke(Stroke::new(1.0, Color32::from_gray(38)));
 
     let mut toggle_clicked = false;
@@ -474,7 +524,14 @@ pub fn module_card_back(
             let (title_rect, _) =
                 ui.allocate_exact_size(Vec2::new(card_w, title_h), Sense::hover());
             let painter = ui.painter_at(title_rect);
-            painter.rect_filled(title_rect, Rounding::same(0.0), title_bg);
+            // Round top corners to match the card frame; bottom stays flat
+            let title_rounding = Rounding {
+                nw: card_rounding,
+                ne: card_rounding,
+                sw: 0.0,
+                se: 0.0,
+            };
+            painter.rect_filled(title_rect, title_rounding, title_bg);
             painter.line_segment(
                 [title_rect.left_top(), title_rect.right_top()],
                 Stroke::new(1.0, Color32::from_gray(60)),
