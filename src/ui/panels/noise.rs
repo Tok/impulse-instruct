@@ -1,6 +1,7 @@
 // ─── ui/panels/noise.rs ──────────────────────────────────────────────────────
 // Noise voice panel — minimal controls (volume, color, cutoff).
 
+use super::PAN_SLIDER_W;
 use crate::ui::{ImpulseApp, widgets};
 
 pub fn draw_noise(app: &mut ImpulseApp, ui: &mut egui::Ui) {
@@ -19,6 +20,18 @@ pub fn draw_noise(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         )
     };
     let mut changed = false;
+    // PAN slider at top
+    ui.horizontal(|ui| {
+        ui.label(
+            egui::RichText::new("PAN")
+                .color(crate::ui::theme::SMOKE)
+                .monospace()
+                .size(8.0),
+        );
+        if widgets::pan_slider(ui, &mut pan, PAN_SLIDER_W) {
+            changed = true;
+        }
+    });
     widgets::centered_row(ui, |ui| {
         if widgets::param_control(ui, "VOL", &mut vol, pm("noise_voice.volume"), ctrl).0 {
             changed = true;
@@ -27,17 +40,6 @@ pub fn draw_noise(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             changed = true;
         }
         if widgets::param_control(ui, "CUT", &mut cutoff, pm("noise_voice.cutoff"), ctrl).0 {
-            changed = true;
-        }
-    });
-    ui.horizontal(|ui| {
-        ui.label(
-            egui::RichText::new("PAN")
-                .color(crate::ui::theme::SMOKE)
-                .monospace()
-                .size(7.5),
-        );
-        if widgets::pan_slider(ui, &mut pan, 60.0) {
             changed = true;
         }
     });

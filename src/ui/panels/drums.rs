@@ -407,12 +407,12 @@ pub fn draw_amen(app: &mut ImpulseApp, ui: &mut egui::Ui) {
     };
     let mut changed = false;
 
-    // Single row: file input + load + knobs
+    // Row 1: file input + load button (full width)
     ui.horizontal(|ui| {
         let resp = ui.add(
             egui::TextEdit::singleline(&mut path)
                 .hint_text("amen.wav")
-                .desired_width(80.0)
+                .desired_width(ui.available_width() - 30.0)
                 .font(egui::FontId::monospace(8.0)),
         );
         if resp.changed() {
@@ -425,15 +425,18 @@ pub fn draw_amen(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         {
             let _ = app.audio_tx.push(AudioCommand::LoadSampler(data));
         }
-        if widgets::param_control(ui, "VOL", &mut vol, ParamMode::Free, ctrl).0 {
+    });
+    // Row 2: knobs
+    ui.horizontal(|ui| {
+        if widgets::param_control(ui, "VOLUME", &mut vol, ParamMode::Free, ctrl).0 {
             changed = true;
         }
         let mut pitch_norm = (pitch + 24.0) / 48.0;
-        if widgets::param_control(ui, "PIT", &mut pitch_norm, ParamMode::Free, ctrl).0 {
+        if widgets::param_control(ui, "PITCH", &mut pitch_norm, ParamMode::Free, ctrl).0 {
             pitch = pitch_norm * 48.0 - 24.0;
             changed = true;
         }
-        if widgets::toggle_button(ui, if loop_mode { "LP" } else { "1×" }, &mut loop_mode) {
+        if widgets::toggle_button(ui, if loop_mode { "LOOP" } else { "ONE" }, &mut loop_mode) {
             changed = true;
         }
     });
