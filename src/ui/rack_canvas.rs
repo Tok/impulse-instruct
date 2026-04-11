@@ -97,6 +97,12 @@ pub fn draw_rack(app: &mut ImpulseApp, ctx: &egui::Context, ui: &mut egui::Ui) {
     {
         app.focused_module = Some(kind);
         app.focus_time = std::time::Instant::now();
+        // Expand the zone containing the target so the module is visible
+        match kind.default_zone() {
+            crate::state::Zone::Global => app.zone_global_collapsed = false,
+            crate::state::Zone::Voice => app.zone_voice_collapsed = false,
+            crate::state::Zone::FxMod => app.zone_fxmod_collapsed = false,
+        }
     }
 
     let scroll_out = ScrollArea::vertical()
