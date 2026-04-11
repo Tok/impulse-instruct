@@ -4,8 +4,9 @@
 use crate::ui::{ImpulseApp, theme, widgets};
 
 pub fn draw_noise_section(app: &mut ImpulseApp, ui: &mut egui::Ui) {
-    ui.add_space(4.0);
+    ui.add_space(8.0);
     widgets::section_header(ui, "NOISE VOICE");
+    ui.spacing_mut().slider_width = 200.0;
 
     let (noise_enabled, mut noise_volume, mut noise_color, mut noise_cutoff) = {
         let s = app.state.read();

@@ -279,13 +279,17 @@ pub fn draw_bass(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             changed = true;
         }
     } else {
-        // ── Knob mode: 3 equal-width glass groups ─────────────────────────────
+        // ── Knob mode: FILTER + CHARACTER wide, MOD compact ──────────────────
         let ctrl_big = ctrl.phi_bigger(); // primary: cutoff, resonance
         let ctrl_sm = ctrl.phi_smaller(); // secondary: glide, noise, FM
-        let gw = widgets::even_group_width(ui, 3);
+        let avail = ui.available_width();
+        let spacing = ui.spacing().item_spacing.x;
+        // FILTER and CHARACTER get 40% each, MOD gets 20%
+        let gw_main = ((avail - spacing * 2.0) * 0.40).floor();
+        let gw_mod = avail - gw_main * 2.0 - spacing * 2.0;
         ui.horizontal(|ui| {
             // FILTER group: 2×2 grid (CUT/RES, ENV/DEC)
-            widgets::glass_group_fill(ui, gw, gw, |ui| {
+            widgets::glass_group_fill(ui, gw_main, gw_main, |ui| {
                 ui.label(
                     egui::RichText::new("FILTER")
                         .color(theme::FOG)
@@ -350,7 +354,7 @@ pub fn draw_bass(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                 });
             });
             // CHARACTER group: ACC, DRV, VOL, SUB
-            widgets::glass_group_fill(ui, gw, gw, |ui| {
+            widgets::glass_group_fill(ui, gw_main, gw_main, |ui| {
                 ui.label(
                     egui::RichText::new("CHARACTER")
                         .color(theme::FOG)
@@ -414,8 +418,8 @@ pub fn draw_bass(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                     }
                 });
             });
-            // MOD group: GLD, NSE, FMD, FMR
-            widgets::glass_group_fill(ui, gw, gw, |ui| {
+            // MOD group: GLD, NSE, FMD, FMR (compact)
+            widgets::glass_group_fill(ui, gw_mod, gw_mod, |ui| {
                 ui.label(
                     egui::RichText::new("MOD")
                         .color(theme::FOG)
@@ -557,7 +561,7 @@ pub fn draw_bass(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                     .size(8.0)
                     .color(theme::SMOKE),
             );
-            if widgets::pan_slider(ui, &mut pan, 80.0) {
+            if widgets::pan_slider(ui, &mut pan, 200.0) {
                 let av = active_voice.min(app.state.read().bass_voices.len().saturating_sub(1));
                 app.state.write().bass_voices[av].synth.pan = pan;
                 app.push_audio_params();
@@ -707,7 +711,7 @@ pub fn draw_bass(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                 app.push_audio_params();
             }
         });
-        ui.add_space(4.0);
+        ui.add_space(10.0);
         // Filter response curve
         ui.horizontal(|ui| {
             let disp_spacer2 = ((ui.available_width() - env_w - 60.0) / 2.0).max(0.0);
@@ -727,7 +731,7 @@ pub fn draw_bass(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         });
     }); // end vertical_centered
 
-    ui.add_space(8.0);
+    ui.add_space(12.0);
 
     // Waveform toggle + animated preview
     ui.horizontal(|ui| {
@@ -761,8 +765,8 @@ pub fn draw_bass(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             Waveform::Square => 1,
             Waveform::Supersaw => 2,
         };
-        let viz_h = env_h.min(40.0);
-        widgets::waveform_icon(ui, wave_kind, env_w * 0.4, viz_h);
+        let viz_h = env_h.max(60.0);
+        widgets::waveform_icon(ui, wave_kind, env_w * 0.8, viz_h);
     });
 
     // Filter mode toggle
