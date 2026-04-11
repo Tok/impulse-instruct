@@ -396,11 +396,17 @@ fn draw_zone_grid_dots(ui: &egui::Ui, zone_left: f32, zone_top: f32, zone_bottom
     let painter = ui.painter();
     let dot_color = Color32::from_gray(35);
     let step = col_w + RACK_GAP;
-    let right = zone_left + GRID_COLS as f32 * step;
-    let mut y = zone_top;
-    while y <= zone_bottom + 1.0 {
+    // Dots sit at gap centerlines — offset by half_gap so a card spanning
+    // columns c..c+n has dots at its left edge, between it and its neighbour,
+    // and at its right edge.
+    let half = RACK_GAP * 0.5;
+    let ox = zone_left - half;
+    let oy = zone_top - half;
+    let right = ox + GRID_COLS as f32 * step + RACK_GAP;
+    let mut y = oy;
+    while y <= zone_bottom + step {
         for c in 0..=GRID_COLS {
-            let x = zone_left + c as f32 * step;
+            let x = ox + c as f32 * step;
             if x <= right + 1.0 {
                 painter.circle_filled(egui::Pos2::new(x, y), 1.0, dot_color);
             }
@@ -467,12 +473,14 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
                         ports,
                     )
                 } else {
-                    module_card::module_card(
+                    let h = module_grid_h(ModuleKind::LlmConsole, col_w);
+                    module_card::module_card_sized(
                         ui,
                         id,
                         ModuleKind::LlmConsole,
                         enabled,
                         Some(available_w - 2.0),
+                        Some(h),
                         app.kind_scale(ModuleKind::LlmConsole),
                         ports,
                         |ui| {
@@ -598,12 +606,14 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
                     ports,
                 )
             } else {
-                module_card::module_card(
+                let h = module_grid_h(ModuleKind::StepSequencer, col_w);
+                module_card::module_card_sized(
                     ui,
                     seq_id,
                     ModuleKind::StepSequencer,
                     enabled,
                     Some(available_w - 2.0),
+                    Some(h),
                     app.kind_scale(ModuleKind::StepSequencer),
                     ports,
                     |ui| {
@@ -648,12 +658,14 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
                     ports,
                 )
             } else {
-                module_card::module_card(
+                let h = module_grid_h(ModuleKind::MasterOutput, col_w);
+                module_card::module_card_sized(
                     ui,
                     master_id,
                     ModuleKind::MasterOutput,
                     true,
                     Some(available_w - 2.0),
+                    Some(h),
                     app.kind_scale(ModuleKind::MasterOutput),
                     ports,
                     |ui| {
