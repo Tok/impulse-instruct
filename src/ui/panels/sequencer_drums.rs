@@ -284,7 +284,8 @@ pub(super) fn draw_drum_rows(
         let vel_h = 4.0_f32;
         let prob_h = 2.0_f32;
         let ratch_h = 3.0_f32;
-        let combined_h = vel_h + prob_h + ratch_h;
+        let gap = 1.0_f32;
+        let combined_h = vel_h + gap + prob_h + gap + ratch_h;
         let mut vel_changed: Option<(usize, f32)> = None;
         let mut ratchet_changed: Option<(usize, u8)> = None;
         ui.horizontal(|ui| {
@@ -324,7 +325,7 @@ pub(super) fn draw_drum_rows(
                         egui::Color32::from_gray(vcol),
                     );
                     // Probability bar (middle)
-                    let py = vy + vel_h;
+                    let py = vy + vel_h + gap;
                     let pcol = if is_active { 50u8 } else { 20 };
                     p.rect_filled(
                         egui::Rect::from_min_size(
@@ -335,7 +336,7 @@ pub(super) fn draw_drum_rows(
                         egui::Color32::from_gray(pcol),
                     );
                     // Ratchet ticks (bottom)
-                    let ry = py + prob_h;
+                    let ry = py + prob_h + gap;
                     let tick_w = w / 4.0;
                     for t in 0..4u8 {
                         let lit = t < ratchet;
