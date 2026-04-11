@@ -287,9 +287,12 @@ pub fn draw_bass(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         // FILTER and CHARACTER get 40% each, MOD gets 20%
         let gw_main = ((avail - spacing * 2.0) * 0.40).floor();
         let gw_mod = avail - gw_main * 2.0 - spacing * 2.0;
+        // Fixed height so all three glass groups match
+        let group_h = ctrl.knob_size * 2.0 + 50.0; // 2 knob rows + label + spacing
         ui.horizontal(|ui| {
             // FILTER group: 2×2 grid (CUT/RES, ENV/DEC)
             widgets::glass_group_fill(ui, gw_main, gw_main, |ui| {
+                ui.set_min_height(group_h);
                 ui.label(
                     egui::RichText::new("FILTER")
                         .color(theme::FOG)
@@ -355,6 +358,7 @@ pub fn draw_bass(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             });
             // CHARACTER group: ACC, DRV, VOL, SUB
             widgets::glass_group_fill(ui, gw_main, gw_main, |ui| {
+                ui.set_min_height(group_h);
                 ui.label(
                     egui::RichText::new("CHARACTER")
                         .color(theme::FOG)
@@ -420,6 +424,7 @@ pub fn draw_bass(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             });
             // MOD group: GLD, NSE, FMD, FMR (compact)
             widgets::glass_group_fill(ui, gw_mod, gw_mod, |ui| {
+                ui.set_min_height(group_h);
                 ui.label(
                     egui::RichText::new("MOD")
                         .color(theme::FOG)
@@ -733,68 +738,109 @@ pub fn draw_bass(app: &mut ImpulseApp, ui: &mut egui::Ui) {
 
     ui.add_space(12.0);
 
-    // Waveform toggle + animated preview
-    ui.horizontal(|ui| {
-        ui.label(
-            egui::RichText::new("WAVE")
-                .color(theme::SMOKE)
-                .monospace()
-                .size(9.0),
-        );
-        let mut saw = waveform == Waveform::Saw;
-        if widgets::toggle_button(ui, "SAW", &mut saw) {
-            let av = app.state.read().active_voice;
-            app.state.write().bass_voices[av].synth.waveform = Waveform::Saw;
-            app.push_audio_params();
-        }
-        let mut sq = waveform == Waveform::Square;
-        if widgets::toggle_button(ui, "SQR", &mut sq) {
-            let av = app.state.read().active_voice;
-            app.state.write().bass_voices[av].synth.waveform = Waveform::Square;
-            app.push_audio_params();
-        }
-        let mut ss = waveform == Waveform::Supersaw;
-        if widgets::toggle_button(ui, "SUPER", &mut ss) {
-            let av = app.state.read().active_voice;
-            app.state.write().bass_voices[av].synth.waveform = Waveform::Supersaw;
-            app.push_audio_params();
-        }
-        // Animated waveform preview
-        let wave_kind = match waveform {
-            Waveform::Saw => 0,
-            Waveform::Square => 1,
-            Waveform::Supersaw => 2,
-        };
-        let viz_h = env_h.max(60.0);
-        widgets::waveform_icon(ui, wave_kind, env_w * 0.8, viz_h);
-    });
+    // WAVE / FILT / PRESET rows left, waveform display right
+    let label_w = 50.0; // fixed label width for alignment
+    let wave_kind = match waveform {
+        Waveform::Saw => 0,
+        Waveform::Square => 1,
+        Waveform::Supersaw => 2,
+    };
+    let viz_w = (ui.available_width() - label_w - 160.0).max(80.0);
+    let viz_h = env_h.max(60.0);
+    let viz_total_h = viz_h; // waveform display spans all 3 rows
 
-    // Filter mode toggle
     ui.horizontal(|ui| {
-        ui.label(
-            egui::RichText::new("FILT")
-                .color(theme::SMOKE)
-                .monospace()
-                .size(9.0),
-        );
-        let mut lp = filter_mode == FilterMode::Lowpass;
-        if widgets::toggle_button(ui, "LP", &mut lp) {
-            let av = app.state.read().active_voice;
-            app.state.write().bass_voices[av].synth.filter_mode = FilterMode::Lowpass;
-            app.push_audio_params();
-        }
-        let mut hp = filter_mode == FilterMode::Highpass;
-        if widgets::toggle_button(ui, "HP", &mut hp) {
-            let av = app.state.read().active_voice;
-            app.state.write().bass_voices[av].synth.filter_mode = FilterMode::Highpass;
-            app.push_audio_params();
-        }
-        let mut bp = filter_mode == FilterMode::Bandpass;
-        if widgets::toggle_button(ui, "BP", &mut bp) {
-            let av = app.state.read().active_voice;
-            app.state.write().bass_voices[av].synth.filter_mode = FilterMode::Bandpass;
-            app.push_audio_params();
-        }
+        // Left column: WAVE + FILT + PRESET stacked
+        ui.vertical(|ui| {
+            // WAVE row
+            ui.horizontal(|ui| {
+                ui.add_sized(
+                    [label_w, 18.0],
+                    egui::Label::new(
+                        egui::RichText::new("WAVE")
+                            .color(theme::SMOKE)
+                            .monospace()
+                            .size(9.0),
+                    ),
+                );
+                let mut saw = waveform == Waveform::Saw;
+                if widgets::toggle_button(ui, "SAW", &mut saw) {
+                    let av = app.state.read().active_voice;
+                    app.state.write().bass_voices[av].synth.waveform = Waveform::Saw;
+                    app.push_audio_params();
+                }
+                let mut sq = waveform == Waveform::Square;
+                if widgets::toggle_button(ui, "SQR", &mut sq) {
+                    let av = app.state.read().active_voice;
+                    app.state.write().bass_voices[av].synth.waveform = Waveform::Square;
+                    app.push_audio_params();
+                }
+                let mut ss = waveform == Waveform::Supersaw;
+                if widgets::toggle_button(ui, "SUPER", &mut ss) {
+                    let av = app.state.read().active_voice;
+                    app.state.write().bass_voices[av].synth.waveform = Waveform::Supersaw;
+                    app.push_audio_params();
+                }
+            });
+            // FILT row
+            ui.horizontal(|ui| {
+                ui.add_sized(
+                    [label_w, 18.0],
+                    egui::Label::new(
+                        egui::RichText::new("FILT")
+                            .color(theme::SMOKE)
+                            .monospace()
+                            .size(9.0),
+                    ),
+                );
+                let mut lp = filter_mode == FilterMode::Lowpass;
+                if widgets::toggle_button(ui, "LP", &mut lp) {
+                    let av = app.state.read().active_voice;
+                    app.state.write().bass_voices[av].synth.filter_mode = FilterMode::Lowpass;
+                    app.push_audio_params();
+                }
+                let mut hp = filter_mode == FilterMode::Highpass;
+                if widgets::toggle_button(ui, "HP", &mut hp) {
+                    let av = app.state.read().active_voice;
+                    app.state.write().bass_voices[av].synth.filter_mode = FilterMode::Highpass;
+                    app.push_audio_params();
+                }
+                let mut bp = filter_mode == FilterMode::Bandpass;
+                if widgets::toggle_button(ui, "BP", &mut bp) {
+                    let av = app.state.read().active_voice;
+                    app.state.write().bass_voices[av].synth.filter_mode = FilterMode::Bandpass;
+                    app.push_audio_params();
+                }
+            });
+            // PRESET row
+            ui.horizontal(|ui| {
+                ui.add_sized(
+                    [label_w, 18.0],
+                    egui::Label::new(
+                        egui::RichText::new("PRESET")
+                            .color(theme::SMOKE)
+                            .monospace()
+                            .size(9.0),
+                    ),
+                );
+                if ui
+                    .add(egui::Button::new(
+                        egui::RichText::new("REESE")
+                            .monospace()
+                            .size(9.0)
+                            .color(theme::FOG),
+                    ))
+                    .on_hover_text("Detuned dual saws + sub + highpass — classic DnB/jungle bass")
+                    .clicked()
+                {
+                    let s = app.state.read().clone();
+                    *app.state.write() = crate::state::apply_reese_preset(s);
+                    app.push_audio_params();
+                }
+            });
+        });
+        // Right column: waveform display
+        widgets::waveform_icon(ui, wave_kind, viz_w, viz_total_h);
     });
 
     // Supersaw controls (only shown when Supersaw is active)
@@ -838,30 +884,6 @@ pub fn draw_bass(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             }
         });
     }
-
-    // Preset shortcuts
-    ui.horizontal(|ui| {
-        ui.label(
-            egui::RichText::new("PRESET")
-                .color(theme::SMOKE)
-                .monospace()
-                .size(9.0),
-        );
-        if ui
-            .add(egui::Button::new(
-                egui::RichText::new("REESE")
-                    .monospace()
-                    .size(9.0)
-                    .color(theme::FOG),
-            ))
-            .on_hover_text("Detuned dual saws + sub + highpass — classic DnB/jungle bass")
-            .clicked()
-        {
-            let s = app.state.read().clone();
-            *app.state.write() = crate::state::apply_reese_preset(s);
-            app.push_audio_params();
-        }
-    });
 
     ui.add_space(4.0);
 

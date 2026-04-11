@@ -6,7 +6,6 @@ use crate::ui::{ImpulseApp, theme, widgets};
 pub fn draw_noise_section(app: &mut ImpulseApp, ui: &mut egui::Ui) {
     ui.add_space(8.0);
     widgets::section_header(ui, "NOISE VOICE");
-    ui.spacing_mut().slider_width = 200.0;
 
     let (noise_enabled, mut noise_volume, mut noise_color, mut noise_cutoff) = {
         let s = app.state.read();
@@ -18,7 +17,20 @@ pub fn draw_noise_section(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         )
     };
 
+    let label_w = 50.0;
+    ui.spacing_mut().slider_width = 200.0;
+
+    // ON toggle — own row
     ui.horizontal(|ui| {
+        ui.add_sized(
+            [label_w, 18.0],
+            egui::Label::new(
+                egui::RichText::new("POWER")
+                    .color(theme::SMOKE)
+                    .monospace()
+                    .size(9.0),
+            ),
+        );
         let on_color = if noise_enabled {
             theme::CHALK
         } else {
@@ -30,10 +42,9 @@ pub fn draw_noise_section(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             egui::Color32::TRANSPARENT
         };
         if ui
-            .add_sized(
-                [28.0, 18.0],
+            .add(
                 egui::Button::new(
-                    egui::RichText::new("ON")
+                    egui::RichText::new(if noise_enabled { "ON" } else { "OFF" })
                         .monospace()
                         .size(9.0)
                         .color(on_color),
@@ -45,12 +56,18 @@ pub fn draw_noise_section(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             app.state.write().noise_voice.enabled = !noise_enabled;
             app.push_audio_params();
         }
+    });
 
-        ui.label(
-            egui::RichText::new("VOL")
-                .color(theme::SMOKE)
-                .monospace()
-                .size(9.0),
+    // VOL slider
+    ui.horizontal(|ui| {
+        ui.add_sized(
+            [label_w, 18.0],
+            egui::Label::new(
+                egui::RichText::new("VOL")
+                    .color(theme::SMOKE)
+                    .monospace()
+                    .size(9.0),
+            ),
         );
         if ui
             .add(
@@ -65,12 +82,16 @@ pub fn draw_noise_section(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         }
     });
 
+    // COLOR slider
     ui.horizontal(|ui| {
-        ui.label(
-            egui::RichText::new("COLOR (WHITE→BROWN)")
-                .color(theme::SMOKE)
-                .monospace()
-                .size(9.0),
+        ui.add_sized(
+            [label_w, 18.0],
+            egui::Label::new(
+                egui::RichText::new("COLOR")
+                    .color(theme::SMOKE)
+                    .monospace()
+                    .size(9.0),
+            ),
         );
         if ui
             .add(
@@ -98,12 +119,16 @@ pub fn draw_noise_section(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         );
     });
 
+    // CUTOFF slider
     ui.horizontal(|ui| {
-        ui.label(
-            egui::RichText::new("CUTOFF")
-                .color(theme::SMOKE)
-                .monospace()
-                .size(9.0),
+        ui.add_sized(
+            [label_w, 18.0],
+            egui::Label::new(
+                egui::RichText::new("CUT")
+                    .color(theme::SMOKE)
+                    .monospace()
+                    .size(9.0),
+            ),
         );
         if ui
             .add(
