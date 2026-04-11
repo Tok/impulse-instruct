@@ -226,34 +226,29 @@ Scripts to create:
 
 ### UI polish — next session
 
-- [ ] **PAN slider right-justified** — all voice panels (bass, 808, 909,
-  hoover, AN1X) should right-justify their PAN slider using
-  `Layout::right_to_left` or a spacer. Currently left-aligned.
-- [ ] **Module remove (×) with confirmation** — the × button on module
-  card headers should ask for confirmation, then disconnect cables and
-  remove the module from the rack. Currently × only shows on
-  `allows_multiple` modules (FX, LFO, agents). Should also show on
-  voice modules for rack customization.
+- [x] **PAN slider right-justified** — all voice panels (bass, 808, 909,
+  hoover, AN1X, noise) right-justify PAN slider using `Layout::right_to_left`.
+- [x] **Module remove (×) with confirmation** — × button on all modules
+  except core singletons (seq/master/console). Centered confirmation dialog
+  before removing. Handles LLM agent cleanup.
 
 ### Sequencer panel overhaul
 
-- [ ] **BPM/SWING sliders** — 3× wider, aligned vertically. Sliders are
-  on the right side. Move SYNC button left of the BPM slider so slider
-  is rightmost and both sliders align. Full word labels: BPM, SWING.
-- [ ] **Top section padding** — add consistent spacing between controls.
-- [ ] **Step button alignment** — top (bass) and bottom (drum) step rows
-  must use identical sizing, padding, and style. Currently they look
-  slightly different (different padding/offset). Unify.
-- [ ] **ACCENT/SLIDE rows** — write out fully: ACCENT, SLIDE. Fix vertical
-  misalignment — first ~2 accent/slide buttons are ~3px too high.
-- [ ] **Colored step dots** — add a thin black circle (`circle_stroke`)
-  around the Huth-colored note dots on active steps.
-- [ ] **Bottom drum sliders** — 2× wider, labels below sliders instead
-  of left. Full words: CLOSED HIHAT, OPEN HIHAT, etc.
+- [x] **BPM/SWING sliders** — 3× wider (200px), SYNC moved left of BPM
+  slider. Both sliders right-justified and vertically aligned.
+- [x] **Top section padding** — 2px spacing between header lines.
+- [x] **Step button alignment** — bass and drum rows share `prefix_w`
+  measurement for cross-row alignment.
+- [x] **ACCENT/SLIDE rows** — full words ACCENT, SLIDE. Removed
+  `add_enabled_ui` wrapper that caused vertical misalignment.
+- [x] **Colored step dots** — 1px black `circle_stroke` around note dots
+  on both active and inactive bass steps.
+- [x] **Bottom drum sliders** — 2× wider (SEQ_VOL_W 52→100). Full words:
+  808 CLOSED HH, 909 OPEN HH, etc.
 - [ ] **Pattern alignment** — right-justify all step pattern grids (top
   and bottom) so they align on the right edge. More space available on
   the left for controls.
-- [ ] **Full labels** — BNK→BANK, CHN→CHAIN, etc. throughout.
+- [x] **Full labels** — BANK, CHAIN, STEPS, SWING, SNAP, ACCENT, SLIDE.
 
 ### Refactoring — magic numbers and hardcoded literals
 
