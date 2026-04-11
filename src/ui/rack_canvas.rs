@@ -499,6 +499,12 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
                 ui.add_space(2.0);
                 ui.horizontal_wrapped(|ui| {
                     let slot_w = FX_SLOT_W.min(available_w);
+                    // Center agent cards
+                    let total_w = agent_ids.len() as f32 * (slot_w + ui.spacing().item_spacing.x);
+                    let pad = ((available_w - total_w) / 2.0).max(0.0);
+                    if pad > 0.0 {
+                        ui.add_space(pad);
+                    }
                     for (id, enabled) in &agent_ids {
                         let resp = if app.rack_flipped {
                             module_card::module_card_back(

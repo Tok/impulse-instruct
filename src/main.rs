@@ -384,7 +384,7 @@ fn run() -> anyhow::Result<()> {
     log::info!("Launching UI window…");
     let native_options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
-            .with_title("Impulse Instruct")
+            .with_title(format!("Impulse Instruct v{}", env!("CARGO_PKG_VERSION")))
             .with_icon(std::sync::Arc::new(make_window_icon()))
             .with_maximized(true)
             .with_inner_size([1920.0, 1080.0]) // fallback if maximized hint is ignored by WM

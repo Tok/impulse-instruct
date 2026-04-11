@@ -10,27 +10,45 @@ use crate::state::{
 use crate::ui::{ImpulseApp, SEQ_LABEL_H, SEQ_LABEL_W, SEQ_VOL_W, theme, widgets};
 
 pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
-    // Dynamic min height: 2 header lines + space for ~3 voice lanes when empty,
-    // grows with actual content when voices are present.
-    let n_voices = {
+    // Dynamic height: count actual visible rows (bass + expanded drums + hoover + an1x)
+    {
         let s = app.state.read();
         let pad = s.ui_prefs.effective_pad_px();
-        let voice_h = pad + 12.0; // step buttons + vel/prob/ratchet lanes
-        let n = s
+        let row_h = pad + 16.0; // step buttons + combined sub-lane
+        let header_h = 50.0; // transport + header controls
+
+        let has_bass = s
             .rack
             .modules
             .iter()
-            .filter(|m| {
-                matches!(
-                    m.kind,
-                    crate::state::ModuleKind::DrumKit808 | crate::state::ModuleKind::DrumKit909
-                )
-            })
-            .count();
-        let lanes = if n > 0 { n * 4 } else { 3 }; // ~4 voices per kit, or 3 placeholder
-        (lanes as f32 * voice_h + 60.0).max(180.0)
-    };
-    ui.set_min_height(n_voices);
+            .any(|m| m.kind == crate::state::ModuleKind::AcidBass);
+        let has_hoover = s
+            .rack
+            .modules
+            .iter()
+            .any(|m| m.kind == crate::state::ModuleKind::HooverLead);
+        let has_an1x = s
+            .rack
+            .modules
+            .iter()
+            .any(|m| m.kind == crate::state::ModuleKind::An1xVoice);
+
+        // Count drum voices that have active steps or are expanded
+        let drum_rows: usize = s
+            .sequencer
+            .drum_patterns
+            .iter()
+            .filter(|(_, p)| p.iter().any(|st| st.active))
+            .count()
+            + app.expanded_seq_voices.len();
+
+        let bass_rows = if has_bass { 2.0 } else { 0.0 }; // note row + accent/slide
+        let synth_rows = if has_hoover { 1.0 } else { 0.0 } + if has_an1x { 1.0 } else { 0.0 };
+        let total_rows = bass_rows + drum_rows as f32 + synth_rows;
+
+        let h = (header_h + total_rows * row_h).max(120.0);
+        ui.set_min_height(h);
+    }
     let (
         current_step,
         running,
