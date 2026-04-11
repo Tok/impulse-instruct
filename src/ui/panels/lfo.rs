@@ -196,64 +196,26 @@ pub fn draw_lfo_slot(app: &mut ImpulseApp, ui: &mut egui::Ui, slot_idx: usize) {
     }
     let slot = app.state.read().lfo[slot_idx];
     let i = slot_idx;
-
     let mut enabled = slot.enabled;
     let mut rate = slot.rate;
     let mut depth = slot.depth;
+    let ctrl = widgets::ControlPrefs::from_prefs(&app.state.read().ui_prefs);
+    let ctrl_lg = ctrl.phi_bigger();
 
-    // Enable + waveform row
+    // Row 1: ON | → [TARGET] | waveform selectors
     ui.horizontal(|ui| {
+        ui.spacing_mut().item_spacing.x = super::KNOB_SPACING;
         if ui.selectable_label(enabled, "ON").clicked() {
             enabled = !enabled;
             app.state.write().lfo[i].enabled = enabled;
             app.push_audio_params();
         }
-        for (label, wave) in [
-            ("SIN", LfoWaveform::Sine),
-            ("TRI", LfoWaveform::Triangle),
-            ("SAW", LfoWaveform::Saw),
-            ("SQR", LfoWaveform::Square),
-        ] {
-            let active = slot.waveform == wave;
-            if ui.selectable_label(active, label).clicked() {
-                app.state.write().lfo[i].waveform = wave;
-                app.push_audio_params();
-            }
-        }
-    });
-
-    // Rate + Depth knobs
-    let ctrl = widgets::ControlPrefs::from_prefs(&app.state.read().ui_prefs);
-    ui.horizontal(|ui| {
-        if widgets::param_control(ui, "RATE", &mut rate, crate::state::ParamMode::Free, ctrl).0 {
-            app.state.write().lfo[i].rate = rate;
-            app.push_audio_params();
-        }
-        if widgets::param_control(ui, "DEPTH", &mut depth, crate::state::ParamMode::Free, ctrl).0 {
-            app.state.write().lfo[i].depth = depth;
-            app.push_audio_params();
-        }
-        let hz = 0.01 + rate * 19.99;
-        ui.label(
-            egui::RichText::new(format!("{:.1}Hz", hz))
-                .color(theme::IRON)
-                .monospace()
-                .size(8.0),
-        );
-    });
-
-    // Target row
-    ui.horizontal(|ui| {
-        ui.label(
-            egui::RichText::new("→")
-                .color(theme::SMOKE)
-                .monospace()
-                .size(9.0),
-        );
+        ui.separator();
+        // Target button
         let t_label = target_label(&slot.target);
         if ui
             .button(
-                egui::RichText::new(t_label)
+                egui::RichText::new(format!("→ {}", t_label))
                     .color(if slot.target == LfoTarget::None {
                         theme::IRON
                     } else {
@@ -267,9 +229,65 @@ pub fn draw_lfo_slot(app: &mut ImpulseApp, ui: &mut egui::Ui, slot_idx: usize) {
             app.state.write().lfo[i].target = next_target(&slot.target);
             app.push_audio_params();
         }
+        ui.separator();
+        // Waveform selectors
+        for (label, wave) in [
+            ("SIN", LfoWaveform::Sine),
+            ("TRI", LfoWaveform::Triangle),
+            ("SAW", LfoWaveform::Saw),
+            ("SQR", LfoWaveform::Square),
+        ] {
+            let active = slot.waveform == wave;
+            if ui.selectable_label(active, label).clicked() {
+                app.state.write().lfo[i].waveform = wave;
+                app.push_audio_params();
+            }
+        }
     });
+    ui.add_space(2.0);
 
-    // Animated LFO waveform preview
+    // Row 2: RATE + DEPTH knobs in a glass pane (large, centered)
+    {
+        let gw = ui.available_width();
+        widgets::glass_group_fill(ui, gw, gw, |ui| {
+            ui.spacing_mut().item_spacing.x = super::KNOB_SPACING;
+            widgets::centered_row(ui, |ui| {
+                if widgets::param_control(
+                    ui,
+                    "RATE",
+                    &mut rate,
+                    crate::state::ParamMode::Free,
+                    ctrl_lg,
+                )
+                .0
+                {
+                    app.state.write().lfo[i].rate = rate;
+                    app.push_audio_params();
+                }
+                if widgets::param_control(
+                    ui,
+                    "DEPTH",
+                    &mut depth,
+                    crate::state::ParamMode::Free,
+                    ctrl_lg,
+                )
+                .0
+                {
+                    app.state.write().lfo[i].depth = depth;
+                    app.push_audio_params();
+                }
+                let hz = 0.01 + rate * 19.99;
+                ui.label(
+                    egui::RichText::new(format!("{:.1}Hz", hz))
+                        .color(theme::IRON)
+                        .monospace()
+                        .size(8.0),
+                );
+            });
+        });
+    }
+
+    // Waveform preview — full width, bottom-aligned
     let shape = match slot.waveform {
         LfoWaveform::Sine => 0u8,
         LfoWaveform::Triangle => 1,
@@ -279,8 +297,9 @@ pub fn draw_lfo_slot(app: &mut ImpulseApp, ui: &mut egui::Ui, slot_idx: usize) {
         LfoWaveform::SampleAndHold => 5,
     };
     let t_label = target_label(&slot.target);
-    let viz_w = ui.available_width().min(140.0);
-    widgets::lfo_preview(ui, shape, rate, depth, t_label, viz_w, 36.0);
+    let viz_w = ui.available_width();
+    let viz_h = ui.available_height().max(50.0);
+    widgets::lfo_preview(ui, shape, rate, depth, t_label, viz_w, viz_h);
 }
 
 // ─── Free EG ─────────────────────────────────────────────────────────────────
