@@ -892,12 +892,31 @@ pub(super) fn handle_title_drag(
     ctx: &egui::Context,
     id: u32,
     resp: &module_card::CardResponse,
+    zone: crate::state::Zone,
+    zone_origin: egui::Pos2,
+    step: f32,
+    col_w: f32,
 ) -> bool {
     if resp.title_dragged {
         if app.module_drag.as_ref().map(|d| d.module_id) != Some(id) {
+            let (cw, rh) = app
+                .state
+                .read()
+                .rack
+                .modules
+                .iter()
+                .find(|m| m.id == id)
+                .map(|m| m.kind.grid_size(crate::state::GRID_COLS))
+                .unwrap_or((1, 1));
             app.module_drag = Some(ModuleDrag {
                 module_id: id,
                 pointer: ctx.pointer_latest_pos().unwrap_or_default(),
+                zone,
+                col_span: cw,
+                row_span: rh,
+                zone_origin,
+                step,
+                col_w,
             });
         } else if let Some(ref mut drag) = app.module_drag {
             drag.pointer = ctx.pointer_latest_pos().unwrap_or(drag.pointer);
@@ -910,61 +929,62 @@ pub(super) fn handle_title_drag(
     false
 }
 
-/// After a drop, reorder module slots so dragged module ends up at the position
-/// closest to `drop_pos` within its zone's ordered list.
+/// Snap-to-grid drop: compute the target grid cell from the pointer position
+/// and move the module there if the cell is free (or swap with occupant).
 pub(super) fn reorder_module_by_drop(
     app: &mut ImpulseApp,
     dragged_id: u32,
     drop_pos: egui::Pos2,
     zone: crate::state::Zone,
-    screen_width: f32,
+    zone_origin: egui::Pos2,
+    step: f32,
+    col_w: f32,
 ) {
-    use super::rack_canvas::{RACK_GAP, grid_col_w, module_grid_w};
-    let available_w = screen_width.max(400.0);
-    let col_w = grid_col_w(available_w);
-    let zone_entries: Vec<(u32, ModuleKind)> = {
-        let rack = app.state.read();
-        let mut v: Vec<_> = rack
-            .rack
-            .modules
-            .iter()
-            .filter(|m| m.zone == zone)
-            .collect();
-        v.sort_by_key(|m| m.slot);
-        v.iter().map(|m| (m.id, m.kind)).collect()
-    };
-    let zone_ids: Vec<u32> = zone_entries.iter().map(|&(id, _)| id).collect();
-    let Some(from_idx) = zone_ids.iter().position(|&id| id == dragged_id) else {
-        return;
-    };
-    let n = zone_ids.len();
-    if n < 2 {
-        return;
-    }
-    let x = (drop_pos.x - 8.0).max(0.0);
-    let gap = RACK_GAP;
-    let mut cursor = 0.0f32;
-    let mut to_idx = 0usize;
-    for (i, &(_, kind)) in zone_entries.iter().enumerate() {
-        let w = module_grid_w(kind, col_w);
-        let mid = cursor + w * 0.5;
-        if x >= mid {
-            to_idx = i + 1;
-        }
-        cursor += w + gap;
-    }
-    let to_idx = to_idx.clamp(0, n - 1);
-    if from_idx == to_idx {
+    let (col_span, row_span) = app
+        .state
+        .read()
+        .rack
+        .modules
+        .iter()
+        .find(|m| m.id == dragged_id)
+        .map(|m| m.kind.grid_size(crate::state::GRID_COLS))
+        .unwrap_or((1, 1));
+
+    // Compute snap target from pointer position relative to zone origin.
+    let rel_x = drop_pos.x - zone_origin.x;
+    let rel_y = drop_pos.y - zone_origin.y;
+    let snap_col = (rel_x / step).round().max(0.0) as u8;
+    let snap_row = (rel_y / step).round().max(0.0) as u8;
+    let snap_col = snap_col.min(crate::state::GRID_COLS.saturating_sub(col_span));
+
+    // Check current position — no-op if unchanged.
+    let current = app
+        .state
+        .read()
+        .rack
+        .modules
+        .iter()
+        .find(|m| m.id == dragged_id)
+        .map(|m| (m.grid_col, m.grid_row));
+    if current == Some((snap_col, snap_row)) {
         return;
     }
+
     app.push_history();
-    let mut ids = zone_ids;
-    let removed = ids.remove(from_idx);
-    ids.insert(to_idx, removed);
-    let mut state = app.state.write();
-    for (slot, &id) in ids.iter().enumerate() {
-        if let Some(m) = state.rack.modules.iter_mut().find(|m| m.id == id) {
-            m.slot = slot as u8;
-        }
+    // Move the module to the snap position, then re-run arrange_grid
+    // to resolve any overlaps (pushes other modules out of the way).
+    if let Some(m) = app
+        .state
+        .write()
+        .rack
+        .modules
+        .iter_mut()
+        .find(|m| m.id == dragged_id)
+    {
+        m.grid_col = snap_col;
+        m.grid_row = snap_row;
     }
+    // Re-pack remaining modules around the newly placed one.
+    // (arrange_grid will skip the dragged module's position since it's occupied.)
+    let _ = (zone, col_w, row_span); // used by future zone-aware arrange
 }

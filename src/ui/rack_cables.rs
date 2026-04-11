@@ -17,6 +17,18 @@ pub struct CableDrag {
 pub struct ModuleDrag {
     pub module_id: u32,
     pub pointer: Pos2,
+    /// Zone the dragged module belongs to.
+    pub zone: crate::state::Zone,
+    /// Grid column span of the module (from grid_size).
+    pub col_span: u8,
+    /// Grid row span of the module.
+    pub row_span: u8,
+    /// Zone rect origin (top-left of the zone's grid area).
+    pub zone_origin: Pos2,
+    /// Grid step (col_w + gap).
+    pub step: f32,
+    /// Grid column width.
+    pub col_w: f32,
 }
 
 // ─── Cable drawing ────────────────────────────────────────────────────────────

@@ -182,49 +182,47 @@ pub fn draw_rack(app: &mut ImpulseApp, ctx: &egui::Context, ui: &mut egui::Ui) {
     if let Some(ref drag) = app.module_drag
         && let Some(pointer) = ctx.pointer_latest_pos()
     {
+        // Compute snap position on the grid
+        let rel_x = pointer.x - drag.zone_origin.x;
+        let rel_y = pointer.y - drag.zone_origin.y;
+        let snap_col = (rel_x / drag.step).round().max(0.0) as u8;
+        let snap_row = (rel_y / drag.step).round().max(0.0) as u8;
+        let snap_col = snap_col.min(GRID_COLS.saturating_sub(drag.col_span));
+
+        // Ghost rect at the snapped grid position
+        let gx = drag.zone_origin.x + snap_col as f32 * drag.step;
+        let gy = drag.zone_origin.y + snap_row as f32 * drag.step;
+        let gw = module_grid_w(
+            app.state
+                .read()
+                .rack
+                .modules
+                .iter()
+                .find(|m| m.id == drag.module_id)
+                .map(|m| m.kind)
+                .unwrap_or(ModuleKind::FxReverb),
+            drag.col_w,
+        );
+        let gh =
+            drag.row_span as f32 * drag.col_w + (drag.row_span as f32 - 1.0).max(0.0) * RACK_GAP;
+        let ghost_rect = egui::Rect::from_min_size(egui::pos2(gx, gy), egui::vec2(gw, gh));
+
         let painter = ctx.layer_painter(egui::LayerId::new(
             egui::Order::Tooltip,
             egui::Id::new("module_drag_ghost"),
         ));
-        let kind = app
-            .state
-            .read()
-            .rack
-            .modules
-            .iter()
-            .find(|m| m.id == drag.module_id)
-            .map(|m| m.kind);
-        if let Some(k) = kind {
-            let ghost_rect = egui::Rect::from_center_size(pointer, egui::Vec2::new(120.0, 22.0));
-            painter.rect_filled(
-                ghost_rect,
-                egui::Rounding::same(4.0),
-                Color32::from_rgba_premultiplied(30, 30, 30, 180),
-            );
-            painter.rect_stroke(
-                ghost_rect,
-                egui::Rounding::same(4.0),
-                egui::Stroke::new(1.0, Color32::from_gray(80)),
-            );
-            painter.text(
-                ghost_rect.center(),
-                egui::Align2::CENTER_CENTER,
-                k.label(),
-                egui::FontId::monospace(9.5),
-                Color32::from_gray(200),
-            );
-            // Draw a bright insertion line at the drop target position
-            let drop_x = pointer.x;
-            let screen = ctx.screen_rect();
-            painter.line_segment(
-                [
-                    egui::pos2(drop_x, screen.min.y + 40.0),
-                    egui::pos2(drop_x, screen.max.y - 40.0),
-                ],
-                egui::Stroke::new(2.0, Color32::from_gray(160)),
-            );
-            ctx.request_repaint();
-        }
+        // Semi-transparent fill at the snap target
+        painter.rect_filled(
+            ghost_rect,
+            egui::Rounding::same(8.0),
+            Color32::from_rgba_premultiplied(60, 60, 60, 100),
+        );
+        painter.rect_stroke(
+            ghost_rect,
+            egui::Rounding::same(8.0),
+            egui::Stroke::new(2.0, Color32::from_gray(140)),
+        );
+        ctx.request_repaint();
     }
     draw_add_menu(app, ctx);
 }
@@ -607,8 +605,9 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
                 app.push_fx_plan();
             }
             let drop_pos = ctx_ref.pointer_latest_pos().unwrap_or_default();
-            if handle_title_drag(app, &ctx_ref, id, &resp) {
-                reorder_module_by_drop(app, id, drop_pos, Zone::Voice, available_w);
+            let zo = zone_rect.min;
+            if handle_title_drag(app, &ctx_ref, id, &resp, Zone::Voice, zo, step, col_w) {
+                reorder_module_by_drop(app, id, drop_pos, Zone::Voice, zo, step, col_w);
             }
         }
         draw_zone_grid_dots(ui, zone_left, zone_top, zone_top + zone_h, col_w);
@@ -718,8 +717,9 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
                 app.push_fx_plan();
             }
             let drop_pos = ctx_ref.pointer_latest_pos().unwrap_or_default();
-            if handle_title_drag(app, &ctx_ref, id, &resp) {
-                reorder_module_by_drop(app, id, drop_pos, Zone::FxMod, available_w);
+            let zo = zone_rect.min;
+            if handle_title_drag(app, &ctx_ref, id, &resp, Zone::FxMod, zo, step, col_w) {
+                reorder_module_by_drop(app, id, drop_pos, Zone::FxMod, zo, step, col_w);
             }
         }
         draw_zone_grid_dots(ui, zone_left, zone_top, zone_top + zone_h, col_w);
