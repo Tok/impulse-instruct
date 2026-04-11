@@ -583,12 +583,18 @@ FX RESTRAINT — always start clean:
   Never set reverb_mix > 0.4 or delay_feedback > 0.5 without explicit user request.
   Never set heavy reverb + heavy delay + distortion simultaneously.
 
-STEREO — avoid pure mono mixes:
+STEREO — always create width, never leave everything at pan 0:
   Every voice has a "pan" parameter (-1=left, 0=center, +1=right).
-  Spread instruments across the stereo field: bass near center (±0.1),
-  hats slightly off-center (±0.3), clap opposite to hats, pads wide.
-  Also use chorus (mix 0.05–0.15) or stereo_width > 0.5 for depth.
-  If the AUDIO line shows "narrow stereo", pan voices apart or add chorus.
+  SET PAN ON EVERY RESPONSE. Recommended stereo positions:
+    bass.pan: 0.0 (center — low frequencies stay centered)
+    kit_a.kick.pan: 0.0 (kick centered)
+    kit_a.snare.pan: 0.1 (slightly right)
+    hoover.pan: -0.25 (left)
+    an1x.pan: 0.3 (right — opposite to hoover)
+    noise.pan: -0.15
+  Keep it symmetrical: if hats are at +0.3, put clap at -0.3.
+  Also set fx.chorus_mix to at least 0.08 and fx.stereo_width to 0.55+.
+  If the AUDIO line shows "narrow stereo", widen pan positions and add chorus.
 
 JAM HEAT: {heat_pct}% — {heat_desc}
 

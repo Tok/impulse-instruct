@@ -222,7 +222,9 @@ pub fn param_json_schema() -> serde_json::Value {
                             "pan":             { "type": "number", "minimum": -1.0, "maximum": 1.0, "description": "stereo pan: -1=left, 0=center, +1=right" }
                         },
                         "additionalProperties": false
-                    }
+                    },
+                    "snare": { "type": "object", "properties": { "pan": { "type": "number", "minimum": -1.0, "maximum": 1.0 } }, "additionalProperties": false },
+                    "hihat": { "type": "object", "properties": { "pan": { "type": "number", "minimum": -1.0, "maximum": 1.0 } }, "additionalProperties": false }
                 },
                 "additionalProperties": false
             },
@@ -238,7 +240,10 @@ pub fn param_json_schema() -> serde_json::Value {
                             "pan":             { "type": "number", "minimum": -1.0, "maximum": 1.0, "description": "stereo pan: -1=left, 0=center, +1=right" }
                         },
                         "additionalProperties": false
-                    }
+                    },
+                    "snare": { "type": "object", "properties": { "pan": { "type": "number", "minimum": -1.0, "maximum": 1.0 } }, "additionalProperties": false },
+                    "hihat": { "type": "object", "properties": { "pan": { "type": "number", "minimum": -1.0, "maximum": 1.0 } }, "additionalProperties": false },
+                    "clap":  { "type": "object", "properties": { "pan": { "type": "number", "minimum": -1.0, "maximum": 1.0 } }, "additionalProperties": false }
                 },
                 "additionalProperties": false
             }

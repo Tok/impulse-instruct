@@ -35,7 +35,7 @@ look_at sequencer
 say "Asking the agent for a pattern."
 
 # Send prompt BEFORE playing — pattern loads while sequencer is stopped.
-ask "acid groove, kick and hats, short bass line — just 3 or 4 notes with gaps, leave room"
+ask "acid groove, kick and hats, short bass line with gaps. set pan positions for stereo width, add subtle chorus"
 
 play
 wait_seconds 3
@@ -153,9 +153,9 @@ scene "Band jam"
 play
 wait_seconds 1
 
-ask "acid bass, squelchy, cutoff low, resonance high" BASS
-ask "kick on steps 0,4,8,12. hihat on 2,6,10,14. clap on 4,12. open hihat on 6,14" DRUMS
-ask "reverb mix 0.12, reverb size 0.5, delay mix 0.08, delay time 0.375" FX
+ask "acid bass, squelchy, cutoff low, resonance high, pan center" BASS
+ask "kick on steps 0,4,8,12 pan center. hihat on 2,6,10,14 pan 0.3. clap on 4,12 pan -0.3. open hihat on 6,14" DRUMS
+ask "reverb mix 0.12, reverb size 0.5, delay mix 0.08, chorus mix 0.1, stereo_width 0.6" FX
 
 look_at console
 wait_seconds 3

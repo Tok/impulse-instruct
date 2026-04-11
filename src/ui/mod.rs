@@ -872,7 +872,8 @@ impl eframe::App for ImpulseApp {
                              3-5 different notes but leave gaps — not every step \
                              needs a note. Use accent and slide on some steps. \
                              Add a kick pattern and hi-hats. Set the filter \
-                             to something interesting."
+                             to something interesting. Set pan positions for \
+                             stereo width and add subtle chorus."
                         .into(),
                     one_shot: true,
                     agent_id: None,

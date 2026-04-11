@@ -223,6 +223,24 @@ pub fn apply_llm_update(state: AppState, update: &serde_json::Value, scope: &[St
             s.kit_a.kick.pan = (v as f32).clamp(-1.0, 1.0);
         }
     }
+    // kit_a snare/hihat pan
+    if in_scope("kit_a")
+        && let Some(kit_a) = update.get("kit_a").and_then(|v| v.as_object())
+    {
+        if let Some(snare) = kit_a.get("snare").and_then(|v| v.as_object())
+            && let Some(v) = snare.get("pan").and_then(|v| v.as_f64())
+            && !locked.contains("kit_a.snare.pan")
+        {
+            s.kit_a.snare.pan = (v as f32).clamp(-1.0, 1.0);
+        }
+        if let Some(hihat) = kit_a.get("hihat").and_then(|v| v.as_object())
+            && let Some(v) = hihat.get("pan").and_then(|v| v.as_f64())
+            && !locked.contains("kit_a.hihat.pan")
+        {
+            s.kit_a.hihat_closed.pan = (v as f32).clamp(-1.0, 1.0);
+            s.kit_a.hihat_open.pan = (v as f32).clamp(-1.0, 1.0);
+        }
+    }
 
     if in_scope("kit_b")
         && let Some(kit_b) = update.get("kit_b").and_then(|v| v.as_object())
@@ -248,6 +266,30 @@ pub fn apply_llm_update(state: AppState, update: &serde_json::Value, scope: &[St
             && let Some(v) = kick.get("pan").and_then(|v| v.as_f64())
         {
             s.kit_b.kick.pan = (v as f32).clamp(-1.0, 1.0);
+        }
+    }
+    // kit_b snare/hihat/clap pan
+    if in_scope("kit_b")
+        && let Some(kit_b) = update.get("kit_b").and_then(|v| v.as_object())
+    {
+        if let Some(snare) = kit_b.get("snare").and_then(|v| v.as_object())
+            && let Some(v) = snare.get("pan").and_then(|v| v.as_f64())
+            && !locked.contains("kit_b.snare.pan")
+        {
+            s.kit_b.snare.pan = (v as f32).clamp(-1.0, 1.0);
+        }
+        if let Some(hihat) = kit_b.get("hihat").and_then(|v| v.as_object())
+            && let Some(v) = hihat.get("pan").and_then(|v| v.as_f64())
+            && !locked.contains("kit_b.hihat.pan")
+        {
+            s.kit_b.hihat_closed.pan = (v as f32).clamp(-1.0, 1.0);
+            s.kit_b.hihat_open.pan = (v as f32).clamp(-1.0, 1.0);
+        }
+        if let Some(clap) = kit_b.get("clap").and_then(|v| v.as_object())
+            && let Some(v) = clap.get("pan").and_then(|v| v.as_f64())
+            && !locked.contains("kit_b.clap.pan")
+        {
+            s.kit_b.clap.pan = (v as f32).clamp(-1.0, 1.0);
         }
     }
 
