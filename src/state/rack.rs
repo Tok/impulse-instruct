@@ -191,7 +191,7 @@ impl ModuleKind {
             Self::LlmConsole => (grid_cols, 1),
             Self::MasterOutput => (grid_cols, 1),
             Self::AcidBass => (4, 7),
-            Self::DrumKit808 => (4, 4),
+            Self::DrumKit808 => (3, 3),
             Self::DrumKit909 => (4, 4),
             Self::HooverLead => (4, 2),
             Self::An1xVoice => (6, 6),

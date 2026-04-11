@@ -47,9 +47,15 @@ pub fn draw_kit_a(app: &mut ImpulseApp, ui: &mut egui::Ui) {
 
     let ctrl = widgets::ControlPrefs::from_prefs(&app.state.read().ui_prefs);
     let xy_size = app.state.read().ui_prefs.effective_xy_px();
-    let gw = widgets::even_group_width(ui, 3);
+    let avail = ui.available_width();
+    let spacing = ui.spacing().item_spacing.x;
+    let gw = ((avail - spacing) / 2.0).floor(); // 2-column layout
+    let group_h = ctrl.knob_size * 2.0 + 50.0;
+
+    // Row 1: KICK (left) + KICK XY PAD (right)
     ui.horizontal(|ui| {
         widgets::glass_group_fill(ui, gw, gw, |ui| {
+            ui.set_min_height(group_h);
             ui.label(
                 egui::RichText::new("KICK")
                     .color(theme::FOG)
@@ -88,12 +94,47 @@ pub fn draw_kit_a(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                         .monospace()
                         .size(7.5),
                 );
-                if widgets::pan_slider(ui, &mut kpan_a, 60.0) {
+                if widgets::pan_slider(ui, &mut kpan_a, 80.0) {
                     changed = true;
                 }
             });
         });
+        // KICK XY PAD (right column)
+        ui.vertical(|ui| {
+            ui.set_min_height(group_h);
+            ui.label(
+                egui::RichText::new("KICK: PITCH × DECAY")
+                    .color(theme::SMOKE)
+                    .monospace()
+                    .size(8.0),
+            );
+            let pad_size = (gw - 20.0).min(xy_size);
+            if widgets::xy_pad(
+                ui,
+                "drums_kick_xy",
+                "PIT",
+                "DEC",
+                &mut kp,
+                &mut kd,
+                pad_size,
+                false,
+                1,
+            )
+            .0
+            {
+                let mut s = app.state.write();
+                s.kit_a.kick.pitch = kp;
+                s.kit_a.kick.decay = kd;
+                drop(s);
+                app.push_audio_params();
+            }
+        });
+    });
+
+    // Row 2: SNARE (left) + HIHAT (right)
+    ui.horizontal(|ui| {
         widgets::glass_group_fill(ui, gw, gw, |ui| {
+            ui.set_min_height(group_h);
             ui.label(
                 egui::RichText::new("SNARE")
                     .color(theme::FOG)
@@ -118,6 +159,7 @@ pub fn draw_kit_a(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             });
         });
         widgets::glass_group_fill(ui, gw, gw, |ui| {
+            ui.set_min_height(group_h);
             ui.label(
                 egui::RichText::new("HIHAT")
                     .color(theme::FOG)
@@ -171,60 +213,6 @@ pub fn draw_kit_a(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             ("kit_a.hihat_closed.decay", hcd),
             ("kit_a.hihat_closed.volume", hv),
         ]);
-    }
-
-    // PITCH × DECAY XY pad for quick kick shaping (centered)
-    ui.add_space(2.0);
-    ui.vertical_centered(|ui| {
-        ui.label(
-            egui::RichText::new("KICK: PITCH × DECAY")
-                .color(theme::SMOKE)
-                .monospace()
-                .size(9.0),
-        );
-        ui.horizontal(|ui| {
-            let pad_spacer = ((ui.available_width() - xy_size - 10.0) / 2.0).max(0.0);
-            ui.add_space(pad_spacer);
-            if widgets::xy_pad(
-                ui,
-                "drums_kick_xy",
-                "PIT",
-                "DEC",
-                &mut kp,
-                &mut kd,
-                xy_size,
-                false,
-                1,
-            )
-            .0
-            {
-                let mut s = app.state.write();
-                s.kit_a.kick.pitch = kp;
-                s.kit_a.kick.decay = kd;
-                drop(s);
-                app.push_audio_params();
-            }
-        });
-    }); // close vertical_centered
-
-    // Gabber kick preset
-    ui.add_space(2.0);
-    if ui
-        .add(
-            egui::Button::new(
-                egui::RichText::new("GABBER KICK")
-                    .monospace()
-                    .size(8.0)
-                    .color(theme::FOG),
-            )
-            .fill(egui::Color32::from_gray(22)),
-        )
-        .on_hover_text("Extreme pitch sweep + hard clip - gabber/hardcore kick")
-        .clicked()
-    {
-        let s = app.state.read().clone();
-        *app.state.write() = crate::state::apply_gabber_kick_preset(s);
-        app.push_audio_params();
     }
 }
 
