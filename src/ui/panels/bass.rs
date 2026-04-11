@@ -111,7 +111,7 @@ pub fn draw_bass(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                 [active.min(app.state.read().bass_voices.len().saturating_sub(1))]
             .synth
             .pan;
-            if widgets::pan_slider(ui, &mut pan, 120.0) {
+            if widgets::pan_slider(ui, &mut pan, super::PAN_SLIDER_W) {
                 let av = active.min(app.state.read().bass_voices.len().saturating_sub(1));
                 app.state.write().bass_voices[av].synth.pan = pan;
                 app.push_audio_params();

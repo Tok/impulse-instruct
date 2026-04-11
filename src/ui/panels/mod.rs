@@ -1,6 +1,9 @@
 // ─── ui/panels/mod.rs ─────────────────────────────────────────────────────────
 // Re-exports all panel draw functions.
 
+/// Standard PAN slider width shared across voice panels.
+pub(super) const PAN_SLIDER_W: f32 = 140.0;
+
 pub mod an1x;
 pub mod bass;
 mod bass_noise;

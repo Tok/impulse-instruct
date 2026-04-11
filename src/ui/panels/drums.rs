@@ -1,6 +1,7 @@
 // ─── ui/panels/drums.rs ───────────────────────────────────────────────────────
 // Drum kit panels: Kit A (808-style), Kit B (909-style), and Amen sampler.
 
+use super::PAN_SLIDER_W;
 use crate::audio::{AudioCommand, load_wav_to_44100};
 use crate::state::ParamMode;
 use crate::ui::{ImpulseApp, theme, widgets};
@@ -52,6 +53,19 @@ pub fn draw_kit_a(app: &mut ImpulseApp, ui: &mut egui::Ui) {
     let gw = ((avail - spacing) / 2.0).floor(); // 2-column layout
     let group_h = ctrl.knob_size * 2.0 + 50.0;
 
+    // PAN slider at the very top
+    ui.horizontal(|ui| {
+        ui.label(
+            egui::RichText::new("PAN")
+                .color(theme::SMOKE)
+                .monospace()
+                .size(8.0),
+        );
+        if widgets::pan_slider(ui, &mut kpan_a, PAN_SLIDER_W) {
+            changed = true;
+        }
+    });
+
     // Row 1: KICK (left) + KICK XY PAD (right)
     ui.horizontal(|ui| {
         widgets::glass_group_fill(ui, gw, gw, |ui| {
@@ -85,17 +99,6 @@ pub fn draw_kit_a(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                     changed = true;
                 }
                 if widgets::param_control(ui, "CLIP", &mut kclip, ParamMode::Free, ctrl).0 {
-                    changed = true;
-                }
-            });
-            ui.horizontal(|ui| {
-                ui.label(
-                    egui::RichText::new("PAN")
-                        .color(theme::SMOKE)
-                        .monospace()
-                        .size(7.5),
-                );
-                if widgets::pan_slider(ui, &mut kpan_a, 80.0) {
                     changed = true;
                 }
             });
@@ -259,53 +262,66 @@ pub fn draw_kit_b(app: &mut ImpulseApp, ui: &mut egui::Ui) {
     let mut changed = false;
 
     let ctrl = widgets::ControlPrefs::from_prefs(&app.state.read().ui_prefs);
-    let gw = widgets::even_group_width(ui, 3);
+    let ctrl_big = ctrl.phi_bigger(); // larger knobs for the important KICK params
+    let avail = ui.available_width();
+    let spacing = ui.spacing().item_spacing.x;
+    let gw_half = ((avail - spacing) / 2.0).floor();
+    let group_h = ctrl.knob_size * 2.0 + 50.0;
+
+    // PAN slider at the very top
     ui.horizontal(|ui| {
-        widgets::glass_group_fill(ui, gw, gw, |ui| {
-            ui.label(
-                egui::RichText::new("KICK")
-                    .color(theme::FOG)
-                    .monospace()
-                    .size(9.5),
-            );
-            widgets::centered_row(ui, |ui| {
-                if widgets::param_control(ui, "PITCH", &mut kp, ParamMode::Free, ctrl).0 {
-                    changed = true;
-                }
-                if widgets::param_control(ui, "DECAY", &mut kd, ParamMode::Free, ctrl).0 {
-                    changed = true;
-                }
-                if widgets::param_control(ui, "PUNCH", &mut kpu, ParamMode::Free, ctrl).0 {
-                    changed = true;
-                }
-                if widgets::param_control(ui, "LEVEL", &mut kv, ParamMode::Free, ctrl).0 {
-                    changed = true;
-                }
-            });
-            widgets::centered_row(ui, |ui| {
-                if widgets::param_control(ui, "P.DPT", &mut kped, ParamMode::Free, ctrl).0 {
-                    changed = true;
-                }
-                if widgets::param_control(ui, "P.TIM", &mut kpet, ParamMode::Free, ctrl).0 {
-                    changed = true;
-                }
-                if widgets::param_control(ui, "CLIP", &mut kclip, ParamMode::Free, ctrl).0 {
-                    changed = true;
-                }
-            });
-            ui.horizontal(|ui| {
-                ui.label(
-                    egui::RichText::new("PAN")
-                        .color(theme::SMOKE)
-                        .monospace()
-                        .size(7.5),
-                );
-                if widgets::pan_slider(ui, &mut kpan_b, 60.0) {
-                    changed = true;
-                }
-            });
+        ui.label(
+            egui::RichText::new("PAN")
+                .color(theme::SMOKE)
+                .monospace()
+                .size(8.0),
+        );
+        if widgets::pan_slider(ui, &mut kpan_b, PAN_SLIDER_W) {
+            changed = true;
+        }
+    });
+
+    // Row 1: KICK — full width, bigger knobs (most important for 909)
+    widgets::glass_group_fill(ui, avail, avail, |ui| {
+        ui.spacing_mut().item_spacing.x = 10.0;
+        ui.label(
+            egui::RichText::new("KICK")
+                .color(theme::FOG)
+                .monospace()
+                .size(9.5),
+        );
+        widgets::centered_row(ui, |ui| {
+            if widgets::param_control(ui, "PITCH", &mut kp, ParamMode::Free, ctrl_big).0 {
+                changed = true;
+            }
+            if widgets::param_control(ui, "DECAY", &mut kd, ParamMode::Free, ctrl_big).0 {
+                changed = true;
+            }
+            if widgets::param_control(ui, "PUNCH", &mut kpu, ParamMode::Free, ctrl_big).0 {
+                changed = true;
+            }
+            if widgets::param_control(ui, "LEVEL", &mut kv, ParamMode::Free, ctrl_big).0 {
+                changed = true;
+            }
         });
-        widgets::glass_group_fill(ui, gw, gw, |ui| {
+        widgets::centered_row(ui, |ui| {
+            if widgets::param_control(ui, "P.DEPTH", &mut kped, ParamMode::Free, ctrl).0 {
+                changed = true;
+            }
+            if widgets::param_control(ui, "P.TIME", &mut kpet, ParamMode::Free, ctrl).0 {
+                changed = true;
+            }
+            if widgets::param_control(ui, "CLIP", &mut kclip, ParamMode::Free, ctrl).0 {
+                changed = true;
+            }
+        });
+    });
+
+    // Row 2: SNARE (left) + CLAP/RIM (right)
+    ui.horizontal(|ui| {
+        widgets::glass_group_fill(ui, gw_half, gw_half, |ui| {
+            ui.set_min_height(group_h);
+            ui.spacing_mut().item_spacing.x = 8.0;
             ui.label(
                 egui::RichText::new("SNARE")
                     .color(theme::FOG)
@@ -316,7 +332,7 @@ pub fn draw_kit_b(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                 if widgets::param_control(ui, "TONE", &mut st, ParamMode::Free, ctrl).0 {
                     changed = true;
                 }
-                if widgets::param_control(ui, "SNAP", &mut ssn, ParamMode::Free, ctrl).0 {
+                if widgets::param_control(ui, "SNAPPY", &mut ssn, ParamMode::Free, ctrl).0 {
                     changed = true;
                 }
             });
@@ -329,7 +345,9 @@ pub fn draw_kit_b(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                 }
             });
         });
-        widgets::glass_group_fill(ui, gw, gw, |ui| {
+        widgets::glass_group_fill(ui, gw_half, gw_half, |ui| {
+            ui.set_min_height(group_h);
+            ui.spacing_mut().item_spacing.x = 8.0;
             ui.label(
                 egui::RichText::new("CLAP / RIM")
                     .color(theme::FOG)
@@ -337,10 +355,10 @@ pub fn draw_kit_b(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                     .size(9.5),
             );
             widgets::centered_row(ui, |ui| {
-                if widgets::param_control(ui, "C.DEC", &mut cd, ParamMode::Free, ctrl).0 {
+                if widgets::param_control(ui, "DECAY", &mut cd, ParamMode::Free, ctrl).0 {
                     changed = true;
                 }
-                if widgets::param_control(ui, "C.LVL", &mut cv, ParamMode::Free, ctrl).0 {
+                if widgets::param_control(ui, "LEVEL", &mut cv, ParamMode::Free, ctrl).0 {
                     changed = true;
                 }
             });
