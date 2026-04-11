@@ -260,7 +260,7 @@ pub fn draw_fx(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             // Macro: horizontal row of knobs inside a group
             macro_rules! hknobs {
                 ($ui:expr, $( ($label:expr, $val:expr, $pm:expr) ),+ $(,)?) => {
-                    $ui.horizontal_wrapped(|ui| {
+                    $ui.horizontal(|ui| {
                         $( if widgets::param_control(ui, $label, $val, $pm, ctrl).0 { changed = true; } )+
                     });
                 }
