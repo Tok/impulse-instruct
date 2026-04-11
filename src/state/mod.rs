@@ -97,7 +97,7 @@ pub fn set_param_mode(state: AppState, path: &str, mode: ParamMode) -> AppState 
 }
 
 pub mod ui_prefs;
-pub use ui_prefs::{AutosaveInterval, HuthStyle, KnobSize, KnobStyle, PadSize, UiPrefs};
+pub use ui_prefs::{AutosaveInterval, HuthStyle, UiPrefs};
 
 mod fx_plan;
 pub mod rack;

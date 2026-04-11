@@ -46,10 +46,6 @@ pub struct SessionData {
     #[serde(default)]
     pub rack_flipped: Option<bool>,
     // UI prefs subset
-    pub knob_style: Option<crate::state::KnobStyle>,
-    pub knob_size: Option<crate::state::KnobSize>,
-    pub pad_size: Option<crate::state::PadSize>,
-    pub use_sliders: Option<bool>,
     pub ui_scale: Option<f32>,
     pub log_level_idx: Option<usize>,
     #[serde(default)]
@@ -92,10 +88,6 @@ pub fn save_session_ext(
         show_cables: Some(show_cables),
         rack_flipped: Some(rack_flipped),
         llm_agents: Some(state.llm_agents.clone()),
-        knob_style: Some(state.ui_prefs.knob_style),
-        knob_size: Some(state.ui_prefs.knob_size),
-        pad_size: Some(state.ui_prefs.pad_size),
-        use_sliders: Some(state.ui_prefs.use_sliders),
         ui_scale: Some(state.ui_prefs.ui_scale),
         log_level_idx: Some(state.ui_prefs.log_level_idx),
         autosave_interval: Some(state.ui_prefs.autosave_interval),
@@ -158,18 +150,6 @@ pub fn apply_session(state: &mut AppState, data: SessionData) {
         && !v.is_empty()
     {
         state.llm.model_path = v;
-    }
-    if let Some(v) = data.knob_style {
-        state.ui_prefs.knob_style = v;
-    }
-    if let Some(v) = data.knob_size {
-        state.ui_prefs.knob_size = v;
-    }
-    if let Some(v) = data.pad_size {
-        state.ui_prefs.pad_size = v;
-    }
-    if let Some(v) = data.use_sliders {
-        state.ui_prefs.use_sliders = v;
     }
     if let Some(v) = data.ui_scale {
         state.ui_prefs.ui_scale = v.clamp(0.5, 3.0);
