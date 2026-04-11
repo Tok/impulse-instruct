@@ -231,7 +231,10 @@ impl ImpulseApp {
         log::info!("ImpulseApp::new — creating UI…");
 
         // ── Load last session from eframe's persistent storage ────────────────
-        if let Some(storage) = cc.storage
+        // Only restore if session.json also exists — deleting session.json
+        // signals a clean start (e.g. demo recording).
+        if std::path::Path::new("session.json").exists()
+            && let Some(storage) = cc.storage
             && let Some(json) = storage.get_string("session")
             && let Ok(mut loaded) = serde_json::from_str::<AppState>(&json)
         {

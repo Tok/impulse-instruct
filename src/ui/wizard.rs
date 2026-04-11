@@ -26,12 +26,40 @@ impl ImpulseApp {
 
         let statuses = crate::llm::vram::check_presets(si.vram_total_mb, &self.available_models);
 
-        // Check Enter key at ctx level — works regardless of widget focus
+        // Keyboard: Enter submits, Up/Down or W/S navigate presets
         let enter_pressed = ctx.input(|i| i.key_pressed(egui::Key::Enter));
+        let nav_up =
+            ctx.input(|i| i.key_pressed(egui::Key::ArrowUp) || i.key_pressed(egui::Key::W));
+        let nav_down =
+            ctx.input(|i| i.key_pressed(egui::Key::ArrowDown) || i.key_pressed(egui::Key::S));
 
         // Does the current state already have agents from a prior session?
         let has_prior_agents = !self.state.read().llm_agents.is_empty();
         let prior_agent_count = self.state.read().llm_agents.len();
+
+        // Keyboard navigation: Up/Down cycles through options
+        let n_presets = statuses.len();
+        if nav_down {
+            if self.wizard_selected == Self::WIZARD_RESUME {
+                self.wizard_selected = 0; // resume → first preset
+            } else if self.wizard_selected + 1 < n_presets {
+                self.wizard_selected += 1;
+            } else if has_prior_agents {
+                self.wizard_selected = Self::WIZARD_RESUME;
+            }
+        }
+        if nav_up {
+            if self.wizard_selected == Self::WIZARD_RESUME {
+                self.wizard_selected = n_presets.saturating_sub(1);
+            } else if self.wizard_selected > 0 {
+                self.wizard_selected -= 1;
+            } else if has_prior_agents {
+                self.wizard_selected = Self::WIZARD_RESUME;
+            }
+        }
+
+        // Track whether we should apply this frame (click or Enter)
+        let mut apply_choice: Option<usize> = None;
 
         egui::Window::new("Agent Setup")
             .collapsible(false)
@@ -132,7 +160,7 @@ impl ImpulseApp {
                         .min_size(egui::vec2(460.0, 28.0)),
                     );
                     if resp.clicked() {
-                        self.wizard_selected = Self::WIZARD_RESUME;
+                        apply_choice = Some(Self::WIZARD_RESUME);
                     }
                     ui.add_space(4.0);
                     ui.label(
@@ -219,7 +247,7 @@ impl ImpulseApp {
                         .rounding(egui::Rounding::same(3.0)),
                     );
                     if resp.clicked() && selectable {
-                        self.wizard_selected = i;
+                        apply_choice = Some(i);
                     }
 
                     if !status.models_available {
@@ -275,59 +303,41 @@ impl ImpulseApp {
                     });
                 }
 
-                ui.add_space(10.0);
-
-                // ── Action buttons ───────────────────────────────────────
-                let is_resume = self.wizard_selected == Self::WIZARD_RESUME;
-                let can_apply = is_resume
-                    || statuses
-                        .get(self.wizard_selected)
-                        .map(|s| s.fits_vram && s.models_available)
-                        .unwrap_or(false);
-
-                ui.horizontal(|ui| {
-                    let label = if is_resume {
-                        "Resume"
-                    } else if has_prior_agents {
-                        "Apply"
-                    } else {
-                        "Start"
-                    };
-                    let clicked = ui
-                        .add_enabled(
-                            can_apply,
-                            egui::Button::new(
-                                egui::RichText::new(label)
-                                    .monospace()
-                                    .size(10.0)
-                                    .color(if can_apply { theme::CHALK } else { theme::IRON }),
-                            )
-                            .min_size(egui::vec2(100.0, 26.0)),
-                        )
-                        .clicked();
-                    if clicked || (enter_pressed && can_apply) {
-                        if is_resume {
-                            self.mark_wizard_done();
-                        } else {
-                            self.apply_wizard_preset(self.wizard_selected);
-                        }
-                        self.show_wizard = false;
-                        // Auto-play: start the sequencer after wizard completes
-                        if !self.state.read().sequencer.running {
-                            let s = self.state.read().clone();
-                            *self.state.write() = crate::state::toggle_sequencer_running(s);
-                        }
+                // Enter submits the highlighted selection
+                if enter_pressed {
+                    let is_resume = self.wizard_selected == Self::WIZARD_RESUME;
+                    let can_apply = is_resume
+                        || statuses
+                            .get(self.wizard_selected)
+                            .map(|s| s.fits_vram && s.models_available)
+                            .unwrap_or(false);
+                    if can_apply {
+                        apply_choice = Some(self.wizard_selected);
                     }
-                });
+                }
 
-                ui.add_space(4.0);
+                ui.add_space(6.0);
                 ui.label(
-                    egui::RichText::new("You can add/remove agents anytime from the rack.")
+                    egui::RichText::new("Click a preset or press Enter. ↑↓ to navigate.")
                         .color(theme::IRON)
                         .monospace()
                         .size(8.0),
                 );
             });
+
+        // Apply the chosen preset/resume (outside the window closure)
+        if let Some(choice) = apply_choice {
+            if choice == Self::WIZARD_RESUME {
+                self.mark_wizard_done();
+            } else {
+                self.apply_wizard_preset(choice);
+            }
+            self.show_wizard = false;
+            if !self.state.read().sequencer.running {
+                let s = self.state.read().clone();
+                *self.state.write() = crate::state::toggle_sequencer_running(s);
+            }
+        }
     }
 
     /// Apply a wizard preset: spawn agents with the right models/personas/scopes.
