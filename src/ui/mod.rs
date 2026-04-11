@@ -158,7 +158,6 @@ pub struct ImpulseApp {
     pub(crate) stereo_balance: f32,
     last_thinking: Option<String>,
     seq_page: usize,
-    /// Cached x-offset where step buttons start (measured from drum rows, used next frame).
     pub(crate) seq_prefix_width: f32,
     expanded_seq_voices: std::collections::HashSet<crate::state::DrumVoice>,
     drum_clipboard: Option<(crate::state::DrumVoice, Vec<crate::state::Step>)>,
@@ -189,29 +188,16 @@ pub struct ImpulseApp {
     pub(crate) focused_module: Option<crate::state::ModuleKind>,
     /// Instant when the focused module was set (for shine animation).
     pub(crate) focus_time: std::time::Instant,
-    // Track last-saved rack cable/module count to detect changes.
     last_saved_rack_sig: (usize, usize),
-    // Timestamp of the most recent actual save (for interval throttling).
     last_save_time: std::time::Instant,
-    // Per-kind UI scale factors (ModuleKind → scale, default 1.0, range 0.5–2.0).
-    // All modules of the same kind share a scale (e.g. all LlmAgent cards scale together).
     pub(crate) module_scales: std::collections::HashMap<crate::state::ModuleKind, f32>,
-    // Auto-listen: when enabled, trigger LISTEN automatically every N jam cycles.
     auto_listen: bool,
-    // Counts jam cycles since the last auto-listen trigger.
     auto_listen_counter: u32,
-    // When jam_bars > 0: (fire_time, agent_id) for the next scheduled jam cycle.
     jam_next_fire: Option<(std::time::Instant, Option<u32>)>,
-    // Round-robin index for multi-agent jam dispatch.
     jam_next_agent: usize,
-    // When true the LLM strip collapses to show only the prompt row.
-    // Native pixels_per_point at startup — used as base for ui_scale.
     native_ppp: f32,
-    /// Set by API when params change — UI polls this and pushes to audio thread.
     api_params_dirty: Arc<std::sync::atomic::AtomicBool>,
-    /// Central lock-paint mode: None = normal drag, Some(mode) = click paints that mode.
     pub(crate) touch_mode: Option<crate::state::ParamMode>,
-    // Per-zone collapse state.
     pub(crate) zone_global_collapsed: bool,
     pub(crate) zone_voice_collapsed: bool,
     pub(crate) zone_fxmod_collapsed: bool,
@@ -401,13 +387,11 @@ impl ImpulseApp {
         let snapshot = self.state.read().clone();
         self.history.push(snapshot);
     }
-    // update_spectrum → ui_helpers.rs
 
     /// Effective scale for a module kind (1.0 if unset).
     pub(crate) fn kind_scale(&self, kind: crate::state::ModuleKind) -> f32 {
         self.module_scales.get(&kind).copied().unwrap_or(1.0)
     }
-    // observe_edits, push_audio_params, push_fx_plan, tick_ramps → ui_helpers.rs
 
     fn drain_llm_outputs(&mut self) {
         while let Ok(out) = self.llm_rx.try_recv() {
@@ -705,11 +689,24 @@ impl ImpulseApp {
                 }
                 self.push_audio_params();
                 log::debug!("UI: LLM output processed, audio params pushed");
+
+                // Highlight (and optionally scroll to) the module affected by this update.
+                if let Some(kind) = ui_helpers::llm_update_focus_kind(out.param_update.as_ref()) {
+                    self.focused_module = Some(kind);
+                    self.focus_time = std::time::Instant::now();
+                    if self.state.read().ui_prefs.llm_auto_scroll {
+                        let scroll_name = match kind.default_zone() {
+                            crate::state::Zone::Global => "global",
+                            crate::state::Zone::Voice => "voice",
+                            crate::state::Zone::FxMod => "fxmod",
+                        };
+                        self.state.write().scroll_target = Some(scroll_name.to_string());
+                    }
+                }
             }
         }
         log::trace!("UI: drain_llm_outputs complete");
     }
-    // drain_midi_events → midi_handler.rs, drain_api_log → api_log_handler.rs
 }
 
 impl eframe::App for ImpulseApp {

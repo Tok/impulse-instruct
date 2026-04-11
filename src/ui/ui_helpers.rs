@@ -110,3 +110,37 @@ impl ImpulseApp {
         }
     }
 }
+
+/// Map LLM param update JSON keys to the most relevant module for focus highlighting.
+pub(super) fn llm_update_focus_kind(
+    update: Option<&serde_json::Value>,
+) -> Option<crate::state::ModuleKind> {
+    use crate::state::ModuleKind;
+    let obj = update?.as_object()?;
+    // Priority order: bass > sequencer > drums > fx > hoover > an1x
+    if obj.contains_key("bass") {
+        Some(ModuleKind::AcidBass)
+    } else if obj.contains_key("sequencer") {
+        if let Some(seq) = obj.get("sequencer").and_then(|v| v.as_object())
+            && seq.keys().any(|k| {
+                k.contains("kick")
+                    || k.contains("snare")
+                    || k.contains("hihat")
+                    || k.contains("clap")
+            })
+        {
+            return Some(ModuleKind::DrumKit808);
+        }
+        Some(ModuleKind::StepSequencer)
+    } else if obj.contains_key("kit_a") || obj.contains_key("kit_b") {
+        Some(ModuleKind::DrumKit808)
+    } else if obj.contains_key("fx") {
+        Some(ModuleKind::FxReverb)
+    } else if obj.contains_key("hoover") {
+        Some(ModuleKind::HooverLead)
+    } else if obj.contains_key("an1x") {
+        Some(ModuleKind::An1xVoice)
+    } else {
+        None
+    }
+}

@@ -183,6 +183,10 @@ pub struct UiPrefs {
     /// Show active ramp indicators.
     #[serde(default = "default_true_pref")]
     pub stream_ramps: bool,
+    /// When true, LLM responses auto-scroll to the affected module.
+    /// Off by default — mainly useful for demo recordings.
+    #[serde(default)]
+    pub llm_auto_scroll: bool,
 }
 
 fn default_true_pref() -> bool {
@@ -253,6 +257,7 @@ impl Default for UiPrefs {
             stream_drums: false,
             stream_hz_scale: true,
             stream_ramps: true,
+            llm_auto_scroll: false,
         }
     }
 }
