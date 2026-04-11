@@ -388,19 +388,19 @@ fn row_expand_and_pad(row: &[(u32, ModuleKind, bool)], available_w: f32, col_w: 
 /// Paint subtle dots at grid intersections on the rack background.
 /// Paint subtle dots at grid intersections within a zone's content area.
 /// Called per-zone so each collapsible section gets its own aligned grid.
-fn draw_zone_grid_dots(ui: &egui::Ui, zone_top: f32, zone_bottom: f32, col_w: f32) {
+/// `zone_left` is the X where modules actually start (cursor X at zone start).
+fn draw_zone_grid_dots(ui: &egui::Ui, zone_left: f32, zone_top: f32, zone_bottom: f32, col_w: f32) {
     if col_w < 5.0 || zone_bottom <= zone_top {
         return;
     }
     let painter = ui.painter();
     let dot_color = Color32::from_gray(35);
     let step = col_w + RACK_GAP;
-    let left = ui.min_rect().min.x;
-    let right = ui.min_rect().max.x;
+    let right = zone_left + GRID_COLS as f32 * step;
     let mut y = zone_top;
     while y <= zone_bottom + 1.0 {
         for c in 0..=GRID_COLS {
-            let x = left + c as f32 * step;
+            let x = zone_left + c as f32 * step;
             if x <= right + 1.0 {
                 painter.circle_filled(egui::Pos2::new(x, y), 1.0, dot_color);
             }
@@ -434,6 +434,7 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
 
     if !app.zone_global_collapsed {
         ui.spacing_mut().item_spacing.y = RACK_GAP;
+        let zone_left = ui.cursor().left();
         let zone_top = ui.cursor().top();
         // LLM Console — style, prompt, JAM (singleton, full-width, always first)
         {
@@ -664,7 +665,7 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
             card_rects.push((ModuleKind::MasterOutput, resp.card_rect));
         }
 
-        draw_zone_grid_dots(ui, zone_top, ui.cursor().top(), col_w);
+        draw_zone_grid_dots(ui, zone_left, zone_top, ui.cursor().top(), col_w);
     } // end zone_global_collapsed guard
 
     app.zone_y[1] = ui.cursor().top() - content_top;
@@ -682,6 +683,7 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
 
     if !app.zone_voice_collapsed {
         ui.spacing_mut().item_spacing.y = RACK_GAP;
+        let zone_left = ui.cursor().left();
         let zone_top = ui.cursor().top();
         // Collect voice modules in slot order.
         let voice_ids: Vec<(u32, ModuleKind, bool)> = {
@@ -772,7 +774,7 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
                 }
             });
         }
-        draw_zone_grid_dots(ui, zone_top, ui.cursor().top(), col_w);
+        draw_zone_grid_dots(ui, zone_left, zone_top, ui.cursor().top(), col_w);
     } // end zone_voice_collapsed guard
 
     app.zone_y[2] = ui.cursor().top() - content_top;
@@ -789,6 +791,7 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
 
     if !app.zone_fxmod_collapsed {
         ui.spacing_mut().item_spacing.y = RACK_GAP;
+        let zone_left = ui.cursor().left();
         let zone_top = ui.cursor().top();
         let fxmod_ids: Vec<(u32, ModuleKind, bool)> = {
             let mut v: Vec<_> = app
@@ -888,7 +891,7 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
                 }
             });
         }
-        draw_zone_grid_dots(ui, zone_top, ui.cursor().top(), col_w);
+        draw_zone_grid_dots(ui, zone_left, zone_top, ui.cursor().top(), col_w);
     } // end zone_fxmod_collapsed guard
 
     ui.ctx().memory_mut(|m| {
