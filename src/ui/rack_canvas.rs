@@ -225,6 +225,62 @@ pub fn draw_rack(app: &mut ImpulseApp, ctx: &egui::Context, ui: &mut egui::Ui) {
         ctx.request_repaint();
     }
     draw_add_menu(app, ctx);
+    draw_remove_confirm(app, ctx);
+}
+
+fn draw_remove_confirm(app: &mut ImpulseApp, ctx: &egui::Context) {
+    let module_id = match app.confirm_remove_module {
+        Some(id) => id,
+        None => return,
+    };
+    let label = app
+        .state
+        .read()
+        .rack
+        .modules
+        .iter()
+        .find(|m| m.id == module_id)
+        .map(|m| m.kind.label().to_string())
+        .unwrap_or_else(|| format!("Module #{}", module_id));
+    let mut open = true;
+    egui::Window::new("confirm_remove")
+        .title_bar(false)
+        .resizable(false)
+        .collapsible(false)
+        .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
+        .open(&mut open)
+        .show(ctx, |ui| {
+            ui.label(
+                egui::RichText::new(format!("Remove {}?", label))
+                    .monospace()
+                    .size(9.5)
+                    .color(Color32::from_gray(200)),
+            );
+            ui.add_space(4.0);
+            ui.horizontal(|ui| {
+                if ui.button("Remove").clicked() {
+                    let is_agent = app
+                        .state
+                        .read()
+                        .rack
+                        .modules
+                        .iter()
+                        .any(|m| m.id == module_id && m.kind == ModuleKind::LlmAgent);
+                    app.state.write().rack.remove_module(module_id);
+                    if is_agent {
+                        app.state.write().llm_agents.retain(|a| a.id != module_id);
+                    }
+                    app.push_fx_plan();
+                    app.confirm_remove_module = None;
+                }
+                if ui.button("Cancel").clicked() {
+                    app.confirm_remove_module = None;
+                }
+            });
+        });
+    if !open {
+        app.confirm_remove_module = None;
+    }
 }
 
 fn draw_add_menu(app: &mut ImpulseApp, ctx: &egui::Context) {
@@ -507,10 +563,8 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
             {
                 m.enabled = !enabled;
             }
-            if resp.remove_clicked && kind == ModuleKind::LlmAgent {
-                app.state.write().rack.remove_module(id);
-                app.state.write().llm_agents.retain(|a| a.id != id);
-                app.push_fx_plan();
+            if resp.remove_clicked {
+                app.confirm_remove_module = Some(id);
             }
         }
 
@@ -628,8 +682,7 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
                 app.push_fx_plan();
             }
             if resp.remove_clicked {
-                app.state.write().rack.remove_module(id);
-                app.push_fx_plan();
+                app.confirm_remove_module = Some(id);
             }
             let drop_pos = ctx_ref.pointer_latest_pos().unwrap_or_default();
             let zo = zone_rect.min;
@@ -752,8 +805,7 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
                 app.push_fx_plan();
             }
             if resp.remove_clicked {
-                app.state.write().rack.remove_module(id);
-                app.push_fx_plan();
+                app.confirm_remove_module = Some(id);
             }
             let drop_pos = ctx_ref.pointer_latest_pos().unwrap_or_default();
             let zo = zone_rect.min;

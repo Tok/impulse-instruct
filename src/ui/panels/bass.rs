@@ -99,23 +99,24 @@ pub fn draw_bass(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                 let av = app.state.read().active_voice;
                 app.state.write().bass_voices[av].lock_key = lk;
             }
-            ui.separator();
-            // PAN slider
-            ui.label(
-                egui::RichText::new("PAN")
-                    .monospace()
-                    .size(8.0)
-                    .color(theme::SMOKE),
-            );
-            let mut pan = app.state.read().bass_voices
-                [active.min(app.state.read().bass_voices.len().saturating_sub(1))]
-            .synth
-            .pan;
-            if widgets::pan_slider(ui, &mut pan, super::PAN_SLIDER_W) {
-                let av = active.min(app.state.read().bass_voices.len().saturating_sub(1));
-                app.state.write().bass_voices[av].synth.pan = pan;
-                app.push_audio_params();
-            }
+            // PAN slider — right-justified
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                let mut pan = app.state.read().bass_voices
+                    [active.min(app.state.read().bass_voices.len().saturating_sub(1))]
+                .synth
+                .pan;
+                if widgets::pan_slider(ui, &mut pan, super::PAN_SLIDER_W) {
+                    let av = active.min(app.state.read().bass_voices.len().saturating_sub(1));
+                    app.state.write().bass_voices[av].synth.pan = pan;
+                    app.push_audio_params();
+                }
+                ui.label(
+                    egui::RichText::new("PAN")
+                        .monospace()
+                        .size(8.0)
+                        .color(theme::SMOKE),
+                );
+            });
         });
         // Note buttons when GLOBAL KEY is unchecked (own row)
         if !lock_key {

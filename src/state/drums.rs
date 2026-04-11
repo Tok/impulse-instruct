@@ -276,20 +276,20 @@ impl DrumVoice {
 
     pub fn label(&self) -> &'static str {
         match self {
-            DrumVoice::Kick808 => "KA Kick",
-            DrumVoice::Snare808 => "KA Snare",
-            DrumVoice::HihatClosed808 => "KA CHH",
-            DrumVoice::HihatOpen808 => "KA OHH",
-            DrumVoice::TomHi808 => "KA Hi Tom",
-            DrumVoice::TomMid808 => "KA Mid Tom",
-            DrumVoice::TomLo808 => "KA Lo Tom",
-            DrumVoice::Kick909 => "KB Kick",
-            DrumVoice::Snare909 => "KB Snare",
-            DrumVoice::HihatClosed909 => "KB CHH",
-            DrumVoice::HihatOpen909 => "KB OHH",
-            DrumVoice::Clap909 => "KB Clap",
-            DrumVoice::Rim909 => "KB Rim",
-            DrumVoice::Amen => "Amen",
+            DrumVoice::Kick808 => "808 KICK",
+            DrumVoice::Snare808 => "808 SNARE",
+            DrumVoice::HihatClosed808 => "808 CLOSED HH",
+            DrumVoice::HihatOpen808 => "808 OPEN HH",
+            DrumVoice::TomHi808 => "808 HI TOM",
+            DrumVoice::TomMid808 => "808 MID TOM",
+            DrumVoice::TomLo808 => "808 LO TOM",
+            DrumVoice::Kick909 => "909 KICK",
+            DrumVoice::Snare909 => "909 SNARE",
+            DrumVoice::HihatClosed909 => "909 CLOSED HH",
+            DrumVoice::HihatOpen909 => "909 OPEN HH",
+            DrumVoice::Clap909 => "909 CLAP",
+            DrumVoice::Rim909 => "909 RIM",
+            DrumVoice::Amen => "AMEN",
         }
     }
 

@@ -4,7 +4,7 @@
 
 #[cfg(test)]
 mod llm_apply_rack_tests {
-    use crate::state::rack::rack_kind_name_matches;
+    use crate::state::rack_scope::rack_kind_name_matches;
     use crate::state::{AppState, ModuleKind, apply_llm_update};
 
     #[test]

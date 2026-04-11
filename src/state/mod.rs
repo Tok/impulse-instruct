@@ -102,15 +102,16 @@ pub use ui_prefs::{AutosaveInterval, HuthStyle, KnobSize, KnobStyle, PadSize, Ui
 mod fx_plan;
 pub mod rack;
 mod rack_presets;
+pub mod rack_scope;
 pub use fx_plan::compile_fx_plan;
 pub use rack::{
     Cable, CableColor, FxPlan, FxStep, GRID_COLS, ModuleKind, PortDir, PortKind, PortRef,
-    RackModule, RackState, Zone, rack_kind_name_matches, scope_from_control_cables,
+    RackModule, RackState, Zone,
 };
 pub use rack_presets::RACK_PRESETS;
+pub use rack_scope::{rack_kind_name_matches, scope_from_control_cables};
 
 // ─── Amen / WAV sampler voice state ──────────────────────────────────────────
-
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct AmenState {
     /// Path to the WAV file to load (empty = no sample loaded).
@@ -135,7 +136,6 @@ impl Default for AmenState {
 }
 
 // ─── Top-level ───────────────────────────────────────────────────────────────
-
 fn default_pattern_bank() -> Vec<SequencerState> {
     vec![SequencerState::default(); 8]
 }

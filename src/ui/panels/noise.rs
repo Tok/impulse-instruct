@@ -20,17 +20,19 @@ pub fn draw_noise(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         )
     };
     let mut changed = false;
-    // PAN slider at top
+    // PAN slider — right-justified
     ui.horizontal(|ui| {
-        ui.label(
-            egui::RichText::new("PAN")
-                .color(crate::ui::theme::SMOKE)
-                .monospace()
-                .size(8.0),
-        );
-        if widgets::pan_slider(ui, &mut pan, PAN_SLIDER_W) {
-            changed = true;
-        }
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            if widgets::pan_slider(ui, &mut pan, PAN_SLIDER_W) {
+                changed = true;
+            }
+            ui.label(
+                egui::RichText::new("PAN")
+                    .color(crate::ui::theme::SMOKE)
+                    .monospace()
+                    .size(8.0),
+            );
+        });
     });
     widgets::centered_row(ui, |ui| {
         if widgets::param_control(ui, "VOL", &mut vol, pm("noise_voice.volume"), ctrl).0 {

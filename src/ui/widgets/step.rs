@@ -55,6 +55,7 @@ pub fn step_button(
                 let dot_r = (size_px * 0.18).max(2.5);
                 let dot_pos = Pos2::new(inset.center().x, inset.max.y - dot_r - 1.0);
                 painter.circle_filled(dot_pos, dot_r, col);
+                painter.circle_stroke(dot_pos, dot_r, Stroke::new(1.0, Color32::from_gray(0)));
                 // Note name label above the dot (only when cell is large enough)
                 if let Some(label) = note_label
                     && size_px >= 26.0
@@ -98,10 +99,12 @@ pub fn step_button(
             if let Some(col) = dot_color {
                 let dot_r = (size_px * 0.14).max(2.0);
                 let dot_pos = Pos2::new(inner.center().x, inner.max.y - dot_r - 2.0);
-                painter.circle_filled(
+                let dim_col = Color32::from_rgba_unmultiplied(col.r(), col.g(), col.b(), 80);
+                painter.circle_filled(dot_pos, dot_r, dim_col);
+                painter.circle_stroke(
                     dot_pos,
                     dot_r,
-                    Color32::from_rgba_unmultiplied(col.r(), col.g(), col.b(), 80),
+                    Stroke::new(1.0, Color32::from_rgba_unmultiplied(0, 0, 0, 80)),
                 );
             }
         }

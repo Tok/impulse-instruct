@@ -50,9 +50,9 @@ pub(super) const LOG_LEVELS: &[(&str, log::LevelFilter)] = &[
     ("trace", log::LevelFilter::Trace),
 ];
 
-pub(crate) const SEQ_LABEL_W: f32 = 72.0;
+pub(crate) const SEQ_LABEL_W: f32 = 100.0;
 pub(crate) const SEQ_LABEL_H: f32 = 22.0;
-pub(crate) const SEQ_VOL_W: f32 = 52.0;
+pub(crate) const SEQ_VOL_W: f32 = 100.0;
 pub(crate) const SEQ_VOL_H: f32 = 14.0;
 
 /// Derives BPM from incoming MIDI clock pulses (24 per quarter note).
@@ -200,6 +200,8 @@ pub struct ImpulseApp {
     pub(crate) zone_global_collapsed: bool,
     pub(crate) zone_voice_collapsed: bool,
     pub(crate) zone_fxmod_collapsed: bool,
+    /// Module ID pending removal confirmation (None = no dialog shown).
+    pub(crate) confirm_remove_module: Option<u32>,
 }
 
 /// Audio channels bundled to keep `ImpulseApp::new` under the arg limit.
@@ -383,6 +385,7 @@ impl ImpulseApp {
             zone_global_collapsed: false,
             zone_voice_collapsed: false,
             zone_fxmod_collapsed: false,
+            confirm_remove_module: None,
         }
     }
     /// Record the current state to the undo history before a mutation.
@@ -760,7 +763,6 @@ impl eframe::App for ImpulseApp {
         self.drain_llm_outputs();
         self.drain_api_log();
         self.drain_midi_events();
-
         // Poll API params_dirty flag — push audio params when API changed state
         if self
             .api_params_dirty
@@ -917,7 +919,6 @@ impl eframe::App for ImpulseApp {
             let drain = self.dsp_load_buf.len() - 64;
             self.dsp_load_buf.drain(..drain);
         }
-
         // Track step changes for smooth event stream interpolation
         {
             let step = self.state.read().sequencer.current_step;
@@ -926,7 +927,6 @@ impl eframe::App for ImpulseApp {
                 self.last_step_time = ctx.input(|i| i.time);
             }
         }
-
         self.update_audio_analysis(ctx);
         self.tick_ramps();
         self.draw_windows(ctx);

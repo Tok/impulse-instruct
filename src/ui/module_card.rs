@@ -385,12 +385,16 @@ pub fn module_card_sized<R>(
                 }
             }
 
-            // ── Remove button (×) — only for modules that allow multiple instances
+            // ── Remove button (×) — shown on all except core singletons
             let rm_rect = Rect::from_center_size(
                 Pos2::new(title_rect.right() - 44.0, title_rect.center().y),
                 Vec2::splat(10.0),
             );
-            if kind.allows_multiple() || kind == ModuleKind::LlmAgent {
+            let is_core = matches!(
+                kind,
+                ModuleKind::StepSequencer | ModuleKind::MasterOutput | ModuleKind::LlmConsole
+            );
+            if !is_core {
                 let rm_resp =
                     ui.interact(rm_rect, ui.id().with("rm").with(_module_id), Sense::click());
                 if rm_resp.clicked() {
@@ -590,8 +594,12 @@ pub fn module_card_back(
             if drag_resp.hovered() || drag_resp.dragged() {
                 ui.ctx().set_cursor_icon(egui::CursorIcon::Grab);
             }
-            // Remove button — only for multi-instance modules
-            if kind.allows_multiple() || kind == ModuleKind::LlmAgent {
+            // Remove button — shown on all except core singletons
+            let is_core = matches!(
+                kind,
+                ModuleKind::StepSequencer | ModuleKind::MasterOutput | ModuleKind::LlmConsole
+            );
+            if !is_core {
                 let rm_rect = Rect::from_center_size(
                     Pos2::new(title_rect.right() - 12.0, title_rect.center().y),
                     Vec2::splat(10.0),

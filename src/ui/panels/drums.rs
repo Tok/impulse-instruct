@@ -52,17 +52,19 @@ pub fn draw_kit_a(app: &mut ImpulseApp, ui: &mut egui::Ui) {
     let gw = ((avail - super::GLASS_GAP) / 2.0).floor(); // 2-column layout
     let group_h = ctrl.knob_size * 2.0 + 50.0;
 
-    // PAN slider at the very top
+    // PAN slider — right-justified
     ui.horizontal(|ui| {
-        ui.label(
-            egui::RichText::new("PAN")
-                .color(theme::SMOKE)
-                .monospace()
-                .size(8.0),
-        );
-        if widgets::pan_slider(ui, &mut kpan_a, PAN_SLIDER_W) {
-            changed = true;
-        }
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            if widgets::pan_slider(ui, &mut kpan_a, PAN_SLIDER_W) {
+                changed = true;
+            }
+            ui.label(
+                egui::RichText::new("PAN")
+                    .color(theme::SMOKE)
+                    .monospace()
+                    .size(8.0),
+            );
+        });
     });
 
     // Row 1: KICK (left) + KICK XY PAD (right)
@@ -270,17 +272,19 @@ pub fn draw_kit_b(app: &mut ImpulseApp, ui: &mut egui::Ui) {
     let avail = ui.available_width();
     let gw_half = ((avail - super::GLASS_GAP) / 2.0).floor();
 
-    // PAN slider at the very top
+    // PAN slider — right-justified
     ui.horizontal(|ui| {
-        ui.label(
-            egui::RichText::new("PAN")
-                .color(theme::SMOKE)
-                .monospace()
-                .size(8.0),
-        );
-        if widgets::pan_slider(ui, &mut kpan_b, PAN_SLIDER_W) {
-            changed = true;
-        }
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            if widgets::pan_slider(ui, &mut kpan_b, PAN_SLIDER_W) {
+                changed = true;
+            }
+            ui.label(
+                egui::RichText::new("PAN")
+                    .color(theme::SMOKE)
+                    .monospace()
+                    .size(8.0),
+            );
+        });
     });
 
     // Row 1: KICK — full width, bigger knobs (most important for 909)

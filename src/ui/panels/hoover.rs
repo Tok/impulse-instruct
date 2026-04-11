@@ -104,17 +104,19 @@ pub fn draw_hoover(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                 }
             });
             ui.horizontal(|ui| {
-                ui.label(
-                    egui::RichText::new("PAN")
-                        .color(theme::SMOKE)
-                        .monospace()
-                        .size(7.5),
-                );
-                let mut pan = app.state.read().hoover.pan;
-                if widgets::pan_slider(ui, &mut pan, super::PAN_SLIDER_W) {
-                    app.state.write().hoover.pan = pan;
-                    app.push_audio_params();
-                }
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    let mut pan = app.state.read().hoover.pan;
+                    if widgets::pan_slider(ui, &mut pan, super::PAN_SLIDER_W) {
+                        app.state.write().hoover.pan = pan;
+                        app.push_audio_params();
+                    }
+                    ui.label(
+                        egui::RichText::new("PAN")
+                            .color(theme::SMOKE)
+                            .monospace()
+                            .size(7.5),
+                    );
+                });
             });
             widgets::centered_row(ui, |ui| {
                 let voices = app.state.read().hoover.voices;

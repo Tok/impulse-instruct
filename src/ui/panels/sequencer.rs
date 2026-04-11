@@ -84,7 +84,7 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
 
         // Steps
         ui.label(
-            egui::RichText::new("STP")
+            egui::RichText::new("STEPS")
                 .color(theme::SMOKE)
                 .monospace()
                 .size(8.0),
@@ -124,31 +124,13 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             }
         }
 
-        // Right-justified: BPM slider + SYNC
+        // Right-justified: SYNC | BPM label | [slider 3× wider] | value
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             let (mut bpm, sync_on) = {
                 let s = app.state.read();
                 (s.sequencer.bpm, s.sequencer.midi_clock_sync)
             };
-            let sync_color = if sync_on {
-                egui::Color32::from_rgb(80, 180, 80)
-            } else {
-                theme::SMOKE
-            };
-            if ui
-                .add(
-                    egui::Button::new(
-                        egui::RichText::new("SYNC")
-                            .monospace()
-                            .size(7.5)
-                            .color(sync_color),
-                    )
-                    .min_size(egui::Vec2::new(28.0, 14.0)),
-                )
-                .clicked()
-            {
-                app.state.write().sequencer.midi_clock_sync = !sync_on;
-            }
+            // RTL order: rightmost first
             ui.label(
                 egui::RichText::new(format!("{:.0}", bpm))
                     .color(if sync_on { theme::IRON } else { theme::FOG })
@@ -158,7 +140,8 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             let slider_col = if sync_on { theme::FOG } else { theme::IRON };
             ui.visuals_mut().selection.bg_fill = slider_col;
             if ui
-                .add(
+                .add_sized(
+                    [200.0, 14.0],
                     egui::Slider::new(&mut bpm, 40.0..=300.0)
                         .show_value(false)
                         .trailing_fill(true),
@@ -175,8 +158,29 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                     .monospace()
                     .size(8.0),
             );
+            let sync_color = if sync_on {
+                egui::Color32::from_rgb(80, 180, 80)
+            } else {
+                theme::SMOKE
+            };
+            if ui
+                .add(
+                    egui::Button::new(
+                        egui::RichText::new("SYNC")
+                            .monospace()
+                            .size(7.5)
+                            .color(sync_color),
+                    )
+                    .min_size(egui::Vec2::new(34.0, 14.0)),
+                )
+                .clicked()
+            {
+                app.state.write().sequencer.midi_clock_sync = !sync_on;
+            }
         });
     });
+
+    ui.add_space(2.0);
 
     // ── Line 2: Time Sig | Key | Scale SNAP | ← right: Swing ────────
     ui.horizontal(|ui| {
@@ -284,9 +288,9 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         };
         if ui
             .add_sized(
-                [30.0, 14.0],
+                [36.0, 14.0],
                 egui::Button::new(
-                    egui::RichText::new("SNP")
+                    egui::RichText::new("SNAP")
                         .monospace()
                         .size(7.0)
                         .color(snap_color),
@@ -310,7 +314,8 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                     .size(8.0),
             );
             if ui
-                .add(
+                .add_sized(
+                    [200.0, 14.0],
                     egui::Slider::new(&mut swing, 0.0..=1.0)
                         .show_value(false)
                         .trailing_fill(true),
@@ -320,7 +325,7 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                 app.state.write().sequencer.swing = swing;
             }
             ui.label(
-                egui::RichText::new("SWG")
+                egui::RichText::new("SWING")
                     .color(theme::SMOKE)
                     .monospace()
                     .size(8.0),
@@ -479,7 +484,7 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                 ui.add_sized(
                     [prefix_w, marker_h],
                     egui::Label::new(
-                        egui::RichText::new("ACC")
+                        egui::RichText::new("ACCENT")
                             .color(theme::IRON)
                             .monospace()
                             .size(7.0),
@@ -489,20 +494,26 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                     let abs = page_start + i;
                     beat_div(ui, i);
                     let is_accent = bass_page.get(i).map(|s| s.accent).unwrap_or(false);
-                    ui.add_enabled_ui(abs < bass_steps, |ui| {
-                        let color = if is_accent { theme::CHALK } else { theme::PIT };
-                        let text = egui::RichText::new("A").monospace().size(7.0).color(color);
-                        if ui
-                            .add_sized(
-                                [pad_px, marker_h],
-                                egui::Button::new(text).fill(egui::Color32::TRANSPARENT),
-                            )
-                            .clicked()
-                        {
-                            let s = app.state.read().clone();
-                            *app.state.write() = toggle_bass_accent(s, abs);
-                        }
-                    });
+                    let enabled = abs < bass_steps;
+                    let color = if !enabled {
+                        theme::PIT
+                    } else if is_accent {
+                        theme::CHALK
+                    } else {
+                        theme::PIT
+                    };
+                    let text = egui::RichText::new("A").monospace().size(7.0).color(color);
+                    if ui
+                        .add_sized(
+                            [pad_px, marker_h],
+                            egui::Button::new(text).fill(egui::Color32::TRANSPARENT),
+                        )
+                        .clicked()
+                        && enabled
+                    {
+                        let s = app.state.read().clone();
+                        *app.state.write() = toggle_bass_accent(s, abs);
+                    }
                 }
             });
 
@@ -511,7 +522,7 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                 ui.add_sized(
                     [prefix_w, marker_h],
                     egui::Label::new(
-                        egui::RichText::new("SLD")
+                        egui::RichText::new("SLIDE")
                             .color(theme::IRON)
                             .monospace()
                             .size(7.0),
@@ -521,20 +532,26 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                     let abs = page_start + i;
                     beat_div(ui, i);
                     let is_slide = bass_page.get(i).map(|s| s.slide).unwrap_or(false);
-                    ui.add_enabled_ui(abs < bass_steps, |ui| {
-                        let color = if is_slide { theme::CHALK } else { theme::PIT };
-                        let text = egui::RichText::new("S").monospace().size(7.0).color(color);
-                        if ui
-                            .add_sized(
-                                [pad_px, marker_h],
-                                egui::Button::new(text).fill(egui::Color32::TRANSPARENT),
-                            )
-                            .clicked()
-                        {
-                            let s = app.state.read().clone();
-                            *app.state.write() = toggle_bass_slide(s, abs);
-                        }
-                    });
+                    let enabled = abs < bass_steps;
+                    let color = if !enabled {
+                        theme::PIT
+                    } else if is_slide {
+                        theme::CHALK
+                    } else {
+                        theme::PIT
+                    };
+                    let text = egui::RichText::new("S").monospace().size(7.0).color(color);
+                    if ui
+                        .add_sized(
+                            [pad_px, marker_h],
+                            egui::Button::new(text).fill(egui::Color32::TRANSPARENT),
+                        )
+                        .clicked()
+                        && enabled
+                    {
+                        let s = app.state.read().clone();
+                        *app.state.write() = toggle_bass_slide(s, abs);
+                    }
                 }
             });
             ui.spacing_mut().item_spacing.y = prev_spacing;

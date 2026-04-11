@@ -4,7 +4,8 @@
 use super::llm_helpers::{
     apply_an1x_update, apply_bass_update, apply_fx_update, apply_hoover_update, unlocked_f32,
 };
-use super::rack::{PortDir, PortRef, rack_kind_name_matches, rack_out_port_kind};
+use super::rack::{PortDir, PortRef, rack_out_port_kind};
+use super::rack_scope::rack_kind_name_matches;
 use super::transitions::{
     expand_sequencer_steps, set_drum_step_ratchet, set_drum_voice_steps, set_lane_steps,
 };

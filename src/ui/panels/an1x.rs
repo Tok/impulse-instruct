@@ -371,17 +371,19 @@ pub fn draw_an1x(app: &mut ImpulseApp, ui: &mut Ui) {
                     ak!(ui, "REL", amp_release);
                 });
                 ui.horizontal(|ui| {
-                    ui.label(
-                        egui::RichText::new("PAN")
-                            .color(theme::SMOKE)
-                            .monospace()
-                            .size(7.5),
-                    );
-                    let mut pan = app.state.read().an1x.pan;
-                    if widgets::pan_slider(ui, &mut pan, super::PAN_SLIDER_W) {
-                        app.state.write().an1x.pan = pan;
-                        app.push_audio_params();
-                    }
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        let mut pan = app.state.read().an1x.pan;
+                        if widgets::pan_slider(ui, &mut pan, super::PAN_SLIDER_W) {
+                            app.state.write().an1x.pan = pan;
+                            app.push_audio_params();
+                        }
+                        ui.label(
+                            egui::RichText::new("PAN")
+                                .color(theme::SMOKE)
+                                .monospace()
+                                .size(7.5),
+                        );
+                    });
                 });
             });
             widgets::glass_group_fill(ui, gw, gw, |ui| {
