@@ -170,8 +170,8 @@ scene "Band jam"
 play
 wait_seconds 1
 
-ask "acid bass, squelchy, cutoff low, resonance high, pan center" BASS
-ask "kick on steps 0,4,8,12 pan center. hihat on 2,6,10,14 pan 0.3. clap on 4,12 pan -0.3. open hihat on 6,14" DRUMS
+ask "acid bass line with syncopation, squelchy, cutoff low, resonance high, pan center" BASS
+ask "kick on steps 0,4,8,12,16,20,24,28 pan center. hihat on 2,6,10,14,18,22,26,30 pan 0.3. clap on 4,12,20,28 pan -0.3. open hihat on 6,14,22,30" DRUMS
 ask "reverb mix 0.12, reverb size 0.5, delay mix 0.08, chorus mix 0.1, stereo_width 0.6" FX
 
 look_at console
