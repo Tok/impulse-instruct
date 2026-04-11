@@ -391,58 +391,40 @@ pub fn draw_kit_b(app: &mut ImpulseApp, ui: &mut egui::Ui) {
 
 pub fn draw_amen(app: &mut ImpulseApp, ui: &mut egui::Ui) {
     let ctrl = widgets::ControlPrefs::from_prefs(&app.state.read().ui_prefs);
-
-    // ── File path + Load button ───────────────────────────────────────────────
     let mut path = app.state.read().amen.path.clone();
-    ui.horizontal(|ui| {
-        ui.label(
-            egui::RichText::new("WAV file")
-                .monospace()
-                .size(9.5)
-                .color(theme::FOG),
-        );
-    });
-    ui.horizontal(|ui| {
-        let resp = ui.add(
-            egui::TextEdit::singleline(&mut path)
-                .hint_text("path/to/amen.wav")
-                .desired_width(ui.available_width() - 60.0),
-        );
-        if resp.changed() {
-            app.state.write().amen.path = path.clone();
-        }
-        if ui.button("Load").clicked() {
-            match load_wav_to_44100(&path) {
-                Some(data) => {
-                    let _ = app.audio_tx.push(AudioCommand::LoadSampler(data));
-                    log::info!("Amen sampler: loaded '{}'", path);
-                }
-                None => {
-                    log::warn!("Amen sampler: could not load '{}'", path);
-                }
-            }
-        }
-    });
-
-    ui.add_space(4.0);
-
-    // ── Volume + Pitch knobs ──────────────────────────────────────────────────
     let (mut vol, mut pitch, mut loop_mode) = {
         let s = app.state.read();
         (s.amen.volume, s.amen.pitch, s.amen.loop_mode)
     };
     let mut changed = false;
 
+    // Single row: file input + load + knobs
     ui.horizontal(|ui| {
-        if widgets::param_control(ui, "VOLUME", &mut vol, ParamMode::Free, ctrl).0 {
+        let resp = ui.add(
+            egui::TextEdit::singleline(&mut path)
+                .hint_text("amen.wav")
+                .desired_width(80.0)
+                .font(egui::FontId::monospace(8.0)),
+        );
+        if resp.changed() {
+            app.state.write().amen.path = path.clone();
+        }
+        if ui
+            .small_button(egui::RichText::new("LD").monospace().size(7.0))
+            .clicked()
+            && let Some(data) = load_wav_to_44100(&path)
+        {
+            let _ = app.audio_tx.push(AudioCommand::LoadSampler(data));
+        }
+        if widgets::param_control(ui, "VOL", &mut vol, ParamMode::Free, ctrl).0 {
             changed = true;
         }
-        let mut pitch_norm = (pitch + 24.0) / 48.0; // -24..+24 → 0..1
-        if widgets::param_control(ui, "PITCH", &mut pitch_norm, ParamMode::Free, ctrl).0 {
+        let mut pitch_norm = (pitch + 24.0) / 48.0;
+        if widgets::param_control(ui, "PIT", &mut pitch_norm, ParamMode::Free, ctrl).0 {
             pitch = pitch_norm * 48.0 - 24.0;
             changed = true;
         }
-        if widgets::toggle_button(ui, if loop_mode { "LOOP" } else { "1×" }, &mut loop_mode) {
+        if widgets::toggle_button(ui, if loop_mode { "LP" } else { "1×" }, &mut loop_mode) {
             changed = true;
         }
     });

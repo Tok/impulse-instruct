@@ -15,7 +15,7 @@
 // Cables are drawn as a Painter overlay after all cards are placed, using
 // screen positions collected during card rendering.
 
-use egui::{Color32, ScrollArea, Vec2};
+use egui::{Color32, ScrollArea};
 
 use crate::state::{ModuleKind, Zone};
 use crate::ui::module_card::PortPos;
@@ -433,6 +433,7 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
     }
 
     if !app.zone_global_collapsed {
+        ui.spacing_mut().item_spacing.y = RACK_GAP;
         let zone_top = ui.cursor().top();
         // LLM Console — style, prompt, JAM (singleton, full-width, always first)
         {
@@ -454,7 +455,6 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
                     .find(|m| m.id == id)
                     .map(|m| m.enabled)
                     .unwrap_or(true);
-                ui.add_space(2.0);
                 let resp = if app.rack_flipped {
                     module_card::module_card_back(
                         ui,
@@ -507,7 +507,6 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
                 .map(|m| (m.id, m.enabled))
                 .collect();
             if !agent_ids.is_empty() {
-                ui.add_space(2.0);
                 ui.horizontal_wrapped(|ui| {
                     let slot_w = module_grid_w(ModuleKind::LlmAgent, col_w);
                     // Center agent cards
@@ -587,7 +586,6 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
                 .find(|m| m.id == seq_id)
                 .map(|m| m.enabled)
                 .unwrap_or(true);
-            ui.add_space(2.0);
             let resp = if app.rack_flipped {
                 module_card::module_card_back(
                     ui,
@@ -638,7 +636,6 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
                 .find(|m| m.kind == ModuleKind::MasterOutput)
                 .map(|m| m.id)
                 .unwrap_or(101);
-            ui.add_space(2.0);
             let resp = if app.rack_flipped {
                 module_card::module_card_back(
                     ui,
@@ -667,7 +664,6 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
             card_rects.push((ModuleKind::MasterOutput, resp.card_rect));
         }
 
-        ui.add_space(2.0);
         draw_zone_grid_dots(ui, zone_top, ui.cursor().top(), col_w);
     } // end zone_global_collapsed guard
 
@@ -685,6 +681,7 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
     let ctx_ref = ui.ctx().clone();
 
     if !app.zone_voice_collapsed {
+        ui.spacing_mut().item_spacing.y = RACK_GAP;
         let zone_top = ui.cursor().top();
         // Collect voice modules in slot order.
         let voice_ids: Vec<(u32, ModuleKind, bool)> = {
@@ -714,7 +711,7 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
         for row in group_into_rows(&voice_ids, available_w, col_w) {
             let (expand, pad) = row_expand_and_pad(&row, available_w, col_w);
             ui.horizontal(|ui| {
-                ui.spacing_mut().item_spacing = Vec2::new(RACK_GAP, 0.0);
+                ui.spacing_mut().item_spacing = egui::vec2(RACK_GAP, 0.0);
                 if pad > 1.0 {
                     ui.add_space(pad);
                 }
@@ -774,10 +771,7 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
                     }
                 }
             });
-            ui.add_space(RACK_GAP);
         }
-
-        ui.add_space(2.0);
         draw_zone_grid_dots(ui, zone_top, ui.cursor().top(), col_w);
     } // end zone_voice_collapsed guard
 
@@ -794,6 +788,7 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
     }
 
     if !app.zone_fxmod_collapsed {
+        ui.spacing_mut().item_spacing.y = RACK_GAP;
         let zone_top = ui.cursor().top();
         let fxmod_ids: Vec<(u32, ModuleKind, bool)> = {
             let mut v: Vec<_> = app
@@ -822,7 +817,7 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
         for row in group_into_rows(&fxmod_ids, available_w, col_w) {
             let (expand, pad) = row_expand_and_pad(&row, available_w, col_w);
             ui.horizontal(|ui| {
-                ui.spacing_mut().item_spacing = Vec2::new(RACK_GAP, 0.0);
+                ui.spacing_mut().item_spacing = egui::vec2(RACK_GAP, 0.0);
                 if pad > 1.0 {
                     ui.add_space(pad);
                 }
@@ -892,10 +887,7 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
                     }
                 }
             });
-            ui.add_space(RACK_GAP);
         }
-
-        ui.add_space(4.0);
         draw_zone_grid_dots(ui, zone_top, ui.cursor().top(), col_w);
     } // end zone_fxmod_collapsed guard
 

@@ -199,7 +199,7 @@ impl ModuleKind {
             Self::NoiseVoice => (2, 1),
             Self::GranularTexture => (3, 1),
             Self::LlmAgent => (4, 3),
-            Self::EspeakNgTts | Self::CoquiTts => (2, 2),
+            Self::EspeakNgTts | Self::CoquiTts => (2, 3),
             Self::SpectrumAnalyzer => (4, 2),
             Self::ActivityTimeline => (4, 2),
             Self::StereoMeter => (2, 1),
