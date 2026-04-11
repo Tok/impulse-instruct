@@ -741,107 +741,89 @@ impl ImpulseApp {
             }
         });
 
-        // JAM + agent status now merged into line 1 (model/ctx row above)
+        // Prompt input moved to the rack toolbar (draw_prompt_input).
+    }
 
-        // ── Prompt input + ASK ───────────────────────────────────────
-        ui.add_space(2.0);
-        ui.horizontal(|ui| {
-            let avail = ui.available_width();
-            let prompt_w = avail - 40.0;
+    /// Prompt input + submit — drawn in the rack toolbar, not the LLM console.
+    pub(super) fn draw_prompt_input(&mut self, ui: &mut egui::Ui) {
+        let avail = ui.available_width();
+        // Leave space for the toolbar buttons on the right
+        let prompt_w = (avail - 300.0).max(200.0);
 
-            // Subtle highlight frame around the prompt row
-            let prompt_rect =
-                egui::Rect::from_min_size(ui.cursor().min, egui::vec2(prompt_w + 40.0, 24.0));
-            ui.painter().rect_stroke(
-                prompt_rect.shrink(1.0),
-                egui::Rounding::same(3.0),
-                egui::Stroke::new(1.0, egui::Color32::from_gray(45)),
-            );
+        let response = ui.add(
+            egui::TextEdit::singleline(&mut self.prompt_input)
+                .hint_text("prompt…")
+                .desired_width(prompt_w)
+                .min_size(egui::vec2(0.0, 18.0))
+                .font(egui::FontId::monospace(10.0)),
+        );
+        let submit = ui
+            .button(egui::RichText::new("↵").monospace().size(10.0))
+            .clicked();
 
-            let response = ui.add(
-                egui::TextEdit::singleline(&mut self.prompt_input)
-                    .hint_text("prompt the model…")
-                    .desired_width(prompt_w)
-                    .min_size(egui::vec2(0.0, 22.0))
-                    .font(egui::FontId::monospace(11.0)),
-            );
-            let submit = ui
-                .button(egui::RichText::new("↵").monospace().size(11.0))
-                .clicked();
-
-            // Enter submits: egui's singleline TextEdit loses focus on Enter,
-            // so we detect "lost focus + Enter key" which is the standard pattern.
-            let enter_pressed =
-                response.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
-            if enter_pressed {
-                // Strip trailing newline the TextEdit may have appended.
-                if self.prompt_input.ends_with('\n') {
-                    self.prompt_input.pop();
-                }
-                // Re-acquire focus so the user can type the next prompt immediately.
-                response.request_focus();
+        let enter_pressed = response.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
+        if enter_pressed {
+            if self.prompt_input.ends_with('\n') {
+                self.prompt_input.pop();
             }
+            response.request_focus();
+        }
 
-            if submit || enter_pressed {
-                let typed = self.prompt_input.trim().to_string();
-                let (prompt, log_line) = if typed.is_empty() {
-                    let active_style = self.state.read().llm.active_style.clone();
-                    let p = match active_style.as_deref() {
-                        Some(id) => {
-                            let name = StyleCatalog::get()
-                                .find_by_id(id)
-                                .map(|s| s.name.as_str())
-                                .unwrap_or(id);
-                            format!("do something fresh in the {} style", name)
-                        }
-                        None => {
-                            "do something interesting — evolve the pattern and sound".to_string()
-                        }
-                    };
-                    (p, "YOU → [evolve]\n".to_string())
-                } else {
-                    let lower = typed.to_lowercase();
-                    let catalog = StyleCatalog::get();
-                    if let Some(matched) = catalog.styles().iter().find(|s| {
-                        s.keywords
-                            .iter()
-                            .any(|kw| lower.contains(&kw.to_lowercase()))
-                    }) {
-                        self.state.write().llm.active_style = Some(matched.id.clone());
-                        self.log_text
-                            .push_str(&format!("Style → {}\n", matched.name));
+        if submit || enter_pressed {
+            let typed = self.prompt_input.trim().to_string();
+            let (prompt, log_line) = if typed.is_empty() {
+                let active_style = self.state.read().llm.active_style.clone();
+                let p = match active_style.as_deref() {
+                    Some(id) => {
+                        let name = StyleCatalog::get()
+                            .find_by_id(id)
+                            .map(|s| s.name.as_str())
+                            .unwrap_or(id);
+                        format!("do something fresh in the {} style", name)
                     }
-                    (typed.clone(), format!("YOU → {}\n", typed))
+                    None => "do something interesting — evolve the pattern and sound".to_string(),
                 };
-                self.log_text.push_str(&log_line);
-                // Broadcast to all enabled agents so the full team responds.
-                let enabled_agents: Vec<u32> = {
-                    let s = self.state.read();
-                    s.llm_agents
+                (p, "YOU → [evolve]\n".to_string())
+            } else {
+                let lower = typed.to_lowercase();
+                let catalog = StyleCatalog::get();
+                if let Some(matched) = catalog.styles().iter().find(|s| {
+                    s.keywords
                         .iter()
-                        .filter(|a| s.rack.modules.iter().any(|m| m.id == a.id && m.enabled))
-                        .map(|a| a.id)
-                        .collect()
-                };
-                if enabled_agents.is_empty() {
-                    // No agents — fall back to singleton
-                    let _ = self.llm_tx.try_send(LlmInput::Infer {
-                        prompt,
-                        one_shot: true,
-                        agent_id: None,
-                    });
-                } else {
-                    for aid in enabled_agents {
-                        let _ = self.llm_tx.try_send(LlmInput::Infer {
-                            prompt: prompt.clone(),
-                            one_shot: true,
-                            agent_id: Some(aid),
-                        });
-                    }
+                        .any(|kw| lower.contains(&kw.to_lowercase()))
+                }) {
+                    self.state.write().llm.active_style = Some(matched.id.clone());
+                    self.log_text
+                        .push_str(&format!("Style → {}\n", matched.name));
                 }
-                self.prompt_input.clear();
+                (typed.clone(), format!("YOU → {}\n", typed))
+            };
+            self.log_text.push_str(&log_line);
+            let enabled_agents: Vec<u32> = {
+                let s = self.state.read();
+                s.llm_agents
+                    .iter()
+                    .filter(|a| s.rack.modules.iter().any(|m| m.id == a.id && m.enabled))
+                    .map(|a| a.id)
+                    .collect()
+            };
+            if enabled_agents.is_empty() {
+                let _ = self.llm_tx.try_send(LlmInput::Infer {
+                    prompt,
+                    one_shot: true,
+                    agent_id: None,
+                });
+            } else {
+                for aid in enabled_agents {
+                    let _ = self.llm_tx.try_send(LlmInput::Infer {
+                        prompt: prompt.clone(),
+                        one_shot: true,
+                        agent_id: Some(aid),
+                    });
+                }
             }
-        });
+            self.prompt_input.clear();
+        }
     }
 }
 

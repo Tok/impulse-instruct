@@ -8,6 +8,11 @@ use crate::ui::ImpulseApp;
 
 pub fn draw_toolbar(app: &mut ImpulseApp, ui: &mut egui::Ui) {
     ui.horizontal_wrapped(|ui| {
+        // ── Prompt input (left side) ─────────────────────────────────
+        app.draw_prompt_input(ui);
+        ui.separator();
+
+        // ── Mode + rack controls (right side) ───────────────────────
         ui.label(
             egui::RichText::new("MODE")
                 .monospace()
