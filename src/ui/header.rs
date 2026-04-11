@@ -489,7 +489,10 @@ impl ImpulseApp {
                         );
                     }
 
-                    // (Agent status moved to log strip right side)
+                    // ── Push remaining controls to the right edge ──
+                    let right_w = 300.0; // approximate width needed for KNOB+MON+VRAM
+                    let spacer = (ui.available_width() - right_w).max(0.0);
+                    ui.add_space(spacer);
 
                     // ── KNOBS ──
                     ui.separator();
