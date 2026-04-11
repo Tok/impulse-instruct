@@ -397,12 +397,27 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
 
     let content_top = ui.cursor().top();
 
+    let all_collapsed =
+        app.zone_global_collapsed && app.zone_voice_collapsed && app.zone_fxmod_collapsed;
+
     app.zone_y[0] = ui.cursor().top() - content_top;
     {
-        let (add, toggle) =
-            module_card::zone_rail(ui, "GLOBAL", true, 24, app.zone_global_collapsed);
+        let (add, toggle, toggle_all) = module_card::zone_rail(
+            ui,
+            "GLOBAL",
+            true,
+            24,
+            app.zone_global_collapsed,
+            all_collapsed,
+        );
         if toggle {
             app.zone_global_collapsed = !app.zone_global_collapsed;
+        }
+        if toggle_all {
+            let target = !all_collapsed;
+            app.zone_global_collapsed = target;
+            app.zone_voice_collapsed = target;
+            app.zone_fxmod_collapsed = target;
         }
         if add {
             app.add_menu_zone = Some(crate::state::Zone::Global);
@@ -504,10 +519,22 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
 
     app.zone_y[1] = ui.cursor().top() - content_top;
     {
-        let (add, toggle) =
-            module_card::zone_rail(ui, "VOICES", true, 18, app.zone_voice_collapsed);
+        let (add, toggle, toggle_all) = module_card::zone_rail(
+            ui,
+            "VOICES",
+            true,
+            18,
+            app.zone_voice_collapsed,
+            all_collapsed,
+        );
         if toggle {
             app.zone_voice_collapsed = !app.zone_voice_collapsed;
+        }
+        if toggle_all {
+            let target = !all_collapsed;
+            app.zone_global_collapsed = target;
+            app.zone_voice_collapsed = target;
+            app.zone_fxmod_collapsed = target;
         }
         if add {
             app.add_menu_zone = Some(Zone::Voice);
@@ -615,10 +642,22 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
 
     app.zone_y[2] = ui.cursor().top() - content_top;
     {
-        let (add, toggle) =
-            module_card::zone_rail(ui, "FX + MODULATION", true, 14, app.zone_fxmod_collapsed);
+        let (add, toggle, toggle_all) = module_card::zone_rail(
+            ui,
+            "FX + MODULATION",
+            true,
+            14,
+            app.zone_fxmod_collapsed,
+            all_collapsed,
+        );
         if toggle {
             app.zone_fxmod_collapsed = !app.zone_fxmod_collapsed;
+        }
+        if toggle_all {
+            let target = !all_collapsed;
+            app.zone_global_collapsed = target;
+            app.zone_voice_collapsed = target;
+            app.zone_fxmod_collapsed = target;
         }
         if add {
             app.add_menu_zone = Some(Zone::FxMod);

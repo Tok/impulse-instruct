@@ -833,16 +833,19 @@ pub fn module_card_back(
 /// Draw a horizontal zone rail separator with collapse toggle, label, and optional [+ Add] button.
 /// `bg_gray` sets the zone rail background brightness (R=G=B — no tint).
 /// `collapsed` reflects the current collapse state (affects the ▶/▼ arrow drawn).
-/// Returns `(add_clicked, collapse_toggle_clicked)`.
+/// `all_collapsed` is true when every zone is collapsed (affects the ▼▼/▶▶ button).
+/// Returns `(add_clicked, collapse_toggle_clicked, collapse_all_clicked)`.
 pub fn zone_rail(
     ui: &mut egui::Ui,
     label: &str,
     show_add: bool,
     bg_gray: u8,
     collapsed: bool,
-) -> (bool, bool) {
+    all_collapsed: bool,
+) -> (bool, bool, bool) {
     let mut add_clicked = false;
     let mut collapse_clicked = false;
+    let mut collapse_all_clicked = false;
     let (rail_rect, _) =
         ui.allocate_exact_size(Vec2::new(ui.available_width(), 18.0), Sense::hover());
     let painter = ui.painter_at(rail_rect);
@@ -913,10 +916,35 @@ pub fn zone_rail(
         Color32::from_gray(70),
     );
 
-    // [+ ADD] button on the right
+    // ▼▼/▶▶ collapse/expand all — right-justified
+    {
+        let all_label = if all_collapsed { "▼▼" } else { "▶▶" };
+        let all_rect = Rect::from_center_size(
+            Pos2::new(rail_rect.right() - 16.0, screw_y),
+            Vec2::new(20.0, 13.0),
+        );
+        let all_resp = ui.interact(all_rect, ui.id().with("all").with(label), Sense::click());
+        let all_col = if all_resp.hovered() {
+            Color32::from_gray(140)
+        } else {
+            Color32::from_gray(65)
+        };
+        painter.text(
+            all_rect.center(),
+            egui::Align2::CENTER_CENTER,
+            all_label,
+            egui::FontId::monospace(7.5),
+            all_col,
+        );
+        if all_resp.clicked() {
+            collapse_all_clicked = true;
+        }
+    }
+
+    // [+ ADD] button — left of the ▼▼/▶▶ button
     if show_add {
         let btn_rect = Rect::from_center_size(
-            Pos2::new(rail_rect.right() - 30.0, screw_y),
+            Pos2::new(rail_rect.right() - 56.0, screw_y),
             Vec2::new(44.0, 13.0),
         );
         let btn_resp = ui.interact(btn_rect, ui.id().with("add").with(label), Sense::click());
@@ -939,5 +967,5 @@ pub fn zone_rail(
         }
     }
 
-    (add_clicked, collapse_clicked)
+    (add_clicked, collapse_clicked, collapse_all_clicked)
 }
