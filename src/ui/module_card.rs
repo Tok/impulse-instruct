@@ -879,7 +879,11 @@ pub fn zone_rail(
         Pos2::new(rail_rect.left() + 8.0, screw_y),
         Vec2::splat(14.0),
     );
-    let arrow_resp = ui.interact(arrow_rect, ui.id().with("collapse"), Sense::click());
+    let arrow_resp = ui.interact(
+        arrow_rect,
+        ui.id().with("collapse").with(label),
+        Sense::click(),
+    );
     if arrow_resp.hovered() {
         ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
     }
@@ -915,7 +919,7 @@ pub fn zone_rail(
             Pos2::new(rail_rect.right() - 30.0, screw_y),
             Vec2::new(44.0, 13.0),
         );
-        let btn_resp = ui.interact(btn_rect, ui.id().with("add"), Sense::click());
+        let btn_resp = ui.interact(btn_rect, ui.id().with("add").with(label), Sense::click());
         let btn_col = if btn_resp.hovered() {
             Color32::from_gray(120)
         } else {
