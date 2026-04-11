@@ -15,20 +15,24 @@ reset_rack
 
 say "Impulse Instruct. AI-controlled synthesizers. Let's build a rack."
 
+say "Adding bass."
 add_instrument bass
 look_at bass
-wait_seconds 0.5
+wait_seconds 1
+
+say "Drums."
 add_instrument 808
 add_instrument 909
 look_at 808
-wait_seconds 0.5
+wait_seconds 1
+
+say "Reverb and delay."
 add_effect reverb
 add_effect delay
 look_at reverb
-wait_seconds 0.5
+wait_seconds 1
 
-say "Bass, drums, reverb, delay. Adding an AI agent."
-
+say "Adding an AI agent."
 add_agent PULSE gemma
 look_at console
 wait_seconds 2
