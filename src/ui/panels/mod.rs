@@ -7,6 +7,9 @@ pub(super) const PAN_SLIDER_W: f32 = 140.0;
 /// Standard horizontal spacing between knobs inside glass groups and FX panels.
 pub(super) const KNOB_SPACING: f32 = 8.0;
 
+/// Spacing between adjacent glass panes (used in ui.horizontal layouts containing glass groups).
+pub(crate) const GLASS_GAP: f32 = 5.0;
+
 pub mod an1x;
 pub mod bass;
 mod bass_noise;

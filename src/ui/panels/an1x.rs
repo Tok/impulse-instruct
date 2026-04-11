@@ -223,6 +223,7 @@ pub fn draw_an1x(app: &mut ImpulseApp, ui: &mut Ui) {
     {
         let gw = widgets::even_group_width(ui, 3);
         ui.horizontal(|ui| {
+            ui.spacing_mut().item_spacing.x = super::GLASS_GAP;
             widgets::glass_group_fill(ui, gw, gw, |ui| {
                 ui.set_min_height(group_h);
                 ui.spacing_mut().item_spacing.x = super::KNOB_SPACING;
@@ -281,6 +282,7 @@ pub fn draw_an1x(app: &mut ImpulseApp, ui: &mut Ui) {
     {
         let gw = widgets::even_group_width(ui, 3);
         ui.horizontal(|ui| {
+            ui.spacing_mut().item_spacing.x = super::GLASS_GAP;
             widgets::glass_group_fill(ui, gw, gw, |ui| {
                 ui.set_min_height(group_h);
                 ui.spacing_mut().item_spacing.x = super::KNOB_SPACING;

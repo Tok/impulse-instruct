@@ -49,8 +49,7 @@ pub fn draw_kit_a(app: &mut ImpulseApp, ui: &mut egui::Ui) {
     let ctrl = widgets::ControlPrefs::from_prefs(&app.state.read().ui_prefs);
     let xy_size = app.state.read().ui_prefs.effective_xy_px();
     let avail = ui.available_width();
-    let spacing = ui.spacing().item_spacing.x;
-    let gw = ((avail - spacing) / 2.0).floor(); // 2-column layout
+    let gw = ((avail - super::GLASS_GAP) / 2.0).floor(); // 2-column layout
     let group_h = ctrl.knob_size * 2.0 + 50.0;
 
     // PAN slider at the very top
@@ -68,6 +67,7 @@ pub fn draw_kit_a(app: &mut ImpulseApp, ui: &mut egui::Ui) {
 
     // Row 1: KICK (left) + KICK XY PAD (right)
     ui.horizontal(|ui| {
+        ui.spacing_mut().item_spacing.x = super::GLASS_GAP;
         widgets::glass_group_fill(ui, gw, gw, |ui| {
             ui.set_min_height(group_h);
             ui.spacing_mut().item_spacing.x = super::KNOB_SPACING;
@@ -140,6 +140,7 @@ pub fn draw_kit_a(app: &mut ImpulseApp, ui: &mut egui::Ui) {
 
     // Row 2: SNARE (left) + HIHAT (right)
     ui.horizontal(|ui| {
+        ui.spacing_mut().item_spacing.x = super::GLASS_GAP;
         widgets::glass_group_fill(ui, gw, gw, |ui| {
             ui.set_min_height(group_h);
             ui.spacing_mut().item_spacing.x = super::KNOB_SPACING;
@@ -267,8 +268,7 @@ pub fn draw_kit_b(app: &mut ImpulseApp, ui: &mut egui::Ui) {
     let ctrl = widgets::ControlPrefs::from_prefs(&app.state.read().ui_prefs);
     let ctrl_big = ctrl.phi_bigger(); // larger knobs for the important KICK params
     let avail = ui.available_width();
-    let spacing = ui.spacing().item_spacing.x;
-    let gw_half = ((avail - spacing) / 2.0).floor();
+    let gw_half = ((avail - super::GLASS_GAP) / 2.0).floor();
 
     // PAN slider at the very top
     ui.horizontal(|ui| {
@@ -321,6 +321,7 @@ pub fn draw_kit_b(app: &mut ImpulseApp, ui: &mut egui::Ui) {
 
     // Row 2: SNARE (left) + CLAP/RIM (right) — all knobs single row each
     ui.horizontal(|ui| {
+        ui.spacing_mut().item_spacing.x = super::GLASS_GAP;
         widgets::glass_group_fill(ui, gw_half, gw_half, |ui| {
             ui.spacing_mut().item_spacing.x = super::KNOB_SPACING;
             ui.label(

@@ -298,14 +298,15 @@ pub fn draw_bass(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         let ctrl_big = ctrl.phi_bigger(); // primary: cutoff, resonance
         let ctrl_sm = ctrl.phi_smaller(); // secondary: glide, noise, FM
         let avail = ui.available_width();
-        let spacing = ui.spacing().item_spacing.x;
+        let gap = super::GLASS_GAP;
         // FILTER and CHARACTER get 40% each, MOD gets 20%
-        let gw_main = ((avail - spacing * 2.0) * 0.40).floor();
-        let gw_mod = avail - gw_main * 2.0 - spacing * 2.0;
+        let gw_main = ((avail - gap * 2.0) * 0.40).floor();
+        let gw_mod = avail - gw_main * 2.0 - gap * 2.0;
         // Fixed height so all three glass groups match
         // Height based on the largest knobs (FILTER uses ctrl_big)
         let group_h = ctrl_big.knob_size * 2.0 + 50.0;
         ui.horizontal(|ui| {
+            ui.spacing_mut().item_spacing.x = super::GLASS_GAP;
             // FILTER group: 2×2 grid (CUT/RES, ENV/DEC)
             widgets::glass_group_fill(ui, gw_main, gw_main, |ui| {
                 ui.set_min_height(group_h);

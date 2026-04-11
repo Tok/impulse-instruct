@@ -547,9 +547,9 @@ pub use event_stream::event_stream;
 /// });
 /// ```
 pub fn even_group_width(ui: &Ui, n: usize) -> f32 {
-    let spacing = ui.spacing().item_spacing.x;
+    let gap = crate::ui::panels::GLASS_GAP;
     let avail = ui.available_width();
-    let total_gaps = spacing * (n.saturating_sub(1)) as f32;
+    let total_gaps = gap * (n.saturating_sub(1)) as f32;
     ((avail - total_gaps) / n.max(1) as f32).max(40.0)
 }
 
