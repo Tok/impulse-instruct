@@ -4,6 +4,29 @@ What's already built is documented in [docs/features.md](docs/features.md).
 
 ---
 
+## Recently completed (v0.7.1-snapshot development cycle)
+
+- **Per-voice stereo pan** — full stack: state, DSP, LLM schema/apply, UI
+  slider on all voice panels. Agents actively set pan positions.
+- **TTS as rack module** — per-module settings, cable routing, no global toggle
+- **Real-time mix observer** — audio-level + pattern alerts, stereo awareness,
+  injected into every LLM prompt. Header display + agent feedback loop.
+- **Demo scenario system** — 10 scenarios, DSL (scene/say/ask/play/focus_on),
+  CoquiTTS, --scenario/--skip-video/--trim-start flags, batch output dirs
+- **Event stream enhancements** — Hz scale, drum dots, configurable layers,
+  gate/accent sizing, phantom note fixes, time signature display
+- **Recording pipeline** — window-id capture, isolated virtual PipeWire sink,
+  dual video output (clean + subtitled), SRT generation, test script
+- **Style catalog** — mc_lines + themes per style, stereo guidance in prompts
+- **Sequencer alignment** — merged vel/prob/ratchet into single combined row,
+  accent/slide markers match step width, adaptive sequencer height
+- **Header/footer layout** — analysis display, alerts, session stats, GitHub
+  link, VRAM/RAM bars, right-justified sections
+- **Code health** — 474 tests (+37), 6 file splits, duplicate cable fix,
+  UTF-8 crash fix, log dedup, log level from settings
+
+---
+
 ## v0.7.1 — next release
 
 ### Agent tooling — gradual control & expressiveness
