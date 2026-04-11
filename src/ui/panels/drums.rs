@@ -103,16 +103,19 @@ pub fn draw_kit_a(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                 }
             });
         });
-        // KICK XY PAD (right column)
+        // KICK XY PAD (right column, padded)
+        ui.add_space(6.0);
         ui.vertical(|ui| {
             ui.set_min_height(group_h);
+            ui.add_space(4.0);
             ui.label(
                 egui::RichText::new("KICK: PITCH × DECAY")
                     .color(theme::SMOKE)
                     .monospace()
                     .size(8.0),
             );
-            let pad_size = (gw - 20.0).min(xy_size);
+            // Constrain pad to fit within the cell with padding
+            let pad_size = (gw - 40.0).min(xy_size).min(group_h - 30.0);
             if widgets::xy_pad(
                 ui,
                 "drums_kick_xy",
@@ -266,7 +269,6 @@ pub fn draw_kit_b(app: &mut ImpulseApp, ui: &mut egui::Ui) {
     let avail = ui.available_width();
     let spacing = ui.spacing().item_spacing.x;
     let gw_half = ((avail - spacing) / 2.0).floor();
-    let group_h = ctrl.knob_size * 2.0 + 50.0;
 
     // PAN slider at the very top
     ui.horizontal(|ui| {
@@ -317,10 +319,9 @@ pub fn draw_kit_b(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         });
     });
 
-    // Row 2: SNARE (left) + CLAP/RIM (right)
+    // Row 2: SNARE (left) + CLAP/RIM (right) — all knobs single row each
     ui.horizontal(|ui| {
         widgets::glass_group_fill(ui, gw_half, gw_half, |ui| {
-            ui.set_min_height(group_h);
             ui.spacing_mut().item_spacing.x = 8.0;
             ui.label(
                 egui::RichText::new("SNARE")
@@ -335,8 +336,6 @@ pub fn draw_kit_b(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                 if widgets::param_control(ui, "SNAPPY", &mut ssn, ParamMode::Free, ctrl).0 {
                     changed = true;
                 }
-            });
-            widgets::centered_row(ui, |ui| {
                 if widgets::param_control(ui, "DECAY", &mut sd, ParamMode::Free, ctrl).0 {
                     changed = true;
                 }
@@ -346,7 +345,6 @@ pub fn draw_kit_b(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             });
         });
         widgets::glass_group_fill(ui, gw_half, gw_half, |ui| {
-            ui.set_min_height(group_h);
             ui.spacing_mut().item_spacing.x = 8.0;
             ui.label(
                 egui::RichText::new("CLAP / RIM")
