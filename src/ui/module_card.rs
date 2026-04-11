@@ -236,11 +236,11 @@ fn module_card_inner<R>(
     let fill = Color32::from_gray(14);
     let title_bg = focused_title_bg(ui.ctx(), kind);
 
-    // Pin the outer UI to the requested width so the frame doesn't overflow
-    // the grid slot.  Both min and max are set to prevent shrinking or growing.
+    // Set minimum width so the card doesn't shrink below the grid slot.
+    // Max width is NOT set here — the caller constrains width via allocate_ui
+    // or the frame's inner max_width handles overflow.
     if let Some(w) = min_width {
         ui.set_min_width(w);
-        ui.set_max_width(w);
     }
 
     let frame = Frame::none()

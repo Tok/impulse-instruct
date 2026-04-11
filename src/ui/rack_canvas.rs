@@ -711,37 +711,41 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
                 }
                 for (id, kind, enabled) in &row {
                     let slot_w = module_grid_w(*kind, col_w) * expand;
-                    // Dim the card ghost while it's being dragged
                     let is_dragging = app.module_drag.as_ref().map(|d| d.module_id) == Some(*id);
                     let eff_enabled = if is_dragging { false } else { *enabled };
-                    let resp = if app.rack_flipped {
-                        module_card::module_card_back(
-                            ui,
-                            *id,
-                            *kind,
-                            eff_enabled,
-                            Some(slot_w),
-                            app.kind_scale(*kind),
-                            ports,
-                        )
-                    } else {
-                        module_card::module_card_grid(
-                            ui,
-                            *id,
-                            *kind,
-                            eff_enabled,
-                            Some(slot_w),
-                            None,
-                            app.kind_scale(*kind),
-                            ports,
-                            |ui| {
-                                draw_voice_content(app, ui, *kind, *id);
-                            },
-                        )
-                        .0
-                    };
-                    card_rects.push((*kind, resp.card_rect));
-                    if resp.toggle_clicked && !is_dragging {
+                    // allocate_ui constrains the card to exactly slot_w
+                    let card_resp = ui
+                        .allocate_ui(Vec2::new(slot_w, ui.available_height()), |ui| {
+                            if app.rack_flipped {
+                                module_card::module_card_back(
+                                    ui,
+                                    *id,
+                                    *kind,
+                                    eff_enabled,
+                                    Some(slot_w),
+                                    app.kind_scale(*kind),
+                                    ports,
+                                )
+                            } else {
+                                module_card::module_card_grid(
+                                    ui,
+                                    *id,
+                                    *kind,
+                                    eff_enabled,
+                                    Some(slot_w),
+                                    None,
+                                    app.kind_scale(*kind),
+                                    ports,
+                                    |ui| {
+                                        draw_voice_content(app, ui, *kind, *id);
+                                    },
+                                )
+                                .0
+                            }
+                        })
+                        .inner;
+                    card_rects.push((*kind, card_resp.card_rect));
+                    if card_resp.toggle_clicked && !is_dragging {
                         let en = *enabled;
                         if let Some(m) = app
                             .state
@@ -755,12 +759,12 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
                         }
                         app.push_fx_plan();
                     }
-                    if resp.remove_clicked {
+                    if card_resp.remove_clicked {
                         app.state.write().rack.remove_module(*id);
                         app.push_fx_plan();
                     }
                     let drop_pos = ctx_ref.pointer_latest_pos().unwrap_or_default();
-                    if handle_title_drag(app, &ctx_ref, *id, &resp) {
+                    if handle_title_drag(app, &ctx_ref, *id, &card_resp) {
                         reorder_module_by_drop(app, *id, drop_pos, Zone::Voice, available_w);
                     }
                 }
@@ -819,44 +823,48 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
                     let slot_w = module_grid_w(*kind, col_w) * expand;
                     let is_dragging = app.module_drag.as_ref().map(|d| d.module_id) == Some(*id);
                     let eff_enabled = if is_dragging { false } else { *enabled };
-                    let resp = if app.rack_flipped {
-                        module_card::module_card_back(
-                            ui,
-                            *id,
-                            *kind,
-                            eff_enabled,
-                            Some(slot_w),
-                            app.kind_scale(*kind),
-                            ports,
-                        )
-                    } else {
-                        module_card::module_card_grid(
-                            ui,
-                            *id,
-                            *kind,
-                            eff_enabled,
-                            Some(slot_w),
-                            None,
-                            app.kind_scale(*kind),
-                            ports,
-                            |ui| {
-                                if *kind == ModuleKind::LfoModule {
-                                    draw_lfo_content(app, ui, *id);
-                                } else if *kind == ModuleKind::SpectrumAnalyzer {
-                                    crate::ui::panels::draw_spectrum(app, ui);
-                                } else if *kind == ModuleKind::StereoMeter {
-                                    crate::ui::panels::draw_stereo_meter(app, ui);
-                                } else if *kind == ModuleKind::ActivityTimeline {
-                                    crate::ui::panels::draw_timeline(app, ui);
-                                } else {
-                                    draw_fx_content(app, ui, *kind);
-                                }
-                            },
-                        )
-                        .0
-                    };
-                    card_rects.push((*kind, resp.card_rect));
-                    if resp.toggle_clicked && !is_dragging {
+                    let card_resp = ui
+                        .allocate_ui(Vec2::new(slot_w, ui.available_height()), |ui| {
+                            if app.rack_flipped {
+                                module_card::module_card_back(
+                                    ui,
+                                    *id,
+                                    *kind,
+                                    eff_enabled,
+                                    Some(slot_w),
+                                    app.kind_scale(*kind),
+                                    ports,
+                                )
+                            } else {
+                                module_card::module_card_grid(
+                                    ui,
+                                    *id,
+                                    *kind,
+                                    eff_enabled,
+                                    Some(slot_w),
+                                    None,
+                                    app.kind_scale(*kind),
+                                    ports,
+                                    |ui| {
+                                        if *kind == ModuleKind::LfoModule {
+                                            draw_lfo_content(app, ui, *id);
+                                        } else if *kind == ModuleKind::SpectrumAnalyzer {
+                                            crate::ui::panels::draw_spectrum(app, ui);
+                                        } else if *kind == ModuleKind::StereoMeter {
+                                            crate::ui::panels::draw_stereo_meter(app, ui);
+                                        } else if *kind == ModuleKind::ActivityTimeline {
+                                            crate::ui::panels::draw_timeline(app, ui);
+                                        } else {
+                                            draw_fx_content(app, ui, *kind);
+                                        }
+                                    },
+                                )
+                                .0
+                            }
+                        })
+                        .inner;
+                    card_rects.push((*kind, card_resp.card_rect));
+                    if card_resp.toggle_clicked && !is_dragging {
                         let en = *enabled;
                         if let Some(m) = app
                             .state
@@ -870,17 +878,17 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
                         }
                         app.push_fx_plan();
                     }
-                    if resp.remove_clicked {
+                    if card_resp.remove_clicked {
                         app.state.write().rack.remove_module(*id);
                         app.push_fx_plan();
                     }
                     let drop_pos = ctx_ref.pointer_latest_pos().unwrap_or_default();
-                    if handle_title_drag(app, &ctx_ref, *id, &resp) {
+                    if handle_title_drag(app, &ctx_ref, *id, &card_resp) {
                         reorder_module_by_drop(app, *id, drop_pos, Zone::FxMod, available_w);
                     }
                 }
             });
-            ui.add_space(4.0);
+            ui.add_space(RACK_GAP);
         }
 
         ui.add_space(4.0);
