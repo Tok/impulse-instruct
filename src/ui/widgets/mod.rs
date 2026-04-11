@@ -568,12 +568,8 @@ pub fn glass_group<R>(
 
 /// A horizontal row of controls. Inside a `glass_group_fill` (which uses
 /// `top_down(Center)`), this row is centered as a block.
-pub fn centered_row<R>(
-    ui: &mut Ui,
-    add_contents: impl FnOnce(&mut Ui) -> R,
-) -> egui::InnerResponse<R> {
-    ui.horizontal(add_contents)
-}
+mod centered;
+pub use centered::centered_row;
 
 /// Like `glass_group` but sets an exact width (both min and max), so the panel fills
 /// its allocated share when used in an evenly distributed row.
