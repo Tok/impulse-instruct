@@ -200,6 +200,13 @@ pub struct UiPrefs {
     /// Show stereo/pan position indicator in the event stream.
     #[serde(default)]
     pub stream_stereo: bool,
+    /// Rack grid columns (3–6). Determines cell size: rack_width / N.
+    #[serde(default = "default_grid_cols")]
+    pub rack_grid_cols: u8,
+}
+
+fn default_grid_cols() -> u8 {
+    4
 }
 
 fn default_true_pref() -> bool {
@@ -275,6 +282,7 @@ impl Default for UiPrefs {
             show_ring_oscilloscope: true,
             show_event_stream: true,
             stream_stereo: false,
+            rack_grid_cols: default_grid_cols(),
         }
     }
 }

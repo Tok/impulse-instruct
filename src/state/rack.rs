@@ -181,6 +181,29 @@ impl ModuleKind {
         }
     }
 
+    /// Grid span in (columns, rows) for the rack grid layout.
+    /// Full-width modules span all `grid_cols` columns.
+    pub fn grid_span(self, grid_cols: u8) -> (u8, u8) {
+        match self {
+            // Full-width modules span all columns, 1 row (height snapped separately)
+            Self::StepSequencer | Self::LlmConsole | Self::MasterOutput => (grid_cols, 1),
+            // Wide voice
+            Self::An1xVoice => (2, 2),
+            // Standard voice modules — 1 col, 2 rows
+            Self::AcidBass
+            | Self::DrumKit808
+            | Self::DrumKit909
+            | Self::HooverLead
+            | Self::AmenSampler
+            | Self::NoiseVoice
+            | Self::GranularTexture => (1, 2),
+            // Agent — same as voice
+            Self::LlmAgent => (1, 2),
+            // Everything else (FX, LFO, analysis, TTS) — 1×1
+            _ => (1, 1),
+        }
+    }
+
     /// Which zone this module belongs to by default.
     pub fn default_zone(self) -> Zone {
         match self {

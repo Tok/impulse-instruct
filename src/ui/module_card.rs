@@ -182,6 +182,47 @@ pub fn module_card<R>(
     _ports: &mut Vec<PortPos>,
     content: impl FnOnce(&mut egui::Ui) -> R,
 ) -> (CardResponse, Option<R>) {
+    module_card_inner(
+        ui, _module_id, kind, enabled, min_width, None, scale, _ports, content,
+    )
+}
+
+/// Module card with optional fixed grid height for the content area.
+pub fn module_card_grid<R>(
+    ui: &mut egui::Ui,
+    module_id: u32,
+    kind: ModuleKind,
+    enabled: bool,
+    min_width: Option<f32>,
+    grid_height: Option<f32>,
+    scale: f32,
+    ports: &mut Vec<PortPos>,
+    content: impl FnOnce(&mut egui::Ui) -> R,
+) -> (CardResponse, Option<R>) {
+    module_card_inner(
+        ui,
+        module_id,
+        kind,
+        enabled,
+        min_width,
+        grid_height,
+        scale,
+        ports,
+        content,
+    )
+}
+
+fn module_card_inner<R>(
+    ui: &mut egui::Ui,
+    _module_id: u32,
+    kind: ModuleKind,
+    enabled: bool,
+    min_width: Option<f32>,
+    grid_height: Option<f32>,
+    scale: f32,
+    _ports: &mut Vec<PortPos>,
+    content: impl FnOnce(&mut egui::Ui) -> R,
+) -> (CardResponse, Option<R>) {
     // Per-module collapse: stored in egui persistent data keyed by module id
     let collapse_id = egui::Id::new("collapsed").with(_module_id);
     let collapsed = ui
@@ -362,14 +403,36 @@ pub fn module_card<R>(
             if collapsed {
                 None
             } else {
+                // Title bar is 22px; content margins are 8*scale top + 8*scale bottom.
+                // When grid_height is set, clamp content to fill exactly that height.
+                let content_margin_y = 8.0 * scale * 2.0;
+                let title_h = 22.0;
+                let content_h = grid_height.map(|gh| (gh - title_h - content_margin_y).max(20.0));
+
                 let content_frame = Frame::none()
                     .fill(fill)
                     .inner_margin(Margin::symmetric(6.0 * scale, 8.0 * scale));
                 let inner_resp = content_frame.show(ui, |ui| {
                     ui.spacing_mut().item_spacing = Vec2::new(2.0 * scale, 2.0 * scale);
                     ui.set_max_width(card_w - 12.0);
+                    if let Some(ch) = content_h {
+                        ui.set_min_height(ch);
+                        ui.set_max_height(ch);
+                    }
                     ui.with_layout(egui::Layout::top_down(egui::Align::Center), |ui| {
-                        if enabled {
+                        if let Some(ch) = content_h {
+                            egui::ScrollArea::vertical()
+                                .max_height(ch)
+                                .auto_shrink([false; 2])
+                                .show(ui, |ui| {
+                                    if enabled {
+                                        content(ui)
+                                    } else {
+                                        ui.add_enabled_ui(false, |ui| content(ui)).inner
+                                    }
+                                })
+                                .inner
+                        } else if enabled {
                             content(ui)
                         } else {
                             ui.add_enabled_ui(false, |ui| content(ui)).inner

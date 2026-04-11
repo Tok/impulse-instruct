@@ -343,14 +343,8 @@ pub(super) fn draw_master_content(app: &mut ImpulseApp, ui: &mut egui::Ui) {
 // ─── LLM agent card content ──────────────────────────────────────────────────
 
 pub(super) fn draw_llm_agent_content(app: &mut ImpulseApp, ui: &mut egui::Ui, module_id: u32) {
-    // Scroll if content overflows — no forced minimum height
-    egui::ScrollArea::vertical()
-        .id_source(ui.id().with("agent_scroll").with(module_id))
-        .max_height(330.0)
-        .auto_shrink([false; 2])
-        .show(ui, |ui| {
-            draw_llm_agent_inner(app, ui, module_id);
-        });
+    // Grid height enforcement is handled by module_card_grid — just draw content.
+    draw_llm_agent_inner(app, ui, module_id);
 }
 
 fn draw_llm_agent_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, module_id: u32) {
@@ -925,8 +919,10 @@ pub(super) fn reorder_module_by_drop(
     zone: crate::state::Zone,
     screen_width: f32,
 ) {
-    use super::rack_canvas::module_slot_w;
+    use super::rack_canvas::{RACK_GAP, grid_cell, module_grid_size};
     let available_w = screen_width.max(400.0);
+    let grid_cols = app.state.read().ui_prefs.rack_grid_cols.clamp(3, 6);
+    let cell = grid_cell(available_w, grid_cols);
     let zone_entries: Vec<(u32, ModuleKind)> = {
         let rack = app.state.read();
         let mut v: Vec<_> = rack
@@ -947,11 +943,11 @@ pub(super) fn reorder_module_by_drop(
         return;
     }
     let x = (drop_pos.x - 8.0).max(0.0);
-    let gap = 4.0f32;
+    let gap = RACK_GAP;
     let mut cursor = 0.0f32;
     let mut to_idx = 0usize;
     for (i, &(_, kind)) in zone_entries.iter().enumerate() {
-        let w = module_slot_w(kind, available_w);
+        let w = module_grid_size(kind, grid_cols, cell).0;
         let mid = cursor + w * 0.5;
         if x >= mid {
             to_idx = i + 1;

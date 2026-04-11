@@ -117,6 +117,11 @@ What's already built is documented in [docs/features.md](docs/features.md).
   TTS module connected, it can add one to the rack and wire itself to it
   (unless restricted by scope or a `can_modify_rack: false` flag). This is
   a rack tool-use action, not implicit — the agent requests it via JSON.
+- [ ] **NeuTTS Nano as CoquiTTS replacement** — evaluate
+  `neuphonic/neutts-nano-q4-gguf` (GGUF quantized, runs locally via
+  llama.cpp or similar). Potential drop-in for CoquiTTS with better
+  quality and simpler deployment. HF:
+  https://huggingface.co/neuphonic/neutts-nano-q4-gguf
 
 ### Feedback & awareness
 

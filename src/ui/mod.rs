@@ -18,9 +18,9 @@ mod util;
 pub mod widgets;
 pub(crate) use util::scan_models;
 use util::webbrowser_open;
+mod prefs_controls;
 mod windows;
 mod wizard;
-
 pub(crate) use note::{ansi_colorize_notes, note_name};
 
 /// Convert a dot-path + float value into a nested JSON object.
