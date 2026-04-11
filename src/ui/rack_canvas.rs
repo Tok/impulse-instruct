@@ -115,14 +115,6 @@ pub fn draw_rack(app: &mut ImpulseApp, ctx: &egui::Context, ui: &mut egui::Ui) {
             draw_rack_inner(app, ui, &mut ports);
         });
 
-    // Draw grid dots as a background overlay across the full visible rack
-    {
-        let available_w = (canvas_rect.width() - 8.0).max(200.0);
-        let col_w = grid_col_w(available_w);
-        let scroll_y = scroll_out.state.offset.y;
-        draw_grid_dots(ctx, canvas_rect, col_w, scroll_y);
-    }
-
     super::rack_scroll::handle_scroll(app, ctx, &scroll_target, &scroll_out);
     super::rack_scroll::publish_focus(app, ctx);
 
@@ -394,30 +386,23 @@ fn row_expand_and_pad(row: &[(u32, ModuleKind, bool)], available_w: f32, col_w: 
 }
 
 /// Paint subtle dots at grid intersections on the rack background.
-/// Paint subtle dots at grid intersections as a background overlay.
-/// Uses the scroll offset so dots scroll with the rack content.
-fn draw_grid_dots(ctx: &egui::Context, canvas_rect: egui::Rect, col_w: f32, scroll_offset: f32) {
-    if col_w < 5.0 || !canvas_rect.is_positive() {
+/// Paint subtle dots at grid intersections within a zone's content area.
+/// Called per-zone so each collapsible section gets its own aligned grid.
+fn draw_zone_grid_dots(ui: &egui::Ui, zone_top: f32, zone_bottom: f32, col_w: f32) {
+    if col_w < 5.0 || zone_bottom <= zone_top {
         return;
     }
-    let mut painter = ctx.layer_painter(egui::LayerId::new(
-        egui::Order::Background,
-        egui::Id::new("rack_grid_dots"),
-    ));
-    painter.set_clip_rect(canvas_rect);
+    let painter = ui.painter();
     let dot_color = Color32::from_gray(35);
     let step = col_w + RACK_GAP;
-    let left = canvas_rect.min.x;
-    // Align Y to grid, accounting for scroll
-    let y_origin = canvas_rect.min.y - (scroll_offset % step);
-    let mut y = y_origin;
-    while y <= canvas_rect.max.y + step {
-        if y >= canvas_rect.min.y - 1.0 {
-            for c in 0..=GRID_COLS {
-                let x = left + c as f32 * step;
-                if x <= canvas_rect.max.x + 1.0 {
-                    painter.circle_filled(egui::Pos2::new(x, y), 1.0, dot_color);
-                }
+    let left = ui.min_rect().min.x;
+    let right = ui.min_rect().max.x;
+    let mut y = zone_top;
+    while y <= zone_bottom + 1.0 {
+        for c in 0..=GRID_COLS {
+            let x = left + c as f32 * step;
+            if x <= right + 1.0 {
+                painter.circle_filled(egui::Pos2::new(x, y), 1.0, dot_color);
             }
         }
         y += step;
@@ -448,6 +433,7 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
     }
 
     if !app.zone_global_collapsed {
+        let zone_top = ui.cursor().top();
         // LLM Console — style, prompt, JAM (singleton, full-width, always first)
         {
             let console_id = app
@@ -682,6 +668,7 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
         }
 
         ui.add_space(2.0);
+        draw_zone_grid_dots(ui, zone_top, ui.cursor().top(), col_w);
     } // end zone_global_collapsed guard
 
     app.zone_y[1] = ui.cursor().top() - content_top;
@@ -698,6 +685,7 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
     let ctx_ref = ui.ctx().clone();
 
     if !app.zone_voice_collapsed {
+        let zone_top = ui.cursor().top();
         // Collect voice modules in slot order.
         let voice_ids: Vec<(u32, ModuleKind, bool)> = {
             let mut v: Vec<_> = app
@@ -790,6 +778,7 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
         }
 
         ui.add_space(2.0);
+        draw_zone_grid_dots(ui, zone_top, ui.cursor().top(), col_w);
     } // end zone_voice_collapsed guard
 
     app.zone_y[2] = ui.cursor().top() - content_top;
@@ -805,6 +794,7 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
     }
 
     if !app.zone_fxmod_collapsed {
+        let zone_top = ui.cursor().top();
         let fxmod_ids: Vec<(u32, ModuleKind, bool)> = {
             let mut v: Vec<_> = app
                 .state
@@ -906,6 +896,7 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
         }
 
         ui.add_space(4.0);
+        draw_zone_grid_dots(ui, zone_top, ui.cursor().top(), col_w);
     } // end zone_fxmod_collapsed guard
 
     ui.ctx().memory_mut(|m| {
