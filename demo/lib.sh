@@ -598,7 +598,7 @@ ask() {
     local prompt="$1"
     local agent="${2:-}"
     api_prompt "$prompt" "$agent"
-    pause "${3:-10}"
+    pause "${3:-5}"
 }
 
 # ── View control ─────────────────────────────────────────────────────────────

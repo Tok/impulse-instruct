@@ -47,7 +47,7 @@ look_at sequencer
 say "Asking the agent for a pattern."
 
 # Send prompt BEFORE playing — pattern loads while sequencer is stopped.
-ask "acid groove, kick and hats, short bass line with gaps. set pan positions for stereo width, add subtle chorus"
+ask "acid groove, kick and hats, short bass line with gaps. set pan positions for stereo width, add subtle chorus" "" 5
 
 play
 wait_seconds 3

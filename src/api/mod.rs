@@ -247,10 +247,9 @@ async fn post_unlock(
 }
 
 async fn post_play(AxumState(api): AxumState<ApiState>) -> Json<OkResponse> {
-    {
-        let mut s = api.app_state.write();
-        s.sequencer.running = true;
-    }
+    api.app_state.write().sequencer.running = true;
+    api.params_dirty
+        .store(true, std::sync::atomic::Ordering::Relaxed);
     api_log(&api, "[API] sequencer: play");
     Json(OkResponse {
         ok: true,
@@ -260,6 +259,8 @@ async fn post_play(AxumState(api): AxumState<ApiState>) -> Json<OkResponse> {
 
 async fn post_stop(AxumState(api): AxumState<ApiState>) -> Json<OkResponse> {
     api.app_state.write().sequencer.running = false;
+    api.params_dirty
+        .store(true, std::sync::atomic::Ordering::Relaxed);
     api_log(&api, "[API] sequencer: stop");
     Json(OkResponse {
         ok: true,
