@@ -148,5 +148,5 @@ screenshot "${VERSION}-synthwave-tts"
 stop
 
 echo ""
-echo "  Screenshots saved to assets/screenshots/"
-ls -1 assets/screenshots/${VERSION}-*.png 2>/dev/null | sed 's/^/    /'
+echo "  Screenshots saved to ${BATCH_DIR:-demo/output}/"
+ls -1 "${BATCH_DIR:-demo/output}"/${VERSION}-*.png 2>/dev/null | sed 's/^/    /'

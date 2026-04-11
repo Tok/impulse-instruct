@@ -452,14 +452,15 @@ get_window_geometry() {
 
 # ─── Screenshot capture ──────────────────────────────────────────────────────
 
-SCREENSHOT_DIR="${DEMO_DIR}/../assets/screenshots"
-
 capture_screenshot() {
-    # Capture the app window to a PNG file.
+    # Capture the app window to a PNG file in the batch output dir.
     # Usage: capture_screenshot "v0.7.1-rack-backside"
     local name="$1"
-    local outfile="$SCREENSHOT_DIR/${name}.png"
-    mkdir -p "$SCREENSHOT_DIR"
+
+    # Determine output directory — batch dir during recording, fallback to demo/output
+    local out_dir="${BATCH_DIR:-${DEMO_DIR}/output}"
+    mkdir -p "$out_dir"
+    local outfile="$out_dir/${name}.png"
 
     local wid="${APP_WINDOW_ID:-}"
     if [ -z "$wid" ] || [ "$wid" = "0" ]; then
@@ -488,11 +489,6 @@ capture_screenshot() {
     fi
 
     echo "  Screenshot: $outfile"
-
-    # Also copy to the batch output dir if recording
-    if [ -n "${BATCH_DIR:-}" ] && [ -d "${BATCH_DIR:-}" ] && [ -f "$outfile" ]; then
-        cp "$outfile" "$BATCH_DIR/${name}.png"
-    fi
 }
 
 # ═══════════════════════════════════════════════════════════════════════════════

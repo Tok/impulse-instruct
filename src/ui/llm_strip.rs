@@ -744,17 +744,29 @@ impl ImpulseApp {
         // JAM + agent status now merged into line 1 (model/ctx row above)
 
         // ── Prompt input + ASK ───────────────────────────────────────
+        ui.add_space(2.0);
         ui.horizontal(|ui| {
             let avail = ui.available_width();
             let prompt_w = avail - 40.0;
+
+            // Subtle highlight frame around the prompt row
+            let prompt_rect =
+                egui::Rect::from_min_size(ui.cursor().min, egui::vec2(prompt_w + 40.0, 24.0));
+            ui.painter().rect_stroke(
+                prompt_rect.shrink(1.0),
+                egui::Rounding::same(3.0),
+                egui::Stroke::new(1.0, egui::Color32::from_gray(45)),
+            );
+
             let response = ui.add(
                 egui::TextEdit::singleline(&mut self.prompt_input)
                     .hint_text("prompt the model…")
                     .desired_width(prompt_w)
-                    .font(egui::FontId::monospace(9.5)),
+                    .min_size(egui::vec2(0.0, 22.0))
+                    .font(egui::FontId::monospace(11.0)),
             );
             let submit = ui
-                .button(egui::RichText::new("↵").monospace().size(10.0))
+                .button(egui::RichText::new("↵").monospace().size(11.0))
                 .clicked();
 
             // Enter submits: egui's singleline TextEdit loses focus on Enter,
