@@ -188,7 +188,7 @@ impl ModuleKind {
         match self {
             //                                     W     H
             Self::StepSequencer => (grid_cols, 4),
-            Self::LlmConsole => (grid_cols, 2),
+            Self::LlmConsole => (grid_cols, 1),
             Self::MasterOutput => (grid_cols, 1),
             Self::AcidBass => (4, 8),
             Self::DrumKit808 => (4, 4),

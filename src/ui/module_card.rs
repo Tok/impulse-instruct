@@ -379,26 +379,37 @@ pub fn module_card_sized<R>(
             if collapsed {
                 None
             } else {
+                // Compute content budget from grid height (if provided).
+                let title_h = 22.0;
+                let margin_y = 8.0 * scale * 2.0;
+                let content_budget = min_height.map(|mh| (mh - title_h - margin_y).max(20.0));
+
                 let content_frame = Frame::none()
                     .fill(fill)
                     .inner_margin(Margin::symmetric(6.0 * scale, 8.0 * scale));
                 let inner_resp = content_frame.show(ui, |ui| {
                     ui.spacing_mut().item_spacing = Vec2::new(2.0 * scale, 2.0 * scale);
                     ui.set_max_width(card_w - 12.0);
-                    // Grid height: ensure card fills its grid row(s)
-                    if let Some(mh) = min_height {
-                        let title_h = 22.0;
-                        let margin_y = 8.0 * scale * 2.0;
-                        ui.set_min_height((mh - title_h - margin_y).max(0.0));
+                    let draw_content = |ui: &mut egui::Ui| {
+                        ui.with_layout(egui::Layout::top_down(egui::Align::Center), |ui| {
+                            if enabled {
+                                content(ui)
+                            } else {
+                                ui.add_enabled_ui(false, |ui| content(ui)).inner
+                            }
+                        })
+                        .inner
+                    };
+                    if let Some(budget) = content_budget {
+                        // Grid height set: scroll overflow, enforce exact height
+                        egui::ScrollArea::vertical()
+                            .max_height(budget)
+                            .auto_shrink([false; 2])
+                            .show(ui, draw_content)
+                            .inner
+                    } else {
+                        draw_content(ui)
                     }
-                    ui.with_layout(egui::Layout::top_down(egui::Align::Center), |ui| {
-                        if enabled {
-                            content(ui)
-                        } else {
-                            ui.add_enabled_ui(false, |ui| content(ui)).inner
-                        }
-                    })
-                    .inner
                 });
                 Some(inner_resp.inner)
             }
