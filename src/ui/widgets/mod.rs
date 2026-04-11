@@ -580,31 +580,17 @@ pub fn glass_group_fill<R>(
     max_width: f32,
     content: impl FnOnce(&mut Ui) -> R,
 ) -> egui::InnerResponse<R> {
-    let sub_rounding = egui::Rounding::same(5.0);
-    let resp = egui::Frame::none()
+    egui::Frame::none()
         .fill(Color32::from_gray(15))
         .stroke(Stroke::new(1.0, Color32::from_gray(28)))
         .inner_margin(egui::Margin::same(6.0))
-        .rounding(sub_rounding)
+        .rounding(egui::Rounding::same(5.0))
         .show(ui, |ui| {
             ui.set_min_width(min_width - 14.0); // subtract inner margin × 2
             ui.set_max_width(max_width - 14.0);
             ui.with_layout(egui::Layout::top_down(egui::Align::Center), content)
                 .inner
-        });
-
-    // Asymmetric edge highlights — top bright, bottom shadow.
-    // Use thin rects with matching rounding so highlights follow the corners.
-    let rect = resp.response.rect;
-    let painter = ui.painter();
-    let top_edge = egui::Rect::from_min_size(rect.min, egui::Vec2::new(rect.width(), 1.0));
-    painter.rect_filled(top_edge, sub_rounding, Color32::from_gray(64));
-    let bot_edge = egui::Rect::from_min_size(
-        egui::Pos2::new(rect.left(), rect.bottom() - 1.0),
-        egui::Vec2::new(rect.width(), 1.0),
-    );
-    painter.rect_filled(bot_edge, sub_rounding, Color32::from_gray(8));
-    resp
+        })
 }
 
 // ─── Glass Slider ────────────────────────────────────────────────────────────
