@@ -5,10 +5,8 @@ use std::collections::HashSet;
 
 pub mod drums;
 pub use drums::*;
-
 pub mod lfo;
 pub use lfo::*;
-
 pub mod music;
 #[allow(unused_imports)]
 pub use music::note_in_scale;
@@ -103,11 +101,13 @@ pub use ui_prefs::{AutosaveInterval, HuthStyle, KnobSize, KnobStyle, PadSize, Ui
 
 mod fx_plan;
 pub mod rack;
+mod rack_presets;
 pub use fx_plan::compile_fx_plan;
 pub use rack::{
     Cable, CableColor, FxPlan, FxStep, ModuleKind, PortDir, PortKind, PortRef, RackModule,
     RackState, Zone, rack_kind_name_matches, scope_from_control_cables,
 };
+pub use rack_presets::RACK_PRESETS;
 
 // ─── Amen / WAV sampler voice state ──────────────────────────────────────────
 

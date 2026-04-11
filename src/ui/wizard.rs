@@ -119,9 +119,64 @@ impl ImpulseApp {
                     });
                 }
 
+                // ── Rack layout preset ───────────────────────────────
                 ui.add_space(8.0);
                 ui.label(
-                    egui::RichText::new("CONFIGURATION")
+                    egui::RichText::new("RACK LAYOUT")
+                        .color(theme::CHALK)
+                        .monospace()
+                        .size(10.5)
+                        .strong(),
+                );
+                ui.separator();
+                ui.add_space(2.0);
+                ui.horizontal_wrapped(|ui| {
+                    for (i, rp) in crate::state::RACK_PRESETS.iter().enumerate() {
+                        let selected = self.wizard_rack_preset == i;
+                        let col = if selected { theme::CHALK } else { theme::FOG };
+                        let fill = if selected {
+                            egui::Color32::from_gray(35)
+                        } else {
+                            egui::Color32::from_gray(18)
+                        };
+                        let stroke = if selected {
+                            egui::Stroke::new(1.0, theme::ASH)
+                        } else {
+                            egui::Stroke::new(1.0, egui::Color32::from_gray(24))
+                        };
+                        if ui
+                            .add(
+                                egui::Button::new(
+                                    egui::RichText::new(rp.name)
+                                        .monospace()
+                                        .size(10.0)
+                                        .color(col),
+                                )
+                                .fill(fill)
+                                .stroke(stroke)
+                                .rounding(egui::Rounding::same(3.0))
+                                .min_size(egui::vec2(80.0, 24.0)),
+                            )
+                            .on_hover_text(rp.description)
+                            .clicked()
+                        {
+                            self.wizard_rack_preset = i;
+                        }
+                    }
+                });
+                if let Some(rp) = crate::state::RACK_PRESETS.get(self.wizard_rack_preset) {
+                    ui.label(
+                        egui::RichText::new(rp.description)
+                            .color(theme::IRON)
+                            .monospace()
+                            .size(8.5),
+                    );
+                }
+
+                // ── Agent configuration ─────────────────────────────
+                ui.add_space(8.0);
+                ui.label(
+                    egui::RichText::new("AI AGENTS")
                         .color(theme::CHALK)
                         .monospace()
                         .size(10.5)
@@ -340,25 +395,43 @@ impl ImpulseApp {
         }
     }
 
-    /// Apply a wizard preset: spawn agents with the right models/personas/scopes.
-    fn apply_wizard_preset(&mut self, preset_idx: usize) {
+    /// Apply a wizard preset: rebuild the rack from the rack preset, then
+    /// spawn agents with the right models/personas/scopes.
+    fn apply_wizard_preset(&mut self, agent_preset_idx: usize) {
         use crate::llm::vram::{PRESETS, find_model};
-        let preset = match PRESETS.get(preset_idx) {
+        let agent_preset = match PRESETS.get(agent_preset_idx) {
             Some(p) => p,
             None => return,
         };
 
-        // Remove all existing agents — wizard applies a clean setup.
-        {
-            let old_ids: Vec<u32> = self.state.read().llm_agents.iter().map(|a| a.id).collect();
+        // Apply rack layout preset first
+        if let Some(rack_preset) = crate::state::RACK_PRESETS.get(self.wizard_rack_preset) {
+            let new_rack = crate::state::RackState::from_preset(rack_preset);
             let mut s = self.state.write();
-            for id in &old_ids {
-                s.rack.remove_module(*id);
-            }
+            // Preserve LLM agents — they'll be replaced below
             s.llm_agents.clear();
+            s.rack = new_rack;
         }
 
-        for pa in preset.agents {
+        // Remove the default agent added by from_preset — we'll add preset agents
+        {
+            let agent_ids: Vec<u32> = self
+                .state
+                .read()
+                .rack
+                .modules
+                .iter()
+                .filter(|m| m.kind == crate::state::ModuleKind::LlmAgent)
+                .map(|m| m.id)
+                .collect();
+            let mut s = self.state.write();
+            for id in agent_ids {
+                s.rack.remove_module(id);
+            }
+        }
+
+        // Spawn agents from the agent preset
+        for pa in agent_preset.agents {
             let model_path = find_model(pa.model_pattern, &self.available_models);
             let scope: Vec<String> = pa.scope.iter().map(|s| s.to_string()).collect();
 

@@ -315,27 +315,27 @@ pub(super) fn module_grid_w(kind: ModuleKind, col_w: f32) -> f32 {
     c as f32 * col_w + (c as f32 - 1.0).max(0.0) * RACK_GAP
 }
 
-/// Grid height in cells for each module kind.
+/// Grid height in whole cells for each module kind.
 /// Content that exceeds this just grows — this is a minimum, not a cap.
-fn grid_row_count(kind: ModuleKind) -> f32 {
+fn grid_row_count(kind: ModuleKind) -> u8 {
     match kind {
-        ModuleKind::AcidBass => 6.0,
-        ModuleKind::An1xVoice => 5.0,
-        ModuleKind::DrumKit808 | ModuleKind::DrumKit909 => 3.0,
-        ModuleKind::HooverLead | ModuleKind::AmenSampler => 2.5,
-        ModuleKind::LlmAgent => 2.5,
-        ModuleKind::NoiseVoice | ModuleKind::GranularTexture => 1.0,
-        ModuleKind::EspeakNgTts | ModuleKind::CoquiTts => 1.5,
-        ModuleKind::SpectrumAnalyzer | ModuleKind::ActivityTimeline => 1.5,
+        ModuleKind::AcidBass => 6,
+        ModuleKind::An1xVoice => 5,
+        ModuleKind::DrumKit808 | ModuleKind::DrumKit909 => 3,
+        ModuleKind::HooverLead | ModuleKind::AmenSampler => 3,
+        ModuleKind::LlmAgent => 3,
+        ModuleKind::NoiseVoice | ModuleKind::GranularTexture => 1,
+        ModuleKind::EspeakNgTts | ModuleKind::CoquiTts => 2,
+        ModuleKind::SpectrumAnalyzer | ModuleKind::ActivityTimeline => 2,
         // FX, LFO, stereo meter — 1 cell
-        _ => 1.0,
+        _ => 1,
     }
 }
 
-/// Pixel height for a module's grid row span.
+/// Pixel height for a module's grid row span (whole cells only).
 pub(super) fn module_grid_h(kind: ModuleKind, col_w: f32) -> f32 {
-    let rows = grid_row_count(kind);
-    rows * col_w + (rows.ceil() - 1.0).max(0.0) * RACK_GAP
+    let r = grid_row_count(kind) as f32;
+    r * col_w + (r - 1.0).max(0.0) * RACK_GAP
 }
 
 /// Width spanning `n` grid columns (including internal gaps).

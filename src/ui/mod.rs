@@ -34,16 +34,14 @@ fn dot_path_to_json(path: &str, value: f32) -> serde_json::Value {
         .fold(leaf, |acc, &key| serde_json::json!({ key: acc }))
 }
 
-use crossbeam_channel::{Receiver, Sender};
-use egui::{CentralPanel, Frame, TopBottomPanel};
-use parking_lot::RwLock;
-use std::sync::Arc;
-
 use crate::audio::AudioCommand;
 use crate::llm::{LlmInput, LlmOutput};
 use crate::midi::MidiEvent;
 use crate::state::AppState;
-
+use crossbeam_channel::{Receiver, Sender};
+use egui::{CentralPanel, Frame, TopBottomPanel};
+use parking_lot::RwLock;
+use std::sync::Arc;
 pub(super) const LOG_LEVELS: &[(&str, log::LevelFilter)] = &[
     ("error", log::LevelFilter::Error),
     ("warn", log::LevelFilter::Warn),
@@ -166,6 +164,7 @@ pub struct ImpulseApp {
     show_sysinfo: bool,
     pub(crate) show_wizard: bool,
     pub(crate) wizard_selected: usize,
+    pub(crate) wizard_rack_preset: usize,
     prefs_tab: usize,
     llm_tab: usize,
     startup_done: bool,
@@ -349,6 +348,7 @@ impl ImpulseApp {
                 usize::MAX // WIZARD_RESUME
             },
 
+            wizard_rack_preset: 1, // default to "Basic" (303 + 808 + 909)
             prefs_tab: 0,
             llm_tab: 0,
             startup_done: false,
