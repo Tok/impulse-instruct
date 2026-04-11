@@ -280,6 +280,7 @@ pub(super) fn draw_drum_rows(
         });
 
         // ── Velocity / Probability / Ratchet lanes ─────────────────────────
+        ui.add_space(-1.0); // pull tight against step buttons
         // Velocity
         ui.horizontal(|ui| {
             // Match the label column from the step button row

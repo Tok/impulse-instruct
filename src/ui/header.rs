@@ -521,47 +521,7 @@ impl ImpulseApp {
                         }
                     }
 
-                    ui.separator();
-
-                    // ── MON slider ────────────────────────────────────────
-                    {
-                        let vol_col = if self.ui_volume < 0.4 {
-                            theme::ASH
-                        } else if self.ui_volume < 0.75 {
-                            theme::SMOKE
-                        } else {
-                            theme::FOG
-                        };
-                        ui.label(
-                            egui::RichText::new("MON")
-                                .color(vol_col)
-                                .monospace()
-                                .size(8.0),
-                        );
-                        if ui
-                            .scope(|ui| {
-                                ui.spacing_mut().slider_width = 80.0;
-                                ui.add(
-                                    egui::Slider::new(&mut self.ui_volume, 0.0..=1.0)
-                                        .show_value(false),
-                                )
-                            })
-                            .inner
-                            .changed()
-                        {
-                            let _ = self
-                                .audio_tx
-                                .push(AudioCommand::SetMonitorVolume(self.ui_volume));
-                        }
-                        ui.label(
-                            egui::RichText::new(format!("{}%", (self.ui_volume * 100.0) as u32))
-                                .color(vol_col)
-                                .monospace()
-                                .size(7.5),
-                        );
-                    }
-
-                    // ── VRAM / RAM / API (right-justified) ───────────────
+                    // ── RIGHT side: VRAM/RAM/API + MON ────────────────────
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         let (has_vram, has_ram, vram_used, vram_total, ram_used, ram_total) = self
                             .sys_info
@@ -655,6 +615,49 @@ impl ImpulseApp {
                                     webbrowser_open(&format!("http://localhost:{port}/api/schema"));
                             }
                         });
+
+                        ui.separator();
+
+                        // ── MON slider (left of VRAM in right_to_left) ──
+                        {
+                            let vol_col = if self.ui_volume < 0.4 {
+                                theme::ASH
+                            } else if self.ui_volume < 0.75 {
+                                theme::SMOKE
+                            } else {
+                                theme::FOG
+                            };
+                            ui.label(
+                                egui::RichText::new(format!(
+                                    "{}%",
+                                    (self.ui_volume * 100.0) as u32
+                                ))
+                                .color(vol_col)
+                                .monospace()
+                                .size(7.5),
+                            );
+                            if ui
+                                .scope(|ui| {
+                                    ui.spacing_mut().slider_width = 80.0;
+                                    ui.add(
+                                        egui::Slider::new(&mut self.ui_volume, 0.0..=1.0)
+                                            .show_value(false),
+                                    )
+                                })
+                                .inner
+                                .changed()
+                            {
+                                let _ = self
+                                    .audio_tx
+                                    .push(AudioCommand::SetMonitorVolume(self.ui_volume));
+                            }
+                            ui.label(
+                                egui::RichText::new("MON")
+                                    .color(vol_col)
+                                    .monospace()
+                                    .size(8.0),
+                            );
+                        }
                     });
                 });
             });
