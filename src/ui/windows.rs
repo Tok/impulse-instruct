@@ -737,46 +737,66 @@ impl ImpulseApp {
                     ui.label(
                         egui::RichText::new("◆ IMPULSE INSTRUCT")
                             .monospace()
-                            .size(14.0)
+                            .size(16.0)
                             .color(theme::CHALK),
                     );
+                    let version = env!("CARGO_PKG_VERSION");
                     ui.label(
-                        egui::RichText::new("v0.1 — LLM-controlled synthesizer")
+                        egui::RichText::new(format!("v{version}"))
                             .monospace()
-                            .size(9.5)
+                            .size(10.0)
                             .color(theme::SMOKE),
                     );
-                    ui.add_space(8.0);
                     ui.label(
-                        egui::RichText::new("Bass Synth  ·  Drum Kit A  ·  Drum Kit B")
+                        egui::RichText::new("A synthesizer with AI agents inside it")
                             .monospace()
                             .size(9.0)
                             .color(theme::ASH),
                     );
+                    ui.add_space(8.0);
                     ui.label(
-                        egui::RichText::new("LLM engine: llama.cpp")
+                        egui::RichText::new(
+                            "303 Bass · 808 Kit · 909 Kit · AN1X · Hoover · Noise · Granular",
+                        )
+                        .monospace()
+                        .size(8.0)
+                        .color(theme::ASH),
+                    );
+                    ui.label(
+                        egui::RichText::new("LLM: llama.cpp · Gemma 4 · Bonsai")
                             .monospace()
-                            .size(9.0)
+                            .size(8.0)
                             .color(theme::ASH),
                     );
                     ui.add_space(10.0);
                     ui.label(
-                        egui::RichText::new("Type a prompt and press ASK.")
+                        egui::RichText::new("Rust · egui · cpal · rtrb")
                             .monospace()
-                            .size(9.0)
-                            .color(theme::FOG),
+                            .size(8.0)
+                            .color(theme::IRON),
                     );
+                    ui.add_space(10.0);
+                    if ui
+                        .add(
+                            egui::Label::new(
+                                egui::RichText::new("github.com/Tok/impulse-instruct")
+                                    .monospace()
+                                    .size(9.0)
+                                    .color(theme::FOG),
+                            )
+                            .sense(egui::Sense::click()),
+                        )
+                        .on_hover_text("Open in browser")
+                        .clicked()
+                    {
+                        let _ = super::webbrowser_open("https://github.com/Tok/impulse-instruct");
+                    }
+                    ui.add_space(4.0);
                     ui.label(
-                        egui::RichText::new("Toggle JAM for continuous mutation.")
+                        egui::RichText::new("Contributions welcome — issues, PRs, feedback")
                             .monospace()
-                            .size(9.0)
-                            .color(theme::FOG),
-                    );
-                    ui.label(
-                        egui::RichText::new("HEAT controls how wild it gets.")
-                            .monospace()
-                            .size(9.0)
-                            .color(theme::FOG),
+                            .size(8.0)
+                            .color(theme::IRON),
                     );
                     ui.add_space(10.0);
                     if ui.button("Close").clicked() {

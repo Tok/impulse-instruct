@@ -117,6 +117,7 @@ pub struct ImpulseApp {
     scope_history: std::collections::VecDeque<Vec<f32>>,
     /// For smooth event stream: last observed current_step + time it changed.
     last_seq_step: usize,
+    session_start: std::time::Instant,
     last_step_time: f64,
     capture_rx: rtrb::Consumer<f32>,
     dsp_load_rx: rtrb::Consumer<f32>,
@@ -297,6 +298,7 @@ impl ImpulseApp {
             scope_buf: Vec::new(),
             scope_history: std::collections::VecDeque::with_capacity(12),
             last_seq_step: usize::MAX,
+            session_start: std::time::Instant::now(),
             last_step_time: 0.0,
             capture_rx: audio.capture_rx,
             dsp_load_rx: audio.dsp_load_rx,
@@ -942,6 +944,12 @@ impl eframe::App for ImpulseApp {
             )
             .exact_height(18.0)
             .show(ctx, |ui| {
+                let s = self.state.read();
+                let n_modules = s.rack.modules.len();
+                let n_agents = s.llm_agents.len();
+                let n_cables = s.rack.cables.len();
+                let uptime_secs = self.session_start.elapsed().as_secs();
+                drop(s);
                 scope_footer::draw_footer_status(
                     ui,
                     &self.midi_port,
@@ -949,6 +957,10 @@ impl eframe::App for ImpulseApp {
                     &mut self.rack_flipped,
                     &mut self.ctrl_locked,
                     &mut self.alt_locked,
+                    n_modules,
+                    n_agents,
+                    n_cables,
+                    uptime_secs,
                 );
             });
 
