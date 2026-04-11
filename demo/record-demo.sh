@@ -106,9 +106,7 @@ if [ "$SKIP_VIDEO" -eq 0 ]; then
     check_dep pw-record   "sudo apt install pipewire (should already be there)"
 fi
 if [ "$NO_TTS" -eq 0 ]; then
-    if ! command -v tts >/dev/null 2>&1; then
-        check_dep espeak-ng  "sudo apt install espeak-ng (or pip install TTS for CoquiTTS)"
-    fi
+    check_dep tts        "pip install TTS (CoquiTTS required for demo narration)"
     check_dep paplay     "sudo apt install pulseaudio-utils"
 fi
 

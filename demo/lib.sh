@@ -205,22 +205,16 @@ wait_for_api() {
 # ─── TTS helpers ──────────────────────────────────────────────────────────────
 
 tts_generate() {
-    # Pre-generate a TTS clip. Returns the wav path.
-    # Tries CoquiTTS first (better quality), falls back to espeak-ng.
+    # Pre-generate a TTS clip using CoquiTTS. Returns the wav path.
     # Usage: tts_generate "clip_id" "Text to speak"
     local id="$1" text="$2"
     local outfile="$TTS_DIR/${id}.wav"
     mkdir -p "$TTS_DIR"
     if [ ! -f "$outfile" ]; then
-        if command -v tts >/dev/null 2>&1; then
-            # CoquiTTS — high-quality neural TTS
-            tts --text "$text" --out_path "$outfile" \
-                ${TTS_MODEL:+--model_name "$TTS_MODEL"} 2>/dev/null
-        fi
-        # Fallback to espeak-ng if CoquiTTS failed or isn't installed
+        tts --text "$text" --out_path "$outfile" \
+            ${TTS_MODEL:+--model_name "$TTS_MODEL"} 2>/dev/null
         if [ ! -f "$outfile" ]; then
-            espeak-ng -v "$TTS_VOICE" -s "$TTS_SPEED" -p "$TTS_PITCH" \
-                -w "$outfile" "$text" 2>/dev/null
+            echo "  ERROR: CoquiTTS failed to generate: $text" >&2
         fi
     fi
     echo "$outfile"
