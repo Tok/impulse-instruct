@@ -300,6 +300,62 @@ fn scope_excludes_non_scoped_targets() {
     );
 }
 
+// ── Grid placement ─────────────────────────────────────────────────────────
+
+#[test]
+fn arrange_grid_no_overlap() {
+    let rack = RackState::default();
+    // Verify no two modules in the same zone overlap on the grid.
+    for zone in [Zone::Global, Zone::Voice, Zone::FxMod] {
+        let mods: Vec<_> = rack.modules.iter().filter(|m| m.zone == zone).collect();
+        for (i, a) in mods.iter().enumerate() {
+            let (aw, ah) = a.kind.grid_size(GRID_COLS);
+            for b in &mods[i + 1..] {
+                let (bw, bh) = b.kind.grid_size(GRID_COLS);
+                let a_right = a.grid_col + aw;
+                let a_bottom = a.grid_row + ah;
+                let b_right = b.grid_col + bw;
+                let b_bottom = b.grid_row + bh;
+                let overlaps = a.grid_col < b_right
+                    && b.grid_col < a_right
+                    && a.grid_row < b_bottom
+                    && b.grid_row < a_bottom;
+                assert!(
+                    !overlaps,
+                    "{:?} at ({},{}) {}x{} overlaps {:?} at ({},{}) {}x{} in {:?}",
+                    a.kind,
+                    a.grid_col,
+                    a.grid_row,
+                    aw,
+                    ah,
+                    b.kind,
+                    b.grid_col,
+                    b.grid_row,
+                    bw,
+                    bh,
+                    zone,
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn arrange_grid_modules_within_bounds() {
+    let rack = RackState::default();
+    for m in &rack.modules {
+        let (w, _h) = m.kind.grid_size(GRID_COLS);
+        assert!(
+            m.grid_col + w <= GRID_COLS,
+            "{:?} at col {} + width {} exceeds {} columns",
+            m.kind,
+            m.grid_col,
+            w,
+            GRID_COLS,
+        );
+    }
+}
+
 // ── Module zone placement ──────────────────────────────────────────────────
 
 #[test]

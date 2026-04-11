@@ -131,7 +131,16 @@ pub fn apply_session(state: &mut AppState, data: SessionData) {
         if removed > 0 {
             log::warn!("Session: removed {removed} cyclic audio cable(s) from rack");
         }
+        // Migrate old sessions: if all modules are at (0,0), run grid placement.
+        let needs_grid = rack
+            .modules
+            .iter()
+            .all(|m| m.grid_col == 0 && m.grid_row == 0)
+            && rack.modules.len() > 1;
         state.rack = rack;
+        if needs_grid {
+            state.rack.arrange_grid();
+        }
     }
     if let Some(v) = data.active_style {
         state.llm.active_style = Some(v);

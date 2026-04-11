@@ -775,6 +775,7 @@ impl Default for RackState {
             }
         }
 
+        rack.arrange_grid();
         rack
     }
 }
