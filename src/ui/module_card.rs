@@ -425,12 +425,7 @@ pub fn module_card_sized<R>(
 
                 let content_frame = Frame::none()
                     .fill(fill)
-                    .rounding(Rounding {
-                        nw: 0.0,
-                        ne: 0.0,
-                        sw: card_rounding,
-                        se: card_rounding,
-                    })
+                    .rounding(Rounding::same(card_rounding))
                     .inner_margin(Margin::symmetric(6.0 * scale, 8.0 * scale));
                 let inner_resp = content_frame.show(ui, |ui| {
                     ui.spacing_mut().item_spacing = Vec2::new(2.0 * scale, 2.0 * scale);
