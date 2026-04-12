@@ -35,15 +35,6 @@ fn touch_mode(ui: &Ui) -> Option<ParamMode> {
 
 /// Check if a directional key is held, including WASD if `wasd_as_arrows` is set.
 /// Reads the flag from egui temp data (written by the update loop each frame).
-/// Check if Alt is effectively held — physical key OR footer lock.
-fn alt_effective(ctx: &egui::Context) -> bool {
-    let key = ctx.input(|i| i.modifiers.alt);
-    let locked = ctx
-        .data(|d| d.get_temp::<bool>(egui::Id::new("alt_locked")))
-        .unwrap_or(false);
-    key || locked
-}
-
 /// Check if Ctrl is effectively held — physical key OR footer lock.
 /// This is the modifier that cycles param lock modes when clicking knobs.
 /// (Alt would collide with window managers / OS menus.)

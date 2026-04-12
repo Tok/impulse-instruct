@@ -170,14 +170,11 @@ pub fn draw_footer_status(
     dsp_buf: &[f32],
     rack_flipped: &mut bool,
     ctrl_locked: &mut bool,
-    alt_locked: &mut bool,
     stats: FooterStats,
 ) {
     ui.horizontal(|ui| {
         let ctrl_key = ui.input(|i| i.modifiers.ctrl);
-        let alt_key = ui.input(|i| i.modifiers.alt);
         let ctrl = ctrl_key || *ctrl_locked;
-        let alt = alt_key || *alt_locked;
         let c = |on, locked| {
             if locked {
                 super::theme::CHALK
@@ -199,20 +196,9 @@ pub fn draw_footer_status(
         if ctrl_resp.double_clicked() {
             *ctrl_locked = !*ctrl_locked;
         }
-        ctrl_resp.on_hover_text("Ctrl + scroll: zoom. Double-click to lock.");
-        let alt_resp = ui.add(
-            egui::Label::new(
-                egui::RichText::new(if *alt_locked { "Alt●" } else { "Alt" })
-                    .monospace()
-                    .size(8.0)
-                    .color(c(alt, *alt_locked)),
-            )
-            .sense(egui::Sense::click()),
+        ctrl_resp.on_hover_text(
+            "Ctrl + click knob: cycle lock mode.\nCtrl + scroll: zoom.\nDouble-click to lock Ctrl on.",
         );
-        if alt_resp.double_clicked() {
-            *alt_locked = !*alt_locked;
-        }
-        alt_resp.on_hover_text("Alt + click knob: lock mode. Double-click to lock.");
         let tab_resp = ui.add(
             egui::Label::new(
                 egui::RichText::new(if *rack_flipped { "Tab:BACK" } else { "Tab" })

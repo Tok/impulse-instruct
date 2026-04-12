@@ -182,11 +182,7 @@ pub fn draw_cable_overlay(
     use crate::state::rack::lfo_target_module_kind;
     use crate::state::{LfoTarget, ModuleKind, PortDir, PortKind, PortRef};
 
-    let alt_key = ctx.input(|i| i.modifiers.alt);
-    let alt_locked = ctx
-        .data(|d| d.get_temp::<bool>(egui::Id::new("alt_locked")))
-        .unwrap_or(false);
-    let alt_held = alt_key || alt_locked;
+    let alt_held = ctx.input(|i| i.modifiers.alt);
     let show_cables = app.rack_flipped && !alt_held && !app.show_prefs;
     let has_drag = app.cable_drag.is_some();
 

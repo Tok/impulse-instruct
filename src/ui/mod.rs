@@ -178,7 +178,6 @@ pub struct ImpulseApp {
     /// Counts flips-to-back to alternate scroll target (master → agent → master …)
     pub(crate) flip_to_back_count: u32,
     pub(crate) ctrl_locked: bool,
-    pub(crate) alt_locked: bool,
     pub(crate) show_shortcuts: bool,
     pub(crate) add_menu_zone: Option<crate::state::Zone>,
     // Module being dragged by its title bar (id + current pointer position).
@@ -356,7 +355,6 @@ impl ImpulseApp {
             rack_flipped: false, // volatile — always start in front view
             flip_to_back_count: 0,
             ctrl_locked: false,
-            alt_locked: false,
             show_shortcuts: false,
             add_menu_zone: None,
             module_drag: None,
@@ -745,7 +743,6 @@ impl eframe::App for ImpulseApp {
                 egui::Id::new("wasd_as_arrows"),
                 self.state.read().ui_prefs.wasd_as_arrows,
             );
-            d.insert_temp(egui::Id::new("alt_locked"), self.alt_locked);
             d.insert_temp(egui::Id::new("ctrl_locked"), self.ctrl_locked);
         });
 
@@ -943,7 +940,6 @@ impl eframe::App for ImpulseApp {
                     &self.dsp_load_buf,
                     &mut self.rack_flipped,
                     &mut self.ctrl_locked,
-                    &mut self.alt_locked,
                     scope_footer::FooterStats {
                         n_modules: nm,
                         n_agents: na,
