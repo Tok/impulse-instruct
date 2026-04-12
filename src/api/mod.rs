@@ -453,8 +453,7 @@ fn parse_module_kind(name: &str) -> Option<crate::state::ModuleKind> {
         "spectrumanalyzer" | "spectrum" => Some(SpectrumAnalyzer),
         "stereometer" => Some(StereoMeter),
         "activitytimeline" | "timeline" => Some(ActivityTimeline),
-        "espeakngtts" | "espeak" | "tts" => Some(EspeakNgTts),
-        "coquitts" | "coqui" => Some(CoquiTts),
+        "neutts" | "tts" | "voice" => Some(NeuTts),
         _ => None,
     }
 }
@@ -492,15 +491,8 @@ async fn post_rack_add(
         );
     }
     // Create per-module state for TTS modules.
-    if matches!(
-        kind,
-        crate::state::ModuleKind::EspeakNgTts | crate::state::ModuleKind::CoquiTts
-    ) {
-        let mut tts_state = crate::state::TtsModuleState::new(id);
-        if kind == crate::state::ModuleKind::CoquiTts {
-            tts_state.engine = crate::state::TtsEngine::CoquiTts;
-        }
-        s.tts_modules.push(tts_state);
+    if kind == crate::state::ModuleKind::NeuTts {
+        s.tts_modules.push(crate::state::TtsModuleState::new(id));
     }
     // Auto-scroll to the new module so it's visible.
     s.scroll_target = Some(req.kind.clone());
@@ -539,7 +531,7 @@ async fn post_rack_agent(
         }
         if req.tts == Some(true) {
             // Add a TTS module and wire a control cable from this agent.
-            let tts_id = s.rack.add_module(crate::state::ModuleKind::EspeakNgTts);
+            let tts_id = s.rack.add_module(crate::state::ModuleKind::NeuTts);
             s.tts_modules
                 .push(crate::state::TtsModuleState::new(tts_id));
             s.rack.connect_control(id, tts_id);

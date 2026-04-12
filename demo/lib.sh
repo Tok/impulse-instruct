@@ -8,17 +8,15 @@ TTS_DIR="$DEMO_DIR/tts_cache"
 NARRATION_LIST="$DEMO_DIR/.narration_playlist"
 XDO="python3 $DEMO_DIR/xdo.py"
 
-# TTS settings — CoquiTTS for demo narration
-# CoquiTTS requires Python <3.12; use .tts-venv if available.
-# Setup: python3.11 -m venv .tts-venv && .tts-venv/bin/pip install TTS
-TTS_MODEL="${TTS_MODEL:-tts_models/en/ljspeech/tacotron2-DDC}"
+# TTS settings — NeuTTS Air for demo narration
+# Setup: ./scripts/setup-neutts.sh
 PROJECT_DIR="${DEMO_DIR}/.."
-TTS_VENV_BIN="${PROJECT_DIR}/.tts-venv/bin"
-if [ -x "${TTS_VENV_BIN}/tts" ]; then
-    TTS_CMD="${TTS_VENV_BIN}/tts"
-else
-    TTS_CMD="tts"  # fall back to system PATH
-fi
+NEUTTS_PORT="${NEUTTS_PORT:-8770}"
+NEUTTS_URL="http://127.0.0.1:${NEUTTS_PORT}"
+NEUTTS_VENV="${PROJECT_DIR}/.neutts-venv"
+NEUTTS_REF_AUDIO="${NEUTTS_REF_AUDIO:-${PROJECT_DIR}/voices/default.wav}"
+NEUTTS_REF_TEXT="${NEUTTS_REF_TEXT:-${PROJECT_DIR}/voices/default.txt}"
+NEUTTS_PID=""
 
 # Window ID — set by record-demo.sh after finding the app
 APP_WINDOW_ID="${APP_WINDOW_ID:-0}"
@@ -207,19 +205,56 @@ wait_for_api() {
     echo "  API is up (took ${waited}s)"
 }
 
+# ─── NeuTTS server lifecycle ──────────────────────────────────────────────────
+
+start_neutts_server() {
+    if curl -sf "${NEUTTS_URL}/health" >/dev/null 2>&1; then
+        echo "  NeuTTS server already running on port ${NEUTTS_PORT}"
+        return 0
+    fi
+    local python="${NEUTTS_VENV}/bin/python"
+    [ -x "$python" ] || python="python3"
+    echo "  Starting NeuTTS server (port ${NEUTTS_PORT})..."
+    "$python" "${PROJECT_DIR}/scripts/neutts-server.py" --port "$NEUTTS_PORT" &
+    NEUTTS_PID=$!
+    local waited=0
+    while ! curl -sf "${NEUTTS_URL}/health" >/dev/null 2>&1; do
+        sleep 1
+        waited=$((waited + 1))
+        if [ "$waited" -ge 30 ]; then
+            echo "  ERROR: NeuTTS server failed to start after 30s" >&2
+            return 1
+        fi
+    done
+    echo "  NeuTTS server ready (took ${waited}s, PID: $NEUTTS_PID)"
+}
+
+stop_neutts_server() {
+    if [ -n "$NEUTTS_PID" ]; then
+        kill "$NEUTTS_PID" 2>/dev/null
+        wait "$NEUTTS_PID" 2>/dev/null
+        NEUTTS_PID=""
+        echo "  NeuTTS server stopped"
+    fi
+}
+
 # ─── TTS helpers ──────────────────────────────────────────────────────────────
 
 tts_generate() {
-    # Pre-generate a TTS clip using CoquiTTS. Returns the wav path.
+    # Pre-generate a TTS clip using NeuTTS Air server. Returns the wav path.
     # Usage: tts_generate "clip_id" "Text to speak"
     local id="$1" text="$2"
     local outfile="$TTS_DIR/${id}.wav"
     mkdir -p "$TTS_DIR"
     if [ ! -f "$outfile" ]; then
-        "$TTS_CMD" --text "$text" --out_path "$outfile" \
-            ${TTS_MODEL:+--model_name "$TTS_MODEL"} 2>/dev/null
+        local json
+        json=$(printf '{"text":"%s","ref_audio":"%s","ref_text":"%s","out_path":"%s"}' \
+            "$text" "$NEUTTS_REF_AUDIO" "$NEUTTS_REF_TEXT" "$outfile")
+        curl -sf -X POST "${NEUTTS_URL}/synthesize" \
+            -H "Content-Type: application/json" \
+            -d "$json" >/dev/null 2>&1
         if [ ! -f "$outfile" ]; then
-            echo "  ERROR: CoquiTTS failed to generate: $text" >&2
+            echo "  ERROR: NeuTTS failed to generate: $text" >&2
         fi
     fi
     echo "$outfile"

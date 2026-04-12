@@ -74,11 +74,9 @@ A detailed log of what's built.
 
 ## TTS / MC mode
 
-- espeak-ng backend - speaks agent `mc_line` field via TTS rack module
-- Coqui TTS backend - higher quality synthesis; auto-falls back to espeak-ng if binary not found
-- **TTS as rack module** - agents speak through TTS modules connected via control cables; no cable = no speech; per-module settings (engine, pitch, speed, amplitude, voice char, jitter, pitch snap)
-- MC voice characters: Jungle MC, Rave Announcer, Robot, Smooth DJ (per-module)
-- Autotune/pitch-snap - pitch-quantize output to current key/scale
+- **NeuTTS Air voice cloning** — local GGUF model (~527MB), persistent Python server on port 8770; voice identity from 3-15s reference audio clips; per-module settings (voice reference, temperature, top-k, top-p)
+- **TTS as rack module** — agents speak through TTS modules connected via control cables; no cable = no speech; single `ModuleKind::NeuTts` replaces old espeak/coqui dual-engine system
+- Pitch-snap — synthesised voice quantised to nearest in-key note (autocorrelation pitch detection + resampling)
 - API `"tts": true` on agent creation auto-adds a TTS module and wires it
 
 ## Style catalog (`styles.json`)

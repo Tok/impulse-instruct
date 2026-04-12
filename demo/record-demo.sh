@@ -106,14 +106,7 @@ if [ "$SKIP_VIDEO" -eq 0 ]; then
     check_dep pw-record   "sudo apt install pipewire (should already be there)"
 fi
 if [ "$NO_TTS" -eq 0 ]; then
-    TTS_VENV_BIN="${PROJECT_DIR}/.tts-venv/bin"
-    if [ -x "${TTS_VENV_BIN}/tts" ] || command -v tts >/dev/null 2>&1; then
-        check_dep paplay     "sudo apt install pulseaudio-utils"
-    else
-        echo "  WARNING: CoquiTTS not found. Narration disabled." >&2
-        echo "  Setup: python3.11 -m venv .tts-venv && .tts-venv/bin/pip install TTS" >&2
-        NO_TTS=1
-    fi
+    check_dep paplay "sudo apt install pulseaudio-utils"
 fi
 
 # Verify xdo.py works (only needed for video mode)
@@ -144,6 +137,7 @@ echo ""
 
 echo "[1/6] Pre-generating TTS clips..."
 if [ "$NO_TTS" -eq 0 ]; then
+    start_neutts_server || { echo "  Falling back to no-TTS mode"; NO_TTS=1; }
     idx=0
     clip_id=""
     while IFS= read -r line; do
@@ -217,6 +211,7 @@ cleanup() {
         wait "$PW_RECORD_PID" 2>/dev/null
     fi
     [ -n "$APP_PID" ] && kill "$APP_PID" 2>/dev/null && wait "$APP_PID" 2>/dev/null
+    stop_neutts_server 2>/dev/null
     # Clean up virtual recording sink
     destroy_recording_sink 2>/dev/null
     rm -f "$NARRATION_LIST"

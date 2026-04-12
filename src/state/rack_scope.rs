@@ -105,8 +105,8 @@ pub fn rack_kind_name_matches(kind: ModuleKind, name: &str) -> bool {
         ModuleKind::AmenSampler => matches!(n.as_str(), "amen" | "sampler" | "break"),
         ModuleKind::NoiseVoice => matches!(n.as_str(), "noise"),
         ModuleKind::GranularTexture => matches!(n.as_str(), "granular" | "grain" | "texture"),
-        ModuleKind::EspeakNgTts | ModuleKind::CoquiTts => {
-            matches!(n.as_str(), "espeak" | "coqui" | "tts" | "mc" | "voice")
+        ModuleKind::NeuTts => {
+            matches!(n.as_str(), "neutts" | "tts" | "mc" | "voice")
         }
         ModuleKind::MasterOutput => {
             matches!(n.as_str(), "master" | "master_out" | "out" | "output")

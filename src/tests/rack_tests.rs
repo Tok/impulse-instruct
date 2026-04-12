@@ -289,7 +289,7 @@ fn scope_empty_when_no_cables() {
 fn scope_excludes_non_scoped_targets() {
     let mut rack = empty_rack();
     let agent = rack.add_module(ModuleKind::LlmAgent);
-    let tts = rack.add_module(ModuleKind::EspeakNgTts);
+    let tts = rack.add_module(ModuleKind::NeuTts);
     rack.connect_control(agent, tts);
     let scope = scope_from_control_cables(&rack, agent);
     // TTS modules may or may not have a scope name — check what kind_to_scope_name returns
@@ -440,7 +440,7 @@ fn preset_arrange_is_idempotent() {
 fn modules_go_to_correct_zones() {
     assert_eq!(ModuleKind::AcidBass.default_zone(), Zone::Voice);
     assert_eq!(ModuleKind::DrumKit808.default_zone(), Zone::Voice);
-    assert_eq!(ModuleKind::EspeakNgTts.default_zone(), Zone::Voice);
+    assert_eq!(ModuleKind::NeuTts.default_zone(), Zone::Voice);
     assert_eq!(ModuleKind::FxReverb.default_zone(), Zone::FxMod);
     assert_eq!(ModuleKind::FxDelay.default_zone(), Zone::FxMod);
     assert_eq!(ModuleKind::LfoModule.default_zone(), Zone::FxMod);

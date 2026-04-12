@@ -115,9 +115,9 @@ Each agent can run a different model. A `LlamaServerPool` manages server process
 
 **API params push to audio** — parameter changes via the HTTP API (`POST /api/params`) now immediately affect the audio output. Filter sweeps, pad movements, and all param changes from the API are audible in real time.
 
-**Demo recording system** — 10+ demo scenarios with CoquiTTS narration, automated rack setup, filter sweeps, multi-agent jams. Captures video (GPU-accelerated h264_nvenc), isolated app audio via PipeWire, and screenshots. `yuv444p` encoding preserves color accuracy on the grayscale UI.
+**Demo recording system** — 10+ demo scenarios with NeuTTS Air narration, automated rack setup, filter sweeps, multi-agent jams. Captures video (GPU-accelerated h264_nvenc), isolated app audio via PipeWire.
 
-**TTS as rack module** — TTS engines (espeak-ng, CoquiTTS) are now per-module with individual settings, wired via control cables from agents.
+**TTS as rack module** — NeuTTS Air voice cloning with per-module settings (voice reference, temperature, top-k), wired via control cables from agents.
 
 **Real-time mix observer** — audio analysis (sub/low/mid/hi band levels, peak, stereo correlation) runs every ~2s and is injected into every LLM prompt. Agents self-correct based on mix state.
 
@@ -174,10 +174,9 @@ See [docs/features.md](docs/features.md) for the full feature list.
 - Agent memory and style learning across sessions
 
 **TTS / MC mode**
-- espeak-ng backend for low-latency MC lines
-- Coqui TTS backend for higher quality synthesis
-- Per-module TTS settings wired via rack control cables
-- Voice characters: Jungle MC, Rave Announcer, Robot, Smooth DJ
+- NeuTTS Air voice cloning (local GGUF, ~527MB model)
+- Per-module settings: voice reference, temperature, top-k, pitch snap
+- Wired via rack control cables from agents
 
 **I/O and integration**
 - MIDI in: NoteOn/Off to bass synth and live record; CC to synth params; Start/Stop transport
@@ -334,8 +333,7 @@ Written in Rust. Key dependencies:
 | Audio I/O | [cpal](https://github.com/RustAudio/cpal) 0.15 |
 | Audio thread - DSP | [rtrb](https://github.com/mgeier/rtrb) lock-free ring buffer |
 | LLM inference | [llama-server](https://github.com/ggml-org/llama.cpp) (official) / [PrismML fork](https://github.com/prism-ml/llama.cpp) for Bonsai 1-bit |
-| TTS (low-latency) | [espeak-ng](https://github.com/espeak-ng/espeak-ng) |
-| TTS (quality) | [Coqui TTS](https://github.com/coqui-ai/TTS) (CLI, optional) |
+| TTS voice cloning | [NeuTTS Air](https://huggingface.co/neuphonic/neutts-air) (GGUF, local) + [espeak-ng](https://github.com/espeak-ng/espeak-ng) (phonemization) |
 | HTTP/MCP API | [axum](https://github.com/tokio-rs/axum) 0.7 |
 | MIDI | [midir](https://github.com/Boddlnagg/midir) 0.9 |
 

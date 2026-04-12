@@ -86,10 +86,10 @@ mod fx_plan_tests {
     fn default_rack_tts_has_reverb_route() {
         let rack = RackState::default();
         let plan = compile_fx_plan(&rack);
-        let tts_route = plan.voice_routes.get(&ModuleKind::EspeakNgTts);
+        let tts_route = plan.voice_routes.get(&ModuleKind::NeuTts);
         assert!(
             tts_route.is_some(),
-            "default rack: EspeakNgTts should have a voice route"
+            "default rack: NeuTts should have a voice route"
         );
         assert!(
             !plan.voice_routes.contains_key(&ModuleKind::AcidBass),

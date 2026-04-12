@@ -10,9 +10,9 @@ fn default_rack_creates_tts_module_state() {
         .rack
         .modules
         .iter()
-        .filter(|m| matches!(m.kind, ModuleKind::EspeakNgTts | ModuleKind::CoquiTts))
+        .filter(|m| m.kind == ModuleKind::NeuTts)
         .collect();
-    // Default rack has an EspeakNgTts module
+    // Default rack has a NeuTts module
     assert!(
         !tts_modules.is_empty(),
         "default rack should have a TTS module"
@@ -31,30 +31,17 @@ fn default_rack_creates_tts_module_state() {
 fn tts_module_state_defaults() {
     let tts = TtsModuleState::new(42);
     assert_eq!(tts.id, 42);
-    assert_eq!(tts.engine, TtsEngine::EspeakNg);
-    assert_eq!(tts.pitch, 0);
-    assert_eq!(tts.speed, 0);
-    assert_eq!(tts.amplitude, 0);
-    assert_eq!(tts.voice_char, McVoiceChar::Auto);
-    assert!(!tts.randomise);
+    assert_eq!(tts.voice_ref, "default");
+    assert!((tts.temperature - 0.8).abs() < 0.01);
+    assert_eq!(tts.top_k, 30);
+    assert!((tts.top_p - 0.9).abs() < 0.01);
     assert!(!tts.pitch_snap);
-}
-
-#[test]
-fn coqui_tts_module_sets_engine() {
-    let mut s = AppState::default();
-    let id = s.rack.add_module(ModuleKind::CoquiTts);
-    let mut tts = TtsModuleState::new(id);
-    tts.engine = TtsEngine::CoquiTts;
-    s.tts_modules.push(tts);
-    let found = s.tts_modules.iter().find(|t| t.id == id).unwrap();
-    assert_eq!(found.engine, TtsEngine::CoquiTts);
 }
 
 #[test]
 fn tts_module_removed_with_rack_module() {
     let mut s = AppState::default();
-    let id = s.rack.add_module(ModuleKind::EspeakNgTts);
+    let id = s.rack.add_module(ModuleKind::NeuTts);
     s.tts_modules.push(TtsModuleState::new(id));
     assert!(s.tts_modules.iter().any(|t| t.id == id));
     // Simulate removal (as done in API)
@@ -66,7 +53,7 @@ fn tts_module_removed_with_rack_module() {
 #[test]
 fn tts_modules_cleared_on_rack_reset() {
     let mut s = AppState::default();
-    let id = s.rack.add_module(ModuleKind::EspeakNgTts);
+    let id = s.rack.add_module(ModuleKind::NeuTts);
     s.tts_modules.push(TtsModuleState::new(id));
     assert!(!s.tts_modules.is_empty());
     // Simulate rack reset (keep only core modules)
@@ -96,21 +83,21 @@ fn agent_finds_tts_via_control_cable() {
     // Add an agent
     let agent_id = s.rack.add_module(ModuleKind::LlmAgent);
     // Add a TTS module
-    let tts_id = s.rack.add_module(ModuleKind::EspeakNgTts);
+    let tts_id = s.rack.add_module(ModuleKind::NeuTts);
     let mut tts_state = TtsModuleState::new(tts_id);
-    tts_state.pitch = 50;
+    tts_state.temperature = 1.2;
     s.tts_modules.push(tts_state);
-    // Wire agent → TTS via control cable
+    // Wire agent -> TTS via control cable
     s.rack.connect_control(agent_id, tts_id);
     // Find TTS module via cable routing (same logic as llm/mod.rs)
     let found = s.rack.cables.iter().find_map(|c| {
         if c.from.module_id == agent_id && c.from.kind == PortKind::Control {
             let target = c.to.module_id;
-            if s.rack.modules.iter().any(|m| {
-                m.id == target
-                    && matches!(m.kind, ModuleKind::EspeakNgTts | ModuleKind::CoquiTts)
-                    && m.enabled
-            }) {
+            if s.rack
+                .modules
+                .iter()
+                .any(|m| m.id == target && m.kind == ModuleKind::NeuTts && m.enabled)
+            {
                 s.tts_modules.iter().find(|t| t.id == target)
             } else {
                 None
@@ -120,22 +107,24 @@ fn agent_finds_tts_via_control_cable() {
         }
     });
     assert!(found.is_some(), "should find TTS module via cable");
-    assert_eq!(found.unwrap().pitch, 50);
+    assert!((found.unwrap().temperature - 1.2).abs() < 0.01);
 }
 
 #[test]
 fn agent_without_tts_cable_finds_nothing() {
     let mut s = AppState::default();
     let agent_id = s.rack.add_module(ModuleKind::LlmAgent);
-    let tts_id = s.rack.add_module(ModuleKind::EspeakNgTts);
+    let tts_id = s.rack.add_module(ModuleKind::NeuTts);
     s.tts_modules.push(TtsModuleState::new(tts_id));
     // NO cable wired — agent should not find TTS
     let found = s.rack.cables.iter().find_map(|c| {
         if c.from.module_id == agent_id && c.from.kind == PortKind::Control {
             let target = c.to.module_id;
-            if s.rack.modules.iter().any(|m| {
-                m.id == target && matches!(m.kind, ModuleKind::EspeakNgTts | ModuleKind::CoquiTts)
-            }) {
+            if s.rack
+                .modules
+                .iter()
+                .any(|m| m.id == target && m.kind == ModuleKind::NeuTts)
+            {
                 s.tts_modules.iter().find(|t| t.id == target)
             } else {
                 None
@@ -151,7 +140,7 @@ fn agent_without_tts_cable_finds_nothing() {
 fn disabled_tts_module_not_found() {
     let mut s = AppState::default();
     let agent_id = s.rack.add_module(ModuleKind::LlmAgent);
-    let tts_id = s.rack.add_module(ModuleKind::EspeakNgTts);
+    let tts_id = s.rack.add_module(ModuleKind::NeuTts);
     s.tts_modules.push(TtsModuleState::new(tts_id));
     s.rack.connect_control(agent_id, tts_id);
     // Disable the TTS module
@@ -161,11 +150,11 @@ fn disabled_tts_module_not_found() {
     let found = s.rack.cables.iter().find_map(|c| {
         if c.from.module_id == agent_id && c.from.kind == PortKind::Control {
             let target = c.to.module_id;
-            if s.rack.modules.iter().any(|m| {
-                m.id == target
-                    && matches!(m.kind, ModuleKind::EspeakNgTts | ModuleKind::CoquiTts)
-                    && m.enabled
-            }) {
+            if s.rack
+                .modules
+                .iter()
+                .any(|m| m.id == target && m.kind == ModuleKind::NeuTts && m.enabled)
+            {
                 s.tts_modules.iter().find(|t| t.id == target)
             } else {
                 None
@@ -181,13 +170,12 @@ fn disabled_tts_module_not_found() {
 fn multiple_tts_modules_agent_finds_wired_one() {
     let mut s = AppState::default();
     let agent_id = s.rack.add_module(ModuleKind::LlmAgent);
-    let tts1 = s.rack.add_module(ModuleKind::EspeakNgTts);
-    let tts2 = s.rack.add_module(ModuleKind::CoquiTts);
+    let tts1 = s.rack.add_module(ModuleKind::NeuTts);
+    let tts2 = s.rack.add_module(ModuleKind::NeuTts);
     let mut state1 = TtsModuleState::new(tts1);
-    state1.pitch = 10;
+    state1.temperature = 0.5;
     let mut state2 = TtsModuleState::new(tts2);
-    state2.pitch = 90;
-    state2.engine = TtsEngine::CoquiTts;
+    state2.temperature = 1.5;
     s.tts_modules.push(state1);
     s.tts_modules.push(state2);
     // Wire agent to tts2 only
@@ -195,11 +183,11 @@ fn multiple_tts_modules_agent_finds_wired_one() {
     let found = s.rack.cables.iter().find_map(|c| {
         if c.from.module_id == agent_id && c.from.kind == PortKind::Control {
             let target = c.to.module_id;
-            if s.rack.modules.iter().any(|m| {
-                m.id == target
-                    && matches!(m.kind, ModuleKind::EspeakNgTts | ModuleKind::CoquiTts)
-                    && m.enabled
-            }) {
+            if s.rack
+                .modules
+                .iter()
+                .any(|m| m.id == target && m.kind == ModuleKind::NeuTts && m.enabled)
+            {
                 s.tts_modules.iter().find(|t| t.id == target)
             } else {
                 None
@@ -211,8 +199,7 @@ fn multiple_tts_modules_agent_finds_wired_one() {
     assert!(found.is_some());
     let tts = found.unwrap();
     assert_eq!(tts.id, tts2);
-    assert_eq!(tts.pitch, 90);
-    assert_eq!(tts.engine, TtsEngine::CoquiTts);
+    assert!((tts.temperature - 1.5).abs() < 0.01);
 }
 
 #[test]
@@ -221,5 +208,5 @@ fn tts_module_state_serializes() {
     let json = serde_json::to_string(&tts).unwrap();
     let back: TtsModuleState = serde_json::from_str(&json).unwrap();
     assert_eq!(back.id, 7);
-    assert_eq!(back.engine, TtsEngine::EspeakNg);
+    assert_eq!(back.voice_ref, "default");
 }

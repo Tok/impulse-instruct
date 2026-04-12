@@ -71,9 +71,6 @@ What's already built is documented in [docs/features.md](docs/features.md).
 
 - [ ] **Agent self-add TTS module** — if an agent is in MC/DJ mode and has no
   TTS module connected, it can add one to the rack and wire itself to it
-- [ ] **NeuTTS Nano as CoquiTTS replacement** — evaluate
-  `neuphonic/neutts-nano-q4-gguf` (GGUF quantized, runs locally via
-  llama.cpp or similar). Potential drop-in for CoquiTTS.
 
 ### UI / UX
 

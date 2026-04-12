@@ -59,7 +59,7 @@ pub const RACK_PRESETS: &[RackPreset] = &[
             ModuleKind::AmenSampler,
             ModuleKind::NoiseVoice,
             ModuleKind::GranularTexture,
-            ModuleKind::EspeakNgTts,
+            ModuleKind::NeuTts,
         ],
         fx: &[
             ModuleKind::FxWaveshaper,

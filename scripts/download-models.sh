@@ -55,9 +55,15 @@ case "$MODEL" in
     MODEL_FILE="DeepSeek-R1-Distill-Qwen-14B-Q4_K_M.gguf"
     MODEL_DESC="DeepSeek-R1-Distill-Qwen-14B Q4_K_M (~9 GB) — CoT, needs ~12 GB VRAM; newer distills may exist"
     ;;
+  neutts)
+    HF_REPO="neuphonic/neutts-air-q4-gguf"
+    MODEL_FILE="neutts-air-q4.gguf"
+    HF_FILE="neutts-air-Q4_0.gguf"
+    MODEL_DESC="NeuTTS Air Q4 GGUF (~527 MB) — neural TTS voice cloning"
+    ;;
   *)
     echo "Unknown model: '$MODEL'"
-    echo "Available: gemma4 (default), bonsai, deepseek-r1-7b, deepseek-r1-14b, qwen3, qwen3-14b"
+    echo "Available: gemma4 (default), bonsai, deepseek-r1-7b, deepseek-r1-14b, qwen3, qwen3-14b, neutts"
     exit 1
     ;;
 esac
@@ -117,12 +123,18 @@ else
       $HF_LOGIN || { echo "Login cancelled. Re-run after logging in."; exit 1; }
     fi
     echo "Using ${HF_CMD}…"
-    $HF_CMD download "$HF_REPO" "$MODEL_FILE" \
+    DL_FILE="${HF_FILE:-$MODEL_FILE}"
+    $HF_CMD download "$HF_REPO" "$DL_FILE" \
       --local-dir "$MODEL_DIR"
+    # Rename if the HF filename differs from our expected name
+    if [[ -n "${HF_FILE:-}" ]] && [[ "$HF_FILE" != "$MODEL_FILE" ]] && [[ -f "${MODEL_DIR}/${HF_FILE}" ]]; then
+      mv "${MODEL_DIR}/${HF_FILE}" "$OUTPUT_PATH"
+    fi
 
   # Last resort: direct wget/curl from HuggingFace CDN
   else
-    HF_URL="https://huggingface.co/${HF_REPO}/resolve/main/${MODEL_FILE}"
+    DL_FILE="${HF_FILE:-$MODEL_FILE}"
+    HF_URL="https://huggingface.co/${HF_REPO}/resolve/main/${DL_FILE}"
     echo "Falling back to direct download from:"
     echo "  ${HF_URL}"
     echo ""

@@ -284,12 +284,8 @@ impl Default for AppState {
         }
         // Create TTS module state for any TTS modules in the default rack.
         for m in &s.rack.modules {
-            if matches!(m.kind, ModuleKind::EspeakNgTts | ModuleKind::CoquiTts) {
-                let mut tts = TtsModuleState::new(m.id);
-                if m.kind == ModuleKind::CoquiTts {
-                    tts.engine = TtsEngine::CoquiTts;
-                }
-                s.tts_modules.push(tts);
+            if m.kind == ModuleKind::NeuTts {
+                s.tts_modules.push(TtsModuleState::new(m.id));
             }
         }
         s
@@ -677,9 +673,9 @@ impl Default for FxState {
 
 // ─── LLM ─────────────────────────────────────────────────────────────────────
 
-// ConversationMode, McVoiceChar, TtsEngine, TtsModuleState → state/tts.rs
+// ConversationMode, TtsModuleState → state/tts_types.rs
 pub mod tts_types;
-pub use tts_types::{ConversationMode, McVoiceChar, TtsEngine, TtsModuleState};
+pub use tts_types::{ConversationMode, TtsModuleState};
 
 /// Whether to use the short `brief` or full `description` from styles.json.
 /// Brief (~50 tokens) suits smaller/faster models; Full (~150 tokens) for capable models.
@@ -753,23 +749,6 @@ pub struct LlmState {
     pub frequency_penalty: f32, // OpenAI-compat; 0.0 = off
     pub seed: i64,              // -1 = random each call
     // TTS settings moved to per-module TtsModuleState (AppState.tts_modules).
-    // Legacy fields kept for session.json backward compat (serde default, ignored at runtime).
-    #[serde(default)]
-    pub tts_enabled: bool,
-    #[serde(default)]
-    pub tts_pitch: u8,
-    #[serde(default)]
-    pub tts_speed: u16,
-    #[serde(default)]
-    pub tts_amplitude: u8,
-    #[serde(default)]
-    pub tts_voice_char: McVoiceChar,
-    #[serde(default)]
-    pub tts_randomise: bool,
-    #[serde(default)]
-    pub tts_pitch_snap: bool,
-    #[serde(default)]
-    pub tts_engine: TtsEngine,
     pub style_verbosity: StyleVerbosity, // Brief = ~50 token brief, Full = ~150 token description
     pub auto_lock_on_touch: bool,        // if true, touching a knob locks it to user-only control
     pub auto_compact: bool,              // restart server automatically when context > 85% full
@@ -831,14 +810,6 @@ impl Default for LlmState {
             repeat_penalty: 1.0,
             frequency_penalty: 0.0,
             seed: -1,
-            tts_enabled: false,
-            tts_pitch: 0,
-            tts_speed: 0,
-            tts_amplitude: 0,
-            tts_voice_char: McVoiceChar::Auto,
-            tts_randomise: false,
-            tts_pitch_snap: false,
-            tts_engine: TtsEngine::EspeakNg,
             style_verbosity: StyleVerbosity::Full,
             auto_lock_on_touch: false,
             auto_compact: true,

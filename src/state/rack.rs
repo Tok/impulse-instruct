@@ -112,9 +112,9 @@ pub enum ModuleKind {
     AmenSampler,
     NoiseVoice,
     GranularTexture,
-    // ── TTS / MC voice modules ────────────────────────────────────────────────
-    EspeakNgTts,
-    CoquiTts,
+    // ── TTS voice module (NeuTTS Air) ───────────────────────────────────────
+    #[serde(alias = "EspeakNgTts", alias = "CoquiTts")]
+    NeuTts,
     // ── Sequencer ─────────────────────────────────────────────────────────────
     /// Main step sequencer — drives all voice modules.
     StepSequencer,
@@ -156,8 +156,7 @@ impl ModuleKind {
             Self::AmenSampler => "AMEN",
             Self::NoiseVoice => "NOISE",
             Self::GranularTexture => "GRANULAR",
-            Self::EspeakNgTts => "TTS ESPEAK",
-            Self::CoquiTts => "TTS COQUI",
+            Self::NeuTts => "TTS VOICE",
             Self::StepSequencer => "SEQUENCER",
             Self::FxReverb => "REVERB",
             Self::FxDelay => "DELAY",
@@ -199,7 +198,7 @@ impl ModuleKind {
             Self::NoiseVoice => (2, 1),
             Self::GranularTexture => (3, 1),
             Self::LlmAgent => (3, 2),
-            Self::EspeakNgTts | Self::CoquiTts => (2, 3),
+            Self::NeuTts => (2, 3),
             Self::SpectrumAnalyzer => (4, 2),
             Self::ActivityTimeline => (4, 2),
             Self::StereoMeter => (2, 1),
@@ -234,8 +233,7 @@ impl ModuleKind {
             | Self::AmenSampler
             | Self::NoiseVoice
             | Self::GranularTexture
-            | Self::EspeakNgTts
-            | Self::CoquiTts => Zone::Voice,
+            | Self::NeuTts => Zone::Voice,
             Self::FxReverb
             | Self::FxDelay
             | Self::FxChorus
@@ -407,7 +405,7 @@ impl RackState {
                 ModuleKind::AmenSampler => 15,
                 ModuleKind::NoiseVoice => 16,
                 ModuleKind::GranularTexture => 17,
-                ModuleKind::EspeakNgTts | ModuleKind::CoquiTts => 18,
+                ModuleKind::NeuTts => 18,
                 ModuleKind::FxWaveshaper => 20,
                 ModuleKind::FxReverb => 21,
                 ModuleKind::FxDelay => 22,
@@ -673,7 +671,7 @@ impl Default for RackState {
         rack.add_module(ModuleKind::AmenSampler);
         rack.add_module(ModuleKind::NoiseVoice);
         rack.add_module(ModuleKind::GranularTexture);
-        rack.add_module(ModuleKind::EspeakNgTts);
+        rack.add_module(ModuleKind::NeuTts);
 
         // ── FX + Mod zone — order matches the fixed chain in process_block ───
         rack.add_module(ModuleKind::FxWaveshaper);
@@ -719,8 +717,8 @@ impl Default for RackState {
         .filter_map(|&k| find(k))
         .collect();
 
-        // TTS default cable: EspeakNgTts → FxReverb (bypasses master bus).
-        let tts_id = find(ModuleKind::EspeakNgTts);
+        // TTS default cable: NeuTts → FxReverb (bypasses master bus).
+        let tts_id = find(ModuleKind::NeuTts);
         let reverb_id = find(ModuleKind::FxReverb);
 
         // Serial FX chain (mirrors the hardcoded process_block order).

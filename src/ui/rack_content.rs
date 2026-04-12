@@ -20,9 +20,7 @@ pub(super) fn draw_voice_content(
         ModuleKind::AmenSampler => crate::ui::panels::draw_amen(app, ui),
         ModuleKind::NoiseVoice => crate::ui::panels::draw_noise(app, ui),
         ModuleKind::GranularTexture => crate::ui::panels::draw_granular(app, ui),
-        ModuleKind::EspeakNgTts | ModuleKind::CoquiTts => {
-            crate::ui::panels::draw_tts(app, ui, module_id)
-        }
+        ModuleKind::NeuTts => crate::ui::panels::draw_tts(app, ui, module_id),
         _ => {}
     }
 }

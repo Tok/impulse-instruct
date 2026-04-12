@@ -649,11 +649,7 @@ pub fn run_llm_loop(
                                 let target = c.to.module_id;
                                 if s.rack.modules.iter().any(|m| {
                                     m.id == target
-                                        && matches!(
-                                            m.kind,
-                                            crate::state::ModuleKind::EspeakNgTts
-                                                | crate::state::ModuleKind::CoquiTts
-                                        )
+                                        && m.kind == crate::state::ModuleKind::NeuTts
                                         && m.enabled
                                 }) {
                                     s.tts_modules.iter().find(|t| t.id == target)
@@ -665,28 +661,9 @@ pub fn run_llm_loop(
                             }
                         });
                         if let Some(tts_mod) = tts_mod {
-                            use crate::state::TtsEngine;
                             let tts_text = output.mc_line.as_deref().unwrap_or(comment);
-                            log::info!(
-                                "[TTS] module={} engine={:?}: {}",
-                                tts_mod.id,
-                                tts_mod.engine,
-                                tts_text
-                            );
-                            let tp = tts::TtsParams {
-                                pitch: tts_mod.pitch,
-                                speed: tts_mod.speed,
-                                amplitude: tts_mod.amplitude,
-                                voice_char: &tts_mod.voice_char,
-                                randomise: tts_mod.randomise,
-                                pitch_snap: tts_mod.pitch_snap,
-                                root_note: s.sequencer.root_note,
-                                scale: s.sequencer.scale,
-                            };
-                            match tts_mod.engine {
-                                TtsEngine::CoquiTts => speak_coqui(tts_text, &mode, &tp, &tts_tx),
-                                TtsEngine::EspeakNg => speak_fx(tts_text, &mode, &tp, &tts_tx),
-                            }
+                            log::info!("[TTS] module={}: {}", tts_mod.id, tts_text);
+                            speak_neutts(tts_text, tts_mod, &tts_tx);
                         }
                     }
                 }
@@ -755,4 +732,4 @@ pub fn run_llm_loop(
 }
 
 pub mod tts;
-pub use tts::{TtsParams, speak_coqui, speak_fx};
+pub use tts::speak_neutts;

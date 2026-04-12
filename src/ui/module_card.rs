@@ -35,7 +35,7 @@ fn title_fill(kind: ModuleKind) -> Color32 {
         | ModuleKind::NoiseVoice
         | ModuleKind::GranularTexture => 24,
         ModuleKind::An1xVoice => 28,
-        ModuleKind::EspeakNgTts | ModuleKind::CoquiTts => 26,
+        ModuleKind::NeuTts => 26,
         ModuleKind::FxReverb
         | ModuleKind::FxDelay
         | ModuleKind::FxChorus
@@ -682,8 +682,7 @@ pub fn module_card_back(
                     | ModuleKind::An1xVoice
                     | ModuleKind::AmenSampler
                     | ModuleKind::NoiseVoice
-                    | ModuleKind::EspeakNgTts
-                    | ModuleKind::CoquiTts
+                    | ModuleKind::NeuTts
             );
 
             // ── LEFT side: input ports ──────────────────────────────────────

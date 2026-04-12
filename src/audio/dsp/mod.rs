@@ -521,7 +521,7 @@ impl DspState {
         let (chain_amen, amen_len) = snap_route(ModuleKind::AmenSampler);
         let (chain_noise, noise_len) = snap_route(ModuleKind::NoiseVoice);
         let (chain_granular, gran_len) = snap_route(ModuleKind::GranularTexture);
-        let (chain_tts, tts_len) = snap_route(ModuleKind::EspeakNgTts);
+        let (chain_tts, tts_len) = snap_route(ModuleKind::NeuTts);
         let have_voice_routes = !self.fx_plan.voice_routes.is_empty();
         // Release the immutable borrow on self (via fx_plan) before the mutable frame loop.
         let _ = snap_route;
