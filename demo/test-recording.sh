@@ -87,16 +87,19 @@ echo "  Geometry: ${GRAB_W}x${GRAB_H}"
 RAW_VIDEO="$BATCH_DIR/${BASENAME}-raw.mkv"
 echo "[3/7] Starting video capture → $(basename "$RAW_VIDEO")"
 
-# -t 15 hard stops after 15s even if SIGINT fails
+# Chroma fix: bgr0 → yuv444p (no subsampling loss) → encoder downsamples to 420p
+# with lanczos + full_chroma flags to prevent vertical chroma offset.
+SWS_CAPTURE="-vf format=yuv444p -pix_fmt yuv420p -sws_flags lanczos+accurate_rnd+full_chroma_int+full_chroma_inp"
+
+# -t 25 hard stops after 25s even if SIGINT fails
 setsid ffmpeg -y \
     -f x11grab \
     -window_id "$WINDOW_ID_DEC" \
     -framerate 30 \
     -draw_mouse 0 \
     -i "${DISPLAY}" \
-    -t 15 \
-    -pix_fmt yuv420p \
-    -sws_flags "lanczos+accurate_rnd+full_chroma_int+full_chroma_inp" \
+    -t 25 \
+    $SWS_CAPTURE \
     -c:v h264_nvenc -preset p4 -cq 20 \
     -an \
     "$RAW_VIDEO" \
@@ -112,9 +115,8 @@ if ! kill -0 "$FFMPEG_PID" 2>/dev/null; then
         -framerate 30 \
         -draw_mouse 0 \
         -i "${DISPLAY}" \
-        -t 15 \
-        -pix_fmt yuv420p \
-        -sws_flags "lanczos+accurate_rnd+full_chroma_int+full_chroma_inp" \
+        -t 25 \
+        $SWS_CAPTURE \
         -c:v libx264 -preset ultrafast -crf 23 \
         -an \
         "$RAW_VIDEO" \
@@ -145,7 +147,7 @@ fi
 
 # ── Step 5: Record 10 seconds ───────────────────────────────────────────────
 
-echo "[5/7] Recording 10 seconds..."
+echo "[5/7] Recording 20 seconds..."
 
 export DEMO_START_NS
 DEMO_START_NS=$(date +%s%N)
@@ -156,7 +158,7 @@ echo "2.0|2.0|Test subtitle line one" >> "$NARRATION_LIST"
 echo "5.0|2.0|Test subtitle line two" >> "$NARRATION_LIST"
 echo "8.0|2.0|Recording pipeline test" >> "$NARRATION_LIST"
 
-sleep 10
+sleep 20
 api_stop
 
 # ── Step 6: Stop captures ───────────────────────────────────────────────────
@@ -207,15 +209,16 @@ HAS_AUDIO=0
 AUDIO_ARGS=""
 [ "$HAS_AUDIO" -eq 1 ] && AUDIO_ARGS="-i $APP_AUDIO -c:a aac -b:a 128k -map 0:v:0 -map 1:a:0 -shortest"
 
-# Clean version
-SWS="-sws_flags lanczos+accurate_rnd+full_chroma_int+full_chroma_inp"
+# Re-encode: raw capture is already yuv420p with correct chroma from capture stage.
+# Re-encoding preserves pixel format; sws_flags for any internal conversion.
+SWS_ENCODE="-sws_flags lanczos+accurate_rnd+full_chroma_int+full_chroma_inp"
 echo -n "  Clean video: "
 if ffmpeg -y -i "$RAW_VIDEO" $AUDIO_ARGS \
-    -pix_fmt yuv420p $SWS -c:v h264_nvenc -preset p4 -cq 22 \
+    $SWS_ENCODE -c:v h264_nvenc -preset p4 -cq 22 \
     "$FINAL" </dev/null 2>/dev/null; then
     echo "OK ($(du -h "$FINAL" | cut -f1))"
 elif ffmpeg -y -i "$RAW_VIDEO" $AUDIO_ARGS \
-    -pix_fmt yuv420p $SWS -c:v libx264 -preset fast -crf 23 \
+    $SWS_ENCODE -c:v libx264 -preset fast -crf 23 \
     "$FINAL" </dev/null 2>/dev/null; then
     echo "OK libx264 ($(du -h "$FINAL" | cut -f1))"
 else
@@ -226,12 +229,12 @@ fi
 echo -n "  Subtitled video: "
 if [ -f "$SRT_FILE" ] && [ -f "$RAW_VIDEO" ]; then
     if ffmpeg -y -i "$RAW_VIDEO" $AUDIO_ARGS \
-        $SWS -pix_fmt yuv420p -vf "subtitles=${SRT_FILE}:force_style='FontSize=22,FontName=monospace,PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,Outline=2,MarginV=40'" \
+        $SWS_ENCODE -vf "subtitles=${SRT_FILE}:force_style='FontSize=22,FontName=monospace,PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,Outline=2,MarginV=40'" \
         -c:v h264_nvenc -preset p4 -cq 22 \
         "$FINAL_SUBS" </dev/null 2>/dev/null; then
         echo "OK ($(du -h "$FINAL_SUBS" | cut -f1))"
     elif ffmpeg -y -i "$RAW_VIDEO" $AUDIO_ARGS \
-        $SWS -pix_fmt yuv420p -vf "subtitles=${SRT_FILE}:force_style='FontSize=22,FontName=monospace'" \
+        $SWS_ENCODE -vf "subtitles=${SRT_FILE}:force_style='FontSize=22,FontName=monospace'" \
         -c:v libx264 -preset fast -crf 23 \
         "$FINAL_SUBS" </dev/null 2>/dev/null; then
         echo "OK libx264 ($(du -h "$FINAL_SUBS" | cut -f1))"
