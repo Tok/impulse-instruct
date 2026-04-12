@@ -29,8 +29,15 @@ import json
 import os
 import sys
 import time
+import warnings
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from pathlib import Path
+
+# Silence third-party deprecation noise from torch.nn.utils.weight_norm and
+# perth's pkg_resources import — these come from upstream libs we don't control.
+warnings.filterwarnings("ignore", category=FutureWarning)
+warnings.filterwarnings("ignore", category=UserWarning)
+warnings.filterwarnings("ignore", category=DeprecationWarning)
 
 # ---------------------------------------------------------------------------
 # Model loading (deferred until first use or server startup)

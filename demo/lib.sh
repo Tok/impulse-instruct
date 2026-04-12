@@ -113,6 +113,14 @@ api_rack_reset() {
     curl -sf -X POST "$API/api/rack/reset" >/dev/null 2>&1 || true
 }
 
+api_state_reset() {
+    # Full AppState wipe — everything back to defaults (Empty rack preset),
+    # preserving only the currently-loaded model path.  Guarantees a blank
+    # slate even when attaching to an already-running app (LFO off, seq
+    # stopped, no active style, no leftover agents, all params default).
+    curl -sf -X POST "$API/api/state/reset" >/dev/null 2>&1 || true
+}
+
 api_rack_add() {
     # Add a module to the rack. Returns JSON with "id" field.
     # Usage: id=$(api_rack_add "808")
@@ -521,6 +529,9 @@ generate_srt() {
     # so the line stays on screen comfortably longer than the spoken audio.
     # Override with SRT_DISPLAY_FACTOR env var (1.0 = audio-length only).
     local factor="${SRT_DISPLAY_FACTOR:-1.5}"
+    # Subtitles were appearing ~1s ahead of the spoken audio; shift the whole
+    # SRT later by this many seconds. Override with SRT_OFFSET_SECS.
+    local offset="${SRT_OFFSET_SECS:-1.0}"
 
     if [ ! -f "$NARRATION_LIST" ]; then
         echo "No narration entries found" >&2
@@ -532,6 +543,7 @@ generate_srt() {
         idx=$((idx + 1))
         local display_dur end_sec
         display_dur=$(awk -v d="$dur" -v f="$factor" 'BEGIN { printf "%.3f", d * f }')
+        start_sec=$(echo "$start_sec + $offset" | bc)
         end_sec=$(echo "$start_sec + $display_dur" | bc)
 
         local start_ts end_ts
@@ -574,9 +586,13 @@ pregenerate_srt() {
     > "$outfile"
     local t=0.0 idx=0
 
+    local offset="${SRT_OFFSET_SECS:-1.0}"
+
     _emit_srt() {
         local start="$1" end="$2" text="$3"
         idx=$((idx + 1))
+        start=$(awk -v a="$start" -v o="$offset" 'BEGIN { printf "%.3f", a + o }')
+        end=$(awk -v a="$end" -v o="$offset" 'BEGIN { printf "%.3f", a + o }')
         local st et
         st=$(secs_to_srt "$start")
         et=$(secs_to_srt "$end")
@@ -977,23 +993,24 @@ sweep_pad() {
     # Keyframes define the shape, intermediate values are lerped.
     # Usage: sweep_pad [seconds]
     local duration="${1:-8}"
-    # Keyframes: cutoff resonance (smooth acid arc)
+    # Keyframes: cutoff resonance — stay in the top-left quarter of the pad
+    # (low cutoff, high resonance) for a focused acid squelch demo.
     local keys=(
-        "0.12 0.85"
-        "0.20 0.90"
-        "0.35 0.80"
-        "0.55 0.75"
-        "0.75 0.85"
-        "0.88 0.65"
-        "0.70 0.80"
-        "0.50 0.90"
+        "0.08 0.82"
+        "0.15 0.92"
+        "0.25 0.88"
+        "0.35 0.78"
+        "0.42 0.85"
         "0.30 0.95"
-        "0.15 0.88"
-        "0.25 0.92"
-        "0.60 0.75"
-        "0.80 0.65"
-        "0.45 0.88"
-        "0.20 0.82"
+        "0.18 0.90"
+        "0.10 0.80"
+        "0.22 0.96"
+        "0.38 0.88"
+        "0.28 0.78"
+        "0.12 0.92"
+        "0.20 0.98"
+        "0.33 0.82"
+        "0.10 0.88"
     )
     local nkeys=${#keys[@]}
     # ~60 updates per 8 seconds ≈ 7.5fps — smooth enough for visible knob motion

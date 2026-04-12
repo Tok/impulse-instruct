@@ -288,6 +288,13 @@ else
     wait_for_api 5
 fi
 
+# Guarantee a blank slate — even when attaching to a running app that may
+# have LFO on, agents loaded, sequencer running, etc.  --fresh-session on
+# launch only handles fresh starts; this covers the reuse case too.
+echo "  Resetting app state to defaults..."
+api_state_reset
+sleep 1
+
 # ─── Find the app window + start capture ─────────────────────────────────────
 
 if [ "$SKIP_VIDEO" -eq 0 ]; then

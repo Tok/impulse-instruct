@@ -74,7 +74,7 @@ wait_seconds 1
 
 say "Cutoff and resonance."
 
-sweep_pad 8
+sweep_pad 11
 
 wait_seconds 1
 
@@ -234,7 +234,7 @@ wait_seconds 4
 scene "Live filter"
 
 focus_on bass
-sweep_pad 8
+sweep_pad 11
 wait_seconds 1
 
 # ── Scene 13: Outro ───────────────────────────────────────────────────────

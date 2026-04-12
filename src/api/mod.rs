@@ -645,6 +645,27 @@ async fn post_rack_remove(
     })
 }
 
+/// Full AppState reset — everything back to defaults, Empty rack preset.
+/// Preserves the currently-loaded model path so the user doesn't lose it.
+/// Intended for demo recording, CI, and automated sessions that need to
+/// guarantee a blank slate even when attaching to an already-running app.
+async fn post_state_reset(AxumState(api): AxumState<ApiState>) -> Json<OkResponse> {
+    use crate::state::{AppState, RACK_PRESETS, RackState};
+    let mut s = api.app_state.write();
+    let model_path = s.llm.model_path.clone();
+    let ui_scale = s.ui_prefs.ui_scale;
+    *s = AppState::default();
+    s.llm.model_path = model_path;
+    s.ui_prefs.ui_scale = ui_scale;
+    s.rack = RackState::from_preset(&RACK_PRESETS[0]);
+    drop(s);
+    api_log(&api, "[API] state: full reset to defaults");
+    Json(OkResponse {
+        ok: true,
+        message: Some("state reset".into()),
+    })
+}
+
 /// Clear the rack to a minimal setup: just sequencer + master + LLM console.
 async fn post_rack_reset(AxumState(api): AxumState<ApiState>) -> Json<OkResponse> {
     use crate::state::ModuleKind;
@@ -704,6 +725,7 @@ pub fn build_router(api_state: ApiState) -> Router {
         .route("/api/rack/cable", post(post_rack_cable))
         .route("/api/rack/remove", post(post_rack_remove))
         .route("/api/rack/reset", post(post_rack_reset))
+        .route("/api/state/reset", post(post_state_reset))
         .route("/api/rack/collapse", post(post_collapse))
         .layer(cors)
         .with_state(api_state)
