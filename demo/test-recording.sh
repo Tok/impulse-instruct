@@ -95,8 +95,8 @@ setsid ffmpeg -y \
     -draw_mouse 0 \
     -i "${DISPLAY}" \
     -t 15 \
-    -vf "format=yuv420p" \
-    -sws_flags "+accurate_rnd+full_chroma_int+full_chroma_inp+lanczos" \
+    -pix_fmt yuv420p \
+    -sws_flags "lanczos+accurate_rnd+full_chroma_int+full_chroma_inp" \
     -c:v h264_nvenc -preset p4 -cq 20 \
     -an \
     "$RAW_VIDEO" \
@@ -113,8 +113,8 @@ if ! kill -0 "$FFMPEG_PID" 2>/dev/null; then
         -draw_mouse 0 \
         -i "${DISPLAY}" \
         -t 15 \
-        -vf "format=yuv420p" \
-        -sws_flags "+accurate_rnd+full_chroma_int+full_chroma_inp+lanczos" \
+        -pix_fmt yuv420p \
+        -sws_flags "lanczos+accurate_rnd+full_chroma_int+full_chroma_inp" \
         -c:v libx264 -preset ultrafast -crf 23 \
         -an \
         "$RAW_VIDEO" \
@@ -208,14 +208,14 @@ AUDIO_ARGS=""
 [ "$HAS_AUDIO" -eq 1 ] && AUDIO_ARGS="-i $APP_AUDIO -c:a aac -b:a 128k -map 0:v:0 -map 1:a:0 -shortest"
 
 # Clean version
-SWS="-sws_flags +accurate_rnd+full_chroma_int+full_chroma_inp+lanczos"
+SWS="-sws_flags lanczos+accurate_rnd+full_chroma_int+full_chroma_inp"
 echo -n "  Clean video: "
 if ffmpeg -y -i "$RAW_VIDEO" $AUDIO_ARGS \
-    -vf "format=yuv420p" $SWS -c:v h264_nvenc -preset p4 -cq 22 \
+    -pix_fmt yuv420p $SWS -c:v h264_nvenc -preset p4 -cq 22 \
     "$FINAL" </dev/null 2>/dev/null; then
     echo "OK ($(du -h "$FINAL" | cut -f1))"
 elif ffmpeg -y -i "$RAW_VIDEO" $AUDIO_ARGS \
-    -vf "format=yuv420p" $SWS -c:v libx264 -preset fast -crf 23 \
+    -pix_fmt yuv420p $SWS -c:v libx264 -preset fast -crf 23 \
     "$FINAL" </dev/null 2>/dev/null; then
     echo "OK libx264 ($(du -h "$FINAL" | cut -f1))"
 else
@@ -226,12 +226,12 @@ fi
 echo -n "  Subtitled video: "
 if [ -f "$SRT_FILE" ] && [ -f "$RAW_VIDEO" ]; then
     if ffmpeg -y -i "$RAW_VIDEO" $AUDIO_ARGS \
-        $SWS -vf "subtitles=${SRT_FILE}:force_style='FontSize=22,FontName=monospace,PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,Outline=2,MarginV=40',format=yuv420p" \
+        $SWS -pix_fmt yuv420p -vf "subtitles=${SRT_FILE}:force_style='FontSize=22,FontName=monospace,PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,Outline=2,MarginV=40'" \
         -c:v h264_nvenc -preset p4 -cq 22 \
         "$FINAL_SUBS" </dev/null 2>/dev/null; then
         echo "OK ($(du -h "$FINAL_SUBS" | cut -f1))"
     elif ffmpeg -y -i "$RAW_VIDEO" $AUDIO_ARGS \
-        $SWS -vf "subtitles=${SRT_FILE}:force_style='FontSize=22,FontName=monospace',format=yuv420p" \
+        $SWS -pix_fmt yuv420p -vf "subtitles=${SRT_FILE}:force_style='FontSize=22,FontName=monospace'" \
         -c:v libx264 -preset fast -crf 23 \
         "$FINAL_SUBS" </dev/null 2>/dev/null; then
         echo "OK libx264 ($(du -h "$FINAL_SUBS" | cut -f1))"

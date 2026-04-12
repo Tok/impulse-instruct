@@ -350,8 +350,8 @@ if [ "$SKIP_VIDEO" -eq 0 ]; then
         -draw_mouse 0 \
         -i "${DISPLAY}" \
         -t 600 \
-        -vf "format=yuv420p" \
-        -sws_flags "+accurate_rnd+full_chroma_int+full_chroma_inp+lanczos" \
+        -pix_fmt yuv420p \
+        -sws_flags "lanczos+accurate_rnd+full_chroma_int+full_chroma_inp" \
         -c:v h264_nvenc -preset p4 -cq 18 \
         -an \
         "$RAW_VIDEO" \
@@ -502,16 +502,16 @@ if [ "$SKIP_VIDEO" -eq 0 ]; then
     ffmpeg -y \
         $TRIM_ARGS -i "$RAW_VIDEO" \
         $ENCODE_AUDIO \
-        -vf "format=yuv420p" \
-        -sws_flags "+accurate_rnd+full_chroma_int+full_chroma_inp+lanczos" \
+        -pix_fmt yuv420p \
+        -sws_flags "lanczos+accurate_rnd+full_chroma_int+full_chroma_inp" \
         -c:v h264_nvenc -preset p4 -cq 22 \
         "$FINAL_VIDEO" \
         </dev/null 2>/dev/null || \
     ffmpeg -y \
         $TRIM_ARGS -i "$RAW_VIDEO" \
         $ENCODE_AUDIO \
-        -vf "format=yuv420p" \
-        -sws_flags "+accurate_rnd+full_chroma_int+full_chroma_inp+lanczos" \
+        -pix_fmt yuv420p \
+        -sws_flags "lanczos+accurate_rnd+full_chroma_int+full_chroma_inp" \
         -c:v libx264 -preset fast -crf 23 \
         "$FINAL_VIDEO" \
         </dev/null 2>/dev/null || true
@@ -523,16 +523,18 @@ if [ "$SKIP_VIDEO" -eq 0 ]; then
         ffmpeg -y \
             $TRIM_ARGS -i "$RAW_VIDEO" \
             $ENCODE_AUDIO \
-            -sws_flags "+accurate_rnd+full_chroma_int+full_chroma_inp+lanczos" \
-            -vf "subtitles=${SRT_FILE}:force_style='FontSize=22,FontName=monospace,PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,Outline=2,MarginV=40',format=yuv420p" \
+            -sws_flags "lanczos+accurate_rnd+full_chroma_int+full_chroma_inp" \
+            -pix_fmt yuv420p \
+            -vf "subtitles=${SRT_FILE}:force_style='FontSize=22,FontName=monospace,PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,Outline=2,MarginV=40'" \
             -c:v h264_nvenc -preset p4 -cq 22 \
             "$FINAL_VIDEO_SUBS" \
             </dev/null 2>/dev/null || \
         ffmpeg -y \
             $TRIM_ARGS -i "$RAW_VIDEO" \
             $ENCODE_AUDIO \
-            -sws_flags "+accurate_rnd+full_chroma_int+full_chroma_inp+lanczos" \
-            -vf "subtitles=${SRT_FILE}:force_style='FontSize=22,FontName=monospace',format=yuv420p" \
+            -sws_flags "lanczos+accurate_rnd+full_chroma_int+full_chroma_inp" \
+            -pix_fmt yuv420p \
+            -vf "subtitles=${SRT_FILE}:force_style='FontSize=22,FontName=monospace'" \
             -c:v libx264 -preset fast -crf 23 \
             "$FINAL_VIDEO_SUBS" \
             </dev/null 2>/dev/null || true
