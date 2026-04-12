@@ -20,13 +20,13 @@ Everything runs entirely offline: no cloud calls, no subscriptions, no latency. 
 ---
 
 <p align="center">
-  <img src="assets/screenshots/v0.7.2-intro-sequencer.png" alt="Sequencer — 32-step wrap, per-voice sliders, bass/accent/slide intensity" width="900"/>
+  <img src="assets/screenshots/v0.7.4-snapshot-intro-sequencer.png" alt="Sequencer — 32-step wrap, per-voice sliders, bass/accent/slide intensity, 303 centered between 808 and 909" width="900"/>
 </p>
 <p align="center">
-  <img src="assets/screenshots/v0.7.2-intro-bass-detail.png" alt="Bass detail — 303-style filter with chrome knobs and XY pad" width="900"/>
+  <img src="assets/screenshots/v0.7.4-snapshot-intro-bass-detail.png" alt="Bass detail — 303-style filter with chrome knobs, full-word labels, XY pad" width="900"/>
 </p>
 <p align="center">
-  <img src="assets/screenshots/v0.7.2-intro-cables.png" alt="Back panel — cable topology filter dims modules not in the signal path" width="900"/>
+  <img src="assets/screenshots/v0.7.4-snapshot-intro-cables.png" alt="Back panel — cable topology filter dims modules not in the signal path"  width="900"/>
 </p>
 
 ---
