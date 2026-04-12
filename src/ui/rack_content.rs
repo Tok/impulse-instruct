@@ -558,7 +558,6 @@ fn draw_llm_agent_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, module_id: u32)
                 .color(theme::IRON),
         );
     }
-
     // ── Conversation mode + thinking ───────────────────────────────────
     ui.horizontal(|ui| {
         ui.spacing_mut().item_spacing.x = 2.0;
@@ -626,7 +625,6 @@ fn draw_llm_agent_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, module_id: u32)
             app.state.write().llm_agents[idx].enable_thinking = !enable_thinking;
         }
     });
-
     // ── Role + autonomy permissions ─────────────────────────────────────
     ui.horizontal(|ui| {
         ui.spacing_mut().item_spacing.x = 2.0;
@@ -679,7 +677,6 @@ fn draw_llm_agent_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, module_id: u32)
             app.state.write().llm_agents[idx].can_dismiss = !can_dismiss;
         }
     });
-
     // ── Style selector ──────────────────────────────────────────────────
     {
         use crate::llm::styles::StyleCatalog;
@@ -747,7 +744,6 @@ fn draw_llm_agent_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, module_id: u32)
                 }
             });
     }
-
     // ── User instructions ───────────────────────────────────────────────
     let instr_resp = ui.add(
         egui::TextEdit::multiline(&mut user_instructions)
@@ -760,7 +756,6 @@ fn draw_llm_agent_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, module_id: u32)
     if instr_resp.changed() {
         app.state.write().llm_agents[idx].user_instructions = user_instructions;
     }
-
     // ── System prompt override ──────────────────────────────────────────
     let has_override = !prompt_override.is_empty();
     let ovr_header = if has_override {
@@ -795,7 +790,6 @@ fn draw_llm_agent_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, module_id: u32)
             app.state.write().llm_agents[idx].system_prompt_override = prompt_override;
         }
     });
-
     // ── Stats + last response ────────────────────────────────────────────
     if !last_resp.is_empty() {
         let snippet: String = last_resp.chars().take(80).collect();
@@ -817,7 +811,6 @@ fn draw_llm_agent_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, module_id: u32)
 }
 
 // ─── Cable drag interaction ───────────────────────────────────────────────────
-
 pub(super) fn handle_cable_drag(
     app: &mut ImpulseApp,
     ctx: &egui::Context,
@@ -883,7 +876,6 @@ pub(super) fn handle_cable_drag(
 }
 
 // ─── Drag helpers (moved from rack_canvas.rs to stay under 1000-line limit) ──
-
 use crate::ui::rack_cables::ModuleDrag;
 
 /// Process drag start/stop from a card response and update app.module_drag.
@@ -971,9 +963,28 @@ pub(super) fn reorder_module_by_drop(
         return;
     }
 
+    // Overlap check: reject drop if any other module in the same zone occupies
+    // any cell in the target (snap_col..+col_span, snap_row..+row_span) block.
+    let blocked = {
+        let s = app.state.read();
+        s.rack
+            .modules
+            .iter()
+            .filter(|m| m.id != dragged_id && m.zone == zone)
+            .any(|m| {
+                let (mw, mh) = m.kind.grid_size(crate::state::GRID_COLS);
+                // AABB overlap test
+                snap_col < m.grid_col + mw
+                    && m.grid_col < snap_col + col_span
+                    && snap_row < m.grid_row + mh
+                    && m.grid_row < snap_row + row_span
+            })
+    };
+    if blocked {
+        return; // target occupied — keep original position
+    }
+
     app.push_history();
-    // Move the module to the snap position, then re-run arrange_grid
-    // to resolve any overlaps (pushes other modules out of the way).
     if let Some(m) = app
         .state
         .write()
@@ -985,7 +996,5 @@ pub(super) fn reorder_module_by_drop(
         m.grid_col = snap_col;
         m.grid_row = snap_row;
     }
-    // Re-pack remaining modules around the newly placed one.
-    // (arrange_grid will skip the dragged module's position since it's occupied.)
-    let _ = (zone, col_w, row_span); // used by future zone-aware arrange
+    let _ = col_w; // used by future zone-aware features
 }

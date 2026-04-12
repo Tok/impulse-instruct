@@ -287,7 +287,9 @@ pub fn draw_an1x(app: &mut ImpulseApp, ui: &mut Ui) {
         });
     }
 
-    // ── Row 2 (3 cols): TUNE | A.ADSR | PITCH ENV ──────────────────────
+    ui.add_space(super::GLASS_GAP);
+
+    // ── Row 2 (3 cols): TUNE | AMP ADSR | PITCH ENV ────────────────────
     {
         let gw = widgets::even_group_width(ui, 3);
         ui.horizontal(|ui| {
@@ -365,7 +367,7 @@ pub fn draw_an1x(app: &mut ImpulseApp, ui: &mut Ui) {
                 ui.set_min_height(group_h2);
                 ui.spacing_mut().item_spacing.x = super::KNOB_SPACING;
                 ui.label(
-                    egui::RichText::new("A.ADSR")
+                    egui::RichText::new("AMP ADSR")
                         .color(theme::FOG)
                         .monospace()
                         .size(9.5),

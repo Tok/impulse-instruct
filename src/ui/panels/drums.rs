@@ -140,6 +140,8 @@ pub fn draw_kit_a(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         });
     });
 
+    ui.add_space(super::GLASS_GAP);
+
     // Row 2: SNARE (left) + HIHAT (right)
     ui.horizontal(|ui| {
         ui.spacing_mut().item_spacing.x = super::GLASS_GAP;
@@ -322,6 +324,8 @@ pub fn draw_kit_b(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             }
         });
     });
+
+    ui.add_space(super::GLASS_GAP);
 
     // Row 2: SNARE (left) + CLAP/RIM (right) — all knobs single row each
     ui.horizontal(|ui| {
