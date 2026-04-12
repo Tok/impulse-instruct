@@ -180,7 +180,7 @@ if [ "$NO_TTS" -eq 0 ]; then
     done < "$SCENARIO_FILE"
     echo "  TTS clips cached in $TTS_DIR ($tts_ok ok, $tts_fail failed)"
     if [ "$tts_fail" -gt 0 ]; then
-        echo "  Missing clips (all 3 retries failed):"
+        echo "  Missing clips (all retries exhausted):"
         printf "%b" "$tts_failed_ids" | sed 's/^/    /'
     fi
     # Stop server now — frees GPU memory for the app (LLM + display).

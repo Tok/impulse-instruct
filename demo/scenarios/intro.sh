@@ -108,24 +108,31 @@ wait_seconds 1
 
 scene "LFO modulation"
 
-say "LFOs add living modulation. Let's sweep the filter."
-# Ask the agent to wire an LFO onto the bass cutoff — slow triangle, moderate
-# depth — so the filter opens and closes hands-free while the track plays.
-ask "enable lfo[0] with target=BassCutoff, waveform=Triangle, rate=0.12, depth=0.45" "" 8
+# Drop an LFO module into the rack and scroll to it so the module card
+# is on screen before we talk about what it does.
+add_effect lfo
+look_at lfo
+wait_seconds 1
+
+say "An LFO moves a parameter hands-free. Any knob can be a target."
+
+# ── LFO 1: classic sine on the bass filter cutoff ──
+say "Sine wave on the bass cutoff — classic acid breath."
+api_params '{"lfo": [{"enabled": true, "target": "BassCutoff", "waveform": "Sine", "rate": 0.18, "depth": 0.55}]}'
 focus_on bass
-wait_seconds 3
-
-say "The rate drives how fast it moves."
-# Nudge the LFO rate live — viewers hear the sweep speed up.
-api_params '{"lfo": [{"rate": 0.22}]}'
-wait_seconds 3
-
-say "Depth controls how far the filter travels."
-api_params '{"lfo": [{"depth": 0.7}]}'
 wait_seconds 4
 
-# Release the LFO before we tear down the single-agent rack.
-api_params '{"lfo": [{"enabled": false}]}'
+# ── LFO 2: slower triangle on reverb mix — different waveform + target ──
+say "A second LFO, triangle wave, on the reverb mix."
+api_params '{"lfo": [{}, {"enabled": true, "target": "ReverbMix", "waveform": "Triangle", "rate": 0.06, "depth": 0.35}]}'
+look_at lfo
+wait_seconds 4
+
+say "Filter pulses fast, reverb breathes slow."
+wait_seconds 3
+
+# Release both LFOs before we tear down the single-agent rack.
+api_params '{"lfo": [{"enabled": false}, {"enabled": false}]}'
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # PART 2: Multi-agent band

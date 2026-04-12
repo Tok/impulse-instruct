@@ -243,10 +243,15 @@ stop_neutts_server() {
 tts_generate() {
     # Pre-generate a TTS clip using NeuTTS Air server. Returns the wav path.
     # Usage: tts_generate "clip_id" "Text to speak"
-    # Retries up to 3 times on failure (NeuTTS can stall while warming up on
-    # the first few calls, and occasionally fails on longer sentences).
+    # Retries up to `TTS_MAX_ATTEMPTS` times (default 10). NeuTTS can:
+    #   - Stall on the first few warm-up calls
+    #   - Occasionally fail on specific phonetic inputs
+    #   - Segfault outright, leaving the server dead — we detect that via
+    #     `/health` and restart it automatically before the next retry so
+    #     we don't waste attempts against a corpse.
     local id="$1" text="$2"
     local outfile="$TTS_DIR/${id}.wav"
+    local max_attempts="${TTS_MAX_ATTEMPTS:-10}"
     mkdir -p "$TTS_DIR"
     if [ -f "$outfile" ] && [ -s "$outfile" ]; then
         echo "$outfile"
@@ -269,7 +274,7 @@ tts_generate() {
     fi
     local attempt=0
     local resp_code=""
-    while [ "$attempt" -lt 3 ]; do
+    while [ "$attempt" -lt "$max_attempts" ]; do
         attempt=$((attempt + 1))
         rm -f "$outfile"
         resp_code=$(curl -s -w "%{http_code}" \
@@ -282,10 +287,24 @@ tts_generate() {
             echo "$outfile"
             return 0
         fi
-        echo "  WARN: NeuTTS attempt $attempt/3 failed (HTTP $resp_code) for: $text" >&2
-        sleep 1
+        echo "  WARN: NeuTTS attempt $attempt/$max_attempts failed (HTTP $resp_code) for: $text" >&2
+        # Check if the server is even alive — if not (crashed, segfaulted,
+        # OOM'd), restart it before burning more retries.
+        if ! curl -sf --max-time 3 "${NEUTTS_URL}/health" >/dev/null 2>&1; then
+            echo "  [tts] NeuTTS server unreachable — restarting…" >&2
+            NEUTTS_PID=""
+            start_neutts_server || {
+                echo "  [tts] restart failed, will retry again" >&2
+            }
+        fi
+        # Back off slightly between attempts (1s, then 2s, then 2s cap).
+        if [ "$attempt" -lt 3 ]; then
+            sleep 1
+        else
+            sleep 2
+        fi
     done
-    echo "  ERROR: NeuTTS synth gave up after 3 attempts for: $text" >&2
+    echo "  ERROR: NeuTTS synth gave up after $max_attempts attempts for: $text" >&2
     rm -f "$outfile"
     echo "$outfile"
     return 1
