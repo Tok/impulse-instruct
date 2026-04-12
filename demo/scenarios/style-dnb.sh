@@ -21,6 +21,8 @@ say "Bass, two drum kits, reverb, delay."
 add_agent DNB gemma
 wait_for_model
 
+set_bpm 170
+
 # ── Scene 2: Tempo and kick ────────────────────────────────────────────────
 
 scene "170 BPM foundation"
@@ -30,7 +32,7 @@ look_at sequencer
 play
 wait_seconds 1
 
-ask "170 BPM, two-step kick and snare pattern, fast hats"
+ask "Style is drum and bass at 170 BPM. Two-step kick and snare pattern, fast hats."
 
 say "Two-step pattern at 170. The agent picks the step placement."
 wait_seconds 3
@@ -63,7 +65,7 @@ scene "Effects and filter sweep"
 
 look_at console
 
-ask "subtle delay and reverb, then slowly open the bass filter over 4 bars" 14
+ask "subtle delay and reverb, then slowly open the bass filter over 4 bars" "" 14
 
 say "Filter ramp running. Builds tension."
 wait_seconds 3
@@ -74,7 +76,7 @@ scene "Drop"
 
 show_all
 
-ask "drop it, full energy, all drums, heavy bass" 12
+ask "drop it, full energy, all drums, heavy bass" "" 12
 
 wait_seconds 4
 

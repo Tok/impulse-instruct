@@ -923,6 +923,11 @@ wait_for_model() {
 play()  { api_play; }
 stop()  { api_stop; }
 
+set_bpm() {
+    # Force sequencer tempo. Usage: set_bpm 170
+    api_params "{\"sequencer\":{\"bpm\":$1}}"
+}
+
 # ── AI prompts ───────────────────────────────────────────────────────────────
 
 ask() {

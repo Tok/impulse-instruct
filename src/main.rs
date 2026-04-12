@@ -246,7 +246,13 @@ fn run() -> anyhow::Result<()> {
     if args.fresh_session {
         log::info!("Fresh session requested — starting with Empty rack preset");
         let empty = &impulse_instruct::state::RACK_PRESETS[0]; // "Empty"
-        app_state.write().rack = impulse_instruct::state::RackState::from_preset(empty);
+        let mut s = app_state.write();
+        s.rack = impulse_instruct::state::RackState::from_preset(empty);
+        // Clear agents/TTS pre-populated by AppState::default() for the default
+        // rack. Without this, a stale "default" agent survives and fires the
+        // startup auto-prompt before any scenario has set up its own agents.
+        s.llm_agents.clear();
+        s.tts_modules.clear();
     } else if let Some(session) = impulse_instruct::state::load_session() {
         impulse_instruct::state::apply_session(&mut app_state.write(), session);
         log::info!("Session restored from session.json");

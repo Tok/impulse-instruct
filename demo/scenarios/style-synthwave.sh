@@ -27,6 +27,8 @@ add_agent NEON bonsai "" mc tts
 
 wait_for_model
 
+set_bpm 108
+
 # ── Scene 2: Arpeggiated bass ──────────────────────────────────────────────
 
 scene "Driving bass"
@@ -36,7 +38,7 @@ look_at sequencer
 play
 wait_seconds 1
 
-ask "synthwave, 108 BPM, driving arpeggiated bass line, minor key"
+ask "Style is synthwave at 108 BPM. Driving arpeggiated bass line in a minor key, use 4 distinct scale pitches spread across both halves of the bank"
 
 focus_on bass
 
@@ -82,11 +84,11 @@ look_at console
 
 say "The NEON agent runs in MC mode with TTS. It generates lines and speaks them."
 
-ask "chrome sunset, neon grid, digital highway, palm trees in the rain" NEON
+ask "rhyme a short couplet about a beach car chase under a neon sunset — keep it punchy, two lines, internal rhyme if you can" NEON
 
 wait_seconds 8
 
-say "The Bonsai model generates text, espeak renders it. Pitch snap quantises to the key."
+say "Bonsai writes the couplet, NeuTTS renders it. Pitch snap quantises to the key."
 wait_seconds 3
 
 # ── Scene 7: Full scene ───────────────────────────────────────────────────
@@ -98,7 +100,7 @@ show_all
 ask "more movement, open the filter, build it up"
 wait_seconds 5
 
-ask "electric dreams, laser horizon, the city never sleeps" NEON
+ask "rhyme another couplet — palm trees, chrome wheels, a getaway down the coastal road, neon skyline. two lines, make it rhyme" NEON
 
 wait_seconds 8
 

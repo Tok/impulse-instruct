@@ -38,7 +38,7 @@ wait_seconds 3
 
 scene "Single ramp"
 
-ask "slowly open the filter over 4 bars" 14
+ask "slowly open the filter over 4 bars" "" 14
 
 say "Filter ramped over four bars. Visible on the knob."
 wait_seconds 2
@@ -47,7 +47,7 @@ wait_seconds 2
 
 scene "Multiple simultaneous ramps"
 
-ask "bring the filter back down over 4 bars while increasing resonance and fading in reverb" 16
+ask "bring the filter back down over 4 bars while increasing resonance and fading in reverb" "" 16
 
 say "Three parameters changing independently."
 wait_seconds 2
@@ -58,12 +58,12 @@ scene "Build and drop"
 
 show_all
 
-ask "build up over 8 bars, open everything, more delay, more reverb" 18
+ask "build up over 8 bars, open everything, more delay, more reverb" "" 18
 
 say "Build complete."
 wait_seconds 1
 
-ask "drop, close the filter, punch it, strip the effects" 10
+ask "drop, close the filter, punch it, strip the effects" "" 10
 
 say "Instant contrast. Build-and-drop using ramps versus direct values."
 wait_seconds 3

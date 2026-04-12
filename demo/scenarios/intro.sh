@@ -92,7 +92,7 @@ screenshot "v${VERSION}-intro-bass-detail"
 
 scene "AI-controlled ramp"
 
-ask "slowly sweep the filter open over 4 bars" 14
+ask "slowly sweep the filter open over 4 bars" "" 14
 
 say "The AI ramps parameters over bars."
 say "Smooth, locked to the tempo."
