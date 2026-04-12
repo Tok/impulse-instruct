@@ -7,6 +7,10 @@ use crate::state::save_project;
 use crate::ui::{ImpulseApp, theme};
 use egui::{Frame, TopBottomPanel};
 
+/// Width (px) shared by the header's horizontal sliders (HEAT, MON) so they
+/// stay visually aligned if one of them is retuned later.
+const HEADER_SLIDER_WIDTH: f32 = 180.0;
+
 impl ImpulseApp {
     /// Menu bar + header transport strip + log/scope combined panel.
     pub(super) fn draw_menu_and_header(&mut self, ctx: &egui::Context) {
@@ -514,7 +518,7 @@ impl ImpulseApp {
                         );
                         if ui
                             .scope(|ui| {
-                                ui.spacing_mut().slider_width = 180.0;
+                                ui.spacing_mut().slider_width = HEADER_SLIDER_WIDTH;
                                 ui.add(egui::Slider::new(&mut heat, 0.0..=1.0).show_value(false))
                             })
                             .inner
@@ -531,7 +535,9 @@ impl ImpulseApp {
                     }
 
                     // ── Push remaining controls to the right edge ──
-                    let right_w = 260.0; // approximate width needed for MON+VRAM+status
+                    // MON slider (HEADER_SLIDER_WIDTH) + VRAM/RAM bars (~120) + label
+                    // gap + separators. Keep in sync with HEADER_SLIDER_WIDTH.
+                    let right_w = HEADER_SLIDER_WIDTH + 200.0;
                     let spacer = (ui.available_width() - right_w).max(0.0);
                     ui.add_space(spacer);
 
@@ -550,7 +556,7 @@ impl ImpulseApp {
                     );
                     if ui
                         .scope(|ui| {
-                            ui.spacing_mut().slider_width = 60.0;
+                            ui.spacing_mut().slider_width = HEADER_SLIDER_WIDTH;
                             ui.add(
                                 egui::Slider::new(&mut self.ui_volume, 0.0..=1.0).show_value(false),
                             )
