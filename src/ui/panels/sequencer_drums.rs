@@ -30,30 +30,8 @@ pub(super) fn draw_drum_rows(
         ui.separator();
         ui.add_space(2.0);
 
-        // Measure prefix width by rendering invisible widgets matching the drum row layout.
-        // This runs every frame so bass/hoover/an1x rows always have an accurate prefix_w.
-        if app.seq_prefix_width <= 0.0 {
-            ui.horizontal(|ui| {
-                ui.set_height(0.0);
-                ui.add(
-                    egui::Button::new(egui::RichText::new("M").monospace().size(7.5))
-                        .min_size(egui::vec2(10.0, 0.0))
-                        .fill(egui::Color32::TRANSPARENT),
-                );
-                ui.add(
-                    egui::Button::new(egui::RichText::new("S").monospace().size(7.5))
-                        .min_size(egui::vec2(10.0, 0.0))
-                        .fill(egui::Color32::TRANSPARENT),
-                );
-                ui.allocate_space(egui::vec2(SEQ_LABEL_W - 20.0, 0.0));
-                ui.allocate_space(egui::vec2(SEQ_VOL_W, 0.0));
-                ui.allocate_space(egui::vec2(18.0, 0.0));
-                let rel_x = ui.cursor().min.x - ui.min_rect().min.x;
-                if rel_x > 0.0 {
-                    app.seq_prefix_width = rel_x;
-                }
-            });
-        }
+        // Prefix width is computed statically in draw_sequencer — no measure
+        // pass needed. Every row emits the same 5-widget prefix structure.
     }
 
     // Inactive + not-expanded voices → one compact horizontal chip strip.
@@ -157,13 +135,21 @@ pub(super) fn draw_drum_rows(
 
         // ── Step buttons row ──────────────────────────────────────────────────
         let mut steps_x = 0.0f32;
-        let cached_prefix_w = app.seq_prefix_width.max(10.0);
         for sub in 0..sub_rows {
             let mut vel_changed: Option<(usize, f32)> = None;
             let mut ratchet_changed: Option<(usize, u8)> = None;
             ui.horizontal(|ui| {
                 if sub > 0 {
-                    ui.add_space(cached_prefix_w);
+                    // Match the sub==0 prefix structure exactly so egui's
+                    // item_spacing adds the same number of trailing gaps on
+                    // both rows. Emitting a single add_space(prefix_w) leaves
+                    // one extra item_spacing compared to the 5-widget path
+                    // below, shifting cells horizontally.
+                    ui.add_space(10.0);
+                    ui.add_space(10.0);
+                    ui.add_space(SEQ_LABEL_W - 20.0);
+                    ui.add_space(SEQ_VOL_W);
+                    ui.add_space(18.0);
                     if row_spacer > 0.0 {
                         ui.add_space(row_spacer);
                     }
@@ -211,16 +197,19 @@ pub(super) fn draw_drum_rows(
                 } else {
                     egui::Color32::from_gray(50)
                 };
-                if ui
-                    .add(
-                        egui::Button::new(
-                            egui::RichText::new("M").monospace().size(7.5).color(m_col),
-                        )
-                        .min_size(egui::vec2(10.0, SEQ_LABEL_H))
-                        .fill(egui::Color32::TRANSPARENT),
-                    )
-                    .clicked()
-                {
+                // Exact-size clickable M button (painted manually so cursor
+                // advances by exactly 10 px; add_sized(Button) advances by the
+                // button's intrinsic content size instead).
+                let (m_rect, m_resp) =
+                    ui.allocate_exact_size(egui::vec2(10.0, SEQ_LABEL_H), egui::Sense::click());
+                ui.painter().text(
+                    m_rect.center(),
+                    egui::Align2::CENTER_CENTER,
+                    "M",
+                    egui::FontId::monospace(7.5),
+                    m_col,
+                );
+                if m_resp.clicked() {
                     let mut s = app.state.write();
                     if is_muted {
                         s.sequencer.muted_drums.remove(voice);
@@ -228,16 +217,16 @@ pub(super) fn draw_drum_rows(
                         s.sequencer.muted_drums.insert(*voice);
                     }
                 }
-                if ui
-                    .add(
-                        egui::Button::new(
-                            egui::RichText::new("S").monospace().size(7.5).color(s_col),
-                        )
-                        .min_size(egui::vec2(10.0, SEQ_LABEL_H))
-                        .fill(egui::Color32::TRANSPARENT),
-                    )
-                    .clicked()
-                {
+                let (s_rect, s_resp) =
+                    ui.allocate_exact_size(egui::vec2(10.0, SEQ_LABEL_H), egui::Sense::click());
+                ui.painter().text(
+                    s_rect.center(),
+                    egui::Align2::CENTER_CENTER,
+                    "S",
+                    egui::FontId::monospace(7.5),
+                    s_col,
+                );
+                if s_resp.clicked() {
                     let mut s = app.state.write();
                     if is_soloed {
                         s.sequencer.soloed_drums.remove(voice);
@@ -246,15 +235,16 @@ pub(super) fn draw_drum_rows(
                     }
                 }
 
-                let label_resp = ui.add_sized(
-                    [SEQ_LABEL_W - 20.0, SEQ_LABEL_H],
-                    egui::Label::new(
-                        egui::RichText::new(voice.label())
-                            .color(if is_muted { theme::PIT } else { theme::SMOKE })
-                            .monospace()
-                            .size(8.5),
-                    )
-                    .sense(egui::Sense::click()),
+                let (label_rect, label_resp) = ui.allocate_exact_size(
+                    egui::vec2(SEQ_LABEL_W - 20.0, SEQ_LABEL_H),
+                    egui::Sense::click(),
+                );
+                ui.painter().text(
+                    egui::pos2(label_rect.min.x, label_rect.center().y),
+                    egui::Align2::LEFT_CENTER,
+                    voice.label(),
+                    egui::FontId::monospace(8.5),
+                    if is_muted { theme::PIT } else { theme::SMOKE },
                 );
                 label_resp.context_menu(|ui| {
                     if ui.button("Copy pattern").clicked() {
@@ -295,31 +285,28 @@ pub(super) fn draw_drum_rows(
                 });
 
                 let mut vol = voice.get_volume(&app.state.read());
-                let vol_resp = ui.add_sized(
-                    [SEQ_VOL_W, SEQ_VOL_H],
-                    egui::Slider::new(&mut vol, 0.0..=1.0)
-                        .show_value(false)
-                        .trailing_fill(true),
-                );
-                if vol_resp.changed() {
+                if super::sequencer::fixed_slider(ui, SEQ_VOL_W, SEQ_VOL_H, &mut vol, 0.0..=1.0)
+                    .changed()
+                {
                     let s = app.state.read().clone();
                     *app.state.write() = voice.set_volume(s, vol);
                     app.push_audio_params();
                 }
 
-                let steps_resp = ui.add_sized(
-                    [18.0, SEQ_LABEL_H],
-                    egui::Label::new(
-                        egui::RichText::new(format!("{:02}", voice_steps))
-                            .color(if voice_steps == seq_steps {
-                                theme::PIT
-                            } else {
-                                theme::FOG
-                            })
-                            .monospace()
-                            .size(7.5),
-                    )
-                    .sense(egui::Sense::click_and_drag()),
+                let (steps_rect, steps_resp) = ui.allocate_exact_size(
+                    egui::vec2(18.0, SEQ_LABEL_H),
+                    egui::Sense::click_and_drag(),
+                );
+                ui.painter().text(
+                    steps_rect.center(),
+                    egui::Align2::CENTER_CENTER,
+                    format!("{:02}", voice_steps),
+                    egui::FontId::monospace(7.5),
+                    if voice_steps == seq_steps {
+                        theme::PIT
+                    } else {
+                        theme::FOG
+                    },
                 );
                 if steps_resp.dragged() {
                     let delta = steps_resp.drag_delta().x;
@@ -337,11 +324,6 @@ pub(super) fn draw_drum_rows(
                 }
 
                 let mut toggled = None;
-                // Cache prefix width for cross-row alignment (bass, hoover, an1x use this next frame)
-                let rel_x = ui.cursor().min.x - ui.min_rect().min.x;
-                if rel_x > 0.0 {
-                    app.seq_prefix_width = rel_x;
-                }
                 if row_spacer > 0.0 {
                     ui.add_space(row_spacer);
                 }

@@ -54,7 +54,7 @@ pub(super) const LOG_LEVELS: &[(&str, log::LevelFilter)] = &[
 
 pub(crate) const SEQ_LABEL_W: f32 = 100.0;
 pub(crate) const SEQ_LABEL_H: f32 = 22.0;
-pub(crate) const SEQ_VOL_W: f32 = 300.0;
+pub(crate) const SEQ_VOL_W: f32 = 330.0;
 pub(crate) const SEQ_VOL_H: f32 = 14.0;
 
 /// Derives BPM from incoming MIDI clock pulses (24 per quarter note).

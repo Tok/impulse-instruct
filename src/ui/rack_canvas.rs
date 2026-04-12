@@ -404,7 +404,7 @@ pub(super) fn module_grid_h(kind: ModuleKind, col_w: f32) -> f32 {
 }
 
 /// Dynamic row count for the sequencer grid cell — adapts to visible lanes.
-pub(super) fn sequencer_grid_rows(state: &crate::state::AppState) -> u8 {
+pub(super) fn sequencer_grid_rows(state: &crate::state::AppState, col_w: f32) -> u8 {
     use crate::state::ModuleKind;
     let has = |k: ModuleKind| state.rack.modules.iter().any(|m| m.kind == k && m.enabled);
     let has_bass = has(ModuleKind::AcidBass);
@@ -416,25 +416,33 @@ pub(super) fn sequencer_grid_rows(state: &crate::state::AppState) -> u8 {
         .iter()
         .filter(|(_, p)| p.iter().any(|st| st.active))
         .count();
-    // bass=2 rows (note + accent/slide), hoover=1, an1x=1, each drum=1
-    let lane_rows = (if has_bass { 2 } else { 0 })
-        + (if has_hoover { 1 } else { 0 })
-        + (if has_an1x { 1 } else { 0 })
-        + active_drum_voices;
-    // Each lane wraps into N sub-rows when steps > 32 (64-step patterns).
-    let seq_steps = state.sequencer.steps;
-    // 1..=32 → 1 row, 33..=64 → 2 rows.
-    let sub_rows = seq_steps.min(64).div_ceil(32).max(1);
-    let physical_rows = lane_rows * sub_rows;
-    // Base: 2 grid rows (header + controls). Each 2 physical rows = 1 extra grid row.
-    let base_rows = 2u8;
-    let extra = (physical_rows as f32 / 2.0).ceil() as u8;
-    (base_rows + extra).max(2)
+    // Pixel estimate — mirrors draw_sequencer. Tuned so the grid cell fits
+    // the content exactly (no trailing empty row).
+    let pad = state.ui_prefs.effective_pad_px();
+    let step_row = pad + 22.0; // main step button row with padding
+    let marker_row = 16.0; // accent / slide marker row (compact)
+    let drum_sub = 14.0; // vel/prob/ratchet sub-lane under drum step row
+    let header_h = 55.0;
+    let sub_rows = state.sequencer.steps.min(64).div_ceil(32).max(1) as f32;
+    let bass_h = if has_bass {
+        sub_rows * (step_row + marker_row + marker_row)
+    } else {
+        0.0
+    };
+    let hoover_h = if has_hoover { sub_rows * step_row } else { 0.0 };
+    let an1x_h = if has_an1x { sub_rows * step_row } else { 0.0 };
+    let drums_h = active_drum_voices as f32 * sub_rows * (step_row + drum_sub);
+    let total_h = header_h + bass_h + hoover_h + an1x_h + drums_h;
+    // Convert pixel height to grid rows: each grid row occupies col_w + RACK_GAP
+    // (minus one trailing gap on the last row).
+    let step = col_w + RACK_GAP;
+    let grid_rows = ((total_h + RACK_GAP) / step).ceil() as u8;
+    grid_rows.max(2)
 }
 
 /// Pixel height for the sequencer, dynamically sized by rack contents.
 pub(super) fn sequencer_grid_h(state: &crate::state::AppState, col_w: f32) -> f32 {
-    let r = sequencer_grid_rows(state) as f32;
+    let r = sequencer_grid_rows(state, col_w) as f32;
     r * col_w + (r - 1.0).max(0.0) * RACK_GAP
 }
 
@@ -595,7 +603,7 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
                 .map(|m| (m.id, m.kind, m.enabled, m.grid_col, m.grid_row))
                 .collect()
         };
-        let seq_rows = sequencer_grid_rows(&app.state.read());
+        let seq_rows = sequencer_grid_rows(&app.state.read(), col_w);
         // Sync dynamic sequencer height to rack state so arrange_grid uses it.
         {
             let mut s = app.state.write();
