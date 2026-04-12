@@ -282,17 +282,13 @@ fn draw_knob(painter: &Painter, rect: Rect, value: f32, mode: ParamMode, hovered
     let base_g = (32i16 + mode_shift + if hovered { 8 } else { 0 }).clamp(4, 80) as u8;
     painter.circle_filled(center, radius, Color32::from_gray(base_g));
 
-    // Radial brush strokes — 24 fine lines from inner to outer, alternating brightness
-    for i in 0..24u32 {
-        let angle = TAU * i as f32 / 24.0;
-        let g = if i % 2 == 0 {
-            (base_g as i16 + 10).clamp(4, 90) as u8
-        } else {
-            (base_g as i16 - 4).clamp(4, 90) as u8
-        };
+    // Radial brush strokes — 48 uniform spokes from inner to outer
+    let spoke_g = (base_g as i16 + 10).clamp(4, 90) as u8;
+    for i in 0..48u32 {
+        let angle = TAU * i as f32 / 48.0;
         let a = center + Vec2::new(angle.cos(), angle.sin()) * (radius * 0.20);
         let b = center + Vec2::new(angle.cos(), angle.sin()) * (radius * 0.88);
-        painter.line_segment([a, b], Stroke::new(1.0, Color32::from_gray(g)));
+        painter.line_segment([a, b], Stroke::new(1.0, Color32::from_gray(spoke_g)));
     }
 
     // Centre hub — dark recessed disc
