@@ -361,17 +361,23 @@ pub fn module_card_sized<R>(
                 ui.id().with("title_drag").with(_module_id),
                 Sense::click_and_drag(),
             );
-            title_dragged = drag_resp.dragged();
-            title_drag_released = drag_resp.drag_stopped();
+            let is_fixed = matches!(
+                kind,
+                ModuleKind::StepSequencer | ModuleKind::MasterOutput | ModuleKind::LlmConsole
+            );
+            if !is_fixed {
+                title_dragged = drag_resp.dragged();
+                title_drag_released = drag_resp.drag_stopped();
+            }
             if drag_resp.clicked() {
                 collapse_clicked = true;
                 ui.ctx()
                     .data_mut(|d| d.insert_temp(collapse_id, !collapsed));
             }
-            if drag_resp.hovered() || drag_resp.dragged() {
+            if !is_fixed && (drag_resp.hovered() || drag_resp.dragged()) {
                 ui.ctx().set_cursor_icon(egui::CursorIcon::Grab);
             }
-            {
+            if !is_fixed {
                 let dot_col = if drag_resp.hovered() || drag_resp.dragged() {
                     Color32::from_gray(140)
                 } else {

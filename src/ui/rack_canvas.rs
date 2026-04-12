@@ -207,20 +207,42 @@ pub fn draw_rack(app: &mut ImpulseApp, ctx: &egui::Context, ui: &mut egui::Ui) {
             drag.row_span as f32 * drag.col_w + (drag.row_span as f32 - 1.0).max(0.0) * RACK_GAP;
         let ghost_rect = egui::Rect::from_min_size(egui::pos2(gx, gy), egui::vec2(gw, gh));
 
+        // Check if drop position is blocked by another module
+        let drop_blocked = {
+            let s = app.state.read();
+            s.rack
+                .modules
+                .iter()
+                .filter(|m| m.id != drag.module_id && m.zone == drag.zone)
+                .any(|m| {
+                    let (mw, mh) = m.kind.grid_size(GRID_COLS);
+                    snap_col < m.grid_col + mw
+                        && m.grid_col < snap_col + drag.col_span
+                        && snap_row < m.grid_row + mh
+                        && m.grid_row < snap_row + drag.row_span
+                })
+        };
+
         let painter = ctx.layer_painter(egui::LayerId::new(
             egui::Order::Tooltip,
             egui::Id::new("module_drag_ghost"),
         ));
-        // Semi-transparent fill at the snap target
-        painter.rect_filled(
-            ghost_rect,
-            egui::Rounding::same(8.0),
-            Color32::from_rgba_premultiplied(60, 60, 60, 100),
-        );
+        let (fill, stroke_col) = if drop_blocked {
+            (
+                Color32::from_rgba_premultiplied(80, 20, 20, 100),
+                Color32::from_gray(80),
+            )
+        } else {
+            (
+                Color32::from_rgba_premultiplied(60, 60, 60, 100),
+                Color32::from_gray(140),
+            )
+        };
+        painter.rect_filled(ghost_rect, egui::Rounding::same(8.0), fill);
         painter.rect_stroke(
             ghost_rect,
             egui::Rounding::same(8.0),
-            egui::Stroke::new(2.0, Color32::from_gray(140)),
+            egui::Stroke::new(2.0, stroke_col),
         );
         ctx.request_repaint();
     }
@@ -481,6 +503,7 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
     }
 
     if !app.zone_global_collapsed {
+        let ctx_global = ui.ctx().clone();
         let zone_left = ui.cursor().left();
         let zone_top = ui.cursor().top();
         let step = grid_step(col_w);
@@ -565,6 +588,14 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
             }
             if resp.remove_clicked {
                 app.confirm_remove_module = Some(id);
+            }
+            // Drag only for non-fixed globals (agents)
+            if kind == ModuleKind::LlmAgent {
+                let drop_pos = ctx_global.pointer_latest_pos().unwrap_or_default();
+                let zo = zone_rect.min;
+                if handle_title_drag(app, &ctx_global, id, &resp, Zone::Global, zo, step, col_w) {
+                    reorder_module_by_drop(app, id, drop_pos, Zone::Global, zo, step, col_w);
+                }
             }
         }
 

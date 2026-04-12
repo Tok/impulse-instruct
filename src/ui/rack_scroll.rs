@@ -37,6 +37,21 @@ pub(crate) fn handle_scroll(
     let scroll_state_id = scroll_out.id;
     let max_y = (scroll_out.content_size.y - scroll_out.inner_rect.height()).max(0.0);
 
+    // ── Mouse wheel boost (3× default speed) ─────────────────────────────────
+    {
+        let wheel_y = ctx.input(|i| i.raw_scroll_delta.y);
+        if wheel_y.abs() > 0.1
+            && scroll_out
+                .inner_rect
+                .contains(ctx.pointer_latest_pos().unwrap_or_default())
+        {
+            let boost = wheel_y * 2.0; // 2× extra on top of egui's 1× = 3× total
+            let mut state = scroll_out.state;
+            state.offset.y = (state.offset.y - boost).clamp(0.0, max_y);
+            state.store(ctx, scroll_state_id);
+        }
+    }
+
     // ── Keyboard scroll (arrows / WASD) ─────────────────────────────────────
     {
         let scroll_speed = 180.0;

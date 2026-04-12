@@ -61,7 +61,7 @@ impl ImpulseApp {
         // Track whether we should apply this frame (click or Enter)
         let mut apply_choice: Option<usize> = None;
 
-        egui::Window::new("Agent Setup")
+        egui::Window::new("Rack Setup")
             .collapsible(false)
             .resizable(false)
             .min_width(480.0)

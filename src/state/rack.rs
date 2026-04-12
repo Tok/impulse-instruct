@@ -198,7 +198,7 @@ impl ModuleKind {
             Self::AmenSampler => (3, 1),
             Self::NoiseVoice => (2, 1),
             Self::GranularTexture => (3, 1),
-            Self::LlmAgent => (3, 2),
+            Self::LlmAgent => (3, 1),
             Self::EspeakNgTts | Self::CoquiTts => (2, 3),
             Self::SpectrumAnalyzer => (4, 2),
             Self::ActivityTimeline => (4, 2),
@@ -393,12 +393,12 @@ impl RackState {
     /// the module's (w, h) span fits without overlapping existing modules.
     pub fn arrange_grid(&mut self) {
         fn order(kind: ModuleKind) -> u8 {
-            // Same canonical order as arrange_canonical
+            // Full-width globals first, then smaller modules fill gaps
             match kind {
                 ModuleKind::LlmConsole => 0,
-                ModuleKind::LlmAgent => 1,
-                ModuleKind::StepSequencer => 2,
-                ModuleKind::MasterOutput => 3,
+                ModuleKind::StepSequencer => 1,
+                ModuleKind::MasterOutput => 2,
+                ModuleKind::LlmAgent => 3,
                 ModuleKind::AcidBass => 10,
                 ModuleKind::DrumKit808 => 11,
                 ModuleKind::DrumKit909 => 12,
