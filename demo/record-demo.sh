@@ -246,7 +246,21 @@ cleanup() {
         kill -9 "$PW_RECORD_PID" 2>/dev/null
         wait "$PW_RECORD_PID" 2>/dev/null
     fi
-    [ -n "$APP_PID" ] && kill "$APP_PID" 2>/dev/null && wait "$APP_PID" 2>/dev/null
+    if [ -n "$APP_PID" ]; then
+        # SIGTERM first, give the app a moment to run Drop handlers
+        # (LlamaServerBackend's Drop SIGKILLs its child llama-server).
+        kill -TERM "$APP_PID" 2>/dev/null
+        for _ in 1 2 3 4 5 6; do
+            kill -0 "$APP_PID" 2>/dev/null || break
+            sleep 0.5
+        done
+        kill -KILL "$APP_PID" 2>/dev/null
+        wait "$APP_PID" 2>/dev/null
+    fi
+    # Drop doesn't run on SIGKILL, and even SIGTERM can race — sweep
+    # any orphaned llama-server spawned by our app. Match on --model so
+    # we don't touch unrelated llama-server instances the user may run.
+    pkill -KILL -f 'llama-server .* --model' 2>/dev/null
     stop_neutts_server 2>/dev/null
     # Clean up virtual recording sink
     destroy_recording_sink 2>/dev/null
