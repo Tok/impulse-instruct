@@ -23,7 +23,7 @@ use util::webbrowser_open;
 mod prefs_controls;
 mod windows;
 mod wizard;
-pub(crate) use note::{ansi_colorize_notes, note_name};
+pub(crate) use note::{ansi_colorize_notes, note_freq_label, note_name};
 
 /// Convert a dot-path + float value into a nested JSON object.
 /// "bass.cutoff", 0.4  →  {"bass": {"cutoff": 0.4}}
