@@ -187,7 +187,7 @@ impl ModuleKind {
     pub fn grid_size(self, grid_cols: u8) -> (u8, u8) {
         match self {
             //                                     W     H
-            Self::StepSequencer => (grid_cols, 4),
+            Self::StepSequencer => (grid_cols, 2),
             Self::LlmConsole => (grid_cols, 1),
             Self::MasterOutput => (grid_cols, 1),
             Self::AcidBass => (4, 7),

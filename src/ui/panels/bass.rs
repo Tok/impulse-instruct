@@ -759,9 +759,13 @@ pub fn draw_bass(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                 }
             });
         });
-        // Right column: waveform display (with left padding)
+        // Right column: waveform display (with padding)
         ui.add_space(8.0);
-        widgets::waveform_icon(ui, wave_kind, viz_w, viz_total_h);
+        ui.vertical(|ui| {
+            ui.add_space(4.0);
+            widgets::waveform_icon(ui, wave_kind, viz_w, viz_total_h);
+            ui.add_space(4.0);
+        });
     });
 
     // Supersaw controls (only shown when Supersaw is active)

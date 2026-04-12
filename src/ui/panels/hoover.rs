@@ -45,9 +45,12 @@ pub fn draw_hoover(app: &mut ImpulseApp, ui: &mut egui::Ui) {
 
     // ── Three equal-width glass groups ────────────────────────────────────────
     let gw = widgets::even_group_width(ui, 3);
+    // Uniform height across all groups — matches the tallest (OSC with PAN + voices)
+    let group_h = ctrl.knob_size * 2.0 + 60.0;
     ui.horizontal(|ui| {
         // FILTER group: START, SWEEP, RESO (horizontal)
         widgets::glass_group_fill(ui, gw, gw, |ui| {
+            ui.set_min_height(group_h);
             ui.label(
                 egui::RichText::new("FILTER")
                     .color(theme::FOG)
@@ -81,6 +84,7 @@ pub fn draw_hoover(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         });
         // OSC group: DETUNE + VOL horizontal, VOICES stepper
         widgets::glass_group_fill(ui, gw, gw, |ui| {
+            ui.set_min_height(group_h);
             ui.label(
                 egui::RichText::new("OSC")
                     .color(theme::FOG)
@@ -138,6 +142,7 @@ pub fn draw_hoover(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         });
         // LFO group: RATE + DEPTH horizontal
         widgets::glass_group_fill(ui, gw, gw, |ui| {
+            ui.set_min_height(group_h);
             ui.label(
                 egui::RichText::new("PITCH LFO")
                     .color(theme::FOG)

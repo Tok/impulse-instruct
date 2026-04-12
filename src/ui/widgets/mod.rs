@@ -620,7 +620,7 @@ pub fn glass_group_fill<R>(
     egui::Frame::none()
         .fill(Color32::from_gray(15))
         .stroke(Stroke::new(1.0, Color32::from_gray(28)))
-        .inner_margin(egui::Margin::same(6.0))
+        .inner_margin(egui::Margin::symmetric(6.0, 8.0))
         .rounding(egui::Rounding::same(5.0))
         .show(ui, |ui| {
             ui.set_min_width(min_width - 14.0); // subtract inner margin × 2

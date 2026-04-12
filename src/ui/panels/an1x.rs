@@ -103,6 +103,7 @@ pub fn draw_an1x(app: &mut ImpulseApp, ui: &mut Ui) {
                 An1xWave::Noise => 5, // reuse S&H-like animation
             }
         };
+        ui.add_space(4.0);
         ui.vertical(|ui| {
             ui.label(
                 egui::RichText::new("O1")
@@ -110,8 +111,11 @@ pub fn draw_an1x(app: &mut ImpulseApp, ui: &mut Ui) {
                     .size(7.0)
                     .monospace(),
             );
+            ui.add_space(2.0);
             widgets::waveform_icon(ui, wave_to_kind(osc1w), 100.0, 48.0);
+            ui.add_space(2.0);
         });
+        ui.add_space(4.0);
         ui.vertical(|ui| {
             ui.label(
                 egui::RichText::new("O2")
@@ -119,7 +123,9 @@ pub fn draw_an1x(app: &mut ImpulseApp, ui: &mut Ui) {
                     .size(7.0)
                     .monospace(),
             );
+            ui.add_space(2.0);
             widgets::waveform_icon(ui, wave_to_kind(osc2w), 100.0, 48.0);
+            ui.add_space(2.0);
         });
     });
     // ── Filter mode + ADSR vizzes (compact header row) ─────────────────────
@@ -174,6 +180,7 @@ pub fn draw_an1x(app: &mut ImpulseApp, ui: &mut Ui) {
                 drop(st);
                 app.push_audio_params();
             }
+            ui.add_space(4.0);
         }
         ui.separator();
         {
@@ -202,6 +209,7 @@ pub fn draw_an1x(app: &mut ImpulseApp, ui: &mut Ui) {
                 drop(st);
                 app.push_audio_params();
             }
+            ui.add_space(4.0);
         }
     });
 
