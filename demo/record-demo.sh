@@ -143,21 +143,29 @@ if [ "$NO_TTS" -eq 0 ]; then
     start_neutts_server || { echo "  Falling back to no-TTS mode"; NO_TTS=1; }
     clip_id=""
     scene_num=0
+    tts_ok=0
+    tts_fail=0
+    tts_failed_ids=""
+    _gen_one() {
+        # $1=id, $2=text; reports and tracks success/failure.
+        if tts_generate "$1" "$2" >/dev/null; then
+            tts_ok=$((tts_ok + 1))
+            echo "  [$tts_ok] Generated: $1"
+        else
+            tts_fail=$((tts_fail + 1))
+            tts_failed_ids="${tts_failed_ids}$1\n"
+        fi
+    }
     while IFS= read -r line; do
         # narrate "id" \        (two-line form: text on next line)
         if [[ "$line" =~ narrate[[:space:]]+(--wait[[:space:]]+)?\"([^\"]+)\"[[:space:]]+\\?$ ]]; then
             clip_id="${BASH_REMATCH[2]}"
         elif [[ "$line" =~ ^[[:space:]]+\"(.+)\"$ ]] && [ -n "${clip_id:-}" ]; then
-            text="${BASH_REMATCH[1]}"
-            tts_generate "$clip_id" "$text" >/dev/null
-            echo "  Generated: $clip_id"
+            _gen_one "$clip_id" "${BASH_REMATCH[1]}"
             clip_id=""
         # narrate "id" "text"
         elif [[ "$line" =~ narrate[[:space:]]+(--wait[[:space:]]+)?\"([^\"]+)\"[[:space:]]+\"(.+)\" ]]; then
-            clip_id="${BASH_REMATCH[2]}"
-            text="${BASH_REMATCH[3]}"
-            tts_generate "$clip_id" "$text" >/dev/null
-            echo "  Generated: $clip_id"
+            _gen_one "${BASH_REMATCH[2]}" "${BASH_REMATCH[3]}"
             clip_id=""
         # scene "name"  (track scene counter for say auto-IDs)
         elif [[ "$line" =~ ^[[:space:]]*scene[[:space:]]+\".*\" ]]; then
@@ -167,11 +175,14 @@ if [ "$NO_TTS" -eq 0 ]; then
             text="${BASH_REMATCH[1]}"
             slug=$(echo "$text" | tr ' ' '_' | tr -cd 'a-zA-Z0-9_' | head -c 30)
             auto_id=$(printf 'auto_%03d_%s' "$scene_num" "$slug")
-            tts_generate "$auto_id" "$text" >/dev/null
-            echo "  Generated: $auto_id"
+            _gen_one "$auto_id" "$text"
         fi
     done < "$SCENARIO_FILE"
-    echo "  TTS clips cached in $TTS_DIR"
+    echo "  TTS clips cached in $TTS_DIR ($tts_ok ok, $tts_fail failed)"
+    if [ "$tts_fail" -gt 0 ]; then
+        echo "  Missing clips (all 3 retries failed):"
+        printf "%b" "$tts_failed_ids" | sed 's/^/    /'
+    fi
     # Stop server now — frees GPU memory for the app (LLM + display).
     # Playback uses cached WAV files via paplay, no server needed.
     stop_neutts_server

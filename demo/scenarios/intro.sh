@@ -134,7 +134,8 @@ wait_seconds 4
 stop
 wait_seconds 1
 
-say "Split the AI into specialists. Each one controls its own instruments."
+say "Split the AI into specialists."
+say "Each one controls its own instruments."
 
 reset_rack
 add_instrument bass
@@ -221,6 +222,8 @@ scene "End"
 
 show_all
 
-say "Impulse Instruct. Build your rack, wire AI agents, make music with words. Everything runs locally."
+say "Impulse Instruct."
+say "Build your rack, wire AI agents, make music with words."
+say "Everything runs locally."
 
 stop

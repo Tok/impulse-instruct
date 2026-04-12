@@ -81,6 +81,21 @@ What's already built is documented in [docs/features.md](docs/features.md).
 
 ### UI / UX
 
+- [ ] **Quick-command buttons on LLM agent card** — one-click shortcuts for
+  common re-prompts so users don't have to retype. Small row of pill
+  buttons on each agent card that POST the mapped prompt to the agent's
+  scope. Starter set:
+    - *Rewrite melody* → "rewrite the bass/lead melody, keep the rhythm"
+    - *Rewrite rhythm* → "rewrite the step pattern, keep the notes"
+    - *Rewrite both* → "rewrite rhythm and melody from scratch"
+    - *Variation* → "subtle variation of the current pattern"
+    - *Fill* → "add a fill in the last bar"
+    - *Sparser* / *Busier* → density tweaks
+    - *Brighter* / *Darker* → timbre tweaks (cutoff / reverb)
+    - *Swap style* → opens the style picker
+  Buttons should respect the agent's scope (only the BASS agent's
+  *Rewrite melody* touches bass) and be configurable per-persona in
+  future. Consider a compact ⋯ menu for less-common commands.
 - [ ] **Rack CV cables driving LFO targets** — cables are visual only; wiring
   them to actually change LFO target at DSP level
 - [ ] **Touch mode improvements** — touch-paint mode for mobile/tablet;

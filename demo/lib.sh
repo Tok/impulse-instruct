@@ -243,38 +243,52 @@ stop_neutts_server() {
 tts_generate() {
     # Pre-generate a TTS clip using NeuTTS Air server. Returns the wav path.
     # Usage: tts_generate "clip_id" "Text to speak"
+    # Retries up to 3 times on failure (NeuTTS can stall while warming up on
+    # the first few calls, and occasionally fails on longer sentences).
     local id="$1" text="$2"
     local outfile="$TTS_DIR/${id}.wav"
     mkdir -p "$TTS_DIR"
-    if [ ! -f "$outfile" ]; then
-        # Build JSON payload safely via jq (handles quotes, escapes, unicode).
-        local json
-        if command -v jq >/dev/null 2>&1; then
-            json=$(jq -nc \
-                --arg text "$text" \
-                --arg ref_audio "$NEUTTS_REF_AUDIO" \
-                --arg ref_text "$NEUTTS_REF_TEXT" \
-                --arg out "$outfile" \
-                '{text:$text, ref_audio:$ref_audio, ref_text:$ref_text, out_path:$out}')
-        else
-            # Fallback: naive escape (only handles double quotes and backslashes)
-            local esc
-            esc=$(printf '%s' "$text" | sed 's/\\/\\\\/g; s/"/\\"/g')
-            json=$(printf '{"text":"%s","ref_audio":"%s","ref_text":"%s","out_path":"%s"}' \
-                "$esc" "$NEUTTS_REF_AUDIO" "$NEUTTS_REF_TEXT" "$outfile")
-        fi
-        local resp_code
+    if [ -f "$outfile" ] && [ -s "$outfile" ]; then
+        echo "$outfile"
+        return 0
+    fi
+    # Build JSON payload safely via jq (handles quotes, escapes, unicode).
+    local json
+    if command -v jq >/dev/null 2>&1; then
+        json=$(jq -nc \
+            --arg text "$text" \
+            --arg ref_audio "$NEUTTS_REF_AUDIO" \
+            --arg ref_text "$NEUTTS_REF_TEXT" \
+            --arg out "$outfile" \
+            '{text:$text, ref_audio:$ref_audio, ref_text:$ref_text, out_path:$out}')
+    else
+        local esc
+        esc=$(printf '%s' "$text" | sed 's/\\/\\\\/g; s/"/\\"/g')
+        json=$(printf '{"text":"%s","ref_audio":"%s","ref_text":"%s","out_path":"%s"}' \
+            "$esc" "$NEUTTS_REF_AUDIO" "$NEUTTS_REF_TEXT" "$outfile")
+    fi
+    local attempt=0
+    local resp_code=""
+    while [ "$attempt" -lt 3 ]; do
+        attempt=$((attempt + 1))
+        rm -f "$outfile"
         resp_code=$(curl -s -w "%{http_code}" \
+            --max-time 120 \
             -X POST "${NEUTTS_URL}/synthesize" \
             -H "Content-Type: application/json" \
             --data-binary "$json" \
             -o "$outfile" 2>/dev/null || echo "000")
-        if [ ! -s "$outfile" ]; then
-            echo "  ERROR: NeuTTS synth failed (HTTP $resp_code) for: $text" >&2
-            rm -f "$outfile"
+        if [ -s "$outfile" ]; then
+            echo "$outfile"
+            return 0
         fi
-    fi
+        echo "  WARN: NeuTTS attempt $attempt/3 failed (HTTP $resp_code) for: $text" >&2
+        sleep 1
+    done
+    echo "  ERROR: NeuTTS synth gave up after 3 attempts for: $text" >&2
+    rm -f "$outfile"
     echo "$outfile"
+    return 1
 }
 
 tts_duration() {

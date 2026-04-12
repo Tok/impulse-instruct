@@ -135,21 +135,31 @@ pub(super) fn draw_ai_zone(
     draw_zone_grid_dots(ui, zone_left, zone_top, zone_top + zone_h, col_w);
 }
 
-/// ~5-line preview of an agent's last JSON response, truncated at 600 chars.
-/// Extracted so the agent card draw stays compact.
+/// Fixed 6-line viewport for an agent's last JSON response. Always reserves
+/// the same vertical space (even when empty) so long outputs can't push the
+/// following `t/s` / cycles line off the card.
 pub(crate) fn draw_last_response_preview(ui: &mut egui::Ui, last_resp: &str) {
-    if last_resp.is_empty() {
-        return;
-    }
-    let mut view: String = last_resp.chars().take(600).collect();
-    if last_resp.len() > 600 {
+    let font = egui::FontId::monospace(7.5);
+    let row_h = ui.fonts(|f| f.row_height(&font));
+    let viewport_h = row_h * 6.0 + 4.0;
+    let viewport_w = ui.available_width();
+    let mut view: String = last_resp.chars().take(720).collect();
+    if last_resp.len() > 720 {
         view.push('…');
     }
-    egui::TextEdit::multiline(&mut view)
-        .desired_rows(5)
-        .desired_width(ui.available_width())
-        .font(egui::FontId::monospace(7.5))
-        .text_color(crate::ui::theme::SMOKE)
-        .interactive(false)
-        .show(ui);
+    ui.allocate_ui(egui::vec2(viewport_w, viewport_h), |ui| {
+        egui::ScrollArea::vertical()
+            .min_scrolled_height(viewport_h)
+            .max_height(viewport_h)
+            .auto_shrink([false, false])
+            .show(ui, |ui| {
+                egui::TextEdit::multiline(&mut view)
+                    .desired_rows(6)
+                    .desired_width(viewport_w)
+                    .font(font)
+                    .text_color(crate::ui::theme::SMOKE)
+                    .interactive(false)
+                    .show(ui);
+            });
+    });
 }

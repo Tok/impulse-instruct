@@ -391,6 +391,10 @@ impl RackState {
         m.grid_col = gc;
         m.grid_row = gr;
         self.modules.push(m);
+        // Re-run the full layout so newly added modules get the center-bias
+        // pass (keeps the zone visually balanced instead of piling everything
+        // against the left edge).
+        self.arrange_grid();
         id
     }
 

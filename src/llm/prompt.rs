@@ -327,14 +327,17 @@ STEP SEQUENCER (default 32 steps = two 4/4 bars of 16th notes):
     Index list  [0,4,8,12]   — active step indices; all others cleared. SAVES TOKENS — use this.
     Inline      [1,0,0,0,…]  — up to 64 values, 0/1 (or false/true). Use only when most steps are on.
     Clear       []           — silence all steps for that voice.
-  CRITICAL — USE THE CURRENT PATTERN LENGTH:
-    Before writing any step array, read `sequencer.steps` AND the per-voice length
-    (`bass_len`, `hoover_len`, `an1x_len`, `drum_lengths.<voice>`) from CURRENT STATE.
-    Spread indices across that FULL range. Do NOT assume 16 steps.
-    • 32-step kick  → [0,4,8,12,16,20,24,28]   (NOT [0,4,8,12])
-    • 32-step bass  → fill all 32 positions when using inline format
-    • 64-step pad   → spread across 0..63
-    Indices must be < length. Writing only the first half of the bank is a bug.
+  RANGE AWARENESS — use the full pattern length:
+    Before writing a step array, read `sequencer.steps` and the per-voice
+    length (`bass_len`, `hoover_len`, `an1x_len`, `drum_lengths.<voice>`)
+    from CURRENT STATE so indices are in range and the pattern isn't stuck
+    in the first half of the bank.
+    • Indices must be < length. Don't exceed the bank.
+    • Use the second half (steps 16..31, or 32..63) for variation — not a
+      mirror of the first half.
+    • See DRUM PATTERNS and BASS PATTERNS below for voice-specific rhythm
+      guidance. Bass is NOT drums — do not copy kick-like even grids into
+      bass lines.
 
   sequencer.bass_steps    — step array for 303 bass trigger
   sequencer.bass_notes    — MIDI note array (24=C1, 36=C2, 48=C3; acid range 33–48)
@@ -495,22 +498,72 @@ HOOVER LEAD (supersaw + resonant LP filter sweep — dominator/rave character):
 
 ═══ RHYTHM BASICS ═══
 
-Minimal 4/4 foundation (32 steps = 2 bars) — use index list format (compact, preferred):
-  kick_a_steps 4-on-floor:   [0,4,8,12,16,20,24,28]
-  hihat_a_steps offbeat 8ths:[2,6,10,14,18,22,26,30]
-  snare_a_steps on 2 and 4:  [4,12,20,28]
-  clap_b_steps on 2 and 4:   [4,12,20,28]
-Build from there — add syncopation and gaps. Never fill every step with the same drum.
-Spread hits evenly across ALL steps — check sequencer.steps in CURRENT STATE.
+DRUM PATTERNS — regular grid is good, with kit-specific character.
+Kit naming: `_a` = 808 (classic warm/loose), `_b` = 909 (crisp/tight/driving).
+
+909 (Kit B) — PIN the grid. Acid house, techno, classic dance foundations.
+  kick_b_steps 4-on-floor:    [0,4,8,12,16,20,24,28]
+  clap_b_steps on 2 and 4:    [4,12,20,28]
+  hihat_b_steps offbeat 8ths: [2,6,10,14,18,22,26,30]
+
+808 (Kit A) — ALMOST 4-on-the-floor with one or two tweaks per bar for
+groove. Shift/drop 1–2 steps from the perfect grid, keep the pulse readable.
+  kick_a_steps:    [0,4,8,12,16,20,26,28]       ← missed 24, pushed 26
+  kick_a_steps:    [0,4,7,12,16,20,24,30]       ← anticipation on 7, tail on 30
+  snare_a_steps:   [4,12,20,28]                 ← or [4,12,19,28] for a pull
+  hihat_a_steps:   [2,6,10,14,18,22,26,30]      ← can stay even, or drop one
+
+Classic acid style often layers 909 kick for the drive plus 808 kick/snare
+for the texture — two overlapping grids reinforcing the groove.
+
+Drums should span the full sequencer.steps length. Use the second half for
+fills/variation — don't duplicate the first half verbatim. Never fill every
+step with the same drum.
 
 IMPORTANT — drum_ratchets takes INTEGERS 1–4 only, never booleans:
   CORRECT: {{"drum_ratchets": {{"hihat_a": [1,1,2,1,1,1,4,1,1,1,2,1,1,1,1,1]}}}}
   WRONG:   {{"drum_ratchets": {{"hihat_a": [true,false,true,…]}}}}  ← booleans are invalid here
 
+BASS PATTERNS (303 — bass_steps) — DO NOT copy the drum grid. Bass wants
+syncopation and space. Target roughly 1/3 to 2/3 note density across the
+pattern (≈ 10–22 notes per 32 steps for classic acid / acid house).
+  AVOID even 16th grids like [0,4,8,12,16,20,24,28] — that's kick territory,
+  lifeless under an acid line. Bass should push and pull against the kick.
+  Good 32-step acid bass rhythms — irregular, occasional consecutive 16ths,
+  leaving space where the kick is dominant:
+    [0, 3, 6, 10, 14, 15, 18, 22, 23, 28]     — ~10 notes, pairs + rests
+    [0, 2, 3, 7, 10, 14, 16, 19, 22, 26, 27]  — ~11 notes, off-grid feel
+    [0, 3, 6, 7, 10, 13, 16, 19, 22, 23, 26]  — ~11 notes, push/pull
+    [0, 2, 5, 8, 13, 16, 19, 24, 27]          — ~9 notes, sparse
+  Rules of thumb:
+    • Anchor step 0 most of the time.
+    • Off-beat steps (3, 7, 10, 13, 19, 22, 27) drive the acid push.
+    • Occasional back-to-back 16ths (e.g. 6,7 or 22,23) add urgency — but
+      don't fill every 16th, that's no longer acid.
+    • Leave bigger gaps around the kick's strong beats (4, 12, 20, 28) so
+      the bass breathes rather than doubling the kick.
+    • Density 1/3–2/3 — less for dub / deep house, more for rolling acid.
+    • BOTH HALVES EQUALLY ACTIVE: if steps 0..15 have ~5 hits, steps 16..31
+      should have about the same count. Don't front-load the bar with
+      activity and leave the second half thin — the loop is supposed to
+      repeat seamlessly, an empty second half sounds like a mistake.
+
 BASS MELODY BASICS:
   Acid range C2–C3: C2=36, D2=38, Eb2=39, F2=41, G2=43, A2=45, Bb2=46, B2=47, C3=48
   Minor pentatonic (C): 36, 39, 41, 43, 46 (and 48 for octave)
-  Keep to 3–5 distinct pitches per loop. Use false in bass_steps for rhythmic rests.
+  Use AT LEAST 3 different scale pitches across the loop — a line that's
+  just the root note over and over is not acid, it's a drone. Typical:
+  3–5 distinct pitches (root + 5th + one or two colour tones).
+  DISTRIBUTE NOTES ACROSS BOTH HALVES:
+    If the first half (steps 0..15) has variation C, D, F, G, don't let
+    the second half (steps 16..31) collapse to all Cs. The second half
+    should reuse the same vocabulary — maybe reordered, maybe with a new
+    colour tone for contrast — but it should stay as melodically active
+    as the first. Both bars equally weighted.
+  Variation ideas for the second half: transpose a motif up a 5th, swap
+  the 3rd for the 7th, add one unexpected chromatic note on a syncopated
+  step. Avoid the lazy pattern of "busy bar 1, empty bar 2".
+  Use false in bass_steps for rhythmic rests (silence ≠ root note held).
 
 ═══ MUSIC THEORY REFERENCE ═══
 

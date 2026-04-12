@@ -50,6 +50,19 @@ def _get_tts(model_path: str | None = None):
         print("ERROR: neutts not installed.  Run: scripts/setup-neutts.sh", file=sys.stderr)
         sys.exit(1)
 
+    # NeuTTS hardcodes self.max_context = 2048 in its __init__, which also
+    # becomes the llama.cpp `n_ctx` and the generation `max_tokens`. For
+    # longer sentences this truncates the audio or returns garbled codes.
+    # The underlying Qwen backbone is trained on 32768 tokens; match it
+    # to use the full native capacity (~640 s of audio headroom). Override
+    # with the NEUTTS_CTX env var if VRAM is tight.
+    _neutts_ctx = int(os.environ.get("NEUTTS_CTX", "32768"))
+
+    class NeuTTSWide(NeuTTS):
+        def _load_backbone(self, backbone_repo, backbone_device):
+            self.max_context = _neutts_ctx
+            super()._load_backbone(backbone_repo, backbone_device)
+
     # Resolve model path
     if model_path is None:
         # Search common locations
@@ -73,7 +86,7 @@ def _get_tts(model_path: str | None = None):
     import torch
     device = "gpu" if torch.cuda.is_available() else "cpu"
     print(f"Device: {device}", flush=True)
-    _tts_instance = NeuTTS(
+    _tts_instance = NeuTTSWide(
         backbone_repo=model_path,
         backbone_device=device,
         language="en-us",
