@@ -32,7 +32,7 @@ look_at sequencer
 play
 wait_seconds 1
 
-ask "Style is drum and bass at 170 BPM. Two-step kick and snare pattern, fast hats."
+ask "Style is drum and bass at 170 BPM. Two-step on kit_a: kick on steps 0,20, snare on 8,24. Hihat on 2,6,10,14,18,22,26,30, pan 0.3. Kick/snare center."
 
 say "Two-step pattern at 170. The agent picks the step placement."
 wait_seconds 3
@@ -43,7 +43,7 @@ scene "Rolling hats"
 
 focus_on 808
 
-ask "rolling hi-hats, sixteenths, add some open hats for syncopation"
+ask "rolling hi-hats, sixteenths across all 16 positions of kit_a, add open hats on 6,14,22,30 for syncopation, velocity variation between steps"
 
 say "Continuous hat rolls. Characteristic of the genre."
 wait_seconds 3
@@ -54,7 +54,7 @@ scene "Reese bass"
 
 focus_on bass
 
-ask "deep reese bass, dark, sub-heavy, sparse pattern"
+ask "deep reese bass, dark, sub-heavy, detuned supersaw, cutoff around 0.2, resonance 0.4, sparse pattern with 4 distinct scale pitches across both halves, slide between notes, pan center"
 
 say "Sub bass. The agent sets filter and note placement."
 wait_seconds 3
@@ -65,7 +65,10 @@ scene "Effects and filter sweep"
 
 look_at console
 
-ask "subtle delay and reverb, then slowly open the bass filter over 4 bars" "" 14
+# Deterministic FX levels via api_params — don't ask the agent to set dB values.
+api_params '{"fx": {"reverb_mix": 0.18, "reverb_size": 0.55, "delay_mix": 0.14, "delay_time": 0.375, "stereo_width": 0.6}}'
+
+ask "slowly open the bass filter over 4 bars, start near 0.2 and ramp to 0.75" "" 14
 
 say "Filter ramp running. Builds tension."
 wait_seconds 3

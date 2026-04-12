@@ -24,13 +24,17 @@ scene "Adding specialist agents"
 
 say "Three agents, each scoped to specific instruments."
 
-add_agent BASS bonsai bass
+# BASS runs Gemma 4 E4B — melody work needs a stronger model than Q1 Bonsai
+# can reliably deliver. DRUMS and FX do rhythm/knob work, so Bonsai is fine.
+add_agent BASS gemma bass
 add_agent DRUMS bonsai "kit_a,kit_b"
 add_agent FX bonsai fx
 
 wait_for_model
 
-say "Each runs Bonsai. They share one model server."
+set_bpm 128
+
+say "Bass on Gemma, drums and FX on Bonsai. One server per model, ref-counted."
 
 # ── Scene 3: Show wiring ──────────────────────────────────────────────────
 
@@ -54,9 +58,9 @@ scene "Independent prompts"
 play
 wait_seconds 1
 
-ask "acid bass line, squelchy" BASS
-ask "four on the floor, off-beat hats, clap on two and four" DRUMS
-ask "subtle reverb and short delay" FX
+ask "acid bass line, squelchy, 4 distinct scale pitches spread across both halves of the bank, low cutoff, high resonance, pan center" BASS
+ask "kick on steps 0,4,8,12,16,20,24,28 pan center, hihat on 2,6,10,14,18,22,26,30 pan 0.3, clap on 4,12,20,28 pan -0.3" DRUMS
+ask "reverb mix 0.12, reverb size 0.5, delay mix 0.08, stereo_width 0.6" FX
 
 say "Each agent only modified its own instruments."
 wait_seconds 3
@@ -67,7 +71,7 @@ scene "Scoped changes"
 
 focus_on bass
 
-ask "more resonance, darker" BASS
+ask "more resonance, darker, add slide on a few steps" BASS
 
 say "Bass changed. Drums and FX untouched."
 wait_seconds 2
