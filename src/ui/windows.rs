@@ -499,7 +499,7 @@ impl ImpulseApp {
             .show(ctx, |ui| {
                 ui.vertical_centered(|ui| {
                     ui.label(
-                        egui::RichText::new("◆ IMPULSE INSTRUCT")
+                        egui::RichText::new("IMPULSE • INSTRUCT")
                             .monospace()
                             .size(16.0)
                             .color(theme::CHALK),

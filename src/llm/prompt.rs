@@ -141,7 +141,11 @@ pub fn build_system_prompt_full(
             "\n═══ ACTIVE STYLE ═══\n\nFree mode — no style constraints. \
              Be creative and unpredictable. Experiment freely with sound and rhythm. \
              Surprise the listener. Choose any musical direction that feels interesting \
-             and don't hold back.\n".to_string(),
+             and don't hold back. Even without a style, commit to a root+scale and \
+             spread at least 3 distinct pitches across EACH half of the bass loop — \
+             the second half of the bank must be as melodically active as the first, \
+             never fall back on root-only fill. Always respect the current \
+             `sequencer.steps` length and per-voice lengths when writing step arrays.\n".to_string(),
         Some("__custom__") => {
             let desc = state.llm.custom_style_text.trim();
             if desc.is_empty() {

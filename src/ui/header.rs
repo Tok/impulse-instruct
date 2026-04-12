@@ -392,7 +392,7 @@ impl ImpulseApp {
                         ui.set_min_width(280.0);
                         ui.vertical(|ui| {
                             ui.label(
-                                egui::RichText::new("◆ IMPULSE INSTRUCT")
+                                egui::RichText::new("IMPULSE • INSTRUCT")
                                     .color(theme::CHALK)
                                     .size(12.0)
                                     .monospace()

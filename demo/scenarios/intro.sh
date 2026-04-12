@@ -51,7 +51,7 @@ look_at sequencer
 say "Asking the agent for a pattern."
 
 # Send prompt BEFORE playing — pattern loads while sequencer is stopped.
-ask "acid groove, kick and hats, short bass line with gaps. set pan positions for stereo width, add subtle chorus" "" 5
+ask "acid groove, kick and hats, bass line with gaps spanning the full bank, 3–5 distinct pitches across both halves. set pan positions for stereo width, add subtle chorus" "" 5
 
 play
 wait_seconds 3
@@ -214,7 +214,7 @@ wait_seconds 2
 scene "Melody rewrite"
 
 say "The bass agent rewrites the melody on demand."
-ask "rewrite the bass melody from scratch, keep the rhythm, more movement, new phrase" BASS 8
+ask "rewrite the bass melody from scratch, keep the rhythm, more movement, new phrase, vary pitches across both halves of the bank — no root-only second half" BASS 8
 focus_on bass
 wait_seconds 3
 say "Same groove, different line."
