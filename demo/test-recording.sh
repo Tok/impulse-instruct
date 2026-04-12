@@ -16,6 +16,10 @@ VERSION=$(grep '^version' "$PROJECT_DIR/Cargo.toml" | head -1 | sed 's/.*"\(.*\)
 BATCH_DIR="$OUTPUT_DIR/${TIMESTAMP}"
 BASENAME="v${VERSION}-test"
 
+# Clean up old test batches (keep last 3)
+mkdir -p "$OUTPUT_DIR"
+ls -1dt "$OUTPUT_DIR"/20* 2>/dev/null | tail -n +4 | xargs rm -rf 2>/dev/null || true
+
 source "$DEMO_DIR/lib.sh"
 
 APP_RUNNING=0
@@ -87,11 +91,7 @@ echo "  Geometry: ${GRAB_W}x${GRAB_H}"
 RAW_VIDEO="$BATCH_DIR/${BASENAME}-raw.mkv"
 echo "[3/7] Starting video capture → $(basename "$RAW_VIDEO")"
 
-# Chroma fix: bgr0 → yuv444p (no subsampling loss) → encoder downsamples to 420p
-# with lanczos + full_chroma flags to prevent vertical chroma offset.
-SWS_CAPTURE="-vf format=yuv444p -pix_fmt yuv420p -sws_flags lanczos+accurate_rnd+full_chroma_int+full_chroma_inp"
-
-# -t 15 hard stops after 25s even if SIGINT fails
+# -t 15 hard stops after 15s even if SIGINT fails
 setsid ffmpeg -y \
     -f x11grab \
     -window_id "$WINDOW_ID_DEC" \
@@ -99,7 +99,7 @@ setsid ffmpeg -y \
     -draw_mouse 0 \
     -i "${DISPLAY}" \
     -t 15 \
-    $SWS_CAPTURE \
+    -pix_fmt yuv420p \
     -c:v h264_nvenc -preset p4 -cq 20 \
     -an \
     "$RAW_VIDEO" \
@@ -116,7 +116,7 @@ if ! kill -0 "$FFMPEG_PID" 2>/dev/null; then
         -draw_mouse 0 \
         -i "${DISPLAY}" \
         -t 15 \
-        $SWS_CAPTURE \
+        -pix_fmt yuv420p \
         -c:v libx264 -preset ultrafast -crf 23 \
         -an \
         "$RAW_VIDEO" \
@@ -209,8 +209,6 @@ HAS_AUDIO=0
 AUDIO_ARGS=""
 [ "$HAS_AUDIO" -eq 1 ] && AUDIO_ARGS="-i $APP_AUDIO -c:a aac -b:a 128k -map 0:v:0 -map 1:a:0 -shortest"
 
-# Re-encode: raw capture is already yuv420p with correct chroma from capture stage.
-# Re-encoding preserves pixel format; sws_flags for any internal conversion.
 SWS_ENCODE="-sws_flags lanczos+accurate_rnd+full_chroma_int+full_chroma_inp"
 echo -n "  Clean video: "
 if ffmpeg -y -i "$RAW_VIDEO" $AUDIO_ARGS \
@@ -259,6 +257,52 @@ for f in "$RAW_VIDEO" "$APP_AUDIO" "$SRT_FILE" "$FINAL" "$FINAL_SUBS"; do
         printf "  %-50s  MISSING\n" "$(basename "$f")"
     fi
 done
+
+# ── Chroma offset test encodes ────────────────────────────────────────────────
+# Re-encode the raw capture with different approaches to find which fixes the
+# vertical chroma offset. Compare these side-by-side with the raw.
+
+if [ -f "$RAW_VIDEO" ]; then
+    echo ""
+    echo "=== Chroma test encodes ==="
+    CDIR="$BATCH_DIR/chroma_tests"
+    mkdir -p "$CDIR"
+
+    echo -n "  1_plain_420p.mp4 ... "
+    ffmpeg -y -i "$RAW_VIDEO" -pix_fmt yuv420p \
+        -c:v libx264 -preset fast -crf 20 \
+        "$CDIR/1_plain_420p.mp4" </dev/null 2>/dev/null && echo "OK" || echo "FAIL"
+
+    echo -n "  2_fullrange.mp4 ... "
+    ffmpeg -y -i "$RAW_VIDEO" \
+        -vf "scale=in_range=full:out_range=full:flags=lanczos+accurate_rnd+full_chroma_int+full_chroma_inp" \
+        -pix_fmt yuv420p -color_range pc \
+        -c:v libx264 -preset fast -crf 20 -x264-params fullrange=1 \
+        "$CDIR/2_fullrange.mp4" </dev/null 2>/dev/null && echo "OK" || echo "FAIL"
+
+    echo -n "  3_chromaloc.mp4 ... "
+    ffmpeg -y -i "$RAW_VIDEO" -pix_fmt yuv420p \
+        -chroma_sample_location left \
+        -colorspace bt709 -color_primaries bt709 -color_trc bt709 \
+        -c:v libx264 -preset fast -crf 20 \
+        "$CDIR/3_chromaloc.mp4" </dev/null 2>/dev/null && echo "OK" || echo "FAIL"
+
+    echo -n "  4_yuv444p.mp4 ... "
+    ffmpeg -y -i "$RAW_VIDEO" -pix_fmt yuv444p -profile:v high444p \
+        -c:v libx264 -preset fast -crf 20 \
+        "$CDIR/4_yuv444p.mp4" </dev/null 2>/dev/null && echo "OK" || echo "FAIL"
+
+    echo -n "  5_sws_lanczos.mp4 ... "
+    ffmpeg -y -i "$RAW_VIDEO" \
+        -sws_flags "lanczos+accurate_rnd+full_chroma_int+full_chroma_inp" \
+        -c:v libx264 -preset fast -crf 20 \
+        "$CDIR/5_sws_lanczos.mp4" </dev/null 2>/dev/null && echo "OK" || echo "FAIL"
+
+    echo ""
+    echo "Compare these files in $CDIR/"
+    echo "  4_yuv444p.mp4 = no chroma subsampling (reference)"
+    echo "  The first 420p variant matching it is the fix."
+fi
 
 echo ""
 echo "Test complete."

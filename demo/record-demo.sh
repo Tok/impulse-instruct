@@ -350,9 +350,7 @@ if [ "$SKIP_VIDEO" -eq 0 ]; then
         -draw_mouse 0 \
         -i "${DISPLAY}" \
         -t 600 \
-        -vf format=yuv444p \
         -pix_fmt yuv420p \
-        -sws_flags "lanczos+accurate_rnd+full_chroma_int+full_chroma_inp" \
         -c:v h264_nvenc -preset p4 -cq 18 \
         -an \
         "$RAW_VIDEO" \
