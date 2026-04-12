@@ -391,24 +391,28 @@ if [ "$SKIP_VIDEO" -eq 0 ]; then
 
     echo ""
     echo "[5/6] Recording demo..."
-    echo "  Capturing window $APP_WINDOW_ID (${GRAB_W}x${GRAB_H})"
-    echo "  Window capture mode — app can be in background, other tabs won't interfere"
+    echo "  Capturing region ${GRAB_W}x${GRAB_H} at +${GRAB_X}+${GRAB_Y}"
     echo "  Raw output: $RAW_VIDEO"
 
-    # Convert hex window ID to decimal for ffmpeg -window_id
-    WINDOW_ID_DEC=$(printf '%d' "$APP_WINDOW_ID")
-
-    # setsid puts ffmpeg in its own process group — ensures kill -9 works
-    # Crop to even dimensions (yuv420p needs 2x2 blocks; odd window sizes break libx264)
-    # -t 600 is a 10-minute safety net in case SIGINT fails
+    # Region capture via x11grab — reliable across X11 and XWayland.
+    # -window_id looked nicer on paper but silently degrades to full-screen
+    # capture when xcb can't map the wmctrl-reported window handle (common
+    # on Wayland compositors running XWayland), which was the regression.
+    # The GRAB_X/Y/W/H rect is computed from wmctrl geometry and already
+    # even-sized, so we capture the window's current position directly.
+    # Caveat: if the window is moved mid-recording the capture stays on the
+    # original rect. Our automation never moves the window after the initial
+    # wmctrl focus/raise, so this is fine.
+    #
+    # setsid puts ffmpeg in its own process group so kill -9 propagates.
+    # -t 600 is a 10-minute safety net in case SIGINT fails.
     setsid ffmpeg -y \
         -f x11grab \
-        -window_id "$WINDOW_ID_DEC" \
+        -video_size "${GRAB_W}x${GRAB_H}" \
         -framerate 30 \
         -draw_mouse 0 \
-        -i "${DISPLAY}" \
+        -i "${DISPLAY}+${GRAB_X},${GRAB_Y}" \
         -t 600 \
-        -vf "crop=trunc(iw/2)*2:trunc(ih/2)*2" \
         -pix_fmt yuv420p \
         -c:v h264_nvenc -preset p4 -cq 18 \
         -an \
