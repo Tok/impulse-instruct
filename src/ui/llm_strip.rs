@@ -25,7 +25,7 @@ pub(super) fn colorize_log(text: &str, default_color: egui::Color32) -> egui::te
     use egui::text::{LayoutJob, TextFormat};
 
     let mut job = LayoutJob::default();
-    let font = egui::FontId::monospace(9.0);
+    let font = egui::FontId::monospace(13.0);
     // Thinking lines render in SMOKE (darker than default FOG) to visually separate them.
     let think_color = theme::SMOKE;
 

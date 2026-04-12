@@ -377,11 +377,6 @@ if [ "$SKIP_VIDEO" -eq 0 ]; then
     # Convert hex window ID to decimal for ffmpeg -window_id
     WINDOW_ID_DEC=$(printf '%d' "$APP_WINDOW_ID")
 
-    # Mark the video start timestamp *before* spawning ffmpeg so narration
-    # log timestamps can be translated into video-relative times (SRT ends
-    # up in sync with the actual recording, not scenario-relative).
-    export VIDEO_START_NS
-    VIDEO_START_NS=$(date +%s%N)
     # setsid puts ffmpeg in its own process group — ensures kill -9 works
     # Crop to even dimensions (yuv420p needs 2x2 blocks; odd window sizes break libx264)
     # -t 600 is a 10-minute safety net in case SIGINT fails
@@ -400,23 +395,24 @@ if [ "$SKIP_VIDEO" -eq 0 ]; then
         </dev/null >/dev/null 2>&1 &
     FFMPEG_PID=$!
 
-    sleep 1  # let ffmpeg settle
+    # Let ffmpeg settle before starting the scenario clock. The 1-second
+    # wait + the DEMO_START_NS timestamp immediately after it pin the
+    # scenario's t=0 to approximately when ffmpeg actually started
+    # recording frames — narration log timestamps are then video-relative
+    # and SRT subtitles stay in sync with the recorded audio.
+    sleep 1
 else
     echo "[4/6] Skipping capture (--skip-video)"
     echo "[5/6] Running scenario without recording..."
-    # No video — use now as the reference so demo_elapsed still reports
-    # positive times.
-    export VIDEO_START_NS
-    VIDEO_START_NS=$(date +%s%N)
 fi
 
 # Clear narration log
 rm -f "$NARRATION_LIST"
 
-# DEMO_START_NS kept as an alias for scripts that reference it; both now
-# point at video t=0 so runtime narration timestamps are video-relative.
+# Record start time (nanoseconds) — captured right after ffmpeg settles
+# so narrate() timestamps are video-relative.
 export DEMO_START_NS
-DEMO_START_NS="$VIDEO_START_NS"
+DEMO_START_NS=$(date +%s%N)
 
 echo ""
 echo "  Running scenario: $SCENARIO"

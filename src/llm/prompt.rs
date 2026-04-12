@@ -554,15 +554,28 @@ BASS MELODY BASICS:
   Use AT LEAST 3 different scale pitches across the loop — a line that's
   just the root note over and over is not acid, it's a drone. Typical:
   3–5 distinct pitches (root + 5th + one or two colour tones).
-  DISTRIBUTE NOTES ACROSS BOTH HALVES:
-    If the first half (steps 0..15) has variation C, D, F, G, don't let
-    the second half (steps 16..31) collapse to all Cs. The second half
-    should reuse the same vocabulary — maybe reordered, maybe with a new
-    colour tone for contrast — but it should stay as melodically active
-    as the first. Both bars equally weighted.
-  Variation ideas for the second half: transpose a motif up a 5th, swap
-  the 3rd for the 7th, add one unexpected chromatic note on a syncopated
-  step. Avoid the lazy pattern of "busy bar 1, empty bar 2".
+  DISTRIBUTE NOTES ACROSS BOTH HALVES — this is the #1 thing to get right:
+    The most common failure mode is a 32-step `bass_notes` array where the
+    first half has real melodic shape (C, D, F, G, Eb, G…) and the second
+    half is just C, C, C, C, C, … — the model gives up on variation and
+    falls back to the root. DO NOT DO THIS. It sounds lazy and wrong.
+    Each half of the loop should have AT LEAST 3 distinct scale pitches,
+    independently. The second half is not a filler — it is half the loop.
+
+  Concrete example of a good 32-step `bass_notes` in C minor (root 36):
+    [36, 43, 36, 41, 39, 36, 43, 36, 48, 43, 41, 36, 39, 41, 36, 43,
+     36, 41, 39, 43, 36, 46, 43, 36, 39, 43, 48, 41, 36, 43, 39, 36]
+    Notice: both halves use the full palette (36, 39, 41, 43, 46, 48),
+    both halves anchor step 0 on the root, both halves have a 5th-leap.
+
+  Variation tools for the second half: transpose a motif up a 5th, swap
+  the 3rd for the 7th, add one chromatic passing tone on a syncopated
+  step, invert the contour. Avoid the lazy "busy bar 1, root bar 2".
+
+  NEVER SHORTCUT WITH ALL-Cs. If you're tempted to fill the second half
+  with the root because you're running out of ideas, stop and reuse the
+  vocabulary from the first half instead. Silence (`false` in
+  `bass_steps`) is always a better choice than repeating the root.
   Use false in bass_steps for rhythmic rests (silence ≠ root note held).
 
 ═══ MUSIC THEORY REFERENCE ═══
