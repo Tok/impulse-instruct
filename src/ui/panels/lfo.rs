@@ -200,7 +200,7 @@ pub fn draw_lfo_slot(app: &mut ImpulseApp, ui: &mut egui::Ui, slot_idx: usize) {
     let mut rate = slot.rate;
     let mut depth = slot.depth;
     let ctrl = widgets::ControlPrefs::from_prefs(&app.state.read().ui_prefs);
-    let ctrl_lg = ctrl.phi_bigger();
+    let ctrl_lg = ctrl.phi_bigger().flat();
 
     // Row 1: ON | → [TARGET] | waveform selectors
     ui.horizontal(|ui| {

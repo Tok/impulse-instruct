@@ -28,7 +28,7 @@ pub fn draw_granular(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             }
         }
     });
-    let ctrl = widgets::ControlPrefs::from_prefs(&app.state.read().ui_prefs);
+    let ctrl = widgets::ControlPrefs::from_prefs(&app.state.read().ui_prefs).flat();
     let locked = app.state.read().llm.locked_params.clone();
     let focused = app.state.read().llm.focused_params.clone();
     let pm = |path: &str| crate::state::param_mode(path, &locked, &focused);

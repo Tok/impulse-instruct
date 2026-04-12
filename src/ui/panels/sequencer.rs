@@ -12,6 +12,27 @@ use crate::ui::{ImpulseApp, SEQ_LABEL_H, SEQ_LABEL_W, SEQ_VOL_W, theme, widgets}
 /// Number of step buttons visible per page.
 pub(super) const STEPS_PER_PAGE: usize = 32;
 
+/// Estimate total width of the step grid (buttons + beat dividers).
+/// Used to right-justify step rows by inserting a spacer after the prefix.
+pub(super) fn step_grid_width(
+    pad_px: f32,
+    time_sig_num: usize,
+    page_start: usize,
+    item_spacing_x: f32,
+) -> f32 {
+    let mut w = 0.0f32;
+    for i in 0..STEPS_PER_PAGE {
+        let beat_pos = (page_start + i) % time_sig_num;
+        if i > 0 && beat_pos == 0 {
+            w += 4.0;
+        } else if i > 0 && i.is_multiple_of(4) {
+            w += 2.0;
+        }
+        w += pad_px + item_spacing_x;
+    }
+    w
+}
+
 pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
     // Dynamic height: count actual visible rows (bass + expanded drums + hoover + an1x)
     {
@@ -405,6 +426,14 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             // Approximate fallback for the very first frame
             10.0 + 10.0 + (SEQ_LABEL_W - 20.0) + SEQ_VOL_W + 18.0 + 32.0
         };
+        // Right-justify spacer: push step grids to the right edge.
+        let grid_w = step_grid_width(
+            pad_px,
+            time_sig_num,
+            page_start,
+            ui.spacing().item_spacing.x,
+        );
+        let row_spacer = (ui.available_width() - prefix_w - grid_w - 8.0).max(0.0);
 
         // ── Bass rows — only shown when AcidBass is in the rack ───────────────
         if rack_has_bass {
@@ -429,6 +458,9 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                             .size(8.5),
                     ),
                 );
+                if row_spacer > 0.0 {
+                    ui.add_space(row_spacer);
+                }
                 for i in 0..STEPS_PER_PAGE {
                     let abs = page_start + i;
                     beat_div(ui, i);
@@ -490,6 +522,9 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                             .size(7.0),
                     ),
                 );
+                if row_spacer > 0.0 {
+                    ui.add_space(row_spacer);
+                }
                 for i in 0..STEPS_PER_PAGE {
                     let abs = page_start + i;
                     beat_div(ui, i);
@@ -528,6 +563,9 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                             .size(7.0),
                     ),
                 );
+                if row_spacer > 0.0 {
+                    ui.add_space(row_spacer);
+                }
                 for i in 0..STEPS_PER_PAGE {
                     let abs = page_start + i;
                     beat_div(ui, i);
@@ -588,6 +626,9 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                             .size(8.5),
                     ),
                 );
+                if row_spacer > 0.0 {
+                    ui.add_space(row_spacer);
+                }
                 for i in 0..STEPS_PER_PAGE {
                     let abs = page_start + i;
                     beat_div(ui, i);
@@ -667,6 +708,9 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                             .size(8.5),
                     ),
                 );
+                if row_spacer > 0.0 {
+                    ui.add_space(row_spacer);
+                }
                 for i in 0..STEPS_PER_PAGE {
                     let abs = page_start + i;
                     beat_div(ui, i);
@@ -723,6 +767,7 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             pad_px,
             seq_steps,
             running,
+            row_spacer,
             current_step,
         );
     });

@@ -5,7 +5,7 @@ use crate::state::ParamMode;
 use crate::ui::{ImpulseApp, theme, widgets};
 
 pub fn draw_hoover(app: &mut ImpulseApp, ui: &mut egui::Ui) {
-    let ctrl = widgets::ControlPrefs::from_prefs(&app.state.read().ui_prefs);
+    let ctrl = widgets::ControlPrefs::from_prefs(&app.state.read().ui_prefs).flat();
 
     ui.horizontal(|ui| {
         let enabled = app.state.read().hoover.enabled;

@@ -19,6 +19,7 @@ pub(super) fn draw_drum_rows(
     pad_px: f32,
     seq_steps: usize,
     running: bool,
+    row_spacer: f32,
     current_step: usize,
 ) {
     if !voices.is_empty() {
@@ -283,12 +284,15 @@ pub(super) fn draw_drum_rows(
             }
 
             let mut toggled = None;
-            steps_x = ui.cursor().min.x; // track for sub-lane alignment
             // Cache prefix width for cross-row alignment (bass, hoover, an1x use this next frame)
-            let rel_x = steps_x - ui.min_rect().min.x;
+            let rel_x = ui.cursor().min.x - ui.min_rect().min.x;
             if rel_x > 0.0 {
                 app.seq_prefix_width = rel_x;
             }
+            if row_spacer > 0.0 {
+                ui.add_space(row_spacer);
+            }
+            steps_x = ui.cursor().min.x; // track for sub-lane alignment
             for i in 0..STEPS_PER_PAGE {
                 let abs = page_start + i;
                 beat_div(ui, i);

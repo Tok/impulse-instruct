@@ -268,7 +268,7 @@ pub fn draw_kit_b(app: &mut ImpulseApp, ui: &mut egui::Ui) {
     let mut changed = false;
 
     let ctrl = widgets::ControlPrefs::from_prefs(&app.state.read().ui_prefs);
-    let ctrl_big = ctrl.phi_bigger(); // larger knobs for the important KICK params
+    let ctrl_big = ctrl.phi_bigger().flat(); // larger knobs for the important KICK params
     let avail = ui.available_width();
     let gw_half = ((avail - super::GLASS_GAP) / 2.0).floor();
 

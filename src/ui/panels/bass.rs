@@ -215,7 +215,7 @@ pub fn draw_bass(app: &mut ImpulseApp, ui: &mut egui::Ui) {
     // Helper macro — avoids repeating the changed/cycle boilerplate 13 times.
     {
         // ── Knob layout: FILTER + CHARACTER wide, MOD compact ────────────────
-        let ctrl_big = ctrl.phi_bigger(); // primary: cutoff, resonance
+        let ctrl_big = ctrl.phi_bigger().flat(); // primary: cutoff, resonance
         let ctrl_sm = ctrl.phi_smaller(); // secondary: glide, noise, FM
         let avail = ui.available_width();
         let gap = super::GLASS_GAP;
