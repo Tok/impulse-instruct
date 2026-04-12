@@ -473,6 +473,125 @@ generate_srt() {
     echo "$outfile"
 }
 
+min_subtitle_dur() {
+    # Rough reading-time estimate for a subtitle: 0.35s/word + 0.5s baseline,
+    # clamped to [1.5, 6.0] seconds. Used so subtitles remain on-screen for a
+    # readable time even when the corresponding TTS clip is shorter (e.g.
+    # truncated or fast-spoken).
+    local text="$1"
+    local words
+    words=$(echo "$text" | wc -w)
+    local dur
+    dur=$(awk -v w="$words" 'BEGIN { d = w * 0.35 + 0.5; if (d < 1.5) d = 1.5; if (d > 6.0) d = 6.0; printf "%.3f", d }')
+    echo "$dur"
+}
+
+pregenerate_srt() {
+    # Parse a scenario file and emit an SRT based on narrate + pause/sleep
+    # timings. Uses actual clip duration (if the WAV exists in $TTS_DIR),
+    # taking max(clip_dur, reading_time). Non-blocking narrate emits a
+    # subtitle at the current cursor time without advancing it; narrate --wait
+    # and pause/sleep advance the cursor. Timing is approximate (API calls
+    # take variable time) but close enough for subtitles.
+    #
+    # Usage: pregenerate_srt SCENARIO_FILE OUTFILE
+    local scenario="$1" outfile="$2"
+    [ -f "$scenario" ] || { echo "  pregenerate_srt: no scenario file: $scenario" >&2; return 1; }
+    > "$outfile"
+    local t=0.0 idx=0
+
+    _emit_srt() {
+        local start="$1" end="$2" text="$3"
+        idx=$((idx + 1))
+        local st et
+        st=$(secs_to_srt "$start")
+        et=$(secs_to_srt "$end")
+        {
+            echo "$idx"
+            echo "$st --> $et"
+            echo "$text"
+            echo ""
+        } >> "$outfile"
+    }
+
+    _clip_duration_or_estimate() {
+        local id="$1" text="$2"
+        local est
+        est=$(min_subtitle_dur "$text")
+        local wav="$TTS_DIR/${id}.wav"
+        if [ -f "$wav" ]; then
+            local d
+            d=$(tts_duration "$wav" 2>/dev/null)
+            # Use max(wav_dur, reading_time).
+            if [ -n "$d" ]; then
+                awk -v a="$d" -v b="$est" 'BEGIN { if (a > b) printf "%.3f", a; else printf "%.3f", b }'
+                return
+            fi
+        fi
+        echo "$est"
+    }
+
+    local clip_id=""
+    local scene_num=0
+    while IFS= read -r line; do
+        # Strip leading whitespace for matching
+        local trimmed="${line#"${line%%[![:space:]]*}"}"
+        # narrate "id" "text"   |   narrate --wait "id" "text"
+        if [[ "$trimmed" =~ ^narrate[[:space:]]+(--wait[[:space:]]+)?\"([^\"]+)\"[[:space:]]+\"(.+)\"[[:space:]]*\\?$ ]]; then
+            local is_wait="${BASH_REMATCH[1]}" id="${BASH_REMATCH[2]}" text="${BASH_REMATCH[3]}"
+            local dur
+            dur=$(_clip_duration_or_estimate "$id" "$text")
+            local end
+            end=$(awk -v a="$t" -v b="$dur" 'BEGIN { printf "%.3f", a + b }')
+            _emit_srt "$t" "$end" "$text"
+            if [ -n "$is_wait" ]; then
+                t="$end"
+            fi
+            clip_id=""
+        # Two-line form: narrate "id" \   (next line is the quoted text)
+        elif [[ "$trimmed" =~ ^narrate[[:space:]]+(--wait[[:space:]]+)?\"([^\"]+)\"[[:space:]]+\\$ ]]; then
+            clip_id="${BASH_REMATCH[2]}"
+            _two_line_is_wait="${BASH_REMATCH[1]}"
+        elif [[ -n "$clip_id" && "$trimmed" =~ ^\"(.+)\"[[:space:]]*$ ]]; then
+            local text="${BASH_REMATCH[1]}"
+            local dur
+            dur=$(_clip_duration_or_estimate "$clip_id" "$text")
+            local end
+            end=$(awk -v a="$t" -v b="$dur" 'BEGIN { printf "%.3f", a + b }')
+            _emit_srt "$t" "$end" "$text"
+            if [ -n "$_two_line_is_wait" ]; then
+                t="$end"
+            fi
+            clip_id=""
+            _two_line_is_wait=""
+        # scene "name"   (track scene counter for auto-ID lookup)
+        elif [[ "$trimmed" =~ ^scene[[:space:]]+\".*\" ]]; then
+            scene_num=$((scene_num + 1))
+        # say "text"  (expands to narrate --wait + pause 1)
+        elif [[ "$trimmed" =~ ^say[[:space:]]+\"(.+)\"[[:space:]]*$ ]]; then
+            local text="${BASH_REMATCH[1]}"
+            local slug
+            slug=$(echo "$text" | tr ' ' '_' | tr -cd 'a-zA-Z0-9_' | head -c 30)
+            local auto_id
+            auto_id=$(printf 'auto_%03d_%s' "$scene_num" "$slug")
+            local dur
+            dur=$(_clip_duration_or_estimate "$auto_id" "$text")
+            local end
+            end=$(awk -v a="$t" -v b="$dur" 'BEGIN { printf "%.3f", a + b }')
+            _emit_srt "$t" "$end" "$text"
+            # say always blocks (narrate --wait) then pauses 1s
+            t=$(awk -v a="$end" 'BEGIN { printf "%.3f", a + 1.0 }')
+        # pause N  |  sleep N  |  wait_seconds N   (advance cursor)
+        elif [[ "$trimmed" =~ ^(pause|sleep|wait_seconds)[[:space:]]+([0-9.]+) ]]; then
+            local n="${BASH_REMATCH[2]}"
+            t=$(awk -v a="$t" -v b="$n" 'BEGIN { printf "%.3f", a + b }')
+        fi
+    done < "$scenario"
+
+    echo "  Pre-generated SRT: $outfile ($idx entries, estimated end at ${t}s)"
+    echo "$outfile"
+}
+
 secs_to_srt() {
     local total="$1"
     local h m s ms

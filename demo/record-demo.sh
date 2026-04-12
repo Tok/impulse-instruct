@@ -141,9 +141,10 @@ echo ""
 echo "[1/6] Pre-generating TTS clips..."
 if [ "$NO_TTS" -eq 0 ]; then
     start_neutts_server || { echo "  Falling back to no-TTS mode"; NO_TTS=1; }
-    idx=0
     clip_id=""
+    scene_num=0
     while IFS= read -r line; do
+        # narrate "id" \        (two-line form: text on next line)
         if [[ "$line" =~ narrate[[:space:]]+(--wait[[:space:]]+)?\"([^\"]+)\"[[:space:]]+\\?$ ]]; then
             clip_id="${BASH_REMATCH[2]}"
         elif [[ "$line" =~ ^[[:space:]]+\"(.+)\"$ ]] && [ -n "${clip_id:-}" ]; then
@@ -151,18 +152,36 @@ if [ "$NO_TTS" -eq 0 ]; then
             tts_generate "$clip_id" "$text" >/dev/null
             echo "  Generated: $clip_id"
             clip_id=""
+        # narrate "id" "text"
         elif [[ "$line" =~ narrate[[:space:]]+(--wait[[:space:]]+)?\"([^\"]+)\"[[:space:]]+\"(.+)\" ]]; then
             clip_id="${BASH_REMATCH[2]}"
             text="${BASH_REMATCH[3]}"
             tts_generate "$clip_id" "$text" >/dev/null
             echo "  Generated: $clip_id"
             clip_id=""
+        # scene "name"  (track scene counter for say auto-IDs)
+        elif [[ "$line" =~ ^[[:space:]]*scene[[:space:]]+\".*\" ]]; then
+            scene_num=$((scene_num + 1))
+        # say "text"  (expands to narrate --wait "auto_NNN_<slug>" "text")
+        elif [[ "$line" =~ ^[[:space:]]*say[[:space:]]+\"(.+)\"[[:space:]]*$ ]]; then
+            text="${BASH_REMATCH[1]}"
+            slug=$(echo "$text" | tr ' ' '_' | tr -cd 'a-zA-Z0-9_' | head -c 30)
+            auto_id=$(printf 'auto_%03d_%s' "$scene_num" "$slug")
+            tts_generate "$auto_id" "$text" >/dev/null
+            echo "  Generated: $auto_id"
         fi
     done < "$SCENARIO_FILE"
     echo "  TTS clips cached in $TTS_DIR"
     # Stop server now — frees GPU memory for the app (LLM + display).
     # Playback uses cached WAV files via paplay, no server needed.
     stop_neutts_server
+
+    # Pre-generate SRT from scenario + actual clip durations. Timings are
+    # approximate (API/UI calls take variable time at runtime) but the SRT
+    # contains the full intended text with reading-time-friendly durations,
+    # independent of runtime execution or TTS truncation.
+    PREGEN_SRT="$BATCH_DIR/${BASENAME}.pregen.srt"
+    pregenerate_srt "$SCENARIO_FILE" "$PREGEN_SRT" >/dev/null || PREGEN_SRT=""
 else
     echo "  Skipped (--no-tts)"
     # Override narrate to still log subtitles but skip audio playback
@@ -480,12 +499,17 @@ if [ "$SKIP_VIDEO" -eq 0 ]; then
     # Base name for output variants
     BASE="${BATCH_DIR}/${BASENAME}"
 
-    # Always generate SRT if narration entries exist (even with --no-tts)
+    # Prefer the pre-generated SRT (parsed from scenario + clip durations).
+    # Fall back to runtime NARRATION_LIST if pre-gen didn't happen (--no-tts).
     SRT_FILE=""
-    if [ -f "$NARRATION_LIST" ] && [ -s "$NARRATION_LIST" ]; then
+    if [ -n "${PREGEN_SRT:-}" ] && [ -s "${PREGEN_SRT:-/dev/null}" ]; then
+        cp "$PREGEN_SRT" "${BASE}.srt"
+        SRT_FILE="${BASE}.srt"
+        echo "  Subtitles (pre-generated): $SRT_FILE"
+    elif [ -f "$NARRATION_LIST" ] && [ -s "$NARRATION_LIST" ]; then
         SRT_NAME="${BASE}.srt" generate_srt >/dev/null
         SRT_FILE="${BASE}.srt"
-        echo "  Subtitles: $SRT_FILE"
+        echo "  Subtitles (runtime): $SRT_FILE"
     else
         echo "  Subtitles: none (no narration entries)"
     fi

@@ -11,8 +11,15 @@ use crate::ui::{ImpulseApp, SEQ_LABEL_H, SEQ_LABEL_W, SEQ_VOL_W, theme, widgets}
 
 /// Number of step buttons visible per page.
 pub(super) const STEPS_PER_PAGE: usize = 32;
+/// Number of step buttons per physical row — rows wrap vertically when >16.
+pub(super) const STEPS_PER_ROW: usize = 16;
 
-/// Estimate total width of the step grid (buttons + beat dividers).
+/// Number of sub-rows (wrapped 16-step rows) needed for the current page.
+pub(super) fn sub_rows_for(seq_steps: usize) -> usize {
+    seq_steps.min(STEPS_PER_PAGE).div_ceil(STEPS_PER_ROW).max(1)
+}
+
+/// Estimate total width of one wrapped step row (buttons + beat dividers).
 /// Used to right-justify step rows by inserting a spacer after the prefix.
 pub(super) fn step_grid_width(
     pad_px: f32,
@@ -21,7 +28,7 @@ pub(super) fn step_grid_width(
     item_spacing_x: f32,
 ) -> f32 {
     let mut w = 0.0f32;
-    for i in 0..STEPS_PER_PAGE {
+    for i in 0..STEPS_PER_ROW {
         let beat_pos = (page_start + i) % time_sig_num;
         if i > 0 && beat_pos == 0 {
             w += 4.0;
@@ -68,7 +75,10 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
 
         let bass_rows = if has_bass { 2.0 } else { 0.0 }; // note row + accent/slide
         let synth_rows = if has_hoover { 1.0 } else { 0.0 } + if has_an1x { 1.0 } else { 0.0 };
-        let total_rows = bass_rows + drum_rows as f32 + synth_rows;
+        let lane_rows = bass_rows + drum_rows as f32 + synth_rows;
+        // Each lane wraps into N sub-rows when steps > 16.
+        let sub_rows = s.sequencer.steps.min(32).div_ceil(16).max(1) as f32;
+        let total_rows = lane_rows * sub_rows;
 
         let h = (header_h + total_rows * row_h).max(120.0);
         ui.set_min_height(h);
@@ -408,14 +418,21 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
     let voices: &[DrumVoice] = &active_drum_voices;
 
     // ── Helper closure: emit beat dividers ────────────────────────────────────
-    let beat_div = |ui: &mut egui::Ui, i: usize| {
-        let beat_pos = (page_start + i) % time_sig_num;
-        if i > 0 && beat_pos == 0 {
+    // `local_i` is the position within the sub-row (0..STEPS_PER_ROW); no leading
+    // spacer at local_i==0. `abs_i` is the absolute step index for beat calculation.
+    let beat_div = |ui: &mut egui::Ui, local_i: usize, abs_i: usize| {
+        if local_i == 0 {
+            return;
+        }
+        let beat_pos = abs_i % time_sig_num;
+        if beat_pos == 0 {
             ui.add_space(4.0);
-        } else if i > 0 && i.is_multiple_of(4) {
+        } else if abs_i.is_multiple_of(4) {
             ui.add_space(2.0);
         }
     };
+
+    let sub_rows = sub_rows_for(seq_steps);
 
     egui::ScrollArea::vertical().show(ui, |ui| {
         // Prefix width cached from drum rows — ensures bass/hoover/an1x step
@@ -448,150 +465,186 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                 let end = (page_start + STEPS_PER_PAGE).min(s.sequencer.bass_pattern.len());
                 s.sequencer.bass_pattern[page_start..end].to_vec()
             };
-            ui.horizontal(|ui| {
-                ui.add_sized(
-                    [prefix_w, SEQ_LABEL_H],
-                    egui::Label::new(
-                        egui::RichText::new("BASS")
-                            .color(theme::SMOKE)
-                            .monospace()
-                            .size(8.5),
-                    ),
-                );
-                if row_spacer > 0.0 {
-                    ui.add_space(row_spacer);
-                }
-                for i in 0..STEPS_PER_PAGE {
-                    let abs = page_start + i;
-                    beat_div(ui, i);
-                    let step = bass_page.get(i).copied();
-                    let is_active = step.map(|s| s.active).unwrap_or(false);
-                    let is_current = abs == bass_cursor;
-                    ui.add_enabled_ui(abs < bass_steps, |ui| {
-                        let clicked = if huth_full {
-                            let note = step.map(|s| s.note).unwrap_or(36);
-                            let gate = step.map(|s| s.gate).unwrap_or(0.5);
-                            widgets::huth_note_cell(ui, note, gate, is_active, is_current, pad_px)
-                        } else {
-                            let note = step.map(|s| s.note).unwrap_or(36);
-                            let note_col = if is_active {
-                                Some(theme::note_color(note))
-                            } else {
-                                None
-                            };
-                            let label = if is_active {
-                                Some(crate::ui::note_name(note))
-                            } else {
-                                None
-                            };
-                            widgets::step_button(
-                                ui, is_active, is_current, 1.0, 1.0, note_col, label, pad_px,
-                            )
-                        };
-                        if clicked {
-                            let s = app.state.read().clone();
-                            let note = s
-                                .sequencer
-                                .bass_pattern
-                                .get(abs)
-                                .map(|b| b.note)
-                                .unwrap_or(36);
-                            let was = s
-                                .sequencer
-                                .bass_pattern
-                                .get(abs)
-                                .map(|b| b.active)
-                                .unwrap_or(false);
-                            *app.state.write() = crate::state::set_bass_step(s, abs, note, !was);
+            for sub in 0..sub_rows {
+                ui.horizontal(|ui| {
+                    if sub == 0 {
+                        ui.add_sized(
+                            [prefix_w, SEQ_LABEL_H],
+                            egui::Label::new(
+                                egui::RichText::new("BASS")
+                                    .color(theme::SMOKE)
+                                    .monospace()
+                                    .size(8.5),
+                            ),
+                        );
+                    } else {
+                        ui.add_space(prefix_w);
+                    }
+                    if row_spacer > 0.0 {
+                        ui.add_space(row_spacer);
+                    }
+                    let base = sub * STEPS_PER_ROW;
+                    for j in 0..STEPS_PER_ROW {
+                        let i = base + j;
+                        if i >= STEPS_PER_PAGE {
+                            break;
                         }
-                    });
-                }
-            });
+                        let abs = page_start + i;
+                        beat_div(ui, j, abs);
+                        let step = bass_page.get(i).copied();
+                        let is_active = step.map(|s| s.active).unwrap_or(false);
+                        let is_current = abs == bass_cursor;
+                        ui.add_enabled_ui(abs < bass_steps, |ui| {
+                            let clicked = if huth_full {
+                                let note = step.map(|s| s.note).unwrap_or(36);
+                                let gate = step.map(|s| s.gate).unwrap_or(0.5);
+                                widgets::huth_note_cell(
+                                    ui, note, gate, is_active, is_current, pad_px,
+                                )
+                            } else {
+                                let note = step.map(|s| s.note).unwrap_or(36);
+                                let note_col = if is_active {
+                                    Some(theme::note_color(note))
+                                } else {
+                                    None
+                                };
+                                let label = if is_active {
+                                    Some(crate::ui::note_name(note))
+                                } else {
+                                    None
+                                };
+                                widgets::step_button(
+                                    ui, is_active, is_current, 1.0, 1.0, note_col, label, pad_px,
+                                )
+                            };
+                            if clicked {
+                                let s = app.state.read().clone();
+                                let note = s
+                                    .sequencer
+                                    .bass_pattern
+                                    .get(abs)
+                                    .map(|b| b.note)
+                                    .unwrap_or(36);
+                                let was = s
+                                    .sequencer
+                                    .bass_pattern
+                                    .get(abs)
+                                    .map(|b| b.active)
+                                    .unwrap_or(false);
+                                *app.state.write() =
+                                    crate::state::set_bass_step(s, abs, note, !was);
+                            }
+                        });
+                    }
+                });
+            }
 
             // Accent + slide rows — compact vertical spacing
             let marker_h = (pad_px * 0.35).clamp(10.0, 16.0);
             let prev_spacing = ui.spacing().item_spacing.y;
             ui.spacing_mut().item_spacing.y = 0.0;
-            ui.horizontal(|ui| {
-                ui.add_sized(
-                    [prefix_w, marker_h],
-                    egui::Label::new(
-                        egui::RichText::new("ACCENT")
-                            .color(theme::IRON)
-                            .monospace()
-                            .size(7.0),
-                    ),
-                );
-                if row_spacer > 0.0 {
-                    ui.add_space(row_spacer);
-                }
-                for i in 0..STEPS_PER_PAGE {
-                    let abs = page_start + i;
-                    beat_div(ui, i);
-                    let is_accent = bass_page.get(i).map(|s| s.accent).unwrap_or(false);
-                    let enabled = abs < bass_steps;
-                    let color = if !enabled {
-                        theme::PIT
-                    } else if is_accent {
-                        theme::CHALK
+            for sub in 0..sub_rows {
+                ui.horizontal(|ui| {
+                    if sub == 0 {
+                        ui.add_sized(
+                            [prefix_w, marker_h],
+                            egui::Label::new(
+                                egui::RichText::new("ACCENT")
+                                    .color(theme::IRON)
+                                    .monospace()
+                                    .size(7.0),
+                            ),
+                        );
                     } else {
-                        theme::PIT
-                    };
-                    let text = egui::RichText::new("A").monospace().size(7.0).color(color);
-                    if ui
-                        .add_sized(
-                            [pad_px, marker_h],
-                            egui::Button::new(text).fill(egui::Color32::TRANSPARENT),
-                        )
-                        .clicked()
-                        && enabled
-                    {
-                        let s = app.state.read().clone();
-                        *app.state.write() = toggle_bass_accent(s, abs);
+                        ui.add_space(prefix_w);
                     }
-                }
-            });
+                    if row_spacer > 0.0 {
+                        ui.add_space(row_spacer);
+                    }
+                    let base = sub * STEPS_PER_ROW;
+                    for j in 0..STEPS_PER_ROW {
+                        let i = base + j;
+                        if i >= STEPS_PER_PAGE {
+                            break;
+                        }
+                        let abs = page_start + i;
+                        beat_div(ui, j, abs);
+                        let is_accent = bass_page.get(i).map(|s| s.accent).unwrap_or(false);
+                        let enabled = abs < bass_steps;
+                        let color = if !enabled {
+                            theme::PIT
+                        } else if is_accent {
+                            theme::CHALK
+                        } else {
+                            theme::PIT
+                        };
+                        let text = egui::RichText::new("A").monospace().size(7.0).color(color);
+                        if ui
+                            .add_sized(
+                                [pad_px, marker_h],
+                                egui::Button::new(text).fill(egui::Color32::TRANSPARENT),
+                            )
+                            .clicked()
+                            && enabled
+                        {
+                            let s = app.state.read().clone();
+                            *app.state.write() = toggle_bass_accent(s, abs);
+                        }
+                    }
+                });
+            }
 
             // Slide row
-            ui.horizontal(|ui| {
-                ui.add_sized(
-                    [prefix_w, marker_h],
-                    egui::Label::new(
-                        egui::RichText::new("SLIDE")
-                            .color(theme::IRON)
-                            .monospace()
-                            .size(7.0),
-                    ),
-                );
-                if row_spacer > 0.0 {
-                    ui.add_space(row_spacer);
-                }
-                for i in 0..STEPS_PER_PAGE {
-                    let abs = page_start + i;
-                    beat_div(ui, i);
-                    let is_slide = bass_page.get(i).map(|s| s.slide).unwrap_or(false);
-                    let enabled = abs < bass_steps;
-                    let color = if !enabled {
-                        theme::PIT
-                    } else if is_slide {
-                        theme::CHALK
+            for sub in 0..sub_rows {
+                ui.horizontal(|ui| {
+                    if sub == 0 {
+                        ui.add_sized(
+                            [prefix_w, marker_h],
+                            egui::Label::new(
+                                egui::RichText::new("SLIDE")
+                                    .color(theme::IRON)
+                                    .monospace()
+                                    .size(7.0),
+                            ),
+                        );
                     } else {
-                        theme::PIT
-                    };
-                    let text = egui::RichText::new("S").monospace().size(7.0).color(color);
-                    if ui
-                        .add_sized(
-                            [pad_px, marker_h],
-                            egui::Button::new(text).fill(egui::Color32::TRANSPARENT),
-                        )
-                        .clicked()
-                        && enabled
-                    {
-                        let s = app.state.read().clone();
-                        *app.state.write() = toggle_bass_slide(s, abs);
+                        ui.add_space(prefix_w);
                     }
-                }
-            });
+                    if row_spacer > 0.0 {
+                        ui.add_space(row_spacer);
+                    }
+                    let base = sub * STEPS_PER_ROW;
+                    for j in 0..STEPS_PER_ROW {
+                        let i = base + j;
+                        if i >= STEPS_PER_PAGE {
+                            break;
+                        }
+                        let abs = page_start + i;
+                        beat_div(ui, j, abs);
+                        let is_slide = bass_page.get(i).map(|s| s.slide).unwrap_or(false);
+                        let enabled = abs < bass_steps;
+                        let color = if !enabled {
+                            theme::PIT
+                        } else if is_slide {
+                            theme::CHALK
+                        } else {
+                            theme::PIT
+                        };
+                        let text = egui::RichText::new("S").monospace().size(7.0).color(color);
+                        if ui
+                            .add_sized(
+                                [pad_px, marker_h],
+                                egui::Button::new(text).fill(egui::Color32::TRANSPARENT),
+                            )
+                            .clicked()
+                            && enabled
+                        {
+                            let s = app.state.read().clone();
+                            *app.state.write() = toggle_bass_slide(s, abs);
+                        }
+                    }
+                });
+            }
             ui.spacing_mut().item_spacing.y = prev_spacing;
         } // end if rack_has_bass
 
@@ -611,70 +664,83 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                 let end = (page_start + STEPS_PER_PAGE).min(s.sequencer.hoover_pattern.len());
                 s.sequencer.hoover_pattern[page_start..end].to_vec()
             };
-            ui.horizontal(|ui| {
-                let label_color = if hoover_enabled {
-                    theme::SMOKE
-                } else {
-                    theme::PIT
-                };
-                ui.add_sized(
-                    [prefix_w, SEQ_LABEL_H],
-                    egui::Label::new(
-                        egui::RichText::new("HOOVER")
-                            .color(label_color)
-                            .monospace()
-                            .size(8.5),
-                    ),
-                );
-                if row_spacer > 0.0 {
-                    ui.add_space(row_spacer);
-                }
-                for i in 0..STEPS_PER_PAGE {
-                    let abs = page_start + i;
-                    beat_div(ui, i);
-                    let step = hoover_page.get(i).copied();
-                    let is_active = step.map(|s| s.active).unwrap_or(false);
-                    let is_current = abs == hoover_cursor;
-                    ui.add_enabled_ui(abs < hoover_steps, |ui| {
-                        let clicked = if huth_full {
-                            let note = step.map(|s| s.note).unwrap_or(57);
-                            let gate = step.map(|s| s.gate).unwrap_or(0.5);
-                            widgets::huth_note_cell(ui, note, gate, is_active, is_current, pad_px)
-                        } else {
-                            let note = step.map(|s| s.note).unwrap_or(36);
-                            let note_col = if is_active {
-                                Some(theme::note_color(note))
-                            } else {
-                                None
-                            };
-                            let label = if is_active {
-                                Some(crate::ui::note_name(note))
-                            } else {
-                                None
-                            };
-                            widgets::step_button(
-                                ui, is_active, is_current, 1.0, 1.0, note_col, label, pad_px,
-                            )
-                        };
-                        if clicked {
-                            let s = app.state.read().clone();
-                            let note = s
-                                .sequencer
-                                .hoover_pattern
-                                .get(abs)
-                                .map(|b| b.note)
-                                .unwrap_or(57);
-                            let was = s
-                                .sequencer
-                                .hoover_pattern
-                                .get(abs)
-                                .map(|b| b.active)
-                                .unwrap_or(false);
-                            *app.state.write() = set_hoover_step(s, abs, note, !was);
+            for sub in 0..sub_rows {
+                ui.horizontal(|ui| {
+                    let label_color = if hoover_enabled {
+                        theme::SMOKE
+                    } else {
+                        theme::PIT
+                    };
+                    if sub == 0 {
+                        ui.add_sized(
+                            [prefix_w, SEQ_LABEL_H],
+                            egui::Label::new(
+                                egui::RichText::new("HOOVER")
+                                    .color(label_color)
+                                    .monospace()
+                                    .size(8.5),
+                            ),
+                        );
+                    } else {
+                        ui.add_space(prefix_w);
+                    }
+                    if row_spacer > 0.0 {
+                        ui.add_space(row_spacer);
+                    }
+                    let base = sub * STEPS_PER_ROW;
+                    for j in 0..STEPS_PER_ROW {
+                        let i = base + j;
+                        if i >= STEPS_PER_PAGE {
+                            break;
                         }
-                    });
-                }
-            });
+                        let abs = page_start + i;
+                        beat_div(ui, j, abs);
+                        let step = hoover_page.get(i).copied();
+                        let is_active = step.map(|s| s.active).unwrap_or(false);
+                        let is_current = abs == hoover_cursor;
+                        ui.add_enabled_ui(abs < hoover_steps, |ui| {
+                            let clicked = if huth_full {
+                                let note = step.map(|s| s.note).unwrap_or(57);
+                                let gate = step.map(|s| s.gate).unwrap_or(0.5);
+                                widgets::huth_note_cell(
+                                    ui, note, gate, is_active, is_current, pad_px,
+                                )
+                            } else {
+                                let note = step.map(|s| s.note).unwrap_or(36);
+                                let note_col = if is_active {
+                                    Some(theme::note_color(note))
+                                } else {
+                                    None
+                                };
+                                let label = if is_active {
+                                    Some(crate::ui::note_name(note))
+                                } else {
+                                    None
+                                };
+                                widgets::step_button(
+                                    ui, is_active, is_current, 1.0, 1.0, note_col, label, pad_px,
+                                )
+                            };
+                            if clicked {
+                                let s = app.state.read().clone();
+                                let note = s
+                                    .sequencer
+                                    .hoover_pattern
+                                    .get(abs)
+                                    .map(|b| b.note)
+                                    .unwrap_or(57);
+                                let was = s
+                                    .sequencer
+                                    .hoover_pattern
+                                    .get(abs)
+                                    .map(|b| b.active)
+                                    .unwrap_or(false);
+                                *app.state.write() = set_hoover_step(s, abs, note, !was);
+                            }
+                        });
+                    }
+                });
+            }
         } // end if rack_has_hoover
 
         // ── AN1X row — only shown when An1xVoice is in the rack ───────────────
@@ -693,70 +759,83 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                 let end = (page_start + STEPS_PER_PAGE).min(s.sequencer.an1x_pattern.len());
                 s.sequencer.an1x_pattern[page_start..end].to_vec()
             };
-            ui.horizontal(|ui| {
-                let label_color = if an1x_enabled {
-                    theme::SMOKE
-                } else {
-                    theme::PIT
-                };
-                ui.add_sized(
-                    [prefix_w, SEQ_LABEL_H],
-                    egui::Label::new(
-                        egui::RichText::new("AN1X")
-                            .color(label_color)
-                            .monospace()
-                            .size(8.5),
-                    ),
-                );
-                if row_spacer > 0.0 {
-                    ui.add_space(row_spacer);
-                }
-                for i in 0..STEPS_PER_PAGE {
-                    let abs = page_start + i;
-                    beat_div(ui, i);
-                    let step = an1x_page.get(i).copied();
-                    let is_active = step.map(|s| s.active).unwrap_or(false);
-                    let is_current = abs == an1x_cursor;
-                    ui.add_enabled_ui(abs < an1x_steps, |ui| {
-                        let clicked = if huth_full {
-                            let note = step.map(|s| s.note).unwrap_or(57);
-                            let gate = step.map(|s| s.gate).unwrap_or(0.5);
-                            widgets::huth_note_cell(ui, note, gate, is_active, is_current, pad_px)
-                        } else {
-                            let note = step.map(|s| s.note).unwrap_or(36);
-                            let note_col = if is_active {
-                                Some(theme::note_color(note))
-                            } else {
-                                None
-                            };
-                            let label = if is_active {
-                                Some(crate::ui::note_name(note))
-                            } else {
-                                None
-                            };
-                            widgets::step_button(
-                                ui, is_active, is_current, 1.0, 1.0, note_col, label, pad_px,
-                            )
-                        };
-                        if clicked {
-                            let s = app.state.read().clone();
-                            let note = s
-                                .sequencer
-                                .an1x_pattern
-                                .get(abs)
-                                .map(|b| b.note)
-                                .unwrap_or(57);
-                            let was = s
-                                .sequencer
-                                .an1x_pattern
-                                .get(abs)
-                                .map(|b| b.active)
-                                .unwrap_or(false);
-                            *app.state.write() = set_an1x_step(s, abs, note, !was);
+            for sub in 0..sub_rows {
+                ui.horizontal(|ui| {
+                    let label_color = if an1x_enabled {
+                        theme::SMOKE
+                    } else {
+                        theme::PIT
+                    };
+                    if sub == 0 {
+                        ui.add_sized(
+                            [prefix_w, SEQ_LABEL_H],
+                            egui::Label::new(
+                                egui::RichText::new("AN1X")
+                                    .color(label_color)
+                                    .monospace()
+                                    .size(8.5),
+                            ),
+                        );
+                    } else {
+                        ui.add_space(prefix_w);
+                    }
+                    if row_spacer > 0.0 {
+                        ui.add_space(row_spacer);
+                    }
+                    let base = sub * STEPS_PER_ROW;
+                    for j in 0..STEPS_PER_ROW {
+                        let i = base + j;
+                        if i >= STEPS_PER_PAGE {
+                            break;
                         }
-                    });
-                }
-            });
+                        let abs = page_start + i;
+                        beat_div(ui, j, abs);
+                        let step = an1x_page.get(i).copied();
+                        let is_active = step.map(|s| s.active).unwrap_or(false);
+                        let is_current = abs == an1x_cursor;
+                        ui.add_enabled_ui(abs < an1x_steps, |ui| {
+                            let clicked = if huth_full {
+                                let note = step.map(|s| s.note).unwrap_or(57);
+                                let gate = step.map(|s| s.gate).unwrap_or(0.5);
+                                widgets::huth_note_cell(
+                                    ui, note, gate, is_active, is_current, pad_px,
+                                )
+                            } else {
+                                let note = step.map(|s| s.note).unwrap_or(36);
+                                let note_col = if is_active {
+                                    Some(theme::note_color(note))
+                                } else {
+                                    None
+                                };
+                                let label = if is_active {
+                                    Some(crate::ui::note_name(note))
+                                } else {
+                                    None
+                                };
+                                widgets::step_button(
+                                    ui, is_active, is_current, 1.0, 1.0, note_col, label, pad_px,
+                                )
+                            };
+                            if clicked {
+                                let s = app.state.read().clone();
+                                let note = s
+                                    .sequencer
+                                    .an1x_pattern
+                                    .get(abs)
+                                    .map(|b| b.note)
+                                    .unwrap_or(57);
+                                let was = s
+                                    .sequencer
+                                    .an1x_pattern
+                                    .get(abs)
+                                    .map(|b| b.active)
+                                    .unwrap_or(false);
+                                *app.state.write() = set_an1x_step(s, abs, note, !was);
+                            }
+                        });
+                    }
+                });
+            }
         } // end if rack_has_an1x
 
         draw_drum_rows(
@@ -769,6 +848,8 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             running,
             row_spacer,
             current_step,
+            sub_rows,
+            time_sig_num,
         );
     });
 }

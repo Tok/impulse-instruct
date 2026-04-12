@@ -417,9 +417,13 @@ pub(super) fn sequencer_grid_rows(state: &crate::state::AppState) -> u8 {
         + (if has_hoover { 1 } else { 0 })
         + (if has_an1x { 1 } else { 0 })
         + active_drum_voices;
-    // Base: 2 grid rows (header + controls). Each 2 lane rows = 1 extra grid row.
+    // Each lane wraps into N sub-rows when steps > 16 (e.g. 32-step patterns).
+    let seq_steps = state.sequencer.steps;
+    let sub_rows = seq_steps.min(32).div_ceil(16).max(1);
+    let physical_rows = lane_rows * sub_rows;
+    // Base: 2 grid rows (header + controls). Each 2 physical rows = 1 extra grid row.
     let base_rows = 2u8;
-    let extra = (lane_rows as f32 / 2.0).ceil() as u8;
+    let extra = (physical_rows as f32 / 2.0).ceil() as u8;
     (base_rows + extra).max(2)
 }
 
