@@ -224,8 +224,9 @@ pub fn draw_an1x(app: &mut ImpulseApp, ui: &mut Ui) {
         }};
     }
 
-    // Consistent glass group height across both rows
+    // Consistent glass group height — row 1 has 2 knob rows, row 2 adds PAN
     let group_h = ctrl.knob_size * 2.0 + 50.0;
+    let group_h2 = group_h + 24.0; // extra space for PAN slider in A.ADSR
 
     // ── Row 1 (3 cols): LEVELS | FILTER | F.ADSR ────────────────────────
     {
@@ -292,7 +293,7 @@ pub fn draw_an1x(app: &mut ImpulseApp, ui: &mut Ui) {
         ui.horizontal(|ui| {
             ui.spacing_mut().item_spacing.x = super::GLASS_GAP;
             widgets::glass_group_fill(ui, gw, gw, |ui| {
-                ui.set_min_height(group_h);
+                ui.set_min_height(group_h2);
                 ui.spacing_mut().item_spacing.x = super::KNOB_SPACING;
                 ui.label(
                     egui::RichText::new("TUNE")
@@ -361,7 +362,7 @@ pub fn draw_an1x(app: &mut ImpulseApp, ui: &mut Ui) {
                 });
             });
             widgets::glass_group_fill(ui, gw, gw, |ui| {
-                ui.set_min_height(group_h);
+                ui.set_min_height(group_h2);
                 ui.spacing_mut().item_spacing.x = super::KNOB_SPACING;
                 ui.label(
                     egui::RichText::new("A.ADSR")
@@ -395,7 +396,7 @@ pub fn draw_an1x(app: &mut ImpulseApp, ui: &mut Ui) {
                 });
             });
             widgets::glass_group_fill(ui, gw, gw, |ui| {
-                ui.set_min_height(group_h);
+                ui.set_min_height(group_h2);
                 ui.spacing_mut().item_spacing.x = super::KNOB_SPACING;
                 ui.label(
                     egui::RichText::new("PITCH ENV")
