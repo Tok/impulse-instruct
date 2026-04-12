@@ -181,6 +181,11 @@ fn run() -> anyhow::Result<()> {
         log::error!("PANIC: {}\n{}", info, bt);
     }));
 
+    // Install SIGINT/SIGTERM handler BEFORE spawning any threads so the
+    // signal mask is inherited everywhere. Without this, Ctrl-C leaves
+    // llama-server children orphaned (Rust Drop doesn't run on signals).
+    install_signal_handler();
+
     let args = Args::parse();
 
     // Resolve log level: CLI --log overrides persisted setting, which overrides "info"
@@ -432,6 +437,58 @@ fn run() -> anyhow::Result<()> {
     log::info!("eframe::run_native returned — window closed normally");
 
     Ok(())
+}
+
+/// Install SIGINT/SIGTERM handler on unix. Rust's Drop doesn't run when
+/// the process is killed by a signal, which orphaned our llama-server
+/// children. Here we block the signals on the main thread so spawned
+/// threads inherit the block, then spin a dedicated thread that
+/// sigwait()s, kills llama-server children, and exits the process.
+#[cfg(unix)]
+fn install_signal_handler() {
+    use std::mem::MaybeUninit;
+    unsafe {
+        let mut mask: MaybeUninit<libc::sigset_t> = MaybeUninit::uninit();
+        libc::sigemptyset(mask.as_mut_ptr());
+        libc::sigaddset(mask.as_mut_ptr(), libc::SIGINT);
+        libc::sigaddset(mask.as_mut_ptr(), libc::SIGTERM);
+        libc::pthread_sigmask(libc::SIG_BLOCK, mask.as_ptr(), std::ptr::null_mut());
+    }
+    std::thread::Builder::new()
+        .name("signal-handler".into())
+        .spawn(|| {
+            let mut sig: i32 = 0;
+            unsafe {
+                let mut mask: MaybeUninit<libc::sigset_t> = MaybeUninit::uninit();
+                libc::sigemptyset(mask.as_mut_ptr());
+                libc::sigaddset(mask.as_mut_ptr(), libc::SIGINT);
+                libc::sigaddset(mask.as_mut_ptr(), libc::SIGTERM);
+                libc::sigwait(mask.as_ptr(), &mut sig);
+            }
+            let name = match sig {
+                libc::SIGINT => "SIGINT",
+                libc::SIGTERM => "SIGTERM",
+                _ => "signal",
+            };
+            eprintln!("\n{name} received — shutting down, killing llama-server children");
+            log::warn!("{name} received — initiating shutdown");
+            let _ = std::process::Command::new("pkill")
+                .args(["-TERM", "-f", "llama-server .* --model"])
+                .status();
+            // Short grace period so pkill lands before we exit.
+            std::thread::sleep(std::time::Duration::from_millis(200));
+            let _ = std::process::Command::new("pkill")
+                .args(["-KILL", "-f", "llama-server .* --model"])
+                .status();
+            std::process::exit(128 + sig);
+        })
+        .expect("failed to spawn signal-handler thread");
+}
+
+#[cfg(not(unix))]
+fn install_signal_handler() {
+    // Windows: no equivalent without adding a crate; ctrl-C just kills the
+    // process. The demo script already sweeps llama-server itself there.
 }
 
 /// Generate the window icon pixel buffer.

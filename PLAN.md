@@ -4,18 +4,6 @@ What's already built is documented in [docs/features.md](docs/features.md).
 
 ---
 
-## TOP PRIORITY — fix knob lock/focus cycling
-
-- [ ] **Knob lock/focus gesture broken after style-by-mode change** — knobs
-  now render differently per `ParamMode` (chrome for Free, darkened chrome
-  for UserOwned, flat/brushed for LlmFocus), but the interaction that
-  cycles through modes isn't working as expected anymore. The visual
-  feedback is correct; the input path (right-click? middle-click? mode
-  button?) needs auditing end-to-end so users can actually toggle
-  lock/focus from the knob itself again. See `knob_chrome`/`knob` in
-  `src/ui/widgets/mod.rs` and the dispatcher in `param_control`.
-
----
 
 ## v0.7.3 — next release
 
@@ -33,11 +21,6 @@ What's already built is documented in [docs/features.md](docs/features.md).
   addressable as LFO targets and ramp targets. Add `LfoTarget::Pan`
   variants and ensure `apply_llm_update` handles `"bass.pan"`,
   `"kit_a.kick.pan"`, etc.
-- [ ] **Moderate defaults in system prompt** — discourage extreme values
-  (reverb mix > 0.5, delay feedback > 0.6, etc.) unless explicitly
-  asked. Guide agents toward musical subtlety over dramatic resets
-- [ ] **Velocity/volume awareness** — prompt guidance to keep drum volumes
-  balanced; prevent clap/snare rush at uncomfortable levels
 
 ### DSP
 
@@ -135,7 +118,6 @@ What's already built is documented in [docs/features.md](docs/features.md).
 - [ ] **CI: run LLM integration tests on release** — currently manual;
   automate in GitHub Actions with a Gemma model cache
 - [ ] **Codecov improvement** — currently ~37%; target higher with new suites
-- [ ] **Graceful shutdown** — catch SIGINT/SIGTERM, drop audio stream cleanly
 
 ---
 

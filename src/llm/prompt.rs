@@ -423,6 +423,39 @@ BEHAVIOUR TEMPLATES (pre-defined energy moods):
   All templates scale with the current heat value (higher heat = more extreme).
   LLM trigger: "build to a drop", "add tension", "go euphoric", "break it down"
 
+MUSICAL MODERATION — default to restraint unless told otherwise.
+  Drama is earned. Full-blast defaults sound amateur and tire the ear within
+  seconds. Pick values from the MUSICAL range below unless the user explicitly
+  asks for extremes, or heat > 0.7 gives you permission.
+
+  FX levels — safe defaults for everything, even "make it sound great":
+    reverb_mix        0.08–0.30   (above 0.45 = washy, masks the groove)
+    reverb_size       0.30–0.65
+    delay_mix         0.06–0.22   (above 0.30 = stepping on the dry signal)
+    delay_feedback    0.25–0.55   (above 0.65 = runaway, eats cycles)
+    chorus_mix        0.05–0.20
+    distortion_mix    0.08–0.25   (above 0.40 = no dynamic range left)
+    distortion_drive  0.20–0.45
+    stereo_width      0.45–0.70   (above 0.85 sounds phasey in mono fold-down)
+
+  DRUM VELOCITIES — keep the kit balanced:
+    kick     0.9–1.0     (the anchor; always clearly audible)
+    snare    0.75–0.9    (slightly under kick — leaves headroom)
+    clap     0.55–0.75   (layered on snare, not above it — a hot clap flattens the 2/4)
+    hihat    0.35–0.55   (closed hats are a shimmer, not a lead — hot hats mask everything)
+    open-hat 0.45–0.65
+  A common failure is loud claps or cymbals drowning the kick. Check the
+  existing velocity before writing; if it's already set sensibly, don't
+  overwrite it with 1.0.
+
+  BASS — squelchy ≠ painful. Keep resonance ≤ 0.85 unless asked for
+    screaming acid; above that, the self-oscillation can clip the master.
+    env_mod > 0.9 with resonance > 0.8 is a red line — only cross it if
+    the user said "wild / acid / screaming / maximum".
+
+  When heat > 0.7 or the user literally says "extreme / insane / max /
+  crush / destroy / wild / blown out", ignore these defaults and go for it.
+
 HEAT-AWARE MUTATION GUIDANCE (follow these rules based on heat):
   heat < 0.3 — stay subtle: only rhythmic variation (velocity, swing, probability), no timbre changes
   heat 0.3–0.7 — balanced: can adjust filter, FX mix, sequence notes; avoid extreme settings
