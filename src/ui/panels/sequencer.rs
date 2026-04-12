@@ -29,6 +29,15 @@ pub(super) fn steps_in_sub(seq_steps: usize, sub: usize) -> usize {
 /// Estimate total width of the widest step row (buttons + beat dividers).
 /// Used to right-justify step rows by inserting a spacer after the prefix.
 /// `row_steps` is the cell count for the widest sub-row (first one).
+/// Reserve a fixed-width zero-height slot. Unlike `ui.add_space(w)` (which
+/// just increments the cursor), this goes through `allocate_exact_size` and
+/// therefore adds `item_spacing.x` trailing the slot — matching the
+/// behaviour of label/slider widgets so sub-row prefixes share one x anchor
+/// when slots mix placeholder space and real widgets.
+pub(super) fn fixed_space(ui: &mut egui::Ui, w: f32) {
+    ui.allocate_exact_size(egui::vec2(w, 0.0), egui::Sense::hover());
+}
+
 /// Allocate an exact-sized rect and render a left-aligned monospace label
 /// inside it via the painter. Unlike `ui.add_sized([w,h], Label::new(...))`,
 /// this guarantees the cursor advances by exactly `w` pixels regardless of
@@ -512,8 +521,8 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             };
             for sub in 0..sub_rows {
                 ui.horizontal(|ui| {
-                    ui.add_space(10.0);
-                    ui.add_space(10.0);
+                    fixed_space(ui, 10.0);
+                    fixed_space(ui, 10.0);
                     if sub == 0 {
                         fixed_label(
                             ui,
@@ -529,10 +538,10 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                             app.push_audio_params();
                         }
                     } else {
-                        ui.add_space(SEQ_LABEL_W - 20.0);
-                        ui.add_space(SEQ_VOL_W);
+                        fixed_space(ui, SEQ_LABEL_W - 20.0);
+                        fixed_space(ui, SEQ_VOL_W);
                     }
-                    ui.add_space(18.0);
+                    fixed_space(ui, 18.0);
                     if row_spacer > 0.0 {
                         ui.add_space(row_spacer);
                     }
@@ -599,8 +608,8 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             ui.spacing_mut().item_spacing.y = 0.0;
             for sub in 0..sub_rows {
                 ui.horizontal(|ui| {
-                    ui.add_space(10.0);
-                    ui.add_space(10.0);
+                    fixed_space(ui, 10.0);
+                    fixed_space(ui, 10.0);
                     if sub == 0 {
                         fixed_label(ui, SEQ_LABEL_W - 20.0, row_h, "ACCENT", theme::IRON, 7.0);
                         let mut accent = app.state.read().bass_voices[0].synth.accent_level;
@@ -610,10 +619,10 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                             app.push_audio_params();
                         }
                     } else {
-                        ui.add_space(SEQ_LABEL_W - 20.0);
-                        ui.add_space(SEQ_VOL_W);
+                        fixed_space(ui, SEQ_LABEL_W - 20.0);
+                        fixed_space(ui, SEQ_VOL_W);
                     }
-                    ui.add_space(18.0);
+                    fixed_space(ui, 18.0);
                     if row_spacer > 0.0 {
                         ui.add_space(row_spacer);
                     }
@@ -653,8 +662,8 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             // Slide row
             for sub in 0..sub_rows {
                 ui.horizontal(|ui| {
-                    ui.add_space(10.0);
-                    ui.add_space(10.0);
+                    fixed_space(ui, 10.0);
+                    fixed_space(ui, 10.0);
                     if sub == 0 {
                         fixed_label(ui, SEQ_LABEL_W - 20.0, row_h, "SLIDE", theme::IRON, 7.0);
                         let mut slide = app.state.read().bass_voices[0].synth.portamento_time;
@@ -663,10 +672,10 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                             app.push_audio_params();
                         }
                     } else {
-                        ui.add_space(SEQ_LABEL_W - 20.0);
-                        ui.add_space(SEQ_VOL_W);
+                        fixed_space(ui, SEQ_LABEL_W - 20.0);
+                        fixed_space(ui, SEQ_VOL_W);
                     }
-                    ui.add_space(18.0);
+                    fixed_space(ui, 18.0);
                     if row_spacer > 0.0 {
                         ui.add_space(row_spacer);
                     }
@@ -728,8 +737,8 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                     } else {
                         theme::PIT
                     };
-                    ui.add_space(10.0);
-                    ui.add_space(10.0);
+                    fixed_space(ui, 10.0);
+                    fixed_space(ui, 10.0);
                     if sub == 0 {
                         fixed_label(
                             ui,
@@ -745,10 +754,10 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                             app.push_audio_params();
                         }
                     } else {
-                        ui.add_space(SEQ_LABEL_W - 20.0);
-                        ui.add_space(SEQ_VOL_W);
+                        fixed_space(ui, SEQ_LABEL_W - 20.0);
+                        fixed_space(ui, SEQ_VOL_W);
                     }
-                    ui.add_space(18.0);
+                    fixed_space(ui, 18.0);
                     if row_spacer > 0.0 {
                         ui.add_space(row_spacer);
                     }
@@ -831,8 +840,8 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                     } else {
                         theme::PIT
                     };
-                    ui.add_space(10.0);
-                    ui.add_space(10.0);
+                    fixed_space(ui, 10.0);
+                    fixed_space(ui, 10.0);
                     if sub == 0 {
                         fixed_label(
                             ui,
@@ -848,10 +857,10 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                             app.push_audio_params();
                         }
                     } else {
-                        ui.add_space(SEQ_LABEL_W - 20.0);
-                        ui.add_space(SEQ_VOL_W);
+                        fixed_space(ui, SEQ_LABEL_W - 20.0);
+                        fixed_space(ui, SEQ_VOL_W);
                     }
-                    ui.add_space(18.0);
+                    fixed_space(ui, 18.0);
                     if row_spacer > 0.0 {
                         ui.add_space(row_spacer);
                     }

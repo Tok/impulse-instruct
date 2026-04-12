@@ -145,11 +145,11 @@ pub(super) fn draw_drum_rows(
                     // both rows. Emitting a single add_space(prefix_w) leaves
                     // one extra item_spacing compared to the 5-widget path
                     // below, shifting cells horizontally.
-                    ui.add_space(10.0);
-                    ui.add_space(10.0);
-                    ui.add_space(SEQ_LABEL_W - 20.0);
-                    ui.add_space(SEQ_VOL_W);
-                    ui.add_space(18.0);
+                    super::sequencer::fixed_space(ui, 10.0);
+                    super::sequencer::fixed_space(ui, 10.0);
+                    super::sequencer::fixed_space(ui, SEQ_LABEL_W - 20.0);
+                    super::sequencer::fixed_space(ui, SEQ_VOL_W);
+                    super::sequencer::fixed_space(ui, 18.0);
                     if row_spacer > 0.0 {
                         ui.add_space(row_spacer);
                     }
