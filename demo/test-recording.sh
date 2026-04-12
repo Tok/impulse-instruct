@@ -43,7 +43,7 @@ if [ "$APP_RUNNING" -eq 0 ]; then
     echo "[1/7] Launching app (mock mode)..."
     cd "$PROJECT_DIR"
     if [ -f "target/release/impulse-instruct" ]; then
-        ./target/release/impulse-instruct --skip-wizard --mock --log info &
+        ./target/release/impulse-instruct --skip-wizard --fresh-session --mock --log info &
     else
         echo "  No release build. Run: cargo build --release"
         exit 1

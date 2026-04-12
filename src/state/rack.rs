@@ -358,19 +358,64 @@ impl RackState {
     }
 
     /// Add a module of the given kind, returning its assigned id.
+    /// Automatically finds the first free grid position in the module's zone
+    /// so modules never stack on top of each other.
     pub fn add_module(&mut self, kind: ModuleKind) -> u32 {
         let id = self.next_id;
         self.next_id += 1;
-        // Assign slot = count of existing modules in same zone.
-        let slot = self
-            .modules
-            .iter()
-            .filter(|m| m.zone == kind.default_zone())
-            .count() as u8;
+        let zone = kind.default_zone();
+        let slot = self.modules.iter().filter(|m| m.zone == zone).count() as u8;
+        let (gc, gr) = self.find_free_position(kind);
         let mut m = RackModule::new(id, kind);
         m.slot = slot;
+        m.grid_col = gc;
+        m.grid_row = gr;
         self.modules.push(m);
         id
+    }
+
+    /// Find the first free (col, row) position in the given kind's zone where
+    /// a module of its size fits without overlapping existing modules.
+    /// Returns (0, 0) as a fallback if the zone is completely full.
+    fn find_free_position(&self, kind: ModuleKind) -> (u8, u8) {
+        let (w, h) = kind.grid_size(GRID_COLS);
+        let cols = GRID_COLS as usize;
+        let max_rows = 64usize;
+        let zone = kind.default_zone();
+
+        // Build occupancy grid from existing modules in the same zone
+        let mut occ = vec![vec![false; cols]; max_rows];
+        for m in &self.modules {
+            if m.zone != zone {
+                continue;
+            }
+            let (mw, mh) = m.kind.grid_size(GRID_COLS);
+            for dr in 0..mh as usize {
+                for dc in 0..mw as usize {
+                    let r = m.grid_row as usize + dr;
+                    let c = m.grid_col as usize + dc;
+                    if r < max_rows && c < cols {
+                        occ[r][c] = true;
+                    }
+                }
+            }
+        }
+
+        // Scan top-to-bottom, left-to-right for first free block
+        let w = w as usize;
+        let h = h as usize;
+        if w == 0 || w > cols || h == 0 {
+            return (0, 0);
+        }
+        for r in 0..(max_rows - h) {
+            for c in 0..=(cols - w) {
+                let fits = (0..h).all(|dr| (0..w).all(|dc| !occ[r + dr][c + dc]));
+                if fits {
+                    return (c as u8, r as u8);
+                }
+            }
+        }
+        (0, 0)
     }
 
     /// Remove a module and any cables connected to it.

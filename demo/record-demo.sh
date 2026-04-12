@@ -241,9 +241,9 @@ if [ "$APP_RUNNING" -eq 0 ]; then
     # App log output will be visible in the terminal alongside demo progress.
     # --log trace: full diagnostics captured in the log file (JSON output, etc.)
     if [ -n "$MODEL_PATH" ]; then
-        ./target/release/impulse-instruct --skip-wizard --model "$MODEL_PATH" --log trace &
+        ./target/release/impulse-instruct --skip-wizard --fresh-session --model "$MODEL_PATH" --log trace &
     else
-        ./target/release/impulse-instruct --skip-wizard --mock --log trace &
+        ./target/release/impulse-instruct --skip-wizard --fresh-session --mock --log trace &
     fi
     APP_PID=$!
     wait_for_api 30

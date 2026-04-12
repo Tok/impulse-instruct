@@ -37,6 +37,7 @@ struct Args {
     mock: bool,
     osc_port: Option<u16>, // None = disabled; Some(port) = OSC listener enabled
     skip_wizard: bool,
+    fresh_session: bool,
 }
 
 impl Args {
@@ -50,6 +51,7 @@ impl Args {
             mock: false,
             osc_port: None,
             skip_wizard: false,
+            fresh_session: false,
         };
 
         let mut i = 1;
@@ -58,6 +60,7 @@ impl Args {
                 "--no-api" => result.no_api = true,
                 "--mock" => result.mock = true,
                 "--skip-wizard" => result.skip_wizard = true,
+                "--fresh-session" => result.fresh_session = true,
                 "--port" => {
                     i += 1;
                     if let Some(v) = args.get(i) {
@@ -89,6 +92,7 @@ impl Args {
                     println!("  --log <level>      Log level (default: info)");
                     println!("  --mock             Run without LLM (mock responses only)");
                     println!("  --skip-wizard      Skip the setup wizard on launch");
+                    println!("  --fresh-session    Start with empty rack, ignore saved session");
                     println!("  --osc              Enable OSC input on port 57120 (UDP)");
                     println!("  --osc-port <N>     Enable OSC input on port N (UDP)");
                     std::process::exit(0);
@@ -231,7 +235,14 @@ fn run() -> anyhow::Result<()> {
     let app_state = Arc::new(RwLock::new(AppState::default()));
 
     // Load session (rack layout, style, ui prefs) from last run.
-    if let Some(session) = impulse_instruct::state::load_session() {
+    // When --fresh-session is passed, start with the Empty rack preset
+    // (sequencer + master + console only). Demo scripts use this to ensure
+    // a clean, reproducible starting state.
+    if args.fresh_session {
+        log::info!("Fresh session requested — starting with Empty rack preset");
+        let empty = &impulse_instruct::state::RACK_PRESETS[0]; // "Empty"
+        app_state.write().rack = impulse_instruct::state::RackState::from_preset(empty);
+    } else if let Some(session) = impulse_instruct::state::load_session() {
         impulse_instruct::state::apply_session(&mut app_state.write(), session);
         log::info!("Session restored from session.json");
     }
