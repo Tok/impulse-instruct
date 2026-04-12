@@ -133,6 +133,18 @@ Alerts cycle in the header (2 at a time, rotating each second). Multiple alerts 
 
 ## UI
 
+- **12-column grid rack** - RPG-inventory-style module placement with snap-to-grid drag and drop; bin-packing auto-arrange with center-biased positioning; per-zone dynamic height
+- **Two knob styles** - chrome (concentric rings, scale marks, glint arc) and flat/brushed (radial spokes, knurled edge, hub disc); freely mixable via `ControlPrefs::flat()`; fixed sizes (KNOB_PX=55, PAD_PX=34)
+- **Knob value arc** - 270-degree outer range ring on all knobs showing full range with filled portion up to current value
+- **Module remove with confirmation** - centered dialog on all non-core modules; disconnects cables and cleans up agents
+- **Drag overlap prevention** - AABB collision check rejects drops onto occupied grid cells; red ghost overlay for blocked positions
+- **Right-justified PAN sliders** - all voice panels (bass, 808, 909, AN1X, hoover, noise)
+- **Right-justified step grids** - sequencer step buttons pushed to right edge via computed spacer
+- **Full sequencer labels** - BANK, CHAIN, STEPS, SWING, SNAP, ACCENT, SLIDE; drum voices: 808 KICK, 909 CLOSED HH, etc.
+- **Wider sequencer sliders** - BPM/SWING 200px, drum volume 100px
+- **Uniform glass pane heights** - per-row min_height in hoover, AN1X, bass, 808, 909
+- **Rack presets in wizard** - Empty/Basic/Standard/Full; wizard renamed "Rack Setup"
+- **3x scroll speed** - mouse wheel boost for faster rack navigation
 - 5 panels: Sequencer / Bass (303) / 808 / 909 / FX; AN1X and Hoover in sequencer area
 - Chrome knobs, glass sliders, embossed buttons (neumorphic grayscale)
 - **Skeuomorphic step buttons** - active inset well (debossed 2px) with inverted edge highlights; velocity bloom over inset; chrome knob well shadow + catch-light
@@ -149,7 +161,7 @@ Alerts cycle in the header (2 at a time, rotating each second). Multiple alerts 
 - **Cable signal animation** - normalised to arc length (constant perceived speed regardless of cable length); 2-5 dots per cable based on length
 - **LFO visual cables** - active LFO slots synthesise rack cables from state (lfo.target → ModuleKind mapping) so LFO connections show without needing a rack cable entry
 - **Central touch-paint mode** - `· / U / F` toolbar row; clicking a knob paints its param mode when mode is active; replaces broken right-click cycling
-- **UI preferences** - knob style (Chrome/Flat), knob size (S/M/L/XL, default M=55px), pad size (S/M/L/XL, default M=44px), UI scale (0.5–3.0×, instant via pixels_per_point); all persisted in session.json
+- **UI preferences** - UI scale (0.5–3.0×, instant via pixels_per_point), Huth style, CRT effect, phosphor settings; persisted in session.json
 - **Responsive header** - heat slider fills remaining width; COOL/WARM/HOT/FIRE/CHAOS tier labels with color ramp; monitor volume labelled MON (listen-only, not export)
 - **Zone visual hierarchy** - zone rails (Global/Voices/FX+Mod) have distinct gray backgrounds (24/18/14); module cards have 6px side + 8px top/bottom inner margin; 3-dot drag handle in every title bar
 - **Per-zone collapse** - each zone rail has ▶/▼ toggle; collapses all cards in that zone to recover screen space
@@ -158,7 +170,7 @@ Alerts cycle in the header (2 at a time, rotating each second). Multiple alerts 
 - **Log level persistence** - `log_level_idx` persisted in `session.json`; survives restarts
 - **Skeuomorphic XY pad** — thick beveled outer frame (raised panel, inset rubber well), corner tick marks, rubber nub cursor with layered dome, specular catch-light, and hover glow ring; Y axis label/value overlaid inside pad; no left label strip
 - **Centered module layout** — knobs and controls center-align horizontally within glass groups and rack module cards (no more left-clustering dead space)
-- **Custom size overrides** — Preferences now exposes separate pixel DragValues for KNOB SIZE, SEQ STEP SIZE, XY PAD SIZE, and ENV HEIGHT; S/M/L/XL presets remain as quick-picks with ↺ reset; PadSize Fibonacci-aligned (S=21 / M=34 / L=55 / XL=89 px)
+- **Fixed control sizes** — knobs (55px), step buttons (34px), XY pads (172px), ADSR displays (77px); constants in `ui_prefs.rs`
 - **Rounded sequencer step buttons** — rounding increased to 22% of pad size; neumorphic bevel uses rect_stroke pairs so highlights follow the rounded shape
 - **Scaled envelope display** — decay/ADSR height scales with XY pad size (30% of xy_size, configurable via ENV HEIGHT override); width spans both pads
 - **Huth ANSI terminal output** — `log::info!` LLM response lines and thinking tokens emit ANSI 24-bit color escape codes for note names, frequencies, and MIDI numbers when stdout is a TTY; matches in-UI log colorization
@@ -182,7 +194,7 @@ Alerts cycle in the header (2 at a time, rotating each second). Multiple alerts 
 ## Testing and build
 
 - Unit tests across submodules (seq_tests, state_tests, llm_tests, audio::analysis, jam_tools_tests, music_api_tests, ui::note, ui::llm_strip), split at 1000-line limit per file
-- 431 unit tests total
+- 479 unit tests total
 - 39 LLM integration tests in 3 suites: `llm_suite` (core), `llm_suite_style` (artist refs), `llm_suite_theory` (music theory + producer lingo)
 - Pre-commit hook: fmt + clippy + tests + 1000-line LOC limit
 - `scripts/run-tests.sh --coverage` - HTML coverage report (lcov)
@@ -268,7 +280,7 @@ Alerts cycle in the header (2 at a time, rotating each second). Multiple alerts 
 
 ### Refactoring and test coverage
 
-- **431 unit tests**; suites: `llm_apply_tests` (68), `persistence_tests` (25), `helpers_tests` (7), `music_tests` (13), `dsp_tests` (16), `fx_plan_tests` (7), `vram_tests` (9)
+- **479 unit tests**; suites: `llm_apply_tests` (68), `persistence_tests` (25), `helpers_tests` (7), `music_tests` (13), `dsp_tests` (16), `fx_plan_tests` (7), `vram_tests` (9)
 - **`rack.connect_control(from_id, to_id)`** - replaces 8-line PortRef boilerplate at 6 call sites
 - **`spawn_agent()` pure function** - transitions.rs; wizard.rs and SpawnAgent handler refactored to use it
 - **`format_llm_display()` pure function** - extracted from drain_llm_outputs into transitions.rs
