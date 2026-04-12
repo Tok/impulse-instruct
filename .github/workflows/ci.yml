@@ -217,3 +217,33 @@ jobs:
           files: |
             ${{ matrix.asset_name }}.zip
             ${{ matrix.asset_name }}.sha256
+
+  # ── Rolling release cleanup ────────────────────────────────────────────────
+  # Keep only the latest release. Runs after both matrix builds finished
+  # uploading, so the current tag is already published by the time we
+  # scan for older ones.
+  cleanup_old_releases:
+    name: Delete prior releases (rolling)
+    needs: release
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Delete all GitHub releases except ${{ github.ref_name }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          KEEP_TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          echo "Keeping: $KEEP_TAG"
+          # List tag names of all releases, skip the current one, delete each
+          # along with its underlying git tag (--cleanup-tag).
+          gh release list --limit 100 --json tagName \
+            --jq '.[].tagName' \
+          | while IFS= read -r tag; do
+              if [ "$tag" != "$KEEP_TAG" ]; then
+                echo "Deleting $tag"
+                gh release delete "$tag" --yes --cleanup-tag || true
+              fi
+            done
