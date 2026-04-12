@@ -90,8 +90,7 @@ The app auto-detects the model in `models/` and connects to it. The startup wiza
 |-------|------|------|-------|
 | **Gemma 4 E4B Q4_K_M** | ~4.6 GB | ~6 GB | **Recommended.** Best JSON accuracy, passes all integration tests. |
 | **Bonsai 8B Q1_0_g128** | ~1.1 GB | ~2 GB | Lightweight agent. Fits in 2 GB VRAM. Great for specialist agents in a multi-model team. |
-| **DeepSeek-R1-Distill-Qwen-7B** | ~5 GB | ~7 GB | Chain-of-thought capable, Qwen2.5 base. |
-| **DeepSeek-R1-Distill-Qwen-14B** | ~9 GB | ~11 GB | Higher quality CoT, needs 12+ GB VRAM. |
+| **NeuTTS Air Q4** | ~527 MB | CPU | Neural TTS voice cloning for MC/DJ modules. Apache 2.0. |
 
 Each agent can run a different model. A `LlamaServerPool` manages server processes — agents sharing the same model share a single server (ref-counted). Typical multi-agent VRAM budgets:
 
@@ -345,6 +344,7 @@ MIT - see [LICENSE](LICENSE)
 
 Gemma 4 model: [Google Gemma Terms of Use](https://ai.google.dev/gemma/terms)
 Bonsai 8B model: Apache 2.0 - credit to [prism-ml](https://huggingface.co/prism-ml)
+NeuTTS Air model: Apache 2.0 - credit to [Neuphonic](https://huggingface.co/neuphonic/neutts-air)
 
 ---
 

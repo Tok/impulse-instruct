@@ -180,5 +180,124 @@ case "$MODEL" in
     echo "DeepSeek-R1-Distill is released under the MIT License by DeepSeek AI."
     echo "Quantisation by bartowski. See: https://huggingface.co/${HF_REPO}"
     ;;
+  neutts)
+    echo "NeuTTS Air is released by Neuphonic under the NeuTTS License."
+    echo "See: https://huggingface.co/${HF_REPO}"
+    ;;
 esac
 echo "─────────────────────────────────────────────────────────────────────────────"
+
+# ── NeuTTS Air setup function ─────────────────────────────────────────────────
+NEUTTS_VENV=".neutts-venv"
+NEUTTS_MODEL="${MODEL_DIR}/neutts-air-q4.gguf"
+
+setup_neutts() {
+  echo ""
+  echo "─── NeuTTS Air voice cloning setup ─────────────────────────────────────────"
+  echo ""
+
+  # Check espeak-ng
+  if ! command -v espeak-ng &>/dev/null; then
+    echo "  espeak-ng not found — needed for NeuTTS phonemisation."
+    echo "  Install: sudo apt install espeak-ng"
+    echo "  Skipping NeuTTS setup."
+    return
+  fi
+
+  # Find Python
+  PYTHON=""
+  for py in python3.12 python3.11 python3.10 python3; do
+    if command -v "$py" &>/dev/null; then PYTHON="$py"; break; fi
+  done
+  if [[ -z "$PYTHON" ]]; then
+    echo "  Python 3.10+ not found. Skipping NeuTTS setup."
+    return
+  fi
+
+  # Create venv + install
+  if [[ ! -d "$NEUTTS_VENV" ]]; then
+    echo "  Creating Python venv ($NEUTTS_VENV)..."
+    "$PYTHON" -m venv "$NEUTTS_VENV"
+  fi
+  echo "  Installing neutts[llama]..."
+  "$NEUTTS_VENV/bin/pip" install --quiet --upgrade pip
+  "$NEUTTS_VENV/bin/pip" install --quiet "neutts[llama]" soundfile numpy
+
+  # Download model
+  if [[ ! -f "$NEUTTS_MODEL" ]]; then
+    echo "  Downloading NeuTTS Air Q4 GGUF (~527 MB)..."
+    DL_FILE="neutts-air-Q4_0.gguf"
+    if [[ -n "${HF_CMD:-}" ]]; then
+      $HF_CMD download "neuphonic/neutts-air-q4-gguf" "$DL_FILE" --local-dir "$MODEL_DIR"
+      [[ -f "${MODEL_DIR}/${DL_FILE}" ]] && mv "${MODEL_DIR}/${DL_FILE}" "$NEUTTS_MODEL"
+    elif command -v wget &>/dev/null; then
+      wget -q --show-progress -O "$NEUTTS_MODEL" \
+        "https://huggingface.co/neuphonic/neutts-air-q4-gguf/resolve/main/$DL_FILE"
+    elif command -v curl &>/dev/null; then
+      curl -L --progress-bar -o "$NEUTTS_MODEL" \
+        "https://huggingface.co/neuphonic/neutts-air-q4-gguf/resolve/main/$DL_FILE"
+    fi
+  fi
+
+  # Verify
+  if "$NEUTTS_VENV/bin/python" -c "from neutts import NeuTTS" 2>/dev/null; then
+    echo ""
+    echo "  ✓ NeuTTS Air ready (model: $(du -h "$NEUTTS_MODEL" 2>/dev/null | cut -f1 || echo '?'))"
+  else
+    echo "  WARNING: neutts import failed. TTS may not work."
+  fi
+  echo "─────────────────────────────────────────────────────────────────────────────"
+}
+
+# If called with explicit 'neutts' target, run setup and exit
+if [[ "$MODEL" == "neutts" ]]; then
+  setup_neutts
+  exit 0
+fi
+
+# ── Optional recommended downloads ────────────────────────────────────────────
+
+# Bonsai 8B (lightweight multi-agent model)
+BONSAI_MODEL="${MODEL_DIR}/Bonsai-8B.gguf"
+if [[ "$MODEL" != "bonsai" ]]; then
+  if [[ -f "$BONSAI_MODEL" ]]; then
+    echo ""
+    echo "✓ Bonsai 8B already present."
+  else
+    echo ""
+    echo "Bonsai 8B is a lightweight 1-bit model (~1.1 GB) for multi-agent setups."
+    read -r -p "Also download Bonsai 8B? [Y/n] " reply
+    reply="${reply:-y}"
+    if [[ "$reply" =~ ^[Yy]$ ]] || [[ -z "$reply" ]]; then
+      echo "  Downloading Bonsai 8B..."
+      if [[ -n "${HF_CMD:-}" ]]; then
+        $HF_CMD download "prism-ml/Bonsai-8B-gguf" "Bonsai-8B.gguf" --local-dir "$MODEL_DIR"
+      elif command -v wget &>/dev/null; then
+        wget -q --show-progress -O "$BONSAI_MODEL" \
+          "https://huggingface.co/prism-ml/Bonsai-8B-gguf/resolve/main/Bonsai-8B.gguf"
+      elif command -v curl &>/dev/null; then
+        curl -L --progress-bar -o "$BONSAI_MODEL" \
+          "https://huggingface.co/prism-ml/Bonsai-8B-gguf/resolve/main/Bonsai-8B.gguf"
+      fi
+      [[ -f "$BONSAI_MODEL" ]] && echo "  ✓ Bonsai 8B ready ($(du -h "$BONSAI_MODEL" | cut -f1))" || echo "  Download failed."
+    else
+      echo "  Skipped. Run later: ./scripts/download-models.sh bonsai"
+    fi
+  fi
+fi
+
+# NeuTTS Air (voice cloning for TTS modules)
+if [[ -f "$NEUTTS_MODEL" ]] && [[ -d "$NEUTTS_VENV" ]]; then
+  echo ""
+  echo "✓ NeuTTS Air already set up."
+else
+  echo ""
+  echo "NeuTTS Air enables neural voice cloning for TTS modules (~527 MB download)."
+  read -r -p "Set up NeuTTS Air? [Y/n] " reply
+  reply="${reply:-y}"
+  if [[ "$reply" =~ ^[Yy]$ ]] || [[ -z "$reply" ]]; then
+    setup_neutts
+  else
+    echo "  Skipped. Run later: ./scripts/download-models.sh neutts"
+  fi
+fi

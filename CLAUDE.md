@@ -14,7 +14,7 @@ cargo test                           # unit tests (split across src/tests/)
 ./start.sh --dev                     # build + launch (debug + verbose)
 ./scripts/run-tests.sh --coverage    # HTML coverage report
 ./scripts/build-all.sh               # Linux + Windows EXE → dist/
-./scripts/download-models.sh         # fetch Gemma 4 E4B GGUF (~4.6 GB, default, needs HF account)
+./scripts/download-models.sh         # fetch Gemma 4 E4B GGUF (~4.6 GB, default) + NeuTTS Air (~527 MB, optional)
 ./scripts/run-llm-tests.sh           # all LLM integration suites (needs running model)
 ./scripts/run-llm-style.sh           # artist/genre reference tests only
 ./scripts/run-llm-theory.sh          # music theory + producer lingo tests only

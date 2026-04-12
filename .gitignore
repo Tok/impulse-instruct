@@ -17,3 +17,4 @@ cobertura.xml
 /demo/output/
 /demo/tts_cache/
 .tts-venv/
+.neutts-venv/
