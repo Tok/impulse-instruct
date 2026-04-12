@@ -392,6 +392,48 @@ fn arrange_grid_full_preset_no_overlap() {
     }
 }
 
+#[test]
+fn arrange_grid_is_idempotent() {
+    // Arranging twice should produce the same positions.
+    let mut rack = RackState::default();
+    let before: Vec<(u32, u8, u8)> = rack
+        .modules
+        .iter()
+        .map(|m| (m.id, m.grid_col, m.grid_row))
+        .collect();
+    rack.arrange_grid();
+    let after: Vec<(u32, u8, u8)> = rack
+        .modules
+        .iter()
+        .map(|m| (m.id, m.grid_col, m.grid_row))
+        .collect();
+    assert_eq!(before, after, "arrange_grid should be idempotent");
+}
+
+#[test]
+fn preset_arrange_is_idempotent() {
+    use crate::state::RACK_PRESETS;
+    for (i, preset) in RACK_PRESETS.iter().enumerate() {
+        let mut rack = RackState::from_preset(preset);
+        let before: Vec<(u32, u8, u8)> = rack
+            .modules
+            .iter()
+            .map(|m| (m.id, m.grid_col, m.grid_row))
+            .collect();
+        rack.arrange_grid();
+        let after: Vec<(u32, u8, u8)> = rack
+            .modules
+            .iter()
+            .map(|m| (m.id, m.grid_col, m.grid_row))
+            .collect();
+        assert_eq!(
+            before, after,
+            "preset {} ('{}') arrange_grid not idempotent",
+            i, preset.name
+        );
+    }
+}
+
 // ── Module zone placement ──────────────────────────────────────────────────
 
 #[test]
