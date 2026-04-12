@@ -13,7 +13,11 @@ scene "Setup"
 
 reset_rack
 
-say "Impulse Instruct. AI-controlled audio synthesizers. Let's build a rack."
+say "Impulse Instruct."
+pause 0.4
+say "A smart synthesizer."
+pause 0.6
+say "Let's build a rack!"
 
 say "Adding bass."
 add_instrument bass
@@ -86,7 +90,8 @@ scene "AI-controlled ramp"
 
 ask "slowly sweep the filter open over 4 bars" 14
 
-say "The AI ramps parameters over bars. Smooth, tempo-synced."
+say "The AI ramps parameters over bars."
+say "Smooth, locked to the tempo."
 wait_seconds 2
 
 # ── Scene 6: Show cables — after wiring is visible ─────────────────────────
@@ -97,7 +102,8 @@ scene "Control cables"
 look_at console
 wait_seconds 1
 show_cables
-say "Back panel. Control cables connect the agent to each instrument."
+say "The back panel shows control cables."
+say "They connect the agent to each instrument."
 # Tour every zone top-to-bottom so all cables are on screen at some point.
 tour_rack 1.2
 screenshot "v${VERSION}-intro-cables"
@@ -114,18 +120,25 @@ add_effect lfo
 look_at lfo
 wait_seconds 1
 
-say "An LFO moves a parameter hands-free. Any knob can be a target."
+say "An LFO moves a parameter on its own."
+say "Any knob can be a target."
 
 # ── LFO 1: classic sine on the bass filter cutoff ──
-say "Sine wave on the bass cutoff — classic acid breath."
+say "Sine wave on the bass cutoff."
+say "Classic acid breath."
 api_params '{"lfo": [{"enabled": true, "target": "BassCutoff", "waveform": "Sine", "rate": 0.18, "depth": 0.55}]}'
 focus_on bass
 wait_seconds 4
 
 # ── LFO 2: slower triangle on reverb mix — different waveform + target ──
-say "A second LFO, triangle wave, on the reverb mix."
-api_params '{"lfo": [{}, {"enabled": true, "target": "ReverbMix", "waveform": "Triangle", "rate": 0.06, "depth": 0.35}]}'
+# Each LfoModule in the rack binds to the next LFO slot; without a second
+# module slot 1 has no card on screen.
+add_effect lfo
 look_at lfo
+wait_seconds 1
+say "A second LFO."
+say "Triangle wave on the reverb mix."
+api_params '{"lfo": [{}, {"enabled": true, "target": "ReverbMix", "waveform": "Triangle", "rate": 0.06, "depth": 0.35}]}'
 wait_seconds 4
 
 say "Filter pulses fast, reverb breathes slow."
@@ -244,7 +257,9 @@ scene "End"
 show_all
 
 say "Impulse Instruct."
-say "Build your rack, wire AI agents and generate music with words."
+say "Build your rack."
+say "Wire up AI agents."
+say "Make music with words."
 say "Everything runs locally."
 
 stop

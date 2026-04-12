@@ -248,6 +248,26 @@ stop_neutts_server() {
 
 # ─── TTS helpers ──────────────────────────────────────────────────────────────
 
+# Transform subtitle text into a TTS-friendly form.
+#
+# NeuTTS sometimes mispronounces bare acronyms (reads "AI" as the word "eye",
+# runs "LFO" together as "elfo"), so we spell them out with dots for the
+# speech pass.  The subtitle keeps the original short form, since that reads
+# more naturally on screen.
+#
+# Word-boundary aware — only whole-word matches are rewritten, so we don't
+# mangle "bass" or "fax" into something weird.
+tts_speakable() {
+    local text="$1"
+    text=$(printf '%s' "$text" | sed -E '
+        s/\bLFO\b/L.F.O./g;
+        s/\bAI\b/A.I./g;
+        s/\bFX\b/effects/g;
+        s/\bBPM\b/B.P.M./g;
+    ')
+    printf '%s' "$text"
+}
+
 tts_generate() {
     # Pre-generate a TTS clip using NeuTTS Air server. Returns the wav path.
     # Usage: tts_generate "clip_id" "Text to speak"
@@ -346,8 +366,10 @@ narrate() {
     if [ "$1" = "--wait" ]; then blocking=1; shift; fi
 
     local id="$1" text="$2"
+    local speak_text
+    speak_text=$(tts_speakable "$text")
     local wavfile
-    wavfile=$(tts_generate "$id" "$text")
+    wavfile=$(tts_generate "$id" "$speak_text")
     local start_sec
     start_sec=$(demo_elapsed)
     local est
@@ -531,7 +553,7 @@ generate_srt() {
     local factor="${SRT_DISPLAY_FACTOR:-1.5}"
     # Subtitles were appearing ~1s ahead of the spoken audio; shift the whole
     # SRT later by this many seconds. Override with SRT_OFFSET_SECS.
-    local offset="${SRT_OFFSET_SECS:-1.0}"
+    local offset="${SRT_OFFSET_SECS:-1.3}"
 
     if [ ! -f "$NARRATION_LIST" ]; then
         echo "No narration entries found" >&2
@@ -586,7 +608,7 @@ pregenerate_srt() {
     > "$outfile"
     local t=0.0 idx=0
 
-    local offset="${SRT_OFFSET_SECS:-1.0}"
+    local offset="${SRT_OFFSET_SECS:-1.3}"
 
     _emit_srt() {
         local start="$1" end="$2" text="$3"

@@ -214,6 +214,19 @@ pub fn parse_and_schedule_ramp(
         .map(|v| v as f32)
         .unwrap_or_else(|| current_param_value(&state, &param));
 
+    // No-op guard: if the ramp target is already (effectively) where we are,
+    // don't schedule — it would waste a ramp slot and show a flat line in the
+    // event stream. 0.002 ≈ 0.2 %, below visible knob movement.
+    if (from - to).abs() < 0.002 {
+        log::debug!(
+            "ramp: skipping no-op ({} already at {:.3}, target {:.3})",
+            param,
+            from,
+            to
+        );
+        return state;
+    }
+
     // Bar-based ramp: { "bars": 4 }  →  smooth interpolation over N bars.
     if let Some(bars) = obj.get("bars").and_then(|v| v.as_f64()) {
         let bars = bars.max(1.0) as u64;

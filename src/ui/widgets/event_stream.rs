@@ -371,10 +371,16 @@ pub fn event_stream(ui: &mut Ui, state: &AppState, smooth_step: f64, width: f32,
     }
 
     // ── Active ramps ────────────────────────────────────────────────────────
+    // Drawn as a sloped line across the ramp band so the shape of the
+    // transition is visible (rising / falling / amount). Param value 0 maps
+    // to the bottom of the band, 1 to the top.
     if !state.ui_prefs.stream_ramps {
         // Skip ramp display
     } else {
-        let ramp_y = inner.max.y - 3.0;
+        let band_bot = inner.max.y - 2.0;
+        let band_top = inner.max.y - 16.0;
+        let band_h = band_bot - band_top;
+        let val_to_y = |v: f32| band_bot - v.clamp(0.0, 1.0) * band_h;
         for ramp in &state.llm.active_ramps {
             if ramp.total_global_steps == 0 {
                 continue;
@@ -386,22 +392,38 @@ pub fn event_stream(ui: &mut Ui, state: &AppState, smooth_step: f64, width: f32,
             if remaining == 0 {
                 continue;
             }
-            let ramp_steps = remaining as f32;
-            let x_start = now_x;
-            let x_end = (now_x + ramp_steps * step_w).min(inner.max.x);
             let t = elapsed as f32 / ramp.total_global_steps as f32;
-            let brightness = (100.0 + t * 80.0) as u8;
+            let current_val = ramp.from + (ramp.target - ramp.from) * t;
+
+            let x_start = now_x;
+            let x_end = (now_x + remaining as f32 * step_w).min(inner.max.x);
+            let y_start = val_to_y(current_val);
+            let y_end = val_to_y(ramp.target);
+
+            let brightness = (120.0 + t * 80.0) as u8;
+            let stroke_color = Color32::from_gray(brightness);
+
+            // Faint guide line at the target value so the ramp reads as going "to" it.
             painter.line_segment(
-                [Pos2::new(x_start, ramp_y), Pos2::new(x_end, ramp_y)],
-                Stroke::new(2.0, Color32::from_gray(brightness)),
+                [Pos2::new(x_start, y_end), Pos2::new(x_end, y_end)],
+                Stroke::new(0.5, Color32::from_gray(50)),
             );
+            // The ramp itself.
+            painter.line_segment(
+                [Pos2::new(x_start, y_start), Pos2::new(x_end, y_end)],
+                Stroke::new(1.5, stroke_color),
+            );
+            // Current value dot + target dot.
+            painter.circle_filled(Pos2::new(x_start, y_start), 1.8, stroke_color);
+            painter.circle_filled(Pos2::new(x_end, y_end), 1.6, Color32::from_gray(150));
+
             let short_param = ramp.param.split('.').next_back().unwrap_or(&ramp.param);
             painter.text(
-                Pos2::new(x_start + 2.0, ramp_y - 4.0),
+                Pos2::new(x_start + 3.0, band_top - 1.0),
                 egui::Align2::LEFT_BOTTOM,
                 short_param,
                 egui::FontId::monospace(6.0),
-                Color32::from_gray(60),
+                Color32::from_gray(80),
             );
         }
     } // stream_ramps
