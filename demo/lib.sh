@@ -4,8 +4,8 @@
 
 API="http://127.0.0.1:8765"
 DEMO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-TTS_DIR="$DEMO_DIR/tts_cache"
-NARRATION_LIST="$DEMO_DIR/.narration_playlist"
+TTS_DIR="${TTS_DIR:-$DEMO_DIR/tts_cache}"
+NARRATION_LIST="${NARRATION_LIST:-$DEMO_DIR/.narration_playlist}"
 XDO="python3 $DEMO_DIR/xdo.py"
 
 # TTS settings — NeuTTS Air for demo narration
@@ -247,14 +247,31 @@ tts_generate() {
     local outfile="$TTS_DIR/${id}.wav"
     mkdir -p "$TTS_DIR"
     if [ ! -f "$outfile" ]; then
+        # Build JSON payload safely via jq (handles quotes, escapes, unicode).
         local json
-        json=$(printf '{"text":"%s","ref_audio":"%s","ref_text":"%s","out_path":"%s"}' \
-            "$text" "$NEUTTS_REF_AUDIO" "$NEUTTS_REF_TEXT" "$outfile")
-        curl -sf -X POST "${NEUTTS_URL}/synthesize" \
+        if command -v jq >/dev/null 2>&1; then
+            json=$(jq -nc \
+                --arg text "$text" \
+                --arg ref_audio "$NEUTTS_REF_AUDIO" \
+                --arg ref_text "$NEUTTS_REF_TEXT" \
+                --arg out "$outfile" \
+                '{text:$text, ref_audio:$ref_audio, ref_text:$ref_text, out_path:$out}')
+        else
+            # Fallback: naive escape (only handles double quotes and backslashes)
+            local esc
+            esc=$(printf '%s' "$text" | sed 's/\\/\\\\/g; s/"/\\"/g')
+            json=$(printf '{"text":"%s","ref_audio":"%s","ref_text":"%s","out_path":"%s"}' \
+                "$esc" "$NEUTTS_REF_AUDIO" "$NEUTTS_REF_TEXT" "$outfile")
+        fi
+        local resp_code
+        resp_code=$(curl -s -w "%{http_code}" \
+            -X POST "${NEUTTS_URL}/synthesize" \
             -H "Content-Type: application/json" \
-            -d "$json" >/dev/null 2>&1
-        if [ ! -f "$outfile" ]; then
-            echo "  ERROR: NeuTTS failed to generate: $text" >&2
+            --data-binary "$json" \
+            -o "$outfile" 2>/dev/null || echo "000")
+        if [ ! -s "$outfile" ]; then
+            echo "  ERROR: NeuTTS synth failed (HTTP $resp_code) for: $text" >&2
+            rm -f "$outfile"
         fi
     fi
     echo "$outfile"

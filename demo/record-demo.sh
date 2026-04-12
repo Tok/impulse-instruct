@@ -123,6 +123,9 @@ VERSION=$(grep '^version' "$PROJECT_DIR/Cargo.toml" | head -1 | sed 's/.*"\(.*\)
 BATCH_DIR="$OUTPUT_DIR/${TIMESTAMP}"
 BASENAME="v${VERSION}-${SCENARIO}"
 mkdir -p "$BATCH_DIR"
+# TTS clips for this batch go into the batch dir (not shared cache)
+export TTS_DIR="$BATCH_DIR/tts"
+mkdir -p "$TTS_DIR"
 
 # ─── Log file ────────────────────────────────────────────────────────────────
 LOGFILE="$BATCH_DIR/${BASENAME}.log"

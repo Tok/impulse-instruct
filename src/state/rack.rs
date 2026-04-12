@@ -394,7 +394,8 @@ impl RackState {
             if m.zone != zone {
                 continue;
             }
-            let (mw, mh) = m.kind.grid_size(GRID_COLS);
+            let (mw, static_h) = m.kind.grid_size(GRID_COLS);
+            let mh = self.dyn_height_override(m.kind).unwrap_or(static_h);
             for dr in 0..mh as usize {
                 for dc in 0..mw as usize {
                     let r = m.grid_row as usize + dr;
@@ -408,7 +409,7 @@ impl RackState {
 
         // Scan top-to-bottom, left-to-right for first free block
         let w = w as usize;
-        let h = h as usize;
+        let h = self.dyn_height_override(kind).unwrap_or(h) as usize;
         if w == 0 || w > cols || h == 0 {
             return (0, 0);
         }
