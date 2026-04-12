@@ -20,18 +20,18 @@ Everything runs entirely offline: no cloud calls, no subscriptions, no latency. 
 ---
 
 <p align="center">
-  <img src="assets/screenshots/v0.7.1-snapshot-intro-sequencer.png" alt="Sequencer and bass synth — 32-step patterns with Huth note coloring" width="900"/>
+  <img src="assets/screenshots/v0.7.2-intro-sequencer.png" alt="Sequencer — 32-step wrap, per-voice sliders, bass/accent/slide intensity" width="900"/>
 </p>
 <p align="center">
-  <img src="assets/screenshots/v0.7.1-snapshot-intro-bass-detail.png" alt="Bass detail — 303-style filter with chrome knobs and XY pad" width="900"/>
+  <img src="assets/screenshots/v0.7.2-intro-bass-detail.png" alt="Bass detail — 303-style filter with chrome knobs and XY pad" width="900"/>
 </p>
 <p align="center">
-  <img src="assets/screenshots/v0.7.1-snapshot-intro-cables.png" alt="Back panel — control cables connecting agents to modules" width="900"/>
+  <img src="assets/screenshots/v0.7.2-intro-cables.png" alt="Back panel — cable topology filter dims modules not in the signal path" width="900"/>
 </p>
 
 ---
 
-## v0.7.1 - Pre-release
+## v0.7.2 - Pre-release
 
 **This is pre-release software.** It works and makes sound, but expect rough edges. The UI is functional but visually unpolished in places.
 
@@ -104,27 +104,16 @@ Each agent can run a different model. A `LlamaServerPool` manages server process
 
 ---
 
-## What's new in v0.7.1
+## What's new in v0.7.2
 
-**32-step sequencer default** — patterns now default to 32 steps (two bars) with support for per-voice lengths and polyrhythm. LLM agents are aware of step counts and spread patterns across the full range.
+12-column grid rack, AI / MAIN AUDIO / VOICES / FX+MOD zone tabs, cable
+topology filter that actually gates audio, NeuTTS Air voice cloning
+replacing espeak, resilient demo recording with pre-generated SRT,
+voice-specific rhythm guidance for the LLM (909 pins the grid, 808
+almost-4OTF, 303 syncopated at 1/3–2/3 density), knob style reflects
+lock state. 478 unit tests, 105 commits since v0.7.1.
 
-**Per-voice stereo pan** — every voice (bass, drums, hoover, AN1X, noise) has a pan knob. Agents actively set pan positions for stereo width.
-
-**Auto-highlight on LLM response** — when an agent modifies a module, that module gets a brief highlight animation so you can see what changed.
-
-**API params push to audio** — parameter changes via the HTTP API (`POST /api/params`) now immediately affect the audio output. Filter sweeps, pad movements, and all param changes from the API are audible in real time.
-
-**Demo recording system** — 10+ demo scenarios with NeuTTS Air narration, automated rack setup, filter sweeps, multi-agent jams. Captures video (GPU-accelerated h264_nvenc), isolated app audio via PipeWire.
-
-**TTS as rack module** — NeuTTS Air voice cloning with per-module settings (voice reference, temperature, top-k), wired via control cables from agents.
-
-**Real-time mix observer** — audio analysis (sub/low/mid/hi band levels, peak, stereo correlation) runs every ~2s and is injected into every LLM prompt. Agents self-correct based on mix state.
-
-**Wizard improvements** — click a preset to directly apply it (no separate submit button). Enter submits, arrow keys navigate. Session restore respects clean starts.
-
-**474 unit tests** — +37 since v0.7.0. All passing.
-
-See [docs/features.md](docs/features.md) for the full feature list.
+Full details in [docs/features.md](docs/features.md).
 
 ---
 
@@ -292,13 +281,13 @@ The LLM understands musical intent well. When a style doesn't land, the cause is
 
 **What doesn't yet:** the hoover lead exists but doesn't sound like a hoover. The Amen break is synthesised step-by-step rather than sampled. Some genre textures are partially wired but not finished.
 
-**What's improved in v0.7.1:** ambient and drone have dedicated tools (long envelopes, granular texture, reverb freeze, cross-modulation). The 32-step default gives patterns more room to breathe. Real-time mix analysis helps agents self-correct. API parameter changes are now audible.
+**What's improved in v0.7.2:** audio cables now actually route signal (disconnecting a reverb stops it processing). The rack is a proper 12-column grid with snap-to-grid drag and center-bias placement. Bass/kick rhythm guidance is voice-specific so bass lines aren't just 4-on-the-floor copies of the kick. TTS is NeuTTS Air (voice cloning, much better than espeak). Demo recording has resilient pre-gen with retry logic.
 
 ---
 
 ## Test Suites
 
-474 unit tests plus 3 LLM integration suites that run against a real model:
+478 unit tests plus 3 LLM integration suites that run against a real model:
 
 | Suite | What it tests |
 |-------|--------------|

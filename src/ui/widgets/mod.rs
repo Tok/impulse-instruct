@@ -463,7 +463,13 @@ pub fn slider(ui: &mut Ui, label: &str, value: &mut f32, mode: ParamMode) -> (bo
     (changed, mode_cycled)
 }
 
-/// Dispatch to the appropriate control widget based on `ControlPrefs`.
+/// Dispatch to the appropriate control widget based on `ControlPrefs` and
+/// `ParamMode`. The mode drives the visual style so users can tell lock
+/// state at a glance:
+///   • Free (unmanaged)     → chrome (default)
+///   • UserOwned (locked)   → chrome, darkened (mode_shift inside the widget)
+///   • LlmFocus (focused)   → flat/brushed — visibly distinct from chrome
+///
 /// Returns `(value_changed, mode_cycled)`.
 pub fn param_control(
     ui: &mut Ui,
@@ -472,7 +478,11 @@ pub fn param_control(
     mode: ParamMode,
     prefs: ControlPrefs,
 ) -> (bool, bool) {
-    match prefs.style {
+    let style = match mode {
+        ParamMode::LlmFocus => ControlStyle::KnobFlat,
+        _ => prefs.style,
+    };
+    match style {
         ControlStyle::KnobFlat => knob(ui, label, value, mode, prefs.knob_size),
         ControlStyle::KnobChrome => knob_chrome(ui, label, value, mode, prefs.knob_size),
     }
@@ -760,9 +770,13 @@ fn draw_knob_chrome(
         Stroke::new(1.0, Color32::from_gray(8)),
     );
 
-    // Concentric fills — tinted by mode (U=darker, F=brighter, Free=normal)
+    // Concentric fills — tinted by mode. UserOwned (locked) pushes the whole
+    // knob markedly darker so the user can read lock state at a glance; Free
+    // is the baseline chrome look. LlmFocus never reaches knob_chrome — the
+    // dispatcher in `param_control` switches to the flat/brushed style for
+    // focus — but we leave a small shift in case it's rendered directly.
     let mode_shift: i16 = match mode {
-        ParamMode::UserOwned => -12,
+        ParamMode::UserOwned => -22,
         ParamMode::LlmFocus => 15,
         ParamMode::Free => 0,
     };
@@ -780,13 +794,21 @@ fn draw_knob_chrome(
         Stroke::new(1.0, Color32::from_gray(14)),
     );
 
-    // Bright outer rim — polished edge; Focus mode shimmers
+    // Bright outer rim — polished edge; Focus mode shimmers. UserOwned
+    // darkens the rim too so the whole silhouette reads as "locked".
     let rim_col = match mode {
         ParamMode::LlmFocus => {
             let pulse = (time * TAU).sin() * 0.5 + 0.5;
             (130.0 + pulse * 70.0) as u8
         }
-        _ => {
+        ParamMode::UserOwned => {
+            if hovered {
+                110u8
+            } else {
+                70u8
+            }
+        }
+        ParamMode::Free => {
             if hovered {
                 180u8
             } else {

@@ -4,6 +4,145 @@ A detailed log of what's built.
 
 ---
 
+## v0.7.2 additions (105 commits since v0.7.1)
+
+### UI rework — 12-column RPG-inventory rack
+
+- **12-col grid rack** — modules snap to a fixed column grid with bin-packing
+  placement; `arrange_grid()` runs a center-bias pass so zones stay visually
+  balanced instead of piling against the left edge; `add_module()` re-runs
+  the full layout on every API/demo add so new modules land centered
+- **AI / MAIN AUDIO zone split** — `Zone::Global` was too catch-all. Split
+  into `Zone::Ai` (LLM console + agents, always on top, agents now pack
+  directly under the console) and `Zone::Global` rebranded "MAIN AUDIO"
+  (sequencer + master). Four tabs total: AI / MAIN AUDIO / VOICES /
+  FX+MOD. Old sessions migrate zones on load via `persistence::apply_session`
+- **Module remove with confirmation** — centered dialog on all non-core
+  modules; disconnects cables and cleans up agents automatically
+- **Drag overlap prevention** — AABB collision check rejects drops onto
+  occupied grid cells; red ghost overlay for blocked positions
+- **Dynamic sequencer height** — sequencer grid cell pixel-sized from
+  per-lane actual heights (step row, accent/slide marker rows, drum
+  vel/prob/ratchet sub-lanes) rather than a coarse "2-physical-rows =
+  1-grid-row" heuristic; cell stays exactly as tall as content needs
+- **Flip-scroll behaviour** — first rack flip scrolls to master, second to
+  agent; extracted to `src/ui/flip.rs`
+- **Rack presets in wizard** — Empty/Basic/Standard/Full; wizard renamed
+  "Rack Setup"; `from_preset()` wires default cables so fresh presets are
+  audible immediately
+
+### Sequencer — wrap, alignment, new sliders
+
+- **32-step-per-row wrap** — `STEPS_PER_ROW = 32`; 1..=32 steps render on
+  one row, 33..=64 wrap into 2 rows of 32 each; odd time signatures keep
+  correct beat spacing via absolute-index beat dividers
+- **Exact-size prefix** — every row (bass / accent / slide / hoover / an1x
+  / drums) emits an identical 5-widget prefix through
+  `allocate_exact_size`, `fixed_label`, `fixed_slider`, and `fixed_space`
+  helpers; cells share one x anchor across voices and sub-rows (no more
+  drum rows drifting half a step right of bass)
+- **Volume/accent/slide sliders in the sequencer** — bass row shows bass
+  volume; ACCENT row shows `bass.accent_level`; SLIDE row shows
+  `bass.portamento_time`; HOOVER and AN1X rows show their own volumes;
+  every slider uses `SEQ_VOL_W = 330 px` with `style.spacing.slider_width`
+  overridden so the widget renders at the full reserved width
+- **Header label alignment** — BPM and SWING labels use identical
+  fixed-width slots so they left-align vertically across rows; `fixed_slider`
+  drives both at `HDR_SLIDER_W = 600 px`
+- **Per-voice step-count editor** — drag/double-click the `02`-style
+  count widget to change a drum voice's length independently of global
+  `sequencer.steps`
+- **Step set matches bank** — rendering stops exactly at `seq_steps`;
+  disabled "ghost" cells past the configured length are gone
+
+### Audio cables actually route
+
+- **Cable topology filter** — `compile_fx_plan()` walks the audio-cable
+  graph and includes only FX modules reachable from a voice (or from
+  another reachable FX). Disconnect a reverb from the chain → reverb
+  stops processing. No more "visual lie" where cables implied routing
+  that DSP ignored
+- **Visual dimming** — modules not in the compiled FxPlan render dimmed on
+  the back panel so it's obvious which ones don't see audio
+- **`wire_default_cables()` reusable** — called by `RackState::default()`,
+  `RackState::from_preset()`, and by `apply_session()` as a migration for
+  old sessions with 0 cables; ensures wizard Presets produce an audible
+  signal path on first flip
+- **Cycle-safe connect** — `connect()` rejects audio cables that would
+  create cycles; `strip_audio_cycles()` sanitises session data on load
+
+### TTS — NeuTTS Air replaces Coqui
+
+- **NeuTTS Air voice cloning** — local GGUF model (~527 MB), persistent
+  Python HTTP server on port 8770; voice identity cloned from a 3–15 s
+  reference clip; single `ModuleKind::NeuTts` with per-module settings
+  (voice_ref, temperature, top_k, top_p); Coqui/direct-espeak paths removed
+- **n_ctx bumped 2048 → 32768** via `NeuTTSWide` subclass overriding
+  `_load_backbone`; matches Qwen 0.5B's training context so long sentences
+  stop garbling. Overridable via `NEUTTS_CTX` env var for low-VRAM setups
+- **Voice reference generator** — `scripts/generate-voices.sh` produces
+  `voices/default.wav`, `mc.wav`, `dj.wav`, `robot.wav` from espeak
+  rendering; integrated into `scripts/download-models.sh` setup flow
+- **Smart pitch snap** — optional per-clip pitch detection + resample to
+  nearest in-key note (`tts.pitch_snap`)
+
+### Demo recording pipeline
+
+- **`demo/record-demo.sh`** — full orchestration: pre-generate TTS, launch
+  app with `--skip-wizard --fresh-session`, start h264_nvenc capture with
+  `-pix_fmt yuv420p -vf "crop=trunc(iw/2)*2:trunc(ih/2)*2"`, run scenario,
+  re-encode with `-sws_flags "lanczos+accurate_rnd+full_chroma_int+full_chroma_inp"`
+- **Pre-generated SRT** — `pregenerate_srt` parses the scenario
+  (`say` / `narrate` / `scene` / `pause` / `wait_seconds`) and emits a
+  complete SRT before recording starts, independent of runtime timing;
+  durations use `max(clip_duration, reading_time)` so subtitles stay
+  on-screen long enough even if NeuTTS truncated the audio
+- **Resilient TTS pre-gen** — `tts_generate` retries up to 3× with a 120 s
+  curl `--max-time`; pre-gen pass tracks ok/failed counts and prints the
+  missing clip IDs at the end so silent NeuTTS failures don't slip
+  through; handles both `narrate "id" "text"` and high-level
+  `say "text"` (auto-ID `auto_NNN_<slug>`) in scenarios
+- **NeuTTS server stops after pre-gen** — frees GPU memory for the LLM
+  during recording; runtime playback uses cached WAVs via paplay
+- **`--fresh-session` flag** — ignores saved session, starts with the
+  Empty rack preset so demos never inherit the user's setup
+- **TTS + audio routed to batch dir** — per-recording `tts/` subdirectory,
+  separated from the permanent `voices/` reference clips
+
+### LLM agent improvements
+
+- **AI zone** — console + agents live together, agents pack directly
+  under the console after adding. Adding via API auto-scrolls to the AI
+  zone so the new agent is visible
+- **Current-state pattern-length awareness** — prompt `CURRENT STATE` JSON
+  exposes live `bass_len`, `hoover_len`, `an1x_len`, and per-voice
+  `drum_lengths` (keyed by schema names); agents stop assuming 16 steps
+  and actually use the configured length
+- **Voice-specific rhythm guidance** — prompt split into DRUM PATTERNS
+  (909 = pin the 4OTF grid; 808 = almost 4OTF with 1–2 tweaks) and BASS
+  PATTERNS (syncopated, 1/3–2/3 density target, "do not copy the kick
+  grid", concrete off-grid examples, both halves equally active, at least
+  3 distinct scale pitches per loop)
+- **Fixed-height JSON preview on agent card** — 6-row painter-clipped
+  viewport (replaces growing TextEdit / ScrollArea that leaked into
+  neighbouring cards); long responses truncate with an ellipsis
+- **Knob style reflects lock state** — chrome for Free, darkened chrome
+  for UserOwned (locked), flat/brushed for LlmFocus (focused); mode
+  dispatch in `param_control`
+
+### Infrastructure / refactors
+
+- **File-size split for 1000-line limit** — `ui/rack_ai.rs` (AI zone
+  rendering), `ui/flip.rs` (rack flip logic), `state/fx_plan.rs`
+  (topo-sort), `state/persistence.rs` migration hooks
+- **Zone migration** — `apply_session()` re-applies `default_zone()` per
+  module on load so pre-split sessions land in the correct AI / MAIN
+  AUDIO / VOICE / FX+MOD tabs automatically
+- **API `/scroll` + `/collapse`** extended for the 4-tab zone layout
+  (`ai`, `main`/`global`/`mainaudio`, `voice`, `fxmod`)
+
+---
+
 ## Core synth
 
 - **Bass synth** - saw/square/supersaw oscillator, 4-pole Moog ladder filter (LP/HP/BP), sub-osc, noise, FM pair, portamento, waveshaper, overdrive, per-step accent + slide

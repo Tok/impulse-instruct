@@ -73,13 +73,19 @@ pub enum ModuleKind {
 
 ### Zone
 
-Modules are grouped into three vertical zones in the rack UI:
+Modules are grouped into four vertical zones (tabs) in the rack UI:
 
-| Variant | Contents |
-|---------|----------|
-| `Zone::Global` | StepSequencer, MasterOutput — full-width strip at the top |
-| `Zone::Voice` | All voice and TTS modules |
-| `Zone::FxMod` | All FX processors and LFO instances |
+| Variant | UI label | Contents |
+|---------|----------|----------|
+| `Zone::Ai` | "AI" | `LlmConsole`, `LlmAgent` — agents pack directly under the console |
+| `Zone::Global` | "MAIN AUDIO" | `StepSequencer`, `MasterOutput` — full-width transport + master |
+| `Zone::Voice` | "VOICES" | All voice and TTS modules |
+| `Zone::FxMod` | "FX + MOD" | All FX processors and LFO instances |
+
+`Zone::Global`'s serde variant name is kept for backward compat with
+pre-v0.7.2 sessions; `apply_session()` runs a zone-migration pass on
+load that re-applies `kind.default_zone()` to every saved module, so
+older sessions land in the correct tabs automatically.
 
 ### RackModule
 

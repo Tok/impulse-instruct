@@ -4,7 +4,20 @@ What's already built is documented in [docs/features.md](docs/features.md).
 
 ---
 
-## v0.7.2 — next release
+## TOP PRIORITY — fix knob lock/focus cycling
+
+- [ ] **Knob lock/focus gesture broken after style-by-mode change** — knobs
+  now render differently per `ParamMode` (chrome for Free, darkened chrome
+  for UserOwned, flat/brushed for LlmFocus), but the interaction that
+  cycles through modes isn't working as expected anymore. The visual
+  feedback is correct; the input path (right-click? middle-click? mode
+  button?) needs auditing end-to-end so users can actually toggle
+  lock/focus from the knob itself again. See `knob_chrome`/`knob` in
+  `src/ui/widgets/mod.rs` and the dispatcher in `param_control`.
+
+---
+
+## v0.7.3 — next release
 
 ### Agent tooling — gradual control & expressiveness
 
@@ -38,15 +51,9 @@ What's already built is documented in [docs/features.md](docs/features.md).
   via rack cables (data model exists, DSP routing partially wired)
 - [ ] **Dub techno send/return** — dedicated send/return FX workflow for
   dub-style infinite delay feedback chains
-- [ ] **Audio cables gate signal** — currently DSP processes voices regardless
-  of cable routing. Audio cables should actually control signal flow.
 
 ### Sequencer
 
-- [ ] **Multi-row step wrap** — when steps > 16, wrap each voice row into
-  multiple 16-step sub-rows instead of stretching across the full 32-step
-  width. Must handle odd time signatures (3/4, 5/4, 7/8). Currently
-  STEPS_PER_PAGE=32 which spills over at narrow rack widths.
 - [ ] **Pattern probability per step** — already implemented but LLM doesn't
   use it well; improve prompt guidance for probability-based patterns
 - [ ] **Song mode** — chain patterns with per-chain tempo/style transitions
@@ -132,4 +139,3 @@ What's already built is documented in [docs/features.md](docs/features.md).
 |-------|-------|--------|
 | Wizard always shows on startup | By design — resume or start fresh | Working as intended |
 | Hoover doesn't sound like a hoover | DSP tuning, not a code bug | Needs filter sweep shape tuning |
-| Audio cables decorative only | DSP processes voices directly from state | Needs signal-path gating |
