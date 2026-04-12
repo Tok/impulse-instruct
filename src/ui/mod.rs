@@ -541,10 +541,6 @@ impl ImpulseApp {
                         };
                         self.log_text.push_str(&msg);
                     }
-                    LlmAction::SetHeat(h) if !out.is_jam => {
-                        self.state.write().llm.heat = *h;
-                        self.session_dirty = true;
-                    }
                     LlmAction::SetStyle(sid) if !out.is_jam => {
                         // Respect style lock — agents can't override user-selected style
                         if !self.state.read().llm.style_lock {
@@ -565,7 +561,8 @@ impl ImpulseApp {
                             self.session_dirty = true;
                         }
                     }
-                    LlmAction::SetHeat(_) | LlmAction::SetStyle(_) => {} // jam: ignore
+                    LlmAction::SetHeat(_) => {} // heat is user-only; always ignore
+                    LlmAction::SetStyle(_) => {} // jam: ignore
                     LlmAction::SetPersona(p) => {
                         self.state.write().llm.persona_name = p.clone();
                         self.session_dirty = true;

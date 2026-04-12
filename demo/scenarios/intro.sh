@@ -19,15 +19,19 @@ say "A smart synthesizer."
 pause 0.6
 say "Let's build a rack!"
 
+say "Drums."
+add_instrument 808
+look_at 808
+wait_seconds 1
+
 say "Adding bass."
 add_instrument bass
 look_at bass
 wait_seconds 1
 
-say "Drums."
-add_instrument 808
+say "More drums."
 add_instrument 909
-look_at 808
+look_at 909
 wait_seconds 1
 
 say "Reverb and delay."
@@ -161,12 +165,13 @@ say "Split the AI into specialists."
 say "Each one controls its own instruments."
 
 reset_rack
+add_instrument 808
+wait_seconds 0.3
 add_instrument bass
 look_at bass
 wait_seconds 0.5
-add_instrument 808
 add_instrument 909
-look_at 808
+look_at 909
 wait_seconds 0.5
 add_effect reverb
 add_effect delay
@@ -174,7 +179,10 @@ add_effect delay
 # Add agents and scroll to console to show them appearing
 look_at console
 wait_seconds 0.5
-add_agent BASS bonsai bass
+# BASS uses the larger Gemma 4 E4B — melody work needs a stronger model
+# than Q1 Bonsai can reliably deliver. DRUMS and FX are rhythm/knob work,
+# where Bonsai's 1-bit quant is more than enough.
+add_agent BASS gemma bass
 wait_seconds 0.5
 add_agent DRUMS bonsai "kit_a,kit_b"
 wait_seconds 0.5
@@ -196,7 +204,7 @@ scene "Band jam"
 play
 wait_seconds 1
 
-ask "acid bass line with syncopation, squelchy, cutoff low, resonance high, pan center" BASS
+ask "rewrite the bass melody from scratch: acid line with syncopation, squelchy, cutoff low, resonance high, pan center. Use 4 distinct scale pitches spread across BOTH halves of the bank — the second half must NOT be root-only Cs" BASS
 ask "kick on steps 0,4,8,12,16,20,24,28 pan center. hihat on 2,6,10,14,18,22,26,30 pan 0.3. clap on 4,12,20,28 pan -0.3. open hihat on 6,14,22,30" DRUMS
 ask "reverb mix 0.12, reverb size 0.5, delay mix 0.08, chorus mix 0.1, stereo_width 0.6" FX
 
@@ -214,7 +222,7 @@ wait_seconds 2
 scene "Melody rewrite"
 
 say "The bass agent rewrites the melody on demand."
-ask "rewrite the bass melody from scratch, keep the rhythm, more movement, new phrase, vary pitches across both halves of the bank — no root-only second half" BASS 8
+ask "rewrite the bass melody from scratch, keep the rhythm, completely new phrase with more movement. Use 4+ distinct scale pitches in EACH half of the bank independently — the second half must have the same pitch variety as the first, not root-only" BASS 8
 focus_on bass
 wait_seconds 3
 say "Same groove, different line."
@@ -247,6 +255,9 @@ wait_seconds 4
 scene "Live filter"
 
 focus_on bass
+say "Bass runs on Gemma 4 E4B."
+say "Drums and effects on Bonsai 8B, one bit quantized."
+say "Both local, both open weights."
 sweep_pad 11
 wait_seconds 1
 

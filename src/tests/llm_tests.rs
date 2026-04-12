@@ -493,29 +493,16 @@ mod action_extraction {
     }
 
     #[test]
-    fn heat_clamped_to_0_1() {
-        let mut obj = json!({"settings": {"heat": 2.5}})
+    fn heat_is_user_only_llm_cannot_set() {
+        let mut obj = json!({"settings": {"heat": 0.9}})
             .as_object()
             .unwrap()
             .clone();
         let actions = extract_llm_actions(&mut obj);
-        match &actions[0] {
-            LlmAction::SetHeat(h) => assert_eq!(*h, 1.0),
-            _ => panic!("expected SetHeat"),
-        }
-    }
-
-    #[test]
-    fn heat_negative_clamped() {
-        let mut obj = json!({"settings": {"heat": -0.5}})
-            .as_object()
-            .unwrap()
-            .clone();
-        let actions = extract_llm_actions(&mut obj);
-        match &actions[0] {
-            LlmAction::SetHeat(h) => assert_eq!(*h, 0.0),
-            _ => panic!("expected SetHeat"),
-        }
+        assert!(
+            !actions.iter().any(|a| matches!(a, LlmAction::SetHeat(_))),
+            "LLM-emitted `heat` must be ignored — heat is user-only"
+        );
     }
 
     #[test]
@@ -543,7 +530,12 @@ mod action_extraction {
         .unwrap()
         .clone();
         let actions = extract_llm_actions(&mut obj);
-        assert_eq!(actions.len(), 5);
+        // heat is ignored (user-only) — 4 actions: style, persona, conv_mode, jam_bars
+        assert_eq!(actions.len(), 4);
+        assert!(
+            !actions.iter().any(|a| matches!(a, LlmAction::SetHeat(_))),
+            "heat must not be extractable from LLM output"
+        );
         assert!(!obj.contains_key("settings")); // consumed
     }
 

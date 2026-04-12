@@ -186,9 +186,7 @@ pub fn extract_llm_actions(
         actions.push(LlmAction::SaveProject);
     }
     if let Some(s) = obj.get("settings").and_then(|v| v.as_object()).cloned() {
-        if let Some(h) = s.get("heat").and_then(|v| v.as_f64()) {
-            actions.push(LlmAction::SetHeat((h as f32).clamp(0.0, 1.0)));
-        }
+        // Heat is USER-ONLY. Any `heat` key the model emits is ignored here.
         if let Some(st) = s.get("style").and_then(|v| v.as_str()) {
             actions.push(LlmAction::SetStyle(st.to_string()));
         }
