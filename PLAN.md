@@ -245,9 +245,8 @@ Scripts to create:
   on both active and inactive bass steps.
 - [x] **Bottom drum sliders** — 2× wider (SEQ_VOL_W 52→100). Full words:
   808 CLOSED HH, 909 OPEN HH, etc.
-- [ ] **Pattern alignment** — right-justify all step pattern grids (top
-  and bottom) so they align on the right edge. More space available on
-  the left for controls.
+- [x] **Pattern alignment** — step grids right-justified via spacer between
+  prefix (labels/sliders) and step buttons. All rows aligned to right edge.
 - [x] **Full labels** — BANK, CHAIN, STEPS, SWING, SNAP, ACCENT, SLIDE.
 
 ### Refactoring — magic numbers and hardcoded literals
