@@ -59,6 +59,9 @@ What's already built is documented in [docs/features.md](docs/features.md).
   templates that replace the generic "generate all parameters" jam prompt
 - [ ] **VRAM-aware model fallback** — when spawn is rejected, auto-suggest or
   auto-select a lighter model that fits the remaining VRAM budget
+- [ ] **Test additional LLM models** — evaluate DeepSeek-R1-Distill-Qwen-7B/14B
+  and Qwen3-8B/14B for JSON accuracy and music theory understanding.
+  Download scripts exist but models are not yet tuned or integration-tested.
 - [ ] **Jam-via-API** — currently API prompts are always one_shot (no jam loop).
   Need safe jam support that doesn't do full-state replacement.
 - [ ] **Style mc_lines/themes UI editor** — allow editing mc_lines and themes
