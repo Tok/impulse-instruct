@@ -328,20 +328,40 @@ narrate() {
     # Play TTS and log subtitle entry.
     # Usage: narrate "clip_id" "Text that is also the subtitle"
     #        narrate --wait "clip_id" "Text..."   (blocks until done)
+    #
+    # Missing-WAV handling: if tts_generate couldn't produce audio (server
+    # down / retries exhausted / segfault), the scenario still proceeds —
+    # a reading-time estimate is written to NARRATION_LIST so the
+    # subtitle still appears in the SRT, and `--wait` blocks for that
+    # estimate so scenario pacing stays roughly intact.
     local blocking=0
     if [ "$1" = "--wait" ]; then blocking=1; shift; fi
 
     local id="$1" text="$2"
     local wavfile
     wavfile=$(tts_generate "$id" "$text")
-    if [ ! -s "$wavfile" ]; then
-        echo "  [narrate] SKIP (no wav): $id — \"$text\"" >&2
-        return 1
-    fi
-    local dur
-    dur=$(tts_duration "$wavfile")
     local start_sec
     start_sec=$(demo_elapsed)
+    local est
+    est=$(min_subtitle_dur "$text")
+
+    if [ ! -s "$wavfile" ]; then
+        # No audio available — emit a silent subtitle cue so the SRT
+        # still shows the line, and keep the scenario timeline intact.
+        echo "${start_sec}|${est}|${text}" >> "$NARRATION_LIST"
+        echo "  [narrate] NO WAV: $id (subtitle only, ${est}s) — \"$text\"" >&2
+        if [ "$blocking" -eq 1 ]; then
+            sleep "$est"
+        fi
+        return 1
+    fi
+
+    local dur
+    dur=$(tts_duration "$wavfile")
+    # Guard against ffprobe returning empty / garbage.
+    case "$dur" in
+        ''|*[!0-9.]*) dur="$est" ;;
+    esac
 
     echo "${start_sec}|${dur}|${text}" >> "$NARRATION_LIST"
     echo "  [narrate] $id (${dur}s): \"$text\"" >&2
@@ -353,7 +373,10 @@ narrate() {
         # time to release before the next clip opens a new one — without it
         # rapid consecutive plays can silently drop.
         if ! paplay "$wavfile" 2>&1; then
-            aplay "$wavfile" 2>&1 || echo "  [narrate] PLAY FAILED: $id" >&2
+            aplay "$wavfile" 2>&1 || {
+                echo "  [narrate] PLAY FAILED: $id — sleeping ${dur}s to keep timing" >&2
+                sleep "$dur"
+            }
         fi
         sleep 0.15
     else
