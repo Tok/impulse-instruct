@@ -562,24 +562,36 @@ IMPORTANT — drum_ratchets takes INTEGERS 1–4 only, never booleans:
   WRONG:   {{"drum_ratchets": {{"hihat_a": [true,false,true,…]}}}}  ← booleans are invalid here
 
 BASS PATTERNS (303 — bass_steps) — DO NOT copy the drum grid. Bass wants
-syncopation and space. Target roughly 1/3 to 2/3 note density across the
-pattern (≈ 10–22 notes per 32 steps for classic acid / acid house).
+syncopation and SPACE. Default target: ~1/4 to 1/2 note density (≈ 8–14
+notes per 32 steps). Dense patterns (>18 notes per 32) tire the ear
+fast; only go there for peak-time rolling acid or if the user explicitly
+asks for a busy/rolling/driving line.
+
+  STYLE-SPECIFIC DENSITY (override the default when a style is active):
+    • Classical / Bach / counterpoint      → dense is correct (18–28/32,
+      continuous 16th-note motion is the genre)
+    • Acid / acid house / rolling techno  → 10–16/32 (the examples below)
+    • Techno / minimal / dub techno       → 6–10/32 (lots of space)
+    • Deep house / ambient / dub          → 4–8/32 (sparse, almost skeletal)
+    • Drum & bass / breakbeat             → 8–14/32
+
   AVOID even 16th grids like [0,4,8,12,16,20,24,28] — that's kick territory,
   lifeless under an acid line. Bass should push and pull against the kick.
-  Good 32-step acid bass rhythms — irregular, occasional consecutive 16ths,
-  leaving space where the kick is dominant:
-    [0, 3, 6, 10, 14, 15, 18, 22, 23, 28]     — ~10 notes, pairs + rests
-    [0, 2, 3, 7, 10, 14, 16, 19, 22, 26, 27]  — ~11 notes, off-grid feel
-    [0, 3, 6, 7, 10, 13, 16, 19, 22, 23, 26]  — ~11 notes, push/pull
+  Good 32-step acid bass rhythms — irregular, leaving space where the kick
+  is dominant:
+    [0, 3, 6, 10, 14, 18, 22, 26]             — ~8 notes, classic sparse
+    [0, 3, 6, 10, 14, 15, 18, 22, 26]         — ~9 notes, one pair
     [0, 2, 5, 8, 13, 16, 19, 24, 27]          — ~9 notes, sparse
+    [0, 3, 6, 10, 14, 15, 18, 22, 23, 28]     — ~10 notes, pairs + rests
+    [0, 3, 6, 7, 10, 13, 16, 19, 22, 26]      — ~10 notes, push/pull
   Rules of thumb:
     • Anchor step 0 most of the time.
     • Off-beat steps (3, 7, 10, 13, 19, 22, 27) drive the acid push.
-    • Occasional back-to-back 16ths (e.g. 6,7 or 22,23) add urgency — but
-      don't fill every 16th, that's no longer acid.
+    • Occasional back-to-back 16ths (e.g. 6,7 or 22,23) add urgency — use
+      sparingly, not as a default texture.
     • Leave bigger gaps around the kick's strong beats (4, 12, 20, 28) so
       the bass breathes rather than doubling the kick.
-    • Density 1/3–2/3 — less for dub / deep house, more for rolling acid.
+    • When in doubt, remove a note. Space is what makes a bass line groove.
     • BOTH HALVES EQUALLY ACTIVE: if steps 0..15 have ~5 hits, steps 16..31
       should have about the same count. Don't front-load the bar with
       activity and leave the second half thin — the loop is supposed to
