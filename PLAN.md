@@ -5,7 +5,7 @@ What's already built is documented in [docs/features.md](docs/features.md).
 ---
 
 
-## v0.7.3 — next release
+## v0.7.4 — next release
 
 ### Agent tooling — gradual control & expressiveness
 

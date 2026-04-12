@@ -172,7 +172,8 @@ Knobs and sliders reflect their lock mode visually, entirely in grayscale:
 The visual contrast tells users at a glance which knobs the LLM will touch (Free),
 which are protected (U), and which the LLM is actively targeting (F).
 
-**Interaction:** Alt+click any knob or slider to cycle through Free / U / F.
+**Interaction:** Ctrl+click any knob to cycle through Free / U / F. Sliders
+have a dedicated ·/U/F mode button at the end of the track.
 
 ---
 
@@ -180,8 +181,7 @@ which are protected (U), and which the LLM is actively targeting (F).
 
 The footer strip shows three modifier indicators on the left:
 
-- **Ctrl** - highlights when held; Ctrl+scroll wheel zooms (global or per-module)
-- **Alt** - highlights when held; Alt+click cycles knob/slider lock mode
+- **Ctrl** - highlights when held; Ctrl+click knob cycles lock mode; Ctrl+scroll wheel zooms (global or per-module); double-click to lock Ctrl on
 - **Tab:BACK** - highlights when rack is flipped to back panel view
 
 All indicators have hover tooltips. The indicators light up from `IRON` (idle)

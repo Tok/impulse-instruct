@@ -4,6 +4,94 @@ A detailed log of what's built.
 
 ---
 
+## v0.7.3 additions (23 commits since v0.7.2)
+
+### LLM control flow
+
+- **Scoped agents can rewrite their voice's sequencer** — the `sequencer.*`
+  update block was gated entirely by `in_scope("sequencer")`, so every
+  scoped agent (BASS, DRUMS, …) silently dropped `bass_steps` / `bass_notes` /
+  `drum_lengths` / per-kit step arrays. Per-voice sequencer fields now
+  dispatch by the voice's own scope (`bass_* → "bass"`, `kick_a_steps →
+  "kit_a"`, etc.); global fields still require `"sequencer"` scope
+- **Heat is user-only** — `settings.heat` emitted by the LLM is ignored.
+  Heat is a user vibes knob, not an agent action. Prompt doc updated
+  to match
+- **Heat actually chaotic at 1.0** — previous effect was a 3% top_p nudge.
+  Heat now scales temperature ×(1 + h·0.8), top_p toward 1.0, min_p floor
+  ×(1 − h·0.9), and frequency_penalty + h·0.4 (which also discourages
+  repeated-root fallbacks like the old all-Cs bass issue)
+- **MUSICAL MODERATION prompt section** — concrete safe ranges for FX
+  (reverb/delay/chorus/distortion mix + feedback/drive), drum velocities
+  (kick > snare > clap > hats), and bass aggression (resonance ≤ 0.85
+  unless asked). Agents default to restraint unless heat > 0.7 or the
+  user literally asks for "wild / insane / max / destroy"
+- **Sparser default bass density** — 1/4–1/2 (8–14 notes per 32 steps)
+  replaces 1/3–2/3 (10–22). Style-specific table overrides: Bach stays
+  dense (18–28), acid 10–16, techno/minimal 6–10, deep house/ambient 4–8
+- **Free-mode prompt teaches the bank** — even without a style, agents
+  now commit to root+scale and spread ≥ 3 distinct pitches across each
+  half of the bass loop, respecting `sequencer.steps`
+
+### UI
+
+- **Ctrl+click cycles knob lock mode** — replaces Alt+click (which
+  collided with OS menus) and the tooltip-advertised right-click (which
+  the code didn't accept). Works with the footer Ctrl lock too so
+  pointer-only users can toggle without a keyboard
+- **Style-based lock indication, no badges** — Free = chrome, LlmFocus =
+  brightened chrome, UserOwned = flat knob with visible spokes. Tooltip
+  only appears on non-default modes to keep untouched knobs silent
+- **Full-word knob labels** — CUT→CUTOFF, RES→RESO, ENV→ENVMOD,
+  DEC→DECAY, ACC→ACCENT, DRV→DRIVE, VOL→VOLUME, GLD→GLIDE, NSE→NOISE,
+  DTN→DETUNE, DAMP→DAMPING, FDBK→FEEDBACK, FMD→FM.DEPTH, FMR→FM.RATIO,
+  and LFO targets (DLY.T→DELAY.TIME, etc.) across every panel and the
+  rack's FX mini-cards
+- **Ring scope phosphor matches bar** — both use history trails (gray
+  15→90, stroke 1.0→1.8) with CHALK current frame; the single-frame glow
+  underlay is gone
+- **303 centered in the rack** — canonical voice order swapped so
+  AcidBass (11) sits between DrumKit808 (10) and DrumKit909 (12),
+  matching pitch register and making the classic 3-voice rack visually
+  balanced regardless of insertion order
+- **Wordmark bullet** — title bar + About dialog read `IMPULSE • INSTRUCT`
+  instead of `◆ IMPULSE INSTRUCT`
+- **Header polish** — MON slider widened to match HEAT; VRAM/RAM bars
+  enlarged; log colored by role (user / agent / system / api)
+- **Piano labels** — top two octaves labeled; hover reveals frequency
+- **Alt footer indicator removed** — Ctrl carries the lock workflow;
+  physical Alt still hides cables
+
+### Graceful shutdown
+
+- **SIGINT / SIGTERM handler** — Rust's Drop doesn't run on signals, so
+  Ctrl-C on the running app used to orphan the llama-server child and
+  its VRAM. A dedicated signal-handler thread now `sigwait()`s and
+  `pkill`s `llama-server … --model` (SIGTERM, then SIGKILL 200 ms
+  later) before the process exits
+
+### Demo recording
+
+- **Reliable llama-server cleanup between runs** — the demo script's
+  cleanup trap now SIGTERM-then-SIGKILLs the app with a 3-second grace
+  window for Drop, then `pkill`s orphans
+- **BASS agent on Gemma, DRUMS + FX on Bonsai** — Q1 Bonsai couldn't
+  reliably follow the pitch-distribution rules for melody rewrites.
+  Bigger model handles the bass voice; Bonsai stays on rhythm/knob work
+- **Female narrator + longer subtitle display** — intro TTS voice
+  swap, reading-time-friendly subtitle durations, intro line tweaks
+- **Runtime-timestamped SRT** — subtitles derive from actual narrate()
+  playback timestamps, no drift vs. the recorded audio
+- **LFO scene** — adds an LFO module and scrolls to it so the card is
+  visible before the modulation starts
+- **TTS retry + server restart** — up to 10× with server bounce;
+  graceful handling of missing WAVs in narration
+- **Model shoutout in live-filter scene** — names "Gemma 4 E4B" and
+  "Bonsai 8B, one bit quantized" during pad sweep before the outro
+- **Free & open source outro line**
+
+---
+
 ## v0.7.2 additions (105 commits since v0.7.1)
 
 ### UI rework — 12-column RPG-inventory rack
@@ -365,11 +453,11 @@ Alerts cycle in the header (2 at a time, rotating each second). Multiple alerts 
 
 - **Knob mode visuals** - body darker when UserOwned, brighter when LlmFocus; catch-light and chrome rim shimmer at 1 Hz on Focus knobs (grayscale animated)
 - **Slider mode tinting** - track background darker (U) / brighter (F); fill color varies per mode
-- **Alt+click cycling** - Alt+click on flat knobs, chrome knobs, and slider tracks cycles Free / User / Focus
+- **Ctrl+click cycling** - Ctrl+click any knob cycles Free / UserOwned / LlmFocus; sliders have a dedicated ·/U/F mode button
 
 ### Footer and header
 
-- **Footer mode indicators** - [Ctrl] [Alt] [Tab:BACK] with tooltips; highlight when active
+- **Footer mode indicators** - [Ctrl] [Tab:BACK] with tooltips; highlight when active
 - **Header agent status** - compact round-robin display after HEAT slider; pulsing dot + persona name per enabled agent; bright when inferring, dim when idle
 
 ### Wizard improvements

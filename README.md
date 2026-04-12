@@ -31,7 +31,7 @@ Everything runs entirely offline: no cloud calls, no subscriptions, no latency. 
 
 ---
 
-## v0.7.2 - Pre-release
+## v0.7.3 - Pre-release
 
 **This is pre-release software.** It works and makes sound, but expect rough edges. The UI is functional but visually unpolished in places.
 
@@ -104,14 +104,17 @@ Each agent can run a different model. A `LlamaServerPool` manages server process
 
 ---
 
-## What's new in v0.7.2
+## What's new in v0.7.3
 
-12-column grid rack, AI / MAIN AUDIO / VOICES / FX+MOD zone tabs, cable
-topology filter that actually gates audio, NeuTTS Air voice cloning
-replacing espeak, resilient demo recording with pre-generated SRT,
-voice-specific rhythm guidance for the LLM (909 pins the grid, 808
-almost-4OTF, 303 syncopated at 1/3–2/3 density), knob style reflects
-lock state. 478 unit tests, 105 commits since v0.7.1.
+Scoped agents can finally rewrite their voice's sequencer (a silent
+scope bug was dropping every `bass_steps` / `bass_notes` / per-kit
+pattern write). Ctrl+click cycles knob lock mode; UserOwned renders
+as a flat spoked knob, LlmFocus as brightened chrome. Knob labels are
+full words across every panel. Heat is user-only and actually chaotic
+at 1.0. MUSICAL MODERATION prompt section keeps default FX/velocity/
+bass values in musical ranges unless you ask for extremes. SIGINT
+handler cleans up llama-server children. 303 sits centered between
+808 and 909 in the rack. 477 unit tests, 23 commits since v0.7.2.
 
 Full details in [docs/features.md](docs/features.md).
 
@@ -281,7 +284,7 @@ The LLM understands musical intent well. When a style doesn't land, the cause is
 
 **What doesn't yet:** the hoover lead exists but doesn't sound like a hoover. The Amen break is synthesised step-by-step rather than sampled. Some genre textures are partially wired but not finished.
 
-**What's improved in v0.7.2:** audio cables now actually route signal (disconnecting a reverb stops it processing). The rack is a proper 12-column grid with snap-to-grid drag and center-bias placement. Bass/kick rhythm guidance is voice-specific so bass lines aren't just 4-on-the-floor copies of the kick. TTS is NeuTTS Air (voice cloning, much better than espeak). Demo recording has resilient pre-gen with retry logic.
+**What's improved in v0.7.3:** scoped agents actually write their voice's sequencer fields (a nasty silent bug). Knob lock mode on Ctrl+click with a real style cue (chrome / brightened chrome / flat spokes). Full-word knob labels everywhere. Heat is a user knob again, and at 1.0 it's actually chaotic rather than a 3% top_p nudge. The prompt now teaches agents to pick musical defaults for FX, drum velocities, and bass aggression. Graceful shutdown cleans up llama-server on Ctrl-C.
 
 ---
 
