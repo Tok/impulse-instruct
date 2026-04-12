@@ -101,7 +101,7 @@ pub fn draw_hoover(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                 }
                 {
                     let mut v = app.state.read().hoover.volume;
-                    if widgets::param_control(ui, "VOL", &mut v, ParamMode::Free, ctrl).0 {
+                    if widgets::param_control(ui, "VOLUME", &mut v, ParamMode::Free, ctrl).0 {
                         app.state.write().hoover.volume = v;
                         app.push_audio_params();
                     }

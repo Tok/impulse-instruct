@@ -258,12 +258,12 @@ pub fn draw_an1x(app: &mut ImpulseApp, ui: &mut Ui) {
                         .size(9.5),
                 );
                 widgets::centered_row(ui, |ui| {
-                    ak!(ui, "CUT", filter_cutoff);
-                    ak!(ui, "RES", filter_resonance);
+                    ak!(ui, "CUTOFF", filter_cutoff);
+                    ak!(ui, "RESO", filter_resonance);
                 });
                 widgets::centered_row(ui, |ui| {
-                    ak!(ui, "ENV", filter_env_amount);
-                    ak!(ui, "KEY", filter_key_track);
+                    ak!(ui, "ENVAMT", filter_env_amount);
+                    ak!(ui, "KEYTRK", filter_key_track);
                 });
             });
             widgets::glass_group_fill(ui, gw, gw, |ui| {
@@ -276,12 +276,12 @@ pub fn draw_an1x(app: &mut ImpulseApp, ui: &mut Ui) {
                         .size(9.5),
                 );
                 widgets::centered_row(ui, |ui| {
-                    ak!(ui, "ATK", filter_attack);
-                    ak!(ui, "DEC", filter_decay);
+                    ak!(ui, "ATTACK", filter_attack);
+                    ak!(ui, "DECAY", filter_decay);
                 });
                 widgets::centered_row(ui, |ui| {
-                    ak!(ui, "SUS", filter_sustain);
-                    ak!(ui, "REL", filter_release);
+                    ak!(ui, "SUSTAIN", filter_sustain);
+                    ak!(ui, "RELEASE", filter_release);
                 });
             });
         });
@@ -304,7 +304,7 @@ pub fn draw_an1x(app: &mut ImpulseApp, ui: &mut Ui) {
                         .size(9.5),
                 );
                 widgets::centered_row(ui, |ui| {
-                    ak!(ui, "DET", osc2_detune);
+                    ak!(ui, "DETUNE", osc2_detune);
                     let oct = app.state.read().an1x.osc2_octave;
                     ui.label(
                         egui::RichText::new("OCT")
@@ -373,13 +373,13 @@ pub fn draw_an1x(app: &mut ImpulseApp, ui: &mut Ui) {
                         .size(9.5),
                 );
                 widgets::centered_row(ui, |ui| {
-                    ak!(ui, "ATK", amp_attack);
-                    ak!(ui, "DEC", amp_decay);
-                    ak!(ui, "VOL", volume);
+                    ak!(ui, "ATTACK", amp_attack);
+                    ak!(ui, "DECAY", amp_decay);
+                    ak!(ui, "VOLUME", volume);
                 });
                 widgets::centered_row(ui, |ui| {
-                    ak!(ui, "SUS", amp_sustain);
-                    ak!(ui, "REL", amp_release);
+                    ak!(ui, "SUSTAIN", amp_sustain);
+                    ak!(ui, "RELEASE", amp_release);
                 });
                 ui.horizontal(|ui| {
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
@@ -407,9 +407,9 @@ pub fn draw_an1x(app: &mut ImpulseApp, ui: &mut Ui) {
                         .size(9.5),
                 );
                 widgets::centered_row(ui, |ui| {
-                    ak!(ui, "ATK", pitch_env_attack);
-                    ak!(ui, "DEC", pitch_env_decay);
-                    ak!(ui, "AMT", pitch_env_amount);
+                    ak!(ui, "ATTACK", pitch_env_attack);
+                    ak!(ui, "DECAY", pitch_env_decay);
+                    ak!(ui, "AMOUNT", pitch_env_amount);
                 });
             });
         });

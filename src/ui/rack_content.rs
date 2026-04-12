@@ -57,7 +57,7 @@ pub(super) fn draw_fx_content(app: &mut ImpulseApp, ui: &mut egui::Ui, kind: Mod
             hk!(
                 ui,
                 ("SIZE", &mut rs, pm("fx.reverb_size")),
-                ("DAMP", &mut rd, pm("fx.reverb_damp")),
+                ("DAMPING", &mut rd, pm("fx.reverb_damp")),
                 ("MIX", &mut rm, pm("fx.reverb_mix"))
             );
             if changed || rs != app.state.read().fx.reverb_size {
@@ -75,7 +75,7 @@ pub(super) fn draw_fx_content(app: &mut ImpulseApp, ui: &mut egui::Ui, kind: Mod
             hk!(
                 ui,
                 ("TIME", &mut dt, pm("fx.delay_time")),
-                ("FDBK", &mut df, pm("fx.delay_feedback")),
+                ("FEEDBACK", &mut df, pm("fx.delay_feedback")),
                 ("MIX", &mut dm, pm("fx.delay_mix"))
             );
             if changed || dt != app.state.read().fx.delay_time {
@@ -150,8 +150,8 @@ pub(super) fn draw_fx_content(app: &mut ImpulseApp, ui: &mut egui::Ui, kind: Mod
             };
             hk!(
                 ui,
-                ("THR", &mut th, pm("fx.compressor_threshold")),
-                ("RAT", &mut ra, pm("fx.compressor_ratio")),
+                ("THRESH", &mut th, pm("fx.compressor_threshold")),
+                ("RATIO", &mut ra, pm("fx.compressor_ratio")),
                 ("MIX", &mut mi, pm("fx.compressor_mix"))
             );
             if changed || th != app.state.read().fx.compressor_threshold {
@@ -168,8 +168,8 @@ pub(super) fn draw_fx_content(app: &mut ImpulseApp, ui: &mut egui::Ui, kind: Mod
             };
             hk!(
                 ui,
-                ("DRV", &mut dr, pm("fx.tape_drive")),
-                ("FLTR", &mut fl, pm("fx.tape_flutter")),
+                ("DRIVE", &mut dr, pm("fx.tape_drive")),
+                ("FLUTTER", &mut fl, pm("fx.tape_flutter")),
                 ("MIX", &mut mi, pm("fx.tape_mix"))
             );
             if changed || dr != app.state.read().fx.tape_drive {

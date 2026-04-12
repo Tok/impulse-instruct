@@ -480,8 +480,12 @@ impl RackState {
                 ModuleKind::LlmAgent => 1,
                 ModuleKind::StepSequencer => 2,
                 ModuleKind::MasterOutput => 3,
-                ModuleKind::AcidBass => 10,
-                ModuleKind::DrumKit808 => 11,
+                // Canonical voice order in the voice zone: put the bass between
+                // the two drum kits so the melodic voice sits centered between
+                // low (808) and high (909) drums — also matches its pitch
+                // register, which lives above 808 kicks and below 909 hats.
+                ModuleKind::DrumKit808 => 10,
+                ModuleKind::AcidBass => 11,
                 ModuleKind::DrumKit909 => 12,
                 ModuleKind::HooverLead => 13,
                 ModuleKind::An1xVoice => 14,

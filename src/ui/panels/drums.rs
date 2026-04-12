@@ -121,8 +121,8 @@ pub fn draw_kit_a(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             if widgets::xy_pad(
                 ui,
                 "drums_kick_xy",
-                "PIT",
-                "DEC",
+                "PITCH",
+                "DECAY",
                 &mut kp,
                 &mut kd,
                 pad_size,

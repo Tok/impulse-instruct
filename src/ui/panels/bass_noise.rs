@@ -66,7 +66,7 @@ pub fn draw_noise_section(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             ui.add_sized(
                 [label_w, 18.0],
                 egui::Label::new(
-                    egui::RichText::new("VOL")
+                    egui::RichText::new("VOLUME")
                         .color(theme::SMOKE)
                         .monospace()
                         .size(9.0),
@@ -127,7 +127,7 @@ pub fn draw_noise_section(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             ui.add_sized(
                 [label_w, 18.0],
                 egui::Label::new(
-                    egui::RichText::new("CUT")
+                    egui::RichText::new("CUTOFF")
                         .color(theme::SMOKE)
                         .monospace()
                         .size(9.0),

@@ -35,13 +35,13 @@ pub fn draw_noise(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         });
     });
     widgets::centered_row(ui, |ui| {
-        if widgets::param_control(ui, "VOL", &mut vol, pm("noise_voice.volume"), ctrl).0 {
+        if widgets::param_control(ui, "VOLUME", &mut vol, pm("noise_voice.volume"), ctrl).0 {
             changed = true;
         }
         if widgets::param_control(ui, "COLOR", &mut color, pm("noise_voice.color"), ctrl).0 {
             changed = true;
         }
-        if widgets::param_control(ui, "CUT", &mut cutoff, pm("noise_voice.cutoff"), ctrl).0 {
+        if widgets::param_control(ui, "CUTOFF", &mut cutoff, pm("noise_voice.cutoff"), ctrl).0 {
             changed = true;
         }
     });

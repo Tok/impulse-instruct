@@ -240,7 +240,7 @@ pub fn draw_bass(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                 widgets::centered_row(ui, |ui| {
                     let (ch, cy) = widgets::param_control(
                         ui,
-                        "CUT",
+                        "CUTOFF",
                         &mut cutoff,
                         param_mode("bass.cutoff", &locked, &focused),
                         ctrl_big,
@@ -253,7 +253,7 @@ pub fn draw_bass(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                     }
                     let (ch, cy) = widgets::param_control(
                         ui,
-                        "RES",
+                        "RESO",
                         &mut resonance,
                         param_mode("bass.resonance", &locked, &focused),
                         ctrl_big,
@@ -268,7 +268,7 @@ pub fn draw_bass(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                 widgets::centered_row(ui, |ui| {
                     let (ch, cy) = widgets::param_control(
                         ui,
-                        "ENV",
+                        "ENVMOD",
                         &mut env_mod,
                         param_mode("bass.env_mod", &locked, &focused),
                         ctrl,
@@ -281,7 +281,7 @@ pub fn draw_bass(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                     }
                     let (ch, cy) = widgets::param_control(
                         ui,
-                        "DEC",
+                        "DECAY",
                         &mut decay,
                         param_mode("bass.decay", &locked, &focused),
                         ctrl,
@@ -307,7 +307,7 @@ pub fn draw_bass(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                 widgets::centered_row(ui, |ui| {
                     let (ch, cy) = widgets::param_control(
                         ui,
-                        "ACC",
+                        "ACCENT",
                         &mut accent,
                         param_mode("bass.accent_level", &locked, &focused),
                         ctrl,
@@ -320,7 +320,7 @@ pub fn draw_bass(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                     }
                     let (ch, cy) = widgets::param_control(
                         ui,
-                        "DRV",
+                        "DRIVE",
                         &mut dist,
                         param_mode("bass.distortion", &locked, &focused),
                         ctrl,
@@ -335,7 +335,7 @@ pub fn draw_bass(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                 widgets::centered_row(ui, |ui| {
                     let (ch, cy) = widgets::param_control(
                         ui,
-                        "VOL",
+                        "VOLUME",
                         &mut vol,
                         param_mode("bass.volume", &locked, &focused),
                         ctrl,
@@ -374,7 +374,7 @@ pub fn draw_bass(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                 widgets::centered_row(ui, |ui| {
                     let (ch, cy) = widgets::param_control(
                         ui,
-                        "GLD",
+                        "GLIDE",
                         &mut portamento_time,
                         param_mode("bass.portamento_time", &locked, &focused),
                         ctrl_sm,
@@ -387,7 +387,7 @@ pub fn draw_bass(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                     }
                     let (ch, cy) = widgets::param_control(
                         ui,
-                        "NSE",
+                        "NOISE",
                         &mut noise_mix,
                         param_mode("bass.noise_mix", &locked, &focused),
                         ctrl_sm,
@@ -400,18 +400,32 @@ pub fn draw_bass(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                     }
                 });
                 widgets::centered_row(ui, |ui| {
-                    if widgets::param_control(ui, "FMD", &mut fm_depth, ParamMode::Free, ctrl_sm).0
+                    if widgets::param_control(
+                        ui,
+                        "FM.DEPTH",
+                        &mut fm_depth,
+                        ParamMode::Free,
+                        ctrl_sm,
+                    )
+                    .0
                     {
                         changed = true;
                     }
-                    if widgets::param_control(ui, "FMR", &mut fm_ratio, ParamMode::Free, ctrl_sm).0
+                    if widgets::param_control(
+                        ui,
+                        "FM.RATIO",
+                        &mut fm_ratio,
+                        ParamMode::Free,
+                        ctrl_sm,
+                    )
+                    .0
                     {
                         changed = true;
                     }
                 });
                 if widgets::param_control_bipolar(
                     ui,
-                    "DTN",
+                    "DETUNE",
                     &mut osc_detune,
                     ParamMode::Free,
                     ctrl_sm,
@@ -507,12 +521,12 @@ pub fn draw_bass(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             let pads_w = xy_size * 2.0 + 24.0; // two pads + spacing
             let pad_spacer = ((ui.available_width() - pads_w) / 2.0).max(0.0);
             ui.add_space(pad_spacer);
-            // Pad 1 — cycles: CUT×RES | ACCENT×VOL | DIST×SUB
+            // Pad 1 — cycles: CUTOFF×RESO | ACCENT×VOLUME | DRIVE×SUB
             let p1 = widgets::xy_pad_pair(ui.ctx(), "bass_xy1");
             let (lx1, ly1, mut vx1, mut vy1) = match p1 {
-                1 => ("ACCENT", "VOL", accent, vol),
-                2 => ("DIST", "SUB", dist, sub_osc_level),
-                _ => ("CUT", "RES", cutoff, resonance),
+                1 => ("ACCENT", "VOLUME", accent, vol),
+                2 => ("DRIVE", "SUB", dist, sub_osc_level),
+                _ => ("CUTOFF", "RESO", cutoff, resonance),
             };
             let xy1_locked_cur = match p1 {
                 1 => {
@@ -561,12 +575,12 @@ pub fn draw_bass(app: &mut ImpulseApp, ui: &mut egui::Ui) {
 
             ui.add_space(6.0);
 
-            // Pad 2 — cycles: ENV×DEC | FM.D×FM.R | NOISE×GLIDE
+            // Pad 2 — cycles: ENVMOD×DECAY | FM.DEPTH×FM.RATIO | NOISE×GLIDE
             let p2 = widgets::xy_pad_pair(ui.ctx(), "bass_xy2");
             let (lx2, ly2, mut vx2, mut vy2) = match p2 {
-                1 => ("FM.D", "FM.R", fm_depth, fm_ratio),
+                1 => ("FM.DEPTH", "FM.RATIO", fm_depth, fm_ratio),
                 2 => ("NOISE", "GLIDE", noise_mix, portamento_time),
-                _ => ("ENV", "DEC", env_mod, decay),
+                _ => ("ENVMOD", "DECAY", env_mod, decay),
             };
             let xy2_locked_cur = match p2 {
                 1 => false,
