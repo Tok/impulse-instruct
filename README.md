@@ -98,7 +98,7 @@ Each agent can run a different model. A `LlamaServerPool` manages server process
 |-------|--------|------|
 | **Solo** | 1x Gemma | ~6 GB |
 | **Duo** | 2x Gemma (shared server) | ~6 GB |
-| **Band** | 1x Gemma conductor + 4x Bonsai players | ~8 GB |
+| **Crew** | 1x Gemma conductor + 4x Bonsai specialists | ~8 GB |
 | **Swarm** | 1x Gemma + 3x Bonsai | ~8 GB |
 | **Lite** | 1x Bonsai | ~2 GB |
 
@@ -149,7 +149,7 @@ Full details in [docs/features.md](docs/features.md).
 - Multiple LLM agents, each with its own persona, model, scope, heat, temperature, and style
 - Agents take turns in round-robin; each agent only controls the modules it's wired to via control cables
 - Server pool: `LlamaServerPool` manages N llama-server processes, ref-counted per model
-- Startup wizard: detects GPU VRAM, click-to-apply presets (Solo, Duo, Band, Swarm, Lite)
+- Startup wizard: detects GPU VRAM, click-to-apply presets (Solo, Duo, Crew, Swarm, Lite)
 - Dynamic spawning: agents can request new agents or dismiss themselves via JSON actions
 - Cable-driven scope: control cables from agent to module define what each agent can touch
 - Jam mode: continuous autonomous loop, rate and intensity controlled by HEAT slider (0-100%)

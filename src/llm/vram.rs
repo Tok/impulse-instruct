@@ -227,8 +227,8 @@ pub const PRESETS: &[AgentPreset] = &[
         total_vram_mb: 8000, // 6000 Gemma + 2000 Bonsai (shared)
     },
     AgentPreset {
-        name: "Band",
-        description: "1x Gemma conductor + 4x Bonsai players",
+        name: "Crew",
+        description: "1x Gemma conductor + 4x Bonsai specialists",
         agents: &[
             PresetAgent {
                 model_pattern: "gemma",
@@ -439,7 +439,7 @@ mod tests {
         assert!(find_status(&statuses, "Solo").models_available);
         assert!(find_status(&statuses, "Duo").fits_vram);
         assert!(find_status(&statuses, "Swarm").fits_vram);
-        assert!(find_status(&statuses, "Band").fits_vram);
+        assert!(find_status(&statuses, "Crew").fits_vram);
         assert!(find_status(&statuses, "Voices").fits_vram);
         assert!(find_status(&statuses, "Lite").fits_vram);
     }
@@ -452,7 +452,7 @@ mod tests {
         assert!(!swarm.models_available);
         assert_eq!(swarm.missing_models, vec!["bonsai"]);
         assert!(!find_status(&statuses, "Lite").models_available);
-        assert!(!find_status(&statuses, "Band").models_available);
+        assert!(!find_status(&statuses, "Crew").models_available);
         assert!(!find_status(&statuses, "Voices").models_available);
         // Gemma-only presets are fine
         assert!(find_status(&statuses, "Solo").models_available);
@@ -469,7 +469,7 @@ mod tests {
         assert!(!find_status(&statuses, "Solo").fits_vram); // 6G
         assert!(!find_status(&statuses, "Duo").fits_vram); // 6G
         assert!(!find_status(&statuses, "Swarm").fits_vram); // 8G
-        assert!(!find_status(&statuses, "Band").fits_vram); // 8G
+        assert!(!find_status(&statuses, "Crew").fits_vram); // 8G
         assert!(find_status(&statuses, "Lite").fits_vram); // 2G
     }
 
@@ -483,7 +483,7 @@ mod tests {
 
     #[test]
     fn band_has_five_agents() {
-        let band = PRESETS.iter().find(|p| p.name == "Band").unwrap();
+        let band = PRESETS.iter().find(|p| p.name == "Crew").unwrap();
         assert_eq!(band.agents.len(), 5);
         assert_eq!(band.agents[0].persona, "CONDUCTOR");
     }

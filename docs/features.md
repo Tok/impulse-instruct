@@ -206,7 +206,7 @@ A detailed log of what's built.
 - **Dynamic spawning** - agents can request new agents (`LlmAction::SpawnAgent`) or dismiss themselves (`LlmAction::DismissAgent`) via JSON; gated by `agent_autonomy` flag; auto-wire control cables on spawn
 - **VRAM budget module** - `src/llm/vram.rs` with model profiles (Gemma, Bonsai, DeepSeek, Qwen3), VRAM estimates, and preset configurations
 - **VRAM budget guard** - `would_exceed_vram()` rejects agent spawns that would exceed GPU memory; checked at SpawnAgent action + server pool acquire; prevents silent OOM crashes
-- **Startup wizard** - always shows on startup; resume last session or start fresh with a preset (Solo/Duo/Swarm/Band/Voices/Lite); GPU VRAM detection + budget bar
+- **Startup wizard** - always shows on startup; resume last session or start fresh with a preset (Solo/Duo/Swarm/Crew/Voices/Lite); GPU VRAM detection + budget bar
 - **VRAM estimate on agent cards** - shows `~X.XG VRAM` below model selector
 - **Agent persona in log** - output and thinking lines show the correct agent persona name, not the global singleton
 - **Console routes to agents** - typed prompts go to the first enabled agent instead of bypassing the agent system

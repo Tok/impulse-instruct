@@ -71,7 +71,7 @@ pub struct CollapseRequest {
 
 #[derive(Deserialize)]
 pub struct PresetRequest {
-    /// Preset name: "Solo", "Duo", "Swarm", "Band", "Voices", "Lite"
+    /// Preset name: "Solo", "Duo", "Swarm", "Crew", "Voices", "Lite"
     pub name: String,
 }
 

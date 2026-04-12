@@ -3,7 +3,7 @@
 # Quick overview of Impulse Instruct. Sound within 30 seconds.
 # Two parts: single agent, then multi-agent band.
 
-scene_count 13
+scene_count 14
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # PART 1: Quick start — rack + agent + sound
@@ -97,32 +97,35 @@ scene "Control cables"
 look_at console
 wait_seconds 1
 show_cables
-wait_seconds 3
 say "Back panel. Control cables connect the agent to each instrument."
+# Tour every zone top-to-bottom so all cables are on screen at some point.
+tour_rack 1.2
 screenshot "v${VERSION}-intro-cables"
 show_knobs
 wait_seconds 1
 
-# ── Scene 7: Parameter locking — scroll to bass first ──────────────────────
+# ── Scene 7: LFO — living modulation while the track keeps playing ─────────
 
-scene "Parameter lock"
+scene "LFO modulation"
 
+say "LFOs add living modulation. Let's sweep the filter."
+# Ask the agent to wire an LFO onto the bass cutoff — slow triangle, moderate
+# depth — so the filter opens and closes hands-free while the track plays.
+ask "enable lfo[0] with target=BassCutoff, waveform=Triangle, rate=0.12, depth=0.45" "" 8
 focus_on bass
-wait_seconds 1
+wait_seconds 3
 
-lock "sequencer.bass_steps" "tb303.cutoff"
+say "The rate drives how fast it moves."
+# Nudge the LFO rate live — viewers hear the sweep speed up.
+api_params '{"lfo": [{"rate": 0.22}]}'
+wait_seconds 3
 
-say "Locking bass cutoff and pattern."
+say "Depth controls how far the filter travels."
+api_params '{"lfo": [{"depth": 0.7}]}'
+wait_seconds 4
 
-look_at console
-ask "strip it back, minimal techno, different drums"
-
-focus_on bass
-wait_seconds 2
-
-say "Bass stayed locked. Only drums changed."
-
-unlock "sequencer.bass_steps" "tb303.cutoff"
+# Release the LFO before we tear down the single-agent rack.
+api_params '{"lfo": [{"enabled": false}]}'
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # PART 2: Multi-agent band
@@ -130,7 +133,7 @@ unlock "sequencer.bass_steps" "tb303.cutoff"
 
 scene "Multi-agent setup"
 
-wait_seconds 4
+wait_seconds 2
 stop
 wait_seconds 1
 
@@ -160,8 +163,9 @@ wait_for_model
 
 # Brief cable view — agents are now wired, so cables are visible
 show_cables
-wait_seconds 3
 say "Each agent has its own control cables."
+# Scroll top-to-bottom so every agent's cable run is visible.
+tour_rack 1.2
 show_knobs
 wait_seconds 1
 
@@ -185,7 +189,17 @@ say "Three agents. Each handled its own part."
 focus_on reverb
 wait_seconds 2
 
-# ── Scene 10: Scoped control ─────────────────────────────────────────────
+# ── Scene 10: Melody rewrite — agent rearranges over the same groove ────
+
+scene "Melody rewrite"
+
+say "The bass agent rewrites the melody on demand."
+ask "rewrite the bass melody from scratch, keep the rhythm, more movement, new phrase" BASS 8
+focus_on bass
+wait_seconds 3
+say "Same groove, different line."
+
+# ── Scene 11: Scoped control ─────────────────────────────────────────────
 
 scene "Scoped control"
 

@@ -36,7 +36,7 @@ VRAM.
 | **Solo** | 1x Gemma | ~6 GB | Quick sessions, full control from one agent |
 | **Duo** | 2x Gemma (shared) | ~6 GB | Bass + drums/FX split |
 | **Swarm** | 1x Gemma + 3x Bonsai | ~8 GB | Lead producer + 3 specialists |
-| **Band** | 1x Gemma + 4x Bonsai | ~8 GB | Conductor + bass/drums/keys/FX |
+| **Crew** | 1x Gemma + 4x Bonsai | ~8 GB | Conductor + bass/drums/keys/FX |
 | **Voices** | 1x Gemma + 4x Bonsai | ~8 GB | One agent per voice group |
 | **Lite** | 1x Bonsai | ~2 GB | Minimal VRAM, fast responses |
 

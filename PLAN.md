@@ -80,6 +80,12 @@ What's already built is documented in [docs/features.md](docs/features.md).
 - [ ] **Style → rack auto-setup** — add `rack_modules` field to `styles.json`
   entries, listing which modules to add and how to wire them when a style
   is selected.
+- [ ] **Style-aware agent-preset naming** — the default multi-agent setup
+  is called "Crew" generically. Styles should be able to override the
+  preset display name in `styles.json` (`agent_preset_label` or similar)
+  so e.g. disco/jazz presents it as "Band", hip-hop as "Posse", techno
+  as "Squad", ambient as "Ensemble". Purely a labelling concern — the
+  underlying preset stays the same.
 
 ### TTS
 

@@ -889,6 +889,20 @@ show_knobs() {
     pause 1
 }
 
+tour_rack() {
+    # Scroll through every zone (AI → MAIN AUDIO → VOICES → FX+MOD → back
+    # up) with a short pause on each so viewers can see the full rack
+    # contents. Useful while the back panel is flipped so every cable
+    # segment is on screen at some point.
+    # Usage: tour_rack              # ~6 s total, default pause 1.0 s/zone
+    #        tour_rack 2.0          # 2 s per zone (slower)
+    local per="${1:-1.2}"
+    for tgt in ai global voice fxmod voice global ai; do
+        api_scroll "$tgt"
+        pause "$per"
+    done
+}
+
 # ── Parameter control ────────────────────────────────────────────────────────
 
 lock() {
