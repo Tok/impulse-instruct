@@ -259,7 +259,8 @@ show_all
 say "Impulse Instruct."
 say "Build your rack."
 say "Wire up AI agents."
-say "Make music with words."
+say "Create music with words."
 say "Everything runs locally."
+say "Free and open source."
 
 stop

@@ -553,7 +553,7 @@ generate_srt() {
     local factor="${SRT_DISPLAY_FACTOR:-1.5}"
     # Subtitles were appearing ~1s ahead of the spoken audio; shift the whole
     # SRT later by this many seconds. Override with SRT_OFFSET_SECS.
-    local offset="${SRT_OFFSET_SECS:-1.3}"
+    local offset="${SRT_OFFSET_SECS:-1.5}"
 
     if [ ! -f "$NARRATION_LIST" ]; then
         echo "No narration entries found" >&2
@@ -608,7 +608,7 @@ pregenerate_srt() {
     > "$outfile"
     local t=0.0 idx=0
 
-    local offset="${SRT_OFFSET_SECS:-1.3}"
+    local offset="${SRT_OFFSET_SECS:-1.5}"
 
     _emit_srt() {
         local start="$1" end="$2" text="$3"
