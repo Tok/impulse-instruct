@@ -123,6 +123,11 @@ pub fn apply_session(state: &mut AppState, data: SessionData) {
         if removed > 0 {
             log::warn!("Session: removed {removed} cyclic audio cable(s) from rack");
         }
+        // Migrate old sessions: auto-wire if modules exist but no cables.
+        if rack.cables.is_empty() && rack.modules.len() > 1 {
+            log::info!("Session: no cables found — auto-wiring default routing");
+            rack.wire_default_cables();
+        }
         // Migrate old sessions: if all modules are at (0,0), run grid placement.
         let needs_grid = rack
             .modules

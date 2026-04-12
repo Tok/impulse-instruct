@@ -473,6 +473,22 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
 
     let mut card_rects: Vec<(ModuleKind, egui::Rect)> = Vec::new();
 
+    // Compute which FX modules are connected via audio cables (for visual dimming).
+    let connected_fx: std::collections::HashSet<u32> = {
+        let s = app.state.read();
+        s.rack
+            .cables
+            .iter()
+            .filter(|c| c.from.kind == crate::state::PortKind::Audio)
+            .flat_map(|c| [c.from.module_id, c.to.module_id])
+            .filter(|id| {
+                s.rack.modules.iter().any(|m| {
+                    m.id == *id && crate::state::fx_plan::kind_to_fx_step(m.kind).is_some()
+                })
+            })
+            .collect()
+    };
+
     let content_top = ui.cursor().top();
 
     let all_collapsed =
@@ -822,6 +838,15 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
                 .0
             };
             card_rects.push((kind, resp.card_rect));
+            // Dim disconnected FX modules on the back panel
+            if app.rack_flipped && !connected_fx.contains(&id) {
+                let p = ui.painter();
+                p.rect_filled(
+                    resp.card_rect,
+                    egui::Rounding::same(8.0),
+                    Color32::from_rgba_premultiplied(0, 0, 0, 120),
+                );
+            }
             if resp.toggle_clicked && !is_dragging {
                 if let Some(m) = app
                     .state

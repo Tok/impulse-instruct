@@ -661,6 +661,7 @@ impl ImpulseApp {
                                 self.push_history();
                                 self.state.write().rack.remove_module(aid);
                                 self.state.write().llm_agents.retain(|a| a.id != aid);
+                                self.push_fx_plan();
                                 self.log_text.push_str(&format!("{} signed off\n", name));
                                 if self.state.read().llm_agents.len() == 1 {
                                     self.state.write().llm_agents[0].scope.clear();
@@ -931,7 +932,6 @@ impl eframe::App for ImpulseApp {
         self.tick_ramps();
         self.draw_windows(ctx);
         self.draw_menu_and_header(ctx);
-        // Scope is now integrated into draw_log_and_scope (header.rs)
         TopBottomPanel::bottom("footer")
             .frame(
                 Frame::none()
