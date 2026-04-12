@@ -43,6 +43,10 @@ What's already built is documented in [docs/features.md](docs/features.md).
 
 ### Sequencer
 
+- [ ] **Multi-row step wrap** — when steps > 16, wrap each voice row into
+  multiple 16-step sub-rows instead of stretching across the full 32-step
+  width. Must handle odd time signatures (3/4, 5/4, 7/8). Currently
+  STEPS_PER_PAGE=32 which spills over at narrow rack widths.
 - [ ] **Pattern probability per step** — already implemented but LLM doesn't
   use it well; improve prompt guidance for probability-based patterns
 - [ ] **Song mode** — chain patterns with per-chain tempo/style transitions

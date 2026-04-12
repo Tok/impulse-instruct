@@ -87,6 +87,7 @@ impl RackState {
             modules: Vec::new(),
             cables: Vec::new(),
             next_id: 100,
+            dyn_sequencer_rows: None,
         };
         rack.add_module(ModuleKind::StepSequencer);
         rack.add_module(ModuleKind::MasterOutput);

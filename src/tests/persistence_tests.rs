@@ -250,6 +250,7 @@ mod apply_session_tests {
             modules: Vec::new(),
             cables: Vec::new(),
             next_id: 999,
+            dyn_sequencer_rows: None,
         };
         let data = SessionData {
             rack: Some(custom_rack),

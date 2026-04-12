@@ -157,6 +157,9 @@ if [ "$NO_TTS" -eq 0 ]; then
         fi
     done < "$SCENARIO_FILE"
     echo "  TTS clips cached in $TTS_DIR"
+    # Stop server now — frees GPU memory for the app (LLM + display).
+    # Playback uses cached WAV files via paplay, no server needed.
+    stop_neutts_server
 else
     echo "  Skipped (--no-tts)"
     # Override narrate to still log subtitles but skip audio playback

@@ -336,6 +336,11 @@ pub struct RackState {
     pub cables: Vec<Cable>,
     /// Counter for assigning stable module IDs.
     pub next_id: u32,
+    /// Dynamic height override for the sequencer (adapts to visible lanes).
+    /// Updated each frame by rack_canvas via `set_sequencer_rows()`.
+    /// Not persisted — recomputed on every render.
+    #[serde(default, skip)]
+    pub dyn_sequencer_rows: Option<u8>,
 }
 
 impl RackState {
@@ -434,6 +439,17 @@ impl RackState {
     /// Bin-pack modules onto the 12-column grid within each zone.
     /// Scans top-to-bottom, left-to-right for the first position where
     /// the module's (w, h) span fits without overlapping existing modules.
+    /// Dynamic grid height override for modules whose size depends on their
+    /// content. Currently only used for StepSequencer (grows with visible lanes).
+    /// The caller (rack_canvas) updates this via `set_sequencer_dyn_rows()`.
+    fn dyn_height_override(&self, kind: ModuleKind) -> Option<u8> {
+        if kind == ModuleKind::StepSequencer {
+            self.dyn_sequencer_rows
+        } else {
+            None
+        }
+    }
+
     pub fn arrange_grid(&mut self) {
         fn order(kind: ModuleKind) -> u8 {
             // Full-width globals first, then smaller modules fill gaps
@@ -487,6 +503,7 @@ impl RackState {
 
             for (slot_idx, &(id, kind)) in ids.iter().enumerate() {
                 let (w, h) = kind.grid_size(GRID_COLS);
+                let h = self.dyn_height_override(kind).unwrap_or(h);
                 let w = w as usize;
                 let h = h as usize;
 
@@ -835,6 +852,7 @@ impl Default for RackState {
             modules: Vec::new(),
             cables: Vec::new(),
             next_id: 100, // Reserve low ids for system nodes
+            dyn_sequencer_rows: None,
         };
 
         // ── Global zone ──────────────────────────────────────────────────────

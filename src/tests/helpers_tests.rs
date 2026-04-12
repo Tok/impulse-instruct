@@ -87,6 +87,7 @@ mod connect_control_tests {
             modules: Vec::new(),
             cables: Vec::new(),
             next_id: 1,
+            dyn_sequencer_rows: None,
         };
         let agent_id = rack.add_module(ModuleKind::LlmAgent);
         let bass_id = rack.add_module(ModuleKind::AcidBass);
@@ -109,6 +110,7 @@ mod connect_control_tests {
             modules: Vec::new(),
             cables: Vec::new(),
             next_id: 1,
+            dyn_sequencer_rows: None,
         };
         let agent_id = rack.add_module(ModuleKind::LlmAgent);
         let bass_id = rack.add_module(ModuleKind::AcidBass);

@@ -399,6 +399,36 @@ pub(super) fn module_grid_h(kind: ModuleKind, col_w: f32) -> f32 {
     r * col_w + (r - 1.0).max(0.0) * RACK_GAP
 }
 
+/// Dynamic row count for the sequencer grid cell — adapts to visible lanes.
+pub(super) fn sequencer_grid_rows(state: &crate::state::AppState) -> u8 {
+    use crate::state::ModuleKind;
+    let has = |k: ModuleKind| state.rack.modules.iter().any(|m| m.kind == k && m.enabled);
+    let has_bass = has(ModuleKind::AcidBass);
+    let has_hoover = has(ModuleKind::HooverLead);
+    let has_an1x = has(ModuleKind::An1xVoice);
+    let active_drum_voices = state
+        .sequencer
+        .drum_patterns
+        .iter()
+        .filter(|(_, p)| p.iter().any(|st| st.active))
+        .count();
+    // bass=2 rows (note + accent/slide), hoover=1, an1x=1, each drum=1
+    let lane_rows = (if has_bass { 2 } else { 0 })
+        + (if has_hoover { 1 } else { 0 })
+        + (if has_an1x { 1 } else { 0 })
+        + active_drum_voices;
+    // Base: 2 grid rows (header + controls). Each 2 lane rows = 1 extra grid row.
+    let base_rows = 2u8;
+    let extra = (lane_rows as f32 / 2.0).ceil() as u8;
+    (base_rows + extra).max(2)
+}
+
+/// Pixel height for the sequencer, dynamically sized by rack contents.
+pub(super) fn sequencer_grid_h(state: &crate::state::AppState, col_w: f32) -> f32 {
+    let r = sequencer_grid_rows(state) as f32;
+    r * col_w + (r - 1.0).max(0.0) * RACK_GAP
+}
+
 /// Grid step: col_w + gap. Cards at adjacent grid positions are separated by this.
 pub(super) fn grid_step(col_w: f32) -> f32 {
     col_w + RACK_GAP
@@ -534,11 +564,26 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
                 .map(|m| (m.id, m.kind, m.enabled, m.grid_col, m.grid_row))
                 .collect()
         };
+        let seq_rows = sequencer_grid_rows(&app.state.read());
+        // Sync dynamic sequencer height to rack state so arrange_grid uses it.
+        {
+            let mut s = app.state.write();
+            if s.rack.dyn_sequencer_rows != Some(seq_rows) {
+                s.rack.dyn_sequencer_rows = Some(seq_rows);
+                s.rack.arrange_grid();
+            }
+        }
+        let seq_rows = seq_rows as usize;
         let zone_rows = global_mods
             .iter()
             .map(|&(_, kind, _, _, gr)| {
-                let (_, h) = kind.grid_size(GRID_COLS);
-                gr as usize + h as usize
+                let h = if kind == ModuleKind::StepSequencer {
+                    seq_rows
+                } else {
+                    let (_, h) = kind.grid_size(GRID_COLS);
+                    h as usize
+                };
+                gr as usize + h
             })
             .max()
             .unwrap_or(0);
@@ -549,7 +594,11 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
 
         for &(id, kind, enabled, gc, gr) in &global_mods {
             let slot_w = module_grid_w(kind, col_w);
-            let slot_h = module_grid_h(kind, col_w);
+            let slot_h = if kind == ModuleKind::StepSequencer {
+                sequencer_grid_h(&app.state.read(), col_w)
+            } else {
+                module_grid_h(kind, col_w)
+            };
             let (col_span, _) = kind.grid_size(GRID_COLS);
             let x = card_x(zone_rect.min.x, gc, col_span, step, app.rack_flipped);
             let y = zone_rect.min.y + gr as f32 * step;

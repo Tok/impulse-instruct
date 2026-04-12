@@ -1,5 +1,6 @@
 // ─── ui/mod.rs — Main egui application ───────────────────────────────────────
 mod api_log_handler;
+mod flip;
 mod header;
 mod llm_strip;
 mod midi_handler;
@@ -173,6 +174,8 @@ pub struct ImpulseApp {
     pub(crate) cable_drag: Option<rack_canvas::CableDrag>,
     pub(crate) show_cables: bool,
     pub(crate) rack_flipped: bool,
+    /// Counts flips-to-back to alternate scroll target (master → agent → master …)
+    pub(crate) flip_to_back_count: u32,
     pub(crate) ctrl_locked: bool,
     pub(crate) alt_locked: bool,
     pub(crate) show_shortcuts: bool,
@@ -231,9 +234,7 @@ impl ImpulseApp {
         theme::apply(&cc.egui_ctx);
         log::info!("ImpulseApp::new — creating UI…");
 
-        // ── Load last session from eframe's persistent storage ────────────────
-        // Only restore if session.json also exists — deleting session.json
-        // signals a clean start (e.g. demo recording).
+        // Load last session — only if session.json exists (deletion = clean start).
         if std::path::Path::new("session.json").exists()
             && let Some(storage) = cc.storage
             && let Some(json) = storage.get_string("session")
@@ -250,29 +251,22 @@ impl ImpulseApp {
             log::info!("Session restored from last run.");
         }
 
-        // Restore persisted log level from ui_prefs
+        // Restore persisted log level
         {
             let idx = state.read().ui_prefs.log_level_idx;
             if let Some((_, filter)) = LOG_LEVELS.get(idx) {
                 log::set_max_level(*filter);
             }
         }
-
         // Don't auto-start the sequencer — let the user or AI start it.
-        // The whole point is the AI builds the pattern fresh each time.
-        {
-            let mut s = state.write();
-            s.sequencer.running = false;
-        }
+        state.write().sequencer.running = false;
 
         // Pre-load amen WAV if path is set in restored session.
+        let amen_path = state.read().amen.path.clone();
+        if !amen_path.is_empty()
+            && let Some(data) = crate::audio::load_wav_to_44100(&amen_path)
         {
-            let path = state.read().amen.path.clone();
-            if !path.is_empty()
-                && let Some(data) = crate::audio::load_wav_to_44100(&path)
-            {
-                let _ = audio.params_tx.push(AudioCommand::LoadSampler(data));
-            }
+            let _ = audio.params_tx.push(AudioCommand::LoadSampler(data));
         }
 
         let mut log_text = "[ Impulse Instruct ready ]\n".to_string();
@@ -361,6 +355,7 @@ impl ImpulseApp {
                 .and_then(|s| s.show_cables)
                 .unwrap_or(true),
             rack_flipped: false, // volatile — always start in front view
+            flip_to_back_count: 0,
             ctrl_locked: false,
             alt_locked: false,
             show_shortcuts: false,
@@ -846,13 +841,13 @@ impl eframe::App for ImpulseApp {
             }
         }
         if ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Tab)) {
-            self.rack_flipped = !self.rack_flipped;
-            self.session_dirty = true;
+            self.toggle_rack_flip();
         }
-        // API-driven rack flip
-        if let Some(show_back) = self.state.write().rack_flip_requested.take() {
-            self.rack_flipped = show_back;
-            self.session_dirty = true;
+        let api_flip = self.state.write().rack_flip_requested.take();
+        if let Some(show_back) = api_flip
+            && show_back != self.rack_flipped
+        {
+            self.toggle_rack_flip();
         }
         if ctx.input_mut(|i| {
             i.consume_key(egui::Modifiers::SHIFT, egui::Key::Slash) // Shift+/ = ?
@@ -948,6 +943,7 @@ impl eframe::App for ImpulseApp {
                         s.rack.cables.len(),
                     )
                 };
+                let was_flipped = self.rack_flipped;
                 scope_footer::draw_footer_status(
                     ui,
                     &self.midi_port,
@@ -963,6 +959,10 @@ impl eframe::App for ImpulseApp {
                         api_port: self.api_port,
                     },
                 );
+                if was_flipped != self.rack_flipped {
+                    self.rack_flipped = was_flipped;
+                    self.toggle_rack_flip();
+                }
             });
 
         TopBottomPanel::bottom("piano")

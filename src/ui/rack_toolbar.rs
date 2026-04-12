@@ -82,8 +82,7 @@ pub fn draw_toolbar(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             .on_hover_text("Flip rack  [Tab]  —  hold Alt to hide cables")
             .clicked()
         {
-            app.rack_flipped = !app.rack_flipped;
-            app.session_dirty = true;
+            app.toggle_rack_flip();
         }
         ui.separator();
         let tbtn = |ui: &mut egui::Ui, label: &str| -> bool {

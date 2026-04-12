@@ -10,6 +10,7 @@ fn empty_rack() -> RackState {
         modules: Vec::new(),
         cables: Vec::new(),
         next_id: 1,
+        dyn_sequencer_rows: None,
     }
 }
 
