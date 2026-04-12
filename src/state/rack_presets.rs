@@ -101,6 +101,7 @@ impl RackState {
             rack.add_module(ModuleKind::LfoModule);
         }
         rack.add_module(ModuleKind::LlmAgent);
+        rack.wire_default_cables();
         rack.arrange_canonical();
         rack
     }

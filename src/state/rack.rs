@@ -545,6 +545,141 @@ impl RackState {
         }
     }
 
+    /// Wire standard default cables for whichever modules are present:
+    /// seq→voices (CV), voices→master (audio), FX serial chain, TTS→reverb,
+    /// and agent→all controllable (control). Safe to call on any rack — only
+    /// wires modules that actually exist.
+    pub fn wire_default_cables(&mut self) {
+        let find = |modules: &[RackModule], kind: ModuleKind| -> Option<u32> {
+            modules.iter().find(|m| m.kind == kind).map(|m| m.id)
+        };
+        let master_id = find(&self.modules, ModuleKind::MasterOutput);
+        let seq_id = find(&self.modules, ModuleKind::StepSequencer);
+        let voice_ids: Vec<u32> = [
+            ModuleKind::AcidBass,
+            ModuleKind::DrumKit808,
+            ModuleKind::DrumKit909,
+            ModuleKind::HooverLead,
+            ModuleKind::An1xVoice,
+            ModuleKind::AmenSampler,
+            ModuleKind::NoiseVoice,
+            ModuleKind::GranularTexture,
+        ]
+        .iter()
+        .filter_map(|&k| find(&self.modules, k))
+        .collect();
+        let tts_id = find(&self.modules, ModuleKind::NeuTts);
+        let reverb_id = find(&self.modules, ModuleKind::FxReverb);
+        let fx_ids: Vec<u32> = [
+            ModuleKind::FxWaveshaper,
+            ModuleKind::FxReverb,
+            ModuleKind::FxDelay,
+            ModuleKind::FxBitcrush,
+            ModuleKind::FxChorus,
+            ModuleKind::FxPhaser,
+            ModuleKind::FxRingMod,
+            ModuleKind::FxEq,
+            ModuleKind::FxCompressor,
+            ModuleKind::FxTapeSat,
+            ModuleKind::FxDrive,
+            ModuleKind::FxAutotune,
+        ]
+        .iter()
+        .filter_map(|&k| find(&self.modules, k))
+        .collect();
+
+        // Seq → voices (CV)
+        if let Some(sid) = seq_id {
+            for vid in &voice_ids {
+                self.connect(
+                    PortRef {
+                        module_id: sid,
+                        dir: PortDir::Out,
+                        kind: PortKind::Cv,
+                        index: 0,
+                    },
+                    PortRef {
+                        module_id: *vid,
+                        dir: PortDir::In,
+                        kind: PortKind::Cv,
+                        index: 0,
+                    },
+                );
+            }
+        }
+        // TTS → reverb
+        if let (Some(tid), Some(rid)) = (tts_id, reverb_id) {
+            self.connect(
+                PortRef {
+                    module_id: tid,
+                    dir: PortDir::Out,
+                    kind: PortKind::Audio,
+                    index: 0,
+                },
+                PortRef {
+                    module_id: rid,
+                    dir: PortDir::In,
+                    kind: PortKind::Audio,
+                    index: 0,
+                },
+            );
+        }
+        // Voices → master
+        if let Some(mid) = master_id {
+            for vid in &voice_ids {
+                self.connect(
+                    PortRef {
+                        module_id: *vid,
+                        dir: PortDir::Out,
+                        kind: PortKind::Audio,
+                        index: 0,
+                    },
+                    PortRef {
+                        module_id: mid,
+                        dir: PortDir::In,
+                        kind: PortKind::Audio,
+                        index: 0,
+                    },
+                );
+            }
+        }
+        // FX serial chain
+        for pair in fx_ids.windows(2) {
+            self.connect(
+                PortRef {
+                    module_id: pair[0],
+                    dir: PortDir::Out,
+                    kind: PortKind::Audio,
+                    index: 0,
+                },
+                PortRef {
+                    module_id: pair[1],
+                    dir: PortDir::In,
+                    kind: PortKind::Audio,
+                    index: 0,
+                },
+            );
+        }
+        // Agent → all controllable
+        let agent_id = find(&self.modules, ModuleKind::LlmAgent);
+        if let Some(aid) = agent_id {
+            let targets: Vec<u32> = self
+                .modules
+                .iter()
+                .filter(|m| {
+                    !matches!(
+                        m.kind,
+                        ModuleKind::MasterOutput | ModuleKind::LlmAgent | ModuleKind::LlmConsole
+                    )
+                })
+                .map(|m| m.id)
+                .collect();
+            for tid in &targets {
+                self.connect_control(aid, *tid);
+            }
+        }
+    }
+
     /// Remove audio cables that participate in cycles.  Non-audio cables are
     /// kept unconditionally.  Returns the number of cables removed.
     pub fn strip_audio_cycles(&mut self) -> usize {
@@ -694,150 +829,7 @@ impl Default for RackState {
         // Default LLM agent
         rack.add_module(ModuleKind::LlmAgent);
 
-        // ── Default cables ────────────────────────────────────────────────────
-        // Collect IDs first (no borrow conflict with connect()).
-        let find = |kind: ModuleKind| -> Option<u32> {
-            rack.modules.iter().find(|m| m.kind == kind).map(|m| m.id)
-        };
-        let master_id = find(ModuleKind::MasterOutput);
-        let seq_id = find(ModuleKind::StepSequencer);
-
-        // Voice → MasterOutput (voice mix bus).
-        let voice_ids: Vec<u32> = [
-            ModuleKind::AcidBass,
-            ModuleKind::DrumKit808,
-            ModuleKind::DrumKit909,
-            ModuleKind::HooverLead,
-            ModuleKind::An1xVoice,
-            ModuleKind::AmenSampler,
-            ModuleKind::NoiseVoice,
-            ModuleKind::GranularTexture,
-        ]
-        .iter()
-        .filter_map(|&k| find(k))
-        .collect();
-
-        // TTS default cable: NeuTts → FxReverb (bypasses master bus).
-        let tts_id = find(ModuleKind::NeuTts);
-        let reverb_id = find(ModuleKind::FxReverb);
-
-        // Serial FX chain (mirrors the hardcoded process_block order).
-        let fx_chain: &[ModuleKind] = &[
-            ModuleKind::FxWaveshaper,
-            ModuleKind::FxReverb,
-            ModuleKind::FxDelay,
-            ModuleKind::FxBitcrush,
-            ModuleKind::FxChorus,
-            ModuleKind::FxPhaser,
-            ModuleKind::FxRingMod,
-            ModuleKind::FxEq,
-            ModuleKind::FxCompressor,
-            ModuleKind::FxTapeSat,
-            ModuleKind::FxDrive,
-            ModuleKind::FxAutotune,
-        ];
-        let fx_ids: Vec<u32> = fx_chain.iter().filter_map(|&k| find(k)).collect();
-        let _ = find; // end closure borrow before mutable connect() calls
-
-        // StepSequencer → each voice (gate/CV)
-        if let Some(sid) = seq_id {
-            for vid in &voice_ids {
-                rack.connect(
-                    PortRef {
-                        module_id: sid,
-                        dir: PortDir::Out,
-                        kind: PortKind::Cv,
-                        index: 0,
-                    },
-                    PortRef {
-                        module_id: *vid,
-                        dir: PortDir::In,
-                        kind: PortKind::Cv,
-                        index: 0,
-                    },
-                );
-            }
-        }
-
-        // TTS → FxReverb
-        if let (Some(tid), Some(rid)) = (tts_id, reverb_id) {
-            rack.connect(
-                PortRef {
-                    module_id: tid,
-                    dir: PortDir::Out,
-                    kind: PortKind::Audio,
-                    index: 0,
-                },
-                PortRef {
-                    module_id: rid,
-                    dir: PortDir::In,
-                    kind: PortKind::Audio,
-                    index: 0,
-                },
-            );
-        }
-
-        // Voice → master bus
-        if let Some(mid) = master_id {
-            for vid in voice_ids {
-                rack.connect(
-                    PortRef {
-                        module_id: vid,
-                        dir: PortDir::Out,
-                        kind: PortKind::Audio,
-                        index: 0,
-                    },
-                    PortRef {
-                        module_id: mid,
-                        dir: PortDir::In,
-                        kind: PortKind::Audio,
-                        index: 0,
-                    },
-                );
-            }
-        }
-
-        // FX serial chain: each FX out → next FX in
-        for pair in fx_ids.windows(2) {
-            rack.connect(
-                PortRef {
-                    module_id: pair[0],
-                    dir: PortDir::Out,
-                    kind: PortKind::Audio,
-                    index: 0,
-                },
-                PortRef {
-                    module_id: pair[1],
-                    dir: PortDir::In,
-                    kind: PortKind::Audio,
-                    index: 0,
-                },
-            );
-        }
-
-        // LLM Agent → all controllable modules (Control cables)
-        let agent_id = rack
-            .modules
-            .iter()
-            .find(|m| m.kind == ModuleKind::LlmAgent)
-            .map(|m| m.id);
-        if let Some(agent_id) = agent_id {
-            let controllable: Vec<u32> = rack
-                .modules
-                .iter()
-                .filter(|m| {
-                    !matches!(
-                        m.kind,
-                        ModuleKind::MasterOutput | ModuleKind::LlmAgent | ModuleKind::LlmConsole
-                    )
-                })
-                .map(|m| m.id)
-                .collect();
-            for target_id in &controllable {
-                rack.connect_control(agent_id, *target_id);
-            }
-        }
-
+        rack.wire_default_cables();
         rack.arrange_grid();
         rack
     }
