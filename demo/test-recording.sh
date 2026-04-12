@@ -91,14 +91,14 @@ echo "[3/7] Starting video capture → $(basename "$RAW_VIDEO")"
 # with lanczos + full_chroma flags to prevent vertical chroma offset.
 SWS_CAPTURE="-vf format=yuv444p -pix_fmt yuv420p -sws_flags lanczos+accurate_rnd+full_chroma_int+full_chroma_inp"
 
-# -t 25 hard stops after 25s even if SIGINT fails
+# -t 15 hard stops after 25s even if SIGINT fails
 setsid ffmpeg -y \
     -f x11grab \
     -window_id "$WINDOW_ID_DEC" \
     -framerate 30 \
     -draw_mouse 0 \
     -i "${DISPLAY}" \
-    -t 25 \
+    -t 15 \
     $SWS_CAPTURE \
     -c:v h264_nvenc -preset p4 -cq 20 \
     -an \
@@ -115,7 +115,7 @@ if ! kill -0 "$FFMPEG_PID" 2>/dev/null; then
         -framerate 30 \
         -draw_mouse 0 \
         -i "${DISPLAY}" \
-        -t 25 \
+        -t 15 \
         $SWS_CAPTURE \
         -c:v libx264 -preset ultrafast -crf 23 \
         -an \
@@ -147,7 +147,7 @@ fi
 
 # ── Step 5: Record 10 seconds ───────────────────────────────────────────────
 
-echo "[5/7] Recording 20 seconds..."
+echo "[5/7] Recording 10 seconds..."
 
 export DEMO_START_NS
 DEMO_START_NS=$(date +%s%N)
@@ -158,7 +158,7 @@ echo "2.0|2.0|Test subtitle line one" >> "$NARRATION_LIST"
 echo "5.0|2.0|Test subtitle line two" >> "$NARRATION_LIST"
 echo "8.0|2.0|Recording pipeline test" >> "$NARRATION_LIST"
 
-sleep 20
+sleep 10
 api_stop
 
 # ── Step 6: Stop captures ───────────────────────────────────────────────────
