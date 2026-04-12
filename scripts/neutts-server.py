@@ -68,13 +68,30 @@ def _get_tts(model_path: str | None = None):
 
     print(f"Loading NeuTTS model: {model_path} …", flush=True)
     t0 = time.time()
+    # backbone_repo accepts a local .gguf path directly.
+    # Try GPU first; fall back to CPU if CUDA unavailable.
+    import torch
+    device = "gpu" if torch.cuda.is_available() else "cpu"
+    print(f"Device: {device}", flush=True)
     _tts_instance = NeuTTS(
-        backend="llama",
-        model_path=model_path,
-        n_ctx=2048,
+        backbone_repo=model_path,
+        backbone_device=device,
+        language="en-us",
     )
     print(f"Model loaded in {time.time() - t0:.1f}s", flush=True)
     return _tts_instance
+
+
+# Cache encoded reference audio to avoid re-encoding on every call
+_ref_cache: dict[str, object] = {}
+
+
+def _get_ref_codes(tts, ref_audio: str):
+    """Encode reference audio (cached)."""
+    if ref_audio not in _ref_cache:
+        print(f"Encoding reference: {ref_audio} …", flush=True)
+        _ref_cache[ref_audio] = tts.encode_reference(ref_audio)
+    return _ref_cache[ref_audio]
 
 
 def synthesize(text: str, ref_audio: str, ref_text: str, out_path: str,
@@ -93,13 +110,14 @@ def synthesize(text: str, ref_audio: str, ref_text: str, out_path: str,
     else:
         ref_transcript = ref_text  # allow inline text
 
+    # Encode reference audio (cached across calls)
+    ref_codes = _get_ref_codes(tts, ref_audio)
+
     t0 = time.time()
     wav = tts.infer(
-        input_text=text,
-        ref_audio=ref_audio,
+        text=text,
+        ref_codes=ref_codes,
         ref_text=ref_transcript,
-        temperature=temperature,
-        top_k=top_k,
     )
     duration_ms = int((time.time() - t0) * 1000)
 
