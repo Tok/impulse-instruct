@@ -76,13 +76,15 @@ impl ImpulseApp {
 
                     // ── Left: LLM log (full height) ─────────────────────
                     ui.allocate_ui(egui::vec2(log_w, total_h), |ui| {
+                        ui.spacing_mut().item_spacing.y = 0.0;
                         egui::ScrollArea::vertical()
                             .id_source("global_log")
                             .stick_to_bottom(true)
                             .auto_shrink([false; 2])
                             .show(ui, |ui: &mut egui::Ui| {
-                                let job =
-                                    super::llm_strip::colorize_log(&self.log_text, theme::FOG);
+                                ui.spacing_mut().item_spacing.y = 0.0;
+                                let trimmed = self.log_text.trim_end_matches('\n');
+                                let job = super::llm_strip::colorize_log(trimmed, theme::FOG);
                                 ui.add(egui::Label::new(job).wrap().selectable(true));
                             });
                     });
@@ -579,17 +581,17 @@ impl ImpulseApp {
                         .unwrap_or((false, false, 0, 0, 0, 0));
                     if has_vram || has_ram {
                         ui.vertical(|ui| {
-                            ui.spacing_mut().item_spacing.y = 1.0;
+                            ui.spacing_mut().item_spacing.y = 1.5;
                             let bar = |ui: &mut egui::Ui, label: &str, frac: f32| {
                                 ui.horizontal(|ui| {
                                     ui.label(
                                         egui::RichText::new(label)
                                             .color(theme::ASH)
                                             .monospace()
-                                            .size(7.0),
+                                            .size(10.5),
                                     );
                                     let (br, _) = ui.allocate_exact_size(
-                                        egui::vec2(50.0, 5.0),
+                                        egui::vec2(86.0, 7.5),
                                         egui::Sense::hover(),
                                     );
                                     let p = ui.painter();
@@ -613,7 +615,7 @@ impl ImpulseApp {
                                         egui::RichText::new(format!("{}%", (frac * 100.0) as u32))
                                             .color(theme::ASH)
                                             .monospace()
-                                            .size(6.5),
+                                            .size(9.75),
                                     );
                                 });
                             };

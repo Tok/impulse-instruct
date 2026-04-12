@@ -21,25 +21,34 @@ use crate::ui::{ImpulseApp, theme};
 ///   (only when the note letter is NOT surrounded by other letters)
 /// • Frequency: `440Hz`, `261.6 Hz` etc. — mapped to nearest chromatic semitone
 /// • MIDI number context: `note 60`, `midi 72`, `pitch 48`
-pub(super) fn colorize_log(text: &str, default_color: egui::Color32) -> egui::text::LayoutJob {
+pub(super) fn colorize_log(text: &str, _default_color: egui::Color32) -> egui::text::LayoutJob {
     use egui::text::{LayoutJob, TextFormat};
 
     let mut job = LayoutJob::default();
     let font = egui::FontId::monospace(13.0);
-    // Thinking lines render in SMOKE (darker than default FOG) to visually separate them.
-    let think_color = theme::SMOKE;
 
-    // Returns the base color for the line starting at byte offset `p`.
+    // Per-line base color, prioritizing importance:
+    //   agent speak  — CHALK  (near white, most important)
+    //   agent think  — HAZE   (bright, slightly dimmer than speak)
+    //   user prompt  — FOG    (mid bright)
+    //   api / system — SMOKE  (mid)
     let line_color_at = |p: usize, bytes: &[u8], text: &str| -> egui::Color32 {
         let end = bytes[p..]
             .iter()
             .position(|&b| b == b'\n')
             .map(|i| p + i)
             .unwrap_or(bytes.len());
-        if text[p..end].contains("(think):") {
-            think_color
+        let line = &text[p..end];
+        if line.contains("(thinking):") {
+            theme::HAZE
+        } else if line.starts_with("◆ ") || line.contains(" -> ") {
+            theme::CHALK
+        } else if line.starts_with("YOU ") {
+            theme::FOG
+        } else if line.starts_with('[') && !line.contains("[API]") {
+            theme::ASH
         } else {
-            default_color
+            theme::SMOKE
         }
     };
 

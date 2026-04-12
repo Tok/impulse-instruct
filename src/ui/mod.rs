@@ -271,17 +271,14 @@ impl ImpulseApp {
             let _ = audio.params_tx.push(AudioCommand::LoadSampler(data));
         }
 
-        let mut log_text = "[ Impulse Instruct ready ]\n".to_string();
+        let mut log_text = "[Impulse Instruct ready]\n".to_string();
         if let Some(ref port) = midi_port {
-            log_text.push_str(&format!("[ MIDI: {} ]\n", port));
+            log_text.push_str(&format!("[MIDI: {}]\n", port));
         } else {
-            log_text.push_str("[ MIDI: no device found ]\n");
+            log_text.push_str("[MIDI: no device found]\n");
         }
         if let Some(port) = api_port {
-            log_text.push_str(&format!(
-                "[ HTTP API active → http://localhost:{} ]\n",
-                port
-            ));
+            log_text.push_str(&format!("[HTTP API active → http://localhost:{}]\n", port));
         }
         Self {
             state,
