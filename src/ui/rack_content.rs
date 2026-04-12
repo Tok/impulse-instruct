@@ -788,16 +788,7 @@ fn draw_llm_agent_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, module_id: u32)
             app.state.write().llm_agents[idx].system_prompt_override = prompt_override;
         }
     });
-    // ── Stats + last response ────────────────────────────────────────────
-    if !last_resp.is_empty() {
-        let snippet: String = last_resp.chars().take(80).collect();
-        ui.label(
-            egui::RichText::new(snippet)
-                .color(theme::SMOKE)
-                .monospace()
-                .size(7.5),
-        );
-    }
+    super::rack_ai::draw_last_response_preview(ui, &last_resp);
     ui.horizontal(|ui| {
         ui.label(
             egui::RichText::new(format!("{:.1} t/s  #{}", tps, cycles))
@@ -994,5 +985,5 @@ pub(super) fn reorder_module_by_drop(
         m.grid_col = snap_col;
         m.grid_row = snap_row;
     }
-    let _ = col_w; // used by future zone-aware features
+    let _ = col_w;
 }

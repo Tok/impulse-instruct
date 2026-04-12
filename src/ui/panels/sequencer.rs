@@ -7,28 +7,37 @@ use crate::state::{
     DrumVoice, MAX_STEPS, ROOT_NAMES, Scale, set_an1x_step, set_hoover_step, set_root_note,
     set_scale, set_scale_snap, toggle_bass_accent, toggle_bass_slide,
 };
-use crate::ui::{ImpulseApp, SEQ_LABEL_H, SEQ_LABEL_W, SEQ_VOL_W, theme, widgets};
+use crate::ui::{ImpulseApp, SEQ_LABEL_H, SEQ_LABEL_W, SEQ_VOL_H, SEQ_VOL_W, theme, widgets};
 
-/// Number of step buttons visible per page.
-pub(super) const STEPS_PER_PAGE: usize = 32;
-/// Number of step buttons per physical row — rows wrap vertically when >16.
-pub(super) const STEPS_PER_ROW: usize = 16;
+/// Maximum step buttons visible (MAX_STEPS = 64 fits 2 rows of 32).
+pub(super) const STEPS_PER_PAGE: usize = crate::state::MAX_STEPS;
+/// Number of step buttons per physical row — rows wrap vertically when >32.
+pub(super) const STEPS_PER_ROW: usize = 32;
 
-/// Number of sub-rows (wrapped 16-step rows) needed for the current page.
+/// Number of sub-rows (wrapped 32-step rows) needed for `seq_steps`.
+/// 1..=32 → 1 row, 33..=64 → 2 rows.
 pub(super) fn sub_rows_for(seq_steps: usize) -> usize {
     seq_steps.min(STEPS_PER_PAGE).div_ceil(STEPS_PER_ROW).max(1)
 }
 
-/// Estimate total width of one wrapped step row (buttons + beat dividers).
+/// Step count rendered in a given sub-row (last sub-row may be partial).
+pub(super) fn steps_in_sub(seq_steps: usize, sub: usize) -> usize {
+    let base = sub * STEPS_PER_ROW;
+    seq_steps.saturating_sub(base).min(STEPS_PER_ROW)
+}
+
+/// Estimate total width of the widest step row (buttons + beat dividers).
 /// Used to right-justify step rows by inserting a spacer after the prefix.
+/// `row_steps` is the cell count for the widest sub-row (first one).
 pub(super) fn step_grid_width(
     pad_px: f32,
     time_sig_num: usize,
     page_start: usize,
     item_spacing_x: f32,
+    row_steps: usize,
 ) -> f32 {
     let mut w = 0.0f32;
-    for i in 0..STEPS_PER_ROW {
+    for i in 0..row_steps {
         let beat_pos = (page_start + i) % time_sig_num;
         if i > 0 && beat_pos == 0 {
             w += 4.0;
@@ -77,7 +86,7 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         let synth_rows = if has_hoover { 1.0 } else { 0.0 } + if has_an1x { 1.0 } else { 0.0 };
         let lane_rows = bass_rows + drum_rows as f32 + synth_rows;
         // Each lane wraps into N sub-rows when steps > 16.
-        let sub_rows = s.sequencer.steps.min(32).div_ceil(16).max(1) as f32;
+        let sub_rows = s.sequencer.steps.min(64).div_ceil(32).max(1) as f32;
         let total_rows = lane_rows * sub_rows;
 
         let h = (header_h + total_rows * row_h).max(120.0);
@@ -443,12 +452,16 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             // Approximate fallback for the very first frame
             10.0 + 10.0 + (SEQ_LABEL_W - 20.0) + SEQ_VOL_W + 18.0 + 32.0
         };
-        // Right-justify spacer: push step grids to the right edge.
+        // Right-justify spacer: push step grids to the right edge. Use the
+        // widest sub-row's step count so all sub-rows share a common right
+        // anchor (partial last sub-rows left-align under the fixed anchor).
+        let widest_row_steps = steps_in_sub(seq_steps, 0);
         let grid_w = step_grid_width(
             pad_px,
             time_sig_num,
             page_start,
             ui.spacing().item_spacing.x,
+            widest_row_steps,
         );
         let row_spacer = (ui.available_width() - prefix_w - grid_w - 8.0).max(0.0);
 
@@ -468,8 +481,11 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             for sub in 0..sub_rows {
                 ui.horizontal(|ui| {
                     if sub == 0 {
+                        // Prefix: M/S placeholders + label + VOLUME slider + steps placeholder
+                        ui.add_space(10.0);
+                        ui.add_space(10.0);
                         ui.add_sized(
-                            [prefix_w, SEQ_LABEL_H],
+                            [SEQ_LABEL_W - 20.0, SEQ_LABEL_H],
                             egui::Label::new(
                                 egui::RichText::new("BASS")
                                     .color(theme::SMOKE)
@@ -477,6 +493,20 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                                     .size(8.5),
                             ),
                         );
+                        let mut vol = app.state.read().bass_voices[0].synth.volume;
+                        if ui
+                            .add_sized(
+                                [SEQ_VOL_W, SEQ_VOL_H],
+                                egui::Slider::new(&mut vol, 0.0..=1.0)
+                                    .show_value(false)
+                                    .trailing_fill(true),
+                            )
+                            .changed()
+                        {
+                            app.state.write().bass_voices[0].synth.volume = vol;
+                            app.push_audio_params();
+                        }
+                        ui.add_space(18.0);
                     } else {
                         ui.add_space(prefix_w);
                     }
@@ -486,7 +516,7 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                     let base = sub * STEPS_PER_ROW;
                     for j in 0..STEPS_PER_ROW {
                         let i = base + j;
-                        if i >= STEPS_PER_PAGE {
+                        if i >= seq_steps {
                             break;
                         }
                         let abs = page_start + i;
@@ -541,13 +571,16 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
 
             // Accent + slide rows — compact vertical spacing
             let marker_h = (pad_px * 0.35).clamp(10.0, 16.0);
+            let row_h = marker_h.max(SEQ_VOL_H);
             let prev_spacing = ui.spacing().item_spacing.y;
             ui.spacing_mut().item_spacing.y = 0.0;
             for sub in 0..sub_rows {
                 ui.horizontal(|ui| {
                     if sub == 0 {
+                        ui.add_space(10.0);
+                        ui.add_space(10.0);
                         ui.add_sized(
-                            [prefix_w, marker_h],
+                            [SEQ_LABEL_W - 20.0, row_h],
                             egui::Label::new(
                                 egui::RichText::new("ACCENT")
                                     .color(theme::IRON)
@@ -555,6 +588,20 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                                     .size(7.0),
                             ),
                         );
+                        let mut accent = app.state.read().bass_voices[0].synth.accent_level;
+                        if ui
+                            .add_sized(
+                                [SEQ_VOL_W, SEQ_VOL_H],
+                                egui::Slider::new(&mut accent, 0.0..=1.0)
+                                    .show_value(false)
+                                    .trailing_fill(true),
+                            )
+                            .changed()
+                        {
+                            app.state.write().bass_voices[0].synth.accent_level = accent;
+                            app.push_audio_params();
+                        }
+                        ui.add_space(18.0);
                     } else {
                         ui.add_space(prefix_w);
                     }
@@ -564,7 +611,7 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                     let base = sub * STEPS_PER_ROW;
                     for j in 0..STEPS_PER_ROW {
                         let i = base + j;
-                        if i >= STEPS_PER_PAGE {
+                        if i >= seq_steps {
                             break;
                         }
                         let abs = page_start + i;
@@ -581,7 +628,7 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                         let text = egui::RichText::new("A").monospace().size(7.0).color(color);
                         if ui
                             .add_sized(
-                                [pad_px, marker_h],
+                                [pad_px, row_h],
                                 egui::Button::new(text).fill(egui::Color32::TRANSPARENT),
                             )
                             .clicked()
@@ -598,8 +645,10 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             for sub in 0..sub_rows {
                 ui.horizontal(|ui| {
                     if sub == 0 {
+                        ui.add_space(10.0);
+                        ui.add_space(10.0);
                         ui.add_sized(
-                            [prefix_w, marker_h],
+                            [SEQ_LABEL_W - 20.0, row_h],
                             egui::Label::new(
                                 egui::RichText::new("SLIDE")
                                     .color(theme::IRON)
@@ -607,6 +656,20 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                                     .size(7.0),
                             ),
                         );
+                        let mut slide = app.state.read().bass_voices[0].synth.portamento_time;
+                        if ui
+                            .add_sized(
+                                [SEQ_VOL_W, SEQ_VOL_H],
+                                egui::Slider::new(&mut slide, 0.0..=1.0)
+                                    .show_value(false)
+                                    .trailing_fill(true),
+                            )
+                            .changed()
+                        {
+                            app.state.write().bass_voices[0].synth.portamento_time = slide;
+                            app.push_audio_params();
+                        }
+                        ui.add_space(18.0);
                     } else {
                         ui.add_space(prefix_w);
                     }
@@ -616,7 +679,7 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                     let base = sub * STEPS_PER_ROW;
                     for j in 0..STEPS_PER_ROW {
                         let i = base + j;
-                        if i >= STEPS_PER_PAGE {
+                        if i >= seq_steps {
                             break;
                         }
                         let abs = page_start + i;
@@ -633,7 +696,7 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                         let text = egui::RichText::new("S").monospace().size(7.0).color(color);
                         if ui
                             .add_sized(
-                                [pad_px, marker_h],
+                                [pad_px, row_h],
                                 egui::Button::new(text).fill(egui::Color32::TRANSPARENT),
                             )
                             .clicked()
@@ -671,26 +734,22 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                     } else {
                         theme::PIT
                     };
-                    if sub == 0 {
-                        ui.add_sized(
-                            [prefix_w, SEQ_LABEL_H],
-                            egui::Label::new(
-                                egui::RichText::new("HOOVER")
-                                    .color(label_color)
-                                    .monospace()
-                                    .size(8.5),
-                            ),
-                        );
+                    let label_text = if sub == 0 {
+                        egui::RichText::new("HOOVER")
+                            .color(label_color)
+                            .monospace()
+                            .size(8.5)
                     } else {
-                        ui.add_space(prefix_w);
-                    }
+                        egui::RichText::new("")
+                    };
+                    ui.add_sized([prefix_w, SEQ_LABEL_H], egui::Label::new(label_text));
                     if row_spacer > 0.0 {
                         ui.add_space(row_spacer);
                     }
                     let base = sub * STEPS_PER_ROW;
                     for j in 0..STEPS_PER_ROW {
                         let i = base + j;
-                        if i >= STEPS_PER_PAGE {
+                        if i >= seq_steps {
                             break;
                         }
                         let abs = page_start + i;
@@ -766,26 +825,22 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                     } else {
                         theme::PIT
                     };
-                    if sub == 0 {
-                        ui.add_sized(
-                            [prefix_w, SEQ_LABEL_H],
-                            egui::Label::new(
-                                egui::RichText::new("AN1X")
-                                    .color(label_color)
-                                    .monospace()
-                                    .size(8.5),
-                            ),
-                        );
+                    let label_text = if sub == 0 {
+                        egui::RichText::new("AN1X")
+                            .color(label_color)
+                            .monospace()
+                            .size(8.5)
                     } else {
-                        ui.add_space(prefix_w);
-                    }
+                        egui::RichText::new("")
+                    };
+                    ui.add_sized([prefix_w, SEQ_LABEL_H], egui::Label::new(label_text));
                     if row_spacer > 0.0 {
                         ui.add_space(row_spacer);
                     }
                     let base = sub * STEPS_PER_ROW;
                     for j in 0..STEPS_PER_ROW {
                         let i = base + j;
-                        if i >= STEPS_PER_PAGE {
+                        if i >= seq_steps {
                             break;
                         }
                         let abs = page_start + i;

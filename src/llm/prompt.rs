@@ -98,6 +98,14 @@ pub fn build_system_prompt_full(
             "bpm": state.sequencer.bpm,
             "steps": state.sequencer.steps,
             "bass_len": state.sequencer.bass_steps,
+            "hoover_len": state.sequencer.hoover_steps,
+            "an1x_len": state.sequencer.an1x_steps,
+            "drum_lengths": state
+                .sequencer
+                .drum_steps
+                .iter()
+                .filter_map(|(v, n)| v.schema_key().map(|k| (k.to_string(), *n)))
+                .collect::<std::collections::BTreeMap<String, usize>>(),
             "swing": state.sequencer.swing,
             "root_note": state.sequencer.root_note,
             "scale": state.sequencer.scale.name(),
@@ -319,9 +327,14 @@ STEP SEQUENCER (default 32 steps = two 4/4 bars of 16th notes):
     Index list  [0,4,8,12]   — active step indices; all others cleared. SAVES TOKENS — use this.
     Inline      [1,0,0,0,…]  — up to 64 values, 0/1 (or false/true). Use only when most steps are on.
     Clear       []           — silence all steps for that voice.
-  IMPORTANT: Spread ALL patterns (bass, drums, hoover, an1x) across the ENTIRE length.
-    Check sequencer.steps and per-voice lengths in CURRENT STATE. Use the full range evenly.
-    Example: 32-step kick = [0,4,8,12,16,20,24,28], NOT just [0,4,8,12].
+  CRITICAL — USE THE CURRENT PATTERN LENGTH:
+    Before writing any step array, read `sequencer.steps` AND the per-voice length
+    (`bass_len`, `hoover_len`, `an1x_len`, `drum_lengths.<voice>`) from CURRENT STATE.
+    Spread indices across that FULL range. Do NOT assume 16 steps.
+    • 32-step kick  → [0,4,8,12,16,20,24,28]   (NOT [0,4,8,12])
+    • 32-step bass  → fill all 32 positions when using inline format
+    • 64-step pad   → spread across 0..63
+    Indices must be < length. Writing only the first half of the bank is a bug.
 
   sequencer.bass_steps    — step array for 303 bass trigger
   sequencer.bass_notes    — MIDI note array (24=C1, 36=C2, 48=C3; acid range 33–48)

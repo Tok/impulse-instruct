@@ -128,6 +128,21 @@ pub fn apply_session(state: &mut AppState, data: SessionData) {
             log::info!("Session: no cables found — auto-wiring default routing");
             rack.wire_default_cables();
         }
+        // Migrate pre-v0.7.2 sessions: re-apply default zones (LLM console/agent
+        // moved from Zone::Global to Zone::Ai). Force re-layout so modules land
+        // in their new zones.
+        let mut zones_changed = false;
+        for m in rack.modules.iter_mut() {
+            let z = m.kind.default_zone();
+            if m.zone != z {
+                m.zone = z;
+                zones_changed = true;
+            }
+        }
+        if zones_changed {
+            log::info!("Session: migrated module zones (AI split out from Global)");
+            rack.arrange_grid();
+        }
         // Migrate old sessions: if all modules are at (0,0), run grid placement.
         let needs_grid = rack
             .modules

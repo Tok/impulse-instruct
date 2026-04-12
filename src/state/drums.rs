@@ -293,6 +293,23 @@ impl DrumVoice {
         }
     }
 
+    /// Canonical JSON key used in the LLM schema (`kick_a`, `snare_b`, …).
+    /// Returns `None` for voices not exposed to the LLM schema.
+    pub fn schema_key(self) -> Option<&'static str> {
+        Some(match self {
+            DrumVoice::Kick808 => "kick_a",
+            DrumVoice::Snare808 => "snare_a",
+            DrumVoice::HihatClosed808 => "hihat_a",
+            DrumVoice::HihatOpen808 => "hihat_a_open",
+            DrumVoice::Kick909 => "kick_b",
+            DrumVoice::Snare909 => "snare_b",
+            DrumVoice::HihatClosed909 => "hihat_b",
+            DrumVoice::HihatOpen909 => "hihat_b_open",
+            DrumVoice::Clap909 => "clap_b",
+            _ => return None,
+        })
+    }
+
     /// Which rack `ModuleKind` this drum voice belongs to.
     pub fn module_kind(self) -> crate::state::ModuleKind {
         match self {

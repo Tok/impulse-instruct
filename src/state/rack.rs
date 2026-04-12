@@ -222,9 +222,8 @@ impl ModuleKind {
     /// Which zone this module belongs to by default.
     pub fn default_zone(self) -> Zone {
         match self {
-            Self::StepSequencer | Self::MasterOutput | Self::LlmAgent | Self::LlmConsole => {
-                Zone::Global
-            }
+            Self::LlmConsole | Self::LlmAgent => Zone::Ai,
+            Self::StepSequencer | Self::MasterOutput => Zone::Global,
             Self::AcidBass
             | Self::DrumKit808
             | Self::DrumKit909
@@ -283,12 +282,28 @@ pub const GRID_COLS: u8 = 12;
 /// The vertical zone a module lives in.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Zone {
-    /// Clock, transport, master output — full-width strip at the top.
+    /// LLM console + agents.
+    Ai,
+    /// Clock/sequencer, master output — the main audio strip.
+    /// (Labelled "MAIN AUDIO" in the UI; the enum name is kept for serde
+    /// backward compat with pre-split sessions.)
     Global,
     /// Voice / instrument modules.
     Voice,
     /// FX processors and modulation sources.
     FxMod,
+}
+
+impl Zone {
+    /// Lowercase scroll-target name (`"ai"`, `"global"`, `"voice"`, `"fxmod"`).
+    pub fn scroll_name(self) -> &'static str {
+        match self {
+            Zone::Ai => "ai",
+            Zone::Global => "global",
+            Zone::Voice => "voice",
+            Zone::FxMod => "fxmod",
+        }
+    }
 }
 
 // ─── Module ───────────────────────────────────────────────────────────────────
@@ -453,12 +468,14 @@ impl RackState {
 
     pub fn arrange_grid(&mut self) {
         fn order(kind: ModuleKind) -> u8 {
-            // Full-width globals first, then smaller modules fill gaps
+            // Within each zone: full-width strips first, then smaller modules pack
+            // into the free cells below. AI zone: console above, agents pack under.
+            // MAIN AUDIO zone: sequencer, then master.
             match kind {
                 ModuleKind::LlmConsole => 0,
-                ModuleKind::StepSequencer => 1,
-                ModuleKind::MasterOutput => 2,
-                ModuleKind::LlmAgent => 3,
+                ModuleKind::LlmAgent => 1,
+                ModuleKind::StepSequencer => 2,
+                ModuleKind::MasterOutput => 3,
                 ModuleKind::AcidBass => 10,
                 ModuleKind::DrumKit808 => 11,
                 ModuleKind::DrumKit909 => 12,
@@ -489,7 +506,7 @@ impl RackState {
         let cols = GRID_COLS as usize;
         let max_rows = 64usize; // generous upper bound
 
-        for zone in [Zone::Global, Zone::Voice, Zone::FxMod] {
+        for zone in [Zone::Ai, Zone::Global, Zone::Voice, Zone::FxMod] {
             // Collect and sort by canonical order
             let mut ids: Vec<(u32, ModuleKind)> = self
                 .modules

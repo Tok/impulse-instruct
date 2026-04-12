@@ -273,13 +273,17 @@ async fn post_scroll(
     Json(req): Json<ScrollRequest>,
 ) -> Json<OkResponse> {
     if req.collapse_others {
-        let is_global = req.target == "global" || req.target == "sequencer";
+        let is_ai = req.target == "ai" || req.target == "console" || req.target == "agent";
+        let is_global = req.target == "global"
+            || req.target == "main"
+            || req.target == "mainaudio"
+            || req.target == "sequencer";
         let is_voice = req.target == "voice"
             || req.target == "bass"
             || req.target == "808"
             || req.target == "909";
         let is_fx = req.target == "fxmod" || req.target == "fx";
-        api.app_state.write().collapse_requested = Some((!is_global, !is_voice, !is_fx));
+        api.app_state.write().collapse_requested = Some((!is_ai, !is_global, !is_voice, !is_fx));
     }
     api.app_state.write().scroll_target = Some(req.target.clone());
     api_log(&api, format!("[API] scroll → {}", req.target));
@@ -293,12 +297,16 @@ async fn post_collapse(
     AxumState(api): AxumState<ApiState>,
     Json(req): Json<CollapseRequest>,
 ) -> Json<OkResponse> {
+    // Tuple order: (ai, global, voice, fxmod) → each bool is "collapsed?".
+    // Action "X" collapses only zone X (leaving the others expanded), mirroring
+    // the pre-split behaviour of /api/rack/collapse { "action": "global" }.
     let collapse = match req.action.as_str() {
-        "all" => Some((true, true, true)),
-        "none" => Some((false, false, false)),
-        "global" => Some((true, false, false)),
-        "voice" => Some((false, true, false)),
-        "fxmod" => Some((false, false, true)),
+        "all" => Some((true, true, true, true)),
+        "none" => Some((false, false, false, false)),
+        "ai" => Some((true, false, false, false)),
+        "global" | "main" | "mainaudio" => Some((false, true, false, false)),
+        "voice" => Some((false, false, true, false)),
+        "fxmod" => Some((false, false, false, true)),
         _ => None,
     };
     if let Some(c) = collapse {
@@ -467,13 +475,15 @@ async fn post_rack_add(
     let mut s = api.app_state.write();
     let id = s.rack.add_module(kind);
     // Auto-wire voice and FX modules to MasterOutput with an audio cable.
-    if kind.default_zone() != crate::state::Zone::Global
-        && let Some(master_id) = s
-            .rack
-            .modules
-            .iter()
-            .find(|m| m.kind == crate::state::ModuleKind::MasterOutput)
-            .map(|m| m.id)
+    if !matches!(
+        kind.default_zone(),
+        crate::state::Zone::Global | crate::state::Zone::Ai
+    ) && let Some(master_id) = s
+        .rack
+        .modules
+        .iter()
+        .find(|m| m.kind == crate::state::ModuleKind::MasterOutput)
+        .map(|m| m.id)
     {
         s.rack.connect(
             PortRef {
@@ -568,8 +578,9 @@ async fn post_rack_agent(
             s.rack.connect_control(id, *tid);
         }
         s.llm_agents.push(agent);
-        // Auto-scroll to the console area so the new agent is visible.
-        s.scroll_target = Some("console".to_string());
+        // Auto-scroll to the AI zone (now its own tab containing the console
+        // plus all agents) so the newly added agent is visible.
+        s.scroll_target = Some("ai".to_string());
         id
     };
 

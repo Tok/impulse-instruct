@@ -171,7 +171,7 @@ pub(super) fn draw_drum_rows(
                     let base = sub * STEPS_PER_ROW;
                     for j in 0..STEPS_PER_ROW {
                         let i = base + j;
-                        if i >= STEPS_PER_PAGE {
+                        if i >= seq_steps {
                             break;
                         }
                         let abs = page_start + i;
@@ -348,7 +348,7 @@ pub(super) fn draw_drum_rows(
                 steps_x = ui.cursor().min.x; // track for sub-lane alignment
                 for j in 0..STEPS_PER_ROW {
                     let i = j;
-                    if i >= STEPS_PER_PAGE {
+                    if i >= seq_steps {
                         break;
                     }
                     let abs = page_start + i;
@@ -387,7 +387,7 @@ pub(super) fn draw_drum_rows(
                 let base = sub * STEPS_PER_ROW;
                 for j in 0..STEPS_PER_ROW {
                     let i = base + j;
-                    if i >= STEPS_PER_PAGE {
+                    if i >= seq_steps {
                         break;
                     }
                     let abs = page_start + i;

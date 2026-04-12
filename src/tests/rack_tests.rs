@@ -308,7 +308,7 @@ fn scope_excludes_non_scoped_targets() {
 fn arrange_grid_no_overlap() {
     let rack = RackState::default();
     // Verify no two modules in the same zone overlap on the grid.
-    for zone in [Zone::Global, Zone::Voice, Zone::FxMod] {
+    for zone in [Zone::Ai, Zone::Global, Zone::Voice, Zone::FxMod] {
         let mods: Vec<_> = rack.modules.iter().filter(|m| m.zone == zone).collect();
         for (i, a) in mods.iter().enumerate() {
             let (aw, ah) = a.kind.grid_size(GRID_COLS);
@@ -363,7 +363,7 @@ fn arrange_grid_full_preset_no_overlap() {
     use crate::state::RACK_PRESETS;
     // Test the "Full" preset specifically (index 3)
     let rack = RackState::from_preset(&RACK_PRESETS[3]);
-    for zone in [Zone::Global, Zone::Voice, Zone::FxMod] {
+    for zone in [Zone::Ai, Zone::Global, Zone::Voice, Zone::FxMod] {
         let mods: Vec<_> = rack.modules.iter().filter(|m| m.zone == zone).collect();
         for (i, a) in mods.iter().enumerate() {
             let (aw, ah) = a.kind.grid_size(GRID_COLS);
@@ -446,6 +446,6 @@ fn modules_go_to_correct_zones() {
     assert_eq!(ModuleKind::FxDelay.default_zone(), Zone::FxMod);
     assert_eq!(ModuleKind::LfoModule.default_zone(), Zone::FxMod);
     assert_eq!(ModuleKind::MasterOutput.default_zone(), Zone::Global);
-    assert_eq!(ModuleKind::LlmConsole.default_zone(), Zone::Global);
-    assert_eq!(ModuleKind::LlmAgent.default_zone(), Zone::Global);
+    assert_eq!(ModuleKind::LlmConsole.default_zone(), Zone::Ai);
+    assert_eq!(ModuleKind::LlmAgent.default_zone(), Zone::Ai);
 }

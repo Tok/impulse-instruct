@@ -32,7 +32,8 @@ const VOICE_KINDS: &[ModuleKind] = &[
     ModuleKind::AmenSampler,
     ModuleKind::NoiseVoice,
 ];
-const GLOBAL_KINDS: &[ModuleKind] = &[ModuleKind::LlmConsole, ModuleKind::LlmAgent];
+const AI_KINDS: &[ModuleKind] = &[ModuleKind::LlmConsole, ModuleKind::LlmAgent];
+const GLOBAL_KINDS: &[ModuleKind] = &[];
 const FXMOD_KINDS: &[ModuleKind] = &[
     ModuleKind::FxReverb,
     ModuleKind::FxDelay,
@@ -67,7 +68,8 @@ pub fn draw_rack(app: &mut ImpulseApp, ctx: &egui::Context, ui: &mut egui::Ui) {
             });
         }
     }
-    if let Some((g, v, f)) = app.state.write().collapse_requested.take() {
+    if let Some((a, g, v, f)) = app.state.write().collapse_requested.take() {
+        app.zone_ai_collapsed = a;
         app.zone_global_collapsed = g;
         app.zone_voice_collapsed = v;
         app.zone_fxmod_collapsed = f;
@@ -99,6 +101,7 @@ pub fn draw_rack(app: &mut ImpulseApp, ctx: &egui::Context, ui: &mut egui::Ui) {
         app.focus_time = std::time::Instant::now();
         // Expand the zone containing the target so the module is visible
         match kind.default_zone() {
+            crate::state::Zone::Ai => app.zone_ai_collapsed = false,
             crate::state::Zone::Global => app.zone_global_collapsed = false,
             crate::state::Zone::Voice => app.zone_voice_collapsed = false,
             crate::state::Zone::FxMod => app.zone_fxmod_collapsed = false,
@@ -311,6 +314,7 @@ fn draw_add_menu(app: &mut ImpulseApp, ctx: &egui::Context) {
         None => return,
     };
     let kinds: &[ModuleKind] = match zone {
+        crate::state::Zone::Ai => AI_KINDS,
         crate::state::Zone::Voice => VOICE_KINDS,
         crate::state::Zone::FxMod => FXMOD_KINDS,
         crate::state::Zone::Global => GLOBAL_KINDS,
@@ -417,9 +421,10 @@ pub(super) fn sequencer_grid_rows(state: &crate::state::AppState) -> u8 {
         + (if has_hoover { 1 } else { 0 })
         + (if has_an1x { 1 } else { 0 })
         + active_drum_voices;
-    // Each lane wraps into N sub-rows when steps > 16 (e.g. 32-step patterns).
+    // Each lane wraps into N sub-rows when steps > 32 (64-step patterns).
     let seq_steps = state.sequencer.steps;
-    let sub_rows = seq_steps.min(32).div_ceil(16).max(1);
+    // 1..=32 → 1 row, 33..=64 → 2 rows.
+    let sub_rows = seq_steps.min(64).div_ceil(32).max(1);
     let physical_rows = lane_rows * sub_rows;
     // Base: 2 grid rows (header + controls). Each 2 physical rows = 1 extra grid row.
     let base_rows = 2u8;
@@ -458,7 +463,7 @@ pub(crate) fn grid_unit(ctx: &egui::Context) -> f32 {
 }
 
 /// Compute card X position — mirrored horizontally when the rack is flipped.
-fn card_x(zone_left: f32, gc: u8, col_span: u8, step: f32, flipped: bool) -> f32 {
+pub(super) fn card_x(zone_left: f32, gc: u8, col_span: u8, step: f32, flipped: bool) -> f32 {
     if flipped {
         // Mirror: a card at column gc with width col_span maps to
         // column (GRID_COLS - gc - col_span) from the left.
@@ -472,7 +477,13 @@ fn card_x(zone_left: f32, gc: u8, col_span: u8, step: f32, flipped: bool) -> f32
 /// Paint subtle dots at grid intersections within a zone's content area.
 /// Called per-zone so each collapsible section gets its own aligned grid.
 /// `zone_left` is the X where modules actually start (cursor X at zone start).
-fn draw_zone_grid_dots(ui: &egui::Ui, zone_left: f32, zone_top: f32, zone_bottom: f32, col_w: f32) {
+pub(super) fn draw_zone_grid_dots(
+    ui: &egui::Ui,
+    zone_left: f32,
+    zone_top: f32,
+    zone_bottom: f32,
+    col_w: f32,
+) {
     if col_w < 5.0 || zone_bottom <= zone_top {
         return;
     }
@@ -525,14 +536,29 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
 
     let content_top = ui.cursor().top();
 
-    let all_collapsed =
-        app.zone_global_collapsed && app.zone_voice_collapsed && app.zone_fxmod_collapsed;
+    let all_collapsed = app.zone_ai_collapsed
+        && app.zone_global_collapsed
+        && app.zone_voice_collapsed
+        && app.zone_fxmod_collapsed;
 
-    app.zone_y[0] = ui.cursor().top() - content_top;
+    // ─── AI zone (LLM console + agents) ──────────────────────────────────────
+    super::rack_ai::draw_ai_zone(
+        app,
+        ui,
+        ports,
+        &mut card_rects,
+        col_w,
+        available_w,
+        content_top,
+        all_collapsed,
+    );
+
+    // ─── MAIN AUDIO zone (sequencer + master) ────────────────────────────────
+    app.zone_y[1] = ui.cursor().top() - content_top;
     {
         let (add, toggle, toggle_all) = module_card::zone_rail(
             ui,
-            "GLOBAL",
+            "MAIN AUDIO",
             true,
             24,
             app.zone_global_collapsed,
@@ -543,6 +569,7 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
         }
         if toggle_all {
             let target = !all_collapsed;
+            app.zone_ai_collapsed = target;
             app.zone_global_collapsed = target;
             app.zone_voice_collapsed = target;
             app.zone_fxmod_collapsed = target;
@@ -671,7 +698,7 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
         draw_zone_grid_dots(ui, zone_left, zone_top, zone_top + zone_h, col_w);
     } // end zone_global_collapsed guard
 
-    app.zone_y[1] = ui.cursor().top() - content_top;
+    app.zone_y[2] = ui.cursor().top() - content_top;
     {
         let (add, toggle, toggle_all) = module_card::zone_rail(
             ui,
@@ -686,6 +713,7 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
         }
         if toggle_all {
             let target = !all_collapsed;
+            app.zone_ai_collapsed = target;
             app.zone_global_collapsed = target;
             app.zone_voice_collapsed = target;
             app.zone_fxmod_collapsed = target;
@@ -793,7 +821,7 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
         draw_zone_grid_dots(ui, zone_left, zone_top, zone_top + zone_h, col_w);
     } // end zone_voice_collapsed guard
 
-    app.zone_y[2] = ui.cursor().top() - content_top;
+    app.zone_y[3] = ui.cursor().top() - content_top;
     {
         let (add, toggle, toggle_all) = module_card::zone_rail(
             ui,
@@ -808,6 +836,7 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
         }
         if toggle_all {
             let target = !all_collapsed;
+            app.zone_ai_collapsed = target;
             app.zone_global_collapsed = target;
             app.zone_voice_collapsed = target;
             app.zone_fxmod_collapsed = target;

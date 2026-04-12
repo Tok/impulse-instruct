@@ -7,6 +7,7 @@ mod midi_handler;
 pub mod module_card;
 mod note;
 pub mod panels;
+mod rack_ai;
 pub mod rack_cables;
 pub mod rack_canvas;
 pub(crate) mod rack_content;
@@ -53,7 +54,7 @@ pub(super) const LOG_LEVELS: &[(&str, log::LevelFilter)] = &[
 
 pub(crate) const SEQ_LABEL_W: f32 = 100.0;
 pub(crate) const SEQ_LABEL_H: f32 = 22.0;
-pub(crate) const SEQ_VOL_W: f32 = 100.0;
+pub(crate) const SEQ_VOL_W: f32 = 300.0;
 pub(crate) const SEQ_VOL_H: f32 = 14.0;
 
 /// Derives BPM from incoming MIDI clock pulses (24 per quarter note).
@@ -185,7 +186,7 @@ pub struct ImpulseApp {
     // Auto-save: set when rack or session-worthy state changes; saved next frame.
     pub(crate) session_dirty: bool,
     /// Zone Y offsets (relative to scroll content top), updated each frame by rack_canvas.
-    pub(crate) zone_y: [f32; 3], // [global, voice, fxmod]
+    pub(crate) zone_y: [f32; 4], // [ai, global, voice, fxmod]
     /// Focused module kind — highlighted in the rack (set by API scroll or click).
     pub(crate) focused_module: Option<crate::state::ModuleKind>,
     /// Instant when the focused module was set (for shine animation).
@@ -200,6 +201,7 @@ pub struct ImpulseApp {
     native_ppp: f32,
     api_params_dirty: Arc<std::sync::atomic::AtomicBool>,
     pub(crate) touch_mode: Option<crate::state::ParamMode>,
+    pub(crate) zone_ai_collapsed: bool,
     pub(crate) zone_global_collapsed: bool,
     pub(crate) zone_voice_collapsed: bool,
     pub(crate) zone_fxmod_collapsed: bool,
@@ -362,7 +364,7 @@ impl ImpulseApp {
             add_menu_zone: None,
             module_drag: None,
             session_dirty: false,
-            zone_y: [0.0; 3],
+            zone_y: [0.0; 4],
             focused_module: None,
             focus_time: std::time::Instant::now(),
             last_saved_rack_sig: (0, 0),
@@ -377,6 +379,7 @@ impl ImpulseApp {
             native_ppp: 0.0, // captured on first frame after DPI is established
             api_params_dirty,
             touch_mode: None,
+            zone_ai_collapsed: false,
             zone_global_collapsed: false,
             zone_voice_collapsed: false,
             zone_fxmod_collapsed: false,
@@ -697,12 +700,8 @@ impl ImpulseApp {
                     self.focused_module = Some(kind);
                     self.focus_time = std::time::Instant::now();
                     if self.state.read().ui_prefs.llm_auto_scroll {
-                        let scroll_name = match kind.default_zone() {
-                            crate::state::Zone::Global => "global",
-                            crate::state::Zone::Voice => "voice",
-                            crate::state::Zone::FxMod => "fxmod",
-                        };
-                        self.state.write().scroll_target = Some(scroll_name.to_string());
+                        self.state.write().scroll_target =
+                            Some(kind.default_zone().scroll_name().to_string());
                     }
                 }
             }

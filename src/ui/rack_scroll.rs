@@ -104,17 +104,21 @@ pub(crate) fn handle_scroll(
                     })
             })
             .or_else(|| match t.to_ascii_lowercase().as_str() {
-                "global" => {
-                    app.zone_global_collapsed = false;
+                "ai" => {
+                    app.zone_ai_collapsed = false;
                     Some(app.zone_y[0])
+                }
+                "global" | "main" | "mainaudio" | "main_audio" => {
+                    app.zone_global_collapsed = false;
+                    Some(app.zone_y[1])
                 }
                 "voice" | "voices" | "drums" => {
                     app.zone_voice_collapsed = false;
-                    Some(app.zone_y[1])
+                    Some(app.zone_y[2])
                 }
                 "fxmod" | "fx" | "effects" | "modulation" => {
                     app.zone_fxmod_collapsed = false;
-                    Some(app.zone_y[2])
+                    Some(app.zone_y[3])
                 }
                 _ => None,
             });

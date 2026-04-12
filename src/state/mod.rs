@@ -229,9 +229,9 @@ pub struct AppState {
     /// `current_step` advances. Used for bar-based ramp timing.
     #[serde(skip)]
     pub global_step_count: u64,
-    /// API-requested zone collapse: (global, voice, fxmod). None = no change.
+    /// API-requested zone collapse: (ai, global, voice, fxmod). None = no change.
     #[serde(skip)]
-    pub collapse_requested: Option<(bool, bool, bool)>,
+    pub collapse_requested: Option<(bool, bool, bool, bool)>,
     /// Compact audio analysis text, auto-updated by the UI every ~2s.
     /// Injected into every LLM system prompt as global context.
     #[serde(skip)]
