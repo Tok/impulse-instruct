@@ -7,6 +7,43 @@ What's already built is documented in [docs/features.md](docs/features.md).
 
 ## v0.7.4 — next release
 
+### TOP PRIORITY — start with a refactoring session
+
+Before adding new features, spend a focused session on file splits and
+test coverage for logic added late in 0.7.3. Ship foundation first.
+
+- [ ] **Split `state/rack.rs`** (currently 999 LOC, AT the 1000 limit) —
+  extract pure layout logic into `state/rack_layout.rs`:
+  - `arrange_grid()` + the order() type-priority map
+  - `find_free_position()` + occupancy scan
+  - center-bias pass
+  - `strip_audio_cycles()` if it fits cleanly
+  Pure layout code, no behavior change, unblocks any further edit on rack.
+- [ ] **Split `state/mod.rs`** (971 LOC) — big struct defs and default
+  helpers dominate; move defaults into `state/defaults.rs`. The old
+  memory-flagged "AT 1000" priority.
+- [ ] **Regression tests for the scope bug fixed in 5ec3bb2**:
+    - `bass_scope_writes_bass_steps_and_notes`
+    - `bass_scope_cannot_write_bpm_or_swing`
+    - `kit_a_scope_cannot_touch_kit_b_patterns`
+    - `kit_b_scope_cannot_touch_kit_a_patterns`
+    - `drum_lengths_respects_kit_scope_per_key`
+    - `hoover_scope_can_write_hoover_len`
+    - `sequencer_scope_grants_all_fields_backwards_compat`
+    - `empty_scope_grants_everything`
+    These lock in the per-voice scope dispatch we just added — the bug
+    was silent for multiple releases, don't let it regress.
+- [ ] **Layout regression tests for the rack-centering fix in 781a736**:
+    - `arrange_grid_places_303_between_drums` — verify AcidBass lands
+      in grid_col between DrumKit808 and DrumKit909 when all three
+      present
+    - `add_module_stacks_without_overlap` — occupancy grid correctness
+    - `center_bias_shifts_row_bands_toward_center`
+- [ ] **Extract pure helpers in `llm_apply.rs` (744 LOC)** — the per-voice
+  dispatch I added this session is ripe for helper extraction (e.g.
+  `apply_bass_sequencer_fields(s, seq, locked) -> AppState`). Each
+  helper gets its own test.
+
 ### Agent tooling — gradual control & expressiveness
 
 - [ ] **LFO-as-tool for agents** — agents can schedule an LFO on any target
