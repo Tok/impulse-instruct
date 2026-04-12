@@ -135,31 +135,86 @@ pub(super) fn draw_ai_zone(
     draw_zone_grid_dots(ui, zone_left, zone_top, zone_top + zone_h, col_w);
 }
 
-/// Fixed 6-line viewport for an agent's last JSON response. Always reserves
-/// the same vertical space (even when empty) so long outputs can't push the
-/// following `t/s` / cycles line off the card.
+/// Fixed 6-line preview of an agent's last JSON response, painted directly
+/// via the clipped painter. Using a painter (instead of TextEdit/ScrollArea)
+/// guarantees the preview can't overflow its box — text beyond the 6-line
+/// viewport is simply not drawn, and lines beyond the rect bottom are
+/// clipped by `painter.with_clip_rect(rect)`.
 pub(crate) fn draw_last_response_preview(ui: &mut egui::Ui, last_resp: &str) {
     let font = egui::FontId::monospace(7.5);
     let row_h = ui.fonts(|f| f.row_height(&font));
-    let viewport_h = row_h * 6.0 + 4.0;
+    const LINES: usize = 6;
+    let viewport_h = row_h * LINES as f32 + 4.0;
     let viewport_w = ui.available_width();
-    let mut view: String = last_resp.chars().take(720).collect();
-    if last_resp.len() > 720 {
-        view.push('…');
+    let (rect, _) =
+        ui.allocate_exact_size(egui::vec2(viewport_w, viewport_h), egui::Sense::hover());
+    if last_resp.is_empty() {
+        return;
     }
-    ui.allocate_ui(egui::vec2(viewport_w, viewport_h), |ui| {
-        egui::ScrollArea::vertical()
-            .min_scrolled_height(viewport_h)
-            .max_height(viewport_h)
-            .auto_shrink([false, false])
-            .show(ui, |ui| {
-                egui::TextEdit::multiline(&mut view)
-                    .desired_rows(6)
-                    .desired_width(viewport_w)
-                    .font(font)
-                    .text_color(crate::ui::theme::SMOKE)
-                    .interactive(false)
-                    .show(ui);
+
+    let color = crate::ui::theme::SMOKE;
+    let painter = ui.painter_at(rect);
+    let available_text_w = (rect.width() - 4.0).max(1.0);
+
+    // Wrap existing newlines first, then word-wrap each to the viewport width.
+    let mut wrapped: Vec<String> = Vec::new();
+    'outer: for raw_line in last_resp.split('\n') {
+        if raw_line.is_empty() {
+            wrapped.push(String::new());
+            if wrapped.len() >= LINES {
+                break 'outer;
+            }
+            continue;
+        }
+        let mut current = String::new();
+        for ch in raw_line.chars() {
+            let candidate: String = current.chars().chain(std::iter::once(ch)).collect();
+            let w = ui.fonts(|f| {
+                f.layout_no_wrap(candidate.clone(), font.clone(), color)
+                    .size()
+                    .x
             });
-    });
+            if w > available_text_w && !current.is_empty() {
+                wrapped.push(std::mem::take(&mut current));
+                if wrapped.len() >= LINES {
+                    break 'outer;
+                }
+            }
+            current.push(ch);
+        }
+        if !current.is_empty() {
+            wrapped.push(current);
+            if wrapped.len() >= LINES {
+                break 'outer;
+            }
+        }
+    }
+    // Truncate ellipsis on the last line if we cut the response off.
+    if wrapped.len() >= LINES
+        && let Some(last) = wrapped.last_mut()
+        && !last.ends_with('…')
+    {
+        // Shorten enough to fit the ellipsis.
+        while ui.fonts(|f| {
+            let mut t = last.clone();
+            t.push('…');
+            f.layout_no_wrap(t, font.clone(), color).size().x
+        }) > available_text_w
+            && !last.is_empty()
+        {
+            last.pop();
+        }
+        last.push('…');
+    }
+
+    for (i, line) in wrapped.iter().take(LINES).enumerate() {
+        let y = rect.min.y + 2.0 + row_h * i as f32;
+        painter.text(
+            egui::pos2(rect.min.x + 2.0, y),
+            egui::Align2::LEFT_TOP,
+            line,
+            font.clone(),
+            color,
+        );
+    }
 }

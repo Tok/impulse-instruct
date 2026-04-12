@@ -315,15 +315,28 @@ narrate() {
     local id="$1" text="$2"
     local wavfile
     wavfile=$(tts_generate "$id" "$text")
+    if [ ! -s "$wavfile" ]; then
+        echo "  [narrate] SKIP (no wav): $id — \"$text\"" >&2
+        return 1
+    fi
     local dur
     dur=$(tts_duration "$wavfile")
     local start_sec
     start_sec=$(demo_elapsed)
 
     echo "${start_sec}|${dur}|${text}" >> "$NARRATION_LIST"
+    echo "  [narrate] $id (${dur}s): \"$text\"" >&2
 
     if [ "$blocking" -eq 1 ]; then
-        paplay "$wavfile" 2>/dev/null || aplay "$wavfile" 2>/dev/null
+        # Synchronous: paplay should block until the stream drains. If it
+        # exits non-zero (sink busy, no default sink, etc.), fall back to
+        # aplay. Small sleep after playback gives the PipeWire/ALSA stream
+        # time to release before the next clip opens a new one — without it
+        # rapid consecutive plays can silently drop.
+        if ! paplay "$wavfile" 2>&1; then
+            aplay "$wavfile" 2>&1 || echo "  [narrate] PLAY FAILED: $id" >&2
+        fi
+        sleep 0.15
     else
         (paplay "$wavfile" 2>/dev/null || aplay "$wavfile" 2>/dev/null) &
     fi
