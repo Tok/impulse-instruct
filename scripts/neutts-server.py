@@ -164,8 +164,14 @@ class NeuTTSHandler(BaseHTTPRequestHandler):
             return
 
         text = body.get("text", "")
-        ref_audio = body.get("ref_audio", "voices/default.wav")
-        ref_text = body.get("ref_text", "voices/default.txt")
+        # Accept voice_ref (stem) or explicit ref_audio/ref_text paths
+        voice_ref = body.get("voice_ref", body.get("ref_audio", "default"))
+        if not voice_ref.endswith(".wav"):
+            ref_audio = f"voices/{voice_ref}.wav"
+            ref_text = f"voices/{voice_ref}.txt"
+        else:
+            ref_audio = voice_ref
+            ref_text = body.get("ref_text", voice_ref.replace(".wav", ".txt"))
         out_path = body.get("out_path", f"/tmp/neutts_{int(time.time()*1e9)}.wav")
         temperature = float(body.get("temperature", 0.8))
         top_k = int(body.get("top_k", 30))
@@ -181,7 +187,15 @@ class NeuTTSHandler(BaseHTTPRequestHandler):
                 out_path=out_path, temperature=temperature, top_k=top_k,
                 top_p=top_p, model_path=self.model_path,
             )
-            self._json_response(result)
+            # Return WAV bytes directly for in-app use
+            with open(out_path, "rb") as f:
+                wav_data = f.read()
+            self.send_response(200)
+            self.send_header("Content-Type", "audio/wav")
+            self.send_header("Content-Length", str(len(wav_data)))
+            self.send_header("X-Duration-Ms", str(result.get("duration_ms", 0)))
+            self.end_headers()
+            self.wfile.write(wav_data)
         except Exception as e:
             self._json_response({"ok": False, "error": str(e)}, 500)
 

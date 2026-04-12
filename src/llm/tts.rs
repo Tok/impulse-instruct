@@ -43,7 +43,7 @@ pub fn speak_neutts(text: &str, tts: &TtsModuleState, tts_tx: &Arc<Mutex<Produce
     std::thread::spawn(move || {
         let client = match ureq::AgentBuilder::new()
             .timeout_connect(std::time::Duration::from_secs(2))
-            .timeout(std::time::Duration::from_secs(10))
+            .timeout(std::time::Duration::from_secs(30))
             .build()
             .post(&url)
             .send_json(&payload)

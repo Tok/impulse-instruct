@@ -50,119 +50,131 @@ pub fn draw_tts(app: &mut ImpulseApp, ui: &mut egui::Ui, module_id: u32) {
         )
     };
 
-    // Force left alignment so section headers don't center
-    ui.with_layout(egui::Layout::top_down(egui::Align::LEFT), |ui| {
-        if !enabled {
-            ui.add_space(2.0);
+    if !enabled {
+        ui.add_space(2.0);
+        ui.label(
+            egui::RichText::new("Module disabled")
+                .monospace()
+                .size(7.5)
+                .color(theme::PIT),
+        );
+        return;
+    }
+
+    ui.add_space(3.0);
+    widgets::section_header(ui, "NeuTTS Air");
+
+    let small_label = |text: &str| {
+        egui::RichText::new(text)
+            .monospace()
+            .size(8.0)
+            .color(theme::SMOKE)
+    };
+
+    // ── Voice selector ──────────────────────────────────────────────────────
+    let voices: Vec<String> = std::fs::read_dir("voices")
+        .ok()
+        .map(|entries| {
+            let mut v: Vec<String> = entries
+                .filter_map(|e| e.ok())
+                .filter_map(|e| {
+                    let n = e.file_name().to_string_lossy().to_string();
+                    n.strip_suffix(".wav").map(|s| s.to_string())
+                })
+                .collect();
+            v.sort();
+            v
+        })
+        .unwrap_or_default();
+    ui.horizontal(|ui| {
+        ui.label(small_label("VOICE"));
+        for name in &voices {
+            let active = *name == voice_ref;
+            let col = if active { theme::CHALK } else { theme::IRON };
+            let fill = if active {
+                egui::Color32::from_gray(50)
+            } else {
+                egui::Color32::TRANSPARENT
+            };
+            if ui
+                .add(
+                    egui::Button::new(
+                        egui::RichText::new(name.to_uppercase())
+                            .monospace()
+                            .size(7.5)
+                            .color(col),
+                    )
+                    .fill(fill)
+                    .min_size(egui::vec2(0.0, 14.0)),
+                )
+                .clicked()
+            {
+                let val = name.clone();
+                with_tts(app, module_id, |t| t.voice_ref = val);
+            }
+        }
+        if voices.is_empty() {
             ui.label(
-                egui::RichText::new("Module disabled")
+                egui::RichText::new("run scripts/generate-voices.sh")
                     .monospace()
-                    .size(7.5)
+                    .size(7.0)
                     .color(theme::PIT),
             );
-            return;
         }
+    });
 
-        ui.add_space(3.0);
-        widgets::section_header(ui, "NeuTTS Air");
+    // ── Temperature ─────────────────────────────────────────────────────────
+    ui.horizontal(|ui| {
+        ui.label(small_label("TEMP"));
+        let mut v = temperature;
+        if ui
+            .add(egui::DragValue::new(&mut v).range(0.1..=2.0).speed(0.01))
+            .changed()
+        {
+            with_tts(app, module_id, |t| t.temperature = v);
+        }
+    });
 
-        let small_label = |text: &str| {
-            egui::RichText::new(text)
-                .monospace()
-                .size(8.0)
-                .color(theme::SMOKE)
-        };
+    // ── Top-K ───────────────────────────────────────────────────────────────
+    ui.horizontal(|ui| {
+        ui.label(small_label("TOP-K"));
+        let mut v = top_k as i32;
+        if ui
+            .add(egui::DragValue::new(&mut v).range(1..=200).speed(1))
+            .changed()
+        {
+            let val = v as u16;
+            with_tts(app, module_id, |t| t.top_k = val);
+        }
+    });
 
-        // ── Voice reference ────────────────────────────────────────────────────
-        ui.horizontal(|ui| {
-            ui.label(small_label("VOICE"));
-            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                let mut v = voice_ref.clone();
-                let resp = ui.add(
-                    egui::TextEdit::singleline(&mut v)
-                        .desired_width(80.0)
-                        .font(egui::TextStyle::Monospace),
-                );
-                if resp.changed() {
-                    let val = v.clone();
-                    with_tts(app, module_id, |t| t.voice_ref = val);
-                }
-            });
-        });
-        ui.label(
-            egui::RichText::new("voice reference stem (voices/{ref}.wav)")
-                .monospace()
-                .size(7.0)
-                .color(theme::PIT),
-        );
+    // ── Top-P ───────────────────────────────────────────────────────────────
+    ui.horizontal(|ui| {
+        ui.label(small_label("TOP-P"));
+        let mut v = top_p;
+        if ui
+            .add(egui::DragValue::new(&mut v).range(0.1..=1.0).speed(0.01))
+            .changed()
+        {
+            with_tts(app, module_id, |t| t.top_p = v);
+        }
+    });
 
-        // ── Temperature ────────────────────────────────────────────────────────
-        ui.horizontal(|ui| {
-            ui.label(small_label("TEMP"));
-            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                let mut v = temperature;
-                if ui
-                    .add(egui::DragValue::new(&mut v).range(0.1..=2.0).speed(0.01))
-                    .changed()
-                {
-                    with_tts(app, module_id, |t| t.temperature = v);
-                }
-            });
-        });
-        ui.label(
-            egui::RichText::new("sampling temperature (0.5-1.5)")
-                .monospace()
-                .size(7.0)
-                .color(theme::PIT),
-        );
+    ui.add_space(3.0);
+    widgets::section_header(ui, "FX");
 
-        // ── Top-K ──────────────────────────────────────────────────────────────
-        ui.horizontal(|ui| {
-            ui.label(small_label("TOP-K"));
-            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                let mut v = top_k as i32;
-                if ui
-                    .add(egui::DragValue::new(&mut v).range(1..=200).speed(1))
-                    .changed()
-                {
-                    let val = v as u16;
-                    with_tts(app, module_id, |t| t.top_k = val);
-                }
-            });
-        });
-
-        // ── Top-P ──────────────────────────────────────────────────────────────
-        ui.horizontal(|ui| {
-            ui.label(small_label("TOP-P"));
-            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                let mut v = top_p;
-                if ui
-                    .add(egui::DragValue::new(&mut v).range(0.1..=1.0).speed(0.01))
-                    .changed()
-                {
-                    with_tts(app, module_id, |t| t.top_p = v);
-                }
-            });
-        });
-
-        ui.add_space(3.0);
-        widgets::section_header(ui, "FX");
-
-        // ── Pitch snap ──────────────────────────────────────────────────────────
-        ui.horizontal(|ui| {
-            ui.label(small_label("PITCH SNAP"));
-            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                let mut ps = pitch_snap;
-                if widgets::toggle_button(ui, if ps { "ON" } else { "OFF" }, &mut ps) {
-                    with_tts(app, module_id, |t| t.pitch_snap = ps);
-                }
-            });
-        });
-        ui.label(
-            egui::RichText::new("snap voice to nearest in-key note")
-                .monospace()
-                .size(7.0)
-                .color(theme::PIT),
-        );
-    }); // end left-aligned layout
+    // ── Pitch snap ──────────────────────────────────────────────────────────
+    ui.horizontal(|ui| {
+        ui.label(small_label("PITCH SNAP"));
+        let mut ps = pitch_snap;
+        if widgets::toggle_button(ui, if ps { "ON" } else { "OFF" }, &mut ps) {
+            with_tts(app, module_id, |t| t.pitch_snap = ps);
+        }
+    });
+    ui.label(
+        egui::RichText::new("snap voice to nearest in-key note")
+            .monospace()
+            .size(7.0)
+            .color(theme::PIT),
+    );
 }
