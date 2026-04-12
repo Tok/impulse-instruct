@@ -239,6 +239,12 @@ setup_neutts() {
     fi
   fi
 
+  # Generate voice references if missing
+  if [[ ! -f "voices/default.wav" ]]; then
+    echo "  Generating voice references..."
+    ./scripts/generate-voices.sh 2>/dev/null || true
+  fi
+
   # Verify
   if "$NEUTTS_VENV/bin/python" -c "from neutts import NeuTTS" 2>/dev/null; then
     echo ""
