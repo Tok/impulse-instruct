@@ -14,8 +14,8 @@ PROJECT_DIR="${DEMO_DIR}/.."
 NEUTTS_PORT="${NEUTTS_PORT:-8770}"
 NEUTTS_URL="http://127.0.0.1:${NEUTTS_PORT}"
 NEUTTS_VENV="${PROJECT_DIR}/.neutts-venv"
-NEUTTS_REF_AUDIO="${NEUTTS_REF_AUDIO:-${PROJECT_DIR}/voices/default.wav}"
-NEUTTS_REF_TEXT="${NEUTTS_REF_TEXT:-${PROJECT_DIR}/voices/default.txt}"
+NEUTTS_REF_AUDIO="${NEUTTS_REF_AUDIO:-${PROJECT_DIR}/voices/narrator.wav}"
+NEUTTS_REF_TEXT="${NEUTTS_REF_TEXT:-${PROJECT_DIR}/voices/narrator.txt}"
 NEUTTS_PID=""
 
 # Window ID — set by record-demo.sh after finding the app
@@ -475,6 +475,10 @@ pause() {
 generate_srt() {
     local outfile="${SRT_NAME:-${OUTPUT_DIR:-$DEMO_DIR}/demo_subtitles.srt}"
     local idx=0
+    # Stretch each subtitle's display window to 1.5× the TTS clip duration
+    # so the line stays on screen comfortably longer than the spoken audio.
+    # Override with SRT_DISPLAY_FACTOR env var (1.0 = audio-length only).
+    local factor="${SRT_DISPLAY_FACTOR:-1.5}"
 
     if [ ! -f "$NARRATION_LIST" ]; then
         echo "No narration entries found" >&2
@@ -484,8 +488,9 @@ generate_srt() {
     > "$outfile"
     while IFS='|' read -r start_sec dur text; do
         idx=$((idx + 1))
-        local end_sec
-        end_sec=$(echo "$start_sec + $dur" | bc)
+        local display_dur end_sec
+        display_dur=$(awk -v d="$dur" -v f="$factor" 'BEGIN { printf "%.3f", d * f }')
+        end_sec=$(echo "$start_sec + $display_dur" | bc)
 
         local start_ts end_ts
         start_ts=$(secs_to_srt "$start_sec")

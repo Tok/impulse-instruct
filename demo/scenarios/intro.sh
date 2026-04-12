@@ -13,7 +13,7 @@ scene "Setup"
 
 reset_rack
 
-say "Impulse Instruct. AI-controlled synthesizers. Let's build a rack."
+say "Impulse Instruct. AI-controlled audio synthesizers. Let's build a rack."
 
 say "Adding bass."
 add_instrument bass
@@ -98,7 +98,7 @@ look_at console
 wait_seconds 1
 show_cables
 wait_seconds 3
-say "Back panel. Control cables from the agent to each instrument."
+say "Back panel. Control cables connect the agent to each instrument."
 screenshot "v${VERSION}-intro-cables"
 show_knobs
 wait_seconds 1
@@ -223,7 +223,7 @@ scene "End"
 show_all
 
 say "Impulse Instruct."
-say "Build your rack, wire AI agents, make music with words."
+say "Build your rack, wire AI agents and generate music with words."
 say "Everything runs locally."
 
 stop

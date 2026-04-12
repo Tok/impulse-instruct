@@ -63,6 +63,7 @@ echo ""
 
 VOICES=(
     "default|en|50|140|Welcome to Impulse Instruct. This is an AI powered music production studio with modular synthesis, drum machines, and intelligent agents that create music together in real time."
+    "narrator|en-us+f3|55|150|Welcome to Impulse Instruct. This is an AI powered music production studio with modular synthesis, drum machines, and intelligent agents that create music together in real time."
     "mc|en+m3|65|170|Selector! Big up the junglist massive! We have the bass, we have the breaks, we have the riddim. Pull up and rewind! This one goes out to all the ravers in the building tonight."
     "dj|en+m4|40|130|Good evening ladies and gentlemen. Welcome to the show. Tonight we have a very special set lined up for you. Sit back, relax, and let the music take you on a journey through sound."
     "robot|en+m7|30|120|System initialised. Audio synthesis module online. All parameters nominal. Beginning music generation sequence. Standby for output."
