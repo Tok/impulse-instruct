@@ -431,7 +431,7 @@ pub fn module_card_sized<R>(
                     ui.spacing_mut().item_spacing = Vec2::new(2.0 * scale, 2.0 * scale);
                     ui.set_max_width(card_w - 12.0);
                     let draw_content = |ui: &mut egui::Ui| {
-                        ui.with_layout(egui::Layout::top_down(egui::Align::Center), |ui| {
+                        ui.with_layout(egui::Layout::top_down(egui::Align::LEFT), |ui| {
                             if enabled {
                                 content(ui)
                             } else {
