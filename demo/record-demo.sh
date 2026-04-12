@@ -342,6 +342,7 @@ if [ "$SKIP_VIDEO" -eq 0 ]; then
     WINDOW_ID_DEC=$(printf '%d' "$APP_WINDOW_ID")
 
     # setsid puts ffmpeg in its own process group — ensures kill -9 works
+    # Crop to even dimensions (yuv420p needs 2x2 blocks; odd window sizes break libx264)
     # -t 600 is a 10-minute safety net in case SIGINT fails
     setsid ffmpeg -y \
         -f x11grab \
@@ -350,6 +351,7 @@ if [ "$SKIP_VIDEO" -eq 0 ]; then
         -draw_mouse 0 \
         -i "${DISPLAY}" \
         -t 600 \
+        -vf "crop=trunc(iw/2)*2:trunc(ih/2)*2" \
         -pix_fmt yuv420p \
         -c:v h264_nvenc -preset p4 -cq 18 \
         -an \

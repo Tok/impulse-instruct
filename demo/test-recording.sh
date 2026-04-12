@@ -91,6 +91,9 @@ echo "  Geometry: ${GRAB_W}x${GRAB_H}"
 RAW_VIDEO="$BATCH_DIR/${BASENAME}-raw.mkv"
 echo "[3/7] Starting video capture → $(basename "$RAW_VIDEO")"
 
+# Crop to even dimensions (yuv420p needs 2x2 blocks; odd window sizes break libx264)
+EVEN_CROP="-vf crop=trunc(iw/2)*2:trunc(ih/2)*2"
+
 # -t 15 hard stops after 15s even if SIGINT fails
 setsid ffmpeg -y \
     -f x11grab \
@@ -99,7 +102,7 @@ setsid ffmpeg -y \
     -draw_mouse 0 \
     -i "${DISPLAY}" \
     -t 15 \
-    -pix_fmt yuv420p \
+    $EVEN_CROP -pix_fmt yuv420p \
     -c:v h264_nvenc -preset p4 -cq 20 \
     -an \
     "$RAW_VIDEO" \
@@ -116,7 +119,7 @@ if ! kill -0 "$FFMPEG_PID" 2>/dev/null; then
         -draw_mouse 0 \
         -i "${DISPLAY}" \
         -t 15 \
-        -pix_fmt yuv420p \
+        $EVEN_CROP -pix_fmt yuv420p \
         -c:v libx264 -preset ultrafast -crf 23 \
         -an \
         "$RAW_VIDEO" \
@@ -268,32 +271,35 @@ if [ -f "$RAW_VIDEO" ]; then
     CDIR="$BATCH_DIR/chroma_tests"
     mkdir -p "$CDIR"
 
+    # Ensure even dimensions for all re-encodes
+    PAD="-vf pad=ceil(iw/2)*2:ceil(ih/2)*2"
+
     echo -n "  1_plain_420p.mp4 ... "
-    ffmpeg -y -i "$RAW_VIDEO" -pix_fmt yuv420p \
+    ffmpeg -y -i "$RAW_VIDEO" $PAD -pix_fmt yuv420p \
         -c:v libx264 -preset fast -crf 20 \
         "$CDIR/1_plain_420p.mp4" </dev/null 2>/dev/null && echo "OK" || echo "FAIL"
 
     echo -n "  2_fullrange.mp4 ... "
     ffmpeg -y -i "$RAW_VIDEO" \
-        -vf "scale=in_range=full:out_range=full:flags=lanczos+accurate_rnd+full_chroma_int+full_chroma_inp" \
+        -vf "pad=ceil(iw/2)*2:ceil(ih/2)*2,scale=in_range=full:out_range=full:flags=lanczos+accurate_rnd+full_chroma_int+full_chroma_inp" \
         -pix_fmt yuv420p -color_range pc \
         -c:v libx264 -preset fast -crf 20 -x264-params fullrange=1 \
         "$CDIR/2_fullrange.mp4" </dev/null 2>/dev/null && echo "OK" || echo "FAIL"
 
     echo -n "  3_chromaloc.mp4 ... "
-    ffmpeg -y -i "$RAW_VIDEO" -pix_fmt yuv420p \
+    ffmpeg -y -i "$RAW_VIDEO" $PAD -pix_fmt yuv420p \
         -chroma_sample_location left \
         -colorspace bt709 -color_primaries bt709 -color_trc bt709 \
         -c:v libx264 -preset fast -crf 20 \
         "$CDIR/3_chromaloc.mp4" </dev/null 2>/dev/null && echo "OK" || echo "FAIL"
 
     echo -n "  4_yuv444p.mp4 ... "
-    ffmpeg -y -i "$RAW_VIDEO" -pix_fmt yuv444p -profile:v high444p \
+    ffmpeg -y -i "$RAW_VIDEO" $PAD -pix_fmt yuv444p -profile:v high444p \
         -c:v libx264 -preset fast -crf 20 \
         "$CDIR/4_yuv444p.mp4" </dev/null 2>/dev/null && echo "OK" || echo "FAIL"
 
     echo -n "  5_sws_lanczos.mp4 ... "
-    ffmpeg -y -i "$RAW_VIDEO" \
+    ffmpeg -y -i "$RAW_VIDEO" $PAD \
         -sws_flags "lanczos+accurate_rnd+full_chroma_int+full_chroma_inp" \
         -c:v libx264 -preset fast -crf 20 \
         "$CDIR/5_sws_lanczos.mp4" </dev/null 2>/dev/null && echo "OK" || echo "FAIL"
