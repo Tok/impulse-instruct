@@ -134,6 +134,7 @@ impl ImpulseApp {
                         super::scope_footer::draw_ring_scope_colored(
                             ui,
                             &self.scope_buf,
+                            &self.scope_history,
                             total_h,
                             huth_col,
                         );

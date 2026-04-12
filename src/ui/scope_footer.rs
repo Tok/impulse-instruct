@@ -400,19 +400,27 @@ pub fn draw_crt_overlay(ctx: &egui::Context) {
 /// Draw the scope buffer as a circular ring — a diagnostic/aesthetic display.
 /// `buf` is the most recent scope samples; `size` is the widget diameter.
 #[allow(dead_code)]
-pub fn draw_ring_scope(ui: &mut egui::Ui, buf: &[f32], size: f32) {
-    draw_ring_scope_colored(ui, buf, size, None);
+pub fn draw_ring_scope(
+    ui: &mut egui::Ui,
+    buf: &[f32],
+    history: &std::collections::VecDeque<Vec<f32>>,
+    size: f32,
+) {
+    draw_ring_scope_colored(ui, buf, history, size, None);
 }
 
-/// Ring scope with optional Huth color override.
+/// Ring scope with optional Huth color override. Uses the same phosphor
+/// persistence as `draw_scope_colored` — history frames fade from dim/thin
+/// to bright/thick, current frame drawn on top in CHALK (or Huth color).
 pub fn draw_ring_scope_colored(
     ui: &mut egui::Ui,
     buf: &[f32],
+    history: &std::collections::VecDeque<Vec<f32>>,
     size: f32,
     huth_color: Option<egui::Color32>,
 ) {
     let (rect, _) = ui.allocate_exact_size(egui::vec2(size, size), egui::Sense::hover());
-    if !ui.is_rect_visible(rect) || buf.is_empty() {
+    if !ui.is_rect_visible(rect) {
         return;
     }
     let painter = ui.painter();
@@ -420,43 +428,66 @@ pub fn draw_ring_scope_colored(
     let outer_r = size * 0.45;
     let inner_r = outer_r * 0.4;
 
-    // Background circle
+    // Background circles
     painter.circle_stroke(center, outer_r, egui::Stroke::new(1.0, theme::SLATE));
     painter.circle_stroke(center, inner_r, egui::Stroke::new(0.5, theme::IRON));
 
-    // Draw waveform as a polar plot
-    let n = buf.len().min(256);
-    let step = buf.len() / n;
-    let mut points = Vec::with_capacity(n + 1);
-    for i in 0..n {
-        let sample = buf[i * step];
-        let angle = (i as f32 / n as f32) * std::f32::consts::TAU - std::f32::consts::FRAC_PI_2;
-        let r = inner_r + (outer_r - inner_r) * (0.5 + sample.clamp(-0.5, 0.5));
-        points.push(egui::pos2(
-            center.x + angle.cos() * r,
-            center.y + angle.sin() * r,
-        ));
-    }
-    if let Some(&first) = points.first() {
-        points.push(first); // close the ring
-    }
-    // Phosphor glow: thicker dim layer underneath, then bright trace on top
-    let trace_col = huth_color.unwrap_or(egui::Color32::from_gray(160));
-    let glow_col = if huth_color.is_some() {
-        egui::Color32::from_rgba_unmultiplied(trace_col.r(), trace_col.g(), trace_col.b(), 60)
-    } else {
-        egui::Color32::from_gray(35)
+    // Project a scope buffer into a closed polar path.
+    let project = |frame: &[f32]| -> Vec<egui::Pos2> {
+        let n = frame.len().min(256);
+        if n < 2 {
+            return Vec::new();
+        }
+        let step = (frame.len() / n).max(1);
+        let mut pts = Vec::with_capacity(n + 1);
+        for i in 0..n {
+            let sample = frame[i * step];
+            let angle = (i as f32 / n as f32) * std::f32::consts::TAU - std::f32::consts::FRAC_PI_2;
+            let r = inner_r + (outer_r - inner_r) * (0.5 + sample.clamp(-0.5, 0.5));
+            pts.push(egui::pos2(
+                center.x + angle.cos() * r,
+                center.y + angle.sin() * r,
+            ));
+        }
+        if let Some(&first) = pts.first() {
+            pts.push(first);
+        }
+        pts
     };
+
+    // Phosphor trails — match draw_scope_colored exactly.
+    let hist_len = history.len();
+    for (age, frame) in history.iter().enumerate() {
+        let pts = project(frame);
+        if pts.len() < 2 {
+            continue;
+        }
+        let t = age as f32 / hist_len.max(1) as f32;
+        let brightness = (15.0 + t * 75.0) as u8;
+        let thickness = 1.0 + t * 0.8;
+        let col = egui::Color32::from_gray(brightness);
+        painter.add(egui::Shape::Path(egui::epaint::PathShape::line(
+            pts,
+            egui::Stroke::new(thickness, col),
+        )));
+    }
+
+    // Current frame on top, full brightness.
+    if buf.is_empty() {
+        return;
+    }
+    let pts = project(buf);
+    if pts.len() < 2 {
+        return;
+    }
+    let wave_col = huth_color.unwrap_or(theme::CHALK);
     painter.add(egui::Shape::Path(egui::epaint::PathShape::line(
-        points.clone(),
-        egui::Stroke::new(3.0, glow_col),
-    )));
-    painter.add(egui::Shape::Path(egui::epaint::PathShape::line(
-        points,
-        egui::Stroke::new(1.5, trace_col),
+        pts,
+        egui::Stroke::new(1.5, wave_col),
     )));
 
-    // Write-head dot: tracks the newest sample position on the ring
+    // Write-head dot on the outer edge.
+    let n = buf.len().min(256);
     let head_frac = (n.saturating_sub(1)) as f32 / n as f32;
     let head_angle = head_frac * std::f32::consts::TAU - std::f32::consts::FRAC_PI_2;
     let head_pos = egui::pos2(
