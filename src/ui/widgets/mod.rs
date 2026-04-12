@@ -44,6 +44,17 @@ fn alt_effective(ctx: &egui::Context) -> bool {
     key || locked
 }
 
+/// Check if Ctrl is effectively held — physical key OR footer lock.
+/// This is the modifier that cycles param lock modes when clicking knobs.
+/// (Alt would collide with window managers / OS menus.)
+fn ctrl_effective(ctx: &egui::Context) -> bool {
+    let key = ctx.input(|i| i.modifiers.ctrl || i.modifiers.command);
+    let locked = ctx
+        .data(|d| d.get_temp::<bool>(egui::Id::new("ctrl_locked")))
+        .unwrap_or(false);
+    key || locked
+}
+
 fn dir_key_down(ui: &Ui, arrow: egui::Key, wasd: egui::Key) -> bool {
     let wasd_on = ui
         .ctx()
@@ -146,18 +157,17 @@ fn mode_char(mode: ParamMode) -> &'static str {
     }
 }
 
-/// Hover tooltip text explaining the current mode and how to cycle.
-/// Knobs: right-click cycles. Sliders: click the ·/U/F button.
-fn mode_tooltip(mode: ParamMode) -> &'static str {
+/// Hover tooltip text for non-default modes. Returns None for Free so that
+/// ordinary untouched knobs don't show a lock hint — only those the user
+/// (or the LLM) has deliberately marked get the explanatory tooltip.
+fn mode_tooltip(mode: ParamMode) -> Option<&'static str> {
     match mode {
-        ParamMode::Free => {
-            "· Free — LLM and user both control this\nRight-click to lock to user only (U)"
-        }
-        ParamMode::UserOwned => {
-            "U User owned — LLM ignores this param, you still control it\nRight-click to set LLM focus (F)"
-        }
+        ParamMode::Free => None,
+        ParamMode::UserOwned => Some(
+            "Locked — LLM ignores this param, you still control it.\nCtrl+click to cycle: U → F → ·",
+        ),
         ParamMode::LlmFocus => {
-            "F LLM focus — model will actively drive this param\nRight-click to release (·)"
+            Some("Focused — model will actively drive this param.\nCtrl+click to cycle: F → · → U")
         }
     }
 }
@@ -230,12 +240,16 @@ pub fn knob(ui: &mut Ui, label: &str, value: &mut f32, mode: ParamMode, size: f3
         );
     }
 
-    let response = response.on_hover_text(mode_tooltip(mode));
-    // Alt+click: cycle lock mode. Uses clicked_by to distinguish from drag.
-    // Touch-paint mode: primary click sets mode.
-    let alt_held = alt_effective(&response.ctx);
+    // Only attach the lock-state tooltip when the knob is non-default —
+    // untouched knobs stay silent to avoid visual/verbal noise.
+    let response = match mode_tooltip(mode) {
+        Some(text) => response.on_hover_text(text),
+        None => response,
+    };
+    // Ctrl+click cycles lock mode. Touch-paint mode also uses primary click.
+    let ctrl_held = ctrl_effective(&response.ctx);
     let primary_click = response.clicked_by(egui::PointerButton::Primary);
-    let mode_cycled = primary_click && (alt_held || tmode.is_some());
+    let mode_cycled = primary_click && (ctrl_held || tmode.is_some());
     (changed, mode_cycled)
 }
 
@@ -455,7 +469,11 @@ pub fn slider(ui: &mut Ui, label: &str, value: &mut f32, mode: ParamMode) -> (bo
             .fill(egui::Color32::TRANSPARENT)
             .frame(false),
         );
-        if btn.on_hover_text(mode_tooltip(mode)).clicked() {
+        let btn = match mode_tooltip(mode) {
+            Some(text) => btn.on_hover_text(text),
+            None => btn.on_hover_text("Click to cycle lock mode (· → U → F)"),
+        };
+        if btn.clicked() {
             mode_cycled = true;
         }
     });
@@ -467,8 +485,8 @@ pub fn slider(ui: &mut Ui, label: &str, value: &mut f32, mode: ParamMode) -> (bo
 /// `ParamMode`. The mode drives the visual style so users can tell lock
 /// state at a glance:
 ///   • Free (unmanaged)     → chrome (default)
-///   • UserOwned (locked)   → chrome, darkened (mode_shift inside the widget)
-///   • LlmFocus (focused)   → flat/brushed — visibly distinct from chrome
+///   • LlmFocus (focused)   → chrome, brightened via mode_shift (+12)
+///   • UserOwned (locked)   → flat/brushed with visible spokes
 ///
 /// Returns `(value_changed, mode_cycled)`.
 pub fn param_control(
@@ -479,7 +497,7 @@ pub fn param_control(
     prefs: ControlPrefs,
 ) -> (bool, bool) {
     let style = match mode {
-        ParamMode::LlmFocus => ControlStyle::KnobFlat,
+        ParamMode::UserOwned => ControlStyle::KnobFlat,
         _ => prefs.style,
     };
     match style {
@@ -711,10 +729,13 @@ pub fn knob_chrome(
         );
     }
 
-    let response = response.on_hover_text(mode_tooltip(mode));
-    let alt_held = alt_effective(&response.ctx);
+    let response = match mode_tooltip(mode) {
+        Some(text) => response.on_hover_text(text),
+        None => response,
+    };
+    let ctrl_held = ctrl_effective(&response.ctx);
     let primary_click = response.clicked_by(egui::PointerButton::Primary);
-    let mode_cycled = primary_click && (alt_held || tmode.is_some());
+    let mode_cycled = primary_click && (ctrl_held || tmode.is_some());
     (changed, mode_cycled)
 }
 
