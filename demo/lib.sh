@@ -629,6 +629,58 @@ secs_to_srt() {
     printf "%02d:%02d:%02d,%03d" "$h" "$m" "$s" "$ms"
 }
 
+srt_time_to_secs() {
+    # HH:MM:SS,mmm → seconds (float).
+    local t="$1"
+    local h m s ms
+    IFS=':,' read -r h m s ms <<< "$t"
+    awk -v h="$h" -v m="$m" -v s="$s" -v ms="$ms" \
+        'BEGIN { printf "%.3f", h*3600 + m*60 + s + ms/1000 }'
+}
+
+srt_shift_seconds() {
+    # Subtract `offset` seconds from every timestamp in `file` (in place).
+    # Cues whose END time falls before 0 are dropped; cues whose START time
+    # falls before 0 are clipped to 0 so they still appear at the beginning.
+    local file="$1"
+    local offset="$2"
+    [ -f "$file" ] || return 1
+    local tmp
+    tmp="$(mktemp)"
+    awk -v offset="$offset" '
+        function ts_to_s(t,   h, m, s, ms, parts1, parts2) {
+            split(t, parts1, ",")
+            ms = parts1[2] + 0
+            split(parts1[1], parts2, ":")
+            h = parts2[1] + 0; m = parts2[2] + 0; s = parts2[3] + 0
+            return h*3600 + m*60 + s + ms/1000
+        }
+        function s_to_ts(x,   h, m, s, ms) {
+            if (x < 0) x = 0
+            h = int(x/3600); x -= h*3600
+            m = int(x/60);   x -= m*60
+            s = int(x)
+            ms = int((x - s)*1000 + 0.5)
+            return sprintf("%02d:%02d:%02d,%03d", h, m, s, ms)
+        }
+        BEGIN { block=""; drop=0 }
+        /^[0-9]+[[:space:]]*$/ && block=="" { idx=$0; block="idx"; next }
+        block=="idx" && /-->/ {
+            split($0, parts, " --> ")
+            a = ts_to_s(parts[1]) - offset
+            b = ts_to_s(parts[2]) - offset
+            if (b <= 0) { drop=1; block=""; idx=""; next }
+            printf "%s\n%s --> %s\n", idx, s_to_ts(a), s_to_ts(b)
+            block="text"; next
+        }
+        block=="text" && /^[[:space:]]*$/ { print ""; block=""; next }
+        block=="text" { print; next }
+        drop && /^[[:space:]]*$/ { drop=0; next }
+        drop { next }
+        { print }
+    ' "$file" > "$tmp" && mv "$tmp" "$file"
+}
+
 # ─── Window helpers (X11) ────────────────────────────────────────────────────
 
 find_app_window() {

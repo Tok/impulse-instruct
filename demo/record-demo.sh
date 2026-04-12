@@ -377,6 +377,11 @@ if [ "$SKIP_VIDEO" -eq 0 ]; then
     # Convert hex window ID to decimal for ffmpeg -window_id
     WINDOW_ID_DEC=$(printf '%d' "$APP_WINDOW_ID")
 
+    # Mark the video start timestamp *before* spawning ffmpeg so narration
+    # log timestamps can be translated into video-relative times (SRT ends
+    # up in sync with the actual recording, not scenario-relative).
+    export VIDEO_START_NS
+    VIDEO_START_NS=$(date +%s%N)
     # setsid puts ffmpeg in its own process group — ensures kill -9 works
     # Crop to even dimensions (yuv420p needs 2x2 blocks; odd window sizes break libx264)
     # -t 600 is a 10-minute safety net in case SIGINT fails
@@ -399,14 +404,19 @@ if [ "$SKIP_VIDEO" -eq 0 ]; then
 else
     echo "[4/6] Skipping capture (--skip-video)"
     echo "[5/6] Running scenario without recording..."
+    # No video — use now as the reference so demo_elapsed still reports
+    # positive times.
+    export VIDEO_START_NS
+    VIDEO_START_NS=$(date +%s%N)
 fi
 
 # Clear narration log
 rm -f "$NARRATION_LIST"
 
-# Record start time (nanoseconds)
+# DEMO_START_NS kept as an alias for scripts that reference it; both now
+# point at video t=0 so runtime narration timestamps are video-relative.
 export DEMO_START_NS
-DEMO_START_NS=$(date +%s%N)
+DEMO_START_NS="$VIDEO_START_NS"
 
 echo ""
 echo "  Running scenario: $SCENARIO"
@@ -510,17 +520,30 @@ if [ "$SKIP_VIDEO" -eq 0 ]; then
     # Base name for output variants
     BASE="${BATCH_DIR}/${BASENAME}"
 
-    # Prefer the pre-generated SRT (parsed from scenario + clip durations).
-    # Fall back to runtime NARRATION_LIST if pre-gen didn't happen (--no-tts).
+    # Prefer RUNTIME-timestamped subtitles (from narrate() logging actual
+    # start_sec when each clip plays) — these stay in sync with what's
+    # actually in the recording. The scenario's API/inference/UI calls have
+    # variable runtime and the pre-gen SRT's estimated timings drift.
+    # Pre-generated SRT is only used as a fallback when no runtime log
+    # exists (e.g. recording aborted before the scenario finished).
     SRT_FILE=""
-    if [ -n "${PREGEN_SRT:-}" ] && [ -s "${PREGEN_SRT:-/dev/null}" ]; then
-        cp "$PREGEN_SRT" "${BASE}.srt"
-        SRT_FILE="${BASE}.srt"
-        echo "  Subtitles (pre-generated): $SRT_FILE"
-    elif [ -f "$NARRATION_LIST" ] && [ -s "$NARRATION_LIST" ]; then
+    if [ -f "$NARRATION_LIST" ] && [ -s "$NARRATION_LIST" ]; then
         SRT_NAME="${BASE}.srt" generate_srt >/dev/null
         SRT_FILE="${BASE}.srt"
+        # Shift SRT timestamps back by TRIM_START so they line up with the
+        # trimmed video timeline (ffmpeg's -ss before -i resets output PTS
+        # to 0 but doesn't adjust the external subtitles file).
+        if [ "$TRIM_START" -gt 0 ] 2>/dev/null; then
+            srt_shift_seconds "$SRT_FILE" "$TRIM_START" || true
+        fi
         echo "  Subtitles (runtime): $SRT_FILE"
+    elif [ -n "${PREGEN_SRT:-}" ] && [ -s "${PREGEN_SRT:-/dev/null}" ]; then
+        cp "$PREGEN_SRT" "${BASE}.srt"
+        SRT_FILE="${BASE}.srt"
+        if [ "$TRIM_START" -gt 0 ] 2>/dev/null; then
+            srt_shift_seconds "$SRT_FILE" "$TRIM_START" || true
+        fi
+        echo "  Subtitles (pre-generated fallback): $SRT_FILE"
     else
         echo "  Subtitles: none (no narration entries)"
     fi
