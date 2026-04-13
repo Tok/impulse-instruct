@@ -114,12 +114,29 @@ pub fn draw_tts(app: &mut ImpulseApp, ui: &mut egui::Ui, module_id: u32) {
             }
         }
         if voices.is_empty() {
+            // Empty state mirrors the AmenSampler panel: a hint + a GET
+            // button that opens LibriVox on Internet Archive, which is
+            // the most reliable source of clean, single-speaker clips
+            // for NeuTTS voice cloning.  See voices/README.md for the
+            // full workflow.
             ui.label(
-                egui::RichText::new("run scripts/generate-voices.sh")
+                egui::RichText::new("No voices in voices/")
                     .monospace()
                     .size(7.0)
                     .color(theme::PIT),
             );
+            if ui
+                .small_button(egui::RichText::new("GET").monospace().size(7.0))
+                .on_hover_text(
+                    "Open archive.org/details/librivoxaudio\n\
+                     Download a short clean WAV (3–15s of one speaker, no music)\n\
+                     and drop it into voices/ alongside a .txt transcript.",
+                )
+                .clicked()
+            {
+                let _ =
+                    crate::ui::util::webbrowser_open("https://archive.org/details/librivoxaudio");
+            }
         }
     });
 

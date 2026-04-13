@@ -320,3 +320,23 @@ else
     echo "  Skipped. Run later: ./scripts/download-models.sh neutts"
   fi
 fi
+
+# ── Optional sample packs (not auto-downloaded — just a reminder) ────────────
+# These aren't bundled with the app or shipped via HuggingFace.  Point the
+# user at archive.org and let them grab whichever packs they like.
+echo ""
+echo "─── Optional sample packs ──────────────────────────────────────────────────"
+echo "  Impulse Instruct doesn't bundle audio samples.  Grab what you want:"
+echo ""
+echo "  Amen breaks (for the AMEN sampler module)"
+echo "    https://archive.org/details/amen-breaks"
+echo "    https://archive.org/details/amen-breaks-compilation"
+echo "    → extract .wav files into  samples/amen/"
+echo ""
+echo "  Voice references (for the NeuTTS MC / TTS module)"
+echo "    https://archive.org/details/librivoxaudio      (clean, recommended)"
+echo "    https://commonvoice.mozilla.org/                (CC0 short clips)"
+echo "    → drop a 3–15s mono WAV into  voices/"
+echo "      alongside a matching  voices/<name>.txt  transcript"
+echo "    (or run ./scripts/generate-voices.sh for robotic espeak-ng defaults)"
+echo "────────────────────────────────────────────────────────────────────────────"

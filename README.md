@@ -92,6 +92,18 @@ download-models.bat neutts
 
 The scripts will offer manual-download instructions if no CLI tool is found; nothing needs to be installed.
 
+### 1b - Optional sample packs (free, from the Internet Archive)
+
+Impulse Instruct doesn't bundle audio samples. Two modules benefit from user-dropped content:
+
+- **Amen breaks** for the `AMEN` sampler module — grab a `.zip` from
+  [archive.org/details/amen-breaks](https://archive.org/details/amen-breaks) or
+  [amen-breaks-compilation](https://archive.org/details/amen-breaks-compilation)
+  and extract `.wav` files into `samples/amen/`. The module's GET button opens the page in your browser.
+- **Voice references** for the NeuTTS MC / DJ module — a 3–15s clean mono WAV of one speaker, plus a matching `.txt` transcript. [LibriVox audiobooks on the Internet Archive](https://archive.org/details/librivoxaudio) are the easiest clean source. Drop `voices/myvoice.wav` + `voices/myvoice.txt`.
+
+Both directories exist in the release zip with a README pointing at the same links.
+
 ### 2 - Run
 
 Linux:

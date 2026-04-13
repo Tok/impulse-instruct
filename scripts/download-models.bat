@@ -181,6 +181,21 @@ if exist "%OUTPUT_PATH%" (
     echo [OK] Model ready: %OUTPUT_PATH%
     echo.
     echo Run with: start.bat
+    echo.
+    echo ---- Optional sample packs ------------------------------------------
+    echo   Impulse Instruct doesn't bundle audio samples. Grab what you want:
+    echo.
+    echo   Amen breaks [for the AMEN sampler module]
+    echo     https://archive.org/details/amen-breaks
+    echo     https://archive.org/details/amen-breaks-compilation
+    echo     -^> extract .wav files into  samples\amen\
+    echo.
+    echo   Voice references [for the NeuTTS MC / TTS module]
+    echo     https://archive.org/details/librivoxaudio     [clean, recommended]
+    echo     https://commonvoice.mozilla.org/               [CC0 short clips]
+    echo     -^> drop a 3-15s mono WAV into  voices\
+    echo        alongside a matching  voices\^<name^>.txt  transcript
+    echo ---------------------------------------------------------------------
 ) else (
     echo.
     echo ERROR: Download failed. File not found at %OUTPUT_PATH%
