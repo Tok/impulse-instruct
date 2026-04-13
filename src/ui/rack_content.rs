@@ -20,9 +20,7 @@ pub(super) fn draw_voice_content(
         ModuleKind::AmenSampler => crate::ui::panels::draw_amen(app, ui),
         ModuleKind::NoiseVoice => crate::ui::panels::draw_noise(app, ui),
         ModuleKind::GranularTexture => crate::ui::panels::draw_granular(app, ui),
-        ModuleKind::EspeakNgTts | ModuleKind::CoquiTts => {
-            crate::ui::panels::draw_tts(app, ui, module_id)
-        }
+        ModuleKind::NeuTts => crate::ui::panels::draw_tts(app, ui, module_id),
         _ => {}
     }
 }
@@ -39,6 +37,7 @@ pub(super) fn draw_fx_content(app: &mut ImpulseApp, ui: &mut egui::Ui, kind: Mod
     let focused = app.state.read().llm.focused_params.clone();
     let pm = |path: &str| crate::state::param_mode(path, &locked, &focused);
     let mut changed = false;
+    ui.spacing_mut().item_spacing.x = crate::ui::panels::KNOB_SPACING;
 
     // Helper: horizontal row of knobs
     macro_rules! hk {
@@ -58,7 +57,7 @@ pub(super) fn draw_fx_content(app: &mut ImpulseApp, ui: &mut egui::Ui, kind: Mod
             hk!(
                 ui,
                 ("SIZE", &mut rs, pm("fx.reverb_size")),
-                ("DAMP", &mut rd, pm("fx.reverb_damp")),
+                ("DAMPING", &mut rd, pm("fx.reverb_damp")),
                 ("MIX", &mut rm, pm("fx.reverb_mix"))
             );
             if changed || rs != app.state.read().fx.reverb_size {
@@ -76,7 +75,7 @@ pub(super) fn draw_fx_content(app: &mut ImpulseApp, ui: &mut egui::Ui, kind: Mod
             hk!(
                 ui,
                 ("TIME", &mut dt, pm("fx.delay_time")),
-                ("FDBK", &mut df, pm("fx.delay_feedback")),
+                ("FEEDBACK", &mut df, pm("fx.delay_feedback")),
                 ("MIX", &mut dm, pm("fx.delay_mix"))
             );
             if changed || dt != app.state.read().fx.delay_time {
@@ -151,8 +150,8 @@ pub(super) fn draw_fx_content(app: &mut ImpulseApp, ui: &mut egui::Ui, kind: Mod
             };
             hk!(
                 ui,
-                ("THR", &mut th, pm("fx.compressor_threshold")),
-                ("RAT", &mut ra, pm("fx.compressor_ratio")),
+                ("THRESH", &mut th, pm("fx.compressor_threshold")),
+                ("RATIO", &mut ra, pm("fx.compressor_ratio")),
                 ("MIX", &mut mi, pm("fx.compressor_mix"))
             );
             if changed || th != app.state.read().fx.compressor_threshold {
@@ -169,8 +168,8 @@ pub(super) fn draw_fx_content(app: &mut ImpulseApp, ui: &mut egui::Ui, kind: Mod
             };
             hk!(
                 ui,
-                ("DRV", &mut dr, pm("fx.tape_drive")),
-                ("FLTR", &mut fl, pm("fx.tape_flutter")),
+                ("DRIVE", &mut dr, pm("fx.tape_drive")),
+                ("FLUTTER", &mut fl, pm("fx.tape_flutter")),
                 ("MIX", &mut mi, pm("fx.tape_mix"))
             );
             if changed || dr != app.state.read().fx.tape_drive {
@@ -187,7 +186,7 @@ pub(super) fn draw_fx_content(app: &mut ImpulseApp, ui: &mut egui::Ui, kind: Mod
             };
             hk!(
                 ui,
-                ("DRV", &mut dr, pm("fx.distortion_drive")),
+                ("DRIVE", &mut dr, pm("fx.distortion_drive")),
                 ("MIX", &mut mi, pm("fx.distortion_mix"))
             );
             if changed {
@@ -203,7 +202,7 @@ pub(super) fn draw_fx_content(app: &mut ImpulseApp, ui: &mut egui::Ui, kind: Mod
             };
             hk!(
                 ui,
-                ("AMT", &mut amt, pm("fx.autotune_amount")),
+                ("AMOUNT", &mut amt, pm("fx.autotune_amount")),
                 ("MIX", &mut mi, pm("fx.autotune_mix"))
             );
             if changed {
@@ -219,7 +218,7 @@ pub(super) fn draw_fx_content(app: &mut ImpulseApp, ui: &mut egui::Ui, kind: Mod
             };
             hk!(
                 ui,
-                ("DRV", &mut dr, pm("fx.waveshaper_drive")),
+                ("DRIVE", &mut dr, pm("fx.waveshaper_drive")),
                 ("MIX", &mut mi, pm("fx.waveshaper_mix"))
             );
             if changed {
@@ -267,6 +266,18 @@ pub(super) fn draw_fx_content(app: &mut ImpulseApp, ui: &mut egui::Ui, kind: Mod
 
     if changed {
         app.push_audio_params();
+        // Observe key FX params for style tracking
+        let fx = &app.state.read().fx.clone();
+        app.observe_edits(&[
+            ("fx.reverb_mix", fx.reverb_mix),
+            ("fx.delay_mix", fx.delay_mix),
+            ("fx.delay_feedback", fx.delay_feedback),
+            ("fx.chorus_mix", fx.chorus_mix),
+            ("fx.compressor_threshold", fx.compressor_threshold),
+            ("fx.distortion_drive", fx.distortion_drive),
+            ("fx.master_volume", fx.master_volume),
+            ("fx.stereo_width", fx.stereo_width),
+        ]);
     }
 }
 
@@ -331,6 +342,11 @@ pub(super) fn draw_master_content(app: &mut ImpulseApp, ui: &mut egui::Ui) {
 // ─── LLM agent card content ──────────────────────────────────────────────────
 
 pub(super) fn draw_llm_agent_content(app: &mut ImpulseApp, ui: &mut egui::Ui, module_id: u32) {
+    // Width is constrained by the grid; height auto-sizes to content.
+    draw_llm_agent_inner(app, ui, module_id);
+}
+
+fn draw_llm_agent_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, module_id: u32) {
     use crate::ui::theme;
 
     let agent_idx = {
@@ -540,7 +556,6 @@ pub(super) fn draw_llm_agent_content(app: &mut ImpulseApp, ui: &mut egui::Ui, mo
                 .color(theme::IRON),
         );
     }
-
     // ── Conversation mode + thinking ───────────────────────────────────
     ui.horizontal(|ui| {
         ui.spacing_mut().item_spacing.x = 2.0;
@@ -608,7 +623,6 @@ pub(super) fn draw_llm_agent_content(app: &mut ImpulseApp, ui: &mut egui::Ui, mo
             app.state.write().llm_agents[idx].enable_thinking = !enable_thinking;
         }
     });
-
     // ── Role + autonomy permissions ─────────────────────────────────────
     ui.horizontal(|ui| {
         ui.spacing_mut().item_spacing.x = 2.0;
@@ -661,7 +675,6 @@ pub(super) fn draw_llm_agent_content(app: &mut ImpulseApp, ui: &mut egui::Ui, mo
             app.state.write().llm_agents[idx].can_dismiss = !can_dismiss;
         }
     });
-
     // ── Style selector ──────────────────────────────────────────────────
     {
         use crate::llm::styles::StyleCatalog;
@@ -729,7 +742,6 @@ pub(super) fn draw_llm_agent_content(app: &mut ImpulseApp, ui: &mut egui::Ui, mo
                 }
             });
     }
-
     // ── User instructions ───────────────────────────────────────────────
     let instr_resp = ui.add(
         egui::TextEdit::multiline(&mut user_instructions)
@@ -742,7 +754,6 @@ pub(super) fn draw_llm_agent_content(app: &mut ImpulseApp, ui: &mut egui::Ui, mo
     if instr_resp.changed() {
         app.state.write().llm_agents[idx].user_instructions = user_instructions;
     }
-
     // ── System prompt override ──────────────────────────────────────────
     let has_override = !prompt_override.is_empty();
     let ovr_header = if has_override {
@@ -777,17 +788,7 @@ pub(super) fn draw_llm_agent_content(app: &mut ImpulseApp, ui: &mut egui::Ui, mo
             app.state.write().llm_agents[idx].system_prompt_override = prompt_override;
         }
     });
-
-    // ── Stats + last response ────────────────────────────────────────────
-    if !last_resp.is_empty() {
-        let snippet: String = last_resp.chars().take(80).collect();
-        ui.label(
-            egui::RichText::new(snippet)
-                .color(theme::SMOKE)
-                .monospace()
-                .size(7.5),
-        );
-    }
+    super::rack_ai::draw_last_response_preview(ui, &last_resp);
     ui.horizontal(|ui| {
         ui.label(
             egui::RichText::new(format!("{:.1} t/s  #{}", tps, cycles))
@@ -799,7 +800,6 @@ pub(super) fn draw_llm_agent_content(app: &mut ImpulseApp, ui: &mut egui::Ui, mo
 }
 
 // ─── Cable drag interaction ───────────────────────────────────────────────────
-
 pub(super) fn handle_cable_drag(
     app: &mut ImpulseApp,
     ctx: &egui::Context,
@@ -865,7 +865,6 @@ pub(super) fn handle_cable_drag(
 }
 
 // ─── Drag helpers (moved from rack_canvas.rs to stay under 1000-line limit) ──
-
 use crate::ui::rack_cables::ModuleDrag;
 
 /// Process drag start/stop from a card response and update app.module_drag.
@@ -875,12 +874,31 @@ pub(super) fn handle_title_drag(
     ctx: &egui::Context,
     id: u32,
     resp: &module_card::CardResponse,
+    zone: crate::state::Zone,
+    zone_origin: egui::Pos2,
+    step: f32,
+    col_w: f32,
 ) -> bool {
     if resp.title_dragged {
         if app.module_drag.as_ref().map(|d| d.module_id) != Some(id) {
+            let (cw, rh) = app
+                .state
+                .read()
+                .rack
+                .modules
+                .iter()
+                .find(|m| m.id == id)
+                .map(|m| m.kind.grid_size(crate::state::GRID_COLS))
+                .unwrap_or((1, 1));
             app.module_drag = Some(ModuleDrag {
                 module_id: id,
                 pointer: ctx.pointer_latest_pos().unwrap_or_default(),
+                zone,
+                col_span: cw,
+                row_span: rh,
+                zone_origin,
+                step,
+                col_w,
             });
         } else if let Some(ref mut drag) = app.module_drag {
             drag.pointer = ctx.pointer_latest_pos().unwrap_or(drag.pointer);
@@ -893,60 +911,79 @@ pub(super) fn handle_title_drag(
     false
 }
 
-/// After a drop, reorder module slots so dragged module ends up at the position
-/// closest to `drop_pos` within its zone's ordered list.
+/// Snap-to-grid drop: compute the target grid cell from the pointer position
+/// and move the module there if the cell is free (or swap with occupant).
 pub(super) fn reorder_module_by_drop(
     app: &mut ImpulseApp,
     dragged_id: u32,
     drop_pos: egui::Pos2,
     zone: crate::state::Zone,
-    screen_width: f32,
+    zone_origin: egui::Pos2,
+    step: f32,
+    col_w: f32,
 ) {
-    use super::rack_canvas::module_slot_w;
-    let available_w = screen_width.max(400.0);
-    let zone_entries: Vec<(u32, ModuleKind)> = {
-        let rack = app.state.read();
-        let mut v: Vec<_> = rack
-            .rack
+    let (col_span, row_span) = app
+        .state
+        .read()
+        .rack
+        .modules
+        .iter()
+        .find(|m| m.id == dragged_id)
+        .map(|m| m.kind.grid_size(crate::state::GRID_COLS))
+        .unwrap_or((1, 1));
+
+    // Compute snap target from pointer position relative to zone origin.
+    let rel_x = drop_pos.x - zone_origin.x;
+    let rel_y = drop_pos.y - zone_origin.y;
+    let snap_col = (rel_x / step).round().max(0.0) as u8;
+    let snap_row = (rel_y / step).round().max(0.0) as u8;
+    let snap_col = snap_col.min(crate::state::GRID_COLS.saturating_sub(col_span));
+
+    // Check current position — no-op if unchanged.
+    let current = app
+        .state
+        .read()
+        .rack
+        .modules
+        .iter()
+        .find(|m| m.id == dragged_id)
+        .map(|m| (m.grid_col, m.grid_row));
+    if current == Some((snap_col, snap_row)) {
+        return;
+    }
+
+    // Overlap check: reject drop if any other module in the same zone occupies
+    // any cell in the target (snap_col..+col_span, snap_row..+row_span) block.
+    let blocked = {
+        let s = app.state.read();
+        s.rack
             .modules
             .iter()
-            .filter(|m| m.zone == zone)
-            .collect();
-        v.sort_by_key(|m| m.slot);
-        v.iter().map(|m| (m.id, m.kind)).collect()
+            .filter(|m| m.id != dragged_id && m.zone == zone)
+            .any(|m| {
+                let (mw, mh) = m.kind.grid_size(crate::state::GRID_COLS);
+                // AABB overlap test
+                snap_col < m.grid_col + mw
+                    && m.grid_col < snap_col + col_span
+                    && snap_row < m.grid_row + mh
+                    && m.grid_row < snap_row + row_span
+            })
     };
-    let zone_ids: Vec<u32> = zone_entries.iter().map(|&(id, _)| id).collect();
-    let Some(from_idx) = zone_ids.iter().position(|&id| id == dragged_id) else {
-        return;
-    };
-    let n = zone_ids.len();
-    if n < 2 {
-        return;
+    if blocked {
+        return; // target occupied — keep original position
     }
-    let x = (drop_pos.x - 8.0).max(0.0);
-    let gap = 4.0f32;
-    let mut cursor = 0.0f32;
-    let mut to_idx = 0usize;
-    for (i, &(_, kind)) in zone_entries.iter().enumerate() {
-        let w = module_slot_w(kind, available_w);
-        let mid = cursor + w * 0.5;
-        if x >= mid {
-            to_idx = i + 1;
-        }
-        cursor += w + gap;
-    }
-    let to_idx = to_idx.clamp(0, n - 1);
-    if from_idx == to_idx {
-        return;
-    }
+
     app.push_history();
-    let mut ids = zone_ids;
-    let removed = ids.remove(from_idx);
-    ids.insert(to_idx, removed);
-    let mut state = app.state.write();
-    for (slot, &id) in ids.iter().enumerate() {
-        if let Some(m) = state.rack.modules.iter_mut().find(|m| m.id == id) {
-            m.slot = slot as u8;
-        }
+    if let Some(m) = app
+        .state
+        .write()
+        .rack
+        .modules
+        .iter_mut()
+        .find(|m| m.id == dragged_id)
+    {
+        m.grid_col = snap_col;
+        m.grid_row = snap_row;
     }
+    let _ = col_w;
 }

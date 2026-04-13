@@ -27,6 +27,8 @@ add_agent NEON bonsai "" mc tts
 
 wait_for_model
 
+set_bpm 108
+
 # ── Scene 2: Arpeggiated bass ──────────────────────────────────────────────
 
 scene "Driving bass"
@@ -36,7 +38,7 @@ look_at sequencer
 play
 wait_seconds 1
 
-ask "synthwave, 108 BPM, driving arpeggiated bass line, minor key"
+ask "Style is synthwave at 108 BPM. Driving arpeggiated bass line in a minor key, use 4 distinct scale pitches spread across both halves of the bank"
 
 focus_on bass
 
@@ -60,7 +62,7 @@ scene "808 drums"
 
 focus_on 808
 
-ask "gated snare on two and four, steady kick, eighth note hats"
+ask "steady kick on kit_a steps 0,8,16,24. Gated snare on 4,12,20,28. Eighth-note hats on 0,2,4,6,8,10,12,14,16,18,20,22,24,26,28,30 with velocity variation. Pan hihat 0.3, clap -0.3, kick/snare center."
 
 say "Gated reverb snare is the signature sound."
 wait_seconds 3
@@ -69,9 +71,10 @@ wait_seconds 3
 
 scene "Chorus and reverb"
 
-ask "big chorus on the pad, long cinematic reverb, tempo synced delay"
+# Deterministic synthwave FX bed — wide chorus, long reverb, tempo-synced delay.
+api_params '{"fx": {"chorus_mix": 0.35, "chorus_depth": 0.6, "chorus_rate": 0.25, "reverb_mix": 0.28, "reverb_size": 0.75, "reverb_gate_time": 0.45, "delay_mix": 0.2, "delay_time": 0.5, "delay_feedback": 0.45, "stereo_width": 0.75}}'
 
-say "Chorus, reverb, and delay. Wide stereo image."
+say "Chorus, long plate reverb with a gate, and a half-note delay. Wide stereo image."
 wait_seconds 3
 
 # ── Scene 6: The MC ────────────────────────────────────────────────────────
@@ -82,11 +85,11 @@ look_at console
 
 say "The NEON agent runs in MC mode with TTS. It generates lines and speaks them."
 
-ask "chrome sunset, neon grid, digital highway, palm trees in the rain" NEON
+ask "rhyme a short couplet about a beach car chase under a neon sunset — keep it punchy, two lines, internal rhyme if you can" NEON
 
 wait_seconds 8
 
-say "The Bonsai model generates text, espeak renders it. Pitch snap quantises to the key."
+say "Bonsai writes the couplet, NeuTTS renders it. Pitch snap quantises to the key."
 wait_seconds 3
 
 # ── Scene 7: Full scene ───────────────────────────────────────────────────
@@ -98,7 +101,7 @@ show_all
 ask "more movement, open the filter, build it up"
 wait_seconds 5
 
-ask "electric dreams, laser horizon, the city never sleeps" NEON
+ask "rhyme another couplet — palm trees, chrome wheels, a getaway down the coastal road, neon skyline. two lines, make it rhyme" NEON
 
 wait_seconds 8
 

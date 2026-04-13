@@ -20,7 +20,7 @@ pub fn draw_pattern_chain(app: &mut ImpulseApp, ui: &mut egui::Ui) {
 
     // Bank slots
     ui.label(
-        egui::RichText::new("BNK")
+        egui::RichText::new("BANK")
             .color(theme::SMOKE)
             .monospace()
             .size(8.0),
@@ -52,7 +52,7 @@ pub fn draw_pattern_chain(app: &mut ImpulseApp, ui: &mut egui::Ui) {
 
     // Chain slots (compact)
     ui.label(
-        egui::RichText::new("CHN")
+        egui::RichText::new("CHAIN")
             .color(theme::SMOKE)
             .monospace()
             .size(8.0),

@@ -19,7 +19,8 @@ pub(crate) fn resolve_focus_kind(target: &str) -> Option<ModuleKind> {
         "delay" => Some(ModuleKind::FxDelay),
         "chorus" => Some(ModuleKind::FxChorus),
         "lfo" => Some(ModuleKind::LfoModule),
-        "console" | "llm" | "agent" => Some(ModuleKind::LlmConsole),
+        "console" | "llm" => Some(ModuleKind::LlmConsole),
+        "agent" | "llm_agent" | "agents" => Some(ModuleKind::LlmAgent),
         "spectrum" => Some(ModuleKind::SpectrumAnalyzer),
         "master" => Some(ModuleKind::MasterOutput),
         _ => None,
@@ -36,6 +37,21 @@ pub(crate) fn handle_scroll(
 ) {
     let scroll_state_id = scroll_out.id;
     let max_y = (scroll_out.content_size.y - scroll_out.inner_rect.height()).max(0.0);
+
+    // ── Mouse wheel boost (3× default speed) ─────────────────────────────────
+    {
+        let wheel_y = ctx.input(|i| i.raw_scroll_delta.y);
+        if wheel_y.abs() > 0.1
+            && scroll_out
+                .inner_rect
+                .contains(ctx.pointer_latest_pos().unwrap_or_default())
+        {
+            let boost = wheel_y * 2.0; // 2× extra on top of egui's 1× = 3× total
+            let mut state = scroll_out.state;
+            state.offset.y = (state.offset.y - boost).clamp(0.0, max_y);
+            state.store(ctx, scroll_state_id);
+        }
+    }
 
     // ── Keyboard scroll (arrows / WASD) ─────────────────────────────────────
     {
@@ -88,17 +104,21 @@ pub(crate) fn handle_scroll(
                     })
             })
             .or_else(|| match t.to_ascii_lowercase().as_str() {
-                "global" => {
-                    app.zone_global_collapsed = false;
+                "ai" => {
+                    app.zone_ai_collapsed = false;
                     Some(app.zone_y[0])
+                }
+                "global" | "main" | "mainaudio" | "main_audio" => {
+                    app.zone_global_collapsed = false;
+                    Some(app.zone_y[1])
                 }
                 "voice" | "voices" | "drums" => {
                     app.zone_voice_collapsed = false;
-                    Some(app.zone_y[1])
+                    Some(app.zone_y[2])
                 }
                 "fxmod" | "fx" | "effects" | "modulation" => {
                     app.zone_fxmod_collapsed = false;
-                    Some(app.zone_y[2])
+                    Some(app.zone_y[3])
                 }
                 _ => None,
             });

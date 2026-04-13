@@ -37,6 +37,7 @@ struct Args {
     mock: bool,
     osc_port: Option<u16>, // None = disabled; Some(port) = OSC listener enabled
     skip_wizard: bool,
+    fresh_session: bool,
 }
 
 impl Args {
@@ -50,6 +51,7 @@ impl Args {
             mock: false,
             osc_port: None,
             skip_wizard: false,
+            fresh_session: false,
         };
 
         let mut i = 1;
@@ -58,6 +60,7 @@ impl Args {
                 "--no-api" => result.no_api = true,
                 "--mock" => result.mock = true,
                 "--skip-wizard" => result.skip_wizard = true,
+                "--fresh-session" => result.fresh_session = true,
                 "--port" => {
                     i += 1;
                     if let Some(v) = args.get(i) {
@@ -89,6 +92,7 @@ impl Args {
                     println!("  --log <level>      Log level (default: info)");
                     println!("  --mock             Run without LLM (mock responses only)");
                     println!("  --skip-wizard      Skip the setup wizard on launch");
+                    println!("  --fresh-session    Start with empty rack, ignore saved session");
                     println!("  --osc              Enable OSC input on port 57120 (UDP)");
                     println!("  --osc-port <N>     Enable OSC input on port N (UDP)");
                     std::process::exit(0);
@@ -177,6 +181,11 @@ fn run() -> anyhow::Result<()> {
         log::error!("PANIC: {}\n{}", info, bt);
     }));
 
+    // Install SIGINT/SIGTERM handler BEFORE spawning any threads so the
+    // signal mask is inherited everywhere. Without this, Ctrl-C leaves
+    // llama-server children orphaned (Rust Drop doesn't run on signals).
+    install_signal_handler();
+
     let args = Args::parse();
 
     // Resolve log level: CLI --log overrides persisted setting, which overrides "info"
@@ -231,7 +240,20 @@ fn run() -> anyhow::Result<()> {
     let app_state = Arc::new(RwLock::new(AppState::default()));
 
     // Load session (rack layout, style, ui prefs) from last run.
-    if let Some(session) = impulse_instruct::state::load_session() {
+    // When --fresh-session is passed, start with the Empty rack preset
+    // (sequencer + master + console only). Demo scripts use this to ensure
+    // a clean, reproducible starting state.
+    if args.fresh_session {
+        log::info!("Fresh session requested — starting with Empty rack preset");
+        let empty = &impulse_instruct::state::RACK_PRESETS[0]; // "Empty"
+        let mut s = app_state.write();
+        s.rack = impulse_instruct::state::RackState::from_preset(empty);
+        // Clear agents/TTS pre-populated by AppState::default() for the default
+        // rack. Without this, a stale "default" agent survives and fires the
+        // startup auto-prompt before any scenario has set up its own agents.
+        s.llm_agents.clear();
+        s.tts_modules.clear();
+    } else if let Some(session) = impulse_instruct::state::load_session() {
         impulse_instruct::state::apply_session(&mut app_state.write(), session);
         log::info!("Session restored from session.json");
     }
@@ -421,6 +443,58 @@ fn run() -> anyhow::Result<()> {
     log::info!("eframe::run_native returned — window closed normally");
 
     Ok(())
+}
+
+/// Install SIGINT/SIGTERM handler on unix. Rust's Drop doesn't run when
+/// the process is killed by a signal, which orphaned our llama-server
+/// children. Here we block the signals on the main thread so spawned
+/// threads inherit the block, then spin a dedicated thread that
+/// sigwait()s, kills llama-server children, and exits the process.
+#[cfg(unix)]
+fn install_signal_handler() {
+    use std::mem::MaybeUninit;
+    unsafe {
+        let mut mask: MaybeUninit<libc::sigset_t> = MaybeUninit::uninit();
+        libc::sigemptyset(mask.as_mut_ptr());
+        libc::sigaddset(mask.as_mut_ptr(), libc::SIGINT);
+        libc::sigaddset(mask.as_mut_ptr(), libc::SIGTERM);
+        libc::pthread_sigmask(libc::SIG_BLOCK, mask.as_ptr(), std::ptr::null_mut());
+    }
+    std::thread::Builder::new()
+        .name("signal-handler".into())
+        .spawn(|| {
+            let mut sig: i32 = 0;
+            unsafe {
+                let mut mask: MaybeUninit<libc::sigset_t> = MaybeUninit::uninit();
+                libc::sigemptyset(mask.as_mut_ptr());
+                libc::sigaddset(mask.as_mut_ptr(), libc::SIGINT);
+                libc::sigaddset(mask.as_mut_ptr(), libc::SIGTERM);
+                libc::sigwait(mask.as_ptr(), &mut sig);
+            }
+            let name = match sig {
+                libc::SIGINT => "SIGINT",
+                libc::SIGTERM => "SIGTERM",
+                _ => "signal",
+            };
+            eprintln!("\n{name} received — shutting down, killing llama-server children");
+            log::warn!("{name} received — initiating shutdown");
+            let _ = std::process::Command::new("pkill")
+                .args(["-TERM", "-f", "llama-server .* --model"])
+                .status();
+            // Short grace period so pkill lands before we exit.
+            std::thread::sleep(std::time::Duration::from_millis(200));
+            let _ = std::process::Command::new("pkill")
+                .args(["-KILL", "-f", "llama-server .* --model"])
+                .status();
+            std::process::exit(128 + sig);
+        })
+        .expect("failed to spawn signal-handler thread");
+}
+
+#[cfg(not(unix))]
+fn install_signal_handler() {
+    // Windows: no equivalent without adding a crate; ctrl-C just kills the
+    // process. The demo script already sweeps llama-server itself there.
 }
 
 /// Generate the window icon pixel buffer.

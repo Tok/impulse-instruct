@@ -2,6 +2,7 @@
 // Tests for rack module management, cable routing, cycle detection, and guards.
 
 use crate::state::rack::*;
+use crate::state::rack_scope::scope_from_control_cables;
 
 /// Empty rack with no modules or cables — avoids default rack's 50+ cables.
 fn empty_rack() -> RackState {
@@ -9,6 +10,7 @@ fn empty_rack() -> RackState {
         modules: Vec::new(),
         cables: Vec::new(),
         next_id: 1,
+        dyn_sequencer_rows: None,
     }
 }
 
@@ -288,7 +290,7 @@ fn scope_empty_when_no_cables() {
 fn scope_excludes_non_scoped_targets() {
     let mut rack = empty_rack();
     let agent = rack.add_module(ModuleKind::LlmAgent);
-    let tts = rack.add_module(ModuleKind::EspeakNgTts);
+    let tts = rack.add_module(ModuleKind::NeuTts);
     rack.connect_control(agent, tts);
     let scope = scope_from_control_cables(&rack, agent);
     // TTS modules may or may not have a scope name — check what kind_to_scope_name returns
@@ -300,17 +302,150 @@ fn scope_excludes_non_scoped_targets() {
     );
 }
 
+// ── Grid placement ─────────────────────────────────────────────────────────
+
+#[test]
+fn arrange_grid_no_overlap() {
+    let rack = RackState::default();
+    // Verify no two modules in the same zone overlap on the grid.
+    for zone in [Zone::Ai, Zone::Global, Zone::Voice, Zone::FxMod] {
+        let mods: Vec<_> = rack.modules.iter().filter(|m| m.zone == zone).collect();
+        for (i, a) in mods.iter().enumerate() {
+            let (aw, ah) = a.kind.grid_size(GRID_COLS);
+            for b in &mods[i + 1..] {
+                let (bw, bh) = b.kind.grid_size(GRID_COLS);
+                let a_right = a.grid_col + aw;
+                let a_bottom = a.grid_row + ah;
+                let b_right = b.grid_col + bw;
+                let b_bottom = b.grid_row + bh;
+                let overlaps = a.grid_col < b_right
+                    && b.grid_col < a_right
+                    && a.grid_row < b_bottom
+                    && b.grid_row < a_bottom;
+                assert!(
+                    !overlaps,
+                    "{:?} at ({},{}) {}x{} overlaps {:?} at ({},{}) {}x{} in {:?}",
+                    a.kind,
+                    a.grid_col,
+                    a.grid_row,
+                    aw,
+                    ah,
+                    b.kind,
+                    b.grid_col,
+                    b.grid_row,
+                    bw,
+                    bh,
+                    zone,
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn arrange_grid_modules_within_bounds() {
+    let rack = RackState::default();
+    for m in &rack.modules {
+        let (w, _h) = m.kind.grid_size(GRID_COLS);
+        assert!(
+            m.grid_col + w <= GRID_COLS,
+            "{:?} at col {} + width {} exceeds {} columns",
+            m.kind,
+            m.grid_col,
+            w,
+            GRID_COLS,
+        );
+    }
+}
+
+#[test]
+fn arrange_grid_full_preset_no_overlap() {
+    use crate::state::RACK_PRESETS;
+    // Test the "Full" preset specifically (index 3)
+    let rack = RackState::from_preset(&RACK_PRESETS[3]);
+    for zone in [Zone::Ai, Zone::Global, Zone::Voice, Zone::FxMod] {
+        let mods: Vec<_> = rack.modules.iter().filter(|m| m.zone == zone).collect();
+        for (i, a) in mods.iter().enumerate() {
+            let (aw, ah) = a.kind.grid_size(GRID_COLS);
+            for b in &mods[i + 1..] {
+                let (bw, bh) = b.kind.grid_size(GRID_COLS);
+                let overlaps = a.grid_col < b.grid_col + bw
+                    && b.grid_col < a.grid_col + aw
+                    && a.grid_row < b.grid_row + bh
+                    && b.grid_row < a.grid_row + ah;
+                assert!(
+                    !overlaps,
+                    "Full preset: {:?}@({},{}) {}x{} overlaps {:?}@({},{}) {}x{} in {:?}",
+                    a.kind,
+                    a.grid_col,
+                    a.grid_row,
+                    aw,
+                    ah,
+                    b.kind,
+                    b.grid_col,
+                    b.grid_row,
+                    bw,
+                    bh,
+                    zone,
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn arrange_grid_is_idempotent() {
+    // Arranging twice should produce the same positions.
+    let mut rack = RackState::default();
+    let before: Vec<(u32, u8, u8)> = rack
+        .modules
+        .iter()
+        .map(|m| (m.id, m.grid_col, m.grid_row))
+        .collect();
+    rack.arrange_grid();
+    let after: Vec<(u32, u8, u8)> = rack
+        .modules
+        .iter()
+        .map(|m| (m.id, m.grid_col, m.grid_row))
+        .collect();
+    assert_eq!(before, after, "arrange_grid should be idempotent");
+}
+
+#[test]
+fn preset_arrange_is_idempotent() {
+    use crate::state::RACK_PRESETS;
+    for (i, preset) in RACK_PRESETS.iter().enumerate() {
+        let mut rack = RackState::from_preset(preset);
+        let before: Vec<(u32, u8, u8)> = rack
+            .modules
+            .iter()
+            .map(|m| (m.id, m.grid_col, m.grid_row))
+            .collect();
+        rack.arrange_grid();
+        let after: Vec<(u32, u8, u8)> = rack
+            .modules
+            .iter()
+            .map(|m| (m.id, m.grid_col, m.grid_row))
+            .collect();
+        assert_eq!(
+            before, after,
+            "preset {} ('{}') arrange_grid not idempotent",
+            i, preset.name
+        );
+    }
+}
+
 // ── Module zone placement ──────────────────────────────────────────────────
 
 #[test]
 fn modules_go_to_correct_zones() {
     assert_eq!(ModuleKind::AcidBass.default_zone(), Zone::Voice);
     assert_eq!(ModuleKind::DrumKit808.default_zone(), Zone::Voice);
-    assert_eq!(ModuleKind::EspeakNgTts.default_zone(), Zone::Voice);
+    assert_eq!(ModuleKind::NeuTts.default_zone(), Zone::Voice);
     assert_eq!(ModuleKind::FxReverb.default_zone(), Zone::FxMod);
     assert_eq!(ModuleKind::FxDelay.default_zone(), Zone::FxMod);
     assert_eq!(ModuleKind::LfoModule.default_zone(), Zone::FxMod);
     assert_eq!(ModuleKind::MasterOutput.default_zone(), Zone::Global);
-    assert_eq!(ModuleKind::LlmConsole.default_zone(), Zone::Global);
-    assert_eq!(ModuleKind::LlmAgent.default_zone(), Zone::Global);
+    assert_eq!(ModuleKind::LlmConsole.default_zone(), Zone::Ai);
+    assert_eq!(ModuleKind::LlmAgent.default_zone(), Zone::Ai);
 }

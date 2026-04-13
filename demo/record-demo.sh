@@ -106,14 +106,7 @@ if [ "$SKIP_VIDEO" -eq 0 ]; then
     check_dep pw-record   "sudo apt install pipewire (should already be there)"
 fi
 if [ "$NO_TTS" -eq 0 ]; then
-    TTS_VENV_BIN="${PROJECT_DIR}/.tts-venv/bin"
-    if [ -x "${TTS_VENV_BIN}/tts" ] || command -v tts >/dev/null 2>&1; then
-        check_dep paplay     "sudo apt install pulseaudio-utils"
-    else
-        echo "  WARNING: CoquiTTS not found. Narration disabled." >&2
-        echo "  Setup: python3.11 -m venv .tts-venv && .tts-venv/bin/pip install TTS" >&2
-        NO_TTS=1
-    fi
+    check_dep paplay "sudo apt install pulseaudio-utils"
 fi
 
 # Verify xdo.py works (only needed for video mode)
@@ -130,6 +123,9 @@ VERSION=$(grep '^version' "$PROJECT_DIR/Cargo.toml" | head -1 | sed 's/.*"\(.*\)
 BATCH_DIR="$OUTPUT_DIR/${TIMESTAMP}"
 BASENAME="v${VERSION}-${SCENARIO}"
 mkdir -p "$BATCH_DIR"
+# TTS clips for this batch go into the batch dir (not shared cache)
+export TTS_DIR="$BATCH_DIR/tts"
+mkdir -p "$TTS_DIR"
 
 # ─── Log file ────────────────────────────────────────────────────────────────
 LOGFILE="$BATCH_DIR/${BASENAME}.log"
@@ -144,25 +140,59 @@ echo ""
 
 echo "[1/6] Pre-generating TTS clips..."
 if [ "$NO_TTS" -eq 0 ]; then
-    idx=0
+    start_neutts_server || { echo "  Falling back to no-TTS mode"; NO_TTS=1; }
     clip_id=""
+    scene_num=0
+    tts_ok=0
+    tts_fail=0
+    tts_failed_ids=""
+    _gen_one() {
+        # $1=id, $2=text; reports and tracks success/failure.
+        if tts_generate "$1" "$2" >/dev/null; then
+            tts_ok=$((tts_ok + 1))
+            echo "  [$tts_ok] Generated: $1"
+        else
+            tts_fail=$((tts_fail + 1))
+            tts_failed_ids="${tts_failed_ids}$1\n"
+        fi
+    }
     while IFS= read -r line; do
+        # narrate "id" \        (two-line form: text on next line)
         if [[ "$line" =~ narrate[[:space:]]+(--wait[[:space:]]+)?\"([^\"]+)\"[[:space:]]+\\?$ ]]; then
             clip_id="${BASH_REMATCH[2]}"
         elif [[ "$line" =~ ^[[:space:]]+\"(.+)\"$ ]] && [ -n "${clip_id:-}" ]; then
-            text="${BASH_REMATCH[1]}"
-            tts_generate "$clip_id" "$text" >/dev/null
-            echo "  Generated: $clip_id"
+            _gen_one "$clip_id" "${BASH_REMATCH[1]}"
             clip_id=""
+        # narrate "id" "text"
         elif [[ "$line" =~ narrate[[:space:]]+(--wait[[:space:]]+)?\"([^\"]+)\"[[:space:]]+\"(.+)\" ]]; then
-            clip_id="${BASH_REMATCH[2]}"
-            text="${BASH_REMATCH[3]}"
-            tts_generate "$clip_id" "$text" >/dev/null
-            echo "  Generated: $clip_id"
+            _gen_one "${BASH_REMATCH[2]}" "${BASH_REMATCH[3]}"
             clip_id=""
+        # scene "name"  (track scene counter for say auto-IDs)
+        elif [[ "$line" =~ ^[[:space:]]*scene[[:space:]]+\".*\" ]]; then
+            scene_num=$((scene_num + 1))
+        # say "text"  (expands to narrate --wait "auto_NNN_<slug>" "text")
+        elif [[ "$line" =~ ^[[:space:]]*say[[:space:]]+\"(.+)\"[[:space:]]*$ ]]; then
+            text="${BASH_REMATCH[1]}"
+            slug=$(echo "$text" | tr ' ' '_' | tr -cd 'a-zA-Z0-9_' | head -c 30)
+            auto_id=$(printf 'auto_%03d_%s' "$scene_num" "$slug")
+            _gen_one "$auto_id" "$text"
         fi
     done < "$SCENARIO_FILE"
-    echo "  TTS clips cached in $TTS_DIR"
+    echo "  TTS clips cached in $TTS_DIR ($tts_ok ok, $tts_fail failed)"
+    if [ "$tts_fail" -gt 0 ]; then
+        echo "  Missing clips (all retries exhausted):"
+        printf "%b" "$tts_failed_ids" | sed 's/^/    /'
+    fi
+    # Stop server now — frees GPU memory for the app (LLM + display).
+    # Playback uses cached WAV files via paplay, no server needed.
+    stop_neutts_server
+
+    # Pre-generate SRT from scenario + actual clip durations. Timings are
+    # approximate (API/UI calls take variable time at runtime) but the SRT
+    # contains the full intended text with reading-time-friendly durations,
+    # independent of runtime execution or TTS truncation.
+    PREGEN_SRT="$BATCH_DIR/${BASENAME}.pregen.srt"
+    pregenerate_srt "$SCENARIO_FILE" "$PREGEN_SRT" >/dev/null || PREGEN_SRT=""
 else
     echo "  Skipped (--no-tts)"
     # Override narrate to still log subtitles but skip audio playback
@@ -216,7 +246,22 @@ cleanup() {
         kill -9 "$PW_RECORD_PID" 2>/dev/null
         wait "$PW_RECORD_PID" 2>/dev/null
     fi
-    [ -n "$APP_PID" ] && kill "$APP_PID" 2>/dev/null && wait "$APP_PID" 2>/dev/null
+    if [ -n "$APP_PID" ]; then
+        # SIGTERM first, give the app a moment to run Drop handlers
+        # (LlamaServerBackend's Drop SIGKILLs its child llama-server).
+        kill -TERM "$APP_PID" 2>/dev/null
+        for _ in 1 2 3 4 5 6; do
+            kill -0 "$APP_PID" 2>/dev/null || break
+            sleep 0.5
+        done
+        kill -KILL "$APP_PID" 2>/dev/null
+        wait "$APP_PID" 2>/dev/null
+    fi
+    # Drop doesn't run on SIGKILL, and even SIGTERM can race — sweep
+    # any orphaned llama-server spawned by our app. Match on --model so
+    # we don't touch unrelated llama-server instances the user may run.
+    pkill -KILL -f 'llama-server .* --model' 2>/dev/null
+    stop_neutts_server 2>/dev/null
     # Clean up virtual recording sink
     destroy_recording_sink 2>/dev/null
     rm -f "$NARRATION_LIST"
@@ -246,9 +291,9 @@ if [ "$APP_RUNNING" -eq 0 ]; then
     # App log output will be visible in the terminal alongside demo progress.
     # --log trace: full diagnostics captured in the log file (JSON output, etc.)
     if [ -n "$MODEL_PATH" ]; then
-        ./target/release/impulse-instruct --skip-wizard --model "$MODEL_PATH" --log trace &
+        ./target/release/impulse-instruct --skip-wizard --fresh-session --model "$MODEL_PATH" --log trace &
     else
-        ./target/release/impulse-instruct --skip-wizard --mock --log trace &
+        ./target/release/impulse-instruct --skip-wizard --fresh-session --mock --log trace &
     fi
     APP_PID=$!
     wait_for_api 30
@@ -256,6 +301,13 @@ else
     echo "[3/6] Using already-running app."
     wait_for_api 5
 fi
+
+# Guarantee a blank slate — even when attaching to a running app that may
+# have LFO on, agents loaded, sequencer running, etc.  --fresh-session on
+# launch only handles fresh starts; this covers the reuse case too.
+echo "  Resetting app state to defaults..."
+api_state_reset
+sleep 1
 
 # ─── Find the app window + start capture ─────────────────────────────────────
 
@@ -339,30 +391,41 @@ if [ "$SKIP_VIDEO" -eq 0 ]; then
 
     echo ""
     echo "[5/6] Recording demo..."
-    echo "  Capturing window $APP_WINDOW_ID (${GRAB_W}x${GRAB_H})"
-    echo "  Window capture mode — app can be in background, other tabs won't interfere"
+    echo "  Capturing region ${GRAB_W}x${GRAB_H} at +${GRAB_X}+${GRAB_Y}"
     echo "  Raw output: $RAW_VIDEO"
 
-    # Convert hex window ID to decimal for ffmpeg -window_id
-    WINDOW_ID_DEC=$(printf '%d' "$APP_WINDOW_ID")
-
-    # setsid puts ffmpeg in its own process group — ensures kill -9 works
-    # -t 600 is a 10-minute safety net in case SIGINT fails
+    # Region capture via x11grab — reliable across X11 and XWayland.
+    # -window_id looked nicer on paper but silently degrades to full-screen
+    # capture when xcb can't map the wmctrl-reported window handle (common
+    # on Wayland compositors running XWayland), which was the regression.
+    # The GRAB_X/Y/W/H rect is computed from wmctrl geometry and already
+    # even-sized, so we capture the window's current position directly.
+    # Caveat: if the window is moved mid-recording the capture stays on the
+    # original rect. Our automation never moves the window after the initial
+    # wmctrl focus/raise, so this is fine.
+    #
+    # setsid puts ffmpeg in its own process group so kill -9 propagates.
+    # -t 600 is a 10-minute safety net in case SIGINT fails.
     setsid ffmpeg -y \
         -f x11grab \
-        -window_id "$WINDOW_ID_DEC" \
+        -video_size "${GRAB_W}x${GRAB_H}" \
         -framerate 30 \
         -draw_mouse 0 \
-        -i "${DISPLAY}" \
+        -i "${DISPLAY}+${GRAB_X},${GRAB_Y}" \
         -t 600 \
+        -pix_fmt yuv420p \
         -c:v h264_nvenc -preset p4 -cq 18 \
-        -pix_fmt yuv444p -profile:v high444p \
         -an \
         "$RAW_VIDEO" \
         </dev/null >/dev/null 2>&1 &
     FFMPEG_PID=$!
 
-    sleep 1  # let ffmpeg settle
+    # Let ffmpeg settle before starting the scenario clock. The 1-second
+    # wait + the DEMO_START_NS timestamp immediately after it pin the
+    # scenario's t=0 to approximately when ffmpeg actually started
+    # recording frames — narration log timestamps are then video-relative
+    # and SRT subtitles stay in sync with the recorded audio.
+    sleep 1
 else
     echo "[4/6] Skipping capture (--skip-video)"
     echo "[5/6] Running scenario without recording..."
@@ -371,7 +434,8 @@ fi
 # Clear narration log
 rm -f "$NARRATION_LIST"
 
-# Record start time (nanoseconds)
+# Record start time (nanoseconds) — captured right after ffmpeg settles
+# so narrate() timestamps are video-relative.
 export DEMO_START_NS
 DEMO_START_NS=$(date +%s%N)
 
@@ -477,12 +541,30 @@ if [ "$SKIP_VIDEO" -eq 0 ]; then
     # Base name for output variants
     BASE="${BATCH_DIR}/${BASENAME}"
 
-    # Always generate SRT if narration entries exist (even with --no-tts)
+    # Prefer RUNTIME-timestamped subtitles (from narrate() logging actual
+    # start_sec when each clip plays) — these stay in sync with what's
+    # actually in the recording. The scenario's API/inference/UI calls have
+    # variable runtime and the pre-gen SRT's estimated timings drift.
+    # Pre-generated SRT is only used as a fallback when no runtime log
+    # exists (e.g. recording aborted before the scenario finished).
     SRT_FILE=""
     if [ -f "$NARRATION_LIST" ] && [ -s "$NARRATION_LIST" ]; then
         SRT_NAME="${BASE}.srt" generate_srt >/dev/null
         SRT_FILE="${BASE}.srt"
-        echo "  Subtitles: $SRT_FILE"
+        # Shift SRT timestamps back by TRIM_START so they line up with the
+        # trimmed video timeline (ffmpeg's -ss before -i resets output PTS
+        # to 0 but doesn't adjust the external subtitles file).
+        if [ "$TRIM_START" -gt 0 ] 2>/dev/null; then
+            srt_shift_seconds "$SRT_FILE" "$TRIM_START" || true
+        fi
+        echo "  Subtitles (runtime): $SRT_FILE"
+    elif [ -n "${PREGEN_SRT:-}" ] && [ -s "${PREGEN_SRT:-/dev/null}" ]; then
+        cp "$PREGEN_SRT" "${BASE}.srt"
+        SRT_FILE="${BASE}.srt"
+        if [ "$TRIM_START" -gt 0 ] 2>/dev/null; then
+            srt_shift_seconds "$SRT_FILE" "$TRIM_START" || true
+        fi
+        echo "  Subtitles (pre-generated fallback): $SRT_FILE"
     else
         echo "  Subtitles: none (no narration entries)"
     fi
@@ -506,17 +588,15 @@ if [ "$SKIP_VIDEO" -eq 0 ]; then
     ffmpeg -y \
         $TRIM_ARGS -i "$RAW_VIDEO" \
         $ENCODE_AUDIO \
-        -sws_flags "+accurate_rnd+full_chroma_int" \
+        -sws_flags "lanczos+accurate_rnd+full_chroma_int+full_chroma_inp" \
         -c:v h264_nvenc -preset p4 -cq 22 \
-        -pix_fmt yuv444p -profile:v high444p \
         "$FINAL_VIDEO" \
         </dev/null 2>/dev/null || \
     ffmpeg -y \
         $TRIM_ARGS -i "$RAW_VIDEO" \
         $ENCODE_AUDIO \
-        -sws_flags "+accurate_rnd+full_chroma_int" \
+        -sws_flags "lanczos+accurate_rnd+full_chroma_int+full_chroma_inp" \
         -c:v libx264 -preset fast -crf 23 \
-        -pix_fmt yuv444p -profile:v high444 \
         "$FINAL_VIDEO" \
         </dev/null 2>/dev/null || true
     [ -f "$FINAL_VIDEO" ] && echo " OK" || echo " FAIL"
@@ -527,19 +607,17 @@ if [ "$SKIP_VIDEO" -eq 0 ]; then
         ffmpeg -y \
             $TRIM_ARGS -i "$RAW_VIDEO" \
             $ENCODE_AUDIO \
-            -sws_flags "+accurate_rnd+full_chroma_int" \
+            -sws_flags "lanczos+accurate_rnd+full_chroma_int+full_chroma_inp" \
             -vf "subtitles=${SRT_FILE}:force_style='FontSize=22,FontName=monospace,PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,Outline=2,MarginV=40'" \
             -c:v h264_nvenc -preset p4 -cq 22 \
-            -pix_fmt yuv444p -profile:v high444p \
             "$FINAL_VIDEO_SUBS" \
             </dev/null 2>/dev/null || \
         ffmpeg -y \
             $TRIM_ARGS -i "$RAW_VIDEO" \
             $ENCODE_AUDIO \
-            -sws_flags "+accurate_rnd+full_chroma_int" \
+            -sws_flags "lanczos+accurate_rnd+full_chroma_int+full_chroma_inp" \
             -vf "subtitles=${SRT_FILE}:force_style='FontSize=22,FontName=monospace'" \
             -c:v libx264 -preset fast -crf 23 \
-            -pix_fmt yuv444p -profile:v high444 \
             "$FINAL_VIDEO_SUBS" \
             </dev/null 2>/dev/null || true
         [ -f "$FINAL_VIDEO_SUBS" ] && echo " OK" || echo " FAIL"

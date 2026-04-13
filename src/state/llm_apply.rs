@@ -4,7 +4,8 @@
 use super::llm_helpers::{
     apply_an1x_update, apply_bass_update, apply_fx_update, apply_hoover_update, unlocked_f32,
 };
-use super::rack::{PortDir, PortRef, rack_kind_name_matches, rack_out_port_kind};
+use super::rack::{PortDir, PortRef, rack_out_port_kind};
+use super::rack_scope::rack_kind_name_matches;
 use super::transitions::{
     expand_sequencer_steps, set_drum_step_ratchet, set_drum_voice_steps, set_lane_steps,
 };
@@ -40,66 +41,96 @@ pub fn apply_llm_update(state: AppState, update: &serde_json::Value, scope: &[St
         }
     }
 
-    if in_scope("sequencer")
-        && let Some(seq) = update.get("sequencer").and_then(|v| v.as_object())
-    {
-        if !locked.contains("sequencer.bpm")
-            && let Some(bpm) = seq.get("bpm").and_then(|v| v.as_f64())
-        {
-            s.sequencer.bpm = (bpm as f32).clamp(40.0, 250.0);
+    // Per-voice sequencer fields (bass_steps, bass_notes, kick_a_steps, …)
+    // live under `sequencer.*` in the JSON, but logically belong to their
+    // voice's scope — a BASS agent with scope=["bass"] must still be able
+    // to rewrite bass_steps/bass_notes. Gate each subsection by whichever
+    // scope it actually belongs to. A "sequencer" scope grants everything.
+    let seq_scope = in_scope("sequencer");
+    let bass_ok = seq_scope || in_scope("bass");
+    let hoover_ok = seq_scope || in_scope("hoover");
+    let an1x_ok = seq_scope || in_scope("an1x");
+    let kit_a_ok = seq_scope || in_scope("kit_a");
+    let kit_b_ok = seq_scope || in_scope("kit_b");
+    let any_seq_scope = seq_scope || bass_ok || hoover_ok || an1x_ok || kit_a_ok || kit_b_ok;
+    if any_seq_scope && let Some(seq) = update.get("sequencer").and_then(|v| v.as_object()) {
+        // ── Global fields — require explicit "sequencer" scope ───────
+        if seq_scope {
+            if !locked.contains("sequencer.bpm")
+                && let Some(bpm) = seq.get("bpm").and_then(|v| v.as_f64())
+            {
+                s.sequencer.bpm = (bpm as f32).clamp(40.0, 250.0);
+            }
+            if !locked.contains("sequencer.swing")
+                && let Some(v) = seq.get("swing").and_then(|v| v.as_f64())
+            {
+                s.sequencer.swing = (v as f32).clamp(0.0, 1.0);
+            }
+            if !locked.contains("sequencer.steps")
+                && let Some(steps) = seq.get("steps").and_then(|v| v.as_u64())
+            {
+                s = expand_sequencer_steps(s, steps as usize);
+            }
+            if !locked.contains("sequencer.time_sig_num")
+                && let Some(v) = seq.get("time_sig_num").and_then(|v| v.as_u64())
+            {
+                s.sequencer.time_sig_num = (v as u8).clamp(2, 9);
+            }
+            if !locked.contains("sequencer.root_note")
+                && let Some(v) = seq.get("root_note").and_then(|v| v.as_u64())
+            {
+                s.sequencer.root_note = (v as u8).clamp(0, 11);
+            }
+            if !locked.contains("sequencer.scale")
+                && let Some(v) = seq.get("scale").and_then(|v| v.as_str())
+                && let Some(sc) = Scale::from_str(v)
+            {
+                s.sequencer.scale = sc;
+            }
         }
-        if !locked.contains("sequencer.swing")
-            && let Some(v) = seq.get("swing").and_then(|v| v.as_f64())
-        {
-            s.sequencer.swing = (v as f32).clamp(0.0, 1.0);
-        }
-        if !locked.contains("sequencer.steps")
-            && let Some(steps) = seq.get("steps").and_then(|v| v.as_u64())
-        {
-            s = expand_sequencer_steps(s, steps as usize);
-        }
-        if !locked.contains("sequencer.time_sig_num")
-            && let Some(v) = seq.get("time_sig_num").and_then(|v| v.as_u64())
-        {
-            s.sequencer.time_sig_num = (v as u8).clamp(2, 9);
-        }
-        // Polyrhythm: per-voice step-count overrides.
+
+        // ── Per-drum-kit lengths + ratchets ──────────────────────────
+        use DrumVoice::*;
+        let kit_a_voices: &[(&str, DrumVoice)] = &[
+            ("kick_a", Kick808),
+            ("snare_a", Snare808),
+            ("hihat_a", HihatClosed808),
+            ("hihat_a_open", HihatOpen808),
+        ];
+        let kit_b_voices: &[(&str, DrumVoice)] = &[
+            ("kick_b", Kick909),
+            ("snare_b", Snare909),
+            ("hihat_b", HihatClosed909),
+            ("hihat_b_open", HihatOpen909),
+            ("clap_b", Clap909),
+        ];
         if !locked.contains("sequencer.drum_lengths")
             && let Some(obj) = seq.get("drum_lengths").and_then(|v| v.as_object())
         {
-            use DrumVoice::*;
-            for (key, voice) in &[
-                ("kick_a", Kick808),
-                ("snare_a", Snare808),
-                ("hihat_a", HihatClosed808),
-                ("hihat_a_open", HihatOpen808),
-                ("kick_b", Kick909),
-                ("snare_b", Snare909),
-                ("hihat_b", HihatClosed909),
-                ("hihat_b_open", HihatOpen909),
-                ("clap_b", Clap909),
-            ] {
+            let mut voices_to_apply: Vec<(&str, DrumVoice)> = Vec::new();
+            if kit_a_ok {
+                voices_to_apply.extend_from_slice(kit_a_voices);
+            }
+            if kit_b_ok {
+                voices_to_apply.extend_from_slice(kit_b_voices);
+            }
+            for (key, voice) in &voices_to_apply {
                 if let Some(n) = obj.get(*key).and_then(|v| v.as_u64()) {
                     s = set_drum_voice_steps(s, *voice, n as usize);
                 }
             }
         }
-        // Ratchet: per-voice per-step sub-hit counts.
         if !locked.contains("sequencer.drum_ratchets")
             && let Some(obj) = seq.get("drum_ratchets").and_then(|v| v.as_object())
         {
-            use DrumVoice::*;
-            for (key, voice) in &[
-                ("kick_a", Kick808),
-                ("snare_a", Snare808),
-                ("hihat_a", HihatClosed808),
-                ("hihat_a_open", HihatOpen808),
-                ("kick_b", Kick909),
-                ("snare_b", Snare909),
-                ("hihat_b", HihatClosed909),
-                ("hihat_b_open", HihatOpen909),
-                ("clap_b", Clap909),
-            ] {
+            let mut voices_to_apply: Vec<(&str, DrumVoice)> = Vec::new();
+            if kit_a_ok {
+                voices_to_apply.extend_from_slice(kit_a_voices);
+            }
+            if kit_b_ok {
+                voices_to_apply.extend_from_slice(kit_b_voices);
+            }
+            for (key, voice) in &voices_to_apply {
                 if let Some(arr) = obj.get(*key).and_then(|v| v.as_array()) {
                     for (step, val) in arr.iter().enumerate().take(MAX_STEPS) {
                         if let Some(r) = val.as_u64() {
@@ -109,45 +140,40 @@ pub fn apply_llm_update(state: AppState, update: &serde_json::Value, scope: &[St
                 }
             }
         }
-        if !locked.contains("sequencer.bass_len")
-            && let Some(n) = seq.get("bass_len").and_then(|v| v.as_u64())
-        {
-            s = set_lane_steps(s, "bass", n as usize);
+
+        // ── Per-melodic-voice fields ─────────────────────────────────
+        if bass_ok {
+            if !locked.contains("sequencer.bass_len")
+                && let Some(n) = seq.get("bass_len").and_then(|v| v.as_u64())
+            {
+                s = set_lane_steps(s, "bass", n as usize);
+            }
+            if !locked.contains("sequencer.bass_steps")
+                && let Some(arr) = seq.get("bass_steps").and_then(|v| v.as_array())
+            {
+                apply_llm_step_array(arr, &mut s.sequencer.bass_pattern, MAX_STEPS, |step, a| {
+                    step.active = a;
+                });
+                let bass_pattern_clone = s.sequencer.bass_pattern.clone();
+                if let Some(pat) = s.sequencer.bass_patterns.get_mut(0) {
+                    *pat = bass_pattern_clone;
+                }
+            }
         }
-        if !locked.contains("sequencer.hoover_len")
+        if hoover_ok
+            && !locked.contains("sequencer.hoover_len")
             && let Some(n) = seq.get("hoover_len").and_then(|v| v.as_u64())
         {
             s = set_lane_steps(s, "hoover", n as usize);
         }
-        if !locked.contains("sequencer.an1x_len")
+        if an1x_ok
+            && !locked.contains("sequencer.an1x_len")
             && let Some(n) = seq.get("an1x_len").and_then(|v| v.as_u64())
         {
             s = set_lane_steps(s, "an1x", n as usize);
         }
-        if !locked.contains("sequencer.bass_steps")
-            && let Some(arr) = seq.get("bass_steps").and_then(|v| v.as_array())
-        {
-            apply_llm_step_array(arr, &mut s.sequencer.bass_pattern, MAX_STEPS, |step, a| {
-                step.active = a;
-            });
-            // Keep voice 0 pattern in sync
-            let bass_pattern_clone = s.sequencer.bass_pattern.clone();
-            if let Some(pat) = s.sequencer.bass_patterns.get_mut(0) {
-                *pat = bass_pattern_clone;
-            }
-        }
-        if !locked.contains("sequencer.root_note")
-            && let Some(v) = seq.get("root_note").and_then(|v| v.as_u64())
-        {
-            s.sequencer.root_note = (v as u8).clamp(0, 11);
-        }
-        if !locked.contains("sequencer.scale")
-            && let Some(v) = seq.get("scale").and_then(|v| v.as_str())
-            && let Some(sc) = Scale::from_str(v)
-        {
-            s.sequencer.scale = sc;
-        }
-        if !locked.contains("sequencer.bass_notes")
+        if bass_ok
+            && !locked.contains("sequencer.bass_notes")
             && let Some(arr) = seq.get("bass_notes").and_then(|v| v.as_array())
         {
             let snap = s.sequencer.scale_snap;
@@ -169,21 +195,25 @@ pub fn apply_llm_update(state: AppState, update: &serde_json::Value, scope: &[St
                 }
             }
         }
-        let drum_step_fields: &[(&str, DrumVoice, f32)] = &[
-            ("kick_a_steps", DrumVoice::Kick808, 1.0),
-            ("hihat_a_steps", DrumVoice::HihatClosed808, 0.7),
-            ("snare_a_steps", DrumVoice::Snare808, 1.0),
-            ("kick_b_steps", DrumVoice::Kick909, 1.0),
-            ("snare_b_steps", DrumVoice::Snare909, 1.0),
-            ("clap_b_steps", DrumVoice::Clap909, 1.0),
-            ("hihat_b_steps", DrumVoice::HihatClosed909, 0.7),
+        // Per-kit step arrays — kit_a fields require kit_a scope, etc.
+        let drum_step_fields: &[(&str, DrumVoice, f32, bool)] = &[
+            ("kick_a_steps", DrumVoice::Kick808, 1.0, true),
+            ("hihat_a_steps", DrumVoice::HihatClosed808, 0.7, true),
+            ("snare_a_steps", DrumVoice::Snare808, 1.0, true),
+            ("kick_b_steps", DrumVoice::Kick909, 1.0, false),
+            ("snare_b_steps", DrumVoice::Snare909, 1.0, false),
+            ("clap_b_steps", DrumVoice::Clap909, 1.0, false),
+            ("hihat_b_steps", DrumVoice::HihatClosed909, 0.7, false),
         ];
-        for &(field, voice, default_vel) in drum_step_fields {
+        for &(field, voice, default_vel, is_kit_a) in drum_step_fields {
+            let kit_ok = if is_kit_a { kit_a_ok } else { kit_b_ok };
+            if !kit_ok {
+                continue;
+            }
             let lock_key = format!("sequencer.{}", field);
             if !locked.contains(&lock_key)
                 && let Some(arr) = seq.get(field).and_then(|v| v.as_array())
             {
-                // Collect indices first to avoid split-borrow issues with drum_patterns
                 let arr: Vec<_> = arr.clone();
                 if let Some(pattern) = s.sequencer.drum_patterns.get_mut(&voice) {
                     apply_llm_step_array(&arr, pattern, MAX_STEPS, |step, active| {

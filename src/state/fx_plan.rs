@@ -6,7 +6,7 @@ use std::collections::{HashMap, HashSet};
 
 use super::{FxPlan, FxStep, ModuleKind, PortKind, RackState};
 
-fn kind_to_fx_step(kind: ModuleKind) -> Option<FxStep> {
+pub(crate) fn kind_to_fx_step(kind: ModuleKind) -> Option<FxStep> {
     match kind {
         ModuleKind::FxWaveshaper => Some(FxStep::Waveshaper),
         ModuleKind::FxReverb => Some(FxStep::Reverb),
@@ -43,9 +43,11 @@ pub fn compile_fx_plan(rack: &RackState) -> FxPlan {
         return FxPlan::default();
     }
 
-    // Build adjacency and in-degree over FX→FX audio cables only.
-    let mut adj: HashMap<u32, Vec<u32>> = HashMap::new();
-    let mut in_degree: HashMap<u32, usize> = fx_map.keys().map(|&id| (id, 0)).collect();
+    // Build FX→FX adjacency and collect FX modules that participate in any
+    // audio cable (either FX→FX or voice→FX). FX modules with zero audio
+    // cables are excluded — they're orphaned and shouldn't process.
+    let mut fx_adj: HashMap<u32, Vec<u32>> = HashMap::new();
+    let mut connected_fx: HashSet<u32> = HashSet::new();
 
     for cable in &rack.cables {
         if cable.from.kind != PortKind::Audio {
@@ -53,11 +55,29 @@ pub fn compile_fx_plan(rack: &RackState) -> FxPlan {
         }
         let from_fx = fx_map.contains_key(&cable.from.module_id);
         let to_fx = fx_map.contains_key(&cable.to.module_id);
+        // Any audio cable touching an FX module marks it as connected
+        if from_fx {
+            connected_fx.insert(cable.from.module_id);
+        }
+        if to_fx {
+            connected_fx.insert(cable.to.module_id);
+        }
+        // FX→FX adjacency for topological sort
         if from_fx && to_fx {
-            adj.entry(cable.from.module_id)
+            fx_adj
+                .entry(cable.from.module_id)
                 .or_default()
                 .push(cable.to.module_id);
-            *in_degree.entry(cable.to.module_id).or_insert(0) += 1;
+        }
+    }
+
+    // In-degree only for connected FX modules
+    let mut in_degree: HashMap<u32, usize> = connected_fx.iter().map(|&id| (id, 0)).collect();
+    for neighbors in fx_adj.values() {
+        for &nid in neighbors {
+            if let Some(deg) = in_degree.get_mut(&nid) {
+                *deg += 1;
+            }
         }
     }
 
@@ -72,7 +92,7 @@ pub fn compile_fx_plan(rack: &RackState) -> FxPlan {
         q
     };
 
-    let mut ordered: Vec<FxStep> = Vec::with_capacity(fx_map.len());
+    let mut ordered: Vec<FxStep> = Vec::with_capacity(connected_fx.len());
     while !queue.is_empty() {
         let id = queue.remove(0);
         if let Some(&kind) = fx_map.get(&id)
@@ -80,7 +100,7 @@ pub fn compile_fx_plan(rack: &RackState) -> FxPlan {
         {
             ordered.push(step);
         }
-        if let Some(neighbors) = adj.get(&id) {
+        if let Some(neighbors) = fx_adj.get(&id) {
             let mut next_ready: Vec<u32> = Vec::new();
             for &nid in neighbors {
                 if let Some(deg) = in_degree.get_mut(&nid) {
@@ -110,8 +130,7 @@ pub fn compile_fx_plan(rack: &RackState) -> FxPlan {
         ModuleKind::AmenSampler,
         ModuleKind::NoiseVoice,
         ModuleKind::GranularTexture,
-        ModuleKind::EspeakNgTts,
-        ModuleKind::CoquiTts,
+        ModuleKind::NeuTts,
     ];
 
     // Map voice module id → kind for quick lookup.
@@ -143,13 +162,13 @@ pub fn compile_fx_plan(rack: &RackState) -> FxPlan {
             None => continue,
         };
         let mut chain: Vec<FxStep> = vec![first_step];
-        // Walk adj from first FX module id.
+        // Walk FX→FX adjacency from first FX module id.
         let mut cur_id = cable.to.module_id;
         let mut visited = HashSet::new();
         visited.insert(cur_id);
-        // Follow the single-output chain (linear adjacency).
+        // Follow the single-output chain (linear FX→FX adjacency).
         loop {
-            let next_ids = adj.get(&cur_id).map(|v| v.as_slice()).unwrap_or(&[]);
+            let next_ids = fx_adj.get(&cur_id).map(|v| v.as_slice()).unwrap_or(&[]);
             match next_ids {
                 [next_id] if !visited.contains(next_id) => {
                     if let Some(&kind) = fx_map.get(next_id)

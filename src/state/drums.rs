@@ -276,21 +276,38 @@ impl DrumVoice {
 
     pub fn label(&self) -> &'static str {
         match self {
-            DrumVoice::Kick808 => "KA Kick",
-            DrumVoice::Snare808 => "KA Snare",
-            DrumVoice::HihatClosed808 => "KA CHH",
-            DrumVoice::HihatOpen808 => "KA OHH",
-            DrumVoice::TomHi808 => "KA Hi Tom",
-            DrumVoice::TomMid808 => "KA Mid Tom",
-            DrumVoice::TomLo808 => "KA Lo Tom",
-            DrumVoice::Kick909 => "KB Kick",
-            DrumVoice::Snare909 => "KB Snare",
-            DrumVoice::HihatClosed909 => "KB CHH",
-            DrumVoice::HihatOpen909 => "KB OHH",
-            DrumVoice::Clap909 => "KB Clap",
-            DrumVoice::Rim909 => "KB Rim",
-            DrumVoice::Amen => "Amen",
+            DrumVoice::Kick808 => "808 KICK",
+            DrumVoice::Snare808 => "808 SNARE",
+            DrumVoice::HihatClosed808 => "808 CLOSED HH",
+            DrumVoice::HihatOpen808 => "808 OPEN HH",
+            DrumVoice::TomHi808 => "808 HI TOM",
+            DrumVoice::TomMid808 => "808 MID TOM",
+            DrumVoice::TomLo808 => "808 LO TOM",
+            DrumVoice::Kick909 => "909 KICK",
+            DrumVoice::Snare909 => "909 SNARE",
+            DrumVoice::HihatClosed909 => "909 CLOSED HH",
+            DrumVoice::HihatOpen909 => "909 OPEN HH",
+            DrumVoice::Clap909 => "909 CLAP",
+            DrumVoice::Rim909 => "909 RIM",
+            DrumVoice::Amen => "AMEN",
         }
+    }
+
+    /// Canonical JSON key used in the LLM schema (`kick_a`, `snare_b`, …).
+    /// Returns `None` for voices not exposed to the LLM schema.
+    pub fn schema_key(self) -> Option<&'static str> {
+        Some(match self {
+            DrumVoice::Kick808 => "kick_a",
+            DrumVoice::Snare808 => "snare_a",
+            DrumVoice::HihatClosed808 => "hihat_a",
+            DrumVoice::HihatOpen808 => "hihat_a_open",
+            DrumVoice::Kick909 => "kick_b",
+            DrumVoice::Snare909 => "snare_b",
+            DrumVoice::HihatClosed909 => "hihat_b",
+            DrumVoice::HihatOpen909 => "hihat_b_open",
+            DrumVoice::Clap909 => "clap_b",
+            _ => return None,
+        })
     }
 
     /// Which rack `ModuleKind` this drum voice belongs to.

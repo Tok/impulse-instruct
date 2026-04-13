@@ -4,7 +4,7 @@
 use crate::audio::AudioCommand;
 use crate::sequencer::TriggerEvent;
 use crate::state::{record_bass_note, scale_degree};
-use crate::ui::{ImpulseApp, note_name, theme};
+use crate::ui::{ImpulseApp, note_freq_label, note_name, theme};
 
 pub fn draw_piano(app: &mut ImpulseApp, ui: &mut egui::Ui, ctx: &egui::Context) {
     use egui::{Color32, Pos2, Rect, Sense, Stroke, Vec2};
@@ -195,7 +195,7 @@ pub fn draw_piano(app: &mut ImpulseApp, ui: &mut egui::Ui, ctx: &egui::Context) 
             let lbl = note_name(note);
             let lbl_text = if is_c { lbl } else { &lbl[..lbl.len() - 1] };
             let font_size = if is_c { 8.5 } else { 7.5 };
-            let label_pos = Pos2::new(x + wk_w * 0.5, oy + wk_h - 10.0);
+            let label_pos = Pos2::new(x + wk_w * 0.5, oy + wk_h - 16.0);
             let pill = Rect::from_center_size(
                 label_pos,
                 egui::Vec2::new(lbl_text.len() as f32 * 5.5 + 4.0, 11.0),
@@ -214,6 +214,18 @@ pub fn draw_piano(app: &mut ImpulseApp, ui: &mut egui::Ui, ctx: &egui::Context) 
                 label_color,
             );
         }
+
+        // Hover tooltip: full note name + frequency in Hz
+        ui.interact(
+            key_rect,
+            egui::Id::new(("piano_wkey", note)),
+            Sense::hover(),
+        )
+        .on_hover_text(format!(
+            "{} — {} Hz",
+            note_name(note),
+            note_freq_label(note)
+        ));
 
         if let Some(cp) = click_pos
             && key_rect.contains(cp)
@@ -361,6 +373,18 @@ pub fn draw_piano(app: &mut ImpulseApp, ui: &mut egui::Ui, ctx: &egui::Context) 
             {
                 clicked_note = Some(note);
             }
+
+            // Hover tooltip: full note name + frequency in Hz
+            ui.interact(
+                key_rect,
+                egui::Id::new(("piano_bkey", note)),
+                Sense::hover(),
+            )
+            .on_hover_text(format!(
+                "{} — {} Hz",
+                note_name(note),
+                note_freq_label(note)
+            ));
         }
     }
 

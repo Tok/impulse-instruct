@@ -98,6 +98,14 @@ pub fn build_system_prompt_full(
             "bpm": state.sequencer.bpm,
             "steps": state.sequencer.steps,
             "bass_len": state.sequencer.bass_steps,
+            "hoover_len": state.sequencer.hoover_steps,
+            "an1x_len": state.sequencer.an1x_steps,
+            "drum_lengths": state
+                .sequencer
+                .drum_steps
+                .iter()
+                .filter_map(|(v, n)| v.schema_key().map(|k| (k.to_string(), *n)))
+                .collect::<std::collections::BTreeMap<String, usize>>(),
             "swing": state.sequencer.swing,
             "root_note": state.sequencer.root_note,
             "scale": state.sequencer.scale.name(),
@@ -133,7 +141,11 @@ pub fn build_system_prompt_full(
             "\n═══ ACTIVE STYLE ═══\n\nFree mode — no style constraints. \
              Be creative and unpredictable. Experiment freely with sound and rhythm. \
              Surprise the listener. Choose any musical direction that feels interesting \
-             and don't hold back.\n".to_string(),
+             and don't hold back. Even without a style, commit to a root+scale and \
+             spread at least 3 distinct pitches across EACH half of the bass loop — \
+             the second half of the bank must be as melodically active as the first, \
+             never fall back on root-only fill. Always respect the current \
+             `sequencer.steps` length and per-voice lengths when writing step arrays.\n".to_string(),
         Some("__custom__") => {
             let desc = state.llm.custom_style_text.trim();
             if desc.is_empty() {
@@ -319,9 +331,17 @@ STEP SEQUENCER (default 32 steps = two 4/4 bars of 16th notes):
     Index list  [0,4,8,12]   — active step indices; all others cleared. SAVES TOKENS — use this.
     Inline      [1,0,0,0,…]  — up to 64 values, 0/1 (or false/true). Use only when most steps are on.
     Clear       []           — silence all steps for that voice.
-  IMPORTANT: Spread ALL patterns (bass, drums, hoover, an1x) across the ENTIRE length.
-    Check sequencer.steps and per-voice lengths in CURRENT STATE. Use the full range evenly.
-    Example: 32-step kick = [0,4,8,12,16,20,24,28], NOT just [0,4,8,12].
+  RANGE AWARENESS — use the full pattern length:
+    Before writing a step array, read `sequencer.steps` and the per-voice
+    length (`bass_len`, `hoover_len`, `an1x_len`, `drum_lengths.<voice>`)
+    from CURRENT STATE so indices are in range and the pattern isn't stuck
+    in the first half of the bank.
+    • Indices must be < length. Don't exceed the bank.
+    • Use the second half (steps 16..31, or 32..63) for variation — not a
+      mirror of the first half.
+    • See DRUM PATTERNS and BASS PATTERNS below for voice-specific rhythm
+      guidance. Bass is NOT drums — do not copy kick-like even grids into
+      bass lines.
 
   sequencer.bass_steps    — step array for 303 bass trigger
   sequencer.bass_notes    — MIDI note array (24=C1, 36=C2, 48=C3; acid range 33–48)
@@ -403,6 +423,39 @@ BEHAVIOUR TEMPLATES (pre-defined energy moods):
   All templates scale with the current heat value (higher heat = more extreme).
   LLM trigger: "build to a drop", "add tension", "go euphoric", "break it down"
 
+MUSICAL MODERATION — default to restraint unless told otherwise.
+  Drama is earned. Full-blast defaults sound amateur and tire the ear within
+  seconds. Pick values from the MUSICAL range below unless the user explicitly
+  asks for extremes, or heat > 0.7 gives you permission.
+
+  FX levels — safe defaults for everything, even "make it sound great":
+    reverb_mix        0.08–0.30   (above 0.45 = washy, masks the groove)
+    reverb_size       0.30–0.65
+    delay_mix         0.06–0.22   (above 0.30 = stepping on the dry signal)
+    delay_feedback    0.25–0.55   (above 0.65 = runaway, eats cycles)
+    chorus_mix        0.05–0.20
+    distortion_mix    0.08–0.25   (above 0.40 = no dynamic range left)
+    distortion_drive  0.20–0.45
+    stereo_width      0.45–0.70   (above 0.85 sounds phasey in mono fold-down)
+
+  DRUM VELOCITIES — keep the kit balanced:
+    kick     0.9–1.0     (the anchor; always clearly audible)
+    snare    0.75–0.9    (slightly under kick — leaves headroom)
+    clap     0.55–0.75   (layered on snare, not above it — a hot clap flattens the 2/4)
+    hihat    0.35–0.55   (closed hats are a shimmer, not a lead — hot hats mask everything)
+    open-hat 0.45–0.65
+  A common failure is loud claps or cymbals drowning the kick. Check the
+  existing velocity before writing; if it's already set sensibly, don't
+  overwrite it with 1.0.
+
+  BASS — squelchy ≠ painful. Keep resonance ≤ 0.85 unless asked for
+    screaming acid; above that, the self-oscillation can clip the master.
+    env_mod > 0.9 with resonance > 0.8 is a red line — only cross it if
+    the user said "wild / acid / screaming / maximum".
+
+  When heat > 0.7 or the user literally says "extreme / insane / max /
+  crush / destroy / wild / blown out", ignore these defaults and go for it.
+
 HEAT-AWARE MUTATION GUIDANCE (follow these rules based on heat):
   heat < 0.3 — stay subtle: only rhythmic variation (velocity, swing, probability), no timbre changes
   heat 0.3–0.7 — balanced: can adjust filter, FX mix, sequence notes; avoid extreme settings
@@ -482,22 +535,97 @@ HOOVER LEAD (supersaw + resonant LP filter sweep — dominator/rave character):
 
 ═══ RHYTHM BASICS ═══
 
-Minimal 4/4 foundation (32 steps = 2 bars) — use index list format (compact, preferred):
-  kick_a_steps 4-on-floor:   [0,4,8,12,16,20,24,28]
-  hihat_a_steps offbeat 8ths:[2,6,10,14,18,22,26,30]
-  snare_a_steps on 2 and 4:  [4,12,20,28]
-  clap_b_steps on 2 and 4:   [4,12,20,28]
-Build from there — add syncopation and gaps. Never fill every step with the same drum.
-Spread hits evenly across ALL steps — check sequencer.steps in CURRENT STATE.
+DRUM PATTERNS — regular grid is good, with kit-specific character.
+Kit naming: `_a` = 808 (classic warm/loose), `_b` = 909 (crisp/tight/driving).
+
+909 (Kit B) — PIN the grid. Acid house, techno, classic dance foundations.
+  kick_b_steps 4-on-floor:    [0,4,8,12,16,20,24,28]
+  clap_b_steps on 2 and 4:    [4,12,20,28]
+  hihat_b_steps offbeat 8ths: [2,6,10,14,18,22,26,30]
+
+808 (Kit A) — ALMOST 4-on-the-floor with one or two tweaks per bar for
+groove. Shift/drop 1–2 steps from the perfect grid, keep the pulse readable.
+  kick_a_steps:    [0,4,8,12,16,20,26,28]       ← missed 24, pushed 26
+  kick_a_steps:    [0,4,7,12,16,20,24,30]       ← anticipation on 7, tail on 30
+  snare_a_steps:   [4,12,20,28]                 ← or [4,12,19,28] for a pull
+  hihat_a_steps:   [2,6,10,14,18,22,26,30]      ← can stay even, or drop one
+
+Classic acid style often layers 909 kick for the drive plus 808 kick/snare
+for the texture — two overlapping grids reinforcing the groove.
+
+Drums should span the full sequencer.steps length. Use the second half for
+fills/variation — don't duplicate the first half verbatim. Never fill every
+step with the same drum.
 
 IMPORTANT — drum_ratchets takes INTEGERS 1–4 only, never booleans:
   CORRECT: {{"drum_ratchets": {{"hihat_a": [1,1,2,1,1,1,4,1,1,1,2,1,1,1,1,1]}}}}
   WRONG:   {{"drum_ratchets": {{"hihat_a": [true,false,true,…]}}}}  ← booleans are invalid here
 
+BASS PATTERNS (303 — bass_steps) — DO NOT copy the drum grid. Bass wants
+syncopation and SPACE. Default target: ~1/4 to 1/2 note density (≈ 8–14
+notes per 32 steps). Dense patterns (>18 notes per 32) tire the ear
+fast; only go there for peak-time rolling acid or if the user explicitly
+asks for a busy/rolling/driving line.
+
+  STYLE-SPECIFIC DENSITY (override the default when a style is active):
+    • Classical / Bach / counterpoint      → dense is correct (18–28/32,
+      continuous 16th-note motion is the genre)
+    • Acid / acid house / rolling techno  → 10–16/32 (the examples below)
+    • Techno / minimal / dub techno       → 6–10/32 (lots of space)
+    • Deep house / ambient / dub          → 4–8/32 (sparse, almost skeletal)
+    • Drum & bass / breakbeat             → 8–14/32
+
+  AVOID even 16th grids like [0,4,8,12,16,20,24,28] — that's kick territory,
+  lifeless under an acid line. Bass should push and pull against the kick.
+  Good 32-step acid bass rhythms — irregular, leaving space where the kick
+  is dominant:
+    [0, 3, 6, 10, 14, 18, 22, 26]             — ~8 notes, classic sparse
+    [0, 3, 6, 10, 14, 15, 18, 22, 26]         — ~9 notes, one pair
+    [0, 2, 5, 8, 13, 16, 19, 24, 27]          — ~9 notes, sparse
+    [0, 3, 6, 10, 14, 15, 18, 22, 23, 28]     — ~10 notes, pairs + rests
+    [0, 3, 6, 7, 10, 13, 16, 19, 22, 26]      — ~10 notes, push/pull
+  Rules of thumb:
+    • Anchor step 0 most of the time.
+    • Off-beat steps (3, 7, 10, 13, 19, 22, 27) drive the acid push.
+    • Occasional back-to-back 16ths (e.g. 6,7 or 22,23) add urgency — use
+      sparingly, not as a default texture.
+    • Leave bigger gaps around the kick's strong beats (4, 12, 20, 28) so
+      the bass breathes rather than doubling the kick.
+    • When in doubt, remove a note. Space is what makes a bass line groove.
+    • BOTH HALVES EQUALLY ACTIVE: if steps 0..15 have ~5 hits, steps 16..31
+      should have about the same count. Don't front-load the bar with
+      activity and leave the second half thin — the loop is supposed to
+      repeat seamlessly, an empty second half sounds like a mistake.
+
 BASS MELODY BASICS:
   Acid range C2–C3: C2=36, D2=38, Eb2=39, F2=41, G2=43, A2=45, Bb2=46, B2=47, C3=48
   Minor pentatonic (C): 36, 39, 41, 43, 46 (and 48 for octave)
-  Keep to 3–5 distinct pitches per loop. Use false in bass_steps for rhythmic rests.
+  Use AT LEAST 3 different scale pitches across the loop — a line that's
+  just the root note over and over is not acid, it's a drone. Typical:
+  3–5 distinct pitches (root + 5th + one or two colour tones).
+  DISTRIBUTE NOTES ACROSS BOTH HALVES — this is the #1 thing to get right:
+    The most common failure mode is a 32-step `bass_notes` array where the
+    first half has real melodic shape (C, D, F, G, Eb, G…) and the second
+    half is just C, C, C, C, C, … — the model gives up on variation and
+    falls back to the root. DO NOT DO THIS. It sounds lazy and wrong.
+    Each half of the loop should have AT LEAST 3 distinct scale pitches,
+    independently. The second half is not a filler — it is half the loop.
+
+  Concrete example of a good 32-step `bass_notes` in C minor (root 36):
+    [36, 43, 36, 41, 39, 36, 43, 36, 48, 43, 41, 36, 39, 41, 36, 43,
+     36, 41, 39, 43, 36, 46, 43, 36, 39, 43, 48, 41, 36, 43, 39, 36]
+    Notice: both halves use the full palette (36, 39, 41, 43, 46, 48),
+    both halves anchor step 0 on the root, both halves have a 5th-leap.
+
+  Variation tools for the second half: transpose a motif up a 5th, swap
+  the 3rd for the 7th, add one chromatic passing tone on a syncopated
+  step, invert the contour. Avoid the lazy "busy bar 1, root bar 2".
+
+  NEVER SHORTCUT WITH ALL-Cs. If you're tempted to fill the second half
+  with the root because you're running out of ideas, stop and reuse the
+  vocabulary from the first half instead. Silence (`false` in
+  `bass_steps`) is always a better choice than repeating the root.
+  Use false in bass_steps for rhythmic rests (silence ≠ root note held).
 
 ═══ MUSIC THEORY REFERENCE ═══
 
@@ -631,7 +759,6 @@ RACK ROUTING — enable/disable modules and wire cables between them:
 
 SETTINGS — change only when explicitly asked:
   {{"settings": {{
-    "heat": 0.3,                 ← jam mutation intensity 0–1 (0=subtle, 1=anything goes)
     "style": "acid_house",       ← switch active style (use style id from the style list)
     "jam_bars": 4,               ← bars between jam cycles (0=continuous, 1/2/4/8 common values)
     "persona": "PULSE",          ← AI name shown in UI

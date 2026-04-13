@@ -4,21 +4,19 @@
 
 API="http://127.0.0.1:8765"
 DEMO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-TTS_DIR="$DEMO_DIR/tts_cache"
-NARRATION_LIST="$DEMO_DIR/.narration_playlist"
+TTS_DIR="${TTS_DIR:-$DEMO_DIR/tts_cache}"
+NARRATION_LIST="${NARRATION_LIST:-$DEMO_DIR/.narration_playlist}"
 XDO="python3 $DEMO_DIR/xdo.py"
 
-# TTS settings — CoquiTTS for demo narration
-# CoquiTTS requires Python <3.12; use .tts-venv if available.
-# Setup: python3.11 -m venv .tts-venv && .tts-venv/bin/pip install TTS
-TTS_MODEL="${TTS_MODEL:-tts_models/en/ljspeech/tacotron2-DDC}"
+# TTS settings — NeuTTS Air for demo narration
+# Setup: ./scripts/setup-neutts.sh
 PROJECT_DIR="${DEMO_DIR}/.."
-TTS_VENV_BIN="${PROJECT_DIR}/.tts-venv/bin"
-if [ -x "${TTS_VENV_BIN}/tts" ]; then
-    TTS_CMD="${TTS_VENV_BIN}/tts"
-else
-    TTS_CMD="tts"  # fall back to system PATH
-fi
+NEUTTS_PORT="${NEUTTS_PORT:-8770}"
+NEUTTS_URL="http://127.0.0.1:${NEUTTS_PORT}"
+NEUTTS_VENV="${PROJECT_DIR}/.neutts-venv"
+NEUTTS_REF_AUDIO="${NEUTTS_REF_AUDIO:-${PROJECT_DIR}/voices/narrator.wav}"
+NEUTTS_REF_TEXT="${NEUTTS_REF_TEXT:-${PROJECT_DIR}/voices/narrator.txt}"
+NEUTTS_PID=""
 
 # Window ID — set by record-demo.sh after finding the app
 APP_WINDOW_ID="${APP_WINDOW_ID:-0}"
@@ -115,6 +113,14 @@ api_rack_reset() {
     curl -sf -X POST "$API/api/rack/reset" >/dev/null 2>&1 || true
 }
 
+api_state_reset() {
+    # Full AppState wipe — everything back to defaults (Empty rack preset),
+    # preserving only the currently-loaded model path.  Guarantees a blank
+    # slate even when attaching to an already-running app (LFO off, seq
+    # stopped, no active style, no leftover agents, all params default).
+    curl -sf -X POST "$API/api/state/reset" >/dev/null 2>&1 || true
+}
+
 api_rack_add() {
     # Add a module to the rack. Returns JSON with "id" field.
     # Usage: id=$(api_rack_add "808")
@@ -207,22 +213,129 @@ wait_for_api() {
     echo "  API is up (took ${waited}s)"
 }
 
+# ─── NeuTTS server lifecycle ──────────────────────────────────────────────────
+
+start_neutts_server() {
+    if curl -sf "${NEUTTS_URL}/health" >/dev/null 2>&1; then
+        echo "  NeuTTS server already running on port ${NEUTTS_PORT}"
+        return 0
+    fi
+    local python="${NEUTTS_VENV}/bin/python"
+    [ -x "$python" ] || python="python3"
+    echo "  Starting NeuTTS server (port ${NEUTTS_PORT})..."
+    "$python" "${PROJECT_DIR}/scripts/neutts-server.py" --port "$NEUTTS_PORT" &
+    NEUTTS_PID=$!
+    local waited=0
+    while ! curl -sf "${NEUTTS_URL}/health" >/dev/null 2>&1; do
+        sleep 1
+        waited=$((waited + 1))
+        if [ "$waited" -ge 30 ]; then
+            echo "  ERROR: NeuTTS server failed to start after 30s" >&2
+            return 1
+        fi
+    done
+    echo "  NeuTTS server ready (took ${waited}s, PID: $NEUTTS_PID)"
+}
+
+stop_neutts_server() {
+    if [ -n "$NEUTTS_PID" ]; then
+        kill "$NEUTTS_PID" 2>/dev/null
+        wait "$NEUTTS_PID" 2>/dev/null
+        NEUTTS_PID=""
+        echo "  NeuTTS server stopped"
+    fi
+}
+
 # ─── TTS helpers ──────────────────────────────────────────────────────────────
 
+# Transform subtitle text into a TTS-friendly form.
+#
+# NeuTTS sometimes mispronounces bare acronyms (reads "AI" as the word "eye",
+# runs "LFO" together as "elfo"), so we spell them out with dots for the
+# speech pass.  The subtitle keeps the original short form, since that reads
+# more naturally on screen.
+#
+# Word-boundary aware — only whole-word matches are rewritten, so we don't
+# mangle "bass" or "fax" into something weird.
+tts_speakable() {
+    local text="$1"
+    text=$(printf '%s' "$text" | sed -E '
+        s/\bLFO\b/L.F.O./g;
+        s/\bAI\b/A.I./g;
+        s/\bFX\b/effects/g;
+        s/\bBPM\b/B.P.M./g;
+    ')
+    printf '%s' "$text"
+}
+
 tts_generate() {
-    # Pre-generate a TTS clip using CoquiTTS. Returns the wav path.
+    # Pre-generate a TTS clip using NeuTTS Air server. Returns the wav path.
     # Usage: tts_generate "clip_id" "Text to speak"
+    # Retries up to `TTS_MAX_ATTEMPTS` times (default 10). NeuTTS can:
+    #   - Stall on the first few warm-up calls
+    #   - Occasionally fail on specific phonetic inputs
+    #   - Segfault outright, leaving the server dead — we detect that via
+    #     `/health` and restart it automatically before the next retry so
+    #     we don't waste attempts against a corpse.
     local id="$1" text="$2"
     local outfile="$TTS_DIR/${id}.wav"
+    local max_attempts="${TTS_MAX_ATTEMPTS:-10}"
     mkdir -p "$TTS_DIR"
-    if [ ! -f "$outfile" ]; then
-        "$TTS_CMD" --text "$text" --out_path "$outfile" \
-            ${TTS_MODEL:+--model_name "$TTS_MODEL"} 2>/dev/null
-        if [ ! -f "$outfile" ]; then
-            echo "  ERROR: CoquiTTS failed to generate: $text" >&2
-        fi
+    if [ -f "$outfile" ] && [ -s "$outfile" ]; then
+        echo "$outfile"
+        return 0
     fi
+    # Build JSON payload safely via jq (handles quotes, escapes, unicode).
+    local json
+    if command -v jq >/dev/null 2>&1; then
+        json=$(jq -nc \
+            --arg text "$text" \
+            --arg ref_audio "$NEUTTS_REF_AUDIO" \
+            --arg ref_text "$NEUTTS_REF_TEXT" \
+            --arg out "$outfile" \
+            '{text:$text, ref_audio:$ref_audio, ref_text:$ref_text, out_path:$out}')
+    else
+        local esc
+        esc=$(printf '%s' "$text" | sed 's/\\/\\\\/g; s/"/\\"/g')
+        json=$(printf '{"text":"%s","ref_audio":"%s","ref_text":"%s","out_path":"%s"}' \
+            "$esc" "$NEUTTS_REF_AUDIO" "$NEUTTS_REF_TEXT" "$outfile")
+    fi
+    local attempt=0
+    local resp_code=""
+    while [ "$attempt" -lt "$max_attempts" ]; do
+        attempt=$((attempt + 1))
+        rm -f "$outfile"
+        resp_code=$(curl -s -w "%{http_code}" \
+            --max-time 120 \
+            -X POST "${NEUTTS_URL}/synthesize" \
+            -H "Content-Type: application/json" \
+            --data-binary "$json" \
+            -o "$outfile" 2>/dev/null || echo "000")
+        if [ -s "$outfile" ]; then
+            echo "$outfile"
+            return 0
+        fi
+        echo "  WARN: NeuTTS attempt $attempt/$max_attempts failed (HTTP $resp_code) for: $text" >&2
+        # Check if the server is even alive — if not (crashed, segfaulted,
+        # OOM'd), restart it before burning more retries.
+        if ! curl -sf --max-time 3 "${NEUTTS_URL}/health" >/dev/null 2>&1; then
+            echo "  [tts] NeuTTS server unreachable — restarting…" >&2
+            NEUTTS_PID=""
+            start_neutts_server || {
+                echo "  [tts] restart failed, will retry again" >&2
+            }
+        fi
+        # Back off slightly between attempts (1s, then 2s, then 2s cap).
+        if [ "$attempt" -lt 3 ]; then
+            sleep 1
+        else
+            sleep 2
+        fi
+    done
+    echo "  ERROR: NeuTTS synth gave up after $max_attempts attempts for: $text" >&2
+    rm -f "$outfile"
     echo "$outfile"
+    return 1
 }
 
 tts_duration() {
@@ -243,21 +356,59 @@ narrate() {
     # Play TTS and log subtitle entry.
     # Usage: narrate "clip_id" "Text that is also the subtitle"
     #        narrate --wait "clip_id" "Text..."   (blocks until done)
+    #
+    # Missing-WAV handling: if tts_generate couldn't produce audio (server
+    # down / retries exhausted / segfault), the scenario still proceeds —
+    # a reading-time estimate is written to NARRATION_LIST so the
+    # subtitle still appears in the SRT, and `--wait` blocks for that
+    # estimate so scenario pacing stays roughly intact.
     local blocking=0
     if [ "$1" = "--wait" ]; then blocking=1; shift; fi
 
     local id="$1" text="$2"
+    local speak_text
+    speak_text=$(tts_speakable "$text")
     local wavfile
-    wavfile=$(tts_generate "$id" "$text")
-    local dur
-    dur=$(tts_duration "$wavfile")
+    wavfile=$(tts_generate "$id" "$speak_text")
     local start_sec
     start_sec=$(demo_elapsed)
+    local est
+    est=$(min_subtitle_dur "$text")
+
+    if [ ! -s "$wavfile" ]; then
+        # No audio available — emit a silent subtitle cue so the SRT
+        # still shows the line, and keep the scenario timeline intact.
+        echo "${start_sec}|${est}|${text}" >> "$NARRATION_LIST"
+        echo "  [narrate] NO WAV: $id (subtitle only, ${est}s) — \"$text\"" >&2
+        if [ "$blocking" -eq 1 ]; then
+            sleep "$est"
+        fi
+        return 1
+    fi
+
+    local dur
+    dur=$(tts_duration "$wavfile")
+    # Guard against ffprobe returning empty / garbage.
+    case "$dur" in
+        ''|*[!0-9.]*) dur="$est" ;;
+    esac
 
     echo "${start_sec}|${dur}|${text}" >> "$NARRATION_LIST"
+    echo "  [narrate] $id (${dur}s): \"$text\"" >&2
 
     if [ "$blocking" -eq 1 ]; then
-        paplay "$wavfile" 2>/dev/null || aplay "$wavfile" 2>/dev/null
+        # Synchronous: paplay should block until the stream drains. If it
+        # exits non-zero (sink busy, no default sink, etc.), fall back to
+        # aplay. Small sleep after playback gives the PipeWire/ALSA stream
+        # time to release before the next clip opens a new one — without it
+        # rapid consecutive plays can silently drop.
+        if ! paplay "$wavfile" 2>&1; then
+            aplay "$wavfile" 2>&1 || {
+                echo "  [narrate] PLAY FAILED: $id — sleeping ${dur}s to keep timing" >&2
+                sleep "$dur"
+            }
+        fi
+        sleep 0.15
     else
         (paplay "$wavfile" 2>/dev/null || aplay "$wavfile" 2>/dev/null) &
     fi
@@ -396,6 +547,13 @@ pause() {
 generate_srt() {
     local outfile="${SRT_NAME:-${OUTPUT_DIR:-$DEMO_DIR}/demo_subtitles.srt}"
     local idx=0
+    # Stretch each subtitle's display window to 1.5× the TTS clip duration
+    # so the line stays on screen comfortably longer than the spoken audio.
+    # Override with SRT_DISPLAY_FACTOR env var (1.0 = audio-length only).
+    local factor="${SRT_DISPLAY_FACTOR:-1.5}"
+    # Subtitles were appearing ~1s ahead of the spoken audio; shift the whole
+    # SRT later by this many seconds. Override with SRT_OFFSET_SECS.
+    local offset="${SRT_OFFSET_SECS:-1.5}"
 
     if [ ! -f "$NARRATION_LIST" ]; then
         echo "No narration entries found" >&2
@@ -405,8 +563,10 @@ generate_srt() {
     > "$outfile"
     while IFS='|' read -r start_sec dur text; do
         idx=$((idx + 1))
-        local end_sec
-        end_sec=$(echo "$start_sec + $dur" | bc)
+        local display_dur end_sec
+        display_dur=$(awk -v d="$dur" -v f="$factor" 'BEGIN { printf "%.3f", d * f }')
+        start_sec=$(echo "$start_sec + $offset" | bc)
+        end_sec=$(echo "$start_sec + $display_dur" | bc)
 
         local start_ts end_ts
         start_ts=$(secs_to_srt "$start_sec")
@@ -421,6 +581,129 @@ generate_srt() {
     echo "$outfile"
 }
 
+min_subtitle_dur() {
+    # Rough reading-time estimate for a subtitle: 0.35s/word + 0.5s baseline,
+    # clamped to [1.5, 6.0] seconds. Used so subtitles remain on-screen for a
+    # readable time even when the corresponding TTS clip is shorter (e.g.
+    # truncated or fast-spoken).
+    local text="$1"
+    local words
+    words=$(echo "$text" | wc -w)
+    local dur
+    dur=$(awk -v w="$words" 'BEGIN { d = w * 0.35 + 0.5; if (d < 1.5) d = 1.5; if (d > 6.0) d = 6.0; printf "%.3f", d }')
+    echo "$dur"
+}
+
+pregenerate_srt() {
+    # Parse a scenario file and emit an SRT based on narrate + pause/sleep
+    # timings. Uses actual clip duration (if the WAV exists in $TTS_DIR),
+    # taking max(clip_dur, reading_time). Non-blocking narrate emits a
+    # subtitle at the current cursor time without advancing it; narrate --wait
+    # and pause/sleep advance the cursor. Timing is approximate (API calls
+    # take variable time) but close enough for subtitles.
+    #
+    # Usage: pregenerate_srt SCENARIO_FILE OUTFILE
+    local scenario="$1" outfile="$2"
+    [ -f "$scenario" ] || { echo "  pregenerate_srt: no scenario file: $scenario" >&2; return 1; }
+    > "$outfile"
+    local t=0.0 idx=0
+
+    local offset="${SRT_OFFSET_SECS:-1.5}"
+
+    _emit_srt() {
+        local start="$1" end="$2" text="$3"
+        idx=$((idx + 1))
+        start=$(awk -v a="$start" -v o="$offset" 'BEGIN { printf "%.3f", a + o }')
+        end=$(awk -v a="$end" -v o="$offset" 'BEGIN { printf "%.3f", a + o }')
+        local st et
+        st=$(secs_to_srt "$start")
+        et=$(secs_to_srt "$end")
+        {
+            echo "$idx"
+            echo "$st --> $et"
+            echo "$text"
+            echo ""
+        } >> "$outfile"
+    }
+
+    _clip_duration_or_estimate() {
+        local id="$1" text="$2"
+        local est
+        est=$(min_subtitle_dur "$text")
+        local wav="$TTS_DIR/${id}.wav"
+        if [ -f "$wav" ]; then
+            local d
+            d=$(tts_duration "$wav" 2>/dev/null)
+            # Use max(wav_dur, reading_time).
+            if [ -n "$d" ]; then
+                awk -v a="$d" -v b="$est" 'BEGIN { if (a > b) printf "%.3f", a; else printf "%.3f", b }'
+                return
+            fi
+        fi
+        echo "$est"
+    }
+
+    local clip_id=""
+    local scene_num=0
+    while IFS= read -r line; do
+        # Strip leading whitespace for matching
+        local trimmed="${line#"${line%%[![:space:]]*}"}"
+        # narrate "id" "text"   |   narrate --wait "id" "text"
+        if [[ "$trimmed" =~ ^narrate[[:space:]]+(--wait[[:space:]]+)?\"([^\"]+)\"[[:space:]]+\"(.+)\"[[:space:]]*\\?$ ]]; then
+            local is_wait="${BASH_REMATCH[1]}" id="${BASH_REMATCH[2]}" text="${BASH_REMATCH[3]}"
+            local dur
+            dur=$(_clip_duration_or_estimate "$id" "$text")
+            local end
+            end=$(awk -v a="$t" -v b="$dur" 'BEGIN { printf "%.3f", a + b }')
+            _emit_srt "$t" "$end" "$text"
+            if [ -n "$is_wait" ]; then
+                t="$end"
+            fi
+            clip_id=""
+        # Two-line form: narrate "id" \   (next line is the quoted text)
+        elif [[ "$trimmed" =~ ^narrate[[:space:]]+(--wait[[:space:]]+)?\"([^\"]+)\"[[:space:]]+\\$ ]]; then
+            clip_id="${BASH_REMATCH[2]}"
+            _two_line_is_wait="${BASH_REMATCH[1]}"
+        elif [[ -n "$clip_id" && "$trimmed" =~ ^\"(.+)\"[[:space:]]*$ ]]; then
+            local text="${BASH_REMATCH[1]}"
+            local dur
+            dur=$(_clip_duration_or_estimate "$clip_id" "$text")
+            local end
+            end=$(awk -v a="$t" -v b="$dur" 'BEGIN { printf "%.3f", a + b }')
+            _emit_srt "$t" "$end" "$text"
+            if [ -n "$_two_line_is_wait" ]; then
+                t="$end"
+            fi
+            clip_id=""
+            _two_line_is_wait=""
+        # scene "name"   (track scene counter for auto-ID lookup)
+        elif [[ "$trimmed" =~ ^scene[[:space:]]+\".*\" ]]; then
+            scene_num=$((scene_num + 1))
+        # say "text"  (expands to narrate --wait + pause 1)
+        elif [[ "$trimmed" =~ ^say[[:space:]]+\"(.+)\"[[:space:]]*$ ]]; then
+            local text="${BASH_REMATCH[1]}"
+            local slug
+            slug=$(echo "$text" | tr ' ' '_' | tr -cd 'a-zA-Z0-9_' | head -c 30)
+            local auto_id
+            auto_id=$(printf 'auto_%03d_%s' "$scene_num" "$slug")
+            local dur
+            dur=$(_clip_duration_or_estimate "$auto_id" "$text")
+            local end
+            end=$(awk -v a="$t" -v b="$dur" 'BEGIN { printf "%.3f", a + b }')
+            _emit_srt "$t" "$end" "$text"
+            # say always blocks (narrate --wait) then pauses 1s
+            t=$(awk -v a="$end" 'BEGIN { printf "%.3f", a + 1.0 }')
+        # pause N  |  sleep N  |  wait_seconds N   (advance cursor)
+        elif [[ "$trimmed" =~ ^(pause|sleep|wait_seconds)[[:space:]]+([0-9.]+) ]]; then
+            local n="${BASH_REMATCH[2]}"
+            t=$(awk -v a="$t" -v b="$n" 'BEGIN { printf "%.3f", a + b }')
+        fi
+    done < "$scenario"
+
+    echo "  Pre-generated SRT: $outfile ($idx entries, estimated end at ${t}s)"
+    echo "$outfile"
+}
+
 secs_to_srt() {
     local total="$1"
     local h m s ms
@@ -429,6 +712,58 @@ secs_to_srt() {
     s=$(echo "($total - $h * 3600 - $m * 60) / 1" | bc)
     ms=$(echo "scale=0; ($total - $h * 3600 - $m * 60 - $s) * 1000 / 1" | bc)
     printf "%02d:%02d:%02d,%03d" "$h" "$m" "$s" "$ms"
+}
+
+srt_time_to_secs() {
+    # HH:MM:SS,mmm → seconds (float).
+    local t="$1"
+    local h m s ms
+    IFS=':,' read -r h m s ms <<< "$t"
+    awk -v h="$h" -v m="$m" -v s="$s" -v ms="$ms" \
+        'BEGIN { printf "%.3f", h*3600 + m*60 + s + ms/1000 }'
+}
+
+srt_shift_seconds() {
+    # Subtract `offset` seconds from every timestamp in `file` (in place).
+    # Cues whose END time falls before 0 are dropped; cues whose START time
+    # falls before 0 are clipped to 0 so they still appear at the beginning.
+    local file="$1"
+    local offset="$2"
+    [ -f "$file" ] || return 1
+    local tmp
+    tmp="$(mktemp)"
+    awk -v offset="$offset" '
+        function ts_to_s(t,   h, m, s, ms, parts1, parts2) {
+            split(t, parts1, ",")
+            ms = parts1[2] + 0
+            split(parts1[1], parts2, ":")
+            h = parts2[1] + 0; m = parts2[2] + 0; s = parts2[3] + 0
+            return h*3600 + m*60 + s + ms/1000
+        }
+        function s_to_ts(x,   h, m, s, ms) {
+            if (x < 0) x = 0
+            h = int(x/3600); x -= h*3600
+            m = int(x/60);   x -= m*60
+            s = int(x)
+            ms = int((x - s)*1000 + 0.5)
+            return sprintf("%02d:%02d:%02d,%03d", h, m, s, ms)
+        }
+        BEGIN { block=""; drop=0 }
+        /^[0-9]+[[:space:]]*$/ && block=="" { idx=$0; block="idx"; next }
+        block=="idx" && /-->/ {
+            split($0, parts, " --> ")
+            a = ts_to_s(parts[1]) - offset
+            b = ts_to_s(parts[2]) - offset
+            if (b <= 0) { drop=1; block=""; idx=""; next }
+            printf "%s\n%s --> %s\n", idx, s_to_ts(a), s_to_ts(b)
+            block="text"; next
+        }
+        block=="text" && /^[[:space:]]*$/ { print ""; block=""; next }
+        block=="text" { print; next }
+        drop && /^[[:space:]]*$/ { drop=0; next }
+        drop { next }
+        { print }
+    ' "$file" > "$tmp" && mv "$tmp" "$file"
 }
 
 # ─── Window helpers (X11) ────────────────────────────────────────────────────
@@ -588,6 +923,11 @@ wait_for_model() {
 play()  { api_play; }
 stop()  { api_stop; }
 
+set_bpm() {
+    # Force sequencer tempo. Usage: set_bpm 170
+    api_params "{\"sequencer\":{\"bpm\":$1}}"
+}
+
 # ── AI prompts ───────────────────────────────────────────────────────────────
 
 ask() {
@@ -634,6 +974,20 @@ show_knobs() {
     pause 1
 }
 
+tour_rack() {
+    # Scroll through every zone (AI → MAIN AUDIO → VOICES → FX+MOD → back
+    # up) with a short pause on each so viewers can see the full rack
+    # contents. Useful while the back panel is flipped so every cable
+    # segment is on screen at some point.
+    # Usage: tour_rack              # ~6 s total, default pause 1.0 s/zone
+    #        tour_rack 2.0          # 2 s per zone (slower)
+    local per="${1:-1.2}"
+    for tgt in ai global voice fxmod voice global ai; do
+        api_scroll "$tgt"
+        pause "$per"
+    done
+}
+
 # ── Parameter control ────────────────────────────────────────────────────────
 
 lock() {
@@ -666,23 +1020,24 @@ sweep_pad() {
     # Keyframes define the shape, intermediate values are lerped.
     # Usage: sweep_pad [seconds]
     local duration="${1:-8}"
-    # Keyframes: cutoff resonance (smooth acid arc)
+    # Keyframes: cutoff resonance — stay in the top-left quarter of the pad
+    # (low cutoff, high resonance) for a focused acid squelch demo.
     local keys=(
-        "0.12 0.85"
-        "0.20 0.90"
-        "0.35 0.80"
-        "0.55 0.75"
-        "0.75 0.85"
-        "0.88 0.65"
-        "0.70 0.80"
-        "0.50 0.90"
+        "0.08 0.82"
+        "0.15 0.92"
+        "0.25 0.88"
+        "0.35 0.78"
+        "0.42 0.85"
         "0.30 0.95"
-        "0.15 0.88"
-        "0.25 0.92"
-        "0.60 0.75"
-        "0.80 0.65"
-        "0.45 0.88"
-        "0.20 0.82"
+        "0.18 0.90"
+        "0.10 0.80"
+        "0.22 0.96"
+        "0.38 0.88"
+        "0.28 0.78"
+        "0.12 0.92"
+        "0.20 0.98"
+        "0.33 0.82"
+        "0.10 0.88"
     )
     local nkeys=${#keys[@]}
     # ~60 updates per 8 seconds ≈ 7.5fps — smooth enough for visible knob motion

@@ -71,7 +71,7 @@ pub struct CollapseRequest {
 
 #[derive(Deserialize)]
 pub struct PresetRequest {
-    /// Preset name: "Solo", "Duo", "Swarm", "Band", "Voices", "Lite"
+    /// Preset name: "Solo", "Duo", "Swarm", "Crew", "Voices", "Lite"
     pub name: String,
 }
 
@@ -273,13 +273,17 @@ async fn post_scroll(
     Json(req): Json<ScrollRequest>,
 ) -> Json<OkResponse> {
     if req.collapse_others {
-        let is_global = req.target == "global" || req.target == "sequencer";
+        let is_ai = req.target == "ai" || req.target == "console" || req.target == "agent";
+        let is_global = req.target == "global"
+            || req.target == "main"
+            || req.target == "mainaudio"
+            || req.target == "sequencer";
         let is_voice = req.target == "voice"
             || req.target == "bass"
             || req.target == "808"
             || req.target == "909";
         let is_fx = req.target == "fxmod" || req.target == "fx";
-        api.app_state.write().collapse_requested = Some((!is_global, !is_voice, !is_fx));
+        api.app_state.write().collapse_requested = Some((!is_ai, !is_global, !is_voice, !is_fx));
     }
     api.app_state.write().scroll_target = Some(req.target.clone());
     api_log(&api, format!("[API] scroll → {}", req.target));
@@ -293,12 +297,16 @@ async fn post_collapse(
     AxumState(api): AxumState<ApiState>,
     Json(req): Json<CollapseRequest>,
 ) -> Json<OkResponse> {
+    // Tuple order: (ai, global, voice, fxmod) → each bool is "collapsed?".
+    // Action "X" collapses only zone X (leaving the others expanded), mirroring
+    // the pre-split behaviour of /api/rack/collapse { "action": "global" }.
     let collapse = match req.action.as_str() {
-        "all" => Some((true, true, true)),
-        "none" => Some((false, false, false)),
-        "global" => Some((true, false, false)),
-        "voice" => Some((false, true, false)),
-        "fxmod" => Some((false, false, true)),
+        "all" => Some((true, true, true, true)),
+        "none" => Some((false, false, false, false)),
+        "ai" => Some((true, false, false, false)),
+        "global" | "main" | "mainaudio" => Some((false, true, false, false)),
+        "voice" => Some((false, false, true, false)),
+        "fxmod" => Some((false, false, false, true)),
         _ => None,
     };
     if let Some(c) = collapse {
@@ -453,8 +461,7 @@ fn parse_module_kind(name: &str) -> Option<crate::state::ModuleKind> {
         "spectrumanalyzer" | "spectrum" => Some(SpectrumAnalyzer),
         "stereometer" => Some(StereoMeter),
         "activitytimeline" | "timeline" => Some(ActivityTimeline),
-        "espeakngtts" | "espeak" | "tts" => Some(EspeakNgTts),
-        "coquitts" | "coqui" => Some(CoquiTts),
+        "neutts" | "tts" | "voice" => Some(NeuTts),
         _ => None,
     }
 }
@@ -468,13 +475,15 @@ async fn post_rack_add(
     let mut s = api.app_state.write();
     let id = s.rack.add_module(kind);
     // Auto-wire voice and FX modules to MasterOutput with an audio cable.
-    if kind.default_zone() != crate::state::Zone::Global
-        && let Some(master_id) = s
-            .rack
-            .modules
-            .iter()
-            .find(|m| m.kind == crate::state::ModuleKind::MasterOutput)
-            .map(|m| m.id)
+    if !matches!(
+        kind.default_zone(),
+        crate::state::Zone::Global | crate::state::Zone::Ai
+    ) && let Some(master_id) = s
+        .rack
+        .modules
+        .iter()
+        .find(|m| m.kind == crate::state::ModuleKind::MasterOutput)
+        .map(|m| m.id)
     {
         s.rack.connect(
             PortRef {
@@ -492,15 +501,8 @@ async fn post_rack_add(
         );
     }
     // Create per-module state for TTS modules.
-    if matches!(
-        kind,
-        crate::state::ModuleKind::EspeakNgTts | crate::state::ModuleKind::CoquiTts
-    ) {
-        let mut tts_state = crate::state::TtsModuleState::new(id);
-        if kind == crate::state::ModuleKind::CoquiTts {
-            tts_state.engine = crate::state::TtsEngine::CoquiTts;
-        }
-        s.tts_modules.push(tts_state);
+    if kind == crate::state::ModuleKind::NeuTts {
+        s.tts_modules.push(crate::state::TtsModuleState::new(id));
     }
     // Auto-scroll to the new module so it's visible.
     s.scroll_target = Some(req.kind.clone());
@@ -539,7 +541,7 @@ async fn post_rack_agent(
         }
         if req.tts == Some(true) {
             // Add a TTS module and wire a control cable from this agent.
-            let tts_id = s.rack.add_module(crate::state::ModuleKind::EspeakNgTts);
+            let tts_id = s.rack.add_module(crate::state::ModuleKind::NeuTts);
             s.tts_modules
                 .push(crate::state::TtsModuleState::new(tts_id));
             s.rack.connect_control(id, tts_id);
@@ -576,8 +578,9 @@ async fn post_rack_agent(
             s.rack.connect_control(id, *tid);
         }
         s.llm_agents.push(agent);
-        // Auto-scroll to the console area so the new agent is visible.
-        s.scroll_target = Some("console".to_string());
+        // Auto-scroll to the AI zone (now its own tab containing the console
+        // plus all agents) so the newly added agent is visible.
+        s.scroll_target = Some("ai".to_string());
         id
     };
 
@@ -642,6 +645,27 @@ async fn post_rack_remove(
     })
 }
 
+/// Full AppState reset — everything back to defaults, Empty rack preset.
+/// Preserves the currently-loaded model path so the user doesn't lose it.
+/// Intended for demo recording, CI, and automated sessions that need to
+/// guarantee a blank slate even when attaching to an already-running app.
+async fn post_state_reset(AxumState(api): AxumState<ApiState>) -> Json<OkResponse> {
+    use crate::state::{AppState, RACK_PRESETS, RackState};
+    let mut s = api.app_state.write();
+    let model_path = s.llm.model_path.clone();
+    let ui_scale = s.ui_prefs.ui_scale;
+    *s = AppState::default();
+    s.llm.model_path = model_path;
+    s.ui_prefs.ui_scale = ui_scale;
+    s.rack = RackState::from_preset(&RACK_PRESETS[0]);
+    drop(s);
+    api_log(&api, "[API] state: full reset to defaults");
+    Json(OkResponse {
+        ok: true,
+        message: Some("state reset".into()),
+    })
+}
+
 /// Clear the rack to a minimal setup: just sequencer + master + LLM console.
 async fn post_rack_reset(AxumState(api): AxumState<ApiState>) -> Json<OkResponse> {
     use crate::state::ModuleKind;
@@ -701,6 +725,7 @@ pub fn build_router(api_state: ApiState) -> Router {
         .route("/api/rack/cable", post(post_rack_cable))
         .route("/api/rack/remove", post(post_rack_remove))
         .route("/api/rack/reset", post(post_rack_reset))
+        .route("/api/state/reset", post(post_state_reset))
         .route("/api/rack/collapse", post(post_collapse))
         .layer(cors)
         .with_state(api_state)

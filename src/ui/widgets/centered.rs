@@ -8,7 +8,10 @@ pub fn centered_row<R>(
     ui: &mut Ui,
     add_contents: impl FnOnce(&mut Ui) -> R,
 ) -> egui::InnerResponse<R> {
-    let row_id = ui.id().with("centered_row_w");
+    // Stable unique ID per call site — ui.next_auto_id() increments each call
+    // within the same parent, so sibling rows get distinct IDs without relying
+    // on cursor position (which shifts when spacers change, causing oscillation).
+    let row_id = ui.next_auto_id().with("centered_row_w");
     let prev_w: f32 = ui.ctx().data(|d| d.get_temp(row_id).unwrap_or(0.0));
     let avail = ui.available_width();
     let spacer = ((avail - prev_w) / 2.0).max(0.0);

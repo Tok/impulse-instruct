@@ -20,7 +20,9 @@ Output: `demo/output/impulse_demo_<timestamp>.mp4`
 | Tool | Package | Purpose |
 |------|---------|---------|
 | `ffmpeg` (with NVENC) | `ffmpeg` | Screen recording + encoding |
-| `espeak-ng` | `espeak-ng` | TTS narration |
+| NeuTTS Air | `scripts/download-models.sh` (offers setup) | TTS narration (voice cloning GGUF) |
+| `espeak-ng` | `espeak-ng` | Reference-voice rendering for `scripts/generate-voices.sh` |
+| `jq` | `jq` | Safe JSON payload building for NeuTTS requests |
 | `paplay` | `pulseaudio-utils` | TTS audio playback |
 | `pw-record` | `pipewire` | Per-app audio capture |
 | `wmctrl` | `wmctrl` | Window detection |
@@ -42,13 +44,33 @@ Output: `demo/output/impulse_demo_<timestamp>.mp4`
 ## How it works
 
 1. **Build** — `cargo build --release`
-2. **Launch** — starts the app with `--skip-wizard --model <gemma4>`
-3. **Window detection** — `wmctrl` finds the app window, gets geometry
-4. **Screen recording** — `ffmpeg` with x11grab + NVENC (`h264_nvenc`)
-5. **Audio capture** — `pw-record` targets the app's PipeWire node (isolated)
-6. **Scenario** — sources `scenario.sh` which drives the app via HTTP API
-7. **TTS narration** — pre-generated clips played via `paplay`
-8. **Post-processing** — mux video + audio, burn subtitles, NVENC encode
+2. **Pre-generate TTS** — start `scripts/neutts-server.py`, walk the
+   scenario matching `narrate` / `say` / `scene` lines, write all clips
+   to `$BATCH_DIR/tts/`. Retries up to 3× with a 120 s curl timeout; the
+   end of this step prints `(N ok, M failed)` with the missing clip IDs
+3. **Pre-generate SRT** — `pregenerate_srt` parses the scenario again
+   (`say` / `narrate` / `scene` / `pause` / `wait_seconds`) and writes a
+   complete subtitle file before recording starts; durations are
+   `max(clip_duration, reading_time)` so subtitles stay on screen long
+   enough even if NeuTTS truncated the audio
+4. **Stop NeuTTS server** — frees GPU memory for the main LLM during
+   recording; runtime playback uses cached WAVs
+5. **Launch app** — `--skip-wizard --fresh-session --model <gemma4>` so
+   recordings never inherit the user's saved rack
+6. **Window detection** — `wmctrl` finds the app window, gets geometry
+7. **Screen recording** — `ffmpeg` with x11grab + NVENC (`h264_nvenc`),
+   `-pix_fmt yuv420p -vf "crop=trunc(iw/2)*2:trunc(ih/2)*2"` for even
+   dimensions
+8. **Audio capture** — `pw-record` targets the app's PipeWire node
+   (isolated) or a virtual recording sink
+9. **Scenario** — sources the scenario file; high-level helpers
+   (`say`, `wait_seconds`, `scene`) drive the app via HTTP API
+10. **Runtime narration** — `narrate --wait` blocks on `paplay` of the
+    cached WAV per clip; `[narrate] <id> (<dur>s)` lines log each play,
+    `PLAY FAILED` surfaces paplay/aplay failures that used to be silent
+11. **Post-processing** — re-encode with
+    `-sws_flags "lanczos+accurate_rnd+full_chroma_int+full_chroma_inp"`,
+    mux audio, optionally burn the pre-generated SRT in
 
 ## Demo scenario structure
 

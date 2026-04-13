@@ -14,7 +14,7 @@ cargo test                           # unit tests (split across src/tests/)
 ./start.sh --dev                     # build + launch (debug + verbose)
 ./scripts/run-tests.sh --coverage    # HTML coverage report
 ./scripts/build-all.sh               # Linux + Windows EXE → dist/
-./scripts/download-models.sh         # fetch Gemma 4 E4B GGUF (~4.6 GB, default, needs HF account)
+./scripts/download-models.sh         # fetch Gemma 4 E4B GGUF (~4.6 GB, default) + NeuTTS Air (~527 MB, optional)
 ./scripts/run-llm-tests.sh           # all LLM integration suites (needs running model)
 ./scripts/run-llm-style.sh           # artist/genre reference tests only
 ./scripts/run-llm-theory.sh          # music theory + producer lingo tests only
@@ -133,7 +133,7 @@ POST /api/sequencer/play
 POST /api/sequencer/stop
 POST /api/scroll         { "target": "voice" }  (global/voice/fxmod/bass/808/fx/…)
 POST /api/scroll         { "target": "bass", "collapse_others": true }  focus mode
-POST /api/preset         { "name": "Band" }     (Solo/Duo/Swarm/Band/Voices/Lite)
+POST /api/preset         { "name": "Crew" }     (Solo/Duo/Swarm/Crew/Voices/Lite)
 POST /api/flip           { "show_back": true }   (true=cables, false=knobs)
 POST /api/rack/reset                              strip to sequencer + master + console
 POST /api/rack/add       { "kind": "808" }        add module, returns { "id": N }

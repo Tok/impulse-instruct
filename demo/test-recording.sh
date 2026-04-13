@@ -16,6 +16,10 @@ VERSION=$(grep '^version' "$PROJECT_DIR/Cargo.toml" | head -1 | sed 's/.*"\(.*\)
 BATCH_DIR="$OUTPUT_DIR/${TIMESTAMP}"
 BASENAME="v${VERSION}-test"
 
+# Clean up old test batches (keep last 3)
+mkdir -p "$OUTPUT_DIR"
+ls -1dt "$OUTPUT_DIR"/20* 2>/dev/null | tail -n +4 | xargs rm -rf 2>/dev/null || true
+
 source "$DEMO_DIR/lib.sh"
 
 APP_RUNNING=0
@@ -39,7 +43,7 @@ if [ "$APP_RUNNING" -eq 0 ]; then
     echo "[1/7] Launching app (mock mode)..."
     cd "$PROJECT_DIR"
     if [ -f "target/release/impulse-instruct" ]; then
-        ./target/release/impulse-instruct --skip-wizard --mock --log info &
+        ./target/release/impulse-instruct --skip-wizard --fresh-session --mock --log info &
     else
         echo "  No release build. Run: cargo build --release"
         exit 1
@@ -87,6 +91,9 @@ echo "  Geometry: ${GRAB_W}x${GRAB_H}"
 RAW_VIDEO="$BATCH_DIR/${BASENAME}-raw.mkv"
 echo "[3/7] Starting video capture → $(basename "$RAW_VIDEO")"
 
+# Crop to even dimensions (yuv420p needs 2x2 blocks; odd window sizes break libx264)
+EVEN_CROP="-vf crop=trunc(iw/2)*2:trunc(ih/2)*2"
+
 # -t 15 hard stops after 15s even if SIGINT fails
 setsid ffmpeg -y \
     -f x11grab \
@@ -95,8 +102,8 @@ setsid ffmpeg -y \
     -draw_mouse 0 \
     -i "${DISPLAY}" \
     -t 15 \
+    $EVEN_CROP -pix_fmt yuv420p \
     -c:v h264_nvenc -preset p4 -cq 20 \
-    -pix_fmt yuv420p \
     -an \
     "$RAW_VIDEO" \
     </dev/null >/dev/null 2>&1 &
@@ -112,8 +119,8 @@ if ! kill -0 "$FFMPEG_PID" 2>/dev/null; then
         -draw_mouse 0 \
         -i "${DISPLAY}" \
         -t 15 \
+        $EVEN_CROP -pix_fmt yuv420p \
         -c:v libx264 -preset ultrafast -crf 23 \
-        -pix_fmt yuv420p \
         -an \
         "$RAW_VIDEO" \
         </dev/null >/dev/null 2>&1 &
@@ -205,15 +212,14 @@ HAS_AUDIO=0
 AUDIO_ARGS=""
 [ "$HAS_AUDIO" -eq 1 ] && AUDIO_ARGS="-i $APP_AUDIO -c:a aac -b:a 128k -map 0:v:0 -map 1:a:0 -shortest"
 
-# Clean version
-SWS="-sws_flags +accurate_rnd+full_chroma_int"
+SWS_ENCODE="-sws_flags lanczos+accurate_rnd+full_chroma_int+full_chroma_inp"
 echo -n "  Clean video: "
 if ffmpeg -y -i "$RAW_VIDEO" $AUDIO_ARGS \
-    $SWS -c:v h264_nvenc -preset p4 -cq 22 \
+    $SWS_ENCODE -c:v h264_nvenc -preset p4 -cq 22 \
     "$FINAL" </dev/null 2>/dev/null; then
     echo "OK ($(du -h "$FINAL" | cut -f1))"
 elif ffmpeg -y -i "$RAW_VIDEO" $AUDIO_ARGS \
-    $SWS -c:v libx264 -preset fast -crf 23 \
+    $SWS_ENCODE -c:v libx264 -preset fast -crf 23 \
     "$FINAL" </dev/null 2>/dev/null; then
     echo "OK libx264 ($(du -h "$FINAL" | cut -f1))"
 else
@@ -224,12 +230,12 @@ fi
 echo -n "  Subtitled video: "
 if [ -f "$SRT_FILE" ] && [ -f "$RAW_VIDEO" ]; then
     if ffmpeg -y -i "$RAW_VIDEO" $AUDIO_ARGS \
-        $SWS -vf "subtitles=${SRT_FILE}:force_style='FontSize=22,FontName=monospace,PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,Outline=2,MarginV=40'" \
+        $SWS_ENCODE -vf "subtitles=${SRT_FILE}:force_style='FontSize=22,FontName=monospace,PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,Outline=2,MarginV=40'" \
         -c:v h264_nvenc -preset p4 -cq 22 \
         "$FINAL_SUBS" </dev/null 2>/dev/null; then
         echo "OK ($(du -h "$FINAL_SUBS" | cut -f1))"
     elif ffmpeg -y -i "$RAW_VIDEO" $AUDIO_ARGS \
-        $SWS -vf "subtitles=${SRT_FILE}:force_style='FontSize=22,FontName=monospace'" \
+        $SWS_ENCODE -vf "subtitles=${SRT_FILE}:force_style='FontSize=22,FontName=monospace'" \
         -c:v libx264 -preset fast -crf 23 \
         "$FINAL_SUBS" </dev/null 2>/dev/null; then
         echo "OK libx264 ($(du -h "$FINAL_SUBS" | cut -f1))"
@@ -254,6 +260,55 @@ for f in "$RAW_VIDEO" "$APP_AUDIO" "$SRT_FILE" "$FINAL" "$FINAL_SUBS"; do
         printf "  %-50s  MISSING\n" "$(basename "$f")"
     fi
 done
+
+# ── Chroma offset test encodes ────────────────────────────────────────────────
+# Re-encode the raw capture with different approaches to find which fixes the
+# vertical chroma offset. Compare these side-by-side with the raw.
+
+if [ -f "$RAW_VIDEO" ]; then
+    echo ""
+    echo "=== Chroma test encodes ==="
+    CDIR="$BATCH_DIR/chroma_tests"
+    mkdir -p "$CDIR"
+
+    # Ensure even dimensions for all re-encodes
+    PAD="-vf pad=ceil(iw/2)*2:ceil(ih/2)*2"
+
+    echo -n "  1_plain_420p.mp4 ... "
+    ffmpeg -y -i "$RAW_VIDEO" $PAD -pix_fmt yuv420p \
+        -c:v libx264 -preset fast -crf 20 \
+        "$CDIR/1_plain_420p.mp4" </dev/null 2>/dev/null && echo "OK" || echo "FAIL"
+
+    echo -n "  2_fullrange.mp4 ... "
+    ffmpeg -y -i "$RAW_VIDEO" \
+        -vf "pad=ceil(iw/2)*2:ceil(ih/2)*2,scale=in_range=full:out_range=full:flags=lanczos+accurate_rnd+full_chroma_int+full_chroma_inp" \
+        -pix_fmt yuv420p -color_range pc \
+        -c:v libx264 -preset fast -crf 20 -x264-params fullrange=1 \
+        "$CDIR/2_fullrange.mp4" </dev/null 2>/dev/null && echo "OK" || echo "FAIL"
+
+    echo -n "  3_chromaloc.mp4 ... "
+    ffmpeg -y -i "$RAW_VIDEO" $PAD -pix_fmt yuv420p \
+        -chroma_sample_location left \
+        -colorspace bt709 -color_primaries bt709 -color_trc bt709 \
+        -c:v libx264 -preset fast -crf 20 \
+        "$CDIR/3_chromaloc.mp4" </dev/null 2>/dev/null && echo "OK" || echo "FAIL"
+
+    echo -n "  4_yuv444p.mp4 ... "
+    ffmpeg -y -i "$RAW_VIDEO" $PAD -pix_fmt yuv444p -profile:v high444p \
+        -c:v libx264 -preset fast -crf 20 \
+        "$CDIR/4_yuv444p.mp4" </dev/null 2>/dev/null && echo "OK" || echo "FAIL"
+
+    echo -n "  5_sws_lanczos.mp4 ... "
+    ffmpeg -y -i "$RAW_VIDEO" $PAD \
+        -sws_flags "lanczos+accurate_rnd+full_chroma_int+full_chroma_inp" \
+        -c:v libx264 -preset fast -crf 20 \
+        "$CDIR/5_sws_lanczos.mp4" </dev/null 2>/dev/null && echo "OK" || echo "FAIL"
+
+    echo ""
+    echo "Compare these files in $CDIR/"
+    echo "  4_yuv444p.mp4 = no chroma subsampling (reference)"
+    echo "  The first 420p variant matching it is the fix."
+fi
 
 echo ""
 echo "Test complete."

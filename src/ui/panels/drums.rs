@@ -1,6 +1,7 @@
 // ─── ui/panels/drums.rs ───────────────────────────────────────────────────────
 // Drum kit panels: Kit A (808-style), Kit B (909-style), and Amen sampler.
 
+use super::PAN_SLIDER_W;
 use crate::audio::{AudioCommand, load_wav_to_44100};
 use crate::state::ParamMode;
 use crate::ui::{ImpulseApp, theme, widgets};
@@ -47,9 +48,31 @@ pub fn draw_kit_a(app: &mut ImpulseApp, ui: &mut egui::Ui) {
 
     let ctrl = widgets::ControlPrefs::from_prefs(&app.state.read().ui_prefs);
     let xy_size = app.state.read().ui_prefs.effective_xy_px();
-    let gw = widgets::even_group_width(ui, 3);
+    let avail = ui.available_width();
+    let gw = ((avail - super::GLASS_GAP) / 2.0).floor(); // 2-column layout
+    let group_h = ctrl.knob_size * 2.0 + 50.0;
+
+    // PAN slider — right-justified
     ui.horizontal(|ui| {
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            if widgets::pan_slider(ui, &mut kpan_a, PAN_SLIDER_W) {
+                changed = true;
+            }
+            ui.label(
+                egui::RichText::new("PAN")
+                    .color(theme::SMOKE)
+                    .monospace()
+                    .size(8.0),
+            );
+        });
+    });
+
+    // Row 1: KICK (left) + KICK XY PAD (right)
+    ui.horizontal(|ui| {
+        ui.spacing_mut().item_spacing.x = super::GLASS_GAP;
         widgets::glass_group_fill(ui, gw, gw, |ui| {
+            ui.set_min_height(group_h);
+            ui.spacing_mut().item_spacing.x = super::KNOB_SPACING;
             ui.label(
                 egui::RichText::new("KICK")
                     .color(theme::FOG)
@@ -81,19 +104,50 @@ pub fn draw_kit_a(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                     changed = true;
                 }
             });
-            ui.horizontal(|ui| {
-                ui.label(
-                    egui::RichText::new("PAN")
-                        .color(theme::SMOKE)
-                        .monospace()
-                        .size(7.5),
-                );
-                if widgets::pan_slider(ui, &mut kpan_a, 60.0) {
-                    changed = true;
-                }
-            });
         });
+        // KICK XY PAD (right column, padded)
+        ui.add_space(6.0);
+        ui.vertical(|ui| {
+            ui.set_min_height(group_h);
+            ui.add_space(4.0);
+            ui.label(
+                egui::RichText::new("KICK: PITCH × DECAY")
+                    .color(theme::SMOKE)
+                    .monospace()
+                    .size(8.0),
+            );
+            // Constrain pad to fit within the cell with padding
+            let pad_size = (gw - 40.0).min(xy_size).min(group_h - 30.0);
+            if widgets::xy_pad(
+                ui,
+                "drums_kick_xy",
+                "PITCH",
+                "DECAY",
+                &mut kp,
+                &mut kd,
+                pad_size,
+                false,
+                1,
+            )
+            .0
+            {
+                let mut s = app.state.write();
+                s.kit_a.kick.pitch = kp;
+                s.kit_a.kick.decay = kd;
+                drop(s);
+                app.push_audio_params();
+            }
+        });
+    });
+
+    ui.add_space(super::GLASS_GAP);
+
+    // Row 2: SNARE (left) + HIHAT (right)
+    ui.horizontal(|ui| {
+        ui.spacing_mut().item_spacing.x = super::GLASS_GAP;
         widgets::glass_group_fill(ui, gw, gw, |ui| {
+            ui.set_min_height(group_h);
+            ui.spacing_mut().item_spacing.x = super::KNOB_SPACING;
             ui.label(
                 egui::RichText::new("SNARE")
                     .color(theme::FOG)
@@ -104,7 +158,7 @@ pub fn draw_kit_a(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                 if widgets::param_control(ui, "TONE", &mut st, ParamMode::Free, ctrl).0 {
                     changed = true;
                 }
-                if widgets::param_control(ui, "SNAP", &mut ssn, ParamMode::Free, ctrl).0 {
+                if widgets::param_control(ui, "SNAPPY", &mut ssn, ParamMode::Free, ctrl).0 {
                     changed = true;
                 }
             });
@@ -118,6 +172,8 @@ pub fn draw_kit_a(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             });
         });
         widgets::glass_group_fill(ui, gw, gw, |ui| {
+            ui.set_min_height(group_h);
+            ui.spacing_mut().item_spacing.x = super::KNOB_SPACING;
             ui.label(
                 egui::RichText::new("HIHAT")
                     .color(theme::FOG)
@@ -125,13 +181,15 @@ pub fn draw_kit_a(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                     .size(9.5),
             );
             widgets::centered_row(ui, |ui| {
-                if widgets::param_control(ui, "CLSD", &mut hcd, ParamMode::Free, ctrl).0 {
+                if widgets::param_control(ui, "CLOSED", &mut hcd, ParamMode::Free, ctrl).0 {
                     changed = true;
                 }
                 if widgets::param_control(ui, "OPEN", &mut hod, ParamMode::Free, ctrl).0 {
                     changed = true;
                 }
-                if widgets::param_control(ui, "LVL", &mut hv, ParamMode::Free, ctrl).0 {
+            });
+            widgets::centered_row(ui, |ui| {
+                if widgets::param_control(ui, "LEVEL", &mut hv, ParamMode::Free, ctrl).0 {
                     changed = true;
                 }
             });
@@ -159,60 +217,18 @@ pub fn draw_kit_a(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         s.kit_a.hihat_open.volume = hv;
         drop(s);
         app.push_audio_params();
-    }
-
-    // PITCH × DECAY XY pad for quick kick shaping (centered)
-    ui.add_space(2.0);
-    ui.vertical_centered(|ui| {
-        ui.label(
-            egui::RichText::new("KICK: PITCH × DECAY")
-                .color(theme::SMOKE)
-                .monospace()
-                .size(9.0),
-        );
-        ui.horizontal(|ui| {
-            let pad_spacer = ((ui.available_width() - xy_size - 10.0) / 2.0).max(0.0);
-            ui.add_space(pad_spacer);
-            if widgets::xy_pad(
-                ui,
-                "drums_kick_xy",
-                "PIT",
-                "DEC",
-                &mut kp,
-                &mut kd,
-                xy_size,
-                false,
-                1,
-            )
-            .0
-            {
-                let mut s = app.state.write();
-                s.kit_a.kick.pitch = kp;
-                s.kit_a.kick.decay = kd;
-                drop(s);
-                app.push_audio_params();
-            }
-        });
-    }); // close vertical_centered
-
-    // Gabber kick preset
-    ui.add_space(2.0);
-    if ui
-        .add(
-            egui::Button::new(
-                egui::RichText::new("GABBER KICK")
-                    .monospace()
-                    .size(8.0)
-                    .color(theme::FOG),
-            )
-            .fill(egui::Color32::from_gray(22)),
-        )
-        .on_hover_text("Extreme pitch sweep + hard clip - gabber/hardcore kick")
-        .clicked()
-    {
-        let s = app.state.read().clone();
-        *app.state.write() = crate::state::apply_gabber_kick_preset(s);
-        app.push_audio_params();
+        app.observe_edits(&[
+            ("kit_a.kick.pitch", kp),
+            ("kit_a.kick.decay", kd),
+            ("kit_a.kick.punch", kpu),
+            ("kit_a.kick.volume", kv),
+            ("kit_a.snare.tone", st),
+            ("kit_a.snare.snappy", ssn),
+            ("kit_a.snare.decay", sd),
+            ("kit_a.snare.volume", sv),
+            ("kit_a.hihat_closed.decay", hcd),
+            ("kit_a.hihat_closed.volume", hv),
+        ]);
     }
 }
 
@@ -254,53 +270,68 @@ pub fn draw_kit_b(app: &mut ImpulseApp, ui: &mut egui::Ui) {
     let mut changed = false;
 
     let ctrl = widgets::ControlPrefs::from_prefs(&app.state.read().ui_prefs);
-    let gw = widgets::even_group_width(ui, 3);
+    let ctrl_big = ctrl.phi_bigger(); // larger knobs for the important KICK params
+    let avail = ui.available_width();
+    let gw_half = ((avail - super::GLASS_GAP) / 2.0).floor();
+
+    // PAN slider — right-justified
     ui.horizontal(|ui| {
-        widgets::glass_group_fill(ui, gw, gw, |ui| {
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            if widgets::pan_slider(ui, &mut kpan_b, PAN_SLIDER_W) {
+                changed = true;
+            }
             ui.label(
-                egui::RichText::new("KICK")
-                    .color(theme::FOG)
+                egui::RichText::new("PAN")
+                    .color(theme::SMOKE)
                     .monospace()
-                    .size(9.5),
+                    .size(8.0),
             );
-            widgets::centered_row(ui, |ui| {
-                if widgets::param_control(ui, "PITCH", &mut kp, ParamMode::Free, ctrl).0 {
-                    changed = true;
-                }
-                if widgets::param_control(ui, "DECAY", &mut kd, ParamMode::Free, ctrl).0 {
-                    changed = true;
-                }
-                if widgets::param_control(ui, "PUNCH", &mut kpu, ParamMode::Free, ctrl).0 {
-                    changed = true;
-                }
-                if widgets::param_control(ui, "LEVEL", &mut kv, ParamMode::Free, ctrl).0 {
-                    changed = true;
-                }
-            });
-            widgets::centered_row(ui, |ui| {
-                if widgets::param_control(ui, "P.DPT", &mut kped, ParamMode::Free, ctrl).0 {
-                    changed = true;
-                }
-                if widgets::param_control(ui, "P.TIM", &mut kpet, ParamMode::Free, ctrl).0 {
-                    changed = true;
-                }
-                if widgets::param_control(ui, "CLIP", &mut kclip, ParamMode::Free, ctrl).0 {
-                    changed = true;
-                }
-            });
-            ui.horizontal(|ui| {
-                ui.label(
-                    egui::RichText::new("PAN")
-                        .color(theme::SMOKE)
-                        .monospace()
-                        .size(7.5),
-                );
-                if widgets::pan_slider(ui, &mut kpan_b, 60.0) {
-                    changed = true;
-                }
-            });
         });
-        widgets::glass_group_fill(ui, gw, gw, |ui| {
+    });
+
+    // Row 1: KICK — full width, bigger knobs (most important for 909)
+    widgets::glass_group_fill(ui, avail, avail, |ui| {
+        ui.spacing_mut().item_spacing.x = super::KNOB_SPACING;
+        ui.label(
+            egui::RichText::new("KICK")
+                .color(theme::FOG)
+                .monospace()
+                .size(9.5),
+        );
+        widgets::centered_row(ui, |ui| {
+            if widgets::param_control(ui, "PITCH", &mut kp, ParamMode::Free, ctrl_big).0 {
+                changed = true;
+            }
+            if widgets::param_control(ui, "DECAY", &mut kd, ParamMode::Free, ctrl_big).0 {
+                changed = true;
+            }
+            if widgets::param_control(ui, "PUNCH", &mut kpu, ParamMode::Free, ctrl_big).0 {
+                changed = true;
+            }
+            if widgets::param_control(ui, "LEVEL", &mut kv, ParamMode::Free, ctrl_big).0 {
+                changed = true;
+            }
+        });
+        widgets::centered_row(ui, |ui| {
+            if widgets::param_control(ui, "P.DEPTH", &mut kped, ParamMode::Free, ctrl).0 {
+                changed = true;
+            }
+            if widgets::param_control(ui, "P.TIME", &mut kpet, ParamMode::Free, ctrl).0 {
+                changed = true;
+            }
+            if widgets::param_control(ui, "CLIP", &mut kclip, ParamMode::Free, ctrl).0 {
+                changed = true;
+            }
+        });
+    });
+
+    ui.add_space(super::GLASS_GAP);
+
+    // Row 2: SNARE (left) + CLAP/RIM (right) — all knobs single row each
+    ui.horizontal(|ui| {
+        ui.spacing_mut().item_spacing.x = super::GLASS_GAP;
+        widgets::glass_group_fill(ui, gw_half, gw_half, |ui| {
+            ui.spacing_mut().item_spacing.x = super::KNOB_SPACING;
             ui.label(
                 egui::RichText::new("SNARE")
                     .color(theme::FOG)
@@ -311,11 +342,9 @@ pub fn draw_kit_b(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                 if widgets::param_control(ui, "TONE", &mut st, ParamMode::Free, ctrl).0 {
                     changed = true;
                 }
-                if widgets::param_control(ui, "SNAP", &mut ssn, ParamMode::Free, ctrl).0 {
+                if widgets::param_control(ui, "SNAPPY", &mut ssn, ParamMode::Free, ctrl).0 {
                     changed = true;
                 }
-            });
-            widgets::centered_row(ui, |ui| {
                 if widgets::param_control(ui, "DECAY", &mut sd, ParamMode::Free, ctrl).0 {
                     changed = true;
                 }
@@ -324,7 +353,8 @@ pub fn draw_kit_b(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                 }
             });
         });
-        widgets::glass_group_fill(ui, gw, gw, |ui| {
+        widgets::glass_group_fill(ui, gw_half, gw_half, |ui| {
+            ui.spacing_mut().item_spacing.x = super::KNOB_SPACING;
             ui.label(
                 egui::RichText::new("CLAP / RIM")
                     .color(theme::FOG)
@@ -332,10 +362,10 @@ pub fn draw_kit_b(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                     .size(9.5),
             );
             widgets::centered_row(ui, |ui| {
-                if widgets::param_control(ui, "C.DEC", &mut cd, ParamMode::Free, ctrl).0 {
+                if widgets::param_control(ui, "DECAY", &mut cd, ParamMode::Free, ctrl).0 {
                     changed = true;
                 }
-                if widgets::param_control(ui, "C.LVL", &mut cv, ParamMode::Free, ctrl).0 {
+                if widgets::param_control(ui, "LEVEL", &mut cv, ParamMode::Free, ctrl).0 {
                     changed = true;
                 }
             });
@@ -360,6 +390,18 @@ pub fn draw_kit_b(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         s.kit_b.clap.volume = cv;
         drop(s);
         app.push_audio_params();
+        app.observe_edits(&[
+            ("kit_b.kick.pitch", kp),
+            ("kit_b.kick.decay", kd),
+            ("kit_b.kick.punch", kpu),
+            ("kit_b.kick.volume", kv),
+            ("kit_b.snare.tone", st),
+            ("kit_b.snare.snappy", ssn),
+            ("kit_b.snare.decay", sd),
+            ("kit_b.snare.volume", sv),
+            ("kit_b.clap.decay", cd),
+            ("kit_b.clap.volume", cv),
+        ]);
     }
 }
 
@@ -367,58 +409,43 @@ pub fn draw_kit_b(app: &mut ImpulseApp, ui: &mut egui::Ui) {
 
 pub fn draw_amen(app: &mut ImpulseApp, ui: &mut egui::Ui) {
     let ctrl = widgets::ControlPrefs::from_prefs(&app.state.read().ui_prefs);
-
-    // ── File path + Load button ───────────────────────────────────────────────
     let mut path = app.state.read().amen.path.clone();
-    ui.horizontal(|ui| {
-        ui.label(
-            egui::RichText::new("WAV file")
-                .monospace()
-                .size(9.5)
-                .color(theme::FOG),
-        );
-    });
-    ui.horizontal(|ui| {
-        let resp = ui.add(
-            egui::TextEdit::singleline(&mut path)
-                .hint_text("path/to/amen.wav")
-                .desired_width(ui.available_width() - 60.0),
-        );
-        if resp.changed() {
-            app.state.write().amen.path = path.clone();
-        }
-        if ui.button("Load").clicked() {
-            match load_wav_to_44100(&path) {
-                Some(data) => {
-                    let _ = app.audio_tx.push(AudioCommand::LoadSampler(data));
-                    log::info!("Amen sampler: loaded '{}'", path);
-                }
-                None => {
-                    log::warn!("Amen sampler: could not load '{}'", path);
-                }
-            }
-        }
-    });
-
-    ui.add_space(4.0);
-
-    // ── Volume + Pitch knobs ──────────────────────────────────────────────────
     let (mut vol, mut pitch, mut loop_mode) = {
         let s = app.state.read();
         (s.amen.volume, s.amen.pitch, s.amen.loop_mode)
     };
     let mut changed = false;
 
+    // Row 1: file input + load button (full width)
+    ui.horizontal(|ui| {
+        let resp = ui.add(
+            egui::TextEdit::singleline(&mut path)
+                .hint_text("amen.wav")
+                .desired_width(ui.available_width() - 30.0)
+                .font(egui::FontId::monospace(8.0)),
+        );
+        if resp.changed() {
+            app.state.write().amen.path = path.clone();
+        }
+        if ui
+            .small_button(egui::RichText::new("LD").monospace().size(7.0))
+            .clicked()
+            && let Some(data) = load_wav_to_44100(&path)
+        {
+            let _ = app.audio_tx.push(AudioCommand::LoadSampler(data));
+        }
+    });
+    // Row 2: knobs
     ui.horizontal(|ui| {
         if widgets::param_control(ui, "VOLUME", &mut vol, ParamMode::Free, ctrl).0 {
             changed = true;
         }
-        let mut pitch_norm = (pitch + 24.0) / 48.0; // -24..+24 → 0..1
+        let mut pitch_norm = (pitch + 24.0) / 48.0;
         if widgets::param_control(ui, "PITCH", &mut pitch_norm, ParamMode::Free, ctrl).0 {
             pitch = pitch_norm * 48.0 - 24.0;
             changed = true;
         }
-        if widgets::toggle_button(ui, if loop_mode { "LOOP" } else { "1×" }, &mut loop_mode) {
+        if widgets::toggle_button(ui, if loop_mode { "LOOP" } else { "ONE" }, &mut loop_mode) {
             changed = true;
         }
     });

@@ -269,7 +269,7 @@ pub fn draw_fx(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             // ── REVERB (3+2 rows) ──────────────────────────────────────────────
             widgets::glass_group_fill(ui, gw, gw, |ui| {
                 ui.label(egui::RichText::new("REVERB").color(theme::FOG).monospace().size(9.5));
-                hknobs!(ui, ("MIX", &mut rm, pm("fx.reverb_mix")), ("SIZE", &mut rs, pm("fx.reverb_size")), ("DAMP", &mut rd, ParamMode::Free));
+                hknobs!(ui, ("MIX", &mut rm, pm("fx.reverb_mix")), ("SIZE", &mut rs, pm("fx.reverb_size")), ("DAMPING", &mut rd, ParamMode::Free));
                 ui.horizontal(|ui| {
                     let mut rgt_norm = rgt / 2.0;
                     if widgets::param_control(ui, "GATE", &mut rgt_norm, pm("fx.reverb_gate_time"), ctrl).0 {
@@ -284,7 +284,7 @@ pub fn draw_fx(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             // ── DELAY (3+2 rows) ───────────────────────────────────────────────
             widgets::glass_group_fill(ui, gw, gw, |ui| {
                 ui.label(egui::RichText::new("DELAY").color(theme::FOG).monospace().size(9.5));
-                hknobs!(ui, ("MIX", &mut dm, pm("fx.delay_mix")), ("TIME", &mut dt, ParamMode::Free), ("FDBK", &mut df, pm("fx.delay_feedback")));
+                hknobs!(ui, ("MIX", &mut dm, pm("fx.delay_mix")), ("TIME", &mut dt, ParamMode::Free), ("FEEDBACK", &mut df, pm("fx.delay_feedback")));
                 hknobs!(ui, ("WOW", &mut delay_wow, pm("fx.delay_wow_flutter")), ("SAT", &mut delay_sat, pm("fx.delay_saturation")));
             });
 
@@ -310,7 +310,7 @@ pub fn draw_fx(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             // ── EQ (1 row) ─────────────────────────────────────────────────────
             widgets::glass_group_fill(ui, gw, gw, |ui| {
                 ui.label(egui::RichText::new("EQ").color(theme::FOG).monospace().size(9.5));
-                hknobs!(ui, ("LOW", &mut eq_low, ParamMode::Free), ("MID", &mut eq_mid, ParamMode::Free), ("HI", &mut eq_hi, ParamMode::Free));
+                hknobs!(ui, ("LOW", &mut eq_low, ParamMode::Free), ("MID", &mut eq_mid, ParamMode::Free), ("HIGH", &mut eq_hi, ParamMode::Free));
             });
 
             // ── COMPRESSOR (2×2) ───────────────────────────────────────────────
@@ -323,19 +323,19 @@ pub fn draw_fx(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             // ── SIDECHAIN (1 row) ──────────────────────────────────────────────
             widgets::glass_group_fill(ui, gw, gw, |ui| {
                 ui.label(egui::RichText::new("SIDECHAIN").color(theme::FOG).monospace().size(9.5));
-                hknobs!(ui, ("AMT", &mut sc_amount, pm("fx.sidechain_amount")), ("ATK", &mut sc_attack, pm("fx.sidechain_attack")), ("REL", &mut sc_release, pm("fx.sidechain_release")));
+                hknobs!(ui, ("AMOUNT", &mut sc_amount, pm("fx.sidechain_amount")), ("ATTACK", &mut sc_attack, pm("fx.sidechain_attack")), ("RELEASE", &mut sc_release, pm("fx.sidechain_release")));
             });
 
             // ── TAPE (1 row) ───────────────────────────────────────────────────
             widgets::glass_group_fill(ui, gw, gw, |ui| {
                 ui.label(egui::RichText::new("TAPE").color(theme::FOG).monospace().size(9.5));
-                hknobs!(ui, ("MIX", &mut tape_mix, ParamMode::Free), ("DRV", &mut tape_drive, ParamMode::Free), ("FLTR", &mut tape_flutter, ParamMode::Free));
+                hknobs!(ui, ("MIX", &mut tape_mix, ParamMode::Free), ("DRIVE", &mut tape_drive, ParamMode::Free), ("FLUTTER", &mut tape_flutter, ParamMode::Free));
             });
 
             // ── MASTER (3+2+tuning) ────────────────────────────────────────────
             widgets::glass_group_fill(ui, gw, gw, |ui| {
                 ui.label(egui::RichText::new("MASTER").color(theme::FOG).monospace().size(9.5));
-                hknobs!(ui, ("DRV", &mut dd, ParamMode::Free), ("MIX", &mut dx, ParamMode::Free), ("VOL", &mut mv, ParamMode::Free));
+                hknobs!(ui, ("DRIVE", &mut dd, ParamMode::Free), ("MIX", &mut dx, ParamMode::Free), ("VOLUME", &mut mv, ParamMode::Free));
                 ui.horizontal(|ui| {
                     let mut mp_norm = (master_pitch + 12.0) / 24.0;
                     if widgets::param_control(ui, "PITCH", &mut mp_norm, pm("fx.master_pitch_st"), ctrl).0 {
@@ -402,5 +402,15 @@ pub fn draw_fx(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         s.fx.reverb_freeze = rev_freeze;
         drop(s);
         app.push_audio_params();
+        app.observe_edits(&[
+            ("fx.reverb_mix", rm),
+            ("fx.delay_mix", dm),
+            ("fx.delay_feedback", df),
+            ("fx.chorus_mix", ch_mix),
+            ("fx.compressor_threshold", comp_thresh),
+            ("fx.distortion_drive", dd),
+            ("fx.master_volume", mv),
+            ("fx.stereo_width", stereo_w),
+        ]);
     }
 }

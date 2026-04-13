@@ -31,7 +31,7 @@ Everything runs entirely offline: no cloud calls, no subscriptions, no latency. 
 
 ---
 
-## v0.7.1 - Pre-release
+## v0.7.3 - Pre-release
 
 **This is pre-release software.** It works and makes sound, but expect rough edges. The UI is functional but visually unpolished in places.
 
@@ -46,41 +46,64 @@ See [Known Limitations](#known-limitations) for specifics.
 
 ## Download
 
-Pre-built binaries are available on the [releases page](https://github.com/Tok/impulse-instruct/releases):
+Grab the latest **release zip** from the [releases page](https://github.com/Tok/impulse-instruct/releases):
 
-- `impulse-instruct-linux-x86_64` - Linux (Ubuntu 22.04+) - primary development platform, tested
-- `impulse-instruct-windows-x86_64.exe` - Windows 10/11 - cross-compiled, **untested**
+- `impulse-instruct-linux-x86_64.zip` - Linux (Ubuntu 22.04+) - primary development platform, tested
+- `impulse-instruct-windows-x86_64.zip` - Windows 10/11 - cross-compiled, **untested**
 
-**No installation required.** Download, make executable (Linux: `chmod +x`), and run.
+**Do not download the GitHub source zip** unless you intend to build from source — it has no binary and the `start` scripts assume you have the Rust toolchain installed.
+
+**No installation required.** Unzip, and run (Linux: `chmod +x start.sh` first).
 
 ---
 
 ## Getting started
 
-### 1 - Download a model
+### 1 - Download a model (Gemma is required)
 
-The app ships without a model. Download one before first run:
+The release zip ships without model files. You need at least **Gemma 4 E4B Q4_K_M** (~4.6 GB) for first run. Everything else is optional.
 
+**Option A — Manual download via browser (recommended for non-technical users):**
+
+1. Sign up free at [https://huggingface.co/join](https://huggingface.co/join) and log in.
+2. Open [https://huggingface.co/unsloth/gemma-4-E4B-it-GGUF](https://huggingface.co/unsloth/gemma-4-E4B-it-GGUF) and download **`gemma-4-E4B-it-Q4_K_M.gguf`** (click the download arrow next to the filename).
+3. Move the downloaded `.gguf` into the `models/` folder next to the binary.
+4. Done — launch the app.
+
+Optional extras, same process:
+- **Bonsai 8B** (~1.1 GB) — lightweight specialist agents for multi-model setups: [prism-ml/Bonsai-8B-gguf](https://huggingface.co/prism-ml/Bonsai-8B-gguf) → `Bonsai-8B.gguf`
+- **NeuTTS Air Q4** (~527 MB) — neural voice cloning for MC/DJ modules: [neuphonic/neutts-air-q4-gguf](https://huggingface.co/neuphonic/neutts-air-q4-gguf) → rename `neutts-air-Q4_0.gguf` to `neutts-air-q4.gguf`
+
+**Option B — Script (if you already have `hf`/`huggingface-cli`/`curl`):**
+
+Linux:
 ```bash
-./scripts/download-models.sh          # Gemma 4 E4B (~4.6 GB, recommended)
-./scripts/download-models.sh bonsai   # Bonsai 8B (~1.1 GB, lightweight fallback)
+./download-models.sh          # Gemma 4 E4B (default)
+./download-models.sh bonsai   # optional: Bonsai 8B
+./download-models.sh neutts   # optional: NeuTTS Air
 ```
 
-A free [HuggingFace](https://huggingface.co/join) account is required. The script handles authentication and places the file in `models/`.
+Windows:
+```
+download-models.bat
+download-models.bat bonsai
+download-models.bat neutts
+```
 
-On **Windows**, run the equivalent `.bat` script:
-```
-scripts\download-models.bat
-scripts\download-models.bat bonsai
-```
+The scripts will offer manual-download instructions if no CLI tool is found; nothing needs to be installed.
 
 ### 2 - Run
 
+Linux:
 ```bash
-./impulse-instruct-linux-x86_64
+./start.sh
 ```
 
-The app auto-detects the model in `models/` and connects to it. The startup wizard detects your GPU, shows available VRAM, and suggests a configuration. Click a preset or press Enter to start.
+Windows: double-click **`start.bat`** (it runs the exe in a console window so logs stay visible).
+
+The app auto-detects models in `models/` and connects. The startup wizard detects your GPU, shows available VRAM, and suggests a configuration. Click a preset or press Enter to start.
+
+> **Windows SmartScreen warning:** the release `.exe` is **not code-signed** (signing requires a paid EV certificate). Windows may show *"Windows protected your PC"* on first launch — click **More info → Run anyway**. The build is produced transparently by GitHub Actions from the public source; you can verify the exact commit on the [releases page](https://github.com/Tok/impulse-instruct/releases).
 
 ---
 
@@ -90,8 +113,7 @@ The app auto-detects the model in `models/` and connects to it. The startup wiza
 |-------|------|------|-------|
 | **Gemma 4 E4B Q4_K_M** | ~4.6 GB | ~6 GB | **Recommended.** Best JSON accuracy, passes all integration tests. |
 | **Bonsai 8B Q1_0_g128** | ~1.1 GB | ~2 GB | Lightweight agent. Fits in 2 GB VRAM. Great for specialist agents in a multi-model team. |
-| **DeepSeek-R1-Distill-Qwen-7B** | ~5 GB | ~7 GB | Chain-of-thought capable, Qwen2.5 base. |
-| **DeepSeek-R1-Distill-Qwen-14B** | ~9 GB | ~11 GB | Higher quality CoT, needs 12+ GB VRAM. |
+| **NeuTTS Air Q4** | ~527 MB | CPU | Neural TTS voice cloning for MC/DJ modules. Apache 2.0. |
 
 Each agent can run a different model. A `LlamaServerPool` manages server processes — agents sharing the same model share a single server (ref-counted). Typical multi-agent VRAM budgets:
 
@@ -99,33 +121,25 @@ Each agent can run a different model. A `LlamaServerPool` manages server process
 |-------|--------|------|
 | **Solo** | 1x Gemma | ~6 GB |
 | **Duo** | 2x Gemma (shared server) | ~6 GB |
-| **Band** | 1x Gemma conductor + 4x Bonsai players | ~8 GB |
+| **Crew** | 1x Gemma conductor + 4x Bonsai specialists | ~8 GB |
 | **Swarm** | 1x Gemma + 3x Bonsai | ~8 GB |
 | **Lite** | 1x Bonsai | ~2 GB |
 
 ---
 
-## What's new in v0.7.1
+## What's new in v0.7.3
 
-**32-step sequencer default** — patterns now default to 32 steps (two bars) with support for per-voice lengths and polyrhythm. LLM agents are aware of step counts and spread patterns across the full range.
+Scoped agents can finally rewrite their voice's sequencer (a silent
+scope bug was dropping every `bass_steps` / `bass_notes` / per-kit
+pattern write). Ctrl+click cycles knob lock mode; UserOwned renders
+as a flat spoked knob, LlmFocus as brightened chrome. Knob labels are
+full words across every panel. Heat is user-only and actually chaotic
+at 1.0. MUSICAL MODERATION prompt section keeps default FX/velocity/
+bass values in musical ranges unless you ask for extremes. SIGINT
+handler cleans up llama-server children. 303 sits centered between
+808 and 909 in the rack. 477 unit tests, 23 commits since v0.7.2.
 
-**Per-voice stereo pan** — every voice (bass, drums, hoover, AN1X, noise) has a pan knob. Agents actively set pan positions for stereo width.
-
-**Auto-highlight on LLM response** — when an agent modifies a module, that module gets a brief highlight animation so you can see what changed.
-
-**API params push to audio** — parameter changes via the HTTP API (`POST /api/params`) now immediately affect the audio output. Filter sweeps, pad movements, and all param changes from the API are audible in real time.
-
-**Demo recording system** — 10+ demo scenarios with NeuTTS Air narration, automated rack setup, filter sweeps, multi-agent jams. Captures video (GPU-accelerated h264_nvenc), isolated app audio via PipeWire, and screenshots. `yuv444p` encoding preserves color accuracy on the grayscale UI.
-
-**TTS as rack module** — NeuTTS Air (with espeak-ng phonemization) runs per-module with individual settings, wired via control cables from agents.
-
-**Real-time mix observer** — audio analysis (sub/low/mid/hi band levels, peak, stereo correlation) runs every ~2s and is injected into every LLM prompt. Agents self-correct based on mix state.
-
-**Wizard improvements** — click a preset to directly apply it (no separate submit button). Enter submits, arrow keys navigate. Session restore respects clean starts.
-
-**474 unit tests** — +37 since v0.7.0. All passing.
-
-See [docs/features.md](docs/features.md) for the full feature list.
+Full details in [docs/features.md](docs/features.md).
 
 ---
 
@@ -161,7 +175,7 @@ See [docs/features.md](docs/features.md) for the full feature list.
 - Multiple LLM agents, each with its own persona, model, scope, heat, temperature, and style
 - Agents take turns in round-robin; each agent only controls the modules it's wired to via control cables
 - Server pool: `LlamaServerPool` manages N llama-server processes, ref-counted per model
-- Startup wizard: detects GPU VRAM, click-to-apply presets (Solo, Duo, Band, Swarm, Lite)
+- Startup wizard: detects GPU VRAM, click-to-apply presets (Solo, Duo, Crew, Swarm, Lite)
 - Dynamic spawning: agents can request new agents or dismiss themselves via JSON actions
 - Cable-driven scope: control cables from agent to module define what each agent can touch
 - Jam mode: continuous autonomous loop, rate and intensity controlled by HEAT slider (0-100%)
@@ -294,13 +308,13 @@ The LLM understands musical intent well. When a style doesn't land, the cause is
 
 **What doesn't yet:** the hoover lead exists but doesn't sound like a hoover. The Amen break is synthesised step-by-step rather than sampled. Some genre textures are partially wired but not finished.
 
-**What's improved in v0.7.1:** ambient and drone have dedicated tools (long envelopes, granular texture, reverb freeze, cross-modulation). The 32-step default gives patterns more room to breathe. Real-time mix analysis helps agents self-correct. API parameter changes are now audible.
+**What's improved in v0.7.3:** scoped agents actually write their voice's sequencer fields (a nasty silent bug). Knob lock mode on Ctrl+click with a real style cue (chrome / brightened chrome / flat spokes). Full-word knob labels everywhere. Heat is a user knob again, and at 1.0 it's actually chaotic rather than a 3% top_p nudge. The prompt now teaches agents to pick musical defaults for FX, drum velocities, and bass aggression. Graceful shutdown cleans up llama-server on Ctrl-C.
 
 ---
 
 ## Test Suites
 
-474 unit tests plus 3 LLM integration suites that run against a real model:
+478 unit tests plus 3 LLM integration suites that run against a real model:
 
 | Suite | What it tests |
 |-------|--------------|
@@ -346,6 +360,7 @@ MIT - see [LICENSE](LICENSE)
 
 Gemma 4 model: [Google Gemma Terms of Use](https://ai.google.dev/gemma/terms)
 Bonsai 8B model: Apache 2.0 - credit to [prism-ml](https://huggingface.co/prism-ml)
+NeuTTS Air model: Apache 2.0 - credit to [Neuphonic](https://huggingface.co/neuphonic/neutts-air)
 
 ---
 

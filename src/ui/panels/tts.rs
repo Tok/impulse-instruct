@@ -1,8 +1,8 @@
 // ─── ui/panels/tts.rs ─────────────────────────────────────────────────────────
-// Rack module panel for EspeakNgTts and CoquiTts voice cards.
+// Rack module panel for NeuTts voice cards.
 // Settings are per-module (stored in AppState.tts_modules).
 
-use crate::state::{McVoiceChar, TtsModuleState};
+use crate::state::TtsModuleState;
 use crate::ui::{ImpulseApp, theme, widgets};
 
 /// Mutate the TtsModuleState for `mid` inside `app`.
@@ -30,7 +30,7 @@ pub fn draw_tts(app: &mut ImpulseApp, ui: &mut egui::Ui, module_id: u32) {
     }
 
     // ── Snapshot ─────────────────────────────────────────────────────────────
-    let (engine, pitch, speed, amplitude, voice_char, randomise, pitch_snap, enabled) = {
+    let (voice_ref, temperature, top_k, top_p, pitch_snap, enabled) = {
         let s = app.state.read();
         let t = s.tts_modules.iter().find(|t| t.id == module_id).unwrap();
         let mod_enabled = s
@@ -41,49 +41,14 @@ pub fn draw_tts(app: &mut ImpulseApp, ui: &mut egui::Ui, module_id: u32) {
             .map(|m| m.enabled)
             .unwrap_or(false);
         (
-            t.engine.clone(),
-            t.pitch,
-            t.speed,
-            t.amplitude,
-            t.voice_char.clone(),
-            t.randomise,
+            t.voice_ref.clone(),
+            t.temperature,
+            t.top_k,
+            t.top_p,
             t.pitch_snap,
             mod_enabled,
         )
     };
-
-    // ── Engine toggle ───────────────────────────────────────────────────────
-    ui.horizontal(|ui| {
-        use crate::state::TtsEngine;
-        for (label, variant) in &[("ESP", TtsEngine::EspeakNg), ("COQ", TtsEngine::CoquiTts)] {
-            let active = engine == *variant;
-            let fill = if active {
-                egui::Color32::from_gray(55)
-            } else {
-                egui::Color32::from_gray(22)
-            };
-            let color = if active { theme::CHALK } else { theme::IRON };
-            let resp = ui.add_sized(
-                [28.0, 18.0],
-                egui::Button::new(
-                    egui::RichText::new(*label)
-                        .monospace()
-                        .size(8.0)
-                        .color(color),
-                )
-                .fill(fill),
-            );
-            if resp.clicked() {
-                let v = variant.clone();
-                with_tts(app, module_id, |t| t.engine = v);
-            }
-            let hover = match variant {
-                TtsEngine::EspeakNg => "espeak-ng: always available, robotic character",
-                TtsEngine::CoquiTts => "Coqui TTS: neural voice, requires `tts` CLI in PATH",
-            };
-            resp.on_hover_text(hover);
-        }
-    });
 
     if !enabled {
         ui.add_space(2.0);
@@ -97,45 +62,7 @@ pub fn draw_tts(app: &mut ImpulseApp, ui: &mut egui::Ui, module_id: u32) {
     }
 
     ui.add_space(3.0);
-    widgets::section_header(ui, "VOICE");
-
-    // ── Voice character cycle button ────────────────────────────────────────
-    ui.horizontal(|ui| {
-        ui.label(
-            egui::RichText::new("CHAR")
-                .monospace()
-                .size(8.0)
-                .color(theme::SMOKE),
-        );
-        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            let chars = [
-                (McVoiceChar::Auto, "AUTO"),
-                (McVoiceChar::JungleMc, "JUNGLE MC"),
-                (McVoiceChar::RaveAnnouncer, "RAVE"),
-                (McVoiceChar::Robot, "ROBOT"),
-                (McVoiceChar::SmoothDj, "SMOOTH DJ"),
-            ];
-            let cur_idx = chars
-                .iter()
-                .position(|(c, _)| *c == voice_char)
-                .unwrap_or(0);
-            let next_idx = (cur_idx + 1) % chars.len();
-            let resp = ui.small_button(
-                egui::RichText::new(chars[cur_idx].1)
-                    .monospace()
-                    .size(8.0)
-                    .color(theme::FOG),
-            );
-            if resp.clicked() {
-                let vc = chars[next_idx].0.clone();
-                with_tts(app, module_id, |t| t.voice_char = vc);
-            }
-            resp.on_hover_text("Click to cycle voice character");
-        });
-    });
-
-    ui.add_space(2.0);
-    widgets::section_header(ui, "PARAMS  (0 = mode default)");
+    widgets::section_header(ui, "NeuTTS Air");
 
     let small_label = |text: &str| {
         egui::RichText::new(text)
@@ -144,98 +71,105 @@ pub fn draw_tts(app: &mut ImpulseApp, ui: &mut egui::Ui, module_id: u32) {
             .color(theme::SMOKE)
     };
 
-    // ── Pitch ───────────────────────────────────────────────────────────────
+    // ── Voice selector ──────────────────────────────────────────────────────
+    let voices: Vec<String> = std::fs::read_dir("voices")
+        .ok()
+        .map(|entries| {
+            let mut v: Vec<String> = entries
+                .filter_map(|e| e.ok())
+                .filter_map(|e| {
+                    let n = e.file_name().to_string_lossy().to_string();
+                    n.strip_suffix(".wav").map(|s| s.to_string())
+                })
+                .collect();
+            v.sort();
+            v
+        })
+        .unwrap_or_default();
     ui.horizontal(|ui| {
-        ui.label(small_label("PITCH"));
-        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            let mut v = pitch as i32;
+        ui.label(small_label("VOICE"));
+        for name in &voices {
+            let active = *name == voice_ref;
+            let col = if active { theme::CHALK } else { theme::IRON };
+            let fill = if active {
+                egui::Color32::from_gray(50)
+            } else {
+                egui::Color32::TRANSPARENT
+            };
             if ui
-                .add(egui::DragValue::new(&mut v).range(0..=99).speed(1))
-                .changed()
+                .add(
+                    egui::Button::new(
+                        egui::RichText::new(name.to_uppercase())
+                            .monospace()
+                            .size(7.5)
+                            .color(col),
+                    )
+                    .fill(fill)
+                    .min_size(egui::vec2(0.0, 14.0)),
+                )
+                .clicked()
             {
-                let val = v as u8;
-                with_tts(app, module_id, |t| t.pitch = val);
+                let val = name.clone();
+                with_tts(app, module_id, |t| t.voice_ref = val);
             }
-        });
+        }
+        if voices.is_empty() {
+            ui.label(
+                egui::RichText::new("run scripts/generate-voices.sh")
+                    .monospace()
+                    .size(7.0)
+                    .color(theme::PIT),
+            );
+        }
     });
-    ui.label(
-        egui::RichText::new("1-99; 0 = mode default")
-            .monospace()
-            .size(7.0)
-            .color(theme::PIT),
-    );
 
-    // ── Speed ───────────────────────────────────────────────────────────────
+    // ── Temperature ─────────────────────────────────────────────────────────
     ui.horizontal(|ui| {
-        ui.label(small_label("SPEED"));
-        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            let mut v = speed as i32;
-            if ui
-                .add(egui::DragValue::new(&mut v).range(0..=500).speed(2))
-                .changed()
-            {
-                let val = v as u16;
-                with_tts(app, module_id, |t| t.speed = val);
-            }
-        });
+        ui.label(small_label("TEMP"));
+        let mut v = temperature;
+        if ui
+            .add(egui::DragValue::new(&mut v).range(0.1..=2.0).speed(0.01))
+            .changed()
+        {
+            with_tts(app, module_id, |t| t.temperature = v);
+        }
     });
-    ui.label(
-        egui::RichText::new("words/min; 0 = mode default")
-            .monospace()
-            .size(7.0)
-            .color(theme::PIT),
-    );
 
-    // ── Volume ──────────────────────────────────────────────────────────────
+    // ── Top-K ───────────────────────────────────────────────────────────────
     ui.horizontal(|ui| {
-        ui.label(small_label("VOL"));
-        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            let mut v = amplitude as i32;
-            if ui
-                .add(egui::DragValue::new(&mut v).range(0..=200).speed(2))
-                .changed()
-            {
-                let val = v as u8;
-                with_tts(app, module_id, |t| t.amplitude = val);
-            }
-        });
+        ui.label(small_label("TOP-K"));
+        let mut v = top_k as i32;
+        if ui
+            .add(egui::DragValue::new(&mut v).range(1..=200).speed(1))
+            .changed()
+        {
+            let val = v as u16;
+            with_tts(app, module_id, |t| t.top_k = val);
+        }
     });
-    ui.label(
-        egui::RichText::new("0-200; 0 = default (100)")
-            .monospace()
-            .size(7.0)
-            .color(theme::PIT),
-    );
+
+    // ── Top-P ───────────────────────────────────────────────────────────────
+    ui.horizontal(|ui| {
+        ui.label(small_label("TOP-P"));
+        let mut v = top_p;
+        if ui
+            .add(egui::DragValue::new(&mut v).range(0.1..=1.0).speed(0.01))
+            .changed()
+        {
+            with_tts(app, module_id, |t| t.top_p = v);
+        }
+    });
 
     ui.add_space(3.0);
     widgets::section_header(ui, "FX");
 
-    // ── Jitter ──────────────────────────────────────────────────────────────
-    ui.horizontal(|ui| {
-        ui.label(small_label("JITTER"));
-        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            let mut r = randomise;
-            if widgets::toggle_button(ui, if r { "ON" } else { "OFF" }, &mut r) {
-                with_tts(app, module_id, |t| t.randomise = r);
-            }
-        });
-    });
-    ui.label(
-        egui::RichText::new("+-10% pitch/speed per utterance")
-            .monospace()
-            .size(7.0)
-            .color(theme::PIT),
-    );
-
     // ── Pitch snap ──────────────────────────────────────────────────────────
     ui.horizontal(|ui| {
         ui.label(small_label("PITCH SNAP"));
-        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            let mut ps = pitch_snap;
-            if widgets::toggle_button(ui, if ps { "ON" } else { "OFF" }, &mut ps) {
-                with_tts(app, module_id, |t| t.pitch_snap = ps);
-            }
-        });
+        let mut ps = pitch_snap;
+        if widgets::toggle_button(ui, if ps { "ON" } else { "OFF" }, &mut ps) {
+            with_tts(app, module_id, |t| t.pitch_snap = ps);
+        }
     });
     ui.label(
         egui::RichText::new("snap voice to nearest in-key note")

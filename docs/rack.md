@@ -44,9 +44,8 @@ pub enum ModuleKind {
     AmenSampler,    // Amen break sampler / loop slicer
     NoiseVoice,     // White/pink noise generator
 
-    // TTS / MC voice modules
-    EspeakNgTts,    // eSpeak-NG text-to-speech (always-on by default)
-    CoquiTts,       // Coqui TTS (optional, higher quality)
+    // TTS voice module (NeuTTS Air)
+    NeuTts,         // Neural TTS voice cloning via local GGUF model
 
     // Sequencer
     StepSequencer,  // Main 16/32/64-step clock and pattern store
@@ -74,13 +73,19 @@ pub enum ModuleKind {
 
 ### Zone
 
-Modules are grouped into three vertical zones in the rack UI:
+Modules are grouped into four vertical zones (tabs) in the rack UI:
 
-| Variant | Contents |
-|---------|----------|
-| `Zone::Global` | StepSequencer, MasterOutput — full-width strip at the top |
-| `Zone::Voice` | All voice and TTS modules |
-| `Zone::FxMod` | All FX processors and LFO instances |
+| Variant | UI label | Contents |
+|---------|----------|----------|
+| `Zone::Ai` | "AI" | `LlmConsole`, `LlmAgent` — agents pack directly under the console |
+| `Zone::Global` | "MAIN AUDIO" | `StepSequencer`, `MasterOutput` — full-width transport + master |
+| `Zone::Voice` | "VOICES" | All voice and TTS modules |
+| `Zone::FxMod` | "FX + MOD" | All FX processors and LFO instances |
+
+`Zone::Global`'s serde variant name is kept for backward compat with
+pre-v0.7.2 sessions; `apply_session()` runs a zone-migration pass on
+load that re-applies `kind.default_zone()` to every saved module, so
+older sessions land in the correct tabs automatically.
 
 ### RackModule
 
@@ -164,7 +169,7 @@ still render correctly:
 
 **Global zone:** StepSequencer, MasterOutput
 
-**Voice zone:** AcidBass, DrumKit808, DrumKit909, HooverLead, An1xVoice, AmenSampler, EspeakNgTts
+**Voice zone:** AcidBass, DrumKit808, DrumKit909, HooverLead, An1xVoice, AmenSampler, NeuTts
 
 **FX zone (in processing order):**
 Waveshaper → Reverb → Delay → Bitcrush → Chorus → Phaser → RingMod → Eq → Compressor → TapeSat → Drive
@@ -173,7 +178,7 @@ Waveshaper → Reverb → Delay → Bitcrush → Chorus → Phaser → RingMod �
 
 **Default cables:**
 - Voice modules (AcidBass through AmenSampler) → MasterOutput
-- EspeakNgTts → FxReverb (TTS bus bypasses the main voice mix)
+- NeuTts → FxReverb (TTS bus bypasses the main voice mix)
 - FX chain: each FX output → next FX input (serial chain)
 
 ---
@@ -249,7 +254,7 @@ StepSequencer
     +-- triggers --> AmenSampler --|    cable exists)            |
     +-- triggers --> NoiseVoice  --+                             |
                                                                  |
-EspeakNgTts -------[tts cable]-------> FxReverb ------[tts mix]-+
+NeuTts -------[tts cable]-------> FxReverb ------[tts mix]-+
 ```
 
 When AcidBass has an explicit cable to FxReverb, it routes through
@@ -277,6 +282,6 @@ without explicit cables share the global chain.
 - `compile_fx_plan` operational: global chain and per-voice routes both active in DSP.
 - Default cables wire the serial FX chain and TTS bus at startup.
 - Rack UI renders module cards; cable patching UI is in progress.
-- TTS module cards (EspeakNgTts, CoquiTts) render in the voice zone; TTS audio routes
+- TTS module cards (NeuTts, NeuTts) render in the voice zone; TTS audio routes
   through the reverb bus by default.
 - CV routing (LFO → parameter target) is data-modeled but not yet wired into the DSP.

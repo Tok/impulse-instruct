@@ -4,8 +4,8 @@
 
 #[cfg(test)]
 mod session_data_tests {
+    use crate::state::AutosaveInterval;
     use crate::state::persistence::SessionData;
-    use crate::state::{AutosaveInterval, KnobSize, KnobStyle, PadSize};
 
     #[test]
     fn session_data_serialize_deserialize_round_trip() {
@@ -17,10 +17,6 @@ mod session_data_tests {
             model_path: Some("models/test.gguf".to_string()),
             show_cables: Some(true),
             rack_flipped: Some(false),
-            knob_style: Some(KnobStyle::Flat),
-            knob_size: Some(KnobSize::Large),
-            pad_size: Some(PadSize::Small),
-            use_sliders: Some(true),
             ui_scale: Some(1.5),
             log_level_idx: Some(2),
             autosave_interval: Some(AutosaveInterval::FiveSec),
@@ -41,10 +37,6 @@ mod session_data_tests {
         assert_eq!(loaded.model_path, data.model_path);
         assert_eq!(loaded.show_cables, Some(true));
         assert_eq!(loaded.rack_flipped, Some(false));
-        assert_eq!(loaded.knob_style, Some(KnobStyle::Flat));
-        assert_eq!(loaded.knob_size, Some(KnobSize::Large));
-        assert_eq!(loaded.pad_size, Some(PadSize::Small));
-        assert_eq!(loaded.use_sliders, Some(true));
         assert_eq!(loaded.ui_scale, Some(1.5));
         assert_eq!(loaded.log_level_idx, Some(2));
         assert_eq!(loaded.autosave_interval, Some(AutosaveInterval::FiveSec));
@@ -82,7 +74,7 @@ mod session_data_tests {
 #[cfg(test)]
 mod apply_session_tests {
     use crate::state::persistence::{SessionData, apply_session};
-    use crate::state::{AppState, AutosaveInterval, KnobSize, KnobStyle, ModuleKind, PadSize};
+    use crate::state::{AppState, AutosaveInterval, ModuleKind};
 
     #[test]
     fn apply_session_sets_style_and_instructions() {
@@ -131,10 +123,6 @@ mod apply_session_tests {
     fn apply_session_ui_prefs() {
         let mut state = AppState::default();
         let data = SessionData {
-            knob_style: Some(KnobStyle::Flat),
-            knob_size: Some(KnobSize::Large),
-            pad_size: Some(PadSize::Small),
-            use_sliders: Some(true),
             ui_scale: Some(2.0),
             log_level_idx: Some(3),
             autosave_interval: Some(AutosaveInterval::ThirtySec),
@@ -142,10 +130,6 @@ mod apply_session_tests {
             ..Default::default()
         };
         apply_session(&mut state, data);
-        assert_eq!(state.ui_prefs.knob_style, KnobStyle::Flat);
-        assert_eq!(state.ui_prefs.knob_size, KnobSize::Large);
-        assert_eq!(state.ui_prefs.pad_size, PadSize::Small);
-        assert!(state.ui_prefs.use_sliders);
         assert!((state.ui_prefs.ui_scale - 2.0).abs() < 1e-4);
         assert_eq!(state.ui_prefs.log_level_idx, 3);
         assert_eq!(
@@ -198,11 +182,11 @@ mod apply_session_tests {
     fn apply_session_none_fields_leave_state_unchanged() {
         let mut state = AppState::default();
         let orig_style = state.llm.active_style.clone();
-        let orig_knob = state.ui_prefs.knob_style;
+        let orig_scale = state.ui_prefs.ui_scale;
         let data = SessionData::default(); // all None
         apply_session(&mut state, data);
         assert_eq!(state.llm.active_style, orig_style);
-        assert_eq!(state.ui_prefs.knob_style, orig_knob);
+        assert!((state.ui_prefs.ui_scale - orig_scale).abs() < 1e-4);
     }
 
     #[test]
@@ -266,6 +250,7 @@ mod apply_session_tests {
             modules: Vec::new(),
             cables: Vec::new(),
             next_id: 999,
+            dyn_sequencer_rows: None,
         };
         let data = SessionData {
             rack: Some(custom_rack),

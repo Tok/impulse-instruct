@@ -45,9 +45,12 @@ pub fn draw_hoover(app: &mut ImpulseApp, ui: &mut egui::Ui) {
 
     // ── Three equal-width glass groups ────────────────────────────────────────
     let gw = widgets::even_group_width(ui, 3);
+    // Uniform height across all groups — matches the tallest (OSC with PAN + voices)
+    let group_h = ctrl.knob_size * 2.0 + 60.0;
     ui.horizontal(|ui| {
         // FILTER group: START, SWEEP, RESO (horizontal)
         widgets::glass_group_fill(ui, gw, gw, |ui| {
+            ui.set_min_height(group_h);
             ui.label(
                 egui::RichText::new("FILTER")
                     .color(theme::FOG)
@@ -81,6 +84,7 @@ pub fn draw_hoover(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         });
         // OSC group: DETUNE + VOL horizontal, VOICES stepper
         widgets::glass_group_fill(ui, gw, gw, |ui| {
+            ui.set_min_height(group_h);
             ui.label(
                 egui::RichText::new("OSC")
                     .color(theme::FOG)
@@ -97,24 +101,26 @@ pub fn draw_hoover(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                 }
                 {
                     let mut v = app.state.read().hoover.volume;
-                    if widgets::param_control(ui, "VOL", &mut v, ParamMode::Free, ctrl).0 {
+                    if widgets::param_control(ui, "VOLUME", &mut v, ParamMode::Free, ctrl).0 {
                         app.state.write().hoover.volume = v;
                         app.push_audio_params();
                     }
                 }
             });
             ui.horizontal(|ui| {
-                ui.label(
-                    egui::RichText::new("PAN")
-                        .color(theme::SMOKE)
-                        .monospace()
-                        .size(7.5),
-                );
-                let mut pan = app.state.read().hoover.pan;
-                if widgets::pan_slider(ui, &mut pan, 60.0) {
-                    app.state.write().hoover.pan = pan;
-                    app.push_audio_params();
-                }
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    let mut pan = app.state.read().hoover.pan;
+                    if widgets::pan_slider(ui, &mut pan, super::PAN_SLIDER_W) {
+                        app.state.write().hoover.pan = pan;
+                        app.push_audio_params();
+                    }
+                    ui.label(
+                        egui::RichText::new("PAN")
+                            .color(theme::SMOKE)
+                            .monospace()
+                            .size(7.5),
+                    );
+                });
             });
             widgets::centered_row(ui, |ui| {
                 let voices = app.state.read().hoover.voices;
@@ -136,6 +142,7 @@ pub fn draw_hoover(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         });
         // LFO group: RATE + DEPTH horizontal
         widgets::glass_group_fill(ui, gw, gw, |ui| {
+            ui.set_min_height(group_h);
             ui.label(
                 egui::RichText::new("PITCH LFO")
                     .color(theme::FOG)
@@ -184,4 +191,15 @@ pub fn draw_hoover(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         *app.state.write() = crate::state::apply_hoover_preset(s);
         app.push_audio_params();
     }
+    // Observe edits for style tracking (snapshot then observe)
+    let (fs, res, det, vol) = {
+        let h = &app.state.read().hoover;
+        (h.filter_start, h.resonance, h.detune, h.volume)
+    };
+    app.observe_edits(&[
+        ("hoover.filter_start", fs),
+        ("hoover.resonance", res),
+        ("hoover.detune", det),
+        ("hoover.volume", vol),
+    ]);
 }

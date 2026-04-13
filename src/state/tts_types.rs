@@ -1,6 +1,5 @@
-// ─── state/tts.rs ────────────────────────────────────────────────────────────
-// TTS-related types: conversation mode, voice character presets, per-module
-// TTS state.  Extracted from state/mod.rs to stay under the line limit.
+// ─── state/tts_types.rs ──────────────────────────────────────────────────────
+// TTS-related types: conversation mode, per-module NeuTTS settings.
 
 use serde::{Deserialize, Serialize};
 
@@ -14,53 +13,53 @@ pub enum ConversationMode {
     Mc,  // jungle/rave MC — "selector!", "junglist massive!", "rewind!"
 }
 
-/// espeak-ng voice character preset for TTS output.
-/// Auto = follow ConversationMode's default. Others override the voice selection.
-#[derive(Clone, Debug, PartialEq, Default, Serialize, Deserialize)]
-pub enum McVoiceChar {
-    #[default]
-    Auto, // follow ConversationMode defaults
-    JungleMc,      // fast, high-pitched ragga MC (en+m3)
-    RaveAnnouncer, // loud, rapid hype announcer (en+m2)
-    Robot,         // robotic, flat, low (en+m7)
-    SmoothDj,      // mid-low smooth DJ (en+m4)
-}
+/// NeuTTS server port.
+pub const NEUTTS_PORT: u16 = 8770;
 
-/// EspeakNg: always available, low quality, zero setup.
-/// CoquiTts: higher quality neural voice; requires `tts` CLI in PATH. Falls
-///           back to espeak-ng automatically if the binary is not found.
-#[derive(Clone, Debug, PartialEq, Default, Serialize, Deserialize)]
-pub enum TtsEngine {
-    #[default]
-    EspeakNg,
-    CoquiTts,
-}
-
-/// Per-module TTS settings.  Keyed by the TTS rack module's `id` in
-/// `AppState.tts_modules`.  An agent speaks through a TTS module when
+/// Per-module TTS settings for NeuTTS Air.  Keyed by the TTS rack module's
+/// `id` in `AppState.tts_modules`.  An agent speaks through a TTS module when
 /// a control cable connects the agent to the TTS module.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct TtsModuleState {
     pub id: u32,
-    pub engine: TtsEngine,
-    pub pitch: u8,               // 0 = mode default; 1–99 override
-    pub speed: u16,              // 0 = mode default; words/min override
-    pub amplitude: u8,           // 0 = default (100); 1–200 override
-    pub voice_char: McVoiceChar, // voice character preset
-    pub randomise: bool,         // ±10% pitch/speed jitter per utterance
-    pub pitch_snap: bool,        // snap voice to nearest in-key note
+    /// Voice reference stem — matches a file pair in `voices/{ref}.wav` + `.txt`.
+    #[serde(default = "default_voice_ref")]
+    pub voice_ref: String,
+    /// NeuTTS sampling temperature (0.5–1.5, default 0.8).
+    #[serde(default = "default_temperature")]
+    pub temperature: f32,
+    /// NeuTTS top-k sampling (10–100, default 30).
+    #[serde(default = "default_top_k")]
+    pub top_k: u16,
+    /// NeuTTS top-p sampling (0.5–1.0, default 0.9).
+    #[serde(default = "default_top_p")]
+    pub top_p: f32,
+    /// Snap synthesised voice to the nearest in-key note.
+    #[serde(default)]
+    pub pitch_snap: bool,
+}
+
+fn default_voice_ref() -> String {
+    "default".to_string()
+}
+fn default_temperature() -> f32 {
+    0.8
+}
+fn default_top_k() -> u16 {
+    30
+}
+fn default_top_p() -> f32 {
+    0.9
 }
 
 impl TtsModuleState {
     pub fn new(id: u32) -> Self {
         Self {
             id,
-            engine: TtsEngine::EspeakNg,
-            pitch: 0,
-            speed: 0,
-            amplitude: 0,
-            voice_char: McVoiceChar::Auto,
-            randomise: false,
+            voice_ref: default_voice_ref(),
+            temperature: default_temperature(),
+            top_k: default_top_k(),
+            top_p: default_top_p(),
             pitch_snap: false,
         }
     }

@@ -32,6 +32,7 @@ mod fx_plan_tests {
             modules: Vec::new(),
             cables: Vec::new(),
             next_id: 0,
+            dyn_sequencer_rows: None,
         };
         let plan = compile_fx_plan(&rack);
         assert!(plan.steps.is_empty());
@@ -61,6 +62,7 @@ mod fx_plan_tests {
             modules: Vec::new(),
             cables: Vec::new(),
             next_id: 1,
+            dyn_sequencer_rows: None,
         };
         let rev_id = rack.add_module(ModuleKind::FxReverb);
         let del_id = rack.add_module(ModuleKind::FxDelay);
@@ -86,10 +88,10 @@ mod fx_plan_tests {
     fn default_rack_tts_has_reverb_route() {
         let rack = RackState::default();
         let plan = compile_fx_plan(&rack);
-        let tts_route = plan.voice_routes.get(&ModuleKind::EspeakNgTts);
+        let tts_route = plan.voice_routes.get(&ModuleKind::NeuTts);
         assert!(
             tts_route.is_some(),
-            "default rack: EspeakNgTts should have a voice route"
+            "default rack: NeuTts should have a voice route"
         );
         assert!(
             !plan.voice_routes.contains_key(&ModuleKind::AcidBass),
@@ -103,6 +105,7 @@ mod fx_plan_tests {
             modules: Vec::new(),
             cables: Vec::new(),
             next_id: 1,
+            dyn_sequencer_rows: None,
         };
         let bass_id = rack.add_module(ModuleKind::AcidBass);
         let rev_id = rack.add_module(ModuleKind::FxReverb);
@@ -151,6 +154,7 @@ mod fx_plan_tests {
             modules: Vec::new(),
             cables: Vec::new(),
             next_id: 1,
+            dyn_sequencer_rows: None,
         };
         let bass_id = rack.add_module(ModuleKind::AcidBass);
         let rev_id = rack.add_module(ModuleKind::FxReverb);
@@ -182,6 +186,7 @@ mod fx_plan_tests {
             modules: Vec::new(),
             cables: Vec::new(),
             next_id: 1,
+            dyn_sequencer_rows: None,
         };
         let a = rack.add_module(ModuleKind::FxDelay);
         let b = rack.add_module(ModuleKind::FxReverb);
@@ -226,6 +231,7 @@ mod fx_plan_tests {
             modules: Vec::new(),
             cables: Vec::new(),
             next_id: 1,
+            dyn_sequencer_rows: None,
         };
         let a = rack.add_module(ModuleKind::FxDelay);
         let b = rack.add_module(ModuleKind::FxReverb);
@@ -272,6 +278,7 @@ mod fx_plan_tests {
             modules: Vec::new(),
             cables: Vec::new(),
             next_id: 1,
+            dyn_sequencer_rows: None,
         };
         let a = rack.add_module(ModuleKind::FxDelay);
         let b = rack.add_module(ModuleKind::FxReverb);

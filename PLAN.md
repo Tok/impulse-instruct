@@ -4,72 +4,73 @@ What's already built is documented in [docs/features.md](docs/features.md).
 
 ---
 
-## Recently completed (v0.7.1-snapshot development cycle)
 
-- **Per-voice stereo pan** — full stack: state, DSP, LLM schema/apply, UI
-  slider on all voice panels. Agents actively set pan positions.
-- **TTS as rack module** — per-module settings, cable routing, no global toggle
-- **Real-time mix observer** — audio-level + pattern alerts, stereo awareness,
-  injected into every LLM prompt. Header display + agent feedback loop.
-- **Demo scenario system** — 10 scenarios, DSL (scene/say/ask/play/focus_on),
-  CoquiTTS, --scenario/--skip-video/--trim-start flags, batch output dirs
-- **Event stream enhancements** — Hz scale, drum dots, configurable layers,
-  gate/accent sizing, phantom note fixes, time signature display
-- **Recording pipeline** — window-id capture, isolated virtual PipeWire sink,
-  dual video output (clean + subtitled), SRT generation, test script
-- **Style catalog** — mc_lines + themes per style, stereo guidance in prompts
-- **Sequencer alignment** — merged vel/prob/ratchet into single combined row,
-  accent/slide markers match step width, adaptive sequencer height
-- **Header/footer layout** — analysis display, alerts, session stats, GitHub
-  link, VRAM/RAM bars, right-justified sections
-- **Code health** — 474 tests (+37), 6 file splits, duplicate cable fix,
-  UTF-8 crash fix, log dedup, log level from settings
+## v0.7.4 — next release
 
----
+### TOP PRIORITY — start with a refactoring session
 
-## v0.7.1 — next release
+Before adding new features, spend a focused session on file splits and
+test coverage for logic added late in 0.7.3. Ship foundation first.
+
+- [ ] **Split `state/rack.rs`** (currently 999 LOC, AT the 1000 limit) —
+  extract pure layout logic into `state/rack_layout.rs`:
+  - `arrange_grid()` + the order() type-priority map
+  - `find_free_position()` + occupancy scan
+  - center-bias pass
+  - `strip_audio_cycles()` if it fits cleanly
+  Pure layout code, no behavior change, unblocks any further edit on rack.
+- [ ] **Split `state/mod.rs`** (971 LOC) — big struct defs and default
+  helpers dominate; move defaults into `state/defaults.rs`. The old
+  memory-flagged "AT 1000" priority.
+- [ ] **Regression tests for the scope bug fixed in 5ec3bb2**:
+    - `bass_scope_writes_bass_steps_and_notes`
+    - `bass_scope_cannot_write_bpm_or_swing`
+    - `kit_a_scope_cannot_touch_kit_b_patterns`
+    - `kit_b_scope_cannot_touch_kit_a_patterns`
+    - `drum_lengths_respects_kit_scope_per_key`
+    - `hoover_scope_can_write_hoover_len`
+    - `sequencer_scope_grants_all_fields_backwards_compat`
+    - `empty_scope_grants_everything`
+    These lock in the per-voice scope dispatch we just added — the bug
+    was silent for multiple releases, don't let it regress.
+- [ ] **Layout regression tests for the rack-centering fix in 781a736**:
+    - `arrange_grid_places_303_between_drums` — verify AcidBass lands
+      in grid_col between DrumKit808 and DrumKit909 when all three
+      present
+    - `add_module_stacks_without_overlap` — occupancy grid correctness
+    - `center_bias_shifts_row_bands_toward_center`
+- [ ] **Extract pure helpers in `llm_apply.rs` (744 LOC)** — the per-voice
+  dispatch I added this session is ripe for helper extraction (e.g.
+  `apply_bass_sequencer_fields(s, seq, locked) -> AppState`). Each
+  helper gets its own test.
 
 ### Agent tooling — gradual control & expressiveness
 
 - [ ] **LFO-as-tool for agents** — agents can schedule an LFO on any target
   (cutoff, resonance, reverb mix, etc.) to introduce changes gradually
   instead of jumping to a value. JSON schema: `"lfo_assign": {"target": "bass.cutoff", "rate": 0.5, "depth": 0.3}`
-- [x] **Parameter ramps** — agents can set a target value + ramp duration
-  (e.g. "move cutoff from 0.3 to 0.8 over 4 bars"). Interpolated per UI frame.
-  JSON: `"ramp": {"param": "bass.cutoff", "to": 0.8, "bars": 4}` or `"ramps": [...]`
 - [ ] **XY pad control** — expose cutoff/resonance pad as a first-class
   tool the agent can move. Currently agents set values but the pad
   position doesn't visually track mid-change
 - [ ] **ADSR envelope shaping** — expose attack/decay/sustain/release as
   agent-controllable parameters with the same ramp/LFO tooling
-- [ ] **Moderate defaults in system prompt** — discourage extreme values
-  (reverb mix > 0.5, delay feedback > 0.6, etc.) unless explicitly
-  asked. Guide agents toward musical subtlety over dramatic resets
-- [ ] **Velocity/volume awareness** — prompt guidance to keep drum volumes
-  balanced; prevent clap/snare rush at uncomfortable levels
+- [ ] **Pan as LFO/ramp target** — all voice pan parameters must be
+  addressable as LFO targets and ramp targets. Add `LfoTarget::Pan`
+  variants and ensure `apply_llm_update` handles `"bass.pan"`,
+  `"kit_a.kick.pan"`, etc.
 
 ### DSP
 
 - [ ] **Gabber kick voice** — dedicated voice (not just preset on 808 kick);
   extreme pitch envelope, hard clipper, layered transient
-- [ ] **Per-voice pan** — each voice (bass, 808, 909, hoover, AN1X, noise) gets
-  a pan knob (-1 L to +1 R, default 0 center). Applied before the FX chain.
-  LLM-addressable: `"bass": {"pan": -0.3}`, `"kit_a": {"kick": {"pan": 0.1}}`.
-  Displayed as a simple L/R slider on each voice card.
 - [ ] **Pan FX module** — insertable rack module for per-chain stereo placement.
-  Can be wired between any two modules. Knobs: pan position, width, auto-pan
-  rate (LFO). Enables off-center placement of specific FX returns.
-- [ ] **Pan in sequencer** — per-step pan value for bass voice (like velocity but
-  L/R). Notation: 0 = center (default), -1 = full left, +1 = full right.
-  Could be visualized as horizontal position of the note dot in event stream.
-- [ ] **LFO target: StereoWidth** — add StereoWidth to LfoTarget enum so agents
-  can modulate stereo width over time (auto-pan effect).
+  Knobs: pan position, width, auto-pan rate (LFO)
+- [ ] **Pan in sequencer** — per-step pan value for bass voice (like velocity but L/R)
+- [ ] **LFO target: StereoWidth** — modulate stereo width over time (auto-pan)
 - [ ] **Per-voice FX sends** — route individual voices to specific FX modules
   via rack cables (data model exists, DSP routing partially wired)
 - [ ] **Dub techno send/return** — dedicated send/return FX workflow for
   dub-style infinite delay feedback chains
-- [ ] **Audio cables gate signal** — currently DSP processes voices regardless
-  of cable routing. Audio cables should actually control signal flow.
 
 ### Sequencer
 
@@ -82,145 +83,78 @@ What's already built is documented in [docs/features.md](docs/features.md).
 
 - [ ] **Total smart randomization** — one-click random setup: pick a random
   style, add appropriate instruments, set random (but musically coherent)
-  parameters, generate a pattern. Useful for quick demos, inspiration,
-  and testing. API: `POST /api/randomize`. CLI: `--randomize`.
+  parameters, generate a pattern. API: `POST /api/randomize`.
 - [ ] **Agent conversation history** — multi-turn within a single jam cycle;
   agent sees its own previous outputs for coherent evolution
 - [ ] **Prompt templates per style** — styles can define custom prompt
   templates that replace the generic "generate all parameters" jam prompt
 - [ ] **VRAM-aware model fallback** — when spawn is rejected, auto-suggest or
   auto-select a lighter model that fits the remaining VRAM budget
+- [ ] **Test additional LLM models** — evaluate DeepSeek-R1-Distill-Qwen-7B/14B
+  and Qwen3-8B/14B for JSON accuracy and music theory understanding.
+  Download scripts exist but models are not yet tuned or integration-tested.
 - [ ] **Jam-via-API** — currently API prompts are always one_shot (no jam loop).
   Need safe jam support that doesn't do full-state replacement.
 - [ ] **Style mc_lines/themes UI editor** — allow editing mc_lines and themes
-  per style from the UI preferences, so users don't need to modify styles.json
-  directly. Store overrides in session.json.
+  per style from the UI preferences
 - [ ] **Style → rack auto-setup** — add `rack_modules` field to `styles.json`
-  entries, listing which modules to add and how to wire them when a style is
-  selected. E.g. `"rack_modules": ["bass", "808", "reverb", "delay"]` for acid,
-  `"rack_modules": ["an1x", "reverb"]` for baroque. Selecting a style resets
-  the rack and adds the listed modules automatically.
+  entries, listing which modules to add and how to wire them when a style
+  is selected.
+- [ ] **Style-aware agent-preset naming** — the default multi-agent setup
+  is called "Crew" generically. Styles should be able to override the
+  preset display name in `styles.json` (`agent_preset_label` or similar)
+  so e.g. disco/jazz presents it as "Band", hip-hop as "Posse", techno
+  as "Squad", ambient as "Ensemble". Purely a labelling concern — the
+  underlying preset stays the same.
 
-### TTS as rack module (refactor)
+### TTS
 
-- [x] **TTS settings per module** — `TtsModuleState` struct with engine, pitch,
-  speed, amplitude, voice_char, randomise, pitch_snap. Stored in
-  `AppState.tts_modules`, keyed by rack module id.
-- [x] **Agent → TTS routing** — inference path checks for control cables from
-  agent to TTS modules. No cable = no speech. Settings read from module.
-- [x] **Global TTS fields deprecated** — legacy `tts_*` fields on `LlmState`
-  kept for session.json backward compat (serde default), ignored at runtime.
-  TTS panel reads/writes module state.
-- [x] **API `tts: true`** — auto-adds a TTS module and wires a control cable
-  from the agent.
 - [ ] **Agent self-add TTS module** — if an agent is in MC/DJ mode and has no
   TTS module connected, it can add one to the rack and wire itself to it
-  (unless restricted by scope or a `can_modify_rack: false` flag). This is
-  a rack tool-use action, not implicit — the agent requests it via JSON.
-
-### Feedback & awareness
-
-- [x] **Auto-listen always on** — audio analysis runs every ~2s, compact
-  snapshot (`AUDIO: sub:-20 low:-12 mid:-18 hi:-24 pk:-8dB`) injected
-  into every LLM system prompt as global context. Agents see mix state
-  and can self-correct. Also shown in header bar.
-- [x] **LLM console: 8+ visible lines** — default height increased from 50px
-  to 100px (~8 lines visible). Still resizable.
 
 ### UI / UX
 
-- [x] **Oscilloscope ring → right of scope strip** — ring scope moved to right
-  side of scope strip, enlarged from 40px to 80px. Panel height 48→88px.
-- [x] **Round-robin indicator → log strip** — agent schedule display moved to
-  right side of log strip in 2-row layout. More visible, near console output.
-- [ ] **FX knob layout per group** — evaluate each FX group for 2×2 grid vs
-  horizontal row. Groups with 4+ knobs (delay, compressor) suit 2×2; smaller
-  groups (chorus, phaser) stay as rows. Adds visual variety and reduces
-  horizontal cramping. Requires per-group layout in fx.rs hknobs! macro.
-- [ ] **Knob centering in glass groups** — egui's horizontal always takes full
-  width, preventing Align::Center from working. Needs two-pass render or
-  pre-calculated content width with spacer. Affects all panels.
-- [ ] **Event stream Huth notation (Vol. 3)** — replace dots with U-shapes
-  per Huth *Farbige Noten* theory: outer U is the note color, inner white U
-  for sharps/flats. Longer notes stretch horizontally. Dot size correlates
-  to velocity/volume. ADSR visualized via note shape (attack = left slope,
-  decay = fill gradient, sustain = width, release = right fade).
-- [ ] **Event stream stereo/pan layer** — L/R balance line or stereo width
-  indicator. "no stereo difference" alert when L≈R (bland/mono mix).
-- [ ] **Sequencer step markers table layout** — accent/slide markers properly
-  aligned to step buttons in a compact table. Reduce vertical spacing.
-- [ ] **Module drag reorder** — insertion point indicator works; needs better
-  width calculation (now uses screen width, was hardcoded 1200px)
+- [ ] **Quick-command buttons on LLM agent card** — one-click shortcuts for
+  common re-prompts so users don't have to retype. Small row of pill
+  buttons on each agent card that POST the mapped prompt to the agent's
+  scope. Starter set:
+    - *Rewrite melody* → "rewrite the bass/lead melody, keep the rhythm"
+    - *Rewrite rhythm* → "rewrite the step pattern, keep the notes"
+    - *Rewrite both* → "rewrite rhythm and melody from scratch"
+    - *Variation* → "subtle variation of the current pattern"
+    - *Fill* → "add a fill in the last bar"
+    - *Sparser* / *Busier* → density tweaks
+    - *Brighter* / *Darker* → timbre tweaks (cutoff / reverb)
+    - *Swap style* → opens the style picker
+  Buttons should respect the agent's scope (only the BASS agent's
+  *Rewrite melody* touches bass) and be configurable per-persona in
+  future. Consider a compact ⋯ menu for less-common commands.
 - [ ] **Rack CV cables driving LFO targets** — cables are visual only; wiring
   them to actually change LFO target at DSP level
-- [ ] **Preferences: tuning selector** — ComboBox exists in FX MASTER group;
-  could also be in Preferences for discoverability
 - [ ] **Touch mode improvements** — touch-paint mode for mobile/tablet;
   gesture support for zoom/scroll
-- [ ] **observe_user_edit in remaining panels** — currently only bass panel;
-  extend to 808, 909, hoover, AN1X, noise, granular, FX panels
 
-### Demo recording — next implementation priority
-
-#### Infrastructure (do first)
-
-- [x] **CoquiTTS for narration** — `tts_generate()` tries CoquiTTS first, falls
-  back to espeak-ng. Configurable via `TTS_MODEL` env var.
-- [x] **Scenario directory** — `demo/scenarios/` with `--scenario X` flag on
-  `record-demo.sh` (default: intro). High-level DSL in `lib.sh` for readable scripts.
-- [x] **`--skip-video` flag** — run scenario without ffmpeg recording, for headless
-  style verification.
-- [x] **`--skip-narration` rename** — `--skip-narration` alias added alongside
-  `--no-tts`.
-
-#### Style demo scripts (tutorial + verification)
-
-Each style demo follows a template:
-1. Reset rack → add instruments appropriate for the style
-2. Narrate what we're building and why
-3. Send prompts to agents with style-specific instructions
-4. Show the agents working (wait for inference, scroll to instruments)
-5. Demonstrate key features (ramps, LFO, filter sweeps)
-6. Use `POST /api/scroll { "target": "bass", "collapse_others": true }` to focus
-7. End with a jam session showing the style in action
-
-Scripts to create:
-- [x] **`demo/scenarios/style-acid.sh`** — raw acid: 303 squelch, 808 percussion,
-  ramps, parameter locking. 8 scenes.
-- [x] **`demo/scenarios/style-dnb.sh`** — 170 BPM, reese bass, rolling hats. 7 scenes.
-- [x] **`demo/scenarios/style-ambient.sh`** — AN1X pads, deep reverb, slow ramps. 6 scenes.
-- [x] **`demo/scenarios/style-techno.sh`** — kick-driven, minimal, tension/release. 7 scenes.
-- [x] **`demo/scenarios/style-bach.sh`** — AN1X only, no drums, classical counterpoint,
-  cathedral reverb. 7 scenes.
-
-#### Setup demo scripts (capability showcase)
+### Demo recording
 
 - [ ] **`demo/scenarios/setup-mc-singer.sh`** — Jungle MC + TTS Singer through
-  autotune. Non-deterministic, 100% agent-controlled. Shows: multi-agent, TTS
-  pitch-snap pipeline, creative potential. Narrated as "watch what happens."
-- [x] **`demo/scenarios/setup-multi-agent.sh`** — BASS + DRUMS + FX specialist
-  agents with Bonsai models. 8 scenes: scoping, cable wiring, independent evolution.
-- [x] **`demo/scenarios/style-synthwave.sh`** — AN1X pads, arpeggiated bass, 808,
-  TTS MC agent spitting neon poetry via Bonsai. 8 scenes.
-- [x] **`demo/scenarios/setup-ramp-lfo.sh`** — Parameter ramps: single, multiple,
-  build/drop dynamics. 6 scenes.
-
-#### Feature demo scenes (can be standalone or embedded)
-
+  autotune. Non-deterministic, 100% agent-controlled.
 - [ ] **ADSR scene** — agent shaping bass envelope (attack/decay)
 - [ ] **LFO assignment scene** — agent schedules filter sweep via LFO
 - [ ] **Parameter ramp scene** — gradual cutoff sweep over bars
 - [ ] **Event stream scene** — Huth-colored note history scrolling in real time
-- [ ] **Collapse/focus scene** — API collapse_others to isolate a section
+
+### Refactoring
+
+- [ ] **Panel typography constants** — define `FONT_XS`/`FONT_SM`/`FONT_MD`/`FONT_LG`
+- [ ] **Panel spacing constants** — define `SPACING_SM`/`SPACING_MD`/`SPACING_LG`
+- [ ] **Glass group helpers** — `glass_label(ui, text)`, `glass_group_height(ctrl)`
+- [ ] **Module card constants** — `TITLE_BAR_H`, `CARD_ROUNDING`, `GLASS_ROUNDING`
 
 ### Infrastructure
 
 - [ ] **CI: run LLM integration tests on release** — currently manual;
   automate in GitHub Actions with a Gemma model cache
-- [ ] **Codecov improvement** — currently ~37%; new test suites should push
-  it higher once CI runs
-- [ ] **Graceful shutdown** — catch SIGINT/SIGTERM, drop audio stream cleanly
-  to prevent PipeWire resource leaks
+- [ ] **Codecov improvement** — currently ~37%; target higher with new suites
 
 ---
 
@@ -230,4 +164,3 @@ Scripts to create:
 |-------|-------|--------|
 | Wizard always shows on startup | By design — resume or start fresh | Working as intended |
 | Hoover doesn't sound like a hoover | DSP tuning, not a code bug | Needs filter sweep shape tuning |
-| Audio cables decorative only | DSP processes voices directly from state | Needs signal-path gating |

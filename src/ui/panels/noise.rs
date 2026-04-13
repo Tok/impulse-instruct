@@ -1,6 +1,7 @@
 // ─── ui/panels/noise.rs ──────────────────────────────────────────────────────
 // Noise voice panel — minimal controls (volume, color, cutoff).
 
+use super::PAN_SLIDER_W;
 use crate::ui::{ImpulseApp, widgets};
 
 pub fn draw_noise(app: &mut ImpulseApp, ui: &mut egui::Ui) {
@@ -19,25 +20,28 @@ pub fn draw_noise(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         )
     };
     let mut changed = false;
+    // PAN slider — right-justified
+    ui.horizontal(|ui| {
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            if widgets::pan_slider(ui, &mut pan, PAN_SLIDER_W) {
+                changed = true;
+            }
+            ui.label(
+                egui::RichText::new("PAN")
+                    .color(crate::ui::theme::SMOKE)
+                    .monospace()
+                    .size(8.0),
+            );
+        });
+    });
     widgets::centered_row(ui, |ui| {
-        if widgets::param_control(ui, "VOL", &mut vol, pm("noise_voice.volume"), ctrl).0 {
+        if widgets::param_control(ui, "VOLUME", &mut vol, pm("noise_voice.volume"), ctrl).0 {
             changed = true;
         }
         if widgets::param_control(ui, "COLOR", &mut color, pm("noise_voice.color"), ctrl).0 {
             changed = true;
         }
-        if widgets::param_control(ui, "CUT", &mut cutoff, pm("noise_voice.cutoff"), ctrl).0 {
-            changed = true;
-        }
-    });
-    ui.horizontal(|ui| {
-        ui.label(
-            egui::RichText::new("PAN")
-                .color(crate::ui::theme::SMOKE)
-                .monospace()
-                .size(7.5),
-        );
-        if widgets::pan_slider(ui, &mut pan, 60.0) {
+        if widgets::param_control(ui, "CUTOFF", &mut cutoff, pm("noise_voice.cutoff"), ctrl).0 {
             changed = true;
         }
     });
@@ -50,5 +54,10 @@ pub fn draw_noise(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             s.noise_voice.pan = pan;
         }
         app.push_audio_params();
+        app.observe_edits(&[
+            ("noise_voice.volume", vol),
+            ("noise_voice.color", color),
+            ("noise_voice.cutoff", cutoff),
+        ]);
     }
 }

@@ -4,6 +4,233 @@ A detailed log of what's built.
 
 ---
 
+## v0.7.3 additions (23 commits since v0.7.2)
+
+### LLM control flow
+
+- **Scoped agents can rewrite their voice's sequencer** — the `sequencer.*`
+  update block was gated entirely by `in_scope("sequencer")`, so every
+  scoped agent (BASS, DRUMS, …) silently dropped `bass_steps` / `bass_notes` /
+  `drum_lengths` / per-kit step arrays. Per-voice sequencer fields now
+  dispatch by the voice's own scope (`bass_* → "bass"`, `kick_a_steps →
+  "kit_a"`, etc.); global fields still require `"sequencer"` scope
+- **Heat is user-only** — `settings.heat` emitted by the LLM is ignored.
+  Heat is a user vibes knob, not an agent action. Prompt doc updated
+  to match
+- **Heat actually chaotic at 1.0** — previous effect was a 3% top_p nudge.
+  Heat now scales temperature ×(1 + h·0.8), top_p toward 1.0, min_p floor
+  ×(1 − h·0.9), and frequency_penalty + h·0.4 (which also discourages
+  repeated-root fallbacks like the old all-Cs bass issue)
+- **MUSICAL MODERATION prompt section** — concrete safe ranges for FX
+  (reverb/delay/chorus/distortion mix + feedback/drive), drum velocities
+  (kick > snare > clap > hats), and bass aggression (resonance ≤ 0.85
+  unless asked). Agents default to restraint unless heat > 0.7 or the
+  user literally asks for "wild / insane / max / destroy"
+- **Sparser default bass density** — 1/4–1/2 (8–14 notes per 32 steps)
+  replaces 1/3–2/3 (10–22). Style-specific table overrides: Bach stays
+  dense (18–28), acid 10–16, techno/minimal 6–10, deep house/ambient 4–8
+- **Free-mode prompt teaches the bank** — even without a style, agents
+  now commit to root+scale and spread ≥ 3 distinct pitches across each
+  half of the bass loop, respecting `sequencer.steps`
+
+### UI
+
+- **Ctrl+click cycles knob lock mode** — replaces Alt+click (which
+  collided with OS menus) and the tooltip-advertised right-click (which
+  the code didn't accept). Works with the footer Ctrl lock too so
+  pointer-only users can toggle without a keyboard
+- **Style-based lock indication, no badges** — Free = chrome, LlmFocus =
+  brightened chrome, UserOwned = flat knob with visible spokes. Tooltip
+  only appears on non-default modes to keep untouched knobs silent
+- **Full-word knob labels** — CUT→CUTOFF, RES→RESO, ENV→ENVMOD,
+  DEC→DECAY, ACC→ACCENT, DRV→DRIVE, VOL→VOLUME, GLD→GLIDE, NSE→NOISE,
+  DTN→DETUNE, DAMP→DAMPING, FDBK→FEEDBACK, FMD→FM.DEPTH, FMR→FM.RATIO,
+  and LFO targets (DLY.T→DELAY.TIME, etc.) across every panel and the
+  rack's FX mini-cards
+- **Ring scope phosphor matches bar** — both use history trails (gray
+  15→90, stroke 1.0→1.8) with CHALK current frame; the single-frame glow
+  underlay is gone
+- **303 centered in the rack** — canonical voice order swapped so
+  AcidBass (11) sits between DrumKit808 (10) and DrumKit909 (12),
+  matching pitch register and making the classic 3-voice rack visually
+  balanced regardless of insertion order
+- **Wordmark bullet** — title bar + About dialog read `IMPULSE • INSTRUCT`
+  instead of `◆ IMPULSE INSTRUCT`
+- **Header polish** — MON slider widened to match HEAT; VRAM/RAM bars
+  enlarged; log colored by role (user / agent / system / api)
+- **Piano labels** — top two octaves labeled; hover reveals frequency
+- **Alt footer indicator removed** — Ctrl carries the lock workflow;
+  physical Alt still hides cables
+
+### Graceful shutdown
+
+- **SIGINT / SIGTERM handler** — Rust's Drop doesn't run on signals, so
+  Ctrl-C on the running app used to orphan the llama-server child and
+  its VRAM. A dedicated signal-handler thread now `sigwait()`s and
+  `pkill`s `llama-server … --model` (SIGTERM, then SIGKILL 200 ms
+  later) before the process exits
+
+### Demo recording
+
+- **Reliable llama-server cleanup between runs** — the demo script's
+  cleanup trap now SIGTERM-then-SIGKILLs the app with a 3-second grace
+  window for Drop, then `pkill`s orphans
+- **BASS agent on Gemma, DRUMS + FX on Bonsai** — Q1 Bonsai couldn't
+  reliably follow the pitch-distribution rules for melody rewrites.
+  Bigger model handles the bass voice; Bonsai stays on rhythm/knob work
+- **Female narrator + longer subtitle display** — intro TTS voice
+  swap, reading-time-friendly subtitle durations, intro line tweaks
+- **Runtime-timestamped SRT** — subtitles derive from actual narrate()
+  playback timestamps, no drift vs. the recorded audio
+- **LFO scene** — adds an LFO module and scrolls to it so the card is
+  visible before the modulation starts
+- **TTS retry + server restart** — up to 10× with server bounce;
+  graceful handling of missing WAVs in narration
+- **Model shoutout in live-filter scene** — names "Gemma 4 E4B" and
+  "Bonsai 8B, one bit quantized" during pad sweep before the outro
+- **Free & open source outro line**
+
+---
+
+## v0.7.2 additions (105 commits since v0.7.1)
+
+### UI rework — 12-column RPG-inventory rack
+
+- **12-col grid rack** — modules snap to a fixed column grid with bin-packing
+  placement; `arrange_grid()` runs a center-bias pass so zones stay visually
+  balanced instead of piling against the left edge; `add_module()` re-runs
+  the full layout on every API/demo add so new modules land centered
+- **AI / MAIN AUDIO zone split** — `Zone::Global` was too catch-all. Split
+  into `Zone::Ai` (LLM console + agents, always on top, agents now pack
+  directly under the console) and `Zone::Global` rebranded "MAIN AUDIO"
+  (sequencer + master). Four tabs total: AI / MAIN AUDIO / VOICES /
+  FX+MOD. Old sessions migrate zones on load via `persistence::apply_session`
+- **Module remove with confirmation** — centered dialog on all non-core
+  modules; disconnects cables and cleans up agents automatically
+- **Drag overlap prevention** — AABB collision check rejects drops onto
+  occupied grid cells; red ghost overlay for blocked positions
+- **Dynamic sequencer height** — sequencer grid cell pixel-sized from
+  per-lane actual heights (step row, accent/slide marker rows, drum
+  vel/prob/ratchet sub-lanes) rather than a coarse "2-physical-rows =
+  1-grid-row" heuristic; cell stays exactly as tall as content needs
+- **Flip-scroll behaviour** — first rack flip scrolls to master, second to
+  agent; extracted to `src/ui/flip.rs`
+- **Rack presets in wizard** — Empty/Basic/Standard/Full; wizard renamed
+  "Rack Setup"; `from_preset()` wires default cables so fresh presets are
+  audible immediately
+
+### Sequencer — wrap, alignment, new sliders
+
+- **32-step-per-row wrap** — `STEPS_PER_ROW = 32`; 1..=32 steps render on
+  one row, 33..=64 wrap into 2 rows of 32 each; odd time signatures keep
+  correct beat spacing via absolute-index beat dividers
+- **Exact-size prefix** — every row (bass / accent / slide / hoover / an1x
+  / drums) emits an identical 5-widget prefix through
+  `allocate_exact_size`, `fixed_label`, `fixed_slider`, and `fixed_space`
+  helpers; cells share one x anchor across voices and sub-rows (no more
+  drum rows drifting half a step right of bass)
+- **Volume/accent/slide sliders in the sequencer** — bass row shows bass
+  volume; ACCENT row shows `bass.accent_level`; SLIDE row shows
+  `bass.portamento_time`; HOOVER and AN1X rows show their own volumes;
+  every slider uses `SEQ_VOL_W = 330 px` with `style.spacing.slider_width`
+  overridden so the widget renders at the full reserved width
+- **Header label alignment** — BPM and SWING labels use identical
+  fixed-width slots so they left-align vertically across rows; `fixed_slider`
+  drives both at `HDR_SLIDER_W = 600 px`
+- **Per-voice step-count editor** — drag/double-click the `02`-style
+  count widget to change a drum voice's length independently of global
+  `sequencer.steps`
+- **Step set matches bank** — rendering stops exactly at `seq_steps`;
+  disabled "ghost" cells past the configured length are gone
+
+### Audio cables actually route
+
+- **Cable topology filter** — `compile_fx_plan()` walks the audio-cable
+  graph and includes only FX modules reachable from a voice (or from
+  another reachable FX). Disconnect a reverb from the chain → reverb
+  stops processing. No more "visual lie" where cables implied routing
+  that DSP ignored
+- **Visual dimming** — modules not in the compiled FxPlan render dimmed on
+  the back panel so it's obvious which ones don't see audio
+- **`wire_default_cables()` reusable** — called by `RackState::default()`,
+  `RackState::from_preset()`, and by `apply_session()` as a migration for
+  old sessions with 0 cables; ensures wizard Presets produce an audible
+  signal path on first flip
+- **Cycle-safe connect** — `connect()` rejects audio cables that would
+  create cycles; `strip_audio_cycles()` sanitises session data on load
+
+### TTS — NeuTTS Air replaces Coqui
+
+- **NeuTTS Air voice cloning** — local GGUF model (~527 MB), persistent
+  Python HTTP server on port 8770; voice identity cloned from a 3–15 s
+  reference clip; single `ModuleKind::NeuTts` with per-module settings
+  (voice_ref, temperature, top_k, top_p); Coqui/direct-espeak paths removed
+- **n_ctx bumped 2048 → 32768** via `NeuTTSWide` subclass overriding
+  `_load_backbone`; matches Qwen 0.5B's training context so long sentences
+  stop garbling. Overridable via `NEUTTS_CTX` env var for low-VRAM setups
+- **Voice reference generator** — `scripts/generate-voices.sh` produces
+  `voices/default.wav`, `mc.wav`, `dj.wav`, `robot.wav` from espeak
+  rendering; integrated into `scripts/download-models.sh` setup flow
+- **Smart pitch snap** — optional per-clip pitch detection + resample to
+  nearest in-key note (`tts.pitch_snap`)
+
+### Demo recording pipeline
+
+- **`demo/record-demo.sh`** — full orchestration: pre-generate TTS, launch
+  app with `--skip-wizard --fresh-session`, start h264_nvenc capture with
+  `-pix_fmt yuv420p -vf "crop=trunc(iw/2)*2:trunc(ih/2)*2"`, run scenario,
+  re-encode with `-sws_flags "lanczos+accurate_rnd+full_chroma_int+full_chroma_inp"`
+- **Pre-generated SRT** — `pregenerate_srt` parses the scenario
+  (`say` / `narrate` / `scene` / `pause` / `wait_seconds`) and emits a
+  complete SRT before recording starts, independent of runtime timing;
+  durations use `max(clip_duration, reading_time)` so subtitles stay
+  on-screen long enough even if NeuTTS truncated the audio
+- **Resilient TTS pre-gen** — `tts_generate` retries up to 3× with a 120 s
+  curl `--max-time`; pre-gen pass tracks ok/failed counts and prints the
+  missing clip IDs at the end so silent NeuTTS failures don't slip
+  through; handles both `narrate "id" "text"` and high-level
+  `say "text"` (auto-ID `auto_NNN_<slug>`) in scenarios
+- **NeuTTS server stops after pre-gen** — frees GPU memory for the LLM
+  during recording; runtime playback uses cached WAVs via paplay
+- **`--fresh-session` flag** — ignores saved session, starts with the
+  Empty rack preset so demos never inherit the user's setup
+- **TTS + audio routed to batch dir** — per-recording `tts/` subdirectory,
+  separated from the permanent `voices/` reference clips
+
+### LLM agent improvements
+
+- **AI zone** — console + agents live together, agents pack directly
+  under the console after adding. Adding via API auto-scrolls to the AI
+  zone so the new agent is visible
+- **Current-state pattern-length awareness** — prompt `CURRENT STATE` JSON
+  exposes live `bass_len`, `hoover_len`, `an1x_len`, and per-voice
+  `drum_lengths` (keyed by schema names); agents stop assuming 16 steps
+  and actually use the configured length
+- **Voice-specific rhythm guidance** — prompt split into DRUM PATTERNS
+  (909 = pin the 4OTF grid; 808 = almost 4OTF with 1–2 tweaks) and BASS
+  PATTERNS (syncopated, 1/3–2/3 density target, "do not copy the kick
+  grid", concrete off-grid examples, both halves equally active, at least
+  3 distinct scale pitches per loop)
+- **Fixed-height JSON preview on agent card** — 6-row painter-clipped
+  viewport (replaces growing TextEdit / ScrollArea that leaked into
+  neighbouring cards); long responses truncate with an ellipsis
+- **Knob style reflects lock state** — chrome for Free, darkened chrome
+  for UserOwned (locked), flat/brushed for LlmFocus (focused); mode
+  dispatch in `param_control`
+
+### Infrastructure / refactors
+
+- **File-size split for 1000-line limit** — `ui/rack_ai.rs` (AI zone
+  rendering), `ui/flip.rs` (rack flip logic), `state/fx_plan.rs`
+  (topo-sort), `state/persistence.rs` migration hooks
+- **Zone migration** — `apply_session()` re-applies `default_zone()` per
+  module on load so pre-split sessions land in the correct AI / MAIN
+  AUDIO / VOICE / FX+MOD tabs automatically
+- **API `/scroll` + `/collapse`** extended for the 4-tab zone layout
+  (`ai`, `main`/`global`/`mainaudio`, `voice`, `fxmod`)
+
+---
+
 ## Core synth
 
 - **Bass synth** - saw/square/supersaw oscillator, 4-pole Moog ladder filter (LP/HP/BP), sub-osc, noise, FM pair, portamento, waveshaper, overdrive, per-step accent + slide
@@ -67,18 +294,16 @@ A detailed log of what's built.
 - **Dynamic spawning** - agents can request new agents (`LlmAction::SpawnAgent`) or dismiss themselves (`LlmAction::DismissAgent`) via JSON; gated by `agent_autonomy` flag; auto-wire control cables on spawn
 - **VRAM budget module** - `src/llm/vram.rs` with model profiles (Gemma, Bonsai, DeepSeek, Qwen3), VRAM estimates, and preset configurations
 - **VRAM budget guard** - `would_exceed_vram()` rejects agent spawns that would exceed GPU memory; checked at SpawnAgent action + server pool acquire; prevents silent OOM crashes
-- **Startup wizard** - always shows on startup; resume last session or start fresh with a preset (Solo/Duo/Swarm/Band/Voices/Lite); GPU VRAM detection + budget bar
+- **Startup wizard** - always shows on startup; resume last session or start fresh with a preset (Solo/Duo/Swarm/Crew/Voices/Lite); GPU VRAM detection + budget bar
 - **VRAM estimate on agent cards** - shows `~X.XG VRAM` below model selector
 - **Agent persona in log** - output and thinking lines show the correct agent persona name, not the global singleton
 - **Console routes to agents** - typed prompts go to the first enabled agent instead of bypassing the agent system
 
 ## TTS / MC mode
 
-- espeak-ng backend - speaks agent `mc_line` field via TTS rack module
-- Coqui TTS backend - higher quality synthesis; auto-falls back to espeak-ng if binary not found
-- **TTS as rack module** - agents speak through TTS modules connected via control cables; no cable = no speech; per-module settings (engine, pitch, speed, amplitude, voice char, jitter, pitch snap)
-- MC voice characters: Jungle MC, Rave Announcer, Robot, Smooth DJ (per-module)
-- Autotune/pitch-snap - pitch-quantize output to current key/scale
+- **NeuTTS Air voice cloning** — local GGUF model (~527MB), persistent Python server on port 8770; voice identity from 3-15s reference audio clips; per-module settings (voice reference, temperature, top-k, top-p)
+- **TTS as rack module** — agents speak through TTS modules connected via control cables; no cable = no speech; single `ModuleKind::NeuTts` replaces old espeak/coqui dual-engine system
+- Pitch-snap — synthesised voice quantised to nearest in-key note (autocorrelation pitch detection + resampling)
 - API `"tts": true` on agent creation auto-adds a TTS module and wires it
 
 ## Style catalog (`styles.json`)
@@ -133,6 +358,18 @@ Alerts cycle in the header (2 at a time, rotating each second). Multiple alerts 
 
 ## UI
 
+- **12-column grid rack** - RPG-inventory-style module placement with snap-to-grid drag and drop; bin-packing auto-arrange with center-biased positioning; per-zone dynamic height
+- **Two knob styles** - chrome (concentric rings, scale marks, glint arc) and flat/brushed (radial spokes, knurled edge, hub disc); freely mixable via `ControlPrefs::flat()`; fixed sizes (KNOB_PX=55, PAD_PX=34)
+- **Knob value arc** - 270-degree outer range ring on all knobs showing full range with filled portion up to current value
+- **Module remove with confirmation** - centered dialog on all non-core modules; disconnects cables and cleans up agents
+- **Drag overlap prevention** - AABB collision check rejects drops onto occupied grid cells; red ghost overlay for blocked positions
+- **Right-justified PAN sliders** - all voice panels (bass, 808, 909, AN1X, hoover, noise)
+- **Right-justified step grids** - sequencer step buttons pushed to right edge via computed spacer
+- **Full sequencer labels** - BANK, CHAIN, STEPS, SWING, SNAP, ACCENT, SLIDE; drum voices: 808 KICK, 909 CLOSED HH, etc.
+- **Wider sequencer sliders** - BPM/SWING 200px, drum volume 100px
+- **Uniform glass pane heights** - per-row min_height in hoover, AN1X, bass, 808, 909
+- **Rack presets in wizard** - Empty/Basic/Standard/Full; wizard renamed "Rack Setup"
+- **3x scroll speed** - mouse wheel boost for faster rack navigation
 - 5 panels: Sequencer / Bass (303) / 808 / 909 / FX; AN1X and Hoover in sequencer area
 - Chrome knobs, glass sliders, embossed buttons (neumorphic grayscale)
 - **Skeuomorphic step buttons** - active inset well (debossed 2px) with inverted edge highlights; velocity bloom over inset; chrome knob well shadow + catch-light
@@ -149,7 +386,7 @@ Alerts cycle in the header (2 at a time, rotating each second). Multiple alerts 
 - **Cable signal animation** - normalised to arc length (constant perceived speed regardless of cable length); 2-5 dots per cable based on length
 - **LFO visual cables** - active LFO slots synthesise rack cables from state (lfo.target → ModuleKind mapping) so LFO connections show without needing a rack cable entry
 - **Central touch-paint mode** - `· / U / F` toolbar row; clicking a knob paints its param mode when mode is active; replaces broken right-click cycling
-- **UI preferences** - knob style (Chrome/Flat), knob size (S/M/L/XL, default M=55px), pad size (S/M/L/XL, default M=44px), UI scale (0.5–3.0×, instant via pixels_per_point); all persisted in session.json
+- **UI preferences** - UI scale (0.5–3.0×, instant via pixels_per_point), Huth style, CRT effect, phosphor settings; persisted in session.json
 - **Responsive header** - heat slider fills remaining width; COOL/WARM/HOT/FIRE/CHAOS tier labels with color ramp; monitor volume labelled MON (listen-only, not export)
 - **Zone visual hierarchy** - zone rails (Global/Voices/FX+Mod) have distinct gray backgrounds (24/18/14); module cards have 6px side + 8px top/bottom inner margin; 3-dot drag handle in every title bar
 - **Per-zone collapse** - each zone rail has ▶/▼ toggle; collapses all cards in that zone to recover screen space
@@ -158,7 +395,7 @@ Alerts cycle in the header (2 at a time, rotating each second). Multiple alerts 
 - **Log level persistence** - `log_level_idx` persisted in `session.json`; survives restarts
 - **Skeuomorphic XY pad** — thick beveled outer frame (raised panel, inset rubber well), corner tick marks, rubber nub cursor with layered dome, specular catch-light, and hover glow ring; Y axis label/value overlaid inside pad; no left label strip
 - **Centered module layout** — knobs and controls center-align horizontally within glass groups and rack module cards (no more left-clustering dead space)
-- **Custom size overrides** — Preferences now exposes separate pixel DragValues for KNOB SIZE, SEQ STEP SIZE, XY PAD SIZE, and ENV HEIGHT; S/M/L/XL presets remain as quick-picks with ↺ reset; PadSize Fibonacci-aligned (S=21 / M=34 / L=55 / XL=89 px)
+- **Fixed control sizes** — knobs (55px), step buttons (34px), XY pads (172px), ADSR displays (77px); constants in `ui_prefs.rs`
 - **Rounded sequencer step buttons** — rounding increased to 22% of pad size; neumorphic bevel uses rect_stroke pairs so highlights follow the rounded shape
 - **Scaled envelope display** — decay/ADSR height scales with XY pad size (30% of xy_size, configurable via ENV HEIGHT override); width spans both pads
 - **Huth ANSI terminal output** — `log::info!` LLM response lines and thinking tokens emit ANSI 24-bit color escape codes for note names, frequencies, and MIDI numbers when stdout is a TTY; matches in-UI log colorization
@@ -182,7 +419,7 @@ Alerts cycle in the header (2 at a time, rotating each second). Multiple alerts 
 ## Testing and build
 
 - Unit tests across submodules (seq_tests, state_tests, llm_tests, audio::analysis, jam_tools_tests, music_api_tests, ui::note, ui::llm_strip), split at 1000-line limit per file
-- 431 unit tests total
+- 479 unit tests total
 - 39 LLM integration tests in 3 suites: `llm_suite` (core), `llm_suite_style` (artist refs), `llm_suite_theory` (music theory + producer lingo)
 - Pre-commit hook: fmt + clippy + tests + 1000-line LOC limit
 - `scripts/run-tests.sh --coverage` - HTML coverage report (lcov)
@@ -216,11 +453,11 @@ Alerts cycle in the header (2 at a time, rotating each second). Multiple alerts 
 
 - **Knob mode visuals** - body darker when UserOwned, brighter when LlmFocus; catch-light and chrome rim shimmer at 1 Hz on Focus knobs (grayscale animated)
 - **Slider mode tinting** - track background darker (U) / brighter (F); fill color varies per mode
-- **Alt+click cycling** - Alt+click on flat knobs, chrome knobs, and slider tracks cycles Free / User / Focus
+- **Ctrl+click cycling** - Ctrl+click any knob cycles Free / UserOwned / LlmFocus; sliders have a dedicated ·/U/F mode button
 
 ### Footer and header
 
-- **Footer mode indicators** - [Ctrl] [Alt] [Tab:BACK] with tooltips; highlight when active
+- **Footer mode indicators** - [Ctrl] [Tab:BACK] with tooltips; highlight when active
 - **Header agent status** - compact round-robin display after HEAT slider; pulsing dot + persona name per enabled agent; bright when inferring, dim when idle
 
 ### Wizard improvements
@@ -268,7 +505,7 @@ Alerts cycle in the header (2 at a time, rotating each second). Multiple alerts 
 
 ### Refactoring and test coverage
 
-- **431 unit tests**; suites: `llm_apply_tests` (68), `persistence_tests` (25), `helpers_tests` (7), `music_tests` (13), `dsp_tests` (16), `fx_plan_tests` (7), `vram_tests` (9)
+- **479 unit tests**; suites: `llm_apply_tests` (68), `persistence_tests` (25), `helpers_tests` (7), `music_tests` (13), `dsp_tests` (16), `fx_plan_tests` (7), `vram_tests` (9)
 - **`rack.connect_control(from_id, to_id)`** - replaces 8-line PortRef boilerplate at 6 call sites
 - **`spawn_agent()` pure function** - transitions.rs; wizard.rs and SpawnAgent handler refactored to use it
 - **`format_llm_display()` pure function** - extracted from drain_llm_outputs into transitions.rs

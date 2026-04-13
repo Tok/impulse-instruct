@@ -15,7 +15,15 @@ use egui::{Color32, Painter, Pos2, Rect, Sense, Stroke, Ui, Vec2};
 use std::f32::consts::TAU;
 
 use super::theme;
-use crate::state::{KnobStyle, ParamMode, UiPrefs};
+use crate::state::ParamMode;
+
+// ─── Knob geometry constants ────────────────────────────────────────────────
+/// Body radius as fraction of widget half-width (same for flat and chrome).
+const KNOB_BODY_R: f32 = 0.38;
+/// Value arc radius as fraction of body radius (outside the body circle).
+const KNOB_ARC_R: f32 = 1.055;
+/// φ — golden ratio for proportional knob sizing.
+const PHI: f32 = 1.618;
 
 /// Read the active touch-paint mode from the shared egui context data.
 /// Returns `None` when the user is in normal (drag) mode.
@@ -27,11 +35,13 @@ fn touch_mode(ui: &Ui) -> Option<ParamMode> {
 
 /// Check if a directional key is held, including WASD if `wasd_as_arrows` is set.
 /// Reads the flag from egui temp data (written by the update loop each frame).
-/// Check if Alt is effectively held — physical key OR footer lock.
-fn alt_effective(ctx: &egui::Context) -> bool {
-    let key = ctx.input(|i| i.modifiers.alt);
+/// Check if Ctrl is effectively held — physical key OR footer lock.
+/// This is the modifier that cycles param lock modes when clicking knobs.
+/// (Alt would collide with window managers / OS menus.)
+fn ctrl_effective(ctx: &egui::Context) -> bool {
+    let key = ctx.input(|i| i.modifiers.ctrl || i.modifiers.command);
     let locked = ctx
-        .data(|d| d.get_temp::<bool>(egui::Id::new("alt_locked")))
+        .data(|d| d.get_temp::<bool>(egui::Id::new("ctrl_locked")))
         .unwrap_or(false);
     key || locked
 }
@@ -51,7 +61,6 @@ fn dir_key_down(ui: &Ui, arrow: egui::Key, wasd: egui::Key) -> bool {
 pub enum ControlStyle {
     KnobFlat,
     KnobChrome,
-    Sliders,
 }
 
 /// Full control rendering preferences — style + size.
@@ -59,27 +68,20 @@ pub enum ControlStyle {
 #[derive(Clone, Copy, Debug)]
 pub struct ControlPrefs {
     pub style: ControlStyle,
-    /// Knob body size in pixels (from `KnobSize::body_px()`).
+    /// Knob body size in pixels.
     pub knob_size: f32,
 }
 
 impl ControlPrefs {
-    pub fn from_prefs(prefs: &UiPrefs) -> Self {
-        let style = if prefs.use_sliders {
-            ControlStyle::Sliders
-        } else if prefs.knob_style == KnobStyle::Chrome {
-            ControlStyle::KnobChrome
-        } else {
-            ControlStyle::KnobFlat
-        };
+    pub fn from_prefs(prefs: &crate::state::UiPrefs) -> Self {
         Self {
-            style,
+            style: ControlStyle::KnobChrome,
             knob_size: prefs.effective_knob_px(),
         }
     }
 
     /// Like `from_prefs` but with a per-module scale factor applied to knob size.
-    pub fn from_prefs_scaled(prefs: &UiPrefs, scale: f32) -> Self {
+    pub fn from_prefs_scaled(prefs: &crate::state::UiPrefs, scale: f32) -> Self {
         let mut cp = Self::from_prefs(prefs);
         cp.knob_size = (cp.knob_size * scale).max(20.0);
         cp
@@ -88,7 +90,16 @@ impl ControlPrefs {
     /// Return a copy with knob radius scaled by φ — for primary params (cutoff, resonance).
     pub fn phi_bigger(self) -> Self {
         Self {
-            knob_size: (self.knob_size * 1.618).max(20.0),
+            knob_size: (self.knob_size * PHI).max(20.0),
+            ..self
+        }
+    }
+
+    /// Return a copy using the flat knob style — for accent/highlight knobs
+    /// that should visually stand out from the default chrome knobs.
+    pub fn flat(self) -> Self {
+        Self {
+            style: ControlStyle::KnobFlat,
             ..self
         }
     }
@@ -96,7 +107,7 @@ impl ControlPrefs {
     /// Return a copy with knob radius scaled by 1/φ — for secondary params (glide, FM).
     pub fn phi_smaller(self) -> Self {
         Self {
-            knob_size: (self.knob_size * 0.618).max(16.0),
+            knob_size: (self.knob_size / PHI).max(16.0),
             ..self
         }
     }
@@ -108,10 +119,6 @@ impl ControlPrefs {
             ControlStyle::KnobFlat | ControlStyle::KnobChrome => {
                 // Single column of knobs: body + label margins
                 self.knob_size + 24.0
-            }
-            ControlStyle::Sliders => {
-                // label (72) + slider track (130) + mode btn (18) + inner margin (12)
-                232.0
             }
         }
     }
@@ -141,18 +148,17 @@ fn mode_char(mode: ParamMode) -> &'static str {
     }
 }
 
-/// Hover tooltip text explaining the current mode and how to cycle.
-/// Knobs: right-click cycles. Sliders: click the ·/U/F button.
-fn mode_tooltip(mode: ParamMode) -> &'static str {
+/// Hover tooltip text for non-default modes. Returns None for Free so that
+/// ordinary untouched knobs don't show a lock hint — only those the user
+/// (or the LLM) has deliberately marked get the explanatory tooltip.
+fn mode_tooltip(mode: ParamMode) -> Option<&'static str> {
     match mode {
-        ParamMode::Free => {
-            "· Free — LLM and user both control this\nRight-click to lock to user only (U)"
-        }
-        ParamMode::UserOwned => {
-            "U User owned — LLM ignores this param, you still control it\nRight-click to set LLM focus (F)"
-        }
+        ParamMode::Free => None,
+        ParamMode::UserOwned => Some(
+            "Locked — LLM ignores this param, you still control it.\nCtrl+click to cycle: U → F → ·",
+        ),
         ParamMode::LlmFocus => {
-            "F LLM focus — model will actively drive this param\nRight-click to release (·)"
+            Some("Focused — model will actively drive this param.\nCtrl+click to cycle: F → · → U")
         }
     }
 }
@@ -225,93 +231,125 @@ pub fn knob(ui: &mut Ui, label: &str, value: &mut f32, mode: ParamMode, size: f3
         );
     }
 
-    let response = response.on_hover_text(mode_tooltip(mode));
-    // Alt+click: cycle lock mode. Uses clicked_by to distinguish from drag.
-    // Touch-paint mode: primary click sets mode.
-    let alt_held = alt_effective(&response.ctx);
+    // Only attach the lock-state tooltip when the knob is non-default —
+    // untouched knobs stay silent to avoid visual/verbal noise.
+    let response = match mode_tooltip(mode) {
+        Some(text) => response.on_hover_text(text),
+        None => response,
+    };
+    // Ctrl+click cycles lock mode. Touch-paint mode also uses primary click.
+    let ctrl_held = ctrl_effective(&response.ctx);
     let primary_click = response.clicked_by(egui::PointerButton::Primary);
-    let mode_cycled = primary_click && (alt_held || tmode.is_some());
+    let mode_cycled = primary_click && (ctrl_held || tmode.is_some());
     (changed, mode_cycled)
 }
 
 fn draw_knob(painter: &Painter, rect: Rect, value: f32, mode: ParamMode, hovered: bool, time: f32) {
     let center = rect.center();
-    let radius = rect.width() * 0.45;
+    let radius = rect.width() * KNOB_BODY_R;
 
-    // Well shadow — dark drop shadow offset slightly down-right
+    let start_angle: f32 = std::f32::consts::FRAC_PI_2 + std::f32::consts::FRAC_PI_4 * 3.0;
+    let sweep = TAU * 0.75;
+    let filled_sweep = sweep * value;
+
+    // ── Scale marks (same geometry as chrome for visual consistency) ──────────
+    for i in 0..=12usize {
+        let t = i as f32 / 12.0;
+        let is_major = i % 3 == 0;
+        let angle = start_angle + sweep * t;
+        let (inner_r, outer_r, col, width) = if is_major {
+            (radius * 1.10, radius * 1.28, 80u8, 1.5_f32)
+        } else {
+            (radius * 1.12, radius * 1.21, 42u8, 1.0_f32)
+        };
+        let p_inner = center + Vec2::new(angle.cos(), angle.sin()) * inner_r;
+        let p_outer = center + Vec2::new(angle.cos(), angle.sin()) * outer_r;
+        painter.line_segment(
+            [p_inner, p_outer],
+            Stroke::new(width, Color32::from_gray(col)),
+        );
+    }
+
+    // ── Brushed body — radial lines instead of concentric rings ──────────────
+    // Drop shadow
     painter.circle_filled(
         center + Vec2::new(0.5, 1.0),
-        radius + 1.5,
+        radius + 1.0,
         Color32::from_gray(8),
     );
 
-    // Body — tinted by lock state: darker when user-owned, brighter when focused
-    let bg = match mode {
-        ParamMode::UserOwned => Color32::from_gray(if hovered { 22 } else { 14 }),
-        ParamMode::LlmFocus => Color32::from_gray(if hovered { 50 } else { 38 }),
-        ParamMode::Free => {
+    // Base fill — mode-tinted
+    let mode_shift: i16 = match mode {
+        ParamMode::UserOwned => -10,
+        ParamMode::LlmFocus => 12,
+        ParamMode::Free => 0,
+    };
+    let base_g = (32i16 + mode_shift + if hovered { 8 } else { 0 }).clamp(4, 80) as u8;
+    painter.circle_filled(center, radius, Color32::from_gray(base_g));
+
+    // Radial brush strokes — 48 uniform spokes from inner to outer
+    let spoke_g = (base_g as i16 + 10).clamp(4, 90) as u8;
+    for i in 0..48u32 {
+        let angle = TAU * i as f32 / 48.0;
+        let a = center + Vec2::new(angle.cos(), angle.sin()) * (radius * 0.20);
+        let b = center + Vec2::new(angle.cos(), angle.sin()) * (radius * 0.88);
+        painter.line_segment([a, b], Stroke::new(1.0, Color32::from_gray(spoke_g)));
+    }
+
+    // Centre hub — dark recessed disc
+    let hub_r = radius * 0.22;
+    painter.circle_filled(center, hub_r, Color32::from_gray(12));
+    painter.circle_stroke(center, hub_r, Stroke::new(0.5, Color32::from_gray(40)));
+
+    // Outer rim — polished edge; Focus mode shimmers
+    let rim_col = match mode {
+        ParamMode::LlmFocus => {
+            let pulse = (time * TAU).sin() * 0.5 + 0.5;
+            (110.0 + pulse * 60.0) as u8
+        }
+        _ => {
             if hovered {
-                theme::SLATE
+                140u8
             } else {
-                theme::PIT
+                90u8
             }
         }
     };
-    painter.circle_filled(center, radius, bg);
-
-    // Catch-light: short bright line toward top-left, simulates overhead lamp.
-    // Focus knobs shimmer slowly to signal "hot" status.
-    let cl_angle = std::f32::consts::PI * 1.25; // ~10 o'clock
-    let cl_a = center + Vec2::new(cl_angle.cos(), cl_angle.sin()) * (radius * 0.25);
-    let cl_b = center + Vec2::new(cl_angle.cos(), cl_angle.sin()) * (radius * 0.60);
-    let cl_bright: u8 = match mode {
-        ParamMode::UserOwned => 60,
-        ParamMode::LlmFocus => {
-            // Slow shimmer (1 Hz sine pulse between 120 and 200)
-            let pulse = (time * TAU).sin() * 0.5 + 0.5;
-            (120.0 + pulse * 80.0) as u8
-        }
-        ParamMode::Free => 100,
-    };
-    painter.line_segment(
-        [cl_a, cl_b],
-        Stroke::new(1.5, Color32::from_gray(cl_bright)),
+    painter.circle_stroke(
+        center,
+        radius,
+        Stroke::new(1.0, Color32::from_gray(rim_col)),
     );
 
-    // Ring stroke — mode-tinted
-    let ring_col = match mode {
-        ParamMode::UserOwned => Color32::from_gray(45),
-        ParamMode::LlmFocus => Color32::from_gray(120),
-        ParamMode::Free => theme::ASH,
-    };
-    painter.circle_stroke(center, radius, Stroke::new(1.0, ring_col));
+    // Knurled edge — subtle inset groove just inside the rim
+    painter.circle_stroke(
+        center,
+        radius * 0.94,
+        Stroke::new(0.5, Color32::from_gray(16)),
+    );
 
-    // Arc track (270° sweep, starting bottom-left)
-    let start_angle: f32 = std::f32::consts::FRAC_PI_2 + std::f32::consts::FRAC_PI_4 * 3.0;
-    let sweep = TAU * 0.75;
-    let track_r = radius * 0.72;
-
+    // ── Value arc ring ───────────────────────────────────────────────────────
+    let ring_r = radius * KNOB_ARC_R;
     draw_arc(
         painter,
         center,
-        track_r,
+        ring_r,
         start_angle,
         sweep,
-        1.0,
-        theme::SLATE,
+        2.5,
+        Color32::from_gray(35),
     );
 
-    let filled_sweep = sweep * value;
     let arc_color = match mode {
-        ParamMode::UserOwned => theme::IRON,
-        ParamMode::LlmFocus => mode_color(ParamMode::LlmFocus),
-        ParamMode::Free => theme::FOG,
+        ParamMode::UserOwned => Color32::from_gray(70),
+        ParamMode::LlmFocus => theme::CHALK,
+        ParamMode::Free => Color32::from_gray(180),
     };
     if filled_sweep > 0.01 {
         draw_arc(
             painter,
             center,
-            track_r,
+            ring_r,
             start_angle,
             filled_sweep,
             2.0,
@@ -319,23 +357,28 @@ fn draw_knob(painter: &Painter, rect: Rect, value: f32, mode: ParamMode, hovered
         );
     }
 
-    // Pointer line from near-centre to near-rim (replaces dot — clearer read)
-    let end_angle = start_angle + filled_sweep;
-    let ptr_a = center + Vec2::new(end_angle.cos(), end_angle.sin()) * (radius * 0.18);
-    let ptr_b = center + Vec2::new(end_angle.cos(), end_angle.sin()) * (radius * 0.75);
+    // ── Pointer line — shadow + bright ───────────────────────────────────────
+    let ptr_angle = start_angle + filled_sweep;
+    let ptr_a = center + Vec2::new(ptr_angle.cos(), ptr_angle.sin()) * (radius * 0.15);
+    let ptr_b = center + Vec2::new(ptr_angle.cos(), ptr_angle.sin()) * (radius * 0.80);
+    let shadow = Vec2::new(0.5, 0.5);
     painter.line_segment(
-        [ptr_a + Vec2::new(0.5, 0.5), ptr_b + Vec2::new(0.5, 0.5)],
+        [ptr_a + shadow, ptr_b + shadow],
         Stroke::new(1.0, Color32::from_gray(8)),
     );
-    painter.line_segment([ptr_a, ptr_b], Stroke::new(1.5, arc_color));
+    painter.line_segment([ptr_a, ptr_b], Stroke::new(2.0, Color32::from_gray(200)));
 
-    // Mode indicator — centre dot, colour signals state
+    // ── Mode indicator ───────────────────────────────────────────────────────
     painter.text(
         center,
         egui::Align2::CENTER_CENTER,
         mode_char(mode),
-        egui::FontId::monospace(8.0),
-        mode_color(mode),
+        egui::FontId::monospace(7.0),
+        match mode {
+            ParamMode::Free => Color32::from_gray(42),
+            ParamMode::UserOwned => Color32::from_gray(72),
+            ParamMode::LlmFocus => Color32::from_gray(185),
+        },
     );
 }
 
@@ -417,7 +460,11 @@ pub fn slider(ui: &mut Ui, label: &str, value: &mut f32, mode: ParamMode) -> (bo
             .fill(egui::Color32::TRANSPARENT)
             .frame(false),
         );
-        if btn.on_hover_text(mode_tooltip(mode)).clicked() {
+        let btn = match mode_tooltip(mode) {
+            Some(text) => btn.on_hover_text(text),
+            None => btn.on_hover_text("Click to cycle lock mode (· → U → F)"),
+        };
+        if btn.clicked() {
             mode_cycled = true;
         }
     });
@@ -425,7 +472,13 @@ pub fn slider(ui: &mut Ui, label: &str, value: &mut f32, mode: ParamMode) -> (bo
     (changed, mode_cycled)
 }
 
-/// Dispatch to the appropriate control widget based on `ControlPrefs`.
+/// Dispatch to the appropriate control widget based on `ControlPrefs` and
+/// `ParamMode`. The mode drives the visual style so users can tell lock
+/// state at a glance:
+///   • Free (unmanaged)     → chrome (default)
+///   • LlmFocus (focused)   → chrome, brightened via mode_shift (+12)
+///   • UserOwned (locked)   → flat/brushed with visible spokes
+///
 /// Returns `(value_changed, mode_cycled)`.
 pub fn param_control(
     ui: &mut Ui,
@@ -434,8 +487,11 @@ pub fn param_control(
     mode: ParamMode,
     prefs: ControlPrefs,
 ) -> (bool, bool) {
-    match prefs.style {
-        ControlStyle::Sliders => slider_glass(ui, label, value, mode),
+    let style = match mode {
+        ParamMode::UserOwned => ControlStyle::KnobFlat,
+        _ => prefs.style,
+    };
+    match style {
         ControlStyle::KnobFlat => knob(ui, label, value, mode, prefs.knob_size),
         ControlStyle::KnobChrome => knob_chrome(ui, label, value, mode, prefs.knob_size),
     }
@@ -547,9 +603,9 @@ pub use event_stream::event_stream;
 /// });
 /// ```
 pub fn even_group_width(ui: &Ui, n: usize) -> f32 {
-    let spacing = ui.spacing().item_spacing.x;
+    let gap = crate::ui::panels::GLASS_GAP;
     let avail = ui.available_width();
-    let total_gaps = spacing * (n.saturating_sub(1)) as f32;
+    let total_gaps = gap * (n.saturating_sub(1)) as f32;
     ((avail - total_gaps) / n.max(1) as f32).max(40.0)
 }
 
@@ -580,164 +636,17 @@ pub fn glass_group_fill<R>(
     max_width: f32,
     content: impl FnOnce(&mut Ui) -> R,
 ) -> egui::InnerResponse<R> {
-    let resp = egui::Frame::none()
+    egui::Frame::none()
         .fill(Color32::from_gray(15))
         .stroke(Stroke::new(1.0, Color32::from_gray(28)))
-        .inner_margin(egui::Margin::same(6.0))
-        .rounding(egui::Rounding::same(3.0))
+        .inner_margin(egui::Margin::symmetric(6.0, 8.0))
+        .rounding(egui::Rounding::same(5.0))
         .show(ui, |ui| {
             ui.set_min_width(min_width - 14.0); // subtract inner margin × 2
             ui.set_max_width(max_width - 14.0);
             ui.with_layout(egui::Layout::top_down(egui::Align::Center), content)
                 .inner
-        });
-
-    // Overlay asymmetric edge highlights (smoked-glass edge illusion)
-    let rect = resp.response.rect;
-    let painter = ui.painter();
-    painter.line_segment(
-        [rect.left_top(), rect.right_top()],
-        Stroke::new(1.0, Color32::from_gray(64)),
-    );
-    painter.line_segment(
-        [rect.left_bottom(), rect.right_bottom()],
-        Stroke::new(1.0, Color32::from_gray(8)),
-    );
-    resp
-}
-
-// ─── Glass Slider ────────────────────────────────────────────────────────────
-
-/// Frosted-glass horizontal slider — recessed track, brighter filled segment,
-/// 1px specular top edge, chrome-pill thumb.
-/// Returns `(value_changed, mode_cycled)`.
-pub fn slider_glass(ui: &mut Ui, label: &str, value: &mut f32, mode: ParamMode) -> (bool, bool) {
-    let label_w = 72.0_f32;
-    let mode_btn_w = 18.0_f32;
-    let track_h = 10.0_f32;
-    let _thumb_w = 8.0_f32;
-    let mut changed = false;
-    let mut mode_cycled = false;
-
-    ui.horizontal(|ui| {
-        let text_color = if mode == ParamMode::UserOwned {
-            theme::ASH
-        } else {
-            theme::SMOKE
-        };
-        ui.add_sized(
-            [label_w, track_h + 4.0],
-            egui::Label::new(
-                egui::RichText::new(label)
-                    .monospace()
-                    .size(9.0)
-                    .color(text_color),
-            ),
-        );
-
-        let avail = (ui.available_width() - mode_btn_w).max(40.0);
-        let (track_rect, response) =
-            ui.allocate_exact_size(Vec2::new(avail, track_h + 4.0), Sense::click_and_drag());
-
-        let track = Rect::from_min_size(
-            Pos2::new(track_rect.min.x, track_rect.center().y - track_h * 0.5),
-            Vec2::new(track_rect.width(), track_h),
-        );
-
-        let alt_held = ui.input(|i| i.modifiers.alt);
-        if !alt_held
-            && (response.dragged() || response.clicked())
-            && let Some(pos) = response.interact_pointer_pos()
-        {
-            *value = ((pos.x - track.min.x) / track.width()).clamp(0.0, 1.0);
-            changed = true;
-        }
-        // Alt+click on the track cycles lock mode
-        if alt_held && response.clicked() {
-            mode_cycled = true;
-        }
-        // Arrow-key fine adjustment when hovered.
-        if response.hovered() {
-            let step = 0.01;
-            if ui.input(|i| i.key_down(egui::Key::ArrowRight)) {
-                *value = (*value + step).clamp(0.0, 1.0);
-                changed = true;
-            }
-            if ui.input(|i| i.key_down(egui::Key::ArrowLeft)) {
-                *value = (*value - step).clamp(0.0, 1.0);
-                changed = true;
-            }
-        }
-
-        if ui.is_rect_visible(track_rect) {
-            let painter = ui.painter();
-            let rounding = egui::Rounding::same(2.0);
-
-            // Recessed track background — slightly tinted by mode
-            let track_bg = match mode {
-                ParamMode::UserOwned => Color32::from_gray(8),
-                ParamMode::LlmFocus => Color32::from_gray(18),
-                ParamMode::Free => Color32::from_gray(12),
-            };
-            painter.rect_filled(track, rounding, track_bg);
-            painter.rect_stroke(track, rounding, Stroke::new(1.0, Color32::from_gray(8)));
-
-            // Filled segment from left to thumb
-            let fill_w = track.width() * value.clamp(0.0, 1.0);
-            if fill_w > 1.0 {
-                let fill_rect = Rect::from_min_size(track.min, Vec2::new(fill_w, track.height()));
-                let fill_col = match mode {
-                    ParamMode::UserOwned => Color32::from_gray(45),
-                    ParamMode::LlmFocus => Color32::from_gray(180),
-                    ParamMode::Free => Color32::from_gray(90),
-                };
-                painter.rect_filled(fill_rect, rounding, fill_col);
-                // 1px specular top edge on fill
-                painter.line_segment(
-                    [fill_rect.left_top(), fill_rect.right_top()],
-                    Stroke::new(1.0, Color32::from_gray(140)),
-                );
-            }
-
-            // Round chrome thumb
-            let thumb_cx = track.min.x + track.width() * value.clamp(0.0, 1.0);
-            let thumb_r = track.height() * 0.70;
-            let thumb_center = Pos2::new(thumb_cx, track.center().y);
-            // Shadow
-            painter.circle_filled(
-                thumb_center + Vec2::new(0.5, 0.5),
-                thumb_r + 0.5,
-                Color32::from_gray(8),
-            );
-            // Body: concentric fills for a dome look
-            painter.circle_filled(thumb_center, thumb_r, Color32::from_gray(55));
-            painter.circle_filled(thumb_center, thumb_r * 0.70, Color32::from_gray(35));
-            // Top specular
-            painter.circle_stroke(
-                thumb_center,
-                thumb_r,
-                Stroke::new(1.0, Color32::from_gray(140)),
-            );
-        }
-
-        // Mode cycle button
-        let btn = ui.add_sized(
-            [mode_btn_w, track_h + 4.0],
-            egui::Button::new(
-                egui::RichText::new(mode_char(mode))
-                    .monospace()
-                    .size(9.0)
-                    .color(mode_color(mode)),
-            )
-            .fill(egui::Color32::TRANSPARENT)
-            .frame(false),
-        );
-        if btn.on_hover_text(mode_tooltip(mode)).clicked() {
-            mode_cycled = true;
-        }
-    });
-
-    (changed, mode_cycled)
+        })
 }
 
 // ─── Chrome Knob ─────────────────────────────────────────────────────────────
@@ -811,10 +720,13 @@ pub fn knob_chrome(
         );
     }
 
-    let response = response.on_hover_text(mode_tooltip(mode));
-    let alt_held = alt_effective(&response.ctx);
+    let response = match mode_tooltip(mode) {
+        Some(text) => response.on_hover_text(text),
+        None => response,
+    };
+    let ctrl_held = ctrl_effective(&response.ctx);
     let primary_click = response.clicked_by(egui::PointerButton::Primary);
-    let mode_cycled = primary_click && (alt_held || tmode.is_some());
+    let mode_cycled = primary_click && (ctrl_held || tmode.is_some());
     (changed, mode_cycled)
 }
 
@@ -828,7 +740,7 @@ fn draw_knob_chrome(
 ) {
     let center = rect.center();
     // Smaller body leaves room for value arc + scale marks outside
-    let radius = rect.width() * 0.38;
+    let radius = rect.width() * KNOB_BODY_R;
 
     let start_angle: f32 = std::f32::consts::FRAC_PI_2 + std::f32::consts::FRAC_PI_4 * 3.0;
     let sweep = TAU * 0.75;
@@ -870,9 +782,13 @@ fn draw_knob_chrome(
         Stroke::new(1.0, Color32::from_gray(8)),
     );
 
-    // Concentric fills — tinted by mode (U=darker, F=brighter, Free=normal)
+    // Concentric fills — tinted by mode. UserOwned (locked) pushes the whole
+    // knob markedly darker so the user can read lock state at a glance; Free
+    // is the baseline chrome look. LlmFocus never reaches knob_chrome — the
+    // dispatcher in `param_control` switches to the flat/brushed style for
+    // focus — but we leave a small shift in case it's rendered directly.
     let mode_shift: i16 = match mode {
-        ParamMode::UserOwned => -12,
+        ParamMode::UserOwned => -22,
         ParamMode::LlmFocus => 15,
         ParamMode::Free => 0,
     };
@@ -890,13 +806,21 @@ fn draw_knob_chrome(
         Stroke::new(1.0, Color32::from_gray(14)),
     );
 
-    // Bright outer rim — polished edge; Focus mode shimmers
+    // Bright outer rim — polished edge; Focus mode shimmers. UserOwned
+    // darkens the rim too so the whole silhouette reads as "locked".
     let rim_col = match mode {
         ParamMode::LlmFocus => {
             let pulse = (time * TAU).sin() * 0.5 + 0.5;
             (130.0 + pulse * 70.0) as u8
         }
-        _ => {
+        ParamMode::UserOwned => {
+            if hovered {
+                110u8
+            } else {
+                70u8
+            }
+        }
+        ParamMode::Free => {
             if hovered {
                 180u8
             } else {
@@ -926,15 +850,15 @@ fn draw_knob_chrome(
     }
 
     // ── Value arc ring (outside body, inside scale marks) ─────────────────────
-    let arc_r = radius * 1.055;
+    let arc_r = radius * KNOB_ARC_R;
     draw_arc(
         painter,
         center,
         arc_r,
         start_angle,
         sweep,
-        2.0,
-        Color32::from_gray(16),
+        2.5,
+        Color32::from_gray(35),
     );
 
     let arc_color = match mode {

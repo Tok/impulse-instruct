@@ -7,6 +7,10 @@ use crate::state::save_project;
 use crate::ui::{ImpulseApp, theme};
 use egui::{Frame, TopBottomPanel};
 
+/// Width (px) shared by the header's horizontal sliders (HEAT, MON) so they
+/// stay visually aligned if one of them is retuned later.
+const HEADER_SLIDER_WIDTH: f32 = 180.0;
+
 impl ImpulseApp {
     /// Menu bar + header transport strip + log/scope combined panel.
     pub(super) fn draw_menu_and_header(&mut self, ctx: &egui::Context) {
@@ -15,14 +19,19 @@ impl ImpulseApp {
         self.draw_log_and_scope(ctx);
     }
 
-    /// Resizable log panel + fixed scope panel below it.
-    /// Dragging the handle between them grows/shrinks the log.
+    /// Combined log + visualizations panel.
+    ///
+    /// Single resizable `TopBottomPanel` with a 3-column internal layout:
+    ///   Left:   LLM log (golden-ratio width, full height)
+    ///   Center: event stream + bar oscilloscope stacked vertically
+    ///   Right:  ring oscilloscope (square, full height)
+    ///
+    /// Each visualization can be toggled off in Preferences → Display.
+    /// Disabled columns are reclaimed by the remaining elements.
     pub(super) fn draw_log_and_scope(&mut self, ctx: &egui::Context) {
-        let scope_h = 80.0;
         let screen_h = ctx.screen_rect().height();
 
-        // ── Log panel (resizable) ───────────────────────────────────
-        TopBottomPanel::top("log_panel")
+        TopBottomPanel::top("header_info")
             .frame(Frame::none().fill(theme::PIT).inner_margin(egui::Margin {
                 left: 8.0,
                 right: 8.0,
@@ -30,69 +39,106 @@ impl ImpulseApp {
                 bottom: 2.0,
             }))
             .resizable(true)
-            .min_height(40.0)
+            .min_height(60.0)
             .max_height(screen_h * 0.5)
-            .default_height(100.0)
+            .default_height(160.0)
             .show(ctx, |ui| {
-                egui::ScrollArea::vertical()
-                    .id_source("global_log")
-                    .stick_to_bottom(true)
-                    .auto_shrink([false; 2])
-                    .show(ui, |ui: &mut egui::Ui| {
-                        let job = super::llm_strip::colorize_log(&self.log_text, theme::FOG);
-                        ui.add(egui::Label::new(job).wrap().selectable(true));
-                    });
-            });
-
-        // ── Scope + event stream panel (fixed height) ──────────────
-        TopBottomPanel::top("scope_panel")
-            .frame(
-                Frame::none()
-                    .fill(theme::PIT)
-                    .inner_margin(egui::Margin::symmetric(8.0, 2.0)),
-            )
-            .exact_height(scope_h)
-            .show(ctx, |ui| {
+                let (show_bar, show_ring, show_stream) = {
+                    let p = &self.state.read().ui_prefs;
+                    (
+                        p.show_bar_oscilloscope,
+                        p.show_ring_oscilloscope,
+                        p.show_event_stream,
+                    )
+                };
+                let any_center = show_bar || show_stream;
                 let full_w = ui.available_width();
-                let ring_w = scope_h;
-                let content_w = (full_w - ring_w - 12.0).max(120.0);
-                // φ : 1 split — oscilloscope gets 61.8%, event stream gets 38.2%
-                let osc_w = content_w * (1.618 / 2.618);
-                let stream_w = content_w - osc_w - 4.0;
-                let h = scope_h - 4.0;
+                let total_h = ui.available_height();
+                let gap = 4.0;
+
+                // Column widths
+                let ring_w = if show_ring { total_h } else { 0.0 };
+                let ring_gap = if show_ring { gap } else { 0.0 };
+                let remaining_w = (full_w - ring_w - ring_gap).max(80.0);
+                let (log_w, center_w) = if any_center {
+                    let lw = remaining_w * (1.618 / 2.618);
+                    (lw, remaining_w - lw - gap)
+                } else {
+                    (remaining_w, 0.0)
+                };
+
+                // Huth color detection (shared by bar and ring scopes)
+                let huth_col = if self.state.read().ui_prefs.huth_oscilloscope {
+                    super::scope_footer::detect_note(&self.scope_buf, 44100.0)
+                        .map(theme::note_color)
+                } else {
+                    None
+                };
+
                 ui.horizontal_top(|ui| {
-                    // Linear oscilloscope (left) — with optional Huth coloring
-                    let huth_col = if self.state.read().ui_prefs.huth_oscilloscope {
-                        super::scope_footer::detect_note(&self.scope_buf, 44100.0)
-                            .map(theme::note_color)
-                    } else {
-                        None
-                    };
-                    super::scope_footer::draw_scope_colored(
-                        ui,
-                        &self.scope_buf,
-                        &self.scope_history,
-                        osc_w,
-                        h,
-                        huth_col,
-                    );
-                    // Event stream (center) — smooth sub-step interpolation
-                    {
-                        let state = self.state.read();
-                        let now = ctx.input(|i| i.time);
-                        // Compute fractional step from time elapsed since last step change
-                        let secs_per_step = 60.0 / (state.sequencer.bpm as f64 * 4.0);
-                        let elapsed = (now - self.last_step_time).max(0.0);
-                        let frac = if state.sequencer.running && secs_per_step > 0.001 {
-                            (elapsed / secs_per_step).clamp(0.0, 0.99)
-                        } else {
-                            0.0
-                        };
-                        let smooth = self.last_seq_step as f64 + frac;
-                        super::widgets::event_stream(ui, &state, smooth, stream_w, h);
+                    ui.spacing_mut().item_spacing.x = gap;
+
+                    // ── Left: LLM log (full height) ─────────────────────
+                    ui.allocate_ui(egui::vec2(log_w, total_h), |ui| {
+                        ui.spacing_mut().item_spacing.y = 0.0;
+                        egui::ScrollArea::vertical()
+                            .id_source("global_log")
+                            .stick_to_bottom(true)
+                            .auto_shrink([false; 2])
+                            .show(ui, |ui: &mut egui::Ui| {
+                                ui.spacing_mut().item_spacing.y = 0.0;
+                                let trimmed = self.log_text.trim_end_matches('\n');
+                                let job = super::llm_strip::colorize_log(trimmed, theme::FOG);
+                                ui.add(egui::Label::new(job).wrap().selectable(true));
+                            });
+                    });
+
+                    // ── Center: event stream + bar oscilloscope stacked ──
+                    if any_center {
+                        let both = show_bar && show_stream;
+                        let half_h = if both { (total_h - gap) / 2.0 } else { total_h };
+                        ui.allocate_ui(egui::vec2(center_w, total_h), |ui| {
+                            ui.vertical(|ui| {
+                                ui.spacing_mut().item_spacing.y = gap;
+                                if show_stream {
+                                    let state = self.state.read();
+                                    let now = ctx.input(|i| i.time);
+                                    let secs_per_step = 60.0 / (state.sequencer.bpm as f64 * 4.0);
+                                    let elapsed = (now - self.last_step_time).max(0.0);
+                                    let frac = if state.sequencer.running && secs_per_step > 0.001 {
+                                        (elapsed / secs_per_step).clamp(0.0, 0.99)
+                                    } else {
+                                        0.0
+                                    };
+                                    let smooth = self.last_seq_step as f64 + frac;
+                                    super::widgets::event_stream(
+                                        ui, &state, smooth, center_w, half_h,
+                                    );
+                                }
+                                if show_bar {
+                                    super::scope_footer::draw_scope_colored(
+                                        ui,
+                                        &self.scope_buf,
+                                        &self.scope_history,
+                                        center_w,
+                                        half_h,
+                                        huth_col,
+                                    );
+                                }
+                            });
+                        });
                     }
-                    // Ring scope (right) — same Huth color as linear scope
-                    super::scope_footer::draw_ring_scope_colored(ui, &self.scope_buf, h, huth_col);
+
+                    // ── Right: ring oscilloscope (square) ───────────────
+                    if show_ring {
+                        super::scope_footer::draw_ring_scope_colored(
+                            ui,
+                            &self.scope_buf,
+                            &self.scope_history,
+                            total_h,
+                            huth_col,
+                        );
+                    }
                 });
             });
     }
@@ -347,7 +393,7 @@ impl ImpulseApp {
                         ui.set_min_width(280.0);
                         ui.vertical(|ui| {
                             ui.label(
-                                egui::RichText::new("◆ IMPULSE INSTRUCT")
+                                egui::RichText::new("IMPULSE • INSTRUCT")
                                     .color(theme::CHALK)
                                     .size(12.0)
                                     .monospace()
@@ -473,7 +519,7 @@ impl ImpulseApp {
                         );
                         if ui
                             .scope(|ui| {
-                                ui.spacing_mut().slider_width = 180.0;
+                                ui.spacing_mut().slider_width = HEADER_SLIDER_WIDTH;
                                 ui.add(egui::Slider::new(&mut heat, 0.0..=1.0).show_value(false))
                             })
                             .inner
@@ -490,31 +536,11 @@ impl ImpulseApp {
                     }
 
                     // ── Push remaining controls to the right edge ──
-                    let right_w = 300.0; // approximate width needed for KNOB+MON+VRAM
+                    // MON slider (HEADER_SLIDER_WIDTH) + VRAM/RAM bars (~120) + label
+                    // gap + separators. Keep in sync with HEADER_SLIDER_WIDTH.
+                    let right_w = HEADER_SLIDER_WIDTH + 200.0;
                     let spacer = (ui.available_width() - right_w).max(0.0);
                     ui.add_space(spacer);
-
-                    // ── KNOBS ──
-                    ui.separator();
-                    let use_sliders = self.state.read().ui_prefs.use_sliders;
-                    if ui
-                        .add(
-                            egui::Button::new(
-                                egui::RichText::new(if use_sliders { "SLDR" } else { "KNOB" })
-                                    .color(if use_sliders {
-                                        theme::SMOKE
-                                    } else {
-                                        theme::ASH
-                                    })
-                                    .monospace()
-                                    .size(8.0),
-                            )
-                            .fill(egui::Color32::TRANSPARENT),
-                        )
-                        .clicked()
-                    {
-                        self.state.write().ui_prefs.use_sliders = !use_sliders;
-                    }
 
                     // ── MON ──
                     ui.separator();
@@ -531,7 +557,7 @@ impl ImpulseApp {
                     );
                     if ui
                         .scope(|ui| {
-                            ui.spacing_mut().slider_width = 60.0;
+                            ui.spacing_mut().slider_width = HEADER_SLIDER_WIDTH;
                             ui.add(
                                 egui::Slider::new(&mut self.ui_volume, 0.0..=1.0).show_value(false),
                             )
@@ -562,17 +588,17 @@ impl ImpulseApp {
                         .unwrap_or((false, false, 0, 0, 0, 0));
                     if has_vram || has_ram {
                         ui.vertical(|ui| {
-                            ui.spacing_mut().item_spacing.y = 1.0;
+                            ui.spacing_mut().item_spacing.y = 1.5;
                             let bar = |ui: &mut egui::Ui, label: &str, frac: f32| {
                                 ui.horizontal(|ui| {
                                     ui.label(
                                         egui::RichText::new(label)
                                             .color(theme::ASH)
                                             .monospace()
-                                            .size(7.0),
+                                            .size(10.5),
                                     );
                                     let (br, _) = ui.allocate_exact_size(
-                                        egui::vec2(50.0, 5.0),
+                                        egui::vec2(86.0, 7.5),
                                         egui::Sense::hover(),
                                     );
                                     let p = ui.painter();
@@ -596,7 +622,7 @@ impl ImpulseApp {
                                         egui::RichText::new(format!("{}%", (frac * 100.0) as u32))
                                             .color(theme::ASH)
                                             .monospace()
-                                            .size(6.5),
+                                            .size(9.75),
                                     );
                                 });
                             };

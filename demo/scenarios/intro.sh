@@ -3,7 +3,7 @@
 # Quick overview of Impulse Instruct. Sound within 30 seconds.
 # Two parts: single agent, then multi-agent band.
 
-scene_count 13
+scene_count 14
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # PART 1: Quick start — rack + agent + sound
@@ -13,17 +13,25 @@ scene "Setup"
 
 reset_rack
 
-say "Impulse Instruct. AI-controlled synthesizers. Let's build a rack."
+say "Impulse Instruct."
+pause 0.4
+say "A smart synthesizer."
+pause 0.6
+say "Let's build a rack!"
+
+say "Drums."
+add_instrument 808
+look_at 808
+wait_seconds 1
 
 say "Adding bass."
 add_instrument bass
 look_at bass
 wait_seconds 1
 
-say "Drums."
-add_instrument 808
+say "More drums."
 add_instrument 909
-look_at 808
+look_at 909
 wait_seconds 1
 
 say "Reverb and delay."
@@ -47,7 +55,7 @@ look_at sequencer
 say "Asking the agent for a pattern."
 
 # Send prompt BEFORE playing — pattern loads while sequencer is stopped.
-ask "acid groove, kick and hats, short bass line with gaps. set pan positions for stereo width, add subtle chorus" "" 5
+ask "acid groove, kick and hats, bass line with gaps spanning the full bank, 3–5 distinct pitches across both halves. set pan positions for stereo width, add subtle chorus" "" 5
 
 play
 wait_seconds 3
@@ -74,7 +82,7 @@ wait_seconds 1
 
 say "Cutoff and resonance."
 
-sweep_pad 8
+sweep_pad 11
 
 wait_seconds 1
 
@@ -84,9 +92,10 @@ screenshot "v${VERSION}-intro-bass-detail"
 
 scene "AI-controlled ramp"
 
-ask "slowly sweep the filter open over 4 bars" 14
+ask "slowly sweep the filter open over 4 bars" "" 14
 
-say "The AI ramps parameters over bars. Smooth, tempo-synced."
+say "The AI ramps parameters over bars."
+say "Smooth, locked to the tempo."
 wait_seconds 2
 
 # ── Scene 6: Show cables — after wiring is visible ─────────────────────────
@@ -97,32 +106,50 @@ scene "Control cables"
 look_at console
 wait_seconds 1
 show_cables
-wait_seconds 3
-say "Back panel. Control cables from the agent to each instrument."
+say "The back panel shows control cables."
+say "They connect the agent to each instrument."
+# Tour every zone top-to-bottom so all cables are on screen at some point.
+tour_rack 1.2
 screenshot "v${VERSION}-intro-cables"
 show_knobs
 wait_seconds 1
 
-# ── Scene 7: Parameter locking — scroll to bass first ──────────────────────
+# ── Scene 7: LFO — living modulation while the track keeps playing ─────────
 
-scene "Parameter lock"
+scene "LFO modulation"
 
-focus_on bass
+# Drop an LFO module into the rack and scroll to it so the module card
+# is on screen before we talk about what it does.
+add_effect lfo
+look_at lfo
 wait_seconds 1
 
-lock "sequencer.bass_steps" "tb303.cutoff"
+say "An LFO moves a parameter on its own."
+say "Any knob can be a target."
 
-say "Locking bass cutoff and pattern."
-
-look_at console
-ask "strip it back, minimal techno, different drums"
-
+# ── LFO 1: classic sine on the bass filter cutoff ──
+say "Sine wave on the bass cutoff."
+say "Classic acid breath."
+api_params '{"lfo": [{"enabled": true, "target": "BassCutoff", "waveform": "Sine", "rate": 0.18, "depth": 0.55}]}'
 focus_on bass
-wait_seconds 2
+wait_seconds 4
 
-say "Bass stayed locked. Only drums changed."
+# ── LFO 2: slower triangle on reverb mix — different waveform + target ──
+# Each LfoModule in the rack binds to the next LFO slot; without a second
+# module slot 1 has no card on screen.
+add_effect lfo
+look_at lfo
+wait_seconds 1
+say "A second LFO."
+say "Triangle wave on the reverb mix."
+api_params '{"lfo": [{}, {"enabled": true, "target": "ReverbMix", "waveform": "Triangle", "rate": 0.06, "depth": 0.35}]}'
+wait_seconds 4
 
-unlock "sequencer.bass_steps" "tb303.cutoff"
+say "Filter pulses fast, reverb breathes slow."
+wait_seconds 3
+
+# Release both LFOs before we tear down the single-agent rack.
+api_params '{"lfo": [{"enabled": false}, {"enabled": false}]}'
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # PART 2: Multi-agent band
@@ -130,19 +157,21 @@ unlock "sequencer.bass_steps" "tb303.cutoff"
 
 scene "Multi-agent setup"
 
-wait_seconds 4
+wait_seconds 2
 stop
 wait_seconds 1
 
-say "Split the AI into specialists. Each one controls its own instruments."
+say "Split the AI into specialists."
+say "Each one controls its own instruments."
 
 reset_rack
+add_instrument 808
+wait_seconds 0.3
 add_instrument bass
 look_at bass
 wait_seconds 0.5
-add_instrument 808
 add_instrument 909
-look_at 808
+look_at 909
 wait_seconds 0.5
 add_effect reverb
 add_effect delay
@@ -150,7 +179,10 @@ add_effect delay
 # Add agents and scroll to console to show them appearing
 look_at console
 wait_seconds 0.5
-add_agent BASS bonsai bass
+# BASS uses the larger Gemma 4 E4B — melody work needs a stronger model
+# than Q1 Bonsai can reliably deliver. DRUMS and FX are rhythm/knob work,
+# where Bonsai's 1-bit quant is more than enough.
+add_agent BASS gemma bass
 wait_seconds 0.5
 add_agent DRUMS bonsai "kit_a,kit_b"
 wait_seconds 0.5
@@ -159,8 +191,9 @@ wait_for_model
 
 # Brief cable view — agents are now wired, so cables are visible
 show_cables
-wait_seconds 3
 say "Each agent has its own control cables."
+# Scroll top-to-bottom so every agent's cable run is visible.
+tour_rack 1.2
 show_knobs
 wait_seconds 1
 
@@ -171,7 +204,7 @@ scene "Band jam"
 play
 wait_seconds 1
 
-ask "acid bass line with syncopation, squelchy, cutoff low, resonance high, pan center" BASS
+ask "rewrite the bass melody from scratch: acid line with syncopation, squelchy, cutoff low, resonance high, pan center. Use 4 distinct scale pitches spread across BOTH halves of the bank — the second half must NOT be root-only Cs" BASS
 ask "kick on steps 0,4,8,12,16,20,24,28 pan center. hihat on 2,6,10,14,18,22,26,30 pan 0.3. clap on 4,12,20,28 pan -0.3. open hihat on 6,14,22,30" DRUMS
 ask "reverb mix 0.12, reverb size 0.5, delay mix 0.08, chorus mix 0.1, stereo_width 0.6" FX
 
@@ -184,7 +217,17 @@ say "Three agents. Each handled its own part."
 focus_on reverb
 wait_seconds 2
 
-# ── Scene 10: Scoped control ─────────────────────────────────────────────
+# ── Scene 10: Melody rewrite — agent rearranges over the same groove ────
+
+scene "Melody rewrite"
+
+say "The bass agent rewrites the melody on demand."
+ask "rewrite the bass melody from scratch, keep the rhythm, completely new phrase with more movement. Use 4+ distinct scale pitches in EACH half of the bank independently — the second half must have the same pitch variety as the first, not root-only" BASS 8
+focus_on bass
+wait_seconds 3
+say "Same groove, different line."
+
+# ── Scene 11: Scoped control ─────────────────────────────────────────────
 
 scene "Scoped control"
 
@@ -212,7 +255,10 @@ wait_seconds 4
 scene "Live filter"
 
 focus_on bass
-sweep_pad 8
+say "Bass runs on Gemma 4 E4B."
+say "Drums and effects on Bonsai 8B, one bit quantized."
+say "Both local, both open weights."
+sweep_pad 11
 wait_seconds 1
 
 # ── Scene 13: Outro ───────────────────────────────────────────────────────
@@ -221,6 +267,11 @@ scene "End"
 
 show_all
 
-say "Impulse Instruct. Build your rack, wire AI agents, make music with words. Everything runs locally."
+say "Impulse Instruct."
+say "Build your rack."
+say "Wire up AI agents."
+say "Create music with words."
+say "Everything runs locally."
+say "Free and open source."
 
 stop

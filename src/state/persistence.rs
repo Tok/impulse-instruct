@@ -46,10 +46,6 @@ pub struct SessionData {
     #[serde(default)]
     pub rack_flipped: Option<bool>,
     // UI prefs subset
-    pub knob_style: Option<crate::state::KnobStyle>,
-    pub knob_size: Option<crate::state::KnobSize>,
-    pub pad_size: Option<crate::state::PadSize>,
-    pub use_sliders: Option<bool>,
     pub ui_scale: Option<f32>,
     pub log_level_idx: Option<usize>,
     #[serde(default)]
@@ -92,10 +88,6 @@ pub fn save_session_ext(
         show_cables: Some(show_cables),
         rack_flipped: Some(rack_flipped),
         llm_agents: Some(state.llm_agents.clone()),
-        knob_style: Some(state.ui_prefs.knob_style),
-        knob_size: Some(state.ui_prefs.knob_size),
-        pad_size: Some(state.ui_prefs.pad_size),
-        use_sliders: Some(state.ui_prefs.use_sliders),
         ui_scale: Some(state.ui_prefs.ui_scale),
         log_level_idx: Some(state.ui_prefs.log_level_idx),
         autosave_interval: Some(state.ui_prefs.autosave_interval),
@@ -131,7 +123,36 @@ pub fn apply_session(state: &mut AppState, data: SessionData) {
         if removed > 0 {
             log::warn!("Session: removed {removed} cyclic audio cable(s) from rack");
         }
+        // Migrate old sessions: auto-wire if modules exist but no cables.
+        if rack.cables.is_empty() && rack.modules.len() > 1 {
+            log::info!("Session: no cables found — auto-wiring default routing");
+            rack.wire_default_cables();
+        }
+        // Migrate pre-v0.7.2 sessions: re-apply default zones (LLM console/agent
+        // moved from Zone::Global to Zone::Ai). Force re-layout so modules land
+        // in their new zones.
+        let mut zones_changed = false;
+        for m in rack.modules.iter_mut() {
+            let z = m.kind.default_zone();
+            if m.zone != z {
+                m.zone = z;
+                zones_changed = true;
+            }
+        }
+        if zones_changed {
+            log::info!("Session: migrated module zones (AI split out from Global)");
+            rack.arrange_grid();
+        }
+        // Migrate old sessions: if all modules are at (0,0), run grid placement.
+        let needs_grid = rack
+            .modules
+            .iter()
+            .all(|m| m.grid_col == 0 && m.grid_row == 0)
+            && rack.modules.len() > 1;
         state.rack = rack;
+        if needs_grid {
+            state.rack.arrange_grid();
+        }
     }
     if let Some(v) = data.active_style {
         state.llm.active_style = Some(v);
@@ -149,18 +170,6 @@ pub fn apply_session(state: &mut AppState, data: SessionData) {
         && !v.is_empty()
     {
         state.llm.model_path = v;
-    }
-    if let Some(v) = data.knob_style {
-        state.ui_prefs.knob_style = v;
-    }
-    if let Some(v) = data.knob_size {
-        state.ui_prefs.knob_size = v;
-    }
-    if let Some(v) = data.pad_size {
-        state.ui_prefs.pad_size = v;
-    }
-    if let Some(v) = data.use_sliders {
-        state.ui_prefs.use_sliders = v;
     }
     if let Some(v) = data.ui_scale {
         state.ui_prefs.ui_scale = v.clamp(0.5, 3.0);

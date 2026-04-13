@@ -17,6 +17,18 @@ pub struct CableDrag {
 pub struct ModuleDrag {
     pub module_id: u32,
     pub pointer: Pos2,
+    /// Zone the dragged module belongs to.
+    pub zone: crate::state::Zone,
+    /// Grid column span of the module (from grid_size).
+    pub col_span: u8,
+    /// Grid row span of the module.
+    pub row_span: u8,
+    /// Zone rect origin (top-left of the zone's grid area).
+    pub zone_origin: Pos2,
+    /// Grid step (col_w + gap).
+    pub step: f32,
+    /// Grid column width.
+    pub col_w: f32,
 }
 
 // ─── Cable drawing ────────────────────────────────────────────────────────────
@@ -170,11 +182,7 @@ pub fn draw_cable_overlay(
     use crate::state::rack::lfo_target_module_kind;
     use crate::state::{LfoTarget, ModuleKind, PortDir, PortKind, PortRef};
 
-    let alt_key = ctx.input(|i| i.modifiers.alt);
-    let alt_locked = ctx
-        .data(|d| d.get_temp::<bool>(egui::Id::new("alt_locked")))
-        .unwrap_or(false);
-    let alt_held = alt_key || alt_locked;
+    let alt_held = ctx.input(|i| i.modifiers.alt);
     let show_cables = app.rack_flipped && !alt_held && !app.show_prefs;
     let has_drag = app.cable_drag.is_some();
 

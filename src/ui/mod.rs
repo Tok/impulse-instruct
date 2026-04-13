@@ -1,11 +1,13 @@
 // ─── ui/mod.rs — Main egui application ───────────────────────────────────────
 mod api_log_handler;
+mod flip;
 mod header;
 mod llm_strip;
 mod midi_handler;
 pub mod module_card;
 mod note;
 pub mod panels;
+mod rack_ai;
 pub mod rack_cables;
 pub mod rack_canvas;
 pub(crate) mod rack_content;
@@ -18,10 +20,10 @@ mod util;
 pub mod widgets;
 pub(crate) use util::scan_models;
 use util::webbrowser_open;
+mod prefs_controls;
 mod windows;
 mod wizard;
-
-pub(crate) use note::{ansi_colorize_notes, note_name};
+pub(crate) use note::{ansi_colorize_notes, note_freq_label, note_name};
 
 /// Convert a dot-path + float value into a nested JSON object.
 /// "bass.cutoff", 0.4  →  {"bass": {"cutoff": 0.4}}
@@ -34,16 +36,14 @@ fn dot_path_to_json(path: &str, value: f32) -> serde_json::Value {
         .fold(leaf, |acc, &key| serde_json::json!({ key: acc }))
 }
 
-use crossbeam_channel::{Receiver, Sender};
-use egui::{CentralPanel, Frame, TopBottomPanel};
-use parking_lot::RwLock;
-use std::sync::Arc;
-
 use crate::audio::AudioCommand;
 use crate::llm::{LlmInput, LlmOutput};
 use crate::midi::MidiEvent;
 use crate::state::AppState;
-
+use crossbeam_channel::{Receiver, Sender};
+use egui::{CentralPanel, Frame, TopBottomPanel};
+use parking_lot::RwLock;
+use std::sync::Arc;
 pub(super) const LOG_LEVELS: &[(&str, log::LevelFilter)] = &[
     ("error", log::LevelFilter::Error),
     ("warn", log::LevelFilter::Warn),
@@ -52,9 +52,9 @@ pub(super) const LOG_LEVELS: &[(&str, log::LevelFilter)] = &[
     ("trace", log::LevelFilter::Trace),
 ];
 
-pub(crate) const SEQ_LABEL_W: f32 = 72.0;
+pub(crate) const SEQ_LABEL_W: f32 = 100.0;
 pub(crate) const SEQ_LABEL_H: f32 = 22.0;
-pub(crate) const SEQ_VOL_W: f32 = 52.0;
+pub(crate) const SEQ_VOL_W: f32 = 330.0;
 pub(crate) const SEQ_VOL_H: f32 = 14.0;
 
 /// Derives BPM from incoming MIDI clock pulses (24 per quarter note).
@@ -166,6 +166,7 @@ pub struct ImpulseApp {
     show_sysinfo: bool,
     pub(crate) show_wizard: bool,
     pub(crate) wizard_selected: usize,
+    pub(crate) wizard_rack_preset: usize,
     prefs_tab: usize,
     llm_tab: usize,
     startup_done: bool,
@@ -174,8 +175,9 @@ pub struct ImpulseApp {
     pub(crate) cable_drag: Option<rack_canvas::CableDrag>,
     pub(crate) show_cables: bool,
     pub(crate) rack_flipped: bool,
+    /// Counts flips-to-back to alternate scroll target (master → agent → master …)
+    pub(crate) flip_to_back_count: u32,
     pub(crate) ctrl_locked: bool,
-    pub(crate) alt_locked: bool,
     pub(crate) show_shortcuts: bool,
     pub(crate) add_menu_zone: Option<crate::state::Zone>,
     // Module being dragged by its title bar (id + current pointer position).
@@ -183,7 +185,7 @@ pub struct ImpulseApp {
     // Auto-save: set when rack or session-worthy state changes; saved next frame.
     pub(crate) session_dirty: bool,
     /// Zone Y offsets (relative to scroll content top), updated each frame by rack_canvas.
-    pub(crate) zone_y: [f32; 3], // [global, voice, fxmod]
+    pub(crate) zone_y: [f32; 4], // [ai, global, voice, fxmod]
     /// Focused module kind — highlighted in the rack (set by API scroll or click).
     pub(crate) focused_module: Option<crate::state::ModuleKind>,
     /// Instant when the focused module was set (for shine animation).
@@ -198,9 +200,12 @@ pub struct ImpulseApp {
     native_ppp: f32,
     api_params_dirty: Arc<std::sync::atomic::AtomicBool>,
     pub(crate) touch_mode: Option<crate::state::ParamMode>,
+    pub(crate) zone_ai_collapsed: bool,
     pub(crate) zone_global_collapsed: bool,
     pub(crate) zone_voice_collapsed: bool,
     pub(crate) zone_fxmod_collapsed: bool,
+    /// Module ID pending removal confirmation (None = no dialog shown).
+    pub(crate) confirm_remove_module: Option<u32>,
 }
 
 /// Audio channels bundled to keep `ImpulseApp::new` under the arg limit.
@@ -230,9 +235,7 @@ impl ImpulseApp {
         theme::apply(&cc.egui_ctx);
         log::info!("ImpulseApp::new — creating UI…");
 
-        // ── Load last session from eframe's persistent storage ────────────────
-        // Only restore if session.json also exists — deleting session.json
-        // signals a clean start (e.g. demo recording).
+        // Load last session — only if session.json exists (deletion = clean start).
         if std::path::Path::new("session.json").exists()
             && let Some(storage) = cc.storage
             && let Some(json) = storage.get_string("session")
@@ -249,42 +252,32 @@ impl ImpulseApp {
             log::info!("Session restored from last run.");
         }
 
-        // Restore persisted log level from ui_prefs
+        // Restore persisted log level
         {
             let idx = state.read().ui_prefs.log_level_idx;
             if let Some((_, filter)) = LOG_LEVELS.get(idx) {
                 log::set_max_level(*filter);
             }
         }
-
         // Don't auto-start the sequencer — let the user or AI start it.
-        // The whole point is the AI builds the pattern fresh each time.
-        {
-            let mut s = state.write();
-            s.sequencer.running = false;
-        }
+        state.write().sequencer.running = false;
 
         // Pre-load amen WAV if path is set in restored session.
+        let amen_path = state.read().amen.path.clone();
+        if !amen_path.is_empty()
+            && let Some(data) = crate::audio::load_wav_to_44100(&amen_path)
         {
-            let path = state.read().amen.path.clone();
-            if !path.is_empty()
-                && let Some(data) = crate::audio::load_wav_to_44100(&path)
-            {
-                let _ = audio.params_tx.push(AudioCommand::LoadSampler(data));
-            }
+            let _ = audio.params_tx.push(AudioCommand::LoadSampler(data));
         }
 
-        let mut log_text = "[ Impulse Instruct ready ]\n".to_string();
+        let mut log_text = "[Impulse Instruct ready]\n".to_string();
         if let Some(ref port) = midi_port {
-            log_text.push_str(&format!("[ MIDI: {} ]\n", port));
+            log_text.push_str(&format!("[MIDI: {}]\n", port));
         } else {
-            log_text.push_str("[ MIDI: no device found ]\n");
+            log_text.push_str("[MIDI: no device found]\n");
         }
         if let Some(port) = api_port {
-            log_text.push_str(&format!(
-                "[ HTTP API active → http://localhost:{} ]\n",
-                port
-            ));
+            log_text.push_str(&format!("[HTTP API active → http://localhost:{}]\n", port));
         }
         Self {
             state,
@@ -349,6 +342,7 @@ impl ImpulseApp {
                 usize::MAX // WIZARD_RESUME
             },
 
+            wizard_rack_preset: 1, // default to "Basic" (303 + 808 + 909)
             prefs_tab: 0,
             llm_tab: 0,
             startup_done: false,
@@ -359,13 +353,13 @@ impl ImpulseApp {
                 .and_then(|s| s.show_cables)
                 .unwrap_or(true),
             rack_flipped: false, // volatile — always start in front view
+            flip_to_back_count: 0,
             ctrl_locked: false,
-            alt_locked: false,
             show_shortcuts: false,
             add_menu_zone: None,
             module_drag: None,
             session_dirty: false,
-            zone_y: [0.0; 3],
+            zone_y: [0.0; 4],
             focused_module: None,
             focus_time: std::time::Instant::now(),
             last_saved_rack_sig: (0, 0),
@@ -380,9 +374,11 @@ impl ImpulseApp {
             native_ppp: 0.0, // captured on first frame after DPI is established
             api_params_dirty,
             touch_mode: None,
+            zone_ai_collapsed: false,
             zone_global_collapsed: false,
             zone_voice_collapsed: false,
             zone_fxmod_collapsed: false,
+            confirm_remove_module: None,
         }
     }
     /// Record the current state to the undo history before a mutation.
@@ -543,10 +539,6 @@ impl ImpulseApp {
                         };
                         self.log_text.push_str(&msg);
                     }
-                    LlmAction::SetHeat(h) if !out.is_jam => {
-                        self.state.write().llm.heat = *h;
-                        self.session_dirty = true;
-                    }
                     LlmAction::SetStyle(sid) if !out.is_jam => {
                         // Respect style lock — agents can't override user-selected style
                         if !self.state.read().llm.style_lock {
@@ -567,7 +559,8 @@ impl ImpulseApp {
                             self.session_dirty = true;
                         }
                     }
-                    LlmAction::SetHeat(_) | LlmAction::SetStyle(_) => {} // jam: ignore
+                    LlmAction::SetHeat(_) => {} // heat is user-only; always ignore
+                    LlmAction::SetStyle(_) => {} // jam: ignore
                     LlmAction::SetPersona(p) => {
                         self.state.write().llm.persona_name = p.clone();
                         self.session_dirty = true;
@@ -658,6 +651,7 @@ impl ImpulseApp {
                                 self.push_history();
                                 self.state.write().rack.remove_module(aid);
                                 self.state.write().llm_agents.retain(|a| a.id != aid);
+                                self.push_fx_plan();
                                 self.log_text.push_str(&format!("{} signed off\n", name));
                                 if self.state.read().llm_agents.len() == 1 {
                                     self.state.write().llm_agents[0].scope.clear();
@@ -698,12 +692,8 @@ impl ImpulseApp {
                     self.focused_module = Some(kind);
                     self.focus_time = std::time::Instant::now();
                     if self.state.read().ui_prefs.llm_auto_scroll {
-                        let scroll_name = match kind.default_zone() {
-                            crate::state::Zone::Global => "global",
-                            crate::state::Zone::Voice => "voice",
-                            crate::state::Zone::FxMod => "fxmod",
-                        };
-                        self.state.write().scroll_target = Some(scroll_name.to_string());
+                        self.state.write().scroll_target =
+                            Some(kind.default_zone().scroll_name().to_string());
                     }
                 }
             }
@@ -753,14 +743,12 @@ impl eframe::App for ImpulseApp {
                 egui::Id::new("wasd_as_arrows"),
                 self.state.read().ui_prefs.wasd_as_arrows,
             );
-            d.insert_temp(egui::Id::new("alt_locked"), self.alt_locked);
             d.insert_temp(egui::Id::new("ctrl_locked"), self.ctrl_locked);
         });
 
         self.drain_llm_outputs();
         self.drain_api_log();
         self.drain_midi_events();
-
         // Poll API params_dirty flag — push audio params when API changed state
         if self
             .api_params_dirty
@@ -843,13 +831,13 @@ impl eframe::App for ImpulseApp {
             }
         }
         if ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Tab)) {
-            self.rack_flipped = !self.rack_flipped;
-            self.session_dirty = true;
+            self.toggle_rack_flip();
         }
-        // API-driven rack flip
-        if let Some(show_back) = self.state.write().rack_flip_requested.take() {
-            self.rack_flipped = show_back;
-            self.session_dirty = true;
+        let api_flip = self.state.write().rack_flip_requested.take();
+        if let Some(show_back) = api_flip
+            && show_back != self.rack_flipped
+        {
+            self.toggle_rack_flip();
         }
         if ctx.input_mut(|i| {
             i.consume_key(egui::Modifiers::SHIFT, egui::Key::Slash) // Shift+/ = ?
@@ -917,7 +905,6 @@ impl eframe::App for ImpulseApp {
             let drain = self.dsp_load_buf.len() - 64;
             self.dsp_load_buf.drain(..drain);
         }
-
         // Track step changes for smooth event stream interpolation
         {
             let step = self.state.read().sequencer.current_step;
@@ -926,12 +913,10 @@ impl eframe::App for ImpulseApp {
                 self.last_step_time = ctx.input(|i| i.time);
             }
         }
-
         self.update_audio_analysis(ctx);
         self.tick_ramps();
         self.draw_windows(ctx);
         self.draw_menu_and_header(ctx);
-        // Scope is now integrated into draw_log_and_scope (header.rs)
         TopBottomPanel::bottom("footer")
             .frame(
                 Frame::none()
@@ -948,13 +933,13 @@ impl eframe::App for ImpulseApp {
                         s.rack.cables.len(),
                     )
                 };
+                let was_flipped = self.rack_flipped;
                 scope_footer::draw_footer_status(
                     ui,
                     &self.midi_port,
                     &self.dsp_load_buf,
                     &mut self.rack_flipped,
                     &mut self.ctrl_locked,
-                    &mut self.alt_locked,
                     scope_footer::FooterStats {
                         n_modules: nm,
                         n_agents: na,
@@ -963,6 +948,10 @@ impl eframe::App for ImpulseApp {
                         api_port: self.api_port,
                     },
                 );
+                if was_flipped != self.rack_flipped {
+                    self.rack_flipped = was_flipped;
+                    self.toggle_rack_flip();
+                }
             });
 
         TopBottomPanel::bottom("piano")
