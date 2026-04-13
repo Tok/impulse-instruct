@@ -111,9 +111,13 @@ pub use rack::{
 pub use rack_presets::RACK_PRESETS;
 pub use rack_scope::{parse_module_kind, rack_kind_name_matches, scope_from_control_cables};
 
-// Amen sampler state lives in its own module to keep LOC under the limit.
+// Amen sampler + bass voice state live in their own modules to keep LOC
+// under the 1000-line cap on state/mod.rs.
 pub use amen::{AmenMeta, AmenState};
+use bass::default_bass_voices;
+pub use bass::{BassState, BassVoiceState};
 mod amen;
+mod bass;
 
 // ─── Top-level ───────────────────────────────────────────────────────────────
 fn default_pattern_bank() -> Vec<SequencerState> {
@@ -274,91 +278,8 @@ impl Default for AppState {
 
 // ─── Bass synth ───────────────────────────────────────────────────────────────
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct BassState {
-    pub cutoff: f32,       // 0–1 → 200–8000 Hz
-    pub resonance: f32,    // 0–1
-    pub env_mod: f32,      // 0–1 filter env depth
-    pub decay: f32,        // 0–1 → 50–2000 ms
-    pub accent_level: f32, // 0–1
-    pub waveform: Waveform,
-    pub filter_mode: FilterMode, // LP / HP / BP
-    pub distortion: f32,         // 0–1
-    pub volume: f32,             // 0–1
-    pub supersaw_detune: f32,    // 0–1 → 0–1 semitone spread between voices
-    pub supersaw_voices: u8,     // 2–7
-    pub sub_osc_level: f32,      // 0–1 sine one octave below, mixed before filter
-    pub portamento_time: f32,    // 0–1 → 10ms–500ms slide/glide time
-    pub noise_mix: f32,          // 0–1 white noise mixed into oscillator before filter
-    pub osc_detune: f32,         // semitone offset -1..+1, shifts entire oscillator pitch
-    pub fm_ratio: f32,           // 0–1 → modulator/carrier ratio 0.5–8.0
-    pub fm_depth: f32,           // 0–1 FM modulation depth; 0 = off (pure additive)
-    #[serde(default)]
-    pub pan: f32, // -1.0 (left) to +1.0 (right), 0.0 = center
-}
-
-impl Default for BassState {
-    fn default() -> Self {
-        Self {
-            cutoff: 0.4,
-            resonance: 0.6,
-            env_mod: 0.5,
-            decay: 0.4,
-            accent_level: 0.7,
-            waveform: Waveform::Saw,
-            filter_mode: FilterMode::Lowpass,
-            distortion: 0.2,
-            volume: 0.8,
-            supersaw_detune: 0.5,
-            supersaw_voices: 5,
-            sub_osc_level: 0.0,
-            portamento_time: 0.1, // ~60ms
-            noise_mix: 0.0,
-            osc_detune: 0.0,
-            fm_ratio: 0.0,
-            fm_depth: 0.0,
-            pan: 0.0,
-        }
-    }
-}
-
-// ─── Multi-voice bass ─────────────────────────────────────────────────────────
-
-/// One bass voice slot: a `BassState` synth engine + per-voice musical context.
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct BassVoiceState {
-    /// Synth parameters for this voice (identical layout to the legacy `BassState`).
-    pub synth: BassState,
-    /// Tonic note override (0=C … 11=B). Only used when `lock_key` is false.
-    pub root_note: u8,
-    /// Scale override. Only used when `lock_key` is false.
-    pub scale: Scale,
-    /// When true, use the global `sequencer.root_note` / `sequencer.scale` instead.
-    pub lock_key: bool,
-    /// Whether this voice is active. Voice 0 is always on; voices 1-3 can be toggled.
-    pub enabled: bool,
-}
-
-impl Default for BassVoiceState {
-    fn default() -> Self {
-        Self {
-            synth: BassState::default(),
-            root_note: 9, // A — matches the default starter pattern
-            scale: Scale::NaturalMinor,
-            lock_key: true, // follow the global key by default
-            enabled: false, // voices 1-3 start disabled; voice 0 is always enabled
-        }
-    }
-}
-
-fn default_bass_voices() -> Vec<BassVoiceState> {
-    let mut voices: Vec<BassVoiceState> = (0..MAX_BASS_VOICES)
-        .map(|_| BassVoiceState::default())
-        .collect();
-    // Voice 0 is always enabled
-    voices[0].enabled = true;
-    voices
-}
+// Bass voice state + multi-voice wrapper extracted to bass.rs — see
+// `pub use bass::...` above.  This region is intentionally empty.
 
 fn default_bass_patterns() -> Vec<Vec<TB303Step>> {
     // Voice 0 gets the same starter pattern as `bass_pattern`; voices 1-3 are silent.

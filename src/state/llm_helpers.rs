@@ -135,6 +135,33 @@ pub(super) fn apply_bass_update(
     {
         s.bass_voices[voice_idx].enabled = v;
     }
+    // ── ADSR + PWM (101-style shaping) ───────────────────────────────────
+    let bp = format!("{}.amp_attack", prefix);
+    let v = s.bass_voices[voice_idx].synth.amp_attack;
+    s.bass_voices[voice_idx].synth.amp_attack = unlocked_f32(v, b, "amp_attack", &bp, locked);
+    let bp = format!("{}.amp_sustain", prefix);
+    let v = s.bass_voices[voice_idx].synth.amp_sustain;
+    s.bass_voices[voice_idx].synth.amp_sustain = unlocked_f32(v, b, "amp_sustain", &bp, locked);
+    let bp = format!("{}.amp_release", prefix);
+    let v = s.bass_voices[voice_idx].synth.amp_release;
+    s.bass_voices[voice_idx].synth.amp_release = unlocked_f32(v, b, "amp_release", &bp, locked);
+    let bp = format!("{}.filter_attack", prefix);
+    let v = s.bass_voices[voice_idx].synth.filter_attack;
+    s.bass_voices[voice_idx].synth.filter_attack = unlocked_f32(v, b, "filter_attack", &bp, locked);
+    let bp = format!("{}.filter_sustain", prefix);
+    let v = s.bass_voices[voice_idx].synth.filter_sustain;
+    s.bass_voices[voice_idx].synth.filter_sustain =
+        unlocked_f32(v, b, "filter_sustain", &bp, locked);
+    let bp = format!("{}.filter_release", prefix);
+    let v = s.bass_voices[voice_idx].synth.filter_release;
+    s.bass_voices[voice_idx].synth.filter_release =
+        unlocked_f32(v, b, "filter_release", &bp, locked);
+    let bp = format!("{}.pulse_width", prefix);
+    if !locked.contains(&bp)
+        && let Some(v) = b.get("pulse_width").and_then(|v| v.as_f64())
+    {
+        s.bass_voices[voice_idx].synth.pulse_width = (v as f32).clamp(0.05, 0.95);
+    }
 }
 
 /// Apply hoover voice fields from an LLM JSON update object.

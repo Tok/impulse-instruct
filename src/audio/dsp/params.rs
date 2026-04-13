@@ -39,6 +39,14 @@ pub struct BassVoiceParams {
     pub distortion: f32,
     pub volume: f32,
     pub filter_mode: u8, // 0=LP, 1=HP, 2=BP
+    // ADSR shaping (101-style).  Defaults preserve 303 behavior.
+    pub amp_attack: f32,     // 0–1 → 0–1s
+    pub amp_sustain: f32,    // 0–1
+    pub amp_release: f32,    // 0–1 → 0–2s
+    pub filter_attack: f32,  // 0–1 → 0–0.5s
+    pub filter_sustain: f32, // 0–1
+    pub filter_release: f32, // 0–1 → 0–2s
+    pub pulse_width: f32,    // 0.05..0.95 (centered at 0.5 = square)
 }
 
 impl BassVoiceParams {
@@ -67,6 +75,13 @@ impl BassVoiceParams {
                 FilterMode::Highpass => 1,
                 FilterMode::Bandpass => 2,
             },
+            amp_attack: b.amp_attack.clamp(0.0, 1.0),
+            amp_sustain: b.amp_sustain.clamp(0.0, 1.0),
+            amp_release: b.amp_release.clamp(0.0, 1.0),
+            filter_attack: b.filter_attack.clamp(0.0, 1.0),
+            filter_sustain: b.filter_sustain.clamp(0.0, 1.0),
+            filter_release: b.filter_release.clamp(0.0, 1.0),
+            pulse_width: b.pulse_width.clamp(0.05, 0.95),
         }
     }
 }
