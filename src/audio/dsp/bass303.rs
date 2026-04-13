@@ -40,6 +40,10 @@ pub(super) struct Bass303 {
     svf_low: f32,
     svf_band: f32,
     noise_gen: NoiseGen,
+    // Per-voice LFO state — phase advances every sample, fade counts up
+    // from 0 on retrigger to honor lfo_delay.
+    lfo_phase: f32,
+    lfo_fade: f32, // 0..1 — 1 = full depth reached
 }
 
 impl Default for Bass303 {
@@ -62,6 +66,8 @@ impl Default for Bass303 {
             svf_low: 0.0,
             svf_band: 0.0,
             noise_gen: NoiseGen::new(0xBAD_C0DE),
+            lfo_phase: 0.0,
+            lfo_fade: 0.0,
         }
     }
 }
@@ -76,6 +82,26 @@ fn env_coeff(sr: f32, t_seconds: f32) -> f32 {
         return 0.0; // instant step to target
     }
     (-1.0 / (sr * t_seconds)).exp()
+}
+
+/// Evaluate a unit LFO waveform at phase `p` (0..1).  Returns a value
+/// in the range -1..+1.  `waveform` uses the numeric mirror from
+/// BassVoiceParams (1=Sine, 2=Tri, 3=Saw, 4=InvSaw, 5=Square).
+fn lfo_wave(p: f32, waveform: u8) -> f32 {
+    let p = p.rem_euclid(1.0);
+    match waveform {
+        2 => 4.0 * (p - 0.5).abs() - 1.0, // triangle
+        3 => 2.0 * p - 1.0,               // saw (up)
+        4 => 1.0 - 2.0 * p,               // inv saw (down)
+        5 => {
+            if p < 0.5 {
+                1.0
+            } else {
+                -1.0
+            }
+        } // square
+        _ => (p * std::f32::consts::TAU).sin(), // sine (default)
+    }
 }
 
 impl Bass303 {
@@ -102,6 +128,8 @@ impl Bass303 {
             if self.filt_env < 0.01 {
                 self.filt_env = 0.0;
             }
+            // Reset LFO fade-in so each new note honors the delay setting.
+            self.lfo_fade = 0.0;
         }
     }
 
@@ -120,7 +148,55 @@ impl Bass303 {
             self.freq = self.freq + (self.target_freq - self.freq) * (1.0 - slide_coeff);
         }
 
-        let freq_mod = 2.0f32.powf((p.lfo_pitch_mod_st + vp.osc_detune) / 12.0);
+        // ── Per-voice LFO (SH-101 style) ────────────────────────────────────
+        // Compute once per sample, route to the selected target further
+        // down.  Rate is either bpm-synced (Hz = (host_bpm / 60) /
+        // sync_beats) or free (linear 0.01..20 Hz mapping).  The fade-in
+        // honors lfo_delay so each new note ramps up to full depth over
+        // delay seconds (0 = instant).  lfo_target == 0 = Off = no-op.
+        let lfo_value = if vp.lfo_target == 0 || vp.lfo_depth <= 0.0001 {
+            0.0
+        } else {
+            let rate_hz = if vp.lfo_bpm_sync {
+                ((p.sequencer_bpm / 60.0) / vp.lfo_sync_beats.max(0.03125)).clamp(0.01, 40.0)
+            } else {
+                (0.01 + vp.lfo_rate * 19.99).clamp(0.01, 40.0)
+            };
+            self.lfo_phase = (self.lfo_phase + rate_hz / sr).rem_euclid(1.0);
+            let raw = lfo_wave(self.lfo_phase, vp.lfo_waveform);
+            // Fade-in: ramp lfo_fade from 0 → 1 over lfo_delay seconds.
+            let delay_s = vp.lfo_delay * 4.0;
+            if delay_s > 0.001 {
+                self.lfo_fade = (self.lfo_fade + 1.0 / (sr * delay_s)).min(1.0);
+            } else {
+                self.lfo_fade = 1.0;
+            }
+            raw * vp.lfo_depth * self.lfo_fade
+        };
+        // Compose each modulation contribution based on target.  Values
+        // are chosen so full depth = audibly musical but not destructive.
+        let lfo_pitch_st = if vp.lfo_target == 1 {
+            lfo_value * 2.0
+        } else {
+            0.0
+        };
+        let lfo_pwm = if vp.lfo_target == 2 {
+            lfo_value * 0.45
+        } else {
+            0.0
+        };
+        let lfo_cutoff = if vp.lfo_target == 3 {
+            lfo_value * 0.5
+        } else {
+            0.0
+        };
+        let lfo_amp_mult = if vp.lfo_target == 4 {
+            1.0 + lfo_value * 0.5
+        } else {
+            1.0
+        };
+
+        let freq_mod = 2.0f32.powf((p.lfo_pitch_mod_st + vp.osc_detune + lfo_pitch_st) / 12.0);
 
         let fm_mod = if vp.fm_depth > 0.001 {
             let mod_ratio = 0.5 + vp.fm_ratio * 7.5;
@@ -162,7 +238,9 @@ impl Bass303 {
         } else {
             // Pulse wave with variable width.  pulse_width = 0.5 is a
             // classic square; narrower = reedier, wider = less harmonic.
-            let pw = vp.pulse_width.clamp(0.05, 0.95);
+            // LFO PWM modulation (if routed) adds/subtracts around the
+            // static pulse_width value.
+            let pw = (vp.pulse_width + lfo_pwm).clamp(0.05, 0.95);
             if self.phase < pw { 1.0 } else { -1.0 }
         };
         self.sub_phase += self.freq * freq_mod * 0.5 / sr;
@@ -262,7 +340,8 @@ impl Bass303 {
             }
         }
 
-        let cutoff_env = (vp.cutoff + self.filt_env * vp.env_mod * accent_mult).clamp(0.0, 1.0);
+        let cutoff_env =
+            (vp.cutoff + self.filt_env * vp.env_mod * accent_mult + lfo_cutoff).clamp(0.0, 1.0);
         let cutoff_hz = 200.0 * (40.0f32).powf(cutoff_env);
         let g = {
             let w = cutoff_hz / sr;
@@ -291,6 +370,6 @@ impl Bass303 {
             filtered
         };
 
-        dist * self.amp_env * vp.volume * accent_mult
+        dist * self.amp_env * vp.volume * accent_mult * lfo_amp_mult
     }
 }

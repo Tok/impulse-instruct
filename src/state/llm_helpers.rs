@@ -162,6 +162,57 @@ pub(super) fn apply_bass_update(
     {
         s.bass_voices[voice_idx].synth.pulse_width = (v as f32).clamp(0.05, 0.95);
     }
+
+    // ── Per-voice LFO (101-style) ────────────────────────────────────────
+    // "lfo_target": "off" | "pitch" | "pwm" | "cutoff" | "amp"
+    let bp = format!("{}.lfo_target", prefix);
+    if !locked.contains(&bp)
+        && let Some(t) = b.get("lfo_target").and_then(|v| v.as_str())
+    {
+        use crate::state::BassLfoTarget;
+        s.bass_voices[voice_idx].synth.lfo_target = match t.to_ascii_lowercase().as_str() {
+            "pitch" => BassLfoTarget::Pitch,
+            "pwm" | "pulse_width" | "pulse" => BassLfoTarget::PulseWidth,
+            "cutoff" | "filter" | "filter_cutoff" => BassLfoTarget::FilterCutoff,
+            "amp" | "amplitude" | "tremolo" => BassLfoTarget::Amplitude,
+            _ => BassLfoTarget::Off,
+        };
+    }
+    let bp = format!("{}.lfo_rate", prefix);
+    let v = s.bass_voices[voice_idx].synth.lfo_rate;
+    s.bass_voices[voice_idx].synth.lfo_rate = unlocked_f32(v, b, "lfo_rate", &bp, locked);
+    let bp = format!("{}.lfo_depth", prefix);
+    let v = s.bass_voices[voice_idx].synth.lfo_depth;
+    s.bass_voices[voice_idx].synth.lfo_depth = unlocked_f32(v, b, "lfo_depth", &bp, locked);
+    let bp = format!("{}.lfo_delay", prefix);
+    let v = s.bass_voices[voice_idx].synth.lfo_delay;
+    s.bass_voices[voice_idx].synth.lfo_delay = unlocked_f32(v, b, "lfo_delay", &bp, locked);
+    // "lfo_waveform": "sine" | "triangle" | "saw" | "inv_saw" | "square"
+    let bp = format!("{}.lfo_waveform", prefix);
+    if !locked.contains(&bp)
+        && let Some(w) = b.get("lfo_waveform").and_then(|v| v.as_str())
+    {
+        use crate::state::LfoWaveform;
+        s.bass_voices[voice_idx].synth.lfo_waveform = match w.to_ascii_lowercase().as_str() {
+            "triangle" | "tri" => LfoWaveform::Triangle,
+            "saw" => LfoWaveform::Saw,
+            "inv_saw" | "invsaw" | "ramp_down" => LfoWaveform::InvSaw,
+            "square" | "pulse" => LfoWaveform::Square,
+            _ => LfoWaveform::Sine,
+        };
+    }
+    let bp = format!("{}.lfo_bpm_sync", prefix);
+    if !locked.contains(&bp)
+        && let Some(v) = b.get("lfo_bpm_sync").and_then(|v| v.as_bool())
+    {
+        s.bass_voices[voice_idx].synth.lfo_bpm_sync = v;
+    }
+    let bp = format!("{}.lfo_sync_beats", prefix);
+    if !locked.contains(&bp)
+        && let Some(v) = b.get("lfo_sync_beats").and_then(|v| v.as_f64())
+    {
+        s.bass_voices[voice_idx].synth.lfo_sync_beats = (v as f32).clamp(0.03125, 16.0);
+    }
 }
 
 /// Apply hoover voice fields from an LLM JSON update object.

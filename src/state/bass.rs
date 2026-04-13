@@ -10,8 +10,45 @@
 use serde::{Deserialize, Serialize};
 
 use super::MAX_BASS_VOICES;
+use super::lfo::LfoWaveform;
 use super::music::Scale;
 use super::synth_types::{FilterMode, Waveform};
+
+/// LFO modulation target for the per-voice bass LFO.
+/// Mirrors the SH-101 LFO routing: pitch vibrato, PWM on the pulse,
+/// filter cutoff (wah), or amplitude (tremolo).  Off disables the LFO
+/// entirely regardless of depth.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub enum BassLfoTarget {
+    #[default]
+    Off,
+    Pitch,
+    PulseWidth,
+    FilterCutoff,
+    Amplitude,
+}
+
+impl BassLfoTarget {
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Off => "OFF",
+            Self::Pitch => "PITCH",
+            Self::PulseWidth => "PWM",
+            Self::FilterCutoff => "CUTOFF",
+            Self::Amplitude => "AMP",
+        }
+    }
+
+    pub fn next(self) -> Self {
+        match self {
+            Self::Off => Self::Pitch,
+            Self::Pitch => Self::PulseWidth,
+            Self::PulseWidth => Self::FilterCutoff,
+            Self::FilterCutoff => Self::Amplitude,
+            Self::Amplitude => Self::Off,
+        }
+    }
+}
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct BassState {
@@ -62,6 +99,25 @@ pub struct BassState {
     // square.  Going narrow gives the "reedy" 101 sound.
     #[serde(default = "default_pulse_width")]
     pub pulse_width: f32,
+
+    // ── Per-voice LFO — SH-101-style routable modulator ─────────────────────
+    // Target defaults to Off so existing sessions aren't affected.  Set a
+    // target + non-zero depth to get pitch vibrato, PWM oscillation,
+    // filter wah, or tremolo without going near the global LFO matrix.
+    #[serde(default)]
+    pub lfo_target: BassLfoTarget,
+    #[serde(default)]
+    pub lfo_rate: f32, // 0–1 → 0.01–20 Hz (free); ignored when bpm_sync
+    #[serde(default)]
+    pub lfo_depth: f32, // 0–1; per-target scaling applied in DSP
+    #[serde(default)]
+    pub lfo_waveform: LfoWaveform,
+    #[serde(default)]
+    pub lfo_delay: f32, // 0–1 → 0–4 s fade-in before LFO reaches full depth
+    #[serde(default)]
+    pub lfo_bpm_sync: bool,
+    #[serde(default = "default_lfo_sync_beats")]
+    pub lfo_sync_beats: f32, // division in beats (1=quarter, 0.5=8th, 0.25=16th, 4=bar)
 }
 
 fn default_sustain_full() -> f32 {
@@ -72,6 +128,9 @@ fn default_release_short() -> f32 {
 }
 fn default_pulse_width() -> f32 {
     0.5
+}
+fn default_lfo_sync_beats() -> f32 {
+    1.0 // quarter note
 }
 
 impl Default for BassState {
@@ -102,6 +161,13 @@ impl Default for BassState {
             filter_sustain: 0.0,
             filter_release: default_release_short(),
             pulse_width: default_pulse_width(),
+            lfo_target: BassLfoTarget::Off,
+            lfo_rate: 0.25, // ~0.5 Hz when off — harmless default
+            lfo_depth: 0.0,
+            lfo_waveform: LfoWaveform::Sine,
+            lfo_delay: 0.0,
+            lfo_bpm_sync: false,
+            lfo_sync_beats: default_lfo_sync_beats(),
         }
     }
 }

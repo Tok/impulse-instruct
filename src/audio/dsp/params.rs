@@ -47,6 +47,14 @@ pub struct BassVoiceParams {
     pub filter_sustain: f32, // 0–1
     pub filter_release: f32, // 0–1 → 0–2s
     pub pulse_width: f32,    // 0.05..0.95 (centered at 0.5 = square)
+    // Per-voice LFO — SH-101 style.  target=0 (Off) disables.
+    pub lfo_target: u8,   // 0=Off 1=Pitch 2=PWM 3=Cutoff 4=Amp
+    pub lfo_rate: f32,    // 0–1 → 0.01–20 Hz (free)
+    pub lfo_depth: f32,   // 0–1
+    pub lfo_waveform: u8, // mirror of LfoWaveform index (Sine=1, Tri=2, Saw=3, InvSaw=4, Square=5)
+    pub lfo_delay: f32,   // 0–1 → 0–4 s fade-in
+    pub lfo_bpm_sync: bool,
+    pub lfo_sync_beats: f32,
 }
 
 impl BassVoiceParams {
@@ -82,6 +90,28 @@ impl BassVoiceParams {
             filter_sustain: b.filter_sustain.clamp(0.0, 1.0),
             filter_release: b.filter_release.clamp(0.0, 1.0),
             pulse_width: b.pulse_width.clamp(0.05, 0.95),
+            lfo_target: match b.lfo_target {
+                crate::state::BassLfoTarget::Off => 0,
+                crate::state::BassLfoTarget::Pitch => 1,
+                crate::state::BassLfoTarget::PulseWidth => 2,
+                crate::state::BassLfoTarget::FilterCutoff => 3,
+                crate::state::BassLfoTarget::Amplitude => 4,
+            },
+            lfo_rate: b.lfo_rate.clamp(0.0, 1.0),
+            lfo_depth: b.lfo_depth.clamp(0.0, 1.0),
+            lfo_waveform: match b.lfo_waveform {
+                crate::state::LfoWaveform::Sine => 1,
+                crate::state::LfoWaveform::Triangle => 2,
+                crate::state::LfoWaveform::Saw => 3,
+                crate::state::LfoWaveform::InvSaw => 4,
+                crate::state::LfoWaveform::Square => 5,
+                // SampleAndHold not supported by the bass voice LFO yet;
+                // fall back to square (closest stepped-ish behavior).
+                _ => 5,
+            },
+            lfo_delay: b.lfo_delay.clamp(0.0, 1.0),
+            lfo_bpm_sync: b.lfo_bpm_sync,
+            lfo_sync_beats: b.lfo_sync_beats.clamp(0.03125, 16.0),
         }
     }
 }

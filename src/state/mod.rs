@@ -115,7 +115,7 @@ pub use rack_scope::{parse_module_kind, rack_kind_name_matches, scope_from_contr
 // under the 1000-line cap on state/mod.rs.
 pub use amen::{AmenMeta, AmenState};
 use bass::default_bass_voices;
-pub use bass::{BassState, BassVoiceState};
+pub use bass::{BassLfoTarget, BassState, BassVoiceState};
 mod amen;
 mod bass;
 
