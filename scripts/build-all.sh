@@ -36,6 +36,10 @@ cp "$LINUX_BIN" "${DIST}/impulse-instruct-linux-x86_64"
 strip "${DIST}/impulse-instruct-linux-x86_64"
 cp scripts/dist-start.sh "${DIST}/start.sh"
 chmod +x "${DIST}/start.sh"
+# Ship download-models.sh at the root of the release, not under scripts/,
+# so end users see it next to the binary.
+cp scripts/download-models.sh "${DIST}/download-models.sh"
+chmod +x "${DIST}/download-models.sh"
 
 # Ship user-tunable JSON configs (styles, instructions, startup prompts)
 cp config.json instructions.json styles.json "${DIST}/"
@@ -101,6 +105,7 @@ else
   WIN_BIN="target/${WIN_TARGET}/release/impulse-instruct.exe"
   cp "$WIN_BIN" "${DIST}/impulse-instruct-windows-x86_64.exe"
   cp scripts/dist-start.bat "${DIST}/start.bat"
+  cp scripts/download-models.bat "${DIST}/download-models.bat"
   echo "✓ Windows: ${DIST}/impulse-instruct-windows-x86_64.exe ($(du -sh "${DIST}/impulse-instruct-windows-x86_64.exe" | cut -f1))"
   # JSON configs and models/ dir already added by Linux step above
 fi

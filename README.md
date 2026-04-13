@@ -46,41 +46,64 @@ See [Known Limitations](#known-limitations) for specifics.
 
 ## Download
 
-Pre-built binaries are available on the [releases page](https://github.com/Tok/impulse-instruct/releases):
+Grab the latest **release zip** from the [releases page](https://github.com/Tok/impulse-instruct/releases):
 
-- `impulse-instruct-linux-x86_64` - Linux (Ubuntu 22.04+) - primary development platform, tested
-- `impulse-instruct-windows-x86_64.exe` - Windows 10/11 - cross-compiled, **untested**
+- `impulse-instruct-linux-x86_64.zip` - Linux (Ubuntu 22.04+) - primary development platform, tested
+- `impulse-instruct-windows-x86_64.zip` - Windows 10/11 - cross-compiled, **untested**
 
-**No installation required.** Download, make executable (Linux: `chmod +x`), and run.
+**Do not download the GitHub source zip** unless you intend to build from source — it has no binary and the `start` scripts assume you have the Rust toolchain installed.
+
+**No installation required.** Unzip, and run (Linux: `chmod +x start.sh` first).
 
 ---
 
 ## Getting started
 
-### 1 - Download a model
+### 1 - Download a model (Gemma is required)
 
-The app ships without a model. Download one before first run:
+The release zip ships without model files. You need at least **Gemma 4 E4B Q4_K_M** (~4.6 GB) for first run. Everything else is optional.
 
+**Option A — Manual download via browser (recommended for non-technical users):**
+
+1. Sign up free at [https://huggingface.co/join](https://huggingface.co/join) and log in.
+2. Open [https://huggingface.co/unsloth/gemma-4-E4B-it-GGUF](https://huggingface.co/unsloth/gemma-4-E4B-it-GGUF) and download **`gemma-4-E4B-it-Q4_K_M.gguf`** (click the download arrow next to the filename).
+3. Move the downloaded `.gguf` into the `models/` folder next to the binary.
+4. Done — launch the app.
+
+Optional extras, same process:
+- **Bonsai 8B** (~1.1 GB) — lightweight specialist agents for multi-model setups: [prism-ml/Bonsai-8B-gguf](https://huggingface.co/prism-ml/Bonsai-8B-gguf) → `Bonsai-8B.gguf`
+- **NeuTTS Air Q4** (~527 MB) — neural voice cloning for MC/DJ modules: [neuphonic/neutts-air-q4-gguf](https://huggingface.co/neuphonic/neutts-air-q4-gguf) → rename `neutts-air-Q4_0.gguf` to `neutts-air-q4.gguf`
+
+**Option B — Script (if you already have `hf`/`huggingface-cli`/`curl`):**
+
+Linux:
 ```bash
-./scripts/download-models.sh          # Gemma 4 E4B (~4.6 GB, recommended)
-./scripts/download-models.sh bonsai   # Bonsai 8B (~1.1 GB, lightweight fallback)
+./download-models.sh          # Gemma 4 E4B (default)
+./download-models.sh bonsai   # optional: Bonsai 8B
+./download-models.sh neutts   # optional: NeuTTS Air
 ```
 
-A free [HuggingFace](https://huggingface.co/join) account is required. The script handles authentication and places the file in `models/`.
+Windows:
+```
+download-models.bat
+download-models.bat bonsai
+download-models.bat neutts
+```
 
-On **Windows**, run the equivalent `.bat` script:
-```
-scripts\download-models.bat
-scripts\download-models.bat bonsai
-```
+The scripts will offer manual-download instructions if no CLI tool is found; nothing needs to be installed.
 
 ### 2 - Run
 
+Linux:
 ```bash
-./impulse-instruct-linux-x86_64
+./start.sh
 ```
 
-The app auto-detects the model in `models/` and connects to it. The startup wizard detects your GPU, shows available VRAM, and suggests a configuration. Click a preset or press Enter to start.
+Windows: double-click **`start.bat`** (it runs the exe in a console window so logs stay visible).
+
+The app auto-detects models in `models/` and connects. The startup wizard detects your GPU, shows available VRAM, and suggests a configuration. Click a preset or press Enter to start.
+
+> **Windows SmartScreen warning:** the release `.exe` is **not code-signed** (signing requires a paid EV certificate). Windows may show *"Windows protected your PC"* on first launch — click **More info → Run anyway**. The build is produced transparently by GitHub Actions from the public source; you can verify the exact commit on the [releases page](https://github.com/Tok/impulse-instruct/releases).
 
 ---
 

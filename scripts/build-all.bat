@@ -31,6 +31,12 @@ if errorlevel 1 (
 )
 
 copy /y "target\%WIN_TARGET%\release\impulse-instruct.exe" "%DIST%\impulse-instruct-windows-x86_64.exe"
+copy /y "scripts\dist-start.bat" "%DIST%\start.bat" >nul
+copy /y "scripts\download-models.bat" "%DIST%\download-models.bat" >nul
+copy /y "config.json" "%DIST%\config.json" >nul
+copy /y "instructions.json" "%DIST%\instructions.json" >nul
+copy /y "styles.json" "%DIST%\styles.json" >nul
+if not exist "%DIST%\models" mkdir "%DIST%\models"
 echo [OK] Windows: %DIST%\impulse-instruct-windows-x86_64.exe
 
 rem ── Optional code signing ────────────────────────────────────────────────────

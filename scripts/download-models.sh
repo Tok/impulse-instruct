@@ -143,7 +143,20 @@ else
     elif command -v curl &>/dev/null; then
       curl -L --continue-at - -o "$OUTPUT_PATH" "$HF_URL"
     else
-      echo "ERROR: No download tool found (need hf / huggingface-cli, wget, or curl)."
+      echo ""
+      echo "══════════════════════════════════════════════════════════════════════"
+      echo "  MANUAL DOWNLOAD RECOMMENDED"
+      echo "══════════════════════════════════════════════════════════════════════"
+      echo ""
+      echo "  No download tool was found (hf / huggingface-cli / wget / curl)."
+      echo "  Rather than installing one, just download in your browser:"
+      echo ""
+      echo "  1. Open: ${HF_URL}"
+      echo "  2. Sign in at https://huggingface.co/join if prompted."
+      echo "  3. Click the download arrow next to '${DL_FILE}'."
+      echo "  4. Move the file to:  $(pwd)/${OUTPUT_PATH}"
+      echo ""
+      echo "══════════════════════════════════════════════════════════════════════"
       exit 1
     fi
   fi
