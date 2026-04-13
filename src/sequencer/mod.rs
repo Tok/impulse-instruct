@@ -7,6 +7,9 @@ use crate::state::{DrumVoice, SequencerState};
 
 // ─── Events emitted by the sequencer ─────────────────────────────────────────
 
+pub mod preecho;
+pub use preecho::{PreechoConfig, preecho_scale};
+
 #[derive(Clone, Debug)]
 pub enum TriggerEvent {
     DrumTrigger {
@@ -204,18 +207,52 @@ pub fn advance_clock(
                     .max(1);
             if let Some(pattern) = seq.drum_patterns.get(voice) {
                 let s = pattern.get(vstep).copied().unwrap_or_default();
+                // Look up the voice's pre-echo config (keyed by voice
+                // group name so a single "kit_a" entry drives every
+                // 808 sub-voice).  Inactive configs return identity
+                // scaling so this is a no-op for the default case.
+                let voice_key = match voice {
+                    DrumVoice::Kick808
+                    | DrumVoice::Snare808
+                    | DrumVoice::HihatClosed808
+                    | DrumVoice::HihatOpen808
+                    | DrumVoice::TomHi808
+                    | DrumVoice::TomMid808
+                    | DrumVoice::TomLo808 => "kit_a",
+                    DrumVoice::Kick909
+                    | DrumVoice::Snare909
+                    | DrumVoice::HihatClosed909
+                    | DrumVoice::HihatOpen909
+                    | DrumVoice::Clap909
+                    | DrumVoice::Rim909 => "kit_b",
+                    DrumVoice::Amen => "amen",
+                };
+                let voice_steps = seq
+                    .drum_steps
+                    .get(voice)
+                    .copied()
+                    .unwrap_or(seq.steps)
+                    .max(1);
+                let (vel_mul, rat_add) = seq
+                    .preecho
+                    .get(voice_key)
+                    .map(|cfg| preecho::preecho_scale(vstep, voice_steps, cfg))
+                    .unwrap_or((1.0, 0));
+
                 if s.active && prob_hit(s.probability, vstep, loop_count, *voice as u32) {
+                    let effective_vel = (s.velocity * vel_mul).clamp(0.0, 1.0);
+                    let effective_ratchet = s.ratchet.saturating_add(rat_add).min(8);
                     events.push(TriggerEvent::DrumTrigger {
                         voice: *voice,
-                        velocity: s.velocity,
+                        velocity: effective_vel,
                         slice: s.slice,
                     });
                     // Schedule ratchet sub-hits (ratchet=1 means no sub-hits).
-                    if s.ratchet > 1 {
-                        ratchet_remaining[i] = s.ratchet - 1;
-                        ratchet_interval[i] = sps / s.ratchet as f64;
+                    if effective_ratchet > 1 {
+                        ratchet_remaining[i] = effective_ratchet - 1;
+                        ratchet_interval[i] = sps / effective_ratchet as f64;
                         ratchet_acc[i] = 0.0;
-                        ratchet_vel[i] = s.velocity;
+                        ratchet_vel[i] = effective_vel;
                         ratchet_slice[i] = s.slice;
                     }
                 }

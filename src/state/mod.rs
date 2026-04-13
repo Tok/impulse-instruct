@@ -405,6 +405,13 @@ pub struct SequencerState {
     /// Which bass voices are enabled for sequencing. Synced from AppState.bass_voices[i].enabled.
     #[serde(default = "default_bass_voice_enabled")]
     pub bass_voice_enabled: [bool; MAX_BASS_VOICES],
+    /// Pre-echo (lead-in) configs per voice.  When active, anchor steps
+    /// get reinforced by a ramped build-up on the steps leading into
+    /// them (velocity / ratchet).  See `crate::sequencer::preecho`.
+    /// Lookup key = voice name ("bass", "kit_a", "kit_b", "amen",
+    /// "hoover", "an1x").  Empty = no preecho on that voice.
+    #[serde(default)]
+    pub preecho: std::collections::HashMap<String, crate::sequencer::PreechoConfig>,
 }
 
 impl Default for SequencerState {
@@ -454,6 +461,7 @@ impl Default for SequencerState {
             },
             bass_voice_steps: vec![32usize; MAX_BASS_VOICES],
             bass_voice_enabled: default_bass_voice_enabled(),
+            preecho: std::collections::HashMap::new(),
         }
     }
 }

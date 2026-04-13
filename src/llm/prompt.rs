@@ -578,6 +578,24 @@ IMPORTANT — drum_ratchets takes INTEGERS 1–4 only, never booleans:
   CORRECT: {{"drum_ratchets": {{"hihat_a": [1,1,2,1,1,1,4,1,1,1,2,1,1,1,1,1]}}}}
   WRONG:   {{"drum_ratchets": {{"hihat_a": [true,false,true,…]}}}}  ← booleans are invalid here
 
+PRE-ECHO / lead-in reinforcement — `sequencer.preecho`:
+  A pattern modulator that reinforces a groove.  You declare anchor
+  steps (the pulse of the groove) and the N steps leading into each
+  anchor get a build-up (velocity ramp 0.3→1.0 and/or ratchet build
+  1→4) so the pattern feels like it reaches for the anchor.  Useful
+  for drum drops, turnarounds, and emphasising downbeats.
+    {{"sequencer": {{"preecho": {{
+      "kit_a": {{"anchors": [0, 16], "length": 4,
+                "velocity_ramp": true, "ratchet_ramp": true}},
+      "amen":  {{"anchors": [8, 24], "length": 3,
+                "velocity_ramp": true}}
+    }}}}}}
+  Voice keys: "kit_a" | "kit_b" | "amen" | "bass" | "hoover" | "an1x"
+  Set a voice to null to clear its preecho.  Anchors that aren't
+  themselves active steps still anchor the lead-in (the build-up
+  happens before them regardless).  Use sparingly — 2 anchors per
+  bar is usually enough; too many and everything feels like a fill.
+
 BASS PATTERNS (303 — bass_steps) — DO NOT copy the drum grid. Bass wants
 syncopation and SPACE. Default target: ~1/4 to 1/2 note density (≈ 8–14
 notes per 32 steps). Dense patterns (>18 notes per 32) tire the ear

@@ -228,6 +228,69 @@ pub fn apply_llm_update(state: AppState, update: &serde_json::Value, scope: &[St
             }
         }
 
+        // ── Pre-echo (anchor lead-ins) ──────────────────────────────────────
+        // JSON shape:
+        //   "sequencer": {
+        //     "preecho": {
+        //       "kit_a":  { "anchors": [0, 16], "length": 4,
+        //                   "velocity_ramp": true, "ratchet_ramp": true },
+        //       "bass":   { ... }
+        //     }
+        //   }
+        // Setting a voice to null clears that voice's preecho.  The voice
+        // keys ("kit_a", "kit_b", "amen", "bass", "hoover", "an1x")
+        // match the scope / rack naming.
+        if any_seq_scope && let Some(obj) = seq.get("preecho").and_then(|v| v.as_object()) {
+            for (voice_key, val) in obj {
+                let lock_key = format!("sequencer.preecho.{}", voice_key);
+                if locked.contains(&lock_key) {
+                    continue;
+                }
+                let scope_ok = match voice_key.as_str() {
+                    "bass" => bass_ok,
+                    "hoover" => hoover_ok,
+                    "an1x" => an1x_ok,
+                    "kit_a" => kit_a_ok,
+                    "kit_b" => kit_b_ok,
+                    "amen" => amen_ok,
+                    _ => seq_scope,
+                };
+                if !scope_ok {
+                    continue;
+                }
+                if val.is_null() {
+                    s.sequencer.preecho.remove(voice_key);
+                    continue;
+                }
+                let Some(cfg_obj) = val.as_object() else {
+                    continue;
+                };
+                let mut cfg = s
+                    .sequencer
+                    .preecho
+                    .get(voice_key)
+                    .cloned()
+                    .unwrap_or_default();
+                if let Some(arr) = cfg_obj.get("anchors").and_then(|v| v.as_array()) {
+                    cfg.anchors = arr
+                        .iter()
+                        .filter_map(|x| x.as_u64())
+                        .map(|n| (n as u8).min(63))
+                        .collect();
+                }
+                if let Some(v) = cfg_obj.get("length").and_then(|v| v.as_u64()) {
+                    cfg.length = (v as u8).min(16);
+                }
+                if let Some(v) = cfg_obj.get("velocity_ramp").and_then(|v| v.as_bool()) {
+                    cfg.velocity_ramp = v;
+                }
+                if let Some(v) = cfg_obj.get("ratchet_ramp").and_then(|v| v.as_bool()) {
+                    cfg.ratchet_ramp = v;
+                }
+                s.sequencer.preecho.insert(voice_key.clone(), cfg);
+            }
+        }
+
         // ── Amen sampler step pattern + per-step slice indices ──────────────
         // JSON: { "sequencer": { "amen_steps": [0,4,8,12],
         //                        "amen_slices": [1,3,2,5] } }
