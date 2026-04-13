@@ -41,7 +41,7 @@ pub(super) fn colorize_log(text: &str, _default_color: egui::Color32) -> egui::t
         let line = &text[p..end];
         if line.contains("(thinking):") {
             theme::HAZE
-        } else if line.starts_with("◆ ") || line.contains(" -> ") {
+        } else if line.starts_with("► ") || line.contains(" -> ") {
             theme::CHALK
         } else if line.starts_with("YOU ") {
             theme::FOG

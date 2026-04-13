@@ -121,10 +121,9 @@ pub struct ImpulseApp {
     capture_rx: rtrb::Consumer<f32>,
     dsp_load_rx: rtrb::Consumer<f32>,
     dsp_load_buf: Vec<f32>,
-    pub(crate) amen_wave_cache: (String, Vec<(f32, f32)>), // (path, min/max thumbnail)
-    /// Most-recent audio analysis snapshot. Auto-updated every ~2s.
-    audio_analysis: Option<crate::audio::analysis::AudioAnalysis>,
-    /// Last time we ran auto-analysis (seconds since epoch, from ctx.input.time).
+    pub(crate) amen_wave_cache: (String, Vec<(f32, f32)>),
+    pub(crate) neutts_online: bool, // cached health; panel polls /health
+    audio_analysis: Option<crate::audio::analysis::AudioAnalysis>, // ~2s auto-refresh
     last_analysis_time: f64,
     listen_pending: bool, // LISTEN button flag — labels next LLM resp "LISTEN →"
     llm_tx: Sender<LlmInput>,
@@ -292,6 +291,7 @@ impl ImpulseApp {
             dsp_load_rx: audio.dsp_load_rx,
             dsp_load_buf: Vec::with_capacity(64),
             amen_wave_cache: (String::new(), Vec::new()),
+            neutts_online: false,
             audio_analysis: None,
             last_analysis_time: 0.0,
             listen_pending: false,
@@ -469,7 +469,7 @@ impl ImpulseApp {
                 }
                 // MC line: shown separately with a marker so it's visually distinct
                 if let Some(ref mc) = out.mc_line {
-                    self.log_text.push_str(&format!("◆ {}\n", mc));
+                    self.log_text.push_str(&format!("► {}\n", mc)); // U+25BA speaking marker
                 }
             }
             // Jam re-triggers unless heat is at zero (model is parked).

@@ -11,7 +11,47 @@
 
 use crate::llm::LlmInput;
 use crate::state::TtsModuleState;
+use crate::state::tts_types::NEUTTS_PORT;
 use crate::ui::{ImpulseApp, theme, widgets};
+
+/// Quick health check of the NeuTTS Python server.  Returns true if
+/// GET http://127.0.0.1:NEUTTS_PORT/health answers with 2xx.  Uses a
+/// 250ms timeout so a dead server doesn't stall the UI thread.
+/// Called infrequently (~1 Hz) — cached on `tts_server_online_at` below.
+fn check_neutts_alive() -> bool {
+    let url = format!("http://127.0.0.1:{}/health", NEUTTS_PORT);
+    ureq::AgentBuilder::new()
+        .timeout_connect(std::time::Duration::from_millis(250))
+        .timeout(std::time::Duration::from_millis(250))
+        .build()
+        .get(&url)
+        .call()
+        .map(|r| (200..300).contains(&r.status()))
+        .unwrap_or(false)
+}
+
+/// Spawn the NeuTTS Python server in the background.  Uses the optional
+/// .neutts-venv python if present (matches demo/lib.sh), else system
+/// python3.  The spawned process is detached — we don't track its PID
+/// in the UI; the cleanup trap in demo/record-demo.sh or a manual
+/// `pkill -f neutts-server.py` handles shutdown.  No-op if spawning
+/// fails.
+fn spawn_neutts_server() {
+    let venv_py = std::path::Path::new(".neutts-venv/bin/python");
+    let python = if venv_py.exists() {
+        venv_py.to_string_lossy().into_owned()
+    } else {
+        "python3".to_string()
+    };
+    let _ = std::process::Command::new(python)
+        .arg("scripts/neutts-server.py")
+        .arg("--port")
+        .arg(NEUTTS_PORT.to_string())
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .spawn();
+}
 
 /// Mutate the TtsModuleState for `mid` inside `app`.
 fn with_tts(app: &mut ImpulseApp, mid: u32, f: impl FnOnce(&mut TtsModuleState)) {
@@ -139,6 +179,53 @@ pub fn draw_tts(app: &mut ImpulseApp, ui: &mut egui::Ui, module_id: u32) {
 
     ui.add_space(3.0);
     widgets::section_header(ui, "NeuTTS Air");
+
+    // ── Server status + START button ────────────────────────────────────────
+    // Poll the NeuTTS /health endpoint at most once per second (keyed by
+    // ctx.input().time — shared across all TTS panels drawn this frame).
+    // When offline, SAY / ASK and runtime mc_line synthesis all fail
+    // silently at the HTTP POST, which is a confusing failure mode
+    // ("LLM emitted the line, nothing plays").  Surfacing status +
+    // offering a one-click START fixes that.
+    let now = ui.ctx().input(|i| i.time);
+    let last_check: f64 = ui
+        .ctx()
+        .data(|d| d.get_temp::<f64>(egui::Id::new("tts_health_check_at")))
+        .unwrap_or(-10.0);
+    if now - last_check > 1.0 {
+        app.neutts_online = check_neutts_alive();
+        ui.ctx()
+            .data_mut(|d| d.insert_temp(egui::Id::new("tts_health_check_at"), now));
+    }
+    ui.horizontal(|ui| {
+        let (label, color) = if app.neutts_online {
+            ("NeuTTS: ONLINE", theme::CHALK)
+        } else {
+            ("NeuTTS: OFFLINE", theme::PIT)
+        };
+        ui.label(
+            egui::RichText::new(label)
+                .monospace()
+                .size(7.0)
+                .color(color),
+        );
+        if !app.neutts_online
+            && ui
+                .small_button(egui::RichText::new("START").monospace().size(7.0))
+                .on_hover_text(
+                    "Spawn scripts/neutts-server.py on port 8770.\n\
+                     Uses .neutts-venv/bin/python if present, else python3.\n\
+                     First start takes a few seconds to load the model.",
+                )
+                .clicked()
+        {
+            spawn_neutts_server();
+            // Reset the cache so the next frame re-polls immediately
+            // once the server comes up.
+            ui.ctx()
+                .data_mut(|d| d.insert_temp(egui::Id::new("tts_health_check_at"), -10.0_f64));
+        }
+    });
 
     let small_label = |text: &str| {
         egui::RichText::new(text)
