@@ -485,6 +485,11 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
 
     let sub_rows = sub_rows_for(seq_steps);
 
+    // Pre-echo row BEFORE the lane scroll area so it always has a
+    // stable position and doesn't get pushed out when the ScrollArea
+    // expands to fill the remaining space.
+    super::sequencer_preecho::draw_preecho_row(app, ui);
+
     egui::ScrollArea::vertical().show(ui, |ui| {
         // Prefix width computed statically from the fixed 5-widget prefix
         // structure (M + S + label + vol + steps, separated by item_spacing).
@@ -935,9 +940,7 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         );
     });
 
-    // ── Pre-echo (anchor lead-ins) ──────────────────────────────────────────
-    // Compact row exposing the voice pre-echo configs from the sequencer
-    // panel so they're controllable without asking the LLM.  Full
-    // semantics documented in src/sequencer/preecho.rs.
-    super::sequencer_preecho::draw_preecho_row(app, ui);
+    // Pre-echo row is rendered above the lane ScrollArea (see earlier in
+    // this function) so it stays pinned to a stable position instead of
+    // getting pushed past the module bounds when the scroll area grows.
 }

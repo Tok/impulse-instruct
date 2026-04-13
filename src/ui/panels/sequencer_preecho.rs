@@ -162,6 +162,17 @@ pub(super) fn draw_preecho_row(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                 cfg.anchors.sort();
                 cfg.anchors.dedup();
             }
+            // If the user is adding their first anchor and LEN is still at
+            // 0 (the factory default), seed a musically-useful default so
+            // the modulation actually fires.  One beat = seq_steps / 4
+            // (typical 32-step bar → 8-step lead-in, which is the width
+            // of a bar-quarter — decent "build-up" length).  Capped at 16.
+            if cfg.length == 0 && !cfg.anchors.is_empty() {
+                cfg.length = ((seq_steps / 4).max(1) as u8).min(16);
+                // Velocity ramp is the most common / least surprising
+                // default.  Ratchet ramp stays off (it's more intrusive).
+                cfg.velocity_ramp = true;
+            }
             changed = true;
         }
 
@@ -193,7 +204,7 @@ pub(super) fn draw_preecho_row(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             changed = true;
         }
 
-        // CLEAR — disable preecho for the currently-selected voice.
+        // CLEAR — fully remove preecho for the currently-selected voice.
         if ui
             .small_button(
                 egui::RichText::new("CLEAR")
@@ -204,8 +215,11 @@ pub(super) fn draw_preecho_row(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             .on_hover_text(format!("Disable pre-echo for {}", selected))
             .clicked()
         {
+            app.state.write().sequencer.preecho.remove(&selected);
+            // Skip the persist-below path by zeroing cfg and signalling
+            // not changed; the remove already did the state write.
             cfg = PreechoConfig::default();
-            changed = true;
+            changed = false;
         }
     });
 
@@ -215,14 +229,16 @@ pub(super) fn draw_preecho_row(app: &mut ImpulseApp, ui: &mut egui::Ui) {
     }
 
     if changed {
-        if cfg.is_active() {
-            app.state
-                .write()
-                .sequencer
-                .preecho
-                .insert(selected.clone(), cfg);
-        } else {
-            app.state.write().sequencer.preecho.remove(&selected);
-        }
+        // Always persist the edit even when inactive.  Previously we
+        // removed the config when !is_active(), which wiped a user's
+        // fresh anchor the moment they clicked it (length default was 0
+        // so is_active was false until the length was also bumped — a
+        // race the user hit every time).  Now the config sticks; only
+        // the CLEAR button removes it (via a separate branch below).
+        app.state
+            .write()
+            .sequencer
+            .preecho
+            .insert(selected.clone(), cfg);
     }
 }
