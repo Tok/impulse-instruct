@@ -282,9 +282,13 @@ if [ "$NO_TTS" -eq 0 ]; then
         echo "  Missing clips (all retries exhausted):"
         printf "%b" "$tts_failed_ids" | sed 's/^/    /'
     fi
-    # Stop server now — frees GPU memory for the app (LLM + display).
-    # Playback uses cached WAV files via paplay, no server needed.
-    stop_neutts_server
+    # IMPORTANT: don't stop the NeuTTS server here.  The in-app TTS
+    # module (used for runtime mc_line synthesis when an MC agent is
+    # spawned during the scenario) shares the same Python server on
+    # port 8770 — stopping it would make scenario-time MC lines fail
+    # silently.  Memory is fine: NeuTTS Air Q4 is ~527 MB and Gemma
+    # ~5 GB, comfortably under most GPU budgets.  The cleanup trap
+    # stops the server after the scenario finishes.
 
     # Pre-generate SRT from scenario + actual clip durations. Timings are
     # approximate (API/UI calls take variable time at runtime) but the SRT

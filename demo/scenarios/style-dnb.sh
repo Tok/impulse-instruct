@@ -1,15 +1,12 @@
 #!/usr/bin/env bash
 # ─── Drum & Bass (Jump-up) Demo ──────────────────────────────────────────────
-# 174 BPM, syncopated two-step, rolling 16th hats, AN1X pitched bass stabs,
-# the drum break is regenerated twice during the demo, and an MC rides the
-# tail of the clip.
+# 174 BPM, amen-break sampler as the drum backbone, 303-style bass voice
+# as the reese melody, AN1X as a background drone pad (atmosphere, not a
+# lead).  Drum break is regenerated twice.  MC shout-out at the tail.
 
 scene_count 9
 
 # ── Scene 1: Intro ──────────────────────────────────────────────────────────
-# Opens the clip with context for viewers landing on YouTube cold — what the
-# app is, what style we're building, and the fact that the LLM writes the
-# patterns live.
 
 scene "Intro"
 
@@ -20,17 +17,20 @@ say "Impulse Instruct — a synthesizer with a local AI producer. Today: jump-up
 wait_seconds 1
 
 # ── Scene 2: Setup ──────────────────────────────────────────────────────────
+# D&B is sample-heavy, so AmenSampler is the drum backbone.  808 layers a
+# punchy kick.  Bass voice (303-style) is the main reese.  AN1X sits in the
+# back as a drone pad.
 
 scene "Setup"
 
-# AN1X carries the bass line as pitched stabs — no 303 bass voice this time.
-add_instrument an1x
+add_instrument amen
 add_instrument 808
-add_instrument 909
+add_instrument bass
+add_instrument an1x
 add_effect reverb
 add_effect delay
 
-say "AN1X as the bass, two drum kits, reverb, delay."
+say "Amen break sampler, 808 kick layer, bass, AN1X drone pad, reverb, delay."
 
 add_agent DNB gemma
 wait_for_model
@@ -46,93 +46,79 @@ look_at sequencer
 play
 wait_seconds 1
 
-# Intent-driven prompt — style seed handles the exact step positions.
-ask "set up classic jump-up drums on kit_a: kick on beat 1 and just before beat 3.5 (syncopated two-step), big snare on 2 and 4, rolling 16th hats the whole bar with open-hat accents on the off-beats. velocity variation so the hats breathe."
+ask "set up classic jump-up drums: amen-break sampler driving the break, and kit_a (808) adding a punchy kick on beat 1, beat 3, and just past beat 3.5 with a big snare on 2 and 4. Rolling 16th hats across the bar with open-hat accents on the off-beats."
 
-say "Syncopated two-step. Rolling hats drive the bar."
+say "Amen break plus 808 kick layer. Rolling hats on top."
 wait_seconds 3
 
-# ── Scene 4: AN1X stab line ─────────────────────────────────────────────────
+# ── Scene 4: Reese bass ─────────────────────────────────────────────────────
 
-scene "AN1X bass stabs"
+scene "Reese bass"
+
+focus_on bass
+
+ask "BASS voice plays a reese melody — detuned supersaw (5 voices, detune around 0.55), ladder filter cutoff around 0.4 and resonance 0.6, some sub-osc for weight. A minor pentatonic, 5 or 6 distinct pitches across the 32-step bar, syncopated, singable but heavy. This is the main melodic line."
+
+say "303-style bass voice carrying the reese. Syncopated, singable."
+wait_seconds 3
+
+# ── Scene 5: AN1X drone pad ─────────────────────────────────────────────────
+
+scene "AN1X drone pad"
 
 focus_on an1x
 
-ask "AN1X as the lead-and-bass: tuned piano-like tone (detuned saws, NO hard sync, filter open around 0.6, resonance around 0.25 — warm, not abrasive), snappy amp envelope but notes still musical. A minor pentatonic, 5 or 6 distinct pitches across the 32-step loop, syncopated not on every downbeat. Write a singable melodic line, not a drone. Pan center."
+ask "AN1X as a BACKGROUND drone pad only — NOT a melody. Sparse: 2 to 4 LONG sustained notes across the 32-step bar, high sustain, long release, dark filter. Should sit UNDER the drums and bass, barely noticeable at first. Two pitches minimum (root and fifth). No dense patterns, no notes on every other step."
 
-say "AN1X tuned like a piano — melodic, not a reese drone."
+say "AN1X drops back to atmosphere. Two or three long notes, under the mix."
 wait_seconds 3
 
-# ── Scene 5: Break regeneration #1 ──────────────────────────────────────────
-# First of two explicit break regenerations — ask the agent for a fresh drum
-# pattern that keeps the style but rewrites the hits.
+# ── Scene 6: Fresh break ────────────────────────────────────────────────────
 
 scene "Fresh break"
 
 look_at sequencer
 
-ask "rewrite the kit_a drums for variety — keep the jump-up feel and rolling hats, but shift the kick placement and add a snare ghost hit or fill. same tempo, same energy." "" 10
+ask "rewrite the amen + kit_a drums for variety — keep the jump-up feel and rolling hats, but shift the kick placement and add a snare ghost hit or fill. same tempo, same energy." "" 10
 
 say "The agent rewrites the break. Same style, different phrasing."
 wait_seconds 4
 
-# ── Scene 6: Build ──────────────────────────────────────────────────────────
+# ── Scene 7: Drop ──────────────────────────────────────────────────────────
 
-scene "Build the pressure"
+scene "Drop"
 
 look_at console
 
 # Deterministic FX levels — don't ask the agent for dB values.
-api_params '{"fx": {"reverb_mix": 0.12, "reverb_size": 0.4, "delay_mix": 0.1, "delay_time": 0.1875, "stereo_width": 0.65}}'
-
-ask "slowly open the AN1X filter over 4 bars, start near 0.3 and ramp to 0.8, keep resonance around 0.55 so it sings" "" 14
-
-say "Filter ramp on the stabs. Tension builds into the drop."
-wait_seconds 3
-
-# ── Scene 7: Drop + break regeneration #2 ───────────────────────────────────
-# The drop also regenerates the drum break — denser, harder, fill-heavy.
-
-scene "Drop"
+api_params '{"fx": {"reverb_mix": 0.14, "reverb_size": 0.45, "delay_mix": 0.1, "delay_time": 0.1875, "stereo_width": 0.65}}'
 
 show_all
 
-ask "drop — rewrite the kit_a drums harder and denser: 32nd-note hat rolls on the off-beats, a proper amen-break-style snare fill before the bar loops, punchier kick velocities, AN1X stabs with more octave jumps. Keep it musical, not cluttered." "" 12
+ask "drop — rewrite amen + kit_a harder and denser: 32nd-note hat rolls on the off-beats, a proper amen-break-style snare fill before the bar loops, punchier kick velocities. Open the bass filter a bit for more bite. Keep AN1X sparse and subdued." "" 14
 
 say "Second rewrite of the break. Denser, harder, fill-heavy."
 wait_seconds 4
 
 # ── Scene 8: MC ─────────────────────────────────────────────────────────────
-# Spawning the MC agent via /api/rack/agent (not via a PULSE prompt) —
-# the LLM was unreliable at emitting the spawn_agent action when asked
-# in natural language (the agent would confirm the intent in text but
-# not actually produce the JSON).  The API path is deterministic and
-# auto-scrolls to the new TTS module.  The second ask IS LLM-driven —
-# it's routed directly to the MC agent so an mc_line is emitted and
-# NeuTTS synthesises + plays it.
+# Spawn via API (reliable).  NeuTTS server is left running by record-demo.sh
+# now, so in-app MC synthesis actually renders audio this time.
 
 scene "MC on the mic"
 
 add_agent MC gemma "" mc tts
 wait_seconds 3
 
-# Prompt the MC directly — only MC-mode agents emit mc_line, which is
-# what triggers NeuTTS playback of the shout.
 ask "drop a single short jump-up shout-out, one line, peak-time rave energy" MC 10
 
 say "MC steps up. Jump-up energy on the mic."
-
-# In-app NeuTTS synthesis takes several seconds per line AFTER the LLM
-# produces the MC text, then audio has to play through.  Give the pipeline
-# at least 30s before stop() lands — cold-path NeuTTS is slow on the first
-# line, and earlier cuts had stop() trim the shout.
 wait_seconds 30
 
 # ── Scene 9: End ────────────────────────────────────────────────────────────
 
 scene "End"
 
-say "Jump-up D&B at 174 — two break rewrites, AN1X stabs, MC on top. Everything ran locally on one GPU."
+say "Jump-up D&B at 174 — amen break, reese bass, AN1X pad, MC on top. Everything ran locally on one GPU."
 wait_seconds 3
 
 stop
