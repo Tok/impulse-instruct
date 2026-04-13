@@ -429,14 +429,146 @@ fn scan_amen_samples() -> Vec<std::path::PathBuf> {
 /// Internet Archive collection used by the "Get samples" button.
 const AMEN_ARCHIVE_URL: &str = "https://archive.org/details/amen-breaks";
 
-/// Load a WAV from disk, push its samples to the audio thread, and cache
-/// header metadata into AmenState.meta for the UI to display.
+/// Load a WAV from disk, push its samples to the audio thread, cache
+/// header metadata into AmenState.meta, and build a waveform thumbnail
+/// for the panel display.
 fn load_and_cache(app: &mut ImpulseApp, path: &str) {
     if let Some(data) = load_wav_to_44100(path) {
+        // Rebuild the waveform thumbnail before handing the Arc over —
+        // cheaper than reading the file again from the UI thread.
+        app.amen_wave_cache = (path.to_string(), build_wave_thumb(&data, 256));
         let _ = app.audio_tx.push(AudioCommand::LoadSampler(data));
     }
     let meta = crate::audio::read_wav_meta(path);
     app.state.write().amen.meta = meta;
+}
+
+/// Downsample a mono sample buffer into `n_cols` min/max pairs for cheap
+/// waveform rendering.  Returns empty if `samples` is empty.
+fn build_wave_thumb(samples: &[f32], n_cols: usize) -> Vec<(f32, f32)> {
+    if samples.is_empty() || n_cols == 0 {
+        return Vec::new();
+    }
+    let mut out = Vec::with_capacity(n_cols);
+    let step = samples.len() as f32 / n_cols as f32;
+    for i in 0..n_cols {
+        let a = (i as f32 * step) as usize;
+        let b = (((i + 1) as f32) * step) as usize;
+        let end = b.min(samples.len()).max(a + 1);
+        let slice = &samples[a..end];
+        let mut mn = 0.0_f32;
+        let mut mx = 0.0_f32;
+        for &s in slice {
+            if s < mn {
+                mn = s;
+            }
+            if s > mx {
+                mx = s;
+            }
+        }
+        out.push((mn, mx));
+    }
+    out
+}
+
+/// Paint the waveform thumbnail into `rect` with slice-boundary markers
+/// and start/end offset shading.  `active_slice` (if any) highlights the
+/// currently-playing slice wedge.
+fn draw_waveform(
+    ui: &mut egui::Ui,
+    thumb: &[(f32, f32)],
+    slice_count: u8,
+    start_offset: f32,
+    end_offset: f32,
+    active_slice: Option<u8>,
+    width: f32,
+    height: f32,
+) {
+    let (rect, _) = ui.allocate_exact_size(egui::vec2(width, height), egui::Sense::hover());
+    let painter = ui.painter_at(rect);
+    painter.rect_filled(
+        rect,
+        egui::Rounding::same(2.0),
+        egui::Color32::from_gray(10),
+    );
+    painter.rect_stroke(
+        rect,
+        egui::Rounding::same(2.0),
+        egui::Stroke::new(0.5, egui::Color32::from_gray(40)),
+    );
+    if thumb.is_empty() {
+        return;
+    }
+    let mid = rect.center().y;
+    let half_h = rect.height() * 0.45;
+    let col_count = thumb.len();
+    let col_w = rect.width() / col_count as f32;
+    // Waveform columns.
+    for (i, (mn, mx)) in thumb.iter().enumerate() {
+        let x = rect.min.x + i as f32 * col_w + col_w * 0.5;
+        let y_top = mid - mx * half_h;
+        let y_bot = mid - mn * half_h;
+        painter.line_segment(
+            [egui::pos2(x, y_top), egui::pos2(x, y_bot)],
+            egui::Stroke::new(col_w.max(1.0), egui::Color32::from_gray(160)),
+        );
+    }
+    // Start/end offset shading — dim the parts of the sample outside
+    // the usable region.
+    let shade = egui::Color32::from_rgba_unmultiplied(8, 8, 8, 180);
+    if start_offset > 0.0 {
+        let x0 = rect.min.x;
+        let x1 = rect.min.x + start_offset * rect.width();
+        painter.rect_filled(
+            egui::Rect::from_min_max(egui::pos2(x0, rect.min.y), egui::pos2(x1, rect.max.y)),
+            egui::Rounding::ZERO,
+            shade,
+        );
+    }
+    if end_offset < 1.0 {
+        let x0 = rect.min.x + end_offset * rect.width();
+        let x1 = rect.max.x;
+        painter.rect_filled(
+            egui::Rect::from_min_max(egui::pos2(x0, rect.min.y), egui::pos2(x1, rect.max.y)),
+            egui::Rounding::ZERO,
+            shade,
+        );
+    }
+    // Slice markers: vertical lines at equal divisions within [start, end].
+    let slices = slice_count.max(1);
+    let region_w = (end_offset - start_offset).max(0.001) * rect.width();
+    let region_x0 = rect.min.x + start_offset * rect.width();
+    let slice_w = region_w / slices as f32;
+    for i in 0..=slices {
+        let x = region_x0 + i as f32 * slice_w;
+        painter.line_segment(
+            [
+                egui::pos2(x, rect.min.y + 1.0),
+                egui::pos2(x, rect.max.y - 1.0),
+            ],
+            egui::Stroke::new(0.6, egui::Color32::from_gray(80)),
+        );
+    }
+    // Highlight the active slice.
+    if let Some(a) = active_slice
+        && a < slices
+    {
+        let x0 = region_x0 + a as f32 * slice_w;
+        let x1 = x0 + slice_w;
+        painter.rect_filled(
+            egui::Rect::from_min_max(
+                egui::pos2(x0, rect.min.y + 1.0),
+                egui::pos2(x1, rect.max.y - 1.0),
+            ),
+            egui::Rounding::ZERO,
+            egui::Color32::from_rgba_unmultiplied(200, 200, 200, 30),
+        );
+    }
+    // Center zero-line.
+    painter.line_segment(
+        [egui::pos2(rect.min.x, mid), egui::pos2(rect.max.x, mid)],
+        egui::Stroke::new(0.3, egui::Color32::from_gray(45)),
+    );
 }
 
 /// Draw the circular slice-wheel visualization — an actual loop made of
@@ -664,8 +796,30 @@ pub fn draw_amen(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         );
     }
 
-    // ── Slice wheel + reverse indicator ──────────────────────────────────────
+    // ── Waveform display ─────────────────────────────────────────────────────
+    // Rebuild the thumbnail if the path changed since our last cache.
+    if !path.is_empty()
+        && app.amen_wave_cache.0 != path
+        && let Some(data) = load_wav_to_44100(&path)
+    {
+        app.amen_wave_cache = (path.clone(), build_wave_thumb(&data, 256));
+    }
     let active = current_amen_slice(app);
+    if !app.amen_wave_cache.1.is_empty() {
+        let wave_w = ui.available_width().min(260.0);
+        draw_waveform(
+            ui,
+            &app.amen_wave_cache.1,
+            slice_count,
+            start_offset,
+            end_offset,
+            active,
+            wave_w,
+            44.0,
+        );
+    }
+
+    // ── Slice wheel + reverse indicator ──────────────────────────────────────
     ui.horizontal(|ui| {
         draw_slice_wheel(ui, slice_count, active, reverse, loop_mode, 56.0);
         ui.vertical(|ui| {

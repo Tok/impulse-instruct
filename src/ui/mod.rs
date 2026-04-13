@@ -108,7 +108,6 @@ impl MidiClockTracker {
 mod undo;
 pub(crate) use api_log_handler::{ActivityAction, ActivityEntry};
 use undo::StateHistory;
-
 pub struct ImpulseApp {
     state: Arc<RwLock<AppState>>,
     audio_tx: rtrb::Producer<AudioCommand>,
@@ -116,12 +115,13 @@ pub struct ImpulseApp {
     scope_rx: rtrb::Consumer<f32>,
     scope_buf: Vec<f32>,
     scope_history: std::collections::VecDeque<Vec<f32>>,
-    last_seq_step: usize, // for smooth event stream
+    last_seq_step: usize, // smooth event stream
     session_start: std::time::Instant,
     last_step_time: f64,
     capture_rx: rtrb::Consumer<f32>,
     dsp_load_rx: rtrb::Consumer<f32>,
     dsp_load_buf: Vec<f32>,
+    pub(crate) amen_wave_cache: (String, Vec<(f32, f32)>), // (path, min/max thumbnail)
     /// Most-recent audio analysis snapshot. Auto-updated every ~2s.
     audio_analysis: Option<crate::audio::analysis::AudioAnalysis>,
     /// Last time we ran auto-analysis (seconds since epoch, from ctx.input.time).
@@ -291,6 +291,7 @@ impl ImpulseApp {
             capture_rx: audio.capture_rx,
             dsp_load_rx: audio.dsp_load_rx,
             dsp_load_buf: Vec::with_capacity(64),
+            amen_wave_cache: (String::new(), Vec::new()),
             audio_analysis: None,
             last_analysis_time: 0.0,
             listen_pending: false,
