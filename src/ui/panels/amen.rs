@@ -266,29 +266,41 @@ fn draw_slice_wheel(
     // Start at 12 o'clock, clockwise → angle0 = -π/2.
     let dir = if reverse { -1.0 } else { 1.0 };
 
-    // Wedge fills
-    for i in 0..n {
-        let a0 = -std::f32::consts::FRAC_PI_2 + (i as f32 / n as f32) * tau * dir;
-        let a1 = -std::f32::consts::FRAC_PI_2 + ((i + 1) as f32 / n as f32) * tau * dir;
-        let active = active_slice.map(|s| s as usize) == Some(i);
+    if n == 1 {
+        // Single slice = the whole sample.  A triangle-fan "full wedge"
+        // degenerates (first and last vertex coincide), which renders as
+        // a visible seam.  Paint a proper filled disc instead.
+        let active = active_slice.is_some();
         let fill = if active {
             egui::Color32::from_gray(180)
         } else {
             egui::Color32::from_gray(40)
         };
-        // Tessellate the wedge as a triangle fan around the center.
-        let steps = 12;
-        let mut pts = vec![center];
-        for k in 0..=steps {
-            let t = k as f32 / steps as f32;
-            let a = a0 + (a1 - a0) * t;
-            pts.push(center + egui::vec2(a.cos(), a.sin()) * r_outer);
+        painter.circle_filled(center, r_outer, fill);
+    } else {
+        for i in 0..n {
+            let a0 = -std::f32::consts::FRAC_PI_2 + (i as f32 / n as f32) * tau * dir;
+            let a1 = -std::f32::consts::FRAC_PI_2 + ((i + 1) as f32 / n as f32) * tau * dir;
+            let active = active_slice.map(|s| s as usize) == Some(i);
+            let fill = if active {
+                egui::Color32::from_gray(180)
+            } else {
+                egui::Color32::from_gray(40)
+            };
+            // Tessellate the wedge as a triangle fan around the center.
+            let steps = 12;
+            let mut pts = vec![center];
+            for k in 0..=steps {
+                let t = k as f32 / steps as f32;
+                let a = a0 + (a1 - a0) * t;
+                pts.push(center + egui::vec2(a.cos(), a.sin()) * r_outer);
+            }
+            painter.add(egui::Shape::convex_polygon(
+                pts,
+                fill,
+                egui::Stroke::new(0.5, egui::Color32::from_gray(15)),
+            ));
         }
-        painter.add(egui::Shape::convex_polygon(
-            pts,
-            fill,
-            egui::Stroke::new(0.5, egui::Color32::from_gray(15)),
-        ));
     }
     // Inner hole
     painter.circle_filled(center, r_inner, egui::Color32::from_gray(12));
@@ -416,14 +428,19 @@ pub fn draw_amen(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             // Leave room for RND + LD buttons (two small buttons ~48px total
             // plus item_spacing).  Using a fixed cap keeps the picker from
             // pushing outside the 3-cell module width on narrow rack layouts.
+            // Track the previous path so we can detect a dropdown
+            // selection AFTER the combobox closes — the earlier
+            // "selectable_label.clicked() → load inline" pattern
+            // sometimes lost the click when the combobox rebuilt its
+            // popup on the same frame.  Assigning selectable_value
+            // directly to `path` and syncing state once after show_ui
+            // is the more reliable pattern.
+            let path_before = path.clone();
             egui::ComboBox::from_id_source("amen_sample_picker")
-                // Room for RND + LD + PLAY (3 small buttons).
-                .width((ui.available_width() - 96.0).max(60.0))
+                // Room for RANDOM + LOAD + PLAY (3 buttons, wider now).
+                .width((ui.available_width() - 150.0).max(60.0))
                 .selected_text(egui::RichText::new(current_name).monospace().size(8.0))
                 .show_ui(ui, |ui| {
-                    // Cap the popup height so long sample-pack dirs don't
-                    // overflow the rack/panel bounds (the user reported
-                    // entries getting cut off).  200px ≈ 14 rows at 8pt.
                     egui::ScrollArea::vertical()
                         .max_height(200.0)
                         .show(ui, |ui| {
@@ -434,22 +451,20 @@ pub fn draw_amen(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                                     .and_then(|n| n.to_str())
                                     .unwrap_or(sp_str.as_str())
                                     .to_string();
-                                if ui
-                                    .selectable_label(
-                                        path == sp_str,
-                                        egui::RichText::new(name).monospace().size(8.0),
-                                    )
-                                    .clicked()
-                                {
-                                    path = sp_str;
-                                    app.state.write().amen.path = path.clone();
-                                    load_and_cache(app, &path);
-                                }
+                                ui.selectable_value(
+                                    &mut path,
+                                    sp_str,
+                                    egui::RichText::new(name).monospace().size(8.0),
+                                );
                             }
                         });
                 });
+            if path != path_before {
+                app.state.write().amen.path = path.clone();
+                load_and_cache(app, &path);
+            }
             if ui
-                .small_button(egui::RichText::new("RND").monospace().size(7.0))
+                .small_button(egui::RichText::new("RANDOM").monospace().size(7.0))
                 .on_hover_text("Load a random sample from samples/amen/")
                 .clicked()
                 && let Some(rand_path) = pick_random_sample()
@@ -459,7 +474,7 @@ pub fn draw_amen(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                 load_and_cache(app, &rand_path);
             }
             if ui
-                .small_button(egui::RichText::new("LD").monospace().size(7.0))
+                .small_button(egui::RichText::new("LOAD").monospace().size(7.0))
                 .on_hover_text("Reload the selected sample from disk")
                 .clicked()
             {
@@ -528,8 +543,13 @@ pub fn draw_amen(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         load_and_cache(app, &path);
     }
     let active = current_amen_slice(app);
+    // Reserve the waveform vertical slot whether or not a sample is
+    // loaded — otherwise the whole lower half of the panel shifts up
+    // when loading a WAV, which jitters the knob positions.  The rect
+    // just stays empty until a thumbnail is available.
+    let wave_h = 66.0;
+    let wave_w = ui.available_width().min(260.0);
     if !app.amen_wave_cache.1.is_empty() {
-        let wave_w = ui.available_width().min(260.0);
         let positions_snapshot: Vec<f32> = app.state.read().amen.slice_positions.clone();
         draw_waveform(
             ui,
@@ -540,7 +560,22 @@ pub fn draw_amen(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             &positions_snapshot,
             active,
             wave_w,
-            44.0,
+            wave_h,
+        );
+    } else {
+        // Reserve the same vertical slot so the panel layout doesn't
+        // shift on load.  A thin dark rect gives a visual "no sample"
+        // hint without drawing anything noisy.
+        let (rect, _) = ui.allocate_exact_size(egui::vec2(wave_w, wave_h), egui::Sense::hover());
+        ui.painter().rect_filled(
+            rect,
+            egui::Rounding::same(2.0),
+            egui::Color32::from_gray(10),
+        );
+        ui.painter().rect_stroke(
+            rect,
+            egui::Rounding::same(2.0),
+            egui::Stroke::new(0.5, egui::Color32::from_gray(30)),
         );
     }
     // AUTO detects transients and populates AmenState.slice_positions;
@@ -592,20 +627,28 @@ pub fn draw_amen(app: &mut ImpulseApp, ui: &mut egui::Ui) {
     // STRETCH).  Packing all three into that column frees the lower half
     // of the panel for a single knob row.
     let host_bpm = app.state.read().sequencer.bpm;
+    // Fixed label column so SLICES / DIR / BPM align even though the
+    // words differ in length.  "SLICES" is the longest at 6 chars.
+    let label_col = 48.0_f32;
+    let lbl = |ui: &mut egui::Ui, text: &str| {
+        let (rect, _) = ui.allocate_exact_size(egui::vec2(label_col, 14.0), egui::Sense::hover());
+        ui.painter().text(
+            rect.left_center(),
+            egui::Align2::LEFT_CENTER,
+            text,
+            egui::FontId::monospace(7.5),
+            theme::SMOKE,
+        );
+    };
     ui.horizontal(|ui| {
         // Small padding around the wheel so it doesn't hug other widgets.
-        ui.add_space(4.0);
-        draw_slice_wheel(ui, slice_count, active, reverse, loop_mode, 96.0);
         ui.add_space(6.0);
+        draw_slice_wheel(ui, slice_count, active, reverse, loop_mode, 144.0);
+        ui.add_space(8.0);
         ui.vertical(|ui| {
             // SLICES selector
             ui.horizontal(|ui| {
-                ui.label(
-                    egui::RichText::new("SLICES")
-                        .monospace()
-                        .size(7.5)
-                        .color(theme::SMOKE),
-                );
+                lbl(ui, "SLICES");
                 for &n in &[1u8, 2, 4, 8, 16] {
                     let col = if slice_count == n {
                         theme::CHALK
@@ -632,12 +675,7 @@ pub fn draw_amen(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             // DIR (REV/FWD) + LOOP — label added to the direction toggle
             // so the state reads cleanly without needing the hub arrow.
             ui.horizontal(|ui| {
-                ui.label(
-                    egui::RichText::new("DIR")
-                        .monospace()
-                        .size(7.5)
-                        .color(theme::SMOKE),
-                );
+                lbl(ui, "DIR");
                 if widgets::toggle_button(ui, if reverse { "REV" } else { "FWD" }, &mut reverse) {
                     changed = true;
                 }
@@ -655,12 +693,7 @@ pub fn draw_amen(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             // sequencer.bpm, matching the "default synced" behavior the
             // user expects.
             ui.horizontal(|ui| {
-                ui.label(
-                    egui::RichText::new("BPM")
-                        .monospace()
-                        .size(7.5)
-                        .color(theme::SMOKE),
-                );
+                lbl(ui, "BPM");
                 let mut v = source_bpm;
                 if ui
                     .add(egui::DragValue::new(&mut v).range(40.0..=300.0).speed(0.5))
@@ -687,6 +720,15 @@ pub fn draw_amen(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             });
         });
     });
+
+    // Push the knob row down so it's glued to the bottom of the panel
+    // regardless of whether the waveform / slice-wheel section ended up
+    // with spare vertical room.  Estimate the knob row's own height
+    // (~40 px including the glass-pane padding) and eat the remaining
+    // available height above it.
+    let knob_row_h = 40.0_f32;
+    let spacer = (ui.available_height() - knob_row_h).max(0.0);
+    ui.add_space(spacer);
 
     // ── Knob row — three glass-pane groups on one line ──────────────────────
     // LEVEL (vol/pitch) · REGION (start/end) · SHAPE (gate/stutter).
