@@ -407,6 +407,28 @@ pub fn draw_kit_b(app: &mut ImpulseApp, ui: &mut egui::Ui) {
 
 // ─── Amen / WAV sampler panel ─────────────────────────────────────────────────
 
+/// Scan `samples/amen/` for .wav files and return their paths sorted by name.
+/// Empty Vec means the directory is missing or contains no WAVs.
+fn scan_amen_samples() -> Vec<std::path::PathBuf> {
+    let mut out: Vec<std::path::PathBuf> = std::fs::read_dir("samples/amen")
+        .into_iter()
+        .flatten()
+        .flatten()
+        .map(|e| e.path())
+        .filter(|p| {
+            p.is_file()
+                && p.extension()
+                    .and_then(|e| e.to_str())
+                    .is_some_and(|e| e.eq_ignore_ascii_case("wav"))
+        })
+        .collect();
+    out.sort();
+    out
+}
+
+/// Internet Archive collection used by the "Get samples" button.
+const AMEN_ARCHIVE_URL: &str = "https://archive.org/details/amen-breaks";
+
 pub fn draw_amen(app: &mut ImpulseApp, ui: &mut egui::Ui) {
     let ctrl = widgets::ControlPrefs::from_prefs(&app.state.read().ui_prefs);
     let mut path = app.state.read().amen.path.clone();
@@ -416,25 +438,73 @@ pub fn draw_amen(app: &mut ImpulseApp, ui: &mut egui::Ui) {
     };
     let mut changed = false;
 
-    // Row 1: file input + load button (full width)
-    ui.horizontal(|ui| {
-        let resp = ui.add(
-            egui::TextEdit::singleline(&mut path)
-                .hint_text("amen.wav")
-                .desired_width(ui.available_width() - 30.0)
-                .font(egui::FontId::monospace(8.0)),
-        );
-        if resp.changed() {
-            app.state.write().amen.path = path.clone();
-        }
-        if ui
-            .small_button(egui::RichText::new("LD").monospace().size(7.0))
-            .clicked()
-            && let Some(data) = load_wav_to_44100(&path)
-        {
-            let _ = app.audio_tx.push(AudioCommand::LoadSampler(data));
-        }
-    });
+    // Row 1: sample picker.  Scans samples/amen/ for WAVs — if present,
+    // show a dropdown of user-dropped samples.  If empty, show a helpful
+    // message pointing at archive.org with a button to open the browser.
+    let samples = scan_amen_samples();
+    if samples.is_empty() {
+        ui.horizontal(|ui| {
+            ui.label(
+                egui::RichText::new("No samples in samples/amen/")
+                    .monospace()
+                    .size(8.0)
+                    .color(theme::ASH),
+            );
+            if ui
+                .small_button(egui::RichText::new("GET").monospace().size(7.0))
+                .on_hover_text(format!(
+                    "Open {}\nDownload a .zip of WAVs and extract into samples/amen/",
+                    AMEN_ARCHIVE_URL
+                ))
+                .clicked()
+            {
+                let _ = crate::ui::util::webbrowser_open(AMEN_ARCHIVE_URL);
+            }
+        });
+    } else {
+        ui.horizontal(|ui| {
+            let current_name = std::path::Path::new(&path)
+                .file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or("(pick sample)")
+                .to_string();
+            egui::ComboBox::from_id_source("amen_sample_picker")
+                .width(ui.available_width() - 30.0)
+                .selected_text(egui::RichText::new(current_name).monospace().size(8.0))
+                .show_ui(ui, |ui| {
+                    for sp in &samples {
+                        let sp_str = sp.to_string_lossy().to_string();
+                        let name = sp
+                            .file_name()
+                            .and_then(|n| n.to_str())
+                            .unwrap_or(sp_str.as_str())
+                            .to_string();
+                        if ui
+                            .selectable_label(
+                                path == sp_str,
+                                egui::RichText::new(name).monospace().size(8.0),
+                            )
+                            .clicked()
+                        {
+                            path = sp_str;
+                            app.state.write().amen.path = path.clone();
+                            if let Some(data) = load_wav_to_44100(&path) {
+                                let _ = app.audio_tx.push(AudioCommand::LoadSampler(data));
+                            }
+                        }
+                    }
+                });
+            if ui
+                .small_button(egui::RichText::new("LD").monospace().size(7.0))
+                .on_hover_text("Reload the selected sample from disk")
+                .clicked()
+                && let Some(data) = load_wav_to_44100(&path)
+            {
+                let _ = app.audio_tx.push(AudioCommand::LoadSampler(data));
+            }
+        });
+    }
+
     // Row 2: knobs
     ui.horizontal(|ui| {
         if widgets::param_control(ui, "VOLUME", &mut vol, ParamMode::Free, ctrl).0 {
