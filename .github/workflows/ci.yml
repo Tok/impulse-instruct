@@ -145,26 +145,35 @@ jobs:
       - name: Bundle config + data files
         shell: bash
         run: |
-          # Create a zip containing binary + configs + start scripts.
-          # This is the primary distribution — users extract and run.
-          mkdir -p bundle/models bundle/scripts
+          # Create a zip containing end-user binary + configs + end-user
+          # start/download scripts. Dev-only scripts (cargo-dependent
+          # start.sh/start.bat at repo root, scripts/build-*, etc.) are
+          # deliberately excluded — end users never need cargo/python.
+          mkdir -p bundle/models
           cp ${{ matrix.asset_name }} bundle/
           for f in config.json instructions.json styles.json; do
             [ -f "$f" ] && cp "$f" bundle/
           done
-          # Start scripts so users get terminal log output
-          [ -f start.sh ] && cp start.sh bundle/
-          [ -f start.bat ] && cp start.bat bundle/
-          # Download helper scripts
-          for f in scripts/download-models.sh scripts/download-models.bat; do
-            [ -f "$f" ] && cp "$f" bundle/scripts/
-          done
+          # End-user launchers (just run the exe in a console; no cargo)
+          cp scripts/dist-start.sh  bundle/start.sh
+          cp scripts/dist-start.bat bundle/start.bat
+          chmod +x bundle/start.sh
+          # Download helpers at the root, next to the binary
+          cp scripts/download-models.sh  bundle/download-models.sh
+          cp scripts/download-models.bat bundle/download-models.bat
+          chmod +x bundle/download-models.sh
           echo "# Place .gguf model files here. See README for download instructions." > bundle/models/README.md
+
+          # Include version in the zip filename (e.g. v0.7.4)
+          VERSION="${{ github.ref_name }}"
+          ZIP_NAME="impulse-instruct-${VERSION}-$(echo ${{ matrix.asset_name }} | sed 's/^impulse-instruct-//; s/\.exe$//').zip"
+          echo "ZIP_NAME=$ZIP_NAME" >> "$GITHUB_ENV"
+
           cd bundle
           if [[ "$RUNNER_OS" == "Windows" ]]; then
-            7z a ../${{ matrix.asset_name }}.zip .
+            7z a "../$ZIP_NAME" .
           else
-            zip -r ../${{ matrix.asset_name }}.zip .
+            zip -r "../$ZIP_NAME" .
           fi
           cd ..
 
@@ -195,10 +204,12 @@ jobs:
             A smart synthesizer with a virtual production team inside — multiple LLM agents collaborate to write patterns, shape sound, and evolve tracks in real time.
 
             ### Quick start
-            1. Download the `.zip` for your platform
-            2. Extract — you'll get the binary, configs, start scripts, and a `models/` folder
-            3. Run `scripts/download-models.sh` (or `.bat`) to fetch Gemma 4 E4B (~4.6 GB)
-            4. Run `./start.sh` (Linux) or `start.bat` (Windows) — this launches the app with terminal logging
+            1. Download the `impulse-instruct-${{ github.ref_name }}-<platform>.zip` for your platform (**not** the auto-attached "Source code" zip).
+            2. Extract — you'll get the binary, configs, start scripts, and an empty `models/` folder.
+            3. **Get a model.** Either download `gemma-4-E4B-it-Q4_K_M.gguf` manually from [unsloth/gemma-4-E4B-it-GGUF](https://huggingface.co/unsloth/gemma-4-E4B-it-GGUF) and drop it in `models/`, or run `./download-models.sh` / `download-models.bat`.
+            4. Run `./start.sh` (Linux) or double-click `start.bat` (Windows) — this launches the app in a console so logs stay visible.
+
+            > **Windows note:** the `.exe` is not code-signed. SmartScreen may show *"Windows protected your PC"* — click **More info → Run anyway**. The build is reproducible and attested; see verification below.
 
             ### Verify
             ```
@@ -215,7 +226,7 @@ jobs:
             - **Gemma 4 E4B Q4_K_M** (~4.6 GB) — best accuracy, default; needed for all presets
             - **Bonsai 8B Q1_0_g128** (~1.1 GB) — lightweight agent for multi-model teams
           files: |
-            ${{ matrix.asset_name }}.zip
+            ${{ env.ZIP_NAME }}
             ${{ matrix.asset_name }}.sha256
 
   # ── Rolling release cleanup ────────────────────────────────────────────────
