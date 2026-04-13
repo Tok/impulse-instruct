@@ -675,6 +675,9 @@ pub fn apply_agent_mode_and_tts(
         s.tts_modules
             .push(crate::state::TtsModuleState::new(tts_id));
         s.rack.connect_control(agent_id, tts_id);
+        // Scroll the UI to the new TTS module so the viewer (or recording)
+        // sees where the MC/DJ voice comes from.
+        s.scroll_target = Some("tts".to_string());
     }
     s
 }

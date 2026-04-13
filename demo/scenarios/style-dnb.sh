@@ -58,9 +58,9 @@ scene "AN1X bass stabs"
 
 focus_on an1x
 
-ask "AN1X bass stabs, short punchy envelope (hard sync on, saw pair slightly detuned), A minor pentatonic, 5 or 6 distinct pitches across the 32-step loop, syncopated not on every downbeat. Think pitched figures that jump and talk — not a sustained drone. Pan center."
+ask "AN1X as the lead-and-bass: tuned piano-like tone (detuned saws, NO hard sync, filter open around 0.6, resonance around 0.25 — warm, not abrasive), snappy amp envelope but notes still musical. A minor pentatonic, 5 or 6 distinct pitches across the 32-step loop, syncopated not on every downbeat. Write a singable melodic line, not a drone. Pan center."
 
-say "Pitched bass stabs instead of a sustained reese. Short and punchy."
+say "AN1X tuned like a piano — melodic, not a reese drone."
 wait_seconds 3
 
 # ── Scene 5: Break regeneration #1 ──────────────────────────────────────────
@@ -106,21 +106,37 @@ wait_seconds 4
 # Prompt PULSE to add + wire the MC rather than hard-coding it through the
 # API — this is what the app's meant to feel like: tell the producer what
 # you want, the producer sets it up.  PULSE emits a spawn_agent action with
-# mode=mc and (implicitly) tts=true, which adds a NeuTts module and wires
-# a control cable from the new MC agent to it.
+# mode=mc and (implicitly) tts=true, which adds a NeuTts module, wires a
+# control cable from the new MC agent to it, and auto-scrolls to the TTS.
+#
+# We split this into two asks:
+#   1. PULSE spawns the MC agent + TTS module.
+#   2. A second ask is sent directly to the MC, which emits the mc_line
+#      field (only MC-mode agents produce those) and the in-app NeuTTS
+#      pipeline synthesizes + plays it.
+# Combining both into one ask to PULSE left the shout as a narration
+# instead of an actual synthesized line — only MC-mode agents trigger TTS.
 
 scene "MC on the mic"
 
 look_at console
 
-ask "spawn an MC agent, jump-up rave flavor, MC mode with TTS voice cloning, then have the MC drop a single short shout-out over the current pattern"
+ask "spawn an MC agent, jump-up rave flavor, MC mode with TTS voice cloning" "" 8
 
-say "PULSE spawns an MC. The MC rides the track."
+# Give the spawn + TTS module creation a moment to apply, and for the UI
+# to scroll to the new TTS module.
+wait_seconds 4
+
+# Now send the shout request directly to the MC agent — only MC-mode
+# agents emit mc_line, which is what triggers NeuTTS playback.
+ask "drop a single short jump-up shout-out, one line, peak-time rave energy" MC 10
+
+say "PULSE spawned the MC. MC rides the track."
 
 # In-app NeuTTS synthesis takes several seconds per line AFTER the LLM
 # produces the MC text, then audio has to play through.  Give the pipeline
 # at least 30s before stop() lands — cold-path NeuTTS is slow on the first
-# line, and an earlier cut had stop() trim the shout.
+# line, and earlier cuts had stop() trim the shout.
 wait_seconds 30
 
 # ── Scene 9: End ────────────────────────────────────────────────────────────

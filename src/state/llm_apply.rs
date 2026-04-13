@@ -624,6 +624,9 @@ pub fn apply_llm_update(state: AppState, update: &serde_json::Value, scope: &[St
                 if kind == super::ModuleKind::NeuTts {
                     s.tts_modules.push(super::TtsModuleState::new(id));
                 }
+                // Scroll the UI to the newly-added module so it's visible
+                // in the rack (matches /api/rack/add behavior).
+                s.scroll_target = Some(name.to_string());
             }
         }
         // ── rack.remove — delete the first module matching each kind string.
