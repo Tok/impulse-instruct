@@ -574,6 +574,11 @@ async fn post_rack_agent(
             s.tts_modules
                 .push(crate::state::TtsModuleState::new(tts_id));
             s.rack.connect_control(id, tts_id);
+            // Scroll to the new TTS module so the viewer sees where the
+            // MC/DJ voice actually comes from in the rack.  Overwrites the
+            // "ai" scroll_target set below; TTS is the more interesting
+            // destination when a voice just appeared.
+            s.scroll_target = Some("tts".to_string());
         }
 
         // Wire control cables to modules matching the scope
@@ -607,9 +612,13 @@ async fn post_rack_agent(
             s.rack.connect_control(id, *tid);
         }
         s.llm_agents.push(agent);
-        // Auto-scroll to the AI zone (now its own tab containing the console
-        // plus all agents) so the newly added agent is visible.
-        s.scroll_target = Some("ai".to_string());
+        // Auto-scroll to the AI zone by default so the new agent is
+        // visible.  If a TTS module was also added, the earlier tts block
+        // already set scroll_target to "tts" (a more interesting
+        // destination for MC/DJ spawns) — don't overwrite it.
+        if req.tts != Some(true) {
+            s.scroll_target = Some("ai".to_string());
+        }
         id
     };
 

@@ -103,35 +103,24 @@ say "Second rewrite of the break. Denser, harder, fill-heavy."
 wait_seconds 4
 
 # ── Scene 8: MC ─────────────────────────────────────────────────────────────
-# Prompt PULSE to add + wire the MC rather than hard-coding it through the
-# API — this is what the app's meant to feel like: tell the producer what
-# you want, the producer sets it up.  PULSE emits a spawn_agent action with
-# mode=mc and (implicitly) tts=true, which adds a NeuTts module, wires a
-# control cable from the new MC agent to it, and auto-scrolls to the TTS.
-#
-# We split this into two asks:
-#   1. PULSE spawns the MC agent + TTS module.
-#   2. A second ask is sent directly to the MC, which emits the mc_line
-#      field (only MC-mode agents produce those) and the in-app NeuTTS
-#      pipeline synthesizes + plays it.
-# Combining both into one ask to PULSE left the shout as a narration
-# instead of an actual synthesized line — only MC-mode agents trigger TTS.
+# Spawning the MC agent via /api/rack/agent (not via a PULSE prompt) —
+# the LLM was unreliable at emitting the spawn_agent action when asked
+# in natural language (the agent would confirm the intent in text but
+# not actually produce the JSON).  The API path is deterministic and
+# auto-scrolls to the new TTS module.  The second ask IS LLM-driven —
+# it's routed directly to the MC agent so an mc_line is emitted and
+# NeuTTS synthesises + plays it.
 
 scene "MC on the mic"
 
-look_at console
+add_agent MC gemma "" mc tts
+wait_seconds 3
 
-ask "spawn an MC agent, jump-up rave flavor, MC mode with TTS voice cloning" "" 8
-
-# Give the spawn + TTS module creation a moment to apply, and for the UI
-# to scroll to the new TTS module.
-wait_seconds 4
-
-# Now send the shout request directly to the MC agent — only MC-mode
-# agents emit mc_line, which is what triggers NeuTTS playback.
+# Prompt the MC directly — only MC-mode agents emit mc_line, which is
+# what triggers NeuTTS playback of the shout.
 ask "drop a single short jump-up shout-out, one line, peak-time rave energy" MC 10
 
-say "PULSE spawned the MC. MC rides the track."
+say "MC steps up. Jump-up energy on the mic."
 
 # In-app NeuTTS synthesis takes several seconds per line AFTER the LLM
 # produces the MC text, then audio has to play through.  Give the pipeline
