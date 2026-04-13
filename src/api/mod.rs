@@ -87,6 +87,16 @@ pub struct AmenRequest {
     pub random: bool,
 }
 
+/// Same shape as AmenRequest, separate type so we can extend either
+/// module independently without breaking the other.
+#[derive(Deserialize)]
+pub struct GranularRequest {
+    #[serde(default)]
+    pub path: Option<String>,
+    #[serde(default)]
+    pub random: bool,
+}
+
 #[derive(Deserialize)]
 pub struct StyleRequest {
     /// Style id from styles.json (e.g. "drum_and_bass"), "__free__",
@@ -379,6 +389,40 @@ async fn post_amen(
             Json(OkResponse {
                 ok: false,
                 message: Some("no path and no samples found in samples/amen/".into()),
+            })
+        }
+    }
+}
+
+/// Load a texture sample into the granular voice — mirror of /api/amen.
+/// Writes granular.path in AppState; the UI panel picks up the change
+/// and handles the full load (decode + audio-thread push via
+/// AudioCommand::LoadGranular) on its next frame.
+async fn post_granular(
+    AxumState(api): AxumState<ApiState>,
+    Json(req): Json<GranularRequest>,
+) -> Json<OkResponse> {
+    let resolved: Option<String> = if let Some(p) = req.path.as_deref().filter(|s| !s.is_empty()) {
+        Some(p.to_string())
+    } else if req.random {
+        crate::ui::panels::granular::pick_random_texture()
+    } else {
+        None
+    };
+    match resolved {
+        Some(p) => {
+            api.app_state.write().granular.path = p.clone();
+            api_log(&api, format!("[API] granular: loaded {}", p));
+            Json(OkResponse {
+                ok: true,
+                message: Some(format!("granular: {}", p)),
+            })
+        }
+        None => {
+            api_log(&api, "[API] granular: no sample resolved".to_string());
+            Json(OkResponse {
+                ok: false,
+                message: Some("no path and no samples found in samples/textures/".into()),
             })
         }
     }
@@ -820,6 +864,7 @@ pub fn build_router(api_state: ApiState) -> Router {
         .route("/api/preset", post(post_preset))
         .route("/api/style", post(post_style))
         .route("/api/amen", post(post_amen))
+        .route("/api/granular", post(post_granular))
         .route("/api/flip", post(post_flip))
         .route("/api/rack/add", post(post_rack_add))
         .route("/api/rack/agent", post(post_rack_agent))
