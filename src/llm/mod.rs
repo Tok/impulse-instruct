@@ -47,6 +47,14 @@ pub enum LlmAction {
         persona: String,
         scope: Vec<String>,
         model: Option<String>,
+        /// Conversation mode override ("off" | "producer" | "dj" | "mc").
+        /// When Some("mc"), the UI dispatch also auto-wires TTS even if
+        /// `tts` is false — MC without voice isn't meaningful.
+        mode: Option<String>,
+        /// When true, spawn a NeuTts module alongside the agent and wire a
+        /// control cable from agent → TTS (mirrors the /api/rack/agent
+        /// `tts: true` path).
+        tts: bool,
     },
     DismissAgent,
     /// Send a structured hint to another agent by persona name.

@@ -62,6 +62,44 @@ fn kind_to_scope_name(kind: ModuleKind) -> Option<String> {
     }
 }
 
+/// Parse a flexible module-kind string (from LLM JSON or HTTP API) into a
+/// `ModuleKind`.  Accepts snake_case, dashed, spaced, and short aliases.
+pub fn parse_module_kind(name: &str) -> Option<ModuleKind> {
+    use ModuleKind::*;
+    match name
+        .to_ascii_lowercase()
+        .replace(['-', '_', ' '], "")
+        .as_str()
+    {
+        "acidbass" | "bass" | "303" => Some(AcidBass),
+        "drumkit808" | "808" | "kita" | "druma" | "drumsa" => Some(DrumKit808),
+        "drumkit909" | "909" | "kitb" | "drumb" | "drumsb" => Some(DrumKit909),
+        "hooverlead" | "hoover" | "lead" => Some(HooverLead),
+        "an1xvoice" | "an1x" | "an-1x" | "pad" | "synth" => Some(An1xVoice),
+        "amensampler" | "amen" | "sampler" | "break" => Some(AmenSampler),
+        "noisevoice" | "noise" => Some(NoiseVoice),
+        "granulartexture" | "granular" | "grain" | "texture" => Some(GranularTexture),
+        "fxreverb" | "reverb" | "verb" => Some(FxReverb),
+        "fxdelay" | "delay" | "echo" => Some(FxDelay),
+        "fxchorus" | "chorus" | "ensemble" => Some(FxChorus),
+        "fxphaser" | "phaser" | "phase" => Some(FxPhaser),
+        "fxeq" | "eq" | "equalizer" | "equaliser" => Some(FxEq),
+        "fxcompressor" | "compressor" | "comp" => Some(FxCompressor),
+        "fxtapesat" | "tapesat" | "tape" | "saturation" => Some(FxTapeSat),
+        "fxdrive" | "drive" | "overdrive" | "distortion" => Some(FxDrive),
+        "fxautotune" | "autotune" | "pitchcorrect" | "tune" => Some(FxAutotune),
+        "fxwaveshaper" | "waveshaper" | "shaper" => Some(FxWaveshaper),
+        "fxbitcrush" | "bitcrush" | "lofi" => Some(FxBitcrush),
+        "fxringmod" | "ringmod" | "ring" => Some(FxRingMod),
+        "lfomodule" | "lfo" => Some(LfoModule),
+        "spectrumanalyzer" | "spectrum" | "analyser" | "analyzer" => Some(SpectrumAnalyzer),
+        "stereometer" | "stereo" | "correlation" | "meter" => Some(StereoMeter),
+        "activitytimeline" | "timeline" | "activity" | "log" => Some(ActivityTimeline),
+        "neutts" | "tts" | "voice" | "mc" => Some(NeuTts),
+        _ => None,
+    }
+}
+
 /// Match a module kind against a flexible name string from the LLM.
 pub fn rack_kind_name_matches(kind: ModuleKind, name: &str) -> bool {
     let n = name.to_lowercase();

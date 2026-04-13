@@ -756,8 +756,10 @@ STEREO — always create width, never leave everything at pan 0:
 
 JAM HEAT: {heat_pct}% — {heat_desc}
 
-RACK ROUTING — enable/disable modules and wire cables between them:
+RACK ROUTING — add/remove modules, enable/disable them, and wire cables:
   {{"rack": {{
+    "add":        ["808", "reverb"],                     ← create new modules (auto-wired to master)
+    "remove":     ["chorus"],                            ← delete the first module matching each name
     "enable":     ["bitcrush"],                          ← turn a module on
     "disable":    ["reverb"],                            ← turn a module off
     "connect":    [{{"from": "bass",     "to": "bitcrush"}},
@@ -767,12 +769,16 @@ RACK ROUTING — enable/disable modules and wire cables between them:
   Module names: "bass", "808", "909", "hoover", "an1x", "amen", "noise", "granular",
                 "bitcrush", "reverb", "delay", "chorus", "phaser", "drive",
                 "eq", "compressor", "tapesat", "waveshaper", "ringmod",
-                "lfo", "master", "sequencer"
+                "lfo", "tts", "master", "sequencer"
 
+  "add an 808 and a reverb" / "give me a bitcrush"
+    → add rack.add entries; voice/FX modules auto-wire to master
   "connect the bitcrush" / "wire it up" / "route bass through reverb"
     → add rack.connect entries from the source to the target module then to master if needed
   "disconnect reverb" / "remove that cable"
     → add rack.disconnect entry
+  "take the chorus out" / "remove the 909"
+    → add rack.remove entry
 
 SETTINGS — change only when explicitly asked:
   {{"settings": {{
@@ -783,7 +789,9 @@ SETTINGS — change only when explicitly asked:
     "spawn_agent": {{               ← spawn a new LLM agent module in the rack
       "persona": "BASS BRAIN",      ← name shown on the agent card
       "scope": ["bass", "fx"],      ← which modules this agent controls (empty = all)
-      "model": null                  ← model override (null = use default model)
+      "model": null,                 ← model override (null = use default model)
+      "mode": "mc",                  ← optional: "producer" | "dj" | "mc" (default producer)
+      "tts": true                    ← optional: add + wire a NeuTts module (auto-true when mode=mc)
     }},
     "dismiss": true                  ← this agent removes itself from the rack
   }}}}

@@ -584,6 +584,8 @@ impl ImpulseApp {
                         persona,
                         scope,
                         model,
+                        mode,
+                        tts,
                     } => {
                         let s = self.state.read();
                         let ok = s.llm.agent_autonomy
@@ -617,16 +619,24 @@ impl ImpulseApp {
                         if ok && vram_ok {
                             self.push_history();
                             let snapshot = self.state.read().clone();
-                            let (new_state, _id) = crate::state::spawn_agent(
+                            let (spawned, agent_id) = crate::state::spawn_agent(
                                 snapshot,
                                 persona,
                                 scope,
                                 crate::state::AgentRole::Producer,
                                 model.clone(),
                             );
+                            let new_state = crate::state::apply_agent_mode_and_tts(
+                                spawned,
+                                agent_id,
+                                mode.as_deref(),
+                                *tts,
+                            );
                             *self.state.write() = new_state;
-                            self.log_text
-                                .push_str(&format!("Agent spawned: {} ({:?})\n", persona, scope));
+                            let tts_tag = if *tts { " + TTS" } else { "" };
+                            self.log_text.push_str(&format!(
+                                "Agent spawned: {persona} ({scope:?}){tts_tag}\n"
+                            ));
                             self.session_dirty = true;
                         }
                     }

@@ -491,40 +491,9 @@ async fn post_flip(
 // ─── Rack manipulation endpoints ─────────────────────────────────────────────
 
 /// Parse a module kind from a string name.
-fn parse_module_kind(name: &str) -> Option<crate::state::ModuleKind> {
-    use crate::state::ModuleKind::*;
-    match name
-        .to_ascii_lowercase()
-        .replace(['-', '_', ' '], "")
-        .as_str()
-    {
-        "acidbass" | "bass" | "303" => Some(AcidBass),
-        "drumkit808" | "808" => Some(DrumKit808),
-        "drumkit909" | "909" => Some(DrumKit909),
-        "hooverlead" | "hoover" => Some(HooverLead),
-        "an1xvoice" | "an1x" => Some(An1xVoice),
-        "amensampler" | "amen" => Some(AmenSampler),
-        "noisevoice" | "noise" => Some(NoiseVoice),
-        "fxreverb" | "reverb" => Some(FxReverb),
-        "fxdelay" | "delay" => Some(FxDelay),
-        "fxchorus" | "chorus" => Some(FxChorus),
-        "fxphaser" | "phaser" => Some(FxPhaser),
-        "fxeq" | "eq" => Some(FxEq),
-        "fxcompressor" | "compressor" => Some(FxCompressor),
-        "fxtapesat" | "tapesat" => Some(FxTapeSat),
-        "fxdrive" | "drive" => Some(FxDrive),
-        "fxautotune" | "autotune" => Some(FxAutotune),
-        "fxwaveshaper" | "waveshaper" => Some(FxWaveshaper),
-        "fxbitcrush" | "bitcrush" => Some(FxBitcrush),
-        "fxringmod" | "ringmod" => Some(FxRingMod),
-        "lfomodule" | "lfo" => Some(LfoModule),
-        "spectrumanalyzer" | "spectrum" => Some(SpectrumAnalyzer),
-        "stereometer" => Some(StereoMeter),
-        "activitytimeline" | "timeline" => Some(ActivityTimeline),
-        "neutts" | "tts" | "voice" => Some(NeuTts),
-        _ => None,
-    }
-}
+// parse_module_kind now lives in state::rack_scope so both the HTTP API
+// and the LLM rack.add action path parse names identically.
+use crate::state::parse_module_kind;
 
 async fn post_rack_add(
     AxumState(api): AxumState<ApiState>,

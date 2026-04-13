@@ -4,8 +4,8 @@
 use super::llm_helpers::{
     apply_an1x_update, apply_bass_update, apply_fx_update, apply_hoover_update, unlocked_f32,
 };
-use super::rack::{PortDir, PortRef, rack_out_port_kind};
-use super::rack_scope::rack_kind_name_matches;
+use super::rack::{PortDir, PortKind, PortRef, rack_out_port_kind};
+use super::rack_scope::{parse_module_kind, rack_kind_name_matches};
 use super::transitions::{
     expand_sequencer_steps, set_drum_step_ratchet, set_drum_voice_steps, set_lane_steps,
 };
@@ -588,6 +588,60 @@ pub fn apply_llm_update(state: AppState, update: &serde_json::Value, scope: &[St
     //                   "connect": [{"from": "bitcrush", "to": "master"}],
     //                   "disconnect": [{"from": "bitcrush", "to": "master"}] } }
     if let Some(rack_upd) = update.get("rack").and_then(|v| v.as_object()) {
+        // ── rack.add — create new modules from a list of kind strings.
+        // Auto-wires voice/FX modules to MasterOutput so they're audible
+        // without a second "connect" action (matches /api/rack/add behavior).
+        if let Some(arr) = rack_upd.get("add").and_then(|v| v.as_array()) {
+            for v in arr {
+                let Some(name) = v.as_str() else { continue };
+                let Some(kind) = parse_module_kind(name) else {
+                    continue;
+                };
+                let id = s.rack.add_module(kind);
+                if !matches!(kind.default_zone(), super::Zone::Global | super::Zone::Ai)
+                    && let Some(master_id) = s
+                        .rack
+                        .modules
+                        .iter()
+                        .find(|m| m.kind == super::ModuleKind::MasterOutput)
+                        .map(|m| m.id)
+                {
+                    s.rack.connect(
+                        PortRef {
+                            module_id: id,
+                            dir: PortDir::Out,
+                            kind: PortKind::Audio,
+                            index: 0,
+                        },
+                        PortRef {
+                            module_id: master_id,
+                            dir: PortDir::In,
+                            kind: PortKind::Audio,
+                            index: 0,
+                        },
+                    );
+                }
+                if kind == super::ModuleKind::NeuTts {
+                    s.tts_modules.push(super::TtsModuleState::new(id));
+                }
+            }
+        }
+        // ── rack.remove — delete the first module matching each kind string.
+        if let Some(arr) = rack_upd.get("remove").and_then(|v| v.as_array()) {
+            for v in arr {
+                let Some(name) = v.as_str() else { continue };
+                let target = s
+                    .rack
+                    .modules
+                    .iter()
+                    .find(|m| rack_kind_name_matches(m.kind, name))
+                    .map(|m| m.id);
+                if let Some(id) = target {
+                    s.rack.remove_module(id);
+                    s.tts_modules.retain(|t| t.id != id);
+                }
+            }
+        }
         if let Some(arr) = rack_upd.get("enable").and_then(|v| v.as_array()) {
             for v in arr {
                 if let Some(name) = v.as_str() {
