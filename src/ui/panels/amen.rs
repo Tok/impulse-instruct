@@ -411,8 +411,11 @@ pub fn draw_amen(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                 .and_then(|n| n.to_str())
                 .unwrap_or("(pick sample)")
                 .to_string();
+            // Leave room for RND + LD buttons (two small buttons ~48px total
+            // plus item_spacing).  Using a fixed cap keeps the picker from
+            // pushing outside the 3-cell module width on narrow rack layouts.
             egui::ComboBox::from_id_source("amen_sample_picker")
-                .width(ui.available_width() - 30.0)
+                .width((ui.available_width() - 70.0).max(60.0))
                 .selected_text(egui::RichText::new(current_name).monospace().size(8.0))
                 .show_ui(ui, |ui| {
                     for sp in &samples {
@@ -549,11 +552,15 @@ pub fn draw_amen(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         }
     });
 
-    // ── Slice wheel + reverse indicator ──────────────────────────────────────
+    // ── Slice wheel + slices/rev/loop + tempo stacked column ───────────────
+    // The slice wheel sits on the left; the column to its right holds the
+    // SLICES buttons, REV/LOOP toggles, and the tempo row (SRC BPM +
+    // STRETCH).  Packing all three into that column frees the lower half
+    // of the panel for a single knob row.
     ui.horizontal(|ui| {
         draw_slice_wheel(ui, slice_count, active, reverse, loop_mode, 56.0);
         ui.vertical(|ui| {
-            // SLICES selector (cycles through 1/2/4/8/16)
+            // SLICES selector
             ui.horizontal(|ui| {
                 ui.label(
                     egui::RichText::new("SLICES")
@@ -562,8 +569,7 @@ pub fn draw_amen(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                         .color(theme::SMOKE),
                 );
                 for &n in &[1u8, 2, 4, 8, 16] {
-                    let active_sel = slice_count == n;
-                    let col = if active_sel {
+                    let col = if slice_count == n {
                         theme::CHALK
                     } else {
                         theme::IRON
@@ -585,7 +591,7 @@ pub fn draw_amen(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                     }
                 }
             });
-            // REV / LOOP toggles
+            // REV / LOOP
             ui.horizontal(|ui| {
                 if widgets::toggle_button(ui, if reverse { "REV" } else { "FWD" }, &mut reverse) {
                     changed = true;
@@ -598,75 +604,81 @@ pub fn draw_amen(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                     changed = true;
                 }
             });
+            // SRC BPM + STRETCH — tempo-matching controls.  STRETCH on =
+            // resample-based stretch to sequencer.bpm (pitches the sample).
+            ui.horizontal(|ui| {
+                ui.label(
+                    egui::RichText::new("BPM")
+                        .monospace()
+                        .size(7.5)
+                        .color(theme::SMOKE),
+                );
+                let mut v = source_bpm;
+                if ui
+                    .add(egui::DragValue::new(&mut v).range(40.0..=300.0).speed(0.5))
+                    .changed()
+                {
+                    source_bpm = v;
+                    changed = true;
+                }
+                if widgets::toggle_button(
+                    ui,
+                    if bpm_stretch { "STRETCH" } else { "FREE" },
+                    &mut bpm_stretch,
+                ) {
+                    changed = true;
+                }
+            });
         });
     });
 
-    // ── Sliders row 1: volume / pitch ────────────────────────────────────────
+    // ── Knob row — three glass-pane groups on one line ──────────────────────
+    // LEVEL (vol/pitch) · REGION (start/end) · SHAPE (gate/stutter).
+    // even_group_width evenly distributes the 3 panes across the panel's
+    // available width, respecting the inter-group gap.
+    let gw = widgets::even_group_width(ui, 3);
     ui.horizontal(|ui| {
-        if widgets::param_control(ui, "VOLUME", &mut vol, ParamMode::Free, ctrl).0 {
-            changed = true;
-        }
-        let mut pitch_norm = (pitch + 24.0) / 48.0;
-        if widgets::param_control(ui, "PITCH", &mut pitch_norm, ParamMode::Free, ctrl).0 {
-            pitch = pitch_norm * 48.0 - 24.0;
-            changed = true;
-        }
-    });
-
-    // ── Sliders row 2: region offsets ────────────────────────────────────────
-    ui.horizontal(|ui| {
-        if widgets::param_control(ui, "START", &mut start_offset, ParamMode::Free, ctrl).0 {
-            if start_offset >= end_offset {
-                start_offset = (end_offset - 0.01).max(0.0);
-            }
-            changed = true;
-        }
-        if widgets::param_control(ui, "END", &mut end_offset, ParamMode::Free, ctrl).0 {
-            if end_offset <= start_offset {
-                end_offset = (start_offset + 0.01).min(1.0);
-            }
-            changed = true;
-        }
-    });
-
-    // ── Sliders row 3: gate + stutter ────────────────────────────────────────
-    ui.horizontal(|ui| {
-        if widgets::param_control(ui, "GATE", &mut gate, ParamMode::Free, ctrl).0 {
-            changed = true;
-        }
-        let mut stutter_norm = stutter as f32 / 4.0;
-        if widgets::param_control(ui, "STUTTER", &mut stutter_norm, ParamMode::Free, ctrl).0 {
-            stutter = (stutter_norm * 4.0).round().clamp(0.0, 4.0) as u8;
-            changed = true;
-        }
-    });
-
-    // ── BPM stretch row ──────────────────────────────────────────────────────
-    // SRC BPM is the sample's original tempo; STRETCH toggles resample-based
-    // tempo matching to sequencer.bpm (non-pitch-preserving, classic
-    // drumbreak treatment — the sample pitches up/down to match).
-    ui.horizontal(|ui| {
-        ui.label(
-            egui::RichText::new("SRC BPM")
-                .monospace()
-                .size(7.5)
-                .color(theme::SMOKE),
-        );
-        let mut v = source_bpm;
-        if ui
-            .add(egui::DragValue::new(&mut v).range(40.0..=300.0).speed(0.5))
-            .changed()
-        {
-            source_bpm = v;
-            changed = true;
-        }
-        if widgets::toggle_button(
-            ui,
-            if bpm_stretch { "STRETCH" } else { "FREE" },
-            &mut bpm_stretch,
-        ) {
-            changed = true;
-        }
+        widgets::glass_group_fill(ui, gw, gw, |ui| {
+            ui.horizontal(|ui| {
+                if widgets::param_control(ui, "VOLUME", &mut vol, ParamMode::Free, ctrl).0 {
+                    changed = true;
+                }
+                let mut pitch_norm = (pitch + 24.0) / 48.0;
+                if widgets::param_control(ui, "PITCH", &mut pitch_norm, ParamMode::Free, ctrl).0 {
+                    pitch = pitch_norm * 48.0 - 24.0;
+                    changed = true;
+                }
+            });
+        });
+        widgets::glass_group_fill(ui, gw, gw, |ui| {
+            ui.horizontal(|ui| {
+                if widgets::param_control(ui, "START", &mut start_offset, ParamMode::Free, ctrl).0 {
+                    if start_offset >= end_offset {
+                        start_offset = (end_offset - 0.01).max(0.0);
+                    }
+                    changed = true;
+                }
+                if widgets::param_control(ui, "END", &mut end_offset, ParamMode::Free, ctrl).0 {
+                    if end_offset <= start_offset {
+                        end_offset = (start_offset + 0.01).min(1.0);
+                    }
+                    changed = true;
+                }
+            });
+        });
+        widgets::glass_group_fill(ui, gw, gw, |ui| {
+            ui.horizontal(|ui| {
+                if widgets::param_control(ui, "GATE", &mut gate, ParamMode::Free, ctrl).0 {
+                    changed = true;
+                }
+                let mut stutter_norm = stutter as f32 / 4.0;
+                if widgets::param_control(ui, "STUTTER", &mut stutter_norm, ParamMode::Free, ctrl).0
+                {
+                    stutter = (stutter_norm * 4.0).round().clamp(0.0, 4.0) as u8;
+                    changed = true;
+                }
+            });
+        });
     });
 
     if changed {

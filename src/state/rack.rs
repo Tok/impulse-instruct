@@ -194,7 +194,7 @@ impl ModuleKind {
             Self::DrumKit909 => (4, 3),
             Self::HooverLead => (4, 2),
             Self::An1xVoice => (6, 6),
-            Self::AmenSampler => (3, 1),
+            Self::AmenSampler => (3, 2),
             Self::NoiseVoice => (2, 1),
             Self::GranularTexture => (3, 1),
             Self::LlmAgent => (3, 2),

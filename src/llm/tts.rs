@@ -49,29 +49,61 @@ pub fn speak_neutts(text: &str, tts: &TtsModuleState, tts_tx: &Arc<Mutex<Produce
             .send_json(&payload)
         {
             Ok(resp) => resp,
+            Err(ureq::Error::Status(code, resp)) => {
+                let body = resp.into_string().unwrap_or_default();
+                log::warn!(
+                    "NeuTTS /synthesize returned {} — voice_ref may be missing or invalid. Body: {}",
+                    code,
+                    body.chars().take(200).collect::<String>()
+                );
+                return;
+            }
             Err(e) => {
-                log::debug!("NeuTTS server unreachable: {}", e);
+                log::warn!("NeuTTS server unreachable: {}", e);
                 return;
             }
         };
 
         // Read WAV bytes from response body.
         let mut wav_bytes = Vec::new();
-        if client.into_reader().read_to_end(&mut wav_bytes).is_err() {
+        if let Err(e) = client.into_reader().read_to_end(&mut wav_bytes) {
+            log::warn!("NeuTTS: failed to read response body: {}", e);
+            return;
+        }
+        if wav_bytes.is_empty() {
+            log::warn!("NeuTTS: server returned empty body");
             return;
         }
 
         if let Some(mut samples) = read_wav_f32_bytes(&wav_bytes) {
+            if samples.is_empty() {
+                log::warn!("NeuTTS: returned WAV decoded to zero samples");
+                return;
+            }
             if pitch_snap && let Some(hz) = detect_pitch_hz(&samples, 44100.0) {
                 let detected_midi = (12.0 * (hz / 440.0).log2() + 69.0).round() as u8;
                 let snapped_midi = crate::state::snap_to_scale(detected_midi, root_note, scale);
                 let shift = snapped_midi as f32 - detected_midi as f32;
                 samples = resample_pitch_shift(&samples, shift);
             }
+            let sample_count = samples.len();
             let mut tx = tts_tx.lock();
+            let mut pushed = 0usize;
             for s in &samples {
-                let _ = tx.push(*s);
+                if tx.push(*s).is_ok() {
+                    pushed += 1;
+                }
             }
+            log::info!(
+                "NeuTTS: pushed {}/{} samples to ring buffer",
+                pushed,
+                sample_count
+            );
+        } else {
+            log::warn!(
+                "NeuTTS: failed to decode WAV response ({} bytes)",
+                wav_bytes.len()
+            );
         }
     });
 }
