@@ -325,23 +325,53 @@ pub fn draw_tts(app: &mut ImpulseApp, ui: &mut egui::Ui, module_id: u32) {
         .data(|d| d.get_temp::<String>(mem_id))
         .unwrap_or_default();
     let mut input_changed = false;
+    // Resolve controller now so the empty-SAY fallback can prompt it.
+    let controller_for_say = controlling_agent(app, module_id);
     ui.horizontal(|ui| {
         let resp = ui.add(
             egui::TextEdit::singleline(&mut line)
-                .hint_text("type something to speak…")
+                .hint_text("speak this… (empty + SAY = improvise)")
                 .desired_width(ui.available_width() - 36.0)
                 .font(egui::FontId::monospace(8.0)),
         );
         input_changed = resp.changed() || resp.lost_focus();
-        let send =
-            resp.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) && !line.is_empty();
+        let enter_pressed = resp.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
         let clicked = ui
             .small_button(egui::RichText::new("SAY").monospace().size(7.5))
-            .on_hover_text("Synthesise this line immediately through NeuTTS")
-            .clicked()
-            && !line.is_empty();
-        if send || clicked {
+            .on_hover_text(
+                "With text: synthesise it immediately through NeuTTS.\n\
+                 Empty: ask the controlling agent to improvise something\n\
+                 that fits its persona (rhyme, shout, sung hook, bleep…).",
+            )
+            .clicked();
+        if (enter_pressed || clicked) && !line.is_empty() {
+            // Normal path — type a line, synthesise it.
             crate::llm::speak_neutts(&line, &tts_state, &app.tts_tx);
+        } else if clicked && line.is_empty() {
+            // Empty SAY → fall through to the controlling agent.  The
+            // prompt leaves the form open ("rhyme / sung hook / shout /
+            // bleep") so personas like ROBOT can pick bleep-bloop and a
+            // jump-up MC can pick a rave shout.  Themes from the active
+            // style land alongside so the line stays in character.
+            if let Some((agent_id, _persona)) = controller_for_say.as_ref() {
+                let themes = active_style_themes(app);
+                let theme_hint = if themes.is_empty() {
+                    String::new()
+                } else {
+                    format!(" Themes: {}.", themes.join(", "))
+                };
+                let prompt = format!(
+                    "Improvise one short line that fits YOUR persona — a rhyme, \
+                     a shout, a sung hook, a robotic bleep-bloop, whatever is \
+                     most in character.  One line only, peak-time energy.{}",
+                    theme_hint
+                );
+                let _ = app.llm_tx.try_send(LlmInput::Infer {
+                    prompt,
+                    one_shot: true,
+                    agent_id: Some(*agent_id),
+                });
+            }
         }
     });
     if input_changed {
