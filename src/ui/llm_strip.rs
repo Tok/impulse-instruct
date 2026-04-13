@@ -210,6 +210,43 @@ pub(super) fn colorize_log(text: &str, _default_color: egui::Color32) -> egui::t
                             pos += 1;
                             continue;
                         }
+                        // Ignore-list: if the bare letter is the target of a
+                        // non-musical label like "Kit A" / "Kit B", skip the
+                        // Huth coloring.  The letter is technically a valid
+                        // note name but in this context it's just an ID.
+                        //
+                        // The preceding character is already known to be a
+                        // word-boundary (safe_before), so look back past it
+                        // to find the previous word.
+                        const IGNORE_PRECEDING_WORDS: &[&[u8]] = &[
+                            b"kit",  // "Kit A", "Kit B"
+                            b"pad",  // "Pad A", "Pad B" (future-proofing)
+                            b"part", // "Part A", "Part B"
+                            b"bank", // "Bank A", "Bank B"
+                            b"slot", // "Slot A", "Slot B"
+                        ];
+                        let mut ws = pos.saturating_sub(1); // pos-1 is the word-boundary char
+                        while ws > 0 && matches!(bytes[ws], b' ' | b'\t') {
+                            ws -= 1;
+                        }
+                        // ws now points at the last char of the preceding word (or is 0).
+                        let word_end = ws + 1;
+                        let mut word_start = word_end;
+                        while word_start > 0 && bytes[word_start - 1].is_ascii_alphabetic() {
+                            word_start -= 1;
+                        }
+                        let prev_word = &bytes[word_start..word_end];
+                        let skip = IGNORE_PRECEDING_WORDS.iter().any(|ign| {
+                            prev_word.len() == ign.len()
+                                && prev_word
+                                    .iter()
+                                    .zip(*ign)
+                                    .all(|(a, b)| a.to_ascii_lowercase() == *b)
+                        });
+                        if skip {
+                            pos += 1;
+                            continue;
+                        }
                         // Extend span to cover "A minor", "G major", etc.
                         if next_char == b' ' && j < len {
                             const QUALITIES: &[&[u8]] = &[
@@ -876,6 +913,29 @@ mod tests {
     #[test]
     fn e_flat_not_colored() {
         assert!(!has_note_color("E-flat"), "E in E-flat must not be colored");
+    }
+
+    #[test]
+    fn kit_a_b_not_colored() {
+        // "Kit A" / "Kit B" are non-musical module IDs — the A/B must
+        // stay uncolored even though they're valid note letters.
+        assert!(
+            !has_note_color("added Kit A to the rack"),
+            "Kit A — the A must not be colored"
+        );
+        assert!(
+            !has_note_color("Kit B snare on 4"),
+            "Kit B — the B must not be colored"
+        );
+        // Case insensitivity.
+        assert!(
+            !has_note_color("kit a hihat rolls"),
+            "kit a (lowercase) — a must not be colored"
+        );
+        // Other ignore-words.
+        assert!(!has_note_color("Pad A layered"));
+        assert!(!has_note_color("Bank B active"));
+        assert!(!has_note_color("Slot F loaded"));
     }
 
     #[test]
