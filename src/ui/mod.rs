@@ -112,11 +112,11 @@ use undo::StateHistory;
 pub struct ImpulseApp {
     state: Arc<RwLock<AppState>>,
     audio_tx: rtrb::Producer<AudioCommand>,
+    pub(crate) tts_tx: std::sync::Arc<parking_lot::Mutex<rtrb::Producer<f32>>>,
     scope_rx: rtrb::Consumer<f32>,
     scope_buf: Vec<f32>,
     scope_history: std::collections::VecDeque<Vec<f32>>,
-    /// For smooth event stream: last observed current_step + time it changed.
-    last_seq_step: usize,
+    last_seq_step: usize, // for smooth event stream
     session_start: std::time::Instant,
     last_step_time: f64,
     capture_rx: rtrb::Consumer<f32>,
@@ -126,9 +126,7 @@ pub struct ImpulseApp {
     audio_analysis: Option<crate::audio::analysis::AudioAnalysis>,
     /// Last time we ran auto-analysis (seconds since epoch, from ctx.input.time).
     last_analysis_time: f64,
-    /// True when the most-recently-sent prompt came from the Listen button —
-    /// used to label the LLM response as "LISTEN →" in the log.
-    listen_pending: bool,
+    listen_pending: bool, // LISTEN button flag — labels next LLM resp "LISTEN →"
     llm_tx: Sender<LlmInput>,
     llm_rx: Receiver<LlmOutput>,
     midi_rx: Receiver<MidiEvent>,
@@ -215,6 +213,7 @@ pub struct AudioChannels {
     pub capture_rx: rtrb::Consumer<f32>,
     pub dsp_load_rx: rtrb::Consumer<f32>,
     pub stereo_rx: rtrb::Consumer<f32>,
+    pub tts_tx: std::sync::Arc<parking_lot::Mutex<rtrb::Producer<f32>>>,
 }
 
 impl ImpulseApp {
@@ -282,6 +281,7 @@ impl ImpulseApp {
         Self {
             state,
             audio_tx: audio.params_tx,
+            tts_tx: audio.tts_tx,
             scope_rx: audio.scope_rx,
             scope_buf: Vec::new(),
             scope_history: std::collections::VecDeque::with_capacity(12),
