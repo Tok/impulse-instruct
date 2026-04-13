@@ -170,17 +170,22 @@ pub fn draw_an1x(app: &mut ImpulseApp, ui: &mut Ui) {
                     .monospace()
                     .size(7.0),
             );
-            ui.add_space(4.0);
-            if widgets::adsr_display(ui, &mut a, &mut d, &mut s, &mut r, 280.0, 100.0) {
-                let mut st = app.state.write();
-                st.an1x.filter_attack = a;
-                st.an1x.filter_decay = d;
-                st.an1x.filter_sustain = s;
-                st.an1x.filter_release = r;
-                drop(st);
-                app.push_audio_params();
-            }
-            ui.add_space(4.0);
+            // Wrap the ADSR display in a padded frame so it has visible
+            // breathing room instead of butting up against the F.ENV
+            // label and the separator.
+            egui::Frame::none()
+                .inner_margin(egui::Margin::symmetric(8.0, 6.0))
+                .show(ui, |ui| {
+                    if widgets::adsr_display(ui, &mut a, &mut d, &mut s, &mut r, 280.0, 100.0) {
+                        let mut st = app.state.write();
+                        st.an1x.filter_attack = a;
+                        st.an1x.filter_decay = d;
+                        st.an1x.filter_sustain = s;
+                        st.an1x.filter_release = r;
+                        drop(st);
+                        app.push_audio_params();
+                    }
+                });
         }
         ui.separator();
         {
@@ -199,17 +204,20 @@ pub fn draw_an1x(app: &mut ImpulseApp, ui: &mut Ui) {
                     .monospace()
                     .size(7.0),
             );
-            ui.add_space(4.0);
-            if widgets::adsr_display(ui, &mut a, &mut d, &mut s, &mut r, 280.0, 100.0) {
-                let mut st = app.state.write();
-                st.an1x.amp_attack = a;
-                st.an1x.amp_decay = d;
-                st.an1x.amp_sustain = s;
-                st.an1x.amp_release = r;
-                drop(st);
-                app.push_audio_params();
-            }
-            ui.add_space(4.0);
+            // Matching padding to the F.ENV block above.
+            egui::Frame::none()
+                .inner_margin(egui::Margin::symmetric(8.0, 6.0))
+                .show(ui, |ui| {
+                    if widgets::adsr_display(ui, &mut a, &mut d, &mut s, &mut r, 280.0, 100.0) {
+                        let mut st = app.state.write();
+                        st.an1x.amp_attack = a;
+                        st.an1x.amp_decay = d;
+                        st.an1x.amp_sustain = s;
+                        st.an1x.amp_release = r;
+                        drop(st);
+                        app.push_audio_params();
+                    }
+                });
         }
     });
 

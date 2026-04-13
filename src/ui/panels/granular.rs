@@ -167,8 +167,11 @@ pub fn draw_granular(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         app.granular_tap[h] = s;
         app.granular_tap_head = (h + 1) % tap_len;
     }
+    // Bigger waveform strip (66 px — matches the amen panel) so the
+    // ring buffer is actually legible.  Same dark-rect styling +
+    // 0.5 stroke so the look is consistent with the amen display.
     let (rect, _) = ui.allocate_exact_size(
-        egui::vec2(ui.available_width().min(260.0), 28.0),
+        egui::vec2(ui.available_width().min(260.0), 66.0),
         egui::Sense::hover(),
     );
     let painter = ui.painter_at(rect);

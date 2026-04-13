@@ -24,6 +24,7 @@ pub mod piano;
 pub mod sequencer;
 pub mod sequencer_chain;
 pub(super) mod sequencer_drums;
+pub(super) mod sequencer_preecho;
 pub mod spectrum;
 pub mod stereo_meter;
 pub mod timeline;

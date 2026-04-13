@@ -721,14 +721,13 @@ pub fn draw_amen(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         });
     });
 
-    // Push the knob row down so it's glued to the bottom of the panel
-    // regardless of whether the waveform / slice-wheel section ended up
-    // with spare vertical room.  Estimate the knob row's own height
-    // (~40 px including the glass-pane padding) and eat the remaining
-    // available height above it.
-    let knob_row_h = 40.0_f32;
-    let spacer = (ui.available_height() - knob_row_h).max(0.0);
-    ui.add_space(spacer);
+    // Earlier attempt to "glue" this row to the bottom via
+    // add_space(available - knob_h) half-overflowed the panel because
+    // glass_group_fill's own inner margin (+16 px) pushed the panes
+    // past the module edge.  Drop the spacer and let the row fall
+    // naturally below the wheel + waveform section.  If the panel has
+    // headroom above, it lives above; we accept that trade for
+    // panes-that-don't-clip.
 
     // ── Knob row — three glass-pane groups on one line ──────────────────────
     // LEVEL (vol/pitch) · REGION (start/end) · SHAPE (gate/stutter).

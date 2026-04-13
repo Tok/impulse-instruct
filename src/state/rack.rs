@@ -196,7 +196,7 @@ impl ModuleKind {
             Self::An1xVoice => (6, 6),
             Self::AmenSampler => (3, 3),
             Self::NoiseVoice => (2, 1),
-            Self::GranularTexture => (3, 1),
+            Self::GranularTexture => (3, 2),
             Self::LlmAgent => (3, 2),
             Self::NeuTts => (2, 3),
             Self::SpectrumAnalyzer => (4, 2),

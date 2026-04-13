@@ -934,4 +934,10 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             time_sig_num,
         );
     });
+
+    // ── Pre-echo (anchor lead-ins) ──────────────────────────────────────────
+    // Compact row exposing the voice pre-echo configs from the sequencer
+    // panel so they're controllable without asking the LLM.  Full
+    // semantics documented in src/sequencer/preecho.rs.
+    super::sequencer_preecho::draw_preecho_row(app, ui);
 }
