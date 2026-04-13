@@ -52,7 +52,9 @@ pub fn apply_llm_update(state: AppState, update: &serde_json::Value, scope: &[St
     let an1x_ok = seq_scope || in_scope("an1x");
     let kit_a_ok = seq_scope || in_scope("kit_a");
     let kit_b_ok = seq_scope || in_scope("kit_b");
-    let any_seq_scope = seq_scope || bass_ok || hoover_ok || an1x_ok || kit_a_ok || kit_b_ok;
+    let amen_ok = seq_scope || in_scope("amen");
+    let any_seq_scope =
+        seq_scope || bass_ok || hoover_ok || an1x_ok || kit_a_ok || kit_b_ok || amen_ok;
     if any_seq_scope && let Some(seq) = update.get("sequencer").and_then(|v| v.as_object()) {
         // ── Global fields — require explicit "sequencer" scope ───────
         if seq_scope {
@@ -222,6 +224,39 @@ pub fn apply_llm_update(state: AppState, update: &serde_json::Value, scope: &[St
                             step.velocity = default_vel;
                         }
                     });
+                }
+            }
+        }
+
+        // ── Amen sampler step pattern + per-step slice indices ──────────────
+        // JSON: { "sequencer": { "amen_steps": [0,4,8,12],
+        //                        "amen_slices": [1,3,2,5] } }
+        // amen_steps is the standard step-array format (same as kick_a_steps).
+        // amen_slices is an optional parallel array: one slice index per step
+        //   where 0 = auto-advance, 1..=slice_count = explicit slice.
+        //   Length can match amen_steps or be per-step across all 32 steps.
+        if amen_ok
+            && !locked.contains("sequencer.amen_steps")
+            && let Some(arr) = seq.get("amen_steps").and_then(|v| v.as_array())
+        {
+            let arr: Vec<_> = arr.clone();
+            if let Some(pattern) = s.sequencer.drum_patterns.get_mut(&DrumVoice::Amen) {
+                apply_llm_step_array(&arr, pattern, MAX_STEPS, |step, active| {
+                    step.active = active;
+                    if active && step.velocity == 0.0 {
+                        step.velocity = 1.0;
+                    }
+                });
+            }
+        }
+        if amen_ok
+            && !locked.contains("sequencer.amen_slices")
+            && let Some(arr) = seq.get("amen_slices").and_then(|v| v.as_array())
+            && let Some(pattern) = s.sequencer.drum_patterns.get_mut(&DrumVoice::Amen)
+        {
+            for (i, val) in arr.iter().enumerate().take(pattern.len()) {
+                if let Some(n) = val.as_u64() {
+                    pattern[i].slice = (n as u8).min(16);
                 }
             }
         }
@@ -518,6 +553,58 @@ pub fn apply_llm_update(state: AppState, update: &serde_json::Value, scope: &[St
         && let Some(a) = update.get("an1x").and_then(|v| v.as_object())
     {
         apply_an1x_update(&mut s, a, locked);
+    }
+
+    // ── Amen sampler params (pitch, volume, loop, slice settings) ───────────
+    // JSON: { "amen": { "slice_count": 8, "gate": 0.85, "reverse": false,
+    //                   "stutter": 0, "start_offset": 0.0, "end_offset": 1.0,
+    //                   "loop_mode": true, "pitch": 0, "volume": 0.75 } }
+    if in_scope("amen")
+        && let Some(a) = update.get("amen").and_then(|v| v.as_object())
+    {
+        s.amen.pitch =
+            unlocked_f32(s.amen.pitch, a, "pitch", "amen.pitch", locked).clamp(-24.0, 24.0);
+        s.amen.volume = unlocked_f32(s.amen.volume, a, "volume", "amen.volume", locked);
+        if let Some(v) = a.get("loop_mode").and_then(|v| v.as_bool())
+            && !locked.contains("amen.loop_mode")
+        {
+            s.amen.loop_mode = v;
+        }
+        if let Some(v) = a.get("slice_count").and_then(|v| v.as_u64())
+            && !locked.contains("amen.slice_count")
+        {
+            s.amen.slice_count = (v as u8).clamp(1, 16);
+        }
+        s.amen.start_offset = unlocked_f32(
+            s.amen.start_offset,
+            a,
+            "start_offset",
+            "amen.start_offset",
+            locked,
+        )
+        .clamp(0.0, 1.0);
+        s.amen.end_offset = unlocked_f32(
+            s.amen.end_offset,
+            a,
+            "end_offset",
+            "amen.end_offset",
+            locked,
+        )
+        .clamp(0.0, 1.0);
+        if s.amen.end_offset <= s.amen.start_offset {
+            s.amen.end_offset = (s.amen.start_offset + 0.01).min(1.0);
+        }
+        if let Some(v) = a.get("reverse").and_then(|v| v.as_bool())
+            && !locked.contains("amen.reverse")
+        {
+            s.amen.reverse = v;
+        }
+        s.amen.gate = unlocked_f32(s.amen.gate, a, "gate", "amen.gate", locked).clamp(0.05, 1.0);
+        if let Some(v) = a.get("stutter").and_then(|v| v.as_u64())
+            && !locked.contains("amen.stutter")
+        {
+            s.amen.stutter = (v as u8).min(4);
+        }
     }
 
     // ── Euclidean rhythm ──────────────────────────────────────────────────────

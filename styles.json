@@ -1267,6 +1267,13 @@
         "amp_sustain": 0.85,
         "amp_release": 0.5
       },
+      "amen": {
+        "slice_count": 8,
+        "loop_mode": true,
+        "gate": 0.85,
+        "reverse": false,
+        "stutter": 0
+      },
       "fx": {
         "reverb_mix": 0.12,
         "reverb_size": 0.45,
