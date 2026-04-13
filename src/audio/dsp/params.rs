@@ -309,6 +309,23 @@ pub struct AudioParams {
     /// Entries 0..amen_slice_count hold explicit start positions, in
     /// ascending order.  Max 16 slices (matches UI cap).
     pub amen_slice_positions: [f32; 16],
+    /// Per-slice pitch-shift in semitones (−24..+24, NaN sentinel in slot 0
+    /// = unused → all slices share the global amen_pitch).  Additive with
+    /// amen_pitch and BPM-stretch, applied at trigger time.
+    pub amen_slice_pitches: [f32; 16],
+    /// Per-slice volume multiplier (0..2, NaN sentinel in slot 0 = unused
+    /// → all slices share the global amen_volume).  Applied multiplicatively.
+    pub amen_slice_volumes: [f32; 16],
+    /// BPM the source sample was originally recorded at.  Used only when
+    /// amen_bpm_stretch is true.
+    pub amen_source_bpm: f32,
+    /// Stretch sample playback to match the host BPM (non-pitch-preserving —
+    /// the sample is resampled, which also shifts its pitch).  For classic
+    /// D&B drumbreak treatment, leave this on and accept the pitch shift.
+    pub amen_bpm_stretch: bool,
+    /// Host/sequencer BPM — mirror of s.sequencer.bpm.  Used by the amen
+    /// voice for tempo-matching; other voices sync via different paths.
+    pub sequencer_bpm: f32,
     // Rack presence — only trigger / process voices that are in the rack
     pub rack_bass: bool,
     pub rack_drums808: bool,
@@ -608,6 +625,23 @@ impl AudioParams {
                 }
                 arr
             },
+            amen_slice_pitches: {
+                let mut arr = [f32::NAN; 16];
+                for (i, p) in s.amen.slice_pitches.iter().take(16).enumerate() {
+                    arr[i] = p.clamp(-24.0, 24.0);
+                }
+                arr
+            },
+            amen_slice_volumes: {
+                let mut arr = [f32::NAN; 16];
+                for (i, v) in s.amen.slice_volumes.iter().take(16).enumerate() {
+                    arr[i] = v.clamp(0.0, 2.0);
+                }
+                arr
+            },
+            amen_source_bpm: s.amen.source_bpm.clamp(40.0, 300.0),
+            amen_bpm_stretch: s.amen.bpm_stretch,
+            sequencer_bpm: s.sequencer.bpm,
             rack_bass: s
                 .rack
                 .modules

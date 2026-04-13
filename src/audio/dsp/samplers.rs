@@ -32,6 +32,13 @@ pub(super) struct AmenVoice {
     stutter_left: u8,
     /// Auto-advance counter for slice-index 0 ("pick next slice").
     auto_slice: u8,
+    /// Additional pitch offset in semitones applied on top of the caller's
+    /// pitch_semitones — set at trigger time from per-slice overrides
+    /// and/or BPM stretch.
+    extra_pitch: f32,
+    /// Volume multiplier for the current slice — set at trigger from per-
+    /// slice overrides (default 1.0).
+    slice_volume: f32,
     playing: bool,
 }
 
@@ -46,6 +53,8 @@ impl AmenVoice {
             direction: 1.0,
             stutter_left: 0,
             auto_slice: 0,
+            extra_pitch: 0.0,
+            slice_volume: 1.0,
             playing: false,
         }
     }
@@ -77,6 +86,11 @@ impl AmenVoice {
         gate: f32,
         stutter: u8,
         slice_positions: &[f32; 16],
+        slice_pitches: &[f32; 16],
+        slice_volumes: &[f32; 16],
+        bpm_stretch: bool,
+        source_bpm: f32,
+        sequencer_bpm: f32,
     ) {
         let Some(samples) = self.samples.as_ref() else {
             return;
@@ -133,6 +147,29 @@ impl AmenVoice {
             self.gate_end = sstart + slice_len * gate_frac;
         }
         self.stutter_left = stutter;
+
+        // Compute extra pitch from BPM stretch + per-slice override.
+        let mut extra = 0.0_f32;
+        if bpm_stretch && source_bpm > 1.0 && sequencer_bpm > 1.0 {
+            // rate = host/source → pitch shift in semitones = 12 * log2(rate)
+            extra += 12.0 * (sequencer_bpm / source_bpm).log2();
+        }
+        if !slice_pitches[0].is_nan()
+            && let Some(&sp) = slice_pitches.get(idx0 as usize)
+            && !sp.is_nan()
+        {
+            extra += sp;
+        }
+        self.extra_pitch = extra;
+        self.slice_volume = if !slice_volumes[0].is_nan() {
+            slice_volumes
+                .get(idx0 as usize)
+                .copied()
+                .filter(|v| !v.is_nan())
+                .unwrap_or(1.0)
+        } else {
+            1.0
+        };
         self.playing = true;
     }
 
@@ -141,7 +178,10 @@ impl AmenVoice {
     /// and for tests).  Preserved for backward compatibility.
     #[allow(dead_code)]
     pub(super) fn trigger_whole(&mut self) {
-        self.trigger(1, 1, 0.0, 1.0, false, 1.0, 0, &[f32::NAN; 16]);
+        let nan16 = [f32::NAN; 16];
+        self.trigger(
+            1, 1, 0.0, 1.0, false, 1.0, 0, &nan16, &nan16, &nan16, false, 136.0, 170.0,
+        );
     }
 
     /// Render one sample. `pitch_semitones` shifts playback speed (±24 st);
@@ -156,7 +196,7 @@ impl AmenVoice {
         if !self.playing {
             return 0.0;
         }
-        let rate = 2.0_f32.powf(pitch_semitones / 12.0) * self.direction;
+        let rate = 2.0_f32.powf((pitch_semitones + self.extra_pitch) / 12.0) * self.direction;
 
         // Gate / end-of-slice handling.
         let forward = self.direction > 0.0;
@@ -193,7 +233,7 @@ impl AmenVoice {
         let frac = self.pos - idx as f32;
         let out = samples[idx] + (samples[idx + 1] - samples[idx]) * frac;
         self.pos += rate;
-        out * volume
+        out * volume * self.slice_volume
     }
 }
 

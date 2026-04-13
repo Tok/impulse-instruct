@@ -48,6 +48,28 @@ pub struct AmenState {
     /// button) or, later, manual marker editing.
     #[serde(default)]
     pub slice_positions: Vec<f32>,
+    /// Per-slice pitch offset in semitones (−24..+24).  Empty = all slices
+    /// share the global `pitch`.  When populated, entry N overrides the
+    /// pitch for slice N.  Stacks on top of `pitch` and BPM stretch.
+    #[serde(default)]
+    pub slice_pitches: Vec<f32>,
+    /// Per-slice volume multiplier (0..2).  Empty = all slices share the
+    /// global `volume`.  When populated, entry N scales the output of
+    /// slice N multiplicatively.
+    #[serde(default)]
+    pub slice_volumes: Vec<f32>,
+    /// The BPM the loaded sample was originally recorded at.  Only used
+    /// when `bpm_stretch` is true.  Default is 136 (classic Amen Brother
+    /// tempo) — change per-sample in the UI or via the API.
+    #[serde(default = "default_source_bpm")]
+    pub source_bpm: f32,
+    /// Stretch sample playback to match the current sequencer BPM.  Simple
+    /// resample-based stretch, which also shifts pitch — that's the
+    /// classic jump-up drumbreak treatment.  Pitch-preserving stretch
+    /// (phase vocoder / granular) could be a follow-up; this covers the
+    /// 90% use case.
+    #[serde(default)]
+    pub bpm_stretch: bool,
     /// Cached metadata about the currently-loaded WAV (display-only).
     /// Not serialized — populated by the UI panel when a file is loaded.
     #[serde(skip)]
@@ -62,6 +84,9 @@ fn default_end_offset() -> f32 {
 }
 fn default_amen_gate() -> f32 {
     1.0
+}
+fn default_source_bpm() -> f32 {
+    136.0
 }
 
 /// Cached WAV header info for the currently-loaded sample.  Lives on
@@ -94,6 +119,10 @@ impl Default for AmenState {
             gate: default_amen_gate(),
             stutter: 0,
             slice_positions: Vec::new(),
+            slice_pitches: Vec::new(),
+            slice_volumes: Vec::new(),
+            source_bpm: default_source_bpm(),
+            bpm_stretch: false,
             meta: None,
         }
     }

@@ -361,6 +361,8 @@ pub fn draw_amen(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         mut reverse,
         mut gate,
         mut stutter,
+        mut source_bpm,
+        mut bpm_stretch,
         meta,
     ) = {
         let s = app.state.read();
@@ -374,6 +376,8 @@ pub fn draw_amen(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             s.amen.reverse,
             s.amen.gate,
             s.amen.stutter,
+            s.amen.source_bpm,
+            s.amen.bpm_stretch,
             s.amen.meta.clone(),
         )
     };
@@ -637,6 +641,34 @@ pub fn draw_amen(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         }
     });
 
+    // ── BPM stretch row ──────────────────────────────────────────────────────
+    // SRC BPM is the sample's original tempo; STRETCH toggles resample-based
+    // tempo matching to sequencer.bpm (non-pitch-preserving, classic
+    // drumbreak treatment — the sample pitches up/down to match).
+    ui.horizontal(|ui| {
+        ui.label(
+            egui::RichText::new("SRC BPM")
+                .monospace()
+                .size(7.5)
+                .color(theme::SMOKE),
+        );
+        let mut v = source_bpm;
+        if ui
+            .add(egui::DragValue::new(&mut v).range(40.0..=300.0).speed(0.5))
+            .changed()
+        {
+            source_bpm = v;
+            changed = true;
+        }
+        if widgets::toggle_button(
+            ui,
+            if bpm_stretch { "STRETCH" } else { "FREE" },
+            &mut bpm_stretch,
+        ) {
+            changed = true;
+        }
+    });
+
     if changed {
         let mut s = app.state.write();
         s.amen.volume = vol;
@@ -648,6 +680,8 @@ pub fn draw_amen(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         s.amen.reverse = reverse;
         s.amen.gate = gate.clamp(0.05, 1.0);
         s.amen.stutter = stutter.min(4);
+        s.amen.source_bpm = source_bpm.clamp(40.0, 300.0);
+        s.amen.bpm_stretch = bpm_stretch;
         drop(s);
         app.push_audio_params();
     }

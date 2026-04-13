@@ -338,6 +338,11 @@ impl DspState {
                         self.params.amen_gate,
                         self.params.amen_stutter,
                         &self.params.amen_slice_positions,
+                        &self.params.amen_slice_pitches,
+                        &self.params.amen_slice_volumes,
+                        self.params.amen_bpm_stretch,
+                        self.params.amen_source_bpm,
+                        self.params.sequencer_bpm,
                     ),
                 }
             }

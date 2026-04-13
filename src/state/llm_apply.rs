@@ -605,6 +605,49 @@ pub fn apply_llm_update(state: AppState, update: &serde_json::Value, scope: &[St
         {
             s.amen.stutter = (v as u8).min(4);
         }
+        s.amen.source_bpm = unlocked_f32(
+            s.amen.source_bpm,
+            a,
+            "source_bpm",
+            "amen.source_bpm",
+            locked,
+        )
+        .clamp(40.0, 300.0);
+        if let Some(v) = a.get("bpm_stretch").and_then(|v| v.as_bool())
+            && !locked.contains("amen.bpm_stretch")
+        {
+            s.amen.bpm_stretch = v;
+        }
+        // Per-slice pitch array: either an array of semitone offsets or
+        // clears via empty array / null.
+        if !locked.contains("amen.slice_pitches")
+            && let Some(v) = a.get("slice_pitches")
+        {
+            if let Some(arr) = v.as_array() {
+                s.amen.slice_pitches = arr
+                    .iter()
+                    .filter_map(|x| x.as_f64())
+                    .map(|x| (x as f32).clamp(-24.0, 24.0))
+                    .take(16)
+                    .collect();
+            } else if v.is_null() {
+                s.amen.slice_pitches.clear();
+            }
+        }
+        if !locked.contains("amen.slice_volumes")
+            && let Some(v) = a.get("slice_volumes")
+        {
+            if let Some(arr) = v.as_array() {
+                s.amen.slice_volumes = arr
+                    .iter()
+                    .filter_map(|x| x.as_f64())
+                    .map(|x| (x as f32).clamp(0.0, 2.0))
+                    .take(16)
+                    .collect();
+            } else if v.is_null() {
+                s.amen.slice_volumes.clear();
+            }
+        }
     }
 
     // ── Euclidean rhythm ──────────────────────────────────────────────────────
