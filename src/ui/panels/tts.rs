@@ -468,9 +468,26 @@ pub fn draw_tts(app: &mut ImpulseApp, ui: &mut egui::Ui, module_id: u32) {
     ui.add_space(2.0);
     widgets::section_header(ui, "Synth");
 
+    // Fixed label column width so the value widgets below align into a
+    // tidy vertical stack.  Eyeballed at 84px — wide enough for the
+    // longest label ("TEMPERATURE") at 8pt monospace.
+    let label_w: f32 = 84.0;
+    let labelled_row = |ui: &mut egui::Ui, text: &str, body: &mut dyn FnMut(&mut egui::Ui)| {
+        ui.horizontal(|ui| {
+            let (rect, _) = ui.allocate_exact_size(egui::vec2(label_w, 14.0), egui::Sense::hover());
+            ui.painter().text(
+                rect.left_center(),
+                egui::Align2::LEFT_CENTER,
+                text,
+                egui::FontId::monospace(8.0),
+                theme::SMOKE,
+            );
+            body(ui);
+        });
+    };
+
     // ── Temperature ─────────────────────────────────────────────────────────
-    ui.horizontal(|ui| {
-        ui.label(small_label("TEMP"));
+    labelled_row(ui, "TEMPERATURE", &mut |ui| {
         let mut v = temperature;
         if ui
             .add(egui::DragValue::new(&mut v).range(0.1..=2.0).speed(0.01))
@@ -481,8 +498,7 @@ pub fn draw_tts(app: &mut ImpulseApp, ui: &mut egui::Ui, module_id: u32) {
     });
 
     // ── Top-K ───────────────────────────────────────────────────────────────
-    ui.horizontal(|ui| {
-        ui.label(small_label("TOP-K"));
+    labelled_row(ui, "TOP-K", &mut |ui| {
         let mut v = top_k as i32;
         if ui
             .add(egui::DragValue::new(&mut v).range(1..=200).speed(1))
@@ -494,8 +510,7 @@ pub fn draw_tts(app: &mut ImpulseApp, ui: &mut egui::Ui, module_id: u32) {
     });
 
     // ── Top-P ───────────────────────────────────────────────────────────────
-    ui.horizontal(|ui| {
-        ui.label(small_label("TOP-P"));
+    labelled_row(ui, "TOP-P", &mut |ui| {
         let mut v = top_p;
         if ui
             .add(egui::DragValue::new(&mut v).range(0.1..=1.0).speed(0.01))
@@ -508,9 +523,8 @@ pub fn draw_tts(app: &mut ImpulseApp, ui: &mut egui::Ui, module_id: u32) {
     ui.add_space(3.0);
     widgets::section_header(ui, "FX");
 
-    // ── Pitch snap ──────────────────────────────────────────────────────────
-    ui.horizontal(|ui| {
-        ui.label(small_label("PITCH SNAP"));
+    // ── Pitch snap — same label-aligned row as the Synth controls ──────────
+    labelled_row(ui, "PITCH SNAP", &mut |ui| {
         let mut ps = pitch_snap;
         if widgets::toggle_button(ui, if ps { "ON" } else { "OFF" }, &mut ps) {
             with_tts(app, module_id, |t| t.pitch_snap = ps);
