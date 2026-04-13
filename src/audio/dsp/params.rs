@@ -304,6 +304,11 @@ pub struct AudioParams {
     pub amen_reverse: bool,
     pub amen_gate: f32,   // 0..1 of slice duration
     pub amen_stutter: u8, // extra retriggers per step
+    /// Custom slice start positions (normalized 0..1 of full sample).
+    /// Sentinel: NaN in slot [0] = unused, fall back to equal divisions.
+    /// Entries 0..amen_slice_count hold explicit start positions, in
+    /// ascending order.  Max 16 slices (matches UI cap).
+    pub amen_slice_positions: [f32; 16],
     // Rack presence — only trigger / process voices that are in the rack
     pub rack_bass: bool,
     pub rack_drums808: bool,
@@ -596,6 +601,13 @@ impl AudioParams {
             amen_reverse: s.amen.reverse,
             amen_gate: s.amen.gate.clamp(0.05, 1.0),
             amen_stutter: s.amen.stutter.min(4),
+            amen_slice_positions: {
+                let mut arr = [f32::NAN; 16];
+                for (i, p) in s.amen.slice_positions.iter().take(16).enumerate() {
+                    arr[i] = p.clamp(0.0, 1.0);
+                }
+                arr
+            },
             rack_bass: s
                 .rack
                 .modules

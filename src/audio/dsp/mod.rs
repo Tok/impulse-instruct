@@ -337,6 +337,7 @@ impl DspState {
                         self.params.amen_reverse,
                         self.params.amen_gate,
                         self.params.amen_stutter,
+                        &self.params.amen_slice_positions,
                     ),
                 }
             }

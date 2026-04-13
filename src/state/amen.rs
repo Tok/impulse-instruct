@@ -40,6 +40,14 @@ pub struct AmenState {
     /// 0 = play once.  1–4 = ratchet-for-samples.
     #[serde(default)]
     pub stutter: u8,
+    /// Manual slice start positions (normalized 0..1 of full sample).
+    /// Empty → slices are equal divisions of [start_offset, end_offset]
+    /// (the default and legacy behavior).  When populated, entry N is
+    /// the start of slice N; slice N ends at entry N+1 (or at end_offset
+    /// for the last entry).  Populated by transient detection (AUTO
+    /// button) or, later, manual marker editing.
+    #[serde(default)]
+    pub slice_positions: Vec<f32>,
     /// Cached metadata about the currently-loaded WAV (display-only).
     /// Not serialized — populated by the UI panel when a file is loaded.
     #[serde(skip)]
@@ -85,6 +93,7 @@ impl Default for AmenState {
             reverse: false,
             gate: default_amen_gate(),
             stutter: 0,
+            slice_positions: Vec::new(),
             meta: None,
         }
     }

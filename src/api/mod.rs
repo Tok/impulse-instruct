@@ -76,6 +76,18 @@ pub struct PresetRequest {
 }
 
 #[derive(Deserialize)]
+pub struct AmenRequest {
+    /// Explicit path to a WAV file (relative or absolute).  Use this when
+    /// you know which sample you want, e.g. for scripted demos.
+    #[serde(default)]
+    pub path: Option<String>,
+    /// When true, pick a random WAV from samples/amen/.  Ignored when
+    /// `path` is set.
+    #[serde(default)]
+    pub random: bool,
+}
+
+#[derive(Deserialize)]
 pub struct StyleRequest {
     /// Style id from styles.json (e.g. "drum_and_bass"), "__free__",
     /// "__custom__", or empty/null to clear the active style.
@@ -334,6 +346,44 @@ async fn post_collapse(
 /// style is not locked. This mirrors what the UI style dropdown does, giving
 /// demo scripts and external controllers a way to pin the style before
 /// inference so prior-session bleed can't override the user's intent.
+/// Load a sample into the AmenSampler — either a specific path or a random
+/// file from samples/amen/.  The API writes the path into AppState; the UI
+/// panel auto-detects the change on its next frame and handles the actual
+/// WAV decode + audio-thread push + waveform cache rebuild (the same code
+/// path the user-facing picker uses).
+async fn post_amen(
+    AxumState(api): AxumState<ApiState>,
+    Json(req): Json<AmenRequest>,
+) -> Json<OkResponse> {
+    let resolved: Option<String> = if let Some(p) = req.path.as_deref().filter(|s| !s.is_empty()) {
+        Some(p.to_string())
+    } else if req.random {
+        crate::ui::panels::amen::pick_random_sample()
+    } else {
+        None
+    };
+    match resolved {
+        Some(p) => {
+            api.app_state.write().amen.path = p.clone();
+            // Clear custom slice positions — they belonged to the previous
+            // sample and probably won't land on the new file's transients.
+            api.app_state.write().amen.slice_positions.clear();
+            api_log(&api, format!("[API] amen: loaded {}", p));
+            Json(OkResponse {
+                ok: true,
+                message: Some(format!("amen: {}", p)),
+            })
+        }
+        None => {
+            api_log(&api, "[API] amen: no sample resolved".to_string());
+            Json(OkResponse {
+                ok: false,
+                message: Some("no path and no samples found in samples/amen/".into()),
+            })
+        }
+    }
+}
+
 async fn post_style(
     AxumState(api): AxumState<ApiState>,
     Json(req): Json<StyleRequest>,
@@ -769,6 +819,7 @@ pub fn build_router(api_state: ApiState) -> Router {
         .route("/api/scroll", post(post_scroll))
         .route("/api/preset", post(post_preset))
         .route("/api/style", post(post_style))
+        .route("/api/amen", post(post_amen))
         .route("/api/flip", post(post_flip))
         .route("/api/rack/add", post(post_rack_add))
         .route("/api/rack/agent", post(post_rack_agent))

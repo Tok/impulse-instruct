@@ -66,6 +66,7 @@ impl AmenVoice {
     /// - `reverse` — play the slice from end to start.
     /// - `gate` — 0..1, fraction of the slice that actually plays.
     /// - `stutter` — extra retriggers of this same slice (0 = play once).
+    #[allow(clippy::too_many_arguments)]
     pub(super) fn trigger(
         &mut self,
         slice_idx: u8,
@@ -75,6 +76,7 @@ impl AmenVoice {
         reverse: bool,
         gate: f32,
         stutter: u8,
+        slice_positions: &[f32; 16],
     ) {
         let Some(samples) = self.samples.as_ref() else {
             return;
@@ -89,7 +91,7 @@ impl AmenVoice {
             .floor()
             .max(region_start + 1.0);
         let region_len = region_end - region_start;
-        let slice_len = region_len / slices as f32;
+        let slice_len_equal = region_len / slices as f32;
 
         // Resolve slice index.  slice_idx 0 means auto-advance.
         let idx0 = if slice_idx == 0 {
@@ -100,9 +102,25 @@ impl AmenVoice {
             (slice_idx - 1) % slices
         };
 
-        let sstart = region_start + idx0 as f32 * slice_len;
-        let send = sstart + slice_len;
+        // Use custom positions when they're populated (entry 0 is NaN
+        // sentinel for "unused").  Positions are normalized 0..1 of the
+        // full sample and must be in ascending order.
+        let use_custom = !slice_positions[0].is_nan();
+        let (sstart, send) = if use_custom {
+            let a = slice_positions[idx0 as usize];
+            let b_idx = (idx0 as usize + 1).min(15);
+            let b = if (idx0 as usize + 1) < slices as usize && !slice_positions[b_idx].is_nan() {
+                slice_positions[b_idx]
+            } else {
+                end_offset.clamp(0.0, 1.0)
+            };
+            (a * n, b * n)
+        } else {
+            let s0 = region_start + idx0 as f32 * slice_len_equal;
+            (s0, s0 + slice_len_equal)
+        };
         let gate_frac = gate.clamp(0.05, 1.0);
+        let slice_len = (send - sstart).max(1.0);
 
         self.slice_start = sstart;
         self.slice_end = send;
@@ -123,7 +141,7 @@ impl AmenVoice {
     /// and for tests).  Preserved for backward compatibility.
     #[allow(dead_code)]
     pub(super) fn trigger_whole(&mut self) {
-        self.trigger(1, 1, 0.0, 1.0, false, 1.0, 0);
+        self.trigger(1, 1, 0.0, 1.0, false, 1.0, 0, &[f32::NAN; 16]);
     }
 
     /// Render one sample. `pitch_semitones` shifts playback speed (±24 st);
