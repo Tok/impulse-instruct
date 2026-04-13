@@ -111,29 +111,9 @@ pub use rack::{
 pub use rack_presets::RACK_PRESETS;
 pub use rack_scope::{parse_module_kind, rack_kind_name_matches, scope_from_control_cables};
 
-// ─── Amen / WAV sampler voice state ──────────────────────────────────────────
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct AmenState {
-    /// Path to the WAV file to load (empty = no sample loaded).
-    pub path: String,
-    /// Playback pitch offset in semitones (-24 to +24). 0 = original pitch.
-    pub pitch: f32,
-    /// Output volume (0.0–1.0).
-    pub volume: f32,
-    /// When true, loops the sample; otherwise plays once per trigger.
-    pub loop_mode: bool,
-}
-
-impl Default for AmenState {
-    fn default() -> Self {
-        Self {
-            path: String::new(),
-            pitch: 0.0,
-            volume: 0.75,
-            loop_mode: false,
-        }
-    }
-}
+// Amen sampler state lives in its own module to keep LOC under the limit.
+pub use amen::{AmenMeta, AmenState};
+mod amen;
 
 // ─── Top-level ───────────────────────────────────────────────────────────────
 fn default_pattern_bank() -> Vec<SequencerState> {
@@ -419,6 +399,11 @@ pub struct Step {
     pub probability: f32, // 0–1: chance the step fires (1.0 = always, 0.5 = 50%)
     #[serde(default = "default_ratchet")]
     pub ratchet: u8, // 1 = single hit, 2/3/4 = N sub-hits per step
+    /// Slice index for sample-playback voices (AmenSampler).  0 = auto
+    /// (the voice picks the next slice each trigger); 1..=16 = explicit.
+    /// Ignored by purely synthesised drum voices.
+    #[serde(default)]
+    pub slice: u8,
 }
 
 fn default_ratchet() -> u8 {
@@ -432,6 +417,7 @@ impl Default for Step {
             velocity: 1.0,
             probability: 1.0,
             ratchet: 1,
+            slice: 0,
         }
     }
 }

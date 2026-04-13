@@ -283,6 +283,12 @@ pub struct AudioParams {
     pub amen_pitch: f32,  // semitones -24..+24
     pub amen_volume: f32, // 0–1
     pub amen_loop: bool,
+    pub amen_slice_count: u8,   // 1 = whole sample; 2/4/8/16 = break-chop
+    pub amen_start_offset: f32, // 0..1 of sample
+    pub amen_end_offset: f32,   // 0..1 of sample
+    pub amen_reverse: bool,
+    pub amen_gate: f32,   // 0..1 of slice duration
+    pub amen_stutter: u8, // extra retriggers per step
     // Rack presence — only trigger / process voices that are in the rack
     pub rack_bass: bool,
     pub rack_drums808: bool,
@@ -569,6 +575,12 @@ impl AudioParams {
             amen_pitch: s.amen.pitch,
             amen_volume: s.amen.volume,
             amen_loop: s.amen.loop_mode,
+            amen_slice_count: s.amen.slice_count.max(1),
+            amen_start_offset: s.amen.start_offset.clamp(0.0, 1.0),
+            amen_end_offset: s.amen.end_offset.clamp(0.0, 1.0),
+            amen_reverse: s.amen.reverse,
+            amen_gate: s.amen.gate.clamp(0.05, 1.0),
+            amen_stutter: s.amen.stutter.min(4),
             rack_bass: s
                 .rack
                 .modules

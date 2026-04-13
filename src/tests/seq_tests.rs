@@ -61,6 +61,7 @@ mod sequencer_tests {
             velocity: 1.0,
             probability: 1.0,
             ratchet: 1,
+            slice: 0,
         };
 
         let sps = samples_per_step(120.0, 44100.0) as usize;
@@ -91,6 +92,7 @@ mod sequencer_tests {
             velocity: 1.0,
             probability: 1.0,
             ratchet: 2,
+            slice: 0,
         };
 
         let sps = samples_per_step(120.0, 44100.0);
@@ -276,6 +278,7 @@ mod probability_tests {
                     velocity: 1.0,
                     probability: 1.0,
                     ratchet: 1,
+                    slice: 0,
                 };
             }
             pattern[0] = Step {
@@ -283,6 +286,7 @@ mod probability_tests {
                 velocity: 1.0,
                 probability: prob,
                 ratchet: 1,
+                slice: 0,
             };
         }
         seq

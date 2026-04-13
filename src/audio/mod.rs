@@ -290,6 +290,56 @@ impl AudioEngine {
 
 /// Load a 16-bit PCM WAV file, return mono f32 samples normalised to ±1 and
 /// resampled to 44100 Hz. Returns `None` on any parse or I/O error.
+/// Read just the WAV header + data length from `path` without decoding the
+/// full sample buffer.  Used by the UI to display size / length / channels
+/// info without the cost of a full load.  Returns samples-after-resample
+/// at 44.1 kHz (approximate when source rate differs).
+pub fn read_wav_meta(path: &str) -> Option<crate::state::AmenMeta> {
+    let bytes = std::fs::read(path).ok()?;
+    let file_bytes = bytes.len() as u64;
+    if bytes.len() < 44 || &bytes[0..4] != b"RIFF" || &bytes[8..12] != b"WAVE" {
+        return None;
+    }
+    let mut pos = 12usize;
+    let mut channels = 1u16;
+    let mut src_rate = 44100u32;
+    let mut bits = 16u16;
+    let mut data_len = 0usize;
+    while pos + 8 <= bytes.len() {
+        let tag = &bytes[pos..pos + 4];
+        let chunk_len = u32::from_le_bytes(bytes[pos + 4..pos + 8].try_into().ok()?) as usize;
+        pos += 8;
+        if tag == b"fmt " && chunk_len >= 16 {
+            channels = u16::from_le_bytes(bytes[pos + 2..pos + 4].try_into().ok()?);
+            src_rate = u32::from_le_bytes(bytes[pos + 4..pos + 8].try_into().ok()?);
+            bits = u16::from_le_bytes(bytes[pos + 14..pos + 16].try_into().ok()?);
+        } else if tag == b"data" {
+            data_len = chunk_len;
+            break;
+        }
+        pos += chunk_len + (chunk_len & 1);
+    }
+    let frame_bytes = (channels as usize) * (bits as usize / 8).max(1);
+    let n_frames = if frame_bytes > 0 {
+        data_len / frame_bytes
+    } else {
+        0
+    };
+    // Samples after internal resample to 44.1k (approx).
+    let samples_44k = if src_rate == 44100 {
+        n_frames
+    } else {
+        ((n_frames as f64) * 44100.0 / (src_rate as f64)).round() as usize
+    };
+    Some(crate::state::AmenMeta {
+        samples: samples_44k,
+        src_rate,
+        channels,
+        bits,
+        file_bytes,
+    })
+}
+
 pub fn load_wav_to_44100(path: &str) -> Option<Arc<Vec<f32>>> {
     let bytes = std::fs::read(path).ok()?;
     if bytes.len() < 44 || &bytes[0..4] != b"RIFF" || &bytes[8..12] != b"WAVE" {

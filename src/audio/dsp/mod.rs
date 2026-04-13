@@ -290,7 +290,11 @@ impl DspState {
     pub fn handle_trigger(&mut self, event: &TriggerEvent) {
         use crate::sequencer::TriggerEvent::*;
         match event {
-            DrumTrigger { voice, velocity } => {
+            DrumTrigger {
+                voice,
+                velocity,
+                slice,
+            } => {
                 let in_rack = match voice {
                     DrumVoice::Kick808
                     | DrumVoice::Snare808
@@ -325,7 +329,15 @@ impl DspState {
                     DrumVoice::HihatOpen909 => self.hihat_open909.trigger(),
                     DrumVoice::Clap909 => self.clap909.trigger(),
                     DrumVoice::Rim909 => self.rim909.trigger(),
-                    DrumVoice::Amen => self.amen.trigger(),
+                    DrumVoice::Amen => self.amen.trigger(
+                        *slice,
+                        self.params.amen_slice_count,
+                        self.params.amen_start_offset,
+                        self.params.amen_end_offset,
+                        self.params.amen_reverse,
+                        self.params.amen_gate,
+                        self.params.amen_stutter,
+                    ),
                 }
             }
             BassTrigger {

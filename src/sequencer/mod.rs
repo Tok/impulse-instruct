@@ -12,6 +12,10 @@ pub enum TriggerEvent {
     DrumTrigger {
         voice: DrumVoice,
         velocity: f32, // reserved for per-step velocity routing
+        /// Slice index from the step (0 = auto-advance in the voice).
+        /// Only meaningful for sample-based voices (AmenSampler); pure
+        /// synth drums ignore it.
+        slice: u8,
     },
     BassTrigger {
         voice_idx: usize,
@@ -51,6 +55,7 @@ pub struct ClockState {
     pub ratchet_acc: [f64; NUM_DRUM_VOICES],      // sample accumulator since step fire
     pub ratchet_interval: [f64; NUM_DRUM_VOICES], // sps / N
     pub ratchet_vel: [f32; NUM_DRUM_VOICES],      // velocity of sub-hits
+    pub ratchet_slice: [u8; NUM_DRUM_VOICES],     // slice index of sub-hits
 }
 
 impl Default for ClockState {
@@ -66,6 +71,7 @@ impl Default for ClockState {
             ratchet_acc: [0.0; NUM_DRUM_VOICES],
             ratchet_interval: [0.0; NUM_DRUM_VOICES],
             ratchet_vel: [0.0; NUM_DRUM_VOICES],
+            ratchet_slice: [0; NUM_DRUM_VOICES],
         }
     }
 }
@@ -102,6 +108,7 @@ pub fn advance_clock(
     let mut ratchet_acc = clock.ratchet_acc;
     let mut ratchet_interval = clock.ratchet_interval;
     let mut ratchet_vel = clock.ratchet_vel;
+    let mut ratchet_slice = clock.ratchet_slice;
 
     // Advance ratchet sub-hit accumulators and emit any pending sub-hits.
     // Each pending voice fires when its acc crosses the ratchet interval.
@@ -116,6 +123,7 @@ pub fn advance_clock(
             events.push(TriggerEvent::DrumTrigger {
                 voice: *voice,
                 velocity: ratchet_vel[i],
+                slice: ratchet_slice[i],
             });
         }
     }
@@ -200,6 +208,7 @@ pub fn advance_clock(
                     events.push(TriggerEvent::DrumTrigger {
                         voice: *voice,
                         velocity: s.velocity,
+                        slice: s.slice,
                     });
                     // Schedule ratchet sub-hits (ratchet=1 means no sub-hits).
                     if s.ratchet > 1 {
@@ -207,6 +216,7 @@ pub fn advance_clock(
                         ratchet_interval[i] = sps / s.ratchet as f64;
                         ratchet_acc[i] = 0.0;
                         ratchet_vel[i] = s.velocity;
+                        ratchet_slice[i] = s.slice;
                     }
                 }
             }
@@ -277,6 +287,7 @@ pub fn advance_clock(
         ratchet_acc,
         ratchet_interval,
         ratchet_vel,
+        ratchet_slice,
     };
     (new_clock, events)
 }
