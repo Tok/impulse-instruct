@@ -124,7 +124,7 @@ pub fn draw_granular(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                     }
                 });
             if ui
-                .small_button(egui::RichText::new("RND").monospace().size(7.0))
+                .small_button(egui::RichText::new("RANDOM").monospace().size(7.0))
                 .on_hover_text("Load a random sample from samples/textures/")
                 .clicked()
                 && let Some(rand_path) = pick_random_texture()
@@ -133,7 +133,7 @@ pub fn draw_granular(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                 load_and_push(app, &rand_path);
             }
             if ui
-                .small_button(egui::RichText::new("LD").monospace().size(7.0))
+                .small_button(egui::RichText::new("LOAD").monospace().size(7.0))
                 .on_hover_text("Reload the selected sample from disk")
                 .clicked()
             {
@@ -155,6 +155,106 @@ pub fn draw_granular(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         load_and_push(app, &path);
         ui.ctx().data_mut(|d| d.insert_temp(mem_id, path.clone()));
     }
+
+    // ── Live master-output ring buffer + CAPTURE button ─────────────────────
+    // Drain any samples the audio thread has produced since the last frame
+    // into our local ring (granular_tap / granular_tap_head).  Then render
+    // a compact min/max strip with a moving "head" cursor so the user can
+    // see what's currently in the buffer before clicking CAPTURE.
+    let tap_len = app.granular_tap.len();
+    while let Ok(s) = app.granular_capture_rx.pop() {
+        let h = app.granular_tap_head;
+        app.granular_tap[h] = s;
+        app.granular_tap_head = (h + 1) % tap_len;
+    }
+    let (rect, _) = ui.allocate_exact_size(
+        egui::vec2(ui.available_width().min(260.0), 28.0),
+        egui::Sense::hover(),
+    );
+    let painter = ui.painter_at(rect);
+    painter.rect_filled(
+        rect,
+        egui::Rounding::same(2.0),
+        egui::Color32::from_gray(10),
+    );
+    painter.rect_stroke(
+        rect,
+        egui::Rounding::same(2.0),
+        egui::Stroke::new(0.5, egui::Color32::from_gray(30)),
+    );
+    // Column-wise min/max over the ring buffer, starting at the oldest
+    // sample (head) so the display scrolls left→right in chronological
+    // order.  200 columns across ~3 s of audio = ~15 ms per column.
+    let cols = (rect.width().max(1.0) as usize).min(260);
+    if cols > 0 && tap_len > 0 {
+        let samples_per_col = tap_len / cols;
+        let mid = rect.center().y;
+        let half_h = rect.height() * 0.45;
+        for c in 0..cols {
+            let (mut mn, mut mx) = (0.0_f32, 0.0_f32);
+            let col_start = c * samples_per_col;
+            for k in 0..samples_per_col {
+                // Read ring-relative: (head + col_start + k) % len
+                let idx = (app.granular_tap_head + col_start + k) % tap_len;
+                let s = app.granular_tap[idx];
+                if s < mn {
+                    mn = s;
+                }
+                if s > mx {
+                    mx = s;
+                }
+            }
+            let x = rect.min.x + c as f32 + 0.5;
+            painter.line_segment(
+                [
+                    egui::pos2(x, mid - mx * half_h),
+                    egui::pos2(x, mid - mn * half_h),
+                ],
+                egui::Stroke::new(1.0, egui::Color32::from_gray(140)),
+            );
+        }
+    }
+    // Head cursor — always at the right edge (freshest sample arrives here).
+    painter.line_segment(
+        [
+            egui::pos2(rect.max.x - 0.5, rect.min.y + 1.0),
+            egui::pos2(rect.max.x - 0.5, rect.max.y - 1.0),
+        ],
+        egui::Stroke::new(1.0, theme::CHALK),
+    );
+    ui.ctx()
+        .request_repaint_after(std::time::Duration::from_millis(33));
+
+    // CAPTURE row
+    ui.horizontal(|ui| {
+        ui.label(
+            egui::RichText::new(format!("LIVE {:.1}s", tap_len as f32 / 44100.0))
+                .monospace()
+                .size(7.5)
+                .color(theme::SMOKE),
+        );
+        if ui
+            .small_button(egui::RichText::new("CAPTURE").monospace().size(7.5))
+            .on_hover_text(
+                "Freeze the ring buffer (the last few seconds of master\n\
+                 output) as the granular source.  In-memory only — no\n\
+                 file written.  Click again to re-capture.",
+            )
+            .clicked()
+        {
+            // Re-order so slot 0 = oldest sample, then push to the audio thread.
+            let mut out: Vec<f32> = Vec::with_capacity(tap_len);
+            let h = app.granular_tap_head;
+            out.extend_from_slice(&app.granular_tap[h..]);
+            out.extend_from_slice(&app.granular_tap[..h]);
+            let arc = std::sync::Arc::new(out);
+            let _ = app.audio_tx.push(AudioCommand::LoadGranular(arc));
+            // Set a synthetic path so the panel doesn't auto-reload from disk.
+            let label = "«captured»".to_string();
+            app.state.write().granular.path = label.clone();
+            ui.ctx().data_mut(|d| d.insert_temp(mem_id, label));
+        }
+    });
 
     // ── Knobs ────────────────────────────────────────────────────────────────
     let ctrl = widgets::ControlPrefs::from_prefs(&app.state.read().ui_prefs);

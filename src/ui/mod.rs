@@ -122,7 +122,10 @@ pub struct ImpulseApp {
     dsp_load_rx: rtrb::Consumer<f32>,
     dsp_load_buf: Vec<f32>,
     pub(crate) amen_wave_cache: (String, Vec<(f32, f32)>),
-    pub(crate) neutts_online: bool, // cached health; panel polls /health
+    pub(crate) neutts_online: bool,
+    pub(crate) granular_capture_rx: rtrb::Consumer<f32>,
+    pub(crate) granular_tap: Vec<f32>, // ring buffer, ~3s master output for CAPTURE
+    pub(crate) granular_tap_head: usize,
     audio_analysis: Option<crate::audio::analysis::AudioAnalysis>, // ~2s auto-refresh
     last_analysis_time: f64,
     listen_pending: bool, // LISTEN button flag — labels next LLM resp "LISTEN →"
@@ -131,15 +134,12 @@ pub struct ImpulseApp {
     midi_rx: Receiver<MidiEvent>,
     midi_port: Option<String>,
     pressed_notes: std::collections::HashSet<u8>,
-    /// Note currently held down by the mouse (separate from MIDI-held notes).
-    piano_mouse_note: Option<u8>,
+    piano_mouse_note: Option<u8>, // mouse-held note, separate from MIDI
     prompt_input: String,
     log_text: String,
     api_port: Option<u16>,
-    /// Lock-free receiver for API→UI log messages (sender is in ApiState).
-    api_log_rx: crossbeam_channel::Receiver<String>,
-    /// UI log dedup: last line content and repeat count.
-    last_log_line: String,
+    api_log_rx: crossbeam_channel::Receiver<String>, // from ApiState log sender
+    last_log_line: String,                           // dedup
     log_repeat_count: u32,
     show_about: bool,
     pub(crate) activity_log: Vec<ActivityEntry>,
@@ -172,8 +172,7 @@ pub struct ImpulseApp {
     pub(crate) cable_drag: Option<rack_canvas::CableDrag>,
     pub(crate) show_cables: bool,
     pub(crate) rack_flipped: bool,
-    /// Counts flips-to-back to alternate scroll target (master → agent → master …)
-    pub(crate) flip_to_back_count: u32,
+    pub(crate) flip_to_back_count: u32, // flips-to-back count, cycles scroll target
     pub(crate) ctrl_locked: bool,
     pub(crate) show_shortcuts: bool,
     pub(crate) add_menu_zone: Option<crate::state::Zone>,
@@ -181,12 +180,9 @@ pub struct ImpulseApp {
     pub(crate) module_drag: Option<rack_canvas::ModuleDrag>,
     // Auto-save: set when rack or session-worthy state changes; saved next frame.
     pub(crate) session_dirty: bool,
-    /// Zone Y offsets (relative to scroll content top), updated each frame by rack_canvas.
-    pub(crate) zone_y: [f32; 4], // [ai, global, voice, fxmod]
-    /// Focused module kind — highlighted in the rack (set by API scroll or click).
-    pub(crate) focused_module: Option<crate::state::ModuleKind>,
-    /// Instant when the focused module was set (for shine animation).
-    pub(crate) focus_time: std::time::Instant,
+    pub(crate) zone_y: [f32; 4], // [ai, global, voice, fxmod] rack scroll offsets
+    pub(crate) focused_module: Option<crate::state::ModuleKind>, // rack highlight target
+    pub(crate) focus_time: std::time::Instant, // shine-animation timestamp
     last_saved_rack_sig: (usize, usize),
     last_save_time: std::time::Instant,
     pub(crate) module_scales: std::collections::HashMap<crate::state::ModuleKind, f32>,
@@ -212,6 +208,7 @@ pub struct AudioChannels {
     pub capture_rx: rtrb::Consumer<f32>,
     pub dsp_load_rx: rtrb::Consumer<f32>,
     pub stereo_rx: rtrb::Consumer<f32>,
+    pub granular_capture_rx: rtrb::Consumer<f32>,
     pub tts_tx: std::sync::Arc<parking_lot::Mutex<rtrb::Producer<f32>>>,
 }
 
@@ -292,6 +289,9 @@ impl ImpulseApp {
             dsp_load_buf: Vec::with_capacity(64),
             amen_wave_cache: (String::new(), Vec::new()),
             neutts_online: false,
+            granular_capture_rx: audio.granular_capture_rx,
+            granular_tap: vec![0.0; 44_100 * 3], // 3s at 44.1k
+            granular_tap_head: 0,
             audio_analysis: None,
             last_analysis_time: 0.0,
             listen_pending: false,

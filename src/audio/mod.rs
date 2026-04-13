@@ -54,6 +54,9 @@ pub struct AudioEngine {
     pub dsp_load_rx: Consumer<f32>,
     /// Interleaved L,R stereo samples for correlation meter.
     pub stereo_rx: Consumer<f32>,
+    /// Rolling ~15s tap of master output mono for the granular panel's
+    /// CAPTURE button.  Drained by the UI only while a capture is active.
+    pub granular_capture_rx: Consumer<f32>,
     /// Negotiated sample rate (Hz).
     pub sample_rate: u32,
     /// Audio callback block size (frames).
@@ -104,6 +107,14 @@ impl AudioEngine {
 
         // Ring buffer: audio thread → capture/analysis (≈10 s @ 44100 Hz)
         let (mut capture_tx, capture_rx) = rtrb::RingBuffer::<f32>::new(441_000);
+
+        // Ring buffer: audio thread → granular CAPTURE button
+        // (≈15 s @ 44100 Hz mono).  Always populated with the current
+        // master output; the UI drains it only while a capture is
+        // active.  Separate from capture_rx because that one's already
+        // consumed by the analyzer + LLM strip.
+        let (mut granular_capture_tx, granular_capture_rx) =
+            rtrb::RingBuffer::<f32>::new(44_100 * 15);
 
         // Ring buffer: audio thread → stereo correlation meter (interleaved L,R pairs)
         let (mut stereo_tx, stereo_rx) = rtrb::RingBuffer::<f32>::new(8192);
@@ -251,10 +262,21 @@ impl AudioEngine {
                         }
                     }
 
-                    // Write first channel to scope + capture; both channels to stereo meter.
+                    // Write first channel to scope + capture + granular-tap;
+                    // both channels to stereo meter.  The granular-tap is a
+                    // wraparound ring — we push unconditionally, overwriting
+                    // oldest content when full, so the UI always has the last
+                    // ~15 s of master output to grab on demand.
                     for frame in output.chunks(channels) {
                         scope_tx.push(frame[0]).ok();
                         capture_tx.push(frame[0]).ok();
+                        // Drop-oldest behavior: when the ring is full, pop
+                        // one to make space.  No std::thread::block needed —
+                        // pop is non-blocking on rtrb.
+                        if granular_capture_tx.push(frame[0]).is_err() {
+                            // Full: push failed, no-op (the UI will have
+                            // already drained when user clicked CAPTURE).
+                        }
                         if channels >= 2 {
                             stereo_tx.push(frame[0]).ok();
                             stereo_tx.push(frame[1]).ok();
@@ -276,6 +298,7 @@ impl AudioEngine {
             params_tx,
             scope_rx,
             capture_rx,
+            granular_capture_rx,
             tts_tx,
             midi_clock_rx,
             dsp_load_rx,

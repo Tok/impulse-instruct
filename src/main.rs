@@ -404,6 +404,7 @@ fn run() -> anyhow::Result<()> {
         capture_rx: audio_engine.capture_rx,
         dsp_load_rx: audio_engine.dsp_load_rx,
         stereo_rx: audio_engine.stereo_rx,
+        granular_capture_rx: audio_engine.granular_capture_rx,
         tts_tx: std::sync::Arc::clone(&audio_engine.tts_tx),
     };
 
