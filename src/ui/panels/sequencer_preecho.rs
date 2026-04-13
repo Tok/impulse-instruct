@@ -15,6 +15,10 @@
 use crate::sequencer::PreechoConfig;
 use crate::ui::{ImpulseApp, theme, widgets};
 
+/// Width of each step cell in the anchor strip.
+const ANCHOR_STEP_W: f32 = 10.0;
+const ANCHOR_STEP_H: f32 = 14.0;
+
 const VOICE_KEYS: &[&str] = &["kit_a", "kit_b", "amen", "bass", "hoover", "an1x"];
 
 pub(super) fn draw_preecho_row(app: &mut ImpulseApp, ui: &mut egui::Ui) {
@@ -40,18 +44,6 @@ pub(super) fn draw_preecho_row(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         .get(&selected)
         .cloned()
         .unwrap_or_default();
-
-    let anchors_id = egui::Id::new(("preecho_anchors", selected.clone()));
-    let anchors_str_default = anchor_list_to_string(&cfg.anchors);
-    let mut anchors_str: String = ui
-        .ctx()
-        .data(|d| d.get_temp::<String>(anchors_id))
-        .unwrap_or(anchors_str_default.clone());
-    // If the stored buffer is stale relative to the resolved config
-    // (e.g. LLM wrote new anchors externally), prefer the resolved one.
-    if anchor_list_matches(&anchors_str, &cfg.anchors).not_ok() {
-        anchors_str = anchors_str_default;
-    }
 
     let mut changed = false;
     let mut new_selected = selected.clone();
@@ -103,19 +95,73 @@ pub(super) fn draw_preecho_row(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         }
         ui.separator();
 
-        // Anchor list input.
-        let resp = ui.add(
-            egui::TextEdit::singleline(&mut anchors_str)
-                .hint_text("anchors e.g. 0, 16")
-                .desired_width(96.0)
-                .font(egui::FontId::monospace(8.0)),
-        );
-        if resp.changed() {
-            ui.ctx()
-                .data_mut(|d| d.insert_temp(anchors_id, anchors_str.clone()));
+        // Clickable anchor strip — one tiny cell per step.  Click to
+        // toggle anchor at that step.  Lit cells = anchors; dimly lit
+        // cells = steps inside the lead-in window of some anchor.
+        let seq_steps = app.state.read().sequencer.steps.clamp(1, 64);
+        let strip_w = ANCHOR_STEP_W * seq_steps as f32 + (seq_steps as f32 - 1.0);
+        let (rect, resp) =
+            ui.allocate_exact_size(egui::vec2(strip_w, ANCHOR_STEP_H), egui::Sense::click());
+        let painter = ui.painter_at(rect);
+        let mut clicked_step: Option<usize> = None;
+        if resp.clicked()
+            && let Some(p) = resp.interact_pointer_pos()
+        {
+            let rel = (p.x - rect.min.x) / (ANCHOR_STEP_W + 1.0);
+            if rel >= 0.0 {
+                clicked_step = Some((rel as usize).min(seq_steps - 1));
+            }
         }
-        if resp.lost_focus() || resp.ctx.input(|i| i.key_pressed(egui::Key::Enter)) {
-            cfg.anchors = parse_anchor_list(&anchors_str);
+        // Compute which steps are inside a lead-in window for preview.
+        let in_leadin = |step: usize| -> bool {
+            if cfg.length == 0 {
+                return false;
+            }
+            for &a in &cfg.anchors {
+                let a = a as usize;
+                if a >= seq_steps {
+                    continue;
+                }
+                let d = (a + seq_steps - step) % seq_steps;
+                if d > 0 && d <= cfg.length as usize {
+                    return true;
+                }
+            }
+            false
+        };
+        for i in 0..seq_steps {
+            let x0 = rect.min.x + i as f32 * (ANCHOR_STEP_W + 1.0);
+            let r = egui::Rect::from_min_size(
+                egui::pos2(x0, rect.min.y),
+                egui::vec2(ANCHOR_STEP_W, ANCHOR_STEP_H),
+            );
+            let is_anchor = cfg.anchors.iter().any(|&a| a as usize == i);
+            let fill = if is_anchor {
+                theme::CHALK
+            } else if in_leadin(i) {
+                egui::Color32::from_gray(70)
+            } else {
+                egui::Color32::from_gray(22)
+            };
+            painter.rect_filled(r, egui::Rounding::same(1.5), fill);
+            // Beat boundaries get a subtle brighter outline so 4/4 subdivisions read cleanly.
+            if i % 4 == 0 {
+                painter.rect_stroke(
+                    r,
+                    egui::Rounding::same(1.5),
+                    egui::Stroke::new(0.6, egui::Color32::from_gray(90)),
+                );
+            }
+        }
+        if let Some(step) = clicked_step {
+            let step_u = step as u8;
+            if cfg.anchors.contains(&step_u) {
+                cfg.anchors.retain(|a| *a != step_u);
+            } else {
+                cfg.anchors.push(step_u);
+                cfg.anchors.sort();
+                cfg.anchors.dedup();
+            }
             changed = true;
         }
 
@@ -159,8 +205,6 @@ pub(super) fn draw_preecho_row(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             .clicked()
         {
             cfg = PreechoConfig::default();
-            ui.ctx()
-                .data_mut(|d| d.insert_temp(anchors_id, String::new()));
             changed = true;
         }
     });
@@ -181,35 +225,4 @@ pub(super) fn draw_preecho_row(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             app.state.write().sequencer.preecho.remove(&selected);
         }
     }
-}
-
-fn anchor_list_to_string(anchors: &[u8]) -> String {
-    anchors
-        .iter()
-        .map(|n| n.to_string())
-        .collect::<Vec<_>>()
-        .join(", ")
-}
-
-fn parse_anchor_list(s: &str) -> Vec<u8> {
-    s.split(|c: char| c == ',' || c.is_whitespace())
-        .filter(|t| !t.is_empty())
-        .filter_map(|t| t.parse::<u8>().ok())
-        .filter(|n| (*n as usize) < 64)
-        .collect()
-}
-
-/// Result of comparing the user's in-memory anchor string against the
-/// resolved config — used to detect when an external write invalidates
-/// the displayed text.
-struct AnchorCheck(bool);
-
-impl AnchorCheck {
-    fn not_ok(self) -> bool {
-        !self.0
-    }
-}
-
-fn anchor_list_matches(text: &str, cfg_anchors: &[u8]) -> AnchorCheck {
-    AnchorCheck(parse_anchor_list(text) == cfg_anchors)
 }
