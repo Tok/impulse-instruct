@@ -16,8 +16,10 @@ use crate::sequencer::PreechoConfig;
 use crate::ui::{ImpulseApp, theme, widgets};
 
 /// Width of each step cell in the anchor strip.
-const ANCHOR_STEP_W: f32 = 10.0;
-const ANCHOR_STEP_H: f32 = 14.0;
+/// Sized ~1.5× the original 10/14 so the click targets read more
+/// like toggle boxes than slivers.
+const ANCHOR_STEP_W: f32 = 15.0;
+const ANCHOR_STEP_H: f32 = 21.0;
 
 const VOICE_KEYS: &[&str] = &["kit_a", "kit_b", "amen", "bass", "hoover", "an1x"];
 
