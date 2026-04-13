@@ -134,6 +134,7 @@ POST /api/sequencer/stop
 POST /api/scroll         { "target": "voice" }  (global/voice/fxmod/bass/808/fx/…)
 POST /api/scroll         { "target": "bass", "collapse_others": true }  focus mode
 POST /api/preset         { "name": "Crew" }     (Solo/Duo/Swarm/Crew/Voices/Lite)
+POST /api/style          { "id": "drum_and_bass" }  set global style + propagate to agents (id=null clears)
 POST /api/flip           { "show_back": true }   (true=cables, false=knobs)
 POST /api/rack/reset                              strip to sequencer + master + console
 POST /api/rack/add       { "kind": "808" }        add module, returns { "id": N }

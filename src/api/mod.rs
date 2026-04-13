@@ -16,7 +16,7 @@ use std::sync::Arc;
 use tower_http::cors::{Any, CorsLayer};
 
 use crate::llm::LlmInput;
-use crate::state::{AppState, apply_llm_update, lock_params, unlock_params};
+use crate::state::{AppState, apply_llm_update, lock_params, propagate_style, unlock_params};
 
 // ─── Shared API state ─────────────────────────────────────────────────────────
 
@@ -73,6 +73,17 @@ pub struct CollapseRequest {
 pub struct PresetRequest {
     /// Preset name: "Solo", "Duo", "Swarm", "Crew", "Voices", "Lite"
     pub name: String,
+}
+
+#[derive(Deserialize)]
+pub struct StyleRequest {
+    /// Style id from styles.json (e.g. "drum_and_bass"), "__free__",
+    /// "__custom__", or empty/null to clear the active style.
+    #[serde(default)]
+    pub id: Option<String>,
+    /// Optional custom style brief, used when id == "__custom__".
+    #[serde(default)]
+    pub custom_text: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -316,6 +327,55 @@ async fn post_collapse(
     Json(OkResponse {
         ok: true,
         message: Some(format!("collapse {}", req.action)),
+    })
+}
+
+/// Set (or clear) the global active style and propagate it to all agents whose
+/// style is not locked. This mirrors what the UI style dropdown does, giving
+/// demo scripts and external controllers a way to pin the style before
+/// inference so prior-session bleed can't override the user's intent.
+async fn post_style(
+    AxumState(api): AxumState<ApiState>,
+    Json(req): Json<StyleRequest>,
+) -> Json<OkResponse> {
+    let id = req.id.as_deref().map(str::trim).filter(|s| !s.is_empty());
+    {
+        let current = snapshot(&api.app_state);
+        let next = match id {
+            Some(id) => {
+                let mut s = current;
+                s.llm.active_style = Some(id.to_string());
+                if let Some(text) = req.custom_text.as_deref() {
+                    s.llm.custom_style_text = text.to_string();
+                }
+                propagate_style(s, id)
+            }
+            None => {
+                let mut s = current;
+                s.llm.active_style = None;
+                for agent in &mut s.llm_agents {
+                    if !agent.style_locked {
+                        agent.active_style = None;
+                    }
+                }
+                s
+            }
+        };
+        *api.app_state.write() = next;
+    }
+    api_log(
+        &api,
+        match id {
+            Some(id) => format!("[API] style: set to {}", id),
+            None => "[API] style: cleared".into(),
+        },
+    );
+    Json(OkResponse {
+        ok: true,
+        message: Some(match id {
+            Some(id) => format!("style set to {}", id),
+            None => "style cleared".into(),
+        }),
     })
 }
 
@@ -719,6 +779,7 @@ pub fn build_router(api_state: ApiState) -> Router {
         .route("/api/sequencer/stop", post(post_stop))
         .route("/api/scroll", post(post_scroll))
         .route("/api/preset", post(post_preset))
+        .route("/api/style", post(post_style))
         .route("/api/flip", post(post_flip))
         .route("/api/rack/add", post(post_rack_add))
         .route("/api/rack/agent", post(post_rack_agent))

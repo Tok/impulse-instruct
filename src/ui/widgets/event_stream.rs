@@ -97,6 +97,18 @@ pub fn event_stream(ui: &mut Ui, state: &AppState, smooth_step: f64, width: f32,
             }
         }
     }
+    // Also fold AN1X notes into the auto-range so the stream has something
+    // to paint when the 303 bass voices are off (e.g. jump-up D&B style
+    // with AN1X as the lead melodic voice).
+    if state.an1x.enabled {
+        let an1x_steps = seq.an1x_steps.min(seq.an1x_pattern.len());
+        for step in seq.an1x_pattern.iter().take(an1x_steps) {
+            if step.active {
+                lo_note = lo_note.min(step.note);
+                hi_note = hi_note.max(step.note);
+            }
+        }
+    }
     // Add margin of ±3 semitones, minimum 12 semitone range
     if hi_note < lo_note {
         lo_note = 36;
@@ -272,6 +284,55 @@ pub fn event_stream(ui: &mut Ui, state: &AppState, smooth_step: f64, width: f32,
                                 ),
                             ),
                         );
+                    }
+                }
+            }
+        }
+
+        // ── AN1X notes (same Huth coloring; distinct size + slight outline)
+        // Rendered only when AN1X is enabled.  Shares the stream_bass_notes
+        // ui pref — it's the "melodic voice" stream regardless of source —
+        // so the display stays populated when the 303 voices are off.
+        if state.an1x.enabled {
+            let an1x_steps = seq.an1x_steps.min(seq.an1x_pattern.len());
+            for (step_idx, step) in seq.an1x_pattern.iter().enumerate().take(an1x_steps) {
+                if !step.active {
+                    continue;
+                }
+                let note = step.note;
+                let color = theme::note_color(note);
+                let step_offset = step_idx as f32 - pos_in_pattern;
+                // Wrap relative to AN1X pattern length, not bass length.
+                let offsets = [
+                    step_offset,
+                    step_offset + an1x_steps as f32,
+                    step_offset - an1x_steps as f32,
+                ];
+                for &off in &offsets {
+                    let x = now_x + off * step_w;
+                    if x < inner.min.x - circle_r || x > inner.max.x + circle_r {
+                        continue;
+                    }
+                    let y = note_y(note);
+                    let dist = (off.abs() / display_steps).clamp(0.0, 1.0);
+                    let alpha = ((1.0 - dist * 0.7) * 255.0) as u8;
+                    let fill =
+                        Color32::from_rgba_unmultiplied(color.r(), color.g(), color.b(), alpha);
+                    let gate_scale = 0.7 + step.gate * 0.3;
+                    let r = circle_r * gate_scale * if step.accent { 1.4 } else { 1.0 };
+                    let pos = Pos2::new(x, y);
+                    let stroke_w = if step.accent { 2.0 } else { 1.0 };
+                    let stroke_a = if step.accent {
+                        alpha
+                    } else {
+                        (alpha as f32 * 0.5) as u8
+                    };
+                    let stroke_col = Color32::from_rgba_unmultiplied(0, 0, 0, stroke_a);
+                    if use_u_cups {
+                        draw_u_cup(&painter, pos, r, fill, stroke_w, stroke_col);
+                    } else {
+                        painter.circle_filled(pos, r, fill);
+                        painter.circle_stroke(pos, r, Stroke::new(stroke_w, stroke_col));
                     }
                 }
             }

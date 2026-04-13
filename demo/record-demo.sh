@@ -136,11 +136,110 @@ echo "  Scenario: $SCENARIO"
 echo "  Flags: skip_build=$SKIP_BUILD no_tts=$NO_TTS skip_video=$SKIP_VIDEO"
 echo ""
 
-# ─── Pre-generate TTS clips ──────────────────────────────────────────────────
+# ─── Build the app ───────────────────────────────────────────────────────────
+#
+# Ordering rationale: Build → launch app (background) → pre-gen TTS.
+# Launching the app before TTS generation lets llama-server load Gemma 4 onto
+# the GPU while NeuTTS is still busy synthesising clips on CPU + GPU.  By the
+# time the scenario runs and adds an agent, the model pool already has a warm
+# server — no 60-120s cold-start stall.
 
-echo "[1/6] Pre-generating TTS clips..."
+if [ "$SKIP_BUILD" -eq 0 ] && [ "$APP_RUNNING" -eq 0 ]; then
+    echo "[1/6] Building Impulse Instruct..."
+    cd "$PROJECT_DIR"
+    cargo build --release 2>&1 | tail -3
+    echo "  Build complete."
+else
+    echo "[1/6] Build skipped."
+fi
+
+# ─── Cleanup trap ─────────────────────────────────────────────────────────────
+
+APP_PID=""
+FFMPEG_PID=""
+PW_RECORD_PID=""
+
+cleanup() {
+    echo ""
+    echo "Cleaning up..."
+    if [ -n "$FFMPEG_PID" ]; then
+        kill -INT "$FFMPEG_PID" 2>/dev/null
+        sleep 1
+        kill -9 -"$FFMPEG_PID" 2>/dev/null || kill -9 "$FFMPEG_PID" 2>/dev/null
+        wait "$FFMPEG_PID" 2>/dev/null
+    fi
+    if [ -n "$PW_RECORD_PID" ]; then
+        kill -INT "$PW_RECORD_PID" 2>/dev/null
+        sleep 1
+        kill -9 "$PW_RECORD_PID" 2>/dev/null
+        wait "$PW_RECORD_PID" 2>/dev/null
+    fi
+    if [ -n "$APP_PID" ]; then
+        # SIGTERM first, give the app a moment to run Drop handlers
+        # (LlamaServerBackend's Drop SIGKILLs its child llama-server).
+        kill -TERM "$APP_PID" 2>/dev/null
+        for _ in 1 2 3 4 5 6; do
+            kill -0 "$APP_PID" 2>/dev/null || break
+            sleep 0.5
+        done
+        kill -KILL "$APP_PID" 2>/dev/null
+        wait "$APP_PID" 2>/dev/null
+    fi
+    # Drop doesn't run on SIGKILL, and even SIGTERM can race — sweep
+    # any orphaned llama-server spawned by our app. Match on --model so
+    # we don't touch unrelated llama-server instances the user may run.
+    pkill -KILL -f 'llama-server .* --model' 2>/dev/null
+    stop_neutts_server 2>/dev/null
+    # Clean up virtual recording sink
+    destroy_recording_sink 2>/dev/null
+    rm -f "$NARRATION_LIST"
+    echo "Done."
+}
+trap cleanup EXIT
+
+# ─── Launch the app (background — llama-server warms while TTS runs) ─────────
+
+if [ "$DRY_RUN" -eq 1 ]; then
+    # Dry run: skip app launch entirely, just pre-gen TTS and exit.
+    echo "[2/6] App launch skipped (--dry-run)."
+elif [ "$APP_RUNNING" -eq 0 ]; then
+    echo ""
+    echo "[2/6] Launching app with --skip-wizard..."
+    cd "$PROJECT_DIR"
+    # Remove stale session so the app starts with a clean rack
+    rm -f session.json
+    # Real LLM mode — llama-server starts automatically for the configured model.
+    # Pass --model explicitly to ensure Gemma 4 is loaded (session.json may be stale).
+    # The API is on by default (port 8765).
+    MODEL_PATH="models/gemma-4-E4B-it-Q4_K_M.gguf"
+    if [ ! -f "$MODEL_PATH" ]; then
+        echo "  WARNING: $MODEL_PATH not found. Run ./scripts/download-models.sh first." >&2
+        echo "  Falling back to --mock mode." >&2
+        MODEL_PATH=""
+    fi
+    # Launch WITHOUT redirecting stdout/stderr. Redirecting can crash
+    # eframe/egui when GPU drivers write to stderr expecting a terminal.
+    # App log output will be visible in the terminal alongside demo progress.
+    # --log trace: full diagnostics captured in the log file (JSON output, etc.)
+    if [ -n "$MODEL_PATH" ]; then
+        ./target/release/impulse-instruct --skip-wizard --fresh-session --model "$MODEL_PATH" --log trace &
+    else
+        ./target/release/impulse-instruct --skip-wizard --fresh-session --mock --log trace &
+    fi
+    APP_PID=$!
+    echo "  App launched (pid=$APP_PID) — llama-server will warm up during TTS pre-gen."
+else
+    echo "[2/6] Using already-running app."
+fi
+
+# ─── Pre-generate TTS clips (concurrent with llama-server warm-up) ───────────
+
+echo ""
+echo "[3/6] Pre-generating TTS clips..."
 if [ "$NO_TTS" -eq 0 ]; then
     start_neutts_server || { echo "  Falling back to no-TTS mode"; NO_TTS=1; }
+fi
+if [ "$NO_TTS" -eq 0 ]; then
     clip_id=""
     scene_num=0
     tts_ok=0
@@ -213,101 +312,33 @@ if [ "$DRY_RUN" -eq 1 ]; then
     exit 0
 fi
 
-# ─── Build the app ───────────────────────────────────────────────────────────
-
-if [ "$SKIP_BUILD" -eq 0 ] && [ "$APP_RUNNING" -eq 0 ]; then
-    echo ""
-    echo "[2/6] Building Impulse Instruct..."
-    cd "$PROJECT_DIR"
-    cargo build --release 2>&1 | tail -3
-    echo "  Build complete."
-else
-    echo "[2/6] Build skipped."
-fi
-
-# ─── Cleanup trap ─────────────────────────────────────────────────────────────
-
-APP_PID=""
-FFMPEG_PID=""
-PW_RECORD_PID=""
-
-cleanup() {
-    echo ""
-    echo "Cleaning up..."
-    if [ -n "$FFMPEG_PID" ]; then
-        kill -INT "$FFMPEG_PID" 2>/dev/null
-        sleep 1
-        kill -9 -"$FFMPEG_PID" 2>/dev/null || kill -9 "$FFMPEG_PID" 2>/dev/null
-        wait "$FFMPEG_PID" 2>/dev/null
-    fi
-    if [ -n "$PW_RECORD_PID" ]; then
-        kill -INT "$PW_RECORD_PID" 2>/dev/null
-        sleep 1
-        kill -9 "$PW_RECORD_PID" 2>/dev/null
-        wait "$PW_RECORD_PID" 2>/dev/null
-    fi
-    if [ -n "$APP_PID" ]; then
-        # SIGTERM first, give the app a moment to run Drop handlers
-        # (LlamaServerBackend's Drop SIGKILLs its child llama-server).
-        kill -TERM "$APP_PID" 2>/dev/null
-        for _ in 1 2 3 4 5 6; do
-            kill -0 "$APP_PID" 2>/dev/null || break
-            sleep 0.5
-        done
-        kill -KILL "$APP_PID" 2>/dev/null
-        wait "$APP_PID" 2>/dev/null
-    fi
-    # Drop doesn't run on SIGKILL, and even SIGTERM can race — sweep
-    # any orphaned llama-server spawned by our app. Match on --model so
-    # we don't touch unrelated llama-server instances the user may run.
-    pkill -KILL -f 'llama-server .* --model' 2>/dev/null
-    stop_neutts_server 2>/dev/null
-    # Clean up virtual recording sink
-    destroy_recording_sink 2>/dev/null
-    rm -f "$NARRATION_LIST"
-    echo "Done."
-}
-trap cleanup EXIT
-
-# ─── Launch the app ──────────────────────────────────────────────────────────
-
+# ─── Wait for app API to be reachable ────────────────────────────────────────
+# App was launched before TTS pre-gen; by now it's almost certainly up, but
+# keep a short safety wait in case TTS finished very fast.
 if [ "$APP_RUNNING" -eq 0 ]; then
-    echo ""
-    echo "[3/6] Launching app with --skip-wizard..."
-    cd "$PROJECT_DIR"
-    # Remove stale session so the app starts with a clean rack
-    rm -f session.json
-    # Real LLM mode — llama-server starts automatically for the configured model.
-    # Pass --model explicitly to ensure Gemma 4 is loaded (session.json may be stale).
-    # The API is on by default (port 8765).
-    MODEL_PATH="models/gemma-4-E4B-it-Q4_K_M.gguf"
-    if [ ! -f "$MODEL_PATH" ]; then
-        echo "  WARNING: $MODEL_PATH not found. Run ./scripts/download-models.sh first." >&2
-        echo "  Falling back to --mock mode." >&2
-        MODEL_PATH=""
-    fi
-    # Launch WITHOUT redirecting stdout/stderr. Redirecting can crash
-    # eframe/egui when GPU drivers write to stderr expecting a terminal.
-    # App log output will be visible in the terminal alongside demo progress.
-    # --log trace: full diagnostics captured in the log file (JSON output, etc.)
-    if [ -n "$MODEL_PATH" ]; then
-        ./target/release/impulse-instruct --skip-wizard --fresh-session --model "$MODEL_PATH" --log trace &
-    else
-        ./target/release/impulse-instruct --skip-wizard --fresh-session --mock --log trace &
-    fi
-    APP_PID=$!
     wait_for_api 30
 else
-    echo "[3/6] Using already-running app."
     wait_for_api 5
 fi
 
 # Guarantee a blank slate — even when attaching to a running app that may
 # have LFO on, agents loaded, sequencer running, etc.  --fresh-session on
 # launch only handles fresh starts; this covers the reuse case too.
+# Safe to do post-warmup: api_state_reset only mutates AppState, it doesn't
+# touch the LLM thread's LlamaServerPool, so the pre-acquired warm server
+# for --model stays alive.  The scenario's add_agent will reuse it.
 echo "  Resetting app state to defaults..."
 api_state_reset
 sleep 1
+
+# Wait for llama-server to finish loading the model BEFORE we start the video
+# recording.  Otherwise the first seconds of the recording are dead air while
+# the scenario's initial ask/wait_for_model blocks the clip timeline.  The
+# app's LLM thread pre-acquired the server at startup (concurrent with TTS
+# pre-gen), so by now it's usually already warm — wait_for_llm returns
+# immediately if llm_initializing is already False.  Safe in mock mode too
+# (mock flips llm_initializing=False on startup).
+wait_for_llm 300
 
 # ─── Find the app window + start capture ─────────────────────────────────────
 

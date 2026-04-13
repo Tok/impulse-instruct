@@ -1214,118 +1214,22 @@
       "drum and bass",
       "dnb",
       "d&b",
-      "neurofunk",
-      "liquid dnb",
-      "reese",
-      "rolling dnb"
+      "jump up",
+      "jump-up",
+      "amen",
+      "reese stab"
     ],
-    "bpm_range": "170–180",
-    "brief": "Drum and Bass 170–180 BPM. Big snare on 2&4, intricate hi-hats. Reese bass: detuned dark sub, slow filter undulation, growling movement. Short reverb, minimal delay — everything must cut through. Tension between mechanical kick and fluid bass.",
-    "description": "Drum and Bass — 170 to 180 BPM. Tight, technical, and heavy. Big snare on 2 and 4 with intricate hi-hat work filling the spaces. Bass is the emotional core — deep rolling sub with slow filter movement, growling and undulating. A Reese bass feel: detuned, dark, with subtle pitch movement. Short reverb, minimal delay — everything needs to cut through at this speed. The energy is in the tension between the mechanical precision of the kick and the fluid movement of the bass.",
+    "bpm_range": "174–176",
+    "brief": "Jump-up D&B at 174 BPM. Kick on beat 1 and late 3 (syncopated two-step), big snare on 2 and 4, rolling 16th hats with open-hat accents. Bass is AN1X pitched STABS (short, punchy, hard-sync saws) playing a melodic minor line — NOT a sustained reese drone. In-your-face, fun, aggressive.",
+    "description": "Jump-up Drum and Bass — 174 BPM. Fast, fun, aggressive — not technical neurofunk or liquid. Drums are the classic syncopated two-step: kick on beat 1 and just before beat 3.5 (step 0 and step 10 on a 16-grid), BIG snare on 2 and 4, rolling 16th hats the whole bar with open-hat accents on off-beats. Amen-break chops welcome as fills. Bass is AN1X pitched STABS — short hard-sync saws with a snappy amp envelope and a touch of pitch-envelope blip. It plays a MELODIC line (minor pentatonic, 4–6 pitches) that jumps and talks, not a sustained drone. Short reverb, minimal delay so stabs stay punchy. The 303 bass voice stays OFF — the AN1X is the bass voice in this style.",
     "seed_patterns": {
-      "kick": [
-        1,
-        0,
-        0,
-        0,
-        0,
-        0,
-        1,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        1,
-        0
-      ],
-      "snare": [
-        0,
-        0,
-        0,
-        0,
-        1,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        1,
-        0,
-        0,
-        0
-      ],
-      "hihat": [
-        1,
-        1,
-        0,
-        1,
-        1,
-        0,
-        1,
-        1,
-        0,
-        1,
-        1,
-        0,
-        1,
-        1,
-        0,
-        1
-      ],
-      "bass_steps": [
-        1,
-        0,
-        1,
-        0,
-        0,
-        0,
-        1,
-        0,
-        1,
-        0,
-        0,
-        0,
-        1,
-        0,
-        0,
-        0
-      ],
-      "bass_notes": [
-        33,
-        33,
-        36,
-        33,
-        33,
-        33,
-        33,
-        33,
-        33,
-        33,
-        36,
-        33,
-        33,
-        33,
-        33,
-        33
-      ]
+      "kick":  [1,0,0,0,0,0,0,0, 0,0,0,0,0,0,0,0, 0,0,0,0,1,0,0,0, 0,0,0,0,0,0,0,0],
+      "snare": [0,0,0,0,0,0,0,0, 1,0,0,0,0,0,0,0, 0,0,0,0,0,0,0,0, 1,0,0,0,0,0,0,0],
+      "hihat": [1,0,1,0,1,0,1,0, 1,0,1,0,1,0,1,0, 1,0,1,0,1,0,1,0, 1,0,1,0,1,0,1,0]
     },
     "suggested_root": 9,
     "suggested_scale": "minor",
     "baseline_params": {
-      "bass": {
-        "cutoff": 0.38,
-        "resonance": 0.6,
-        "env_mod": 0.55,
-        "decay": 0.3,
-        "waveform": "Saw",
-        "volume": 0.88,
-        "sub_osc_level": 0.45
-      },
       "sequencer": {
         "bpm": 174.0
       },
@@ -1333,27 +1237,46 @@
         "enabled": false
       },
       "an1x": {
-        "enabled": false
+        "enabled": true,
+        "volume": 0.85,
+        "osc1_level": 0.9,
+        "osc2_level": 0.7,
+        "osc2_detune": 0.52,
+        "hard_sync": true,
+        "filter_cutoff": 0.42,
+        "filter_resonance": 0.55,
+        "filter_env_amount": 0.7,
+        "filter_attack": 0.02,
+        "filter_decay": 0.22,
+        "filter_sustain": 0.25,
+        "filter_release": 0.1,
+        "amp_attack": 0.01,
+        "amp_decay": 0.28,
+        "amp_sustain": 0.15,
+        "amp_release": 0.08,
+        "pitch_env_amount": 0.55,
+        "pitch_env_decay": 0.12
       },
       "fx": {
-        "reverb_mix": 0.1,
+        "reverb_mix": 0.08,
         "reverb_size": 0.3,
-        "delay_mix": 0.08
+        "delay_mix": 0.06
       }
     },
     "mc_lines": [
-      "Rollers. All night long.",
-      "Step up to the bass.",
-      "Hold tight the drum and bass massive.",
-      "Let it roll."
+      "Hold tight the jump-up massive.",
+      "Rewind! Pull it up!",
+      "Selector — let it roll.",
+      "Big up the ravers!",
+      "One time for the bass!"
     ],
     "themes": [
-      "rollers",
-      "bass",
+      "jump up",
+      "stabs",
       "breaks",
-      "dark",
-      "liquid",
-      "jump up"
+      "amen",
+      "rewind",
+      "dancefloor"
     ]
   },
   {

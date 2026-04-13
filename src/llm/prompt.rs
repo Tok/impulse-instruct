@@ -165,7 +165,24 @@ pub fn build_system_prompt_full(
                     _ => s.description.as_str(),
                 };
                 let seed = if !s.seed_patterns.is_empty() {
-                    format!("\nSeed patterns (16-step starting point — extend to fill sequencer.steps, adapt freely):\n{}\n", s.seed_patterns.to_prompt_lines())
+                    // Report the seed's actual length so the agent knows
+                    // whether to extend, scale, or copy verbatim to match
+                    // sequencer.steps.  Styles like D&B ship 32-step seeds
+                    // already tuned to the engine's default bar length.
+                    let seed_len = [
+                        s.seed_patterns.kick.len(),
+                        s.seed_patterns.snare.len(),
+                        s.seed_patterns.hihat.len(),
+                        s.seed_patterns.bass_steps.len(),
+                    ]
+                    .into_iter()
+                    .max()
+                    .unwrap_or(0);
+                    format!(
+                        "\nSeed patterns ({}-step starting point — match sequencer.steps exactly; if sequencer.steps is longer, extend the pattern; if shorter, sample down. Adapt freely within the style):\n{}\n",
+                        seed_len,
+                        s.seed_patterns.to_prompt_lines()
+                    )
                 } else {
                     String::new()
                 };

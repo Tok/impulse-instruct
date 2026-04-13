@@ -8,7 +8,8 @@ scene_count 8
 
 scene "Setup"
 
-reset_rack
+reset_all
+set_style synthwave
 
 add_instrument bass
 add_instrument an1x
