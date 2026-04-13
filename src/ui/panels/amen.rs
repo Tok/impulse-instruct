@@ -302,14 +302,16 @@ fn draw_slice_wheel(
     if looping {
         painter.circle_stroke(center, r_outer + 3.0, egui::Stroke::new(1.0, theme::CHALK));
     }
-    // Reverse arrow indicator in the hub
+    // Direction arrow in the hub (black pointing glyphs render reliably
+    // in egui's default font — the earlier open-pointer chars showed as
+    // a fallback square on some systems).
     let arrow_col = theme::ASH;
-    let hub_label = if reverse { "◁" } else { "▷" };
+    let hub_label = if reverse { "◄" } else { "►" };
     painter.text(
         center,
         egui::Align2::CENTER_CENTER,
         hub_label,
-        egui::FontId::proportional(size * 0.28),
+        egui::FontId::monospace(size * 0.22),
         arrow_col,
     );
 }
@@ -415,28 +417,36 @@ pub fn draw_amen(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             // plus item_spacing).  Using a fixed cap keeps the picker from
             // pushing outside the 3-cell module width on narrow rack layouts.
             egui::ComboBox::from_id_source("amen_sample_picker")
-                .width((ui.available_width() - 70.0).max(60.0))
+                // Room for RND + LD + PLAY (3 small buttons).
+                .width((ui.available_width() - 96.0).max(60.0))
                 .selected_text(egui::RichText::new(current_name).monospace().size(8.0))
                 .show_ui(ui, |ui| {
-                    for sp in &samples {
-                        let sp_str = sp.to_string_lossy().to_string();
-                        let name = sp
-                            .file_name()
-                            .and_then(|n| n.to_str())
-                            .unwrap_or(sp_str.as_str())
-                            .to_string();
-                        if ui
-                            .selectable_label(
-                                path == sp_str,
-                                egui::RichText::new(name).monospace().size(8.0),
-                            )
-                            .clicked()
-                        {
-                            path = sp_str;
-                            app.state.write().amen.path = path.clone();
-                            load_and_cache(app, &path);
-                        }
-                    }
+                    // Cap the popup height so long sample-pack dirs don't
+                    // overflow the rack/panel bounds (the user reported
+                    // entries getting cut off).  200px ≈ 14 rows at 8pt.
+                    egui::ScrollArea::vertical()
+                        .max_height(200.0)
+                        .show(ui, |ui| {
+                            for sp in &samples {
+                                let sp_str = sp.to_string_lossy().to_string();
+                                let name = sp
+                                    .file_name()
+                                    .and_then(|n| n.to_str())
+                                    .unwrap_or(sp_str.as_str())
+                                    .to_string();
+                                if ui
+                                    .selectable_label(
+                                        path == sp_str,
+                                        egui::RichText::new(name).monospace().size(8.0),
+                                    )
+                                    .clicked()
+                                {
+                                    path = sp_str;
+                                    app.state.write().amen.path = path.clone();
+                                    load_and_cache(app, &path);
+                                }
+                            }
+                        });
                 });
             if ui
                 .small_button(egui::RichText::new("RND").monospace().size(7.0))
@@ -455,6 +465,30 @@ pub fn draw_amen(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             {
                 let p = path.clone();
                 load_and_cache(app, &p);
+            }
+            // PLAY — one-shot trigger of the amen voice through the
+            // normal DSP trigger pipeline, using current slice/gate/
+            // stutter settings.  Useful for auditioning without the
+            // sequencer running.
+            if ui
+                .small_button(egui::RichText::new("▶").monospace().size(7.5))
+                .on_hover_text(
+                    "Trigger the sample once (uses current slice, gate,\n\
+                     stutter, reverse, and BPM-stretch settings).\n\
+                     Slice 0 = auto-advance.",
+                )
+                .clicked()
+            {
+                use crate::audio::AudioCommand;
+                use crate::sequencer::TriggerEvent;
+                use crate::state::DrumVoice;
+                let _ = app
+                    .audio_tx
+                    .push(AudioCommand::Trigger(TriggerEvent::DrumTrigger {
+                        voice: DrumVoice::Amen,
+                        velocity: 1.0,
+                        slice: 0,
+                    }));
             }
         });
     }
@@ -557,8 +591,12 @@ pub fn draw_amen(app: &mut ImpulseApp, ui: &mut egui::Ui) {
     // SLICES buttons, REV/LOOP toggles, and the tempo row (SRC BPM +
     // STRETCH).  Packing all three into that column frees the lower half
     // of the panel for a single knob row.
+    let host_bpm = app.state.read().sequencer.bpm;
     ui.horizontal(|ui| {
-        draw_slice_wheel(ui, slice_count, active, reverse, loop_mode, 56.0);
+        // Small padding around the wheel so it doesn't hug other widgets.
+        ui.add_space(4.0);
+        draw_slice_wheel(ui, slice_count, active, reverse, loop_mode, 96.0);
+        ui.add_space(6.0);
         ui.vertical(|ui| {
             // SLICES selector
             ui.horizontal(|ui| {
@@ -591,8 +629,15 @@ pub fn draw_amen(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                     }
                 }
             });
-            // REV / LOOP
+            // DIR (REV/FWD) + LOOP — label added to the direction toggle
+            // so the state reads cleanly without needing the hub arrow.
             ui.horizontal(|ui| {
+                ui.label(
+                    egui::RichText::new("DIR")
+                        .monospace()
+                        .size(7.5)
+                        .color(theme::SMOKE),
+                );
                 if widgets::toggle_button(ui, if reverse { "REV" } else { "FWD" }, &mut reverse) {
                     changed = true;
                 }
@@ -604,8 +649,11 @@ pub fn draw_amen(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                     changed = true;
                 }
             });
-            // SRC BPM + STRETCH — tempo-matching controls.  STRETCH on =
-            // resample-based stretch to sequencer.bpm (pitches the sample).
+            // SRC BPM + STRETCH — tempo-matching controls.  SYNC button
+            // snaps source_bpm to the sequencer BPM (the "host" tempo)
+            // so STRETCH effectively becomes a no-op until you change
+            // sequencer.bpm, matching the "default synced" behavior the
+            // user expects.
             ui.horizontal(|ui| {
                 ui.label(
                     egui::RichText::new("BPM")
@@ -619,6 +667,14 @@ pub fn draw_amen(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                     .changed()
                 {
                     source_bpm = v;
+                    changed = true;
+                }
+                if ui
+                    .small_button(egui::RichText::new("=").monospace().size(7.0))
+                    .on_hover_text(format!("Sync source BPM to host ({:.0})", host_bpm))
+                    .clicked()
+                {
+                    source_bpm = host_bpm;
                     changed = true;
                 }
                 if widgets::toggle_button(
