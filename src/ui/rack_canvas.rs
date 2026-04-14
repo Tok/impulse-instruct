@@ -182,6 +182,7 @@ pub fn draw_rack(app: &mut ImpulseApp, ctx: &egui::Context, ui: &mut egui::Ui) {
         }
     }
     handle_cable_drag(app, ctx, &ports);
+    crate::ui::module_card_mod::draw_mod_selector_dropdowns(app, ctx, &ports);
     if let Some(ref drag) = app.module_drag
         && let Some(pointer) = ctx.pointer_latest_pos()
     {
