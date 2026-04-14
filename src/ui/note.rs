@@ -88,6 +88,12 @@ pub(crate) fn ansi_colorize_notes(text: &str) -> std::borrow::Cow<'_, str> {
                     let has_octave = j < len && bytes[j].is_ascii_digit();
                     if has_octave {
                         j += 1;
+                        // Word boundary required after the octave digit —
+                        // rejects `E4B`, `C4_K_M.gguf` etc.
+                        if j < len && bytes[j].is_ascii_alphabetic() {
+                            pos += 1;
+                            continue;
+                        }
                     }
                     // For bare notes (no accidental, no octave digit), both the
                     // preceding and following characters must be word boundaries or
@@ -179,8 +185,16 @@ pub(crate) fn ansi_colorize_notes(text: &str) -> std::borrow::Cow<'_, str> {
                 }
             }
         }
-        // Frequency: digits (optional .digits) optionally space then Hz
+        // Frequency: digits (optional .digits) optionally space then Hz.
+        // Word boundary required before the number — otherwise "44100 Hz"
+        // would re-match starting at the second '4' as embedded "4100 Hz".
         if b.is_ascii_digit() {
+            let prev_word_break =
+                pos == 0 || !(bytes[pos - 1].is_ascii_digit() || bytes[pos - 1] == b'.');
+            if !prev_word_break {
+                pos += 1;
+                continue;
+            }
             let mut j = pos;
             while j < len && (bytes[j].is_ascii_digit() || bytes[j] == b'.') {
                 j += 1;
@@ -190,10 +204,12 @@ pub(crate) fn ansi_colorize_notes(text: &str) -> std::borrow::Cow<'_, str> {
             if k < len && bytes[k] == b' ' {
                 k += 1;
             }
+            // No upper Hz cap — semitone class wraps so 44100 Hz colours
+            // by its octave-equivalent semitone, not by the embedded 4100.
             if k + 2 <= len
                 && bytes[k..k + 2].eq_ignore_ascii_case(b"Hz")
                 && let Ok(hz) = num_str.parse::<f64>()
-                && (20.0..=20_000.0).contains(&hz)
+                && hz >= 20.0
             {
                 let st = (69.0 + 12.0 * (hz / 440.0_f64).log2()).round() as i64;
                 paint!(pos, k + 2, st.rem_euclid(12) as u8);

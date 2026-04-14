@@ -92,8 +92,8 @@ fn note_semitone(c: char, acc: Option<char>) -> Option<u8> {
     Some(((base + off).rem_euclid(12)) as u8)
 }
 
-const IGNORE_PRECEDING_WORDS: &[&[u8]] = &[b"kit", b"pad", b"part", b"bank", b"slot"];
-const QUALITIES: &[&[u8]] = &[
+pub(crate) const IGNORE_PRECEDING_WORDS: &[&[u8]] = &[b"kit", b"pad", b"part", b"bank", b"slot"];
+pub(crate) const QUALITIES: &[&[u8]] = &[
     b"major",
     b"minor",
     b"maj",
@@ -144,6 +144,13 @@ fn note_spans(line: &str) -> Vec<(usize, usize, u8)> {
                     let has_octave = j < len && bytes[j].is_ascii_digit();
                     if has_octave {
                         j += 1;
+                        // Reject `E4B`, `C4_K_M.gguf` etc. — after the octave
+                        // digit we still need a word boundary (non-alpha).
+                        // Without this check, model filenames colour as notes.
+                        if j < len && bytes[j].is_ascii_alphabetic() {
+                            pos += 1;
+                            continue;
+                        }
                     }
                     let bare = acc.is_none() && !has_octave;
                     if bare {
@@ -233,7 +240,18 @@ fn note_spans(line: &str) -> Vec<(usize, usize, u8)> {
         }
 
         // ── Frequency (N[.N] Hz) ───────────────────────────────────────────
+        // Require a non-digit/non-dot word boundary BEFORE the number so we
+        // don't match e.g. "4100 Hz" inside "44100 Hz" by re-entering at the
+        // second digit.  Also no upper Hz cap — the semitone-class mapping
+        // wraps cleanly so 44100 Hz colours as F (its octave-equivalent
+        // semitone), not as the embedded 4100 Hz blue.
         if b.is_ascii_digit() {
+            let prev_word_break =
+                pos == 0 || !(bytes[pos - 1].is_ascii_digit() || bytes[pos - 1] == b'.');
+            if !prev_word_break {
+                pos += 1;
+                continue;
+            }
             let mut j = pos;
             while j < len && (bytes[j].is_ascii_digit() || bytes[j] == b'.') {
                 j += 1;
@@ -246,7 +264,7 @@ fn note_spans(line: &str) -> Vec<(usize, usize, u8)> {
             if k + 2 <= len
                 && bytes[k..k + 2].eq_ignore_ascii_case(b"Hz")
                 && let Ok(hz) = num_str.parse::<f64>()
-                && (20.0..=20_000.0).contains(&hz)
+                && hz >= 20.0
             {
                 let midi = 69.0 + 12.0 * (hz / 440.0_f64).log2();
                 let st = (midi.round() as i64).rem_euclid(12) as u8;
@@ -305,4 +323,48 @@ pub fn colorize(line: &str) -> String {
     }
     out.push_str(RESET);
     out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::note_spans;
+
+    fn spans(s: &str) -> Vec<(usize, usize)> {
+        note_spans(s).into_iter().map(|(a, b, _)| (a, b)).collect()
+    }
+
+    #[test]
+    fn model_filename_does_not_match_e4() {
+        // E4B sits inside a model filename — no notes should be detected.
+        let s = "loading models/gemma-4-E4B-it-Q4_K_M.gguf";
+        assert!(spans(s).is_empty(), "unexpected spans: {:?}", spans(s));
+    }
+
+    #[test]
+    fn freq_44100_matches_full_token_not_embedded() {
+        let s = "sample rate 44100 Hz active";
+        let v = spans(s);
+        assert_eq!(v, vec![(12, 20)], "got {:?}", v); // "44100 Hz" full
+    }
+
+    #[test]
+    fn freq_4100_still_matches_at_boundary() {
+        let s = "tone at 4100 Hz";
+        let v = spans(s);
+        assert_eq!(v, vec![(8, 15)], "got {:?}", v);
+    }
+
+    #[test]
+    fn standalone_c4_still_colors() {
+        let s = "play C4 next";
+        let v = spans(s);
+        assert_eq!(v, vec![(5, 7)]);
+    }
+
+    #[test]
+    fn bare_g_minor_still_colors() {
+        let s = "key of G minor";
+        let v = spans(s);
+        assert_eq!(v, vec![(7, 14)]);
+    }
 }

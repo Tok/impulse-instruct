@@ -171,6 +171,12 @@ pub(super) fn colorize_log(text: &str, _default_color: egui::Color32) -> egui::t
                     let has_octave = j < len && bytes[j].is_ascii_digit();
                     if has_octave {
                         j += 1;
+                        // Reject `E4B`, `C4_K_M.gguf` etc. — after the octave
+                        // digit we still need a word boundary (non-alpha).
+                        if j < len && bytes[j].is_ascii_alphabetic() {
+                            pos += 1;
+                            continue;
+                        }
                     }
                     // For bare notes (no accidental, no octave), require safe punctuation
                     // on both sides — prevents "D" in "D&B", "E" in "E-flat", etc.
@@ -251,30 +257,8 @@ pub(super) fn colorize_log(text: &str, _default_color: egui::Color32) -> egui::t
                         }
                         // Extend span to cover "A minor", "G major", etc.
                         if next_char == b' ' && j < len {
-                            const QUALITIES: &[&[u8]] = &[
-                                b"major",
-                                b"minor",
-                                b"maj",
-                                b"min",
-                                b"diminished",
-                                b"dim",
-                                b"augmented",
-                                b"aug",
-                                b"sus",
-                                b"suspended",
-                                b"dorian",
-                                b"phrygian",
-                                b"lydian",
-                                b"mixolydian",
-                                b"locrian",
-                                b"aeolian",
-                                b"melodic",
-                                b"harmonic",
-                                b"pentatonic",
-                                b"chromatic",
-                            ];
                             let rest = &bytes[j + 1..];
-                            for q in QUALITIES {
+                            for q in crate::log_fmt::QUALITIES {
                                 let qlen = q.len();
                                 if rest.len() >= qlen {
                                     let matches_ci = rest[..qlen]
@@ -298,7 +282,15 @@ pub(super) fn colorize_log(text: &str, _default_color: egui::Color32) -> egui::t
         }
 
         // ── Frequency: digits (optional dot+digits) optionally space then Hz ─
+        // Word boundary required before the number — otherwise "44100 Hz"
+        // would re-match starting at the second '4' as "4100 Hz" (blue).
         if b.is_ascii_digit() {
+            let prev_word_break =
+                pos == 0 || !(bytes[pos - 1].is_ascii_digit() || bytes[pos - 1] == b'.');
+            if !prev_word_break {
+                pos += 1;
+                continue;
+            }
             let mut j = pos;
             while j < len && (bytes[j].is_ascii_digit() || bytes[j] == b'.') {
                 j += 1;
@@ -308,10 +300,12 @@ pub(super) fn colorize_log(text: &str, _default_color: egui::Color32) -> egui::t
             if k < len && bytes[k] == b' ' {
                 k += 1;
             }
+            // No upper Hz cap — semitone class wraps cleanly so 44100 Hz
+            // colours by its octave-equivalent semitone, not blue at the 4.
             if k + 2 <= len
                 && bytes[k..k + 2].eq_ignore_ascii_case(b"Hz")
                 && let Ok(hz) = num_str.parse::<f64>()
-                && (20.0..=20_000.0).contains(&hz)
+                && hz >= 20.0
             {
                 let st = freq_semitone(hz);
                 colored!(pos, k + 2, st);
