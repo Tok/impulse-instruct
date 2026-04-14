@@ -433,10 +433,11 @@ pub(super) fn sequencer_grid_rows(state: &crate::state::AppState, col_w: f32) ->
     let an1x_h = if has_an1x { sub_rows * step_row } else { 0.0 };
     let drums_h = active_drum_voices as f32 * sub_rows * (step_row + drum_sub);
     // Pre-echo row that lives at the bottom of the sequencer panel
-    // (always rendered): top add_space + compact horizontal row with
-    // the anchor strip (21 px) + labels + toggles.  Budget ~32 px so
-    // the grid cell has room for it without clipping.
-    let preecho_h = 32.0;
+    // (always rendered): padding + horizontal row with the anchor
+    // strip (21 px square cells + leading/trailing 6 px pads)
+    // + labels + toggles + trailing pad.  Budget 42 px covers it
+    // with a few px of margin so the cell isn't shaved close.
+    let preecho_h = 42.0;
     let total_h = header_h + bass_h + hoover_h + an1x_h + drums_h + preecho_h;
     // Convert pixel height to grid rows: each grid row occupies col_w + RACK_GAP
     // (minus one trailing gap on the last row).

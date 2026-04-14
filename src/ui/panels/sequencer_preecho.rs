@@ -15,11 +15,14 @@
 use crate::sequencer::PreechoConfig;
 use crate::ui::{ImpulseApp, theme, widgets};
 
-/// Width of each step cell in the anchor strip.
-/// Sized ~1.5× the original 10/14 so the click targets read more
-/// like toggle boxes than slivers.
-const ANCHOR_STEP_W: f32 = 15.0;
+/// Size of each step cell in the anchor strip — kept square so they
+/// read as actual toggle boxes, not slivers.  21 px matches the
+/// bumped size from the earlier "1.5×" pass.
+const ANCHOR_STEP_W: f32 = 21.0;
 const ANCHOR_STEP_H: f32 = 21.0;
+/// Space to reserve on either side of the strip (and above/below)
+/// so the cells don't butt up against neighboring widgets.
+const ANCHOR_STRIP_PAD: f32 = 6.0;
 
 const VOICE_KEYS: &[&str] = &["kit_a", "kit_b", "amen", "bass", "hoover", "an1x"];
 
@@ -97,11 +100,16 @@ pub(super) fn draw_preecho_row(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         }
         ui.separator();
 
-        // Clickable anchor strip — one tiny cell per step.  Click to
-        // toggle anchor at that step.  Lit cells = anchors; dimly lit
-        // cells = steps inside the lead-in window of some anchor.
+        // Clickable anchor strip — one cell per sequencer step.  Click
+        // to toggle anchor at that step.  Lit cells = anchors; dimly
+        // lit = inside a lead-in window of some anchor.  Padded on all
+        // four sides so the square cells have visible breathing room.
+        ui.add_space(ANCHOR_STRIP_PAD);
         let seq_steps = app.state.read().sequencer.steps.clamp(1, 64);
         let strip_w = ANCHOR_STEP_W * seq_steps as f32 + (seq_steps as f32 - 1.0);
+        // Horizontal padding sandwiches the strip between two spacers so
+        // it doesn't touch the separator or the LEN label.
+        ui.add_space(ANCHOR_STRIP_PAD);
         let (rect, resp) =
             ui.allocate_exact_size(egui::vec2(strip_w, ANCHOR_STEP_H), egui::Sense::click());
         let painter = ui.painter_at(rect);
@@ -177,6 +185,8 @@ pub(super) fn draw_preecho_row(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             }
             changed = true;
         }
+        // Trailing horizontal pad — mirror of the leading ANCHOR_STRIP_PAD.
+        ui.add_space(ANCHOR_STRIP_PAD);
 
         // LEN drag value.
         ui.label(
@@ -243,4 +253,9 @@ pub(super) fn draw_preecho_row(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             .preecho
             .insert(selected.clone(), cfg);
     }
+
+    // Trailing vertical pad below the whole row so the preecho section
+    // has visible separation from the lane scroll area above it and the
+    // module boundary below it.
+    ui.add_space(ANCHOR_STRIP_PAD);
 }
