@@ -742,6 +742,8 @@ fn draw_llm_agent_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, module_id: u32)
                 }
             });
     }
+    // ── Quick-command pills (one-click re-prompts) ──────────────────────
+    super::agent_pills::draw_pills(app, ui, module_id);
     // ── User instructions ───────────────────────────────────────────────
     let instr_resp = ui.add(
         egui::TextEdit::multiline(&mut user_instructions)

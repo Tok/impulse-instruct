@@ -1,4 +1,5 @@
 // ─── ui/mod.rs — Main egui application ───────────────────────────────────────
+pub mod agent_pills;
 mod api_log_handler;
 mod flip;
 mod header;
@@ -475,8 +476,7 @@ impl ImpulseApp {
             // Jam re-triggers unless heat is at zero (model is parked).
             if out.text == "[jam_cycle_done]" && self.state.read().llm.heat > 0.0 {
                 {
-                    // Advance ramps selectively — do NOT replace the full state,
-                    // as that overwrites rack/agent changes made by the API.
+                    // Advance ramps selectively (don't full-replace state — would overwrite API/rack edits).
                     let cur = self.state.read().clone();
                     let next = crate::state::jam_tools::advance_ramps(cur);
                     let mut s = self.state.write();
