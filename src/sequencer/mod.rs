@@ -252,7 +252,16 @@ pub fn advance_clock(
                     // step N plays slice N.  Other drum voices ignore the
                     // slice field entirely.
                     let effective_slice = if matches!(*voice, DrumVoice::Amen) && s.slice == 0 {
-                        (vstep as u8).saturating_add(1)
+                        // Auto-advance: step N plays slice N by default, OR
+                        // slice_order[N % len] when the user defined a
+                        // custom permutation on SequencerState.amen_slice_order.
+                        let order = &seq.amen_slice_order;
+                        let raw = if order.is_empty() {
+                            vstep as u8
+                        } else {
+                            order[vstep % order.len()]
+                        };
+                        raw.saturating_add(1)
                     } else {
                         s.slice
                     };

@@ -422,6 +422,13 @@ pub struct SequencerState {
     /// "hoover", "an1x").  Empty = no preecho on that voice.
     #[serde(default)]
     pub preecho: std::collections::HashMap<String, crate::sequencer::PreechoConfig>,
+    /// Amen slice play order — maps step index to slice index.  Empty =
+    /// identity (step N → slice N).  When populated, the sequencer's
+    /// auto-advance path looks up `amen_slice_order[step % len]` so the
+    /// user can rearrange the break into a custom permutation (e.g.
+    /// `[3, 0, 1, 2]` shifts the whole pattern by 3 slices).
+    #[serde(default)]
+    pub amen_slice_order: Vec<u8>,
 }
 
 impl Default for SequencerState {
@@ -472,6 +479,7 @@ impl Default for SequencerState {
             bass_voice_steps: vec![32usize; MAX_BASS_VOICES],
             bass_voice_enabled: default_bass_voice_enabled(),
             preecho: std::collections::HashMap::new(),
+            amen_slice_order: Vec::new(),
         }
     }
 }

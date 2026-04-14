@@ -278,12 +278,18 @@ fn draw_slice_wheel(
         };
         painter.circle_filled(center, r_outer, fill);
     } else {
+        // Pulsing intensity for the active slice — modulate gray over time
+        // so the "now playing" highlight obviously stands out from the
+        // static slice fills.
+        let t = ui.ctx().input(|i| i.time) as f32;
+        let pulse = (t * 4.0 * std::f32::consts::TAU).sin() * 0.5 + 0.5; // 0..1
+        let active_g = (190.0 + pulse * 50.0) as u8; // 190..240
         for i in 0..n {
             let a0 = -std::f32::consts::FRAC_PI_2 + (i as f32 / n as f32) * tau * dir;
             let a1 = -std::f32::consts::FRAC_PI_2 + ((i + 1) as f32 / n as f32) * tau * dir;
             let active = active_slice.map(|s| s as usize) == Some(i);
             let fill = if active {
-                egui::Color32::from_gray(180)
+                egui::Color32::from_gray(active_g)
             } else {
                 egui::Color32::from_gray(40)
             };
@@ -300,6 +306,26 @@ fn draw_slice_wheel(
                 fill,
                 egui::Stroke::new(0.5, egui::Color32::from_gray(15)),
             ));
+            // Slice index label inside each wedge so the user can see
+            // which slice is which without counting clockwise from 12.
+            let mid_angle = (a0 + a1) * 0.5;
+            let label_r = (r_outer + r_inner) * 0.5;
+            let label_pos = center + egui::vec2(mid_angle.cos(), mid_angle.sin()) * label_r;
+            let label_col = if active {
+                egui::Color32::from_gray(20)
+            } else {
+                egui::Color32::from_gray(120)
+            };
+            painter.text(
+                label_pos,
+                egui::Align2::CENTER_CENTER,
+                format!("{}", i + 1),
+                egui::FontId::monospace(size * 0.07),
+                label_col,
+            );
+        }
+        if active_slice.is_some() {
+            ui.ctx().request_repaint();
         }
     }
     // Inner hole
@@ -328,6 +354,80 @@ fn draw_slice_wheel(
     );
 }
 
+/// Render the slice-order edit strip — one cell per step position, each
+/// showing which slice plays at that step.  Click any cell to cycle through
+/// 1..=slice_count (wrapping back to 1).  A small `RESET` button restores
+/// the identity mapping (empty `amen_slice_order`).
+///
+/// `order` is mutated in-place; returns `true` if anything changed.
+fn draw_slice_order_strip(
+    ui: &mut egui::Ui,
+    order: &mut Vec<u8>,
+    slice_count: u8,
+    active_slice: Option<u8>,
+) -> bool {
+    let n = slice_count.max(1) as usize;
+    if order.len() != n {
+        // Auto-resize to match current slice count.  Initialise new entries
+        // with their identity index so resizing slice count from 4 → 8 leaves
+        // the existing cells alone and adds 4..7 at the end.
+        let prev_len = order.len();
+        order.resize(n, 0);
+        for (i, slot) in order.iter_mut().enumerate().skip(prev_len) {
+            *slot = i as u8;
+        }
+    }
+    let mut changed = false;
+    ui.horizontal(|ui| {
+        ui.spacing_mut().item_spacing.x = 2.0;
+        ui.label(
+            egui::RichText::new("ORDER")
+                .color(theme::SMOKE)
+                .monospace()
+                .size(7.5),
+        );
+        #[allow(clippy::needless_range_loop)]
+        for i in 0..n {
+            let slot = order[i] as usize;
+            let label = format!("{}", slot + 1);
+            // Highlight the cell whose POSITION matches the active step
+            // (where the playhead currently is in the order strip).
+            let is_active = active_slice.map(|s| s as usize) == Some(slot);
+            let bg = if is_active {
+                egui::Color32::from_gray(80)
+            } else {
+                egui::Color32::from_gray(28)
+            };
+            let fg = if is_active { theme::CHALK } else { theme::FOG };
+            if ui
+                .add(
+                    egui::Button::new(egui::RichText::new(&label).monospace().size(8.0).color(fg))
+                        .fill(bg)
+                        .min_size(egui::vec2(18.0, 16.0)),
+                )
+                .on_hover_text(format!(
+                    "Step {} → slice {} (click to cycle)",
+                    i + 1,
+                    slot + 1
+                ))
+                .clicked()
+            {
+                order[i] = ((slot + 1) % n) as u8;
+                changed = true;
+            }
+        }
+        if ui
+            .small_button(egui::RichText::new("RESET").monospace().size(7.0))
+            .on_hover_text("Reset to identity (step N → slice N)")
+            .clicked()
+        {
+            order.clear();
+            changed = true;
+        }
+    });
+    changed
+}
+
 /// Find the slice index of the most recently-played amen step.
 /// Returns None if no step or the drum isn't playing.
 fn current_amen_slice(app: &ImpulseApp) -> Option<u8> {
@@ -348,11 +448,16 @@ fn current_amen_slice(app: &ImpulseApp) -> Option<u8> {
             && step.active
         {
             let slices = s.amen.slice_count.max(1);
-            // Slice 0 means auto — we can't know the DSP's auto counter, but
-            // approximate by using (loop_count * pattern hits + pos_in_loop)
-            // ≈ current_step mod slice_count so the wheel still animates.
+            // Slice 0 means auto — mirror the sequencer's effective slice
+            // resolution (apply amen_slice_order if set, else linear).
             let resolved = if step.slice == 0 {
-                (idx as u8) % slices
+                let order = &s.sequencer.amen_slice_order;
+                let raw = if order.is_empty() {
+                    idx as u8
+                } else {
+                    order[idx % order.len()]
+                };
+                raw % slices
             } else {
                 (step.slice - 1) % slices
             };
@@ -721,13 +826,25 @@ pub fn draw_amen(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         });
     });
 
+    // ── Slice ORDER strip ────────────────────────────────────────────────
+    // Maps step index to slice index — the heart of "rearrange the break".
+    // Each cell shows the slice number that fires at that step position;
+    // click to cycle through 1..slice_count.  Active step is highlighted
+    // so the user can visually track the live playhead through the order.
+    let order_changed = draw_slice_order_strip(
+        ui,
+        &mut app.state.write().sequencer.amen_slice_order,
+        slice_count,
+        active,
+    );
+    if order_changed {
+        app.push_audio_params();
+    }
+
     // Earlier attempt to "glue" this row to the bottom via
     // add_space(available - knob_h) half-overflowed the panel because
     // glass_group_fill's own inner margin (+16 px) pushed the panes
-    // past the module edge.  Drop the spacer and let the row fall
-    // naturally below the wheel + waveform section.  If the panel has
-    // headroom above, it lives above; we accept that trade for
-    // panes-that-don't-clip.
+    // past the module edge.
 
     // ── Knob row — three glass-pane groups on one line ──────────────────────
     // LEVEL (vol/pitch) · REGION (start/end) · SHAPE (gate/stutter).

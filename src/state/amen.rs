@@ -111,7 +111,7 @@ impl Default for AmenState {
             path: String::new(),
             pitch: 0.0,
             volume: 0.75,
-            loop_mode: false,
+            loop_mode: true,
             slice_count: default_slice_count(),
             start_offset: 0.0,
             end_offset: default_end_offset(),
