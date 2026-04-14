@@ -1,6 +1,4 @@
-// ─── state/llm_apply.rs ──────────────────────────────────────────────────────
-// LLM update application extracted from transitions.rs to keep LOC under 1000.
-
+// ─── state/llm_apply.rs ── LLM update application (extracted from transitions).
 use super::llm_helpers::{
     apply_an1x_update, apply_bass_update, apply_fx_update, apply_hoover_update, unlocked_f32,
 };
@@ -14,12 +12,9 @@ use super::{AppState, DrumVoice, LfoTarget, LfoWaveform, MAX_STEPS, Scale, snap_
 use crate::sequencer::euclidean_rhythm;
 
 /// Apply an LLM-generated partial update, respecting locked params.
-/// Returns the new state (caller replaces old state with this).
 pub fn apply_llm_update(state: AppState, update: &serde_json::Value, scope: &[String]) -> AppState {
     let mut s = state;
     let locked = &s.llm.locked_params.clone();
-
-    // Scope helper: empty scope = unrestricted
     let in_scope = |key: &str| scope.is_empty() || scope.iter().any(|s| s == key);
 
     // Legacy "bass" key → voice 0
@@ -943,6 +938,13 @@ pub fn apply_llm_update(state: AppState, update: &serde_json::Value, scope: &[St
                         s.rack.disconnect(&from_ref, &to_ref);
                     }
                 }
+            }
+        }
+
+        // rack.mod_cable — per-knob LFO modulation patching.
+        if let Some(arr) = rack_upd.get("mod_cable").and_then(|v| v.as_array()) {
+            for v in arr {
+                crate::state::modulation::apply_llm_mod_cable_entry(&mut s.rack, v);
             }
         }
     }

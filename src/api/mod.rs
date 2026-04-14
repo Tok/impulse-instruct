@@ -159,6 +159,12 @@ pub struct RackRemoveRequest {
     pub id: u32,
 }
 
+mod rack_mod;
+pub use rack_mod::{
+    RackModCableRequest, RackModDepthRequest, RackModTargetRequest, post_rack_mod_cable,
+    post_rack_mod_depth, post_rack_mod_target,
+};
+
 #[derive(Serialize)]
 pub struct OkResponse {
     pub ok: bool,
@@ -869,6 +875,9 @@ pub fn build_router(api_state: ApiState) -> Router {
         .route("/api/rack/add", post(post_rack_add))
         .route("/api/rack/agent", post(post_rack_agent))
         .route("/api/rack/cable", post(post_rack_cable))
+        .route("/api/rack/mod_cable", post(post_rack_mod_cable))
+        .route("/api/rack/mod_target", post(post_rack_mod_target))
+        .route("/api/rack/mod_depth", post(post_rack_mod_depth))
         .route("/api/rack/remove", post(post_rack_remove))
         .route("/api/rack/reset", post(post_rack_reset))
         .route("/api/state/reset", post(post_state_reset))

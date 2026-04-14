@@ -105,7 +105,9 @@ pub mod rack;
 mod rack_presets;
 pub mod rack_scope;
 pub use fx_plan::compile_fx_plan;
-pub use modulation::{ModInput, lfo_target_short_label, mod_input_label, mod_inputs};
+pub use modulation::{
+    ModInput, lfo_target_short_label, mod_input_label, mod_inputs, parse_lfo_target,
+};
 pub use rack::{
     Cable, CableColor, FxPlan, FxStep, GRID_COLS, ModuleKind, PortDir, PortKind, PortRef,
     RackModule, RackState, Zone,

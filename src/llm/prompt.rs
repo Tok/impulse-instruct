@@ -782,7 +782,13 @@ RACK ROUTING — add/remove modules, enable/disable them, and wire cables:
     "disable":    ["reverb"],                            ← turn a module off
     "connect":    [{{"from": "bass",     "to": "bitcrush"}},
                    {{"from": "bitcrush", "to": "master"}}],   ← add patch cables
-    "disconnect": [{{"from": "bitcrush", "to": "master"}}]    ← remove a cable
+    "disconnect": [{{"from": "bitcrush", "to": "master"}}],   ← remove a cable
+    "mod_cable":  [                                           ← per-knob modulation:
+      {{"from_lfo": 0, "to": "bass", "slot": 0,                  drive bass slot 0 (B.PAN)
+        "depth": 0.5}},                                          at 50 % depth from LFO #0
+      {{"from_lfo": 1, "to": "reverb", "slot": 0,                drive reverb slot 0
+        "depth": 0.4, "targets": ["ReverbMix", "ReverbSize"]}}   with multi-target selection
+    ]
   }}}}
   Module names: "bass", "808", "909", "hoover", "an1x", "amen", "noise", "granular",
                 "bitcrush", "reverb", "delay", "chorus", "phaser", "drive",

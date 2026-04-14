@@ -152,6 +152,132 @@ pub(crate) fn lfo_target_module_kind(target: LfoTarget) -> Option<ModuleKind> {
     }
 }
 
+/// Case-insensitive parse of an `LfoTarget` variant name (e.g. "BassPan",
+/// "reverbmix").  Used by the API + LLM action handlers.  Returns `None`
+/// for unrecognised names; "none" / "" / "—" / "-" parse to `LfoTarget::None`.
+pub fn parse_lfo_target(name: &str) -> Option<LfoTarget> {
+    use LfoTarget::*;
+    let n = name.trim().to_ascii_lowercase();
+    Some(match n.as_str() {
+        "none" | "" | "—" | "-" => None,
+        "basscutoff" => BassCutoff,
+        "bassresonance" => BassResonance,
+        "basspitch" => BassPitch,
+        "bassvolume" => BassVolume,
+        "basspan" => BassPan,
+        "hooverpan" => HooverPan,
+        "noisepan" => NoisePan,
+        "kick808pitch" => Kick808Pitch,
+        "kick808pan" => Kick808Pan,
+        "snare808pan" => Snare808Pan,
+        "hihat808pan" => Hihat808Pan,
+        "kick909pan" => Kick909Pan,
+        "snare909pan" => Snare909Pan,
+        "hihat909pan" => Hihat909Pan,
+        "clap909pan" => Clap909Pan,
+        "an1xcutoff" => An1xCutoff,
+        "an1xpitch" => An1xPitch,
+        "an1xpan" => An1xPan,
+        "reverbmix" => ReverbMix,
+        "reverbsize" => ReverbSize,
+        "reverbdamp" => ReverbDamp,
+        "delaytime" => DelayTime,
+        "delayfeedback" => DelayFeedback,
+        "delaymix" => DelayMix,
+        "chorusrate" => ChorusRate,
+        "chorusdepth" => ChorusDepth,
+        "chorusmix" => ChorusMix,
+        "phaserrate" => PhaserRate,
+        "phaserdepth" => PhaserDepth,
+        "phasermix" => PhaserMix,
+        "waveshaperdrive" => WaveshaperDrive,
+        "waveshapermix" => WaveshaperMix,
+        "distortiondrive" => DistortionDrive,
+        "distortionmix" => DistortionMix,
+        "bitcrushbits" => BitcrushBits,
+        "bitcrushrate" => BitcrushRate,
+        "bitcrushmix" => BitcrushMix,
+        "ringmodfreq" => RingModFreq,
+        "ringmodmix" => RingModMix,
+        "eqlow" => EqLow,
+        "eqmid" => EqMid,
+        "eqhigh" => EqHigh,
+        "compthresh" => CompThresh,
+        "compratio" => CompRatio,
+        "compmix" => CompMix,
+        "tapedrive" => TapeDrive,
+        "tapemix" => TapeMix,
+        "tapeflutter" => TapeFlutter,
+        "autotuneamount" => AutotuneAmount,
+        "autotunemix" => AutotuneMix,
+        "mastervolume" => MasterVolume,
+        _ => return Option::None,
+    })
+}
+
+/// Apply one `rack.mod_cable` JSON entry to the rack — patches the cable,
+/// optionally sets depth, and optionally sets selector targets in one shot.
+/// Each entry: { from_lfo: idx, to: <kind name>, slot: u8, depth?: 0..1,
+/// targets?: [String] }.
+pub fn apply_llm_mod_cable_entry(rack: &mut crate::state::RackState, v: &serde_json::Value) {
+    use crate::state::{ModuleKind, PortDir, PortKind, PortRef};
+    let lfo_idx = v.get("from_lfo").and_then(|x| x.as_u64()).unwrap_or(0) as usize;
+    let to_name = v.get("to").and_then(|x| x.as_str());
+    let slot = v.get("slot").and_then(|x| x.as_u64()).unwrap_or(0) as u8;
+    let depth = v.get("depth").and_then(|x| x.as_f64()).map(|d| d as f32);
+    let lfo_id = rack
+        .modules
+        .iter()
+        .filter(|m| m.kind == ModuleKind::LfoModule)
+        .nth(lfo_idx)
+        .map(|m| m.id);
+    let to_id = to_name.and_then(|n| {
+        rack.modules
+            .iter()
+            .find(|m| crate::state::rack_kind_name_matches(m.kind, n))
+            .map(|m| m.id)
+    });
+    let (Some(fid), Some(tid)) = (lfo_id, to_id) else {
+        return;
+    };
+    rack.connect(
+        PortRef {
+            module_id: fid,
+            dir: PortDir::Out,
+            kind: PortKind::Cv,
+            index: 0,
+        },
+        PortRef {
+            module_id: tid,
+            dir: PortDir::In,
+            kind: PortKind::Mod,
+            index: slot,
+        },
+    );
+    let Some(m) = rack.modules.iter_mut().find(|m| m.id == tid) else {
+        return;
+    };
+    if let Some(d) = depth {
+        let idx = slot as usize;
+        if m.mod_input_depths.len() <= idx {
+            m.mod_input_depths.resize(idx + 1, 1.0);
+        }
+        m.mod_input_depths[idx] = d.clamp(0.0, 1.0);
+    }
+    if let Some(targets) = v.get("targets").and_then(|x| x.as_array()) {
+        let parsed: Vec<LfoTarget> = targets
+            .iter()
+            .filter_map(|tv| tv.as_str())
+            .filter_map(parse_lfo_target)
+            .collect();
+        let idx = slot as usize;
+        if m.mod_selectors.len() <= idx {
+            m.mod_selectors.resize(idx + 1, Vec::new());
+        }
+        m.mod_selectors[idx] = parsed;
+    }
+}
+
 /// `PortKind` emitted on a module's primary output.
 pub(crate) fn rack_out_port_kind(kind: ModuleKind) -> PortKind {
     match kind {
