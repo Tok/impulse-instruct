@@ -405,7 +405,14 @@ impl DspState {
         let mut p = p_base;
         for i in 0..4 {
             let lp = p_base.lfo[i];
-            if !lp.enabled {
+            // Run this slot if it's directly enabled OR a cable-routed mod
+            // sources from it — otherwise nothing depends on its phase.
+            let has_route = p_base
+                .mod_routes
+                .iter()
+                .take(p_base.mod_route_count as usize)
+                .any(|r| r.lfo_slot as usize == i);
+            if !lp.enabled && !has_route {
                 continue;
             }
             let rate_hz = 0.01 + lp.rate * 19.99;
@@ -436,10 +443,13 @@ impl DspState {
                 }
             };
 
-            let mod_val = lfo_val * lp.depth;
-            apply_mod_target(&mut p, lp.target, mod_val);
-            // Cable-routed mod: any mod_route sourced from this LFO slot
-            // contributes lfo_val × route.depth to its target param.
+            // Slot's built-in target only fires when the slot is enabled.
+            // Cable-routed mods always fire — that's the user's intent when
+            // they patched a cable from this slot.
+            if lp.enabled {
+                let mod_val = lfo_val * lp.depth;
+                apply_mod_target(&mut p, lp.target, mod_val);
+            }
             for r in p_base
                 .mod_routes
                 .iter()

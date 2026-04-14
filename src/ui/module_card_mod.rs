@@ -126,43 +126,53 @@ pub fn draw_mod_input_ports(
     y
 }
 
-/// Draw a floating ComboBox over each Selector mod-jack on the back panel so
-/// the user can pick which parameter that slot modulates.  Iterates the
-/// per-frame port list; for each Mod-In port whose slot kind is `Selector`,
-/// renders an overlay at the port position and writes the choice back into
-/// `RackModule.mod_selectors[index]`.
+/// Per-port back-panel overlays: target dropdown (Selector slots only) +
+/// depth knob (every Mod-In jack).  Iterates the per-frame port list and
+/// renders an `egui::Area` overlay at each Mod-In jack position.  Writes
+/// changes back into `RackModule.mod_selectors` and `mod_input_depths` in a
+/// single write lock at the end of the frame.
 pub fn draw_mod_selector_dropdowns(app: &mut ImpulseApp, ctx: &egui::Context, ports: &[PortPos]) {
     if !app.rack_flipped {
         return;
     }
-    // Snapshot the per-module kind + current selector targets so we can render
-    // without holding a write lock on app.state during the ComboBox pass.
-    let snapshot: Vec<(u32, ModuleKind, Vec<LfoTarget>)> = {
+    // Snapshot module kind + current selector targets + depths under a read
+    // lock so the overlay pass can render lock-free.
+    let snapshot: Vec<(u32, ModuleKind, Vec<LfoTarget>, Vec<f32>)> = {
         let s = app.state.read();
         s.rack
             .modules
             .iter()
-            .map(|m| (m.id, m.kind, m.mod_selectors.clone()))
+            .map(|m| {
+                (
+                    m.id,
+                    m.kind,
+                    m.mod_selectors.clone(),
+                    m.mod_input_depths.clone(),
+                )
+            })
             .collect()
     };
-    let mut changes: Vec<(u32, usize, LfoTarget)> = Vec::new();
+    let mut sel_changes: Vec<(u32, usize, LfoTarget)> = Vec::new();
+    let mut depth_changes: Vec<(u32, usize, f32)> = Vec::new();
     for p in ports
         .iter()
         .filter(|p| p.port.dir == PortDir::In && p.port.kind == PortKind::Mod)
     {
-        let Some((_, kind, selectors)) = snapshot.iter().find(|(id, _, _)| *id == p.port.module_id)
+        let Some((_, kind, selectors, depths)) = snapshot
+            .iter()
+            .find(|(id, _, _, _)| *id == p.port.module_id)
         else {
             continue;
         };
         let idx = p.port.index as usize;
         let slots = mod_inputs(*kind);
-        if !matches!(slots.get(idx), Some(ModInput::Selector)) {
+        let Some(slot) = slots.get(idx) else {
             continue;
-        }
-        let current = selectors.get(idx).copied().unwrap_or(LfoTarget::None);
-        // Scope the dropdown to targets that modulate this module kind, plus
-        // the None option.  Voice kinds (no matching LfoTarget variants yet)
-        // fall back to ALL_TARGETS so the slot is still usable.
+        };
+        let is_selector = matches!(slot, ModInput::Selector);
+        let cur_sel = selectors.get(idx).copied().unwrap_or(LfoTarget::None);
+        let cur_depth = depths.get(idx).copied().unwrap_or(1.0).clamp(0.0, 1.0);
+        // Scope dropdown options to this module's targets when possible.
         let own_targets: Vec<LfoTarget> = ALL_TARGETS
             .iter()
             .copied()
@@ -175,9 +185,8 @@ pub fn draw_mod_selector_dropdowns(app: &mut ImpulseApp, ctx: &egui::Context, po
                 .chain(own_targets)
                 .collect()
         };
-        // Anchor the dropdown just to the right of the jack, centred vertically.
         let anchor = p.center + Vec2::new(8.0, -7.0);
-        egui::Area::new(egui::Id::new(("mod_sel", p.port.module_id, idx)))
+        egui::Area::new(egui::Id::new(("mod_overlay", p.port.module_id, idx)))
             .order(egui::Order::Foreground)
             .fixed_pos(anchor)
             .show(ctx, |ui| {
@@ -185,40 +194,72 @@ pub fn draw_mod_selector_dropdowns(app: &mut ImpulseApp, ctx: &egui::Context, po
                     .fill(Color32::from_gray(20))
                     .inner_margin(egui::Margin::symmetric(2.0, 0.0));
                 frame.show(ui, |ui| {
-                    let mut sel = current;
-                    egui::ComboBox::from_id_source(("mod_sel_combo", p.port.module_id, idx))
-                        .selected_text(
-                            egui::RichText::new(lfo_target_short_label(current))
-                                .monospace()
-                                .size(7.5)
-                                .color(Color32::from_gray(170)),
-                        )
-                        .width(52.0)
-                        .show_ui(ui, |ui| {
-                            for t in &options {
-                                ui.selectable_value(
-                                    &mut sel,
-                                    *t,
-                                    egui::RichText::new(lfo_target_short_label(*t))
-                                        .monospace()
-                                        .size(8.0),
-                                );
+                    ui.horizontal(|ui| {
+                        ui.spacing_mut().item_spacing.x = 2.0;
+                        if is_selector {
+                            let mut sel = cur_sel;
+                            egui::ComboBox::from_id_source((
+                                "mod_sel_combo",
+                                p.port.module_id,
+                                idx,
+                            ))
+                            .selected_text(
+                                egui::RichText::new(lfo_target_short_label(cur_sel))
+                                    .monospace()
+                                    .size(7.5)
+                                    .color(Color32::from_gray(170)),
+                            )
+                            .width(52.0)
+                            .show_ui(ui, |ui| {
+                                for t in &options {
+                                    ui.selectable_value(
+                                        &mut sel,
+                                        *t,
+                                        egui::RichText::new(lfo_target_short_label(*t))
+                                            .monospace()
+                                            .size(8.0),
+                                    );
+                                }
+                            });
+                            if sel != cur_sel {
+                                sel_changes.push((p.port.module_id, idx, sel));
                             }
-                        });
-                    if sel != current {
-                        changes.push((p.port.module_id, idx, sel));
-                    }
+                        }
+                        // Depth: 0..100 % drag value (compact).  Stored as 0..1.
+                        let mut pct = (cur_depth * 100.0).round() as i32;
+                        let resp = ui.add(
+                            egui::DragValue::new(&mut pct)
+                                .range(0..=100)
+                                .speed(1.0)
+                                .suffix("%")
+                                .custom_formatter(|n, _| format!("{:>3}%", n as i32)),
+                        );
+                        if resp.changed() {
+                            let new_d = (pct as f32 / 100.0).clamp(0.0, 1.0);
+                            if (new_d - cur_depth).abs() > f32::EPSILON {
+                                depth_changes.push((p.port.module_id, idx, new_d));
+                            }
+                        }
+                    });
                 });
             });
     }
-    if !changes.is_empty() {
+    if !sel_changes.is_empty() || !depth_changes.is_empty() {
         let mut s = app.state.write();
-        for (mid, idx, tgt) in changes {
+        for (mid, idx, tgt) in sel_changes {
             if let Some(m) = s.rack.modules.iter_mut().find(|m| m.id == mid) {
                 if m.mod_selectors.len() <= idx {
                     m.mod_selectors.resize(idx + 1, LfoTarget::None);
                 }
                 m.mod_selectors[idx] = tgt;
+            }
+        }
+        for (mid, idx, d) in depth_changes {
+            if let Some(m) = s.rack.modules.iter_mut().find(|m| m.id == mid) {
+                if m.mod_input_depths.len() <= idx {
+                    m.mod_input_depths.resize(idx + 1, 1.0);
+                }
+                m.mod_input_depths[idx] = d;
             }
         }
     }

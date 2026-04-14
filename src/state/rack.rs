@@ -332,6 +332,11 @@ pub struct RackModule {
     /// Per-selector mod-input targets (indexed by selector position).
     #[serde(default)]
     pub mod_selectors: Vec<crate::state::LfoTarget>,
+    /// Per-mod-input depth (0..1).  Indexed by `mod_inputs(kind)` slot
+    /// position — applies to both Fixed and Selector slots.  Empty / short
+    /// vec defaults each missing entry to 1.0.
+    #[serde(default)]
+    pub mod_input_depths: Vec<f32>,
 }
 
 impl RackModule {
@@ -345,6 +350,7 @@ impl RackModule {
             grid_col: 0,
             grid_row: 0,
             mod_selectors: Vec::new(),
+            mod_input_depths: Vec::new(),
         }
     }
 }

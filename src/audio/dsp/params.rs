@@ -53,10 +53,16 @@ pub fn compile_mod_routes(s: &AppState) -> ([ModRouteCopy; MAX_MOD_ROUTES], u8) 
         if target == LfoTarget::None {
             continue;
         }
+        let depth = target_module
+            .mod_input_depths
+            .get(cable.to.index as usize)
+            .copied()
+            .unwrap_or(1.0)
+            .clamp(0.0, 1.0);
         routes[count] = ModRouteCopy {
             lfo_slot: slot_idx as u8,
             target_u8: lfo_target_to_u8(target),
-            depth: 1.0,
+            depth,
         };
         count += 1;
     }
