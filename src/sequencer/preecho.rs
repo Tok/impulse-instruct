@@ -24,10 +24,16 @@
 
 use serde::{Deserialize, Serialize};
 
-/// Per-voice pre-echo configuration.  Empty `anchors` or `length == 0`
-/// disables the effect entirely, which is the default.
-#[derive(Clone, Debug, Serialize, Deserialize, Default)]
+/// Per-voice pre-echo configuration.  Empty `anchors`, `length == 0`,
+/// or `enabled == false` disables the effect entirely.
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct PreechoConfig {
+    /// Master enable — a single toggle to bypass the modulator
+    /// without clearing anchors or settings.  Defaults to true so
+    /// existing configs keep working and freshly-created ones are
+    /// armed as soon as anchors + length are set.
+    #[serde(default = "default_enabled")]
+    pub enabled: bool,
     /// Step indices that anchor the groove.  Out-of-range entries (>=
     /// pattern steps) are ignored at apply time.
     #[serde(default)]
@@ -46,9 +52,25 @@ pub struct PreechoConfig {
     pub ratchet_ramp: bool,
 }
 
+fn default_enabled() -> bool {
+    true
+}
+
+impl Default for PreechoConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            anchors: Vec::new(),
+            length: 0,
+            velocity_ramp: false,
+            ratchet_ramp: false,
+        }
+    }
+}
+
 impl PreechoConfig {
     pub fn is_active(&self) -> bool {
-        self.length > 0 && !self.anchors.is_empty()
+        self.enabled && self.length > 0 && !self.anchors.is_empty()
     }
 }
 
@@ -109,6 +131,7 @@ mod tests {
 
     fn cfg(anchors: &[u8], length: u8, vr: bool, rr: bool) -> PreechoConfig {
         PreechoConfig {
+            enabled: true,
             anchors: anchors.to_vec(),
             length,
             velocity_ramp: vr,

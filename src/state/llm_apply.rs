@@ -271,6 +271,9 @@ pub fn apply_llm_update(state: AppState, update: &serde_json::Value, scope: &[St
                     .get(voice_key)
                     .cloned()
                     .unwrap_or_default();
+                if let Some(v) = cfg_obj.get("enabled").and_then(|v| v.as_bool()) {
+                    cfg.enabled = v;
+                }
                 if let Some(arr) = cfg_obj.get("anchors").and_then(|v| v.as_array()) {
                     cfg.anchors = arr
                         .iter()

@@ -63,17 +63,25 @@ pub(super) fn draw_preecho_row(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         );
         ui.add_space(4.0);
 
-        // Voice tabs.  Active voices (with any anchors + length > 0)
-        // get a CHALK label so you can see at a glance which voice
-        // groups have the modulator armed.
+        // Voice tabs.  Fully-armed voices (enabled + anchors + length)
+        // get FOG; configured-but-off voices (anchors present but
+        // enabled=false) get a dimmer IRON so you can see at a glance
+        // which voice groups are set up without being confused about
+        // which are actually modulating the playback.
         let preecho_map = app.state.read().sequencer.preecho.clone();
         for vk in VOICE_KEYS {
             let is_sel = selected == *vk;
-            let is_active = preecho_map.get(*vk).map(|c| c.is_active()).unwrap_or(false);
+            let entry = preecho_map.get(*vk);
+            let is_active = entry.map(|c| c.is_active()).unwrap_or(false);
+            let is_armed_but_off = entry
+                .map(|c| !c.is_active() && !c.anchors.is_empty() && c.length > 0)
+                .unwrap_or(false);
             let col = if is_sel {
                 theme::CHALK
             } else if is_active {
                 theme::FOG
+            } else if is_armed_but_off {
+                theme::ASH
             } else {
                 theme::IRON
             };
@@ -187,6 +195,14 @@ pub(super) fn draw_preecho_row(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         }
         // Trailing horizontal pad — mirror of the leading ANCHOR_STRIP_PAD.
         ui.add_space(ANCHOR_STRIP_PAD);
+
+        // Master ON/OFF — a quick bypass that preserves anchors + length
+        // so the user can audition with/without the modulation.
+        let mut enabled = cfg.enabled;
+        if widgets::toggle_button(ui, if enabled { "ON" } else { "OFF" }, &mut enabled) {
+            cfg.enabled = enabled;
+            changed = true;
+        }
 
         // LEN drag value.
         ui.label(
