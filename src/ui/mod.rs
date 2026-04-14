@@ -111,7 +111,7 @@ use undo::StateHistory;
 pub struct ImpulseApp {
     state: Arc<RwLock<AppState>>,
     audio_tx: rtrb::Producer<AudioCommand>,
-    pub(crate) tts_tx: std::sync::Arc<parking_lot::Mutex<rtrb::Producer<f32>>>,
+    pub(crate) tts_tx: crate::audio::TtsSink,
     scope_rx: rtrb::Consumer<f32>,
     scope_buf: Vec<f32>,
     scope_history: std::collections::VecDeque<Vec<f32>>,
@@ -209,7 +209,7 @@ pub struct AudioChannels {
     pub dsp_load_rx: rtrb::Consumer<f32>,
     pub stereo_rx: rtrb::Consumer<f32>,
     pub granular_capture_rx: rtrb::Consumer<f32>,
-    pub tts_tx: std::sync::Arc<parking_lot::Mutex<rtrb::Producer<f32>>>,
+    pub tts_tx: crate::audio::TtsSink,
 }
 
 impl ImpulseApp {
@@ -266,10 +266,9 @@ impl ImpulseApp {
         }
 
         let mut log_text = "[Impulse Instruct ready]\n".to_string();
-        if let Some(ref port) = midi_port {
-            log_text.push_str(&format!("[MIDI: {}]\n", port));
-        } else {
-            log_text.push_str("[MIDI: no device found]\n");
+        match midi_port.as_ref() {
+            Some(p) => log_text.push_str(&format!("[MIDI: {}]\n", p)),
+            None => log_text.push_str("[MIDI: no device found]\n"),
         }
         if let Some(port) = api_port {
             log_text.push_str(&format!("[HTTP API active → http://localhost:{}]\n", port));
@@ -447,9 +446,9 @@ impl ImpulseApp {
                     persona_name.clone()
                 };
                 let line = if out.thinking.as_ref().is_some_and(|t| !t.is_empty()) {
-                    format!("{} -> {} [think]\n", persona, display)
+                    format!("{}: {} [think]\n", persona, display)
                 } else {
-                    format!("{} -> {}\n", persona, display)
+                    format!("{}: {}\n", persona, display)
                 };
                 log::info!("{}", ansi_colorize_notes(line.trim_end()));
                 self.log_text.push_str(&line);
@@ -467,9 +466,10 @@ impl ImpulseApp {
                 if self.activity_log.len() > 500 {
                     self.activity_log.drain(..100);
                 }
-                // MC line: shown separately with a marker so it's visually distinct
                 if let Some(ref mc) = out.mc_line {
-                    self.log_text.push_str(&format!("► {}\n", mc)); // U+25BA speaking marker
+                    let line = format!("► {}", mc); // U+25BA speaking marker
+                    self.log_text.push_str(&format!("{}\n", line));
+                    log::info!("{}", line);
                 }
             }
             // Jam re-triggers unless heat is at zero (model is parked).

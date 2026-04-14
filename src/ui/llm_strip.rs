@@ -41,12 +41,14 @@ pub(super) fn colorize_log(text: &str, _default_color: egui::Color32) -> egui::t
         let line = &text[p..end];
         if line.contains("(thinking):") {
             theme::HAZE
-        } else if line.starts_with("► ") || line.contains(" -> ") {
+        } else if line.starts_with("► ") {
             theme::CHALK
         } else if line.starts_with("YOU ") {
             theme::FOG
         } else if line.starts_with('[') && !line.contains("[API]") {
             theme::ASH
+        } else if crate::log_fmt::starts_with_persona(line) {
+            theme::CHALK
         } else {
             theme::SMOKE
         }

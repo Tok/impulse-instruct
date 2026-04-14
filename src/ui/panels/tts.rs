@@ -346,6 +346,10 @@ pub fn draw_tts(app: &mut ImpulseApp, ui: &mut egui::Ui, module_id: u32) {
             .clicked();
         if (enter_pressed || clicked) && !line.is_empty() {
             // Normal path — type a line, synthesise it.
+            let say_line = format!("► {}", line); // U+25BA speaking marker
+            app.log_text.push_str(&say_line);
+            app.log_text.push('\n');
+            log::info!("{}", say_line);
             crate::llm::speak_neutts(&line, &tts_state, &app.tts_tx);
         } else if clicked && line.is_empty() {
             // Empty SAY → fall through to the controlling agent.  The

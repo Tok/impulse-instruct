@@ -3,10 +3,7 @@
 //   speak_neutts() — POST text + voice params to NeuTTS, push rendered audio
 //                    samples to the ring buffer for DSP FX routing.
 
-use parking_lot::Mutex;
-use rtrb::Producer;
-use std::sync::Arc;
-
+use crate::audio::TtsSink;
 use crate::state::{TtsModuleState, tts_types::NEUTTS_PORT};
 
 /// Speak `text` via the NeuTTS Air server, pushing rendered PCM samples to the
@@ -14,7 +11,7 @@ use crate::state::{TtsModuleState, tts_types::NEUTTS_PORT};
 /// the DSP via the NeuTts rack voice route.
 ///
 /// No-ops silently if the NeuTTS server is unreachable.
-pub fn speak_neutts(text: &str, tts: &TtsModuleState, tts_tx: &Arc<Mutex<Producer<f32>>>) {
+pub fn speak_neutts(text: &str, tts: &TtsModuleState, tts_tx: &TtsSink) {
     let clean: String = text
         .chars()
         .filter(|c| c.is_ascii_graphic() || *c == ' ')
@@ -36,7 +33,7 @@ pub fn speak_neutts(text: &str, tts: &TtsModuleState, tts_tx: &Arc<Mutex<Produce
     let url = format!("http://127.0.0.1:{}/synthesize", NEUTTS_PORT);
 
     // Spawn a blocking thread so we don't block the LLM inference loop.
-    let tts_tx = tts_tx.clone();
+    let sink = tts_tx.clone();
     let pitch_snap = tts.pitch_snap;
     let root_note = 0u8; // caller can extend later
     let scale = crate::state::Scale::default();
@@ -75,19 +72,20 @@ pub fn speak_neutts(text: &str, tts: &TtsModuleState, tts_tx: &Arc<Mutex<Produce
             return;
         }
 
-        if let Some(mut samples) = read_wav_f32_bytes(&wav_bytes) {
+        let target_sr = sink.target_sr;
+        if let Some(mut samples) = read_wav_f32_bytes(&wav_bytes, target_sr) {
             if samples.is_empty() {
                 log::warn!("NeuTTS: returned WAV decoded to zero samples");
                 return;
             }
-            if pitch_snap && let Some(hz) = detect_pitch_hz(&samples, 44100.0) {
+            if pitch_snap && let Some(hz) = detect_pitch_hz(&samples, target_sr as f32) {
                 let detected_midi = (12.0 * (hz / 440.0).log2() + 69.0).round() as u8;
                 let snapped_midi = crate::state::snap_to_scale(detected_midi, root_note, scale);
                 let shift = snapped_midi as f32 - detected_midi as f32;
                 samples = resample_pitch_shift(&samples, shift);
             }
             let sample_count = samples.len();
-            let mut tx = tts_tx.lock();
+            let mut tx = sink.tx.lock();
             let mut pushed = 0usize;
             for s in &samples {
                 if tx.push(*s).is_ok() {
@@ -95,9 +93,10 @@ pub fn speak_neutts(text: &str, tts: &TtsModuleState, tts_tx: &Arc<Mutex<Produce
                 }
             }
             log::info!(
-                "NeuTTS: pushed {}/{} samples to ring buffer",
+                "NeuTTS: pushed {}/{} samples to ring buffer (target_sr={}Hz)",
                 pushed,
-                sample_count
+                sample_count,
+                target_sr,
             );
         } else {
             log::warn!(
@@ -109,9 +108,9 @@ pub fn speak_neutts(text: &str, tts: &TtsModuleState, tts_tx: &Arc<Mutex<Produce
 }
 
 /// Minimal PCM-16 WAV reader from in-memory bytes — returns mono f32 samples
-/// normalised to +/-1.  Converts stereo to mono by averaging channels.
+/// resampled to `target_sr` Hz.  Stereo is folded to mono by averaging.
 /// Returns `None` on any parse error (not a valid RIFF/WAV).
-fn read_wav_f32_bytes(bytes: &[u8]) -> Option<Vec<f32>> {
+fn read_wav_f32_bytes(bytes: &[u8], target_sr: u32) -> Option<Vec<f32>> {
     if bytes.len() < 44 {
         return None;
     }
@@ -164,19 +163,23 @@ fn read_wav_f32_bytes(bytes: &[u8]) -> Option<Vec<f32>> {
         mono.push(sum / channels as f32);
     }
 
-    // Upsample to 44100 Hz if needed (2x linear interpolation for 22050->44100).
-    if src_rate == 22050 {
-        let mut up = Vec::with_capacity(mono.len() * 2);
-        for i in 0..mono.len() {
-            let a = mono[i];
-            let b = if i + 1 < mono.len() { mono[i + 1] } else { 0.0 };
-            up.push(a);
-            up.push((a + b) * 0.5);
-        }
-        return Some(up);
+    // Resample to target_sr using linear interpolation.
+    if src_rate == target_sr || mono.is_empty() {
+        return Some(mono);
     }
-
-    Some(mono)
+    let ratio = target_sr as f64 / src_rate as f64;
+    let new_len = ((mono.len() as f64) * ratio).round() as usize;
+    let mut out = Vec::with_capacity(new_len);
+    let step = 1.0 / ratio; // src-sample step per output-sample
+    for i in 0..new_len {
+        let src_pos = i as f64 * step;
+        let idx = src_pos as usize;
+        let frac = (src_pos - idx as f64) as f32;
+        let a = mono.get(idx).copied().unwrap_or(0.0);
+        let b = mono.get(idx + 1).copied().unwrap_or(a);
+        out.push(a + (b - a) * frac);
+    }
+    Some(out)
 }
 
 /// Detect the dominant fundamental frequency (Hz) of `samples` at `sample_rate` Hz.

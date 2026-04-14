@@ -213,7 +213,9 @@ fn run() -> anyhow::Result<()> {
                 .replace('T', " ")
                 .trim_end_matches('Z')
                 .to_string();
-            writeln!(buf, "{} {:5} {}", ts_str, record.level(), record.args())
+            let msg = format!("{}", record.args());
+            let colored = impulse_instruct::log_fmt::colorize(&msg);
+            writeln!(buf, "{} {:5} {}", ts_str, record.level(), colored)
         })
         .init();
     // Apply the effective log level as the global gate
@@ -319,7 +321,7 @@ fn run() -> anyhow::Result<()> {
         let state = Arc::clone(&app_state);
         let out_tx = llm_out_tx.clone();
         let mock = args.mock;
-        let tts_tx = Arc::clone(&audio_engine.tts_tx);
+        let tts_tx = audio_engine.tts_tx.clone();
         std::thread::Builder::new()
             .name("llm".into())
             .stack_size(8 * 1024 * 1024)
@@ -405,7 +407,7 @@ fn run() -> anyhow::Result<()> {
         dsp_load_rx: audio_engine.dsp_load_rx,
         stereo_rx: audio_engine.stereo_rx,
         granular_capture_rx: audio_engine.granular_capture_rx,
-        tts_tx: std::sync::Arc::clone(&audio_engine.tts_tx),
+        tts_tx: audio_engine.tts_tx.clone(),
     };
 
     log::info!("Launching UI window…");

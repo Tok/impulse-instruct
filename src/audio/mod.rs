@@ -18,6 +18,16 @@ use crate::state::{AppState, FxPlan, compile_fx_plan};
 
 pub use dsp::{AudioParams, DspState};
 
+/// Handle for pushing TTS audio to the DSP mix bus.
+/// Carries the target sample rate so the TTS pipeline can resample its WAV
+/// output to match the device rate — otherwise 24 kHz NeuTTS output played at
+/// 48 kHz ends up chipmunked and half-length (perceived as silence).
+#[derive(Clone)]
+pub struct TtsSink {
+    pub tx: Arc<Mutex<Producer<f32>>>,
+    pub target_sr: u32,
+}
+
 // ─── Messages sent from UI/HTTP thread to audio thread ───────────────────────
 
 pub enum AudioCommand {
@@ -45,7 +55,7 @@ pub struct AudioEngine {
     /// (~10 s). Drain in the UI thread and pass to `analysis::analyse_audio`.
     pub capture_rx: Consumer<f32>,
     /// TTS processed audio pushed by the LLM thread, mixed into the output.
-    pub tts_tx: Arc<Mutex<Producer<f32>>>,
+    pub tts_tx: TtsSink,
     /// MIDI clock bytes (0xF8/0xFA/0xFC) produced by the audio thread.
     /// Drain this in a dedicated thread and forward to a MIDI output port.
     pub midi_clock_rx: Consumer<u8>,
@@ -121,7 +131,10 @@ impl AudioEngine {
 
         // Ring buffer: TTS processed audio → audio thread mix (≈6s @ 44100Hz)
         let (tts_producer, tts_consumer) = rtrb::RingBuffer::<f32>::new(262144);
-        let tts_tx = Arc::new(Mutex::new(tts_producer));
+        let tts_tx = TtsSink {
+            tx: Arc::new(Mutex::new(tts_producer)),
+            target_sr: config.sample_rate.0,
+        };
 
         // Ring buffer: audio thread → MIDI clock output thread (1 byte per tick, 24 PPQN)
         let (mut midi_clock_tx, midi_clock_rx) = rtrb::RingBuffer::<u8>::new(512);

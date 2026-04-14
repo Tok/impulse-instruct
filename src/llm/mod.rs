@@ -127,7 +127,7 @@ pub fn run_llm_loop(
     input_rx: Receiver<LlmInput>,
     output_tx: Sender<LlmOutput>,
     mock: bool,
-    tts_tx: Arc<parking_lot::Mutex<rtrb::Producer<f32>>>,
+    tts_tx: crate::audio::TtsSink,
 ) {
     if mock {
         {
@@ -628,12 +628,15 @@ pub fn run_llm_loop(
                         .clone()
                         .unwrap_or_else(|| state.read().llm.persona_name.clone());
                     if !one_shot {
-                        log::debug!("{} (jam) -> {}", persona, comment);
+                        log::debug!("{} (jam): {}", persona, comment);
                     }
+                }
 
-                    // ── TTS via rack cable ────────────────────────────────
-                    // Find TTS modules connected to this agent via control
-                    // cables.  Read settings from the TTS module, not global.
+                // ── TTS via rack cable ────────────────────────────────────
+                // Trigger whenever the agent produced a spoken line — this
+                // must NOT be gated on param_update, since an MC/DJ agent
+                // commonly emits mc_line without changing any params.
+                if output.mc_line.is_some() {
                     let mode = if let Some(aid) = agent_id {
                         state
                             .read()
@@ -649,7 +652,6 @@ pub fn run_llm_loop(
                     if tts_mode {
                         let s = state.read();
                         let src_id = agent_id.unwrap_or(0);
-                        // Find a TTS module wired from this agent
                         let tts_mod = s.rack.cables.iter().find_map(|c| {
                             if c.from.module_id == src_id
                                 && c.from.kind == crate::state::PortKind::Control
@@ -669,9 +671,14 @@ pub fn run_llm_loop(
                             }
                         });
                         if let Some(tts_mod) = tts_mod {
-                            let tts_text = output.mc_line.as_deref().unwrap_or(comment);
+                            let tts_text = output.mc_line.as_deref().unwrap_or_default();
                             log::info!("[TTS] module={}: {}", tts_mod.id, tts_text);
                             speak_neutts(tts_text, tts_mod, &tts_tx);
+                        } else {
+                            log::warn!(
+                                "[TTS] agent {} emitted mc_line but no NeuTts module is cable-wired from it",
+                                src_id
+                            );
                         }
                     }
                 }

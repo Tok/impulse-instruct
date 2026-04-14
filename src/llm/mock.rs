@@ -261,7 +261,7 @@ pub fn run_mock_loop(
                         .unwrap_or("[mock]");
                     let persona = state.read().llm.persona_name.clone();
                     if one_shot {
-                        log::info!("{} (mock) -> {}", persona, comment);
+                        log::info!("{} (mock): {}", persona, comment);
                     }
                 }
                 {
