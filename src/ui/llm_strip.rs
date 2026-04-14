@@ -367,6 +367,10 @@ impl ImpulseApp {
 
     /// LLM console content — rendered inside a rackable module card.
     /// Contains: style selector, instructions, log, JAM timing, LISTEN, prompt input.
+    fn apply_style_rack_modules(&mut self, names: &[String]) {
+        super::style_rack::apply(self, names);
+    }
+
     fn apply_style_selection(&mut self, maybe_id: Option<String>) {
         match maybe_id {
             None => {
@@ -388,9 +392,15 @@ impl ImpulseApp {
             }
             Some(id) => {
                 let catalog = StyleCatalog::get();
-                let (name, baseline) = catalog
+                let (name, baseline, rack_modules) = catalog
                     .find_by_id(&id)
-                    .map(|s| (s.name.clone(), s.baseline_params.clone()))
+                    .map(|s| {
+                        (
+                            s.name.clone(),
+                            s.baseline_params.clone(),
+                            s.rack_modules.clone(),
+                        )
+                    })
                     .unwrap_or_default();
                 if let Some(ref bp) = baseline {
                     let current = self.state.read().clone();
@@ -403,6 +413,7 @@ impl ImpulseApp {
                     };
                     *self.state.write() = next;
                 }
+                self.apply_style_rack_modules(&rack_modules);
                 self.state.write().llm.active_style = Some(id);
                 let _ = self.llm_tx.try_send(LlmInput::ResetContext);
                 self.log_text

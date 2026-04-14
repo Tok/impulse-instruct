@@ -148,7 +148,8 @@
       "warehouse",
       "Chicago",
       "raw"
-    ]
+    ],
+    "rack_modules": ["bass", "808", "reverb"]
   },
   {
     "id": "acid_house",
@@ -1205,7 +1206,8 @@
       "ragga",
       "bass",
       "amen"
-    ]
+    ],
+    "rack_modules": ["bass", "amen", "808", "reverb", "delay", "tts"]
   },
   {
     "id": "drum_and_bass",
@@ -1294,7 +1296,8 @@
       "amen",
       "rewind",
       "dancefloor"
-    ]
+    ],
+    "rack_modules": ["bass", "amen", "808", "reverb", "delay"]
   },
   {
     "id": "breakcore",
@@ -1546,7 +1549,8 @@
       "dub",
       "space",
       "Berlin"
-    ]
+    ],
+    "rack_modules": ["bass", "808", "delay", "reverb", "chorus"]
   },
   {
     "id": "minimal_techno",
@@ -1941,7 +1945,8 @@
       "kick",
       "distortion",
       "Rotterdam"
-    ]
+    ],
+    "rack_modules": ["909", "808", "drive", "waveshaper"]
   },
   {
     "id": "early_rave",
