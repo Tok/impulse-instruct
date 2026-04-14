@@ -71,8 +71,9 @@ const ALL_TARGETS: &[LfoTarget] = &[
     LfoTarget::MasterVolume,
 ];
 
-/// Vertical gap between successive back-panel ports (matches the core card).
-const PORT_SPACING: f32 = 16.0;
+/// Vertical gap between successive back-panel ports — large enough that the
+/// per-jack mod-overlay (slider + chip row) doesn't overlap its neighbours.
+const PORT_SPACING: f32 = 22.0;
 
 /// Small labelled toggle chip — selected = light fill + bright text,
 /// unselected = dim fill + dim text.  Used in mod-target multi-select.
@@ -148,7 +149,7 @@ pub fn back_strip_height(kind: ModuleKind) -> f32 {
         + has_cv_in(kind) as usize
         + has_control_in(kind) as usize
         + mod_inputs(kind).len();
-    (12.0 + n as f32 * PORT_SPACING).max(52.0)
+    (14.0 + n as f32 * PORT_SPACING).max(60.0)
 }
 
 /// Draw Mod-in jacks for `kind` starting at `start_y` on the left (input)
@@ -278,6 +279,12 @@ pub fn draw_mod_selector_dropdowns(app: &mut ImpulseApp, ctx: &egui::Context, po
                         ui.spacing_mut().slider_width = 50.0;
                         ui.add(egui::Slider::new(&mut d, 0.0..=1.0).show_value(false))
                             .on_hover_text(format!("Depth {:.0}%", cur_depth * 100.0));
+                        ui.label(
+                            egui::RichText::new(format!("{:>3}%", (d * 100.0).round() as i32))
+                                .monospace()
+                                .size(7.5)
+                                .color(Color32::from_gray(170)),
+                        );
                         if d != cur_depth {
                             depth_changes.push((p.port.module_id, idx, d));
                         }

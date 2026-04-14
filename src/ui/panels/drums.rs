@@ -46,8 +46,16 @@ pub fn draw_kit_a(app: &mut ImpulseApp, ui: &mut egui::Ui) {
     };
     let mut changed = false;
 
-    let ctrl = widgets::ControlPrefs::from_prefs(&app.state.read().ui_prefs);
-    let xy_size = app.state.read().ui_prefs.effective_xy_px();
+    // Honour per-module scale (set via Ctrl+scroll) — ControlPrefs needs the
+    // scale so knob sizes match the card's outer scaling, otherwise the panel
+    // overflows a shrunk-down card and the pad's hit region drifts off its
+    // visible position via the ScrollArea fallback in module_card_sized.
+    let scale: f32 = ui
+        .ctx()
+        .data(|d| d.get_temp(egui::Id::new("module_scale")))
+        .unwrap_or(1.0);
+    let ctrl = widgets::ControlPrefs::from_prefs_scaled(&app.state.read().ui_prefs, scale);
+    let xy_size = app.state.read().ui_prefs.effective_xy_px() * scale;
     let avail = ui.available_width();
     let gw = ((avail - super::GLASS_GAP) / 2.0).floor(); // 2-column layout
     let group_h = ctrl.knob_size * 2.0 + 50.0;
@@ -269,7 +277,11 @@ pub fn draw_kit_b(app: &mut ImpulseApp, ui: &mut egui::Ui) {
     };
     let mut changed = false;
 
-    let ctrl = widgets::ControlPrefs::from_prefs(&app.state.read().ui_prefs);
+    let scale: f32 = ui
+        .ctx()
+        .data(|d| d.get_temp(egui::Id::new("module_scale")))
+        .unwrap_or(1.0);
+    let ctrl = widgets::ControlPrefs::from_prefs_scaled(&app.state.read().ui_prefs, scale);
     let ctrl_big = ctrl.phi_bigger(); // larger knobs for the important KICK params
     let avail = ui.available_width();
     let gw_half = ((avail - super::GLASS_GAP) / 2.0).floor();

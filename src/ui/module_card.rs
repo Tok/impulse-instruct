@@ -627,13 +627,16 @@ pub fn module_card_back(
             let (strip_rect, _) =
                 ui.allocate_exact_size(Vec2::new(card_w, strip_h), Sense::hover());
             let sp = ui.painter_at(strip_rect);
-            // Faint module name watermark
+            // Faint module name watermark — anchored bottom-right so the
+            // mod-overlay chips/sliders growing rightward from the left jacks
+            // never collide with it.  (Was centred, which clipped the label
+            // for modules with many mod inputs like the 909 kit.)
             sp.text(
-                strip_rect.center(),
-                egui::Align2::CENTER_CENTER,
+                strip_rect.right_bottom() - Vec2::new(8.0, 6.0),
+                egui::Align2::RIGHT_BOTTOM,
                 kind.label(),
                 egui::FontId::monospace(11.0),
-                Color32::from_gray(28),
+                Color32::from_gray(32),
             );
 
             let port_hit_r = PORT_RADIUS + 4.0;
@@ -669,7 +672,7 @@ pub fn module_card_back(
                 sp.text(
                     pos + Vec2::new(10.0, 0.0),
                     egui::Align2::LEFT_CENTER,
-                    "AUD",
+                    "AUD IN",
                     label_font.clone(),
                     label_col,
                 );
@@ -679,7 +682,7 @@ pub fn module_card_back(
                     Sense::hover(),
                 )
                 .on_hover_text("Audio In");
-                in_y += 16.0;
+                in_y += 22.0;
             }
             if has_cv_in {
                 let pos = Pos2::new(left_x, in_y);
@@ -696,7 +699,7 @@ pub fn module_card_back(
                 sp.text(
                     pos + Vec2::new(10.0, 0.0),
                     egui::Align2::LEFT_CENTER,
-                    "CV",
+                    "CV IN",
                     label_font.clone(),
                     label_col,
                 );
@@ -706,7 +709,7 @@ pub fn module_card_back(
                     Sense::hover(),
                 )
                 .on_hover_text("CV / Gate In");
-                in_y += 16.0;
+                in_y += 22.0;
             }
             if has_control_in {
                 let pos = Pos2::new(left_x, in_y);
@@ -723,11 +726,11 @@ pub fn module_card_back(
                 sp.text(
                     pos + Vec2::new(10.0, 0.0),
                     egui::Align2::LEFT_CENTER,
-                    "CTL",
+                    "CTL IN",
                     label_font.clone(),
                     label_col,
                 );
-                in_y += 16.0;
+                in_y += 22.0;
             }
             super::module_card_mod::draw_mod_input_ports(
                 ui,
@@ -759,7 +762,7 @@ pub fn module_card_back(
                 sp.text(
                     pos + Vec2::new(-10.0, 0.0),
                     egui::Align2::RIGHT_CENTER,
-                    "AUD",
+                    "AUD OUT",
                     label_font.clone(),
                     label_col,
                 );
@@ -769,7 +772,7 @@ pub fn module_card_back(
                     Sense::hover(),
                 )
                 .on_hover_text("Audio Out");
-                out_y += 16.0;
+                out_y += 22.0;
             }
             if has_cv_out {
                 let pos = Pos2::new(right_x, out_y);
@@ -786,7 +789,7 @@ pub fn module_card_back(
                 sp.text(
                     pos + Vec2::new(-10.0, 0.0),
                     egui::Align2::RIGHT_CENTER,
-                    "CV",
+                    "CV OUT",
                     label_font.clone(),
                     label_col,
                 );
@@ -796,7 +799,7 @@ pub fn module_card_back(
                     Sense::hover(),
                 )
                 .on_hover_text("CV Out");
-                out_y += 16.0;
+                out_y += 22.0;
             }
             if has_control_out {
                 let pos = Pos2::new(right_x, out_y);
@@ -813,7 +816,7 @@ pub fn module_card_back(
                 sp.text(
                     pos + Vec2::new(-10.0, 0.0),
                     egui::Align2::RIGHT_CENTER,
-                    "CTL",
+                    "CTL OUT",
                     label_font,
                     label_col,
                 );
