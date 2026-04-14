@@ -87,8 +87,9 @@ const ALL_TARGETS: &[LfoTarget] = &[
 ];
 
 /// Vertical gap between successive back-panel ports — large enough that the
-/// per-jack mod-overlay (slider + chip row) doesn't overlap its neighbours.
-const PORT_SPACING: f32 = 22.0;
+/// per-jack mod-overlay (slider + chip row), now anchored *below* the jack
+/// centre, doesn't overlap the next jack's circle.
+const PORT_SPACING: f32 = 26.0;
 
 /// Small labelled toggle chip — selected = light fill + bright text,
 /// unselected = dim fill + dim text.  Used in mod-target multi-select.
@@ -282,7 +283,10 @@ pub fn draw_mod_selector_dropdowns(app: &mut ImpulseApp, ctx: &egui::Context, po
             .collect();
         let all_selected =
             !real_targets.is_empty() && real_targets.iter().all(|t| cur_targets.contains(t));
-        let anchor = p.center + Vec2::new(10.0, -8.0);
+        // Anchor the overlay below the jack centre (was above-centre at
+        // y - 8) so it doesn't cover the AUD / CV / CTL labels of the
+        // top horizontal port row sitting above the first mod jack.
+        let anchor = p.center + Vec2::new(10.0, 4.0);
         if anchor.y > max_overlay_y {
             // Jack is below the visible rack region — skip its overlay so
             // the piano panel below isn't covered by the floating Area.
