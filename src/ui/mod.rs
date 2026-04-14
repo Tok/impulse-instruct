@@ -1,7 +1,9 @@
 // ─── ui/mod.rs — Main egui application ───────────────────────────────────────
+pub mod agent_card;
 pub mod agent_pills;
 mod api_log_handler;
 mod flip;
+pub mod fx_dir;
 mod header;
 mod llm_strip;
 mod midi_handler;
@@ -21,11 +23,11 @@ pub mod theme;
 mod ui_helpers;
 mod util;
 pub mod widgets;
+pub(crate) use note::{ansi_colorize_notes, note_freq_label, note_name};
 pub(crate) use util::{scan_models, webbrowser_open};
 mod prefs_controls;
 mod windows;
 mod wizard;
-pub(crate) use note::{ansi_colorize_notes, note_freq_label, note_name};
 
 /// Convert a dot-path + float value into a nested JSON object.
 /// "bass.cutoff", 0.4  →  {"bass": {"cutoff": 0.4}}
@@ -59,8 +61,7 @@ pub(crate) const SEQ_LABEL_H: f32 = 22.0;
 pub(crate) const SEQ_VOL_W: f32 = 330.0;
 pub(crate) const SEQ_VOL_H: f32 = 14.0;
 
-/// Derives BPM from incoming MIDI clock pulses (24 per quarter note).
-/// Averages the last 8 inter-pulse intervals for stability.
+/// BPM tracker — averages last 8 inter-pulse intervals from MIDI clock (24 PPQN).
 struct MidiClockTracker {
     last: Option<std::time::Instant>,
     intervals: [f64; 8],
@@ -78,7 +79,6 @@ impl MidiClockTracker {
         }
     }
 
-    /// Call on each 0xF8 pulse. Returns computed BPM if stable, else None.
     fn on_clock(&mut self) -> Option<f32> {
         let now = std::time::Instant::now();
         if let Some(last) = self.last {

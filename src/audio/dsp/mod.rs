@@ -19,6 +19,27 @@ use voices::*;
 use crate::sequencer::TriggerEvent;
 use crate::state::{DrumVoice, FxPlan, FxStep, ModuleKind};
 
+/// Length of the per-FX reverse-tap circular buffer in samples — 1 second
+/// at 44.1 kHz.  Trade-off: longer = richer reverse character but more
+/// memory + a longer "rewind cycle" before the read tap loops.
+const REV_BUF_LEN: usize = 44100;
+
+/// Write `sig` to the FX-specific circular buffer at `head`, advance head,
+/// then read+return the current reversed-tap sample at `play` and decrement
+/// it.  Shared between the Reverb and Delay arms; sized array borrows mean
+/// no per-block allocations.
+fn step_rev_tap(buf: &mut [f32], head: &mut usize, play: &mut usize, sig: f32) -> f32 {
+    buf[*head] = sig;
+    *head = (*head + 1) % REV_BUF_LEN;
+    let out = buf[*play];
+    *play = if *play == 0 {
+        REV_BUF_LEN - 1
+    } else {
+        *play - 1
+    };
+    out
+}
+
 // ─── Full DSP state ───────────────────────────────────────────────────────────
 
 pub struct DspState {
@@ -81,6 +102,18 @@ pub struct DspState {
     /// 0.0 = no override (voice's static pan_303 wins); non-zero = use this
     /// instead.  Persists until the next trigger updates it.
     bass_step_pan: f32,
+    /// Reverb / Delay reverse-tap buffers — separate per-FX so each can
+    /// independently switch FWD / REV / MIRROR without interfering.  1 s
+    /// circular buffer of dry input feeding each FX; the read tap walks
+    /// backwards every sample, looping every REV_BUF_LEN samples (a
+    /// continuously-rewinding tape).  Allocated on the heap once at
+    /// DspState::new (no per-block allocations).
+    rev_buf_reverb: Vec<f32>,
+    rev_head_reverb: usize,
+    rev_play_reverb: usize,
+    rev_buf_delay: Vec<f32>,
+    rev_head_delay: usize,
+    rev_play_delay: usize,
     duck_attack: f32,
     duck_release: f32,
 }
@@ -140,6 +173,14 @@ impl DspState {
             tts_consumer,
             tts_duck: 1.0,
             bass_step_pan: 0.0,
+            // 1 s buffers @ 44.1 kHz — enough for musically useful reverse
+            // character without massive memory.  Allocated once on the heap.
+            rev_buf_reverb: vec![0.0; REV_BUF_LEN],
+            rev_head_reverb: 0,
+            rev_play_reverb: 0,
+            rev_buf_delay: vec![0.0; REV_BUF_LEN],
+            rev_head_delay: 0,
+            rev_play_delay: 0,
             duck_attack: 1.0 - (-8.0_f32 / sample_rate).exp(),
             duck_release: 1.0 - (-2.0_f32 / sample_rate).exp(),
         }
@@ -172,11 +213,21 @@ impl DspState {
             }
             FxStep::Reverb => {
                 if p.reverb_mix > 0.001 || p.reverb_freeze {
-                    let wet =
-                        self.reverb
-                            .process(sig, p.reverb_size, p.reverb_damp, p.reverb_freeze);
-                    if p.reverb_freeze {
-                        wet // freeze: output only the frozen tail
+                    let rev_in = step_rev_tap(
+                        &mut self.rev_buf_reverb,
+                        &mut self.rev_head_reverb,
+                        &mut self.rev_play_reverb,
+                        sig,
+                    );
+                    let r = &mut self.reverb;
+                    let (sz, dp, fz) = (p.reverb_size, p.reverb_damp, p.reverb_freeze);
+                    let wet = match p.reverb_dir {
+                        1 => r.process(rev_in, sz, dp, fz),
+                        2 => r.process(sig, sz, dp, fz) + r.process(rev_in, sz, dp, false) * 0.7,
+                        _ => r.process(sig, sz, dp, fz),
+                    };
+                    if fz {
+                        wet
                     } else {
                         sig * (1.0 - p.reverb_mix) + wet * p.reverb_mix * gate_env
                     }
@@ -185,14 +236,27 @@ impl DspState {
                 }
             }
             FxStep::Delay => {
-                let wet = self.delay.process_tape(
+                let rev_in = step_rev_tap(
+                    &mut self.rev_buf_delay,
+                    &mut self.rev_head_delay,
+                    &mut self.rev_play_delay,
                     sig,
+                );
+                let d = &mut self.delay;
+                let (ds, fb, wf, sat) = (
                     delay_samples,
                     p.delay_feedback,
                     p.delay_wow_flutter,
                     p.delay_saturation,
-                    sr,
                 );
+                let wet = match p.delay_dir {
+                    1 => d.process_tape(rev_in, ds, fb, wf, sat, sr),
+                    2 => {
+                        d.process_tape(sig, ds, fb, wf, sat, sr)
+                            + d.process_tape(rev_in, ds, fb, wf, sat, sr) * 0.7
+                    }
+                    _ => d.process_tape(sig, ds, fb, wf, sat, sr),
+                };
                 sig * (1.0 - p.delay_mix) + wet * p.delay_mix
             }
             FxStep::Bitcrush => {
