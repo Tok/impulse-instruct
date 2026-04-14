@@ -314,16 +314,16 @@ fn draw_slice_wheel(
     if looping {
         painter.circle_stroke(center, r_outer + 3.0, egui::Stroke::new(1.0, theme::CHALK));
     }
-    // Direction arrow in the hub (black pointing glyphs render reliably
-    // in egui's default font — the earlier open-pointer chars showed as
-    // a fallback square on some systems).
+    // Direction arrow in the hub — circular rotation glyphs (NOT play
+    // triangles) so the indicator reads as "wheel direction" rather than
+    // a clickable transport control.
     let arrow_col = theme::ASH;
-    let hub_label = if reverse { "◄" } else { "►" };
+    let hub_label = if reverse { "↺" } else { "↻" };
     painter.text(
         center,
         egui::Align2::CENTER_CENTER,
         hub_label,
-        egui::FontId::monospace(size * 0.22),
+        egui::FontId::monospace(size * 0.28),
         arrow_col,
     );
 }

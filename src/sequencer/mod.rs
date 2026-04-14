@@ -242,10 +242,22 @@ pub fn advance_clock(
                 if s.active && prob_hit(s.probability, vstep, loop_count, *voice as u32) {
                     let effective_vel = (s.velocity * vel_mul).clamp(0.0, 1.0);
                     let effective_ratchet = s.ratchet.saturating_add(rat_add).min(8);
+                    // Amen-specific auto: when step.slice is 0 (unset), map
+                    // each step's INDEX to the slice index (1-based, so the
+                    // DSP's `(slice_idx-1) % slices` resolves to vstep %
+                    // slices).  This makes the obvious break-chopping use
+                    // case work straight from the standard step lane:
+                    // step N plays slice N.  Other drum voices ignore the
+                    // slice field entirely.
+                    let effective_slice = if matches!(*voice, DrumVoice::Amen) && s.slice == 0 {
+                        (vstep as u8).saturating_add(1)
+                    } else {
+                        s.slice
+                    };
                     events.push(TriggerEvent::DrumTrigger {
                         voice: *voice,
                         velocity: effective_vel,
-                        slice: s.slice,
+                        slice: effective_slice,
                     });
                     // Schedule ratchet sub-hits (ratchet=1 means no sub-hits).
                     if effective_ratchet > 1 {
@@ -253,7 +265,7 @@ pub fn advance_clock(
                         ratchet_interval[i] = sps / effective_ratchet as f64;
                         ratchet_acc[i] = 0.0;
                         ratchet_vel[i] = effective_vel;
-                        ratchet_slice[i] = s.slice;
+                        ratchet_slice[i] = effective_slice;
                     }
                 }
             }
