@@ -59,19 +59,36 @@ pub enum LfoTarget {
     HooverPan,
     // Noise voice
     NoisePan,
-    // Drum voices
+    // Drum voices — 808
     Kick808Pitch,
+    Kick808Decay,
     Kick808Pan,
+    Snare808Tone,
+    Snare808Decay,
     Snare808Pan,
     Hihat808Pan,
+    // Drum voices — 909
+    Kick909Pitch,
+    Kick909Decay,
     Kick909Pan,
+    Snare909Tone,
+    Snare909Decay,
     Snare909Pan,
     Hihat909Pan,
+    Clap909Decay,
     Clap909Pan,
     // AN1X
     An1xCutoff,
     An1xPitch,
     An1xPan,
+    // Sampler / texture / TTS voices
+    AmenVolume,
+    AmenStart,
+    AmenGate,
+    GranularVolume,
+    GranularDensity,
+    GranularGrain,
+    GranularPos,
     // FX: Reverb
     ReverbMix,
     ReverbSize,

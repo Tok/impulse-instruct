@@ -811,7 +811,8 @@ impl An1xVoice {
         } else {
             0.0
         }; // ±2 st
-        let pitch_st = self.current_pitch + drift_st + pitch_lfo_st + pitch_env_st;
+        let pitch_st =
+            self.current_pitch + drift_st + pitch_lfo_st + pitch_env_st + p.an1x_pitch_mod_st;
         let base_freq = super::dsp_util::midi_to_hz_tuned(pitch_st.round() as u8, p.tuning)
             * 2.0_f32.powf((pitch_st - pitch_st.round()) / 12.0);
 

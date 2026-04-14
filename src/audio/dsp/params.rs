@@ -144,6 +144,22 @@ pub fn lfo_target_to_u8(t: LfoTarget) -> u8 {
         TapeFlutter => 49,
         AutotuneAmount => 50,
         AutotuneMix => 51,
+        // Drum extras (52..62) and sampler/granular (63..69).
+        Kick808Decay => 52,
+        Snare808Tone => 53,
+        Snare808Decay => 54,
+        Kick909Pitch => 55,
+        Kick909Decay => 56,
+        Snare909Tone => 57,
+        Snare909Decay => 58,
+        Clap909Decay => 59,
+        AmenVolume => 60,
+        AmenStart => 61,
+        AmenGate => 62,
+        GranularVolume => 63,
+        GranularDensity => 64,
+        GranularGrain => 65,
+        GranularPos => 66,
     }
 }
 
@@ -411,6 +427,10 @@ pub struct AudioParams {
     pub mod_route_count: u8,
     pub sequencer_running: bool,
     pub lfo_pitch_mod_st: f32,
+    /// AN1X pitch modulation (semitones) accumulated this block from the
+    /// cable-routed mod system (LfoTarget::An1xPitch / opcode 16).  Added
+    /// on top of pitch_st in An1xVoice::process.
+    pub an1x_pitch_mod_st: f32,
     // Free EG
     pub free_eg_enabled: bool,
     pub free_eg_values: [f32; 8],
@@ -674,6 +694,7 @@ impl AudioParams {
             mod_route_count,
             sequencer_running: s.sequencer.running,
             lfo_pitch_mod_st: 0.0,
+            an1x_pitch_mod_st: 0.0,
             free_eg_enabled: s.free_eg.enabled,
             free_eg_values: s.free_eg.values,
             free_eg_period: 0.5 * 64.0_f32.powf(s.free_eg.period), // 0→0.5s, 1→32s

@@ -31,7 +31,7 @@ pub fn apply_mod_target(p: &mut AudioParams, target: u8, mod_val: f32) {
         13 => p.distortion_drive = (p.distortion_drive + mod_val * 0.5).clamp(0.0, 1.0),
         14 => p.master_volume = (p.master_volume + mod_val * 0.3).clamp(0.0, 1.5),
         15 => p.an1x_filter_cutoff = (p.an1x_filter_cutoff + mod_val).clamp(0.0, 1.0),
-        16 => {} // AN1X pitch — no direct field on AudioParams yet.
+        16 => p.an1x_pitch_mod_st += mod_val * 12.0, // ±12 st at full depth
         // ── Pan family — bipolar -1..+1 ───────────────────────────────────
         17 => p.pan_303 = (p.pan_303 + mod_val).clamp(-1.0, 1.0),
         18 => p.pan_hoover = (p.pan_hoover + mod_val).clamp(-1.0, 1.0),
@@ -69,6 +69,22 @@ pub fn apply_mod_target(p: &mut AudioParams, target: u8, mod_val: f32) {
         49 => p.tape_flutter = (p.tape_flutter + mod_val).clamp(0.0, 1.0),
         50 => p.autotune_amount = (p.autotune_amount + mod_val).clamp(0.0, 1.0),
         51 => p.autotune_mix = (p.autotune_mix + mod_val).clamp(0.0, 1.0),
+        // Drum extras + sampler/granular.
+        52 => p.kick808_decay = (p.kick808_decay + mod_val * 0.5).clamp(0.0, 1.0),
+        53 => p.snare808_tone = (p.snare808_tone + mod_val).clamp(0.0, 1.0),
+        54 => p.snare808_decay = (p.snare808_decay + mod_val * 0.5).clamp(0.0, 1.0),
+        55 => p.kick909_pitch = (p.kick909_pitch + mod_val * 0.5).clamp(0.0, 1.0),
+        56 => p.kick909_decay = (p.kick909_decay + mod_val * 0.5).clamp(0.0, 1.0),
+        57 => p.snare909_tone = (p.snare909_tone + mod_val).clamp(0.0, 1.0),
+        58 => p.snare909_decay = (p.snare909_decay + mod_val * 0.5).clamp(0.0, 1.0),
+        59 => p.clap909_decay = (p.clap909_decay + mod_val * 0.5).clamp(0.0, 1.0),
+        60 => p.amen_volume = (p.amen_volume + mod_val).clamp(0.0, 1.5),
+        61 => p.amen_start_offset = (p.amen_start_offset + mod_val * 0.5).clamp(0.0, 1.0),
+        62 => p.amen_gate = (p.amen_gate + mod_val).clamp(0.05, 1.0),
+        63 => p.granular_volume = (p.granular_volume + mod_val).clamp(0.0, 1.5),
+        64 => p.granular_density = (p.granular_density + mod_val).clamp(0.0, 1.0),
+        65 => p.granular_grain_size = (p.granular_grain_size + mod_val).clamp(0.0, 1.0),
+        66 => p.granular_position = (p.granular_position + mod_val).clamp(0.0, 1.0),
         _ => {}
     }
 }
