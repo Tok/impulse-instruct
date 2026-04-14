@@ -31,7 +31,7 @@ Everything runs entirely offline: no cloud calls, no subscriptions, no latency. 
 
 ---
 
-## v0.7.3 - Pre-release
+## v0.7.5-snapshot — Pre-release
 
 **This is pre-release software.** It works and makes sound, but expect rough edges. The UI is functional but visually unpolished in places.
 
@@ -139,17 +139,50 @@ Each agent can run a different model. A `LlamaServerPool` manages server process
 
 ---
 
-## What's new in v0.7.3
+## What's new since v0.7.4
 
-Scoped agents can finally rewrite their voice's sequencer (a silent
-scope bug was dropping every `bass_steps` / `bass_notes` / per-kit
-pattern write). Ctrl+click cycles knob lock mode; UserOwned renders
-as a flat spoked knob, LlmFocus as brightened chrome. Knob labels are
-full words across every panel. Heat is user-only and actually chaotic
-at 1.0. MUSICAL MODERATION prompt section keeps default FX/velocity/
-bass values in musical ranges unless you ask for extremes. SIGINT
-handler cleans up llama-server children. 303 sits centered between
-808 and 909 in the rack. 477 unit tests, 23 commits since v0.7.2.
+Heavy-focus session on the AMEN sampler, the bass voice's 101 gap,
+and a new pattern modulator:
+
+- **AMEN break chopper** — the voice went from "play the whole WAV"
+  to a proper slicer.  Per-step slice selection, transient-based AUTO
+  detect, per-slice pitch/volume, BPM-stretch to host tempo, forward
+  and reverse playback with gate + stutter, waveform thumbnail with
+  slice markers, and a circular slice wheel that lights the active
+  wedge.  Samples live in `samples/amen/` — the panel has GET /
+  RANDOM / LOAD / PLAY buttons and a scrollable picker.
+- **Granular CAPTURE** — the granular voice can freeze the current
+  master-output buffer into its source.  A live scrolling ring-buffer
+  viz shows what's currently in the tap.  Textures can also be loaded
+  from `samples/textures/` (archive.org / freesound / LibriVox links
+  baked into the panel).
+- **Bass voice → SH-101 territory** — full ADSR on both amp and
+  filter envelopes, PWM on the pulse wave, and a per-voice LFO with
+  routable targets (pitch / PWM / cutoff / amp).  Free-rate or
+  BPM-synced.  The 303 squelch still lives at default values.
+- **Pre-echo modulator** — anchor-driven lead-in reinforcement.
+  Declare anchor step indices per voice, set a lead-in length, pick
+  velocity ramp and/or ratchet build; the lead-in cells ramp into
+  each anchor for a build-up feel.  Compact one-row UI with a
+  clickable step strip at the bottom of the sequencer panel.
+- **TTS panel overhaul** — live NeuTTS server status with a one-click
+  START, SAY field that synthesises arbitrary text immediately,
+  ASK row (THEME / RHYME / SING) that prompts the controlling agent,
+  conditioning preview line showing the voice's transcript, empty-SAY
+  fallback asks the agent to improvise in character.
+- **Demo scenario rewrite for D&B** — jump-up style seed (32-step
+  seeds, kick on 1 + late-3 + just-before-4, AN1X as drone pad,
+  bass as reese), MC scene spawns via API and shouts a single line,
+  record-demo.sh keeps NeuTTS running so runtime lines actually
+  synthesise.
+- **LLM action surface** — rack.add / rack.remove for creating
+  modules from agent JSON, spawn_agent gains mode + tts fields,
+  new POST /api/style, /api/amen, /api/granular endpoints.
+- **Module layout refinements** — AmenSampler 3×3 with grouped
+  knobs and waveform placeholders, granular 3×2, sequencer dynamic
+  sizer now reserves space for the preecho row so it doesn't clip.
+
+489 unit tests, 36 commits since v0.7.4.
 
 Full details in [docs/features.md](docs/features.md).
 
@@ -317,15 +350,13 @@ The LLM understands musical intent well. When a style doesn't land, the cause is
 
 **What works well:** acid bass. The ladder filter, env mod, resonance, and slide are all solid.
 
-**What doesn't yet:** the hoover lead exists but doesn't sound like a hoover. The Amen break is synthesised step-by-step rather than sampled. Some genre textures are partially wired but not finished.
-
-**What's improved in v0.7.3:** scoped agents actually write their voice's sequencer fields (a nasty silent bug). Knob lock mode on Ctrl+click with a real style cue (chrome / brightened chrome / flat spokes). Full-word knob labels everywhere. Heat is a user knob again, and at 1.0 it's actually chaotic rather than a 3% top_p nudge. The prompt now teaches agents to pick musical defaults for FX, drum velocities, and bass aggression. Graceful shutdown cleans up llama-server on Ctrl-C.
+**What doesn't yet:** the hoover lead exists but doesn't sound like a hoover. Some genre textures are partially wired but not finished.
 
 ---
 
 ## Test Suites
 
-478 unit tests plus 3 LLM integration suites that run against a real model:
+489 unit tests plus 3 LLM integration suites that run against a real model:
 
 | Suite | What it tests |
 |-------|--------------|
