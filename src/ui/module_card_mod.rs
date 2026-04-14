@@ -217,7 +217,7 @@ pub fn draw_mod_selector_dropdowns(app: &mut ImpulseApp, ctx: &egui::Context, po
     let max_overlay_y = screen_bottom - 105.0;
     // Snapshot module kind + current per-slot multi-select target lists +
     // depths under a read lock so the overlay pass can render lock-free.
-    type Snap = (u32, ModuleKind, Vec<Vec<LfoTarget>>, Vec<f32>);
+    type Snap = (u32, ModuleKind, Vec<Vec<LfoTarget>>, Vec<f32>, Vec<bool>);
     let snapshot: Vec<Snap> = {
         let s = app.state.read();
         s.rack
@@ -229,6 +229,7 @@ pub fn draw_mod_selector_dropdowns(app: &mut ImpulseApp, ctx: &egui::Context, po
                     m.kind,
                     m.mod_selectors.clone(),
                     m.mod_input_depths.clone(),
+                    m.mod_input_invert.clone(),
                 )
             })
             .collect()
@@ -236,13 +237,14 @@ pub fn draw_mod_selector_dropdowns(app: &mut ImpulseApp, ctx: &egui::Context, po
     // Pending changes — applied in a single write lock at end of frame.
     let mut sel_changes: Vec<(u32, usize, Vec<LfoTarget>)> = Vec::new();
     let mut depth_changes: Vec<(u32, usize, f32)> = Vec::new();
+    let mut invert_changes: Vec<(u32, usize, bool)> = Vec::new();
     for p in ports
         .iter()
         .filter(|p| p.port.dir == PortDir::In && p.port.kind == PortKind::Mod)
     {
-        let Some((_, kind, selectors, depths)) = snapshot
+        let Some((_, kind, selectors, depths, inverts)) = snapshot
             .iter()
-            .find(|(id, _, _, _)| *id == p.port.module_id)
+            .find(|(id, _, _, _, _)| *id == p.port.module_id)
         else {
             continue;
         };
@@ -254,6 +256,7 @@ pub fn draw_mod_selector_dropdowns(app: &mut ImpulseApp, ctx: &egui::Context, po
         let is_selector = matches!(slot, ModInput::Selector);
         let cur_targets: Vec<LfoTarget> = selectors.get(idx).cloned().unwrap_or_default();
         let cur_depth = depths.get(idx).copied().unwrap_or(1.0).clamp(0.0, 1.0);
+        let cur_invert = inverts.get(idx).copied().unwrap_or(false);
         // Scope chips to this module's own LfoTargets.  "—" is a meta-chip:
         // selected when ALL real targets are active; clicking it toggles all
         // on (or all off if everything is currently active).
@@ -282,15 +285,30 @@ pub fn draw_mod_selector_dropdowns(app: &mut ImpulseApp, ctx: &egui::Context, po
                 frame.show(ui, |ui| {
                     ui.horizontal(|ui| {
                         ui.spacing_mut().item_spacing = Vec2::new(2.0, 0.0);
+                        // Polarity toggle — `+` for normal, `−` for inverted.
+                        // Shown FIRST so the slider's % visually matches the
+                        // sign next to it.
+                        let pol_label = if cur_invert { "−" } else { "+" };
+                        if chip_button(ui, pol_label, cur_invert).clicked() {
+                            invert_changes.push((p.port.module_id, idx, !cur_invert));
+                        }
                         let mut d = cur_depth;
                         ui.spacing_mut().slider_width = 50.0;
                         ui.add(egui::Slider::new(&mut d, 0.0..=1.0).show_value(false))
-                            .on_hover_text(format!("Depth {:.0}%", cur_depth * 100.0));
+                            .on_hover_text(format!(
+                                "Depth {}{:.0}%",
+                                if cur_invert { "-" } else { "+" },
+                                cur_depth * 100.0
+                            ));
                         ui.label(
-                            egui::RichText::new(format!("{:>3}%", (d * 100.0).round() as i32))
-                                .monospace()
-                                .size(7.5)
-                                .color(Color32::from_gray(170)),
+                            egui::RichText::new(format!(
+                                "{}{:>3}%",
+                                if cur_invert { "-" } else { " " },
+                                (d * 100.0).round() as i32
+                            ))
+                            .monospace()
+                            .size(7.5)
+                            .color(Color32::from_gray(170)),
                         );
                         if d != cur_depth {
                             depth_changes.push((p.port.module_id, idx, d));
@@ -323,7 +341,7 @@ pub fn draw_mod_selector_dropdowns(app: &mut ImpulseApp, ctx: &egui::Context, po
                 });
             });
     }
-    if !sel_changes.is_empty() || !depth_changes.is_empty() {
+    if !sel_changes.is_empty() || !depth_changes.is_empty() || !invert_changes.is_empty() {
         let mut s = app.state.write();
         for (mid, idx, targets) in sel_changes {
             if let Some(m) = s.rack.modules.iter_mut().find(|m| m.id == mid) {
@@ -339,6 +357,14 @@ pub fn draw_mod_selector_dropdowns(app: &mut ImpulseApp, ctx: &egui::Context, po
                     m.mod_input_depths.resize(idx + 1, 1.0);
                 }
                 m.mod_input_depths[idx] = d;
+            }
+        }
+        for (mid, idx, inv) in invert_changes {
+            if let Some(m) = s.rack.modules.iter_mut().find(|m| m.id == mid) {
+                if m.mod_input_invert.len() <= idx {
+                    m.mod_input_invert.resize(idx + 1, false);
+                }
+                m.mod_input_invert[idx] = inv;
             }
         }
     }

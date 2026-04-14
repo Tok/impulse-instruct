@@ -41,12 +41,22 @@ pub fn compile_mod_routes(s: &AppState) -> ([ModRouteCopy; MAX_MOD_ROUTES], u8) 
             continue;
         };
         let inputs = mod_inputs(target_module.kind);
-        let depth = target_module
+        let depth_unipolar = target_module
             .mod_input_depths
             .get(cable.to.index as usize)
             .copied()
             .unwrap_or(1.0)
             .clamp(0.0, 1.0);
+        let invert = target_module
+            .mod_input_invert
+            .get(cable.to.index as usize)
+            .copied()
+            .unwrap_or(false);
+        let depth = if invert {
+            -depth_unipolar
+        } else {
+            depth_unipolar
+        };
         // Resolve the slot's effective target list — Fixed = its single
         // target, Selector = the multi-select Vec the user picked.
         let targets: &[LfoTarget] = match inputs.get(cable.to.index as usize) {

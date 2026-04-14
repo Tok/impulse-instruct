@@ -339,6 +339,11 @@ pub struct RackModule {
     /// vec defaults each missing entry to 1.0.
     #[serde(default)]
     pub mod_input_depths: Vec<f32>,
+    /// Per-mod-input polarity flag (true = invert).  When true the depth
+    /// is negated before being multiplied with the LFO value, so the
+    /// modulation pulls the target down where it would normally push up.
+    #[serde(default)]
+    pub mod_input_invert: Vec<bool>,
 }
 
 impl RackModule {
@@ -353,6 +358,7 @@ impl RackModule {
             grid_row: 0,
             mod_selectors: Vec::new(),
             mod_input_depths: Vec::new(),
+            mod_input_invert: Vec::new(),
         }
     }
 }
