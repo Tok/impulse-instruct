@@ -621,7 +621,9 @@ pub fn module_card_back(
             }
 
             // ── Port strip (inputs left, outputs right) ─────────────────────
-            let strip_h = 52.0;
+            // Strip height grows with port count so mod jacks don't get
+            // clipped on small modules.
+            let strip_h = super::module_card_mod::back_strip_height(kind);
             let (strip_rect, _) =
                 ui.allocate_exact_size(Vec2::new(card_w, strip_h), Sense::hover());
             let sp = ui.painter_at(strip_rect);
@@ -641,43 +643,17 @@ pub fn module_card_back(
             let label_font = egui::FontId::monospace(7.0);
             let label_col = Color32::from_gray(60);
 
-            // Determine which ports this module has
-            let has_audio_in = matches!(
-                kind,
-                ModuleKind::FxReverb
-                    | ModuleKind::FxDelay
-                    | ModuleKind::FxChorus
-                    | ModuleKind::FxPhaser
-                    | ModuleKind::FxRingMod
-                    | ModuleKind::FxWaveshaper
-                    | ModuleKind::FxBitcrush
-                    | ModuleKind::FxEq
-                    | ModuleKind::FxCompressor
-                    | ModuleKind::FxTapeSat
-                    | ModuleKind::FxDrive
-                    | ModuleKind::FxAutotune
-                    | ModuleKind::MasterOutput
-            );
+            // Port presence — deferred to module_card_mod helpers.
+            use super::module_card_mod as mcm;
+            let has_audio_in = mcm::has_audio_in(kind);
+            let has_cv_in = mcm::has_cv_in(kind);
+            let has_control_in = mcm::has_control_in(kind);
             let has_cv_out = matches!(kind, ModuleKind::LfoModule | ModuleKind::StepSequencer);
             let has_control_out = matches!(kind, ModuleKind::LlmAgent);
-            let has_control_in = !matches!(
-                kind,
-                ModuleKind::MasterOutput | ModuleKind::LlmAgent | ModuleKind::LlmConsole
-            );
-            let has_cv_in = matches!(
-                kind,
-                ModuleKind::AcidBass
-                    | ModuleKind::DrumKit808
-                    | ModuleKind::DrumKit909
-                    | ModuleKind::HooverLead
-                    | ModuleKind::An1xVoice
-                    | ModuleKind::AmenSampler
-                    | ModuleKind::NoiseVoice
-                    | ModuleKind::NeuTts
-            );
 
             // ── LEFT side: input ports ──────────────────────────────────────
-            let mut in_y = strip_rect.center().y - 10.0;
+            // Top-anchored stack at 16px spacing so 5+ jacks fit without clipping.
+            let mut in_y = strip_rect.top() + 14.0;
             if has_audio_in {
                 let pos = Pos2::new(left_x, in_y);
                 draw_port_circle(&sp, pos, PortKind::Audio, PortDir::In);
@@ -703,7 +679,7 @@ pub fn module_card_back(
                     Sense::hover(),
                 )
                 .on_hover_text("Audio In");
-                in_y += 20.0;
+                in_y += 16.0;
             }
             if has_cv_in {
                 let pos = Pos2::new(left_x, in_y);
@@ -730,7 +706,7 @@ pub fn module_card_back(
                     Sense::hover(),
                 )
                 .on_hover_text("CV / Gate In");
-                in_y += 20.0;
+                in_y += 16.0;
             }
             if has_control_in {
                 let pos = Pos2::new(left_x, in_y);
@@ -751,7 +727,7 @@ pub fn module_card_back(
                     label_font.clone(),
                     label_col,
                 );
-                in_y += 20.0;
+                in_y += 16.0;
             }
             super::module_card_mod::draw_mod_input_ports(
                 ui,
@@ -767,7 +743,7 @@ pub fn module_card_back(
             );
 
             // ── RIGHT side: output ports ────────────────────────────────────
-            let mut out_y = strip_rect.center().y - 10.0;
+            let mut out_y = strip_rect.top() + 14.0;
             {
                 let pos = Pos2::new(right_x, out_y);
                 draw_port_circle(&sp, pos, PortKind::Audio, PortDir::Out);
@@ -793,7 +769,7 @@ pub fn module_card_back(
                     Sense::hover(),
                 )
                 .on_hover_text("Audio Out");
-                out_y += 20.0;
+                out_y += 16.0;
             }
             if has_cv_out {
                 let pos = Pos2::new(right_x, out_y);
@@ -820,7 +796,7 @@ pub fn module_card_back(
                     Sense::hover(),
                 )
                 .on_hover_text("CV Out");
-                out_y += 20.0;
+                out_y += 16.0;
             }
             if has_control_out {
                 let pos = Pos2::new(right_x, out_y);

@@ -329,9 +329,11 @@ pub struct RackModule {
     /// Grid row (0-based) in the zone's grid.
     #[serde(default)]
     pub grid_row: u8,
-    /// Per-selector mod-input targets (indexed by selector position).
+    /// Per-Selector slot: list of currently-active LfoTargets (multi-select).
+    /// Indexed by selector position; an empty inner list = no targets active
+    /// for that slot.
     #[serde(default)]
-    pub mod_selectors: Vec<crate::state::LfoTarget>,
+    pub mod_selectors: Vec<Vec<crate::state::LfoTarget>>,
     /// Per-mod-input depth (0..1).  Indexed by `mod_inputs(kind)` slot
     /// position — applies to both Fixed and Selector slots.  Empty / short
     /// vec defaults each missing entry to 1.0.

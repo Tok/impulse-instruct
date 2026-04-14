@@ -72,7 +72,84 @@ const ALL_TARGETS: &[LfoTarget] = &[
 ];
 
 /// Vertical gap between successive back-panel ports (matches the core card).
-const PORT_SPACING: f32 = 20.0;
+const PORT_SPACING: f32 = 16.0;
+
+/// Small labelled toggle chip — selected = light fill + bright text,
+/// unselected = dim fill + dim text.  Used in mod-target multi-select.
+fn chip_button(ui: &mut egui::Ui, label: &str, selected: bool) -> egui::Response {
+    let text = egui::RichText::new(label)
+        .monospace()
+        .size(7.5)
+        .color(if selected {
+            Color32::from_gray(235)
+        } else {
+            Color32::from_gray(140)
+        });
+    ui.add(
+        egui::Button::new(text)
+            .small()
+            .fill(if selected {
+                Color32::from_gray(60)
+            } else {
+                Color32::from_gray(28)
+            })
+            .stroke(egui::Stroke::NONE)
+            .rounding(2.0),
+    )
+}
+
+/// True if `kind` exposes an audio-in jack on the back panel.
+pub fn has_audio_in(kind: ModuleKind) -> bool {
+    use ModuleKind::*;
+    matches!(
+        kind,
+        FxReverb
+            | FxDelay
+            | FxChorus
+            | FxPhaser
+            | FxRingMod
+            | FxWaveshaper
+            | FxBitcrush
+            | FxEq
+            | FxCompressor
+            | FxTapeSat
+            | FxDrive
+            | FxAutotune
+            | MasterOutput
+    )
+}
+
+/// True if `kind` exposes a CV-in (gate/pitch) jack — voices.
+pub fn has_cv_in(kind: ModuleKind) -> bool {
+    use ModuleKind::*;
+    matches!(
+        kind,
+        AcidBass
+            | DrumKit808
+            | DrumKit909
+            | HooverLead
+            | An1xVoice
+            | AmenSampler
+            | NoiseVoice
+            | NeuTts
+    )
+}
+
+/// True if `kind` accepts a Control-in cable from an LLM agent.
+pub fn has_control_in(kind: ModuleKind) -> bool {
+    use ModuleKind::*;
+    !matches!(kind, MasterOutput | LlmAgent | LlmConsole)
+}
+
+/// Computed back-panel strip height — grows with the input-port count so
+/// mod jacks don't get clipped on small (1-row) modules.
+pub fn back_strip_height(kind: ModuleKind) -> f32 {
+    let n = has_audio_in(kind) as usize
+        + has_cv_in(kind) as usize
+        + has_control_in(kind) as usize
+        + mod_inputs(kind).len();
+    (12.0 + n as f32 * PORT_SPACING).max(52.0)
+}
 
 /// Draw Mod-in jacks for `kind` starting at `start_y` on the left (input)
 /// column, appending each port to `ports`.  Returns the y-coordinate below the
@@ -135,9 +212,10 @@ pub fn draw_mod_selector_dropdowns(app: &mut ImpulseApp, ctx: &egui::Context, po
     if !app.rack_flipped {
         return;
     }
-    // Snapshot module kind + current selector targets + depths under a read
-    // lock so the overlay pass can render lock-free.
-    let snapshot: Vec<(u32, ModuleKind, Vec<LfoTarget>, Vec<f32>)> = {
+    // Snapshot module kind + current per-slot multi-select target lists +
+    // depths under a read lock so the overlay pass can render lock-free.
+    type Snap = (u32, ModuleKind, Vec<Vec<LfoTarget>>, Vec<f32>);
+    let snapshot: Vec<Snap> = {
         let s = app.state.read();
         s.rack
             .modules
@@ -152,7 +230,8 @@ pub fn draw_mod_selector_dropdowns(app: &mut ImpulseApp, ctx: &egui::Context, po
             })
             .collect()
     };
-    let mut sel_changes: Vec<(u32, usize, LfoTarget)> = Vec::new();
+    // Pending changes — applied in a single write lock at end of frame.
+    let mut sel_changes: Vec<(u32, usize, Vec<LfoTarget>)> = Vec::new();
     let mut depth_changes: Vec<(u32, usize, f32)> = Vec::new();
     for p in ports
         .iter()
@@ -170,20 +249,18 @@ pub fn draw_mod_selector_dropdowns(app: &mut ImpulseApp, ctx: &egui::Context, po
             continue;
         };
         let is_selector = matches!(slot, ModInput::Selector);
-        let cur_sel = selectors.get(idx).copied().unwrap_or(LfoTarget::None);
+        let cur_targets: Vec<LfoTarget> = selectors.get(idx).cloned().unwrap_or_default();
         let cur_depth = depths.get(idx).copied().unwrap_or(1.0).clamp(0.0, 1.0);
-        // Scope chip options to this module's own targets, plus None.
-        // Modules with no scoped targets (e.g. AmenSampler, GranularTexture,
-        // NeuTts) get just the None option — they're modulatable via a
-        // dedicated LfoTarget being added later.
-        let chip_targets: Vec<LfoTarget> = std::iter::once(LfoTarget::None)
-            .chain(
-                ALL_TARGETS
-                    .iter()
-                    .copied()
-                    .filter(|t| lfo_target_module_kind(*t) == Some(*kind)),
-            )
+        // Scope chips to this module's own LfoTargets.  "—" is a meta-chip:
+        // selected when ALL real targets are active; clicking it toggles all
+        // on (or all off if everything is currently active).
+        let real_targets: Vec<LfoTarget> = ALL_TARGETS
+            .iter()
+            .copied()
+            .filter(|t| lfo_target_module_kind(*t) == Some(*kind))
             .collect();
+        let all_selected =
+            !real_targets.is_empty() && real_targets.iter().all(|t| cur_targets.contains(t));
         let anchor = p.center + Vec2::new(10.0, -8.0);
         egui::Area::new(egui::Id::new(("mod_overlay", p.port.module_id, idx)))
             .order(egui::Order::Foreground)
@@ -197,7 +274,6 @@ pub fn draw_mod_selector_dropdowns(app: &mut ImpulseApp, ctx: &egui::Context, po
                 frame.show(ui, |ui| {
                     ui.horizontal(|ui| {
                         ui.spacing_mut().item_spacing = Vec2::new(2.0, 0.0);
-                        // Depth slider: 0..1, click+drag, no text input.
                         let mut d = cur_depth;
                         ui.spacing_mut().slider_width = 50.0;
                         ui.add(egui::Slider::new(&mut d, 0.0..=1.0).show_value(false))
@@ -206,29 +282,26 @@ pub fn draw_mod_selector_dropdowns(app: &mut ImpulseApp, ctx: &egui::Context, po
                             depth_changes.push((p.port.module_id, idx, d));
                         }
                         if is_selector {
-                            for t in &chip_targets {
-                                let selected = *t == cur_sel;
-                                let label = lfo_target_short_label(*t);
-                                let text = egui::RichText::new(label).monospace().size(7.5).color(
-                                    if selected {
-                                        Color32::from_gray(235)
+                            // "—" / ALL meta-chip
+                            if chip_button(ui, "—", all_selected).clicked() {
+                                let new_targets = if all_selected {
+                                    Vec::new()
+                                } else {
+                                    real_targets.clone()
+                                };
+                                sel_changes.push((p.port.module_id, idx, new_targets));
+                            }
+                            // Per-target toggle chips (multi-select)
+                            for t in &real_targets {
+                                let active = cur_targets.contains(t);
+                                if chip_button(ui, lfo_target_short_label(*t), active).clicked() {
+                                    let mut next = cur_targets.clone();
+                                    if active {
+                                        next.retain(|x| x != t);
                                     } else {
-                                        Color32::from_gray(140)
-                                    },
-                                );
-                                let resp = ui.add(
-                                    egui::Button::new(text)
-                                        .small()
-                                        .fill(if selected {
-                                            Color32::from_gray(60)
-                                        } else {
-                                            Color32::from_gray(28)
-                                        })
-                                        .stroke(egui::Stroke::NONE)
-                                        .rounding(2.0),
-                                );
-                                if resp.clicked() && *t != cur_sel {
-                                    sel_changes.push((p.port.module_id, idx, *t));
+                                        next.push(*t);
+                                    }
+                                    sel_changes.push((p.port.module_id, idx, next));
                                 }
                             }
                         }
@@ -238,12 +311,12 @@ pub fn draw_mod_selector_dropdowns(app: &mut ImpulseApp, ctx: &egui::Context, po
     }
     if !sel_changes.is_empty() || !depth_changes.is_empty() {
         let mut s = app.state.write();
-        for (mid, idx, tgt) in sel_changes {
+        for (mid, idx, targets) in sel_changes {
             if let Some(m) = s.rack.modules.iter_mut().find(|m| m.id == mid) {
                 if m.mod_selectors.len() <= idx {
-                    m.mod_selectors.resize(idx + 1, LfoTarget::None);
+                    m.mod_selectors.resize(idx + 1, Vec::new());
                 }
-                m.mod_selectors[idx] = tgt;
+                m.mod_selectors[idx] = targets;
             }
         }
         for (mid, idx, d) in depth_changes {

@@ -41,30 +41,34 @@ pub fn compile_mod_routes(s: &AppState) -> ([ModRouteCopy; MAX_MOD_ROUTES], u8) 
             continue;
         };
         let inputs = mod_inputs(target_module.kind);
-        let target = match inputs.get(cable.to.index as usize) {
-            Some(ModInput::Fixed(t)) => *t,
-            Some(ModInput::Selector) => target_module
-                .mod_selectors
-                .get(cable.to.index as usize)
-                .copied()
-                .unwrap_or(LfoTarget::None),
-            None => continue,
-        };
-        if target == LfoTarget::None {
-            continue;
-        }
         let depth = target_module
             .mod_input_depths
             .get(cable.to.index as usize)
             .copied()
             .unwrap_or(1.0)
             .clamp(0.0, 1.0);
-        routes[count] = ModRouteCopy {
-            lfo_slot: slot_idx as u8,
-            target_u8: lfo_target_to_u8(target),
-            depth,
+        // Resolve the slot's effective target list — Fixed = its single
+        // target, Selector = the multi-select Vec the user picked.
+        let targets: &[LfoTarget] = match inputs.get(cable.to.index as usize) {
+            Some(ModInput::Fixed(t)) => std::slice::from_ref(t),
+            Some(ModInput::Selector) => target_module
+                .mod_selectors
+                .get(cable.to.index as usize)
+                .map(|v| v.as_slice())
+                .unwrap_or(&[]),
+            None => continue,
         };
-        count += 1;
+        for &t in targets {
+            if t == LfoTarget::None || count >= MAX_MOD_ROUTES {
+                continue;
+            }
+            routes[count] = ModRouteCopy {
+                lfo_slot: slot_idx as u8,
+                target_u8: lfo_target_to_u8(t),
+                depth,
+            };
+            count += 1;
+        }
     }
     (routes, count as u8)
 }
