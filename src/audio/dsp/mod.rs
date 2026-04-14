@@ -3,6 +3,7 @@
 mod bass303;
 mod dsp_util;
 mod fx;
+mod mod_apply;
 mod params;
 mod samplers;
 mod voices;
@@ -10,6 +11,7 @@ use bass303::Bass303;
 pub use dsp_util::midi_to_hz;
 use dsp_util::*;
 use fx::*;
+use mod_apply::apply_mod_target;
 pub use params::AudioParams;
 use samplers::*;
 use voices::*;
@@ -435,24 +437,17 @@ impl DspState {
             };
 
             let mod_val = lfo_val * lp.depth;
-            match lp.target {
-                1 => p.cutoff = (p.cutoff + mod_val).clamp(0.0, 1.0),
-                2 => p.resonance = (p.resonance + mod_val).clamp(0.0, 1.0),
-                3 => p.lfo_pitch_mod_st += mod_val * 12.0, // ±12 semitones at depth=1
-                4 => p.volume_303 = (p.volume_303 + mod_val).clamp(0.0, 1.5),
-                5 => p.reverb_mix = (p.reverb_mix + mod_val).clamp(0.0, 1.0),
-                6 => p.delay_time = (p.delay_time + mod_val * 0.5).clamp(0.0, 1.0),
-                7 => p.delay_feedback = (p.delay_feedback + mod_val * 0.5).clamp(0.0, 0.99),
-                8 => p.chorus_mix = (p.chorus_mix + mod_val).clamp(0.0, 1.0),
-                9 => p.chorus_rate = (p.chorus_rate + mod_val).clamp(0.0, 1.0),
-                10 => p.kick808_pitch = (p.kick808_pitch + mod_val * 0.5).clamp(0.0, 1.0),
-                11 => p.phaser_rate = (p.phaser_rate + mod_val).clamp(0.0, 1.0),
-                12 => p.phaser_depth = (p.phaser_depth + mod_val).clamp(0.0, 1.0),
-                13 => p.distortion_drive = (p.distortion_drive + mod_val * 0.5).clamp(0.0, 1.0),
-                14 => p.master_volume = (p.master_volume + mod_val * 0.3).clamp(0.0, 1.5),
-                15 => p.an1x_filter_cutoff = (p.an1x_filter_cutoff + mod_val).clamp(0.0, 1.0),
-                16 => {} // AN1X pitch: no direct pitch field in AudioParams yet
-                _ => {}
+            apply_mod_target(&mut p, lp.target, mod_val);
+            // Cable-routed mod: any mod_route sourced from this LFO slot
+            // contributes lfo_val × route.depth to its target param.
+            for r in p_base
+                .mod_routes
+                .iter()
+                .take(p_base.mod_route_count as usize)
+            {
+                if r.lfo_slot as usize == i {
+                    apply_mod_target(&mut p, r.target_u8, lfo_val * r.depth);
+                }
             }
         }
 
@@ -478,25 +473,7 @@ impl DspState {
             let level = v0 + (v1 - v0) * frac; // 0..1
             let bipolar_depth = (p_base.free_eg_depth - 0.5) * 2.0; // -1..+1
             let mod_val = level * bipolar_depth;
-            match p_base.free_eg_target {
-                1 => p.cutoff = (p.cutoff + mod_val).clamp(0.0, 1.0),
-                2 => p.resonance = (p.resonance + mod_val).clamp(0.0, 1.0),
-                3 => p.lfo_pitch_mod_st += mod_val * 12.0,
-                4 => p.volume_303 = (p.volume_303 + mod_val).clamp(0.0, 1.5),
-                5 => p.reverb_mix = (p.reverb_mix + mod_val).clamp(0.0, 1.0),
-                6 => p.delay_time = (p.delay_time + mod_val * 0.5).clamp(0.0, 1.0),
-                7 => p.delay_feedback = (p.delay_feedback + mod_val * 0.5).clamp(0.0, 0.99),
-                8 => p.chorus_mix = (p.chorus_mix + mod_val).clamp(0.0, 1.0),
-                9 => p.chorus_rate = (p.chorus_rate + mod_val).clamp(0.0, 1.0),
-                10 => p.kick808_pitch = (p.kick808_pitch + mod_val * 0.5).clamp(0.0, 1.0),
-                11 => p.phaser_rate = (p.phaser_rate + mod_val).clamp(0.0, 1.0),
-                12 => p.phaser_depth = (p.phaser_depth + mod_val).clamp(0.0, 1.0),
-                13 => p.distortion_drive = (p.distortion_drive + mod_val * 0.5).clamp(0.0, 1.0),
-                14 => p.master_volume = (p.master_volume + mod_val * 0.3).clamp(0.0, 1.5),
-                15 => p.an1x_filter_cutoff = (p.an1x_filter_cutoff + mod_val).clamp(0.0, 1.0),
-                16 => {} // AN1X pitch: no direct pitch field in AudioParams yet
-                _ => {}
-            }
+            apply_mod_target(&mut p, p_base.free_eg_target, mod_val);
         }
 
         if p.master_pitch_st.abs() > 0.001 {

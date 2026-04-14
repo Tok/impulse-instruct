@@ -6,32 +6,139 @@ use crate::state::{
     An1xLfoTarget, An1xWave, AppState, FilterMode, LfoTarget, LfoWaveform, ModuleKind,
 };
 
-/// Encode an `LfoTarget` into the compact u8 opcode consumed by the audio
-/// thread.  The u8 codes are a closed set defined here; targets added to
-/// `LfoTarget` for per-knob mod jacks that don't yet have DSP support map to
-/// 0 (None), since the LFO module itself doesn't drive them — they're only
-/// reachable via cable-declared modulation (wired in a later commit).
-fn lfo_target_to_u8(t: LfoTarget) -> u8 {
-    match t {
-        LfoTarget::None => 0,
-        LfoTarget::BassCutoff => 1,
-        LfoTarget::BassResonance => 2,
-        LfoTarget::BassPitch => 3,
-        LfoTarget::BassVolume => 4,
-        LfoTarget::ReverbMix => 5,
-        LfoTarget::DelayTime => 6,
-        LfoTarget::DelayFeedback => 7,
-        LfoTarget::ChorusMix => 8,
-        LfoTarget::ChorusRate => 9,
-        LfoTarget::Kick808Pitch => 10,
-        LfoTarget::PhaserRate => 11,
-        LfoTarget::PhaserDepth => 12,
-        LfoTarget::DistortionDrive => 13,
-        LfoTarget::MasterVolume => 14,
-        LfoTarget::An1xCutoff => 15,
-        LfoTarget::An1xPitch => 16,
-        _ => 0,
+/// Walk the rack's Mod cables and emit a fixed-size array of compiled mod
+/// routes for the audio thread to consume.  Each route resolves the source
+/// LFO module to its slot index (position in the rack's LfoModule order) and
+/// the destination Mod-In jack to its `LfoTarget` (Fixed slot or the user-
+/// picked Selector value).  Routes whose source/target can't be resolved or
+/// whose target is `None` are silently skipped.  The depth defaults to 1.0
+/// (a per-cable depth knob is a future addition).
+pub fn compile_mod_routes(s: &AppState) -> ([ModRouteCopy; MAX_MOD_ROUTES], u8) {
+    use crate::state::{ModInput, ModuleKind, PortKind, mod_inputs};
+    let mut routes = [ModRouteCopy::default(); MAX_MOD_ROUTES];
+    let mut count = 0usize;
+    let lfo_ids: Vec<u32> = s
+        .rack
+        .modules
+        .iter()
+        .filter(|m| m.kind == ModuleKind::LfoModule)
+        .map(|m| m.id)
+        .collect();
+    for cable in &s.rack.cables {
+        if count >= MAX_MOD_ROUTES {
+            break;
+        }
+        if cable.from.kind != PortKind::Cv || cable.to.kind != PortKind::Mod {
+            continue;
+        }
+        let Some(slot_idx) = lfo_ids.iter().position(|id| *id == cable.from.module_id) else {
+            continue;
+        };
+        if slot_idx >= s.lfo.len() {
+            continue;
+        }
+        let Some(target_module) = s.rack.modules.iter().find(|m| m.id == cable.to.module_id) else {
+            continue;
+        };
+        let inputs = mod_inputs(target_module.kind);
+        let target = match inputs.get(cable.to.index as usize) {
+            Some(ModInput::Fixed(t)) => *t,
+            Some(ModInput::Selector) => target_module
+                .mod_selectors
+                .get(cable.to.index as usize)
+                .copied()
+                .unwrap_or(LfoTarget::None),
+            None => continue,
+        };
+        if target == LfoTarget::None {
+            continue;
+        }
+        routes[count] = ModRouteCopy {
+            lfo_slot: slot_idx as u8,
+            target_u8: lfo_target_to_u8(target),
+            depth: 1.0,
+        };
+        count += 1;
     }
+    (routes, count as u8)
+}
+
+/// Encode an `LfoTarget` into a compact u8 opcode consumed by the audio
+/// thread.  Stable IDs — adding new targets requires adding new codes here
+/// AND a matching arm in `apply_mod_target` (src/audio/dsp/mod.rs).
+pub fn lfo_target_to_u8(t: LfoTarget) -> u8 {
+    use LfoTarget::*;
+    match t {
+        None => 0,
+        // Legacy (1..16) — drive the existing LFO-module path.
+        BassCutoff => 1,
+        BassResonance => 2,
+        BassPitch => 3,
+        BassVolume => 4,
+        ReverbMix => 5,
+        DelayTime => 6,
+        DelayFeedback => 7,
+        ChorusMix => 8,
+        ChorusRate => 9,
+        Kick808Pitch => 10,
+        PhaserRate => 11,
+        PhaserDepth => 12,
+        DistortionDrive => 13,
+        MasterVolume => 14,
+        An1xCutoff => 15,
+        An1xPitch => 16,
+        // Pan family.
+        BassPan => 17,
+        HooverPan => 18,
+        NoisePan => 19,
+        Kick808Pan => 20,
+        Snare808Pan => 21,
+        Hihat808Pan => 22,
+        Kick909Pan => 23,
+        Snare909Pan => 24,
+        Hihat909Pan => 25,
+        Clap909Pan => 26,
+        An1xPan => 27,
+        // FX knob expansion.
+        ReverbSize => 28,
+        ReverbDamp => 29,
+        DelayMix => 30,
+        ChorusDepth => 31,
+        PhaserMix => 32,
+        WaveshaperDrive => 33,
+        WaveshaperMix => 34,
+        DistortionMix => 35,
+        BitcrushBits => 36,
+        BitcrushRate => 37,
+        BitcrushMix => 38,
+        RingModFreq => 39,
+        RingModMix => 40,
+        EqLow => 41,
+        EqMid => 42,
+        EqHigh => 43,
+        CompThresh => 44,
+        CompRatio => 45,
+        CompMix => 46,
+        TapeDrive => 47,
+        TapeMix => 48,
+        TapeFlutter => 49,
+        AutotuneAmount => 50,
+        AutotuneMix => 51,
+    }
+}
+
+/// Maximum number of cable-declared modulation routes the audio thread
+/// will process per block.  Bounded so the array stays Copy-friendly.
+pub const MAX_MOD_ROUTES: usize = 32;
+
+/// Cable-declared modulation route (Copy).  Says: "LFO slot N's value drives
+/// target opcode T at depth D".  Compiled from rack Mod cables in
+/// `AudioParams::from_app_state`.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct ModRouteCopy {
+    pub lfo_slot: u8,  // index into AudioParams.lfo (0..3)
+    pub target_u8: u8, // opcode from `lfo_target_to_u8`
+    pub depth: f32,    // bipolar depth multiplier
 }
 
 /// Per-slot LFO configuration passed to the audio thread (Copy-safe).
@@ -278,6 +385,10 @@ pub struct AudioParams {
     pub sample_rate: f32,
     // LFO
     pub lfo: [LfoParamsCopy; 4],
+    /// Cable-declared modulation routes — populated from rack Mod cables.
+    /// Each route says: "LFO slot N drives target T at depth D".
+    pub mod_routes: [ModRouteCopy; MAX_MOD_ROUTES],
+    pub mod_route_count: u8,
     pub sequencer_running: bool,
     pub lfo_pitch_mod_st: f32,
     // Free EG
@@ -398,6 +509,7 @@ impl AudioParams {
         let bass = &s.bass_voices[0].synth;
         let bvp: [BassVoiceParams; crate::state::MAX_BASS_VOICES] =
             std::array::from_fn(|i| BassVoiceParams::from_bass_state(&s.bass_voices[i].synth));
+        let (mod_routes, mod_route_count) = compile_mod_routes(s);
         Self {
             cutoff: bass.cutoff,
             resonance: bass.resonance,
@@ -538,6 +650,8 @@ impl AudioParams {
                 }
                 arr
             },
+            mod_routes,
+            mod_route_count,
             sequencer_running: s.sequencer.running,
             lfo_pitch_mod_st: 0.0,
             free_eg_enabled: s.free_eg.enabled,
