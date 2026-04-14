@@ -45,7 +45,7 @@ pub enum LfoWaveform {
     SampleAndHold,
 }
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum LfoTarget {
     #[default]
     None,

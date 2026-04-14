@@ -24,6 +24,9 @@ pub enum PortKind {
     Cv,
     /// LLM control link — connects an LLM agent to modules it may control.
     Control,
+    /// Per-knob modulation input (LFO → target knob).  Distinct from Cv so
+    /// the rack UI and fx_plan can treat mod cables separately.
+    Mod,
 }
 
 /// Direction of a port relative to its module.
@@ -285,8 +288,8 @@ pub enum Zone {
     /// LLM console + agents.
     Ai,
     /// Clock/sequencer, master output — the main audio strip.
-    /// (Labelled "MAIN AUDIO" in the UI; the enum name is kept for serde
-    /// backward compat with pre-split sessions.)
+    /// Labelled "MAIN AUDIO" in the UI; the enum name is kept for serde
+    /// backward compat with pre-split sessions.
     Global,
     /// Voice / instrument modules.
     Voice,
@@ -326,6 +329,9 @@ pub struct RackModule {
     /// Grid row (0-based) in the zone's grid.
     #[serde(default)]
     pub grid_row: u8,
+    /// Per-selector mod-input targets (indexed by selector position).
+    #[serde(default)]
+    pub mod_selectors: Vec<crate::state::LfoTarget>,
 }
 
 impl RackModule {
@@ -338,6 +344,7 @@ impl RackModule {
             slot: 0,
             grid_col: 0,
             grid_row: 0,
+            mod_selectors: Vec::new(),
         }
     }
 }
@@ -961,39 +968,4 @@ pub struct FxPlan {
     /// When non-empty for a voice, the DSP routes that bus through its own
     /// chain instead of the global chain.
     pub voice_routes: HashMap<ModuleKind, Vec<FxStep>>,
-}
-
-// ─── LLM rack helpers ─────────────────────────────────────────────────────────
-
-/// Maps an `LfoTarget` to the rack `ModuleKind` it modulates.
-/// Used to synthesise visual cables for active LFO slots.
-/// Returns `None` for `LfoTarget::None` or targets without a matching module kind.
-pub(crate) fn lfo_target_module_kind(target: crate::state::LfoTarget) -> Option<ModuleKind> {
-    use crate::state::LfoTarget;
-    match target {
-        LfoTarget::None => None,
-        LfoTarget::BassCutoff
-        | LfoTarget::BassResonance
-        | LfoTarget::BassPitch
-        | LfoTarget::BassVolume => Some(ModuleKind::AcidBass),
-        LfoTarget::Kick808Pitch => Some(ModuleKind::DrumKit808),
-        LfoTarget::ReverbMix => Some(ModuleKind::FxReverb),
-        LfoTarget::DelayTime | LfoTarget::DelayFeedback => Some(ModuleKind::FxDelay),
-        LfoTarget::ChorusMix | LfoTarget::ChorusRate => Some(ModuleKind::FxChorus),
-        LfoTarget::PhaserRate | LfoTarget::PhaserDepth => Some(ModuleKind::FxPhaser),
-        LfoTarget::DistortionDrive => Some(ModuleKind::FxWaveshaper),
-        LfoTarget::MasterVolume => Some(ModuleKind::MasterOutput),
-        LfoTarget::An1xCutoff | LfoTarget::An1xPitch => Some(ModuleKind::An1xVoice),
-    }
-}
-
-/// Returns the `PortKind` emitted on a module's primary output.
-/// CV sources (LFO, Sequencer) use `Cv`; everything else uses `Audio`.
-/// The destination port kind always matches the source.
-pub(crate) fn rack_out_port_kind(kind: ModuleKind) -> PortKind {
-    match kind {
-        ModuleKind::LlmAgent => PortKind::Control,
-        ModuleKind::LfoModule | ModuleKind::StepSequencer => PortKind::Cv,
-        _ => PortKind::Audio,
-    }
 }

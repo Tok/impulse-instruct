@@ -5,6 +5,7 @@ mod header;
 mod llm_strip;
 mod midi_handler;
 pub mod module_card;
+pub mod module_card_mod;
 mod note;
 pub mod panels;
 mod rack_ai;
@@ -265,14 +266,14 @@ impl ImpulseApp {
             let _ = audio.params_tx.push(AudioCommand::LoadSampler(data));
         }
 
-        let mut log_text = "[Impulse Instruct ready]\n".to_string();
-        match midi_port.as_ref() {
-            Some(p) => log_text.push_str(&format!("[MIDI: {}]\n", p)),
-            None => log_text.push_str("[MIDI: no device found]\n"),
-        }
-        if let Some(port) = api_port {
-            log_text.push_str(&format!("[HTTP API active → http://localhost:{}]\n", port));
-        }
+        let midi_line = midi_port
+            .as_ref()
+            .map(|p| format!("[MIDI: {}]\n", p))
+            .unwrap_or_else(|| "[MIDI: no device found]\n".into());
+        let api_line = api_port
+            .map(|p| format!("[HTTP API active → http://localhost:{}]\n", p))
+            .unwrap_or_default();
+        let log_text = format!("[Impulse Instruct ready]\n{}{}", midi_line, api_line);
         Self {
             state,
             audio_tx: audio.params_tx,
@@ -467,9 +468,8 @@ impl ImpulseApp {
                     self.activity_log.drain(..100);
                 }
                 if let Some(ref mc) = out.mc_line {
-                    let line = format!("► {}", mc); // U+25BA speaking marker
-                    self.log_text.push_str(&format!("{}\n", line));
-                    log::info!("{}", line);
+                    self.log_text.push_str(&format!("► {}\n", mc));
+                    log::info!("► {}", mc);
                 }
             }
             // Jam re-triggers unless heat is at zero (model is parked).

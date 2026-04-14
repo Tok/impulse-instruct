@@ -1,11 +1,7 @@
 // ─── ui/module_card.rs ────────────────────────────────────────────────────────
 // Wraps a panel draw function in a labelled, bordered module card.
-//
-// Each card:
-//   • Title bar with module name, enable toggle, port indicators
-//   • Content area that fills available width
-//   • Port circles on the right edge of the title bar (audio out) and left edge
-//     (audio in) — registered into the frame's port map for cable hit-testing.
+// Each card has a title bar with enable toggle + port indicators, a content
+// area, and audio in/out port circles registered for cable hit-testing.
 
 use egui::{Color32, Frame, Margin, Pos2, Rect, Rounding, Sense, Stroke, Vec2};
 
@@ -159,38 +155,35 @@ fn draw_focus_shine(
 pub const PORT_RADIUS: f32 = 5.5;
 const PORT_HOLE: f32 = 2.2;
 
-/// Port radius for a given kind — Control ports are smaller.
+/// Port radius for a given kind — Control and Mod ports are smaller.
 pub fn port_radius(kind: PortKind) -> f32 {
-    if kind == PortKind::Control {
-        3.5
-    } else {
-        PORT_RADIUS
+    match kind {
+        PortKind::Control => 3.5,
+        PortKind::Mod => 3.8,
+        _ => PORT_RADIUS,
     }
 }
 
 /// Draw a jack port circle and return its centre.
 pub fn draw_port_circle(painter: &egui::Painter, center: Pos2, kind: PortKind, dir: PortDir) {
     let r = port_radius(kind);
-    let hole = if kind == PortKind::Control {
-        1.2
-    } else {
-        PORT_HOLE
-    };
-    let ring_color = if kind == PortKind::Control {
-        Color32::from_gray(70)
-    } else {
-        Color32::from_gray(100)
-    };
+    let small = matches!(kind, PortKind::Control | PortKind::Mod);
+    let hole = if small { 1.3 } else { PORT_HOLE };
+    let ring_color = Color32::from_gray(if small { 80 } else { 100 });
     painter.circle_filled(center, r + 1.5, Color32::from_gray(12));
     painter.circle_filled(center, r, ring_color);
     let inner = match dir {
-        PortDir::Out => Color32::from_gray(if kind == PortKind::Control { 45 } else { 60 }),
-        PortDir::In => Color32::from_gray(if kind == PortKind::Control { 25 } else { 30 }),
+        PortDir::Out => Color32::from_gray(if small { 45 } else { 60 }),
+        PortDir::In => Color32::from_gray(if small { 25 } else { 30 }),
     };
     painter.circle_filled(center, r - 1.5, inner);
     painter.circle_filled(center, hole, Color32::from_gray(8));
     if kind == PortKind::Cv {
         painter.circle_filled(center, 0.8, Color32::from_gray(180));
+    } else if kind == PortKind::Mod {
+        let c = Color32::from_gray(170);
+        painter.circle_filled(center + Vec2::new(-1.6, 0.0), 0.6, c);
+        painter.circle_filled(center + Vec2::new(1.6, 0.0), 0.6, c);
     }
 }
 
@@ -760,7 +753,20 @@ pub fn module_card_back(
                     label_font.clone(),
                     label_col,
                 );
+                in_y += 20.0;
             }
+            super::module_card_mod::draw_mod_input_ports(
+                ui,
+                &sp,
+                module_id,
+                kind,
+                left_x,
+                in_y,
+                &label_font,
+                label_col,
+                port_size,
+                ports,
+            );
 
             // ── RIGHT side: output ports ────────────────────────────────────
             let mut out_y = strip_rect.center().y - 10.0;

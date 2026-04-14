@@ -800,6 +800,13 @@ fn draw_llm_agent_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, module_id: u32)
 }
 
 // ─── Cable drag interaction ───────────────────────────────────────────────────
+/// Two port kinds can be patched together iff they're identical OR one side
+/// is CV (LFO/seq output) and the other is Mod (per-knob modulation input).
+fn port_kinds_compatible(a: crate::state::PortKind, b: crate::state::PortKind) -> bool {
+    use crate::state::PortKind::*;
+    a == b || matches!((a, b), (Cv, Mod) | (Mod, Cv))
+}
+
 pub(super) fn handle_cable_drag(
     app: &mut ImpulseApp,
     ctx: &egui::Context,
@@ -834,7 +841,7 @@ pub(super) fn handle_cable_drag(
         && let Some(drag) = app.cable_drag.take()
         && let Some(target) = hovered_port
         && drag.from_port.dir != target.port.dir
-        && drag.from_port.kind == target.port.kind
+        && port_kinds_compatible(drag.from_port.kind, target.port.kind)
         && drag.from_port.module_id != target.port.module_id
     {
         let (from, to) = if drag.from_port.dir == crate::state::PortDir::Out {

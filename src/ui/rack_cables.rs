@@ -179,7 +179,7 @@ pub fn draw_cable_overlay(
     ports: &[crate::ui::module_card::PortPos],
     canvas_rect: egui::Rect,
 ) {
-    use crate::state::rack::lfo_target_module_kind;
+    use crate::state::modulation::lfo_target_module_kind;
     use crate::state::{LfoTarget, ModuleKind, PortDir, PortKind, PortRef};
 
     let alt_held = ctx.input(|i| i.modifiers.alt);
