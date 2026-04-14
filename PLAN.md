@@ -36,7 +36,51 @@ Quick list of roadmap items that became real:
 
 ## v0.7.6 — next release
 
-### TOP PRIORITY — regression coverage
+### TOP PRIORITY — make TTS audibly work again
+
+TTS regressed during the 0.7.5 session — runtime mc_line synthesis
+is silent even when:
+
+- the NeuTTS Python server is up (panel status shows ONLINE),
+- the voice_ref points at a valid `voices/<name>.wav`,
+- the log shows `► <mc_line>` (LLM produced the line) and
+  `[TTS] module=<id>: <text>` (speak_neutts was called),
+- the `NeuTTS: pushed N/M samples to ring buffer` confirmation
+  appears (samples reached the tts ring buffer).
+
+Despite all that, nothing comes out of the speakers.  So the break
+is downstream of the ring-buffer push — either the DSP mix path
+isn't consuming tts_consumer, the TTS voice's FX chain isn't
+routing to master, or the ducking logic is zeroing the signal.
+
+Debug plan:
+- [ ] **Log tts_consumer pops at DSP side** — add a periodic
+  `log::trace` that dumps popped sample count per block, so we can
+  confirm the audio thread is actually draining.
+- [ ] **Check FX-plan routing when NeuTts module is present** —
+  compile_fx_plan returns chain_tts; verify it's populated and
+  that handle_trigger isn't ignoring it.
+- [ ] **Audit the duck envelope** — `tts_duck` smoothing starts
+  at what value?  If it starts at 0 and never ramps up, the
+  synth-out wins but tts_sig contribution is zeroed by
+  (synth_out * tts_duck + tts_sig) math … actually that formula
+  adds tts_sig unmodulated, so ducking only attenuates synth not
+  TTS.  Still, double-check.
+- [ ] **Sanity: feed a DC pulse directly into tts_tx** — click SAY
+  with a known WAV and scope the master output for the expected
+  duration.  If still silent, the break is in the DSP; if audible,
+  something in speak_neutts is producing silence or wrong-format
+  WAV bytes.
+- [ ] **Check WAV decode** — the read_wav_f32_bytes parser may be
+  rejecting the NeuTTS Air output format (different bit depth /
+  container).
+- [ ] **Add an integration test** — construct a DspState with a
+  NeuTts module, push known samples to tts_tx, run process_block
+  for N blocks, assert non-zero output.
+
+Once fixed, re-record the D&B demo with a working MC line.
+
+### Regression coverage
 
 Logic added in 0.7.4/0.7.5 (amen slicing, bass LFO, preecho, rack
 mutations from LLM) is covered by unit tests for the pure pieces but
