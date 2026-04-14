@@ -175,6 +175,12 @@ pub fn draw_bass(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         filter_mode,
         mut supersaw_detune,
         supersaw_voices,
+        mut lfo_target,
+        mut lfo_rate,
+        mut lfo_depth,
+        mut lfo_waveform,
+        mut lfo_bpm_sync,
+        mut lfo_sync_beats,
         locked,
         focused,
         auto_lock,
@@ -200,6 +206,12 @@ pub fn draw_bass(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             b.filter_mode,
             b.supersaw_detune,
             b.supersaw_voices,
+            b.lfo_target,
+            b.lfo_rate,
+            b.lfo_depth,
+            b.lfo_waveform,
+            b.lfo_bpm_sync,
+            b.lfo_sync_beats,
             s.llm.locked_params.clone(),
             s.llm.focused_params.clone(),
             s.llm.auto_lock_on_touch,
@@ -436,6 +448,102 @@ pub fn draw_bass(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                 }
             });
         });
+
+        // ── LFO row — per-voice SH-101-style modulator ──────────────────
+        // Compact glass strip below the FILTER/CHARACTER/MOD groups so the
+        // user can manually tune what the LLM can already write via
+        // bass.lfo_target / lfo_rate / lfo_depth / lfo_waveform /
+        // lfo_bpm_sync / lfo_sync_beats.
+        ui.add_space(4.0);
+        widgets::glass_group_fill(ui, ui.available_width(), ui.available_width(), |ui| {
+            ui.spacing_mut().item_spacing.x = super::KNOB_SPACING;
+            ui.horizontal(|ui| {
+                ui.label(
+                    egui::RichText::new("LFO")
+                        .color(theme::FOG)
+                        .monospace()
+                        .size(9.5),
+                );
+                // TARGET cycle button
+                let target_label = lfo_target.label();
+                if ui
+                    .small_button(
+                        egui::RichText::new(format!("→ {}", target_label))
+                            .monospace()
+                            .size(8.0),
+                    )
+                    .on_hover_text("LFO target — click to cycle (Off → Pitch → PWM → Cutoff → Amp)")
+                    .clicked()
+                {
+                    lfo_target = lfo_target.next();
+                    changed = true;
+                }
+                // WAVEFORM cycle button
+                let wave_label = match lfo_waveform {
+                    crate::state::LfoWaveform::Sine => "SIN",
+                    crate::state::LfoWaveform::Triangle => "TRI",
+                    crate::state::LfoWaveform::Saw => "SAW",
+                    crate::state::LfoWaveform::InvSaw => "↓SW",
+                    crate::state::LfoWaveform::Square => "SQR",
+                    crate::state::LfoWaveform::SampleAndHold => "S&H",
+                };
+                if ui
+                    .small_button(egui::RichText::new(wave_label).monospace().size(8.0))
+                    .on_hover_text("LFO waveform — click to cycle")
+                    .clicked()
+                {
+                    lfo_waveform = match lfo_waveform {
+                        crate::state::LfoWaveform::Sine => crate::state::LfoWaveform::Triangle,
+                        crate::state::LfoWaveform::Triangle => crate::state::LfoWaveform::Saw,
+                        crate::state::LfoWaveform::Saw => crate::state::LfoWaveform::InvSaw,
+                        crate::state::LfoWaveform::InvSaw => crate::state::LfoWaveform::Square,
+                        crate::state::LfoWaveform::Square => {
+                            crate::state::LfoWaveform::SampleAndHold
+                        }
+                        crate::state::LfoWaveform::SampleAndHold => crate::state::LfoWaveform::Sine,
+                    };
+                    changed = true;
+                }
+                // SYNC toggle
+                let sync_text = if lfo_bpm_sync { "SYNC●" } else { "SYNC○" };
+                if ui
+                    .small_button(egui::RichText::new(sync_text).monospace().size(8.0))
+                    .on_hover_text("BPM-sync vs free-run rate")
+                    .clicked()
+                {
+                    lfo_bpm_sync = !lfo_bpm_sync;
+                    changed = true;
+                }
+                // RATE / BEATS — show whichever is active
+                if lfo_bpm_sync {
+                    if widgets::param_control(
+                        ui,
+                        "BEATS",
+                        &mut lfo_sync_beats,
+                        ParamMode::Free,
+                        ctrl_sm,
+                    )
+                    .0
+                    {
+                        changed = true;
+                    }
+                } else if widgets::param_control(
+                    ui,
+                    "RATE",
+                    &mut lfo_rate,
+                    ParamMode::Free,
+                    ctrl_sm,
+                )
+                .0
+                {
+                    changed = true;
+                }
+                // DEPTH
+                if widgets::param_control(ui, "DEPTH", &mut lfo_depth, ParamMode::Free, ctrl_sm).0 {
+                    changed = true;
+                }
+            });
+        });
     }
 
     // Apply all changes in a single brief write, using pure state transitions
@@ -459,6 +567,12 @@ pub fn draw_bass(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             snap.bass_voices[av].synth.osc_detune = osc_detune;
             snap.bass_voices[av].synth.fm_ratio = fm_ratio;
             snap.bass_voices[av].synth.fm_depth = fm_depth;
+            snap.bass_voices[av].synth.lfo_target = lfo_target;
+            snap.bass_voices[av].synth.lfo_rate = lfo_rate;
+            snap.bass_voices[av].synth.lfo_depth = lfo_depth;
+            snap.bass_voices[av].synth.lfo_waveform = lfo_waveform;
+            snap.bass_voices[av].synth.lfo_bpm_sync = lfo_bpm_sync;
+            snap.bass_voices[av].synth.lfo_sync_beats = lfo_sync_beats;
             // auto_lock: touching a free param immediately makes it UserOwned
             if auto_lock {
                 for p in [

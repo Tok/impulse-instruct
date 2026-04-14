@@ -36,49 +36,37 @@ Quick list of roadmap items that became real:
 
 ## v0.7.6 — next release
 
-### TOP PRIORITY — make TTS audibly work again
+### Shipped this cycle
 
-TTS regressed during the 0.7.5 session — runtime mc_line synthesis
-is silent even when:
+- [x] **TTS audibility fix** — root cause was a sample-rate mismatch:
+  NeuTTS Air outputs 24 kHz WAV but the reader only upsampled the
+  legacy 22050 → 44100 case.  TtsSink now carries the device target
+  rate; `read_wav_f32_bytes` does generic linear resampling.
+- [x] **Agent-triggered TTS** — `speak_neutts` call hoisted out of
+  the `param_update` gate so MC agents that emit only `mc_line` (no
+  param change) still fire TTS.  Warn-log when an MC agent speaks
+  but no NeuTts module is wired.
+- [x] **Per-knob modulation system** — third cable kind
+  (`PortKind::Mod`); every module declares `mod_inputs(kind)`; back
+  panel renders Fixed / Selector jacks with multi-select target
+  chips, depth slider with `+ / −` polarity toggle and `%` label;
+  cables compile into per-block `ModRouteCopy` array; DSP applies
+  via shared `apply_mod_target` dispatch.  HTTP API + LLM JSON
+  exposure landed.
+- [x] **Bass voice LFO panel row** — manual knobs for the
+  `bass.lfo_*` params the LLM could already write.
+- [x] **Amen step → slice mapping** — when `step.slice == 0`, the
+  sequencer substitutes vstep+1 so step N plays slice N (the
+  obvious break-chopping behaviour).
+- [x] **Shell log colorization** — env_logger format routes through
+  `log_fmt::colorize` with grayscale line colors + Huth note
+  highlights matching the in-UI log.
+- [x] **Huth filter fixes** — model filenames like
+  `gemma-4-E4B-it-Q4_K_M.gguf` no longer colour as notes; `44100 Hz`
+  colours as one full token instead of embedded blue.
 
-- the NeuTTS Python server is up (panel status shows ONLINE),
-- the voice_ref points at a valid `voices/<name>.wav`,
-- the log shows `► <mc_line>` (LLM produced the line) and
-  `[TTS] module=<id>: <text>` (speak_neutts was called),
-- the `NeuTTS: pushed N/M samples to ring buffer` confirmation
-  appears (samples reached the tts ring buffer).
-
-Despite all that, nothing comes out of the speakers.  So the break
-is downstream of the ring-buffer push — either the DSP mix path
-isn't consuming tts_consumer, the TTS voice's FX chain isn't
-routing to master, or the ducking logic is zeroing the signal.
-
-Debug plan:
-- [ ] **Log tts_consumer pops at DSP side** — add a periodic
-  `log::trace` that dumps popped sample count per block, so we can
-  confirm the audio thread is actually draining.
-- [ ] **Check FX-plan routing when NeuTts module is present** —
-  compile_fx_plan returns chain_tts; verify it's populated and
-  that handle_trigger isn't ignoring it.
-- [ ] **Audit the duck envelope** — `tts_duck` smoothing starts
-  at what value?  If it starts at 0 and never ramps up, the
-  synth-out wins but tts_sig contribution is zeroed by
-  (synth_out * tts_duck + tts_sig) math … actually that formula
-  adds tts_sig unmodulated, so ducking only attenuates synth not
-  TTS.  Still, double-check.
-- [ ] **Sanity: feed a DC pulse directly into tts_tx** — click SAY
-  with a known WAV and scope the master output for the expected
-  duration.  If still silent, the break is in the DSP; if audible,
-  something in speak_neutts is producing silence or wrong-format
-  WAV bytes.
-- [ ] **Check WAV decode** — the read_wav_f32_bytes parser may be
-  rejecting the NeuTTS Air output format (different bit depth /
-  container).
-- [ ] **Add an integration test** — construct a DspState with a
-  NeuTts module, push known samples to tts_tx, run process_block
-  for N blocks, assert non-zero output.
-
-Once fixed, re-record the D&B demo with a working MC line.
+Re-record the D&B demo with a working MC line — still pending a
+clean recording pass.
 
 ### Regression coverage
 
@@ -181,13 +169,8 @@ write integration-style tests against a mocked DSP and AppState:
   for common re-prompts (Rewrite melody / rhythm / both,
   Variation, Fill, Sparser, Busier, Brighter, Darker, Swap style).
   Respect agent scope.
-- [ ] **Rack CV cables driving LFO targets** — cables are visual
-  only; wire them to actually change LFO target at DSP level.
 - [ ] **Touch mode improvements** — touch-paint mode for
   mobile/tablet; gesture support for zoom/scroll.
-- [ ] **Bass voice LFO panel row** — the LLM can write
-  `bass.lfo_*` today but the panel doesn't have knobs for manual
-  control yet.
 - [ ] **Preecho step-strip lane alignment** — the strip lives in
   the preecho section; aligning it with the sequencer's step
   grid above would make the anchors read more obviously as
