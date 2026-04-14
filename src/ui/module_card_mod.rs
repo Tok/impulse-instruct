@@ -172,72 +172,64 @@ pub fn draw_mod_selector_dropdowns(app: &mut ImpulseApp, ctx: &egui::Context, po
         let is_selector = matches!(slot, ModInput::Selector);
         let cur_sel = selectors.get(idx).copied().unwrap_or(LfoTarget::None);
         let cur_depth = depths.get(idx).copied().unwrap_or(1.0).clamp(0.0, 1.0);
-        // Scope dropdown options to this module's targets when possible.
-        let own_targets: Vec<LfoTarget> = ALL_TARGETS
-            .iter()
-            .copied()
-            .filter(|t| lfo_target_module_kind(*t) == Some(*kind))
+        // Scope chip options to this module's own targets, plus None.
+        // Modules with no scoped targets (e.g. AmenSampler, GranularTexture,
+        // NeuTts) get just the None option — they're modulatable via a
+        // dedicated LfoTarget being added later.
+        let chip_targets: Vec<LfoTarget> = std::iter::once(LfoTarget::None)
+            .chain(
+                ALL_TARGETS
+                    .iter()
+                    .copied()
+                    .filter(|t| lfo_target_module_kind(*t) == Some(*kind)),
+            )
             .collect();
-        let options: Vec<LfoTarget> = if own_targets.is_empty() {
-            ALL_TARGETS.to_vec()
-        } else {
-            std::iter::once(LfoTarget::None)
-                .chain(own_targets)
-                .collect()
-        };
-        let anchor = p.center + Vec2::new(8.0, -7.0);
+        let anchor = p.center + Vec2::new(10.0, -8.0);
         egui::Area::new(egui::Id::new(("mod_overlay", p.port.module_id, idx)))
             .order(egui::Order::Foreground)
             .fixed_pos(anchor)
             .show(ctx, |ui| {
                 let frame = egui::Frame::none()
-                    .fill(Color32::from_gray(20))
-                    .inner_margin(egui::Margin::symmetric(2.0, 0.0));
+                    .fill(Color32::from_gray(18))
+                    .stroke(egui::Stroke::new(0.5, Color32::from_gray(50)))
+                    .rounding(2.0)
+                    .inner_margin(egui::Margin::symmetric(3.0, 1.0));
                 frame.show(ui, |ui| {
                     ui.horizontal(|ui| {
-                        ui.spacing_mut().item_spacing.x = 2.0;
-                        if is_selector {
-                            let mut sel = cur_sel;
-                            egui::ComboBox::from_id_source((
-                                "mod_sel_combo",
-                                p.port.module_id,
-                                idx,
-                            ))
-                            .selected_text(
-                                egui::RichText::new(lfo_target_short_label(cur_sel))
-                                    .monospace()
-                                    .size(7.5)
-                                    .color(Color32::from_gray(170)),
-                            )
-                            .width(52.0)
-                            .show_ui(ui, |ui| {
-                                for t in &options {
-                                    ui.selectable_value(
-                                        &mut sel,
-                                        *t,
-                                        egui::RichText::new(lfo_target_short_label(*t))
-                                            .monospace()
-                                            .size(8.0),
-                                    );
-                                }
-                            });
-                            if sel != cur_sel {
-                                sel_changes.push((p.port.module_id, idx, sel));
-                            }
+                        ui.spacing_mut().item_spacing = Vec2::new(2.0, 0.0);
+                        // Depth slider: 0..1, click+drag, no text input.
+                        let mut d = cur_depth;
+                        ui.spacing_mut().slider_width = 50.0;
+                        ui.add(egui::Slider::new(&mut d, 0.0..=1.0).show_value(false))
+                            .on_hover_text(format!("Depth {:.0}%", cur_depth * 100.0));
+                        if d != cur_depth {
+                            depth_changes.push((p.port.module_id, idx, d));
                         }
-                        // Depth: 0..100 % drag value (compact).  Stored as 0..1.
-                        let mut pct = (cur_depth * 100.0).round() as i32;
-                        let resp = ui.add(
-                            egui::DragValue::new(&mut pct)
-                                .range(0..=100)
-                                .speed(1.0)
-                                .suffix("%")
-                                .custom_formatter(|n, _| format!("{:>3}%", n as i32)),
-                        );
-                        if resp.changed() {
-                            let new_d = (pct as f32 / 100.0).clamp(0.0, 1.0);
-                            if (new_d - cur_depth).abs() > f32::EPSILON {
-                                depth_changes.push((p.port.module_id, idx, new_d));
+                        if is_selector {
+                            for t in &chip_targets {
+                                let selected = *t == cur_sel;
+                                let label = lfo_target_short_label(*t);
+                                let text = egui::RichText::new(label).monospace().size(7.5).color(
+                                    if selected {
+                                        Color32::from_gray(235)
+                                    } else {
+                                        Color32::from_gray(140)
+                                    },
+                                );
+                                let resp = ui.add(
+                                    egui::Button::new(text)
+                                        .small()
+                                        .fill(if selected {
+                                            Color32::from_gray(60)
+                                        } else {
+                                            Color32::from_gray(28)
+                                        })
+                                        .stroke(egui::Stroke::NONE)
+                                        .rounding(2.0),
+                                );
+                                if resp.clicked() && *t != cur_sel {
+                                    sel_changes.push((p.port.module_id, idx, *t));
+                                }
                             }
                         }
                     });

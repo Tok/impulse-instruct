@@ -155,11 +155,10 @@ fn draw_focus_shine(
 pub const PORT_RADIUS: f32 = 5.5;
 const PORT_HOLE: f32 = 2.2;
 
-/// Port radius for a given kind — Control and Mod ports are smaller.
+/// Port radius — Control ports are smaller; everything else uses PORT_RADIUS.
 pub fn port_radius(kind: PortKind) -> f32 {
     match kind {
         PortKind::Control => 3.5,
-        PortKind::Mod => 3.8,
         _ => PORT_RADIUS,
     }
 }
@@ -167,23 +166,22 @@ pub fn port_radius(kind: PortKind) -> f32 {
 /// Draw a jack port circle and return its centre.
 pub fn draw_port_circle(painter: &egui::Painter, center: Pos2, kind: PortKind, dir: PortDir) {
     let r = port_radius(kind);
-    let small = matches!(kind, PortKind::Control | PortKind::Mod);
-    let hole = if small { 1.3 } else { PORT_HOLE };
-    let ring_color = Color32::from_gray(if small { 80 } else { 100 });
-    painter.circle_filled(center, r + 1.5, Color32::from_gray(12));
-    painter.circle_filled(center, r, ring_color);
-    let inner = match dir {
-        PortDir::Out => Color32::from_gray(if small { 45 } else { 60 }),
-        PortDir::In => Color32::from_gray(if small { 25 } else { 30 }),
+    let (ring, out_v, in_v, hole) = match kind {
+        PortKind::Control => (80u8, 45u8, 25u8, 1.3),
+        PortKind::Mod => (140, 70, 40, PORT_HOLE),
+        _ => (100, 60, 30, PORT_HOLE),
     };
-    painter.circle_filled(center, r - 1.5, inner);
+    let inner = if dir == PortDir::Out { out_v } else { in_v };
+    painter.circle_filled(center, r + 1.5, Color32::from_gray(12));
+    painter.circle_filled(center, r, Color32::from_gray(ring));
+    painter.circle_filled(center, r - 1.5, Color32::from_gray(inner));
     painter.circle_filled(center, hole, Color32::from_gray(8));
     if kind == PortKind::Cv {
         painter.circle_filled(center, 0.8, Color32::from_gray(180));
     } else if kind == PortKind::Mod {
-        let c = Color32::from_gray(170);
-        painter.circle_filled(center + Vec2::new(-1.6, 0.0), 0.6, c);
-        painter.circle_filled(center + Vec2::new(1.6, 0.0), 0.6, c);
+        let c = Color32::from_gray(200);
+        painter.circle_filled(center + Vec2::new(-2.4, 0.0), 0.8, c);
+        painter.circle_filled(center + Vec2::new(2.4, 0.0), 0.8, c);
     }
 }
 
