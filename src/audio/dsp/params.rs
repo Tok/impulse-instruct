@@ -6,6 +6,34 @@ use crate::state::{
     An1xLfoTarget, An1xWave, AppState, FilterMode, LfoTarget, LfoWaveform, ModuleKind,
 };
 
+/// Encode an `LfoTarget` into the compact u8 opcode consumed by the audio
+/// thread.  The u8 codes are a closed set defined here; targets added to
+/// `LfoTarget` for per-knob mod jacks that don't yet have DSP support map to
+/// 0 (None), since the LFO module itself doesn't drive them — they're only
+/// reachable via cable-declared modulation (wired in a later commit).
+fn lfo_target_to_u8(t: LfoTarget) -> u8 {
+    match t {
+        LfoTarget::None => 0,
+        LfoTarget::BassCutoff => 1,
+        LfoTarget::BassResonance => 2,
+        LfoTarget::BassPitch => 3,
+        LfoTarget::BassVolume => 4,
+        LfoTarget::ReverbMix => 5,
+        LfoTarget::DelayTime => 6,
+        LfoTarget::DelayFeedback => 7,
+        LfoTarget::ChorusMix => 8,
+        LfoTarget::ChorusRate => 9,
+        LfoTarget::Kick808Pitch => 10,
+        LfoTarget::PhaserRate => 11,
+        LfoTarget::PhaserDepth => 12,
+        LfoTarget::DistortionDrive => 13,
+        LfoTarget::MasterVolume => 14,
+        LfoTarget::An1xCutoff => 15,
+        LfoTarget::An1xPitch => 16,
+        _ => 0,
+    }
+}
+
 /// Per-slot LFO configuration passed to the audio thread (Copy-safe).
 #[derive(Clone, Copy, Debug)]
 pub struct LfoParamsCopy {
@@ -505,25 +533,7 @@ impl AudioParams {
                         rate: slot.rate,
                         depth: slot.depth,
                         phase_offset: slot.phase_offset,
-                        target: match slot.target {
-                            LfoTarget::None => 0,
-                            LfoTarget::BassCutoff => 1,
-                            LfoTarget::BassResonance => 2,
-                            LfoTarget::BassPitch => 3,
-                            LfoTarget::BassVolume => 4,
-                            LfoTarget::ReverbMix => 5,
-                            LfoTarget::DelayTime => 6,
-                            LfoTarget::DelayFeedback => 7,
-                            LfoTarget::ChorusMix => 8,
-                            LfoTarget::ChorusRate => 9,
-                            LfoTarget::Kick808Pitch => 10,
-                            LfoTarget::PhaserRate => 11,
-                            LfoTarget::PhaserDepth => 12,
-                            LfoTarget::DistortionDrive => 13,
-                            LfoTarget::MasterVolume => 14,
-                            LfoTarget::An1xCutoff => 15,
-                            LfoTarget::An1xPitch => 16,
-                        },
+                        target: lfo_target_to_u8(slot.target),
                     };
                 }
                 arr
@@ -534,25 +544,7 @@ impl AudioParams {
             free_eg_values: s.free_eg.values,
             free_eg_period: 0.5 * 64.0_f32.powf(s.free_eg.period), // 0→0.5s, 1→32s
             free_eg_depth: s.free_eg.depth,
-            free_eg_target: match s.free_eg.target {
-                LfoTarget::None => 0,
-                LfoTarget::BassCutoff => 1,
-                LfoTarget::BassResonance => 2,
-                LfoTarget::BassPitch => 3,
-                LfoTarget::BassVolume => 4,
-                LfoTarget::ReverbMix => 5,
-                LfoTarget::DelayTime => 6,
-                LfoTarget::DelayFeedback => 7,
-                LfoTarget::ChorusMix => 8,
-                LfoTarget::ChorusRate => 9,
-                LfoTarget::Kick808Pitch => 10,
-                LfoTarget::PhaserRate => 11,
-                LfoTarget::PhaserDepth => 12,
-                LfoTarget::DistortionDrive => 13,
-                LfoTarget::MasterVolume => 14,
-                LfoTarget::An1xCutoff => 15,
-                LfoTarget::An1xPitch => 16,
-            },
+            free_eg_target: lfo_target_to_u8(s.free_eg.target),
             free_eg_loop: s.free_eg.loop_mode,
             noise_voice_enabled: s.noise_voice.enabled,
             noise_voice_volume: s.noise_voice.volume,

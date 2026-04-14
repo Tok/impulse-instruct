@@ -49,22 +49,62 @@ pub enum LfoWaveform {
 pub enum LfoTarget {
     #[default]
     None,
+    // Bass voice
     BassCutoff,
     BassResonance,
     BassPitch,
     BassVolume,
-    ReverbMix,
-    DelayTime,
-    DelayFeedback,
-    ChorusMix,
-    ChorusRate,
+    // Drum voices
     Kick808Pitch,
-    PhaserRate,
-    PhaserDepth,
-    DistortionDrive,
-    MasterVolume,
+    // AN1X
     An1xCutoff,
     An1xPitch,
+    // FX: Reverb
+    ReverbMix,
+    ReverbSize,
+    ReverbDamp,
+    // FX: Delay
+    DelayTime,
+    DelayFeedback,
+    DelayMix,
+    // FX: Chorus
+    ChorusRate,
+    ChorusDepth,
+    ChorusMix,
+    // FX: Phaser
+    PhaserRate,
+    PhaserDepth,
+    PhaserMix,
+    // FX: Waveshaper (pre-FX soft clipper)
+    WaveshaperDrive,
+    WaveshaperMix,
+    // FX: Drive (distortion)
+    DistortionDrive,
+    DistortionMix,
+    // FX: Bitcrush
+    BitcrushBits,
+    BitcrushRate,
+    BitcrushMix,
+    // FX: Ring Mod
+    RingModFreq,
+    RingModMix,
+    // FX: EQ
+    EqLow,
+    EqMid,
+    EqHigh,
+    // FX: Compressor
+    CompThresh,
+    CompRatio,
+    CompMix,
+    // FX: Tape Sat
+    TapeDrive,
+    TapeMix,
+    TapeFlutter,
+    // FX: Autotune
+    AutotuneAmount,
+    AutotuneMix,
+    // Master
+    MasterVolume,
 }
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]
