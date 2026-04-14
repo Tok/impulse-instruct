@@ -354,6 +354,11 @@ pub struct TB303Step {
     pub accent: bool,
     pub slide: bool,
     pub gate: f32, // 0–1 gate length ratio
+    /// Per-step stereo pan, -1.0 = hard left, 0.0 = centre, 1.0 = hard right.
+    /// Applied at trigger time on top of the voice's static pan setting.
+    /// Defaults to 0 so old patterns deserialize unchanged.
+    #[serde(default)]
+    pub pan: f32,
 }
 
 impl Default for TB303Step {
@@ -364,6 +369,7 @@ impl Default for TB303Step {
             accent: false,
             slide: false,
             gate: 0.5,
+            pan: 0.0,
         }
     }
 }

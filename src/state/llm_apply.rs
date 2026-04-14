@@ -193,7 +193,21 @@ pub fn apply_llm_update(state: AppState, update: &serde_json::Value, scope: &[St
                 }
             }
         }
-        // Per-kit step arrays — kit_a fields require kit_a scope, etc.
+        // Per-step pan parallel to bass_notes (-1..1; 0 = use voice static).
+        if bass_ok
+            && !locked.contains("sequencer.bass_pans")
+            && let Some(arr) = seq.get("bass_pans").and_then(|v| v.as_array())
+        {
+            for (i, val) in arr.iter().enumerate().take(MAX_STEPS) {
+                if let Some(p) = val.as_f64() {
+                    let p = (p as f32).clamp(-1.0, 1.0);
+                    s.sequencer.bass_pattern[i].pan = p;
+                    if let Some(pat) = s.sequencer.bass_patterns.get_mut(0) {
+                        pat[i].pan = p;
+                    }
+                }
+            }
+        }
         let drum_step_fields: &[(&str, DrumVoice, f32, bool)] = &[
             ("kick_a_steps", DrumVoice::Kick808, 1.0, true),
             ("hihat_a_steps", DrumVoice::HihatClosed808, 0.7, true),
@@ -211,31 +225,22 @@ pub fn apply_llm_update(state: AppState, update: &serde_json::Value, scope: &[St
             let lock_key = format!("sequencer.{}", field);
             if !locked.contains(&lock_key)
                 && let Some(arr) = seq.get(field).and_then(|v| v.as_array())
+                && let Some(pattern) = s.sequencer.drum_patterns.get_mut(&voice)
             {
                 let arr: Vec<_> = arr.clone();
-                if let Some(pattern) = s.sequencer.drum_patterns.get_mut(&voice) {
-                    apply_llm_step_array(&arr, pattern, MAX_STEPS, |step, active| {
-                        step.active = active;
-                        if active && step.velocity == 0.0 {
-                            step.velocity = default_vel;
-                        }
-                    });
-                }
+                apply_llm_step_array(&arr, pattern, MAX_STEPS, |step, active| {
+                    step.active = active;
+                    if active && step.velocity == 0.0 {
+                        step.velocity = default_vel;
+                    }
+                });
             }
         }
 
-        // ── Pre-echo (anchor lead-ins) ──────────────────────────────────────
-        // JSON shape:
-        //   "sequencer": {
-        //     "preecho": {
-        //       "kit_a":  { "anchors": [0, 16], "length": 4,
-        //                   "velocity_ramp": true, "ratchet_ramp": true },
-        //       "bass":   { ... }
-        //     }
-        //   }
-        // Setting a voice to null clears that voice's preecho.  The voice
-        // keys ("kit_a", "kit_b", "amen", "bass", "hoover", "an1x")
-        // match the scope / rack naming.
+        // Pre-echo (anchor lead-ins).  JSON shape:
+        //   "sequencer": { "preecho": { "kit_a": { "anchors": [0,16],
+        //     "length": 4, "velocity_ramp": true, "ratchet_ramp": true }}}.
+        // null clears that voice; voice keys match scope naming.
         if any_seq_scope && let Some(obj) = seq.get("preecho").and_then(|v| v.as_object()) {
             for (voice_key, val) in obj {
                 let lock_key = format!("sequencer.preecho.{}", voice_key);
@@ -290,13 +295,8 @@ pub fn apply_llm_update(state: AppState, update: &serde_json::Value, scope: &[St
             }
         }
 
-        // ── Amen sampler step pattern + per-step slice indices ──────────────
-        // JSON: { "sequencer": { "amen_steps": [0,4,8,12],
-        //                        "amen_slices": [1,3,2,5] } }
-        // amen_steps is the standard step-array format (same as kick_a_steps).
-        // amen_slices is an optional parallel array: one slice index per step
-        //   where 0 = auto-advance, 1..=slice_count = explicit slice.
-        //   Length can match amen_steps or be per-step across all 32 steps.
+        // amen_steps + amen_slices — standard step array + optional per-step
+        // slice indices (0 = auto-advance, 1..=slice_count = explicit).
         if amen_ok
             && !locked.contains("sequencer.amen_steps")
             && let Some(arr) = seq.get("amen_steps").and_then(|v| v.as_array())

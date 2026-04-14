@@ -77,6 +77,10 @@ pub struct DspState {
     tts_consumer: rtrb::Consumer<f32>,
     // Duck envelope: smoothly attenuates synth when TTS is active.
     tts_duck: f32,
+    /// Per-step pan latched from the most recent BassTrigger event.
+    /// 0.0 = no override (voice's static pan_303 wins); non-zero = use this
+    /// instead.  Persists until the next trigger updates it.
+    bass_step_pan: f32,
     duck_attack: f32,
     duck_release: f32,
 }
@@ -135,6 +139,7 @@ impl DspState {
             sidechain_env: 0.0,
             tts_consumer,
             tts_duck: 1.0,
+            bass_step_pan: 0.0,
             duck_attack: 1.0 - (-8.0_f32 / sample_rate).exp(),
             duck_release: 1.0 - (-2.0_f32 / sample_rate).exp(),
         }
@@ -354,9 +359,11 @@ impl DspState {
                 accent,
                 slide,
                 gate_samples: _,
+                pan,
             } => {
                 if self.params.rack_bass && *voice_idx < crate::state::MAX_BASS_VOICES {
                     self.bass[*voice_idx].trigger(*note, *accent, *slide, self.params.tuning);
+                    self.bass_step_pan = pan.clamp(-1.0, 1.0);
                 }
             }
             BassGateOff { voice_idx } => {
@@ -857,8 +864,15 @@ impl DspState {
 
             let out = ((synth_out * self.tts_duck + tts_sig) * p.master_volume).clamp(-1.0, 1.0);
 
-            // Per-voice pan → side signal (computed before FX borrows self)
-            let pan_side = bus_bass * p.pan_303 * 0.5
+            // Per-voice pan → side signal (computed before FX borrows self).
+            // Bass pan: per-step override (latched from BassTrigger.pan)
+            // wins when non-zero, otherwise the voice's static pan_303.
+            let bass_pan = if self.bass_step_pan.abs() > 0.0001 {
+                self.bass_step_pan
+            } else {
+                p.pan_303
+            };
+            let pan_side = bus_bass * bass_pan * 0.5
                 + k808 * dv[0] * p.pan_kick808 * 0.5
                 + s808 * dv[1] * p.pan_snare808 * 0.5
                 + (hh808c * dv[2] + hh808o * dv[3]) * p.pan_hihat808 * 0.5

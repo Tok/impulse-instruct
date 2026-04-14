@@ -26,6 +26,8 @@ pub enum TriggerEvent {
         accent: bool,
         slide: bool,
         gate_samples: u32, // reserved for gate-off timing
+        /// Per-step pan, -1.0..1.0; 0 = use the voice's static pan.
+        pan: f32,
     },
     BassGateOff {
         voice_idx: usize,
@@ -302,6 +304,7 @@ pub fn advance_clock(
                     accent: bs.accent,
                     slide: bs.slide,
                     gate_samples,
+                    pan: bs.pan.clamp(-1.0, 1.0),
                 });
             }
         }

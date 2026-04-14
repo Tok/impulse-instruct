@@ -362,6 +362,7 @@ STEP SEQUENCER (default 32 steps = two 4/4 bars of 16th notes):
 
   sequencer.bass_steps    — step array for 303 bass trigger
   sequencer.bass_notes    — MIDI note array (24=C1, 36=C2, 48=C3; acid range 33–48)
+  sequencer.bass_pans     — per-step pan -1..1 (0 = use voice static; non-zero overrides)
   sequencer.kick_a_steps  — Kit A kick steps
   sequencer.snare_a_steps — Kit A snare steps
   sequencer.hihat_a_steps — Kit A closed hihat steps
