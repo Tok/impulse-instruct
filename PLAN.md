@@ -64,6 +64,17 @@ Quick list of roadmap items that became real:
 - [x] **Huth filter fixes** — model filenames like
   `gemma-4-E4B-it-Q4_K_M.gguf` no longer colour as notes; `44100 Hz`
   colours as one full token instead of embedded blue.
+- [x] **Pan in sequencer** — per-step pan on TB303Step, plumbed
+  through BassTrigger + DSP step-pan latch, LLM `bass_pans` array.
+- [x] **Quick-command pills on agent card** — REWRITE / VARI / FILL
+  / SPARSE / BUSY / BRIGHT / DARK pills fire one-shot prompts scoped
+  to the agent.
+- [x] **Style → rack auto-setup** — Style.rack_modules walked on
+  style switch (non-destructive); seeded for acid_classic / jungle /
+  drum_and_bass / gabber / dub_techno.
+- [x] **POST /api/randomize** — one-click smart randomization: picks
+  a random style, applies baseline + rack modules, kicks the LLM
+  into a "FULL RESET to <style>" generate.
 
 Re-record the D&B demo with a working MC line — still pending a
 clean recording pass.
@@ -107,8 +118,6 @@ write integration-style tests against a mocked DSP and AppState:
 - [ ] **Pan FX module** — insertable rack module for per-chain
   stereo placement.  Knobs: pan position, width, auto-pan rate
   (LFO).
-- [ ] **Pan in sequencer** — per-step pan value for bass voice
-  (like velocity but L/R).
 - [ ] **LFO target: StereoWidth** — modulate stereo width over
   time (auto-pan).
 - [ ] **Dub techno send/return** — dedicated send/return FX
@@ -135,10 +144,6 @@ write integration-style tests against a mocked DSP and AppState:
 
 ### Intelligence
 
-- [ ] **Total smart randomization** — one-click random setup: pick
-  a random style, add appropriate instruments, set random (but
-  musically coherent) parameters, generate a pattern.
-  API: `POST /api/randomize`.
 - [ ] **Agent conversation history** — multi-turn within a single
   jam cycle; agent sees its own previous outputs for coherent
   evolution.
@@ -156,19 +161,12 @@ write integration-style tests against a mocked DSP and AppState:
   full-state replacement.
 - [ ] **Style mc_lines/themes UI editor** — allow editing
   mc_lines and themes per style from the UI preferences.
-- [ ] **Style → rack auto-setup** — add `rack_modules` field to
-  `styles.json` entries, listing which modules to add and how to
-  wire them when a style is selected.
 - [ ] **Style-aware agent-preset naming** — styles override the
   default multi-agent setup name ("Crew" → "Band" / "Posse" /
   "Squad" / "Ensemble" per style).
 
 ### UI / UX
 
-- [ ] **Quick-command buttons on LLM agent card** — pill buttons
-  for common re-prompts (Rewrite melody / rhythm / both,
-  Variation, Fill, Sparser, Busier, Brighter, Darker, Swap style).
-  Respect agent scope.
 - [ ] **Touch mode improvements** — touch-paint mode for
   mobile/tablet; gesture support for zoom/scroll.
 - [ ] **Preecho step-strip lane alignment** — the strip lives in
