@@ -236,7 +236,9 @@ pub fn draw_an1x(app: &mut ImpulseApp, ui: &mut Ui) {
     let group_h = ctrl.knob_size * 2.0 + 50.0;
     let group_h2 = group_h + 24.0; // extra space for PAN slider in A.ADSR
 
-    // ── Row 1 (3 cols): LEVELS | FILTER | F.ADSR ────────────────────────
+    // ── Row 1 (3 cols): F.ADSR | FILTER | LEVELS ────────────────────────
+    // F.ADSR moved to the leftmost column so it sits below the F.ENV
+    // display in the header row.  LEVELS pushed to the right.
     {
         let gw = widgets::even_group_width(ui, 3);
         ui.horizontal(|ui| {
@@ -245,15 +247,18 @@ pub fn draw_an1x(app: &mut ImpulseApp, ui: &mut Ui) {
                 ui.set_min_height(group_h);
                 ui.spacing_mut().item_spacing.x = super::KNOB_SPACING;
                 ui.label(
-                    egui::RichText::new("LEVELS")
+                    egui::RichText::new("F.ADSR")
                         .color(theme::FOG)
                         .monospace()
                         .size(9.5),
                 );
                 widgets::centered_row(ui, |ui| {
-                    ak!(ui, "O1", osc1_level);
-                    ak!(ui, "O2", osc2_level);
-                    ak!(ui, "SUB", sub_level);
+                    ak!(ui, "ATTACK", filter_attack);
+                    ak!(ui, "DECAY", filter_decay);
+                });
+                widgets::centered_row(ui, |ui| {
+                    ak!(ui, "SUSTAIN", filter_sustain);
+                    ak!(ui, "RELEASE", filter_release);
                 });
             });
             widgets::glass_group_fill(ui, gw, gw, |ui| {
@@ -278,18 +283,15 @@ pub fn draw_an1x(app: &mut ImpulseApp, ui: &mut Ui) {
                 ui.set_min_height(group_h);
                 ui.spacing_mut().item_spacing.x = super::KNOB_SPACING;
                 ui.label(
-                    egui::RichText::new("F.ADSR")
+                    egui::RichText::new("LEVELS")
                         .color(theme::FOG)
                         .monospace()
                         .size(9.5),
                 );
                 widgets::centered_row(ui, |ui| {
-                    ak!(ui, "ATTACK", filter_attack);
-                    ak!(ui, "DECAY", filter_decay);
-                });
-                widgets::centered_row(ui, |ui| {
-                    ak!(ui, "SUSTAIN", filter_sustain);
-                    ak!(ui, "RELEASE", filter_release);
+                    ak!(ui, "O1", osc1_level);
+                    ak!(ui, "O2", osc2_level);
+                    ak!(ui, "SUB", sub_level);
                 });
             });
         });
@@ -297,7 +299,9 @@ pub fn draw_an1x(app: &mut ImpulseApp, ui: &mut Ui) {
 
     ui.add_space(super::GLASS_GAP);
 
-    // ── Row 2 (3 cols): TUNE | AMP ADSR | PITCH ENV ────────────────────
+    // ── Row 2 (3 cols): TUNE | PITCH ENV | AMP ADSR ─────────────────────
+    // AMP ADSR moved to the rightmost column so it sits below the A.ENV
+    // display in the header row.  PITCH ENV fills the middle slot.
     {
         let gw = widgets::even_group_width(ui, 3);
         ui.horizontal(|ui| {
@@ -375,6 +379,21 @@ pub fn draw_an1x(app: &mut ImpulseApp, ui: &mut Ui) {
                 ui.set_min_height(group_h2);
                 ui.spacing_mut().item_spacing.x = super::KNOB_SPACING;
                 ui.label(
+                    egui::RichText::new("PITCH ENV")
+                        .color(theme::FOG)
+                        .monospace()
+                        .size(9.5),
+                );
+                widgets::centered_row(ui, |ui| {
+                    ak!(ui, "ATTACK", pitch_env_attack);
+                    ak!(ui, "DECAY", pitch_env_decay);
+                    ak!(ui, "AMOUNT", pitch_env_amount);
+                });
+            });
+            widgets::glass_group_fill(ui, gw, gw, |ui| {
+                ui.set_min_height(group_h2);
+                ui.spacing_mut().item_spacing.x = super::KNOB_SPACING;
+                ui.label(
                     egui::RichText::new("AMP ADSR")
                         .color(theme::FOG)
                         .monospace()
@@ -403,21 +422,6 @@ pub fn draw_an1x(app: &mut ImpulseApp, ui: &mut Ui) {
                                 .size(7.5),
                         );
                     });
-                });
-            });
-            widgets::glass_group_fill(ui, gw, gw, |ui| {
-                ui.set_min_height(group_h2);
-                ui.spacing_mut().item_spacing.x = super::KNOB_SPACING;
-                ui.label(
-                    egui::RichText::new("PITCH ENV")
-                        .color(theme::FOG)
-                        .monospace()
-                        .size(9.5),
-                );
-                widgets::centered_row(ui, |ui| {
-                    ak!(ui, "ATTACK", pitch_env_attack);
-                    ak!(ui, "DECAY", pitch_env_decay);
-                    ak!(ui, "AMOUNT", pitch_env_amount);
                 });
             });
         });
