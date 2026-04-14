@@ -135,6 +135,7 @@ POST /api/scroll         { "target": "voice" }  (global/voice/fxmod/bass/808/fx/
 POST /api/scroll         { "target": "bass", "collapse_others": true }  focus mode
 POST /api/preset         { "name": "Crew" }     (Solo/Duo/Swarm/Crew/Voices/Lite)
 POST /api/style          { "id": "drum_and_bass" }  set global style + propagate to agents (id=null clears)
+POST /api/randomize                              random style + auto-rack + LLM "generate from scratch"
 POST /api/amen           { "path": "samples/amen/foo.wav" }  load a specific amen sample
 POST /api/amen           { "random": true }     load a random sample from samples/amen/
 POST /api/granular       { "path": "samples/textures/pad.wav" }  load a granular texture

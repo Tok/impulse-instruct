@@ -479,6 +479,78 @@ async fn post_style(
     })
 }
 
+async fn post_randomize(AxumState(api): AxumState<ApiState>) -> Json<OkResponse> {
+    use crate::llm::LlmInput;
+    use crate::llm::styles::StyleCatalog;
+    let styles = StyleCatalog::get().styles();
+    if styles.is_empty() {
+        return Json(OkResponse {
+            ok: false,
+            message: Some("no styles available".into()),
+        });
+    }
+    // Cheap nanosecond-based pick — good enough for a UX dice roll without a
+    // rand-crate dependency.
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.subsec_nanos() as usize)
+        .unwrap_or(0);
+    let style = &styles[nanos % styles.len()];
+    let style_id = style.id.clone();
+    let style_name = style.name.clone();
+    let baseline = style.baseline_params.clone();
+    let rack_modules = style.rack_modules.clone();
+    // Apply baseline params + rack modules + style id under one write.
+    {
+        use crate::state::{apply_llm_update, parse_module_kind};
+        let mut s_owned = api.app_state.read().clone();
+        if let Some(bp) = baseline {
+            s_owned = apply_llm_update(s_owned, &bp, &[]);
+        }
+        let mut added: Vec<&str> = Vec::new();
+        for name in &rack_modules {
+            let Some(kind) = parse_module_kind(name) else {
+                continue;
+            };
+            if !s_owned.rack.modules.iter().any(|m| m.kind == kind) {
+                s_owned.rack.add_module(kind);
+                added.push(name.as_str());
+            }
+        }
+        if !added.is_empty() {
+            s_owned.rack.wire_default_cables();
+        }
+        s_owned.llm.active_style = Some(style_id.clone());
+        for agent in &mut s_owned.llm_agents {
+            if !agent.style_locked {
+                agent.active_style = Some(style_id.clone());
+            }
+        }
+        *api.app_state.write() = s_owned;
+    }
+    // Kick the LLM into generating a fresh pattern for the picked style.
+    let _ = api.llm_tx.try_send(LlmInput::Infer {
+        prompt: format!(
+            "FULL RESET to {} — randomize: generate all parameters from scratch.",
+            style_name
+        ),
+        one_shot: true,
+        agent_id: None,
+    });
+    api_log(
+        &api,
+        format!(
+            "[API] randomize → style '{}' ({} rack modules)",
+            style_id,
+            rack_modules.len()
+        ),
+    );
+    Json(OkResponse {
+        ok: true,
+        message: Some(format!("randomized → {}", style_name)),
+    })
+}
+
 async fn post_preset(
     AxumState(api): AxumState<ApiState>,
     Json(req): Json<PresetRequest>,
@@ -869,6 +941,7 @@ pub fn build_router(api_state: ApiState) -> Router {
         .route("/api/scroll", post(post_scroll))
         .route("/api/preset", post(post_preset))
         .route("/api/style", post(post_style))
+        .route("/api/randomize", post(post_randomize))
         .route("/api/amen", post(post_amen))
         .route("/api/granular", post(post_granular))
         .route("/api/flip", post(post_flip))
