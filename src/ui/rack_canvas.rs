@@ -531,6 +531,20 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
     ui.ctx()
         .data_mut(|d| d.insert_temp(egui::Id::new(GRID_COL_W_ID), col_w));
 
+    // Publish each LfoModule's slot index (0..3 by rack order) so the back
+    // panel can label LFO #1, #2, … and CV-OUT jacks can reference it too.
+    {
+        let s = app.state.read();
+        let mut idx = 0usize;
+        for m in &s.rack.modules {
+            if m.kind == ModuleKind::LfoModule {
+                ui.ctx()
+                    .data_mut(|d| d.insert_temp(egui::Id::new("lfo_slot").with(m.id), idx));
+                idx += 1;
+            }
+        }
+    }
+
     let mut card_rects: Vec<(ModuleKind, egui::Rect)> = Vec::new();
 
     // Compute which FX modules are connected via audio cables (for visual dimming).

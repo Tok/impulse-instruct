@@ -142,14 +142,11 @@ pub fn has_control_in(kind: ModuleKind) -> bool {
     !matches!(kind, MasterOutput | LlmAgent | LlmConsole)
 }
 
-/// Computed back-panel strip height — grows with the input-port count so
-/// mod jacks don't get clipped on small (1-row) modules.
+/// Computed back-panel strip height — AUD/CV/CTL share a single horizontal
+/// top row (~30 px), then the mod-input jacks stack vertically below.
 pub fn back_strip_height(kind: ModuleKind) -> f32 {
-    let n = has_audio_in(kind) as usize
-        + has_cv_in(kind) as usize
-        + has_control_in(kind) as usize
-        + mod_inputs(kind).len();
-    (14.0 + n as f32 * PORT_SPACING).max(60.0)
+    let mods = mod_inputs(kind).len();
+    (32.0 + mods as f32 * PORT_SPACING).max(48.0)
 }
 
 /// Draw Mod-in jacks for `kind` starting at `start_y` on the left (input)
@@ -213,6 +210,11 @@ pub fn draw_mod_selector_dropdowns(app: &mut ImpulseApp, ctx: &egui::Context, po
     if !app.rack_flipped {
         return;
     }
+    // Skip overlays whose anchor would land in (or below) the bottom-panel
+    // strip — the piano + footer always stay on top regardless of egui
+    // layer order.  Approximate piano+footer reserved height = 105 px.
+    let screen_bottom = ctx.screen_rect().max.y;
+    let max_overlay_y = screen_bottom - 105.0;
     // Snapshot module kind + current per-slot multi-select target lists +
     // depths under a read lock so the overlay pass can render lock-free.
     type Snap = (u32, ModuleKind, Vec<Vec<LfoTarget>>, Vec<f32>);
@@ -263,6 +265,11 @@ pub fn draw_mod_selector_dropdowns(app: &mut ImpulseApp, ctx: &egui::Context, po
         let all_selected =
             !real_targets.is_empty() && real_targets.iter().all(|t| cur_targets.contains(t));
         let anchor = p.center + Vec2::new(10.0, -8.0);
+        if anchor.y > max_overlay_y {
+            // Jack is below the visible rack region — skip its overlay so
+            // the piano panel below isn't covered by the floating Area.
+            continue;
+        }
         egui::Area::new(egui::Id::new(("mod_overlay", p.port.module_id, idx)))
             .order(egui::Order::Foreground)
             .fixed_pos(anchor)

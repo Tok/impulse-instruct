@@ -532,7 +532,9 @@ pub fn module_card_back(
             draw_focus_shine(&painter, title_rect, kind, ui.ctx());
             let label_font = 9.5;
             let label_pos = title_rect.left_center() + Vec2::new(10.0, 0.0);
-            // For LlmAgent modules, show persona name (e.g. "LLM AGENT · BASS")
+            // For LlmAgent modules, show persona name (e.g. "LLM AGENT · BASS").
+            // For LfoModule, append a #N slot index so each instance is
+            // individually identifiable on the back panel.
             let label = if kind == ModuleKind::LlmAgent {
                 let persona: String = ui
                     .ctx()
@@ -543,6 +545,12 @@ pub fn module_card_back(
                 } else {
                     format!("{} · {}", kind.label(), persona)
                 }
+            } else if kind == ModuleKind::LfoModule {
+                let slot: usize = ui
+                    .ctx()
+                    .data(|d| d.get_temp(egui::Id::new("lfo_slot").with(module_id)))
+                    .unwrap_or(0);
+                format!("{} #{}", kind.label(), slot + 1)
             } else {
                 kind.label().to_string()
             };
@@ -654,83 +662,49 @@ pub fn module_card_back(
             let has_cv_out = matches!(kind, ModuleKind::LfoModule | ModuleKind::StepSequencer);
             let has_control_out = matches!(kind, ModuleKind::LlmAgent);
 
-            // ── LEFT side: input ports ──────────────────────────────────────
-            // Top-anchored stack at 16px spacing so 5+ jacks fit without clipping.
-            let mut in_y = strip_rect.top() + 14.0;
-            if has_audio_in {
-                let pos = Pos2::new(left_x, in_y);
-                draw_port_circle(&sp, pos, PortKind::Audio, PortDir::In);
+            // ── Top row: AUD/CV/CTL ports laid out HORIZONTALLY ─────────────
+            // Inputs grow left → right from left_x; labels sit below the
+            // port circle so each port pair fits in a narrow column.  Mod
+            // jacks then stack vertically below.
+            let row_y = strip_rect.top() + 12.0;
+            let mod_start_y = strip_rect.top() + 30.0;
+            let port_step_x = 24.0;
+            let mut in_x = left_x;
+            let mut place_in = |kind_p: PortKind, label: &str, hover: &str, hash: &str| {
+                let pos = Pos2::new(in_x, row_y);
+                draw_port_circle(&sp, pos, kind_p, PortDir::In);
                 ports.push(PortPos {
                     port: PortRef {
                         module_id,
                         dir: PortDir::In,
-                        kind: PortKind::Audio,
+                        kind: kind_p,
                         index: 0,
                     },
                     center: pos,
                 });
                 sp.text(
-                    pos + Vec2::new(10.0, 0.0),
-                    egui::Align2::LEFT_CENTER,
-                    "AUD IN",
+                    pos + Vec2::new(0.0, 8.0),
+                    egui::Align2::CENTER_TOP,
+                    label,
                     label_font.clone(),
                     label_col,
                 );
                 ui.interact(
                     Rect::from_center_size(pos, port_size),
-                    ui.id().with("bp_ain"),
+                    ui.id().with(hash),
                     Sense::hover(),
                 )
-                .on_hover_text("Audio In");
-                in_y += 22.0;
+                .on_hover_text(hover);
+                in_x += port_step_x;
+            };
+            if has_audio_in {
+                place_in(PortKind::Audio, "AUD", "Audio In", "bp_ain");
             }
             if has_cv_in {
-                let pos = Pos2::new(left_x, in_y);
-                draw_port_circle(&sp, pos, PortKind::Cv, PortDir::In);
-                ports.push(PortPos {
-                    port: PortRef {
-                        module_id,
-                        dir: PortDir::In,
-                        kind: PortKind::Cv,
-                        index: 0,
-                    },
-                    center: pos,
-                });
-                sp.text(
-                    pos + Vec2::new(10.0, 0.0),
-                    egui::Align2::LEFT_CENTER,
-                    "CV IN",
-                    label_font.clone(),
-                    label_col,
-                );
-                ui.interact(
-                    Rect::from_center_size(pos, port_size),
-                    ui.id().with("bp_cin"),
-                    Sense::hover(),
-                )
-                .on_hover_text("CV / Gate In");
-                in_y += 22.0;
+                place_in(PortKind::Cv, "CV", "CV / Gate In", "bp_cin");
             }
             if has_control_in {
-                let pos = Pos2::new(left_x, in_y);
-                draw_port_circle(&sp, pos, PortKind::Control, PortDir::In);
-                ports.push(PortPos {
-                    port: PortRef {
-                        module_id,
-                        dir: PortDir::In,
-                        kind: PortKind::Control,
-                        index: 0,
-                    },
-                    center: pos,
-                });
-                sp.text(
-                    pos + Vec2::new(10.0, 0.0),
-                    egui::Align2::LEFT_CENTER,
-                    "CTL IN",
-                    label_font.clone(),
-                    label_col,
-                );
-                in_y += 22.0;
+                place_in(PortKind::Control, "CTL", "Control In (LLM)", "bp_ctlin");
             }
             super::module_card_mod::draw_mod_input_ports(
                 ui,
@@ -738,87 +712,61 @@ pub fn module_card_back(
                 module_id,
                 kind,
                 left_x,
-                in_y,
+                mod_start_y,
                 &label_font,
                 label_col,
                 port_size,
                 ports,
             );
 
-            // ── RIGHT side: output ports ────────────────────────────────────
-            let mut out_y = strip_rect.top() + 14.0;
-            {
-                let pos = Pos2::new(right_x, out_y);
-                draw_port_circle(&sp, pos, PortKind::Audio, PortDir::Out);
+            // ── RIGHT side: output ports — also horizontal, right→left ──────
+            let mut out_x = right_x;
+            let mut place_out = |kind_p: PortKind, label: String, hover: &str, hash: &str| {
+                let pos = Pos2::new(out_x, row_y);
+                draw_port_circle(&sp, pos, kind_p, PortDir::Out);
                 ports.push(PortPos {
                     port: PortRef {
                         module_id,
                         dir: PortDir::Out,
-                        kind: PortKind::Audio,
+                        kind: kind_p,
                         index: 0,
                     },
                     center: pos,
                 });
                 sp.text(
-                    pos + Vec2::new(-10.0, 0.0),
-                    egui::Align2::RIGHT_CENTER,
-                    "AUD OUT",
+                    pos + Vec2::new(0.0, 8.0),
+                    egui::Align2::CENTER_TOP,
+                    &label,
                     label_font.clone(),
                     label_col,
                 );
                 ui.interact(
                     Rect::from_center_size(pos, port_size),
-                    ui.id().with("bp_aout"),
+                    ui.id().with(hash),
                     Sense::hover(),
                 )
-                .on_hover_text("Audio Out");
-                out_y += 22.0;
-            }
+                .on_hover_text(hover);
+                out_x -= port_step_x;
+            };
+            place_out(PortKind::Audio, "AUD".into(), "Audio Out", "bp_aout");
             if has_cv_out {
-                let pos = Pos2::new(right_x, out_y);
-                draw_port_circle(&sp, pos, PortKind::Cv, PortDir::Out);
-                ports.push(PortPos {
-                    port: PortRef {
-                        module_id,
-                        dir: PortDir::Out,
-                        kind: PortKind::Cv,
-                        index: 0,
-                    },
-                    center: pos,
-                });
-                sp.text(
-                    pos + Vec2::new(-10.0, 0.0),
-                    egui::Align2::RIGHT_CENTER,
-                    "CV OUT",
-                    label_font.clone(),
-                    label_col,
-                );
-                ui.interact(
-                    Rect::from_center_size(pos, port_size),
-                    ui.id().with("bp_cout"),
-                    Sense::hover(),
-                )
-                .on_hover_text("CV Out");
-                out_y += 22.0;
+                let cv_label = if kind == ModuleKind::LfoModule {
+                    let slot: usize = ui
+                        .ctx()
+                        .data(|d| d.get_temp(egui::Id::new("lfo_slot").with(module_id)))
+                        .unwrap_or(0);
+                    format!("#{}", slot + 1)
+                } else {
+                    "CV".into()
+                };
+                place_out(PortKind::Cv, cv_label, "CV Out", "bp_cout");
             }
             if has_control_out {
-                let pos = Pos2::new(right_x, out_y);
-                draw_port_circle(&sp, pos, PortKind::Control, PortDir::Out);
-                ports.push(PortPos {
-                    port: PortRef {
-                        module_id,
-                        dir: PortDir::Out,
-                        kind: PortKind::Control,
-                        index: 0,
-                    },
-                    center: pos,
-                });
-                sp.text(
-                    pos + Vec2::new(-10.0, 0.0),
-                    egui::Align2::RIGHT_CENTER,
-                    "CTL OUT",
-                    label_font,
-                    label_col,
+                place_out(
+                    PortKind::Control,
+                    "CTL".into(),
+                    "Control Out (LLM)",
+                    "bp_ctlout",
                 );
             }
         });
