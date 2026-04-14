@@ -128,6 +128,13 @@ write integration-style tests against a mocked DSP and AppState:
 - [ ] **Per-slice playback direction on amen** — currently reverse
   is a global flag; per-slice reverse would enable edit-era glitch
   patterns.
+- [ ] **Tempo-quantized FX direction buffer** — Reverb/Delay's
+  REV/MIRROR rewind cycle is fixed at ~1 s.  Snap the buffer length
+  to a beat division (1/4, 1/2, 1, 2 bars) so the rewind cycle
+  syncs with the pattern instead of drifting against it.
+- [ ] **Reverse mode for compressor envelope** — third FX worth
+  reversing (envelope follower).  Would give "reverse compression"
+  swell-into-hit transient shaping.
 
 ### Sequencer
 
@@ -173,6 +180,13 @@ write integration-style tests against a mocked DSP and AppState:
   the preecho section; aligning it with the sequencer's step
   grid above would make the anchors read more obviously as
   "positions in the pattern".
+- [ ] **Per-step bass pan UI lane** — data path is wired
+  (TB303Step.pan + LLM bass_pans), but the sequencer panel doesn't
+  have a drag-bars lane to set it visually yet.
+- [ ] **NeuTts mod targets** — Amen/Granular got per-voice
+  LfoTarget variants this cycle but NeuTts still has none; its TTS
+  bus volume isn't an `AudioParams` knob, so wiring needs a small
+  audio-thread-side restructure.
 
 ### Demo recording
 
@@ -217,3 +231,5 @@ write integration-style tests against a mocked DSP and AppState:
 | Wizard always shows on startup | By design — resume or start fresh | Working as intended |
 | Hoover doesn't sound like a hoover | DSP tuning, not a code bug | Needs filter sweep shape tuning |
 | Pre-echo ignores melodic voices | TB303Step has no velocity field | Planned for v0.7.6 |
+| Reverb/Delay REV "rewinds" every ~1 s | Fixed-length reverse-tap buffer | Planned: tempo-quantized buffer length |
+| NeuTts Selector mod jacks show only "—" | No NeuTts-specific LfoTarget yet | Needs TTS bus volume on AudioParams |
