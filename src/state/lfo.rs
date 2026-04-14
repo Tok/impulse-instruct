@@ -54,11 +54,24 @@ pub enum LfoTarget {
     BassResonance,
     BassPitch,
     BassVolume,
+    BassPan,
+    // Hoover voice
+    HooverPan,
+    // Noise voice
+    NoisePan,
     // Drum voices
     Kick808Pitch,
+    Kick808Pan,
+    Snare808Pan,
+    Hihat808Pan,
+    Kick909Pan,
+    Snare909Pan,
+    Hihat909Pan,
+    Clap909Pan,
     // AN1X
     An1xCutoff,
     An1xPitch,
+    An1xPan,
     // FX: Reverb
     ReverbMix,
     ReverbSize,

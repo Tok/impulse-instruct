@@ -26,11 +26,15 @@ pub fn mod_inputs(kind: ModuleKind) -> &'static [ModInput] {
     use ModInput::{Fixed, Selector};
     use ModuleKind::*;
     match kind {
-        // ── Voices — many knobs, 3 generic selector jacks each ────────────
-        // (Per-voice pan will be added as a fixed jack in a follow-up pass.)
-        AcidBass | DrumKit808 | DrumKit909 | HooverLead | An1xVoice | AmenSampler
-        | GranularTexture | NeuTts => &[Selector, Selector, Selector],
-        NoiseVoice => &[Selector, Selector],
+        // ── Voices with a single pan field — Fixed(Pan) + 2 selectors ─────
+        AcidBass => &[Fixed(BassPan), Selector, Selector],
+        HooverLead => &[Fixed(HooverPan), Selector],
+        An1xVoice => &[Fixed(An1xPan), Selector, Selector],
+        NoiseVoice => &[Fixed(NoisePan), Selector],
+        // ── Voices without a single pan (multi-voice kits / pan-less) ─────
+        DrumKit808 | DrumKit909 | AmenSampler | GranularTexture | NeuTts => {
+            &[Selector, Selector, Selector]
+        }
         // ── Sequencer — BPM, swing, and a spare selector ──────────────────
         StepSequencer => &[Selector, Selector, Selector],
         // ── FX ≤3 knobs → dedicated jack per knob ──────────────────────────
@@ -70,9 +74,20 @@ pub fn lfo_target_short_label(target: LfoTarget) -> &'static str {
         BassResonance => "B.RES",
         BassPitch => "B.PIT",
         BassVolume => "B.VOL",
+        BassPan => "B.PAN",
+        HooverPan => "H.PAN",
+        NoisePan => "N.PAN",
         Kick808Pitch => "K8.PIT",
+        Kick808Pan => "K8.PAN",
+        Snare808Pan => "S8.PAN",
+        Hihat808Pan => "H8.PAN",
+        Kick909Pan => "K9.PAN",
+        Snare909Pan => "S9.PAN",
+        Hihat909Pan => "H9.PAN",
+        Clap909Pan => "C9.PAN",
         An1xCutoff => "A.CUT",
         An1xPitch => "A.PIT",
+        An1xPan => "A.PAN",
         ReverbMix => "RVB.MX",
         ReverbSize => "RVB.SZ",
         ReverbDamp => "RVB.DP",
@@ -115,9 +130,12 @@ pub(crate) fn lfo_target_module_kind(target: LfoTarget) -> Option<ModuleKind> {
     use LfoTarget::*;
     match target {
         None => Option::None,
-        BassCutoff | BassResonance | BassPitch | BassVolume => Some(ModuleKind::AcidBass),
-        Kick808Pitch => Some(ModuleKind::DrumKit808),
-        An1xCutoff | An1xPitch => Some(ModuleKind::An1xVoice),
+        BassCutoff | BassResonance | BassPitch | BassVolume | BassPan => Some(ModuleKind::AcidBass),
+        HooverPan => Some(ModuleKind::HooverLead),
+        NoisePan => Some(ModuleKind::NoiseVoice),
+        Kick808Pitch | Kick808Pan | Snare808Pan | Hihat808Pan => Some(ModuleKind::DrumKit808),
+        Kick909Pan | Snare909Pan | Hihat909Pan | Clap909Pan => Some(ModuleKind::DrumKit909),
+        An1xCutoff | An1xPitch | An1xPan => Some(ModuleKind::An1xVoice),
         ReverbMix | ReverbSize | ReverbDamp => Some(ModuleKind::FxReverb),
         DelayTime | DelayFeedback | DelayMix => Some(ModuleKind::FxDelay),
         ChorusRate | ChorusDepth | ChorusMix => Some(ModuleKind::FxChorus),
