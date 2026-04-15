@@ -232,6 +232,28 @@ pub(super) fn draw_fx_content(app: &mut ImpulseApp, ui: &mut egui::Ui, kind: Mod
                 s.fx.autotune_mix = mi;
             }
         }
+        ModuleKind::FxPan => {
+            let (mut pos, mut width, mut rate) = {
+                let s = app.state.read();
+                (s.fx.fx_pan_pos, s.fx.fx_pan_width, s.fx.fx_pan_rate)
+            };
+            // POS control in the panel takes 0..1; map to -1..+1 under the
+            // hood so the centre-click / drag feel matches other knobs.
+            let mut pos_norm = (pos + 1.0) * 0.5;
+            hk!(
+                ui,
+                ("POS", &mut pos_norm, pm("fx.fx_pan_pos")),
+                ("WIDTH", &mut width, pm("fx.fx_pan_width")),
+                ("RATE", &mut rate, pm("fx.fx_pan_rate"))
+            );
+            if changed {
+                pos = (pos_norm * 2.0 - 1.0).clamp(-1.0, 1.0);
+                let mut s = app.state.write();
+                s.fx.fx_pan_pos = pos;
+                s.fx.fx_pan_width = width;
+                s.fx.fx_pan_rate = rate;
+            }
+        }
         ModuleKind::FxWaveshaper => {
             let (mut dr, mut mi) = {
                 let s = app.state.read();

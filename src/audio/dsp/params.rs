@@ -413,6 +413,10 @@ pub struct AudioParams {
     // Autotune pitch shifter
     pub autotune_amount: f32,
     pub autotune_mix: f32,
+    // Pan FX
+    pub fx_pan_pos: f32,
+    pub fx_pan_width: f32,
+    pub fx_pan_rate: f32,
     // Compressor
     pub compressor_threshold: f32,
     pub compressor_ratio: f32,
@@ -660,6 +664,9 @@ impl AudioParams {
             eq_hi_gain: s.fx.eq_hi_gain,
             autotune_amount: s.fx.autotune_amount,
             autotune_mix: s.fx.autotune_mix,
+            fx_pan_pos: s.fx.fx_pan_pos.clamp(-1.0, 1.0),
+            fx_pan_width: s.fx.fx_pan_width.clamp(0.0, 1.0),
+            fx_pan_rate: s.fx.fx_pan_rate.clamp(0.0, 1.0),
             compressor_threshold: s.fx.compressor_threshold,
             compressor_ratio: s.fx.compressor_ratio,
             compressor_mix: s.fx.compressor_mix,

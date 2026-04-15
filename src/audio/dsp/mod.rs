@@ -98,6 +98,12 @@ pub struct DspState {
     rev_play_delay: usize,
     duck_attack: f32,
     duck_release: f32,
+    /// FxPan LFO phase (0..1) and last-sample side contribution.  The
+    /// phase advances every time the Pan FxStep runs; `fx_pan_side` is
+    /// read in the master stereo mix and decayed back to 0 when the
+    /// step is inactive.
+    fx_pan_phase: f32,
+    fx_pan_side: f32,
 }
 
 impl DspState {
@@ -165,6 +171,8 @@ impl DspState {
             rev_play_delay: 0,
             duck_attack: 1.0 - (-8.0_f32 / sample_rate).exp(),
             duck_release: 1.0 - (-2.0_f32 / sample_rate).exp(),
+            fx_pan_phase: 0.0,
+            fx_pan_side: 0.0,
         }
     }
 
@@ -308,6 +316,21 @@ impl DspState {
             FxStep::Autotune => self
                 .autotune
                 .process(sig, p.autotune_amount, p.autotune_mix),
+            FxStep::Pan => {
+                // Auto-pan — mono-in / mono-out FX that latches a per-sample
+                // side contribution into self.fx_pan_side for the master
+                // stage to mix into the stereo output.  Signal itself is
+                // passed through unchanged so chain order doesn't matter.
+                let rate_hz = 0.05 + p.fx_pan_rate * 7.95;
+                self.fx_pan_phase = (self.fx_pan_phase + rate_hz / sr).rem_euclid(1.0);
+                let lfo = (self.fx_pan_phase * std::f32::consts::TAU).sin();
+                let pan_mult = (p.fx_pan_pos + lfo * p.fx_pan_width).clamp(-1.0, 1.0);
+                // Side signal carries the same sign as pan_mult * sig — the
+                // master mix adds this to `side` so left = mid+side,
+                // right = mid-side produces a proper L/R swing.
+                self.fx_pan_side = sig * pan_mult * 0.5;
+                sig
+            }
         }
     }
 
@@ -931,9 +954,14 @@ impl DspState {
                 + hoover_out * p.pan_hoover * 0.5
                 + an1x_out * p.pan_an1x * 0.5
                 + noise_out * p.pan_noise * 0.5;
+            // Decay the Pan FxStep side-contribution when the step
+            // hasn't run this sample, so switching it off stops the
+            // auto-pan cleanly instead of latching the last side value.
+            self.fx_pan_side *= 0.995;
             let has_stereo = (p.stereo_width - 0.5).abs() > 0.01
                 || granular_side.abs() > 0.001
-                || pan_side.abs() > 0.0001;
+                || pan_side.abs() > 0.0001
+                || self.fx_pan_side.abs() > 0.0001;
             if channels >= 2 && has_stereo {
                 let mid = out;
                 let chorus_side = self.chorus.read_tap(0.4) * 0.3;
@@ -943,7 +971,7 @@ impl DspState {
                 } else {
                     0.0
                 };
-                let side = chorus_side * w + granular_side * gran_w + pan_side;
+                let side = chorus_side * w + granular_side * gran_w + pan_side + self.fx_pan_side;
                 let left = (mid + side).clamp(-1.0, 1.0);
                 let right = (mid - side).clamp(-1.0, 1.0);
                 frame[0] = left;

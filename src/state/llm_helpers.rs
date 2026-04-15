@@ -573,6 +573,9 @@ pub(super) fn apply_fx_update(
         "fx.autotune_amount"
     );
     u!(s.fx.autotune_mix, "autotune_mix", "fx.autotune_mix");
+    u!(s.fx.fx_pan_pos, "fx_pan_pos", "fx.fx_pan_pos");
+    u!(s.fx.fx_pan_width, "fx_pan_width", "fx.fx_pan_width");
+    u!(s.fx.fx_pan_rate, "fx_pan_rate", "fx.fx_pan_rate");
     u!(s.fx.master_volume, "master_volume", "fx.master_volume");
     u!(
         s.fx.xmod_bass_to_an1x_pitch,

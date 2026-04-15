@@ -134,6 +134,7 @@ pub enum ModuleKind {
     FxTapeSat,
     FxDrive,
     FxAutotune,
+    FxPan,
     // ── Analysis ──────────────────────────────────────────────────────────────
     SpectrumAnalyzer,
     StereoMeter,
@@ -173,6 +174,7 @@ impl ModuleKind {
             Self::FxTapeSat => "TAPE SAT",
             Self::FxDrive => "DRIVE",
             Self::FxAutotune => "AUTOTUNE",
+            Self::FxPan => "PAN",
             Self::SpectrumAnalyzer => "SPECTRUM",
             Self::StereoMeter => "STEREO METER",
             Self::ActivityTimeline => "TIMELINE",
@@ -218,7 +220,8 @@ impl ModuleKind {
             | Self::FxCompressor
             | Self::FxTapeSat
             | Self::FxDrive
-            | Self::FxAutotune => (2, 1),
+            | Self::FxAutotune
+            | Self::FxPan => (2, 1),
         }
     }
 
@@ -248,6 +251,7 @@ impl ModuleKind {
             | Self::FxTapeSat
             | Self::FxDrive
             | Self::FxAutotune
+            | Self::FxPan
             | Self::SpectrumAnalyzer
             | Self::StereoMeter
             | Self::ActivityTimeline
@@ -271,6 +275,7 @@ impl ModuleKind {
                 | Self::FxTapeSat
                 | Self::FxDrive
                 | Self::FxAutotune
+                | Self::FxPan
                 | Self::LfoModule
                 | Self::LlmAgent
         )
@@ -526,6 +531,7 @@ impl RackState {
                 ModuleKind::FxTapeSat => 29,
                 ModuleKind::FxDrive => 30,
                 ModuleKind::FxAutotune => 31,
+                ModuleKind::FxPan => 36,
                 ModuleKind::SpectrumAnalyzer => 32,
                 ModuleKind::StereoMeter => 33,
                 ModuleKind::ActivityTimeline => 34,
@@ -692,6 +698,7 @@ impl RackState {
             ModuleKind::FxTapeSat,
             ModuleKind::FxDrive,
             ModuleKind::FxAutotune,
+            ModuleKind::FxPan,
         ]
         .iter()
         .filter_map(|&k| find(&self.modules, k))
@@ -962,6 +969,7 @@ pub enum FxStep {
     TapeSat,
     Drive,
     Autotune,
+    Pan,
 }
 
 /// Compiled FX processing order derived from the rack cable graph.

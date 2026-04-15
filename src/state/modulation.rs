@@ -48,7 +48,7 @@ pub fn mod_inputs(kind: ModuleKind) -> &'static [ModInput] {
         FxTapeSat => &[Fixed(TapeDrive), Fixed(TapeMix), Fixed(TapeFlutter)],
         FxAutotune => &[Fixed(AutotuneAmount), Fixed(AutotuneMix)],
         // ── FX >3 knobs → 3 selectors ──────────────────────────────────────
-        FxReverb | FxDelay | FxCompressor => &[Selector, Selector, Selector],
+        FxReverb | FxDelay | FxCompressor | FxPan => &[Selector, Selector, Selector],
         // ── Explicit opt-outs ─────────────────────────────────────────────
         MasterOutput | LfoModule | LlmAgent | LlmConsole | SpectrumAnalyzer | StereoMeter
         | ActivityTimeline => &[],

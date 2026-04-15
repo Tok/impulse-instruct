@@ -121,9 +121,11 @@ write integration-style tests against a mocked DSP and AppState:
 
 - [ ] **Gabber kick voice** — dedicated voice (not just preset on
   808 kick); extreme pitch envelope, hard clipper, layered transient.
-- [ ] **Pan FX module** — insertable rack module for per-chain
-  stereo placement.  Knobs: pan position, width, auto-pan rate
-  (LFO).
+- [x] **Pan FX module** — `ModuleKind::FxPan` + `FxStep::Pan`.
+  Pass-through on the mono signal; writes a per-sample auto-pan
+  side contribution (`fx_pan_side`) into the master stereo mix
+  via LFO (pos + width * sin(2π·rate·t)).  POS / WIDTH / RATE
+  knobs, LLM plumbing (`fx.fx_pan_*`), rack parse + name matcher.
 - [ ] **LFO target: StereoWidth** — modulate stereo width over
   time (auto-pan).
 - [ ] **Dub techno send/return** — dedicated send/return FX

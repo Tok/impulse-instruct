@@ -569,6 +569,19 @@ pub struct FxState {
     pub autotune_amount: f32, // 0–1 → 0..+12 semitones upward pitch shift
     #[serde(default)]
     pub autotune_mix: f32, // 0–1 wet/dry
+    /// Pan FX: centre bias (-1..+1), hard-pan at the extremes.
+    #[serde(default)]
+    pub fx_pan_pos: f32,
+    /// Pan FX: auto-pan depth 0..1 (0 = static pan at fx_pan_pos).
+    #[serde(default)]
+    pub fx_pan_width: f32,
+    /// Pan FX: auto-pan LFO rate 0..1 → 0.05..8 Hz.
+    #[serde(default = "default_fx_pan_rate")]
+    pub fx_pan_rate: f32,
+}
+
+fn default_fx_pan_rate() -> f32 {
+    0.3
 }
 
 impl Default for FxState {
@@ -624,6 +637,9 @@ impl Default for FxState {
             eq_hi_gain: 0.0,
             autotune_amount: 0.0,
             autotune_mix: 0.0,
+            fx_pan_pos: 0.0,
+            fx_pan_width: 0.5,
+            fx_pan_rate: default_fx_pan_rate(),
         }
     }
 }

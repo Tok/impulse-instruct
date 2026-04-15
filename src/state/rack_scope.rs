@@ -91,6 +91,7 @@ pub fn parse_module_kind(name: &str) -> Option<ModuleKind> {
         "fxwaveshaper" | "waveshaper" | "shaper" => Some(FxWaveshaper),
         "fxbitcrush" | "bitcrush" | "lofi" => Some(FxBitcrush),
         "fxringmod" | "ringmod" | "ring" => Some(FxRingMod),
+        "fxpan" | "pan" | "autopan" => Some(FxPan),
         "lfomodule" | "lfo" => Some(LfoModule),
         "spectrumanalyzer" | "spectrum" | "analyser" | "analyzer" => Some(SpectrumAnalyzer),
         "stereometer" | "stereo" | "correlation" | "meter" => Some(StereoMeter),
@@ -134,6 +135,7 @@ pub fn rack_kind_name_matches(kind: ModuleKind, name: &str) -> bool {
             n.as_str(),
             "autotune" | "auto_tune" | "pitch_correct" | "tune" | "fx"
         ),
+        ModuleKind::FxPan => matches!(n.as_str(), "pan" | "autopan" | "fx"),
         ModuleKind::LfoModule => matches!(n.as_str(), "lfo"),
         ModuleKind::AcidBass => matches!(n.as_str(), "bass" | "acid" | "303"),
         ModuleKind::DrumKit808 => matches!(n.as_str(), "808" | "kit_a" | "drum_a" | "drums_a"),
