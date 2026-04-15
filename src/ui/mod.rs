@@ -123,7 +123,7 @@ pub struct ImpulseApp {
     capture_rx: rtrb::Consumer<f32>,
     dsp_load_rx: rtrb::Consumer<f32>,
     dsp_load_buf: Vec<f32>,
-    pub(crate) amen_wave_cache: (String, Vec<(f32, f32)>),
+    pub(crate) amen_ui: panels::amen_viz::AmenUiState,
     pub(crate) neutts_online: bool,
     pub(crate) granular_capture_rx: rtrb::Consumer<f32>,
     pub(crate) granular_tap: Vec<f32>, // ring buffer, ~3s master output for CAPTURE
@@ -288,7 +288,7 @@ impl ImpulseApp {
             capture_rx: audio.capture_rx,
             dsp_load_rx: audio.dsp_load_rx,
             dsp_load_buf: Vec::with_capacity(64),
-            amen_wave_cache: (String::new(), Vec::new()),
+            amen_ui: Default::default(),
             neutts_online: false,
             granular_capture_rx: audio.granular_capture_rx,
             granular_tap: vec![0.0; 44_100 * 3], // 3s at 44.1k

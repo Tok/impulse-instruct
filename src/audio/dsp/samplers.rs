@@ -135,16 +135,21 @@ impl AmenVoice {
         };
         let gate_frac = gate.clamp(0.05, 1.0);
         let slice_len = (send - sstart).max(1.0);
+        // Stutter divides the slice budget so N retriggers fit inside one
+        // slice duration instead of extending past it.  stutter=0 → full
+        // slice; stutter=4 → five hits crammed into one slice's worth.
+        let sub_len = (slice_len / (stutter as f32 + 1.0)).max(1.0);
+        let gate_window = sub_len * gate_frac;
 
         self.slice_start = sstart;
         self.slice_end = send;
         self.direction = if reverse { -1.0 } else { 1.0 };
         if reverse {
             self.pos = send - 1.0;
-            self.gate_end = send - slice_len * gate_frac;
+            self.gate_end = send - gate_window;
         } else {
             self.pos = sstart;
-            self.gate_end = sstart + slice_len * gate_frac;
+            self.gate_end = sstart + gate_window;
         }
         self.stutter_left = stutter;
 

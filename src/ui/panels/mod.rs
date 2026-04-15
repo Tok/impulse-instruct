@@ -11,6 +11,7 @@ pub(super) const KNOB_SPACING: f32 = 8.0;
 pub(crate) const GLASS_GAP: f32 = 5.0;
 
 pub mod amen;
+pub(crate) mod amen_viz;
 pub mod an1x;
 pub mod bass;
 mod bass_noise;

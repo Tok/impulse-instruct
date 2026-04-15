@@ -59,7 +59,7 @@ fn load_and_cache(app: &mut ImpulseApp, path: &str) {
     if let Some(data) = load_wav_to_44100(path) {
         // Rebuild the waveform thumbnail before handing the Arc over —
         // cheaper than reading the file again from the UI thread.
-        app.amen_wave_cache = (path.to_string(), build_wave_thumb(&data, 256));
+        app.amen_ui.wave_cache = (path.to_string(), build_wave_thumb(&data, 256));
         let _ = app.audio_tx.push(AudioCommand::LoadSampler(data));
     }
     let meta = crate::audio::read_wav_meta(path);
@@ -92,266 +92,6 @@ fn build_wave_thumb(samples: &[f32], n_cols: usize) -> Vec<(f32, f32)> {
         out.push((mn, mx));
     }
     out
-}
-
-/// Paint the waveform thumbnail into `rect` with slice-boundary markers
-/// and start/end offset shading.  `active_slice` (if any) highlights the
-/// currently-playing slice wedge.
-#[allow(clippy::too_many_arguments)]
-fn draw_waveform(
-    ui: &mut egui::Ui,
-    thumb: &[(f32, f32)],
-    slice_count: u8,
-    start_offset: f32,
-    end_offset: f32,
-    slice_positions: &[f32],
-    active_slice: Option<u8>,
-    width: f32,
-    height: f32,
-) {
-    let (rect, _) = ui.allocate_exact_size(egui::vec2(width, height), egui::Sense::hover());
-    let painter = ui.painter_at(rect);
-    painter.rect_filled(
-        rect,
-        egui::Rounding::same(2.0),
-        egui::Color32::from_gray(10),
-    );
-    painter.rect_stroke(
-        rect,
-        egui::Rounding::same(2.0),
-        egui::Stroke::new(0.5, egui::Color32::from_gray(40)),
-    );
-    if thumb.is_empty() {
-        return;
-    }
-    let mid = rect.center().y;
-    let half_h = rect.height() * 0.45;
-    let col_count = thumb.len();
-    let col_w = rect.width() / col_count as f32;
-    // Waveform columns.
-    for (i, (mn, mx)) in thumb.iter().enumerate() {
-        let x = rect.min.x + i as f32 * col_w + col_w * 0.5;
-        let y_top = mid - mx * half_h;
-        let y_bot = mid - mn * half_h;
-        painter.line_segment(
-            [egui::pos2(x, y_top), egui::pos2(x, y_bot)],
-            egui::Stroke::new(col_w.max(1.0), egui::Color32::from_gray(160)),
-        );
-    }
-    // Start/end offset shading — dim the parts of the sample outside
-    // the usable region.
-    let shade = egui::Color32::from_rgba_unmultiplied(8, 8, 8, 180);
-    if start_offset > 0.0 {
-        let x0 = rect.min.x;
-        let x1 = rect.min.x + start_offset * rect.width();
-        painter.rect_filled(
-            egui::Rect::from_min_max(egui::pos2(x0, rect.min.y), egui::pos2(x1, rect.max.y)),
-            egui::Rounding::ZERO,
-            shade,
-        );
-    }
-    if end_offset < 1.0 {
-        let x0 = rect.min.x + end_offset * rect.width();
-        let x1 = rect.max.x;
-        painter.rect_filled(
-            egui::Rect::from_min_max(egui::pos2(x0, rect.min.y), egui::pos2(x1, rect.max.y)),
-            egui::Rounding::ZERO,
-            shade,
-        );
-    }
-    // Slice markers.  If slice_positions is populated, draw markers at
-    // those exact times (custom / transient-detected).  Otherwise draw
-    // equal divisions within [start_offset, end_offset].
-    let slices = slice_count.max(1);
-    let region_w = (end_offset - start_offset).max(0.001) * rect.width();
-    let region_x0 = rect.min.x + start_offset * rect.width();
-    let slice_w_equal = region_w / slices as f32;
-    let use_custom = !slice_positions.is_empty();
-    let marker_color = if use_custom {
-        // Slightly brighter for user/detected markers so they're distinct.
-        egui::Color32::from_gray(140)
-    } else {
-        egui::Color32::from_gray(80)
-    };
-    if use_custom {
-        for &p in slice_positions {
-            let x = rect.min.x + p.clamp(0.0, 1.0) * rect.width();
-            painter.line_segment(
-                [
-                    egui::pos2(x, rect.min.y + 1.0),
-                    egui::pos2(x, rect.max.y - 1.0),
-                ],
-                egui::Stroke::new(0.8, marker_color),
-            );
-        }
-        // Also the trailing end-offset line so the last slice has a cap.
-        let x_end = rect.min.x + end_offset * rect.width();
-        painter.line_segment(
-            [
-                egui::pos2(x_end, rect.min.y + 1.0),
-                egui::pos2(x_end, rect.max.y - 1.0),
-            ],
-            egui::Stroke::new(0.8, marker_color),
-        );
-    } else {
-        for i in 0..=slices {
-            let x = region_x0 + i as f32 * slice_w_equal;
-            painter.line_segment(
-                [
-                    egui::pos2(x, rect.min.y + 1.0),
-                    egui::pos2(x, rect.max.y - 1.0),
-                ],
-                egui::Stroke::new(0.6, marker_color),
-            );
-        }
-    }
-    // Highlight the active slice.
-    if let Some(a) = active_slice
-        && a < slices
-    {
-        let (x0, x1) = if use_custom {
-            let a_x = slice_positions
-                .get(a as usize)
-                .copied()
-                .unwrap_or(0.0)
-                .clamp(0.0, 1.0);
-            let next = slice_positions
-                .get(a as usize + 1)
-                .copied()
-                .unwrap_or(end_offset)
-                .clamp(0.0, 1.0);
-            (
-                rect.min.x + a_x * rect.width(),
-                rect.min.x + next * rect.width(),
-            )
-        } else {
-            let x0 = region_x0 + a as f32 * slice_w_equal;
-            (x0, x0 + slice_w_equal)
-        };
-        painter.rect_filled(
-            egui::Rect::from_min_max(
-                egui::pos2(x0, rect.min.y + 1.0),
-                egui::pos2(x1, rect.max.y - 1.0),
-            ),
-            egui::Rounding::ZERO,
-            egui::Color32::from_rgba_unmultiplied(200, 200, 200, 30),
-        );
-    }
-    // Center zero-line.
-    painter.line_segment(
-        [egui::pos2(rect.min.x, mid), egui::pos2(rect.max.x, mid)],
-        egui::Stroke::new(0.3, egui::Color32::from_gray(45)),
-    );
-}
-
-/// Draw the circular slice-wheel visualization — an actual loop made of
-/// N wedges (one per slice).  The currently-playing slice is highlighted
-/// based on the sequencer's last-fired amen step.
-fn draw_slice_wheel(
-    ui: &mut egui::Ui,
-    slice_count: u8,
-    active_slice: Option<u8>,
-    reverse: bool,
-    looping: bool,
-    size: f32,
-) {
-    let (rect, _resp) = ui.allocate_exact_size(egui::vec2(size, size), egui::Sense::hover());
-    let painter = ui.painter_at(rect);
-    let center = rect.center();
-    let r_outer = size * 0.46;
-    let r_inner = size * 0.22;
-
-    let n = slice_count.max(1) as usize;
-    let tau = std::f32::consts::TAU;
-    // Start at 12 o'clock, clockwise → angle0 = -π/2.
-    let dir = if reverse { -1.0 } else { 1.0 };
-
-    if n == 1 {
-        // Single slice = the whole sample.  A triangle-fan "full wedge"
-        // degenerates (first and last vertex coincide), which renders as
-        // a visible seam.  Paint a proper filled disc instead.
-        let active = active_slice.is_some();
-        let fill = if active {
-            egui::Color32::from_gray(180)
-        } else {
-            egui::Color32::from_gray(40)
-        };
-        painter.circle_filled(center, r_outer, fill);
-    } else {
-        // Pulsing intensity for the active slice — modulate gray over time
-        // so the "now playing" highlight obviously stands out from the
-        // static slice fills.
-        let t = ui.ctx().input(|i| i.time) as f32;
-        let pulse = (t * 4.0 * std::f32::consts::TAU).sin() * 0.5 + 0.5; // 0..1
-        let active_g = (190.0 + pulse * 50.0) as u8; // 190..240
-        for i in 0..n {
-            let a0 = -std::f32::consts::FRAC_PI_2 + (i as f32 / n as f32) * tau * dir;
-            let a1 = -std::f32::consts::FRAC_PI_2 + ((i + 1) as f32 / n as f32) * tau * dir;
-            let active = active_slice.map(|s| s as usize) == Some(i);
-            let fill = if active {
-                egui::Color32::from_gray(active_g)
-            } else {
-                egui::Color32::from_gray(40)
-            };
-            // Tessellate the wedge as a triangle fan around the center.
-            let steps = 12;
-            let mut pts = vec![center];
-            for k in 0..=steps {
-                let t = k as f32 / steps as f32;
-                let a = a0 + (a1 - a0) * t;
-                pts.push(center + egui::vec2(a.cos(), a.sin()) * r_outer);
-            }
-            painter.add(egui::Shape::convex_polygon(
-                pts,
-                fill,
-                egui::Stroke::new(0.5, egui::Color32::from_gray(15)),
-            ));
-            // Slice index label inside each wedge so the user can see
-            // which slice is which without counting clockwise from 12.
-            let mid_angle = (a0 + a1) * 0.5;
-            let label_r = (r_outer + r_inner) * 0.5;
-            let label_pos = center + egui::vec2(mid_angle.cos(), mid_angle.sin()) * label_r;
-            let label_col = if active {
-                egui::Color32::from_gray(20)
-            } else {
-                egui::Color32::from_gray(120)
-            };
-            painter.text(
-                label_pos,
-                egui::Align2::CENTER_CENTER,
-                format!("{}", i + 1),
-                egui::FontId::monospace(size * 0.07),
-                label_col,
-            );
-        }
-        if active_slice.is_some() {
-            ui.ctx().request_repaint();
-        }
-    }
-    // Inner hole
-    painter.circle_filled(center, r_inner, egui::Color32::from_gray(12));
-    // Outer ring
-    painter.circle_stroke(
-        center,
-        r_outer,
-        egui::Stroke::new(1.0, egui::Color32::from_gray(90)),
-    );
-    // Loop indicator: second ring just outside when loop_mode is on
-    if looping {
-        painter.circle_stroke(center, r_outer + 3.0, egui::Stroke::new(1.0, theme::CHALK));
-    }
-    // Direction arrow in the hub — circular rotation glyphs (NOT play
-    // triangles) so the indicator reads as "wheel direction" rather than
-    // a clickable transport control.
-    let arrow_col = theme::ASH;
-    let hub_label = if reverse { "↺" } else { "↻" };
-    painter.text(
-        center,
-        egui::Align2::CENTER_CENTER,
-        hub_label,
-        egui::FontId::monospace(size * 0.28),
-        arrow_col,
-    );
 }
 
 /// Render the slice-order edit strip — one cell per step position, each
@@ -422,6 +162,29 @@ fn draw_slice_order_strip(
             .clicked()
         {
             order.clear();
+            changed = true;
+        }
+        if ui
+            .small_button(egui::RichText::new("RAND").monospace().size(7.0))
+            .on_hover_text("Shuffle the order into a random permutation of slices 1..N")
+            .clicked()
+        {
+            // SystemTime-seeded Fisher-Yates over 0..n.  Permutes the whole
+            // strip; pair with RESET if you want the identity back.
+            let seed = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_nanos() as u64)
+                .unwrap_or(0xC0FFEE);
+            let mut perm: Vec<u8> = (0..n as u8).collect();
+            let mut s = seed | 1;
+            for i in (1..perm.len()).rev() {
+                s = s
+                    .wrapping_mul(6364136223846793005)
+                    .wrapping_add(1442695040888963407);
+                let j = ((s >> 33) as usize) % (i + 1);
+                perm.swap(i, j);
+            }
+            *order = perm;
             changed = true;
         }
     });
@@ -644,21 +407,54 @@ pub fn draw_amen(app: &mut ImpulseApp, ui: &mut egui::Ui) {
     // If the path changed since we last synced (user picked a new file, or
     // the API / LLM wrote amen.path), fully reload: push samples to the
     // audio thread, refresh the metadata cache, rebuild the thumbnail.
-    if !path.is_empty() && app.amen_wave_cache.0 != path {
+    if !path.is_empty() && app.amen_ui.wave_cache.0 != path {
         load_and_cache(app, &path);
     }
     let active = current_amen_slice(app);
+    // Update the slice-trail history once per frame, before any
+    // animation-driven rendering.  Pushes a (slice, now) entry on each
+    // active-slice change and prunes entries older than half a bar.
+    let host_bpm_now = app.state.read().sequencer.bpm;
+    let now_t = ui.ctx().input(|i| i.time);
+    let trail_window = (120.0 / host_bpm_now.max(1.0)) as f64;
+    let step_dur = (15.0 / host_bpm_now.max(1.0)) as f64; // 16 steps/bar
+    if active != app.amen_ui.last_trail_slice {
+        if let Some(s) = active {
+            app.amen_ui.slice_trail.push((s, now_t));
+        }
+        app.amen_ui.last_trail_slice = active;
+    }
+    let cutoff = now_t - trail_window;
+    app.amen_ui.slice_trail.retain(|(_, t)| *t >= cutoff);
+    // Ease the wheel's pointer angle toward the active slice mid-angle.
+    {
+        let n = slice_count.max(1) as usize;
+        let dir = if reverse { -1.0 } else { 1.0 };
+        if let Some(a) = active {
+            let target = -std::f32::consts::FRAC_PI_2
+                + ((a as f32 + 0.5) / n as f32) * std::f32::consts::TAU * dir;
+            let mut delta = target - app.amen_ui.wheel_angle;
+            let tau = std::f32::consts::TAU;
+            while delta > std::f32::consts::PI {
+                delta -= tau;
+            }
+            while delta < -std::f32::consts::PI {
+                delta += tau;
+            }
+            app.amen_ui.wheel_angle += delta * 0.25;
+        }
+    }
     // Reserve the waveform vertical slot whether or not a sample is
     // loaded — otherwise the whole lower half of the panel shifts up
     // when loading a WAV, which jitters the knob positions.  The rect
     // just stays empty until a thumbnail is available.
     let wave_h = 66.0;
     let wave_w = ui.available_width().min(260.0);
-    if !app.amen_wave_cache.1.is_empty() {
+    if !app.amen_ui.wave_cache.1.is_empty() {
         let positions_snapshot: Vec<f32> = app.state.read().amen.slice_positions.clone();
-        draw_waveform(
+        super::amen_viz::draw_waveform(
             ui,
-            &app.amen_wave_cache.1,
+            &app.amen_ui.wave_cache.1,
             slice_count,
             start_offset,
             end_offset,
@@ -666,6 +462,9 @@ pub fn draw_amen(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             active,
             wave_w,
             wave_h,
+            &app.amen_ui.slice_trail,
+            now_t,
+            step_dur,
         );
     } else {
         // Reserve the same vertical slot so the panel layout doesn't
@@ -748,7 +547,18 @@ pub fn draw_amen(app: &mut ImpulseApp, ui: &mut egui::Ui) {
     ui.horizontal(|ui| {
         // Small padding around the wheel so it doesn't hug other widgets.
         ui.add_space(6.0);
-        draw_slice_wheel(ui, slice_count, active, reverse, loop_mode, 144.0);
+        super::amen_viz::draw_slice_wheel(
+            ui,
+            slice_count,
+            active,
+            reverse,
+            loop_mode,
+            144.0,
+            &app.amen_ui.slice_trail,
+            now_t,
+            trail_window,
+            app.amen_ui.wheel_angle,
+        );
         ui.add_space(8.0);
         ui.vertical(|ui| {
             // SLICES selector

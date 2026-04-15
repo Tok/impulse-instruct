@@ -136,30 +136,24 @@ write integration-style tests against a mocked DSP and AppState:
   reversing (envelope follower).  Would give "reverse compression"
   swell-into-hit transient shaping.
 
-### Amen — next session
+### Amen — shipped this session
 
-- [ ] **Stutter knob doesn't behave** — check what `stutter` 1..4
-  actually does at trigger time vs the panel knob's range; the
-  retrigger count seems off (silent or runaway depending on slice
-  length and gate).  Audit AmenVoice::trigger + process and the
-  panel knob mapping.
-- [ ] **Display fixes** — slice wheel + waveform thumbnail glitch
-  in some configurations (no sample loaded, slice_count == 1,
-  custom slice_positions empty).  Sweep through the corner cases
-  and make the rendering robust.
-- [ ] **Chop randomization** — RAND button next to RESET on the
-  ORDER strip that shuffles `amen_slice_order` into a random
-  permutation of `0..slice_count`.  Optional "musical" mode that
-  keeps slice 0 (the downbeat) fixed.
-- [ ] **Animate the wheel** — beyond the current pulsing wedge,
-  rotate the active slice indicator with the playhead so the wheel
-  reads as actual rotation (not just lighting up cells).  Trail
-  the previously-played slices with a fade for ~half a bar.
-- [ ] **Animate the waveform** — playhead cursor sweeps through
-  the visible region while the slice plays; on each new slice
-  trigger the waveform briefly highlights the active slice's range
-  (subtle flash + fade).  Currently the waveform is static once
-  the sample is loaded.
+- [x] **Stutter knob fix** — gate window now scaled by `1/(stutter+1)`
+  so retriggers fit inside one slice budget instead of running past
+  the next step.  Stutter=4 plays five hits in one slice's worth of
+  time as expected.
+- [x] **Display fixes** — waveform `use_custom` now requires
+  `positions.len() >= slice_count`, NaN/Inf positions are filtered,
+  active-slice highlight falls back to start/end offsets when a
+  custom position is missing or non-finite.
+- [x] **Chop randomization** — RAND button next to RESET on the
+  ORDER strip; SystemTime-seeded Fisher-Yates shuffle of `0..n`.
+- [x] **Animate the wheel** — slice trail with half-bar fade per
+  wedge + smoothly rotating outer notch eased toward the active
+  slice's mid-angle (shortest-path interpolation).
+- [x] **Animate the waveform** — active-slice highlight alpha
+  fades out over one step duration; playhead cursor sweeps across
+  the active slice's range as it plays.
 
 ### Sequencer
 
