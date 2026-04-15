@@ -51,13 +51,14 @@ pub(super) fn draw_fx_content(app: &mut ImpulseApp, ui: &mut egui::Ui, kind: Mod
 
     match kind {
         ModuleKind::FxReverb => {
-            let (mut rs, mut rd, mut rm, mut rdir) = {
+            let (mut rs, mut rd, mut rm, mut rdir, mut rq) = {
                 let s = app.state.read();
                 (
                     s.fx.reverb_size,
                     s.fx.reverb_damp,
                     s.fx.reverb_mix,
                     s.fx.reverb_dir,
+                    s.fx.reverb_rev_quant,
                 )
             };
             hk!(
@@ -67,22 +68,25 @@ pub(super) fn draw_fx_content(app: &mut ImpulseApp, ui: &mut egui::Ui, kind: Mod
                 ("MIX", &mut rm, pm("fx.reverb_mix"))
             );
             let dir_changed = draw_fx_dir_button(ui, &mut rdir, "Reverb direction");
-            if changed || rs != app.state.read().fx.reverb_size || dir_changed {
+            let q_changed = crate::ui::fx_dir::draw_fx_rev_quant_button(ui, &mut rq, "Reverb");
+            if changed || rs != app.state.read().fx.reverb_size || dir_changed || q_changed {
                 let mut s = app.state.write();
                 s.fx.reverb_size = rs;
                 s.fx.reverb_damp = rd;
                 s.fx.reverb_mix = rm;
                 s.fx.reverb_dir = rdir;
+                s.fx.reverb_rev_quant = rq;
             }
         }
         ModuleKind::FxDelay => {
-            let (mut dt, mut df, mut dm, mut ddir) = {
+            let (mut dt, mut df, mut dm, mut ddir, mut dq) = {
                 let s = app.state.read();
                 (
                     s.fx.delay_time,
                     s.fx.delay_feedback,
                     s.fx.delay_mix,
                     s.fx.delay_dir,
+                    s.fx.delay_rev_quant,
                 )
             };
             hk!(
@@ -92,12 +96,14 @@ pub(super) fn draw_fx_content(app: &mut ImpulseApp, ui: &mut egui::Ui, kind: Mod
                 ("MIX", &mut dm, pm("fx.delay_mix"))
             );
             let dir_changed = draw_fx_dir_button(ui, &mut ddir, "Delay direction");
-            if changed || dt != app.state.read().fx.delay_time || dir_changed {
+            let q_changed = crate::ui::fx_dir::draw_fx_rev_quant_button(ui, &mut dq, "Delay");
+            if changed || dt != app.state.read().fx.delay_time || dir_changed || q_changed {
                 let mut s = app.state.write();
                 s.fx.delay_time = dt;
                 s.fx.delay_feedback = df;
                 s.fx.delay_mix = dm;
                 s.fx.delay_dir = ddir;
+                s.fx.delay_rev_quant = dq;
             }
         }
         ModuleKind::FxChorus => {

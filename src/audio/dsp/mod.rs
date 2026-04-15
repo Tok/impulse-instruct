@@ -5,6 +5,7 @@ mod dsp_util;
 mod fx;
 mod mod_apply;
 mod params;
+mod rev_tap;
 mod samplers;
 mod voices;
 use bass303::Bass303;
@@ -19,26 +20,7 @@ use voices::*;
 use crate::sequencer::TriggerEvent;
 use crate::state::{DrumVoice, FxPlan, FxStep, ModuleKind};
 
-/// Length of the per-FX reverse-tap circular buffer in samples — 1 second
-/// at 44.1 kHz.  Trade-off: longer = richer reverse character but more
-/// memory + a longer "rewind cycle" before the read tap loops.
-const REV_BUF_LEN: usize = 44100;
-
-/// Write `sig` to the FX-specific circular buffer at `head`, advance head,
-/// then read+return the current reversed-tap sample at `play` and decrement
-/// it.  Shared between the Reverb and Delay arms; sized array borrows mean
-/// no per-block allocations.
-fn step_rev_tap(buf: &mut [f32], head: &mut usize, play: &mut usize, sig: f32) -> f32 {
-    buf[*head] = sig;
-    *head = (*head + 1) % REV_BUF_LEN;
-    let out = buf[*play];
-    *play = if *play == 0 {
-        REV_BUF_LEN - 1
-    } else {
-        *play - 1
-    };
-    out
-}
+use rev_tap::{REV_BUF_LEN, rev_tap_len_for_quant, step_rev_tap};
 
 // ─── Full DSP state ───────────────────────────────────────────────────────────
 
@@ -218,6 +200,7 @@ impl DspState {
                         &mut self.rev_head_reverb,
                         &mut self.rev_play_reverb,
                         sig,
+                        rev_tap_len_for_quant(p.reverb_rev_quant, sr, p.sequencer_bpm),
                     );
                     let r = &mut self.reverb;
                     let (sz, dp, fz) = (p.reverb_size, p.reverb_damp, p.reverb_freeze);
@@ -241,6 +224,7 @@ impl DspState {
                     &mut self.rev_head_delay,
                     &mut self.rev_play_delay,
                     sig,
+                    rev_tap_len_for_quant(p.delay_rev_quant, sr, p.sequencer_bpm),
                 );
                 let d = &mut self.delay;
                 let (ds, fb, wf, sat) = (

@@ -365,11 +365,14 @@ pub struct AudioParams {
     pub reverb_freeze: bool,
     /// 0=FWD, 1=REV (preverb), 2=MIRROR.
     pub reverb_dir: u8,
+    /// Beat-division snap for the reverse-tap loop length.
+    pub reverb_rev_quant: u8,
     pub delay_time: f32,
     pub delay_feedback: f32,
     pub delay_mix: f32,
     /// 0=FWD, 1=REV (anti-echo), 2=MIRROR.
     pub delay_dir: u8,
+    pub delay_rev_quant: u8,
     pub delay_wow_flutter: f32,
     pub delay_saturation: f32,
     pub distortion_drive: f32,
@@ -620,10 +623,12 @@ impl AudioParams {
             reverb_gate_time: s.fx.reverb_gate_time,
             reverb_freeze: s.fx.reverb_freeze,
             reverb_dir: s.fx.reverb_dir.min(2),
+            reverb_rev_quant: s.fx.reverb_rev_quant.min(4),
             delay_time: s.fx.delay_time,
             delay_feedback: s.fx.delay_feedback,
             delay_mix: s.fx.delay_mix,
             delay_dir: s.fx.delay_dir.min(2),
+            delay_rev_quant: s.fx.delay_rev_quant.min(4),
             delay_wow_flutter: s.fx.delay_wow_flutter,
             delay_saturation: s.fx.delay_saturation,
             distortion_drive: s.fx.distortion_drive,

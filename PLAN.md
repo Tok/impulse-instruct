@@ -134,10 +134,12 @@ write integration-style tests against a mocked DSP and AppState:
 - [ ] **Per-slice playback direction on amen** — currently reverse
   is a global flag; per-slice reverse would enable edit-era glitch
   patterns.
-- [ ] **Tempo-quantized FX direction buffer** — Reverb/Delay's
-  REV/MIRROR rewind cycle is fixed at ~1 s.  Snap the buffer length
-  to a beat division (1/4, 1/2, 1, 2 bars) so the rewind cycle
-  syncs with the pattern instead of drifting against it.
+- [x] **Tempo-quantized FX direction buffer** — `rev_tap_len_for_quant`
+  snaps the reverse-tap loop length to a beat division (1s free,
+  1/4 bar, 1/2, 1 bar, 2 bars).  `reverb_rev_quant` / `delay_rev_quant`
+  in FxState, plumbed through AudioParams; a small quant-cycle button
+  sits next to each FWD/REV/MIRROR control.  Extracted the reverse-tap
+  buffer helpers into `src/audio/dsp/rev_tap.rs` with 5 unit tests.
 - [ ] **Reverse mode for compressor envelope** — third FX worth
   reversing (envelope follower).  Would give "reverse compression"
   swell-into-hit transient shaping.

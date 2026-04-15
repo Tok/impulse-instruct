@@ -501,6 +501,11 @@ pub struct FxState {
     /// 1 s circular buffer of past input.
     #[serde(default)]
     pub reverb_dir: u8,
+    /// Beat division for the REV/MIRROR rewind cycle.  0=free 1 s,
+    /// 1=1/4 bar (1 beat), 2=1/2 bar, 3=1 bar, 4=2 bars.  Snaps the
+    /// reverse-tap loop length to the active BPM.
+    #[serde(default)]
+    pub reverb_rev_quant: u8,
     pub delay_time: f32,     // 0–1 → 0–2000 ms
     pub delay_feedback: f32, // 0–1
     pub delay_mix: f32,      // 0–1 wet/dry
@@ -509,6 +514,10 @@ pub struct FxState {
     /// 2=MIRROR.
     #[serde(default)]
     pub delay_dir: u8,
+    /// Same beat-division snap as `reverb_rev_quant` but for the delay's
+    /// reverse tap.
+    #[serde(default)]
+    pub delay_rev_quant: u8,
     #[serde(default)]
     pub delay_wow_flutter: f32, // 0–1 tape wow/flutter depth
     #[serde(default)]
@@ -571,10 +580,12 @@ impl Default for FxState {
             reverb_gate_time: 0.0,
             reverb_freeze: false,
             reverb_dir: 0,
+            reverb_rev_quant: 0,
             delay_time: 0.375,
             delay_feedback: 0.4,
             delay_mix: 0.0,
             delay_dir: 0,
+            delay_rev_quant: 0,
             delay_wow_flutter: 0.0,
             delay_saturation: 0.0,
             distortion_drive: 0.0,
