@@ -1,8 +1,63 @@
 // ─── ui/panels/sequencer_chain.rs ────────────────────────────────────────────
 // Pattern bank selector and chain editor for the sequencer panel.
+// Also home to small shared sequencer-row helpers (e.g. per-step pan).
 
 use crate::state::{bank_swap, bank_write, chain_pop, chain_push, set_chain_enabled};
 use crate::ui::{ImpulseApp, theme};
+
+/// Per-step bass pan cell — paints a centre-line + tick at the current
+/// pan value; drag-to-set, right-click resets to centre.
+pub(crate) fn pan_cell(
+    ui: &mut egui::Ui,
+    app: &mut ImpulseApp,
+    abs: usize,
+    pan: f32,
+    enabled: bool,
+    pad_px: f32,
+    row_h: f32,
+) {
+    let (rect, resp) =
+        ui.allocate_exact_size(egui::vec2(pad_px, row_h), egui::Sense::click_and_drag());
+    let p = ui.painter_at(rect);
+    let cy = rect.center().y;
+    p.line_segment(
+        [
+            egui::pos2(rect.min.x + 2.0, cy),
+            egui::pos2(rect.max.x - 2.0, cy),
+        ],
+        egui::Stroke::new(0.5, theme::PIT),
+    );
+    if enabled {
+        let cx = rect.min.x + (pan.clamp(-1.0, 1.0) + 1.0) * 0.5 * rect.width();
+        let col = if pan.abs() < 0.01 {
+            theme::IRON
+        } else {
+            theme::CHALK
+        };
+        p.line_segment(
+            [
+                egui::pos2(cx, rect.min.y + 1.0),
+                egui::pos2(cx, rect.max.y - 1.0),
+            ],
+            egui::Stroke::new(1.5, col),
+        );
+    }
+    if enabled
+        && (resp.dragged() || resp.clicked())
+        && let Some(pos) = resp.interact_pointer_pos()
+    {
+        let np = ((pos.x - rect.min.x) / rect.width().max(1.0) * 2.0 - 1.0).clamp(-1.0, 1.0);
+        if let Some(step) = app.state.write().sequencer.bass_pattern.get_mut(abs) {
+            step.pan = np;
+        }
+    }
+    if enabled
+        && resp.secondary_clicked()
+        && let Some(step) = app.state.write().sequencer.bass_pattern.get_mut(abs)
+    {
+        step.pan = 0.0;
+    }
+}
 
 const SLOT_NAMES: [&str; 8] = ["A", "B", "C", "D", "E", "F", "G", "H"];
 

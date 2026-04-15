@@ -201,13 +201,16 @@ write integration-style tests against a mocked DSP and AppState:
 
 - [ ] **Touch mode improvements** — touch-paint mode for
   mobile/tablet; gesture support for zoom/scroll.
-- [ ] **Preecho step-strip lane alignment** — the strip lives in
-  the preecho section; aligning it with the sequencer's step
-  grid above would make the anchors read more obviously as
-  "positions in the pattern".
-- [ ] **Per-step bass pan UI lane** — data path is wired
-  (TB303Step.pan + LLM bass_pans), but the sequencer panel doesn't
-  have a drag-bars lane to set it visually yet.
+- [x] **Preecho step-strip lane alignment** — strip cells now use
+  the sequencer's `effective_pad_px()` (so widths match) and the
+  whole strip is right-justified to the panel's right edge with
+  the trailing controls (LEN/VEL/RAT/CLEAR/ON) moved to the left
+  of it.  Anchor cells line up with the step columns above.
+- [x] **Per-step bass pan UI lane** — PAN row added to the bass
+  voice section (BASS / ACCENT / SLIDE / PAN).  Drag horizontally
+  on a cell to set TB303Step.pan, right-click resets to centre.
+  Cell painting factored into `pan_cell` in sequencer_chain.rs to
+  keep sequencer.rs under the 1000-line limit.
 - [ ] **NeuTts mod targets** — Amen/Granular got per-voice
   LfoTarget variants this cycle but NeuTts still has none; its TTS
   bus volume isn't an `AudioParams` knob, so wiring needs a small

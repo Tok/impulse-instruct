@@ -15,10 +15,11 @@
 use crate::sequencer::PreechoConfig;
 use crate::ui::{ImpulseApp, theme, widgets};
 
-/// Size of each step cell in the anchor strip — kept square so they
-/// read as actual toggle boxes, not slivers.  21 px matches the
-/// bumped size from the earlier "1.5×" pass.
-const ANCHOR_STEP_W: f32 = 21.0;
+/// Default cell height for the anchor strip; cell width tracks the
+/// sequencer's `effective_pad_px()` at draw time so anchors align with
+/// the step columns above.  When the sequencer hasn't laid out yet
+/// (first frame) we fall back to this width.
+const ANCHOR_STEP_W_FALLBACK: f32 = 21.0;
 const ANCHOR_STEP_H: f32 = 21.0;
 /// Space to reserve on either side of the strip (and above/below)
 /// so the cells don't butt up against neighboring widgets.
@@ -108,16 +109,67 @@ pub(super) fn draw_preecho_row(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         }
         ui.separator();
 
-        // Clickable anchor strip — one cell per sequencer step.  Click
-        // to toggle anchor at that step.  Lit cells = anchors; dimly
-        // lit = inside a lead-in window of some anchor.  Padded on all
-        // four sides so the square cells have visible breathing room.
-        ui.add_space(ANCHOR_STRIP_PAD);
+        // Render trailing controls (LEN/VEL/RAT/CLEAR/ON-OFF) FIRST, so
+        // the anchor strip ends up as the last widget in the row and we
+        // can right-justify it to match the sequencer's step grid edge.
+        // (The strip itself + its click handling are drawn further down.)
         let seq_steps = app.state.read().sequencer.steps.clamp(1, 64);
-        let strip_w = ANCHOR_STEP_W * seq_steps as f32 + (seq_steps as f32 - 1.0);
-        // Horizontal padding sandwiches the strip between two spacers so
-        // it doesn't touch the separator or the LEN label.
-        ui.add_space(ANCHOR_STRIP_PAD);
+        let cell_w = {
+            let p = app.state.read().ui_prefs.effective_pad_px();
+            if p > 1.0 { p } else { ANCHOR_STEP_W_FALLBACK }
+        };
+        let strip_w = cell_w * seq_steps as f32 + (seq_steps as f32 - 1.0);
+
+        let mut enabled = cfg.enabled;
+        if widgets::toggle_button(ui, if enabled { "ON" } else { "OFF" }, &mut enabled) {
+            cfg.enabled = enabled;
+            changed = true;
+        }
+        ui.label(
+            egui::RichText::new("LEN")
+                .monospace()
+                .size(7.5)
+                .color(theme::SMOKE),
+        );
+        let mut len = cfg.length as i32;
+        if ui
+            .add(egui::DragValue::new(&mut len).range(0..=16).speed(0.1))
+            .changed()
+        {
+            cfg.length = len.clamp(0, 16) as u8;
+            changed = true;
+        }
+        let mut vr = cfg.velocity_ramp;
+        if widgets::toggle_button(ui, if vr { "VEL" } else { "vel" }, &mut vr) {
+            cfg.velocity_ramp = vr;
+            changed = true;
+        }
+        let mut rr = cfg.ratchet_ramp;
+        if widgets::toggle_button(ui, if rr { "RAT" } else { "rat" }, &mut rr) {
+            cfg.ratchet_ramp = rr;
+            changed = true;
+        }
+        let mut clear_clicked = false;
+        if ui
+            .small_button(
+                egui::RichText::new("CLEAR")
+                    .monospace()
+                    .size(7.0)
+                    .color(theme::ASH),
+            )
+            .on_hover_text(format!("Disable pre-echo for {}", selected))
+            .clicked()
+        {
+            clear_clicked = true;
+        }
+
+        // Right-justify the anchor strip so its right edge lines up with
+        // the sequencer's step grid above.  Sequencer rows end 8 px shy
+        // of the panel's right edge (see step_grid_width / row_spacer).
+        let strip_right = ui.max_rect().max.x - 8.0;
+        let cur_x = ui.cursor().min.x;
+        let pad_to_strip = (strip_right - strip_w - cur_x).max(ANCHOR_STRIP_PAD);
+        ui.add_space(pad_to_strip);
         let (rect, resp) =
             ui.allocate_exact_size(egui::vec2(strip_w, ANCHOR_STEP_H), egui::Sense::click());
         let painter = ui.painter_at(rect);
@@ -125,7 +177,7 @@ pub(super) fn draw_preecho_row(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         if resp.clicked()
             && let Some(p) = resp.interact_pointer_pos()
         {
-            let rel = (p.x - rect.min.x) / (ANCHOR_STEP_W + 1.0);
+            let rel = (p.x - rect.min.x) / (cell_w + 1.0);
             if rel >= 0.0 {
                 clicked_step = Some((rel as usize).min(seq_steps - 1));
             }
@@ -148,10 +200,10 @@ pub(super) fn draw_preecho_row(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             false
         };
         for i in 0..seq_steps {
-            let x0 = rect.min.x + i as f32 * (ANCHOR_STEP_W + 1.0);
+            let x0 = rect.min.x + i as f32 * (cell_w + 1.0);
             let r = egui::Rect::from_min_size(
                 egui::pos2(x0, rect.min.y),
-                egui::vec2(ANCHOR_STEP_W, ANCHOR_STEP_H),
+                egui::vec2(cell_w, ANCHOR_STEP_H),
             );
             let is_anchor = cfg.anchors.iter().any(|&a| a as usize == i);
             let fill = if is_anchor {
@@ -193,59 +245,8 @@ pub(super) fn draw_preecho_row(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             }
             changed = true;
         }
-        // Trailing horizontal pad — mirror of the leading ANCHOR_STRIP_PAD.
-        ui.add_space(ANCHOR_STRIP_PAD);
-
-        // Master ON/OFF — a quick bypass that preserves anchors + length
-        // so the user can audition with/without the modulation.
-        let mut enabled = cfg.enabled;
-        if widgets::toggle_button(ui, if enabled { "ON" } else { "OFF" }, &mut enabled) {
-            cfg.enabled = enabled;
-            changed = true;
-        }
-
-        // LEN drag value.
-        ui.label(
-            egui::RichText::new("LEN")
-                .monospace()
-                .size(7.5)
-                .color(theme::SMOKE),
-        );
-        let mut len = cfg.length as i32;
-        if ui
-            .add(egui::DragValue::new(&mut len).range(0..=16).speed(0.1))
-            .changed()
-        {
-            cfg.length = len.clamp(0, 16) as u8;
-            changed = true;
-        }
-
-        // VEL / RAT toggles.
-        let mut vr = cfg.velocity_ramp;
-        if widgets::toggle_button(ui, if vr { "VEL" } else { "vel" }, &mut vr) {
-            cfg.velocity_ramp = vr;
-            changed = true;
-        }
-        let mut rr = cfg.ratchet_ramp;
-        if widgets::toggle_button(ui, if rr { "RAT" } else { "rat" }, &mut rr) {
-            cfg.ratchet_ramp = rr;
-            changed = true;
-        }
-
-        // CLEAR — fully remove preecho for the currently-selected voice.
-        if ui
-            .small_button(
-                egui::RichText::new("CLEAR")
-                    .monospace()
-                    .size(7.0)
-                    .color(theme::ASH),
-            )
-            .on_hover_text(format!("Disable pre-echo for {}", selected))
-            .clicked()
-        {
+        if clear_clicked {
             app.state.write().sequencer.preecho.remove(&selected);
-            // Skip the persist-below path by zeroing cfg and signalling
-            // not changed; the remove already did the state write.
             cfg = PreechoConfig::default();
             changed = false;
         }
