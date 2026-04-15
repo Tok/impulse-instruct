@@ -86,6 +86,97 @@ mod llm_apply_rack_tests {
     }
 
     #[test]
+    fn rack_add_creates_module_and_wires_to_master() {
+        let s = AppState::default();
+        let initial = s.rack.modules.len();
+        let initial_cables = s.rack.cables.len();
+        let update = serde_json::json!({ "rack": { "add": ["bitcrush"] } });
+        let s = apply_llm_update(s, &update, &[]);
+        assert_eq!(s.rack.modules.len(), initial + 1);
+        // Newly added FX module should be auto-cabled to master.
+        let bc_id = s
+            .rack
+            .modules
+            .iter()
+            .filter(|m| m.kind == ModuleKind::FxBitcrush)
+            .max_by_key(|m| m.id)
+            .map(|m| m.id)
+            .expect("bitcrush module not found");
+        let master_id = s
+            .rack
+            .modules
+            .iter()
+            .find(|m| m.kind == ModuleKind::MasterOutput)
+            .map(|m| m.id)
+            .expect("master output missing");
+        assert!(
+            s.rack
+                .cables
+                .iter()
+                .any(|c| c.from.module_id == bc_id && c.to.module_id == master_id),
+            "expected new module wired to master"
+        );
+        assert!(s.rack.cables.len() > initial_cables);
+    }
+
+    #[test]
+    fn rack_remove_deletes_module_and_its_cables() {
+        // Start by adding a fresh bitcrush module (so removing it leaves the
+        // default rack stable for the kind-name lookup).
+        let s = AppState::default();
+        let s = apply_llm_update(
+            s,
+            &serde_json::json!({ "rack": { "add": ["bitcrush"] } }),
+            &[],
+        );
+        let count_after_add = s.rack.modules.len();
+        let cable_count_after_add = s.rack.cables.len();
+        // Capture the id of the first bitcrush — that's the one rack.remove
+        // will target ("first module matching kind").
+        let removed_id = s
+            .rack
+            .modules
+            .iter()
+            .find(|m| m.kind == ModuleKind::FxBitcrush)
+            .map(|m| m.id)
+            .unwrap();
+
+        let s = apply_llm_update(
+            s,
+            &serde_json::json!({ "rack": { "remove": ["bitcrush"] } }),
+            &[],
+        );
+        assert_eq!(s.rack.modules.len(), count_after_add - 1);
+        assert!(
+            !s.rack.modules.iter().any(|m| m.id == removed_id),
+            "removed module should be gone"
+        );
+        // Cables touching the removed module must be cleaned up.
+        assert!(
+            !s.rack
+                .cables
+                .iter()
+                .any(|c| c.from.module_id == removed_id || c.to.module_id == removed_id)
+        );
+        assert!(s.rack.cables.len() < cable_count_after_add);
+    }
+
+    #[test]
+    fn rack_add_remove_round_trip_restores_module_count() {
+        let s = AppState::default();
+        let initial = s.rack.modules.len();
+        let s = apply_llm_update(
+            s,
+            &serde_json::json!({ "rack": { "add": ["bitcrush"], "remove": ["bitcrush"] } }),
+            &[],
+        );
+        // add then remove in the same pass: net zero modules.  add runs
+        // before remove, so the just-added bitcrush is what gets removed
+        // (or some pre-existing one — either way count is stable).
+        assert_eq!(s.rack.modules.len(), initial);
+    }
+
+    #[test]
     fn rack_connect_does_not_duplicate() {
         let s = AppState::default();
         let initial = s.rack.cables.len();

@@ -86,17 +86,23 @@ mutations from LLM) is covered by unit tests for the pure pieces but
 not yet end-to-end.  Before adding another large feature batch,
 write integration-style tests against a mocked DSP and AppState:
 
-- [ ] **Per-voice LFO regression tests** — route sweep for each
-  target, fade-in honors lfo_delay, bpm_sync rate matches expected
-  Hz for known BPMs.
-- [ ] **Preecho integration tests** — build a SequencerState with
-  an active preecho config, step advance_clock by known N samples,
-  assert emitted DrumTrigger velocities match the ramp math.
-- [ ] **Amen slice playback tests** — with a known sample buffer,
-  trigger slice N and assert the read-range matches.
-- [ ] **LLM rack.add / rack.remove** — round-trip an agent JSON
-  through apply_llm_update and assert the rack ends up in the
-  expected state.
+- [x] **Per-voice LFO regression tests** — `lfo_rate_hz` and
+  `lfo_fade_step` extracted as pure helpers; tests cover free vs.
+  bpm-sync rate (incl. clamping), waveform endpoints, and a
+  fade-in ramp duration check at 44.1 kHz.
+- [x] **Preecho integration tests** — `preecho_scales_velocity_through_advance_clock`
+  drives a 16-step kick pattern through the real `advance_clock`,
+  asserts anchor + lead-in + outside-window velocities match the
+  ramp math.
+- [x] **Amen slice playback tests** — 7 tests against `AmenVoice`
+  (forward, reverse, slice indexing, custom positions,
+  auto-advance, stutter inside slice budget).  Surfaced and fixed
+  a real bug: reverse playback at `pos == send-1` tripped the
+  out-of-bounds neighbour-read kill-switch on the first sample.
+- [x] **LLM rack.add / rack.remove** — round-trip tests for
+  `rack.add` (auto-cables to master) and `rack.remove` (cleans up
+  cables touching the removed module), plus a same-pass add+remove
+  round-trip that restores the original module count.
 - [ ] **State size-limit watch** — `state/mod.rs` keeps bumping
   against the 1000-line cap.  Extract `bass` / `amen` / `preecho`
   accessors into dedicated modules so the core mod.rs stays lean.

@@ -230,13 +230,16 @@ impl AmenVoice {
             }
         }
 
-        let idx = self.pos as usize;
-        if idx + 1 >= samples.len() {
-            self.playing = false;
-            return 0.0;
-        }
-        let frac = self.pos - idx as f32;
-        let out = samples[idx] + (samples[idx + 1] - samples[idx]) * frac;
+        // Clamp the index so reverse playback can safely start at
+        // pos == send - 1 (which would otherwise sit on the last index
+        // and trip an out-of-bounds neighbour read for interpolation).
+        // The forward gate_end / reverse pos<1 checks above are the
+        // real termination conditions.
+        let len = samples.len();
+        let idx = (self.pos as usize).min(len.saturating_sub(1));
+        let frac = (self.pos - idx as f32).clamp(0.0, 1.0);
+        let next = samples.get(idx + 1).copied().unwrap_or(samples[idx]);
+        let out = samples[idx] + (next - samples[idx]) * frac;
         self.pos += rate;
         out * volume * self.slice_volume
     }
@@ -375,5 +378,212 @@ impl GranularVoice {
 
         let gain = volume * 0.3; // scale down — many overlapping grains can be loud
         (out_l * gain, out_r * gain)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Build a ramp sample [0, 1, 2, …, n-1] as f32 so the read position
+    /// is recoverable from each output value.
+    fn ramp_sample(n: usize) -> Arc<Vec<f32>> {
+        Arc::new((0..n).map(|i| i as f32).collect())
+    }
+
+    fn nan16() -> [f32; 16] {
+        [f32::NAN; 16]
+    }
+
+    fn render(voice: &mut AmenVoice, n: usize) -> Vec<f32> {
+        (0..n).map(|_| voice.process(0.0, 1.0, false)).collect()
+    }
+
+    #[test]
+    fn trigger_whole_plays_full_sample_forward() {
+        let mut v = AmenVoice::new();
+        v.load(ramp_sample(8));
+        v.trigger_whole();
+        let out = render(&mut v, 8);
+        // Reads 0..7 with linear interp; last sample stops because
+        // idx+1 hits sample length.  First five should be 0..4 exactly.
+        assert_eq!(&out[..5], &[0.0, 1.0, 2.0, 3.0, 4.0]);
+    }
+
+    #[test]
+    fn slice_index_selects_correct_region() {
+        // 16 samples / 4 slices = slice_len 4.  Slice 2 → positions 4..7.
+        let mut v = AmenVoice::new();
+        v.load(ramp_sample(16));
+        v.trigger(
+            2,
+            4,
+            0.0,
+            1.0,
+            false,
+            1.0,
+            0,
+            &nan16(),
+            &nan16(),
+            &nan16(),
+            false,
+            136.0,
+            136.0,
+        );
+        let out = render(&mut v, 4);
+        assert_eq!(out[0], 4.0);
+        assert!(out[3] < 8.0 && out[3] >= 7.0);
+    }
+
+    #[test]
+    fn reverse_plays_backward() {
+        let mut v = AmenVoice::new();
+        v.load(ramp_sample(8));
+        v.trigger(
+            1,
+            1,
+            0.0,
+            1.0,
+            true,
+            1.0,
+            0,
+            &nan16(),
+            &nan16(),
+            &nan16(),
+            false,
+            136.0,
+            136.0,
+        );
+        let out = render(&mut v, 4);
+        // pos starts at send-1 = 7, decrements by 1.0 each call.
+        assert!(out[0] > out[1] && out[1] > out[2]);
+        assert!((out[0] - 7.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn stutter_fits_inside_slice_budget() {
+        // Slice length 8; stutter=1 → sub_len=4; gate=1 → window=4.
+        // After 4 samples voice should retrigger (pos resets to slice start).
+        let mut v = AmenVoice::new();
+        v.load(ramp_sample(8));
+        v.trigger(
+            1,
+            1,
+            0.0,
+            1.0,
+            false,
+            1.0,
+            1,
+            &nan16(),
+            &nan16(),
+            &nan16(),
+            false,
+            136.0,
+            136.0,
+        );
+        let out = render(&mut v, 8);
+        // First sub-slice: 0,1,2,3.  Stutter retrigger resets to 0.
+        assert_eq!(out[0], 0.0);
+        assert!(out[3] >= 3.0);
+        // Sample 4 is the first read of the retriggered slice → back near 0.
+        assert!(
+            out[4] < 1.0,
+            "expected stutter retrigger near 0, got {}",
+            out[4]
+        );
+    }
+
+    #[test]
+    fn stutter_zero_plays_full_slice_then_stops() {
+        let mut v = AmenVoice::new();
+        v.load(ramp_sample(8));
+        v.trigger(
+            1,
+            1,
+            0.0,
+            1.0,
+            false,
+            1.0,
+            0,
+            &nan16(),
+            &nan16(),
+            &nan16(),
+            false,
+            136.0,
+            136.0,
+        );
+        // 8 samples to play through, then silence (no stutter, no loop).
+        let out = render(&mut v, 12);
+        assert!(out[0] < out[5]);
+        assert_eq!(out[10], 0.0);
+        assert_eq!(out[11], 0.0);
+    }
+
+    #[test]
+    fn custom_positions_override_equal_division() {
+        // 16 samples; positions [0.0, 0.5] for 2 slices → slice 1 = 0..8.
+        let mut v = AmenVoice::new();
+        v.load(ramp_sample(16));
+        let mut pos = nan16();
+        pos[0] = 0.0;
+        pos[1] = 0.5;
+        v.trigger(
+            1,
+            2,
+            0.0,
+            1.0,
+            false,
+            1.0,
+            0,
+            &pos,
+            &nan16(),
+            &nan16(),
+            false,
+            136.0,
+            136.0,
+        );
+        let out = render(&mut v, 8);
+        assert_eq!(out[0], 0.0);
+        assert!((out[7] - 7.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn auto_advance_increments_each_trigger() {
+        let mut v = AmenVoice::new();
+        v.load(ramp_sample(16));
+        // slice_count=4; slice 0 means auto.  First fire = slice 0 (region 0..4).
+        v.trigger(
+            0,
+            4,
+            0.0,
+            1.0,
+            false,
+            1.0,
+            0,
+            &nan16(),
+            &nan16(),
+            &nan16(),
+            false,
+            136.0,
+            136.0,
+        );
+        assert_eq!(v.process(0.0, 1.0, false), 0.0);
+        // Re-trigger advances: slice 1 (region 4..8).
+        v.trigger(
+            0,
+            4,
+            0.0,
+            1.0,
+            false,
+            1.0,
+            0,
+            &nan16(),
+            &nan16(),
+            &nan16(),
+            false,
+            136.0,
+            136.0,
+        );
+        assert_eq!(v.process(0.0, 1.0, false), 4.0);
     }
 }
