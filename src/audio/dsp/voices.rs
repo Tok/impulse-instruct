@@ -943,6 +943,7 @@ pub(super) fn drum_voice_idx(voice: &crate::state::DrumVoice) -> usize {
         Clap909 => 11,
         Rim909 => 12,
         Amen => 13,
+        GabberKick => 14,
     }
 }
 

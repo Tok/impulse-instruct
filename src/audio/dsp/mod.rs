@@ -3,6 +3,7 @@
 mod bass303;
 mod dsp_util;
 mod fx;
+mod gabber_kick;
 mod mod_apply;
 mod params;
 mod rev_tap;
@@ -12,6 +13,7 @@ use bass303::Bass303;
 pub use dsp_util::midi_to_hz;
 use dsp_util::*;
 use fx::*;
+use gabber_kick::GabberKick;
 use mod_apply::apply_mod_target;
 pub use params::AudioParams;
 use samplers::*;
@@ -40,6 +42,7 @@ pub struct DspState {
     hihat_open909: HiHat,
     clap909: Clap,
     rim909: Snare,
+    gabber_kick: GabberKick,
     // FX
     reverb: Reverb,
     delay: DelayLine,
@@ -66,7 +69,7 @@ pub struct DspState {
     free_eg_done: bool, // true after one-shot completes
     prev_running: bool,
     // Per-voice velocity (set on trigger, applied to voice output)
-    drum_velocity: [f32; 14],
+    drum_velocity: [f32; 15],
     // Current params
     params: AudioParams,
     sample_rate: f32,
@@ -130,6 +133,7 @@ impl DspState {
             hihat_open909: HiHat::new(0xdddd),
             clap909: Clap::new(0xeeee),
             rim909: Snare::new(0xffff),
+            gabber_kick: GabberKick::new(0xab12),
             reverb: Reverb::new(),
             delay: DelayLine::new(),
             chorus: Chorus::new(),
@@ -151,7 +155,7 @@ impl DspState {
             lfo_noise: NoiseGen::new(0xCAFE_BABE),
             free_eg_phase: 0.0,
             free_eg_done: false,
-            drum_velocity: [1.0; 14],
+            drum_velocity: [1.0; 15],
             prev_running: false,
             params: p,
             sample_rate,
@@ -388,6 +392,9 @@ impl DspState {
                     | DrumVoice::Clap909
                     | DrumVoice::Rim909 => self.params.rack_drums909,
                     DrumVoice::Amen => self.params.rack_amen,
+                    // Gabber rides on the 808 kit's rack presence in Stage 1;
+                    // promoted to its own ModuleKind in Stage 2.
+                    DrumVoice::GabberKick => self.params.rack_drums808,
                 };
                 if !in_rack {
                     return;
@@ -422,6 +429,7 @@ impl DspState {
                         self.params.amen_source_bpm,
                         self.params.sequencer_bpm,
                     ),
+                    DrumVoice::GabberKick => self.gabber_kick.trigger(),
                 }
             }
             BassTrigger {
@@ -677,6 +685,7 @@ impl DspState {
                     .process(p.hihat_open909_decay, 0.8, p.hihat909_volume, sr);
             let clap = self.clap909.process(p.clap909_decay, p.clap909_volume, sr);
             let rim = self.rim909.process(0.7, 0.3, 0.15, 0.75, sr);
+            let gk = self.gabber_kick.process(&p, sr);
             let noise_out = self.noise_voice.process(sr, &p);
             let hoover_out = if p.hoover_enabled {
                 self.hoover.process(sr, &p)
@@ -720,7 +729,8 @@ impl DspState {
                 + hh808o * dv[3]
                 + th808 * dv[4]
                 + tm808 * dv[5]
-                + tl808 * dv[6];
+                + tl808 * dv[6]
+                + gk * dv[14];
             let bus_909 = k909 * dv[7]
                 + s909 * dv[8]
                 + hh909c * dv[9]
@@ -951,6 +961,7 @@ impl DspState {
                 + s909 * dv[8] * p.pan_snare909 * 0.5
                 + (hh909c * dv[9] + hh909o * dv[10]) * p.pan_hihat909 * 0.5
                 + clap * dv[11] * p.pan_clap909 * 0.5
+                + gk * dv[14] * p.gabber_pan * 0.5
                 + hoover_out * p.pan_hoover * 0.5
                 + an1x_out * p.pan_an1x * 0.5
                 + noise_out * p.pan_noise * 0.5;

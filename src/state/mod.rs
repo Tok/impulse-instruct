@@ -127,8 +127,10 @@ pub use rack_scope::{parse_module_kind, rack_kind_name_matches, scope_from_contr
 pub use amen::{AmenMeta, AmenState};
 use bass::default_bass_voices;
 pub use bass::{BassLfoTarget, BassState, BassVoiceState};
+pub use gabber::GabberKickParams;
 mod amen;
 mod bass;
+mod gabber;
 
 // ─── Top-level ───────────────────────────────────────────────────────────────
 fn default_pattern_bank() -> Vec<SequencerState> {
@@ -179,6 +181,8 @@ pub struct AppState {
     pub an1x: An1xState,
     #[serde(default)]
     pub amen: AmenState,
+    #[serde(default)]
+    pub gabber_kick: GabberKickParams,
     #[serde(default)]
     pub ui_prefs: UiPrefs,
     /// 8 named pattern slots (A–H) for storage and chain playback.
@@ -250,6 +254,7 @@ impl Default for AppState {
             hoover: Default::default(),
             an1x: Default::default(),
             amen: Default::default(),
+            gabber_kick: Default::default(),
             ui_prefs: Default::default(),
             pattern_bank: default_pattern_bank(),
             pattern_edit: 0,

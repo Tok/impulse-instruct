@@ -45,7 +45,7 @@ pub enum TriggerEvent {
 // ─── Clock state (audio-thread local, not in shared AppState) ─────────────────
 
 /// Number of drum voices — must match DrumVoice::ALL.len()
-const NUM_DRUM_VOICES: usize = 14;
+const NUM_DRUM_VOICES: usize = 15;
 
 #[derive(Clone, Debug)]
 pub struct ClockState {
@@ -228,6 +228,7 @@ pub fn advance_clock(
                     | DrumVoice::Clap909
                     | DrumVoice::Rim909 => "kit_b",
                     DrumVoice::Amen => "amen",
+                    DrumVoice::GabberKick => "gabber_kick",
                 };
                 let voice_steps = seq
                     .drum_steps
