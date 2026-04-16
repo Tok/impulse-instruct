@@ -1946,7 +1946,7 @@
       "distortion",
       "Rotterdam"
     ],
-    "rack_modules": ["909", "808", "drive", "waveshaper"]
+    "rack_modules": ["gabber", "drive", "waveshaper"]
   },
   {
     "id": "early_rave",

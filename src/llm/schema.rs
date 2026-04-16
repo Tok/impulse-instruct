@@ -263,6 +263,21 @@ pub fn param_json_schema() -> serde_json::Value {
                     "clap":  { "type": "object", "properties": { "pan": { "type": "number", "minimum": -1.0, "maximum": 1.0 } }, "additionalProperties": false }
                 },
                 "additionalProperties": false
+            },
+            "gabber_kick": {
+                "type": "object",
+                "description": "Dedicated hardcore kick voice — distinct from kit_a/kit_b. Higher base freq (50-110 Hz), 1×-13× pitch sweep, hard clip into tanh saturator, dedicated transient click layer. Enable by adding a 'gabber' module to the rack.",
+                "properties": {
+                    "pitch":            { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "base freq 50-110 Hz" },
+                    "decay":            { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "amp decay 0.1-1.5 s" },
+                    "pitch_env_depth":  { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "pitch sweep 1×-13× (steeper than 808); 0.85+ for gabber" },
+                    "pitch_env_time":   { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "pitch sweep time 5-60 ms; short = snappy" },
+                    "clip":             { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "hard-clip → tanh saturator drive: 0=clean, 0.55=Rotterdam, 1=meltdown" },
+                    "transient":        { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "transient click layer amount (filtered noise burst, 8 ms env)" },
+                    "volume":           { "type": "number", "minimum": 0.0, "maximum": 1.5, "description": "voice output level" },
+                    "pan":              { "type": "number", "minimum": -1.0, "maximum": 1.0, "description": "stereo pan: -1=left, 0=center, +1=right" }
+                },
+                "additionalProperties": false
             }
         },
         "euclidean": {

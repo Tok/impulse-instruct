@@ -119,8 +119,14 @@ write integration-style tests against a mocked DSP and AppState:
 
 ### DSP
 
-- [ ] **Gabber kick voice** — dedicated voice (not just preset on
-  808 kick); extreme pitch envelope, hard clipper, layered transient.
+- [x] **Gabber kick voice** — dedicated `ModuleKind::GabberKick` with
+  its own DSP voice (50–110 Hz base, 1×–13× pitch sweep, hard clip
+  into tanh saturator), transient click layer (HPF noise burst with
+  its own 8 ms envelope), 4 LfoTarget variants (Pitch / Decay / Clip
+  / Pan), and a dedicated UI panel with PITCH / DECAY / P.DEPTH /
+  P.TIME / CLIP / TRANS / VOLUME / PAN.  Wired through the full
+  stack: DrumVoice → AudioParams → apply_llm_update → rack picker →
+  gabber style.
 - [x] **Pan FX module** — `ModuleKind::FxPan` + `FxStep::Pan`.
   Pass-through on the mono signal; writes a per-sample auto-pan
   side contribution (`fx_pan_side`) into the master stereo mix

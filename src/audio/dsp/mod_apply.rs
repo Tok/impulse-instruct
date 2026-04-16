@@ -88,6 +88,11 @@ pub fn apply_mod_target(p: &mut AudioParams, target: u8, mod_val: f32) {
         // Stereo width — 0=mono, 0.5=normal, 1=wide.  Full-depth LFO sweeps
         // the whole range; callers pick centre with the voice's own width knob.
         67 => p.stereo_width = (p.stereo_width + mod_val * 0.5).clamp(0.0, 1.0),
+        // Gabber kick (dedicated hardcore voice).
+        68 => p.gabber_pitch = (p.gabber_pitch + mod_val * 0.5).clamp(0.0, 1.0),
+        69 => p.gabber_decay = (p.gabber_decay + mod_val * 0.5).clamp(0.0, 1.0),
+        70 => p.gabber_clip = (p.gabber_clip + mod_val).clamp(0.0, 1.0),
+        71 => p.gabber_pan = (p.gabber_pan + mod_val).clamp(-1.0, 1.0),
         _ => {}
     }
 }

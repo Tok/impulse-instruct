@@ -136,6 +136,10 @@ pub fn lfo_target_short_label(target: LfoTarget) -> &'static str {
         TapeFlutter => "TP.FL",
         AutotuneAmount => "AT.AM",
         AutotuneMix => "AT.MX",
+        GabberKickPitch => "GK.PIT",
+        GabberKickDecay => "GK.DEC",
+        GabberKickClip => "GK.CLP",
+        GabberKickPan => "GK.PAN",
         MasterVolume => "M.VOL",
         StereoWidth => "M.WID",
     }
@@ -171,6 +175,9 @@ pub(crate) fn lfo_target_module_kind(target: LfoTarget) -> Option<ModuleKind> {
         CompThresh | CompRatio | CompMix => Some(ModuleKind::FxCompressor),
         TapeDrive | TapeMix | TapeFlutter => Some(ModuleKind::FxTapeSat),
         AutotuneAmount | AutotuneMix => Some(ModuleKind::FxAutotune),
+        GabberKickPitch | GabberKickDecay | GabberKickClip | GabberKickPan => {
+            Some(ModuleKind::GabberKick)
+        }
         MasterVolume | StereoWidth => Some(ModuleKind::MasterOutput),
     }
 }
@@ -248,6 +255,10 @@ pub fn parse_lfo_target(name: &str) -> Option<LfoTarget> {
         "tapeflutter" => TapeFlutter,
         "autotuneamount" => AutotuneAmount,
         "autotunemix" => AutotuneMix,
+        "gabberkickpitch" => GabberKickPitch,
+        "gabberkickdecay" => GabberKickDecay,
+        "gabberkickclip" => GabberKickClip,
+        "gabberkickpan" => GabberKickPan,
         "mastervolume" => MasterVolume,
         "stereowidth" => StereoWidth,
         _ => return Option::None,

@@ -83,6 +83,10 @@ const ALL_TARGETS: &[LfoTarget] = &[
     LfoTarget::TapeFlutter,
     LfoTarget::AutotuneAmount,
     LfoTarget::AutotuneMix,
+    LfoTarget::GabberKickPitch,
+    LfoTarget::GabberKickDecay,
+    LfoTarget::GabberKickClip,
+    LfoTarget::GabberKickPan,
     LfoTarget::MasterVolume,
     LfoTarget::StereoWidth,
 ];

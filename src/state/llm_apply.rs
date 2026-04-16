@@ -417,6 +417,48 @@ pub fn apply_llm_update(state: AppState, update: &serde_json::Value, scope: &[St
         }
     }
 
+    if in_scope("gabber_kick")
+        && let Some(g) = update.get("gabber_kick").and_then(|v| v.as_object())
+    {
+        let gk = &mut s.gabber_kick;
+        gk.pitch = unlocked_f32(gk.pitch, g, "pitch", "gabber_kick.pitch", locked);
+        gk.decay = unlocked_f32(gk.decay, g, "decay", "gabber_kick.decay", locked);
+        gk.pitch_env_depth = unlocked_f32(
+            gk.pitch_env_depth,
+            g,
+            "pitch_env_depth",
+            "gabber_kick.pitch_env_depth",
+            locked,
+        );
+        gk.pitch_env_time = unlocked_f32(
+            gk.pitch_env_time,
+            g,
+            "pitch_env_time",
+            "gabber_kick.pitch_env_time",
+            locked,
+        );
+        gk.clip = unlocked_f32(gk.clip, g, "clip", "gabber_kick.clip", locked);
+        gk.transient = unlocked_f32(
+            gk.transient,
+            g,
+            "transient",
+            "gabber_kick.transient",
+            locked,
+        );
+        // Volume allows up to 1.5; unlocked_f32 clamps to 0..1 — inline version here.
+        if !locked.contains("gabber_kick.volume")
+            && let Some(v) = g.get("volume").and_then(|v| v.as_f64())
+        {
+            gk.volume = (v as f32).clamp(0.0, 1.5);
+        }
+        // Pan is bipolar -1..+1 — unlocked_f32 is unipolar, so inline again.
+        if !locked.contains("gabber_kick.pan")
+            && let Some(v) = g.get("pan").and_then(|v| v.as_f64())
+        {
+            gk.pan = (v as f32).clamp(-1.0, 1.0);
+        }
+    }
+
     if in_scope("fx")
         && let Some(fx) = update.get("fx").and_then(|v| v.as_object())
     {

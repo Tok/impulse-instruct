@@ -453,6 +453,28 @@ fn modules_go_to_correct_zones() {
 // ── GabberKick ModuleKind wiring ───────────────────────────────────────────
 
 #[test]
+fn gabber_kick_lfo_targets_parse_and_label() {
+    use crate::state::LfoTarget;
+    use crate::state::modulation::{
+        lfo_target_module_kind, lfo_target_short_label, parse_lfo_target,
+    };
+
+    for (name, variant, label) in [
+        ("GabberKickPitch", LfoTarget::GabberKickPitch, "GK.PIT"),
+        ("gabberkickdecay", LfoTarget::GabberKickDecay, "GK.DEC"),
+        ("GabberKickClip", LfoTarget::GabberKickClip, "GK.CLP"),
+        ("gabberkickpan", LfoTarget::GabberKickPan, "GK.PAN"),
+    ] {
+        assert_eq!(parse_lfo_target(name), Some(variant));
+        assert_eq!(lfo_target_short_label(variant), label);
+        assert_eq!(
+            lfo_target_module_kind(variant),
+            Some(ModuleKind::GabberKick)
+        );
+    }
+}
+
+#[test]
 fn gabber_kick_module_kind_parses_and_scopes() {
     use crate::state::rack_scope::{parse_module_kind, rack_kind_name_matches};
 

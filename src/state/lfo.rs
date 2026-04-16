@@ -133,6 +133,11 @@ pub enum LfoTarget {
     // FX: Autotune
     AutotuneAmount,
     AutotuneMix,
+    // Gabber kick (dedicated hardcore voice)
+    GabberKickPitch,
+    GabberKickDecay,
+    GabberKickClip,
+    GabberKickPan,
     // Master
     MasterVolume,
     StereoWidth,
