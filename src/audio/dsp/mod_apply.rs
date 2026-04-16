@@ -85,6 +85,9 @@ pub fn apply_mod_target(p: &mut AudioParams, target: u8, mod_val: f32) {
         64 => p.granular_density = (p.granular_density + mod_val).clamp(0.0, 1.0),
         65 => p.granular_grain_size = (p.granular_grain_size + mod_val).clamp(0.0, 1.0),
         66 => p.granular_position = (p.granular_position + mod_val).clamp(0.0, 1.0),
+        // Stereo width — 0=mono, 0.5=normal, 1=wide.  Full-depth LFO sweeps
+        // the whole range; callers pick centre with the voice's own width knob.
+        67 => p.stereo_width = (p.stereo_width + mod_val * 0.5).clamp(0.0, 1.0),
         _ => {}
     }
 }

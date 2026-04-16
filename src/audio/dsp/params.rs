@@ -160,6 +160,7 @@ pub fn lfo_target_to_u8(t: LfoTarget) -> u8 {
         GranularDensity => 64,
         GranularGrain => 65,
         GranularPos => 66,
+        StereoWidth => 67,
     }
 }
 

@@ -84,6 +84,7 @@ const ALL_TARGETS: &[LfoTarget] = &[
     LfoTarget::AutotuneAmount,
     LfoTarget::AutotuneMix,
     LfoTarget::MasterVolume,
+    LfoTarget::StereoWidth,
 ];
 
 /// Vertical gap between successive back-panel ports — large enough that the

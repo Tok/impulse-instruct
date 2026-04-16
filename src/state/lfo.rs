@@ -135,6 +135,7 @@ pub enum LfoTarget {
     AutotuneMix,
     // Master
     MasterVolume,
+    StereoWidth,
 }
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]

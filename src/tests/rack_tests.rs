@@ -449,3 +449,27 @@ fn modules_go_to_correct_zones() {
     assert_eq!(ModuleKind::LlmConsole.default_zone(), Zone::Ai);
     assert_eq!(ModuleKind::LlmAgent.default_zone(), Zone::Ai);
 }
+
+// ── LfoTarget StereoWidth wiring ───────────────────────────────────────────
+
+#[test]
+fn stereo_width_target_parse_and_label() {
+    use crate::state::LfoTarget;
+    use crate::state::modulation::{
+        lfo_target_module_kind, lfo_target_short_label, parse_lfo_target,
+    };
+
+    assert_eq!(
+        parse_lfo_target("StereoWidth"),
+        Some(LfoTarget::StereoWidth)
+    );
+    assert_eq!(
+        parse_lfo_target("stereowidth"),
+        Some(LfoTarget::StereoWidth)
+    );
+    assert_eq!(lfo_target_short_label(LfoTarget::StereoWidth), "M.WID");
+    assert_eq!(
+        lfo_target_module_kind(LfoTarget::StereoWidth),
+        Some(ModuleKind::MasterOutput),
+    );
+}

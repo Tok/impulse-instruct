@@ -136,6 +136,7 @@ pub fn lfo_target_short_label(target: LfoTarget) -> &'static str {
         AutotuneAmount => "AT.AM",
         AutotuneMix => "AT.MX",
         MasterVolume => "M.VOL",
+        StereoWidth => "M.WID",
     }
 }
 
@@ -169,7 +170,7 @@ pub(crate) fn lfo_target_module_kind(target: LfoTarget) -> Option<ModuleKind> {
         CompThresh | CompRatio | CompMix => Some(ModuleKind::FxCompressor),
         TapeDrive | TapeMix | TapeFlutter => Some(ModuleKind::FxTapeSat),
         AutotuneAmount | AutotuneMix => Some(ModuleKind::FxAutotune),
-        MasterVolume => Some(ModuleKind::MasterOutput),
+        MasterVolume | StereoWidth => Some(ModuleKind::MasterOutput),
     }
 }
 
@@ -247,6 +248,7 @@ pub fn parse_lfo_target(name: &str) -> Option<LfoTarget> {
         "autotuneamount" => AutotuneAmount,
         "autotunemix" => AutotuneMix,
         "mastervolume" => MasterVolume,
+        "stereowidth" => StereoWidth,
         _ => return Option::None,
     })
 }
