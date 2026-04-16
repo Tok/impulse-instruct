@@ -126,8 +126,9 @@ write integration-style tests against a mocked DSP and AppState:
   side contribution (`fx_pan_side`) into the master stereo mix
   via LFO (pos + width * sin(2π·rate·t)).  POS / WIDTH / RATE
   knobs, LLM plumbing (`fx.fx_pan_*`), rack parse + name matcher.
-- [ ] **LFO target: StereoWidth** — modulate stereo width over
-  time (auto-pan).
+- [x] **LFO target: StereoWidth** — `LfoTarget::StereoWidth`
+  (opcode 67) lands the recipe in all 6 places; `apply_mod_target`
+  scales by 0.5 so a full-depth LFO sweeps the whole 0..1 range.
 - [ ] **Dub techno send/return** — dedicated send/return FX
   workflow for dub-style infinite delay feedback chains.
 - [ ] **Pitch-preserving BPM stretch on amen** — current stretch
