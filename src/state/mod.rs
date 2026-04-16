@@ -107,6 +107,7 @@ pub use ui_prefs::{AutosaveInterval, HuthStyle, UiPrefs};
 
 pub(crate) mod fx_plan;
 pub mod modulation;
+pub mod module_kind;
 pub mod rack;
 mod rack_presets;
 pub mod rack_scope;
@@ -114,9 +115,9 @@ pub use fx_plan::compile_fx_plan;
 pub use modulation::{
     ModInput, lfo_target_short_label, mod_input_label, mod_inputs, parse_lfo_target,
 };
+pub use module_kind::{GRID_COLS, ModuleKind, Zone};
 pub use rack::{
-    Cable, CableColor, FxPlan, FxStep, GRID_COLS, ModuleKind, PortDir, PortKind, PortRef,
-    RackModule, RackState, Zone,
+    Cable, CableColor, FxPlan, FxStep, PortDir, PortKind, PortRef, RackModule, RackState,
 };
 pub use rack_presets::RACK_PRESETS;
 pub use rack_scope::{parse_module_kind, rack_kind_name_matches, scope_from_control_cables};
