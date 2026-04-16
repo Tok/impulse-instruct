@@ -27,6 +27,12 @@ pub use granular::GranularState;
 pub mod an1x;
 pub use an1x::{An1xLfoTarget, An1xState, An1xWave};
 
+pub mod sequencer_state;
+pub use sequencer_state::{SequencerState, Step, TB303Step};
+
+pub mod fx;
+pub use fx::FxState;
+
 pub const MAX_STEPS: usize = 64;
 pub const MAX_BASS_VOICES: usize = 4;
 
@@ -279,14 +285,6 @@ impl Default for AppState {
         s
     }
 }
-
-// Step / TB303Step / SequencerState → state/sequencer_state.rs
-pub mod sequencer_state;
-pub use sequencer_state::{SequencerState, Step, TB303Step};
-
-// FxState → state/fx.rs
-pub mod fx;
-pub use fx::FxState;
 
 // ─── LLM ─────────────────────────────────────────────────────────────────────
 

@@ -11,7 +11,7 @@ use super::{MAX_BASS_VOICES, MAX_STEPS};
 
 // ─── Bass pattern defaults (used by SequencerState::default + serde) ─────────
 
-pub(super) fn default_bass_patterns() -> Vec<Vec<TB303Step>> {
+fn default_bass_patterns() -> Vec<Vec<TB303Step>> {
     // Voice 0 gets the same starter pattern as `bass_pattern`; voices 1-3 are silent.
     let mut patterns = Vec::with_capacity(MAX_BASS_VOICES);
 
@@ -31,11 +31,11 @@ pub(super) fn default_bass_patterns() -> Vec<Vec<TB303Step>> {
     patterns
 }
 
-pub(super) fn default_bass_voice_steps() -> Vec<usize> {
+fn default_bass_voice_steps() -> Vec<usize> {
     vec![16usize; MAX_BASS_VOICES]
 }
 
-pub(super) fn default_bass_voice_enabled() -> [bool; MAX_BASS_VOICES] {
+fn default_bass_voice_enabled() -> [bool; MAX_BASS_VOICES] {
     let mut arr = [false; MAX_BASS_VOICES];
     arr[0] = true;
     arr
