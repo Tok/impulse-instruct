@@ -392,9 +392,7 @@ impl DspState {
                     | DrumVoice::Clap909
                     | DrumVoice::Rim909 => self.params.rack_drums909,
                     DrumVoice::Amen => self.params.rack_amen,
-                    // Gabber rides on the 808 kit's rack presence in Stage 1;
-                    // promoted to its own ModuleKind in Stage 2.
-                    DrumVoice::GabberKick => self.params.rack_drums808,
+                    DrumVoice::GabberKick => self.params.rack_gabber_kick,
                 };
                 if !in_rack {
                     return;

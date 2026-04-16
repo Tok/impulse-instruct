@@ -35,6 +35,7 @@ pub fn mod_inputs(kind: ModuleKind) -> &'static [ModInput] {
         DrumKit808 | DrumKit909 | AmenSampler | GranularTexture | NeuTts => {
             &[Selector, Selector, Selector]
         }
+        GabberKick => &[Selector, Selector, Selector],
         // ── Sequencer — BPM, swing, and a spare selector ──────────────────
         StepSequencer => &[Selector, Selector, Selector],
         // ── FX ≤3 knobs → dedicated jack per knob ──────────────────────────

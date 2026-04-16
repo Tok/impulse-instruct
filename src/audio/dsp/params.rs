@@ -563,6 +563,7 @@ pub struct AudioParams {
     pub rack_amen: bool,
     pub rack_hoover: bool,
     pub rack_an1x: bool,
+    pub rack_gabber_kick: bool,
 }
 
 impl AudioParams {
@@ -885,6 +886,11 @@ impl AudioParams {
                 .modules
                 .iter()
                 .any(|m| m.kind == ModuleKind::An1xVoice && m.enabled),
+            rack_gabber_kick: s
+                .rack
+                .modules
+                .iter()
+                .any(|m| m.kind == ModuleKind::GabberKick && m.enabled),
         }
     }
 }

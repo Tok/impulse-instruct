@@ -450,6 +450,34 @@ fn modules_go_to_correct_zones() {
     assert_eq!(ModuleKind::LlmAgent.default_zone(), Zone::Ai);
 }
 
+// ── GabberKick ModuleKind wiring ───────────────────────────────────────────
+
+#[test]
+fn gabber_kick_module_kind_parses_and_scopes() {
+    use crate::state::rack_scope::{parse_module_kind, rack_kind_name_matches};
+
+    // Name parser accepts canonical + common aliases.
+    assert_eq!(parse_module_kind("gabber"), Some(ModuleKind::GabberKick));
+    assert_eq!(
+        parse_module_kind("gabber_kick"),
+        Some(ModuleKind::GabberKick),
+    );
+    assert_eq!(parse_module_kind("Rotterdam"), Some(ModuleKind::GabberKick));
+
+    // Reverse matcher accepts the same aliases.
+    assert!(rack_kind_name_matches(ModuleKind::GabberKick, "gabber"));
+    assert!(rack_kind_name_matches(
+        ModuleKind::GabberKick,
+        "gabber_kick",
+    ));
+    assert!(!rack_kind_name_matches(ModuleKind::GabberKick, "808"));
+
+    // Voice-zone, single-instance, unique grid label.
+    assert_eq!(ModuleKind::GabberKick.default_zone(), Zone::Voice);
+    assert!(!ModuleKind::GabberKick.allows_multiple());
+    assert_eq!(ModuleKind::GabberKick.label(), "GABBER KICK");
+}
+
 // ── LfoTarget StereoWidth wiring ───────────────────────────────────────────
 
 #[test]

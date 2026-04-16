@@ -27,6 +27,7 @@ const VOICE_KINDS: &[ModuleKind] = &[
     ModuleKind::AcidBass,
     ModuleKind::DrumKit808,
     ModuleKind::DrumKit909,
+    ModuleKind::GabberKick,
     ModuleKind::HooverLead,
     ModuleKind::An1xVoice,
     ModuleKind::AmenSampler,

@@ -20,6 +20,8 @@ pub enum ModuleKind {
     AmenSampler,
     NoiseVoice,
     GranularTexture,
+    /// Dedicated hardcore-style kick voice — distinct from the 808/909 kicks.
+    GabberKick,
     // ── TTS voice module (NeuTTS Air) ───────────────────────────────────────
     #[serde(alias = "EspeakNgTts", alias = "CoquiTts")]
     NeuTts,
@@ -65,6 +67,7 @@ impl ModuleKind {
             Self::AmenSampler => "AMEN",
             Self::NoiseVoice => "NOISE",
             Self::GranularTexture => "GRANULAR",
+            Self::GabberKick => "GABBER KICK",
             Self::NeuTts => "TTS VOICE",
             Self::StepSequencer => "SEQUENCER",
             Self::FxReverb => "REVERB",
@@ -107,6 +110,7 @@ impl ModuleKind {
             Self::AmenSampler => (3, 3),
             Self::NoiseVoice => (2, 1),
             Self::GranularTexture => (3, 2),
+            Self::GabberKick => (3, 2),
             Self::LlmAgent => (3, 2),
             Self::NeuTts => (2, 3),
             Self::SpectrumAnalyzer => (4, 2),
@@ -143,7 +147,8 @@ impl ModuleKind {
             | Self::AmenSampler
             | Self::NoiseVoice
             | Self::GranularTexture
-            | Self::NeuTts => Zone::Voice,
+            | Self::NeuTts
+            | Self::GabberKick => Zone::Voice,
             Self::FxReverb
             | Self::FxDelay
             | Self::FxChorus

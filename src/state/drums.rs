@@ -333,7 +333,7 @@ impl DrumVoice {
             | DrumVoice::Clap909
             | DrumVoice::Rim909 => crate::state::ModuleKind::DrumKit909,
             DrumVoice::Amen => crate::state::ModuleKind::AmenSampler,
-            DrumVoice::GabberKick => crate::state::ModuleKind::DrumKit808,
+            DrumVoice::GabberKick => crate::state::ModuleKind::GabberKick,
         }
     }
 
