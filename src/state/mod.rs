@@ -576,6 +576,7 @@ impl LlmAgentState {
 pub mod jam_tools;
 pub mod llm_apply;
 pub(crate) mod llm_helpers;
+pub(crate) mod llm_rack;
 pub mod transitions;
 
 pub use transitions::*;
