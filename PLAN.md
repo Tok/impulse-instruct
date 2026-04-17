@@ -111,6 +111,19 @@ Highlights of the cycle:
   ceiling 1.5), stereo_width 0.5× scaling, gabber kick
   targets, and isolation tests asserting no opcode silently
   scribbles outside its declared field.
+- [x] **Untested agent-state transitions** — added 20 tests
+  in `tests/helpers_tests.rs` for `apply_agent_mode_and_tts`
+  (mode parsing producer/dj/mc + case-insensitivity + unknown
+  string keeps existing, TTS=true adds a NeuTts module + wires
+  a control cable + sets scroll target, TTS=false leaves the
+  rack alone), `observe_user_edit` (high/low recording,
+  mid-range filter, dedup-on-repeated-param, cap at
+  STYLE_OBS_MAX, propagation to every agent),
+  `push_agent_memory` (append, unknown-id no-op, cap at
+  AGENT_MEMORY_MAX with oldest-dropped semantics), and
+  `format_llm_display` (raw text fallthrough when no update,
+  Off mode lists keys even with comment, non-Off uses
+  comment, fallback to keys when comment missing).
 - [ ] **At-cap files (still)** — `src/ui/mod.rs` (1000),
   `ui/llm_strip.rs` (998), `ui/rack_canvas.rs` (997),
   `ui/panels/bass.rs` (995), `ui/panels/sequencer.rs` (992) are

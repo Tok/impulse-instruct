@@ -124,3 +124,285 @@ mod connect_control_tests {
         assert_eq!(rack.cables[1].to.module_id, drum_id);
     }
 }
+
+#[cfg(test)]
+mod apply_agent_mode_and_tts_tests {
+    use crate::state::{
+        AgentRole, AppState, ConversationMode, ModuleKind, PortKind, apply_agent_mode_and_tts,
+        spawn_agent,
+    };
+
+    fn fresh_with_agent() -> (AppState, u32) {
+        let s = AppState::default();
+        spawn_agent(s, "Bot", &[], AgentRole::Producer, None)
+    }
+
+    #[test]
+    fn mode_off_sets_conversation_mode() {
+        let (s, id) = fresh_with_agent();
+        let s = apply_agent_mode_and_tts(s, id, Some("off"), false);
+        let agent = s.llm_agents.iter().find(|a| a.id == id).unwrap();
+        assert_eq!(agent.conversation_mode, ConversationMode::Off);
+    }
+
+    #[test]
+    fn mode_producer_dj_mc_all_recognised() {
+        for (label, expected) in &[
+            ("producer", ConversationMode::Producer),
+            ("dj", ConversationMode::Dj),
+            ("mc", ConversationMode::Mc),
+        ] {
+            let (s, id) = fresh_with_agent();
+            let s = apply_agent_mode_and_tts(s, id, Some(label), false);
+            let agent = s.llm_agents.iter().find(|a| a.id == id).unwrap();
+            assert_eq!(agent.conversation_mode, *expected, "mode {label}");
+        }
+    }
+
+    #[test]
+    fn mode_string_is_case_insensitive() {
+        let (s, id) = fresh_with_agent();
+        let s = apply_agent_mode_and_tts(s, id, Some("MC"), false);
+        let agent = s.llm_agents.iter().find(|a| a.id == id).unwrap();
+        assert_eq!(agent.conversation_mode, ConversationMode::Mc);
+    }
+
+    #[test]
+    fn unknown_mode_string_leaves_conversation_mode_unchanged() {
+        let (mut s, id) = fresh_with_agent();
+        s.llm_agents
+            .iter_mut()
+            .find(|a| a.id == id)
+            .unwrap()
+            .conversation_mode = ConversationMode::Producer;
+        let s = apply_agent_mode_and_tts(s, id, Some("synthwave"), false);
+        let agent = s.llm_agents.iter().find(|a| a.id == id).unwrap();
+        assert_eq!(agent.conversation_mode, ConversationMode::Producer);
+    }
+
+    #[test]
+    fn tts_true_adds_neutts_module_and_wires_a_control_cable() {
+        let (s, id) = fresh_with_agent();
+        let neutts_before = s
+            .rack
+            .modules
+            .iter()
+            .filter(|m| m.kind == ModuleKind::NeuTts)
+            .count();
+        let tts_modules_before = s.tts_modules.len();
+        let s = apply_agent_mode_and_tts(s, id, None, true);
+        let neutts_after = s
+            .rack
+            .modules
+            .iter()
+            .filter(|m| m.kind == ModuleKind::NeuTts)
+            .count();
+        assert_eq!(neutts_after, neutts_before + 1);
+        assert_eq!(s.tts_modules.len(), tts_modules_before + 1);
+        // The agent should now have a control cable to the new NeuTts module.
+        let neutts_id = s
+            .rack
+            .modules
+            .iter()
+            .filter(|m| m.kind == ModuleKind::NeuTts)
+            .last()
+            .unwrap()
+            .id;
+        assert!(
+            s.rack.cables.iter().any(|c| c.from.module_id == id
+                && c.to.module_id == neutts_id
+                && c.from.kind == PortKind::Control),
+            "expected control cable from agent to NeuTts"
+        );
+    }
+
+    #[test]
+    fn tts_true_sets_scroll_target() {
+        let (s, id) = fresh_with_agent();
+        let s = apply_agent_mode_and_tts(s, id, None, true);
+        assert_eq!(s.scroll_target, Some("tts".to_string()));
+    }
+
+    #[test]
+    fn tts_false_does_not_add_neutts_module() {
+        let (s, id) = fresh_with_agent();
+        let neutts_before = s
+            .rack
+            .modules
+            .iter()
+            .filter(|m| m.kind == ModuleKind::NeuTts)
+            .count();
+        let s = apply_agent_mode_and_tts(s, id, Some("dj"), false);
+        let neutts_after = s
+            .rack
+            .modules
+            .iter()
+            .filter(|m| m.kind == ModuleKind::NeuTts)
+            .count();
+        assert_eq!(neutts_after, neutts_before);
+    }
+}
+
+#[cfg(test)]
+mod observe_user_edit_tests {
+    use crate::state::{AgentRole, AppState, STYLE_OBS_MAX, observe_user_edit, spawn_agent};
+
+    fn one_agent() -> AppState {
+        let s = AppState::default();
+        let (s, _) = spawn_agent(s, "Bot", &[], AgentRole::Producer, None);
+        s
+    }
+
+    #[test]
+    fn high_value_records_a_high_observation() {
+        let s = observe_user_edit(one_agent(), "fx.reverb_mix", 0.85);
+        let obs = &s.llm_agents.last().unwrap().style_observations;
+        assert!(
+            obs.iter()
+                .any(|o| o.contains("high") && o.contains("reverb_mix"))
+        );
+    }
+
+    #[test]
+    fn low_value_records_a_low_observation() {
+        let s = observe_user_edit(one_agent(), "bass.cutoff", 0.1);
+        let obs = &s.llm_agents.last().unwrap().style_observations;
+        assert!(
+            obs.iter()
+                .any(|o| o.contains("low") && o.contains("bass.cutoff"))
+        );
+    }
+
+    #[test]
+    fn mid_value_is_ignored() {
+        let s = one_agent();
+        let before = s.llm_agents.last().unwrap().style_observations.len();
+        let s = observe_user_edit(s, "bass.cutoff", 0.5);
+        let after = s.llm_agents.last().unwrap().style_observations.len();
+        assert_eq!(before, after);
+    }
+
+    #[test]
+    fn repeated_edit_to_same_param_replaces_prior_observation() {
+        let s = observe_user_edit(one_agent(), "bass.cutoff", 0.85);
+        let s = observe_user_edit(s, "bass.cutoff", 0.15);
+        let obs = &s.llm_agents.last().unwrap().style_observations;
+        // Only one observation about bass.cutoff (the new low one).
+        let n = obs.iter().filter(|o| o.contains("bass.cutoff")).count();
+        assert_eq!(n, 1, "old observation should be replaced, got {obs:?}");
+        assert!(
+            obs.iter()
+                .any(|o| o.contains("low") && o.contains("bass.cutoff"))
+        );
+    }
+
+    #[test]
+    fn observations_cap_at_style_obs_max() {
+        let mut s = one_agent();
+        for i in 0..(STYLE_OBS_MAX + 5) {
+            // Use a unique param each time so the dedup branch doesn't hide
+            // the cap behaviour.
+            let path = format!("fx.knob_{i}");
+            s = observe_user_edit(s, &path, 0.9);
+        }
+        let obs = &s.llm_agents.last().unwrap().style_observations;
+        assert_eq!(obs.len(), STYLE_OBS_MAX);
+    }
+
+    #[test]
+    fn observation_propagates_to_every_agent() {
+        let mut s = AppState::default();
+        for i in 0..3 {
+            let (next, _) = spawn_agent(s, &format!("Bot{i}"), &[], AgentRole::Producer, None);
+            s = next;
+        }
+        let s = observe_user_edit(s, "fx.reverb_mix", 0.95);
+        for a in &s.llm_agents {
+            // Every agent (including the seeded default) should have the obs.
+            assert!(
+                a.style_observations
+                    .iter()
+                    .any(|o| o.contains("reverb_mix")),
+                "missing on agent {}",
+                a.persona_name
+            );
+        }
+    }
+}
+
+#[cfg(test)]
+mod push_agent_memory_tests {
+    use crate::state::{AGENT_MEMORY_MAX, AgentRole, AppState, push_agent_memory, spawn_agent};
+
+    #[test]
+    fn pushing_appends_a_snippet() {
+        let (s, id) = spawn_agent(AppState::default(), "Bot", &[], AgentRole::Producer, None);
+        let s = push_agent_memory(s, id, "made the bass acidic".to_string());
+        let agent = s.llm_agents.iter().find(|a| a.id == id).unwrap();
+        assert_eq!(
+            agent.memory.last().map(|s| s.as_str()),
+            Some("made the bass acidic")
+        );
+    }
+
+    #[test]
+    fn pushing_to_an_unknown_id_is_a_no_op() {
+        let s = AppState::default();
+        let before = s.llm_agents.iter().map(|a| a.memory.len()).sum::<usize>();
+        let s = push_agent_memory(s, 99999, "ignored".to_string());
+        let after = s.llm_agents.iter().map(|a| a.memory.len()).sum::<usize>();
+        assert_eq!(before, after);
+    }
+
+    #[test]
+    fn memory_caps_at_agent_memory_max() {
+        let (mut s, id) = spawn_agent(AppState::default(), "Bot", &[], AgentRole::Producer, None);
+        for i in 0..(AGENT_MEMORY_MAX + 5) {
+            s = push_agent_memory(s, id, format!("snippet {i}"));
+        }
+        let agent = s.llm_agents.iter().find(|a| a.id == id).unwrap();
+        assert_eq!(agent.memory.len(), AGENT_MEMORY_MAX);
+        // Oldest entries dropped — last entry should be the final snippet.
+        assert_eq!(
+            agent.memory.last().map(|s| s.as_str()),
+            Some(format!("snippet {}", AGENT_MEMORY_MAX + 4).as_str())
+        );
+    }
+}
+
+#[cfg(test)]
+mod format_llm_display_tests {
+    use crate::state::{ConversationMode, format_llm_display};
+    use serde_json::json;
+
+    #[test]
+    fn no_param_update_returns_raw_text_unchanged() {
+        let out = format_llm_display(None, "hello world", &ConversationMode::Producer);
+        assert_eq!(out, "hello world");
+    }
+
+    #[test]
+    fn off_mode_lists_changed_keys_even_if_comment_present() {
+        let upd = json!({ "_comment": "ignored", "bass": {} });
+        let out = format_llm_display(Some(&upd), "raw", &ConversationMode::Off);
+        assert!(out.starts_with("updated "));
+        assert!(out.contains("bass"));
+        assert!(!out.contains("_comment"));
+    }
+
+    #[test]
+    fn non_off_mode_with_comment_returns_the_comment() {
+        let upd = json!({ "_comment": "rolled into a half-time pattern", "bass": {} });
+        let out = format_llm_display(Some(&upd), "raw", &ConversationMode::Producer);
+        assert_eq!(out, "rolled into a half-time pattern");
+    }
+
+    #[test]
+    fn non_off_mode_without_comment_falls_back_to_keys() {
+        let upd = json!({ "bass": {}, "fx": {} });
+        let out = format_llm_display(Some(&upd), "raw", &ConversationMode::Producer);
+        assert!(out.starts_with("updated "));
+        assert!(out.contains("bass"));
+        assert!(out.contains("fx"));
+    }
+}
