@@ -357,11 +357,7 @@ pub fn read_wav_meta(path: &str) -> Option<crate::state::AmenMeta> {
         pos += chunk_len + (chunk_len & 1);
     }
     let frame_bytes = (channels as usize) * (bits as usize / 8).max(1);
-    let n_frames = if frame_bytes > 0 {
-        data_len / frame_bytes
-    } else {
-        0
-    };
+    let n_frames = data_len.checked_div(frame_bytes).unwrap_or(0);
     // Samples after internal resample to 44.1k (approx).
     let samples_44k = if src_rate == 44100 {
         n_frames
