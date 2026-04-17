@@ -202,18 +202,18 @@ impl Chorus {
 // ─── 3-band parametric EQ (biquad shelves + peak) ─────────────────────────────
 
 /// One biquad filter in direct form II transposed.
-struct Biquad {
-    b0: f32,
-    b1: f32,
-    b2: f32,
-    a1: f32,
-    a2: f32,
-    s1: f32,
-    s2: f32,
+pub(crate) struct Biquad {
+    pub(crate) b0: f32,
+    pub(crate) b1: f32,
+    pub(crate) b2: f32,
+    pub(crate) a1: f32,
+    pub(crate) a2: f32,
+    pub(crate) s1: f32,
+    pub(crate) s2: f32,
 }
 
 impl Biquad {
-    fn process(&mut self, x: f32) -> f32 {
+    pub(crate) fn process(&mut self, x: f32) -> f32 {
         let y = self.b0 * x + self.s1;
         self.s1 = self.b1 * x - self.a1 * y + self.s2;
         self.s2 = self.b2 * x - self.a2 * y;
@@ -221,7 +221,7 @@ impl Biquad {
     }
 
     /// Low shelf at `fc` Hz with `gain_db` boost/cut.
-    fn low_shelf(fc: f32, gain_db: f32, sr: f32) -> Self {
+    pub(crate) fn low_shelf(fc: f32, gain_db: f32, sr: f32) -> Self {
         let a = 10.0f32.powf(gain_db / 40.0);
         let w0 = std::f32::consts::TAU * fc / sr;
         let cos_w0 = w0.cos();
@@ -244,7 +244,7 @@ impl Biquad {
     }
 
     /// High shelf at `fc` Hz with `gain_db` boost/cut.
-    fn high_shelf(fc: f32, gain_db: f32, sr: f32) -> Self {
+    pub(crate) fn high_shelf(fc: f32, gain_db: f32, sr: f32) -> Self {
         let a = 10.0f32.powf(gain_db / 40.0);
         let w0 = std::f32::consts::TAU * fc / sr;
         let cos_w0 = w0.cos();
@@ -267,7 +267,7 @@ impl Biquad {
     }
 
     /// Peaking EQ at `fc` Hz, bandwidth Q, with `gain_db` boost/cut.
-    fn peak(fc: f32, q: f32, gain_db: f32, sr: f32) -> Self {
+    pub(crate) fn peak(fc: f32, q: f32, gain_db: f32, sr: f32) -> Self {
         let a = 10.0f32.powf(gain_db / 40.0);
         let w0 = std::f32::consts::TAU * fc / sr;
         let alpha = w0.sin() / (2.0 * q);
@@ -291,7 +291,7 @@ impl Biquad {
 
 /// 3-band EQ: low shelf 200 Hz · mid peak 1 kHz · high shelf 5 kHz.
 /// Coefficients are recomputed only when gain values change (per-block comparison).
-pub(super) struct EqBands {
+pub(crate) struct EqBands {
     low: Biquad,
     mid: Biquad,
     hi: Biquad,
@@ -302,7 +302,7 @@ pub(super) struct EqBands {
 }
 
 impl EqBands {
-    pub(super) fn new(sr: f32) -> Self {
+    pub(crate) fn new(sr: f32) -> Self {
         Self {
             low: Biquad::low_shelf(200.0, 0.0, sr),
             mid: Biquad::peak(1000.0, 1.0, 0.0, sr),
@@ -315,7 +315,7 @@ impl EqBands {
     }
 
     /// `low/mid/hi_gain`: -1..+1 → -12..+12 dB.
-    pub(super) fn process(
+    pub(crate) fn process(
         &mut self,
         input: f32,
         low_gain: f32,
@@ -344,7 +344,7 @@ impl EqBands {
 
 // ─── Compressor / limiter ─────────────────────────────────────────────────────
 
-pub(super) struct Compressor {
+pub(crate) struct Compressor {
     env: f32, // peak envelope follower state
     // Multiband: per-band envelope followers + crossover filter state
     band_env: [f32; 3],
@@ -363,7 +363,13 @@ impl Compressor {
     }
 
     /// Single-band compressor (static — no &self to avoid borrow conflicts).
-    fn compress_band(input: f32, env: &mut f32, threshold: f32, ratio: f32, sr: f32) -> f32 {
+    pub(crate) fn compress_band(
+        input: f32,
+        env: &mut f32,
+        threshold: f32,
+        ratio: f32,
+        sr: f32,
+    ) -> f32 {
         let thresh_db = -40.0 * (1.0 - threshold);
         let ratio_val = 1.0 + ratio * 19.0;
         let level = input.abs();

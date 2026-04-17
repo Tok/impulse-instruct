@@ -2,7 +2,7 @@
 
 mod bass303;
 mod dsp_util;
-mod fx;
+pub mod fx;
 pub mod fx_math;
 mod gabber_kick;
 mod mod_apply;
