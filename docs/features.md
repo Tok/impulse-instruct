@@ -4,6 +4,62 @@ A detailed log of what's built.
 
 ---
 
+## v0.7.6 release polish
+
+### Cable visual hierarchy
+
+Three patch-cable styles, layered back → front so the most semantically
+important paths read on top:
+
+- **Audio cable** — fattest 3D tube (4.5 px body / 2.5 px core, gray
+  155/185), used for `PortKind::Audio` connections.
+- **Signal cable** — `draw_signal_cable` in `src/ui/rack_cables.rs`,
+  sized between audio and AI control (3.5 px body / 1.8 px core, gray
+  125/155, lighter shadow + softer specular).  Used for
+  `PortKind::Cv` and `PortKind::Mod` cables and the synthesised LFO
+  cables — modulation reads as a thinner secondary path next to the
+  audio routing.
+- **Control cable** — thinnest dark cable (2.0 / 1.0 gray 90/120) for
+  LLM agent → module control links.  Drawn last so it sits visually
+  on top.
+
+### Sequencer PAN row reset
+
+A small `○` button next to the PAN row label zeros every step's pan
+in one click.  Right-click on a single cell still resets just that
+step.  Layout math ensures the step grid stays aligned with the bass
+row above.
+
+### Pre-echo header refinements
+
+- **Voice tabs sized like BANK / CHAIN slots** — `add_sized([38, 14])`
+  with monospace size 8.0 so the sequencer's two header strips
+  visually align.  Width 38 fits the longest voice label ("hoover").
+- **Two-line layout** — line 1 = PRE-ECHO label + voice tabs +
+  right-justified anchor strip; line 2 = ON / LEN / VEL / RAT /
+  CLEAR.  The split lets the strip take the full panel width without
+  competing with trailing controls.
+- **Left-aligned with the sliders above** — both rows emit the same
+  `10 + 10 + (SEQ_LABEL_W − 20)` prefix as the bass / drum rows so
+  the controls start where the sliders do.  PRE-ECHO label is painted
+  directly into the label slot.
+- **Anchor strip stride mirrors the sequencer step grid exactly** —
+  per-cell stride is `cell_w + item_spacing.x` plus 4 px at every bar
+  boundary and 2 px at every non-bar 4-step boundary.  Cumulative
+  `step_x` array drives both drawing and click hit-testing so anchors
+  land on the same cell visually and on click.
+
+### Mod-overlay top clip
+
+`draw_mod_selector_dropdowns` takes a `canvas_rect` parameter and
+skips any back-panel jack whose anchor scrolls above
+`canvas_rect.min.y`.  Mirrors the existing bottom-edge skip (piano /
+footer reserved height) so the Foreground `egui::Area` no longer
+paints over the header info panel or the prompt strip when the rack
+scrolls.
+
+---
+
 ## v0.7.5-snapshot — continued (post-snapshot session)
 
 ### Per-knob modulation system

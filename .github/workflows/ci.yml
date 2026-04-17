@@ -241,6 +241,13 @@ jobs:
     permissions:
       contents: write
     steps:
+      # `gh release delete --cleanup-tag` deletes the underlying git tag
+      # by pushing a deletion from the local clone, so it needs a real
+      # working directory.  Without this checkout the step fails with
+      # `fatal: not a git repository`.
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
       - name: Delete all GitHub releases except ${{ github.ref_name }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

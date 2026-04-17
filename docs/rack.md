@@ -111,10 +111,24 @@ A **PortRef** identifies a specific port on a specific module:
 pub struct PortRef {
     pub module_id: u32,
     pub dir: PortDir,   // In or Out
-    pub kind: PortKind, // Audio (stereo) or Cv (0–1 mono)
+    pub kind: PortKind, // Audio | Cv | Control | Mod
     pub index: u8,      // Port index within (dir, kind) group
 }
 ```
+
+**PortKind** — four kinds, each with its own visual treatment in the
+rack overlay:
+
+| Kind | Purpose | Cable style |
+|------|---------|-------------|
+| `Audio` | Stereo audio signal | Audio cable — fattest tube (4.5 / 2.5 px, gray 155/185) |
+| `Cv` | Mono CV (0–1) — LFO targets, gates, pitch CV | Signal cable — mid (3.5 / 1.8 px, gray 125/155) |
+| `Mod` | Per-knob modulation input (LFO → target knob) | Signal cable — same as Cv |
+| `Control` | LLM agent → controllable module | Control cable — thinnest (2.0 / 1.0 px, gray 90/120) |
+
+Cables are layered back → front: audio (behind) → signal → control
+(on top), so the most semantically important paths read clearly even
+when many cables overlap.
 
 A **Cable** connects one output port to one input port:
 
