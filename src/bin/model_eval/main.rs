@@ -206,7 +206,7 @@ fn print_ascii_table(results: &[ModelResult], specs: &[&StyleSpec]) {
                 Some(sr) => {
                     let passes = sr.check_results.iter().filter(|(_, r)| r.is_pass()).count();
                     let total = sr.check_results.len();
-                    let bar_filled = if total > 0 { (passes * 5) / total } else { 0 };
+                    let bar_filled = (passes * 5).checked_div(total).unwrap_or(0);
                     let bar: String = "█".repeat(bar_filled) + &"░".repeat(5 - bar_filled);
                     format!("{bar} {passes}/{total}")
                 }
