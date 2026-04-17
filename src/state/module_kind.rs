@@ -169,6 +169,39 @@ impl ModuleKind {
         }
     }
 
+    /// True if this module produces an audio bus signal (voice or FX).  Used by
+    /// the back-panel "reaches MASTER" indicator — modules without an audio
+    /// output (sequencer, LFO, agents, meters) are not part of the audio
+    /// graph and their LED is hidden entirely.
+    pub fn has_audio_output(self) -> bool {
+        matches!(
+            self,
+            Self::AcidBass
+                | Self::HooverLead
+                | Self::DrumKit808
+                | Self::DrumKit909
+                | Self::AmenSampler
+                | Self::GranularTexture
+                | Self::GabberKick
+                | Self::NoiseVoice
+                | Self::An1xVoice
+                | Self::NeuTts
+                | Self::FxReverb
+                | Self::FxDelay
+                | Self::FxChorus
+                | Self::FxPhaser
+                | Self::FxRingMod
+                | Self::FxWaveshaper
+                | Self::FxBitcrush
+                | Self::FxEq
+                | Self::FxCompressor
+                | Self::FxTapeSat
+                | Self::FxDrive
+                | Self::FxAutotune
+                | Self::FxPan
+        )
+    }
+
     /// Whether this module type may have more than one instance in the rack.
     pub fn allows_multiple(self) -> bool {
         matches!(

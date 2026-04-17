@@ -83,6 +83,7 @@ pub(super) fn draw_ai_zone(
                 id,
                 kind,
                 enabled,
+                app.state.read().rack.reaches_master(id),
                 Some(slot_w),
                 Some(slot_h),
                 app.kind_scale(kind),

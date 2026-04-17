@@ -486,6 +486,7 @@ pub fn module_card_back(
     module_id: u32,
     kind: ModuleKind,
     enabled: bool,
+    reaches_master: bool,
     min_width: Option<f32>,
     min_height: Option<f32>,
     _scale: f32,
@@ -574,22 +575,46 @@ pub fn module_card_back(
                 egui::FontId::monospace(label_font),
                 Color32::from_gray(if enabled { 200 } else { 80 }),
             );
-            // LED toggle — proper round LED with halo when lit, dim when off.
-            let led_center = Pos2::new(title_rect.left() + 5.0, title_rect.center().y);
-            let led_r = 2.6_f32;
-            let led_hit = Rect::from_center_size(led_center, Vec2::splat(8.0));
-            if ui
-                .interact(led_hit, ui.id().with("led").with(module_id), Sense::click())
-                .clicked()
-            {
-                toggle_clicked = true;
-            }
-            if enabled {
-                theme::led(&painter, led_center, led_r, Color32::from_gray(220), 1.0);
-            } else {
-                // Off state — dark socket with a faint glint so the click target stays visible.
-                painter.circle_filled(led_center, led_r, Color32::from_gray(28));
-                painter.circle_stroke(led_center, led_r, Stroke::new(0.7, Color32::from_gray(8)));
+            // Back-panel "reaches MASTER" LED — only meaningful for modules
+            // that emit audio (voices and FX).  Sequencer / LFO / agents /
+            // meters always pass, so we skip the LED entirely there to keep
+            // the title bar clean.
+            if kind.has_audio_output() {
+                let led_center = Pos2::new(title_rect.left() + 9.0, title_rect.center().y);
+                let led_r = 2.6_f32;
+                let led_hit = Rect::from_center_size(led_center, Vec2::splat(10.0));
+                let led_resp =
+                    ui.interact(led_hit, ui.id().with("led").with(module_id), Sense::click());
+                if led_resp.clicked() {
+                    toggle_clicked = true;
+                }
+                let lit = enabled && reaches_master;
+                if lit {
+                    theme::led(&painter, led_center, led_r, Color32::from_gray(220), 1.0);
+                } else {
+                    // Off / unreachable state — dark socket with a faint glint
+                    // so the click target stays visible.
+                    painter.circle_filled(led_center, led_r, Color32::from_gray(28));
+                    painter.circle_stroke(
+                        led_center,
+                        led_r,
+                        Stroke::new(0.7, Color32::from_gray(8)),
+                    );
+                }
+                let state_line = if !enabled {
+                    "Disabled — click to enable."
+                } else if !reaches_master {
+                    "No audio path to MASTER — patch a cable."
+                } else {
+                    "Enabled and reaching MASTER."
+                };
+                led_resp.on_hover_text(format!(
+                    "Audio path indicator\n\
+                     Lit when this module is enabled and its audio reaches MASTER.\n\
+                     Click to toggle the module on / off.\n\
+                     \n\
+                     {state_line}"
+                ));
             }
             // Drag zone
             let drag_rect = Rect::from_min_max(

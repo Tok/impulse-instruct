@@ -188,6 +188,88 @@ impl RackState {
         self.modules.iter().find(|m| m.id == id)
     }
 
+    /// Whether `module_id` has any audible path through audio cables to a
+    /// `MasterOutput` module.  Walks `Audio` cables forward (out→in), only
+    /// stepping through enabled modules.  Modules without an audio output
+    /// (LFO, LlmAgent, etc.) always return `true` — they contribute via
+    /// other channels and shouldn't be flagged "disconnected from master".
+    pub fn reaches_master(&self, module_id: u32) -> bool {
+        let master_id = match self
+            .modules
+            .iter()
+            .find(|m| m.kind == ModuleKind::MasterOutput)
+        {
+            Some(m) => m.id,
+            None => return false,
+        };
+        if module_id == master_id {
+            return true;
+        }
+        // Modules without an Audio Out are not part of the audio graph.
+        let start = match self.module(module_id) {
+            Some(m) => m,
+            None => return false,
+        };
+        let has_audio_out = self.cables.iter().any(|c| {
+            c.from.module_id == module_id
+                && c.from.dir == PortDir::Out
+                && c.from.kind == PortKind::Audio
+        }) || matches!(
+            start.kind,
+            ModuleKind::AcidBass
+                | ModuleKind::HooverLead
+                | ModuleKind::DrumKit808
+                | ModuleKind::DrumKit909
+                | ModuleKind::AmenSampler
+                | ModuleKind::GranularTexture
+                | ModuleKind::GabberKick
+                | ModuleKind::NoiseVoice
+                | ModuleKind::An1xVoice
+                | ModuleKind::NeuTts
+                | ModuleKind::FxReverb
+                | ModuleKind::FxDelay
+                | ModuleKind::FxChorus
+                | ModuleKind::FxPhaser
+                | ModuleKind::FxRingMod
+                | ModuleKind::FxWaveshaper
+                | ModuleKind::FxBitcrush
+                | ModuleKind::FxEq
+                | ModuleKind::FxCompressor
+                | ModuleKind::FxTapeSat
+                | ModuleKind::FxDrive
+                | ModuleKind::FxAutotune
+                | ModuleKind::FxPan
+        );
+        if !has_audio_out {
+            return true;
+        }
+        let mut visited: std::collections::HashSet<u32> = std::collections::HashSet::new();
+        let mut stack = vec![module_id];
+        while let Some(id) = stack.pop() {
+            if !visited.insert(id) {
+                continue;
+            }
+            if id == master_id {
+                return true;
+            }
+            for cable in self.cables.iter().filter(|c| {
+                c.from.module_id == id
+                    && c.from.dir == PortDir::Out
+                    && c.from.kind == PortKind::Audio
+                    && c.to.kind == PortKind::Audio
+            }) {
+                if let Some(dst) = self.module(cable.to.module_id) {
+                    // MasterOutput is reachable even if marked disabled —
+                    // walking through other disabled modules drops the path.
+                    if dst.kind == ModuleKind::MasterOutput || dst.enabled {
+                        stack.push(dst.id);
+                    }
+                }
+            }
+        }
+        false
+    }
+
     /// Modules in a given zone, sorted by slot.
     pub fn zone_modules(&self, zone: Zone) -> Vec<&RackModule> {
         let mut v: Vec<&RackModule> = self.modules.iter().filter(|m| m.zone == zone).collect();
