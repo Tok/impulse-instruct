@@ -3,6 +3,8 @@
 
 use egui::{Color32, Pos2, Stroke, Vec2};
 
+use crate::ui::theme;
+
 // ─── Drag state structs ───────────────────────────────────────────────────────
 
 /// UI-local state for a cable currently being dragged.
@@ -212,7 +214,7 @@ pub fn draw_control_cable(
     // Body — dark gray
     painter.add(egui::Shape::line(
         points.clone(),
-        Stroke::new(2.0, Color32::from_gray(90)),
+        Stroke::new(2.0, theme::ASH),
     ));
     // Core — slightly lighter
     painter.add(egui::Shape::line(

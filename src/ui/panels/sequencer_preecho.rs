@@ -241,7 +241,7 @@ pub(super) fn draw_preecho_row(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                 painter.rect_stroke(
                     r,
                     egui::Rounding::same(1.5),
-                    egui::Stroke::new(0.6, egui::Color32::from_gray(90)),
+                    egui::Stroke::new(0.6, theme::ASH),
                 );
             }
         }

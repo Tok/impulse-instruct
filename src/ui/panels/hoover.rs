@@ -182,7 +182,7 @@ pub fn draw_hoover(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                     .size(7.5)
                     .color(theme::SMOKE),
             )
-            .fill(egui::Color32::from_gray(28)),
+            .fill(theme::PIT),
         )
         .on_hover_text("Apply classic Hoover lead settings and enable voice")
         .clicked()

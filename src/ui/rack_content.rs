@@ -4,7 +4,7 @@
 
 use crate::state::ModuleKind;
 use crate::ui::fx_dir::draw_fx_dir_button;
-use crate::ui::{ImpulseApp, module_card};
+use crate::ui::{ImpulseApp, module_card, theme};
 
 pub(super) fn draw_voice_content(
     app: &mut ImpulseApp,
@@ -350,7 +350,7 @@ pub(super) fn draw_master_content(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             egui::RichText::new("MASTER VOL")
                 .monospace()
                 .size(9.0)
-                .color(egui::Color32::from_gray(90)),
+                .color(theme::ASH),
         );
         if widgets::param_control(ui, "", &mut master_vol, crate::state::ParamMode::Free, ctrl).0 {
             app.state.write().fx.master_volume = master_vol;
@@ -376,7 +376,7 @@ pub(super) fn draw_master_content(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             let col = if present {
                 egui::Color32::from_gray(160)
             } else {
-                egui::Color32::from_gray(28)
+                theme::PIT
             };
             ui.label(egui::RichText::new(*label).monospace().size(8.0).color(col));
         }

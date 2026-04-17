@@ -360,7 +360,7 @@ impl ImpulseApp {
                             let p = (time * 4.0 * std::f32::consts::TAU).sin() * 0.3 + 0.7;
                             egui::Color32::from_gray((220.0 * p) as u8)
                         } else {
-                            egui::Color32::from_gray(60)
+                            theme::IRON
                         };
                         ui.label(egui::RichText::new("●").color(dot_col).size(7.5));
                     }

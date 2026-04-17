@@ -69,7 +69,7 @@ pub fn draw_spectrum(app: &mut ImpulseApp, ui: &mut egui::Ui) {
     if ui.is_rect_visible(rect) {
         let painter = ui.painter_at(rect);
         // Dark background
-        painter.rect_filled(rect, egui::Rounding::same(2.0), egui::Color32::from_gray(8));
+        painter.rect_filled(rect, egui::Rounding::same(2.0), theme::VOID);
 
         let bar_w = rect.width() / NUM_BANDS as f32;
         let db_range = DB_CEIL - DB_FLOOR;
@@ -118,7 +118,7 @@ pub fn draw_spectrum(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                 egui::Align2::CENTER_CENTER,
                 label,
                 egui::FontId::monospace(7.0),
-                egui::Color32::from_gray(60),
+                theme::IRON,
             );
         }
     }

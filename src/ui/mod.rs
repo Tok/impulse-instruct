@@ -667,7 +667,7 @@ impl eframe::App for ImpulseApp {
         CentralPanel::default()
             .frame(
                 Frame::none()
-                    .fill(egui::Color32::from_gray(8))
+                    .fill(theme::VOID)
                     .inner_margin(egui::Margin::same(4.0)),
             )
             .show(ctx, |ui| {

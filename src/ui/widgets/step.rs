@@ -38,15 +38,11 @@ pub fn step_button(
         if active {
             // Debossed / pressed look:
             // Dark inset shadow frame, slightly brighter outer ring, deep inner well.
-            painter.rect_filled(inner, r, Color32::from_gray(18));
+            painter.rect_filled(inner, r, theme::DEEP);
             // Bright bottom-right rim (light bounces off raised surround)
-            painter.rect_stroke(
-                inner.shrink(0.5),
-                r,
-                Stroke::new(1.0, Color32::from_gray(60)),
-            );
+            painter.rect_stroke(inner.shrink(0.5), r, Stroke::new(1.0, theme::IRON));
             // Dark top-left rim (pressed inward — shadow side)
-            painter.rect_stroke(inner, r, Stroke::new(1.0, Color32::from_gray(8)));
+            painter.rect_stroke(inner, r, Stroke::new(1.0, theme::VOID));
             // Inset well
             let inset = inner.shrink(2.5);
             painter.rect_filled(inset, r, Color32::from_gray(22));

@@ -137,7 +137,7 @@ impl ImpulseApp {
                         let fill = if selected {
                             egui::Color32::from_gray(35)
                         } else {
-                            egui::Color32::from_gray(18)
+                            theme::DEEP
                         };
                         let stroke = if selected {
                             egui::Stroke::new(1.0, theme::ASH)

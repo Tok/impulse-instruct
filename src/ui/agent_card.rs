@@ -238,7 +238,7 @@ fn draw_llm_agent_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, module_id: u32)
             let fill = if active {
                 egui::Color32::from_gray(40)
             } else {
-                egui::Color32::from_gray(18)
+                theme::DEEP
             };
             if ui
                 .add(
@@ -267,7 +267,7 @@ fn draw_llm_agent_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, module_id: u32)
         let think_fill = if enable_thinking {
             egui::Color32::from_gray(40)
         } else {
-            egui::Color32::from_gray(18)
+            theme::DEEP
         };
         if ui
             .add(

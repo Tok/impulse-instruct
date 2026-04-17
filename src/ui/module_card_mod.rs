@@ -13,6 +13,7 @@ use crate::state::{
 };
 use crate::ui::ImpulseApp;
 use crate::ui::module_card::{PortPos, draw_port_circle};
+use crate::ui::theme;
 
 /// Ordered list of all LfoTarget variants — used to populate Selector-slot
 /// dropdowns.  Kept in display order (voices → FX → master).
@@ -110,11 +111,7 @@ fn chip_button(ui: &mut egui::Ui, label: &str, selected: bool) -> egui::Response
     ui.add(
         egui::Button::new(text)
             .small()
-            .fill(if selected {
-                Color32::from_gray(60)
-            } else {
-                Color32::from_gray(28)
-            })
+            .fill(if selected { theme::IRON } else { theme::PIT })
             .stroke(egui::Stroke::NONE)
             .rounding(2.0),
     )
@@ -317,7 +314,7 @@ pub fn draw_mod_selector_dropdowns(
             .fixed_pos(anchor)
             .show(ctx, |ui| {
                 let frame = egui::Frame::none()
-                    .fill(Color32::from_gray(18))
+                    .fill(theme::DEEP)
                     .stroke(egui::Stroke::new(0.5, Color32::from_gray(50)))
                     .rounding(2.0)
                     .inner_margin(egui::Margin::symmetric(3.0, 1.0));

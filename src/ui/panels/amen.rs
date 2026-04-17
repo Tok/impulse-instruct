@@ -136,7 +136,7 @@ fn draw_slice_order_strip(
             let bg = if is_active {
                 egui::Color32::from_gray(80)
             } else {
-                egui::Color32::from_gray(28)
+                theme::PIT
             };
             let fg = if is_active { theme::CHALK } else { theme::FOG };
             if ui

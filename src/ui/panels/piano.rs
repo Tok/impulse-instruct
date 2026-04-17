@@ -311,9 +311,9 @@ pub fn draw_piano(app: &mut ImpulseApp, ui: &mut egui::Ui, ctx: &egui::Context) 
 
             // Neumorphic edges
             let (bhi, bsh) = if active {
-                (Color32::from_gray(100), Color32::from_gray(8))
+                (Color32::from_gray(100), theme::VOID)
             } else {
-                (Color32::from_gray(52), Color32::from_gray(8))
+                (Color32::from_gray(52), theme::VOID)
             };
             painter.line_segment(
                 [key_rect.left_top(), key_rect.right_top()],

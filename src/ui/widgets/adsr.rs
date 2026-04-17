@@ -3,6 +3,8 @@
 
 use egui::{Color32, Pos2, Sense, Stroke, Ui, Vec2};
 
+use crate::ui::theme;
+
 /// Interactive ADSR envelope display. Draws the classic attack-decay-sustain-release
 /// shape as a polyline. Drag in each zone to edit the corresponding parameter:
 ///   - Left zone       → A (attack time)
@@ -131,7 +133,7 @@ pub fn adsr_display(
         }
 
         // Always-on parameter labels
-        let label_col = Color32::from_gray(90);
+        let label_col = theme::ASH;
         let font = egui::FontId::monospace(7.0);
         // A label (attack time as ms: 0–1 → 0–500ms)
         let a_ms = *attack * 500.0;
@@ -264,7 +266,7 @@ pub fn decay_display(ui: &mut Ui, decay: &mut f32, env_mod: f32, width: f32, hei
         painter.circle_filled(pts[1], 2.5, Color32::from_gray(180));
 
         // Labels: peak Hz value + decay time
-        let label_col = Color32::from_gray(90);
+        let label_col = theme::ASH;
         let font = egui::FontId::monospace(7.0);
         // Decay time: 0–1 → 50–2000 ms
         let d_ms = 50.0 + *decay * 1950.0;
@@ -417,7 +419,7 @@ pub fn filter_response(
     );
 
     // Labels
-    let label_col = Color32::from_gray(90);
+    let label_col = theme::ASH;
     let font = egui::FontId::monospace(7.0);
 
     // Cutoff frequency

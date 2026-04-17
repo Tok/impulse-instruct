@@ -170,15 +170,12 @@ pub fn draw_glass_panel(painter: &egui::Painter, rect: egui::Rect, rounding: egu
     // 1px dark bottom border
     painter.line_segment(
         [rect.left_bottom(), rect.right_bottom()],
-        Stroke::new(1.0, Color32::from_gray(8)),
+        Stroke::new(1.0, VOID),
     );
     // 1px dim side borders
-    painter.line_segment(
-        [rect.left_top(), rect.left_bottom()],
-        Stroke::new(1.0, Color32::from_gray(28)),
-    );
+    painter.line_segment([rect.left_top(), rect.left_bottom()], Stroke::new(1.0, PIT));
     painter.line_segment(
         [rect.right_top(), rect.right_bottom()],
-        Stroke::new(1.0, Color32::from_gray(28)),
+        Stroke::new(1.0, PIT),
     );
 }

@@ -133,7 +133,7 @@ impl ControlPrefs {
 /// LlmFocus  = near-white (235)     — brightest state: LLM is actively driving this
 fn mode_color(mode: ParamMode) -> Color32 {
     match mode {
-        ParamMode::Free => Color32::from_gray(28),
+        ParamMode::Free => theme::PIT,
         ParamMode::UserOwned => theme::IRON, // 60
         ParamMode::LlmFocus => theme::CHALK, // 235
     }
@@ -272,11 +272,7 @@ fn draw_knob(painter: &Painter, rect: Rect, value: f32, mode: ParamMode, hovered
 
     // ── Brushed body — radial lines instead of concentric rings ──────────────
     // Drop shadow
-    painter.circle_filled(
-        center + Vec2::new(0.5, 1.0),
-        radius + 1.0,
-        Color32::from_gray(8),
-    );
+    painter.circle_filled(center + Vec2::new(0.5, 1.0), radius + 1.0, theme::VOID);
 
     // Base fill — mode-tinted
     let mode_shift: i16 = match mode {
@@ -364,7 +360,7 @@ fn draw_knob(painter: &Painter, rect: Rect, value: f32, mode: ParamMode, hovered
     let shadow = Vec2::new(0.5, 0.5);
     painter.line_segment(
         [ptr_a + shadow, ptr_b + shadow],
-        Stroke::new(1.0, Color32::from_gray(8)),
+        Stroke::new(1.0, theme::VOID),
     );
     painter.line_segment([ptr_a, ptr_b], Stroke::new(2.0, Color32::from_gray(200)));
 
@@ -649,7 +645,7 @@ pub fn glass_group_fill<R>(
 ) -> egui::InnerResponse<R> {
     egui::Frame::none()
         .fill(Color32::from_gray(15))
-        .stroke(Stroke::new(1.0, Color32::from_gray(28)))
+        .stroke(Stroke::new(1.0, theme::PIT))
         .inner_margin(egui::Margin::symmetric(6.0, 8.0))
         .rounding(egui::Rounding::same(GLASS_ROUNDING))
         .show(ui, |ui| {
@@ -776,7 +772,7 @@ fn draw_knob_chrome(
             let off = Vec2::new(0.4, 0.4);
             painter.line_segment(
                 [p_inner + off, p_outer + off],
-                Stroke::new(1.0, Color32::from_gray(8)),
+                Stroke::new(1.0, theme::VOID),
             );
         }
         painter.line_segment(
@@ -787,11 +783,7 @@ fn draw_knob_chrome(
 
     // ── Chrome body ───────────────────────────────────────────────────────────
     // Outer shadow ring
-    painter.circle_stroke(
-        center,
-        radius + 1.0,
-        Stroke::new(1.0, Color32::from_gray(8)),
-    );
+    painter.circle_stroke(center, radius + 1.0, Stroke::new(1.0, theme::VOID));
 
     // Concentric fills — tinted by mode. UserOwned (locked) pushes the whole
     // knob markedly darker so the user can read lock state at a glance; Free
@@ -897,7 +889,7 @@ fn draw_knob_chrome(
     let shadow = Vec2::new(0.5, 0.5);
     painter.line_segment(
         [ptr_a + shadow, ptr_b + shadow],
-        Stroke::new(1.0, Color32::from_gray(8)),
+        Stroke::new(1.0, theme::VOID),
     );
     // Bright line
     painter.line_segment([ptr_a, ptr_b], Stroke::new(2.0, Color32::from_gray(220)));

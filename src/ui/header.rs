@@ -476,7 +476,7 @@ impl ImpulseApp {
                                 theme::ASH
                             };
                             let rec_fill = if live_record && running {
-                                egui::Color32::from_gray(60)
+                                theme::IRON
                             } else {
                                 egui::Color32::TRANSPARENT
                             };

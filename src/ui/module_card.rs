@@ -5,6 +5,7 @@
 
 use egui::{Color32, Frame, Margin, Pos2, Rect, Rounding, Sense, Stroke, Vec2};
 
+use super::theme;
 use crate::state::{ModuleKind, PortDir, PortKind, PortRef};
 
 // ─── Card geometry ────────────────────────────────────────────────────────────
@@ -185,7 +186,7 @@ pub fn draw_port_circle(painter: &egui::Painter, center: Pos2, kind: PortKind, d
     painter.circle_filled(center, r + 1.5, Color32::from_gray(12));
     painter.circle_filled(center, r, Color32::from_gray(ring));
     painter.circle_filled(center, r - 1.5, Color32::from_gray(inner));
-    painter.circle_filled(center, hole, Color32::from_gray(8));
+    painter.circle_filled(center, hole, theme::VOID);
     if kind == PortKind::Cv {
         painter.circle_filled(center, 0.8, Color32::from_gray(180));
     } else if kind == PortKind::Mod {
@@ -305,7 +306,7 @@ pub fn module_card_sized<R>(
             // 1px shadow at bottom (flat — meets content area)
             painter.line_segment(
                 [title_rect.left_bottom(), title_rect.right_bottom()],
-                Stroke::new(1.0, Color32::from_gray(8)),
+                Stroke::new(1.0, theme::VOID),
             );
             // Focus shine sweep overlay
             draw_focus_shine(&painter, title_rect, kind, ui.ctx());
@@ -318,7 +319,7 @@ pub fn module_card_sized<R>(
                 egui::Align2::LEFT_CENTER,
                 kind.label(),
                 egui::FontId::monospace(label_font),
-                Color32::from_gray(8),
+                theme::VOID,
             );
             painter.text(
                 label_pos,
@@ -408,7 +409,7 @@ pub fn module_card_sized<R>(
                 let rm_col = if rm_resp.hovered() {
                     Color32::from_gray(200)
                 } else {
-                    Color32::from_gray(60)
+                    theme::IRON
                 };
                 painter.text(
                     rm_rect.center(),
@@ -532,7 +533,7 @@ pub fn module_card_back(
             painter.rect_filled(title_rect, title_rounding, title_bg);
             painter.line_segment(
                 [title_rect.left_bottom(), title_rect.right_bottom()],
-                Stroke::new(1.0, Color32::from_gray(8)),
+                Stroke::new(1.0, theme::VOID),
             );
             draw_focus_shine(&painter, title_rect, kind, ui.ctx());
             let label_font = 9.5;
@@ -564,7 +565,7 @@ pub fn module_card_back(
                 egui::Align2::LEFT_CENTER,
                 &label,
                 egui::FontId::monospace(label_font),
-                Color32::from_gray(8),
+                theme::VOID,
             );
             painter.text(
                 label_pos,
@@ -622,7 +623,7 @@ pub fn module_card_back(
                 let rm_col = if rm_resp.hovered() {
                     Color32::from_gray(200)
                 } else {
-                    Color32::from_gray(60)
+                    theme::IRON
                 };
                 painter.text(
                     rm_rect.center(),
@@ -657,7 +658,7 @@ pub fn module_card_back(
             let left_x = strip_rect.left() + 16.0;
             let right_x = strip_rect.right() - 16.0;
             let label_font = egui::FontId::monospace(7.0);
-            let label_col = Color32::from_gray(60);
+            let label_col = theme::IRON;
 
             // Port presence — deferred to module_card_mod helpers.
             use super::module_card_mod as mcm;
@@ -818,7 +819,7 @@ pub fn zone_rail(
     );
     painter.line_segment(
         [rail_rect.left_bottom(), rail_rect.right_bottom()],
-        Stroke::new(1.0, Color32::from_gray(8)),
+        Stroke::new(1.0, theme::VOID),
     );
     // Screw holes along the rail
     let screw_y = rail_rect.center().y;

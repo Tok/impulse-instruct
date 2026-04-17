@@ -46,7 +46,7 @@ pub fn event_stream(ui: &mut Ui, state: &AppState, smooth_step: f64, width: f32,
     let painter = ui.painter_at(rect); // clip to rect bounds
 
     // Background
-    painter.rect_filled(rect, egui::Rounding::same(2.0), Color32::from_gray(8));
+    painter.rect_filled(rect, egui::Rounding::same(2.0), theme::VOID);
     painter.rect_stroke(
         rect,
         egui::Rounding::same(2.0),
@@ -152,7 +152,7 @@ pub fn event_stream(ui: &mut Ui, state: &AppState, smooth_step: f64, width: f32,
                 // Faint horizontal guide line
                 painter.line_segment(
                     [Pos2::new(inner.min.x + 22.0, y), Pos2::new(inner.max.x, y)],
-                    Stroke::new(0.3, Color32::from_gray(18)),
+                    Stroke::new(0.3, theme::DEEP),
                 );
             }
         }

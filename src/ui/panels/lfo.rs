@@ -397,7 +397,7 @@ fn draw_free_eg(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                     egui::vec2(bar_w - 2.0, fill_h.max(1.0)),
                 );
                 let col = if eg.enabled {
-                    egui::Color32::from_gray(90)
+                    theme::ASH
                 } else {
                     egui::Color32::from_gray(40)
                 };
