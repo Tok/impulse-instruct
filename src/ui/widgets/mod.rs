@@ -591,6 +591,17 @@ pub use event_stream::event_stream;
 
 // ─── Glass Group ─────────────────────────────────────────────────────────────
 
+/// Corner radius of the smoked-glass panel frame.
+pub const GLASS_ROUNDING: f32 = 5.0;
+
+/// Height for a glass group that holds two rows of knobs of size `ctrl.knob_size`
+/// plus `extra` px of vertical chrome (labels + margins).  Empirically 50 px is
+/// right for two rows of default knobs with a single label strip; 60 px suits
+/// panels with a heavier header (hoover).
+pub fn glass_group_height(ctrl: ControlPrefs, extra: f32) -> f32 {
+    ctrl.knob_size * 2.0 + extra
+}
+
 /// Compute the per-group width for an evenly-distributed row of `n` glass panels.
 /// Call this before the `ui.horizontal()` that contains the groups.
 ///
@@ -640,7 +651,7 @@ pub fn glass_group_fill<R>(
         .fill(Color32::from_gray(15))
         .stroke(Stroke::new(1.0, Color32::from_gray(28)))
         .inner_margin(egui::Margin::symmetric(6.0, 8.0))
-        .rounding(egui::Rounding::same(5.0))
+        .rounding(egui::Rounding::same(GLASS_ROUNDING))
         .show(ui, |ui| {
             ui.set_min_width(min_width - 14.0); // subtract inner margin × 2
             ui.set_max_width(max_width - 14.0);

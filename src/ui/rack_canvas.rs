@@ -18,7 +18,7 @@
 use egui::{Color32, ScrollArea};
 
 use crate::state::{ModuleKind, Zone, rack::GRID_COLS};
-use crate::ui::module_card::PortPos;
+use crate::ui::module_card::{CARD_ROUNDING, PortPos};
 use crate::ui::{ImpulseApp, module_card, rack_cables};
 // Re-export so callers referencing `rack_canvas::CableDrag` keep working.
 pub use crate::ui::rack_cables::{CableDrag, ModuleDrag};
@@ -243,10 +243,10 @@ pub fn draw_rack(app: &mut ImpulseApp, ctx: &egui::Context, ui: &mut egui::Ui) {
                 Color32::from_gray(140),
             )
         };
-        painter.rect_filled(ghost_rect, egui::Rounding::same(8.0), fill);
+        painter.rect_filled(ghost_rect, egui::Rounding::same(CARD_ROUNDING), fill);
         painter.rect_stroke(
             ghost_rect,
-            egui::Rounding::same(8.0),
+            egui::Rounding::same(CARD_ROUNDING),
             egui::Stroke::new(2.0, stroke_col),
         );
         ctx.request_repaint();
@@ -816,7 +816,7 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
                 let p = ui.painter();
                 p.rect_filled(
                     resp.card_rect,
-                    egui::Rounding::same(8.0),
+                    egui::Rounding::same(CARD_ROUNDING),
                     Color32::from_rgba_premultiplied(0, 0, 0, 120),
                 );
             }

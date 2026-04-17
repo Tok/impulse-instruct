@@ -7,6 +7,14 @@ use egui::{Color32, Frame, Margin, Pos2, Rect, Rounding, Sense, Stroke, Vec2};
 
 use crate::state::{ModuleKind, PortDir, PortKind, PortRef};
 
+// ─── Card geometry ────────────────────────────────────────────────────────────
+
+/// Title-bar height — fixed, independent of per-module scale.
+pub(crate) const TITLE_BAR_H: f32 = 22.0;
+
+/// Outer-frame corner radius for module cards (front + back panels).
+pub(crate) const CARD_ROUNDING: f32 = 8.0;
+
 // ─── Port registry (per-frame) ───────────────────────────────────────────────
 
 /// Screen position of a module port — populated during card rendering,
@@ -254,11 +262,10 @@ pub fn module_card_sized<R>(
         ui.set_min_width(w);
     }
 
-    let card_rounding = 8.0;
     let frame = Frame::none()
         .fill(fill)
         .inner_margin(Margin::ZERO)
-        .rounding(Rounding::same(card_rounding))
+        .rounding(Rounding::same(CARD_ROUNDING))
         .stroke(Stroke::new(1.0, Color32::from_gray(38)));
 
     let mut toggle_clicked = false;
@@ -279,19 +286,18 @@ pub fn module_card_sized<R>(
             ui.set_max_width(card_w);
 
             // ── Title bar — fixed height, not affected by per-module scale ──
-            let title_h = 22.0_f32;
             // Use card_w explicitly — avoids inheriting stale available_width from
             // the horizontal_wrapped parent when the content hasn't settled yet.
             let (title_rect, _) =
-                ui.allocate_exact_size(Vec2::new(card_w, title_h), Sense::hover());
+                ui.allocate_exact_size(Vec2::new(card_w, TITLE_BAR_H), Sense::hover());
             let painter = ui.painter_at(title_rect);
 
             // Title bar fill — rounding matches the outer frame so the fill
             // doesn't leak past the rounded corners.  The frame stroke (1px) is
             // painted on top by egui after all content, so it covers the edges.
             let title_rounding = Rounding {
-                nw: card_rounding,
-                ne: card_rounding,
+                nw: CARD_ROUNDING,
+                ne: CARD_ROUNDING,
                 sw: 0.0,
                 se: 0.0,
             };
@@ -418,13 +424,12 @@ pub fn module_card_sized<R>(
                 None
             } else {
                 // Compute content budget from grid height (if provided).
-                let title_h = 22.0;
                 let margin_y = 8.0 * scale * 2.0;
-                let content_budget = min_height.map(|mh| (mh - title_h - margin_y).max(20.0));
+                let content_budget = min_height.map(|mh| (mh - TITLE_BAR_H - margin_y).max(20.0));
 
                 let content_frame = Frame::none()
                     .fill(fill)
-                    .rounding(Rounding::same(card_rounding))
+                    .rounding(Rounding::same(CARD_ROUNDING))
                     .inner_margin(Margin::symmetric(6.0 * scale, 8.0 * scale));
                 let inner_resp = content_frame.show(ui, |ui| {
                     ui.spacing_mut().item_spacing = Vec2::new(2.0 * scale, 2.0 * scale);
@@ -492,11 +497,10 @@ pub fn module_card_back(
         ui.set_min_width(min_w);
     }
 
-    let card_rounding = 8.0;
     let frame = Frame::none()
         .fill(fill)
         .inner_margin(Margin::ZERO)
-        .rounding(Rounding::same(card_rounding))
+        .rounding(Rounding::same(CARD_ROUNDING))
         .stroke(Stroke::new(1.0, Color32::from_gray(38)));
 
     let mut toggle_clicked = false;
@@ -515,14 +519,13 @@ pub fn module_card_back(
             }
 
             // ── Title bar — fixed height, same as front ────────────────────
-            let title_h = 22.0_f32;
             let (title_rect, _) =
-                ui.allocate_exact_size(Vec2::new(card_w, title_h), Sense::hover());
+                ui.allocate_exact_size(Vec2::new(card_w, TITLE_BAR_H), Sense::hover());
             let painter = ui.painter_at(title_rect);
             // Round top corners to match the card frame; bottom stays flat
             let title_rounding = Rounding {
-                nw: card_rounding,
-                ne: card_rounding,
+                nw: CARD_ROUNDING,
+                ne: CARD_ROUNDING,
                 sw: 0.0,
                 se: 0.0,
             };

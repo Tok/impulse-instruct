@@ -46,7 +46,7 @@ pub fn draw_hoover(app: &mut ImpulseApp, ui: &mut egui::Ui) {
     // ── Three equal-width glass groups ────────────────────────────────────────
     let gw = widgets::even_group_width(ui, 3);
     // Uniform height across all groups — matches the tallest (OSC with PAN + voices)
-    let group_h = ctrl.knob_size * 2.0 + 60.0;
+    let group_h = widgets::glass_group_height(ctrl, 60.0);
     ui.horizontal(|ui| {
         // FILTER group: START, SWEEP, RESO (horizontal)
         widgets::glass_group_fill(ui, gw, gw, |ui| {

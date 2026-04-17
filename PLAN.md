@@ -257,10 +257,17 @@ Highlights of the cycle:
   `FONT_XS`/`FONT_SM`/`FONT_MD`/`FONT_LG`.
 - [ ] **Panel spacing constants** — define
   `SPACING_SM`/`SPACING_MD`/`SPACING_LG`.
-- [ ] **Glass group helpers** — `glass_label(ui, text)`,
-  `glass_group_height(ctrl)`.
-- [ ] **Module card constants** — `TITLE_BAR_H`, `CARD_ROUNDING`,
-  `GLASS_ROUNDING`.
+- [ ] **Glass group helpers** — `glass_label(ui, text)` still to
+  do (the inline pattern varies too much across panels for a
+  single helper).  ✓ `widgets::glass_group_height(ctrl, extra)`
+  landed and the four call sites (bass / drums / hoover / an1x)
+  now use it.
+- [x] **Module card constants** — `TITLE_BAR_H` (22) and
+  `CARD_ROUNDING` (8) live in `ui/module_card.rs`;
+  `GLASS_ROUNDING` (5) lives next to the glass-group widget in
+  `ui/widgets/mod.rs`.  All in-crate literals (`module_card.rs`
+  title-bar rects + frame rounding, `rack_canvas.rs` ghost-drag
+  overlay) switched to the named constants.
 
 ### Infrastructure
 

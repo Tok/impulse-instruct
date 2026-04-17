@@ -58,7 +58,7 @@ pub fn draw_kit_a(app: &mut ImpulseApp, ui: &mut egui::Ui) {
     let xy_size = app.state.read().ui_prefs.effective_xy_px() * scale;
     let avail = ui.available_width();
     let gw = ((avail - super::GLASS_GAP) / 2.0).floor(); // 2-column layout
-    let group_h = ctrl.knob_size * 2.0 + 50.0;
+    let group_h = widgets::glass_group_height(ctrl, 50.0);
 
     // PAN slider — right-justified
     ui.horizontal(|ui| {

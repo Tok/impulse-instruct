@@ -230,7 +230,7 @@ pub fn draw_bass(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         let gw_mod = avail - gw_main * 2.0 - gap * 2.0;
         // Fixed height so all three glass groups match
         // Height based on the largest knobs (FILTER uses ctrl_big)
-        let group_h = ctrl_big.knob_size * 2.0 + 50.0;
+        let group_h = widgets::glass_group_height(ctrl_big, 50.0);
         ui.horizontal(|ui| {
             ui.spacing_mut().item_spacing.x = super::GLASS_GAP;
             // FILTER group: 2×2 grid (CUT/RES, ENV/DEC)
