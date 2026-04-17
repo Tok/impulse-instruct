@@ -79,7 +79,7 @@ pub fn speak_neutts(text: &str, tts: &TtsModuleState, tts_tx: &TtsSink) {
                 return;
             }
             if pitch_snap && let Some(hz) = detect_pitch_hz(&samples, target_sr as f32) {
-                let detected_midi = (12.0 * (hz / 440.0).log2() + 69.0).round() as u8;
+                let detected_midi = crate::audio::dsp::hz_to_midi(hz).round() as u8;
                 let snapped_midi = crate::state::snap_to_scale(detected_midi, root_note, scale);
                 let shift = snapped_midi as f32 - detected_midi as f32;
                 samples = resample_pitch_shift(&samples, shift);

@@ -27,6 +27,12 @@ use audio::AudioEngine;
 use llm::{LlmInput, run_llm_loop};
 use state::AppState;
 
+/// Default HTTP/MCP API port.  Override with `--port <N>`.
+const DEFAULT_API_PORT: u16 = 8765;
+/// Default OSC listener port (SuperCollider's default).  Override with
+/// `--osc-port <N>`.  Only used when `--osc` / `--osc-port` is passed.
+const DEFAULT_OSC_PORT: u16 = 57120;
+
 // ─── CLI args (no extra deps — just std::env::args) ──────────────────────────
 
 struct Args {
@@ -45,7 +51,7 @@ impl Args {
         let args: Vec<String> = std::env::args().collect();
         let mut result = Self {
             no_api: false,
-            port: 8765,
+            port: DEFAULT_API_PORT,
             model: None,
             log_level: None,
             mock: false,
@@ -64,7 +70,7 @@ impl Args {
                 "--port" => {
                     i += 1;
                     if let Some(v) = args.get(i) {
-                        result.port = v.parse().unwrap_or(8765);
+                        result.port = v.parse().unwrap_or(DEFAULT_API_PORT);
                     }
                 }
                 "--model" => {
@@ -75,25 +81,29 @@ impl Args {
                     i += 1;
                     result.log_level = args.get(i).cloned();
                 }
-                "--osc" => result.osc_port = Some(57120),
+                "--osc" => result.osc_port = Some(DEFAULT_OSC_PORT),
                 "--osc-port" => {
                     i += 1;
                     if let Some(v) = args.get(i) {
-                        result.osc_port = Some(v.parse().unwrap_or(57120));
+                        result.osc_port = Some(v.parse().unwrap_or(DEFAULT_OSC_PORT));
                     }
                 }
                 "--help" | "-h" => {
                     println!("Impulse Instruct — LLM-first audio synthesizer\n");
                     println!("USAGE: impulse-instruct [OPTIONS]\n");
                     println!("OPTIONS:");
-                    println!("  --no-api           Disable HTTP/MCP API (default: on, port 8765)");
-                    println!("  --port <N>         HTTP port (default: 8765)");
+                    println!(
+                        "  --no-api           Disable HTTP/MCP API (default: on, port {DEFAULT_API_PORT})"
+                    );
+                    println!("  --port <N>         HTTP port (default: {DEFAULT_API_PORT})");
                     println!("  --model <path>     GGUF model path");
                     println!("  --log <level>      Log level (default: info)");
                     println!("  --mock             Run without LLM (mock responses only)");
                     println!("  --skip-wizard      Skip the setup wizard on launch");
                     println!("  --fresh-session    Start with empty rack, ignore saved session");
-                    println!("  --osc              Enable OSC input on port 57120 (UDP)");
+                    println!(
+                        "  --osc              Enable OSC input on port {DEFAULT_OSC_PORT} (UDP)"
+                    );
                     println!("  --osc-port <N>     Enable OSC input on port N (UDP)");
                     std::process::exit(0);
                 }

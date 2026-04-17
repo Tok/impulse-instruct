@@ -14,7 +14,7 @@ pub(super) const STEPS_PER_ROW: usize = 32;
 
 /// Number of sub-rows (wrapped 32-step rows) needed for `seq_steps`.
 /// 1..=32 → 1 row, 33..=64 → 2 rows.
-pub(super) fn sub_rows_for(seq_steps: usize) -> usize {
+pub(crate) fn sub_rows_for(seq_steps: usize) -> usize {
     seq_steps.min(STEPS_PER_PAGE).div_ceil(STEPS_PER_ROW).max(1)
 }
 
@@ -138,7 +138,7 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             .count()
             + app.expanded_seq_voices.len();
 
-        let sub_rows = s.sequencer.steps.min(64).div_ceil(32).max(1) as f32;
+        let sub_rows = sub_rows_for(s.sequencer.steps) as f32;
         let bass_h = if has_bass {
             sub_rows * (step_row + marker_row + marker_row)
         } else {

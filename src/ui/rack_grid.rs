@@ -48,7 +48,7 @@ pub(super) fn sequencer_grid_rows(state: &crate::state::AppState, col_w: f32) ->
     let marker_row = 16.0; // accent / slide marker row (compact)
     let drum_sub = 14.0; // vel/prob/ratchet sub-lane under drum step row
     let header_h = 55.0;
-    let sub_rows = state.sequencer.steps.min(64).div_ceil(32).max(1) as f32;
+    let sub_rows = crate::ui::panels::sequencer::sub_rows_for(state.sequencer.steps) as f32;
     let bass_h = if has_bass {
         sub_rows * (step_row + marker_row + marker_row)
     } else {

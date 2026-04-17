@@ -136,7 +136,7 @@ pub fn event_stream(ui: &mut Ui, state: &AppState, smooth_step: f64, width: f32,
         for &note in &[24u8, 36, 48, 60, 72, 84, 96] {
             if note >= lo_note && note <= hi_note {
                 let y = note_y(note);
-                let hz = 440.0 * 2.0_f32.powf((note as f32 - 69.0) / 12.0);
+                let hz = crate::audio::dsp::midi_to_hz(note);
                 let label = if hz >= 1000.0 {
                     format!("{:.1}k", hz / 1000.0)
                 } else {
@@ -499,8 +499,8 @@ pub fn event_stream(ui: &mut Ui, state: &AppState, smooth_step: f64, width: f32,
         Color32::from_gray(50),
     );
     // Note range indicator with Hz
-    let lo_hz = 440.0 * 2.0_f32.powf((lo_note as f32 - 69.0) / 12.0);
-    let hi_hz = 440.0 * 2.0_f32.powf((hi_note as f32 - 69.0) / 12.0);
+    let lo_hz = crate::audio::dsp::midi_to_hz(lo_note);
+    let hi_hz = crate::audio::dsp::midi_to_hz(hi_note);
     painter.text(
         inner.right_top() + Vec2::new(-2.0, 1.0),
         egui::Align2::RIGHT_TOP,

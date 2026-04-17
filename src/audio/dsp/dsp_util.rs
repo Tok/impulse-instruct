@@ -12,6 +12,12 @@ pub fn midi_to_hz(note: u8) -> f32 {
     440.0 * 2.0f32.powf((note as f32 - 69.0) / 12.0)
 }
 
+/// Convert frequency in Hz to fractional MIDI note number (12-TET, A4=440).
+/// Inverse of `midi_to_hz`; callers round/clamp as needed.
+pub fn hz_to_midi(hz: f32) -> f32 {
+    69.0 + 12.0 * (hz / 440.0).log2()
+}
+
 /// Convert MIDI note to Hz using the specified tuning system.
 /// `tuning`: 0=12-TET (default), 1=just intonation, 2=slendro, 3=pelog.
 pub fn midi_to_hz_tuned(note: u8, tuning: u8) -> f32 {

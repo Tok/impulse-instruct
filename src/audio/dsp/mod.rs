@@ -11,8 +11,8 @@ mod rev_tap;
 pub mod samplers;
 pub mod voices;
 use bass303::Bass303;
-pub use dsp_util::midi_to_hz;
 use dsp_util::*;
+pub use dsp_util::{hz_to_midi, midi_to_hz};
 use fx::*;
 use fx_math::{
     BitcrushState, bitcrush_step, drive_step, free_eg_value_at, gated_reverb_envelope_step,

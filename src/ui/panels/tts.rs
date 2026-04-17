@@ -212,11 +212,11 @@ pub fn draw_tts(app: &mut ImpulseApp, ui: &mut egui::Ui, module_id: u32) {
         if !app.neutts_online
             && ui
                 .small_button(egui::RichText::new("START").monospace().size(7.0))
-                .on_hover_text(
-                    "Spawn scripts/neutts-server.py on port 8770.\n\
+                .on_hover_text(format!(
+                    "Spawn scripts/neutts-server.py on port {NEUTTS_PORT}.\n\
                      Uses .neutts-venv/bin/python if present, else python3.\n\
                      First start takes a few seconds to load the model.",
-                )
+                ))
                 .clicked()
         {
             spawn_neutts_server();

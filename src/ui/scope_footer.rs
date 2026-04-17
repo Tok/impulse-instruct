@@ -102,8 +102,7 @@ pub fn detect_note(buf: &[f32], sample_rate: f32) -> Option<u8> {
     if !(20.0..=8000.0).contains(&freq) {
         return None;
     }
-    // Frequency to MIDI note: note = 12 * log2(freq / 440) + 69
-    let midi = (12.0 * (freq / 440.0).log2() + 69.0).round() as i32;
+    let midi = crate::audio::dsp::hz_to_midi(freq).round() as i32;
     Some(midi.clamp(0, 127) as u8)
 }
 
