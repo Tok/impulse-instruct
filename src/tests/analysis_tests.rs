@@ -18,10 +18,20 @@ fn clipping_detected() {
 #[test]
 fn near_clip_detected() {
     let a = AudioAnalysis {
-        peak_db: -2.0,
+        peak_db: -1.2,
         ..Default::default()
     };
     assert!(a.alerts().contains(&"near clip"));
+}
+
+#[test]
+fn near_clip_not_triggered_at_minus_2() {
+    // -2 dB is comfortably below the new threshold; it shouldn't alarm.
+    let a = AudioAnalysis {
+        peak_db: -2.0,
+        ..Default::default()
+    };
+    assert!(!a.alerts().contains(&"near clip"));
 }
 
 #[test]

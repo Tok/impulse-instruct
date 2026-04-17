@@ -59,7 +59,9 @@ impl AudioAnalysis {
         if self.peak_db > -1.0 {
             out.push("CLIPPING");
         }
-        if self.peak_db > -3.0 && self.peak_db <= -1.0 {
+        // Narrow window — only fire when actually within ~1 dB of clipping.
+        // Previously -3.0 lit up on most default-volume material.
+        if self.peak_db > -1.5 && self.peak_db <= -1.0 {
             out.push("near clip");
         }
         if self.high_rms_db > -8.0 && self.transients_per_bar > 6.0 {
