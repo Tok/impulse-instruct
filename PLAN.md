@@ -59,10 +59,15 @@ Highlights of the cycle:
   874 → 726 lines.  +24 tests covering clamp ranges, locked-path
   preservation, scope filtering, end/start swap, slice-array
   truncation/clear, and the euclidean voice mapping.
-- [ ] **`apply_llm_update` decomposition (round 2)** — the
-  per-melodic-voice block (lines 96–470 of the new file) and the
-  preecho block are still inline.  Extract them next so each
-  section can be unit-tested in isolation.
+- [x] **`apply_llm_update` decomposition (round 2)** — extracted
+  `SeqScope`, `apply_melodic_lane_lens`, `apply_bass_notes`,
+  `apply_bass_pans`, `apply_preecho_voices` into
+  `state/llm_apply_seq.rs`.  `state/llm_apply.rs` shrank
+  726 → 621 lines.  +25 tests in a new
+  `tests/llm_apply_voice_tests.rs` covering scope resolution,
+  scale-snap rounding, MIDI note clamping, voice-0 mirror,
+  signed-pan clamps, anchor / length clamps, null-clears
+  preecho entries, partial preecho updates preserve other fields.
 - [x] **`unlocked_f32` range bug** — added `unlocked_f32_range`
   with explicit `min` / `max`; routed `amen.pitch` (±24) and
   `amen.source_bpm` (40–300) through it.  +4 regression tests

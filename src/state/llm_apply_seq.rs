@@ -13,9 +13,66 @@ use std::collections::HashSet;
 use serde_json::{Map, Value};
 
 use super::llm_helpers::{unlocked_f32, unlocked_f32_range};
-use super::transitions::expand_sequencer_steps;
-use super::{AppState, DrumVoice, MAX_STEPS, Scale};
+use super::transitions::{expand_sequencer_steps, set_lane_steps};
+use super::{AppState, DrumVoice, MAX_STEPS, Scale, snap_to_scale};
 use crate::sequencer::euclidean_rhythm;
+
+/// Per-voice scope flags for the `sequencer.*` block of the LLM JSON.
+/// A bare "sequencer" scope grants every per-voice subsection; otherwise
+/// each voice key (`bass`, `hoover`, `an1x`, `kit_a`, `kit_b`, `amen`)
+/// only unlocks its own slice of the sequencer object.  Centralising the
+/// resolution stops the same boolean fan-out from being recomputed at
+/// every helper call site.
+#[derive(Clone, Copy, Debug)]
+pub struct SeqScope {
+    pub seq: bool,
+    pub bass: bool,
+    pub hoover: bool,
+    pub an1x: bool,
+    pub kit_a: bool,
+    pub kit_b: bool,
+    pub amen: bool,
+}
+
+impl SeqScope {
+    /// Resolve scope flags from the agent-supplied scope list.  An empty
+    /// scope means "all keys allowed" (the unscoped, full-stack agent path).
+    pub fn from_scope(scope: &[String]) -> Self {
+        let in_scope = |k: &str| scope.is_empty() || scope.iter().any(|s| s == k);
+        let seq = in_scope("sequencer");
+        Self {
+            seq,
+            bass: seq || in_scope("bass"),
+            hoover: seq || in_scope("hoover"),
+            an1x: seq || in_scope("an1x"),
+            kit_a: seq || in_scope("kit_a"),
+            kit_b: seq || in_scope("kit_b"),
+            amen: seq || in_scope("amen"),
+        }
+    }
+
+    /// True when at least one sequencer-related key is in scope — used to
+    /// short-circuit the whole `sequencer.*` block when nothing inside it
+    /// is reachable for the current agent.
+    pub fn any(&self) -> bool {
+        self.seq || self.bass || self.hoover || self.an1x || self.kit_a || self.kit_b || self.amen
+    }
+
+    /// Resolve scope for a preecho voice key.  Unknown voice keys fall
+    /// back to the global `sequencer` scope (matching the behaviour the
+    /// inline match used to have).
+    pub fn for_preecho_voice(&self, voice: &str) -> bool {
+        match voice {
+            "bass" => self.bass,
+            "hoover" => self.hoover,
+            "an1x" => self.an1x,
+            "kit_a" => self.kit_a,
+            "kit_b" => self.kit_b,
+            "amen" => self.amen,
+            _ => self.seq,
+        }
+    }
+}
 
 /// Apply the global sequencer fields (`bpm`, `swing`, `steps`,
 /// `time_sig_num`, `root_note`, `scale`) from the `sequencer.*` LLM JSON
@@ -212,5 +269,157 @@ pub(super) fn apply_euclidean_update(
         for (i, &active) in pattern.iter().enumerate().take(usable) {
             row[i].active = active;
         }
+    }
+}
+
+/// Apply per-melodic-voice lane lengths from the `sequencer` JSON object:
+/// `bass_len`, `hoover_len`, `an1x_len`.  Each respects its own scope
+/// flag and the matching `sequencer.<voice>_len` lock path.
+pub(super) fn apply_melodic_lane_lens(
+    s: &mut AppState,
+    seq: &Map<String, Value>,
+    scope: SeqScope,
+    locked: &HashSet<String>,
+) {
+    if scope.bass
+        && !locked.contains("sequencer.bass_len")
+        && let Some(n) = seq.get("bass_len").and_then(|v| v.as_u64())
+    {
+        let taken = std::mem::take(s);
+        *s = set_lane_steps(taken, "bass", n as usize);
+    }
+    if scope.hoover
+        && !locked.contains("sequencer.hoover_len")
+        && let Some(n) = seq.get("hoover_len").and_then(|v| v.as_u64())
+    {
+        let taken = std::mem::take(s);
+        *s = set_lane_steps(taken, "hoover", n as usize);
+    }
+    if scope.an1x
+        && !locked.contains("sequencer.an1x_len")
+        && let Some(n) = seq.get("an1x_len").and_then(|v| v.as_u64())
+    {
+        let taken = std::mem::take(s);
+        *s = set_lane_steps(taken, "an1x", n as usize);
+    }
+}
+
+/// Apply the bass `bass_notes` array (per-step MIDI notes).  Notes are
+/// clamped to 0..=127 and snapped to the active scale when
+/// `scale_snap` is on.  Voice-0's mirror pattern is updated in lockstep so
+/// the legacy single-voice fields and per-voice fields stay coherent.
+pub(super) fn apply_bass_notes(
+    s: &mut AppState,
+    seq: &Map<String, Value>,
+    scope: SeqScope,
+    locked: &HashSet<String>,
+) {
+    if !scope.bass || locked.contains("sequencer.bass_notes") {
+        return;
+    }
+    let Some(arr) = seq.get("bass_notes").and_then(|v| v.as_array()) else {
+        return;
+    };
+    let snap = s.sequencer.scale_snap;
+    let root = s.sequencer.root_note;
+    let scale = s.sequencer.scale;
+    for (i, val) in arr.iter().enumerate().take(MAX_STEPS) {
+        if let Some(note) = val.as_u64() {
+            let note = note.clamp(0, 127) as u8;
+            let snapped = if snap {
+                snap_to_scale(note, root, scale)
+            } else {
+                note
+            };
+            s.sequencer.bass_pattern[i].note = snapped;
+            if let Some(pat) = s.sequencer.bass_patterns.get_mut(0) {
+                pat[i].note = snapped;
+            }
+        }
+    }
+}
+
+/// Apply per-step pan offsets (`bass_pans`, parallel to `bass_notes`).
+/// Each value is clamped to `-1..=1`; `0.0` means "use the voice's
+/// static pan".  Mirrors voice 0's bass_patterns slot in lockstep.
+pub(super) fn apply_bass_pans(
+    s: &mut AppState,
+    seq: &Map<String, Value>,
+    scope: SeqScope,
+    locked: &HashSet<String>,
+) {
+    if !scope.bass || locked.contains("sequencer.bass_pans") {
+        return;
+    }
+    let Some(arr) = seq.get("bass_pans").and_then(|v| v.as_array()) else {
+        return;
+    };
+    for (i, val) in arr.iter().enumerate().take(MAX_STEPS) {
+        if let Some(p) = val.as_f64() {
+            let p = (p as f32).clamp(-1.0, 1.0);
+            s.sequencer.bass_pattern[i].pan = p;
+            if let Some(pat) = s.sequencer.bass_patterns.get_mut(0) {
+                pat[i].pan = p;
+            }
+        }
+    }
+}
+
+/// Apply the `preecho` map: per-voice anchor lead-in configuration.
+/// JSON shape:
+///   `"preecho": { "kit_a": { "anchors": [0,16], "length": 4,
+///     "velocity_ramp": true, "ratchet_ramp": true, "enabled": true } }`.
+/// `null` clears that voice; voice keys match the regular scope naming
+/// (`bass` / `hoover` / `an1x` / `kit_a` / `kit_b` / `amen`).
+pub(super) fn apply_preecho_voices(
+    s: &mut AppState,
+    seq: &Map<String, Value>,
+    scope: SeqScope,
+    locked: &HashSet<String>,
+) {
+    let Some(obj) = seq.get("preecho").and_then(|v| v.as_object()) else {
+        return;
+    };
+    for (voice_key, val) in obj {
+        let lock_key = format!("sequencer.preecho.{}", voice_key);
+        if locked.contains(&lock_key) {
+            continue;
+        }
+        if !scope.for_preecho_voice(voice_key) {
+            continue;
+        }
+        if val.is_null() {
+            s.sequencer.preecho.remove(voice_key);
+            continue;
+        }
+        let Some(cfg_obj) = val.as_object() else {
+            continue;
+        };
+        let mut cfg = s
+            .sequencer
+            .preecho
+            .get(voice_key)
+            .cloned()
+            .unwrap_or_default();
+        if let Some(v) = cfg_obj.get("enabled").and_then(|v| v.as_bool()) {
+            cfg.enabled = v;
+        }
+        if let Some(arr) = cfg_obj.get("anchors").and_then(|v| v.as_array()) {
+            cfg.anchors = arr
+                .iter()
+                .filter_map(|x| x.as_u64())
+                .map(|n| (n as u8).min(63))
+                .collect();
+        }
+        if let Some(v) = cfg_obj.get("length").and_then(|v| v.as_u64()) {
+            cfg.length = (v as u8).min(16);
+        }
+        if let Some(v) = cfg_obj.get("velocity_ramp").and_then(|v| v.as_bool()) {
+            cfg.velocity_ramp = v;
+        }
+        if let Some(v) = cfg_obj.get("ratchet_ramp").and_then(|v| v.as_bool()) {
+            cfg.ratchet_ramp = v;
+        }
+        s.sequencer.preecho.insert(voice_key.clone(), cfg);
     }
 }
