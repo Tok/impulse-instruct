@@ -9,7 +9,7 @@ use super::AudioParams;
 use super::voices::{Envelope, NoiseGen};
 
 #[derive(Clone)]
-pub(super) struct GabberKick {
+pub(crate) struct GabberKick {
     phase: f32,
     pitch_env: Envelope,
     amp_env: Envelope,
@@ -20,7 +20,7 @@ pub(super) struct GabberKick {
 }
 
 impl GabberKick {
-    pub(super) fn new(seed: u32) -> Self {
+    pub(crate) fn new(seed: u32) -> Self {
         Self {
             phase: 0.0,
             pitch_env: Envelope::default(),
@@ -31,7 +31,7 @@ impl GabberKick {
         }
     }
 
-    pub(super) fn trigger(&mut self) {
+    pub(crate) fn trigger(&mut self) {
         self.pitch_env.trigger();
         self.amp_env.trigger();
         self.transient_env.trigger();
@@ -39,7 +39,7 @@ impl GabberKick {
         self.click_hp_z = 0.0;
     }
 
-    pub(super) fn process(&mut self, p: &AudioParams, sr: f32) -> f32 {
+    pub(crate) fn process(&mut self, p: &AudioParams, sr: f32) -> f32 {
         // 50–110 Hz base — higher than 808 (40–80) for sharper gabber tone.
         let base_hz = 50.0 + p.gabber_pitch * 60.0;
         let amp_coeff = (-1.0 / (sr * (p.gabber_decay * 1.4 + 0.1))).exp();

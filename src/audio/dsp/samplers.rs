@@ -273,7 +273,7 @@ impl Default for Grain {
     }
 }
 
-pub(super) struct GranularVoice {
+pub(crate) struct GranularVoice {
     samples: Option<Arc<Vec<f32>>>,
     grains: [Grain; MAX_GRAINS],
     spawn_counter: f32, // counts down to next grain spawn
@@ -281,7 +281,7 @@ pub(super) struct GranularVoice {
 }
 
 impl GranularVoice {
-    pub(super) fn new(seed: u32) -> Self {
+    pub(crate) fn new(seed: u32) -> Self {
         Self {
             samples: None,
             grains: [Grain::default(); MAX_GRAINS],
@@ -290,7 +290,7 @@ impl GranularVoice {
         }
     }
 
-    pub(super) fn load(&mut self, data: Arc<Vec<f32>>) {
+    pub(crate) fn load(&mut self, data: Arc<Vec<f32>>) {
         self.samples = Some(data);
         for g in &mut self.grains {
             g.active = false;
@@ -299,7 +299,7 @@ impl GranularVoice {
 
     /// Render one stereo sample pair from all active grains.
     /// Per-grain pan values are applied using equal-power panning.
-    pub(super) fn process(
+    pub(crate) fn process(
         &mut self,
         volume: f32,
         density: f32,

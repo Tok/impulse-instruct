@@ -124,6 +124,19 @@ Highlights of the cycle:
   `format_llm_display` (raw text fallthrough when no update,
   Off mode lists keys even with comment, non-Off uses
   comment, fallback to keys when comment missing).
+- [x] **GranularVoice + GabberKick + log_fmt** — promoted
+  GranularVoice and GabberKick to `pub(crate)`, added the
+  `samplers` and `gabber_kick` submodules to the public DSP
+  API.  +19 tests in a new `tests/dsp_voice_extra_tests.rs`:
+  GranularVoice silence-without-sample / silence-with-empty-
+  buffer / volume=0 short-circuit / audible after load+volume,
+  pitch-scatter + jitter stays finite, silent input → silent
+  output.  GabberKick silent-before-trigger, audible-after,
+  decays-to-silence, clip param pushes peak near unity,
+  zero-volume short-circuit.  log_fmt::starts_with_persona:
+  uppercase + digit + underscore positives, lowercase /
+  no-colon-space / empty / single-char / leading-bracket
+  rejections.
 - [ ] **At-cap files (still)** — `src/ui/mod.rs` (1000),
   `ui/llm_strip.rs` (998), `ui/rack_canvas.rs` (997),
   `ui/panels/bass.rs` (995), `ui/panels/sequencer.rs` (992) are
