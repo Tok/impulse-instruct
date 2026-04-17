@@ -69,7 +69,7 @@ impl ImpulseApp {
 
                 // Huth color detection (shared by bar and ring scopes)
                 let huth_col = if self.state.read().ui_prefs.huth_oscilloscope {
-                    super::scope_footer::detect_note(&self.scope_buf, 44100.0)
+                    super::scope_footer::detect_note(&self.scope_buf, crate::audio::SAMPLE_RATE)
                         .map(theme::note_color)
                 } else {
                     None

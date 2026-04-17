@@ -702,7 +702,7 @@ impl AudioParams {
                 FilterMode::Highpass => 1,
                 FilterMode::Bandpass => 2,
             },
-            sample_rate: 44100.0,
+            sample_rate: crate::audio::SAMPLE_RATE,
             lfo: {
                 let mut arr = [LfoParamsCopy {
                     enabled: false,

@@ -17,12 +17,13 @@ impl ImpulseApp {
     /// prompt with the results. No-op if no audio has been captured yet.
     pub(crate) fn trigger_listen(&mut self) {
         use crate::audio::analysis::{analyse_audio, format_snapshot};
-        let mut captured: Vec<f32> = Vec::with_capacity(441_000);
+        use crate::audio::{SAMPLE_RATE, SAMPLE_RATE_HZ};
+        let mut captured: Vec<f32> = Vec::with_capacity(SAMPLE_RATE_HZ as usize * 10);
         while let Ok(s) = self.capture_rx.pop() {
             captured.push(s);
         }
         if !captured.is_empty() {
-            let analysis = analyse_audio(&captured, 44100.0);
+            let analysis = analyse_audio(&captured, SAMPLE_RATE);
             let snapshot = format_snapshot(&analysis);
             let prompt = format!(
                 "{}\nYou are listening to the audio you just produced. React — correct any mix or arrangement issues. Respond in JSON.",

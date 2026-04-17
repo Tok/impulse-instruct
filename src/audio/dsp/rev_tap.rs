@@ -3,9 +3,9 @@
 // Extracted from mod.rs to stay under the 1000-line limit.
 
 /// Length of the per-FX reverse-tap circular buffer in samples — 1 second
-/// at 44.1 kHz.  Trade-off: longer = richer reverse character but more
-/// memory + a longer "rewind cycle" before the read tap loops.
-pub(super) const REV_BUF_LEN: usize = 44100;
+/// at the engine rate.  Trade-off: longer = richer reverse character but
+/// more memory + a longer "rewind cycle" before the read tap loops.
+pub(super) const REV_BUF_LEN: usize = crate::audio::SAMPLE_RATE_HZ as usize;
 
 /// Write `sig` to the FX-specific circular buffer at `head`, advance head,
 /// then read+return the current reversed-tap sample at `play` and decrement

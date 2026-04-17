@@ -253,10 +253,16 @@ Highlights of the cycle:
 
 ### Refactoring
 
-- [ ] **Panel typography constants** — define
-  `FONT_XS`/`FONT_SM`/`FONT_MD`/`FONT_LG`.
-- [ ] **Panel spacing constants** — define
-  `SPACING_SM`/`SPACING_MD`/`SPACING_LG`.
+- [ ] **Panel typography tiers** — if we do this, it should
+  be an enum (`FontTier::{Xs, Sm, Md, Lg}` with `.px()`)
+  rather than loose constants, so the variant set is closed
+  and call sites can't accidentally introduce a 9.25 px
+  one-off.  Only worth doing if we decide to collapse the
+  11 distinct `.size(...)` values currently in use down to
+  a few canonical tiers (which is a visual-design call, not
+  a pure refactor).
+- [ ] **Panel spacing tiers** — same shape.  Only worth it
+  if we settle on a small number of canonical gaps.
 - [ ] **Glass group helpers** — `glass_label(ui, text)` still to
   do (the inline pattern varies too much across panels for a
   single helper).  ✓ `widgets::glass_group_height(ctrl, extra)`

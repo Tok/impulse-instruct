@@ -18,6 +18,18 @@ use crate::state::{AppState, FxPlan, compile_fx_plan};
 
 pub use dsp::{AudioParams, DspState};
 
+// ─── Internal sample rate ────────────────────────────────────────────────────
+// All DSP, samplers and captures run at this fixed rate.  External files
+// (WAV, TTS output) are resampled on load.  The device rate is tracked
+// separately on the cpal stream and only matters at the I/O boundary.
+
+/// Internal sample rate as f32 — the canonical form used by DSP/analysis.
+pub const SAMPLE_RATE: f32 = 44_100.0;
+
+/// Same rate as an integer — use for `Vec` lengths, WAV headers, and any
+/// context where a `usize` / `u32` is expected.
+pub const SAMPLE_RATE_HZ: u32 = 44_100;
+
 /// Handle for pushing TTS audio to the DSP mix bus.
 /// Carries the target sample rate so the TTS pipeline can resample its WAV
 /// output to match the device rate — otherwise 24 kHz NeuTTS output played at
@@ -115,16 +127,16 @@ impl AudioEngine {
         // Ring buffer: audio thread → scope display
         let (mut scope_tx, scope_rx) = rtrb::RingBuffer::<f32>::new(4096);
 
-        // Ring buffer: audio thread → capture/analysis (≈10 s @ 44100 Hz)
-        let (mut capture_tx, capture_rx) = rtrb::RingBuffer::<f32>::new(441_000);
+        // Ring buffer: audio thread → capture/analysis (≈10 s at engine rate)
+        let (mut capture_tx, capture_rx) =
+            rtrb::RingBuffer::<f32>::new(SAMPLE_RATE_HZ as usize * 10);
 
-        // Ring buffer: audio thread → granular CAPTURE button
-        // (≈15 s @ 44100 Hz mono).  Always populated with the current
-        // master output; the UI drains it only while a capture is
-        // active.  Separate from capture_rx because that one's already
-        // consumed by the analyzer + LLM strip.
+        // Ring buffer: audio thread → granular CAPTURE button (≈15 s mono).
+        // Always populated with the current master output; the UI drains it
+        // only while a capture is active.  Separate from capture_rx because
+        // that one's already consumed by the analyzer + LLM strip.
         let (mut granular_capture_tx, granular_capture_rx) =
-            rtrb::RingBuffer::<f32>::new(44_100 * 15);
+            rtrb::RingBuffer::<f32>::new(SAMPLE_RATE_HZ as usize * 15);
 
         // Ring buffer: audio thread → stereo correlation meter (interleaved L,R pairs)
         let (mut stereo_tx, stereo_rx) = rtrb::RingBuffer::<f32>::new(8192);
@@ -339,7 +351,7 @@ pub fn read_wav_meta(path: &str) -> Option<crate::state::AmenMeta> {
     }
     let mut pos = 12usize;
     let mut channels = 1u16;
-    let mut src_rate = 44100u32;
+    let mut src_rate = SAMPLE_RATE_HZ;
     let mut bits = 16u16;
     let mut data_len = 0usize;
     while pos + 8 <= bytes.len() {
@@ -358,11 +370,11 @@ pub fn read_wav_meta(path: &str) -> Option<crate::state::AmenMeta> {
     }
     let frame_bytes = (channels as usize) * (bits as usize / 8).max(1);
     let n_frames = data_len.checked_div(frame_bytes).unwrap_or(0);
-    // Samples after internal resample to 44.1k (approx).
-    let samples_44k = if src_rate == 44100 {
+    // Samples after internal resample to the engine rate (approx).
+    let samples_44k = if src_rate == SAMPLE_RATE_HZ {
         n_frames
     } else {
-        ((n_frames as f64) * 44100.0 / (src_rate as f64)).round() as usize
+        ((n_frames as f64) * SAMPLE_RATE as f64 / (src_rate as f64)).round() as usize
     };
     Some(crate::state::AmenMeta {
         samples: samples_44k,
@@ -381,7 +393,7 @@ pub fn load_wav_to_44100(path: &str) -> Option<Arc<Vec<f32>>> {
 
     let mut pos = 12usize;
     let mut channels = 1u16;
-    let mut src_rate = 44100u32;
+    let mut src_rate = SAMPLE_RATE_HZ;
     let mut bits = 16u16;
     let mut data_start = 0usize;
     let mut data_len = 0usize;
@@ -424,11 +436,11 @@ pub fn load_wav_to_44100(path: &str) -> Option<Arc<Vec<f32>>> {
         mono.push(sum / channels as f32);
     }
 
-    // Resample to 44100 Hz if needed.
-    let out = if src_rate == 44100 {
+    // Resample to the engine rate if needed.
+    let out = if src_rate == SAMPLE_RATE_HZ {
         mono
     } else {
-        let ratio = src_rate as f32 / 44100.0;
+        let ratio = src_rate as f32 / SAMPLE_RATE;
         let new_len = (mono.len() as f32 / ratio) as usize;
         (0..new_len)
             .map(|i| {

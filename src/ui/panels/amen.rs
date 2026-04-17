@@ -8,7 +8,7 @@
 //   slice wheel + SLICES / REV / LOOP       → volume/pitch sliders
 //   start/end offset sliders                → gate/stutter sliders
 
-use crate::audio::{AudioCommand, load_wav_to_44100};
+use crate::audio::{AudioCommand, SAMPLE_RATE, load_wav_to_44100};
 use crate::state::ParamMode;
 use crate::ui::{ImpulseApp, theme, widgets};
 
@@ -378,7 +378,7 @@ pub fn draw_amen(app: &mut ImpulseApp, ui: &mut egui::Ui) {
 
     // ── Metadata strip ───────────────────────────────────────────────────────
     if let Some(m) = meta {
-        let sec = m.samples as f32 / 44100.0;
+        let sec = m.samples as f32 / SAMPLE_RATE;
         let size_kb = m.file_bytes as f32 / 1024.0;
         let info = format!(
             "{:.2}s  {}ch  {}-bit  {:.1}kHz  {:.0}KB",
@@ -499,8 +499,11 @@ pub fn draw_amen(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                 .clicked()
                 && let Some(data) = load_wav_to_44100(&path)
             {
-                let positions =
-                    crate::audio::onset::detect_onsets(&data, 44100.0, slice_count.max(2) as usize);
+                let positions = crate::audio::onset::detect_onsets(
+                    &data,
+                    SAMPLE_RATE,
+                    slice_count.max(2) as usize,
+                );
                 app.state.write().amen.slice_positions = positions;
                 changed = true;
             }

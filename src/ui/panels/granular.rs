@@ -6,7 +6,7 @@
 // state prompt linking to archive.org / freesound when no samples are
 // present.
 
-use crate::audio::{AudioCommand, load_wav_to_44100};
+use crate::audio::{AudioCommand, SAMPLE_RATE, load_wav_to_44100};
 use crate::ui::{ImpulseApp, theme, widgets};
 
 /// Directory scanned for user-dropped texture WAVs.
@@ -231,7 +231,7 @@ pub fn draw_granular(app: &mut ImpulseApp, ui: &mut egui::Ui) {
     // CAPTURE row
     ui.horizontal(|ui| {
         ui.label(
-            egui::RichText::new(format!("LIVE {:.1}s", tap_len as f32 / 44100.0))
+            egui::RichText::new(format!("LIVE {:.1}s", tap_len as f32 / SAMPLE_RATE))
                 .monospace()
                 .size(7.5)
                 .color(theme::SMOKE),

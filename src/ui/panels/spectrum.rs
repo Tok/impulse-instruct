@@ -1,6 +1,7 @@
 // ─── ui/panels/spectrum.rs ────────────────────────────────────────────────────
 // Spectrum analyser display — real-time FFT magnitude bars.
 
+use crate::audio::SAMPLE_RATE;
 use crate::ui::{ImpulseApp, theme};
 
 /// Number of logarithmic display bands (20 Hz – 20 kHz).
@@ -55,7 +56,7 @@ pub fn draw_spectrum(app: &mut ImpulseApp, ui: &mut egui::Ui) {
     } else {
         crate::audio::spectrum::log_bands(
             &app.spectrum_magnitudes,
-            44100.0 / crate::audio::spectrum::FFT_SIZE as f32,
+            SAMPLE_RATE / crate::audio::spectrum::FFT_SIZE as f32,
             NUM_BANDS,
         )
     };

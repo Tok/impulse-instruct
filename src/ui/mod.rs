@@ -294,7 +294,7 @@ impl ImpulseApp {
             amen_ui: Default::default(),
             neutts_online: false,
             granular_capture_rx: audio.granular_capture_rx,
-            granular_tap: vec![0.0; 44_100 * 3], // 3s at 44.1k
+            granular_tap: vec![0.0; crate::audio::SAMPLE_RATE_HZ as usize * 3], // 3s ring buffer
             granular_tap_head: 0,
             audio_analysis: None,
             last_analysis_time: 0.0,
