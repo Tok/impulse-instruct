@@ -78,6 +78,16 @@ Highlights of the cycle:
   bitcrush step + sidechain envelope follower & ducker + gated
   reverb envelope + 6-waveform LFO lookup + 8-step free-EG
   interpolation).  `mod.rs` shrank 998 → 955 lines.  +31 tests.
+- [x] **Voice DSP unit tests** — promoted `LadderFilter`,
+  `OnePole`, `NoiseGen`, `Envelope`, `AdsrPhase` (+
+  `adsr_samples`, `adsr_tick`, `osc_sample`, `drum_voice_idx`)
+  to `pub(crate)` so `tests/dsp_tests.rs` can hit them
+  directly.  +31 tests covering filter steady state +
+  HF attenuation + saturation safety, one-pole convergence,
+  noise-gen range/determinism/seed degenerate, envelope
+  trigger/decay/deactivation, ADSR phase transitions, osc
+  waveform shapes (saw/square/triangle/sine/noise), drum
+  voice index layout (808 / 909 / amen / gabber blocks).
 - [ ] **At-cap files (still)** — `src/ui/mod.rs` (1000),
   `ui/llm_strip.rs` (998), `ui/rack_canvas.rs` (997),
   `ui/panels/bass.rs` (995), `ui/panels/sequencer.rs` (992) are

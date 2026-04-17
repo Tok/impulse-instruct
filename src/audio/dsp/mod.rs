@@ -9,7 +9,7 @@ mod mod_apply;
 mod params;
 mod rev_tap;
 mod samplers;
-mod voices;
+pub mod voices;
 use bass303::Bass303;
 pub use dsp_util::midi_to_hz;
 use dsp_util::*;

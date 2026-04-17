@@ -3,14 +3,14 @@
 
 /// Moog-style 4-pole ladder filter state.
 #[derive(Clone, Copy, Default)]
-pub(super) struct LadderFilter {
-    pub(super) s: [f32; 4],
+pub(crate) struct LadderFilter {
+    pub(crate) s: [f32; 4],
 }
 
 impl LadderFilter {
     /// `g` is the per-stage filter coefficient (0–~0.99).
     /// Callers must map cutoff to a proper g before calling.
-    pub(super) fn process(&mut self, input: f32, g: f32, resonance: f32) -> f32 {
+    pub(crate) fn process(&mut self, input: f32, g: f32, resonance: f32) -> f32 {
         let f = g.clamp(0.001, 0.99);
         let k = resonance * 4.0; // self-oscillation at k=4.0
 
@@ -29,12 +29,12 @@ impl LadderFilter {
 
 /// Simple one-pole smoothing filter.
 #[derive(Clone, Copy, Default)]
-pub(super) struct OnePole {
-    pub(super) state: f32,
+pub(crate) struct OnePole {
+    pub(crate) state: f32,
 }
 
 impl OnePole {
-    pub(super) fn process(&mut self, input: f32, coeff: f32) -> f32 {
+    pub(crate) fn process(&mut self, input: f32, coeff: f32) -> f32 {
         self.state = self.state * coeff + input * (1.0 - coeff);
         self.state
     }
@@ -42,15 +42,15 @@ impl OnePole {
 
 /// PRNG for noise generation (xorshift32 — no stdlib, no heap).
 #[derive(Clone, Copy)]
-pub(super) struct NoiseGen {
-    pub(super) state: u32,
+pub(crate) struct NoiseGen {
+    pub(crate) state: u32,
 }
 
 impl NoiseGen {
-    pub(super) fn new(seed: u32) -> Self {
+    pub(crate) fn new(seed: u32) -> Self {
         Self { state: seed.max(1) }
     }
-    pub(super) fn next(&mut self) -> f32 {
+    pub(crate) fn next(&mut self) -> f32 {
         self.state ^= self.state << 13;
         self.state ^= self.state >> 17;
         self.state ^= self.state << 5;
@@ -61,17 +61,17 @@ impl NoiseGen {
 // ─── Drum voice generic base ──────────────────────────────────────────────────
 
 #[derive(Clone, Copy, Default)]
-pub(super) struct Envelope {
-    pub(super) value: f32,
-    pub(super) active: bool,
+pub(crate) struct Envelope {
+    pub(crate) value: f32,
+    pub(crate) active: bool,
 }
 
 impl Envelope {
-    pub(super) fn trigger(&mut self) {
+    pub(crate) fn trigger(&mut self) {
         self.value = 1.0;
         self.active = true;
     }
-    pub(super) fn tick(&mut self, decay_coeff: f32) -> f32 {
+    pub(crate) fn tick(&mut self, decay_coeff: f32) -> f32 {
         if !self.active {
             return 0.0;
         }
@@ -562,8 +562,8 @@ impl HooverVoice {
 // ─── AN1X-style virtual analog voice ─────────────────────────────────────────
 
 /// ADSR envelope phase.
-#[derive(Clone, Copy, PartialEq)]
-enum AdsrPhase {
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub(crate) enum AdsrPhase {
     Idle,
     Attack,
     Decay,
@@ -578,13 +578,13 @@ const ADSR_MAX_RELEASE_MS: f32 = 30_000.0; // 30 s
 
 /// Maps a 0–1 ADSR time knob to samples. Quadratic curve: 0→1ms, 1→max_ms.
 #[inline]
-fn adsr_samples(v: f32, sr: f32, max_ms: f32) -> f32 {
+pub(crate) fn adsr_samples(v: f32, sr: f32, max_ms: f32) -> f32 {
     let ms = 1.0 + v * v * (max_ms - 1.0);
     (ms * 0.001 * sr).max(1.0)
 }
 
 /// Step one ADSR sample; returns current envelope value.
-fn adsr_tick(
+pub(crate) fn adsr_tick(
     phase: &mut AdsrPhase,
     val: &mut f32,
     gate: bool,
@@ -635,7 +635,7 @@ fn adsr_tick(
 
 /// Generate one sample from a waveform. `phase` is 0–1.
 #[inline]
-fn osc_sample(wave: u8, phase: f32, noise_state: &mut u32) -> f32 {
+pub(crate) fn osc_sample(wave: u8, phase: f32, noise_state: &mut u32) -> f32 {
     match wave {
         0 => phase * 2.0 - 1.0, // saw
         1 => {
@@ -926,7 +926,7 @@ impl An1xVoice {
 }
 
 /// Map DrumVoice to its index in the drum_velocity array (matches DrumVoice::ALL order).
-pub(super) fn drum_voice_idx(voice: &crate::state::DrumVoice) -> usize {
+pub(crate) fn drum_voice_idx(voice: &crate::state::DrumVoice) -> usize {
     use crate::state::DrumVoice::*;
     match voice {
         Kick808 => 0,
