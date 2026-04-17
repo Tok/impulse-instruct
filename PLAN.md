@@ -52,9 +52,27 @@ Highlights of the cycle:
 
 ### Regression coverage
 
-- [ ] **State size-limit watch** — `state/mod.rs` keeps bumping
-  against the 1000-line cap.  Extract `bass` / `amen` / `preecho`
-  accessors into dedicated modules so the core mod.rs stays lean.
+- [x] **`apply_llm_update` decomposition (round 1)** — extracted
+  `apply_sequencer_globals`, `apply_amen_update`,
+  `apply_euclidean_update` (and the `drum_voice_from_str` mapping)
+  into `state/llm_apply_seq.rs`.  `state/llm_apply.rs` shrank
+  874 → 726 lines.  +24 tests covering clamp ranges, locked-path
+  preservation, scope filtering, end/start swap, slice-array
+  truncation/clear, and the euclidean voice mapping.
+- [ ] **`apply_llm_update` decomposition (round 2)** — the
+  per-melodic-voice block (lines 96–470 of the new file) and the
+  preecho block are still inline.  Extract them next so each
+  section can be unit-tested in isolation.
+- [ ] **`unlocked_f32` range bug** — the helper hard-clamps to
+  `[0, 1]` before the call site re-clamps to the field's real
+  range, so `amen.pitch` (±24), `amen.source_bpm` (40–300), etc.
+  end up incorrectly clamped.  Add a range-aware variant or
+  bypass the inner clamp for non-unit fields.
+- [ ] **At-cap files** — `src/ui/mod.rs` (1000), `audio/dsp/mod.rs`
+  (998), `ui/llm_strip.rs` (998), `ui/rack_canvas.rs` (997),
+  `ui/panels/bass.rs` (995), `ui/panels/sequencer.rs` (992) are
+  all one feature away from the hard limit.  Plan splits before
+  the next feature lands in any of them.
 
 ### Agent tooling — gradual control & expressiveness
 

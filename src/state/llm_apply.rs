@@ -1,12 +1,10 @@
 // ─── state/llm_apply.rs ── LLM update application (extracted from transitions).
+use super::llm_apply_seq::{apply_amen_update, apply_euclidean_update, apply_sequencer_globals};
 use super::llm_helpers::{
     apply_an1x_update, apply_bass_update, apply_fx_update, apply_hoover_update, unlocked_f32,
 };
-use super::transitions::{
-    expand_sequencer_steps, set_drum_step_ratchet, set_drum_voice_steps, set_lane_steps,
-};
-use super::{AppState, DrumVoice, LfoTarget, LfoWaveform, MAX_STEPS, Scale, snap_to_scale};
-use crate::sequencer::euclidean_rhythm;
+use super::transitions::{set_drum_step_ratchet, set_drum_voice_steps, set_lane_steps};
+use super::{AppState, DrumVoice, LfoTarget, LfoWaveform, MAX_STEPS, snap_to_scale};
 
 /// Apply an LLM-generated partial update, respecting locked params.
 pub fn apply_llm_update(state: AppState, update: &serde_json::Value, scope: &[String]) -> AppState {
@@ -49,39 +47,9 @@ pub fn apply_llm_update(state: AppState, update: &serde_json::Value, scope: &[St
     let any_seq_scope =
         seq_scope || bass_ok || hoover_ok || an1x_ok || kit_a_ok || kit_b_ok || amen_ok;
     if any_seq_scope && let Some(seq) = update.get("sequencer").and_then(|v| v.as_object()) {
-        // ── Global fields — require explicit "sequencer" scope ───────
+        // Global fields — require explicit "sequencer" scope.
         if seq_scope {
-            if !locked.contains("sequencer.bpm")
-                && let Some(bpm) = seq.get("bpm").and_then(|v| v.as_f64())
-            {
-                s.sequencer.bpm = (bpm as f32).clamp(40.0, 250.0);
-            }
-            if !locked.contains("sequencer.swing")
-                && let Some(v) = seq.get("swing").and_then(|v| v.as_f64())
-            {
-                s.sequencer.swing = (v as f32).clamp(0.0, 1.0);
-            }
-            if !locked.contains("sequencer.steps")
-                && let Some(steps) = seq.get("steps").and_then(|v| v.as_u64())
-            {
-                s = expand_sequencer_steps(s, steps as usize);
-            }
-            if !locked.contains("sequencer.time_sig_num")
-                && let Some(v) = seq.get("time_sig_num").and_then(|v| v.as_u64())
-            {
-                s.sequencer.time_sig_num = (v as u8).clamp(2, 9);
-            }
-            if !locked.contains("sequencer.root_note")
-                && let Some(v) = seq.get("root_note").and_then(|v| v.as_u64())
-            {
-                s.sequencer.root_note = (v as u8).clamp(0, 11);
-            }
-            if !locked.contains("sequencer.scale")
-                && let Some(v) = seq.get("scale").and_then(|v| v.as_str())
-                && let Some(sc) = Scale::from_str(v)
-            {
-                s.sequencer.scale = sc;
-            }
+            apply_sequencer_globals(&mut s, seq, locked);
         }
 
         // ── Per-drum-kit lengths + ratchets ──────────────────────────
@@ -656,135 +624,19 @@ pub fn apply_llm_update(state: AppState, update: &serde_json::Value, scope: &[St
         apply_an1x_update(&mut s, a, locked);
     }
 
-    // ── Amen sampler params (pitch, volume, loop, slice settings) ───────────
-    // JSON: { "amen": { "slice_count": 8, "gate": 0.85, "reverse": false,
-    //                   "stutter": 0, "start_offset": 0.0, "end_offset": 1.0,
-    //                   "loop_mode": true, "pitch": 0, "volume": 0.75 } }
+    // Amen sampler params (pitch, volume, loop, slice settings).
+    // See `state::llm_apply_seq::apply_amen_update` for the per-field rules.
     if in_scope("amen")
         && let Some(a) = update.get("amen").and_then(|v| v.as_object())
     {
-        s.amen.pitch =
-            unlocked_f32(s.amen.pitch, a, "pitch", "amen.pitch", locked).clamp(-24.0, 24.0);
-        s.amen.volume = unlocked_f32(s.amen.volume, a, "volume", "amen.volume", locked);
-        if let Some(v) = a.get("loop_mode").and_then(|v| v.as_bool())
-            && !locked.contains("amen.loop_mode")
-        {
-            s.amen.loop_mode = v;
-        }
-        if let Some(v) = a.get("slice_count").and_then(|v| v.as_u64())
-            && !locked.contains("amen.slice_count")
-        {
-            s.amen.slice_count = (v as u8).clamp(1, 16);
-        }
-        s.amen.start_offset = unlocked_f32(
-            s.amen.start_offset,
-            a,
-            "start_offset",
-            "amen.start_offset",
-            locked,
-        )
-        .clamp(0.0, 1.0);
-        s.amen.end_offset = unlocked_f32(
-            s.amen.end_offset,
-            a,
-            "end_offset",
-            "amen.end_offset",
-            locked,
-        )
-        .clamp(0.0, 1.0);
-        if s.amen.end_offset <= s.amen.start_offset {
-            s.amen.end_offset = (s.amen.start_offset + 0.01).min(1.0);
-        }
-        if let Some(v) = a.get("reverse").and_then(|v| v.as_bool())
-            && !locked.contains("amen.reverse")
-        {
-            s.amen.reverse = v;
-        }
-        s.amen.gate = unlocked_f32(s.amen.gate, a, "gate", "amen.gate", locked).clamp(0.05, 1.0);
-        if let Some(v) = a.get("stutter").and_then(|v| v.as_u64())
-            && !locked.contains("amen.stutter")
-        {
-            s.amen.stutter = (v as u8).min(4);
-        }
-        s.amen.source_bpm = unlocked_f32(
-            s.amen.source_bpm,
-            a,
-            "source_bpm",
-            "amen.source_bpm",
-            locked,
-        )
-        .clamp(40.0, 300.0);
-        if let Some(v) = a.get("bpm_stretch").and_then(|v| v.as_bool())
-            && !locked.contains("amen.bpm_stretch")
-        {
-            s.amen.bpm_stretch = v;
-        }
-        // Per-slice pitch array: either an array of semitone offsets or
-        // clears via empty array / null.
-        if !locked.contains("amen.slice_pitches")
-            && let Some(v) = a.get("slice_pitches")
-        {
-            if let Some(arr) = v.as_array() {
-                s.amen.slice_pitches = arr
-                    .iter()
-                    .filter_map(|x| x.as_f64())
-                    .map(|x| (x as f32).clamp(-24.0, 24.0))
-                    .take(16)
-                    .collect();
-            } else if v.is_null() {
-                s.amen.slice_pitches.clear();
-            }
-        }
-        if !locked.contains("amen.slice_volumes")
-            && let Some(v) = a.get("slice_volumes")
-        {
-            if let Some(arr) = v.as_array() {
-                s.amen.slice_volumes = arr
-                    .iter()
-                    .filter_map(|x| x.as_f64())
-                    .map(|x| (x as f32).clamp(0.0, 2.0))
-                    .take(16)
-                    .collect();
-            } else if v.is_null() {
-                s.amen.slice_volumes.clear();
-            }
-        }
+        apply_amen_update(&mut s, a, locked);
     }
 
-    // ── Euclidean rhythm ──────────────────────────────────────────────────────
-    // JSON: { "euclidean": { "voice": "kick_a", "pulses": 5, "steps": 16 } }
+    // Euclidean rhythm shortcut — see `apply_euclidean_update`.
     if in_scope("euclidean")
         && let Some(e) = update.get("euclidean").and_then(|v| v.as_object())
     {
-        let voice_str = e.get("voice").and_then(|v| v.as_str()).unwrap_or("");
-        let pulses = e.get("pulses").and_then(|v| v.as_u64()).unwrap_or(4) as usize;
-        let n_steps = e
-            .get("steps")
-            .and_then(|v| v.as_u64())
-            .unwrap_or(s.sequencer.steps as u64) as usize;
-        let drum_voice = match voice_str {
-            "kick_a" => Some(DrumVoice::Kick808),
-            "snare_a" => Some(DrumVoice::Snare808),
-            "hihat_a" | "closed_hat_a" => Some(DrumVoice::HihatClosed808),
-            "hihat_a_open" | "open_hat_a" => Some(DrumVoice::HihatOpen808),
-            "kick_b" => Some(DrumVoice::Kick909),
-            "snare_b" => Some(DrumVoice::Snare909),
-            "hihat_b" | "closed_hat_b" => Some(DrumVoice::HihatClosed909),
-            "hihat_b_open" | "open_hat_b" => Some(DrumVoice::HihatOpen909),
-            "clap_b" => Some(DrumVoice::Clap909),
-            _ => None,
-        };
-        if let Some(voice) = drum_voice {
-            let lock_path = format!("sequencer.{}_steps", voice_str);
-            if !locked.contains(&lock_path) {
-                let pattern = euclidean_rhythm(pulses, n_steps);
-                if let Some(row) = s.sequencer.drum_patterns.get_mut(&voice) {
-                    for (i, &active) in pattern.iter().enumerate().take(row.len()) {
-                        row[i].active = active;
-                    }
-                }
-            }
-        }
+        apply_euclidean_update(&mut s, e, locked);
     }
 
     // ── Internal music API ────────────────────────────────────────────────────

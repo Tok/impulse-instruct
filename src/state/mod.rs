@@ -580,6 +580,7 @@ impl LlmAgentState {
 /// Sync the default (first) LlmAgentState with the global LlmState.
 pub mod jam_tools;
 pub mod llm_apply;
+pub mod llm_apply_seq;
 pub(crate) mod llm_helpers;
 pub(crate) mod llm_rack;
 pub mod transitions;
