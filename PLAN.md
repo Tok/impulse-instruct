@@ -149,11 +149,21 @@ Highlights of the cycle:
   passthrough + finite at full drive; Phaser mix=0 passthrough
   + audible full wet; Autotune amount=0 / mix=0 passthrough
   + finite under full pitch shift + audible after priming.
-- [ ] **At-cap files (still)** — `src/ui/mod.rs` (1000),
-  `ui/llm_strip.rs` (998), `ui/rack_canvas.rs` (997),
-  `ui/panels/bass.rs` (995), `ui/panels/sequencer.rs` (992) are
-  all one feature away from the hard limit.  Plan splits before
-  the next feature lands in any of them.
+- [ ] **At-cap files** — three of five split; two remain:
+  - [x] `src/ui/mod.rs` (1000 → 686) — extracted
+    `drain_llm_outputs` into `ui/llm_drain.rs`.
+  - [x] `ui/llm_strip.rs` (998 → 557) — extracted the Huth
+    note-colorizer + its 12 tests into `ui/llm_log_color.rs`
+    (header.rs call site updated).
+  - [x] `ui/rack_canvas.rs` (997 → 858) — extracted the fixed
+    12-col grid helpers (RACK_GAP, grid_col_w, module_grid_w/h,
+    sequencer_grid_rows/h, grid_step, span_w, grid_unit, card_x,
+    draw_zone_grid_dots) into `ui/rack_grid.rs`; rack_ai.rs
+    import path updated.
+  - [ ] `ui/panels/bass.rs` (995) — monolithic `draw_bass`
+    function with deeply shared mut state; split needs a design
+    pass.
+  - [ ] `ui/panels/sequencer.rs` (992) — same shape as bass.rs.
 
 ### Agent tooling — gradual control & expressiveness
 

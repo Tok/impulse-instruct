@@ -88,7 +88,7 @@ impl ImpulseApp {
                             .show(ui, |ui: &mut egui::Ui| {
                                 ui.spacing_mut().item_spacing.y = 0.0;
                                 let trimmed = self.log_text.trim_end_matches('\n');
-                                let job = super::llm_strip::colorize_log(trimmed, theme::FOG);
+                                let job = super::llm_log_color::colorize_log(trimmed, theme::FOG);
                                 ui.add(egui::Label::new(job).wrap().selectable(true));
                             });
                     });

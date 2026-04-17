@@ -4,10 +4,8 @@
 use crate::state::{ModuleKind, Zone, rack::GRID_COLS};
 use crate::ui::ImpulseApp;
 use crate::ui::module_card::{self, PortPos};
-use crate::ui::rack_canvas::{
-    card_x, draw_zone_grid_dots, grid_step, module_grid_h, module_grid_w,
-};
 use crate::ui::rack_content::{draw_llm_agent_content, handle_title_drag, reorder_module_by_drop};
+use crate::ui::rack_grid::{card_x, draw_zone_grid_dots, grid_step, module_grid_h, module_grid_w};
 
 #[allow(clippy::too_many_arguments)]
 pub(super) fn draw_ai_zone(
