@@ -75,7 +75,7 @@ pub fn draw_hoover(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                 }
                 {
                     let mut v = app.state.read().hoover.resonance;
-                    if widgets::param_control(ui, "RESO", &mut v, ParamMode::Free, ctrl).0 {
+                    if widgets::param_control(ui, "RESONANCE", &mut v, ParamMode::Free, ctrl).0 {
                         app.state.write().hoover.resonance = v;
                         app.push_audio_params();
                     }

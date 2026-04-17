@@ -153,6 +153,9 @@ pub struct ImpulseApp {
     ui_volume: f32,
     /// Last non-zero monitor volume — restored when the user un-mutes.
     pre_mute_volume: f32,
+    /// User-adjusted center column width in the lower header band (event
+    /// stream + bar oscilloscope).  0 means "use default = ~40 % of width".
+    pub(crate) lower_center_w: f32,
     piano_show_labels: bool,
     pub(crate) spectrum_magnitudes: Vec<f32>,
     pub(crate) spectrum_peaks: Vec<f32>,
@@ -319,6 +322,7 @@ impl ImpulseApp {
             export_bars: 8,
             ui_volume: 1.0,
             pre_mute_volume: 1.0,
+            lower_center_w: 0.0,
             piano_show_labels: true,
             spectrum_magnitudes: Vec::new(),
             spectrum_peaks: Vec::new(),

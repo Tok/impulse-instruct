@@ -9,7 +9,7 @@ use crate::ui::{ImpulseApp, theme, widgets};
 const TARGET_LABELS: &[(&str, LfoTarget)] = &[
     ("NONE", LfoTarget::None),
     ("CUTOFF", LfoTarget::BassCutoff),
-    ("RESO", LfoTarget::BassResonance),
+    ("RESONANCE", LfoTarget::BassResonance),
     ("PITCH", LfoTarget::BassPitch),
     ("VOLUME", LfoTarget::BassVolume),
     ("REVERB", LfoTarget::ReverbMix),

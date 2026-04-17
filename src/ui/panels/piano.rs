@@ -182,13 +182,21 @@ pub fn draw_piano(app: &mut ImpulseApp, ui: &mut egui::Ui, ctx: &egui::Context) 
             } else {
                 (1.5, 0.32) // other degrees — subtle
             };
-            theme::led(
-                painter,
-                Pos2::new(dot_x, dot_y),
-                dot_r,
-                Color32::from_gray(220),
-                intensity,
-            );
+            // Bright white LEDs disappear on bare-white keys — when Huth
+            // coloring is disabled, fall back to a dark "black LED" that
+            // emits darkness instead.  With Huth on, keys are tinted, so
+            // the white LED reads fine.
+            if huth_on {
+                theme::led(
+                    painter,
+                    Pos2::new(dot_x, dot_y),
+                    dot_r,
+                    Color32::from_gray(220),
+                    intensity,
+                );
+            } else {
+                theme::led_dark(painter, Pos2::new(dot_x, dot_y), dot_r, intensity);
+            }
         }
 
         // Labels: C notes always visible; all notes when show_label is on

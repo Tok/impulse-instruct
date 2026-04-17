@@ -347,7 +347,7 @@ pub(super) fn draw_master_content(app: &mut ImpulseApp, ui: &mut egui::Ui) {
 
     ui.horizontal(|ui| {
         ui.label(
-            egui::RichText::new("MASTER VOL")
+            egui::RichText::new("MASTER VOLUME")
                 .monospace()
                 .size(9.0)
                 .color(theme::ASH),

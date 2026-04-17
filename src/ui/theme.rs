@@ -230,14 +230,17 @@ pub fn draw_glass_panel(painter: &egui::Painter, rect: egui::Rect, rounding: egu
 // believable LED we ALSO brighten the core toward white as intensity rises —
 // real LEDs bloom toward white at their hot spot.
 
-/// 5-ring LED falloff: (radius_multiplier, alpha).  Outermost is intentionally
-/// very transparent so the halo fades into the background instead of
-/// terminating in a hard edge.
-const LED_RING_LAYERS: [(f32, u8); 5] = [
-    (3.2, 6), // outermost — barely visible
-    (2.4, 22),
-    (1.8, 55),
-    (1.3, 130),
+/// 8-ring LED falloff: (radius_multiplier, alpha).  Outermost rings are
+/// nearly invisible (alpha 2 / 7) so the halo blends seamlessly into the
+/// surrounding panel; inner rings ramp steeply for a smooth glow gradient.
+const LED_RING_LAYERS: [(f32, u8); 8] = [
+    (4.2, 2), // outermost — almost invisible
+    (3.4, 7),
+    (2.7, 18),
+    (2.2, 38),
+    (1.7, 70),
+    (1.4, 115),
+    (1.15, 175),
     (1.0, 255), // saturated core
 ];
 
@@ -275,6 +278,42 @@ pub fn led(painter: &egui::Painter, center: Pos2, radius: f32, color: Color32, i
         center + spec_off,
         (radius * 0.32).max(0.7),
         rgba(255, 255, 255, 200),
+    );
+}
+
+/// "Dark LED" — inverse-light variant for use on bright surfaces (e.g. white
+/// piano keys when Huth coloring is disabled).  Same dome geometry as
+/// [`led`] but every ring darkens the surface instead of brightening it,
+/// and the hot spot trends toward true black.  The top-left specular
+/// highlight is kept (the lens dome is still glass).
+pub fn led_dark(painter: &egui::Painter, center: Pos2, radius: f32, intensity: f32) {
+    let i = intensity.clamp(0.0, 1.0);
+    if i <= 0.0 || radius <= 0.0 {
+        return;
+    }
+    let scale = |a: u8| -> u8 { (a as f32 * i) as u8 };
+    let black = |a: u8| -> Color32 { Color32::from_rgba_unmultiplied(0, 0, 0, scale(a)) };
+
+    // 8 concentric rings — same geometry as `led`, all in BLACK.  On a
+    // bright key this paints a soft dark halo and a near-solid dark core.
+    for &(mult, alpha) in &LED_RING_LAYERS {
+        painter.circle_filled(center, radius * mult, black(alpha));
+    }
+    // Hot spot — pull the centre even darker (the "deep crystal").
+    painter.circle_filled(center, radius * 0.6, black(220));
+    // Outer rim (a hair lighter than the surrounding dark ring) so the
+    // dome reads as a physical object, not just a hole.
+    painter.circle_stroke(
+        center,
+        radius,
+        Stroke::new(0.7, Color32::from_rgba_unmultiplied(40, 40, 40, scale(180))),
+    );
+    // Specular highlight near top-left (glass dome catches light).
+    let spec_off = Vec2::new(-radius * 0.32, -radius * 0.32);
+    painter.circle_filled(
+        center + spec_off,
+        (radius * 0.32).max(0.7),
+        Color32::from_rgba_unmultiplied(255, 255, 255, scale(180)),
     );
 }
 
@@ -348,6 +387,72 @@ pub fn draw_screen_bezel(painter: &egui::Painter, rect: Rect, rounding: Rounding
 
 /// Default rounding used by `screen_chip`.
 pub const SCREEN_CHIP_ROUNDING: f32 = 3.0;
+
+// ─── Header grid ─────────────────────────────────────────────────────────────
+//
+// Both header panels (top transport bar + lower log/scope band) share a
+// single virtual grid of `HEADER_TOTAL_COLS` columns so the per-section
+// padding and widths line up across the two strips.
+//
+// Cell width scales with the window so the layout always fits exactly
+// horizontally.  Cell height is locked to `HEADER_CELL_H_MIN` so 2-row
+// chips stay readable on narrow displays.
+
+/// Virtual cell columns spanning the full header width.
+pub const HEADER_TOTAL_COLS: u32 = 105;
+/// Cells tall the top transport strip occupies.
+pub const HEADER_TOP_ROWS: u32 = 2;
+/// Cells tall the lower (log + visualizers) strip occupies by default.
+pub const HEADER_LOWER_ROWS: u32 = 6;
+/// Minimum cell height in pixels — protects text legibility on narrow displays.
+pub const HEADER_CELL_H_MIN: f32 = 20.0;
+/// Minimum cell width in pixels.
+pub const HEADER_CELL_W_MIN: f32 = 10.0;
+/// Inset (px) the chip content gets relative to its outer cell rect.
+pub const HEADER_CHIP_INSET: f32 = 4.0;
+
+/// Compute the per-cell pixel size for the given total available pixel width.
+pub fn header_cell_size(available_w: f32) -> (f32, f32) {
+    let cell_w = (available_w / HEADER_TOTAL_COLS as f32).max(HEADER_CELL_W_MIN);
+    let cell_h = cell_w.max(HEADER_CELL_H_MIN);
+    (cell_w, cell_h)
+}
+
+/// Translate a (col, row, span_cols, span_rows) cell tuple to a pixel rect
+/// anchored at `origin`.
+pub fn header_cell_rect(
+    origin: Pos2,
+    cell_w: f32,
+    cell_h: f32,
+    col: u32,
+    row: u32,
+    span_cols: u32,
+    span_rows: u32,
+) -> Rect {
+    Rect::from_min_size(
+        Pos2::new(
+            origin.x + col as f32 * cell_w,
+            origin.y + row as f32 * cell_h,
+        ),
+        Vec2::new(span_cols as f32 * cell_w, span_rows as f32 * cell_h),
+    )
+}
+
+/// Same screen-chip look as [`screen_chip`] but placed at an explicit
+/// `outer_rect` (used by the header grid).  Insets the content by
+/// [`HEADER_CHIP_INSET`] so widgets don't touch the bezel.
+pub fn screen_chip_at(
+    ui: &mut egui::Ui,
+    outer_rect: Rect,
+    fill: Color32,
+    content: impl FnOnce(&mut egui::Ui),
+) {
+    let rounding = Rounding::same(SCREEN_CHIP_ROUNDING);
+    draw_screen_panel(ui.painter(), outer_rect, rounding, fill);
+    let inner = outer_rect.shrink(HEADER_CHIP_INSET);
+    let mut child = ui.child_ui(inner, *ui.layout(), None);
+    content(&mut child);
+}
 
 /// Wrap `content` in a recessed-screen "chip" — a small framed area used
 /// to group header controls so they read as separate displays instead of

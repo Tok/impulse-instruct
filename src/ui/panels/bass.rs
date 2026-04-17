@@ -259,7 +259,7 @@ pub fn draw_bass(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                     }
                     let (ch, cy) = widgets::param_control(
                         ui,
-                        "RESO",
+                        "RESONANCE",
                         &mut resonance,
                         param_mode("bass.resonance", &locked, &focused),
                         ctrl_big,
@@ -274,7 +274,7 @@ pub fn draw_bass(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                 widgets::centered_row(ui, |ui| {
                     let (ch, cy) = widgets::param_control(
                         ui,
-                        "ENVMOD",
+                        "ENV. MOD",
                         &mut env_mod,
                         param_mode("bass.env_mod", &locked, &focused),
                         ctrl,
@@ -634,7 +634,7 @@ pub fn draw_bass(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             let (lx1, ly1, mut vx1, mut vy1) = match p1 {
                 1 => ("ACCENT", "VOLUME", accent, vol),
                 2 => ("DRIVE", "SUB", dist, sub_osc_level),
-                _ => ("CUTOFF", "RESO", cutoff, resonance),
+                _ => ("CUTOFF", "RESONANCE", cutoff, resonance),
             };
             let xy1_locked_cur = match p1 {
                 1 => {
@@ -688,7 +688,7 @@ pub fn draw_bass(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             let (lx2, ly2, mut vx2, mut vy2) = match p2 {
                 1 => ("FM.DEPTH", "FM.RATIO", fm_depth, fm_ratio),
                 2 => ("NOISE", "GLIDE", noise_mix, portamento_time),
-                _ => ("ENVMOD", "DECAY", env_mod, decay),
+                _ => ("ENV. MOD", "DECAY", env_mod, decay),
             };
             let xy2_locked_cur = match p2 {
                 1 => false,

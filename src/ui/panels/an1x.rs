@@ -272,7 +272,7 @@ pub fn draw_an1x(app: &mut ImpulseApp, ui: &mut Ui) {
                 );
                 widgets::centered_row(ui, |ui| {
                     ak!(ui, "CUTOFF", filter_cutoff);
-                    ak!(ui, "RESO", filter_resonance);
+                    ak!(ui, "RESONANCE", filter_resonance);
                 });
                 widgets::centered_row(ui, |ui| {
                     ak!(ui, "ENVAMT", filter_env_amount);

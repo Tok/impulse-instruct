@@ -189,7 +189,7 @@ impl ImpulseApp {
                 0.0
             };
             ui.label(
-                egui::RichText::new(format!("CTX {:.0}%", pct * 100.0))
+                egui::RichText::new(format!("CONTEXT {:.0}%", pct * 100.0))
                     .monospace()
                     .size(8.0)
                     .color(if pct > 0.85 { theme::FOG } else { theme::ASH }),
@@ -209,7 +209,7 @@ impl ImpulseApp {
             if ui
                 .add(
                     egui::Button::new(
-                        egui::RichText::new("RST")
+                        egui::RichText::new("RESET")
                             .monospace()
                             .size(7.5)
                             .color(theme::IRON),

@@ -98,7 +98,7 @@ pub fn draw_toolbar(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             )
             .clicked()
         };
-        if tbtn(ui, "ARR") {
+        if tbtn(ui, "ARRANGE") {
             app.state.write().rack.arrange_canonical();
             app.session_dirty = true;
         }

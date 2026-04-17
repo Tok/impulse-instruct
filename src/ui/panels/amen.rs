@@ -594,7 +594,11 @@ pub fn draw_amen(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             // so the state reads cleanly without needing the hub arrow.
             ui.horizontal(|ui| {
                 lbl(ui, "DIR");
-                if widgets::toggle_button(ui, if reverse { "REV" } else { "FWD" }, &mut reverse) {
+                if widgets::toggle_button(
+                    ui,
+                    if reverse { "REVERSE" } else { "FORWARD" },
+                    &mut reverse,
+                ) {
                     changed = true;
                 }
                 if widgets::toggle_button(

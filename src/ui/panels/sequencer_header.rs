@@ -125,7 +125,7 @@ pub(super) fn draw_line_2(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         // Time signature
         let current_ts = app.state.read().sequencer.time_sig_num;
         ui.label(
-            egui::RichText::new("TS")
+            egui::RichText::new("TIME SIG.")
                 .color(theme::SMOKE)
                 .monospace()
                 .size(8.0),

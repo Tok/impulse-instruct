@@ -229,7 +229,7 @@ fn draw_llm_agent_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, module_id: u32)
         use crate::state::ConversationMode;
         for (label, mode) in &[
             ("OFF", ConversationMode::Off),
-            ("PRD", ConversationMode::Producer),
+            ("PRODUCER", ConversationMode::Producer),
             ("DJ", ConversationMode::Dj),
             ("MC", ConversationMode::Mc),
         ] {
@@ -272,7 +272,7 @@ fn draw_llm_agent_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, module_id: u32)
         if ui
             .add(
                 egui::Button::new(
-                    egui::RichText::new("THK")
+                    egui::RichText::new("THINK")
                         .monospace()
                         .size(7.5)
                         .color(think_col),
@@ -305,7 +305,7 @@ fn draw_llm_agent_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, module_id: u32)
             )
             .clicked()
         };
-        if role_btn(ui, "PRD", &AgentRole::Producer) {
+        if role_btn(ui, "PRODUCER", &AgentRole::Producer) {
             app.state.write().llm_agents[idx].role = AgentRole::Producer;
         }
         if role_btn(ui, "MC", &AgentRole::Mc) {

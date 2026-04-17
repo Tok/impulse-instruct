@@ -102,10 +102,10 @@ pub fn draw_kit_a(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                 }
             });
             widgets::centered_row(ui, |ui| {
-                if widgets::param_control(ui, "P.DPT", &mut kped, ParamMode::Free, ctrl).0 {
+                if widgets::param_control(ui, "P.DEPTH", &mut kped, ParamMode::Free, ctrl).0 {
                     changed = true;
                 }
-                if widgets::param_control(ui, "P.TIM", &mut kpet, ParamMode::Free, ctrl).0 {
+                if widgets::param_control(ui, "P.TIME", &mut kpet, ParamMode::Free, ctrl).0 {
                     changed = true;
                 }
                 if widgets::param_control(ui, "CLIP", &mut kclip, ParamMode::Free, ctrl).0 {
