@@ -149,21 +149,22 @@ Highlights of the cycle:
   passthrough + finite at full drive; Phaser mix=0 passthrough
   + audible full wet; Autotune amount=0 / mix=0 passthrough
   + finite under full pitch shift + audible after priming.
-- [ ] **At-cap files** — three of five split; two remain:
-  - [x] `src/ui/mod.rs` (1000 → 686) — extracted
-    `drain_llm_outputs` into `ui/llm_drain.rs`.
-  - [x] `ui/llm_strip.rs` (998 → 557) — extracted the Huth
-    note-colorizer + its 12 tests into `ui/llm_log_color.rs`
-    (header.rs call site updated).
-  - [x] `ui/rack_canvas.rs` (997 → 858) — extracted the fixed
-    12-col grid helpers (RACK_GAP, grid_col_w, module_grid_w/h,
-    sequencer_grid_rows/h, grid_step, span_w, grid_unit, card_x,
-    draw_zone_grid_dots) into `ui/rack_grid.rs`; rack_ai.rs
-    import path updated.
-  - [ ] `ui/panels/bass.rs` (995) — monolithic `draw_bass`
-    function with deeply shared mut state; split needs a design
-    pass.
-  - [ ] `ui/panels/sequencer.rs` (992) — same shape as bass.rs.
+- [x] **At-cap files** — all five split, every file now
+  comfortably under 1000:
+  - `src/ui/mod.rs` (1000 → 685) — `drain_llm_outputs` →
+    `ui/llm_drain.rs`.
+  - `ui/llm_strip.rs` (998 → 557) — Huth note-colorizer + 12
+    tests → `ui/llm_log_color.rs`.
+  - `ui/rack_canvas.rs` (997 → 858) — 12-col grid helpers →
+    `ui/rack_grid.rs`.
+  - `ui/panels/bass.rs` (995 → 788) — WAVE/FILT/PRESET + Supersaw
+    row → `panels/bass_wave.rs`; LOCKED-params strip →
+    `panels/bass_locks.rs`.  Follows the existing `bass_noise.rs`
+    sibling-helper pattern — each section re-reads its own
+    snapshot from AppState rather than threading locals.
+  - `ui/panels/sequencer.rs` (992 → 742) — Line-1 (BPM row) and
+    Line-2 (Key/Scale/Swing) header strips → `panels/
+    sequencer_header.rs` (`draw_line_1`, `draw_line_2`).
 
 ### Agent tooling — gradual control & expressiveness
 
