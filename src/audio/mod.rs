@@ -261,9 +261,9 @@ impl AudioEngine {
                         midi_clock_running = running_now;
 
                         if running_now {
-                            // tick_interval = sr * 60 / (bpm * 24)
-                            let tick_interval =
-                                (sample_rate as f64 * 60.0) / (seq_snap.bpm as f64 * 24.0);
+                            // tick_interval = sr * 60 / (bpm * 24 PPQN)
+                            let tick_interval = (sample_rate as f64 * 60.0)
+                                / (seq_snap.bpm as f64 * crate::midi::MIDI_CLOCK_PPQN);
                             midi_clock_acc += block as f64;
                             while midi_clock_acc >= tick_interval {
                                 midi_clock_acc -= tick_interval;

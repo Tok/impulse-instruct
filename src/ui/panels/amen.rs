@@ -9,7 +9,7 @@
 //   start/end offset sliders                → gate/stutter sliders
 
 use crate::audio::{AudioCommand, SAMPLE_RATE, load_wav_to_44100};
-use crate::state::ParamMode;
+use crate::state::{BPM_MAX, BPM_MIN, ParamMode};
 use crate::ui::{ImpulseApp, theme, widgets};
 
 // ─── Amen / WAV sampler panel ─────────────────────────────────────────────────
@@ -614,7 +614,11 @@ pub fn draw_amen(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                 lbl(ui, "BPM");
                 let mut v = source_bpm;
                 if ui
-                    .add(egui::DragValue::new(&mut v).range(40.0..=300.0).speed(0.5))
+                    .add(
+                        egui::DragValue::new(&mut v)
+                            .range(BPM_MIN..=BPM_MAX)
+                            .speed(0.5),
+                    )
                     .changed()
                 {
                     source_bpm = v;
@@ -719,7 +723,7 @@ pub fn draw_amen(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         s.amen.reverse = reverse;
         s.amen.gate = gate.clamp(0.05, 1.0);
         s.amen.stutter = stutter.min(4);
-        s.amen.source_bpm = source_bpm.clamp(40.0, 300.0);
+        s.amen.source_bpm = source_bpm.clamp(BPM_MIN, BPM_MAX);
         s.amen.bpm_stretch = bpm_stretch;
         drop(s);
         app.push_audio_params();

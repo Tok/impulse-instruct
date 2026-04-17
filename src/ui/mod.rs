@@ -94,7 +94,7 @@ impl MidiClockTracker {
                     self.count += 1;
                 }
                 let avg = self.intervals[..self.count].iter().sum::<f64>() / self.count as f64;
-                let bpm = 60.0 / (avg * 24.0);
+                let bpm = 60.0 / (avg * crate::midi::MIDI_CLOCK_PPQN);
                 self.last = Some(now);
                 return Some(bpm as f32);
             }

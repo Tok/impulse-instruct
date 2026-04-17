@@ -6,7 +6,9 @@
 
 use super::sequencer::{fixed_label, fixed_slider};
 use super::sequencer_chain::draw_pattern_chain;
-use crate::state::{MAX_STEPS, ROOT_NAMES, Scale, set_root_note, set_scale, set_scale_snap};
+use crate::state::{
+    BPM_MAX, BPM_MIN, MAX_STEPS, ROOT_NAMES, Scale, set_root_note, set_scale, set_scale_snap,
+};
 use crate::ui::{ImpulseApp, theme};
 
 /// Bank | Chain | Steps | BPM + SYNC row.
@@ -76,7 +78,9 @@ pub(super) fn draw_line_1(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             );
             let slider_col = if sync_on { theme::FOG } else { theme::IRON };
             ui.visuals_mut().selection.bg_fill = slider_col;
-            if fixed_slider(ui, HDR_SLIDER_W, 14.0, &mut bpm, 40.0..=300.0).changed() && !sync_on {
+            if fixed_slider(ui, HDR_SLIDER_W, 14.0, &mut bpm, BPM_MIN..=BPM_MAX).changed()
+                && !sync_on
+            {
                 app.state.write().sequencer.bpm = bpm;
                 app.push_audio_params();
             }

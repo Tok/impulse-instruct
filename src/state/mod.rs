@@ -36,6 +36,12 @@ pub use fx::FxState;
 pub const MAX_STEPS: usize = 64;
 pub const MAX_BASS_VOICES: usize = 4;
 
+/// Valid sequencer BPM bounds — used by sliders, drag-values, clamp()s, and the
+/// amen source-BPM field.  Narrower than General MIDI's 0–500 on purpose:
+/// sub-40 crawls and 300+ is already in drum'n'bass / gabber territory.
+pub const BPM_MIN: f32 = 40.0;
+pub const BPM_MAX: f32 = 300.0;
+
 // ─── Param control mode (tristate) ───────────────────────────────────────────
 
 /// Whether a parameter is under user control, free for the LLM, or actively

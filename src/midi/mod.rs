@@ -6,6 +6,11 @@
 use crossbeam_channel::Sender;
 use midir::{MidiInput, MidiInputConnection, MidiOutput, MidiOutputConnection};
 
+/// MIDI timing-clock resolution: 24 pulses per quarter note, as specified by
+/// the MIDI 1.0 standard.  Used to compute the clock-out tick interval from
+/// BPM and to recover BPM from incoming clock pulses.
+pub const MIDI_CLOCK_PPQN: f64 = 24.0;
+
 // ─── MIDI events we emit to the UI thread ─────────────────────────────────────
 
 #[derive(Clone, Debug)]

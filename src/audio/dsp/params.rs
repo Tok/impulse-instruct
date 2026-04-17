@@ -3,7 +3,8 @@
 // This module has no side effects; all types are Copy/Clone.
 
 use crate::state::{
-    An1xLfoTarget, An1xWave, AppState, FilterMode, LfoTarget, LfoWaveform, ModuleKind,
+    An1xLfoTarget, An1xWave, AppState, BPM_MAX, BPM_MIN, FilterMode, LfoTarget, LfoWaveform,
+    ModuleKind,
 };
 
 /// Walk the rack's Mod cables and emit a fixed-size array of compiled mod
@@ -857,7 +858,7 @@ impl AudioParams {
                 }
                 arr
             },
-            amen_source_bpm: s.amen.source_bpm.clamp(40.0, 300.0),
+            amen_source_bpm: s.amen.source_bpm.clamp(BPM_MIN, BPM_MAX),
             amen_bpm_stretch: s.amen.bpm_stretch,
             sequencer_bpm: s.sequencer.bpm,
             rack_bass: s

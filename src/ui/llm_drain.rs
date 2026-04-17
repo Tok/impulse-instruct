@@ -77,9 +77,7 @@ impl ImpulseApp {
                     action,
                     detail: display,
                 });
-                if self.activity_log.len() > 500 {
-                    self.activity_log.drain(..100);
-                }
+                self.trim_activity_log();
                 if let Some(ref mc) = out.mc_line {
                     self.log_text.push_str(&format!("► {}\n", mc));
                     log::info!("► {}", mc);

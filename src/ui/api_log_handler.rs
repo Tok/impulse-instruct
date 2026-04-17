@@ -4,6 +4,12 @@
 
 use super::ImpulseApp;
 
+/// Soft cap on the structured activity-log ring — when exceeded, the oldest
+/// `ACTIVITY_LOG_DRAIN` entries are dropped.  Cap/drain together give a ~4×
+/// churn cushion so we don't Vec::drain on every push.
+pub(crate) const ACTIVITY_LOG_CAP: usize = 500;
+pub(crate) const ACTIVITY_LOG_DRAIN: usize = 100;
+
 /// A single entry in the structured activity log.
 #[derive(Clone)]
 pub(crate) struct ActivityEntry {
@@ -56,8 +62,15 @@ impl ImpulseApp {
                 detail: msg,
             });
         }
-        if self.activity_log.len() > 500 {
-            self.activity_log.drain(..100);
+        self.trim_activity_log();
+    }
+
+    /// Drop the oldest `ACTIVITY_LOG_DRAIN` entries once the log grows past
+    /// `ACTIVITY_LOG_CAP`.  Kept as a method rather than inlined so both
+    /// producers (API log + LLM drain) stay in sync on the policy.
+    pub(crate) fn trim_activity_log(&mut self) {
+        if self.activity_log.len() > ACTIVITY_LOG_CAP {
+            self.activity_log.drain(..ACTIVITY_LOG_DRAIN);
         }
     }
 }
