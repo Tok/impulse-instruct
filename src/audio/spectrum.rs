@@ -74,6 +74,53 @@ pub fn log_bands(magnitudes: &[f32], bin_hz: f32, num_bands: usize) -> Vec<f32> 
     bands
 }
 
+// ─── Huth temperature (warm/cold) from spectrum ──────────────────────────────
+// Magnitude-weighted average of the per-semitone warm/cold scalar.  Pure
+// function — caller supplies the 12-entry semitone table (the UI layer's
+// `theme::NOTE_TEMP`) so this stays in the audio crate without a UI dep.
+
+/// Bins below this many dB above floor contribute zero weight.
+const TEMP_DB_THRESHOLD: f32 = -60.0;
+/// Lower frequency cutoff — below this is subsonic / DC bin.
+const TEMP_HZ_MIN: f32 = 30.0;
+/// Upper frequency cutoff — above this it's mostly cymbal noise without
+/// a meaningful pitch class.
+const TEMP_HZ_MAX: f32 = 5_000.0;
+
+/// Magnitude-weighted warm/cold value for the spectrum.  Returns a number
+/// in `[-1.0, 1.0]` (-1 cold / +1 warm) or `NaN` if there is no signal
+/// above the threshold.  `magnitudes` are dBFS as produced by
+/// [`compute_spectrum`].
+pub fn spectrum_temperature(magnitudes: &[f32], bin_hz: f32, semi_temps: &[f32; 12]) -> f32 {
+    if magnitudes.is_empty() || bin_hz <= 0.0 {
+        return f32::NAN;
+    }
+    let bin_lo = ((TEMP_HZ_MIN / bin_hz).floor() as usize).max(1);
+    let bin_hi = ((TEMP_HZ_MAX / bin_hz).ceil() as usize).min(magnitudes.len());
+    if bin_lo >= bin_hi {
+        return f32::NAN;
+    }
+    let mut weighted_sum = 0.0_f32;
+    let mut total_weight = 0.0_f32;
+    for (i, &mag) in magnitudes.iter().enumerate().take(bin_hi).skip(bin_lo) {
+        let w = (mag - TEMP_DB_THRESHOLD).max(0.0);
+        if w <= 0.0 {
+            continue;
+        }
+        let hz = i as f32 * bin_hz;
+        // Hz → fractional MIDI (12-TET, A4 = 440), then rounded pitch class.
+        let semi = (69.0 + 12.0 * (hz / 440.0).log2()).round() as i32;
+        let pc = semi.rem_euclid(12) as usize;
+        weighted_sum += w * semi_temps[pc];
+        total_weight += w;
+    }
+    if total_weight <= 0.0 {
+        f32::NAN
+    } else {
+        (weighted_sum / total_weight).clamp(-1.0, 1.0)
+    }
+}
+
 /// Hann window coefficient for sample `i` of `n`.
 fn hann(i: usize, n: usize) -> f32 {
     let phase = std::f32::consts::TAU * i as f32 / n as f32;
@@ -162,5 +209,59 @@ mod tests {
         let short = vec![0.5; 100]; // much less than FFT_SIZE
         let result = compute_spectrum(&short, 44100.0);
         assert_eq!(result.magnitudes.len(), FFT_SIZE / 2);
+    }
+
+    // C  C# D  D# E  F  F# G  G# A  A# B
+    const HUTH_TEMPS: [f32; 12] = [
+        -1.00, -0.87, -0.50, 0.00, 0.50, 1.00, 0.87, 0.34, -0.17, -0.64, -0.91, -1.00,
+    ];
+
+    fn sine(freq: f32, sr: f32) -> Vec<f32> {
+        (0..FFT_SIZE)
+            .map(|i| (std::f32::consts::TAU * freq * i as f32 / sr).sin())
+            .collect()
+    }
+
+    #[test]
+    fn spectrum_temperature_silence_is_nan() {
+        let mags = vec![-96.0_f32; 512];
+        let t = spectrum_temperature(&mags, 44100.0 / 1024.0, &HUTH_TEMPS);
+        assert!(t.is_nan(), "got {t}");
+    }
+
+    #[test]
+    fn spectrum_temperature_empty_input_is_nan() {
+        assert!(spectrum_temperature(&[], 44.0, &HUTH_TEMPS).is_nan());
+    }
+
+    #[test]
+    fn spectrum_temperature_c_tone_reads_cold() {
+        // C5 = 523.25 Hz — Huth Blue, coldest.
+        let sr = 44100.0_f32;
+        let result = compute_spectrum(&sine(523.25, sr), sr);
+        let t = spectrum_temperature(&result.magnitudes, result.bin_hz, &HUTH_TEMPS);
+        assert!(t < -0.5, "C tone should read cold, got {t}");
+    }
+
+    #[test]
+    fn spectrum_temperature_f_tone_reads_warm() {
+        // F5 = 698.46 Hz — Huth Orange, warmest.
+        let sr = 44100.0_f32;
+        let result = compute_spectrum(&sine(698.46, sr), sr);
+        let t = spectrum_temperature(&result.magnitudes, result.bin_hz, &HUTH_TEMPS);
+        assert!(t > 0.5, "F tone should read warm, got {t}");
+    }
+
+    #[test]
+    fn spectrum_temperature_in_range() {
+        // Mixed broadband signal — value must stay clamped.
+        let sr = 44100.0_f32;
+        let mut samples = sine(220.0, sr);
+        for (i, s) in sine(440.0, sr).iter().enumerate() {
+            samples[i] += s;
+        }
+        let result = compute_spectrum(&samples, sr);
+        let t = spectrum_temperature(&result.magnitudes, result.bin_hz, &HUTH_TEMPS);
+        assert!((-1.0..=1.0).contains(&t), "{t} out of range");
     }
 }

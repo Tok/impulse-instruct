@@ -3,16 +3,16 @@
 
 use serde::{Deserialize, Serialize};
 
-/// How much Huth *Farbige Noten* color theory is applied to the UI.
+/// Whether Huth *Farbige Noten* coloring is applied to the piano + sequencer.
+/// Older sessions used `PianoOnly` / `Full` — both deserialize to `On`.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum HuthStyle {
-    /// Huth colors only on the piano keyboard (existing behavior).
-    #[default]
-    PianoOnly,
-    /// Piano + sequencer melodic note cells rendered as Huth U-shapes.
-    Full,
-    /// All UI chrome is monochrome; piano uses standard black/white.
+    /// Monochrome — piano uses standard black/white, sequencer dots are gray.
     Off,
+    /// Huth colors on the piano keyboard and sequencer LED dots.
+    #[default]
+    #[serde(alias = "PianoOnly", alias = "Full")]
+    On,
 }
 
 /// How often the session is auto-saved to `session.json`.
@@ -160,7 +160,7 @@ impl UiPrefs {
 impl Default for UiPrefs {
     fn default() -> Self {
         Self {
-            huth_style: HuthStyle::PianoOnly,
+            huth_style: HuthStyle::On,
             bloom_enabled: false,
             bloom_intensity: 0.5,
             log_level_idx: 2, // Info

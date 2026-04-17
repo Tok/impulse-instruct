@@ -9,7 +9,7 @@ pub use emboss::button_emboss;
 pub use pan::pan_slider;
 
 pub mod step;
-pub use step::{huth_note_cell, step_button};
+pub use step::step_button;
 
 use egui::{Color32, Painter, Pos2, Rect, Sense, Stroke, Ui, Vec2};
 use std::f32::consts::TAU;

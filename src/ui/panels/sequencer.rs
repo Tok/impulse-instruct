@@ -151,7 +151,7 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         let h = (header_h + bass_h + hoover_h + an1x_h + drums_h).max(120.0);
         ui.set_min_height(h);
     }
-    let (current_step, running, seq_steps, time_sig_num, pad_px, huth_full) = {
+    let (current_step, running, seq_steps, time_sig_num, pad_px) = {
         let s = app.state.read();
         (
             s.sequencer.current_step,
@@ -159,7 +159,6 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             s.sequencer.steps,
             s.sequencer.time_sig_num as usize,
             s.ui_prefs.effective_pad_px(),
-            s.ui_prefs.huth_style == crate::state::HuthStyle::Full,
         )
     };
     super::sequencer_header::draw_line_1(app, ui);
@@ -307,28 +306,20 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                         let is_active = step.map(|s| s.active).unwrap_or(false);
                         let is_current = abs == bass_cursor;
                         ui.add_enabled_ui(abs < bass_steps, |ui| {
-                            let clicked = if huth_full {
-                                let note = step.map(|s| s.note).unwrap_or(36);
-                                let gate = step.map(|s| s.gate).unwrap_or(0.5);
-                                widgets::huth_note_cell(
-                                    ui, note, gate, is_active, is_current, pad_px,
-                                )
+                            let note = step.map(|s| s.note).unwrap_or(36);
+                            let note_col = if is_active {
+                                Some(theme::note_color(note))
                             } else {
-                                let note = step.map(|s| s.note).unwrap_or(36);
-                                let note_col = if is_active {
-                                    Some(theme::note_color(note))
-                                } else {
-                                    None
-                                };
-                                let label = if is_active {
-                                    Some(crate::ui::note_name(note))
-                                } else {
-                                    None
-                                };
-                                widgets::step_button(
-                                    ui, is_active, is_current, 1.0, 1.0, note_col, label, pad_px,
-                                )
+                                None
                             };
+                            let label = if is_active {
+                                Some(crate::ui::note_name(note))
+                            } else {
+                                None
+                            };
+                            let clicked = widgets::step_button(
+                                ui, is_active, is_current, 1.0, 1.0, note_col, label, pad_px,
+                            );
                             if clicked {
                                 let s = app.state.read().clone();
                                 let note = s
@@ -572,28 +563,20 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                         let is_active = step.map(|s| s.active).unwrap_or(false);
                         let is_current = abs == hoover_cursor;
                         ui.add_enabled_ui(abs < hoover_steps, |ui| {
-                            let clicked = if huth_full {
-                                let note = step.map(|s| s.note).unwrap_or(57);
-                                let gate = step.map(|s| s.gate).unwrap_or(0.5);
-                                widgets::huth_note_cell(
-                                    ui, note, gate, is_active, is_current, pad_px,
-                                )
+                            let note = step.map(|s| s.note).unwrap_or(57);
+                            let note_col = if is_active {
+                                Some(theme::note_color(note))
                             } else {
-                                let note = step.map(|s| s.note).unwrap_or(36);
-                                let note_col = if is_active {
-                                    Some(theme::note_color(note))
-                                } else {
-                                    None
-                                };
-                                let label = if is_active {
-                                    Some(crate::ui::note_name(note))
-                                } else {
-                                    None
-                                };
-                                widgets::step_button(
-                                    ui, is_active, is_current, 1.0, 1.0, note_col, label, pad_px,
-                                )
+                                None
                             };
+                            let label = if is_active {
+                                Some(crate::ui::note_name(note))
+                            } else {
+                                None
+                            };
+                            let clicked = widgets::step_button(
+                                ui, is_active, is_current, 1.0, 1.0, note_col, label, pad_px,
+                            );
                             if clicked {
                                 let s = app.state.read().clone();
                                 let note = s
@@ -675,28 +658,20 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                         let is_active = step.map(|s| s.active).unwrap_or(false);
                         let is_current = abs == an1x_cursor;
                         ui.add_enabled_ui(abs < an1x_steps, |ui| {
-                            let clicked = if huth_full {
-                                let note = step.map(|s| s.note).unwrap_or(57);
-                                let gate = step.map(|s| s.gate).unwrap_or(0.5);
-                                widgets::huth_note_cell(
-                                    ui, note, gate, is_active, is_current, pad_px,
-                                )
+                            let note = step.map(|s| s.note).unwrap_or(57);
+                            let note_col = if is_active {
+                                Some(theme::note_color(note))
                             } else {
-                                let note = step.map(|s| s.note).unwrap_or(36);
-                                let note_col = if is_active {
-                                    Some(theme::note_color(note))
-                                } else {
-                                    None
-                                };
-                                let label = if is_active {
-                                    Some(crate::ui::note_name(note))
-                                } else {
-                                    None
-                                };
-                                widgets::step_button(
-                                    ui, is_active, is_current, 1.0, 1.0, note_col, label, pad_px,
-                                )
+                                None
                             };
+                            let label = if is_active {
+                                Some(crate::ui::note_name(note))
+                            } else {
+                                None
+                            };
+                            let clicked = widgets::step_button(
+                                ui, is_active, is_current, 1.0, 1.0, note_col, label, pad_px,
+                            );
                             if clicked {
                                 let s = app.state.read().clone();
                                 let note = s

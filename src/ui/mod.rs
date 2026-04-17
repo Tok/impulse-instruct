@@ -151,6 +151,8 @@ pub struct ImpulseApp {
     pub(crate) show_prefs: bool,
     export_bars: u32,
     ui_volume: f32,
+    /// Last non-zero monitor volume — restored when the user un-mutes.
+    pre_mute_volume: f32,
     piano_show_labels: bool,
     pub(crate) spectrum_magnitudes: Vec<f32>,
     pub(crate) spectrum_peaks: Vec<f32>,
@@ -316,6 +318,7 @@ impl ImpulseApp {
             show_prefs: false,
             export_bars: 8,
             ui_volume: 1.0,
+            pre_mute_volume: 1.0,
             piano_show_labels: true,
             spectrum_magnitudes: Vec::new(),
             spectrum_peaks: Vec::new(),

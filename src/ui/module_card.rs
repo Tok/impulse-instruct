@@ -574,26 +574,23 @@ pub fn module_card_back(
                 egui::FontId::monospace(label_font),
                 Color32::from_gray(if enabled { 200 } else { 80 }),
             );
-            // LED toggle
-            let led_rect = Rect::from_center_size(
-                Pos2::new(title_rect.left() + 4.0, title_rect.center().y),
-                Vec2::splat(5.0),
-            );
+            // LED toggle — proper round LED with halo when lit, dim when off.
+            let led_center = Pos2::new(title_rect.left() + 5.0, title_rect.center().y);
+            let led_r = 2.6_f32;
+            let led_hit = Rect::from_center_size(led_center, Vec2::splat(8.0));
             if ui
-                .interact(
-                    led_rect,
-                    ui.id().with("led").with(module_id),
-                    Sense::click(),
-                )
+                .interact(led_hit, ui.id().with("led").with(module_id), Sense::click())
                 .clicked()
             {
                 toggle_clicked = true;
             }
-            painter.rect_filled(
-                led_rect,
-                Rounding::same(1.0),
-                Color32::from_gray(if enabled { 220 } else { 32 }),
-            );
+            if enabled {
+                theme::led(&painter, led_center, led_r, Color32::from_gray(220), 1.0);
+            } else {
+                // Off state — dark socket with a faint glint so the click target stays visible.
+                painter.circle_filled(led_center, led_r, Color32::from_gray(28));
+                painter.circle_stroke(led_center, led_r, Stroke::new(0.7, Color32::from_gray(8)));
+            }
             // Drag zone
             let drag_rect = Rect::from_min_max(
                 Pos2::new(title_rect.left() + 20.0, title_rect.min.y),

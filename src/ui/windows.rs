@@ -302,9 +302,8 @@ impl ImpulseApp {
 
                         let cur = self.state.read().ui_prefs.huth_style;
                         for (style, label, hint) in [
-                            (HuthStyle::Off, "OFF", "Monochrome piano, grayscale sequencer"),
-                            (HuthStyle::PianoOnly, "PIANO", "Huth colors on the piano keyboard only (default)"),
-                            (HuthStyle::Full, "FULL", "Piano + sequencer melodic rows as Huth U-cups"),
+                            (HuthStyle::Off, "OFF", "Monochrome piano, grayscale sequencer dots"),
+                            (HuthStyle::On, "ON", "Huth colors on piano + sequencer LED dots (default)"),
                         ] {
                             ui.horizontal(|ui| {
                                 let selected = cur == style;

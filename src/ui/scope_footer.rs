@@ -30,12 +30,7 @@ pub fn draw_scope_colored(
         return;
     }
     let painter = ui.painter();
-    painter.rect_filled(rect, egui::Rounding::ZERO, theme::PIT);
-    painter.rect_stroke(
-        rect,
-        egui::Rounding::ZERO,
-        egui::Stroke::new(1.0, theme::SLATE),
-    );
+    theme::draw_screen_bezel(painter, rect, egui::Rounding::same(2.0));
 
     let w = rect.width();
     let mid = rect.center().y;
@@ -409,11 +404,12 @@ pub fn draw_ring_scope_colored(
         return;
     }
     let painter = ui.painter();
+    // Recessed-screen background — matches the linear scope and event stream
+    theme::draw_screen_bezel(painter, rect, egui::Rounding::same(2.0));
     let center = rect.center();
     let outer_r = size * 0.45;
     let inner_r = outer_r * 0.4;
-
-    // Background circles
+    // Subtle scope-radius guide rings (drawn over the void)
     painter.circle_stroke(center, outer_r, egui::Stroke::new(1.0, theme::SLATE));
     painter.circle_stroke(center, inner_r, egui::Stroke::new(0.5, theme::IRON));
 

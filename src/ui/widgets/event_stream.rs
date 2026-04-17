@@ -4,40 +4,62 @@
 // active ramps as gradient bars, and beat/bar grid lines.
 
 use crate::state::AppState;
-use crate::state::ui_prefs::HuthStyle;
+use crate::state::sequencer_state::pattern_temperature_acc;
 use crate::ui::theme;
 use egui::{Color32, Pos2, Rect, Sense, Stroke, Ui, Vec2};
 
-/// Draw a Huth U-cup (open-top cup shape) centered at `center`.
-/// Width = 2r, height = 1.6r. Three sides: left, bottom, right.
-fn draw_u_cup(
-    painter: &egui::Painter,
-    center: Pos2,
-    r: f32,
-    fill: Color32,
-    stroke_w: f32,
-    stroke_color: Color32,
-) {
-    let hw = r; // half width
-    let hh = r * 0.8; // half height
-    let tl = Pos2::new(center.x - hw, center.y - hh);
-    let br = Pos2::new(center.x + hw, center.y + hh);
-    let cup = Rect::from_min_max(tl, br);
-
-    // Filled interior (no top edge — paint full rect, the open top is just the stroke)
-    painter.rect_filled(cup, egui::Rounding::ZERO, fill);
-
-    // Three-sided stroke: left, bottom, right (no top)
-    let stroke = Stroke::new(stroke_w, stroke_color);
-    painter.line_segment([cup.left_top(), cup.left_bottom()], stroke);
-    painter.line_segment([cup.left_bottom(), cup.right_bottom()], stroke);
-    painter.line_segment([cup.right_bottom(), cup.right_top()], stroke);
+/// Sum the Huth warm/cold value across all enabled melodic voices in `state`,
+/// weighted by gate × accent.  Returns NaN if no active note is found.
+fn bank_temperature(state: &AppState) -> f32 {
+    let seq = &state.sequencer;
+    let mut sum = 0.0_f32;
+    let mut wsum = 0.0_f32;
+    for (vi, voice) in state.bass_voices.iter().enumerate() {
+        if !voice.enabled {
+            continue;
+        }
+        let pattern = if vi == 0 {
+            &seq.bass_pattern
+        } else if let Some(p) = seq.bass_patterns.get(vi) {
+            p
+        } else {
+            continue;
+        };
+        let len = seq
+            .bass_voice_steps
+            .get(vi)
+            .copied()
+            .unwrap_or(seq.steps)
+            .min(pattern.len());
+        let (s, w) = pattern_temperature_acc(pattern, len, &theme::NOTE_TEMP);
+        sum += s;
+        wsum += w;
+    }
+    if state.an1x.enabled {
+        let len = seq.an1x_steps.min(seq.an1x_pattern.len());
+        let (s, w) = pattern_temperature_acc(&seq.an1x_pattern, len, &theme::NOTE_TEMP);
+        sum += s;
+        wsum += w;
+    }
+    if wsum > 0.0 {
+        (sum / wsum).clamp(-1.0, 1.0)
+    } else {
+        f32::NAN
+    }
 }
 
 /// Draw the event stream visualization.
 /// Shows recent and upcoming note events scrolling right-to-left at tempo.
 /// `smooth_step`: fractional step position for sub-step smooth scrolling.
-pub fn event_stream(ui: &mut Ui, state: &AppState, smooth_step: f64, width: f32, height: f32) {
+/// `temperature`: live Huth warm/cold value in [-1, +1] (NaN = unavailable).
+pub fn event_stream(
+    ui: &mut Ui,
+    state: &AppState,
+    smooth_step: f64,
+    width: f32,
+    height: f32,
+    temperature: f32,
+) {
     let size = Vec2::new(width, height);
     let (rect, _) = ui.allocate_exact_size(size, Sense::hover());
     if !ui.is_rect_visible(rect) {
@@ -45,13 +67,8 @@ pub fn event_stream(ui: &mut Ui, state: &AppState, smooth_step: f64, width: f32,
     }
     let painter = ui.painter_at(rect); // clip to rect bounds
 
-    // Background
-    painter.rect_filled(rect, egui::Rounding::same(2.0), theme::VOID);
-    painter.rect_stroke(
-        rect,
-        egui::Rounding::same(2.0),
-        Stroke::new(1.0, Color32::from_gray(25)),
-    );
+    // Recessed-screen background (matches oscilloscopes for visual continuity)
+    theme::draw_screen_bezel(&painter, rect, egui::Rounding::same(2.0));
 
     let pad = 2.0_f32;
     let inner = Rect::from_min_max(rect.min + Vec2::splat(pad), rect.max - Vec2::splat(pad));
@@ -205,7 +222,6 @@ pub fn event_stream(ui: &mut Ui, state: &AppState, smooth_step: f64, width: f32,
         return;
     }
     let circle_r = (inner_h * 0.08).clamp(3.0, 8.0);
-    let use_u_cups = state.ui_prefs.huth_style == HuthStyle::Full;
     if state.ui_prefs.stream_bass_notes {
         for (vi, voice) in state.bass_voices.iter().enumerate() {
             if !voice.enabled {
@@ -243,26 +259,11 @@ pub fn event_stream(ui: &mut Ui, state: &AppState, smooth_step: f64, width: f32,
                     let dist = (off.abs() / display_steps).clamp(0.0, 1.0);
                     let alpha = ((1.0 - dist * 0.7) * 255.0) as u8;
 
-                    let fill =
-                        Color32::from_rgba_unmultiplied(color.r(), color.g(), color.b(), alpha);
                     // Size: accent = 1.4x, gate scales 0.7x–1.0x
                     let gate_scale = 0.7 + step.gate * 0.3;
                     let r = circle_r * gate_scale * if step.accent { 1.4 } else { 1.0 };
                     let pos = Pos2::new(x, y);
-                    let stroke_w = if step.accent { 2.0 } else { 1.0 };
-                    let stroke_a = if step.accent {
-                        alpha
-                    } else {
-                        (alpha as f32 * 0.5) as u8
-                    };
-                    let stroke_col = Color32::from_rgba_unmultiplied(0, 0, 0, stroke_a);
-
-                    if use_u_cups {
-                        draw_u_cup(&painter, pos, r, fill, stroke_w, stroke_col);
-                    } else {
-                        painter.circle_filled(pos, r, fill);
-                        painter.circle_stroke(pos, r, Stroke::new(stroke_w, stroke_col));
-                    }
+                    theme::led_flat(&painter, pos, r, color, alpha as f32 / 255.0);
 
                     // Slide: line to next note
                     if step.slide
@@ -316,24 +317,10 @@ pub fn event_stream(ui: &mut Ui, state: &AppState, smooth_step: f64, width: f32,
                     let y = note_y(note);
                     let dist = (off.abs() / display_steps).clamp(0.0, 1.0);
                     let alpha = ((1.0 - dist * 0.7) * 255.0) as u8;
-                    let fill =
-                        Color32::from_rgba_unmultiplied(color.r(), color.g(), color.b(), alpha);
                     let gate_scale = 0.7 + step.gate * 0.3;
                     let r = circle_r * gate_scale * if step.accent { 1.4 } else { 1.0 };
                     let pos = Pos2::new(x, y);
-                    let stroke_w = if step.accent { 2.0 } else { 1.0 };
-                    let stroke_a = if step.accent {
-                        alpha
-                    } else {
-                        (alpha as f32 * 0.5) as u8
-                    };
-                    let stroke_col = Color32::from_rgba_unmultiplied(0, 0, 0, stroke_a);
-                    if use_u_cups {
-                        draw_u_cup(&painter, pos, r, fill, stroke_w, stroke_col);
-                    } else {
-                        painter.circle_filled(pos, r, fill);
-                        painter.circle_stroke(pos, r, Stroke::new(stroke_w, stroke_col));
-                    }
+                    theme::led_flat(&painter, pos, r, color, alpha as f32 / 255.0);
                 }
             }
         }
@@ -370,10 +357,12 @@ pub fn event_stream(ui: &mut Ui, state: &AppState, smooth_step: f64, width: f32,
                         }
                         let dist = (off.abs() / display_steps).clamp(0.0, 1.0);
                         let a = ((1.0 - dist * 0.6) * 255.0) as u8;
-                        painter.circle_filled(
+                        theme::led_flat(
+                            &painter,
                             Pos2::new(x, y),
                             *radius,
-                            Color32::from_rgba_unmultiplied(color.r(), color.g(), color.b(), a),
+                            *color,
+                            a as f32 / 255.0,
                         );
                     }
                 }
@@ -491,13 +480,147 @@ pub fn event_stream(ui: &mut Ui, state: &AppState, smooth_step: f64, width: f32,
 
     // ── Labels ──────────────────────────────────────────────────────────────
     let font = egui::FontId::monospace(6.5);
+    // Fixed-width formatting so the TEMP strip doesn't jitter when the step
+    // counter rolls past 9 or BPM digits change.
+    let bpm_label = format!("{:>3.0}bpm {}/{} #{:>2}", bpm, time_sig, 4, current_step);
+    // Reserve space for the Hz scale column on the left when it's enabled.
+    let header_x_pad = if state.ui_prefs.stream_hz_scale {
+        26.0
+    } else {
+        2.0
+    };
     painter.text(
-        inner.left_top() + Vec2::new(2.0, 1.0),
+        inner.left_top() + Vec2::new(header_x_pad, 1.0),
         egui::Align2::LEFT_TOP,
-        format!("{:.0}bpm {}/{} #{}", bpm, time_sig, 4, current_step),
+        &bpm_label,
         font.clone(),
         Color32::from_gray(50),
     );
+
+    // ── Huth temperature strip (Warme/Kalte Töne) ─────────────────────────
+    // Live needle (top) = master audio out (spectrum-derived).
+    // Static tick (below) = melody bank intent (pattern notes × gate × accent).
+    let bank_temp = bank_temperature(state);
+    if temperature.is_finite() || bank_temp.is_finite() {
+        let bpm_w = painter
+            .layout_no_wrap(bpm_label.clone(), font.clone(), Color32::WHITE)
+            .size()
+            .x;
+        // Reserve space for "TEMP" label + numeric value + right-side note range.
+        let label_text = "TEMP";
+        let label_w = painter
+            .layout_no_wrap(label_text.to_string(), font.clone(), Color32::WHITE)
+            .size()
+            .x;
+        let strip_w =
+            70.0_f32.min((inner.width() - bpm_w - label_w - header_x_pad - 230.0).max(0.0));
+        if strip_w > 12.0 {
+            let strip_h = 5.0_f32;
+            let label_x = inner.min.x + header_x_pad + bpm_w + 8.0;
+            let strip_x = label_x + label_w + 4.0;
+            let strip_y = inner.min.y + 2.0;
+            let strip_rect =
+                Rect::from_min_size(Pos2::new(strip_x, strip_y), Vec2::new(strip_w, strip_h));
+            // "TEMP" label
+            painter.text(
+                Pos2::new(label_x, strip_y - 1.0),
+                egui::Align2::LEFT_TOP,
+                label_text,
+                font.clone(),
+                Color32::from_gray(70),
+            );
+            // Gradient: cold-blue → neutral → warm-orange.
+            let band_count = 14;
+            for i in 0..band_count {
+                let t = -1.0 + 2.0 * (i as f32 / (band_count - 1) as f32);
+                let band_x = strip_x + (i as f32 / band_count as f32) * strip_w;
+                let band_w = (strip_w / band_count as f32) + 0.5;
+                let mut col = theme::temperature_color(t);
+                col = Color32::from_rgba_unmultiplied(col.r(), col.g(), col.b(), 180);
+                painter.rect_filled(
+                    Rect::from_min_size(Pos2::new(band_x, strip_y), Vec2::new(band_w, strip_h)),
+                    egui::Rounding::ZERO,
+                    col,
+                );
+            }
+            // Frame
+            painter.rect_stroke(
+                strip_rect,
+                egui::Rounding::ZERO,
+                Stroke::new(0.5, Color32::from_gray(60)),
+            );
+            // Static (bank) tick below the strip — small filled triangle.
+            if bank_temp.is_finite() {
+                let bx = strip_x + (bank_temp.clamp(-1.0, 1.0) * 0.5 + 0.5) * strip_w;
+                let by = strip_y + strip_h + 0.5;
+                let tri = vec![
+                    Pos2::new(bx, by),
+                    Pos2::new(bx - 2.5, by + 3.0),
+                    Pos2::new(bx + 2.5, by + 3.0),
+                ];
+                painter.add(egui::Shape::convex_polygon(
+                    tri,
+                    Color32::from_gray(180),
+                    Stroke::NONE,
+                ));
+            }
+            // Live needle at spectrum temperature position.
+            if temperature.is_finite() {
+                let n_t = temperature.clamp(-1.0, 1.0);
+                let nx = strip_x + (n_t * 0.5 + 0.5) * strip_w;
+                painter.line_segment(
+                    [
+                        Pos2::new(nx, strip_y - 1.0),
+                        Pos2::new(nx, strip_y + strip_h + 1.0),
+                    ],
+                    Stroke::new(1.2, Color32::from_gray(235)),
+                );
+            }
+            // Numeric value (live if available, else bank).
+            let display_t = if temperature.is_finite() {
+                temperature.clamp(-1.0, 1.0)
+            } else {
+                bank_temp.clamp(-1.0, 1.0)
+            };
+            painter.text(
+                Pos2::new(strip_x + strip_w + 4.0, strip_y - 1.0),
+                egui::Align2::LEFT_TOP,
+                format!("{:+.2}", display_t),
+                font.clone(),
+                theme::temperature_color(display_t),
+            );
+            // Hover tooltip explaining the two markers.
+            let hit_rect = Rect::from_min_max(
+                Pos2::new(label_x, strip_y - 2.0),
+                Pos2::new(strip_x + strip_w + 32.0, strip_y + strip_h + 5.0),
+            );
+            let hit = ui.interact(
+                hit_rect,
+                egui::Id::new("event_stream_temp_strip"),
+                Sense::hover(),
+            );
+            if hit.hovered() {
+                hit.on_hover_ui(|ui| {
+                    ui.label("Huth Warme / Kalte Töne");
+                    ui.separator();
+                    ui.label("Needle: live master-out timbre");
+                    ui.label("▲ tick: melody-bank intent (pattern notes)");
+                    let live_str = if temperature.is_finite() {
+                        format!("{:+.2}", temperature)
+                    } else {
+                        "—".to_string()
+                    };
+                    let bank_str = if bank_temp.is_finite() {
+                        format!("{:+.2}", bank_temp)
+                    } else {
+                        "—".to_string()
+                    };
+                    ui.small(format!("live {live_str}   bank {bank_str}"));
+                });
+            }
+        }
+    }
+
     // Note range indicator with Hz
     let lo_hz = crate::audio::dsp::midi_to_hz(lo_note);
     let hi_hz = crate::audio::dsp::midi_to_hz(hi_note);

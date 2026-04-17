@@ -211,3 +211,36 @@ impl Default for SequencerState {
         }
     }
 }
+
+// ─── Huth temperature for a melodic pattern slice ────────────────────────────
+// Pure helper.  Returns running totals (weighted_sum, total_weight) so the
+// caller can sum across multiple voices / lanes before averaging.  The
+// `semi_temps` argument is the 12-entry pitch-class table from
+// `crate::ui::theme::NOTE_TEMP` (passed in to keep state ↛ ui dep clean).
+
+/// Accent boost applied on top of a step's gate when weighting note temperature.
+const TEMP_ACCENT_BOOST: f32 = 1.5;
+
+/// Accumulate (weighted_sum, total_weight) of `theme::note_temperature(note)`
+/// across the first `len` active steps, weighted by `gate × accent_boost`.
+pub fn pattern_temperature_acc(
+    steps: &[TB303Step],
+    len: usize,
+    semi_temps: &[f32; 12],
+) -> (f32, f32) {
+    let mut sum = 0.0_f32;
+    let mut wsum = 0.0_f32;
+    for s in steps.iter().take(len) {
+        if !s.active {
+            continue;
+        }
+        let w = s.gate.max(0.0) * if s.accent { TEMP_ACCENT_BOOST } else { 1.0 };
+        if w <= 0.0 {
+            continue;
+        }
+        let pc = (s.note % 12) as usize;
+        sum += w * semi_temps[pc];
+        wsum += w;
+    }
+    (sum, wsum)
+}

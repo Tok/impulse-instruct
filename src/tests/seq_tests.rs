@@ -446,3 +446,97 @@ mod probability_tests {
         );
     }
 }
+
+#[cfg(test)]
+mod pattern_temperature_tests {
+    use crate::state::TB303Step;
+    use crate::state::sequencer_state::pattern_temperature_acc;
+
+    // Match crate::ui::theme::NOTE_TEMP — kept local so the test stays in
+    // the state crate without an UI dep.
+    const HUTH: [f32; 12] = [
+        -1.00, -0.87, -0.50, 0.00, 0.50, 1.00, 0.87, 0.34, -0.17, -0.64, -0.91, -1.00,
+    ];
+
+    fn step(note: u8, gate: f32, accent: bool) -> TB303Step {
+        TB303Step {
+            active: true,
+            note,
+            accent,
+            slide: false,
+            gate,
+            pan: 0.0,
+        }
+    }
+
+    #[test]
+    fn empty_pattern_zero_weight() {
+        let (s, w) = pattern_temperature_acc(&[], 0, &HUTH);
+        assert_eq!(s, 0.0);
+        assert_eq!(w, 0.0);
+    }
+
+    #[test]
+    fn inactive_steps_skipped() {
+        let mut steps = vec![TB303Step::default(); 4];
+        // All inactive — no contribution.
+        let (s, w) = pattern_temperature_acc(&steps, 4, &HUTH);
+        assert_eq!(w, 0.0);
+        assert_eq!(s, 0.0);
+        // Activate one F note.
+        steps[0] = step(65, 1.0, false);
+        let (s, w) = pattern_temperature_acc(&steps, 4, &HUTH);
+        assert!((w - 1.0).abs() < 1e-6);
+        assert!((s - 1.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn accent_boosts_weight() {
+        let plain = vec![step(65, 1.0, false)];
+        let accented = vec![step(65, 1.0, true)];
+        let (_, wp) = pattern_temperature_acc(&plain, 1, &HUTH);
+        let (_, wa) = pattern_temperature_acc(&accented, 1, &HUTH);
+        assert!(wa > wp, "accent should weigh more: {wa} vs {wp}");
+        // Boost factor is 1.5.
+        assert!((wa - 1.5 * wp).abs() < 1e-6);
+    }
+
+    #[test]
+    fn c_pattern_reads_cold_f_pattern_reads_warm() {
+        let cs: Vec<_> = (0..8).map(|_| step(60, 1.0, false)).collect();
+        let fs: Vec<_> = (0..8).map(|_| step(65, 1.0, false)).collect();
+        let (sc, wc) = pattern_temperature_acc(&cs, 8, &HUTH);
+        let (sf, wf) = pattern_temperature_acc(&fs, 8, &HUTH);
+        assert!((sc / wc - (-1.0)).abs() < 1e-6);
+        assert!((sf / wf - 1.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn len_truncates() {
+        let steps = vec![step(60, 1.0, false), step(65, 1.0, false)];
+        // len=1 → only the cold C counts.
+        let (s, w) = pattern_temperature_acc(&steps, 1, &HUTH);
+        assert!((s / w - (-1.0)).abs() < 1e-6);
+    }
+
+    #[test]
+    fn zero_gate_skipped() {
+        let steps = vec![step(60, 0.0, false), step(65, 1.0, false)];
+        let (s, w) = pattern_temperature_acc(&steps, 2, &HUTH);
+        // Only F (warm) contributes.
+        assert!((w - 1.0).abs() < 1e-6);
+        assert!((s - 1.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn note_octaves_wrap() {
+        // C0, C5, C9 should all read as cold C.
+        let steps = vec![
+            step(0, 1.0, false),
+            step(60, 1.0, false),
+            step(108, 1.0, false),
+        ];
+        let (s, w) = pattern_temperature_acc(&steps, 3, &HUTH);
+        assert!((s / w - (-1.0)).abs() < 1e-6);
+    }
+}

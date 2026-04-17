@@ -1,7 +1,7 @@
 // ─── ui/widgets/step.rs ───────────────────────────────────────────────────────
 // Sequencer step widgets: standard step button + Huth Farbige Noten U-cup cell.
 
-use egui::{Color32, Pos2, Rect, Sense, Stroke, Ui, Vec2};
+use egui::{Color32, Pos2, Sense, Stroke, Ui, Vec2};
 
 use crate::ui::theme;
 
@@ -50,8 +50,7 @@ pub fn step_button(
             if let Some(col) = dot_color {
                 let dot_r = (size_px * 0.18).max(2.5);
                 let dot_pos = Pos2::new(inset.center().x, inset.max.y - dot_r - 1.0);
-                painter.circle_filled(dot_pos, dot_r, col);
-                painter.circle_stroke(dot_pos, dot_r, Stroke::new(1.0, Color32::from_gray(0)));
+                theme::led(painter, dot_pos, dot_r, col, 1.0);
                 // Note name label above the dot (only when cell is large enough)
                 if let Some(label) = note_label
                     && size_px >= 26.0
@@ -95,13 +94,8 @@ pub fn step_button(
             if let Some(col) = dot_color {
                 let dot_r = (size_px * 0.14).max(2.0);
                 let dot_pos = Pos2::new(inner.center().x, inner.max.y - dot_r - 2.0);
-                let dim_col = Color32::from_rgba_unmultiplied(col.r(), col.g(), col.b(), 80);
-                painter.circle_filled(dot_pos, dot_r, dim_col);
-                painter.circle_stroke(
-                    dot_pos,
-                    dot_r,
-                    Stroke::new(1.0, Color32::from_rgba_unmultiplied(0, 0, 0, 80)),
-                );
+                // Dim LED — half-intensity so inactive steps still feel "on standby"
+                theme::led(painter, dot_pos, dot_r, col, 0.45);
             }
         }
 
@@ -122,129 +116,6 @@ pub fn step_button(
             // Subtle inner ring — reinforces the "lit up" face
             painter.rect_stroke(
                 inner.shrink(1.5),
-                r,
-                Stroke::new(1.0, Color32::from_rgba_unmultiplied(200, 200, 200, 45)),
-            );
-        }
-    }
-
-    response.clicked()
-}
-
-// ─── Huth Note Cell ──────────────────────────────────────────────────────────
-//
-// Renders a single sequencer step as a Huth *Farbige Noten* U-cup:
-//
-//   ┌─────┐  ← open top (unused / background)
-//   │█████│
-//   │█████│  ← colored fill rising from the bottom; height = gate fraction
-//   └──┬──┘
-//      └── rounded bottom corners only
-//
-// White-key notes (natural C D E F G A B): solid Huth color fill.
-// Black-key notes (sharps/flats C# D# F# G# A#): Huth color with a white
-//   inner rectangle — the "double U" Huth used for semitones.
-//
-// `gate` 0–1 controls fill height (0.3 minimum so short notes stay visible).
-// Returns true when clicked.
-
-pub fn huth_note_cell(
-    ui: &mut Ui,
-    note: u8,
-    gate: f32,
-    active: bool,
-    current: bool,
-    size_px: f32,
-) -> bool {
-    let sz = Vec2::splat(size_px);
-    let (rect, response) = ui.allocate_exact_size(sz, Sense::click());
-
-    if ui.is_rect_visible(rect) {
-        let painter = ui.painter();
-        // Background — same as inactive step
-        let bg = Color32::from_gray(22);
-        painter.rect_filled(rect.shrink(1.0), egui::Rounding::same(2.0), bg);
-
-        if active {
-            let huth = theme::note_color(note);
-            let pitch_class = note % 12;
-            // Black keys: C#=1, D#=3, F#=6, G#=8, A#=10
-            let is_black_key = matches!(pitch_class, 1 | 3 | 6 | 8 | 10);
-
-            // Fill height rises from the bottom; gate clamped to 0.3–1.0 range
-            let fill_frac = gate.clamp(0.3, 1.0);
-            let cell_h = rect.height() - 2.0;
-            let fill_h = cell_h * fill_frac;
-            let fill_top = rect.max.y - 1.0 - fill_h;
-
-            let fill_rect = Rect::from_min_max(
-                Pos2::new(rect.min.x + 1.0, fill_top),
-                Pos2::new(rect.max.x - 1.0, rect.max.y - 1.0),
-            );
-            let rounding = egui::Rounding {
-                nw: 0.0,
-                ne: 0.0,
-                sw: (size_px * 0.22).max(3.0),
-                se: (size_px * 0.22).max(3.0),
-            };
-            painter.rect_filled(fill_rect, rounding, huth);
-
-            // White inner shape for black-key (semitone) notes
-            if is_black_key {
-                let inset = (size_px * 0.18).max(2.5);
-                let inner_h = (fill_h - inset * 1.5).max(0.0);
-                if inner_h > 2.0 {
-                    let inner = Rect::from_min_max(
-                        Pos2::new(
-                            fill_rect.min.x + inset,
-                            fill_rect.max.y - inner_h - inset * 0.5,
-                        ),
-                        Pos2::new(fill_rect.max.x - inset, fill_rect.max.y - inset * 0.5),
-                    );
-                    let inner_r = egui::Rounding {
-                        nw: 0.0,
-                        ne: 0.0,
-                        sw: (size_px * 0.14).max(2.0),
-                        se: (size_px * 0.14).max(2.0),
-                    };
-                    painter.rect_filled(
-                        inner,
-                        inner_r,
-                        Color32::from_rgba_unmultiplied(255, 255, 255, 200),
-                    );
-                }
-            }
-        }
-
-        // Note name label — top-center of cell, over the Huth fill
-        if active && size_px >= 26.0 {
-            let font_sz = (size_px * 0.22).clamp(7.0, 10.0);
-            let text_pos = Pos2::new(rect.center().x, rect.min.y + font_sz * 0.5 + 2.0);
-            let label = crate::ui::note_name(note);
-            painter.text(
-                text_pos,
-                egui::Align2::CENTER_CENTER,
-                label,
-                egui::FontId::monospace(font_sz),
-                Color32::from_white_alpha(200),
-            );
-        }
-
-        // Current-step cursor — outer bloom + bright border + inner ring
-        if current {
-            let r = egui::Rounding::same(2.0);
-            for i in 1..=3u8 {
-                let expand = i as f32 * 1.5;
-                let alpha = 40u8.saturating_sub(i * 12);
-                painter.rect_filled(
-                    rect.expand(expand),
-                    r,
-                    Color32::from_rgba_unmultiplied(220, 220, 220, alpha),
-                );
-            }
-            painter.rect_stroke(rect.shrink(0.5), r, Stroke::new(1.5, theme::CHALK));
-            painter.rect_stroke(
-                rect.shrink(2.5),
                 r,
                 Stroke::new(1.0, Color32::from_rgba_unmultiplied(200, 200, 200, 45)),
             );

@@ -79,18 +79,33 @@ impl ImpulseApp {
                     ui.spacing_mut().item_spacing.x = gap;
 
                     // ── Left: LLM log (full height) ─────────────────────
+                    // Wrap in a screen panel — same bezel as the oscilloscopes
+                    // and event stream, but with a slightly lighter `DEEP`
+                    // fill so the log reads as a "lit" panel rather than a
+                    // deep CRT void.
                     ui.allocate_ui(egui::vec2(log_w, total_h), |ui| {
+                        let log_rect = ui.available_rect_before_wrap();
+                        theme::draw_screen_panel(
+                            ui.painter(),
+                            log_rect,
+                            egui::Rounding::same(theme::SCREEN_CHIP_ROUNDING),
+                            theme::DEEP,
+                        );
                         ui.spacing_mut().item_spacing.y = 0.0;
-                        egui::ScrollArea::vertical()
-                            .id_source("global_log")
-                            .stick_to_bottom(true)
-                            .auto_shrink([false; 2])
-                            .show(ui, |ui: &mut egui::Ui| {
-                                ui.spacing_mut().item_spacing.y = 0.0;
-                                let trimmed = self.log_text.trim_end_matches('\n');
-                                let job = super::llm_log_color::colorize_log(trimmed, theme::FOG);
-                                ui.add(egui::Label::new(job).wrap().selectable(true));
-                            });
+                        // Inset a couple pixels so text doesn't touch the bezel edge.
+                        ui.allocate_ui_at_rect(log_rect.shrink(4.0), |ui| {
+                            egui::ScrollArea::vertical()
+                                .id_source("global_log")
+                                .stick_to_bottom(true)
+                                .auto_shrink([false; 2])
+                                .show(ui, |ui: &mut egui::Ui| {
+                                    ui.spacing_mut().item_spacing.y = 0.0;
+                                    let trimmed = self.log_text.trim_end_matches('\n');
+                                    let job =
+                                        super::llm_log_color::colorize_log(trimmed, theme::FOG);
+                                    ui.add(egui::Label::new(job).wrap().selectable(true));
+                                });
+                        });
                     });
 
                     // ── Center: event stream + bar oscilloscope stacked ──
@@ -111,8 +126,24 @@ impl ImpulseApp {
                                         0.0
                                     };
                                     let smooth = self.last_seq_step as f64 + frac;
+                                    let temperature = if self.spectrum_magnitudes.is_empty() {
+                                        f32::NAN
+                                    } else {
+                                        let bin_hz = crate::audio::SAMPLE_RATE
+                                            / crate::audio::spectrum::FFT_SIZE as f32;
+                                        crate::audio::spectrum::spectrum_temperature(
+                                            &self.spectrum_magnitudes,
+                                            bin_hz,
+                                            &theme::NOTE_TEMP,
+                                        )
+                                    };
                                     super::widgets::event_stream(
-                                        ui, &state, smooth, center_w, half_h,
+                                        ui,
+                                        &state,
+                                        smooth,
+                                        center_w,
+                                        half_h,
+                                        temperature,
                                     );
                                 }
                                 if show_bar {
@@ -388,9 +419,10 @@ impl ImpulseApp {
             )
             .show(ctx, |ui| {
                 ui.horizontal(|ui| {
+                    ui.spacing_mut().item_spacing.x = 4.0;
                     // ── LOGO ─────────────────────────────────────────────────
-                    ui.scope(|ui| {
-                        ui.set_min_width(280.0);
+                    theme::screen_chip(ui, theme::VOID, |ui| {
+                        ui.set_min_width(268.0);
                         ui.vertical(|ui| {
                             ui.label(
                                 egui::RichText::new("IMPULSE • INSTRUCT")
@@ -431,12 +463,10 @@ impl ImpulseApp {
                         });
                     });
 
-                    ui.separator();
-
                     // ── TRANSPORT  (fixed 150px) ──────────────────────────────
-                    ui.scope(|ui| {
-                        ui.set_min_width(150.0);
-                        ui.set_max_width(150.0);
+                    theme::screen_chip(ui, theme::VOID, |ui| {
+                        ui.set_min_width(140.0);
+                        ui.set_max_width(140.0);
                         ui.spacing_mut().button_padding = egui::vec2(4.0, 1.0);
                         ui.spacing_mut().item_spacing.x = 4.0;
                         let (running, bpm, live_record) = {
@@ -499,10 +529,8 @@ impl ImpulseApp {
                         });
                     });
 
-                    ui.separator();
-
                     // ── HEAT (global jam intensity) ──────────────────────────
-                    {
+                    theme::screen_chip(ui, theme::VOID, |ui| {
                         let mut heat = self.state.read().llm.heat;
                         let heat_col = if heat < 0.3 {
                             theme::ASH
@@ -533,45 +561,88 @@ impl ImpulseApp {
                                 .monospace()
                                 .size(8.5),
                         );
-                    }
+                    });
 
                     // ── Push remaining controls to the right edge ──
-                    // MON slider (HEADER_SLIDER_WIDTH) + VRAM/RAM bars (~120) + label
-                    // gap + separators. Keep in sync with HEADER_SLIDER_WIDTH.
-                    let right_w = HEADER_SLIDER_WIDTH + 200.0;
+                    // Two screen-chip groups: (MUTE + MON) and (VRAM/RAM).
+                    // Estimate right block width to align cleanly.
+                    let right_w = HEADER_SLIDER_WIDTH + 230.0;
                     let spacer = (ui.available_width() - right_w).max(0.0);
                     ui.add_space(spacer);
 
-                    // ── MON ──
-                    ui.separator();
-                    let vol_col = if self.ui_volume < 0.5 {
-                        theme::ASH
-                    } else {
-                        theme::SMOKE
-                    };
-                    ui.label(
-                        egui::RichText::new("MON")
-                            .color(vol_col)
-                            .monospace()
-                            .size(8.0),
-                    );
-                    if ui
-                        .scope(|ui| {
-                            ui.spacing_mut().slider_width = HEADER_SLIDER_WIDTH;
-                            ui.add(
-                                egui::Slider::new(&mut self.ui_volume, 0.0..=1.0).show_value(false),
+                    // ── MUTE + MON ──────────────────────────────────────────
+                    theme::screen_chip(ui, theme::VOID, |ui| {
+                        // Mute toggle — same chrome as PLAY / REC.
+                        let muted = self.ui_volume <= 0.0;
+                        let mute_text_col = if muted { theme::CHALK } else { theme::ASH };
+                        let mute_fill = if muted {
+                            theme::IRON
+                        } else {
+                            egui::Color32::TRANSPARENT
+                        };
+                        let mute_label = if muted { "MUTED" } else { "MUTE" };
+                        if ui
+                            .add_sized(
+                                [56.0, 20.0],
+                                egui::Button::new(
+                                    egui::RichText::new(mute_label)
+                                        .monospace()
+                                        .size(9.5)
+                                        .color(mute_text_col),
+                                )
+                                .fill(mute_fill),
                             )
-                        })
-                        .inner
-                        .changed()
-                    {
-                        let _ = self
-                            .audio_tx
-                            .push(AudioCommand::SetMonitorVolume(self.ui_volume));
-                    }
+                            .on_hover_text("Mute / unmute monitor output")
+                            .clicked()
+                        {
+                            if muted {
+                                self.ui_volume = if self.pre_mute_volume > 0.0 {
+                                    self.pre_mute_volume
+                                } else {
+                                    1.0
+                                };
+                            } else {
+                                self.pre_mute_volume = self.ui_volume.max(0.0);
+                                self.ui_volume = 0.0;
+                            }
+                            let _ = self
+                                .audio_tx
+                                .push(AudioCommand::SetMonitorVolume(self.ui_volume));
+                        }
+                        let vol_col = if self.ui_volume < 0.5 {
+                            theme::ASH
+                        } else {
+                            theme::SMOKE
+                        };
+                        ui.label(
+                            egui::RichText::new("MON")
+                                .color(vol_col)
+                                .monospace()
+                                .size(8.0),
+                        );
+                        if ui
+                            .scope(|ui| {
+                                ui.spacing_mut().slider_width = HEADER_SLIDER_WIDTH;
+                                ui.add(
+                                    egui::Slider::new(&mut self.ui_volume, 0.0..=1.0)
+                                        .show_value(false),
+                                )
+                            })
+                            .inner
+                            .changed()
+                        {
+                            // Slider above 0 implicitly un-mutes; remember the new
+                            // value so the next mute click can restore it.
+                            if self.ui_volume > 0.0 {
+                                self.pre_mute_volume = self.ui_volume;
+                            }
+                            let _ = self
+                                .audio_tx
+                                .push(AudioCommand::SetMonitorVolume(self.ui_volume));
+                        }
+                    });
 
-                    // ── VRAM / RAM (stacked progress bars) ──
-                    ui.separator();
+                    // ── VRAM / RAM (stacked progress bars) ───────────────────
                     let (has_vram, has_ram, vram_used, vram_total, ram_used, ram_total) = self
                         .sys_info
                         .lock()
@@ -587,51 +658,56 @@ impl ImpulseApp {
                         })
                         .unwrap_or((false, false, 0, 0, 0, 0));
                     if has_vram || has_ram {
-                        ui.vertical(|ui| {
-                            ui.spacing_mut().item_spacing.y = 1.5;
-                            let bar = |ui: &mut egui::Ui, label: &str, frac: f32| {
-                                ui.horizontal(|ui| {
-                                    ui.label(
-                                        egui::RichText::new(label)
-                                            .color(theme::ASH)
-                                            .monospace()
-                                            .size(10.5),
-                                    );
-                                    let (br, _) = ui.allocate_exact_size(
-                                        egui::vec2(86.0, 7.5),
-                                        egui::Sense::hover(),
-                                    );
-                                    let p = ui.painter();
-                                    p.rect_filled(br, 1.0, egui::Color32::from_gray(30));
-                                    let fw = (br.width() * frac.clamp(0.0, 1.0)).max(0.0);
-                                    if fw > 0.0 {
-                                        p.rect_filled(
-                                            egui::Rect::from_min_size(
-                                                br.min,
-                                                egui::vec2(fw, br.height()),
-                                            ),
-                                            1.0,
-                                            egui::Color32::from_gray(if frac > 0.85 {
-                                                160
-                                            } else {
-                                                80
-                                            }),
+                        theme::screen_chip(ui, theme::VOID, |ui| {
+                            ui.vertical(|ui| {
+                                ui.spacing_mut().item_spacing.y = 1.5;
+                                let bar = |ui: &mut egui::Ui, label: &str, frac: f32| {
+                                    ui.horizontal(|ui| {
+                                        ui.label(
+                                            egui::RichText::new(label)
+                                                .color(theme::ASH)
+                                                .monospace()
+                                                .size(10.5),
                                         );
-                                    }
-                                    ui.label(
-                                        egui::RichText::new(format!("{}%", (frac * 100.0) as u32))
+                                        let (br, _) = ui.allocate_exact_size(
+                                            egui::vec2(86.0, 7.5),
+                                            egui::Sense::hover(),
+                                        );
+                                        let p = ui.painter();
+                                        p.rect_filled(br, 1.0, egui::Color32::from_gray(30));
+                                        let fw = (br.width() * frac.clamp(0.0, 1.0)).max(0.0);
+                                        if fw > 0.0 {
+                                            p.rect_filled(
+                                                egui::Rect::from_min_size(
+                                                    br.min,
+                                                    egui::vec2(fw, br.height()),
+                                                ),
+                                                1.0,
+                                                egui::Color32::from_gray(if frac > 0.85 {
+                                                    160
+                                                } else {
+                                                    80
+                                                }),
+                                            );
+                                        }
+                                        ui.label(
+                                            egui::RichText::new(format!(
+                                                "{}%",
+                                                (frac * 100.0) as u32
+                                            ))
                                             .color(theme::ASH)
                                             .monospace()
                                             .size(9.75),
-                                    );
-                                });
-                            };
-                            if has_vram {
-                                bar(ui, "VRAM", vram_used as f32 / vram_total as f32);
-                            }
-                            if has_ram {
-                                bar(ui, "RAM ", ram_used as f32 / ram_total as f32);
-                            }
+                                        );
+                                    });
+                                };
+                                if has_vram {
+                                    bar(ui, "VRAM", vram_used as f32 / vram_total as f32);
+                                }
+                                if has_ram {
+                                    bar(ui, "RAM ", ram_used as f32 / ram_total as f32);
+                                }
+                            });
                         });
                     }
                 });
