@@ -62,13 +62,17 @@ pub(super) fn draw_preecho_row(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                 .size(8.0)
                 .color(theme::SMOKE),
         );
-        ui.add_space(4.0);
 
-        // Voice tabs.  Fully-armed voices (enabled + anchors + length)
-        // get FOG; configured-but-off voices (anchors present but
-        // enabled=false) get a dimmer IRON so you can see at a glance
-        // which voice groups are set up without being confused about
-        // which are actually modulating the playback.
+        // Voice tabs — sized like the BANK / CHAIN slots in the chain
+        // row above (uniform width, height 14, monospace 8.0) so the
+        // sequencer's two header strips visually align.  Width is 38 to
+        // accommodate the longest voice label ("hoover").
+        //
+        // Fully-armed voices (enabled + anchors + length) get FOG;
+        // configured-but-off voices (anchors present but enabled=false)
+        // get a dimmer ASH so you can see at a glance which voice groups
+        // are set up without being confused about which are actually
+        // modulating the playback.
         let preecho_map = app.state.read().sequencer.preecho.clone();
         for vk in VOICE_KEYS {
             let is_sel = selected == *vk;
@@ -92,10 +96,10 @@ pub(super) fn draw_preecho_row(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                 egui::Color32::TRANSPARENT
             };
             if ui
-                .add(
-                    egui::Button::new(egui::RichText::new(*vk).monospace().size(7.5).color(col))
-                        .fill(fill)
-                        .min_size(egui::vec2(0.0, 14.0)),
+                .add_sized(
+                    [38.0, 14.0],
+                    egui::Button::new(egui::RichText::new(*vk).monospace().size(8.0).color(col))
+                        .fill(fill),
                 )
                 .on_hover_text(if is_active {
                     format!("{} — preecho active", vk)

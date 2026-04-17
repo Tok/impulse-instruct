@@ -718,10 +718,31 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                     fixed_space(ui, 20.0);
                     if sub == 0 {
                         fixed_label(ui, SEQ_LABEL_W - 20.0, row_h, "PAN", theme::IRON, 7.0);
+                        let reset_w = 14.0;
+                        let resp = ui
+                            .add_sized(
+                                [reset_w, row_h],
+                                egui::Button::new(
+                                    egui::RichText::new("○")
+                                        .monospace()
+                                        .size(9.0)
+                                        .color(theme::IRON),
+                                )
+                                .fill(egui::Color32::TRANSPARENT),
+                            )
+                            .on_hover_text("Reset all step pans to centre");
+                        if resp.clicked() {
+                            let mut s = app.state.write();
+                            for step in s.sequencer.bass_pattern.iter_mut() {
+                                step.pan = 0.0;
+                            }
+                        }
+                        let item_x = ui.spacing().item_spacing.x;
+                        fixed_space(ui, SEQ_VOL_W + 18.0 - reset_w - item_x);
                     } else {
                         fixed_space(ui, SEQ_LABEL_W - 20.0);
+                        fixed_space(ui, SEQ_VOL_W + 18.0);
                     }
-                    fixed_space(ui, SEQ_VOL_W + 18.0);
                     if row_spacer > 0.0 {
                         ui.add_space(row_spacer);
                     }
