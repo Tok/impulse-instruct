@@ -97,6 +97,20 @@ Highlights of the cycle:
   compressor sub- vs supra-threshold behaviour, envelope
   follower rise + decay, ratio=1:1 passthrough, finiteness
   on silent input.
+- [x] **Mod-target dispatcher tests** — `audio/dsp/mod_apply::
+  apply_mod_target` is the central LFO/Free-EG → param
+  dispatcher (71 opcodes).  +30 tests in a new
+  `tests/dsp_mod_apply_tests.rs` covering opcode 0 + unknown
+  no-ops, unipolar clamps (cutoff / reverb_mix /
+  delay_feedback at 0.99), scaled mods (delay_time / kick808
+  pitch / distortion drive use 0.5×; master_volume uses 0.3×
+  with 1.5 ceiling), pitch accumulators (`+=` not clamp-set,
+  12-st scaling on opcodes 3 + 16), bipolar pan clamps for
+  every drum + 303 + an1x slot, signed EQ clamps, special
+  ranges (amen_gate floor 0.05; amen / granular / 303 volume
+  ceiling 1.5), stereo_width 0.5× scaling, gabber kick
+  targets, and isolation tests asserting no opcode silently
+  scribbles outside its declared field.
 - [ ] **At-cap files (still)** — `src/ui/mod.rs` (1000),
   `ui/llm_strip.rs` (998), `ui/rack_canvas.rs` (997),
   `ui/panels/bass.rs` (995), `ui/panels/sequencer.rs` (992) are

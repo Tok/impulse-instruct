@@ -5,7 +5,7 @@ mod dsp_util;
 pub mod fx;
 pub mod fx_math;
 mod gabber_kick;
-mod mod_apply;
+pub mod mod_apply;
 mod params;
 mod rev_tap;
 mod samplers;

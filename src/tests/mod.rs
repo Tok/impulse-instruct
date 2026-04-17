@@ -5,6 +5,7 @@
 
 mod analysis_tests;
 mod dsp_fx_tests;
+mod dsp_mod_apply_tests;
 mod dsp_tests;
 mod fx_plan_tests;
 mod helpers_tests;
