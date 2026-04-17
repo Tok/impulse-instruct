@@ -63,11 +63,10 @@ Highlights of the cycle:
   per-melodic-voice block (lines 96–470 of the new file) and the
   preecho block are still inline.  Extract them next so each
   section can be unit-tested in isolation.
-- [ ] **`unlocked_f32` range bug** — the helper hard-clamps to
-  `[0, 1]` before the call site re-clamps to the field's real
-  range, so `amen.pitch` (±24), `amen.source_bpm` (40–300), etc.
-  end up incorrectly clamped.  Add a range-aware variant or
-  bypass the inner clamp for non-unit fields.
+- [x] **`unlocked_f32` range bug** — added `unlocked_f32_range`
+  with explicit `min` / `max`; routed `amen.pitch` (±24) and
+  `amen.source_bpm` (40–300) through it.  +4 regression tests
+  covering the previously-broken full ranges.
 - [ ] **At-cap files** — `src/ui/mod.rs` (1000), `audio/dsp/mod.rs`
   (998), `ui/llm_strip.rs` (998), `ui/rack_canvas.rs` (997),
   `ui/panels/bass.rs` (995), `ui/panels/sequencer.rs` (992) are

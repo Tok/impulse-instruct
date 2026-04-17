@@ -502,6 +502,57 @@ mod amen_update_tests {
         assert!(s.amen.loop_mode);
     }
 
+    // Regression: prior to the unlocked_f32_range fix the inner clamp(0,1)
+    // pinned amen.pitch to ±1.0, so a +12 / -12 semitone request became
+    // +1.0 / 0.0.  These two tests would have failed against the old code.
+    #[test]
+    fn pitch_accepts_full_semitone_range() {
+        let s = AppState::default();
+        let s = apply_llm_update(s, &serde_json::json!({ "amen": { "pitch": 12.0 } }), &[]);
+        assert!((s.amen.pitch - 12.0).abs() < 1e-6);
+        let s = apply_llm_update(s, &serde_json::json!({ "amen": { "pitch": -7.0 } }), &[]);
+        assert!((s.amen.pitch - -7.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn pitch_clamps_at_plus_minus_24() {
+        let s = AppState::default();
+        let s = apply_llm_update(s, &serde_json::json!({ "amen": { "pitch": 99.0 } }), &[]);
+        assert_eq!(s.amen.pitch, 24.0);
+        let s = apply_llm_update(s, &serde_json::json!({ "amen": { "pitch": -99.0 } }), &[]);
+        assert_eq!(s.amen.pitch, -24.0);
+    }
+
+    // Regression: source_bpm always ended up pinned to 40 because the inner
+    // clamp(0,1) returned 1.0, then clamp(40, 300) snapped to 40.
+    #[test]
+    fn source_bpm_accepts_full_range() {
+        let s = AppState::default();
+        let s = apply_llm_update(
+            s,
+            &serde_json::json!({ "amen": { "source_bpm": 174.0 } }),
+            &[],
+        );
+        assert!((s.amen.source_bpm - 174.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn source_bpm_clamps_to_40_300() {
+        let s = AppState::default();
+        let s = apply_llm_update(
+            s,
+            &serde_json::json!({ "amen": { "source_bpm": 600.0 } }),
+            &[],
+        );
+        assert_eq!(s.amen.source_bpm, 300.0);
+        let s = apply_llm_update(
+            s,
+            &serde_json::json!({ "amen": { "source_bpm": 5.0 } }),
+            &[],
+        );
+        assert_eq!(s.amen.source_bpm, 40.0);
+    }
+
     #[test]
     fn end_offset_below_start_is_bumped_above_it() {
         let mut s = AppState::default();

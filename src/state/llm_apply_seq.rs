@@ -12,7 +12,7 @@ use std::collections::HashSet;
 
 use serde_json::{Map, Value};
 
-use super::llm_helpers::unlocked_f32;
+use super::llm_helpers::{unlocked_f32, unlocked_f32_range};
 use super::transitions::expand_sequencer_steps;
 use super::{AppState, DrumVoice, MAX_STEPS, Scale};
 use crate::sequencer::euclidean_rhythm;
@@ -79,7 +79,7 @@ pub(super) fn apply_amen_update(
     a: &Map<String, Value>,
     locked: &HashSet<String>,
 ) {
-    s.amen.pitch = unlocked_f32(s.amen.pitch, a, "pitch", "amen.pitch", locked).clamp(-24.0, 24.0);
+    s.amen.pitch = unlocked_f32_range(s.amen.pitch, a, "pitch", "amen.pitch", locked, -24.0, 24.0);
     s.amen.volume = unlocked_f32(s.amen.volume, a, "volume", "amen.volume", locked);
     if let Some(v) = a.get("loop_mode").and_then(|v| v.as_bool())
         && !locked.contains("amen.loop_mode")
@@ -121,14 +121,15 @@ pub(super) fn apply_amen_update(
     {
         s.amen.stutter = (v as u8).min(4);
     }
-    s.amen.source_bpm = unlocked_f32(
+    s.amen.source_bpm = unlocked_f32_range(
         s.amen.source_bpm,
         a,
         "source_bpm",
         "amen.source_bpm",
         locked,
-    )
-    .clamp(40.0, 300.0);
+        40.0,
+        300.0,
+    );
     if let Some(v) = a.get("bpm_stretch").and_then(|v| v.as_bool())
         && !locked.contains("amen.bpm_stretch")
     {

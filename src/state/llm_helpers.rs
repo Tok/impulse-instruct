@@ -7,6 +7,11 @@ use std::collections::HashSet;
 use super::{AppState, FilterMode, MAX_STEPS, Waveform};
 
 /// Returns the updated value if not locked, otherwise returns the original.
+/// Clamps to `[0, 1]` — the right call for the bulk of synth knobs.  For
+/// fields outside that range (semitone offsets, BPM, etc.) use
+/// [`unlocked_f32_range`] instead so the value isn't pre-clamped to `[0, 1]`
+/// and then re-clamped to its real range (which silently pinned every
+/// non-unit field to its lower bound — see history of this function).
 pub(super) fn unlocked_f32(
     current: f32,
     obj: &serde_json::Map<String, serde_json::Value>,
@@ -14,12 +19,27 @@ pub(super) fn unlocked_f32(
     path: &str,
     locked: &HashSet<String>,
 ) -> f32 {
+    unlocked_f32_range(current, obj, key, path, locked, 0.0, 1.0)
+}
+
+/// Generic version of [`unlocked_f32`] that clamps the parsed value to a
+/// caller-supplied range.  Use this for any field whose valid range is not
+/// `[0, 1]` (e.g. `amen.pitch ∈ [-24, 24]`, `amen.source_bpm ∈ [40, 300]`).
+pub(crate) fn unlocked_f32_range(
+    current: f32,
+    obj: &serde_json::Map<String, serde_json::Value>,
+    key: &str,
+    path: &str,
+    locked: &HashSet<String>,
+    min: f32,
+    max: f32,
+) -> f32 {
     if locked.contains(path) {
         return current;
     }
     obj.get(key)
         .and_then(|v| v.as_f64())
-        .map(|v| (v as f32).clamp(0.0, 1.0))
+        .map(|v| (v as f32).clamp(min, max))
         .unwrap_or(current)
 }
 
