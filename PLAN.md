@@ -137,6 +137,18 @@ Highlights of the cycle:
   uppercase + digit + underscore positives, lowercase /
   no-colon-space / empty / single-char / leading-bracket
   rejections.
+- [x] **Stateful FX processors** — promoted Reverb,
+  DelayLine, Chorus, TapeSat, Phaser, Autotune to
+  `pub(crate)`.  +18 tests in `tests/dsp_fx_tests.rs`:
+  Reverb silent-input passthrough + impulse-decays + freeze
+  holds the tail + stays finite under continuous drive;
+  DelayLine impulse resurfaces at the chosen offset + feedback
+  produces a decaying echo train + stays finite at high
+  feedback / saturation; Chorus mix=0 passthrough + finite
+  full-wet + read_tap returns finite values; TapeSat mix=0
+  passthrough + finite at full drive; Phaser mix=0 passthrough
+  + audible full wet; Autotune amount=0 / mix=0 passthrough
+  + finite under full pitch shift + audible after priming.
 - [ ] **At-cap files (still)** — `src/ui/mod.rs` (1000),
   `ui/llm_strip.rs` (998), `ui/rack_canvas.rs` (997),
   `ui/panels/bass.rs` (995), `ui/panels/sequencer.rs` (992) are

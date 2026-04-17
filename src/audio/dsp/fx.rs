@@ -8,12 +8,12 @@ pub(super) const MAX_CHORUS_SIZE: usize = 4096; // ~85ms @ 48kHz
 
 // ─── Simple Schroeder reverb ──────────────────────────────────────────────────
 
-pub(super) struct Reverb {
-    pub(super) comb_delays: [Vec<f32>; REVERB_COMBS],
-    pub(super) comb_ptrs: [usize; REVERB_COMBS],
-    pub(super) comb_filters: [f32; REVERB_COMBS],
-    pub(super) allpass_delays: [Vec<f32>; REVERB_ALLPASS],
-    pub(super) allpass_ptrs: [usize; REVERB_ALLPASS],
+pub(crate) struct Reverb {
+    pub(crate) comb_delays: [Vec<f32>; REVERB_COMBS],
+    pub(crate) comb_ptrs: [usize; REVERB_COMBS],
+    pub(crate) comb_filters: [f32; REVERB_COMBS],
+    pub(crate) allpass_delays: [Vec<f32>; REVERB_ALLPASS],
+    pub(crate) allpass_ptrs: [usize; REVERB_ALLPASS],
 }
 
 // Freeverb-inspired delay lengths (prime-ish, tuned for ~44.1kHz)
@@ -21,7 +21,7 @@ const COMB_LENGTHS: [usize; REVERB_COMBS] = [1116, 1188, 1277, 1356, 1422, 1491,
 const ALLPASS_LENGTHS: [usize; REVERB_ALLPASS] = [556, 441, 341, 225];
 
 impl Reverb {
-    pub(super) fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self {
             comb_delays: std::array::from_fn(|i| vec![0.0f32; COMB_LENGTHS[i]]),
             comb_ptrs: [0; REVERB_COMBS],
@@ -31,7 +31,7 @@ impl Reverb {
         }
     }
 
-    pub(super) fn process(&mut self, input: f32, room_size: f32, damp: f32, freeze: bool) -> f32 {
+    pub(crate) fn process(&mut self, input: f32, room_size: f32, damp: f32, freeze: bool) -> f32 {
         // Freeze: feedback = 1.0, no new input → reverb tail holds indefinitely
         let (feedback, input) = if freeze {
             (1.0, 0.0)
@@ -72,15 +72,15 @@ impl Reverb {
 
 // ─── Delay line ───────────────────────────────────────────────────────────────
 
-pub(super) struct DelayLine {
-    pub(super) buf: Vec<f32>,
-    pub(super) ptr: usize,
+pub(crate) struct DelayLine {
+    pub(crate) buf: Vec<f32>,
+    pub(crate) ptr: usize,
     wow_phase: f32,     // slow sine LFO for wow (0–1)
     flutter_phase: f32, // faster LFO for flutter (0–1)
 }
 
 impl DelayLine {
-    pub(super) fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self {
             buf: vec![0.0; MAX_DELAY_SAMPLES],
             ptr: 0,
@@ -91,7 +91,7 @@ impl DelayLine {
 
     /// Tape-style delay with wow/flutter modulation and feedback saturation.
     /// `wow_flutter`: 0–1 depth of pitch wobble. `sat`: 0–1 tape saturation on feedback.
-    pub(super) fn process_tape(
+    pub(crate) fn process_tape(
         &mut self,
         input: f32,
         delay_samples: usize,
@@ -138,14 +138,14 @@ impl DelayLine {
 
 // ─── Chorus / ensemble effect ─────────────────────────────────────────────────
 
-pub(super) struct Chorus {
-    pub(super) buf: [f32; MAX_CHORUS_SIZE],
-    pub(super) write: usize,
-    pub(super) lfo_phase: f32,
+pub(crate) struct Chorus {
+    pub(crate) buf: [f32; MAX_CHORUS_SIZE],
+    pub(crate) write: usize,
+    pub(crate) lfo_phase: f32,
 }
 
 impl Chorus {
-    pub(super) fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self {
             buf: [0.0; MAX_CHORUS_SIZE],
             write: 0,
@@ -155,7 +155,7 @@ impl Chorus {
 
     /// Two-voice BBD-style chorus: base ±10ms modulated by two phase-offset LFOs.
     /// `rate`: 0–1 → 0.1–8 Hz, `depth`: 0–1 → 0–10ms, `mix`: 0–1 wet/dry.
-    pub(super) fn process(&mut self, input: f32, rate: f32, depth: f32, mix: f32, sr: f32) -> f32 {
+    pub(crate) fn process(&mut self, input: f32, rate: f32, depth: f32, mix: f32, sr: f32) -> f32 {
         if mix < 0.001 {
             return input;
         }
@@ -192,7 +192,7 @@ impl Chorus {
 
     /// Read a sample at a fractional delay position (0–1 → 0–MAX_CHORUS_SIZE).
     /// Used for stereo decorrelation.
-    pub(super) fn read_tap(&self, pos: f32) -> f32 {
+    pub(crate) fn read_tap(&self, pos: f32) -> f32 {
         let off = ((pos * MAX_CHORUS_SIZE as f32) as usize).clamp(1, MAX_CHORUS_SIZE - 1);
         let r = (self.write + MAX_CHORUS_SIZE - off) % MAX_CHORUS_SIZE;
         self.buf[r]
@@ -439,17 +439,17 @@ impl Compressor {
 
 // ─── Tape saturation ──────────────────────────────────────────────────────────
 
-pub(super) struct TapeSat {
+pub(crate) struct TapeSat {
     flutter_phase: f32,
 }
 
 impl TapeSat {
-    pub(super) fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self { flutter_phase: 0.0 }
     }
 
     /// `drive`: 0–1 saturation amount. `mix`: 0–1 wet/dry. `flutter`: 0–1 wow depth (~2.5 Hz).
-    pub(super) fn process(
+    pub(crate) fn process(
         &mut self,
         input: f32,
         drive: f32,
@@ -480,14 +480,14 @@ impl TapeSat {
 
 // ─── Phaser (4-stage all-pass cascade) ────────────────────────────────────────
 
-pub(super) struct Phaser {
+pub(crate) struct Phaser {
     /// All-pass filter states (one per stage, Chamberlin transposed-direct-form-II).
     stages: [f32; 4],
     lfo_phase: f32,
 }
 
 impl Phaser {
-    pub(super) fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self {
             stages: [0.0; 4],
             lfo_phase: 0.0,
@@ -497,7 +497,7 @@ impl Phaser {
     /// `rate`: 0–1 → 0.05–5 Hz LFO rate.
     /// `depth`: 0–1 sweep width (0 = narrow, 1 = full 300–4000 Hz sweep).
     /// `mix`: 0–1 wet/dry.
-    pub(super) fn process(&mut self, input: f32, rate: f32, depth: f32, mix: f32, sr: f32) -> f32 {
+    pub(crate) fn process(&mut self, input: f32, rate: f32, depth: f32, mix: f32, sr: f32) -> f32 {
         if mix < 0.001 {
             return input;
         }
@@ -542,7 +542,7 @@ impl Phaser {
 const AUTOTUNE_BUF: usize = 4096; // ~93 ms @ 44.1 kHz — no heap alloc
 const AUTOTUNE_GRAIN: f32 = 1024.0; // ~23 ms crossfade period
 
-pub(super) struct Autotune {
+pub(crate) struct Autotune {
     buf: [f32; AUTOTUNE_BUF],
     write: usize,
     r1: f32,  // grain-1 read head (fractional sample index into ring buffer)
@@ -551,7 +551,7 @@ pub(super) struct Autotune {
 }
 
 impl Autotune {
-    pub(super) fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self {
             buf: [0.0; AUTOTUNE_BUF],
             write: 0,
@@ -562,7 +562,7 @@ impl Autotune {
     }
 
     /// Process one sample.  `amount`: 0–1.  `mix`: 0–1 wet/dry.
-    pub(super) fn process(&mut self, input: f32, amount: f32, mix: f32) -> f32 {
+    pub(crate) fn process(&mut self, input: f32, amount: f32, mix: f32) -> f32 {
         if mix < 0.001 || amount < 0.001 {
             return input;
         }

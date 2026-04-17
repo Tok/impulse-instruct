@@ -319,3 +319,242 @@ mod compress_band_tests {
         }
     }
 }
+
+#[cfg(test)]
+mod reverb_tests {
+    use crate::audio::dsp::fx::Reverb;
+
+    #[test]
+    fn fresh_reverb_emits_silence_for_silent_input() {
+        let mut r = Reverb::new();
+        for _ in 0..2000 {
+            let out = r.process(0.0, 0.5, 0.3, false);
+            assert_eq!(out, 0.0);
+        }
+    }
+
+    #[test]
+    fn impulse_produces_a_decaying_tail() {
+        let mut r = Reverb::new();
+        // Single-sample impulse, then silence.  The shortest comb delay
+        // is 1116 samples, so the first echo only appears after that.
+        let _ = r.process(1.0, 0.5, 0.3, false);
+        let mut early_peak = 0.0_f32;
+        for _ in 0..3000 {
+            early_peak = early_peak.max(r.process(0.0, 0.5, 0.3, false).abs());
+        }
+        let mut tail_peak = 0.0_f32;
+        for _ in 0..50_000 {
+            tail_peak = tail_peak.max(r.process(0.0, 0.5, 0.3, false).abs());
+        }
+        // Some energy fed back from the impulse should be audible.
+        assert!(early_peak > 0.0, "expected audible early tail");
+        // Far tail magnitude must not exceed the early tail (decay).
+        assert!(
+            tail_peak <= early_peak + 1e-3,
+            "tail {tail_peak} should be ≤ early {early_peak}"
+        );
+    }
+
+    #[test]
+    fn freeze_holds_existing_tail_without_new_input() {
+        let mut r = Reverb::new();
+        // Energise the buffers with a hot input.
+        for _ in 0..200 {
+            let _ = r.process(0.5, 0.9, 0.0, false);
+        }
+        // Now freeze with a hot loaded input — the wet tail should
+        // persist (feedback = 1.0) for many samples without dying off.
+        let mut frozen_tail = 0.0_f32;
+        for _ in 0..4000 {
+            frozen_tail = frozen_tail.max(r.process(99.9, 0.9, 0.0, true).abs());
+        }
+        assert!(frozen_tail > 0.0, "frozen tail should keep going");
+    }
+
+    #[test]
+    fn output_stays_finite_under_continuous_drive() {
+        let mut r = Reverb::new();
+        for i in 0..10_000 {
+            // Mix of DC + a slow oscillation so feedback gets exercised.
+            let drive = 0.3 + 0.2 * (i as f32 * 0.001).sin();
+            let out = r.process(drive, 0.7, 0.4, false);
+            assert!(out.is_finite(), "blew up after {i} samples: {out}");
+        }
+    }
+}
+
+#[cfg(test)]
+mod delay_line_tests {
+    use crate::audio::dsp::fx::DelayLine;
+
+    #[test]
+    fn input_resurfaces_at_the_chosen_delay_offset() {
+        let mut d = DelayLine::new();
+        let delay = 256_usize;
+        // Single-sample impulse with no feedback / wow / saturation.
+        let _ = d.process_tape(1.0, delay, 0.0, 0.0, 0.0, 44100.0);
+        // 255 samples of silence shouldn't reveal it yet.
+        for _ in 0..(delay - 1) {
+            let out = d.process_tape(0.0, delay, 0.0, 0.0, 0.0, 44100.0);
+            assert!(out.abs() < 1e-3, "early leak: {out}");
+        }
+        // Sample at the chosen offset should now have the impulse echo.
+        let out = d.process_tape(0.0, delay, 0.0, 0.0, 0.0, 44100.0);
+        assert!((out - 1.0).abs() < 0.01, "expected 1.0, got {out}");
+    }
+
+    #[test]
+    fn feedback_creates_a_decaying_echo_train() {
+        let mut d = DelayLine::new();
+        let delay = 64_usize;
+        let _ = d.process_tape(1.0, delay, 0.5, 0.0, 0.0, 44100.0);
+        let mut peaks: Vec<f32> = Vec::new();
+        for n in 0..6 {
+            // Skip ahead delay samples and read the echo magnitude.
+            for _ in 0..(delay - 1) {
+                let _ = d.process_tape(0.0, delay, 0.5, 0.0, 0.0, 44100.0);
+            }
+            let out = d.process_tape(0.0, delay, 0.5, 0.0, 0.0, 44100.0);
+            peaks.push(out.abs());
+            let _ = n;
+        }
+        // Each successive echo should be smaller than the previous one.
+        for w in peaks.windows(2) {
+            assert!(w[1] < w[0] + 1e-4, "echoes must decay: {peaks:?}");
+        }
+    }
+
+    #[test]
+    fn output_stays_finite_with_high_feedback_and_saturation() {
+        let mut d = DelayLine::new();
+        for i in 0..5_000 {
+            let drive = 0.5 + 0.3 * (i as f32 * 0.01).sin();
+            let out = d.process_tape(drive, 1000, 0.95, 0.5, 1.0, 44100.0);
+            assert!(out.is_finite());
+        }
+    }
+}
+
+#[cfg(test)]
+mod chorus_tests {
+    use crate::audio::dsp::fx::Chorus;
+
+    #[test]
+    fn zero_mix_returns_dry_passthrough() {
+        let mut c = Chorus::new();
+        let dry = 0.42;
+        assert_eq!(c.process(dry, 0.5, 0.5, 0.0, 44100.0), dry);
+    }
+
+    #[test]
+    fn produces_finite_output_under_full_wet_modulation() {
+        let mut c = Chorus::new();
+        for i in 0..5_000 {
+            let x = 0.5 * (i as f32 * 0.01).sin();
+            let out = c.process(x, 0.7, 0.7, 1.0, 44100.0);
+            assert!(out.is_finite());
+        }
+    }
+
+    #[test]
+    fn read_tap_indexes_into_the_buffer_safely() {
+        let mut c = Chorus::new();
+        for _ in 0..200 {
+            let _ = c.process(0.3, 0.5, 0.5, 1.0, 44100.0);
+        }
+        let v = c.read_tap(0.0);
+        let v_mid = c.read_tap(0.5);
+        let v_end = c.read_tap(1.0);
+        assert!(v.is_finite() && v_mid.is_finite() && v_end.is_finite());
+    }
+}
+
+#[cfg(test)]
+mod tape_sat_tests {
+    use crate::audio::dsp::fx::TapeSat;
+
+    #[test]
+    fn zero_mix_returns_dry() {
+        let mut t = TapeSat::new();
+        assert_eq!(t.process(0.6, 0.7, 0.0, 0.5, 44100.0), 0.6);
+    }
+
+    #[test]
+    fn produces_finite_output_at_high_drive() {
+        let mut t = TapeSat::new();
+        for i in 0..2_000 {
+            let x = 0.7 * (i as f32 * 0.02).sin();
+            let out = t.process(x, 1.0, 1.0, 1.0, 44100.0);
+            assert!(out.is_finite());
+        }
+    }
+}
+
+#[cfg(test)]
+mod phaser_tests {
+    use crate::audio::dsp::fx::Phaser;
+
+    #[test]
+    fn zero_mix_returns_dry() {
+        let mut p = Phaser::new();
+        assert_eq!(p.process(0.3, 0.5, 0.5, 0.0, 44100.0), 0.3);
+    }
+
+    #[test]
+    fn full_wet_produces_a_finite_modulated_signal() {
+        let mut p = Phaser::new();
+        let mut nonzero = false;
+        for i in 0..2_000 {
+            let x = 0.5 * (i as f32 * 0.05).sin();
+            let out = p.process(x, 0.7, 0.8, 1.0, 44100.0);
+            assert!(out.is_finite());
+            if out.abs() > 0.05 {
+                nonzero = true;
+            }
+        }
+        assert!(nonzero, "expected audible output from full-wet phaser");
+    }
+}
+
+#[cfg(test)]
+mod autotune_tests {
+    use crate::audio::dsp::fx::Autotune;
+
+    #[test]
+    fn zero_amount_returns_dry_signal() {
+        let mut a = Autotune::new();
+        assert_eq!(a.process(0.4, 0.0, 1.0), 0.4);
+    }
+
+    #[test]
+    fn zero_mix_returns_dry_signal() {
+        let mut a = Autotune::new();
+        assert_eq!(a.process(0.4, 0.5, 0.0), 0.4);
+    }
+
+    #[test]
+    fn produces_finite_output_under_full_pitch_shift() {
+        let mut a = Autotune::new();
+        for i in 0..5_000 {
+            let x = 0.5 * (i as f32 * 0.015).sin();
+            let out = a.process(x, 1.0, 1.0);
+            assert!(out.is_finite());
+        }
+    }
+
+    #[test]
+    fn full_wet_produces_audible_signal_after_priming() {
+        let mut a = Autotune::new();
+        // Prime the ring buffer + crossfade envelope.
+        for i in 0..2_000 {
+            let _ = a.process(0.5 * (i as f32 * 0.01).sin(), 1.0, 1.0);
+        }
+        // Now sample the wet output for a stretch and confirm non-silence.
+        let mut peak = 0.0_f32;
+        for i in 0..2_000 {
+            peak = peak.max(a.process(0.5 * (i as f32 * 0.01).sin(), 1.0, 1.0).abs());
+        }
+        assert!(peak > 0.05, "autotune should produce audible output");
+    }
+}
