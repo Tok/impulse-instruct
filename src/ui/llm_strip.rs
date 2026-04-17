@@ -41,12 +41,14 @@ pub(super) fn colorize_log(text: &str, _default_color: egui::Color32) -> egui::t
         let line = &text[p..end];
         if line.contains("(thinking):") {
             theme::HAZE
-        } else if line.starts_with("◆ ") || line.contains(" -> ") {
+        } else if line.starts_with("► ") {
             theme::CHALK
         } else if line.starts_with("YOU ") {
             theme::FOG
         } else if line.starts_with('[') && !line.contains("[API]") {
             theme::ASH
+        } else if crate::log_fmt::starts_with_persona(line) {
+            theme::CHALK
         } else {
             theme::SMOKE
         }
@@ -169,6 +171,12 @@ pub(super) fn colorize_log(text: &str, _default_color: egui::Color32) -> egui::t
                     let has_octave = j < len && bytes[j].is_ascii_digit();
                     if has_octave {
                         j += 1;
+                        // Reject `E4B`, `C4_K_M.gguf` etc. — after the octave
+                        // digit we still need a word boundary (non-alpha).
+                        if j < len && bytes[j].is_ascii_alphabetic() {
+                            pos += 1;
+                            continue;
+                        }
                     }
                     // For bare notes (no accidental, no octave), require safe punctuation
                     // on both sides — prevents "D" in "D&B", "E" in "E-flat", etc.
@@ -210,32 +218,47 @@ pub(super) fn colorize_log(text: &str, _default_color: egui::Color32) -> egui::t
                             pos += 1;
                             continue;
                         }
+                        // Ignore-list: if the bare letter is the target of a
+                        // non-musical label like "Kit A" / "Kit B", skip the
+                        // Huth coloring.  The letter is technically a valid
+                        // note name but in this context it's just an ID.
+                        //
+                        // The preceding character is already known to be a
+                        // word-boundary (safe_before), so look back past it
+                        // to find the previous word.
+                        const IGNORE_PRECEDING_WORDS: &[&[u8]] = &[
+                            b"kit",  // "Kit A", "Kit B"
+                            b"pad",  // "Pad A", "Pad B" (future-proofing)
+                            b"part", // "Part A", "Part B"
+                            b"bank", // "Bank A", "Bank B"
+                            b"slot", // "Slot A", "Slot B"
+                        ];
+                        let mut ws = pos.saturating_sub(1); // pos-1 is the word-boundary char
+                        while ws > 0 && matches!(bytes[ws], b' ' | b'\t') {
+                            ws -= 1;
+                        }
+                        // ws now points at the last char of the preceding word (or is 0).
+                        let word_end = ws + 1;
+                        let mut word_start = word_end;
+                        while word_start > 0 && bytes[word_start - 1].is_ascii_alphabetic() {
+                            word_start -= 1;
+                        }
+                        let prev_word = &bytes[word_start..word_end];
+                        let skip = IGNORE_PRECEDING_WORDS.iter().any(|ign| {
+                            prev_word.len() == ign.len()
+                                && prev_word
+                                    .iter()
+                                    .zip(*ign)
+                                    .all(|(a, b)| a.to_ascii_lowercase() == *b)
+                        });
+                        if skip {
+                            pos += 1;
+                            continue;
+                        }
                         // Extend span to cover "A minor", "G major", etc.
                         if next_char == b' ' && j < len {
-                            const QUALITIES: &[&[u8]] = &[
-                                b"major",
-                                b"minor",
-                                b"maj",
-                                b"min",
-                                b"diminished",
-                                b"dim",
-                                b"augmented",
-                                b"aug",
-                                b"sus",
-                                b"suspended",
-                                b"dorian",
-                                b"phrygian",
-                                b"lydian",
-                                b"mixolydian",
-                                b"locrian",
-                                b"aeolian",
-                                b"melodic",
-                                b"harmonic",
-                                b"pentatonic",
-                                b"chromatic",
-                            ];
                             let rest = &bytes[j + 1..];
-                            for q in QUALITIES {
+                            for q in crate::log_fmt::QUALITIES {
                                 let qlen = q.len();
                                 if rest.len() >= qlen {
                                     let matches_ci = rest[..qlen]
@@ -259,7 +282,15 @@ pub(super) fn colorize_log(text: &str, _default_color: egui::Color32) -> egui::t
         }
 
         // ── Frequency: digits (optional dot+digits) optionally space then Hz ─
+        // Word boundary required before the number — otherwise "44100 Hz"
+        // would re-match starting at the second '4' as "4100 Hz" (blue).
         if b.is_ascii_digit() {
+            let prev_word_break =
+                pos == 0 || !(bytes[pos - 1].is_ascii_digit() || bytes[pos - 1] == b'.');
+            if !prev_word_break {
+                pos += 1;
+                continue;
+            }
             let mut j = pos;
             while j < len && (bytes[j].is_ascii_digit() || bytes[j] == b'.') {
                 j += 1;
@@ -269,10 +300,12 @@ pub(super) fn colorize_log(text: &str, _default_color: egui::Color32) -> egui::t
             if k < len && bytes[k] == b' ' {
                 k += 1;
             }
+            // No upper Hz cap — semitone class wraps cleanly so 44100 Hz
+            // colours by its octave-equivalent semitone, not blue at the 4.
             if k + 2 <= len
                 && bytes[k..k + 2].eq_ignore_ascii_case(b"Hz")
                 && let Ok(hz) = num_str.parse::<f64>()
-                && (20.0..=20_000.0).contains(&hz)
+                && hz >= 20.0
             {
                 let st = freq_semitone(hz);
                 colored!(pos, k + 2, st);
@@ -334,6 +367,10 @@ impl ImpulseApp {
 
     /// LLM console content — rendered inside a rackable module card.
     /// Contains: style selector, instructions, log, JAM timing, LISTEN, prompt input.
+    fn apply_style_rack_modules(&mut self, names: &[String]) {
+        super::style_rack::apply(self, names);
+    }
+
     fn apply_style_selection(&mut self, maybe_id: Option<String>) {
         match maybe_id {
             None => {
@@ -355,9 +392,15 @@ impl ImpulseApp {
             }
             Some(id) => {
                 let catalog = StyleCatalog::get();
-                let (name, baseline) = catalog
+                let (name, baseline, rack_modules) = catalog
                     .find_by_id(&id)
-                    .map(|s| (s.name.clone(), s.baseline_params.clone()))
+                    .map(|s| {
+                        (
+                            s.name.clone(),
+                            s.baseline_params.clone(),
+                            s.rack_modules.clone(),
+                        )
+                    })
                     .unwrap_or_default();
                 if let Some(ref bp) = baseline {
                     let current = self.state.read().clone();
@@ -370,6 +413,7 @@ impl ImpulseApp {
                     };
                     *self.state.write() = next;
                 }
+                self.apply_style_rack_modules(&rack_modules);
                 self.state.write().llm.active_style = Some(id);
                 let _ = self.llm_tx.try_send(LlmInput::ResetContext);
                 self.log_text
@@ -876,6 +920,29 @@ mod tests {
     #[test]
     fn e_flat_not_colored() {
         assert!(!has_note_color("E-flat"), "E in E-flat must not be colored");
+    }
+
+    #[test]
+    fn kit_a_b_not_colored() {
+        // "Kit A" / "Kit B" are non-musical module IDs — the A/B must
+        // stay uncolored even though they're valid note letters.
+        assert!(
+            !has_note_color("added Kit A to the rack"),
+            "Kit A — the A must not be colored"
+        );
+        assert!(
+            !has_note_color("Kit B snare on 4"),
+            "Kit B — the B must not be colored"
+        );
+        // Case insensitivity.
+        assert!(
+            !has_note_color("kit a hihat rolls"),
+            "kit a (lowercase) — a must not be colored"
+        );
+        // Other ignore-words.
+        assert!(!has_note_color("Pad A layered"));
+        assert!(!has_note_color("Bank B active"));
+        assert!(!has_note_color("Slot F loaded"));
     }
 
     #[test]

@@ -134,6 +134,15 @@ pub struct Style {
     /// about what to sing or rap about in this style.
     #[serde(default)]
     pub themes: Vec<String>,
+    /// Suggested rack module set for this style.  Names match
+    /// `state::rack_scope::parse_module_kind` (e.g. "bass", "808", "909",
+    /// "amen", "reverb", "delay", "drive").  When the user picks this
+    /// style and the rack doesn't already contain a module of each listed
+    /// kind, the missing ones are added (auto-wired to master via
+    /// `wire_default_cables` afterwards).  Existing modules are kept so
+    /// switching styles isn't destructive.
+    #[serde(default)]
+    pub rack_modules: Vec<String>,
 }
 
 pub struct StyleCatalog(Vec<Style>);

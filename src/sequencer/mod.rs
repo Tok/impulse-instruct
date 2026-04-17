@@ -7,11 +7,18 @@ use crate::state::{DrumVoice, SequencerState};
 
 // ─── Events emitted by the sequencer ─────────────────────────────────────────
 
+pub mod preecho;
+pub use preecho::{PreechoConfig, preecho_scale};
+
 #[derive(Clone, Debug)]
 pub enum TriggerEvent {
     DrumTrigger {
         voice: DrumVoice,
         velocity: f32, // reserved for per-step velocity routing
+        /// Slice index from the step (0 = auto-advance in the voice).
+        /// Only meaningful for sample-based voices (AmenSampler); pure
+        /// synth drums ignore it.
+        slice: u8,
     },
     BassTrigger {
         voice_idx: usize,
@@ -19,6 +26,8 @@ pub enum TriggerEvent {
         accent: bool,
         slide: bool,
         gate_samples: u32, // reserved for gate-off timing
+        /// Per-step pan, -1.0..1.0; 0 = use the voice's static pan.
+        pan: f32,
     },
     BassGateOff {
         voice_idx: usize,
@@ -36,7 +45,7 @@ pub enum TriggerEvent {
 // ─── Clock state (audio-thread local, not in shared AppState) ─────────────────
 
 /// Number of drum voices — must match DrumVoice::ALL.len()
-const NUM_DRUM_VOICES: usize = 14;
+const NUM_DRUM_VOICES: usize = 15;
 
 #[derive(Clone, Debug)]
 pub struct ClockState {
@@ -51,6 +60,7 @@ pub struct ClockState {
     pub ratchet_acc: [f64; NUM_DRUM_VOICES],      // sample accumulator since step fire
     pub ratchet_interval: [f64; NUM_DRUM_VOICES], // sps / N
     pub ratchet_vel: [f32; NUM_DRUM_VOICES],      // velocity of sub-hits
+    pub ratchet_slice: [u8; NUM_DRUM_VOICES],     // slice index of sub-hits
 }
 
 impl Default for ClockState {
@@ -66,6 +76,7 @@ impl Default for ClockState {
             ratchet_acc: [0.0; NUM_DRUM_VOICES],
             ratchet_interval: [0.0; NUM_DRUM_VOICES],
             ratchet_vel: [0.0; NUM_DRUM_VOICES],
+            ratchet_slice: [0; NUM_DRUM_VOICES],
         }
     }
 }
@@ -102,6 +113,7 @@ pub fn advance_clock(
     let mut ratchet_acc = clock.ratchet_acc;
     let mut ratchet_interval = clock.ratchet_interval;
     let mut ratchet_vel = clock.ratchet_vel;
+    let mut ratchet_slice = clock.ratchet_slice;
 
     // Advance ratchet sub-hit accumulators and emit any pending sub-hits.
     // Each pending voice fires when its acc crosses the ratchet interval.
@@ -116,6 +128,7 @@ pub fn advance_clock(
             events.push(TriggerEvent::DrumTrigger {
                 voice: *voice,
                 velocity: ratchet_vel[i],
+                slice: ratchet_slice[i],
             });
         }
     }
@@ -196,17 +209,75 @@ pub fn advance_clock(
                     .max(1);
             if let Some(pattern) = seq.drum_patterns.get(voice) {
                 let s = pattern.get(vstep).copied().unwrap_or_default();
+                // Look up the voice's pre-echo config (keyed by voice
+                // group name so a single "kit_a" entry drives every
+                // 808 sub-voice).  Inactive configs return identity
+                // scaling so this is a no-op for the default case.
+                let voice_key = match voice {
+                    DrumVoice::Kick808
+                    | DrumVoice::Snare808
+                    | DrumVoice::HihatClosed808
+                    | DrumVoice::HihatOpen808
+                    | DrumVoice::TomHi808
+                    | DrumVoice::TomMid808
+                    | DrumVoice::TomLo808 => "kit_a",
+                    DrumVoice::Kick909
+                    | DrumVoice::Snare909
+                    | DrumVoice::HihatClosed909
+                    | DrumVoice::HihatOpen909
+                    | DrumVoice::Clap909
+                    | DrumVoice::Rim909 => "kit_b",
+                    DrumVoice::Amen => "amen",
+                    DrumVoice::GabberKick => "gabber_kick",
+                };
+                let voice_steps = seq
+                    .drum_steps
+                    .get(voice)
+                    .copied()
+                    .unwrap_or(seq.steps)
+                    .max(1);
+                let (vel_mul, rat_add) = seq
+                    .preecho
+                    .get(voice_key)
+                    .map(|cfg| preecho::preecho_scale(vstep, voice_steps, cfg))
+                    .unwrap_or((1.0, 0));
+
                 if s.active && prob_hit(s.probability, vstep, loop_count, *voice as u32) {
+                    let effective_vel = (s.velocity * vel_mul).clamp(0.0, 1.0);
+                    let effective_ratchet = s.ratchet.saturating_add(rat_add).min(8);
+                    // Amen-specific auto: when step.slice is 0 (unset), map
+                    // each step's INDEX to the slice index (1-based, so the
+                    // DSP's `(slice_idx-1) % slices` resolves to vstep %
+                    // slices).  This makes the obvious break-chopping use
+                    // case work straight from the standard step lane:
+                    // step N plays slice N.  Other drum voices ignore the
+                    // slice field entirely.
+                    let effective_slice = if matches!(*voice, DrumVoice::Amen) && s.slice == 0 {
+                        // Auto-advance: step N plays slice N by default, OR
+                        // slice_order[N % len] when the user defined a
+                        // custom permutation on SequencerState.amen_slice_order.
+                        let order = &seq.amen_slice_order;
+                        let raw = if order.is_empty() {
+                            vstep as u8
+                        } else {
+                            order[vstep % order.len()]
+                        };
+                        raw.saturating_add(1)
+                    } else {
+                        s.slice
+                    };
                     events.push(TriggerEvent::DrumTrigger {
                         voice: *voice,
-                        velocity: s.velocity,
+                        velocity: effective_vel,
+                        slice: effective_slice,
                     });
                     // Schedule ratchet sub-hits (ratchet=1 means no sub-hits).
-                    if s.ratchet > 1 {
-                        ratchet_remaining[i] = s.ratchet - 1;
-                        ratchet_interval[i] = sps / s.ratchet as f64;
+                    if effective_ratchet > 1 {
+                        ratchet_remaining[i] = effective_ratchet - 1;
+                        ratchet_interval[i] = sps / effective_ratchet as f64;
                         ratchet_acc[i] = 0.0;
-                        ratchet_vel[i] = s.velocity;
+                        ratchet_vel[i] = effective_vel;
+                        ratchet_slice[i] = effective_slice;
                     }
                 }
             }
@@ -243,6 +314,7 @@ pub fn advance_clock(
                     accent: bs.accent,
                     slide: bs.slide,
                     gate_samples,
+                    pan: bs.pan.clamp(-1.0, 1.0),
                 });
             }
         }
@@ -277,6 +349,7 @@ pub fn advance_clock(
         ratchet_acc,
         ratchet_interval,
         ratchet_vel,
+        ratchet_slice,
     };
     (new_clock, events)
 }

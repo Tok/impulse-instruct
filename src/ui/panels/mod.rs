@@ -10,11 +10,14 @@ pub(super) const KNOB_SPACING: f32 = 8.0;
 /// Spacing between adjacent glass panes (used in ui.horizontal layouts containing glass groups).
 pub(crate) const GLASS_GAP: f32 = 5.0;
 
+pub mod amen;
+pub(crate) mod amen_viz;
 pub mod an1x;
 pub mod bass;
 mod bass_noise;
 pub mod drums;
 pub mod fx;
+pub mod gabber;
 pub mod granular;
 pub mod hoover;
 pub mod lfo;
@@ -23,15 +26,18 @@ pub mod piano;
 pub mod sequencer;
 pub mod sequencer_chain;
 pub(super) mod sequencer_drums;
+pub(super) mod sequencer_preecho;
 pub mod spectrum;
 pub mod stereo_meter;
 pub mod timeline;
 pub mod tts;
 
+pub use amen::draw_amen;
 pub use an1x::draw_an1x;
 pub use bass::draw_bass;
-pub use drums::{draw_amen, draw_kit_a, draw_kit_b};
+pub use drums::{draw_kit_a, draw_kit_b};
 pub use fx::draw_fx;
+pub use gabber::draw_gabber;
 pub use granular::draw_granular;
 pub use hoover::draw_hoover;
 pub use lfo::{draw_lfo, draw_lfo_slot};

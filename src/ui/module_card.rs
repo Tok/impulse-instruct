@@ -1,11 +1,7 @@
 // ─── ui/module_card.rs ────────────────────────────────────────────────────────
 // Wraps a panel draw function in a labelled, bordered module card.
-//
-// Each card:
-//   • Title bar with module name, enable toggle, port indicators
-//   • Content area that fills available width
-//   • Port circles on the right edge of the title bar (audio out) and left edge
-//     (audio in) — registered into the frame's port map for cable hit-testing.
+// Each card has a title bar with enable toggle + port indicators, a content
+// area, and audio in/out port circles registered for cable hit-testing.
 
 use egui::{Color32, Frame, Margin, Pos2, Rect, Rounding, Sense, Stroke, Vec2};
 
@@ -33,7 +29,8 @@ fn title_fill(kind: ModuleKind) -> Color32 {
         | ModuleKind::DrumKit909
         | ModuleKind::AmenSampler
         | ModuleKind::NoiseVoice
-        | ModuleKind::GranularTexture => 24,
+        | ModuleKind::GranularTexture
+        | ModuleKind::GabberKick => 24,
         ModuleKind::An1xVoice => 28,
         ModuleKind::NeuTts => 26,
         ModuleKind::FxReverb
@@ -48,6 +45,7 @@ fn title_fill(kind: ModuleKind) -> Color32 {
         | ModuleKind::FxTapeSat
         | ModuleKind::FxDrive
         | ModuleKind::FxAutotune
+        | ModuleKind::FxPan
         | ModuleKind::SpectrumAnalyzer
         | ModuleKind::StereoMeter
         | ModuleKind::ActivityTimeline => 20,
@@ -159,38 +157,33 @@ fn draw_focus_shine(
 pub const PORT_RADIUS: f32 = 5.5;
 const PORT_HOLE: f32 = 2.2;
 
-/// Port radius for a given kind — Control ports are smaller.
+/// Port radius — Control ports are smaller; everything else uses PORT_RADIUS.
 pub fn port_radius(kind: PortKind) -> f32 {
-    if kind == PortKind::Control {
-        3.5
-    } else {
-        PORT_RADIUS
+    match kind {
+        PortKind::Control => 3.5,
+        _ => PORT_RADIUS,
     }
 }
 
 /// Draw a jack port circle and return its centre.
 pub fn draw_port_circle(painter: &egui::Painter, center: Pos2, kind: PortKind, dir: PortDir) {
     let r = port_radius(kind);
-    let hole = if kind == PortKind::Control {
-        1.2
-    } else {
-        PORT_HOLE
+    let (ring, out_v, in_v, hole) = match kind {
+        PortKind::Control => (80u8, 45u8, 25u8, 1.3),
+        PortKind::Mod => (140, 70, 40, PORT_HOLE),
+        _ => (100, 60, 30, PORT_HOLE),
     };
-    let ring_color = if kind == PortKind::Control {
-        Color32::from_gray(70)
-    } else {
-        Color32::from_gray(100)
-    };
+    let inner = if dir == PortDir::Out { out_v } else { in_v };
     painter.circle_filled(center, r + 1.5, Color32::from_gray(12));
-    painter.circle_filled(center, r, ring_color);
-    let inner = match dir {
-        PortDir::Out => Color32::from_gray(if kind == PortKind::Control { 45 } else { 60 }),
-        PortDir::In => Color32::from_gray(if kind == PortKind::Control { 25 } else { 30 }),
-    };
-    painter.circle_filled(center, r - 1.5, inner);
+    painter.circle_filled(center, r, Color32::from_gray(ring));
+    painter.circle_filled(center, r - 1.5, Color32::from_gray(inner));
     painter.circle_filled(center, hole, Color32::from_gray(8));
     if kind == PortKind::Cv {
         painter.circle_filled(center, 0.8, Color32::from_gray(180));
+    } else if kind == PortKind::Mod {
+        let c = Color32::from_gray(200);
+        painter.circle_filled(center + Vec2::new(-2.4, 0.0), 0.8, c);
+        painter.circle_filled(center + Vec2::new(2.4, 0.0), 0.8, c);
     }
 }
 
@@ -541,7 +534,9 @@ pub fn module_card_back(
             draw_focus_shine(&painter, title_rect, kind, ui.ctx());
             let label_font = 9.5;
             let label_pos = title_rect.left_center() + Vec2::new(10.0, 0.0);
-            // For LlmAgent modules, show persona name (e.g. "LLM AGENT · BASS")
+            // For LlmAgent modules, show persona name (e.g. "LLM AGENT · BASS").
+            // For LfoModule, append a #N slot index so each instance is
+            // individually identifiable on the back panel.
             let label = if kind == ModuleKind::LlmAgent {
                 let persona: String = ui
                     .ctx()
@@ -552,6 +547,12 @@ pub fn module_card_back(
                 } else {
                     format!("{} · {}", kind.label(), persona)
                 }
+            } else if kind == ModuleKind::LfoModule {
+                let slot: usize = ui
+                    .ctx()
+                    .data(|d| d.get_temp(egui::Id::new("lfo_slot").with(module_id)))
+                    .unwrap_or(0);
+                format!("{} #{}", kind.label(), slot + 1)
             } else {
                 kind.label().to_string()
             };
@@ -630,17 +631,22 @@ pub fn module_card_back(
             }
 
             // ── Port strip (inputs left, outputs right) ─────────────────────
-            let strip_h = 52.0;
+            // Strip height grows with port count so mod jacks don't get
+            // clipped on small modules.
+            let strip_h = super::module_card_mod::back_strip_height(kind);
             let (strip_rect, _) =
                 ui.allocate_exact_size(Vec2::new(card_w, strip_h), Sense::hover());
             let sp = ui.painter_at(strip_rect);
-            // Faint module name watermark
+            // Faint module name watermark — anchored bottom-right so the
+            // mod-overlay chips/sliders growing rightward from the left jacks
+            // never collide with it.  (Was centred, which clipped the label
+            // for modules with many mod inputs like the 909 kit.)
             sp.text(
-                strip_rect.center(),
-                egui::Align2::CENTER_CENTER,
+                strip_rect.right_bottom() - Vec2::new(8.0, 6.0),
+                egui::Align2::RIGHT_BOTTOM,
                 kind.label(),
                 egui::FontId::monospace(11.0),
-                Color32::from_gray(28),
+                Color32::from_gray(32),
             );
 
             let port_hit_r = PORT_RADIUS + 4.0;
@@ -650,192 +656,119 @@ pub fn module_card_back(
             let label_font = egui::FontId::monospace(7.0);
             let label_col = Color32::from_gray(60);
 
-            // Determine which ports this module has
-            let has_audio_in = matches!(
-                kind,
-                ModuleKind::FxReverb
-                    | ModuleKind::FxDelay
-                    | ModuleKind::FxChorus
-                    | ModuleKind::FxPhaser
-                    | ModuleKind::FxRingMod
-                    | ModuleKind::FxWaveshaper
-                    | ModuleKind::FxBitcrush
-                    | ModuleKind::FxEq
-                    | ModuleKind::FxCompressor
-                    | ModuleKind::FxTapeSat
-                    | ModuleKind::FxDrive
-                    | ModuleKind::FxAutotune
-                    | ModuleKind::MasterOutput
-            );
+            // Port presence — deferred to module_card_mod helpers.
+            use super::module_card_mod as mcm;
+            let has_audio_in = mcm::has_audio_in(kind);
+            let has_cv_in = mcm::has_cv_in(kind);
+            let has_control_in = mcm::has_control_in(kind);
             let has_cv_out = matches!(kind, ModuleKind::LfoModule | ModuleKind::StepSequencer);
             let has_control_out = matches!(kind, ModuleKind::LlmAgent);
-            let has_control_in = !matches!(
-                kind,
-                ModuleKind::MasterOutput | ModuleKind::LlmAgent | ModuleKind::LlmConsole
-            );
-            let has_cv_in = matches!(
-                kind,
-                ModuleKind::AcidBass
-                    | ModuleKind::DrumKit808
-                    | ModuleKind::DrumKit909
-                    | ModuleKind::HooverLead
-                    | ModuleKind::An1xVoice
-                    | ModuleKind::AmenSampler
-                    | ModuleKind::NoiseVoice
-                    | ModuleKind::NeuTts
-            );
 
-            // ── LEFT side: input ports ──────────────────────────────────────
-            let mut in_y = strip_rect.center().y - 10.0;
-            if has_audio_in {
-                let pos = Pos2::new(left_x, in_y);
-                draw_port_circle(&sp, pos, PortKind::Audio, PortDir::In);
+            // ── Top row: AUD/CV/CTL ports laid out HORIZONTALLY ─────────────
+            // Inputs grow left → right from left_x; labels sit below the
+            // port circle so each port pair fits in a narrow column.  Mod
+            // jacks then stack vertically below.
+            let row_y = strip_rect.top() + 12.0;
+            let mod_start_y = strip_rect.top() + 30.0;
+            let port_step_x = 24.0;
+            let mut in_x = left_x;
+            let mut place_in = |kind_p: PortKind, label: &str, hover: &str, hash: &str| {
+                let pos = Pos2::new(in_x, row_y);
+                draw_port_circle(&sp, pos, kind_p, PortDir::In);
                 ports.push(PortPos {
                     port: PortRef {
                         module_id,
                         dir: PortDir::In,
-                        kind: PortKind::Audio,
+                        kind: kind_p,
                         index: 0,
                     },
                     center: pos,
                 });
                 sp.text(
-                    pos + Vec2::new(10.0, 0.0),
-                    egui::Align2::LEFT_CENTER,
-                    "AUD",
+                    pos + Vec2::new(0.0, 8.0),
+                    egui::Align2::CENTER_TOP,
+                    label,
                     label_font.clone(),
                     label_col,
                 );
                 ui.interact(
                     Rect::from_center_size(pos, port_size),
-                    ui.id().with("bp_ain"),
+                    ui.id().with(hash),
                     Sense::hover(),
                 )
-                .on_hover_text("Audio In");
-                in_y += 20.0;
+                .on_hover_text(hover);
+                in_x += port_step_x;
+            };
+            if has_audio_in {
+                place_in(PortKind::Audio, "AUD", "Audio In", "bp_ain");
             }
             if has_cv_in {
-                let pos = Pos2::new(left_x, in_y);
-                draw_port_circle(&sp, pos, PortKind::Cv, PortDir::In);
-                ports.push(PortPos {
-                    port: PortRef {
-                        module_id,
-                        dir: PortDir::In,
-                        kind: PortKind::Cv,
-                        index: 0,
-                    },
-                    center: pos,
-                });
-                sp.text(
-                    pos + Vec2::new(10.0, 0.0),
-                    egui::Align2::LEFT_CENTER,
-                    "CV",
-                    label_font.clone(),
-                    label_col,
-                );
-                ui.interact(
-                    Rect::from_center_size(pos, port_size),
-                    ui.id().with("bp_cin"),
-                    Sense::hover(),
-                )
-                .on_hover_text("CV / Gate In");
-                in_y += 20.0;
+                place_in(PortKind::Cv, "CV", "CV / Gate In", "bp_cin");
             }
             if has_control_in {
-                let pos = Pos2::new(left_x, in_y);
-                draw_port_circle(&sp, pos, PortKind::Control, PortDir::In);
-                ports.push(PortPos {
-                    port: PortRef {
-                        module_id,
-                        dir: PortDir::In,
-                        kind: PortKind::Control,
-                        index: 0,
-                    },
-                    center: pos,
-                });
-                sp.text(
-                    pos + Vec2::new(10.0, 0.0),
-                    egui::Align2::LEFT_CENTER,
-                    "CTL",
-                    label_font.clone(),
-                    label_col,
-                );
+                place_in(PortKind::Control, "CTL", "Control In (LLM)", "bp_ctlin");
             }
+            super::module_card_mod::draw_mod_input_ports(
+                ui,
+                &sp,
+                module_id,
+                kind,
+                left_x,
+                mod_start_y,
+                &label_font,
+                label_col,
+                port_size,
+                ports,
+            );
 
-            // ── RIGHT side: output ports ────────────────────────────────────
-            let mut out_y = strip_rect.center().y - 10.0;
-            {
-                let pos = Pos2::new(right_x, out_y);
-                draw_port_circle(&sp, pos, PortKind::Audio, PortDir::Out);
+            // ── RIGHT side: output ports — also horizontal, right→left ──────
+            let mut out_x = right_x;
+            let mut place_out = |kind_p: PortKind, label: String, hover: &str, hash: &str| {
+                let pos = Pos2::new(out_x, row_y);
+                draw_port_circle(&sp, pos, kind_p, PortDir::Out);
                 ports.push(PortPos {
                     port: PortRef {
                         module_id,
                         dir: PortDir::Out,
-                        kind: PortKind::Audio,
+                        kind: kind_p,
                         index: 0,
                     },
                     center: pos,
                 });
                 sp.text(
-                    pos + Vec2::new(-10.0, 0.0),
-                    egui::Align2::RIGHT_CENTER,
-                    "AUD",
+                    pos + Vec2::new(0.0, 8.0),
+                    egui::Align2::CENTER_TOP,
+                    &label,
                     label_font.clone(),
                     label_col,
                 );
                 ui.interact(
                     Rect::from_center_size(pos, port_size),
-                    ui.id().with("bp_aout"),
+                    ui.id().with(hash),
                     Sense::hover(),
                 )
-                .on_hover_text("Audio Out");
-                out_y += 20.0;
-            }
+                .on_hover_text(hover);
+                out_x -= port_step_x;
+            };
+            place_out(PortKind::Audio, "AUD".into(), "Audio Out", "bp_aout");
             if has_cv_out {
-                let pos = Pos2::new(right_x, out_y);
-                draw_port_circle(&sp, pos, PortKind::Cv, PortDir::Out);
-                ports.push(PortPos {
-                    port: PortRef {
-                        module_id,
-                        dir: PortDir::Out,
-                        kind: PortKind::Cv,
-                        index: 0,
-                    },
-                    center: pos,
-                });
-                sp.text(
-                    pos + Vec2::new(-10.0, 0.0),
-                    egui::Align2::RIGHT_CENTER,
-                    "CV",
-                    label_font.clone(),
-                    label_col,
-                );
-                ui.interact(
-                    Rect::from_center_size(pos, port_size),
-                    ui.id().with("bp_cout"),
-                    Sense::hover(),
-                )
-                .on_hover_text("CV Out");
-                out_y += 20.0;
+                let cv_label = if kind == ModuleKind::LfoModule {
+                    let slot: usize = ui
+                        .ctx()
+                        .data(|d| d.get_temp(egui::Id::new("lfo_slot").with(module_id)))
+                        .unwrap_or(0);
+                    format!("#{}", slot + 1)
+                } else {
+                    "CV".into()
+                };
+                place_out(PortKind::Cv, cv_label, "CV Out", "bp_cout");
             }
             if has_control_out {
-                let pos = Pos2::new(right_x, out_y);
-                draw_port_circle(&sp, pos, PortKind::Control, PortDir::Out);
-                ports.push(PortPos {
-                    port: PortRef {
-                        module_id,
-                        dir: PortDir::Out,
-                        kind: PortKind::Control,
-                        index: 0,
-                    },
-                    center: pos,
-                });
-                sp.text(
-                    pos + Vec2::new(-10.0, 0.0),
-                    egui::Align2::RIGHT_CENTER,
-                    "CTL",
-                    label_font,
-                    label_col,
+                place_out(
+                    PortKind::Control,
+                    "CTL".into(),
+                    "Control Out (LLM)",
+                    "bp_ctlout",
                 );
             }
         });

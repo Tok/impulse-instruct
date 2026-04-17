@@ -33,6 +33,7 @@ impl ImpulseApp {
                             accent: vel > 0.8,
                             slide: false,
                             gate_samples: 22050,
+                            pan: 0.0,
                         }));
                     let step = self.state.read().sequencer.current_step;
                     let s = self.state.read().clone();

@@ -136,93 +136,21 @@ echo "  Scenario: $SCENARIO"
 echo "  Flags: skip_build=$SKIP_BUILD no_tts=$NO_TTS skip_video=$SKIP_VIDEO"
 echo ""
 
-# ─── Pre-generate TTS clips ──────────────────────────────────────────────────
-
-echo "[1/6] Pre-generating TTS clips..."
-if [ "$NO_TTS" -eq 0 ]; then
-    start_neutts_server || { echo "  Falling back to no-TTS mode"; NO_TTS=1; }
-    clip_id=""
-    scene_num=0
-    tts_ok=0
-    tts_fail=0
-    tts_failed_ids=""
-    _gen_one() {
-        # $1=id, $2=text; reports and tracks success/failure.
-        if tts_generate "$1" "$2" >/dev/null; then
-            tts_ok=$((tts_ok + 1))
-            echo "  [$tts_ok] Generated: $1"
-        else
-            tts_fail=$((tts_fail + 1))
-            tts_failed_ids="${tts_failed_ids}$1\n"
-        fi
-    }
-    while IFS= read -r line; do
-        # narrate "id" \        (two-line form: text on next line)
-        if [[ "$line" =~ narrate[[:space:]]+(--wait[[:space:]]+)?\"([^\"]+)\"[[:space:]]+\\?$ ]]; then
-            clip_id="${BASH_REMATCH[2]}"
-        elif [[ "$line" =~ ^[[:space:]]+\"(.+)\"$ ]] && [ -n "${clip_id:-}" ]; then
-            _gen_one "$clip_id" "${BASH_REMATCH[1]}"
-            clip_id=""
-        # narrate "id" "text"
-        elif [[ "$line" =~ narrate[[:space:]]+(--wait[[:space:]]+)?\"([^\"]+)\"[[:space:]]+\"(.+)\" ]]; then
-            _gen_one "${BASH_REMATCH[2]}" "${BASH_REMATCH[3]}"
-            clip_id=""
-        # scene "name"  (track scene counter for say auto-IDs)
-        elif [[ "$line" =~ ^[[:space:]]*scene[[:space:]]+\".*\" ]]; then
-            scene_num=$((scene_num + 1))
-        # say "text"  (expands to narrate --wait "auto_NNN_<slug>" "text")
-        elif [[ "$line" =~ ^[[:space:]]*say[[:space:]]+\"(.+)\"[[:space:]]*$ ]]; then
-            text="${BASH_REMATCH[1]}"
-            slug=$(echo "$text" | tr ' ' '_' | tr -cd 'a-zA-Z0-9_' | head -c 30)
-            auto_id=$(printf 'auto_%03d_%s' "$scene_num" "$slug")
-            _gen_one "$auto_id" "$text"
-        fi
-    done < "$SCENARIO_FILE"
-    echo "  TTS clips cached in $TTS_DIR ($tts_ok ok, $tts_fail failed)"
-    if [ "$tts_fail" -gt 0 ]; then
-        echo "  Missing clips (all retries exhausted):"
-        printf "%b" "$tts_failed_ids" | sed 's/^/    /'
-    fi
-    # Stop server now — frees GPU memory for the app (LLM + display).
-    # Playback uses cached WAV files via paplay, no server needed.
-    stop_neutts_server
-
-    # Pre-generate SRT from scenario + actual clip durations. Timings are
-    # approximate (API/UI calls take variable time at runtime) but the SRT
-    # contains the full intended text with reading-time-friendly durations,
-    # independent of runtime execution or TTS truncation.
-    PREGEN_SRT="$BATCH_DIR/${BASENAME}.pregen.srt"
-    pregenerate_srt "$SCENARIO_FILE" "$PREGEN_SRT" >/dev/null || PREGEN_SRT=""
-else
-    echo "  Skipped (--no-tts)"
-    # Override narrate to still log subtitles but skip audio playback
-    narrate() {
-        local blocking=0
-        if [ "$1" = "--wait" ]; then shift; fi
-        local id="$1" text="$2"
-        local start_sec
-        start_sec=$(demo_elapsed 2>/dev/null || echo "0")
-        echo "${start_sec}|2.0|${text}" >> "$NARRATION_LIST"
-    }
-    wait_narration() { :; }
-fi
-
-if [ "$DRY_RUN" -eq 1 ]; then
-    echo ""
-    echo "Dry run complete. TTS clips are in $TTS_DIR"
-    exit 0
-fi
-
 # ─── Build the app ───────────────────────────────────────────────────────────
+#
+# Ordering rationale: Build → launch app (background) → pre-gen TTS.
+# Launching the app before TTS generation lets llama-server load Gemma 4 onto
+# the GPU while NeuTTS is still busy synthesising clips on CPU + GPU.  By the
+# time the scenario runs and adds an agent, the model pool already has a warm
+# server — no 60-120s cold-start stall.
 
 if [ "$SKIP_BUILD" -eq 0 ] && [ "$APP_RUNNING" -eq 0 ]; then
-    echo ""
-    echo "[2/6] Building Impulse Instruct..."
+    echo "[1/6] Building Impulse Instruct..."
     cd "$PROJECT_DIR"
     cargo build --release 2>&1 | tail -3
     echo "  Build complete."
 else
-    echo "[2/6] Build skipped."
+    echo "[1/6] Build skipped."
 fi
 
 # ─── Cleanup trap ─────────────────────────────────────────────────────────────
@@ -269,11 +197,14 @@ cleanup() {
 }
 trap cleanup EXIT
 
-# ─── Launch the app ──────────────────────────────────────────────────────────
+# ─── Launch the app (background — llama-server warms while TTS runs) ─────────
 
-if [ "$APP_RUNNING" -eq 0 ]; then
+if [ "$DRY_RUN" -eq 1 ]; then
+    # Dry run: skip app launch entirely, just pre-gen TTS and exit.
+    echo "[2/6] App launch skipped (--dry-run)."
+elif [ "$APP_RUNNING" -eq 0 ]; then
     echo ""
-    echo "[3/6] Launching app with --skip-wizard..."
+    echo "[2/6] Launching app with --skip-wizard..."
     cd "$PROJECT_DIR"
     # Remove stale session so the app starts with a clean rack
     rm -f session.json
@@ -296,18 +227,122 @@ if [ "$APP_RUNNING" -eq 0 ]; then
         ./target/release/impulse-instruct --skip-wizard --fresh-session --mock --log trace &
     fi
     APP_PID=$!
+    echo "  App launched (pid=$APP_PID) — llama-server will warm up during TTS pre-gen."
+else
+    echo "[2/6] Using already-running app."
+fi
+
+# ─── Pre-generate TTS clips (concurrent with llama-server warm-up) ───────────
+
+echo ""
+echo "[3/6] Pre-generating TTS clips..."
+if [ "$NO_TTS" -eq 0 ]; then
+    start_neutts_server || { echo "  Falling back to no-TTS mode"; NO_TTS=1; }
+fi
+if [ "$NO_TTS" -eq 0 ]; then
+    clip_id=""
+    scene_num=0
+    tts_ok=0
+    tts_fail=0
+    tts_failed_ids=""
+    _gen_one() {
+        # $1=id, $2=text; reports and tracks success/failure.
+        if tts_generate "$1" "$2" >/dev/null; then
+            tts_ok=$((tts_ok + 1))
+            echo "  [$tts_ok] Generated: $1"
+        else
+            tts_fail=$((tts_fail + 1))
+            tts_failed_ids="${tts_failed_ids}$1\n"
+        fi
+    }
+    while IFS= read -r line; do
+        # narrate "id" \        (two-line form: text on next line)
+        if [[ "$line" =~ narrate[[:space:]]+(--wait[[:space:]]+)?\"([^\"]+)\"[[:space:]]+\\?$ ]]; then
+            clip_id="${BASH_REMATCH[2]}"
+        elif [[ "$line" =~ ^[[:space:]]+\"(.+)\"$ ]] && [ -n "${clip_id:-}" ]; then
+            _gen_one "$clip_id" "${BASH_REMATCH[1]}"
+            clip_id=""
+        # narrate "id" "text"
+        elif [[ "$line" =~ narrate[[:space:]]+(--wait[[:space:]]+)?\"([^\"]+)\"[[:space:]]+\"(.+)\" ]]; then
+            _gen_one "${BASH_REMATCH[2]}" "${BASH_REMATCH[3]}"
+            clip_id=""
+        # scene "name"  (track scene counter for say auto-IDs)
+        elif [[ "$line" =~ ^[[:space:]]*scene[[:space:]]+\".*\" ]]; then
+            scene_num=$((scene_num + 1))
+        # say "text"  (expands to narrate --wait "auto_NNN_<slug>" "text")
+        elif [[ "$line" =~ ^[[:space:]]*say[[:space:]]+\"(.+)\"[[:space:]]*$ ]]; then
+            text="${BASH_REMATCH[1]}"
+            slug=$(echo "$text" | tr ' ' '_' | tr -cd 'a-zA-Z0-9_' | head -c 30)
+            auto_id=$(printf 'auto_%03d_%s' "$scene_num" "$slug")
+            _gen_one "$auto_id" "$text"
+        fi
+    done < "$SCENARIO_FILE"
+    echo "  TTS clips cached in $TTS_DIR ($tts_ok ok, $tts_fail failed)"
+    if [ "$tts_fail" -gt 0 ]; then
+        echo "  Missing clips (all retries exhausted):"
+        printf "%b" "$tts_failed_ids" | sed 's/^/    /'
+    fi
+    # IMPORTANT: don't stop the NeuTTS server here.  The in-app TTS
+    # module (used for runtime mc_line synthesis when an MC agent is
+    # spawned during the scenario) shares the same Python server on
+    # port 8770 — stopping it would make scenario-time MC lines fail
+    # silently.  Memory is fine: NeuTTS Air Q4 is ~527 MB and Gemma
+    # ~5 GB, comfortably under most GPU budgets.  The cleanup trap
+    # stops the server after the scenario finishes.
+
+    # Pre-generate SRT from scenario + actual clip durations. Timings are
+    # approximate (API/UI calls take variable time at runtime) but the SRT
+    # contains the full intended text with reading-time-friendly durations,
+    # independent of runtime execution or TTS truncation.
+    PREGEN_SRT="$BATCH_DIR/${BASENAME}.pregen.srt"
+    pregenerate_srt "$SCENARIO_FILE" "$PREGEN_SRT" >/dev/null || PREGEN_SRT=""
+else
+    echo "  Skipped (--no-tts)"
+    # Override narrate to still log subtitles but skip audio playback
+    narrate() {
+        local blocking=0
+        if [ "$1" = "--wait" ]; then shift; fi
+        local id="$1" text="$2"
+        local start_sec
+        start_sec=$(demo_elapsed 2>/dev/null || echo "0")
+        echo "${start_sec}|2.0|${text}" >> "$NARRATION_LIST"
+    }
+    wait_narration() { :; }
+fi
+
+if [ "$DRY_RUN" -eq 1 ]; then
+    echo ""
+    echo "Dry run complete. TTS clips are in $TTS_DIR"
+    exit 0
+fi
+
+# ─── Wait for app API to be reachable ────────────────────────────────────────
+# App was launched before TTS pre-gen; by now it's almost certainly up, but
+# keep a short safety wait in case TTS finished very fast.
+if [ "$APP_RUNNING" -eq 0 ]; then
     wait_for_api 30
 else
-    echo "[3/6] Using already-running app."
     wait_for_api 5
 fi
 
 # Guarantee a blank slate — even when attaching to a running app that may
 # have LFO on, agents loaded, sequencer running, etc.  --fresh-session on
 # launch only handles fresh starts; this covers the reuse case too.
+# Safe to do post-warmup: api_state_reset only mutates AppState, it doesn't
+# touch the LLM thread's LlamaServerPool, so the pre-acquired warm server
+# for --model stays alive.  The scenario's add_agent will reuse it.
 echo "  Resetting app state to defaults..."
 api_state_reset
 sleep 1
+
+# Wait for llama-server to finish loading the model BEFORE we start the video
+# recording.  Otherwise the first seconds of the recording are dead air while
+# the scenario's initial ask/wait_for_model blocks the clip timeline.  The
+# app's LLM thread pre-acquired the server at startup (concurrent with TTS
+# pre-gen), so by now it's usually already warm — wait_for_llm returns
+# immediately if llm_initializing is already False.  Safe in mock mode too
+# (mock flips llm_initializing=False on startup).
+wait_for_llm 300
 
 # ─── Find the app window + start capture ─────────────────────────────────────
 

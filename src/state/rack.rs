@@ -24,6 +24,9 @@ pub enum PortKind {
     Cv,
     /// LLM control link — connects an LLM agent to modules it may control.
     Control,
+    /// Per-knob modulation input (LFO → target knob).  Distinct from Cv so
+    /// the rack UI and fx_plan can treat mod cables separately.
+    Mod,
 }
 
 /// Direction of a port relative to its module.
@@ -98,213 +101,10 @@ pub struct Cable {
     pub color: CableColor,
 }
 
-// ─── Module kinds ─────────────────────────────────────────────────────────────
-
-/// Every instantiable module type in the rack.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub enum ModuleKind {
-    // ── Voice modules ─────────────────────────────────────────────────────────
-    AcidBass,
-    DrumKit808,
-    DrumKit909,
-    HooverLead,
-    An1xVoice,
-    AmenSampler,
-    NoiseVoice,
-    GranularTexture,
-    // ── TTS voice module (NeuTTS Air) ───────────────────────────────────────
-    #[serde(alias = "EspeakNgTts", alias = "CoquiTts")]
-    NeuTts,
-    // ── Sequencer ─────────────────────────────────────────────────────────────
-    /// Main step sequencer — drives all voice modules.
-    StepSequencer,
-    // ── FX modules ────────────────────────────────────────────────────────────
-    FxReverb,
-    FxDelay,
-    FxChorus,
-    FxPhaser,
-    FxRingMod,
-    FxWaveshaper,
-    FxBitcrush,
-    FxEq,
-    FxCompressor,
-    FxTapeSat,
-    FxDrive,
-    FxAutotune,
-    // ── Analysis ──────────────────────────────────────────────────────────────
-    SpectrumAnalyzer,
-    StereoMeter,
-    ActivityTimeline,
-    // ── Modulation ────────────────────────────────────────────────────────────
-    LfoModule,
-    LlmAgent,
-    // ── LLM console (singleton, Global zone) ──────────────────────────────
-    LlmConsole,
-    //── Utility ───────────────────────────────────────────────────────────────
-    MasterOutput,
-}
-
-impl ModuleKind {
-    /// Short display label shown in the module card title bar.
-    pub fn label(self) -> &'static str {
-        match self {
-            Self::AcidBass => "BASS SYNTH",
-            Self::DrumKit808 => "808 KIT",
-            Self::DrumKit909 => "909 KIT",
-            Self::HooverLead => "HOOVER",
-            Self::An1xVoice => "AN1X",
-            Self::AmenSampler => "AMEN",
-            Self::NoiseVoice => "NOISE",
-            Self::GranularTexture => "GRANULAR",
-            Self::NeuTts => "TTS VOICE",
-            Self::StepSequencer => "SEQUENCER",
-            Self::FxReverb => "REVERB",
-            Self::FxDelay => "DELAY",
-            Self::FxChorus => "CHORUS",
-            Self::FxPhaser => "PHASER",
-            Self::FxRingMod => "RING MOD",
-            Self::FxWaveshaper => "WAVESHAPER",
-            Self::FxBitcrush => "BITCRUSH",
-            Self::FxEq => "EQ",
-            Self::FxCompressor => "COMPRESSOR",
-            Self::FxTapeSat => "TAPE SAT",
-            Self::FxDrive => "DRIVE",
-            Self::FxAutotune => "AUTOTUNE",
-            Self::SpectrumAnalyzer => "SPECTRUM",
-            Self::StereoMeter => "STEREO METER",
-            Self::ActivityTimeline => "TIMELINE",
-            Self::LfoModule => "LFO",
-            Self::LlmAgent => "LLM AGENT",
-            Self::LlmConsole => "LLM CONSOLE",
-            Self::MasterOutput => "MASTER",
-        }
-    }
-
-    /// Grid size in (columns, rows) for the 12-column rack grid.
-    /// Full-width modules use `grid_cols` for width; all others are fixed.
-    /// Height is enforced as a minimum — content taller than this grows naturally.
-    pub fn grid_size(self, grid_cols: u8) -> (u8, u8) {
-        match self {
-            //                                     W     H
-            Self::StepSequencer => (grid_cols, 2),
-            Self::LlmConsole => (grid_cols, 1),
-            Self::MasterOutput => (grid_cols, 1),
-            Self::AcidBass => (4, 7),
-            Self::DrumKit808 => (3, 3),
-            Self::DrumKit909 => (4, 3),
-            Self::HooverLead => (4, 2),
-            Self::An1xVoice => (6, 6),
-            Self::AmenSampler => (3, 1),
-            Self::NoiseVoice => (2, 1),
-            Self::GranularTexture => (3, 1),
-            Self::LlmAgent => (3, 2),
-            Self::NeuTts => (2, 3),
-            Self::SpectrumAnalyzer => (4, 2),
-            Self::ActivityTimeline => (4, 2),
-            Self::StereoMeter => (2, 1),
-            Self::LfoModule => (2, 2),
-            // FX modules — exhaustive so new variants cause a compile error
-            Self::FxReverb
-            | Self::FxDelay
-            | Self::FxChorus
-            | Self::FxPhaser
-            | Self::FxRingMod
-            | Self::FxWaveshaper
-            | Self::FxBitcrush
-            | Self::FxEq
-            | Self::FxCompressor
-            | Self::FxTapeSat
-            | Self::FxDrive
-            | Self::FxAutotune => (2, 1),
-        }
-    }
-
-    /// Which zone this module belongs to by default.
-    pub fn default_zone(self) -> Zone {
-        match self {
-            Self::LlmConsole | Self::LlmAgent => Zone::Ai,
-            Self::StepSequencer | Self::MasterOutput => Zone::Global,
-            Self::AcidBass
-            | Self::DrumKit808
-            | Self::DrumKit909
-            | Self::HooverLead
-            | Self::An1xVoice
-            | Self::AmenSampler
-            | Self::NoiseVoice
-            | Self::GranularTexture
-            | Self::NeuTts => Zone::Voice,
-            Self::FxReverb
-            | Self::FxDelay
-            | Self::FxChorus
-            | Self::FxPhaser
-            | Self::FxRingMod
-            | Self::FxWaveshaper
-            | Self::FxBitcrush
-            | Self::FxEq
-            | Self::FxCompressor
-            | Self::FxTapeSat
-            | Self::FxDrive
-            | Self::FxAutotune
-            | Self::SpectrumAnalyzer
-            | Self::StereoMeter
-            | Self::ActivityTimeline
-            | Self::LfoModule => Zone::FxMod,
-        }
-    }
-
-    /// Whether this module type may have more than one instance in the rack.
-    pub fn allows_multiple(self) -> bool {
-        matches!(
-            self,
-            Self::FxReverb
-                | Self::FxDelay
-                | Self::FxChorus
-                | Self::FxPhaser
-                | Self::FxRingMod
-                | Self::FxWaveshaper
-                | Self::FxBitcrush
-                | Self::FxEq
-                | Self::FxCompressor
-                | Self::FxTapeSat
-                | Self::FxDrive
-                | Self::FxAutotune
-                | Self::LfoModule
-                | Self::LlmAgent
-        )
-    }
-}
-
-// ─── Zone ────────────────────────────────────────────────────────────────────
-
-/// Fixed grid column count for the rack layout.
-pub const GRID_COLS: u8 = 12;
-
-/// The vertical zone a module lives in.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub enum Zone {
-    /// LLM console + agents.
-    Ai,
-    /// Clock/sequencer, master output — the main audio strip.
-    /// (Labelled "MAIN AUDIO" in the UI; the enum name is kept for serde
-    /// backward compat with pre-split sessions.)
-    Global,
-    /// Voice / instrument modules.
-    Voice,
-    /// FX processors and modulation sources.
-    FxMod,
-}
-
-impl Zone {
-    /// Lowercase scroll-target name (`"ai"`, `"global"`, `"voice"`, `"fxmod"`).
-    pub fn scroll_name(self) -> &'static str {
-        match self {
-            Zone::Ai => "ai",
-            Zone::Global => "global",
-            Zone::Voice => "voice",
-            Zone::FxMod => "fxmod",
-        }
-    }
-}
+// `ModuleKind`, `Zone`, and `GRID_COLS` live in state/module_kind.rs.
+// Re-exported here so `super::rack::{ModuleKind, Zone, GRID_COLS}` keeps
+// working for all existing callers after the extraction.
+pub use super::module_kind::{GRID_COLS, ModuleKind, Zone};
 
 // ─── Module ───────────────────────────────────────────────────────────────────
 
@@ -326,6 +126,21 @@ pub struct RackModule {
     /// Grid row (0-based) in the zone's grid.
     #[serde(default)]
     pub grid_row: u8,
+    /// Per-Selector slot: list of currently-active LfoTargets (multi-select).
+    /// Indexed by selector position; an empty inner list = no targets active
+    /// for that slot.
+    #[serde(default)]
+    pub mod_selectors: Vec<Vec<crate::state::LfoTarget>>,
+    /// Per-mod-input depth (0..1).  Indexed by `mod_inputs(kind)` slot
+    /// position — applies to both Fixed and Selector slots.  Empty / short
+    /// vec defaults each missing entry to 1.0.
+    #[serde(default)]
+    pub mod_input_depths: Vec<f32>,
+    /// Per-mod-input polarity flag (true = invert).  When true the depth
+    /// is negated before being multiplied with the LFO value, so the
+    /// modulation pulls the target down where it would normally push up.
+    #[serde(default)]
+    pub mod_input_invert: Vec<bool>,
 }
 
 impl RackModule {
@@ -338,6 +153,9 @@ impl RackModule {
             slot: 0,
             grid_col: 0,
             grid_row: 0,
+            mod_selectors: Vec::new(),
+            mod_input_depths: Vec::new(),
+            mod_input_invert: Vec::new(),
         }
     }
 }
@@ -487,12 +305,14 @@ impl RackState {
                 ModuleKind::DrumKit808 => 10,
                 ModuleKind::AcidBass => 11,
                 ModuleKind::DrumKit909 => 12,
-                ModuleKind::HooverLead => 13,
-                ModuleKind::An1xVoice => 14,
-                ModuleKind::AmenSampler => 15,
-                ModuleKind::NoiseVoice => 16,
-                ModuleKind::GranularTexture => 17,
-                ModuleKind::NeuTts => 18,
+                // Gabber kick sits next to the drum kits — it's a drum voice.
+                ModuleKind::GabberKick => 13,
+                ModuleKind::HooverLead => 14,
+                ModuleKind::An1xVoice => 15,
+                ModuleKind::AmenSampler => 16,
+                ModuleKind::NoiseVoice => 17,
+                ModuleKind::GranularTexture => 18,
+                ModuleKind::NeuTts => 19,
                 ModuleKind::FxWaveshaper => 20,
                 ModuleKind::FxReverb => 21,
                 ModuleKind::FxDelay => 22,
@@ -505,6 +325,7 @@ impl RackState {
                 ModuleKind::FxTapeSat => 29,
                 ModuleKind::FxDrive => 30,
                 ModuleKind::FxAutotune => 31,
+                ModuleKind::FxPan => 36,
                 ModuleKind::SpectrumAnalyzer => 32,
                 ModuleKind::StereoMeter => 33,
                 ModuleKind::ActivityTimeline => 34,
@@ -671,6 +492,7 @@ impl RackState {
             ModuleKind::FxTapeSat,
             ModuleKind::FxDrive,
             ModuleKind::FxAutotune,
+            ModuleKind::FxPan,
         ]
         .iter()
         .filter_map(|&k| find(&self.modules, k))
@@ -941,6 +763,7 @@ pub enum FxStep {
     TapeSat,
     Drive,
     Autotune,
+    Pan,
 }
 
 /// Compiled FX processing order derived from the rack cable graph.
@@ -961,39 +784,4 @@ pub struct FxPlan {
     /// When non-empty for a voice, the DSP routes that bus through its own
     /// chain instead of the global chain.
     pub voice_routes: HashMap<ModuleKind, Vec<FxStep>>,
-}
-
-// ─── LLM rack helpers ─────────────────────────────────────────────────────────
-
-/// Maps an `LfoTarget` to the rack `ModuleKind` it modulates.
-/// Used to synthesise visual cables for active LFO slots.
-/// Returns `None` for `LfoTarget::None` or targets without a matching module kind.
-pub(crate) fn lfo_target_module_kind(target: crate::state::LfoTarget) -> Option<ModuleKind> {
-    use crate::state::LfoTarget;
-    match target {
-        LfoTarget::None => None,
-        LfoTarget::BassCutoff
-        | LfoTarget::BassResonance
-        | LfoTarget::BassPitch
-        | LfoTarget::BassVolume => Some(ModuleKind::AcidBass),
-        LfoTarget::Kick808Pitch => Some(ModuleKind::DrumKit808),
-        LfoTarget::ReverbMix => Some(ModuleKind::FxReverb),
-        LfoTarget::DelayTime | LfoTarget::DelayFeedback => Some(ModuleKind::FxDelay),
-        LfoTarget::ChorusMix | LfoTarget::ChorusRate => Some(ModuleKind::FxChorus),
-        LfoTarget::PhaserRate | LfoTarget::PhaserDepth => Some(ModuleKind::FxPhaser),
-        LfoTarget::DistortionDrive => Some(ModuleKind::FxWaveshaper),
-        LfoTarget::MasterVolume => Some(ModuleKind::MasterOutput),
-        LfoTarget::An1xCutoff | LfoTarget::An1xPitch => Some(ModuleKind::An1xVoice),
-    }
-}
-
-/// Returns the `PortKind` emitted on a module's primary output.
-/// CV sources (LFO, Sequencer) use `Cv`; everything else uses `Audio`.
-/// The destination port kind always matches the source.
-pub(crate) fn rack_out_port_kind(kind: ModuleKind) -> PortKind {
-    match kind {
-        ModuleKind::LlmAgent => PortKind::Control,
-        ModuleKind::LfoModule | ModuleKind::StepSequencer => PortKind::Cv,
-        _ => PortKind::Audio,
-    }
 }

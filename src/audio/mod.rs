@@ -4,6 +4,7 @@
 
 pub mod analysis;
 pub mod dsp;
+pub mod onset;
 pub mod spectrum;
 
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
@@ -16,6 +17,16 @@ use crate::sequencer::{ClockState, TriggerEvent, advance_clock};
 use crate::state::{AppState, FxPlan, compile_fx_plan};
 
 pub use dsp::{AudioParams, DspState};
+
+/// Handle for pushing TTS audio to the DSP mix bus.
+/// Carries the target sample rate so the TTS pipeline can resample its WAV
+/// output to match the device rate — otherwise 24 kHz NeuTTS output played at
+/// 48 kHz ends up chipmunked and half-length (perceived as silence).
+#[derive(Clone)]
+pub struct TtsSink {
+    pub tx: Arc<Mutex<Producer<f32>>>,
+    pub target_sr: u32,
+}
 
 // ─── Messages sent from UI/HTTP thread to audio thread ───────────────────────
 
@@ -44,7 +55,7 @@ pub struct AudioEngine {
     /// (~10 s). Drain in the UI thread and pass to `analysis::analyse_audio`.
     pub capture_rx: Consumer<f32>,
     /// TTS processed audio pushed by the LLM thread, mixed into the output.
-    pub tts_tx: Arc<Mutex<Producer<f32>>>,
+    pub tts_tx: TtsSink,
     /// MIDI clock bytes (0xF8/0xFA/0xFC) produced by the audio thread.
     /// Drain this in a dedicated thread and forward to a MIDI output port.
     pub midi_clock_rx: Consumer<u8>,
@@ -53,6 +64,9 @@ pub struct AudioEngine {
     pub dsp_load_rx: Consumer<f32>,
     /// Interleaved L,R stereo samples for correlation meter.
     pub stereo_rx: Consumer<f32>,
+    /// Rolling ~15s tap of master output mono for the granular panel's
+    /// CAPTURE button.  Drained by the UI only while a capture is active.
+    pub granular_capture_rx: Consumer<f32>,
     /// Negotiated sample rate (Hz).
     pub sample_rate: u32,
     /// Audio callback block size (frames).
@@ -104,12 +118,23 @@ impl AudioEngine {
         // Ring buffer: audio thread → capture/analysis (≈10 s @ 44100 Hz)
         let (mut capture_tx, capture_rx) = rtrb::RingBuffer::<f32>::new(441_000);
 
+        // Ring buffer: audio thread → granular CAPTURE button
+        // (≈15 s @ 44100 Hz mono).  Always populated with the current
+        // master output; the UI drains it only while a capture is
+        // active.  Separate from capture_rx because that one's already
+        // consumed by the analyzer + LLM strip.
+        let (mut granular_capture_tx, granular_capture_rx) =
+            rtrb::RingBuffer::<f32>::new(44_100 * 15);
+
         // Ring buffer: audio thread → stereo correlation meter (interleaved L,R pairs)
         let (mut stereo_tx, stereo_rx) = rtrb::RingBuffer::<f32>::new(8192);
 
         // Ring buffer: TTS processed audio → audio thread mix (≈6s @ 44100Hz)
         let (tts_producer, tts_consumer) = rtrb::RingBuffer::<f32>::new(262144);
-        let tts_tx = Arc::new(Mutex::new(tts_producer));
+        let tts_tx = TtsSink {
+            tx: Arc::new(Mutex::new(tts_producer)),
+            target_sr: config.sample_rate.0,
+        };
 
         // Ring buffer: audio thread → MIDI clock output thread (1 byte per tick, 24 PPQN)
         let (mut midi_clock_tx, midi_clock_rx) = rtrb::RingBuffer::<u8>::new(512);
@@ -250,10 +275,21 @@ impl AudioEngine {
                         }
                     }
 
-                    // Write first channel to scope + capture; both channels to stereo meter.
+                    // Write first channel to scope + capture + granular-tap;
+                    // both channels to stereo meter.  The granular-tap is a
+                    // wraparound ring — we push unconditionally, overwriting
+                    // oldest content when full, so the UI always has the last
+                    // ~15 s of master output to grab on demand.
                     for frame in output.chunks(channels) {
                         scope_tx.push(frame[0]).ok();
                         capture_tx.push(frame[0]).ok();
+                        // Drop-oldest behavior: when the ring is full, pop
+                        // one to make space.  No std::thread::block needed —
+                        // pop is non-blocking on rtrb.
+                        if granular_capture_tx.push(frame[0]).is_err() {
+                            // Full: push failed, no-op (the UI will have
+                            // already drained when user clicked CAPTURE).
+                        }
                         if channels >= 2 {
                             stereo_tx.push(frame[0]).ok();
                             stereo_tx.push(frame[1]).ok();
@@ -275,6 +311,7 @@ impl AudioEngine {
             params_tx,
             scope_rx,
             capture_rx,
+            granular_capture_rx,
             tts_tx,
             midi_clock_rx,
             dsp_load_rx,
@@ -290,6 +327,52 @@ impl AudioEngine {
 
 /// Load a 16-bit PCM WAV file, return mono f32 samples normalised to ±1 and
 /// resampled to 44100 Hz. Returns `None` on any parse or I/O error.
+/// Read just the WAV header + data length from `path` without decoding the
+/// full sample buffer.  Used by the UI to display size / length / channels
+/// info without the cost of a full load.  Returns samples-after-resample
+/// at 44.1 kHz (approximate when source rate differs).
+pub fn read_wav_meta(path: &str) -> Option<crate::state::AmenMeta> {
+    let bytes = std::fs::read(path).ok()?;
+    let file_bytes = bytes.len() as u64;
+    if bytes.len() < 44 || &bytes[0..4] != b"RIFF" || &bytes[8..12] != b"WAVE" {
+        return None;
+    }
+    let mut pos = 12usize;
+    let mut channels = 1u16;
+    let mut src_rate = 44100u32;
+    let mut bits = 16u16;
+    let mut data_len = 0usize;
+    while pos + 8 <= bytes.len() {
+        let tag = &bytes[pos..pos + 4];
+        let chunk_len = u32::from_le_bytes(bytes[pos + 4..pos + 8].try_into().ok()?) as usize;
+        pos += 8;
+        if tag == b"fmt " && chunk_len >= 16 {
+            channels = u16::from_le_bytes(bytes[pos + 2..pos + 4].try_into().ok()?);
+            src_rate = u32::from_le_bytes(bytes[pos + 4..pos + 8].try_into().ok()?);
+            bits = u16::from_le_bytes(bytes[pos + 14..pos + 16].try_into().ok()?);
+        } else if tag == b"data" {
+            data_len = chunk_len;
+            break;
+        }
+        pos += chunk_len + (chunk_len & 1);
+    }
+    let frame_bytes = (channels as usize) * (bits as usize / 8).max(1);
+    let n_frames = data_len.checked_div(frame_bytes).unwrap_or(0);
+    // Samples after internal resample to 44.1k (approx).
+    let samples_44k = if src_rate == 44100 {
+        n_frames
+    } else {
+        ((n_frames as f64) * 44100.0 / (src_rate as f64)).round() as usize
+    };
+    Some(crate::state::AmenMeta {
+        samples: samples_44k,
+        src_rate,
+        channels,
+        bits,
+        file_bytes,
+    })
+}
+
 pub fn load_wav_to_44100(path: &str) -> Option<Arc<Vec<f32>>> {
     let bytes = std::fs::read(path).ok()?;
     if bytes.len() < 44 || &bytes[0..4] != b"RIFF" || &bytes[8..12] != b"WAVE" {

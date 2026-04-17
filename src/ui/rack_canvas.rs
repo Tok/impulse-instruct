@@ -27,6 +27,7 @@ const VOICE_KINDS: &[ModuleKind] = &[
     ModuleKind::AcidBass,
     ModuleKind::DrumKit808,
     ModuleKind::DrumKit909,
+    ModuleKind::GabberKick,
     ModuleKind::HooverLead,
     ModuleKind::An1xVoice,
     ModuleKind::AmenSampler,
@@ -182,6 +183,7 @@ pub fn draw_rack(app: &mut ImpulseApp, ctx: &egui::Context, ui: &mut egui::Ui) {
         }
     }
     handle_cable_drag(app, ctx, &ports);
+    crate::ui::module_card_mod::draw_mod_selector_dropdowns(app, ctx, &ports, canvas_rect);
     if let Some(ref drag) = app.module_drag
         && let Some(pointer) = ctx.pointer_latest_pos()
     {
@@ -432,7 +434,13 @@ pub(super) fn sequencer_grid_rows(state: &crate::state::AppState, col_w: f32) ->
     let hoover_h = if has_hoover { sub_rows * step_row } else { 0.0 };
     let an1x_h = if has_an1x { sub_rows * step_row } else { 0.0 };
     let drums_h = active_drum_voices as f32 * sub_rows * (step_row + drum_sub);
-    let total_h = header_h + bass_h + hoover_h + an1x_h + drums_h;
+    // Pre-echo row that lives at the bottom of the sequencer panel
+    // (always rendered): padding + horizontal row with the anchor
+    // strip (21 px square cells + leading/trailing 6 px pads)
+    // + labels + toggles + trailing pad.  Budget 42 px covers it
+    // with a few px of margin so the cell isn't shaved close.
+    let preecho_h = 42.0;
+    let total_h = header_h + bass_h + hoover_h + an1x_h + drums_h + preecho_h;
     // Convert pixel height to grid rows: each grid row occupies col_w + RACK_GAP
     // (minus one trailing gap on the last row).
     let step = col_w + RACK_GAP;
@@ -523,6 +531,20 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
     // Publish col_w so panels can read it via grid_unit()
     ui.ctx()
         .data_mut(|d| d.insert_temp(egui::Id::new(GRID_COL_W_ID), col_w));
+
+    // Publish each LfoModule's slot index (0..3 by rack order) so the back
+    // panel can label LFO #1, #2, … and CV-OUT jacks can reference it too.
+    {
+        let s = app.state.read();
+        let mut idx = 0usize;
+        for m in &s.rack.modules {
+            if m.kind == ModuleKind::LfoModule {
+                ui.ctx()
+                    .data_mut(|d| d.insert_temp(egui::Id::new("lfo_slot").with(m.id), idx));
+                idx += 1;
+            }
+        }
+    }
 
     let mut card_rects: Vec<(ModuleKind, egui::Rect)> = Vec::new();
 

@@ -20,6 +20,7 @@ pub(crate) fn kind_to_fx_step(kind: ModuleKind) -> Option<FxStep> {
         ModuleKind::FxTapeSat => Some(FxStep::TapeSat),
         ModuleKind::FxDrive => Some(FxStep::Drive),
         ModuleKind::FxAutotune => Some(FxStep::Autotune),
+        ModuleKind::FxPan => Some(FxStep::Pan),
         _ => None,
     }
 }

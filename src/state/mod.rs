@@ -27,6 +27,12 @@ pub use granular::GranularState;
 pub mod an1x;
 pub use an1x::{An1xLfoTarget, An1xState, An1xWave};
 
+pub mod sequencer_state;
+pub use sequencer_state::{SequencerState, Step, TB303Step};
+
+pub mod fx;
+pub use fx::FxState;
+
 pub const MAX_STEPS: usize = 64;
 pub const MAX_BASS_VOICES: usize = 4;
 
@@ -100,40 +106,31 @@ pub mod ui_prefs;
 pub use ui_prefs::{AutosaveInterval, HuthStyle, UiPrefs};
 
 pub(crate) mod fx_plan;
+pub mod modulation;
+pub mod module_kind;
 pub mod rack;
 mod rack_presets;
 pub mod rack_scope;
 pub use fx_plan::compile_fx_plan;
+pub use modulation::{
+    ModInput, lfo_target_short_label, mod_input_label, mod_inputs, parse_lfo_target,
+};
+pub use module_kind::{GRID_COLS, ModuleKind, Zone};
 pub use rack::{
-    Cable, CableColor, FxPlan, FxStep, GRID_COLS, ModuleKind, PortDir, PortKind, PortRef,
-    RackModule, RackState, Zone,
+    Cable, CableColor, FxPlan, FxStep, PortDir, PortKind, PortRef, RackModule, RackState,
 };
 pub use rack_presets::RACK_PRESETS;
-pub use rack_scope::{rack_kind_name_matches, scope_from_control_cables};
+pub use rack_scope::{parse_module_kind, rack_kind_name_matches, scope_from_control_cables};
 
-// ─── Amen / WAV sampler voice state ──────────────────────────────────────────
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct AmenState {
-    /// Path to the WAV file to load (empty = no sample loaded).
-    pub path: String,
-    /// Playback pitch offset in semitones (-24 to +24). 0 = original pitch.
-    pub pitch: f32,
-    /// Output volume (0.0–1.0).
-    pub volume: f32,
-    /// When true, loops the sample; otherwise plays once per trigger.
-    pub loop_mode: bool,
-}
-
-impl Default for AmenState {
-    fn default() -> Self {
-        Self {
-            path: String::new(),
-            pitch: 0.0,
-            volume: 0.75,
-            loop_mode: false,
-        }
-    }
-}
+// Amen sampler + bass voice state live in their own modules to keep LOC
+// under the 1000-line cap on state/mod.rs.
+pub use amen::{AmenMeta, AmenState};
+use bass::default_bass_voices;
+pub use bass::{BassLfoTarget, BassState, BassVoiceState};
+pub use gabber::GabberKickParams;
+mod amen;
+mod bass;
+mod gabber;
 
 // ─── Top-level ───────────────────────────────────────────────────────────────
 fn default_pattern_bank() -> Vec<SequencerState> {
@@ -184,6 +181,8 @@ pub struct AppState {
     pub an1x: An1xState,
     #[serde(default)]
     pub amen: AmenState,
+    #[serde(default)]
+    pub gabber_kick: GabberKickParams,
     #[serde(default)]
     pub ui_prefs: UiPrefs,
     /// 8 named pattern slots (A–H) for storage and chain playback.
@@ -255,6 +254,7 @@ impl Default for AppState {
             hoover: Default::default(),
             an1x: Default::default(),
             amen: Default::default(),
+            gabber_kick: Default::default(),
             ui_prefs: Default::default(),
             pattern_bank: default_pattern_bank(),
             pattern_edit: 0,
@@ -289,385 +289,6 @@ impl Default for AppState {
             }
         }
         s
-    }
-}
-
-// ─── Bass synth ───────────────────────────────────────────────────────────────
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct BassState {
-    pub cutoff: f32,       // 0–1 → 200–8000 Hz
-    pub resonance: f32,    // 0–1
-    pub env_mod: f32,      // 0–1 filter env depth
-    pub decay: f32,        // 0–1 → 50–2000 ms
-    pub accent_level: f32, // 0–1
-    pub waveform: Waveform,
-    pub filter_mode: FilterMode, // LP / HP / BP
-    pub distortion: f32,         // 0–1
-    pub volume: f32,             // 0–1
-    pub supersaw_detune: f32,    // 0–1 → 0–1 semitone spread between voices
-    pub supersaw_voices: u8,     // 2–7
-    pub sub_osc_level: f32,      // 0–1 sine one octave below, mixed before filter
-    pub portamento_time: f32,    // 0–1 → 10ms–500ms slide/glide time
-    pub noise_mix: f32,          // 0–1 white noise mixed into oscillator before filter
-    pub osc_detune: f32,         // semitone offset -1..+1, shifts entire oscillator pitch
-    pub fm_ratio: f32,           // 0–1 → modulator/carrier ratio 0.5–8.0
-    pub fm_depth: f32,           // 0–1 FM modulation depth; 0 = off (pure additive)
-    #[serde(default)]
-    pub pan: f32, // -1.0 (left) to +1.0 (right), 0.0 = center
-}
-
-impl Default for BassState {
-    fn default() -> Self {
-        Self {
-            cutoff: 0.4,
-            resonance: 0.6,
-            env_mod: 0.5,
-            decay: 0.4,
-            accent_level: 0.7,
-            waveform: Waveform::Saw,
-            filter_mode: FilterMode::Lowpass,
-            distortion: 0.2,
-            volume: 0.8,
-            supersaw_detune: 0.5,
-            supersaw_voices: 5,
-            sub_osc_level: 0.0,
-            portamento_time: 0.1, // ~60ms
-            noise_mix: 0.0,
-            osc_detune: 0.0,
-            fm_ratio: 0.0,
-            fm_depth: 0.0,
-            pan: 0.0,
-        }
-    }
-}
-
-// ─── Multi-voice bass ─────────────────────────────────────────────────────────
-
-/// One bass voice slot: a `BassState` synth engine + per-voice musical context.
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct BassVoiceState {
-    /// Synth parameters for this voice (identical layout to the legacy `BassState`).
-    pub synth: BassState,
-    /// Tonic note override (0=C … 11=B). Only used when `lock_key` is false.
-    pub root_note: u8,
-    /// Scale override. Only used when `lock_key` is false.
-    pub scale: Scale,
-    /// When true, use the global `sequencer.root_note` / `sequencer.scale` instead.
-    pub lock_key: bool,
-    /// Whether this voice is active. Voice 0 is always on; voices 1-3 can be toggled.
-    pub enabled: bool,
-}
-
-impl Default for BassVoiceState {
-    fn default() -> Self {
-        Self {
-            synth: BassState::default(),
-            root_note: 9, // A — matches the default starter pattern
-            scale: Scale::NaturalMinor,
-            lock_key: true, // follow the global key by default
-            enabled: false, // voices 1-3 start disabled; voice 0 is always enabled
-        }
-    }
-}
-
-fn default_bass_voices() -> Vec<BassVoiceState> {
-    let mut voices: Vec<BassVoiceState> = (0..MAX_BASS_VOICES)
-        .map(|_| BassVoiceState::default())
-        .collect();
-    // Voice 0 is always enabled
-    voices[0].enabled = true;
-    voices
-}
-
-fn default_bass_patterns() -> Vec<Vec<TB303Step>> {
-    // Voice 0 gets the same starter pattern as `bass_pattern`; voices 1-3 are silent.
-    let mut patterns = Vec::with_capacity(MAX_BASS_VOICES);
-
-    // Voice 0: A minor starter pattern (mirrors SequencerState default)
-    let mut p0 = vec![TB303Step::default(); MAX_STEPS];
-    let bass_notes: &[(usize, u8)] = &[(0, 45), (6, 48), (12, 52)];
-    for &(step, note) in bass_notes {
-        p0[step].active = true;
-        p0[step].note = note;
-    }
-    patterns.push(p0);
-
-    // Voices 1-3: silent
-    for _ in 1..MAX_BASS_VOICES {
-        patterns.push(vec![TB303Step::default(); MAX_STEPS]);
-    }
-    patterns
-}
-
-fn default_bass_voice_steps() -> Vec<usize> {
-    vec![16usize; MAX_BASS_VOICES]
-}
-
-fn default_bass_voice_enabled() -> [bool; MAX_BASS_VOICES] {
-    let mut arr = [false; MAX_BASS_VOICES];
-    arr[0] = true;
-    arr
-}
-
-// ─── Sequencer ───────────────────────────────────────────────────────────────
-
-#[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq)]
-pub struct Step {
-    pub active: bool,
-    pub velocity: f32,    // 0–1
-    pub probability: f32, // 0–1: chance the step fires (1.0 = always, 0.5 = 50%)
-    #[serde(default = "default_ratchet")]
-    pub ratchet: u8, // 1 = single hit, 2/3/4 = N sub-hits per step
-}
-
-fn default_ratchet() -> u8 {
-    1
-}
-
-impl Default for Step {
-    fn default() -> Self {
-        Self {
-            active: false,
-            velocity: 1.0,
-            probability: 1.0,
-            ratchet: 1,
-        }
-    }
-}
-
-#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
-pub struct TB303Step {
-    pub active: bool,
-    pub note: u8, // MIDI note number
-    pub accent: bool,
-    pub slide: bool,
-    pub gate: f32, // 0–1 gate length ratio
-}
-
-impl Default for TB303Step {
-    fn default() -> Self {
-        Self {
-            active: false,
-            note: 36,
-            accent: false,
-            slide: false,
-            gate: 0.5,
-        }
-    }
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct SequencerState {
-    pub bpm: f32,
-    pub steps: usize, // 1–64, active step count
-    pub current_step: usize,
-    pub running: bool,
-    pub swing: f32,       // 0–1: 0=straight, 0.5=strong shuffle (75/25 triplet feel)
-    pub time_sig_num: u8, // beats per bar (2–9, default 4); denominator always /4
-    pub drum_patterns: std::collections::HashMap<DrumVoice, Vec<Step>>,
-    pub bass_pattern: Vec<TB303Step>,
-    pub hoover_pattern: Vec<TB303Step>,
-    pub an1x_pattern: Vec<TB303Step>,
-    /// Tonic note (0=C … 11=B). Used for scale highlighting and LLM music theory.
-    pub root_note: u8,
-    /// Active scale / mode for this pattern.
-    pub scale: Scale,
-    /// When true, LLM-provided bass_notes are snapped to the active scale.
-    pub scale_snap: bool,
-    /// Per-voice step counts for polyrhythm. Each voice loops independently at
-    /// its own length; voices not present here default to `steps`.
-    pub drum_steps: std::collections::HashMap<DrumVoice, usize>,
-    /// Independent step counts for bass, hoover, and AN1X lanes.
-    pub bass_steps: usize,
-    pub hoover_steps: usize,
-    pub an1x_steps: usize,
-    /// Per-voice bass patterns for multi-voice support. Voice 0 mirrors `bass_pattern`.
-    #[serde(default = "default_bass_patterns")]
-    pub bass_patterns: Vec<Vec<TB303Step>>,
-    /// Per-voice step counts for bass voices. Voice 0 mirrors `bass_steps`.
-    #[serde(default = "default_bass_voice_steps")]
-    pub bass_voice_steps: Vec<usize>,
-    /// Drum voices that are muted (never trigger regardless of pattern).
-    pub muted_drums: std::collections::HashSet<DrumVoice>,
-    /// Drum voices in solo mode. When non-empty, only these voices trigger.
-    pub soloed_drums: std::collections::HashSet<DrumVoice>,
-    /// When true, BPM is slaved to incoming MIDI clock pulses (0xF8).
-    #[serde(default)]
-    pub midi_clock_sync: bool,
-    /// Which bass voices are enabled for sequencing. Synced from AppState.bass_voices[i].enabled.
-    #[serde(default = "default_bass_voice_enabled")]
-    pub bass_voice_enabled: [bool; MAX_BASS_VOICES],
-}
-
-impl Default for SequencerState {
-    fn default() -> Self {
-        let mut drum_patterns = std::collections::HashMap::new();
-        // Pre-allocate MAX_STEPS silent steps; only the first `steps` are active in the clock.
-        for v in DrumVoice::ALL {
-            drum_patterns.insert(*v, vec![Step::default(); MAX_STEPS]);
-        }
-
-        // All patterns start blank — the AI builds everything from scratch.
-        let bass_pattern = vec![TB303Step::default(); MAX_STEPS];
-
-        // Default: all drum voices use the global `steps` length.
-        let mut drum_steps = std::collections::HashMap::new();
-        for v in DrumVoice::ALL {
-            drum_steps.insert(*v, 32usize);
-        }
-
-        Self {
-            bpm: 120.0,
-            steps: 32,
-            current_step: 0,
-            running: false,
-            swing: 0.0,
-            time_sig_num: 4,
-            drum_patterns,
-            bass_pattern: bass_pattern.clone(),
-            hoover_pattern: vec![TB303Step::default(); MAX_STEPS],
-            an1x_pattern: vec![TB303Step::default(); MAX_STEPS],
-            root_note: 9, // A
-            scale: Scale::NaturalMinor,
-            scale_snap: false,
-            drum_steps,
-            bass_steps: 32,
-            hoover_steps: 32,
-            an1x_steps: 32,
-            muted_drums: std::collections::HashSet::new(),
-            soloed_drums: std::collections::HashSet::new(),
-            midi_clock_sync: false,
-            bass_patterns: {
-                let mut pats = vec![bass_pattern];
-                for _ in 1..MAX_BASS_VOICES {
-                    pats.push(vec![TB303Step::default(); MAX_STEPS]);
-                }
-                pats
-            },
-            bass_voice_steps: vec![32usize; MAX_BASS_VOICES],
-            bass_voice_enabled: default_bass_voice_enabled(),
-        }
-    }
-}
-
-// ─── FX Chain ────────────────────────────────────────────────────────────────
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct FxState {
-    pub reverb_size: f32, // 0–1 room size
-    pub reverb_damp: f32, // 0–1 damping
-    pub reverb_mix: f32,  // 0–1 wet/dry
-    #[serde(default)]
-    pub reverb_gate_time: f32, // 0 = no gate; 0.01–2.0 s gate close time (gated reverb)
-    #[serde(default)]
-    pub reverb_freeze: bool, // true = infinite hold, tail loops indefinitely
-    pub delay_time: f32,  // 0–1 → 0–2000 ms
-    pub delay_feedback: f32, // 0–1
-    pub delay_mix: f32,   // 0–1 wet/dry
-    #[serde(default)]
-    pub delay_wow_flutter: f32, // 0–1 tape wow/flutter depth
-    #[serde(default)]
-    pub delay_saturation: f32, // 0–1 tape saturation on feedback
-    pub distortion_drive: f32, // 0–1
-    pub distortion_mix: f32, // 0–1 wet/dry
-    pub compressor_threshold: f32, // 0–1 → -40–0 dB
-    pub compressor_ratio: f32, // 0–1 → 1:1–20:1
-    pub compressor_mix: f32, // 0–1 wet/dry (0 = bypassed)
-    #[serde(default)]
-    pub compressor_multiband: f32, // 0 = single band, >0 = 3-band (low/mid/high)
-    pub master_volume: f32, // 0–1
-    #[serde(default)]
-    pub stereo_width: f32, // 0–1: 0=mono, 0.5=normal, 1=wide
-    #[serde(default)]
-    pub tuning: u8, // 0=12-TET, 1=just intonation, 2=slendro, 3=pelog
-    #[serde(default)]
-    pub xmod_bass_to_an1x_pitch: f32, // 0–1 bass osc → AN1X pitch FM depth
-    #[serde(default)]
-    pub xmod_noise_to_filter: f32, // 0–1 noise → bass filter cutoff mod depth
-    #[serde(default)]
-    pub sidechain_amount: f32, // 0–1 sidechain compression depth (kick ducks bass/pad)
-    #[serde(default)]
-    pub sidechain_attack: f32, // 0–1 → 0.1–50 ms attack
-    #[serde(default)]
-    pub sidechain_release: f32, // 0–1 → 10–500 ms release
-    pub tape_drive: f32,  // 0–1 saturation amount
-    pub tape_mix: f32,    // 0–1 wet/dry
-    pub tape_flutter: f32, // 0–1 wow/flutter depth
-    #[serde(default)]
-    pub master_pitch_st: f32, // -12..+12 semitones: global pitch offset for melodic voices
-    pub bitcrush_bits: f32, // 0–1: 1.0 = full quality (bypass), 0.0 = 1-bit
-    pub bitcrush_rate: f32, // 0–1: 0.0 = no decimation, 1.0 = extreme downsampling
-    pub bitcrush_mix: f32, // 0–1: wet/dry
-    pub chorus_rate: f32, // 0–1 → 0.1–8 Hz LFO rate
-    pub chorus_depth: f32, // 0–1 modulation depth
-    pub chorus_mix: f32,  // 0–1 wet/dry
-    pub phaser_rate: f32, // 0–1 → 0.05–5 Hz LFO rate
-    pub phaser_depth: f32, // 0–1 sweep depth
-    pub phaser_mix: f32,  // 0–1 wet/dry
-    pub waveshaper_drive: f32, // 0–1 → soft-clip drive amount (pre-FX)
-    pub waveshaper_mix: f32, // 0–1 wet/dry
-    pub ring_mod_freq: f32, // 0–1 → 50–500 Hz carrier frequency
-    pub ring_mod_mix: f32, // 0–1 wet/dry
-    pub eq_low_gain: f32, // -1..+1 → -12..+12 dB low shelf (~200 Hz)
-    pub eq_mid_gain: f32, // -1..+1 → -12..+12 dB mid peak (~1 kHz)
-    pub eq_hi_gain: f32,  // -1..+1 → -12..+12 dB high shelf (~5 kHz)
-    #[serde(default)]
-    pub autotune_amount: f32, // 0–1 → 0..+12 semitones upward pitch shift
-    #[serde(default)]
-    pub autotune_mix: f32, // 0–1 wet/dry
-}
-
-impl Default for FxState {
-    fn default() -> Self {
-        Self {
-            reverb_size: 0.4,
-            reverb_damp: 0.5,
-            reverb_mix: 0.0,
-            reverb_gate_time: 0.0,
-            reverb_freeze: false,
-            delay_time: 0.375,
-            delay_feedback: 0.4,
-            delay_mix: 0.0,
-            delay_wow_flutter: 0.0,
-            delay_saturation: 0.0,
-            distortion_drive: 0.0,
-            distortion_mix: 0.0,
-            compressor_threshold: 0.7,
-            compressor_ratio: 0.3,
-            compressor_mix: 0.0,
-            compressor_multiband: 0.0,
-            master_volume: 0.85,
-            stereo_width: 0.5,
-            tuning: 0,
-            xmod_bass_to_an1x_pitch: 0.0,
-            xmod_noise_to_filter: 0.0,
-            sidechain_amount: 0.0,
-            sidechain_attack: 0.1,
-            sidechain_release: 0.3,
-            tape_drive: 0.3,
-            tape_mix: 0.0,
-            tape_flutter: 0.2,
-            master_pitch_st: 0.0,
-            bitcrush_bits: 1.0,
-            bitcrush_rate: 0.0,
-            bitcrush_mix: 0.0,
-            chorus_rate: 0.3,
-            chorus_depth: 0.5,
-            chorus_mix: 0.0,
-            phaser_rate: 0.3,
-            phaser_depth: 0.5,
-            phaser_mix: 0.0,
-            waveshaper_drive: 0.0,
-            waveshaper_mix: 0.0,
-            ring_mod_freq: 0.2,
-            ring_mod_mix: 0.0,
-            eq_low_gain: 0.0,
-            eq_mid_gain: 0.0,
-            eq_hi_gain: 0.0,
-            autotune_amount: 0.0,
-            autotune_mix: 0.0,
-        }
     }
 }
 
@@ -960,6 +581,7 @@ impl LlmAgentState {
 pub mod jam_tools;
 pub mod llm_apply;
 pub(crate) mod llm_helpers;
+pub(crate) mod llm_rack;
 pub mod transitions;
 
 pub use transitions::*;

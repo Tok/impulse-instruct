@@ -219,10 +219,21 @@ pub fn extract_llm_actions(
                 .get("model")
                 .and_then(|v| v.as_str())
                 .map(String::from);
+            let mode = spawn.get("mode").and_then(|v| v.as_str()).map(String::from);
+            // tts: explicit bool, or implicit when mode == "mc"
+            let tts = spawn
+                .get("tts")
+                .and_then(|v| v.as_bool())
+                .unwrap_or_else(|| {
+                    mode.as_deref()
+                        .is_some_and(|m| m.eq_ignore_ascii_case("mc"))
+                });
             actions.push(LlmAction::SpawnAgent {
                 persona,
                 scope,
                 model,
+                mode,
+                tts,
             });
         }
         // dismiss: true — the agent that produced this output dismisses itself

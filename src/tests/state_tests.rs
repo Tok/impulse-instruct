@@ -452,10 +452,11 @@ mod bank_chain_tests {
 mod transition_coverage_tests {
     use crate::state::synth_types::Waveform;
     use crate::state::{
-        AppState, Scale, apply_boc_preset, apply_hoover_preset, apply_reese_preset, bank_load,
-        bank_write, lock_param, set_an1x_step, set_bass_step, set_chain, set_chain_enabled,
-        set_hoover_step, set_pattern_edit, set_root_note, set_scale, set_scale_snap,
-        toggle_bass_accent, toggle_bass_slide, toggle_sequencer_running, unlock_param,
+        AppState, DrumVoice, Scale, apply_boc_preset, apply_hoover_preset, apply_reese_preset,
+        bank_load, bank_write, lock_param, set_an1x_step, set_bass_step, set_chain,
+        set_chain_enabled, set_hoover_step, set_pattern_edit, set_root_note, set_scale,
+        set_scale_snap, toggle_bass_accent, toggle_bass_slide, toggle_sequencer_running,
+        unlock_param,
     };
 
     #[test]
@@ -630,6 +631,65 @@ mod transition_coverage_tests {
             "gabber kick needs long sweep time"
         );
         assert!(s.kit_a.kick.punch > 0.8, "gabber kick needs max transient");
+    }
+
+    #[test]
+    fn apply_llm_update_routes_gabber_kick_block() {
+        let state = AppState::default();
+        let update = serde_json::json!({
+            "gabber_kick": {
+                "pitch": 0.6,
+                "clip": 0.95,
+                "transient": 0.2,
+                "volume": 1.2,
+                "pan": -0.5,
+            }
+        });
+        let next = crate::state::apply_llm_update(state, &update, &[]);
+        assert!((next.gabber_kick.pitch - 0.6).abs() < 1e-4);
+        assert!((next.gabber_kick.clip - 0.95).abs() < 1e-4);
+        assert!((next.gabber_kick.transient - 0.2).abs() < 1e-4);
+        assert!(
+            (next.gabber_kick.volume - 1.2).abs() < 1e-4,
+            "volume clamps to 1.5, not 1.0"
+        );
+        assert!((next.gabber_kick.pan - -0.5).abs() < 1e-4);
+    }
+
+    #[test]
+    fn apply_llm_update_respects_gabber_kick_locks() {
+        let mut state = AppState::default();
+        state
+            .llm
+            .locked_params
+            .insert("gabber_kick.clip".to_string());
+        let original_clip = state.gabber_kick.clip;
+        let update = serde_json::json!({ "gabber_kick": { "clip": 0.99 } });
+        let next = crate::state::apply_llm_update(state, &update, &[]);
+        assert!((next.gabber_kick.clip - original_clip).abs() < 1e-4);
+    }
+
+    #[test]
+    fn gabber_kick_voice_wired_and_defaults_aggressive() {
+        // DrumVoice::GabberKick registered end-to-end.
+        assert!(DrumVoice::ALL.contains(&DrumVoice::GabberKick));
+        assert_eq!(DrumVoice::GabberKick.label(), "GABBER KICK");
+        assert_eq!(DrumVoice::GabberKick.schema_key(), Some("gabber_kick"));
+
+        // Default params should already be in "hardcore" territory so the
+        // voice sounds gabber-y without needing a preset run.
+        let s = AppState::default();
+        assert!(s.gabber_kick.clip > 0.3, "default clip aggressive");
+        assert!(
+            s.gabber_kick.pitch_env_depth > 0.7,
+            "default pitch sweep deep"
+        );
+        assert!(s.gabber_kick.transient > 0.3, "default transient audible");
+        assert_eq!(s.gabber_kick.pan, 0.0);
+
+        // Volume accessor routes through the new field.
+        let s2 = DrumVoice::GabberKick.set_volume(s, 0.42);
+        assert!((DrumVoice::GabberKick.get_volume(&s2) - 0.42).abs() < 1e-5);
     }
 }
 

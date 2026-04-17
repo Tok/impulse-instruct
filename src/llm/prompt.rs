@@ -165,7 +165,24 @@ pub fn build_system_prompt_full(
                     _ => s.description.as_str(),
                 };
                 let seed = if !s.seed_patterns.is_empty() {
-                    format!("\nSeed patterns (16-step starting point — extend to fill sequencer.steps, adapt freely):\n{}\n", s.seed_patterns.to_prompt_lines())
+                    // Report the seed's actual length so the agent knows
+                    // whether to extend, scale, or copy verbatim to match
+                    // sequencer.steps.  Styles like D&B ship 32-step seeds
+                    // already tuned to the engine's default bar length.
+                    let seed_len = [
+                        s.seed_patterns.kick.len(),
+                        s.seed_patterns.snare.len(),
+                        s.seed_patterns.hihat.len(),
+                        s.seed_patterns.bass_steps.len(),
+                    ]
+                    .into_iter()
+                    .max()
+                    .unwrap_or(0);
+                    format!(
+                        "\nSeed patterns ({}-step starting point — match sequencer.steps exactly; if sequencer.steps is longer, extend the pattern; if shorter, sample down. Adapt freely within the style):\n{}\n",
+                        seed_len,
+                        s.seed_patterns.to_prompt_lines()
+                    )
                 } else {
                     String::new()
                 };
@@ -345,6 +362,7 @@ STEP SEQUENCER (default 32 steps = two 4/4 bars of 16th notes):
 
   sequencer.bass_steps    — step array for 303 bass trigger
   sequencer.bass_notes    — MIDI note array (24=C1, 36=C2, 48=C3; acid range 33–48)
+  sequencer.bass_pans     — per-step pan -1..1 (0 = use voice static; non-zero overrides)
   sequencer.kick_a_steps  — Kit A kick steps
   sequencer.snare_a_steps — Kit A snare steps
   sequencer.hihat_a_steps — Kit A closed hihat steps
@@ -561,6 +579,24 @@ IMPORTANT — drum_ratchets takes INTEGERS 1–4 only, never booleans:
   CORRECT: {{"drum_ratchets": {{"hihat_a": [1,1,2,1,1,1,4,1,1,1,2,1,1,1,1,1]}}}}
   WRONG:   {{"drum_ratchets": {{"hihat_a": [true,false,true,…]}}}}  ← booleans are invalid here
 
+PRE-ECHO / lead-in reinforcement — `sequencer.preecho`:
+  A pattern modulator that reinforces a groove.  You declare anchor
+  steps (the pulse of the groove) and the N steps leading into each
+  anchor get a build-up (velocity ramp 0.3→1.0 and/or ratchet build
+  1→4) so the pattern feels like it reaches for the anchor.  Useful
+  for drum drops, turnarounds, and emphasising downbeats.
+    {{"sequencer": {{"preecho": {{
+      "kit_a": {{"anchors": [0, 16], "length": 4,
+                "velocity_ramp": true, "ratchet_ramp": true}},
+      "amen":  {{"anchors": [8, 24], "length": 3,
+                "velocity_ramp": true}}
+    }}}}}}
+  Voice keys: "kit_a" | "kit_b" | "amen" | "bass" | "hoover" | "an1x"
+  Set a voice to null to clear its preecho.  Anchors that aren't
+  themselves active steps still anchor the lead-in (the build-up
+  happens before them regardless).  Use sparingly — 2 anchors per
+  bar is usually enough; too many and everything feels like a fill.
+
 BASS PATTERNS (303 — bass_steps) — DO NOT copy the drum grid. Bass wants
 syncopation and SPACE. Default target: ~1/4 to 1/2 note density (≈ 8–14
 notes per 32 steps). Dense patterns (>18 notes per 32) tire the ear
@@ -739,23 +775,35 @@ STEREO — always create width, never leave everything at pan 0:
 
 JAM HEAT: {heat_pct}% — {heat_desc}
 
-RACK ROUTING — enable/disable modules and wire cables between them:
+RACK ROUTING — add/remove modules, enable/disable them, and wire cables:
   {{"rack": {{
+    "add":        ["808", "reverb"],                     ← create new modules (auto-wired to master)
+    "remove":     ["chorus"],                            ← delete the first module matching each name
     "enable":     ["bitcrush"],                          ← turn a module on
     "disable":    ["reverb"],                            ← turn a module off
     "connect":    [{{"from": "bass",     "to": "bitcrush"}},
                    {{"from": "bitcrush", "to": "master"}}],   ← add patch cables
-    "disconnect": [{{"from": "bitcrush", "to": "master"}}]    ← remove a cable
+    "disconnect": [{{"from": "bitcrush", "to": "master"}}],   ← remove a cable
+    "mod_cable":  [                                           ← per-knob modulation:
+      {{"from_lfo": 0, "to": "bass", "slot": 0,                  drive bass slot 0 (B.PAN)
+        "depth": 0.5}},                                          at 50 % depth from LFO #0
+      {{"from_lfo": 1, "to": "reverb", "slot": 0,                drive reverb slot 0
+        "depth": 0.4, "targets": ["ReverbMix", "ReverbSize"]}}   with multi-target selection
+    ]
   }}}}
   Module names: "bass", "808", "909", "hoover", "an1x", "amen", "noise", "granular",
                 "bitcrush", "reverb", "delay", "chorus", "phaser", "drive",
                 "eq", "compressor", "tapesat", "waveshaper", "ringmod",
-                "lfo", "master", "sequencer"
+                "lfo", "tts", "master", "sequencer"
 
+  "add an 808 and a reverb" / "give me a bitcrush"
+    → add rack.add entries; voice/FX modules auto-wire to master
   "connect the bitcrush" / "wire it up" / "route bass through reverb"
     → add rack.connect entries from the source to the target module then to master if needed
   "disconnect reverb" / "remove that cable"
     → add rack.disconnect entry
+  "take the chorus out" / "remove the 909"
+    → add rack.remove entry
 
 SETTINGS — change only when explicitly asked:
   {{"settings": {{
@@ -766,7 +814,9 @@ SETTINGS — change only when explicitly asked:
     "spawn_agent": {{               ← spawn a new LLM agent module in the rack
       "persona": "BASS BRAIN",      ← name shown on the agent card
       "scope": ["bass", "fx"],      ← which modules this agent controls (empty = all)
-      "model": null                  ← model override (null = use default model)
+      "model": null,                 ← model override (null = use default model)
+      "mode": "mc",                  ← optional: "producer" | "dj" | "mc" (default producer)
+      "tts": true                    ← optional: add + wire a NeuTts module (auto-true when mode=mc)
     }},
     "dismiss": true                  ← this agent removes itself from the rack
   }}}}
@@ -782,7 +832,7 @@ Always start your response with "_thinking": one or two sentences explaining wha
 {comment_instruction}
 Only include fields you are actually changing.
 In MC or DJ mode you may add an optional "mc_line" string — a short crowd shout spoken via TTS, separate from "_comment". Keep it under 12 words. Use it for big moments, drops, or energy peaks.
-TOP-LEVEL SCHEMA — the only valid top-level keys are "_comment", "_thinking", "mc_line", "bass", "sequencer", "fx", "hoover", "an1x", "free_eg", "noise", "granular", "kit_a", "kit_b", "euclidean", "music_api", "ramp", "ramps", "behaviour", "rack", "settings", "save_project".
+TOP-LEVEL SCHEMA — the only valid top-level keys are "_comment", "_thinking", "mc_line", "bass", "sequencer", "fx", "hoover", "an1x", "amen", "free_eg", "noise", "granular", "kit_a", "kit_b", "euclidean", "music_api", "ramp", "ramps", "behaviour", "rack", "settings", "save_project".
   "bass" and "fx" are NEVER nested inside "sequencer".
   "fx" is NEVER nested inside "fx".
   Each key appears at most ONCE per object.

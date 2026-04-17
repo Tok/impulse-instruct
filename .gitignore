@@ -19,3 +19,7 @@ cobertura.xml
 .tts-venv/
 .neutts-venv/
 voices/*.wav
+# User-dropped sample packs (see samples/README.md).  The dir + README
+# + .gitkeep stubs are tracked; the .wav contents are not.
+samples/**/*.wav
+samples/**/*.WAV

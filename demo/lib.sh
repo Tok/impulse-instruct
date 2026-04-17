@@ -121,6 +121,15 @@ api_state_reset() {
     curl -sf -X POST "$API/api/state/reset" >/dev/null 2>&1 || true
 }
 
+api_set_style() {
+    # Set the global active style and propagate to all agents.
+    # Usage: api_set_style drum_and_bass
+    #        api_set_style ""              # clear active style
+    curl -sf -X POST "$API/api/style" \
+        -H "Content-Type: application/json" \
+        -d "{\"id\": \"$1\"}" >/dev/null 2>&1 || true
+}
+
 api_rack_add() {
     # Add a module to the rack. Returns JSON with "id" field.
     # Usage: id=$(api_rack_add "808")
@@ -872,6 +881,25 @@ reset_rack() {
     api_flip_front
     api_collapse "none"
     pause 1
+}
+
+reset_all() {
+    # Full state wipe — clears rack, agents, active_style, LFOs, seq transport,
+    # all params. Stronger than reset_rack: use at the top of style scenarios
+    # to prevent a prior session's active_style (or any leftover state) from
+    # bleeding into the new demo.
+    api_state_reset
+    api_flip_front
+    api_collapse "none"
+    pause 1
+}
+
+set_style() {
+    # Pin the global active style so the LLM's system prompt carries the right
+    # style brief into every ask.  Call right after reset_all, before the first
+    # ask, to guarantee the agent isn't still anchored to a previous style.
+    # Usage: set_style drum_and_bass
+    api_set_style "$1"
 }
 
 add_instrument() {

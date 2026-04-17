@@ -61,6 +61,7 @@ mod sequencer_tests {
             velocity: 1.0,
             probability: 1.0,
             ratchet: 1,
+            slice: 0,
         };
 
         let sps = samples_per_step(120.0, 44100.0) as usize;
@@ -80,6 +81,99 @@ mod sequencer_tests {
     }
 
     #[test]
+    fn preecho_scales_velocity_through_advance_clock() {
+        // Activate every step on kick808; install preecho with anchor=8,
+        // length=4, velocity_ramp.  Steps 4..=7 are the lead-in window;
+        // step 8 is the anchor (full velocity), other steps untouched.
+        use crate::sequencer::PreechoConfig;
+        let mut seq = SequencerState {
+            running: true,
+            bpm: 120.0,
+            ..SequencerState::default()
+        };
+        for s in seq
+            .drum_patterns
+            .get_mut(&DrumVoice::Kick808)
+            .unwrap()
+            .iter_mut()
+        {
+            *s = Step {
+                active: true,
+                velocity: 1.0,
+                probability: 1.0,
+                ratchet: 1,
+                slice: 0,
+            };
+        }
+        seq.preecho.insert(
+            "kit_a".to_string(),
+            PreechoConfig {
+                enabled: true,
+                anchors: vec![8],
+                length: 4,
+                velocity_ramp: true,
+                ratchet_ramp: false,
+            },
+        );
+        // Walk enough samples to fire all 16 steps.
+        // Step one block at a time and tag each kick trigger with the
+        // current_step the clock landed on (advance_clock fires triggers
+        // when entering a new step).
+        let sps = samples_per_step(120.0, 44100.0) as usize;
+        let mut clock = ClockState::default();
+        let mut velocities: std::collections::HashMap<usize, f32> = Default::default();
+        for _ in 0..20 {
+            let prev = clock.current_step;
+            let (next, events) = advance_clock(clock, &seq, sps + 1, 44100.0);
+            if next.current_step != prev {
+                let vstep = next.current_step % 16;
+                for e in &events {
+                    if let TriggerEvent::DrumTrigger {
+                        voice: DrumVoice::Kick808,
+                        velocity,
+                        ..
+                    } = e
+                    {
+                        velocities.entry(vstep).or_insert(*velocity);
+                    }
+                }
+            }
+            clock = next;
+        }
+        // Step 8 (anchor) should be at full velocity; the lead-in steps
+        // 4..=7 should ramp upward; step 0 and step 12 (outside the
+        // lead-in window) should be unscaled.
+        let v = |s: usize| velocities.get(&s).copied().unwrap_or(0.0);
+        assert!(
+            (v(8) - 1.0).abs() < 1e-3,
+            "anchor expected 1.0, got {}",
+            v(8)
+        );
+        assert!(
+            (v(0) - 1.0).abs() < 1e-3,
+            "outside-window expected 1.0, got {}",
+            v(0)
+        );
+        assert!(
+            (v(12) - 1.0).abs() < 1e-3,
+            "outside-window expected 1.0, got {}",
+            v(12)
+        );
+        // Lead-in is monotonically increasing toward the anchor.
+        assert!(
+            v(4) < v(5) && v(5) < v(6) && v(6) < v(7),
+            "expected ramp 4<5<6<7, got {} {} {} {}",
+            v(4),
+            v(5),
+            v(6),
+            v(7)
+        );
+        // Step 7 (d=1, pos=1.0) → vel = 1.0; step 4 (d=4, pos=0.25) → 0.475.
+        assert!((v(7) - 1.0).abs() < 1e-3);
+        assert!((v(4) - 0.475).abs() < 1e-3);
+    }
+
+    #[test]
     fn ratchet_2_emits_sub_hit_after_step_fires() {
         let mut seq = SequencerState {
             running: true,
@@ -91,6 +185,7 @@ mod sequencer_tests {
             velocity: 1.0,
             probability: 1.0,
             ratchet: 2,
+            slice: 0,
         };
 
         let sps = samples_per_step(120.0, 44100.0);
@@ -276,6 +371,7 @@ mod probability_tests {
                     velocity: 1.0,
                     probability: 1.0,
                     ratchet: 1,
+                    slice: 0,
                 };
             }
             pattern[0] = Step {
@@ -283,6 +379,7 @@ mod probability_tests {
                 velocity: 1.0,
                 probability: prob,
                 ratchet: 1,
+                slice: 0,
             };
         }
         seq

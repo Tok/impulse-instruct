@@ -6,6 +6,182 @@ use crate::state::{
     An1xLfoTarget, An1xWave, AppState, FilterMode, LfoTarget, LfoWaveform, ModuleKind,
 };
 
+/// Walk the rack's Mod cables and emit a fixed-size array of compiled mod
+/// routes for the audio thread to consume.  Each route resolves the source
+/// LFO module to its slot index (position in the rack's LfoModule order) and
+/// the destination Mod-In jack to its `LfoTarget` (Fixed slot or the user-
+/// picked Selector value).  Routes whose source/target can't be resolved or
+/// whose target is `None` are silently skipped.  The depth defaults to 1.0
+/// (a per-cable depth knob is a future addition).
+pub fn compile_mod_routes(s: &AppState) -> ([ModRouteCopy; MAX_MOD_ROUTES], u8) {
+    use crate::state::{ModInput, ModuleKind, PortKind, mod_inputs};
+    let mut routes = [ModRouteCopy::default(); MAX_MOD_ROUTES];
+    let mut count = 0usize;
+    let lfo_ids: Vec<u32> = s
+        .rack
+        .modules
+        .iter()
+        .filter(|m| m.kind == ModuleKind::LfoModule)
+        .map(|m| m.id)
+        .collect();
+    for cable in &s.rack.cables {
+        if count >= MAX_MOD_ROUTES {
+            break;
+        }
+        if cable.from.kind != PortKind::Cv || cable.to.kind != PortKind::Mod {
+            continue;
+        }
+        let Some(slot_idx) = lfo_ids.iter().position(|id| *id == cable.from.module_id) else {
+            continue;
+        };
+        if slot_idx >= s.lfo.len() {
+            continue;
+        }
+        let Some(target_module) = s.rack.modules.iter().find(|m| m.id == cable.to.module_id) else {
+            continue;
+        };
+        let inputs = mod_inputs(target_module.kind);
+        let depth_unipolar = target_module
+            .mod_input_depths
+            .get(cable.to.index as usize)
+            .copied()
+            .unwrap_or(1.0)
+            .clamp(0.0, 1.0);
+        let invert = target_module
+            .mod_input_invert
+            .get(cable.to.index as usize)
+            .copied()
+            .unwrap_or(false);
+        let depth = if invert {
+            -depth_unipolar
+        } else {
+            depth_unipolar
+        };
+        // Resolve the slot's effective target list — Fixed = its single
+        // target, Selector = the multi-select Vec the user picked.
+        let targets: &[LfoTarget] = match inputs.get(cable.to.index as usize) {
+            Some(ModInput::Fixed(t)) => std::slice::from_ref(t),
+            Some(ModInput::Selector) => target_module
+                .mod_selectors
+                .get(cable.to.index as usize)
+                .map(|v| v.as_slice())
+                .unwrap_or(&[]),
+            None => continue,
+        };
+        for &t in targets {
+            if t == LfoTarget::None || count >= MAX_MOD_ROUTES {
+                continue;
+            }
+            routes[count] = ModRouteCopy {
+                lfo_slot: slot_idx as u8,
+                target_u8: lfo_target_to_u8(t),
+                depth,
+            };
+            count += 1;
+        }
+    }
+    (routes, count as u8)
+}
+
+/// Encode an `LfoTarget` into a compact u8 opcode consumed by the audio
+/// thread.  Stable IDs — adding new targets requires adding new codes here
+/// AND a matching arm in `apply_mod_target` (src/audio/dsp/mod.rs).
+pub fn lfo_target_to_u8(t: LfoTarget) -> u8 {
+    use LfoTarget::*;
+    match t {
+        None => 0,
+        // Legacy (1..16) — drive the existing LFO-module path.
+        BassCutoff => 1,
+        BassResonance => 2,
+        BassPitch => 3,
+        BassVolume => 4,
+        ReverbMix => 5,
+        DelayTime => 6,
+        DelayFeedback => 7,
+        ChorusMix => 8,
+        ChorusRate => 9,
+        Kick808Pitch => 10,
+        PhaserRate => 11,
+        PhaserDepth => 12,
+        DistortionDrive => 13,
+        MasterVolume => 14,
+        An1xCutoff => 15,
+        An1xPitch => 16,
+        // Pan family.
+        BassPan => 17,
+        HooverPan => 18,
+        NoisePan => 19,
+        Kick808Pan => 20,
+        Snare808Pan => 21,
+        Hihat808Pan => 22,
+        Kick909Pan => 23,
+        Snare909Pan => 24,
+        Hihat909Pan => 25,
+        Clap909Pan => 26,
+        An1xPan => 27,
+        // FX knob expansion.
+        ReverbSize => 28,
+        ReverbDamp => 29,
+        DelayMix => 30,
+        ChorusDepth => 31,
+        PhaserMix => 32,
+        WaveshaperDrive => 33,
+        WaveshaperMix => 34,
+        DistortionMix => 35,
+        BitcrushBits => 36,
+        BitcrushRate => 37,
+        BitcrushMix => 38,
+        RingModFreq => 39,
+        RingModMix => 40,
+        EqLow => 41,
+        EqMid => 42,
+        EqHigh => 43,
+        CompThresh => 44,
+        CompRatio => 45,
+        CompMix => 46,
+        TapeDrive => 47,
+        TapeMix => 48,
+        TapeFlutter => 49,
+        AutotuneAmount => 50,
+        AutotuneMix => 51,
+        // Drum extras (52..62) and sampler/granular (63..69).
+        Kick808Decay => 52,
+        Snare808Tone => 53,
+        Snare808Decay => 54,
+        Kick909Pitch => 55,
+        Kick909Decay => 56,
+        Snare909Tone => 57,
+        Snare909Decay => 58,
+        Clap909Decay => 59,
+        AmenVolume => 60,
+        AmenStart => 61,
+        AmenGate => 62,
+        GranularVolume => 63,
+        GranularDensity => 64,
+        GranularGrain => 65,
+        GranularPos => 66,
+        StereoWidth => 67,
+        GabberKickPitch => 68,
+        GabberKickDecay => 69,
+        GabberKickClip => 70,
+        GabberKickPan => 71,
+    }
+}
+
+/// Maximum number of cable-declared modulation routes the audio thread
+/// will process per block.  Bounded so the array stays Copy-friendly.
+pub const MAX_MOD_ROUTES: usize = 32;
+
+/// Cable-declared modulation route (Copy).  Says: "LFO slot N's value drives
+/// target opcode T at depth D".  Compiled from rack Mod cables in
+/// `AudioParams::from_app_state`.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct ModRouteCopy {
+    pub lfo_slot: u8,  // index into AudioParams.lfo (0..3)
+    pub target_u8: u8, // opcode from `lfo_target_to_u8`
+    pub depth: f32,    // bipolar depth multiplier
+}
+
 /// Per-slot LFO configuration passed to the audio thread (Copy-safe).
 #[derive(Clone, Copy, Debug)]
 pub struct LfoParamsCopy {
@@ -39,6 +215,22 @@ pub struct BassVoiceParams {
     pub distortion: f32,
     pub volume: f32,
     pub filter_mode: u8, // 0=LP, 1=HP, 2=BP
+    // ADSR shaping (101-style).  Defaults preserve 303 behavior.
+    pub amp_attack: f32,     // 0–1 → 0–1s
+    pub amp_sustain: f32,    // 0–1
+    pub amp_release: f32,    // 0–1 → 0–2s
+    pub filter_attack: f32,  // 0–1 → 0–0.5s
+    pub filter_sustain: f32, // 0–1
+    pub filter_release: f32, // 0–1 → 0–2s
+    pub pulse_width: f32,    // 0.05..0.95 (centered at 0.5 = square)
+    // Per-voice LFO — SH-101 style.  target=0 (Off) disables.
+    pub lfo_target: u8,   // 0=Off 1=Pitch 2=PWM 3=Cutoff 4=Amp
+    pub lfo_rate: f32,    // 0–1 → 0.01–20 Hz (free)
+    pub lfo_depth: f32,   // 0–1
+    pub lfo_waveform: u8, // mirror of LfoWaveform index (Sine=1, Tri=2, Saw=3, InvSaw=4, Square=5)
+    pub lfo_delay: f32,   // 0–1 → 0–4 s fade-in
+    pub lfo_bpm_sync: bool,
+    pub lfo_sync_beats: f32,
 }
 
 impl BassVoiceParams {
@@ -67,6 +259,35 @@ impl BassVoiceParams {
                 FilterMode::Highpass => 1,
                 FilterMode::Bandpass => 2,
             },
+            amp_attack: b.amp_attack.clamp(0.0, 1.0),
+            amp_sustain: b.amp_sustain.clamp(0.0, 1.0),
+            amp_release: b.amp_release.clamp(0.0, 1.0),
+            filter_attack: b.filter_attack.clamp(0.0, 1.0),
+            filter_sustain: b.filter_sustain.clamp(0.0, 1.0),
+            filter_release: b.filter_release.clamp(0.0, 1.0),
+            pulse_width: b.pulse_width.clamp(0.05, 0.95),
+            lfo_target: match b.lfo_target {
+                crate::state::BassLfoTarget::Off => 0,
+                crate::state::BassLfoTarget::Pitch => 1,
+                crate::state::BassLfoTarget::PulseWidth => 2,
+                crate::state::BassLfoTarget::FilterCutoff => 3,
+                crate::state::BassLfoTarget::Amplitude => 4,
+            },
+            lfo_rate: b.lfo_rate.clamp(0.0, 1.0),
+            lfo_depth: b.lfo_depth.clamp(0.0, 1.0),
+            lfo_waveform: match b.lfo_waveform {
+                crate::state::LfoWaveform::Sine => 1,
+                crate::state::LfoWaveform::Triangle => 2,
+                crate::state::LfoWaveform::Saw => 3,
+                crate::state::LfoWaveform::InvSaw => 4,
+                crate::state::LfoWaveform::Square => 5,
+                // SampleAndHold not supported by the bass voice LFO yet;
+                // fall back to square (closest stepped-ish behavior).
+                _ => 5,
+            },
+            lfo_delay: b.lfo_delay.clamp(0.0, 1.0),
+            lfo_bpm_sync: b.lfo_bpm_sync,
+            lfo_sync_beats: b.lfo_sync_beats.clamp(0.03125, 16.0),
         }
     }
 }
@@ -130,6 +351,15 @@ pub struct AudioParams {
     pub hihat909_volume: f32,
     pub clap909_decay: f32,
     pub clap909_volume: f32,
+    // Gabber kick (dedicated hardcore-kick voice, distinct from 808/909)
+    pub gabber_pitch: f32,
+    pub gabber_decay: f32,
+    pub gabber_pitch_env_depth: f32,
+    pub gabber_pitch_env_time: f32,
+    pub gabber_clip: f32,
+    pub gabber_transient: f32,
+    pub gabber_volume: f32,
+    pub gabber_pan: f32,
     // Per-voice pan (-1 L .. +1 R, 0 center)
     pub pan_kick808: f32,
     pub pan_snare808: f32,
@@ -147,9 +377,16 @@ pub struct AudioParams {
     pub reverb_mix: f32,
     pub reverb_gate_time: f32, // 0 = no gate; gate close time in seconds
     pub reverb_freeze: bool,
+    /// 0=FWD, 1=REV (preverb), 2=MIRROR.
+    pub reverb_dir: u8,
+    /// Beat-division snap for the reverse-tap loop length.
+    pub reverb_rev_quant: u8,
     pub delay_time: f32,
     pub delay_feedback: f32,
     pub delay_mix: f32,
+    /// 0=FWD, 1=REV (anti-echo), 2=MIRROR.
+    pub delay_dir: u8,
+    pub delay_rev_quant: u8,
     pub delay_wow_flutter: f32,
     pub delay_saturation: f32,
     pub distortion_drive: f32,
@@ -190,6 +427,10 @@ pub struct AudioParams {
     // Autotune pitch shifter
     pub autotune_amount: f32,
     pub autotune_mix: f32,
+    // Pan FX
+    pub fx_pan_pos: f32,
+    pub fx_pan_width: f32,
+    pub fx_pan_rate: f32,
     // Compressor
     pub compressor_threshold: f32,
     pub compressor_ratio: f32,
@@ -205,8 +446,16 @@ pub struct AudioParams {
     pub sample_rate: f32,
     // LFO
     pub lfo: [LfoParamsCopy; 4],
+    /// Cable-declared modulation routes — populated from rack Mod cables.
+    /// Each route says: "LFO slot N drives target T at depth D".
+    pub mod_routes: [ModRouteCopy; MAX_MOD_ROUTES],
+    pub mod_route_count: u8,
     pub sequencer_running: bool,
     pub lfo_pitch_mod_st: f32,
+    /// AN1X pitch modulation (semitones) accumulated this block from the
+    /// cable-routed mod system (LfoTarget::An1xPitch / opcode 16).  Added
+    /// on top of pitch_st in An1xVoice::process.
+    pub an1x_pitch_mod_st: f32,
     // Free EG
     pub free_eg_enabled: bool,
     pub free_eg_values: [f32; 8],
@@ -283,6 +532,34 @@ pub struct AudioParams {
     pub amen_pitch: f32,  // semitones -24..+24
     pub amen_volume: f32, // 0–1
     pub amen_loop: bool,
+    pub amen_slice_count: u8,   // 1 = whole sample; 2/4/8/16 = break-chop
+    pub amen_start_offset: f32, // 0..1 of sample
+    pub amen_end_offset: f32,   // 0..1 of sample
+    pub amen_reverse: bool,
+    pub amen_gate: f32,   // 0..1 of slice duration
+    pub amen_stutter: u8, // extra retriggers per step
+    /// Custom slice start positions (normalized 0..1 of full sample).
+    /// Sentinel: NaN in slot [0] = unused, fall back to equal divisions.
+    /// Entries 0..amen_slice_count hold explicit start positions, in
+    /// ascending order.  Max 16 slices (matches UI cap).
+    pub amen_slice_positions: [f32; 16],
+    /// Per-slice pitch-shift in semitones (−24..+24, NaN sentinel in slot 0
+    /// = unused → all slices share the global amen_pitch).  Additive with
+    /// amen_pitch and BPM-stretch, applied at trigger time.
+    pub amen_slice_pitches: [f32; 16],
+    /// Per-slice volume multiplier (0..2, NaN sentinel in slot 0 = unused
+    /// → all slices share the global amen_volume).  Applied multiplicatively.
+    pub amen_slice_volumes: [f32; 16],
+    /// BPM the source sample was originally recorded at.  Used only when
+    /// amen_bpm_stretch is true.
+    pub amen_source_bpm: f32,
+    /// Stretch sample playback to match the host BPM (non-pitch-preserving —
+    /// the sample is resampled, which also shifts its pitch).  For classic
+    /// D&B drumbreak treatment, leave this on and accept the pitch shift.
+    pub amen_bpm_stretch: bool,
+    /// Host/sequencer BPM — mirror of s.sequencer.bpm.  Used by the amen
+    /// voice for tempo-matching; other voices sync via different paths.
+    pub sequencer_bpm: f32,
     // Rack presence — only trigger / process voices that are in the rack
     pub rack_bass: bool,
     pub rack_drums808: bool,
@@ -290,6 +567,7 @@ pub struct AudioParams {
     pub rack_amen: bool,
     pub rack_hoover: bool,
     pub rack_an1x: bool,
+    pub rack_gabber_kick: bool,
 }
 
 impl AudioParams {
@@ -297,6 +575,7 @@ impl AudioParams {
         let bass = &s.bass_voices[0].synth;
         let bvp: [BassVoiceParams; crate::state::MAX_BASS_VOICES] =
             std::array::from_fn(|i| BassVoiceParams::from_bass_state(&s.bass_voices[i].synth));
+        let (mod_routes, mod_route_count) = compile_mod_routes(s);
         Self {
             cutoff: bass.cutoff,
             resonance: bass.resonance,
@@ -347,6 +626,14 @@ impl AudioParams {
             hihat909_volume: s.kit_b.hihat_closed.volume,
             clap909_decay: s.kit_b.clap.decay,
             clap909_volume: s.kit_b.clap.volume,
+            gabber_pitch: s.gabber_kick.pitch,
+            gabber_decay: s.gabber_kick.decay,
+            gabber_pitch_env_depth: s.gabber_kick.pitch_env_depth,
+            gabber_pitch_env_time: s.gabber_kick.pitch_env_time,
+            gabber_clip: s.gabber_kick.clip.clamp(0.0, 1.0),
+            gabber_transient: s.gabber_kick.transient.clamp(0.0, 1.0),
+            gabber_volume: s.gabber_kick.volume.clamp(0.0, 1.5),
+            gabber_pan: s.gabber_kick.pan.clamp(-1.0, 1.0),
             pan_kick808: s.kit_a.kick.pan,
             pan_snare808: s.kit_a.snare.pan,
             pan_hihat808: s.kit_a.hihat_closed.pan,
@@ -362,9 +649,13 @@ impl AudioParams {
             reverb_mix: s.fx.reverb_mix,
             reverb_gate_time: s.fx.reverb_gate_time,
             reverb_freeze: s.fx.reverb_freeze,
+            reverb_dir: s.fx.reverb_dir.min(2),
+            reverb_rev_quant: s.fx.reverb_rev_quant.min(4),
             delay_time: s.fx.delay_time,
             delay_feedback: s.fx.delay_feedback,
             delay_mix: s.fx.delay_mix,
+            delay_dir: s.fx.delay_dir.min(2),
+            delay_rev_quant: s.fx.delay_rev_quant.min(4),
             delay_wow_flutter: s.fx.delay_wow_flutter,
             delay_saturation: s.fx.delay_saturation,
             distortion_drive: s.fx.distortion_drive,
@@ -396,6 +687,9 @@ impl AudioParams {
             eq_hi_gain: s.fx.eq_hi_gain,
             autotune_amount: s.fx.autotune_amount,
             autotune_mix: s.fx.autotune_mix,
+            fx_pan_pos: s.fx.fx_pan_pos.clamp(-1.0, 1.0),
+            fx_pan_width: s.fx.fx_pan_width.clamp(0.0, 1.0),
+            fx_pan_rate: s.fx.fx_pan_rate.clamp(0.0, 1.0),
             compressor_threshold: s.fx.compressor_threshold,
             compressor_ratio: s.fx.compressor_ratio,
             compressor_mix: s.fx.compressor_mix,
@@ -432,54 +726,21 @@ impl AudioParams {
                         rate: slot.rate,
                         depth: slot.depth,
                         phase_offset: slot.phase_offset,
-                        target: match slot.target {
-                            LfoTarget::None => 0,
-                            LfoTarget::BassCutoff => 1,
-                            LfoTarget::BassResonance => 2,
-                            LfoTarget::BassPitch => 3,
-                            LfoTarget::BassVolume => 4,
-                            LfoTarget::ReverbMix => 5,
-                            LfoTarget::DelayTime => 6,
-                            LfoTarget::DelayFeedback => 7,
-                            LfoTarget::ChorusMix => 8,
-                            LfoTarget::ChorusRate => 9,
-                            LfoTarget::Kick808Pitch => 10,
-                            LfoTarget::PhaserRate => 11,
-                            LfoTarget::PhaserDepth => 12,
-                            LfoTarget::DistortionDrive => 13,
-                            LfoTarget::MasterVolume => 14,
-                            LfoTarget::An1xCutoff => 15,
-                            LfoTarget::An1xPitch => 16,
-                        },
+                        target: lfo_target_to_u8(slot.target),
                     };
                 }
                 arr
             },
+            mod_routes,
+            mod_route_count,
             sequencer_running: s.sequencer.running,
             lfo_pitch_mod_st: 0.0,
+            an1x_pitch_mod_st: 0.0,
             free_eg_enabled: s.free_eg.enabled,
             free_eg_values: s.free_eg.values,
             free_eg_period: 0.5 * 64.0_f32.powf(s.free_eg.period), // 0→0.5s, 1→32s
             free_eg_depth: s.free_eg.depth,
-            free_eg_target: match s.free_eg.target {
-                LfoTarget::None => 0,
-                LfoTarget::BassCutoff => 1,
-                LfoTarget::BassResonance => 2,
-                LfoTarget::BassPitch => 3,
-                LfoTarget::BassVolume => 4,
-                LfoTarget::ReverbMix => 5,
-                LfoTarget::DelayTime => 6,
-                LfoTarget::DelayFeedback => 7,
-                LfoTarget::ChorusMix => 8,
-                LfoTarget::ChorusRate => 9,
-                LfoTarget::Kick808Pitch => 10,
-                LfoTarget::PhaserRate => 11,
-                LfoTarget::PhaserDepth => 12,
-                LfoTarget::DistortionDrive => 13,
-                LfoTarget::MasterVolume => 14,
-                LfoTarget::An1xCutoff => 15,
-                LfoTarget::An1xPitch => 16,
-            },
+            free_eg_target: lfo_target_to_u8(s.free_eg.target),
             free_eg_loop: s.free_eg.loop_mode,
             noise_voice_enabled: s.noise_voice.enabled,
             noise_voice_volume: s.noise_voice.volume,
@@ -569,6 +830,36 @@ impl AudioParams {
             amen_pitch: s.amen.pitch,
             amen_volume: s.amen.volume,
             amen_loop: s.amen.loop_mode,
+            amen_slice_count: s.amen.slice_count.max(1),
+            amen_start_offset: s.amen.start_offset.clamp(0.0, 1.0),
+            amen_end_offset: s.amen.end_offset.clamp(0.0, 1.0),
+            amen_reverse: s.amen.reverse,
+            amen_gate: s.amen.gate.clamp(0.05, 1.0),
+            amen_stutter: s.amen.stutter.min(4),
+            amen_slice_positions: {
+                let mut arr = [f32::NAN; 16];
+                for (i, p) in s.amen.slice_positions.iter().take(16).enumerate() {
+                    arr[i] = p.clamp(0.0, 1.0);
+                }
+                arr
+            },
+            amen_slice_pitches: {
+                let mut arr = [f32::NAN; 16];
+                for (i, p) in s.amen.slice_pitches.iter().take(16).enumerate() {
+                    arr[i] = p.clamp(-24.0, 24.0);
+                }
+                arr
+            },
+            amen_slice_volumes: {
+                let mut arr = [f32::NAN; 16];
+                for (i, v) in s.amen.slice_volumes.iter().take(16).enumerate() {
+                    arr[i] = v.clamp(0.0, 2.0);
+                }
+                arr
+            },
+            amen_source_bpm: s.amen.source_bpm.clamp(40.0, 300.0),
+            amen_bpm_stretch: s.amen.bpm_stretch,
+            sequencer_bpm: s.sequencer.bpm,
             rack_bass: s
                 .rack
                 .modules
@@ -599,6 +890,11 @@ impl AudioParams {
                 .modules
                 .iter()
                 .any(|m| m.kind == ModuleKind::An1xVoice && m.enabled),
+            rack_gabber_kick: s
+                .rack
+                .modules
+                .iter()
+                .any(|m| m.kind == ModuleKind::GabberKick && m.enabled),
         }
     }
 }

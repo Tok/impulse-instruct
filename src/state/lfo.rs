@@ -45,26 +45,102 @@ pub enum LfoWaveform {
     SampleAndHold,
 }
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum LfoTarget {
     #[default]
     None,
+    // Bass voice
     BassCutoff,
     BassResonance,
     BassPitch,
     BassVolume,
-    ReverbMix,
-    DelayTime,
-    DelayFeedback,
-    ChorusMix,
-    ChorusRate,
+    BassPan,
+    // Hoover voice
+    HooverPan,
+    // Noise voice
+    NoisePan,
+    // Drum voices — 808
     Kick808Pitch,
-    PhaserRate,
-    PhaserDepth,
-    DistortionDrive,
-    MasterVolume,
+    Kick808Decay,
+    Kick808Pan,
+    Snare808Tone,
+    Snare808Decay,
+    Snare808Pan,
+    Hihat808Pan,
+    // Drum voices — 909
+    Kick909Pitch,
+    Kick909Decay,
+    Kick909Pan,
+    Snare909Tone,
+    Snare909Decay,
+    Snare909Pan,
+    Hihat909Pan,
+    Clap909Decay,
+    Clap909Pan,
+    // AN1X
     An1xCutoff,
     An1xPitch,
+    An1xPan,
+    // Sampler / texture / TTS voices
+    AmenVolume,
+    AmenStart,
+    AmenGate,
+    GranularVolume,
+    GranularDensity,
+    GranularGrain,
+    GranularPos,
+    // FX: Reverb
+    ReverbMix,
+    ReverbSize,
+    ReverbDamp,
+    // FX: Delay
+    DelayTime,
+    DelayFeedback,
+    DelayMix,
+    // FX: Chorus
+    ChorusRate,
+    ChorusDepth,
+    ChorusMix,
+    // FX: Phaser
+    PhaserRate,
+    PhaserDepth,
+    PhaserMix,
+    // FX: Waveshaper (pre-FX soft clipper)
+    WaveshaperDrive,
+    WaveshaperMix,
+    // FX: Drive (distortion)
+    DistortionDrive,
+    DistortionMix,
+    // FX: Bitcrush
+    BitcrushBits,
+    BitcrushRate,
+    BitcrushMix,
+    // FX: Ring Mod
+    RingModFreq,
+    RingModMix,
+    // FX: EQ
+    EqLow,
+    EqMid,
+    EqHigh,
+    // FX: Compressor
+    CompThresh,
+    CompRatio,
+    CompMix,
+    // FX: Tape Sat
+    TapeDrive,
+    TapeMix,
+    TapeFlutter,
+    // FX: Autotune
+    AutotuneAmount,
+    AutotuneMix,
+    // Gabber kick (dedicated hardcore voice)
+    GabberKickPitch,
+    GabberKickDecay,
+    GabberKickClip,
+    GabberKickPan,
+    // Master
+    MasterVolume,
+    StereoWidth,
 }
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]

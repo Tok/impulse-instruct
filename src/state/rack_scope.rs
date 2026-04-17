@@ -44,6 +44,7 @@ fn kind_to_scope_name(kind: ModuleKind) -> Option<String> {
         ModuleKind::AmenSampler => Some("amen".to_string()),
         ModuleKind::NoiseVoice => Some("noise".to_string()),
         ModuleKind::GranularTexture => Some("granular".to_string()),
+        ModuleKind::GabberKick => Some("gabber_kick".to_string()),
         ModuleKind::StepSequencer => Some("sequencer".to_string()),
         ModuleKind::FxReverb
         | ModuleKind::FxDelay
@@ -58,6 +59,46 @@ fn kind_to_scope_name(kind: ModuleKind) -> Option<String> {
         | ModuleKind::FxDrive
         | ModuleKind::FxAutotune => Some("fx".to_string()),
         ModuleKind::LfoModule => Some("lfo".to_string()),
+        _ => None,
+    }
+}
+
+/// Parse a flexible module-kind string (from LLM JSON or HTTP API) into a
+/// `ModuleKind`.  Accepts snake_case, dashed, spaced, and short aliases.
+pub fn parse_module_kind(name: &str) -> Option<ModuleKind> {
+    use ModuleKind::*;
+    match name
+        .to_ascii_lowercase()
+        .replace(['-', '_', ' '], "")
+        .as_str()
+    {
+        "acidbass" | "bass" | "303" => Some(AcidBass),
+        "drumkit808" | "808" | "kita" | "druma" | "drumsa" => Some(DrumKit808),
+        "drumkit909" | "909" | "kitb" | "drumb" | "drumsb" => Some(DrumKit909),
+        "hooverlead" | "hoover" | "lead" => Some(HooverLead),
+        "an1xvoice" | "an1x" | "an-1x" | "pad" | "synth" => Some(An1xVoice),
+        "amensampler" | "amen" | "sampler" | "break" => Some(AmenSampler),
+        "noisevoice" | "noise" => Some(NoiseVoice),
+        "granulartexture" | "granular" | "grain" | "texture" => Some(GranularTexture),
+        "gabberkick" | "gabber" | "hardcorekick" | "rotterdam" => Some(GabberKick),
+        "fxreverb" | "reverb" | "verb" => Some(FxReverb),
+        "fxdelay" | "delay" | "echo" => Some(FxDelay),
+        "fxchorus" | "chorus" | "ensemble" => Some(FxChorus),
+        "fxphaser" | "phaser" | "phase" => Some(FxPhaser),
+        "fxeq" | "eq" | "equalizer" | "equaliser" => Some(FxEq),
+        "fxcompressor" | "compressor" | "comp" => Some(FxCompressor),
+        "fxtapesat" | "tapesat" | "tape" | "saturation" => Some(FxTapeSat),
+        "fxdrive" | "drive" | "overdrive" | "distortion" => Some(FxDrive),
+        "fxautotune" | "autotune" | "pitchcorrect" | "tune" => Some(FxAutotune),
+        "fxwaveshaper" | "waveshaper" | "shaper" => Some(FxWaveshaper),
+        "fxbitcrush" | "bitcrush" | "lofi" => Some(FxBitcrush),
+        "fxringmod" | "ringmod" | "ring" => Some(FxRingMod),
+        "fxpan" | "pan" | "autopan" => Some(FxPan),
+        "lfomodule" | "lfo" => Some(LfoModule),
+        "spectrumanalyzer" | "spectrum" | "analyser" | "analyzer" => Some(SpectrumAnalyzer),
+        "stereometer" | "stereo" | "correlation" | "meter" => Some(StereoMeter),
+        "activitytimeline" | "timeline" | "activity" | "log" => Some(ActivityTimeline),
+        "neutts" | "tts" | "voice" | "mc" => Some(NeuTts),
         _ => None,
     }
 }
@@ -96,6 +137,7 @@ pub fn rack_kind_name_matches(kind: ModuleKind, name: &str) -> bool {
             n.as_str(),
             "autotune" | "auto_tune" | "pitch_correct" | "tune" | "fx"
         ),
+        ModuleKind::FxPan => matches!(n.as_str(), "pan" | "autopan" | "fx"),
         ModuleKind::LfoModule => matches!(n.as_str(), "lfo"),
         ModuleKind::AcidBass => matches!(n.as_str(), "bass" | "acid" | "303"),
         ModuleKind::DrumKit808 => matches!(n.as_str(), "808" | "kit_a" | "drum_a" | "drums_a"),
@@ -105,6 +147,12 @@ pub fn rack_kind_name_matches(kind: ModuleKind, name: &str) -> bool {
         ModuleKind::AmenSampler => matches!(n.as_str(), "amen" | "sampler" | "break"),
         ModuleKind::NoiseVoice => matches!(n.as_str(), "noise"),
         ModuleKind::GranularTexture => matches!(n.as_str(), "granular" | "grain" | "texture"),
+        ModuleKind::GabberKick => {
+            matches!(
+                n.as_str(),
+                "gabber" | "gabber_kick" | "hardcore" | "rotterdam"
+            )
+        }
         ModuleKind::NeuTts => {
             matches!(n.as_str(), "neutts" | "tts" | "mc" | "voice")
         }

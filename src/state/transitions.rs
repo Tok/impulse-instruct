@@ -644,6 +644,44 @@ pub fn spawn_agent(
     (s, id)
 }
 
+/// After an agent is spawned, optionally apply a conversation-mode override
+/// and add + wire a NeuTts module if TTS is requested.  Shared by the
+/// HTTP `/api/rack/agent` handler and the LLM `spawn_agent` action so both
+/// paths produce identical results.  No-op if `agent_id` doesn't exist.
+pub fn apply_agent_mode_and_tts(
+    state: AppState,
+    agent_id: u32,
+    mode: Option<&str>,
+    tts: bool,
+) -> AppState {
+    let mut s = state;
+    if let Some(mode_str) = mode {
+        use crate::state::ConversationMode;
+        let cm = match mode_str.to_ascii_lowercase().as_str() {
+            "off" => Some(ConversationMode::Off),
+            "producer" => Some(ConversationMode::Producer),
+            "dj" => Some(ConversationMode::Dj),
+            "mc" => Some(ConversationMode::Mc),
+            _ => None,
+        };
+        if let Some(cm) = cm
+            && let Some(a) = s.llm_agents.iter_mut().find(|a| a.id == agent_id)
+        {
+            a.conversation_mode = cm;
+        }
+    }
+    if tts {
+        let tts_id = s.rack.add_module(crate::state::ModuleKind::NeuTts);
+        s.tts_modules
+            .push(crate::state::TtsModuleState::new(tts_id));
+        s.rack.connect_control(agent_id, tts_id);
+        // Scroll the UI to the new TTS module so the viewer (or recording)
+        // sees where the MC/DJ voice comes from.
+        s.scroll_target = Some("tts".to_string());
+    }
+    s
+}
+
 /// Format an LLM response for display in the log.
 ///
 /// Returns the user-visible summary text:

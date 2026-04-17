@@ -8,7 +8,8 @@ scene_count 7
 
 scene "Setup"
 
-reset_rack
+reset_all
+set_style jungle
 
 add_instrument bass
 add_instrument 808

@@ -1,8 +1,8 @@
 // ─── ui/panels/drums.rs ───────────────────────────────────────────────────────
-// Drum kit panels: Kit A (808-style), Kit B (909-style), and Amen sampler.
+// Drum kit panels: Kit A (808-style) and Kit B (909-style).
+// (AmenSampler panel moved to ui/panels/amen.rs.)
 
 use super::PAN_SLIDER_W;
-use crate::audio::{AudioCommand, load_wav_to_44100};
 use crate::state::ParamMode;
 use crate::ui::{ImpulseApp, theme, widgets};
 
@@ -46,8 +46,16 @@ pub fn draw_kit_a(app: &mut ImpulseApp, ui: &mut egui::Ui) {
     };
     let mut changed = false;
 
-    let ctrl = widgets::ControlPrefs::from_prefs(&app.state.read().ui_prefs);
-    let xy_size = app.state.read().ui_prefs.effective_xy_px();
+    // Honour per-module scale (set via Ctrl+scroll) — ControlPrefs needs the
+    // scale so knob sizes match the card's outer scaling, otherwise the panel
+    // overflows a shrunk-down card and the pad's hit region drifts off its
+    // visible position via the ScrollArea fallback in module_card_sized.
+    let scale: f32 = ui
+        .ctx()
+        .data(|d| d.get_temp(egui::Id::new("module_scale")))
+        .unwrap_or(1.0);
+    let ctrl = widgets::ControlPrefs::from_prefs_scaled(&app.state.read().ui_prefs, scale);
+    let xy_size = app.state.read().ui_prefs.effective_xy_px() * scale;
     let avail = ui.available_width();
     let gw = ((avail - super::GLASS_GAP) / 2.0).floor(); // 2-column layout
     let group_h = ctrl.knob_size * 2.0 + 50.0;
@@ -269,7 +277,11 @@ pub fn draw_kit_b(app: &mut ImpulseApp, ui: &mut egui::Ui) {
     };
     let mut changed = false;
 
-    let ctrl = widgets::ControlPrefs::from_prefs(&app.state.read().ui_prefs);
+    let scale: f32 = ui
+        .ctx()
+        .data(|d| d.get_temp(egui::Id::new("module_scale")))
+        .unwrap_or(1.0);
+    let ctrl = widgets::ControlPrefs::from_prefs_scaled(&app.state.read().ui_prefs, scale);
     let ctrl_big = ctrl.phi_bigger(); // larger knobs for the important KICK params
     let avail = ui.available_width();
     let gw_half = ((avail - super::GLASS_GAP) / 2.0).floor();
@@ -402,60 +414,5 @@ pub fn draw_kit_b(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             ("kit_b.clap.decay", cd),
             ("kit_b.clap.volume", cv),
         ]);
-    }
-}
-
-// ─── Amen / WAV sampler panel ─────────────────────────────────────────────────
-
-pub fn draw_amen(app: &mut ImpulseApp, ui: &mut egui::Ui) {
-    let ctrl = widgets::ControlPrefs::from_prefs(&app.state.read().ui_prefs);
-    let mut path = app.state.read().amen.path.clone();
-    let (mut vol, mut pitch, mut loop_mode) = {
-        let s = app.state.read();
-        (s.amen.volume, s.amen.pitch, s.amen.loop_mode)
-    };
-    let mut changed = false;
-
-    // Row 1: file input + load button (full width)
-    ui.horizontal(|ui| {
-        let resp = ui.add(
-            egui::TextEdit::singleline(&mut path)
-                .hint_text("amen.wav")
-                .desired_width(ui.available_width() - 30.0)
-                .font(egui::FontId::monospace(8.0)),
-        );
-        if resp.changed() {
-            app.state.write().amen.path = path.clone();
-        }
-        if ui
-            .small_button(egui::RichText::new("LD").monospace().size(7.0))
-            .clicked()
-            && let Some(data) = load_wav_to_44100(&path)
-        {
-            let _ = app.audio_tx.push(AudioCommand::LoadSampler(data));
-        }
-    });
-    // Row 2: knobs
-    ui.horizontal(|ui| {
-        if widgets::param_control(ui, "VOLUME", &mut vol, ParamMode::Free, ctrl).0 {
-            changed = true;
-        }
-        let mut pitch_norm = (pitch + 24.0) / 48.0;
-        if widgets::param_control(ui, "PITCH", &mut pitch_norm, ParamMode::Free, ctrl).0 {
-            pitch = pitch_norm * 48.0 - 24.0;
-            changed = true;
-        }
-        if widgets::toggle_button(ui, if loop_mode { "LOOP" } else { "ONE" }, &mut loop_mode) {
-            changed = true;
-        }
-    });
-
-    if changed {
-        let mut s = app.state.write();
-        s.amen.volume = vol;
-        s.amen.pitch = pitch;
-        s.amen.loop_mode = loop_mode;
-        drop(s);
-        app.push_audio_params();
     }
 }

@@ -1,11 +1,7 @@
-// ─── state/llm_apply.rs ──────────────────────────────────────────────────────
-// LLM update application extracted from transitions.rs to keep LOC under 1000.
-
+// ─── state/llm_apply.rs ── LLM update application (extracted from transitions).
 use super::llm_helpers::{
     apply_an1x_update, apply_bass_update, apply_fx_update, apply_hoover_update, unlocked_f32,
 };
-use super::rack::{PortDir, PortRef, rack_out_port_kind};
-use super::rack_scope::rack_kind_name_matches;
 use super::transitions::{
     expand_sequencer_steps, set_drum_step_ratchet, set_drum_voice_steps, set_lane_steps,
 };
@@ -13,12 +9,9 @@ use super::{AppState, DrumVoice, LfoTarget, LfoWaveform, MAX_STEPS, Scale, snap_
 use crate::sequencer::euclidean_rhythm;
 
 /// Apply an LLM-generated partial update, respecting locked params.
-/// Returns the new state (caller replaces old state with this).
 pub fn apply_llm_update(state: AppState, update: &serde_json::Value, scope: &[String]) -> AppState {
     let mut s = state;
     let locked = &s.llm.locked_params.clone();
-
-    // Scope helper: empty scope = unrestricted
     let in_scope = |key: &str| scope.is_empty() || scope.iter().any(|s| s == key);
 
     // Legacy "bass" key → voice 0
@@ -52,7 +45,9 @@ pub fn apply_llm_update(state: AppState, update: &serde_json::Value, scope: &[St
     let an1x_ok = seq_scope || in_scope("an1x");
     let kit_a_ok = seq_scope || in_scope("kit_a");
     let kit_b_ok = seq_scope || in_scope("kit_b");
-    let any_seq_scope = seq_scope || bass_ok || hoover_ok || an1x_ok || kit_a_ok || kit_b_ok;
+    let amen_ok = seq_scope || in_scope("amen");
+    let any_seq_scope =
+        seq_scope || bass_ok || hoover_ok || an1x_ok || kit_a_ok || kit_b_ok || amen_ok;
     if any_seq_scope && let Some(seq) = update.get("sequencer").and_then(|v| v.as_object()) {
         // ── Global fields — require explicit "sequencer" scope ───────
         if seq_scope {
@@ -195,7 +190,21 @@ pub fn apply_llm_update(state: AppState, update: &serde_json::Value, scope: &[St
                 }
             }
         }
-        // Per-kit step arrays — kit_a fields require kit_a scope, etc.
+        // Per-step pan parallel to bass_notes (-1..1; 0 = use voice static).
+        if bass_ok
+            && !locked.contains("sequencer.bass_pans")
+            && let Some(arr) = seq.get("bass_pans").and_then(|v| v.as_array())
+        {
+            for (i, val) in arr.iter().enumerate().take(MAX_STEPS) {
+                if let Some(p) = val.as_f64() {
+                    let p = (p as f32).clamp(-1.0, 1.0);
+                    s.sequencer.bass_pattern[i].pan = p;
+                    if let Some(pat) = s.sequencer.bass_patterns.get_mut(0) {
+                        pat[i].pan = p;
+                    }
+                }
+            }
+        }
         let drum_step_fields: &[(&str, DrumVoice, f32, bool)] = &[
             ("kick_a_steps", DrumVoice::Kick808, 1.0, true),
             ("hihat_a_steps", DrumVoice::HihatClosed808, 0.7, true),
@@ -213,15 +222,100 @@ pub fn apply_llm_update(state: AppState, update: &serde_json::Value, scope: &[St
             let lock_key = format!("sequencer.{}", field);
             if !locked.contains(&lock_key)
                 && let Some(arr) = seq.get(field).and_then(|v| v.as_array())
+                && let Some(pattern) = s.sequencer.drum_patterns.get_mut(&voice)
             {
                 let arr: Vec<_> = arr.clone();
-                if let Some(pattern) = s.sequencer.drum_patterns.get_mut(&voice) {
-                    apply_llm_step_array(&arr, pattern, MAX_STEPS, |step, active| {
-                        step.active = active;
-                        if active && step.velocity == 0.0 {
-                            step.velocity = default_vel;
-                        }
-                    });
+                apply_llm_step_array(&arr, pattern, MAX_STEPS, |step, active| {
+                    step.active = active;
+                    if active && step.velocity == 0.0 {
+                        step.velocity = default_vel;
+                    }
+                });
+            }
+        }
+
+        // Pre-echo (anchor lead-ins).  JSON shape:
+        //   "sequencer": { "preecho": { "kit_a": { "anchors": [0,16],
+        //     "length": 4, "velocity_ramp": true, "ratchet_ramp": true }}}.
+        // null clears that voice; voice keys match scope naming.
+        if any_seq_scope && let Some(obj) = seq.get("preecho").and_then(|v| v.as_object()) {
+            for (voice_key, val) in obj {
+                let lock_key = format!("sequencer.preecho.{}", voice_key);
+                if locked.contains(&lock_key) {
+                    continue;
+                }
+                let scope_ok = match voice_key.as_str() {
+                    "bass" => bass_ok,
+                    "hoover" => hoover_ok,
+                    "an1x" => an1x_ok,
+                    "kit_a" => kit_a_ok,
+                    "kit_b" => kit_b_ok,
+                    "amen" => amen_ok,
+                    _ => seq_scope,
+                };
+                if !scope_ok {
+                    continue;
+                }
+                if val.is_null() {
+                    s.sequencer.preecho.remove(voice_key);
+                    continue;
+                }
+                let Some(cfg_obj) = val.as_object() else {
+                    continue;
+                };
+                let mut cfg = s
+                    .sequencer
+                    .preecho
+                    .get(voice_key)
+                    .cloned()
+                    .unwrap_or_default();
+                if let Some(v) = cfg_obj.get("enabled").and_then(|v| v.as_bool()) {
+                    cfg.enabled = v;
+                }
+                if let Some(arr) = cfg_obj.get("anchors").and_then(|v| v.as_array()) {
+                    cfg.anchors = arr
+                        .iter()
+                        .filter_map(|x| x.as_u64())
+                        .map(|n| (n as u8).min(63))
+                        .collect();
+                }
+                if let Some(v) = cfg_obj.get("length").and_then(|v| v.as_u64()) {
+                    cfg.length = (v as u8).min(16);
+                }
+                if let Some(v) = cfg_obj.get("velocity_ramp").and_then(|v| v.as_bool()) {
+                    cfg.velocity_ramp = v;
+                }
+                if let Some(v) = cfg_obj.get("ratchet_ramp").and_then(|v| v.as_bool()) {
+                    cfg.ratchet_ramp = v;
+                }
+                s.sequencer.preecho.insert(voice_key.clone(), cfg);
+            }
+        }
+
+        // amen_steps + amen_slices — standard step array + optional per-step
+        // slice indices (0 = auto-advance, 1..=slice_count = explicit).
+        if amen_ok
+            && !locked.contains("sequencer.amen_steps")
+            && let Some(arr) = seq.get("amen_steps").and_then(|v| v.as_array())
+        {
+            let arr: Vec<_> = arr.clone();
+            if let Some(pattern) = s.sequencer.drum_patterns.get_mut(&DrumVoice::Amen) {
+                apply_llm_step_array(&arr, pattern, MAX_STEPS, |step, active| {
+                    step.active = active;
+                    if active && step.velocity == 0.0 {
+                        step.velocity = 1.0;
+                    }
+                });
+            }
+        }
+        if amen_ok
+            && !locked.contains("sequencer.amen_slices")
+            && let Some(arr) = seq.get("amen_slices").and_then(|v| v.as_array())
+            && let Some(pattern) = s.sequencer.drum_patterns.get_mut(&DrumVoice::Amen)
+        {
+            for (i, val) in arr.iter().enumerate().take(pattern.len()) {
+                if let Some(n) = val.as_u64() {
+                    pattern[i].slice = (n as u8).min(16);
                 }
             }
         }
@@ -320,6 +414,48 @@ pub fn apply_llm_update(state: AppState, update: &serde_json::Value, scope: &[St
             && !locked.contains("kit_b.clap.pan")
         {
             s.kit_b.clap.pan = (v as f32).clamp(-1.0, 1.0);
+        }
+    }
+
+    if in_scope("gabber_kick")
+        && let Some(g) = update.get("gabber_kick").and_then(|v| v.as_object())
+    {
+        let gk = &mut s.gabber_kick;
+        gk.pitch = unlocked_f32(gk.pitch, g, "pitch", "gabber_kick.pitch", locked);
+        gk.decay = unlocked_f32(gk.decay, g, "decay", "gabber_kick.decay", locked);
+        gk.pitch_env_depth = unlocked_f32(
+            gk.pitch_env_depth,
+            g,
+            "pitch_env_depth",
+            "gabber_kick.pitch_env_depth",
+            locked,
+        );
+        gk.pitch_env_time = unlocked_f32(
+            gk.pitch_env_time,
+            g,
+            "pitch_env_time",
+            "gabber_kick.pitch_env_time",
+            locked,
+        );
+        gk.clip = unlocked_f32(gk.clip, g, "clip", "gabber_kick.clip", locked);
+        gk.transient = unlocked_f32(
+            gk.transient,
+            g,
+            "transient",
+            "gabber_kick.transient",
+            locked,
+        );
+        // Volume allows up to 1.5; unlocked_f32 clamps to 0..1 — inline version here.
+        if !locked.contains("gabber_kick.volume")
+            && let Some(v) = g.get("volume").and_then(|v| v.as_f64())
+        {
+            gk.volume = (v as f32).clamp(0.0, 1.5);
+        }
+        // Pan is bipolar -1..+1 — unlocked_f32 is unipolar, so inline again.
+        if !locked.contains("gabber_kick.pan")
+            && let Some(v) = g.get("pan").and_then(|v| v.as_f64())
+        {
+            gk.pan = (v as f32).clamp(-1.0, 1.0);
         }
     }
 
@@ -520,6 +656,101 @@ pub fn apply_llm_update(state: AppState, update: &serde_json::Value, scope: &[St
         apply_an1x_update(&mut s, a, locked);
     }
 
+    // ── Amen sampler params (pitch, volume, loop, slice settings) ───────────
+    // JSON: { "amen": { "slice_count": 8, "gate": 0.85, "reverse": false,
+    //                   "stutter": 0, "start_offset": 0.0, "end_offset": 1.0,
+    //                   "loop_mode": true, "pitch": 0, "volume": 0.75 } }
+    if in_scope("amen")
+        && let Some(a) = update.get("amen").and_then(|v| v.as_object())
+    {
+        s.amen.pitch =
+            unlocked_f32(s.amen.pitch, a, "pitch", "amen.pitch", locked).clamp(-24.0, 24.0);
+        s.amen.volume = unlocked_f32(s.amen.volume, a, "volume", "amen.volume", locked);
+        if let Some(v) = a.get("loop_mode").and_then(|v| v.as_bool())
+            && !locked.contains("amen.loop_mode")
+        {
+            s.amen.loop_mode = v;
+        }
+        if let Some(v) = a.get("slice_count").and_then(|v| v.as_u64())
+            && !locked.contains("amen.slice_count")
+        {
+            s.amen.slice_count = (v as u8).clamp(1, 16);
+        }
+        s.amen.start_offset = unlocked_f32(
+            s.amen.start_offset,
+            a,
+            "start_offset",
+            "amen.start_offset",
+            locked,
+        )
+        .clamp(0.0, 1.0);
+        s.amen.end_offset = unlocked_f32(
+            s.amen.end_offset,
+            a,
+            "end_offset",
+            "amen.end_offset",
+            locked,
+        )
+        .clamp(0.0, 1.0);
+        if s.amen.end_offset <= s.amen.start_offset {
+            s.amen.end_offset = (s.amen.start_offset + 0.01).min(1.0);
+        }
+        if let Some(v) = a.get("reverse").and_then(|v| v.as_bool())
+            && !locked.contains("amen.reverse")
+        {
+            s.amen.reverse = v;
+        }
+        s.amen.gate = unlocked_f32(s.amen.gate, a, "gate", "amen.gate", locked).clamp(0.05, 1.0);
+        if let Some(v) = a.get("stutter").and_then(|v| v.as_u64())
+            && !locked.contains("amen.stutter")
+        {
+            s.amen.stutter = (v as u8).min(4);
+        }
+        s.amen.source_bpm = unlocked_f32(
+            s.amen.source_bpm,
+            a,
+            "source_bpm",
+            "amen.source_bpm",
+            locked,
+        )
+        .clamp(40.0, 300.0);
+        if let Some(v) = a.get("bpm_stretch").and_then(|v| v.as_bool())
+            && !locked.contains("amen.bpm_stretch")
+        {
+            s.amen.bpm_stretch = v;
+        }
+        // Per-slice pitch array: either an array of semitone offsets or
+        // clears via empty array / null.
+        if !locked.contains("amen.slice_pitches")
+            && let Some(v) = a.get("slice_pitches")
+        {
+            if let Some(arr) = v.as_array() {
+                s.amen.slice_pitches = arr
+                    .iter()
+                    .filter_map(|x| x.as_f64())
+                    .map(|x| (x as f32).clamp(-24.0, 24.0))
+                    .take(16)
+                    .collect();
+            } else if v.is_null() {
+                s.amen.slice_pitches.clear();
+            }
+        }
+        if !locked.contains("amen.slice_volumes")
+            && let Some(v) = a.get("slice_volumes")
+        {
+            if let Some(arr) = v.as_array() {
+                s.amen.slice_volumes = arr
+                    .iter()
+                    .filter_map(|x| x.as_f64())
+                    .map(|x| (x as f32).clamp(0.0, 2.0))
+                    .take(16)
+                    .collect();
+            } else if v.is_null() {
+                s.amen.slice_volumes.clear();
+            }
+        }
+    }
+
     // ── Euclidean rhythm ──────────────────────────────────────────────────────
     // JSON: { "euclidean": { "voice": "kick_a", "pulses": 5, "steps": 16 } }
     if in_scope("euclidean")
@@ -587,110 +818,9 @@ pub fn apply_llm_update(state: AppState, update: &serde_json::Value, scope: &[St
     // JSON: { "rack": { "enable": ["bitcrush"], "disable": ["reverb"],
     //                   "connect": [{"from": "bitcrush", "to": "master"}],
     //                   "disconnect": [{"from": "bitcrush", "to": "master"}] } }
+    // Implementation in state/llm_rack.rs.
     if let Some(rack_upd) = update.get("rack").and_then(|v| v.as_object()) {
-        if let Some(arr) = rack_upd.get("enable").and_then(|v| v.as_array()) {
-            for v in arr {
-                if let Some(name) = v.as_str() {
-                    for m in &mut s.rack.modules {
-                        if rack_kind_name_matches(m.kind, name) {
-                            m.enabled = true;
-                        }
-                    }
-                }
-            }
-        }
-        if let Some(arr) = rack_upd.get("disable").and_then(|v| v.as_array()) {
-            for v in arr {
-                if let Some(name) = v.as_str() {
-                    for m in &mut s.rack.modules {
-                        if rack_kind_name_matches(m.kind, name) {
-                            m.enabled = false;
-                        }
-                    }
-                }
-            }
-        }
-        if let Some(arr) = rack_upd.get("connect").and_then(|v| v.as_array()) {
-            for v in arr {
-                let from_name = v.get("from").and_then(|v| v.as_str());
-                let to_name = v.get("to").and_then(|v| v.as_str());
-                if let (Some(fn_), Some(tn)) = (from_name, to_name) {
-                    let from_mod = s
-                        .rack
-                        .modules
-                        .iter()
-                        .find(|m| rack_kind_name_matches(m.kind, fn_))
-                        .map(|m| (m.id, m.kind));
-                    let to_mod = s
-                        .rack
-                        .modules
-                        .iter()
-                        .find(|m| rack_kind_name_matches(m.kind, tn))
-                        .map(|m| (m.id, m.kind));
-                    if let (Some((fid, fkind)), Some((tid, _tkind))) = (from_mod, to_mod) {
-                        // Don't duplicate an existing cable
-                        let exists = s
-                            .rack
-                            .cables
-                            .iter()
-                            .any(|c| c.from.module_id == fid && c.to.module_id == tid);
-                        if !exists {
-                            let port_kind = rack_out_port_kind(fkind);
-                            s.rack.connect(
-                                PortRef {
-                                    module_id: fid,
-                                    dir: PortDir::Out,
-                                    kind: port_kind,
-                                    index: 0,
-                                },
-                                PortRef {
-                                    module_id: tid,
-                                    dir: PortDir::In,
-                                    kind: port_kind,
-                                    index: 0,
-                                },
-                            );
-                        }
-                    }
-                }
-            }
-        }
-        if let Some(arr) = rack_upd.get("disconnect").and_then(|v| v.as_array()) {
-            for v in arr {
-                let from_name = v.get("from").and_then(|v| v.as_str());
-                let to_name = v.get("to").and_then(|v| v.as_str());
-                if let (Some(fn_), Some(tn)) = (from_name, to_name) {
-                    let from_mod = s
-                        .rack
-                        .modules
-                        .iter()
-                        .find(|m| rack_kind_name_matches(m.kind, fn_))
-                        .map(|m| (m.id, m.kind));
-                    let to_id = s
-                        .rack
-                        .modules
-                        .iter()
-                        .find(|m| rack_kind_name_matches(m.kind, tn))
-                        .map(|m| m.id);
-                    if let (Some((fid, fkind)), Some(tid)) = (from_mod, to_id) {
-                        let port_kind = rack_out_port_kind(fkind);
-                        let from_ref = PortRef {
-                            module_id: fid,
-                            dir: PortDir::Out,
-                            kind: port_kind,
-                            index: 0,
-                        };
-                        let to_ref = PortRef {
-                            module_id: tid,
-                            dir: PortDir::In,
-                            kind: port_kind,
-                            index: 0,
-                        };
-                        s.rack.disconnect(&from_ref, &to_ref);
-                    }
-                }
-            }
-        }
+        super::llm_rack::apply_llm_rack_update(&mut s, rack_upd);
     }
 
     s

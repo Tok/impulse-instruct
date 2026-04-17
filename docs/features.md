@@ -4,6 +4,378 @@ A detailed log of what's built.
 
 ---
 
+## v0.7.6 release polish
+
+### Cable visual hierarchy
+
+Three patch-cable styles, layered back → front so the most semantically
+important paths read on top:
+
+- **Audio cable** — fattest 3D tube (4.5 px body / 2.5 px core, gray
+  155/185), used for `PortKind::Audio` connections.
+- **Signal cable** — `draw_signal_cable` in `src/ui/rack_cables.rs`,
+  sized between audio and AI control (3.5 px body / 1.8 px core, gray
+  125/155, lighter shadow + softer specular).  Used for
+  `PortKind::Cv` and `PortKind::Mod` cables and the synthesised LFO
+  cables — modulation reads as a thinner secondary path next to the
+  audio routing.
+- **Control cable** — thinnest dark cable (2.0 / 1.0 gray 90/120) for
+  LLM agent → module control links.  Drawn last so it sits visually
+  on top.
+
+### Sequencer PAN row reset
+
+A small `○` button next to the PAN row label zeros every step's pan
+in one click.  Right-click on a single cell still resets just that
+step.  Layout math ensures the step grid stays aligned with the bass
+row above.
+
+### Pre-echo header refinements
+
+- **Voice tabs sized like BANK / CHAIN slots** — `add_sized([38, 14])`
+  with monospace size 8.0 so the sequencer's two header strips
+  visually align.  Width 38 fits the longest voice label ("hoover").
+- **Two-line layout** — line 1 = PRE-ECHO label + voice tabs +
+  right-justified anchor strip; line 2 = ON / LEN / VEL / RAT /
+  CLEAR.  The split lets the strip take the full panel width without
+  competing with trailing controls.
+- **Left-aligned with the sliders above** — both rows emit the same
+  `10 + 10 + (SEQ_LABEL_W − 20)` prefix as the bass / drum rows so
+  the controls start where the sliders do.  PRE-ECHO label is painted
+  directly into the label slot.
+- **Anchor strip stride mirrors the sequencer step grid exactly** —
+  per-cell stride is `cell_w + item_spacing.x` plus 4 px at every bar
+  boundary and 2 px at every non-bar 4-step boundary.  Cumulative
+  `step_x` array drives both drawing and click hit-testing so anchors
+  land on the same cell visually and on click.
+
+### Mod-overlay top clip
+
+`draw_mod_selector_dropdowns` takes a `canvas_rect` parameter and
+skips any back-panel jack whose anchor scrolls above
+`canvas_rect.min.y`.  Mirrors the existing bottom-edge skip (piano /
+footer reserved height) so the Foreground `egui::Area` no longer
+paints over the header info panel or the prompt strip when the rack
+scrolls.
+
+---
+
+## v0.7.5-snapshot — continued (post-snapshot session)
+
+### Per-knob modulation system
+
+- **Third cable kind** — `PortKind::Mod` distinct from Audio / CV /
+  Control.  An LFO module's CV output can patch into any specific
+  knob via dedicated mod-input jacks on the back panel.
+- **`mod_inputs(kind)` interface** — every `ModuleKind` declares a
+  list of `ModInput::Fixed(LfoTarget)` (dedicated per-knob jack) or
+  `ModInput::Selector` (generic jack with a target picker).  The
+  exhaustive match enforces the contract: adding a new kind forces
+  the author to declare its mod interface, even if empty.
+- **47+ LfoTarget variants** — every modulatable knob is named:
+  bass cutoff/reso/pitch/volume/pan, AN1X cutoff/pitch/pan, per-drum
+  pan + decay (808 + 909), reverb size/damp/mix, delay time/feedback/
+  mix, chorus rate/depth/mix, phaser, waveshaper, drive, bitcrush,
+  ringmod, EQ, compressor, tape sat, autotune, amen volume/start/
+  gate, granular volume/density/grain/position, master volume.
+- **Multi-select Selector chips** — `RackModule.mod_selectors:
+  Vec<Vec<LfoTarget>>` per slot.  Each chip toggles one target on/
+  off; a `—` meta-chip toggles all on/off at once.
+- **Per-cable depth (`%`) + polarity (`+ / −`)** — slider 0–1 with
+  visible % label and an inversion toggle so a single mod can drive
+  the target up or down without changing the source.
+- **Cable-only LFO activation** — an LFO slot's phase still runs
+  even when its built-in `target` is None, as long as a Mod cable
+  sources from that slot.
+- **Audio-thread routing** — `ModRouteCopy` (lfo_slot, target_u8,
+  depth) array snapshot in `AudioParams`; `apply_mod_target` shared
+  dispatch handles 67 opcodes (legacy + new).  No per-block
+  allocations.
+- **AN1X pitch DSP route** wired (was a stub) via
+  `AudioParams.an1x_pitch_mod_st`.
+- **HTTP API**: `POST /api/rack/mod_cable | mod_target | mod_depth`
+  with case-insensitive target name parsing.
+- **LLM JSON**: `rack.mod_cable: [{from_lfo, to, slot, depth?,
+  targets?}]` action handled by
+  `state::modulation::apply_llm_mod_cable_entry`.
+
+### TTS — audible again, agent-triggered
+
+- **Sample-rate fix** — NeuTTS Air outputs 24 kHz WAV; the reader
+  only upsampled the legacy 22050 → 44100 case, so 24 kHz audio
+  played at 2× speed and was perceived as silence.  New `TtsSink {
+  tx, target_sr }` carries the device rate; `read_wav_f32_bytes`
+  does generic linear resampling.
+- **Agent-triggered TTS** — `speak_neutts` was gated behind `if let
+  Some(param_update)`, so MC agents that emit only `mc_line`
+  (no param change) never fired TTS.  Hoisted out of the gate.
+- **Shell log gets the line** — agent `mc_line` now also reaches
+  `log::info!`.
+- **Warn log** when an MC agent speaks but no NeuTts module is wired.
+
+### Reverb + Delay direction toggle (FWD / REV / MIRROR)
+
+- Per-FX 1 s circular input buffer feeds a continuously-rewinding
+  reverse tap.  REV mode processes the reversed tap → preverb swell
+  / anti-echoes preceding the dry hit.  MIRROR sums forward + reverse
+  (reverse weighted 0.7 so it doesn't dominate).
+- Compact 3-state cycle button on the FX panel.
+- **Caveat**: rewind cycle is fixed at ~1 s — tempo-quantized buffer
+  size is a future improvement.
+
+### Bass voice — LFO panel + per-step pan
+
+- **LFO panel row** — TARGET (Off → Pitch → PWM → Cutoff → Amp) and
+  WAVE (SIN/TRI/SAW/↓SW/SQR/S&H) cycle buttons, SYNC toggle (●/○),
+  RATE-or-BEATS knob, DEPTH knob.  Maps to the existing `bass.lfo_*`
+  fields the LLM could already write.
+- **Per-step pan** — `TB303Step.pan: f32` (-1..1, 0 = use voice
+  static).  `TriggerEvent::BassTrigger.pan` plumbed to DSP, latched
+  per trigger and used in the per-voice pan mix.  LLM JSON:
+  `sequencer.bass_pans: [...]`.
+
+### Amen — looping + rearranging + clearer playback
+
+- **Loop by default** — `AmenState.loop_mode` flips to true.
+- **Slice ORDER strip** — `SequencerState.amen_slice_order: Vec<u8>`
+  maps step index → slice index (empty = identity).  Per-cell click
+  cycles 1..slice_count.  Auto-resizes when SLICES count changes.
+  RESET clears.
+- **Step → slice mapping** — when `step.slice == 0`, the sequencer
+  substitutes `slice_order[step % len]` (or `step` when empty), so
+  step 4 plays slice 4.  Single-enabled-step patterns no longer
+  always re-fire slice 1.
+- **Pulsing now-playing wedge** + slice number labels inside each
+  ring + matching highlight on the ORDER strip cell.
+- **Direction indicator** swapped from ▶ / ◀ (looks like a play
+  button) to ↻ / ↺ (rotation arrows).
+
+### LLM agent card — quick-command pills
+
+- 7 pills on the agent card (REWRITE / VARI / FILL / SPARSE / BUSY /
+  BRIGHT / DARK) fire one-shot `LlmInput::Infer` scoped to the agent.
+  The agent's existing scope (control cables) is honoured by the LLM
+  loop, so each pill lands inside the agent's sandbox.
+
+### Style → rack auto-setup
+
+- **`Style.rack_modules: Vec<String>`** — selecting a style adds the
+  missing modules non-destructively (existing kinds are kept).  Calls
+  `wire_default_cables()` once after additions; pushes a recomputed
+  FxPlan; logs "Style rack: + bass, amen, …".
+- Seeded for `acid_classic` / `jungle` / `drum_and_bass` / `gabber` /
+  `dub_techno`; other styles inherit empty default until filled in.
+
+### Smart randomization — `POST /api/randomize`
+
+- Picks a random style (SystemTime nanos % len, no rand-crate
+  dependency), applies baseline params, adds rack modules, sets
+  active_style + propagates to non-locked agents, fires
+  `LlmInput::Infer` with "FULL RESET to <name>".
+
+### Shell log colourisation + Huth filter fixes
+
+- **Shell log** routes through `log_fmt::colorize` with grayscale
+  line colours matching the in-UI log (`CHALK / HAZE / FOG / SMOKE /
+  ASH`) plus Huth note-colour highlights.  Auto-disables on non-TTY
+  or when `NO_COLOR` is set.
+- **Model filenames** like `gemma-4-E4B-it-Q4_K_M.gguf` no longer
+  colour `E4` as a note (word-boundary check after the octave digit
+  rejects `E4B`).
+- **`44100 Hz`** colours as one full token instead of being parsed
+  as embedded `4100 Hz` blue (left word-boundary on the digit scan
+  + dropped the upper Hz cap; semitone class wraps cleanly).
+- **Persona prefix** — agent response lines `PULSE -> Hi` rewritten
+  to `PULSE: Hi`; line-colour detection updated.
+
+### Back-panel layout overhaul
+
+- AUD / CV / CTL ports share a single horizontal top row of the
+  strip with labels below each circle; in/out badges disambiguated
+  (`AUD IN` / `AUD OUT`, etc.).
+- Mod jacks stack vertically below the row; per-jack overlay anchored
+  *below* the jack so the top-row labels stay visible.
+- Adaptive strip height grows with mod-input count; (1,2)-grid FX
+  cards no longer clip 5-jack stacks.
+- `LFO #N` slot label in the title bar + `#N` on the CV-OUT jack so
+  multiple LFO instances are individually identifiable.
+- Mod overlay skips rendering when its anchor would land in the
+  bottom-105 px reserved for the piano panel — piano always stays on
+  top.
+
+### Drum panel scaling
+
+- `draw_kit_a` / `draw_kit_b` now use `ControlPrefs::from_prefs_scaled`
+  so per-module scale (Ctrl+scroll) takes effect; the 808 XY pad
+  hit-region matches the visual after shrinking.
+
+---
+
+## v0.7.5-snapshot additions (36 commits since v0.7.4)
+
+### AMEN sampler — proper break chopper
+
+- **Slice model** — each trigger plays one slice of the loaded WAV,
+  not the whole sample.  slice_count: 1/2/4/8/16.  Per-drum-step
+  `slice` field selects which slice fires (0 = auto-advance).
+- **Gate + stutter + reverse** — per-slice gate fraction cuts
+  playback short for stuttery pulses; stutter (0–4) retriggers
+  the slice; reverse flips direction globally.
+- **Transient auto-slicing** — AUTO button runs an energy-based
+  onset detector on the loaded sample and populates
+  `slice_positions` (normalised 0..1) with the detected times.
+  RESET clears back to equal divisions.
+- **Per-slice pitch + volume** — 16-slot arrays on AmenState;
+  agents can write `slice_pitches` / `slice_volumes` to vary
+  individual slices across a chopped pattern.
+- **BPM-stretch to host tempo** — source_bpm + bpm_stretch
+  together pitch the sample to match sequencer.bpm.  Classic
+  drumbreak treatment (pitch follows tempo; pitch-preserving
+  stretch deferred).
+- **Waveform thumbnail + slice wheel** — the panel shows a
+  min/max waveform strip with slice markers and start/end region
+  shading, plus a circular slice wheel with the currently-playing
+  slice lit up.  Placeholder rect when no sample loaded so the
+  layout doesn't jitter on load.
+- **Sample discovery** — `samples/amen/` directory with GET /
+  RANDOM / LOAD / PLAY buttons, scrollable dropdown picker,
+  metadata strip (duration / channels / bit depth / source rate /
+  file size), archive.org GET button linking to the amen-breaks
+  collection.
+- **POST /api/amen** — accepts `{ "path": "..." }` or
+  `{ "random": true }` so scenarios can swap samples mid-jam.
+- **LLM schema** — full `amen.*` object writable from agent JSON:
+  slice_count, start_offset, end_offset, reverse, gate, stutter,
+  loop_mode, pitch, volume, slice_positions, slice_pitches,
+  slice_volumes, source_bpm, bpm_stretch.  Plus
+  `sequencer.amen_steps` + `sequencer.amen_slices` for chopped
+  patterns.
+
+### Granular texture voice — CAPTURE workflow
+
+- **Live master-output ring buffer** — audio thread always pushes
+  the master output mono into a dedicated 15s ring.  UI drains
+  into a 3s rolling tap every frame.
+- **Live waveform strip** — 260×66 px min/max viz scrolling
+  oldest-left → newest-right with a CHALK cursor at the freshest
+  sample.
+- **CAPTURE button** — freezes current tap contents as the
+  granular voice's source.  In-memory only; path becomes
+  `«captured»` so the disk-load auto-sync skips it.
+- **Texture samples directory** — `samples/textures/` with a
+  GET button linking to archive.org/details/opensource_audio;
+  RANDOM / LOAD buttons mirror the amen panel.
+- **POST /api/granular** — same shape as /api/amen for picking
+  or randomising texture source.
+
+### Bass voice → SH-101 territory
+
+- **Full ADSR** on both amp and filter envelopes — `amp_attack`,
+  `amp_sustain`, `amp_release`, `filter_attack`, `filter_sustain`,
+  `filter_release`.  Legacy `decay` still drives the filter env
+  time for 303-style decay-only squelch.  Backward-compat via
+  serde defaults.
+- **PWM** — pulse width modulatable on the square waveform
+  (0.05..0.95, centered 0.5 = classic square).  Narrow pulses
+  give the reedy 101 sound.
+- **Per-voice LFO** — dedicated modulator with routable targets:
+  Pitch (±2 st), PulseWidth (±0.45), FilterCutoff (±0.5),
+  Amplitude (±50% tremolo).  Free-rate (0.01–20 Hz) or BPM-sync.
+  Sine / Triangle / Saw / Inv-Saw / Square waveforms.  Fade-in
+  resets per note to honor lfo_delay.
+
+### Pre-echo pattern modulator
+
+- **Anchor-driven lead-ins** — declare anchor step indices per
+  voice; the N steps before each anchor get a build-up ramp
+  (velocity 0.3→1.0 and/or ratchet 1→4).  Wrap-aware: tail of
+  the bar leads into step-0 downbeat.
+- **Per-voice configs** —
+  `sequencer.preecho[kit_a|kit_b|amen|bass|hoover|an1x]` with
+  `{enabled, anchors, length, velocity_ramp, ratchet_ramp}`.
+  Applied inline in `advance_clock` at trigger time (drums for
+  v1; melodic voices pass through unchanged).
+- **UI** — compact single-row section at the bottom of the
+  sequencer panel with voice tabs, a clickable 21×21 square-cell
+  anchor strip (live lead-in preview), LEN drag, ON/OFF,
+  VEL / RAT toggles, CLEAR.  8 pure-function tests on the
+  scaling math.
+
+### TTS panel overhaul
+
+- **Server status** with polling /health check, inline ONLINE /
+  OFFLINE indicator, one-click **START** button that spawns
+  `scripts/neutts-server.py` on port 8770 as a detached
+  subprocess.  Uses `.neutts-venv/bin/python` if present.
+- **SAY field + button** — type a line, synthesise immediately
+  through NeuTTS with the module's voice_ref / temp / top-k /
+  top-p.  Enter also fires.  Empty SAY prompts the controlling
+  agent to improvise in character (rhyme / shout / sung hook /
+  ROBOT bleep, whatever fits).
+- **ASK row** — THEME / RHYME / SING buttons send persona-
+  aware prompts to the controlling agent with the active
+  style's themes appended.
+- **Conditioning preview** — shows the first line of
+  `voices/<voice_ref>.txt` under the voice selector.
+- **Voice reference discovery** — `voices/` directory GET
+  button opens archive.org/details/librivoxaudio as the clean-
+  single-speaker source recommendation.  README docs Common
+  Voice and the MC-character search-term caveat (music
+  underneath clones badly).
+
+### Rack + module changes
+
+- **LLM action surface** — `rack.add` / `rack.remove` let
+  agents create/delete modules from JSON.  `spawn_agent` gains
+  `mode` ("off" / "producer" / "dj" / "mc") and `tts` fields;
+  mode=mc auto-wires a NeuTts module and a control cable.
+- **POST /api/style** — set active style + propagate to
+  unlocked agents (fixes prior-session style bleed).
+- **parse_module_kind** moved to `state/rack_scope.rs`, shared
+  between HTTP API and LLM rack path.
+- **AmenSampler panel redesign** — 3×3 module, grouped knobs,
+  square anchor cells, slice wheel with forward/reverse hub
+  glyph, waveform placeholder reserves space so loading
+  doesn't jitter the layout.
+- **GranularTexture** module 3×1 → 3×2 to fit the live ring
+  viz.
+- **AN1X panel padding** — F.ENV and A.ENV ADSR visualisers
+  wrapped in (8, 6) inner-margin frames.
+
+### Demo scenarios
+
+- **D&B style-dnb.sh** rewritten — 10 scenes, amen chopping,
+  AN1X as drone pad not lead, bass as reese, MC scene via API
+  that actually plays through NeuTTS (server kept alive).
+- **record-demo.sh** reorder — app launches before TTS pre-gen
+  so llama-server warms concurrently; `wait_for_llm` before
+  starting capture so clips don't begin with dead air.
+- **set_style / reset_all helpers** in demo/lib.sh prevent
+  prior-session style bleed.
+
+### Log + prompt polish
+
+- **► marker** on MC lines (replaces ambiguous ◆).
+- **Kit A / Kit B ignore rule** — the log's Huth note colorizer
+  skips bare letters preceded by "kit" / "pad" / "part" /
+  "bank" / "slot".  Prevents "Kit A" being painted as a note.
+- **Seed pattern length** — prompt now reports the seed's
+  actual length dynamically (was hardcoded "16-step").
+
+### Ops / release
+
+- **v0.7.4 shipped** — 36 commits ago; CI bundles release zips
+  as `impulse-instruct-vX.Y.Z-{linux,windows}-x86_64.zip` with
+  end-user start scripts.
+- **`scripts/download-models.{sh,bat}`** at release-zip root
+  (no longer in scripts/ subdir).  Manual-download path
+  primary; URL fallback when CLI tools missing.
+- **`/samples/amen/` and `/samples/textures/`** directories
+  tracked via .gitkeep; contents gitignored.  `samples/
+  README.md` points at archive.org + freesound.
+
+---
+
 ## v0.7.3 additions (23 commits since v0.7.2)
 
 ### LLM control flow

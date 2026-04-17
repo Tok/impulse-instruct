@@ -135,6 +135,84 @@ pub(super) fn apply_bass_update(
     {
         s.bass_voices[voice_idx].enabled = v;
     }
+    // ── ADSR + PWM (101-style shaping) ───────────────────────────────────
+    let bp = format!("{}.amp_attack", prefix);
+    let v = s.bass_voices[voice_idx].synth.amp_attack;
+    s.bass_voices[voice_idx].synth.amp_attack = unlocked_f32(v, b, "amp_attack", &bp, locked);
+    let bp = format!("{}.amp_sustain", prefix);
+    let v = s.bass_voices[voice_idx].synth.amp_sustain;
+    s.bass_voices[voice_idx].synth.amp_sustain = unlocked_f32(v, b, "amp_sustain", &bp, locked);
+    let bp = format!("{}.amp_release", prefix);
+    let v = s.bass_voices[voice_idx].synth.amp_release;
+    s.bass_voices[voice_idx].synth.amp_release = unlocked_f32(v, b, "amp_release", &bp, locked);
+    let bp = format!("{}.filter_attack", prefix);
+    let v = s.bass_voices[voice_idx].synth.filter_attack;
+    s.bass_voices[voice_idx].synth.filter_attack = unlocked_f32(v, b, "filter_attack", &bp, locked);
+    let bp = format!("{}.filter_sustain", prefix);
+    let v = s.bass_voices[voice_idx].synth.filter_sustain;
+    s.bass_voices[voice_idx].synth.filter_sustain =
+        unlocked_f32(v, b, "filter_sustain", &bp, locked);
+    let bp = format!("{}.filter_release", prefix);
+    let v = s.bass_voices[voice_idx].synth.filter_release;
+    s.bass_voices[voice_idx].synth.filter_release =
+        unlocked_f32(v, b, "filter_release", &bp, locked);
+    let bp = format!("{}.pulse_width", prefix);
+    if !locked.contains(&bp)
+        && let Some(v) = b.get("pulse_width").and_then(|v| v.as_f64())
+    {
+        s.bass_voices[voice_idx].synth.pulse_width = (v as f32).clamp(0.05, 0.95);
+    }
+
+    // ── Per-voice LFO (101-style) ────────────────────────────────────────
+    // "lfo_target": "off" | "pitch" | "pwm" | "cutoff" | "amp"
+    let bp = format!("{}.lfo_target", prefix);
+    if !locked.contains(&bp)
+        && let Some(t) = b.get("lfo_target").and_then(|v| v.as_str())
+    {
+        use crate::state::BassLfoTarget;
+        s.bass_voices[voice_idx].synth.lfo_target = match t.to_ascii_lowercase().as_str() {
+            "pitch" => BassLfoTarget::Pitch,
+            "pwm" | "pulse_width" | "pulse" => BassLfoTarget::PulseWidth,
+            "cutoff" | "filter" | "filter_cutoff" => BassLfoTarget::FilterCutoff,
+            "amp" | "amplitude" | "tremolo" => BassLfoTarget::Amplitude,
+            _ => BassLfoTarget::Off,
+        };
+    }
+    let bp = format!("{}.lfo_rate", prefix);
+    let v = s.bass_voices[voice_idx].synth.lfo_rate;
+    s.bass_voices[voice_idx].synth.lfo_rate = unlocked_f32(v, b, "lfo_rate", &bp, locked);
+    let bp = format!("{}.lfo_depth", prefix);
+    let v = s.bass_voices[voice_idx].synth.lfo_depth;
+    s.bass_voices[voice_idx].synth.lfo_depth = unlocked_f32(v, b, "lfo_depth", &bp, locked);
+    let bp = format!("{}.lfo_delay", prefix);
+    let v = s.bass_voices[voice_idx].synth.lfo_delay;
+    s.bass_voices[voice_idx].synth.lfo_delay = unlocked_f32(v, b, "lfo_delay", &bp, locked);
+    // "lfo_waveform": "sine" | "triangle" | "saw" | "inv_saw" | "square"
+    let bp = format!("{}.lfo_waveform", prefix);
+    if !locked.contains(&bp)
+        && let Some(w) = b.get("lfo_waveform").and_then(|v| v.as_str())
+    {
+        use crate::state::LfoWaveform;
+        s.bass_voices[voice_idx].synth.lfo_waveform = match w.to_ascii_lowercase().as_str() {
+            "triangle" | "tri" => LfoWaveform::Triangle,
+            "saw" => LfoWaveform::Saw,
+            "inv_saw" | "invsaw" | "ramp_down" => LfoWaveform::InvSaw,
+            "square" | "pulse" => LfoWaveform::Square,
+            _ => LfoWaveform::Sine,
+        };
+    }
+    let bp = format!("{}.lfo_bpm_sync", prefix);
+    if !locked.contains(&bp)
+        && let Some(v) = b.get("lfo_bpm_sync").and_then(|v| v.as_bool())
+    {
+        s.bass_voices[voice_idx].synth.lfo_bpm_sync = v;
+    }
+    let bp = format!("{}.lfo_sync_beats", prefix);
+    if !locked.contains(&bp)
+        && let Some(v) = b.get("lfo_sync_beats").and_then(|v| v.as_f64())
+    {
+        s.bass_voices[voice_idx].synth.lfo_sync_beats = (v as f32).clamp(0.03125, 16.0);
+    }
 }
 
 /// Apply hoover voice fields from an LLM JSON update object.
@@ -495,6 +573,9 @@ pub(super) fn apply_fx_update(
         "fx.autotune_amount"
     );
     u!(s.fx.autotune_mix, "autotune_mix", "fx.autotune_mix");
+    u!(s.fx.fx_pan_pos, "fx_pan_pos", "fx.fx_pan_pos");
+    u!(s.fx.fx_pan_width, "fx_pan_width", "fx.fx_pan_width");
+    u!(s.fx.fx_pan_rate, "fx_pan_rate", "fx.fx_pan_rate");
     u!(s.fx.master_volume, "master_volume", "fx.master_volume");
     u!(
         s.fx.xmod_bass_to_an1x_pitch,

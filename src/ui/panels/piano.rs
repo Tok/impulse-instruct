@@ -406,6 +406,7 @@ pub fn draw_piano(app: &mut ImpulseApp, ui: &mut egui::Ui, ctx: &egui::Context) 
                     accent: false,
                     slide: false,
                     gate_samples: 22050,
+                    pan: 0.0,
                 }));
             // Live record: write note into the bass pattern at the current step.
             let (live_record, running, current_step) = {

@@ -1,0 +1,225 @@
+// ─── state/module_kind.rs ─────────────────────────────────────────────────────
+// `ModuleKind` + `Zone` — the enumeration of every instantiable rack module
+// type and the vertical layout zones.  Extracted from rack.rs to keep that
+// file under the 1000-line cap.  Layout/label/grid metadata is exhaustive per
+// variant here; adding a new kind forces every match to be updated.
+
+use serde::{Deserialize, Serialize};
+
+// ─── Module kinds ─────────────────────────────────────────────────────────────
+
+/// Every instantiable module type in the rack.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum ModuleKind {
+    // ── Voice modules ─────────────────────────────────────────────────────────
+    AcidBass,
+    DrumKit808,
+    DrumKit909,
+    HooverLead,
+    An1xVoice,
+    AmenSampler,
+    NoiseVoice,
+    GranularTexture,
+    /// Dedicated hardcore-style kick voice — distinct from the 808/909 kicks.
+    GabberKick,
+    // ── TTS voice module (NeuTTS Air) ───────────────────────────────────────
+    #[serde(alias = "EspeakNgTts", alias = "CoquiTts")]
+    NeuTts,
+    // ── Sequencer ─────────────────────────────────────────────────────────────
+    /// Main step sequencer — drives all voice modules.
+    StepSequencer,
+    // ── FX modules ────────────────────────────────────────────────────────────
+    FxReverb,
+    FxDelay,
+    FxChorus,
+    FxPhaser,
+    FxRingMod,
+    FxWaveshaper,
+    FxBitcrush,
+    FxEq,
+    FxCompressor,
+    FxTapeSat,
+    FxDrive,
+    FxAutotune,
+    FxPan,
+    // ── Analysis ──────────────────────────────────────────────────────────────
+    SpectrumAnalyzer,
+    StereoMeter,
+    ActivityTimeline,
+    // ── Modulation ────────────────────────────────────────────────────────────
+    LfoModule,
+    LlmAgent,
+    // ── LLM console (singleton, Global zone) ──────────────────────────────
+    LlmConsole,
+    //── Utility ───────────────────────────────────────────────────────────────
+    MasterOutput,
+}
+
+impl ModuleKind {
+    /// Short display label shown in the module card title bar.
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::AcidBass => "BASS SYNTH",
+            Self::DrumKit808 => "808 KIT",
+            Self::DrumKit909 => "909 KIT",
+            Self::HooverLead => "HOOVER",
+            Self::An1xVoice => "AN1X",
+            Self::AmenSampler => "AMEN",
+            Self::NoiseVoice => "NOISE",
+            Self::GranularTexture => "GRANULAR",
+            Self::GabberKick => "GABBER KICK",
+            Self::NeuTts => "TTS VOICE",
+            Self::StepSequencer => "SEQUENCER",
+            Self::FxReverb => "REVERB",
+            Self::FxDelay => "DELAY",
+            Self::FxChorus => "CHORUS",
+            Self::FxPhaser => "PHASER",
+            Self::FxRingMod => "RING MOD",
+            Self::FxWaveshaper => "WAVESHAPER",
+            Self::FxBitcrush => "BITCRUSH",
+            Self::FxEq => "EQ",
+            Self::FxCompressor => "COMPRESSOR",
+            Self::FxTapeSat => "TAPE SAT",
+            Self::FxDrive => "DRIVE",
+            Self::FxAutotune => "AUTOTUNE",
+            Self::FxPan => "PAN",
+            Self::SpectrumAnalyzer => "SPECTRUM",
+            Self::StereoMeter => "STEREO METER",
+            Self::ActivityTimeline => "TIMELINE",
+            Self::LfoModule => "LFO",
+            Self::LlmAgent => "LLM AGENT",
+            Self::LlmConsole => "LLM CONSOLE",
+            Self::MasterOutput => "MASTER",
+        }
+    }
+
+    /// Grid size in (columns, rows) for the 12-column rack grid.
+    /// Full-width modules use `grid_cols` for width; all others are fixed.
+    /// Height is enforced as a minimum — content taller than this grows naturally.
+    pub fn grid_size(self, grid_cols: u8) -> (u8, u8) {
+        match self {
+            //                                     W     H
+            Self::StepSequencer => (grid_cols, 2),
+            Self::LlmConsole => (grid_cols, 1),
+            Self::MasterOutput => (grid_cols, 1),
+            Self::AcidBass => (4, 7),
+            Self::DrumKit808 => (3, 3),
+            Self::DrumKit909 => (4, 3),
+            Self::HooverLead => (4, 2),
+            Self::An1xVoice => (6, 6),
+            Self::AmenSampler => (3, 3),
+            Self::NoiseVoice => (2, 1),
+            Self::GranularTexture => (3, 2),
+            Self::GabberKick => (3, 2),
+            Self::LlmAgent => (3, 2),
+            Self::NeuTts => (2, 3),
+            Self::SpectrumAnalyzer => (4, 2),
+            Self::ActivityTimeline => (4, 2),
+            Self::StereoMeter => (2, 1),
+            Self::LfoModule => (2, 2),
+            // FX modules — exhaustive so new variants cause a compile error
+            Self::FxReverb
+            | Self::FxDelay
+            | Self::FxChorus
+            | Self::FxPhaser
+            | Self::FxRingMod
+            | Self::FxWaveshaper
+            | Self::FxBitcrush
+            | Self::FxEq
+            | Self::FxCompressor
+            | Self::FxTapeSat
+            | Self::FxDrive
+            | Self::FxAutotune
+            | Self::FxPan => (2, 1),
+        }
+    }
+
+    /// Which zone this module belongs to by default.
+    pub fn default_zone(self) -> Zone {
+        match self {
+            Self::LlmConsole | Self::LlmAgent => Zone::Ai,
+            Self::StepSequencer | Self::MasterOutput => Zone::Global,
+            Self::AcidBass
+            | Self::DrumKit808
+            | Self::DrumKit909
+            | Self::HooverLead
+            | Self::An1xVoice
+            | Self::AmenSampler
+            | Self::NoiseVoice
+            | Self::GranularTexture
+            | Self::NeuTts
+            | Self::GabberKick => Zone::Voice,
+            Self::FxReverb
+            | Self::FxDelay
+            | Self::FxChorus
+            | Self::FxPhaser
+            | Self::FxRingMod
+            | Self::FxWaveshaper
+            | Self::FxBitcrush
+            | Self::FxEq
+            | Self::FxCompressor
+            | Self::FxTapeSat
+            | Self::FxDrive
+            | Self::FxAutotune
+            | Self::FxPan
+            | Self::SpectrumAnalyzer
+            | Self::StereoMeter
+            | Self::ActivityTimeline
+            | Self::LfoModule => Zone::FxMod,
+        }
+    }
+
+    /// Whether this module type may have more than one instance in the rack.
+    pub fn allows_multiple(self) -> bool {
+        matches!(
+            self,
+            Self::FxReverb
+                | Self::FxDelay
+                | Self::FxChorus
+                | Self::FxPhaser
+                | Self::FxRingMod
+                | Self::FxWaveshaper
+                | Self::FxBitcrush
+                | Self::FxEq
+                | Self::FxCompressor
+                | Self::FxTapeSat
+                | Self::FxDrive
+                | Self::FxAutotune
+                | Self::FxPan
+                | Self::LfoModule
+                | Self::LlmAgent
+        )
+    }
+}
+
+// ─── Zone ────────────────────────────────────────────────────────────────────
+
+/// Fixed grid column count for the rack layout.
+pub const GRID_COLS: u8 = 12;
+
+/// The vertical zone a module lives in.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum Zone {
+    /// LLM console + agents.
+    Ai,
+    /// Clock/sequencer, master output — the main audio strip.
+    /// Labelled "MAIN AUDIO" in the UI; the enum name is kept for serde
+    /// backward compat with pre-split sessions.
+    Global,
+    /// Voice / instrument modules.
+    Voice,
+    /// FX processors and modulation sources.
+    FxMod,
+}
+
+impl Zone {
+    /// Lowercase scroll-target name (`"ai"`, `"global"`, `"voice"`, `"fxmod"`).
+    pub fn scroll_name(self) -> &'static str {
+        match self {
+            Zone::Ai => "ai",
+            Zone::Global => "global",
+            Zone::Voice => "voice",
+            Zone::FxMod => "fxmod",
+        }
+    }
+}

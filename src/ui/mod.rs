@@ -1,10 +1,14 @@
 // ─── ui/mod.rs — Main egui application ───────────────────────────────────────
+pub mod agent_card;
+pub mod agent_pills;
 mod api_log_handler;
 mod flip;
+pub mod fx_dir;
 mod header;
 mod llm_strip;
 mod midi_handler;
 pub mod module_card;
+pub mod module_card_mod;
 mod note;
 pub mod panels;
 mod rack_ai;
@@ -14,16 +18,16 @@ pub(crate) mod rack_content;
 mod rack_scroll;
 mod rack_toolbar;
 mod scope_footer;
+pub mod style_rack;
 pub mod theme;
 mod ui_helpers;
 mod util;
 pub mod widgets;
-pub(crate) use util::scan_models;
-use util::webbrowser_open;
+pub(crate) use note::{ansi_colorize_notes, note_freq_label, note_name};
+pub(crate) use util::{scan_models, webbrowser_open};
 mod prefs_controls;
 mod windows;
 mod wizard;
-pub(crate) use note::{ansi_colorize_notes, note_freq_label, note_name};
 
 /// Convert a dot-path + float value into a nested JSON object.
 /// "bass.cutoff", 0.4  →  {"bass": {"cutoff": 0.4}}
@@ -57,8 +61,7 @@ pub(crate) const SEQ_LABEL_H: f32 = 22.0;
 pub(crate) const SEQ_VOL_W: f32 = 330.0;
 pub(crate) const SEQ_VOL_H: f32 = 14.0;
 
-/// Derives BPM from incoming MIDI clock pulses (24 per quarter note).
-/// Averages the last 8 inter-pulse intervals for stability.
+/// BPM tracker — averages last 8 inter-pulse intervals from MIDI clock (24 PPQN).
 struct MidiClockTracker {
     last: Option<std::time::Instant>,
     intervals: [f64; 8],
@@ -76,7 +79,6 @@ impl MidiClockTracker {
         }
     }
 
-    /// Call on each 0xF8 pulse. Returns computed BPM if stable, else None.
     fn on_clock(&mut self) -> Option<f32> {
         let now = std::time::Instant::now();
         if let Some(last) = self.last {
@@ -108,41 +110,38 @@ impl MidiClockTracker {
 mod undo;
 pub(crate) use api_log_handler::{ActivityAction, ActivityEntry};
 use undo::StateHistory;
-
 pub struct ImpulseApp {
     state: Arc<RwLock<AppState>>,
     audio_tx: rtrb::Producer<AudioCommand>,
+    pub(crate) tts_tx: crate::audio::TtsSink,
     scope_rx: rtrb::Consumer<f32>,
     scope_buf: Vec<f32>,
     scope_history: std::collections::VecDeque<Vec<f32>>,
-    /// For smooth event stream: last observed current_step + time it changed.
-    last_seq_step: usize,
+    last_seq_step: usize, // smooth event stream
     session_start: std::time::Instant,
     last_step_time: f64,
     capture_rx: rtrb::Consumer<f32>,
     dsp_load_rx: rtrb::Consumer<f32>,
     dsp_load_buf: Vec<f32>,
-    /// Most-recent audio analysis snapshot. Auto-updated every ~2s.
-    audio_analysis: Option<crate::audio::analysis::AudioAnalysis>,
-    /// Last time we ran auto-analysis (seconds since epoch, from ctx.input.time).
+    pub(crate) amen_ui: panels::amen_viz::AmenUiState,
+    pub(crate) neutts_online: bool,
+    pub(crate) granular_capture_rx: rtrb::Consumer<f32>,
+    pub(crate) granular_tap: Vec<f32>, // ring buffer, ~3s master output for CAPTURE
+    pub(crate) granular_tap_head: usize,
+    audio_analysis: Option<crate::audio::analysis::AudioAnalysis>, // ~2s auto-refresh
     last_analysis_time: f64,
-    /// True when the most-recently-sent prompt came from the Listen button —
-    /// used to label the LLM response as "LISTEN →" in the log.
-    listen_pending: bool,
+    listen_pending: bool, // LISTEN button flag — labels next LLM resp "LISTEN →"
     llm_tx: Sender<LlmInput>,
     llm_rx: Receiver<LlmOutput>,
     midi_rx: Receiver<MidiEvent>,
     midi_port: Option<String>,
     pressed_notes: std::collections::HashSet<u8>,
-    /// Note currently held down by the mouse (separate from MIDI-held notes).
-    piano_mouse_note: Option<u8>,
+    piano_mouse_note: Option<u8>, // mouse-held note, separate from MIDI
     prompt_input: String,
     log_text: String,
     api_port: Option<u16>,
-    /// Lock-free receiver for API→UI log messages (sender is in ApiState).
-    api_log_rx: crossbeam_channel::Receiver<String>,
-    /// UI log dedup: last line content and repeat count.
-    last_log_line: String,
+    api_log_rx: crossbeam_channel::Receiver<String>, // from ApiState log sender
+    last_log_line: String,                           // dedup
     log_repeat_count: u32,
     show_about: bool,
     pub(crate) activity_log: Vec<ActivityEntry>,
@@ -175,8 +174,7 @@ pub struct ImpulseApp {
     pub(crate) cable_drag: Option<rack_canvas::CableDrag>,
     pub(crate) show_cables: bool,
     pub(crate) rack_flipped: bool,
-    /// Counts flips-to-back to alternate scroll target (master → agent → master …)
-    pub(crate) flip_to_back_count: u32,
+    pub(crate) flip_to_back_count: u32, // flips-to-back count, cycles scroll target
     pub(crate) ctrl_locked: bool,
     pub(crate) show_shortcuts: bool,
     pub(crate) add_menu_zone: Option<crate::state::Zone>,
@@ -184,12 +182,9 @@ pub struct ImpulseApp {
     pub(crate) module_drag: Option<rack_canvas::ModuleDrag>,
     // Auto-save: set when rack or session-worthy state changes; saved next frame.
     pub(crate) session_dirty: bool,
-    /// Zone Y offsets (relative to scroll content top), updated each frame by rack_canvas.
-    pub(crate) zone_y: [f32; 4], // [ai, global, voice, fxmod]
-    /// Focused module kind — highlighted in the rack (set by API scroll or click).
-    pub(crate) focused_module: Option<crate::state::ModuleKind>,
-    /// Instant when the focused module was set (for shine animation).
-    pub(crate) focus_time: std::time::Instant,
+    pub(crate) zone_y: [f32; 4], // [ai, global, voice, fxmod] rack scroll offsets
+    pub(crate) focused_module: Option<crate::state::ModuleKind>, // rack highlight target
+    pub(crate) focus_time: std::time::Instant, // shine-animation timestamp
     last_saved_rack_sig: (usize, usize),
     last_save_time: std::time::Instant,
     pub(crate) module_scales: std::collections::HashMap<crate::state::ModuleKind, f32>,
@@ -215,6 +210,8 @@ pub struct AudioChannels {
     pub capture_rx: rtrb::Consumer<f32>,
     pub dsp_load_rx: rtrb::Consumer<f32>,
     pub stereo_rx: rtrb::Consumer<f32>,
+    pub granular_capture_rx: rtrb::Consumer<f32>,
+    pub tts_tx: crate::audio::TtsSink,
 }
 
 impl ImpulseApp {
@@ -270,18 +267,18 @@ impl ImpulseApp {
             let _ = audio.params_tx.push(AudioCommand::LoadSampler(data));
         }
 
-        let mut log_text = "[Impulse Instruct ready]\n".to_string();
-        if let Some(ref port) = midi_port {
-            log_text.push_str(&format!("[MIDI: {}]\n", port));
-        } else {
-            log_text.push_str("[MIDI: no device found]\n");
-        }
-        if let Some(port) = api_port {
-            log_text.push_str(&format!("[HTTP API active → http://localhost:{}]\n", port));
-        }
+        let midi_line = midi_port
+            .as_ref()
+            .map(|p| format!("[MIDI: {}]\n", p))
+            .unwrap_or_else(|| "[MIDI: no device found]\n".into());
+        let api_line = api_port
+            .map(|p| format!("[HTTP API active → http://localhost:{}]\n", p))
+            .unwrap_or_default();
+        let log_text = format!("[Impulse Instruct ready]\n{}{}", midi_line, api_line);
         Self {
             state,
             audio_tx: audio.params_tx,
+            tts_tx: audio.tts_tx,
             scope_rx: audio.scope_rx,
             scope_buf: Vec::new(),
             scope_history: std::collections::VecDeque::with_capacity(12),
@@ -291,6 +288,11 @@ impl ImpulseApp {
             capture_rx: audio.capture_rx,
             dsp_load_rx: audio.dsp_load_rx,
             dsp_load_buf: Vec::with_capacity(64),
+            amen_ui: Default::default(),
+            neutts_online: false,
+            granular_capture_rx: audio.granular_capture_rx,
+            granular_tap: vec![0.0; 44_100 * 3], // 3s at 44.1k
+            granular_tap_head: 0,
             audio_analysis: None,
             last_analysis_time: 0.0,
             listen_pending: false,
@@ -446,9 +448,9 @@ impl ImpulseApp {
                     persona_name.clone()
                 };
                 let line = if out.thinking.as_ref().is_some_and(|t| !t.is_empty()) {
-                    format!("{} -> {} [think]\n", persona, display)
+                    format!("{}: {} [think]\n", persona, display)
                 } else {
-                    format!("{} -> {}\n", persona, display)
+                    format!("{}: {}\n", persona, display)
                 };
                 log::info!("{}", ansi_colorize_notes(line.trim_end()));
                 self.log_text.push_str(&line);
@@ -466,16 +468,15 @@ impl ImpulseApp {
                 if self.activity_log.len() > 500 {
                     self.activity_log.drain(..100);
                 }
-                // MC line: shown separately with a marker so it's visually distinct
                 if let Some(ref mc) = out.mc_line {
-                    self.log_text.push_str(&format!("◆ {}\n", mc));
+                    self.log_text.push_str(&format!("► {}\n", mc));
+                    log::info!("► {}", mc);
                 }
             }
             // Jam re-triggers unless heat is at zero (model is parked).
             if out.text == "[jam_cycle_done]" && self.state.read().llm.heat > 0.0 {
                 {
-                    // Advance ramps selectively — do NOT replace the full state,
-                    // as that overwrites rack/agent changes made by the API.
+                    // Advance ramps selectively (don't full-replace state — would overwrite API/rack edits).
                     let cur = self.state.read().clone();
                     let next = crate::state::jam_tools::advance_ramps(cur);
                     let mut s = self.state.write();
@@ -584,6 +585,8 @@ impl ImpulseApp {
                         persona,
                         scope,
                         model,
+                        mode,
+                        tts,
                     } => {
                         let s = self.state.read();
                         let ok = s.llm.agent_autonomy
@@ -617,16 +620,24 @@ impl ImpulseApp {
                         if ok && vram_ok {
                             self.push_history();
                             let snapshot = self.state.read().clone();
-                            let (new_state, _id) = crate::state::spawn_agent(
+                            let (spawned, agent_id) = crate::state::spawn_agent(
                                 snapshot,
                                 persona,
                                 scope,
                                 crate::state::AgentRole::Producer,
                                 model.clone(),
                             );
+                            let new_state = crate::state::apply_agent_mode_and_tts(
+                                spawned,
+                                agent_id,
+                                mode.as_deref(),
+                                *tts,
+                            );
                             *self.state.write() = new_state;
-                            self.log_text
-                                .push_str(&format!("Agent spawned: {} ({:?})\n", persona, scope));
+                            let tts_tag = if *tts { " + TTS" } else { "" };
+                            self.log_text.push_str(&format!(
+                                "Agent spawned: {persona} ({scope:?}){tts_tag}\n"
+                            ));
                             self.session_dirty = true;
                         }
                     }

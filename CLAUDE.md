@@ -134,11 +134,20 @@ POST /api/sequencer/stop
 POST /api/scroll         { "target": "voice" }  (global/voice/fxmod/bass/808/fx/…)
 POST /api/scroll         { "target": "bass", "collapse_others": true }  focus mode
 POST /api/preset         { "name": "Crew" }     (Solo/Duo/Swarm/Crew/Voices/Lite)
+POST /api/style          { "id": "drum_and_bass" }  set global style + propagate to agents (id=null clears)
+POST /api/randomize                              random style + auto-rack + LLM "generate from scratch"
+POST /api/amen           { "path": "samples/amen/foo.wav" }  load a specific amen sample
+POST /api/amen           { "random": true }     load a random sample from samples/amen/
+POST /api/granular       { "path": "samples/textures/pad.wav" }  load a granular texture
+POST /api/granular       { "random": true }     load a random sample from samples/textures/
 POST /api/flip           { "show_back": true }   (true=cables, false=knobs)
 POST /api/rack/reset                              strip to sequencer + master + console
 POST /api/rack/add       { "kind": "808" }        add module, returns { "id": N }
 POST /api/rack/agent     { "persona": "BASS", "scope": ["bass"], "model": "bonsai", "mode": "mc", "tts": true }
 POST /api/rack/cable     { "from": 1, "to": 5 }  connect modules (default: control cable)
+POST /api/rack/mod_cable { "from": 7, "to": 1, "slot": 0, "depth": 0.5 }  LFO→Mod-In jack
+POST /api/rack/mod_target{ "module": 1, "slot": 0, "targets": ["BassPan", "BassCutoff"] }
+POST /api/rack/mod_depth { "module": 1, "slot": 0, "depth": 0.5 }  per-jack depth 0..1
 POST /api/rack/remove    { "id": 5 }              remove module + its cables
 POST /api/rack/collapse  { "action": "all" }      all/none/global/voice/fxmod
 ```

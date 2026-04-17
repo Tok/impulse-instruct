@@ -711,6 +711,55 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                     }
                 });
             }
+
+            // PAN row — drag horizontally to set, right-click to centre.
+            for sub in 0..sub_rows {
+                ui.horizontal(|ui| {
+                    fixed_space(ui, 20.0);
+                    if sub == 0 {
+                        fixed_label(ui, SEQ_LABEL_W - 20.0, row_h, "PAN", theme::IRON, 7.0);
+                        let reset_w = 14.0;
+                        let resp = ui
+                            .add_sized(
+                                [reset_w, row_h],
+                                egui::Button::new(
+                                    egui::RichText::new("○")
+                                        .monospace()
+                                        .size(9.0)
+                                        .color(theme::IRON),
+                                )
+                                .fill(egui::Color32::TRANSPARENT),
+                            )
+                            .on_hover_text("Reset all step pans to centre");
+                        if resp.clicked() {
+                            let mut s = app.state.write();
+                            for step in s.sequencer.bass_pattern.iter_mut() {
+                                step.pan = 0.0;
+                            }
+                        }
+                        let item_x = ui.spacing().item_spacing.x;
+                        fixed_space(ui, SEQ_VOL_W + 18.0 - reset_w - item_x);
+                    } else {
+                        fixed_space(ui, SEQ_LABEL_W - 20.0);
+                        fixed_space(ui, SEQ_VOL_W + 18.0);
+                    }
+                    if row_spacer > 0.0 {
+                        ui.add_space(row_spacer);
+                    }
+                    let base = sub * STEPS_PER_ROW;
+                    for j in 0..STEPS_PER_ROW {
+                        let i = base + j;
+                        if i >= seq_steps {
+                            break;
+                        }
+                        let abs = page_start + i;
+                        beat_div(ui, j, abs);
+                        let enabled = abs < bass_steps;
+                        let pan = bass_page.get(i).map(|s| s.pan).unwrap_or(0.0);
+                        super::sequencer_chain::pan_cell(ui, app, abs, pan, enabled, pad_px, row_h);
+                    }
+                });
+            }
             ui.spacing_mut().item_spacing.y = prev_spacing;
         } // end if rack_has_bass
 
@@ -934,4 +983,10 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             time_sig_num,
         );
     });
+
+    // Pre-echo row lives at the bottom of the panel below the lane
+    // ScrollArea.  The module is sized (cols, 3) specifically so this
+    // row has room to sit without being clipped by the scroll area's
+    // greedy vertical fill.
+    super::sequencer_preecho::draw_preecho_row(app, ui);
 }

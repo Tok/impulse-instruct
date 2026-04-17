@@ -3,19 +3,26 @@
 mod bass303;
 mod dsp_util;
 mod fx;
+mod gabber_kick;
+mod mod_apply;
 mod params;
+mod rev_tap;
 mod samplers;
 mod voices;
 use bass303::Bass303;
 pub use dsp_util::midi_to_hz;
 use dsp_util::*;
 use fx::*;
+use gabber_kick::GabberKick;
+use mod_apply::apply_mod_target;
 pub use params::AudioParams;
 use samplers::*;
 use voices::*;
 
 use crate::sequencer::TriggerEvent;
 use crate::state::{DrumVoice, FxPlan, FxStep, ModuleKind};
+
+use rev_tap::{REV_BUF_LEN, rev_tap_len_for_quant, step_rev_tap};
 
 // ─── Full DSP state ───────────────────────────────────────────────────────────
 
@@ -35,6 +42,7 @@ pub struct DspState {
     hihat_open909: HiHat,
     clap909: Clap,
     rim909: Snare,
+    gabber_kick: GabberKick,
     // FX
     reverb: Reverb,
     delay: DelayLine,
@@ -61,7 +69,7 @@ pub struct DspState {
     free_eg_done: bool, // true after one-shot completes
     prev_running: bool,
     // Per-voice velocity (set on trigger, applied to voice output)
-    drum_velocity: [f32; 14],
+    drum_velocity: [f32; 15],
     // Current params
     params: AudioParams,
     sample_rate: f32,
@@ -75,8 +83,30 @@ pub struct DspState {
     tts_consumer: rtrb::Consumer<f32>,
     // Duck envelope: smoothly attenuates synth when TTS is active.
     tts_duck: f32,
+    /// Per-step pan latched from the most recent BassTrigger event.
+    /// 0.0 = no override (voice's static pan_303 wins); non-zero = use this
+    /// instead.  Persists until the next trigger updates it.
+    bass_step_pan: f32,
+    /// Reverb / Delay reverse-tap buffers — separate per-FX so each can
+    /// independently switch FWD / REV / MIRROR without interfering.  1 s
+    /// circular buffer of dry input feeding each FX; the read tap walks
+    /// backwards every sample, looping every REV_BUF_LEN samples (a
+    /// continuously-rewinding tape).  Allocated on the heap once at
+    /// DspState::new (no per-block allocations).
+    rev_buf_reverb: Vec<f32>,
+    rev_head_reverb: usize,
+    rev_play_reverb: usize,
+    rev_buf_delay: Vec<f32>,
+    rev_head_delay: usize,
+    rev_play_delay: usize,
     duck_attack: f32,
     duck_release: f32,
+    /// FxPan LFO phase (0..1) and last-sample side contribution.  The
+    /// phase advances every time the Pan FxStep runs; `fx_pan_side` is
+    /// read in the master stereo mix and decayed back to 0 when the
+    /// step is inactive.
+    fx_pan_phase: f32,
+    fx_pan_side: f32,
 }
 
 impl DspState {
@@ -103,6 +133,7 @@ impl DspState {
             hihat_open909: HiHat::new(0xdddd),
             clap909: Clap::new(0xeeee),
             rim909: Snare::new(0xffff),
+            gabber_kick: GabberKick::new(0xab12),
             reverb: Reverb::new(),
             delay: DelayLine::new(),
             chorus: Chorus::new(),
@@ -124,7 +155,7 @@ impl DspState {
             lfo_noise: NoiseGen::new(0xCAFE_BABE),
             free_eg_phase: 0.0,
             free_eg_done: false,
-            drum_velocity: [1.0; 14],
+            drum_velocity: [1.0; 15],
             prev_running: false,
             params: p,
             sample_rate,
@@ -133,8 +164,19 @@ impl DspState {
             sidechain_env: 0.0,
             tts_consumer,
             tts_duck: 1.0,
+            bass_step_pan: 0.0,
+            // 1 s buffers @ 44.1 kHz — enough for musically useful reverse
+            // character without massive memory.  Allocated once on the heap.
+            rev_buf_reverb: vec![0.0; REV_BUF_LEN],
+            rev_head_reverb: 0,
+            rev_play_reverb: 0,
+            rev_buf_delay: vec![0.0; REV_BUF_LEN],
+            rev_head_delay: 0,
+            rev_play_delay: 0,
             duck_attack: 1.0 - (-8.0_f32 / sample_rate).exp(),
             duck_release: 1.0 - (-2.0_f32 / sample_rate).exp(),
+            fx_pan_phase: 0.0,
+            fx_pan_side: 0.0,
         }
     }
 
@@ -165,11 +207,22 @@ impl DspState {
             }
             FxStep::Reverb => {
                 if p.reverb_mix > 0.001 || p.reverb_freeze {
-                    let wet =
-                        self.reverb
-                            .process(sig, p.reverb_size, p.reverb_damp, p.reverb_freeze);
-                    if p.reverb_freeze {
-                        wet // freeze: output only the frozen tail
+                    let rev_in = step_rev_tap(
+                        &mut self.rev_buf_reverb,
+                        &mut self.rev_head_reverb,
+                        &mut self.rev_play_reverb,
+                        sig,
+                        rev_tap_len_for_quant(p.reverb_rev_quant, sr, p.sequencer_bpm),
+                    );
+                    let r = &mut self.reverb;
+                    let (sz, dp, fz) = (p.reverb_size, p.reverb_damp, p.reverb_freeze);
+                    let wet = match p.reverb_dir {
+                        1 => r.process(rev_in, sz, dp, fz),
+                        2 => r.process(sig, sz, dp, fz) + r.process(rev_in, sz, dp, false) * 0.7,
+                        _ => r.process(sig, sz, dp, fz),
+                    };
+                    if fz {
+                        wet
                     } else {
                         sig * (1.0 - p.reverb_mix) + wet * p.reverb_mix * gate_env
                     }
@@ -178,14 +231,28 @@ impl DspState {
                 }
             }
             FxStep::Delay => {
-                let wet = self.delay.process_tape(
+                let rev_in = step_rev_tap(
+                    &mut self.rev_buf_delay,
+                    &mut self.rev_head_delay,
+                    &mut self.rev_play_delay,
                     sig,
+                    rev_tap_len_for_quant(p.delay_rev_quant, sr, p.sequencer_bpm),
+                );
+                let d = &mut self.delay;
+                let (ds, fb, wf, sat) = (
                     delay_samples,
                     p.delay_feedback,
                     p.delay_wow_flutter,
                     p.delay_saturation,
-                    sr,
                 );
+                let wet = match p.delay_dir {
+                    1 => d.process_tape(rev_in, ds, fb, wf, sat, sr),
+                    2 => {
+                        d.process_tape(sig, ds, fb, wf, sat, sr)
+                            + d.process_tape(rev_in, ds, fb, wf, sat, sr) * 0.7
+                    }
+                    _ => d.process_tape(sig, ds, fb, wf, sat, sr),
+                };
                 sig * (1.0 - p.delay_mix) + wet * p.delay_mix
             }
             FxStep::Bitcrush => {
@@ -253,6 +320,21 @@ impl DspState {
             FxStep::Autotune => self
                 .autotune
                 .process(sig, p.autotune_amount, p.autotune_mix),
+            FxStep::Pan => {
+                // Auto-pan — mono-in / mono-out FX that latches a per-sample
+                // side contribution into self.fx_pan_side for the master
+                // stage to mix into the stereo output.  Signal itself is
+                // passed through unchanged so chain order doesn't matter.
+                let rate_hz = 0.05 + p.fx_pan_rate * 7.95;
+                self.fx_pan_phase = (self.fx_pan_phase + rate_hz / sr).rem_euclid(1.0);
+                let lfo = (self.fx_pan_phase * std::f32::consts::TAU).sin();
+                let pan_mult = (p.fx_pan_pos + lfo * p.fx_pan_width).clamp(-1.0, 1.0);
+                // Side signal carries the same sign as pan_mult * sig — the
+                // master mix adds this to `side` so left = mid+side,
+                // right = mid-side produces a proper L/R swing.
+                self.fx_pan_side = sig * pan_mult * 0.5;
+                sig
+            }
         }
     }
 
@@ -290,7 +372,11 @@ impl DspState {
     pub fn handle_trigger(&mut self, event: &TriggerEvent) {
         use crate::sequencer::TriggerEvent::*;
         match event {
-            DrumTrigger { voice, velocity } => {
+            DrumTrigger {
+                voice,
+                velocity,
+                slice,
+            } => {
                 let in_rack = match voice {
                     DrumVoice::Kick808
                     | DrumVoice::Snare808
@@ -306,6 +392,7 @@ impl DspState {
                     | DrumVoice::Clap909
                     | DrumVoice::Rim909 => self.params.rack_drums909,
                     DrumVoice::Amen => self.params.rack_amen,
+                    DrumVoice::GabberKick => self.params.rack_gabber_kick,
                 };
                 if !in_rack {
                     return;
@@ -325,7 +412,22 @@ impl DspState {
                     DrumVoice::HihatOpen909 => self.hihat_open909.trigger(),
                     DrumVoice::Clap909 => self.clap909.trigger(),
                     DrumVoice::Rim909 => self.rim909.trigger(),
-                    DrumVoice::Amen => self.amen.trigger(),
+                    DrumVoice::Amen => self.amen.trigger(
+                        *slice,
+                        self.params.amen_slice_count,
+                        self.params.amen_start_offset,
+                        self.params.amen_end_offset,
+                        self.params.amen_reverse,
+                        self.params.amen_gate,
+                        self.params.amen_stutter,
+                        &self.params.amen_slice_positions,
+                        &self.params.amen_slice_pitches,
+                        &self.params.amen_slice_volumes,
+                        self.params.amen_bpm_stretch,
+                        self.params.amen_source_bpm,
+                        self.params.sequencer_bpm,
+                    ),
+                    DrumVoice::GabberKick => self.gabber_kick.trigger(),
                 }
             }
             BassTrigger {
@@ -334,9 +436,11 @@ impl DspState {
                 accent,
                 slide,
                 gate_samples: _,
+                pan,
             } => {
                 if self.params.rack_bass && *voice_idx < crate::state::MAX_BASS_VOICES {
                     self.bass[*voice_idx].trigger(*note, *accent, *slide, self.params.tuning);
+                    self.bass_step_pan = pan.clamp(-1.0, 1.0);
                 }
             }
             BassGateOff { voice_idx } => {
@@ -385,7 +489,14 @@ impl DspState {
         let mut p = p_base;
         for i in 0..4 {
             let lp = p_base.lfo[i];
-            if !lp.enabled {
+            // Run this slot if it's directly enabled OR a cable-routed mod
+            // sources from it — otherwise nothing depends on its phase.
+            let has_route = p_base
+                .mod_routes
+                .iter()
+                .take(p_base.mod_route_count as usize)
+                .any(|r| r.lfo_slot as usize == i);
+            if !lp.enabled && !has_route {
                 continue;
             }
             let rate_hz = 0.01 + lp.rate * 19.99;
@@ -416,25 +527,21 @@ impl DspState {
                 }
             };
 
-            let mod_val = lfo_val * lp.depth;
-            match lp.target {
-                1 => p.cutoff = (p.cutoff + mod_val).clamp(0.0, 1.0),
-                2 => p.resonance = (p.resonance + mod_val).clamp(0.0, 1.0),
-                3 => p.lfo_pitch_mod_st += mod_val * 12.0, // ±12 semitones at depth=1
-                4 => p.volume_303 = (p.volume_303 + mod_val).clamp(0.0, 1.5),
-                5 => p.reverb_mix = (p.reverb_mix + mod_val).clamp(0.0, 1.0),
-                6 => p.delay_time = (p.delay_time + mod_val * 0.5).clamp(0.0, 1.0),
-                7 => p.delay_feedback = (p.delay_feedback + mod_val * 0.5).clamp(0.0, 0.99),
-                8 => p.chorus_mix = (p.chorus_mix + mod_val).clamp(0.0, 1.0),
-                9 => p.chorus_rate = (p.chorus_rate + mod_val).clamp(0.0, 1.0),
-                10 => p.kick808_pitch = (p.kick808_pitch + mod_val * 0.5).clamp(0.0, 1.0),
-                11 => p.phaser_rate = (p.phaser_rate + mod_val).clamp(0.0, 1.0),
-                12 => p.phaser_depth = (p.phaser_depth + mod_val).clamp(0.0, 1.0),
-                13 => p.distortion_drive = (p.distortion_drive + mod_val * 0.5).clamp(0.0, 1.0),
-                14 => p.master_volume = (p.master_volume + mod_val * 0.3).clamp(0.0, 1.5),
-                15 => p.an1x_filter_cutoff = (p.an1x_filter_cutoff + mod_val).clamp(0.0, 1.0),
-                16 => {} // AN1X pitch: no direct pitch field in AudioParams yet
-                _ => {}
+            // Slot's built-in target only fires when the slot is enabled.
+            // Cable-routed mods always fire — that's the user's intent when
+            // they patched a cable from this slot.
+            if lp.enabled {
+                let mod_val = lfo_val * lp.depth;
+                apply_mod_target(&mut p, lp.target, mod_val);
+            }
+            for r in p_base
+                .mod_routes
+                .iter()
+                .take(p_base.mod_route_count as usize)
+            {
+                if r.lfo_slot as usize == i {
+                    apply_mod_target(&mut p, r.target_u8, lfo_val * r.depth);
+                }
             }
         }
 
@@ -460,25 +567,7 @@ impl DspState {
             let level = v0 + (v1 - v0) * frac; // 0..1
             let bipolar_depth = (p_base.free_eg_depth - 0.5) * 2.0; // -1..+1
             let mod_val = level * bipolar_depth;
-            match p_base.free_eg_target {
-                1 => p.cutoff = (p.cutoff + mod_val).clamp(0.0, 1.0),
-                2 => p.resonance = (p.resonance + mod_val).clamp(0.0, 1.0),
-                3 => p.lfo_pitch_mod_st += mod_val * 12.0,
-                4 => p.volume_303 = (p.volume_303 + mod_val).clamp(0.0, 1.5),
-                5 => p.reverb_mix = (p.reverb_mix + mod_val).clamp(0.0, 1.0),
-                6 => p.delay_time = (p.delay_time + mod_val * 0.5).clamp(0.0, 1.0),
-                7 => p.delay_feedback = (p.delay_feedback + mod_val * 0.5).clamp(0.0, 0.99),
-                8 => p.chorus_mix = (p.chorus_mix + mod_val).clamp(0.0, 1.0),
-                9 => p.chorus_rate = (p.chorus_rate + mod_val).clamp(0.0, 1.0),
-                10 => p.kick808_pitch = (p.kick808_pitch + mod_val * 0.5).clamp(0.0, 1.0),
-                11 => p.phaser_rate = (p.phaser_rate + mod_val).clamp(0.0, 1.0),
-                12 => p.phaser_depth = (p.phaser_depth + mod_val).clamp(0.0, 1.0),
-                13 => p.distortion_drive = (p.distortion_drive + mod_val * 0.5).clamp(0.0, 1.0),
-                14 => p.master_volume = (p.master_volume + mod_val * 0.3).clamp(0.0, 1.5),
-                15 => p.an1x_filter_cutoff = (p.an1x_filter_cutoff + mod_val).clamp(0.0, 1.0),
-                16 => {} // AN1X pitch: no direct pitch field in AudioParams yet
-                _ => {}
-            }
+            apply_mod_target(&mut p, p_base.free_eg_target, mod_val);
         }
 
         if p.master_pitch_st.abs() > 0.001 {
@@ -594,6 +683,7 @@ impl DspState {
                     .process(p.hihat_open909_decay, 0.8, p.hihat909_volume, sr);
             let clap = self.clap909.process(p.clap909_decay, p.clap909_volume, sr);
             let rim = self.rim909.process(0.7, 0.3, 0.15, 0.75, sr);
+            let gk = self.gabber_kick.process(&p, sr);
             let noise_out = self.noise_voice.process(sr, &p);
             let hoover_out = if p.hoover_enabled {
                 self.hoover.process(sr, &p)
@@ -637,7 +727,8 @@ impl DspState {
                 + hh808o * dv[3]
                 + th808 * dv[4]
                 + tm808 * dv[5]
-                + tl808 * dv[6];
+                + tl808 * dv[6]
+                + gk * dv[14];
             let bus_909 = k909 * dv[7]
                 + s909 * dv[8]
                 + hh909c * dv[9]
@@ -852,8 +943,15 @@ impl DspState {
 
             let out = ((synth_out * self.tts_duck + tts_sig) * p.master_volume).clamp(-1.0, 1.0);
 
-            // Per-voice pan → side signal (computed before FX borrows self)
-            let pan_side = bus_bass * p.pan_303 * 0.5
+            // Per-voice pan → side signal (computed before FX borrows self).
+            // Bass pan: per-step override (latched from BassTrigger.pan)
+            // wins when non-zero, otherwise the voice's static pan_303.
+            let bass_pan = if self.bass_step_pan.abs() > 0.0001 {
+                self.bass_step_pan
+            } else {
+                p.pan_303
+            };
+            let pan_side = bus_bass * bass_pan * 0.5
                 + k808 * dv[0] * p.pan_kick808 * 0.5
                 + s808 * dv[1] * p.pan_snare808 * 0.5
                 + (hh808c * dv[2] + hh808o * dv[3]) * p.pan_hihat808 * 0.5
@@ -861,12 +959,18 @@ impl DspState {
                 + s909 * dv[8] * p.pan_snare909 * 0.5
                 + (hh909c * dv[9] + hh909o * dv[10]) * p.pan_hihat909 * 0.5
                 + clap * dv[11] * p.pan_clap909 * 0.5
+                + gk * dv[14] * p.gabber_pan * 0.5
                 + hoover_out * p.pan_hoover * 0.5
                 + an1x_out * p.pan_an1x * 0.5
                 + noise_out * p.pan_noise * 0.5;
+            // Decay the Pan FxStep side-contribution when the step
+            // hasn't run this sample, so switching it off stops the
+            // auto-pan cleanly instead of latching the last side value.
+            self.fx_pan_side *= 0.995;
             let has_stereo = (p.stereo_width - 0.5).abs() > 0.01
                 || granular_side.abs() > 0.001
-                || pan_side.abs() > 0.0001;
+                || pan_side.abs() > 0.0001
+                || self.fx_pan_side.abs() > 0.0001;
             if channels >= 2 && has_stereo {
                 let mid = out;
                 let chorus_side = self.chorus.read_tap(0.4) * 0.3;
@@ -876,7 +980,7 @@ impl DspState {
                 } else {
                     0.0
                 };
-                let side = chorus_side * w + granular_side * gran_w + pan_side;
+                let side = chorus_side * w + granular_side * gran_w + pan_side + self.fx_pan_side;
                 let left = (mid + side).clamp(-1.0, 1.0);
                 let right = (mid - side).clamp(-1.0, 1.0);
                 frame[0] = left;

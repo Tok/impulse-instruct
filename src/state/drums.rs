@@ -254,6 +254,9 @@ pub enum DrumVoice {
     Rim909,
     /// WAV sampler voice — plays the loaded amen (or any user WAV).
     Amen,
+    /// Dedicated gabber-kick voice — hardcore/Rotterdam-style distorted kick
+    /// with a transient click layer, tuned higher and harder than 808/909.
+    GabberKick,
 }
 
 impl DrumVoice {
@@ -272,6 +275,7 @@ impl DrumVoice {
         DrumVoice::Clap909,
         DrumVoice::Rim909,
         DrumVoice::Amen,
+        DrumVoice::GabberKick,
     ];
 
     pub fn label(&self) -> &'static str {
@@ -290,6 +294,7 @@ impl DrumVoice {
             DrumVoice::Clap909 => "909 CLAP",
             DrumVoice::Rim909 => "909 RIM",
             DrumVoice::Amen => "AMEN",
+            DrumVoice::GabberKick => "GABBER KICK",
         }
     }
 
@@ -306,6 +311,7 @@ impl DrumVoice {
             DrumVoice::HihatClosed909 => "hihat_b",
             DrumVoice::HihatOpen909 => "hihat_b_open",
             DrumVoice::Clap909 => "clap_b",
+            DrumVoice::GabberKick => "gabber_kick",
             _ => return None,
         })
     }
@@ -327,6 +333,7 @@ impl DrumVoice {
             | DrumVoice::Clap909
             | DrumVoice::Rim909 => crate::state::ModuleKind::DrumKit909,
             DrumVoice::Amen => crate::state::ModuleKind::AmenSampler,
+            DrumVoice::GabberKick => crate::state::ModuleKind::GabberKick,
         }
     }
 
@@ -346,6 +353,7 @@ impl DrumVoice {
             DrumVoice::Clap909 => s.kit_b.clap.volume,
             DrumVoice::Rim909 => s.kit_b.rim.volume,
             DrumVoice::Amen => s.amen.volume,
+            DrumVoice::GabberKick => s.gabber_kick.volume,
         }
     }
 
@@ -365,6 +373,7 @@ impl DrumVoice {
             DrumVoice::Clap909 => s.kit_b.clap.volume = v,
             DrumVoice::Rim909 => s.kit_b.rim.volume = v,
             DrumVoice::Amen => s.amen.volume = v,
+            DrumVoice::GabberKick => s.gabber_kick.volume = v,
         }
         s
     }
