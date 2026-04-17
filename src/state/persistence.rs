@@ -4,8 +4,8 @@
 use super::{AppState, ModuleKind};
 use serde::{Deserialize, Serialize};
 
-const SETTINGS_PATH: &str = "settings.json";
-const SESSION_PATH: &str = "session.json";
+pub const SETTINGS_PATH: &str = "settings.json";
+pub const SESSION_PATH: &str = "session.json";
 
 /// Write the model path to `settings.json` so it persists across restarts.
 pub fn save_model_setting(model_path: &str) {

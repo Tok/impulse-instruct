@@ -236,7 +236,7 @@ impl ImpulseApp {
         log::info!("ImpulseApp::new — creating UI…");
 
         // Load last session — only if session.json exists (deletion = clean start).
-        if std::path::Path::new("session.json").exists()
+        if std::path::Path::new(crate::state::SESSION_PATH).exists()
             && let Some(storage) = cc.storage
             && let Some(json) = storage.get_string("session")
             && let Ok(mut loaded) = serde_json::from_str::<AppState>(&json)
