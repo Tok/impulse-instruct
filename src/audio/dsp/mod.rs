@@ -3,6 +3,7 @@
 mod bass303;
 mod dsp_util;
 mod fx;
+pub mod fx_math;
 mod gabber_kick;
 mod mod_apply;
 mod params;
@@ -13,6 +14,10 @@ use bass303::Bass303;
 pub use dsp_util::midi_to_hz;
 use dsp_util::*;
 use fx::*;
+use fx_math::{
+    BitcrushState, bitcrush_step, drive_step, free_eg_value_at, gated_reverb_envelope_step,
+    lfo_value_at, sidechain_duck, sidechain_envelope_step, waveshaper_step,
+};
 use gabber_kick::GabberKick;
 use mod_apply::apply_mod_target;
 pub use params::AudioParams;
@@ -196,15 +201,7 @@ impl DspState {
         gate_env: f32,
     ) -> f32 {
         match step {
-            FxStep::Waveshaper => {
-                if p.waveshaper_mix > 0.001 {
-                    let drive = p.waveshaper_drive * 8.0 + 1.0;
-                    let shaped = tanh(sig * drive) / tanh(drive);
-                    sig * (1.0 - p.waveshaper_mix) + shaped * p.waveshaper_mix
-                } else {
-                    sig
-                }
-            }
+            FxStep::Waveshaper => waveshaper_step(sig, p.waveshaper_drive, p.waveshaper_mix),
             FxStep::Reverb => {
                 if p.reverb_mix > 0.001 || p.reverb_freeze {
                     let rev_in = step_rev_tap(
@@ -256,20 +253,15 @@ impl DspState {
                 sig * (1.0 - p.delay_mix) + wet * p.delay_mix
             }
             FxStep::Bitcrush => {
-                if p.bitcrush_mix > 0.01 {
-                    let hold_frames = (1.0 + p.bitcrush_rate * 15.0) as u32;
-                    if self.bitcrush_counter == 0 {
-                        let bits = (1.0 + p.bitcrush_bits * 15.0).round().max(1.0);
-                        let scale = (1u32 << (bits as u32 - 1)) as f32;
-                        self.bitcrush_held = (sig * scale).round() / scale;
-                        self.bitcrush_counter = hold_frames;
-                    } else {
-                        self.bitcrush_counter -= 1;
-                    }
-                    sig * (1.0 - p.bitcrush_mix) + self.bitcrush_held * p.bitcrush_mix
-                } else {
-                    sig
-                }
+                let state = BitcrushState {
+                    held: self.bitcrush_held,
+                    counter: self.bitcrush_counter,
+                };
+                let (next, out) =
+                    bitcrush_step(state, sig, p.bitcrush_bits, p.bitcrush_rate, p.bitcrush_mix);
+                self.bitcrush_held = next.held;
+                self.bitcrush_counter = next.counter;
+                out
             }
             FxStep::Chorus => {
                 self.chorus
@@ -308,15 +300,7 @@ impl DspState {
                 self.tape_sat
                     .process(sig, p.tape_drive, p.tape_mix, p.tape_flutter, sr)
             }
-            FxStep::Drive => {
-                if p.distortion_drive > 0.01 {
-                    let drive = p.distortion_drive * 6.0 + 1.0;
-                    let dist = tanh(sig * drive);
-                    sig * (1.0 - p.distortion_mix) + dist * p.distortion_mix
-                } else {
-                    sig
-                }
-            }
+            FxStep::Drive => drive_step(sig, p.distortion_drive, p.distortion_mix),
             FxStep::Autotune => self
                 .autotune
                 .process(sig, p.autotune_amount, p.autotune_mix),
@@ -506,26 +490,12 @@ impl DspState {
             let wrapped = self.lfo_phases[i] < old_phase; // true when phase wrapped
 
             let phase = (self.lfo_phases[i] + lp.phase_offset) % 1.0;
-            let lfo_val = match lp.waveform {
-                0 => (phase * std::f32::consts::TAU).sin(),
-                1 => 1.0 - 4.0 * (phase - 0.5).abs(),
-                2 => phase * 2.0 - 1.0,
-                3 => 1.0 - phase * 2.0,
-                4 => {
-                    if phase < 0.5 {
-                        1.0
-                    } else {
-                        -1.0
-                    }
-                }
-                _ => {
-                    // S&H: update held value on phase wrap
-                    if wrapped {
-                        self.lfo_sh_held[i] = self.lfo_noise.next();
-                    }
-                    self.lfo_sh_held[i]
-                }
-            };
+            // S&H re-latches on each phase wrap; lfo_value_at itself is
+            // pure and just looks up the held value, so the latch lives here.
+            if lp.waveform > 4 && wrapped {
+                self.lfo_sh_held[i] = self.lfo_noise.next();
+            }
+            let lfo_val = lfo_value_at(phase, lp.waveform, self.lfo_sh_held[i]);
 
             // Slot's built-in target only fires when the slot is enabled.
             // Cable-routed mods always fire — that's the user's intent when
@@ -558,15 +528,11 @@ impl DspState {
                     self.free_eg_done = true;
                 }
             }
-            // Interpolate between the 8 steps
-            let pos = self.free_eg_phase * 7.0; // 0..7
-            let idx = pos.floor() as usize;
-            let frac = pos.fract();
-            let v0 = p_base.free_eg_values[idx.min(7)];
-            let v1 = p_base.free_eg_values[(idx + 1).min(7)];
-            let level = v0 + (v1 - v0) * frac; // 0..1
-            let bipolar_depth = (p_base.free_eg_depth - 0.5) * 2.0; // -1..+1
-            let mod_val = level * bipolar_depth;
+            let mod_val = free_eg_value_at(
+                self.free_eg_phase,
+                &p_base.free_eg_values,
+                p_base.free_eg_depth,
+            );
             apply_mod_target(&mut p, p_base.free_eg_target, mod_val);
         }
 
@@ -746,14 +712,9 @@ impl DspState {
                 let kick_level = (k808 * dv[0]).abs() + (k909 * dv[7]).abs();
                 let att_ms = 0.1 + p.sidechain_attack * 49.9; // 0.1–50 ms
                 let rel_ms = 10.0 + p.sidechain_release * 490.0; // 10–500 ms
-                let att_coeff = (-1.0 / (att_ms * 0.001 * sr)).exp();
-                let rel_coeff = (-1.0 / (rel_ms * 0.001 * sr)).exp();
-                if kick_level > self.sidechain_env {
-                    self.sidechain_env = kick_level + (self.sidechain_env - kick_level) * att_coeff;
-                } else {
-                    self.sidechain_env *= rel_coeff;
-                }
-                let duck = 1.0 - (self.sidechain_env * p.sidechain_amount * 4.0).min(1.0);
+                self.sidechain_env =
+                    sidechain_envelope_step(self.sidechain_env, kick_level, att_ms, rel_ms, sr);
+                let duck = sidechain_duck(self.sidechain_env, p.sidechain_amount);
                 (
                     bus_bass * duck,
                     bus_an1x * duck,
@@ -775,16 +736,12 @@ impl DspState {
                 + bus_noise
                 + bus_granular)
                 * 0.60;
-            if p.reverb_gate_time > 0.001 {
-                if detection_sum.abs() > 0.08 {
-                    self.reverb_gate_env = 1.0;
-                } else {
-                    let decay = (-1.0 / (p.reverb_gate_time * sr)).exp();
-                    self.reverb_gate_env *= decay;
-                }
-            } else {
-                self.reverb_gate_env = 1.0;
-            }
+            self.reverb_gate_env = gated_reverb_envelope_step(
+                self.reverb_gate_env,
+                detection_sum.abs(),
+                p.reverb_gate_time,
+                sr,
+            );
             let gate_env = self.reverb_gate_env;
 
             // Route voices through FX chains and sum to output.

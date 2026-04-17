@@ -72,8 +72,14 @@ Highlights of the cycle:
   with explicit `min` / `max`; routed `amen.pitch` (±24) and
   `amen.source_bpm` (40–300) through it.  +4 regression tests
   covering the previously-broken full ranges.
-- [ ] **At-cap files** — `src/ui/mod.rs` (1000), `audio/dsp/mod.rs`
-  (998), `ui/llm_strip.rs` (998), `ui/rack_canvas.rs` (997),
+- [x] **DSP fx_math extraction** — pulled the closed-form math
+  out of `audio/dsp/mod.rs::apply_fx_step` and `process_block`
+  into a new `audio/dsp/fx_math.rs` (waveshaper / drive /
+  bitcrush step + sidechain envelope follower & ducker + gated
+  reverb envelope + 6-waveform LFO lookup + 8-step free-EG
+  interpolation).  `mod.rs` shrank 998 → 955 lines.  +31 tests.
+- [ ] **At-cap files (still)** — `src/ui/mod.rs` (1000),
+  `ui/llm_strip.rs` (998), `ui/rack_canvas.rs` (997),
   `ui/panels/bass.rs` (995), `ui/panels/sequencer.rs` (992) are
   all one feature away from the hard limit.  Plan splits before
   the next feature lands in any of them.
