@@ -227,7 +227,12 @@ pub fn draw_mod_input_ports(
 /// renders an `egui::Area` overlay at each Mod-In jack position.  Writes
 /// changes back into `RackModule.mod_selectors` and `mod_input_depths` in a
 /// single write lock at the end of the frame.
-pub fn draw_mod_selector_dropdowns(app: &mut ImpulseApp, ctx: &egui::Context, ports: &[PortPos]) {
+pub fn draw_mod_selector_dropdowns(
+    app: &mut ImpulseApp,
+    ctx: &egui::Context,
+    ports: &[PortPos],
+    canvas_rect: egui::Rect,
+) {
     if !app.rack_flipped {
         return;
     }
@@ -236,6 +241,11 @@ pub fn draw_mod_selector_dropdowns(app: &mut ImpulseApp, ctx: &egui::Context, po
     // layer order.  Approximate piano+footer reserved height = 105 px.
     let screen_bottom = ctx.screen_rect().max.y;
     let max_overlay_y = screen_bottom - 105.0;
+    // Same idea for the top edge: when the rack scrolls and a back-panel
+    // jack ends up above the canvas, its Foreground Area would otherwise
+    // paint over the header info panel and the prompt strip.  Using the
+    // canvas top as the cutoff matches what the cable overlay clips to.
+    let min_overlay_y = canvas_rect.min.y;
     // Snapshot module kind + current per-slot multi-select target lists +
     // depths under a read lock so the overlay pass can render lock-free.
     type Snap = (u32, ModuleKind, Vec<Vec<LfoTarget>>, Vec<f32>, Vec<bool>);
@@ -295,6 +305,11 @@ pub fn draw_mod_selector_dropdowns(app: &mut ImpulseApp, ctx: &egui::Context, po
         if anchor.y > max_overlay_y {
             // Jack is below the visible rack region — skip its overlay so
             // the piano panel below isn't covered by the floating Area.
+            continue;
+        }
+        if anchor.y < min_overlay_y {
+            // Jack is scrolled above the canvas — skip so the floating
+            // Area doesn't paint over the header/prompt strip above.
             continue;
         }
         egui::Area::new(egui::Id::new(("mod_overlay", p.port.module_id, idx)))
