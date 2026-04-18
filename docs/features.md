@@ -95,10 +95,9 @@ and can't truncate its pattern mid-array.
 
 ### LLM infra
 
-- **Context default 32 K → 64 K** — both Gemma 4 E4B (128 K native)
-  and Bonsai 8B (64 K via YaRN) handle 64 K comfortably.  Test
-  harness matches.  ~11 K-token system prompt plus headroom for
-  memory / style observations / multi-turn growth.
+- **Context default 32 K → 64 K** — Gemma 4 E4B (128 K native) handles
+  64 K comfortably.  Test harness matches.  ~11 K-token system prompt plus
+  headroom for memory / style observations / multi-turn growth.
 - **Prompt-prefix cache reuse** — `--cache-reuse 256` on server spawn
   + `cache_prompt: true` on every lane body.  Shared system-prompt
   prefix reused between calls: ~5 s prefill → ~0 s once warm.
@@ -755,9 +754,6 @@ scrolls.
 - **Reliable llama-server cleanup between runs** — the demo script's
   cleanup trap now SIGTERM-then-SIGKILLs the app with a 3-second grace
   window for Drop, then `pkill`s orphans
-- **BASS agent on Gemma, DRUMS + FX on Bonsai** — Q1 Bonsai couldn't
-  reliably follow the pitch-distribution rules for melody rewrites.
-  Bigger model handles the bass voice; Bonsai stays on rhythm/knob work
 - **Female narrator + longer subtitle display** — intro TTS voice
   swap, reading-time-friendly subtitle durations, intro line tweaks
 - **Runtime-timestamped SRT** — subtitles derive from actual narrate()
@@ -766,8 +762,6 @@ scrolls.
   visible before the modulation starts
 - **TTS retry + server restart** — up to 10× with server bounce;
   graceful handling of missing WAVs in narration
-- **Model shoutout in live-filter scene** — names "Gemma 4 E4B" and
-  "Bonsai 8B, one bit quantized" during pad sweep before the outro
 - **Free & open source outro line**
 
 ---
@@ -949,7 +943,7 @@ scrolls.
 
 ## Intelligence
 
-- LLM runs locally via llama-server subprocess (official llama.cpp for Gemma/Qwen; PrismML fork for Bonsai 1-bit)
+- LLM runs locally via llama-server subprocess (official llama.cpp build)
 - Jam mode - PULSE evolves the pattern autonomously; heat slider 0-100% gates/throttles jam rate
 - Behaviour templates: "build", "drop", "breakdown", "tension", "euphoric"
 - Lock system - touch a knob to claim it; LLM won't override it
@@ -972,9 +966,9 @@ scrolls.
 - **Round-robin scheduling** - agents take turns during jam cycles; only enabled rack modules participate
 - **Cable-driven scope** - `PortKind::Control` cables from agent to module define what each agent may control; `scope_from_control_cables()` resolves scope at inference time; empty scope = agent controls everything
 - **Dynamic spawning** - agents can request new agents (`LlmAction::SpawnAgent`) or dismiss themselves (`LlmAction::DismissAgent`) via JSON; gated by `agent_autonomy` flag; auto-wire control cables on spawn
-- **VRAM budget module** - `src/llm/vram.rs` with model profiles (Gemma, Bonsai, DeepSeek, Qwen3), VRAM estimates, and preset configurations
+- **VRAM budget module** - `src/llm/vram.rs` with model profiles (Gemma, DeepSeek, Qwen3), VRAM estimates, and preset configurations
 - **VRAM budget guard** - `would_exceed_vram()` rejects agent spawns that would exceed GPU memory; checked at SpawnAgent action + server pool acquire; prevents silent OOM crashes
-- **Startup wizard** - always shows on startup; resume last session or start fresh with a preset (Solo/Duo/Swarm/Crew/Voices/Lite); GPU VRAM detection + budget bar
+- **Startup wizard** - always shows on startup; resume last session or start fresh with a preset (Solo/Duo/Swarm/Crew/Voices); GPU VRAM detection + budget bar
 - **VRAM estimate on agent cards** - shows `~X.XG VRAM` below model selector
 - **Agent persona in log** - output and thinking lines show the correct agent persona name, not the global singleton
 - **Console routes to agents** - typed prompts go to the first enabled agent instead of bypassing the agent system
@@ -1104,7 +1098,7 @@ Alerts cycle in the header (2 at a time, rotating each second). Multiple alerts 
 - Pre-commit hook: fmt + clippy + tests + 1000-line LOC limit
 - `scripts/run-tests.sh --coverage` - HTML coverage report (lcov)
 - Cross-compile to Windows EXE via `cargo-xwin` + `scripts/build-all.sh`
-- `scripts/download-models.sh` - Gemma 4 E4B (default), Bonsai 8B, Qwen3-8B, Qwen3-14B
+- `scripts/download-models.sh` - Gemma 4 E4B (default), Qwen3-8B, Qwen3-14B, DeepSeek-R1 7B/14B
 - Windows `.bat` equivalents for all scripts (`start.bat`, `scripts/*.bat`)
 - **CI/CD security** - `ci.yml` runs tests + tarpaulin + Codecov on `main` and `develop`; `release` job on `v*` tags builds Linux+Windows in GH Actions (no local builds), attaches `.sha256` sidecars and SLSA level-2 build provenance attestation
 - Release zips include start scripts (`start.sh`/`start.bat`) and download helpers

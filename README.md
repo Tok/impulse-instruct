@@ -71,7 +71,6 @@ The release zip ships without model files. You need at least **Gemma 4 E4B Q4_K_
 4. Done — launch the app.
 
 Optional extras, same process:
-- **Bonsai 8B** (~1.1 GB) — lightweight specialist agents for multi-model setups: [prism-ml/Bonsai-8B-gguf](https://huggingface.co/prism-ml/Bonsai-8B-gguf) → `Bonsai-8B.gguf`
 - **NeuTTS Air Q4** (~527 MB) — neural voice cloning for MC/DJ modules: [neuphonic/neutts-air-q4-gguf](https://huggingface.co/neuphonic/neutts-air-q4-gguf) → rename `neutts-air-Q4_0.gguf` to `neutts-air-q4.gguf`
 
 **Option B — Script (if you already have `hf`/`huggingface-cli`/`curl`):**
@@ -79,14 +78,12 @@ Optional extras, same process:
 Linux:
 ```bash
 ./download-models.sh          # Gemma 4 E4B (default)
-./download-models.sh bonsai   # optional: Bonsai 8B
 ./download-models.sh neutts   # optional: NeuTTS Air
 ```
 
 Windows:
 ```
 download-models.bat
-download-models.bat bonsai
 download-models.bat neutts
 ```
 
@@ -124,18 +121,17 @@ The app auto-detects models in `models/` and connects. The startup wizard detect
 | Model | Size | VRAM | Notes |
 |-------|------|------|-------|
 | **Gemma 4 E4B Q4_K_M** | ~4.6 GB | ~6 GB | **Recommended.** Best JSON accuracy, passes all integration tests. |
-| **Bonsai 8B Q1_0_g128** | ~1.1 GB | ~2 GB | Lightweight agent. Fits in 2 GB VRAM. Great for specialist agents in a multi-model team. |
 | **NeuTTS Air Q4** | ~527 MB | CPU | Neural TTS voice cloning for MC/DJ modules. Apache 2.0. |
 
-Each agent can run a different model. A `LlamaServerPool` manages server processes — agents sharing the same model share a single server (ref-counted). Typical multi-agent VRAM budgets:
+Each agent can run a different model. A `LlamaServerPool` manages server processes — agents sharing the same model share a single server (ref-counted).  Same-model agents share VRAM, so a 5-agent Crew of Gemmas costs the same ~6 GB as a single Gemma. Typical multi-agent VRAM budgets:
 
 | Setup | Agents | VRAM |
 |-------|--------|------|
 | **Solo** | 1x Gemma | ~6 GB |
-| **Duo** | 2x Gemma (shared server) | ~6 GB |
-| **Crew** | 1x Gemma conductor + 4x Bonsai specialists | ~8 GB |
-| **Swarm** | 1x Gemma + 3x Bonsai | ~8 GB |
-| **Lite** | 1x Bonsai | ~2 GB |
+| **Duo** | 2x Gemma — bass + drums/FX | ~6 GB |
+| **Swarm** | 4x Gemma — lead + 3 helpers | ~6 GB |
+| **Crew** | 5x Gemma — conductor + 4 specialists | ~6 GB |
+| **Voices** | 5x Gemma — one agent per voice | ~6 GB |
 
 ---
 
@@ -389,7 +385,7 @@ Written in Rust. Key dependencies:
 | UI | [egui](https://github.com/emilk/egui) / eframe 0.28 |
 | Audio I/O | [cpal](https://github.com/RustAudio/cpal) 0.15 |
 | Audio thread - DSP | [rtrb](https://github.com/mgeier/rtrb) lock-free ring buffer |
-| LLM inference | [llama-server](https://github.com/ggml-org/llama.cpp) (official) / [PrismML fork](https://github.com/prism-ml/llama.cpp) for Bonsai 1-bit |
+| LLM inference | [llama-server](https://github.com/ggml-org/llama.cpp) (official) |
 | TTS voice cloning | [NeuTTS Air](https://huggingface.co/neuphonic/neutts-air) (GGUF, local) + [espeak-ng](https://github.com/espeak-ng/espeak-ng) (phonemization) |
 | HTTP/MCP API | [axum](https://github.com/tokio-rs/axum) 0.7 |
 | MIDI | [midir](https://github.com/Boddlnagg/midir) 0.9 |
@@ -401,7 +397,6 @@ Written in Rust. Key dependencies:
 MIT - see [LICENSE](LICENSE)
 
 Gemma 4 model: [Google Gemma Terms of Use](https://ai.google.dev/gemma/terms)
-Bonsai 8B model: Apache 2.0 - credit to [prism-ml](https://huggingface.co/prism-ml)
 NeuTTS Air model: Apache 2.0 - credit to [Neuphonic](https://huggingface.co/neuphonic/neutts-air)
 
 ---

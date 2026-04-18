@@ -2,7 +2,7 @@
 // Style catalog for genre-aware prompting.
 // Loaded once from `styles.json` at the project root (with embedded fallback).
 // Each entry provides a descriptive creative brief that is injected into the
-// system prompt when a style is active — Bonsai reads it and decides what to do.
+// system prompt when a style is active — the LLM reads it and decides what to do.
 
 use serde::{Deserialize, Serialize};
 use std::sync::OnceLock;

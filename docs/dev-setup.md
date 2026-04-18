@@ -9,7 +9,7 @@ Build instructions, architecture notes, HTTP API reference, and contributor setu
 | | |
 |---|---|
 | **GPU** | NVIDIA GPU with CUDA 12.x (tested: RTX 4070 Ti Super) |
-| **VRAM** | ≥ 6 GB for Gemma 4 E4B; ≥ 2 GB for Bonsai 8B |
+| **VRAM** | ≥ 6 GB for Gemma 4 E4B |
 | **OS** | Linux (Ubuntu 22.04+); Windows cross-compile via cargo-xwin |
 | **Rust** | 1.85+ (edition 2024) |
 | **C++ toolchain** | `build-essential cmake ninja-build` for llama-server builds |
@@ -26,13 +26,10 @@ Build instructions, architecture notes, HTTP API reference, and contributor setu
 git clone <repo> impulse-instruct && cd impulse-instruct
 
 # 2. Build the inference server (one-time, ~3–5 min)
-./scripts/build-bonsai-server.sh     # PrismML fork for Bonsai 8B
-# or
-./scripts/build-llama-server.sh      # standard llama.cpp for Gemma 4 / others
+./scripts/build-llama-server.sh      # standard llama.cpp
 
 # 3. Download a model (requires free HuggingFace account)
 ./scripts/download-models.sh         # Gemma 4 E4B (~4.6 GB, recommended)
-./scripts/download-models.sh bonsai  # Bonsai 8B (~1.1 GB, lightweight)
 
 # 4. Run
 cargo run --release                  # real LLM inference
@@ -52,7 +49,6 @@ cargo run -- --log debug             # verbose logging
 | `cargo run --release` | Release build with real LLM inference |
 | `./start.sh` | Build + launch (release, mock LLM) |
 | `./start.sh --dev` | Build + launch (debug + verbose) |
-| `./scripts/build-bonsai-server.sh` | Build PrismML llama-server for Bonsai 8B |
 | `./scripts/build-llama-server.sh` | Build standard llama.cpp server |
 | `./scripts/download-models.sh [model]` | Download GGUF model |
 | `./scripts/run-tests.sh --coverage` | Unit tests + HTML coverage report |
@@ -228,9 +224,8 @@ can't (e.g. no sudo in CI). Adjust the version suffix to match whatever
 | Model | Download | Size | VRAM | Server |
 |-------|----------|------|------|--------|
 | **Gemma 4 E4B Q4_K_M** | `./scripts/download-models.sh` | ~4.6 GB | ~6 GB | Standard llama.cpp |
-| **Bonsai 8B Q1_0_g128** | `./scripts/download-models.sh bonsai` | ~1.1 GB | ~2 GB | PrismML fork (Q1_0_g128 kernel) |
 
-Bonsai uses `.llama-build/bin/llama-server` (PrismML fork). All other models use `.llama-official-build/bin/llama-server` (standard llama.cpp). The app selects the correct server automatically based on the model file.
+All models use `.llama-official-build/bin/llama-server` (standard llama.cpp), built via `./scripts/build-llama-server.sh`.
 
 ---
 

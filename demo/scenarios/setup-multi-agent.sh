@@ -24,17 +24,17 @@ scene "Adding specialist agents"
 
 say "Three agents, each scoped to specific instruments."
 
-# BASS runs Gemma 4 E4B — melody work needs a stronger model than Q1 Bonsai
-# can reliably deliver. DRUMS and FX do rhythm/knob work, so Bonsai is fine.
+# All agents share a single Gemma 4 E4B server (ref-counted in LlamaServerPool),
+# so a 3-agent band costs the same VRAM as a single Solo agent.
 add_agent BASS gemma bass
-add_agent DRUMS bonsai "kit_a,kit_b"
-add_agent FX bonsai fx
+add_agent DRUMS gemma "kit_a,kit_b"
+add_agent FX gemma fx
 
 wait_for_model
 
 set_bpm 128
 
-say "Bass on Gemma, drums and FX on Bonsai. One server per model, ref-counted."
+say "Bass, drums and FX all on Gemma. One server, ref-counted."
 
 # ── Scene 3: Show wiring ──────────────────────────────────────────────────
 

@@ -10,7 +10,7 @@
 #
 # Usage:
 #   ./scripts/run-llm-bass.sh                        # all models in models/
-#   ./scripts/run-llm-bass.sh models/Bonsai-8B.gguf  # single model
+#   ./scripts/run-llm-bass.sh models/gemma-4-E4B-it-Q4_K_M.gguf  # single model
 #   ./scripts/run-llm-bass.sh --verbose              # full JSON output
 # ─────────────────────────────────────────────────────────────────────────────
 LLM_SUITE=llm_suite_bass exec "$(dirname "$0")/run-llm-tests.sh" "$@"

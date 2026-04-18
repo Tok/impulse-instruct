@@ -179,14 +179,13 @@ add_effect delay
 # Add agents and scroll to console to show them appearing
 look_at console
 wait_seconds 0.5
-# BASS uses the larger Gemma 4 E4B — melody work needs a stronger model
-# than Q1 Bonsai can reliably deliver. DRUMS and FX are rhythm/knob work,
-# where Bonsai's 1-bit quant is more than enough.
+# All agents share a single Gemma 4 E4B server (ref-counted in
+# LlamaServerPool), so the band costs the same VRAM as one agent.
 add_agent BASS gemma bass
 wait_seconds 0.5
-add_agent DRUMS bonsai "kit_a,kit_b"
+add_agent DRUMS gemma "kit_a,kit_b"
 wait_seconds 0.5
-add_agent FX bonsai fx
+add_agent FX gemma fx
 wait_for_model
 
 # Brief cable view — agents are now wired, so cables are visible
@@ -255,9 +254,8 @@ wait_seconds 4
 scene "Live filter"
 
 focus_on bass
-say "Bass runs on Gemma 4 E4B."
-say "Drums and effects on Bonsai 8B, one bit quantized."
-say "Both local, both open weights."
+say "Bass, drums and effects all share one Gemma 4 E4B server."
+say "Local, open weights."
 sweep_pad 11
 wait_seconds 1
 

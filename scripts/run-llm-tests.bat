@@ -3,20 +3,19 @@ setlocal enabledelayedexpansion
 rem ─── scripts\run-llm-tests.bat ───────────────────────────────────────────────
 rem Run the LLM integration suite against one or all models.
 rem
-rem Default model set: Gemma 4 E4B + Bonsai 8B (officially evaluated).
+rem Default model set: Gemma 4 E4B (officially evaluated).
 rem Qwen and Llama variants skipped by default. Use --all-models to test everything in models\.
 rem They may work; the system prompt just isn't tuned for them.
 rem
 rem Server binary selection:
-rem   Bonsai / *bonsai* -> .llama-build\bin\llama-server.exe          (PrismML fork)
-rem   All other models  -> .llama-official-build\bin\llama-server.exe  (official)
-rem   fallback          -> llama-server from PATH
+rem   .llama-official-build\bin\llama-server.exe (standard llama.cpp), or
+rem   llama-server from PATH as fallback.
 rem
 rem Usage:
-rem   scripts\run-llm-tests.bat                                # Gemma + Bonsai, all suites
+rem   scripts\run-llm-tests.bat                                # Gemma, all suites
 rem   scripts\run-llm-tests.bat --all-models                   # all *.gguf in models\
-rem   scripts\run-llm-tests.bat models\Bonsai-8B.gguf          # single model
-rem   scripts\run-llm-tests.bat models\Bonsai-8B.gguf acid     # single model + filter
+rem   scripts\run-llm-tests.bat models\gemma-4-E4B-it-Q4_K_M.gguf       # single model
+rem   scripts\run-llm-tests.bat models\gemma-4-E4B-it-Q4_K_M.gguf acid  # single + filter
 rem   scripts\run-llm-style.bat                                # style suite only
 rem   scripts\run-llm-theory.bat                               # theory suite only
 rem ──────────────────────────────────────────────────────────────────────────────
@@ -83,7 +82,7 @@ if not "%MODEL_ARG%"=="" (
         )
     )
     if "!MODELS_RAN!"=="0" (
-        echo ERROR: no default models found (gemma/bonsai). Use --all-models to include Qwen and others.
+        echo ERROR: no default models found (gemma). Use --all-models to include Qwen and others.
         exit /b 1
     )
 )
@@ -97,10 +96,7 @@ set MODEL_NAME=%~n1%~x1
 
 rem Pick server binary
 set SERVER_BIN=
-echo %MODEL_NAME% | findstr /i "bonsai" >nul
-if not errorlevel 1 (
-    set SERVER_BIN=.llama-build\bin\llama-server.exe
-) else if exist ".llama-official-build\bin\llama-server.exe" (
+if exist ".llama-official-build\bin\llama-server.exe" (
     set SERVER_BIN=.llama-official-build\bin\llama-server.exe
 ) else (
     where llama-server >nul 2>&1
@@ -113,8 +109,7 @@ echo ==========================================
 
 if "%SERVER_BIN%"=="" (
     echo ERROR: no llama-server binary found
-    echo   For Bonsai models:  scripts\build-bonsai-server.bat
-    echo   For other models:   scripts\build-llama-server.bat
+    echo   Run: scripts\build-llama-server.bat
     set OVERALL_EXIT=1
     exit /b 0
 )

@@ -26,28 +26,21 @@ the track with focused attention.
 
 ## Recommended Configurations
 
-The startup wizard offers presets, but you can build any combination.  The
-general recommendation is **one Gemma 4 E4B as the primary model** plus
-**0-4 Bonsai 8B agents** as lightweight specialists, depending on available
-VRAM.
+The startup wizard offers presets, but you can build any combination.  Every
+preset uses **Gemma 4 E4B** for all agents.  Agents sharing the same model
+share a single llama-server process (ref-counted in `LlamaServerPool`), so a
+5-agent Crew costs the same ~6 GB as a single Solo agent.
 
 | Setup | Models | VRAM | Best for |
 |-------|--------|------|----------|
 | **Solo** | 1x Gemma | ~6 GB | Quick sessions, full control from one agent |
-| **Duo** | 2x Gemma (shared) | ~6 GB | Bass + drums/FX split |
-| **Swarm** | 1x Gemma + 3x Bonsai | ~8 GB | Lead producer + 3 specialists |
-| **Crew** | 1x Gemma + 4x Bonsai | ~8 GB | Conductor + bass/drums/keys/FX |
-| **Voices** | 1x Gemma + 4x Bonsai | ~8 GB | One agent per voice group |
-| **Lite** | 1x Bonsai | ~2 GB | Minimal VRAM, fast responses |
+| **Duo** | 2x Gemma | ~6 GB | Bass + drums/FX split |
+| **Swarm** | 4x Gemma | ~6 GB | Lead producer + 3 specialists |
+| **Crew** | 5x Gemma | ~6 GB | Conductor + bass/drums/keys/FX |
+| **Voices** | 5x Gemma | ~6 GB | One agent per voice group |
 
-Gemma 4 E4B is the strongest model for musical understanding and JSON accuracy
-(passes all 39 integration tests).  Bonsai 8B is much smaller and faster but
-less capable — it works well for focused tasks where the scope is narrow
-(e.g. "just handle the bass filter").
-
-Agents sharing the same model share a single llama-server process (ref-counted
-in `LlamaServerPool`), so two Gemma agents don't cost 12 GB — they share the
-same 6 GB server.
+Gemma 4 E4B is the strongest model evaluated for musical understanding and
+JSON accuracy (passes all 39 integration tests).
 
 ---
 
@@ -135,7 +128,7 @@ Agents can also spawn or dismiss themselves via JSON actions when
 `agent_autonomy` is enabled in settings:
 
 ```json
-{ "settings": { "spawn_agent": { "persona": "FX", "scope": ["fx"], "model": "bonsai" } } }
+{ "settings": { "spawn_agent": { "persona": "FX", "scope": ["fx"], "model": "gemma" } } }
 { "settings": { "dismiss": true } }
 ```
 
@@ -145,7 +138,7 @@ Agents can also spawn or dismiss themselves via JSON actions when
 
 - **Start with Solo**, get a feel for the sound, then add specialists
 - **Lock parameters** you care about before adding agents — agents respect locks
-- **Use narrow scopes** for Bonsai agents — they work best with focused tasks
+- **Use narrow scopes** for specialist agents — they work best with focused tasks
 - **Set different jam_bars** per agent — stagger their cycles for variety
 - **Watch the log** — each agent's persona name appears before its response
 - **Lower heat for specialists** — a bass agent at heat 20% makes subtle filter

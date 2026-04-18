@@ -165,7 +165,7 @@ impl ImpulseApp {
                             1 => {
                                 widgets::section_header(ui, "SAMPLING  [experimental]");
                                 ui.label(
-                                    egui::RichText::new("Gemma defaults: top_k 64, top_p 0.95 · Bonsai: top_k 20, top_p 0.9, temp ×0.5")
+                                    egui::RichText::new("Gemma defaults: top_k 64, top_p 0.95, min_p 0.05")
                                         .monospace()
                                         .size(8.0)
                                         .color(theme::IRON),
@@ -196,8 +196,8 @@ impl ImpulseApp {
                                         }
                                     });
                                 });
-                                ui.label(egui::RichText::new("0 = disabled; Gemma 64, Bonsai 20").monospace().size(7.5).color(theme::IRON));
-                                sampling_row!("top_p", top_p, 0.0_f32, 1.0_f32, 0.01, "nucleus cutoff — Gemma 0.95, Bonsai 0.90");
+                                ui.label(egui::RichText::new("0 = disabled; Gemma default 64").monospace().size(7.5).color(theme::IRON));
+                                sampling_row!("top_p", top_p, 0.0_f32, 1.0_f32, 0.01, "nucleus cutoff — Gemma default 0.95");
                                 sampling_row!("min_p", min_p, 0.0_f32, 0.5_f32, 0.005, "min-prob floor — 0.05 default, 0 to disable");
                                 sampling_row!("repeat_penalty", repeat_penalty, 1.0_f32, 2.0_f32, 0.01, "1.0 = off; >1.0 penalises repeated tokens");
                                 sampling_row!("freq_penalty", frequency_penalty, 0.0_f32, 2.0_f32, 0.01, "0.0 = off; reduces repetitive phrasing");
@@ -542,7 +542,7 @@ impl ImpulseApp {
                         .color(theme::ASH),
                     );
                     ui.label(
-                        egui::RichText::new("LLM: llama.cpp · Gemma 4 · Bonsai")
+                        egui::RichText::new("LLM: llama.cpp · Gemma 4")
                             .monospace()
                             .size(8.0)
                             .color(theme::ASH),

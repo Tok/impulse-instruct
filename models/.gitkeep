@@ -1,4 +1,4 @@
 # Place your GGUF model here.
-# Recommended: prism-ml/Bonsai-8B-gguf (Q4_K_M, ~5GB)
-# huggingface-cli download prism-ml/Bonsai-8B-gguf --include "*.gguf" --local-dir models/
-# Then update models/bonsai-8b-q4.gguf in the app or set via --model flag.
+# Recommended: unsloth/gemma-4-E4B-it-GGUF (Q4_K_M, ~4.6 GB)
+# huggingface-cli download unsloth/gemma-4-E4B-it-GGUF --include "*Q4_K_M*" --local-dir models/
+# The app auto-detects models in this directory; pick one in the startup wizard.

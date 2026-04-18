@@ -28,7 +28,6 @@ scripts\run-tests.bat
 scripts\build-all.bat
 scripts\download-models.bat
 scripts\build-llama-server.bat
-scripts\build-bonsai-server.bat
 scripts\run-llm-tests.bat
 scripts\run-llm-style.bat
 scripts\run-llm-theory.bat
@@ -108,12 +107,10 @@ Quick summary of the key rules:
 
 Models (ranked by test suite results):
 - **Gemma 4 E4B Q4_K_M** - default, 4.6 GB, best accuracy, passes all 39 LLM integration tests
-- **Bonsai 8B Q1_0_g128** - 1.1 GB lightweight fallback, no chain-of-thought, requires PrismML llama-server fork
 - **Qwen3-8B / 14B** - optional, chain-of-thought capable; not recommended as default (heavier, no accuracy gain over Gemma 4)
 - **Other GGUF models** (e.g. Llama variants) - technically compatible with llama-server but not evaluated; system prompt is not tuned for them. Users are free to experiment.
 
-Server selection: Bonsai uses `.llama-build/bin/llama-server` (PrismML fork, Q1_0_g128 format).
-All other models use `.llama-official-build/bin/llama-server` (standard llama.cpp).
+Server: `.llama-official-build/bin/llama-server` (standard llama.cpp), built via `./scripts/build-llama-server.sh`.
 
 - Mock mode: runs without model, returns plausible JSON based on prompt keywords + instruction set
 - Real mode: any GGUF model via llama-server subprocess; model selected at runtime via UI
@@ -135,7 +132,7 @@ POST /api/sequencer/play
 POST /api/sequencer/stop
 POST /api/scroll         { "target": "voice" }  (global/voice/fxmod/bass/808/fx/…)
 POST /api/scroll         { "target": "bass", "collapse_others": true }  focus mode
-POST /api/preset         { "name": "Crew" }     (Solo/Duo/Swarm/Crew/Voices/Lite)
+POST /api/preset         { "name": "Crew" }     (Solo/Duo/Swarm/Crew/Voices)
 POST /api/style          { "id": "drum_and_bass" }  set global style + propagate to agents (id=null clears)
 POST /api/randomize                              random style + auto-rack + LLM "generate from scratch"
 POST /api/amen           { "path": "samples/amen/foo.wav" }  load a specific amen sample
@@ -145,7 +142,7 @@ POST /api/granular       { "random": true }     load a random sample from sample
 POST /api/flip           { "show_back": true }   (true=cables, false=knobs)
 POST /api/rack/reset                              strip to sequencer + master + console
 POST /api/rack/add       { "kind": "808" }        add module, returns { "id": N }
-POST /api/rack/agent     { "persona": "BASS", "scope": ["bass"], "model": "bonsai", "mode": "mc", "tts": true }
+POST /api/rack/agent     { "persona": "BASS", "scope": ["bass"], "model": "gemma", "mode": "mc", "tts": true }
 POST /api/rack/cable     { "from": 1, "to": 5 }  connect modules (default: control cable)
 POST /api/rack/mod_cable { "from": 7, "to": 1, "slot": 0, "depth": 0.5 }  LFO→Mod-In jack
 POST /api/rack/mod_target{ "module": 1, "slot": 0, "targets": ["BassPan", "BassCutoff"] }

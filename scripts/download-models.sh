@@ -4,7 +4,6 @@
 #
 # Usage:
 #   ./scripts/download-models.sh                  # Gemma 4 E4B (default, ~4.6 GB, best overall)
-#   ./scripts/download-models.sh bonsai           # Bonsai-8B (1-bit Q1, ~1.1 GB, lightweight)
 #   ./scripts/download-models.sh deepseek-r1-7b   # DeepSeek-R1-Distill-Qwen-7B (~5 GB, CoT, fast)
 #   ./scripts/download-models.sh deepseek-r1-14b  # DeepSeek-R1-Distill-Qwen-14B (~9 GB, CoT, accurate)
 #   ./scripts/download-models.sh qwen3            # Qwen3-8B Q4_K_M (~5 GB, optional)
@@ -29,11 +28,6 @@ case "$MODEL" in
     HF_REPO="unsloth/gemma-4-E4B-it-GGUF"
     MODEL_FILE="gemma-4-E4B-it-Q4_K_M.gguf"
     MODEL_DESC="Gemma 4 E4B Q4_K_M (unsloth, ~4.6 GB) — default, best accuracy + speed"
-    ;;
-  bonsai)
-    HF_REPO="prism-ml/Bonsai-8B-gguf"
-    MODEL_FILE="Bonsai-8B.gguf"
-    MODEL_DESC="Bonsai-8B Q1_0_g128 (PrismML, ~1.1 GB) — tiny fallback, no chain-of-thought"
     ;;
   qwen3)
     HF_REPO="bartowski/Qwen_Qwen3-8B-GGUF"
@@ -63,7 +57,7 @@ case "$MODEL" in
     ;;
   *)
     echo "Unknown model: '$MODEL'"
-    echo "Available: gemma4 (default), bonsai, deepseek-r1-7b, deepseek-r1-14b, qwen3, qwen3-14b, neutts"
+    echo "Available: gemma4 (default), deepseek-r1-7b, deepseek-r1-14b, qwen3, qwen3-14b, neutts"
     exit 1
     ;;
 esac
@@ -181,10 +175,6 @@ case "$MODEL" in
     echo "Gemma 4 E4B is released under the Gemma Terms of Use by Google DeepMind."
     echo "Quantisation by unsloth. See: https://huggingface.co/${HF_REPO}"
     ;;
-  bonsai)
-    echo "Bonsai 8B is released under the Apache License 2.0 by prism-ml."
-    echo "See: https://huggingface.co/${HF_REPO}"
-    ;;
   qwen3|qwen3-14b)
     echo "Qwen3 is released under the Qwen Research License by Alibaba Cloud."
     echo "Quantisation by bartowski. See: https://huggingface.co/${HF_REPO}"
@@ -275,35 +265,6 @@ if [[ "$MODEL" == "neutts" ]]; then
 fi
 
 # ── Optional recommended downloads ────────────────────────────────────────────
-
-# Bonsai 8B (lightweight multi-agent model)
-BONSAI_MODEL="${MODEL_DIR}/Bonsai-8B.gguf"
-if [[ "$MODEL" != "bonsai" ]]; then
-  if [[ -f "$BONSAI_MODEL" ]]; then
-    echo ""
-    echo "✓ Bonsai 8B already present."
-  else
-    echo ""
-    echo "Bonsai 8B is a lightweight 1-bit model (~1.1 GB) for multi-agent setups."
-    read -r -p "Also download Bonsai 8B? [Y/n] " reply
-    reply="${reply:-y}"
-    if [[ "$reply" =~ ^[Yy]$ ]] || [[ -z "$reply" ]]; then
-      echo "  Downloading Bonsai 8B..."
-      if [[ -n "${HF_CMD:-}" ]]; then
-        $HF_CMD download "prism-ml/Bonsai-8B-gguf" "Bonsai-8B.gguf" --local-dir "$MODEL_DIR"
-      elif command -v wget &>/dev/null; then
-        wget -q --show-progress -O "$BONSAI_MODEL" \
-          "https://huggingface.co/prism-ml/Bonsai-8B-gguf/resolve/main/Bonsai-8B.gguf"
-      elif command -v curl &>/dev/null; then
-        curl -L --progress-bar -o "$BONSAI_MODEL" \
-          "https://huggingface.co/prism-ml/Bonsai-8B-gguf/resolve/main/Bonsai-8B.gguf"
-      fi
-      [[ -f "$BONSAI_MODEL" ]] && echo "  ✓ Bonsai 8B ready ($(du -h "$BONSAI_MODEL" | cut -f1))" || echo "  Download failed."
-    else
-      echo "  Skipped. Run later: ./scripts/download-models.sh bonsai"
-    fi
-  fi
-fi
 
 # NeuTTS Air (voice cloning for TTS modules)
 if [[ -f "$NEUTTS_MODEL" ]] && [[ -d "$NEUTTS_VENV" ]]; then

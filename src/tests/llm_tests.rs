@@ -808,11 +808,11 @@ mod agent_model_tests {
     fn agent_model_some_overrides_global() {
         let state = AppState::default();
         let mut agent = LlmAgentState::new_default(1);
-        agent.model_path = Some("models/bonsai.gguf".to_string());
+        agent.model_path = Some("models/qwen3-8b.gguf".to_string());
         let resolved = agent
             .model_path
             .unwrap_or_else(|| state.llm.model_path.clone());
-        assert_eq!(resolved, "models/bonsai.gguf");
+        assert_eq!(resolved, "models/qwen3-8b.gguf");
     }
 
     #[test]

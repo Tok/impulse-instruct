@@ -275,30 +275,30 @@ if [ -n "$AGENT_ID" ]; then
 fi
 
 narrate --wait "s10_add_bass_agent" \
-    "A bass agent running Bonsai, a lightweight model, just for the three oh three."
+    "A bass agent running Gemma, scoped just to the three oh three."
 pause 0.5
 
-BASS_AGENT=$(api_rack_agent "BASS" '["bass"]' "bonsai")
+BASS_AGENT=$(api_rack_agent "BASS" '["bass"]' "gemma")
 pause 1
 
 narrate --wait "s10_add_drum_agent" \
     "A drum agent for the eight oh eight and nine oh nine."
 pause 0.5
 
-DRUM_AGENT=$(api_rack_agent "DRUMS" '["kit_a", "kit_b"]' "bonsai")
+DRUM_AGENT=$(api_rack_agent "DRUMS" '["kit_a", "kit_b"]' "gemma")
 pause 1
 
 narrate --wait "s10_add_fx_agent" \
     "And an effects agent to manage reverb and delay."
 pause 0.5
 
-FX_AGENT=$(api_rack_agent "FX" '["fx"]' "bonsai")
+FX_AGENT=$(api_rack_agent "FX" '["fx"]' "gemma")
 pause 1
 
 wait_for_llm 90
 
 narrate --wait "s10_band_ready" \
-    "Three specialist agents, each running Bonsai. They share one lightweight model server."
+    "Three specialist agents, each running Gemma. They share one model server, ref-counted."
 pause 1
 
 # ─── Scene 11: Show agent wiring ─────────────────────────────────────────────
@@ -339,7 +339,7 @@ pause 0.5
 api_play
 pause 2
 
-# Send prompts to EACH agent individually — be very explicit for Bonsai
+# Send prompts to EACH agent individually — be very explicit
 api_prompt "set cutoff to 0.5, resonance to 0.6, program a bass pattern on steps 0,3,6,8,11,14" "BASS"
 pause 10
 

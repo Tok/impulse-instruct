@@ -127,7 +127,7 @@ pub struct RackAgentRequest {
     /// Scope — what the agent controls (e.g. ["bass"], ["kit_a", "kit_b"])
     #[serde(default)]
     pub scope: Vec<String>,
-    /// Model pattern to match (e.g. "gemma", "bonsai"). Omit to inherit default.
+    /// Model pattern to match (e.g. "gemma", "qwen3"). Omit to inherit default.
     #[serde(default)]
     pub model: Option<String>,
     /// Conversation mode: "off", "producer", "dj", "mc". Default: "producer".

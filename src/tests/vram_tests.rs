@@ -15,7 +15,7 @@ mod vram_budget_tests {
     #[test]
     fn estimate_vram_known_model() {
         assert_eq!(estimate_vram("models/gemma-4-e4b-Q4.gguf"), 6000);
-        assert_eq!(estimate_vram("models/bonsai-8b.gguf"), 2000);
+        assert_eq!(estimate_vram("models/qwen3-8b-Q4.gguf"), 7000);
     }
 
     #[test]
@@ -36,11 +36,11 @@ mod vram_budget_tests {
     #[test]
     fn estimate_total_mixed_models() {
         let agents = vec![
-            agent(None),                          // global = gemma
-            agent(Some("models/bonsai-8b.gguf")), // bonsai
+            agent(None),                         // global = gemma (6000)
+            agent(Some("models/qwen3-8b.gguf")), // qwen3 8B (7000)
         ];
         let total = estimate_total_vram(&agents, "models/gemma-4-e4b.gguf", None);
-        assert_eq!(total, 6000 + 2000);
+        assert_eq!(total, 6000 + 7000);
     }
 
     #[test]
@@ -49,22 +49,22 @@ mod vram_budget_tests {
         let total = estimate_total_vram(
             &agents,
             "models/gemma-4-e4b.gguf",
-            Some("models/bonsai-8b.gguf"),
+            Some("models/qwen3-8b.gguf"),
         );
-        assert_eq!(total, 6000 + 2000);
+        assert_eq!(total, 6000 + 7000);
     }
 
     #[test]
     fn candidate_already_loaded_not_double_counted() {
-        let agents = vec![agent(Some("models/bonsai-8b.gguf"))];
+        let agents = vec![agent(Some("models/qwen3-8b.gguf"))];
         let total = estimate_total_vram(
             &agents,
             "models/gemma-4-e4b.gguf",
-            Some("models/bonsai-8b.gguf"),
+            Some("models/qwen3-8b.gguf"),
         );
-        // Candidate is same as existing agent's model → only bonsai counted
+        // Candidate is same as existing agent's model → only qwen3 counted
         // (no agent uses global gemma, so it's not included)
-        assert_eq!(total, 2000);
+        assert_eq!(total, 7000);
     }
 
     #[test]
@@ -92,12 +92,12 @@ mod vram_budget_tests {
     #[test]
     fn would_exceed_over_budget() {
         let agents = vec![agent(None)]; // gemma = 6000
-        // Adding bonsai = 2000, total = 8000 > 7000
+        // Adding qwen3 8B = 7000, total = 13000 > 12000
         assert!(would_exceed_vram(
             &agents,
             "models/gemma-4-e4b.gguf",
-            Some("models/bonsai-8b.gguf"),
-            7000
+            Some("models/qwen3-8b.gguf"),
+            12000
         ));
     }
 }

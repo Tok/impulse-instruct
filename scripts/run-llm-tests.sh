@@ -6,28 +6,26 @@
 # to test only that one.
 #
 # Server binary selection (mirrors what the app does on model switch):
-#   Bonsai / *bonsai* → .llama-build/bin/llama-server          (PrismML fork, Q1_0_g128)
-#   All other models  → .llama-official-build/bin/llama-server  (standard llama.cpp)
-#   fallback          → llama-server from $PATH
+#   .llama-official-build/bin/llama-server (standard llama.cpp), or
+#   llama-server from $PATH as fallback.
 #
 # Each test fires a prompt 10 times and passes if ≥7 (directional) or ≥9
 # (clearing/schema) responses satisfy the assertion.  A failing test means
 # the model needs better tuning or the system prompt needs adjustment.
 #
 # Prerequisites:
-#   ./scripts/build-bonsai-server.sh   (builds .llama-build/bin/llama-server, PrismML fork)
-#   ./scripts/build-llama-server.sh    (builds .llama-official-build/bin/llama-server, standard)
-#   ./scripts/download-models.sh       (downloads models/Bonsai-8B.gguf)
+#   ./scripts/build-llama-server.sh    (builds .llama-official-build/bin/llama-server)
+#   ./scripts/download-models.sh       (downloads models/gemma-4-E4B-it-Q4_K_M.gguf)
 #
-# Default model set: Gemma 4 E4B + Bonsai 8B (officially evaluated).
+# Default model set: Gemma 4 E4B (officially evaluated).
 # Qwen and Llama variants are skipped by default — pass --all-models to test everything
 # in models/. They may work; the system prompt just isn't tuned for them.
 #
 # Usage:
-#   ./scripts/run-llm-tests.sh                                    # Gemma + Bonsai, all suites
+#   ./scripts/run-llm-tests.sh                                    # Gemma, all suites
 #   ./scripts/run-llm-tests.sh --all-models                       # all *.gguf in models/
-#   ./scripts/run-llm-tests.sh models/Bonsai-8B.gguf              # single model
-#   ./scripts/run-llm-tests.sh models/Bonsai-8B.gguf acid         # single model + filter
+#   ./scripts/run-llm-tests.sh models/gemma-4-E4B-it-Q4_K_M.gguf  # single model
+#   ./scripts/run-llm-tests.sh models/gemma-4-E4B-it-Q4_K_M.gguf acid  # single + filter
 #   ./scripts/run-llm-tests.sh --verbose                          # full JSON, no truncation
 #   ./scripts/run-llm-style.sh                                    # style suite only
 #   ./scripts/run-llm-theory.sh                                   # theory suite only
@@ -59,7 +57,7 @@ done
 # ── Resolve model list ────────────────────────────────────────────────────────
 if [[ -z "$MODEL_ARG" || "$MODEL_ARG" == --* ]]; then
   # No model specified — scan models/ directory.
-  # Default set: Gemma 4 + Bonsai (officially evaluated).
+  # Default set: Gemma 4 (officially evaluated).
   # Qwen requires --all-models (works but adds ~2× runtime for marginal gain).
   # Any other *.gguf (including Llama variants) is included when --all-models is set;
   # they may work but the system prompt is not tuned for them.
@@ -85,7 +83,7 @@ if [[ -z "$MODEL_ARG" || "$MODEL_ARG" == --* ]]; then
     MODELS+=("$m")
   done
   if [[ ${#MODELS[@]} -eq 0 ]]; then
-    echo "ERROR: no default models found (gemma/bonsai). Use --all-models to include Qwen and others."
+    echo "ERROR: no default models found (gemma). Use --all-models to include Qwen and others."
     exit 1
   fi
 else
@@ -94,10 +92,7 @@ fi
 
 # ── Helper: select server binary for a given model path ──────────────────────
 pick_server_bin() {
-  local model_lower="${1,,}"
-  if [[ "$model_lower" == *"bonsai"* ]]; then
-    echo ".llama-build/bin/llama-server"
-  elif [[ -f ".llama-official-build/bin/llama-server" ]]; then
+  if [[ -f ".llama-official-build/bin/llama-server" ]]; then
     echo ".llama-official-build/bin/llama-server"
   elif command -v llama-server &>/dev/null; then
     echo "llama-server"
@@ -109,7 +104,6 @@ pick_server_bin() {
 server_label() {
   local bin="$1"
   case "$bin" in
-    *.llama-build*)          echo "PrismML fork (Q1_0_g128 / Bonsai)" ;;
     *.llama-official-build*) echo "official llama.cpp" ;;
     *)                       echo "\$PATH llama-server" ;;
   esac
@@ -158,8 +152,7 @@ for MODEL in "${MODELS[@]}"; do
 
   if [[ -z "$SERVER_BIN" ]]; then
     echo "ERROR: no llama-server binary found"
-    echo "  For Bonsai models:  ./scripts/build-bonsai-server.sh"
-    echo "  For other models:   ./scripts/build-llama-server.sh"
+    echo "  Run: ./scripts/build-llama-server.sh"
     SUMMARY_LINES+=("  SKIP   $MODEL_NAME  (no server binary)")
     continue
   fi
@@ -286,7 +279,6 @@ names = args[n:count_idx]
 def shorten(name):
     name = re.sub(r'\.gguf$', '', name)
     name = re.sub(r'gemma-4-E4B-it-Q4_K_M', 'Gemma4-E4B', name)
-    name = re.sub(r'[Bb]onsai-8B.*', 'Bonsai-8B', name)
     name = re.sub(r'Qwen_Qwen3-(\w+)-Q4_K_M', r'Qwen3-\1', name)
     return name[:20]
 

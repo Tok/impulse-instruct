@@ -916,9 +916,9 @@ add_effect() {
 add_agent() {
     # Add an AI agent.
     # Usage: add_agent ACID gemma
-    #        add_agent BASS bonsai bass
-    #        add_agent DRUMS bonsai "kit_a,kit_b"
-    #        add_agent MC bonsai "" mc tts    (MC mode with TTS enabled)
+    #        add_agent BASS gemma bass
+    #        add_agent DRUMS gemma "kit_a,kit_b"
+    #        add_agent MC gemma "" mc tts    (MC mode with TTS enabled)
     local persona="$1"
     local model="${2:-gemma}"
     local scope_csv="${3:-}"
