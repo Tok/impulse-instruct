@@ -105,46 +105,48 @@ pub fn apply_llm_update(state: AppState, update: &serde_json::Value, scope: &[St
         // Each helper checks its own scope flag + lock path; cheap to call
         // unconditionally.
         apply_melodic_lane_lens(&mut s, seq, seq_scope_flags, locked);
-        if seq_scope_flags.bass
-            && !locked.contains("sequencer.bass_steps")
-            && let Some(arr) = seq.get("bass_steps").and_then(|v| v.as_array())
-        {
-            apply_llm_step_array(arr, &mut s.sequencer.bass_pattern, MAX_STEPS, |step, a| {
-                step.active = a;
-            });
-            let bass_pattern_clone = s.sequencer.bass_pattern.clone();
-            if let Some(pat) = s.sequencer.bass_patterns.get_mut(0) {
-                *pat = bass_pattern_clone;
+        // Per-voice bass step/accent/slide arrays.  Voice 0 reads the legacy
+        // `bass_{field}` key (and keeps mirroring into `bass_pattern`); voices
+        // 1..=3 read `bass{N+1}_{field}`.  Each field has its own lock path
+        // so the user can pin one voice without freezing the others.
+        if seq_scope_flags.bass {
+            let voice_count = s.sequencer.bass_patterns.len();
+            for voice_idx in 0..voice_count {
+                for (field, set_flag) in [
+                    (
+                        "steps",
+                        apply_step_active as fn(&mut crate::state::TB303Step, bool),
+                    ),
+                    (
+                        "accents",
+                        apply_step_accent as fn(&mut crate::state::TB303Step, bool),
+                    ),
+                    (
+                        "slides",
+                        apply_step_slide as fn(&mut crate::state::TB303Step, bool),
+                    ),
+                ] {
+                    let key = super::llm_apply_seq::bass_voice_field(voice_idx, field);
+                    if locked.contains(&format!("sequencer.{}", key)) {
+                        continue;
+                    }
+                    let Some(arr) = seq.get(&key).and_then(|v| v.as_array()) else {
+                        continue;
+                    };
+                    if let Some(pat) = s.sequencer.bass_patterns.get_mut(voice_idx) {
+                        apply_llm_step_array(arr, pat, MAX_STEPS, set_flag);
+                    }
+                    if voice_idx == 0 {
+                        // Mirror voice 0 into the legacy single-voice pattern.
+                        if let Some(pat) = s.sequencer.bass_patterns.first() {
+                            s.sequencer.bass_pattern = pat.clone();
+                        }
+                    }
+                }
             }
         }
         apply_bass_notes(&mut s, seq, seq_scope_flags, locked);
         apply_bass_pans(&mut s, seq, seq_scope_flags, locked);
-        // bass_accents / bass_slides — parallel per-step flags.  Same format
-        // as bass_steps (bool array or index list).
-        if seq_scope_flags.bass
-            && !locked.contains("sequencer.bass_accents")
-            && let Some(arr) = seq.get("bass_accents").and_then(|v| v.as_array())
-        {
-            apply_llm_step_array(arr, &mut s.sequencer.bass_pattern, MAX_STEPS, |step, a| {
-                step.accent = a;
-            });
-            let clone = s.sequencer.bass_pattern.clone();
-            if let Some(pat) = s.sequencer.bass_patterns.get_mut(0) {
-                *pat = clone;
-            }
-        }
-        if seq_scope_flags.bass
-            && !locked.contains("sequencer.bass_slides")
-            && let Some(arr) = seq.get("bass_slides").and_then(|v| v.as_array())
-        {
-            apply_llm_step_array(arr, &mut s.sequencer.bass_pattern, MAX_STEPS, |step, a| {
-                step.slide = a;
-            });
-            let clone = s.sequencer.bass_pattern.clone();
-            if let Some(pat) = s.sequencer.bass_patterns.get_mut(0) {
-                *pat = clone;
-            }
-        }
 
         let drum_step_fields: &[(&str, DrumVoice, f32, bool)] = &[
             ("kick_a_steps", DrumVoice::Kick808, 1.0, true),
@@ -602,6 +604,19 @@ pub fn apply_llm_update(state: AppState, update: &serde_json::Value, scope: &[St
 // ─── Step-array parser ────────────────────────────────────────────────────────
 
 /// Apply a JSON step array to a mutable pattern slice.
+/// Setter helpers for the three bool-array fields on a `TB303Step` — kept
+/// as named `fn`s so the dispatch table in the per-voice bass loop can hold
+/// a `fn` pointer rather than a trait object per closure.
+fn apply_step_active(s: &mut crate::state::TB303Step, a: bool) {
+    s.active = a;
+}
+fn apply_step_accent(s: &mut crate::state::TB303Step, a: bool) {
+    s.accent = a;
+}
+fn apply_step_slide(s: &mut crate::state::TB303Step, a: bool) {
+    s.slide = a;
+}
+
 ///
 /// Accepts: `[]` clear, `[0,4,8]` index list (< 16), `[1,0,…]` inline 0/1 (≥ 16).
 /// `set_active` must update `active` plus any default fields.

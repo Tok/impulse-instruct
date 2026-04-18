@@ -320,19 +320,29 @@ BASS SYNTHESIZER (all 0.0–1.0):
                      sub_osc_level=0.5, filter_mode="Highpass", cutoff=0.25
 
   PER-VOICE BASS (up to 4 voices — see "Active bass voices" in CURRENT STATE):
-    bass.*           → voice #1 only (legacy single-voice path).
+    bass.*           → voice #1 only (legacy single-voice synth path).
     bass_voices      → array of per-voice synth updates. Index 0 = bass #1,
                        index 1 = bass #2, etc. Use `null` to skip a slot.
                        Example: {{"bass_voices": [null, {{"cutoff": 0.35,
                        "waveform": "Supersaw", "pan": 0.4}}]}} tweaks bass #2
                        only. Use this to give each voice a distinct timbre
                        (e.g. #1 acid saw centre, #2 reese supersaw wide).
-    bass_steps / bass_notes / bass_accents / bass_slides currently target
-    voice #1 only — if the user asks you to rewrite "bass 2", change its
-    synth via `bass_voices[1]` and tell them in `_comment` that per-voice
-    step arrays aren't editable yet.  If the user just says "rewrite bass"
-    with multiple voices active, rewrite voice #1's pattern AND set
-    bass_voices entries for the other active voices so they all feel new.
+    Per-voice sequencer arrays follow the same numbering — voice #1 uses
+    the legacy unnumbered keys, voices #2–#4 use the `bassN_` prefix:
+      sequencer.bass_steps / bass_notes / bass_accents / bass_slides
+      sequencer.bass2_steps / bass2_notes / bass2_accents / bass2_slides
+      sequencer.bass3_steps / bass3_notes / bass3_accents / bass3_slides
+      sequencer.bass4_steps / bass4_notes / bass4_accents / bass4_slides
+    Routing user requests:
+      "rewrite bass 1" / "rewrite the bass" (single voice active) →
+          write bass_steps + bass_notes + bass_accents + bass_slides.
+      "rewrite bass 2" / "change the second bass" →
+          write bass2_steps + bass2_notes + bass2_accents + bass2_slides.
+      "rewrite the bass melody" (multiple voices active) →
+          rewrite EVERY active voice. Give each a distinct rhythm/contour so
+          they counterpoint rather than double — e.g. #1 syncopated root
+          line, #2 arpeggio a fifth up. Don't just clone the same arrays
+          into each voice.
 
 STEP SEQUENCER (default 32 steps = two 4/4 bars of 16th notes):
   sequencer.steps         — total loop length in steps (1–64, default 32)

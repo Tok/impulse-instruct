@@ -226,6 +226,64 @@ mod llm_apply_sequencer_tests {
     }
 
     #[test]
+    fn sequencer_bass2_steps_target_voice_1() {
+        // bass2_steps writes bass_patterns[1] only — voice 0 (bass_pattern)
+        // must remain untouched.
+        let s = AppState::default();
+        let update = serde_json::json!({
+            "sequencer": { "bass2_steps": [0, 6, 12] }
+        });
+        let s = apply_llm_update(s, &update, &[]);
+        // Voice 1 got the pattern.
+        assert!(s.sequencer.bass_patterns[1][0].active);
+        assert!(s.sequencer.bass_patterns[1][6].active);
+        assert!(s.sequencer.bass_patterns[1][12].active);
+        // Voice 0 and the legacy mirror are untouched.
+        assert!(!s.sequencer.bass_pattern[0].active);
+        assert!(!s.sequencer.bass_patterns[0][6].active);
+    }
+
+    #[test]
+    fn sequencer_bass2_notes_accents_slides() {
+        let s = AppState::default();
+        let update = serde_json::json!({
+            "sequencer": {
+                "bass2_notes":   [48, 43, 41, 36],
+                "bass2_accents": [0, 3],
+                "bass2_slides":  [0]
+            }
+        });
+        let s = apply_llm_update(s, &update, &[]);
+        assert_eq!(s.sequencer.bass_patterns[1][0].note, 48);
+        assert_eq!(s.sequencer.bass_patterns[1][3].note, 36);
+        assert!(s.sequencer.bass_patterns[1][0].accent);
+        assert!(s.sequencer.bass_patterns[1][3].accent);
+        assert!(s.sequencer.bass_patterns[1][0].slide);
+        // Voice 0 untouched.
+        assert_eq!(s.sequencer.bass_pattern[0].note, 36); // default C2
+        assert!(!s.sequencer.bass_pattern[0].accent);
+    }
+
+    #[test]
+    fn sequencer_bass2_steps_independent_lock_from_bass_steps() {
+        // Locking sequencer.bass_steps must NOT freeze bass2_steps.
+        let s = AppState::default();
+        let s = lock_param(s, "sequencer.bass_steps");
+        let update = serde_json::json!({
+            "sequencer": {
+                "bass_steps":  [0, 4, 8, 12],
+                "bass2_steps": [0, 6]
+            }
+        });
+        let s = apply_llm_update(s, &update, &[]);
+        // Voice 0 pattern locked — no changes.
+        assert!(!s.sequencer.bass_pattern[4].active);
+        // Voice 1 still writable.
+        assert!(s.sequencer.bass_patterns[1][0].active);
+        assert!(s.sequencer.bass_patterns[1][6].active);
+    }
+
+    #[test]
     fn sequencer_kick_a_steps_index_list() {
         let s = AppState::default();
         let update = serde_json::json!({ "sequencer": { "kick_a_steps": [0, 4, 8, 12] } });

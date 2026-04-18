@@ -304,22 +304,12 @@ pub(super) fn apply_melodic_lane_lens(
     }
 }
 
-/// Apply the bass `bass_notes` array (per-step MIDI notes).  Notes are
-/// clamped to 0..=127 and snapped to the active scale when
-/// `scale_snap` is on.  Voice-0's mirror pattern is updated in lockstep so
-/// the legacy single-voice fields and per-voice fields stay coherent.
-pub(super) fn apply_bass_notes(
-    s: &mut AppState,
-    seq: &Map<String, Value>,
-    scope: SeqScope,
-    locked: &HashSet<String>,
-) {
-    if !scope.bass || locked.contains("sequencer.bass_notes") {
-        return;
-    }
-    let Some(arr) = seq.get("bass_notes").and_then(|v| v.as_array()) else {
-        return;
-    };
+/// Apply a `bass_notes` / `bass2_notes` / `bass3_notes` / `bass4_notes`
+/// array to `bass_patterns[voice_idx]`.  Voice 0 additionally mirrors into
+/// the legacy `bass_pattern` field so older code paths stay coherent.
+/// Notes are clamped to 0..=127 and snapped to the current scale when
+/// `scale_snap` is on.  Caller has already verified scope + lock.
+fn write_bass_notes_to_voice(s: &mut AppState, arr: &[Value], voice_idx: usize) {
     let snap = s.sequencer.scale_snap;
     let root = s.sequencer.root_note;
     let scale = s.sequencer.scale;
@@ -331,36 +321,85 @@ pub(super) fn apply_bass_notes(
             } else {
                 note
             };
-            s.sequencer.bass_pattern[i].note = snapped;
-            if let Some(pat) = s.sequencer.bass_patterns.get_mut(0) {
+            if voice_idx == 0 {
+                s.sequencer.bass_pattern[i].note = snapped;
+            }
+            if let Some(pat) = s.sequencer.bass_patterns.get_mut(voice_idx) {
                 pat[i].note = snapped;
             }
         }
     }
 }
 
-/// Apply per-step pan offsets (`bass_pans`, parallel to `bass_notes`).
-/// Each value is clamped to `-1..=1`; `0.0` means "use the voice's
-/// static pan".  Mirrors voice 0's bass_patterns slot in lockstep.
+/// Apply `bass_pans` / `bassN_pans` to a specific voice.  Caller guarantees
+/// scope + lock have already been checked.
+fn write_bass_pans_to_voice(s: &mut AppState, arr: &[Value], voice_idx: usize) {
+    for (i, val) in arr.iter().enumerate().take(MAX_STEPS) {
+        if let Some(p) = val.as_f64() {
+            let p = (p as f32).clamp(-1.0, 1.0);
+            if voice_idx == 0 {
+                s.sequencer.bass_pattern[i].pan = p;
+            }
+            if let Some(pat) = s.sequencer.bass_patterns.get_mut(voice_idx) {
+                pat[i].pan = p;
+            }
+        }
+    }
+}
+
+/// JSON key for a bass voice's sequencer array.  Voice 0 uses the legacy
+/// `bass_{field}` form; voices 1..=3 use `bass{N+1}_{field}` (user-facing
+/// numbering: #2, #3, #4).
+pub(super) fn bass_voice_field(voice_idx: usize, field: &str) -> String {
+    if voice_idx == 0 {
+        format!("bass_{}", field)
+    } else {
+        format!("bass{}_{}", voice_idx + 1, field)
+    }
+}
+
+/// Apply all four melodic arrays (`notes`, `pans`, `accents`, `slides`)
+/// from the JSON object for every bass voice slot.  Voice 0 reads the
+/// legacy `bass_*` keys; voices 1..=3 read `bass{N+1}_*`.  Unlocks and
+/// scope are already gated at the caller — this is the fan-out layer.
+pub(super) fn apply_bass_notes(
+    s: &mut AppState,
+    seq: &Map<String, Value>,
+    scope: SeqScope,
+    locked: &HashSet<String>,
+) {
+    if !scope.bass {
+        return;
+    }
+    let voice_count = s.sequencer.bass_patterns.len();
+    for voice_idx in 0..voice_count {
+        let key = bass_voice_field(voice_idx, "notes");
+        if locked.contains(&format!("sequencer.{}", key)) {
+            continue;
+        }
+        if let Some(arr) = seq.get(&key).and_then(|v| v.as_array()) {
+            write_bass_notes_to_voice(s, arr, voice_idx);
+        }
+    }
+}
+
 pub(super) fn apply_bass_pans(
     s: &mut AppState,
     seq: &Map<String, Value>,
     scope: SeqScope,
     locked: &HashSet<String>,
 ) {
-    if !scope.bass || locked.contains("sequencer.bass_pans") {
+    if !scope.bass {
         return;
     }
-    let Some(arr) = seq.get("bass_pans").and_then(|v| v.as_array()) else {
-        return;
-    };
-    for (i, val) in arr.iter().enumerate().take(MAX_STEPS) {
-        if let Some(p) = val.as_f64() {
-            let p = (p as f32).clamp(-1.0, 1.0);
-            s.sequencer.bass_pattern[i].pan = p;
-            if let Some(pat) = s.sequencer.bass_patterns.get_mut(0) {
-                pat[i].pan = p;
-            }
+    let voice_count = s.sequencer.bass_patterns.len();
+    for voice_idx in 0..voice_count {
+        let key = bass_voice_field(voice_idx, "pans");
+        if locked.contains(&format!("sequencer.{}", key)) {
+            continue;
+        }
+        if let Some(arr) = seq.get(&key).and_then(|v| v.as_array()) {
+            write_bass_pans_to_voice(s, arr, voice_idx);
         }
     }
 }
