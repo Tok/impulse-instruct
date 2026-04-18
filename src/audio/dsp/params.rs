@@ -551,6 +551,12 @@ pub struct AudioParams {
     /// Per-slice volume multiplier (0..2, NaN sentinel in slot 0 = unused
     /// → all slices share the global amen_volume).  Applied multiplicatively.
     pub amen_slice_volumes: [f32; 16],
+    /// Per-slice playback direction override.  `-1` in a slot = inherit
+    /// the global `amen_reverse` flag; `0` = force forward; `1` = force
+    /// reverse.  All slots default to `-1` so unless the user / LLM
+    /// populates `AmenState.slice_reverses`, the voice behaves exactly
+    /// like the pre-per-slice version.
+    pub amen_slice_reverses: [i8; 16],
     /// BPM the source sample was originally recorded at.  Used only when
     /// amen_bpm_stretch is true.
     pub amen_source_bpm: f32,
@@ -855,6 +861,13 @@ impl AudioParams {
                 let mut arr = [f32::NAN; 16];
                 for (i, v) in s.amen.slice_volumes.iter().take(16).enumerate() {
                     arr[i] = v.clamp(0.0, 2.0);
+                }
+                arr
+            },
+            amen_slice_reverses: {
+                let mut arr = [-1_i8; 16];
+                for (i, &rev) in s.amen.slice_reverses.iter().take(16).enumerate() {
+                    arr[i] = if rev { 1 } else { 0 };
                 }
                 arr
             },

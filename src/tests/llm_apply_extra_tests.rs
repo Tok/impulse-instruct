@@ -623,6 +623,87 @@ mod amen_update_tests {
     }
 
     #[test]
+    fn slice_reverses_apply_from_bool_array() {
+        let s = AppState::default();
+        let s = apply_llm_update(
+            s,
+            &serde_json::json!({ "amen": { "slice_reverses": [true, false, true, false] } }),
+            &[],
+        );
+        assert_eq!(s.amen.slice_reverses, vec![true, false, true, false]);
+    }
+
+    #[test]
+    fn slice_reverses_accept_integer_0_1() {
+        // Older Gemma outputs sometimes emit 0/1 integers for bools — the
+        // apply layer tolerates both.
+        let s = AppState::default();
+        let s = apply_llm_update(
+            s,
+            &serde_json::json!({ "amen": { "slice_reverses": [1, 0, 1] } }),
+            &[],
+        );
+        assert_eq!(s.amen.slice_reverses, vec![true, false, true]);
+    }
+
+    #[test]
+    fn slice_reverses_null_clears_the_vec() {
+        let mut s = AppState::default();
+        s.amen.slice_reverses = vec![true, false, true];
+        let s = apply_llm_update(
+            s,
+            &serde_json::json!({ "amen": { "slice_reverses": null } }),
+            &[],
+        );
+        assert!(s.amen.slice_reverses.is_empty());
+    }
+
+    #[test]
+    fn slice_reverses_truncates_at_sixteen() {
+        let s = AppState::default();
+        let arr: Vec<bool> = (0..20).map(|i| i % 2 == 0).collect();
+        let s = apply_llm_update(
+            s,
+            &serde_json::json!({ "amen": { "slice_reverses": arr } }),
+            &[],
+        );
+        assert_eq!(s.amen.slice_reverses.len(), 16);
+    }
+
+    #[test]
+    fn slice_reverses_locked_field_is_preserved() {
+        let mut s = AppState::default();
+        s.amen.slice_reverses = vec![true, true];
+        s.llm
+            .locked_params
+            .insert("amen.slice_reverses".to_string());
+        let s = apply_llm_update(
+            s,
+            &serde_json::json!({ "amen": { "slice_reverses": [false, false, false] } }),
+            &[],
+        );
+        assert_eq!(s.amen.slice_reverses, vec![true, true]);
+    }
+
+    #[test]
+    fn params_encode_slice_reverses_with_minus_one_sentinel() {
+        // Empty Vec → every slot stays at -1 (inherit global).
+        use crate::audio::AudioParams;
+        let s = AppState::default();
+        let p = AudioParams::from_app_state(&s);
+        assert!(p.amen_slice_reverses.iter().all(|&x| x == -1));
+    }
+
+    #[test]
+    fn params_encode_populated_slice_reverses_as_0_and_1() {
+        use crate::audio::AudioParams;
+        let mut s = AppState::default();
+        s.amen.slice_reverses = vec![true, false, true];
+        let p = AudioParams::from_app_state(&s);
+        assert_eq!(&p.amen_slice_reverses[..5], &[1, 0, 1, -1, -1]);
+    }
+
+    #[test]
     fn locked_amen_field_is_preserved() {
         let mut s = AppState::default();
         s.amen.gate = 0.5;

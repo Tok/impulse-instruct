@@ -25,8 +25,10 @@ they ship and are reflected in `features.md`.
 - **Pitch-preserving BPM stretch on amen** — current stretch shifts
   pitch; phase-vocoder / granular stretch for tempo match without pitch
   change.
-- **Per-slice playback direction on amen** — currently reverse is a
-  global flag; per-slice reverse would enable edit-era glitch patterns.
+- **Per-slice amen reverse UI** — state / DSP / API / LLM-apply all
+  handle `amen.slice_reverses`; what's missing is a 16-cell toggle row
+  on the Amen panel so the user can click individual slices backward
+  without going through the API.
 - **Reverse mode for compressor envelope** — third FX worth reversing.
   Would give "reverse compression" swell-into-hit transient shaping.
 

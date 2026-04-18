@@ -144,6 +144,27 @@ A detailed log of what's built.
   `(one-shot)` for quick tailing.
 - 4 new serde tests pin the default + field parsing.
 
+### Per-slice amen reverse
+
+- `AmenState.slice_reverses: Vec<bool>` — parallel to `slice_pitches` /
+  `slice_volumes`.  Empty (default) → every slice inherits the global
+  `reverse` flag (fully backwards-compatible).  Populated → entry N
+  forces slice N's direction (`true` = reverse, `false` = forward),
+  unused trailing slots fall back to global.
+- `AudioParams.amen_slice_reverses: [i8; 16]` encodes the Vec with a
+  `-1` sentinel for "inherit global"; `0` = forward, `1` = reverse.
+  The DSP trigger consults this slot before falling back to the global
+  flag, so specific slices can glitch backwards while the rest of the
+  break plays forward — classic edit-era chop patterns.
+- `apply_llm_update` takes `{"amen": {"slice_reverses": [true, false,
+  ...]}}` (bools or 0/1 integers tolerated), `null` clears, truncates
+  at 16.  Honours the `amen.slice_reverses` lock path.
+- Backend-only for now — exposed via state + DSP + LLM apply + API; UI
+  toggles on the Amen panel are listed as a follow-up in `PLAN.md`.
+- 10 new tests pin the DSP per-slice override path (both directions +
+  sentinel), the apply-layer bool/int/null handling, lock preservation,
+  16-entry truncation, and the params i8 encoding.
+
 ### Lane fade-in ramp
 
 - Phase 2 cycles only replace one voice at a time, which made pattern

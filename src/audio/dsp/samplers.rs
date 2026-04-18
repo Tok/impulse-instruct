@@ -75,6 +75,9 @@ impl AmenVoice {
     /// - `reverse` — play the slice from end to start.
     /// - `gate` — 0..1, fraction of the slice that actually plays.
     /// - `stutter` — extra retriggers of this same slice (0 = play once).
+    /// - `slice_reverses` — per-slice direction override.  `-1` in a slot = use the
+    ///   global `reverse`; `0` = force forward; `1` = force reverse.  Lets specific
+    ///   slices glitch backwards while the rest of the break plays forward.
     #[allow(clippy::too_many_arguments)]
     pub(super) fn trigger(
         &mut self,
@@ -88,6 +91,7 @@ impl AmenVoice {
         slice_positions: &[f32; 16],
         slice_pitches: &[f32; 16],
         slice_volumes: &[f32; 16],
+        slice_reverses: &[i8; 16],
         bpm_stretch: bool,
         source_bpm: f32,
         sequencer_bpm: f32,
@@ -143,8 +147,17 @@ impl AmenVoice {
 
         self.slice_start = sstart;
         self.slice_end = send;
-        self.direction = if reverse { -1.0 } else { 1.0 };
-        if reverse {
+        // Per-slice direction override: -1 in the slot = inherit global,
+        // 0 = force forward, 1 = force reverse.  Fallthrough when the
+        // slice index is out of bounds (idx0 >= 16 can happen with
+        // slice_count caps that grow later).
+        let reversed = match slice_reverses.get(idx0 as usize).copied().unwrap_or(-1) {
+            1 => true,
+            0 => false,
+            _ => reverse,
+        };
+        self.direction = if reversed { -1.0 } else { 1.0 };
+        if reversed {
             self.pos = send - 1.0;
             self.gate_end = send - gate_window;
         } else {
@@ -184,8 +197,9 @@ impl AmenVoice {
     #[allow(dead_code)]
     pub(super) fn trigger_whole(&mut self) {
         let nan16 = [f32::NAN; 16];
+        let none16 = [-1_i8; 16];
         self.trigger(
-            1, 1, 0.0, 1.0, false, 1.0, 0, &nan16, &nan16, &nan16, false, 136.0, 170.0,
+            1, 1, 0.0, 1.0, false, 1.0, 0, &nan16, &nan16, &nan16, &none16, false, 136.0, 170.0,
         );
     }
 
@@ -395,6 +409,13 @@ mod tests {
         [f32::NAN; 16]
     }
 
+    /// Per-slice reverse-override sentinel: every slot at `-1` means
+    /// "inherit the global `reverse` flag", which preserves the legacy
+    /// behaviour the existing trigger tests assert.
+    fn none16() -> [i8; 16] {
+        [-1_i8; 16]
+    }
+
     fn render(voice: &mut AmenVoice, n: usize) -> Vec<f32> {
         (0..n).map(|_| voice.process(0.0, 1.0, false)).collect()
     }
@@ -426,6 +447,7 @@ mod tests {
             &nan16(),
             &nan16(),
             &nan16(),
+            &none16(),
             false,
             136.0,
             136.0,
@@ -450,6 +472,7 @@ mod tests {
             &nan16(),
             &nan16(),
             &nan16(),
+            &none16(),
             false,
             136.0,
             136.0,
@@ -477,6 +500,7 @@ mod tests {
             &nan16(),
             &nan16(),
             &nan16(),
+            &none16(),
             false,
             136.0,
             136.0,
@@ -508,6 +532,7 @@ mod tests {
             &nan16(),
             &nan16(),
             &nan16(),
+            &none16(),
             false,
             136.0,
             136.0,
@@ -538,6 +563,7 @@ mod tests {
             &pos,
             &nan16(),
             &nan16(),
+            &none16(),
             false,
             136.0,
             136.0,
@@ -563,6 +589,7 @@ mod tests {
             &nan16(),
             &nan16(),
             &nan16(),
+            &none16(),
             false,
             136.0,
             136.0,
@@ -580,10 +607,98 @@ mod tests {
             &nan16(),
             &nan16(),
             &nan16(),
+            &none16(),
             false,
             136.0,
             136.0,
         );
         assert_eq!(v.process(0.0, 1.0, false), 4.0);
+    }
+
+    #[test]
+    fn per_slice_reverse_overrides_global_forward() {
+        // Global `reverse=false` but slot 0 of `slice_reverses` = 1 (force
+        // reverse).  Playing slice 1 (idx0=0) should read backwards.
+        let mut v = AmenVoice::new();
+        v.load(ramp_sample(8));
+        let mut rev = none16();
+        rev[0] = 1;
+        v.trigger(
+            1,
+            1,
+            0.0,
+            1.0,
+            false, // global: forward
+            1.0,
+            0,
+            &nan16(),
+            &nan16(),
+            &nan16(),
+            &rev,
+            false,
+            136.0,
+            136.0,
+        );
+        let out = render(&mut v, 4);
+        // Per-slice override flips direction: starts at 7.0 and walks down.
+        assert!(out[0] > out[1] && out[1] > out[2]);
+        assert!((out[0] - 7.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn per_slice_override_forces_forward_on_global_reverse() {
+        // Global `reverse=true` but slot 0 = 0 (force forward).  Slice plays
+        // normally despite the global flag.
+        let mut v = AmenVoice::new();
+        v.load(ramp_sample(8));
+        let mut rev = none16();
+        rev[0] = 0;
+        v.trigger(
+            1,
+            1,
+            0.0,
+            1.0,
+            true, // global: reverse
+            1.0,
+            0,
+            &nan16(),
+            &nan16(),
+            &nan16(),
+            &rev,
+            false,
+            136.0,
+            136.0,
+        );
+        let out = render(&mut v, 4);
+        assert!(out[0] < out[1] && out[1] < out[2]);
+        assert_eq!(out[0], 0.0);
+    }
+
+    #[test]
+    fn per_slice_sentinel_inherits_global() {
+        // Slot 0 = -1 means "inherit global".  With global=true, playback
+        // must be reverse even though the override array is "populated".
+        let mut v = AmenVoice::new();
+        v.load(ramp_sample(8));
+        let rev = none16(); // all -1
+        v.trigger(
+            1,
+            1,
+            0.0,
+            1.0,
+            true, // global: reverse
+            1.0,
+            0,
+            &nan16(),
+            &nan16(),
+            &nan16(),
+            &rev,
+            false,
+            136.0,
+            136.0,
+        );
+        let out = render(&mut v, 4);
+        assert!(out[0] > out[1]);
+        assert!((out[0] - 7.0).abs() < 0.01);
     }
 }

@@ -220,6 +220,25 @@ pub(super) fn apply_amen_update(
             s.amen.slice_volumes.clear();
         }
     }
+    // Per-slice reverse: JSON is a bool array, `null` clears, booleans
+    // accepted as-is and 0/1 integers tolerated (older model outputs).
+    if !locked.contains("amen.slice_reverses")
+        && let Some(v) = a.get("slice_reverses")
+    {
+        if let Some(arr) = v.as_array() {
+            s.amen.slice_reverses = arr
+                .iter()
+                .filter_map(|x| match x {
+                    Value::Bool(b) => Some(*b),
+                    Value::Number(n) => n.as_u64().map(|u| u != 0),
+                    _ => None,
+                })
+                .take(16)
+                .collect();
+        } else if v.is_null() {
+            s.amen.slice_reverses.clear();
+        }
+    }
 }
 
 /// Map a textual voice id (`"kick_a"`, `"snare_b"`, …) to its `DrumVoice`
