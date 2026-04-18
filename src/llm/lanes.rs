@@ -73,16 +73,11 @@ impl LaneKind {
     /// off-topic emission doesn't leak into the wrong lane's state write.
     pub fn output_keys(self) -> &'static [&'static str] {
         match self {
-            // Settings owns `sequencer` too — its subkey filter then
-            // restricts to global knobs (bpm/swing/steps/root_note/…).
-            LaneKind::Settings => &[
-                "settings",
-                "music_api",
-                "behaviour",
-                "ramp",
-                "ramps",
-                "sequencer",
-            ],
+            // `settings` is NOT included — style is user-owned and must
+            // not be changed by the pipeline.  Settings lane only touches
+            // sequencer globals (bpm/swing/key/scale) plus generative
+            // helpers (music_api / behaviour / ramps).
+            LaneKind::Settings => &["music_api", "behaviour", "ramp", "ramps", "sequencer"],
             LaneKind::Bass(_) => &["bass", "bass_voices", "sequencer"],
             LaneKind::KitA | LaneKind::KitB => &["sequencer"],
             LaneKind::Amen => &["amen", "sequencer"],
@@ -169,10 +164,11 @@ impl LaneKind {
     /// keeps the model from wandering into other lanes.
     pub fn task_description(self) -> String {
         match self {
-            LaneKind::Settings => "Set the global settings for this jam: style id, bpm, swing, \
-                root_note, scale. Emit only the `settings` object and the `sequencer` \
-                globals (bpm/steps/swing/time_sig_num/root_note/scale). \
-                Do not write any voice patterns in this call."
+            LaneKind::Settings => "Set the sequencer globals for this jam: bpm, swing, \
+                root_note, scale, time_sig_num. Emit ONLY the `sequencer` globals \
+                (bpm/steps/swing/time_sig_num/root_note/scale). \
+                NEVER change `style` or write a `settings.style` field — style is user-\
+                owned and must stay fixed. Do not write any voice patterns in this call."
                 .into(),
             LaneKind::Bass(idx) => {
                 let prefix = if idx == 0 {
@@ -336,15 +332,16 @@ pub fn build_lane_prompt(state: &AppState, lane: LaneKind) -> String {
 
     format!(
         "You are the {lane_label} writer inside Impulse Instruct. Output ONLY valid JSON \
-         matching the schema. No prose outside `_comment`.\n\
+         matching the schema. No prose.\n\
          \n\
          STATE: {state_header}\n\
          LOCKED (never overwrite): {locked_str}\n\
          {style_hint}{coverage}{harmony_block}{bass_context}\n\
          TASK: {task}\n\
          \n\
-         Always start with `_thinking` (one short sentence). Keep `_comment` concise. \
-         Emit every required field — missing fields break the jam.",
+         Emit ONLY the required fields. Skip `_thinking` and `_comment` — the pipeline \
+         logs lane progress for you, they just eat your token budget. Prefer index lists \
+         (`[0, 4, 8]`) over inline bool arrays — they're 4× shorter.",
         lane_label = lane.label(),
         state_header = state_header,
         locked_str = locked_str,
@@ -389,16 +386,18 @@ pub fn lane_schema(lane: LaneKind) -> serde_json::Value {
     let pan_array = serde_json::json!({ "type": "array", "items": { "type": "number", "minimum": -1.0, "maximum": 1.0 }, "maxItems": 64 });
 
     let common_top = |props: serde_json::Value, required: Vec<&str>| -> serde_json::Value {
-        // Every lane also permits a `_thinking` preamble and a `_comment`
-        // (required in chatty modes, optional-but-present in Off mode).
+        // `_thinking` / `_comment` stay in `properties` (grammar accepts
+        // them if the model emits anyway) but with tight length caps so
+        // they can't devour the per-lane token budget.  Pipeline logs
+        // per-lane progress, so thinking is redundant here.
         let mut props_obj = props.as_object().cloned().unwrap_or_default();
         props_obj.insert(
             "_thinking".into(),
-            serde_json::json!({ "type": "string", "maxLength": 200 }),
+            serde_json::json!({ "type": "string", "maxLength": 80 }),
         );
         props_obj.insert(
             "_comment".into(),
-            serde_json::json!({ "type": "string", "maxLength": 200 }),
+            serde_json::json!({ "type": "string", "maxLength": 80 }),
         );
         serde_json::json!({
             "$schema": "http://json-schema.org/draft-07/schema",
@@ -591,9 +590,10 @@ pub fn lane_schema(lane: LaneKind) -> serde_json::Value {
             serde_json::json!({ "rack": { "type": "object" } }),
             vec!["rack"],
         ),
+        // No `settings` object here — style is user-owned.  Only the
+        // sequencer globals are writable (bpm / swing / key / scale / time sig).
         LaneKind::Settings => common_top(
             serde_json::json!({
-                "settings": { "type": "object" },
                 "sequencer": {
                     "type": "object",
                     "properties": {

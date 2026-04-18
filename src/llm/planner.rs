@@ -50,10 +50,11 @@ pub fn build_planner_prompt(state: &AppState) -> String {
          lane writes that slice of the synth.\n\
          \n\
          STATE: style={style} active_voices=[{active_voices}]\n\
+         STYLE IS USER-OWNED — never request a lane that changes it.\n\
          \n\
          AVAILABLE LANES:\n\
-         • settings  — bpm / swing / key / scale / style (fire first on a \
-           style change or initial jam)\n\
+         • settings  — bpm / swing / key / scale (NOT style — style is user-\
+           owned).  Fire first on an initial jam or when bpm/key should change.\n\
          • bass1 / bass2 / bass3 / bass4 — per-voice bass patterns + synth\n\
          • kit_a     — 808 drums (kick_a / snare_a / hihat_a)\n\
          • kit_b     — 909 drums (kick_b / snare_b / clap_b / hihat_b)\n\

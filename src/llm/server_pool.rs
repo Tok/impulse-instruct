@@ -389,10 +389,10 @@ impl crate::llm::pipeline::PipelineBackend for LlamaServerBackend {
         // tight schemas (required fields + additionalProperties:false),
         // so the server can't emit something off-spec.
         //
-        // Per-lane max_tokens can be tighter than the monolithic 2400 —
-        // even the bass lane's full 5-array payload sits around 500
-        // tokens.  Giving the server a lower ceiling caps any runaway
-        // emission without clipping real output.
+        // Per-lane max_tokens sized for the largest realistic lane
+        // payload (bass with 5 arrays × 32 steps + schema padding ≈
+        // 600-800 tokens).  1600 gives headroom without inviting the
+        // rambling `_thinking` blocks we saw at 2400 in monolithic.
         let body = serde_json::json!({
             "model": "local",
             "messages": [
@@ -406,7 +406,7 @@ impl crate::llm::pipeline::PipelineBackend for LlamaServerBackend {
             "repeat_penalty": sampling.repeat_penalty as f64,
             "frequency_penalty": frequency_penalty,
             "seed": sampling.seed,
-            "max_tokens": 900,
+            "max_tokens": 1600,
             "cache_prompt": true,
             "response_format": {
                 "type": "json_schema",
