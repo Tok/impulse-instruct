@@ -599,14 +599,39 @@ impl eframe::App for ImpulseApp {
             self.startup_done = true;
             let has_agents = !self.state.read().llm_agents.is_empty();
             if has_agents {
+                // Phrase the prompt in terms of the user's selected style
+                // instead of asking the model to "pick a style".  When no
+                // style is set we fall back to a neutral phrasing so the
+                // sentence still reads cleanly.
+                let style_label = {
+                    let s = self.state.read();
+                    match s.llm.active_style.as_deref() {
+                        Some("__free__") | None => None,
+                        Some("__custom__") => {
+                            let t = s.llm.custom_style_text.trim();
+                            if t.is_empty() {
+                                None
+                            } else {
+                                Some(t.to_string())
+                            }
+                        }
+                        Some(id) => crate::llm::styles::StyleCatalog::get()
+                            .find_by_id(id)
+                            .map(|s| s.name.clone()),
+                    }
+                };
+                let head = match style_label {
+                    Some(name) => format!("Create a pattern in the style of {}.", name),
+                    None => "Create a starter pattern.".to_string(),
+                };
+                let prompt = format!(
+                    "{head} Bass line should use 3-5 different notes but leave gaps — not \
+                     every step needs a note. Use accent and slide on some steps. Add a \
+                     kick pattern and hi-hats. Set the filter to something interesting. \
+                     Set pan positions for stereo width and add subtle chorus."
+                );
                 let _ = self.llm_tx.try_send(crate::llm::LlmInput::Infer {
-                    prompt: "Pick a style and create a pattern. Bass line should use \
-                             3-5 different notes but leave gaps — not every step \
-                             needs a note. Use accent and slide on some steps. \
-                             Add a kick pattern and hi-hats. Set the filter \
-                             to something interesting. Set pan positions for \
-                             stereo width and add subtle chorus."
-                        .into(),
+                    prompt,
                     one_shot: true,
                     agent_id: None,
                 });
