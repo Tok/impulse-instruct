@@ -18,6 +18,7 @@ cargo test                           # unit tests (split across src/tests/)
 ./scripts/run-llm-tests.sh           # all LLM integration suites (needs running model)
 ./scripts/run-llm-style.sh           # artist/genre reference tests only
 ./scripts/run-llm-theory.sh          # music theory + producer lingo tests only
+./scripts/run-llm-bass.sh            # bass directive tests (multi-voice, accent/slide, subset, coverage)
 ```
 
 Windows equivalents (`.bat` files mirror every `.sh` script):
@@ -31,6 +32,7 @@ scripts\build-bonsai-server.bat
 scripts\run-llm-tests.bat
 scripts\run-llm-style.bat
 scripts\run-llm-theory.bat
+scripts\run-llm-bass.bat
 ```
 
 ## Architecture - what lives where

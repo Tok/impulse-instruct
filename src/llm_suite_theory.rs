@@ -68,7 +68,7 @@ fn setup() -> Option<(LlamaServerBackend, String)> {
     let backend = if let Ok(url) = std::env::var("LLAMA_SERVER_URL") {
         LlamaServerBackend::connect(&url)
     } else {
-        LlamaServerBackend::new(&state.llm.model_path)
+        LlamaServerBackend::new(&state.llm.model_path, 8192, 18080)
     };
     if !backend.is_live() {
         eprintln!(

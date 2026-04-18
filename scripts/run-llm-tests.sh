@@ -37,9 +37,11 @@ cd "$(dirname "$0")/.."
 
 # ── Suite selection ───────────────────────────────────────────────────────────
 # LLM_SUITE env selects which test module to run (prefix-matched by cargo test):
-#   llm_suite          → all three suites (llm_suite + llm_suite_style + llm_suite_theory)
+#   llm_suite          → all suites (core + style + theory + bass)
 #   llm_suite_style    → artist/genre reference tests only
 #   llm_suite_theory   → music theory + producer lingo tests only
+#   llm_suite_bass     → bass directive tests (multi-voice, accent/slide,
+#                        subset rule, full-coverage rule)
 SUITE="${LLM_SUITE:-llm_suite}"
 
 # ── Args ──────────────────────────────────────────────────────────────────────

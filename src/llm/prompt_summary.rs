@@ -238,7 +238,7 @@ mod tests {
 
     #[test]
     fn rack_coverage_lists_wired_voices_and_rule() {
-        use crate::state::{ModuleKind, RACK_PRESETS, RackState};
+        use crate::state::{RACK_PRESETS, RackState};
         // "Full" preset includes bass + 808 + 909 + amen wired to MASTER.
         let full_preset = RACK_PRESETS
             .iter()
