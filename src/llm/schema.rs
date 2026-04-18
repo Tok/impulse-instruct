@@ -7,6 +7,7 @@ pub fn param_json_schema() -> serde_json::Value {
     let bool_array =
         serde_json::json!({ "type": "array", "items": { "type": "boolean" }, "maxItems": 64 });
     let note_array = serde_json::json!({ "type": "array", "items": { "type": "integer", "minimum": 0, "maximum": 127 }, "maxItems": 64 });
+    let pan_array = serde_json::json!({ "type": "array", "items": { "type": "number", "minimum": -1.0, "maximum": 1.0 }, "maxItems": 64 });
     serde_json::json!({
         "$schema": "http://json-schema.org/draft-07/schema",
         "type": "object",
@@ -67,18 +68,22 @@ pub fn param_json_schema() -> serde_json::Value {
                     "bass_notes":    note_array.clone(),
                     "bass_accents":  bool_array.clone(),
                     "bass_slides":   bool_array.clone(),
+                    "bass_pans":     pan_array.clone(),
                     "bass2_steps":   bool_array.clone(),
                     "bass2_notes":   note_array.clone(),
                     "bass2_accents": bool_array.clone(),
                     "bass2_slides":  bool_array.clone(),
+                    "bass2_pans":    pan_array.clone(),
                     "bass3_steps":   bool_array.clone(),
                     "bass3_notes":   note_array.clone(),
                     "bass3_accents": bool_array.clone(),
                     "bass3_slides":  bool_array.clone(),
+                    "bass3_pans":    pan_array.clone(),
                     "bass4_steps":   bool_array.clone(),
                     "bass4_notes":   note_array,
                     "bass4_accents": bool_array.clone(),
                     "bass4_slides":  bool_array.clone(),
+                    "bass4_pans":    pan_array,
                     "kick_a_steps":  bool_array.clone(),
                     "snare_a_steps": bool_array.clone(),
                     "hihat_a_steps": bool_array.clone(),

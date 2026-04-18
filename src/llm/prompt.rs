@@ -647,6 +647,26 @@ response that touches bass MUST populate each one. Leaving voice #2 (or
 Write bass_steps/bass_notes AND bass2_steps/bass2_notes (plus 3/4 as
 needed) — different rhythms and contours, not clones.
 
+GROOVE CHECKLIST — every time you write a bass pattern, emit the WHOLE set
+of arrays for that voice, not just steps+notes:
+  1. bass_steps          — the rhythm (index list preferred)
+  2. bass_notes          — melodic contour across BOTH halves
+  3. bass_accents        — 3–5 per 32 steps. The downbeat (0), one
+                           second-half anchor (~16), and 1–2 syncopated
+                           push hits. No accents = dead bassline.
+  4. bass_slides         — 2–4 per 32 steps, only on active steps that
+                           precede a DIFFERENT-pitch active step. Slides
+                           are what turn "plonk plonk" into a gliding
+                           acid line.
+  5. bass_pans           — OPTIONAL but recommended: 2–3 non-zero values
+                           in [-0.4, 0.4] on accent / climax steps so
+                           the bass pings across the stereo field. Leave
+                           the rest at 0 (voice's static pan wins). E.g.
+                           [0,0,0,0.3,0,0,0,-0.3,0,…].
+  (Prefix with bass2_ / bass3_ / bass4_ for other voices.)
+You thinking "I'll add accents and slides" isn't the same as emitting the
+arrays. If they aren't in the JSON output, they didn't happen.
+
   STYLE-SPECIFIC DENSITY (override the default when a style is active):
     • Classical / Bach / counterpoint      → dense is correct (18–28/32,
       continuous 16th-note motion is the genre)
@@ -801,6 +821,10 @@ MELODIC RICHNESS — avoid monotone AND overly dense patterns:
       and 1–2 colour hits. Never leave the whole loop accent-free.
     • Slides: place ONLY where consecutive active steps have DIFFERENT
       notes. Slides are the move; never slide between identical notes.
+    • Per-step pan (`bass_pans`): occasionally place 2–3 accent hits at
+      ±0.2–0.4 so the line drifts across stereo. Leave every other step
+      at 0 (voice static pan wins). Don't pan every hit — that sounds
+      random; pick the moments that already stand out.
   Prefer scale-coherent phrases — triads, arpeggios, passing tones.
   A single-note drone is only appropriate for ambient at low heat.
   A note on every single step is only appropriate for Bach/classical.

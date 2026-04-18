@@ -244,6 +244,33 @@ mod llm_apply_sequencer_tests {
     }
 
     #[test]
+    fn sequencer_bass_pans_applied() {
+        let s = AppState::default();
+        let mut pans = vec![0.0_f32; 32];
+        pans[3] = 0.3;
+        pans[10] = -0.3;
+        let update = serde_json::json!({ "sequencer": { "bass_pans": pans } });
+        let s = apply_llm_update(s, &update, &[]);
+        assert!((s.sequencer.bass_pattern[3].pan - 0.3).abs() < 1e-6);
+        assert!((s.sequencer.bass_pattern[10].pan - (-0.3)).abs() < 1e-6);
+        assert_eq!(s.sequencer.bass_patterns[0][3].pan, 0.3);
+    }
+
+    #[test]
+    fn sequencer_bass2_pans_applied() {
+        let s = AppState::default();
+        let mut pans = vec![0.0_f32; 32];
+        pans[0] = 0.4;
+        pans[16] = -0.4;
+        let update = serde_json::json!({ "sequencer": { "bass2_pans": pans } });
+        let s = apply_llm_update(s, &update, &[]);
+        assert!((s.sequencer.bass_patterns[1][0].pan - 0.4).abs() < 1e-6);
+        assert!((s.sequencer.bass_patterns[1][16].pan - (-0.4)).abs() < 1e-6);
+        // Voice 0 untouched.
+        assert_eq!(s.sequencer.bass_pattern[0].pan, 0.0);
+    }
+
+    #[test]
     fn sequencer_bass2_notes_accents_slides() {
         let s = AppState::default();
         let update = serde_json::json!({
