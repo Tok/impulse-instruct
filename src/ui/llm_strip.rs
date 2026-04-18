@@ -262,6 +262,65 @@ impl ImpulseApp {
 
             ui.separator();
 
+            // ── Pipeline progress (only while a turn is in flight) ───
+            let progress = self.state.read().llm.pipeline_progress.clone();
+            if let Some(p) = progress {
+                let label = match (&p.current_lane, p.lanes_done >= p.total_lanes) {
+                    (Some(name), _) => format!("{}/{} {}", p.lanes_done + 1, p.total_lanes, name),
+                    (None, true) => format!("{}/{} done", p.total_lanes, p.total_lanes),
+                    (None, false) => format!("{}/{} planning…", p.lanes_done, p.total_lanes),
+                };
+                ui.label(
+                    egui::RichText::new("PIPE")
+                        .monospace()
+                        .size(8.0)
+                        .color(theme::ASH),
+                );
+                let frac = if p.total_lanes > 0 {
+                    p.lanes_done as f32 / p.total_lanes as f32
+                } else {
+                    0.0
+                };
+                let (bar_rect, _) =
+                    ui.allocate_exact_size(egui::vec2(120.0, 6.0), egui::Sense::hover());
+                let pa = ui.painter();
+                pa.rect_filled(bar_rect, 1.0, egui::Color32::from_gray(38));
+                let fill_w = (bar_rect.width() * frac.clamp(0.0, 1.0)).max(0.0);
+                if fill_w > 0.0 {
+                    pa.rect_filled(
+                        egui::Rect::from_min_size(
+                            bar_rect.min,
+                            egui::vec2(fill_w, bar_rect.height()),
+                        ),
+                        1.0,
+                        // Tint failed-lane fraction differently so partial
+                        // failures are visible at a glance.
+                        if p.failed_count > 0 {
+                            egui::Color32::from_rgb(140, 80, 80)
+                        } else {
+                            egui::Color32::from_gray(140)
+                        },
+                    );
+                }
+                ui.label(
+                    egui::RichText::new(label)
+                        .monospace()
+                        .size(8.0)
+                        .color(theme::FOG),
+                );
+                if p.failed_count > 0 {
+                    ui.label(
+                        egui::RichText::new(format!("({} failed)", p.failed_count))
+                            .monospace()
+                            .size(7.5)
+                            .color(theme::IRON),
+                    );
+                }
+                // Pipeline is actively running — keep the UI animating.
+                ui.ctx().request_repaint();
+                ui.separator();
+            }
+
             // ── JAM timing (same line as model/ctx) ─────────────────
             ui.label(
                 egui::RichText::new("JAM")

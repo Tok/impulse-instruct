@@ -397,6 +397,24 @@ pub struct LlmState {
     /// Flip off to run the legacy monolithic path for debugging.
     #[serde(default = "default_true")]
     pub use_pipeline: bool,
+    /// Live progress of the current pipeline run.  `Some` while a turn is
+    /// in flight, `None` between turns.  Transient — not serialised.
+    #[serde(skip)]
+    pub pipeline_progress: Option<PipelineProgress>,
+}
+
+/// Streaming progress for the lane pipeline — populated by the LLM thread's
+/// pipeline callback so the UI can render a "lane 3 of 8: bass" bar.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct PipelineProgress {
+    /// Total lanes in the plan (set on PlanReady).
+    pub total_lanes: usize,
+    /// Lanes that finished — succeeded or failed.
+    pub lanes_done: usize,
+    /// Lanes that failed (subset of `lanes_done`).
+    pub failed_count: usize,
+    /// Label of the lane currently inferring, or `None` between lanes.
+    pub current_lane: Option<String>,
 }
 
 fn default_true() -> bool {
@@ -453,6 +471,7 @@ impl Default for LlmState {
             jam_cycle_count: 0,
             agent_autonomy: true,
             use_pipeline: true,
+            pipeline_progress: None,
         }
     }
 }

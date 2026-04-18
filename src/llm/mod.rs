@@ -8,6 +8,7 @@ pub mod json_repair;
 pub mod lanes;
 pub mod mock;
 pub mod pipeline;
+pub mod pipeline_events;
 pub mod planner;
 pub mod prompt;
 pub mod prompt_summary;
@@ -529,8 +530,6 @@ pub fn run_llm_loop(
             }
             snap.llm.heat = agent_heat;
 
-            let tx_clone = output_tx.clone();
-            let agent_label_for_cb = agent_label.clone();
             let mut lanes_ran = 0usize;
             // Per-lane write-back: as soon as a lane applies, copy its
             // sequencer/synth/fx state into the shared app state so the
@@ -554,64 +553,36 @@ pub fn run_llm_loop(
                 s.lfo = snapshot.lfo;
                 s.rack = snapshot.rack.clone();
             };
+            let state_for_progress = state.clone();
+            let tx_for_cb = output_tx.clone();
+            let label_for_cb = agent_label.clone();
             let new_state = pipeline::run_pipeline_via_pool(
                 snap,
                 prompt,
                 &mut pool,
                 infer_port,
                 &sampling,
-                |event| match event {
-                    pipeline::PipelineEvent::PlanReady { plan } => {
-                        let labels: Vec<&str> = plan.lanes.iter().map(|l| l.label()).collect();
-                        log::info!(
-                            "pipeline: plan = [{}] ({})",
-                            labels.join(", "),
-                            plan.rationale
-                        );
-                        let _ = tx_clone.try_send(LlmOutput {
-                            text: format!(
-                                "[plan: {} lanes — {}]",
-                                plan.lanes.len(),
-                                labels.join(", ")
-                            ),
-                            agent_id,
-                            ..LlmOutput::default()
-                        });
-                    }
-                    pipeline::PipelineEvent::LaneApplied { lane, ms, .. } => {
-                        lanes_ran += 1;
-                        log::info!("pipeline: {} applied in {}ms", lane.label(), ms);
-                    }
-                    pipeline::PipelineEvent::LaneFailed { lane, error } => {
-                        log::warn!("pipeline: {} failed — {}", lane.label(), error);
-                        let _ = tx_clone.try_send(LlmOutput {
-                            text: format!("[{} failed: {}]", lane.label(), error),
-                            agent_id,
-                            ..LlmOutput::default()
-                        });
-                    }
-                    pipeline::PipelineEvent::PipelineDone {
-                        total_ms,
-                        lanes_succeeded,
-                        lanes_failed,
-                    } => {
-                        log::info!(
-                            "pipeline: done ({} ok, {} failed, {}ms total, agent={})",
-                            lanes_succeeded,
-                            lanes_failed,
-                            total_ms,
-                            agent_label_for_cb,
-                        );
-                    }
-                    _ => {}
+                |event| {
+                    pipeline_events::handle_pipeline_event(
+                        event,
+                        &state_for_progress,
+                        &tx_for_cb,
+                        agent_id,
+                        &label_for_cb,
+                        &mut lanes_ran,
+                    )
                 },
                 write_lane_back,
             );
             let _ = new_state; // per-lane write-back already committed everything
-            // Clear inferring flags now that the pipeline is done.
+            // Clear inferring + progress flags now that the pipeline is done.
+            // Belt-and-braces: PipelineDone clears `pipeline_progress`, but if
+            // the pipeline ever returns early without emitting it the bar
+            // would otherwise stick.
             {
                 let mut s = state.write();
                 s.llm.is_inferring = false;
+                s.llm.pipeline_progress = None;
                 if let Some(aid) = agent_id
                     && let Some(a) = s.llm_agents.iter_mut().find(|a| a.id == aid)
                 {
