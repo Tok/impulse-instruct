@@ -22,7 +22,8 @@
 
 use crate::llm::lanes::{LaneKind, build_lane_prompt, lane_schema};
 use crate::llm::planner::{
-    LanePlan, build_planner_prompt, default_plan, parse_planner_output, planner_schema,
+    LanePlan, build_planner_prompt, default_plan, heuristic_plan, parse_planner_output,
+    planner_schema,
 };
 use crate::llm::{SamplingParams, json_repair};
 use crate::state::AppState;
@@ -86,13 +87,22 @@ pub fn run_pipeline<B: PipelineBackend>(
     let t_start = std::time::Instant::now();
 
     // ── 1. Planner ───────────────────────────────────────────────────────────
-    let plan = run_planner(&state, user_prompt, backend, sampling).unwrap_or_else(|e| {
-        log::info!(
-            "pipeline: planner fell back to default plan — {}",
-            truncate(&e.to_string(), 200)
-        );
-        default_plan(&state)
-    });
+    // Try the deterministic heuristic first — "bass 2", "BASS 2", "second
+    // bass voice", "add reverb", "change the 909 kick" etc. match narrow
+    // phrasings we don't need the LLM for.  Falls through to the planner
+    // call on anything broader or ambiguous.
+    let plan = if let Some(heur) = heuristic_plan(&state, user_prompt) {
+        log::info!("pipeline: heuristic plan hit — {}", heur.rationale);
+        heur
+    } else {
+        run_planner(&state, user_prompt, backend, sampling).unwrap_or_else(|e| {
+            log::info!(
+                "pipeline: planner fell back to default plan — {}",
+                truncate(&e.to_string(), 200)
+            );
+            default_plan(&state)
+        })
+    };
     progress(PipelineEvent::PlanReady { plan: plan.clone() });
 
     // ── 2. Lanes ─────────────────────────────────────────────────────────────
