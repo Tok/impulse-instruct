@@ -124,7 +124,8 @@ Server: `.llama-official-build/bin/llama-server` (standard llama.cpp), built via
 ```
 GET  /api/state          full AppState as JSON
 GET  /api/schema         parameter JSON schema
-POST /api/prompt         { "prompt": "make it acid" }
+POST /api/prompt         { "prompt": "make it acid" }           (one_shot default true)
+POST /api/prompt         { "prompt": "jam", "one_shot": false }  (self-perpetuates while heat>0)
 POST /api/params         { "params": { "tb303": { "cutoff": 0.4 } } }
 POST /api/lock           { "paths": ["tb303.cutoff"] }
 POST /api/unlock         { "paths": ["tb303.cutoff"] }

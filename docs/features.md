@@ -126,6 +126,24 @@ A detailed log of what's built.
 - Reserved 26 px strip; the cycle viz shrinks to match so the right
   panel layout (model bar, prompt, log) stays unchanged.
 
+### Jam-via-API
+
+- `POST /api/prompt` now honours a `"one_shot": false` field; the
+  handler plumbs it through to `LlmInput::Infer` instead of hardcoding
+  one-shot mode.  Default stays `true` so existing clients keep getting
+  single-turn behaviour.
+- With `one_shot: false`, the LLM worker emits `[jam_cycle_done]` after
+  the pipeline finishes; the UI's drain picks it up and schedules the
+  next agent's turn (requires `llm.heat > 0.0` for re-fire — heat is
+  user-owned, so clients must set it via `/api/params` or the slider
+  before starting a jam).
+- Pipeline writeback is already surgical (the "don't clobber user-owned
+  rack" guard landed earlier), so jam-via-API inherits that safety: no
+  full-state replacement, rack / ui_prefs / llm_agents untouched.
+- Log line now tags mode: `[API] prompt (jam) → BASS: …` vs
+  `(one-shot)` for quick tailing.
+- 4 new serde tests pin the default + field parsing.
+
 ### Per-style lane dynamism overrides (Phase 4)
 
 - `Style.lane_dynamism: HashMap<String, f32>` in `styles.json` — optional

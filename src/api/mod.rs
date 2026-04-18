@@ -36,11 +36,22 @@ pub struct ApiState {
 #[derive(Deserialize)]
 pub struct PromptRequest {
     pub prompt: String,
-    #[serde(default)]
+    /// When `true` (default), the prompt fires once and stops.  When
+    /// `false`, the LLM worker sends `[jam_cycle_done]` after the
+    /// pipeline so the UI's jam loop picks it up and re-fires the next
+    /// agent (requires `llm.heat > 0.0` for re-fire to schedule).  The
+    /// pipeline writeback is surgical — only voice/FX fields land in
+    /// shared state, so jam-via-API doesn't clobber user-owned rack /
+    /// preference state.
+    #[serde(default = "default_one_shot")]
     pub one_shot: bool,
     /// Target agent by persona name (e.g. "BASS", "DRUMS"). Omit for global/first agent.
     #[serde(default)]
     pub agent: Option<String>,
+}
+
+fn default_one_shot() -> bool {
+    true
 }
 
 #[derive(Deserialize)]
@@ -219,11 +230,15 @@ async fn post_prompt(
                 .map(|a| a.persona_name.clone())
         })
         .unwrap_or_else(|| "global".into());
-    api_log(&api, format!("[API] prompt → {}: {}", target, req.prompt));
+    let mode = if req.one_shot { "one-shot" } else { "jam" };
+    api_log(
+        &api,
+        format!("[API] prompt ({}) → {}: {}", mode, target, req.prompt),
+    );
     api.llm_tx
         .try_send(LlmInput::Infer {
             prompt: req.prompt,
-            one_shot: true,
+            one_shot: req.one_shot,
             agent_id,
         })
         .map_err(|_| StatusCode::SERVICE_UNAVAILABLE)?;

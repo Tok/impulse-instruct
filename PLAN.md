@@ -74,8 +74,6 @@ they ship and are reflected in `features.md`.
   /14B and Qwen3-8B/14B for JSON accuracy and music theory.  Gemma 4
   26B-A4B is now downloadable (three quants); needs a head-to-head
   vs. E4B on the style + bass + theory suites.
-- **Jam-via-API** — currently API prompts are always one-shot (no jam
-  loop).  Need safe jam support that doesn't do full-state replacement.
 - **Style mc_lines/themes UI editor** — allow editing mc_lines and
   themes per style from UI preferences.
 - **Auto-sync rack on app start to active style** — currently the
