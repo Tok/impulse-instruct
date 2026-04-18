@@ -188,12 +188,22 @@ impl LaneKind {
                     )
                 };
                 format!(
-                    "Write ONLY the pattern for bass voice #{voice}: `{prefix}_steps`, \
-                     `{prefix}_notes`, `{prefix}_accents`, `{prefix}_slides`, `{prefix}_pans`. \
-                     Also tune the synth via {synth_path}. Emit all four required arrays — \
-                     accents/slides indices must be a subset of steps, and slides only \
-                     between different-note steps. {counterpoint} Do not write drums, FX, \
-                     or other bass voices in this call.",
+                    "Write ONLY the pattern for bass voice #{voice}: `{prefix}_steps` (rhythm), \
+                     `{prefix}_notes` (MIDI pitches), `{prefix}_accents` (0..=1), \
+                     `{prefix}_slides` (0..=1), `{prefix}_pans` (-1..=1). \
+                     Tune synth via {synth_path}.\n\
+                     TARGETS per 32-step loop: 8-14 active steps, 3-5 accents, 2-4 slides, \
+                     2-3 non-zero pans in ±0.2..0.4. Accent/slide indices MUST be a subset \
+                     of steps; slides only between different-note active steps. Use 3-5 \
+                     distinct pitches (not one-note drones).\n\
+                     Good example rhythms (32 steps): `[0,3,6,10,14,18,22,26]` classic \
+                     sparse acid; `[0,3,6,10,14,15,18,22,23,28]` push/pull with pairs; \
+                     `[0,2,5,8,13,16,19,24,27]` syncopated. AVOID even kick grids like \
+                     `[0,4,8,12,16,20,24,28]` — that's drum territory.\n\
+                     Example C-minor notes (root 36): `[36,43,36,41,39,36,43,36,48,43,41,\
+                     36,39,41,36,43,36,41,39,43,36,46,43,36,39,43,48,41,36,43,39,36]` — \
+                     both halves use the full palette 36/39/41/43/46/48.\n\
+                     {counterpoint} Do not write drums, FX, or other bass voices.",
                     voice = idx + 1,
                     synth_path = if idx == 0 {
                         "`bass`".to_string()
@@ -202,13 +212,24 @@ impl LaneKind {
                     },
                 )
             }
-            LaneKind::KitA => "Write ONLY the 808 kit patterns: `sequencer.kick_a_steps`, \
-                `sequencer.snare_a_steps`, `sequencer.hihat_a_steps` (and open if needed). \
-                Match the active style's groove. Do not write bass, FX, or kit B."
+            LaneKind::KitA => "Write ONLY the 808 kit patterns. 808 is LOOSE — almost \
+                4-on-the-floor with 1-2 tweaks per bar for groove.\n\
+                32-step example rhythms:\n\
+                kick_a_steps: [0,4,8,12,16,20,26,28] (missed 24, pushed 26)\n\
+                kick_a_steps: [0,4,7,12,16,20,24,30] (anticipation on 7, tail on 30)\n\
+                snare_a_steps: [4,12,20,28] backbeat (or [4,12,19,28] for a pull)\n\
+                hihat_a_steps: [2,6,10,14,18,22,26,30] offbeat 8ths\n\
+                Fill the FULL sequencer.steps (usually 32) — don't stop at step 16. \
+                Do not write bass, FX, or kit B."
                 .into(),
-            LaneKind::KitB => "Write ONLY the 909 kit patterns: `sequencer.kick_b_steps`, \
-                `sequencer.snare_b_steps`, `sequencer.clap_b_steps`, `sequencer.hihat_b_steps`. \
-                Do not write bass, FX, or kit A."
+            LaneKind::KitB => "Write ONLY the 909 kit patterns. 909 PINS the grid — \
+                tight acid house / techno / peak-time foundation.\n\
+                32-step example rhythms:\n\
+                kick_b_steps: [0,4,8,12,16,20,24,28] four-on-floor\n\
+                clap_b_steps: [4,12,20,28] on beats 2 and 4\n\
+                hihat_b_steps: [2,6,10,14,18,22,26,30] offbeat 8ths\n\
+                snare_b_steps: [4,12,20,28] (or offset for half-time)\n\
+                Fill the FULL sequencer.steps (usually 32). Do not write bass, FX, or kit A."
                 .into(),
             LaneKind::Amen => "Write ONLY the amen sampler pattern (`sequencer.amen_steps`, \
                 `amen_slices`) and amen voice params. Do not write other voices."
@@ -224,8 +245,13 @@ impl LaneKind {
                 step. Do not write other voices."
                 .into(),
             LaneKind::Fx => "Write ONLY the `fx` object — reverb / delay / distortion / \
-                chorus / bitcrush / master_pitch. Keep values modest unless the style or \
-                user asks for extremes. Do not write any patterns."
+                chorus / bitcrush / master_pitch. Defaults for a subtle jam:\n\
+                reverb_mix 0.10-0.25, reverb_size 0.4-0.6\n\
+                delay_mix 0.06-0.18, delay_feedback 0.3-0.5\n\
+                chorus_mix 0.10-0.25 (width / stereo ensemble)\n\
+                distortion_drive + _mix only if style asks (gabber / hard techno).\n\
+                Heavier values OK when the user prompt or style explicitly calls for it. \
+                Do not write any patterns."
                 .into(),
             LaneKind::Modulation => "Write ONLY the `lfo` array and/or `free_eg` object for \
                 modulation. Pick one or two targets that suit the current groove. Do not \
@@ -339,9 +365,12 @@ pub fn build_lane_prompt(state: &AppState, lane: LaneKind) -> String {
          {style_hint}{coverage}{harmony_block}{bass_context}\n\
          TASK: {task}\n\
          \n\
-         Emit ONLY the required fields. Skip `_thinking` and `_comment` — the pipeline \
-         logs lane progress for you, they just eat your token budget. Prefer index lists \
-         (`[0, 4, 8]`) over inline bool arrays — they're 4× shorter.",
+         The style above is USER-FIXED — if the user prompt says \"pick a style\" or \
+         similar, ignore that and write within the style listed above. Emit ONLY the \
+         required fields; skip `_thinking` / `_comment`. Prefer index lists \
+         (`[0, 4, 8]`) over inline bool arrays — 4× shorter.\n\
+         Never emit an empty array like `[]` for a required pattern field — that \
+         silences the voice. If you don't have ideas, reuse the example rhythm above.",
         lane_label = lane.label(),
         state_header = state_header,
         locked_str = locked_str,
@@ -630,7 +659,7 @@ mod tests {
             let desc = lane.task_description();
             assert!(!desc.is_empty(), "{lane:?} has empty task_description");
             assert!(
-                desc.len() < 600,
+                desc.len() < 1200,
                 "{lane:?} task_description too long ({} chars)",
                 desc.len()
             );

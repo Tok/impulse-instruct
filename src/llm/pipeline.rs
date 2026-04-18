@@ -175,11 +175,42 @@ pub fn lane_apply_scope(lane: LaneKind) -> Vec<String> {
 ///
 /// Top-level keys outside `output_keys()` are dropped.  Inside
 /// `sequencer`, only the lane's `sequencer_subkeys()` survive.
+///
+/// Also drops empty pattern arrays (`"bass_steps": []`) — the apply
+/// layer treats `[]` as "clear everything", which is a destructive
+/// silent-failure mode when the model emits empty required arrays
+/// to satisfy the schema without having anything useful to say.
 pub fn filter_lane_output(lane: LaneKind, raw: Value) -> Value {
     let allowed_top: &[&str] = lane.output_keys();
     // `_thinking` and `_comment` are meta-fields carried through for
     // logging / UI; always let them pass.
     let carry_over = ["_thinking", "_comment", "mc_line"];
+    // Pattern arrays where "empty means clear" — an empty emission is
+    // almost certainly a model giving up on required fields rather than
+    // the user asking for silence.  Drop these before apply so the
+    // existing pattern survives.
+    let destructive_if_empty = [
+        "bass_steps",
+        "bass2_steps",
+        "bass3_steps",
+        "bass4_steps",
+        "bass_notes",
+        "bass2_notes",
+        "bass3_notes",
+        "bass4_notes",
+        "kick_a_steps",
+        "snare_a_steps",
+        "hihat_a_steps",
+        "kick_b_steps",
+        "snare_b_steps",
+        "clap_b_steps",
+        "hihat_b_steps",
+        "amen_steps",
+        "hoover_steps",
+        "hoover_notes",
+        "an1x_steps",
+        "an1x_notes",
+    ];
 
     let Some(obj) = raw.as_object() else {
         return raw;
@@ -198,9 +229,23 @@ pub fn filter_lane_output(lane: LaneKind, raw: Value) -> Value {
                 let allowed_sub = lane.sequencer_subkeys();
                 let mut filtered = serde_json::Map::new();
                 for (sk, sv) in seq_obj {
-                    if allowed_sub.iter().any(|a| a == sk) {
-                        filtered.insert(sk.clone(), sv.clone());
+                    if !allowed_sub.iter().any(|a| a == sk) {
+                        continue;
                     }
+                    // Drop empty pattern arrays — the apply layer would
+                    // interpret them as "clear this voice", wiping the
+                    // user's current pattern with silence.
+                    if destructive_if_empty.contains(&sk.as_str())
+                        && sv.as_array().is_some_and(|a| a.is_empty())
+                    {
+                        log::warn!(
+                            "pipeline: dropped empty `{}` from {} lane — would have cleared the voice",
+                            sk,
+                            lane.label()
+                        );
+                        continue;
+                    }
+                    filtered.insert(sk.clone(), sv.clone());
                 }
                 if !filtered.is_empty() {
                     out.insert("sequencer".to_string(), Value::Object(filtered));
