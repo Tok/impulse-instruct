@@ -26,6 +26,12 @@ they ship and are reflected in `features.md`.
   global flag; per-slice reverse would enable edit-era glitch patterns.
 - **Reverse mode for compressor envelope** — third FX worth reversing.
   Would give "reverse compression" swell-into-hit transient shaping.
+- **Lane fade-in ramp** — when the pipeline lands a new pattern mid-jam,
+  ramp the voice's volume up over ~1 bar instead of snapping the new
+  loop on.  Core `fx.ramp{s}` machinery already exists (see
+  `state/llm_apply.rs::apply_ramps`); needs a per-voice volume ramp
+  triggered by `on_lane_applied` callback in the pipeline so the new
+  kick fades in while the bass is still being written, etc.
 
 ## Sequencer
 
@@ -48,6 +54,17 @@ they ship and are reflected in `features.md`.
   or auto-select a lighter model that fits the remaining VRAM budget.
 - **Test additional LLM models** — evaluate DeepSeek-R1-Distill-Qwen-7B
   /14B and Qwen3-8B/14B for JSON accuracy and music theory.
+- **Deprecate Bonsai 8B** — the PrismML 1-bit fork was a low-VRAM
+  fallback when Gemma was the only "heavy" model.  With the lane
+  pipeline's tight schema + short per-call outputs, Gemma 4 E4B
+  (4.6 GB, ~60 tok/s) is now fast and accurate enough for the whole
+  pipeline; Bonsai's accuracy gap is no longer worth the extra server
+  binary, model download, and ID-selection surface.  Remove: the
+  Bonsai preset from `vram.rs::PRESETS`, the `bonsai` download entry,
+  `build-bonsai-server.sh`, `.llama-build` binary expectation, the
+  dual-fork branching in `pick_server_binary`, the `bonsai` skip in
+  `run-llm-tests.sh`, and `NOT_A_BONSAI` references in docs/features.
+  Keep the official llama.cpp build as the single server binary.
 - **Jam-via-API** — currently API prompts are always one-shot (no jam
   loop).  Need safe jam support that doesn't do full-state replacement.
 - **Style mc_lines/themes UI editor** — allow editing mc_lines and
