@@ -1405,6 +1405,7 @@ scrolls.
 - **Gated reverb** - `fx.reverb_gate_time` (0-2 s), GATE knob in FX panel
 - **Master pitch offset** - `fx.master_pitch_st` (+-12 st), PITCH knob in MASTER group
 - **Autotune FX module** - `ModuleKind::FxAutotune`; two-head grain overlap-add pitch shifter (`fx.autotune_amount` 0–1 → 0..+12 st, `fx.autotune_mix`); pre-allocated 4096-sample ring buffer (no audio-thread allocations); LLM-addressable via `fx.autotune_amount` / `fx.autotune_mix`
+- **Expandable FX XY pad** - `RackModule.pad_expanded` (persisted, defaults to true); FX kinds with `ModuleKind::supports_xy_pad()` reserve an extra grid row and render an XY pad below their knobs; chevron (▾/▸) in the title bar toggles per-instance, calls `arrange_grid()` so neighbours reflow; first rollout: Autotune (`AMOUNT` × `MIX`)
 
 ## Intelligence
 

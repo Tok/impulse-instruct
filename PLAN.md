@@ -8,20 +8,24 @@ they ship and are reflected in `features.md`.
 
 ## Agent tooling — gradual control & expressiveness
 
-- **FX XY-pad overhaul** (its own session — touches every FX panel and
-  both drum-kit panels).  Plan:
-    - Every FX with exactly two knobs gets an XY pad that drives both
-      axes directly.
-    - Every FX with three knobs gets a switchable XY pad with a tiny
-      A/B · A/C · B/C selector so the user can cycle which two knobs
-      the pad's X / Y control while the third stays on a knob.
+- **FX XY-pad overhaul** — in progress.  Infra + Autotune landed in
+  this session: per-instance `RackModule.pad_expanded` (serde default
+  true) + `ModuleKind::supports_xy_pad()` gate + effective-grid-size
+  plumbing in `arrange_grid` / `find_free_position`; title-bar
+  chevron toggle reflows the rack on click.  Remaining:
+    - Roll out XY pads to remaining FX (3-knob FX use A/B · A/C · B/C
+      cycling via the `xy_pad` widget's existing `num_pairs` param;
+      2-knob FX get a direct pad).  Each rollout flips that kind's
+      `supports_xy_pad()` arm + adds a pad render to `draw_fx_content`.
+      Order: Reverb (3-knob template), then Delay, Chorus, Phaser, EQ,
+      Sidechain, Tape, Master, Bitcrush, then Compressor + Shape.
     - Regroup the 808 and 909 glass panes so linked knob clusters
       (kick: pitch+decay+punch, snare: tone+snappy+decay, etc.) sit
       next to their XY pads rather than scattered across the panel.
-    - Agent side: expose the XY pad as a first-class tool the agent can
-      move, with visual feedback so the pad position tracks mid-change
-      (currently agents set the underlying knob values but the pad
-      doesn't follow).
+    - Agent side: verify pad position already tracks agent-driven
+      knob changes (the widget derives x/y from the live values each
+      frame).  If confirmed, no-op; otherwise add `fx.<name>_xy: [x,y]`
+      as a first-class path.
 - **Hoover / An1x preecho** — bass voices now consume
   `PreechoConfig.accent_ramp` + `slide_cascade` via the shared `"bass"`
   voice key.  Hoover/An1x `TriggerEvent` variants don't carry accent

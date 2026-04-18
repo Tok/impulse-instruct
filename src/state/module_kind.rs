@@ -202,6 +202,13 @@ impl ModuleKind {
         )
     }
 
+    /// True for FX modules that offer an XY pad in the expanded view.
+    /// Modules returning true get an extra grid row when `pad_expanded` is
+    /// true on their `RackModule`, plus a chevron toggle in the title bar.
+    pub fn supports_xy_pad(self) -> bool {
+        matches!(self, Self::FxAutotune)
+    }
+
     /// Whether this module type may have more than one instance in the rack.
     pub fn allows_multiple(self) -> bool {
         matches!(

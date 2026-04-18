@@ -402,6 +402,7 @@ pub fn module_card_back(
         title_dragged,
         title_drag_released,
         collapse_clicked: false,
+        xy_pad_toggle_clicked: false,
         card_rect: outer.response.rect,
     }
 }

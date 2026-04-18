@@ -550,6 +550,7 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
                     Some(slot_w),
                     Some(slot_h),
                     app.kind_scale(kind),
+                    None,
                     ports,
                     |ui| {
                         // Global zone content dispatch
@@ -685,6 +686,7 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
                     Some(slot_w),
                     Some(slot_h),
                     app.kind_scale(kind),
+                    None,
                     ports,
                     |ui| {
                         draw_voice_content(app, ui, kind, id);
@@ -747,30 +749,39 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
         let zone_left = ui.cursor().left();
         let zone_top = ui.cursor().top();
         let step = grid_step(col_w);
-        let fx_mods: Vec<(u32, ModuleKind, bool, u8, u8)> = {
+        // (id, kind, enabled, grid_col, grid_row, pad_expanded, effective_rows)
+        let fx_mods: Vec<(u32, ModuleKind, bool, u8, u8, bool, u8)> = {
             let s = app.state.read();
             s.rack
                 .modules
                 .iter()
                 .filter(|m| m.zone == Zone::FxMod)
-                .map(|m| (m.id, m.kind, m.enabled, m.grid_col, m.grid_row))
+                .map(|m| {
+                    let (_, eff_h) = s.rack.effective_grid_size(m);
+                    (
+                        m.id,
+                        m.kind,
+                        m.enabled,
+                        m.grid_col,
+                        m.grid_row,
+                        m.pad_expanded,
+                        eff_h,
+                    )
+                })
                 .collect()
         };
         let zone_rows = fx_mods
             .iter()
-            .map(|&(_, kind, _, _, gr)| {
-                let (_, h) = kind.grid_size(GRID_COLS);
-                gr as usize + h as usize
-            })
+            .map(|&(_, _, _, _, gr, _, eff_h)| gr as usize + eff_h as usize)
             .max()
             .unwrap_or(0);
         let zone_h = zone_rows as f32 * step;
         let zone_rect = ui
             .allocate_exact_size(egui::Vec2::new(available_w, zone_h), egui::Sense::hover())
             .0;
-        for &(id, kind, enabled, gc, gr) in &fx_mods {
+        for &(id, kind, enabled, gc, gr, pad_expanded, eff_h) in &fx_mods {
             let slot_w = module_grid_w(kind, col_w);
-            let slot_h = module_grid_h(kind, col_w);
+            let slot_h = crate::ui::rack_grid::module_grid_h_rows(eff_h, col_w);
             let (col_span, _) = kind.grid_size(GRID_COLS);
             let x = card_x(zone_rect.min.x, gc, col_span, step, app.rack_flipped);
             let y = zone_rect.min.y + gr as f32 * step;
@@ -780,6 +791,11 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
             let is_dragging = app.module_drag.as_ref().map(|d| d.module_id) == Some(id);
             let eff_enabled = if is_dragging { false } else { enabled };
             let reaches_master = app.state.read().rack.reaches_master(id);
+            let pad_param = if kind.supports_xy_pad() {
+                Some(pad_expanded)
+            } else {
+                None
+            };
             let resp = if app.rack_flipped {
                 module_card::module_card_back(
                     &mut child,
@@ -802,6 +818,7 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
                     Some(slot_w),
                     Some(slot_h),
                     app.kind_scale(kind),
+                    pad_param,
                     ports,
                     |ui| {
                         if kind == ModuleKind::LfoModule {
@@ -813,7 +830,7 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
                         } else if kind == ModuleKind::ActivityTimeline {
                             crate::ui::panels::draw_timeline(app, ui);
                         } else {
-                            draw_fx_content(app, ui, kind);
+                            draw_fx_content(app, ui, kind, id);
                         }
                     },
                 )
@@ -841,6 +858,16 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
                     m.enabled = !enabled;
                 }
                 app.push_fx_plan();
+            }
+            if resp.xy_pad_toggle_clicked && !is_dragging {
+                {
+                    let mut s = app.state.write();
+                    if let Some(m) = s.rack.modules.iter_mut().find(|m| m.id == id) {
+                        m.pad_expanded = !m.pad_expanded;
+                    }
+                    s.rack.arrange_grid();
+                }
+                ctx_ref.request_repaint();
             }
             if resp.remove_clicked {
                 app.confirm_remove_module = Some(id);

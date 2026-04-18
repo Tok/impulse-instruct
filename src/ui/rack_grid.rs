@@ -24,7 +24,13 @@ pub(super) fn module_grid_w(kind: ModuleKind, col_w: f32) -> f32 {
 /// Pixel height for a module's grid row span.
 pub(super) fn module_grid_h(kind: ModuleKind, col_w: f32) -> f32 {
     let (_, r) = kind.grid_size(GRID_COLS);
-    let r = r as f32;
+    module_grid_h_rows(r, col_w)
+}
+
+/// Pixel height for an explicit grid-row count (used when the row count
+/// differs from the kind's static value, e.g. an XY-pad-expanded FX card).
+pub(super) fn module_grid_h_rows(rows: u8, col_w: f32) -> f32 {
+    let r = rows as f32;
     r * col_w + (r - 1.0).max(0.0) * RACK_GAP
 }
 

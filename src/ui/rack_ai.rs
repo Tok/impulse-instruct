@@ -100,6 +100,7 @@ pub(super) fn draw_ai_zone(
                 Some(slot_w),
                 Some(slot_h),
                 app.kind_scale(kind),
+                None,
                 ports,
                 |ui| match kind {
                     ModuleKind::LlmConsole => app.draw_llm_console_content(ui),

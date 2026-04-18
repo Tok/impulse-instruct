@@ -141,6 +141,16 @@ pub struct RackModule {
     /// modulation pulls the target down where it would normally push up.
     #[serde(default)]
     pub mod_input_invert: Vec<bool>,
+    /// XY-pad expansion: when true, modules whose `kind.supports_xy_pad()`
+    /// is true reserve an extra grid row and render an XY pad below their
+    /// knobs.  Kinds that don't support an XY pad ignore this flag.
+    /// Defaults to true so legacy sessions pick up the new expanded look.
+    #[serde(default = "default_pad_expanded")]
+    pub pad_expanded: bool,
+}
+
+fn default_pad_expanded() -> bool {
+    true
 }
 
 impl RackModule {
@@ -156,6 +166,21 @@ impl RackModule {
             mod_selectors: Vec::new(),
             mod_input_depths: Vec::new(),
             mod_input_invert: Vec::new(),
+            pad_expanded: true,
+        }
+    }
+
+    /// Grid (col_span, row_span) taking `pad_expanded` into account.
+    /// Returns `(w, h + 1)` when this module supports an XY pad and the
+    /// pad is currently expanded; otherwise the base size from `kind.grid_size()`.
+    /// Callers that need to respect dynamic overrides like `StepSequencer`
+    /// should go through `RackState::effective_grid_size()` instead.
+    pub fn grid_size(&self, grid_cols: u8) -> (u8, u8) {
+        let (w, h) = self.kind.grid_size(grid_cols);
+        if self.kind.supports_xy_pad() && self.pad_expanded {
+            (w, h + 1)
+        } else {
+            (w, h)
         }
     }
 }
@@ -303,6 +328,10 @@ impl RackState {
     /// Returns (0, 0) as a fallback if the zone is completely full.
     fn find_free_position(&self, kind: ModuleKind) -> (u8, u8) {
         let (w, h) = kind.grid_size(GRID_COLS);
+        // New modules start with `pad_expanded: true`; account for the extra
+        // row if the kind supports an XY pad so the initial placement doesn't
+        // clip into its neighbour below.
+        let h = if kind.supports_xy_pad() { h + 1 } else { h };
         let cols = GRID_COLS as usize;
         let max_rows = 64usize;
         let zone = kind.default_zone();
@@ -313,8 +342,7 @@ impl RackState {
             if m.zone != zone {
                 continue;
             }
-            let (mw, static_h) = m.kind.grid_size(GRID_COLS);
-            let mh = self.dyn_height_override(m.kind).unwrap_or(static_h);
+            let (mw, mh) = self.effective_grid_size(m);
             for dr in 0..mh as usize {
                 for dc in 0..mw as usize {
                     let r = m.grid_row as usize + dr;
@@ -341,6 +369,20 @@ impl RackState {
             }
         }
         (0, 0)
+    }
+
+    /// Effective grid size for a specific module instance, combining the
+    /// kind's static size with per-module expansion (`pad_expanded`) and
+    /// dynamic overrides like the sequencer's visible-lane count.
+    pub fn effective_grid_size(&self, m: &RackModule) -> (u8, u8) {
+        let (w, h) = m.kind.grid_size(GRID_COLS);
+        let h = if m.kind.supports_xy_pad() && m.pad_expanded {
+            h + 1
+        } else {
+            h
+        };
+        let h = self.dyn_height_override(m.kind).unwrap_or(h);
+        (w, h)
     }
 
     /// Remove a module and any cables connected to it.
@@ -419,19 +461,24 @@ impl RackState {
 
         for zone in [Zone::Ai, Zone::Global, Zone::Voice, Zone::FxMod] {
             // Collect and sort by canonical order
-            let mut ids: Vec<(u32, ModuleKind)> = self
+            let mut ids: Vec<(u32, ModuleKind, bool)> = self
                 .modules
                 .iter()
                 .filter(|m| m.zone == zone)
-                .map(|m| (m.id, m.kind))
+                .map(|m| (m.id, m.kind, m.pad_expanded))
                 .collect();
-            ids.sort_by_key(|&(_, k)| order(k));
+            ids.sort_by_key(|&(_, k, _)| order(k));
 
             // 2D occupancy grid
             let mut occ = vec![vec![false; cols]; max_rows];
 
-            for (slot_idx, &(id, kind)) in ids.iter().enumerate() {
+            for (slot_idx, &(id, kind, pad_expanded)) in ids.iter().enumerate() {
                 let (w, h) = kind.grid_size(GRID_COLS);
+                let h = if kind.supports_xy_pad() && pad_expanded {
+                    h + 1
+                } else {
+                    h
+                };
                 let h = self.dyn_height_override(kind).unwrap_or(h);
                 let w = w as usize;
                 let h = h as usize;
@@ -477,7 +524,7 @@ impl RackState {
                 .iter()
                 .filter(|m| m.zone == zone)
                 .map(|m| {
-                    let (w, h) = m.kind.grid_size(GRID_COLS);
+                    let (w, h) = self.effective_grid_size(m);
                     (m.id, m.grid_col, m.grid_row, w, h)
                 })
                 .collect();

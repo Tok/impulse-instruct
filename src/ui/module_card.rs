@@ -208,6 +208,8 @@ pub struct CardResponse {
     pub title_dragged: bool,
     pub title_drag_released: bool,
     pub collapse_clicked: bool,
+    /// The XY-pad chevron (shown only when `pad_expanded` is `Some(_)`) was clicked.
+    pub xy_pad_toggle_clicked: bool,
     pub card_rect: Rect,
 }
 
@@ -239,6 +241,7 @@ pub fn module_card<R>(
         min_width,
         None,
         scale,
+        None,
         ports,
         content,
     )
@@ -246,6 +249,10 @@ pub fn module_card<R>(
 
 /// Module card with explicit min_height for grid conformance.
 /// Only sets `set_min_height` — content taller than this just grows naturally.
+///
+/// `pad_expanded` — when `Some(state)`, a small chevron toggle is drawn in
+/// the title bar reflecting the XY-pad expansion state.  `None` hides the
+/// chevron (for modules that don't offer an XY pad).
 #[allow(clippy::too_many_arguments)]
 pub fn module_card_sized<R>(
     ui: &mut egui::Ui,
@@ -256,6 +263,7 @@ pub fn module_card_sized<R>(
     min_width: Option<f32>,
     min_height: Option<f32>,
     scale: f32,
+    pad_expanded: Option<bool>,
     _ports: &mut Vec<PortPos>,
     content: impl FnOnce(&mut egui::Ui) -> R,
 ) -> (CardResponse, Option<R>) {
@@ -290,6 +298,7 @@ pub fn module_card_sized<R>(
     let mut title_dragged = false;
     let mut title_drag_released = false;
     let mut collapse_clicked = false;
+    let mut xy_pad_toggle_clicked = false;
 
     let inner = frame.show(ui, |ui| {
         // Module cards are always vertical (title bar on top, content below),
@@ -452,6 +461,40 @@ pub fn module_card_sized<R>(
                 }
             }
 
+            // ── XY-pad expand/collapse chevron (if the module offers a pad)
+            if let Some(expanded) = pad_expanded {
+                let chev_rect = Rect::from_center_size(
+                    Pos2::new(title_rect.right() - 22.0, title_rect.center().y),
+                    Vec2::new(14.0, 14.0),
+                );
+                let chev_resp = ui.interact(
+                    chev_rect,
+                    ui.id().with("xy_pad_chev").with(module_id),
+                    Sense::click(),
+                );
+                if chev_resp.clicked() {
+                    xy_pad_toggle_clicked = true;
+                }
+                let chev_col = if chev_resp.hovered() {
+                    Color32::from_gray(180)
+                } else {
+                    Color32::from_gray(95)
+                };
+                let glyph = if expanded { "▾" } else { "▸" };
+                painter.text(
+                    chev_rect.center(),
+                    egui::Align2::CENTER_CENTER,
+                    glyph,
+                    egui::FontId::monospace(9.5),
+                    chev_col,
+                );
+                chev_resp.on_hover_text(if expanded {
+                    "Collapse XY pad"
+                } else {
+                    "Expand XY pad"
+                });
+            }
+
             // ── Remove button (×) — shown on all except core singletons
             let rm_rect = Rect::from_center_size(
                 Pos2::new(title_rect.right() - 44.0, title_rect.center().y),
@@ -531,6 +574,7 @@ pub fn module_card_sized<R>(
             title_dragged,
             title_drag_released,
             collapse_clicked,
+            xy_pad_toggle_clicked,
             card_rect,
         },
         inner.inner,

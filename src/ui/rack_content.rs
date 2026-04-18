@@ -27,7 +27,12 @@ pub(super) fn draw_voice_content(
     }
 }
 
-pub(super) fn draw_fx_content(app: &mut ImpulseApp, ui: &mut egui::Ui, kind: ModuleKind) {
+pub(super) fn draw_fx_content(
+    app: &mut ImpulseApp,
+    ui: &mut egui::Ui,
+    kind: ModuleKind,
+    module_id: u32,
+) {
     use crate::ui::widgets;
 
     let scale: f32 = ui
@@ -40,6 +45,15 @@ pub(super) fn draw_fx_content(app: &mut ImpulseApp, ui: &mut egui::Ui, kind: Mod
     let pm = |path: &str| crate::state::param_mode(path, &locked, &focused);
     let mut changed = false;
     ui.spacing_mut().item_spacing.x = crate::ui::panels::KNOB_SPACING;
+    let pad_expanded = app
+        .state
+        .read()
+        .rack
+        .modules
+        .iter()
+        .find(|m| m.id == module_id)
+        .map(|m| m.pad_expanded)
+        .unwrap_or(false);
 
     // Helper: horizontal row of knobs
     macro_rules! hk {
@@ -240,6 +254,21 @@ pub(super) fn draw_fx_content(app: &mut ImpulseApp, ui: &mut egui::Ui, kind: Mod
                 ("AMOUNT", &mut amt, pm("fx.autotune_amount")),
                 ("MIX", &mut mi, pm("fx.autotune_mix"))
             );
+            if pad_expanded {
+                let pad_size = (ui.available_width() - 8.0).clamp(60.0, 120.0);
+                let pad_locked =
+                    matches!(pm("fx.autotune_amount"), crate::state::ParamMode::UserOwned)
+                        || matches!(pm("fx.autotune_mix"), crate::state::ParamMode::UserOwned);
+                widgets::centered_row(ui, |ui| {
+                    let pad_id = format!("autotune_xy_{module_id}");
+                    let (pad_changed, _) = widgets::xy_pad(
+                        ui, &pad_id, "AMOUNT", "MIX", &mut amt, &mut mi, pad_size, pad_locked, 1,
+                    );
+                    if pad_changed {
+                        changed = true;
+                    }
+                });
+            }
             if changed {
                 let mut s = app.state.write();
                 s.fx.autotune_amount = amt;
@@ -487,15 +516,15 @@ pub(super) fn handle_title_drag(
 ) -> bool {
     if resp.title_dragged {
         if app.module_drag.as_ref().map(|d| d.module_id) != Some(id) {
-            let (cw, rh) = app
-                .state
-                .read()
-                .rack
-                .modules
-                .iter()
-                .find(|m| m.id == id)
-                .map(|m| m.kind.grid_size(crate::state::GRID_COLS))
-                .unwrap_or((1, 1));
+            let (cw, rh) = {
+                let s = app.state.read();
+                s.rack
+                    .modules
+                    .iter()
+                    .find(|m| m.id == id)
+                    .map(|m| s.rack.effective_grid_size(m))
+                    .unwrap_or((1, 1))
+            };
             app.module_drag = Some(ModuleDrag {
                 module_id: id,
                 pointer: ctx.pointer_latest_pos().unwrap_or_default(),
@@ -528,15 +557,15 @@ pub(super) fn reorder_module_by_drop(
     step: f32,
     col_w: f32,
 ) {
-    let (col_span, row_span) = app
-        .state
-        .read()
-        .rack
-        .modules
-        .iter()
-        .find(|m| m.id == dragged_id)
-        .map(|m| m.kind.grid_size(crate::state::GRID_COLS))
-        .unwrap_or((1, 1));
+    let (col_span, row_span) = {
+        let s = app.state.read();
+        s.rack
+            .modules
+            .iter()
+            .find(|m| m.id == dragged_id)
+            .map(|m| s.rack.effective_grid_size(m))
+            .unwrap_or((1, 1))
+    };
 
     // Compute snap target from pointer position relative to zone origin.
     let rel_x = drop_pos.x - zone_origin.x;
@@ -567,7 +596,7 @@ pub(super) fn reorder_module_by_drop(
             .iter()
             .filter(|m| m.id != dragged_id && m.zone == zone)
             .any(|m| {
-                let (mw, mh) = m.kind.grid_size(crate::state::GRID_COLS);
+                let (mw, mh) = s.rack.effective_grid_size(m);
                 // AABB overlap test
                 snap_col < m.grid_col + mw
                     && m.grid_col < snap_col + col_span

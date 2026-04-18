@@ -810,3 +810,101 @@ fn reaches_master_default_preset_voices_all_reach() {
         }
     }
 }
+
+// ── XY-pad expansion (grid size, arrange, serde) ────────────────────────────
+
+#[test]
+fn supports_xy_pad_true_only_for_rolled_out_fx() {
+    // Exhaustive match would be brittle; assert the current rollout: just
+    // FxAutotune at this point. Expand this set as more FX get pads.
+    assert!(ModuleKind::FxAutotune.supports_xy_pad());
+    assert!(!ModuleKind::FxReverb.supports_xy_pad());
+    assert!(!ModuleKind::FxCompressor.supports_xy_pad());
+    assert!(!ModuleKind::AcidBass.supports_xy_pad());
+    assert!(!ModuleKind::StepSequencer.supports_xy_pad());
+}
+
+#[test]
+fn effective_grid_size_expands_when_pad_expanded() {
+    let mut rack = empty_rack();
+    let id = rack.add_module(ModuleKind::FxAutotune);
+    // New modules default to pad_expanded = true.
+    let m = rack.module(id).unwrap();
+    let (w, h) = rack.effective_grid_size(m);
+    let (base_w, base_h) = ModuleKind::FxAutotune.grid_size(GRID_COLS);
+    assert_eq!(w, base_w);
+    assert_eq!(h, base_h + 1, "expanded autotune should be one row taller");
+}
+
+#[test]
+fn effective_grid_size_matches_static_when_collapsed() {
+    let mut rack = empty_rack();
+    let id = rack.add_module(ModuleKind::FxAutotune);
+    rack.modules
+        .iter_mut()
+        .find(|m| m.id == id)
+        .unwrap()
+        .pad_expanded = false;
+    let m = rack.module(id).unwrap();
+    let (w, h) = rack.effective_grid_size(m);
+    assert_eq!((w, h), ModuleKind::FxAutotune.grid_size(GRID_COLS));
+}
+
+#[test]
+fn effective_grid_size_ignores_flag_for_unsupported_kind() {
+    let mut rack = empty_rack();
+    let id = rack.add_module(ModuleKind::FxReverb);
+    // Reverb doesn't support a pad yet — the flag should be inert.
+    rack.modules
+        .iter_mut()
+        .find(|m| m.id == id)
+        .unwrap()
+        .pad_expanded = true;
+    let m = rack.module(id).unwrap();
+    let (w, h) = rack.effective_grid_size(m);
+    assert_eq!((w, h), ModuleKind::FxReverb.grid_size(GRID_COLS));
+}
+
+#[test]
+fn arrange_grid_reserves_extra_row_for_expanded_autotune() {
+    let mut rack = empty_rack();
+    let at = rack.add_module(ModuleKind::FxAutotune);
+    // Place a second autotune — together they must not overlap vertically
+    // when both are in their default (expanded) state.
+    let at2 = rack.add_module(ModuleKind::FxAutotune);
+    rack.arrange_grid();
+    let m1 = rack.module(at).unwrap();
+    let m2 = rack.module(at2).unwrap();
+    let (_, h1) = rack.effective_grid_size(m1);
+    let (_, h2) = rack.effective_grid_size(m2);
+    // Same zone, different placements. No vertical overlap.
+    if m1.grid_col == m2.grid_col {
+        let overlap = m1.grid_row < m2.grid_row + h2 && m2.grid_row < m1.grid_row + h1;
+        assert!(!overlap, "expanded autotunes should not overlap");
+    }
+}
+
+#[test]
+fn pad_expanded_default_true_on_new_module() {
+    let mut rack = empty_rack();
+    let id = rack.add_module(ModuleKind::FxAutotune);
+    assert!(
+        rack.module(id).unwrap().pad_expanded,
+        "pad_expanded should default to true"
+    );
+}
+
+#[test]
+fn pad_expanded_serde_defaults_true_for_legacy_payload() {
+    // Sessions saved before this field existed must deserialize with
+    // pad_expanded = true so the new default takes effect on upgrade.
+    let legacy = r#"{
+        "id": 42,
+        "kind": "FxAutotune",
+        "enabled": true,
+        "zone": "FxMod",
+        "slot": 0
+    }"#;
+    let m: RackModule = serde_json::from_str(legacy).unwrap();
+    assert!(m.pad_expanded);
+}
