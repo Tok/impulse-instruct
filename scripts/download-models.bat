@@ -8,7 +8,8 @@ rem   download-models.bat                  Gemma 4 E4B [default, ~4.6 GB, runs o
 rem   download-models.bat gemma-26b        Gemma 4 26B-A4B UD-IQ4_XS [~13.4 GB, MoE, needs 16 GB]
 rem   download-models.bat gemma-26b-q3     Gemma 4 26B-A4B UD-Q3_K_M [~12.5 GB, MoE]
 rem   download-models.bat gemma-26b-iq2    Gemma 4 26B-A4B UD-IQ2_XXS [~9.9 GB, smallest 26B]
-rem   download-models.bat neutts           NeuTTS Air Q4 [~527 MB, TTS voice cloning]
+rem   download-models.bat neutts           NeuTTS Air Q8 [~803 MB, default TTS voice cloning]
+rem   download-models.bat neutts-q4        NeuTTS Air Q4 [~527 MB, smaller quant]
 rem   download-models.bat deepseek-r1-7b   DeepSeek-R1-Distill-Qwen-7B [~5 GB, CoT]
 rem   download-models.bat deepseek-r1-14b  DeepSeek-R1-Distill-Qwen-14B [~9 GB, CoT]
 rem   download-models.bat qwen3            Qwen3-8B Q4_K_M [~5 GB, optional]
@@ -17,6 +18,21 @@ rem
 rem NOTE: Most models require a free HuggingFace account.
 rem   Sign up at https://huggingface.co/join
 rem   Then log in: hf auth login  (or: huggingface-cli login)
+rem
+rem TTS DEPENDENCIES: NeuTTS Air runs through a small Python helper, so it
+rem needs Python 3.10+ and eSpeak-NG installed on Windows.  Without these,
+rem the MC/TTS rack module silently no-ops.
+rem   Python 3.10+:  https://www.python.org/downloads/windows/
+rem   eSpeak-NG:     https://github.com/espeak-ng/espeak-ng/releases
+rem
+rem OTHER QUANTS / VARIANTS: the aliases above cover the curated set we test
+rem against.  Many more quants and fine-tunes exist on HuggingFace — drop any
+rem .gguf into models\ and the app will auto-detect it.  Worth experimenting
+rem with if you have VRAM headroom or want to compare quality vs. size:
+rem   Gemma 4 26B-A4B (all quants):  https://huggingface.co/unsloth/gemma-4-26B-A4B-it-GGUF
+rem   Gemma 4 31B (all quants):      https://huggingface.co/unsloth/gemma-4-31B-it-GGUF
+rem   Gemma 4 E4B / E2B:             https://huggingface.co/unsloth?search_models=gemma-4
+rem   NeuTTS Air (Q4 / Q8):          https://huggingface.co/neuphonic
 rem
 rem PREFER MANUAL DOWNLOAD? Non-technical Windows users can just browse
 rem the HuggingFace URL printed below and drop the .gguf into the models\
@@ -60,10 +76,17 @@ if /i "%MODEL%"=="gemma-26b-iq2" (
     goto download
 )
 if /i "%MODEL%"=="neutts" (
+    set HF_REPO=neuphonic/neutts-air-q8-gguf
+    set MODEL_FILE=neutts-air-q8.gguf
+    set HF_FILE=neutts-air-Q8_0.gguf
+    set "MODEL_DESC=NeuTTS Air Q8 [~803 MB] -- default TTS/MC voice cloning"
+    goto download
+)
+if /i "%MODEL%"=="neutts-q4" (
     set HF_REPO=neuphonic/neutts-air-q4-gguf
     set MODEL_FILE=neutts-air-q4.gguf
     set HF_FILE=neutts-air-Q4_0.gguf
-    set "MODEL_DESC=NeuTTS Air Q4 [~527 MB] -- optional, TTS/MC voice cloning"
+    set "MODEL_DESC=NeuTTS Air Q4 [~527 MB] -- smaller TTS/MC quant"
     goto download
 )
 if /i "%MODEL%"=="qwen3" (
@@ -92,7 +115,7 @@ if /i "%MODEL%"=="deepseek-r1-14b" (
 )
 
 echo Unknown model: '%MODEL%'
-echo Available: gemma4 [default], gemma-26b, gemma-26b-q3, gemma-26b-iq2, neutts, deepseek-r1-7b, deepseek-r1-14b, qwen3, qwen3-14b
+echo Available: gemma4 [default], gemma-26b, gemma-26b-q3, gemma-26b-iq2, neutts [Q8], neutts-q4, deepseek-r1-7b, deepseek-r1-14b, qwen3, qwen3-14b
 exit /b 1
 
 :download

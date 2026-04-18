@@ -11,10 +11,29 @@
 #   ./scripts/download-models.sh deepseek-r1-14b  # DeepSeek-R1-Distill-Qwen-14B (~9 GB, CoT, accurate)
 #   ./scripts/download-models.sh qwen3            # Qwen3-8B Q4_K_M (~5 GB, optional)
 #   ./scripts/download-models.sh qwen3-14b        # Qwen3-14B Q4_K_M (~9 GB, optional)
+#   ./scripts/download-models.sh neutts           # NeuTTS Air Q8 (~803 MB, default TTS)
+#   ./scripts/download-models.sh neutts-q4        # NeuTTS Air Q4 (~527 MB, smaller quant)
 #
 # NOTE: A free HuggingFace account is required.
 #   Sign up at https://huggingface.co/join
 #   Then log in: huggingface-cli login
+#
+# TTS DEPENDENCIES: NeuTTS Air runs through a small Python helper, so it needs
+# Python 3.10+ and espeak-ng on the host.  The first `./download-models.sh
+# neutts` run creates a `.neutts-venv/` and installs the `neutts` package
+# automatically; without these, the MC/TTS rack module silently no-ops.
+#   Linux:   sudo apt install espeak-ng python3-venv
+#   macOS:   brew install espeak-ng
+#   Windows: install eSpeak-NG from https://github.com/espeak-ng/espeak-ng/releases
+#
+# OTHER QUANTS / VARIANTS: the aliases above cover the curated set we test
+# against.  Many more quants and fine-tunes exist on HuggingFace — drop any
+# `*.gguf` into `models/` and the app will auto-detect it.  Worth experimenting
+# with if you have headroom or want to compare quality vs. size:
+#   Gemma 4 26B-A4B (all quants):  https://huggingface.co/unsloth/gemma-4-26B-A4B-it-GGUF
+#   Gemma 4 31B (all quants):      https://huggingface.co/unsloth/gemma-4-31B-it-GGUF
+#   Gemma 4 E4B / E2B:             https://huggingface.co/unsloth?search_models=gemma-4
+#   NeuTTS Air (Q4 / Q8):          https://huggingface.co/neuphonic
 # ──────────────────────────────────────────────────────────────────────────────
 set -euo pipefail
 printf "\n  \033[38;2;110;110;110m▁▂▄▅▇██▇▅▄▂▁▁▂▄▅▇█\033[38;2;160;160;160m I M P U L S E • I N S T R U C T \033[38;2;110;110;110m█▇▅▄▂▁▁▂▄▅▇██▇▅▄▂▁\033[0m\n\n"
@@ -68,14 +87,20 @@ case "$MODEL" in
     MODEL_DESC="DeepSeek-R1-Distill-Qwen-14B Q4_K_M (~9 GB) — CoT, needs ~12 GB VRAM; newer distills may exist"
     ;;
   neutts)
+    HF_REPO="neuphonic/neutts-air-q8-gguf"
+    MODEL_FILE="neutts-air-q8.gguf"
+    HF_FILE="neutts-air-Q8_0.gguf"
+    MODEL_DESC="NeuTTS Air Q8 GGUF (~803 MB) — neural TTS voice cloning, default"
+    ;;
+  neutts-q4)
     HF_REPO="neuphonic/neutts-air-q4-gguf"
     MODEL_FILE="neutts-air-q4.gguf"
     HF_FILE="neutts-air-Q4_0.gguf"
-    MODEL_DESC="NeuTTS Air Q4 GGUF (~527 MB) — neural TTS voice cloning"
+    MODEL_DESC="NeuTTS Air Q4 GGUF (~527 MB) — smaller, more compressed quant"
     ;;
   *)
     echo "Unknown model: '$MODEL'"
-    echo "Available: gemma4 (default), gemma-26b, gemma-26b-q3, gemma-26b-iq2, deepseek-r1-7b, deepseek-r1-14b, qwen3, qwen3-14b, neutts"
+    echo "Available: gemma4 (default), gemma-26b, gemma-26b-q3, gemma-26b-iq2, deepseek-r1-7b, deepseek-r1-14b, qwen3, qwen3-14b, neutts (Q8), neutts-q4"
     exit 1
     ;;
 esac
@@ -201,7 +226,7 @@ case "$MODEL" in
     echo "DeepSeek-R1-Distill is released under the MIT License by DeepSeek AI."
     echo "Quantisation by bartowski. See: https://huggingface.co/${HF_REPO}"
     ;;
-  neutts)
+  neutts|neutts-q4)
     echo "NeuTTS Air is released by Neuphonic under the NeuTTS License."
     echo "See: https://huggingface.co/${HF_REPO}"
     ;;
@@ -210,7 +235,16 @@ echo "────────────────────────�
 
 # ── NeuTTS Air setup function ─────────────────────────────────────────────────
 NEUTTS_VENV=".neutts-venv"
-NEUTTS_MODEL="${MODEL_DIR}/neutts-air-q4.gguf"
+NEUTTS_MODEL_Q8="${MODEL_DIR}/neutts-air-q8.gguf"
+NEUTTS_MODEL_Q4="${MODEL_DIR}/neutts-air-q4.gguf"
+# Default to Q8 (better quality) but accept an existing Q4 install.
+if [[ -f "$NEUTTS_MODEL_Q8" ]]; then
+  NEUTTS_MODEL="$NEUTTS_MODEL_Q8"
+elif [[ -f "$NEUTTS_MODEL_Q4" ]]; then
+  NEUTTS_MODEL="$NEUTTS_MODEL_Q4"
+else
+  NEUTTS_MODEL="$NEUTTS_MODEL_Q8"
+fi
 
 setup_neutts() {
   echo ""
@@ -244,20 +278,21 @@ setup_neutts() {
   "$NEUTTS_VENV/bin/pip" install --quiet --upgrade pip
   "$NEUTTS_VENV/bin/pip" install --quiet "neutts[llama]" soundfile numpy
 
-  # Download model
-  if [[ ! -f "$NEUTTS_MODEL" ]]; then
-    echo "  Downloading NeuTTS Air Q4 GGUF (~527 MB)..."
-    DL_FILE="neutts-air-Q4_0.gguf"
+  # Download model — prefer Q8 (default), fall back to existing Q4 if present.
+  if [[ ! -f "$NEUTTS_MODEL_Q8" && ! -f "$NEUTTS_MODEL_Q4" ]]; then
+    echo "  Downloading NeuTTS Air Q8 GGUF (~803 MB)..."
+    DL_FILE="neutts-air-Q8_0.gguf"
     if [[ -n "${HF_CMD:-}" ]]; then
-      $HF_CMD download "neuphonic/neutts-air-q4-gguf" "$DL_FILE" --local-dir "$MODEL_DIR"
-      [[ -f "${MODEL_DIR}/${DL_FILE}" ]] && mv "${MODEL_DIR}/${DL_FILE}" "$NEUTTS_MODEL"
+      $HF_CMD download "neuphonic/neutts-air-q8-gguf" "$DL_FILE" --local-dir "$MODEL_DIR"
+      [[ -f "${MODEL_DIR}/${DL_FILE}" ]] && mv "${MODEL_DIR}/${DL_FILE}" "$NEUTTS_MODEL_Q8"
     elif command -v wget &>/dev/null; then
-      wget -q --show-progress -O "$NEUTTS_MODEL" \
-        "https://huggingface.co/neuphonic/neutts-air-q4-gguf/resolve/main/$DL_FILE"
+      wget -q --show-progress -O "$NEUTTS_MODEL_Q8" \
+        "https://huggingface.co/neuphonic/neutts-air-q8-gguf/resolve/main/$DL_FILE"
     elif command -v curl &>/dev/null; then
-      curl -L --progress-bar -o "$NEUTTS_MODEL" \
-        "https://huggingface.co/neuphonic/neutts-air-q4-gguf/resolve/main/$DL_FILE"
+      curl -L --progress-bar -o "$NEUTTS_MODEL_Q8" \
+        "https://huggingface.co/neuphonic/neutts-air-q8-gguf/resolve/main/$DL_FILE"
     fi
+    NEUTTS_MODEL="$NEUTTS_MODEL_Q8"
   fi
 
   # Generate voice references if missing
@@ -290,7 +325,7 @@ if [[ -f "$NEUTTS_MODEL" ]] && [[ -d "$NEUTTS_VENV" ]]; then
   echo "✓ NeuTTS Air already set up."
 else
   echo ""
-  echo "NeuTTS Air enables neural voice cloning for TTS modules (~527 MB download)."
+  echo "NeuTTS Air enables neural voice cloning for TTS modules (~803 MB download, Q8)."
   read -r -p "Set up NeuTTS Air? [Y/n] " reply
   reply="${reply:-y}"
   if [[ "$reply" =~ ^[Yy]$ ]] || [[ -z "$reply" ]]; then

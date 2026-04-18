@@ -71,7 +71,7 @@ The release zip ships without model files. You need at least **Gemma 4 E4B Q4_K_
 4. Done — launch the app.
 
 Optional extras, same process:
-- **NeuTTS Air Q4** (~527 MB) — neural voice cloning for MC/DJ modules: [neuphonic/neutts-air-q4-gguf](https://huggingface.co/neuphonic/neutts-air-q4-gguf) → rename `neutts-air-Q4_0.gguf` to `neutts-air-q4.gguf`
+- **NeuTTS Air Q8** (~803 MB) — neural voice cloning for MC/DJ modules: [neuphonic/neutts-air-q8-gguf](https://huggingface.co/neuphonic/neutts-air-q8-gguf) → rename `neutts-air-Q8_0.gguf` to `neutts-air-q8.gguf`. The Q4 quant (~527 MB, [neuphonic/neutts-air-q4-gguf](https://huggingface.co/neuphonic/neutts-air-q4-gguf)) is also accepted as a smaller fallback.
 
 **Option B — Script (if you already have `hf`/`huggingface-cli`/`curl`):**
 
@@ -128,7 +128,7 @@ The app auto-detects models in `models/` and connects. The startup wizard detect
 | **Gemma 4 26B-A4B UD-IQ4_XS** | ~13.4 GB | ~14 GB | Optional. MoE (4B active / 26B total) — same speed as E4B, much more knowledge. Needs a 16 GB+ GPU. |
 | **Gemma 4 26B-A4B UD-Q3_K_M** | ~12.5 GB | ~13 GB | Optional. Smaller quant of the MoE for tighter VRAM budgets. |
 | **Gemma 4 26B-A4B UD-IQ2_XXS** | ~9.9 GB | ~10 GB | Optional. Smallest 26B-A4B quant. |
-| **NeuTTS Air Q4** | ~527 MB | CPU | Neural TTS voice cloning for MC/DJ modules. Apache 2.0. |
+| **NeuTTS Air Q8** | ~803 MB | CPU | Neural TTS voice cloning for MC/DJ modules. Q4 (~527 MB) also supported as a smaller fallback. NeuTTS License. |
 
 Each agent can run a different model. A `LlamaServerPool` manages server processes — agents sharing the same model share a single server (ref-counted).  Same-model agents share VRAM, so a 5-agent Crew of Gemmas costs the same ~6 GB as a single Gemma. Typical multi-agent VRAM budgets:
 

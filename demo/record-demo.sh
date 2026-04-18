@@ -286,7 +286,7 @@ if [ "$NO_TTS" -eq 0 ]; then
     # module (used for runtime mc_line synthesis when an MC agent is
     # spawned during the scenario) shares the same Python server on
     # port 8770 — stopping it would make scenario-time MC lines fail
-    # silently.  Memory is fine: NeuTTS Air Q4 is ~527 MB and Gemma
+    # silently.  Memory is fine: NeuTTS Air is ~800 MB (Q8) and Gemma
     # ~5 GB, comfortably under most GPU budgets.  The cleanup trap
     # stops the server after the scenario finishes.
 
