@@ -237,6 +237,50 @@ fn truncate(s: &str, max: usize) -> String {
 #[allow(unused_imports)]
 use json_repair as _json_repair_keepalive;
 
+/// Thin adapter that plugs a live `LlamaServerPool` + port into the
+/// `PipelineBackend` trait.  This is what production calls should use —
+/// the pool owns the real llama-server subprocess, the adapter routes
+/// each `infer_lane_json` call to it.  Cheap to construct (holds
+/// mutable borrows), so each pipeline run builds a fresh one.
+pub struct PoolBackend<'a> {
+    pool: &'a mut crate::llm::LlamaServerPool,
+    port: u16,
+}
+
+impl<'a> PoolBackend<'a> {
+    pub fn new(pool: &'a mut crate::llm::LlamaServerPool, port: u16) -> Self {
+        Self { pool, port }
+    }
+}
+
+impl PipelineBackend for PoolBackend<'_> {
+    fn infer_lane_json(
+        &mut self,
+        system: &str,
+        user: &str,
+        schema: &Value,
+        sampling: &SamplingParams,
+    ) -> anyhow::Result<Value> {
+        self.pool
+            .infer_lane(self.port, system, user, schema, sampling)
+    }
+}
+
+/// Convenience entrypoint for callers who already have a pool + port —
+/// builds the adapter and runs the pipeline in one call.  Used by the
+/// LLM worker loop to swap monolithic inference for the lane path.
+pub fn run_pipeline_via_pool(
+    state: AppState,
+    user_prompt: &str,
+    pool: &mut crate::llm::LlamaServerPool,
+    port: u16,
+    sampling: &SamplingParams,
+    progress: impl FnMut(PipelineEvent),
+) -> AppState {
+    let mut backend = PoolBackend::new(pool, port);
+    run_pipeline(state, user_prompt, &mut backend, sampling, progress)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

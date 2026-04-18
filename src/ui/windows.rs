@@ -135,6 +135,22 @@ impl ImpulseApp {
                                         }
                                     });
                                 });
+                                ui.add_space(4.0);
+                                ui.horizontal(|ui| {
+                                    ui.label(egui::RichText::new("Lane pipeline (planner + per-voice)").monospace().size(9.5).color(theme::FOG));
+                                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                                        let mut on = self.state.read().llm.use_pipeline;
+                                        if widgets::toggle_button(ui, if on { "ON" } else { "OFF" }, &mut on) {
+                                            self.state.write().llm.use_pipeline = on;
+                                        }
+                                    });
+                                });
+                                ui.label(
+                                    egui::RichText::new("Splits each turn into focused per-voice calls — shorter, more reliable than one-shot.")
+                                        .monospace()
+                                        .size(8.0)
+                                        .color(theme::IRON),
+                                );
                                 if is_mock {
                                     ui.label(
                                         egui::RichText::new("  (unavailable in mock mode)")

@@ -392,6 +392,11 @@ pub struct LlmState {
     /// Global toggle: allow agents to autonomously spawn new agents during jam.
     #[serde(default = "default_true")]
     pub agent_autonomy: bool,
+    /// When true (default), route user prompts through the sequential
+    /// lane pipeline — one planner call + one focused call per lane.
+    /// Flip off to run the legacy monolithic path for debugging.
+    #[serde(default = "default_true")]
+    pub use_pipeline: bool,
 }
 
 fn default_true() -> bool {
@@ -447,6 +452,7 @@ impl Default for LlmState {
             jam_bars: 0.0,
             jam_cycle_count: 0,
             agent_autonomy: true,
+            use_pipeline: true,
         }
     }
 }

@@ -404,13 +404,158 @@ pub fn run_llm_loop(
             }
         }
 
-        // Build system prompt with per-agent overrides patched in.
         let agent_label = agent_persona.clone().unwrap_or_else(|| "default".into());
         log::info!(
             "LLM: infer start (agent={}, one_shot={})",
             agent_label,
             one_shot
         );
+
+        // Build sampling params up front — the pipeline branch needs them,
+        // and the monolithic path would build identical params anyway.
+        let sampling = {
+            let s = state.read();
+            let agent_seed = agent_id
+                .and_then(|aid| s.llm_agents.iter().find(|a| a.id == aid))
+                .map(|a| a.seed)
+                .unwrap_or(s.llm.seed);
+            SamplingParams {
+                heat: agent_heat,
+                temperature: agent_temp,
+                top_k: s.llm.top_k,
+                top_p: s.llm.top_p,
+                min_p: s.llm.min_p,
+                repeat_penalty: s.llm.repeat_penalty,
+                frequency_penalty: s.llm.frequency_penalty,
+                seed: agent_seed,
+            }
+        };
+
+        // ── Pipeline branch (default) ───────────────────────────────────────
+        // When `use_pipeline` is on, user turns go through planner +
+        // per-lane inferences instead of one monolithic call.  Each
+        // lane has its own focused prompt + required-fields schema so
+        // outputs are short and the model can't skip required arrays.
+        // The pipeline drives its own state apply + UI logging; on
+        // success we `continue` past the monolithic path below.
+        let use_pipeline_this_turn = state.read().llm.use_pipeline;
+        if use_pipeline_this_turn {
+            log::info!(
+                "LLM: starting lane pipeline on port {} (prompt {} chars)",
+                infer_port,
+                prompt.len()
+            );
+            let t0 = Instant::now();
+            let before_state = Box::new(state.read().clone());
+
+            // Apply agent overrides to the snapshot used as pipeline
+            // input — these only affect prompt-building; final state
+            // still lands in the real app state.
+            let mut snap = state.read().clone();
+            if let Some(m) = agent_conv_mode.clone() {
+                snap.llm.conversation_mode = m;
+            }
+            if let Some(s) = agent_style.clone() {
+                snap.llm.active_style = s;
+            }
+            if let Some(c) = agent_custom_style.clone() {
+                snap.llm.custom_style_text = c;
+            }
+            if let Some(p) = agent_persona.clone() {
+                snap.llm.persona_name = p;
+            }
+            snap.llm.heat = agent_heat;
+
+            let tx_clone = output_tx.clone();
+            let agent_label_for_cb = agent_label.clone();
+            let mut lanes_ran = 0usize;
+            let new_state = pipeline::run_pipeline_via_pool(
+                snap,
+                prompt,
+                &mut pool,
+                infer_port,
+                &sampling,
+                |event| match event {
+                    pipeline::PipelineEvent::PlanReady { plan } => {
+                        let labels: Vec<&str> = plan.lanes.iter().map(|l| l.label()).collect();
+                        log::info!(
+                            "pipeline: plan = [{}] ({})",
+                            labels.join(", "),
+                            plan.rationale
+                        );
+                        let _ = tx_clone.try_send(LlmOutput {
+                            text: format!(
+                                "[plan: {} lanes — {}]",
+                                plan.lanes.len(),
+                                labels.join(", ")
+                            ),
+                            agent_id,
+                            ..LlmOutput::default()
+                        });
+                    }
+                    pipeline::PipelineEvent::LaneApplied { lane, ms, .. } => {
+                        lanes_ran += 1;
+                        log::info!("pipeline: {} applied in {}ms", lane.label(), ms);
+                    }
+                    pipeline::PipelineEvent::LaneFailed { lane, error } => {
+                        log::warn!("pipeline: {} failed — {}", lane.label(), error);
+                        let _ = tx_clone.try_send(LlmOutput {
+                            text: format!("[{} failed: {}]", lane.label(), error),
+                            agent_id,
+                            ..LlmOutput::default()
+                        });
+                    }
+                    pipeline::PipelineEvent::PipelineDone {
+                        total_ms,
+                        lanes_succeeded,
+                        lanes_failed,
+                    } => {
+                        log::info!(
+                            "pipeline: done ({} ok, {} failed, {}ms total, agent={})",
+                            lanes_succeeded,
+                            lanes_failed,
+                            total_ms,
+                            agent_label_for_cb,
+                        );
+                    }
+                    _ => {}
+                },
+            );
+            // Write pipeline output back, preserving the live sequencer
+            // step counter (audio thread advances it independently).
+            {
+                let mut s = state.write();
+                let step = s.sequencer.current_step;
+                s.bass_voices = new_state.bass_voices;
+                s.kit_a = new_state.kit_a;
+                s.kit_b = new_state.kit_b;
+                s.sequencer = new_state.sequencer;
+                s.sequencer.current_step = step;
+                s.fx = new_state.fx;
+                s.hoover = new_state.hoover;
+                s.an1x = new_state.an1x;
+                s.noise_voice = new_state.noise_voice;
+                s.lfo = new_state.lfo;
+                s.rack = new_state.rack;
+                s.llm.is_inferring = false;
+                if let Some(aid) = agent_id
+                    && let Some(a) = s.llm_agents.iter_mut().find(|a| a.id == aid)
+                {
+                    a.is_inferring = false;
+                }
+            }
+            let elapsed = t0.elapsed().as_secs_f32();
+            let _ = output_tx.try_send(LlmOutput {
+                text: format!("[pipeline: {} lanes applied in {:.1}s]", lanes_ran, elapsed),
+                agent_id,
+                before_state: Some(before_state),
+                ..LlmOutput::default()
+            });
+            continue;
+        }
+
+        // ── Monolithic path (legacy, `use_pipeline=false`) ──────────────────
+        // Build system prompt with per-agent overrides patched in.
         log::debug!("LLM: building system prompt...");
         let system = {
             let mut snap = state.read().clone();
@@ -468,25 +613,6 @@ pub fn run_llm_loop(
             state.write().llm.last_prompt = prompt.clone();
         }
 
-        let sampling = {
-            let s = state.read();
-            // Per-agent seed override (mirrors style propagation): the agent
-            // carries its own seed copy.  -1 means "random each call".
-            let agent_seed = agent_id
-                .and_then(|aid| s.llm_agents.iter().find(|a| a.id == aid))
-                .map(|a| a.seed)
-                .unwrap_or(s.llm.seed);
-            SamplingParams {
-                heat: agent_heat,
-                temperature: agent_temp,
-                top_k: s.llm.top_k,
-                top_p: s.llm.top_p,
-                min_p: s.llm.min_p,
-                repeat_penalty: s.llm.repeat_penalty,
-                frequency_penalty: s.llm.frequency_penalty,
-                seed: agent_seed,
-            }
-        };
         let enable_thinking = agent_enable_thinking;
         let think_prompt = format!(
             "{} {}",

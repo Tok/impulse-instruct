@@ -354,6 +354,107 @@ impl Drop for LlamaServerBackend {
     }
 }
 
+// ── Pipeline backend impl ────────────────────────────────────────────────────
+//
+// Structured-JSON inference for the lane pipeline.  Takes an explicit
+// schema and sends it as `response_format.json_schema` so llama-server's
+// grammar converter enforces the shape — the per-lane required fields
+// land by construction instead of relying on the prompt to nag.
+
+impl crate::llm::pipeline::PipelineBackend for LlamaServerBackend {
+    fn infer_lane_json(
+        &mut self,
+        system: &str,
+        user: &str,
+        schema: &serde_json::Value,
+        sampling: &SamplingParams,
+    ) -> Result<serde_json::Value> {
+        if !self.live {
+            // Fall through to mock for dev / missing-model flows.
+            let mock = mock_response(user, sampling.heat)?;
+            return Ok(mock.param_update.unwrap_or_default());
+        }
+
+        let url = format!("{}/v1/chat/completions", self.base_url);
+        let heat_f = (sampling.heat as f64).clamp(0.0, 1.0);
+        let temperature = ((sampling.temperature as f64) * (1.0 + heat_f * 0.8)).clamp(0.0, 2.0);
+        let top_p =
+            (sampling.top_p as f64 + heat_f * (1.0 - sampling.top_p as f64)).clamp(0.0, 1.0);
+        let min_p = ((sampling.min_p as f64) * (1.0 - heat_f * 0.9)).clamp(0.0, 1.0);
+        let frequency_penalty = (sampling.frequency_penalty as f64 + heat_f * 0.4).clamp(0.0, 2.0);
+
+        // OpenAI structured-output format: `response_format.type` =
+        // `json_schema` tells llama.cpp to build a GBNF grammar from the
+        // schema and constrain every output token.  Per-lane calls use
+        // tight schemas (required fields + additionalProperties:false),
+        // so the server can't emit something off-spec.
+        //
+        // Per-lane max_tokens can be tighter than the monolithic 2400 —
+        // even the bass lane's full 5-array payload sits around 500
+        // tokens.  Giving the server a lower ceiling caps any runaway
+        // emission without clipping real output.
+        let body = serde_json::json!({
+            "model": "local",
+            "messages": [
+                { "role": "system",  "content": system },
+                { "role": "user",    "content": user   }
+            ],
+            "temperature": temperature,
+            "top_k": sampling.top_k,
+            "top_p": top_p,
+            "min_p": min_p,
+            "repeat_penalty": sampling.repeat_penalty as f64,
+            "frequency_penalty": frequency_penalty,
+            "seed": sampling.seed,
+            "max_tokens": 900,
+            "cache_prompt": true,
+            "response_format": {
+                "type": "json_schema",
+                "json_schema": {
+                    "name": "lane_output",
+                    "strict": true,
+                    "schema": schema,
+                }
+            }
+        });
+
+        let agent = ureq::AgentBuilder::new()
+            .timeout(std::time::Duration::from_secs(INFER_TIMEOUT_SECS))
+            .build();
+
+        let resp = agent
+            .post(&url)
+            .set("Content-Type", "application/json")
+            .send_json(&body)
+            .map_err(|e| match e {
+                ureq::Error::Status(code, response) => {
+                    let body = response.into_string().unwrap_or_default();
+                    anyhow::anyhow!("llama-server lane request failed: status {code}\nbody: {body}")
+                }
+                other => anyhow::anyhow!("llama-server lane request failed: {other}"),
+            })?;
+
+        let resp_text = resp.into_string()?;
+        let resp_json: serde_json::Value = serde_json::from_str(&resp_text).map_err(|e| {
+            anyhow::anyhow!("lane response JSON parse failed: {e}\nbody: {resp_text}")
+        })?;
+        let raw_content = resp_json["choices"][0]["message"]["content"]
+            .as_str()
+            .unwrap_or("")
+            .to_string();
+        if raw_content.is_empty() {
+            return Err(anyhow::anyhow!(
+                "lane response content empty\nbody: {resp_text}"
+            ));
+        }
+        let (_thinking_tag, json_text) = split_thinking(&raw_content);
+        let parsed = repair_json(json_text.trim()).ok_or_else(|| {
+            anyhow::anyhow!("lane JSON parse + repair both failed\nraw: {json_text}")
+        })?;
+        Ok(parsed)
+    }
+}
+
 // ── Backend inference impl ───────────────────────────────────────────────────
 
 impl LlmBackend for LlamaServerBackend {
@@ -624,6 +725,26 @@ impl LlamaServerPool {
             .find(|s| s.port == port)
             .ok_or_else(|| anyhow::anyhow!("No server on port {}", port))?;
         inst.backend.infer(system, user, sampling)
+    }
+
+    /// Lane-pipeline structured inference.  Routes to the backend on
+    /// `port` and invokes its `PipelineBackend` impl.  Used by the
+    /// lane pipeline — one call per lane, schema-constrained output.
+    pub fn infer_lane(
+        &mut self,
+        port: u16,
+        system: &str,
+        user: &str,
+        schema: &serde_json::Value,
+        sampling: &SamplingParams,
+    ) -> Result<serde_json::Value> {
+        use crate::llm::pipeline::PipelineBackend;
+        let inst = self
+            .servers
+            .iter_mut()
+            .find(|s| s.port == port)
+            .ok_or_else(|| anyhow::anyhow!("No server on port {}", port))?;
+        inst.backend.infer_lane_json(system, user, schema, sampling)
     }
 
     /// True if at least one server is live.
