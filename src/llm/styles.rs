@@ -5,6 +5,7 @@
 // system prompt when a style is active — the LLM reads it and decides what to do.
 
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::sync::OnceLock;
 
 static STYLE_CATALOG: OnceLock<StyleCatalog> = OnceLock::new();
@@ -143,6 +144,14 @@ pub struct Style {
     /// switching styles isn't destructive.
     #[serde(default)]
     pub rack_modules: Vec<String>,
+    /// Optional per-lane dynamism overrides for the Phase 2 jam scheduler
+    /// (`lane_scheduler::effective_dynamism`).  Keys match either the exact
+    /// lane label (`"bass1"`, `"kit_a"`, `"fx"`) or a group label (`"bass"`
+    /// covers every bass voice).  Values are `0.0..=1.0` — higher → picked
+    /// more often during jam cycles.  Absent entries fall back to the
+    /// baked-in defaults in `lane_scheduler::baseline_dynamism`.
+    #[serde(default)]
+    pub lane_dynamism: HashMap<String, f32>,
 }
 
 pub struct StyleCatalog(Vec<Style>);

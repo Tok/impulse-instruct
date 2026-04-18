@@ -107,7 +107,20 @@ A detailed log of what's built.
   scorers naturally surface for retry without a separate queue.
 - Tiny no-deps `Xorshift32` seeded from wall-clock nanos — good enough
   for weighted sampling over a handful of lanes, deterministic under a
-  fixed seed so the 15 new scheduler tests pin every decision.
+  fixed seed so the 21 scheduler tests pin every decision.
+
+### Per-style lane dynamism overrides (Phase 4)
+
+- `Style.lane_dynamism: HashMap<String, f32>` in `styles.json` — optional
+  map overriding `lane_scheduler::baseline_dynamism` per genre.
+- Lookup order on each pick: exact label (`"bass1"`) → group label
+  (`"bass"`) → baked-in default.  A single `"bass": 0.9` entry covers
+  every bass voice; per-voice entries still win over the group.
+- `Rack` stays at 0 regardless of style — user-owned composition.
+- `pick_jam_lane` resolves the active style via `StyleCatalog::find_by_id`
+  and threads it through `compute_weight`; values outside `0..=1` are
+  clamped.  Schema is wired and tested (6 new Phase-4 tests); populating
+  the per-style maps in `styles.json` is left as a follow-up knob-twist.
 - **Defensive plan filter** in `pipeline::run_pipeline` — drops any lane
   whose voice/module isn't currently live before the loop, so a stale
   planner output (e.g. after a mid-cycle style switch) doesn't burn an

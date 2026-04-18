@@ -10,13 +10,14 @@
 // override the dynamism constants below.
 
 use crate::llm::lanes::LaneKind;
+use crate::llm::styles::Style;
 use crate::state::{AppState, LaneScore};
 
-/// Baseline dynamism per lane — 0.0 = "the scheduler never picks this",
-/// 1.0 = "always in play".  Phase 4 plan: styles.json → `lane_dynamism` map
-/// overrides these per-style.  Rack is 0.0 because rack composition is
-/// user-owned (see `write_lane_back` guard in `llm/mod.rs`).
-pub fn lane_dynamism(lane: LaneKind) -> f32 {
+/// Baked-in per-lane dynamism defaults — genre-neutral baseline.  Used when
+/// the active style has no override for this lane.  0.0 = "the scheduler
+/// never picks this", 1.0 = "always in play".  Rack stays at 0.0 because
+/// rack composition is user-owned.
+pub fn baseline_dynamism(lane: LaneKind) -> f32 {
     match lane {
         LaneKind::Bass(_) => 0.90,
         LaneKind::KitA | LaneKind::KitB => 0.85,
@@ -27,6 +28,49 @@ pub fn lane_dynamism(lane: LaneKind) -> f32 {
         LaneKind::Settings => 0.25,
         LaneKind::Rack => 0.0,
     }
+}
+
+/// Group label for a lane — coarser than `lane.label()`.  Lets a style set
+/// `"bass": 0.9` once and have it apply to every bass voice rather than
+/// listing `bass1`, `bass2`, `bass3`, `bass4` individually.
+fn group_label(lane: LaneKind) -> &'static str {
+    match lane {
+        LaneKind::Bass(_) => "bass",
+        LaneKind::KitA => "kit_a",
+        LaneKind::KitB => "kit_b",
+        LaneKind::Amen => "amen",
+        LaneKind::Hoover => "hoover",
+        LaneKind::An1x => "an1x",
+        LaneKind::Fx => "fx",
+        LaneKind::Modulation => "mod",
+        LaneKind::Settings => "settings",
+        LaneKind::Rack => "rack",
+    }
+}
+
+/// Resolve the dynamism for `lane` under an optional `style`.  Lookup
+/// order: exact label (`"bass1"`) → group label (`"bass"`) → baseline.
+/// Rack is hard-capped at 0 regardless of style — user-owned composition.
+pub fn effective_dynamism(lane: LaneKind, style: Option<&Style>) -> f32 {
+    if matches!(lane, LaneKind::Rack) {
+        return 0.0;
+    }
+    if let Some(st) = style {
+        let map = &st.lane_dynamism;
+        if let Some(v) = map.get(lane.label()) {
+            return v.clamp(0.0, 1.0);
+        }
+        if let Some(v) = map.get(group_label(lane)) {
+            return v.clamp(0.0, 1.0);
+        }
+    }
+    baseline_dynamism(lane)
+}
+
+/// Backwards-compat alias — callers that don't know about styles get the
+/// baseline.  Kept so existing tests and any downstream code keep working.
+pub fn lane_dynamism(lane: LaneKind) -> f32 {
+    baseline_dynamism(lane)
 }
 
 /// Weight penalty for having fired recently.  `gap` is `current_cycle -
@@ -54,15 +98,17 @@ pub fn heat_jitter(heat: f32, rng: &mut Xorshift32) -> f32 {
 }
 
 /// Pure weight formula — factored out of `pick_jam_lane` for unit tests.
-/// Returns 0.0 for any lane with dynamism 0 (Rack).
+/// Returns 0.0 for any lane with effective dynamism 0 (Rack, or a style
+/// override that set this lane to 0).
 pub fn compute_weight(
     lane: LaneKind,
     score: Option<&LaneScore>,
     current_cycle: u32,
     heat: f32,
+    style: Option<&Style>,
     rng: &mut Xorshift32,
 ) -> f32 {
-    let dyn_w = lane_dynamism(lane);
+    let dyn_w = effective_dynamism(lane, style);
     if dyn_w <= 0.0 {
         return 0.0;
     }
@@ -75,6 +121,8 @@ pub fn compute_weight(
 /// Weighted-random pick from `candidates`.  Returns `None` when
 /// `candidates` is empty or every weight collapsed to 0 (e.g. all lanes
 /// just updated).  Caller should fall back to `default_plan` on `None`.
+/// Consults the active style's `lane_dynamism` map before falling back to
+/// `baseline_dynamism` for each candidate.
 pub fn pick_jam_lane(
     state: &AppState,
     candidates: &[LaneKind],
@@ -85,11 +133,16 @@ pub fn pick_jam_lane(
     }
     let cycle = state.llm.jam_cycle_count;
     let heat = state.llm.heat;
+    let style = state
+        .llm
+        .active_style
+        .as_deref()
+        .and_then(|id| crate::llm::styles::StyleCatalog::get().find_by_id(id));
     let weights: Vec<f32> = candidates
         .iter()
         .map(|&lane| {
             let score = state.llm.lane_scores.get(lane.label());
-            compute_weight(lane, score, cycle, heat, rng)
+            compute_weight(lane, score, cycle, heat, style, rng)
         })
         .collect();
     let total: f32 = weights.iter().sum();

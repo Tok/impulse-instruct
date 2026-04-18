@@ -2,13 +2,41 @@
 #[allow(clippy::module_inception)]
 mod lane_scheduler_tests {
     use crate::llm::lane_scheduler::{
-        Xorshift32, compute_weight, heat_jitter, lane_dynamism, pick_jam_lane, recency_decay,
+        Xorshift32, compute_weight, effective_dynamism, heat_jitter, lane_dynamism, pick_jam_lane,
+        recency_decay,
     };
     use crate::llm::lanes::LaneKind;
     use crate::llm::planner::jam_plan;
+    use crate::llm::styles::Style;
     use crate::state::{
         AppState, LaneScore, ModuleKind, PortDir, PortKind, PortRef, RackModule, RackState,
     };
+    use std::collections::HashMap;
+
+    // Build a bare-bones style with only `lane_dynamism` populated — the
+    // other fields aren't consulted by the scheduler.
+    fn style_with_dynamism(entries: &[(&str, f32)]) -> Style {
+        let mut map = HashMap::new();
+        for (k, v) in entries {
+            map.insert((*k).to_string(), *v);
+        }
+        Style {
+            id: "test".into(),
+            name: "Test".into(),
+            keywords: vec![],
+            bpm_range: String::new(),
+            brief: String::new(),
+            description: String::new(),
+            seed_patterns: Default::default(),
+            suggested_root: None,
+            suggested_scale: None,
+            baseline_params: None,
+            mc_lines: vec![],
+            themes: vec![],
+            rack_modules: vec![],
+            lane_dynamism: map,
+        }
+    }
 
     // ── Fixtures ──────────────────────────────────────────────────────────────
 
@@ -104,13 +132,16 @@ mod lane_scheduler_tests {
     fn compute_weight_rack_is_zero() {
         let mut rng = Xorshift32::new(1);
         // Rack's dynamism short-circuits the formula regardless of score.
-        assert_eq!(compute_weight(LaneKind::Rack, None, 0, 0.5, &mut rng), 0.0);
+        assert_eq!(
+            compute_weight(LaneKind::Rack, None, 0, 0.5, None, &mut rng),
+            0.0
+        );
     }
 
     #[test]
     fn compute_weight_never_picked_has_weight() {
         let mut rng = Xorshift32::new(1);
-        let w = compute_weight(LaneKind::Bass(0), None, 0, 0.0, &mut rng);
+        let w = compute_weight(LaneKind::Bass(0), None, 0, 0.0, None, &mut rng);
         // Bass + never-picked (score default 0.5) + recency 1.0 + no heat
         // jitter → weight = dynamism × 0.5.
         let expected = lane_dynamism(LaneKind::Bass(0)) * 0.5;
@@ -132,7 +163,7 @@ mod lane_scheduler_tests {
             change_count: 1,
         };
         // Big gap so recency doesn't also zero it out.
-        let w = compute_weight(LaneKind::Bass(0), Some(&s), 100, 0.0, &mut rng);
+        let w = compute_weight(LaneKind::Bass(0), Some(&s), 100, 0.0, None, &mut rng);
         assert!(w.abs() < 1e-6);
     }
 
@@ -316,5 +347,65 @@ mod lane_scheduler_tests {
         let mut rng = Xorshift32::new(1);
         let plan = jam_plan(&state, &mut rng);
         assert_eq!(plan.lanes.len(), 1);
+    }
+
+    // ── Per-style dynamism override (Phase 4) ────────────────────────────────
+
+    #[test]
+    fn effective_dynamism_no_style_matches_baseline() {
+        // With `None` style, fall through to baseline.
+        for lane in [LaneKind::Bass(0), LaneKind::KitA, LaneKind::Fx] {
+            assert_eq!(effective_dynamism(lane, None), lane_dynamism(lane));
+        }
+    }
+
+    #[test]
+    fn effective_dynamism_exact_label_wins() {
+        // A per-voice entry ("bass2") should beat the group entry ("bass").
+        let style = style_with_dynamism(&[("bass", 0.5), ("bass2", 0.1)]);
+        assert!((effective_dynamism(LaneKind::Bass(1), Some(&style)) - 0.1).abs() < 1e-4);
+        // Bass(0) falls through the exact lookup and hits the group.
+        assert!((effective_dynamism(LaneKind::Bass(0), Some(&style)) - 0.5).abs() < 1e-4);
+    }
+
+    #[test]
+    fn effective_dynamism_group_covers_all_bass_voices() {
+        // A single "bass" entry covers every bass voice.
+        let style = style_with_dynamism(&[("bass", 0.3)]);
+        for idx in 0..4 {
+            assert!((effective_dynamism(LaneKind::Bass(idx), Some(&style)) - 0.3).abs() < 1e-4);
+        }
+    }
+
+    #[test]
+    fn effective_dynamism_rack_stays_zero_even_under_style() {
+        // Rack is user-owned — no style override can unlock it for the
+        // scheduler.
+        let style = style_with_dynamism(&[("rack", 1.0)]);
+        assert_eq!(effective_dynamism(LaneKind::Rack, Some(&style)), 0.0);
+    }
+
+    #[test]
+    fn effective_dynamism_clamps_out_of_range() {
+        let style = style_with_dynamism(&[("fx", 5.0), ("bass", -1.0)]);
+        assert_eq!(effective_dynamism(LaneKind::Fx, Some(&style)), 1.0);
+        assert_eq!(effective_dynamism(LaneKind::Bass(0), Some(&style)), 0.0);
+    }
+
+    #[test]
+    fn compute_weight_uses_style_override() {
+        // With style override raising fx dynamism above bass, fx should
+        // end up with the higher weight when other factors are equal.
+        let mut rng_a = Xorshift32::new(1);
+        let mut rng_b = Xorshift32::new(1); // same seed → same heat jitter
+        let style = style_with_dynamism(&[("fx", 0.95), ("bass", 0.10)]);
+        let w_bass = compute_weight(LaneKind::Bass(0), None, 0, 0.0, Some(&style), &mut rng_a);
+        let w_fx = compute_weight(LaneKind::Fx, None, 0, 0.0, Some(&style), &mut rng_b);
+        assert!(
+            w_fx > w_bass,
+            "style override should put fx above bass: w_bass={}, w_fx={}",
+            w_bass,
+            w_fx
+        );
     }
 }

@@ -54,10 +54,10 @@ they ship and are reflected in `features.md`.
   output gets a do-over without blocking the weighted picker.
   Phase 2's `(1 - score)` term already biases toward low scorers,
   but an explicit retry still wins on actively-failed lanes.
-- **Lane lifecycle Phase 4 — per-style dynamism in `styles.json`.**
-  Optional `lane_dynamism: { "bass": 0.9, "kit_a": 0.85, "fx": 0.4,
-  ... }` map per style; overrides the genre-neutral defaults baked
-  into `lane_scheduler::lane_dynamism`.
+- **Populate per-style `lane_dynamism` maps in `styles.json`.**  The
+  schema + scheduler hookup landed in Phase 4, but every style still
+  runs on the baked-in defaults.  Fill in genre-appropriate overrides
+  (e.g. ambient = bass 0.4 / fx 0.9, hard techno = kit_a 0.95 / fx 0.2).
 - **Score viz in LLM console** — currently scores log via `log::info!`
   only.  Need a layout-stable widget (small per-lane grid below the
   cycle viz, or a hover-tooltip on each agent's slot) that doesn't
