@@ -167,6 +167,12 @@ pub struct ImpulseApp {
     /// instead of permanently turning it red.
     last_pipeline_failed_count: usize,
     pipeline_flash_until: f64,
+    /// Heartbeat anti-spam timer: when heat > 0 and the jam loop is dormant
+    /// (no in-flight inference, no scheduled fire), the UI fires one Infer
+    /// to kick it off — but the LLM thread takes a frame or two to flip
+    /// `is_inferring`, so without a cooldown we'd fire several duplicates
+    /// during that window.
+    last_jam_kickoff: std::time::Instant,
     session_start: std::time::Instant,
     last_step_time: f64,
     /// Log of melodic notes that have actually fired, captured on each
@@ -352,6 +358,9 @@ impl ImpulseApp {
             last_step_global: 0,
             last_pipeline_failed_count: 0,
             pipeline_flash_until: 0.0,
+            // Set in the past so the first frame's heartbeat check passes
+            // immediately once heat > 0.
+            last_jam_kickoff: std::time::Instant::now() - std::time::Duration::from_secs(10),
             melodic_log: std::collections::VecDeque::with_capacity(MELODIC_LOG_CAP),
             drum_log: std::collections::VecDeque::with_capacity(DRUM_LOG_CAP),
             session_start: std::time::Instant::now(),
@@ -539,6 +548,59 @@ impl eframe::App for ImpulseApp {
             } else {
                 // Still waiting — request a repaint so we check again next frame
                 ctx.request_repaint_after(std::time::Duration::from_millis(200));
+            }
+        }
+
+        // ── Jam-loop heartbeat ──────────────────────────────────────────────
+        // The jam loop self-perpetuates via [jam_cycle_done], but nothing
+        // kicks off the *first* cycle when heat goes 0 → >0 (slider move
+        // or app startup with a saved heat).  Detect "heat > 0 + dormant"
+        // and fire one Infer to spark it.  Cooldown stops re-fires while
+        // the LLM thread is still picking up the message.
+        {
+            let (heat, initializing, any_inferring) = {
+                let s = self.state.read();
+                (
+                    s.llm.heat,
+                    s.llm.llm_initializing,
+                    s.llm.is_inferring || s.llm_agents.iter().any(|a| a.is_inferring),
+                )
+            };
+            let dormant = !any_inferring && self.jam_next_fire.is_none();
+            let cooldown = std::time::Duration::from_millis(500);
+            let cooldown_left = cooldown.saturating_sub(self.last_jam_kickoff.elapsed());
+            if heat > 0.0 && dormant && !initializing {
+                if cooldown_left.is_zero() {
+                    let next = {
+                        let s = self.state.read();
+                        let enabled: Vec<u32> = s
+                            .llm_agents
+                            .iter()
+                            .filter(|a| s.rack.modules.iter().any(|m| m.id == a.id && m.enabled))
+                            .map(|a| a.id)
+                            .collect();
+                        if enabled.is_empty() {
+                            None
+                        } else {
+                            let idx = self.jam_next_agent % enabled.len();
+                            self.jam_next_agent = idx + 1;
+                            Some(enabled[idx])
+                        }
+                    };
+                    if let Some(aid) = next {
+                        let _ = self.llm_tx.try_send(LlmInput::Infer {
+                            prompt: "continue jamming, evolve the pattern".to_string(),
+                            one_shot: false,
+                            agent_id: Some(aid),
+                        });
+                        self.last_jam_kickoff = std::time::Instant::now();
+                    }
+                } else {
+                    // Wake up exactly when the cooldown expires so the
+                    // heartbeat can fire without waiting for some other
+                    // event to repaint us.
+                    ctx.request_repaint_after(cooldown_left);
+                }
             }
         }
 
