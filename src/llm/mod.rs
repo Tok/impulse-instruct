@@ -564,7 +564,15 @@ pub fn run_llm_loop(
                 s.an1x = snapshot.an1x.clone();
                 s.noise_voice = snapshot.noise_voice.clone();
                 s.lfo = snapshot.lfo;
-                s.rack = snapshot.rack.clone();
+                // NOTE: do NOT write back `s.rack` from the pipeline's
+                // snapshot.  Rack composition is user-owned (style picker,
+                // wizard, manual edits) — overwriting it from a stale
+                // snapshot here was reverting style-driven rack changes
+                // mid-pipeline, so a freshly-applied "Classic Acid"
+                // would silently get its full module set restored after
+                // the next lane apply.  Lanes that legitimately need to
+                // mutate the rack (LaneKind::Rack) write through a
+                // different path; routine voice/FX lanes don't.
             };
             let state_for_progress = state.clone();
             let tx_for_cb = output_tx.clone();

@@ -104,6 +104,15 @@ impl ImpulseApp {
                     })
                     .unwrap_or_default();
                 if let Some(ref bp) = baseline {
+                    // Snapshot OUTSIDE the write lock — the clone is the
+                    // expensive part.  Apply ramps + remainder on the
+                    // snapshot, then commit only the synth/sequencer/fx
+                    // fields the style cares about.  Don't replace the
+                    // entire state: a full `*self.state.write() = next`
+                    // copies the rack, llm_agents, and llm queues, which
+                    // both blocks the LLM thread (write lock held during
+                    // the heavy copy) and overwrites whatever it had
+                    // updated since the snapshot.
                     let current = self.state.read().clone();
                     let (ramped, remainder) =
                         crate::state::jam_tools::schedule_baseline_ramps(current, bp, 8.0);
@@ -112,7 +121,18 @@ impl ImpulseApp {
                     } else {
                         ramped
                     };
-                    *self.state.write() = next;
+                    let mut s = self.state.write();
+                    s.bass_voices = next.bass_voices;
+                    s.kit_a = next.kit_a;
+                    s.kit_b = next.kit_b;
+                    s.sequencer = next.sequencer;
+                    s.fx = next.fx;
+                    s.hoover = next.hoover;
+                    s.an1x = next.an1x;
+                    s.noise_voice = next.noise_voice;
+                    s.lfo = next.lfo;
+                    // Rack, llm_agents, llm queues, ui_prefs, etc. left
+                    // untouched — they're not style-driven.
                 }
                 self.apply_style_rack_modules(&rack_modules);
                 self.state.write().llm.active_style = Some(id);
