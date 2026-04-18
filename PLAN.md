@@ -11,9 +11,12 @@ they ship and are reflected in `features.md`.
 - **XY pad control** — expose cutoff/resonance pad as a first-class tool
   the agent can move.  Currently agents set values but the pad position
   doesn't visually track mid-change.
-- **Melodic voice preecho** — TB303Step has no velocity field, only
-  accent/slide.  Design a preecho mapping for bass/hoover/an1x that uses
-  accent-ramping or slide-cascading instead of velocity scaling.
+- **Melodic voice preecho** — now unblocked: `TB303Step.accent` and
+  `.slide` are proportional `f32` 0..=1, which serves as the velocity-
+  like ramp target.  Design a preecho mapping for bass/hoover/an1x
+  that ramps `accent` 0.3 → 1.0 across the N steps before an anchor
+  (and optionally cascades `slide` into the anchor).  Drum preecho
+  already ships; this is the melodic counterpart.
 
 ## DSP
 
@@ -130,5 +133,5 @@ they ship and are reflected in `features.md`.
 | Issue | Cause | Status |
 |-------|-------|--------|
 | Hoover doesn't sound like a hoover | DSP tuning, not a code bug | Needs filter sweep shape tuning |
-| Pre-echo ignores melodic voices | TB303Step has no velocity field | Planned (see Sequencer above) |
+| Pre-echo ignores melodic voices | Mapping not wired yet (velocity field blocker resolved — accent/slide are now proportional f32) | Planned (see "Melodic voice preecho" above) |
 | NeuTts Selector mod jacks show only "—" | No NeuTts-specific LfoTarget yet | Needs TTS bus volume on AudioParams |

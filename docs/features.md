@@ -4,6 +4,160 @@ A detailed log of what's built.
 
 ---
 
+## v0.7.8 — Lane-pipeline + prompt infrastructure
+
+### Sequential lane pipeline (planner + per-voice calls)
+
+User turns now fan out into a planner call + one focused inference per
+voice slice, instead of one monolithic "generate everything" response.
+Each lane ships short output (100–400 tokens) under a required-fields
+JSON schema, so the model can't skip `bass_accents` / `bass_slides`
+and can't truncate its pattern mid-array.
+
+- **`LaneKind` enum** — `Settings / Bass(0..=3) / KitA / KitB / Amen /
+  Hoover / An1x / Fx / Modulation / Rack`.  Each lane carries its own
+  `output_keys`, `sequencer_subkeys`, `task_description`, and JSON
+  schema.  `Bass(idx)` routes voice-0 through legacy `bass_*` fields
+  and voices 1..=3 through `bass{N+1}_*` naming.
+- **`build_lane_prompt(state, lane)`** — compact focused prompt
+  (~1–2 k tokens) with state header, style brief, locked-params list,
+  a `HARMONY` block for melodic lanes (key + in-key MIDI palette in
+  C2–C3) and the lane's task description with concrete example rhythms.
+- **`lane_schema(lane)`** — per-lane JSON Schema.  Required pattern
+  arrays use `min_steps_array` (minItems ≥ 2) so grammar-constrained
+  generation can't emit `[]`.  `additionalProperties: false` on every
+  lane, so the server blocks off-scope fields at the token level.
+- **`heuristic_plan(state, prompt)`** — deterministic pre-parser that
+  catches narrow single-topic commands without calling the LLM.
+  Recognises `"bass2"`, `"BASS 2"`, `"second bass"`, `"bass voice
+  two"`, `"1st bass"`, `"bass one"` → specific Bass(idx); `"add
+  reverb"` / `"more delay"` → Fx; `"808"` / `"kit a"` / `"kick a"` →
+  KitA; `"909"` / `"clap"` → KitB.  Multi-topic or broad prompts fall
+  through to the LLM planner.
+- **`planner_plan`** — tiny LLM call (50–150 token output) with a
+  13-lane enum schema + 7 rules, decides which lanes fire for broader
+  prompts.  Bass expansion is enforced in code: any bass-containing
+  plan auto-covers every active bass voice (so "change the bass"
+  never leaves voice 2 silent).
+- **`default_plan(state)`** — deterministic fallback when the planner
+  LLM fails / returns empty.  Walks the rack in order `Settings →
+  KitA → KitB → Amen → Bass(0..N) → Hoover → An1x → Fx`.
+- **`run_pipeline`** — the executor.  For each lane: builds prompt +
+  schema, calls `PipelineBackend::infer_lane_json`, filters output to
+  the lane's scope, applies to `AppState`, fires an `on_lane_applied`
+  callback.  Per-lane failures don't abort the pipeline.  `PoolBackend`
+  adapts `LlamaServerPool` into the trait so the real server spawns
+  the planner + lane calls on the live model.
+- **Per-lane immediate writeback** — `on_lane_applied` in
+  `run_llm_loop` commits each lane's changes to the shared
+  `Arc<RwLock<AppState>>` the moment it lands.  The audio thread
+  hears drums the second the `kit_a` lane finishes, without waiting
+  for the bass or FX lanes.  Previously everything switched on at
+  the end of the pipeline; now it builds audibly.
+- **Jam-loop hand-off** — pipeline emits `[jam_cycle_done]` at the
+  end of a non-one-shot turn, so the round-robin auto-jam keeps
+  firing at `heat > 0`.
+- **Empty-array guard** — when a lane emits a degenerate
+  `"bass_steps": []`, the filter drops the field with a warn log so
+  the previous pattern survives instead of getting silenced.
+- **Style-is-user-owned** — Settings lane has no `settings.style`
+  field; planner prompt explicitly forbids lanes that change style.
+  User sets the style via the UI, the pipeline respects it.
+- **Feature flag** — `LlmState.use_pipeline: bool` (default true).
+  Preferences window exposes the toggle; when off the legacy
+  monolithic path still runs for debugging.
+
+### Prompt baseline — trim & bass voice expressivity
+
+- **Monolithic prompt trimmed ~56 %** (10.8 K → 4.8 K tokens).  Cut
+  MUSIC THEORY REFERENCE (scales/triads — model knows these),
+  HEAT-AWARE MUTATION GUIDANCE (18 lines of redundant breakpoints),
+  MUSICAL MODERATION prose (→ one-line summary), HOW TO INTERPRET
+  INSTRUCTIONS / ACID JAM GUIDANCE lookup tables, WRONG-example
+  block, LFO / FREE EG / EUCLIDEAN / RAMPS / FX docs (all
+  condensed).  Themes / mc_lines omitted in producer mode.
+  `current_json` state block minified (`to_string` not
+  `to_string_pretty`).
+- **Per-voice bass step arrays** — `bass2_steps/notes/accents/slides/
+  pans`, `bass3_*`, `bass4_*`.  Each voice has its own lock path.
+  Voice-0 still mirrors the legacy unnumbered keys + `bass_pattern`.
+- **Proportional accent / slide** — `TB303Step.accent` and `.slide`
+  are `f32` (0..=1), not `bool`.  DSP scales amp peak 0.8 → 1.0 with
+  accent intensity, portamento time with slide intensity.  Event
+  stream renders dot size by accent and trail length by slide.
+  Schema accepts float arrays or index lists; bool arrays still work
+  for backwards compat.  `de_bool_or_f32` serde adapter round-trips
+  old project JSON.
+- **Grammar-constrained output** — `response_format.type =
+  "json_schema"` sent on every lane call, so llama.cpp compiles the
+  lane schema into a GBNF grammar and enforces required fields at
+  the token level.
+
+### LLM infra
+
+- **Context default 32 K → 64 K** — both Gemma 4 E4B (128 K native)
+  and Bonsai 8B (64 K via YaRN) handle 64 K comfortably.  Test
+  harness matches.  ~11 K-token system prompt plus headroom for
+  memory / style observations / multi-turn growth.
+- **Prompt-prefix cache reuse** — `--cache-reuse 256` on server spawn
+  + `cache_prompt: true` on every lane body.  Shared system-prompt
+  prefix reused between calls: ~5 s prefill → ~0 s once warm.
+- **NeuTTS excluded from integration suite** — `run-llm-tests.sh`
+  hard-skips `*neutts*` / `*-tts*` models; they're voice clones, not
+  chat LLMs.
+- **Egui id-clash overlay off** — `ctx.options_mut(|o|
+  o.warn_on_id_clash = false)` silences the "first use of ID …"
+  debug labels dev builds were painting over widgets.
+- **Wizard default → Full** — first launch / New Project lands on
+  the everything-included rack layout.
+
+### Event-stream polish
+
+- **Drum-hit history** — parallel `drum_log: VecDeque<DrumLogEntry>`
+  to the melodic one; past side of the event stream now renders
+  drum past from the frozen log instead of wrapping the live
+  pattern.  No more "drum wiped the second it's edited".
+- **Wrap-slack fix** — 0.5-step slack on the cycle-wrap threshold
+  in the future loop, bridges the 1–2 frame race between
+  `current_step` advancing and the UI step listener pushing into the
+  log.  Fixes the "blink at every cycle boundary" report.
+
+### Header + small UI
+
+- **TEMP chip** in the top header band — the Huth warm/cold display
+  moved out of the event stream header so it's always visible
+  regardless of the lower panel's size.  HEAT column shrinks
+  34 → 26 cols to make room for TEMP 8.
+- **Per-agent seed chip** on the agent card — mirrors the LLM
+  Console's global SEED row but scoped per-agent.
+- **Style-aware preset naming** — `Crew` preset re-labels itself
+  in the wizard based on active style: jungle/dnb/uk-garage/dubstep
+  → `Posse`; gabber/early-rave/darksynth/electro → `Squad`;
+  synthwave/vaporwave/lo-fi hiphop → `Band`; ambient/baroque/idm →
+  `Ensemble`.  Canonical preset ids stay `Crew` so API + tests are
+  unaffected.
+- **303 lane visibility fix** — sequencer panel now filters lanes
+  by `bass_voices[vi].enabled` directly instead of via
+  `sequencer.bass_voice_enabled`, which was only synced inside the
+  audio-thread snapshot.  Toggling voice 2 from the bass panel
+  correctly shows a second lane.
+- **Piano LEDs** drop the 2nd/6th/7th tier — only tonic / 3rd / 5th
+  render now for easier reading on small screens.
+- **Startup auto-prompt** uses the selected style: "Create a pattern
+  in the style of Acid House." replaces the old "Pick a style…"
+  placeholder that was confusing the model.
+
+### 303 DSP
+
+- **Slide envelope retrigger** — slide steps no longer skip envelope
+  attack.  Previous behaviour (legato with no re-attack) produced
+  silent slides on percussive 303 patches where `amp_sustain ≈ 0`;
+  now every trigger re-attacks while preserving `self.freq` so the
+  pitch still glides into the target.  LFO fade-in stays legato
+  (doesn't reset on slide-linked chains).
+
+---
+
 ## v0.7.7 — UI overhaul cycle
 
 ### Header redesign
