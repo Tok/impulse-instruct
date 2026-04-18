@@ -363,17 +363,23 @@ pub fn module_card_sized<R>(
                 }
                 let lit = enabled && reaches_master;
                 if lit {
-                    // Paint the LED with a clip widened by the halo size
-                    // so the bloom can bleed into the inter-module gap
-                    // — but not infinitely far.  Bounded expansion stops
-                    // the halo well before reaching the header / piano /
-                    // adjacent panels (those would wrongly read as
-                    // "overlapped by the LED" otherwise).  Halo extent is
-                    // about 5×led_r per the LED ring layers.
+                    // Asymmetric clip extension: the LED sits in the
+                    // module's title bar, so the halo below + sides bleeds
+                    // naturally into the inter-module gap, but the upward
+                    // bloom would otherwise run into whatever panel sits
+                    // above the rack (the global header log scrolling
+                    // past the LLM console, for one).  Limit upward
+                    // expansion to the few pixels of halo that actually
+                    // extend above the title bar; allow full halo_pad on
+                    // sides + down.
                     let halo_pad = led_r * 6.0;
-                    let extended = painter
-                        .clone()
-                        .with_clip_rect(painter.clip_rect().expand(halo_pad));
+                    let upward_pad = 4.0;
+                    let cr = painter.clip_rect();
+                    let bounded = egui::Rect::from_min_max(
+                        egui::pos2(cr.min.x - halo_pad, cr.min.y - upward_pad),
+                        egui::pos2(cr.max.x + halo_pad, cr.max.y + halo_pad),
+                    );
+                    let extended = painter.clone().with_clip_rect(bounded);
                     theme::led(&extended, led_center, led_r, Color32::from_gray(220), 1.0);
                 } else {
                     painter.circle_filled(led_center, led_r, Color32::from_gray(28));

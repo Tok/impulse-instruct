@@ -72,6 +72,7 @@ impl ImpulseApp {
     }
 
     fn apply_style_selection(&mut self, maybe_id: Option<String>) {
+        log::info!("apply_style_selection: maybe_id = {:?}", maybe_id);
         match maybe_id {
             None => {
                 self.state.write().llm.active_style = None;

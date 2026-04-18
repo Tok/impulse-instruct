@@ -132,13 +132,18 @@ pub fn module_card_back(
                 }
                 let lit = enabled && reaches_master;
                 if lit {
-                    // Bounded clip-extension — halo bleeds into the inter-
-                    // module gap but stops before adjacent panels.  Same
-                    // draw layer, so cables (overlay) still cover it.
+                    // Asymmetric clip — same reasoning as the front-card
+                    // LED: bleed into the inter-module gap (sides + down)
+                    // but cap upward expansion so the halo doesn't run
+                    // into the panel above.
                     let halo_pad = led_r * 6.0;
-                    let extended = painter
-                        .clone()
-                        .with_clip_rect(painter.clip_rect().expand(halo_pad));
+                    let upward_pad = 4.0;
+                    let cr = painter.clip_rect();
+                    let bounded = egui::Rect::from_min_max(
+                        egui::pos2(cr.min.x - halo_pad, cr.min.y - upward_pad),
+                        egui::pos2(cr.max.x + halo_pad, cr.max.y + halo_pad),
+                    );
+                    let extended = painter.clone().with_clip_rect(bounded);
                     theme::led(&extended, led_center, led_r, Color32::from_gray(220), 1.0);
                 } else {
                     // Off / unreachable state — dark socket with a faint glint
