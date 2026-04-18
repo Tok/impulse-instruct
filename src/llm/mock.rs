@@ -276,7 +276,10 @@ pub fn run_mock_loop(
         }
         // Apply agent dropdown changes to state even in mock mode so the UI
         // reflects the user's selection — no pool to update.
-        if let LlmInput::SwitchAgentModel { agent_id, new_path } = &input {
+        if let LlmInput::SwitchAgentModel {
+            agent_id, new_path, ..
+        } = &input
+        {
             let mut s = state.write();
             if let Some(a) = s.llm_agents.iter_mut().find(|a| a.id == *agent_id) {
                 a.model_path = new_path.clone();

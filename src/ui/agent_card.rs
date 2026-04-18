@@ -129,8 +129,16 @@ fn draw_llm_agent_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, module_id: u32)
                         )
                         .clicked()
                     {
+                        // Optimistic UI: write the new value immediately so
+                        // the dropdown reflects the click this frame, even
+                        // if the LLM thread is mid-inference and won't drain
+                        // its queue for tens of seconds.  The message
+                        // carries the previous override so the LLM thread
+                        // can release the old model from the pool.
+                        let old = app.state.write().llm_agents[idx].model_path.take();
                         let _ = app.llm_tx.try_send(crate::llm::LlmInput::SwitchAgentModel {
                             agent_id: module_id,
+                            old_path: old,
                             new_path: None,
                         });
                     }
@@ -151,8 +159,15 @@ fn draw_llm_agent_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, module_id: u32)
                             )
                             .clicked()
                         {
+                            let old = {
+                                let mut s = app.state.write();
+                                let prev = s.llm_agents[idx].model_path.take();
+                                s.llm_agents[idx].model_path = Some(path.clone());
+                                prev
+                            };
                             let _ = app.llm_tx.try_send(crate::llm::LlmInput::SwitchAgentModel {
                                 agent_id: module_id,
+                                old_path: old,
                                 new_path: Some(path.clone()),
                             });
                         }

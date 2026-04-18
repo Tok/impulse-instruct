@@ -45,8 +45,15 @@ pub enum LlmInput {
     /// the global model; `Some(path)` adds a per-agent override (separate
     /// llama-server load).  The pool is updated synchronously so the old
     /// model's server unloads if no other agent or the global still need it.
+    ///
+    /// `old_path` is the agent's previous override snapshotted by the UI at
+    /// the moment of the click — included in the message because the UI
+    /// optimistically writes the new value to state before the LLM thread
+    /// receives this, so reading `state.llm_agents[…].model_path` here
+    /// would always see the new value.
     SwitchAgentModel {
         agent_id: u32,
+        old_path: Option<String>,
         new_path: Option<String>,
     },
     ResetContext,
@@ -286,24 +293,29 @@ pub fn run_llm_loop(
                 });
                 continue;
             }
-            LlmInput::SwitchAgentModel { agent_id, new_path } => {
+            LlmInput::SwitchAgentModel {
+                agent_id,
+                old_path,
+                new_path,
+            } => {
                 let agent_id = *agent_id;
+                let old_path = old_path.clone();
                 let new_path = new_path.clone();
-                // Snapshot the agent's previous explicit override and apply
-                // the new one in a single short write lock.
-                let old_path: Option<String> = {
+                // UI already optimistically wrote `new_path` to state; we
+                // just need to keep the pool ref counts in sync with the
+                // diff carried by the message.  Defensively make sure
+                // state actually reflects `new_path` in case the LLM
+                // thread is processing this turn before any UI frame.
+                {
                     let mut s = state.write();
                     if let Some(a) = s.llm_agents.iter_mut().find(|a| a.id == agent_id) {
-                        let prev = a.model_path.take();
                         a.model_path = new_path.clone();
-                        prev
                     } else {
                         log::warn!("LLM: SwitchAgentModel for unknown agent_id={}", agent_id);
                         continue;
                     }
-                };
+                }
                 if old_path == new_path {
-                    // No-op: dropdown re-selected the same value.
                     continue;
                 }
                 log::info!(
