@@ -27,6 +27,23 @@ pub(super) fn draw_voice_content(
     }
 }
 
+/// Given a 3-pair XY-pad pair index (0/1/2) and the three knob labels in
+/// canonical A / B / C order, return the (x, y) label pair the pad drives
+/// for that index.  Pair mapping is A/B → A/C → B/C, matching the tooltip
+/// order the widget shows in its corner indicator.
+pub(crate) fn three_pair_labels(
+    pair: usize,
+    a: &'static str,
+    b: &'static str,
+    c: &'static str,
+) -> (&'static str, &'static str) {
+    match pair {
+        0 => (a, b),
+        1 => (a, c),
+        _ => (b, c),
+    }
+}
+
 pub(super) fn draw_fx_content(
     app: &mut ImpulseApp,
     ui: &mut egui::Ui,
@@ -92,6 +109,38 @@ pub(super) fn draw_fx_content(
                     (d, q)
                 })
                 .inner;
+            if pad_expanded {
+                let pad_id = format!("reverb_xy_{module_id}");
+                let pair = widgets::xy_pad_pair(ui.ctx(), &pad_id);
+                let pad_size = (ui.available_width() - 8.0).clamp(60.0, 120.0);
+                let (lx, ly) = three_pair_labels(pair, "SIZE", "DAMP", "MIX");
+                let size_locked =
+                    matches!(pm("fx.reverb_size"), crate::state::ParamMode::UserOwned);
+                let damp_locked =
+                    matches!(pm("fx.reverb_damp"), crate::state::ParamMode::UserOwned);
+                let mix_locked = matches!(pm("fx.reverb_mix"), crate::state::ParamMode::UserOwned);
+                let pad_locked = match pair {
+                    0 => size_locked || damp_locked,
+                    1 => size_locked || mix_locked,
+                    _ => damp_locked || mix_locked,
+                };
+                widgets::centered_row(ui, |ui| {
+                    let (pad_changed, _) = match pair {
+                        0 => widgets::xy_pad(
+                            ui, &pad_id, lx, ly, &mut rs, &mut rd, pad_size, pad_locked, 3,
+                        ),
+                        1 => widgets::xy_pad(
+                            ui, &pad_id, lx, ly, &mut rs, &mut rm, pad_size, pad_locked, 3,
+                        ),
+                        _ => widgets::xy_pad(
+                            ui, &pad_id, lx, ly, &mut rd, &mut rm, pad_size, pad_locked, 3,
+                        ),
+                    };
+                    if pad_changed {
+                        changed = true;
+                    }
+                });
+            }
             if changed || rs != app.state.read().fx.reverb_size || dir_changed || q_changed {
                 let mut s = app.state.write();
                 s.fx.reverb_size = rs;

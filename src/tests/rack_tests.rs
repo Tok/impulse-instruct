@@ -815,13 +815,25 @@ fn reaches_master_default_preset_voices_all_reach() {
 
 #[test]
 fn supports_xy_pad_true_only_for_rolled_out_fx() {
-    // Exhaustive match would be brittle; assert the current rollout: just
-    // FxAutotune at this point. Expand this set as more FX get pads.
+    // Exhaustive match would be brittle; assert the current rollout and
+    // a few kinds that definitely shouldn't have one. Expand this as more
+    // FX get pads.
     assert!(ModuleKind::FxAutotune.supports_xy_pad());
-    assert!(!ModuleKind::FxReverb.supports_xy_pad());
+    assert!(ModuleKind::FxReverb.supports_xy_pad());
     assert!(!ModuleKind::FxCompressor.supports_xy_pad());
     assert!(!ModuleKind::AcidBass.supports_xy_pad());
     assert!(!ModuleKind::StepSequencer.supports_xy_pad());
+}
+
+#[test]
+fn three_pair_labels_dispatch_matches_cycle_order() {
+    use crate::ui::rack_content::three_pair_labels;
+    assert_eq!(three_pair_labels(0, "A", "B", "C"), ("A", "B"));
+    assert_eq!(three_pair_labels(1, "A", "B", "C"), ("A", "C"));
+    assert_eq!(three_pair_labels(2, "A", "B", "C"), ("B", "C"));
+    // Defensive: indices ≥ 3 fall through to the B/C pair (the widget
+    // cycles within 0..num_pairs, so this branch guards against typos).
+    assert_eq!(three_pair_labels(99, "A", "B", "C"), ("B", "C"));
 }
 
 #[test]
@@ -853,8 +865,8 @@ fn effective_grid_size_matches_static_when_collapsed() {
 #[test]
 fn effective_grid_size_ignores_flag_for_unsupported_kind() {
     let mut rack = empty_rack();
-    let id = rack.add_module(ModuleKind::FxReverb);
-    // Reverb doesn't support a pad yet — the flag should be inert.
+    let id = rack.add_module(ModuleKind::FxCompressor);
+    // Compressor doesn't support a pad yet — the flag should be inert.
     rack.modules
         .iter_mut()
         .find(|m| m.id == id)
@@ -862,7 +874,7 @@ fn effective_grid_size_ignores_flag_for_unsupported_kind() {
         .pad_expanded = true;
     let m = rack.module(id).unwrap();
     let (w, h) = rack.effective_grid_size(m);
-    assert_eq!((w, h), ModuleKind::FxReverb.grid_size(GRID_COLS));
+    assert_eq!((w, h), ModuleKind::FxCompressor.grid_size(GRID_COLS));
 }
 
 #[test]

@@ -206,7 +206,7 @@ impl ModuleKind {
     /// Modules returning true get an extra grid row when `pad_expanded` is
     /// true on their `RackModule`, plus a chevron toggle in the title bar.
     pub fn supports_xy_pad(self) -> bool {
-        matches!(self, Self::FxAutotune)
+        matches!(self, Self::FxAutotune | Self::FxReverb)
     }
 
     /// Whether this module type may have more than one instance in the rack.
