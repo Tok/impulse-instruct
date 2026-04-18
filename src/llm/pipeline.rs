@@ -103,6 +103,28 @@ pub fn run_pipeline<B: PipelineBackend>(
             default_plan(&state)
         })
     };
+    // Defensive filter: drop any lane whose voice/module isn't actually
+    // present in the rack right now.  `parse_planner_output` already
+    // applies `lane_is_live`, but the planner sometimes produces stale
+    // labels (e.g. after a style switch removes a voice mid-cycle), and
+    // `default_plan` only reads the rack at construction.  Filtering
+    // here means a no-op-prone lane never burns an inference call.
+    let plan = LanePlan {
+        lanes: plan
+            .lanes
+            .into_iter()
+            .filter(|&l| crate::llm::planner::lane_is_live_pub(&state, l))
+            .collect(),
+        rationale: plan.rationale,
+    };
+    if plan.lanes.is_empty() {
+        progress(PipelineEvent::PipelineDone {
+            total_ms: t_start.elapsed().as_millis(),
+            lanes_succeeded: 0,
+            lanes_failed: 0,
+        });
+        return state;
+    }
     progress(PipelineEvent::PlanReady { plan: plan.clone() });
 
     // ── 2. Lanes ─────────────────────────────────────────────────────────────

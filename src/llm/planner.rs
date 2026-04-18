@@ -522,6 +522,17 @@ fn rack_has(state: &AppState, kind: ModuleKind) -> bool {
 /// filter planner output so we don't fire a no-op bass3 lane because the
 /// model guessed wrong.
 fn lane_is_live(state: &AppState, lane: LaneKind) -> bool {
+    lane_is_live_impl(state, lane)
+}
+
+/// Re-export of `lane_is_live` for the pipeline run-loop's defensive
+/// double-check (filters stale lane labels right before execution, in
+/// case the rack changed since the planner picked the lane).
+pub fn lane_is_live_pub(state: &AppState, lane: LaneKind) -> bool {
+    lane_is_live_impl(state, lane)
+}
+
+fn lane_is_live_impl(state: &AppState, lane: LaneKind) -> bool {
     match lane {
         // Always-available lanes.
         LaneKind::Settings | LaneKind::Fx | LaneKind::Modulation | LaneKind::Rack => true,

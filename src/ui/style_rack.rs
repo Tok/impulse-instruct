@@ -72,10 +72,21 @@ pub fn apply(app: &mut ImpulseApp, names: &[String]) {
         return;
     }
 
+    log::info!(
+        "style_rack: applying {} entries (parsed → {} kinds)",
+        names.len(),
+        spec.len()
+    );
     let mut removed: Vec<ModuleKind> = Vec::new();
     let mut added: Vec<ModuleKind> = Vec::new();
     {
         let mut s = app.state.write();
+        let before_kinds: Vec<ModuleKind> = s.rack.modules.iter().map(|m| m.kind).collect();
+        log::info!(
+            "style_rack: before sync — rack has {} modules: {:?}",
+            before_kinds.len(),
+            before_kinds
+        );
 
         // Step 1: remove modules not in spec (always-keep chrome stays).
         let to_remove: Vec<u32> = s
@@ -144,6 +155,13 @@ pub fn apply(app: &mut ImpulseApp, names: &[String]) {
         // button) so the rack stays compact after add/remove churn.
         s.rack.wire_default_cables();
         s.rack.arrange_canonical();
+
+        let after_kinds: Vec<ModuleKind> = s.rack.modules.iter().map(|m| m.kind).collect();
+        log::info!(
+            "style_rack: after sync — rack has {} modules: {:?}",
+            after_kinds.len(),
+            after_kinds
+        );
     }
 
     if removed.is_empty() && added.is_empty() {

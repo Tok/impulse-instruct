@@ -132,11 +132,14 @@ pub fn module_card_back(
                 }
                 let lit = enabled && reaches_master;
                 if lit {
-                    // Wide-clip painter — halo escapes the panel border but
-                    // stays in the same draw layer, so cables (rendered on
-                    // the overlay layer above the rack) still cover it.
-                    let unclipped = painter.clone().with_clip_rect(Rect::EVERYTHING);
-                    theme::led(&unclipped, led_center, led_r, Color32::from_gray(220), 1.0);
+                    // Bounded clip-extension — halo bleeds into the inter-
+                    // module gap but stops before adjacent panels.  Same
+                    // draw layer, so cables (overlay) still cover it.
+                    let halo_pad = led_r * 6.0;
+                    let extended = painter
+                        .clone()
+                        .with_clip_rect(painter.clip_rect().expand(halo_pad));
+                    theme::led(&extended, led_center, led_r, Color32::from_gray(220), 1.0);
                 } else {
                     // Off / unreachable state — dark socket with a faint glint
                     // so the click target stays visible.

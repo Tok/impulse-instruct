@@ -363,14 +363,18 @@ pub fn module_card_sized<R>(
                 }
                 let lit = enabled && reaches_master;
                 if lit {
-                    // Paint the LED with a wide clip so the halo can extend
-                    // past the panel's title-bar border.  Same draw layer
-                    // as the panel body, so cables (overlay layer), drag
-                    // previews (tooltip layer), the piano, and the header
-                    // panel still correctly cover the halo when they
-                    // overlap it.
-                    let unclipped = painter.clone().with_clip_rect(Rect::EVERYTHING);
-                    theme::led(&unclipped, led_center, led_r, Color32::from_gray(220), 1.0);
+                    // Paint the LED with a clip widened by the halo size
+                    // so the bloom can bleed into the inter-module gap
+                    // — but not infinitely far.  Bounded expansion stops
+                    // the halo well before reaching the header / piano /
+                    // adjacent panels (those would wrongly read as
+                    // "overlapped by the LED" otherwise).  Halo extent is
+                    // about 5×led_r per the LED ring layers.
+                    let halo_pad = led_r * 6.0;
+                    let extended = painter
+                        .clone()
+                        .with_clip_rect(painter.clip_rect().expand(halo_pad));
+                    theme::led(&extended, led_center, led_r, Color32::from_gray(220), 1.0);
                 } else {
                     painter.circle_filled(led_center, led_r, Color32::from_gray(28));
                     painter.circle_stroke(
