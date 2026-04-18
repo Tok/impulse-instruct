@@ -158,6 +158,14 @@ pub fn apply(ctx: &egui::Context) {
 
     style.visuals = visuals;
     ctx.set_style(style);
+
+    // Suppress egui's debug-build overlays: the "first use of ID …" red
+    // labels on widget-id collisions and the debug-on-hover red boxes.
+    // These show up even on cargo-build debug (which is most of the time
+    // for our dev loop) and clutter the UI.
+    ctx.options_mut(|opt| {
+        opt.warn_on_id_clash = false;
+    });
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────

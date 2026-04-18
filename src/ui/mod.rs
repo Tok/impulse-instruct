@@ -397,7 +397,7 @@ impl ImpulseApp {
                 usize::MAX // WIZARD_RESUME
             },
 
-            wizard_rack_preset: 1, // default to "Basic" (303 + 808 + 909)
+            wizard_rack_preset: 3, // default to "Full" (everything — 303 + both drum kits + hoover + an1x + amen + FX chain)
             prefs_tab: 0,
             llm_tab: 0,
             startup_done: false,
