@@ -430,7 +430,7 @@ impl LlmState {
 impl Default for LlmState {
     fn default() -> Self {
         Self {
-            model_path: String::from("models/gemma-4-26B-A4B-it-UD-IQ4_XS.gguf"),
+            model_path: String::from("models/gemma-4-E4B-it-Q4_K_M.gguf"),
             last_prompt: String::new(),
             last_response: String::new(),
             is_inferring: false,
