@@ -445,7 +445,12 @@ fn run() -> anyhow::Result<()> {
                 midi_port,
                 api_log_rx,
                 api_port,
-                args.skip_wizard,
+                // Honour the CLI flag, OR auto-skip when the user already
+                // completed the wizard in a previous session.
+                args.skip_wizard
+                    || impulse_instruct::state::load_session()
+                        .and_then(|s| s.wizard_done)
+                        .unwrap_or(false),
                 api_params_dirty,
             )))
         }),

@@ -10,6 +10,7 @@ mod llm_log_color;
 mod llm_strip;
 mod midi_handler;
 pub mod module_card;
+pub mod module_card_back;
 pub mod module_card_mod;
 mod note;
 pub mod panels;

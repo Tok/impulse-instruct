@@ -77,13 +77,14 @@ pub(super) fn draw_ai_zone(
         let card_rect =
             egui::Rect::from_min_size(egui::Pos2::new(x, y), egui::Vec2::new(slot_w, slot_h));
         let mut child = ui.child_ui(card_rect, egui::Layout::top_down(egui::Align::LEFT), None);
+        let reaches_master = app.state.read().rack.reaches_master(id);
         let resp = if app.rack_flipped {
             module_card::module_card_back(
                 &mut child,
                 id,
                 kind,
                 enabled,
-                app.state.read().rack.reaches_master(id),
+                reaches_master,
                 Some(slot_w),
                 Some(slot_h),
                 app.kind_scale(kind),
@@ -95,6 +96,7 @@ pub(super) fn draw_ai_zone(
                 id,
                 kind,
                 enabled,
+                reaches_master,
                 Some(slot_w),
                 Some(slot_h),
                 app.kind_scale(kind),

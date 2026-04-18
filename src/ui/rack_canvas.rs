@@ -527,13 +527,14 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
             let card_rect =
                 egui::Rect::from_min_size(egui::Pos2::new(x, y), egui::Vec2::new(slot_w, slot_h));
             let mut child = ui.child_ui(card_rect, egui::Layout::top_down(egui::Align::LEFT), None);
+            let reaches_master = app.state.read().rack.reaches_master(id);
             let resp = if app.rack_flipped {
                 module_card::module_card_back(
                     &mut child,
                     id,
                     kind,
                     enabled,
-                    app.state.read().rack.reaches_master(id),
+                    reaches_master,
                     Some(slot_w),
                     Some(slot_h),
                     app.kind_scale(kind),
@@ -545,6 +546,7 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
                     id,
                     kind,
                     enabled,
+                    reaches_master,
                     Some(slot_w),
                     Some(slot_h),
                     app.kind_scale(kind),
@@ -660,13 +662,14 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
             let mut child = ui.child_ui(card_rect, egui::Layout::top_down(egui::Align::LEFT), None);
             let is_dragging = app.module_drag.as_ref().map(|d| d.module_id) == Some(id);
             let eff_enabled = if is_dragging { false } else { enabled };
+            let reaches_master = app.state.read().rack.reaches_master(id);
             let resp = if app.rack_flipped {
                 module_card::module_card_back(
                     &mut child,
                     id,
                     kind,
                     eff_enabled,
-                    app.state.read().rack.reaches_master(id),
+                    reaches_master,
                     Some(slot_w),
                     Some(slot_h),
                     app.kind_scale(kind),
@@ -678,6 +681,7 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
                     id,
                     kind,
                     eff_enabled,
+                    reaches_master,
                     Some(slot_w),
                     Some(slot_h),
                     app.kind_scale(kind),
@@ -775,13 +779,14 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
             let mut child = ui.child_ui(card_rect, egui::Layout::top_down(egui::Align::LEFT), None);
             let is_dragging = app.module_drag.as_ref().map(|d| d.module_id) == Some(id);
             let eff_enabled = if is_dragging { false } else { enabled };
+            let reaches_master = app.state.read().rack.reaches_master(id);
             let resp = if app.rack_flipped {
                 module_card::module_card_back(
                     &mut child,
                     id,
                     kind,
                     eff_enabled,
-                    app.state.read().rack.reaches_master(id),
+                    reaches_master,
                     Some(slot_w),
                     Some(slot_h),
                     app.kind_scale(kind),
@@ -793,6 +798,7 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
                     id,
                     kind,
                     eff_enabled,
+                    reaches_master,
                     Some(slot_w),
                     Some(slot_h),
                     app.kind_scale(kind),

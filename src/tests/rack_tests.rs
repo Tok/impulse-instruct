@@ -523,3 +523,184 @@ fn stereo_width_target_parse_and_label() {
         Some(ModuleKind::MasterOutput),
     );
 }
+
+// ── reaches_master ──────────────────────────────────────────────────────────
+
+fn audio_cable(from_id: u32, to_id: u32) -> Cable {
+    Cable {
+        from: PortRef {
+            module_id: from_id,
+            dir: PortDir::Out,
+            kind: PortKind::Audio,
+            index: 0,
+        },
+        to: PortRef {
+            module_id: to_id,
+            dir: PortDir::In,
+            kind: PortKind::Audio,
+            index: 0,
+        },
+        color: CableColor::Gray,
+    }
+}
+
+#[test]
+fn reaches_master_no_master_module_is_false() {
+    let mut rack = empty_rack();
+    let bass = rack.add_module(ModuleKind::AcidBass);
+    assert!(!rack.reaches_master(bass));
+}
+
+#[test]
+fn reaches_master_audio_less_modules_always_true() {
+    // Sequencer / LFO / agents have no audio bus and are never the
+    // subject of "reaches MASTER" gating — they always pass.
+    let mut rack = empty_rack();
+    let _master = rack.add_module(ModuleKind::MasterOutput);
+    let seq = rack.add_module(ModuleKind::StepSequencer);
+    let lfo = rack.add_module(ModuleKind::LfoModule);
+    let agent = rack.add_module(ModuleKind::LlmAgent);
+    let console = rack.add_module(ModuleKind::LlmConsole);
+    let meter = rack.add_module(ModuleKind::SpectrumAnalyzer);
+    for id in [seq, lfo, agent, console, meter] {
+        assert!(rack.reaches_master(id), "id {id} expected reachable");
+    }
+}
+
+#[test]
+fn reaches_master_master_itself_is_true() {
+    let mut rack = empty_rack();
+    let master = rack.add_module(ModuleKind::MasterOutput);
+    assert!(rack.reaches_master(master));
+}
+
+#[test]
+fn reaches_master_direct_voice_to_master() {
+    let mut rack = empty_rack();
+    let master = rack.add_module(ModuleKind::MasterOutput);
+    let bass = rack.add_module(ModuleKind::AcidBass);
+    rack.cables.push(audio_cable(bass, master));
+    assert!(rack.reaches_master(bass));
+}
+
+#[test]
+fn reaches_master_unconnected_voice_is_false() {
+    let mut rack = empty_rack();
+    let _master = rack.add_module(ModuleKind::MasterOutput);
+    let bass = rack.add_module(ModuleKind::AcidBass);
+    assert!(!rack.reaches_master(bass));
+}
+
+#[test]
+fn reaches_master_through_fx_chain() {
+    // bass → reverb → delay → master   ⇒ all three reach master.
+    let mut rack = empty_rack();
+    let master = rack.add_module(ModuleKind::MasterOutput);
+    let bass = rack.add_module(ModuleKind::AcidBass);
+    let reverb = rack.add_module(ModuleKind::FxReverb);
+    let delay = rack.add_module(ModuleKind::FxDelay);
+    rack.cables.push(audio_cable(bass, reverb));
+    rack.cables.push(audio_cable(reverb, delay));
+    rack.cables.push(audio_cable(delay, master));
+    assert!(rack.reaches_master(bass));
+    assert!(rack.reaches_master(reverb));
+    assert!(rack.reaches_master(delay));
+}
+
+#[test]
+fn reaches_master_orphan_fx_chain_is_false() {
+    // bass → master (direct), reverb → delay → compressor (chain ends in air).
+    // Chain members must report false even though they're "connected" to
+    // each other — they don't reach MASTER.
+    let mut rack = empty_rack();
+    let master = rack.add_module(ModuleKind::MasterOutput);
+    let bass = rack.add_module(ModuleKind::AcidBass);
+    let reverb = rack.add_module(ModuleKind::FxReverb);
+    let delay = rack.add_module(ModuleKind::FxDelay);
+    let comp = rack.add_module(ModuleKind::FxCompressor);
+    rack.cables.push(audio_cable(bass, master));
+    rack.cables.push(audio_cable(reverb, delay));
+    rack.cables.push(audio_cable(delay, comp));
+    assert!(rack.reaches_master(bass));
+    assert!(!rack.reaches_master(reverb), "orphan reverb should be off");
+    assert!(!rack.reaches_master(delay), "orphan delay should be off");
+    assert!(
+        !rack.reaches_master(comp),
+        "orphan compressor should be off"
+    );
+}
+
+#[test]
+fn reaches_master_disabled_intermediate_blocks_path() {
+    // bass → reverb (disabled) → master.  bass should NOT reach master
+    // because the path goes through a disabled module.  reverb itself
+    // still has a direct cable to master, so its own walk would succeed
+    // — the call site combines `enabled && reaches_master` to gate the
+    // LED on the module's own enabled flag.
+    let mut rack = empty_rack();
+    let master = rack.add_module(ModuleKind::MasterOutput);
+    let bass = rack.add_module(ModuleKind::AcidBass);
+    let reverb = rack.add_module(ModuleKind::FxReverb);
+    rack.cables.push(audio_cable(bass, reverb));
+    rack.cables.push(audio_cable(reverb, master));
+    if let Some(m) = rack.modules.iter_mut().find(|m| m.id == reverb) {
+        m.enabled = false;
+    }
+    assert!(!rack.reaches_master(bass));
+    // reverb's own outgoing cable still terminates at master.
+    assert!(rack.reaches_master(reverb));
+}
+
+#[test]
+fn reaches_master_disabled_master_still_reachable() {
+    // The MasterOutput's own enabled flag shouldn't gate reachability —
+    // it always counts as the terminus.
+    let mut rack = empty_rack();
+    let master = rack.add_module(ModuleKind::MasterOutput);
+    let bass = rack.add_module(ModuleKind::AcidBass);
+    rack.cables.push(audio_cable(bass, master));
+    if let Some(m) = rack.modules.iter_mut().find(|m| m.id == master) {
+        m.enabled = false;
+    }
+    assert!(rack.reaches_master(bass));
+}
+
+#[test]
+fn reaches_master_default_preset_voices_all_reach() {
+    // All voices in every preset should reach MASTER through the default
+    // wiring.  Catches regressions in `wire_default_cables`.
+    for preset in crate::state::RACK_PRESETS {
+        let rack = RackState::from_preset(preset);
+        for m in &rack.modules {
+            if !m.kind.has_audio_output() {
+                continue;
+            }
+            // Voice modules MUST reach master.  FX may not (the chain
+            // is intentionally orphaned in some presets).
+            let is_voice = !matches!(
+                m.kind,
+                ModuleKind::FxReverb
+                    | ModuleKind::FxDelay
+                    | ModuleKind::FxChorus
+                    | ModuleKind::FxPhaser
+                    | ModuleKind::FxRingMod
+                    | ModuleKind::FxWaveshaper
+                    | ModuleKind::FxBitcrush
+                    | ModuleKind::FxEq
+                    | ModuleKind::FxCompressor
+                    | ModuleKind::FxTapeSat
+                    | ModuleKind::FxDrive
+                    | ModuleKind::FxAutotune
+                    | ModuleKind::FxPan
+            );
+            if is_voice {
+                assert!(
+                    rack.reaches_master(m.id),
+                    "preset '{}' voice {:?} should reach master",
+                    preset.name,
+                    m.kind,
+                );
+            }
+        }
+    }
+}

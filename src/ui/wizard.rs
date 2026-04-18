@@ -407,10 +407,24 @@ impl ImpulseApp {
         // Apply rack layout preset first
         if let Some(rack_preset) = crate::state::RACK_PRESETS.get(self.wizard_rack_preset) {
             let new_rack = crate::state::RackState::from_preset(rack_preset);
+            // When the preset has no AN1X melodic lead, enable a second
+            // 303 voice so the user has at least two melodic lanes to
+            // play with by default.
+            let has_an1x = rack_preset
+                .voices
+                .contains(&crate::state::ModuleKind::An1xVoice);
             let mut s = self.state.write();
             // Preserve LLM agents — they'll be replaced below
             s.llm_agents.clear();
             s.rack = new_rack;
+            if !has_an1x {
+                if s.sequencer.bass_voice_enabled.len() > 1 {
+                    s.sequencer.bass_voice_enabled[1] = true;
+                }
+                if let Some(v) = s.bass_voices.get_mut(1) {
+                    v.enabled = true;
+                }
+            }
         }
 
         // Remove the default agent added by from_preset — we'll add preset agents

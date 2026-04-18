@@ -93,28 +93,37 @@ const ALL_TARGETS: &[LfoTarget] = &[
 ];
 
 /// Vertical gap between successive back-panel ports — large enough that the
-/// per-jack mod-overlay (slider + chip row), now anchored *below* the jack
-/// centre, doesn't overlap the next jack's circle.
-const PORT_SPACING: f32 = 26.0;
+/// per-jack mod-overlay (slider + chip row, now sitting *below* the label
+/// text and free to wrap to a second row) doesn't overlap the next jack.
+const PORT_SPACING: f32 = 34.0;
+
+/// Chip-text font size (px) — shrunk slightly from the previous 7.5 so the
+/// per-target chips fit more per row inside a typical card width.
+const MOD_OVERLAY_CHIP_FONT_PX: f32 = 6.5;
 
 /// Small labelled toggle chip — selected = light fill + bright text,
 /// unselected = dim fill + dim text.  Used in mod-target multi-select.
 fn chip_button(ui: &mut egui::Ui, label: &str, selected: bool) -> egui::Response {
     let text = egui::RichText::new(label)
         .monospace()
-        .size(7.5)
+        .size(MOD_OVERLAY_CHIP_FONT_PX)
         .color(if selected {
             Color32::from_gray(235)
         } else {
             Color32::from_gray(140)
         });
-    ui.add(
-        egui::Button::new(text)
-            .small()
-            .fill(if selected { theme::IRON } else { theme::PIT })
-            .stroke(egui::Stroke::NONE)
-            .rounding(2.0),
-    )
+    ui.scope(|ui| {
+        // Tighter padding than the default — chips need to pack densely.
+        ui.spacing_mut().button_padding = egui::vec2(2.0, 0.5);
+        ui.add(
+            egui::Button::new(text)
+                .small()
+                .fill(if selected { theme::IRON } else { theme::PIT })
+                .stroke(egui::Stroke::NONE)
+                .rounding(2.0),
+        )
+    })
+    .inner
 }
 
 /// True if `kind` exposes an audio-in jack on the back panel.
@@ -161,10 +170,10 @@ pub fn has_control_in(kind: ModuleKind) -> bool {
 }
 
 /// Computed back-panel strip height — AUD/CV/CTL share a single horizontal
-/// top row (~30 px), then the mod-input jacks stack vertically below.
+/// top row (~36 px), then the mod-input jacks stack vertically below.
 pub fn back_strip_height(kind: ModuleKind) -> f32 {
     let mods = mod_inputs(kind).len();
-    (32.0 + mods as f32 * PORT_SPACING).max(48.0)
+    (38.0 + mods as f32 * PORT_SPACING).max(54.0)
 }
 
 /// Draw Mod-in jacks for `kind` starting at `start_y` on the left (input)
@@ -233,11 +242,16 @@ pub fn draw_mod_selector_dropdowns(
     if !app.rack_flipped {
         return;
     }
-    // Skip overlays whose anchor would land in (or below) the bottom-panel
-    // strip — the piano + footer always stay on top regardless of egui
-    // layer order.  Approximate piano+footer reserved height = 105 px.
+    // Skip overlays whose extent would land in (or below) the bottom-panel
+    // strip — the piano + footer always stay on top of egui Areas because
+    // panels live at a higher LayerId.  The earlier 105 px cutoff used
+    // only the anchor; the overlay itself extends ~50–70 px below it (one
+    // slider row + up to two wrapped chip rows), so we need a fatter
+    // buffer to avoid the bottom-panel collision the user reported.
     let screen_bottom = ctx.screen_rect().max.y;
-    let max_overlay_y = screen_bottom - 105.0;
+    let bottom_panel_h = 105.0_f32;
+    let overlay_est_h_max = 70.0_f32;
+    let max_overlay_y = screen_bottom - bottom_panel_h - overlay_est_h_max;
     // Same idea for the top edge: when the rack scrolls and a back-panel
     // jack ends up above the canvas, its Foreground Area would otherwise
     // paint over the header info panel and the prompt strip.  Using the
@@ -295,10 +309,11 @@ pub fn draw_mod_selector_dropdowns(
             .collect();
         let all_selected =
             !real_targets.is_empty() && real_targets.iter().all(|t| cur_targets.contains(t));
-        // Anchor the overlay below the jack centre (was above-centre at
-        // y - 8) so it doesn't cover the AUD / CV / CTL labels of the
-        // top horizontal port row sitting above the first mod jack.
-        let anchor = p.center + Vec2::new(10.0, 4.0);
+        // Anchor the overlay BELOW the label text (label sits at the jack's
+        // own y centre, ~10 px right of the circle).  Pushing the overlay
+        // down by ~12 px keeps the slider + chip row clear of the label
+        // and gives wrapped chips room without crowding the next jack.
+        let anchor = p.center + Vec2::new(0.0, 12.0);
         if anchor.y > max_overlay_y {
             // Jack is below the visible rack region — skip its overlay so
             // the piano panel below isn't covered by the floating Area.
@@ -309,27 +324,43 @@ pub fn draw_mod_selector_dropdowns(
             // Area doesn't paint over the header/prompt strip above.
             continue;
         }
+        // Use the actual card width as the wrap budget — looked up from
+        // ctx temp data published by `module_card_back` for this module.
+        let card_w = ctx
+            .data(|d| d.get_temp::<f32>(egui::Id::new("back_card_w").with(p.port.module_id)))
+            .unwrap_or(180.0);
+        // Reserve a small gutter on the right so the bezel doesn't kiss
+        // the card border.
+        let overlay_max_w = (card_w - 12.0).max(80.0);
+        let chip_strip_w = (overlay_max_w - 6.0).max(60.0);
         egui::Area::new(egui::Id::new(("mod_overlay", p.port.module_id, idx)))
             .order(egui::Order::Foreground)
             .fixed_pos(anchor)
             .show(ctx, |ui| {
+                ui.set_max_width(overlay_max_w);
                 let frame = egui::Frame::none()
                     .fill(theme::DEEP)
                     .stroke(egui::Stroke::new(0.5, Color32::from_gray(50)))
                     .rounding(2.0)
                     .inner_margin(egui::Margin::symmetric(3.0, 1.0));
                 frame.show(ui, |ui| {
+                    ui.spacing_mut().item_spacing = Vec2::new(3.0, 1.0);
+                    // First row: polarity · depth slider · % readout.
+                    // Slider width is derived from `overlay_max_w` (which
+                    // tracks the card width) minus reserved space for the
+                    // polarity chip + % label + paddings.  This avoids
+                    // any reliance on `available_width` (which jitters
+                    // inside Areas when wrapped chips reflow).
                     ui.horizontal(|ui| {
-                        ui.spacing_mut().item_spacing = Vec2::new(2.0, 0.0);
-                        // Polarity toggle — `+` for normal, `−` for inverted.
-                        // Shown FIRST so the slider's % visually matches the
-                        // sign next to it.
                         let pol_label = if cur_invert { "−" } else { "+" };
                         if chip_button(ui, pol_label, cur_invert).clicked() {
                             invert_changes.push((p.port.module_id, idx, !cur_invert));
                         }
+                        // polarity ~14, pct readout ~30, frame padding 6,
+                        // item spacing 3*2 — leaves the rest for the slider.
+                        let slider_w = (overlay_max_w - 14.0 - 30.0 - 12.0).clamp(20.0, 60.0);
                         let mut d = cur_depth;
-                        ui.spacing_mut().slider_width = 50.0;
+                        ui.spacing_mut().slider_width = slider_w;
                         ui.add(egui::Slider::new(&mut d, 0.0..=1.0).show_value(false))
                             .on_hover_text(format!(
                                 "Depth {}{:.0}%",
@@ -343,37 +374,45 @@ pub fn draw_mod_selector_dropdowns(
                                 (d * 100.0).round() as i32
                             ))
                             .monospace()
-                            .size(7.5)
+                            .size(7.0)
                             .color(Color32::from_gray(170)),
                         );
                         if d != cur_depth {
                             depth_changes.push((p.port.module_id, idx, d));
                         }
-                        if is_selector {
-                            // "—" / ALL meta-chip
-                            if chip_button(ui, "—", all_selected).clicked() {
-                                let new_targets = if all_selected {
-                                    Vec::new()
-                                } else {
-                                    real_targets.clone()
-                                };
-                                sel_changes.push((p.port.module_id, idx, new_targets));
-                            }
-                            // Per-target toggle chips (multi-select)
-                            for t in &real_targets {
-                                let active = cur_targets.contains(t);
-                                if chip_button(ui, lfo_target_short_label(*t), active).clicked() {
-                                    let mut next = cur_targets.clone();
-                                    if active {
-                                        next.retain(|x| x != t);
-                                    } else {
-                                        next.push(*t);
-                                    }
-                                    sel_changes.push((p.port.module_id, idx, next));
-                                }
-                            }
-                        }
                     });
+                    if is_selector {
+                        // Second (+) row: ALL meta-chip + per-target chips.
+                        // Wrapped so wide kits split into multiple lines
+                        // instead of running off the side of the card.
+                        ui.scope(|ui| {
+                            ui.set_max_width(chip_strip_w);
+                            ui.horizontal_wrapped(|ui| {
+                                ui.spacing_mut().item_spacing = Vec2::new(2.0, 1.0);
+                                if chip_button(ui, "—", all_selected).clicked() {
+                                    let new_targets = if all_selected {
+                                        Vec::new()
+                                    } else {
+                                        real_targets.clone()
+                                    };
+                                    sel_changes.push((p.port.module_id, idx, new_targets));
+                                }
+                                for t in &real_targets {
+                                    let active = cur_targets.contains(t);
+                                    if chip_button(ui, lfo_target_short_label(*t), active).clicked()
+                                    {
+                                        let mut next = cur_targets.clone();
+                                        if active {
+                                            next.retain(|x| x != t);
+                                        } else {
+                                            next.push(*t);
+                                        }
+                                        sel_changes.push((p.port.module_id, idx, next));
+                                    }
+                                }
+                            });
+                        });
+                    }
                 });
             });
     }

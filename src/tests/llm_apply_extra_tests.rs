@@ -76,9 +76,12 @@ mod llm_apply_rack_tests {
 
     #[test]
     fn rack_disconnect_removes_cable() {
+        // The default rack now wires only the "important" FX (Reverb +
+        // Delay) directly to MASTER, instead of an FX serial chain.
+        // Disconnecting Reverb→MASTER must shrink the cable count.
         let s = AppState::default();
         let update = serde_json::json!({
-            "rack": { "disconnect": [{ "from": "waveshaper", "to": "reverb" }] }
+            "rack": { "disconnect": [{ "from": "reverb", "to": "master" }] }
         });
         let initial = s.rack.cables.len();
         let s = apply_llm_update(s, &update, &[]);
@@ -178,10 +181,12 @@ mod llm_apply_rack_tests {
 
     #[test]
     fn rack_connect_does_not_duplicate() {
+        // Reverb→MASTER is wired by `wire_default_cables`; re-issuing the
+        // same connect must not add a duplicate.
         let s = AppState::default();
         let initial = s.rack.cables.len();
         let update = serde_json::json!({
-            "rack": { "connect": [{ "from": "waveshaper", "to": "reverb" }] }
+            "rack": { "connect": [{ "from": "reverb", "to": "master" }] }
         });
         let s = apply_llm_update(s, &update, &[]);
         assert_eq!(s.rack.cables.len(), initial, "should not duplicate cable");

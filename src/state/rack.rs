@@ -546,6 +546,8 @@ impl RackState {
         };
         let master_id = find(&self.modules, ModuleKind::MasterOutput);
         let seq_id = find(&self.modules, ModuleKind::StepSequencer);
+        // Voices that get a direct CV trigger from the sequencer and their
+        // dry audio cabled to master.
         let voice_ids: Vec<u32> = [
             ModuleKind::AcidBass,
             ModuleKind::DrumKit808,
@@ -555,30 +557,31 @@ impl RackState {
             ModuleKind::AmenSampler,
             ModuleKind::NoiseVoice,
             ModuleKind::GranularTexture,
+            ModuleKind::GabberKick,
         ]
         .iter()
         .filter_map(|&k| find(&self.modules, k))
         .collect();
         let tts_id = find(&self.modules, ModuleKind::NeuTts);
         let reverb_id = find(&self.modules, ModuleKind::FxReverb);
-        let fx_ids: Vec<u32> = [
-            ModuleKind::FxWaveshaper,
-            ModuleKind::FxReverb,
-            ModuleKind::FxDelay,
-            ModuleKind::FxBitcrush,
-            ModuleKind::FxChorus,
-            ModuleKind::FxPhaser,
-            ModuleKind::FxRingMod,
-            ModuleKind::FxEq,
-            ModuleKind::FxCompressor,
-            ModuleKind::FxTapeSat,
-            ModuleKind::FxDrive,
-            ModuleKind::FxAutotune,
-            ModuleKind::FxPan,
-        ]
-        .iter()
-        .filter_map(|&k| find(&self.modules, k))
-        .collect();
+        let delay_id = find(&self.modules, ModuleKind::FxDelay);
+
+        let audio_cable = |from_id: u32, to_id: u32| {
+            (
+                PortRef {
+                    module_id: from_id,
+                    dir: PortDir::Out,
+                    kind: PortKind::Audio,
+                    index: 0,
+                },
+                PortRef {
+                    module_id: to_id,
+                    dir: PortDir::In,
+                    kind: PortKind::Audio,
+                    index: 0,
+                },
+            )
+        };
 
         // Seq → voices (CV)
         if let Some(sid) = seq_id {
@@ -599,58 +602,29 @@ impl RackState {
                 );
             }
         }
-        // TTS → reverb
-        if let (Some(tid), Some(rid)) = (tts_id, reverb_id) {
-            self.connect(
-                PortRef {
-                    module_id: tid,
-                    dir: PortDir::Out,
-                    kind: PortKind::Audio,
-                    index: 0,
-                },
-                PortRef {
-                    module_id: rid,
-                    dir: PortDir::In,
-                    kind: PortKind::Audio,
-                    index: 0,
-                },
-            );
-        }
-        // Voices → master
+        // Voices → master (dry direct path)
         if let Some(mid) = master_id {
             for vid in &voice_ids {
-                self.connect(
-                    PortRef {
-                        module_id: *vid,
-                        dir: PortDir::Out,
-                        kind: PortKind::Audio,
-                        index: 0,
-                    },
-                    PortRef {
-                        module_id: mid,
-                        dir: PortDir::In,
-                        kind: PortKind::Audio,
-                        index: 0,
-                    },
-                );
+                let (a, b) = audio_cable(*vid, mid);
+                self.connect(a, b);
             }
         }
-        // FX serial chain
-        for pair in fx_ids.windows(2) {
-            self.connect(
-                PortRef {
-                    module_id: pair[0],
-                    dir: PortDir::Out,
-                    kind: PortKind::Audio,
-                    index: 0,
-                },
-                PortRef {
-                    module_id: pair[1],
-                    dir: PortDir::In,
-                    kind: PortKind::Audio,
-                    index: 0,
-                },
-            );
+        // TTS → Reverb (TTS gets ambience).  Reverb output is wired to
+        // master below so this stays in the audio path.
+        if let (Some(tid), Some(rid)) = (tts_id, reverb_id) {
+            let (a, b) = audio_cable(tid, rid);
+            self.connect(a, b);
+        }
+        // ── Wire the "important" FX to master so they have a complete
+        // path.  Other FX live in the rack but stay unwired by default —
+        // the user can patch them in as needed (transparent FX nodes).
+        if let (Some(rid), Some(mid)) = (reverb_id, master_id) {
+            let (a, b) = audio_cable(rid, mid);
+            self.connect(a, b);
+        }
+        if let (Some(did), Some(mid)) = (delay_id, master_id) {
+            let (a, b) = audio_cable(did, mid);
+            self.connect(a, b);
         }
         // Agent → all controllable
         let agent_id = find(&self.modules, ModuleKind::LlmAgent);

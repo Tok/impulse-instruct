@@ -8,22 +8,21 @@ mod fx_plan_tests {
     };
 
     #[test]
-    fn default_rack_compiles_full_chain_in_order() {
+    fn default_rack_compiles_only_wired_fx() {
+        // `wire_default_cables` no longer chains every FX serially —
+        // only the "important" ones (Reverb + Delay) are wired straight
+        // to MASTER, so the plan should contain just those two steps.
+        // Other FX live in the rack but are intentionally orphaned.
         let rack = RackState::default();
         let plan = compile_fx_plan(&rack);
-        assert_eq!(plan.steps.len(), 12);
-        assert_eq!(plan.steps[0], FxStep::Waveshaper);
-        assert_eq!(plan.steps[1], FxStep::Reverb);
-        assert_eq!(plan.steps[2], FxStep::Delay);
-        assert_eq!(plan.steps[3], FxStep::Bitcrush);
-        assert_eq!(plan.steps[4], FxStep::Chorus);
-        assert_eq!(plan.steps[5], FxStep::Phaser);
-        assert_eq!(plan.steps[6], FxStep::RingMod);
-        assert_eq!(plan.steps[7], FxStep::Eq);
-        assert_eq!(plan.steps[8], FxStep::Compressor);
-        assert_eq!(plan.steps[9], FxStep::TapeSat);
-        assert_eq!(plan.steps[10], FxStep::Drive);
-        assert_eq!(plan.steps[11], FxStep::Autotune);
+        assert!(plan.steps.contains(&FxStep::Reverb));
+        assert!(plan.steps.contains(&FxStep::Delay));
+        assert!(
+            !plan.steps.contains(&FxStep::Waveshaper),
+            "orphan FX must not appear in the global plan"
+        );
+        assert!(!plan.steps.contains(&FxStep::Bitcrush));
+        assert!(!plan.steps.contains(&FxStep::Chorus));
     }
 
     #[test]
@@ -53,7 +52,9 @@ mod fx_plan_tests {
             !plan.steps.contains(&FxStep::Reverb),
             "disabled module must not appear in plan"
         );
-        assert_eq!(plan.steps.len(), 11);
+        // Default wiring leaves Reverb + Delay as the only wired FX, so
+        // disabling Reverb should leave just Delay.
+        assert!(plan.steps.contains(&FxStep::Delay));
     }
 
     #[test]
