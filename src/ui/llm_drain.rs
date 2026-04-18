@@ -10,19 +10,17 @@ impl ImpulseApp {
         // `is_inferring` flips false → true — the LLM thread just popped
         // a message off the channel.  Runs every frame regardless of
         // whether any output messages arrived this tick.
+        //
+        // Order matters: agent transitions first so the global decrement
+        // can skip when an agent-bound inference is what triggered the
+        // shared `s.llm.is_inferring` flag.  Otherwise an agent Infer
+        // would consume one slot from per_agent AND one from global —
+        // the latter being a bucket nothing was sent to.
         {
             let s = self.state.read();
             let global_now = s.llm.is_inferring;
-            if !self.last_inferring_global && global_now {
-                // Only count as a "global pop" if we have global pending —
-                // an agent-bound inference also sets s.llm.is_inferring,
-                // and is handled below per-agent.
-                if self.llm_queue.global > 0 {
-                    self.llm_queue.note_start(None);
-                }
-            }
-            self.last_inferring_global = global_now;
 
+            let mut agent_transitioned = false;
             for a in &s.llm_agents {
                 let was = self
                     .last_inferring_per_agent
@@ -31,9 +29,19 @@ impl ImpulseApp {
                     .unwrap_or(false);
                 if !was && a.is_inferring {
                     self.llm_queue.note_start(Some(a.id));
+                    agent_transitioned = true;
                 }
                 self.last_inferring_per_agent.insert(a.id, a.is_inferring);
             }
+
+            if !self.last_inferring_global
+                && global_now
+                && !agent_transitioned
+                && self.llm_queue.global > 0
+            {
+                self.llm_queue.note_start(None);
+            }
+            self.last_inferring_global = global_now;
         }
         while let Ok(out) = self.llm_rx.try_recv() {
             log::info!(

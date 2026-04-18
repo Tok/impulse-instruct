@@ -121,9 +121,55 @@ pub fn llm_cycle(
         ));
     }
 
-    // Per-agent slot rendering.
+    // Pre-locate the inferring agent (if any) so we can draw a progress
+    // arc *behind* the slot dots — keeps z-order consistent.
     let pulse_t = ui.ctx().input(|i| i.time) as f32;
-    let mut any_active = false;
+    let inferring_idx = enabled.iter().position(|a| a.is_inferring);
+    let mut any_active = inferring_idx.is_some();
+
+    // ── Progress arc + scanning tracer ──────────────────────────────
+    // When a pipeline turn is in flight, sweep an arc out from the
+    // inferring agent's slot covering `lanes_done / total_lanes` of the
+    // ring — the round-robin "owns" the whole circle for one turn, so
+    // the arc reads as "this much of the lane plan is done".  Plus a
+    // small bright dot that orbits one lane-step ahead of the arc tip
+    // so motion is visible even between lane completions.
+    let pipeline = state.llm.pipeline_progress.as_ref();
+    if let (Some(idx), Some(p)) = (inferring_idx, pipeline) {
+        let total = p.total_lanes.max(1) as f32;
+        let done = p.lanes_done as f32;
+        // Soft tween into the lane currently being worked on so the
+        // arc grows smoothly rather than stepping each lane apply.
+        let in_flight = if p.current_lane.is_some() { 1.0 } else { 0.0 };
+        let pulse = (pulse_t * 1.3).sin() * 0.5 + 0.5;
+        let smooth = (done + in_flight * pulse * 0.85).min(total);
+        let progress_frac = (smooth / total).clamp(0.0, 1.0);
+
+        let start_a = angle(idx as f32);
+        let span_a = TAU * progress_frac;
+        let arc_steps = ((span_a.abs() / (TAU / 96.0)) as usize).max(2);
+        let arc_r = r_rim;
+        let mut arc_pts: Vec<Pos2> = Vec::with_capacity(arc_steps + 1);
+        for k in 0..=arc_steps {
+            let t = k as f32 / arc_steps as f32;
+            let a = start_a + span_a * t;
+            arc_pts.push(Pos2::new(
+                center.x + a.cos() * arc_r,
+                center.y + a.sin() * arc_r,
+            ));
+        }
+        for w in arc_pts.windows(2) {
+            painter.line_segment([w[0], w[1]], Stroke::new(1.6, Color32::from_gray(165)));
+        }
+        // Tracer head — bright dot at the leading edge of the arc.
+        if let Some(head) = arc_pts.last() {
+            theme::led_flat(&painter, *head, led_r * 0.9, theme::CHALK, 1.0);
+        }
+        // Force a frame each tick so the tween + tracer don't freeze.
+        ui.ctx().request_repaint();
+    }
+
+    // Per-agent slot rendering.
     for (i, agent) in enabled.iter().enumerate() {
         let i_f = i as f32;
         let p = pos(i_f, r_rim);
@@ -133,9 +179,7 @@ pub fn llm_cycle(
             any_active = true;
         }
         // Flat in-screen marker — the cycle viz is styled like an
-        // oscilloscope screen, not physical hardware, so we don't
-        // render the 3-D dome `theme::led` here.  Just a saturated
-        // dot that pulses for the active slot.
+        // oscilloscope screen, not physical hardware, so no 3-D dome.
         let intensity = if active {
             (pulse_t * 4.0 * std::f32::consts::PI).sin() * 0.25 + 0.75
         } else {
@@ -147,6 +191,22 @@ pub fn llm_cycle(
             Color32::from_gray(120)
         };
         theme::led_flat(&painter, p, led_r, dot_color, intensity);
+
+        // Expanding-ring "ping" on the active slot — visible motion
+        // independent of pipeline progress, so even a slow lane reads
+        // as "alive".  Two staggered rings phase out toward 0 alpha.
+        if active {
+            for offset in [0.0_f32, 0.5] {
+                let phase = ((pulse_t * 1.2) + offset).fract();
+                let r = led_r * (1.0 + phase * 4.0);
+                let a = ((1.0 - phase) * 90.0) as u8;
+                painter.circle_stroke(
+                    p,
+                    r,
+                    Stroke::new(1.0, Color32::from_rgba_unmultiplied(220, 220, 220, a)),
+                );
+            }
+        }
 
         // Persona name placed just outside the rim at this slot.
         let label_pos = pos(i_f, r_outer * 1.14);

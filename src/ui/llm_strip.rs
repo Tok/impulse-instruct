@@ -12,6 +12,19 @@ use crate::llm::styles::StyleCatalog;
 use crate::state::apply_llm_update;
 use crate::ui::{ImpulseApp, theme};
 
+/// Truncate `s` to at most `max_chars` characters, suffixing `…` when cut.
+/// Used for fixed-width status slots that mustn't reflow the surrounding
+/// layout when a lane name happens to be longer than usual.
+fn truncate_label(s: &str, max_chars: usize) -> String {
+    if s.chars().count() <= max_chars {
+        s.to_string()
+    } else {
+        let mut out: String = s.chars().take(max_chars.saturating_sub(1)).collect();
+        out.push('…');
+        out
+    }
+}
+
 impl ImpulseApp {
     /// Send an `LlmInput::Infer` to the LLM thread and update the UI-side
     /// queue shadow that drives the LLM console's cycle viz.  Wraps every
@@ -364,57 +377,44 @@ impl ImpulseApp {
                     None if p.lanes_done >= p.total_lanes => {
                         format!("{}/{} done", p.total_lanes, p.total_lanes)
                     }
-                    None => format!("{}/{} planning…", p.lanes_done, p.total_lanes),
+                    None => format!("{}/{} plan…", p.lanes_done, p.total_lanes),
                 },
                 None => "idle".to_string(),
             };
             let label = if total_failed > 0 {
-                format!("{} · {} err", label, total_failed)
+                format!("{} · {}e", label, total_failed)
             } else {
                 label
             };
-            ui.label(egui::RichText::new(label).monospace().size(8.0).color(
-                if progress.is_some() {
-                    theme::FOG
-                } else {
-                    theme::IRON
-                },
-            ));
+            // Fixed-width slot so the bar + label combo doesn't reflow as
+            // the lane name changes length each pipeline step.
+            let label_box_w = 100.0_f32;
+            let (label_rect, _) = ui.allocate_exact_size(
+                egui::vec2(label_box_w, group_h.max(10.0)),
+                egui::Sense::hover(),
+            );
+            let label_color = if progress.is_some() {
+                theme::FOG
+            } else {
+                theme::IRON
+            };
+            ui.painter().text(
+                egui::pos2(label_rect.left() + 4.0, label_rect.center().y),
+                egui::Align2::LEFT_CENTER,
+                truncate_label(&label, 14),
+                egui::FontId::monospace(8.0),
+                label_color,
+            );
             // Keep animating while pipeline is live.
             if progress.is_some() {
                 ui.ctx().request_repaint();
             }
 
-            // Phase-1 lane scores: tiny per-lane summary so the user can
-            // see the evaluator picking up signal in real time.  Order
-            // matches the typical jam pipeline; only renders lanes that
-            // have been scored at least once this session.
-            {
-                let scores = self.state.read().llm.lane_scores.clone();
-                if !scores.is_empty() {
-                    let order = [
-                        "settings", "kit_a", "kit_b", "amen", "bass1", "bass2", "hoover", "an1x",
-                        "fx",
-                    ];
-                    for label in order {
-                        if let Some(s) = scores.get(label) {
-                            // Map score → gray ramp so a glance reads
-                            // brighter = better, dimmer = worse.
-                            let g = (90.0 + s.score * 130.0) as u8;
-                            ui.label(
-                                egui::RichText::new(format!(
-                                    "{}{:.0}",
-                                    &label[..label.len().min(2)],
-                                    s.score * 100.0
-                                ))
-                                .monospace()
-                                .size(7.0)
-                                .color(egui::Color32::from_gray(g)),
-                            );
-                        }
-                    }
-                }
-            }
+            // Phase-1 lane scores intentionally not rendered here — the
+            // log stream (`lane_eval: bass1 → 0.72 [#3]`) is enough for
+            // tuning the evaluator.  Phase 2's scheduler will surface
+            // them in a dedicated widget that doesn't reflow the layout
+            // each pipeline tick.
             ui.separator();
 
             // ── JAM timing (same line as model/ctx) ─────────────────
