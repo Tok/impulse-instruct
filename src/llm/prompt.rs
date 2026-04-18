@@ -3,6 +3,7 @@
 
 use crate::llm::prompt_summary::{
     bass_active_steps_summary, bass_groove_summary, bass_voices_summary,
+    rack_voice_coverage_summary,
 };
 use crate::llm::styles::StyleCatalog;
 use crate::state::{AppState, ConversationMode, ROOT_NAMES, StyleVerbosity};
@@ -69,6 +70,7 @@ pub fn build_system_prompt_full(
     let bass_summary = bass_active_steps_summary(state);
     let voices_info = bass_voices_summary(state);
     let groove_summary = bass_groove_summary(state);
+    let rack_coverage = rack_voice_coverage_summary(state);
 
     let current_json = serde_json::to_string_pretty(&serde_json::json!({
         "bass": {
@@ -118,8 +120,8 @@ pub fn build_system_prompt_full(
     .unwrap_or_default();
     // Bass pattern summary shown separately so the model doesn't treat it as an output field
     let bass_info = format!(
-        "Active bass steps (for reference only, not a JSON field): {}\n{}\n{}",
-        bass_summary, voices_info, groove_summary
+        "Active bass steps (for reference only, not a JSON field): {}\n{}\n{}\n{}",
+        bass_summary, voices_info, groove_summary, rack_coverage
     );
 
     // Resolve active style section (empty string if none set)
@@ -664,6 +666,10 @@ of arrays for that voice, not just steps+notes:
                            the rest at 0 (voice's static pan wins). E.g.
                            [0,0,0,0.3,0,0,0,-0.3,0,…].
   (Prefix with bass2_ / bass3_ / bass4_ for other voices.)
+
+  SUBSET RULE: every bass_accents / bass_slides index MUST also appear
+  in that voice's bass_steps. Accent/slide on an inactive step is silent.
+
 You thinking "I'll add accents and slides" isn't the same as emitting the
 arrays. If they aren't in the JSON output, they didn't happen.
 

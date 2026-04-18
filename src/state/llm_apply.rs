@@ -109,9 +109,12 @@ pub fn apply_llm_update(state: AppState, update: &serde_json::Value, scope: &[St
         // `bass_{field}` key (and keeps mirroring into `bass_pattern`); voices
         // 1..=3 read `bass{N+1}_{field}`.  Each field has its own lock path
         // so the user can pin one voice without freezing the others.
+        let mut voice0_dirty = false;
         if seq_scope_flags.bass {
             let voice_count = s.sequencer.bass_patterns.len();
             for voice_idx in 0..voice_count {
+                let steps_key = super::llm_apply_seq::bass_voice_field(voice_idx, "steps");
+                let touched_steps = seq.get(&steps_key).is_some();
                 for (field, set_flag) in [
                     (
                         "steps",
@@ -135,18 +138,38 @@ pub fn apply_llm_update(state: AppState, update: &serde_json::Value, scope: &[St
                     };
                     if let Some(pat) = s.sequencer.bass_patterns.get_mut(voice_idx) {
                         apply_llm_step_array(arr, pat, MAX_STEPS, set_flag);
+                        if voice_idx == 0 {
+                            voice0_dirty = true;
+                        }
+                    }
+                }
+                // Subset-of-active cleanup: when the same update rewrote
+                // `steps` for this voice, strip accent/slide flags from any
+                // step that is now inactive.  Mirrors the SUBSET RULE in
+                // the prompt — the pattern should be self-consistent even
+                // if the agent listed indices that fell off the rhythm.
+                if touched_steps && let Some(pat) = s.sequencer.bass_patterns.get_mut(voice_idx) {
+                    for step in pat.iter_mut() {
+                        if !step.active {
+                            step.accent = false;
+                            step.slide = false;
+                        }
                     }
                     if voice_idx == 0 {
-                        // Mirror voice 0 into the legacy single-voice pattern.
-                        if let Some(pat) = s.sequencer.bass_patterns.first() {
-                            s.sequencer.bass_pattern = pat.clone();
-                        }
+                        voice0_dirty = true;
                     }
                 }
             }
         }
         apply_bass_notes(&mut s, seq, seq_scope_flags, locked);
         apply_bass_pans(&mut s, seq, seq_scope_flags, locked);
+        // Mirror voice 0 into the legacy single-voice `bass_pattern` only
+        // when something actually changed — otherwise pre-existing values
+        // set outside the LLM path (tests / UI / other code) would be
+        // overwritten by the default voice-0 pattern on every no-op apply.
+        if voice0_dirty && let Some(pat) = s.sequencer.bass_patterns.first() {
+            s.sequencer.bass_pattern = pat.clone();
+        }
 
         let drum_step_fields: &[(&str, DrumVoice, f32, bool)] = &[
             ("kick_a_steps", DrumVoice::Kick808, 1.0, true),
