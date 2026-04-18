@@ -50,7 +50,7 @@ pub(crate) fn three_pair_labels(
     }
 }
 
-/// Render a small chip-style cycle button above a multi-pair XY pad.
+/// Render a small chip-style cycle button next to a multi-pair XY pad.
 /// Shows the current "X × Y" pair with a ↻ affordance; left-click advances
 /// the pair index (stored in egui temp memory keyed by `pad_id`).  The
 /// pad's own right-click still cycles too.
@@ -81,6 +81,96 @@ pub(crate) fn draw_pad_cycle_button(
     }
 }
 
+/// 2-knob XY pad — single pair, fills the card's extra row.  Returns
+/// `true` if either axis was dragged this frame.
+pub(crate) fn render_two_pad(
+    ui: &mut egui::Ui,
+    pad_id: &str,
+    label_x: &'static str,
+    label_y: &'static str,
+    x: &mut f32,
+    y: &mut f32,
+    x_locked: bool,
+    y_locked: bool,
+) -> bool {
+    let pad_size = (ui.available_width() - 16.0).clamp(60.0, 120.0);
+    let pad_locked = x_locked || y_locked;
+    let mut changed = false;
+    crate::ui::widgets::centered_row(ui, |ui| {
+        let (pad_changed, _) =
+            crate::ui::widgets::xy_pad(ui, pad_id, label_x, label_y, x, y, pad_size, pad_locked, 1);
+        if pad_changed {
+            changed = true;
+        }
+    });
+    changed
+}
+
+/// 3-knob switchable XY pad — pad + side-mounted cycle chip inside a
+/// glass pane, centred within the card width.  `pair_state` is the
+/// authoritative pair index (0/1/2) persisted in `RackModule.pad_pair`;
+/// the helper syncs it with the widget's egui temp memory so right-click
+/// cycling on the pad and left-click on the chip both update it.
+///
+/// Returns `(value_changed, pair_changed)` — caller writes back values
+/// if `value_changed`, persists `*pair_state` back to state if
+/// `pair_changed`.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn render_three_pad(
+    ui: &mut egui::Ui,
+    pad_id: &str,
+    labels: [&'static str; 3],
+    pair_state: &mut u8,
+    fields: (&mut f32, &mut f32, &mut f32),
+    locks: [bool; 3],
+) -> (bool, bool) {
+    use crate::ui::widgets;
+    // Push authoritative pair into egui temp so the widget renders it.
+    let cur_pair = (*pair_state as usize) % 3;
+    ui.ctx()
+        .data_mut(|d| d.insert_temp(egui::Id::new(pad_id), cur_pair));
+
+    let (lx, ly) = three_pair_labels(cur_pair, labels[0], labels[1], labels[2]);
+    let pad_locked = match cur_pair {
+        0 => locks[0] || locks[1],
+        1 => locks[0] || locks[2],
+        _ => locks[1] || locks[2],
+    };
+    let (a, b, c) = fields;
+    let mut val_changed = false;
+
+    let group_w = ui.available_width();
+    widgets::glass_group(ui, group_w, |ui| {
+        let pad_size = (ui.available_width() - PAD_CYCLE_SIDE_W - 8.0).clamp(50.0, 100.0);
+        widgets::centered_row(ui, |ui| {
+            let (pad_changed, _) = match cur_pair {
+                0 => widgets::xy_pad(ui, pad_id, lx, ly, a, b, pad_size, pad_locked, 3),
+                1 => widgets::xy_pad(ui, pad_id, lx, ly, a, c, pad_size, pad_locked, 3),
+                _ => widgets::xy_pad(ui, pad_id, lx, ly, b, c, pad_size, pad_locked, 3),
+            };
+            if pad_changed {
+                val_changed = true;
+            }
+            ui.add_space(4.0);
+            ui.vertical(|ui| {
+                draw_pad_cycle_button(ui, pad_id, 3, lx, ly);
+            });
+        });
+    });
+
+    // Read back: right-click on pad and cycle-button clicks both went to temp.
+    let new_pair = ui
+        .ctx()
+        .data(|d| d.get_temp::<usize>(egui::Id::new(pad_id)))
+        .unwrap_or(cur_pair)
+        % 3;
+    let pair_changed = new_pair != cur_pair;
+    if pair_changed {
+        *pair_state = new_pair as u8;
+    }
+    (val_changed, pair_changed)
+}
+
 pub(super) fn draw_fx_content(
     app: &mut ImpulseApp,
     ui: &mut egui::Ui,
@@ -99,15 +189,17 @@ pub(super) fn draw_fx_content(
     let pm = |path: &str| crate::state::param_mode(path, &locked, &focused);
     let mut changed = false;
     ui.spacing_mut().item_spacing.x = crate::ui::panels::KNOB_SPACING;
-    let pad_expanded = app
-        .state
-        .read()
-        .rack
-        .modules
-        .iter()
-        .find(|m| m.id == module_id)
-        .map(|m| m.pad_expanded)
-        .unwrap_or(false);
+    let user_owned = |path: &str| matches!(pm(path), crate::state::ParamMode::UserOwned);
+    let (pad_expanded, initial_pad_pair) = {
+        let s = app.state.read();
+        s.rack
+            .modules
+            .iter()
+            .find(|m| m.id == module_id)
+            .map(|m| (m.pad_expanded, m.pad_pair))
+            .unwrap_or((false, 0))
+    };
+    let mut pad_pair = initial_pad_pair;
 
     // Helper: horizontal row of knobs
     macro_rules! hk {
@@ -147,48 +239,22 @@ pub(super) fn draw_fx_content(
                 })
                 .inner;
             if pad_expanded {
-                let pad_id = format!("reverb_xy_{module_id}");
                 ui.add_space(PAD_SECTION_TOP_GAP);
-                let pair = widgets::xy_pad_pair(ui.ctx(), &pad_id);
-                let (lx, ly) = three_pair_labels(pair, "SIZE", "DAMP", "MIX");
-                let size_locked =
-                    matches!(pm("fx.reverb_size"), crate::state::ParamMode::UserOwned);
-                let damp_locked =
-                    matches!(pm("fx.reverb_damp"), crate::state::ParamMode::UserOwned);
-                let mix_locked = matches!(pm("fx.reverb_mix"), crate::state::ParamMode::UserOwned);
-                let pad_locked = match pair {
-                    0 => size_locked || damp_locked,
-                    1 => size_locked || mix_locked,
-                    _ => damp_locked || mix_locked,
-                };
-                // Wrap pad + side cycle in a glass pane and centre the whole
-                // block within the card. The glass frame takes most of the
-                // card width so the pane reads as the pad's dedicated region.
-                let group_w = ui.available_width();
-                widgets::glass_group(ui, group_w, |ui| {
-                    let pad_size =
-                        (ui.available_width() - PAD_CYCLE_SIDE_W - 8.0).clamp(50.0, 100.0);
-                    widgets::centered_row(ui, |ui| {
-                        let (pad_changed, _) = match pair {
-                            0 => widgets::xy_pad(
-                                ui, &pad_id, lx, ly, &mut rs, &mut rd, pad_size, pad_locked, 3,
-                            ),
-                            1 => widgets::xy_pad(
-                                ui, &pad_id, lx, ly, &mut rs, &mut rm, pad_size, pad_locked, 3,
-                            ),
-                            _ => widgets::xy_pad(
-                                ui, &pad_id, lx, ly, &mut rd, &mut rm, pad_size, pad_locked, 3,
-                            ),
-                        };
-                        if pad_changed {
-                            changed = true;
-                        }
-                        ui.add_space(4.0);
-                        ui.vertical(|ui| {
-                            draw_pad_cycle_button(ui, &pad_id, 3, lx, ly);
-                        });
-                    });
-                });
+                let (vc, _) = render_three_pad(
+                    ui,
+                    &format!("reverb_xy_{module_id}"),
+                    ["SIZE", "DAMP", "MIX"],
+                    &mut pad_pair,
+                    (&mut rs, &mut rd, &mut rm),
+                    [
+                        user_owned("fx.reverb_size"),
+                        user_owned("fx.reverb_damp"),
+                        user_owned("fx.reverb_mix"),
+                    ],
+                );
+                if vc {
+                    changed = true;
+                }
             }
             if changed || rs != app.state.read().fx.reverb_size || dir_changed || q_changed {
                 let mut s = app.state.write();
@@ -223,6 +289,24 @@ pub(super) fn draw_fx_content(
                     (d, q)
                 })
                 .inner;
+            if pad_expanded {
+                ui.add_space(PAD_SECTION_TOP_GAP);
+                let (vc, _) = render_three_pad(
+                    ui,
+                    &format!("delay_xy_{module_id}"),
+                    ["TIME", "FBK", "MIX"],
+                    &mut pad_pair,
+                    (&mut dt, &mut df, &mut dm),
+                    [
+                        user_owned("fx.delay_time"),
+                        user_owned("fx.delay_feedback"),
+                        user_owned("fx.delay_mix"),
+                    ],
+                );
+                if vc {
+                    changed = true;
+                }
+            }
             if changed || dt != app.state.read().fx.delay_time || dir_changed || q_changed {
                 let mut s = app.state.write();
                 s.fx.delay_time = dt;
@@ -243,6 +327,24 @@ pub(super) fn draw_fx_content(
                 ("DEPTH", &mut d, pm("fx.chorus_depth")),
                 ("MIX", &mut m, pm("fx.chorus_mix"))
             );
+            if pad_expanded {
+                ui.add_space(PAD_SECTION_TOP_GAP);
+                let (vc, _) = render_three_pad(
+                    ui,
+                    &format!("chorus_xy_{module_id}"),
+                    ["RATE", "DEPTH", "MIX"],
+                    &mut pad_pair,
+                    (&mut r, &mut d, &mut m),
+                    [
+                        user_owned("fx.chorus_rate"),
+                        user_owned("fx.chorus_depth"),
+                        user_owned("fx.chorus_mix"),
+                    ],
+                );
+                if vc {
+                    changed = true;
+                }
+            }
             if changed || r != app.state.read().fx.chorus_rate {
                 let mut s = app.state.write();
                 s.fx.chorus_rate = r;
@@ -261,6 +363,24 @@ pub(super) fn draw_fx_content(
                 ("DEPTH", &mut d, pm("fx.phaser_depth")),
                 ("MIX", &mut m, pm("fx.phaser_mix"))
             );
+            if pad_expanded {
+                ui.add_space(PAD_SECTION_TOP_GAP);
+                let (vc, _) = render_three_pad(
+                    ui,
+                    &format!("phaser_xy_{module_id}"),
+                    ["RATE", "DEPTH", "MIX"],
+                    &mut pad_pair,
+                    (&mut r, &mut d, &mut m),
+                    [
+                        user_owned("fx.phaser_rate"),
+                        user_owned("fx.phaser_depth"),
+                        user_owned("fx.phaser_mix"),
+                    ],
+                );
+                if vc {
+                    changed = true;
+                }
+            }
             if changed || r != app.state.read().fx.phaser_rate {
                 let mut s = app.state.write();
                 s.fx.phaser_rate = r;
@@ -279,6 +399,24 @@ pub(super) fn draw_fx_content(
                 ("MID", &mut mi, pm("fx.eq_mid_gain")),
                 ("HIGH", &mut hi, pm("fx.eq_hi_gain"))
             );
+            if pad_expanded {
+                ui.add_space(PAD_SECTION_TOP_GAP);
+                let (vc, _) = render_three_pad(
+                    ui,
+                    &format!("eq_xy_{module_id}"),
+                    ["LOW", "MID", "HIGH"],
+                    &mut pad_pair,
+                    (&mut lo, &mut mi, &mut hi),
+                    [
+                        user_owned("fx.eq_low_gain"),
+                        user_owned("fx.eq_mid_gain"),
+                        user_owned("fx.eq_hi_gain"),
+                    ],
+                );
+                if vc {
+                    changed = true;
+                }
+            }
             if changed || lo != app.state.read().fx.eq_low_gain {
                 let mut s = app.state.write();
                 s.fx.eq_low_gain = lo;
@@ -301,6 +439,24 @@ pub(super) fn draw_fx_content(
                 ("RATIO", &mut ra, pm("fx.compressor_ratio")),
                 ("MIX", &mut mi, pm("fx.compressor_mix"))
             );
+            if pad_expanded {
+                ui.add_space(PAD_SECTION_TOP_GAP);
+                let (vc, _) = render_three_pad(
+                    ui,
+                    &format!("comp_xy_{module_id}"),
+                    ["THR", "RATIO", "MIX"],
+                    &mut pad_pair,
+                    (&mut th, &mut ra, &mut mi),
+                    [
+                        user_owned("fx.compressor_threshold"),
+                        user_owned("fx.compressor_ratio"),
+                        user_owned("fx.compressor_mix"),
+                    ],
+                );
+                if vc {
+                    changed = true;
+                }
+            }
             if changed || th != app.state.read().fx.compressor_threshold {
                 let mut s = app.state.write();
                 s.fx.compressor_threshold = th;
@@ -319,6 +475,24 @@ pub(super) fn draw_fx_content(
                 ("FLUTTER", &mut fl, pm("fx.tape_flutter")),
                 ("MIX", &mut mi, pm("fx.tape_mix"))
             );
+            if pad_expanded {
+                ui.add_space(PAD_SECTION_TOP_GAP);
+                let (vc, _) = render_three_pad(
+                    ui,
+                    &format!("tape_xy_{module_id}"),
+                    ["DRIVE", "FLUT", "MIX"],
+                    &mut pad_pair,
+                    (&mut dr, &mut fl, &mut mi),
+                    [
+                        user_owned("fx.tape_drive"),
+                        user_owned("fx.tape_flutter"),
+                        user_owned("fx.tape_mix"),
+                    ],
+                );
+                if vc {
+                    changed = true;
+                }
+            }
             if changed || dr != app.state.read().fx.tape_drive {
                 let mut s = app.state.write();
                 s.fx.tape_drive = dr;
@@ -336,6 +510,21 @@ pub(super) fn draw_fx_content(
                 ("DRIVE", &mut dr, pm("fx.distortion_drive")),
                 ("MIX", &mut mi, pm("fx.distortion_mix"))
             );
+            if pad_expanded {
+                ui.add_space(PAD_SECTION_TOP_GAP);
+                if render_two_pad(
+                    ui,
+                    &format!("drive_xy_{module_id}"),
+                    "DRIVE",
+                    "MIX",
+                    &mut dr,
+                    &mut mi,
+                    user_owned("fx.distortion_drive"),
+                    user_owned("fx.distortion_mix"),
+                ) {
+                    changed = true;
+                }
+            }
             if changed {
                 let mut s = app.state.write();
                 s.fx.distortion_drive = dr;
@@ -354,19 +543,18 @@ pub(super) fn draw_fx_content(
             );
             if pad_expanded {
                 ui.add_space(PAD_SECTION_TOP_GAP);
-                let pad_size = (ui.available_width() - 16.0).clamp(60.0, 120.0);
-                let pad_locked =
-                    matches!(pm("fx.autotune_amount"), crate::state::ParamMode::UserOwned)
-                        || matches!(pm("fx.autotune_mix"), crate::state::ParamMode::UserOwned);
-                widgets::centered_row(ui, |ui| {
-                    let pad_id = format!("autotune_xy_{module_id}");
-                    let (pad_changed, _) = widgets::xy_pad(
-                        ui, &pad_id, "AMOUNT", "MIX", &mut amt, &mut mi, pad_size, pad_locked, 1,
-                    );
-                    if pad_changed {
-                        changed = true;
-                    }
-                });
+                if render_two_pad(
+                    ui,
+                    &format!("autotune_xy_{module_id}"),
+                    "AMOUNT",
+                    "MIX",
+                    &mut amt,
+                    &mut mi,
+                    user_owned("fx.autotune_amount"),
+                    user_owned("fx.autotune_mix"),
+                ) {
+                    changed = true;
+                }
             }
             if changed {
                 let mut s = app.state.write();
@@ -388,6 +576,24 @@ pub(super) fn draw_fx_content(
                 ("WIDTH", &mut width, pm("fx.fx_pan_width")),
                 ("RATE", &mut rate, pm("fx.fx_pan_rate"))
             );
+            if pad_expanded {
+                ui.add_space(PAD_SECTION_TOP_GAP);
+                let (vc, _) = render_three_pad(
+                    ui,
+                    &format!("pan_xy_{module_id}"),
+                    ["POS", "WIDTH", "RATE"],
+                    &mut pad_pair,
+                    (&mut pos_norm, &mut width, &mut rate),
+                    [
+                        user_owned("fx.fx_pan_pos"),
+                        user_owned("fx.fx_pan_width"),
+                        user_owned("fx.fx_pan_rate"),
+                    ],
+                );
+                if vc {
+                    changed = true;
+                }
+            }
             if changed {
                 pos = (pos_norm * 2.0 - 1.0).clamp(-1.0, 1.0);
                 let mut s = app.state.write();
@@ -406,6 +612,21 @@ pub(super) fn draw_fx_content(
                 ("DRIVE", &mut dr, pm("fx.waveshaper_drive")),
                 ("MIX", &mut mi, pm("fx.waveshaper_mix"))
             );
+            if pad_expanded {
+                ui.add_space(PAD_SECTION_TOP_GAP);
+                if render_two_pad(
+                    ui,
+                    &format!("waveshaper_xy_{module_id}"),
+                    "DRIVE",
+                    "MIX",
+                    &mut dr,
+                    &mut mi,
+                    user_owned("fx.waveshaper_drive"),
+                    user_owned("fx.waveshaper_mix"),
+                ) {
+                    changed = true;
+                }
+            }
             if changed {
                 let mut s = app.state.write();
                 s.fx.waveshaper_drive = dr;
@@ -423,6 +644,24 @@ pub(super) fn draw_fx_content(
                 ("RATE", &mut ra, pm("fx.bitcrush_rate")),
                 ("MIX", &mut mi, pm("fx.bitcrush_mix"))
             );
+            if pad_expanded {
+                ui.add_space(PAD_SECTION_TOP_GAP);
+                let (vc, _) = render_three_pad(
+                    ui,
+                    &format!("bitcrush_xy_{module_id}"),
+                    ["BITS", "RATE", "MIX"],
+                    &mut pad_pair,
+                    (&mut bi, &mut ra, &mut mi),
+                    [
+                        user_owned("fx.bitcrush_bits"),
+                        user_owned("fx.bitcrush_rate"),
+                        user_owned("fx.bitcrush_mix"),
+                    ],
+                );
+                if vc {
+                    changed = true;
+                }
+            }
             if changed || bi != app.state.read().fx.bitcrush_bits {
                 let mut s = app.state.write();
                 s.fx.bitcrush_bits = bi;
@@ -440,6 +679,21 @@ pub(super) fn draw_fx_content(
                 ("FREQ", &mut fr, pm("fx.ring_mod_freq")),
                 ("MIX", &mut mi, pm("fx.ring_mod_mix"))
             );
+            if pad_expanded {
+                ui.add_space(PAD_SECTION_TOP_GAP);
+                if render_two_pad(
+                    ui,
+                    &format!("ringmod_xy_{module_id}"),
+                    "FREQ",
+                    "MIX",
+                    &mut fr,
+                    &mut mi,
+                    user_owned("fx.ring_mod_freq"),
+                    user_owned("fx.ring_mod_mix"),
+                ) {
+                    changed = true;
+                }
+            }
             if changed {
                 let mut s = app.state.write();
                 s.fx.ring_mod_freq = fr;
@@ -447,6 +701,20 @@ pub(super) fn draw_fx_content(
             }
         }
         _ => {}
+    }
+
+    // Persist pair cycling (from cycle-chip clicks or right-click on pad)
+    // back to the module so it survives save/restore and is API-addressable.
+    if pad_pair != initial_pad_pair
+        && let Some(m) = app
+            .state
+            .write()
+            .rack
+            .modules
+            .iter_mut()
+            .find(|m| m.id == module_id)
+    {
+        m.pad_pair = pad_pair;
     }
 
     if changed {

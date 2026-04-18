@@ -144,13 +144,16 @@ pub struct RackModule {
     /// XY-pad expansion: when true, modules whose `kind.supports_xy_pad()`
     /// is true reserve an extra grid row and render an XY pad below their
     /// knobs.  Kinds that don't support an XY pad ignore this flag.
-    /// Defaults to true so legacy sessions pick up the new expanded look.
-    #[serde(default = "default_pad_expanded")]
+    /// Defaults to false so the rack starts compact and users opt into
+    /// pads per-module via the title-bar chevron.
+    #[serde(default)]
     pub pad_expanded: bool,
-}
-
-fn default_pad_expanded() -> bool {
-    true
+    /// For multi-pair XY pads (3-knob FX), which pair the pad currently
+    /// drives: 0 = A/B, 1 = A/C, 2 = B/C.  Persisted so the selection
+    /// survives save/restore and is API / LLM addressable.  Ignored by
+    /// single-pair pads (and by kinds without a pad).
+    #[serde(default)]
+    pub pad_pair: u8,
 }
 
 impl RackModule {
@@ -166,7 +169,8 @@ impl RackModule {
             mod_selectors: Vec::new(),
             mod_input_depths: Vec::new(),
             mod_input_invert: Vec::new(),
-            pad_expanded: true,
+            pad_expanded: false,
+            pad_pair: 0,
         }
     }
 
@@ -328,10 +332,9 @@ impl RackState {
     /// Returns (0, 0) as a fallback if the zone is completely full.
     fn find_free_position(&self, kind: ModuleKind) -> (u8, u8) {
         let (w, h) = kind.grid_size(GRID_COLS);
-        // New modules start with `pad_expanded: true`; account for the extra
-        // row if the kind supports an XY pad so the initial placement doesn't
-        // clip into its neighbour below.
-        let h = if kind.supports_xy_pad() { h + 1 } else { h };
+        // New modules start with `pad_expanded: false`, so we only need the
+        // base grid height — the extra row is allocated once the user
+        // expands the pad (arrange_grid reflows at that point).
         let cols = GRID_COLS as usize;
         let max_rows = 64usize;
         let zone = kind.default_zone();

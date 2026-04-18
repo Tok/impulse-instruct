@@ -814,15 +814,37 @@ fn reaches_master_default_preset_voices_all_reach() {
 // ── XY-pad expansion (grid size, arrange, serde) ────────────────────────────
 
 #[test]
-fn supports_xy_pad_true_only_for_rolled_out_fx() {
-    // Exhaustive match would be brittle; assert the current rollout and
-    // a few kinds that definitely shouldn't have one. Expand this as more
-    // FX get pads.
-    assert!(ModuleKind::FxAutotune.supports_xy_pad());
-    assert!(ModuleKind::FxReverb.supports_xy_pad());
-    assert!(!ModuleKind::FxCompressor.supports_xy_pad());
-    assert!(!ModuleKind::AcidBass.supports_xy_pad());
-    assert!(!ModuleKind::StepSequencer.supports_xy_pad());
+fn supports_xy_pad_true_for_every_fx_kind_only() {
+    // All FxXxx kinds have a pad now; non-FX kinds should never report true.
+    let fx_kinds = [
+        ModuleKind::FxReverb,
+        ModuleKind::FxDelay,
+        ModuleKind::FxChorus,
+        ModuleKind::FxPhaser,
+        ModuleKind::FxRingMod,
+        ModuleKind::FxWaveshaper,
+        ModuleKind::FxBitcrush,
+        ModuleKind::FxEq,
+        ModuleKind::FxCompressor,
+        ModuleKind::FxTapeSat,
+        ModuleKind::FxDrive,
+        ModuleKind::FxAutotune,
+        ModuleKind::FxPan,
+    ];
+    for k in fx_kinds {
+        assert!(k.supports_xy_pad(), "{k:?} should support an XY pad");
+    }
+    for k in [
+        ModuleKind::AcidBass,
+        ModuleKind::DrumKit808,
+        ModuleKind::StepSequencer,
+        ModuleKind::MasterOutput,
+        ModuleKind::LfoModule,
+        ModuleKind::LlmAgent,
+        ModuleKind::SpectrumAnalyzer,
+    ] {
+        assert!(!k.supports_xy_pad(), "{k:?} should not support an XY pad");
+    }
 }
 
 #[test]
@@ -840,7 +862,11 @@ fn three_pair_labels_dispatch_matches_cycle_order() {
 fn effective_grid_size_expands_when_pad_expanded() {
     let mut rack = empty_rack();
     let id = rack.add_module(ModuleKind::FxAutotune);
-    // New modules default to pad_expanded = true.
+    rack.modules
+        .iter_mut()
+        .find(|m| m.id == id)
+        .unwrap()
+        .pad_expanded = true;
     let m = rack.module(id).unwrap();
     let (w, h) = rack.effective_grid_size(m);
     let (base_w, base_h) = ModuleKind::FxAutotune.grid_size(GRID_COLS);
@@ -854,13 +880,9 @@ fn effective_grid_size_expands_when_pad_expanded() {
 
 #[test]
 fn effective_grid_size_matches_static_when_collapsed() {
+    // New modules default to pad_expanded = false; no extra row reserved.
     let mut rack = empty_rack();
     let id = rack.add_module(ModuleKind::FxAutotune);
-    rack.modules
-        .iter_mut()
-        .find(|m| m.id == id)
-        .unwrap()
-        .pad_expanded = false;
     let m = rack.module(id).unwrap();
     let (w, h) = rack.effective_grid_size(m);
     assert_eq!((w, h), ModuleKind::FxAutotune.grid_size(GRID_COLS));
@@ -869,8 +891,8 @@ fn effective_grid_size_matches_static_when_collapsed() {
 #[test]
 fn effective_grid_size_ignores_flag_for_unsupported_kind() {
     let mut rack = empty_rack();
-    let id = rack.add_module(ModuleKind::FxCompressor);
-    // Compressor doesn't support a pad yet — the flag should be inert.
+    let id = rack.add_module(ModuleKind::LfoModule);
+    // LFO modules don't have XY pads — the flag is inert on them.
     rack.modules
         .iter_mut()
         .find(|m| m.id == id)
@@ -878,16 +900,22 @@ fn effective_grid_size_ignores_flag_for_unsupported_kind() {
         .pad_expanded = true;
     let m = rack.module(id).unwrap();
     let (w, h) = rack.effective_grid_size(m);
-    assert_eq!((w, h), ModuleKind::FxCompressor.grid_size(GRID_COLS));
+    assert_eq!((w, h), ModuleKind::LfoModule.grid_size(GRID_COLS));
 }
 
 #[test]
 fn arrange_grid_reserves_extra_row_for_expanded_autotune() {
     let mut rack = empty_rack();
     let at = rack.add_module(ModuleKind::FxAutotune);
-    // Place a second autotune — together they must not overlap vertically
-    // when both are in their default (expanded) state.
+    // Expand both pads — the reflow must not overlap them vertically.
     let at2 = rack.add_module(ModuleKind::FxAutotune);
+    for id in [at, at2] {
+        rack.modules
+            .iter_mut()
+            .find(|m| m.id == id)
+            .unwrap()
+            .pad_expanded = true;
+    }
     rack.arrange_grid();
     let m1 = rack.module(at).unwrap();
     let m2 = rack.module(at2).unwrap();
@@ -901,19 +929,24 @@ fn arrange_grid_reserves_extra_row_for_expanded_autotune() {
 }
 
 #[test]
-fn pad_expanded_default_true_on_new_module() {
+fn pad_expanded_defaults_false_on_new_module() {
     let mut rack = empty_rack();
     let id = rack.add_module(ModuleKind::FxAutotune);
     assert!(
-        rack.module(id).unwrap().pad_expanded,
-        "pad_expanded should default to true"
+        !rack.module(id).unwrap().pad_expanded,
+        "pad_expanded should default to false — users opt in per-module"
+    );
+    assert_eq!(
+        rack.module(id).unwrap().pad_pair,
+        0,
+        "pad_pair should default to 0 (A/B)"
     );
 }
 
 #[test]
-fn pad_expanded_serde_defaults_true_for_legacy_payload() {
-    // Sessions saved before this field existed must deserialize with
-    // pad_expanded = true so the new default takes effect on upgrade.
+fn pad_expanded_serde_defaults_false_for_legacy_payload() {
+    // Legacy session payloads that predate the pad fields must deserialize
+    // with the new defaults (pad_expanded = false, pad_pair = 0).
     let legacy = r#"{
         "id": 42,
         "kind": "FxAutotune",
@@ -922,5 +955,6 @@ fn pad_expanded_serde_defaults_true_for_legacy_payload() {
         "slot": 0
     }"#;
     let m: RackModule = serde_json::from_str(legacy).unwrap();
-    assert!(m.pad_expanded);
+    assert!(!m.pad_expanded);
+    assert_eq!(m.pad_pair, 0);
 }
