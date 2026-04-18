@@ -188,49 +188,27 @@ fn draw_llm_agent_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, module_id: u32)
                     }
                 });
         }
-        // Status: pipeline progress > tok/s > cycle count
-        // Two stacked bars (no red): top = lane completion fraction,
-        // bottom = error fraction.  Same width / height, 1 px gap.
+        // Mini cycle clock — Phase 2 of the LLM-console cycle widget.
+        // Same grayscale language as `llm_cycle`: 12-o'clock tick, progress
+        // arc from the pipeline, centre text for countdown / inference /
+        // idle state.  Replaces the two linear progress bars so the clock
+        // is the single source of per-agent status truth.
+        let secs_to_next_fire =
+            app.jam_next_fire
+                .and_then(|(at, pending_agent)| match pending_agent {
+                    Some(aid) if aid == module_id => Some(
+                        at.saturating_duration_since(std::time::Instant::now())
+                            .as_secs_f32(),
+                    ),
+                    _ => None,
+                });
+        let state_snapshot = app.state.read();
+        super::widgets::agent_clock(ui, &state_snapshot, module_id, secs_to_next_fire, 26.0);
+        drop(state_snapshot);
+        // Lane-progress sub-label to keep the per-lane text available
+        // (the clock glyph alone doesn't show "{done}/{total} {name}").
         let agent_progress = app.state.read().llm_agents[idx].pipeline_progress.clone();
         if let Some(p) = agent_progress {
-            let (frac, err_frac) = if p.total_lanes > 0 {
-                (
-                    p.lanes_done as f32 / p.total_lanes as f32,
-                    p.failed_count as f32 / p.total_lanes as f32,
-                )
-            } else {
-                (0.0, 0.0)
-            };
-            let bar_w = 40.0_f32;
-            let bar_h = 2.0_f32;
-            let bar_gap = 1.0_f32;
-            let group_h = bar_h * 2.0 + bar_gap;
-            let (group_rect, _) =
-                ui.allocate_exact_size(egui::vec2(bar_w, group_h), egui::Sense::hover());
-            let pa = ui.painter();
-            let progress_rect = egui::Rect::from_min_size(group_rect.min, egui::vec2(bar_w, bar_h));
-            let error_rect = egui::Rect::from_min_size(
-                egui::pos2(group_rect.min.x, group_rect.min.y + bar_h + bar_gap),
-                egui::vec2(bar_w, bar_h),
-            );
-            pa.rect_filled(progress_rect, 1.0, egui::Color32::from_gray(38));
-            pa.rect_filled(error_rect, 1.0, egui::Color32::from_gray(38));
-            let progress_w = (bar_w * frac.clamp(0.0, 1.0)).max(0.0);
-            if progress_w > 0.0 {
-                pa.rect_filled(
-                    egui::Rect::from_min_size(progress_rect.min, egui::vec2(progress_w, bar_h)),
-                    1.0,
-                    egui::Color32::from_gray(140),
-                );
-            }
-            let error_w = (bar_w * err_frac.clamp(0.0, 1.0)).max(0.0);
-            if error_w > 0.0 {
-                pa.rect_filled(
-                    egui::Rect::from_min_size(error_rect.min, egui::vec2(error_w, bar_h)),
-                    1.0,
-                    egui::Color32::from_gray(95),
-                );
-            }
             let mut label = match &p.current_lane {
                 Some(name) => format!("{}/{} {}", p.lanes_done + 1, p.total_lanes, name),
                 None => format!("{}/{}", p.lanes_done, p.total_lanes),
@@ -241,21 +219,6 @@ fn draw_llm_agent_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, module_id: u32)
             ui.label(
                 egui::RichText::new(label)
                     .color(theme::FOG)
-                    .monospace()
-                    .size(7.5),
-            );
-            ui.ctx().request_repaint();
-        } else if inferring {
-            ui.label(
-                egui::RichText::new(format!("{:.0}t/s", tps))
-                    .color(theme::FOG)
-                    .monospace()
-                    .size(7.5),
-            );
-        } else if cycles > 0 {
-            ui.label(
-                egui::RichText::new(format!("#{}", cycles))
-                    .color(theme::IRON)
                     .monospace()
                     .size(7.5),
             );

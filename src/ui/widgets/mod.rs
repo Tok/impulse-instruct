@@ -591,6 +591,9 @@ pub use llm_cycle::llm_cycle;
 mod lane_scores;
 pub use lane_scores::lane_scores;
 
+mod agent_clock;
+pub use agent_clock::agent_clock;
+
 mod temperature;
 pub use temperature::{bank_temperature, draw_temp_chip};
 

@@ -144,6 +144,27 @@ A detailed log of what's built.
   `(one-shot)` for quick tailing.
 - 4 new serde tests pin the default + field parsing.
 
+### Per-agent cycle clock on agent cards
+
+- `ui/widgets/agent_clock.rs` — 26 px mini clock-face living on each
+  `LlmAgent` card.  Same grayscale language as the big `llm_cycle` in
+  the LLM console: recessed screen bezel, 12-o'clock turn tick, a
+  progress arc drawn from the agent's own `pipeline_progress` fraction,
+  a pulse ring that animates independently of the arc so slow lanes
+  still read as "alive", and a small outward wedge at 12 o'clock when
+  this specific agent is the jam loop's next scheduled fire.
+- Centre text cascades by signal strength: countdown `Ns` when
+  scheduled next → `t/s` during inference on wider cells → `▶` glyph
+  during inference on narrow cells → `#N` cycle count at rest →
+  `·` idle.
+- Replaces the previous pair of linear progress bars — the clock is
+  the single per-agent status glyph now.  The "{done}/{total} lane"
+  sub-label stays underneath for users who want the exact lane name.
+- Ties into the big LLM-console cycle viz: the console shows
+  round-robin context (which agent is about to fire next), each card's
+  clock shows that agent's own work.  Between them, jam state is
+  legible without hunting through the log.
+
 ### Melodic voice preecho (bass)
 
 - `PreechoConfig` gained two melodic flags: `accent_ramp` and

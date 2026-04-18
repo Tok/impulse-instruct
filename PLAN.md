@@ -85,11 +85,6 @@ they ship and are reflected in `features.md`.
   Standard / Full) is still generic; could be replaced with a
   style-driven picker so initial setup matches the user's intended
   genre directly.
-- **Per-agent cycle viz on agent cards** — Phase 2 of the LLM-console
-  cycle widget.  A tiny clock-face mini-circle per agent card showing
-  that agent's queue, its turn position in the round-robin, and its
-  scheduled-next-fire countdown.  Console version already covers all
-  agents on one ring; per-agent gives focus.
 - **Agent overrides escape clip too** — `agent_card.rs` LED already
   uses a foreground layer.  Step-button / piano / knob LEDs are
   tightly bound to their parents and would leak past widget bounds
