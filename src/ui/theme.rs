@@ -238,17 +238,27 @@ pub fn draw_glass_panel(painter: &egui::Painter, rect: egui::Rect, rounding: egu
 // believable LED we ALSO brighten the core toward white as intensity rises —
 // real LEDs bloom toward white at their hot spot.
 
-/// 8-ring LED falloff: (radius_multiplier, alpha).  Outermost rings are
-/// nearly invisible (alpha 2 / 7) so the halo blends seamlessly into the
-/// surrounding panel; inner rings ramp steeply for a smooth glow gradient.
-const LED_RING_LAYERS: [(f32, u8); 8] = [
-    (4.2, 2), // outermost — almost invisible
-    (3.4, 7),
-    (2.7, 18),
-    (2.2, 38),
-    (1.7, 70),
-    (1.4, 115),
-    (1.15, 175),
+/// 16-ring LED falloff: (radius_multiplier, alpha).  Twice as many rings as
+/// the previous 8-ring version for a smoother gradient, with the alpha curve
+/// reshaped so the halo fades to translucent quicker — the lit core stays
+/// bright but the bloom is gentler and stops competing with surrounding
+/// panel chrome.  Outermost rings are barely visible.
+const LED_RING_LAYERS: [(f32, u8); 16] = [
+    (5.0, 1), // outermost — barely there
+    (4.5, 2),
+    (4.0, 4),
+    (3.6, 6),
+    (3.2, 9),
+    (2.9, 14),
+    (2.6, 20),
+    (2.35, 28),
+    (2.1, 38),
+    (1.9, 50),
+    (1.7, 65),
+    (1.55, 85),
+    (1.4, 110),
+    (1.25, 145),
+    (1.12, 190),
     (1.0, 255), // saturated core
 ];
 
@@ -263,7 +273,7 @@ pub fn led(painter: &egui::Painter, center: Pos2, radius: f32, color: Color32, i
     let scale = |a: u8| -> u8 { (a as f32 * i) as u8 };
     let rgba = |r: u8, g: u8, b: u8, a: u8| Color32::from_rgba_unmultiplied(r, g, b, scale(a));
 
-    // 5 concentric rings, outside-in
+    // 16 concentric rings, outside-in
     for &(mult, alpha) in &LED_RING_LAYERS {
         painter.circle_filled(
             center,
@@ -302,7 +312,7 @@ pub fn led_dark(painter: &egui::Painter, center: Pos2, radius: f32, intensity: f
     let scale = |a: u8| -> u8 { (a as f32 * i) as u8 };
     let black = |a: u8| -> Color32 { Color32::from_rgba_unmultiplied(0, 0, 0, scale(a)) };
 
-    // 8 concentric rings — same geometry as `led`, all in BLACK.  On a
+    // 16 concentric rings — same geometry as `led`, all in BLACK.  On a
     // bright key this paints a soft dark halo and a near-solid dark core.
     for &(mult, alpha) in &LED_RING_LAYERS {
         painter.circle_filled(center, radius * mult, black(alpha));

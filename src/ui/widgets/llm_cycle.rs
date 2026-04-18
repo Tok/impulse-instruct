@@ -33,23 +33,28 @@ pub fn llm_cycle(
     }
     let painter = ui.painter_at(rect);
     let center = rect.center();
-    let r_outer = diameter * 0.42;
-    let r_rim = r_outer * 0.93;
-    let r_inner_dots = r_outer * 0.74;
+    // Match the ring oscilloscope's geometry so the two share visual
+    // language: outer = 45% of the chip, inner guide = 40% of outer
+    // (i.e. 18% of the chip), background is the same recessed-screen
+    // bezel with a 2 px rounded square (not a perfect circle — the
+    // chip housing is square, the lit content is round).
+    let r_outer = diameter * 0.45;
+    let r_inner = r_outer * 0.40;
+    let r_rim = r_outer;
+    let r_dots = (r_outer + r_inner) * 0.5; // mid-band for queued dots
 
-    // Background dome (matches the screen-bezel look used elsewhere).
-    theme::draw_screen_bezel(&painter, rect, egui::Rounding::same(diameter * 0.5));
+    theme::draw_screen_bezel(&painter, rect, egui::Rounding::same(2.0));
+    // Subtle guide rings — same colours as `draw_ring_scope_colored`.
+    painter.circle_stroke(center, r_outer, Stroke::new(1.0, theme::SLATE));
+    painter.circle_stroke(center, r_inner, Stroke::new(0.5, theme::IRON));
 
-    // Rim ring — the cycle path.
-    painter.circle_stroke(center, r_rim, Stroke::new(1.0, Color32::from_gray(45)));
-
-    // 12 o'clock tick — start of cycle.
+    // 12 o'clock tick — start of cycle, drawn just outside the rim.
     painter.line_segment(
         [
-            Pos2::new(center.x, center.y - r_outer),
-            Pos2::new(center.x, center.y - r_outer * 0.78),
+            Pos2::new(center.x, center.y - r_outer * 1.06),
+            Pos2::new(center.x, center.y - r_outer * 0.94),
         ],
-        Stroke::new(1.5, Color32::from_gray(120)),
+        Stroke::new(1.5, Color32::from_gray(140)),
     );
 
     // Collect enabled agents in rack order.
@@ -87,19 +92,27 @@ pub fn llm_cycle(
         0
     };
 
+    // Sizes scale with the chip diameter so the widget looks right at
+    // any panel height (the cycle viz now fills the full LLM-console
+    // height, which can range ~120–280 px).
+    let led_r = (r_outer * 0.07).clamp(2.5, 7.0);
+    let dot_r = (r_outer * 0.04).clamp(1.5, 4.0);
+    let label_size = (r_outer * 0.18).clamp(7.0, 11.0);
+    let centre_size = (r_outer * 0.20).clamp(8.0, 13.0);
+
     // Cursor wedge: small filled triangle just outside the rim at the
     // next-to-fire slot.  Points outward from centre.
     {
         let i = next_idx as f32;
         let a = angle(i);
-        let tip = pos(i, r_outer * 0.99);
+        let tip = pos(i, r_outer * 1.04);
         let base_l = Pos2::new(
-            center.x + (a + 0.18).cos() * r_outer * 0.75,
-            center.y + (a + 0.18).sin() * r_outer * 0.75,
+            center.x + (a + 0.18).cos() * r_outer * 0.85,
+            center.y + (a + 0.18).sin() * r_outer * 0.85,
         );
         let base_r = Pos2::new(
-            center.x + (a - 0.18).cos() * r_outer * 0.75,
-            center.y + (a - 0.18).sin() * r_outer * 0.75,
+            center.x + (a - 0.18).cos() * r_outer * 0.85,
+            center.y + (a - 0.18).sin() * r_outer * 0.85,
         );
         painter.add(egui::Shape::convex_polygon(
             vec![tip, base_l, base_r],
@@ -115,7 +128,6 @@ pub fn llm_cycle(
         let i_f = i as f32;
         let p = pos(i_f, r_rim);
 
-        // LED for the slot: pulse if inferring, dim if idle.
         let active = agent.is_inferring;
         if active {
             any_active = true;
@@ -126,15 +138,14 @@ pub fn llm_cycle(
             0.35
         };
         let led_color = if active {
-            Color32::from_rgb(220, 220, 220)
+            Color32::from_rgb(230, 230, 230)
         } else {
             Color32::from_gray(120)
         };
-        theme::led(&painter, p, diameter * 0.045, led_color, intensity);
+        theme::led(&painter, p, led_r, led_color, intensity);
 
         // Persona name placed just outside the rim at this slot.
-        let label_pos = pos(i_f, r_outer * 1.16);
-        // Anchor text to the side of the circle to keep it readable.
+        let label_pos = pos(i_f, r_outer * 1.14);
         let a = angle(i_f);
         let align = if !(-TAU * 0.125..=TAU * 0.375).contains(&a) {
             egui::Align2::CENTER_BOTTOM
@@ -147,7 +158,7 @@ pub fn llm_cycle(
             label_pos,
             align,
             &agent.persona_name,
-            egui::FontId::monospace(8.0),
+            egui::FontId::monospace(label_size),
             if active { theme::CHALK } else { theme::SMOKE },
         );
 
@@ -155,29 +166,28 @@ pub fn llm_cycle(
         // along a short tangent so multiple queued items fan out neatly.
         let pending = queue.count_for(Some(agent.id));
         if pending > 0 {
-            let tangent_a = angle(i_f) + TAU * 0.25; // 90° offset = tangent
-            let dot_r = diameter * 0.022;
+            let tangent_a = angle(i_f) + TAU * 0.25;
             for k in 0..pending.min(6) {
                 let off = (k as f32 - (pending.min(6) as f32 - 1.0) * 0.5) * dot_r * 2.5;
                 let dp = Pos2::new(
-                    center.x + angle(i_f).cos() * r_inner_dots + tangent_a.cos() * off,
-                    center.y + angle(i_f).sin() * r_inner_dots + tangent_a.sin() * off,
+                    center.x + angle(i_f).cos() * r_dots + tangent_a.cos() * off,
+                    center.y + angle(i_f).sin() * r_dots + tangent_a.sin() * off,
                 );
                 painter.circle_filled(dp, dot_r, Color32::from_gray(180));
             }
             if pending > 6 {
                 painter.text(
-                    pos(i_f, r_inner_dots * 0.78),
+                    pos(i_f, r_dots * 0.85),
                     egui::Align2::CENTER_CENTER,
                     format!("+{}", pending - 6),
-                    egui::FontId::monospace(7.0),
+                    egui::FontId::monospace((label_size - 1.0).max(6.0)),
                     theme::FOG,
                 );
             }
         }
     }
 
-    // Centre label: countdown to next fire, "JAM" pulse, or "idle".
+    // Centre label: countdown to next fire, "▶" while inferring, or idle.
     let centre_text = match secs_to_next_fire {
         Some(s) if s > 0.0 => format!("{:.1}s", s),
         _ if any_active => "▶".to_string(),
@@ -188,7 +198,7 @@ pub fn llm_cycle(
         center,
         egui::Align2::CENTER_CENTER,
         &centre_text,
-        egui::FontId::monospace(9.0),
+        egui::FontId::monospace(centre_size),
         if any_active || secs_to_next_fire.is_some() {
             theme::FOG
         } else {
@@ -196,10 +206,9 @@ pub fn llm_cycle(
         },
     );
 
-    // Global-bucket dots (agent_id = None sends) tucked under the centre.
+    // Global-bucket dots (agent_id = None sends) just below the centre.
     if queue.global > 0 {
-        let dot_r = diameter * 0.022;
-        let y = center.y + diameter * 0.18;
+        let y = center.y + r_inner * 0.6;
         for k in 0..queue.global.min(6) {
             let off = (k as f32 - (queue.global.min(6) as f32 - 1.0) * 0.5) * dot_r * 2.5;
             painter.circle_filled(Pos2::new(center.x + off, y), dot_r, Color32::from_gray(160));

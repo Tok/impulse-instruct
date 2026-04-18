@@ -71,6 +71,9 @@ fn draw_llm_agent_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, module_id: u32)
     ui.horizontal(|ui| {
         // White LED indicator — pulses when this agent is inferring,
         // dim/idle otherwise.  Replaces the old text-bullet glyph.
+        // Painted on a foreground layer so the LED's halo is never
+        // covered by the persona TextEdit (or other widgets) drawn
+        // afterwards in the same horizontal row.
         let led_size = egui::vec2(12.0, 12.0);
         let (led_rect, _) = ui.allocate_exact_size(led_size, egui::Sense::hover());
         let intensity = if inferring {
@@ -79,8 +82,12 @@ fn draw_llm_agent_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, module_id: u32)
         } else {
             0.30
         };
+        let overlay = ui.ctx().layer_painter(egui::LayerId::new(
+            egui::Order::Foreground,
+            ui.id().with("agent_led").with(module_id),
+        ));
         theme::led(
-            ui.painter(),
+            &overlay,
             led_rect.center(),
             5.0,
             egui::Color32::from_rgb(230, 230, 230),

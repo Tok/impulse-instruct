@@ -124,10 +124,43 @@ impl ImpulseApp {
     }
 
     pub(super) fn draw_llm_console_content(&mut self, ui: &mut egui::Ui) {
-        // Override the centered layout from module_card — console needs full-width
-        // text fields, log area, and prompt input that fill the card.
-        ui.with_layout(egui::Layout::top_down(egui::Align::Min), |ui| {
-            self.draw_llm_console_inner(ui);
+        // Split the card into LEFT = existing console rows, RIGHT = the
+        // round-robin cycle viz.  Cycle is square (width = height) and
+        // takes the full panel height, mirroring how the ring oscillo-
+        // scope occupies the right side of the global header.  Capped
+        // so the left side always has room for prompt input + log.
+        let total_w = ui.available_width();
+        let total_h = ui.available_height();
+        let cycle_size = total_h.max(96.0).min((total_w * 0.35).max(96.0));
+        let gap = 6.0;
+        let left_w = (total_w - cycle_size - gap).max(220.0);
+
+        let cursor = ui.cursor().min;
+        let left_rect = egui::Rect::from_min_size(cursor, egui::vec2(left_w, total_h));
+        let cycle_rect = egui::Rect::from_min_size(
+            egui::pos2(cursor.x + left_w + gap, cursor.y),
+            egui::vec2(cycle_size, total_h),
+        );
+
+        ui.allocate_ui_at_rect(left_rect, |ui| {
+            ui.with_layout(egui::Layout::top_down(egui::Align::Min), |ui| {
+                self.draw_llm_console_inner(ui);
+            });
+        });
+        ui.allocate_ui_at_rect(cycle_rect, |ui| {
+            let secs_to_next_fire = self.jam_next_fire.map(|(at, _)| {
+                at.saturating_duration_since(std::time::Instant::now())
+                    .as_secs_f32()
+            });
+            let s = self.state.read();
+            super::widgets::llm_cycle(
+                ui,
+                &s,
+                &self.llm_queue,
+                self.jam_next_agent,
+                secs_to_next_fire,
+                cycle_size,
+            );
         });
     }
 
@@ -419,23 +452,8 @@ impl ImpulseApp {
                         .color(theme::ASH),
                 );
             }
-
-            // ── Agent round-robin cycle (right-justified on same line) ──
-            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                let secs_to_next_fire = self.jam_next_fire.map(|(at, _)| {
-                    at.saturating_duration_since(std::time::Instant::now())
-                        .as_secs_f32()
-                });
-                let s = self.state.read();
-                super::widgets::llm_cycle(
-                    ui,
-                    &s,
-                    &self.llm_queue,
-                    self.jam_next_agent,
-                    secs_to_next_fire,
-                    72.0,
-                );
-            });
+            // Round-robin cycle viz now lives in the right-side panel
+            // (set up by `draw_llm_console_content`).
         });
 
         // ── Style selector + instructions ────────────────────────────
