@@ -39,7 +39,7 @@ const PILLS: &[(&str, &str, &str)] = &[
 /// `module_id`.  Pill clicks send a one-shot LlmInput::Infer scoped to that
 /// agent — its existing scope (rack control cables) is honoured by the LLM
 /// loop, so the prompt naturally lands inside its sandbox.
-pub fn draw_pills(app: &ImpulseApp, ui: &mut egui::Ui, module_id: u32) {
+pub fn draw_pills(app: &mut ImpulseApp, ui: &mut egui::Ui, module_id: u32) {
     ui.horizontal_wrapped(|ui| {
         ui.spacing_mut().item_spacing = egui::Vec2::new(2.0, 2.0);
         for (label, prompt, hover) in PILLS {
@@ -57,11 +57,7 @@ pub fn draw_pills(app: &ImpulseApp, ui: &mut egui::Ui, module_id: u32) {
                 .on_hover_text(*hover)
                 .clicked()
             {
-                let _ = app.llm_tx.try_send(crate::llm::LlmInput::Infer {
-                    prompt: (*prompt).to_string(),
-                    one_shot: true,
-                    agent_id: Some(module_id),
-                });
+                app.send_llm_infer((*prompt).to_string(), true, Some(module_id));
             }
         }
     });

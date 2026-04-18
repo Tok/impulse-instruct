@@ -69,18 +69,25 @@ fn draw_llm_agent_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, module_id: u32)
 
     // ── Persona + model + status (single line) ────────────────────────────
     ui.horizontal(|ui| {
-        if inferring {
+        // White LED indicator — pulses when this agent is inferring,
+        // dim/idle otherwise.  Replaces the old text-bullet glyph.
+        let led_size = egui::vec2(12.0, 12.0);
+        let (led_rect, _) = ui.allocate_exact_size(led_size, egui::Sense::hover());
+        let intensity = if inferring {
             let t = ui.ctx().input(|i| i.time) as f32;
-            let pulse = (t * 4.0 * std::f32::consts::TAU).sin() * 0.3 + 0.7;
-            let g = (220.0 * pulse) as u8;
-            ui.label(
-                egui::RichText::new("●")
-                    .color(egui::Color32::from_gray(g))
-                    .size(10.0),
-            );
-            ui.ctx().request_repaint();
+            (t * 4.0 * std::f32::consts::PI).sin() * 0.25 + 0.75
         } else {
-            ui.label(egui::RichText::new("●").color(theme::ASH).size(10.0));
+            0.30
+        };
+        theme::led(
+            ui.painter(),
+            led_rect.center(),
+            5.0,
+            egui::Color32::from_rgb(230, 230, 230),
+            intensity,
+        );
+        if inferring {
+            ui.ctx().request_repaint();
         }
         let resp = ui.add(
             egui::TextEdit::singleline(&mut persona)

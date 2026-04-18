@@ -585,6 +585,9 @@ pub use waveform_viz::{lfo_preview, waveform_icon};
 mod event_stream;
 pub use event_stream::event_stream;
 
+mod llm_cycle;
+pub use llm_cycle::llm_cycle;
+
 mod temperature;
 pub use temperature::{bank_temperature, draw_temp_chip};
 

@@ -147,6 +147,42 @@ pub struct DrumLogEntry {
     pub voice: crate::state::DrumVoice,
 }
 
+/// UI-side approximation of the LLM input channel queue, broken down per
+/// agent + a "global" bucket for `agent_id = None` sends.  Bumped at every
+/// `try_send` on the UI side; decremented when the corresponding agent's
+/// `is_inferring` flips false → true (i.e. the LLM thread popped it).
+/// API and OSC sends bypass this shadow — acceptable for v1.
+#[derive(Default, Clone, Debug)]
+pub struct LlmQueueShadow {
+    pub per_agent: std::collections::HashMap<u32, usize>,
+    pub global: usize,
+}
+
+impl LlmQueueShadow {
+    pub fn note_send(&mut self, agent_id: Option<u32>) {
+        match agent_id {
+            Some(id) => *self.per_agent.entry(id).or_insert(0) += 1,
+            None => self.global += 1,
+        }
+    }
+    pub fn note_start(&mut self, agent_id: Option<u32>) {
+        match agent_id {
+            Some(id) => {
+                if let Some(v) = self.per_agent.get_mut(&id) {
+                    *v = v.saturating_sub(1);
+                }
+            }
+            None => self.global = self.global.saturating_sub(1),
+        }
+    }
+    pub fn count_for(&self, agent_id: Option<u32>) -> usize {
+        match agent_id {
+            Some(id) => self.per_agent.get(&id).copied().unwrap_or(0),
+            None => self.global,
+        }
+    }
+}
+
 pub struct ImpulseApp {
     state: Arc<RwLock<AppState>>,
     audio_tx: rtrb::Producer<AudioCommand>,
@@ -173,6 +209,15 @@ pub struct ImpulseApp {
     /// `is_inferring`, so without a cooldown we'd fire several duplicates
     /// during that window.
     last_jam_kickoff: std::time::Instant,
+    /// UI-side shadow of the LLM input queue.  Every `LlmInput::Infer` sent
+    /// from this UI bumps a counter; transitions of `is_inferring` from
+    /// false → true decrement.  Drives the LLM console's cycle viz.
+    /// Doesn't see sends from the HTTP API or OSC — acceptable for v1.
+    pub(crate) llm_queue: LlmQueueShadow,
+    /// `is_inferring` snapshot per agent + global from the previous frame —
+    /// used to detect false → true transitions for the queue shadow.
+    last_inferring_per_agent: std::collections::HashMap<u32, bool>,
+    last_inferring_global: bool,
     session_start: std::time::Instant,
     last_step_time: f64,
     /// Log of melodic notes that have actually fired, captured on each
@@ -361,6 +406,9 @@ impl ImpulseApp {
             // Set in the past so the first frame's heartbeat check passes
             // immediately once heat > 0.
             last_jam_kickoff: std::time::Instant::now() - std::time::Duration::from_secs(10),
+            llm_queue: LlmQueueShadow::default(),
+            last_inferring_per_agent: std::collections::HashMap::new(),
+            last_inferring_global: false,
             melodic_log: std::collections::VecDeque::with_capacity(MELODIC_LOG_CAP),
             drum_log: std::collections::VecDeque::with_capacity(DRUM_LOG_CAP),
             session_start: std::time::Instant::now(),
@@ -539,11 +587,11 @@ impl eframe::App for ImpulseApp {
             if std::time::Instant::now() >= fire_at {
                 self.jam_next_fire = None;
                 if self.state.read().llm.heat > 0.0 {
-                    let _ = self.llm_tx.try_send(LlmInput::Infer {
-                        prompt: "continue jamming, evolve the pattern".to_string(),
-                        one_shot: false,
-                        agent_id: pending_agent,
-                    });
+                    self.send_llm_infer(
+                        "continue jamming, evolve the pattern".to_string(),
+                        false,
+                        pending_agent,
+                    );
                 }
             } else {
                 // Still waiting — request a repaint so we check again next frame
@@ -588,11 +636,11 @@ impl eframe::App for ImpulseApp {
                         }
                     };
                     if let Some(aid) = next {
-                        let _ = self.llm_tx.try_send(LlmInput::Infer {
-                            prompt: "continue jamming, evolve the pattern".to_string(),
-                            one_shot: false,
-                            agent_id: Some(aid),
-                        });
+                        self.send_llm_infer(
+                            "continue jamming, evolve the pattern".to_string(),
+                            false,
+                            Some(aid),
+                        );
                         self.last_jam_kickoff = std::time::Instant::now();
                     }
                 } else {
@@ -729,11 +777,7 @@ impl eframe::App for ImpulseApp {
                      kick pattern and hi-hats. Set the filter to something interesting. \
                      Set pan positions for stereo width and add subtle chorus."
                 );
-                let _ = self.llm_tx.try_send(crate::llm::LlmInput::Infer {
-                    prompt,
-                    one_shot: true,
-                    agent_id: None,
-                });
+                self.send_llm_infer(prompt, true, None);
                 self.log_text
                     .push_str("AUTO → startup prompt sent, generating initial pattern…\n");
             }

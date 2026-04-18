@@ -13,6 +13,20 @@ use crate::state::apply_llm_update;
 use crate::ui::{ImpulseApp, theme};
 
 impl ImpulseApp {
+    /// Send an `LlmInput::Infer` to the LLM thread and update the UI-side
+    /// queue shadow that drives the LLM console's cycle viz.  Wraps every
+    /// in-UI Infer dispatch so the visualiser stays in sync with what the
+    /// LLM thread will see.  Direct API / OSC sends bypass this — they're
+    /// not represented in the viz for v1.
+    pub(crate) fn send_llm_infer(&mut self, prompt: String, one_shot: bool, agent_id: Option<u32>) {
+        self.llm_queue.note_send(agent_id);
+        let _ = self.llm_tx.try_send(crate::llm::LlmInput::Infer {
+            prompt,
+            one_shot,
+            agent_id,
+        });
+    }
+
     /// Drain the audio capture buffer, run analysis, and fire a one-shot LLM
     /// prompt with the results. No-op if no audio has been captured yet.
     pub(crate) fn trigger_listen(&mut self) {
@@ -30,11 +44,7 @@ impl ImpulseApp {
                 snapshot
             );
             self.log_text.push_str("LISTEN → analysing…\n");
-            let _ = self.llm_tx.try_send(LlmInput::Infer {
-                prompt,
-                one_shot: true,
-                agent_id: None,
-            });
+            self.send_llm_infer(prompt, true, None);
             self.audio_analysis = Some(analysis);
             self.listen_pending = true;
         } else {
@@ -57,11 +67,11 @@ impl ImpulseApp {
             Some(ref id) if id == "__free__" => {
                 self.state.write().llm.active_style = Some(id.clone());
                 self.log_text.push_str("Style → Free\n");
-                let _ = self.llm_tx.try_send(LlmInput::Infer {
-                    prompt: "we're going free — be creative and unpredictable, surprise me".into(),
-                    one_shot: true,
-                    agent_id: None,
-                });
+                self.send_llm_infer(
+                    "we're going free — be creative and unpredictable, surprise me".into(),
+                    true,
+                    None,
+                );
             }
             Some(ref id) if id == "__custom__" => {
                 self.state.write().llm.active_style = Some(id.clone());
@@ -95,14 +105,14 @@ impl ImpulseApp {
                 let _ = self.llm_tx.try_send(LlmInput::ResetContext);
                 self.log_text
                     .push_str(&format!("Style → {} (reset)\n", name));
-                let _ = self.llm_tx.try_send(LlmInput::Infer {
-                    prompt: format!(
+                self.send_llm_infer(
+                    format!(
                         "FULL RESET to {} — generate all parameters from scratch.",
                         name
                     ),
-                    one_shot: true,
-                    agent_id: None,
-                });
+                    true,
+                    None,
+                );
             }
         }
         // Propagate style to all sub-agents that don't have style_locked
@@ -410,50 +420,21 @@ impl ImpulseApp {
                 );
             }
 
-            // ── Agent round-robin (right-justified on same line) ────
+            // ── Agent round-robin cycle (right-justified on same line) ──
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                let secs_to_next_fire = self.jam_next_fire.map(|(at, _)| {
+                    at.saturating_duration_since(std::time::Instant::now())
+                        .as_secs_f32()
+                });
                 let s = self.state.read();
-                let agents = &s.llm_agents;
-                let enabled: Vec<_> = agents
-                    .iter()
-                    .filter(|a| s.rack.modules.iter().any(|m| m.id == a.id && m.enabled))
-                    .collect();
-                if !enabled.is_empty() {
-                    let time = ui.ctx().input(|i| i.time) as f32;
-                    // Right-to-left: draw in reverse so they appear left-to-right
-                    for a in enabled.iter().rev() {
-                        let scope_str = a.scope.join(",");
-                        if !scope_str.is_empty() {
-                            ui.label(
-                                egui::RichText::new(format!("[{}]", scope_str))
-                                    .color(theme::IRON)
-                                    .monospace()
-                                    .size(6.5),
-                            );
-                        }
-                        let name_col = if a.is_inferring {
-                            theme::CHALK
-                        } else {
-                            theme::IRON
-                        };
-                        ui.label(
-                            egui::RichText::new(&a.persona_name)
-                                .color(name_col)
-                                .monospace()
-                                .size(7.5),
-                        );
-                        let dot_col = if a.is_inferring {
-                            let p = (time * 4.0 * std::f32::consts::TAU).sin() * 0.3 + 0.7;
-                            egui::Color32::from_gray((220.0 * p) as u8)
-                        } else {
-                            theme::IRON
-                        };
-                        ui.label(egui::RichText::new("●").color(dot_col).size(7.5));
-                    }
-                    if agents.iter().any(|a| a.is_inferring) {
-                        ui.ctx().request_repaint();
-                    }
-                }
+                super::widgets::llm_cycle(
+                    ui,
+                    &s,
+                    &self.llm_queue,
+                    self.jam_next_agent,
+                    secs_to_next_fire,
+                    72.0,
+                );
             });
         });
 
@@ -702,18 +683,10 @@ impl ImpulseApp {
                     .collect()
             };
             if enabled_agents.is_empty() {
-                let _ = self.llm_tx.try_send(LlmInput::Infer {
-                    prompt,
-                    one_shot: true,
-                    agent_id: None,
-                });
+                self.send_llm_infer(prompt, true, None);
             } else {
                 for aid in enabled_agents {
-                    let _ = self.llm_tx.try_send(LlmInput::Infer {
-                        prompt: prompt.clone(),
-                        one_shot: true,
-                        agent_id: Some(aid),
-                    });
+                    self.send_llm_infer(prompt.clone(), true, Some(aid));
                 }
             }
             self.prompt_input.clear();

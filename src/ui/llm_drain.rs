@@ -3,10 +3,38 @@
 // scheduling, and the LlmAction switch (style / persona / spawn / dismiss / …).
 
 use super::{ActivityAction, ActivityEntry, ImpulseApp, ansi_colorize_notes, ui_helpers};
-use crate::llm::LlmInput;
 
 impl ImpulseApp {
     pub(super) fn drain_llm_outputs(&mut self) {
+        // Decrement the LLM-input queue shadow when an agent's
+        // `is_inferring` flips false → true — the LLM thread just popped
+        // a message off the channel.  Runs every frame regardless of
+        // whether any output messages arrived this tick.
+        {
+            let s = self.state.read();
+            let global_now = s.llm.is_inferring;
+            if !self.last_inferring_global && global_now {
+                // Only count as a "global pop" if we have global pending —
+                // an agent-bound inference also sets s.llm.is_inferring,
+                // and is handled below per-agent.
+                if self.llm_queue.global > 0 {
+                    self.llm_queue.note_start(None);
+                }
+            }
+            self.last_inferring_global = global_now;
+
+            for a in &s.llm_agents {
+                let was = self
+                    .last_inferring_per_agent
+                    .get(&a.id)
+                    .copied()
+                    .unwrap_or(false);
+                if !was && a.is_inferring {
+                    self.llm_queue.note_start(Some(a.id));
+                }
+                self.last_inferring_per_agent.insert(a.id, a.is_inferring);
+            }
+        }
         while let Ok(out) = self.llm_rx.try_recv() {
             log::info!(
                 "UI: drain_llm_output received (has_update={}, text_len={})",
@@ -133,11 +161,11 @@ impl ImpulseApp {
                         next_id,
                     ));
                 } else if let Some(aid) = next_id {
-                    let _ = self.llm_tx.try_send(LlmInput::Infer {
-                        prompt: "continue jamming, evolve the pattern".to_string(),
-                        one_shot: false,
-                        agent_id: Some(aid),
-                    });
+                    self.send_llm_infer(
+                        "continue jamming, evolve the pattern".to_string(),
+                        false,
+                        Some(aid),
+                    );
                 }
             }
             use crate::llm::LlmAction;

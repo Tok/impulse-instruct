@@ -9,7 +9,6 @@
 //      controls this TTS module (via control cable) and let it emit
 //      an mc_line; the existing LLM → TTS pipeline handles playback.
 
-use crate::llm::LlmInput;
 use crate::state::TtsModuleState;
 use crate::state::tts_types::NEUTTS_PORT;
 use crate::ui::{ImpulseApp, theme, widgets};
@@ -92,15 +91,11 @@ fn controlling_agent(app: &ImpulseApp, tts_module_id: u32) -> Option<(u32, Strin
 /// Send a one-shot inference prompt to the agent controlling this TTS
 /// module.  The agent's MC/DJ conversation mode causes it to emit an
 /// mc_line which the LLM thread routes back through NeuTTS.
-fn ask_controller(app: &ImpulseApp, tts_module_id: u32, prompt: &str) {
+fn ask_controller(app: &mut ImpulseApp, tts_module_id: u32, prompt: &str) {
     let Some((agent_id, _)) = controlling_agent(app, tts_module_id) else {
         return;
     };
-    let _ = app.llm_tx.try_send(LlmInput::Infer {
-        prompt: prompt.to_string(),
-        one_shot: true,
-        agent_id: Some(agent_id),
-    });
+    app.send_llm_infer(prompt.to_string(), true, Some(agent_id));
 }
 
 /// Load the first line of voices/<name>.txt as a transcript preview.
@@ -370,11 +365,7 @@ pub fn draw_tts(app: &mut ImpulseApp, ui: &mut egui::Ui, module_id: u32) {
                      most in character.  One line only, peak-time energy.{}",
                     theme_hint
                 );
-                let _ = app.llm_tx.try_send(LlmInput::Infer {
-                    prompt,
-                    one_shot: true,
-                    agent_id: Some(*agent_id),
-                });
+                app.send_llm_infer(prompt, true, Some(*agent_id));
             }
         }
     });
