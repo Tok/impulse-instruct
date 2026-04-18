@@ -196,6 +196,24 @@ A detailed log of what's built.
   + cascade lands on `BassTrigger.slide`, 2 apply-layer tests for
   bass-key JSON + partial-update preservation.
 
+### Per-slice amen reverse UI
+
+- `draw_slice_reverse_strip` in `panels/amen.rs` — a per-slice direction
+  row laid out just under the slice-order strip.  Each cell shows `→`
+  forward or `←` reverse, tinted the same way as the order strip
+  (active-slice highlight while the playhead sits on it).
+- When `AmenState.slice_reverses` is empty, every cell shows the global
+  `reverse` flag with a slightly dimmer glyph — "inherits global".  The
+  first click on any cell populates the vec with the current global
+  direction, then flips that slice; subsequent clicks are simple in-place
+  flips.  A `RESET` button clears the vec back to inherit-global mode.
+- Slice-count changes auto-resize the vec: clicking on a slice that
+  didn't exist when the vec was first populated pads up to the new count
+  with the current global direction before flipping.
+- Ties into the state/DSP/params work that landed in 29b1ac2 — users
+  can now drive the glitch-chop feature entirely from the panel without
+  touching the API or LLM JSON.
+
 ### Per-slice amen reverse
 
 - `AmenState.slice_reverses: Vec<bool>` — parallel to `slice_pitches` /
