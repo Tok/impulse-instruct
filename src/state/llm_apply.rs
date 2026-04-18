@@ -115,19 +115,34 @@ pub fn apply_llm_update(state: AppState, update: &serde_json::Value, scope: &[St
             for voice_idx in 0..voice_count {
                 let steps_key = super::llm_apply_seq::bass_voice_field(voice_idx, "steps");
                 let touched_steps = seq.get(&steps_key).is_some();
-                for (field, set_flag) in [
-                    (
-                        "steps",
-                        apply_step_active as fn(&mut crate::state::TB303Step, bool),
-                    ),
+                // bass_steps uses bool semantics (step active/inactive).
+                {
+                    let key = &steps_key;
+                    if !locked.contains(&format!("sequencer.{}", key))
+                        && let Some(arr) = seq.get(key).and_then(|v| v.as_array())
+                        && let Some(pat) = s.sequencer.bass_patterns.get_mut(voice_idx)
+                    {
+                        apply_llm_step_array(arr, pat, MAX_STEPS, apply_step_active);
+                        if voice_idx == 0 {
+                            voice0_dirty = true;
+                        }
+                    }
+                }
+                // bass_accents / bass_slides are now intensity arrays
+                // (0..=1).  Bool and index-list formats still accepted
+                // for backwards compat with older LLM output.
+                fn set_accent(s: &mut crate::state::TB303Step, v: f32) {
+                    s.accent = v;
+                }
+                fn set_slide(s: &mut crate::state::TB303Step, v: f32) {
+                    s.slide = v;
+                }
+                for (field, set_field) in [
                     (
                         "accents",
-                        apply_step_accent as fn(&mut crate::state::TB303Step, bool),
+                        set_accent as fn(&mut crate::state::TB303Step, f32),
                     ),
-                    (
-                        "slides",
-                        apply_step_slide as fn(&mut crate::state::TB303Step, bool),
-                    ),
+                    ("slides", set_slide as fn(&mut crate::state::TB303Step, f32)),
                 ] {
                     let key = super::llm_apply_seq::bass_voice_field(voice_idx, field);
                     if locked.contains(&format!("sequencer.{}", key)) {
@@ -137,7 +152,7 @@ pub fn apply_llm_update(state: AppState, update: &serde_json::Value, scope: &[St
                         continue;
                     };
                     if let Some(pat) = s.sequencer.bass_patterns.get_mut(voice_idx) {
-                        apply_llm_step_array(arr, pat, MAX_STEPS, set_flag);
+                        apply_llm_intensity_array(arr, pat, set_field);
                         if voice_idx == 0 {
                             voice0_dirty = true;
                         }
@@ -151,8 +166,8 @@ pub fn apply_llm_update(state: AppState, update: &serde_json::Value, scope: &[St
                 if touched_steps && let Some(pat) = s.sequencer.bass_patterns.get_mut(voice_idx) {
                     for step in pat.iter_mut() {
                         if !step.active {
-                            step.accent = false;
-                            step.slide = false;
+                            step.accent = 0.0;
+                            step.slide = 0.0;
                         }
                     }
                     if voice_idx == 0 {
@@ -633,11 +648,56 @@ pub fn apply_llm_update(state: AppState, update: &serde_json::Value, scope: &[St
 fn apply_step_active(s: &mut crate::state::TB303Step, a: bool) {
     s.active = a;
 }
-fn apply_step_accent(s: &mut crate::state::TB303Step, a: bool) {
-    s.accent = a;
-}
-fn apply_step_slide(s: &mut crate::state::TB303Step, a: bool) {
-    s.slide = a;
+
+/// Apply an intensity array (`bass_accents` / `bass_slides`) to the
+/// `.accent` or `.slide` field of every step in `pattern`.  Three wire
+/// formats are accepted; precedence matches `apply_llm_step_array`:
+///   • `[]` — clear all (set every step's field to 0.0)
+///   • short (< 16) — integer index list → set listed indices to 1.0
+///   • ≥ 16 — inline per-step values: bools (true→1.0), integers
+///     (0/1 → 0.0/1.0), or floats in [0, 1] (proportional intensity)
+pub fn apply_llm_intensity_array<F>(
+    arr: &[serde_json::Value],
+    pattern: &mut [crate::state::TB303Step],
+    mut set_field: F,
+) where
+    F: FnMut(&mut crate::state::TB303Step, f32),
+{
+    let n = pattern.len().min(MAX_STEPS);
+    if arr.is_empty() {
+        for step in pattern[..n].iter_mut() {
+            set_field(step, 0.0);
+        }
+        return;
+    }
+    let looks_like_index_list = arr.len() < 16 && arr.iter().all(|v| v.is_u64() || v.is_i64());
+    if looks_like_index_list {
+        for step in pattern[..n].iter_mut() {
+            set_field(step, 0.0);
+        }
+        for val in arr {
+            if let Some(idx) = val.as_u64().map(|i| i as usize)
+                && idx < n
+            {
+                set_field(&mut pattern[idx], 1.0);
+            }
+        }
+        return;
+    }
+    // Inline: element-by-element.  Booleans, 0/1 ints, and floats all
+    // valid.  Out-of-range floats are clamped to [0, 1].
+    for (i, val) in arr.iter().enumerate().take(n) {
+        let v = if let Some(b) = val.as_bool() {
+            if b { 1.0 } else { 0.0 }
+        } else if let Some(f) = val.as_f64() {
+            (f as f32).clamp(0.0, 1.0)
+        } else if let Some(u) = val.as_u64() {
+            if u == 0 { 0.0 } else { 1.0 }
+        } else {
+            continue;
+        };
+        set_field(&mut pattern[i], v);
+    }
 }
 
 ///

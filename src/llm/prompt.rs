@@ -378,18 +378,16 @@ STEP SEQUENCER (default 32 steps = two 4/4 bars of 16th notes):
   sequencer.bass_steps    — step array for 303 bass trigger
   sequencer.bass_notes    — MIDI note array (24=C1, 36=C2, 48=C3; acid range 33–48)
   sequencer.bass_pans     — per-step pan -1..1 (0 = use voice static; non-zero overrides)
-  sequencer.bass_accents  — per-step accent flags (parallel to bass_steps).
-                             USE THESE — accent is what turns a bassline into
-                             groove. Target 3–5 accents per 32-step loop: the
-                             downbeat (0), one off-beat push (3 or 6), one
-                             second-half anchor (16), and 1–2 colour hits.
-                             Index list `[0,6,10,19,26]` or boolean array.
-  sequencer.bass_slides   — per-step slide flags. A slide on step N glides
-                             from N into N+1 (so mark the FIRST note of the
-                             pair, not the target). 2–4 slides per 32-step
-                             loop gives classic acid legato. Pair slides with
-                             note-changes (never slide into the same note).
-                             Example: [3, 10, 14, 22].
+  sequencer.bass_accents  — per-step accent intensity 0..=1 (0=none,
+                             1=full, 0.5=half). Index list `[0,6,19]` = full
+                             accents; float array `[1,0,0,0.5,…]` (≥16 long)
+                             = per-step intensity. Mix 1.0/0.5/0.3 for
+                             dynamics — flat 1.0s are less musical. Target
+                             3–5 accents per 32-step loop.
+  sequencer.bass_slides   — per-step slide intensity 0..=1. Step N glides
+                             into N+1 with length proportional to value
+                             (0=instant, 1=full). Only between DIFFERENT
+                             notes. Formats match bass_accents.
   sequencer.kick_a_steps  — Kit A kick steps
   sequencer.snare_a_steps — Kit A snare steps
   sequencer.hihat_a_steps — Kit A closed hihat steps

@@ -272,15 +272,15 @@ mod transition_tests {
     #[test]
     fn toggle_bass_accent_and_slide() {
         let state = AppState::default();
-        assert!(!state.sequencer.bass_pattern[0].accent);
+        assert_eq!(state.sequencer.bass_pattern[0].accent, 0.0);
         let state = toggle_bass_accent(state, 0);
-        assert!(state.sequencer.bass_pattern[0].accent);
+        assert!(state.sequencer.bass_pattern[0].accent > 0.0);
         let state = toggle_bass_accent(state, 0);
-        assert!(!state.sequencer.bass_pattern[0].accent);
+        assert_eq!(state.sequencer.bass_pattern[0].accent, 0.0);
 
-        assert!(!state.sequencer.bass_pattern[2].slide);
+        assert_eq!(state.sequencer.bass_pattern[2].slide, 0.0);
         let state = toggle_bass_slide(state, 2);
-        assert!(state.sequencer.bass_pattern[2].slide);
+        assert!(state.sequencer.bass_pattern[2].slide > 0.0);
     }
 
     #[test]
@@ -520,17 +520,17 @@ mod transition_coverage_tests {
     #[test]
     fn toggle_bass_accent_flips() {
         let s = AppState::default();
-        let was = s.sequencer.bass_pattern[2].accent;
+        let was_on = s.sequencer.bass_pattern[2].accent > 0.0;
         let s = toggle_bass_accent(s, 2);
-        assert_eq!(s.sequencer.bass_pattern[2].accent, !was);
+        assert_eq!(s.sequencer.bass_pattern[2].accent > 0.0, !was_on);
     }
 
     #[test]
     fn toggle_bass_slide_flips() {
         let s = AppState::default();
-        let was = s.sequencer.bass_pattern[1].slide;
+        let was_on = s.sequencer.bass_pattern[1].slide > 0.0;
         let s = toggle_bass_slide(s, 1);
-        assert_eq!(s.sequencer.bass_pattern[1].slide, !was);
+        assert_eq!(s.sequencer.bass_pattern[1].slide > 0.0, !was_on);
     }
 
     #[test]

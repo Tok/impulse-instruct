@@ -23,8 +23,12 @@ pub enum TriggerEvent {
     BassTrigger {
         voice_idx: usize,
         note: u8,
-        accent: bool,
-        slide: bool,
+        /// Accent intensity 0..=1 (0 = no accent).  Previously a bool;
+        /// now proportional so the DSP can scale amp lift by value.
+        accent: f32,
+        /// Slide intensity 0..=1 (0 = no glide).  Controls the glide
+        /// time coefficient on the receiving voice.
+        slide: f32,
         gate_samples: u32, // reserved for gate-off timing
         /// Per-step pan, -1.0..1.0; 0 = use the voice's static pan.
         pan: f32,

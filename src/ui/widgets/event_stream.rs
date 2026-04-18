@@ -39,6 +39,14 @@ pub fn event_stream(
     let inner_w = inner.width();
     let inner_h = inner.height();
 
+    // Wrap-slack: how many steps in the recent past a live-pattern step
+    // still renders as "next fire" before being deemed last-cycle.  Half a
+    // step bridges the 1–2 frame race between `current_step` advancing and
+    // the UI step listener pushing the entry into the log — without the
+    // slack, the just-fired step wrapped to a full cycle ahead and briefly
+    // vanished from screen at every cycle boundary.
+    const WRAP_SLACK: f32 = 0.5;
+
     let seq = &state.sequencer;
     let bpm = seq.bpm;
     let steps = seq.steps;
@@ -199,8 +207,11 @@ pub fn event_stream(
         return;
     }
     let circle_r = (inner_h * 0.08).clamp(3.0, 8.0);
-    // Helper: render a note dot at a given offset (in step units).
-    let render_dot = |off: f32, note: u8, gate: f32, accent: bool| {
+    // Helper: render a note dot at a given offset (in step units).  Accent
+    // scales the radius proportionally (0.0 = normal, 1.0 = full ×1.4);
+    // slide extends a short horizontal tail ahead of the dot, length
+    // proportional to the slide intensity (0 = no tail, 1 = full step).
+    let render_dot = |off: f32, note: u8, gate: f32, accent: f32, slide: f32| {
         let x = now_x + off * step_w;
         if x < inner.min.x - circle_r || x > inner.max.x + circle_r {
             return;
@@ -210,8 +221,22 @@ pub fn event_stream(
         let alpha = ((1.0 - dist * 0.7) * 255.0) as u8;
         let color = theme::note_color(note);
         let gate_scale = 0.7 + gate * 0.3;
-        let r = circle_r * gate_scale * if accent { 1.4 } else { 1.0 };
+        let accent_scale = 1.0 + 0.4 * accent.clamp(0.0, 1.0);
+        let r = circle_r * gate_scale * accent_scale;
         theme::led_flat(&painter, Pos2::new(x, y), r, color, alpha as f32 / 255.0);
+        if slide > 0.0 {
+            // Tail reaches forward by up to one step, fading out along
+            // its length — visualises the glide proportional to slide.
+            let tail_len = slide.clamp(0.0, 1.0) * step_w;
+            let tail_alpha = (alpha as f32 * 0.55) as u8;
+            painter.line_segment(
+                [Pos2::new(x + r, y), Pos2::new(x + r + tail_len, y)],
+                Stroke::new(
+                    (r * 0.55).max(1.0),
+                    Color32::from_rgba_unmultiplied(color.r(), color.g(), color.b(), tail_alpha),
+                ),
+            );
+        }
     };
     if state.ui_prefs.stream_bass_notes {
         // ── PAST: render fired-note history from the log (offset ≤ 0).
@@ -226,7 +251,7 @@ pub fn event_stream(
             if off < -display_steps {
                 continue;
             }
-            render_dot(off, entry.note, entry.gate, entry.accent);
+            render_dot(off, entry.note, entry.gate, entry.accent, entry.slide);
         }
 
         // ── FUTURE: render upcoming notes from each voice's live pattern.
@@ -254,40 +279,42 @@ pub fn event_stream(
                 if !step.active {
                     continue;
                 }
-                // "Next fire" offset — always > 0.
+                // "Next fire" offset, with a small negative slack so a
+                // just-fired step keeps rendering instead of blinking off
+                // for the frame or two before the log catches up.
                 let mut off = step_idx as f32 - local_pos;
-                if off <= 0.0 {
+                if off < -WRAP_SLACK {
                     off += voice_steps as f32;
                 }
                 if off > display_steps {
                     continue;
                 }
-                render_dot(off, step.note, step.gate, step.accent);
+                render_dot(off, step.note, step.gate, step.accent, step.slide);
 
-                // Slide: line to next active step in the same cycle.
-                if step.slide
+                // Slide: diagonal line to next active step, length and
+                // opacity proportional to the slide intensity (0 = none,
+                // 1 = full slide).  0.5 draws a half-length line at half
+                // alpha so a weak slide reads as a subtle lean.
+                if step.slide > 0.0
                     && let Some(next) = pattern.get(step_idx + 1)
                     && next.active
                 {
+                    let s_amount = step.slide.clamp(0.0, 1.0);
                     let x = now_x + off * step_w;
-                    let nx = x + step_w;
                     let y = note_y(step.note);
                     let ny = note_y(next.note);
                     let dist = (off / display_steps).clamp(0.0, 1.0);
-                    let alpha = ((1.0 - dist * 0.7) * 255.0) as u8;
+                    let base_alpha = (1.0 - dist * 0.7) * 255.0;
+                    let alpha = (base_alpha * 0.5 * s_amount) as u8;
                     let color = theme::note_color(step.note);
-                    let r =
-                        circle_r * (0.7 + step.gate * 0.3) * if step.accent { 1.4 } else { 1.0 };
+                    let accent_scale = 1.0 + 0.4 * step.accent.clamp(0.0, 1.0);
+                    let r = circle_r * (0.7 + step.gate * 0.3) * accent_scale;
+                    let nx = x + step_w * s_amount;
                     painter.line_segment(
                         [Pos2::new(x + r, y), Pos2::new(nx - circle_r, ny)],
                         Stroke::new(
                             1.0,
-                            Color32::from_rgba_unmultiplied(
-                                color.r(),
-                                color.g(),
-                                color.b(),
-                                alpha / 2,
-                            ),
+                            Color32::from_rgba_unmultiplied(color.r(), color.g(), color.b(), alpha),
                         ),
                     );
                 }
@@ -303,13 +330,13 @@ pub fn event_stream(
                     continue;
                 }
                 let mut off = step_idx as f32 - local_pos;
-                if off <= 0.0 {
+                if off < -WRAP_SLACK {
                     off += an1x_steps as f32;
                 }
                 if off > display_steps {
                     continue;
                 }
-                render_dot(off, step.note, step.gate, step.accent);
+                render_dot(off, step.note, step.gate, step.accent, step.slide);
             }
         }
         // ── Hoover future notes — same treatment.
@@ -321,13 +348,13 @@ pub fn event_stream(
                     continue;
                 }
                 let mut off = step_idx as f32 - local_pos;
-                if off <= 0.0 {
+                if off < -WRAP_SLACK {
                     off += hoover_steps as f32;
                 }
                 if off > display_steps {
                     continue;
                 }
-                render_dot(off, step.note, step.gate, step.accent);
+                render_dot(off, step.note, step.gate, step.accent, step.slide);
             }
         }
     } // stream_bass_notes
@@ -378,7 +405,7 @@ pub fn event_stream(
                         continue;
                     }
                     let mut off = step_idx as f32 - pos_in_pattern;
-                    if off <= 0.0 {
+                    if off < -WRAP_SLACK {
                         off += steps as f32;
                     }
                     if off > display_steps {

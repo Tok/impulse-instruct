@@ -185,13 +185,13 @@ mod llm_apply_sequencer_tests {
             "sequencer": { "bass_accents": [0, 6, 19] }
         });
         let s = apply_llm_update(s, &update, &[]);
-        assert!(s.sequencer.bass_pattern[0].accent);
-        assert!(!s.sequencer.bass_pattern[1].accent);
-        assert!(s.sequencer.bass_pattern[6].accent);
-        assert!(s.sequencer.bass_pattern[19].accent);
+        assert!(s.sequencer.bass_pattern[0].accent > 0.0);
+        assert_eq!(s.sequencer.bass_pattern[1].accent, 0.0);
+        assert!(s.sequencer.bass_pattern[6].accent > 0.0);
+        assert!(s.sequencer.bass_pattern[19].accent > 0.0);
         // Voice 0's per-voice pattern mirrors the legacy bass_pattern.
-        assert!(s.sequencer.bass_patterns[0][0].accent);
-        assert!(s.sequencer.bass_patterns[0][6].accent);
+        assert!(s.sequencer.bass_patterns[0][0].accent > 0.0);
+        assert!(s.sequencer.bass_patterns[0][6].accent > 0.0);
     }
 
     #[test]
@@ -204,13 +204,13 @@ mod llm_apply_sequencer_tests {
         arr[19] = true;
         let update = serde_json::json!({ "sequencer": { "bass_slides": arr } });
         let s = apply_llm_update(s, &update, &[]);
-        assert!(!s.sequencer.bass_pattern[0].slide);
-        assert!(s.sequencer.bass_pattern[3].slide);
-        assert!(s.sequencer.bass_pattern[10].slide);
-        assert!(s.sequencer.bass_pattern[19].slide);
-        assert!(!s.sequencer.bass_pattern[20].slide);
+        assert_eq!(s.sequencer.bass_pattern[0].slide, 0.0);
+        assert!(s.sequencer.bass_pattern[3].slide > 0.0);
+        assert!(s.sequencer.bass_pattern[10].slide > 0.0);
+        assert!(s.sequencer.bass_pattern[19].slide > 0.0);
+        assert_eq!(s.sequencer.bass_pattern[20].slide, 0.0);
         // Voice 0 mirror.
-        assert!(s.sequencer.bass_patterns[0][3].slide);
+        assert!(s.sequencer.bass_patterns[0][3].slide > 0.0);
     }
 
     #[test]
@@ -221,8 +221,8 @@ mod llm_apply_sequencer_tests {
             "sequencer": { "bass_accents": [0, 4, 8] }
         });
         let s = apply_llm_update(s, &update, &[]);
-        assert!(!s.sequencer.bass_pattern[0].accent);
-        assert!(!s.sequencer.bass_pattern[4].accent);
+        assert_eq!(s.sequencer.bass_pattern[0].accent, 0.0);
+        assert_eq!(s.sequencer.bass_pattern[4].accent, 0.0);
     }
 
     #[test]
@@ -257,6 +257,52 @@ mod llm_apply_sequencer_tests {
     }
 
     #[test]
+    fn sequencer_bass_accents_proportional_float_array() {
+        // New behaviour: LLM can emit float intensities 0..=1 (not just
+        // bools).  Inline per-step format requires ≥16 values.
+        let s = AppState::default();
+        let mut accents = vec![0.0_f32; 32];
+        accents[0] = 1.0; // full accent on the downbeat
+        accents[4] = 0.5; // half-accent colour hit
+        accents[12] = 0.3; // lighter
+        let update = serde_json::json!({ "sequencer": { "bass_accents": accents } });
+        let s = apply_llm_update(s, &update, &[]);
+        assert!((s.sequencer.bass_pattern[0].accent - 1.0).abs() < 1e-6);
+        assert!((s.sequencer.bass_pattern[4].accent - 0.5).abs() < 1e-6);
+        assert!((s.sequencer.bass_pattern[12].accent - 0.3).abs() < 1e-6);
+        assert_eq!(s.sequencer.bass_pattern[1].accent, 0.0);
+        // Voice 0 mirror follows.
+        assert!((s.sequencer.bass_patterns[0][4].accent - 0.5).abs() < 1e-6);
+    }
+
+    #[test]
+    fn sequencer_bass_slides_proportional_float_array() {
+        let s = AppState::default();
+        let mut slides = vec![0.0_f32; 32];
+        slides[3] = 0.2; // light glide
+        slides[10] = 1.0; // full glide
+        let update = serde_json::json!({ "sequencer": { "bass_slides": slides } });
+        let s = apply_llm_update(s, &update, &[]);
+        assert!((s.sequencer.bass_pattern[3].slide - 0.2).abs() < 1e-6);
+        assert!((s.sequencer.bass_pattern[10].slide - 1.0).abs() < 1e-6);
+        assert_eq!(s.sequencer.bass_pattern[0].slide, 0.0);
+    }
+
+    #[test]
+    fn sequencer_bass_accents_bool_array_still_accepted() {
+        // Backwards compat: old LLM output emitted bool inline arrays.
+        let s = AppState::default();
+        let mut accents: Vec<bool> = vec![false; 32];
+        accents[0] = true;
+        accents[8] = true;
+        let update = serde_json::json!({ "sequencer": { "bass_accents": accents } });
+        let s = apply_llm_update(s, &update, &[]);
+        assert_eq!(s.sequencer.bass_pattern[0].accent, 1.0);
+        assert_eq!(s.sequencer.bass_pattern[8].accent, 1.0);
+        assert_eq!(s.sequencer.bass_pattern[1].accent, 0.0);
+    }
+
+    #[test]
     fn sequencer_bass2_pans_applied() {
         let s = AppState::default();
         let mut pans = vec![0.0_f32; 32];
@@ -283,12 +329,12 @@ mod llm_apply_sequencer_tests {
         let s = apply_llm_update(s, &update, &[]);
         assert_eq!(s.sequencer.bass_patterns[1][0].note, 48);
         assert_eq!(s.sequencer.bass_patterns[1][3].note, 36);
-        assert!(s.sequencer.bass_patterns[1][0].accent);
-        assert!(s.sequencer.bass_patterns[1][3].accent);
-        assert!(s.sequencer.bass_patterns[1][0].slide);
+        assert!(s.sequencer.bass_patterns[1][0].accent > 0.0);
+        assert!(s.sequencer.bass_patterns[1][3].accent > 0.0);
+        assert!(s.sequencer.bass_patterns[1][0].slide > 0.0);
         // Voice 0 untouched.
         assert_eq!(s.sequencer.bass_pattern[0].note, 36); // default C2
-        assert!(!s.sequencer.bass_pattern[0].accent);
+        assert_eq!(s.sequencer.bass_pattern[0].accent, 0.0);
     }
 
     #[test]

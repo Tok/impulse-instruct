@@ -415,7 +415,8 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                             }
                             let abs = page_start + i;
                             beat_div(ui, j, abs);
-                            let is_accent = voice_page.get(i).map(|s| s.accent).unwrap_or(false);
+                            let is_accent =
+                                voice_page.get(i).map(|s| s.accent > 0.0).unwrap_or(false);
                             let enabled = abs < voice_steps;
                             let color = if !enabled || !is_accent {
                                 theme::PIT
@@ -466,7 +467,8 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                             }
                             let abs = page_start + i;
                             beat_div(ui, j, abs);
-                            let is_slide = voice_page.get(i).map(|s| s.slide).unwrap_or(false);
+                            let is_slide =
+                                voice_page.get(i).map(|s| s.slide > 0.0).unwrap_or(false);
                             let enabled = abs < voice_steps;
                             let color = if !enabled || !is_slide {
                                 theme::PIT

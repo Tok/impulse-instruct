@@ -232,17 +232,26 @@ pub fn set_bass_step(state: AppState, step: usize, note: u8, active: bool) -> Ap
     set_bass_step_voice(state, vi, step, note, active)
 }
 
-/// Toggle accent on a 303 step on a specific voice.
+/// Toggle accent on a 303 step on a specific voice.  Intensity flips
+/// between 0.0 (off) and 1.0 (full accent); non-zero values round to
+/// "on" semantics so a partially-set accent toggles cleanly back to 0.
 pub fn toggle_bass_accent_voice(state: AppState, voice_idx: usize, step: usize) -> AppState {
     let mut s = state;
     let vi = voice_idx.min(crate::state::MAX_BASS_VOICES - 1);
+    let new_val = if let Some(pat) = s.sequencer.bass_patterns.get(vi)
+        && step < pat.len()
+    {
+        if pat[step].accent > 0.0 { 0.0 } else { 1.0 }
+    } else {
+        1.0
+    };
     if let Some(pat) = s.sequencer.bass_patterns.get_mut(vi)
         && step < pat.len()
     {
-        pat[step].accent = !pat[step].accent;
+        pat[step].accent = new_val;
     }
     if vi == 0 && step < s.sequencer.bass_pattern.len() {
-        s.sequencer.bass_pattern[step].accent = !s.sequencer.bass_pattern[step].accent;
+        s.sequencer.bass_pattern[step].accent = new_val;
     }
     s
 }
@@ -257,13 +266,20 @@ pub fn toggle_bass_accent(state: AppState, step: usize) -> AppState {
 pub fn toggle_bass_slide_voice(state: AppState, voice_idx: usize, step: usize) -> AppState {
     let mut s = state;
     let vi = voice_idx.min(crate::state::MAX_BASS_VOICES - 1);
+    let new_val = if let Some(pat) = s.sequencer.bass_patterns.get(vi)
+        && step < pat.len()
+    {
+        if pat[step].slide > 0.0 { 0.0 } else { 1.0 }
+    } else {
+        1.0
+    };
     if let Some(pat) = s.sequencer.bass_patterns.get_mut(vi)
         && step < pat.len()
     {
-        pat[step].slide = !pat[step].slide;
+        pat[step].slide = new_val;
     }
     if vi == 0 && step < s.sequencer.bass_pattern.len() {
-        s.sequencer.bass_pattern[step].slide = !s.sequencer.bass_pattern[step].slide;
+        s.sequencer.bass_pattern[step].slide = new_val;
     }
     s
 }

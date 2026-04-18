@@ -421,8 +421,8 @@ pub fn draw_piano(app: &mut ImpulseApp, ui: &mut egui::Ui, ctx: &egui::Context) 
                 .push(AudioCommand::Trigger(TriggerEvent::BassTrigger {
                     voice_idx: 0,
                     note,
-                    accent: false,
-                    slide: false,
+                    accent: 0.0,
+                    slide: 0.0,
                     gate_samples: 22050,
                     pan: 0.0,
                 }));

@@ -539,7 +539,7 @@ fn apply_music_api_chord_sets_accent() {
     let api = json_obj(r#"{ "chord": { "root": "C", "quality": "major" } }"#);
     let out = apply_music_api(state, &api);
     assert!(
-        out.sequencer.bass_pattern[0].accent,
+        out.sequencer.bass_pattern[0].accent > 0.0,
         "chord step should have accent"
     );
 }

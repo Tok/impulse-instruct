@@ -462,8 +462,8 @@ mod pattern_temperature_tests {
         TB303Step {
             active: true,
             note,
-            accent,
-            slide: false,
+            accent: if accent { 1.0 } else { 0.0 },
+            slide: 0.0,
             gate,
             pan: 0.0,
         }

@@ -34,8 +34,12 @@ pub(super) struct Bass303 {
     amp_phase: EnvPhase,
     filt_phase: EnvPhase,
     gate: bool,
-    accent: bool,
-    slide: bool,
+    /// Accent intensity 0..=1 — scales the amp peak and cutoff boost
+    /// proportionally (0 = flat, 1 = full accent).
+    accent: f32,
+    /// Slide intensity 0..=1 — scales the portamento time applied when
+    /// gliding into the next note (0 = instant, 1 = full glide).
+    slide: f32,
     filter: LadderFilter,
     svf_low: f32,
     svf_band: f32,
@@ -60,8 +64,8 @@ impl Default for Bass303 {
             amp_phase: EnvPhase::Idle,
             filt_phase: EnvPhase::Idle,
             gate: false,
-            accent: false,
-            slide: false,
+            accent: 0.0,
+            slide: 0.0,
             filter: LadderFilter::default(),
             svf_low: 0.0,
             svf_band: 0.0,
@@ -132,19 +136,20 @@ pub(super) fn lfo_wave(p: f32, waveform: u8) -> f32 {
 }
 
 impl Bass303 {
-    pub(super) fn trigger(&mut self, note: u8, accent: bool, slide: bool, tuning: u8) {
+    pub(super) fn trigger(&mut self, note: u8, accent: f32, slide: f32, tuning: u8) {
         let new_freq = super::dsp_util::midi_to_hz_tuned(note, tuning);
-        // `slide` is a property of the NEW step: it asks the voice to
-        // glide *into* this note.  The previously-stored `self.slide`
-        // tracks whether the last trigger asked for a glide — that is
-        // what decides whether pitch jumps or is held for smoothing.
-        let glide_in = self.slide;
+        // `slide` is a property of the NEW step (intensity 0..=1): any
+        // positive value asks the voice to glide *into* this note.  The
+        // previously-stored `self.slide` tracks whether the last trigger
+        // asked for a glide — that is what decides whether pitch jumps
+        // or is held for smoothing.
+        let glide_in = self.slide > 0.0;
         if !glide_in {
             self.freq = new_freq;
         }
         self.target_freq = new_freq;
-        self.accent = accent;
-        self.slide = slide;
+        self.accent = accent.clamp(0.0, 1.0);
+        self.slide = slide.clamp(0.0, 1.0);
         self.gate = true;
         // Always restart the envelope attack.  Keeping the old "slide
         // skips envelope retrigger" behaviour caused slide-into notes to
@@ -179,8 +184,11 @@ impl Bass303 {
     pub(super) fn process(&mut self, p: &AudioParams, vp: &params::BassVoiceParams) -> f32 {
         let sr = p.sample_rate;
 
-        if self.slide {
-            let slide_time = 0.01 + vp.portamento_time * 0.49;
+        if self.slide > 0.0 {
+            // Slide amount scales the glide time proportionally — a half-
+            // strength slide completes its glide in half the time of a
+            // full slide at the same portamento setting.
+            let slide_time = 0.01 + vp.portamento_time * 0.49 * self.slide;
             let slide_coeff = (-1.0 / (sr * slide_time)).exp();
             self.freq = self.freq + (self.target_freq - self.freq) * (1.0 - slide_coeff);
         }
@@ -283,11 +291,10 @@ impl Bass303 {
         let noise = self.noise_gen.next();
         let osc = osc + sub * vp.sub_osc_level + noise * vp.noise_mix;
 
-        let accent_mult = if self.accent {
-            vp.accent_level * 0.4 + 0.8
-        } else {
-            1.0
-        };
+        // Filter-env accent boost scales linearly with accent intensity —
+        // no accent → 1.0 (unchanged), full accent → full boost.
+        let full_accent_mult = vp.accent_level * 0.4 + 0.8;
+        let accent_mult = 1.0 + self.accent * (full_accent_mult - 1.0);
         // Legacy filter-env decay time (used when filter_sustain == 0 — the
         // 303 behavior).  For 101 shaping, filter_attack / filter_sustain /
         // filter_release take over via the phase machine.
@@ -303,8 +310,10 @@ impl Bass303 {
         let amp_attack_c = env_coeff(sr, amp_attack_t.max(0.001));
         let amp_decay_c = env_coeff(sr, amp_decay_t);
         let amp_release_c = env_coeff(sr, amp_release_t.max(0.001));
-        // Accent lifts the amp peak target the same way the old code did.
-        let amp_peak = if self.accent { 1.0 } else { 0.8 };
+        // Accent lifts the amp peak target proportionally: 0 → 0.8
+        // (unaccented level), 1 → 1.0 (full peak).  Values in between
+        // glide the peak linearly so a half-accent is audibly softer.
+        let amp_peak = 0.8 + 0.2 * self.accent;
         match self.amp_phase {
             EnvPhase::Idle => {
                 self.amp_env = 0.0;
@@ -479,9 +488,9 @@ mod tests {
         v.amp_env = 0.0;
         v.filt_phase = EnvPhase::Release;
         v.filt_env = 0.0;
-        v.slide = true; // previous trigger was a slide, so glide-in is armed
+        v.slide = 1.0; // previous trigger was a slide, so glide-in is armed
         v.freq = 110.0;
-        v.trigger(48, false, true, 0); // new slide note
+        v.trigger(48, 0.0, 1.0, 0); // new slide note
         assert!(matches!(v.amp_phase, EnvPhase::Attack));
         assert!(matches!(v.filt_phase, EnvPhase::Attack));
         // freq preserved for glide; target_freq updated.
@@ -492,9 +501,9 @@ mod tests {
     #[test]
     fn non_slide_trigger_jumps_pitch() {
         let mut v = Bass303::default();
-        v.slide = false; // previous was not a slide
+        v.slide = 0.0; // previous was not a slide
         v.freq = 110.0;
-        v.trigger(60, false, false, 0);
+        v.trigger(60, 0.0, 0.0, 0);
         let expected = super::super::dsp_util::midi_to_hz_tuned(60, 0);
         assert!(
             (v.freq - expected).abs() < 1e-3,

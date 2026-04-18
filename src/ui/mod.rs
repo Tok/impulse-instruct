@@ -132,8 +132,10 @@ pub struct MelodicLogEntry {
     pub note: u8,
     /// Step gate length 0..1 — used to scale the dot size.
     pub gate: f32,
-    /// Whether the step was accented (renders larger).
-    pub accent: bool,
+    /// Accent intensity 0..=1 — renders proportionally larger / brighter.
+    pub accent: f32,
+    /// Slide intensity 0..=1 — renders proportionally longer trail.
+    pub slide: f32,
 }
 
 /// One entry in the drum-hit history — analogous to `MelodicLogEntry`
@@ -661,12 +663,13 @@ impl eframe::App for ImpulseApp {
                 self.last_step_time = ctx.input(|i| i.time);
                 let fired_at = s.global_step_count;
                 let seq = &s.sequencer;
-                let mut push = |note: u8, gate: f32, accent: bool| {
+                let mut push = |note: u8, gate: f32, accent: f32, slide: f32| {
                     self.melodic_log.push_back(MelodicLogEntry {
                         fired_at,
                         note,
                         gate,
                         accent,
+                        slide,
                     });
                 };
                 // Bass voices (multi-voice) — voice 0 mirrors bass_pattern.
@@ -690,7 +693,7 @@ impl eframe::App for ImpulseApp {
                     if let Some(st) = pattern.get(step % voice_steps)
                         && st.active
                     {
-                        push(st.note, st.gate, st.accent);
+                        push(st.note, st.gate, st.accent, st.slide);
                     }
                 }
                 // AN1X
@@ -699,7 +702,7 @@ impl eframe::App for ImpulseApp {
                     if let Some(st) = seq.an1x_pattern.get(step % n)
                         && st.active
                     {
-                        push(st.note, st.gate, st.accent);
+                        push(st.note, st.gate, st.accent, st.slide);
                     }
                 }
                 // Hoover
@@ -708,7 +711,7 @@ impl eframe::App for ImpulseApp {
                     if let Some(st) = seq.hoover_pattern.get(step % n)
                         && st.active
                     {
-                        push(st.note, st.gate, st.accent);
+                        push(st.note, st.gate, st.accent, st.slide);
                     }
                 }
                 while self.melodic_log.len() > MELODIC_LOG_CAP {

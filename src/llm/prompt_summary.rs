@@ -136,7 +136,7 @@ pub fn bass_groove_summary(state: &AppState) -> String {
         .bass_pattern
         .iter()
         .enumerate()
-        .filter(|(_, s)| s.active && s.accent)
+        .filter(|(_, s)| s.active && s.accent > 0.0)
         .map(|(i, _)| i)
         .collect();
     let slides: Vec<usize> = state
@@ -144,7 +144,7 @@ pub fn bass_groove_summary(state: &AppState) -> String {
         .bass_pattern
         .iter()
         .enumerate()
-        .filter(|(_, s)| s.active && s.slide)
+        .filter(|(_, s)| s.active && s.slide > 0.0)
         .map(|(i, _)| i)
         .collect();
     let fmt = |v: &[usize]| -> String {
@@ -203,9 +203,9 @@ mod tests {
     fn groove_summary_reports_accents_and_slides() {
         let mut s = AppState::default();
         s.sequencer.bass_pattern[0].active = true;
-        s.sequencer.bass_pattern[0].accent = true;
+        s.sequencer.bass_pattern[0].accent = 1.0;
         s.sequencer.bass_pattern[3].active = true;
-        s.sequencer.bass_pattern[3].slide = true;
+        s.sequencer.bass_pattern[3].slide = 1.0;
         let out = bass_groove_summary(&s);
         assert!(out.contains("Accent steps: 0"));
         assert!(out.contains("Slide steps: 3"));
