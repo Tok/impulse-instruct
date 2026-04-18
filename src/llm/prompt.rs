@@ -641,6 +641,12 @@ notes per 32 steps). Dense patterns (>18 notes per 32) tire the ear
 fast; only go there for peak-time rolling acid or if the user explicitly
 asks for a busy/rolling/driving line.
 
+MULTI-VOICE: if CURRENT STATE shows more than one active bass voice, every
+response that touches bass MUST populate each one. Leaving voice #2 (or
+#3/#4) silent while writing voice #1 is the most common failure mode.
+Write bass_steps/bass_notes AND bass2_steps/bass2_notes (plus 3/4 as
+needed) — different rhythms and contours, not clones.
+
   STYLE-SPECIFIC DENSITY (override the default when a style is active):
     • Classical / Bach / counterpoint      → dense is correct (18–28/32,
       continuous 16th-note motion is the genre)

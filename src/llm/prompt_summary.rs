@@ -26,7 +26,9 @@ pub fn bass_active_steps_summary(state: &AppState) -> String {
 }
 
 /// "Active bass voices (N of M): [#1, #2, …]" so the agent knows how many
-/// voices are live and which indices to target.
+/// voices are live and which indices to target.  When more than one voice
+/// is active the line is followed by an explicit directive — the default
+/// failure mode is writing only `bass_*` and ignoring the other voices.
 pub fn bass_voices_summary(state: &AppState) -> String {
     let active: Vec<usize> = state
         .bass_voices
@@ -35,7 +37,7 @@ pub fn bass_voices_summary(state: &AppState) -> String {
         .filter(|(_, v)| v.enabled)
         .map(|(i, _)| i)
         .collect();
-    format!(
+    let header = format!(
         "Active bass voices ({} of {}): [{}]",
         active.len(),
         state.bass_voices.len(),
@@ -44,6 +46,31 @@ pub fn bass_voices_summary(state: &AppState) -> String {
             .map(|i| format!("#{}", i + 1))
             .collect::<Vec<_>>()
             .join(", ")
+    );
+    if active.len() < 2 {
+        return header;
+    }
+    // Multi-voice hard rule — listed directly alongside the count so it
+    // can't be skimmed past.
+    let per_voice_keys = active
+        .iter()
+        .map(|&i| {
+            if i == 0 {
+                "bass_steps+bass_notes".to_string()
+            } else {
+                format!("bass{i}_steps+bass{i}_notes", i = i + 1)
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(" AND ");
+    format!(
+        "{}\n\
+         MULTI-VOICE RULE: when you write any bass pattern (initial jam, \
+         style change, or rewrite), you MUST populate a DISTINCT pattern \
+         for EACH active voice — write {}. Do not write only voice #1 and \
+         leave the others silent. Give each voice its own rhythm and \
+         contour so they counterpoint rather than double.",
+        header, per_voice_keys
     )
 }
 
@@ -96,6 +123,26 @@ mod tests {
         assert!(out.starts_with("Active bass voices (2 of"));
         assert!(out.contains("#1"));
         assert!(out.contains("#2"));
+    }
+
+    #[test]
+    fn voices_summary_emits_multi_voice_rule() {
+        let mut s = AppState::default();
+        s.bass_voices[0].enabled = true;
+        s.bass_voices[1].enabled = true;
+        let out = bass_voices_summary(&s);
+        assert!(out.contains("MULTI-VOICE RULE"));
+        assert!(out.contains("bass_steps+bass_notes"));
+        assert!(out.contains("bass2_steps+bass2_notes"));
+    }
+
+    #[test]
+    fn voices_summary_single_voice_no_multi_rule() {
+        let mut s = AppState::default();
+        s.bass_voices[0].enabled = true;
+        // voice 1 disabled — only voice 0 active, no multi-voice directive
+        let out = bass_voices_summary(&s);
+        assert!(!out.contains("MULTI-VOICE RULE"));
     }
 
     #[test]
