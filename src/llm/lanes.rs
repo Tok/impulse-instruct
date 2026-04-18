@@ -408,11 +408,34 @@ fn scale_notes_in_c2_c3(state: &AppState) -> String {
 /// not even listed in `properties`, making `additionalProperties: false`
 /// a hard ceiling.
 pub fn lane_schema(lane: LaneKind) -> serde_json::Value {
+    // Bool / int arrays for step & note fields.  `min_steps_array` keeps a
+    // floor of 2 indices so the grammar forbids the model-friendly but
+    // musically-useless `[]` — it has to commit to at least two hits.
+    // Plain `bool_array` is for optional arrays where [] is legitimate.
     let bool_array =
         serde_json::json!({ "type": "array", "items": { "type": "boolean" }, "maxItems": 64 });
-    let note_array = serde_json::json!({ "type": "array", "items": { "type": "integer", "minimum": 0, "maximum": 127 }, "maxItems": 64, "minItems": 1 });
-    let intensity_array = serde_json::json!({ "type": "array", "items": { "type": "number", "minimum": 0.0, "maximum": 1.0 }, "maxItems": 64 });
-    let pan_array = serde_json::json!({ "type": "array", "items": { "type": "number", "minimum": -1.0, "maximum": 1.0 }, "maxItems": 64 });
+    let min_steps_array = serde_json::json!({
+        "type": "array",
+        "items": { "type": "integer", "minimum": 0, "maximum": 64 },
+        "minItems": 2,
+        "maxItems": 64
+    });
+    let note_array = serde_json::json!({
+        "type": "array",
+        "items": { "type": "integer", "minimum": 0, "maximum": 127 },
+        "minItems": 4,
+        "maxItems": 64
+    });
+    let intensity_array = serde_json::json!({
+        "type": "array",
+        "items": { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+        "maxItems": 64
+    });
+    let pan_array = serde_json::json!({
+        "type": "array",
+        "items": { "type": "number", "minimum": -1.0, "maximum": 1.0 },
+        "maxItems": 64
+    });
 
     let common_top = |props: serde_json::Value, required: Vec<&str>| -> serde_json::Value {
         // `_thinking` / `_comment` stay in `properties` (grammar accepts
@@ -450,7 +473,12 @@ pub fn lane_schema(lane: LaneKind) -> serde_json::Value {
             let slides_key = format!("{prefix}_slides");
             let pans_key = format!("{prefix}_pans");
             let mut seq_props = serde_json::Map::new();
-            seq_props.insert(steps_key.clone(), bool_array.clone());
+            // Bass pattern arrays: steps + notes are the load-bearing
+            // required fields — use the min-enforced variants so the
+            // grammar can't emit `[]`.  Accents/slides allow empty
+            // (user may want an un-accented line) but we still require
+            // the key to be present via `required: [...]`.
+            seq_props.insert(steps_key.clone(), min_steps_array.clone());
             seq_props.insert(notes_key.clone(), note_array.clone());
             seq_props.insert(accents_key.clone(), intensity_array.clone());
             seq_props.insert(slides_key.clone(), intensity_array.clone());
@@ -517,11 +545,12 @@ pub fn lane_schema(lane: LaneKind) -> serde_json::Value {
             let sequencer = serde_json::json!({
                 "type": "object",
                 "properties": {
-                    "kick_a_steps":  bool_array.clone(),
-                    "snare_a_steps": bool_array.clone(),
-                    "hihat_a_steps": bool_array.clone(),
+                    // Required → must emit ≥2 indices, can't be [].
+                    "kick_a_steps":  min_steps_array.clone(),
+                    "snare_a_steps": min_steps_array.clone(),
+                    "hihat_a_steps": min_steps_array.clone(),
                 },
-                "required": ["kick_a_steps"],
+                "required": ["kick_a_steps", "snare_a_steps", "hihat_a_steps"],
                 "additionalProperties": false,
             });
             common_top(
@@ -533,12 +562,12 @@ pub fn lane_schema(lane: LaneKind) -> serde_json::Value {
             let sequencer = serde_json::json!({
                 "type": "object",
                 "properties": {
-                    "kick_b_steps":  bool_array.clone(),
-                    "snare_b_steps": bool_array.clone(),
-                    "clap_b_steps":  bool_array.clone(),
-                    "hihat_b_steps": bool_array.clone(),
+                    "kick_b_steps":  min_steps_array.clone(),
+                    "snare_b_steps": min_steps_array.clone(),
+                    "clap_b_steps":  min_steps_array.clone(),
+                    "hihat_b_steps": min_steps_array.clone(),
                 },
-                "required": ["kick_b_steps"],
+                "required": ["kick_b_steps", "hihat_b_steps"],
                 "additionalProperties": false,
             });
             common_top(

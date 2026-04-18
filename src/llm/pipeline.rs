@@ -100,6 +100,14 @@ pub fn run_pipeline<B: PipelineBackend>(
         let schema = lane_schema(lane);
         match backend.infer_lane_json(&system, user_prompt, &schema, sampling) {
             Ok(raw) => {
+                // Log the raw lane output before filtering so we can see
+                // what the model actually emitted — essential when a lane
+                // "applies" but produces silent output.
+                log::info!(
+                    "pipeline: {} raw = {}",
+                    lane.label(),
+                    truncate(&raw.to_string(), 400)
+                );
                 let filtered = filter_lane_output(lane, raw);
                 let scope = lane_apply_scope(lane);
                 state = crate::state::apply_llm_update(state, &filtered, &scope);

@@ -67,16 +67,19 @@ pub fn build_planner_prompt(state: &AppState) -> String {
          \n\
          RULES:\n\
          1. Only include lanes whose voice/module is ACTIVE (see the \
-            active_voices list above). Exception: `settings`, `fx`, `mod`, \
-            `rack` are always available.\n\
+            active_voices list above). Exception: `settings`, `fx`, `mod` \
+            are always available.\n\
          2. Narrow user commands pick ONE lane. `rewrite bass 2` → [bass2]. \
             `add reverb` → [fx]. `change the kick` → [kit_a] or [kit_b].\n\
-         3. Broad commands (`acid house`, `start a jam`, `make a track`, \
-            style change) pick a FULL jam: settings first, then drums, \
-            then bass, then fx.\n\
-         4. Order matters — settings always first, drums before bass \
+         3. Broad commands (`start a jam`, `make a track`, \"make a pattern\") \
+            pick a FULL jam: drums, bass, fx. Skip `settings` unless the user \
+            explicitly asks for a tempo/key change.\n\
+         4. `rack` and `mod` are NICHE — only include them if the user \
+            explicitly asks (\"add an 808\", \"wire the delay\", \"add an LFO\"). \
+            Never fire them as part of a generic groove.\n\
+         5. Order matters — settings (if included) first, drums before bass \
             (bass can reference the kick grid), fx last.\n\
-         5. Keep it minimal. Fewer lanes = faster response. Don't fire \
+         6. Keep it minimal. Fewer lanes = faster response. Don't fire \
             lanes the user didn't ask for.\n\
          \n\
          Output JSON only: {{\"lanes\": [\"settings\", \"kit_a\", \"bass1\", \"fx\"], \
