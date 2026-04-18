@@ -306,15 +306,11 @@ impl ImpulseApp {
             ui.separator();
 
             // ── Pipeline progress (always visible — empty when idle) ───
-            // Detect new failures by watching `failed_count` grow; trigger
-            // a 1-second white flash instead of permanently tinting red.
+            // Two stacked bars, no red tint.  Top = lane-completion
+            // fraction; bottom = error-count fraction (same denominator,
+            // visible only when failures > 0).  Errors render in a
+            // dimmer gray, not red.
             let progress = self.state.read().llm.pipeline_progress.clone();
-            let now_t = ui.ctx().input(|i| i.time);
-            let total_failed = progress.as_ref().map(|p| p.failed_count).unwrap_or(0);
-            if total_failed > self.last_pipeline_failed_count {
-                self.pipeline_flash_until = now_t + 1.0;
-            }
-            self.last_pipeline_failed_count = total_failed;
 
             ui.label(
                 egui::RichText::new("PIPE")
@@ -322,37 +318,43 @@ impl ImpulseApp {
                     .size(8.0)
                     .color(theme::ASH),
             );
-            let (bar_rect, _) =
-                ui.allocate_exact_size(egui::vec2(180.0, 6.0), egui::Sense::hover());
+            let bar_w = 180.0_f32;
+            let bar_h = 3.0_f32;
+            let bar_gap = 1.0_f32;
+            let group_h = bar_h * 2.0 + bar_gap;
+            let (group_rect, _) =
+                ui.allocate_exact_size(egui::vec2(bar_w, group_h), egui::Sense::hover());
             let pa = ui.painter();
-            pa.rect_filled(bar_rect, 1.0, egui::Color32::from_gray(38));
+            let progress_rect = egui::Rect::from_min_size(group_rect.min, egui::vec2(bar_w, bar_h));
+            let error_rect = egui::Rect::from_min_size(
+                egui::pos2(group_rect.min.x, group_rect.min.y + bar_h + bar_gap),
+                egui::vec2(bar_w, bar_h),
+            );
+            pa.rect_filled(progress_rect, 1.0, egui::Color32::from_gray(38));
+            pa.rect_filled(error_rect, 1.0, egui::Color32::from_gray(38));
 
-            let frac = match &progress {
-                Some(p) if p.total_lanes > 0 => p.lanes_done as f32 / p.total_lanes as f32,
-                _ => 0.0,
+            let (frac, err_frac, total_failed) = match &progress {
+                Some(p) if p.total_lanes > 0 => (
+                    p.lanes_done as f32 / p.total_lanes as f32,
+                    p.failed_count as f32 / p.total_lanes as f32,
+                    p.failed_count,
+                ),
+                _ => (0.0, 0.0, 0),
             };
-            let fill_w = (bar_rect.width() * frac.clamp(0.0, 1.0)).max(0.0);
-            let flashing = now_t < self.pipeline_flash_until;
-            let bar_color = if flashing {
-                // Pulse white→light-gray over the flash window.
-                let t = ((self.pipeline_flash_until - now_t) as f32).clamp(0.0, 1.0);
-                let g = (180.0 + 75.0 * t) as u8;
-                egui::Color32::from_gray(g)
-            } else {
-                egui::Color32::from_gray(140)
-            };
-            // While flashing, paint the FULL bar so the acknowledgement is
-            // unmistakable even when the pipeline has just finished and the
-            // progress fraction would otherwise be 0 again.
-            let active_w = if flashing { bar_rect.width() } else { fill_w };
-            if active_w > 0.0 {
+            let progress_w = (bar_w * frac.clamp(0.0, 1.0)).max(0.0);
+            if progress_w > 0.0 {
                 pa.rect_filled(
-                    egui::Rect::from_min_size(
-                        bar_rect.min,
-                        egui::vec2(active_w, bar_rect.height()),
-                    ),
+                    egui::Rect::from_min_size(progress_rect.min, egui::vec2(progress_w, bar_h)),
                     1.0,
-                    bar_color,
+                    egui::Color32::from_gray(140),
+                );
+            }
+            let error_w = (bar_w * err_frac.clamp(0.0, 1.0)).max(0.0);
+            if error_w > 0.0 {
+                pa.rect_filled(
+                    egui::Rect::from_min_size(error_rect.min, egui::vec2(error_w, bar_h)),
+                    1.0,
+                    egui::Color32::from_gray(95),
                 );
             }
 
@@ -366,6 +368,11 @@ impl ImpulseApp {
                 },
                 None => "idle".to_string(),
             };
+            let label = if total_failed > 0 {
+                format!("{} · {} err", label, total_failed)
+            } else {
+                label
+            };
             ui.label(egui::RichText::new(label).monospace().size(8.0).color(
                 if progress.is_some() {
                     theme::FOG
@@ -373,8 +380,8 @@ impl ImpulseApp {
                     theme::IRON
                 },
             ));
-            // Keep animating while pipeline is live or the flash is ongoing.
-            if progress.is_some() || flashing {
+            // Keep animating while pipeline is live.
+            if progress.is_some() {
                 ui.ctx().request_repaint();
             }
             ui.separator();

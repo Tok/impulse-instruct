@@ -197,12 +197,6 @@ pub struct ImpulseApp {
     /// can't jitter when the audio thread updates state between the
     /// step-change detection and the header's render-time state read.
     last_step_global: u64,
-    /// Pipeline failure flash: cumulative failed count last seen + the
-    /// `ctx.input(|i| i.time)` timestamp when the next flash should end.
-    /// When `failed_count` grows we briefly tint the progress bar white
-    /// instead of permanently turning it red.
-    last_pipeline_failed_count: usize,
-    pipeline_flash_until: f64,
     /// Heartbeat anti-spam timer: when heat > 0 and the jam loop is dormant
     /// (no in-flight inference, no scheduled fire), the UI fires one Infer
     /// to kick it off — but the LLM thread takes a frame or two to flip
@@ -401,8 +395,6 @@ impl ImpulseApp {
             scope_history: std::collections::VecDeque::with_capacity(12),
             last_seq_step: usize::MAX,
             last_step_global: 0,
-            last_pipeline_failed_count: 0,
-            pipeline_flash_until: 0.0,
             // Set in the past so the first frame's heartbeat check passes
             // immediately once heat > 0.
             last_jam_kickoff: std::time::Instant::now() - std::time::Duration::from_secs(10),

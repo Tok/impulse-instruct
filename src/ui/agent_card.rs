@@ -189,32 +189,55 @@ fn draw_llm_agent_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, module_id: u32)
                 });
         }
         // Status: pipeline progress > tok/s > cycle count
+        // Two stacked bars (no red): top = lane completion fraction,
+        // bottom = error fraction.  Same width / height, 1 px gap.
         let agent_progress = app.state.read().llm_agents[idx].pipeline_progress.clone();
         if let Some(p) = agent_progress {
-            let frac = if p.total_lanes > 0 {
-                p.lanes_done as f32 / p.total_lanes as f32
+            let (frac, err_frac) = if p.total_lanes > 0 {
+                (
+                    p.lanes_done as f32 / p.total_lanes as f32,
+                    p.failed_count as f32 / p.total_lanes as f32,
+                )
             } else {
-                0.0
+                (0.0, 0.0)
             };
-            let (bar_rect, _) = ui.allocate_exact_size(egui::vec2(40.0, 4.0), egui::Sense::hover());
+            let bar_w = 40.0_f32;
+            let bar_h = 2.0_f32;
+            let bar_gap = 1.0_f32;
+            let group_h = bar_h * 2.0 + bar_gap;
+            let (group_rect, _) =
+                ui.allocate_exact_size(egui::vec2(bar_w, group_h), egui::Sense::hover());
             let pa = ui.painter();
-            pa.rect_filled(bar_rect, 1.0, egui::Color32::from_gray(38));
-            let fill_w = (bar_rect.width() * frac.clamp(0.0, 1.0)).max(0.0);
-            if fill_w > 0.0 {
+            let progress_rect = egui::Rect::from_min_size(group_rect.min, egui::vec2(bar_w, bar_h));
+            let error_rect = egui::Rect::from_min_size(
+                egui::pos2(group_rect.min.x, group_rect.min.y + bar_h + bar_gap),
+                egui::vec2(bar_w, bar_h),
+            );
+            pa.rect_filled(progress_rect, 1.0, egui::Color32::from_gray(38));
+            pa.rect_filled(error_rect, 1.0, egui::Color32::from_gray(38));
+            let progress_w = (bar_w * frac.clamp(0.0, 1.0)).max(0.0);
+            if progress_w > 0.0 {
                 pa.rect_filled(
-                    egui::Rect::from_min_size(bar_rect.min, egui::vec2(fill_w, bar_rect.height())),
+                    egui::Rect::from_min_size(progress_rect.min, egui::vec2(progress_w, bar_h)),
                     1.0,
-                    if p.failed_count > 0 {
-                        egui::Color32::from_rgb(140, 80, 80)
-                    } else {
-                        egui::Color32::from_gray(140)
-                    },
+                    egui::Color32::from_gray(140),
                 );
             }
-            let label = match &p.current_lane {
+            let error_w = (bar_w * err_frac.clamp(0.0, 1.0)).max(0.0);
+            if error_w > 0.0 {
+                pa.rect_filled(
+                    egui::Rect::from_min_size(error_rect.min, egui::vec2(error_w, bar_h)),
+                    1.0,
+                    egui::Color32::from_gray(95),
+                );
+            }
+            let mut label = match &p.current_lane {
                 Some(name) => format!("{}/{} {}", p.lanes_done + 1, p.total_lanes, name),
                 None => format!("{}/{}", p.lanes_done, p.total_lanes),
             };
+            if p.failed_count > 0 {
+                label = format!("{} · {}e", label, p.failed_count);
+            }
             ui.label(
                 egui::RichText::new(label)
                     .color(theme::FOG)
