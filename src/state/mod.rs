@@ -548,6 +548,10 @@ pub struct LlmAgentState {
     /// global seed is changed. When false (default), seed syncs with global.
     #[serde(default)]
     pub seed_locked: bool,
+    /// Live pipeline progress for this agent's current inference, or `None`
+    /// when idle.  Transient — not serialised.
+    #[serde(skip)]
+    pub pipeline_progress: Option<PipelineProgress>,
 }
 
 fn default_agent_seed() -> i64 {
@@ -588,6 +592,7 @@ impl LlmAgentState {
             style_locked: false,
             seed: -1,
             seed_locked: false,
+            pipeline_progress: None,
         }
     }
 
@@ -620,6 +625,7 @@ impl LlmAgentState {
             style_locked: false,
             seed: llm.seed,
             seed_locked: false,
+            pipeline_progress: None,
         }
     }
 }

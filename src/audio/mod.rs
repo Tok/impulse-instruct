@@ -278,9 +278,25 @@ impl AudioEngine {
                     // Propagate current_step back; advance chain on each loop boundary.
                     {
                         let mut s = state_clone.write();
-                        // Increment monotonic step counter when the step advances.
-                        if clock.current_step != s.sequencer.current_step {
-                            s.global_step_count += 1;
+                        // Increment monotonic step counter by the *actual*
+                        // delta — `advance_clock` can cross multiple step
+                        // boundaries in one block when block_size approaches
+                        // or exceeds samples_per_step (high BPM / large
+                        // engine block), so always adding 1 caused
+                        // `global_step_count` to drift behind the audio
+                        // clock.  The event-stream visualiser keys past
+                        // notes by `global_step_count`, so the drift
+                        // showed up as a per-pattern jitter on the playhead.
+                        let prev_step = s.sequencer.current_step;
+                        let curr_step = clock.current_step;
+                        if curr_step != prev_step {
+                            let delta = if curr_step >= prev_step {
+                                (curr_step - prev_step) as u64
+                            } else {
+                                // Wrapped at MAX_STEPS (e.g. 63 → 0).
+                                (crate::state::MAX_STEPS - prev_step + curr_step) as u64
+                            };
+                            s.global_step_count += delta;
                         }
                         s.sequencer.current_step = clock.current_step;
                         if clock.loop_count != prev_loop_count

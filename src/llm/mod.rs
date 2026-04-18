@@ -577,7 +577,7 @@ pub fn run_llm_loop(
             let _ = new_state; // per-lane write-back already committed everything
             // Clear inferring + progress flags now that the pipeline is done.
             // Belt-and-braces: PipelineDone clears `pipeline_progress`, but if
-            // the pipeline ever returns early without emitting it the bar
+            // the pipeline ever returns early without emitting it the bars
             // would otherwise stick.
             {
                 let mut s = state.write();
@@ -587,6 +587,7 @@ pub fn run_llm_loop(
                     && let Some(a) = s.llm_agents.iter_mut().find(|a| a.id == aid)
                 {
                     a.is_inferring = false;
+                    a.pipeline_progress = None;
                 }
             }
             let elapsed = t0.elapsed().as_secs_f32();

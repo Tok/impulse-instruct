@@ -46,6 +46,15 @@ pub fn event_stream(
     // slack, the just-fired step wrapped to a full cycle ahead and briefly
     // vanished from screen at every cycle boundary.
     const WRAP_SLACK: f32 = 0.5;
+    // Compute the "next fire" offset for a step, normalised by `voice_steps`
+    // via rem_euclid so the wrap is deterministic instead of depending on
+    // the sign of `step_idx - local_pos` plus a manual fix-up.  Shifting by
+    // WRAP_SLACK preserves the "linger half a step into the past" behaviour
+    // (just-fired steps render slightly to the left of `now_x`).
+    fn next_fire_offset(step_idx: usize, local_pos: f32, voice_steps: usize) -> f32 {
+        let span = voice_steps as f32;
+        ((step_idx as f32 - local_pos + WRAP_SLACK).rem_euclid(span)) - WRAP_SLACK
+    }
 
     let seq = &state.sequencer;
     let bpm = seq.bpm;
@@ -282,10 +291,7 @@ pub fn event_stream(
                 // "Next fire" offset, with a small negative slack so a
                 // just-fired step keeps rendering instead of blinking off
                 // for the frame or two before the log catches up.
-                let mut off = step_idx as f32 - local_pos;
-                if off < -WRAP_SLACK {
-                    off += voice_steps as f32;
-                }
+                let off = next_fire_offset(step_idx, local_pos, voice_steps);
                 if off > display_steps {
                     continue;
                 }
@@ -329,10 +335,7 @@ pub fn event_stream(
                 if !step.active {
                     continue;
                 }
-                let mut off = step_idx as f32 - local_pos;
-                if off < -WRAP_SLACK {
-                    off += an1x_steps as f32;
-                }
+                let off = next_fire_offset(step_idx, local_pos, an1x_steps);
                 if off > display_steps {
                     continue;
                 }
@@ -347,10 +350,7 @@ pub fn event_stream(
                 if !step.active {
                     continue;
                 }
-                let mut off = step_idx as f32 - local_pos;
-                if off < -WRAP_SLACK {
-                    off += hoover_steps as f32;
-                }
+                let off = next_fire_offset(step_idx, local_pos, hoover_steps);
                 if off > display_steps {
                     continue;
                 }
@@ -404,10 +404,7 @@ pub fn event_stream(
                     if !step.active {
                         continue;
                     }
-                    let mut off = step_idx as f32 - pos_in_pattern;
-                    if off < -WRAP_SLACK {
-                        off += steps as f32;
-                    }
+                    let off = next_fire_offset(step_idx, pos_in_pattern, steps);
                     if off > display_steps {
                         continue;
                     }

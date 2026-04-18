@@ -159,8 +159,41 @@ fn draw_llm_agent_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, module_id: u32)
                     }
                 });
         }
-        // Status: tok/s or cycle count
-        if inferring {
+        // Status: pipeline progress > tok/s > cycle count
+        let agent_progress = app.state.read().llm_agents[idx].pipeline_progress.clone();
+        if let Some(p) = agent_progress {
+            let frac = if p.total_lanes > 0 {
+                p.lanes_done as f32 / p.total_lanes as f32
+            } else {
+                0.0
+            };
+            let (bar_rect, _) = ui.allocate_exact_size(egui::vec2(40.0, 4.0), egui::Sense::hover());
+            let pa = ui.painter();
+            pa.rect_filled(bar_rect, 1.0, egui::Color32::from_gray(38));
+            let fill_w = (bar_rect.width() * frac.clamp(0.0, 1.0)).max(0.0);
+            if fill_w > 0.0 {
+                pa.rect_filled(
+                    egui::Rect::from_min_size(bar_rect.min, egui::vec2(fill_w, bar_rect.height())),
+                    1.0,
+                    if p.failed_count > 0 {
+                        egui::Color32::from_rgb(140, 80, 80)
+                    } else {
+                        egui::Color32::from_gray(140)
+                    },
+                );
+            }
+            let label = match &p.current_lane {
+                Some(name) => format!("{}/{} {}", p.lanes_done + 1, p.total_lanes, name),
+                None => format!("{}/{}", p.lanes_done, p.total_lanes),
+            };
+            ui.label(
+                egui::RichText::new(label)
+                    .color(theme::FOG)
+                    .monospace()
+                    .size(7.5),
+            );
+            ui.ctx().request_repaint();
+        } else if inferring {
             ui.label(
                 egui::RichText::new(format!("{:.0}t/s", tps))
                     .color(theme::FOG)
