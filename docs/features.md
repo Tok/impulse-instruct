@@ -144,6 +144,29 @@ A detailed log of what's built.
   `(one-shot)` for quick tailing.
 - 4 new serde tests pin the default + field parsing.
 
+### Retry-on-low-score queue (Phase 3)
+
+- `LlmState.retry_queue: VecDeque<String>` — lane labels whose last
+  `evaluate_lane` score came in at or below `RETRY_THRESHOLD` (0.3).
+- `lane_eval::record_lane_score` enqueues on a bad score, deduping
+  against any entry already in the queue so the "fresh failures first"
+  order is preserved.  Queue capped at `RETRY_QUEUE_MAX` (4); overflow
+  drops the oldest pending entry so a stuck-in-retry lane can't block
+  fresh ones.
+- `planner::jam_plan` drains the queue before running the Phase 2
+  weighted picker: walks heads until a lane that's still live on the
+  rack turns up, returns a single-lane plan with `from_retry: true`,
+  and logs `retry_queue: popped bass1 …`.  Dead entries (lane's
+  module left the rack since the score fired) are skipped, not
+  returned — the rack is authoritative over the queue.
+- `pipeline_events::handle_pipeline_event` reads `plan.from_retry` on
+  `PlanReady` and calls `consume_retry_prefix_mut` to remove the
+  consumed entry (plus any dead heads that were skipped) from the
+  shared queue, so the next cycle doesn't re-pick the same lane
+  unless it scores low again.
+- 9 new Phase-3 tests in `lane_scheduler_tests.rs` pin the threshold,
+  dedup, cap, and `jam_plan` retry-first ordering behaviour.
+
 ### Per-style lane dynamism overrides (Phase 4)
 
 - `Style.lane_dynamism: HashMap<String, f32>` in `styles.json` — optional

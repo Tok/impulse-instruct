@@ -6,7 +6,7 @@ mod lane_scheduler_tests {
         recency_decay,
     };
     use crate::llm::lanes::LaneKind;
-    use crate::llm::planner::jam_plan;
+    use crate::llm::planner_jam::jam_plan;
     use crate::llm::styles::Style;
     use crate::state::{
         AppState, LaneScore, ModuleKind, PortDir, PortKind, PortRef, RackModule, RackState,
@@ -407,5 +407,124 @@ mod lane_scheduler_tests {
             w_bass,
             w_fx
         );
+    }
+
+    // ── Phase 3: retry queue ─────────────────────────────────────────────────
+
+    #[test]
+    fn low_score_queues_retry() {
+        use crate::llm::lane_eval::{RETRY_THRESHOLD, record_lane_score};
+        let mut llm = crate::state::LlmState::default();
+        record_lane_score(&mut llm, LaneKind::Bass(0), RETRY_THRESHOLD - 0.05);
+        assert_eq!(llm.retry_queue.len(), 1);
+        assert_eq!(llm.retry_queue.front().map(|s| s.as_str()), Some("bass1"));
+    }
+
+    #[test]
+    fn exactly_at_threshold_queues_retry() {
+        // Phase 3 says ≤ threshold — exact match must still queue.
+        use crate::llm::lane_eval::{RETRY_THRESHOLD, record_lane_score};
+        let mut llm = crate::state::LlmState::default();
+        record_lane_score(&mut llm, LaneKind::KitA, RETRY_THRESHOLD);
+        assert_eq!(llm.retry_queue.len(), 1);
+    }
+
+    #[test]
+    fn high_score_does_not_queue() {
+        use crate::llm::lane_eval::record_lane_score;
+        let mut llm = crate::state::LlmState::default();
+        record_lane_score(&mut llm, LaneKind::Bass(0), 0.85);
+        assert!(llm.retry_queue.is_empty());
+    }
+
+    #[test]
+    fn retry_queue_dedupes() {
+        // Same lane failing twice should only occupy one queue slot.
+        use crate::llm::lane_eval::record_lane_score;
+        let mut llm = crate::state::LlmState::default();
+        record_lane_score(&mut llm, LaneKind::Bass(0), 0.1);
+        record_lane_score(&mut llm, LaneKind::Bass(0), 0.2);
+        assert_eq!(llm.retry_queue.len(), 1);
+    }
+
+    #[test]
+    fn retry_queue_respects_cap() {
+        // Queue capped at RETRY_QUEUE_MAX — overflow drops the oldest
+        // entry so a stuck-in-retry lane can't block fresh ones.
+        use crate::llm::lane_eval::{RETRY_QUEUE_MAX, record_lane_score};
+        let mut llm = crate::state::LlmState::default();
+        let lanes = [
+            LaneKind::Bass(0),
+            LaneKind::Bass(1),
+            LaneKind::Bass(2),
+            LaneKind::Bass(3),
+            LaneKind::KitA,
+            LaneKind::KitB,
+            LaneKind::Fx,
+        ];
+        for lane in lanes {
+            record_lane_score(&mut llm, lane, 0.1);
+        }
+        assert!(llm.retry_queue.len() <= RETRY_QUEUE_MAX);
+        // Oldest (bass1) should have been dropped to make room.
+        assert!(!llm.retry_queue.iter().any(|l| l == "bass1"));
+        // Newest (fx) should be at the back.
+        assert_eq!(llm.retry_queue.back().map(|s| s.as_str()), Some("fx"));
+    }
+
+    #[test]
+    fn jam_plan_pops_retry_head_before_weighted_pick() {
+        // Queue a retry on Bass(0); jam_plan must return it regardless of
+        // the weighted picker's preference.
+        let mut state = bass_only_state();
+        state
+            .llm
+            .retry_queue
+            .push_back(LaneKind::Bass(0).label().to_string());
+        let mut rng = Xorshift32::new(1);
+        let plan = jam_plan(&state, &mut rng);
+        assert_eq!(plan.lanes, vec![LaneKind::Bass(0)]);
+        assert!(plan.from_retry);
+        assert!(plan.rationale.contains("phase-3 retry"));
+    }
+
+    #[test]
+    fn jam_plan_skips_dead_retry_entry() {
+        // Queue a retry for a lane that isn't live (Hoover on a bass-only
+        // rack).  jam_plan must fall through to the weighted picker.
+        let mut state = bass_only_state();
+        state
+            .llm
+            .retry_queue
+            .push_back(LaneKind::Hoover.label().to_string());
+        let mut rng = Xorshift32::new(1);
+        let plan = jam_plan(&state, &mut rng);
+        assert!(!plan.from_retry);
+        assert!(plan.rationale.contains("phase-2"));
+    }
+
+    #[test]
+    fn consume_retry_prefix_drops_head() {
+        use crate::llm::planner_jam::consume_retry_prefix_mut;
+        let mut llm = crate::state::LlmState::default();
+        llm.retry_queue.push_back("bass1".into());
+        llm.retry_queue.push_back("kit_a".into());
+        consume_retry_prefix_mut(&mut llm, LaneKind::Bass(0));
+        assert_eq!(llm.retry_queue.len(), 1);
+        assert_eq!(llm.retry_queue.front().map(|s| s.as_str()), Some("kit_a"));
+    }
+
+    #[test]
+    fn consume_retry_prefix_drops_dead_heads() {
+        // Dead entry at the head gets dropped while consuming the target.
+        use crate::llm::planner_jam::consume_retry_prefix_mut;
+        let mut llm = crate::state::LlmState::default();
+        llm.retry_queue.push_back("garbage_label".into()); // unknown lane
+        llm.retry_queue.push_back("bass1".into());
+        llm.retry_queue.push_back("fx".into());
+        consume_retry_prefix_mut(&mut llm, LaneKind::Bass(0));
+        // Both the unknown head and the consumed bass1 are gone.
+        assert_eq!(llm.retry_queue.len(), 1);
+        assert_eq!(llm.retry_queue.front().map(|s| s.as_str()), Some("fx"));
     }
 }

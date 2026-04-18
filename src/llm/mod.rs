@@ -12,6 +12,7 @@ pub mod mock;
 pub mod pipeline;
 pub mod pipeline_events;
 pub mod planner;
+pub mod planner_jam;
 pub mod prompt;
 pub mod prompt_summary;
 pub mod schema;

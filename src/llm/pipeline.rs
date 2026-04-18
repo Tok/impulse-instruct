@@ -95,7 +95,7 @@ pub fn run_pipeline<B: PipelineBackend>(
     // to the regular heuristic → LLM planner → default chain.
     let plan = if is_jam {
         let mut rng = crate::llm::lane_scheduler::Xorshift32::from_entropy();
-        let jp = crate::llm::planner::jam_plan(&state, &mut rng);
+        let jp = crate::llm::planner_jam::jam_plan(&state, &mut rng);
         if jp.lanes.is_empty() {
             log::info!("pipeline: jam_plan empty, falling back to default_plan");
             default_plan(&state)
@@ -128,6 +128,7 @@ pub fn run_pipeline<B: PipelineBackend>(
             .filter(|&l| crate::llm::planner::lane_is_live_pub(&state, l))
             .collect(),
         rationale: plan.rationale,
+        from_retry: plan.from_retry,
     };
     if plan.lanes.is_empty() {
         progress(PipelineEvent::PipelineDone {

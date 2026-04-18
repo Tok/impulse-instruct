@@ -258,9 +258,22 @@ fn evaluate_settings(state: &AppState) -> f32 {
 
 // ─── Score-storage helper used by `pipeline_events::handle_pipeline_event` ───
 
+/// Phase 3 — scores at or below this threshold push the lane onto
+/// `LlmState.retry_queue` so the next jam cycle rewrites it first.
+/// 0.3 is "bad output" territory in every per-lane scorer: densities
+/// outside their usable bands, no variety, or coverage gaps.
+pub const RETRY_THRESHOLD: f32 = 0.3;
+
+/// Hard cap on the retry queue.  The queue exists to recover from one-off
+/// bad outputs, not to become a parallel scheduler.  Overflow drops the
+/// oldest pending entry so a stuck-in-retry lane can't block fresh ones.
+pub const RETRY_QUEUE_MAX: usize = 4;
+
 /// Record a score for `lane` against the current state.  Bumps `change_count`,
-/// updates `last_changed_cycle`, and overwrites `score`.  The tag emitted to
-/// the log is short (`lane_eval: bass1 → 0.72 [#3]`) so it's easy to scan.
+/// updates `last_changed_cycle`, overwrites `score`, and — when the score is
+/// at or below `RETRY_THRESHOLD` — pushes the lane onto the retry queue so
+/// Phase 3's do-over kicks in next jam cycle.  Dedupes: a lane already in
+/// the queue isn't queued again, keeping the "fresh failures first" order.
 pub fn record_lane_score(state: &mut crate::state::LlmState, lane: LaneKind, score: f32) {
     use crate::state::LaneScore;
     let key = lane.label().to_string();
@@ -272,10 +285,25 @@ pub fn record_lane_score(state: &mut crate::state::LlmState, lane: LaneKind, sco
     entry.score = score.clamp(0.0, 1.0);
     entry.last_changed_cycle = state.jam_cycle_count;
     entry.change_count = entry.change_count.saturating_add(1);
+    let clamped = entry.score;
     log::info!(
         "lane_eval: {} → {:.2} [#{}]",
         key,
-        entry.score,
+        clamped,
         entry.change_count
     );
+
+    if clamped <= RETRY_THRESHOLD && !state.retry_queue.iter().any(|l| l == &key) {
+        state.retry_queue.push_back(key.clone());
+        while state.retry_queue.len() > RETRY_QUEUE_MAX {
+            state.retry_queue.pop_front();
+        }
+        log::info!(
+            "retry_queue: {} queued (score {:.2} ≤ {:.2}), depth={}",
+            key,
+            clamped,
+            RETRY_THRESHOLD,
+            state.retry_queue.len()
+        );
+    }
 }

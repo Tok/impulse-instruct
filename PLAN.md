@@ -48,12 +48,6 @@ they ship and are reflected in `features.md`.
 
 ## Intelligence
 
-- **Lane lifecycle Phase 3 — retry on low score.**  When
-  `evaluate_lane` returns below a threshold (~0.3), push the same
-  lane back to the front of the next-pick queue so a one-off bad
-  output gets a do-over without blocking the weighted picker.
-  Phase 2's `(1 - score)` term already biases toward low scorers,
-  but an explicit retry still wins on actively-failed lanes.
 - **Populate per-style `lane_dynamism` maps in `styles.json`.**  The
   schema + scheduler hookup landed in Phase 4, but every style still
   runs on the baked-in defaults.  Fill in genre-appropriate overrides

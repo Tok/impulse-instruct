@@ -24,6 +24,11 @@ use crate::state::{AppState, ModuleKind};
 pub struct LanePlan {
     pub lanes: Vec<LaneKind>,
     pub rationale: String,
+    /// True when `jam_plan` pulled this lane off `LlmState.retry_queue`
+    /// (Phase 3).  `pipeline_events::handle_pipeline_event` reads this on
+    /// `PlanReady` so it can pop the matching entry off the shared queue
+    /// before the next jam cycle runs.
+    pub from_retry: bool,
 }
 
 impl LanePlan {
@@ -196,7 +201,11 @@ pub fn parse_planner_output(state: &AppState, json: &serde_json::Value) -> Optio
         .and_then(|v| v.as_str())
         .unwrap_or_default()
         .to_string();
-    Some(LanePlan { lanes, rationale })
+    Some(LanePlan {
+        lanes,
+        rationale,
+        from_retry: false,
+    })
 }
 
 /// Try to resolve the user prompt to a lane plan without calling the
@@ -231,6 +240,7 @@ pub fn heuristic_plan(state: &AppState, user_prompt: &str) -> Option<LanePlan> {
         return Some(LanePlan {
             lanes: vec![LaneKind::Bass(idx)],
             rationale: format!("narrow command → bass voice {} (heuristic)", idx + 1),
+            from_retry: false,
         });
     }
 
@@ -240,6 +250,7 @@ pub fn heuristic_plan(state: &AppState, user_prompt: &str) -> Option<LanePlan> {
         return Some(LanePlan {
             lanes: vec![LaneKind::Fx],
             rationale: "narrow command → fx (heuristic)".into(),
+            from_retry: false,
         });
     }
 
@@ -273,6 +284,7 @@ pub fn heuristic_plan(state: &AppState, user_prompt: &str) -> Option<LanePlan> {
         return Some(LanePlan {
             lanes: vec![LaneKind::KitA],
             rationale: "narrow command → kit_a (heuristic)".into(),
+            from_retry: false,
         });
     }
     if wants_kit_b
@@ -283,6 +295,7 @@ pub fn heuristic_plan(state: &AppState, user_prompt: &str) -> Option<LanePlan> {
         return Some(LanePlan {
             lanes: vec![LaneKind::KitB],
             rationale: "narrow command → kit_b (heuristic)".into(),
+            from_retry: false,
         });
     }
 
@@ -299,6 +312,7 @@ pub fn heuristic_plan(state: &AppState, user_prompt: &str) -> Option<LanePlan> {
             return Some(LanePlan {
                 lanes: vec![*lane],
                 rationale: format!("narrow command → {} (heuristic)", lane.label()),
+                from_retry: false,
             });
         }
     }
@@ -486,59 +500,13 @@ pub fn default_plan(state: &AppState) -> LanePlan {
     LanePlan {
         lanes,
         rationale: "default full-jam plan (planner fallback)".to_string(),
+        from_retry: false,
     }
-}
-
-/// Phase 2 weighted single-lane picker for jam cycles.  Assembles every
-/// live lane as a candidate, runs the `lane_scheduler` weighted sampler,
-/// and wraps the chosen lane in a single-lane `LanePlan`.  Returns an
-/// empty plan when no lanes are live or every weight collapsed to zero;
-/// the caller should fall back to `default_plan` in that case.
-///
-/// Scheduler biases: high lane_score → picked less often (so good bass
-/// "lives" while kit/fx rotate); just-rewritten → picked less often
-/// (recency decay); heat raises per-candidate jitter.
-pub fn jam_plan(state: &AppState, rng: &mut crate::llm::lane_scheduler::Xorshift32) -> LanePlan {
-    let candidates = live_lane_candidates(state);
-    match crate::llm::lane_scheduler::pick_jam_lane(state, &candidates, rng) {
-        Some(lane) => LanePlan {
-            lanes: vec![lane],
-            rationale: format!(
-                "phase-2 weighted pick: {} (from {} candidates, cycle {})",
-                lane.label(),
-                candidates.len(),
-                state.llm.jam_cycle_count,
-            ),
-        },
-        None => LanePlan::default(),
-    }
-}
-
-/// Every lane that is currently live on the state (module wired + reaches
-/// master + voice enabled).  `Settings` + `Fx` + `Modulation` are always
-/// live; `Rack` is excluded because it's scheduler-ineligible (user-owned).
-fn live_lane_candidates(state: &AppState) -> Vec<LaneKind> {
-    let mut lanes: Vec<LaneKind> = vec![
-        LaneKind::Settings,
-        LaneKind::KitA,
-        LaneKind::KitB,
-        LaneKind::Amen,
-        LaneKind::Bass(0),
-        LaneKind::Bass(1),
-        LaneKind::Bass(2),
-        LaneKind::Bass(3),
-        LaneKind::Hoover,
-        LaneKind::An1x,
-        LaneKind::Fx,
-        LaneKind::Modulation,
-    ];
-    lanes.retain(|&l| lane_is_live_impl(state, l));
-    lanes
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-fn lane_from_label(label: &str) -> Option<LaneKind> {
+pub(crate) fn lane_from_label(label: &str) -> Option<LaneKind> {
     match label {
         "settings" => Some(LaneKind::Settings),
         "bass1" => Some(LaneKind::Bass(0)),

@@ -70,6 +70,14 @@ pub fn handle_pipeline_event(
             {
                 a.pipeline_progress = Some(progress);
             }
+            // Phase 3: if this plan was drawn from the retry queue, drop
+            // the consumed entry (plus any stale preceding heads) from the
+            // shared queue so the next cycle doesn't re-pick the same lane.
+            if plan.from_retry
+                && let Some(&lane) = plan.lanes.first()
+            {
+                crate::llm::planner_jam::consume_retry_prefix_mut(&mut s.llm, lane);
+            }
             drop(s);
             let _ = output_tx.try_send(LlmOutput {
                 text: format!("[plan: {} lanes — {}]", plan.lanes.len(), labels.join(", ")),

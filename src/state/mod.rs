@@ -1,7 +1,7 @@
 // ─── state/mod.rs ── single source of truth for all synth parameters ─────────
 // Pure data only — no methods that mutate in-place. Transitions at the bottom.
 use serde::{Deserialize, Serialize};
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap, HashSet, VecDeque};
 
 pub mod drums;
 pub use drums::*;
@@ -403,11 +403,18 @@ pub struct LlmState {
     pub pipeline_progress: Option<PipelineProgress>,
     /// Per-lane lifecycle scoring keyed by lane label (`"bass1"`,
     /// `"kit_a"`, …).  Populated by `lane_eval::evaluate_lane` after
-    /// each successful pipeline lane apply.  Phase 1: stored + logged
-    /// only.  Phase 2 will use this to weight the next jam-cycle's
-    /// lane selection.  Transient — not serialised.
+    /// each successful pipeline lane apply.  The Phase 2 weighted
+    /// scheduler reads this to bias the next jam-cycle's lane pick.
+    /// Transient — not serialised.
     #[serde(skip)]
     pub lane_scores: HashMap<String, LaneScore>,
+    /// Phase 3 retry queue — lane labels whose last `evaluate_lane`
+    /// score fell below `RETRY_THRESHOLD`.  `planner_jam::jam_plan` drains
+    /// this before running the weighted picker so a one-off bad output
+    /// gets a deterministic do-over.  Deduped on insert, oldest dropped
+    /// on overflow (`RETRY_QUEUE_MAX`).  Transient — not serialised.
+    #[serde(skip)]
+    pub retry_queue: VecDeque<String>,
 }
 
 /// One row of `LlmState.lane_scores`.  Tracks how well a lane's last
@@ -496,6 +503,7 @@ impl Default for LlmState {
             use_pipeline: true,
             pipeline_progress: None,
             lane_scores: HashMap::new(),
+            retry_queue: VecDeque::new(),
         }
     }
 }
