@@ -197,6 +197,7 @@ for MODEL in "${MODELS[@]}"; do
     --flash-attn on \
     --cache-type-k q8_0 \
     --cache-type-v q8_0 \
+    --cache-reuse 256 \
     2>"$SERVER_LOG" &
   SERVER_PID=$!
   trap "kill $SERVER_PID 2>/dev/null || true; unset SERVER_PID" EXIT

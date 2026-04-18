@@ -188,6 +188,12 @@ impl LlamaServerBackend {
                 "q8_0",
                 "--cache-type-v",
                 "q8_0",
+                // Reuse cached KV for any prompt prefix that matches a
+                // previous request (min 256 tokens). Combined with
+                // `cache_prompt: true` on the request body, this makes
+                // identical system-prompt requests skip the ~5-8 s prefill.
+                "--cache-reuse",
+                "256",
                 "--log-disable", // reduce noise; we log our own status
             ])
             .stdout(std::process::Stdio::null())
@@ -373,6 +379,11 @@ impl LlmBackend for LlamaServerBackend {
         // json_object mode keeps the server honest about emitting valid JSON.
         // max_tokens: full-reset responses (all voices + FX + LFO) can exceed 1200 tokens
         // and truncate mid-JSON.  2400 gives headroom for the largest possible response.
+        // cache_prompt: llama-server reuses the KV cache for the shared prefix
+        // between requests when true — our ~11 k-token system prompt is
+        // identical across every inference, so this drops prefill time from
+        // ~5-8 s to ~0 s once warm.  Unknown field is silently ignored by
+        // older server builds, so safe to always send.
         let body = serde_json::json!({
             "model": "local",
             "messages": [
@@ -387,6 +398,7 @@ impl LlmBackend for LlamaServerBackend {
             "frequency_penalty": frequency_penalty,
             "seed": sampling.seed,
             "max_tokens": 2400,
+            "cache_prompt": true,
             "response_format": { "type": "json_object" }
         });
 
