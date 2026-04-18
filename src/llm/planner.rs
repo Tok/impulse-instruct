@@ -74,12 +74,17 @@ pub fn build_planner_prompt(state: &AppState) -> String {
          3. Broad commands (`start a jam`, `make a track`, \"make a pattern\") \
             pick a FULL jam: drums, bass, fx. Skip `settings` unless the user \
             explicitly asks for a tempo/key change.\n\
-         4. `rack` and `mod` are NICHE — only include them if the user \
+         4. BASS VOICES — if ANY bass lane is in the plan, include EVERY \
+            bass voice listed in active_voices (bass1, bass2, bass3, bass4 \
+            as applicable).  Skipping a voice leaves it silent.  The only \
+            exception is a user command that names a single voice \
+            (\"rewrite bass 2\" → just [bass2]).\n\
+         5. `rack` and `mod` are NICHE — only include them if the user \
             explicitly asks (\"add an 808\", \"wire the delay\", \"add an LFO\"). \
             Never fire them as part of a generic groove.\n\
-         5. Order matters — settings (if included) first, drums before bass \
+         6. Order matters — settings (if included) first, drums before bass \
             (bass can reference the kick grid), fx last.\n\
-         6. Keep it minimal. Fewer lanes = faster response. Don't fire \
+         7. Keep it minimal. Fewer lanes = faster response. Don't fire \
             lanes the user didn't ask for.\n\
          \n\
          Output JSON only: {{\"lanes\": [\"settings\", \"kit_a\", \"bass1\", \"fx\"], \
@@ -118,13 +123,23 @@ pub fn planner_schema() -> serde_json::Value {
 /// disabled voices / unwired modules so the pipeline doesn't fire a
 /// lane that would be a no-op.  Returns `None` when the lane list is
 /// empty after filtering — the caller should fall back to `default_plan`.
+///
+/// Also auto-expands a bass-containing plan to cover every active bass
+/// voice.  The planner LLM has a habit of picking `bass1` alone even
+/// when `bass2` is also live; skipping a voice leaves it silent, which
+/// is always a musical regression for a multi-voice rack.  A rule in
+/// the prompt reinforces this, but we enforce it in code so the
+/// pipeline doesn't ship a half-configured bass on a model hiccup.
 pub fn parse_planner_output(state: &AppState, json: &serde_json::Value) -> Option<LanePlan> {
     let obj = json.as_object()?;
     let lanes_arr = obj.get("lanes")?.as_array()?;
+    let raw_labels: Vec<String> = lanes_arr
+        .iter()
+        .filter_map(|v| v.as_str().map(|s| s.to_string()))
+        .collect();
     let mut lanes: Vec<LaneKind> = Vec::new();
-    for val in lanes_arr {
-        if let Some(s) = val.as_str()
-            && let Some(lane) = lane_from_label(s)
+    for s in &raw_labels {
+        if let Some(lane) = lane_from_label(s)
             && lane_is_live(state, lane)
             && !lanes.contains(&lane)
         {
@@ -133,6 +148,48 @@ pub fn parse_planner_output(state: &AppState, json: &serde_json::Value) -> Optio
     }
     if lanes.is_empty() {
         return None;
+    }
+    // Auto-expand bass lanes.  If the plan mentions any bass at all BUT
+    // the raw planner output didn't explicitly name a single voice in a
+    // narrow command (e.g. "rewrite bass 2"), extend the bass set to
+    // every active bass voice — preserving the order the planner chose
+    // for the one it did name, and appending the rest.
+    let any_bass = lanes.iter().any(|l| matches!(l, LaneKind::Bass(_)));
+    let named_bass_count = raw_labels.iter().filter(|s| s.starts_with("bass")).count();
+    let single_voice_command = named_bass_count == 1 && raw_labels.len() <= 2;
+    if any_bass && !single_voice_command {
+        let existing: std::collections::BTreeSet<usize> = lanes
+            .iter()
+            .filter_map(|l| {
+                if let LaneKind::Bass(i) = l {
+                    Some(*i)
+                } else {
+                    None
+                }
+            })
+            .collect();
+        // Walk enabled voices in order; insert any that aren't already in
+        // the plan right after the last existing bass lane so drums still
+        // come before bass and FX after.
+        let mut to_insert: Vec<LaneKind> = Vec::new();
+        for (idx, voice) in state.bass_voices.iter().enumerate() {
+            if voice.enabled && !existing.contains(&idx) && lane_is_live(state, LaneKind::Bass(idx))
+            {
+                to_insert.push(LaneKind::Bass(idx));
+            }
+        }
+        if !to_insert.is_empty() {
+            // Find the index just after the last existing Bass lane so
+            // the new voices cluster with the rest and keep the
+            // drums-before-bass / bass-before-fx ordering intact.
+            let last_bass = lanes
+                .iter()
+                .rposition(|l| matches!(l, LaneKind::Bass(_)))
+                .unwrap_or(lanes.len() - 1);
+            for (offset, lane) in to_insert.into_iter().enumerate() {
+                lanes.insert(last_bass + 1 + offset, lane);
+            }
+        }
     }
     let rationale = obj
         .get("rationale")
@@ -336,6 +393,8 @@ mod tests {
 
     #[test]
     fn parse_simple_lane_list() {
+        // Two bass voices are enabled in state_with_full_rack() — the
+        // auto-expansion kicks in, so bass2 is filled in after bass1.
         let s = state_with_full_rack();
         let j = serde_json::json!({
             "lanes": ["settings", "kit_a", "bass1", "fx"],
@@ -348,6 +407,7 @@ mod tests {
                 LaneKind::Settings,
                 LaneKind::KitA,
                 LaneKind::Bass(0),
+                LaneKind::Bass(1),
                 LaneKind::Fx,
             ]
         );
@@ -370,10 +430,54 @@ mod tests {
 
     #[test]
     fn parse_deduplicates() {
+        // Raw planner output has dupes — filter collapses them, then
+        // expansion adds bass2 since state_with_full_rack() has it active.
         let s = state_with_full_rack();
         let j = serde_json::json!({
             "lanes": ["bass1", "bass1", "fx", "bass1", "fx"]
         });
+        let plan = parse_planner_output(&s, &j).unwrap();
+        assert_eq!(
+            plan.lanes,
+            vec![LaneKind::Bass(0), LaneKind::Bass(1), LaneKind::Fx]
+        );
+    }
+
+    #[test]
+    fn bass_plan_expands_to_cover_all_active_voices() {
+        // Planner LLM picks just bass1 but both voices are enabled —
+        // post-processing should add bass2 right after bass1.
+        let s = state_with_full_rack();
+        let j = serde_json::json!({
+            "lanes": ["kit_a", "bass1", "fx"]
+        });
+        let plan = parse_planner_output(&s, &j).unwrap();
+        assert_eq!(
+            plan.lanes,
+            vec![
+                LaneKind::KitA,
+                LaneKind::Bass(0),
+                LaneKind::Bass(1),
+                LaneKind::Fx,
+            ]
+        );
+    }
+
+    #[test]
+    fn narrow_bass_command_stays_single_voice() {
+        // "rewrite bass 2" → [bass2] only.  Post-processing must NOT
+        // auto-expand when the planner clearly picked one specific voice.
+        let s = state_with_full_rack();
+        let j = serde_json::json!({ "lanes": ["bass2"] });
+        let plan = parse_planner_output(&s, &j).unwrap();
+        assert_eq!(plan.lanes, vec![LaneKind::Bass(1)]);
+    }
+
+    #[test]
+    fn single_bass_rack_no_expansion() {
+        // One voice enabled — expansion finds nothing to add.
+        let s = bass_only_state();
+        let j = serde_json::json!({ "lanes": ["bass1", "fx"] });
         let plan = parse_planner_output(&s, &j).unwrap();
         assert_eq!(plan.lanes, vec![LaneKind::Bass(0), LaneKind::Fx]);
     }
