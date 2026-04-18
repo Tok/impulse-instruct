@@ -124,29 +124,24 @@ impl ImpulseApp {
     }
 
     pub(super) fn draw_llm_console_content(&mut self, ui: &mut egui::Ui) {
-        // Split the card into LEFT = existing console rows, RIGHT = the
-        // round-robin cycle viz.  Cycle is square (width = height) and
-        // takes the full panel height, mirroring how the ring oscillo-
-        // scope occupies the right side of the global header.  Capped
-        // so the left side always has room for prompt input + log.
+        // Split the card into LEFT = round-robin cycle viz, RIGHT =
+        // existing console rows.  Cycle is square (width = height)
+        // and takes the full panel height — same idiom as the ring
+        // oscilloscope reserves a square chip on its panel side.
+        // Capped so the right side always has room for prompt + log.
         let total_w = ui.available_width();
         let total_h = ui.available_height();
         let cycle_size = total_h.max(96.0).min((total_w * 0.35).max(96.0));
         let gap = 6.0;
-        let left_w = (total_w - cycle_size - gap).max(220.0);
+        let right_w = (total_w - cycle_size - gap).max(220.0);
 
         let cursor = ui.cursor().min;
-        let left_rect = egui::Rect::from_min_size(cursor, egui::vec2(left_w, total_h));
-        let cycle_rect = egui::Rect::from_min_size(
-            egui::pos2(cursor.x + left_w + gap, cursor.y),
-            egui::vec2(cycle_size, total_h),
+        let cycle_rect = egui::Rect::from_min_size(cursor, egui::vec2(cycle_size, total_h));
+        let right_rect = egui::Rect::from_min_size(
+            egui::pos2(cursor.x + cycle_size + gap, cursor.y),
+            egui::vec2(right_w, total_h),
         );
 
-        ui.allocate_ui_at_rect(left_rect, |ui| {
-            ui.with_layout(egui::Layout::top_down(egui::Align::Min), |ui| {
-                self.draw_llm_console_inner(ui);
-            });
-        });
         ui.allocate_ui_at_rect(cycle_rect, |ui| {
             let secs_to_next_fire = self.jam_next_fire.map(|(at, _)| {
                 at.saturating_duration_since(std::time::Instant::now())
@@ -161,6 +156,11 @@ impl ImpulseApp {
                 secs_to_next_fire,
                 cycle_size,
             );
+        });
+        ui.allocate_ui_at_rect(right_rect, |ui| {
+            ui.with_layout(egui::Layout::top_down(egui::Align::Min), |ui| {
+                self.draw_llm_console_inner(ui);
+            });
         });
     }
 

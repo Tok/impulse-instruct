@@ -238,28 +238,27 @@ pub fn draw_glass_panel(painter: &egui::Painter, rect: egui::Rect, rounding: egu
 // believable LED we ALSO brighten the core toward white as intensity rises —
 // real LEDs bloom toward white at their hot spot.
 
-/// 16-ring LED falloff: (radius_multiplier, alpha).  Twice as many rings as
-/// the previous 8-ring version for a smoother gradient, with the alpha curve
-/// reshaped so the halo fades to translucent quicker — the lit core stays
-/// bright but the bloom is gentler and stops competing with surrounding
-/// panel chrome.  Outermost rings are barely visible.
+/// 16-ring LED falloff: (radius_multiplier, alpha).  Tuned for a bright lit
+/// core with a soft, low-alpha bloom — the halo should hint at light
+/// rather than wash adjacent panel chrome.  Each outer ring carries roughly
+/// half the previous ring's alpha so the falloff is steep but smooth.
 const LED_RING_LAYERS: [(f32, u8); 16] = [
     (5.0, 1), // outermost — barely there
-    (4.5, 2),
-    (4.0, 4),
-    (3.6, 6),
-    (3.2, 9),
-    (2.9, 14),
-    (2.6, 20),
-    (2.35, 28),
-    (2.1, 38),
-    (1.9, 50),
-    (1.7, 65),
-    (1.55, 85),
-    (1.4, 110),
-    (1.25, 145),
-    (1.12, 190),
-    (1.0, 255), // saturated core
+    (4.5, 1),
+    (4.0, 2),
+    (3.6, 3),
+    (3.2, 5),
+    (2.9, 7),
+    (2.6, 10),
+    (2.35, 14),
+    (2.1, 19),
+    (1.9, 26),
+    (1.7, 35),
+    (1.55, 48),
+    (1.4, 65),
+    (1.25, 90),
+    (1.12, 130),
+    (1.0, 220), // saturated (but not opaque) core
 ];
 
 /// Draw a 3D-looking glowing LED at `center` (panels, sequencer, modules).

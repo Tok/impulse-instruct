@@ -132,17 +132,21 @@ pub fn llm_cycle(
         if active {
             any_active = true;
         }
+        // Flat in-screen marker — the cycle viz is styled like an
+        // oscilloscope screen, not physical hardware, so we don't
+        // render the 3-D dome `theme::led` here.  Just a saturated
+        // dot that pulses for the active slot.
         let intensity = if active {
             (pulse_t * 4.0 * std::f32::consts::PI).sin() * 0.25 + 0.75
         } else {
-            0.35
+            0.45
         };
-        let led_color = if active {
+        let dot_color = if active {
             Color32::from_rgb(230, 230, 230)
         } else {
             Color32::from_gray(120)
         };
-        theme::led(&painter, p, led_r, led_color, intensity);
+        theme::led_flat(&painter, p, led_r, dot_color, intensity);
 
         // Persona name placed just outside the rim at this slot.
         let label_pos = pos(i_f, r_outer * 1.14);
