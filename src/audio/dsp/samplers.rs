@@ -1,10 +1,10 @@
 // ─── Sampler-based voices ────────────────────────────────────────────────────
-// Amen/WAV playback + granular texture — separated from voices.rs to stay
-// under the 1000-line limit.
+// Amen/WAV slice playback with per-slice overrides and a granular pitch-
+// preserving BPM stretch.  Granular texture voice lives next door in
+// `granular_voice.rs` — kept separate so this file stays under the
+// 1000-line cap after the stretcher's crossfade logic landed.
 
 use std::sync::Arc;
-
-use super::voices::NoiseGen;
 
 // ─── Amen / WAV sampler voice ─────────────────────────────────────────────────
 
@@ -62,6 +62,37 @@ pub(super) struct AmenVoice {
 /// ratios, short enough that transient smearing stays in the "granular
 /// flavour" range rather than "audible slur".
 const AMEN_GRAIN_LEN: f32 = 2048.0;
+
+/// Length of the grain-boundary crossfade, in samples.  ~5.8 ms at
+/// 44.1 kHz; short enough that the lookahead window doesn't smear the
+/// transient ahead of the splice, long enough to smooth the amplitude /
+/// phase mismatch between the tail of the outgoing grain and the head
+/// of the incoming one.
+const AMEN_GRAIN_FADE: f32 = 256.0;
+
+/// Keep `pos` inside `[slice_start, slice_end)` by wrapping on whichever
+/// boundary was crossed.  Used by the pitch-preserve stretcher both for
+/// the jump at a grain boundary and for the lookahead read during the
+/// crossfade window.  `forward` selects which end is the "start" of
+/// playback so reverse-mode wraps land on the mirror side.
+fn wrap_into_slice(pos: f32, slice_start: f32, slice_end: f32, forward: bool) -> f32 {
+    let slice_len = (slice_end - slice_start).max(1.0);
+    if forward {
+        if pos >= slice_end {
+            slice_start + (pos - slice_end) % slice_len
+        } else if pos < slice_start {
+            slice_end - (slice_start - pos) % slice_len
+        } else {
+            pos
+        }
+    } else if pos <= slice_start {
+        slice_end - 1.0 - (slice_start - pos) % slice_len
+    } else if pos >= slice_end {
+        slice_start + (pos - slice_end) % slice_len
+    } else {
+        pos
+    }
+}
 
 impl AmenVoice {
     pub(super) fn new() -> Self {
@@ -295,195 +326,56 @@ impl AmenVoice {
         // The forward gate_end / reverse pos<1 checks above are the
         // real termination conditions.
         let len = samples.len();
-        let idx = (self.pos as usize).min(len.saturating_sub(1));
-        let frac = (self.pos - idx as f32).clamp(0.0, 1.0);
-        let next = samples.get(idx + 1).copied().unwrap_or(samples[idx]);
-        let out = samples[idx] + (next - samples[idx]) * frac;
-        self.pos += rate;
+        // Small closure for linear-interp reads; used both for the main
+        // read and (in preserve mode) for the crossfade lookahead.
+        let read = |p: f32| -> f32 {
+            let i = (p as usize).min(len.saturating_sub(1));
+            let f = (p - i as f32).clamp(0.0, 1.0);
+            let nx = samples.get(i + 1).copied().unwrap_or(samples[i]);
+            samples[i] + (nx - samples[i]) * f
+        };
+        let base_out = read(self.pos);
 
         // Pitch-preserving stretch: advance the grain counter and, at the
         // grain boundary, jump `pos` by `(stretch_ratio - 1) * GRAIN_LEN`
-        // in the direction of playback.  Over one grain of output the
-        // average advance of `pos` works out to `stretch_ratio`, matching
-        // host tempo while the per-sample read rate stayed at pitch-only
-        // (no BPM pitch shift baked into `extra_pitch`).  V1 has no
-        // crossfade at the splice — it's marked as a follow-up in PLAN.md
-        // once basic correctness is validated.
-        if self.preserve_pitch && (self.stretch_ratio - 1.0).abs() > 1e-4 {
+        // in the direction of playback.  Average advance of `pos` works
+        // out to `stretch_ratio` per output sample, matching host tempo
+        // while the per-sample read rate stayed at pitch-only (no BPM
+        // pitch shift baked into `extra_pitch`).
+        //
+        // v2 adds a short crossfade during the final `AMEN_GRAIN_FADE`
+        // samples of each grain: the output blends from the current read
+        // at `self.pos` toward the lookahead read at `self.pos + jump`.
+        // At the splice, `self.pos` jumps by the same amount, landing on
+        // exactly the sample the crossfade was already heading toward —
+        // the output curve is continuous through the splice, killing the
+        // v1 click at strong ratios.
+        let stretcher_active = self.preserve_pitch && (self.stretch_ratio - 1.0).abs() > 1e-4;
+        let out = if stretcher_active && self.grain_phase >= AMEN_GRAIN_LEN - AMEN_GRAIN_FADE {
+            let jump = (self.stretch_ratio - 1.0) * AMEN_GRAIN_LEN * self.direction;
+            let look_pos =
+                wrap_into_slice(self.pos + jump, self.slice_start, self.slice_end, forward);
+            let look_out = read(look_pos);
+            let t = ((self.grain_phase - (AMEN_GRAIN_LEN - AMEN_GRAIN_FADE)) / AMEN_GRAIN_FADE)
+                .clamp(0.0, 1.0);
+            base_out * (1.0 - t) + look_out * t
+        } else {
+            base_out
+        };
+
+        self.pos += rate;
+
+        if stretcher_active {
             self.grain_phase += 1.0;
             if self.grain_phase >= AMEN_GRAIN_LEN {
                 let jump = (self.stretch_ratio - 1.0) * AMEN_GRAIN_LEN * self.direction;
-                let new_pos = self.pos + jump;
-                // Keep the read within the current slice — the stretcher
-                // should loop/reflect at slice boundaries rather than
-                // march into the next slice's data.
-                self.pos = if forward {
-                    if new_pos >= self.slice_end {
-                        self.slice_start
-                            + (new_pos - self.slice_end)
-                                % (self.slice_end - self.slice_start).max(1.0)
-                    } else if new_pos < self.slice_start {
-                        // Slow-down rewind past slice start — wrap to
-                        // slice_end so the grain re-runs the tail.
-                        self.slice_end
-                            - (self.slice_start - new_pos)
-                                % (self.slice_end - self.slice_start).max(1.0)
-                    } else {
-                        new_pos
-                    }
-                } else if new_pos <= self.slice_start {
-                    // Reverse playback: wrap at the other end.
-                    self.slice_end
-                        - 1.0
-                        - (self.slice_start - new_pos)
-                            % (self.slice_end - self.slice_start).max(1.0)
-                } else if new_pos >= self.slice_end {
-                    self.slice_start
-                        + (new_pos - self.slice_end) % (self.slice_end - self.slice_start).max(1.0)
-                } else {
-                    new_pos
-                };
+                self.pos =
+                    wrap_into_slice(self.pos + jump, self.slice_start, self.slice_end, forward);
                 self.grain_phase = 0.0;
             }
         }
 
         out * volume * self.slice_volume
-    }
-}
-
-// ─── Granular texture voice ─────────────────────────────────────────────────
-
-const MAX_GRAINS: usize = 32;
-
-/// A single active grain with its playback state.
-#[derive(Clone, Copy)]
-struct Grain {
-    pos: f32,     // current position in sample buffer (fractional)
-    rate: f32,    // playback rate (1.0 = normal pitch)
-    age: f32,     // 0→1 progress through the grain window
-    inv_len: f32, // 1.0 / grain_length_samples
-    pan: f32,     // -1..+1 stereo position
-    active: bool,
-}
-
-impl Default for Grain {
-    fn default() -> Self {
-        Self {
-            pos: 0.0,
-            rate: 1.0,
-            age: 0.0,
-            inv_len: 1.0,
-            pan: 0.0,
-            active: false,
-        }
-    }
-}
-
-pub(crate) struct GranularVoice {
-    samples: Option<Arc<Vec<f32>>>,
-    grains: [Grain; MAX_GRAINS],
-    spawn_counter: f32, // counts down to next grain spawn
-    rng: NoiseGen,
-}
-
-impl GranularVoice {
-    pub(crate) fn new(seed: u32) -> Self {
-        Self {
-            samples: None,
-            grains: [Grain::default(); MAX_GRAINS],
-            spawn_counter: 0.0,
-            rng: NoiseGen::new(seed),
-        }
-    }
-
-    pub(crate) fn load(&mut self, data: Arc<Vec<f32>>) {
-        self.samples = Some(data);
-        for g in &mut self.grains {
-            g.active = false;
-        }
-    }
-
-    /// Render one stereo sample pair from all active grains.
-    /// Per-grain pan values are applied using equal-power panning.
-    pub(crate) fn process(
-        &mut self,
-        volume: f32,
-        density: f32,
-        grain_size: f32,
-        position: f32,
-        jitter: f32,
-        pitch_scatter: f32,
-        sr: f32,
-    ) -> (f32, f32) {
-        let samples = match &self.samples {
-            Some(s) if !s.is_empty() => s,
-            _ => return (0.0, 0.0),
-        };
-        if volume < 0.001 {
-            return (0.0, 0.0);
-        }
-
-        let buf_len = samples.len() as f32;
-
-        // Spawn new grains based on density (1–40 grains/sec)
-        let grains_per_sec = 1.0 + density * 39.0;
-        self.spawn_counter -= 1.0;
-        if self.spawn_counter <= 0.0 {
-            self.spawn_counter = sr / grains_per_sec;
-            // Find a free grain slot
-            if let Some(g) = self.grains.iter_mut().find(|g| !g.active) {
-                let size_ms = 10.0 + grain_size * 490.0; // 10–500 ms
-                let grain_samples = (size_ms * 0.001 * sr).max(1.0);
-                let rng_val = self.rng.next(); // -1..+1
-                let jitter_offset = rng_val * jitter * 0.25 * buf_len;
-                let start = (position * buf_len + jitter_offset).rem_euclid(buf_len);
-                let rng_pitch = self.rng.next();
-                let pitch_st = rng_pitch * pitch_scatter * 12.0; // ±12 st
-                let rate = 2.0_f32.powf(pitch_st / 12.0);
-                let rng_pan = self.rng.next();
-
-                g.pos = start;
-                g.rate = rate;
-                g.age = 0.0;
-                g.inv_len = 1.0 / grain_samples;
-                g.pan = rng_pan; // used for stereo later; mono mix ignores it
-                g.active = true;
-            }
-        }
-
-        // Mix all active grains with per-grain panning
-        let (mut out_l, mut out_r) = (0.0_f32, 0.0_f32);
-        for g in &mut self.grains {
-            if !g.active {
-                continue;
-            }
-            // Hann window: sin²(π × age)
-            let window = {
-                let x = g.age * std::f32::consts::PI;
-                let s = x.sin();
-                s * s
-            };
-            // Linear interpolation from buffer
-            let idx = g.pos as usize;
-            if idx + 1 < samples.len() {
-                let frac = g.pos - idx as f32;
-                let sample = samples[idx] + (samples[idx + 1] - samples[idx]) * frac;
-                let amp = sample * window;
-                // Equal-power pan: pan ∈ -1..+1 → L/R gain
-                let pan_r = (g.pan + 1.0) * 0.5; // 0..1
-                let pan_l = 1.0 - pan_r;
-                out_l += amp * pan_l;
-                out_r += amp * pan_r;
-            }
-            g.pos = (g.pos + g.rate).rem_euclid(buf_len);
-            g.age += g.inv_len;
-            if g.age >= 1.0 {
-                g.active = false;
-            }
-        }
-
-        let gain = volume * 0.3; // scale down — many overlapping grains can be loud
-        (out_l * gain, out_r * gain)
     }
 }
 
@@ -968,6 +860,114 @@ mod tests {
             "preserve read should trail classic (rewound at grain boundary): classic={}, preserve={}",
             classic,
             preserve,
+        );
+    }
+
+    // ── wrap_into_slice ────────────────────────────────────────────────
+
+    #[test]
+    fn wrap_forward_past_end_lands_inside_slice() {
+        // Slice = [100, 200).  A position 250 (50 past end) should
+        // land at 150 — start + (pos - end) modulo slice_len.
+        let p = super::wrap_into_slice(250.0, 100.0, 200.0, true);
+        assert!((p - 150.0).abs() < 1e-4);
+    }
+
+    #[test]
+    fn wrap_forward_below_start_reflects_to_end() {
+        // Slow-down rewind — position 70 (30 before start) should
+        // wrap to 170 (end - 30).
+        let p = super::wrap_into_slice(70.0, 100.0, 200.0, true);
+        assert!((p - 170.0).abs() < 1e-4);
+    }
+
+    #[test]
+    fn wrap_reverse_below_start_wraps_to_end_minus_one() {
+        // Reverse mode uses end - 1 as the mirror landing so the
+        // interpolator has a valid neighbour sample.
+        let p = super::wrap_into_slice(70.0, 100.0, 200.0, false);
+        assert!((p - 169.0).abs() < 1e-4);
+    }
+
+    #[test]
+    fn wrap_identity_inside_slice() {
+        let p = super::wrap_into_slice(150.0, 100.0, 200.0, true);
+        assert!((p - 150.0).abs() < 1e-4);
+        let p = super::wrap_into_slice(150.0, 100.0, 200.0, false);
+        assert!((p - 150.0).abs() < 1e-4);
+    }
+
+    // ── Grain-boundary crossfade (v2) ──────────────────────────────────
+
+    /// Render `count` samples from a fresh preserve-mode amen with
+    /// a simple sine-like ramp source, returning the whole vector.
+    fn render_preserve(count: usize, sample_len: usize) -> Vec<f32> {
+        let mut v = AmenVoice::new();
+        v.load(ramp_sample(sample_len));
+        v.trigger(
+            1,
+            1,
+            0.0,
+            1.0,
+            false,
+            1.0,
+            0,
+            &nan16(),
+            &nan16(),
+            &nan16(),
+            &none16(),
+            true,  // bpm_stretch
+            true,  // preserve
+            170.0, // source
+            120.0, // host — slows by ~0.706
+        );
+        (0..count).map(|_| v.process(0.0, 1.0, true)).collect()
+    }
+
+    #[test]
+    fn crossfade_blends_current_and_lookahead_in_fade_window() {
+        // One full grain + enough past to cover the fade + a few
+        // samples of the next grain.  Within the fade window, the
+        // output should smoothly transition from the "current read"
+        // toward the "lookahead read"; outside it, output equals the
+        // raw read (ramp sample value at the read position).
+        let sample_len = (AMEN_GRAIN_LEN as usize) * 3;
+        let total = (AMEN_GRAIN_LEN as usize) + 16;
+        let out = render_preserve(total, sample_len);
+        let fade_start = (AMEN_GRAIN_LEN - AMEN_GRAIN_FADE) as usize;
+        let fade_end = AMEN_GRAIN_LEN as usize;
+        // The sample just before the fade should track the read
+        // position nearly identically (no crossfade contribution).
+        let pre = out[fade_start.saturating_sub(4)];
+        // Mid-fade: must differ from the pure-ramp extrapolation
+        // because the lookahead is pulling toward a different
+        // source position.
+        let mid = out[(fade_start + fade_end) / 2];
+        let mid_extrapolated = pre + ((fade_start + fade_end) as f32 / 2.0 - fade_start as f32);
+        assert!(
+            (mid - mid_extrapolated).abs() > 1.0,
+            "mid-fade sample should differ from pure-ramp prediction: mid={}, pure={}",
+            mid,
+            mid_extrapolated,
+        );
+    }
+
+    #[test]
+    fn crossfade_eliminates_splice_discontinuity() {
+        // Measure the sample-to-sample delta across the grain boundary.
+        // With the crossfade, it should stay in the neighbourhood of
+        // the per-sample delta elsewhere in the waveform (ramp slope
+        // ≈ 1.0 per sample) rather than jumping by the full rewind
+        // distance ~600 samples that v1 would produce.
+        let sample_len = (AMEN_GRAIN_LEN as usize) * 3;
+        let total = (AMEN_GRAIN_LEN as usize) + 16;
+        let out = render_preserve(total, sample_len);
+        let splice = AMEN_GRAIN_LEN as usize;
+        let delta = (out[splice] - out[splice - 1]).abs();
+        assert!(
+            delta < 10.0,
+            "splice delta should be small after crossfade, got {}",
+            delta
         );
     }
 }

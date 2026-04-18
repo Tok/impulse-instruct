@@ -219,8 +219,16 @@ A detailed log of what's built.
   panel's BPM row.  PITCH engages granular; TUNE keeps the classic
   resample that pitches with tempo.  The toggle stays disabled
   until STRETCH is on (preserve without stretch is a no-op).
-- v1 has no crossfade at grain splices — noticeable clicks on strong
-  stretch ratios are a known trade-off, follow-up in PLAN.md.
+- **v2 crossfade** eliminates the v1 splice click.  During the last
+  `AMEN_GRAIN_FADE` samples (256 ≈ 5.8 ms at 44.1 kHz) of each grain,
+  the output linearly blends from the current read at `self.pos` toward
+  the lookahead read at `self.pos + jump` (the predicted post-splice
+  read position, wrapped at slice boundaries via the new shared
+  `wrap_into_slice` helper).  At the splice, `self.pos` jumps to the
+  same target the crossfade was heading toward — the output curve is
+  continuous through the boundary.  Splice sample-to-sample delta
+  drops from ~600× the pre-splice slope to under 10× — below audible
+  click threshold for all reasonable stretch ratios.
 - 4 new DSP tests: trigger captures both flags correctly, preserve
   mode zeroes out `extra_pitch`, classic mode still applies the
   log2-based pitch shift, grain boundary actually rewinds the read

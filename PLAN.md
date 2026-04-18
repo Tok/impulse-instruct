@@ -32,11 +32,6 @@ they ship and are reflected in `features.md`.
 
 - **Dub techno send/return** — dedicated send/return FX workflow for
   dub-style infinite delay feedback chains.
-- **Pitch-preserving stretch — crossfade v2** — the granular stretch
-  shipped v1 has no crossfade at grain boundaries, so strong stretch
-  ratios click at ~46 ms intervals.  Follow-up: add a short (e.g. 256
-  sample) linear or raised-cosine crossfade between the tail of the
-  outgoing grain and the head of the incoming one.
 
 ## Sequencer
 

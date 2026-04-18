@@ -7,7 +7,7 @@
 
 #[cfg(test)]
 mod granular_voice_tests {
-    use crate::audio::dsp::samplers::GranularVoice;
+    use crate::audio::dsp::granular_voice::GranularVoice;
     use std::sync::Arc;
 
     #[test]

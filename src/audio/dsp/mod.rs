@@ -5,6 +5,7 @@ mod dsp_util;
 pub mod fx;
 pub mod fx_math;
 pub mod gabber_kick;
+pub mod granular_voice;
 pub mod mod_apply;
 mod params;
 mod rev_tap;
@@ -19,6 +20,7 @@ use fx_math::{
     lfo_value_at, sidechain_duck, sidechain_envelope_step, waveshaper_step,
 };
 use gabber_kick::GabberKick;
+use granular_voice::GranularVoice;
 use mod_apply::apply_mod_target;
 pub use params::AudioParams;
 use samplers::*;
