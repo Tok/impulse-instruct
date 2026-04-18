@@ -69,14 +69,19 @@ pub enum PipelineEvent {
 /// every successful lane applied; failed lanes are logged via the
 /// progress callback but don't abort the pipeline.
 ///
-/// `progress` is called synchronously on this thread (usually the LLM
-/// worker).  Real usage sends each event through a channel to the UI.
+/// `progress` fires for plan/lane events (logging / UI).
+///
+/// `on_lane_applied` fires once per SUCCESSFULLY applied lane with the
+/// new state — the caller writes it back to the shared `AppState` so
+/// the audio thread hears the change immediately instead of waiting
+/// for every lane to finish.  Tests can pass `|_| {}` as a no-op.
 pub fn run_pipeline<B: PipelineBackend>(
     mut state: AppState,
     user_prompt: &str,
     backend: &mut B,
     sampling: &SamplingParams,
     mut progress: impl FnMut(PipelineEvent),
+    mut on_lane_applied: impl FnMut(&AppState),
 ) -> AppState {
     let t_start = std::time::Instant::now();
 
@@ -111,6 +116,13 @@ pub fn run_pipeline<B: PipelineBackend>(
                 let filtered = filter_lane_output(lane, raw);
                 let scope = lane_apply_scope(lane);
                 state = crate::state::apply_llm_update(state, &filtered, &scope);
+                // Commit this lane's updates to the shared app state right
+                // away so the audio thread picks them up — without this,
+                // every lane silently accumulates and the full turn's
+                // worth of patterns would suddenly switch on at the end
+                // (which was reported as "blocking and silent until the
+                // last lane is in").
+                on_lane_applied(&state);
                 progress(PipelineEvent::LaneApplied {
                     lane,
                     update: filtered,
@@ -329,9 +341,17 @@ pub fn run_pipeline_via_pool(
     port: u16,
     sampling: &SamplingParams,
     progress: impl FnMut(PipelineEvent),
+    on_lane_applied: impl FnMut(&AppState),
 ) -> AppState {
     let mut backend = PoolBackend::new(pool, port);
-    run_pipeline(state, user_prompt, &mut backend, sampling, progress)
+    run_pipeline(
+        state,
+        user_prompt,
+        &mut backend,
+        sampling,
+        progress,
+        on_lane_applied,
+    )
 }
 
 #[cfg(test)]
@@ -532,6 +552,7 @@ mod tests {
             &mut backend,
             &SamplingParams::default(),
             |e| events.borrow_mut().push(e),
+            |_| {},
         );
 
         // BPM landed.
@@ -586,6 +607,7 @@ mod tests {
             &mut backend,
             &SamplingParams::default(),
             |e| events.borrow_mut().push(e),
+            |_| {},
         );
         assert!((new_state.sequencer.bpm - 125.0).abs() < 0.01);
         assert!((new_state.fx.reverb_mix - 0.15).abs() < 0.01);
@@ -630,6 +652,7 @@ mod tests {
             &mut backend,
             &SamplingParams::default(),
             |e| events.borrow_mut().push(e),
+            |_| {},
         );
         assert!((new_state.sequencer.bpm - 128.0).abs() < 0.01);
         let failed = events
@@ -684,6 +707,7 @@ mod tests {
             "two-voice acid bass",
             &mut backend,
             &SamplingParams::default(),
+            |_| {},
             |_| {},
         );
         // 3 calls: planner + bass1 + bass2.  The 3rd call's system

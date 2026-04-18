@@ -469,6 +469,28 @@ pub fn run_llm_loop(
             let tx_clone = output_tx.clone();
             let agent_label_for_cb = agent_label.clone();
             let mut lanes_ran = 0usize;
+            // Per-lane write-back: as soon as a lane applies, copy its
+            // sequencer/synth/fx state into the shared app state so the
+            // audio thread hears the change immediately instead of
+            // waiting for every lane to finish.  Without this the
+            // whole turn's worth of patterns switches on simultaneously
+            // at the end, which feels blocky.
+            let state_for_writeback = state.clone();
+            let write_lane_back = move |snapshot: &AppState| {
+                let mut s = state_for_writeback.write();
+                let step = s.sequencer.current_step;
+                s.bass_voices = snapshot.bass_voices.clone();
+                s.kit_a = snapshot.kit_a.clone();
+                s.kit_b = snapshot.kit_b.clone();
+                s.sequencer = snapshot.sequencer.clone();
+                s.sequencer.current_step = step;
+                s.fx = snapshot.fx.clone();
+                s.hoover = snapshot.hoover.clone();
+                s.an1x = snapshot.an1x.clone();
+                s.noise_voice = snapshot.noise_voice.clone();
+                s.lfo = snapshot.lfo;
+                s.rack = snapshot.rack.clone();
+            };
             let new_state = pipeline::run_pipeline_via_pool(
                 snap,
                 prompt,
@@ -520,23 +542,12 @@ pub fn run_llm_loop(
                     }
                     _ => {}
                 },
+                write_lane_back,
             );
-            // Write pipeline output back, preserving the live sequencer
-            // step counter (audio thread advances it independently).
+            let _ = new_state; // per-lane write-back already committed everything
+            // Clear inferring flags now that the pipeline is done.
             {
                 let mut s = state.write();
-                let step = s.sequencer.current_step;
-                s.bass_voices = new_state.bass_voices;
-                s.kit_a = new_state.kit_a;
-                s.kit_b = new_state.kit_b;
-                s.sequencer = new_state.sequencer;
-                s.sequencer.current_step = step;
-                s.fx = new_state.fx;
-                s.hoover = new_state.hoover;
-                s.an1x = new_state.an1x;
-                s.noise_voice = new_state.noise_voice;
-                s.lfo = new_state.lfo;
-                s.rack = new_state.rack;
                 s.llm.is_inferring = false;
                 if let Some(aid) = agent_id
                     && let Some(a) = s.llm_agents.iter_mut().find(|a| a.id == aid)
