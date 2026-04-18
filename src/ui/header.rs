@@ -164,10 +164,15 @@ impl ImpulseApp {
                         } else {
                             0.0
                         };
-                        // Past-side history needs a monotonic time base, so
-                        // we feed the smooth global step (global_step_count
-                        // + frac) instead of the per-cycle current_step.
-                        let smooth_global = state.global_step_count as f64 + frac;
+                        // Use the global_step_count snapshot taken at the
+                        // moment we last detected a step transition, NOT
+                        // the live state field — the audio thread can
+                        // update state between the detection (in mod.rs)
+                        // and this render-time read, which would mix a
+                        // fresh global with a stale (still-clamped) frac
+                        // and cause the playhead to jitter left/right
+                        // every time that race fires.
+                        let smooth_global = self.last_step_global as f64 + frac;
                         super::widgets::event_stream(
                             ui,
                             &state,

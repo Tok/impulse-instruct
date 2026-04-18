@@ -262,64 +262,79 @@ impl ImpulseApp {
 
             ui.separator();
 
-            // ── Pipeline progress (only while a turn is in flight) ───
+            // ── Pipeline progress (always visible — empty when idle) ───
+            // Detect new failures by watching `failed_count` grow; trigger
+            // a 1-second white flash instead of permanently tinting red.
             let progress = self.state.read().llm.pipeline_progress.clone();
-            if let Some(p) = progress {
-                let label = match (&p.current_lane, p.lanes_done >= p.total_lanes) {
-                    (Some(name), _) => format!("{}/{} {}", p.lanes_done + 1, p.total_lanes, name),
-                    (None, true) => format!("{}/{} done", p.total_lanes, p.total_lanes),
-                    (None, false) => format!("{}/{} planning…", p.lanes_done, p.total_lanes),
-                };
-                ui.label(
-                    egui::RichText::new("PIPE")
-                        .monospace()
-                        .size(8.0)
-                        .color(theme::ASH),
-                );
-                let frac = if p.total_lanes > 0 {
-                    p.lanes_done as f32 / p.total_lanes as f32
-                } else {
-                    0.0
-                };
-                let (bar_rect, _) =
-                    ui.allocate_exact_size(egui::vec2(120.0, 6.0), egui::Sense::hover());
-                let pa = ui.painter();
-                pa.rect_filled(bar_rect, 1.0, egui::Color32::from_gray(38));
-                let fill_w = (bar_rect.width() * frac.clamp(0.0, 1.0)).max(0.0);
-                if fill_w > 0.0 {
-                    pa.rect_filled(
-                        egui::Rect::from_min_size(
-                            bar_rect.min,
-                            egui::vec2(fill_w, bar_rect.height()),
-                        ),
-                        1.0,
-                        // Tint failed-lane fraction differently so partial
-                        // failures are visible at a glance.
-                        if p.failed_count > 0 {
-                            egui::Color32::from_rgb(140, 80, 80)
-                        } else {
-                            egui::Color32::from_gray(140)
-                        },
-                    );
-                }
-                ui.label(
-                    egui::RichText::new(label)
-                        .monospace()
-                        .size(8.0)
-                        .color(theme::FOG),
-                );
-                if p.failed_count > 0 {
-                    ui.label(
-                        egui::RichText::new(format!("({} failed)", p.failed_count))
-                            .monospace()
-                            .size(7.5)
-                            .color(theme::IRON),
-                    );
-                }
-                // Pipeline is actively running — keep the UI animating.
-                ui.ctx().request_repaint();
-                ui.separator();
+            let now_t = ui.ctx().input(|i| i.time);
+            let total_failed = progress.as_ref().map(|p| p.failed_count).unwrap_or(0);
+            if total_failed > self.last_pipeline_failed_count {
+                self.pipeline_flash_until = now_t + 1.0;
             }
+            self.last_pipeline_failed_count = total_failed;
+
+            ui.label(
+                egui::RichText::new("PIPE")
+                    .monospace()
+                    .size(8.0)
+                    .color(theme::ASH),
+            );
+            let (bar_rect, _) =
+                ui.allocate_exact_size(egui::vec2(180.0, 6.0), egui::Sense::hover());
+            let pa = ui.painter();
+            pa.rect_filled(bar_rect, 1.0, egui::Color32::from_gray(38));
+
+            let frac = match &progress {
+                Some(p) if p.total_lanes > 0 => p.lanes_done as f32 / p.total_lanes as f32,
+                _ => 0.0,
+            };
+            let fill_w = (bar_rect.width() * frac.clamp(0.0, 1.0)).max(0.0);
+            let flashing = now_t < self.pipeline_flash_until;
+            let bar_color = if flashing {
+                // Pulse white→light-gray over the flash window.
+                let t = ((self.pipeline_flash_until - now_t) as f32).clamp(0.0, 1.0);
+                let g = (180.0 + 75.0 * t) as u8;
+                egui::Color32::from_gray(g)
+            } else {
+                egui::Color32::from_gray(140)
+            };
+            // While flashing, paint the FULL bar so the acknowledgement is
+            // unmistakable even when the pipeline has just finished and the
+            // progress fraction would otherwise be 0 again.
+            let active_w = if flashing { bar_rect.width() } else { fill_w };
+            if active_w > 0.0 {
+                pa.rect_filled(
+                    egui::Rect::from_min_size(
+                        bar_rect.min,
+                        egui::vec2(active_w, bar_rect.height()),
+                    ),
+                    1.0,
+                    bar_color,
+                );
+            }
+
+            let label = match &progress {
+                Some(p) => match &p.current_lane {
+                    Some(name) => format!("{}/{} {}", p.lanes_done + 1, p.total_lanes, name),
+                    None if p.lanes_done >= p.total_lanes => {
+                        format!("{}/{} done", p.total_lanes, p.total_lanes)
+                    }
+                    None => format!("{}/{} planning…", p.lanes_done, p.total_lanes),
+                },
+                None => "idle".to_string(),
+            };
+            ui.label(egui::RichText::new(label).monospace().size(8.0).color(
+                if progress.is_some() {
+                    theme::FOG
+                } else {
+                    theme::IRON
+                },
+            ));
+            // Keep animating while pipeline is live or the flash is ongoing.
+            if progress.is_some() || flashing {
+                ui.ctx().request_repaint();
+            }
+            ui.separator();
 
             // ── JAM timing (same line as model/ctx) ─────────────────
             ui.label(

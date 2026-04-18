@@ -155,6 +155,18 @@ pub struct ImpulseApp {
     scope_buf: Vec<f32>,
     scope_history: std::collections::VecDeque<Vec<f32>>,
     last_seq_step: usize, // smooth event stream
+    /// `state.global_step_count` snapshot taken at the moment the UI last
+    /// detected a step transition.  Header.rs derives `smooth_global_step`
+    /// from this rather than the live state, so the smoothed playhead
+    /// can't jitter when the audio thread updates state between the
+    /// step-change detection and the header's render-time state read.
+    last_step_global: u64,
+    /// Pipeline failure flash: cumulative failed count last seen + the
+    /// `ctx.input(|i| i.time)` timestamp when the next flash should end.
+    /// When `failed_count` grows we briefly tint the progress bar white
+    /// instead of permanently turning it red.
+    last_pipeline_failed_count: usize,
+    pipeline_flash_until: f64,
     session_start: std::time::Instant,
     last_step_time: f64,
     /// Log of melodic notes that have actually fired, captured on each
@@ -337,6 +349,9 @@ impl ImpulseApp {
             scope_buf: Vec::new(),
             scope_history: std::collections::VecDeque::with_capacity(12),
             last_seq_step: usize::MAX,
+            last_step_global: 0,
+            last_pipeline_failed_count: 0,
+            pipeline_flash_until: 0.0,
             melodic_log: std::collections::VecDeque::with_capacity(MELODIC_LOG_CAP),
             drum_log: std::collections::VecDeque::with_capacity(DRUM_LOG_CAP),
             session_start: std::time::Instant::now(),
@@ -708,6 +723,7 @@ impl eframe::App for ImpulseApp {
             if step != self.last_seq_step && s.sequencer.running {
                 self.last_seq_step = step;
                 self.last_step_time = ctx.input(|i| i.time);
+                self.last_step_global = s.global_step_count;
                 let fired_at = s.global_step_count;
                 let seq = &s.sequencer;
                 let mut push = |note: u8, gate: f32, accent: f32, slide: f32| {
@@ -783,6 +799,7 @@ impl eframe::App for ImpulseApp {
                 // Sequencer stopped; just update the cached cursor.
                 self.last_seq_step = step;
                 self.last_step_time = ctx.input(|i| i.time);
+                self.last_step_global = s.global_step_count;
             }
         }
         self.update_audio_analysis(ctx);

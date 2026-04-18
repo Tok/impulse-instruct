@@ -250,14 +250,24 @@ pub fn event_stream(
     } else {
         current_step as f32
     };
-    for i in 0..(display_steps as usize + 2) {
+    // Iterate enough negative-to-positive `i` values to cover the full
+    // visible width.  `now_x` sits at 75% from the left, so the past side
+    // needs ~display_steps * 0.75 negative offsets and the future side
+    // ~display_steps * 0.25 positive — extending past `steps` to allow
+    // for `pos_in_pattern` ∈ [0, steps).  Without this the grid lines
+    // disappeared early on the past side because the loop only iterated
+    // from 0 upward.
+    let past_steps = (display_steps * 0.75).ceil() as i32 + 2;
+    let future_steps = (display_steps * 0.25).ceil() as i32 + steps as i32 + 2;
+    for i in -past_steps..=future_steps {
         let step_offset = i as f32 - pos_in_pattern;
         let x = now_x + step_offset * step_w;
         if x < inner.min.x - 1.0 || x > inner.max.x + 1.0 {
             continue;
         }
-        // Determine absolute step index to check bar/beat alignment
-        let abs_step = i % steps;
+        // Determine absolute step index to check bar/beat alignment.
+        // `rem_euclid` keeps the index non-negative when `i` is negative.
+        let abs_step = i.rem_euclid(steps as i32) as usize;
         let is_bar = abs_step == 0;
         let is_beat = (abs_step as f32 % steps_per_beat).abs() < 0.5;
 
