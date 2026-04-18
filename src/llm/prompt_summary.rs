@@ -65,11 +65,8 @@ pub fn bass_voices_summary(state: &AppState) -> String {
         .join(" AND ");
     format!(
         "{}\n\
-         MULTI-VOICE RULE: when you write any bass pattern (initial jam, \
-         style change, or rewrite), you MUST populate a DISTINCT pattern \
-         for EACH active voice — write {}. Do not write only voice #1 and \
-         leave the others silent. Give each voice its own rhythm and \
-         contour so they counterpoint rather than double.",
+         MULTI-VOICE: write a DISTINCT pattern for each active voice — \
+         {}. Different rhythms/contours, not clones.",
         header, per_voice_keys
     )
 }
@@ -106,23 +103,14 @@ pub fn rack_voice_coverage_summary(state: &AppState) -> String {
         }
     }
     if present.is_empty() {
-        "Active voice modules (wired to MASTER): none".to_string()
+        "Active voices (wired to MASTER): none".to_string()
     } else {
         format!(
-            "Active voice modules (wired to MASTER): [{}]\n\
-             COVERAGE RULE: on an initial jam generation (or any time the \
-             user asks for a beat / groove / pattern without naming a \
-             single voice), write a pattern for every module above that \
-             the ACTIVE STYLE expects to be making sound. Beat-driven \
-             styles (acid, house, techno, D&B, dubstep, breakcore, gabber, \
-             jungle, garage, electro, synthwave) → every drum kit and \
-             amen in the rack MUST have a pattern, not just the bass. \
-             Style takes precedence: ambient / drone / meditation / dark \
-             ambient / space ambient / dub-heavy styles — leave drums \
-             sparse or silent even if 808/909 are in the rack; the style \
-             brief tells you what voices the track needs. A \"bass-only\" \
-             response under a beat-driven style is always wrong when \
-             drums are patched in.",
+            "Active voices (wired to MASTER): [{}]\n\
+             COVERAGE: on a beat-driven style (acid/house/techno/D&B/\
+             dubstep/jungle/gabber/etc) every drum voice above MUST have \
+             a pattern — not just bass. Ambient/drone/meditation/dub \
+             styles may keep drums sparse or silent.",
             present.join(", ")
         )
     }
@@ -185,7 +173,7 @@ mod tests {
         s.bass_voices[0].enabled = true;
         s.bass_voices[1].enabled = true;
         let out = bass_voices_summary(&s);
-        assert!(out.contains("MULTI-VOICE RULE"));
+        assert!(out.contains("MULTI-VOICE"));
         assert!(out.contains("bass_steps+bass_notes"));
         assert!(out.contains("bass2_steps+bass2_notes"));
     }
@@ -196,7 +184,7 @@ mod tests {
         s.bass_voices[0].enabled = true;
         // voice 1 disabled — only voice 0 active, no multi-voice directive
         let out = bass_voices_summary(&s);
-        assert!(!out.contains("MULTI-VOICE RULE"));
+        assert!(!out.contains("MULTI-VOICE"));
     }
 
     #[test]
@@ -233,7 +221,7 @@ mod tests {
         };
         let out = rack_voice_coverage_summary(&s);
         assert!(out.contains("none"));
-        assert!(!out.contains("COVERAGE RULE"));
+        assert!(!out.contains("COVERAGE"));
     }
 
     #[test]
@@ -248,7 +236,7 @@ mod tests {
         let mut s = AppState::default();
         s.rack = rack;
         let out = rack_voice_coverage_summary(&s);
-        assert!(out.contains("COVERAGE RULE"));
+        assert!(out.contains("COVERAGE"));
         // We don't lock the exact preset contents; just assert we see a
         // drum module (the reason the rule exists) and the bass.
         assert!(out.contains("bass"));
@@ -259,7 +247,7 @@ mod tests {
         );
         // Style-precedence caveat must be present so ambient styles don't
         // accidentally get forced drums.
-        assert!(out.contains("ambient"));
+        assert!(out.to_lowercase().contains("ambient"));
     }
 
     #[test]
