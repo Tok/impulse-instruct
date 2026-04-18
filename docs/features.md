@@ -1405,7 +1405,7 @@ scrolls.
 - **Gated reverb** - `fx.reverb_gate_time` (0-2 s), GATE knob in FX panel
 - **Master pitch offset** - `fx.master_pitch_st` (+-12 st), PITCH knob in MASTER group
 - **Autotune FX module** - `ModuleKind::FxAutotune`; two-head grain overlap-add pitch shifter (`fx.autotune_amount` 0–1 → 0..+12 st, `fx.autotune_mix`); pre-allocated 4096-sample ring buffer (no audio-thread allocations); LLM-addressable via `fx.autotune_amount` / `fx.autotune_mix`
-- **Expandable FX XY pad** - `RackModule.pad_expanded` (persisted, defaults to true); FX kinds with `ModuleKind::supports_xy_pad()` reserve an extra grid row and render an XY pad below their knobs; chevron (▾/▸) in the title bar toggles per-instance, calls `arrange_grid()` so neighbours reflow; first rollout: Autotune (`AMOUNT` × `MIX`)
+- **Expandable FX XY pad** - `RackModule.pad_expanded` (persisted, defaults to `false`) + `RackModule.pad_pair` (u8, 0/1/2) on every FX kind; `ModuleKind::supports_xy_pad()` gates both; chevron (▾/▸) in the title bar expands per-instance and calls `arrange_grid()` so neighbours reflow.  2-knob FX (Autotune, Drive, Waveshaper, RingMod) show a direct pad; 3-knob FX (Reverb, Delay, Chorus, Phaser, EQ, Compressor, TapeSat, Bitcrush, Pan) show a glass-wrapped pad + side-mounted `A × B ↻` cycle chip covering all A/B · A/C · B/C pairs (pad's right-click cycle still works).  `render_two_pad` / `render_three_pad` factor the layout; `POST /api/rack/pad { id, expanded?, pair? }` + `"rack": {"pad": [{"kind": "reverb", "expanded": true, "pair": 1}]}` in LLM JSON make pads addressable from scripts and agents.
 
 ## Intelligence
 

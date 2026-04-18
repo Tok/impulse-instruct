@@ -149,6 +149,7 @@ POST /api/rack/mod_cable { "from": 7, "to": 1, "slot": 0, "depth": 0.5 }  LFO→
 POST /api/rack/mod_target{ "module": 1, "slot": 0, "targets": ["BassPan", "BassCutoff"] }
 POST /api/rack/mod_depth { "module": 1, "slot": 0, "depth": 0.5 }  per-jack depth 0..1
 POST /api/rack/remove    { "id": 5 }              remove module + its cables
+POST /api/rack/pad       { "id": 5, "expanded": true, "pair": 1 }  XY pad expand + pair
 POST /api/rack/collapse  { "action": "all" }      all/none/global/voice/fxmod
 ```
 

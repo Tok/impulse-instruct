@@ -191,6 +191,89 @@ mod llm_apply_rack_tests {
         let s = apply_llm_update(s, &update, &[]);
         assert_eq!(s.rack.cables.len(), initial, "should not duplicate cable");
     }
+
+    #[test]
+    fn rack_pad_expand_by_kind_flips_flag() {
+        let s = AppState::default();
+        let update = serde_json::json!({
+            "rack": { "pad": [{ "kind": "reverb", "expanded": true, "pair": 2 }] }
+        });
+        let s = apply_llm_update(s, &update, &[]);
+        let rev = s
+            .rack
+            .modules
+            .iter()
+            .find(|m| m.kind == ModuleKind::FxReverb)
+            .unwrap();
+        assert!(rev.pad_expanded);
+        assert_eq!(rev.pad_pair, 2);
+    }
+
+    #[test]
+    fn rack_pad_pair_clamps_to_two() {
+        let s = AppState::default();
+        let update = serde_json::json!({
+            "rack": { "pad": [{ "kind": "delay", "pair": 99 }] }
+        });
+        let s = apply_llm_update(s, &update, &[]);
+        let del = s
+            .rack
+            .modules
+            .iter()
+            .find(|m| m.kind == ModuleKind::FxDelay)
+            .unwrap();
+        assert_eq!(del.pad_pair, 2, "pair > 2 should clamp to 2");
+    }
+
+    #[test]
+    fn rack_pad_by_id_targets_specific_module() {
+        // Two chorus modules — targeting by id expands the specific one.
+        let mut s = AppState::default();
+        let id_b = s.rack.add_module(ModuleKind::FxChorus);
+        let update = serde_json::json!({
+            "rack": { "pad": [{ "id": id_b, "expanded": true }] }
+        });
+        let s = apply_llm_update(s, &update, &[]);
+        // The one we targeted by id is expanded.
+        let target = s.rack.modules.iter().find(|m| m.id == id_b).unwrap();
+        assert!(target.pad_expanded);
+        // Other chorus instances keep their (default false) state.
+        let other = s
+            .rack
+            .modules
+            .iter()
+            .find(|m| m.kind == ModuleKind::FxChorus && m.id != id_b)
+            .unwrap();
+        assert!(!other.pad_expanded);
+    }
+
+    #[test]
+    fn rack_pad_omitted_fields_stay_unchanged() {
+        let mut s = AppState::default();
+        // Pre-set the reverb's pad state so we can verify partial updates.
+        if let Some(m) = s
+            .rack
+            .modules
+            .iter_mut()
+            .find(|m| m.kind == ModuleKind::FxReverb)
+        {
+            m.pad_expanded = true;
+            m.pad_pair = 1;
+        }
+        // Only update `pair`; expanded should stay true.
+        let update = serde_json::json!({
+            "rack": { "pad": [{ "kind": "reverb", "pair": 2 }] }
+        });
+        let s = apply_llm_update(s, &update, &[]);
+        let rev = s
+            .rack
+            .modules
+            .iter()
+            .find(|m| m.kind == ModuleKind::FxReverb)
+            .unwrap();
+        assert!(rev.pad_expanded, "unspecified expanded should keep true");
+        assert_eq!(rev.pad_pair, 2);
+    }
 }
 
 #[cfg(test)]

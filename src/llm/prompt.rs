@@ -535,9 +535,12 @@ JAM HEAT: {heat_pct}% — {heat_desc}
 RACK (only when user asks to add/wire/remove modules): `{{"rack": {{"add":["808"],
 "remove":["chorus"], "enable":["bitcrush"], "disable":["reverb"], "connect":[
 {{"from":"bass","to":"bitcrush"}}], "disconnect":[...], "mod_cable":[{{"from_lfo":0,
-"to":"bass","slot":0,"depth":0.5,"targets":["BassCutoff"]}}]}}}}`. Module names:
+"to":"bass","slot":0,"depth":0.5,"targets":["BassCutoff"]}}],
+"pad":[{{"kind":"reverb","expanded":true,"pair":1}}]}}}}`. Module names:
 bass, 808, 909, hoover, an1x, amen, noise, granular, bitcrush, reverb, delay,
 chorus, phaser, drive, eq, compressor, tapesat, waveshaper, ringmod, lfo, tts, master.
+`pad` expands an FX card to reveal its XY pad and (for 3-knob FX) picks which
+pair drives the pad — pair 0 = A/B, 1 = A/C, 2 = B/C from the knob row order.
 
 SETTINGS — set only when explicitly asked: `{{"settings": {{ "style": "<id>",
 "jam_bars": 4, "persona": "NAME", "conversation_mode": "producer|dj|mc|off",
