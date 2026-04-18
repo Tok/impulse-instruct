@@ -382,13 +382,109 @@ fn current_param_value(state: &AppState, path: &str) -> f32 {
 
 /// Write a single float value to a param by dot-path.
 /// Builds a minimal nested JSON and calls apply_llm_update so locked_params are respected.
+///
+/// Supported shapes:
+///  - `"fx.reverb_mix"`       → `{"fx": {"reverb_mix": value}}`
+///  - `"bpm"` (top-level)     → `{"bpm": value}`
+///  - `"bass_voices.2.volume"` → `{"bass_voices": [null, null, {"volume": v}]}`
+///    (array padded with nulls up to the indexed slot; the apply layer
+///    honours nulls as "skip this voice")
 fn apply_param_by_path(state: AppState, path: &str, value: f32) -> AppState {
-    // Split "fx.reverb_mix" → {"fx": {"reverb_mix": value}}
-    let parts: Vec<&str> = path.splitn(2, '.').collect();
+    let parts: Vec<&str> = path.split('.').collect();
     let json = match parts.as_slice() {
         [section, key] => serde_json::json!({ *section: { *key: value } }),
         [key] => serde_json::json!({ *key: value }),
+        ["bass_voices", idx_str, key] => {
+            let Ok(idx) = idx_str.parse::<usize>() else {
+                return state;
+            };
+            if idx >= crate::state::MAX_BASS_VOICES {
+                return state;
+            }
+            let mut arr: Vec<serde_json::Value> =
+                std::iter::repeat_n(serde_json::Value::Null, idx + 1).collect();
+            arr[idx] = serde_json::json!({ *key: value });
+            serde_json::json!({ "bass_voices": arr })
+        }
         _ => return state,
     };
     super::transitions::apply_llm_update(state, &json, &[])
+}
+
+// ─── Lane fade-in (Phase 2/3 companion) ──────────────────────────────────────
+
+/// Floor as fraction of the target volume — the voice dips to this
+/// fraction on lane apply, then ramps back up to the full post-lane
+/// volume over `LANE_FADE_BARS`.  Non-zero so a very brief moment of
+/// near-silence doesn't read as an audio dropout.
+pub const LANE_FADE_FLOOR: f32 = 0.15;
+
+/// Length of the lane fade-in, in sequencer steps.  16 ≈ 1 bar at 4/4
+/// with a 16-step pattern; close enough at other step counts.  Short
+/// enough to feel like a transition rather than a slow swell; long
+/// enough that a just-applied pattern doesn't slam in at full volume.
+pub const LANE_FADE_STEPS: u64 = 16;
+
+/// After a pipeline lane applies, dip that voice's volume to
+/// `LANE_FADE_FLOOR` of its current value and schedule a bar-based
+/// `ParamRamp` back up to the original.  Smooths the "pattern snap" when
+/// Phase 2's single-lane picker replaces a melodic voice mid-jam.
+///
+/// Only single-voice lanes qualify: bass voices, hoover, an1x, amen.
+/// Kits (per-drum volumes, no master), FX, Settings, Modulation, Rack
+/// all no-op.  Voices already near-silent (volume < 0.02) also no-op so
+/// a muted voice doesn't get accidentally unmuted at the ramp's target.
+///
+/// Respects locks transparently: the ramp writes through
+/// `apply_param_by_path` → `apply_llm_update`, which honours
+/// `locked_params` and silently skips if the user has pinned the volume.
+pub fn schedule_lane_fade_in(state: AppState, lane: crate::llm::lanes::LaneKind) -> AppState {
+    use crate::llm::lanes::LaneKind;
+    let (target, path_lock_key, path) = match lane {
+        LaneKind::Bass(0) => {
+            let v = state.bass_voices[0].synth.volume;
+            (v, "bass.volume".to_string(), "bass.volume".to_string())
+        }
+        LaneKind::Bass(idx) if idx < crate::state::MAX_BASS_VOICES => {
+            let v = state.bass_voices[idx].synth.volume;
+            // The nested path `bass_voices.N.volume` is the path both
+            // apply_param_by_path (extended) and locked_params use.
+            let p = format!("bass_voices.{}.volume", idx);
+            (v, p.clone(), p)
+        }
+        LaneKind::Hoover => (
+            state.hoover.volume,
+            "hoover.volume".to_string(),
+            "hoover.volume".to_string(),
+        ),
+        LaneKind::An1x => (
+            state.an1x.volume,
+            "an1x.volume".to_string(),
+            "an1x.volume".to_string(),
+        ),
+        LaneKind::Amen => (
+            state.amen.volume,
+            "amen.volume".to_string(),
+            "amen.volume".to_string(),
+        ),
+        _ => return state, // kits, fx, settings, mod, rack — no single-channel fade
+    };
+
+    if target < 0.02 {
+        return state; // voice already silent; fade would be imperceptible
+    }
+    if state.llm.locked_params.contains(&path_lock_key) {
+        return state; // user pinned volume; don't dip+ramp their value
+    }
+
+    let ramp = ParamRamp {
+        param: path,
+        from: target * LANE_FADE_FLOOR,
+        target,
+        current: target * LANE_FADE_FLOOR,
+        step_per_cycle: 0.0,
+        start_global_step: state.global_step_count,
+        total_global_steps: LANE_FADE_STEPS,
+    };
+    schedule_ramp(state, ramp)
 }

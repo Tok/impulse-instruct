@@ -29,12 +29,6 @@ they ship and are reflected in `features.md`.
   global flag; per-slice reverse would enable edit-era glitch patterns.
 - **Reverse mode for compressor envelope** — third FX worth reversing.
   Would give "reverse compression" swell-into-hit transient shaping.
-- **Lane fade-in ramp** — when the pipeline lands a new pattern mid-jam,
-  ramp the voice's volume up over ~1 bar instead of snapping the new
-  loop on.  Core `fx.ramp{s}` machinery already exists (see
-  `state/llm_apply.rs::apply_ramps`); needs a per-voice volume ramp
-  triggered by `on_lane_applied` callback in the pipeline so the new
-  kick fades in while the bass is still being written, etc.
 
 ## Sequencer
 

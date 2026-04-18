@@ -99,13 +99,24 @@ pub fn handle_pipeline_event(
             });
             // Phase 1 lane lifecycle: score the apply against the rules
             // we encode in the system prompt and stash the score on
-            // state.llm.lane_scores.  Phase 2 will use these scores to
-            // weight the next jam-cycle's lane pick.
+            // state.llm.lane_scores.  Phase 2/3 read these for the
+            // weighted picker + retry queue.
             let score = {
                 let s = state.read();
                 crate::llm::lane_eval::evaluate_lane(&s, lane)
             };
             crate::llm::lane_eval::record_lane_score(&mut state.write().llm, lane, score);
+            // Lane fade-in: dip the voice's volume and ramp back up over
+            // ~1 bar so the new pattern swells in instead of snapping on.
+            // No-op for kits/fx/settings/mod (no single-channel volume)
+            // and for voices that are locked or already near-silent.
+            {
+                let s_clone = state.read().clone();
+                let next = crate::state::jam_tools::schedule_lane_fade_in(s_clone, lane);
+                // Only llm.active_ramps changed — avoid trampling voice
+                // fields that the pipeline just wrote.
+                state.write().llm.active_ramps = next.llm.active_ramps;
+            }
         }
         PipelineEvent::LaneFailed { lane, error } => {
             log::warn!("pipeline: {} failed — {}", lane.label(), error);

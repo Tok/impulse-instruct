@@ -144,6 +144,29 @@ A detailed log of what's built.
   `(one-shot)` for quick tailing.
 - 4 new serde tests pin the default + field parsing.
 
+### Lane fade-in ramp
+
+- Phase 2 cycles only replace one voice at a time, which made pattern
+  snaps much more noticeable.  `state::jam_tools::schedule_lane_fade_in`
+  now dips the applied voice's volume to `LANE_FADE_FLOOR` (15 %) of
+  its current value and schedules a bar-based `ParamRamp` back to
+  target over `LANE_FADE_STEPS` (16 steps ≈ 1 bar in 4/4).
+- Hooked into `pipeline_events::handle_pipeline_event` on `LaneApplied`;
+  writes only `llm.active_ramps` to the shared state so it can't
+  trample the voice fields the pipeline just landed.
+- Single-voice lanes only: `Bass(0..3)`, `Hoover`, `An1x`, `Amen`.
+  Kits (per-drum volumes, no master), FX, Settings, Modulation, and
+  Rack no-op by design.  Voices under 0.02 volume or with a locked
+  volume lock-path also no-op.
+- `apply_param_by_path` gained a third-level `bass_voices.N.volume`
+  branch so voices 1-3 reach the apply layer with the right nested
+  JSON (`{"bass_voices": [null, ..., {"volume": v}]}`).
+- Existing `ui_helpers::tick_ramps` already fires `push_audio_params`
+  when ramps are active, so the fade actually reaches the audio thread
+  without any new wiring.
+- 8 new jam_tools tests pin paths, lock/silence no-ops, dedup on
+  repeat apply, and an end-to-end mid-ramp voice-2 volume check.
+
 ### Retry-on-low-score queue (Phase 3)
 
 - `LlmState.retry_queue: VecDeque<String>` — lane labels whose last
