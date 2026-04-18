@@ -89,6 +89,15 @@ pub fn handle_pipeline_event(
                 p.lanes_done = p.lanes_done.saturating_add(1);
                 p.current_lane = None;
             });
+            // Phase 1 lane lifecycle: score the apply against the rules
+            // we encode in the system prompt and stash the score on
+            // state.llm.lane_scores.  Phase 2 will use these scores to
+            // weight the next jam-cycle's lane pick.
+            let score = {
+                let s = state.read();
+                crate::llm::lane_eval::evaluate_lane(&s, lane)
+            };
+            crate::llm::lane_eval::record_lane_score(&mut state.write().llm, lane, score);
         }
         PipelineEvent::LaneFailed { lane, error } => {
             log::warn!("pipeline: {} failed — {}", lane.label(), error);

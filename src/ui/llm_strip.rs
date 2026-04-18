@@ -384,6 +384,37 @@ impl ImpulseApp {
             if progress.is_some() {
                 ui.ctx().request_repaint();
             }
+
+            // Phase-1 lane scores: tiny per-lane summary so the user can
+            // see the evaluator picking up signal in real time.  Order
+            // matches the typical jam pipeline; only renders lanes that
+            // have been scored at least once this session.
+            {
+                let scores = self.state.read().llm.lane_scores.clone();
+                if !scores.is_empty() {
+                    let order = [
+                        "settings", "kit_a", "kit_b", "amen", "bass1", "bass2", "hoover", "an1x",
+                        "fx",
+                    ];
+                    for label in order {
+                        if let Some(s) = scores.get(label) {
+                            // Map score → gray ramp so a glance reads
+                            // brighter = better, dimmer = worse.
+                            let g = (90.0 + s.score * 130.0) as u8;
+                            ui.label(
+                                egui::RichText::new(format!(
+                                    "{}{:.0}",
+                                    &label[..label.len().min(2)],
+                                    s.score * 100.0
+                                ))
+                                .monospace()
+                                .size(7.0)
+                                .color(egui::Color32::from_gray(g)),
+                            );
+                        }
+                    }
+                }
+            }
             ui.separator();
 
             // ── JAM timing (same line as model/ctx) ─────────────────

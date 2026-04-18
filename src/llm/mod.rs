@@ -5,6 +5,7 @@
 
 pub mod instructions;
 pub mod json_repair;
+pub mod lane_eval;
 pub mod lanes;
 pub mod mock;
 pub mod pipeline;

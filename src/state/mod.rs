@@ -1,7 +1,7 @@
 // ─── state/mod.rs ── single source of truth for all synth parameters ─────────
 // Pure data only — no methods that mutate in-place. Transitions at the bottom.
 use serde::{Deserialize, Serialize};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 pub mod drums;
 pub use drums::*;
@@ -401,6 +401,29 @@ pub struct LlmState {
     /// in flight, `None` between turns.  Transient — not serialised.
     #[serde(skip)]
     pub pipeline_progress: Option<PipelineProgress>,
+    /// Per-lane lifecycle scoring keyed by lane label (`"bass1"`,
+    /// `"kit_a"`, …).  Populated by `lane_eval::evaluate_lane` after
+    /// each successful pipeline lane apply.  Phase 1: stored + logged
+    /// only.  Phase 2 will use this to weight the next jam-cycle's
+    /// lane selection.  Transient — not serialised.
+    #[serde(skip)]
+    pub lane_scores: HashMap<String, LaneScore>,
+}
+
+/// One row of `LlmState.lane_scores`.  Tracks how well a lane's last
+/// generated output matched the rules we encode in the system prompt
+/// (subset rule, density, in-scale ratio, …) plus light bookkeeping
+/// for recency-aware scheduling later.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct LaneScore {
+    /// 0..1 — additive partial credit.  1.0 = output matches every
+    /// expectation; 0.0 = empty / schema-rejected / nonsense.
+    pub score: f32,
+    /// `LlmState.jam_cycle_count` at the moment this lane was last
+    /// updated.  Used by Phase 2's recency decay.
+    pub last_changed_cycle: u32,
+    /// Total successful applies of this lane this session.
+    pub change_count: u32,
 }
 
 /// Streaming progress for the lane pipeline — populated by the LLM thread's
@@ -472,6 +495,7 @@ impl Default for LlmState {
             agent_autonomy: true,
             use_pipeline: true,
             pipeline_progress: None,
+            lane_scores: HashMap::new(),
         }
     }
 }
