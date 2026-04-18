@@ -141,8 +141,7 @@ they ship and are reflected in `features.md`.
 
 | Issue | Cause | Status |
 |-------|-------|--------|
-| App hangs intermittently after extended jamming | Suspected write-lock contention or runaway memory during long sessions; symptom: UI freezes, log stops emitting | Needs a reproduce-with-stack-trace pass; `apply_style_selection` and the pipeline writeback have been reduced in lock duration but the residual hang isn't pinned down |
 | LLM-console LED occasionally overlaps the global header log | Module-card LED clip is bounded but not zero-upward; the header log scrolling past the LLM console module reads the bloom in front | `upward_pad = 0` removed the obvious case; if the LED is still visible in front of the header on scroll, the LED's draw layer needs to drop below the header panel's layer (would require painting LEDs on a separate background-priority layer, or moving the LED draw earlier in the frame) |
 | Hoover doesn't sound like a hoover | DSP tuning, not a code bug | Needs filter sweep shape tuning |
-| Pre-echo ignores melodic voices | Mapping not wired yet (velocity field blocker resolved — accent/slide are now proportional f32) | Planned (see "Melodic voice preecho" above) |
+| Pre-echo ignores Hoover and An1x | Their `TriggerEvent` variants carry only `note` (no accent/slide); bass melodic preecho already ships | Planned (see "Hoover / An1x preecho" above) |
 | NeuTts Selector mod jacks show only "—" | No NeuTts-specific LfoTarget yet | Needs TTS bus volume on AudioParams |
