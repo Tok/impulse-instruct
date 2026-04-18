@@ -941,7 +941,11 @@ pub fn run_llm_loop(
         if one_shot {
             // wait for next prompt
         } else {
-            let _ = input_rx.try_recv();
+            // NOTE: an old `let _ = input_rx.try_recv();` lived here as
+            // (apparently) jam-message dedup, but it would also discard
+            // the next user prompt or control message that happened to
+            // be queued — silent command loss.  The jam loop drives
+            // itself via the `[jam_cycle_done]` output below.
             let _ = output_tx.send(LlmOutput {
                 text: "[jam_cycle_done]".to_string(),
                 param_update: None,

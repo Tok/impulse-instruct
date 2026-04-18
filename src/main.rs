@@ -314,7 +314,11 @@ fn run() -> anyhow::Result<()> {
     }
 
     // ── Channels ─────────────────────────────────────────────────────────────
-    let (llm_tx, llm_rx) = crossbeam_channel::bounded::<LlmInput>(16);
+    // Unbounded so model-load stalls (30–90 s for `wait_for_ready`) and
+    // long pipeline turns can't cause `try_send` to silently drop a user
+    // prompt or a SwitchAgentModel control message.  Throughput is human-
+    // paced; growing the queue isn't a real concern.
+    let (llm_tx, llm_rx) = crossbeam_channel::unbounded::<LlmInput>();
     let (llm_out_tx, llm_out_rx) = crossbeam_channel::bounded::<llm::LlmOutput>(32);
 
     // ── Audio engine (before LLM thread so we can share tts_tx) ─────────────
