@@ -176,8 +176,20 @@ impl ImpulseApp {
                             .clicked()
                             && !selected
                         {
+                            // Optimistic UI: reset every agent override to None
+                            // immediately so the agent dropdowns flip to (Default)
+                            // this frame, without waiting for the LLM thread to
+                            // process the SwitchModel message.  The LLM thread's
+                            // SwitchModel handler GCs the pool via shutdown_all_except,
+                            // which is robust to this state already being None.
+                            {
+                                let mut s = self.state.write();
+                                for a in s.llm_agents.iter_mut() {
+                                    a.model_path = None;
+                                }
+                                s.llm.llm_initializing = true;
+                            }
                             let _ = self.llm_tx.try_send(LlmInput::SwitchModel(path.clone()));
-                            self.state.write().llm.llm_initializing = true;
                         }
                     }
                 });

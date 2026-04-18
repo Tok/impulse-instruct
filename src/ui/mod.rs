@@ -235,6 +235,11 @@ pub struct ImpulseApp {
     pub(crate) focused_module: Option<crate::state::ModuleKind>, // rack highlight target
     pub(crate) focus_time: std::time::Instant, // shine-animation timestamp
     last_saved_rack_sig: (usize, usize),
+    /// Hash of (global model_path, every agent model_path).  Bumps the
+    /// session_dirty flag when the user changes any model selection so the
+    /// autosave persists the choice across restarts — the rack signature
+    /// alone misses model picks because they don't add modules or cables.
+    last_saved_model_sig: u64,
     last_save_time: std::time::Instant,
     pub(crate) module_scales: std::collections::HashMap<crate::state::ModuleKind, f32>,
     auto_listen: bool,
@@ -418,6 +423,7 @@ impl ImpulseApp {
             focused_module: None,
             focus_time: std::time::Instant::now(),
             last_saved_rack_sig: (0, 0),
+            last_saved_model_sig: 0,
             last_save_time: std::time::Instant::now(),
             module_scales: crate::state::load_session()
                 .and_then(|s| s.module_scales)
@@ -523,7 +529,8 @@ impl eframe::App for ImpulseApp {
 
         // ── Auto-save session when rack or key settings change ────────────────
         {
-            let rack = &self.state.read().rack;
+            let s = self.state.read();
+            let rack = &s.rack;
             let sig = (
                 rack.modules.len() + rack.cables.len() * 100,
                 rack.modules
@@ -533,6 +540,21 @@ impl eframe::App for ImpulseApp {
             );
             if sig != self.last_saved_rack_sig {
                 self.last_saved_rack_sig = sig;
+                self.session_dirty = true;
+            }
+            // Model selections (global + per-agent overrides) — the rack sig
+            // doesn't catch these because they don't change module/cable count.
+            let model_sig = {
+                use std::hash::{Hash, Hasher};
+                let mut h = std::collections::hash_map::DefaultHasher::new();
+                s.llm.model_path.hash(&mut h);
+                for a in &s.llm_agents {
+                    a.model_path.hash(&mut h);
+                }
+                h.finish()
+            };
+            if model_sig != self.last_saved_model_sig {
+                self.last_saved_model_sig = model_sig;
                 self.session_dirty = true;
             }
         }

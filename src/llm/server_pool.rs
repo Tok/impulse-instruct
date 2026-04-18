@@ -744,6 +744,23 @@ impl LlamaServerPool {
         self.servers.clear();
     }
 
+    /// Shut down every server whose model_path != `keep`.  Used by the console
+    /// "set model" path: console acts as master switch, so any agent override
+    /// or stale leaked ref is unconditionally unloaded.  Bypasses ref counts —
+    /// callers are expected to also reset agent state to None so agents
+    /// re-acquire (with the new global) on their next inference.
+    pub fn shutdown_all_except(&mut self, keep: &str) {
+        let mut i = 0;
+        while i < self.servers.len() {
+            if self.servers[i].model_path != keep {
+                self.servers[i].backend.shutdown();
+                self.servers.remove(i);
+            } else {
+                i += 1;
+            }
+        }
+    }
+
     fn next_free_port(&self) -> u16 {
         // Find the lowest port in range that isn't already in use.
         for offset in 0..MAX_SERVERS as u16 {

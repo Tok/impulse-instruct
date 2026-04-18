@@ -237,28 +237,21 @@ pub fn run_llm_loop(
                 let old_path = state.read().llm.model_path.clone();
                 log::info!("LLM: switching global model {} -> {}", old_path, new_path);
 
-                // Release every agent's explicit override and reset to None,
-                // so the new global propagates to all agents.  This is the
-                // intended UX: console acts as a master switch that unloads
-                // every other model.  Users can re-add per-agent overrides
-                // via the agent dropdown after the switch.
-                let agent_overrides: Vec<String> = {
+                // Console acts as master switch: reset every agent override
+                // to None so they all inherit the new global on next infer,
+                // and unconditionally GC every server in the pool that
+                // isn't the new global.  Using shutdown_all_except (instead
+                // of per-agent release) makes this robust against the UI's
+                // optimistic agent reset — the pool ends up in a clean
+                // state regardless of when agent.model_path flipped to None.
+                {
                     let mut s = state.write();
-                    let overrides = s
-                        .llm_agents
-                        .iter()
-                        .filter_map(|a| a.model_path.clone())
-                        .collect::<Vec<_>>();
                     for a in s.llm_agents.iter_mut() {
                         a.model_path = None;
                     }
-                    overrides
-                };
-                for path in &agent_overrides {
-                    pool.release(path);
                 }
+                pool.shutdown_all_except(&new_path);
 
-                pool.release(&old_path);
                 state.write().llm.model_path = new_path.clone();
                 state.write().llm.context_used = 0;
                 let live = pool.acquire(&new_path).is_ok() && pool.is_any_live();

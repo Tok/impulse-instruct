@@ -790,8 +790,8 @@ mod pool_tests {
 
     /// Simulates the full lifecycle described by the model-switching spec:
     /// console acquires global, agent inferences acquire+release (no leak),
-    /// agent override flips load to a new model, console SwitchModel resets
-    /// every override and unloads everything except the new global.
+    /// agent override flips load to a new model, console SwitchModel uses
+    /// shutdown_all_except to unload everything but the new global.
     /// Locks down the regression path for the "we jump to wrong models" bug.
     #[test]
     fn console_switch_unloads_every_other_model() {
@@ -814,16 +814,13 @@ mod pool_tests {
         );
 
         // Two agents pick explicit overrides → two new servers loaded.
-        let _ = pool.acquire("models/override-x.gguf").unwrap();
-        let _ = pool.acquire("models/override-y.gguf").unwrap();
+        pool.insert_test_server("models/override-x.gguf", 9001);
+        pool.insert_test_server("models/override-y.gguf", 9002);
         assert_eq!(pool.server_count(), 3);
 
-        // Console SwitchModel: release every agent override + the old global,
-        // then acquire the new global.  The two overrides and the old global
-        // should all be unloaded.
-        pool.release("models/override-x.gguf");
-        pool.release("models/override-y.gguf");
-        pool.release("models/global-a.gguf");
+        // Console SwitchModel: shutdown_all_except is the master-switch
+        // primitive — every server other than the new global must die.
+        pool.shutdown_all_except("models/global-b.gguf");
         let _ = pool.acquire("models/global-b.gguf").unwrap();
 
         assert_eq!(pool.server_count(), 1, "only new global should remain");
@@ -831,6 +828,28 @@ mod pool_tests {
         assert!(pool.port_for("models/global-a.gguf").is_none());
         assert!(pool.port_for("models/override-x.gguf").is_none());
         assert!(pool.port_for("models/override-y.gguf").is_none());
+    }
+
+    /// shutdown_all_except keeps the named server even with leaked refs.
+    #[test]
+    fn shutdown_all_except_keeps_target_with_leaked_refs() {
+        let mut pool = LlamaServerPool::new(9000, 4096);
+        pool.insert_test_server("models/keep.gguf", 9000);
+        pool.insert_test_server("models/drop1.gguf", 9001);
+        pool.insert_test_server("models/drop2.gguf", 9002);
+        // Simulate leaked refs on the keeper (3 acquires, 0 releases).
+        let _ = pool.acquire("models/keep.gguf").unwrap();
+        let _ = pool.acquire("models/keep.gguf").unwrap();
+        assert_eq!(pool.ref_count_for("models/keep.gguf"), Some(3));
+
+        pool.shutdown_all_except("models/keep.gguf");
+
+        assert_eq!(pool.server_count(), 1);
+        assert!(pool.port_for("models/keep.gguf").is_some());
+        assert!(pool.port_for("models/drop1.gguf").is_none());
+        assert!(pool.port_for("models/drop2.gguf").is_none());
+        // Ref count preserved — keep was untouched.
+        assert_eq!(pool.ref_count_for("models/keep.gguf"), Some(3));
     }
 
     /// Re-selecting the same agent model in the dropdown must not cause
