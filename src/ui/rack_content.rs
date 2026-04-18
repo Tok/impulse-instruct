@@ -29,9 +29,9 @@ pub(super) fn draw_voice_content(
 
 /// Vertical gap between the FX knob rows and the XY pad section.
 /// Provides visual separation between the two control groups.
-const PAD_SECTION_TOP_GAP: f32 = 6.0;
-/// Vertical gap between the pair-cycle button and the pad itself.
-const PAD_CYCLE_GAP: f32 = 4.0;
+const PAD_SECTION_TOP_GAP: f32 = 4.0;
+/// Width reserved next to a 3-pair pad for the side-mounted cycle button.
+const PAD_CYCLE_SIDE_W: f32 = 44.0;
 
 /// Given a 3-pair XY-pad pair index (0/1/2) and the three knob labels in
 /// canonical A / B / C order, return the (x, y) label pair the pad drives
@@ -151,11 +151,6 @@ pub(super) fn draw_fx_content(
                 ui.add_space(PAD_SECTION_TOP_GAP);
                 let pair = widgets::xy_pad_pair(ui.ctx(), &pad_id);
                 let (lx, ly) = three_pair_labels(pair, "SIZE", "DAMP", "MIX");
-                widgets::centered_row(ui, |ui| {
-                    draw_pad_cycle_button(ui, &pad_id, 3, lx, ly);
-                });
-                ui.add_space(PAD_CYCLE_GAP);
-                let pad_size = (ui.available_width() - 16.0).clamp(60.0, 120.0);
                 let size_locked =
                     matches!(pm("fx.reverb_size"), crate::state::ParamMode::UserOwned);
                 let damp_locked =
@@ -166,7 +161,10 @@ pub(super) fn draw_fx_content(
                     1 => size_locked || mix_locked,
                     _ => damp_locked || mix_locked,
                 };
-                widgets::centered_row(ui, |ui| {
+                // 3-pair layout: pad on the left, cycle button stacked on the
+                // right where the vertical space would otherwise be empty.
+                let pad_size = (ui.available_width() - PAD_CYCLE_SIDE_W - 12.0).clamp(50.0, 100.0);
+                ui.horizontal(|ui| {
                     let (pad_changed, _) = match pair {
                         0 => widgets::xy_pad(
                             ui, &pad_id, lx, ly, &mut rs, &mut rd, pad_size, pad_locked, 3,
@@ -181,6 +179,10 @@ pub(super) fn draw_fx_content(
                     if pad_changed {
                         changed = true;
                     }
+                    ui.add_space(4.0);
+                    ui.vertical(|ui| {
+                        draw_pad_cycle_button(ui, &pad_id, 3, lx, ly);
+                    });
                 });
             }
             if changed || rs != app.state.read().fx.reverb_size || dir_changed || q_changed {

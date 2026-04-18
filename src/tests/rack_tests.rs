@@ -847,8 +847,8 @@ fn effective_grid_size_expands_when_pad_expanded() {
     assert_eq!(w, base_w);
     assert_eq!(
         h,
-        base_h + 2,
-        "expanded autotune should be two rows taller (pad + padding)"
+        base_h + 1,
+        "expanded autotune should be one row taller (pad fills extra cell)"
     );
 }
 
