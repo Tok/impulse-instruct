@@ -362,7 +362,16 @@ pub fn draw_mod_selector_dropdowns(
                         // item spacing 3*2 — leaves the rest for the slider.
                         let slider_w = (overlay_max_w - 14.0 - 30.0 - 12.0).clamp(20.0, 60.0);
                         let mut d = cur_depth;
-                        ui.spacing_mut().slider_width = slider_w;
+                        // Aggressively shrink the slider's interact size,
+                        // padding, and item spacing so the handle + track
+                        // are noticeably smaller than the default and the
+                        // depth row stays single-line even on the
+                        // narrowest 2-cell-wide FX cards.
+                        let style = ui.style_mut();
+                        style.spacing.slider_width = slider_w;
+                        style.spacing.interact_size.y = 10.0;
+                        style.spacing.button_padding = egui::vec2(2.0, 0.0);
+                        style.spacing.item_spacing = egui::vec2(2.0, 0.0);
                         ui.add(egui::Slider::new(&mut d, 0.0..=1.0).show_value(false))
                             .on_hover_text(format!(
                                 "Depth {}{:.0}%",

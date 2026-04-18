@@ -6,10 +6,13 @@ use crate::state::{bank_swap, bank_write, chain_pop, chain_push, set_chain_enabl
 use crate::ui::{ImpulseApp, theme};
 
 /// Per-step bass pan cell — paints a centre-line + tick at the current
-/// pan value; drag-to-set, right-click resets to centre.
-pub(crate) fn pan_cell(
+/// pan value; drag-to-set, right-click resets to centre.  Voice 0
+/// mirrors `bass_pattern`; other voices write into `bass_patterns[vi]`.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn pan_cell_voice(
     ui: &mut egui::Ui,
     app: &mut ImpulseApp,
+    voice_idx: usize,
     abs: usize,
     pan: f32,
     enabled: bool,
@@ -42,20 +45,29 @@ pub(crate) fn pan_cell(
             egui::Stroke::new(1.5, col),
         );
     }
+    let write_pan = |app: &mut ImpulseApp, np: f32| {
+        let vi = voice_idx.min(crate::state::MAX_BASS_VOICES - 1);
+        let mut s = app.state.write();
+        if let Some(pat) = s.sequencer.bass_patterns.get_mut(vi)
+            && let Some(step) = pat.get_mut(abs)
+        {
+            step.pan = np;
+        }
+        if vi == 0
+            && let Some(step) = s.sequencer.bass_pattern.get_mut(abs)
+        {
+            step.pan = np;
+        }
+    };
     if enabled
         && (resp.dragged() || resp.clicked())
         && let Some(pos) = resp.interact_pointer_pos()
     {
         let np = ((pos.x - rect.min.x) / rect.width().max(1.0) * 2.0 - 1.0).clamp(-1.0, 1.0);
-        if let Some(step) = app.state.write().sequencer.bass_pattern.get_mut(abs) {
-            step.pan = np;
-        }
+        write_pan(app, np);
     }
-    if enabled
-        && resp.secondary_clicked()
-        && let Some(step) = app.state.write().sequencer.bass_pattern.get_mut(abs)
-    {
-        step.pan = 0.0;
+    if enabled && resp.secondary_clicked() {
+        write_pan(app, 0.0);
     }
 }
 

@@ -202,17 +202,23 @@ pub fn set_lane_steps(state: AppState, lane: &str, n: usize) -> AppState {
     s
 }
 
-/// Set a 303 step note (on the active voice's pattern).
-pub fn set_bass_step(state: AppState, step: usize, note: u8, active: bool) -> AppState {
+/// Set a 303 step note on a specific voice's pattern.  Voice 0 mirrors
+/// `bass_pattern` (the legacy field) so existing callers stay in sync.
+pub fn set_bass_step_voice(
+    state: AppState,
+    voice_idx: usize,
+    step: usize,
+    note: u8,
+    active: bool,
+) -> AppState {
     let mut s = state;
-    let vi = s.active_voice.min(crate::state::MAX_BASS_VOICES - 1);
+    let vi = voice_idx.min(crate::state::MAX_BASS_VOICES - 1);
     if let Some(pat) = s.sequencer.bass_patterns.get_mut(vi)
         && step < pat.len()
     {
         pat[step].active = active;
         pat[step].note = note;
     }
-    // Keep legacy bass_pattern in sync for voice 0
     if vi == 0 && step < s.sequencer.bass_pattern.len() {
         s.sequencer.bass_pattern[step].active = active;
         s.sequencer.bass_pattern[step].note = note;
@@ -220,10 +226,16 @@ pub fn set_bass_step(state: AppState, step: usize, note: u8, active: bool) -> Ap
     s
 }
 
-/// Toggle accent on a 303 step (active voice).
-pub fn toggle_bass_accent(state: AppState, step: usize) -> AppState {
+/// Set a 303 step note on the active voice's pattern.
+pub fn set_bass_step(state: AppState, step: usize, note: u8, active: bool) -> AppState {
+    let vi = state.active_voice;
+    set_bass_step_voice(state, vi, step, note, active)
+}
+
+/// Toggle accent on a 303 step on a specific voice.
+pub fn toggle_bass_accent_voice(state: AppState, voice_idx: usize, step: usize) -> AppState {
     let mut s = state;
-    let vi = s.active_voice.min(crate::state::MAX_BASS_VOICES - 1);
+    let vi = voice_idx.min(crate::state::MAX_BASS_VOICES - 1);
     if let Some(pat) = s.sequencer.bass_patterns.get_mut(vi)
         && step < pat.len()
     {
@@ -235,10 +247,16 @@ pub fn toggle_bass_accent(state: AppState, step: usize) -> AppState {
     s
 }
 
-/// Toggle slide on a 303 step (active voice).
-pub fn toggle_bass_slide(state: AppState, step: usize) -> AppState {
+/// Toggle accent on a 303 step (active voice).
+pub fn toggle_bass_accent(state: AppState, step: usize) -> AppState {
+    let vi = state.active_voice;
+    toggle_bass_accent_voice(state, vi, step)
+}
+
+/// Toggle slide on a 303 step on a specific voice.
+pub fn toggle_bass_slide_voice(state: AppState, voice_idx: usize, step: usize) -> AppState {
     let mut s = state;
-    let vi = s.active_voice.min(crate::state::MAX_BASS_VOICES - 1);
+    let vi = voice_idx.min(crate::state::MAX_BASS_VOICES - 1);
     if let Some(pat) = s.sequencer.bass_patterns.get_mut(vi)
         && step < pat.len()
     {
@@ -248,6 +266,12 @@ pub fn toggle_bass_slide(state: AppState, step: usize) -> AppState {
         s.sequencer.bass_pattern[step].slide = !s.sequencer.bass_pattern[step].slide;
     }
     s
+}
+
+/// Toggle slide on a 303 step (active voice).
+pub fn toggle_bass_slide(state: AppState, step: usize) -> AppState {
+    let vi = state.active_voice;
+    toggle_bass_slide_voice(state, vi, step)
 }
 
 /// Apply the Reese bass preset.
