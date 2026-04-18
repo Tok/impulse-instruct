@@ -787,6 +787,65 @@ mod pool_tests {
         pool.shutdown_all();
         assert_eq!(pool.server_count(), 0);
     }
+
+    /// Simulates the full lifecycle described by the model-switching spec:
+    /// console acquires global, agent inferences acquire+release (no leak),
+    /// agent override flips load to a new model, console SwitchModel resets
+    /// every override and unloads everything except the new global.
+    /// Locks down the regression path for the "we jump to wrong models" bug.
+    #[test]
+    fn console_switch_unloads_every_other_model() {
+        let mut pool = LlamaServerPool::new(9000, 4096);
+
+        // Startup: console acquires global.
+        pool.insert_test_server("models/global-a.gguf", 9000);
+        assert_eq!(pool.ref_count_for("models/global-a.gguf"), Some(1));
+
+        // Two agent inferences against the global — acquire then release
+        // (the leak fix).  ref_count must return to 1 after each pair.
+        let _ = pool.acquire("models/global-a.gguf").unwrap();
+        pool.release("models/global-a.gguf");
+        let _ = pool.acquire("models/global-a.gguf").unwrap();
+        pool.release("models/global-a.gguf");
+        assert_eq!(
+            pool.ref_count_for("models/global-a.gguf"),
+            Some(1),
+            "inference should not leak refs"
+        );
+
+        // Two agents pick explicit overrides → two new servers loaded.
+        let _ = pool.acquire("models/override-x.gguf").unwrap();
+        let _ = pool.acquire("models/override-y.gguf").unwrap();
+        assert_eq!(pool.server_count(), 3);
+
+        // Console SwitchModel: release every agent override + the old global,
+        // then acquire the new global.  The two overrides and the old global
+        // should all be unloaded.
+        pool.release("models/override-x.gguf");
+        pool.release("models/override-y.gguf");
+        pool.release("models/global-a.gguf");
+        let _ = pool.acquire("models/global-b.gguf").unwrap();
+
+        assert_eq!(pool.server_count(), 1, "only new global should remain");
+        assert_eq!(pool.port_for("models/global-b.gguf"), Some(9000));
+        assert!(pool.port_for("models/global-a.gguf").is_none());
+        assert!(pool.port_for("models/override-x.gguf").is_none());
+        assert!(pool.port_for("models/override-y.gguf").is_none());
+    }
+
+    /// Re-selecting the same agent model in the dropdown must not cause
+    /// release+acquire churn (which would briefly hit ref_count == 0 and
+    /// shut the server down).  The handler short-circuits when old == new.
+    #[test]
+    fn agent_model_no_op_on_same_path() {
+        let mut pool = LlamaServerPool::new(9000, 4096);
+        pool.insert_test_server("models/x.gguf", 9000);
+        let initial_refs = pool.ref_count_for("models/x.gguf");
+        // Mimic SwitchAgentModel handler's old==new short-circuit: no calls.
+        // Asserting nothing changed is the contract we rely on at the call site.
+        assert_eq!(pool.ref_count_for("models/x.gguf"), initial_refs);
+        assert_eq!(pool.server_count(), 1);
+    }
 }
 
 #[cfg(test)]

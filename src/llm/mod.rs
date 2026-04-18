@@ -35,7 +35,19 @@ pub enum LlmInput {
         #[allow(dead_code)]
         agent_id: Option<u32>,
     },
+    /// Change the global (console) model.  Resets every agent override to
+    /// `None` so all agents inherit the new global, and unloads every other
+    /// model server.  Agents wanting their own model can re-pick via the
+    /// agent dropdown afterwards.
     SwitchModel(String),
+    /// Change a single agent's model override.  `new_path = None` re-inherits
+    /// the global model; `Some(path)` adds a per-agent override (separate
+    /// llama-server load).  The pool is updated synchronously so the old
+    /// model's server unloads if no other agent or the global still need it.
+    SwitchAgentModel {
+        agent_id: u32,
+        new_path: Option<String>,
+    },
     ResetContext,
 }
 
@@ -224,6 +236,28 @@ pub fn run_llm_loop(
                 let new_path = new_path.clone();
                 let old_path = state.read().llm.model_path.clone();
                 log::info!("LLM: switching global model {} -> {}", old_path, new_path);
+
+                // Release every agent's explicit override and reset to None,
+                // so the new global propagates to all agents.  This is the
+                // intended UX: console acts as a master switch that unloads
+                // every other model.  Users can re-add per-agent overrides
+                // via the agent dropdown after the switch.
+                let agent_overrides: Vec<String> = {
+                    let mut s = state.write();
+                    let overrides = s
+                        .llm_agents
+                        .iter()
+                        .filter_map(|a| a.model_path.clone())
+                        .collect::<Vec<_>>();
+                    for a in s.llm_agents.iter_mut() {
+                        a.model_path = None;
+                    }
+                    overrides
+                };
+                for path in &agent_overrides {
+                    pool.release(path);
+                }
+
                 pool.release(&old_path);
                 state.write().llm.model_path = new_path.clone();
                 state.write().llm.context_used = 0;
@@ -256,6 +290,42 @@ pub fn run_llm_loop(
                     actions: vec![],
                     agent_id: None,
                 });
+                continue;
+            }
+            LlmInput::SwitchAgentModel { agent_id, new_path } => {
+                let agent_id = *agent_id;
+                let new_path = new_path.clone();
+                // Snapshot the agent's previous explicit override and apply
+                // the new one in a single short write lock.
+                let old_path: Option<String> = {
+                    let mut s = state.write();
+                    if let Some(a) = s.llm_agents.iter_mut().find(|a| a.id == agent_id) {
+                        let prev = a.model_path.take();
+                        a.model_path = new_path.clone();
+                        prev
+                    } else {
+                        log::warn!("LLM: SwitchAgentModel for unknown agent_id={}", agent_id);
+                        continue;
+                    }
+                };
+                if old_path == new_path {
+                    // No-op: dropdown re-selected the same value.
+                    continue;
+                }
+                log::info!(
+                    "LLM: agent {} model {:?} -> {:?}",
+                    agent_id,
+                    old_path,
+                    new_path
+                );
+                if let Some(old) = old_path {
+                    pool.release(&old);
+                }
+                if let Some(new) = new_path
+                    && let Err(e) = pool.acquire(&new)
+                {
+                    log::error!("LLM: agent {} acquire({}) failed: {}", agent_id, new, e);
+                }
                 continue;
             }
             LlmInput::ResetContext => {
@@ -575,6 +645,11 @@ pub fn run_llm_loop(
                     ..LlmOutput::default()
                 });
             }
+            // Release the per-inference acquire (paired with the acquire at
+            // `pool.acquire(&agent_model)` above).  Without this, the pool's
+            // ref_count grows on every inference and servers never unload —
+            // so model switches never reclaim VRAM.
+            pool.release(&agent_model);
             continue;
         }
 
@@ -881,6 +956,10 @@ pub fn run_llm_loop(
                 }
             }
         }
+
+        // Release the per-inference acquire — paired with the acquire above.
+        // Without this the pool ref_count leaks every inference.
+        pool.release(&agent_model);
 
         if one_shot {
             // wait for next prompt

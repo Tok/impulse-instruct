@@ -129,7 +129,10 @@ fn draw_llm_agent_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, module_id: u32)
                         )
                         .clicked()
                     {
-                        app.state.write().llm_agents[idx].model_path = None;
+                        let _ = app.llm_tx.try_send(crate::llm::LlmInput::SwitchAgentModel {
+                            agent_id: module_id,
+                            new_path: None,
+                        });
                     }
                     for path in &app.available_models.clone() {
                         let short = std::path::Path::new(path)
@@ -148,7 +151,10 @@ fn draw_llm_agent_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, module_id: u32)
                             )
                             .clicked()
                         {
-                            app.state.write().llm_agents[idx].model_path = Some(path.clone());
+                            let _ = app.llm_tx.try_send(crate::llm::LlmInput::SwitchAgentModel {
+                                agent_id: module_id,
+                                new_path: Some(path.clone()),
+                            });
                         }
                     }
                 });
