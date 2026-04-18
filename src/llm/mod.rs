@@ -7,6 +7,7 @@ pub mod instructions;
 pub mod json_repair;
 pub mod lanes;
 pub mod mock;
+pub mod pipeline;
 pub mod planner;
 pub mod prompt;
 pub mod prompt_summary;

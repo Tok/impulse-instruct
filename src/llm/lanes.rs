@@ -73,7 +73,16 @@ impl LaneKind {
     /// off-topic emission doesn't leak into the wrong lane's state write.
     pub fn output_keys(self) -> &'static [&'static str] {
         match self {
-            LaneKind::Settings => &["settings", "music_api", "behaviour", "ramp", "ramps"],
+            // Settings owns `sequencer` too — its subkey filter then
+            // restricts to global knobs (bpm/swing/steps/root_note/…).
+            LaneKind::Settings => &[
+                "settings",
+                "music_api",
+                "behaviour",
+                "ramp",
+                "ramps",
+                "sequencer",
+            ],
             LaneKind::Bass(_) => &["bass", "bass_voices", "sequencer"],
             LaneKind::KitA | LaneKind::KitB => &["sequencer"],
             LaneKind::Amen => &["amen", "sequencer"],
@@ -303,9 +312,12 @@ pub fn build_lane_prompt(state: &AppState, lane: LaneKind) -> String {
 
     // Bass-lane-specific context: show the bass voice summary so the model
     // knows how many voices are live.  Other lanes don't need it.
+    // Prefixed with stable labels so downstream lanes can parse / test for
+    // the presence of the prior-lane fingerprint (e.g. bass2 inspects
+    // bass1's active steps to counterpoint rather than double them).
     let bass_context = if matches!(lane, LaneKind::Bass(_)) {
         format!(
-            "\n{}\n{}\n{}\n",
+            "\n{}\nActive bass steps: {}\n{}\n",
             bass_voices_summary(state),
             bass_active_steps_summary(state),
             bass_groove_summary(state),
