@@ -587,18 +587,27 @@ pub fn module_card_sized<R>(
 /// `bg_gray` sets the zone rail background brightness (R=G=B — no tint).
 /// `collapsed` reflects the current collapse state (affects the ▶/▼ arrow drawn).
 /// `all_collapsed` is true when every zone is collapsed (affects the ▼▼/▶▶ button).
-/// Returns `(add_clicked, collapse_toggle_clicked, collapse_all_clicked)`.
+///
+/// `pad_toggle` — when `Some(any_expanded)`, draw an extra XY chip to the
+/// left of the [+ Add] button.  `any_expanded` flips the glyph (▾ when any
+/// module's pad is expanded, ▸ otherwise) so one click collapses all if any
+/// are open, expands all if all are shut.
+///
+/// Returns `(add_clicked, collapse_toggle_clicked, collapse_all_clicked,
+/// pad_toggle_clicked)`.
 pub fn zone_rail(
     ui: &mut egui::Ui,
     label: &str,
     show_add: bool,
+    pad_toggle: Option<bool>,
     bg_gray: u8,
     collapsed: bool,
     all_collapsed: bool,
-) -> (bool, bool, bool) {
+) -> (bool, bool, bool, bool) {
     let mut add_clicked = false;
     let mut collapse_clicked = false;
     let mut collapse_all_clicked = false;
+    let mut pad_toggle_clicked = false;
     let (rail_rect, _) =
         ui.allocate_exact_size(Vec2::new(ui.available_width(), 18.0), Sense::hover());
     let painter = ui.painter_at(rail_rect);
@@ -720,5 +729,53 @@ pub fn zone_rail(
         }
     }
 
-    (add_clicked, collapse_clicked, collapse_all_clicked)
+    // [XY ▾/▸] — XY-pad expand/collapse-all chip, left of the + ADD button.
+    if let Some(any_expanded) = pad_toggle {
+        // Offset from the right edge: past the ▼▼ all-collapse button and
+        // the + ADD button if present.
+        let anchor_right = if show_add {
+            rail_rect.right() - 86.0
+        } else {
+            rail_rect.right() - 40.0
+        };
+        let btn_rect = Rect::from_center_size(
+            Pos2::new(anchor_right - 20.0, screw_y),
+            Vec2::new(40.0, 13.0),
+        );
+        let btn_resp = ui.interact(
+            btn_rect,
+            ui.id().with("pad_all").with(label),
+            Sense::click(),
+        );
+        let btn_col = if btn_resp.hovered() {
+            Color32::from_gray(140)
+        } else {
+            Color32::from_gray(65)
+        };
+        painter.rect_filled(btn_rect, Rounding::same(2.0), Color32::from_gray(24));
+        painter.rect_stroke(btn_rect, Rounding::same(2.0), Stroke::new(0.5, btn_col));
+        let glyph = if any_expanded { "XY ▾" } else { "XY ▸" };
+        painter.text(
+            btn_rect.center(),
+            egui::Align2::CENTER_CENTER,
+            glyph,
+            egui::FontId::monospace(8.0),
+            btn_col,
+        );
+        if btn_resp.clicked() {
+            pad_toggle_clicked = true;
+        }
+        btn_resp.on_hover_text(if any_expanded {
+            "Collapse every FX XY pad"
+        } else {
+            "Expand every FX XY pad"
+        });
+    }
+
+    (
+        add_clicked,
+        collapse_clicked,
+        collapse_all_clicked,
+        pad_toggle_clicked,
+    )
 }

@@ -447,10 +447,11 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
     // ─── MAIN AUDIO zone (sequencer + master) ────────────────────────────────
     app.zone_y[1] = ui.cursor().top() - content_top;
     {
-        let (add, toggle, toggle_all) = module_card::zone_rail(
+        let (add, toggle, toggle_all, _) = module_card::zone_rail(
             ui,
             "MAIN AUDIO",
             true,
+            None,
             24,
             app.zone_global_collapsed,
             all_collapsed,
@@ -595,10 +596,11 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
 
     app.zone_y[2] = ui.cursor().top() - content_top;
     {
-        let (add, toggle, toggle_all) = module_card::zone_rail(
+        let (add, toggle, toggle_all, _) = module_card::zone_rail(
             ui,
             "VOICES",
             true,
+            None,
             18,
             app.zone_voice_collapsed,
             all_collapsed,
@@ -722,10 +724,20 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
 
     app.zone_y[3] = ui.cursor().top() - content_top;
     {
-        let (add, toggle, toggle_all) = module_card::zone_rail(
+        // Any-expanded flag drives the chip's glyph (▾ vs ▸) so one click
+        // always flips the zone into the opposite state.
+        let fx_any_expanded = {
+            let s = app.state.read();
+            s.rack
+                .modules
+                .iter()
+                .any(|m| m.zone == Zone::FxMod && m.kind.supports_xy_pad() && m.pad_expanded)
+        };
+        let (add, toggle, toggle_all, pad_toggle_all) = module_card::zone_rail(
             ui,
             "FX + MODULATION",
             true,
+            Some(fx_any_expanded),
             14,
             app.zone_fxmod_collapsed,
             all_collapsed,
@@ -739,6 +751,19 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
             app.zone_global_collapsed = target;
             app.zone_voice_collapsed = target;
             app.zone_fxmod_collapsed = target;
+        }
+        if pad_toggle_all {
+            let target = !fx_any_expanded;
+            {
+                let mut s = app.state.write();
+                for m in &mut s.rack.modules {
+                    if m.zone == Zone::FxMod && m.kind.supports_xy_pad() {
+                        m.pad_expanded = target;
+                    }
+                }
+                s.rack.arrange_grid();
+            }
+            ui.ctx().request_repaint();
         }
         if add {
             app.add_menu_zone = Some(Zone::FxMod);

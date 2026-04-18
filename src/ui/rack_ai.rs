@@ -20,8 +20,15 @@ pub(super) fn draw_ai_zone(
 ) {
     app.zone_y[0] = ui.cursor().top() - content_top;
     {
-        let (add, toggle, toggle_all) =
-            module_card::zone_rail(ui, "AI", true, 24, app.zone_ai_collapsed, all_collapsed);
+        let (add, toggle, toggle_all, _) = module_card::zone_rail(
+            ui,
+            "AI",
+            true,
+            None,
+            24,
+            app.zone_ai_collapsed,
+            all_collapsed,
+        );
         if toggle {
             app.zone_ai_collapsed = !app.zone_ai_collapsed;
         }
