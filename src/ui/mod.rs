@@ -18,6 +18,7 @@ mod rack_ai;
 pub mod rack_cables;
 pub mod rack_canvas;
 pub(crate) mod rack_content;
+pub(crate) mod rack_content_pad;
 mod rack_grid;
 mod rack_scroll;
 mod rack_toolbar;

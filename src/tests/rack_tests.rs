@@ -849,7 +849,7 @@ fn supports_xy_pad_true_for_every_fx_kind_only() {
 
 #[test]
 fn three_pair_labels_dispatch_matches_cycle_order() {
-    use crate::ui::rack_content::three_pair_labels;
+    use crate::ui::rack_content_pad::three_pair_labels;
     assert_eq!(three_pair_labels(0, "A", "B", "C"), ("A", "B"));
     assert_eq!(three_pair_labels(1, "A", "B", "C"), ("A", "C"));
     assert_eq!(three_pair_labels(2, "A", "B", "C"), ("B", "C"));
