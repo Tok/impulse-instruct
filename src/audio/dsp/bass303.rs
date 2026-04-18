@@ -134,28 +134,38 @@ pub(super) fn lfo_wave(p: f32, waveform: u8) -> f32 {
 impl Bass303 {
     pub(super) fn trigger(&mut self, note: u8, accent: bool, slide: bool, tuning: u8) {
         let new_freq = super::dsp_util::midi_to_hz_tuned(note, tuning);
-        if !self.slide {
+        // `slide` is a property of the NEW step: it asks the voice to
+        // glide *into* this note.  The previously-stored `self.slide`
+        // tracks whether the last trigger asked for a glide — that is
+        // what decides whether pitch jumps or is held for smoothing.
+        let glide_in = self.slide;
+        if !glide_in {
             self.freq = new_freq;
         }
         self.target_freq = new_freq;
         self.accent = accent;
         self.slide = slide;
         self.gate = true;
-        if !slide {
-            // Envelopes restart their attack phase.  Actual starting value
-            // comes from wherever they currently sit (release-in-progress
-            // steals-from-silence behavior), so legato-ish retriggers
-            // don't click.
-            self.amp_phase = EnvPhase::Attack;
-            self.filt_phase = EnvPhase::Attack;
-            // Preserve legacy accent behavior: accent peaks higher.
-            if self.amp_env < 0.01 {
-                self.amp_env = 0.0;
-            }
-            if self.filt_env < 0.01 {
-                self.filt_env = 0.0;
-            }
-            // Reset LFO fade-in so each new note honors the delay setting.
+        // Always restart the envelope attack.  Keeping the old "slide
+        // skips envelope retrigger" behaviour caused slide-into notes to
+        // be barely audible when the previous note had already decayed
+        // into Release (which is the common case for 303-style patches
+        // where amp_sustain ≈ 0).  Restarting Attack here means a slide
+        // note is always audible; pitch still glides smoothly because
+        // `self.freq` was preserved above — only the envelope retriggers,
+        // not the oscillator pitch.
+        self.amp_phase = EnvPhase::Attack;
+        self.filt_phase = EnvPhase::Attack;
+        if self.amp_env < 0.01 {
+            self.amp_env = 0.0;
+        }
+        if self.filt_env < 0.01 {
+            self.filt_env = 0.0;
+        }
+        // LFO delay only resets on a hard note change, not on legato
+        // glides — otherwise a long LFO delay would never accumulate
+        // across a chain of slide-linked notes.
+        if !glide_in {
             self.lfo_fade = 0.0;
         }
     }
@@ -452,6 +462,45 @@ mod tests {
         assert!(
             (fade - 0.5).abs() < 1e-2,
             "at half-time expected ~0.5, got {fade}"
+        );
+    }
+
+    #[test]
+    fn slide_trigger_restarts_envelope() {
+        // Regression: previously, `slide=true` skipped envelope retrigger
+        // entirely, so a slide following a decayed note inherited
+        // Release-into-silence and was inaudible.  After the fix, every
+        // trigger restarts Attack — pitch smoothing is what makes it a
+        // slide, not a muted envelope.
+        let mut v = Bass303::default();
+        // Decay the envelope into Release manually to simulate a previous
+        // note having finished playing.
+        v.amp_phase = EnvPhase::Release;
+        v.amp_env = 0.0;
+        v.filt_phase = EnvPhase::Release;
+        v.filt_env = 0.0;
+        v.slide = true; // previous trigger was a slide, so glide-in is armed
+        v.freq = 110.0;
+        v.trigger(48, false, true, 0); // new slide note
+        assert!(matches!(v.amp_phase, EnvPhase::Attack));
+        assert!(matches!(v.filt_phase, EnvPhase::Attack));
+        // freq preserved for glide; target_freq updated.
+        assert!((v.freq - 110.0).abs() < 1e-3);
+        assert!((v.target_freq - super::super::dsp_util::midi_to_hz_tuned(48, 0)).abs() < 1e-3);
+    }
+
+    #[test]
+    fn non_slide_trigger_jumps_pitch() {
+        let mut v = Bass303::default();
+        v.slide = false; // previous was not a slide
+        v.freq = 110.0;
+        v.trigger(60, false, false, 0);
+        let expected = super::super::dsp_util::midi_to_hz_tuned(60, 0);
+        assert!(
+            (v.freq - expected).abs() < 1e-3,
+            "non-slide trigger should jump freq to new note; got {}, want {}",
+            v.freq,
+            expected
         );
     }
 
