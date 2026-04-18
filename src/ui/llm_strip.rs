@@ -158,19 +158,28 @@ impl ImpulseApp {
     }
 
     pub(super) fn draw_llm_console_content(&mut self, ui: &mut egui::Ui) {
-        // Split the card into LEFT = round-robin cycle viz, RIGHT =
-        // existing console rows.  Cycle is square (width = height)
-        // and takes the full panel height — same idiom as the ring
-        // oscilloscope reserves a square chip on its panel side.
-        // Capped so the right side always has room for prompt + log.
+        // Split the card into LEFT = round-robin cycle viz + score strip,
+        // RIGHT = existing console rows.  Cycle stays square; score strip
+        // is a fixed 26 px band directly under it, so adding scores never
+        // reshapes the right panel or pushes the prompt/log around.
         let total_w = ui.available_width();
         let total_h = ui.available_height();
-        let cycle_size = total_h.max(96.0).min((total_w * 0.35).max(96.0));
+        // Reserve the score strip first so `cycle_size` can still fit the
+        // remaining height + stay square.
+        let score_strip_h = 26.0_f32.min((total_h * 0.22).max(0.0));
+        let cycle_budget_h = (total_h - score_strip_h).max(80.0);
+        let cycle_size = cycle_budget_h.max(96.0).min((total_w * 0.35).max(96.0));
         let gap = 6.0;
         let right_w = (total_w - cycle_size - gap).max(220.0);
 
         let cursor = ui.cursor().min;
-        let cycle_rect = egui::Rect::from_min_size(cursor, egui::vec2(cycle_size, total_h));
+        let cycle_rect = egui::Rect::from_min_size(cursor, egui::vec2(cycle_size, cycle_size));
+        // Score strip fills the same width as the cycle, directly below
+        // it, inset a couple pixels so its bezel doesn't touch the cycle.
+        let score_rect = egui::Rect::from_min_size(
+            egui::pos2(cursor.x, cursor.y + cycle_size + 2.0),
+            egui::vec2(cycle_size, (total_h - cycle_size - 4.0).max(0.0)),
+        );
         let right_rect = egui::Rect::from_min_size(
             egui::pos2(cursor.x + cycle_size + gap, cursor.y),
             egui::vec2(right_w, total_h),
@@ -191,6 +200,12 @@ impl ImpulseApp {
                 cycle_size,
             );
         });
+        if score_rect.height() >= 14.0 {
+            ui.allocate_ui_at_rect(score_rect, |ui| {
+                let s = self.state.read();
+                super::widgets::lane_scores(ui, &s, score_rect);
+            });
+        }
         ui.allocate_ui_at_rect(right_rect, |ui| {
             ui.with_layout(egui::Layout::top_down(egui::Align::Min), |ui| {
                 self.draw_llm_console_inner(ui);

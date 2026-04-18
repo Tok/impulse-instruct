@@ -109,6 +109,23 @@ A detailed log of what's built.
   for weighted sampling over a handful of lanes, deterministic under a
   fixed seed so the 21 scheduler tests pin every decision.
 
+### Lane-score strip in the LLM console
+
+- `ui/widgets/lane_scores.rs` — compact horizontal cell strip drawn
+  directly under the cycle viz.  One cell per live lane on the rack
+  (Settings + active bass voices + present kits + FX, in `default_plan`
+  order), each showing the lane label, latest `lane_eval` score (two
+  decimals), and a mini fill-bar.  Cells are fixed once the rack is
+  wired, so new scores overwrite values in place rather than reflowing
+  the widget each pipeline tick.
+- The currently-inferring lane pulses with a grayscale ring so the strip
+  mirrors the cycle viz's "this lane is working" cue.
+- Hover any cell for a tooltip with the raw score, `change_count`, and
+  "N cycles ago" bookkeeping from `LlmState.lane_scores` — useful for
+  debugging why the Phase 2 scheduler picked (or skipped) a lane.
+- Reserved 26 px strip; the cycle viz shrinks to match so the right
+  panel layout (model bar, prompt, log) stays unchanged.
+
 ### Per-style lane dynamism overrides (Phase 4)
 
 - `Style.lane_dynamism: HashMap<String, f32>` in `styles.json` — optional

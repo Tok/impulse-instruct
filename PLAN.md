@@ -58,10 +58,6 @@ they ship and are reflected in `features.md`.
   schema + scheduler hookup landed in Phase 4, but every style still
   runs on the baked-in defaults.  Fill in genre-appropriate overrides
   (e.g. ambient = bass 0.4 / fx 0.9, hard techno = kit_a 0.95 / fx 0.2).
-- **Score viz in LLM console** — currently scores log via `log::info!`
-  only.  Need a layout-stable widget (small per-lane grid below the
-  cycle viz, or a hover-tooltip on each agent's slot) that doesn't
-  reflow each pipeline tick.
 - **Mid-pipeline live state checks** — `pipeline::run_pipeline` works
   on a snapshot.  When the user changes the rack mid-cycle, in-flight
   lanes for newly-removed modules still fire.  The defensive
