@@ -68,8 +68,16 @@ pub(super) fn draw_fx_content(app: &mut ImpulseApp, ui: &mut egui::Ui, kind: Mod
                 ("DAMPING", &mut rd, pm("fx.reverb_damp")),
                 ("MIX", &mut rm, pm("fx.reverb_mix"))
             );
-            let dir_changed = draw_fx_dir_button(ui, &mut rdir, "Reverb direction");
-            let q_changed = crate::ui::fx_dir::draw_fx_rev_quant_button(ui, &mut rq, "Reverb");
+            // Direction + reverse-quant share one row so the rev-quant
+            // button doesn't get clipped onto a second row that would
+            // overflow narrow Reverb cards.
+            let (dir_changed, q_changed) = ui
+                .horizontal(|ui| {
+                    let d = draw_fx_dir_button(ui, &mut rdir, "Reverb direction");
+                    let q = crate::ui::fx_dir::draw_fx_rev_quant_button(ui, &mut rq, "Reverb");
+                    (d, q)
+                })
+                .inner;
             if changed || rs != app.state.read().fx.reverb_size || dir_changed || q_changed {
                 let mut s = app.state.write();
                 s.fx.reverb_size = rs;
@@ -96,8 +104,13 @@ pub(super) fn draw_fx_content(app: &mut ImpulseApp, ui: &mut egui::Ui, kind: Mod
                 ("FEEDBACK", &mut df, pm("fx.delay_feedback")),
                 ("MIX", &mut dm, pm("fx.delay_mix"))
             );
-            let dir_changed = draw_fx_dir_button(ui, &mut ddir, "Delay direction");
-            let q_changed = crate::ui::fx_dir::draw_fx_rev_quant_button(ui, &mut dq, "Delay");
+            let (dir_changed, q_changed) = ui
+                .horizontal(|ui| {
+                    let d = draw_fx_dir_button(ui, &mut ddir, "Delay direction");
+                    let q = crate::ui::fx_dir::draw_fx_rev_quant_button(ui, &mut dq, "Delay");
+                    (d, q)
+                })
+                .inner;
             if changed || dt != app.state.read().fx.delay_time || dir_changed || q_changed {
                 let mut s = app.state.write();
                 s.fx.delay_time = dt;

@@ -4,6 +4,160 @@ A detailed log of what's built.
 
 ---
 
+## v0.7.7 — UI overhaul cycle
+
+### Header redesign
+
+- 105-column virtual grid shared by both header strips so chip widths
+  line up across the transport bar and the lower log/scope band.
+- Top header: `LOGO` split into `TITLE` (15 pt strong) + `STATUS`
+  (5-column dB table for sub/low/mid/hi/peak, colour-coded by signal
+  strength) + `WARN` (rotating alert lines / "OK") chips, plus
+  centred BPM, compact STOP/REC, HEAT, MUTE+MON, VRAM/RAM.
+- Lower band: free-form layout — square ring oscilloscope on the
+  right (= panel height), centre column defaults to ~40 % of width
+  (bar oscilloscope on top, event stream below), log fills the rest,
+  with a draggable splitter on the log/centre seam that persists for
+  the session.
+- Global log embossed with `theme::draw_screen_panel` (DEEP fill,
+  slightly lighter than the screen `VOID` of the oscilloscopes).
+- All TLA labels spelled out: `MON → MONITOR`, `ARR → ARRANGE`,
+  `CTX → CONTEXT`, `RST → RESET`, `TS → TIME SIG.`, `THK → THINK`,
+  `PRD → PRODUCER`, `MASTER VOL → MASTER VOLUME`, `P.DPT → P.DEPTH`,
+  `P.TIM → P.TIME`, `RESO → RESONANCE`, `ENVMOD → ENV. MOD`,
+  `FWD → FORWARD`, `REV → REVERSE`, `MIR → MIRROR`.
+- Audio-analysis "near clip" warning tightened from a 2 dB to a 1 dB
+  window so default-volume material stops tripping it.
+
+### LED skeuomorphism
+
+- New `theme::led(painter, center, radius, color, intensity)` —
+  5-ring concentric falloff with very transparent outermost ring,
+  hot-spot brightening toward white, dark housing rim, top-left
+  specular highlight.
+- New `theme::led_dark` — inverse-light variant for bright surfaces
+  (used by piano white-key scale dots when Huth coloring is off).
+- New `theme::led_flat` — 2D variant used inside the event stream so
+  dots don't read as physical raised buttons.
+- Module-card title-bar LED on both front and back panels — same
+  chrome, only renders on modules that emit audio
+  (`ModuleKind::has_audio_output()`), lit when
+  `enabled && reaches_master`.  Front-panel title shifts +18 px past
+  the LED so wide names like "BASS SYNTH" don't lose their leading
+  character.
+- Hover tooltip explains the indicator: *Audio path indicator —
+  lit when this module is enabled and its audio reaches MASTER*.
+
+### Rack reachability + wiring
+
+- `RackState::reaches_master(module_id) -> bool` — pure BFS over
+  audio cables (out → in), only stepping through enabled modules.
+  `MasterOutput` counts as reachable even if its own enabled flag
+  is unset.
+- `wire_default_cables` no longer chains all 12 FX serially with no
+  terminus.  New strategy: voices → MASTER (dry direct), TTS →
+  Reverb (sends), Reverb → MASTER and Delay → MASTER.  All other FX
+  live in the rack but stay unwired (transparent placeholders the
+  user patches in).
+- 16 unit tests covering `reaches_master` and the sequencer
+  lane-visibility predicate (`module enabled AND reaches_master`).
+
+### Sequencer lane visibility
+
+- Sequencer panel uses the same predicate the LED does.  Hoover,
+  GabberKick, AmenSampler, etc. only get a lane when the
+  corresponding module is in the rack, enabled, AND patched into
+  the audio path — orphan modules don't take row space.
+- Dynamic-height calculation auto-shrinks to match: no empty rows,
+  no whitespace when a voice is unpatched.
+- `Full` rack preset gains GabberKick.  Wizard now enables
+  `bass_voice_enabled[1]` whenever the chosen preset includes
+  `AcidBass`, so two 303 lanes are on by default.
+
+### Event stream history
+
+- Notes for all melodic voices: bass voices (multi-voice 303),
+  AN1X, and Hoover are folded into the auto-range and rendered as
+  the same Huth-coloured dots.
+- New `MelodicLogEntry` ring buffer in `ImpulseApp` (cap 256, ≈ 8
+  bars at 32-step patterns).  Each sequencer step transition
+  snapshots the active notes from every melodic pattern and stamps
+  them with the current `global_step_count`.
+- Render split: past (offset ≤ 0) reads from the frozen log;
+  future (offset > 0) reads from the live pattern.  Pattern
+  mutations after the fact don't erase or shift visible past
+  notes — once a note has fired it scrolls left until off-screen.
+- Per-voice cycle length honoured for the future side
+  (`bass_voice_steps`, `an1x_steps`, `hoover_steps`).
+
+### Huth temperature display
+
+- `NOTE_TEMP[12]` per-semitone warm/cold scalar derived from
+  cos(hue − 60°); warm pole F-orange (+1.0), cold pole C-blue
+  (−1.0).
+- `audio::spectrum::spectrum_temperature(magnitudes, bin_hz, semi_temps)`
+  pure fn weighted by FFT bin magnitude across 30 Hz – 5 kHz.
+- `state::sequencer_state::pattern_temperature_acc` does the same
+  for melodic patterns weighted by `gate × accent`.
+- Event stream gains a TEMP strip — blue→neutral→orange gradient
+  with a live needle (spectrum) and a small bank tick (pattern
+  data) plus a numeric readout.  Hover tooltip explains both
+  markers.
+
+### Mod-overlay (back-panel LFO chip strip)
+
+- 5-ring LED falloff for chips; `led_flat` for inside-display dots.
+- Card-width-aware wrap budget — `back_card_w` published into
+  ctx-temp by `module_card_back`, consumed by `module_card_mod`.
+- Slider width derived from stable `overlay_max_w` (clamped 20-60
+  px), so it always fits and never jitters as wrapped chips reflow.
+- Chip text 6.5 pt + tighter button padding so drum-kit Selectors
+  pack densely and wrap into 2 rows only when they have to.
+- Anchor on the same row as the jack/label (right of label), so a
+  wrapped chip strip doesn't push the next jack off-screen and
+  `PORT_SPACING = 32` stays tight.
+- Z-clip extended (`screen_bottom − 105 − 70`) so wrapped chip
+  strips never punch through the keyboard panel when the rack is
+  scrolled.
+
+### Per-agent seed (mirrors style)
+
+- `LlmAgentState` gains `seed: i64` (default −1 = random) and
+  `seed_locked: bool`.
+- `propagate_seed(state, seed)` writes the global `LlmState.seed`
+  and copies it to every agent whose `seed_locked == false`.
+- LLM Console gains a SEED row under STYLE: lock-aware label,
+  custom-formatted DragValue (`random` for −1), RANDOM button.
+- Inference path reads `agent.seed` instead of `LlmState.seed` when
+  an `agent_id` is in scope.
+
+### File / project flow
+
+- File menu gains **New project** (re-opens the wizard) and **Load
+  latest project** (newest `project-*.json` in cwd, no rfd dep).
+- Wizard auto-skips on subsequent launches when the saved session
+  has `wizard_done == true`.
+- Stray "Bars:" DragValue removed from the File menu.
+
+### Heat — chaos mode
+
+- `LlmState` default heat 0.4 → 0.5.
+- 5-band heat guidance in the system prompt: `<0.25` minimal,
+  `0.25-0.5` balanced, `0.5-0.75` bold (FX automation kicks in),
+  `0.75-0.95` chaotic (extreme drives, dense ratchets), `≥0.95`
+  *anything goes — break the rules, overdrive everything, ramp
+  every parameter*.
+- `mock_response` jam curve re-tuned to the same ladder.
+
+### Refactoring
+
+- `module_card.rs` split into `module_card.rs` (front) and
+  `module_card_back.rs` (back).  `module_card.rs` re-exports
+  `module_card_back` so existing call sites keep compiling.
+- `focused_title_bg` + `draw_focus_shine` made `pub(super)`.
+
+---
+
 ## v0.7.6 release polish
 
 ### Cable visual hierarchy

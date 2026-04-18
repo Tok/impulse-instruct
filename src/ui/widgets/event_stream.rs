@@ -5,6 +5,7 @@
 
 use crate::state::AppState;
 use crate::state::sequencer_state::pattern_temperature_acc;
+use crate::ui::MelodicLogEntry;
 use crate::ui::theme;
 use egui::{Color32, Pos2, Rect, Sense, Stroke, Ui, Vec2};
 
@@ -50,12 +51,17 @@ fn bank_temperature(state: &AppState) -> f32 {
 
 /// Draw the event stream visualization.
 /// Shows recent and upcoming note events scrolling right-to-left at tempo.
-/// `smooth_step`: fractional step position for sub-step smooth scrolling.
+/// `smooth_global_step`: monotonic `AppState.global_step_count` plus the
+/// fractional sub-step time, so the past-side log can be positioned
+/// relative to absolute time instead of the per-cycle step counter.
+/// `melodic_log`: frozen history of fired notes (rendered for the past
+/// half of the strip — the future half still reads from the live pattern).
 /// `temperature`: live Huth warm/cold value in [-1, +1] (NaN = unavailable).
 pub fn event_stream(
     ui: &mut Ui,
     state: &AppState,
-    smooth_step: f64,
+    smooth_global_step: f64,
+    melodic_log: &std::collections::VecDeque<MelodicLogEntry>,
     width: f32,
     height: f32,
     temperature: f32,
@@ -126,6 +132,17 @@ pub fn event_stream(
             }
         }
     }
+    // Hoover lead notes — same idea: melodic voice, contributes to the
+    // displayed Hz range so its dots aren't clipped off the top/bottom.
+    if state.hoover.enabled {
+        let hoover_steps = seq.hoover_steps.min(seq.hoover_pattern.len());
+        for step in seq.hoover_pattern.iter().take(hoover_steps) {
+            if step.active {
+                lo_note = lo_note.min(step.note);
+                hi_note = hi_note.max(step.note);
+            }
+        }
+    }
     // Add margin of ±3 semitones, minimum 12 semitone range
     if hi_note < lo_note {
         lo_note = 36;
@@ -178,9 +195,11 @@ pub fn event_stream(
     // ── Beat / bar grid ─────────────────────────────────────────────────────
     let steps_per_beat = (steps as f32 / time_sig as f32).max(1.0);
     // Position within the current pattern cycle (0..steps, fractional).
-    // When stopped, snap to current_step (no interpolation drift).
+    // Both global_step_count and current_step increment in lock-step, so
+    // (global % steps) == (current_step % steps); using the global form
+    // lets us share the same time base with the past-note log.
     let pos_in_pattern = if seq.running {
-        (smooth_step as f32).rem_euclid(steps as f32)
+        smooth_global_step.rem_euclid(steps as f64) as f32
     } else {
         current_step as f32
     };
@@ -222,7 +241,39 @@ pub fn event_stream(
         return;
     }
     let circle_r = (inner_h * 0.08).clamp(3.0, 8.0);
+    // Helper: render a note dot at a given offset (in step units).
+    let render_dot = |off: f32, note: u8, gate: f32, accent: bool| {
+        let x = now_x + off * step_w;
+        if x < inner.min.x - circle_r || x > inner.max.x + circle_r {
+            return;
+        }
+        let y = note_y(note);
+        let dist = (off.abs() / display_steps).clamp(0.0, 1.0);
+        let alpha = ((1.0 - dist * 0.7) * 255.0) as u8;
+        let color = theme::note_color(note);
+        let gate_scale = 0.7 + gate * 0.3;
+        let r = circle_r * gate_scale * if accent { 1.4 } else { 1.0 };
+        theme::led_flat(&painter, Pos2::new(x, y), r, color, alpha as f32 / 255.0);
+    };
     if state.ui_prefs.stream_bass_notes {
+        // ── PAST: render fired-note history from the log (offset ≤ 0).
+        // The log freezes what actually fired — pattern mutations after
+        // the fact don't erase or shift visible past notes.
+        for entry in melodic_log.iter() {
+            let off = entry.fired_at as f64 - smooth_global_step;
+            if off > 0.0 {
+                continue;
+            }
+            let off = off as f32;
+            if off < -display_steps {
+                continue;
+            }
+            render_dot(off, entry.note, entry.gate, entry.accent);
+        }
+
+        // ── FUTURE: render upcoming notes from each voice's live pattern.
+        // For each step we compute the *next-fire* offset (always > 0) so
+        // we don't overlap with the log's past dots.
         for (vi, voice) in state.bass_voices.iter().enumerate() {
             if !voice.enabled {
                 continue;
@@ -234,94 +285,91 @@ pub fn event_stream(
             } else {
                 continue;
             };
-
-            for (step_idx, step) in pattern.iter().enumerate().take(steps) {
+            let voice_steps = seq
+                .bass_voice_steps
+                .get(vi)
+                .copied()
+                .unwrap_or(steps)
+                .max(1);
+            let local_pos = pos_in_pattern.rem_euclid(voice_steps as f32);
+            for (step_idx, step) in pattern.iter().enumerate().take(voice_steps) {
                 if !step.active {
                     continue;
                 }
-                let note = step.note;
-                let color = theme::note_color(note);
+                // "Next fire" offset — always > 0.
+                let mut off = step_idx as f32 - local_pos;
+                if off <= 0.0 {
+                    off += voice_steps as f32;
+                }
+                if off > display_steps {
+                    continue;
+                }
+                render_dot(off, step.note, step.gate, step.accent);
 
-                // Position: step relative to smooth current position within pattern
-                let step_offset = step_idx as f32 - pos_in_pattern;
-                let offsets = [
-                    step_offset,
-                    step_offset + steps as f32,
-                    step_offset - steps as f32,
-                ];
-                for &off in &offsets {
+                // Slide: line to next active step in the same cycle.
+                if step.slide
+                    && let Some(next) = pattern.get(step_idx + 1)
+                    && next.active
+                {
                     let x = now_x + off * step_w;
-                    if x < inner.min.x - circle_r || x > inner.max.x + circle_r {
-                        continue;
-                    }
-                    let y = note_y(note);
-
-                    let dist = (off.abs() / display_steps).clamp(0.0, 1.0);
+                    let nx = x + step_w;
+                    let y = note_y(step.note);
+                    let ny = note_y(next.note);
+                    let dist = (off / display_steps).clamp(0.0, 1.0);
                     let alpha = ((1.0 - dist * 0.7) * 255.0) as u8;
-
-                    // Size: accent = 1.4x, gate scales 0.7x–1.0x
-                    let gate_scale = 0.7 + step.gate * 0.3;
-                    let r = circle_r * gate_scale * if step.accent { 1.4 } else { 1.0 };
-                    let pos = Pos2::new(x, y);
-                    theme::led_flat(&painter, pos, r, color, alpha as f32 / 255.0);
-
-                    // Slide: line to next note
-                    if step.slide
-                        && step_idx + 1 < steps
-                        && let Some(next) = pattern.get(step_idx + 1)
-                        && next.active
-                    {
-                        let nx = x + step_w;
-                        let ny = note_y(next.note);
-                        painter.line_segment(
-                            [Pos2::new(x + r, y), Pos2::new(nx - circle_r, ny)],
-                            Stroke::new(
-                                1.0,
-                                Color32::from_rgba_unmultiplied(
-                                    color.r(),
-                                    color.g(),
-                                    color.b(),
-                                    alpha / 2,
-                                ),
+                    let color = theme::note_color(step.note);
+                    let r =
+                        circle_r * (0.7 + step.gate * 0.3) * if step.accent { 1.4 } else { 1.0 };
+                    painter.line_segment(
+                        [Pos2::new(x + r, y), Pos2::new(nx - circle_r, ny)],
+                        Stroke::new(
+                            1.0,
+                            Color32::from_rgba_unmultiplied(
+                                color.r(),
+                                color.g(),
+                                color.b(),
+                                alpha / 2,
                             ),
-                        );
-                    }
+                        ),
+                    );
                 }
             }
         }
 
-        // ── AN1X notes (same Huth coloring; distinct size + slight outline)
-        // Rendered only when AN1X is enabled.  Shares the stream_bass_notes
-        // ui pref — it's the "melodic voice" stream regardless of source —
-        // so the display stays populated when the 303 voices are off.
+        // ── AN1X future notes (past comes from melodic_log).
         if state.an1x.enabled {
-            let an1x_steps = seq.an1x_steps.min(seq.an1x_pattern.len());
+            let an1x_steps = seq.an1x_steps.min(seq.an1x_pattern.len()).max(1);
+            let local_pos = pos_in_pattern.rem_euclid(an1x_steps as f32);
             for (step_idx, step) in seq.an1x_pattern.iter().enumerate().take(an1x_steps) {
                 if !step.active {
                     continue;
                 }
-                let note = step.note;
-                let color = theme::note_color(note);
-                let step_offset = step_idx as f32 - pos_in_pattern;
-                // Wrap relative to AN1X pattern length, not bass length.
-                let offsets = [
-                    step_offset,
-                    step_offset + an1x_steps as f32,
-                    step_offset - an1x_steps as f32,
-                ];
-                for &off in &offsets {
-                    let x = now_x + off * step_w;
-                    if x < inner.min.x - circle_r || x > inner.max.x + circle_r {
-                        continue;
-                    }
-                    let y = note_y(note);
-                    let dist = (off.abs() / display_steps).clamp(0.0, 1.0);
-                    let alpha = ((1.0 - dist * 0.7) * 255.0) as u8;
-                    let gate_scale = 0.7 + step.gate * 0.3;
-                    let r = circle_r * gate_scale * if step.accent { 1.4 } else { 1.0 };
-                    let pos = Pos2::new(x, y);
-                    theme::led_flat(&painter, pos, r, color, alpha as f32 / 255.0);
+                let mut off = step_idx as f32 - local_pos;
+                if off <= 0.0 {
+                    off += an1x_steps as f32;
                 }
+                if off > display_steps {
+                    continue;
+                }
+                render_dot(off, step.note, step.gate, step.accent);
+            }
+        }
+        // ── Hoover future notes — same treatment.
+        if state.hoover.enabled {
+            let hoover_steps = seq.hoover_steps.min(seq.hoover_pattern.len()).max(1);
+            let local_pos = pos_in_pattern.rem_euclid(hoover_steps as f32);
+            for (step_idx, step) in seq.hoover_pattern.iter().enumerate().take(hoover_steps) {
+                if !step.active {
+                    continue;
+                }
+                let mut off = step_idx as f32 - local_pos;
+                if off <= 0.0 {
+                    off += hoover_steps as f32;
+                }
+                if off > display_steps {
+                    continue;
+                }
+                render_dot(off, step.note, step.gate, step.accent);
             }
         }
     } // stream_bass_notes

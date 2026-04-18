@@ -113,21 +113,18 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         let drum_sub = 14.0;
         let header_h = 55.0;
 
-        let has_bass = s
-            .rack
-            .modules
-            .iter()
-            .any(|m| m.kind == crate::state::ModuleKind::AcidBass);
-        let has_hoover = s
-            .rack
-            .modules
-            .iter()
-            .any(|m| m.kind == crate::state::ModuleKind::HooverLead);
-        let has_an1x = s
-            .rack
-            .modules
-            .iter()
-            .any(|m| m.kind == crate::state::ModuleKind::An1xVoice);
+        // Same predicate the front-panel LED uses: module is enabled AND
+        // its audio reaches MASTER.  Hides rows for voices that the user
+        // hasn't patched into the audio path yet.
+        let has_active = |k: crate::state::ModuleKind| -> bool {
+            s.rack
+                .modules
+                .iter()
+                .any(|m| m.kind == k && m.enabled && s.rack.reaches_master(m.id))
+        };
+        let has_bass = has_active(crate::state::ModuleKind::AcidBass);
+        let has_hoover = has_active(crate::state::ModuleKind::HooverLead);
+        let has_an1x = has_active(crate::state::ModuleKind::An1xVoice);
 
         // Drum voices with at least one active step or currently expanded.
         let drum_rows: usize = s
@@ -198,11 +195,19 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
 
     ui.add_space(2.0);
 
-    // ── Rack-presence flags — only show rows for modules that are in the rack ──
+    // ── Rack-presence flags — only show rows for modules that are
+    // enabled AND patched into the audio path (same predicate the
+    // front-panel LED uses).  Modules sitting in the rack with no
+    // cable to MASTER won't take a sequencer row.
     let (rack_has_bass, rack_has_hoover, rack_has_an1x, active_drum_voices) = {
         use crate::state::ModuleKind;
         let s = app.state.read();
-        let has = |k: ModuleKind| s.rack.modules.iter().any(|m| m.kind == k && m.enabled);
+        let has = |k: ModuleKind| {
+            s.rack
+                .modules
+                .iter()
+                .any(|m| m.kind == k && m.enabled && s.rack.reaches_master(m.id))
+        };
         let filtered: Vec<DrumVoice> = DrumVoice::ALL
             .iter()
             .filter(|v| has(v.module_kind()))

@@ -114,6 +114,27 @@ impl MidiClockTracker {
 mod undo;
 pub(crate) use api_log_handler::{ActivityAction, ActivityEntry};
 use undo::StateHistory;
+
+/// Maximum number of past melodic notes the event-stream history retains.
+/// 256 ≈ 8 bars at 32-step patterns, comfortably more than the widget shows.
+pub(crate) const MELODIC_LOG_CAP: usize = 256;
+
+/// One entry in the melodic-note history.  Recorded on each sequencer
+/// step transition by snapshotting active notes from every melodic
+/// pattern, so the event stream can render past notes from a frozen log
+/// instead of the (mutable) live pattern data.
+#[derive(Clone, Copy, Debug)]
+pub struct MelodicLogEntry {
+    /// `AppState.global_step_count` at the moment this note fired.
+    pub fired_at: u64,
+    /// MIDI pitch.
+    pub note: u8,
+    /// Step gate length 0..1 — used to scale the dot size.
+    pub gate: f32,
+    /// Whether the step was accented (renders larger).
+    pub accent: bool,
+}
+
 pub struct ImpulseApp {
     state: Arc<RwLock<AppState>>,
     audio_tx: rtrb::Producer<AudioCommand>,
@@ -124,6 +145,10 @@ pub struct ImpulseApp {
     last_seq_step: usize, // smooth event stream
     session_start: std::time::Instant,
     last_step_time: f64,
+    /// Log of melodic notes that have actually fired, captured on each
+    /// step transition.  The event-stream widget renders past notes from
+    /// this log so mutations to the pattern don't erase visible history.
+    pub(crate) melodic_log: std::collections::VecDeque<MelodicLogEntry>,
     capture_rx: rtrb::Consumer<f32>,
     dsp_load_rx: rtrb::Consumer<f32>,
     dsp_load_buf: Vec<f32>,
@@ -292,6 +317,7 @@ impl ImpulseApp {
             scope_buf: Vec::new(),
             scope_history: std::collections::VecDeque::with_capacity(12),
             last_seq_step: usize::MAX,
+            melodic_log: std::collections::VecDeque::with_capacity(MELODIC_LOG_CAP),
             session_start: std::time::Instant::now(),
             last_step_time: 0.0,
             capture_rx: audio.capture_rx,
@@ -609,10 +635,73 @@ impl eframe::App for ImpulseApp {
             let drain = self.dsp_load_buf.len() - 64;
             self.dsp_load_buf.drain(..drain);
         }
-        // Track step changes for smooth event stream interpolation
+        // Track step changes for smooth event stream interpolation, and
+        // snapshot melodic notes that fired this tick into a frozen log
+        // so the event-stream display retains the past even if the
+        // pattern is mutated mid-cycle.
         {
-            let step = self.state.read().sequencer.current_step;
-            if step != self.last_seq_step {
+            let s = self.state.read();
+            let step = s.sequencer.current_step;
+            if step != self.last_seq_step && s.sequencer.running {
+                self.last_seq_step = step;
+                self.last_step_time = ctx.input(|i| i.time);
+                let fired_at = s.global_step_count;
+                let seq = &s.sequencer;
+                let mut push = |note: u8, gate: f32, accent: bool| {
+                    self.melodic_log.push_back(MelodicLogEntry {
+                        fired_at,
+                        note,
+                        gate,
+                        accent,
+                    });
+                };
+                // Bass voices (multi-voice) — voice 0 mirrors bass_pattern.
+                for (vi, voice) in s.bass_voices.iter().enumerate() {
+                    if !voice.enabled {
+                        continue;
+                    }
+                    let pattern = if vi == 0 {
+                        &seq.bass_pattern
+                    } else if let Some(p) = seq.bass_patterns.get(vi) {
+                        p
+                    } else {
+                        continue;
+                    };
+                    let voice_steps = seq
+                        .bass_voice_steps
+                        .get(vi)
+                        .copied()
+                        .unwrap_or(seq.steps)
+                        .max(1);
+                    if let Some(st) = pattern.get(step % voice_steps)
+                        && st.active
+                    {
+                        push(st.note, st.gate, st.accent);
+                    }
+                }
+                // AN1X
+                if s.an1x.enabled {
+                    let n = seq.an1x_steps.max(1);
+                    if let Some(st) = seq.an1x_pattern.get(step % n)
+                        && st.active
+                    {
+                        push(st.note, st.gate, st.accent);
+                    }
+                }
+                // Hoover
+                if s.hoover.enabled {
+                    let n = seq.hoover_steps.max(1);
+                    if let Some(st) = seq.hoover_pattern.get(step % n)
+                        && st.active
+                    {
+                        push(st.note, st.gate, st.accent);
+                    }
+                }
+                while self.melodic_log.len() > MELODIC_LOG_CAP {
+                    self.melodic_log.pop_front();
+                }
+            } else if step != self.last_seq_step {
+                // Sequencer stopped; just update the cached cursor.
                 self.last_seq_step = step;
                 self.last_step_time = ctx.input(|i| i.time);
             }

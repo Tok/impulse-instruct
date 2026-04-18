@@ -164,7 +164,10 @@ impl ImpulseApp {
                         } else {
                             0.0
                         };
-                        let smooth = self.last_seq_step as f64 + frac;
+                        // Past-side history needs a monotonic time base, so
+                        // we feed the smooth global step (global_step_count
+                        // + frac) instead of the per-cycle current_step.
+                        let smooth_global = state.global_step_count as f64 + frac;
                         let temperature = if self.spectrum_magnitudes.is_empty() {
                             f32::NAN
                         } else {
@@ -179,7 +182,8 @@ impl ImpulseApp {
                         super::widgets::event_stream(
                             ui,
                             &state,
-                            smooth,
+                            smooth_global,
+                            &self.melodic_log,
                             stream_rect.width(),
                             stream_rect.height(),
                             temperature,

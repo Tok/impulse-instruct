@@ -665,6 +665,112 @@ fn reaches_master_disabled_master_still_reachable() {
     assert!(rack.reaches_master(bass));
 }
 
+// ── Sequencer lane visibility ──────────────────────────────────────────────
+//
+// The sequencer panel uses the same predicate the front-panel LED does to
+// decide whether to render a lane: `module is enabled AND reaches_master`.
+// These tests pin that contract so a regression in either piece (the
+// reachability walker or the lane filter) shows up here.
+
+/// Replicates the closure used by `draw_sequencer` (and the height calc).
+fn lane_visible(rack: &RackState, kind: ModuleKind) -> bool {
+    rack.modules
+        .iter()
+        .any(|m| m.kind == kind && m.enabled && rack.reaches_master(m.id))
+}
+
+#[test]
+fn lane_hidden_when_voice_unwired() {
+    let mut rack = empty_rack();
+    let _master = rack.add_module(ModuleKind::MasterOutput);
+    let _bass = rack.add_module(ModuleKind::AcidBass);
+    // No cable — bass doesn't reach master, so its sequencer lane stays hidden.
+    assert!(!lane_visible(&rack, ModuleKind::AcidBass));
+}
+
+#[test]
+fn lane_visible_when_voice_cabled_to_master() {
+    let mut rack = empty_rack();
+    let master = rack.add_module(ModuleKind::MasterOutput);
+    let bass = rack.add_module(ModuleKind::AcidBass);
+    rack.cables.push(audio_cable(bass, master));
+    assert!(lane_visible(&rack, ModuleKind::AcidBass));
+}
+
+#[test]
+fn lane_visible_when_voice_reaches_via_fx() {
+    let mut rack = empty_rack();
+    let master = rack.add_module(ModuleKind::MasterOutput);
+    let bass = rack.add_module(ModuleKind::AcidBass);
+    let reverb = rack.add_module(ModuleKind::FxReverb);
+    rack.cables.push(audio_cable(bass, reverb));
+    rack.cables.push(audio_cable(reverb, master));
+    assert!(lane_visible(&rack, ModuleKind::AcidBass));
+}
+
+#[test]
+fn lane_hidden_when_voice_disabled() {
+    let mut rack = empty_rack();
+    let master = rack.add_module(ModuleKind::MasterOutput);
+    let bass = rack.add_module(ModuleKind::AcidBass);
+    rack.cables.push(audio_cable(bass, master));
+    if let Some(m) = rack.modules.iter_mut().find(|m| m.id == bass) {
+        m.enabled = false;
+    }
+    assert!(!lane_visible(&rack, ModuleKind::AcidBass));
+}
+
+#[test]
+fn drum_lane_filter_skips_unpatched_kits() {
+    use crate::state::DrumVoice;
+    let mut rack = empty_rack();
+    let master = rack.add_module(ModuleKind::MasterOutput);
+    let kit808 = rack.add_module(ModuleKind::DrumKit808);
+    let _gabber = rack.add_module(ModuleKind::GabberKick);
+    rack.cables.push(audio_cable(kit808, master));
+    // 808 is wired → its drum voices should appear.
+    let active: Vec<DrumVoice> = DrumVoice::ALL
+        .iter()
+        .filter(|v| lane_visible(&rack, v.module_kind()))
+        .copied()
+        .collect();
+    assert!(active.contains(&DrumVoice::Kick808));
+    // GabberKick has no cable to master → its lane stays hidden.
+    assert!(!active.contains(&DrumVoice::GabberKick));
+}
+
+#[test]
+fn lane_visible_for_default_preset() {
+    // Every voice in every preset should drive a visible sequencer lane —
+    // the same contract `reaches_master_default_preset_voices_all_reach`
+    // covers, but expressed in lane-visibility terms.
+    for preset in crate::state::RACK_PRESETS {
+        let rack = RackState::from_preset(preset);
+        for kind in [
+            ModuleKind::AcidBass,
+            ModuleKind::HooverLead,
+            ModuleKind::An1xVoice,
+            ModuleKind::DrumKit808,
+            ModuleKind::DrumKit909,
+            ModuleKind::AmenSampler,
+            ModuleKind::GranularTexture,
+            ModuleKind::GabberKick,
+            ModuleKind::NoiseVoice,
+        ] {
+            // Skip kinds not present in this preset.
+            if !rack.modules.iter().any(|m| m.kind == kind) {
+                continue;
+            }
+            assert!(
+                lane_visible(&rack, kind),
+                "preset '{}' kind {:?} expected to drive a visible lane",
+                preset.name,
+                kind,
+            );
+        }
+    }
+}
+
 #[test]
 fn reaches_master_default_preset_voices_all_reach() {
     // All voices in every preset should reach MASTER through the default

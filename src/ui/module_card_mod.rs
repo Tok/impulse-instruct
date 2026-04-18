@@ -92,12 +92,12 @@ const ALL_TARGETS: &[LfoTarget] = &[
     LfoTarget::StereoWidth,
 ];
 
-/// Vertical gap between successive back-panel ports.  Must clear the per-jack
-/// mod-overlay anchored at jack + 12, which itself takes the slider row plus
-/// (for Selector slots) one chip row that may wrap.  At 34 the second
-/// overlay's chip strip overlapped the next jack's circle; 50 leaves a safe
-/// gap even when the chip row wraps to two lines.
-const PORT_SPACING: f32 = 50.0;
+/// Vertical gap between successive back-panel ports.  Overlays now sit on
+/// the SAME ROW as the jack/label (anchored to the right of the label
+/// rather than below it), so we can pack jacks tighter again.  32 leaves
+/// a couple of pixels of clearance even when the chip row wraps to a
+/// second line.
+const PORT_SPACING: f32 = 32.0;
 
 /// Chip-text font size (px) — shrunk slightly from the previous 7.5 so the
 /// per-target chips fit more per row inside a typical card width.
@@ -175,7 +175,7 @@ pub fn has_control_in(kind: ModuleKind) -> bool {
 /// top row (~36 px), then the mod-input jacks stack vertically below.
 pub fn back_strip_height(kind: ModuleKind) -> f32 {
     let mods = mod_inputs(kind).len();
-    (38.0 + mods as f32 * PORT_SPACING).max(54.0)
+    (36.0 + mods as f32 * PORT_SPACING).max(48.0)
 }
 
 /// Draw Mod-in jacks for `kind` starting at `start_y` on the left (input)
@@ -311,11 +311,11 @@ pub fn draw_mod_selector_dropdowns(
             .collect();
         let all_selected =
             !real_targets.is_empty() && real_targets.iter().all(|t| cur_targets.contains(t));
-        // Anchor the overlay BELOW the label text (label sits at the jack's
-        // own y centre, ~10 px right of the circle).  Pushing the overlay
-        // down by ~12 px keeps the slider + chip row clear of the label
-        // and gives wrapped chips room without crowding the next jack.
-        let anchor = p.center + Vec2::new(0.0, 12.0);
+        // Anchor on the SAME ROW as the jack/label.  The label "MOD1"
+        // (etc.) sits at jack.x + 10 and is ~26 px wide, so we offset
+        // 36 px right of the jack centre to clear it, and 8 px up to
+        // vertically centre the slider/chips around the jack y.
+        let anchor = p.center + Vec2::new(36.0, -8.0);
         if anchor.y > max_overlay_y {
             // Jack is below the visible rack region — skip its overlay so
             // the piano panel below isn't covered by the floating Area.
@@ -326,16 +326,14 @@ pub fn draw_mod_selector_dropdowns(
             // Area doesn't paint over the header/prompt strip above.
             continue;
         }
-        // Use the actual card width as the wrap budget.  The overlay is
-        // anchored at the jack centre, which sits 16 px in from the
-        // card's left edge — so the overlay can extend up to
-        // `card_w - 16 - 4 (right margin)` before clipping the card.
+        // Use the actual card width as the wrap budget.  Jack sits 16 px
+        // in from the card's left edge and the overlay anchors 36 px
+        // further right (past the jack label) — so usable horizontal
+        // budget = card_w - 16 - 36 - 4 (right margin).
         let card_w = ctx
             .data(|d| d.get_temp::<f32>(egui::Id::new("back_card_w").with(p.port.module_id)))
             .unwrap_or(180.0);
-        let overlay_max_w = (card_w - 20.0).max(110.0);
-        // Inner chip strip width = overlay minus frame inner_margin (3 px
-        // each side) minus item_spacing.
+        let overlay_max_w = (card_w - 56.0).max(110.0);
         let chip_strip_w = (overlay_max_w - 8.0).max(90.0);
         egui::Area::new(egui::Id::new(("mod_overlay", p.port.module_id, idx)))
             .order(egui::Order::Foreground)
