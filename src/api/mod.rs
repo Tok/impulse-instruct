@@ -576,9 +576,20 @@ async fn post_preset(
         }
         s.llm_agents.clear();
 
-        // Spawn agents from the preset (inline, no full-state swap)
+        let global_model_lower = s.llm.model_path.to_ascii_lowercase();
+
+        // Spawn agents from the preset (inline, no full-state swap).
+        // If the preset's `model_pattern` already matches the user's
+        // global, leave `model_path = None` so the agent inherits —
+        // otherwise `find_model("gemma", …)` would pin every agent to
+        // the first alphabetical Gemma in `available_models` (e.g. an
+        // IQ2 quant) and load a redundant second llama-server.
         for pa in preset.agents {
-            let model_path = find_model(pa.model_pattern, &available_models);
+            let model_path = if global_model_lower.contains(pa.model_pattern) {
+                None
+            } else {
+                find_model(pa.model_pattern, &available_models)
+            };
             let scope: Vec<String> = pa.scope.iter().map(|sc| sc.to_string()).collect();
 
             let id = s.rack.add_module(crate::state::ModuleKind::LlmAgent);
@@ -621,8 +632,11 @@ async fn post_preset(
             agent_names.push(pa.persona);
         }
 
-        // Set the main model path from the first agent
+        // Only re-pin the global model if the preset's first-agent
+        // pattern doesn't already match the user's chosen global —
+        // otherwise we'd silently swap E4B for whatever sorts first.
         if let Some(first) = preset.agents.first()
+            && !global_model_lower.contains(first.model_pattern)
             && let Some(model) = find_model(first.model_pattern, &available_models)
         {
             s.llm.model_path = model;

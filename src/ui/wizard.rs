@@ -447,9 +447,29 @@ impl ImpulseApp {
             }
         }
 
-        // Spawn agents from the agent preset
+        // Spawn agents from the agent preset.
+        //
+        // Pattern resolution:
+        //   * If the preset's `model_pattern` already matches the user's
+        //     selected global model, leave `model_path = None` so the
+        //     agent inherits — avoids loading a SECOND llama-server for
+        //     a model the user didn't pick (e.g. preset says "gemma",
+        //     global is `gemma-4-E4B-it-Q4_K_M.gguf`, and a stale
+        //     `gemma-4-26B-A4B-it-UD-IQ2_XXS.gguf` happens to sort
+        //     alphabetically first → `find_model("gemma", ...)` would
+        //     pin every agent to IQ2 + spin up a second server).
+        //   * Only when the pattern does NOT match the global does the
+        //     preset really want a different model — then we resolve
+        //     explicitly.  None of the curated presets do this today,
+        //     but the affordance is preserved for future per-agent
+        //     model assignments.
+        let global_model_lower = self.state.read().llm.model_path.to_ascii_lowercase();
         for pa in agent_preset.agents {
-            let model_path = find_model(pa.model_pattern, &self.available_models);
+            let model_path = if global_model_lower.contains(pa.model_pattern) {
+                None
+            } else {
+                find_model(pa.model_pattern, &self.available_models)
+            };
             let scope: Vec<String> = pa.scope.iter().map(|s| s.to_string()).collect();
 
             let snapshot = self.state.read().clone();
