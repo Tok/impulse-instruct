@@ -562,6 +562,19 @@ pub fn run_llm_loop(
                 before_state: Some(before_state),
                 ..LlmOutput::default()
             });
+            // Jam loop hand-off: jam cycles (one_shot=false) need the
+            // `[jam_cycle_done]` signal so `drain_llm_outputs` re-fires
+            // the next turn on the round-robin agent.  The monolithic
+            // path sends this at the bottom of the loop; our `continue`
+            // above skips that path, so we mirror it here.  One-shot
+            // user prompts never need this (they're not in a jam).
+            if !one_shot {
+                let _ = output_tx.try_send(LlmOutput {
+                    text: "[jam_cycle_done]".to_string(),
+                    is_jam: true,
+                    ..LlmOutput::default()
+                });
+            }
             continue;
         }
 
