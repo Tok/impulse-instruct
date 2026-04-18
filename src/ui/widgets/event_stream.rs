@@ -56,6 +56,78 @@ pub fn event_stream(
         ((step_idx as f32 - local_pos + WRAP_SLACK).rem_euclid(span)) - WRAP_SLACK
     }
 
+    /// Per-voice envelope used by the leaf drawer behind each note dot.
+    /// All four params are 0–1; voices without a real `decay` (303 bass,
+    /// hoover) pass `decay = 0`.
+    #[derive(Clone, Copy)]
+    struct Envelope {
+        attack: f32,
+        decay: f32,
+        sustain: f32,
+        release: f32,
+    }
+
+    /// Draw a Y-symmetric "leaf" tracing the ADSR contour, anchored on the
+    /// note dot at `origin` and extending forward in time.  The top edge
+    /// is the envelope itself; the bottom is mirrored across `origin.y` so
+    /// the shape sits centred on the note's pitch line.  Each lane voice
+    /// has a distinct envelope, so the leaf shape doubles as a visual
+    /// fingerprint — punchy stabs are tight diamonds, pad-y notes are long
+    /// elongated tails.
+    fn draw_envelope_leaf(
+        painter: &egui::Painter,
+        origin: Pos2,
+        color: Color32,
+        max_height: f32,
+        max_width: f32,
+        accent: f32,
+        gate: f32,
+        env: Envelope,
+        base_alpha: u8,
+    ) {
+        // Fractional time budget per stage (sums to 1.0 before scaling).
+        // Floors keep the shape readable when a stage is at 0.
+        let a = env.attack.clamp(0.0, 1.0) * 0.30 + 0.05;
+        let d = env.decay.clamp(0.0, 1.0) * 0.20;
+        let s_hold = gate.clamp(0.0, 1.0) * 0.35 + 0.10;
+        let r = env.release.clamp(0.0, 1.0) * 0.35 + 0.05;
+        let total = (a + d + s_hold + r).max(0.01);
+        let scale = max_width / total;
+        let aw = a * scale;
+        let dw = d * scale;
+        let sw = s_hold * scale;
+        let rw = r * scale;
+
+        let peak = max_height * (0.6 + 0.4 * accent.clamp(0.0, 1.0));
+        let sus = peak * env.sustain.clamp(0.0, 1.0);
+
+        let x0 = origin.x;
+        let y0 = origin.y;
+        let pts_top = [
+            Pos2::new(x0, y0),
+            Pos2::new(x0 + aw, y0 - peak),
+            Pos2::new(x0 + aw + dw, y0 - sus),
+            Pos2::new(x0 + aw + dw + sw, y0 - sus),
+            Pos2::new(x0 + aw + dw + sw + rw, y0),
+        ];
+        // Closed polygon: top edge + mirrored bottom edge (skip endpoints
+        // which are already on the axis).
+        let mut poly: Vec<Pos2> = pts_top.to_vec();
+        for p in pts_top.iter().rev().skip(1) {
+            poly.push(Pos2::new(p.x, y0 + (y0 - p.y)));
+        }
+        let fill_a = ((base_alpha as f32) * 0.30) as u8;
+        let stroke_a = ((base_alpha as f32) * 0.55) as u8;
+        let fill = Color32::from_rgba_unmultiplied(color.r(), color.g(), color.b(), fill_a);
+        let stroke = Color32::from_rgba_unmultiplied(color.r(), color.g(), color.b(), stroke_a);
+        painter.add(egui::Shape::Path(egui::epaint::PathShape {
+            points: poly,
+            closed: true,
+            fill,
+            stroke: Stroke::new(0.7, stroke).into(),
+        }));
+    }
+
     let seq = &state.sequencer;
     let bpm = seq.bpm;
     let steps = seq.steps;
@@ -284,6 +356,15 @@ pub fn event_stream(
                 .unwrap_or(steps)
                 .max(1);
             let local_pos = pos_in_pattern.rem_euclid(voice_steps as f32);
+            // Bass synth has A-S-R only (no separate amp_decay); the single
+            // "decay" knob drives the filter envelope.  Pass 0 for D so the
+            // leaf goes A → sustain directly without a dip-and-hold.
+            let env = Envelope {
+                attack: voice.synth.amp_attack,
+                decay: 0.0,
+                sustain: voice.synth.amp_sustain,
+                release: voice.synth.amp_release,
+            };
             for (step_idx, step) in pattern.iter().enumerate().take(voice_steps) {
                 if !step.active {
                     continue;
@@ -295,6 +376,22 @@ pub fn event_stream(
                 if off > display_steps {
                     continue;
                 }
+                let dot_x = now_x + off * step_w;
+                let dot_y = note_y(step.note);
+                let color = theme::note_color(step.note);
+                let dist = (off.abs() / display_steps).clamp(0.0, 1.0);
+                let dot_alpha = ((1.0 - dist * 0.7) * 255.0) as u8;
+                draw_envelope_leaf(
+                    &painter,
+                    Pos2::new(dot_x, dot_y),
+                    color,
+                    circle_r * 1.4,
+                    step_w * 1.6,
+                    step.accent,
+                    step.gate,
+                    env,
+                    dot_alpha,
+                );
                 render_dot(off, step.note, step.gate, step.accent, step.slide);
 
                 // Slide: diagonal line to next active step, length and
@@ -331,6 +428,13 @@ pub fn event_stream(
         if state.an1x.enabled {
             let an1x_steps = seq.an1x_steps.min(seq.an1x_pattern.len()).max(1);
             let local_pos = pos_in_pattern.rem_euclid(an1x_steps as f32);
+            // AN1X has full ADSR on its amp envelope.
+            let env = Envelope {
+                attack: state.an1x.amp_attack,
+                decay: state.an1x.amp_decay,
+                sustain: state.an1x.amp_sustain,
+                release: state.an1x.amp_release,
+            };
             for (step_idx, step) in seq.an1x_pattern.iter().enumerate().take(an1x_steps) {
                 if !step.active {
                     continue;
@@ -339,6 +443,22 @@ pub fn event_stream(
                 if off > display_steps {
                     continue;
                 }
+                let dot_x = now_x + off * step_w;
+                let dot_y = note_y(step.note);
+                let color = theme::note_color(step.note);
+                let dist = (off.abs() / display_steps).clamp(0.0, 1.0);
+                let dot_alpha = ((1.0 - dist * 0.7) * 255.0) as u8;
+                draw_envelope_leaf(
+                    &painter,
+                    Pos2::new(dot_x, dot_y),
+                    color,
+                    circle_r * 1.4,
+                    step_w * 1.6,
+                    step.accent,
+                    step.gate,
+                    env,
+                    dot_alpha,
+                );
                 render_dot(off, step.note, step.gate, step.accent, step.slide);
             }
         }
@@ -346,6 +466,16 @@ pub fn event_stream(
         if state.hoover.enabled {
             let hoover_steps = seq.hoover_steps.min(seq.hoover_pattern.len()).max(1);
             let local_pos = pos_in_pattern.rem_euclid(hoover_steps as f32);
+            // Hoover doesn't expose ADSR — synthesise a pad-style envelope:
+            // medium attack from sweep_time, full sustain (volume-driven),
+            // medium release proportional to sweep_time.  Approximate but
+            // visually distinguishes it from snappier voices.
+            let env = Envelope {
+                attack: state.hoover.sweep_time.clamp(0.0, 1.0) * 0.4,
+                decay: 0.0,
+                sustain: 1.0,
+                release: state.hoover.sweep_time.clamp(0.0, 1.0) * 0.5,
+            };
             for (step_idx, step) in seq.hoover_pattern.iter().enumerate().take(hoover_steps) {
                 if !step.active {
                     continue;
@@ -354,6 +484,22 @@ pub fn event_stream(
                 if off > display_steps {
                     continue;
                 }
+                let dot_x = now_x + off * step_w;
+                let dot_y = note_y(step.note);
+                let color = theme::note_color(step.note);
+                let dist = (off.abs() / display_steps).clamp(0.0, 1.0);
+                let dot_alpha = ((1.0 - dist * 0.7) * 255.0) as u8;
+                draw_envelope_leaf(
+                    &painter,
+                    Pos2::new(dot_x, dot_y),
+                    color,
+                    circle_r * 1.4,
+                    step_w * 1.6,
+                    step.accent,
+                    step.gate,
+                    env,
+                    dot_alpha,
+                );
                 render_dot(off, step.note, step.gate, step.accent, step.slide);
             }
         }
