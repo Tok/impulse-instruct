@@ -196,6 +196,23 @@ A detailed log of what's built.
   + cascade lands on `BassTrigger.slide`, 2 apply-layer tests for
   bass-key JSON + partial-update preservation.
 
+### Reverse-mode compressor
+
+- `FxState.compressor_reverse: bool` — swaps the envelope follower's
+  attack and release time constants inside `Compressor::compress_band`.
+  Normal shape (1 ms attack + 80 ms release) clamps transients fast
+  and releases slowly.  Reverse shape (80 ms / 1 ms) lets the initial
+  transient punch through while the envelope slowly catches up and
+  clamps the sustain — classic reverse-compression swell-into-hit
+  without any look-ahead.
+- Third FX with a reversal mode alongside `reverb_dir` and `delay_dir`.
+  UI: `REVERSE` toggle under the RATIO / MULTI row in the COMP glass
+  pane on the FX panel.  LLM / API accept `{"fx":
+  {"compressor_reverse": true}}`; honours the
+  `fx.compressor_reverse` lock path.
+- 4 new DSP tests pin the asymmetric envelope behaviour: slow rise,
+  fast fall, initial transient preserved, sustain still clamped.
+
 ### Per-slice amen reverse UI
 
 - `draw_slice_reverse_strip` in `panels/amen.rs` — a per-slice direction

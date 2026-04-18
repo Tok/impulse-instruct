@@ -363,18 +363,29 @@ impl Compressor {
     }
 
     /// Single-band compressor (static — no &self to avoid borrow conflicts).
+    ///
+    /// `reverse` swaps the attack / release time constants.  Normal
+    /// shape is fast attack + slow release (1 ms / 80 ms): catches
+    /// transients hard and releases slowly, classic peak limiting.
+    /// Reversed shape (80 ms / 1 ms) makes the envelope miss the
+    /// initial transient almost entirely — the compressor can't ramp
+    /// its gain reduction up fast enough — then clamps the sustain
+    /// once the envelope catches up, creating the classic reverse-
+    /// compression swell-into-hit feel without any look-ahead.
     pub(crate) fn compress_band(
         input: f32,
         env: &mut f32,
         threshold: f32,
         ratio: f32,
         sr: f32,
+        reverse: bool,
     ) -> f32 {
         let thresh_db = -40.0 * (1.0 - threshold);
         let ratio_val = 1.0 + ratio * 19.0;
         let level = input.abs();
-        let att = (-1.0 / (sr * 0.001)).exp();
-        let rel = (-1.0 / (sr * 0.08)).exp();
+        let fast = (-1.0 / (sr * 0.001)).exp(); // 1 ms
+        let slow = (-1.0 / (sr * 0.08)).exp(); // 80 ms
+        let (att, rel) = if reverse { (slow, fast) } else { (fast, slow) };
         *env = if level > *env {
             *env * att + level * (1.0 - att)
         } else {
@@ -391,6 +402,8 @@ impl Compressor {
 
     /// `threshold`: 0–1 → −40..0 dB. `ratio`: 0–1 → 1:1..20:1. `mix`: 0–1 wet/dry.
     /// `multiband`: 0 = single band, >0 = 3-band split (low/mid/high).
+    /// `reverse`: swap attack/release constants for swell-into-hit feel.
+    #[allow(clippy::too_many_arguments)]
     pub(super) fn process(
         &mut self,
         input: f32,
@@ -398,6 +411,7 @@ impl Compressor {
         ratio: f32,
         mix: f32,
         multiband: f32,
+        reverse: bool,
         sr: f32,
     ) -> f32 {
         if mix < 0.001 {
@@ -424,13 +438,16 @@ impl Compressor {
             let mid = input - low - high;
 
             // Compress each band independently
-            let c_low = Self::compress_band(low, &mut self.band_env[0], threshold, ratio, sr);
-            let c_mid = Self::compress_band(mid, &mut self.band_env[1], threshold, ratio, sr);
-            let c_high = Self::compress_band(high, &mut self.band_env[2], threshold, ratio, sr);
+            let c_low =
+                Self::compress_band(low, &mut self.band_env[0], threshold, ratio, sr, reverse);
+            let c_mid =
+                Self::compress_band(mid, &mut self.band_env[1], threshold, ratio, sr, reverse);
+            let c_high =
+                Self::compress_band(high, &mut self.band_env[2], threshold, ratio, sr, reverse);
 
             c_low + c_mid + c_high
         } else {
-            Self::compress_band(input, &mut self.env, threshold, ratio, sr)
+            Self::compress_band(input, &mut self.env, threshold, ratio, sr, reverse)
         };
 
         input * (1.0 - mix) + compressed * mix

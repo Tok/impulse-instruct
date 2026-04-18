@@ -294,6 +294,7 @@ impl DspState {
                 p.compressor_ratio,
                 p.compressor_mix,
                 p.compressor_multiband,
+                p.compressor_reverse,
                 sr,
             ),
             FxStep::TapeSat => {

@@ -8,9 +8,20 @@ they ship and are reflected in `features.md`.
 
 ## Agent tooling — gradual control & expressiveness
 
-- **XY pad control** — expose cutoff/resonance pad as a first-class tool
-  the agent can move.  Currently agents set values but the pad position
-  doesn't visually track mid-change.
+- **FX XY-pad overhaul** (its own session — touches every FX panel and
+  both drum-kit panels).  Plan:
+    - Every FX with exactly two knobs gets an XY pad that drives both
+      axes directly.
+    - Every FX with three knobs gets a switchable XY pad with a tiny
+      A/B · A/C · B/C selector so the user can cycle which two knobs
+      the pad's X / Y control while the third stays on a knob.
+    - Regroup the 808 and 909 glass panes so linked knob clusters
+      (kick: pitch+decay+punch, snare: tone+snappy+decay, etc.) sit
+      next to their XY pads rather than scattered across the panel.
+    - Agent side: expose the XY pad as a first-class tool the agent can
+      move, with visual feedback so the pad position tracks mid-change
+      (currently agents set the underlying knob values but the pad
+      doesn't follow).
 - **Hoover / An1x preecho** — bass voices now consume
   `PreechoConfig.accent_ramp` + `slide_cascade` via the shared `"bass"`
   voice key.  Hoover/An1x `TriggerEvent` variants don't carry accent
@@ -24,8 +35,6 @@ they ship and are reflected in `features.md`.
 - **Pitch-preserving BPM stretch on amen** — current stretch shifts
   pitch; phase-vocoder / granular stretch for tempo match without pitch
   change.
-- **Reverse mode for compressor envelope** — third FX worth reversing.
-  Would give "reverse compression" swell-into-hit transient shaping.
 
 ## Sequencer
 

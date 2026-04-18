@@ -578,6 +578,11 @@ pub(super) fn apply_fx_update(
         "compressor_multiband",
         "fx.compressor_multiband"
     );
+    if !locked.contains("fx.compressor_reverse")
+        && let Some(v) = fx.get("compressor_reverse").and_then(|v| v.as_bool())
+    {
+        s.fx.compressor_reverse = v;
+    }
     u!(s.fx.stereo_width, "stereo_width", "fx.stereo_width");
     if !locked.contains("fx.tuning")
         && let Some(v) = fx.get("tuning").and_then(|v| v.as_u64())

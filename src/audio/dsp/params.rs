@@ -436,6 +436,10 @@ pub struct AudioParams {
     pub compressor_threshold: f32,
     pub compressor_ratio: f32,
     pub compressor_mix: f32,
+    /// See `FxState.compressor_reverse`.  When true, the envelope
+    /// follower's attack and release time constants are swapped inside
+    /// `Compressor::compress_band`.
+    pub compressor_reverse: bool,
     // Tape saturation
     pub tape_drive: f32,
     pub tape_mix: f32,
@@ -700,6 +704,7 @@ impl AudioParams {
             compressor_threshold: s.fx.compressor_threshold,
             compressor_ratio: s.fx.compressor_ratio,
             compressor_mix: s.fx.compressor_mix,
+            compressor_reverse: s.fx.compressor_reverse,
             tape_drive: s.fx.tape_drive,
             tape_mix: s.fx.tape_mix,
             tape_flutter: s.fx.tape_flutter,

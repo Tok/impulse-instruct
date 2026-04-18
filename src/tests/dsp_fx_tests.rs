@@ -251,7 +251,7 @@ mod compress_band_tests {
         let mut env = 0.0;
         let mut out = 0.0;
         for _ in 0..5000 {
-            out = Compressor::compress_band(0.3, &mut env, 1.0, 0.5, 44100.0);
+            out = Compressor::compress_band(0.3, &mut env, 1.0, 0.5, 44100.0, false);
         }
         assert!((out - 0.3).abs() < 0.05, "expected ≈0.3, got {out}");
     }
@@ -263,7 +263,7 @@ mod compress_band_tests {
         let mut env = 0.0;
         let mut out = 0.0;
         for _ in 0..5000 {
-            out = Compressor::compress_band(1.0, &mut env, 0.0, 1.0, 44100.0);
+            out = Compressor::compress_band(1.0, &mut env, 0.0, 1.0, 44100.0, false);
         }
         assert!(out < 1.0, "expected attenuation, got {out}");
         assert!(out > 0.0);
@@ -275,7 +275,7 @@ mod compress_band_tests {
         // input; this covers the "rising" branch of the env update.
         let mut env = 0.0;
         for _ in 0..5000 {
-            let _ = Compressor::compress_band(0.5, &mut env, 0.5, 0.5, 44100.0);
+            let _ = Compressor::compress_band(0.5, &mut env, 0.5, 0.5, 44100.0, false);
         }
         assert!(env > 0.4, "expected env to track input, got {env}");
     }
@@ -285,12 +285,12 @@ mod compress_band_tests {
         let mut env = 0.0;
         // Charge the envelope with a hot input.
         for _ in 0..5000 {
-            let _ = Compressor::compress_band(0.7, &mut env, 0.5, 0.5, 44100.0);
+            let _ = Compressor::compress_band(0.7, &mut env, 0.5, 0.5, 44100.0, false);
         }
         let charged = env;
         // Now silent input — envelope should fall.
         for _ in 0..10_000 {
-            let _ = Compressor::compress_band(0.0, &mut env, 0.5, 0.5, 44100.0);
+            let _ = Compressor::compress_band(0.0, &mut env, 0.5, 0.5, 44100.0, false);
         }
         assert!(
             env < charged * 0.5,
@@ -304,7 +304,7 @@ mod compress_band_tests {
         let mut env = 0.0;
         let mut out = 0.0;
         for _ in 0..5000 {
-            out = Compressor::compress_band(0.6, &mut env, 0.0, 0.0, 44100.0);
+            out = Compressor::compress_band(0.6, &mut env, 0.0, 0.0, 44100.0, false);
         }
         assert!((out - 0.6).abs() < 0.05, "expected ≈0.6, got {out}");
     }
@@ -313,10 +313,102 @@ mod compress_band_tests {
     fn output_stays_finite_for_silent_input() {
         let mut env = 0.0;
         for _ in 0..1000 {
-            let out = Compressor::compress_band(0.0, &mut env, 0.5, 0.5, 44100.0);
+            let out = Compressor::compress_band(0.0, &mut env, 0.5, 0.5, 44100.0, false);
             assert!(out.is_finite());
             assert!(env.is_finite());
         }
+    }
+
+    // ── Reverse mode (swap attack / release) ────────────────────────────
+
+    #[test]
+    fn reverse_mode_envelope_rises_slower_than_normal() {
+        // Fire 100 samples of hot input into two fresh envelopes.  The
+        // normal compressor's 1 ms attack catches the level almost
+        // immediately; the reverse mode's 80 ms attack barely moves.
+        let mut env_normal = 0.0;
+        let mut env_reverse = 0.0;
+        for _ in 0..100 {
+            let _ = Compressor::compress_band(0.9, &mut env_normal, 0.5, 0.5, 44100.0, false);
+            let _ = Compressor::compress_band(0.9, &mut env_reverse, 0.5, 0.5, 44100.0, true);
+        }
+        assert!(
+            env_reverse < env_normal * 0.3,
+            "reverse env should lag: normal={env_normal}, reverse={env_reverse}"
+        );
+    }
+
+    #[test]
+    fn reverse_mode_envelope_falls_faster_than_normal() {
+        // Charge both envelopes to roughly the same level, then feed
+        // silence.  Normal has 80 ms release, reverse has 1 ms → reverse
+        // should drop to near-zero orders of magnitude faster.
+        let mut env_normal = 0.0;
+        let mut env_reverse = 0.0;
+        for _ in 0..10_000 {
+            let _ = Compressor::compress_band(0.9, &mut env_normal, 0.5, 0.5, 44100.0, false);
+            let _ = Compressor::compress_band(0.9, &mut env_reverse, 0.5, 0.5, 44100.0, true);
+        }
+        // Normal charges fast (1 ms attack) and sits at ~0.9; reverse's
+        // slow 80 ms attack catches up to only ~0.85 over the charge
+        // window — close enough that both will behave comparably if the
+        // release constants were identical.
+        assert!(env_normal > 0.85);
+        assert!(env_reverse > 0.80);
+        // Now drain for 100 samples of silence.
+        for _ in 0..100 {
+            let _ = Compressor::compress_band(0.0, &mut env_normal, 0.5, 0.5, 44100.0, false);
+            let _ = Compressor::compress_band(0.0, &mut env_reverse, 0.5, 0.5, 44100.0, true);
+        }
+        assert!(
+            env_reverse < env_normal * 0.5,
+            "reverse env should drop faster on silence: normal={env_normal}, reverse={env_reverse}"
+        );
+    }
+
+    #[test]
+    fn reverse_mode_lets_initial_transient_through() {
+        // Step input 0 → 1.  With threshold=0 (−40 dB) + high ratio the
+        // normal compressor clamps hard on the first sample (fast attack
+        // catches the level); the reverse compressor lets most of the
+        // transient through because the envelope hasn't ramped up yet.
+        let mut env_normal = 0.0;
+        let mut env_reverse = 0.0;
+        let mut first_normal = 0.0;
+        let mut first_reverse = 0.0;
+        for i in 0..20 {
+            let o_n = Compressor::compress_band(1.0, &mut env_normal, 0.0, 1.0, 44100.0, false);
+            let o_r = Compressor::compress_band(1.0, &mut env_reverse, 0.0, 1.0, 44100.0, true);
+            if i == 0 {
+                first_normal = o_n;
+                first_reverse = o_r;
+            }
+        }
+        assert!(
+            first_reverse > first_normal,
+            "reverse should let transient through: first_normal={first_normal}, first_reverse={first_reverse}"
+        );
+    }
+
+    #[test]
+    fn reverse_mode_still_clamps_sustain() {
+        // Long tone past the envelope's slow attack window — reverse
+        // should eventually catch up and clamp, same as normal.
+        let mut env_normal = 0.0;
+        let mut env_reverse = 0.0;
+        let mut last_normal = 0.0;
+        let mut last_reverse = 0.0;
+        for _ in 0..20_000 {
+            last_normal = Compressor::compress_band(1.0, &mut env_normal, 0.0, 1.0, 44100.0, false);
+            last_reverse =
+                Compressor::compress_band(1.0, &mut env_reverse, 0.0, 1.0, 44100.0, true);
+        }
+        // Both should be well below unity by now.
+        assert!(last_normal < 0.8);
+        assert!(last_reverse < 0.8);
+        // And they should land in the same general ballpark — the
+        // envelopes have both saturated, so the gain reduction matches.
+        assert!((last_normal - last_reverse).abs() < 0.1);
     }
 }
 
