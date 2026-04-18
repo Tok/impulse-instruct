@@ -142,8 +142,11 @@ pub fn event_stream(
     let display_steps = steps as f32 * 2.0; // show 2 full patterns
     let step_w = inner_w / display_steps;
 
-    // The "now" position is at 75% from left
-    let now_frac = 0.75;
+    // The "now" position splits past:future at the golden ratio
+    // (1.618:1), so the now-line sits at 1/φ ≈ 0.618 from the left —
+    // larger past pane (where the played history reads) and a smaller
+    // but still useful future pane.
+    let now_frac = 1.0 / 1.618;
     let now_x = inner.min.x + inner_w * now_frac;
 
     // ── Auto-range: find min/max notes in all active patterns ───────────────
@@ -251,14 +254,12 @@ pub fn event_stream(
         current_step as f32
     };
     // Iterate enough negative-to-positive `i` values to cover the full
-    // visible width.  `now_x` sits at 75% from the left, so the past side
-    // needs ~display_steps * 0.75 negative offsets and the future side
-    // ~display_steps * 0.25 positive — extending past `steps` to allow
-    // for `pos_in_pattern` ∈ [0, steps).  Without this the grid lines
-    // disappeared early on the past side because the loop only iterated
-    // from 0 upward.
-    let past_steps = (display_steps * 0.75).ceil() as i32 + 2;
-    let future_steps = (display_steps * 0.25).ceil() as i32 + steps as i32 + 2;
+    // visible width.  `now_x` sits at `now_frac` from the left, so the
+    // past side needs ~display_steps * now_frac negative offsets and
+    // the future side ~display_steps * (1 - now_frac) positive —
+    // extending past `steps` to allow for `pos_in_pattern` ∈ [0, steps).
+    let past_steps = (display_steps * now_frac).ceil() as i32 + 2;
+    let future_steps = (display_steps * (1.0 - now_frac)).ceil() as i32 + steps as i32 + 2;
     for i in -past_steps..=future_steps {
         let step_offset = i as f32 - pos_in_pattern;
         let x = now_x + step_offset * step_w;
