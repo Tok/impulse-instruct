@@ -192,7 +192,7 @@ for MODEL in "${MODELS[@]}"; do
     --model "$MODEL" \
     --host 127.0.0.1 \
     --port "$PORT" \
-    --ctx-size 8192 \
+    --ctx-size 65536 \
     --n-gpu-layers 99 \
     --flash-attn on \
     --cache-type-k q8_0 \
