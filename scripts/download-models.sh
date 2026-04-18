@@ -3,7 +3,10 @@
 # Download GGUF models for Impulse Instruct.
 #
 # Usage:
-#   ./scripts/download-models.sh                  # Gemma 4 E4B (default, ~4.6 GB, best overall)
+#   ./scripts/download-models.sh                  # Gemma 4 E4B (default, ~4.6 GB, runs on 6 GB GPU)
+#   ./scripts/download-models.sh gemma-26b        # Gemma 4 26B-A4B UD-IQ4_XS (~13.4 GB, needs 16 GB GPU)
+#   ./scripts/download-models.sh gemma-26b-q3     # Gemma 4 26B-A4B UD-Q3_K_M (~12.5 GB)
+#   ./scripts/download-models.sh gemma-26b-iq2    # Gemma 4 26B-A4B UD-IQ2_XXS (~9.9 GB, smallest)
 #   ./scripts/download-models.sh deepseek-r1-7b   # DeepSeek-R1-Distill-Qwen-7B (~5 GB, CoT, fast)
 #   ./scripts/download-models.sh deepseek-r1-14b  # DeepSeek-R1-Distill-Qwen-14B (~9 GB, CoT, accurate)
 #   ./scripts/download-models.sh qwen3            # Qwen3-8B Q4_K_M (~5 GB, optional)
@@ -27,7 +30,22 @@ case "$MODEL" in
   gemma4|"")
     HF_REPO="unsloth/gemma-4-E4B-it-GGUF"
     MODEL_FILE="gemma-4-E4B-it-Q4_K_M.gguf"
-    MODEL_DESC="Gemma 4 E4B Q4_K_M (unsloth, ~4.6 GB) — default, best accuracy + speed"
+    MODEL_DESC="Gemma 4 E4B Q4_K_M (unsloth, ~4.6 GB) — default, runs on any 6 GB+ GPU"
+    ;;
+  gemma-26b)
+    HF_REPO="unsloth/gemma-4-26B-A4B-it-GGUF"
+    MODEL_FILE="gemma-4-26B-A4B-it-UD-IQ4_XS.gguf"
+    MODEL_DESC="Gemma 4 26B-A4B UD-IQ4_XS (unsloth, ~13.4 GB) — MoE, 4B active; needs ~14 GB VRAM"
+    ;;
+  gemma-26b-q3)
+    HF_REPO="unsloth/gemma-4-26B-A4B-it-GGUF"
+    MODEL_FILE="gemma-4-26B-A4B-it-UD-Q3_K_M.gguf"
+    MODEL_DESC="Gemma 4 26B-A4B UD-Q3_K_M (unsloth, ~12.5 GB) — MoE, 4B active; needs ~13 GB VRAM"
+    ;;
+  gemma-26b-iq2)
+    HF_REPO="unsloth/gemma-4-26B-A4B-it-GGUF"
+    MODEL_FILE="gemma-4-26B-A4B-it-UD-IQ2_XXS.gguf"
+    MODEL_DESC="Gemma 4 26B-A4B UD-IQ2_XXS (unsloth, ~9.9 GB) — smallest 26B quant; needs ~10 GB VRAM"
     ;;
   qwen3)
     HF_REPO="bartowski/Qwen_Qwen3-8B-GGUF"
@@ -57,7 +75,7 @@ case "$MODEL" in
     ;;
   *)
     echo "Unknown model: '$MODEL'"
-    echo "Available: gemma4 (default), deepseek-r1-7b, deepseek-r1-14b, qwen3, qwen3-14b, neutts"
+    echo "Available: gemma4 (default), gemma-26b, gemma-26b-q3, gemma-26b-iq2, deepseek-r1-7b, deepseek-r1-14b, qwen3, qwen3-14b, neutts"
     exit 1
     ;;
 esac
@@ -171,8 +189,8 @@ fi
 echo ""
 echo "─── License notice ─────────────────────────────────────────────────────────"
 case "$MODEL" in
-  gemma4)
-    echo "Gemma 4 E4B is released under the Gemma Terms of Use by Google DeepMind."
+  gemma4|gemma-26b|gemma-26b-q3|gemma-26b-iq2)
+    echo "Gemma 4 is released under the Gemma Terms of Use by Google DeepMind."
     echo "Quantisation by unsloth. See: https://huggingface.co/${HF_REPO}"
     ;;
   qwen3|qwen3-14b)

@@ -4,7 +4,10 @@ rem ─── download-models.bat ───────────────�
 rem Download GGUF models for Impulse Instruct.
 rem
 rem Usage:
-rem   download-models.bat                  Gemma 4 E4B [default, ~4.6 GB, best overall]
+rem   download-models.bat                  Gemma 4 E4B [default, ~4.6 GB, runs on 6 GB GPU]
+rem   download-models.bat gemma-26b        Gemma 4 26B-A4B UD-IQ4_XS [~13.4 GB, MoE, needs 16 GB]
+rem   download-models.bat gemma-26b-q3     Gemma 4 26B-A4B UD-Q3_K_M [~12.5 GB, MoE]
+rem   download-models.bat gemma-26b-iq2    Gemma 4 26B-A4B UD-IQ2_XXS [~9.9 GB, smallest 26B]
 rem   download-models.bat neutts           NeuTTS Air Q4 [~527 MB, TTS voice cloning]
 rem   download-models.bat deepseek-r1-7b   DeepSeek-R1-Distill-Qwen-7B [~5 GB, CoT]
 rem   download-models.bat deepseek-r1-14b  DeepSeek-R1-Distill-Qwen-14B [~9 GB, CoT]
@@ -36,6 +39,24 @@ if /i "%MODEL%"=="gemma4" (
     set HF_REPO=unsloth/gemma-4-E4B-it-GGUF
     set MODEL_FILE=gemma-4-E4B-it-Q4_K_M.gguf
     set "MODEL_DESC=Gemma 4 E4B Q4_K_M [unsloth, ~4.6 GB] -- default, required for first run"
+    goto download
+)
+if /i "%MODEL%"=="gemma-26b" (
+    set HF_REPO=unsloth/gemma-4-26B-A4B-it-GGUF
+    set MODEL_FILE=gemma-4-26B-A4B-it-UD-IQ4_XS.gguf
+    set "MODEL_DESC=Gemma 4 26B-A4B UD-IQ4_XS [unsloth, ~13.4 GB] -- MoE, 4B active, needs 16 GB"
+    goto download
+)
+if /i "%MODEL%"=="gemma-26b-q3" (
+    set HF_REPO=unsloth/gemma-4-26B-A4B-it-GGUF
+    set MODEL_FILE=gemma-4-26B-A4B-it-UD-Q3_K_M.gguf
+    set "MODEL_DESC=Gemma 4 26B-A4B UD-Q3_K_M [unsloth, ~12.5 GB] -- MoE, 4B active"
+    goto download
+)
+if /i "%MODEL%"=="gemma-26b-iq2" (
+    set HF_REPO=unsloth/gemma-4-26B-A4B-it-GGUF
+    set MODEL_FILE=gemma-4-26B-A4B-it-UD-IQ2_XXS.gguf
+    set "MODEL_DESC=Gemma 4 26B-A4B UD-IQ2_XXS [unsloth, ~9.9 GB] -- smallest 26B quant"
     goto download
 )
 if /i "%MODEL%"=="neutts" (
@@ -71,7 +92,7 @@ if /i "%MODEL%"=="deepseek-r1-14b" (
 )
 
 echo Unknown model: '%MODEL%'
-echo Available: gemma4 [default], neutts, deepseek-r1-7b, deepseek-r1-14b, qwen3, qwen3-14b
+echo Available: gemma4 [default], gemma-26b, gemma-26b-q3, gemma-26b-iq2, neutts, deepseek-r1-7b, deepseek-r1-14b, qwen3, qwen3-14b
 exit /b 1
 
 :download

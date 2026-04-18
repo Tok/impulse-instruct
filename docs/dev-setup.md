@@ -221,11 +221,14 @@ can't (e.g. no sudo in CI). Adjust the version suffix to match whatever
 
 ## Models
 
-| Model | Download | Size | VRAM | Server |
-|-------|----------|------|------|--------|
-| **Gemma 4 E4B Q4_K_M** | `./scripts/download-models.sh` | ~4.6 GB | ~6 GB | Standard llama.cpp |
+| Model | Download | Size | VRAM | Notes |
+|-------|----------|------|------|-------|
+| **Gemma 4 E4B Q4_K_M** | `./scripts/download-models.sh` | ~4.6 GB | ~6 GB | Default — mobile-targeted Gemma 4, runs on any 6 GB GPU |
+| **Gemma 4 26B-A4B UD-IQ4_XS** | `./scripts/download-models.sh gemma-26b` | ~13.4 GB | ~14 GB | MoE (4B active) — E4B speed, 26B knowledge; needs 16 GB |
+| **Gemma 4 26B-A4B UD-Q3_K_M** | `./scripts/download-models.sh gemma-26b-q3` | ~12.5 GB | ~13 GB | Smaller quant of the MoE |
+| **Gemma 4 26B-A4B UD-IQ2_XXS** | `./scripts/download-models.sh gemma-26b-iq2` | ~9.9 GB | ~10 GB | Smallest 26B-A4B quant |
 
-All models use `.llama-official-build/bin/llama-server` (standard llama.cpp), built via `./scripts/build-llama-server.sh`.
+All models use `.llama-official-build/bin/llama-server` (standard llama.cpp), built via `./scripts/build-llama-server.sh`.  The 26B-A4B GGUF files contain only the text transformer; the vision adapter is a separate `mmproj` file we do not download, so inference is text-only.
 
 ---
 

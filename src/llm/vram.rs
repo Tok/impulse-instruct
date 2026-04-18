@@ -25,6 +25,50 @@ pub const MODEL_PROFILES: &[ModelProfile] = &[
         vram_mb: 6000,
     },
     ModelProfile {
+        pattern: "gemma-4-e2b",
+        label: "Gemma 4 E2B",
+        vram_mb: 4000,
+    },
+    // Gemma 4 26B-A4B is MoE (4B active, 26B total).  VRAM listed below
+    // is the disk-size-derived ceiling for the recommended quants on
+    // unsloth/gemma-4-26B-A4B-it-GGUF.  Pattern order matters — list the
+    // most-specific quant patterns first.
+    ModelProfile {
+        pattern: "gemma-4-26b-a4b-it-ud-iq2",
+        label: "Gemma 4 26B-A4B IQ2",
+        vram_mb: 11000,
+    },
+    ModelProfile {
+        pattern: "gemma-4-26b-a4b-it-ud-q2",
+        label: "Gemma 4 26B-A4B Q2",
+        vram_mb: 11500,
+    },
+    ModelProfile {
+        pattern: "gemma-4-26b-a4b-it-ud-iq3",
+        label: "Gemma 4 26B-A4B IQ3",
+        vram_mb: 12500,
+    },
+    ModelProfile {
+        pattern: "gemma-4-26b-a4b-it-ud-q3",
+        label: "Gemma 4 26B-A4B Q3",
+        vram_mb: 13500,
+    },
+    ModelProfile {
+        pattern: "gemma-4-26b-a4b-it-ud-iq4",
+        label: "Gemma 4 26B-A4B IQ4",
+        vram_mb: 14500,
+    },
+    ModelProfile {
+        pattern: "gemma-4-26b-a4b",
+        label: "Gemma 4 26B-A4B",
+        vram_mb: 17500,
+    },
+    ModelProfile {
+        pattern: "gemma-4-31b",
+        label: "Gemma 4 31B",
+        vram_mb: 20000,
+    },
+    ModelProfile {
         pattern: "gemma",
         label: "Gemma (other)",
         vram_mb: 6000,
@@ -383,6 +427,29 @@ mod tests {
     #[test]
     fn estimate_gemma() {
         assert_eq!(estimate_vram("models/gemma-4-e4b-it-Q4_K_M.gguf"), 6000);
+    }
+
+    #[test]
+    fn estimate_gemma_26b_quants() {
+        // Pattern order in MODEL_PROFILES means the more-specific quant
+        // patterns must beat the generic "gemma-4-26b-a4b" fallback.
+        assert_eq!(
+            estimate_vram("models/gemma-4-26B-A4B-it-UD-IQ2_XXS.gguf"),
+            11000
+        );
+        assert_eq!(
+            estimate_vram("models/gemma-4-26B-A4B-it-UD-Q3_K_M.gguf"),
+            13500
+        );
+        assert_eq!(
+            estimate_vram("models/gemma-4-26B-A4B-it-UD-IQ4_XS.gguf"),
+            14500
+        );
+        // Generic fallback for an unknown 26B-A4B quant.
+        assert_eq!(
+            estimate_vram("models/gemma-4-26B-A4B-it-UD-Q4_K_XL.gguf"),
+            17500
+        );
     }
 
     #[test]

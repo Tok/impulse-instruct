@@ -77,13 +77,17 @@ Optional extras, same process:
 
 Linux:
 ```bash
-./download-models.sh          # Gemma 4 E4B (default)
-./download-models.sh neutts   # optional: NeuTTS Air
+./download-models.sh                # Gemma 4 E4B (default)
+./download-models.sh gemma-26b      # optional: Gemma 4 26B-A4B IQ4_XS (~13.4 GB, needs 16 GB GPU)
+./download-models.sh gemma-26b-q3   # optional: Gemma 4 26B-A4B Q3_K_M  (~12.5 GB)
+./download-models.sh gemma-26b-iq2  # optional: Gemma 4 26B-A4B IQ2_XXS (~9.9 GB)
+./download-models.sh neutts         # optional: NeuTTS Air
 ```
 
 Windows:
 ```
 download-models.bat
+download-models.bat gemma-26b
 download-models.bat neutts
 ```
 
@@ -120,7 +124,10 @@ The app auto-detects models in `models/` and connects. The startup wizard detect
 
 | Model | Size | VRAM | Notes |
 |-------|------|------|-------|
-| **Gemma 4 E4B Q4_K_M** | ~4.6 GB | ~6 GB | **Recommended.** Best JSON accuracy, passes all integration tests. |
+| **Gemma 4 E4B Q4_K_M** | ~4.6 GB | ~6 GB | **Recommended default.** Mobile-targeted Gemma 4, fast on any 6 GB GPU, passes all integration tests. |
+| **Gemma 4 26B-A4B UD-IQ4_XS** | ~13.4 GB | ~14 GB | Optional. MoE (4B active / 26B total) — same speed as E4B, much more knowledge. Needs a 16 GB+ GPU. |
+| **Gemma 4 26B-A4B UD-Q3_K_M** | ~12.5 GB | ~13 GB | Optional. Smaller quant of the MoE for tighter VRAM budgets. |
+| **Gemma 4 26B-A4B UD-IQ2_XXS** | ~9.9 GB | ~10 GB | Optional. Smallest 26B-A4B quant. |
 | **NeuTTS Air Q4** | ~527 MB | CPU | Neural TTS voice cloning for MC/DJ modules. Apache 2.0. |
 
 Each agent can run a different model. A `LlamaServerPool` manages server processes — agents sharing the same model share a single server (ref-counted).  Same-model agents share VRAM, so a 5-agent Crew of Gemmas costs the same ~6 GB as a single Gemma. Typical multi-agent VRAM budgets:
