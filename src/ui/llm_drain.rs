@@ -135,8 +135,13 @@ impl ImpulseApp {
                     s.fx = next.fx;
                     s.lfo = next.lfo;
                 }
-                self.state.write().llm.jam_cycle_count =
-                    self.state.read().llm.jam_cycle_count.saturating_add(1);
+                // Read into a local first — if we inline the read into the
+                // assignment's RHS, the `RwLockReadGuard` temporary lives
+                // until the statement's `;`, overlapping with the write
+                // guard on the LHS and self-deadlocking parking_lot's
+                // non-reentrant RwLock.
+                let next_count = self.state.read().llm.jam_cycle_count.saturating_add(1);
+                self.state.write().llm.jam_cycle_count = next_count;
                 if self.auto_listen {
                     self.auto_listen_counter += 1;
                     if self.auto_listen_counter >= 4 {

@@ -1,0 +1,150 @@
+// ─── llm/lane_scheduler.rs ───────────────────────────────────────────────────
+// Phase 2 of the lane lifecycle: weighted single-lane picker for jam cycles.
+//
+// Instead of re-firing every voice every jam cycle, pick ONE lane per cycle
+// weighted by
+//     weight = dynamism(lane) * (1 - score) * recency_decay * heat_jitter
+// so high-scoring lanes "live longer" between rewrites and lanes that just
+// fired don't immediately come back around.  Scores come from Phase 1's
+// `lane_eval` (observation-only until now); Phase 4 will let styles.json
+// override the dynamism constants below.
+
+use crate::llm::lanes::LaneKind;
+use crate::state::{AppState, LaneScore};
+
+/// Baseline dynamism per lane — 0.0 = "the scheduler never picks this",
+/// 1.0 = "always in play".  Phase 4 plan: styles.json → `lane_dynamism` map
+/// overrides these per-style.  Rack is 0.0 because rack composition is
+/// user-owned (see `write_lane_back` guard in `llm/mod.rs`).
+pub fn lane_dynamism(lane: LaneKind) -> f32 {
+    match lane {
+        LaneKind::Bass(_) => 0.90,
+        LaneKind::KitA | LaneKind::KitB => 0.85,
+        LaneKind::Amen => 0.80,
+        LaneKind::Hoover | LaneKind::An1x => 0.75,
+        LaneKind::Modulation => 0.40,
+        LaneKind::Fx => 0.45,
+        LaneKind::Settings => 0.25,
+        LaneKind::Rack => 0.0,
+    }
+}
+
+/// Weight penalty for having fired recently.  `gap` is `current_cycle -
+/// last_changed_cycle`; a never-picked lane (score == None) returns 1.0.
+///   gap=0 → 0.0   (just changed — don't pick again)
+///   gap=1 → 0.5
+///   gap=3 → 0.75
+///   gap=7 → 0.875
+pub fn recency_decay(score: Option<&LaneScore>, current_cycle: u32) -> f32 {
+    match score {
+        None => 1.0,
+        Some(s) => {
+            let gap = current_cycle.saturating_sub(s.last_changed_cycle);
+            1.0 - 1.0 / (1.0 + gap as f32)
+        }
+    }
+}
+
+/// Per-candidate jitter, scaled by global heat.  At heat=0 this returns
+/// 1.0 exactly (deterministic ordering); at heat=1 it can roughly double
+/// a candidate's weight so the pick feels looser when the model is hot.
+pub fn heat_jitter(heat: f32, rng: &mut Xorshift32) -> f32 {
+    let amount = heat.clamp(0.0, 1.0) * 0.6;
+    1.0 + rng.unit_f32() * amount
+}
+
+/// Pure weight formula — factored out of `pick_jam_lane` for unit tests.
+/// Returns 0.0 for any lane with dynamism 0 (Rack).
+pub fn compute_weight(
+    lane: LaneKind,
+    score: Option<&LaneScore>,
+    current_cycle: u32,
+    heat: f32,
+    rng: &mut Xorshift32,
+) -> f32 {
+    let dyn_w = lane_dynamism(lane);
+    if dyn_w <= 0.0 {
+        return 0.0;
+    }
+    let score_term = 1.0 - score.map(|s| s.score).unwrap_or(0.5);
+    let recency = recency_decay(score, current_cycle);
+    let jitter = heat_jitter(heat, rng);
+    (dyn_w * score_term * recency * jitter).max(0.0)
+}
+
+/// Weighted-random pick from `candidates`.  Returns `None` when
+/// `candidates` is empty or every weight collapsed to 0 (e.g. all lanes
+/// just updated).  Caller should fall back to `default_plan` on `None`.
+pub fn pick_jam_lane(
+    state: &AppState,
+    candidates: &[LaneKind],
+    rng: &mut Xorshift32,
+) -> Option<LaneKind> {
+    if candidates.is_empty() {
+        return None;
+    }
+    let cycle = state.llm.jam_cycle_count;
+    let heat = state.llm.heat;
+    let weights: Vec<f32> = candidates
+        .iter()
+        .map(|&lane| {
+            let score = state.llm.lane_scores.get(lane.label());
+            compute_weight(lane, score, cycle, heat, rng)
+        })
+        .collect();
+    let total: f32 = weights.iter().sum();
+    if total <= 0.0 {
+        return None;
+    }
+    let target = rng.unit_f32() * total;
+    let mut acc = 0.0_f32;
+    for (i, w) in weights.iter().enumerate() {
+        acc += *w;
+        if target <= acc {
+            return Some(candidates[i]);
+        }
+    }
+    // Numerical fallthrough — pick the last candidate.
+    Some(*candidates.last().unwrap())
+}
+
+/// Tiny xorshift32 PRNG.  No external RNG crate needed for weighted
+/// sampling over a handful of lanes; deterministic under a fixed seed
+/// so tests can pin the pick.
+pub struct Xorshift32 {
+    state: u32,
+}
+
+impl Xorshift32 {
+    pub fn new(seed: u32) -> Self {
+        Self {
+            state: if seed == 0 { 0x9E3779B9 } else { seed },
+        }
+    }
+
+    /// Seed from wall-clock nanos — production paths want a fresh
+    /// sequence every cycle.
+    pub fn from_entropy() -> Self {
+        use std::time::{SystemTime, UNIX_EPOCH};
+        let seed = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map(|d| d.subsec_nanos())
+            .unwrap_or(0x9E3779B9);
+        Self::new(seed)
+    }
+
+    pub fn next_u32(&mut self) -> u32 {
+        let mut x = self.state;
+        x ^= x << 13;
+        x ^= x >> 17;
+        x ^= x << 5;
+        self.state = x;
+        x
+    }
+
+    /// Uniform `[0, 1)` with 24-bit precision — plenty for a handful of
+    /// lane weights.
+    pub fn unit_f32(&mut self) -> f32 {
+        (self.next_u32() >> 8) as f32 * (1.0 / ((1u32 << 24) as f32))
+    }
+}

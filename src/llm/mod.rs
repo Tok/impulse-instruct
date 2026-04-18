@@ -6,6 +6,7 @@
 pub mod instructions;
 pub mod json_repair;
 pub mod lane_eval;
+pub mod lane_scheduler;
 pub mod lanes;
 pub mod mock;
 pub mod pipeline;
@@ -583,6 +584,7 @@ pub fn run_llm_loop(
                 &mut pool,
                 infer_port,
                 &sampling,
+                !one_shot, // is_jam — jam cycles use Phase 2 single-lane picker
                 |event| {
                     pipeline_events::handle_pipeline_event(
                         event,

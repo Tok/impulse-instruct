@@ -11,6 +11,7 @@ mod dsp_voice_extra_tests;
 mod fx_plan_tests;
 mod helpers_tests;
 mod jam_tools_tests;
+mod lane_scheduler_tests;
 mod llm_apply_extra_tests;
 mod llm_apply_tests;
 mod llm_apply_voice_tests;

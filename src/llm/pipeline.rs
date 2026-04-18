@@ -81,17 +81,29 @@ pub fn run_pipeline<B: PipelineBackend>(
     user_prompt: &str,
     backend: &mut B,
     sampling: &SamplingParams,
+    is_jam: bool,
     mut progress: impl FnMut(PipelineEvent),
     mut on_lane_applied: impl FnMut(&AppState),
 ) -> AppState {
     let t_start = std::time::Instant::now();
 
     // ── 1. Planner ───────────────────────────────────────────────────────────
-    // Try the deterministic heuristic first — "bass 2", "BASS 2", "second
-    // bass voice", "add reverb", "change the 909 kick" etc. match narrow
-    // phrasings we don't need the LLM for.  Falls through to the planner
-    // call on anything broader or ambiguous.
-    let plan = if let Some(heur) = heuristic_plan(&state, user_prompt) {
+    // Jam cycles (is_jam=true) use the Phase 2 weighted single-lane picker
+    // so each cycle rewrites exactly one voice/kit rather than rerunning
+    // the full default plan; score + recency decay in `lane_scheduler`
+    // rotate focus across voices between cycles.  User turns fall through
+    // to the regular heuristic → LLM planner → default chain.
+    let plan = if is_jam {
+        let mut rng = crate::llm::lane_scheduler::Xorshift32::from_entropy();
+        let jp = crate::llm::planner::jam_plan(&state, &mut rng);
+        if jp.lanes.is_empty() {
+            log::info!("pipeline: jam_plan empty, falling back to default_plan");
+            default_plan(&state)
+        } else {
+            log::info!("pipeline: {}", jp.rationale);
+            jp
+        }
+    } else if let Some(heur) = heuristic_plan(&state, user_prompt) {
         log::info!("pipeline: heuristic plan hit — {}", heur.rationale);
         heur
     } else {
@@ -372,6 +384,7 @@ pub fn run_pipeline_via_pool(
     pool: &mut crate::llm::LlamaServerPool,
     port: u16,
     sampling: &SamplingParams,
+    is_jam: bool,
     progress: impl FnMut(PipelineEvent),
     on_lane_applied: impl FnMut(&AppState),
 ) -> AppState {
@@ -381,6 +394,7 @@ pub fn run_pipeline_via_pool(
         user_prompt,
         &mut backend,
         sampling,
+        is_jam,
         progress,
         on_lane_applied,
     )
@@ -583,6 +597,7 @@ mod tests {
             "write a fresh acid bassline with subtle reverb",
             &mut backend,
             &SamplingParams::default(),
+            false, // is_jam — user turn, exercise planner path
             |e| events.borrow_mut().push(e),
             |_| {},
         );
@@ -638,6 +653,7 @@ mod tests {
             "start a jam",
             &mut backend,
             &SamplingParams::default(),
+            false, // is_jam — exercise planner fallback path
             |e| events.borrow_mut().push(e),
             |_| {},
         );
@@ -683,6 +699,7 @@ mod tests {
             "set the jam up",
             &mut backend,
             &SamplingParams::default(),
+            false, // is_jam — exercise planner path
             |e| events.borrow_mut().push(e),
             |_| {},
         );
@@ -739,6 +756,7 @@ mod tests {
             "two-voice acid bass",
             &mut backend,
             &SamplingParams::default(),
+            false, // is_jam — exercise planner path
             |_| {},
             |_| {},
         );

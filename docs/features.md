@@ -86,8 +86,28 @@ A detailed log of what's built.
 - Hook in `pipeline_events::handle_pipeline_event` LaneApplied: scores
   the apply against the rules we encode in the system prompt and stashes
   the score on `LlmState.lane_scores` (logged as `lane_eval: bass1 → 0.72`).
-  Phase 1 is read-only — Phase 2 will use these to weight lane selection
-  and queue retries on low scorers.
+  Phase 1 is read-only; the weighted scheduler below consumes these.
+
+### Weighted single-lane jam scheduler (Phase 2)
+
+- `llm/lane_scheduler.rs` — weighted pick formula
+  `weight = dynamism(lane) * (1 - score) * recency_decay * heat_jitter`.
+  `lane_dynamism` bakes genre-neutral defaults (bass/kits high, settings
+  low, rack always 0 — never scheduler-picked).  `recency_decay` is
+  `1 - 1/(1+gap)` on `jam_cycle_count - last_changed_cycle`, so a
+  just-fired lane zeros out until the next cycle.  `heat_jitter` adds a
+  heat-scaled multiplier (0 at heat=0, up to ×1.6 at heat=1).
+- `planner::jam_plan` assembles every live lane as a candidate, passes
+  them to `pick_jam_lane`, wraps the result in a single-lane `LanePlan`
+  (or empty → caller falls back to `default_plan`).
+- `pipeline::run_pipeline` gained an `is_jam: bool` parameter; jam cycles
+  (one_shot=false) go through `jam_plan` instead of the planner/default
+  chain, so each cycle rewrites exactly one voice/kit rather than the
+  whole rack.  High-scoring lanes "live longer" between rewrites; low
+  scorers naturally surface for retry without a separate queue.
+- Tiny no-deps `Xorshift32` seeded from wall-clock nanos — good enough
+  for weighted sampling over a handful of lanes, deterministic under a
+  fixed seed so the 15 new scheduler tests pin every decision.
 - **Defensive plan filter** in `pipeline::run_pipeline` — drops any lane
   whose voice/module isn't currently live before the loop, so a stale
   planner output (e.g. after a mid-cycle style switch) doesn't burn an

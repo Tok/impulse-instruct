@@ -48,22 +48,16 @@ they ship and are reflected in `features.md`.
 
 ## Intelligence
 
-- **Lane lifecycle Phase 2 — weighted scheduler.**  Phase 1 ships
-  `LlmState.lane_scores` populated by `lane_eval::evaluate_lane` after
-  each successful lane apply, observation-only.  Phase 2 should pick
-  the next jam-cycle's lane via weighted random where
-  `weight = dynamism(lane, style) * (1 - score) * recency_decay *
-  heat_jitter`, fire a single-lane plan instead of the full default,
-  and let high-scoring lanes "live longer" between rewrites.  See
-  `lane_eval.rs` for the per-lane scoring rules already in place.
 - **Lane lifecycle Phase 3 — retry on low score.**  When
   `evaluate_lane` returns below a threshold (~0.3), push the same
   lane back to the front of the next-pick queue so a one-off bad
-  output gets a do-over without blocking the round-robin.
+  output gets a do-over without blocking the weighted picker.
+  Phase 2's `(1 - score)` term already biases toward low scorers,
+  but an explicit retry still wins on actively-failed lanes.
 - **Lane lifecycle Phase 4 — per-style dynamism in `styles.json`.**
   Optional `lane_dynamism: { "bass": 0.9, "kit_a": 0.85, "fx": 0.4,
-  ... }` map per style with sensible defaults baked in (bass + drums
-  high, settings low).  Phase 2's weighted picker reads from here.
+  ... }` map per style; overrides the genre-neutral defaults baked
+  into `lane_scheduler::lane_dynamism`.
 - **Score viz in LLM console** — currently scores log via `log::info!`
   only.  Need a layout-stable widget (small per-lane grid below the
   cycle viz, or a hover-tooltip on each agent's slot) that doesn't
