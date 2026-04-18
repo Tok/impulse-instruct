@@ -161,27 +161,32 @@ pub(super) fn draw_fx_content(
                     1 => size_locked || mix_locked,
                     _ => damp_locked || mix_locked,
                 };
-                // 3-pair layout: pad on the left, cycle button stacked on the
-                // right where the vertical space would otherwise be empty.
-                let pad_size = (ui.available_width() - PAD_CYCLE_SIDE_W - 12.0).clamp(50.0, 100.0);
-                ui.horizontal(|ui| {
-                    let (pad_changed, _) = match pair {
-                        0 => widgets::xy_pad(
-                            ui, &pad_id, lx, ly, &mut rs, &mut rd, pad_size, pad_locked, 3,
-                        ),
-                        1 => widgets::xy_pad(
-                            ui, &pad_id, lx, ly, &mut rs, &mut rm, pad_size, pad_locked, 3,
-                        ),
-                        _ => widgets::xy_pad(
-                            ui, &pad_id, lx, ly, &mut rd, &mut rm, pad_size, pad_locked, 3,
-                        ),
-                    };
-                    if pad_changed {
-                        changed = true;
-                    }
-                    ui.add_space(4.0);
-                    ui.vertical(|ui| {
-                        draw_pad_cycle_button(ui, &pad_id, 3, lx, ly);
+                // Wrap pad + side cycle in a glass pane and centre the whole
+                // block within the card. The glass frame takes most of the
+                // card width so the pane reads as the pad's dedicated region.
+                let group_w = ui.available_width();
+                widgets::glass_group(ui, group_w, |ui| {
+                    let pad_size =
+                        (ui.available_width() - PAD_CYCLE_SIDE_W - 8.0).clamp(50.0, 100.0);
+                    widgets::centered_row(ui, |ui| {
+                        let (pad_changed, _) = match pair {
+                            0 => widgets::xy_pad(
+                                ui, &pad_id, lx, ly, &mut rs, &mut rd, pad_size, pad_locked, 3,
+                            ),
+                            1 => widgets::xy_pad(
+                                ui, &pad_id, lx, ly, &mut rs, &mut rm, pad_size, pad_locked, 3,
+                            ),
+                            _ => widgets::xy_pad(
+                                ui, &pad_id, lx, ly, &mut rd, &mut rm, pad_size, pad_locked, 3,
+                            ),
+                        };
+                        if pad_changed {
+                            changed = true;
+                        }
+                        ui.add_space(4.0);
+                        ui.vertical(|ui| {
+                            draw_pad_cycle_button(ui, &pad_id, 3, lx, ly);
+                        });
                     });
                 });
             }
