@@ -845,7 +845,11 @@ fn effective_grid_size_expands_when_pad_expanded() {
     let (w, h) = rack.effective_grid_size(m);
     let (base_w, base_h) = ModuleKind::FxAutotune.grid_size(GRID_COLS);
     assert_eq!(w, base_w);
-    assert_eq!(h, base_h + 1, "expanded autotune should be one row taller");
+    assert_eq!(
+        h,
+        base_h + 2,
+        "expanded autotune should be two rows taller (pad + padding)"
+    );
 }
 
 #[test]

@@ -171,14 +171,14 @@ impl RackModule {
     }
 
     /// Grid (col_span, row_span) taking `pad_expanded` into account.
-    /// Returns `(w, h + 1)` when this module supports an XY pad and the
+    /// Returns `(w, h + 2)` when this module supports an XY pad and the
     /// pad is currently expanded; otherwise the base size from `kind.grid_size()`.
     /// Callers that need to respect dynamic overrides like `StepSequencer`
     /// should go through `RackState::effective_grid_size()` instead.
     pub fn grid_size(&self, grid_cols: u8) -> (u8, u8) {
         let (w, h) = self.kind.grid_size(grid_cols);
         if self.kind.supports_xy_pad() && self.pad_expanded {
-            (w, h + 1)
+            (w, h + 2)
         } else {
             (w, h)
         }
@@ -331,7 +331,7 @@ impl RackState {
         // New modules start with `pad_expanded: true`; account for the extra
         // row if the kind supports an XY pad so the initial placement doesn't
         // clip into its neighbour below.
-        let h = if kind.supports_xy_pad() { h + 1 } else { h };
+        let h = if kind.supports_xy_pad() { h + 2 } else { h };
         let cols = GRID_COLS as usize;
         let max_rows = 64usize;
         let zone = kind.default_zone();
@@ -377,7 +377,7 @@ impl RackState {
     pub fn effective_grid_size(&self, m: &RackModule) -> (u8, u8) {
         let (w, h) = m.kind.grid_size(GRID_COLS);
         let h = if m.kind.supports_xy_pad() && m.pad_expanded {
-            h + 1
+            h + 2
         } else {
             h
         };
@@ -475,7 +475,7 @@ impl RackState {
             for (slot_idx, &(id, kind, pad_expanded)) in ids.iter().enumerate() {
                 let (w, h) = kind.grid_size(GRID_COLS);
                 let h = if kind.supports_xy_pad() && pad_expanded {
-                    h + 1
+                    h + 2
                 } else {
                     h
                 };

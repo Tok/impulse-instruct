@@ -27,6 +27,12 @@ pub(super) fn draw_voice_content(
     }
 }
 
+/// Vertical gap between the FX knob rows and the XY pad section.
+/// Provides visual separation between the two control groups.
+const PAD_SECTION_TOP_GAP: f32 = 6.0;
+/// Vertical gap between the pair-cycle button and the pad itself.
+const PAD_CYCLE_GAP: f32 = 4.0;
+
 /// Given a 3-pair XY-pad pair index (0/1/2) and the three knob labels in
 /// canonical A / B / C order, return the (x, y) label pair the pad drives
 /// for that index.  Pair mapping is A/B → A/C → B/C, matching the tooltip
@@ -41,6 +47,37 @@ pub(crate) fn three_pair_labels(
         0 => (a, b),
         1 => (a, c),
         _ => (b, c),
+    }
+}
+
+/// Render a small chip-style cycle button above a multi-pair XY pad.
+/// Shows the current "X × Y" pair with a ↻ affordance; left-click advances
+/// the pair index (stored in egui temp memory keyed by `pad_id`).  The
+/// pad's own right-click still cycles too.
+pub(crate) fn draw_pad_cycle_button(
+    ui: &mut egui::Ui,
+    pad_id: &str,
+    num_pairs: usize,
+    label_x: &str,
+    label_y: &str,
+) {
+    use egui::{Color32, RichText};
+    let text = format!("{label_x} × {label_y}  ↻");
+    let btn = egui::Button::new(
+        RichText::new(text)
+            .monospace()
+            .size(8.5)
+            .color(Color32::from_gray(180)),
+    )
+    .fill(Color32::from_gray(22))
+    .stroke(egui::Stroke::new(0.5, Color32::from_gray(55)))
+    .rounding(egui::Rounding::same(3.0));
+    let resp = ui.add(btn).on_hover_text("Cycle pad pair");
+    if resp.clicked() {
+        let pair = crate::ui::widgets::xy_pad_pair(ui.ctx(), pad_id);
+        let next = (pair + 1) % num_pairs.max(1);
+        ui.ctx()
+            .data_mut(|d| d.insert_temp(egui::Id::new(pad_id), next));
     }
 }
 
@@ -111,9 +148,14 @@ pub(super) fn draw_fx_content(
                 .inner;
             if pad_expanded {
                 let pad_id = format!("reverb_xy_{module_id}");
+                ui.add_space(PAD_SECTION_TOP_GAP);
                 let pair = widgets::xy_pad_pair(ui.ctx(), &pad_id);
-                let pad_size = (ui.available_width() - 8.0).clamp(60.0, 120.0);
                 let (lx, ly) = three_pair_labels(pair, "SIZE", "DAMP", "MIX");
+                widgets::centered_row(ui, |ui| {
+                    draw_pad_cycle_button(ui, &pad_id, 3, lx, ly);
+                });
+                ui.add_space(PAD_CYCLE_GAP);
+                let pad_size = (ui.available_width() - 16.0).clamp(60.0, 120.0);
                 let size_locked =
                     matches!(pm("fx.reverb_size"), crate::state::ParamMode::UserOwned);
                 let damp_locked =
@@ -304,7 +346,8 @@ pub(super) fn draw_fx_content(
                 ("MIX", &mut mi, pm("fx.autotune_mix"))
             );
             if pad_expanded {
-                let pad_size = (ui.available_width() - 8.0).clamp(60.0, 120.0);
+                ui.add_space(PAD_SECTION_TOP_GAP);
+                let pad_size = (ui.available_width() - 16.0).clamp(60.0, 120.0);
                 let pad_locked =
                     matches!(pm("fx.autotune_amount"), crate::state::ParamMode::UserOwned)
                         || matches!(pm("fx.autotune_mix"), crate::state::ParamMode::UserOwned);
