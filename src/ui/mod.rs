@@ -118,6 +118,7 @@ use undo::StateHistory;
 /// Maximum number of past melodic notes the event-stream history retains.
 /// 256 ≈ 8 bars at 32-step patterns, comfortably more than the widget shows.
 pub(crate) const MELODIC_LOG_CAP: usize = 256;
+pub(crate) const DRUM_LOG_CAP: usize = 512;
 
 /// One entry in the melodic-note history.  Recorded on each sequencer
 /// step transition by snapshotting active notes from every melodic
@@ -135,6 +136,15 @@ pub struct MelodicLogEntry {
     pub accent: bool,
 }
 
+/// One entry in the drum-hit history — analogous to `MelodicLogEntry`
+/// for kick/snare/hat/etc.  Lets the event stream freeze drum past-side
+/// rendering the same way it freezes melodic past-side.
+#[derive(Clone, Copy, Debug)]
+pub struct DrumLogEntry {
+    pub fired_at: u64,
+    pub voice: crate::state::DrumVoice,
+}
+
 pub struct ImpulseApp {
     state: Arc<RwLock<AppState>>,
     audio_tx: rtrb::Producer<AudioCommand>,
@@ -149,6 +159,9 @@ pub struct ImpulseApp {
     /// step transition.  The event-stream widget renders past notes from
     /// this log so mutations to the pattern don't erase visible history.
     pub(crate) melodic_log: std::collections::VecDeque<MelodicLogEntry>,
+    /// Parallel log for drum hits — same role, drum voices instead of
+    /// pitched notes.
+    pub(crate) drum_log: std::collections::VecDeque<DrumLogEntry>,
     capture_rx: rtrb::Consumer<f32>,
     dsp_load_rx: rtrb::Consumer<f32>,
     dsp_load_buf: Vec<f32>,
@@ -318,6 +331,7 @@ impl ImpulseApp {
             scope_history: std::collections::VecDeque::with_capacity(12),
             last_seq_step: usize::MAX,
             melodic_log: std::collections::VecDeque::with_capacity(MELODIC_LOG_CAP),
+            drum_log: std::collections::VecDeque::with_capacity(DRUM_LOG_CAP),
             session_start: std::time::Instant::now(),
             last_step_time: 0.0,
             capture_rx: audio.capture_rx,
@@ -699,6 +713,21 @@ impl eframe::App for ImpulseApp {
                 }
                 while self.melodic_log.len() > MELODIC_LOG_CAP {
                     self.melodic_log.pop_front();
+                }
+                // Drum hits — snapshot every active drum voice at this step.
+                let n = seq.steps.max(1);
+                for (voice, pattern) in seq.drum_patterns.iter() {
+                    if let Some(st) = pattern.get(step % n)
+                        && st.active
+                    {
+                        self.drum_log.push_back(DrumLogEntry {
+                            fired_at,
+                            voice: *voice,
+                        });
+                    }
+                }
+                while self.drum_log.len() > DRUM_LOG_CAP {
+                    self.drum_log.pop_front();
                 }
             } else if step != self.last_seq_step {
                 // Sequencer stopped; just update the cached cursor.

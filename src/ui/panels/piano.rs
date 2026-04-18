@@ -171,16 +171,18 @@ pub fn draw_piano(app: &mut ImpulseApp, ui: &mut egui::Ui, ctx: &egui::Context) 
             Stroke::new(0.5, Color32::from_gray(if active { 170 } else { 72 })),
         );
 
-        // Scale degree dot — small marker near the top of scale-tone keys
-        if !active && let Some(degree) = scale_degree(note, root_note, seq_scale) {
+        // Scale degree dot — only tonic, 3rd, and 5th render.  Lower-
+        // rank degrees were hidden to tame LED density on small screens.
+        if !active
+            && let Some(degree) = scale_degree(note, root_note, seq_scale)
+            && (degree == 0 || degree == 2 || degree == 4)
+        {
             let dot_y = key_rect.min.y + wk_h * 0.18;
             let dot_x = key_rect.center().x;
             let (dot_r, intensity) = if degree == 0 {
                 (2.8, 0.95) // tonic — brighter, larger
-            } else if degree == 2 || degree == 4 {
-                (2.0, 0.55) // 3rd / 5th — medium
             } else {
-                (1.5, 0.32) // other degrees — subtle
+                (2.0, 0.55) // 3rd / 5th — medium
             };
             // Bright white LEDs disappear on bare-white keys — when Huth
             // coloring is disabled, fall back to a dark "black LED" that
@@ -342,8 +344,12 @@ pub fn draw_piano(app: &mut ImpulseApp, ui: &mut egui::Ui, ctx: &egui::Context) 
                 Stroke::new(1.0, bsh),
             );
 
-            // Scale degree dot for black keys — LED form (1.618× smaller than white-key dots)
-            if !active && let Some(degree) = scale_degree(note, root_note, seq_scale) {
+            // Scale degree dot for black keys — only tonic / 3rd / 5th,
+            // matching the white-key density gate above.
+            if !active
+                && let Some(degree) = scale_degree(note, root_note, seq_scale)
+                && (degree == 0 || degree == 2 || degree == 4)
+            {
                 let intensity = if degree == 0 { 0.85 } else { 0.45 };
                 let dot_r = if degree == 0 { 2.2 } else { 1.5 };
                 theme::led(

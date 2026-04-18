@@ -5,8 +5,8 @@
 
 use crate::state::AppState;
 use crate::state::sequencer_state::pattern_temperature_acc;
-use crate::ui::MelodicLogEntry;
 use crate::ui::theme;
+use crate::ui::{DrumLogEntry, MelodicLogEntry};
 use egui::{Color32, Pos2, Rect, Sense, Stroke, Ui, Vec2};
 
 /// Sum the Huth warm/cold value across all enabled melodic voices in `state`,
@@ -62,6 +62,7 @@ pub fn event_stream(
     state: &AppState,
     smooth_global_step: f64,
     melodic_log: &std::collections::VecDeque<MelodicLogEntry>,
+    drum_log: &std::collections::VecDeque<DrumLogEntry>,
     width: f32,
     height: f32,
     temperature: f32,
@@ -385,34 +386,48 @@ pub fn event_stream(
             (DrumVoice::HihatOpen808, -7.0, Color32::from_gray(120), 1.8),
             (DrumVoice::Clap909, -3.5, Color32::from_gray(180), 2.0),
         ];
+        let layer_for = |voice: &DrumVoice| -> Option<&(DrumVoice, f32, Color32, f32)> {
+            drum_layers.iter().find(|(v, _, _, _)| v == voice)
+        };
+        let draw_dot = |off: f32, y: f32, color: Color32, radius: f32| {
+            let x = now_x + off * step_w;
+            if x < inner.min.x - 2.0 || x > inner.max.x + 2.0 {
+                return;
+            }
+            let dist = (off.abs() / display_steps).clamp(0.0, 1.0);
+            let a = ((1.0 - dist * 0.6) * 255.0) as u8;
+            theme::led_flat(&painter, Pos2::new(x, y), radius, color, a as f32 / 255.0);
+        };
+        // ── PAST: render fired-hit history from the log (off ≤ 0).
+        for entry in drum_log.iter() {
+            let off = entry.fired_at as f64 - smooth_global_step;
+            if off > 0.0 {
+                continue;
+            }
+            let off = off as f32;
+            if off < -display_steps {
+                continue;
+            }
+            if let Some((_, y_off, color, radius)) = layer_for(&entry.voice) {
+                draw_dot(off, drum_y_base + *y_off, *color, *radius);
+            }
+        }
+        // ── FUTURE: next-fire offset from the live pattern (off > 0).
         for (voice, y_off, color, radius) in drum_layers {
             if let Some(pattern) = seq.drum_patterns.get(voice) {
-                let y = drum_y_base + y_off;
+                let y = drum_y_base + *y_off;
                 for (step_idx, step) in pattern.iter().enumerate().take(steps) {
                     if !step.active {
                         continue;
                     }
-                    let step_offset = step_idx as f32 - pos_in_pattern;
-                    let offsets = [
-                        step_offset,
-                        step_offset + steps as f32,
-                        step_offset - steps as f32,
-                    ];
-                    for &off in &offsets {
-                        let x = now_x + off * step_w;
-                        if x < inner.min.x - 2.0 || x > inner.max.x + 2.0 {
-                            continue;
-                        }
-                        let dist = (off.abs() / display_steps).clamp(0.0, 1.0);
-                        let a = ((1.0 - dist * 0.6) * 255.0) as u8;
-                        theme::led_flat(
-                            &painter,
-                            Pos2::new(x, y),
-                            *radius,
-                            *color,
-                            a as f32 / 255.0,
-                        );
+                    let mut off = step_idx as f32 - pos_in_pattern;
+                    if off <= 0.0 {
+                        off += steps as f32;
                     }
+                    if off > display_steps {
+                        continue;
+                    }
+                    draw_dot(off, y, *color, *radius);
                 }
             }
         }

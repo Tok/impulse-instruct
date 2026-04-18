@@ -137,11 +137,7 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         // Each enabled bass voice now gets its own block of rows
         // (note + ACCENT + SLIDE + PAN), so multiply by the voice count.
         let n_bass_voices = if has_bass {
-            s.sequencer
-                .bass_voice_enabled
-                .iter()
-                .filter(|&&e| e)
-                .count() as f32
+            s.bass_voices.iter().filter(|v| v.enabled).count() as f32
         } else {
             0.0
         };
@@ -271,7 +267,7 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             let enabled_voices: Vec<usize> = {
                 let s = app.state.read();
                 (0..crate::state::MAX_BASS_VOICES)
-                    .filter(|&vi| s.sequencer.bass_voice_enabled[vi])
+                    .filter(|&vi| s.bass_voices.get(vi).is_some_and(|v| v.enabled))
                     .collect()
             };
             let marker_h = (pad_px * 0.35).clamp(10.0, 16.0);

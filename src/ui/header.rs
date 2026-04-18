@@ -184,6 +184,7 @@ impl ImpulseApp {
                             &state,
                             smooth_global,
                             &self.melodic_log,
+                            &self.drum_log,
                             stream_rect.width(),
                             stream_rect.height(),
                             temperature,

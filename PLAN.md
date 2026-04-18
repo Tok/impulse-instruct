@@ -14,9 +14,6 @@ they ship and are reflected in `features.md`.
 - **Melodic voice preecho** — TB303Step has no velocity field, only
   accent/slide.  Design a preecho mapping for bass/hoover/an1x that uses
   accent-ramping or slide-cascading instead of velocity scaling.
-- **Per-agent seed UI in the agent card** — global SEED + lock landed in
-  the LLM Console; the per-agent `seed_locked` flag exists in state but
-  has no UI surface yet.
 
 ## DSP
 
@@ -39,9 +36,6 @@ they ship and are reflected in `features.md`.
 - **Preecho v2** — note approach (chromatic / scale-step / arp resolving
   to the anchor note), probability ramp, accent/slide trailing, curve
   shapes (exp / log), auto-length from gap between anchors.
-- **Drum hit history** — the new melodic note log captures bass / AN1X
-  / hoover; extending it to drum triggers would let the event stream
-  freeze drum hits the same way.
 
 ## Intelligence
 

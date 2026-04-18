@@ -40,6 +40,8 @@ fn draw_llm_agent_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, module_id: u32)
         role,
         can_spawn,
         can_dismiss,
+        mut seed,
+        seed_locked,
     ) = {
         let s = app.state.read();
         let a = &s.llm_agents[idx];
@@ -60,6 +62,8 @@ fn draw_llm_agent_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, module_id: u32)
             a.role,
             a.can_spawn,
             a.can_dismiss,
+            a.seed,
+            a.seed_locked,
         )
     };
 
@@ -340,6 +344,67 @@ fn draw_llm_agent_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, module_id: u32)
         }
         if perm_btn(ui, "BYE", can_dismiss, "Can sign off", "Cannot sign off") {
             app.state.write().llm_agents[idx].can_dismiss = !can_dismiss;
+        }
+    });
+    // ── Seed (lock + value + random) ────────────────────────────────────
+    ui.horizontal(|ui| {
+        ui.spacing_mut().item_spacing.x = 3.0;
+        let lock_label = if seed_locked { "SEED [L]" } else { "SEED" };
+        let lock_col = if seed_locked { theme::FOG } else { theme::ASH };
+        let lock_fill = egui::Color32::from_gray(if seed_locked { 35 } else { 18 });
+        if ui
+            .add(
+                egui::Button::new(
+                    egui::RichText::new(lock_label)
+                        .monospace()
+                        .size(7.5)
+                        .color(lock_col),
+                )
+                .fill(lock_fill)
+                .min_size(egui::vec2(36.0, 14.0)),
+            )
+            .on_hover_text(if seed_locked {
+                "Seed locked — global seed changes won't affect this agent. Click to unlock."
+            } else {
+                "Seed follows global. Click to lock independently."
+            })
+            .clicked()
+        {
+            app.state.write().llm_agents[idx].seed_locked = !seed_locked;
+        }
+        if ui
+            .add(
+                egui::DragValue::new(&mut seed)
+                    .range(-1..=i64::MAX)
+                    .speed(1)
+                    .custom_formatter(|n, _| {
+                        if (n as i64) < 0 {
+                            "random".to_string()
+                        } else {
+                            format!("{}", n as i64)
+                        }
+                    }),
+            )
+            .on_hover_text("Per-agent seed (-1 = randomise every call)")
+            .changed()
+        {
+            app.state.write().llm_agents[idx].seed = seed;
+        }
+        if ui
+            .add(
+                egui::Button::new(
+                    egui::RichText::new("RAND")
+                        .monospace()
+                        .size(7.0)
+                        .color(theme::ASH),
+                )
+                .fill(egui::Color32::TRANSPARENT)
+                .min_size(egui::vec2(24.0, 14.0)),
+            )
+            .on_hover_text("Reset to random (-1)")
+            .clicked()
+        {
+            app.state.write().llm_agents[idx].seed = -1;
         }
     });
     // ── Style selector ──────────────────────────────────────────────────
