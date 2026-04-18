@@ -52,9 +52,6 @@ they ship and are reflected in `features.md`.
   loop).  Need safe jam support that doesn't do full-state replacement.
 - **Style mc_lines/themes UI editor** — allow editing mc_lines and
   themes per style from UI preferences.
-- **Style-aware agent-preset naming** — styles override the default
-  multi-agent setup name (`Crew` → `Band` / `Posse` / `Squad` /
-  `Ensemble` per style).
 
 ## UI / UX
 
@@ -66,9 +63,6 @@ they ship and are reflected in `features.md`.
 - **Style-dependent rack defaults** — `Full` is one shape today; future
   presets could be style-aware (Jungle / D&B / Acid / Gabber starter
   kits) instead of the generic Empty / Basic / Standard / Full ladder.
-- **Per-knob temperature display extraction** — the live + bank
-  temperature is in the event-stream header now; a dedicated chip in
-  the top header band would free space and make it always visible.
 - **Project picker** — File menu currently loads the newest
   `project-*.json` from cwd.  A real picker (rfd or in-app file dialog)
   would let the user pick any saved project.

@@ -168,17 +168,6 @@ impl ImpulseApp {
                         // we feed the smooth global step (global_step_count
                         // + frac) instead of the per-cycle current_step.
                         let smooth_global = state.global_step_count as f64 + frac;
-                        let temperature = if self.spectrum_magnitudes.is_empty() {
-                            f32::NAN
-                        } else {
-                            let bin_hz =
-                                crate::audio::SAMPLE_RATE / crate::audio::spectrum::FFT_SIZE as f32;
-                            crate::audio::spectrum::spectrum_temperature(
-                                &self.spectrum_magnitudes,
-                                bin_hz,
-                                &theme::NOTE_TEMP,
-                            )
-                        };
                         super::widgets::event_stream(
                             ui,
                             &state,
@@ -187,7 +176,6 @@ impl ImpulseApp {
                             &self.drum_log,
                             stream_rect.width(),
                             stream_rect.height(),
-                            temperature,
                         );
                     });
                 }
@@ -494,13 +482,14 @@ impl ImpulseApp {
 
     fn draw_header_bar(&mut self, ctx: &egui::Context) {
         // Chip column layout (must sum to HEADER_TOTAL_COLS = 105).
-        // [TITLE 18][STATUS 7][WARN 5][BPM 6][TRANSPORT 6][HEAT 34][MUTE+MON 21][VRAM/RAM 8]
+        // [TITLE 18][STATUS 7][WARN 5][BPM 6][TRANSPORT 6][HEAT 26][TEMP 8][MUTE+MON 21][VRAM/RAM 8]
         const C_TITLE: u32 = 18;
         const C_STATUS: u32 = 7;
         const C_WARN: u32 = 5;
         const C_BPM: u32 = 6;
         const C_TRANSPORT: u32 = 6;
-        const C_HEAT: u32 = 34;
+        const C_HEAT: u32 = 26;
+        const C_TEMP: u32 = 8;
         const C_MUTE_MON: u32 = 21;
         const C_VRAM_RAM: u32 = 8;
 
@@ -759,6 +748,25 @@ impl ImpulseApp {
                                 .size(8.5),
                         );
                     });
+                });
+
+                // ── TEMP (Huth warm/cold chip) ─────────────────────────────
+                let r = cell(col, C_TEMP);
+                col += C_TEMP;
+                theme::screen_chip_at(ui, r, theme::VOID, |ui| {
+                    let live = if self.spectrum_magnitudes.is_empty() {
+                        f32::NAN
+                    } else {
+                        let bin_hz =
+                            crate::audio::SAMPLE_RATE / crate::audio::spectrum::FFT_SIZE as f32;
+                        crate::audio::spectrum::spectrum_temperature(
+                            &self.spectrum_magnitudes,
+                            bin_hz,
+                            &theme::NOTE_TEMP,
+                        )
+                    };
+                    let bank = super::widgets::bank_temperature(&self.state.read());
+                    super::widgets::draw_temp_chip(ui, live, bank);
                 });
 
                 // ── MONITOR + MUTE + slider ────────────────────────────────

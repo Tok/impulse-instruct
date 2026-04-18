@@ -313,6 +313,31 @@ pub const PRESETS: &[AgentPreset] = &[
     },
 ];
 
+/// Return a style-flavored display name for an agent preset.  The underlying
+/// `AgentPreset::name` (`"Crew"`, `"Solo"`, …) remains the canonical id used
+/// by the API and tests; this helper just re-labels it for the UI.  Only the
+/// `Crew` preset is renamed today — the plan calls out `Crew → Band / Posse
+/// / Squad / Ensemble per style`.
+pub fn styled_preset_name(preset_name: &'static str, style_id: Option<&str>) -> &'static str {
+    if preset_name != "Crew" {
+        return preset_name;
+    }
+    match style_id {
+        // Posse — MC/rave lineage, sound-system heritage.
+        Some("jungle" | "drum_and_bass" | "uk_garage" | "dubstep" | "breakcore") => "Posse",
+        // Squad — hard, aggressive, tight-knit kit.
+        Some("gabber" | "early_rave" | "darksynth" | "electro") => "Squad",
+        // Band — retro, song-oriented.
+        Some("synthwave" | "vaporwave" | "lo_fi_hip_hop") => "Band",
+        // Ensemble — contemplative / orchestral.
+        Some(
+            "ambient_house" | "ambient_techno" | "dark_ambient" | "space_ambient" | "meditation"
+            | "baroque_bach" | "idm",
+        ) => "Ensemble",
+        _ => "Crew",
+    }
+}
+
 /// Result of checking a preset against available resources.
 pub struct PresetStatus {
     pub preset: &'static AgentPreset,
@@ -504,5 +529,29 @@ mod tests {
     fn find_model_missing() {
         let models = vec!["models/gemma.gguf".to_string()];
         assert!(find_model("bonsai", &models).is_none());
+    }
+
+    #[test]
+    fn styled_preset_name_renames_crew() {
+        assert_eq!(styled_preset_name("Crew", Some("jungle")), "Posse");
+        assert_eq!(styled_preset_name("Crew", Some("drum_and_bass")), "Posse");
+        assert_eq!(styled_preset_name("Crew", Some("gabber")), "Squad");
+        assert_eq!(styled_preset_name("Crew", Some("synthwave")), "Band");
+        assert_eq!(styled_preset_name("Crew", Some("dark_ambient")), "Ensemble");
+    }
+
+    #[test]
+    fn styled_preset_name_crew_default_when_unmapped() {
+        assert_eq!(styled_preset_name("Crew", None), "Crew");
+        assert_eq!(styled_preset_name("Crew", Some("acid_techno")), "Crew");
+        assert_eq!(styled_preset_name("Crew", Some("__unknown__")), "Crew");
+    }
+
+    #[test]
+    fn styled_preset_name_leaves_other_presets_alone() {
+        for preset in ["Solo", "Duo", "Swarm", "Voices", "Lite"] {
+            assert_eq!(styled_preset_name(preset, Some("jungle")), preset);
+            assert_eq!(styled_preset_name(preset, None), preset);
+        }
     }
 }

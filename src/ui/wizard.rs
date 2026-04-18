@@ -25,6 +25,7 @@ impl ImpulseApp {
             .unwrap_or_default();
 
         let statuses = crate::llm::vram::check_presets(si.vram_total_mb, &self.available_models);
+        let active_style = self.state.read().llm.active_style.clone();
 
         // Keyboard: Enter submits, Up/Down or W/S navigate presets
         let enter_pressed = ctx.input(|i| i.key_pressed(egui::Key::Enter));
@@ -232,7 +233,10 @@ impl ImpulseApp {
                     let selectable = status.fits_vram && status.models_available;
                     let selected = self.wizard_selected == i;
 
-                    let name = status.preset.name;
+                    let name = crate::llm::vram::styled_preset_name(
+                        status.preset.name,
+                        active_style.as_deref(),
+                    );
                     let desc = status.preset.description;
                     let n_agents = status.preset.agents.len();
                     let vram_label =
