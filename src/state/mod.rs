@@ -420,7 +420,7 @@ impl Default for LlmState {
             locked_params: HashSet::new(),
             focused_params: HashSet::new(),
             auto_jam: true,
-            heat: 0.4,
+            heat: 0.5,
             temperature: 0.9,
             conversation_mode: ConversationMode::Producer,
             active_style: None,
@@ -515,6 +515,18 @@ pub struct LlmAgentState {
     /// global style is changed. When false (default), style syncs with global.
     #[serde(default)]
     pub style_locked: bool,
+    /// Per-agent random seed.  -1 = random each call.  Inherited from the
+    /// global LlmState.seed via `propagate_seed` when not locked.
+    #[serde(default = "default_agent_seed")]
+    pub seed: i64,
+    /// When true, this agent's seed is independent and won't change when the
+    /// global seed is changed. When false (default), seed syncs with global.
+    #[serde(default)]
+    pub seed_locked: bool,
+}
+
+fn default_agent_seed() -> i64 {
+    -1
 }
 
 /// Maximum number of memory entries per agent.
@@ -527,7 +539,7 @@ impl LlmAgentState {
         Self {
             id,
             persona_name: "PULSE".to_string(),
-            heat: 0.4,
+            heat: 0.5,
             temperature: 0.9,
             scope: Vec::new(),
             role: AgentRole::Producer,
@@ -549,6 +561,8 @@ impl LlmAgentState {
             style_observations: Vec::new(),
             pending_hints: Vec::new(),
             style_locked: false,
+            seed: -1,
+            seed_locked: false,
         }
     }
 
@@ -579,6 +593,8 @@ impl LlmAgentState {
             style_observations: Vec::new(),
             pending_hints: Vec::new(),
             style_locked: false,
+            seed: llm.seed,
+            seed_locked: false,
         }
     }
 }
@@ -595,6 +611,6 @@ pub use transitions::*;
 
 pub mod persistence;
 pub use persistence::{
-    SESSION_PATH, SETTINGS_PATH, apply_session, load_model_setting, load_session,
+    SESSION_PATH, SETTINGS_PATH, apply_session, load_model_setting, load_project, load_session,
     save_model_setting, save_project, save_session, save_session_ext,
 };

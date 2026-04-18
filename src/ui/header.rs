@@ -217,6 +217,65 @@ impl ImpulseApp {
                 egui::menu::bar(ui, |ui| {
                     ui.menu_button(egui::RichText::new("File").monospace().size(10.0), |ui| {
                         if ui
+                            .button(egui::RichText::new("New project").monospace().size(10.0))
+                            .clicked()
+                        {
+                            // Re-open the wizard and forget the wizard_done
+                            // flag so the user picks a fresh preset.
+                            self.show_wizard = true;
+                            // Snapshot keeps current rack/style intact until
+                            // the user actually applies a preset, mirroring
+                            // wizard "resume" behaviour.
+                            ui.close_menu();
+                        }
+                        if ui
+                            .button(
+                                egui::RichText::new("Load latest project")
+                                    .monospace()
+                                    .size(10.0),
+                            )
+                            .clicked()
+                        {
+                            // Find the newest project-*.json in cwd and
+                            // load it.  Avoids pulling in a file-picker
+                            // dependency for the menu entry.
+                            let latest = std::fs::read_dir(".")
+                                .ok()
+                                .into_iter()
+                                .flatten()
+                                .filter_map(|e| e.ok())
+                                .filter(|e| {
+                                    e.file_name().to_string_lossy().starts_with("project-")
+                                        && e.file_name().to_string_lossy().ends_with(".json")
+                                })
+                                .max_by_key(|e| e.metadata().and_then(|m| m.modified()).ok());
+                            match latest {
+                                Some(entry) => {
+                                    let path = entry.path();
+                                    match crate::state::load_project(&path) {
+                                        Ok(loaded) => {
+                                            *self.state.write() = loaded;
+                                            self.push_audio_params();
+                                            let msg = format!("[ loaded ← {} ]", path.display());
+                                            log::info!("{}", msg);
+                                            self.log_text.push_str(&format!("{}\n", msg));
+                                        }
+                                        Err(e) => {
+                                            let msg = format!("[ load failed: {} ]", e);
+                                            log::error!("{}", msg);
+                                            self.log_text.push_str(&format!("{}\n", msg));
+                                        }
+                                    }
+                                }
+                                None => {
+                                    let msg = "[ no project-*.json found in working dir ]";
+                                    log::warn!("{}", msg);
+                                    self.log_text.push_str(&format!("{}\n", msg));
+                                }
+                            }
+                            ui.close_menu();
+                        }
+                        if ui
                             .button(egui::RichText::new("Save project").monospace().size(10.0))
                             .clicked()
                         {
@@ -237,20 +296,6 @@ impl ImpulseApp {
                         }
 
                         ui.separator();
-
-                        ui.horizontal(|ui| {
-                            ui.label(
-                                egui::RichText::new("Bars:")
-                                    .monospace()
-                                    .size(9.5)
-                                    .color(theme::SMOKE),
-                            );
-                            ui.add(
-                                egui::DragValue::new(&mut self.export_bars)
-                                    .range(1..=64)
-                                    .speed(1.0),
-                            );
-                        });
 
                         if ui
                             .button(egui::RichText::new("Export WAV").monospace().size(10.0))

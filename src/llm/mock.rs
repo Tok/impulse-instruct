@@ -163,12 +163,12 @@ pub fn mock_response(prompt: &str, heat: f32) -> Result<LlmOutput> {
         let cut = (0.3 + (p1 * 2.7).sin().abs() * sweep * 1.6).clamp(0.15, 0.95);
         let res = (0.45 + (p2 * 1.9).cos() * sweep).clamp(0.2, 0.95);
 
-        if heat < 0.3 {
+        if heat < 0.25 {
             serde_json::json!({
-                "_comment": "filter nudge",
+                "_comment": "subtle filter nudge",
                 "bass": { "cutoff": cut, "resonance": res }
             })
-        } else if heat < 0.6 {
+        } else if heat < 0.5 {
             let bpm_shift = (p3.sin() * heat * 12.0) as i32;
             serde_json::json!({
                 "_comment": "filter + bpm nudge",
@@ -176,26 +176,68 @@ pub fn mock_response(prompt: &str, heat: f32) -> Result<LlmOutput> {
                            "env_mod": (0.5 + (p2 * 0.8).sin() * sweep).clamp(0.2, 0.95) },
                 "sequencer": { "bpm": (130.0 + bpm_shift as f32).clamp(100.0, 160.0) }
             })
-        } else if heat < 0.85 {
-            let bpm = (125.0 + (p3 * 2.0).sin() * heat * 20.0).clamp(110.0, 155.0);
+        } else if heat < 0.75 {
+            let bpm = (125.0 + (p3 * 2.0).sin() * heat * 24.0).clamp(108.0, 158.0);
             serde_json::json!({
-                "_comment": "filter + bpm push",
+                "_comment": "bold sweep — fx automation kicks in",
                 "bass": { "cutoff": cut, "resonance": res,
                            "env_mod": (0.6 + (p1 * 1.1).cos() * sweep).clamp(0.3, 0.95),
-                           "decay": (0.3 + (p2 * 0.5).sin().abs() * 0.4).clamp(0.15, 0.8) },
+                           "decay": (0.3 + (p2 * 0.5).sin().abs() * 0.4).clamp(0.15, 0.85) },
+                "fx": {
+                    "reverb_mix": (0.15 + (p3 * 1.3).sin().abs() * 0.35).clamp(0.0, 0.6),
+                    "delay_mix": (0.10 + (p2 * 0.7).cos().abs() * 0.30).clamp(0.0, 0.5)
+                },
+                "sequencer": { "bpm": bpm }
+            })
+        } else if heat < 0.95 {
+            // Chaotic — push FX into aggressive territory and ramp BPM hard.
+            let bpm = (115.0 + (p3 * 1.5).sin() * heat * 35.0).clamp(95.0, 170.0);
+            let drive = (heat * 0.55).clamp(0.2, 0.95);
+            serde_json::json!({
+                "_comment": "chaotic — drives and resonance peak, bpm jumps",
+                "bass": { "cutoff": (cut * 0.6 + 0.4).clamp(0.2, 0.99),
+                           "resonance": (0.65 + (p1 * 2.0).cos() * 0.3).clamp(0.4, 0.99),
+                           "env_mod": (0.7 + (p2 * 1.4).sin() * 0.25).clamp(0.4, 0.99),
+                           "decay": (0.5 + (p2 * 0.5).sin().abs() * 0.4).clamp(0.15, 0.95) },
+                "fx": {
+                    "distortion_drive": drive,
+                    "distortion_mix": (0.3 + (p1 * 0.9).sin().abs() * 0.4).clamp(0.0, 0.7),
+                    "reverb_mix": (0.25 + (p3 * 1.7).cos().abs() * 0.4).clamp(0.0, 0.75),
+                    "delay_mix": (0.20 + (p2 * 1.1).sin().abs() * 0.4).clamp(0.0, 0.7),
+                    "delay_feedback": (0.4 + (p1 * 0.4).cos().abs() * 0.4).clamp(0.0, 0.85)
+                },
                 "sequencer": { "bpm": bpm }
             })
         } else {
-            let styles: &[(&str, f32, f32, f32, f32)] = &[
-                ("full acid — resonance + chaos up", 0.2, 0.88, 0.85, 148.0),
-                ("dark + slow — filter down, BPM down", 0.7, 0.40, 0.30, 95.0),
-                ("hard + fast — filter sweep, BPM up", 0.5, 0.65, 0.70, 160.0),
-                ("hypnotic — mid filter, lower BPM", 0.6, 0.55, 0.50, 118.0),
+            // Maximum chaos — pick from a pool of extreme presets, stack
+            // distortion + bitcrush + ringmod, ramp the lot.
+            let styles: &[(&str, f32, f32, f32, f32, f32)] = &[
+                (
+                    "MAX — full acid into the red",
+                    0.18,
+                    0.95,
+                    0.92,
+                    148.0,
+                    0.85,
+                ),
+                ("MAX — dark slow grinder", 0.65, 0.55, 0.30, 88.0, 0.95),
+                ("MAX — hard + fast 165", 0.5, 0.78, 0.82, 165.0, 0.7),
+                ("MAX — hypnotic dub assault", 0.55, 0.65, 0.55, 118.0, 0.6),
+                ("MAX — gabber 180", 0.4, 0.85, 0.95, 178.0, 0.95),
+                ("MAX — half-time blown out", 0.7, 0.7, 0.7, 78.0, 0.8),
             ];
-            let (cmt, cut2, res2, env2, bpm2) = styles[((ms * 0.003) as usize) % styles.len()];
+            let (cmt, cut2, res2, env2, bpm2, drv) = styles[((ms * 0.005) as usize) % styles.len()];
             serde_json::json!({
                 "_comment": cmt,
                 "bass": { "cutoff": cut2, "resonance": res2, "env_mod": env2 },
+                "fx": {
+                    "distortion_drive": drv,
+                    "distortion_mix": 0.6,
+                    "reverb_mix": 0.5,
+                    "reverb_size": 0.85,
+                    "delay_mix": 0.4,
+                    "delay_feedback": 0.7
+                },
                 "sequencer": { "bpm": bpm2 }
             })
         }

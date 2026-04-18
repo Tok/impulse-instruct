@@ -466,6 +466,12 @@ pub fn run_llm_loop(
 
         let sampling = {
             let s = state.read();
+            // Per-agent seed override (mirrors style propagation): the agent
+            // carries its own seed copy.  -1 means "random each call".
+            let agent_seed = agent_id
+                .and_then(|aid| s.llm_agents.iter().find(|a| a.id == aid))
+                .map(|a| a.seed)
+                .unwrap_or(s.llm.seed);
             SamplingParams {
                 heat: agent_heat,
                 temperature: agent_temp,
@@ -474,7 +480,7 @@ pub fn run_llm_loop(
                 min_p: s.llm.min_p,
                 repeat_penalty: s.llm.repeat_penalty,
                 frequency_penalty: s.llm.frequency_penalty,
-                seed: s.llm.seed,
+                seed: agent_seed,
             }
         };
         let enable_thinking = agent_enable_thinking;

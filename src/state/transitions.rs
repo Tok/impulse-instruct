@@ -751,6 +751,19 @@ pub fn propagate_style(state: AppState, style_id: &str) -> AppState {
     s
 }
 
+/// Propagate a seed change to all agents whose seed is not locked.  Mirrors
+/// `propagate_style` — `seed = -1` means "random each call".
+pub fn propagate_seed(state: AppState, seed: i64) -> AppState {
+    let mut s = state;
+    s.llm.seed = seed;
+    for agent in &mut s.llm_agents {
+        if !agent.seed_locked {
+            agent.seed = seed;
+        }
+    }
+    s
+}
+
 /// Push a memory snippet to an agent's persistent memory, capping at AGENT_MEMORY_MAX.
 pub fn push_agent_memory(state: AppState, agent_id: u32, snippet: String) -> AppState {
     let mut s = state;

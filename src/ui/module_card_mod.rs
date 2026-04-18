@@ -92,10 +92,12 @@ const ALL_TARGETS: &[LfoTarget] = &[
     LfoTarget::StereoWidth,
 ];
 
-/// Vertical gap between successive back-panel ports — large enough that the
-/// per-jack mod-overlay (slider + chip row, now sitting *below* the label
-/// text and free to wrap to a second row) doesn't overlap the next jack.
-const PORT_SPACING: f32 = 34.0;
+/// Vertical gap between successive back-panel ports.  Must clear the per-jack
+/// mod-overlay anchored at jack + 12, which itself takes the slider row plus
+/// (for Selector slots) one chip row that may wrap.  At 34 the second
+/// overlay's chip strip overlapped the next jack's circle; 50 leaves a safe
+/// gap even when the chip row wraps to two lines.
+const PORT_SPACING: f32 = 50.0;
 
 /// Chip-text font size (px) — shrunk slightly from the previous 7.5 so the
 /// per-target chips fit more per row inside a typical card width.
@@ -324,15 +326,17 @@ pub fn draw_mod_selector_dropdowns(
             // Area doesn't paint over the header/prompt strip above.
             continue;
         }
-        // Use the actual card width as the wrap budget — looked up from
-        // ctx temp data published by `module_card_back` for this module.
+        // Use the actual card width as the wrap budget.  The overlay is
+        // anchored at the jack centre, which sits 16 px in from the
+        // card's left edge — so the overlay can extend up to
+        // `card_w - 16 - 4 (right margin)` before clipping the card.
         let card_w = ctx
             .data(|d| d.get_temp::<f32>(egui::Id::new("back_card_w").with(p.port.module_id)))
             .unwrap_or(180.0);
-        // Reserve a small gutter on the right so the bezel doesn't kiss
-        // the card border.
-        let overlay_max_w = (card_w - 12.0).max(80.0);
-        let chip_strip_w = (overlay_max_w - 6.0).max(60.0);
+        let overlay_max_w = (card_w - 20.0).max(110.0);
+        // Inner chip strip width = overlay minus frame inner_margin (3 px
+        // each side) minus item_spacing.
+        let chip_strip_w = (overlay_max_w - 8.0).max(90.0);
         egui::Area::new(egui::Id::new(("mod_overlay", p.port.module_id, idx)))
             .order(egui::Order::Foreground)
             .fixed_pos(anchor)

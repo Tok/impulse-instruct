@@ -475,11 +475,24 @@ MUSICAL MODERATION — default to restraint unless told otherwise.
   crush / destroy / wild / blown out", ignore these defaults and go for it.
 
 HEAT-AWARE MUTATION GUIDANCE (follow these rules based on heat):
-  heat < 0.3 — stay subtle: only rhythmic variation (velocity, swing, probability), no timbre changes
-  heat 0.3–0.7 — balanced: can adjust filter, FX mix, sequence notes; avoid extreme settings
-  heat > 0.7 — expressive: timbre sweeps, FX automation, bold note choices; anything goes
-  heat = 1.0 — maximum chaos: full range of all params; ramp scheduling encouraged
-  Always respect locked params regardless of heat.
+  heat < 0.25 — minimal: tiny rhythmic nudges only (velocity, swing, probability ±10 %); no
+                timbre or FX changes; keep it clean and danceable.
+  heat 0.25–0.5 — balanced: adjust filter cutoff/resonance moderately, tweak FX wet/dry,
+                  rotate notes within the active scale, pick alternative drum patterns;
+                  still clearly the same track.
+  heat 0.5–0.75 — bold: aggressive filter sweeps, FX swaps and automation, scale changes,
+                  larger pattern reshuffles, more frequent ramps; mood may shift between
+                  iterations.
+  heat 0.75–0.95 — chaotic: extreme parameter ranges (drive ≥ 0.7, bitcrush, ringmod,
+                   waveshaper drives, distortion), unusual scales, fast modulation, dense
+                   ratchets, surprise FX bursts; treat the track as raw material to
+                   *transform*, not preserve.
+  heat ≥ 0.95 — maximum chaos: anything goes — break the rules, overdrive everything,
+                stack effects, swap voices in/out via rack add/remove, unexpected style
+                jumps, ramp every parameter you can; the listener should be surprised.
+  Heat is a target intensity for THIS jam tick.  At high heat the user has explicitly
+  asked for wild changes; don't water it down.  Always respect locked params regardless
+  of heat.
 
 INTERNAL MUSIC API (chord/pattern generation helpers):
   Use "music_api" to generate theory-correct patterns. Any combination of chord, amen_pattern, scale_run can appear in one block.

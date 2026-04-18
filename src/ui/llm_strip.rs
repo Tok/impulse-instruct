@@ -471,6 +471,84 @@ impl ImpulseApp {
             }
         });
 
+        // ── Seed row (mirrors STYLE: lock + editable value + random reset) ──
+        ui.horizontal(|ui| {
+            // Reuse `style_lock` as a "global broadcast lock" toggle?  No —
+            // seed has its own lock semantics: when locked, agents won't
+            // auto-pick up global seed changes.  Stored on each agent;
+            // here the global "[L]" suffix is informational, indicating
+            // whether changes propagate (i.e. NOT locked across all agents).
+            let any_agent_locked = self
+                .state
+                .read()
+                .llm_agents
+                .iter()
+                .any(|a| a.seed_locked);
+            let lock_label = if any_agent_locked {
+                "SEED [L]"
+            } else {
+                "SEED"
+            };
+            let lock_col = if any_agent_locked {
+                theme::FOG
+            } else {
+                theme::ASH
+            };
+            ui.add(
+                egui::Label::new(
+                    egui::RichText::new(lock_label)
+                        .monospace()
+                        .size(9.0)
+                        .color(lock_col),
+                )
+                .selectable(false),
+            )
+            .on_hover_text(if any_agent_locked {
+                "At least one agent has its own locked seed. Use the agent card to clear locks."
+            } else {
+                "Seed change propagates to every agent."
+            });
+            ui.add_space(4.0);
+            let mut seed = self.state.read().llm.seed;
+            if ui
+                .add(
+                    egui::DragValue::new(&mut seed)
+                        .range(-1..=i64::MAX)
+                        .speed(1)
+                        .custom_formatter(|n, _| {
+                            if (n as i64) < 0 {
+                                "random".to_string()
+                            } else {
+                                format!("{}", n as i64)
+                            }
+                        }),
+                )
+                .on_hover_text("Random seed (-1 = randomise on every call). Propagates to all unlocked agents.")
+                .changed()
+            {
+                let snap = self.state.read().clone();
+                let new_state = crate::state::propagate_seed(snap, seed);
+                *self.state.write() = new_state;
+            }
+            if ui
+                .add(
+                    egui::Button::new(
+                        egui::RichText::new("RANDOM")
+                            .monospace()
+                            .size(8.0)
+                            .color(theme::ASH),
+                    )
+                    .fill(egui::Color32::TRANSPARENT),
+                )
+                .on_hover_text("Reset to random (seed = -1)")
+                .clicked()
+            {
+                let snap = self.state.read().clone();
+                let new_state = crate::state::propagate_seed(snap, -1);
+                *self.state.write() = new_state;
+            }
+        });
+
         // Prompt input moved to the rack toolbar (draw_prompt_input).
     }
 
