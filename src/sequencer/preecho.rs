@@ -50,6 +50,17 @@ pub struct PreechoConfig {
     /// clamps to the sequencer's ratchet range).
     #[serde(default)]
     pub ratchet_ramp: bool,
+    /// Melodic counterpart of `velocity_ramp`: ramp `TB303Step.accent`
+    /// from 0.3 (earliest lead-in step) → 1.0 (anchor-adjacent) on
+    /// bass voices.  Overrides the step's stored accent while inside
+    /// the lead-in window; anchor step itself plays at user intensity.
+    #[serde(default)]
+    pub accent_ramp: bool,
+    /// Set `TB303Step.slide` to 1.0 on the step immediately before each
+    /// anchor (`d == 1`) so the note slides into the downbeat.  No
+    /// effect on other lead-in steps — just the last one cascades.
+    #[serde(default)]
+    pub slide_cascade: bool,
 }
 
 fn default_enabled() -> bool {
@@ -64,6 +75,8 @@ impl Default for PreechoConfig {
             length: 0,
             velocity_ramp: false,
             ratchet_ramp: false,
+            accent_ramp: false,
+            slide_cascade: false,
         }
     }
 }
@@ -72,6 +85,62 @@ impl PreechoConfig {
     pub fn is_active(&self) -> bool {
         self.enabled && self.length > 0 && !self.anchors.is_empty()
     }
+}
+
+/// Melodic counterpart of `preecho_scale` for bass / TB303-step voices.
+///
+/// Returns `(accent_override, slide_override)` — each `Some(v)` when
+/// the preecho wants to set that field, `None` to keep the step's
+/// stored value.  Anchor steps and steps outside the lead-in window
+/// return `(None, None)` so user intensity shines through on the
+/// downbeat.
+///
+/// Rules:
+/// - `accent_ramp`: linear ramp from 0.3 (earliest lead-in step, `d ==
+///   length`) to 1.0 (anchor-adjacent, `d == 1`).  Applied as an
+///   override, not a multiplier, so a pattern with zero stored accents
+///   still reads as a build-up.
+/// - `slide_cascade`: only the step at `d == 1` gets `Some(1.0)` so
+///   the note slides into the anchor.  Earlier lead-in steps keep
+///   their stored slide.
+pub fn preecho_melodic(
+    step: usize,
+    total_steps: usize,
+    cfg: &PreechoConfig,
+) -> (Option<f32>, Option<f32>) {
+    if !cfg.is_active() || total_steps == 0 {
+        return (None, None);
+    }
+    let length = cfg.length as usize;
+    let mut best_d: Option<usize> = None;
+    for &a in &cfg.anchors {
+        let a = a as usize;
+        if a >= total_steps {
+            continue;
+        }
+        let d = (a + total_steps - step) % total_steps;
+        if d == 0 {
+            return (None, None); // anchor itself — user intensity wins
+        }
+        if d <= length && best_d.map(|x| d < x).unwrap_or(true) {
+            best_d = Some(d);
+        }
+    }
+    let Some(d) = best_d else {
+        return (None, None);
+    };
+    let pos = 1.0 - ((d - 1) as f32 / length.max(1) as f32);
+    let accent = if cfg.accent_ramp {
+        Some((0.3 + 0.7 * pos).clamp(0.0, 1.0))
+    } else {
+        None
+    };
+    let slide = if cfg.slide_cascade && d == 1 {
+        Some(1.0)
+    } else {
+        None
+    };
+    (accent, slide)
 }
 
 /// Compute the pre-echo modulation to apply at a given step, given the
@@ -136,6 +205,20 @@ mod tests {
             length,
             velocity_ramp: vr,
             ratchet_ramp: rr,
+            accent_ramp: false,
+            slide_cascade: false,
+        }
+    }
+
+    fn cfg_melodic(anchors: &[u8], length: u8, ar: bool, sc: bool) -> PreechoConfig {
+        PreechoConfig {
+            enabled: true,
+            anchors: anchors.to_vec(),
+            length,
+            velocity_ramp: false,
+            ratchet_ramp: false,
+            accent_ramp: ar,
+            slide_cascade: sc,
         }
     }
 
@@ -207,5 +290,80 @@ mod tests {
         // is d = (4+16-6)%16 = 14 (out); 12 forward from 6 is d=6 (out).  So
         // step 6 is NOT in any lead-in window of length 3.
         assert_eq!(preecho_scale(6, 16, &c), (1.0, 0));
+    }
+
+    // ── Melodic ──────────────────────────────────────────────────────────
+
+    #[test]
+    fn melodic_inactive_returns_none_none() {
+        let c = cfg_melodic(&[], 4, true, true);
+        assert_eq!(preecho_melodic(5, 16, &c), (None, None));
+        let c = cfg_melodic(&[0], 0, true, true);
+        assert_eq!(preecho_melodic(5, 16, &c), (None, None));
+    }
+
+    #[test]
+    fn melodic_anchor_step_is_untouched() {
+        // Anchor plays at the user's stored accent/slide, unmodified.
+        let c = cfg_melodic(&[4], 3, true, true);
+        assert_eq!(preecho_melodic(4, 16, &c), (None, None));
+    }
+
+    #[test]
+    fn melodic_outside_leadin_is_none() {
+        let c = cfg_melodic(&[8], 3, true, false);
+        // step 4 is 4 away from anchor 8 → outside length=3 window.
+        assert_eq!(preecho_melodic(4, 16, &c), (None, None));
+    }
+
+    #[test]
+    fn melodic_accent_ramp_last_step_is_full() {
+        // d=1 → pos=1.0 → accent = 1.0.
+        let c = cfg_melodic(&[8], 4, true, false);
+        let (a, s) = preecho_melodic(7, 16, &c);
+        assert!((a.unwrap() - 1.0).abs() < 1e-4);
+        assert_eq!(s, None);
+    }
+
+    #[test]
+    fn melodic_accent_ramp_earliest_is_weakest() {
+        // step 4 from anchor 8 with length 4: d=4 → pos = 1 - 3/4 = 0.25
+        // → accent = 0.3 + 0.7*0.25 = 0.475.
+        let c = cfg_melodic(&[8], 4, true, false);
+        let (a, _) = preecho_melodic(4, 16, &c);
+        assert!(
+            (a.unwrap() - 0.475).abs() < 1e-4,
+            "expected ~0.475, got {:?}",
+            a
+        );
+    }
+
+    #[test]
+    fn melodic_slide_cascade_only_on_anchor_adjacent() {
+        // slide_cascade only forces slide on the d==1 step; other lead-in
+        // steps keep their user-set slide (None override).
+        let c = cfg_melodic(&[8], 4, false, true);
+        assert_eq!(preecho_melodic(7, 16, &c).1, Some(1.0));
+        assert_eq!(preecho_melodic(6, 16, &c).1, None);
+        assert_eq!(preecho_melodic(5, 16, &c).1, None);
+    }
+
+    #[test]
+    fn melodic_wraps_around_pattern_end() {
+        let c = cfg_melodic(&[0], 4, true, true);
+        // step 15 is 1 away from anchor 0 (wrapping) → pos=1.0 → full ramp.
+        let (a, s) = preecho_melodic(15, 16, &c);
+        assert!((a.unwrap() - 1.0).abs() < 1e-4);
+        assert_eq!(s, Some(1.0));
+    }
+
+    #[test]
+    fn melodic_both_toggles_compose() {
+        // Both accent_ramp + slide_cascade enabled: the anchor-adjacent
+        // step gets BOTH overrides.
+        let c = cfg_melodic(&[8], 4, true, true);
+        let (a, s) = preecho_melodic(7, 16, &c);
+        assert!((a.unwrap() - 1.0).abs() < 1e-4);
+        assert_eq!(s, Some(1.0));
     }
 }

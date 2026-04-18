@@ -113,6 +113,8 @@ mod sequencer_tests {
                 length: 4,
                 velocity_ramp: true,
                 ratchet_ramp: false,
+                accent_ramp: false,
+                slide_cascade: false,
             },
         );
         // Walk enough samples to fire all 16 steps.
@@ -171,6 +173,117 @@ mod sequencer_tests {
         // Step 7 (d=1, pos=1.0) → vel = 1.0; step 4 (d=4, pos=0.25) → 0.475.
         assert!((v(7) - 1.0).abs() < 1e-3);
         assert!((v(4) - 0.475).abs() < 1e-3);
+    }
+
+    #[test]
+    fn melodic_preecho_ramps_bass_accent_and_cascades_slide() {
+        // Bass voice 0 fires on every step with zero stored accent + slide.
+        // Install preecho at anchor=8, length=4, accent_ramp + slide_cascade.
+        // Steps 4..=7 should receive ramped accent; step 7 should also get
+        // slide=1.0 (d==1).  Steps 0 and 12 pass through unchanged.
+        use crate::sequencer::PreechoConfig;
+        use crate::state::TB303Step;
+        let mut seq = SequencerState {
+            running: true,
+            bpm: 120.0,
+            ..SequencerState::default()
+        };
+        seq.bass_voice_enabled[0] = true;
+        for s in seq.bass_pattern.iter_mut() {
+            *s = TB303Step {
+                active: true,
+                note: 36,
+                accent: 0.0,
+                slide: 0.0,
+                pan: 0.0,
+                gate: 0.5,
+            };
+        }
+        seq.preecho.insert(
+            "bass".to_string(),
+            PreechoConfig {
+                enabled: true,
+                anchors: vec![8],
+                length: 4,
+                velocity_ramp: false,
+                ratchet_ramp: false,
+                accent_ramp: true,
+                slide_cascade: true,
+            },
+        );
+        let sps = samples_per_step(120.0, 44100.0) as usize;
+        let mut clock = ClockState::default();
+        let mut accents: std::collections::HashMap<usize, f32> = Default::default();
+        let mut slides: std::collections::HashMap<usize, f32> = Default::default();
+        for _ in 0..20 {
+            let prev = clock.current_step;
+            let (next, events) = advance_clock(clock, &seq, sps + 1, 44100.0);
+            if next.current_step != prev {
+                let vstep = next.current_step % 16;
+                for e in &events {
+                    if let TriggerEvent::BassTrigger {
+                        voice_idx: 0,
+                        accent,
+                        slide,
+                        ..
+                    } = e
+                    {
+                        accents.entry(vstep).or_insert(*accent);
+                        slides.entry(vstep).or_insert(*slide);
+                    }
+                }
+            }
+            clock = next;
+        }
+        let a = |s: usize| accents.get(&s).copied().unwrap_or(-1.0);
+        let sl = |s: usize| slides.get(&s).copied().unwrap_or(-1.0);
+        // Lead-in 4..=7: monotonic ramp, ending at 1.0 on d=1.
+        assert!(
+            a(4) < a(5) && a(5) < a(6) && a(6) < a(7),
+            "expected accent ramp 4<5<6<7, got {} {} {} {}",
+            a(4),
+            a(5),
+            a(6),
+            a(7),
+        );
+        assert!((a(7) - 1.0).abs() < 1e-3, "expected a(7)=1.0, got {}", a(7));
+        assert!(
+            (a(4) - 0.475).abs() < 1e-3,
+            "expected a(4)≈0.475, got {}",
+            a(4),
+        );
+        // Anchor + outside-window keep the stored zero accent.
+        assert!(
+            (a(8) - 0.0).abs() < 1e-6,
+            "anchor kept stored, got {}",
+            a(8)
+        );
+        assert!(
+            (a(0) - 0.0).abs() < 1e-6,
+            "out-of-window kept, got {}",
+            a(0)
+        );
+        assert!(
+            (a(12) - 0.0).abs() < 1e-6,
+            "out-of-window kept, got {}",
+            a(12)
+        );
+        // Slide cascade fires only on the d=1 step (7); others keep 0.
+        assert!(
+            (sl(7) - 1.0).abs() < 1e-3,
+            "slide cascade at 7, got {}",
+            sl(7)
+        );
+        assert!(
+            (sl(6) - 0.0).abs() < 1e-6,
+            "non-cascade step, got {}",
+            sl(6)
+        );
+        assert!(
+            (sl(8) - 0.0).abs() < 1e-6,
+            "anchor slide kept, got {}",
+            sl(8)
+        );
     }
 
     #[test]

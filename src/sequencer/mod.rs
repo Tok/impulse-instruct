@@ -8,7 +8,7 @@ use crate::state::{DrumVoice, SequencerState};
 // ─── Events emitted by the sequencer ─────────────────────────────────────────
 
 pub mod preecho;
-pub use preecho::{PreechoConfig, preecho_scale};
+pub use preecho::{PreechoConfig, preecho_melodic, preecho_scale};
 
 #[derive(Clone, Debug)]
 pub enum TriggerEvent {
@@ -312,11 +312,22 @@ pub fn advance_clock(
             if bs.active {
                 let gate_samples = (sps * bs.gate as f64) as u32;
                 gate_counters[vi] = gate_samples;
+                // Melodic preecho: when the "bass" voice has accent_ramp
+                // or slide_cascade enabled, override this step's accent /
+                // slide inside the lead-in window.  Anchors + non-lead-in
+                // steps pass through unchanged (None override).
+                let (accent_ov, slide_ov) = seq
+                    .preecho
+                    .get("bass")
+                    .map(|cfg| preecho::preecho_melodic(bstep, vsteps, cfg))
+                    .unwrap_or((None, None));
+                let accent = accent_ov.unwrap_or(bs.accent);
+                let slide = slide_ov.unwrap_or(bs.slide);
                 events.push(TriggerEvent::BassTrigger {
                     voice_idx: vi,
                     note: bs.note,
-                    accent: bs.accent,
-                    slide: bs.slide,
+                    accent,
+                    slide,
                     gate_samples,
                     pan: bs.pan.clamp(-1.0, 1.0),
                 });

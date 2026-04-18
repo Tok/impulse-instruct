@@ -478,6 +478,12 @@ pub(super) fn apply_preecho_voices(
         if let Some(v) = cfg_obj.get("ratchet_ramp").and_then(|v| v.as_bool()) {
             cfg.ratchet_ramp = v;
         }
+        if let Some(v) = cfg_obj.get("accent_ramp").and_then(|v| v.as_bool()) {
+            cfg.accent_ramp = v;
+        }
+        if let Some(v) = cfg_obj.get("slide_cascade").and_then(|v| v.as_bool()) {
+            cfg.slide_cascade = v;
+        }
         s.sequencer.preecho.insert(voice_key.clone(), cfg);
     }
 }

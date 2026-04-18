@@ -373,4 +373,53 @@ mod preecho_voices_tests {
         assert_eq!(entry.anchors, vec![0, 8]);
         assert!(entry.velocity_ramp);
     }
+
+    #[test]
+    fn melodic_accent_ramp_and_slide_cascade_apply_on_bass_voice_key() {
+        let s = AppState::default();
+        let s = apply_llm_update(
+            s,
+            &serde_json::json!({
+                "sequencer": { "preecho": { "bass": {
+                    "enabled": true,
+                    "anchors": [0, 8],
+                    "length": 4,
+                    "accent_ramp": true,
+                    "slide_cascade": true
+                }}}
+            }),
+            &[],
+        );
+        let entry = s.sequencer.preecho.get("bass").expect("bass entry");
+        assert_eq!(entry.anchors, vec![0, 8]);
+        assert_eq!(entry.length, 4);
+        assert!(entry.accent_ramp);
+        assert!(entry.slide_cascade);
+        // Drum-side flags stay off by default — melodic config doesn't
+        // accidentally engage the velocity/ratchet ramps used by kits.
+        assert!(!entry.velocity_ramp);
+        assert!(!entry.ratchet_ramp);
+    }
+
+    #[test]
+    fn melodic_flags_preserved_on_partial_update() {
+        let mut s = AppState::default();
+        let mut cfg = crate::sequencer::PreechoConfig::default();
+        cfg.anchors = vec![8];
+        cfg.length = 4;
+        cfg.accent_ramp = true;
+        cfg.slide_cascade = true;
+        s.sequencer.preecho.insert("bass".to_string(), cfg);
+        let s = apply_llm_update(
+            s,
+            &serde_json::json!({
+                "sequencer": { "preecho": { "bass": { "length": 3 } } }
+            }),
+            &[],
+        );
+        let entry = s.sequencer.preecho.get("bass").unwrap();
+        assert_eq!(entry.length, 3);
+        assert!(entry.accent_ramp);
+        assert!(entry.slide_cascade);
+    }
 }

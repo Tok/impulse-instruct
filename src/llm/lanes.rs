@@ -107,6 +107,10 @@ impl LaneKind {
                     format!("{}_slides", prefix),
                     format!("{}_pans", prefix),
                     format!("{}_len", prefix),
+                    // Melodic preecho targets the shared "bass" voice key,
+                    // so every Bass lane may emit preecho config that
+                    // survives the pipeline filter.
+                    "preecho".into(),
                 ]
             }
             LaneKind::KitA => vec![

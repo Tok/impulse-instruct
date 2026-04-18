@@ -11,12 +11,11 @@ they ship and are reflected in `features.md`.
 - **XY pad control** — expose cutoff/resonance pad as a first-class tool
   the agent can move.  Currently agents set values but the pad position
   doesn't visually track mid-change.
-- **Melodic voice preecho** — now unblocked: `TB303Step.accent` and
-  `.slide` are proportional `f32` 0..=1, which serves as the velocity-
-  like ramp target.  Design a preecho mapping for bass/hoover/an1x
-  that ramps `accent` 0.3 → 1.0 across the N steps before an anchor
-  (and optionally cascades `slide` into the anchor).  Drum preecho
-  already ships; this is the melodic counterpart.
+- **Hoover / An1x preecho** — bass voices now consume
+  `PreechoConfig.accent_ramp` + `slide_cascade` via the shared `"bass"`
+  voice key.  Hoover/An1x `TriggerEvent` variants don't carry accent
+  or slide yet, so extending them (and the matching DSP consumers)
+  stayed out of the first melodic-preecho commit.
 
 ## DSP
 

@@ -144,6 +144,37 @@ A detailed log of what's built.
   `(one-shot)` for quick tailing.
 - 4 new serde tests pin the default + field parsing.
 
+### Melodic voice preecho (bass)
+
+- `PreechoConfig` gained two melodic flags: `accent_ramp` and
+  `slide_cascade`.  Drum preecho (`velocity_ramp` + `ratchet_ramp`)
+  keeps its semantics; these are the TB-303 counterparts.
+- `preecho_melodic(step, total_steps, cfg) -> (Option<f32>,
+  Option<f32>)` is the pure core: returns `Some(accent_override)` on
+  lead-in steps (linear ramp 0.3 → 1.0 from earliest to
+  anchor-adjacent) and `Some(1.0)` for `slide` on the step
+  immediately before an anchor (`d == 1`).  Anchor steps and
+  non-lead-in steps return `(None, None)` so the user's stored
+  accents/slides shine through.
+- `sequencer::advance_clock` looks up `seq.preecho.get("bass")` per
+  bass voice and applies the overrides before emitting
+  `BassTrigger`.  The shared `"bass"` key covers every voice 0..3;
+  per-voice keys aren't needed until the LLM starts wanting that
+  level of control.
+- `apply_preecho_voices` accepts the two new bools; partial updates
+  (e.g. setting only `length`) preserve them.  `Bass` lane's
+  `sequencer_subkeys` now includes `"preecho"` so pipeline filtering
+  doesn't strip a bass-lane preecho update.
+- Hoover/An1x are single-voice TB-303-step users too, but their
+  `TriggerEvent` variants carry only `note`; pushing accent/slide
+  through them is a structural change left as a follow-up (noted in
+  `PLAN.md`).
+- 11 new tests: 8 unit tests on `preecho_melodic` (wrap-around,
+  multi-anchor nearest wins, both toggles composing), 1 end-to-end
+  sequencer test confirming the ramp lands on `BassTrigger.accent`
+  + cascade lands on `BassTrigger.slide`, 2 apply-layer tests for
+  bass-key JSON + partial-update preservation.
+
 ### Per-slice amen reverse
 
 - `AmenState.slice_reverses: Vec<bool>` — parallel to `slice_pitches` /
