@@ -7,6 +7,7 @@ pub mod instructions;
 pub mod json_repair;
 pub mod mock;
 pub mod prompt;
+pub mod prompt_summary;
 pub mod schema;
 pub mod styles;
 pub mod vram;

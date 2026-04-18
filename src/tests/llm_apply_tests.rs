@@ -179,6 +179,53 @@ mod llm_apply_sequencer_tests {
     }
 
     #[test]
+    fn sequencer_bass_accents_index_list() {
+        let s = AppState::default();
+        let update = serde_json::json!({
+            "sequencer": { "bass_accents": [0, 6, 19] }
+        });
+        let s = apply_llm_update(s, &update, &[]);
+        assert!(s.sequencer.bass_pattern[0].accent);
+        assert!(!s.sequencer.bass_pattern[1].accent);
+        assert!(s.sequencer.bass_pattern[6].accent);
+        assert!(s.sequencer.bass_pattern[19].accent);
+        // Voice 0's per-voice pattern mirrors the legacy bass_pattern.
+        assert!(s.sequencer.bass_patterns[0][0].accent);
+        assert!(s.sequencer.bass_patterns[0][6].accent);
+    }
+
+    #[test]
+    fn sequencer_bass_slides_bool_array() {
+        let s = AppState::default();
+        // 32-element inline bool array (≥16 triggers inline path in helper).
+        let mut arr = vec![false; 32];
+        arr[3] = true;
+        arr[10] = true;
+        arr[19] = true;
+        let update = serde_json::json!({ "sequencer": { "bass_slides": arr } });
+        let s = apply_llm_update(s, &update, &[]);
+        assert!(!s.sequencer.bass_pattern[0].slide);
+        assert!(s.sequencer.bass_pattern[3].slide);
+        assert!(s.sequencer.bass_pattern[10].slide);
+        assert!(s.sequencer.bass_pattern[19].slide);
+        assert!(!s.sequencer.bass_pattern[20].slide);
+        // Voice 0 mirror.
+        assert!(s.sequencer.bass_patterns[0][3].slide);
+    }
+
+    #[test]
+    fn sequencer_bass_accents_respects_lock() {
+        let s = AppState::default();
+        let s = lock_param(s, "sequencer.bass_accents");
+        let update = serde_json::json!({
+            "sequencer": { "bass_accents": [0, 4, 8] }
+        });
+        let s = apply_llm_update(s, &update, &[]);
+        assert!(!s.sequencer.bass_pattern[0].accent);
+        assert!(!s.sequencer.bass_pattern[4].accent);
+    }
+
+    #[test]
     fn sequencer_kick_a_steps_index_list() {
         let s = AppState::default();
         let update = serde_json::json!({ "sequencer": { "kick_a_steps": [0, 4, 8, 12] } });

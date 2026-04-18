@@ -119,6 +119,32 @@ pub fn apply_llm_update(state: AppState, update: &serde_json::Value, scope: &[St
         }
         apply_bass_notes(&mut s, seq, seq_scope_flags, locked);
         apply_bass_pans(&mut s, seq, seq_scope_flags, locked);
+        // bass_accents / bass_slides — parallel per-step flags.  Same format
+        // as bass_steps (bool array or index list).
+        if seq_scope_flags.bass
+            && !locked.contains("sequencer.bass_accents")
+            && let Some(arr) = seq.get("bass_accents").and_then(|v| v.as_array())
+        {
+            apply_llm_step_array(arr, &mut s.sequencer.bass_pattern, MAX_STEPS, |step, a| {
+                step.accent = a;
+            });
+            let clone = s.sequencer.bass_pattern.clone();
+            if let Some(pat) = s.sequencer.bass_patterns.get_mut(0) {
+                *pat = clone;
+            }
+        }
+        if seq_scope_flags.bass
+            && !locked.contains("sequencer.bass_slides")
+            && let Some(arr) = seq.get("bass_slides").and_then(|v| v.as_array())
+        {
+            apply_llm_step_array(arr, &mut s.sequencer.bass_pattern, MAX_STEPS, |step, a| {
+                step.slide = a;
+            });
+            let clone = s.sequencer.bass_pattern.clone();
+            if let Some(pat) = s.sequencer.bass_patterns.get_mut(0) {
+                *pat = clone;
+            }
+        }
 
         let drum_step_fields: &[(&str, DrumVoice, f32, bool)] = &[
             ("kick_a_steps", DrumVoice::Kick808, 1.0, true),

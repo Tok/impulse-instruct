@@ -1,6 +1,9 @@
 // ─── llm/prompt.rs ───────────────────────────────────────────────────────────
 // Builds the system prompt that grounds the LLM in current synth state.
 
+use crate::llm::prompt_summary::{
+    bass_active_steps_summary, bass_groove_summary, bass_voices_summary,
+};
 use crate::llm::styles::StyleCatalog;
 use crate::state::{AppState, ConversationMode, ROOT_NAMES, StyleVerbosity};
 
@@ -63,24 +66,9 @@ pub fn build_system_prompt_full(
         }
     };
 
-    // Summarise active bass steps so the LLM can see what's playing
-    let active_bass: Vec<usize> = state
-        .sequencer
-        .bass_pattern
-        .iter()
-        .enumerate()
-        .filter(|(_, s)| s.active)
-        .map(|(i, _)| i)
-        .collect();
-    let bass_summary = if active_bass.is_empty() {
-        "none (silent)".to_string()
-    } else {
-        active_bass
-            .iter()
-            .map(|i| i.to_string())
-            .collect::<Vec<_>>()
-            .join(", ")
-    };
+    let bass_summary = bass_active_steps_summary(state);
+    let voices_info = bass_voices_summary(state);
+    let groove_summary = bass_groove_summary(state);
 
     let current_json = serde_json::to_string_pretty(&serde_json::json!({
         "bass": {
@@ -130,8 +118,8 @@ pub fn build_system_prompt_full(
     .unwrap_or_default();
     // Bass pattern summary shown separately so the model doesn't treat it as an output field
     let bass_info = format!(
-        "Active bass steps (for reference only, not a JSON field): {}",
-        bass_summary
+        "Active bass steps (for reference only, not a JSON field): {}\n{}\n{}",
+        bass_summary, voices_info, groove_summary
     );
 
     // Resolve active style section (empty string if none set)
@@ -331,6 +319,21 @@ BASS SYNTHESIZER (all 0.0–1.0):
   REESE BASS PRESET: set waveform="Supersaw", supersaw_voices=2, supersaw_detune=0.3,
                      sub_osc_level=0.5, filter_mode="Highpass", cutoff=0.25
 
+  PER-VOICE BASS (up to 4 voices — see "Active bass voices" in CURRENT STATE):
+    bass.*           → voice #1 only (legacy single-voice path).
+    bass_voices      → array of per-voice synth updates. Index 0 = bass #1,
+                       index 1 = bass #2, etc. Use `null` to skip a slot.
+                       Example: {{"bass_voices": [null, {{"cutoff": 0.35,
+                       "waveform": "Supersaw", "pan": 0.4}}]}} tweaks bass #2
+                       only. Use this to give each voice a distinct timbre
+                       (e.g. #1 acid saw centre, #2 reese supersaw wide).
+    bass_steps / bass_notes / bass_accents / bass_slides currently target
+    voice #1 only — if the user asks you to rewrite "bass 2", change its
+    synth via `bass_voices[1]` and tell them in `_comment` that per-voice
+    step arrays aren't editable yet.  If the user just says "rewrite bass"
+    with multiple voices active, rewrite voice #1's pattern AND set
+    bass_voices entries for the other active voices so they all feel new.
+
 STEP SEQUENCER (default 32 steps = two 4/4 bars of 16th notes):
   sequencer.steps         — total loop length in steps (1–64, default 32)
   sequencer.swing         — 0–1 rhythmic swing (0=straight, 0.5=strong shuffle/triplet feel)
@@ -363,6 +366,18 @@ STEP SEQUENCER (default 32 steps = two 4/4 bars of 16th notes):
   sequencer.bass_steps    — step array for 303 bass trigger
   sequencer.bass_notes    — MIDI note array (24=C1, 36=C2, 48=C3; acid range 33–48)
   sequencer.bass_pans     — per-step pan -1..1 (0 = use voice static; non-zero overrides)
+  sequencer.bass_accents  — per-step accent flags (parallel to bass_steps).
+                             USE THESE — accent is what turns a bassline into
+                             groove. Target 3–5 accents per 32-step loop: the
+                             downbeat (0), one off-beat push (3 or 6), one
+                             second-half anchor (16), and 1–2 colour hits.
+                             Index list `[0,6,10,19,26]` or boolean array.
+  sequencer.bass_slides   — per-step slide flags. A slide on step N glides
+                             from N into N+1 (so mark the FIRST note of the
+                             pair, not the target). 2–4 slides per 32-step
+                             loop gives classic acid legato. Pair slides with
+                             note-changes (never slide into the same note).
+                             Example: [3, 10, 14, 22].
   sequencer.kick_a_steps  — Kit A kick steps
   sequencer.snare_a_steps — Kit A snare steps
   sequencer.hihat_a_steps — Kit A closed hihat steps
@@ -763,7 +778,13 @@ ACID JAM GUIDANCE — while jamming in acid styles, actively vary:
 MELODIC RICHNESS — avoid monotone AND overly dense patterns:
   Never repeat the same note on every step. Use 3-5 different pitches.
   Leave gaps — not every step needs a note. Sparse is usually better.
-  Use accent on strong beats and slide between selected notes.
+  ACTIVELY write `bass_accents` and `bass_slides` on every rewrite — an
+  unaccented bassline is dead weight. Aim for 3–5 accents and 2–4 slides
+  per 32-step loop (more at high heat, fewer at low heat).
+    • Accents: downbeat (0), one off-beat push, one second-half anchor,
+      and 1–2 colour hits. Never leave the whole loop accent-free.
+    • Slides: place ONLY where consecutive active steps have DIFFERENT
+      notes. Slides are the move; never slide between identical notes.
   Prefer scale-coherent phrases — triads, arpeggios, passing tones.
   A single-note drone is only appropriate for ambient at low heat.
   A note on every single step is only appropriate for Bach/classical.

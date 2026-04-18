@@ -65,6 +65,8 @@ pub fn param_json_schema() -> serde_json::Value {
                     },
                     "bass_steps":    bool_array.clone(),
                     "bass_notes":    note_array,
+                    "bass_accents":  bool_array.clone(),
+                    "bass_slides":   bool_array.clone(),
                     "kick_a_steps":  bool_array.clone(),
                     "snare_a_steps": bool_array.clone(),
                     "hihat_a_steps": bool_array.clone(),
