@@ -568,6 +568,10 @@ pub struct AudioParams {
     /// the sample is resampled, which also shifts its pitch).  For classic
     /// D&B drumbreak treatment, leave this on and accept the pitch shift.
     pub amen_bpm_stretch: bool,
+    /// See `AmenState.bpm_stretch_preserve`.  When true alongside
+    /// `amen_bpm_stretch`, the voice switches to the granular stretch
+    /// path in `AmenVoice::process` instead of the resample-based one.
+    pub amen_bpm_stretch_preserve: bool,
     /// Host/sequencer BPM — mirror of s.sequencer.bpm.  Used by the amen
     /// voice for tempo-matching; other voices sync via different paths.
     pub sequencer_bpm: f32,
@@ -878,6 +882,7 @@ impl AudioParams {
             },
             amen_source_bpm: s.amen.source_bpm.clamp(BPM_MIN, BPM_MAX),
             amen_bpm_stretch: s.amen.bpm_stretch,
+            amen_bpm_stretch_preserve: s.amen.bpm_stretch_preserve,
             sequencer_bpm: s.sequencer.bpm,
             rack_bass: s
                 .rack

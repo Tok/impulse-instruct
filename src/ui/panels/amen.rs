@@ -356,6 +356,7 @@ pub fn draw_amen(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         mut stutter,
         mut source_bpm,
         mut bpm_stretch,
+        mut bpm_stretch_preserve,
         meta,
     ) = {
         let s = app.state.read();
@@ -371,6 +372,7 @@ pub fn draw_amen(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             s.amen.stutter,
             s.amen.source_bpm,
             s.amen.bpm_stretch,
+            s.amen.bpm_stretch_preserve,
             s.amen.meta.clone(),
         )
     };
@@ -754,6 +756,32 @@ pub fn draw_amen(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                 ) {
                     changed = true;
                 }
+                // Pitch-preserving toggle — only meaningful while
+                // STRETCH is on.  PITCH=preserve (granular path), TUNE=
+                // classic resample (pitch shifts with tempo).  The
+                // granular path has no crossfade yet, so splice clicks
+                // at strong stretch ratios are a known v1 trade-off.
+                let mut preserve_ui = bpm_stretch_preserve;
+                ui.add_enabled_ui(bpm_stretch, |ui| {
+                    if widgets::toggle_button(
+                        ui,
+                        if preserve_ui { "PITCH" } else { "TUNE" },
+                        &mut preserve_ui,
+                    ) {
+                        bpm_stretch_preserve = preserve_ui;
+                        changed = true;
+                    }
+                })
+                .response
+                .on_hover_text(if preserve_ui {
+                    "Pitch-preserving granular stretch: timing follows the \
+                     host BPM while pitch stays at the source's original.  \
+                     Splice clicks at strong ratios (v1)."
+                } else {
+                    "Classic resample stretch: the whole sample is pitched \
+                     along with the tempo change (move source BPM and hear \
+                     it as pitch)."
+                });
             });
         });
     });
@@ -857,6 +885,7 @@ pub fn draw_amen(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         s.amen.stutter = stutter.min(4);
         s.amen.source_bpm = source_bpm.clamp(BPM_MIN, BPM_MAX);
         s.amen.bpm_stretch = bpm_stretch;
+        s.amen.bpm_stretch_preserve = bpm_stretch_preserve;
         drop(s);
         app.push_audio_params();
     }

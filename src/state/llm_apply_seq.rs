@@ -192,6 +192,11 @@ pub(super) fn apply_amen_update(
     {
         s.amen.bpm_stretch = v;
     }
+    if let Some(v) = a.get("bpm_stretch_preserve").and_then(|v| v.as_bool())
+        && !locked.contains("amen.bpm_stretch_preserve")
+    {
+        s.amen.bpm_stretch_preserve = v;
+    }
     if !locked.contains("amen.slice_pitches")
         && let Some(v) = a.get("slice_pitches")
     {

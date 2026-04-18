@@ -196,6 +196,36 @@ A detailed log of what's built.
   + cascade lands on `BassTrigger.slide`, 2 apply-layer tests for
   bass-key JSON + partial-update preservation.
 
+### Pitch-preserving BPM stretch on amen (granular v1)
+
+- `AmenState.bpm_stretch_preserve: bool` pairs with the existing
+  `bpm_stretch`.  When both are on, `AmenVoice::process` runs a
+  granular time-stretch: the per-sample read rate stays at native
+  pitch (no BPM-ramped `extra_pitch`), and at every grain boundary
+  (`AMEN_GRAIN_LEN` = 2048 samples ≈ 46 ms at 44.1 kHz) the read
+  position jumps by `(host_bpm / source_bpm - 1) * GRAIN_LEN` in the
+  direction of playback so the average source advance per output
+  sample matches the host-to-source ratio.
+- Keeps per-slice pitch overrides composable: a slice that wanted
+  +12 semitones still gets them; only the BPM's pitch baggage is
+  moved out of `extra_pitch` and into the grain scheduler.
+- Slice boundaries are enforced — rewinds past `slice_start` wrap to
+  the tail, skips past `slice_end` wrap to the head, so the stretcher
+  stays within the currently playing slice instead of marching into
+  the next one.
+- Stretch ratio clamps to `0.25..=4.0` so extreme host/source ratios
+  don't explode the grain math.
+- UI: a PITCH / TUNE toggle sits next to STRETCH / FREE in the Amen
+  panel's BPM row.  PITCH engages granular; TUNE keeps the classic
+  resample that pitches with tempo.  The toggle stays disabled
+  until STRETCH is on (preserve without stretch is a no-op).
+- v1 has no crossfade at grain splices — noticeable clicks on strong
+  stretch ratios are a known trade-off, follow-up in PLAN.md.
+- 4 new DSP tests: trigger captures both flags correctly, preserve
+  mode zeroes out `extra_pitch`, classic mode still applies the
+  log2-based pitch shift, grain boundary actually rewinds the read
+  position relative to classic mode.
+
 ### Reverse-mode compressor
 
 - `FxState.compressor_reverse: bool` — swaps the envelope follower's

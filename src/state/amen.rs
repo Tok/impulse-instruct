@@ -79,6 +79,13 @@ pub struct AmenState {
     /// 90% use case.
     #[serde(default)]
     pub bpm_stretch: bool,
+    /// When `bpm_stretch` is on and this is also true, the voice runs a
+    /// granular time-stretch instead of the resample-based one: timing
+    /// follows the host tempo while pitch stays at the source's
+    /// original.  Ignored when `bpm_stretch` is off (pitch is already
+    /// preserved because nothing's being stretched).
+    #[serde(default)]
+    pub bpm_stretch_preserve: bool,
     /// Cached metadata about the currently-loaded WAV (display-only).
     /// Not serialized — populated by the UI panel when a file is loaded.
     #[serde(skip)]
@@ -133,6 +140,7 @@ impl Default for AmenState {
             slice_reverses: Vec::new(),
             source_bpm: default_source_bpm(),
             bpm_stretch: false,
+            bpm_stretch_preserve: false,
             meta: None,
         }
     }
