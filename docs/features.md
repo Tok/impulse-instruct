@@ -4,7 +4,212 @@ A detailed log of what's built.
 
 ---
 
-## v0.7.8 — Lane-pipeline + prompt infrastructure
+## v0.7.7-snapshot — model overhaul, jam loop, cycle viz, lane scoring
+
+### Model lineup
+
+- **Bonsai 8B + PrismML llama.cpp fork removed** — accuracy gap no longer
+  worth the extra server binary, model download, and dual-fork branching.
+  Pool now uses a single `.llama-official-build/bin/llama-server`.  Swarm/
+  Crew/Voices presets converted to all-Gemma (same model, ref-counted, so
+  a 5-agent Crew costs the same ~6 GB VRAM as Solo); Lite preset deleted.
+- **Gemma 4 26B-A4B added as opt-in** — MoE (4B active / 26B total), same
+  speed as E4B but much more knowledge.  Three quants exposed via
+  `download-models.sh`: `gemma-26b` (UD-IQ4_XS, ~13.4 GB), `gemma-26b-q3`
+  (UD-Q3_K_M, ~12.5 GB), `gemma-26b-iq2` (UD-IQ2_XXS, ~9.9 GB).  Quant-
+  aware `ModelProfile` entries so the wizard estimates VRAM correctly.
+  E4B remains the install default — it's the "works on any 6 GB GPU" floor.
+- **NeuTTS Air Q8 is the new default TTS** — `./download-models.sh neutts`
+  fetches Q8 (~803 MB) instead of Q4.  `neutts-server.py` searches Q8 first
+  then Q4 so existing installs keep working.  `neutts-q4` alias still
+  available.  Header comments on both `download-models.{sh,bat}` document
+  the Python + espeak-ng host deps and link to the unsloth/Neuphonic HF
+  repos for "drop a custom GGUF in models/" exploration.
+
+### Model-switching infrastructure
+
+- **Plugged the pool ref-count leak** — every `pool.acquire()` in the
+  inference path now has a paired `pool.release()` at the tail of both
+  pipeline + monolithic branches.  Servers actually unload at ref_count=0
+  now; previous behaviour was monotonic growth.
+- **Console = master switch** — `LlmInput::SwitchModel` resets every
+  agent override to `None` and shuts down every server except the new
+  global via `LlamaServerPool::shutdown_all_except`.  One canonical model
+  by default; agents can re-add overrides via their dropdown.
+- **`LlmInput::SwitchAgentModel { agent_id, old_path, new_path }`** —
+  agent dropdown change carries the previous override so the LLM thread
+  can update pool ref counts even after the UI optimistically wrote the
+  new value to state.  Same instant-feedback pattern as the console.
+- **Optimistic UI for both dropdowns** — console + per-agent dropdown
+  clicks update state immediately, so the UI reflects the choice this
+  frame instead of waiting for the LLM thread to drain its queue (could
+  be 30+ s during a long pipeline turn).
+- **Model picks persist** — autosave dirty-detection now hashes
+  `state.llm.model_path` plus every `agent.model_path`; any change flips
+  `session_dirty` so the existing session.json autosave catches model
+  picks too (the rack-signature alone missed them).  Channel `bounded(16)`
+  → `unbounded()` so model loads can't drop user prompts.
+- **Wizard preset agents inherit the user's global model** — when a
+  preset's `model_pattern` matches the current global, agents stay on
+  `model_path = None` instead of getting pinned to the first alphabetical
+  Gemma file via `find_model("gemma", ...)` (which used to silently load
+  IQ2 alongside E4B and OOM the GPU).
+
+### Jam loop
+
+- **Heartbeat kickoff** — when `heat > 0` and the loop is dormant (no
+  in-flight inference, no scheduled fire, not initialising), the UI fires
+  one Infer to spark it.  500 ms cooldown stops re-fires while the LLM
+  thread picks the message up.  Self-perpetuating from then via the
+  existing `[jam_cycle_done]` re-fire; previously a fresh start with
+  `heat > 0` sat silent until the user typed a prompt.
+- **Stopped silently dropping commands** — input channel `bounded(16)`
+  → `unbounded()`; removed a destructive `let _ = input_rx.try_recv();`
+  in the monolithic jam path that consumed whichever message happened to
+  be queued (incl. user prompts and SwitchAgentModel control messages).
+- **Pipeline no longer overwrites the rack** — per-lane writeback was
+  doing `s.rack = snapshot.rack.clone()`, silently restoring the
+  pre-style-switch rack mid-pipeline.  Dropped that line — voice/FX
+  lanes have no business mutating the rack.
+
+### Per-lane lifecycle scoring (Phase 1)
+
+- `state::LaneScore { score, last_changed_cycle, change_count }` keyed
+  by `LaneKind::label()`, transient on `LlmState`.
+- `llm/lane_eval.rs` — pure per-lane scoring functions:
+    - bass: density (3–7 ideal) + variety + accent ratio + slide ratio
+    - kits: full-coverage rule (kick + hat) + density bands
+    - amen: presence + reasonable hit count
+    - hoover / an1x: density + variety
+    - fx: not all-zero / not all-one + mid-band knob ratio
+    - settings: bpm + swing in plausible range
+- Hook in `pipeline_events::handle_pipeline_event` LaneApplied: scores
+  the apply against the rules we encode in the system prompt and stashes
+  the score on `LlmState.lane_scores` (logged as `lane_eval: bass1 → 0.72`).
+  Phase 1 is read-only — Phase 2 will use these to weight lane selection
+  and queue retries on low scorers.
+- **Defensive plan filter** in `pipeline::run_pipeline` — drops any lane
+  whose voice/module isn't currently live before the loop, so a stale
+  planner output (e.g. after a mid-cycle style switch) doesn't burn an
+  inference call on a no-op lane.
+
+### Style → rack destructive sync
+
+- `ui/style_rack.rs` rewritten to be destructive: voices and FX not in
+  the spec are removed, missing ones added, then `arrange_canonical()`
+  runs (the same ARRANGE-toolbar pass) so the rack stays compact after
+  the churn.  Always-keep chrome (Sequencer / MasterOutput / LlmConsole
+  / LlmAgent / NeuTts) is never touched, and the LFO floor is enforced
+  (≥ 3 LfoModule instances always present).
+- **Count notation** — entries support a trailing-digit count: `"bass2"`
+  enables 2 bass voices via `sequencer.bass_voice_enabled`, `"lfo3"`
+  loads 3 LFO modules.  Digits-only aliases (`"808"`, `"909"`) preserved.
+  Repeated entries collapse via max-count.
+- All 29 styles in `styles.json` now have a `rack_modules` field
+  (5 pre-existing entries untouched; 24 added).  `styles.json` reformatted
+  so primitive arrays render single-line — file dropped 3578 → 1341 lines.
+
+### LLM console — round-robin cycle viz
+
+- New `widgets::llm_cycle` widget on the LEFT side of the LLM console.
+  Cycles → circles, top = 12 o'clock = round-robin start.  Square chip
+  matching the ring oscilloscope's geometry (full panel height = same
+  width, recessed-screen bezel, `theme::SLATE` / `theme::IRON` guides).
+- Each enabled agent occupies one slot on the rim with its persona name
+  outside; the inferring agent gets a flat in-screen dot (not a 3-D LED
+  — it's "inside" a screen) plus expanding-ring "pings" for visible
+  motion frame-to-frame.
+- **Pipeline progress arc** sweeps clockwise from the inferring agent's
+  slot as `lanes_done / total_lanes` grows, with a soft tween between
+  lane completions and a bright tracer dot at the leading edge.
+- **Cursor wedge** marks the next slot the round-robin will fire on.
+- **Queue shadow** in `ImpulseApp` (UI-side approximation of the LLM
+  input channel queue, broken down per-agent + a global bucket).  Pending
+  Infer messages render as small dots inside the rim at the target
+  agent's slot.  All UI try_send sites now route through a single
+  `send_llm_infer` helper that bumps the shadow; transitions of agent
+  `is_inferring` from false→true decrement (the LLM thread just popped a
+  message off the channel).  Agent transitions handled before global to
+  avoid double-decrementing when an agent-bound Infer flips both flags.
+
+### LLM console — pipeline progress bar
+
+- Two stacked horizontal bars under the model row: top = lane-completion
+  fraction (gray 140), bottom = error fraction (gray 95, NOT red).
+  Persistent (not flashing); fixed-width 100-px label slot to the right
+  with `lane name` / `idle` / `done` / `N err` truncated at 14 chars
+  with `…`.  Identical-shape mini-bars on each agent card (40×2 each
+  with 1 px gap).
+
+### Per-agent pipeline progress
+
+- `LlmAgentState.pipeline_progress: Option<PipelineProgress>` (transient,
+  `#[serde(skip)]`).  `pipeline_events::handle_pipeline_event` updates
+  both global + per-agent slots when an inference is bound to an agent.
+  Each agent card shows its own mini progress bar in the status spot
+  during inference, taking precedence over the existing tok/s readout.
+
+### Event stream — jitter, truncation, leaves
+
+- **Playhead jitter eliminated.**  Two compounding bugs: (a) audio
+  thread did `global_step_count += 1` per block but `advance_clock` can
+  cross multiple step boundaries when block_size approaches step
+  duration — fixed by adding the actual delta with `MAX_STEPS` wrap
+  arithmetic; (b) `event_stream` used a sign-dependent `if off <
+  -WRAP_SLACK { off += span }` fix-up which oscillates near the wrap
+  boundary — replaced with `(step_idx - local_pos + WRAP_SLACK)
+  .rem_euclid(span) - WRAP_SLACK`, deterministic.
+- **Smooth-playhead state-read race fixed.**  `mod.rs` did the step-
+  change detection in one state read (setting `last_step_time`); header
+  did a SEPARATE state read for the smooth calc.  When the audio thread
+  updated `global_step_count` between those, smooth_global jumped back-
+  wards by ~1 step then snapped forward.  Snapshot `global_step_count`
+  atomically with `last_step_time` into `last_step_global` and derive
+  `smooth_global` from that, decoupling the playhead from live state.
+- **Past-grid lines no longer disappear early.**  Loop iterated
+  `0..(display_steps + 2)`; with `now_x` at 75 % from the left the past
+  side needed `[-display_steps * past_frac, +display_steps * future_frac
+  + steps]`.  Switched to a negative-to-positive `i` range with
+  `rem_euclid` for bar/beat alignment.
+- **Now-line moved to the golden-ratio split** (`1/φ ≈ 0.618` from
+  the left, was 0.75) so past:future = 1.618:1 — past pane stays
+  dominant while future grows from 25 % → 38 %.
+- **ADSR envelope "leaf" behind each future note** — Y-symmetric filled
+  shape tracing the voice's amp envelope (bass A-S-R, AN1X full ADSR,
+  Hoover synthesised from `sweep_time`).  Punchy 303 stabs render as
+  tight diamonds; pad-y AN1X notes show elongated leaves.
+
+### LED polish
+
+- **16-ring falloff** (was 8) with reshaped alpha curve so the halo
+  fades to translucent quicker.  Lit core stays bright; bloom is gentler
+  and stops competing with adjacent panel chrome.
+- **Perceptual-luminance compensation** in `theme::led` — high-luminance
+  colours (yellow / white / light cyan) get progressively reduced alpha
+  above 0.4 luminance, so a yellow halo at the same nominal alpha now
+  reads as subtly as a red one.  Floor at 0.45 so even white shows.
+- **Module-card LED halo escapes panel border** — clip extended by
+  `led_r * 6.0` on sides + down (and 0 px upward to avoid bleeding
+  into the global header log scrolling past above), so the bloom
+  bleeds into the inter-module gap as intended.  Same draw layer —
+  cables / piano / drag previews still cover.
+- **Agent-card LED on a foreground layer** — the persona-row indicator
+  is painted via `ctx.layer_painter(LayerId::new(Order::Foreground, …))`
+  so the persona TextEdit (drawn after) can no longer cover it.
+
+### Misc
+
+- **Per-agent model dropdown** on each agent card writes through the new
+  `SwitchAgentModel` message instead of mutating state directly.  No
+  more "set model in console, agent silently keeps the previous one."
+- **Cycle viz lane-name label fixed-width** so the bar+label combo
+  doesn't reflow as the current lane name cycles each pipeline tick.
+- **NeuTTS Q8 prefer-then-fall-back** in `neutts-server.py` candidates
+  list so existing Q4 installs continue to work without reconfiguration.
+
+---
+
+## v0.7.7-snapshot — lane-pipeline + prompt infrastructure
 
 ### Sequential lane pipeline (planner + per-voice calls)
 

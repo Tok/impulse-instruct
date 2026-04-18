@@ -373,7 +373,12 @@ pub fn module_card_sized<R>(
                     // extend above the title bar; allow full halo_pad on
                     // sides + down.
                     let halo_pad = led_r * 6.0;
-                    let upward_pad = 4.0;
+                    // Zero upward expansion — the halo's upper crown is
+                    // clipped to the title-bar top, but that's preferable
+                    // to letting it bleed past the module border into
+                    // whatever panel scrolls past above (e.g. the global
+                    // header log behind the LLM console).
+                    let upward_pad = 0.0;
                     let cr = painter.clip_rect();
                     let bounded = egui::Rect::from_min_max(
                         egui::pos2(cr.min.x - halo_pad, cr.min.y - upward_pad),

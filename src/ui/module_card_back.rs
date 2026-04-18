@@ -137,7 +137,7 @@ pub fn module_card_back(
                     // but cap upward expansion so the halo doesn't run
                     // into the panel above.
                     let halo_pad = led_r * 6.0;
-                    let upward_pad = 4.0;
+                    let upward_pad = 0.0;
                     let cr = painter.clip_rect();
                     let bounded = egui::Rect::from_min_max(
                         egui::pos2(cr.min.x - halo_pad, cr.min.y - upward_pad),

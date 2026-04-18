@@ -31,7 +31,7 @@ Everything runs entirely offline: no cloud calls, no subscriptions, no latency. 
 
 ---
 
-## v0.7.5-snapshot — Pre-release
+## v0.7.7-snapshot — Pre-release
 
 **This is pre-release software.** It works and makes sound, but expect rough edges. The UI is functional but visually unpolished in places.
 
@@ -139,55 +139,6 @@ Each agent can run a different model. A `LlamaServerPool` manages server process
 | **Swarm** | 4x Gemma — lead + 3 helpers | ~6 GB |
 | **Crew** | 5x Gemma — conductor + 4 specialists | ~6 GB |
 | **Voices** | 5x Gemma — one agent per voice | ~6 GB |
-
----
-
-## What's new since v0.7.4
-
-Heavy-focus session on the AMEN sampler, the bass voice's 101 gap,
-and a new pattern modulator:
-
-- **AMEN break chopper** — the voice went from "play the whole WAV"
-  to a proper slicer.  Per-step slice selection, transient-based AUTO
-  detect, per-slice pitch/volume, BPM-stretch to host tempo, forward
-  and reverse playback with gate + stutter, waveform thumbnail with
-  slice markers, and a circular slice wheel that lights the active
-  wedge.  Samples live in `samples/amen/` — the panel has GET /
-  RANDOM / LOAD / PLAY buttons and a scrollable picker.
-- **Granular CAPTURE** — the granular voice can freeze the current
-  master-output buffer into its source.  A live scrolling ring-buffer
-  viz shows what's currently in the tap.  Textures can also be loaded
-  from `samples/textures/` (archive.org / freesound / LibriVox links
-  baked into the panel).
-- **Bass voice → SH-101 territory** — full ADSR on both amp and
-  filter envelopes, PWM on the pulse wave, and a per-voice LFO with
-  routable targets (pitch / PWM / cutoff / amp).  Free-rate or
-  BPM-synced.  The 303 squelch still lives at default values.
-- **Pre-echo modulator** — anchor-driven lead-in reinforcement.
-  Declare anchor step indices per voice, set a lead-in length, pick
-  velocity ramp and/or ratchet build; the lead-in cells ramp into
-  each anchor for a build-up feel.  Compact one-row UI with a
-  clickable step strip at the bottom of the sequencer panel.
-- **TTS panel overhaul** — live NeuTTS server status with a one-click
-  START, SAY field that synthesises arbitrary text immediately,
-  ASK row (THEME / RHYME / SING) that prompts the controlling agent,
-  conditioning preview line showing the voice's transcript, empty-SAY
-  fallback asks the agent to improvise in character.
-- **Demo scenario rewrite for D&B** — jump-up style seed (32-step
-  seeds, kick on 1 + late-3 + just-before-4, AN1X as drone pad,
-  bass as reese), MC scene spawns via API and shouts a single line,
-  record-demo.sh keeps NeuTTS running so runtime lines actually
-  synthesise.
-- **LLM action surface** — rack.add / rack.remove for creating
-  modules from agent JSON, spawn_agent gains mode + tts fields,
-  new POST /api/style, /api/amen, /api/granular endpoints.
-- **Module layout refinements** — AmenSampler 3×3 with grouped
-  knobs and waveform placeholders, granular 3×2, sequencer dynamic
-  sizer now reserves space for the preecho row so it doesn't clip.
-
-489 unit tests, 36 commits since v0.7.4.
-
-Full details in [docs/features.md](docs/features.md).
 
 ---
 
