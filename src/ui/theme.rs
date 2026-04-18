@@ -269,7 +269,17 @@ pub fn led(painter: &egui::Painter, center: Pos2, radius: f32, color: Color32, i
     if i <= 0.0 || radius <= 0.0 {
         return;
     }
-    let scale = |a: u8| -> u8 { (a as f32 * i) as u8 };
+    // Perceptual brightness compensation — high-luminance colours
+    // (yellow, white, light cyan) carry visible halos even at low
+    // alpha because the eye picks up bright pixels more readily.
+    // Below ~0.4 luminance the curve is flat (red/blue/etc render
+    // at full alpha); above that we taper alpha down so a yellow
+    // ring at the same nominal alpha looks roughly as subtle as
+    // a red ring.  Floor at 0.45 so even white still shows.
+    let lum =
+        (0.299 * color.r() as f32 + 0.587 * color.g() as f32 + 0.114 * color.b() as f32) / 255.0;
+    let lum_comp = (1.0 - (lum - 0.4).max(0.0) * 0.85).max(0.45);
+    let scale = |a: u8| -> u8 { (a as f32 * i * lum_comp) as u8 };
     let rgba = |r: u8, g: u8, b: u8, a: u8| Color32::from_rgba_unmultiplied(r, g, b, scale(a));
 
     // 16 concentric rings, outside-in

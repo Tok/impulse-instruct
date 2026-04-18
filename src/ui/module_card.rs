@@ -363,7 +363,14 @@ pub fn module_card_sized<R>(
                 }
                 let lit = enabled && reaches_master;
                 if lit {
-                    theme::led(&painter, led_center, led_r, Color32::from_gray(220), 1.0);
+                    // Paint the LED with a wide clip so the halo can extend
+                    // past the panel's title-bar border.  Same draw layer
+                    // as the panel body, so cables (overlay layer), drag
+                    // previews (tooltip layer), the piano, and the header
+                    // panel still correctly cover the halo when they
+                    // overlap it.
+                    let unclipped = painter.clone().with_clip_rect(Rect::EVERYTHING);
+                    theme::led(&unclipped, led_center, led_r, Color32::from_gray(220), 1.0);
                 } else {
                     painter.circle_filled(led_center, led_r, Color32::from_gray(28));
                     painter.circle_stroke(
