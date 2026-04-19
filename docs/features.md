@@ -4,6 +4,59 @@ A detailed log of what's built.
 
 ---
 
+### Song mode — per-chain-slot overrides
+
+- `ChainSlotOverride { bpm, style, repeats }` parallels the chain vec.
+  Missing / default entries preserve v1 behaviour (pattern's own
+  `pattern_style` + `pattern_bpm_apply`).  The same pattern-bank slot
+  can now appear twice in a chain with different overrides — e.g. the
+  same 16-step loop at 128 BPM then again at 160 BPM for the outro.
+- Audio-thread advance honours `repeats` (1..=64) by holding the slot
+  through N pattern loops before moving on, tracked via a new
+  `chain_repeat_count` counter in `AppState`.  Style overrides feed
+  the existing `apply_pattern_style_on_advance` hook; BPM overrides
+  force the tempo regardless of the pattern's `pattern_bpm_apply`
+  flag, so v1 pattern-based transitions keep working untouched.
+- New API: `POST /api/song { chain, overrides, enabled }` and
+  `GET /api/song` for state snapshots.  7 new transition tests cover
+  clamping (BPM 40–300, repeats 1–64), out-of-bounds no-ops, and
+  atomic `set_song` replacement.
+- UI still shows the flat chain row.  A proper timeline-view editor
+  (Gantt bar per slot + drag-reorder + playhead scrubber) is on the
+  roadmap.
+
+### Per-step drum probability — LLM-writable
+
+- `sequencer.drum_probabilities: { voice: [p0, p1, ...] }` exposes
+  `Step.probability` (0..=1, default 1.0) to the LLM / API.  Same
+  shape as `drum_ratchets`: one float array per voice key (`kick_a`,
+  `snare_a`, `hihat_a`, `kick_b`, `snare_b`, `clap_b`, `hihat_b`).
+  Out-of-range values clamp to `[0, 1]`; missing arrays preserve the
+  stored values.
+- Prompt now documents the four canonical use cases: humanised hats,
+  ghost snares, tension-building under density collapses, and
+  conditional fills — so the model reaches for probability instead of
+  muting a step to achieve the same sparseness statically.
+- Schema entry uses the shared `intensity_array` so grammar-constrained
+  generation can emit it directly.  `preecho.<voice>.probability_ramp`
+  remains the quick-win shortcut for lead-in windows.
+
+### XY pad — first-class agent path
+
+- Every FX effect gets a `fx.<name>_xy: [x, y]` JSON path that writes
+  both knobs of the canonical Pair-0 pad in one update.  Individual
+  knob paths (`fx.reverb_size`, etc.) still work — the XY paths are
+  additions, not replacements.  Pair-1 / Pair-2 combinations stay
+  reachable via the individual knob paths.
+- Supported pads: `reverb_xy`, `delay_xy`, `chorus_xy`, `phaser_xy`,
+  `ring_mod_xy`, `waveshaper_xy`, `bitcrush_xy`, `eq_xy`,
+  `compressor_xy`, `tape_xy`, `distortion_xy`, `autotune_xy`,
+  `fx_pan_xy`.
+- Lock paths compose: locking `fx.reverb_xy` blocks the pad but leaves
+  individual knobs writeable; locking `fx.reverb_size` still lets the
+  pad move the Y axis (`reverb_damp`) without silently bypassing the
+  lock.  5 new tests, 13-pad smoke suite.
+
 ### NeuTts bus volume + LFO target
 
 - `TtsModuleState.volume` (0.0..=1.5, default 1.0) scales the TTS

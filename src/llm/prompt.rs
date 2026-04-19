@@ -492,6 +492,21 @@ step with the same drum.
 
 drum_ratchets values are INTEGERS 1–4 (never bools). E.g. `[1,1,2,1,1,1,4,1,…]`.
 
+PROBABILITY: `{{"sequencer":{{"drum_probabilities":{{"hihat_a":[1,0.6,1,0.5,1,0.8,1,0.4,…]}}}}}}`
+— per-step fire chance 0..=1 per drum voice.  Use it for:
+  • humanising hats: set a 16th-hat grid to [1,0.7,1,0.8,…] so offbeats
+    drop out occasionally — breaks the machine feel.
+  • ghost snares: active step + probability 0.3–0.5 → intermittent
+    shadow hits that thicken the groove.
+  • tension/fills: set probability ≈ 0.5 on bars 3–4 of a loop so the
+    pattern feels like it's crumbling before the drop, then back to 1.0.
+  • conditional fills: leave the full pattern active, lower probability
+    on fill-only steps so they sometimes land and sometimes don't.
+Steps with probability ≥ 1.0 fire every time (default); 0 never fires.
+Only set the voices you actually want to randomise; missing arrays keep
+the stored values.  `preecho.<voice>.probability_ramp: true` is the
+short-form equivalent for lead-in windows (0.3 → 1.0 curved ramp).
+
 PRE-ECHO: `{{"sequencer":{{"preecho":{{"kit_a":{{"anchors":[0,16],"length":4,
 "velocity_ramp":true,"ratchet_ramp":true}}}}}}}}` — N steps before each anchor ramp
 0.3→1.0 (and/or 1→4 ratchets). Voice keys: kit_a, kit_b, amen, bass, hoover, an1x.
@@ -545,6 +560,16 @@ bass, 808, 909, hoover, an1x, amen, noise, granular, bitcrush, reverb, delay,
 chorus, phaser, drive, eq, compressor, tapesat, waveshaper, ringmod, lfo, tts, master.
 `pad` expands an FX card to reveal its XY pad and (for 3-knob FX) picks which
 pair drives the pad — pair 0 = A/B, 1 = A/C, 2 = B/C from the knob row order.
+
+XY PAD SHORTCUTS — every FX effect accepts a `<name>_xy: [x, y]` path under
+`fx` that writes both knobs of the canonical Pair-0 pad in one go: e.g.
+`{{"fx":{{"reverb_xy":[0.7, 0.4]}}}}` is equivalent to setting
+`reverb_size` to 0.7 and `reverb_damp` to 0.4.  Available shortcuts:
+`reverb_xy`, `delay_xy`, `chorus_xy`, `phaser_xy`, `ring_mod_xy`,
+`waveshaper_xy`, `bitcrush_xy`, `eq_xy`, `compressor_xy`, `tape_xy`,
+`distortion_xy`, `autotune_xy`, `fx_pan_xy`.  Use pad-space when thinking
+about intensity/character sweeps; use individual knob paths for Pair-1
+or Pair-2 combinations.
 
 SETTINGS — set only when explicitly asked: `{{"settings": {{ "style": "<id>",
 "jam_bars": 4, "persona": "NAME", "conversation_mode": "producer|dj|mc|off",

@@ -255,7 +255,14 @@ impl AudioEngine {
                     };
 
                     // Advance sequencer — snapshot seq state (no lock held during DSP)
-                    let (seq_snap, chain_snap, chain_enabled, chain_pos_snap) = {
+                    let (
+                        seq_snap,
+                        chain_snap,
+                        chain_overrides_snap,
+                        chain_enabled,
+                        chain_pos_snap,
+                        chain_repeat_snap,
+                    ) = {
                         let s = state_clone.read();
                         let mut seq = s.sequencer.clone();
                         // Sync voice-enabled flags from AppState.bass_voices into the snapshot.
@@ -267,7 +274,14 @@ impl AudioEngine {
                         {
                             seq.bass_voice_enabled[i] = v.enabled;
                         }
-                        (seq, s.chain.clone(), s.chain_enabled, s.chain_pos)
+                        (
+                            seq,
+                            s.chain.clone(),
+                            s.chain_overrides.clone(),
+                            s.chain_enabled,
+                            s.chain_pos,
+                            s.chain_repeat_count,
+                        )
                     };
 
                     let prev_loop_count = clock.loop_count;
@@ -303,34 +317,66 @@ impl AudioEngine {
                             && chain_enabled
                             && !chain_snap.is_empty()
                         {
-                            let next_slot = chain_snap[chain_pos_snap % chain_snap.len()];
-                            let bpm = s.sequencer.bpm;
-                            let swing = s.sequencer.swing;
-                            let running = s.sequencer.running;
-                            // Auto-save current edits to the active bank slot before switching.
-                            let current_edit = s.pattern_edit;
-                            let snap = s.sequencer.clone();
-                            if let Some(slot) = s.pattern_bank.get_mut(current_edit) {
-                                *slot = snap;
-                            }
-                            s.chain_pos = (chain_pos_snap + 1) % chain_snap.len();
-                            let loaded = s.pattern_bank.get(next_slot).cloned().unwrap_or_default();
-                            // Song mode: if the loaded pattern carries a
-                            // style tag, apply it globally + propagate to
-                            // unlocked agents so chain boundaries can drive
-                            // style transitions.  Pulled out before we hand
-                            // `loaded` to the transport reconciler.
-                            let loaded_style = loaded.pattern_style.clone();
-                            s.sequencer =
-                                crate::state::chain_advance_transport(loaded, bpm, swing, running);
-                            s.sequencer.current_step = clock.current_step;
-                            s.pattern_edit = next_slot;
-                            if loaded_style.is_some() {
-                                let owned = std::mem::take(&mut *s);
-                                *s = crate::state::apply_pattern_style_on_advance(
-                                    owned,
-                                    loaded_style.as_deref(),
+                            // Respect per-slot repeat count before actually
+                            // advancing.  The override vec is parallel to
+                            // the chain — missing entries = repeats 1 (v1
+                            // chain behaviour).
+                            let cur_pos = chain_pos_snap % chain_snap.len();
+                            let cur_override = chain_overrides_snap.get(cur_pos);
+                            let cur_repeats = cur_override.map(|o| o.repeats.max(1)).unwrap_or(1);
+                            if chain_repeat_snap + 1 < cur_repeats {
+                                // Stay on the current slot; bump the repeat counter
+                                // and let the audio thread re-enter the same pattern.
+                                s.chain_repeat_count = chain_repeat_snap + 1;
+                            } else {
+                                let next_pos = (cur_pos + 1) % chain_snap.len();
+                                let next_slot = chain_snap[next_pos];
+                                let next_override = chain_overrides_snap.get(next_pos);
+                                let bpm = s.sequencer.bpm;
+                                let swing = s.sequencer.swing;
+                                let running = s.sequencer.running;
+                                // Auto-save current edits to the active bank slot before switching.
+                                let current_edit = s.pattern_edit;
+                                let snap = s.sequencer.clone();
+                                if let Some(slot) = s.pattern_bank.get_mut(current_edit) {
+                                    *slot = snap;
+                                }
+                                s.chain_pos = next_pos;
+                                s.chain_repeat_count = 0;
+                                let loaded =
+                                    s.pattern_bank.get(next_slot).cloned().unwrap_or_default();
+                                // Song-slot style override wins over the
+                                // pattern's intrinsic pattern_style; falling
+                                // back to the pattern's tag keeps v1 chains
+                                // unchanged.
+                                let effective_style = next_override
+                                    .and_then(|o| o.style.clone())
+                                    .or_else(|| loaded.pattern_style.clone());
+                                // Song-slot BPM override forces the tempo
+                                // regardless of the pattern's pattern_bpm_apply
+                                // flag, so the same bank slot can play at
+                                // different tempos in different positions.
+                                let (eff_bpm, eff_swing) = match next_override.and_then(|o| o.bpm) {
+                                    Some(b) => (b, loaded.swing),
+                                    None if loaded.pattern_bpm_apply => (loaded.bpm, loaded.swing),
+                                    None => (bpm, swing),
+                                };
+                                let mut loaded = loaded;
+                                loaded.bpm = eff_bpm;
+                                loaded.swing = eff_swing;
+                                loaded.pattern_bpm_apply = true;
+                                s.sequencer = crate::state::chain_advance_transport(
+                                    loaded, eff_bpm, eff_swing, running,
                                 );
+                                s.sequencer.current_step = clock.current_step;
+                                s.pattern_edit = next_slot;
+                                if effective_style.is_some() {
+                                    let owned = std::mem::take(&mut *s);
+                                    *s = crate::state::apply_pattern_style_on_advance(
+                                        owned,
+                                        effective_style.as_deref(),
+                                    );
+                                }
                             }
                         }
                     }

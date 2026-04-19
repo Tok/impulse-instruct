@@ -8,13 +8,6 @@ they ship and are reflected in `features.md`.
 
 ## Agent tooling — gradual control & expressiveness
 
-- [ ] **XY pad — agent-side first-class path** — the widget already
-  derives the pad position from the live knob values each frame, so
-  agent edits to `fx.reverb_size` etc. visibly move the pad with no
-  extra plumbing.  Promoting the pad itself to a first-class
-  `fx.<name>_xy: [x, y]` JSON path (in addition to the existing
-  per-knob paths) would let agents think in pad-space instead of
-  knob-space — deferred until we see demand.
 
 ## DSP
 
@@ -28,14 +21,13 @@ they ship and are reflected in `features.md`.
 
 ## Sequencer
 
-- [ ] **Pattern probability per step — LLM prompt guidance** — the
-  feature is implemented but the LLM doesn't use it well; improve
-  prompt examples for probability-based patterns.
-- [ ] **Song mode — timeline view** — current surface (per-pattern
-  `pattern_style` + `pattern_bpm_apply`) is enough to arrange
-  multi-style / multi-tempo sets, but a dedicated `Song` struct with
-  per-chain-slot overrides (rather than per-pattern) and a timeline
-  editor would give more flexibility.
+- [ ] **Song mode — timeline UI** — per-chain-slot overrides landed
+  (state + audio thread + `POST /api/song`).  What's still missing is
+  a proper timeline visualisation: a Gantt-style bar per slot with
+  length / repeat-count / override indicators, drag-to-reorder, and a
+  playhead scrubber.  Today the UI still shows the flat chain row; use
+  the API or manual edits on `chain_overrides` until the timeline
+  ships.
 
 ## Intelligence
 

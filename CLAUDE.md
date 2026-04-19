@@ -131,6 +131,8 @@ POST /api/lock           { "paths": ["tb303.cutoff"] }
 POST /api/unlock         { "paths": ["tb303.cutoff"] }
 POST /api/sequencer/play
 POST /api/sequencer/stop
+GET  /api/song                                    returns { chain, overrides, enabled, pos, repeat_count }
+POST /api/song           { "chain": [0,1,2], "overrides": [{ "style": "jungle", "repeats": 2 }, {}, { "bpm": 140.0 }], "enabled": true }
 POST /api/scroll         { "target": "voice" }  (global/voice/fxmod/bass/808/fx/…)
 POST /api/scroll         { "target": "bass", "collapse_others": true }  focus mode
 POST /api/preset         { "name": "Crew" }     (Solo/Duo/Swarm/Crew/Voices)

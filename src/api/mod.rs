@@ -182,6 +182,9 @@ pub use rack_pad::{RackPadRequest, post_rack_pad};
 mod preset;
 pub use preset::post_preset;
 
+mod song;
+pub use song::{SongRequest, SongResponse, get_song, post_song};
+
 mod resets;
 pub use resets::{post_rack_reset, post_state_reset};
 
@@ -807,6 +810,7 @@ pub fn build_router(api_state: ApiState) -> Router {
         .route("/api/unlock", post(post_unlock))
         .route("/api/sequencer/play", post(post_play))
         .route("/api/sequencer/stop", post(post_stop))
+        .route("/api/song", get(get_song).post(post_song))
         .route("/api/scroll", post(post_scroll))
         .route("/api/preset", post(post_preset))
         .route("/api/style", post(post_style))

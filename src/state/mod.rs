@@ -33,6 +33,9 @@ pub use sequencer_state::{SequencerState, Step, TB303Step};
 pub mod fx;
 pub use fx::FxState;
 
+pub mod song;
+pub use song::ChainSlotOverride;
+
 pub const MAX_STEPS: usize = 64;
 pub const MAX_BASS_VOICES: usize = 4;
 
@@ -200,12 +203,26 @@ pub struct AppState {
     /// Ordered playback chain — indices into pattern_bank (max 8 entries).
     #[serde(default)]
     pub chain: Vec<usize>,
+    /// Optional per-chain-slot overrides, parallel to `chain`.  Missing
+    /// entries (vec shorter than `chain`) or default entries fall back to
+    /// the loaded pattern's own `pattern_style` / `pattern_bpm_apply`.
+    /// Lets the same bank slot play under different styles / BPM /
+    /// repeat counts at different positions in the song.
+    #[serde(default)]
+    pub chain_overrides: Vec<ChainSlotOverride>,
     /// When true the audio thread advances through `chain` on each pattern loop.
     #[serde(default)]
     pub chain_enabled: bool,
     /// Current position in the chain — written by audio thread, read by UI.
     #[serde(default)]
     pub chain_pos: usize,
+    /// How many times the current chain slot has looped since last advance.
+    /// Counts 0, 1, 2, … up to `override.repeats`; when it reaches the
+    /// threshold the audio thread advances the slot and resets this to 0.
+    /// Audio-thread-owned; persisted so restart inside a long slot doesn't
+    /// teleport forward.
+    #[serde(default)]
+    pub chain_repeat_count: u8,
     /// When true, piano/MIDI note-ons while running write into the bass pattern.
     #[serde(default)]
     pub live_record: bool,
@@ -265,8 +282,10 @@ impl Default for AppState {
             pattern_bank: default_pattern_bank(),
             pattern_edit: 0,
             chain: Vec::new(),
+            chain_overrides: Vec::new(),
             chain_enabled: false,
             chain_pos: 0,
+            chain_repeat_count: 0,
             live_record: false,
             spectrum: Default::default(),
             rack: Default::default(),

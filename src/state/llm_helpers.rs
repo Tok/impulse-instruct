@@ -634,4 +634,119 @@ pub(super) fn apply_fx_update(
         "sidechain_release",
         "fx.sidechain_release"
     );
+
+    // ── XY pad first-class paths ─────────────────────────────────────────
+    // Each entry is `(xy_key, field_a, field_b, min, max)` — writing
+    // `fx.<xy_key>: [x, y]` sets `field_a` to x and `field_b` to y,
+    // respecting per-field locks *and* the `fx.<xy_key>` lock path.
+    // Maps the canonical Pair-0 of each FX pad; Pair 1 / Pair 2 stay
+    // reachable via the individual knob paths.
+    type XyMap = (&'static str, &'static str, &'static str, f32, f32);
+    const XY_PAIRS: &[XyMap] = &[
+        ("reverb_xy", "reverb_size", "reverb_damp", 0.0, 1.0),
+        ("delay_xy", "delay_time", "delay_feedback", 0.0, 1.0),
+        ("chorus_xy", "chorus_rate", "chorus_depth", 0.0, 1.0),
+        ("phaser_xy", "phaser_rate", "phaser_depth", 0.0, 1.0),
+        ("ring_mod_xy", "ring_mod_freq", "ring_mod_mix", 0.0, 1.0),
+        (
+            "waveshaper_xy",
+            "waveshaper_drive",
+            "waveshaper_mix",
+            0.0,
+            1.0,
+        ),
+        ("bitcrush_xy", "bitcrush_bits", "bitcrush_rate", 0.0, 1.0),
+        ("eq_xy", "eq_low_gain", "eq_mid_gain", -1.0, 1.0),
+        (
+            "compressor_xy",
+            "compressor_threshold",
+            "compressor_ratio",
+            0.0,
+            1.0,
+        ),
+        ("tape_xy", "tape_drive", "tape_flutter", 0.0, 1.0),
+        (
+            "distortion_xy",
+            "distortion_drive",
+            "distortion_mix",
+            0.0,
+            1.0,
+        ),
+        ("autotune_xy", "autotune_amount", "autotune_mix", 0.0, 1.0),
+        ("fx_pan_xy", "fx_pan_pos", "fx_pan_width", 0.0, 1.0),
+    ];
+    for (xy_key, field_a, field_b, min, max) in XY_PAIRS {
+        let Some(arr) = fx.get(*xy_key).and_then(|v| v.as_array()) else {
+            continue;
+        };
+        if arr.len() != 2 {
+            continue;
+        }
+        let (Some(x), Some(y)) = (arr[0].as_f64(), arr[1].as_f64()) else {
+            continue;
+        };
+        let xy_path = format!("fx.{}", xy_key);
+        if locked.contains(&xy_path) {
+            continue;
+        }
+        let path_a = format!("fx.{}", field_a);
+        let path_b = format!("fx.{}", field_b);
+        let x = (x as f32).clamp(*min, *max);
+        let y = (y as f32).clamp(*min, *max);
+        if !locked.contains(&path_a)
+            && let Some(dst) = fx_field_mut(&mut s.fx, field_a)
+        {
+            *dst = x;
+        }
+        if !locked.contains(&path_b)
+            && let Some(dst) = fx_field_mut(&mut s.fx, field_b)
+        {
+            *dst = y;
+        }
+    }
+}
+
+/// Resolve an `FxState` field name to a mutable reference to that field.
+/// Returns `None` for fields that aren't scalar `f32` knobs (booleans,
+/// enum-ish `u8` selectors).  Kept in one place so the XY-pad apply loop
+/// doesn't need to duplicate the big match.
+fn fx_field_mut<'a>(fx: &'a mut super::FxState, key: &str) -> Option<&'a mut f32> {
+    Some(match key {
+        "reverb_size" => &mut fx.reverb_size,
+        "reverb_damp" => &mut fx.reverb_damp,
+        "reverb_mix" => &mut fx.reverb_mix,
+        "delay_time" => &mut fx.delay_time,
+        "delay_feedback" => &mut fx.delay_feedback,
+        "delay_mix" => &mut fx.delay_mix,
+        "chorus_rate" => &mut fx.chorus_rate,
+        "chorus_depth" => &mut fx.chorus_depth,
+        "chorus_mix" => &mut fx.chorus_mix,
+        "phaser_rate" => &mut fx.phaser_rate,
+        "phaser_depth" => &mut fx.phaser_depth,
+        "phaser_mix" => &mut fx.phaser_mix,
+        "ring_mod_freq" => &mut fx.ring_mod_freq,
+        "ring_mod_mix" => &mut fx.ring_mod_mix,
+        "waveshaper_drive" => &mut fx.waveshaper_drive,
+        "waveshaper_mix" => &mut fx.waveshaper_mix,
+        "bitcrush_bits" => &mut fx.bitcrush_bits,
+        "bitcrush_rate" => &mut fx.bitcrush_rate,
+        "bitcrush_mix" => &mut fx.bitcrush_mix,
+        "eq_low_gain" => &mut fx.eq_low_gain,
+        "eq_mid_gain" => &mut fx.eq_mid_gain,
+        "eq_hi_gain" => &mut fx.eq_hi_gain,
+        "compressor_threshold" => &mut fx.compressor_threshold,
+        "compressor_ratio" => &mut fx.compressor_ratio,
+        "compressor_mix" => &mut fx.compressor_mix,
+        "tape_drive" => &mut fx.tape_drive,
+        "tape_mix" => &mut fx.tape_mix,
+        "tape_flutter" => &mut fx.tape_flutter,
+        "distortion_drive" => &mut fx.distortion_drive,
+        "distortion_mix" => &mut fx.distortion_mix,
+        "autotune_amount" => &mut fx.autotune_amount,
+        "autotune_mix" => &mut fx.autotune_mix,
+        "fx_pan_pos" => &mut fx.fx_pan_pos,
+        "fx_pan_width" => &mut fx.fx_pan_width,
+        "fx_pan_rate" => &mut fx.fx_pan_rate,
+        _ => return None,
+    })
 }

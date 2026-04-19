@@ -6,7 +6,7 @@ use super::llm_apply_seq::{
 use super::llm_helpers::{
     apply_an1x_update, apply_bass_update, apply_fx_update, apply_hoover_update, unlocked_f32,
 };
-use super::transitions::{set_drum_step_ratchet, set_drum_voice_steps};
+use super::transitions::{set_drum_step_probability, set_drum_step_ratchet, set_drum_voice_steps};
 use super::{AppState, DrumVoice, LfoTarget, LfoWaveform, MAX_STEPS};
 
 /// Apply an LLM-generated partial update, respecting locked params.
@@ -95,6 +95,31 @@ pub fn apply_llm_update(state: AppState, update: &serde_json::Value, scope: &[St
                     for (step, val) in arr.iter().enumerate().take(MAX_STEPS) {
                         if let Some(r) = val.as_u64() {
                             s = set_drum_step_ratchet(s, *voice, step, r as u8);
+                        }
+                    }
+                }
+            }
+        }
+        // Per-step probabilities — parallel of `drum_ratchets`.  Each
+        // voice key maps to a float array 0..=1; missing / out-of-range
+        // entries are skipped so partial updates stay safe.  Lets the LLM
+        // sculpt humanised fills, ghost-note hats, or conditional snares
+        // without bookkeeping the full step array every cycle.
+        if !locked.contains("sequencer.drum_probabilities")
+            && let Some(obj) = seq.get("drum_probabilities").and_then(|v| v.as_object())
+        {
+            let mut voices_to_apply: Vec<(&str, DrumVoice)> = Vec::new();
+            if seq_scope_flags.kit_a {
+                voices_to_apply.extend_from_slice(kit_a_voices);
+            }
+            if seq_scope_flags.kit_b {
+                voices_to_apply.extend_from_slice(kit_b_voices);
+            }
+            for (key, voice) in &voices_to_apply {
+                if let Some(arr) = obj.get(*key).and_then(|v| v.as_array()) {
+                    for (step, val) in arr.iter().enumerate().take(MAX_STEPS) {
+                        if let Some(p) = val.as_f64() {
+                            s = set_drum_step_probability(s, *voice, step, p as f32);
                         }
                     }
                 }

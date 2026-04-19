@@ -780,6 +780,89 @@ pub fn observe_user_edit(state: AppState, param_path: &str, value: f32) -> AppSt
     s
 }
 
+// ─── Song-mode helpers ──────────────────────────────────────────────────────
+// Set / clear per-chain-slot overrides.  All take ownership and return
+// the updated state — same discipline as the rest of `transitions.rs`.
+// Overrides are kept in a parallel vec; the vec is extended with defaults
+// as needed so `overrides[pos]` is always safe to write.
+
+/// Ensure `state.chain_overrides` is at least `len` entries long by
+/// padding with `ChainSlotOverride::default()`.  Pure + local to this
+/// file — used by the set_* helpers below.
+fn ensure_chain_overrides_len(state: &mut AppState, len: usize) {
+    if state.chain_overrides.len() < len {
+        state.chain_overrides.resize_with(len, Default::default);
+    }
+}
+
+/// Set the style override for chain slot `pos`.  `style == None` clears
+/// the override (slot falls back to the pattern's intrinsic `pattern_style`).
+pub fn set_chain_slot_style(state: AppState, pos: usize, style: Option<String>) -> AppState {
+    let mut s = state;
+    if pos >= s.chain.len() {
+        return s;
+    }
+    ensure_chain_overrides_len(&mut s, pos + 1);
+    s.chain_overrides[pos].style = style;
+    s
+}
+
+/// Set the BPM override for chain slot `pos`.  `bpm == None` clears the
+/// override.  BPM is clamped to the sequencer's valid range on set.
+pub fn set_chain_slot_bpm(state: AppState, pos: usize, bpm: Option<f32>) -> AppState {
+    let mut s = state;
+    if pos >= s.chain.len() {
+        return s;
+    }
+    ensure_chain_overrides_len(&mut s, pos + 1);
+    s.chain_overrides[pos].bpm = bpm.map(|b| b.clamp(crate::state::BPM_MIN, crate::state::BPM_MAX));
+    s
+}
+
+/// Set the repeat count for chain slot `pos`.  Clamped to `1..=64`
+/// (1 = classic chain, 64 is the upper UI cap so a stuck slot doesn't
+/// eat minutes of song time).
+pub fn set_chain_slot_repeats(state: AppState, pos: usize, repeats: u8) -> AppState {
+    let mut s = state;
+    if pos >= s.chain.len() {
+        return s;
+    }
+    ensure_chain_overrides_len(&mut s, pos + 1);
+    s.chain_overrides[pos].repeats = repeats.clamp(1, 64);
+    s
+}
+
+/// Clear every override on the given slot — brings it back to plain
+/// chain-position behaviour (no style swap, no BPM force, one loop).
+pub fn clear_chain_slot_override(state: AppState, pos: usize) -> AppState {
+    let mut s = state;
+    if let Some(entry) = s.chain_overrides.get_mut(pos) {
+        *entry = crate::state::ChainSlotOverride::default();
+    }
+    s
+}
+
+/// Replace the whole chain + overrides + enabled state at once.  Used by
+/// the `/api/song` bulk-set endpoint and the Song-mode UI's bulk save.
+/// Chains are clamped to 8 entries / slot indices 0..=7 to match the
+/// existing chain helpers.
+pub fn set_song(
+    state: AppState,
+    chain: Vec<usize>,
+    overrides: Vec<crate::state::ChainSlotOverride>,
+    enabled: bool,
+) -> AppState {
+    let mut s = state;
+    s.chain = chain.into_iter().map(|v| v.min(7)).take(8).collect();
+    s.chain_overrides = overrides.into_iter().take(s.chain.len()).collect();
+    s.chain_enabled = enabled;
+    if !enabled {
+        s.chain_pos = 0;
+    }
+    s.chain_repeat_count = 0;
+    s
+}
+
 /// Propagate a style change to all agents whose style is not locked.
 pub fn propagate_style(state: AppState, style_id: &str) -> AppState {
     let mut s = state;
