@@ -65,22 +65,11 @@ they ship and are reflected in `features.md`.
 
 - [ ] **Touch mode improvements** — touch-paint mode for
   mobile / tablet; gesture support for zoom / scroll.
-- [ ] **Style-dependent rack defaults at wizard time** — partially
-  addressed: picking a style in the LLM console now reshapes the
-  rack via `style_rack::apply` (destructive, reads `rack_modules`
-  from `styles.json`).  The wizard's `RACK_PRESETS` (Empty / Basic /
-  Standard / Full) is still generic; could be replaced with a
-  style-driven picker so initial setup matches the user's intended
-  genre directly.
 - [ ] **Agent overrides escape clip too** — `agent_card.rs` LED
   already uses a foreground layer.  Step-button / piano / knob LEDs
   are tightly bound to their parents and would leak past widget
   bounds with the same treatment — escalate per-site only when
   actually needed.
-- [ ] **Project picker** — File menu currently loads the newest
-  `project-*.json` from cwd.  A real picker (rfd or in-app file
-  dialog) would let the user pick any saved project.
-- [ ] **Recent projects** sub-menu listing saved sessions.
 - [ ] **Real shaders for LEDs / oscilloscope phosphor** — would
   replace the current multi-circle software glow with a wgpu
   callback for a true HDR bloom + scanline effect.  Scoping this

@@ -174,6 +174,80 @@ impl ImpulseApp {
                     );
                 }
 
+                // ── Style-seeded rack (optional) ────────────────────
+                // Picking a style here takes precedence over the generic
+                // RACK_PRESETS pick above — the rack gets reshaped from
+                // the style's `rack_modules` and the style's
+                // `baseline_params` are stamped on.  "— none —" falls
+                // back to the generic preset's rack.
+                ui.add_space(6.0);
+                ui.horizontal(|ui| {
+                    ui.label(
+                        egui::RichText::new("or seed from style:")
+                            .color(theme::SMOKE)
+                            .monospace()
+                            .size(9.0),
+                    );
+                    let catalog = crate::llm::styles::StyleCatalog::get();
+                    let current_label = match &self.wizard_style_id {
+                        Some(id) => catalog
+                            .find_by_id(id)
+                            .map(|s| s.name.clone())
+                            .unwrap_or_else(|| "— none —".into()),
+                        None => "— none —".into(),
+                    };
+                    egui::ComboBox::from_id_source("wizard_style_picker")
+                        .selected_text(
+                            egui::RichText::new(current_label)
+                                .monospace()
+                                .size(9.5)
+                                .color(theme::FOG),
+                        )
+                        .width(160.0)
+                        .show_ui(ui, |ui| {
+                            if ui
+                                .selectable_label(
+                                    self.wizard_style_id.is_none(),
+                                    egui::RichText::new("— none —").monospace().size(9.5),
+                                )
+                                .clicked()
+                            {
+                                self.wizard_style_id = None;
+                            }
+                            for style in catalog.styles() {
+                                let selected = self
+                                    .wizard_style_id
+                                    .as_deref()
+                                    .map(|s| s == style.id)
+                                    .unwrap_or(false);
+                                if ui
+                                    .selectable_label(
+                                        selected,
+                                        egui::RichText::new(&style.name).monospace().size(9.5),
+                                    )
+                                    .clicked()
+                                {
+                                    self.wizard_style_id = Some(style.id.clone());
+                                }
+                            }
+                        });
+                });
+                if let Some(id) = &self.wizard_style_id {
+                    let catalog = crate::llm::styles::StyleCatalog::get();
+                    if let Some(style) = catalog.find_by_id(id) {
+                        ui.label(
+                            egui::RichText::new(format!(
+                                "rack: {} — {}",
+                                style.rack_modules.join(" · "),
+                                style.bpm_range
+                            ))
+                            .color(theme::IRON)
+                            .monospace()
+                            .size(8.5),
+                        );
+                    }
+                }
+
                 // ── Agent configuration ─────────────────────────────
                 ui.add_space(8.0);
                 ui.label(
@@ -408,8 +482,50 @@ impl ImpulseApp {
             None => return,
         };
 
-        // Apply rack layout preset first
-        if let Some(rack_preset) = crate::state::RACK_PRESETS.get(self.wizard_rack_preset) {
+        // Apply rack layout — style pick takes precedence over the
+        // generic RACK_PRESETS row.  When a style is seeded we still
+        // start from an empty base rack so the style's rack_modules
+        // becomes the exact spec, then stamp the style's baseline
+        // params + mark it active so the first LLM cycle inherits it.
+        if let Some(style_id) = self.wizard_style_id.clone() {
+            let catalog = crate::llm::styles::StyleCatalog::get();
+            if let Some(style) = catalog.find_by_id(&style_id) {
+                // Reset to an empty base rack (Sequencer + Master + Console)
+                // then let style_rack::apply add every module from rack_modules.
+                let empty_preset = crate::state::RACK_PRESETS
+                    .iter()
+                    .find(|p| p.name == "Empty")
+                    .unwrap_or(&crate::state::RACK_PRESETS[0]);
+                let base_rack = crate::state::RackState::from_preset(empty_preset);
+                {
+                    let mut s = self.state.write();
+                    s.llm_agents.clear();
+                    s.rack = base_rack;
+                    // Stamp baseline params so the style's resonance /
+                    // decay / fx values land immediately — mirrors the
+                    // LLM-console style-dropdown flow.
+                    if let Some(baseline) = &style.baseline_params {
+                        let owned = std::mem::take(&mut *s);
+                        *s = crate::state::apply_llm_update(owned, baseline, &[]);
+                    }
+                    s.llm.active_style = Some(style_id.clone());
+                }
+                // Reshape the rack via the existing style pipeline.
+                let names: Vec<String> = style.rack_modules.clone();
+                crate::ui::style_rack::apply(self, &names);
+                // If the style includes bass, enable the second voice
+                // (parity with the generic-preset path below).
+                if names.iter().any(|n| n == "bass" || n == "bass2") {
+                    let mut s = self.state.write();
+                    if s.sequencer.bass_voice_enabled.len() > 1 {
+                        s.sequencer.bass_voice_enabled[1] = true;
+                    }
+                    if let Some(v) = s.bass_voices.get_mut(1) {
+                        v.enabled = true;
+                    }
+                }
+            }
+        } else if let Some(rack_preset) = crate::state::RACK_PRESETS.get(self.wizard_rack_preset) {
             let new_rack = crate::state::RackState::from_preset(rack_preset);
             // Enable a second 303 voice whenever AcidBass is in the preset
             // — every preset that has bass benefits from two melodic lanes.

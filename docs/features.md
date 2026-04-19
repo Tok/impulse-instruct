@@ -4,6 +4,27 @@ A detailed log of what's built.
 
 ---
 
+### File menu — Open / Recent projects / style-seeded wizard
+
+- File menu grows an `Open project…` entry that opens a native file
+  dialog via `rfd` (new dep).  The picker is filtered to `.json`.
+  Drop-in replacement for the old "Load latest" shortcut, which stays
+  as a one-click fallback for the common case.
+- `Recent projects` sub-menu lists up to 10 `project-*.json` files
+  from the working directory, newest first.  Entries route through
+  the same `load_project_from_path` helper as "Open…" and "Load
+  latest" so error handling / logging stay uniform.
+- `list_recent_projects_in(dir)` is the pure helper the UI calls with
+  `"."` and tests exercise with a tempdir — 2 new tests cover the
+  "newest first" ordering + filter, and the missing-dir case.
+- Wizard gets an optional "or seed from style" dropdown that lets
+  users pick a genre at onboarding.  When set, the rack is reshaped
+  from that style's `rack_modules` via the existing
+  `style_rack::apply` pipeline, baseline params are stamped, and
+  `llm.active_style` is pinned — so the first jam cycle already
+  inherits the genre.  Generic `RACK_PRESETS` still picked by default
+  for users who don't have a style in mind.
+
 ### Send-bus routing — per-cable gain + FX→FX feedback
 
 - Every audio `Cable` gains a `audio_gain: f32` field (default 1.0,

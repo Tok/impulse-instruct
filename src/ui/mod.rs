@@ -5,7 +5,7 @@ mod api_log_handler;
 mod app_update;
 mod flip;
 pub mod fx_dir;
-mod header;
+pub(crate) mod header;
 mod llm_drain;
 mod llm_log_color;
 mod llm_strip;
@@ -273,6 +273,12 @@ pub struct ImpulseApp {
     pub(crate) show_wizard: bool,
     pub(crate) wizard_selected: usize,
     pub(crate) wizard_rack_preset: usize,
+    /// Optional style id that seeds the wizard's rack instead of the
+    /// generic `RACK_PRESETS` picks.  `Some(id)` causes `apply_wizard_preset`
+    /// to route through `style_rack::apply` with the style's `rack_modules`
+    /// and to stamp `baseline_params` on fresh load.  `None` = classic
+    /// behaviour (generic preset rack, no style set).
+    pub(crate) wizard_style_id: Option<String>,
     prefs_tab: usize,
     llm_tab: usize,
     startup_done: bool,
@@ -468,6 +474,7 @@ impl ImpulseApp {
             },
 
             wizard_rack_preset: 3, // default to "Full" (everything — 303 + both drum kits + hoover + an1x + amen + FX chain)
+            wizard_style_id: None,
             prefs_tab: 0,
             llm_tab: 0,
             startup_done: false,

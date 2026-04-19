@@ -3,9 +3,43 @@
 
 use crate::audio::AudioCommand;
 use crate::export::{export_mp3, export_stems, export_wav};
-use crate::state::save_project;
+use crate::state::{load_project, save_project};
 use crate::ui::{ImpulseApp, theme};
 use egui::{Frame, TopBottomPanel};
+use std::path::{Path, PathBuf};
+
+/// Return every `project-*.json` in `dir`, newest first.  Best-effort:
+/// read errors yield an empty list.  Shared by the "Load latest" entry
+/// and the "Recent projects" sub-menu so they agree on what's available.
+/// Separated from the cwd default so tests can exercise it against a
+/// tempdir without touching the working tree.
+pub(crate) fn list_recent_projects_in(dir: &Path) -> Vec<PathBuf> {
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return Vec::new();
+    };
+    let mut hits: Vec<(PathBuf, std::time::SystemTime)> = entries
+        .filter_map(|e| e.ok())
+        .filter_map(|e| {
+            let name = e.file_name().to_string_lossy().into_owned();
+            if name.starts_with("project-") && name.ends_with(".json") {
+                let mtime = e
+                    .metadata()
+                    .and_then(|m| m.modified())
+                    .unwrap_or(std::time::UNIX_EPOCH);
+                Some((e.path(), mtime))
+            } else {
+                None
+            }
+        })
+        .collect();
+    // Newest first.
+    hits.sort_by(|a, b| b.1.cmp(&a.1));
+    hits.into_iter().map(|(p, _)| p).collect()
+}
+
+fn list_recent_projects() -> Vec<PathBuf> {
+    list_recent_projects_in(Path::new("."))
+}
 
 impl ImpulseApp {
     /// Menu bar + header transport strip + log/scope combined panel.
@@ -204,6 +238,26 @@ impl ImpulseApp {
             });
     }
 
+    /// Shared helper: load a project JSON from `path`, swap it into the
+    /// live state, push audio params, and log success/failure.  Called
+    /// from "Load latest", "Recent projects → <name>", and "Open…".
+    fn load_project_from_path(&mut self, path: &Path) {
+        match load_project(path) {
+            Ok(loaded) => {
+                *self.state.write() = loaded;
+                self.push_audio_params();
+                let msg = format!("[ loaded ← {} ]", path.display());
+                log::info!("{}", msg);
+                self.log_text.push_str(&format!("{}\n", msg));
+            }
+            Err(e) => {
+                let msg = format!("[ load failed: {} ]", e);
+                log::error!("{}", msg);
+                self.log_text.push_str(&format!("{}\n", msg));
+            }
+        }
+    }
+
     fn draw_menu_bar(&mut self, ctx: &egui::Context) {
         TopBottomPanel::top("menu_bar")
             .frame(
@@ -227,6 +281,23 @@ impl ImpulseApp {
                             ui.close_menu();
                         }
                         if ui
+                            .button(egui::RichText::new("Open project…").monospace().size(10.0))
+                            .clicked()
+                        {
+                            // Native file dialog via rfd.  Blocks the UI
+                            // thread briefly while the picker is open —
+                            // fine for a file-menu action; matches the
+                            // pattern used for Save elsewhere.
+                            let picked = rfd::FileDialog::new()
+                                .add_filter("Project", &["json"])
+                                .set_directory(".")
+                                .pick_file();
+                            if let Some(path) = picked {
+                                self.load_project_from_path(&path);
+                            }
+                            ui.close_menu();
+                        }
+                        if ui
                             .button(
                                 egui::RichText::new("Load latest project")
                                     .monospace()
@@ -234,36 +305,10 @@ impl ImpulseApp {
                             )
                             .clicked()
                         {
-                            // Find the newest project-*.json in cwd and
-                            // load it.  Avoids pulling in a file-picker
-                            // dependency for the menu entry.
-                            let latest = std::fs::read_dir(".")
-                                .ok()
-                                .into_iter()
-                                .flatten()
-                                .filter_map(|e| e.ok())
-                                .filter(|e| {
-                                    e.file_name().to_string_lossy().starts_with("project-")
-                                        && e.file_name().to_string_lossy().ends_with(".json")
-                                })
-                                .max_by_key(|e| e.metadata().and_then(|m| m.modified()).ok());
-                            match latest {
-                                Some(entry) => {
-                                    let path = entry.path();
-                                    match crate::state::load_project(&path) {
-                                        Ok(loaded) => {
-                                            *self.state.write() = loaded;
-                                            self.push_audio_params();
-                                            let msg = format!("[ loaded ← {} ]", path.display());
-                                            log::info!("{}", msg);
-                                            self.log_text.push_str(&format!("{}\n", msg));
-                                        }
-                                        Err(e) => {
-                                            let msg = format!("[ load failed: {} ]", e);
-                                            log::error!("{}", msg);
-                                            self.log_text.push_str(&format!("{}\n", msg));
-                                        }
-                                    }
+                            // Quick-load shortcut: newest project-*.json in cwd.
+                            match list_recent_projects().into_iter().next() {
+                                Some(path) => {
+                                    self.load_project_from_path(&path);
                                 }
                                 None => {
                                     let msg = "[ no project-*.json found in working dir ]";
@@ -273,6 +318,47 @@ impl ImpulseApp {
                             }
                             ui.close_menu();
                         }
+                        // Recent projects sub-menu — populated from the cwd
+                        // scan so each entry round-trips to the same load
+                        // helper.  Caps at 10 so a cwd full of saves
+                        // doesn't blow out the menu height.
+                        let recent = list_recent_projects();
+                        ui.menu_button(
+                            egui::RichText::new(format!(
+                                "Recent projects ({})",
+                                recent.len().min(10)
+                            ))
+                            .monospace()
+                            .size(10.0),
+                            |ui| {
+                                if recent.is_empty() {
+                                    ui.label(
+                                        egui::RichText::new("— none —")
+                                            .monospace()
+                                            .size(10.0)
+                                            .color(theme::SMOKE),
+                                    );
+                                    return;
+                                }
+                                let mut pick: Option<PathBuf> = None;
+                                for path in recent.iter().take(10) {
+                                    let label = path
+                                        .file_name()
+                                        .map(|n| n.to_string_lossy().into_owned())
+                                        .unwrap_or_else(|| path.display().to_string());
+                                    if ui
+                                        .button(egui::RichText::new(label).monospace().size(10.0))
+                                        .clicked()
+                                    {
+                                        pick = Some(path.clone());
+                                    }
+                                }
+                                if let Some(p) = pick {
+                                    self.load_project_from_path(&p);
+                                    ui.close_menu();
+                                }
+                            },
+                        );
                         if ui
                             .button(egui::RichText::new("Save project").monospace().size(10.0))
                             .clicked()
