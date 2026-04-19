@@ -17,7 +17,7 @@ pub mod voices;
 use an1x::An1xVoice;
 use bass303::Bass303;
 use dsp_util::*;
-pub use dsp_util::{hz_to_midi, midi_to_hz};
+pub use dsp_util::{hz_to_midi, midi_to_hz, midi_to_hz_tuned};
 use fx::*;
 use fx_math::{
     free_eg_value_at, gated_reverb_envelope_step, lfo_value_at, sidechain_duck,

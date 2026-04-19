@@ -51,11 +51,12 @@ fn midi_to_hz_just(note: u8) -> f32 {
     base_c4 * RATIOS[degree] * 2.0f32.powi(octave)
 }
 
-/// Javanese slendro (5-tone equal temperament mapped to the black keys).
+/// Javanese slendro — 5-tone equal temperament.  Each MIDI step is one
+/// slendro step of `2^(1/5)`, so 5 MIDI steps equal one octave (rather
+/// than 12, the 12-TET default).
 fn midi_to_hz_slendro(note: u8) -> f32 {
     let base = 261.626; // C4 = MIDI 60
-    let step = (note as f32 - 60.0) / 5.0; // 5 notes per octave
-    base * 2.0f32.powf(step / (12.0 / 5.0))
+    base * 2.0f32.powf((note as f32 - 60.0) / 5.0)
 }
 
 /// Javanese pelog (7-tone non-equal scale, approximated).
