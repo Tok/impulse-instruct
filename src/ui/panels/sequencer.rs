@@ -162,6 +162,8 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
     super::sequencer_header::draw_line_1(app, ui);
     ui.add_space(2.0);
     super::sequencer_header::draw_line_2(app, ui);
+    ui.add_space(2.0);
+    super::sequencer_chain::draw_song_timeline(app, ui);
     ui.add_space(4.0);
 
     let page_start = app.seq_page * STEPS_PER_PAGE;

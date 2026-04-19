@@ -560,6 +560,24 @@ pub fn set_chain(state: AppState, chain: Vec<usize>) -> AppState {
     s
 }
 
+/// Swap two chain slots (and their overrides) in place.  Used by the
+/// timeline UI's drag-to-reorder.  No-op if either index is out of
+/// bounds or both are the same — keeps the caller free of bounds
+/// checks.  `chain_overrides` is padded with defaults to match
+/// `chain`'s length before swapping so indices stay aligned afterward.
+pub fn swap_chain_slots(state: AppState, a: usize, b: usize) -> AppState {
+    let mut s = state;
+    if a == b || a >= s.chain.len() || b >= s.chain.len() {
+        return s;
+    }
+    s.chain.swap(a, b);
+    while s.chain_overrides.len() < s.chain.len() {
+        s.chain_overrides.push(super::ChainSlotOverride::default());
+    }
+    s.chain_overrides.swap(a, b);
+    s
+}
+
 /// Append one slot index to the chain (noop if already 8 entries).
 pub fn chain_push(state: AppState, slot: usize) -> AppState {
     let mut s = state;

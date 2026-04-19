@@ -14,13 +14,6 @@ they ship and are reflected in `features.md`.
 
 ## Sequencer
 
-- [ ] **Song mode — timeline UI** — per-chain-slot overrides landed
-  (state + audio thread + `POST /api/song`).  What's still missing is
-  a proper timeline visualisation: a Gantt-style bar per slot with
-  length / repeat-count / override indicators, drag-to-reorder, and a
-  playhead scrubber.  Today the UI still shows the flat chain row; use
-  the API or manual edits on `chain_overrides` until the timeline
-  ships.
 
 ## Intelligence
 

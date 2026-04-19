@@ -548,6 +548,39 @@ mod song_mode_tests {
     }
 
     #[test]
+    fn swap_chain_slots_swaps_chain_and_overrides_together() {
+        use crate::state::swap_chain_slots;
+        let s = AppState::default();
+        let s = chain_push(s, 0);
+        let s = chain_push(s, 3);
+        let s = chain_push(s, 5);
+        let s = set_chain_slot_style(s, 0, Some("acid_classic".into()));
+        let s = set_chain_slot_repeats(s, 2, 4);
+        // Swap positions 0 and 2 — chain and overrides move as a unit.
+        let s = swap_chain_slots(s, 0, 2);
+        assert_eq!(s.chain, vec![5, 3, 0]);
+        // Slot 0 now holds what was at slot 2 → repeats=4.
+        assert_eq!(s.chain_overrides[0].repeats, 4);
+        // Slot 2 now holds what was at slot 0 → style=acid_classic.
+        assert_eq!(s.chain_overrides[2].style, Some("acid_classic".to_string()));
+    }
+
+    #[test]
+    fn swap_chain_slots_out_of_bounds_is_noop() {
+        use crate::state::swap_chain_slots;
+        let s = AppState::default();
+        let s = chain_push(s, 0);
+        let s = chain_push(s, 3);
+        let orig_chain = s.chain.clone();
+        let s = swap_chain_slots(s, 0, 99);
+        assert_eq!(s.chain, orig_chain);
+        let s = swap_chain_slots(s, 5, 0);
+        assert_eq!(s.chain, orig_chain);
+        let s = swap_chain_slots(s, 1, 1);
+        assert_eq!(s.chain, orig_chain);
+    }
+
+    #[test]
     fn chain_slot_override_is_empty_helper() {
         let mut o = ChainSlotOverride::default();
         assert!(o.is_empty(), "pure default is empty");

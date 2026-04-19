@@ -4,6 +4,27 @@ A detailed log of what's built.
 
 ---
 
+### Song mode — timeline UI
+
+- New `draw_song_timeline` row sits below the compact bank/chain row.
+  Each chain slot renders as a Gantt-style bar (78×22 px) showing:
+  pattern letter, `×N` repeat badge (when > 1), style override tag,
+  BPM override tag.  The currently-playing slot gets a `theme::CHALK`
+  frame + a thin playhead line whose x-position reflects how many
+  repeats of the slot have played so far.
+- Drag a bar onto another to reorder — swaps chain positions and their
+  overrides together via the new `swap_chain_slots` transition (plus 2
+  tests: atomic swap + out-of-bounds no-op).  The visual follows the
+  pointer through the drag so the user sees the reorder live.
+- Click a bar to open an inline popover that edits the slot's
+  overrides: `×repeats` (1..=64), `style` dropdown (— / any style),
+  `bpm` checkbox + drag-value (40..=300, only applied when the
+  checkbox is lit).  `Clear all overrides` button reverts the slot
+  to plain chain-position behaviour.
+- Empty chain renders a hint line ("push bank slots above to compose
+  a song") so the section doesn't silently disappear when a user
+  hasn't built anything yet.
+
 ### Send-bus multi-destination sends
 
 - `FxPlan.voice_routes` switches from `HashMap<ModuleKind, Vec<FxStep>>`
