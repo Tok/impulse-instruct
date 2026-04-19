@@ -6,6 +6,27 @@ pub(super) const REVERB_COMBS: usize = 8;
 pub(super) const REVERB_ALLPASS: usize = 4;
 pub(super) const MAX_CHORUS_SIZE: usize = 4096; // ~85ms @ 48kHz
 
+/// Reverb feedback bounds.  `room_size = 0` → `REVERB_FB_MIN` (tight,
+/// short decay); `room_size = 1` → `REVERB_FB_MIN + REVERB_FB_SCALE`
+/// (≈ 0.98, near the edge of self-oscillation).  Tuned by ear — raising
+/// the scale above 0.3 pushes the tail into runaway territory.
+const REVERB_FB_MIN: f32 = 0.7;
+const REVERB_FB_SCALE: f32 = 0.28;
+
+/// Low-pass coefficient for the comb filter's damping path.  `damp` is
+/// the user knob 0..1; the effective coefficient is `damp * REVERB_DAMP_SCALE`
+/// so the knob hits a musically useful amount (0.4 ceiling) before
+/// killing all highs.
+const REVERB_DAMP_SCALE: f32 = 0.4;
+
+/// Allpass loop feedback — unity would ring forever; 0.5 gives the
+/// classic Schroeder diffuser decay.
+const REVERB_ALLPASS_FEEDBACK: f32 = 0.5;
+
+/// Pre-divided 1.0 / REVERB_COMBS for the summed-comb mixdown.  Keeps
+/// the math loud-but-not-clipping at room_size=1 / damp=0.
+const REVERB_COMB_SUM_SCALE: f32 = 1.0 / REVERB_COMBS as f32;
+
 // ─── Simple Schroeder reverb ──────────────────────────────────────────────────
 
 pub(crate) struct Reverb {
@@ -36,9 +57,9 @@ impl Reverb {
         let (feedback, input) = if freeze {
             (1.0, 0.0)
         } else {
-            (room_size * 0.28 + 0.7, input) // 0.7–0.98
+            (room_size * REVERB_FB_SCALE + REVERB_FB_MIN, input)
         };
-        let damp1 = damp * 0.4;
+        let damp1 = damp * REVERB_DAMP_SCALE;
         let damp2 = 1.0 - damp1;
 
         // Parallel comb filters
@@ -54,14 +75,14 @@ impl Reverb {
             self.comb_ptrs[i] = (ptr + 1) % len;
             out += delayed;
         }
-        out *= 0.125; // scale by num combs
+        out *= REVERB_COMB_SUM_SCALE;
 
         // Series all-pass filters
         for (i, &len) in ALLPASS_LENGTHS.iter().enumerate() {
             let ptr = self.allpass_ptrs[i];
             let delayed = self.allpass_delays[i][ptr];
 
-            self.allpass_delays[i][ptr] = out + delayed * 0.5;
+            self.allpass_delays[i][ptr] = out + delayed * REVERB_ALLPASS_FEEDBACK;
             self.allpass_ptrs[i] = (ptr + 1) % len;
             out = delayed - out;
         }

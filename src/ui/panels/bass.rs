@@ -1,7 +1,7 @@
 // ─── ui/panels/bass.rs ────────────────────────────────────────────────────────
 // Bass synthesizer panel.
 
-use crate::state::{FilterMode, ParamMode, cycle_param_mode, param_mode, set_param_mode};
+use crate::state::{ParamMode, cycle_param_mode, param_mode, set_param_mode};
 use crate::ui::{ImpulseApp, theme, widgets};
 
 pub fn draw_bass(app: &mut ImpulseApp, ui: &mut egui::Ui) {
@@ -769,12 +769,7 @@ pub fn draw_bass(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                     .monospace()
                     .size(9.0),
             );
-            let fm = match filter_mode {
-                FilterMode::Highpass => 1u8,
-                FilterMode::Bandpass => 2,
-                _ => 0,
-            };
-            widgets::filter_response(ui, cutoff, resonance, fm, env_w, env_h);
+            widgets::filter_response(ui, cutoff, resonance, filter_mode, env_w, env_h);
         });
     }); // end vertical_centered
 
