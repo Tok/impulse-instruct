@@ -147,32 +147,43 @@ impl LlamaServerBackend {
             .map(std::process::Stdio::from)
             .unwrap_or(std::process::Stdio::null());
 
-        let child = std::process::Command::new(bin)
-            .args([
-                "--model",
-                model_path,
-                "--host",
-                "127.0.0.1",
-                "--port",
-                &port.to_string(),
-                "--ctx-size",
-                &ctx_size.to_string(),
-                "--n-gpu-layers",
-                "99",
-                "--flash-attn",
-                "on",             // ~30% faster on CUDA; auto-detected if unsupported
-                "--cache-type-k", // KV cache quantization: less VRAM, faster
-                "q8_0",
-                "--cache-type-v",
-                "q8_0",
-                // Reuse cached KV for any prompt prefix that matches a
-                // previous request (min 256 tokens). Combined with
-                // `cache_prompt: true` on the request body, this makes
-                // identical system-prompt requests skip the ~5-8 s prefill.
-                "--cache-reuse",
-                "256",
-                "--log-disable", // reduce noise; we log our own status
-            ])
+        let mut cmd = std::process::Command::new(bin);
+        cmd.args([
+            "--model",
+            model_path,
+            "--host",
+            "127.0.0.1",
+            "--port",
+            &port.to_string(),
+            "--ctx-size",
+            &ctx_size.to_string(),
+            "--n-gpu-layers",
+            "99",
+            "--flash-attn",
+            "on",             // ~30% faster on CUDA; auto-detected if unsupported
+            "--cache-type-k", // KV cache quantization: less VRAM, faster
+            "q8_0",
+            "--cache-type-v",
+            "q8_0",
+            // Reuse cached KV for any prompt prefix that matches a
+            // previous request (min 256 tokens). Combined with
+            // `cache_prompt: true` on the request body, this makes
+            // identical system-prompt requests skip the ~5-8 s prefill.
+            "--cache-reuse",
+            "256",
+            "--log-disable", // reduce noise; we log our own status
+        ]);
+        // Optional sampling seed — demo recorder passes IMPULSE_LLM_SEED for
+        // reproducible runs. Unset (or unparseable) → llama-server picks a
+        // random seed, same as before.
+        let seed_arg = std::env::var("IMPULSE_LLM_SEED")
+            .ok()
+            .and_then(|s| s.parse::<u64>().ok());
+        if let Some(seed) = seed_arg {
+            log::info!("llama-server seed fixed via IMPULSE_LLM_SEED: {seed}");
+            cmd.args(["--seed", &seed.to_string()]);
+        }
+        let child = cmd
             .stdout(std::process::Stdio::null())
             .stderr(stderr_log)
             .spawn();

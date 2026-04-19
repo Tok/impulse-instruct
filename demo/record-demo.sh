@@ -12,6 +12,8 @@ set -u  # warn on unset vars, but don't exit on errors (kills return non-zero)
 #   ./demo/record-demo.sh --skip-narration         # run without TTS narration
 #   ./demo/record-demo.sh --app-running            # force skip build+launch
 #   ./demo/record-demo.sh --dry-run                # just pre-generate TTS, don't record
+#   ./demo/record-demo.sh --reuse-audio            # reuse TTS clips from the shared cache (skip regen)
+#   ./demo/record-demo.sh --seed 42                # pin LLM sampling seed for reproducible runs
 #
 # Output: demo/output/impulse_demo_<timestamp>.mp4
 # ─────────────────────────────────────────────────────────────────────────────
@@ -28,6 +30,8 @@ NO_SUBTITLES=0
 APP_RUNNING=0
 DRY_RUN=0
 SKIP_VIDEO=0
+REUSE_AUDIO=0
+DEMO_SEED=""
 SCENARIO="intro"
 TRIM_START=0        # seconds to cut from the beginning (0 = no trim)
 
@@ -40,21 +44,26 @@ for arg in "$@"; do
         --no-subtitles)    NO_SUBTITLES=1 ;;
         --app-running)     APP_RUNNING=1 ;;
         --dry-run)         DRY_RUN=1 ;;
+        --reuse-audio)     REUSE_AUDIO=1 ;;
         --trim-start)      :  ;;  # value handled below
         --trim-start=*)    TRIM_START="${arg#*=}" ;;
         --no-trim)         TRIM_START=0 ;;
         --scenario)        :  ;;  # value handled below
         --scenario=*)      SCENARIO="${arg#*=}" ;;
+        --seed)            :  ;;  # value handled below
+        --seed=*)          DEMO_SEED="${arg#*=}" ;;
         -h|--help)
-            head -16 "$0" | tail -13
+            head -18 "$0" | tail -15
             exit 0
             ;;
         *)
-            # Check if previous arg was --scenario or --trim-start
+            # Check if previous arg was --scenario, --trim-start, or --seed
             if [ "${prev_arg:-}" = "--trim-start" ]; then
                 TRIM_START="$arg"
             elif [ "${prev_arg:-}" = "--scenario" ]; then
                 SCENARIO="$arg"
+            elif [ "${prev_arg:-}" = "--seed" ]; then
+                DEMO_SEED="$arg"
             else
                 echo "Unknown flag: $arg" >&2; exit 1
             fi
@@ -62,6 +71,15 @@ for arg in "$@"; do
     esac
     prev_arg="$arg"
 done
+
+# Seed — pass through to the app (llama-server) and to bash so scenario-level
+# randomness stays in sync with LLM sampling. Scenarios can read $DEMO_SEED.
+if [ -n "$DEMO_SEED" ]; then
+    export IMPULSE_LLM_SEED="$DEMO_SEED"
+    export DEMO_SEED
+    RANDOM="$DEMO_SEED"
+    echo "Seed: $DEMO_SEED (IMPULSE_LLM_SEED + bash RANDOM)"
+fi
 
 SCENARIO_FILE="$DEMO_DIR/scenarios/${SCENARIO}.sh"
 if [ ! -f "$SCENARIO_FILE" ]; then
@@ -123,8 +141,16 @@ VERSION=$(grep '^version' "$PROJECT_DIR/Cargo.toml" | head -1 | sed 's/.*"\(.*\)
 BATCH_DIR="$OUTPUT_DIR/${TIMESTAMP}"
 BASENAME="v${VERSION}-${SCENARIO}"
 mkdir -p "$BATCH_DIR"
-# TTS clips for this batch go into the batch dir (not shared cache)
-export TTS_DIR="$BATCH_DIR/tts"
+# TTS clip cache location — per-batch by default so each recording owns its
+# clips. --reuse-audio points at the shared persistent cache so unchanged
+# narration lines from prior runs skip re-synthesis (tts_generate already
+# caches by id.wav filename; changed text produces a new id and will regen).
+if [ "$REUSE_AUDIO" -eq 1 ]; then
+    export TTS_DIR="$DEMO_DIR/tts_cache"
+    echo "  [--reuse-audio] Using shared TTS cache: $TTS_DIR"
+else
+    export TTS_DIR="$BATCH_DIR/tts"
+fi
 mkdir -p "$TTS_DIR"
 
 # ─── Log file ────────────────────────────────────────────────────────────────
