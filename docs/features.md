@@ -4,6 +4,80 @@ A detailed log of what's built.
 
 ---
 
+### Rack visual polish — chrome tiles + LED z-order + card resizing
+
+- **Zone backdrop.** The rack's empty cells now show a subtle per-cell
+  chrome gradient (vertical light-grey top → darker-grey bottom via
+  `epaint::Mesh`) plus a hairline separator, replacing the old blank
+  void.  The existing dot grid paints on top of the tiles.  Works
+  identically on the front panel and the back panel (flipped).
+  `draw_zone_grid_dots` → `draw_zone_backdrop`; moved to run BEFORE
+  each zone's card loop so cards and UI sit cleanly above the tiles.
+- **LED halo z-index fix.**  The module-card LED's extended clip rect
+  now intersects with `ctx.available_rect()` (the post-header central
+  panel area) so the halo can bloom into the inter-module gap but can
+  never escape upward into the header log when the LLM console /
+  agent card scrolls past the rack's top edge.  The agent-card LED
+  gets the same treatment by clipping its Foreground layer painter to
+  `ctx.available_rect()`.
+- **808 kit** — re-sized from (3, 4) to (4, 5); each voice wraps its
+  knobs in a nested glass pane (fixed width so pads line up
+  vertically) and a 1.8× bigger XY pad (90-144 px clamp vs the 909's
+  50-80 px) anchored to the top of a `horizontal_top` row.
+- **Delay FX** — (2, 1) → (2, 2) so the 5-button direction / reverse
+  / quantise row no longer overflows the card's right edge.
+- **Agent card layout.**  Left column wraps persona/model, progress
+  sub-label, T/B controls and Scope; right column holds a big
+  right-flushed round-robin clock (80 px, ≈3× the old 26 px inline
+  size) spanning the full height of the left column.  Instructions,
+  t/s badge, conv-mode, pills and prompt override continue full-width
+  below the split.  `t/s` moved directly under Instructions.
+
+### Back-panel mod-overlay tightening
+
+- **Per-slot spacing, keyed off slot kind + card height.**
+  - `PORT_SPACING_FIXED` = 24 px (polarity + slider + % row only).
+  - `PORT_SPACING_SELECTOR` = 42 px (slider row + wrapped chip strip).
+  - `PORT_SPACING_COMPACT` = 24 px — applied to Selectors on 1-cell
+    cards where the chip strip **inlines onto** the slider row
+    instead of wrapping below.
+  - New `back_is_compact(kind)` helper keyed off `grid_size(...).1 <=
+    1`; 1-cell FX (reverb / chorus / phaser / ring-mod / waveshaper /
+    bitcrush / EQ / compressor / tape-sat / drive / autotune / pan)
+    and the `NoiseVoice` drop into compact mode.
+  - `back_strip_height` sums per-slot spacing so each card gets
+    exactly the strip height it needs instead of a flat multiplier.
+- **Slider widget.**  `interact_size.y` 10 → 8 px.  Width clamp upper
+  raised 60 → 140 px on wide cards so the depth slider resolves small
+  nudges on drum kits / 4-col FX.  Compact mode shrinks it further
+  (14–40 px) to reserve room for the inline chips.
+- **% readout centring.**  Now lives inside an
+  `allocate_ui_with_layout(28 × 12, centered_and_justified)` slot so
+  the label sits vertically centred on the slider row instead of
+  floating at the top of the `horizontal_wrapped`.
+- `mod_start_y` bumped 28 → 32 px so the first slider row clears the
+  AUD / CV / CTL label text above it.
+
+### Sequencer transport — preserve `running` across LLM writebacks
+
+- New pure helper `state::transport::preserve_sequencer_transport(live,
+  incoming)`: applies `incoming` onto `live`'s `SequencerState` but
+  keeps `running` and `current_step` from the live copy.  Fixes the
+  "play button turns off after a few beats" bug — the LLM pipeline
+  captures a snapshot at inference start and writes the full
+  sequencer back when the lane completes; if the user pressed Play
+  after the snapshot was captured, the stale `running=false` clobbered
+  the live `running=true`.  Startup one-shot prompt was the common
+  trigger (~3 s inference, user hits Play in between).
+- Routed through the helper at every wholesale writeback site:
+  - `src/llm/mod.rs` (per-lane + monolithic paths).
+  - `src/ui/llm_drain.rs` (jam_cycle_done handler).
+  - `src/ui/llm_strip.rs` (style baseline writeback).
+  - `src/llm/mock.rs` (full-state replace; inline save/restore).
+- 3 regression tests in `tests/transport_tests.rs`: live-running vs
+  stopped-incoming, live-stopped vs running-incoming, and
+  non-transport fields still landing.
+
 ### Song mode — timeline UI
 
 - New `draw_song_timeline` row sits below the compact bank/chain row.

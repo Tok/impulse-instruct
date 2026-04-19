@@ -28,6 +28,11 @@ they ship and are reflected in `features.md`.
 
 ## Demo recording
 
+- [ ] **Next acid demo re-record** — showcase the **two bass voices**
+  (V1 + V2 playing complementary lines), plus FX routes that last
+  session's demo didn't cover (delay/phaser/chorus/ringmod).  Use the
+  bigger NeuTTS quant for the MC/vocal line.  **Bonsai references
+  removed** from the demo script (module no longer in the codebase).
 - [ ] **`demo/scenarios/setup-mc-singer.sh`** — Jungle MC + TTS
   Singer through autotune.  Non-deterministic, 100 % agent-controlled.
 - [ ] **Preecho demo scene** — agent writes anchors into a drum
@@ -57,5 +62,4 @@ they ship and are reflected in `features.md`.
 
 | Issue | Cause | Status |
 |-------|-------|--------|
-| LLM-console LED occasionally overlaps the global header log | Module-card LED clip is bounded but not zero-upward; the header log scrolling past the LLM console module reads the bloom in front | `upward_pad = 0` removed the obvious case; if the LED is still visible in front of the header on scroll, the LED's draw layer needs to drop below the header panel's layer (would require painting LEDs on a separate background-priority layer, or moving the LED draw earlier in the frame) |
 | Hoover doesn't sound like a hoover | DSP tuning, not a code bug | Needs filter sweep shape tuning |
