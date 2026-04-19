@@ -237,16 +237,16 @@ impl ImpulseApp {
 
     fn draw_header_bar(&mut self, ctx: &egui::Context) {
         // Chip column layout (must sum to HEADER_TOTAL_COLS = 105).
-        // [TITLE 18][STATUS 7][WARN 5][BPM 6][TRANSPORT 6][HEAT 26][TEMP 8][MUTE+MON 21][VRAM/RAM 8]
+        // [TITLE 18][STATUS 7][WARN 5][BPM 6][TRANSPORT 6][HEAT 24][TEMP 8][MUTE+MON 21][VRAM/RAM 10]
         const C_TITLE: u32 = 18;
         const C_STATUS: u32 = 7;
         const C_WARN: u32 = 5;
         const C_BPM: u32 = 6;
         const C_TRANSPORT: u32 = 6;
-        const C_HEAT: u32 = 26;
+        const C_HEAT: u32 = 24;
         const C_TEMP: u32 = 8;
         const C_MUTE_MON: u32 = 21;
-        const C_VRAM_RAM: u32 = 8;
+        const C_VRAM_RAM: u32 = 10;
 
         TopBottomPanel::top("header")
             .frame(
@@ -652,10 +652,10 @@ impl ImpulseApp {
                         });
                     };
                     if has_vram {
-                        bar(ui, "V", vram_used as f32 / vram_total as f32);
+                        bar(ui, "VRAM", vram_used as f32 / vram_total as f32);
                     }
                     if has_ram {
-                        bar(ui, "R", ram_used as f32 / ram_total as f32);
+                        bar(ui, "RAM", ram_used as f32 / ram_total as f32);
                     }
                 });
             });
