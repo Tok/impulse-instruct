@@ -361,15 +361,15 @@ pub struct AudioParams {
     pub reverb_gate_time: f32, // 0 = no gate; gate close time in seconds
     pub reverb_freeze: bool,
     /// 0=FWD, 1=REV (preverb), 2=MIRROR.
-    pub reverb_dir: u8,
+    pub reverb_dir: super::FxDirection,
     /// Beat-division snap for the reverse-tap loop length.
-    pub reverb_rev_quant: u8,
+    pub reverb_rev_quant: super::FxRevQuant,
     pub delay_time: f32,
     pub delay_feedback: f32,
     pub delay_mix: f32,
     /// 0=FWD, 1=REV (anti-echo), 2=MIRROR.
-    pub delay_dir: u8,
-    pub delay_rev_quant: u8,
+    pub delay_dir: super::FxDirection,
+    pub delay_rev_quant: super::FxRevQuant,
     pub delay_wow_flutter: f32,
     pub delay_saturation: f32,
     /// Dub send/return: infinite hold on the delay.  When true, feedback

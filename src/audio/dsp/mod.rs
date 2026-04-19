@@ -27,6 +27,7 @@ use gabber_kick::GabberKick;
 use granular_voice::GranularVoice;
 use mod_apply::apply_mod_target;
 pub use params::AudioParams;
+pub use rev_tap::{FxDirection, FxRevQuant};
 use samplers::*;
 use voices::*;
 

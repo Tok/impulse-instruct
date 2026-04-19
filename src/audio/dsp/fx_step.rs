@@ -36,10 +36,13 @@ impl DspState {
                     );
                     let r = &mut self.reverb;
                     let (sz, dp, fz) = (p.reverb_size, p.reverb_damp, p.reverb_freeze);
+                    use super::FxDirection;
                     let wet = match p.reverb_dir {
-                        1 => r.process(rev_in, sz, dp, fz),
-                        2 => r.process(sig, sz, dp, fz) + r.process(rev_in, sz, dp, false) * 0.7,
-                        _ => r.process(sig, sz, dp, fz),
+                        FxDirection::Reverse => r.process(rev_in, sz, dp, fz),
+                        FxDirection::Mirror => {
+                            r.process(sig, sz, dp, fz) + r.process(rev_in, sz, dp, false) * 0.7
+                        }
+                        FxDirection::Forward => r.process(sig, sz, dp, fz),
                     };
                     if fz {
                         wet
@@ -68,13 +71,16 @@ impl DspState {
                     p.delay_hpf,
                     p.delay_lpf,
                 );
+                use super::FxDirection;
                 let wet = match p.delay_dir {
-                    1 => d.process_tape(rev_in, ds, fb, wf, sat, fz, hpf, lpf, sr),
-                    2 => {
+                    FxDirection::Reverse => {
+                        d.process_tape(rev_in, ds, fb, wf, sat, fz, hpf, lpf, sr)
+                    }
+                    FxDirection::Mirror => {
                         d.process_tape(sig, ds, fb, wf, sat, fz, hpf, lpf, sr)
                             + d.process_tape(rev_in, ds, fb, wf, sat, fz, hpf, lpf, sr) * 0.7
                     }
-                    _ => d.process_tape(sig, ds, fb, wf, sat, fz, hpf, lpf, sr),
+                    FxDirection::Forward => d.process_tape(sig, ds, fb, wf, sat, fz, hpf, lpf, sr),
                 };
                 sig * (1.0 - p.delay_mix) + wet * p.delay_mix
             }
