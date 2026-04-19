@@ -35,6 +35,9 @@ pub(crate) use note::{ansi_colorize_notes, note_freq_label, note_name};
 pub(crate) use util::{scan_models, webbrowser_open};
 mod prefs_controls;
 mod windows;
+mod windows_about;
+mod windows_prefs;
+mod windows_sysinfo;
 mod wizard;
 
 /// Convert a dot-path + float value into a nested JSON object.

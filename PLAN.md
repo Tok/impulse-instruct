@@ -50,11 +50,10 @@ they ship and are reflected in `features.md`.
 - [ ] **Glass group helpers** — `glass_label(ui, text)` still to do
   (the inline pattern varies too much across panels for a single
   helper).
-- [ ] **Large-file splits (remaining)** — `src/audio/dsp/samplers.rs`
-  (973 lines) is the top file now; its whole body is one
-  `AmenVoice` impl that doesn't split cleanly into sibling voices.
-  Next candidates near the proactive-split guidance:
-  `src/ui/panels/amen.rs` (892 lines) — worth revisiting next round.
+- [ ] **Large-file splits (remaining)** — top remaining file now is
+  `src/llm/pipeline.rs` (938 lines), followed by `src/llm/mod.rs`
+  (914) and `src/state/rack.rs` (897).  None over cap, but worth
+  watching on the next feature round.
 
 ---
 
