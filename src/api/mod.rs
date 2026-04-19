@@ -182,6 +182,9 @@ pub use rack_pad::{RackPadRequest, post_rack_pad};
 mod resets;
 pub use resets::{post_rack_reset, post_state_reset};
 
+mod midi_export;
+pub use midi_export::{MidiExportRequest, post_midi_export};
+
 #[derive(Serialize)]
 pub struct OkResponse {
     pub ok: bool,
@@ -925,6 +928,7 @@ pub fn build_router(api_state: ApiState) -> Router {
         .route("/api/rack/reset", post(post_rack_reset))
         .route("/api/state/reset", post(post_state_reset))
         .route("/api/rack/collapse", post(post_collapse))
+        .route("/api/midi/export", post(post_midi_export))
         .layer(cors)
         .with_state(api_state)
 }

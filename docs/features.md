@@ -1422,6 +1422,7 @@ scrolls.
 - Live record - MIDI keyboard writes directly into steps
 - Time signature selector (4/4, 3/4, 5/4, 6/8, 7/8...)
 - Mute/solo per row, pattern copy/paste
+- **MIDI export** — `src/midi/export.rs` serialises the active pattern to a Standard MIDI File (Type 1, PPQ 480).  Track 0 carries the tempo + time-signature meta; drums merge onto channel 10 via a GM kit map (`drum_voice_to_gm_note`); each melodic voice (bass / hoover / an1x) lands on its own channel with accent → velocity (64 baseline + up to +63) and `TB303Step.gate` → note length.  Patterns without any active steps don't emit a track so the SMF stays clean in a DAW.  Triggered via the `MIDI ⇩` button at the end of the pattern-bank row (writes `pattern-<unix_secs>.mid` to cwd) or via `POST /api/midi/export { path? }` for scripted exports.
 
 ## FX chain and routing
 

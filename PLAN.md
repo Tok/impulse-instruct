@@ -59,7 +59,12 @@ they ship and are reflected in `features.md`.
   a dedicated `Song` struct with per-chain-slot (not per-pattern)
   overrides and a timeline view, but the current surface is enough
   to arrange multi-style / multi-tempo sets.
-- **MIDI export** — export sequencer pattern as `.mid` file.
+- **MIDI export** — done.  `src/midi/export.rs` writes a Standard MIDI
+  File (Type 1, PPQ 480) from `SequencerState`: track 0 is tempo +
+  time-sig meta, drums merge onto channel 10 via a GM kit map, each
+  melodic voice (bass / hoover / an1x) lands on its own channel.
+  Exposed via `POST /api/midi/export { path? }` and a `MIDI ⇩` button
+  at the end of the pattern-bank row.
 - **Preecho v2** — curves (Linear / Exp / Log / Cosine), probability
   ramp, and auto-length (fills the lead-in from the prior-anchor gap)
   landed.  Accent / slide already shipped in v1 and now surface in the

@@ -278,4 +278,29 @@ pub fn draw_pattern_chain(app: &mut ImpulseApp, ui: &mut egui::Ui) {
     if bpm_resp.clicked() {
         app.state.write().sequencer.pattern_bpm_apply = !bpm_apply;
     }
+
+    // ── Export current pattern as .mid ───────────────────────────────────
+    // Writes `pattern-<unix_secs>.mid` in cwd.  Sequencer-only export —
+    // FX state stays in the project JSON.
+    ui.separator();
+    let export_resp = ui
+        .add_sized(
+            [54.0, 14.0],
+            egui::Button::new(
+                egui::RichText::new("MIDI ⇩")
+                    .monospace()
+                    .size(8.0)
+                    .color(theme::FOG),
+            ),
+        )
+        .on_hover_text(
+            "Export the active pattern as a Standard MIDI File in the current directory.",
+        );
+    if export_resp.clicked() {
+        let seq = app.state.read().sequencer.clone();
+        match crate::midi::save_midi_export(&seq) {
+            Ok(path) => log::info!("MIDI export → {}", path.display()),
+            Err(e) => log::error!("MIDI export failed: {}", e),
+        }
+    }
 }
