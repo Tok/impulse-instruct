@@ -554,4 +554,84 @@ mod tests {
         // S&H falls back to sine (not supported on bass voice).
         assert!((lfo_wave(0.0, SampleAndHold)).abs() < 1e-5);
     }
+
+    // ── lfo_rate_hz ─────────────────────────────────────────────────────────
+
+    #[test]
+    fn lfo_rate_hz_free_mode_maps_linearly_to_roughly_0p01_to_20_hz() {
+        // Free mode: rate_norm 0..1 → 0.01..20 Hz via `0.01 + rate * 19.99`.
+        // Endpoints must land exactly on the clamp bounds.
+        let at_zero = lfo_rate_hz(0.0, false, 120.0, 1.0);
+        let at_one = lfo_rate_hz(1.0, false, 120.0, 1.0);
+        assert!((at_zero - 0.01).abs() < 1e-4, "free@0 should be 0.01 Hz");
+        assert!((at_one - 20.0).abs() < 1e-3, "free@1 should be 20.0 Hz");
+        // Midpoint check so the linear scaling can't silently become log.
+        let mid = lfo_rate_hz(0.5, false, 120.0, 1.0);
+        assert!((mid - 10.005).abs() < 1e-3);
+    }
+
+    #[test]
+    fn lfo_rate_hz_bpm_sync_produces_beat_synced_rate() {
+        // bpm_sync=true → Hz = (bpm / 60) / sync_beats.
+        // 120 BPM, sync_beats=1 → 2 Hz (one cycle per quarter beat... no,
+        // (120/60)/1 = 2 Hz i.e. 2 cycles per second = two per beat in 60
+        // BPM but here it's two per second at 120 BPM).  Assert the
+        // arithmetic directly.
+        let hz = lfo_rate_hz(0.5, true, 120.0, 1.0);
+        assert!((hz - 2.0).abs() < 1e-4);
+        // Half-note sync at 120 BPM → (120/60)/2 = 1 Hz.
+        let hz = lfo_rate_hz(0.0, true, 120.0, 2.0);
+        assert!((hz - 1.0).abs() < 1e-4);
+    }
+
+    #[test]
+    fn lfo_rate_hz_clamps_sync_beats_to_floor_to_avoid_div_zero() {
+        // sync_beats = 0 (or negative) would blow up; the impl clamps
+        // to 0.03125.  Compute expected and check equality.
+        let hz = lfo_rate_hz(0.5, true, 120.0, 0.0);
+        let expected = (120.0_f32 / 60.0 / 0.03125).clamp(0.01, 40.0);
+        assert!((hz - expected).abs() < 1e-3);
+    }
+
+    #[test]
+    fn lfo_rate_hz_clamps_to_40_hz_ceiling() {
+        // Extreme sync (tiny sync_beats) shouldn't push rate past 40 Hz
+        // — that would alias for the audio-thread phase accumulator.
+        let hz = lfo_rate_hz(1.0, true, 300.0, 0.03125);
+        assert!(hz <= 40.0 + 1e-3, "rate must clamp to 40 Hz, got {hz}");
+    }
+
+    // ── lfo_fade_step ───────────────────────────────────────────────────────
+
+    #[test]
+    fn lfo_fade_step_delay_near_zero_snaps_to_unity() {
+        // lfo_delay * 4 ≤ 0.001 s → fade-in is effectively instant;
+        // return 1.0 regardless of prev_fade.
+        assert_eq!(lfo_fade_step(0.0, 48_000.0, 0.0), 1.0);
+        assert_eq!(lfo_fade_step(0.42, 48_000.0, 0.0001), 1.0);
+    }
+
+    #[test]
+    fn lfo_fade_step_progresses_linearly_toward_one() {
+        // With lfo_delay > threshold, each sample adds 1/(sr * delay_s)
+        // to prev_fade.  After one sample at 48 kHz with delay_s = 1 s,
+        // we should move 1/48000 above prev_fade.
+        let start = 0.0;
+        let next = lfo_fade_step(start, 48_000.0, 0.25); // 0.25 * 4 = 1 s
+        assert!(
+            (next - (start + 1.0 / 48_000.0)).abs() < 1e-6,
+            "single-step advance must be 1/(sr * delay_s), got {next}",
+        );
+    }
+
+    #[test]
+    fn lfo_fade_step_saturates_at_one() {
+        // prev_fade already > 1 → clamp down to 1 on the next step.
+        // prev_fade at 0.9999, single step pushes it past 1 → clamp.
+        let next = lfo_fade_step(0.9999, 48_000.0, 0.25);
+        assert!(next <= 1.0, "fade must not exceed 1.0, got {next}");
+        // Already at 1 stays at 1.
+        let next = lfo_fade_step(1.0, 48_000.0, 0.25);
+        assert!((next - 1.0).abs() < 1e-6);
+    }
 }
