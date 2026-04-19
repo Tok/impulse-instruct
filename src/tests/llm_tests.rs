@@ -2,7 +2,6 @@
 mod prompt_tests {
     use crate::llm::{build_system_prompt, param_json_schema};
     use crate::state::AppState;
-
     #[test]
     fn build_system_prompt_contains_json_only_instruction() {
         let state = AppState::default();
@@ -15,7 +14,6 @@ mod prompt_tests {
             "prompt should instruct JSON-only output"
         );
     }
-
     #[test]
     fn build_system_prompt_reflects_current_cutoff() {
         let mut state = AppState::default();
@@ -26,7 +24,6 @@ mod prompt_tests {
             "prompt should embed current cutoff value"
         );
     }
-
     #[test]
     fn build_system_prompt_lists_locked_params() {
         use crate::state::lock_param;
@@ -37,7 +34,6 @@ mod prompt_tests {
             "locked params should appear in prompt"
         );
     }
-
     #[test]
     fn param_json_schema_has_bass_cutoff_range() {
         let schema = param_json_schema();
@@ -50,7 +46,6 @@ mod prompt_tests {
         assert_eq!(min, 0.0);
         assert_eq!(max, 1.0);
     }
-
     #[test]
     fn param_json_schema_bpm_range_is_40_to_250() {
         let schema = param_json_schema();
@@ -63,19 +58,16 @@ mod prompt_tests {
         assert_eq!(min, 40.0);
         assert_eq!(max, 250.0);
     }
-
     #[test]
     fn param_json_schema_rejects_additional_properties() {
         let schema = param_json_schema();
         assert_eq!(schema["additionalProperties"], serde_json::json!(false));
     }
 }
-
 #[cfg(test)]
 mod instruction_tests {
     use crate::llm::instructions::InstructionSet;
     use crate::llm::mock_response;
-
     /// Recursively verify that every key present in `expected` also appears in
     /// `actual` (ignores `_comment` and does not assert exact leaf values).
     fn assert_keys_present(expected: &serde_json::Value, actual: &serde_json::Value, path: &str) {
@@ -96,7 +88,6 @@ mod instruction_tests {
             }
         }
     }
-
     #[test]
     fn instruction_set_loads_and_is_non_empty() {
         let set = InstructionSet::get();
@@ -105,14 +96,12 @@ mod instruction_tests {
             "instruction set should have at least one entry"
         );
     }
-
     #[test]
     fn find_best_match_returns_none_for_empty_prompt() {
         let set = InstructionSet::get();
         // A prompt with no recognisable keywords should not match any instruction
         assert!(set.find_best_match("xyzzy blorple quux").is_none());
     }
-
     #[test]
     fn remove_clap_matches_negation_prompts() {
         let set = InstructionSet::get();
@@ -128,7 +117,6 @@ mod instruction_tests {
             );
         }
     }
-
     /// For every instruction, use its *first keyword* as a test prompt and
     /// verify that the mock output contains all the expected parameter keys.
     #[test]
@@ -144,7 +132,6 @@ mod instruction_tests {
             assert_keys_present(&inst.params, &output, &inst.id);
         }
     }
-
     /// Spot-check a few critical instructions by name.
     #[test]
     fn remove_instructions_emit_all_false_arrays() {
@@ -176,11 +163,9 @@ mod instruction_tests {
         }
     }
 }
-
 #[cfg(test)]
 mod music_theory_tests {
     use crate::state::{Scale, note_in_scale, scale_degree, scale_notes, snap_to_scale};
-
     #[test]
     fn a_minor_contains_expected_notes() {
         // A natural minor: A B C D E F G — MIDI offsets from A(9): 0,2,3,5,7,8,10
@@ -189,40 +174,34 @@ mod music_theory_tests {
         assert!(note_in_scale(52, 9, Scale::NaturalMinor)); // E3
         assert!(!note_in_scale(46, 9, Scale::NaturalMinor)); // A#2 — not in A minor
     }
-
     #[test]
     fn tonic_is_degree_zero() {
         assert_eq!(scale_degree(45, 9, Scale::NaturalMinor), Some(0)); // A2 in A minor
         assert_eq!(scale_degree(57, 9, Scale::NaturalMinor), Some(0)); // A3
         assert_eq!(scale_degree(46, 9, Scale::NaturalMinor), None); // A#2 not in scale
     }
-
     #[test]
     fn snap_keeps_in_scale_note_unchanged() {
         // C3 (48) is in C major — should snap to itself
         assert_eq!(snap_to_scale(48, 0, Scale::Major), 48);
     }
-
     #[test]
     fn snap_moves_out_of_scale_note_to_nearest() {
         // C# (49) is not in C major — should snap to C (48) or D (50), whichever closer
         let snapped = snap_to_scale(49, 0, Scale::Major);
         assert!(snapped == 48 || snapped == 50);
     }
-
     #[test]
     fn chromatic_scale_contains_all_notes() {
         let notes = scale_notes(0, Scale::Chromatic);
         assert_eq!(notes.len(), 128);
     }
-
     #[test]
     fn pentatonic_has_five_notes_per_octave() {
         let notes = scale_notes(0, Scale::Pentatonic);
         // 5 notes per octave × ~10.67 octaves in 0-127 = ~53-54 notes
         assert!(notes.len() >= 50 && notes.len() <= 60);
     }
-
     #[test]
     fn llm_update_snaps_bass_notes_when_enabled() {
         use crate::state::{AppState, apply_llm_update};
@@ -239,7 +218,6 @@ mod music_theory_tests {
             "snapped to {note}, expected 48 or 50"
         );
     }
-
     #[test]
     fn llm_update_leaves_notes_unsnapped_when_disabled() {
         use crate::state::{AppState, apply_llm_update};
@@ -252,12 +230,10 @@ mod music_theory_tests {
         assert_eq!(new_state.sequencer.bass_pattern[0].note, 49);
     }
 }
-
 #[cfg(test)]
 mod style_tests {
     use crate::llm::styles::StyleCatalog;
     use crate::state::{AppState, apply_llm_update};
-
     // Helper: apply a style's baseline_params to a fresh AppState
     fn apply_baseline(style_id: &str) -> AppState {
         let catalog = StyleCatalog::get();
@@ -270,7 +246,6 @@ mod style_tests {
             None => state,
         }
     }
-
     #[test]
     fn all_styles_have_baseline_params() {
         let catalog = StyleCatalog::get();
@@ -286,7 +261,6 @@ mod style_tests {
             missing
         );
     }
-
     #[test]
     fn acid_classic_baseline_is_acid_character() {
         let state = apply_baseline("acid_classic");
@@ -307,7 +281,6 @@ mod style_tests {
         );
         assert!(!state.hoover.enabled, "acid should not have hoover enabled");
     }
-
     #[test]
     fn breakcore_baseline_has_extreme_bpm() {
         let state = apply_baseline("breakcore");
@@ -317,7 +290,6 @@ mod style_tests {
             state.sequencer.bpm
         );
     }
-
     #[test]
     fn gabber_baseline_uses_heavy_distortion() {
         let state = apply_baseline("gabber");
@@ -331,7 +303,6 @@ mod style_tests {
             state.sequencer.bpm
         );
     }
-
     #[test]
     fn early_rave_baseline_enables_hoover() {
         let state = apply_baseline("early_rave");
@@ -352,7 +323,6 @@ mod style_tests {
             state.sequencer.bpm
         );
     }
-
     #[test]
     fn trance_baseline_enables_hoover() {
         let state = apply_baseline("trance");
@@ -363,7 +333,6 @@ mod style_tests {
             state.sequencer.bpm
         );
     }
-
     #[test]
     fn ambient_baselines_have_heavy_reverb() {
         for id in &[
@@ -381,7 +350,6 @@ mod style_tests {
             );
         }
     }
-
     #[test]
     fn ambient_baselines_have_slow_bpm() {
         for id in &["dark_ambient", "space_ambient"] {
@@ -394,7 +362,6 @@ mod style_tests {
             );
         }
     }
-
     #[test]
     fn dub_techno_baseline_has_long_reverb_and_delay() {
         let state = apply_baseline("dub_techno");
@@ -409,7 +376,6 @@ mod style_tests {
             state.fx.delay_feedback
         );
     }
-
     #[test]
     fn style_keywords_cover_rave_and_dominator() {
         let catalog = StyleCatalog::get();
@@ -430,7 +396,6 @@ mod style_tests {
             "catalog should have a style with 'hoover' keyword"
         );
     }
-
     #[test]
     fn style_prompt_language_says_reset() {
         use crate::llm::build_system_prompt;
@@ -443,461 +408,21 @@ mod style_tests {
         );
     }
 }
-
 #[cfg(test)]
 mod dsp_tests {
     use crate::audio::dsp::midi_to_hz;
-
     #[test]
     fn midi_note_69_is_a440() {
         assert!((midi_to_hz(69) - 440.0).abs() < 0.01);
     }
-
     #[test]
     fn midi_note_60_is_middle_c() {
         assert!((midi_to_hz(60) - 261.626).abs() < 0.1);
     }
-
     #[test]
     fn midi_note_octave_doubles_frequency() {
         let c4 = midi_to_hz(60);
         let c5 = midi_to_hz(72);
         assert!((c5 / c4 - 2.0).abs() < 0.001);
-    }
-}
-
-// ─── extract_llm_actions tests ───────────────────────────────────────────────
-
-mod action_extraction {
-    use crate::llm::{LlmAction, extract_llm_actions};
-    use serde_json::json;
-
-    #[test]
-    fn empty_object_yields_no_actions() {
-        let mut obj = serde_json::Map::new();
-        assert!(extract_llm_actions(&mut obj).is_empty());
-    }
-
-    #[test]
-    fn save_project_true() {
-        let mut obj = json!({"save_project": true}).as_object().unwrap().clone();
-        let actions = extract_llm_actions(&mut obj);
-        assert!(matches!(actions[0], LlmAction::SaveProject));
-        assert!(!obj.contains_key("save_project"));
-    }
-
-    #[test]
-    fn save_project_false_ignored() {
-        let mut obj = json!({"save_project": false}).as_object().unwrap().clone();
-        assert!(extract_llm_actions(&mut obj).is_empty());
-    }
-
-    #[test]
-    fn heat_is_user_only_llm_cannot_set() {
-        let mut obj = json!({"settings": {"heat": 0.9}})
-            .as_object()
-            .unwrap()
-            .clone();
-        let actions = extract_llm_actions(&mut obj);
-        assert!(
-            !actions.iter().any(|a| matches!(a, LlmAction::SetHeat(_))),
-            "LLM-emitted `heat` must be ignored — heat is user-only"
-        );
-    }
-
-    #[test]
-    fn style_extracted() {
-        let mut obj = json!({"settings": {"style": "acid_house"}})
-            .as_object()
-            .unwrap()
-            .clone();
-        let actions = extract_llm_actions(&mut obj);
-        match &actions[0] {
-            LlmAction::SetStyle(s) => assert_eq!(s, "acid_house"),
-            _ => panic!("expected SetStyle"),
-        }
-    }
-
-    #[test]
-    fn all_settings_extracted() {
-        let mut obj = json!({
-            "settings": {
-                "heat": 0.7, "style": "techno", "persona": "DJ",
-                "conversation_mode": "mc", "jam_bars": 4.0
-            }
-        })
-        .as_object()
-        .unwrap()
-        .clone();
-        let actions = extract_llm_actions(&mut obj);
-        // heat is ignored (user-only) — 4 actions: style, persona, conv_mode, jam_bars
-        assert_eq!(actions.len(), 4);
-        assert!(
-            !actions.iter().any(|a| matches!(a, LlmAction::SetHeat(_))),
-            "heat must not be extractable from LLM output"
-        );
-        assert!(!obj.contains_key("settings")); // consumed
-    }
-
-    #[test]
-    fn jam_bars_negative_clamped() {
-        let mut obj = json!({"settings": {"jam_bars": -2.0}})
-            .as_object()
-            .unwrap()
-            .clone();
-        let actions = extract_llm_actions(&mut obj);
-        match &actions[0] {
-            LlmAction::SetJamBars(j) => assert_eq!(*j, 0.0),
-            _ => panic!("expected SetJamBars"),
-        }
-    }
-
-    #[test]
-    fn settings_key_removed_even_when_empty() {
-        let mut obj = json!({"settings": {}}).as_object().unwrap().clone();
-        extract_llm_actions(&mut obj);
-        assert!(!obj.contains_key("settings"));
-    }
-}
-
-// ─── json_repair tests ──────────────────────────────────────────────────────
-
-mod json_repair_tests {
-    use crate::llm::json_repair::{repair_json, sanitize_json_structure, split_thinking};
-    use serde_json::json;
-
-    // ── repair_json ─────────────────────────────────────────────────────
-
-    #[test]
-    fn valid_json_passes_through() {
-        let v = repair_json(r#"{"bass": {"cutoff": 0.5}}"#).unwrap();
-        assert_eq!(v["bass"]["cutoff"], 0.5);
-    }
-
-    #[test]
-    fn truncated_object_repaired() {
-        // Simulates max_tokens cutting mid-object
-        let v = repair_json(r#"{"bass": {"cutoff": 0.5}"#).unwrap();
-        assert_eq!(v["bass"]["cutoff"], 0.5);
-    }
-
-    #[test]
-    fn truncated_array_repaired() {
-        let v = repair_json(r#"{"steps": [1, 2, 3"#).unwrap();
-        assert_eq!(v["steps"].as_array().unwrap().len(), 3);
-    }
-
-    #[test]
-    fn completely_invalid_returns_none() {
-        assert!(repair_json("this is not json at all !!!").is_none());
-    }
-
-    #[test]
-    fn trailing_comma_handled() {
-        let v = repair_json(r#"{"bass": {"cutoff": 0.5,}"#);
-        // May or may not parse depending on repair — at minimum shouldn't panic
-        let _ = v;
-    }
-
-    // ── sanitize_json_structure ──────────────────────────────────────────
-
-    #[test]
-    fn bass_lifted_from_sequencer() {
-        let v = json!({"sequencer": {"bass": {"cutoff": 0.3}, "bpm": 120}});
-        let s = sanitize_json_structure(v);
-        assert_eq!(s["bass"]["cutoff"], 0.3);
-        assert!(s["sequencer"]["bass"].is_null());
-        assert_eq!(s["sequencer"]["bpm"], 120);
-    }
-
-    #[test]
-    fn fx_lifted_from_sequencer() {
-        let v = json!({"sequencer": {"fx": {"reverb_mix": 0.4}}});
-        let s = sanitize_json_structure(v);
-        assert_eq!(s["fx"]["reverb_mix"], 0.4);
-    }
-
-    #[test]
-    fn nested_fx_stripped() {
-        let v = json!({"fx": {"reverb_mix": 0.3, "fx": {"delay_mix": 0.2}}});
-        let s = sanitize_json_structure(v);
-        assert_eq!(s["fx"]["reverb_mix"], 0.3);
-        assert!(s["fx"]["fx"].is_null());
-    }
-
-    #[test]
-    fn hallucinated_keys_stripped() {
-        let v = json!({"bass": {}, "drum_ratchets": [1,2], "patterns": {}});
-        let s = sanitize_json_structure(v);
-        assert!(s["drum_ratchets"].is_null());
-        assert!(s["patterns"].is_null());
-        assert!(s["bass"].is_object());
-    }
-
-    #[test]
-    fn dot_notation_lfo_converted_to_array() {
-        let v = json!({
-            "lfo": {
-                "lfo[0].enabled": true,
-                "lfo[0].rate": 0.5,
-                "lfo[1].enabled": false
-            }
-        });
-        let s = sanitize_json_structure(v);
-        let arr = s["lfo"].as_array().unwrap();
-        assert_eq!(arr.len(), 4);
-        assert_eq!(arr[0]["enabled"], true);
-        assert_eq!(arr[0]["rate"], 0.5);
-        assert_eq!(arr[1]["enabled"], false);
-    }
-
-    #[test]
-    fn named_slot_lfo_converted_to_array() {
-        let v = json!({
-            "lfo": {
-                "lfo_0": {"enabled": true, "rate": 0.3},
-                "lfo_2": {"depth": 0.8}
-            }
-        });
-        let s = sanitize_json_structure(v);
-        let arr = s["lfo"].as_array().unwrap();
-        assert_eq!(arr.len(), 4);
-        assert_eq!(arr[0]["rate"], 0.3);
-        assert_eq!(arr[2]["depth"], 0.8);
-    }
-
-    #[test]
-    fn non_object_passes_through() {
-        let v = json!("just a string");
-        let s = sanitize_json_structure(v);
-        assert_eq!(s, "just a string");
-    }
-
-    // ── split_thinking ──────────────────────────────────────────────────
-
-    #[test]
-    fn thinking_block_extracted() {
-        let (think, rest) = split_thinking("<think>planning</think>{\"bass\": {}}");
-        assert_eq!(think.unwrap(), "planning");
-        assert_eq!(rest, "{\"bass\": {}}");
-    }
-
-    #[test]
-    fn no_thinking_block() {
-        let (think, rest) = split_thinking("{\"bass\": {}}");
-        assert!(think.is_none());
-        assert_eq!(rest, "{\"bass\": {}}");
-    }
-
-    #[test]
-    fn empty_thinking_block_returns_none() {
-        let (think, rest) = split_thinking("<think>  </think>remainder");
-        assert!(think.is_none());
-        assert_eq!(rest, "remainder");
-    }
-
-    #[test]
-    fn whitespace_around_thinking_trimmed() {
-        let (think, _) = split_thinking("  <think> hello world </think>  rest  ");
-        assert_eq!(think.unwrap(), "hello world");
-    }
-}
-
-// ── Server pool tests ────────────────────────────────────────────────────────
-
-#[cfg(test)]
-mod pool_tests {
-    use crate::llm::LlamaServerPool;
-
-    #[test]
-    fn acquire_same_model_twice_reuses_server() {
-        let mut pool = LlamaServerPool::new(9000, 4096);
-        pool.insert_test_server("models/a.gguf", 9000);
-        // Second acquire should bump ref_count, not add a new server.
-        let port = pool.acquire("models/a.gguf").unwrap();
-        assert_eq!(port, 9000);
-        assert_eq!(pool.server_count(), 1);
-        assert_eq!(pool.ref_count_for("models/a.gguf"), Some(2));
-    }
-
-    #[test]
-    fn two_different_models_get_different_ports() {
-        let mut pool = LlamaServerPool::new(9000, 4096);
-        pool.insert_test_server("models/a.gguf", 9000);
-        pool.insert_test_server("models/b.gguf", 9001);
-        assert_eq!(pool.server_count(), 2);
-        assert_eq!(pool.port_for("models/a.gguf"), Some(9000));
-        assert_eq!(pool.port_for("models/b.gguf"), Some(9001));
-    }
-
-    #[test]
-    fn release_last_ref_removes_server() {
-        let mut pool = LlamaServerPool::new(9000, 4096);
-        pool.insert_test_server("models/a.gguf", 9000);
-        assert_eq!(pool.server_count(), 1);
-        pool.release("models/a.gguf");
-        assert_eq!(pool.server_count(), 0);
-    }
-
-    #[test]
-    fn release_with_remaining_refs_keeps_server() {
-        let mut pool = LlamaServerPool::new(9000, 4096);
-        pool.insert_test_server("models/a.gguf", 9000);
-        // Bump ref_count to 2
-        let _ = pool.acquire("models/a.gguf").unwrap();
-        assert_eq!(pool.ref_count_for("models/a.gguf"), Some(2));
-        pool.release("models/a.gguf");
-        assert_eq!(pool.server_count(), 1);
-        assert_eq!(pool.ref_count_for("models/a.gguf"), Some(1));
-    }
-
-    #[test]
-    fn next_free_port_skips_occupied() {
-        let mut pool = LlamaServerPool::new(9000, 4096);
-        pool.insert_test_server("models/a.gguf", 9000);
-        pool.insert_test_server("models/b.gguf", 9001);
-        // Next free should be 9002
-        pool.insert_test_server("models/c.gguf", 9002);
-        // Remove middle one, next free should now be 9001
-        pool.release("models/b.gguf");
-        pool.insert_test_server(
-            "models/d.gguf",
-            pool.port_for("models/d.gguf").unwrap_or(9001),
-        );
-        // Verify we can still find ports
-        assert!(pool.server_count() <= 4);
-    }
-
-    #[test]
-    fn shutdown_model_removes_entry() {
-        let mut pool = LlamaServerPool::new(9000, 4096);
-        pool.insert_test_server("models/a.gguf", 9000);
-        pool.insert_test_server("models/b.gguf", 9001);
-        pool.shutdown_model("models/a.gguf");
-        assert_eq!(pool.server_count(), 1);
-        assert!(pool.port_for("models/a.gguf").is_none());
-        assert_eq!(pool.port_for("models/b.gguf"), Some(9001));
-    }
-
-    #[test]
-    fn shutdown_all_clears_pool() {
-        let mut pool = LlamaServerPool::new(9000, 4096);
-        pool.insert_test_server("models/a.gguf", 9000);
-        pool.insert_test_server("models/b.gguf", 9001);
-        pool.shutdown_all();
-        assert_eq!(pool.server_count(), 0);
-    }
-
-    /// Simulates the full lifecycle described by the model-switching spec:
-    /// console acquires global, agent inferences acquire+release (no leak),
-    /// agent override flips load to a new model, console SwitchModel uses
-    /// shutdown_all_except to unload everything but the new global.
-    /// Locks down the regression path for the "we jump to wrong models" bug.
-    #[test]
-    fn console_switch_unloads_every_other_model() {
-        let mut pool = LlamaServerPool::new(9000, 4096);
-
-        // Startup: console acquires global.
-        pool.insert_test_server("models/global-a.gguf", 9000);
-        assert_eq!(pool.ref_count_for("models/global-a.gguf"), Some(1));
-
-        // Two agent inferences against the global — acquire then release
-        // (the leak fix).  ref_count must return to 1 after each pair.
-        let _ = pool.acquire("models/global-a.gguf").unwrap();
-        pool.release("models/global-a.gguf");
-        let _ = pool.acquire("models/global-a.gguf").unwrap();
-        pool.release("models/global-a.gguf");
-        assert_eq!(
-            pool.ref_count_for("models/global-a.gguf"),
-            Some(1),
-            "inference should not leak refs"
-        );
-
-        // Two agents pick explicit overrides → two new servers loaded.
-        pool.insert_test_server("models/override-x.gguf", 9001);
-        pool.insert_test_server("models/override-y.gguf", 9002);
-        assert_eq!(pool.server_count(), 3);
-
-        // Console SwitchModel: shutdown_all_except is the master-switch
-        // primitive — every server other than the new global must die.
-        pool.shutdown_all_except("models/global-b.gguf");
-        let _ = pool.acquire("models/global-b.gguf").unwrap();
-
-        assert_eq!(pool.server_count(), 1, "only new global should remain");
-        assert_eq!(pool.port_for("models/global-b.gguf"), Some(9000));
-        assert!(pool.port_for("models/global-a.gguf").is_none());
-        assert!(pool.port_for("models/override-x.gguf").is_none());
-        assert!(pool.port_for("models/override-y.gguf").is_none());
-    }
-
-    /// shutdown_all_except keeps the named server even with leaked refs.
-    #[test]
-    fn shutdown_all_except_keeps_target_with_leaked_refs() {
-        let mut pool = LlamaServerPool::new(9000, 4096);
-        pool.insert_test_server("models/keep.gguf", 9000);
-        pool.insert_test_server("models/drop1.gguf", 9001);
-        pool.insert_test_server("models/drop2.gguf", 9002);
-        // Simulate leaked refs on the keeper (3 acquires, 0 releases).
-        let _ = pool.acquire("models/keep.gguf").unwrap();
-        let _ = pool.acquire("models/keep.gguf").unwrap();
-        assert_eq!(pool.ref_count_for("models/keep.gguf"), Some(3));
-
-        pool.shutdown_all_except("models/keep.gguf");
-
-        assert_eq!(pool.server_count(), 1);
-        assert!(pool.port_for("models/keep.gguf").is_some());
-        assert!(pool.port_for("models/drop1.gguf").is_none());
-        assert!(pool.port_for("models/drop2.gguf").is_none());
-        // Ref count preserved — keep was untouched.
-        assert_eq!(pool.ref_count_for("models/keep.gguf"), Some(3));
-    }
-
-    /// Re-selecting the same agent model in the dropdown must not cause
-    /// release+acquire churn (which would briefly hit ref_count == 0 and
-    /// shut the server down).  The handler short-circuits when old == new.
-    #[test]
-    fn agent_model_no_op_on_same_path() {
-        let mut pool = LlamaServerPool::new(9000, 4096);
-        pool.insert_test_server("models/x.gguf", 9000);
-        let initial_refs = pool.ref_count_for("models/x.gguf");
-        // Mimic SwitchAgentModel handler's old==new short-circuit: no calls.
-        // Asserting nothing changed is the contract we rely on at the call site.
-        assert_eq!(pool.ref_count_for("models/x.gguf"), initial_refs);
-        assert_eq!(pool.server_count(), 1);
-    }
-}
-
-#[cfg(test)]
-mod agent_model_tests {
-    use crate::state::{AppState, LlmAgentState};
-
-    #[test]
-    fn agent_model_none_falls_back_to_global() {
-        let state = AppState::default();
-        let agent = LlmAgentState::new_default(1);
-        assert!(agent.model_path.is_none());
-        let resolved = agent
-            .model_path
-            .unwrap_or_else(|| state.llm.model_path.clone());
-        assert_eq!(resolved, state.llm.model_path);
-    }
-
-    #[test]
-    fn agent_model_some_overrides_global() {
-        let state = AppState::default();
-        let mut agent = LlmAgentState::new_default(1);
-        agent.model_path = Some("models/qwen3-8b.gguf".to_string());
-        let resolved = agent
-            .model_path
-            .unwrap_or_else(|| state.llm.model_path.clone());
-        assert_eq!(resolved, "models/qwen3-8b.gguf");
-    }
-
-    #[test]
-    fn from_singleton_sets_model_none() {
-        let state = AppState::default();
-        let agent = LlmAgentState::from_singleton(42, &state.llm);
-        assert!(agent.model_path.is_none());
-        assert_eq!(agent.id, 42);
     }
 }

@@ -18,6 +18,7 @@ mod llm_apply_extra_tests;
 mod llm_apply_seq_tests;
 mod llm_apply_tests;
 mod llm_apply_voice_tests;
+mod llm_plumbing_tests;
 mod llm_tests;
 mod music_api_tests;
 mod music_tests;
