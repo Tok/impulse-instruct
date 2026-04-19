@@ -415,6 +415,118 @@ mod push_agent_recent_output_tests {
 }
 
 #[cfg(test)]
+mod propagate_seed_tests {
+    use crate::state::{AgentRole, AppState, propagate_seed, spawn_agent};
+
+    #[test]
+    fn updates_global_seed_and_unlocked_agents() {
+        // Spawn two agents; seed-lock the second.  propagate_seed must
+        // push the new seed to the global + first agent only.
+        let (s, id1) = spawn_agent(AppState::default(), "A", &[], AgentRole::Producer, None);
+        let (mut s, id2) = spawn_agent(s, "B", &[], AgentRole::Producer, None);
+        let old_b = s.llm_agents.iter().find(|a| a.id == id2).unwrap().seed;
+        s.llm_agents
+            .iter_mut()
+            .find(|a| a.id == id2)
+            .unwrap()
+            .seed_locked = true;
+        let s = propagate_seed(s, 42);
+        assert_eq!(s.llm.seed, 42);
+        let a = s.llm_agents.iter().find(|a| a.id == id1).unwrap();
+        assert_eq!(a.seed, 42, "unlocked agent follows the global seed");
+        let b = s.llm_agents.iter().find(|a| a.id == id2).unwrap();
+        assert_eq!(
+            b.seed, old_b,
+            "seed-locked agent keeps its own seed independent of the global"
+        );
+    }
+
+    #[test]
+    fn random_seed_minus_one_propagates() {
+        let (s, id) = spawn_agent(AppState::default(), "R", &[], AgentRole::Producer, None);
+        let mut s = propagate_seed(s, 123);
+        assert_eq!(s.llm_agents.iter().find(|a| a.id == id).unwrap().seed, 123);
+        // -1 is the "random each call" sentinel; propagate like any other value.
+        s = propagate_seed(s, -1);
+        assert_eq!(s.llm.seed, -1);
+        assert_eq!(s.llm_agents.iter().find(|a| a.id == id).unwrap().seed, -1);
+    }
+}
+
+#[cfg(test)]
+mod per_voice_bass_step_tests {
+    // set_bass_step_voice / toggle_bass_accent_voice / toggle_bass_slide_voice
+    // — the per-voice bass writers that drive voices 1..=3 *and* mirror
+    // voice 0 into the legacy `bass_pattern` field.  Voice 0 is the
+    // interesting case because a write must land in both places.
+    use crate::state::{
+        AppState, set_an1x_step, set_bass_step_voice, toggle_bass_accent_voice,
+        toggle_bass_slide_voice,
+    };
+
+    #[test]
+    fn set_bass_step_voice_zero_mirrors_legacy_pattern() {
+        let s = AppState::default();
+        let s = set_bass_step_voice(s, 0, 5, 48, true);
+        assert!(s.sequencer.bass_patterns[0][5].active);
+        assert_eq!(s.sequencer.bass_patterns[0][5].note, 48);
+        // Voice 0 mirrors the legacy field.
+        assert!(s.sequencer.bass_pattern[5].active);
+        assert_eq!(s.sequencer.bass_pattern[5].note, 48);
+    }
+
+    #[test]
+    fn set_bass_step_voice_nonzero_does_not_touch_legacy() {
+        let s = AppState::default();
+        let s = set_bass_step_voice(s, 1, 3, 55, true);
+        assert!(s.sequencer.bass_patterns[1][3].active);
+        assert_eq!(s.sequencer.bass_patterns[1][3].note, 55);
+        assert!(
+            !s.sequencer.bass_pattern[3].active,
+            "voice 1 writes must not touch the legacy voice-0 pattern"
+        );
+    }
+
+    #[test]
+    fn toggle_bass_accent_voice_flips_between_zero_and_one() {
+        let s = AppState::default();
+        let s = toggle_bass_accent_voice(s, 0, 4);
+        assert_eq!(s.sequencer.bass_patterns[0][4].accent, 1.0);
+        assert_eq!(s.sequencer.bass_pattern[4].accent, 1.0);
+        let s = toggle_bass_accent_voice(s, 0, 4);
+        assert_eq!(s.sequencer.bass_patterns[0][4].accent, 0.0);
+        assert_eq!(s.sequencer.bass_pattern[4].accent, 0.0);
+    }
+
+    #[test]
+    fn toggle_bass_slide_voice_flips_between_zero_and_one() {
+        let s = AppState::default();
+        let s = toggle_bass_slide_voice(s, 2, 7);
+        assert_eq!(s.sequencer.bass_patterns[2][7].slide, 1.0);
+        let s = toggle_bass_slide_voice(s, 2, 7);
+        assert_eq!(s.sequencer.bass_patterns[2][7].slide, 0.0);
+    }
+
+    #[test]
+    fn set_an1x_step_writes_into_pattern() {
+        let s = AppState::default();
+        let s = set_an1x_step(s, 9, 62, true);
+        assert!(s.sequencer.an1x_pattern[9].active);
+        assert_eq!(s.sequencer.an1x_pattern[9].note, 62);
+    }
+
+    #[test]
+    fn per_voice_writers_clamp_voice_index_to_max() {
+        // Out-of-range voice_idx (e.g. 99) clamps to MAX_BASS_VOICES-1
+        // rather than panicking — defensive path tests the `vi.min(…)`.
+        let s = AppState::default();
+        let s = set_bass_step_voice(s, 99, 0, 48, true);
+        let last = crate::state::MAX_BASS_VOICES - 1;
+        assert!(s.sequencer.bass_patterns[last][0].active);
+    }
+}
+
+#[cfg(test)]
 mod format_llm_display_tests {
     use crate::state::{ConversationMode, format_llm_display};
     use serde_json::json;
