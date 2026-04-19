@@ -42,14 +42,6 @@ they ship and are reflected in `features.md`.
 
 ## Refactoring
 
-- [ ] **Panel typography tiers** — if we do this, it should be an
-  enum (`FontTier::{Xs, Sm, Md, Lg}` with `.px()`) rather than
-  loose constants, so the variant set is closed and call sites
-  can't accidentally introduce a 9.25 px one-off.  Only worth doing
-  if we collapse the 11 distinct `.size(...)` values to a few
-  canonical tiers (visual-design call).
-- [ ] **Panel spacing tiers** — same shape.  Only worth it if we
-  settle on a small number of canonical gaps.
 - [ ] **Glass group helpers** — `glass_label(ui, text)` still to do
   (the inline pattern varies too much across panels for a single
   helper).
@@ -64,8 +56,6 @@ they ship and are reflected in `features.md`.
 
 ## Infrastructure
 
-- [ ] **CI: run LLM integration tests on release** — currently
-  manual; automate in GitHub Actions with a Gemma model cache.
 - [ ] **Codecov improvement** — currently ~37 %; target higher with
   the new DSP, preecho, mod-overlay, and rack-reachability suites.
 

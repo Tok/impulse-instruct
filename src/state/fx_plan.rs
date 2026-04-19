@@ -4,7 +4,8 @@
 
 use std::collections::{HashMap, HashSet, VecDeque};
 
-use super::rack::{FEEDBACK_GAIN_MAX, FeedbackRoute, VoiceSend};
+use super::fx_types::{FeedbackRoute, VoiceSend};
+use super::rack::FEEDBACK_GAIN_MAX;
 use super::{FxPlan, FxStep, ModuleKind, PortKind, RackState};
 
 pub(crate) fn kind_to_fx_step(kind: ModuleKind) -> Option<FxStep> {

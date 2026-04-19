@@ -118,19 +118,20 @@ pub mod ui_prefs;
 pub use ui_prefs::{AutosaveInterval, HuthStyle, UiPrefs};
 
 pub(crate) mod fx_plan;
+pub mod fx_types;
 pub mod modulation;
 pub mod module_kind;
 pub mod rack;
 mod rack_presets;
 pub mod rack_scope;
 pub use fx_plan::compile_fx_plan;
+pub use fx_types::{FX_STEP_COUNT, FeedbackRoute, FxPlan, FxStep, VoiceSend};
 pub use modulation::{
     ModInput, lfo_target_short_label, mod_input_label, mod_inputs, parse_lfo_target,
 };
 pub use module_kind::{GRID_COLS, ModuleKind, Zone};
 pub use rack::{
-    Cable, CableColor, FEEDBACK_GAIN_MAX, FX_STEP_COUNT, FeedbackRoute, FxPlan, FxStep, PortDir,
-    PortKind, PortRef, RackModule, RackState, VoiceSend,
+    Cable, CableColor, FEEDBACK_GAIN_MAX, PortDir, PortKind, PortRef, RackModule, RackState,
 };
 pub use rack_presets::RACK_PRESETS;
 pub use rack_scope::{parse_module_kind, rack_kind_name_matches, scope_from_control_cables};
