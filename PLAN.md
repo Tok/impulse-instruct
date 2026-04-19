@@ -34,8 +34,16 @@ they ship and are reflected in `features.md`.
 
 ## DSP
 
-- **Dub techno send/return** — dedicated send/return FX workflow for
-  dub-style infinite delay feedback chains.
+- **Dub techno send/return** — minimum-viable dub chain landed on the
+  existing Delay.  `delay_freeze` mirrors `reverb_freeze` (input
+  suppressed, feedback pinned near 1.0 for infinite hold);
+  `delay_hpf` / `delay_lpf` are one-pole filters on the feedback path
+  so each repeat loses highs / lows with every round-trip — the
+  classic dub "drift into smoke".  `styles.json`'s `dub_techno`
+  baseline seeds the new fields + adds tape-sat to the rack preset.
+  Remaining: a true send-bus routing layer (per-cable amount, FX→FX
+  feedback loops the rack's cycle-check currently rejects) — out of
+  scope for the MVP and not required by the existing workflow.
 
 ## Sequencer
 

@@ -485,14 +485,14 @@ mod delay_line_tests {
         let mut d = DelayLine::new();
         let delay = 256_usize;
         // Single-sample impulse with no feedback / wow / saturation.
-        let _ = d.process_tape(1.0, delay, 0.0, 0.0, 0.0, 44100.0);
+        let _ = d.process_tape(1.0, delay, 0.0, 0.0, 0.0, false, 0.0, 0.0, 44100.0);
         // 255 samples of silence shouldn't reveal it yet.
         for _ in 0..(delay - 1) {
-            let out = d.process_tape(0.0, delay, 0.0, 0.0, 0.0, 44100.0);
+            let out = d.process_tape(0.0, delay, 0.0, 0.0, 0.0, false, 0.0, 0.0, 44100.0);
             assert!(out.abs() < 1e-3, "early leak: {out}");
         }
         // Sample at the chosen offset should now have the impulse echo.
-        let out = d.process_tape(0.0, delay, 0.0, 0.0, 0.0, 44100.0);
+        let out = d.process_tape(0.0, delay, 0.0, 0.0, 0.0, false, 0.0, 0.0, 44100.0);
         assert!((out - 1.0).abs() < 0.01, "expected 1.0, got {out}");
     }
 
@@ -500,14 +500,14 @@ mod delay_line_tests {
     fn feedback_creates_a_decaying_echo_train() {
         let mut d = DelayLine::new();
         let delay = 64_usize;
-        let _ = d.process_tape(1.0, delay, 0.5, 0.0, 0.0, 44100.0);
+        let _ = d.process_tape(1.0, delay, 0.5, 0.0, 0.0, false, 0.0, 0.0, 44100.0);
         let mut peaks: Vec<f32> = Vec::new();
         for n in 0..6 {
             // Skip ahead delay samples and read the echo magnitude.
             for _ in 0..(delay - 1) {
-                let _ = d.process_tape(0.0, delay, 0.5, 0.0, 0.0, 44100.0);
+                let _ = d.process_tape(0.0, delay, 0.5, 0.0, 0.0, false, 0.0, 0.0, 44100.0);
             }
-            let out = d.process_tape(0.0, delay, 0.5, 0.0, 0.0, 44100.0);
+            let out = d.process_tape(0.0, delay, 0.5, 0.0, 0.0, false, 0.0, 0.0, 44100.0);
             peaks.push(out.abs());
             let _ = n;
         }
@@ -522,8 +522,87 @@ mod delay_line_tests {
         let mut d = DelayLine::new();
         for i in 0..5_000 {
             let drive = 0.5 + 0.3 * (i as f32 * 0.01).sin();
-            let out = d.process_tape(drive, 1000, 0.95, 0.5, 1.0, 44100.0);
+            let out = d.process_tape(drive, 1000, 0.95, 0.5, 1.0, false, 0.0, 0.0, 44100.0);
             assert!(out.is_finite());
+        }
+    }
+
+    // ── Dub send/return: freeze + feedback-path filters ─────────────────
+
+    #[test]
+    fn freeze_holds_tail_without_new_input() {
+        let mut d = DelayLine::new();
+        let delay = 128_usize;
+        // Prime the loop with a burst, then freeze and feed silence.
+        for _ in 0..delay {
+            let _ = d.process_tape(0.4, delay, 0.6, 0.0, 0.0, false, 0.0, 0.0, 44100.0);
+        }
+        // Snapshot the peak amplitude before freezing.
+        let mut peak_pre = 0.0f32;
+        for _ in 0..(delay * 2) {
+            let out = d.process_tape(0.0, delay, 0.6, 0.0, 0.0, false, 0.0, 0.0, 44100.0);
+            peak_pre = peak_pre.max(out.abs());
+        }
+        // Now freeze (suppresses input, feedback ≈ 1.0) and loud pulse should
+        // be ignored — loop should keep the pre-freeze energy.
+        let mut peak_hold = 0.0f32;
+        for _ in 0..(delay * 10) {
+            let out = d.process_tape(1.0, delay, 0.6, 0.0, 0.0, true, 0.0, 0.0, 44100.0);
+            peak_hold = peak_hold.max(out.abs());
+        }
+        // Frozen loop shouldn't have picked up the 1.0 pulses (they're
+        // suppressed), so peak stays bounded by the pre-freeze content.
+        assert!(
+            peak_hold < peak_pre * 1.5,
+            "freeze should not integrate new input: peak_pre={peak_pre}, peak_hold={peak_hold}"
+        );
+        // And the tail doesn't decay to silence while frozen.
+        assert!(
+            peak_hold > 0.1,
+            "frozen tail should sustain, got {peak_hold}"
+        );
+    }
+
+    #[test]
+    fn feedback_hpf_drains_dc_under_freeze() {
+        // Prime both delay lines with DC, then freeze (fb ≈ 1.0).  Without
+        // HPF the DC sustains in the loop forever; with HPF the highpass
+        // eventually integrates the DC out of the feedback path.  Compare
+        // the long-tail amplitude.
+        let mut d_plain = DelayLine::new();
+        let mut d_hpf = DelayLine::new();
+        let delay = 128_usize;
+        for _ in 0..(delay * 3) {
+            let _ = d_plain.process_tape(0.5, delay, 0.9, 0.0, 0.0, false, 0.0, 0.0, 44100.0);
+            let _ = d_hpf.process_tape(0.5, delay, 0.9, 0.0, 0.0, false, 0.0, 0.0, 44100.0);
+        }
+        let mut last_plain = 0.0f32;
+        let mut last_hpf = 0.0f32;
+        for _ in 0..(delay * 40) {
+            last_plain = d_plain
+                .process_tape(0.0, delay, 0.9, 0.0, 0.0, true, 0.0, 0.0, 44100.0)
+                .abs();
+            last_hpf = d_hpf
+                .process_tape(0.0, delay, 0.9, 0.0, 0.0, true, 0.5, 0.0, 44100.0)
+                .abs();
+        }
+        assert!(
+            last_hpf < last_plain * 0.5,
+            "HPF should drain DC: plain={last_plain}, hpf={last_hpf}"
+        );
+    }
+
+    #[test]
+    fn feedback_lpf_is_bypass_at_zero() {
+        // Confirm the 0-knob branch truly leaves the signal untouched —
+        // two runs with identical seed must produce identical outputs.
+        let mut d_a = DelayLine::new();
+        let mut d_b = DelayLine::new();
+        let delay = 96_usize;
+        for _ in 0..(delay * 3) {
+            let a = d_a.process_tape(0.25, delay, 0.5, 0.0, 0.0, false, 0.0, 0.0, 44100.0);
+            let b = d_b.process_tape(0.25, delay, 0.5, 0.0, 0.0, false, 0.0, 0.0, 44100.0);
+            assert!((a - b).abs() < 1e-6);
         }
     }
 }

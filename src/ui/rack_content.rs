@@ -126,7 +126,7 @@ pub(super) fn draw_fx_content(
             }
         }
         ModuleKind::FxDelay => {
-            let (mut dt, mut df, mut dm, mut ddir, mut dq) = {
+            let (mut dt, mut df, mut dm, mut ddir, mut dq, mut dfz, mut dhpf, mut dlpf) = {
                 let s = app.state.read();
                 (
                     s.fx.delay_time,
@@ -134,6 +134,9 @@ pub(super) fn draw_fx_content(
                     s.fx.delay_mix,
                     s.fx.delay_dir,
                     s.fx.delay_rev_quant,
+                    s.fx.delay_freeze,
+                    s.fx.delay_hpf,
+                    s.fx.delay_lpf,
                 )
             };
             hk!(
@@ -142,13 +145,27 @@ pub(super) fn draw_fx_content(
                 ("FEEDBACK", &mut df, pm("fx.delay_feedback")),
                 ("MIX", &mut dm, pm("fx.delay_mix"))
             );
-            let (dir_changed, q_changed) = ui
+            // Dub send/return row: HPF + LPF feedback filters + FREEZE toggle.
+            hk!(
+                ui,
+                ("HPF", &mut dhpf, pm("fx.delay_hpf")),
+                ("LPF", &mut dlpf, pm("fx.delay_lpf"))
+            );
+            let freeze_changed = ui
                 .horizontal(|ui| {
                     let d = draw_fx_dir_button(ui, &mut ddir, "Delay direction");
                     let q = crate::ui::fx_dir::draw_fx_rev_quant_button(ui, &mut dq, "Delay");
-                    (d, q)
+                    let prev = dfz;
+                    if widgets::toggle_button(ui, if dfz { "FRZ" } else { "frz" }, &mut dfz) {
+                        // toggle_button only returns `true` when clicked; dfz
+                        // already mutated via &mut.  Keep the existing dir/q
+                        // change semantics separate so we don't trigger a
+                        // write when the user hasn't touched freeze.
+                    }
+                    (d, q, dfz != prev)
                 })
                 .inner;
+            let (dir_changed, q_changed, fz_changed) = freeze_changed;
             if pad_expanded {
                 ui.add_space(PAD_SECTION_TOP_GAP);
                 let (vc, _) = render_three_pad(
@@ -167,13 +184,21 @@ pub(super) fn draw_fx_content(
                     changed = true;
                 }
             }
-            if changed || dt != app.state.read().fx.delay_time || dir_changed || q_changed {
+            if changed
+                || dt != app.state.read().fx.delay_time
+                || dir_changed
+                || q_changed
+                || fz_changed
+            {
                 let mut s = app.state.write();
                 s.fx.delay_time = dt;
                 s.fx.delay_feedback = df;
                 s.fx.delay_mix = dm;
                 s.fx.delay_dir = ddir;
                 s.fx.delay_rev_quant = dq;
+                s.fx.delay_freeze = dfz;
+                s.fx.delay_hpf = dhpf;
+                s.fx.delay_lpf = dlpf;
             }
         }
         ModuleKind::FxChorus => {

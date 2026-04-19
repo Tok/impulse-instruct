@@ -390,6 +390,13 @@ pub struct AudioParams {
     pub delay_rev_quant: u8,
     pub delay_wow_flutter: f32,
     pub delay_saturation: f32,
+    /// Dub send/return: infinite hold on the delay.  When true, feedback
+    /// pins at 1.0 and new input is suppressed.
+    pub delay_freeze: bool,
+    /// One-pole HPF on the delay's feedback path (0–1, 0 = bypass).
+    pub delay_hpf: f32,
+    /// One-pole LPF on the delay's feedback path (0–1, 0 = bypass).
+    pub delay_lpf: f32,
     pub distortion_drive: f32,
     pub distortion_mix: f32,
     pub master_volume: f32,
@@ -673,6 +680,9 @@ impl AudioParams {
             delay_rev_quant: s.fx.delay_rev_quant.min(4),
             delay_wow_flutter: s.fx.delay_wow_flutter,
             delay_saturation: s.fx.delay_saturation,
+            delay_freeze: s.fx.delay_freeze,
+            delay_hpf: s.fx.delay_hpf,
+            delay_lpf: s.fx.delay_lpf,
             distortion_drive: s.fx.distortion_drive,
             distortion_mix: s.fx.distortion_mix,
             master_volume: s.fx.master_volume,

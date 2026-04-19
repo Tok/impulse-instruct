@@ -586,12 +586,16 @@
         "reverb_mix": 0.6,
         "reverb_size": 0.85,
         "delay_mix": 0.5,
-        "delay_feedback": 0.7,
-        "delay_time": 0.375
+        "delay_feedback": 0.85,
+        "delay_time": 0.375,
+        "delay_hpf": 0.3,
+        "delay_lpf": 0.4,
+        "tape_drive": 0.4,
+        "tape_mix": 0.5
       }
     },
     "themes": ["echo","fog","infinite","dub","space","Berlin"],
-    "rack_modules": ["bass","808","delay","reverb","chorus"]
+    "rack_modules": ["bass","808","delay","reverb","tapesat","chorus"]
   },
   {
     "id": "minimal_techno",

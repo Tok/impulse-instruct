@@ -238,19 +238,22 @@ impl DspState {
                     rev_tap_len_for_quant(p.delay_rev_quant, sr, p.sequencer_bpm),
                 );
                 let d = &mut self.delay;
-                let (ds, fb, wf, sat) = (
+                let (ds, fb, wf, sat, fz, hpf, lpf) = (
                     delay_samples,
                     p.delay_feedback,
                     p.delay_wow_flutter,
                     p.delay_saturation,
+                    p.delay_freeze,
+                    p.delay_hpf,
+                    p.delay_lpf,
                 );
                 let wet = match p.delay_dir {
-                    1 => d.process_tape(rev_in, ds, fb, wf, sat, sr),
+                    1 => d.process_tape(rev_in, ds, fb, wf, sat, fz, hpf, lpf, sr),
                     2 => {
-                        d.process_tape(sig, ds, fb, wf, sat, sr)
-                            + d.process_tape(rev_in, ds, fb, wf, sat, sr) * 0.7
+                        d.process_tape(sig, ds, fb, wf, sat, fz, hpf, lpf, sr)
+                            + d.process_tape(rev_in, ds, fb, wf, sat, fz, hpf, lpf, sr) * 0.7
                     }
-                    _ => d.process_tape(sig, ds, fb, wf, sat, sr),
+                    _ => d.process_tape(sig, ds, fb, wf, sat, fz, hpf, lpf, sr),
                 };
                 sig * (1.0 - p.delay_mix) + wet * p.delay_mix
             }

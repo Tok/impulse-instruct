@@ -77,6 +77,10 @@ pub(crate) struct DelayLine {
     pub(crate) ptr: usize,
     wow_phase: f32,     // slow sine LFO for wow (0–1)
     flutter_phase: f32, // faster LFO for flutter (0–1)
+    /// One-pole state for the feedback-path HPF (dub send thinner).
+    hpf_state: f32,
+    /// One-pole state for the feedback-path LPF (dub send drift).
+    lpf_state: f32,
 }
 
 impl DelayLine {
@@ -86,11 +90,18 @@ impl DelayLine {
             ptr: 0,
             wow_phase: 0.0,
             flutter_phase: 0.0,
+            hpf_state: 0.0,
+            lpf_state: 0.0,
         }
     }
 
     /// Tape-style delay with wow/flutter modulation and feedback saturation.
     /// `wow_flutter`: 0–1 depth of pitch wobble. `sat`: 0–1 tape saturation on feedback.
+    /// `freeze`: infinite-hold — suppresses new input and pins feedback to ~1.0 so
+    /// the echo loop sustains (dub send/return).
+    /// `hpf_amt` / `lpf_amt`: 0–1, one-pole high/low pass filters on the feedback
+    /// path.  0 = bypass; 1 = aggressive cut (≈1.7 kHz HPF / ≈75 Hz LPF).
+    #[allow(clippy::too_many_arguments)]
     pub(crate) fn process_tape(
         &mut self,
         input: f32,
@@ -98,6 +109,9 @@ impl DelayLine {
         feedback: f32,
         wow_flutter: f32,
         sat: f32,
+        freeze: bool,
+        hpf_amt: f32,
+        lpf_amt: f32,
         sr: f32,
     ) -> f32 {
         let max = MAX_DELAY_SAMPLES - 2; // leave room for interpolation
@@ -122,15 +136,45 @@ impl DelayLine {
         let next = (idx + 1) % MAX_DELAY_SAMPLES;
         let delayed = self.buf[idx] + (self.buf[next] - self.buf[idx]) * frac;
 
+        // Dub freeze: infinite-hold. Suppress input, sustain feedback at ~1.0.
+        // (Clamped just below 1 to keep the filter state from drifting to
+        // infinity on DC after long holds.)
+        let eff_input = if freeze { 0.0 } else { input };
+        let eff_fb = if freeze { 0.999 } else { feedback };
+
         // Tape saturation on feedback — soft clip
-        let fb_signal = if sat > 0.001 {
+        let fb_sat = if sat > 0.001 {
             let drive = 1.0 + sat * 3.0;
-            super::tanh(delayed * drive * feedback) / drive
+            super::tanh(delayed * drive * eff_fb) / drive
         } else {
-            delayed * feedback
+            delayed * eff_fb
         };
 
-        self.buf[self.ptr] = input + fb_signal;
+        // One-pole HPF on the feedback path — thins each round-trip.
+        // alpha_hpf maps knob 0..1 linearly to 0..0.2 (≈0..1.7 kHz cutoff
+        // at 48 kHz), enough to scrub low rumble without nuking the echo.
+        let fb_after_hpf = if hpf_amt > 0.001 {
+            let alpha = hpf_amt * 0.2;
+            self.hpf_state += alpha * (fb_sat - self.hpf_state);
+            fb_sat - self.hpf_state
+        } else {
+            // Reset state so turning the knob back up starts clean.
+            self.hpf_state *= 0.99;
+            fb_sat
+        };
+
+        // One-pole LPF on the feedback path — classic dub "drift into smoke".
+        // alpha_lpf maps knob 1..0 → alpha 0.01..0.3 (≈75 Hz..3 kHz cutoff).
+        let fb_after_lpf = if lpf_amt > 0.001 {
+            let alpha = (0.3 - lpf_amt * 0.29).max(0.01);
+            self.lpf_state += alpha * (fb_after_hpf - self.lpf_state);
+            self.lpf_state
+        } else {
+            self.lpf_state *= 0.99;
+            fb_after_hpf
+        };
+
+        self.buf[self.ptr] = eff_input + fb_after_lpf;
         self.ptr = (self.ptr + 1) % MAX_DELAY_SAMPLES;
         delayed
     }

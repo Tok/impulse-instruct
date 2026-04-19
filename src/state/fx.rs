@@ -36,6 +36,25 @@ pub struct FxState {
     pub delay_wow_flutter: f32, // 0–1 tape wow/flutter depth
     #[serde(default)]
     pub delay_saturation: f32, // 0–1 tape saturation on feedback
+    /// Dub-style infinite hold: when true, the delay line's feedback
+    /// sustains at ~1.0 and new input is suppressed, so the echo loop
+    /// carries on indefinitely without adding more material.  Mirrors
+    /// `reverb_freeze`; paired with `delay_hpf` / `delay_lpf` it
+    /// becomes the classic dub send/return chain.
+    #[serde(default)]
+    pub delay_freeze: bool,
+    /// One-pole high-pass filter on the delay's feedback path (0–1).
+    /// 0 = bypass; 1 = aggressive low cut that makes each echo
+    /// progressively thinner, so the dub loop fades into airy
+    /// whispers instead of piling up bass mud.
+    #[serde(default)]
+    pub delay_hpf: f32,
+    /// One-pole low-pass filter on the delay's feedback path (0–1).
+    /// 0 = bypass; 1 = heavy high cut (≈100 Hz cutoff) so echoes lose
+    /// presence with every round-trip — the classic dub "drift into
+    /// smoke" characteristic.
+    #[serde(default)]
+    pub delay_lpf: f32,
     pub distortion_drive: f32,     // 0–1
     pub distortion_mix: f32,       // 0–1 wet/dry
     pub compressor_threshold: f32, // 0–1 → -40–0 dB
@@ -123,6 +142,9 @@ impl Default for FxState {
             delay_rev_quant: 0,
             delay_wow_flutter: 0.0,
             delay_saturation: 0.0,
+            delay_freeze: false,
+            delay_hpf: 0.0,
+            delay_lpf: 0.0,
             distortion_drive: 0.0,
             distortion_mix: 0.0,
             compressor_threshold: 0.7,

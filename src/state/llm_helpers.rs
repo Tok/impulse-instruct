@@ -536,6 +536,13 @@ pub(super) fn apply_fx_update(
         "delay_saturation",
         "fx.delay_saturation"
     );
+    if !locked.contains("fx.delay_freeze")
+        && let Some(v) = fx.get("delay_freeze").and_then(|v| v.as_bool())
+    {
+        s.fx.delay_freeze = v;
+    }
+    u!(s.fx.delay_hpf, "delay_hpf", "fx.delay_hpf");
+    u!(s.fx.delay_lpf, "delay_lpf", "fx.delay_lpf");
     u!(
         s.fx.distortion_drive,
         "distortion_drive",
