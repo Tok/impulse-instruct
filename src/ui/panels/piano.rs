@@ -82,6 +82,16 @@ pub fn draw_piano(app: &mut ImpulseApp, ui: &mut egui::Ui, ctx: &egui::Context) 
     }
 
     let painter = ui.painter();
+    // Foreground-layer painter for scale-degree LEDs — the piano widget
+    // draws each key's rect chrome via `painter`, which would cover the
+    // LED dot when the next key draws.  Lifting the LEDs to a
+    // foreground layer keeps their halos intact across key boundaries.
+    let glow = ui.ctx().layer_painter(egui::LayerId::new(
+        egui::Order::Foreground,
+        egui::Id::new("piano_glow")
+            .with(rect.min.x.to_bits())
+            .with(rect.min.y.to_bits()),
+    ));
     painter.rect_filled(rect, 0.0, theme::VOID);
 
     let ox = rect.min.x; // origin x
@@ -190,14 +200,14 @@ pub fn draw_piano(app: &mut ImpulseApp, ui: &mut egui::Ui, ctx: &egui::Context) 
             // the white LED reads fine.
             if huth_on {
                 theme::led(
-                    painter,
+                    &glow,
                     Pos2::new(dot_x, dot_y),
                     dot_r,
                     Color32::from_gray(220),
                     intensity,
                 );
             } else {
-                theme::led_dark(painter, Pos2::new(dot_x, dot_y), dot_r, intensity);
+                theme::led_dark(&glow, Pos2::new(dot_x, dot_y), dot_r, intensity);
             }
         }
 
@@ -353,7 +363,7 @@ pub fn draw_piano(app: &mut ImpulseApp, ui: &mut egui::Ui, ctx: &egui::Context) 
                 let intensity = if degree == 0 { 0.85 } else { 0.45 };
                 let dot_r = if degree == 0 { 2.2 } else { 1.5 };
                 theme::led(
-                    painter,
+                    &glow,
                     Pos2::new(x + bk_w * 0.5, key_rect.min.y + bk_h * 0.22),
                     dot_r,
                     Color32::from_gray(220),

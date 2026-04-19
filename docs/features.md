@@ -4,6 +4,34 @@ A detailed log of what's built.
 
 ---
 
+### UX — touch paint, gesture zoom, LED escape, style auto-sync
+
+- **Step-button drag-paint.**  `step_button` now returns
+  `Option<bool>` (the desired active state).  Clicking is unchanged;
+  pressing-and-dragging locks a paint direction at drag start
+  (inactive → paint-on, active → paint-off) and applies it
+  idempotently to every step the pointer enters — the natural
+  behaviour for laying long hat runs or carving sections on touch
+  devices.  Gesture state lives in a single egui-memory key so two
+  grids can't cross-paint.
+- **Multi-touch gestures on the rack canvas.**  `ctx.multi_touch()`
+  is read in `rack_scroll`: two-finger vertical pan drives the
+  rack `ScrollArea` offset; pinch-zoom scales `ui_prefs.ui_scale`
+  (clamped 0.5..=3.0×) — tablet users can now steer the rack
+  without chrome.
+- **LED halos escape widget bounds.**  Step-button current-cursor
+  bloom + scale-degree LED dot, plus piano-panel scale-degree LEDs,
+  paint via `Order::Foreground` layer painters.  Mirrors the fix
+  `agent_card.rs` applied earlier — halos no longer clip at step /
+  key edges.
+- **Auto-sync rack to active style on startup (opt-in).**  New
+  `UiPrefs.autosync_rack_on_start` toggle (Preferences → Controls →
+  Startup).  When on and a genre style is active (not `__free__` /
+  `__custom__`), app launch calls `style_rack::apply` with the
+  style's `rack_modules` so restarting in Classic Acid never leaves
+  a Hoover behind.  Off by default — existing users keep their
+  customised rack.  Round-trips through `session.json`.
+
 ### Intelligence — agent memory, style prompts, VRAM fallback, overrides
 
 - **Agent conversation history.** `LlmAgentState.recent_outputs`

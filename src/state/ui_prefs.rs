@@ -113,6 +113,13 @@ pub struct UiPrefs {
     /// Rack grid columns (3–6). Determines cell size: rack_width / N.
     #[serde(default = "default_grid_cols")]
     pub rack_grid_cols: u8,
+    /// When true, app startup reshapes the rack to match the active
+    /// style's `rack_modules` (via `style_rack::apply`) instead of
+    /// preserving whatever was saved in `session.json`.  Off by default
+    /// so existing users keep their customised rack; opt-in for users
+    /// who prefer a clean slate each time they relaunch a style.
+    #[serde(default)]
+    pub autosync_rack_on_start: bool,
 }
 
 fn default_grid_cols() -> u8 {
@@ -181,6 +188,7 @@ impl Default for UiPrefs {
             show_event_stream: true,
             stream_stereo: false,
             rack_grid_cols: 5,
+            autosync_rack_on_start: false,
         }
     }
 }

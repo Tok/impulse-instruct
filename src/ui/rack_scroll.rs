@@ -53,6 +53,33 @@ pub(crate) fn handle_scroll(
         }
     }
 
+    // ── Multi-touch gestures (pinch zoom + two-finger pan) ──────────────────
+    // egui's `Context::multi_touch` returns a frame-delta summary when
+    // two or more fingers are on the panel.  `zoom_delta` > 1 = pinch
+    // out (zoom in); `translation_delta` is per-frame pan velocity in
+    // points.  We wire them to the global UI scale + the rack scroll
+    // offset so tablet users can steer the rack without chrome.
+    if let Some(mt) = ctx.multi_touch() {
+        // Two-finger vertical pan → rack scroll.  X-component is
+        // ignored because the rack scrolls vertically only.
+        if mt.translation_delta.y.abs() > 0.1 {
+            let mut state = scroll_out.state;
+            state.offset.y = (state.offset.y - mt.translation_delta.y).clamp(0.0, max_y);
+            state.store(ctx, scroll_state_id);
+            ctx.request_repaint();
+        }
+        // Pinch zoom → global UI scale, clamped to the same 0.5..=3.0
+        // range the Ctrl+MW zoom honours (see util::detect_ctrl_zoom).
+        if (mt.zoom_delta - 1.0).abs() > 1e-3 {
+            let cur = app.state.read().ui_prefs.ui_scale;
+            let next = (cur * mt.zoom_delta).clamp(0.5, 3.0);
+            if (next - cur).abs() > 1e-4 {
+                app.state.write().ui_prefs.ui_scale = next;
+                app.session_dirty = true;
+            }
+        }
+    }
+
     // ── Keyboard scroll (arrows / WASD) ─────────────────────────────────────
     {
         let scroll_speed = 180.0;

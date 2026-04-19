@@ -120,6 +120,22 @@ mod apply_session_tests {
     }
 
     #[test]
+    fn apply_session_autosync_rack_flag_round_trips() {
+        use crate::state::persistence::{SessionData, apply_session};
+        let mut state = AppState::default();
+        assert!(
+            !state.ui_prefs.autosync_rack_on_start,
+            "default is off — existing users keep their customised rack"
+        );
+        let data = SessionData {
+            autosync_rack_on_start: Some(true),
+            ..Default::default()
+        };
+        apply_session(&mut state, data);
+        assert!(state.ui_prefs.autosync_rack_on_start);
+    }
+
+    #[test]
     fn apply_session_ui_prefs() {
         let mut state = AppState::default();
         let data = SessionData {

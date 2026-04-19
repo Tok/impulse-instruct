@@ -357,10 +357,9 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                                 } else {
                                     None
                                 };
-                                let clicked = widgets::step_button(
+                                if let Some(new_active) = widgets::step_button(
                                     ui, is_active, is_current, 1.0, 1.0, note_col, label, pad_px,
-                                );
-                                if clicked {
+                                ) {
                                     let s = app.state.read().clone();
                                     let cur_note = s
                                         .sequencer
@@ -369,15 +368,8 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                                         .and_then(|p| p.get(abs))
                                         .map(|b| b.note)
                                         .unwrap_or(36);
-                                    let was = s
-                                        .sequencer
-                                        .bass_patterns
-                                        .get(vi)
-                                        .and_then(|p| p.get(abs))
-                                        .map(|b| b.active)
-                                        .unwrap_or(false);
                                     *app.state.write() = crate::state::set_bass_step_voice(
-                                        s, vi, abs, cur_note, !was,
+                                        s, vi, abs, cur_note, new_active,
                                     );
                                 }
                             });
@@ -621,10 +613,9 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                             } else {
                                 None
                             };
-                            let clicked = widgets::step_button(
+                            if let Some(new_active) = widgets::step_button(
                                 ui, is_active, is_current, 1.0, 1.0, note_col, label, pad_px,
-                            );
-                            if clicked {
+                            ) {
                                 let s = app.state.read().clone();
                                 let note = s
                                     .sequencer
@@ -632,13 +623,7 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                                     .get(abs)
                                     .map(|b| b.note)
                                     .unwrap_or(57);
-                                let was = s
-                                    .sequencer
-                                    .hoover_pattern
-                                    .get(abs)
-                                    .map(|b| b.active)
-                                    .unwrap_or(false);
-                                *app.state.write() = set_hoover_step(s, abs, note, !was);
+                                *app.state.write() = set_hoover_step(s, abs, note, new_active);
                             }
                         });
                     }
@@ -716,10 +701,9 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                             } else {
                                 None
                             };
-                            let clicked = widgets::step_button(
+                            if let Some(new_active) = widgets::step_button(
                                 ui, is_active, is_current, 1.0, 1.0, note_col, label, pad_px,
-                            );
-                            if clicked {
+                            ) {
                                 let s = app.state.read().clone();
                                 let note = s
                                     .sequencer
@@ -727,13 +711,7 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                                     .get(abs)
                                     .map(|b| b.note)
                                     .unwrap_or(57);
-                                let was = s
-                                    .sequencer
-                                    .an1x_pattern
-                                    .get(abs)
-                                    .map(|b| b.active)
-                                    .unwrap_or(false);
-                                *app.state.write() = set_an1x_step(s, abs, note, !was);
+                                *app.state.write() = set_an1x_step(s, abs, note, new_active);
                             }
                         });
                     }

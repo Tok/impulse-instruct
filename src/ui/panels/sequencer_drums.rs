@@ -153,7 +153,7 @@ pub(super) fn draw_drum_rows(
                     if row_spacer > 0.0 {
                         ui.add_space(row_spacer);
                     }
-                    let mut toggled: Option<usize> = None;
+                    let mut toggled: Option<(usize, bool)> = None;
                     let base = sub * STEPS_PER_ROW;
                     for j in 0..STEPS_PER_ROW {
                         let i = base + j;
@@ -167,16 +167,28 @@ pub(super) fn draw_drum_rows(
                         let vel = pattern.get(i).map(|s| s.velocity).unwrap_or(0.0);
                         ui.add_enabled_ui(abs < voice_steps, |ui| {
                             let prob = pattern.get(i).map(|s| s.probability).unwrap_or(1.0);
-                            if widgets::step_button(
+                            if let Some(new_active) = widgets::step_button(
                                 ui, is_active, is_current, vel, prob, None, None, pad_px,
                             ) {
-                                toggled = Some(abs);
+                                // Remember intended state so only the last
+                                // paint-target per row toggles — matches v1
+                                // semantics for click-only grids.
+                                toggled = Some((abs, new_active));
                             }
                         });
                     }
-                    if let Some(step) = toggled {
+                    if let Some((step, new_active)) = toggled {
                         let s = app.state.read().clone();
-                        *app.state.write() = toggle_drum_step(s, *voice, step);
+                        // Only flip if the display state and the paint
+                        // target disagree — keeps the paint idempotent
+                        // even when it re-enters the same cell.
+                        let cur = s.sequencer.drum_patterns[voice]
+                            .get(step)
+                            .map(|p| p.active)
+                            .unwrap_or(false);
+                        if cur != new_active {
+                            *app.state.write() = toggle_drum_step(s, *voice, step);
+                        }
                     }
                     return;
                 }
@@ -323,7 +335,7 @@ pub(super) fn draw_drum_rows(
                     *app.state.write() = set_drum_voice_steps(s, *voice, seq_steps);
                 }
 
-                let mut toggled = None;
+                let mut toggled: Option<(usize, bool)> = None;
                 if row_spacer > 0.0 {
                     ui.add_space(row_spacer);
                 }
@@ -340,16 +352,22 @@ pub(super) fn draw_drum_rows(
                     let vel = pattern.get(i).map(|s| s.velocity).unwrap_or(0.0);
                     ui.add_enabled_ui(abs < voice_steps, |ui| {
                         let prob = pattern.get(i).map(|s| s.probability).unwrap_or(1.0);
-                        if widgets::step_button(
+                        if let Some(new_active) = widgets::step_button(
                             ui, is_active, is_current, vel, prob, None, None, pad_px,
                         ) {
-                            toggled = Some(abs);
+                            toggled = Some((abs, new_active));
                         }
                     });
                 }
-                if let Some(step) = toggled {
+                if let Some((step, new_active)) = toggled {
                     let s = app.state.read().clone();
-                    *app.state.write() = toggle_drum_step(s, *voice, step);
+                    let cur = s.sequencer.drum_patterns[voice]
+                        .get(step)
+                        .map(|p| p.active)
+                        .unwrap_or(false);
+                    if cur != new_active {
+                        *app.state.write() = toggle_drum_step(s, *voice, step);
+                    }
                 }
             });
 

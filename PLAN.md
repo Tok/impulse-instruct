@@ -45,26 +45,9 @@ they ship and are reflected in `features.md`.
   accuracy and music theory.  Gemma 4 26B-A4B is now downloadable
   (three quants); needs a head-to-head vs. E4B on the style + bass +
   theory suites.
-- [ ] **Auto-sync rack on app start to active style** — currently
-  the rack reflects whatever was saved in `session.json`; if the
-  user picked Classic Acid then customised the rack, restart
-  preserves the customisation.  Open question whether to auto-sync
-  on startup or leave it as an explicit re-pick from the dropdown.
 
 ## UI / UX
 
-- [ ] **Touch mode improvements** — touch-paint mode for
-  mobile / tablet; gesture support for zoom / scroll.
-- [ ] **Agent overrides escape clip too** — `agent_card.rs` LED
-  already uses a foreground layer.  Step-button / piano / knob LEDs
-  are tightly bound to their parents and would leak past widget
-  bounds with the same treatment — escalate per-site only when
-  actually needed.
-- [ ] **Real shaders for LEDs / oscilloscope phosphor** — would
-  replace the current multi-circle software glow with a wgpu
-  callback for a true HDR bloom + scanline effect.  Scoping this
-  requires registering a custom render pipeline; it'd be its own
-  subsystem.
 
 ## Demo recording
 

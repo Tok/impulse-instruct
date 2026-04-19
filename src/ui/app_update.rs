@@ -225,6 +225,35 @@ impl eframe::App for ImpulseApp {
         // prompt to get a basic pattern going so the track isn't silent.
         if !self.startup_done && !self.show_wizard && !self.state.read().llm.llm_initializing {
             self.startup_done = true;
+            // Auto-sync rack to active style — opt-in preference.  When
+            // on and a genre style is active, reshape the rack to match
+            // the style's `rack_modules` so restarting in Classic Acid
+            // never leaves a Hoover in the rack from a prior session.
+            // Skip for `__free__` / `__custom__` (no rack_modules to
+            // sync to) and when no style is set.
+            let (autosync, style_modules) = {
+                let s = self.state.read();
+                let sync = s.ui_prefs.autosync_rack_on_start;
+                let modules = match s.llm.active_style.as_deref() {
+                    Some("__free__") | Some("__custom__") | None => None,
+                    Some(id) => crate::llm::styles::StyleCatalog::get()
+                        .find_by_id(id)
+                        .map(|st| st.rack_modules.clone()),
+                };
+                (sync, modules)
+            };
+            if autosync
+                && let Some(modules) = style_modules
+                && !modules.is_empty()
+            {
+                crate::ui::style_rack::apply(self, &modules);
+                log::info!(
+                    "startup: auto-synced rack to active style ({} modules)",
+                    modules.len()
+                );
+                self.log_text
+                    .push_str("[ rack auto-synced to active style ]\n");
+            }
             let has_agents = !self.state.read().llm_agents.is_empty();
             if has_agents {
                 // Phrase the prompt in terms of the user's selected style

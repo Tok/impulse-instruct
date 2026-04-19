@@ -55,6 +55,8 @@ pub struct SessionData {
     #[serde(default)]
     pub wasd_as_arrows: Option<bool>,
     #[serde(default)]
+    pub autosync_rack_on_start: Option<bool>,
+    #[serde(default)]
     pub enable_thinking: Option<bool>,
     #[serde(default)]
     pub show_thinking_in_log: Option<bool>,
@@ -92,6 +94,7 @@ pub fn save_session_ext(
         log_level_idx: Some(state.ui_prefs.log_level_idx),
         autosave_interval: Some(state.ui_prefs.autosave_interval),
         wasd_as_arrows: Some(state.ui_prefs.wasd_as_arrows),
+        autosync_rack_on_start: Some(state.ui_prefs.autosync_rack_on_start),
         enable_thinking: Some(state.llm.enable_thinking),
         show_thinking_in_log: Some(state.llm.show_thinking_in_log),
         temperature: Some(state.llm.temperature),
@@ -187,6 +190,9 @@ pub fn apply_session(state: &mut AppState, data: SessionData) {
     }
     if let Some(v) = data.wasd_as_arrows {
         state.ui_prefs.wasd_as_arrows = v;
+    }
+    if let Some(v) = data.autosync_rack_on_start {
+        state.ui_prefs.autosync_rack_on_start = v;
     }
     if let Some(v) = data.enable_thinking {
         state.llm.enable_thinking = v;
