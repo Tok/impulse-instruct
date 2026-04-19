@@ -34,7 +34,7 @@ pub(crate) fn list_recent_projects_in(dir: &Path) -> Vec<PathBuf> {
         })
         .collect();
     // Newest first.
-    hits.sort_by(|a, b| b.1.cmp(&a.1));
+    hits.sort_by_key(|entry| std::cmp::Reverse(entry.1));
     hits.into_iter().map(|(p, _)| p).collect()
 }
 
