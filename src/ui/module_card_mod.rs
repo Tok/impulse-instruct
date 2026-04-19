@@ -93,12 +93,32 @@ const ALL_TARGETS: &[LfoTarget] = &[
     LfoTarget::StereoWidth,
 ];
 
-/// Vertical gap between successive back-panel ports.  Overlays now sit on
-/// the SAME ROW as the jack/label (anchored to the right of the label
-/// rather than below it), so we can pack jacks tighter again.  32 leaves
-/// a couple of pixels of clearance even when the chip row wraps to a
-/// second line.
-const PORT_SPACING: f32 = 32.0;
+/// Vertical gap between successive back-panel ports.
+/// - Fixed jacks: tight (no chip strip).
+/// - Selector jacks: taller (chip strip wraps under the slider).
+/// - Compact mode: 1-cell-tall cards (NoiseVoice, most FX) can't afford
+///   the tall selector spacing, so selectors collapse their chip strip
+///   inline onto the slider row and stack at the same tight pitch as
+///   Fixed jacks — otherwise a 3-jack FX overlay overflows its card.
+const PORT_SPACING_FIXED: f32 = 24.0;
+const PORT_SPACING_SELECTOR: f32 = 42.0;
+const PORT_SPACING_COMPACT: f32 = 24.0;
+
+/// True if the module kind has room for the 2-row selector overlay.
+/// Currently keyed off grid height: anything taller than one grid row
+/// can fit the stacked chip strip; one-row cards use compact mode.
+pub(crate) fn back_is_compact(kind: ModuleKind) -> bool {
+    kind.grid_size(crate::state::rack::GRID_COLS).1 <= 1
+}
+
+/// Vertical spacing for a given slot kind, given the card's compact flag.
+fn slot_spacing(slot: &crate::state::modulation::ModInput, compact: bool) -> f32 {
+    match slot {
+        crate::state::modulation::ModInput::Fixed(_) => PORT_SPACING_FIXED,
+        crate::state::modulation::ModInput::Selector if compact => PORT_SPACING_COMPACT,
+        crate::state::modulation::ModInput::Selector => PORT_SPACING_SELECTOR,
+    }
+}
 
 /// Chip-text font size (px) — shrunk slightly from the previous 7.5 so the
 /// per-target chips fit more per row inside a typical card width.
@@ -173,10 +193,16 @@ pub fn has_control_in(kind: ModuleKind) -> bool {
 }
 
 /// Computed back-panel strip height — AUD/CV/CTL share a single horizontal
-/// top row (~36 px), then the mod-input jacks stack vertically below.
+/// top row (~32 px), then the mod-input jacks stack vertically below
+/// using `slot_spacing` for each slot (Fixed = tight, Selector = taller,
+/// Selector-on-1-cell-card = tight with inline chips).
 pub fn back_strip_height(kind: ModuleKind) -> f32 {
-    let mods = mod_inputs(kind).len();
-    (36.0 + mods as f32 * PORT_SPACING).max(48.0)
+    let compact = back_is_compact(kind);
+    let stack: f32 = mod_inputs(kind)
+        .iter()
+        .map(|s| slot_spacing(s, compact))
+        .sum();
+    (32.0 + stack).max(40.0)
 }
 
 /// Draw Mod-in jacks for `kind` starting at `start_y` on the left (input)
@@ -226,7 +252,7 @@ pub fn draw_mod_input_ports(
             Sense::hover(),
         )
         .on_hover_text(tip);
-        y += PORT_SPACING;
+        y += slot_spacing(slot, back_is_compact(kind));
     }
     y
 }
@@ -299,6 +325,7 @@ pub fn draw_mod_selector_dropdowns(
             continue;
         };
         let is_selector = matches!(slot, ModInput::Selector);
+        let compact = back_is_compact(*kind);
         let cur_targets: Vec<LfoTarget> = selectors.get(idx).cloned().unwrap_or_default();
         let cur_depth = depths.get(idx).copied().unwrap_or(1.0).clamp(0.0, 1.0);
         let cur_invert = inverts.get(idx).copied().unwrap_or(false);
@@ -348,20 +375,24 @@ pub fn draw_mod_selector_dropdowns(
                     .inner_margin(egui::Margin::symmetric(3.0, 1.0));
                 frame.show(ui, |ui| {
                     ui.spacing_mut().item_spacing = Vec2::new(3.0, 1.0);
-                    // First row: polarity · depth slider · % readout.
-                    // Slider width is derived from `overlay_max_w` (which
-                    // tracks the card width) minus reserved space for the
-                    // polarity chip + % label + paddings.  This avoids
-                    // any reliance on `available_width` (which jitters
-                    // inside Areas when wrapped chips reflow).
-                    ui.horizontal(|ui| {
+                    // First row: polarity · depth slider · % readout
+                    // (+ inlined chip strip when the card is compact so
+                    // 1-cell-tall modules don't overflow their strip).
+                    ui.horizontal_wrapped(|ui| {
                         let pol_label = if cur_invert { "−" } else { "+" };
                         if chip_button(ui, pol_label, cur_invert).clicked() {
                             invert_changes.push((p.port.module_id, idx, !cur_invert));
                         }
                         // polarity ~14, pct readout ~30, frame padding 6,
                         // item spacing 3*2 — leaves the rest for the slider.
-                        let slider_w = (overlay_max_w - 14.0 - 30.0 - 12.0).clamp(20.0, 60.0);
+                        // In compact mode the slider shrinks further so the
+                        // chip row fits on the same line; otherwise it can
+                        // stretch up to 140 px on wider cards.
+                        let slider_w = if compact {
+                            (overlay_max_w - 14.0 - 30.0 - 12.0).clamp(14.0, 40.0)
+                        } else {
+                            (overlay_max_w - 14.0 - 30.0 - 12.0).clamp(20.0, 140.0)
+                        };
                         let mut d = cur_depth;
                         // Aggressively shrink the slider's interact size,
                         // padding, and item spacing so the handle + track
@@ -370,7 +401,7 @@ pub fn draw_mod_selector_dropdowns(
                         // narrowest 2-cell-wide FX cards.
                         let style = ui.style_mut();
                         style.spacing.slider_width = slider_w;
-                        style.spacing.interact_size.y = 10.0;
+                        style.spacing.interact_size.y = 8.0;
                         style.spacing.button_padding = egui::vec2(2.0, 0.0);
                         style.spacing.item_spacing = egui::vec2(2.0, 0.0);
                         ui.add(egui::Slider::new(&mut d, 0.0..=1.0).show_value(false))
@@ -379,21 +410,58 @@ pub fn draw_mod_selector_dropdowns(
                                 if cur_invert { "-" } else { "+" },
                                 cur_depth * 100.0
                             ));
-                        ui.label(
-                            egui::RichText::new(format!(
-                                "{}{:>3}%",
-                                if cur_invert { "-" } else { " " },
-                                (d * 100.0).round() as i32
-                            ))
-                            .monospace()
-                            .size(7.0)
-                            .color(Color32::from_gray(170)),
+                        // Allocate a fixed-size slot matching the slider's
+                        // 12-px row height so `centered_and_justified` can
+                        // vertically centre the % readout inside it — the
+                        // outer `horizontal_wrapped` is Align::TOP which
+                        // would otherwise float the small label at the top
+                        // of the tall slider row.
+                        ui.allocate_ui_with_layout(
+                            egui::vec2(28.0, 12.0),
+                            egui::Layout::centered_and_justified(egui::Direction::LeftToRight),
+                            |ui| {
+                                ui.label(
+                                    egui::RichText::new(format!(
+                                        "{}{:>3}%",
+                                        if cur_invert { "-" } else { " " },
+                                        (d * 100.0).round() as i32
+                                    ))
+                                    .monospace()
+                                    .size(7.0)
+                                    .color(Color32::from_gray(170)),
+                                );
+                            },
                         );
                         if d != cur_depth {
                             depth_changes.push((p.port.module_id, idx, d));
                         }
+                        // Compact + Selector: inline chip strip right after
+                        // the % readout so the overlay stays single-row.
+                        if compact && is_selector {
+                            ui.add_space(2.0);
+                            if chip_button(ui, "—", all_selected).clicked() {
+                                let new_targets = if all_selected {
+                                    Vec::new()
+                                } else {
+                                    real_targets.clone()
+                                };
+                                sel_changes.push((p.port.module_id, idx, new_targets));
+                            }
+                            for t in &real_targets {
+                                let active = cur_targets.contains(t);
+                                if chip_button(ui, lfo_target_short_label(*t), active).clicked() {
+                                    let mut next = cur_targets.clone();
+                                    if active {
+                                        next.retain(|x| x != t);
+                                    } else {
+                                        next.push(*t);
+                                    }
+                                    sel_changes.push((p.port.module_id, idx, next));
+                                }
+                            }
+                        }
                     });
-                    if is_selector {
+                    if is_selector && !compact {
                         // Second (+) row: ALL meta-chip + per-target chips.
                         // Wrapped so wide kits split into multiple lines
                         // instead of running off the side of the card.

@@ -96,10 +96,16 @@ fn draw_llm_agent_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, module_id: u32)
                 } else {
                     0.30
                 };
-                let overlay = ui.ctx().layer_painter(egui::LayerId::new(
+                // Foreground layer so the LED halo lands on top of the
+                // persona TextEdit + model combo, but clipped to the
+                // CentralPanel's rect so the halo can't escape upward
+                // into the header log panel when the agent card scrolls
+                // past the rack's top edge.
+                let mut overlay = ui.ctx().layer_painter(egui::LayerId::new(
                     egui::Order::Foreground,
                     ui.id().with("agent_led").with(module_id),
                 ));
+                overlay.set_clip_rect(ui.ctx().available_rect());
                 theme::led(
                     &overlay,
                     led_rect.center(),

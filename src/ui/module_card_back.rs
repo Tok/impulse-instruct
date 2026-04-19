@@ -248,10 +248,12 @@ pub fn module_card_back(
             // Inputs grow left → right from left_x; labels sit below the
             // port circle so each port pair fits in a narrow column.  Mod
             // jacks then stack vertically below.
-            let row_y = strip_rect.top() + 12.0;
+            let row_y = strip_rect.top() + 10.0;
             // Push the first mod jack down a little so the chip overlays
-            // (which now sit below the labels) don't crowd the top port row.
-            let mod_start_y = strip_rect.top() + 36.0;
+            // (which sit to the right of the labels) don't crowd the top
+            // AUD/CV/CTL port row.  Bumped 28 → 32 so the slider row has
+            // a few extra px of clearance from the AUD label text above.
+            let mod_start_y = strip_rect.top() + 32.0;
             let port_step_x = 24.0;
             let mut in_x = left_x;
             let mut place_in = |kind_p: PortKind, label: &str, hover: &str, hash: &str| {
