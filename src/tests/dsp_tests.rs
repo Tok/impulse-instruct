@@ -197,6 +197,44 @@ mod style_propagation_tests {
             "locked agent should keep its style"
         );
     }
+
+    #[test]
+    fn apply_pattern_style_on_advance_sets_global_and_agents() {
+        use crate::state::apply_pattern_style_on_advance;
+        let s = AppState::default();
+        let (s, _) = spawn_agent(s, "A", &[], AgentRole::Producer, None);
+        let (s, _) = spawn_agent(s, "B", &[], AgentRole::Producer, None);
+        let s = apply_pattern_style_on_advance(s, Some("drum_and_bass"));
+        assert_eq!(s.llm.active_style.as_deref(), Some("drum_and_bass"));
+        for a in &s.llm_agents {
+            assert_eq!(a.active_style.as_deref(), Some("drum_and_bass"));
+        }
+    }
+
+    #[test]
+    fn apply_pattern_style_on_advance_with_none_is_noop() {
+        use crate::state::apply_pattern_style_on_advance;
+        let mut s = AppState::default();
+        s.llm.active_style = Some("ambient".into());
+        let s = apply_pattern_style_on_advance(s, None);
+        assert_eq!(s.llm.active_style.as_deref(), Some("ambient"));
+    }
+
+    #[test]
+    fn apply_pattern_style_respects_agent_lock() {
+        use crate::state::apply_pattern_style_on_advance;
+        let s = AppState::default();
+        let (mut s, _) = spawn_agent(s, "Locked", &[], AgentRole::Producer, None);
+        s.llm_agents[0].style_locked = true;
+        s.llm_agents[0].active_style = Some("techno".into());
+        let s = apply_pattern_style_on_advance(s, Some("acid"));
+        assert_eq!(s.llm.active_style.as_deref(), Some("acid"));
+        assert_eq!(
+            s.llm_agents[0].active_style.as_deref(),
+            Some("techno"),
+            "locked agent should retain its style"
+        );
+    }
 }
 
 // ── fx_math: extracted pure DSP helpers ─────────────────────────────────────

@@ -1388,6 +1388,7 @@ scrolls.
 - Per-step: velocity, probability (0-100%), ratchet (1-4x), accent, slide
 - Euclidean rhythm generator
 - Pattern bank (8 slots), chain playback (up to 8 patterns in sequence)
+- **Song mode style transitions** - `SequencerState.pattern_style: Option<String>` per bank slot; when the chain auto-advances into a slot whose style is `Some(id)`, `apply_pattern_style_on_advance` sets the global `llm.active_style` + propagates to unlocked agents so the chain can drive genre shifts mid-song.  Picker lives at the end of the pattern-bank row (sequencer_chain.rs); persists with the project JSON like any other sequencer field.
 - Live record - MIDI keyboard writes directly into steps
 - Time signature selector (4/4, 3/4, 5/4, 6/8, 7/8...)
 - Mute/solo per row, pattern copy/paste

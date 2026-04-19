@@ -791,6 +791,22 @@ pub fn propagate_style(state: AppState, style_id: &str) -> AppState {
     s
 }
 
+/// Apply a pattern's `pattern_style` tag on chain advance.  When the song
+/// chain walks into a slot whose loaded `SequencerState.pattern_style` is
+/// `Some(id)`, this sets the global `llm.active_style` and propagates it
+/// to all unlocked agents — the core of per-chain style transitions.
+/// `None` leaves the active style unchanged.
+pub fn apply_pattern_style_on_advance(state: AppState, style: Option<&str>) -> AppState {
+    match style {
+        Some(id) => {
+            let mut s = state;
+            s.llm.active_style = Some(id.to_string());
+            propagate_style(s, id)
+        }
+        None => state,
+    }
+}
+
 /// Propagate a seed change to all agents whose seed is not locked.  Mirrors
 /// `propagate_style` — `seed = -1` means "random each call".
 pub fn propagate_seed(state: AppState, seed: i64) -> AppState {

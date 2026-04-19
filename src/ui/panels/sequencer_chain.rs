@@ -2,6 +2,7 @@
 // Pattern bank selector and chain editor for the sequencer panel.
 // Also home to small shared sequencer-row helpers (e.g. per-step pan).
 
+use crate::llm::styles::StyleCatalog;
 use crate::state::{bank_swap, bank_write, chain_pop, chain_push, set_chain_enabled};
 use crate::ui::{ImpulseApp, theme};
 
@@ -188,5 +189,64 @@ pub fn draw_pattern_chain(app: &mut ImpulseApp, ui: &mut egui::Ui) {
     {
         let s = app.state.read().clone();
         *app.state.write() = set_chain_enabled(s, !chain_enabled);
+    }
+
+    // Per-slot style tag — pick a style to apply on chain-advance into the
+    // currently-edited slot.  None = "leave active style unchanged when
+    // this slot plays".  Shown as "STYLE [name]" after ON/OF so the whole
+    // row reads as an arrangement tool.
+    ui.separator();
+    let cur_style = app.state.read().sequencer.pattern_style.clone();
+    let cur_label = match cur_style.as_deref() {
+        Some(id) => StyleCatalog::get()
+            .styles()
+            .iter()
+            .find(|s| s.id == id)
+            .map(|s| s.name.clone())
+            .unwrap_or_else(|| id.to_string()),
+        None => "—".to_string(),
+    };
+    ui.label(
+        egui::RichText::new("STYLE")
+            .color(theme::SMOKE)
+            .monospace()
+            .size(8.0),
+    );
+    let mut new_style: Option<Option<String>> = None;
+    egui::ComboBox::from_id_source("pattern_style_combo")
+        .selected_text(
+            egui::RichText::new(cur_label)
+                .monospace()
+                .size(8.0)
+                .color(theme::FOG),
+        )
+        .width(110.0)
+        .show_ui(ui, |ui| {
+            if ui
+                .selectable_label(
+                    cur_style.is_none(),
+                    egui::RichText::new("— (no style change)")
+                        .monospace()
+                        .size(9.0),
+                )
+                .clicked()
+            {
+                new_style = Some(None);
+            }
+            ui.separator();
+            for s in StyleCatalog::get().styles() {
+                if ui
+                    .selectable_label(
+                        cur_style.as_deref() == Some(s.id.as_str()),
+                        egui::RichText::new(&s.name).monospace().size(9.0),
+                    )
+                    .clicked()
+                {
+                    new_style = Some(Some(s.id.clone()));
+                }
+            }
+        });
+    if let Some(sel) = new_style {
+        app.state.write().sequencer.pattern_style = sel;
     }
 }

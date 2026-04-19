@@ -187,6 +187,14 @@ pub struct SequencerState {
     /// `[3, 0, 1, 2]` shifts the whole pattern by 3 slices).
     #[serde(default)]
     pub amen_slice_order: Vec<u8>,
+    /// Song-mode style tag.  When the pattern bank is playing through a
+    /// chain and this slot becomes active, `pattern_style` (if `Some`)
+    /// is applied as the global `LlmState.active_style` and propagated
+    /// to all unlocked agents — the core of "per-chain style
+    /// transitions".  `None` = leave the active style unchanged when
+    /// the chain advances to this slot.
+    #[serde(default)]
+    pub pattern_style: Option<String>,
 }
 
 impl Default for SequencerState {
@@ -238,6 +246,7 @@ impl Default for SequencerState {
             bass_voice_enabled: default_bass_voice_enabled(),
             preecho: std::collections::HashMap::new(),
             amen_slice_order: Vec::new(),
+            pattern_style: None,
         }
     }
 }

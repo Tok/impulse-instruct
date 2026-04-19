@@ -316,11 +316,24 @@ impl AudioEngine {
                             s.chain_pos = (chain_pos_snap + 1) % chain_snap.len();
                             s.sequencer =
                                 s.pattern_bank.get(next_slot).cloned().unwrap_or_default();
+                            // Song mode: if the loaded pattern carries a
+                            // style tag, apply it globally + propagate to
+                            // unlocked agents so chain boundaries can drive
+                            // style transitions.  Pulled out of the loaded
+                            // pattern before we overwrite bpm/swing/running.
+                            let loaded_style = s.sequencer.pattern_style.clone();
                             s.sequencer.bpm = bpm;
                             s.sequencer.swing = swing;
                             s.sequencer.running = running;
                             s.sequencer.current_step = clock.current_step;
                             s.pattern_edit = next_slot;
+                            if loaded_style.is_some() {
+                                let owned = std::mem::take(&mut *s);
+                                *s = crate::state::apply_pattern_style_on_advance(
+                                    owned,
+                                    loaded_style.as_deref(),
+                                );
+                            }
                         }
                     }
 
