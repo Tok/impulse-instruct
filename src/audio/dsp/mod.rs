@@ -9,6 +9,7 @@ pub mod gabber_kick;
 pub mod granular_voice;
 pub mod mod_apply;
 mod params;
+mod params_from;
 mod rev_tap;
 pub mod samplers;
 pub mod voices;
