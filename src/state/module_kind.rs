@@ -100,7 +100,7 @@ impl ModuleKind {
         match self {
             //                                     W     H
             Self::StepSequencer => (grid_cols, 2),
-            Self::LlmConsole => (grid_cols, 3),
+            Self::LlmConsole => (grid_cols, 1),
             Self::MasterOutput => (grid_cols, 1),
             Self::AcidBass => (4, 7),
             // Drum kits are 4 rows tall so the 3 per-voice glass groups
@@ -121,8 +121,8 @@ impl ModuleKind {
             Self::StereoMeter => (2, 1),
             Self::LfoModule => (2, 2),
             // FX modules — exhaustive so new variants cause a compile error
+            Self::FxDelay => (2, 2), // 5-button row can't fit in 1 row
             Self::FxReverb
-            | Self::FxDelay
             | Self::FxChorus
             | Self::FxPhaser
             | Self::FxRingMod

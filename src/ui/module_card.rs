@@ -372,27 +372,21 @@ pub fn module_card_sized<R>(
                 }
                 let lit = enabled && reaches_master;
                 if lit {
-                    // Asymmetric clip extension: the LED sits in the
-                    // module's title bar, so the halo below + sides bleeds
-                    // naturally into the inter-module gap, but the upward
-                    // bloom would otherwise run into whatever panel sits
-                    // above the rack (the global header log scrolling
-                    // past the LLM console, for one).  Limit upward
-                    // expansion to the few pixels of halo that actually
-                    // extend above the title bar; allow full halo_pad on
-                    // sides + down.
+                    // Extend the clip rect so the LED halo can bleed into
+                    // the inter-module gap, but intersect with the central
+                    // panel's rect so the halo can never escape upward
+                    // into the header area.  `ctx.available_rect()` is the
+                    // CentralPanel's remaining space after every
+                    // TopBottomPanel has claimed its height — its top edge
+                    // sits exactly at the rack's drawable top, which is
+                    // where we want the LED halo to stop.
                     let halo_pad = led_r * 6.0;
-                    // Zero upward expansion — the halo's upper crown is
-                    // clipped to the title-bar top, but that's preferable
-                    // to letting it bleed past the module border into
-                    // whatever panel scrolls past above (e.g. the global
-                    // header log behind the LLM console).
-                    let upward_pad = 0.0;
                     let cr = painter.clip_rect();
                     let bounded = egui::Rect::from_min_max(
-                        egui::pos2(cr.min.x - halo_pad, cr.min.y - upward_pad),
+                        egui::pos2(cr.min.x - halo_pad, cr.min.y - halo_pad),
                         egui::pos2(cr.max.x + halo_pad, cr.max.y + halo_pad),
-                    );
+                    )
+                    .intersect(ui.ctx().available_rect());
                     let extended = painter.clone().with_clip_rect(bounded);
                     theme::led(&extended, led_center, led_r, Color32::from_gray(220), 1.0);
                 } else {

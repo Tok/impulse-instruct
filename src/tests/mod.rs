@@ -30,6 +30,7 @@ mod rack_reach_tests;
 mod rack_tests;
 mod seq_aux_tests;
 mod seq_tests;
+mod song_mode_tests;
 mod state_tests;
 mod transitions_presets_tests;
 mod transport_tests;
