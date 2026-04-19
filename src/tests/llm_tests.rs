@@ -262,6 +262,114 @@ mod style_tests {
         );
     }
     #[test]
+    fn effective_mc_lines_falls_back_to_baseline_when_no_override() {
+        use crate::state::{AppState, effective_mc_lines};
+        let state = AppState::default();
+        // acid_classic ships with baseline mc_lines in styles.json.
+        let lines = effective_mc_lines(&state, "acid_classic");
+        assert!(
+            !lines.is_empty(),
+            "expected baseline mc_lines for acid_classic"
+        );
+    }
+
+    #[test]
+    fn effective_mc_lines_honours_override_when_set() {
+        use crate::state::{AppState, StyleOverride, effective_mc_lines};
+        let mut state = AppState::default();
+        let custom = vec!["Custom line one.".to_string(), "Another custom.".into()];
+        state.style_overrides.insert(
+            "acid_classic".into(),
+            StyleOverride {
+                mc_lines: Some(custom.clone()),
+                themes: None,
+            },
+        );
+        assert_eq!(effective_mc_lines(&state, "acid_classic"), custom);
+    }
+
+    #[test]
+    fn effective_mc_lines_empty_override_silences_baseline() {
+        // Setting the override to an empty vec is "clear this style's
+        // lines", distinct from "fall back to baseline" (which is None).
+        use crate::state::{AppState, StyleOverride, effective_mc_lines};
+        let mut state = AppState::default();
+        state.style_overrides.insert(
+            "acid_classic".into(),
+            StyleOverride {
+                mc_lines: Some(Vec::new()),
+                themes: None,
+            },
+        );
+        assert!(effective_mc_lines(&state, "acid_classic").is_empty());
+    }
+
+    #[test]
+    fn effective_themes_mirrors_mc_lines_semantics() {
+        use crate::state::{AppState, StyleOverride, effective_themes};
+        let mut state = AppState::default();
+        state.style_overrides.insert(
+            "acid_classic".into(),
+            StyleOverride {
+                mc_lines: None,
+                themes: Some(vec!["desert".into(), "chrome".into()]),
+            },
+        );
+        let t = effective_themes(&state, "acid_classic");
+        assert_eq!(t, vec!["desert".to_string(), "chrome".to_string()]);
+    }
+
+    #[test]
+    fn style_override_is_empty_helper() {
+        use crate::state::StyleOverride;
+        let mut o = StyleOverride::default();
+        assert!(o.is_empty());
+        o.mc_lines = Some(vec!["x".into()]);
+        assert!(!o.is_empty());
+    }
+
+    #[test]
+    fn style_jam_prompt_template_shape_and_length() {
+        // Any style that sets `jam_prompt_template` must provide a
+        // non-empty string ≤ 200 chars — past that the prompt starts
+        // to dominate the cycle's effective context and blurs the
+        // "one musical move per cycle" intent.
+        let catalog = StyleCatalog::get();
+        for s in catalog.styles() {
+            if let Some(t) = &s.jam_prompt_template {
+                assert!(
+                    !t.trim().is_empty(),
+                    "{} has empty jam_prompt_template — drop the field instead",
+                    s.id
+                );
+                assert!(
+                    t.chars().count() <= 200,
+                    "{} jam_prompt_template too long ({} chars) — keep ≤ 200",
+                    s.id,
+                    t.chars().count()
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn every_seeded_style_has_a_jam_prompt_template() {
+        // Smoke test: at least 20 styles ship with jam prompts.  Guards
+        // against accidentally stripping the seed data in a re-run.
+        let catalog = StyleCatalog::get();
+        let with_prompt = catalog
+            .styles()
+            .iter()
+            .filter(|s| s.jam_prompt_template.is_some())
+            .count();
+        assert!(
+            with_prompt >= 20,
+            "expected at least 20 styles with jam_prompt_template, got {}",
+            with_prompt
+        );
+    }
+
+    #[test]
     fn all_styles_have_lane_dynamism() {
         let catalog = StyleCatalog::get();
         let missing: Vec<&str> = catalog

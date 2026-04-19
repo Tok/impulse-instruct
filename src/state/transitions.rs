@@ -941,3 +941,24 @@ pub fn push_agent_memory(state: AppState, agent_id: u32, snippet: String) -> App
     }
     s
 }
+
+/// Push a short-term conversation snippet to an agent's `recent_outputs`
+/// trail, capping at `AGENT_RECENT_OUTPUTS_MAX`.  Empty / whitespace-only
+/// snippets are no-ops so the inference loop can unconditionally call
+/// this even when a cycle returns nothing interesting.  Unlike
+/// `push_agent_memory` (unbounded long-term recall) this trail is
+/// intentionally small — it exists to give the agent short-term context
+/// of its own recent moves, not to archive history.
+pub fn push_agent_recent_output(state: AppState, agent_id: u32, snippet: String) -> AppState {
+    let mut s = state;
+    if snippet.trim().is_empty() {
+        return s;
+    }
+    if let Some(agent) = s.llm_agents.iter_mut().find(|a| a.id == agent_id) {
+        agent.recent_outputs.push_back(snippet);
+        while agent.recent_outputs.len() > super::AGENT_RECENT_OUTPUTS_MAX {
+            agent.recent_outputs.pop_front();
+        }
+    }
+    s
+}

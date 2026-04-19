@@ -76,11 +76,7 @@ impl eframe::App for ImpulseApp {
             if std::time::Instant::now() >= fire_at {
                 self.jam_next_fire = None;
                 if self.state.read().llm.heat > 0.0 {
-                    self.send_llm_infer(
-                        "continue jamming, evolve the pattern".to_string(),
-                        false,
-                        pending_agent,
-                    );
+                    self.send_llm_infer(self.jam_prompt_for_active_style(), false, pending_agent);
                 }
             } else {
                 // Still waiting — request a repaint so we check again next frame

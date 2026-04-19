@@ -371,6 +371,50 @@ mod push_agent_memory_tests {
 }
 
 #[cfg(test)]
+mod push_agent_recent_output_tests {
+    use crate::state::{
+        AGENT_RECENT_OUTPUTS_MAX, AgentRole, AppState, push_agent_recent_output, spawn_agent,
+    };
+
+    #[test]
+    fn push_appends_and_caps() {
+        let (mut s, id) = spawn_agent(AppState::default(), "Bot", &[], AgentRole::Producer, None);
+        // Push more than the max — oldest should drop off.
+        for i in 0..(AGENT_RECENT_OUTPUTS_MAX + 2) {
+            s = push_agent_recent_output(s, id, format!("cycle {i}"));
+        }
+        let agent = s.llm_agents.iter().find(|a| a.id == id).unwrap();
+        assert_eq!(agent.recent_outputs.len(), AGENT_RECENT_OUTPUTS_MAX);
+        // Front is the oldest survivor (index 2 since 0 and 1 dropped).
+        assert_eq!(
+            agent.recent_outputs.front().map(|s| s.as_str()),
+            Some("cycle 2")
+        );
+        assert_eq!(
+            agent.recent_outputs.back().map(|s| s.as_str()),
+            Some(format!("cycle {}", AGENT_RECENT_OUTPUTS_MAX + 1).as_str())
+        );
+    }
+
+    #[test]
+    fn empty_snippet_is_noop() {
+        let (s, id) = spawn_agent(AppState::default(), "Bot", &[], AgentRole::Producer, None);
+        let s = push_agent_recent_output(s, id, "   ".to_string());
+        let agent = s.llm_agents.iter().find(|a| a.id == id).unwrap();
+        assert!(agent.recent_outputs.is_empty());
+    }
+
+    #[test]
+    fn unknown_id_is_noop() {
+        let s = AppState::default();
+        let s = push_agent_recent_output(s, 999_999, "ignored".to_string());
+        for a in &s.llm_agents {
+            assert!(a.recent_outputs.is_empty());
+        }
+    }
+}
+
+#[cfg(test)]
 mod format_llm_display_tests {
     use crate::state::{ConversationMode, format_llm_display};
     use serde_json::json;

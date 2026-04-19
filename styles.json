@@ -47,7 +47,8 @@
     "mc_lines": ["Acid. Pure acid.","Feel the three oh three.","The filter is the melody.","Squelch it. Harder."],
     "themes": ["squelch","filter","warehouse","Chicago","raw"],
     "rack_modules": ["bass","808","reverb"],
-    "lane_dynamism": {"bass":0.95,"kit_a":0.7,"kit_b":0.3,"fx":0.3,"hoover":0.0,"an1x":0.0}
+    "lane_dynamism": {"bass":0.95,"kit_a":0.7,"kit_b":0.3,"fx":0.3,"hoover":0.0,"an1x":0.0},
+    "jam_prompt_template": "keep it minimal — tighten the squelch, filter sweep the 303, nothing else moves"
   },
   {
     "id": "acid_house",
@@ -91,7 +92,8 @@
     "mc_lines": ["Let the acid take you.","Three oh three state of mind.","This is how we do it. Filter up.","Acid never dies."],
     "themes": ["acid","dance floor","bass line","late night"],
     "rack_modules": ["bass","808","909","reverb","delay","chorus"],
-    "lane_dynamism": {"bass":0.9,"kit_a":0.8,"kit_b":0.7,"fx":0.45,"hoover":0.0,"an1x":0.0}
+    "lane_dynamism": {"bass":0.9,"kit_a":0.8,"kit_b":0.7,"fx":0.45,"hoover":0.0,"an1x":0.0},
+    "jam_prompt_template": "evolve the 303 filter + accent, leave the kick/hat grid alone unless it drags"
   },
   {
     "id": "acid_techno",
@@ -137,7 +139,8 @@
     "mc_lines": ["Relentless.","The machine speaks.","Lock in. This doesn't stop.","Raw power."],
     "themes": ["machine","industrial","raw","power","warehouse"],
     "rack_modules": ["bass","808","909","reverb","delay","drive"],
-    "lane_dynamism": {"bass":0.9,"kit_a":0.85,"kit_b":0.8,"fx":0.6,"hoover":0.0,"an1x":0.0}
+    "lane_dynamism": {"bass":0.9,"kit_a":0.85,"kit_b":0.8,"fx":0.6,"hoover":0.0,"an1x":0.0},
+    "jam_prompt_template": "push harder — more env_mod, more drive, sharper pattern variations"
   },
   {
     "id": "detroit_techno",
@@ -182,7 +185,8 @@
     },
     "themes": ["future","space","machine soul","motor city","elevation"],
     "rack_modules": ["bass","808","909","reverb","delay"],
-    "lane_dynamism": {"bass":0.8,"kit_a":0.8,"kit_b":0.75,"an1x":0.8,"fx":0.55,"hoover":0.0}
+    "lane_dynamism": {"bass":0.8,"kit_a":0.8,"kit_b":0.75,"an1x":0.8,"fx":0.55,"hoover":0.0},
+    "jam_prompt_template": "add one melodic motion on the an1x, keep the groove dignified and futuristic"
   },
   {
     "id": "berlin_techno",
@@ -224,7 +228,8 @@
     },
     "themes": ["concrete","dark room","repetition","hypnosis"],
     "rack_modules": ["bass","808","909","reverb","delay","drive","compressor"],
-    "lane_dynamism": {"bass":0.75,"kit_a":0.9,"kit_b":0.8,"fx":0.55,"mod":0.65,"hoover":0.0,"an1x":0.5}
+    "lane_dynamism": {"bass":0.75,"kit_a":0.9,"kit_b":0.8,"fx":0.55,"mod":0.65,"hoover":0.0,"an1x":0.5},
+    "jam_prompt_template": "hypnotic evolution only — tiny filter moves, dub out a hat, no new melodies"
   },
   {
     "id": "chicago_house",
@@ -309,7 +314,8 @@
     "mc_lines": ["Go deeper.","Let it wash over you.","Deeper. Always deeper.","This groove right here."],
     "themes": ["deep","groove","soul","midnight","warmth"],
     "rack_modules": ["bass","808","an1x","reverb","delay","chorus","eq"],
-    "lane_dynamism": {"bass":0.65,"kit_a":0.7,"kit_b":0.65,"an1x":0.8,"fx":0.65,"hoover":0.0}
+    "lane_dynamism": {"bass":0.65,"kit_a":0.7,"kit_b":0.65,"an1x":0.8,"fx":0.65,"hoover":0.0},
+    "jam_prompt_template": "let it breathe — soft chords, warm bass, resist adding more elements"
   },
   {
     "id": "uk_garage",
@@ -352,7 +358,8 @@
     "mc_lines": ["Oi oi! Big one.","Rewind that. Selector!","Two step massive.","Hold tight everyone in the building."],
     "themes": ["garage","two step","London","crew","massive"],
     "rack_modules": ["bass2","808","909","reverb","delay"],
-    "lane_dynamism": {"bass":0.85,"kit_a":0.95,"kit_b":0.9,"fx":0.5}
+    "lane_dynamism": {"bass":0.85,"kit_a":0.95,"kit_b":0.9,"fx":0.5},
+    "jam_prompt_template": "skip the kit harder, push a new 2-step fill, keep bass tight and sub-heavy"
   },
   {
     "id": "dubstep",
@@ -397,7 +404,8 @@
     "mc_lines": ["Wooooob.","Drop incoming.","Bass weight.","Low end theory."],
     "themes": ["bass","wobble","dark","sub","weight"],
     "rack_modules": ["bass2","808","909","amen","reverb","delay","drive","bitcrush"],
-    "lane_dynamism": {"bass":0.95,"kit_a":0.8,"kit_b":0.8,"fx":0.85,"mod":0.7}
+    "lane_dynamism": {"bass":0.95,"kit_a":0.8,"kit_b":0.8,"fx":0.85,"mod":0.7},
+    "jam_prompt_template": "wobble the bass filter, throw in a bass drop, leave drums spacious"
   },
   {
     "id": "jungle",
@@ -444,7 +452,8 @@
     "mc_lines": ["Junglist massive! Big up!","Rewind selecta! Pull up!","Boh! Boh! Original nuttah!","Wheel and come again!","Big up all the jungle crew."],
     "themes": ["jungle","massive","selector","ragga","bass","amen"],
     "rack_modules": ["bass","amen","808","reverb","delay","tts"],
-    "lane_dynamism": {"bass":0.85,"kit_a":0.45,"kit_b":0.45,"amen":0.95,"fx":0.55}
+    "lane_dynamism": {"bass":0.85,"kit_a":0.45,"kit_b":0.45,"amen":0.95,"fx":0.55},
+    "jam_prompt_template": "chop the amen differently, tighten the reese, add a snare fill"
   },
   {
     "id": "drum_and_bass",
@@ -514,7 +523,8 @@
     "mc_lines": ["Hold tight the jump-up massive.","Rewind! Pull it up!","Selector — let it roll.","Big up the ravers!","One time for the bass!"],
     "themes": ["jump up","stabs","breaks","amen","rewind","dancefloor"],
     "rack_modules": ["bass","amen","808","reverb","delay"],
-    "lane_dynamism": {"bass":0.9,"kit_a":0.5,"kit_b":0.45,"amen":0.95,"fx":0.55}
+    "lane_dynamism": {"bass":0.9,"kit_a":0.5,"kit_b":0.45,"amen":0.95,"fx":0.55},
+    "jam_prompt_template": "evolve the reese bass + amen chops, keep the rolling energy, one fill per bar"
   },
   {
     "id": "breakcore",
@@ -558,7 +568,8 @@
     "mc_lines": ["Chaos.","Break everything.","This is not music. This is war."],
     "themes": ["chaos","break","noise","destruction","glitch"],
     "rack_modules": ["bass2","808","909","amen","reverb","delay","drive"],
-    "lane_dynamism": {"bass":0.85,"kit_a":0.85,"kit_b":0.85,"amen":0.95,"fx":0.75,"mod":0.65}
+    "lane_dynamism": {"bass":0.85,"kit_a":0.85,"kit_b":0.85,"amen":0.95,"fx":0.75,"mod":0.65},
+    "jam_prompt_template": "glitch it — retrigger the amen, randomise probabilities, chaos over groove"
   },
   {
     "id": "dub_techno",
@@ -608,7 +619,8 @@
     },
     "themes": ["echo","fog","infinite","dub","space","Berlin"],
     "rack_modules": ["bass","808","delay","reverb","tapesat","chorus"],
-    "lane_dynamism": {"bass":0.55,"kit_a":0.55,"kit_b":0.5,"fx":0.95,"mod":0.75}
+    "lane_dynamism": {"bass":0.55,"kit_a":0.55,"kit_b":0.5,"fx":0.95,"mod":0.75},
+    "jam_prompt_template": "let the delay tail hang — tiny filter moves, zero new notes, zero new drums"
   },
   {
     "id": "minimal_techno",
@@ -649,7 +661,8 @@
       }
     },
     "rack_modules": ["bass","808","909","reverb","delay","eq"],
-    "lane_dynamism": {"bass":0.45,"kit_a":0.6,"kit_b":0.55,"fx":0.4,"mod":0.55}
+    "lane_dynamism": {"bass":0.45,"kit_a":0.6,"kit_b":0.55,"fx":0.4,"mod":0.55},
+    "jam_prompt_template": "subtle only — one knob moves per cycle, keep the groove locked and hypnotic"
   },
   {
     "id": "trance",
@@ -699,7 +712,8 @@
     "mc_lines": ["Hands up if you feel it.","Together as one.","Let the melody carry you.","This is our moment."],
     "themes": ["euphoria","unity","sunrise","melody","energy"],
     "rack_modules": ["bass","808","909","hoover","reverb","delay","chorus"],
-    "lane_dynamism": {"bass":0.8,"kit_a":0.8,"kit_b":0.75,"hoover":0.9,"an1x":0.85,"fx":0.8,"mod":0.7}
+    "lane_dynamism": {"bass":0.8,"kit_a":0.8,"kit_b":0.75,"hoover":0.9,"an1x":0.85,"fx":0.8,"mod":0.7},
+    "jam_prompt_template": "build the hoover — filter sweep open, add a lead motion, keep 4-on-floor driving"
   },
   {
     "id": "gabber",
@@ -746,7 +760,8 @@
     "mc_lines": ["Harder! Faster!","This is gabber!","No mercy on the dance floor."],
     "themes": ["hard","fast","kick","distortion","Rotterdam"],
     "rack_modules": ["gabber","drive","waveshaper"],
-    "lane_dynamism": {"bass":0.75,"kit_a":0.95,"kit_b":0.9,"fx":0.6,"hoover":0.6,"an1x":0.0}
+    "lane_dynamism": {"bass":0.75,"kit_a":0.95,"kit_b":0.9,"fx":0.6,"hoover":0.6,"an1x":0.0},
+    "jam_prompt_template": "harder kick, more distortion, push the kit to 200 BPM energy"
   },
   {
     "id": "early_rave",
@@ -800,7 +815,8 @@
     "mc_lines": ["Can you feel the bass?","Ravers! Make some noise!","One more time! One more time!","This is what it's all about."],
     "themes": ["rave","warehouse","smiley","MDMA summer","strobe"],
     "rack_modules": ["bass","hoover","808","909","reverb","drive"],
-    "lane_dynamism": {"bass":0.7,"kit_a":0.85,"kit_b":0.8,"hoover":0.95,"an1x":0.8,"fx":0.6}
+    "lane_dynamism": {"bass":0.7,"kit_a":0.85,"kit_b":0.8,"hoover":0.95,"an1x":0.8,"fx":0.6},
+    "jam_prompt_template": "hoover stabs into the downbeat, piano stab chords, keep it rave-euphoric"
   },
   {
     "id": "synthwave",
@@ -848,7 +864,8 @@
     "mc_lines": ["Chrome sunset on the digital highway.","Neon dreams in the rain.","The city never sleeps.","Electric hearts. Synthetic souls.","Midnight drive. No destination."],
     "themes": ["neon","night drive","chrome","sunset","retro future","palm trees","laser grid","Miami","cyberpunk"],
     "rack_modules": ["an1x","hoover","808","reverb","delay","chorus"],
-    "lane_dynamism": {"bass":0.75,"kit_a":0.7,"kit_b":0.65,"an1x":0.9,"hoover":0.6,"fx":0.8}
+    "lane_dynamism": {"bass":0.75,"kit_a":0.7,"kit_b":0.65,"an1x":0.9,"hoover":0.6,"fx":0.8},
+    "jam_prompt_template": "arp the an1x, sidechain-pump the chords, let the reverb tail smear"
   },
   {
     "id": "darksynth",
@@ -939,7 +956,8 @@
     "mc_lines": ["It's all just a memory now.","The mall is empty.","Nothing is real.","Late night shopping channel."],
     "themes": ["nostalgia","mall","VHS","consumerism","dream","90s","empty"],
     "rack_modules": ["an1x","hoover","reverb","delay","chorus","tape"],
-    "lane_dynamism": {"bass":0.55,"kit_a":0.5,"kit_b":0.45,"an1x":0.85,"hoover":0.6,"fx":0.9,"mod":0.65}
+    "lane_dynamism": {"bass":0.55,"kit_a":0.5,"kit_b":0.45,"an1x":0.85,"hoover":0.6,"fx":0.9,"mod":0.65},
+    "jam_prompt_template": "chop + slow down, stretch the reverb, leave space between hits"
   },
   {
     "id": "idm",
@@ -982,7 +1000,8 @@
     },
     "themes": ["glitch","algorithm","fractal","complexity"],
     "rack_modules": ["bass2","808","909","an1x","reverb","delay","bitcrush"],
-    "lane_dynamism": {"bass":0.8,"kit_a":0.85,"kit_b":0.85,"amen":0.8,"fx":0.8,"mod":0.85}
+    "lane_dynamism": {"bass":0.8,"kit_a":0.85,"kit_b":0.85,"amen":0.8,"fx":0.8,"mod":0.85},
+    "jam_prompt_template": "glitch the hats, shuffle probabilities, keep bass alien and unpredictable"
   },
   {
     "id": "electro",
@@ -1072,7 +1091,8 @@
     "mc_lines": ["Close your eyes. This one drifts.","Let the pad wash over you.","You can breathe now.","No rush. Just waves."],
     "themes": ["drift","waves","chill","sunset","clouds","breath"],
     "rack_modules": ["an1x","hoover","808","reverb","delay","chorus"],
-    "lane_dynamism": {"bass":0.5,"kit_a":0.55,"kit_b":0.45,"an1x":0.75,"hoover":0.55,"fx":0.85,"mod":0.65}
+    "lane_dynamism": {"bass":0.5,"kit_a":0.55,"kit_b":0.45,"an1x":0.75,"hoover":0.55,"fx":0.85,"mod":0.65},
+    "jam_prompt_template": "slow it — longer pads, more reverb, minimal rhythm, zero aggression"
   },
   {
     "id": "ambient_techno",
@@ -1116,7 +1136,8 @@
     "mc_lines": ["The pulse beneath the surface.","Slow and steady.","Somewhere between here and gone."],
     "themes": ["pulse","surface","horizon","depth","stillness"],
     "rack_modules": ["an1x","hoover","808","reverb","delay","chorus"],
-    "lane_dynamism": {"bass":0.5,"kit_a":0.55,"kit_b":0.45,"an1x":0.7,"fx":0.9,"mod":0.75}
+    "lane_dynamism": {"bass":0.5,"kit_a":0.55,"kit_b":0.45,"an1x":0.7,"fx":0.9,"mod":0.75},
+    "jam_prompt_template": "drone the an1x, filter-sweep the noise, 4-on-floor only as a heartbeat"
   },
   {
     "id": "dark_ambient",
@@ -1167,7 +1188,8 @@
     "mc_lines": ["Something moves in the dark.","Can you hear it?","The walls are breathing."],
     "themes": ["dark","void","dread","abandoned","echo","underground"],
     "rack_modules": ["an1x","granular","noise","reverb","delay"],
-    "lane_dynamism": {"bass":0.3,"kit_a":0.2,"kit_b":0.15,"an1x":0.75,"hoover":0.4,"fx":0.95,"mod":0.85}
+    "lane_dynamism": {"bass":0.3,"kit_a":0.2,"kit_b":0.15,"an1x":0.75,"hoover":0.4,"fx":0.95,"mod":0.85},
+    "jam_prompt_template": "no rhythm — evolve the pad texture, push reverb size, stay menacing"
   },
   {
     "id": "space_ambient",
@@ -1218,7 +1240,8 @@
     "mc_lines": ["Transmission received.","Drifting between stars.","No gravity here.","Signal from deep space."],
     "themes": ["space","stars","nebula","orbit","transmission","void","cosmos"],
     "rack_modules": ["an1x","granular","reverb","delay","chorus"],
-    "lane_dynamism": {"bass":0.35,"kit_a":0.25,"kit_b":0.2,"an1x":0.8,"fx":0.95,"mod":0.8}
+    "lane_dynamism": {"bass":0.35,"kit_a":0.25,"kit_b":0.2,"an1x":0.8,"fx":0.95,"mod":0.8},
+    "jam_prompt_template": "drifting pad, slow granular motion, absolutely no rhythm"
   },
   {
     "id": "lo_fi_hip_hop",
@@ -1264,7 +1287,8 @@
     "mc_lines": ["Chill. Just chill.","Late night study vibes.","The vinyl crackle is the melody.","Rain on the window."],
     "themes": ["rain","study","coffee","vinyl","nostalgia","night","calm"],
     "rack_modules": ["bass","808","amen","reverb","tape"],
-    "lane_dynamism": {"bass":0.7,"kit_a":0.6,"kit_b":0.55,"amen":0.65,"fx":0.6}
+    "lane_dynamism": {"bass":0.7,"kit_a":0.6,"kit_b":0.55,"amen":0.65,"fx":0.6},
+    "jam_prompt_template": "jazz chord stab, dusty kit swing, amen chop shuffle, keep it chill"
   },
   {
     "id": "baroque_bach",
@@ -1314,7 +1338,8 @@
     },
     "themes": ["counterpoint","fugue","invention","harpsichord","cathedral"],
     "rack_modules": ["an1x","hoover","reverb"],
-    "lane_dynamism": {"bass":0.85,"kit_a":0.2,"kit_b":0.15,"an1x":0.9,"hoover":0.7,"fx":0.4}
+    "lane_dynamism": {"bass":0.85,"kit_a":0.2,"kit_b":0.15,"an1x":0.9,"hoover":0.7,"fx":0.4},
+    "jam_prompt_template": "counterpoint evolution on the an1x — melodic rigour, no drums"
   },
   {
     "id": "meditation",
@@ -1369,6 +1394,7 @@
     "mc_lines": ["Breathe in. Breathe out.","Be here now.","Let everything go.","Just this moment."],
     "themes": ["breath","stillness","peace","present","water","sky"],
     "rack_modules": ["an1x","granular","noise","reverb"],
-    "lane_dynamism": {"bass":0.3,"kit_a":0.2,"kit_b":0.15,"an1x":0.75,"hoover":0.45,"fx":0.85,"mod":0.65}
+    "lane_dynamism": {"bass":0.3,"kit_a":0.2,"kit_b":0.15,"an1x":0.75,"hoover":0.45,"fx":0.85,"mod":0.65},
+    "jam_prompt_template": "just drift — pad movement only, no percussion, let silence dominate"
   }
 ]

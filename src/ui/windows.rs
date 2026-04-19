@@ -284,6 +284,10 @@ impl ImpulseApp {
                                 if sp_resp.changed() {
                                     self.state.write().llm.system_prompt_override = sp_override;
                                 }
+                                ui.add_space(8.0);
+
+                                // ── Style overrides (mc_lines / themes) ──────
+                                self.draw_style_overrides_editor(ui);
                             }
 
                             // ── TTS ───────────────────────────────────────────
@@ -449,6 +453,196 @@ impl ImpulseApp {
     }
 
     // draw_controls_tab is in prefs_controls.rs
+
+    /// Compact editor for per-style mc_lines / themes overrides.
+    /// Lives inside the AI / Personality tab.  User picks a style from
+    /// a dropdown, sees its effective (override or baseline) lines,
+    /// and can stamp a new override.  Clearing the text fields reverts
+    /// to baseline on save.
+    fn draw_style_overrides_editor(&mut self, ui: &mut egui::Ui) {
+        use crate::llm::styles::StyleCatalog;
+        use crate::state::StyleOverride;
+
+        widgets::section_header(ui, "STYLE OVERRIDES");
+        ui.label(
+            egui::RichText::new(
+                "Per-style MC lines + themes.  Overrides styles.json for one genre.",
+            )
+            .monospace()
+            .size(8.0)
+            .color(theme::IRON),
+        );
+        ui.add_space(4.0);
+
+        // Per-session UI state — which style's overrides are currently
+        // being edited.  Stored in egui memory so it survives frames
+        // without needing an AppState field.
+        let pick_id = egui::Id::new("prefs_style_overrides_pick");
+        let mut pick: String = ui
+            .ctx()
+            .data(|d| d.get_temp::<String>(pick_id))
+            .unwrap_or_else(|| {
+                self.state
+                    .read()
+                    .llm
+                    .active_style
+                    .clone()
+                    .unwrap_or_else(|| {
+                        StyleCatalog::get()
+                            .styles()
+                            .first()
+                            .map(|s| s.id.clone())
+                            .unwrap_or_default()
+                    })
+            });
+
+        ui.horizontal(|ui| {
+            ui.label(
+                egui::RichText::new("Style")
+                    .monospace()
+                    .size(9.5)
+                    .color(theme::FOG),
+            );
+            let current_label = StyleCatalog::get()
+                .find_by_id(&pick)
+                .map(|s| s.name.clone())
+                .unwrap_or_else(|| "— none —".into());
+            egui::ComboBox::from_id_source("style_overrides_dropdown")
+                .selected_text(
+                    egui::RichText::new(current_label)
+                        .monospace()
+                        .size(9.5)
+                        .color(theme::FOG),
+                )
+                .width(160.0)
+                .show_ui(ui, |ui| {
+                    for s in StyleCatalog::get().styles() {
+                        let is_sel = pick == s.id;
+                        if ui
+                            .selectable_label(
+                                is_sel,
+                                egui::RichText::new(&s.name).monospace().size(9.5),
+                            )
+                            .clicked()
+                        {
+                            pick = s.id.clone();
+                        }
+                    }
+                });
+            let has_override = self.state.read().style_overrides.contains_key(&pick);
+            if has_override {
+                ui.label(
+                    egui::RichText::new("◆ override active")
+                        .monospace()
+                        .size(8.5)
+                        .color(theme::CHALK),
+                );
+            }
+        });
+        ui.ctx().data_mut(|d| d.insert_temp(pick_id, pick.clone()));
+
+        // Render the two list editors alongside the baseline for context.
+        let snap = self.state.read();
+        let mc_current = crate::state::effective_mc_lines(&snap, &pick).join("\n");
+        let themes_current = crate::state::effective_themes(&snap, &pick).join(", ");
+        drop(snap);
+
+        // MC lines editor — one per line to match how they're used.
+        ui.add_space(4.0);
+        ui.label(
+            egui::RichText::new("MC lines (one per line)")
+                .monospace()
+                .size(9.0)
+                .color(theme::FOG),
+        );
+        let mc_edit_id = egui::Id::new(("prefs_style_mc", pick.clone()));
+        let mut mc_buf: String = ui
+            .ctx()
+            .data(|d| d.get_temp::<String>(mc_edit_id))
+            .unwrap_or_else(|| mc_current.clone());
+        let mc_resp = ui.add(
+            egui::TextEdit::multiline(&mut mc_buf)
+                .desired_rows(4)
+                .desired_width(f32::INFINITY)
+                .font(egui::TextStyle::Monospace),
+        );
+        if mc_resp.changed() {
+            ui.ctx()
+                .data_mut(|d| d.insert_temp(mc_edit_id, mc_buf.clone()));
+        }
+
+        // Themes — comma-separated list for compactness.
+        ui.add_space(4.0);
+        ui.label(
+            egui::RichText::new("Themes (comma-separated)")
+                .monospace()
+                .size(9.0)
+                .color(theme::FOG),
+        );
+        let themes_edit_id = egui::Id::new(("prefs_style_themes", pick.clone()));
+        let mut themes_buf: String = ui
+            .ctx()
+            .data(|d| d.get_temp::<String>(themes_edit_id))
+            .unwrap_or_else(|| themes_current.clone());
+        let themes_resp = ui.add(
+            egui::TextEdit::singleline(&mut themes_buf)
+                .desired_width(f32::INFINITY)
+                .font(egui::TextStyle::Monospace),
+        );
+        if themes_resp.changed() {
+            ui.ctx()
+                .data_mut(|d| d.insert_temp(themes_edit_id, themes_buf.clone()));
+        }
+
+        // Save / Revert row.  Save stamps the override — an empty list
+        // means "explicitly clear this style's lines" rather than "fall
+        // back to baseline".  Revert drops the override entirely.
+        ui.add_space(6.0);
+        ui.horizontal(|ui| {
+            if ui
+                .button(
+                    egui::RichText::new("Save override")
+                        .monospace()
+                        .size(9.5)
+                        .color(theme::CHALK),
+                )
+                .clicked()
+            {
+                let mc_lines: Vec<String> = mc_buf
+                    .lines()
+                    .map(|l| l.trim().to_string())
+                    .filter(|l| !l.is_empty())
+                    .collect();
+                let themes: Vec<String> = themes_buf
+                    .split(',')
+                    .map(|s| s.trim().to_string())
+                    .filter(|s| !s.is_empty())
+                    .collect();
+                let ov = StyleOverride {
+                    mc_lines: Some(mc_lines),
+                    themes: Some(themes),
+                };
+                self.state.write().style_overrides.insert(pick.clone(), ov);
+            }
+            if ui
+                .button(
+                    egui::RichText::new("Revert to baseline")
+                        .monospace()
+                        .size(9.5)
+                        .color(theme::FOG),
+                )
+                .clicked()
+            {
+                self.state.write().style_overrides.remove(&pick);
+                // Also drop the in-memory edit buffers so the next draw
+                // re-reads from the (now baseline) catalog.
+                ui.ctx().data_mut(|d| {
+                    d.remove::<String>(mc_edit_id);
+                    d.remove::<String>(themes_edit_id);
+                });
+            }
+        });
+    }
 
     fn draw_system_tab(&mut self, ui: &mut egui::Ui) {
         let hint = |ui: &mut egui::Ui, text: &str| {

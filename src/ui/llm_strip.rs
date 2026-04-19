@@ -40,6 +40,26 @@ impl ImpulseApp {
         });
     }
 
+    /// Effective jam prompt — style template if the active style sets
+    /// one, else the generic fallback.  All three jam re-trigger sites
+    /// (heartbeat, deferred fire, [jam_cycle_done]) route through this
+    /// so swapping styles actually rewrites the model's direction
+    /// instead of always saying "evolve the pattern".
+    pub(crate) fn jam_prompt_for_active_style(&self) -> String {
+        const FALLBACK: &str = "continue jamming, evolve the pattern";
+        let style_id = self.state.read().llm.active_style.clone();
+        let Some(id) = style_id else {
+            return FALLBACK.to_string();
+        };
+        let catalog = StyleCatalog::get();
+        catalog
+            .find_by_id(&id)
+            .and_then(|s| s.jam_prompt_template.as_ref())
+            .filter(|t| !t.trim().is_empty())
+            .cloned()
+            .unwrap_or_else(|| FALLBACK.to_string())
+    }
+
     /// Drain the audio capture buffer, run analysis, and fire a one-shot LLM
     /// prompt with the results. No-op if no audio has been captured yet.
     pub(crate) fn trigger_listen(&mut self) {

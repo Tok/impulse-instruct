@@ -111,9 +111,10 @@ fn read_voice_transcript(voice_ref: &str) -> String {
         .unwrap_or_default()
 }
 
-/// Read the current style's themes and mc_lines (if any) from
-/// StyleCatalog so the ask-controller prompts can name them
-/// specifically.  Empty vec if no active style or no themes defined.
+/// Read the current style's effective themes (user override + baseline)
+/// so the ask-controller prompts can name them specifically.  Empty vec
+/// if no active style, the style is `__custom__` / `__free__`, or it
+/// has no themes defined.
 fn active_style_themes(app: &ImpulseApp) -> Vec<String> {
     let s = app.state.read();
     let Some(ref id) = s.llm.active_style else {
@@ -122,10 +123,7 @@ fn active_style_themes(app: &ImpulseApp) -> Vec<String> {
     if id == "__custom__" || id == "__free__" {
         return vec![];
     }
-    crate::llm::styles::StyleCatalog::get()
-        .find_by_id(id)
-        .map(|st| st.themes.clone())
-        .unwrap_or_default()
+    crate::state::effective_themes(&s, id)
 }
 
 pub fn draw_tts(app: &mut ImpulseApp, ui: &mut egui::Ui, module_id: u32) {

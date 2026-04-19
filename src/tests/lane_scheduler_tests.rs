@@ -35,6 +35,7 @@ mod lane_scheduler_tests {
             themes: vec![],
             rack_modules: vec![],
             lane_dynamism: map,
+            jam_prompt_template: None,
         }
     }
 

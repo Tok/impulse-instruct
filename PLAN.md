@@ -40,21 +40,11 @@ they ship and are reflected in `features.md`.
   defensive `lane_is_live_pub` filter at plan time helps but doesn't
   catch changes after the plan is built; needs an `Arc<RwLock>` or
   callback.
-- [ ] **Agent conversation history** — multi-turn within a single jam
-  cycle; agent sees its own previous outputs for coherent evolution.
-- [ ] **Prompt templates per style** — styles can define custom
-  prompt templates that replace the generic "generate all parameters"
-  jam prompt.
-- [ ] **VRAM-aware model fallback** — when a spawn is rejected,
-  auto-suggest or auto-select a lighter model that fits the remaining
-  VRAM budget.
 - [ ] **Test additional LLM models** — evaluate
   DeepSeek-R1-Distill-Qwen-7B / 14B and Qwen3-8B / 14B for JSON
   accuracy and music theory.  Gemma 4 26B-A4B is now downloadable
   (three quants); needs a head-to-head vs. E4B on the style + bass +
   theory suites.
-- [ ] **Style mc_lines / themes UI editor** — allow editing
-  `mc_lines` and themes per style from UI preferences.
 - [ ] **Auto-sync rack on app start to active style** — currently
   the rack reflects whatever was saved in `session.json`; if the
   user picked Classic Acid then customised the rack, restart

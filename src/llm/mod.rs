@@ -559,13 +559,14 @@ pub fn run_llm_loop(
                 snap.llm.system_prompt_override = override_text;
             }
             snap.llm.heat = agent_heat;
-            let (agent_memory, style_obs, hints) = agent_id
+            let (agent_memory, style_obs, hints, recent_outputs) = agent_id
                 .and_then(|aid| snap.llm_agents.iter().find(|a| a.id == aid))
                 .map(|a| {
                     (
                         a.memory.clone(),
                         a.style_observations.clone(),
                         a.pending_hints.clone(),
+                        a.recent_outputs.clone(),
                     )
                 })
                 .unwrap_or_default();
@@ -576,10 +577,15 @@ pub fn run_llm_loop(
                     a.pending_hints.clear();
                 }
             }
-            // Combine memory with hints for the prompt
+            // Combine memory with hints + recent-output trail for the prompt.
+            // Distinct prefixes let the model tell persistent memory apart
+            // from cross-agent hints and its own short-term trail.
             let mut full_memory = agent_memory;
             for h in &hints {
                 full_memory.push(format!("[hint from another agent] {}", h));
+            }
+            for (i, o) in recent_outputs.iter().enumerate() {
+                full_memory.push(format!("[cycle -{}] {}", recent_outputs.len() - i, o));
             }
             log::debug!("LLM: calling build_system_prompt_full...");
             let result =
@@ -816,6 +822,36 @@ pub fn run_llm_loop(
                             if a.memory.len() > crate::state::AGENT_MEMORY_MAX {
                                 a.memory
                                     .drain(..a.memory.len() - crate::state::AGENT_MEMORY_MAX);
+                            }
+                        }
+                        // Short-term recent-output trail — inject into the
+                        // next cycle's prompt so the agent sees its own
+                        // recent moves and can evolve instead of repeating.
+                        // Prefer the `_thinking` line when present (it
+                        // summarises the intent in one sentence); fall back
+                        // to `_comment` and then to a truncated raw text.
+                        let snippet = output
+                            .param_update
+                            .as_ref()
+                            .and_then(|u| u.get("_thinking").and_then(|v| v.as_str()))
+                            .map(|s| s.trim().to_string())
+                            .or_else(|| {
+                                output
+                                    .param_update
+                                    .as_ref()
+                                    .and_then(|u| u.get("_comment").and_then(|v| v.as_str()))
+                                    .map(|s| s.trim().to_string())
+                            })
+                            .unwrap_or_else(|| {
+                                let t = output.text.trim();
+                                let end =
+                                    t.char_indices().nth(200).map(|(i, _)| i).unwrap_or(t.len());
+                                t[..end].to_string()
+                            });
+                        if !snippet.is_empty() {
+                            a.recent_outputs.push_back(snippet);
+                            while a.recent_outputs.len() > crate::state::AGENT_RECENT_OUTPUTS_MAX {
+                                a.recent_outputs.pop_front();
                             }
                         }
                     }

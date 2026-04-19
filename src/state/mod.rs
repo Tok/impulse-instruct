@@ -36,6 +36,9 @@ pub use fx::FxState;
 pub mod song;
 pub use song::ChainSlotOverride;
 
+pub mod style_overrides;
+pub use style_overrides::{StyleOverride, effective_mc_lines, effective_themes};
+
 pub const MAX_STEPS: usize = 64;
 pub const MAX_BASS_VOICES: usize = 4;
 
@@ -239,6 +242,12 @@ pub struct AppState {
     /// Per-module TTS state, keyed by TTS rack module id.
     #[serde(default)]
     pub tts_modules: Vec<TtsModuleState>,
+    /// Per-style mc_lines / themes overrides, keyed by style id.
+    /// Lets users edit MC vocab and vocal themes per genre without
+    /// touching `styles.json`.  Missing / empty entries fall back to
+    /// the catalog baseline — see `state::style_overrides`.
+    #[serde(default)]
+    pub style_overrides: HashMap<String, StyleOverride>,
     // api_log moved to a lock-free crossbeam channel (ApiState.api_log_tx → UI receiver)
     /// Scroll target — the UI scrolls to bring this zone/module into view, then clears.
     /// Format: zone name ("global", "voice", "fxmod") or module kind ("AcidBass", "DrumKit808", etc.)
@@ -292,6 +301,7 @@ impl Default for AppState {
             rack: Default::default(),
             llm_agents: Vec::new(),
             tts_modules: Vec::new(),
+            style_overrides: HashMap::new(),
             scroll_target: None,
             rack_flip_requested: None,
             global_step_count: 0,
@@ -588,6 +598,13 @@ pub struct LlmAgentState {
     /// Pending hints from other agents, consumed on next inference.
     #[serde(default)]
     pub pending_hints: Vec<String>,
+    /// Short-term conversation trail for this agent — the last few
+    /// condensed outputs it produced, injected into the next cycle's
+    /// prompt so the agent can evolve coherently instead of treating
+    /// every cycle as a blank slate.  Capped at `AGENT_RECENT_OUTPUTS_MAX`.
+    /// `#[serde(default)]` so older saves without the field load cleanly.
+    #[serde(default)]
+    pub recent_outputs: VecDeque<String>,
     /// When true, this agent's style is independent and won't change when the
     /// global style is changed. When false (default), style syncs with global.
     #[serde(default)]
@@ -614,6 +631,11 @@ fn default_agent_seed() -> i64 {
 pub const AGENT_MEMORY_MAX: usize = 20;
 /// Maximum number of style observations.
 pub const STYLE_OBS_MAX: usize = 10;
+/// Maximum number of short-term recent-output entries per agent.  Kept
+/// small on purpose: three cycles of context is enough for coherent
+/// evolution without bloating every prompt or encouraging the model
+/// to repeat stale moves.
+pub const AGENT_RECENT_OUTPUTS_MAX: usize = 3;
 
 impl LlmAgentState {
     pub fn new_default(id: u32) -> Self {
@@ -641,6 +663,7 @@ impl LlmAgentState {
             memory: Vec::new(),
             style_observations: Vec::new(),
             pending_hints: Vec::new(),
+            recent_outputs: VecDeque::new(),
             style_locked: false,
             seed: -1,
             seed_locked: false,
@@ -674,6 +697,7 @@ impl LlmAgentState {
             memory: Vec::new(),
             style_observations: Vec::new(),
             pending_hints: Vec::new(),
+            recent_outputs: VecDeque::new(),
             style_locked: false,
             seed: llm.seed,
             seed_locked: false,

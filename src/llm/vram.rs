@@ -418,6 +418,42 @@ pub fn find_model(pattern: &str, available_models: &[String]) -> Option<String> 
         .cloned()
 }
 
+/// When adding `candidate_model` as a new agent would blow the VRAM
+/// budget, pick the *heaviest* model from `available_models` that still
+/// fits — i.e. the nearest-quality downgrade.  Returns `None` if no
+/// available model fits the remaining budget (e.g. even the smallest
+/// model is too big for the current agent roster).
+///
+/// The chosen model is strictly smaller than the candidate (so callers
+/// never re-try the exact same bind) and honours the same
+/// `would_exceed_vram` rule the spawn path uses, so callers can
+/// confidently swap the candidate for the fallback without re-checking.
+pub fn pick_fallback_model(
+    agents: &[crate::state::LlmAgentState],
+    global_model: &str,
+    candidate_model: &str,
+    available_models: &[String],
+    vram_total_mb: u64,
+) -> Option<String> {
+    if vram_total_mb == 0 {
+        return None; // CPU mode — nothing to downgrade for
+    }
+    let candidate_vram = estimate_vram(candidate_model);
+    let mut ranked: Vec<(&String, u64)> = available_models
+        .iter()
+        .map(|m| (m, estimate_vram(m)))
+        .filter(|(m, v)| *v < candidate_vram && m.as_str() != candidate_model)
+        .collect();
+    // Heaviest first — nearest-quality downgrade.
+    ranked.sort_by(|a, b| b.1.cmp(&a.1));
+    for (path, _) in ranked {
+        if !would_exceed_vram(agents, global_model, Some(path), vram_total_mb) {
+            return Some(path.clone());
+        }
+    }
+    None
+}
+
 // ─── Tests ───────────────────────────────────────────────────────────────────
 
 #[cfg(test)]

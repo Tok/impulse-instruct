@@ -152,6 +152,13 @@ pub struct Style {
     /// baked-in defaults in `lane_scheduler::baseline_dynamism`.
     #[serde(default)]
     pub lane_dynamism: HashMap<String, f32>,
+    /// Optional genre-flavoured jam prompt.  When set, overrides the
+    /// generic `"continue jamming, evolve the pattern"` message fired
+    /// every jam cycle so the agent gets style-specific direction (e.g.
+    /// "wobble the reese", "push the hats into 16ths", "let the
+    /// reverb tail breathe").  `None` = use the generic prompt.
+    #[serde(default)]
+    pub jam_prompt_template: Option<String>,
 }
 
 pub struct StyleCatalog(Vec<Style>);

@@ -101,3 +101,94 @@ mod vram_budget_tests {
         ));
     }
 }
+
+#[cfg(test)]
+mod pick_fallback_model_tests {
+    use crate::llm::vram::pick_fallback_model;
+    use crate::state::LlmAgentState;
+
+    fn agent(model: Option<&str>) -> LlmAgentState {
+        let mut a = LlmAgentState::new_default(0);
+        a.model_path = model.map(|s| s.to_string());
+        a
+    }
+
+    #[test]
+    fn picks_heaviest_fitting_alternative() {
+        // Global gemma (6000) already costs the budget.  Adding qwen3-14b
+        // (11000) blows it; qwen3-8b (7000) still doesn't fit;
+        // gemma-4-e2b (4000) does.
+        let agents = vec![agent(None)];
+        let available = vec![
+            "models/qwen3-14b.gguf".to_string(),
+            "models/qwen3-8b.gguf".to_string(),
+            "models/gemma-4-e2b.gguf".to_string(),
+        ];
+        let fb = pick_fallback_model(
+            &agents,
+            "models/gemma-4-e4b.gguf",
+            "models/qwen3-14b.gguf",
+            &available,
+            10_000,
+        );
+        assert_eq!(fb, Some("models/gemma-4-e2b.gguf".to_string()));
+    }
+
+    #[test]
+    fn returns_none_when_nothing_fits() {
+        // Roster already saturates the 5 GB budget; no available model
+        // is lighter than the candidate's 6 GB estimate that also fits.
+        let agents = vec![
+            agent(Some("models/gemma-4-e4b.gguf")),
+            agent(Some("models/qwen3-8b.gguf")),
+        ];
+        let available = vec!["models/qwen3-14b.gguf".to_string()];
+        let fb = pick_fallback_model(
+            &agents,
+            "models/gemma-4-e4b.gguf",
+            "models/qwen3-14b.gguf",
+            &available,
+            5_000,
+        );
+        assert_eq!(fb, None);
+    }
+
+    #[test]
+    fn cpu_mode_returns_none() {
+        // `vram_total_mb == 0` means CPU mode — there's no budget to
+        // downgrade for, so the function bails early with `None`.
+        let agents = vec![agent(None)];
+        let available = vec!["models/gemma-4-e2b.gguf".to_string()];
+        let fb = pick_fallback_model(
+            &agents,
+            "models/gemma-4-e4b.gguf",
+            "models/qwen3-14b.gguf",
+            &available,
+            0,
+        );
+        assert_eq!(fb, None);
+    }
+
+    #[test]
+    fn never_picks_same_or_heavier_model() {
+        // Candidate = gemma-4-e4b (6000).  Even if the budget had room
+        // for qwen3-8b (7000), the function must not suggest it as a
+        // "fallback" since that's an upgrade, not a downgrade.
+        let agents: Vec<LlmAgentState> = vec![];
+        let available = vec![
+            "models/gemma-4-e4b.gguf".to_string(),
+            "models/qwen3-8b.gguf".to_string(),
+        ];
+        let fb = pick_fallback_model(
+            &agents,
+            "models/gemma-4-e4b.gguf",
+            "models/gemma-4-e4b.gguf",
+            &available,
+            20_000,
+        );
+        assert_eq!(
+            fb, None,
+            "same-sized / upgrade models must not be suggested"
+        );
+    }
+}

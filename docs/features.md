@@ -4,6 +4,40 @@ A detailed log of what's built.
 
 ---
 
+### Intelligence — agent memory, style prompts, VRAM fallback, overrides
+
+- **Agent conversation history.** `LlmAgentState.recent_outputs`
+  (VecDeque, cap `AGENT_RECENT_OUTPUTS_MAX = 3`) accumulates one-line
+  condensed summaries of each cycle's output (`_thinking` →
+  `_comment` → truncated raw text).  Injected into the next prompt
+  as `[cycle -N]` lines alongside the existing memory / hint trail,
+  so agents evolve coherently instead of treating every jam cycle
+  as a blank slate.  New `push_agent_recent_output` transition + 3
+  tests (append+cap, empty no-op, unknown-id no-op).
+- **Style prompt templates.** Styles gain an optional
+  `jam_prompt_template: Option<String>` field.  When set, every jam
+  re-trigger uses it instead of the generic
+  "continue jamming, evolve the pattern" directive.  26 styles
+  shipped with genre-flavoured templates via a bulk-edit script,
+  e.g. *jungle* → "chop the amen differently, tighten the reese,
+  add a snare fill".  Single `jam_prompt_for_active_style()` helper
+  funnels all three re-trigger sites.
+- **VRAM-aware model fallback.**  `pick_fallback_model(agents,
+  global_model, candidate, available, vram_total_mb) -> Option<String>`
+  picks the heaviest-yet-fitting lighter model when the spawn
+  candidate blows the VRAM budget.  Wired into the `SpawnAgent`
+  action handler so agent-initiated spawns gracefully downgrade
+  instead of failing silently.  CPU mode (vram_total_mb = 0) is a
+  no-op; never picks same-or-heavier models.  4 new tests.
+- **Per-style mc_lines / themes overrides.**  New `StyleOverride
+  { mc_lines, themes }` on `AppState.style_overrides: HashMap<String,
+  StyleOverride>`; `effective_mc_lines` / `effective_themes` helpers
+  resolve override-first, baseline-fallback.  UI editor in
+  Preferences → AI → Personality lets users pick a style, edit both
+  fields, save or revert.  Empty override = explicit clear, not
+  fallback — so a user can silence a style's MC vocab without
+  touching `styles.json`.  5 new tests.
+
 ### File menu — Open / Recent projects / style-seeded wizard
 
 - File menu grows an `Open project…` entry that opens a native file

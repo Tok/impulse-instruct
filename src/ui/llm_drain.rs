@@ -174,11 +174,7 @@ impl ImpulseApp {
                         next_id,
                     ));
                 } else if let Some(aid) = next_id {
-                    self.send_llm_infer(
-                        "continue jamming, evolve the pattern".to_string(),
-                        false,
-                        Some(aid),
-                    );
+                    self.send_llm_infer(self.jam_prompt_for_active_style(), false, Some(aid));
                 }
             }
             use crate::llm::LlmAction;
@@ -246,26 +242,54 @@ impl ImpulseApp {
                                 .and_then(|aid| s.llm_agents.iter().find(|a| a.id == aid))
                                 .map(|a| a.can_spawn)
                                 .unwrap_or(true);
-                        // VRAM budget check
-                        let vram_ok = !ok || {
-                            let vram_total = self
-                                .sys_info
-                                .lock()
-                                .ok()
-                                .map(|si| si.vram_total_mb)
-                                .unwrap_or(0);
-                            !crate::llm::vram::would_exceed_vram(
+                        // VRAM budget check — when the agent's preferred
+                        // model blows the budget, fall back to the
+                        // nearest-quality lighter model that still fits.
+                        let vram_total = self
+                            .sys_info
+                            .lock()
+                            .ok()
+                            .map(|si| si.vram_total_mb)
+                            .unwrap_or(0);
+                        let mut chosen_model = model.clone();
+                        let mut vram_ok = !ok
+                            || !crate::llm::vram::would_exceed_vram(
                                 &s.llm_agents,
                                 &s.llm.model_path,
-                                model.as_deref(),
+                                chosen_model.as_deref(),
                                 vram_total,
-                            )
-                        };
-                        if !vram_ok {
-                            log::warn!(
-                                "Rejected agent spawn '{}': would exceed VRAM budget",
-                                persona
                             );
+                        if ok && !vram_ok {
+                            // Try to downgrade before giving up.
+                            let candidate_path = chosen_model
+                                .clone()
+                                .unwrap_or_else(|| s.llm.model_path.clone());
+                            let fallback = crate::llm::vram::pick_fallback_model(
+                                &s.llm_agents,
+                                &s.llm.model_path,
+                                &candidate_path,
+                                &self.available_models,
+                                vram_total,
+                            );
+                            if let Some(fb) = fallback {
+                                log::warn!(
+                                    "Agent spawn '{}': '{}' too heavy, falling back to '{}'",
+                                    persona,
+                                    candidate_path,
+                                    fb
+                                );
+                                self.log_text.push_str(&format!(
+                                    "Agent spawn '{}': downgraded to '{}' (VRAM)\n",
+                                    persona, fb
+                                ));
+                                chosen_model = Some(fb);
+                                vram_ok = true;
+                            } else {
+                                log::warn!(
+                                    "Rejected agent spawn '{}': would exceed VRAM budget",
+                                    persona
+                                );
+                            }
                         }
                         drop(s);
                         if ok && vram_ok {
@@ -276,7 +300,7 @@ impl ImpulseApp {
                                 persona,
                                 scope,
                                 crate::state::AgentRole::Producer,
-                                model.clone(),
+                                chosen_model.clone(),
                             );
                             let new_state = crate::state::apply_agent_mode_and_tts(
                                 spawned,

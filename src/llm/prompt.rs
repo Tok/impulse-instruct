@@ -184,7 +184,13 @@ pub fn build_system_prompt_full(
                     }
                     _ => String::new(),
                 };
-                let mc_section = if !s.mc_lines.is_empty()
+                // Honour per-user style overrides (see state::style_overrides).
+                // Falls back to the catalog's `s.mc_lines` / `s.themes`
+                // when no override is set — so unmodified styles read
+                // identically to the pre-overrides code.
+                let eff_mc = crate::state::effective_mc_lines(state, &s.id);
+                let eff_themes = crate::state::effective_themes(state, &s.id);
+                let mc_section = if !eff_mc.is_empty()
                     && matches!(
                         state.llm.conversation_mode,
                         crate::state::ConversationMode::Mc | crate::state::ConversationMode::Dj
@@ -192,20 +198,20 @@ pub fn build_system_prompt_full(
                 {
                     format!(
                         "\nExample MC lines for this style (use as reference, don't copy verbatim):\n{}\n",
-                        s.mc_lines.iter().map(|l| format!("  \"{}\"", l)).collect::<Vec<_>>().join("\n")
+                        eff_mc.iter().map(|l| format!("  \"{}\"", l)).collect::<Vec<_>>().join("\n")
                     )
                 } else {
                     String::new()
                 };
                 // Themes are only useful to MC / DJ singer agents — omit
                 // entirely in producer mode to save prompt tokens.
-                let theme_section = if !s.themes.is_empty()
+                let theme_section = if !eff_themes.is_empty()
                     && matches!(
                         state.llm.conversation_mode,
                         crate::state::ConversationMode::Mc | crate::state::ConversationMode::Dj
                     )
                 {
-                    format!("\nVocal themes: {}\n", s.themes.join(", "))
+                    format!("\nVocal themes: {}\n", eff_themes.join(", "))
                 } else {
                     String::new()
                 };
