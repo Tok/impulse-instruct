@@ -1678,7 +1678,8 @@ Alerts cycle in the header (2 at a time, rotating each second). Multiple alerts 
 
 ### Refactoring and test coverage
 
-- **479 unit tests**; suites: `llm_apply_tests` (68), `persistence_tests` (25), `helpers_tests` (7), `music_tests` (13), `dsp_tests` (16), `fx_plan_tests` (7), `vram_tests` (9)
+- **987 unit tests** across ~30 test files (up from 479 milestone)
+- **2026-04 refactor round** — 13 proactive file splits when the largest sources approached the 1000-line pre-commit cap.  Tests: `rack_tests` → +`rack_reach_tests`, `llm_apply_extra_tests` → +`llm_apply_seq_tests`, `dsp_tests` → +`dsp_voice_primitives_tests`, `llm_tests` → +`llm_plumbing_tests`.  Library: `llm/mod.rs` → +`types.rs`, `api/mod.rs` → +`preset.rs`, `audio/dsp/params.rs` → +`params_from.rs`, `audio/dsp/voices.rs` → +`an1x.rs`, `audio/dsp/mod.rs` → +`fx_step.rs`, `llm/planner.rs` → +`planner_heuristic.rs`, `ui/mod.rs` → +`app_update.rs`, `ui/widgets/mod.rs` → +`knob.rs`.  Top-file count dropped 982 → 973; only one file still above 950 (`audio/dsp/samplers.rs`, one self-contained `AmenVoice`).  Added `planner_tests.rs` (18 tests covering `lane_from_label` / `lane_is_live_pub` / `heuristic_plan` — previously 0 coverage on a 964-line file).
 - **`rack.connect_control(from_id, to_id)`** - replaces 8-line PortRef boilerplate at 6 call sites
 - **`spawn_agent()` pure function** - transitions.rs; wizard.rs and SpawnAgent handler refactored to use it
 - **`format_llm_display()` pure function** - extracted from drain_llm_outputs into transitions.rs

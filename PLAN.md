@@ -135,13 +135,14 @@ they ship and are reflected in `features.md`.
 - [ ] **Glass group helpers** — `glass_label(ui, text)` still to do
   (the inline pattern varies too much across panels for a single
   helper).
-- [ ] **Large-file splits** — `src/llm/mod.rs` (982 lines),
-  `src/ui/mod.rs` (977), `src/audio/dsp/samplers.rs` (973),
-  `src/llm/planner.rs` (964), `src/audio/dsp/mod.rs` (963),
-  `src/audio/dsp/voices.rs` (950), `src/tests/llm_apply_extra_tests.rs`
-  (946), `src/api/mod.rs` (943) are all one append from tripping the
-  1000-line pre-commit cap.  Split proactively into cohesive
-  sub-modules (see coding-guide.md).  `rack_tests.rs` already split.
+- [ ] **Large-file splits (remaining)** — the 2026-04 round pulled
+  13 files under the 1000-line cap; top file is now
+  `src/audio/dsp/samplers.rs` (973 lines, all one `AmenVoice` impl —
+  not easily splittable into sibling voices).  Remaining candidates
+  close to the 700-line proactive-split guidance:
+  `src/ui/rack_canvas.rs` (919), `src/ui/header.rs` (913),
+  `src/state/rack.rs` (893), `src/ui/panels/amen.rs` (892) — none
+  are urgent but worth revisiting next round.
 
 ## Infrastructure
 
