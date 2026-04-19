@@ -678,20 +678,21 @@ pub(crate) fn adsr_tick(
 
 /// Generate one sample from a waveform. `phase` is 0–1.
 #[inline]
-pub(crate) fn osc_sample(wave: u8, phase: f32, noise_state: &mut u32) -> f32 {
+pub(crate) fn osc_sample(wave: crate::state::An1xWave, phase: f32, noise_state: &mut u32) -> f32 {
+    use crate::state::An1xWave;
     match wave {
-        0 => phase * 2.0 - 1.0, // saw
-        1 => {
+        An1xWave::Saw => phase * 2.0 - 1.0,
+        An1xWave::Square => {
             if phase < 0.5 {
                 1.0
             } else {
                 -1.0
             }
-        } // square
-        2 => 1.0 - 4.0 * (phase - 0.5).abs(), // triangle (bipolar)
-        3 => (phase * std::f32::consts::TAU).sin(), // sine
-        _ => {
-            // noise (LCG)
+        }
+        An1xWave::Triangle => 1.0 - 4.0 * (phase - 0.5).abs(),
+        An1xWave::Sine => (phase * std::f32::consts::TAU).sin(),
+        An1xWave::Noise => {
+            // LCG — cheap; the An1x noise osc is fine with mediocre quality.
             *noise_state = noise_state.wrapping_mul(1664525).wrapping_add(1013904223);
             (*noise_state as i32) as f32 / i32::MAX as f32
         }

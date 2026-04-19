@@ -256,44 +256,45 @@ mod adsr_tests {
 #[cfg(test)]
 mod osc_sample_tests {
     use crate::audio::dsp::voices::osc_sample;
+    use crate::state::An1xWave;
 
     #[test]
     fn saw_ramps_minus1_to_plus1() {
         let mut ns = 1u32;
-        assert!((osc_sample(0, 0.0, &mut ns) + 1.0).abs() < 1e-5);
-        assert!((osc_sample(0, 0.5, &mut ns) - 0.0).abs() < 1e-5);
-        assert!((osc_sample(0, 1.0, &mut ns) - 1.0).abs() < 1e-5);
+        assert!((osc_sample(An1xWave::Saw, 0.0, &mut ns) + 1.0).abs() < 1e-5);
+        assert!((osc_sample(An1xWave::Saw, 0.5, &mut ns) - 0.0).abs() < 1e-5);
+        assert!((osc_sample(An1xWave::Saw, 1.0, &mut ns) - 1.0).abs() < 1e-5);
     }
 
     #[test]
     fn square_flips_at_half_phase() {
         let mut ns = 1u32;
-        assert_eq!(osc_sample(1, 0.0, &mut ns), 1.0);
-        assert_eq!(osc_sample(1, 0.49, &mut ns), 1.0);
-        assert_eq!(osc_sample(1, 0.5, &mut ns), -1.0);
-        assert_eq!(osc_sample(1, 0.99, &mut ns), -1.0);
+        assert_eq!(osc_sample(An1xWave::Square, 0.0, &mut ns), 1.0);
+        assert_eq!(osc_sample(An1xWave::Square, 0.49, &mut ns), 1.0);
+        assert_eq!(osc_sample(An1xWave::Square, 0.5, &mut ns), -1.0);
+        assert_eq!(osc_sample(An1xWave::Square, 0.99, &mut ns), -1.0);
     }
 
     #[test]
     fn triangle_peaks_at_half_phase() {
         let mut ns = 1u32;
-        assert!((osc_sample(2, 0.0, &mut ns) + 1.0).abs() < 1e-5);
-        assert!((osc_sample(2, 0.5, &mut ns) - 1.0).abs() < 1e-5);
-        assert!((osc_sample(2, 1.0, &mut ns) + 1.0).abs() < 1e-5);
+        assert!((osc_sample(An1xWave::Triangle, 0.0, &mut ns) + 1.0).abs() < 1e-5);
+        assert!((osc_sample(An1xWave::Triangle, 0.5, &mut ns) - 1.0).abs() < 1e-5);
+        assert!((osc_sample(An1xWave::Triangle, 1.0, &mut ns) + 1.0).abs() < 1e-5);
     }
 
     #[test]
     fn sine_matches_textbook_quarter_cycles() {
         let mut ns = 1u32;
-        assert!((osc_sample(3, 0.0, &mut ns) - 0.0).abs() < 1e-5);
-        assert!((osc_sample(3, 0.25, &mut ns) - 1.0).abs() < 1e-5);
-        assert!((osc_sample(3, 0.75, &mut ns) + 1.0).abs() < 1e-5);
+        assert!((osc_sample(An1xWave::Sine, 0.0, &mut ns) - 0.0).abs() < 1e-5);
+        assert!((osc_sample(An1xWave::Sine, 0.25, &mut ns) - 1.0).abs() < 1e-5);
+        assert!((osc_sample(An1xWave::Sine, 0.75, &mut ns) + 1.0).abs() < 1e-5);
     }
 
     #[test]
     fn noise_mode_advances_the_state() {
         let mut ns = 1u32;
-        let _ = osc_sample(99, 0.0, &mut ns);
+        let _ = osc_sample(An1xWave::Noise, 0.0, &mut ns);
         assert_ne!(ns, 1u32, "LCG should advance the state");
     }
 
@@ -301,7 +302,7 @@ mod osc_sample_tests {
     fn noise_output_stays_in_signed_unit_range() {
         let mut ns = 42u32;
         for _ in 0..500 {
-            let v = osc_sample(99, 0.0, &mut ns);
+            let v = osc_sample(An1xWave::Noise, 0.0, &mut ns);
             assert!(v.is_finite());
             assert!((-1.0..=1.0).contains(&v));
         }

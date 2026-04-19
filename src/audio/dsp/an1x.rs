@@ -189,7 +189,8 @@ impl An1xVoice {
         let pitch_env_st = (p.an1x_pitch_env_amount - 0.5) * 48.0 * self.pitch_val; // ±24 st
 
         // ── OSC frequencies ─────────────────────────────────────────────────
-        let pitch_lfo_st = if p.an1x_lfo_target == 0 {
+        use crate::state::{An1xLfoTarget, FilterMode};
+        let pitch_lfo_st = if p.an1x_lfo_target == An1xLfoTarget::Pitch {
             lfo * 2.0
         } else {
             0.0
@@ -250,7 +251,7 @@ impl An1xVoice {
         );
 
         // Filter cutoff modulation
-        let cutoff_lfo = if p.an1x_lfo_target == 1 {
+        let cutoff_lfo = if p.an1x_lfo_target == An1xLfoTarget::FilterCutoff {
             lfo * 0.3
         } else {
             0.0
@@ -277,13 +278,13 @@ impl An1xVoice {
         self.svf_band = band_new.tanh();
         self.svf_low = low_new.clamp(-1.5, 1.5);
         let filtered = match p.an1x_filter_mode {
-            0 => self.svf_low,
-            1 => high,
-            _ => self.svf_band,
+            FilterMode::Lowpass => self.svf_low,
+            FilterMode::Highpass => high,
+            FilterMode::Bandpass => self.svf_band,
         };
 
         // ── Amplitude ADSR ───────────────────────────────────────────────────
-        let amp_lfo = if p.an1x_lfo_target == 2 {
+        let amp_lfo = if p.an1x_lfo_target == An1xLfoTarget::Amplitude {
             lfo * 0.25
         } else {
             0.0

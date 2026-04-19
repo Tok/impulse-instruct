@@ -212,7 +212,7 @@ pub struct BassVoiceParams {
     pub fm_depth: f32,
     pub distortion: f32,
     pub volume: f32,
-    pub filter_mode: u8, // 0=LP, 1=HP, 2=BP
+    pub filter_mode: crate::state::FilterMode,
     // ADSR shaping (101-style).  Defaults preserve 303 behavior.
     pub amp_attack: f32,     // 0–1 → 0–1s
     pub amp_sustain: f32,    // 0–1
@@ -221,8 +221,8 @@ pub struct BassVoiceParams {
     pub filter_sustain: f32, // 0–1
     pub filter_release: f32, // 0–1 → 0–2s
     pub pulse_width: f32,    // 0.05..0.95 (centered at 0.5 = square)
-    // Per-voice LFO — SH-101 style.  target=0 (Off) disables.
-    pub lfo_target: u8, // 0=Off 1=Pitch 2=PWM 3=Cutoff 4=Amp
+    // Per-voice LFO — SH-101 style.
+    pub lfo_target: crate::state::BassLfoTarget,
     pub lfo_rate: f32,  // 0–1 → 0.01–20 Hz (free)
     pub lfo_depth: f32, // 0–1
     pub lfo_waveform: crate::state::LfoWaveform,
@@ -233,7 +233,7 @@ pub struct BassVoiceParams {
 
 impl BassVoiceParams {
     pub(super) fn from_bass_state(b: &crate::state::BassState) -> Self {
-        use crate::state::{FilterMode, Waveform};
+        use crate::state::Waveform;
         Self {
             cutoff: b.cutoff,
             resonance: b.resonance,
@@ -252,11 +252,7 @@ impl BassVoiceParams {
             fm_depth: b.fm_depth,
             distortion: b.distortion,
             volume: b.volume,
-            filter_mode: match b.filter_mode {
-                FilterMode::Lowpass => 0,
-                FilterMode::Highpass => 1,
-                FilterMode::Bandpass => 2,
-            },
+            filter_mode: b.filter_mode,
             amp_attack: b.amp_attack.clamp(0.0, 1.0),
             amp_sustain: b.amp_sustain.clamp(0.0, 1.0),
             amp_release: b.amp_release.clamp(0.0, 1.0),
@@ -264,13 +260,7 @@ impl BassVoiceParams {
             filter_sustain: b.filter_sustain.clamp(0.0, 1.0),
             filter_release: b.filter_release.clamp(0.0, 1.0),
             pulse_width: b.pulse_width.clamp(0.05, 0.95),
-            lfo_target: match b.lfo_target {
-                crate::state::BassLfoTarget::Off => 0,
-                crate::state::BassLfoTarget::Pitch => 1,
-                crate::state::BassLfoTarget::PulseWidth => 2,
-                crate::state::BassLfoTarget::FilterCutoff => 3,
-                crate::state::BassLfoTarget::Amplitude => 4,
-            },
+            lfo_target: b.lfo_target,
             lfo_rate: b.lfo_rate.clamp(0.0, 1.0),
             lfo_depth: b.lfo_depth.clamp(0.0, 1.0),
             // Pass the enum through verbatim — the bass voice's
@@ -444,8 +434,7 @@ pub struct AudioParams {
     pub tape_mix: f32,
     pub tape_flutter: f32,
     pub master_pitch_st: f32, // -12..+12 semitones added to all melodic voices
-    // Filter mode (0=LP, 1=HP, 2=BP)
-    pub filter_mode: u8,
+    pub filter_mode: crate::state::FilterMode,
     // Sample rate
     pub sample_rate: f32,
     // LFO
@@ -500,9 +489,9 @@ pub struct AudioParams {
     // AN1X voice
     pub an1x_enabled: bool,
     pub an1x_volume: f32,
-    pub an1x_osc1_wave: u8, // 0=Saw 1=Square 2=Triangle 3=Sine 4=Noise
+    pub an1x_osc1_wave: crate::state::An1xWave,
     pub an1x_osc1_level: f32,
-    pub an1x_osc2_wave: u8,
+    pub an1x_osc2_wave: crate::state::An1xWave,
     pub an1x_osc2_level: f32,
     pub an1x_osc2_detune: f32, // 0–1 (0.5 = unison)
     pub an1x_osc2_octave: i8,  // -2..+2
@@ -511,7 +500,7 @@ pub struct AudioParams {
     pub an1x_hard_sync: bool,
     pub an1x_filter_cutoff: f32,
     pub an1x_filter_resonance: f32,
-    pub an1x_filter_mode: u8, // 0=LP 1=HP 2=BP
+    pub an1x_filter_mode: crate::state::FilterMode,
     pub an1x_filter_key_track: f32,
     pub an1x_filter_env_amount: f32,
     pub an1x_filter_attack: f32,
@@ -522,9 +511,9 @@ pub struct AudioParams {
     pub an1x_amp_decay: f32,
     pub an1x_amp_sustain: f32,
     pub an1x_amp_release: f32,
-    pub an1x_lfo_rate_hz: f32,      // Hz (0.01–20)
-    pub an1x_lfo_depth: f32,        // 0–1
-    pub an1x_lfo_target: u8,        // 0=Pitch 1=FilterCutoff 2=Amplitude
+    pub an1x_lfo_rate_hz: f32, // Hz (0.01–20)
+    pub an1x_lfo_depth: f32,   // 0–1
+    pub an1x_lfo_target: crate::state::An1xLfoTarget,
     pub an1x_lfo_delay: f32,        // 0–1 → 0–4s fade-in
     pub an1x_pitch_env_attack: f32, // 0–1
     pub an1x_pitch_env_decay: f32,  // 0–1

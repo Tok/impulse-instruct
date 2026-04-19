@@ -6,9 +6,7 @@
 // audio-thread snapshot is 340-ish lines on its own and grows whenever a
 // new synth parameter is exposed.
 
-use crate::state::{
-    An1xLfoTarget, An1xWave, AppState, BPM_MAX, BPM_MIN, FilterMode, LfoWaveform, ModuleKind,
-};
+use crate::state::{AppState, BPM_MAX, BPM_MIN, LfoWaveform, ModuleKind};
 
 use super::params::{
     AudioParams, BassVoiceParams, LfoParamsCopy, compile_mod_routes, lfo_target_to_u8,
@@ -145,11 +143,7 @@ impl AudioParams {
             tape_mix: s.fx.tape_mix,
             tape_flutter: s.fx.tape_flutter,
             master_pitch_st: s.fx.master_pitch_st,
-            filter_mode: match bass.filter_mode {
-                FilterMode::Lowpass => 0,
-                FilterMode::Highpass => 1,
-                FilterMode::Bandpass => 2,
-            },
+            filter_mode: bass.filter_mode,
             sample_rate: crate::audio::SAMPLE_RATE,
             lfo: {
                 let mut arr = [LfoParamsCopy {
@@ -212,21 +206,9 @@ impl AudioParams {
             hoover_volume: s.hoover.volume,
             an1x_enabled: s.an1x.enabled,
             an1x_volume: s.an1x.volume,
-            an1x_osc1_wave: match s.an1x.osc1_wave {
-                An1xWave::Saw => 0,
-                An1xWave::Square => 1,
-                An1xWave::Triangle => 2,
-                An1xWave::Sine => 3,
-                An1xWave::Noise => 4,
-            },
+            an1x_osc1_wave: s.an1x.osc1_wave,
             an1x_osc1_level: s.an1x.osc1_level,
-            an1x_osc2_wave: match s.an1x.osc2_wave {
-                An1xWave::Saw => 0,
-                An1xWave::Square => 1,
-                An1xWave::Triangle => 2,
-                An1xWave::Sine => 3,
-                An1xWave::Noise => 4,
-            },
+            an1x_osc2_wave: s.an1x.osc2_wave,
             an1x_osc2_level: s.an1x.osc2_level,
             an1x_osc2_detune: s.an1x.osc2_detune,
             an1x_osc2_octave: s.an1x.osc2_octave,
@@ -235,11 +217,7 @@ impl AudioParams {
             an1x_hard_sync: s.an1x.hard_sync,
             an1x_filter_cutoff: s.an1x.filter_cutoff,
             an1x_filter_resonance: s.an1x.filter_resonance,
-            an1x_filter_mode: match s.an1x.filter_mode {
-                FilterMode::Lowpass => 0,
-                FilterMode::Highpass => 1,
-                FilterMode::Bandpass => 2,
-            },
+            an1x_filter_mode: s.an1x.filter_mode,
             an1x_filter_key_track: s.an1x.filter_key_track,
             an1x_filter_env_amount: s.an1x.filter_env_amount,
             an1x_filter_attack: s.an1x.filter_attack,
@@ -256,11 +234,7 @@ impl AudioParams {
                 0.01 + s.an1x.lfo_rate * s.an1x.lfo_rate * 19.99
             },
             an1x_lfo_depth: s.an1x.lfo_depth,
-            an1x_lfo_target: match s.an1x.lfo_target {
-                An1xLfoTarget::Pitch => 0,
-                An1xLfoTarget::FilterCutoff => 1,
-                An1xLfoTarget::Amplitude => 2,
-            },
+            an1x_lfo_target: s.an1x.lfo_target,
             an1x_lfo_delay: s.an1x.lfo_delay,
             an1x_pitch_env_attack: s.an1x.pitch_env_attack,
             an1x_pitch_env_decay: s.an1x.pitch_env_decay,

@@ -206,8 +206,9 @@ impl Bass303 {
         // down.  Rate is either bpm-synced (Hz = (host_bpm / 60) /
         // sync_beats) or free (linear 0.01..20 Hz mapping).  The fade-in
         // honors lfo_delay so each new note ramps up to full depth over
-        // delay seconds (0 = instant).  lfo_target == 0 = Off = no-op.
-        let lfo_value = if vp.lfo_target == 0 || vp.lfo_depth <= 0.0001 {
+        // delay seconds (0 = instant).  Off disables the LFO entirely.
+        use crate::state::BassLfoTarget;
+        let lfo_value = if vp.lfo_target == BassLfoTarget::Off || vp.lfo_depth <= 0.0001 {
             0.0
         } else {
             let rate_hz = lfo_rate_hz(
@@ -223,22 +224,22 @@ impl Bass303 {
         };
         // Compose each modulation contribution based on target.  Values
         // are chosen so full depth = audibly musical but not destructive.
-        let lfo_pitch_st = if vp.lfo_target == 1 {
+        let lfo_pitch_st = if vp.lfo_target == BassLfoTarget::Pitch {
             lfo_value * 2.0
         } else {
             0.0
         };
-        let lfo_pwm = if vp.lfo_target == 2 {
+        let lfo_pwm = if vp.lfo_target == BassLfoTarget::PulseWidth {
             lfo_value * 0.45
         } else {
             0.0
         };
-        let lfo_cutoff = if vp.lfo_target == 3 {
+        let lfo_cutoff = if vp.lfo_target == BassLfoTarget::FilterCutoff {
             lfo_value * 0.5
         } else {
             0.0
         };
-        let lfo_amp_mult = if vp.lfo_target == 4 {
+        let lfo_amp_mult = if vp.lfo_target == BassLfoTarget::Amplitude {
             1.0 + lfo_value * 0.5
         } else {
             1.0
@@ -397,18 +398,20 @@ impl Bass303 {
             (w / (1.0 + w)).clamp(0.001, 0.99)
         };
 
-        let filtered = if vp.filter_mode == 0 {
-            self.filter.process(osc, g, vp.resonance * 0.97)
-        } else {
-            let f = (std::f32::consts::PI * cutoff_hz / sr).sin().min(0.95);
-            let q = 1.0 - vp.resonance * 0.95;
-            self.svf_low += f * self.svf_band;
-            let high = osc - self.svf_low - q * self.svf_band;
-            self.svf_band += f * high;
-            if vp.filter_mode == 1 {
-                high
-            } else {
-                self.svf_band
+        use crate::state::FilterMode;
+        let filtered = match vp.filter_mode {
+            FilterMode::Lowpass => self.filter.process(osc, g, vp.resonance * 0.97),
+            FilterMode::Highpass | FilterMode::Bandpass => {
+                let f = (std::f32::consts::PI * cutoff_hz / sr).sin().min(0.95);
+                let q = 1.0 - vp.resonance * 0.95;
+                self.svf_low += f * self.svf_band;
+                let high = osc - self.svf_low - q * self.svf_band;
+                self.svf_band += f * high;
+                if vp.filter_mode == FilterMode::Highpass {
+                    high
+                } else {
+                    self.svf_band
+                }
             }
         };
 
