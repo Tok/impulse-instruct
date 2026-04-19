@@ -4,7 +4,7 @@
 // Lifted out of dsp/mod.rs to keep that file under the 1000-line cap;
 // the match arm set grows every time a new FX ships.
 
-use crate::state::FxStep;
+use crate::state::{FeedbackRoute, FxStep};
 
 use super::DspState;
 use super::fx_math::{BitcrushState, bitcrush_step, drive_step, waveshaper_step};
@@ -149,17 +149,36 @@ impl DspState {
         }
     }
 
+    /// Apply an FX chain to `sig`.  `feedback_routes` is typically
+    /// `&plan.feedback_routes`; pass `&[]` for chains that should skip
+    /// feedback (most call sites don't need it).
+    ///
+    /// Before each step runs we mix in `prev_fx_output[src] * gain` for
+    /// every route whose `target` matches this step; after it runs we
+    /// write the step's output to `prev_fx_output[step]`.  The implicit
+    /// one-sample delay across samples makes the feedback loop
+    /// algebraically well-defined — no instantaneous cycles — so the
+    /// graph can't blow up numerically.  The compile-time clamp to
+    /// `FEEDBACK_GAIN_MAX` (0.95) preserves the stability margin.
+    #[allow(clippy::too_many_arguments)]
     pub(super) fn apply_fx_chain(
         &mut self,
         mut sig: f32,
         chain: &[FxStep],
+        feedback_routes: &[FeedbackRoute],
         p: &AudioParams,
         delay_samples: usize,
         sr: f32,
         gate_env: f32,
     ) -> f32 {
         for &step in chain {
+            for fr in feedback_routes {
+                if fr.target == step {
+                    sig += self.prev_fx_output[fr.source.idx()] * fr.gain;
+                }
+            }
             sig = self.apply_fx_step(step, sig, p, delay_samples, sr, gate_env);
+            self.prev_fx_output[step.idx()] = sig;
         }
         sig
     }

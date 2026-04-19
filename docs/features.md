@@ -4,6 +4,36 @@ A detailed log of what's built.
 
 ---
 
+### Send-bus routing — per-cable gain + FX→FX feedback
+
+- Every audio `Cable` gains a `audio_gain: f32` field (default 1.0,
+  range 0..=1.5).  Forward Voice→FX cables use it as a per-voice send
+  amount on the first FX of the voice's chain; the rest of the chain
+  processes at unity.  Captured in `FxPlan.voice_send_gain`.
+- `would_create_audio_cycle` loosened to accept FX→FX cycles while
+  still rejecting cycles that touch a voice / master / LLM module —
+  musical feedback only makes sense between effects.  Non-FX cycles
+  continue to fail-closed in both `connect()` and `strip_audio_cycles`.
+- Cycle-closing FX→FX cables are classified as feedback edges at
+  compile time and stored in `FxPlan.feedback_routes`.  The graph
+  builder picks the back-edge deterministically (first-cable-wins
+  forward DAG, rest become feedback) so saves round-trip stably.
+- Audio-thread implementation: `DspState.prev_fx_output: [f32; 13]`
+  keeps the previous sample of every FX type.  `apply_fx_chain`
+  mixes `prev_fx_output[source] * gain` into the target's input
+  before processing, then writes the fresh output back.  The implicit
+  one-sample delay across samples makes the loop algebraically well-
+  defined; user `audio_gain` is clamped to `FEEDBACK_GAIN_MAX` (0.95)
+  at compile time so the graph can't diverge regardless of input.
+- API: `POST /api/rack/cable { audio_gain }` sets the gain at cable
+  creation; `POST /api/rack/cable_gain { from, to, gain }` updates an
+  existing cable.  Feedback clamping applies automatically when the
+  cable turns out to be a back-edge.
+- 4 new tests cover FX-only-cycle acceptance, voice→voice rejection,
+  feedback-gain clamping, and voice_send_gain capture.  Two existing
+  tests (`cycle_rejected_by_connect`, `strip_audio_cycles_removes_cycle`)
+  were flipped / deleted to reflect the new semantics.
+
 ### Song mode — per-chain-slot overrides
 
 - `ChainSlotOverride { bpm, style, repeats }` parallels the chain vec.

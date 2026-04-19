@@ -158,6 +158,12 @@ pub struct RackCableRequest {
     /// Cable type: "control" or "audio" (default: "control")
     #[serde(default = "default_cable_kind")]
     pub kind: String,
+    /// Optional per-audio-cable gain (0..=1.5).  Forward audio cables
+    /// use this as a send amount on the voice→FX entry; FX→FX back-edges
+    /// use it (clamped to `FEEDBACK_GAIN_MAX`) as the feedback mix level.
+    /// `None` = leave the cable at the default 1.0.
+    #[serde(default)]
+    pub audio_gain: Option<f32>,
 }
 
 fn default_cable_kind() -> String {
@@ -168,6 +174,15 @@ fn default_cable_kind() -> String {
 pub struct RackRemoveRequest {
     /// Module ID to remove
     pub id: u32,
+}
+
+#[derive(Deserialize)]
+pub struct RackCableGainRequest {
+    pub from: u32,
+    pub to: u32,
+    /// 0..=1.5 (unity-ish range plus headroom).  Feedback-edge clamping
+    /// to `FEEDBACK_GAIN_MAX` happens at `compile_fx_plan` time.
+    pub gain: f32,
 }
 
 mod rack_mod;
@@ -765,6 +780,19 @@ async fn post_rack_cable(
                 index: 0,
             },
         );
+        // Apply an explicit audio_gain if the caller supplied one —
+        // mutating the most-recently-pushed cable that matches the
+        // (from, to) pair.  Clamped to [0, 1.5]; feedback-edge clamps
+        // apply later at `compile_fx_plan` time.
+        if let Some(g) = req.audio_gain
+            && let Some(cable) = s.rack.cables.iter_mut().rev().find(|c| {
+                c.from.module_id == req.from
+                    && c.to.module_id == req.to
+                    && c.from.kind == PortKind::Audio
+            })
+        {
+            cable.audio_gain = g.clamp(0.0, 1.5);
+        }
     }
     drop(s);
     api_log(
@@ -775,6 +803,46 @@ async fn post_rack_cable(
         ok: true,
         message: Some(format!("cable {} → {}", req.from, req.to)),
     })
+}
+
+async fn post_rack_cable_gain(
+    AxumState(api): AxumState<ApiState>,
+    Json(req): Json<RackCableGainRequest>,
+) -> Json<OkResponse> {
+    let mut s = api.app_state.write();
+    let clamped = req.gain.clamp(0.0, 1.5);
+    let mut hit = false;
+    for cable in &mut s.rack.cables {
+        if cable.from.module_id == req.from
+            && cable.to.module_id == req.to
+            && cable.from.kind == crate::state::PortKind::Audio
+        {
+            cable.audio_gain = clamped;
+            hit = true;
+            break;
+        }
+    }
+    drop(s);
+    api.params_dirty
+        .store(true, std::sync::atomic::Ordering::Relaxed);
+    if hit {
+        api_log(
+            &api,
+            format!(
+                "[API] rack: cable gain {} → {} = {:.3}",
+                req.from, req.to, clamped
+            ),
+        );
+        Json(OkResponse {
+            ok: true,
+            message: Some(format!("gain {:.3}", clamped)),
+        })
+    } else {
+        Json(OkResponse {
+            ok: false,
+            message: Some("no matching audio cable".into()),
+        })
+    }
 }
 
 async fn post_rack_remove(
@@ -821,6 +889,7 @@ pub fn build_router(api_state: ApiState) -> Router {
         .route("/api/rack/add", post(post_rack_add))
         .route("/api/rack/agent", post(post_rack_agent))
         .route("/api/rack/cable", post(post_rack_cable))
+        .route("/api/rack/cable_gain", post(post_rack_cable_gain))
         .route("/api/rack/mod_cable", post(post_rack_mod_cable))
         .route("/api/rack/mod_target", post(post_rack_mod_target))
         .route("/api/rack/mod_depth", post(post_rack_mod_depth))

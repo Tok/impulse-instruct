@@ -99,7 +99,25 @@ pub struct Cable {
     pub from: PortRef,
     pub to: PortRef,
     pub color: CableColor,
+    /// Per-cable gain for audio cables (0.0..=1.5).  Default 1.0 (unity).
+    /// For forward audio cables on a voice→FX route, the gain scales the
+    /// voice signal before it enters the chain (per-cable send amount).
+    /// For back-edges (feedback cables), the gain is further clamped to
+    /// `FEEDBACK_GAIN_MAX` (0.95) when compiled into the FX plan so the
+    /// loop can't diverge regardless of what the user sets.
+    /// Non-audio cables ignore this field.
+    #[serde(default = "default_audio_gain")]
+    pub audio_gain: f32,
 }
+
+fn default_audio_gain() -> f32 {
+    1.0
+}
+
+/// Maximum feedback-edge gain — keeps FX→FX loops stable regardless of
+/// what the user puts on `Cable.audio_gain`.  Picked just shy of 1.0 so
+/// long reverb / delay tails can still build but can't run away to +∞.
+pub const FEEDBACK_GAIN_MAX: f32 = 0.95;
 
 // `ModuleKind`, `Zone`, and `GRID_COLS` live in state/module_kind.rs.
 // Re-exported here so `super::rack::{ModuleKind, Zone, GRID_COLS}` keeps
@@ -706,6 +724,8 @@ impl RackState {
         for cable in old_cables {
             if cable.from.kind == PortKind::Audio
                 && self.would_create_audio_cycle(cable.from.module_id, cable.to.module_id)
+                && !(self.is_fx_module(cable.from.module_id)
+                    && self.is_fx_module(cable.to.module_id))
             {
                 log::warn!(
                     "Stripped cyclic audio cable {} → {} during load",
@@ -717,6 +737,15 @@ impl RackState {
             self.cables.push(cable);
         }
         before - self.cables.len()
+    }
+
+    /// Whether `module_id` is an FX module — used to scope cycle checks
+    /// so FX→FX feedback loops are allowed while voice-path cycles stay
+    /// rejected.  Returns `false` for unknown ids.
+    pub fn is_fx_module(&self, module_id: u32) -> bool {
+        self.module(module_id)
+            .map(|m| super::fx_plan::kind_is_fx(m.kind))
+            .unwrap_or(false)
     }
 
     /// Returns true if adding an audio cable from → to would create a cycle.
@@ -758,18 +787,29 @@ impl RackState {
         if self.cables.iter().any(|c| c.from == from && c.to == to) {
             return false;
         }
+        // Loosen the cycle check: FX→FX cycles are allowed (they become
+        // feedback routes at compile time with a clamped gain so the loop
+        // can't diverge).  Cycles involving a voice / master / LLM module
+        // stay rejected — those would be genuine graph errors, not
+        // musical feedback.
         if from.kind == PortKind::Audio
             && self.would_create_audio_cycle(from.module_id, to.module_id)
+            && !(self.is_fx_module(from.module_id) && self.is_fx_module(to.module_id))
         {
             log::warn!(
-                "Rejected audio cable {} → {}: would create a cycle",
+                "Rejected audio cable {} → {}: would create a non-FX cycle",
                 from.module_id,
                 to.module_id
             );
             return false;
         }
         let color = self.next_cable_color();
-        self.cables.push(Cable { from, to, color });
+        self.cables.push(Cable {
+            from,
+            to,
+            color,
+            audio_gain: default_audio_gain(),
+        });
         true
     }
 
@@ -855,7 +895,7 @@ impl Default for RackState {
 // ─── FX routing plan ──────────────────────────────────────────────────────────
 
 /// One processing step in the compiled FX routing plan.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum FxStep {
     Waveshaper,
     Reverb,
@@ -870,6 +910,51 @@ pub enum FxStep {
     Drive,
     Autotune,
     Pan,
+}
+
+/// Total FxStep variants — sized to pack dense per-FX audio-thread
+/// caches (e.g. previous-sample outputs for feedback routes) without
+/// allocating a HashMap every block.
+pub const FX_STEP_COUNT: usize = 13;
+
+impl FxStep {
+    /// Dense 0..`FX_STEP_COUNT` index — stable; keep in lock-step with
+    /// the variant declaration order above.  Used to index `[f32; N]`
+    /// arrays inside `DspState` without any hashing overhead.
+    pub fn idx(self) -> usize {
+        match self {
+            FxStep::Waveshaper => 0,
+            FxStep::Reverb => 1,
+            FxStep::Delay => 2,
+            FxStep::Bitcrush => 3,
+            FxStep::Chorus => 4,
+            FxStep::Phaser => 5,
+            FxStep::RingMod => 6,
+            FxStep::Eq => 7,
+            FxStep::Compressor => 8,
+            FxStep::TapeSat => 9,
+            FxStep::Drive => 10,
+            FxStep::Autotune => 11,
+            FxStep::Pan => 12,
+        }
+    }
+}
+
+/// One compiled feedback route — an FX→FX back-edge in the cable graph.
+/// Declares "before processing `target`, read the previous sample output
+/// of `source` and mix it into the input with `gain` (clamped 0..=0.95)".
+/// Added by `compile_fx_plan` when a cable closes a cycle in the FX graph.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct FeedbackRoute {
+    /// FX whose *previous*-sample output is fed back.  The audio thread
+    /// maintains a one-sample delay line keyed by FxStep, so the edge is
+    /// algebraically well-defined (no instantaneous self-reference).
+    pub source: FxStep,
+    /// FX that receives the fed-back signal mixed into its input.
+    pub target: FxStep,
+    /// Feedback gain — already clamped to `FEEDBACK_GAIN_MAX` at compile
+    /// time so the audio thread can use it directly.
+    pub gain: f32,
 }
 
 /// Compiled FX processing order derived from the rack cable graph.
@@ -890,4 +975,14 @@ pub struct FxPlan {
     /// When non-empty for a voice, the DSP routes that bus through its own
     /// chain instead of the global chain.
     pub voice_routes: HashMap<ModuleKind, Vec<FxStep>>,
+    /// FX→FX feedback edges — cables that would close a cycle in the
+    /// forward DAG are lifted out here with a one-sample delay.  The audio
+    /// thread reads each source's previous-sample output and mixes it into
+    /// the target's input before the target processes the current sample.
+    pub feedback_routes: Vec<FeedbackRoute>,
+    /// Per-voice bus send gain (from the first Voice→FX cable's `audio_gain`).
+    /// Missing entries default to 1.0 (unity) on the DSP side.  Lets the
+    /// agent dial a voice into its FX chain softer or harder without
+    /// changing the voice's own volume knob.
+    pub voice_send_gain: HashMap<ModuleKind, f32>,
 }

@@ -126,7 +126,8 @@ pub use modulation::{
 };
 pub use module_kind::{GRID_COLS, ModuleKind, Zone};
 pub use rack::{
-    Cable, CableColor, FxPlan, FxStep, PortDir, PortKind, PortRef, RackModule, RackState,
+    Cable, CableColor, FEEDBACK_GAIN_MAX, FX_STEP_COUNT, FeedbackRoute, FxPlan, FxStep, PortDir,
+    PortKind, PortRef, RackModule, RackState,
 };
 pub use rack_presets::RACK_PRESETS;
 pub use rack_scope::{parse_module_kind, rack_kind_name_matches, scope_from_control_cables};

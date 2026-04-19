@@ -2,8 +2,9 @@
 // Compile a cable graph into an ordered FX processing plan.
 // Extracted from rack.rs to keep file sizes under 1000 lines.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap, HashSet, VecDeque};
 
+use super::rack::{FEEDBACK_GAIN_MAX, FeedbackRoute};
 use super::{FxPlan, FxStep, ModuleKind, PortKind, RackState};
 
 pub(crate) fn kind_to_fx_step(kind: ModuleKind) -> Option<FxStep> {
@@ -23,6 +24,40 @@ pub(crate) fn kind_to_fx_step(kind: ModuleKind) -> Option<FxStep> {
         ModuleKind::FxPan => Some(FxStep::Pan),
         _ => None,
     }
+}
+
+/// Whether a `ModuleKind` maps to an `FxStep` — used by the rack's
+/// cycle check to scope feedback permissions to FX-only cycles.
+pub fn kind_is_fx(kind: ModuleKind) -> bool {
+    kind_to_fx_step(kind).is_some()
+}
+
+/// True if the directed graph with edges `(u -> v)` for every `(u, v)` in
+/// `edges` would have a cycle once the single edge `(from, to)` is added.
+/// `nodes` is the full node set so we can seed in-degree for Kahn's sort.
+fn edge_creates_cycle(nodes: &HashSet<u32>, edges: &[(u32, u32)], from: u32, to: u32) -> bool {
+    if from == to {
+        return true;
+    }
+    // BFS from `to` — if we can reach `from` already, the new edge closes a cycle.
+    let mut adj: HashMap<u32, Vec<u32>> = HashMap::new();
+    for &(u, v) in edges {
+        adj.entry(u).or_default().push(v);
+    }
+    let mut visited: HashSet<u32> = HashSet::new();
+    let mut queue = VecDeque::from([to]);
+    while let Some(n) = queue.pop_front() {
+        if n == from {
+            return true;
+        }
+        if visited.insert(n)
+            && let Some(neigh) = adj.get(&n)
+        {
+            queue.extend(neigh);
+        }
+    }
+    let _ = nodes;
+    false
 }
 
 /// Build an `FxPlan` from the rack cable graph using a topological sort
@@ -47,8 +82,17 @@ pub fn compile_fx_plan(rack: &RackState) -> FxPlan {
     // Build FX→FX adjacency and collect FX modules that participate in any
     // audio cable (either FX→FX or voice→FX). FX modules with zero audio
     // cables are excluded — they're orphaned and shouldn't process.
+    //
+    // FX→FX cables are classified greedily: each cable is added to the
+    // forward graph if doing so wouldn't close a cycle.  Cables that
+    // WOULD close a cycle are lifted out as back-edges and compiled
+    // into `feedback_routes`.  Cable order here is the rack's cable
+    // insertion order — the same across saves, so the choice of which
+    // edge becomes the feedback edge is deterministic.
     let mut fx_adj: HashMap<u32, Vec<u32>> = HashMap::new();
+    let mut fwd_edges: Vec<(u32, u32)> = Vec::new();
     let mut connected_fx: HashSet<u32> = HashSet::new();
+    let mut feedback_edges: Vec<(u32, u32, f32)> = Vec::new();
 
     for cable in &rack.cables {
         if cable.from.kind != PortKind::Audio {
@@ -56,19 +100,25 @@ pub fn compile_fx_plan(rack: &RackState) -> FxPlan {
         }
         let from_fx = fx_map.contains_key(&cable.from.module_id);
         let to_fx = fx_map.contains_key(&cable.to.module_id);
-        // Any audio cable touching an FX module marks it as connected
         if from_fx {
             connected_fx.insert(cable.from.module_id);
         }
         if to_fx {
             connected_fx.insert(cable.to.module_id);
         }
-        // FX→FX adjacency for topological sort
         if from_fx && to_fx {
-            fx_adj
-                .entry(cable.from.module_id)
-                .or_default()
-                .push(cable.to.module_id);
+            let from_id = cable.from.module_id;
+            let to_id = cable.to.module_id;
+            if edge_creates_cycle(&connected_fx, &fwd_edges, from_id, to_id) {
+                // Back-edge → feedback route.  Clamp the user-supplied
+                // gain to FEEDBACK_GAIN_MAX here so the audio thread
+                // never has to re-check.
+                let gain = cable.audio_gain.clamp(0.0, FEEDBACK_GAIN_MAX);
+                feedback_edges.push((from_id, to_id, gain));
+            } else {
+                fwd_edges.push((from_id, to_id));
+                fx_adj.entry(from_id).or_default().push(to_id);
+            }
         }
     }
 
@@ -143,6 +193,7 @@ pub fn compile_fx_plan(rack: &RackState) -> FxPlan {
         .collect();
 
     let mut voice_routes: HashMap<ModuleKind, Vec<FxStep>> = HashMap::new();
+    let mut voice_send_gain: HashMap<ModuleKind, f32> = HashMap::new();
 
     for cable in &rack.cables {
         if cable.from.kind != PortKind::Audio {
@@ -185,11 +236,35 @@ pub fn compile_fx_plan(rack: &RackState) -> FxPlan {
                 _ => break, // fan-out, cycle, or end of chain
             }
         }
+        // Capture per-voice send gain from the FIRST voice→FX cable we see
+        // for each voice — mirrors the `or_insert` policy on the chain
+        // itself.  Later cables on the same voice are secondary routes
+        // and don't drive the primary send gain.
+        let gain = cable.audio_gain.clamp(0.0, 1.5);
+        voice_send_gain.entry(voice_kind).or_insert(gain);
         voice_routes.entry(voice_kind).or_insert(chain);
     }
+
+    // Translate back-edges (module-id-keyed) into FeedbackRoutes keyed by FxStep.
+    let feedback_routes: Vec<FeedbackRoute> = feedback_edges
+        .into_iter()
+        .filter_map(|(from_id, to_id, gain)| {
+            let src_kind = fx_map.get(&from_id).copied()?;
+            let tgt_kind = fx_map.get(&to_id).copied()?;
+            let source = kind_to_fx_step(src_kind)?;
+            let target = kind_to_fx_step(tgt_kind)?;
+            Some(FeedbackRoute {
+                source,
+                target,
+                gain,
+            })
+        })
+        .collect();
 
     FxPlan {
         steps: ordered,
         voice_routes,
+        feedback_routes,
+        voice_send_gain,
     }
 }

@@ -33,6 +33,7 @@ fn audio_cable(from_id: u32, to_id: u32) -> Cable {
             index: 0,
         },
         color: CableColor::Gray,
+        audio_gain: 1.0,
     }
 }
 
