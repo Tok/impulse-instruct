@@ -196,6 +196,35 @@ A detailed log of what's built.
   + cascade lands on `BassTrigger.slide`, 2 apply-layer tests for
   bass-key JSON + partial-update preservation.
 
+### Pre-echo v2
+
+- `RampCurve` enum (`Linear` / `Exp` / `Log` / `Cosine`) shapes every
+  scalar ramp (velocity / ratchet / probability / accent) via a
+  `curve.apply(pos) -> f32` helper — slow-starts, fast-starts, and
+  smoothstep ease-in/out in addition to v1's pure linear.  Linear is
+  the default so existing configs read identically.
+- `probability_ramp` overrides `Step.probability` across the lead-in
+  (0.3 at earliest step → 1.0 at anchor-adjacent, curved).  Leading
+  steps fire less often, building up density toward the anchor
+  without user bookkeeping.
+- `auto_length`: when lit, the lead-in window for each anchor is
+  `gap_to_prev_anchor − 1` (wrap-aware), so uneven anchor spacings
+  produce variable-length build-ups without per-anchor config.
+  Single-anchor configs fall back to `length.max(4)` so the toggle
+  can't silently disable the effect.
+- `preecho_scale` + `preecho_melodic` collapsed into one
+  `preecho_apply(step, total, cfg) -> PreechoApply` that returns a
+  single struct with `velocity_mul` / `ratchet_add` /
+  `probability_override` / `accent_override` / `slide_override` —
+  drums read the first three, bass the melodic pair, and future
+  hoover / an1x callers get one entry point.
+- UI picks up a CURVE dropdown, AUTO toggle, PROB / ACC / SLD
+  toggles on a new third row of the preecho editor (the first two
+  rows stay as-is: voice tabs + anchor strip, then ON / LEN / VEL /
+  RAT / CLEAR).  Accent / slide ramps were in the v1 config but
+  never exposed in the panel — they're surfaced now alongside the
+  new v2 toggles so the whole modulation vocabulary is editable.
+
 ### Pitch-preserving BPM stretch on amen (granular v1)
 
 - `AmenState.bpm_stretch_preserve: bool` pairs with the existing

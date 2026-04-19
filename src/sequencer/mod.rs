@@ -8,7 +8,7 @@ use crate::state::{DrumVoice, SequencerState};
 // ─── Events emitted by the sequencer ─────────────────────────────────────────
 
 pub mod preecho;
-pub use preecho::{PreechoConfig, preecho_melodic, preecho_scale};
+pub use preecho::{PreechoApply, PreechoConfig, RampCurve, preecho_apply};
 
 #[derive(Clone, Debug)]
 pub enum TriggerEvent {
@@ -240,15 +240,22 @@ pub fn advance_clock(
                     .copied()
                     .unwrap_or(seq.steps)
                     .max(1);
-                let (vel_mul, rat_add) = seq
+                let pre = seq
                     .preecho
                     .get(voice_key)
-                    .map(|cfg| preecho::preecho_scale(vstep, voice_steps, cfg))
-                    .unwrap_or((1.0, 0));
+                    .map(|cfg| preecho::preecho_apply(vstep, voice_steps, cfg))
+                    .unwrap_or(preecho::PreechoApply::IDENTITY);
 
-                if s.active && prob_hit(s.probability, vstep, loop_count, *voice as u32) {
-                    let effective_vel = (s.velocity * vel_mul).clamp(0.0, 1.0);
-                    let effective_ratchet = s.ratchet.saturating_add(rat_add).min(8);
+                if s.active
+                    && prob_hit(
+                        pre.probability_override.unwrap_or(s.probability),
+                        vstep,
+                        loop_count,
+                        *voice as u32,
+                    )
+                {
+                    let effective_vel = (s.velocity * pre.velocity_mul).clamp(0.0, 1.0);
+                    let effective_ratchet = s.ratchet.saturating_add(pre.ratchet_add).min(8);
                     // Amen-specific auto: when step.slice is 0 (unset), map
                     // each step's INDEX to the slice index (1-based, so the
                     // DSP's `(slice_idx-1) % slices` resolves to vstep %
@@ -316,13 +323,13 @@ pub fn advance_clock(
                 // or slide_cascade enabled, override this step's accent /
                 // slide inside the lead-in window.  Anchors + non-lead-in
                 // steps pass through unchanged (None override).
-                let (accent_ov, slide_ov) = seq
+                let pre = seq
                     .preecho
                     .get("bass")
-                    .map(|cfg| preecho::preecho_melodic(bstep, vsteps, cfg))
-                    .unwrap_or((None, None));
-                let accent = accent_ov.unwrap_or(bs.accent);
-                let slide = slide_ov.unwrap_or(bs.slide);
+                    .map(|cfg| preecho::preecho_apply(bstep, vsteps, cfg))
+                    .unwrap_or(preecho::PreechoApply::IDENTITY);
+                let accent = pre.accent_override.unwrap_or(bs.accent);
+                let slide = pre.slide_override.unwrap_or(bs.slide);
                 events.push(TriggerEvent::BassTrigger {
                     voice_idx: vi,
                     note: bs.note,

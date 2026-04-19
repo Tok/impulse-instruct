@@ -52,9 +52,14 @@ they ship and are reflected in `features.md`.
   overrides and a timeline view, but the current surface is enough
   to arrange multi-style / multi-tempo sets.
 - **MIDI export** — export sequencer pattern as `.mid` file.
-- **Preecho v2** — note approach (chromatic / scale-step / arp resolving
-  to the anchor note), probability ramp, accent/slide trailing, curve
-  shapes (exp / log), auto-length from gap between anchors.
+- **Preecho v2** — curves (Linear / Exp / Log / Cosine), probability
+  ramp, and auto-length (fills the lead-in from the prior-anchor gap)
+  landed.  Accent / slide already shipped in v1 and now surface in the
+  panel as dedicated toggles alongside VEL / RAT.  Remaining: note
+  approach (chromatic / scale-step / arp resolving to the anchor note)
+  and Hoover / An1x support (their `TriggerEvent` variants still only
+  carry `note`; adding accent / slide to them + wiring preecho through
+  the TTS-adjacent synth trigger paths is a separate commit).
 
 ## Intelligence
 
