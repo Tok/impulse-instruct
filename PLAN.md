@@ -34,12 +34,6 @@ they ship and are reflected in `features.md`.
 
 ## Intelligence
 
-- [ ] **Mid-pipeline live state checks** — `pipeline::run_pipeline`
-  works on a snapshot.  When the user changes the rack mid-cycle,
-  in-flight lanes for newly-removed modules still fire.  The
-  defensive `lane_is_live_pub` filter at plan time helps but doesn't
-  catch changes after the plan is built; needs an `Arc<RwLock>` or
-  callback.
 - [ ] **Test additional LLM models** — evaluate
   DeepSeek-R1-Distill-Qwen-7B / 14B and Qwen3-8B / 14B for JSON
   accuracy and music theory.  Gemma 4 26B-A4B is now downloadable

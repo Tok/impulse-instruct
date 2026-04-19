@@ -131,6 +131,21 @@ pub fn handle_pipeline_event(
                 ..LlmOutput::default()
             });
         }
+        PipelineEvent::LaneSkipped { lane, reason } => {
+            // Count as done (so progress still ticks) but not as failed.
+            // Mid-cycle removals aren't model errors; they're user / style
+            // actions the pipeline has to step around gracefully.
+            log::info!("pipeline: {} skipped — {}", lane.label(), reason);
+            with_progress(state, agent_id, |p| {
+                p.lanes_done = p.lanes_done.saturating_add(1);
+                p.current_lane = None;
+            });
+            let _ = output_tx.try_send(LlmOutput {
+                text: format!("[{} skipped: {}]", lane.label(), reason),
+                agent_id,
+                ..LlmOutput::default()
+            });
+        }
         PipelineEvent::PipelineDone {
             total_ms,
             lanes_succeeded,

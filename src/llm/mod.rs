@@ -475,7 +475,8 @@ pub fn run_llm_loop(
                 &mut pool,
                 infer_port,
                 &sampling,
-                !one_shot, // is_jam — jam cycles use Phase 2 single-lane picker
+                !one_shot,    // is_jam — jam cycles use Phase 2 single-lane picker
+                Some(&state), // mid-pipeline live-state re-check — skips lanes whose module was removed
                 |event| {
                     pipeline_events::handle_pipeline_event(
                         event,

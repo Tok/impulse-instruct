@@ -4,6 +4,24 @@ A detailed log of what's built.
 
 ---
 
+### Mid-pipeline live state checks
+
+- `run_pipeline` + `run_pipeline_via_pool` gain an optional
+  `live_state: Option<&Arc<RwLock<AppState>>>` parameter.  When set,
+  the lane loop re-checks `lane_is_live_pub` against the shared
+  state right before firing each lane — catches modules that were
+  removed / disabled between the plan-time filter and the inference
+  call.  `None` preserves the pre-refactor snapshot-only behaviour
+  for tests and one-shot turns.
+- New `PipelineEvent::LaneSkipped { lane, reason }` variant — the
+  progress UI ticks `lanes_done` without bumping `failed_count`, so
+  mid-cycle removals aren't framed as model errors.
+- Wired into the real inference loop so a lane for a just-removed
+  module is skipped before burning an inference call.  2 new tests
+  (`pipeline_skips_lane_when_module_removed_mid_cycle` confirms the
+  skip fires when the live rack changes; `_keeps_snapshot_behaviour`
+  confirms `None` is a pure pass-through).
+
 ### UX — touch paint, gesture zoom, LED escape, style auto-sync
 
 - **Step-button drag-paint.**  `step_button` now returns

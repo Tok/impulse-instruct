@@ -58,6 +58,12 @@ pub enum PipelineEvent {
     },
     /// Lane inference or apply failed; pipeline continues with the next lane.
     LaneFailed { lane: LaneKind, error: String },
+    /// Lane was skipped because a mid-pipeline live-state check found the
+    /// lane's target module missing / disabled (e.g. user removed the
+    /// rack module while the pipeline was mid-cycle).  Distinct from
+    /// `LaneFailed` so the progress UI can show "skipped" without
+    /// framing it as a model error.
+    LaneSkipped { lane: LaneKind, reason: String },
     /// Whole pipeline done.
     PipelineDone {
         total_ms: u128,
@@ -82,6 +88,7 @@ pub fn run_pipeline<B: PipelineBackend>(
     backend: &mut B,
     sampling: &SamplingParams,
     is_jam: bool,
+    live_state: Option<&std::sync::Arc<parking_lot::RwLock<AppState>>>,
     mut progress: impl FnMut(PipelineEvent),
     mut on_lane_applied: impl FnMut(&AppState),
 ) -> AppState {
@@ -144,6 +151,23 @@ pub fn run_pipeline<B: PipelineBackend>(
     let mut succeeded = 0usize;
     let mut failed = 0usize;
     for lane in plan.lanes.iter().copied() {
+        // Mid-pipeline live-state re-check: `plan.lanes` was filtered
+        // against the snapshot at plan time, but the user (or another
+        // agent / the API) can mutate the rack while the pipeline is
+        // mid-cycle.  Re-checking against the shared `live_state` here
+        // means we skip lanes whose target module has since been
+        // removed or disabled, instead of burning an inference call
+        // producing output that won't apply.  `None` live_state keeps
+        // the old snapshot-only behaviour (tests, one-shot turns).
+        if let Some(live) = live_state {
+            let live_snap = live.read();
+            if !crate::llm::planner::lane_is_live_pub(&live_snap, lane) {
+                let reason = format!("{}: module removed / disabled mid-cycle", lane.label());
+                log::warn!("pipeline: skipping {} — {}", lane.label(), reason);
+                progress(PipelineEvent::LaneSkipped { lane, reason });
+                continue;
+            }
+        }
         progress(PipelineEvent::LaneStarted { lane });
         let t_lane = std::time::Instant::now();
         let system = build_lane_prompt(&state, lane);
@@ -379,6 +403,7 @@ impl PipelineBackend for PoolBackend<'_> {
 /// Convenience entrypoint for callers who already have a pool + port —
 /// builds the adapter and runs the pipeline in one call.  Used by the
 /// LLM worker loop to swap monolithic inference for the lane path.
+#[allow(clippy::too_many_arguments)]
 pub fn run_pipeline_via_pool(
     state: AppState,
     user_prompt: &str,
@@ -386,6 +411,7 @@ pub fn run_pipeline_via_pool(
     port: u16,
     sampling: &SamplingParams,
     is_jam: bool,
+    live_state: Option<&std::sync::Arc<parking_lot::RwLock<AppState>>>,
     progress: impl FnMut(PipelineEvent),
     on_lane_applied: impl FnMut(&AppState),
 ) -> AppState {
@@ -396,6 +422,7 @@ pub fn run_pipeline_via_pool(
         &mut backend,
         sampling,
         is_jam,
+        live_state,
         progress,
         on_lane_applied,
     )
@@ -599,6 +626,7 @@ mod tests {
             &mut backend,
             &SamplingParams::default(),
             false, // is_jam — user turn, exercise planner path
+            None,  // no live_state — snapshot-only behaviour
             |e| events.borrow_mut().push(e),
             |_| {},
         );
@@ -655,6 +683,7 @@ mod tests {
             &mut backend,
             &SamplingParams::default(),
             false, // is_jam — exercise planner fallback path
+            None,  // no live_state — snapshot-only behaviour
             |e| events.borrow_mut().push(e),
             |_| {},
         );
@@ -701,6 +730,7 @@ mod tests {
             &mut backend,
             &SamplingParams::default(),
             false, // is_jam — exercise planner path
+            None,  // no live_state — snapshot-only behaviour
             |e| events.borrow_mut().push(e),
             |_| {},
         );
@@ -758,6 +788,7 @@ mod tests {
             &mut backend,
             &SamplingParams::default(),
             false, // is_jam — exercise planner path
+            None,  // no live_state — snapshot-only behaviour
             |_| {},
             |_| {},
         );
@@ -774,6 +805,134 @@ mod tests {
         assert!(
             bass2_system.contains("0"),
             "bass2 prompt should reflect bass1's active step 0"
+        );
+    }
+
+    #[test]
+    fn pipeline_skips_lane_when_module_removed_mid_cycle() {
+        // When the planner emits `[bass1, fx]` but the AcidBass module
+        // gets removed from the live rack between the plan-time filter
+        // and the bass1 inference, the pipeline must skip the bass1
+        // lane (no infer call fires for it), not apply an update
+        // against the now-missing voice.
+        use parking_lot::RwLock;
+        use std::sync::Arc;
+
+        let base = bass_only_state();
+        // Unlock bpm so settings / state mutations actually land (default
+        // state locks bpm).  Not strictly needed here but keeps the test
+        // robust against future callback tweaks that check state fields.
+        let base = crate::state::unlock_param(base, "sequencer.bpm");
+        let live_state = Arc::new(RwLock::new(base.clone()));
+        let mut backend = MockBackend::with_responses(vec![
+            // Planner response: fx then bass1.  `fx` always stays live,
+            // bass1 is live at plan time (rack still has AcidBass).
+            serde_json::json!({ "lanes": ["fx", "bass1"] }),
+            // fx lane response — applied normally.
+            serde_json::json!({ "fx": { "reverb_mix": 0.4 } }),
+            // If the pipeline fires bass1 despite the removal this
+            // response would be consumed; the call-count assertion
+            // catches that failure mode.
+            serde_json::json!({
+                "sequencer": { "bass_steps": [0, 4, 8, 12] }
+            }),
+        ]);
+
+        // Strip AcidBass from the live state the moment any lane lands.
+        // This models the user yanking the module mid-pipeline.
+        let live_for_cb = live_state.clone();
+        let fired = std::cell::Cell::new(false);
+        let on_lane_applied = |_s: &AppState| {
+            if !fired.get() {
+                fired.set(true);
+                let mut live = live_for_cb.write();
+                let ids: Vec<u32> = live
+                    .rack
+                    .modules
+                    .iter()
+                    .filter(|m| m.kind == ModuleKind::AcidBass)
+                    .map(|m| m.id)
+                    .collect();
+                for id in ids {
+                    live.rack.remove_module(id);
+                }
+            }
+        };
+
+        let events = std::cell::RefCell::new(Vec::new());
+        // A prompt long enough to bypass the short-command heuristic and
+        // route through the LLM planner so the mocked response drives
+        // the plan.
+        let prompt = "rewrite the fx bus to a darker reverb space and then \
+                      evolve the bass line with some new accents and slides";
+        let _ = run_pipeline(
+            base,
+            prompt,
+            &mut backend,
+            &SamplingParams::default(),
+            false,
+            Some(&live_state),
+            |e| events.borrow_mut().push(e),
+            on_lane_applied,
+        );
+
+        // 2 calls expected: planner + fx.  The bass1 response stays in
+        // the queue because the live-state check skips that lane before
+        // `infer_lane_json` fires.
+        assert_eq!(
+            backend.calls.len(),
+            2,
+            "expected planner + fx only — bass1 should have been skipped; got {:?}",
+            backend
+                .calls
+                .iter()
+                .map(|(s, _)| s.lines().next().unwrap_or("").to_string())
+                .collect::<Vec<_>>()
+        );
+        // A `LaneSkipped` event for bass1 was emitted.
+        let skipped = events.borrow().iter().any(
+            |e| matches!(e, PipelineEvent::LaneSkipped { lane, .. } if lane.label() == "bass1"),
+        );
+        assert!(skipped, "expected a LaneSkipped event for bass1");
+    }
+
+    #[test]
+    fn pipeline_without_live_state_keeps_snapshot_behaviour() {
+        // Passing `None` for live_state must preserve the pre-refactor
+        // semantics: every planned lane fires, no mid-cycle re-checks.
+        let state = bass_only_state();
+        let state = crate::state::unlock_param(state, "sequencer.bpm");
+        let mut backend = MockBackend::with_responses(vec![
+            serde_json::json!({ "lanes": ["fx", "bass1"] }),
+            serde_json::json!({ "fx": { "reverb_mix": 0.4 } }),
+            serde_json::json!({
+                "sequencer": { "bass_steps": [0, 4, 8, 12] }
+            }),
+        ]);
+        let events = std::cell::RefCell::new(Vec::new());
+        let prompt = "rewrite the fx bus to a darker reverb space and then \
+                      evolve the bass line with some new accents and slides";
+        let _ = run_pipeline(
+            state,
+            prompt,
+            &mut backend,
+            &SamplingParams::default(),
+            false,
+            None, // opt-out of mid-pipeline checks
+            |e| events.borrow_mut().push(e),
+            |_| {},
+        );
+        assert_eq!(
+            backend.calls.len(),
+            3,
+            "expected planner + fx + bass1 when live_state is None"
+        );
+        // No LaneSkipped events should ever fire without live_state.
+        assert!(
+            !events
+                .borrow()
+                .iter()
+                .any(|e| matches!(e, PipelineEvent::LaneSkipped { .. }))
         );
     }
 }
