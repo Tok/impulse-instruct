@@ -109,7 +109,7 @@ mod lane_is_live_tests {
 #[cfg(test)]
 mod heuristic_plan_tests {
     use crate::llm::lanes::LaneKind;
-    use crate::llm::planner::heuristic_plan;
+    use crate::llm::planner_heuristic::heuristic_plan;
     use crate::state::AppState;
 
     #[test]

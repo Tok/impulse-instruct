@@ -22,9 +22,9 @@
 
 use crate::llm::lanes::{LaneKind, build_lane_prompt, lane_schema};
 use crate::llm::planner::{
-    LanePlan, build_planner_prompt, default_plan, heuristic_plan, parse_planner_output,
-    planner_schema,
+    LanePlan, build_planner_prompt, default_plan, parse_planner_output, planner_schema,
 };
+use crate::llm::planner_heuristic::heuristic_plan;
 use crate::llm::{SamplingParams, json_repair};
 use crate::state::AppState;
 use serde_json::Value;
