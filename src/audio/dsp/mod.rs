@@ -35,6 +35,27 @@ use crate::state::{DrumVoice, FX_STEP_COUNT, FxPlan, FxStep, ModuleKind};
 
 use rev_tap::REV_BUF_LEN;
 
+/// Max FX steps in any one chain snapshot — sized to the union of every
+/// voice's chain + the global chain.  Sends beyond this are silently
+/// truncated at snap time (shouldn't happen with the current FX count).
+const MAX_CHAIN: usize = 16;
+/// Max parallel sends per voice.  Three covers "dry + two distinct FX
+/// sends" (classic reverb + delay split) with headroom for a third
+/// colour chain.  Cables beyond this count are truncated at snap time.
+const MAX_SENDS: usize = 3;
+
+/// Stack-friendly per-voice send snapshot — mirrors `FxPlan.voice_routes`
+/// on the audio thread without any HashMap / Vec touches inside the
+/// frame loop.  Each of the `count` active sends has its own chain
+/// (up to `MAX_CHAIN` FxSteps) and per-send gain.
+#[derive(Clone, Copy)]
+struct VoiceSendsSnap {
+    chains: [[FxStep; MAX_CHAIN]; MAX_SENDS],
+    chain_lens: [usize; MAX_SENDS],
+    gains: [f32; MAX_SENDS],
+    count: usize,
+}
+
 // ─── Full DSP state ───────────────────────────────────────────────────────────
 
 pub struct DspState {
@@ -425,7 +446,6 @@ impl DspState {
             (p.delay_time * sr * 2.0).clamp(1.0, MAX_DELAY_SAMPLES as f32 - 2.0) as usize;
 
         // Snapshot FX chains into stack arrays (releases borrow on self.fx_plan).
-        const MAX_CHAIN: usize = 16;
         let mut global_chain = [FxStep::Waveshaper; MAX_CHAIN];
         let mut global_len = 0usize;
         for (i, &s) in self.fx_plan.steps.iter().enumerate().take(MAX_CHAIN) {
@@ -433,27 +453,37 @@ impl DspState {
             global_len += 1;
         }
 
-        // Per-voice route snapshots — copy from HashMap (all Copy, no allocation).
-        let snap_route = |kind: ModuleKind| -> ([FxStep; MAX_CHAIN], usize) {
-            let mut arr = [FxStep::Waveshaper; MAX_CHAIN];
-            let mut len = 0usize;
-            if let Some(steps) = self.fx_plan.voice_routes.get(&kind) {
-                for (i, &s) in steps.iter().enumerate().take(MAX_CHAIN) {
-                    arr[i] = s;
-                    len += 1;
+        // Per-voice send snapshot — each voice can drive up to `MAX_SENDS`
+        // parallel FX sub-chains, each with its own wet gain.  All-stack
+        // so the frame loop iterates without touching HashMaps.
+        let snap_sends = |kind: ModuleKind| -> VoiceSendsSnap {
+            let mut out = VoiceSendsSnap {
+                chains: [[FxStep::Waveshaper; MAX_CHAIN]; MAX_SENDS],
+                chain_lens: [0usize; MAX_SENDS],
+                gains: [1.0f32; MAX_SENDS],
+                count: 0,
+            };
+            if let Some(sends) = self.fx_plan.voice_routes.get(&kind) {
+                for (si, send) in sends.iter().enumerate().take(MAX_SENDS) {
+                    for (ci, &step) in send.chain.iter().enumerate().take(MAX_CHAIN) {
+                        out.chains[si][ci] = step;
+                    }
+                    out.chain_lens[si] = send.chain.len().min(MAX_CHAIN);
+                    out.gains[si] = send.gain;
+                    out.count += 1;
                 }
             }
-            (arr, len)
+            out
         };
-        let (chain_bass, bass_len) = snap_route(ModuleKind::AcidBass);
-        let (chain_808, d808_len) = snap_route(ModuleKind::DrumKit808);
-        let (chain_909, d909_len) = snap_route(ModuleKind::DrumKit909);
-        let (chain_hoover, hov_len) = snap_route(ModuleKind::HooverLead);
-        let (chain_an1x, an1x_len) = snap_route(ModuleKind::An1xVoice);
-        let (chain_amen, amen_len) = snap_route(ModuleKind::AmenSampler);
-        let (chain_noise, noise_len) = snap_route(ModuleKind::NoiseVoice);
-        let (chain_granular, gran_len) = snap_route(ModuleKind::GranularTexture);
-        let (chain_tts, tts_len) = snap_route(ModuleKind::NeuTts);
+        let sends_bass = snap_sends(ModuleKind::AcidBass);
+        let sends_808 = snap_sends(ModuleKind::DrumKit808);
+        let sends_909 = snap_sends(ModuleKind::DrumKit909);
+        let sends_hoover = snap_sends(ModuleKind::HooverLead);
+        let sends_an1x = snap_sends(ModuleKind::An1xVoice);
+        let sends_amen = snap_sends(ModuleKind::AmenSampler);
+        let sends_noise = snap_sends(ModuleKind::NoiseVoice);
+        let sends_granular = snap_sends(ModuleKind::GranularTexture);
+        let sends_tts = snap_sends(ModuleKind::NeuTts);
         let have_voice_routes = !self.fx_plan.voice_routes.is_empty();
 
         // Snapshot feedback routes into a stack array — the audio thread
@@ -477,28 +507,8 @@ impl DspState {
             feedback_len += 1;
         }
 
-        // Snapshot per-voice send gains.  Missing entries → unity so
-        // pre-send-gain rack saves keep working with no behaviour change.
-        let voice_gain = |kind: ModuleKind| -> f32 {
-            self.fx_plan
-                .voice_send_gain
-                .get(&kind)
-                .copied()
-                .unwrap_or(1.0)
-        };
-        let gain_bass = voice_gain(ModuleKind::AcidBass);
-        let gain_808 = voice_gain(ModuleKind::DrumKit808);
-        let gain_909 = voice_gain(ModuleKind::DrumKit909);
-        let gain_hoover = voice_gain(ModuleKind::HooverLead);
-        let gain_an1x = voice_gain(ModuleKind::An1xVoice);
-        let gain_amen = voice_gain(ModuleKind::AmenSampler);
-        let gain_noise = voice_gain(ModuleKind::NoiseVoice);
-        let gain_granular = voice_gain(ModuleKind::GranularTexture);
-        let gain_tts = voice_gain(ModuleKind::NeuTts);
-
         // Release the immutable borrow on self (via fx_plan) before the mutable frame loop.
-        let _ = snap_route;
-        let _ = voice_gain;
+        let _ = snap_sends;
 
         for frame in output.chunks_mut(channels) {
             // Mix all voices to mono
@@ -679,10 +689,14 @@ impl DspState {
                     gate_env,
                 )
             } else {
-                let routed_bass = if bass_len > 0 {
-                    self.apply_fx_chain(
-                        bus_bass * gain_bass,
-                        &chain_bass[..bass_len],
+                // Each voice routes through every one of its parallel
+                // sends; the helper sums the FX outputs and returns the
+                // bus signal unchanged when the voice has no sends
+                // (fallback to dry so un-wired voices stay audible).
+                let routed_bass = if sends_bass.count > 0 {
+                    self.route_voice_sends(
+                        bus_bass,
+                        &sends_bass,
                         fb,
                         &p,
                         delay_samples,
@@ -692,36 +706,20 @@ impl DspState {
                 } else {
                     bus_bass
                 };
-                let routed_808 = if d808_len > 0 {
-                    self.apply_fx_chain(
-                        bus_808 * gain_808,
-                        &chain_808[..d808_len],
-                        fb,
-                        &p,
-                        delay_samples,
-                        sr,
-                        gate_env,
-                    )
+                let routed_808 = if sends_808.count > 0 {
+                    self.route_voice_sends(bus_808, &sends_808, fb, &p, delay_samples, sr, gate_env)
                 } else {
                     bus_808
                 };
-                let routed_909 = if d909_len > 0 {
-                    self.apply_fx_chain(
-                        bus_909 * gain_909,
-                        &chain_909[..d909_len],
-                        fb,
-                        &p,
-                        delay_samples,
-                        sr,
-                        gate_env,
-                    )
+                let routed_909 = if sends_909.count > 0 {
+                    self.route_voice_sends(bus_909, &sends_909, fb, &p, delay_samples, sr, gate_env)
                 } else {
                     bus_909
                 };
-                let routed_hoover = if hov_len > 0 {
-                    self.apply_fx_chain(
-                        bus_hoover * gain_hoover,
-                        &chain_hoover[..hov_len],
+                let routed_hoover = if sends_hoover.count > 0 {
+                    self.route_voice_sends(
+                        bus_hoover,
+                        &sends_hoover,
                         fb,
                         &p,
                         delay_samples,
@@ -731,10 +729,10 @@ impl DspState {
                 } else {
                     bus_hoover
                 };
-                let routed_an1x = if an1x_len > 0 {
-                    self.apply_fx_chain(
-                        bus_an1x * gain_an1x,
-                        &chain_an1x[..an1x_len],
+                let routed_an1x = if sends_an1x.count > 0 {
+                    self.route_voice_sends(
+                        bus_an1x,
+                        &sends_an1x,
                         fb,
                         &p,
                         delay_samples,
@@ -744,10 +742,10 @@ impl DspState {
                 } else {
                     bus_an1x
                 };
-                let routed_amen = if amen_len > 0 {
-                    self.apply_fx_chain(
-                        bus_amen * gain_amen,
-                        &chain_amen[..amen_len],
+                let routed_amen = if sends_amen.count > 0 {
+                    self.route_voice_sends(
+                        bus_amen,
+                        &sends_amen,
                         fb,
                         &p,
                         delay_samples,
@@ -757,10 +755,10 @@ impl DspState {
                 } else {
                     bus_amen
                 };
-                let routed_noise = if noise_len > 0 {
-                    self.apply_fx_chain(
-                        bus_noise * gain_noise,
-                        &chain_noise[..noise_len],
+                let routed_noise = if sends_noise.count > 0 {
+                    self.route_voice_sends(
+                        bus_noise,
+                        &sends_noise,
                         fb,
                         &p,
                         delay_samples,
@@ -770,10 +768,10 @@ impl DspState {
                 } else {
                     bus_noise
                 };
-                let routed_granular = if gran_len > 0 {
-                    self.apply_fx_chain(
-                        bus_granular * gain_granular,
-                        &chain_granular[..gran_len],
+                let routed_granular = if sends_granular.count > 0 {
+                    self.route_voice_sends(
+                        bus_granular,
+                        &sends_granular,
                         fb,
                         &p,
                         delay_samples,
@@ -809,16 +807,8 @@ impl DspState {
             // the `NeuTtsVolume` LFO target.  Scaling AFTER FX keeps duck
             // activity tied to the raw sample stream regardless of gain.
             let tts_raw = self.tts_consumer.pop().unwrap_or(0.0);
-            let tts_fx = if tts_raw != 0.0 && tts_len > 0 {
-                self.apply_fx_chain(
-                    tts_raw * gain_tts,
-                    &chain_tts[..tts_len],
-                    fb,
-                    &p,
-                    delay_samples,
-                    sr,
-                    gate_env,
-                )
+            let tts_fx = if tts_raw != 0.0 && sends_tts.count > 0 {
+                self.route_voice_sends(tts_raw, &sends_tts, fb, &p, delay_samples, sr, gate_env)
             } else {
                 tts_raw
             };

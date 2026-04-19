@@ -141,11 +141,12 @@ mod fx_plan_tests {
         );
         let plan = compile_fx_plan(&rack);
         assert_eq!(plan.steps, vec![FxStep::Reverb, FxStep::Delay]);
-        let bass_route = plan
+        let bass_sends = plan
             .voice_routes
             .get(&ModuleKind::AcidBass)
-            .expect("AcidBass should have an explicit route");
-        assert_eq!(bass_route, &[FxStep::Reverb, FxStep::Delay]);
+            .expect("AcidBass should have an explicit send");
+        assert_eq!(bass_sends.len(), 1);
+        assert_eq!(bass_sends[0].chain, vec![FxStep::Reverb, FxStep::Delay]);
         assert!(!plan.voice_routes.contains_key(&ModuleKind::DrumKit808));
     }
 
@@ -174,18 +175,20 @@ mod fx_plan_tests {
             },
         );
         let plan = compile_fx_plan(&rack);
-        let bass_route = plan
+        let bass_sends = plan
             .voice_routes
             .get(&ModuleKind::AcidBass)
-            .expect("should have a route");
-        assert_eq!(bass_route, &[FxStep::Reverb]);
+            .expect("should have a send");
+        assert_eq!(bass_sends.len(), 1);
+        assert_eq!(bass_sends[0].chain, vec![FxStep::Reverb]);
     }
 
     #[test]
-    fn voice_send_gain_captured_from_first_voice_fx_cable() {
-        // The first Voice→FX cable's `audio_gain` becomes the voice's
-        // send gain in `FxPlan.voice_send_gain` — handy for per-voice
-        // wet/dry balance without touching the voice's volume knob.
+    fn voice_send_gain_captured_on_voice_fx_cable() {
+        // Each Voice→FX cable's `audio_gain` becomes the per-send gain
+        // on the corresponding `VoiceSend`.  Guards the send-bus
+        // refactor that replaced the single-send `voice_send_gain` map
+        // with a list of parallel sends per voice.
         let mut rack = RackState {
             modules: Vec::new(),
             cables: Vec::new(),
@@ -208,12 +211,71 @@ mod fx_plan_tests {
                 index: 0,
             },
         );
-        // Mutate the newly-created cable's audio_gain to simulate an
-        // agent dialling the send softer.
         rack.cables.last_mut().unwrap().audio_gain = 0.4;
         let plan = compile_fx_plan(&rack);
-        let g = plan.voice_send_gain.get(&ModuleKind::AcidBass).copied();
-        assert_eq!(g, Some(0.4));
+        let sends = plan
+            .voice_routes
+            .get(&ModuleKind::AcidBass)
+            .expect("bass has a send");
+        assert_eq!(sends.len(), 1);
+        assert!((sends[0].gain - 0.4).abs() < 1e-6);
+    }
+
+    #[test]
+    fn multiple_voice_fx_cables_produce_parallel_sends() {
+        // Two distinct Voice→FX cables from the same voice to different
+        // FX should produce two `VoiceSend` entries (parallel sends),
+        // each with its own chain + gain.
+        let mut rack = RackState {
+            modules: Vec::new(),
+            cables: Vec::new(),
+            next_id: 1,
+            dyn_sequencer_rows: None,
+        };
+        let bass_id = rack.add_module(ModuleKind::AcidBass);
+        let rev_id = rack.add_module(ModuleKind::FxReverb);
+        let dly_id = rack.add_module(ModuleKind::FxDelay);
+        rack.connect(
+            PortRef {
+                module_id: bass_id,
+                dir: PortDir::Out,
+                kind: PortKind::Audio,
+                index: 0,
+            },
+            PortRef {
+                module_id: rev_id,
+                dir: PortDir::In,
+                kind: PortKind::Audio,
+                index: 0,
+            },
+        );
+        rack.cables.last_mut().unwrap().audio_gain = 0.3;
+        rack.connect(
+            PortRef {
+                module_id: bass_id,
+                dir: PortDir::Out,
+                kind: PortKind::Audio,
+                index: 0,
+            },
+            PortRef {
+                module_id: dly_id,
+                dir: PortDir::In,
+                kind: PortKind::Audio,
+                index: 0,
+            },
+        );
+        rack.cables.last_mut().unwrap().audio_gain = 0.5;
+        let plan = compile_fx_plan(&rack);
+        let sends = plan
+            .voice_routes
+            .get(&ModuleKind::AcidBass)
+            .expect("bass has sends");
+        assert_eq!(sends.len(), 2, "two parallel sends expected");
+        // Cable insertion order drives send order: reverb first, delay second.
+        assert_eq!(sends[0].chain, vec![FxStep::Reverb]);
+        assert!((sends[0].gain - 0.3).abs() < 1e-6);
+        assert_eq!(sends[1].chain, vec![FxStep::Delay]);
+        assert!((sends[1].gain - 0.5).abs() < 1e-6);
     }
 
     #[test]

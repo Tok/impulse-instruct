@@ -4,6 +4,28 @@ A detailed log of what's built.
 
 ---
 
+### Send-bus multi-destination sends
+
+- `FxPlan.voice_routes` switches from `HashMap<ModuleKind, Vec<FxStep>>`
+  (single chain per voice) to `HashMap<ModuleKind, Vec<VoiceSend>>`
+  where each `VoiceSend { chain, gain }` is an independent parallel
+  branch.  The old `voice_send_gain` map is removed — gain lives
+  inside each send now.
+- `compile_fx_plan`: every Voice→FX cable becomes its own `VoiceSend`,
+  not just the first.  Classic "bass → reverb at 30% + bass →
+  delay at 50%" patches now compile correctly.
+- Audio thread: new `DspState::route_voice_sends` helper sums the
+  output of every send for a voice.  Stack-friendly
+  `VoiceSendsSnap { chains[MAX_SENDS][MAX_CHAIN], gains, count }`
+  snapshot means the per-frame loop does zero HashMap touches.
+  `MAX_SENDS = 3` covers dry + reverb send + delay send with
+  headroom.
+- 2 new / updated tests: `voice_send_gain_captured_on_voice_fx_cable`
+  verifies single-send gain survives the refactor;
+  `multiple_voice_fx_cables_produce_parallel_sends` proves two
+  cables from the same voice produce two `VoiceSend` entries with
+  distinct chains and gains.
+
 ### Mid-pipeline live state checks
 
 - `run_pipeline` + `run_pipeline_via_pool` gain an optional

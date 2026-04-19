@@ -11,16 +11,6 @@ they ship and are reflected in `features.md`.
 
 ## DSP
 
-- [ ] **Send-bus routing — multi-destination sends** — per-cable
-  `audio_gain` and FX→FX feedback routes now ship (see `features.md`).
-  What's still a follow-up is true SEND semantics: today a voice has
-  one linear chain; the `voice_send_gain` map captures only the first
-  Voice→FX cable's gain.  Genuine parallel sends (one voice → three
-  different FX chains each with their own wet knob) need the voice
-  route compiler to produce a list of chains per voice rather than
-  one, and the audio thread to mix their outputs.  The feedback clamp
-  + current per-cable gain are enough for dub-delay / shimmer reverb
-  patches; parallel sends land when a genre demand surfaces.
 
 ## Sequencer
 

@@ -957,6 +957,22 @@ pub struct FeedbackRoute {
     pub gain: f32,
 }
 
+/// One parallel send from a voice bus into an FX sub-chain.  A voice
+/// with N entries in `voice_routes` drives N independent sends that
+/// mix together at the output stage — each with its own chain and
+/// wet-level gain.  Makes classic "voice → reverb at 30% + voice →
+/// delay at 50%" patches expressible without a monolithic chain.
+#[derive(Clone, Debug, PartialEq)]
+pub struct VoiceSend {
+    /// Linear FX chain walked forward from the cable's target FX.
+    pub chain: Vec<FxStep>,
+    /// Cable's `audio_gain` (clamped 0..=1.5) applied to the voice
+    /// signal before it enters this chain.  Effectively a per-send wet
+    /// knob — cost to the voice's volume is zero since the gain only
+    /// scales the branch, not the dry pass.
+    pub gain: f32,
+}
+
 /// Compiled FX processing order derived from the rack cable graph.
 ///
 /// Computed outside the audio thread and sent via `AudioCommand::SetFxPlan`
@@ -967,22 +983,17 @@ pub struct FxPlan {
     /// Global FX chain order (from FX→FX cable topology).
     /// Applied to all voice buses that have no explicit voice_routes entry.
     pub steps: Vec<FxStep>,
-    /// Per-voice-bus explicit FX chains (from Voice→FX cable topology).
+    /// Per-voice-bus explicit FX sends (from Voice→FX cable topology).
     ///
     /// Key = voice module kind (AcidBass, DrumKit808, DrumKit909, AmenSampler, …).
-    /// Value = ordered FX steps reachable from that voice's explicit cables.
-    ///
-    /// When non-empty for a voice, the DSP routes that bus through its own
-    /// chain instead of the global chain.
-    pub voice_routes: HashMap<ModuleKind, Vec<FxStep>>,
+    /// Value = **list** of parallel sends.  Each entry is an independent
+    /// chain + gain pair; the audio thread runs every send and mixes
+    /// their outputs.  A voice with no entry (or an empty vec) falls
+    /// through to the global chain.
+    pub voice_routes: HashMap<ModuleKind, Vec<VoiceSend>>,
     /// FX→FX feedback edges — cables that would close a cycle in the
     /// forward DAG are lifted out here with a one-sample delay.  The audio
     /// thread reads each source's previous-sample output and mixes it into
     /// the target's input before the target processes the current sample.
     pub feedback_routes: Vec<FeedbackRoute>,
-    /// Per-voice bus send gain (from the first Voice→FX cable's `audio_gain`).
-    /// Missing entries default to 1.0 (unity) on the DSP side.  Lets the
-    /// agent dial a voice into its FX chain softer or harder without
-    /// changing the voice's own volume knob.
-    pub voice_send_gain: HashMap<ModuleKind, f32>,
 }

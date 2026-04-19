@@ -4,7 +4,7 @@
 
 use std::collections::{HashMap, HashSet, VecDeque};
 
-use super::rack::{FEEDBACK_GAIN_MAX, FeedbackRoute};
+use super::rack::{FEEDBACK_GAIN_MAX, FeedbackRoute, VoiceSend};
 use super::{FxPlan, FxStep, ModuleKind, PortKind, RackState};
 
 pub(crate) fn kind_to_fx_step(kind: ModuleKind) -> Option<FxStep> {
@@ -192,8 +192,12 @@ pub fn compile_fx_plan(rack: &RackState) -> FxPlan {
         .map(|m| (m.id, m.kind))
         .collect();
 
-    let mut voice_routes: HashMap<ModuleKind, Vec<FxStep>> = HashMap::new();
-    let mut voice_send_gain: HashMap<ModuleKind, f32> = HashMap::new();
+    // Each Voice→FX cable becomes its own `VoiceSend` (independent
+    // chain + gain), not just the first.  Voices can now drive N
+    // parallel FX sub-chains and the audio thread mixes their outputs
+    // — classic "voice → reverb @ 30% + voice → delay @ 50%" patches
+    // work naturally.
+    let mut voice_routes: HashMap<ModuleKind, Vec<VoiceSend>> = HashMap::new();
 
     for cable in &rack.cables {
         if cable.from.kind != PortKind::Audio {
@@ -236,13 +240,18 @@ pub fn compile_fx_plan(rack: &RackState) -> FxPlan {
                 _ => break, // fan-out, cycle, or end of chain
             }
         }
-        // Capture per-voice send gain from the FIRST voice→FX cable we see
-        // for each voice — mirrors the `or_insert` policy on the chain
-        // itself.  Later cables on the same voice are secondary routes
-        // and don't drive the primary send gain.
+        // Per-send wet gain from the cable's `audio_gain` (already
+        // clamped at cable creation; clamp again defensively in case a
+        // hand-edited project file sneaks past).  Empty chains can
+        // happen if the target FX kind isn't mapped — skip them.
+        if chain.is_empty() {
+            continue;
+        }
         let gain = cable.audio_gain.clamp(0.0, 1.5);
-        voice_send_gain.entry(voice_kind).or_insert(gain);
-        voice_routes.entry(voice_kind).or_insert(chain);
+        voice_routes
+            .entry(voice_kind)
+            .or_default()
+            .push(VoiceSend { chain, gain });
     }
 
     // Translate back-edges (module-id-keyed) into FeedbackRoutes keyed by FxStep.
@@ -265,6 +274,5 @@ pub fn compile_fx_plan(rack: &RackState) -> FxPlan {
         steps: ordered,
         voice_routes,
         feedback_routes,
-        voice_send_gain,
     }
 }

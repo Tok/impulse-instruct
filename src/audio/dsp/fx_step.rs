@@ -149,6 +149,41 @@ impl DspState {
         }
     }
 
+    /// Route a voice bus through every one of its parallel sends, summing
+    /// the results.  Returns the original `sig` unchanged when the voice
+    /// has zero configured sends (caller then routes through the global
+    /// chain via the fast path).  Each send is one independent
+    /// `apply_fx_chain` call, so N sends cost roughly N× the FX work.
+    #[allow(clippy::too_many_arguments)]
+    pub(super) fn route_voice_sends(
+        &mut self,
+        sig: f32,
+        snap: &super::VoiceSendsSnap,
+        feedback_routes: &[FeedbackRoute],
+        p: &AudioParams,
+        delay_samples: usize,
+        sr: f32,
+        gate_env: f32,
+    ) -> f32 {
+        if snap.count == 0 {
+            return sig;
+        }
+        let mut out = 0.0;
+        for i in 0..snap.count {
+            let chain = &snap.chains[i][..snap.chain_lens[i]];
+            out += self.apply_fx_chain(
+                sig * snap.gains[i],
+                chain,
+                feedback_routes,
+                p,
+                delay_samples,
+                sr,
+                gate_env,
+            );
+        }
+        out
+    }
+
     /// Apply an FX chain to `sig`.  `feedback_routes` is typically
     /// `&plan.feedback_routes`; pass `&[]` for chains that should skip
     /// feedback (most call sites don't need it).
