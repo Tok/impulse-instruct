@@ -52,6 +52,7 @@ const ALL_TARGETS: &[LfoTarget] = &[
     LfoTarget::GranularDensity,
     LfoTarget::GranularGrain,
     LfoTarget::GranularPos,
+    LfoTarget::NeuTtsVolume,
     LfoTarget::ReverbMix,
     LfoTarget::ReverbSize,
     LfoTarget::ReverbDamp,

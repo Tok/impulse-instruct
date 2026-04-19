@@ -104,6 +104,7 @@ pub fn lfo_target_short_label(target: LfoTarget) -> &'static str {
         GranularDensity => "G.DEN",
         GranularGrain => "G.GRN",
         GranularPos => "G.POS",
+        NeuTtsVolume => "TTS.VOL",
         ReverbMix => "RVB.MX",
         ReverbSize => "RVB.SZ",
         ReverbDamp => "RVB.DP",
@@ -163,6 +164,7 @@ pub(crate) fn lfo_target_module_kind(target: LfoTarget) -> Option<ModuleKind> {
         GranularVolume | GranularDensity | GranularGrain | GranularPos => {
             Some(ModuleKind::GranularTexture)
         }
+        NeuTtsVolume => Some(ModuleKind::NeuTts),
         ReverbMix | ReverbSize | ReverbDamp => Some(ModuleKind::FxReverb),
         DelayTime | DelayFeedback | DelayMix => Some(ModuleKind::FxDelay),
         ChorusRate | ChorusDepth | ChorusMix => Some(ModuleKind::FxChorus),
@@ -223,6 +225,7 @@ pub fn parse_lfo_target(name: &str) -> Option<LfoTarget> {
         "granulardensity" => GranularDensity,
         "granulargrain" => GranularGrain,
         "granularpos" => GranularPos,
+        "neuttsvolume" | "ttsvolume" => NeuTtsVolume,
         "reverbmix" => ReverbMix,
         "reverbsize" => ReverbSize,
         "reverbdamp" => ReverbDamp,

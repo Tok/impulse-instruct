@@ -51,6 +51,52 @@ impl RampCurve {
     }
 }
 
+/// How a lead-in step's note is chosen to resolve into the anchor note.
+/// The caller owns the key / scale context and resolves the shift returned
+/// by `preecho_apply`; this enum just picks the shape.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum NoteApproach {
+    /// No note rewriting — lead-in steps play their stored notes.  v1
+    /// behaviour.  Default so existing configs read identically.
+    #[default]
+    Off,
+    /// Descending chromatic approach: the step at distance `d` from the
+    /// anchor plays `anchor_note - d` semitones.  Simple, genre-neutral
+    /// — a classic tension-into-resolution lead-in.
+    Chromatic,
+    /// Descending scale-step approach: walks `d` scale-degrees below the
+    /// anchor note, snapped to the project's active scale.  More musical
+    /// than chromatic when the scale is known.
+    Scale,
+    /// Ascending arpeggio approach: cycles through root/3rd/5th below the
+    /// anchor.  `d=1` lands on a 3rd below, `d=2` on a 5th below, `d=3`
+    /// on the root below — repeating.  Gives a lead-in that feels like a
+    /// chord voicing unfurling into the downbeat.
+    Arp,
+}
+
+/// How to shift a lead-in step's note relative to the anchor.  Returned
+/// by `preecho_apply` as part of the optional note override; the caller
+/// resolves `ScaleSteps` against the active scale and clamps to MIDI.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum NoteShift {
+    /// Add this many semitones to the anchor note (negative = descending).
+    Semitones(i16),
+    /// Walk this many scale-steps from the anchor note (negative = down).
+    ScaleSteps(i16),
+}
+
+/// Resolved note rewrite for a lead-in step.  Carries the anchor step
+/// index (so the caller can look up the anchor's stored note from the
+/// voice's pattern array) plus the shift to apply.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct NoteOverride {
+    /// Step index in the pattern of the anchor this lead-in targets.
+    pub anchor_step: u8,
+    /// How the anchor note should be shifted to produce this step's note.
+    pub shift: NoteShift,
+}
+
 /// Per-voice pre-echo configuration.  Empty `anchors`, `length == 0`
 /// (and `!auto_length`), or `enabled == false` disables the effect
 /// entirely.
@@ -109,6 +155,11 @@ pub struct PreechoConfig {
     /// effect on other lead-in steps — just the last one cascades.
     #[serde(default)]
     pub slide_cascade: bool,
+    /// v2 melodic add-on: rewrite lead-in step notes to resolve into the
+    /// anchor note (chromatic, scale-step, or arpeggio).  `Off` leaves
+    /// the stored notes alone — backwards compatible with v1 configs.
+    #[serde(default)]
+    pub note_approach: NoteApproach,
 }
 
 fn default_enabled() -> bool {
@@ -128,6 +179,7 @@ impl Default for PreechoConfig {
             probability_ramp: false,
             accent_ramp: false,
             slide_cascade: false,
+            note_approach: NoteApproach::Off,
         }
     }
 }
@@ -160,6 +212,12 @@ pub struct PreechoApply {
     /// When `Some`, replaces `TB303Step.slide`.  `None` leaves the
     /// step's stored slide alone.
     pub slide_override: Option<f32>,
+    /// When `Some`, rewrites the step's note so the lead-in resolves into
+    /// the anchor.  Carries the anchor step index so the caller can look
+    /// up the anchor's stored note plus the shift to apply.  `None` on
+    /// anchor steps, outside every window, or when `note_approach` is
+    /// `Off`.
+    pub note_override: Option<NoteOverride>,
 }
 
 impl PreechoApply {
@@ -171,6 +229,7 @@ impl PreechoApply {
         probability_override: None,
         accent_override: None,
         slide_override: None,
+        note_override: None,
     };
 }
 
@@ -216,8 +275,10 @@ pub fn preecho_apply(step: usize, total_steps: usize, cfg: &PreechoConfig) -> Pr
     if !cfg.is_active() || total_steps == 0 {
         return PreechoApply::IDENTITY;
     }
-    let mut best: Option<(usize, u8)> = None; // (distance, effective length)
+    // (distance, effective length, anchor step index)
+    let mut best: Option<(usize, u8, u8)> = None;
     for (ai, &a) in cfg.anchors.iter().enumerate() {
+        let anchor_step = a;
         let a = a as usize;
         if a >= total_steps {
             continue;
@@ -230,11 +291,11 @@ pub fn preecho_apply(step: usize, total_steps: usize, cfg: &PreechoConfig) -> Pr
         if eff_len == 0 || d > eff_len as usize {
             continue;
         }
-        if best.map(|(bd, _)| d < bd).unwrap_or(true) {
-            best = Some((d, eff_len));
+        if best.map(|(bd, _, _)| d < bd).unwrap_or(true) {
+            best = Some((d, eff_len, anchor_step));
         }
     }
-    let Some((d, eff_len)) = best else {
+    let Some((d, eff_len, anchor_step)) = best else {
         return PreechoApply::IDENTITY;
     };
 
@@ -268,6 +329,25 @@ pub fn preecho_apply(step: usize, total_steps: usize, cfg: &PreechoConfig) -> Pr
     } else {
         None
     };
+    // Note-approach shift.  Chromatic walks semitone-by-semitone; Scale
+    // walks scale-step-by-scale-step; Arp walks scale-steps in twos so
+    // the lead-in outlines a triad (−2 → 3rd, −4 → 5th, −6 → root, ...).
+    // Sign is negative so every mode resolves upward into the anchor.
+    let note_override = match cfg.note_approach {
+        NoteApproach::Off => None,
+        NoteApproach::Chromatic => Some(NoteOverride {
+            anchor_step,
+            shift: NoteShift::Semitones(-(d as i16)),
+        }),
+        NoteApproach::Scale => Some(NoteOverride {
+            anchor_step,
+            shift: NoteShift::ScaleSteps(-(d as i16)),
+        }),
+        NoteApproach::Arp => Some(NoteOverride {
+            anchor_step,
+            shift: NoteShift::ScaleSteps(-2 * d as i16),
+        }),
+    };
 
     PreechoApply {
         velocity_mul,
@@ -275,7 +355,58 @@ pub fn preecho_apply(step: usize, total_steps: usize, cfg: &PreechoConfig) -> Pr
         probability_override,
         accent_override,
         slide_override,
+        note_override,
     }
+}
+
+/// Resolve a `NoteShift` against a concrete anchor note + scale context
+/// into the final MIDI note for a lead-in step.  Pure, allocation-free
+/// (no `scale_notes()` call), safe to use from the audio thread.
+/// Clamps to the valid MIDI range (0..=127).
+pub fn resolve_note_shift(
+    anchor_note: u8,
+    shift: NoteShift,
+    root: u8,
+    scale: crate::state::Scale,
+) -> u8 {
+    match shift {
+        NoteShift::Semitones(n) => (anchor_note as i16 + n).clamp(0, 127) as u8,
+        NoteShift::ScaleSteps(n) => walk_scale_steps(anchor_note, n, root, scale),
+    }
+}
+
+/// Walk `steps` scale-degrees from `note` under `(root, scale)`.  Positive
+/// `steps` walks up, negative walks down.  If `note` isn't in the scale,
+/// snap to the nearest scale degree at or below `note` first so the walk
+/// stays inside the scale.
+fn walk_scale_steps(note: u8, steps: i16, root: u8, scale: crate::state::Scale) -> u8 {
+    if steps == 0 {
+        return note;
+    }
+    if scale == crate::state::Scale::Chromatic {
+        return (note as i16 + steps).clamp(0, 127) as u8;
+    }
+    let intervals = scale.intervals();
+    let n = intervals.len() as i16;
+    let root = root % 12;
+    // Pitch class of `note` relative to the root (0..=11).
+    let pc = (note as i16 - root as i16).rem_euclid(12);
+    // Find the largest scale interval <= pc — that's our degree anchor.
+    let mut degree = 0i16;
+    for (i, &iv) in intervals.iter().enumerate() {
+        if iv as i16 <= pc {
+            degree = i as i16;
+        }
+    }
+    // Integer octave of `note` relative to the root+degree combo.
+    let base_semis_from_root = note as i16 - root as i16;
+    let octave = (base_semis_from_root - intervals[degree as usize] as i16).div_euclid(12);
+    // Walk the degree + fold octave shifts back in.
+    let raw = degree + steps;
+    let oct_shift = raw.div_euclid(n);
+    let new_degree = raw.rem_euclid(n);
+    let new_semis = root as i16 + intervals[new_degree as usize] as i16 + (octave + oct_shift) * 12;
+    new_semis.clamp(0, 127) as u8
 }
 
 #[cfg(test)]
@@ -294,6 +425,7 @@ mod tests {
             probability_ramp: false,
             accent_ramp: false,
             slide_cascade: false,
+            note_approach: NoteApproach::Off,
         }
     }
 
@@ -309,6 +441,7 @@ mod tests {
             probability_ramp: false,
             accent_ramp: ar,
             slide_cascade: sc,
+            note_approach: NoteApproach::Off,
         }
     }
 
@@ -485,6 +618,150 @@ mod tests {
         assert!(
             near > far,
             "near lead-in (d=1) should be louder than far (d=7): near={near} far={far}"
+        );
+    }
+
+    // ── v2: note approach ────────────────────────────────────────────────
+
+    fn cfg_note_approach(anchors: &[u8], length: u8, mode: NoteApproach) -> PreechoConfig {
+        PreechoConfig {
+            enabled: true,
+            anchors: anchors.to_vec(),
+            length,
+            auto_length: false,
+            curve: RampCurve::Linear,
+            velocity_ramp: false,
+            ratchet_ramp: false,
+            probability_ramp: false,
+            accent_ramp: false,
+            slide_cascade: false,
+            note_approach: mode,
+        }
+    }
+
+    #[test]
+    fn note_approach_off_leaves_note_override_none() {
+        let c = cfg_note_approach(&[8], 4, NoteApproach::Off);
+        assert_eq!(preecho_apply(7, 16, &c).note_override, None);
+    }
+
+    #[test]
+    fn chromatic_approach_shifts_by_distance_semitones() {
+        let c = cfg_note_approach(&[8], 4, NoteApproach::Chromatic);
+        let o1 = preecho_apply(7, 16, &c).note_override.unwrap();
+        assert_eq!(o1.anchor_step, 8);
+        assert_eq!(o1.shift, NoteShift::Semitones(-1));
+        let o3 = preecho_apply(5, 16, &c).note_override.unwrap();
+        assert_eq!(o3.shift, NoteShift::Semitones(-3));
+    }
+
+    #[test]
+    fn scale_approach_shifts_by_distance_scale_steps() {
+        let c = cfg_note_approach(&[8], 4, NoteApproach::Scale);
+        let o1 = preecho_apply(7, 16, &c).note_override.unwrap();
+        assert_eq!(o1.shift, NoteShift::ScaleSteps(-1));
+        let o3 = preecho_apply(5, 16, &c).note_override.unwrap();
+        assert_eq!(o3.shift, NoteShift::ScaleSteps(-3));
+    }
+
+    #[test]
+    fn arp_approach_doubles_scale_steps() {
+        let c = cfg_note_approach(&[8], 4, NoteApproach::Arp);
+        let o1 = preecho_apply(7, 16, &c).note_override.unwrap();
+        assert_eq!(o1.shift, NoteShift::ScaleSteps(-2));
+        let o2 = preecho_apply(6, 16, &c).note_override.unwrap();
+        assert_eq!(o2.shift, NoteShift::ScaleSteps(-4));
+        let o3 = preecho_apply(5, 16, &c).note_override.unwrap();
+        assert_eq!(o3.shift, NoteShift::ScaleSteps(-6));
+    }
+
+    #[test]
+    fn note_approach_carries_nearest_anchor_step() {
+        // Two anchors; closest one wins + its step index survives into the
+        // override so the caller knows which anchor note to look up.
+        let c = cfg_note_approach(&[4, 12], 3, NoteApproach::Chromatic);
+        assert_eq!(
+            preecho_apply(11, 16, &c).note_override.unwrap().anchor_step,
+            12
+        );
+        assert_eq!(
+            preecho_apply(3, 16, &c).note_override.unwrap().anchor_step,
+            4
+        );
+    }
+
+    #[test]
+    fn note_approach_is_none_at_anchor_and_outside_window() {
+        let c = cfg_note_approach(&[8], 3, NoteApproach::Chromatic);
+        // Anchor itself.
+        assert_eq!(preecho_apply(8, 16, &c).note_override, None);
+        // Far outside window.
+        assert_eq!(preecho_apply(2, 16, &c).note_override, None);
+    }
+
+    // ── v2: resolve_note_shift ──────────────────────────────────────────
+    use crate::state::Scale;
+
+    #[test]
+    fn resolve_semitones_walks_linearly() {
+        assert_eq!(
+            resolve_note_shift(60, NoteShift::Semitones(-1), 0, Scale::NaturalMinor),
+            59
+        );
+        assert_eq!(
+            resolve_note_shift(60, NoteShift::Semitones(-3), 0, Scale::NaturalMinor),
+            57
+        );
+    }
+
+    #[test]
+    fn resolve_semitones_clamps_to_midi_range() {
+        assert_eq!(
+            resolve_note_shift(2, NoteShift::Semitones(-10), 0, Scale::NaturalMinor),
+            0
+        );
+        assert_eq!(
+            resolve_note_shift(120, NoteShift::Semitones(20), 0, Scale::NaturalMinor),
+            127
+        );
+    }
+
+    #[test]
+    fn resolve_scale_steps_walks_minor_scale() {
+        // A natural minor from A (root=9): A B C D E F G → MIDI 57 59 60 62 64 65 67.
+        // Anchor A4 = 69 (scale-degree 0 in A minor, octave above).
+        // Step -1 → G4 (67), -2 → F4 (65), -3 → E4 (64).
+        assert_eq!(
+            resolve_note_shift(69, NoteShift::ScaleSteps(-1), 9, Scale::NaturalMinor),
+            67
+        );
+        assert_eq!(
+            resolve_note_shift(69, NoteShift::ScaleSteps(-2), 9, Scale::NaturalMinor),
+            65
+        );
+        assert_eq!(
+            resolve_note_shift(69, NoteShift::ScaleSteps(-3), 9, Scale::NaturalMinor),
+            64
+        );
+    }
+
+    #[test]
+    fn resolve_scale_steps_chromatic_mode_is_semitone_walk() {
+        // Chromatic scale behaves like semitone stepping (every step = 1 semi).
+        assert_eq!(
+            resolve_note_shift(60, NoteShift::ScaleSteps(-3), 0, Scale::Chromatic),
+            57
+        );
+    }
+
+    #[test]
+    fn resolve_scale_steps_crosses_octave_correctly() {
+        // A minor pentatonic has 5 tones → walking -5 steps drops exactly
+        // one octave; -6 steps drops 1 octave and 1 penta-tone.
+        // A minor penta = A C D E G. Anchor A4 = 69. -5 → A3 = 57.
+        assert_eq!(
+            resolve_note_shift(69, NoteShift::ScaleSteps(-5), 9, Scale::Pentatonic),
+            57
         );
     }
 

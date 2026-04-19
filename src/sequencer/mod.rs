@@ -8,7 +8,10 @@ use crate::state::{DrumVoice, SequencerState};
 // ─── Events emitted by the sequencer ─────────────────────────────────────────
 
 pub mod preecho;
-pub use preecho::{PreechoApply, PreechoConfig, RampCurve, preecho_apply};
+pub use preecho::{
+    NoteApproach, NoteOverride, NoteShift, PreechoApply, PreechoConfig, RampCurve, preecho_apply,
+    resolve_note_shift,
+};
 
 #[derive(Clone, Debug)]
 pub enum TriggerEvent {
@@ -38,10 +41,24 @@ pub enum TriggerEvent {
     },
     HooverTrigger {
         note: u8,
+        /// Accent intensity 0..=1 (0 = no accent).  Scales the amp peak
+        /// in `HooverVoice::process`.  Populated by preecho's
+        /// `accent_ramp` in the lead-in window; anchors and out-of-window
+        /// steps pass through the step's stored accent.
+        accent: f32,
+        /// Slide intensity 0..=1 (0 = no glide).  Controls the glide
+        /// coefficient applied to the frequency when the voice already
+        /// has a previous note.
+        slide: f32,
     },
     HooverGateOff,
     An1xTrigger {
         note: u8,
+        /// Accent intensity 0..=1 (0 = no accent).  Boosts amp-ADSR peak.
+        accent: f32,
+        /// Slide intensity 0..=1 (0 = no glide).  Shortens the effective
+        /// portamento time (faster glide when 0, longer when 1).
+        slide: f32,
     },
     An1xGateOff,
 }
@@ -330,9 +347,23 @@ pub fn advance_clock(
                     .unwrap_or(preecho::PreechoApply::IDENTITY);
                 let accent = pre.accent_override.unwrap_or(bs.accent);
                 let slide = pre.slide_override.unwrap_or(bs.slide);
+                // Note approach: when preecho returns a note_override, the
+                // lead-in step plays a shifted version of the anchor's
+                // stored note instead of its own.  Anchors and out-of-window
+                // steps pass through unchanged.
+                let note = match pre.note_override {
+                    Some(ov) => {
+                        let anchor_note = pattern
+                            .get(ov.anchor_step as usize)
+                            .map(|s| s.note)
+                            .unwrap_or(bs.note);
+                        preecho::resolve_note_shift(anchor_note, ov.shift, seq.root_note, seq.scale)
+                    }
+                    None => bs.note,
+                };
                 events.push(TriggerEvent::BassTrigger {
                     voice_idx: vi,
-                    note: bs.note,
+                    note,
                     accent,
                     slide,
                     gate_samples,
@@ -341,22 +372,70 @@ pub fn advance_clock(
             }
         }
 
-        // Hoover trigger — independent step length
+        // Hoover trigger — independent step length.  Melodic preecho
+        // overrides the step's accent / slide inside the lead-in window
+        // just like the bass path above.
         let hstep = step % seq.hoover_steps.max(1);
         let hs = seq.hoover_pattern.get(hstep).copied().unwrap_or_default();
         if hs.active {
             let gate_samples = (sps * 0.75) as u32;
             gate_counter_hoover = gate_samples;
-            events.push(TriggerEvent::HooverTrigger { note: hs.note });
+            let hsteps = seq.hoover_steps.max(1);
+            let pre = seq
+                .preecho
+                .get("hoover")
+                .map(|cfg| preecho::preecho_apply(hstep, hsteps, cfg))
+                .unwrap_or(preecho::PreechoApply::IDENTITY);
+            let accent = pre.accent_override.unwrap_or(hs.accent);
+            let slide = pre.slide_override.unwrap_or(hs.slide);
+            let note = match pre.note_override {
+                Some(ov) => {
+                    let anchor_note = seq
+                        .hoover_pattern
+                        .get(ov.anchor_step as usize)
+                        .map(|s| s.note)
+                        .unwrap_or(hs.note);
+                    preecho::resolve_note_shift(anchor_note, ov.shift, seq.root_note, seq.scale)
+                }
+                None => hs.note,
+            };
+            events.push(TriggerEvent::HooverTrigger {
+                note,
+                accent,
+                slide,
+            });
         }
 
-        // AN1X trigger — independent step length
+        // AN1X trigger — independent step length, same preecho shape.
         let astep = step % seq.an1x_steps.max(1);
         let ax = seq.an1x_pattern.get(astep).copied().unwrap_or_default();
         if ax.active {
             let gate_samples = (sps * ax.gate as f64) as u32;
             gate_counter_an1x = gate_samples;
-            events.push(TriggerEvent::An1xTrigger { note: ax.note });
+            let asteps = seq.an1x_steps.max(1);
+            let pre = seq
+                .preecho
+                .get("an1x")
+                .map(|cfg| preecho::preecho_apply(astep, asteps, cfg))
+                .unwrap_or(preecho::PreechoApply::IDENTITY);
+            let accent = pre.accent_override.unwrap_or(ax.accent);
+            let slide = pre.slide_override.unwrap_or(ax.slide);
+            let note = match pre.note_override {
+                Some(ov) => {
+                    let anchor_note = seq
+                        .an1x_pattern
+                        .get(ov.anchor_step as usize)
+                        .map(|s| s.note)
+                        .unwrap_or(ax.note);
+                    preecho::resolve_note_shift(anchor_note, ov.shift, seq.root_note, seq.scale)
+                }
+                None => ax.note,
+            };
+            events.push(TriggerEvent::An1xTrigger {
+                note,
+                accent,
+                slide,
+            });
         }
     }
 

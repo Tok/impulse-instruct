@@ -4,6 +4,20 @@ A detailed log of what's built.
 
 ---
 
+### NeuTts bus volume + LFO target
+
+- `TtsModuleState.volume` (0.0..=1.5, default 1.0) scales the TTS
+  ring-buffer output before it hits the master mix.  Pipes through
+  `AudioParams.tts_voice_volume` at frame boundary so the value is
+  live-editable and modulatable.
+- `LfoTarget::NeuTtsVolume` added (opcode 72, label `TTS.VOL`).  The
+  three Selector mod-jacks on the NeuTts back panel now have a real
+  target to route to — previously the selector dropdown was empty and
+  the jacks showed "—".
+- UI: the NeuTts front panel grows a `VOLUME` row under `TOP-P`,
+  matching the Amen/Granular pattern.  Audio-thread cost: one extra
+  float multiply per frame on the TTS bus.
+
 ## v0.7.7-snapshot — model overhaul, jam loop, cycle viz, lane scoring
 
 ### Model lineup
@@ -165,7 +179,7 @@ A detailed log of what's built.
   clock shows that agent's own work.  Between them, jam state is
   legible without hunting through the log.
 
-### Melodic voice preecho (bass)
+### Melodic voice preecho (bass / hoover / an1x)
 
 - `PreechoConfig` gained two melodic flags: `accent_ramp` and
   `slide_cascade`.  Drum preecho (`velocity_ramp` + `ratchet_ramp`)
@@ -186,10 +200,13 @@ A detailed log of what's built.
   (e.g. setting only `length`) preserve them.  `Bass` lane's
   `sequencer_subkeys` now includes `"preecho"` so pipeline filtering
   doesn't strip a bass-lane preecho update.
-- Hoover/An1x are single-voice TB-303-step users too, but their
-  `TriggerEvent` variants carry only `note`; pushing accent/slide
-  through them is a structural change left as a follow-up (noted in
-  `PLAN.md`).
+- Hoover and An1x consume the same overrides under the `"hoover"` and
+  `"an1x"` preecho keys.  Their `TriggerEvent` variants carry `accent`
+  and `slide` fields, and their voices scale output gain by accent (up
+  to +30 % on full accent) plus extend glide time by slide (Hoover
+  runs a 10–160 ms exponential approach; An1x uses
+  `max(global_glide_time, slide)` so a cascade step audibly smears
+  even when the global glide is off).
 - 11 new tests: 8 unit tests on `preecho_melodic` (wrap-around,
   multi-anchor nearest wins, both toggles composing), 1 end-to-end
   sequencer test confirming the ramp lands on `BassTrigger.accent`
@@ -224,6 +241,17 @@ A detailed log of what's built.
   RAT / CLEAR).  Accent / slide ramps were in the v1 config but
   never exposed in the panel — they're surfaced now alongside the
   new v2 toggles so the whole modulation vocabulary is editable.
+- `note_approach` (melodic voices: bass / hoover / an1x) rewrites
+  lead-in step notes so they resolve into the anchor note.  Modes:
+  `Chromatic` (d-th step = anchor − d semitones), `Scale` (− d
+  scale-degrees under the project's active root / scale), `Arp` (− 2·d
+  scale-degrees, outlining a triad below the anchor).  Pure resolver
+  `resolve_note_shift(anchor_note, shift, root, scale) -> u8` lives
+  next to `preecho_apply`; it never allocates and is safe to call from
+  the audio thread.  UI exposes it as an `OFF / CHR / SCL / ARP`
+  dropdown shown only on the bass / hoover / an1x tabs (drum tabs
+  store slice indices in `TB303Step.note`, so a pitch shift on those
+  would be meaningless).
 
 ### Pitch-preserving BPM stretch on amen (granular v1)
 

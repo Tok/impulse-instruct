@@ -351,6 +351,15 @@ impl AudioParams {
                 .modules
                 .iter()
                 .any(|m| m.kind == ModuleKind::GabberKick && m.enabled),
+            // TTS bus volume — take the first TTS module's volume as the
+            // bus-level gain.  Multiple NeuTts modules share a single
+            // ring buffer (they all push into `tts_tx`), so this is a
+            // bus-wide multiplier rather than per-instance.
+            tts_voice_volume: s
+                .tts_modules
+                .first()
+                .map(|m| m.volume.clamp(0.0, 1.5))
+                .unwrap_or(1.0),
         }
     }
 }

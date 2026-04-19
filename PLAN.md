@@ -8,11 +8,6 @@ they ship and are reflected in `features.md`.
 
 ## Agent tooling — gradual control & expressiveness
 
-- [ ] **Hoover / An1x preecho** — bass voices consume
-  `PreechoConfig.accent_ramp` + `slide_cascade` via the shared `"bass"`
-  voice key.  Hoover / An1x `TriggerEvent` variants don't carry accent
-  or slide yet, so extending them (and the matching DSP consumers)
-  stayed out of the first melodic-preecho commit.
 - [ ] **XY pad — agent-side first-class path** — the widget already
   derives the pad position from the live knob values each frame, so
   agent edits to `fx.reverb_size` etc. visibly move the pad with no
@@ -41,16 +36,9 @@ they ship and are reflected in `features.md`.
   multi-style / multi-tempo sets, but a dedicated `Song` struct with
   per-chain-slot overrides (rather than per-pattern) and a timeline
   editor would give more flexibility.
-- [ ] **Preecho v2 — note approach** — chromatic / scale-step / arp
-  resolving to the anchor note, for melodic lead-ins.
 
 ## Intelligence
 
-- [ ] **Populate per-style `lane_dynamism` maps in `styles.json`.**
-  The schema + scheduler hookup landed in Phase 4, but every style
-  still runs on the baked-in defaults.  Fill in genre-appropriate
-  overrides (e.g. ambient = bass 0.4 / fx 0.9, hard techno =
-  kit_a 0.95 / fx 0.2).
 - [ ] **Mid-pipeline live state checks** — `pipeline::run_pipeline`
   works on a snapshot.  When the user changes the rack mid-cycle,
   in-flight lanes for newly-removed modules still fire.  The
@@ -82,10 +70,6 @@ they ship and are reflected in `features.md`.
 
 - [ ] **Touch mode improvements** — touch-paint mode for
   mobile / tablet; gesture support for zoom / scroll.
-- [ ] **NeuTts mod targets** — Amen / Granular got per-voice
-  LfoTarget variants; NeuTts still has none.  Its TTS bus volume
-  isn't an `AudioParams` knob, so wiring needs a small audio-thread
-  restructure.
 - [ ] **Style-dependent rack defaults at wizard time** — partially
   addressed: picking a style in the LLM console now reshapes the
   rack via `style_rack::apply` (destructive, reads `rack_modules`
@@ -159,5 +143,3 @@ they ship and are reflected in `features.md`.
 |-------|-------|--------|
 | LLM-console LED occasionally overlaps the global header log | Module-card LED clip is bounded but not zero-upward; the header log scrolling past the LLM console module reads the bloom in front | `upward_pad = 0` removed the obvious case; if the LED is still visible in front of the header on scroll, the LED's draw layer needs to drop below the header panel's layer (would require painting LEDs on a separate background-priority layer, or moving the LED draw earlier in the frame) |
 | Hoover doesn't sound like a hoover | DSP tuning, not a code bug | Needs filter sweep shape tuning |
-| Pre-echo ignores Hoover and An1x | Their `TriggerEvent` variants carry only `note` (no accent / slide); bass melodic preecho already ships | Planned (see "Hoover / An1x preecho" above) |
-| NeuTts Selector mod jacks show only "—" | No NeuTts-specific LfoTarget yet | Needs TTS bus volume on AudioParams |

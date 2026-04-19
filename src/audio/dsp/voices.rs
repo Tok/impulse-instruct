@@ -439,12 +439,22 @@ pub(super) struct HooverVoice {
     phase: f32,
     unison_phases: [f32; 6],
     freq: f32,
+    /// Glide target.  Equal to `freq` when no slide is in progress.
+    target_freq: f32,
     gate: bool,
     amp_env: f32,  // VCA envelope
     filt_env: f32, // Filter sweep: 1.0 = LP wide open (bright), decays to 0.0 (dark)
     svf_low: f32,
     svf_band: f32,
     lfo_phase: f32,
+    /// Per-step accent (0..=1).  Scales the final output level: 0 leaves the
+    /// voice at its baseline, 1 lifts by `ACCENT_LIFT` (see `process`).
+    /// Populated by melodic preecho's `accent_ramp`.
+    accent: f32,
+    /// Per-step slide (0..=1).  Non-zero enables an exponential pitch glide
+    /// from `freq` → `target_freq`; zero snaps.  Populated by melodic
+    /// preecho's `slide_cascade`.
+    slide: f32,
 }
 
 impl HooverVoice {
@@ -453,17 +463,30 @@ impl HooverVoice {
             phase: 0.0,
             unison_phases: [0.0; 6],
             freq: 220.0,
+            target_freq: 220.0,
             gate: false,
             amp_env: 0.0,
             filt_env: 0.0,
             svf_low: 0.0,
             svf_band: 0.0,
             lfo_phase: 0.0,
+            accent: 0.0,
+            slide: 0.0,
         }
     }
 
-    pub(super) fn trigger(&mut self, note: u8, tuning: u8) {
-        self.freq = super::dsp_util::midi_to_hz_tuned(note, tuning);
+    pub(super) fn trigger(&mut self, note: u8, tuning: u8, accent: f32, slide: f32) {
+        let new_freq = super::dsp_util::midi_to_hz_tuned(note, tuning);
+        self.accent = accent.clamp(0.0, 1.0);
+        self.slide = slide.clamp(0.0, 1.0);
+        // When slide > 0 we leave `self.freq` where it was so `process`
+        // glides into `target_freq`; otherwise we snap.
+        if self.slide > 0.0 && self.freq > 0.0 {
+            self.target_freq = new_freq;
+        } else {
+            self.freq = new_freq;
+            self.target_freq = new_freq;
+        }
         self.gate = true;
         self.amp_env = 0.0; // will rise on fast attack
         self.filt_env = 1.0; // start wide open (LP fully bright)
@@ -495,6 +518,16 @@ impl HooverVoice {
             self.filt_env *= sweep_coeff;
         } else {
             self.filt_env = 0.0;
+        }
+
+        // Slide glide: exponential approach from self.freq → target_freq.
+        // Glide time ramps with slide intensity so a `slide_cascade` step
+        // produces an audibly-smeared lead-in; slide=0 short-circuits the
+        // update path (target == freq).
+        if self.slide > 0.0 && (self.freq - self.target_freq).abs() > 1e-3 {
+            let glide_time_s = 0.01 + self.slide * 0.15; // 10..160 ms
+            let coeff = (-1.0_f32 / (glide_time_s * sr)).exp();
+            self.freq = self.target_freq - (self.target_freq - self.freq) * coeff;
         }
 
         // Pitch LFO (sine, adds the wailing character)
@@ -555,7 +588,12 @@ impl HooverVoice {
         // Soft saturation via tanh to round off harsh clipping at high resonance
         let saturated = mixed.tanh() * 1.15;
 
-        saturated * self.amp_env * p.hoover_volume
+        // Accent lift: 0 leaves baseline, 1 scales output up by ACCENT_LIFT.
+        // Keeps legacy un-accented triggers at their original level.
+        const ACCENT_LIFT: f32 = 0.3;
+        let accent_gain = 1.0 + ACCENT_LIFT * self.accent;
+
+        saturated * self.amp_env * p.hoover_volume * accent_gain
     }
 }
 

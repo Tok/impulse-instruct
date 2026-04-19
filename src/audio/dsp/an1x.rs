@@ -38,6 +38,15 @@ pub(super) struct An1xVoice {
     drift_target: f32,
     drift_prev: f32,
     drift_step_counter: u32,
+
+    /// Per-step accent (0..=1).  Lifts the final output gain — 0 is the
+    /// baseline, 1 boosts by `ACCENT_LIFT`.  Populated by melodic preecho's
+    /// `accent_ramp`.
+    accent: f32,
+    /// Per-step slide (0..=1).  Scales the per-trigger glide time: slide=0
+    /// snaps, slide=1 uses the full `p.an1x_glide_time`.  Populated by
+    /// melodic preecho's `slide_cascade`.
+    slide: f32,
 }
 
 impl An1xVoice {
@@ -65,13 +74,27 @@ impl An1xVoice {
             drift_target: 0.0,
             drift_prev: 0.0,
             drift_step_counter: 0,
+            accent: 0.0,
+            slide: 0.0,
         }
     }
 
-    pub(super) fn trigger(&mut self, note: u8, sr: f32, p: &super::AudioParams) {
+    pub(super) fn trigger(
+        &mut self,
+        note: u8,
+        accent: f32,
+        slide: f32,
+        sr: f32,
+        p: &super::AudioParams,
+    ) {
+        self.accent = accent.clamp(0.0, 1.0);
+        self.slide = slide.clamp(0.0, 1.0);
         let new_note = note as f32;
         // Legato mode: snap to new note only when gate was off (staccato).
         // Always-glide mode: never snap — glide from wherever current_pitch is.
+        // Per-step slide extends the glide time (see `process`) but never
+        // disables the global glide — backwards compat for an1x patterns
+        // that set `an1x_glide_time` and expect every note to glide.
         if p.an1x_glide_legato && !self.gate {
             self.current_pitch = new_note;
         }
@@ -105,7 +128,12 @@ impl An1xVoice {
         }
 
         // ── Glide ────────────────────────────────────────────────────────────
-        let glide_time = p.an1x_glide_time * 0.5; // 0–500 ms
+        // Effective glide time = max(global glide, per-step slide).  Slide
+        // therefore lets a preecho `slide_cascade` step audibly smear even
+        // when the user hasn't configured a global glide, without disabling
+        // the global setting on unrelated steps.
+        let eff_glide = p.an1x_glide_time.max(self.slide);
+        let glide_time = eff_glide * 0.5; // 0–500 ms
         if glide_time > 0.001 {
             let coeff = (-1.0_f32 / (glide_time * sr)).exp();
             self.current_pitch = self.note - (self.note - self.current_pitch) * coeff;
@@ -276,6 +304,12 @@ impl An1xVoice {
             self.active = false;
         }
 
-        filtered * amp * p.an1x_volume
+        // Accent lift — same shape as HooverVoice::process.  Keeps
+        // accent=0 triggers at their legacy level so existing patterns
+        // don't get quieter after preecho landed.
+        const ACCENT_LIFT: f32 = 0.3;
+        let accent_gain = 1.0 + ACCENT_LIFT * self.accent;
+
+        filtered * amp * p.an1x_volume * accent_gain
     }
 }

@@ -37,6 +37,11 @@ pub struct TtsModuleState {
     /// Snap synthesised voice to the nearest in-key note.
     #[serde(default)]
     pub pitch_snap: bool,
+    /// Per-module output volume multiplier (0.0..=1.5).  Scales the TTS
+    /// bus signal before it's mixed into the master; defaults to 1.0.
+    /// Modulatable via the `NeuTtsVolume` LFO target.
+    #[serde(default = "default_tts_volume")]
+    pub volume: f32,
 }
 
 fn default_voice_ref() -> String {
@@ -51,6 +56,9 @@ fn default_top_k() -> u16 {
 fn default_top_p() -> f32 {
     0.9
 }
+fn default_tts_volume() -> f32 {
+    1.0
+}
 
 impl TtsModuleState {
     pub fn new(id: u32) -> Self {
@@ -61,6 +69,7 @@ impl TtsModuleState {
             top_k: default_top_k(),
             top_p: default_top_p(),
             pitch_snap: false,
+            volume: default_tts_volume(),
         }
     }
 }

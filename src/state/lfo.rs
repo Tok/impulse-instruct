@@ -89,6 +89,10 @@ pub enum LfoTarget {
     GranularDensity,
     GranularGrain,
     GranularPos,
+    /// NeuTts output bus volume — scales the TTS ring-buffer signal
+    /// before FX / master mixing.  Modulating this lets agents fade
+    /// their voice in/out under LFO control.
+    NeuTtsVolume,
     // FX: Reverb
     ReverbMix,
     ReverbSize,

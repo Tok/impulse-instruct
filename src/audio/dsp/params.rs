@@ -163,6 +163,7 @@ pub fn lfo_target_to_u8(t: LfoTarget) -> u8 {
         GabberKickDecay => 69,
         GabberKickClip => 70,
         GabberKickPan => 71,
+        NeuTtsVolume => 72,
     }
 }
 
@@ -587,4 +588,10 @@ pub struct AudioParams {
     pub rack_hoover: bool,
     pub rack_an1x: bool,
     pub rack_gabber_kick: bool,
+    /// NeuTts output bus gain (0..=1.5).  Scales the TTS ring-buffer
+    /// signal before FX and master mixing.  Derived from the first
+    /// `TtsModuleState.volume` at frame boundary; exposed as an
+    /// `AudioParams` field so it's modulatable via the `NeuTtsVolume`
+    /// LFO target like any other DSP knob.
+    pub tts_voice_volume: f32,
 }

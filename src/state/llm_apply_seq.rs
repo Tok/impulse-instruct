@@ -489,6 +489,16 @@ pub(super) fn apply_preecho_voices(
         if let Some(v) = cfg_obj.get("slide_cascade").and_then(|v| v.as_bool()) {
             cfg.slide_cascade = v;
         }
+        if let Some(v) = cfg_obj.get("note_approach").and_then(|v| v.as_str()) {
+            use crate::sequencer::NoteApproach;
+            cfg.note_approach = match v.to_ascii_lowercase().as_str() {
+                "off" | "" | "none" => NoteApproach::Off,
+                "chromatic" | "chrom" => NoteApproach::Chromatic,
+                "scale" => NoteApproach::Scale,
+                "arp" | "arpeggio" => NoteApproach::Arp,
+                _ => cfg.note_approach,
+            };
+        }
         s.sequencer.preecho.insert(voice_key.clone(), cfg);
     }
 }

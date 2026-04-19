@@ -46,7 +46,8 @@
     },
     "mc_lines": ["Acid. Pure acid.","Feel the three oh three.","The filter is the melody.","Squelch it. Harder."],
     "themes": ["squelch","filter","warehouse","Chicago","raw"],
-    "rack_modules": ["bass","808","reverb"]
+    "rack_modules": ["bass","808","reverb"],
+    "lane_dynamism": {"bass":0.95,"kit_a":0.7,"kit_b":0.3,"fx":0.3,"hoover":0.0,"an1x":0.0}
   },
   {
     "id": "acid_house",
@@ -89,7 +90,8 @@
     },
     "mc_lines": ["Let the acid take you.","Three oh three state of mind.","This is how we do it. Filter up.","Acid never dies."],
     "themes": ["acid","dance floor","bass line","late night"],
-    "rack_modules": ["bass","808","909","reverb","delay","chorus"]
+    "rack_modules": ["bass","808","909","reverb","delay","chorus"],
+    "lane_dynamism": {"bass":0.9,"kit_a":0.8,"kit_b":0.7,"fx":0.45,"hoover":0.0,"an1x":0.0}
   },
   {
     "id": "acid_techno",
@@ -134,7 +136,8 @@
     },
     "mc_lines": ["Relentless.","The machine speaks.","Lock in. This doesn't stop.","Raw power."],
     "themes": ["machine","industrial","raw","power","warehouse"],
-    "rack_modules": ["bass","808","909","reverb","delay","drive"]
+    "rack_modules": ["bass","808","909","reverb","delay","drive"],
+    "lane_dynamism": {"bass":0.9,"kit_a":0.85,"kit_b":0.8,"fx":0.6,"hoover":0.0,"an1x":0.0}
   },
   {
     "id": "detroit_techno",
@@ -178,7 +181,8 @@
       }
     },
     "themes": ["future","space","machine soul","motor city","elevation"],
-    "rack_modules": ["bass","808","909","reverb","delay"]
+    "rack_modules": ["bass","808","909","reverb","delay"],
+    "lane_dynamism": {"bass":0.8,"kit_a":0.8,"kit_b":0.75,"an1x":0.8,"fx":0.55,"hoover":0.0}
   },
   {
     "id": "berlin_techno",
@@ -219,7 +223,8 @@
       }
     },
     "themes": ["concrete","dark room","repetition","hypnosis"],
-    "rack_modules": ["bass","808","909","reverb","delay","drive","compressor"]
+    "rack_modules": ["bass","808","909","reverb","delay","drive","compressor"],
+    "lane_dynamism": {"bass":0.75,"kit_a":0.9,"kit_b":0.8,"fx":0.55,"mod":0.65,"hoover":0.0,"an1x":0.5}
   },
   {
     "id": "chicago_house",
@@ -260,7 +265,8 @@
     },
     "mc_lines": ["Can you feel it?","Jack your body.","This is house music.","In the beginning there was Jack."],
     "themes": ["house","jack","dance","freedom","underground"],
-    "rack_modules": ["bass","808","909","reverb","delay","chorus"]
+    "rack_modules": ["bass","808","909","reverb","delay","chorus"],
+    "lane_dynamism": {"bass":0.75,"kit_a":0.85,"kit_b":0.75,"fx":0.4}
   },
   {
     "id": "deep_house",
@@ -302,7 +308,8 @@
     },
     "mc_lines": ["Go deeper.","Let it wash over you.","Deeper. Always deeper.","This groove right here."],
     "themes": ["deep","groove","soul","midnight","warmth"],
-    "rack_modules": ["bass","808","an1x","reverb","delay","chorus","eq"]
+    "rack_modules": ["bass","808","an1x","reverb","delay","chorus","eq"],
+    "lane_dynamism": {"bass":0.65,"kit_a":0.7,"kit_b":0.65,"an1x":0.8,"fx":0.65,"hoover":0.0}
   },
   {
     "id": "uk_garage",
@@ -344,7 +351,8 @@
     },
     "mc_lines": ["Oi oi! Big one.","Rewind that. Selector!","Two step massive.","Hold tight everyone in the building."],
     "themes": ["garage","two step","London","crew","massive"],
-    "rack_modules": ["bass2","808","909","reverb","delay"]
+    "rack_modules": ["bass2","808","909","reverb","delay"],
+    "lane_dynamism": {"bass":0.85,"kit_a":0.95,"kit_b":0.9,"fx":0.5}
   },
   {
     "id": "dubstep",
@@ -388,7 +396,8 @@
     },
     "mc_lines": ["Wooooob.","Drop incoming.","Bass weight.","Low end theory."],
     "themes": ["bass","wobble","dark","sub","weight"],
-    "rack_modules": ["bass2","808","909","amen","reverb","delay","drive","bitcrush"]
+    "rack_modules": ["bass2","808","909","amen","reverb","delay","drive","bitcrush"],
+    "lane_dynamism": {"bass":0.95,"kit_a":0.8,"kit_b":0.8,"fx":0.85,"mod":0.7}
   },
   {
     "id": "jungle",
@@ -434,7 +443,8 @@
     },
     "mc_lines": ["Junglist massive! Big up!","Rewind selecta! Pull up!","Boh! Boh! Original nuttah!","Wheel and come again!","Big up all the jungle crew."],
     "themes": ["jungle","massive","selector","ragga","bass","amen"],
-    "rack_modules": ["bass","amen","808","reverb","delay","tts"]
+    "rack_modules": ["bass","amen","808","reverb","delay","tts"],
+    "lane_dynamism": {"bass":0.85,"kit_a":0.45,"kit_b":0.45,"amen":0.95,"fx":0.55}
   },
   {
     "id": "drum_and_bass",
@@ -503,7 +513,8 @@
     },
     "mc_lines": ["Hold tight the jump-up massive.","Rewind! Pull it up!","Selector — let it roll.","Big up the ravers!","One time for the bass!"],
     "themes": ["jump up","stabs","breaks","amen","rewind","dancefloor"],
-    "rack_modules": ["bass","amen","808","reverb","delay"]
+    "rack_modules": ["bass","amen","808","reverb","delay"],
+    "lane_dynamism": {"bass":0.9,"kit_a":0.5,"kit_b":0.45,"amen":0.95,"fx":0.55}
   },
   {
     "id": "breakcore",
@@ -546,7 +557,8 @@
     },
     "mc_lines": ["Chaos.","Break everything.","This is not music. This is war."],
     "themes": ["chaos","break","noise","destruction","glitch"],
-    "rack_modules": ["bass2","808","909","amen","reverb","delay","drive"]
+    "rack_modules": ["bass2","808","909","amen","reverb","delay","drive"],
+    "lane_dynamism": {"bass":0.85,"kit_a":0.85,"kit_b":0.85,"amen":0.95,"fx":0.75,"mod":0.65}
   },
   {
     "id": "dub_techno",
@@ -595,7 +607,8 @@
       }
     },
     "themes": ["echo","fog","infinite","dub","space","Berlin"],
-    "rack_modules": ["bass","808","delay","reverb","tapesat","chorus"]
+    "rack_modules": ["bass","808","delay","reverb","tapesat","chorus"],
+    "lane_dynamism": {"bass":0.55,"kit_a":0.55,"kit_b":0.5,"fx":0.95,"mod":0.75}
   },
   {
     "id": "minimal_techno",
@@ -635,7 +648,8 @@
         "delay_mix": 0.08
       }
     },
-    "rack_modules": ["bass","808","909","reverb","delay","eq"]
+    "rack_modules": ["bass","808","909","reverb","delay","eq"],
+    "lane_dynamism": {"bass":0.45,"kit_a":0.6,"kit_b":0.55,"fx":0.4,"mod":0.55}
   },
   {
     "id": "trance",
@@ -684,7 +698,8 @@
     },
     "mc_lines": ["Hands up if you feel it.","Together as one.","Let the melody carry you.","This is our moment."],
     "themes": ["euphoria","unity","sunrise","melody","energy"],
-    "rack_modules": ["bass","808","909","hoover","reverb","delay","chorus"]
+    "rack_modules": ["bass","808","909","hoover","reverb","delay","chorus"],
+    "lane_dynamism": {"bass":0.8,"kit_a":0.8,"kit_b":0.75,"hoover":0.9,"an1x":0.85,"fx":0.8,"mod":0.7}
   },
   {
     "id": "gabber",
@@ -730,7 +745,8 @@
     },
     "mc_lines": ["Harder! Faster!","This is gabber!","No mercy on the dance floor."],
     "themes": ["hard","fast","kick","distortion","Rotterdam"],
-    "rack_modules": ["gabber","drive","waveshaper"]
+    "rack_modules": ["gabber","drive","waveshaper"],
+    "lane_dynamism": {"bass":0.75,"kit_a":0.95,"kit_b":0.9,"fx":0.6,"hoover":0.6,"an1x":0.0}
   },
   {
     "id": "early_rave",
@@ -783,7 +799,8 @@
     },
     "mc_lines": ["Can you feel the bass?","Ravers! Make some noise!","One more time! One more time!","This is what it's all about."],
     "themes": ["rave","warehouse","smiley","MDMA summer","strobe"],
-    "rack_modules": ["bass","hoover","808","909","reverb","drive"]
+    "rack_modules": ["bass","hoover","808","909","reverb","drive"],
+    "lane_dynamism": {"bass":0.7,"kit_a":0.85,"kit_b":0.8,"hoover":0.95,"an1x":0.8,"fx":0.6}
   },
   {
     "id": "synthwave",
@@ -830,7 +847,8 @@
     },
     "mc_lines": ["Chrome sunset on the digital highway.","Neon dreams in the rain.","The city never sleeps.","Electric hearts. Synthetic souls.","Midnight drive. No destination."],
     "themes": ["neon","night drive","chrome","sunset","retro future","palm trees","laser grid","Miami","cyberpunk"],
-    "rack_modules": ["an1x","hoover","808","reverb","delay","chorus"]
+    "rack_modules": ["an1x","hoover","808","reverb","delay","chorus"],
+    "lane_dynamism": {"bass":0.75,"kit_a":0.7,"kit_b":0.65,"an1x":0.9,"hoover":0.6,"fx":0.8}
   },
   {
     "id": "darksynth",
@@ -875,7 +893,8 @@
     },
     "mc_lines": ["The machines are watching.","No light escapes.","Run. They're coming.","This is the end of the line."],
     "themes": ["machines","dystopia","darkness","danger","survival","android"],
-    "rack_modules": ["an1x","808","reverb","delay","drive"]
+    "rack_modules": ["an1x","808","reverb","delay","drive"],
+    "lane_dynamism": {"bass":0.85,"kit_a":0.85,"kit_b":0.8,"an1x":0.75,"fx":0.75}
   },
   {
     "id": "vaporwave",
@@ -919,7 +938,8 @@
     },
     "mc_lines": ["It's all just a memory now.","The mall is empty.","Nothing is real.","Late night shopping channel."],
     "themes": ["nostalgia","mall","VHS","consumerism","dream","90s","empty"],
-    "rack_modules": ["an1x","hoover","reverb","delay","chorus","tape"]
+    "rack_modules": ["an1x","hoover","reverb","delay","chorus","tape"],
+    "lane_dynamism": {"bass":0.55,"kit_a":0.5,"kit_b":0.45,"an1x":0.85,"hoover":0.6,"fx":0.9,"mod":0.65}
   },
   {
     "id": "idm",
@@ -961,7 +981,8 @@
       }
     },
     "themes": ["glitch","algorithm","fractal","complexity"],
-    "rack_modules": ["bass2","808","909","an1x","reverb","delay","bitcrush"]
+    "rack_modules": ["bass2","808","909","an1x","reverb","delay","bitcrush"],
+    "lane_dynamism": {"bass":0.8,"kit_a":0.85,"kit_b":0.85,"amen":0.8,"fx":0.8,"mod":0.85}
   },
   {
     "id": "electro",
@@ -1005,7 +1026,8 @@
     },
     "mc_lines": ["Robot rock.","The machines take over.","Electric body music."],
     "themes": ["robot","electric","funk","machine","circuit"],
-    "rack_modules": ["bass","808","909","an1x","reverb","delay"]
+    "rack_modules": ["bass","808","909","an1x","reverb","delay"],
+    "lane_dynamism": {"bass":0.85,"kit_a":0.9,"kit_b":0.85,"an1x":0.7,"fx":0.55}
   },
   {
     "id": "ambient_house",
@@ -1049,7 +1071,8 @@
     },
     "mc_lines": ["Close your eyes. This one drifts.","Let the pad wash over you.","You can breathe now.","No rush. Just waves."],
     "themes": ["drift","waves","chill","sunset","clouds","breath"],
-    "rack_modules": ["an1x","hoover","808","reverb","delay","chorus"]
+    "rack_modules": ["an1x","hoover","808","reverb","delay","chorus"],
+    "lane_dynamism": {"bass":0.5,"kit_a":0.55,"kit_b":0.45,"an1x":0.75,"hoover":0.55,"fx":0.85,"mod":0.65}
   },
   {
     "id": "ambient_techno",
@@ -1092,7 +1115,8 @@
     },
     "mc_lines": ["The pulse beneath the surface.","Slow and steady.","Somewhere between here and gone."],
     "themes": ["pulse","surface","horizon","depth","stillness"],
-    "rack_modules": ["an1x","hoover","808","reverb","delay","chorus"]
+    "rack_modules": ["an1x","hoover","808","reverb","delay","chorus"],
+    "lane_dynamism": {"bass":0.5,"kit_a":0.55,"kit_b":0.45,"an1x":0.7,"fx":0.9,"mod":0.75}
   },
   {
     "id": "dark_ambient",
@@ -1142,7 +1166,8 @@
     },
     "mc_lines": ["Something moves in the dark.","Can you hear it?","The walls are breathing."],
     "themes": ["dark","void","dread","abandoned","echo","underground"],
-    "rack_modules": ["an1x","granular","noise","reverb","delay"]
+    "rack_modules": ["an1x","granular","noise","reverb","delay"],
+    "lane_dynamism": {"bass":0.3,"kit_a":0.2,"kit_b":0.15,"an1x":0.75,"hoover":0.4,"fx":0.95,"mod":0.85}
   },
   {
     "id": "space_ambient",
@@ -1192,7 +1217,8 @@
     },
     "mc_lines": ["Transmission received.","Drifting between stars.","No gravity here.","Signal from deep space."],
     "themes": ["space","stars","nebula","orbit","transmission","void","cosmos"],
-    "rack_modules": ["an1x","granular","reverb","delay","chorus"]
+    "rack_modules": ["an1x","granular","reverb","delay","chorus"],
+    "lane_dynamism": {"bass":0.35,"kit_a":0.25,"kit_b":0.2,"an1x":0.8,"fx":0.95,"mod":0.8}
   },
   {
     "id": "lo_fi_hip_hop",
@@ -1237,7 +1263,8 @@
     },
     "mc_lines": ["Chill. Just chill.","Late night study vibes.","The vinyl crackle is the melody.","Rain on the window."],
     "themes": ["rain","study","coffee","vinyl","nostalgia","night","calm"],
-    "rack_modules": ["bass","808","amen","reverb","tape"]
+    "rack_modules": ["bass","808","amen","reverb","tape"],
+    "lane_dynamism": {"bass":0.7,"kit_a":0.6,"kit_b":0.55,"amen":0.65,"fx":0.6}
   },
   {
     "id": "baroque_bach",
@@ -1286,7 +1313,8 @@
       }
     },
     "themes": ["counterpoint","fugue","invention","harpsichord","cathedral"],
-    "rack_modules": ["an1x","hoover","reverb"]
+    "rack_modules": ["an1x","hoover","reverb"],
+    "lane_dynamism": {"bass":0.85,"kit_a":0.2,"kit_b":0.15,"an1x":0.9,"hoover":0.7,"fx":0.4}
   },
   {
     "id": "meditation",
@@ -1340,6 +1368,7 @@
     },
     "mc_lines": ["Breathe in. Breathe out.","Be here now.","Let everything go.","Just this moment."],
     "themes": ["breath","stillness","peace","present","water","sky"],
-    "rack_modules": ["an1x","granular","noise","reverb"]
+    "rack_modules": ["an1x","granular","noise","reverb"],
+    "lane_dynamism": {"bass":0.3,"kit_a":0.2,"kit_b":0.15,"an1x":0.75,"hoover":0.45,"fx":0.85,"mod":0.65}
   }
 ]

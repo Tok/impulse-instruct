@@ -292,9 +292,14 @@ impl DspState {
                     self.bass[*voice_idx].gate_off();
                 }
             }
-            HooverTrigger { note } => {
+            HooverTrigger {
+                note,
+                accent,
+                slide,
+            } => {
                 if self.params.rack_hoover {
-                    self.hoover.trigger(*note, self.params.tuning);
+                    self.hoover
+                        .trigger(*note, self.params.tuning, *accent, *slide);
                 }
             }
             HooverGateOff => {
@@ -302,9 +307,14 @@ impl DspState {
                     self.hoover.gate_off();
                 }
             }
-            An1xTrigger { note } => {
+            An1xTrigger {
+                note,
+                accent,
+                slide,
+            } => {
                 if self.params.rack_an1x {
-                    self.an1x.trigger(*note, self.sample_rate, &self.params);
+                    self.an1x
+                        .trigger(*note, *accent, *slide, self.sample_rate, &self.params);
                 }
             }
             An1xGateOff => {
@@ -735,8 +745,11 @@ impl DspState {
             };
 
             // TTS bus: pop one sample, apply TTS voice chain, duck synth and mix.
+            // `tts_voice_volume` scales the bus post-FX — modulatable via
+            // the `NeuTtsVolume` LFO target.  Scaling AFTER FX keeps duck
+            // activity tied to the raw sample stream regardless of gain.
             let tts_raw = self.tts_consumer.pop().unwrap_or(0.0);
-            let tts_sig = if tts_raw != 0.0 && tts_len > 0 {
+            let tts_fx = if tts_raw != 0.0 && tts_len > 0 {
                 self.apply_fx_chain(
                     tts_raw,
                     &chain_tts[..tts_len],
@@ -748,6 +761,7 @@ impl DspState {
             } else {
                 tts_raw
             };
+            let tts_sig = tts_fx * p.tts_voice_volume;
             // Smooth duck envelope: attenuate synth when TTS active
             let tts_active = tts_raw != 0.0 || self.tts_consumer.slots() > 0;
             let duck_target = if tts_active { 0.35_f32 } else { 1.0 };

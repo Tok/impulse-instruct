@@ -495,6 +495,10 @@ drum_ratchets values are INTEGERS 1–4 (never bools). E.g. `[1,1,2,1,1,1,4,1,�
 PRE-ECHO: `{{"sequencer":{{"preecho":{{"kit_a":{{"anchors":[0,16],"length":4,
 "velocity_ramp":true,"ratchet_ramp":true}}}}}}}}` — N steps before each anchor ramp
 0.3→1.0 (and/or 1→4 ratchets). Voice keys: kit_a, kit_b, amen, bass, hoover, an1x.
+Melodic voices (bass/hoover/an1x) also accept `accent_ramp`, `slide_cascade`, and
+`note_approach` ("off"/"chromatic"/"scale"/"arp") — when set to anything but "off",
+lead-in steps resolve INTO the anchor note (chromatic = −d semitones,
+scale = −d scale-steps, arp = −2·d scale-steps outlining a triad).
 2 anchors/bar max; null to clear.
 
 BASS PATTERNS — syncopated, spacious (not a drum grid). Density targets per 32 steps:

@@ -118,6 +118,7 @@ mod sequencer_tests {
                 probability_ramp: false,
                 accent_ramp: false,
                 slide_cascade: false,
+                note_approach: crate::sequencer::NoteApproach::Off,
             },
         );
         // Walk enough samples to fire all 16 steps.
@@ -215,6 +216,7 @@ mod sequencer_tests {
                 probability_ramp: false,
                 accent_ramp: true,
                 slide_cascade: true,
+                note_approach: crate::sequencer::NoteApproach::Off,
             },
         );
         let sps = samples_per_step(120.0, 44100.0) as usize;
@@ -290,6 +292,312 @@ mod sequencer_tests {
             "anchor slide kept, got {}",
             sl(8)
         );
+    }
+
+    #[test]
+    fn melodic_preecho_ramps_hoover_accent_and_cascades_slide() {
+        // Mirror of the bass preecho test for the Hoover voice.  Every
+        // hoover step fires with zero stored accent/slide; preecho at
+        // anchor=8 length=4 should ramp accent on 4..=7 and set slide=1
+        // on step 7 only.  Uses hoover_steps=16 so anchor 8 is inside.
+        use crate::sequencer::PreechoConfig;
+        use crate::state::TB303Step;
+        let mut seq = SequencerState {
+            running: true,
+            bpm: 120.0,
+            ..SequencerState::default()
+        };
+        seq.hoover_steps = 16;
+        for s in seq.hoover_pattern.iter_mut() {
+            *s = TB303Step {
+                active: true,
+                note: 57,
+                accent: 0.0,
+                slide: 0.0,
+                pan: 0.0,
+                gate: 0.5,
+            };
+        }
+        seq.preecho.insert(
+            "hoover".to_string(),
+            PreechoConfig {
+                enabled: true,
+                anchors: vec![8],
+                length: 4,
+                auto_length: false,
+                curve: Default::default(),
+                velocity_ramp: false,
+                ratchet_ramp: false,
+                probability_ramp: false,
+                accent_ramp: true,
+                slide_cascade: true,
+                note_approach: crate::sequencer::NoteApproach::Off,
+            },
+        );
+        let sps = samples_per_step(120.0, 44100.0) as usize;
+        let mut clock = ClockState::default();
+        let mut accents: std::collections::HashMap<usize, f32> = Default::default();
+        let mut slides: std::collections::HashMap<usize, f32> = Default::default();
+        for _ in 0..20 {
+            let prev = clock.current_step;
+            let (next, events) = advance_clock(clock, &seq, sps + 1, 44100.0);
+            if next.current_step != prev {
+                let vstep = next.current_step % 16;
+                for e in &events {
+                    if let TriggerEvent::HooverTrigger { accent, slide, .. } = e {
+                        accents.entry(vstep).or_insert(*accent);
+                        slides.entry(vstep).or_insert(*slide);
+                    }
+                }
+            }
+            clock = next;
+        }
+        let a = |s: usize| accents.get(&s).copied().unwrap_or(-1.0);
+        let sl = |s: usize| slides.get(&s).copied().unwrap_or(-1.0);
+        assert!(
+            a(4) < a(5) && a(5) < a(6) && a(6) < a(7),
+            "expected hoover accent ramp 4<5<6<7, got {} {} {} {}",
+            a(4),
+            a(5),
+            a(6),
+            a(7),
+        );
+        assert!((a(7) - 1.0).abs() < 1e-3, "expected a(7)=1.0, got {}", a(7));
+        assert!(
+            (a(8) - 0.0).abs() < 1e-6,
+            "anchor kept stored, got {}",
+            a(8)
+        );
+        assert!(
+            (sl(7) - 1.0).abs() < 1e-3,
+            "slide cascade at 7, got {}",
+            sl(7)
+        );
+        assert!(
+            (sl(6) - 0.0).abs() < 1e-6,
+            "non-cascade step, got {}",
+            sl(6)
+        );
+    }
+
+    #[test]
+    fn melodic_preecho_ramps_an1x_accent_and_cascades_slide() {
+        // Same shape as hoover test, targeting an1x.  Installing preecho
+        // under the "an1x" key should only touch an1x triggers and leave
+        // hoover / bass alone.
+        use crate::sequencer::PreechoConfig;
+        use crate::state::TB303Step;
+        let mut seq = SequencerState {
+            running: true,
+            bpm: 120.0,
+            ..SequencerState::default()
+        };
+        seq.an1x_steps = 16;
+        for s in seq.an1x_pattern.iter_mut() {
+            *s = TB303Step {
+                active: true,
+                note: 60,
+                accent: 0.0,
+                slide: 0.0,
+                pan: 0.0,
+                gate: 0.5,
+            };
+        }
+        seq.preecho.insert(
+            "an1x".to_string(),
+            PreechoConfig {
+                enabled: true,
+                anchors: vec![8],
+                length: 4,
+                auto_length: false,
+                curve: Default::default(),
+                velocity_ramp: false,
+                ratchet_ramp: false,
+                probability_ramp: false,
+                accent_ramp: true,
+                slide_cascade: true,
+                note_approach: crate::sequencer::NoteApproach::Off,
+            },
+        );
+        let sps = samples_per_step(120.0, 44100.0) as usize;
+        let mut clock = ClockState::default();
+        let mut accents: std::collections::HashMap<usize, f32> = Default::default();
+        let mut slides: std::collections::HashMap<usize, f32> = Default::default();
+        for _ in 0..20 {
+            let prev = clock.current_step;
+            let (next, events) = advance_clock(clock, &seq, sps + 1, 44100.0);
+            if next.current_step != prev {
+                let vstep = next.current_step % 16;
+                for e in &events {
+                    if let TriggerEvent::An1xTrigger { accent, slide, .. } = e {
+                        accents.entry(vstep).or_insert(*accent);
+                        slides.entry(vstep).or_insert(*slide);
+                    }
+                }
+            }
+            clock = next;
+        }
+        let a = |s: usize| accents.get(&s).copied().unwrap_or(-1.0);
+        let sl = |s: usize| slides.get(&s).copied().unwrap_or(-1.0);
+        assert!(
+            a(4) < a(5) && a(5) < a(6) && a(6) < a(7),
+            "expected an1x accent ramp 4<5<6<7, got {} {} {} {}",
+            a(4),
+            a(5),
+            a(6),
+            a(7),
+        );
+        assert!((a(7) - 1.0).abs() < 1e-3, "expected a(7)=1.0, got {}", a(7));
+        assert!(
+            (sl(7) - 1.0).abs() < 1e-3,
+            "slide cascade at 7, got {}",
+            sl(7)
+        );
+        assert!(
+            (sl(6) - 0.0).abs() < 1e-6,
+            "non-cascade step, got {}",
+            sl(6)
+        );
+    }
+
+    #[test]
+    fn note_approach_chromatic_rewrites_bass_lead_in_notes() {
+        // Bass voice 0 fires on every step; all steps store note 57 (A3).
+        // Preecho anchor=8, length=4, note_approach=Chromatic.
+        // Lead-in 4..=7 should play anchor_note - d: 54, 55, 56, 57... wait
+        // anchor_note is pattern[8].note=57, and d=4..1 → 53,54,55,56.
+        use crate::sequencer::{NoteApproach, PreechoConfig};
+        use crate::state::TB303Step;
+        let mut seq = SequencerState {
+            running: true,
+            bpm: 120.0,
+            ..SequencerState::default()
+        };
+        seq.bass_voice_enabled[0] = true;
+        for s in seq.bass_pattern.iter_mut() {
+            *s = TB303Step {
+                active: true,
+                note: 57,
+                accent: 0.0,
+                slide: 0.0,
+                pan: 0.0,
+                gate: 0.5,
+            };
+        }
+        seq.preecho.insert(
+            "bass".to_string(),
+            PreechoConfig {
+                enabled: true,
+                anchors: vec![8],
+                length: 4,
+                auto_length: false,
+                curve: Default::default(),
+                velocity_ramp: false,
+                ratchet_ramp: false,
+                probability_ramp: false,
+                accent_ramp: false,
+                slide_cascade: false,
+                note_approach: NoteApproach::Chromatic,
+            },
+        );
+        let sps = samples_per_step(120.0, 44100.0) as usize;
+        let mut clock = ClockState::default();
+        let mut notes: std::collections::HashMap<usize, u8> = Default::default();
+        for _ in 0..20 {
+            let prev = clock.current_step;
+            let (next, events) = advance_clock(clock, &seq, sps + 1, 44100.0);
+            if next.current_step != prev {
+                let vstep = next.current_step % 16;
+                for e in &events {
+                    if let TriggerEvent::BassTrigger {
+                        voice_idx: 0, note, ..
+                    } = e
+                    {
+                        notes.entry(vstep).or_insert(*note);
+                    }
+                }
+            }
+            clock = next;
+        }
+        // Lead-in: d=4 → 57-4=53, d=3 → 54, d=2 → 55, d=1 → 56.
+        assert_eq!(notes.get(&4), Some(&53));
+        assert_eq!(notes.get(&5), Some(&54));
+        assert_eq!(notes.get(&6), Some(&55));
+        assert_eq!(notes.get(&7), Some(&56));
+        // Anchor stays at stored note.
+        assert_eq!(notes.get(&8), Some(&57));
+        // Out-of-window stays at stored note.
+        assert_eq!(notes.get(&0), Some(&57));
+        assert_eq!(notes.get(&12), Some(&57));
+    }
+
+    #[test]
+    fn note_approach_scale_walks_scale_degrees() {
+        // Pattern in A natural minor (root=9).  Anchor at step 8 stores A4=69.
+        // Scale approach walks scale degrees down: d=1 → G4=67, d=2 → F4=65,
+        // d=3 → E4=64.  Verifies the sequencer resolves through the scale
+        // rather than straight semitones.
+        use crate::sequencer::{NoteApproach, PreechoConfig};
+        use crate::state::{Scale, TB303Step};
+        let mut seq = SequencerState {
+            running: true,
+            bpm: 120.0,
+            root_note: 9,
+            scale: Scale::NaturalMinor,
+            ..SequencerState::default()
+        };
+        seq.bass_voice_enabled[0] = true;
+        for s in seq.bass_pattern.iter_mut() {
+            *s = TB303Step {
+                active: true,
+                note: 69,
+                accent: 0.0,
+                slide: 0.0,
+                pan: 0.0,
+                gate: 0.5,
+            };
+        }
+        seq.preecho.insert(
+            "bass".to_string(),
+            PreechoConfig {
+                enabled: true,
+                anchors: vec![8],
+                length: 3,
+                auto_length: false,
+                curve: Default::default(),
+                velocity_ramp: false,
+                ratchet_ramp: false,
+                probability_ramp: false,
+                accent_ramp: false,
+                slide_cascade: false,
+                note_approach: NoteApproach::Scale,
+            },
+        );
+        let sps = samples_per_step(120.0, 44100.0) as usize;
+        let mut clock = ClockState::default();
+        let mut notes: std::collections::HashMap<usize, u8> = Default::default();
+        for _ in 0..20 {
+            let prev = clock.current_step;
+            let (next, events) = advance_clock(clock, &seq, sps + 1, 44100.0);
+            if next.current_step != prev {
+                let vstep = next.current_step % 16;
+                for e in &events {
+                    if let TriggerEvent::BassTrigger {
+                        voice_idx: 0, note, ..
+                    } = e
+                    {
+                        notes.entry(vstep).or_insert(*note);
+                    }
+                }
+            }
+            clock = next;
+        }
+        // Anchor-adjacent (d=1) → G4 = 67.
+        assert_eq!(notes.get(&7), Some(&67));
+        // d=2 → F4 = 65.
+        assert_eq!(notes.get(&6), Some(&65));
+        // d=3 → E4 = 64.
+        assert_eq!(notes.get(&5), Some(&64));
     }
 
     #[test]

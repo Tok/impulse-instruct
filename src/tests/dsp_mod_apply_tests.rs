@@ -257,6 +257,17 @@ mod special_range_clamps {
     }
 
     #[test]
+    fn neutts_volume_clamps_at_1_5_and_at_zero() {
+        let mut p = fresh();
+        p.tts_voice_volume = 1.0;
+        apply_mod_target(&mut p, 72, 5.0);
+        assert!((p.tts_voice_volume - 1.5).abs() < 1e-6);
+        p.tts_voice_volume = 0.0;
+        apply_mod_target(&mut p, 72, -5.0);
+        assert_eq!(p.tts_voice_volume, 0.0);
+    }
+
+    #[test]
     fn volume_303_clamps_at_1_5() {
         let mut p = fresh();
         p.volume_303 = 1.0;
@@ -330,7 +341,7 @@ mod target_isolation {
     fn no_other_opcode_touches_cutoff() {
         let baseline = fresh();
         let baseline_cutoff = baseline.cutoff;
-        for op in 2..=71 {
+        for op in 2..=72 {
             let mut p = fresh();
             apply_mod_target(&mut p, op, 0.7);
             assert_eq!(
@@ -346,7 +357,7 @@ mod target_isolation {
     fn no_other_opcode_touches_amen_gate() {
         let baseline = fresh();
         let baseline_gate = baseline.amen_gate;
-        for op in 1..=71 {
+        for op in 1..=72 {
             if op == 62 {
                 continue;
             }

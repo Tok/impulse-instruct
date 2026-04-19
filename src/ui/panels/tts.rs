@@ -140,7 +140,7 @@ pub fn draw_tts(app: &mut ImpulseApp, ui: &mut egui::Ui, module_id: u32) {
     }
 
     // ── Snapshot ─────────────────────────────────────────────────────────────
-    let (voice_ref, temperature, top_k, top_p, pitch_snap, enabled, tts_state) = {
+    let (voice_ref, temperature, top_k, top_p, pitch_snap, volume, enabled, tts_state) = {
         let s = app.state.read();
         let t = s.tts_modules.iter().find(|t| t.id == module_id).unwrap();
         let mod_enabled = s
@@ -156,6 +156,7 @@ pub fn draw_tts(app: &mut ImpulseApp, ui: &mut egui::Ui, module_id: u32) {
             t.top_k,
             t.top_p,
             t.pitch_snap,
+            t.volume,
             mod_enabled,
             t.clone(),
         )
@@ -512,6 +513,17 @@ pub fn draw_tts(app: &mut ImpulseApp, ui: &mut egui::Ui, module_id: u32) {
             .changed()
         {
             with_tts(app, module_id, |t| t.top_p = v);
+        }
+    });
+
+    // ── Volume — modulatable via the NeuTtsVolume LFO target ──────────────
+    labelled_row(ui, "VOLUME", &mut |ui| {
+        let mut v = volume;
+        if ui
+            .add(egui::DragValue::new(&mut v).range(0.0..=1.5).speed(0.01))
+            .changed()
+        {
+            with_tts(app, module_id, |t| t.volume = v);
         }
     });
 

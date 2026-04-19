@@ -12,7 +12,7 @@
 // active preecho, so the user can see at a glance which voices are
 // being modulated without clicking through each tab.
 
-use crate::sequencer::{PreechoConfig, RampCurve};
+use crate::sequencer::{NoteApproach, PreechoConfig, RampCurve};
 use crate::ui::{ImpulseApp, SEQ_LABEL_W, theme, widgets};
 
 /// Short label for the curve dropdown.  Keeps the dropdown narrow.
@@ -22,6 +22,16 @@ fn curve_label(c: RampCurve) -> &'static str {
         RampCurve::Exp => "EXP",
         RampCurve::Log => "LOG",
         RampCurve::Cosine => "COS",
+    }
+}
+
+/// Short label for the note-approach dropdown (melodic tabs only).
+fn approach_label(a: NoteApproach) -> &'static str {
+    match a {
+        NoteApproach::Off => "OFF",
+        NoteApproach::Chromatic => "CHR",
+        NoteApproach::Scale => "SCL",
+        NoteApproach::Arp => "ARP",
     }
 }
 
@@ -397,6 +407,43 @@ pub(super) fn draw_preecho_row(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         if widgets::toggle_button(ui, if sc { "SLD" } else { "sld" }, &mut sc) {
             cfg.slide_cascade = sc;
             changed = true;
+        }
+        // Note-approach picker — only meaningful for melodic tabs; showing
+        // it on drum tabs would mislead since TB303Step.note on drums is
+        // the slice index, not a pitch.
+        let is_melodic = matches!(selected.as_str(), "bass" | "hoover" | "an1x");
+        if is_melodic {
+            let mut new_app: Option<NoteApproach> = None;
+            egui::ComboBox::from_id_source("preecho_note_approach")
+                .selected_text(
+                    egui::RichText::new(approach_label(cfg.note_approach))
+                        .monospace()
+                        .size(8.0)
+                        .color(theme::FOG),
+                )
+                .width(48.0)
+                .show_ui(ui, |ui| {
+                    for a in [
+                        NoteApproach::Off,
+                        NoteApproach::Chromatic,
+                        NoteApproach::Scale,
+                        NoteApproach::Arp,
+                    ] {
+                        if ui
+                            .selectable_label(
+                                cfg.note_approach == a,
+                                egui::RichText::new(approach_label(a)).monospace().size(8.5),
+                            )
+                            .clicked()
+                        {
+                            new_app = Some(a);
+                        }
+                    }
+                });
+            if let Some(a) = new_app {
+                cfg.note_approach = a;
+                changed = true;
+            }
         }
     });
 

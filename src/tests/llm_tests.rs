@@ -262,6 +262,85 @@ mod style_tests {
         );
     }
     #[test]
+    fn all_styles_have_lane_dynamism() {
+        let catalog = StyleCatalog::get();
+        let missing: Vec<&str> = catalog
+            .styles()
+            .iter()
+            .filter(|s| s.lane_dynamism.is_empty())
+            .map(|s| s.id.as_str())
+            .collect();
+        assert!(
+            missing.is_empty(),
+            "styles missing lane_dynamism overrides: {:?}",
+            missing
+        );
+    }
+    #[test]
+    fn lane_dynamism_keys_and_values_valid() {
+        // Keys must match the group labels exported by lane_scheduler,
+        // or the exact lane labels (e.g. "bass1"/"bass2"/"bass3"/"bass4").
+        // Values must be finite and within 0.0..=1.0.
+        const ALLOWED: &[&str] = &[
+            "bass", "kit_a", "kit_b", "amen", "hoover", "an1x", "fx", "mod", "settings", "bass1",
+            "bass2", "bass3", "bass4",
+        ];
+        let catalog = StyleCatalog::get();
+        let mut problems: Vec<String> = Vec::new();
+        for s in catalog.styles() {
+            for (k, v) in &s.lane_dynamism {
+                if !ALLOWED.contains(&k.as_str()) {
+                    problems.push(format!("{}: unknown key '{}'", s.id, k));
+                }
+                if !v.is_finite() || *v < 0.0 || *v > 1.0 {
+                    problems.push(format!("{}: '{}' = {} out of [0,1]", s.id, k, v));
+                }
+            }
+        }
+        assert!(problems.is_empty(), "{:#?}", problems);
+    }
+    #[test]
+    fn ambient_styles_emphasise_fx_over_drums() {
+        // Smoke test on the shape of the overrides: for ambient genres,
+        // fx should weigh more than kit_a.  Guards against a future edit
+        // that flips the genre intent by copy-paste.
+        let catalog = StyleCatalog::get();
+        for id in [
+            "dark_ambient",
+            "space_ambient",
+            "ambient_techno",
+            "meditation",
+        ] {
+            let s = catalog.find_by_id(id).expect(id);
+            let fx = s.lane_dynamism.get("fx").copied().unwrap_or(0.45);
+            let kit_a = s.lane_dynamism.get("kit_a").copied().unwrap_or(0.85);
+            assert!(
+                fx > kit_a,
+                "{}: expected fx ({}) > kit_a ({}) for ambient shape",
+                id,
+                fx,
+                kit_a
+            );
+        }
+    }
+    #[test]
+    fn hard_styles_emphasise_drums_over_fx() {
+        // Mirror check for percussion-forward genres.
+        let catalog = StyleCatalog::get();
+        for id in ["gabber", "uk_garage", "acid_techno"] {
+            let s = catalog.find_by_id(id).expect(id);
+            let fx = s.lane_dynamism.get("fx").copied().unwrap_or(0.45);
+            let kit_a = s.lane_dynamism.get("kit_a").copied().unwrap_or(0.85);
+            assert!(
+                kit_a > fx,
+                "{}: expected kit_a ({}) > fx ({}) for hard-drum shape",
+                id,
+                kit_a,
+                fx
+            );
+        }
+    }
+    #[test]
     fn acid_classic_baseline_is_acid_character() {
         let state = apply_baseline("acid_classic");
         assert!(
