@@ -27,9 +27,37 @@ pub fn llm_cycle(
     diameter: f32,
 ) {
     let size = Vec2::splat(diameter);
-    let (rect, _) = ui.allocate_exact_size(size, Sense::hover());
+    let (rect, response) = ui.allocate_exact_size(size, Sense::hover());
     if !ui.is_rect_visible(rect) {
         return;
+    }
+
+    // Hover tooltip — the widget's language (rim LEDs, wedge, arc, dots,
+    // centre state) isn't self-evident, so spell it out on hover.
+    if response.hovered() {
+        response.on_hover_ui(|ui| {
+            ui.label(
+                egui::RichText::new("Round-robin cycle")
+                    .strong()
+                    .monospace(),
+            );
+            ui.separator();
+            ui.small("Clock face of the agent rotation — walks clockwise");
+            ui.small("from 12 o'clock (tick) hitting each enabled agent in turn.");
+            ui.add_space(4.0);
+            ui.small("• Rim LED = one enabled agent (persona labelled outside)");
+            ui.small("• Pulsing LED + ping rings = currently inferring");
+            ui.small("• Triangle outside rim = next agent to fire");
+            ui.small("• Arc inside rim = lanes_done / total_lanes of current turn");
+            ui.small("• Dots tucked inside a slot = queued asks for that agent");
+            ui.small("• Dots below centre = globally-scoped queued asks");
+            ui.add_space(4.0);
+            ui.small(egui::RichText::new("Centre:  Ns = countdown · ▶ = inferring ·").monospace());
+            ui.small(
+                egui::RichText::new("         ··· = idle + queued · idle = nothing running")
+                    .monospace(),
+            );
+        });
     }
     let painter = ui.painter_at(rect);
     let center = rect.center();
