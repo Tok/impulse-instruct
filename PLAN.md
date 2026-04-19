@@ -8,163 +8,147 @@ they ship and are reflected in `features.md`.
 
 ## Agent tooling — gradual control & expressiveness
 
-- **FX XY-pad overhaul** — in progress.  Infra + Autotune landed in
-  this session: per-instance `RackModule.pad_expanded` (serde default
-  true) + `ModuleKind::supports_xy_pad()` gate + effective-grid-size
-  plumbing in `arrange_grid` / `find_free_position`; title-bar
-  chevron toggle reflows the rack on click.  Remaining:
-    - Roll out XY pads to remaining FX (3-knob FX use A/B · A/C · B/C
-      cycling via the `xy_pad` widget's existing `num_pairs` param;
-      2-knob FX get a direct pad).  Each rollout flips that kind's
-      `supports_xy_pad()` arm + adds a pad render to `draw_fx_content`.
-      Order: Reverb (3-knob template), then Delay, Chorus, Phaser, EQ,
-      Sidechain, Tape, Master, Bitcrush, then Compressor + Shape.
-    - Regroup the 808 and 909 glass panes so linked knob clusters
-      (kick: pitch+decay+punch, snare: tone+snappy+decay, etc.) sit
-      next to their XY pads rather than scattered across the panel.
-    - Agent side: verify pad position already tracks agent-driven
-      knob changes (the widget derives x/y from the live values each
-      frame).  If confirmed, no-op; otherwise add `fx.<name>_xy: [x,y]`
-      as a first-class path.
-- **Hoover / An1x preecho** — bass voices now consume
+- [ ] **Hoover / An1x preecho** — bass voices consume
   `PreechoConfig.accent_ramp` + `slide_cascade` via the shared `"bass"`
-  voice key.  Hoover/An1x `TriggerEvent` variants don't carry accent
+  voice key.  Hoover / An1x `TriggerEvent` variants don't carry accent
   or slide yet, so extending them (and the matching DSP consumers)
   stayed out of the first melodic-preecho commit.
+- [ ] **XY pad — agent-side first-class path** — the widget already
+  derives the pad position from the live knob values each frame, so
+  agent edits to `fx.reverb_size` etc. visibly move the pad with no
+  extra plumbing.  Promoting the pad itself to a first-class
+  `fx.<name>_xy: [x, y]` JSON path (in addition to the existing
+  per-knob paths) would let agents think in pad-space instead of
+  knob-space — deferred until we see demand.
 
 ## DSP
 
-- **Dub techno send/return** — minimum-viable dub chain landed on the
-  existing Delay.  `delay_freeze` mirrors `reverb_freeze` (input
-  suppressed, feedback pinned near 1.0 for infinite hold);
-  `delay_hpf` / `delay_lpf` are one-pole filters on the feedback path
-  so each repeat loses highs / lows with every round-trip — the
-  classic dub "drift into smoke".  `styles.json`'s `dub_techno`
-  baseline seeds the new fields + adds tape-sat to the rack preset.
-  Remaining: a true send-bus routing layer (per-cable amount, FX→FX
-  feedback loops the rack's cycle-check currently rejects) — out of
-  scope for the MVP and not required by the existing workflow.
+- [ ] **Send-bus routing layer** — per-cable send amount + FX→FX
+  feedback loops.  The dub-delay MVP (`delay_freeze` + feedback HPF /
+  LPF) handles the dub-techno use case without needing true sends;
+  this entry tracks the bigger routing refactor if other genres ask
+  for it.  The rack's `would_create_audio_cycle` check currently
+  rejects all FX→FX feedback; loosening that (with a feedback-gain
+  clamp so the graph can't diverge) is the first step.
 
 ## Sequencer
 
-- **Pattern probability per step** — already implemented but LLM doesn't
-  use it well; improve prompt guidance for probability-based patterns.
-- **Song mode** — done for style + tempo transitions.  Each pattern
-  bank slot carries optional `pattern_style` and a `pattern_bpm_apply`
-  opt-in flag.  On chain advance: `apply_pattern_style_on_advance`
-  flips `llm.active_style` + propagates to unlocked agents;
-  `chain_advance_transport` either preserves the prior bpm/swing
-  (default) or jumps to the loaded slot's own bpm/swing when the flag
-  is set.  Remaining: nothing blocking — future polish could move to
-  a dedicated `Song` struct with per-chain-slot (not per-pattern)
-  overrides and a timeline view, but the current surface is enough
-  to arrange multi-style / multi-tempo sets.
-- **MIDI export** — done.  `src/midi/export.rs` writes a Standard MIDI
-  File (Type 1, PPQ 480) from `SequencerState`: track 0 is tempo +
-  time-sig meta, drums merge onto channel 10 via a GM kit map, each
-  melodic voice (bass / hoover / an1x) lands on its own channel.
-  Exposed via `POST /api/midi/export { path? }` and a `MIDI ⇩` button
-  at the end of the pattern-bank row.
-- **Preecho v2** — curves (Linear / Exp / Log / Cosine), probability
-  ramp, and auto-length (fills the lead-in from the prior-anchor gap)
-  landed.  Accent / slide already shipped in v1 and now surface in the
-  panel as dedicated toggles alongside VEL / RAT.  Remaining: note
-  approach (chromatic / scale-step / arp resolving to the anchor note)
-  and Hoover / An1x support (their `TriggerEvent` variants still only
-  carry `note`; adding accent / slide to them + wiring preecho through
-  the TTS-adjacent synth trigger paths is a separate commit).
+- [ ] **Pattern probability per step — LLM prompt guidance** — the
+  feature is implemented but the LLM doesn't use it well; improve
+  prompt examples for probability-based patterns.
+- [ ] **Song mode — timeline view** — current surface (per-pattern
+  `pattern_style` + `pattern_bpm_apply`) is enough to arrange
+  multi-style / multi-tempo sets, but a dedicated `Song` struct with
+  per-chain-slot overrides (rather than per-pattern) and a timeline
+  editor would give more flexibility.
+- [ ] **Preecho v2 — note approach** — chromatic / scale-step / arp
+  resolving to the anchor note, for melodic lead-ins.
 
 ## Intelligence
 
-- **Populate per-style `lane_dynamism` maps in `styles.json`.**  The
-  schema + scheduler hookup landed in Phase 4, but every style still
-  runs on the baked-in defaults.  Fill in genre-appropriate overrides
-  (e.g. ambient = bass 0.4 / fx 0.9, hard techno = kit_a 0.95 / fx 0.2).
-- **Mid-pipeline live state checks** — `pipeline::run_pipeline` works
-  on a snapshot.  When the user changes the rack mid-cycle, in-flight
-  lanes for newly-removed modules still fire.  The defensive
-  `lane_is_live_pub` filter at plan time helps but doesn't catch
-  changes after the plan is built; needs an Arc<RwLock> or callback.
-- **Agent conversation history** — multi-turn within a single jam
+- [ ] **Populate per-style `lane_dynamism` maps in `styles.json`.**
+  The schema + scheduler hookup landed in Phase 4, but every style
+  still runs on the baked-in defaults.  Fill in genre-appropriate
+  overrides (e.g. ambient = bass 0.4 / fx 0.9, hard techno =
+  kit_a 0.95 / fx 0.2).
+- [ ] **Mid-pipeline live state checks** — `pipeline::run_pipeline`
+  works on a snapshot.  When the user changes the rack mid-cycle,
+  in-flight lanes for newly-removed modules still fire.  The
+  defensive `lane_is_live_pub` filter at plan time helps but doesn't
+  catch changes after the plan is built; needs an `Arc<RwLock>` or
+  callback.
+- [ ] **Agent conversation history** — multi-turn within a single jam
   cycle; agent sees its own previous outputs for coherent evolution.
-- **Prompt templates per style** — styles can define custom prompt
-  templates that replace the generic "generate all parameters" jam
-  prompt.
-- **VRAM-aware model fallback** — when spawn is rejected, auto-suggest
-  or auto-select a lighter model that fits the remaining VRAM budget.
-- **Test additional LLM models** — evaluate DeepSeek-R1-Distill-Qwen-7B
-  /14B and Qwen3-8B/14B for JSON accuracy and music theory.  Gemma 4
-  26B-A4B is now downloadable (three quants); needs a head-to-head
-  vs. E4B on the style + bass + theory suites.
-- **Style mc_lines/themes UI editor** — allow editing mc_lines and
-  themes per style from UI preferences.
-- **Auto-sync rack on app start to active style** — currently the
-  rack reflects whatever was saved in session.json; if the user
-  picked Classic Acid then customised the rack, restart preserves
-  the customisation.  Open question whether to auto-sync on startup
-  or leave it as an explicit re-pick from the dropdown.
+- [ ] **Prompt templates per style** — styles can define custom
+  prompt templates that replace the generic "generate all parameters"
+  jam prompt.
+- [ ] **VRAM-aware model fallback** — when a spawn is rejected,
+  auto-suggest or auto-select a lighter model that fits the remaining
+  VRAM budget.
+- [ ] **Test additional LLM models** — evaluate
+  DeepSeek-R1-Distill-Qwen-7B / 14B and Qwen3-8B / 14B for JSON
+  accuracy and music theory.  Gemma 4 26B-A4B is now downloadable
+  (three quants); needs a head-to-head vs. E4B on the style + bass +
+  theory suites.
+- [ ] **Style mc_lines / themes UI editor** — allow editing
+  `mc_lines` and themes per style from UI preferences.
+- [ ] **Auto-sync rack on app start to active style** — currently
+  the rack reflects whatever was saved in `session.json`; if the
+  user picked Classic Acid then customised the rack, restart
+  preserves the customisation.  Open question whether to auto-sync
+  on startup or leave it as an explicit re-pick from the dropdown.
 
 ## UI / UX
 
-- **Touch mode improvements** — touch-paint mode for mobile/tablet;
-  gesture support for zoom/scroll.
-- **NeuTts mod targets** — Amen/Granular got per-voice LfoTarget
-  variants; NeuTts still has none.  Its TTS bus volume isn't an
-  `AudioParams` knob, so wiring needs a small audio-thread restructure.
-- **Style-dependent rack defaults at wizard time** — partially
-  addressed: picking a style in the LLM console now reshapes the rack
-  via `style_rack::apply` (destructive, reads `rack_modules` from
-  styles.json).  The wizard's `RACK_PRESETS` (Empty / Basic /
+- [ ] **Touch mode improvements** — touch-paint mode for
+  mobile / tablet; gesture support for zoom / scroll.
+- [ ] **NeuTts mod targets** — Amen / Granular got per-voice
+  LfoTarget variants; NeuTts still has none.  Its TTS bus volume
+  isn't an `AudioParams` knob, so wiring needs a small audio-thread
+  restructure.
+- [ ] **Style-dependent rack defaults at wizard time** — partially
+  addressed: picking a style in the LLM console now reshapes the
+  rack via `style_rack::apply` (destructive, reads `rack_modules`
+  from `styles.json`).  The wizard's `RACK_PRESETS` (Empty / Basic /
   Standard / Full) is still generic; could be replaced with a
   style-driven picker so initial setup matches the user's intended
   genre directly.
-- **Agent overrides escape clip too** — `agent_card.rs` LED already
-  uses a foreground layer.  Step-button / piano / knob LEDs are
-  tightly bound to their parents and would leak past widget bounds
-  with the same treatment — escalate per-site only when actually
-  needed.
-- **Project picker** — File menu currently loads the newest
-  `project-*.json` from cwd.  A real picker (rfd or in-app file dialog)
-  would let the user pick any saved project.
-- **Recent projects** sub-menu listing saved sessions.
-- **Real shaders for LEDs / oscilloscope phosphor** — would replace the
-  current multi-circle software glow with a wgpu callback for a true
-  HDR bloom + scanline effect.  Scoping this requires registering a
-  custom render pipeline; it'd be its own subsystem.
+- [ ] **Agent overrides escape clip too** — `agent_card.rs` LED
+  already uses a foreground layer.  Step-button / piano / knob LEDs
+  are tightly bound to their parents and would leak past widget
+  bounds with the same treatment — escalate per-site only when
+  actually needed.
+- [ ] **Project picker** — File menu currently loads the newest
+  `project-*.json` from cwd.  A real picker (rfd or in-app file
+  dialog) would let the user pick any saved project.
+- [ ] **Recent projects** sub-menu listing saved sessions.
+- [ ] **Real shaders for LEDs / oscilloscope phosphor** — would
+  replace the current multi-circle software glow with a wgpu
+  callback for a true HDR bloom + scanline effect.  Scoping this
+  requires registering a custom render pipeline; it'd be its own
+  subsystem.
 
 ## Demo recording
 
-- **`demo/scenarios/setup-mc-singer.sh`** — Jungle MC + TTS Singer
-  through autotune.  Non-deterministic, 100% agent-controlled.
-- **Preecho demo scene** — agent writes anchors into a drum pattern
-  and you hear the build-up ramp into each downbeat.
-- **LFO assignment scene** — agent schedules filter sweep via the
-  per-voice bass LFO.
-- **Parameter ramp scene** — gradual cutoff sweep over bars.
-- **Event stream scene** — Huth-coloured note history scrolling in
-  real time, with the new past-side log preserving past notes.
-- **Re-record the D&B demo** — amen + reese + drone pad + MC scenario
-  is ready; waiting on a clean recording run.
+- [ ] **`demo/scenarios/setup-mc-singer.sh`** — Jungle MC + TTS
+  Singer through autotune.  Non-deterministic, 100 % agent-controlled.
+- [ ] **Preecho demo scene** — agent writes anchors into a drum
+  pattern and you hear the build-up ramp into each downbeat.
+- [ ] **LFO assignment scene** — agent schedules filter sweep via
+  the per-voice bass LFO.
+- [ ] **Parameter ramp scene** — gradual cutoff sweep over bars.
+- [ ] **Event stream scene** — Huth-coloured note history scrolling
+  in real time, with the new past-side log preserving past notes.
+- [ ] **Re-record the D&B demo** — amen + reese + drone pad + MC
+  scenario is ready; waiting on a clean recording run.
 
 ## Refactoring
 
-- **Panel typography tiers** — if we do this, it should be an enum
-  (`FontTier::{Xs, Sm, Md, Lg}` with `.px()`) rather than loose
-  constants, so the variant set is closed and call sites can't
-  accidentally introduce a 9.25 px one-off.  Only worth doing if we
-  collapse the 11 distinct `.size(...)` values to a few canonical
-  tiers (visual-design call).
-- **Panel spacing tiers** — same shape.  Only worth it if we settle
-  on a small number of canonical gaps.
-- **Glass group helpers** — `glass_label(ui, text)` still to do (the
-  inline pattern varies too much across panels for a single helper).
+- [ ] **Panel typography tiers** — if we do this, it should be an
+  enum (`FontTier::{Xs, Sm, Md, Lg}` with `.px()`) rather than
+  loose constants, so the variant set is closed and call sites
+  can't accidentally introduce a 9.25 px one-off.  Only worth doing
+  if we collapse the 11 distinct `.size(...)` values to a few
+  canonical tiers (visual-design call).
+- [ ] **Panel spacing tiers** — same shape.  Only worth it if we
+  settle on a small number of canonical gaps.
+- [ ] **Glass group helpers** — `glass_label(ui, text)` still to do
+  (the inline pattern varies too much across panels for a single
+  helper).
+- [ ] **Large-file splits** — `src/llm/mod.rs` (982 lines),
+  `src/ui/mod.rs` (977), `src/audio/dsp/samplers.rs` (973),
+  `src/llm/planner.rs` (964), `src/audio/dsp/mod.rs` (963),
+  `src/audio/dsp/voices.rs` (950), `src/tests/llm_apply_extra_tests.rs`
+  (946), `src/api/mod.rs` (943) are all one append from tripping the
+  1000-line pre-commit cap.  Split proactively into cohesive
+  sub-modules (see coding-guide.md).  `rack_tests.rs` already split.
 
 ## Infrastructure
 
-- **CI: run LLM integration tests on release** — currently manual;
-  automate in GitHub Actions with a Gemma model cache.
-- **Codecov improvement** — currently ~37 %; target higher with the
-  new DSP, preecho, mod-overlay, and rack-reachability suites.
+- [ ] **CI: run LLM integration tests on release** — currently
+  manual; automate in GitHub Actions with a Gemma model cache.
+- [ ] **Codecov improvement** — currently ~37 %; target higher with
+  the new DSP, preecho, mod-overlay, and rack-reachability suites.
 
 ---
 
@@ -174,5 +158,5 @@ they ship and are reflected in `features.md`.
 |-------|-------|--------|
 | LLM-console LED occasionally overlaps the global header log | Module-card LED clip is bounded but not zero-upward; the header log scrolling past the LLM console module reads the bloom in front | `upward_pad = 0` removed the obvious case; if the LED is still visible in front of the header on scroll, the LED's draw layer needs to drop below the header panel's layer (would require painting LEDs on a separate background-priority layer, or moving the LED draw earlier in the frame) |
 | Hoover doesn't sound like a hoover | DSP tuning, not a code bug | Needs filter sweep shape tuning |
-| Pre-echo ignores Hoover and An1x | Their `TriggerEvent` variants carry only `note` (no accent/slide); bass melodic preecho already ships | Planned (see "Hoover / An1x preecho" above) |
+| Pre-echo ignores Hoover and An1x | Their `TriggerEvent` variants carry only `note` (no accent / slide); bass melodic preecho already ships | Planned (see "Hoover / An1x preecho" above) |
 | NeuTts Selector mod jacks show only "—" | No NeuTts-specific LfoTarget yet | Needs TTS bus volume on AudioParams |
