@@ -100,13 +100,13 @@ impl ModuleKind {
         match self {
             //                                     W     H
             Self::StepSequencer => (grid_cols, 2),
-            Self::LlmConsole => (grid_cols, 1),
+            Self::LlmConsole => (grid_cols, 3),
             Self::MasterOutput => (grid_cols, 1),
             Self::AcidBass => (4, 7),
             // Drum kits are 4 rows tall so the 3 per-voice glass groups
             // (kick / snare / hihat or clap) each with an XY pad beside
             // their knobs don't get clipped / scrollbar'd.
-            Self::DrumKit808 => (3, 4),
+            Self::DrumKit808 => (4, 5),
             Self::DrumKit909 => (4, 4),
             Self::HooverLead => (4, 2),
             Self::An1xVoice => (6, 6),

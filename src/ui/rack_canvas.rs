@@ -229,7 +229,7 @@ pub fn draw_rack(app: &mut ImpulseApp, ctx: &egui::Context, ui: &mut egui::Ui) {
 
 // Grid helpers moved to `ui/rack_grid.rs`.
 use super::rack_grid::{
-    GRID_COL_W_ID, RACK_GAP, card_x, draw_zone_grid_dots, grid_col_w, grid_step, module_grid_h,
+    GRID_COL_W_ID, RACK_GAP, card_x, draw_zone_backdrop, grid_col_w, grid_step, module_grid_h,
     module_grid_w, sequencer_grid_h, sequencer_grid_rows,
 };
 
@@ -361,6 +361,8 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
         let zone_rect = ui
             .allocate_exact_size(egui::Vec2::new(available_w, zone_h), egui::Sense::hover())
             .0;
+        // Backdrop first so cards paint on top.
+        draw_zone_backdrop(ui, zone_left, zone_top, zone_top + zone_h, col_w);
 
         for &(id, kind, enabled, gc, gr) in &global_mods {
             let slot_w = module_grid_w(kind, col_w);
@@ -437,8 +439,6 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
                 }
             }
         }
-
-        draw_zone_grid_dots(ui, zone_left, zone_top, zone_top + zone_h, col_w);
     } // end zone_global_collapsed guard
 
     app.zone_y[2] = ui.cursor().top() - content_top;
@@ -499,6 +499,8 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
         let zone_rect = ui
             .allocate_exact_size(egui::Vec2::new(available_w, zone_h), egui::Sense::hover())
             .0;
+        // Backdrop first so cards paint on top.
+        draw_zone_backdrop(ui, zone_left, zone_top, zone_top + zone_h, col_w);
 
         // Place each module at its grid coordinates
         for &(id, kind, enabled, gc, gr) in &voice_mods {
@@ -566,7 +568,6 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
                 reorder_module_by_drop(app, id, drop_pos, Zone::Voice, zo, step, col_w);
             }
         }
-        draw_zone_grid_dots(ui, zone_left, zone_top, zone_top + zone_h, col_w);
     } // end zone_voice_collapsed guard
 
     app.zone_y[3] = ui.cursor().top() - content_top;
@@ -651,6 +652,8 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
         let zone_rect = ui
             .allocate_exact_size(egui::Vec2::new(available_w, zone_h), egui::Sense::hover())
             .0;
+        // Backdrop first so cards paint on top.
+        draw_zone_backdrop(ui, zone_left, zone_top, zone_top + zone_h, col_w);
         for &(id, kind, enabled, gc, gr, pad_expanded, eff_h) in &fx_mods {
             let slot_w = module_grid_w(kind, col_w);
             let slot_h = crate::ui::rack_grid::module_grid_h_rows(eff_h, col_w);
@@ -750,7 +753,6 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
                 reorder_module_by_drop(app, id, drop_pos, Zone::FxMod, zo, step, col_w);
             }
         }
-        draw_zone_grid_dots(ui, zone_left, zone_top, zone_top + zone_h, col_w);
     } // end zone_fxmod_collapsed guard
 
     ui.ctx().memory_mut(|m| {

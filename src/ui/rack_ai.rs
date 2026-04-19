@@ -5,7 +5,7 @@ use crate::state::{ModuleKind, Zone, rack::GRID_COLS};
 use crate::ui::ImpulseApp;
 use crate::ui::module_card::{self, PortPos};
 use crate::ui::rack_content::{draw_llm_agent_content, handle_title_drag, reorder_module_by_drop};
-use crate::ui::rack_grid::{card_x, draw_zone_grid_dots, grid_step, module_grid_h, module_grid_w};
+use crate::ui::rack_grid::{card_x, draw_zone_backdrop, grid_step, module_grid_h, module_grid_w};
 
 #[allow(clippy::too_many_arguments)]
 pub(super) fn draw_ai_zone(
@@ -74,6 +74,8 @@ pub(super) fn draw_ai_zone(
     let zone_rect = ui
         .allocate_exact_size(egui::Vec2::new(available_w, zone_h), egui::Sense::hover())
         .0;
+    // Backdrop first so cards paint on top.
+    draw_zone_backdrop(ui, zone_left, zone_top, zone_top + zone_h, col_w);
 
     for &(id, kind, enabled, gc, gr) in &ai_mods {
         let slot_w = module_grid_w(kind, col_w);
@@ -140,8 +142,6 @@ pub(super) fn draw_ai_zone(
             }
         }
     }
-
-    draw_zone_grid_dots(ui, zone_left, zone_top, zone_top + zone_h, col_w);
 }
 
 /// Fixed 6-line preview of an agent's last JSON response, painted directly

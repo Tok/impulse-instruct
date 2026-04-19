@@ -119,10 +119,14 @@ pub(super) fn card_x(zone_left: f32, gc: u8, col_span: u8, step: f32, flipped: b
     }
 }
 
-/// Paint subtle dots at grid intersections within a zone's content area.
-/// Called per-zone so each collapsible section gets its own aligned grid.
-/// `zone_left` is the X where modules actually start (cursor X at zone start).
-pub(super) fn draw_zone_grid_dots(
+/// Paint the rack zone backdrop — a subtle per-cell chrome gradient plus
+/// the dot grid at column intersections.  Called *before* the zone's card
+/// loop so cards paint on top; empty cells show the chrome tile.
+///
+/// The gradient is a soft vertical fade (light-gray top → darker-gray
+/// bottom) per grid cell, giving empty slots a brushed-metal look that
+/// reads on both the front (flipped=false) and the back panel.
+pub(super) fn draw_zone_backdrop(
     ui: &egui::Ui,
     zone_left: f32,
     zone_top: f32,
@@ -133,11 +137,61 @@ pub(super) fn draw_zone_grid_dots(
         return;
     }
     let painter = ui.painter();
-    let dot_color = Color32::from_gray(35);
     let step = col_w + RACK_GAP;
-    // Dots sit at gap centerlines — offset by half_gap so a card spanning
-    // columns c..c+n has dots at its left edge, between it and its neighbour,
-    // and at its right edge.
+
+    // ── Per-cell chrome gradient ────────────────────────────────────────────
+    // Each 1×1 grid cell is a rounded rect with a light top / dark bottom
+    // vertical gradient.  Uses epaint::Mesh with per-vertex colors — the
+    // simplest way to get a gradient without introducing a texture.
+    let top_col = Color32::from_gray(34);
+    let bot_col = Color32::from_gray(18);
+    let stroke_col = Color32::from_gray(42);
+    let mut y0 = zone_top;
+    while y0 < zone_bottom - 0.5 {
+        let y1 = (y0 + col_w).min(zone_bottom);
+        for c in 0..GRID_COLS {
+            let x0 = zone_left + c as f32 * step;
+            let x1 = x0 + col_w;
+            let rect = egui::Rect::from_min_max(egui::Pos2::new(x0, y0), egui::Pos2::new(x1, y1));
+            // Gradient fill (mesh with 4 vertices, 2 triangles).
+            let mut mesh = egui::epaint::Mesh::default();
+            let base = mesh.vertices.len() as u32;
+            let uv = egui::Pos2::ZERO;
+            mesh.vertices.push(egui::epaint::Vertex {
+                pos: rect.left_top(),
+                uv,
+                color: top_col,
+            });
+            mesh.vertices.push(egui::epaint::Vertex {
+                pos: rect.right_top(),
+                uv,
+                color: top_col,
+            });
+            mesh.vertices.push(egui::epaint::Vertex {
+                pos: rect.right_bottom(),
+                uv,
+                color: bot_col,
+            });
+            mesh.vertices.push(egui::epaint::Vertex {
+                pos: rect.left_bottom(),
+                uv,
+                color: bot_col,
+            });
+            mesh.add_triangle(base, base + 1, base + 2);
+            mesh.add_triangle(base, base + 2, base + 3);
+            painter.add(egui::Shape::mesh(mesh));
+            // Hairline separator between cells — reinforces the tile grid.
+            painter.rect_stroke(
+                rect,
+                egui::Rounding::same(1.0),
+                egui::Stroke::new(0.5, stroke_col),
+            );
+        }
+        y0 += step;
+    }
+
+    // ── Dot grid at column × row intersections ──────────────────────────────
+    let dot_color = Color32::from_gray(45);
     let half = RACK_GAP * 0.5;
     let ox = zone_left - half;
     let oy = zone_top - half;

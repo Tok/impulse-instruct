@@ -178,33 +178,40 @@ impl ImpulseApp {
     }
 
     pub(super) fn draw_llm_console_content(&mut self, ui: &mut egui::Ui) {
-        // Split the card into LEFT = round-robin cycle viz + score strip,
-        // RIGHT = existing console rows.  Cycle stays square; score strip
-        // is a fixed 26 px band directly under it, so adding scores never
-        // reshapes the right panel or pushes the prompt/log around.
+        // Console card is 3 grid rows tall.  Layout: LEFT = existing console
+        // rows (model/prompt/log), RIGHT = round-robin cycle viz (square, its
+        // width adapts to the card's 3-row height) with the score strip
+        // tucked beneath it.
         let total_w = ui.available_width();
         let total_h = ui.available_height();
-        // Reserve the score strip first so `cycle_size` can still fit the
-        // remaining height + stay square.
         let score_strip_h = 26.0_f32.min((total_h * 0.22).max(0.0));
         let cycle_budget_h = (total_h - score_strip_h).max(80.0);
-        let cycle_size = cycle_budget_h.max(96.0).min((total_w * 0.35).max(96.0));
+        // Cycle is a square — its width adapts to match the 3-row height
+        // budget.  Clamp so it never eats more than ~40% of the card width
+        // on very narrow layouts.
+        let cycle_size = cycle_budget_h.min((total_w * 0.4).max(120.0));
         let gap = 6.0;
-        let right_w = (total_w - cycle_size - gap).max(220.0);
+        let left_w = (total_w - cycle_size - gap).max(220.0);
 
         let cursor = ui.cursor().min;
-        let cycle_rect = egui::Rect::from_min_size(cursor, egui::vec2(cycle_size, cycle_size));
-        // Score strip fills the same width as the cycle, directly below
-        // it, inset a couple pixels so its bezel doesn't touch the cycle.
+        // Right-justified cycle: its right edge sits at the card's right
+        // edge, left panel gets everything before it.
+        let cycle_x = cursor.x + total_w - cycle_size;
+        let left_rect = egui::Rect::from_min_size(cursor, egui::vec2(left_w, total_h));
+        let cycle_rect = egui::Rect::from_min_size(
+            egui::pos2(cycle_x, cursor.y),
+            egui::vec2(cycle_size, cycle_size),
+        );
         let score_rect = egui::Rect::from_min_size(
-            egui::pos2(cursor.x, cursor.y + cycle_size + 2.0),
+            egui::pos2(cycle_x, cursor.y + cycle_size + 2.0),
             egui::vec2(cycle_size, (total_h - cycle_size - 4.0).max(0.0)),
         );
-        let right_rect = egui::Rect::from_min_size(
-            egui::pos2(cursor.x + cycle_size + gap, cursor.y),
-            egui::vec2(right_w, total_h),
-        );
 
+        ui.allocate_ui_at_rect(left_rect, |ui| {
+            ui.with_layout(egui::Layout::top_down(egui::Align::Min), |ui| {
+                self.draw_llm_console_inner(ui);
+            });
+        });
         ui.allocate_ui_at_rect(cycle_rect, |ui| {
             let secs_to_next_fire = self.jam_next_fire.map(|(at, _)| {
                 at.saturating_duration_since(std::time::Instant::now())
@@ -226,11 +233,6 @@ impl ImpulseApp {
                 super::widgets::lane_scores(ui, &s, score_rect);
             });
         }
-        ui.allocate_ui_at_rect(right_rect, |ui| {
-            ui.with_layout(egui::Layout::top_down(egui::Align::Min), |ui| {
-                self.draw_llm_console_inner(ui);
-            });
-        });
     }
 
     fn draw_llm_console_inner(&mut self, ui: &mut egui::Ui) {

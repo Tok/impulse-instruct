@@ -7,25 +7,23 @@ use crate::state::ParamMode;
 use crate::ui::rack_content::{render_three_pad_bare, render_two_pad_bare};
 use crate::ui::{ImpulseApp, theme, widgets};
 
-/// Vertical gap that stacks the voice label on top of the knobs + pad row
-/// inside each per-voice glass group.
-const DRUM_VOICE_HEADER_H: f32 = 12.0;
 /// Gap between the knob column and the pad column inside a voice group.
 const DRUM_KNOB_PAD_GAP: f32 = 8.0;
 
 /// Compute a pad size that uses the voice's XY preference but never
 /// steals so much width that the knob column can't fit its own knobs.
 /// `avail` is the card width, `knob_budget` is how many pixels the knob
-/// column should keep as a minimum.
-fn drum_pad_size(avail: f32, xy_pref: f32, knob_budget: f32) -> f32 {
+/// column should keep as a minimum.  `min_px`/`max_px` clamp the result —
+/// the 808 uses a larger range than the 909 because its (4,7) card has
+/// room for bigger pads.
+fn drum_pad_size(avail: f32, xy_pref: f32, knob_budget: f32, min_px: f32, max_px: f32) -> f32 {
     // glass_group has 14 px of horizontal chrome; leave that plus the gap +
     // ~40 px for the side cycle chip (or ~8 px for a 2-knob pad).  The caller
     // passes the side-chip cost inside `knob_budget` so this function just
-    // balances knobs vs pad from whatever's left.  Drums cap lower than the
-    // FX pads so all three voice groups fit the card's grid envelope.
+    // balances knobs vs pad from whatever's left.
     let inner = (avail - 14.0).max(100.0);
-    let for_pad = (inner - knob_budget - DRUM_KNOB_PAD_GAP).max(50.0);
-    xy_pref.min(for_pad).clamp(50.0, 80.0)
+    let for_pad = (inner - knob_budget - DRUM_KNOB_PAD_GAP).max(min_px);
+    xy_pref.min(for_pad).clamp(min_px, max_px)
 }
 
 pub fn draw_kit_a(app: &mut ImpulseApp, ui: &mut egui::Ui) {
@@ -80,33 +78,49 @@ pub fn draw_kit_a(app: &mut ImpulseApp, ui: &mut egui::Ui) {
     let xy_size = app.state.read().ui_prefs.effective_xy_px() * scale;
     let avail = ui.available_width();
 
-    // PAN slider — right-justified
-    ui.horizontal(|ui| {
-        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            if widgets::pan_slider(ui, &mut kpan_a, PAN_SLIDER_W) {
-                changed = true;
-            }
-            ui.label(
-                egui::RichText::new("PAN")
-                    .color(theme::SMOKE)
-                    .monospace()
-                    .size(8.0),
-            );
-        });
+    // 808 now has a (4,7) card with ~1.8× larger XY pads than the 909
+    // (50–80 → 90–144 px).  Every voice uses the SAME fixed knob-pane width
+    // and the SAME pad size so the pads line up vertically across voices.
+    ui.spacing_mut().item_spacing.x = super::KNOB_SPACING;
+
+    // PAN slider — centered at the top
+    widgets::centered_row(ui, |ui| {
+        ui.label(
+            egui::RichText::new("PAN")
+                .color(theme::SMOKE)
+                .monospace()
+                .size(8.0),
+        );
+        if widgets::pan_slider(ui, &mut kpan_a, PAN_SLIDER_W) {
+            changed = true;
+        }
     });
 
-    // ── KICK voice: knobs (left, 2 rows) + PITCH × DECAY × PUNCH pad (right)
-    widgets::glass_group_fill(ui, avail, avail, |ui| {
-        ui.spacing_mut().item_spacing.x = super::KNOB_SPACING;
+    // Fixed knob pane width — 4 knobs + 3 gaps + glass chrome (14 px).
+    // Every voice uses this same width so the pads align vertically, even
+    // HIHAT's 3-knob row centers inside the 4-knob-wide pane.
+    let knob_pane_w = 4.0 * ctrl.knob_size + 3.0 * super::KNOB_SPACING + 14.0;
+    // Shared XY pad size for all three voices (vertical alignment).
+    let pad_budget = (avail - knob_pane_w - DRUM_KNOB_PAD_GAP - 14.0).max(90.0);
+    let pad_size = (xy_size * 1.8).min(pad_budget).clamp(90.0, 144.0);
+
+    // Helper: draw a voice group — outer glass wrapping a label + a
+    // [knob-pane | pad] row, centered as a block.
+    let voice_header = |ui: &mut egui::Ui, txt: &str| {
         ui.label(
-            egui::RichText::new("KICK")
+            egui::RichText::new(txt)
                 .color(theme::FOG)
                 .monospace()
                 .size(9.5),
         );
-        ui.add_space(DRUM_VOICE_HEADER_H - 10.0);
-        ui.horizontal(|ui| {
-            ui.vertical(|ui| {
+    };
+
+    // ── KICK voice (2 knob rows)
+    widgets::glass_group_fill(ui, avail, avail, |ui| {
+        ui.spacing_mut().item_spacing.x = super::KNOB_SPACING;
+        voice_header(ui, "KICK");
+        ui.horizontal_top(|ui| {
+            widgets::glass_group_fill(ui, knob_pane_w, knob_pane_w, |ui| {
                 widgets::centered_row(ui, |ui| {
                     if widgets::param_control(ui, "PITCH", &mut kp, ParamMode::Free, ctrl).0 {
                         changed = true;
@@ -134,8 +148,6 @@ pub fn draw_kit_a(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                 });
             });
             ui.add_space(DRUM_KNOB_PAD_GAP);
-            // Pad + side cycle chip — 3-pair (PITCH × DECAY, × PUNCH combos)
-            let pad_size = drum_pad_size(avail, xy_size, ctrl.knob_size * 4.0 + 50.0);
             if render_three_pad_bare(
                 ui,
                 "kit_a_kick_xy",
@@ -151,17 +163,12 @@ pub fn draw_kit_a(app: &mut ImpulseApp, ui: &mut egui::Ui) {
 
     ui.add_space(super::GLASS_GAP);
 
-    // ── SNARE voice: knobs (left) + TONE × SNAPPY × DECAY pad (right)
+    // ── SNARE voice (1 knob row)
     widgets::glass_group_fill(ui, avail, avail, |ui| {
         ui.spacing_mut().item_spacing.x = super::KNOB_SPACING;
-        ui.label(
-            egui::RichText::new("SNARE")
-                .color(theme::FOG)
-                .monospace()
-                .size(9.5),
-        );
-        ui.horizontal(|ui| {
-            ui.vertical(|ui| {
+        voice_header(ui, "SNARE");
+        ui.horizontal_top(|ui| {
+            widgets::glass_group_fill(ui, knob_pane_w, knob_pane_w, |ui| {
                 widgets::centered_row(ui, |ui| {
                     if widgets::param_control(ui, "TONE", &mut st, ParamMode::Free, ctrl).0 {
                         changed = true;
@@ -178,7 +185,6 @@ pub fn draw_kit_a(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                 });
             });
             ui.add_space(DRUM_KNOB_PAD_GAP);
-            let pad_size = drum_pad_size(avail, xy_size, ctrl.knob_size * 4.0 + 50.0);
             if render_three_pad_bare(
                 ui,
                 "kit_a_snare_xy",
@@ -194,17 +200,12 @@ pub fn draw_kit_a(app: &mut ImpulseApp, ui: &mut egui::Ui) {
 
     ui.add_space(super::GLASS_GAP);
 
-    // ── HIHAT voice: knobs (left) + CLOSED × OPEN 2-pair pad (right)
+    // ── HIHAT voice (1 knob row, 3 knobs — centers inside the 4-wide pane)
     widgets::glass_group_fill(ui, avail, avail, |ui| {
         ui.spacing_mut().item_spacing.x = super::KNOB_SPACING;
-        ui.label(
-            egui::RichText::new("HIHAT")
-                .color(theme::FOG)
-                .monospace()
-                .size(9.5),
-        );
-        ui.horizontal(|ui| {
-            ui.vertical(|ui| {
+        voice_header(ui, "HIHAT");
+        ui.horizontal_top(|ui| {
+            widgets::glass_group_fill(ui, knob_pane_w, knob_pane_w, |ui| {
                 widgets::centered_row(ui, |ui| {
                     if widgets::param_control(ui, "CLOSED", &mut hcd, ParamMode::Free, ctrl).0 {
                         changed = true;
@@ -218,7 +219,6 @@ pub fn draw_kit_a(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                 });
             });
             ui.add_space(DRUM_KNOB_PAD_GAP);
-            let pad_size = drum_pad_size(avail, xy_size, ctrl.knob_size * 3.0 + 10.0);
             if render_two_pad_bare(
                 ui,
                 "kit_a_hihat_xy",
@@ -369,7 +369,7 @@ pub fn draw_kit_b(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                 });
             });
             ui.add_space(DRUM_KNOB_PAD_GAP);
-            let pad_size = drum_pad_size(avail, xy_size, ctrl.knob_size * 4.0 + 50.0);
+            let pad_size = drum_pad_size(avail, xy_size, ctrl.knob_size * 4.0 + 50.0, 50.0, 80.0);
             if render_three_pad_bare(
                 ui,
                 "kit_b_kick_xy",
@@ -412,7 +412,7 @@ pub fn draw_kit_b(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                 });
             });
             ui.add_space(DRUM_KNOB_PAD_GAP);
-            let pad_size = drum_pad_size(avail, xy_size, ctrl.knob_size * 4.0 + 50.0);
+            let pad_size = drum_pad_size(avail, xy_size, ctrl.knob_size * 4.0 + 50.0, 50.0, 80.0);
             if render_three_pad_bare(
                 ui,
                 "kit_b_snare_xy",
@@ -449,7 +449,7 @@ pub fn draw_kit_b(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                 });
             });
             ui.add_space(DRUM_KNOB_PAD_GAP);
-            let pad_size = drum_pad_size(avail, xy_size, ctrl.knob_size * 2.0 + 10.0);
+            let pad_size = drum_pad_size(avail, xy_size, ctrl.knob_size * 2.0 + 10.0, 50.0, 80.0);
             if render_two_pad_bare(
                 ui,
                 "kit_b_clap_xy",
