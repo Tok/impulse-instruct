@@ -121,11 +121,7 @@ impl eframe::App for ImpulseApp {
                         }
                     };
                     if let Some(aid) = next {
-                        self.send_llm_infer(
-                            "continue jamming, evolve the pattern".to_string(),
-                            false,
-                            Some(aid),
-                        );
+                        self.send_llm_infer(self.jam_prompt_for_active_style(), false, Some(aid));
                         self.last_jam_kickoff = std::time::Instant::now();
                     }
                 } else {
