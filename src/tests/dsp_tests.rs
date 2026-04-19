@@ -476,50 +476,50 @@ mod gated_reverb_envelope_tests {
 #[cfg(test)]
 mod lfo_value_tests {
     use crate::audio::dsp::fx_math::lfo_value_at;
+    use crate::state::LfoWaveform;
 
     #[test]
     fn sine_matches_textbook_quarter_cycles() {
-        assert!((lfo_value_at(0.0, 0, 0.0) - 0.0).abs() < 1e-5);
-        assert!((lfo_value_at(0.25, 0, 0.0) - 1.0).abs() < 1e-5);
-        assert!((lfo_value_at(0.5, 0, 0.0) - 0.0).abs() < 1e-5);
-        assert!((lfo_value_at(0.75, 0, 0.0) + 1.0).abs() < 1e-5);
+        assert!((lfo_value_at(0.0, LfoWaveform::Sine, 0.0) - 0.0).abs() < 1e-5);
+        assert!((lfo_value_at(0.25, LfoWaveform::Sine, 0.0) - 1.0).abs() < 1e-5);
+        assert!((lfo_value_at(0.5, LfoWaveform::Sine, 0.0) - 0.0).abs() < 1e-5);
+        assert!((lfo_value_at(0.75, LfoWaveform::Sine, 0.0) + 1.0).abs() < 1e-5);
     }
 
     #[test]
     fn triangle_peaks_at_half_phase() {
         // 1 - 4*|phase - 0.5|
-        assert!((lfo_value_at(0.0, 1, 0.0) + 1.0).abs() < 1e-5);
-        assert!((lfo_value_at(0.5, 1, 0.0) - 1.0).abs() < 1e-5);
-        assert!((lfo_value_at(1.0, 1, 0.0) + 1.0).abs() < 1e-5);
+        assert!((lfo_value_at(0.0, LfoWaveform::Triangle, 0.0) + 1.0).abs() < 1e-5);
+        assert!((lfo_value_at(0.5, LfoWaveform::Triangle, 0.0) - 1.0).abs() < 1e-5);
+        assert!((lfo_value_at(1.0, LfoWaveform::Triangle, 0.0) + 1.0).abs() < 1e-5);
     }
 
     #[test]
     fn saw_up_ramps_minus1_to_plus1() {
-        assert!((lfo_value_at(0.0, 2, 0.0) + 1.0).abs() < 1e-5);
-        assert!((lfo_value_at(0.5, 2, 0.0) - 0.0).abs() < 1e-5);
-        assert!((lfo_value_at(1.0, 2, 0.0) - 1.0).abs() < 1e-5);
+        assert!((lfo_value_at(0.0, LfoWaveform::Saw, 0.0) + 1.0).abs() < 1e-5);
+        assert!((lfo_value_at(0.5, LfoWaveform::Saw, 0.0) - 0.0).abs() < 1e-5);
+        assert!((lfo_value_at(1.0, LfoWaveform::Saw, 0.0) - 1.0).abs() < 1e-5);
     }
 
     #[test]
     fn saw_down_ramps_plus1_to_minus1() {
-        assert!((lfo_value_at(0.0, 3, 0.0) - 1.0).abs() < 1e-5);
-        assert!((lfo_value_at(0.5, 3, 0.0) - 0.0).abs() < 1e-5);
-        assert!((lfo_value_at(1.0, 3, 0.0) + 1.0).abs() < 1e-5);
+        assert!((lfo_value_at(0.0, LfoWaveform::InvSaw, 0.0) - 1.0).abs() < 1e-5);
+        assert!((lfo_value_at(0.5, LfoWaveform::InvSaw, 0.0) - 0.0).abs() < 1e-5);
+        assert!((lfo_value_at(1.0, LfoWaveform::InvSaw, 0.0) + 1.0).abs() < 1e-5);
     }
 
     #[test]
     fn square_flips_at_half_phase() {
-        assert_eq!(lfo_value_at(0.0, 4, 0.0), 1.0);
-        assert_eq!(lfo_value_at(0.49, 4, 0.0), 1.0);
-        assert_eq!(lfo_value_at(0.5, 4, 0.0), -1.0);
-        assert_eq!(lfo_value_at(0.99, 4, 0.0), -1.0);
+        assert_eq!(lfo_value_at(0.0, LfoWaveform::Square, 0.0), 1.0);
+        assert_eq!(lfo_value_at(0.49, LfoWaveform::Square, 0.0), 1.0);
+        assert_eq!(lfo_value_at(0.5, LfoWaveform::Square, 0.0), -1.0);
+        assert_eq!(lfo_value_at(0.99, LfoWaveform::Square, 0.0), -1.0);
     }
 
     #[test]
     fn sample_and_hold_returns_held_value_regardless_of_phase() {
-        // Any waveform code outside 0..=4 is treated as S&H.
-        assert_eq!(lfo_value_at(0.0, 5, 0.7), 0.7);
-        assert_eq!(lfo_value_at(0.5, 99, -0.3), -0.3);
+        assert_eq!(lfo_value_at(0.0, LfoWaveform::SampleAndHold, 0.7), 0.7);
+        assert_eq!(lfo_value_at(0.5, LfoWaveform::SampleAndHold, -0.3), -0.3);
     }
 }
 

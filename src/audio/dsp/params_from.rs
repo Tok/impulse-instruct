@@ -115,7 +115,7 @@ impl AudioParams {
             sidechain_release: s.fx.sidechain_release,
             compressor_multiband: s.fx.compressor_multiband,
             stereo_width: s.fx.stereo_width,
-            tuning: s.fx.tuning,
+            tuning: crate::audio::dsp::TuningSystem::from_u8(s.fx.tuning),
             bitcrush_bits: s.fx.bitcrush_bits,
             bitcrush_rate: s.fx.bitcrush_rate,
             bitcrush_mix: s.fx.bitcrush_mix,
@@ -154,7 +154,7 @@ impl AudioParams {
             lfo: {
                 let mut arr = [LfoParamsCopy {
                     enabled: false,
-                    waveform: 0,
+                    waveform: LfoWaveform::Sine,
                     rate: 0.2,
                     depth: 0.3,
                     phase_offset: 0.0,
@@ -163,14 +163,7 @@ impl AudioParams {
                 for (i, slot) in s.lfo.iter().enumerate() {
                     arr[i] = LfoParamsCopy {
                         enabled: slot.enabled,
-                        waveform: match slot.waveform {
-                            LfoWaveform::Sine => 0,
-                            LfoWaveform::Triangle => 1,
-                            LfoWaveform::Saw => 2,
-                            LfoWaveform::InvSaw => 3,
-                            LfoWaveform::Square => 4,
-                            LfoWaveform::SampleAndHold => 5,
-                        },
+                        waveform: slot.waveform,
                         rate: slot.rate,
                         depth: slot.depth,
                         phase_offset: slot.phase_offset,

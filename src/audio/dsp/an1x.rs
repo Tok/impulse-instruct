@@ -307,8 +307,7 @@ impl An1xVoice {
         // Accent lift — same shape as HooverVoice::process.  Keeps
         // accent=0 triggers at their legacy level so existing patterns
         // don't get quieter after preecho landed.
-        const ACCENT_LIFT: f32 = 0.3;
-        let accent_gain = 1.0 + ACCENT_LIFT * self.accent;
+        let accent_gain = 1.0 + super::dsp_util::ACCENT_LIFT * self.accent;
 
         filtered * amp * p.an1x_volume * accent_gain
     }

@@ -10,6 +10,7 @@ use crate::audio::dsp::fx_math::{
     BitcrushState, bitcrush_step, drive_step, free_eg_value_at, gated_reverb_envelope_step,
     lfo_value_at, sidechain_duck, sidechain_envelope_step, waveshaper_step,
 };
+use crate::state::LfoWaveform;
 
 // ─── Waveshaper / drive ──────────────────────────────────────────────────────
 
@@ -166,45 +167,44 @@ fn gated_reverb_opens_on_detection_and_decays_without_it() {
 #[test]
 fn lfo_sine_hits_zero_and_peaks_at_quarter_phase() {
     // phase 0 → sin(0) = 0; phase 0.25 → sin(τ/4) = 1; phase 0.75 → -1.
-    assert!(lfo_value_at(0.0, 0, 0.0).abs() < 1e-4);
-    assert!((lfo_value_at(0.25, 0, 0.0) - 1.0).abs() < 1e-4);
-    assert!((lfo_value_at(0.75, 0, 0.0) + 1.0).abs() < 1e-4);
+    assert!(lfo_value_at(0.0, LfoWaveform::Sine, 0.0).abs() < 1e-4);
+    assert!((lfo_value_at(0.25, LfoWaveform::Sine, 0.0) - 1.0).abs() < 1e-4);
+    assert!((lfo_value_at(0.75, LfoWaveform::Sine, 0.0) + 1.0).abs() < 1e-4);
 }
 
 #[test]
 fn lfo_triangle_peaks_at_half_and_bottoms_at_endpoints() {
     // phase=0: 1 - 4*0.5 = -1; phase=0.5: 1 - 0 = 1; phase=1 mirrors 0.
-    assert!((lfo_value_at(0.0, 1, 0.0) + 1.0).abs() < 1e-4);
-    assert!((lfo_value_at(0.5, 1, 0.0) - 1.0).abs() < 1e-4);
+    assert!((lfo_value_at(0.0, LfoWaveform::Triangle, 0.0) + 1.0).abs() < 1e-4);
+    assert!((lfo_value_at(0.5, LfoWaveform::Triangle, 0.0) - 1.0).abs() < 1e-4);
 }
 
 #[test]
 fn lfo_saws_are_monotonic() {
-    // Saw-up ramps from -1 to +1; saw-down ramps from +1 to -1.
-    let up_low = lfo_value_at(0.0, 2, 0.0);
-    let up_high = lfo_value_at(1.0, 2, 0.0);
+    // Saw ramps from -1 to +1; InvSaw ramps from +1 to -1.
+    let up_low = lfo_value_at(0.0, LfoWaveform::Saw, 0.0);
+    let up_high = lfo_value_at(1.0, LfoWaveform::Saw, 0.0);
     assert!(up_low < up_high);
     assert!((up_low + 1.0).abs() < 1e-4);
     assert!((up_high - 1.0).abs() < 1e-4);
 
-    let down_low = lfo_value_at(0.0, 3, 0.0);
-    let down_high = lfo_value_at(1.0, 3, 0.0);
+    let down_low = lfo_value_at(0.0, LfoWaveform::InvSaw, 0.0);
+    let down_high = lfo_value_at(1.0, LfoWaveform::InvSaw, 0.0);
     assert!(down_low > down_high);
 }
 
 #[test]
 fn lfo_square_steps_at_half() {
-    assert_eq!(lfo_value_at(0.0, 4, 0.0), 1.0);
-    assert_eq!(lfo_value_at(0.49, 4, 0.0), 1.0);
-    assert_eq!(lfo_value_at(0.51, 4, 0.0), -1.0);
+    assert_eq!(lfo_value_at(0.0, LfoWaveform::Square, 0.0), 1.0);
+    assert_eq!(lfo_value_at(0.49, LfoWaveform::Square, 0.0), 1.0);
+    assert_eq!(lfo_value_at(0.51, LfoWaveform::Square, 0.0), -1.0);
 }
 
 #[test]
 fn lfo_sample_and_hold_returns_held_value_unchanged() {
-    // Any waveform code > 4 is S&H; the caller manages the held value,
-    // so this fn just returns whatever it was given.
-    assert_eq!(lfo_value_at(0.3, 99, 0.42), 0.42);
-    assert_eq!(lfo_value_at(0.7, 5, -0.9), -0.9);
+    // Caller manages the held value; this fn just returns whatever it was given.
+    assert_eq!(lfo_value_at(0.3, LfoWaveform::SampleAndHold, 0.42), 0.42);
+    assert_eq!(lfo_value_at(0.7, LfoWaveform::SampleAndHold, -0.9), -0.9);
 }
 
 // ─── Free-EG ────────────────────────────────────────────────────────────────

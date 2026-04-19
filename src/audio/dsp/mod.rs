@@ -17,7 +17,7 @@ pub mod voices;
 use an1x::An1xVoice;
 use bass303::Bass303;
 use dsp_util::*;
-pub use dsp_util::{hz_to_midi, midi_to_hz, midi_to_hz_tuned};
+pub use dsp_util::{TuningSystem, hz_to_midi, midi_to_hz, midi_to_hz_tuned};
 use fx::*;
 use fx_math::{
     free_eg_value_at, gated_reverb_envelope_step, lfo_value_at, sidechain_duck,
@@ -390,7 +390,7 @@ impl DspState {
             let phase = (self.lfo_phases[i] + lp.phase_offset) % 1.0;
             // S&H re-latches on each phase wrap; lfo_value_at itself is
             // pure and just looks up the held value, so the latch lives here.
-            if lp.waveform > 4 && wrapped {
+            if lp.waveform == crate::state::LfoWaveform::SampleAndHold && wrapped {
                 self.lfo_sh_held[i] = self.lfo_noise.next();
             }
             let lfo_val = lfo_value_at(phase, lp.waveform, self.lfo_sh_held[i]);

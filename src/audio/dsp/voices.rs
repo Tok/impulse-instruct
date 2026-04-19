@@ -475,7 +475,13 @@ impl HooverVoice {
         }
     }
 
-    pub(super) fn trigger(&mut self, note: u8, tuning: u8, accent: f32, slide: f32) {
+    pub(super) fn trigger(
+        &mut self,
+        note: u8,
+        tuning: super::TuningSystem,
+        accent: f32,
+        slide: f32,
+    ) {
         let new_freq = super::dsp_util::midi_to_hz_tuned(note, tuning);
         self.accent = accent.clamp(0.0, 1.0);
         self.slide = slide.clamp(0.0, 1.0);
@@ -590,8 +596,7 @@ impl HooverVoice {
 
         // Accent lift: 0 leaves baseline, 1 scales output up by ACCENT_LIFT.
         // Keeps legacy un-accented triggers at their original level.
-        const ACCENT_LIFT: f32 = 0.3;
-        let accent_gain = 1.0 + ACCENT_LIFT * self.accent;
+        let accent_gain = 1.0 + super::dsp_util::ACCENT_LIFT * self.accent;
 
         saturated * self.amp_env * p.hoover_volume * accent_gain
     }

@@ -185,12 +185,11 @@ pub struct ModRouteCopy {
 #[derive(Clone, Copy, Debug)]
 pub struct LfoParamsCopy {
     pub enabled: bool,
-    pub waveform: u8,      // 0=Sine 1=Triangle 2=Saw 3=InvSaw 4=Square 5=S&H
+    pub waveform: crate::state::LfoWaveform,
     pub rate: f32,         // 0–1
     pub depth: f32,        // 0–1
     pub phase_offset: f32, // 0–1
-    pub target: u8,        // 0=None 1=BassCutoff 2=BassResonance 3=BassPitch 4=BassVolume
-                           // 5=ReverbMix 6=DelayTime 7=DelayFeedback 8=ChorusMix 9=ChorusRate 10=Kick808Pitch
+    pub target: u8,        // opcode from `lfo_target_to_u8`
 }
 
 /// Per-voice bass synth params — one per Bass303 instance.
@@ -223,11 +222,11 @@ pub struct BassVoiceParams {
     pub filter_release: f32, // 0–1 → 0–2s
     pub pulse_width: f32,    // 0.05..0.95 (centered at 0.5 = square)
     // Per-voice LFO — SH-101 style.  target=0 (Off) disables.
-    pub lfo_target: u8,   // 0=Off 1=Pitch 2=PWM 3=Cutoff 4=Amp
-    pub lfo_rate: f32,    // 0–1 → 0.01–20 Hz (free)
-    pub lfo_depth: f32,   // 0–1
-    pub lfo_waveform: u8, // mirror of LfoWaveform index (Sine=1, Tri=2, Saw=3, InvSaw=4, Square=5)
-    pub lfo_delay: f32,   // 0–1 → 0–4 s fade-in
+    pub lfo_target: u8, // 0=Off 1=Pitch 2=PWM 3=Cutoff 4=Amp
+    pub lfo_rate: f32,  // 0–1 → 0.01–20 Hz (free)
+    pub lfo_depth: f32, // 0–1
+    pub lfo_waveform: crate::state::LfoWaveform,
+    pub lfo_delay: f32, // 0–1 → 0–4 s fade-in
     pub lfo_bpm_sync: bool,
     pub lfo_sync_beats: f32,
 }
@@ -274,16 +273,11 @@ impl BassVoiceParams {
             },
             lfo_rate: b.lfo_rate.clamp(0.0, 1.0),
             lfo_depth: b.lfo_depth.clamp(0.0, 1.0),
-            lfo_waveform: match b.lfo_waveform {
-                crate::state::LfoWaveform::Sine => 1,
-                crate::state::LfoWaveform::Triangle => 2,
-                crate::state::LfoWaveform::Saw => 3,
-                crate::state::LfoWaveform::InvSaw => 4,
-                crate::state::LfoWaveform::Square => 5,
-                // SampleAndHold not supported by the bass voice LFO yet;
-                // fall back to square (closest stepped-ish behavior).
-                _ => 5,
-            },
+            // Pass the enum through verbatim — the bass voice's
+            // `lfo_wave` dispatch matches on LfoWaveform directly.
+            // SampleAndHold isn't modelled by the per-voice LFO; the
+            // dispatch falls back to sine for it.
+            lfo_waveform: b.lfo_waveform,
             lfo_delay: b.lfo_delay.clamp(0.0, 1.0),
             lfo_bpm_sync: b.lfo_bpm_sync,
             lfo_sync_beats: b.lfo_sync_beats.clamp(0.03125, 16.0),
@@ -407,7 +401,7 @@ pub struct AudioParams {
     pub sidechain_release: f32,
     pub compressor_multiband: f32,
     pub stereo_width: f32, // 0=mono, 0.5=normal, 1=wide
-    pub tuning: u8,        // 0=12-TET, 1=just, 2=slendro, 3=pelog
+    pub tuning: super::TuningSystem,
     // Bitcrush
     pub bitcrush_bits: f32,
     pub bitcrush_rate: f32,

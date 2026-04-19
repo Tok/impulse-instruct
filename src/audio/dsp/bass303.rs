@@ -118,25 +118,33 @@ pub(super) fn lfo_fade_step(prev_fade: f32, sample_rate: f32, lfo_delay: f32) ->
     }
 }
 
-pub(super) fn lfo_wave(p: f32, waveform: u8) -> f32 {
+pub(super) fn lfo_wave(p: f32, waveform: crate::state::LfoWaveform) -> f32 {
+    use crate::state::LfoWaveform;
     let p = p.rem_euclid(1.0);
     match waveform {
-        2 => 4.0 * (p - 0.5).abs() - 1.0, // triangle
-        3 => 2.0 * p - 1.0,               // saw (up)
-        4 => 1.0 - 2.0 * p,               // inv saw (down)
-        5 => {
+        LfoWaveform::Triangle => 4.0 * (p - 0.5).abs() - 1.0,
+        LfoWaveform::Saw => 2.0 * p - 1.0,
+        LfoWaveform::InvSaw => 1.0 - 2.0 * p,
+        LfoWaveform::Square => {
             if p < 0.5 {
                 1.0
             } else {
                 -1.0
             }
-        } // square
-        _ => (p * std::f32::consts::TAU).sin(), // sine (default)
+        }
+        // Sine + S&H (unsupported by bass voice LFO) fall back to sine.
+        LfoWaveform::Sine | LfoWaveform::SampleAndHold => (p * std::f32::consts::TAU).sin(),
     }
 }
 
 impl Bass303 {
-    pub(super) fn trigger(&mut self, note: u8, accent: f32, slide: f32, tuning: u8) {
+    pub(super) fn trigger(
+        &mut self,
+        note: u8,
+        accent: f32,
+        slide: f32,
+        tuning: super::TuningSystem,
+    ) {
         let new_freq = super::dsp_util::midi_to_hz_tuned(note, tuning);
         // `slide` is a property of the NEW step (intensity 0..=1): any
         // positive value asks the voice to glide *into* this note.  The
@@ -490,12 +498,20 @@ mod tests {
         v.filt_env = 0.0;
         v.slide = 1.0; // previous trigger was a slide, so glide-in is armed
         v.freq = 110.0;
-        v.trigger(48, 0.0, 1.0, 0); // new slide note
+        v.trigger(48, 0.0, 1.0, super::super::TuningSystem::TwelveTet); // new slide note
         assert!(matches!(v.amp_phase, EnvPhase::Attack));
         assert!(matches!(v.filt_phase, EnvPhase::Attack));
         // freq preserved for glide; target_freq updated.
         assert!((v.freq - 110.0).abs() < 1e-3);
-        assert!((v.target_freq - super::super::dsp_util::midi_to_hz_tuned(48, 0)).abs() < 1e-3);
+        assert!(
+            (v.target_freq
+                - super::super::dsp_util::midi_to_hz_tuned(
+                    48,
+                    super::super::TuningSystem::TwelveTet
+                ))
+            .abs()
+                < 1e-3
+        );
     }
 
     #[test]
@@ -503,8 +519,9 @@ mod tests {
         let mut v = Bass303::default();
         v.slide = 0.0; // previous was not a slide
         v.freq = 110.0;
-        v.trigger(60, 0.0, 0.0, 0);
-        let expected = super::super::dsp_util::midi_to_hz_tuned(60, 0);
+        v.trigger(60, 0.0, 0.0, super::super::TuningSystem::TwelveTet);
+        let expected =
+            super::super::dsp_util::midi_to_hz_tuned(60, super::super::TuningSystem::TwelveTet);
         assert!(
             (v.freq - expected).abs() < 1e-3,
             "non-slide trigger should jump freq to new note; got {}, want {}",
@@ -515,20 +532,23 @@ mod tests {
 
     #[test]
     fn lfo_wave_shapes_have_expected_endpoints() {
+        use crate::state::LfoWaveform::*;
         // Sine: 0 at p=0, 0 at p=0.5; positive peak at 0.25.
-        assert!((lfo_wave(0.0, 0)).abs() < 1e-5);
-        assert!((lfo_wave(0.5, 0)).abs() < 1e-5);
-        assert!(lfo_wave(0.25, 0) > 0.99);
-        // Saw (3): -1 at p=0, +1 at p=1.
-        assert!((lfo_wave(0.0, 3) + 1.0).abs() < 1e-5);
-        assert!((lfo_wave(0.999, 3) - 0.998).abs() < 1e-2);
-        // Inv saw (4): +1 at p=0.
-        assert!((lfo_wave(0.0, 4) - 1.0).abs() < 1e-5);
-        // Square (5): +1 first half, -1 second half.
-        assert_eq!(lfo_wave(0.25, 5), 1.0);
-        assert_eq!(lfo_wave(0.75, 5), -1.0);
-        // Triangle (2): +1 at 0 (peak), -1 at 0.5 (valley).
-        assert!((lfo_wave(0.0, 2) - 1.0).abs() < 1e-5);
-        assert!((lfo_wave(0.5, 2) + 1.0).abs() < 1e-5);
+        assert!((lfo_wave(0.0, Sine)).abs() < 1e-5);
+        assert!((lfo_wave(0.5, Sine)).abs() < 1e-5);
+        assert!(lfo_wave(0.25, Sine) > 0.99);
+        // Saw: -1 at p=0, +1 at p=1.
+        assert!((lfo_wave(0.0, Saw) + 1.0).abs() < 1e-5);
+        assert!((lfo_wave(0.999, Saw) - 0.998).abs() < 1e-2);
+        // Inv saw: +1 at p=0.
+        assert!((lfo_wave(0.0, InvSaw) - 1.0).abs() < 1e-5);
+        // Square: +1 first half, -1 second half.
+        assert_eq!(lfo_wave(0.25, Square), 1.0);
+        assert_eq!(lfo_wave(0.75, Square), -1.0);
+        // Triangle: +1 at 0 (peak), -1 at 0.5 (valley).
+        assert!((lfo_wave(0.0, Triangle) - 1.0).abs() < 1e-5);
+        assert!((lfo_wave(0.5, Triangle) + 1.0).abs() < 1e-5);
+        // S&H falls back to sine (not supported on bass voice).
+        assert!((lfo_wave(0.0, SampleAndHold)).abs() < 1e-5);
     }
 }

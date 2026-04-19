@@ -132,29 +132,26 @@ pub fn gated_reverb_envelope_step(
     }
 }
 
-/// Pure LFO value lookup for a normalised phase 0..1.  Waveform codes
-/// match the ones used in `process_block`:
-///   0 = sine, 1 = triangle, 2 = saw-up, 3 = saw-down, 4 = square,
-///   anything else = sample-and-hold (caller tracks the held value).
-///
-/// For S&H, callers pass the most recently latched value as
-/// `sh_held` — this function never updates it; the caller decides
-/// when a phase wrap happened and re-latches via its noise source.
-pub fn lfo_value_at(phase: f32, waveform: u8, sh_held: f32) -> f32 {
+/// Pure LFO value lookup for a normalised phase 0..1.  For S&H, callers
+/// pass the most recently latched value as `sh_held` — this function
+/// never updates it; the caller decides when a phase wrap happened and
+/// re-latches via its noise source.
+pub fn lfo_value_at(phase: f32, waveform: crate::state::LfoWaveform, sh_held: f32) -> f32 {
+    use crate::state::LfoWaveform;
     use std::f32::consts::TAU;
     match waveform {
-        0 => (phase * TAU).sin(),
-        1 => 1.0 - 4.0 * (phase - 0.5).abs(),
-        2 => phase * 2.0 - 1.0,
-        3 => 1.0 - phase * 2.0,
-        4 => {
+        LfoWaveform::Sine => (phase * TAU).sin(),
+        LfoWaveform::Triangle => 1.0 - 4.0 * (phase - 0.5).abs(),
+        LfoWaveform::Saw => phase * 2.0 - 1.0,
+        LfoWaveform::InvSaw => 1.0 - phase * 2.0,
+        LfoWaveform::Square => {
             if phase < 0.5 {
                 1.0
             } else {
                 -1.0
             }
         }
-        _ => sh_held,
+        LfoWaveform::SampleAndHold => sh_held,
     }
 }
 
