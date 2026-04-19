@@ -5,6 +5,7 @@ mod bass303;
 mod dsp_util;
 pub mod fx;
 pub mod fx_math;
+mod fx_step;
 pub mod gabber_kick;
 pub mod granular_voice;
 pub mod mod_apply;
@@ -19,8 +20,8 @@ use dsp_util::*;
 pub use dsp_util::{hz_to_midi, midi_to_hz};
 use fx::*;
 use fx_math::{
-    BitcrushState, bitcrush_step, drive_step, free_eg_value_at, gated_reverb_envelope_step,
-    lfo_value_at, sidechain_duck, sidechain_envelope_step, waveshaper_step,
+    free_eg_value_at, gated_reverb_envelope_step, lfo_value_at, sidechain_duck,
+    sidechain_envelope_step,
 };
 use gabber_kick::GabberKick;
 use granular_voice::GranularVoice;
@@ -32,7 +33,7 @@ use voices::*;
 use crate::sequencer::TriggerEvent;
 use crate::state::{DrumVoice, FxPlan, FxStep, ModuleKind};
 
-use rev_tap::{REV_BUF_LEN, rev_tap_len_for_quant, step_rev_tap};
+use rev_tap::REV_BUF_LEN;
 
 // ─── Full DSP state ───────────────────────────────────────────────────────────
 
@@ -192,158 +193,6 @@ impl DspState {
 
     pub fn set_fx_plan(&mut self, plan: FxPlan) {
         self.fx_plan = plan;
-    }
-
-    /// Apply one FX step to `sig` and return the result.
-    /// Must not hold any borrow on `self.fx_plan` when called.
-    fn apply_fx_step(
-        &mut self,
-        step: FxStep,
-        sig: f32,
-        p: &AudioParams,
-        delay_samples: usize,
-        sr: f32,
-        gate_env: f32,
-    ) -> f32 {
-        match step {
-            FxStep::Waveshaper => waveshaper_step(sig, p.waveshaper_drive, p.waveshaper_mix),
-            FxStep::Reverb => {
-                if p.reverb_mix > 0.001 || p.reverb_freeze {
-                    let rev_in = step_rev_tap(
-                        &mut self.rev_buf_reverb,
-                        &mut self.rev_head_reverb,
-                        &mut self.rev_play_reverb,
-                        sig,
-                        rev_tap_len_for_quant(p.reverb_rev_quant, sr, p.sequencer_bpm),
-                    );
-                    let r = &mut self.reverb;
-                    let (sz, dp, fz) = (p.reverb_size, p.reverb_damp, p.reverb_freeze);
-                    let wet = match p.reverb_dir {
-                        1 => r.process(rev_in, sz, dp, fz),
-                        2 => r.process(sig, sz, dp, fz) + r.process(rev_in, sz, dp, false) * 0.7,
-                        _ => r.process(sig, sz, dp, fz),
-                    };
-                    if fz {
-                        wet
-                    } else {
-                        sig * (1.0 - p.reverb_mix) + wet * p.reverb_mix * gate_env
-                    }
-                } else {
-                    sig
-                }
-            }
-            FxStep::Delay => {
-                let rev_in = step_rev_tap(
-                    &mut self.rev_buf_delay,
-                    &mut self.rev_head_delay,
-                    &mut self.rev_play_delay,
-                    sig,
-                    rev_tap_len_for_quant(p.delay_rev_quant, sr, p.sequencer_bpm),
-                );
-                let d = &mut self.delay;
-                let (ds, fb, wf, sat, fz, hpf, lpf) = (
-                    delay_samples,
-                    p.delay_feedback,
-                    p.delay_wow_flutter,
-                    p.delay_saturation,
-                    p.delay_freeze,
-                    p.delay_hpf,
-                    p.delay_lpf,
-                );
-                let wet = match p.delay_dir {
-                    1 => d.process_tape(rev_in, ds, fb, wf, sat, fz, hpf, lpf, sr),
-                    2 => {
-                        d.process_tape(sig, ds, fb, wf, sat, fz, hpf, lpf, sr)
-                            + d.process_tape(rev_in, ds, fb, wf, sat, fz, hpf, lpf, sr) * 0.7
-                    }
-                    _ => d.process_tape(sig, ds, fb, wf, sat, fz, hpf, lpf, sr),
-                };
-                sig * (1.0 - p.delay_mix) + wet * p.delay_mix
-            }
-            FxStep::Bitcrush => {
-                let state = BitcrushState {
-                    held: self.bitcrush_held,
-                    counter: self.bitcrush_counter,
-                };
-                let (next, out) =
-                    bitcrush_step(state, sig, p.bitcrush_bits, p.bitcrush_rate, p.bitcrush_mix);
-                self.bitcrush_held = next.held;
-                self.bitcrush_counter = next.counter;
-                out
-            }
-            FxStep::Chorus => {
-                self.chorus
-                    .process(sig, p.chorus_rate, p.chorus_depth, p.chorus_mix, sr)
-            }
-            FxStep::Phaser => {
-                self.phaser
-                    .process(sig, p.phaser_rate, p.phaser_depth, p.phaser_mix, sr)
-            }
-            FxStep::RingMod => {
-                if p.ring_mod_mix > 0.001 {
-                    let freq_hz = 50.0 + p.ring_mod_freq * 450.0;
-                    self.ring_mod_phase += freq_hz / sr;
-                    if self.ring_mod_phase >= 1.0 {
-                        self.ring_mod_phase -= 1.0;
-                    }
-                    let carrier = (self.ring_mod_phase * std::f32::consts::TAU).sin();
-                    let ring = sig * carrier;
-                    sig * (1.0 - p.ring_mod_mix) + ring * p.ring_mod_mix
-                } else {
-                    sig
-                }
-            }
-            FxStep::Eq => self
-                .eq
-                .process(sig, p.eq_low_gain, p.eq_mid_gain, p.eq_hi_gain),
-            FxStep::Compressor => self.compressor.process(
-                sig,
-                p.compressor_threshold,
-                p.compressor_ratio,
-                p.compressor_mix,
-                p.compressor_multiband,
-                p.compressor_reverse,
-                sr,
-            ),
-            FxStep::TapeSat => {
-                self.tape_sat
-                    .process(sig, p.tape_drive, p.tape_mix, p.tape_flutter, sr)
-            }
-            FxStep::Drive => drive_step(sig, p.distortion_drive, p.distortion_mix),
-            FxStep::Autotune => self
-                .autotune
-                .process(sig, p.autotune_amount, p.autotune_mix),
-            FxStep::Pan => {
-                // Auto-pan — mono-in / mono-out FX that latches a per-sample
-                // side contribution into self.fx_pan_side for the master
-                // stage to mix into the stereo output.  Signal itself is
-                // passed through unchanged so chain order doesn't matter.
-                let rate_hz = 0.05 + p.fx_pan_rate * 7.95;
-                self.fx_pan_phase = (self.fx_pan_phase + rate_hz / sr).rem_euclid(1.0);
-                let lfo = (self.fx_pan_phase * std::f32::consts::TAU).sin();
-                let pan_mult = (p.fx_pan_pos + lfo * p.fx_pan_width).clamp(-1.0, 1.0);
-                // Side signal carries the same sign as pan_mult * sig — the
-                // master mix adds this to `side` so left = mid+side,
-                // right = mid-side produces a proper L/R swing.
-                self.fx_pan_side = sig * pan_mult * 0.5;
-                sig
-            }
-        }
-    }
-
-    fn apply_fx_chain(
-        &mut self,
-        mut sig: f32,
-        chain: &[FxStep],
-        p: &AudioParams,
-        delay_samples: usize,
-        sr: f32,
-        gate_env: f32,
-    ) -> f32 {
-        for &step in chain {
-            sig = self.apply_fx_step(step, sig, p, delay_samples, sr, gate_env);
-        }
-        sig
     }
 
     pub fn update_params(&mut self, p: AudioParams) {
