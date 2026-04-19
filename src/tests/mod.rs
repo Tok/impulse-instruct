@@ -21,6 +21,7 @@ mod llm_tests;
 mod music_api_tests;
 mod music_tests;
 mod persistence_tests;
+mod planner_tests;
 mod rack_reach_tests;
 mod rack_tests;
 mod seq_tests;
