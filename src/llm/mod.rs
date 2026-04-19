@@ -445,12 +445,16 @@ pub fn run_llm_loop(
             let state_for_writeback = state.clone();
             let write_lane_back = move |snapshot: &AppState| {
                 let mut s = state_for_writeback.write();
-                let step = s.sequencer.current_step;
                 s.bass_voices = snapshot.bass_voices.clone();
                 s.kit_a = snapshot.kit_a.clone();
                 s.kit_b = snapshot.kit_b.clone();
-                s.sequencer = snapshot.sequencer.clone();
-                s.sequencer.current_step = step;
+                // `preserve_sequencer_transport` keeps the live `running`
+                // + `current_step` so a user Play action that raced with
+                // inference isn't clobbered by the snapshot's stale values.
+                crate::state::preserve_sequencer_transport(
+                    &mut s.sequencer,
+                    snapshot.sequencer.clone(),
+                );
                 s.fx = snapshot.fx.clone();
                 s.hoover = snapshot.hoover.clone();
                 s.an1x = snapshot.an1x.clone();
@@ -665,12 +669,13 @@ pub fn run_llm_loop(
                     let t2 = Instant::now();
                     {
                         let mut s = state.write();
-                        let step = s.sequencer.current_step;
                         s.bass_voices = next.bass_voices;
                         s.kit_a = next.kit_a;
                         s.kit_b = next.kit_b;
-                        s.sequencer = next.sequencer;
-                        s.sequencer.current_step = step;
+                        crate::state::preserve_sequencer_transport(
+                            &mut s.sequencer,
+                            next.sequencer,
+                        );
                         s.fx = next.fx;
                         s.hoover = next.hoover;
                         s.an1x = next.an1x;

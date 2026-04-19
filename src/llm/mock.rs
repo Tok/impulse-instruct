@@ -308,7 +308,17 @@ pub fn run_mock_loop(
                 if let Some(ref update) = output.param_update {
                     let current = state.read().clone();
                     let next = apply_llm_update(current, update, &[]);
-                    *state.write() = next;
+                    // Preserve transport across the wholesale replace —
+                    // otherwise a late writeback reverts a user Play
+                    // action that raced the inference.  Snapshot the
+                    // live transport BEFORE `*s = next` blows it away,
+                    // then reinstall it once the replace is done.
+                    let mut s = state.write();
+                    let live_step = s.sequencer.current_step;
+                    let live_running = s.sequencer.running;
+                    *s = next;
+                    s.sequencer.current_step = live_step;
+                    s.sequencer.running = live_running;
                     let comment = update
                         .get("_comment")
                         .and_then(|v| v.as_str())

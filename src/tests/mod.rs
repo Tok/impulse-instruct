@@ -29,5 +29,6 @@ mod rack_reach_tests;
 mod rack_tests;
 mod seq_tests;
 mod state_tests;
+mod transport_tests;
 mod tts_tests;
 mod vram_tests;

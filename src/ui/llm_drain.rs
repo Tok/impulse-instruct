@@ -126,12 +126,10 @@ impl ImpulseApp {
                     let cur = self.state.read().clone();
                     let next = crate::state::jam_tools::advance_ramps(cur);
                     let mut s = self.state.write();
-                    let step = s.sequencer.current_step;
                     s.bass_voices = next.bass_voices;
                     s.kit_a = next.kit_a;
                     s.kit_b = next.kit_b;
-                    s.sequencer = next.sequencer;
-                    s.sequencer.current_step = step;
+                    crate::state::preserve_sequencer_transport(&mut s.sequencer, next.sequencer);
                     s.fx = next.fx;
                     s.lfo = next.lfo;
                 }

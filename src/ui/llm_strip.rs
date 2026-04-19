@@ -145,7 +145,7 @@ impl ImpulseApp {
                     s.bass_voices = next.bass_voices;
                     s.kit_a = next.kit_a;
                     s.kit_b = next.kit_b;
-                    s.sequencer = next.sequencer;
+                    crate::state::preserve_sequencer_transport(&mut s.sequencer, next.sequencer);
                     s.fx = next.fx;
                     s.hoover = next.hoover;
                     s.an1x = next.an1x;
