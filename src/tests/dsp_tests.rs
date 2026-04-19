@@ -237,6 +237,48 @@ mod style_propagation_tests {
     }
 }
 
+#[cfg(test)]
+mod chain_transport_tests {
+    use crate::state::{SequencerState, chain_advance_transport};
+
+    fn loaded_slot(bpm: f32, swing: f32, apply: bool) -> SequencerState {
+        let mut s = SequencerState::default();
+        s.bpm = bpm;
+        s.swing = swing;
+        s.pattern_bpm_apply = apply;
+        s.running = true;
+        s
+    }
+
+    #[test]
+    fn preserves_prior_transport_when_apply_off() {
+        let loaded = loaded_slot(140.0, 0.4, false);
+        let out = chain_advance_transport(loaded, 120.0, 0.0, true);
+        assert!((out.bpm - 120.0).abs() < 1e-4, "bpm should stay prior");
+        assert!((out.swing - 0.0).abs() < 1e-4, "swing should stay prior");
+        assert!(out.running, "running always preserved");
+    }
+
+    #[test]
+    fn adopts_loaded_transport_when_apply_on() {
+        let loaded = loaded_slot(140.0, 0.4, true);
+        let out = chain_advance_transport(loaded, 120.0, 0.0, true);
+        assert!((out.bpm - 140.0).abs() < 1e-4, "bpm should jump to loaded");
+        assert!(
+            (out.swing - 0.4).abs() < 1e-4,
+            "swing should jump to loaded"
+        );
+    }
+
+    #[test]
+    fn running_always_reflects_prior() {
+        // Loaded slot has running=true; prior transport was stopped → stays stopped.
+        let loaded = loaded_slot(140.0, 0.4, true);
+        let out = chain_advance_transport(loaded, 120.0, 0.0, false);
+        assert!(!out.running, "running mirrors prior regardless of apply");
+    }
+}
+
 // ── fx_math: extracted pure DSP helpers ─────────────────────────────────────
 
 #[cfg(test)]

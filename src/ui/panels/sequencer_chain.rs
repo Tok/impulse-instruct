@@ -249,4 +249,33 @@ pub fn draw_pattern_chain(app: &mut ImpulseApp, ui: &mut egui::Ui) {
     if let Some(sel) = new_style {
         app.state.write().sequencer.pattern_style = sel;
     }
+
+    // Per-slot tempo opt-in — when lit, chain advance into this slot uses
+    // the slot's own bpm / swing instead of preserving the prior transport.
+    // Off by default so existing chain projects don't surprise-jump tempos.
+    let bpm_apply = app.state.read().sequencer.pattern_bpm_apply;
+    let (bpm_col, bpm_fill) = if bpm_apply {
+        (theme::CHALK, egui::Color32::from_gray(50))
+    } else {
+        (theme::IRON, egui::Color32::TRANSPARENT)
+    };
+    let bpm_resp = ui
+        .add_sized(
+            [30.0, 14.0],
+            egui::Button::new(
+                egui::RichText::new("BPM⇥")
+                    .monospace()
+                    .size(8.0)
+                    .color(bpm_col),
+            )
+            .fill(bpm_fill),
+        )
+        .on_hover_text(if bpm_apply {
+            "This slot drives its bpm/swing on chain advance. Click to disable."
+        } else {
+            "This slot's bpm/swing persists across chain advances. Click to drive tempo on entry."
+        });
+    if bpm_resp.clicked() {
+        app.state.write().sequencer.pattern_bpm_apply = !bpm_apply;
+    }
 }

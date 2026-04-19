@@ -314,17 +314,15 @@ impl AudioEngine {
                                 *slot = snap;
                             }
                             s.chain_pos = (chain_pos_snap + 1) % chain_snap.len();
-                            s.sequencer =
-                                s.pattern_bank.get(next_slot).cloned().unwrap_or_default();
+                            let loaded = s.pattern_bank.get(next_slot).cloned().unwrap_or_default();
                             // Song mode: if the loaded pattern carries a
                             // style tag, apply it globally + propagate to
                             // unlocked agents so chain boundaries can drive
-                            // style transitions.  Pulled out of the loaded
-                            // pattern before we overwrite bpm/swing/running.
-                            let loaded_style = s.sequencer.pattern_style.clone();
-                            s.sequencer.bpm = bpm;
-                            s.sequencer.swing = swing;
-                            s.sequencer.running = running;
+                            // style transitions.  Pulled out before we hand
+                            // `loaded` to the transport reconciler.
+                            let loaded_style = loaded.pattern_style.clone();
+                            s.sequencer =
+                                crate::state::chain_advance_transport(loaded, bpm, swing, running);
                             s.sequencer.current_step = clock.current_step;
                             s.pattern_edit = next_slot;
                             if loaded_style.is_some() {

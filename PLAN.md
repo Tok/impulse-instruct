@@ -41,16 +41,16 @@ they ship and are reflected in `features.md`.
 
 - **Pattern probability per step** — already implemented but LLM doesn't
   use it well; improve prompt guidance for probability-based patterns.
-- **Song mode** — per-chain-slot style transitions landed:
-  `SequencerState.pattern_style: Option<String>` gets applied via
-  `apply_pattern_style_on_advance` on the chain auto-advance, flipping
-  the global `llm.active_style` and re-propagating to unlocked agents
-  so the chain can drive genre shifts.  Remaining: per-slot tempo
-  transitions (currently the chain preserves current bpm/swing; the
-  loaded pattern's bpm is written but not applied — flipping that
-  behaviour to "apply loaded bpm" is the next step, likely gated
-  behind an opt-in so existing chain projects don't surprise-jump
-  tempos on upgrade).
+- **Song mode** — done for style + tempo transitions.  Each pattern
+  bank slot carries optional `pattern_style` and a `pattern_bpm_apply`
+  opt-in flag.  On chain advance: `apply_pattern_style_on_advance`
+  flips `llm.active_style` + propagates to unlocked agents;
+  `chain_advance_transport` either preserves the prior bpm/swing
+  (default) or jumps to the loaded slot's own bpm/swing when the flag
+  is set.  Remaining: nothing blocking — future polish could move to
+  a dedicated `Song` struct with per-chain-slot (not per-pattern)
+  overrides and a timeline view, but the current surface is enough
+  to arrange multi-style / multi-tempo sets.
 - **MIDI export** — export sequencer pattern as `.mid` file.
 - **Preecho v2** — note approach (chromatic / scale-step / arp resolving
   to the anchor note), probability ramp, accent/slide trailing, curve

@@ -195,6 +195,14 @@ pub struct SequencerState {
     /// the chain advances to this slot.
     #[serde(default)]
     pub pattern_style: Option<String>,
+    /// Song-mode tempo-transition opt-in.  When `true`, the chain
+    /// advance adopts *this* slot's `bpm` + `swing` instead of
+    /// preserving the prior transport; `false` (the default, and the
+    /// pre-Song-mode behaviour) keeps the existing bpm/swing so
+    /// existing chain projects don't surprise-jump tempos on upgrade.
+    /// `running` is always preserved regardless of this flag.
+    #[serde(default)]
+    pub pattern_bpm_apply: bool,
 }
 
 impl Default for SequencerState {
@@ -247,6 +255,7 @@ impl Default for SequencerState {
             preecho: std::collections::HashMap::new(),
             amen_slice_order: Vec::new(),
             pattern_style: None,
+            pattern_bpm_apply: false,
         }
     }
 }

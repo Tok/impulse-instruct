@@ -807,6 +807,31 @@ pub fn apply_pattern_style_on_advance(state: AppState, style: Option<&str>) -> A
     }
 }
 
+/// Transport-field reconciliation for a chain advance.  Takes the slot
+/// just loaded into `sequencer` and the prior transport values; returns
+/// the sequencer with transport populated according to the loaded slot's
+/// `pattern_bpm_apply` opt-in:
+/// * `false` (default) — preserve `prior_bpm` and `prior_swing` (classic
+///   chain behaviour; existing projects upgrade cleanly).
+/// * `true` — keep the loaded slot's own `bpm` and `swing`, so Song-mode
+///   chains can drive tempo changes at pattern boundaries.
+///
+/// `running` is always preserved so the chain never pauses mid-song.
+pub fn chain_advance_transport(
+    loaded: crate::state::SequencerState,
+    prior_bpm: f32,
+    prior_swing: f32,
+    prior_running: bool,
+) -> crate::state::SequencerState {
+    let mut s = loaded;
+    if !s.pattern_bpm_apply {
+        s.bpm = prior_bpm;
+        s.swing = prior_swing;
+    }
+    s.running = prior_running;
+    s
+}
+
 /// Propagate a seed change to all agents whose seed is not locked.  Mirrors
 /// `propagate_style` — `seed = -1` means "random each call".
 pub fn propagate_seed(state: AppState, seed: i64) -> AppState {
