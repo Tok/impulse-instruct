@@ -9,6 +9,7 @@ mod dsp_fx_tests;
 mod dsp_mod_apply_tests;
 mod dsp_tests;
 mod dsp_voice_extra_tests;
+mod dsp_voice_primitives_tests;
 mod fx_plan_tests;
 mod helpers_tests;
 mod jam_tools_tests;
