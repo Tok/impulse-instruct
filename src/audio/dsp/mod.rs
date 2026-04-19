@@ -1,5 +1,6 @@
 // ─── audio/dsp/mod.rs ── Pure DSP synthesis, no allocations in process_block()
 
+pub mod an1x;
 mod bass303;
 mod dsp_util;
 pub mod fx;
@@ -11,6 +12,7 @@ mod params;
 mod rev_tap;
 pub mod samplers;
 pub mod voices;
+use an1x::An1xVoice;
 use bass303::Bass303;
 use dsp_util::*;
 pub use dsp_util::{hz_to_midi, midi_to_hz};
