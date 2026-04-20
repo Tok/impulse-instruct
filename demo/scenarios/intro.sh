@@ -76,14 +76,14 @@ ask "classic acid groove. sparse squelchy bass line, 6-8 hits across the full 32
 # spread the kit across the stereo field so the track doesn't fold
 # to a narrow centre.  The app's default kit volumes (kick 0.65,
 # snare 0.60, hihats 0.75) dominate the bass (0.80) perceptually
-# because the drum transients hit harder per-voice.  Previous runs
-# still showed CLIPPING throughout the recording at 0.4 / 0.45 kit
-# volumes + 0.85 master; dropping another ~25 % plus pulling the
-# master down to 0.65 gives the sum enough headroom to stay below
-# -1 dBFS even when 2 kits play dense 8ths simultaneously.  Pan
-# offsets on hats/snare/clap widen the stereo image; `fx.stereo_width`
-# at 0.85 amplifies the effect globally for delay/chorus returns.
-api_params '{"kit_a":{"kick":{"volume":0.3,"pan":0.0},"snare":{"volume":0.28,"pan":-0.15},"hihat_closed":{"volume":0.32,"pan":0.35},"hihat_open":{"volume":0.32,"pan":-0.3}},"kit_b":{"kick":{"volume":0.3,"pan":0.0},"snare":{"volume":0.28,"pan":0.15},"hihat_closed":{"volume":0.32,"pan":-0.35},"hihat_open":{"volume":0.32,"pan":0.3},"clap":{"volume":0.3,"pan":-0.25}},"fx":{"master_volume":0.65,"stereo_width":0.85}}'
+# because the drum transients hit harder per-voice.  Previous tunings
+# at 0.30 / 0.32 still had percussion louder than the bass line in
+# the recording — dropping another ~25 % (kick 0.22, snare 0.2, hats
+# 0.24, clap 0.22) makes room for the acid bass to carry the groove
+# and keeps the master peak well below -1 dBFS.  Pan offsets on
+# hats/snare/clap widen the stereo image; `fx.stereo_width` at 0.85
+# amplifies the effect globally for delay/chorus returns.
+api_params '{"kit_a":{"kick":{"volume":0.22,"pan":0.0},"snare":{"volume":0.2,"pan":-0.15},"hihat_closed":{"volume":0.24,"pan":0.35},"hihat_open":{"volume":0.24,"pan":-0.3}},"kit_b":{"kick":{"volume":0.22,"pan":0.0},"snare":{"volume":0.2,"pan":0.15},"hihat_closed":{"volume":0.24,"pan":-0.35},"hihat_open":{"volume":0.24,"pan":0.3},"clap":{"volume":0.22,"pan":-0.25}},"fx":{"master_volume":0.65,"stereo_width":0.85}}'
 
 play
 # Give the bass1 lane time to land — inference on a fresh acid-groove
