@@ -457,32 +457,20 @@ pub fn run_llm_loop(
             // whole turn's worth of patterns switches on simultaneously
             // at the end, which feels blocky.
             let state_for_writeback = state.clone();
-            let write_lane_back = move |snapshot: &AppState| {
+            // Apply ONLY the lane's emitted JSON to live state (not the
+            // whole pipeline snapshot).  The old implementation copied
+            // full sub-structs (`bass_voices`, `kit_a`, `kit_b`, `lfo`,
+            // …) from a snapshot frozen at pipeline start, which meant
+            // any `api_params` change the user (or the scenario) made
+            // while the pipeline was in flight got silently clobbered
+            // — voice-2 `enabled`, kit volumes, and LFO targets were
+            // all reverting.  `apply_llm_update` already knows how to
+            // merge a lane's JSON into an AppState while honouring the
+            // apply scope, so we just re-run it against live state.
+            let write_lane_back = move |update: &serde_json::Value, scope: &[String]| {
                 let mut s = state_for_writeback.write();
-                s.bass_voices = snapshot.bass_voices.clone();
-                s.kit_a = snapshot.kit_a.clone();
-                s.kit_b = snapshot.kit_b.clone();
-                // `preserve_sequencer_transport` keeps the live `running`
-                // + `current_step` so a user Play action that raced with
-                // inference isn't clobbered by the snapshot's stale values.
-                crate::state::preserve_sequencer_transport(
-                    &mut s.sequencer,
-                    snapshot.sequencer.clone(),
-                );
-                s.fx = snapshot.fx.clone();
-                s.hoover = snapshot.hoover.clone();
-                s.an1x = snapshot.an1x.clone();
-                s.noise_voice = snapshot.noise_voice.clone();
-                s.lfo = snapshot.lfo;
-                // NOTE: do NOT write back `s.rack` from the pipeline's
-                // snapshot.  Rack composition is user-owned (style picker,
-                // wizard, manual edits) — overwriting it from a stale
-                // snapshot here was reverting style-driven rack changes
-                // mid-pipeline, so a freshly-applied "Classic Acid"
-                // would silently get its full module set restored after
-                // the next lane apply.  Lanes that legitimately need to
-                // mutate the rack (LaneKind::Rack) write through a
-                // different path; routine voice/FX lanes don't.
+                let cur = s.clone();
+                *s = crate::state::apply_llm_update(cur, update, scope);
             };
             let state_for_progress = state.clone();
             let tx_for_cb = output_tx.clone();

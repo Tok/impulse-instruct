@@ -65,15 +65,25 @@ look_at sequencer
 say "Asking the agent for a pattern."
 
 # Send prompt BEFORE playing — pattern loads while sequencer is stopped.
-ask "acid groove, kick and hats, bass line with gaps spanning the full bank, 3–5 distinct pitches across both halves. set pan positions for stereo width" "" 6
+# Classic acid = sparse, squelchy, lots of space between notes.  Earlier
+# runs were coming back with 10-14 bass hits / 32 steps which reads as
+# a techno bassline, not acid.  Cap to 6-8 hits, call out slides +
+# accents as the defining feature, and tell the drum agent to keep
+# kicks on the 4 and hats skipping so the bass carries the groove.
+ask "classic acid groove. sparse squelchy bass line, 6-8 hits across the full 32-step bank, 2-3 distinct pitches, heavy slides + accents for the 303 squelch. kicks on the 4 (steps 0,4,8,12,16,20,24,28), closed hats offbeat (2,6,10,...), open hats only on the pickup before each bar end. pan hats and snares wide for stereo image" "" 6
 
-# Nudge the mix so the bass reads over the drums by default.
-# The app's default kit volumes (kick 0.65, snare 0.60, hihats 0.75)
-# dominate the bass (0.80) perceptually because the drum transients
-# hit harder per-voice.  Scaling the kit down ~25% lets the acid
-# bass carry the groove, which matches how the rest of the demo is
-# narrated ("squelchy", "filter sweep", "counter-line").
-api_params '{"kit_a":{"kick":{"volume":0.5},"snare":{"volume":0.45},"hihat_closed":{"volume":0.55},"hihat_open":{"volume":0.55}},"kit_b":{"kick":{"volume":0.5},"snare":{"volume":0.45},"hihat_closed":{"volume":0.55},"hihat_open":{"volume":0.55},"clap":{"volume":0.5}}}'
+# Nudge the mix so the bass reads over the drums by default, and
+# spread the kit across the stereo field so the track doesn't fold
+# to a narrow centre.  The app's default kit volumes (kick 0.65,
+# snare 0.60, hihats 0.75) dominate the bass (0.80) perceptually
+# because the drum transients hit harder per-voice.  Previous runs
+# still showed CLIPPING throughout the recording at 0.4 / 0.45 kit
+# volumes + 0.85 master; dropping another ~25 % plus pulling the
+# master down to 0.65 gives the sum enough headroom to stay below
+# -1 dBFS even when 2 kits play dense 8ths simultaneously.  Pan
+# offsets on hats/snare/clap widen the stereo image; `fx.stereo_width`
+# at 0.85 amplifies the effect globally for delay/chorus returns.
+api_params '{"kit_a":{"kick":{"volume":0.3,"pan":0.0},"snare":{"volume":0.28,"pan":-0.15},"hihat_closed":{"volume":0.32,"pan":0.35},"hihat_open":{"volume":0.32,"pan":-0.3}},"kit_b":{"kick":{"volume":0.3,"pan":0.0},"snare":{"volume":0.28,"pan":0.15},"hihat_closed":{"volume":0.32,"pan":-0.35},"hihat_open":{"volume":0.32,"pan":0.3},"clap":{"volume":0.3,"pan":-0.25}},"fx":{"master_volume":0.65,"stereo_width":0.85}}'
 
 play
 # Give the bass1 lane time to land — inference on a fresh acid-groove
@@ -165,30 +175,53 @@ scene "FX parade"
 show_all
 say "Now the effects."
 
+# Per-effect flow: add + scroll to panel (front), speak the name, fire
+# the ask, then flip to the back for ~1.5 s to show the auto-wired
+# cable bracing into the master chain, then flip back to knobs to see
+# the next effect land.  The old flow only flipped to cables after all
+# four FX were added, so the viewer couldn't associate each module
+# with its new cable.
+
 # Delay first — wired into the master chain automatically on add.
 delay_id=$(add_effect delay)
 look_at delay
 say "Delay."
 api_prompt "delay mix 0.22, delay time 0.375, feedback 0.35" FX
-wait_seconds 5
+wait_seconds 3
+show_cables
+look_at delay
+wait_seconds 2
+show_knobs
 
 phaser_id=$(add_effect phaser)
 look_at phaser
 say "Phaser."
 api_prompt "phaser mix 0.5, rate 0.15, depth 0.6" FX
-wait_seconds 5
+wait_seconds 3
+show_cables
+look_at phaser
+wait_seconds 2
+show_knobs
 
 chorus_id=$(add_effect chorus)
 look_at chorus
 say "Chorus."
 api_prompt "chorus mix 0.35, rate 0.2, depth 0.5" FX
-wait_seconds 5
+wait_seconds 3
+show_cables
+look_at chorus
+wait_seconds 2
+show_knobs
 
 ringmod_id=$(add_effect ringmod)
 look_at ringmod
 say "Ring modulator."
 api_prompt "ringmod mix 0.15, frequency 220" FX
-wait_seconds 5
+wait_seconds 3
+show_cables
+look_at ringmod
+wait_seconds 2
+show_knobs
 
 # Front-side overview of the full FX lane.
 look_at fxmod
@@ -198,6 +231,10 @@ screenshot "v${VERSION}-intro-fx-rack"
 # Flip to back — auto-wired audio chain is visible now.
 say "The back panel shows how it's all wired."
 show_cables
+# Capture the rack immediately after the flip, before the tour starts
+# panning — lets the changelog show the initial wired-up view.
+pause 0.8
+screenshot "v${VERSION}-intro-cables-flip"
 tour_rack 1.4
 screenshot "v${VERSION}-intro-cables"
 show_knobs
@@ -218,8 +255,16 @@ say "An LFO moves a parameter on its own."
 say "Any knob can be a target."
 
 # LFO 1 — sine on the bass cutoff.
+#
+# PULSE's `mod` lane jams constantly during playback and its outputs
+# frequently use target strings the state enum doesn't accept
+# ("filter_cutoff", "Filter Cutoff"), which silently reset the slot
+# to `LfoTarget::None`.  Lock the slot immediately after setting so
+# the jam can't overwrite while the demo is talking over it; unlock
+# at end of the scene before tearing the rack down.
 say "Sine on the bass cutoff."
 api_params '{"lfo": [{"enabled": true, "target": "BassCutoff", "waveform": "Sine", "rate": 0.18, "depth": 0.55}]}'
+lock "lfo[0]"
 focus_on bass
 wait_seconds 4
 
@@ -230,6 +275,7 @@ wait_seconds 1
 say "A second LFO."
 say "Triangle on the reverb mix."
 api_params '{"lfo": [{}, {"enabled": true, "target": "ReverbMix", "waveform": "Triangle", "rate": 0.06, "depth": 0.35}]}'
+lock "lfo[1]"
 wait_seconds 4
 
 say "Filter pulses fast. Reverb breathes slow."
@@ -239,6 +285,7 @@ wait_seconds 3
 screenshot "v${VERSION}-intro-lfo"
 
 # Release both LFOs before tearing down the single-agent rack.
+unlock "lfo[0]" "lfo[1]"
 api_params '{"lfo": [{"enabled": false}, {"enabled": false}]}'
 
 # ═══════════════════════════════════════════════════════════════════════════════

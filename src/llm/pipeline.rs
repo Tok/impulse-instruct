@@ -79,9 +79,15 @@ pub enum PipelineEvent {
 /// `progress` fires for plan/lane events (logging / UI).
 ///
 /// `on_lane_applied` fires once per SUCCESSFULLY applied lane with the
-/// new state — the caller writes it back to the shared `AppState` so
-/// the audio thread hears the change immediately instead of waiting
-/// for every lane to finish.  Tests can pass `|_| {}` as a no-op.
+/// lane's filtered JSON output + its apply scope.  The caller is
+/// expected to re-play that update against the shared `AppState` via
+/// `apply_llm_update` so the audio thread hears the change immediately
+/// instead of waiting for every lane to finish.  This replaces an
+/// earlier design that copied full sub-structs from the pipeline's
+/// start-of-pipeline snapshot back to live state — which silently
+/// clobbered any `api_params` / UI changes the user made *during* the
+/// pipeline (voice-2 `enabled`, kit volumes, LFO targets, etc.).
+/// Tests that don't care about writeback can pass `|_, _| {}`.
 pub fn run_pipeline<B: PipelineBackend>(
     mut state: AppState,
     user_prompt: &str,
@@ -90,7 +96,7 @@ pub fn run_pipeline<B: PipelineBackend>(
     is_jam: bool,
     live_state: Option<&std::sync::Arc<parking_lot::RwLock<AppState>>>,
     mut progress: impl FnMut(PipelineEvent),
-    mut on_lane_applied: impl FnMut(&AppState),
+    mut on_lane_applied: impl FnMut(&Value, &[String]),
 ) -> AppState {
     let t_start = std::time::Instant::now();
 
@@ -203,8 +209,12 @@ pub fn run_pipeline<B: PipelineBackend>(
                 // every lane silently accumulates and the full turn's
                 // worth of patterns would suddenly switch on at the end
                 // (which was reported as "blocking and silent until the
-                // last lane is in").
-                on_lane_applied(&state);
+                // last lane is in").  The callback gets the filtered JSON
+                // + scope rather than the local state, so it can apply
+                // ONLY what the lane actually wrote against the live
+                // AppState — preserving any user / api_params edits that
+                // happened while the pipeline was in flight.
+                on_lane_applied(&filtered, &scope);
                 progress(PipelineEvent::LaneApplied {
                     lane,
                     update: filtered,
@@ -426,7 +436,7 @@ pub fn run_pipeline_via_pool(
     is_jam: bool,
     live_state: Option<&std::sync::Arc<parking_lot::RwLock<AppState>>>,
     progress: impl FnMut(PipelineEvent),
-    on_lane_applied: impl FnMut(&AppState),
+    on_lane_applied: impl FnMut(&Value, &[String]),
 ) -> AppState {
     let mut backend = PoolBackend::new(pool, port);
     run_pipeline(
@@ -641,7 +651,7 @@ mod tests {
             false, // is_jam — user turn, exercise planner path
             None,  // no live_state — snapshot-only behaviour
             |e| events.borrow_mut().push(e),
-            |_| {},
+            |_, _| {},
         );
 
         // BPM landed.
@@ -698,7 +708,7 @@ mod tests {
             false, // is_jam — exercise planner fallback path
             None,  // no live_state — snapshot-only behaviour
             |e| events.borrow_mut().push(e),
-            |_| {},
+            |_, _| {},
         );
         assert!((new_state.sequencer.bpm - 125.0).abs() < 0.01);
         assert!((new_state.fx.reverb_mix - 0.15).abs() < 0.01);
@@ -745,7 +755,7 @@ mod tests {
             false, // is_jam — exercise planner path
             None,  // no live_state — snapshot-only behaviour
             |e| events.borrow_mut().push(e),
-            |_| {},
+            |_, _| {},
         );
         assert!((new_state.sequencer.bpm - 128.0).abs() < 0.01);
         let failed = events
@@ -803,7 +813,7 @@ mod tests {
             false, // is_jam — exercise planner path
             None,  // no live_state — snapshot-only behaviour
             |_| {},
-            |_| {},
+            |_, _| {},
         );
         // 3 calls: planner + bass1 + bass2.  The 3rd call's system
         // prompt is the bass2 prompt.  It should mention bass_pattern
@@ -855,7 +865,7 @@ mod tests {
         // This models the user yanking the module mid-pipeline.
         let live_for_cb = live_state.clone();
         let fired = std::cell::Cell::new(false);
-        let on_lane_applied = |_s: &AppState| {
+        let on_lane_applied = |_update: &Value, _scope: &[String]| {
             if !fired.get() {
                 fired.set(true);
                 let mut live = live_for_cb.write();
@@ -933,7 +943,7 @@ mod tests {
             false,
             None, // opt-out of mid-pipeline checks
             |e| events.borrow_mut().push(e),
-            |_| {},
+            |_, _| {},
         );
         assert_eq!(
             backend.calls.len(),

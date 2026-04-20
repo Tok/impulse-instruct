@@ -223,7 +223,12 @@ impl LaneKind {
                 kick_a_steps: [0,4,7,12,16,20,24,30] (anticipation on 7, tail on 30)\n\
                 snare_a_steps: [4,12,20,28] backbeat (or [4,12,19,28] for a pull)\n\
                 hihat_a_steps: [2,6,10,14,18,22,26,30] offbeat 8ths\n\
-                Fill the FULL sequencer.steps (usually 32) — don't stop at step 16. \
+                Fill the FULL sequencer.steps (usually 32) — don't stop at step 16.\n\
+                DENSITY CAPS (bar of 32 steps):\n\
+                  kick: 6-10 hits MAX. snare: 2-6 hits. hihat_closed: 6-10 hits \
+                  (avoid 16th runs; prefer offbeat 8ths). hihat_open: 0-4 hits.\n\
+                More hits = more gain on the master bus — stay well under these \
+                caps unless the user prompt explicitly asks for a busy/rolling pattern. \
                 Do not write bass, FX, or kit B."
                 .into(),
             LaneKind::KitB => "Write ONLY the 909 kit patterns. 909 PINS the grid — \
@@ -233,7 +238,13 @@ impl LaneKind {
                 clap_b_steps: [4,12,20,28] on beats 2 and 4\n\
                 hihat_b_steps: [2,6,10,14,18,22,26,30] offbeat 8ths\n\
                 snare_b_steps: [4,12,20,28] (or offset for half-time)\n\
-                Fill the FULL sequencer.steps (usually 32). Do not write bass, FX, or kit A."
+                Fill the FULL sequencer.steps (usually 32).\n\
+                DENSITY CAPS (bar of 32 steps):\n\
+                  kick: 6-10 hits MAX. snare: 2-6 hits. clap: 2-6 hits. \
+                  hihat_closed: 6-10 hits (avoid 16th runs). hihat_open: 0-4 hits.\n\
+                More hits = more gain on the master bus — stay well under these \
+                caps unless the user prompt explicitly asks for a busy pattern. \
+                Do not write bass, FX, or kit A."
                 .into(),
             LaneKind::Amen => "Write ONLY the amen sampler pattern (`sequencer.amen_steps`, \
                 `amen_slices`) and amen voice params. Do not write other voices."
@@ -249,10 +260,12 @@ impl LaneKind {
                 step. Do not write other voices."
                 .into(),
             LaneKind::Fx => "Write ONLY the `fx` object — reverb / delay / distortion / \
-                chorus / bitcrush / master_pitch. Defaults for a subtle jam:\n\
+                chorus / phaser / ring_mod / bitcrush / master_pitch. Defaults for a subtle jam:\n\
                 reverb_mix 0.10-0.25, reverb_size 0.4-0.6\n\
                 delay_mix 0.06-0.18, delay_feedback 0.3-0.5\n\
                 chorus_mix 0.10-0.25 (width / stereo ensemble)\n\
+                phaser_mix 0.15-0.45, phaser_rate 0.1-0.3, phaser_depth 0.4-0.7\n\
+                ring_mod_mix 0.05-0.2, ring_mod_freq 0.1-0.5 (inharmonic clangs — use sparingly)\n\
                 distortion_drive + _mix only if style asks (gabber / hard techno).\n\
                 Heavier values OK when the user prompt or style explicitly calls for it. \
                 Do not write any patterns."
@@ -633,6 +646,11 @@ pub fn lane_schema(lane: LaneKind) -> serde_json::Value {
                         "chorus_mix":       { "type": "number", "minimum": 0.0, "maximum": 1.0 },
                         "chorus_rate":      { "type": "number", "minimum": 0.0, "maximum": 1.0 },
                         "chorus_depth":     { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+                        "phaser_mix":       { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+                        "phaser_rate":      { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+                        "phaser_depth":     { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+                        "ring_mod_mix":     { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+                        "ring_mod_freq":    { "type": "number", "minimum": 0.0, "maximum": 1.0 },
                         "bitcrush_bits":    { "type": "number", "minimum": 0.0, "maximum": 1.0 },
                         "master_pitch_st":  { "type": "number", "minimum": -12.0, "maximum": 12.0 }
                     },
