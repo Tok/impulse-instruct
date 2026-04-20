@@ -13,6 +13,7 @@ set -u  # warn on unset vars, but don't exit on errors (kills return non-zero)
 #   ./demo/record-demo.sh --app-running            # force skip build+launch
 #   ./demo/record-demo.sh --dry-run                # just pre-generate TTS, don't record
 #   ./demo/record-demo.sh --reuse-audio            # reuse TTS clips from the shared cache (skip regen)
+#   ./demo/record-demo.sh --resume                 # reuse the most recent batch dir + its TTS clips (skip regen)
 #   ./demo/record-demo.sh --seed 42                # pin LLM sampling seed for reproducible runs
 #
 # Output: demo/output/impulse_demo_<timestamp>.mp4
@@ -31,6 +32,7 @@ APP_RUNNING=0
 DRY_RUN=0
 SKIP_VIDEO=0
 REUSE_AUDIO=0
+RESUME=0
 DEMO_SEED=""
 SCENARIO="intro"
 TRIM_START=0        # seconds to cut from the beginning (0 = no trim)
@@ -45,6 +47,7 @@ for arg in "$@"; do
         --app-running)     APP_RUNNING=1 ;;
         --dry-run)         DRY_RUN=1 ;;
         --reuse-audio)     REUSE_AUDIO=1 ;;
+        --resume)          RESUME=1 ;;
         --trim-start)      :  ;;  # value handled below
         --trim-start=*)    TRIM_START="${arg#*=}" ;;
         --no-trim)         TRIM_START=0 ;;
@@ -136,20 +139,43 @@ if [ "$SKIP_VIDEO" -eq 0 ]; then
 fi
 
 # ─── Batch output directory ──────────────────────────────────────────────────
-TIMESTAMP=$(date +%Y%m%d_%H%M%S)
 VERSION=$(grep '^version' "$PROJECT_DIR/Cargo.toml" | head -1 | sed 's/.*"\(.*\)"/\1/')
-BATCH_DIR="$OUTPUT_DIR/${TIMESTAMP}"
 BASENAME="v${VERSION}-${SCENARIO}"
+
+if [ "$RESUME" -eq 1 ]; then
+    # Pick the newest timestamped batch dir (YYYYMMDD_HHMMSS). Lexical sort
+    # matches chronological order for that format, so `sort | tail -1` wins.
+    LAST_BATCH=$(find "$OUTPUT_DIR" -maxdepth 1 -mindepth 1 -type d \
+        -regextype posix-extended -regex '.*/[0-9]{8}_[0-9]{6}$' 2>/dev/null \
+        | sort | tail -1)
+    if [ -z "$LAST_BATCH" ] || [ ! -d "$LAST_BATCH" ]; then
+        echo "ERROR: --resume: no previous batch directory found in $OUTPUT_DIR" >&2
+        exit 1
+    fi
+    BATCH_DIR="$LAST_BATCH"
+    TIMESTAMP="$(basename "$BATCH_DIR")"
+    echo "  [--resume] Reusing batch: $BATCH_DIR"
+else
+    TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+    BATCH_DIR="$OUTPUT_DIR/${TIMESTAMP}"
+fi
 mkdir -p "$BATCH_DIR"
 # TTS clip cache location — per-batch by default so each recording owns its
 # clips. --reuse-audio points at the shared persistent cache so unchanged
 # narration lines from prior runs skip re-synthesis (tts_generate already
 # caches by id.wav filename; changed text produces a new id and will regen).
+# --resume reuses the previous batch's tts/ directory — tts_generate sees
+# the existing WAVs and skips synthesis, so only genuinely new lines
+# (scenario edits since last run) get re-synthesized.
 if [ "$REUSE_AUDIO" -eq 1 ]; then
     export TTS_DIR="$DEMO_DIR/tts_cache"
     echo "  [--reuse-audio] Using shared TTS cache: $TTS_DIR"
 else
     export TTS_DIR="$BATCH_DIR/tts"
+    if [ "$RESUME" -eq 1 ]; then
+        _cached=$(find "$TTS_DIR" -maxdepth 1 -type f -name '*.wav' 2>/dev/null | wc -l)
+        echo "  [--resume] Reusing TTS dir: $TTS_DIR ($_cached cached clips)"
+    fi
 fi
 mkdir -p "$TTS_DIR"
 
@@ -432,9 +458,15 @@ if [ "$SKIP_VIDEO" -eq 0 ]; then
     # Try to create a virtual recording sink
     RECORDING_SINK_ID=$(create_recording_sink)
     if [ -n "$RECORDING_SINK_ID" ]; then
-        echo "  Recording sink: node $RECORDING_SINK_ID (isolated virtual sink)"
-        # Record from the sink's monitor
-        pw-record --target "$RECORDING_SINK_ID" "$APP_AUDIO" &
+        # Capture via `parecord` from the sink's paired `.monitor` source.
+        # `pw-record --target <sink_id>` won't work on this setup —
+        # PipeWire reports "No such entity" for null-sink node IDs and
+        # silently falls back to the default source (usually silence).
+        # `parecord --device=impulse-record.monitor` uses the stable
+        # PulseAudio name and reliably taps the monitor, even when the
+        # underlying PipeWire node IDs shift between sessions.
+        echo "  Recording sink: node $RECORDING_SINK_ID (capturing impulse-record.monitor via parecord)"
+        parecord --device=impulse-record.monitor "$APP_AUDIO" &
         PW_RECORD_PID=$!
     else
         echo "  WARN: Could not create virtual sink — trying direct capture"

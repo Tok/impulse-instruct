@@ -407,12 +407,26 @@ pub fn run_llm_loop(
         // outputs are short and the model can't skip required arrays.
         // The pipeline drives its own state apply + UI logging; on
         // success we `continue` past the monolithic path below.
+        // Append /think or /no_think the same way the monolithic path does
+        // (see below).  Reasoning-capable models (Qwen, Gemma-thinking) honour
+        // this chat-template directive — without it they eat the entire
+        // max_tokens budget on <think> before any JSON is emitted and every
+        // lane fails with `content: ""` + `finish_reason: length`.  Plain
+        // models silently ignore the extra suffix.
+        let think_tag = if agent_enable_thinking {
+            "/think"
+        } else {
+            "/no_think"
+        };
+        let think_prompt = format!("{} {}", prompt, think_tag);
+
         let use_pipeline_this_turn = state.read().llm.use_pipeline;
         if use_pipeline_this_turn {
             log::info!(
-                "LLM: starting lane pipeline on port {} (prompt {} chars)",
+                "LLM: starting lane pipeline on port {} (prompt {} chars, {})",
                 infer_port,
-                prompt.len()
+                think_prompt.len(),
+                think_tag
             );
             let t0 = Instant::now();
             let before_state = Box::new(state.read().clone());
@@ -475,7 +489,7 @@ pub fn run_llm_loop(
             let label_for_cb = agent_label.clone();
             let new_state = pipeline::run_pipeline_via_pool(
                 snap,
-                prompt,
+                &think_prompt,
                 &mut pool,
                 infer_port,
                 &sampling,
@@ -602,21 +616,12 @@ pub fn run_llm_loop(
             state.write().llm.last_prompt = prompt.clone();
         }
 
-        let enable_thinking = agent_enable_thinking;
-        let think_prompt = format!(
-            "{} {}",
-            prompt,
-            if enable_thinking {
-                "/think"
-            } else {
-                "/no_think"
-            }
-        );
         log::info!(
-            "LLM: sending inference to port {} ({} system chars, {} prompt chars)",
+            "LLM: sending inference to port {} ({} system chars, {} prompt chars, {})",
             infer_port,
             system.len(),
-            think_prompt.len()
+            think_prompt.len(),
+            think_tag
         );
         let t0 = Instant::now();
         let result = pool.infer(infer_port, &system, &think_prompt, &sampling);

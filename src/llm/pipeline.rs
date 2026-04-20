@@ -110,7 +110,20 @@ pub fn run_pipeline<B: PipelineBackend>(
             log::info!("pipeline: {}", jp.rationale);
             jp
         }
-    } else if let Some(heur) = heuristic_plan(&state, user_prompt) {
+    } else if let Some(heur) = {
+        // Strip the trailing /think or /no_think directive the LLM worker
+        // appends before reaching the pipeline.  The heuristic's 120-char
+        // sanity cap (see `heuristic_plan`) was firing on otherwise-short
+        // prompts because the 7–10 extra tag characters pushed them over,
+        // forcing a slow LLM planner + fallback plan that drops the
+        // requested lane.  The think tag is for the inference server,
+        // not for natural-language matching.
+        let raw = user_prompt
+            .strip_suffix(" /no_think")
+            .or_else(|| user_prompt.strip_suffix(" /think"))
+            .unwrap_or(user_prompt);
+        heuristic_plan(&state, raw)
+    } {
         log::info!("pipeline: heuristic plan hit — {}", heur.rationale);
         heur
     } else {

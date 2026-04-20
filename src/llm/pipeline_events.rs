@@ -90,12 +90,28 @@ pub fn handle_pipeline_event(
                 p.current_lane = Some(lane.label().to_string());
             });
         }
-        PipelineEvent::LaneApplied { lane, ms, .. } => {
+        PipelineEvent::LaneApplied { lane, update, ms } => {
             *lanes_ran += 1;
             log::info!("pipeline: {} applied in {}ms", lane.label(), ms);
             with_progress(state, agent_id, |p| {
                 p.lanes_done = p.lanes_done.saturating_add(1);
                 p.current_lane = None;
+            });
+            // Mirror the monolithic path's per-inference output: send an
+            // LlmOutput carrying the lane's JSON as `param_update` so
+            // `drain_llm_outputs` renders a `"<persona>: …"` line in the
+            // LLM console.  Without this, the pipeline is silent in the
+            // UI log (only `[plan: …]` / `[pipeline: …]` brackets,
+            // which the drain filter deliberately hides).  `is_jam` stays
+            // false so the drain filter lets the line through on both
+            // one-shot and jam cycles — showing per-lane activity is the
+            // whole point of the agent console.
+            let lane_text = format!("[{}]", lane.label());
+            let _ = output_tx.try_send(LlmOutput {
+                text: lane_text,
+                param_update: Some(update),
+                agent_id,
+                ..LlmOutput::default()
             });
             // Phase 1 lane lifecycle: score the apply against the rules
             // we encode in the system prompt and stash the score on

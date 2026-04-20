@@ -405,20 +405,44 @@ narrate() {
     echo "${start_sec}|${dur}|${text}" >> "$NARRATION_LIST"
     echo "  [narrate] $id (${dur}s): \"$text\"" >&2
 
+    # Capture-sink fan-out: when the demo recorder created the
+    # `impulse-record` null-sink, we ALSO play the clip to that sink so
+    # the narration lands in the recorded mp4 alongside the app audio.
+    # Without this, parecord on `impulse-record.monitor` only catches
+    # the synth and the voice-over is missing from the final file.  The
+    # second paplay still goes to the default sink so the operator
+    # hears narration live while recording.  `pactl list short sinks`
+    # is the cheap liveness check — the sink exists whether or not we
+    # tracked the module id, and the grep is robust to stale indexes.
+    local capture_sink=""
+    if pactl list short sinks 2>/dev/null | awk '{print $2}' | grep -qx 'impulse-record'; then
+        capture_sink="impulse-record"
+    fi
+
     if [ "$blocking" -eq 1 ]; then
         # Synchronous: paplay should block until the stream drains. If it
         # exits non-zero (sink busy, no default sink, etc.), fall back to
         # aplay. Small sleep after playback gives the PipeWire/ALSA stream
         # time to release before the next clip opens a new one — without it
         # rapid consecutive plays can silently drop.
+        if [ -n "$capture_sink" ]; then
+            paplay --device="$capture_sink" "$wavfile" 2>/dev/null &
+            local cap_pid=$!
+        fi
         if ! paplay "$wavfile" 2>&1; then
             aplay "$wavfile" 2>&1 || {
                 echo "  [narrate] PLAY FAILED: $id — sleeping ${dur}s to keep timing" >&2
                 sleep "$dur"
             }
         fi
+        # Let the capture-sink copy finish too; same wav, so it should
+        # already be done or within a few ms.
+        [ -n "${cap_pid:-}" ] && wait "$cap_pid" 2>/dev/null
         sleep 0.15
     else
+        if [ -n "$capture_sink" ]; then
+            (paplay --device="$capture_sink" "$wavfile" 2>/dev/null) &
+        fi
         (paplay "$wavfile" 2>/dev/null || aplay "$wavfile" 2>/dev/null) &
     fi
 }
@@ -497,18 +521,36 @@ find_app_pw_node() {
 
 # Create an isolated virtual sink for recording.
 # Returns the sink node ID. The app is routed to this sink via pw-link.
+#
+# We use `pactl load-module module-null-sink` (NOT `pw-cli create-node`):
+# pw-cli creates the node in the context of its own PipeWire client
+# connection, which dies the moment pw-cli exits — the node vanishes
+# with it.  `pactl load-module` runs inside the long-lived
+# pipewire-pulse service, so the sink persists for the whole recording.
+# The module ID is stashed in /tmp so `destroy_recording_sink` can
+# unload it cleanly at shutdown.
 create_recording_sink() {
-    # Create a null sink dedicated to recording
-    pw-cli create-node adapter \
-        "{ factory.name=support.null-audio-sink node.name=impulse-record media.class=Audio/Sink audio.position=[FL,FR] }" \
-        2>/dev/null
+    local module_id
+    module_id=$(pactl load-module module-null-sink \
+        sink_name=impulse-record \
+        sink_properties='device.description=ImpulseRecord' \
+        2>/dev/null)
+    if [ -z "$module_id" ]; then
+        return 1
+    fi
+    echo "$module_id" > /tmp/impulse-record-sink.module
+    # Give pipewire-pulse a beat to register the node, then resolve the
+    # sink's node ID by sink name.  Both the sink and its paired
+    # `impulse-record.monitor` source appear after the module loads; we
+    # return the *sink* id (the app's output gets pw-link'd to it), and
+    # stash the monitor name separately so the capturer can target it.
     sleep 0.5
-    # Find the new sink's node ID
     pw-cli ls Node 2>/dev/null | awk '
         /^[[:space:]]*id [0-9]+/ { id=$2; gsub(/,/,"",id) }
-        /node.name.*impulse-record/ { print id; exit }
+        /node.name = "impulse-record"/ { print id; exit }
     '
 }
+
 
 # Route the app's output to our recording sink
 route_app_to_sink() {
@@ -519,15 +561,24 @@ route_app_to_sink() {
     pw-link "${app_node}:output_FR" "${sink_node}:input_FR" 2>/dev/null
 }
 
-# Destroy the recording sink
+# Destroy the recording sink by unloading the pactl module that created it.
 destroy_recording_sink() {
-    # Find and destroy our recording sink
-    local sink_id
-    sink_id=$(pw-cli ls Node 2>/dev/null | awk '
-        /^[[:space:]]*id [0-9]+/ { id=$2; gsub(/,/,"",id) }
-        /node.name.*impulse-record/ { print id; exit }
-    ')
-    [ -n "$sink_id" ] && pw-cli destroy "$sink_id" 2>/dev/null
+    local module_id=""
+    if [ -f /tmp/impulse-record-sink.module ]; then
+        module_id=$(cat /tmp/impulse-record-sink.module 2>/dev/null)
+        rm -f /tmp/impulse-record-sink.module
+    fi
+    if [ -n "$module_id" ]; then
+        pactl unload-module "$module_id" 2>/dev/null || true
+    else
+        # Fallback: scan pactl's loaded modules for any impulse-record sink
+        # and unload it. Catches stale sinks from a crashed earlier run.
+        pactl list short modules 2>/dev/null \
+            | awk '/module-null-sink.*impulse-record/ { print $1 }' \
+            | while read -r id; do
+                pactl unload-module "$id" 2>/dev/null || true
+            done
+    fi
 }
 
 start_pw_capture() {

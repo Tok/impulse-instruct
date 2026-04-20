@@ -378,8 +378,12 @@ impl crate::llm::pipeline::PipelineBackend for LlamaServerBackend {
         //
         // Per-lane max_tokens sized for the largest realistic lane
         // payload (bass with 5 arrays × 32 steps + schema padding ≈
-        // 600-800 tokens).  1600 gives headroom without inviting the
-        // rambling `_thinking` blocks we saw at 2400 in monolithic.
+        // 600-800 tokens).  Non-thinking models only need ~1600; thinking
+        // models (Qwen, Gemma-thinking) burn their whole budget on
+        // <think> before any JSON shows up, so we give 3000 to leave
+        // room for a reasoning pass followed by the answer.  The
+        // caller is expected to append /no_think when thinking is off
+        // — this is just insurance for models that reason anyway.
         let body = serde_json::json!({
             "model": "local",
             "messages": [
@@ -393,7 +397,7 @@ impl crate::llm::pipeline::PipelineBackend for LlamaServerBackend {
             "repeat_penalty": sampling.repeat_penalty as f64,
             "frequency_penalty": frequency_penalty,
             "seed": sampling.seed,
-            "max_tokens": 1600,
+            "max_tokens": 3000,
             "cache_prompt": true,
             "response_format": {
                 "type": "json_schema",
@@ -429,9 +433,38 @@ impl crate::llm::pipeline::PipelineBackend for LlamaServerBackend {
             .as_str()
             .unwrap_or("")
             .to_string();
+        let finish_reason = resp_json["choices"][0]["finish_reason"]
+            .as_str()
+            .unwrap_or("")
+            .to_string();
         if raw_content.is_empty() {
+            // Salvage attempt: some reasoning-model chat templates dump
+            // the whole turn — including the final JSON — into
+            // `reasoning_content` when the grammar constraint plus the
+            // /think directive collide.  If that field happens to carry
+            // parseable JSON, use it; otherwise surface a more
+            // actionable error (length-stop without `/no_think` is the
+            // usual culprit).
+            let reasoning = resp_json["choices"][0]["message"]["reasoning_content"]
+                .as_str()
+                .unwrap_or("");
+            if !reasoning.is_empty() {
+                let (_thinking_tag, json_text) = split_thinking(reasoning);
+                if let Some(parsed) = repair_json(json_text.trim()) {
+                    log::warn!(
+                        "lane content empty; salvaged JSON from reasoning_content ({} chars)",
+                        reasoning.len()
+                    );
+                    return Ok(parsed);
+                }
+            }
+            let hint = if finish_reason == "length" {
+                " (finish_reason=length — model likely exhausted max_tokens inside <think>; enable_thinking=false appends /no_think)"
+            } else {
+                ""
+            };
             return Err(anyhow::anyhow!(
-                "lane response content empty\nbody: {resp_text}"
+                "lane response content empty{hint}\nbody: {resp_text}"
             ));
         }
         let (_thinking_tag, json_text) = split_thinking(&raw_content);

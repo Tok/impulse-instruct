@@ -118,11 +118,28 @@ pub async fn post_rack_agent(
     AxumState(api): AxumState<ApiState>,
     Json(req): Json<RackAgentRequest>,
 ) -> Json<serde_json::Value> {
-    let available_models = crate::ui::scan_models();
-    let model_path = req
-        .model
-        .as_deref()
-        .and_then(|pat| crate::llm::vram::find_model(pat, &available_models));
+    // Model resolution mirrors the wizard (src/ui/wizard.rs:566-588):
+    // if the requested pattern already matches the globally-loaded model,
+    // leave `model_path = None` so the agent inherits instead of spinning
+    // up a second llama-server.  Without this guard, `find_model("gemma")`
+    // pins the agent to the first Gemma GGUF in `models/` in lexical order
+    // — which is the 26B-A4B thinking variant when it's on disk — even
+    // though the user already has the E4B loaded.  The result was the demo
+    // spawning a second server with the wrong (reasoning) model and every
+    // lane failing with `content:""` + `finish_reason:length`.
+    let model_path = match req.model.as_deref() {
+        None => None,
+        Some(pat) => {
+            let pat_lower = pat.to_ascii_lowercase();
+            let global_lower = api.app_state.read().llm.model_path.to_ascii_lowercase();
+            if global_lower.contains(&pat_lower) {
+                None
+            } else {
+                let available_models = crate::ui::scan_models();
+                crate::llm::vram::find_model(pat, &available_models)
+            }
+        }
+    };
 
     // Add agent directly on the locked state — DO NOT snapshot+swap the entire
     // AppState, as that races with the audio thread writing current_step.

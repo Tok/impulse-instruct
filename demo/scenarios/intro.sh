@@ -67,12 +67,65 @@ say "Asking the agent for a pattern."
 # Send prompt BEFORE playing — pattern loads while sequencer is stopped.
 ask "acid groove, kick and hats, bass line with gaps spanning the full bank, 3–5 distinct pitches across both halves. set pan positions for stereo width" "" 6
 
+# Nudge the mix so the bass reads over the drums by default.
+# The app's default kit volumes (kick 0.65, snare 0.60, hihats 0.75)
+# dominate the bass (0.80) perceptually because the drum transients
+# hit harder per-voice.  Scaling the kit down ~25% lets the acid
+# bass carry the groove, which matches how the rest of the demo is
+# narrated ("squelchy", "filter sweep", "counter-line").
+api_params '{"kit_a":{"kick":{"volume":0.5},"snare":{"volume":0.45},"hihat_closed":{"volume":0.55},"hihat_open":{"volume":0.55}},"kit_b":{"kick":{"volume":0.5},"snare":{"volume":0.45},"hihat_closed":{"volume":0.55},"hihat_open":{"volume":0.55},"clap":{"volume":0.5}}}'
+
 play
-wait_seconds 3
+# Give the bass1 lane time to land — inference on a fresh acid-groove
+# prompt can take 10–20 s and scene 3 used to fire before any bass
+# notes were written, so the "cutoff and resonance" demo played over
+# silent bass steps.  Waiting here keeps the pattern audible when we
+# reach the filter-sweep scenes.
+wait_seconds 10
 
 screenshot "v${VERSION}-intro-sequencer"
 
-# ── Scene 3: Acid filter sweep ──────────────────────────────────────────────
+# ── Scene 3: Two bass voices ────────────────────────────────────────────────
+
+scene "Two bass voices"
+
+# Scroll to the sequencer first so the viewer sees the V2 step row
+# materialise as the agent enables the second voice — otherwise the
+# narration describes a change that hasn't surfaced on screen yet.
+look_at sequencer
+wait_seconds 1
+
+say "One bass is fine. Two is better."
+
+# Enable voice 2 *via the API* before asking the agent to write for it.
+# Why: the planner's `default_plan` skips `Bass(1)` when voice 2 is
+# disabled, and the heuristic planner only accepts prompts ≤ 120 chars
+# of raw text — so a long "enable voice 2" prompt either lands in an
+# LLM planner that returns empty or a fallback plan with no bass2
+# lane, and nothing ever writes `bass.enabled[1] = true`.  Flipping
+# the flag here short-circuits that.  Pans are set at the same time
+# for stereo separation; the ask then only needs to generate the
+# actual pattern content the planner's bass2 lane can write.
+api_params '{"bass_voices":[{"enabled":true,"pan":-0.25},{"enabled":true,"pan":0.25}]}'
+pause 1
+
+# Short, bass2-targeted prompt — under 120 chars so the heuristic
+# planner routes it straight to the Bass(1) lane instead of the
+# fallback plan which doesn't include bass2.
+api_prompt "rewrite bass 2: counter-line, octave down, fewer notes, different rhythm from voice 1"
+pause 3
+say "Two voices. Different rhythms."
+say "One pattern, played as a duet."
+wait_seconds 6
+
+screenshot "v${VERSION}-intro-two-voices"
+
+# ── Scene 4: Acid filter sweep ──────────────────────────────────────────────
+#
+# Moved here (was scene 3) so the bass is actually playing when we
+# demonstrate cutoff + resonance.  Scene 2's 10 s warm-up plus the
+# two-bass-voices scene give bass1 and bass2 lanes time to land
+# before the viewer sees the pad sweep.
 
 scene "Acid filter sweep"
 
@@ -87,7 +140,7 @@ wait_seconds 1
 
 screenshot "v${VERSION}-intro-bass-detail"
 
-# ── Scene 4: AI-controlled ramp ─────────────────────────────────────────────
+# ── Scene 5: AI-controlled ramp ─────────────────────────────────────────────
 
 scene "AI-controlled ramp"
 
@@ -97,24 +150,15 @@ say "The AI ramps parameters over bars."
 say "Smooth, locked to the tempo."
 wait_seconds 2
 
-# ── Scene 5: Two bass voices ────────────────────────────────────────────────
-
-scene "Two bass voices"
-
-say "One bass is fine. Two is better."
-
-ask "enable the second bass voice. voice 2 is a counter-line: octave down, different rhythm from voice 1, fewer notes, distinct from the first voice's pattern. pan voice 1 slightly left, pan voice 2 slightly right for stereo separation" "" 12
-
-focus_on bass
-wait_seconds 4
-
-say "Two voices. Different rhythms."
-say "One pattern, played as a duet."
-wait_seconds 3
-
-screenshot "v${VERSION}-intro-two-voices"
+screenshot "v${VERSION}-intro-ramp"
 
 # ── Scene 6: FX parade — delay, phaser, chorus, ring-mod ────────────────────
+#
+# Flow per effect: add module + scroll to it FIRST, then narrate the
+# name while the fresh panel is on screen, then fire the ask so the
+# audio change lands while the viewer's eyes are already on the right
+# module.  The previous "say name → add → scroll → ask" order
+# announced each effect before it was visible.
 
 scene "FX parade"
 
@@ -122,29 +166,29 @@ show_all
 say "Now the effects."
 
 # Delay first — wired into the master chain automatically on add.
-say "Delay."
 delay_id=$(add_effect delay)
 look_at delay
-ask "delay mix 0.22, delay time 0.375, feedback 0.35" FX 4
-wait_seconds 3
+say "Delay."
+api_prompt "delay mix 0.22, delay time 0.375, feedback 0.35" FX
+wait_seconds 5
 
-say "Phaser."
 phaser_id=$(add_effect phaser)
 look_at phaser
-ask "phaser mix 0.5, rate 0.15, depth 0.6" FX 4
-wait_seconds 3
+say "Phaser."
+api_prompt "phaser mix 0.5, rate 0.15, depth 0.6" FX
+wait_seconds 5
 
-say "Chorus."
 chorus_id=$(add_effect chorus)
 look_at chorus
-ask "chorus mix 0.35, rate 0.2, depth 0.5" FX 4
-wait_seconds 3
+say "Chorus."
+api_prompt "chorus mix 0.35, rate 0.2, depth 0.5" FX
+wait_seconds 5
 
-say "Ring modulator."
 ringmod_id=$(add_effect ringmod)
 look_at ringmod
-ask "ringmod mix 0.15, frequency 220" FX 4
-wait_seconds 3
+say "Ring modulator."
+api_prompt "ringmod mix 0.15, frequency 220" FX
+wait_seconds 5
 
 # Front-side overview of the full FX lane.
 look_at fxmod
@@ -191,6 +235,9 @@ wait_seconds 4
 say "Filter pulses fast. Reverb breathes slow."
 wait_seconds 3
 
+# Snapshot the LFO panel with both modulators live.
+screenshot "v${VERSION}-intro-lfo"
+
 # Release both LFOs before tearing down the single-agent rack.
 api_params '{"lfo": [{"enabled": false}, {"enabled": false}]}'
 
@@ -231,6 +278,9 @@ add_agent DRUMS gemma "kit_a,kit_b"
 wait_seconds 0.5
 add_agent FX gemma fx
 wait_for_model
+
+# Snapshot the three agents wired up before the band jam kicks off.
+screenshot "v${VERSION}-intro-agents"
 
 # ── Scene 9: Band jam ───────────────────────────────────────────────────────
 
@@ -293,6 +343,9 @@ ask "wild filter sweep, cutoff low to high across the bar, max resonance, heavy 
 
 say "The knobs don't move. The agent can't override a lock."
 wait_seconds 3
+
+# Freeze-frame of the padlock state for the changelog / social posts.
+screenshot "v${VERSION}-intro-locked"
 
 say "Unlocking."
 unlock "bass.cutoff" "bass.resonance"
