@@ -5,6 +5,8 @@
 
 mod analysis_tests;
 mod api_tests;
+mod audio_analysis_tests;
+mod compile_mod_routes_tests;
 mod coverage_tests;
 mod drum_voice_tests;
 mod dsp_fx_tests;
@@ -54,6 +56,7 @@ mod seed_patterns_tests;
 mod seq_aux_tests;
 mod seq_tests;
 mod song_mode_tests;
+mod spectrum_onset_tests;
 mod state_tests;
 mod transitions_presets_tests;
 mod transport_tests;
