@@ -286,13 +286,43 @@ tts_generate() {
     #   - Segfault outright, leaving the server dead — we detect that via
     #     `/health` and restart it automatically before the next retry so
     #     we don't waste attempts against a corpse.
+    #   - Produce RUNAWAY generations that keep going past the input
+    #     text (seen e.g. a 5-word line synthesised as 48 s of audio).
+    #     We validate clip length against a generous 3×-reading-time
+    #     upper bound and treat an over-long clip as a failed attempt
+    #     — otherwise a single bad cached clip blocks a whole demo run.
     local id="$1" text="$2"
     local outfile="$TTS_DIR/${id}.wav"
     local max_attempts="${TTS_MAX_ATTEMPTS:-10}"
     mkdir -p "$TTS_DIR"
+    # Upper bound: 3× reading-time estimate, floored at 8 s so short
+    # one-word lines (e.g. "Delay.") don't get false-positive rejects
+    # from ffprobe rounding or trailing silence.
+    local est
+    est=$(min_subtitle_dur "$text")
+    local max_dur
+    max_dur=$(printf '%s * 3\n' "$est" | bc 2>/dev/null)
+    # Guard against bc failure / empty max_dur.
+    case "$max_dur" in
+        ''|*[!0-9.]*) max_dur="30" ;;
+    esac
+    # Floor at 8.0 s (lines as short as "Ring modulator." read ~1.5 s).
+    if [ "$(printf '%s < 8.0\n' "$max_dur" | bc 2>/dev/null)" = "1" ]; then
+        max_dur="8.0"
+    fi
     if [ -f "$outfile" ] && [ -s "$outfile" ]; then
-        echo "$outfile"
-        return 0
+        local cached_dur
+        cached_dur=$(tts_duration "$outfile")
+        case "$cached_dur" in
+            ''|*[!0-9.]*) cached_dur="0" ;;
+        esac
+        if [ "$(printf '%s > %s\n' "$cached_dur" "$max_dur" | bc 2>/dev/null)" = "1" ]; then
+            echo "  WARN: cached TTS $id is ${cached_dur}s (> ${max_dur}s ceiling) — regenerating" >&2
+            rm -f "$outfile"
+        else
+            echo "$outfile"
+            return 0
+        fi
     fi
     # Build JSON payload safely via jq (handles quotes, escapes, unicode).
     local json
@@ -321,10 +351,27 @@ tts_generate() {
             --data-binary "$json" \
             -o "$outfile" 2>/dev/null || echo "000")
         if [ -s "$outfile" ]; then
-            echo "$outfile"
-            return 0
+            # Length sanity-check: NeuTTS occasionally produces a runaway
+            # clip that drones on well past the input text.  A single such
+            # clip playing under `say` (blocking) can stall the entire
+            # scenario — we saw a 5-word line synthesised as 48 s of
+            # audio, which stalled the demo before `play` was ever
+            # called.  Treat over-length output as a failed attempt.
+            local gen_dur
+            gen_dur=$(tts_duration "$outfile")
+            case "$gen_dur" in
+                ''|*[!0-9.]*) gen_dur="0" ;;
+            esac
+            if [ "$(printf '%s > %s\n' "$gen_dur" "$max_dur" | bc 2>/dev/null)" = "1" ]; then
+                echo "  WARN: NeuTTS attempt $attempt/$max_attempts produced ${gen_dur}s for ${est}s line (> ${max_dur}s ceiling): $text" >&2
+                rm -f "$outfile"
+            else
+                echo "$outfile"
+                return 0
+            fi
+        else
+            echo "  WARN: NeuTTS attempt $attempt/$max_attempts failed (HTTP $resp_code) for: $text" >&2
         fi
-        echo "  WARN: NeuTTS attempt $attempt/$max_attempts failed (HTTP $resp_code) for: $text" >&2
         # Check if the server is even alive — if not (crashed, segfaulted,
         # OOM'd), restart it before burning more retries.
         if ! curl -sf --max-time 3 "${NEUTTS_URL}/health" >/dev/null 2>&1; then
