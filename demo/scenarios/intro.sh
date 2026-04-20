@@ -23,6 +23,18 @@ scene "Setup"
 
 reset_rack
 
+# Pin the console style to classic acid so the scenario narration (and
+# every prompt that says "classic acid groove") matches the actual
+# `llm.active_style` state — otherwise agents jam against a null style
+# tag and the groove drifts generic techno-ish.  This uses the lean
+# `/api/style` endpoint, which only sets the tag (no rack wipe, no
+# `baseline_params` stamp), so we keep explicit control over which
+# modules the scenario adds (we want a 909 too, which isn't in
+# `acid_classic`'s `rack_modules`).  Agents spawned later — PULSE in
+# this scene, BASS/DRUMS/FX in scene 8 — inherit the tag via
+# `LlmAgentState::from_singleton`, and `reset_rack` doesn't clear it.
+api_set_style acid_classic
+
 say "Impulse Instruct."
 pause 0.4
 say "A smart synthesizer."
