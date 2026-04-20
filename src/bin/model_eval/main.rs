@@ -4,7 +4,7 @@
 //
 // Usage:
 //   cargo run --bin model_eval                        # scan models/ directory
-//   cargo run --bin model_eval -- --models models/qwen3.gguf,models/bonsai.gguf
+//   cargo run --bin model_eval -- --models models/gemma-4-e4b.gguf,models/qwen3.gguf
 //   cargo run --bin model_eval -- --styles acid,rave,ambient
 //   cargo run --bin model_eval -- --json              # machine-readable output
 //   cargo run --bin model_eval -- --timeout 120       # seconds per inference

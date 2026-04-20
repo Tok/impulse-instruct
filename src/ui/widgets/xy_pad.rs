@@ -77,11 +77,7 @@ pub fn xy_pad(
             Stroke::new(1.0, Color32::from_gray(50)),
         );
         // Bottom-right shadow — underside of raised frame
-        painter.rect_stroke(
-            pad_rect.shrink(1.5),
-            frame_r,
-            Stroke::new(1.5, Color32::from_gray(8)),
-        );
+        painter.rect_stroke(pad_rect.shrink(1.5), frame_r, Stroke::new(1.5, theme::VOID));
 
         // ── Inner well (recessed rubber surface) ──────────────────────────────
         let well_r = egui::Rounding::same(4.0);
@@ -186,7 +182,7 @@ pub fn xy_pad(
                 );
             }
         } else {
-            painter.circle_filled(dot_pos, dot_r, Color32::from_gray(28));
+            painter.circle_filled(dot_pos, dot_r, theme::PIT);
             painter.circle_stroke(dot_pos, dot_r, Stroke::new(1.0, Color32::from_gray(38)));
         }
 

@@ -358,7 +358,7 @@ pub fn apply_music_api(
                 if pos < s.sequencer.bass_pattern.len() {
                     s.sequencer.bass_pattern[pos].active = true;
                     s.sequencer.bass_pattern[pos].note = note % 12;
-                    s.sequencer.bass_pattern[pos].accent = true;
+                    s.sequencer.bass_pattern[pos].accent = 1.0;
                 }
             }
         }

@@ -1,7 +1,7 @@
 // ─── state/mod.rs ── single source of truth for all synth parameters ─────────
 // Pure data only — no methods that mutate in-place. Transitions at the bottom.
 use serde::{Deserialize, Serialize};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet, VecDeque};
 
 pub mod drums;
 pub use drums::*;
@@ -33,8 +33,20 @@ pub use sequencer_state::{SequencerState, Step, TB303Step};
 pub mod fx;
 pub use fx::FxState;
 
+pub mod song;
+pub use song::ChainSlotOverride;
+
+pub mod style_overrides;
+pub use style_overrides::{StyleOverride, effective_mc_lines, effective_themes};
+
 pub const MAX_STEPS: usize = 64;
 pub const MAX_BASS_VOICES: usize = 4;
+
+/// Valid sequencer BPM bounds — used by sliders, drag-values, clamp()s, and the
+/// amen source-BPM field.  Narrower than General MIDI's 0–500 on purpose:
+/// sub-40 crawls and 300+ is already in drum'n'bass / gabber territory.
+pub const BPM_MIN: f32 = 40.0;
+pub const BPM_MAX: f32 = 300.0;
 
 // ─── Param control mode (tristate) ───────────────────────────────────────────
 
@@ -106,18 +118,20 @@ pub mod ui_prefs;
 pub use ui_prefs::{AutosaveInterval, HuthStyle, UiPrefs};
 
 pub(crate) mod fx_plan;
+pub mod fx_types;
 pub mod modulation;
 pub mod module_kind;
 pub mod rack;
 mod rack_presets;
 pub mod rack_scope;
 pub use fx_plan::compile_fx_plan;
+pub use fx_types::{FX_STEP_COUNT, FeedbackRoute, FxPlan, FxStep, VoiceSend};
 pub use modulation::{
     ModInput, lfo_target_short_label, mod_input_label, mod_inputs, parse_lfo_target,
 };
 pub use module_kind::{GRID_COLS, ModuleKind, Zone};
 pub use rack::{
-    Cable, CableColor, FxPlan, FxStep, PortDir, PortKind, PortRef, RackModule, RackState,
+    Cable, CableColor, FEEDBACK_GAIN_MAX, PortDir, PortKind, PortRef, RackModule, RackState,
 };
 pub use rack_presets::RACK_PRESETS;
 pub use rack_scope::{parse_module_kind, rack_kind_name_matches, scope_from_control_cables};
@@ -194,12 +208,26 @@ pub struct AppState {
     /// Ordered playback chain — indices into pattern_bank (max 8 entries).
     #[serde(default)]
     pub chain: Vec<usize>,
+    /// Optional per-chain-slot overrides, parallel to `chain`.  Missing
+    /// entries (vec shorter than `chain`) or default entries fall back to
+    /// the loaded pattern's own `pattern_style` / `pattern_bpm_apply`.
+    /// Lets the same bank slot play under different styles / BPM /
+    /// repeat counts at different positions in the song.
+    #[serde(default)]
+    pub chain_overrides: Vec<ChainSlotOverride>,
     /// When true the audio thread advances through `chain` on each pattern loop.
     #[serde(default)]
     pub chain_enabled: bool,
     /// Current position in the chain — written by audio thread, read by UI.
     #[serde(default)]
     pub chain_pos: usize,
+    /// How many times the current chain slot has looped since last advance.
+    /// Counts 0, 1, 2, … up to `override.repeats`; when it reaches the
+    /// threshold the audio thread advances the slot and resets this to 0.
+    /// Audio-thread-owned; persisted so restart inside a long slot doesn't
+    /// teleport forward.
+    #[serde(default)]
+    pub chain_repeat_count: u8,
     /// When true, piano/MIDI note-ons while running write into the bass pattern.
     #[serde(default)]
     pub live_record: bool,
@@ -215,6 +243,12 @@ pub struct AppState {
     /// Per-module TTS state, keyed by TTS rack module id.
     #[serde(default)]
     pub tts_modules: Vec<TtsModuleState>,
+    /// Per-style mc_lines / themes overrides, keyed by style id.
+    /// Lets users edit MC vocab and vocal themes per genre without
+    /// touching `styles.json`.  Missing / empty entries fall back to
+    /// the catalog baseline — see `state::style_overrides`.
+    #[serde(default)]
+    pub style_overrides: HashMap<String, StyleOverride>,
     // api_log moved to a lock-free crossbeam channel (ApiState.api_log_tx → UI receiver)
     /// Scroll target — the UI scrolls to bring this zone/module into view, then clears.
     /// Format: zone name ("global", "voice", "fxmod") or module kind ("AcidBass", "DrumKit808", etc.)
@@ -259,13 +293,16 @@ impl Default for AppState {
             pattern_bank: default_pattern_bank(),
             pattern_edit: 0,
             chain: Vec::new(),
+            chain_overrides: Vec::new(),
             chain_enabled: false,
             chain_pos: 0,
+            chain_repeat_count: 0,
             live_record: false,
             spectrum: Default::default(),
             rack: Default::default(),
             llm_agents: Vec::new(),
             tts_modules: Vec::new(),
+            style_overrides: HashMap::new(),
             scroll_target: None,
             rack_flip_requested: None,
             global_step_count: 0,
@@ -386,6 +423,59 @@ pub struct LlmState {
     /// Global toggle: allow agents to autonomously spawn new agents during jam.
     #[serde(default = "default_true")]
     pub agent_autonomy: bool,
+    /// When true (default), route user prompts through the sequential
+    /// lane pipeline — one planner call + one focused call per lane.
+    /// Flip off to run the legacy monolithic path for debugging.
+    #[serde(default = "default_true")]
+    pub use_pipeline: bool,
+    /// Live progress of the current pipeline run.  `Some` while a turn is
+    /// in flight, `None` between turns.  Transient — not serialised.
+    #[serde(skip)]
+    pub pipeline_progress: Option<PipelineProgress>,
+    /// Per-lane lifecycle scoring keyed by lane label (`"bass1"`,
+    /// `"kit_a"`, …).  Populated by `lane_eval::evaluate_lane` after
+    /// each successful pipeline lane apply.  The Phase 2 weighted
+    /// scheduler reads this to bias the next jam-cycle's lane pick.
+    /// Transient — not serialised.
+    #[serde(skip)]
+    pub lane_scores: HashMap<String, LaneScore>,
+    /// Phase 3 retry queue — lane labels whose last `evaluate_lane`
+    /// score fell below `RETRY_THRESHOLD`.  `planner_jam::jam_plan` drains
+    /// this before running the weighted picker so a one-off bad output
+    /// gets a deterministic do-over.  Deduped on insert, oldest dropped
+    /// on overflow (`RETRY_QUEUE_MAX`).  Transient — not serialised.
+    #[serde(skip)]
+    pub retry_queue: VecDeque<String>,
+}
+
+/// One row of `LlmState.lane_scores`.  Tracks how well a lane's last
+/// generated output matched the rules we encode in the system prompt
+/// (subset rule, density, in-scale ratio, …) plus light bookkeeping
+/// for recency-aware scheduling later.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct LaneScore {
+    /// 0..1 — additive partial credit.  1.0 = output matches every
+    /// expectation; 0.0 = empty / schema-rejected / nonsense.
+    pub score: f32,
+    /// `LlmState.jam_cycle_count` at the moment this lane was last
+    /// updated.  Used by Phase 2's recency decay.
+    pub last_changed_cycle: u32,
+    /// Total successful applies of this lane this session.
+    pub change_count: u32,
+}
+
+/// Streaming progress for the lane pipeline — populated by the LLM thread's
+/// pipeline callback so the UI can render a "lane 3 of 8: bass" bar.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct PipelineProgress {
+    /// Total lanes in the plan (set on PlanReady).
+    pub total_lanes: usize,
+    /// Lanes that finished — succeeded or failed.
+    pub lanes_done: usize,
+    /// Lanes that failed (subset of `lanes_done`).
+    pub failed_count: usize,
+    /// Label of the lane currently inferring, or `None` between lanes.
+    pub current_lane: Option<String>,
 }
 
 fn default_true() -> bool {
@@ -410,11 +500,11 @@ impl Default for LlmState {
             completion_tokens: 0,
             thinking_tokens: 0,
             context_used: 0,
-            context_max: 32768,
+            context_max: 65536,
             locked_params: HashSet::new(),
             focused_params: HashSet::new(),
             auto_jam: true,
-            heat: 0.4,
+            heat: 0.5,
             temperature: 0.9,
             conversation_mode: ConversationMode::Producer,
             active_style: None,
@@ -441,6 +531,10 @@ impl Default for LlmState {
             jam_bars: 0.0,
             jam_cycle_count: 0,
             agent_autonomy: true,
+            use_pipeline: true,
+            pipeline_progress: None,
+            lane_scores: HashMap::new(),
+            retry_queue: VecDeque::new(),
         }
     }
 }
@@ -505,23 +599,51 @@ pub struct LlmAgentState {
     /// Pending hints from other agents, consumed on next inference.
     #[serde(default)]
     pub pending_hints: Vec<String>,
+    /// Short-term conversation trail for this agent — the last few
+    /// condensed outputs it produced, injected into the next cycle's
+    /// prompt so the agent can evolve coherently instead of treating
+    /// every cycle as a blank slate.  Capped at `AGENT_RECENT_OUTPUTS_MAX`.
+    /// `#[serde(default)]` so older saves without the field load cleanly.
+    #[serde(default)]
+    pub recent_outputs: VecDeque<String>,
     /// When true, this agent's style is independent and won't change when the
     /// global style is changed. When false (default), style syncs with global.
     #[serde(default)]
     pub style_locked: bool,
+    /// Per-agent random seed.  -1 = random each call.  Inherited from the
+    /// global LlmState.seed via `propagate_seed` when not locked.
+    #[serde(default = "default_agent_seed")]
+    pub seed: i64,
+    /// When true, this agent's seed is independent and won't change when the
+    /// global seed is changed. When false (default), seed syncs with global.
+    #[serde(default)]
+    pub seed_locked: bool,
+    /// Live pipeline progress for this agent's current inference, or `None`
+    /// when idle.  Transient — not serialised.
+    #[serde(skip)]
+    pub pipeline_progress: Option<PipelineProgress>,
+}
+
+fn default_agent_seed() -> i64 {
+    -1
 }
 
 /// Maximum number of memory entries per agent.
 pub const AGENT_MEMORY_MAX: usize = 20;
 /// Maximum number of style observations.
 pub const STYLE_OBS_MAX: usize = 10;
+/// Maximum number of short-term recent-output entries per agent.  Kept
+/// small on purpose: three cycles of context is enough for coherent
+/// evolution without bloating every prompt or encouraging the model
+/// to repeat stale moves.
+pub const AGENT_RECENT_OUTPUTS_MAX: usize = 3;
 
 impl LlmAgentState {
     pub fn new_default(id: u32) -> Self {
         Self {
             id,
             persona_name: "PULSE".to_string(),
-            heat: 0.4,
+            heat: 0.5,
             temperature: 0.9,
             scope: Vec::new(),
             role: AgentRole::Producer,
@@ -542,7 +664,11 @@ impl LlmAgentState {
             memory: Vec::new(),
             style_observations: Vec::new(),
             pending_hints: Vec::new(),
+            recent_outputs: VecDeque::new(),
             style_locked: false,
+            seed: -1,
+            seed_locked: false,
+            pipeline_progress: None,
         }
     }
 
@@ -572,7 +698,11 @@ impl LlmAgentState {
             memory: Vec::new(),
             style_observations: Vec::new(),
             pending_hints: Vec::new(),
+            recent_outputs: VecDeque::new(),
             style_locked: false,
+            seed: llm.seed,
+            seed_locked: false,
+            pipeline_progress: None,
         }
     }
 }
@@ -580,14 +710,19 @@ impl LlmAgentState {
 /// Sync the default (first) LlmAgentState with the global LlmState.
 pub mod jam_tools;
 pub mod llm_apply;
+pub mod llm_apply_seq;
 pub(crate) mod llm_helpers;
 pub(crate) mod llm_rack;
 pub mod transitions;
+pub mod transitions_presets;
+pub mod transport;
 
 pub use transitions::*;
+pub use transitions_presets::*;
+pub use transport::preserve_sequencer_transport;
 
 pub mod persistence;
 pub use persistence::{
-    apply_session, load_model_setting, load_session, save_model_setting, save_project,
-    save_session, save_session_ext,
+    SESSION_PATH, SETTINGS_PATH, apply_session, load_model_setting, load_project, load_session,
+    save_model_setting, save_project, save_session, save_session_ext,
 };

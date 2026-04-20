@@ -34,8 +34,12 @@ pub(super) struct Bass303 {
     amp_phase: EnvPhase,
     filt_phase: EnvPhase,
     gate: bool,
-    accent: bool,
-    slide: bool,
+    /// Accent intensity 0..=1 — scales the amp peak and cutoff boost
+    /// proportionally (0 = flat, 1 = full accent).
+    accent: f32,
+    /// Slide intensity 0..=1 — scales the portamento time applied when
+    /// gliding into the next note (0 = instant, 1 = full glide).
+    slide: f32,
     filter: LadderFilter,
     svf_low: f32,
     svf_band: f32,
@@ -60,8 +64,8 @@ impl Default for Bass303 {
             amp_phase: EnvPhase::Idle,
             filt_phase: EnvPhase::Idle,
             gate: false,
-            accent: false,
-            slide: false,
+            accent: 0.0,
+            slide: 0.0,
             filter: LadderFilter::default(),
             svf_low: 0.0,
             svf_band: 0.0,
@@ -114,48 +118,67 @@ pub(super) fn lfo_fade_step(prev_fade: f32, sample_rate: f32, lfo_delay: f32) ->
     }
 }
 
-pub(super) fn lfo_wave(p: f32, waveform: u8) -> f32 {
+pub(super) fn lfo_wave(p: f32, waveform: crate::state::LfoWaveform) -> f32 {
+    use crate::state::LfoWaveform;
     let p = p.rem_euclid(1.0);
     match waveform {
-        2 => 4.0 * (p - 0.5).abs() - 1.0, // triangle
-        3 => 2.0 * p - 1.0,               // saw (up)
-        4 => 1.0 - 2.0 * p,               // inv saw (down)
-        5 => {
+        LfoWaveform::Triangle => 4.0 * (p - 0.5).abs() - 1.0,
+        LfoWaveform::Saw => 2.0 * p - 1.0,
+        LfoWaveform::InvSaw => 1.0 - 2.0 * p,
+        LfoWaveform::Square => {
             if p < 0.5 {
                 1.0
             } else {
                 -1.0
             }
-        } // square
-        _ => (p * std::f32::consts::TAU).sin(), // sine (default)
+        }
+        // Sine + S&H (unsupported by bass voice LFO) fall back to sine.
+        LfoWaveform::Sine | LfoWaveform::SampleAndHold => (p * std::f32::consts::TAU).sin(),
     }
 }
 
 impl Bass303 {
-    pub(super) fn trigger(&mut self, note: u8, accent: bool, slide: bool, tuning: u8) {
+    pub(super) fn trigger(
+        &mut self,
+        note: u8,
+        accent: f32,
+        slide: f32,
+        tuning: super::TuningSystem,
+    ) {
         let new_freq = super::dsp_util::midi_to_hz_tuned(note, tuning);
-        if !self.slide {
+        // `slide` is a property of the NEW step (intensity 0..=1): any
+        // positive value asks the voice to glide *into* this note.  The
+        // previously-stored `self.slide` tracks whether the last trigger
+        // asked for a glide — that is what decides whether pitch jumps
+        // or is held for smoothing.
+        let glide_in = self.slide > 0.0;
+        if !glide_in {
             self.freq = new_freq;
         }
         self.target_freq = new_freq;
-        self.accent = accent;
-        self.slide = slide;
+        self.accent = accent.clamp(0.0, 1.0);
+        self.slide = slide.clamp(0.0, 1.0);
         self.gate = true;
-        if !slide {
-            // Envelopes restart their attack phase.  Actual starting value
-            // comes from wherever they currently sit (release-in-progress
-            // steals-from-silence behavior), so legato-ish retriggers
-            // don't click.
-            self.amp_phase = EnvPhase::Attack;
-            self.filt_phase = EnvPhase::Attack;
-            // Preserve legacy accent behavior: accent peaks higher.
-            if self.amp_env < 0.01 {
-                self.amp_env = 0.0;
-            }
-            if self.filt_env < 0.01 {
-                self.filt_env = 0.0;
-            }
-            // Reset LFO fade-in so each new note honors the delay setting.
+        // Always restart the envelope attack.  Keeping the old "slide
+        // skips envelope retrigger" behaviour caused slide-into notes to
+        // be barely audible when the previous note had already decayed
+        // into Release (which is the common case for 303-style patches
+        // where amp_sustain ≈ 0).  Restarting Attack here means a slide
+        // note is always audible; pitch still glides smoothly because
+        // `self.freq` was preserved above — only the envelope retriggers,
+        // not the oscillator pitch.
+        self.amp_phase = EnvPhase::Attack;
+        self.filt_phase = EnvPhase::Attack;
+        if self.amp_env < 0.01 {
+            self.amp_env = 0.0;
+        }
+        if self.filt_env < 0.01 {
+            self.filt_env = 0.0;
+        }
+        // LFO delay only resets on a hard note change, not on legato
+        // glides — otherwise a long LFO delay would never accumulate
+        // across a chain of slide-linked notes.
+        if !glide_in {
             self.lfo_fade = 0.0;
         }
     }
@@ -169,8 +192,11 @@ impl Bass303 {
     pub(super) fn process(&mut self, p: &AudioParams, vp: &params::BassVoiceParams) -> f32 {
         let sr = p.sample_rate;
 
-        if self.slide {
-            let slide_time = 0.01 + vp.portamento_time * 0.49;
+        if self.slide > 0.0 {
+            // Slide amount scales the glide time proportionally — a half-
+            // strength slide completes its glide in half the time of a
+            // full slide at the same portamento setting.
+            let slide_time = 0.01 + vp.portamento_time * 0.49 * self.slide;
             let slide_coeff = (-1.0 / (sr * slide_time)).exp();
             self.freq = self.freq + (self.target_freq - self.freq) * (1.0 - slide_coeff);
         }
@@ -180,8 +206,9 @@ impl Bass303 {
         // down.  Rate is either bpm-synced (Hz = (host_bpm / 60) /
         // sync_beats) or free (linear 0.01..20 Hz mapping).  The fade-in
         // honors lfo_delay so each new note ramps up to full depth over
-        // delay seconds (0 = instant).  lfo_target == 0 = Off = no-op.
-        let lfo_value = if vp.lfo_target == 0 || vp.lfo_depth <= 0.0001 {
+        // delay seconds (0 = instant).  Off disables the LFO entirely.
+        use crate::state::BassLfoTarget;
+        let lfo_value = if vp.lfo_target == BassLfoTarget::Off || vp.lfo_depth <= 0.0001 {
             0.0
         } else {
             let rate_hz = lfo_rate_hz(
@@ -197,22 +224,22 @@ impl Bass303 {
         };
         // Compose each modulation contribution based on target.  Values
         // are chosen so full depth = audibly musical but not destructive.
-        let lfo_pitch_st = if vp.lfo_target == 1 {
+        let lfo_pitch_st = if vp.lfo_target == BassLfoTarget::Pitch {
             lfo_value * 2.0
         } else {
             0.0
         };
-        let lfo_pwm = if vp.lfo_target == 2 {
+        let lfo_pwm = if vp.lfo_target == BassLfoTarget::PulseWidth {
             lfo_value * 0.45
         } else {
             0.0
         };
-        let lfo_cutoff = if vp.lfo_target == 3 {
+        let lfo_cutoff = if vp.lfo_target == BassLfoTarget::FilterCutoff {
             lfo_value * 0.5
         } else {
             0.0
         };
-        let lfo_amp_mult = if vp.lfo_target == 4 {
+        let lfo_amp_mult = if vp.lfo_target == BassLfoTarget::Amplitude {
             1.0 + lfo_value * 0.5
         } else {
             1.0
@@ -273,11 +300,10 @@ impl Bass303 {
         let noise = self.noise_gen.next();
         let osc = osc + sub * vp.sub_osc_level + noise * vp.noise_mix;
 
-        let accent_mult = if self.accent {
-            vp.accent_level * 0.4 + 0.8
-        } else {
-            1.0
-        };
+        // Filter-env accent boost scales linearly with accent intensity —
+        // no accent → 1.0 (unchanged), full accent → full boost.
+        let full_accent_mult = vp.accent_level * 0.4 + 0.8;
+        let accent_mult = 1.0 + self.accent * (full_accent_mult - 1.0);
         // Legacy filter-env decay time (used when filter_sustain == 0 — the
         // 303 behavior).  For 101 shaping, filter_attack / filter_sustain /
         // filter_release take over via the phase machine.
@@ -293,8 +319,10 @@ impl Bass303 {
         let amp_attack_c = env_coeff(sr, amp_attack_t.max(0.001));
         let amp_decay_c = env_coeff(sr, amp_decay_t);
         let amp_release_c = env_coeff(sr, amp_release_t.max(0.001));
-        // Accent lifts the amp peak target the same way the old code did.
-        let amp_peak = if self.accent { 1.0 } else { 0.8 };
+        // Accent lifts the amp peak target proportionally: 0 → 0.8
+        // (unaccented level), 1 → 1.0 (full peak).  Values in between
+        // glide the peak linearly so a half-accent is audibly softer.
+        let amp_peak = 0.8 + 0.2 * self.accent;
         match self.amp_phase {
             EnvPhase::Idle => {
                 self.amp_env = 0.0;
@@ -370,18 +398,20 @@ impl Bass303 {
             (w / (1.0 + w)).clamp(0.001, 0.99)
         };
 
-        let filtered = if vp.filter_mode == 0 {
-            self.filter.process(osc, g, vp.resonance * 0.97)
-        } else {
-            let f = (std::f32::consts::PI * cutoff_hz / sr).sin().min(0.95);
-            let q = 1.0 - vp.resonance * 0.95;
-            self.svf_low += f * self.svf_band;
-            let high = osc - self.svf_low - q * self.svf_band;
-            self.svf_band += f * high;
-            if vp.filter_mode == 1 {
-                high
-            } else {
-                self.svf_band
+        use crate::state::FilterMode;
+        let filtered = match vp.filter_mode {
+            FilterMode::Lowpass => self.filter.process(osc, g, vp.resonance * 0.97),
+            FilterMode::Highpass | FilterMode::Bandpass => {
+                let f = (std::f32::consts::PI * cutoff_hz / sr).sin().min(0.95);
+                let q = 1.0 - vp.resonance * 0.95;
+                self.svf_low += f * self.svf_band;
+                let high = osc - self.svf_low - q * self.svf_band;
+                self.svf_band += f * high;
+                if vp.filter_mode == FilterMode::Highpass {
+                    high
+                } else {
+                    self.svf_band
+                }
             }
         };
 
@@ -456,21 +486,152 @@ mod tests {
     }
 
     #[test]
+    fn slide_trigger_restarts_envelope() {
+        // Regression: previously, `slide=true` skipped envelope retrigger
+        // entirely, so a slide following a decayed note inherited
+        // Release-into-silence and was inaudible.  After the fix, every
+        // trigger restarts Attack — pitch smoothing is what makes it a
+        // slide, not a muted envelope.
+        let mut v = Bass303::default();
+        // Decay the envelope into Release manually to simulate a previous
+        // note having finished playing.
+        v.amp_phase = EnvPhase::Release;
+        v.amp_env = 0.0;
+        v.filt_phase = EnvPhase::Release;
+        v.filt_env = 0.0;
+        v.slide = 1.0; // previous trigger was a slide, so glide-in is armed
+        v.freq = 110.0;
+        v.trigger(48, 0.0, 1.0, super::super::TuningSystem::TwelveTet); // new slide note
+        assert!(matches!(v.amp_phase, EnvPhase::Attack));
+        assert!(matches!(v.filt_phase, EnvPhase::Attack));
+        // freq preserved for glide; target_freq updated.
+        assert!((v.freq - 110.0).abs() < 1e-3);
+        assert!(
+            (v.target_freq
+                - super::super::dsp_util::midi_to_hz_tuned(
+                    48,
+                    super::super::TuningSystem::TwelveTet
+                ))
+            .abs()
+                < 1e-3
+        );
+    }
+
+    #[test]
+    fn non_slide_trigger_jumps_pitch() {
+        let mut v = Bass303::default();
+        v.slide = 0.0; // previous was not a slide
+        v.freq = 110.0;
+        v.trigger(60, 0.0, 0.0, super::super::TuningSystem::TwelveTet);
+        let expected =
+            super::super::dsp_util::midi_to_hz_tuned(60, super::super::TuningSystem::TwelveTet);
+        assert!(
+            (v.freq - expected).abs() < 1e-3,
+            "non-slide trigger should jump freq to new note; got {}, want {}",
+            v.freq,
+            expected
+        );
+    }
+
+    #[test]
     fn lfo_wave_shapes_have_expected_endpoints() {
+        use crate::state::LfoWaveform::*;
         // Sine: 0 at p=0, 0 at p=0.5; positive peak at 0.25.
-        assert!((lfo_wave(0.0, 0)).abs() < 1e-5);
-        assert!((lfo_wave(0.5, 0)).abs() < 1e-5);
-        assert!(lfo_wave(0.25, 0) > 0.99);
-        // Saw (3): -1 at p=0, +1 at p=1.
-        assert!((lfo_wave(0.0, 3) + 1.0).abs() < 1e-5);
-        assert!((lfo_wave(0.999, 3) - 0.998).abs() < 1e-2);
-        // Inv saw (4): +1 at p=0.
-        assert!((lfo_wave(0.0, 4) - 1.0).abs() < 1e-5);
-        // Square (5): +1 first half, -1 second half.
-        assert_eq!(lfo_wave(0.25, 5), 1.0);
-        assert_eq!(lfo_wave(0.75, 5), -1.0);
-        // Triangle (2): +1 at 0 (peak), -1 at 0.5 (valley).
-        assert!((lfo_wave(0.0, 2) - 1.0).abs() < 1e-5);
-        assert!((lfo_wave(0.5, 2) + 1.0).abs() < 1e-5);
+        assert!((lfo_wave(0.0, Sine)).abs() < 1e-5);
+        assert!((lfo_wave(0.5, Sine)).abs() < 1e-5);
+        assert!(lfo_wave(0.25, Sine) > 0.99);
+        // Saw: -1 at p=0, +1 at p=1.
+        assert!((lfo_wave(0.0, Saw) + 1.0).abs() < 1e-5);
+        assert!((lfo_wave(0.999, Saw) - 0.998).abs() < 1e-2);
+        // Inv saw: +1 at p=0.
+        assert!((lfo_wave(0.0, InvSaw) - 1.0).abs() < 1e-5);
+        // Square: +1 first half, -1 second half.
+        assert_eq!(lfo_wave(0.25, Square), 1.0);
+        assert_eq!(lfo_wave(0.75, Square), -1.0);
+        // Triangle: +1 at 0 (peak), -1 at 0.5 (valley).
+        assert!((lfo_wave(0.0, Triangle) - 1.0).abs() < 1e-5);
+        assert!((lfo_wave(0.5, Triangle) + 1.0).abs() < 1e-5);
+        // S&H falls back to sine (not supported on bass voice).
+        assert!((lfo_wave(0.0, SampleAndHold)).abs() < 1e-5);
+    }
+
+    // ── lfo_rate_hz ─────────────────────────────────────────────────────────
+
+    #[test]
+    fn lfo_rate_hz_free_mode_maps_linearly_to_roughly_0p01_to_20_hz() {
+        // Free mode: rate_norm 0..1 → 0.01..20 Hz via `0.01 + rate * 19.99`.
+        // Endpoints must land exactly on the clamp bounds.
+        let at_zero = lfo_rate_hz(0.0, false, 120.0, 1.0);
+        let at_one = lfo_rate_hz(1.0, false, 120.0, 1.0);
+        assert!((at_zero - 0.01).abs() < 1e-4, "free@0 should be 0.01 Hz");
+        assert!((at_one - 20.0).abs() < 1e-3, "free@1 should be 20.0 Hz");
+        // Midpoint check so the linear scaling can't silently become log.
+        let mid = lfo_rate_hz(0.5, false, 120.0, 1.0);
+        assert!((mid - 10.005).abs() < 1e-3);
+    }
+
+    #[test]
+    fn lfo_rate_hz_bpm_sync_produces_beat_synced_rate() {
+        // bpm_sync=true → Hz = (bpm / 60) / sync_beats.
+        // 120 BPM, sync_beats=1 → 2 Hz (one cycle per quarter beat... no,
+        // (120/60)/1 = 2 Hz i.e. 2 cycles per second = two per beat in 60
+        // BPM but here it's two per second at 120 BPM).  Assert the
+        // arithmetic directly.
+        let hz = lfo_rate_hz(0.5, true, 120.0, 1.0);
+        assert!((hz - 2.0).abs() < 1e-4);
+        // Half-note sync at 120 BPM → (120/60)/2 = 1 Hz.
+        let hz = lfo_rate_hz(0.0, true, 120.0, 2.0);
+        assert!((hz - 1.0).abs() < 1e-4);
+    }
+
+    #[test]
+    fn lfo_rate_hz_clamps_sync_beats_to_floor_to_avoid_div_zero() {
+        // sync_beats = 0 (or negative) would blow up; the impl clamps
+        // to 0.03125.  Compute expected and check equality.
+        let hz = lfo_rate_hz(0.5, true, 120.0, 0.0);
+        let expected = (120.0_f32 / 60.0 / 0.03125).clamp(0.01, 40.0);
+        assert!((hz - expected).abs() < 1e-3);
+    }
+
+    #[test]
+    fn lfo_rate_hz_clamps_to_40_hz_ceiling() {
+        // Extreme sync (tiny sync_beats) shouldn't push rate past 40 Hz
+        // — that would alias for the audio-thread phase accumulator.
+        let hz = lfo_rate_hz(1.0, true, 300.0, 0.03125);
+        assert!(hz <= 40.0 + 1e-3, "rate must clamp to 40 Hz, got {hz}");
+    }
+
+    // ── lfo_fade_step ───────────────────────────────────────────────────────
+
+    #[test]
+    fn lfo_fade_step_delay_near_zero_snaps_to_unity() {
+        // lfo_delay * 4 ≤ 0.001 s → fade-in is effectively instant;
+        // return 1.0 regardless of prev_fade.
+        assert_eq!(lfo_fade_step(0.0, 48_000.0, 0.0), 1.0);
+        assert_eq!(lfo_fade_step(0.42, 48_000.0, 0.0001), 1.0);
+    }
+
+    #[test]
+    fn lfo_fade_step_progresses_linearly_toward_one() {
+        // With lfo_delay > threshold, each sample adds 1/(sr * delay_s)
+        // to prev_fade.  After one sample at 48 kHz with delay_s = 1 s,
+        // we should move 1/48000 above prev_fade.
+        let start = 0.0;
+        let next = lfo_fade_step(start, 48_000.0, 0.25); // 0.25 * 4 = 1 s
+        assert!(
+            (next - (start + 1.0 / 48_000.0)).abs() < 1e-6,
+            "single-step advance must be 1/(sr * delay_s), got {next}",
+        );
+    }
+
+    #[test]
+    fn lfo_fade_step_saturates_at_one() {
+        // prev_fade already > 1 → clamp down to 1 on the next step.
+        // prev_fade at 0.9999, single step pushes it past 1 → clamp.
+        let next = lfo_fade_step(0.9999, 48_000.0, 0.25);
+        assert!(next <= 1.0, "fade must not exceed 1.0, got {next}");
+        // Already at 1 stays at 1.
+        let next = lfo_fade_step(1.0, 48_000.0, 0.25);
+        assert!((next - 1.0).abs() < 1e-6);
     }
 }

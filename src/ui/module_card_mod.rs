@@ -13,6 +13,7 @@ use crate::state::{
 };
 use crate::ui::ImpulseApp;
 use crate::ui::module_card::{PortPos, draw_port_circle};
+use crate::ui::theme;
 
 /// Ordered list of all LfoTarget variants — used to populate Selector-slot
 /// dropdowns.  Kept in display order (voices → FX → master).
@@ -51,6 +52,7 @@ const ALL_TARGETS: &[LfoTarget] = &[
     LfoTarget::GranularDensity,
     LfoTarget::GranularGrain,
     LfoTarget::GranularPos,
+    LfoTarget::NeuTtsVolume,
     LfoTarget::ReverbMix,
     LfoTarget::ReverbSize,
     LfoTarget::ReverbDamp,
@@ -91,33 +93,60 @@ const ALL_TARGETS: &[LfoTarget] = &[
     LfoTarget::StereoWidth,
 ];
 
-/// Vertical gap between successive back-panel ports — large enough that the
-/// per-jack mod-overlay (slider + chip row), now anchored *below* the jack
-/// centre, doesn't overlap the next jack's circle.
-const PORT_SPACING: f32 = 26.0;
+/// Vertical gap between successive back-panel ports.
+/// - Fixed jacks: tight (no chip strip).
+/// - Selector jacks: taller (chip strip wraps under the slider).
+/// - Compact mode: 1-cell-tall cards (NoiseVoice, most FX) can't afford
+///   the tall selector spacing, so selectors collapse their chip strip
+///   inline onto the slider row and stack at the same tight pitch as
+///   Fixed jacks — otherwise a 3-jack FX overlay overflows its card.
+const PORT_SPACING_FIXED: f32 = 24.0;
+const PORT_SPACING_SELECTOR: f32 = 42.0;
+const PORT_SPACING_COMPACT: f32 = 24.0;
+
+/// True if the module kind has room for the 2-row selector overlay.
+/// Currently keyed off grid height: anything taller than one grid row
+/// can fit the stacked chip strip; one-row cards use compact mode.
+pub(crate) fn back_is_compact(kind: ModuleKind) -> bool {
+    kind.grid_size(crate::state::rack::GRID_COLS).1 <= 1
+}
+
+/// Vertical spacing for a given slot kind, given the card's compact flag.
+fn slot_spacing(slot: &crate::state::modulation::ModInput, compact: bool) -> f32 {
+    match slot {
+        crate::state::modulation::ModInput::Fixed(_) => PORT_SPACING_FIXED,
+        crate::state::modulation::ModInput::Selector if compact => PORT_SPACING_COMPACT,
+        crate::state::modulation::ModInput::Selector => PORT_SPACING_SELECTOR,
+    }
+}
+
+/// Chip-text font size (px) — shrunk slightly from the previous 7.5 so the
+/// per-target chips fit more per row inside a typical card width.
+const MOD_OVERLAY_CHIP_FONT_PX: f32 = 6.5;
 
 /// Small labelled toggle chip — selected = light fill + bright text,
 /// unselected = dim fill + dim text.  Used in mod-target multi-select.
 fn chip_button(ui: &mut egui::Ui, label: &str, selected: bool) -> egui::Response {
     let text = egui::RichText::new(label)
         .monospace()
-        .size(7.5)
+        .size(MOD_OVERLAY_CHIP_FONT_PX)
         .color(if selected {
             Color32::from_gray(235)
         } else {
             Color32::from_gray(140)
         });
-    ui.add(
-        egui::Button::new(text)
-            .small()
-            .fill(if selected {
-                Color32::from_gray(60)
-            } else {
-                Color32::from_gray(28)
-            })
-            .stroke(egui::Stroke::NONE)
-            .rounding(2.0),
-    )
+    ui.scope(|ui| {
+        // Tighter padding than the default — chips need to pack densely.
+        ui.spacing_mut().button_padding = egui::vec2(2.0, 0.5);
+        ui.add(
+            egui::Button::new(text)
+                .small()
+                .fill(if selected { theme::IRON } else { theme::PIT })
+                .stroke(egui::Stroke::NONE)
+                .rounding(2.0),
+        )
+    })
+    .inner
 }
 
 /// True if `kind` exposes an audio-in jack on the back panel.
@@ -164,10 +193,16 @@ pub fn has_control_in(kind: ModuleKind) -> bool {
 }
 
 /// Computed back-panel strip height — AUD/CV/CTL share a single horizontal
-/// top row (~30 px), then the mod-input jacks stack vertically below.
+/// top row (~32 px), then the mod-input jacks stack vertically below
+/// using `slot_spacing` for each slot (Fixed = tight, Selector = taller,
+/// Selector-on-1-cell-card = tight with inline chips).
 pub fn back_strip_height(kind: ModuleKind) -> f32 {
-    let mods = mod_inputs(kind).len();
-    (32.0 + mods as f32 * PORT_SPACING).max(48.0)
+    let compact = back_is_compact(kind);
+    let stack: f32 = mod_inputs(kind)
+        .iter()
+        .map(|s| slot_spacing(s, compact))
+        .sum();
+    (32.0 + stack).max(40.0)
 }
 
 /// Draw Mod-in jacks for `kind` starting at `start_y` on the left (input)
@@ -217,7 +252,7 @@ pub fn draw_mod_input_ports(
             Sense::hover(),
         )
         .on_hover_text(tip);
-        y += PORT_SPACING;
+        y += slot_spacing(slot, back_is_compact(kind));
     }
     y
 }
@@ -236,11 +271,16 @@ pub fn draw_mod_selector_dropdowns(
     if !app.rack_flipped {
         return;
     }
-    // Skip overlays whose anchor would land in (or below) the bottom-panel
-    // strip — the piano + footer always stay on top regardless of egui
-    // layer order.  Approximate piano+footer reserved height = 105 px.
+    // Skip overlays whose extent would land in (or below) the bottom-panel
+    // strip — the piano + footer always stay on top of egui Areas because
+    // panels live at a higher LayerId.  The earlier 105 px cutoff used
+    // only the anchor; the overlay itself extends ~50–70 px below it (one
+    // slider row + up to two wrapped chip rows), so we need a fatter
+    // buffer to avoid the bottom-panel collision the user reported.
     let screen_bottom = ctx.screen_rect().max.y;
-    let max_overlay_y = screen_bottom - 105.0;
+    let bottom_panel_h = 105.0_f32;
+    let overlay_est_h_max = 70.0_f32;
+    let max_overlay_y = screen_bottom - bottom_panel_h - overlay_est_h_max;
     // Same idea for the top edge: when the rack scrolls and a back-panel
     // jack ends up above the canvas, its Foreground Area would otherwise
     // paint over the header info panel and the prompt strip.  Using the
@@ -285,6 +325,7 @@ pub fn draw_mod_selector_dropdowns(
             continue;
         };
         let is_selector = matches!(slot, ModInput::Selector);
+        let compact = back_is_compact(*kind);
         let cur_targets: Vec<LfoTarget> = selectors.get(idx).cloned().unwrap_or_default();
         let cur_depth = depths.get(idx).copied().unwrap_or(1.0).clamp(0.0, 1.0);
         let cur_invert = inverts.get(idx).copied().unwrap_or(false);
@@ -298,10 +339,11 @@ pub fn draw_mod_selector_dropdowns(
             .collect();
         let all_selected =
             !real_targets.is_empty() && real_targets.iter().all(|t| cur_targets.contains(t));
-        // Anchor the overlay below the jack centre (was above-centre at
-        // y - 8) so it doesn't cover the AUD / CV / CTL labels of the
-        // top horizontal port row sitting above the first mod jack.
-        let anchor = p.center + Vec2::new(10.0, 4.0);
+        // Anchor on the SAME ROW as the jack/label.  The label "MOD1"
+        // (etc.) sits at jack.x + 10 and is ~26 px wide, so we offset
+        // 36 px right of the jack centre to clear it, and 8 px up to
+        // vertically centre the slider/chips around the jack y.
+        let anchor = p.center + Vec2::new(36.0, -8.0);
         if anchor.y > max_overlay_y {
             // Jack is below the visible rack region — skip its overlay so
             // the piano panel below isn't covered by the floating Area.
@@ -312,48 +354,91 @@ pub fn draw_mod_selector_dropdowns(
             // Area doesn't paint over the header/prompt strip above.
             continue;
         }
+        // Use the actual card width as the wrap budget.  Jack sits 16 px
+        // in from the card's left edge and the overlay anchors 36 px
+        // further right (past the jack label) — so usable horizontal
+        // budget = card_w - 16 - 36 - 4 (right margin).
+        let card_w = ctx
+            .data(|d| d.get_temp::<f32>(egui::Id::new("back_card_w").with(p.port.module_id)))
+            .unwrap_or(180.0);
+        let overlay_max_w = (card_w - 56.0).max(110.0);
+        let chip_strip_w = (overlay_max_w - 8.0).max(90.0);
         egui::Area::new(egui::Id::new(("mod_overlay", p.port.module_id, idx)))
             .order(egui::Order::Foreground)
             .fixed_pos(anchor)
             .show(ctx, |ui| {
+                ui.set_max_width(overlay_max_w);
                 let frame = egui::Frame::none()
-                    .fill(Color32::from_gray(18))
+                    .fill(theme::DEEP)
                     .stroke(egui::Stroke::new(0.5, Color32::from_gray(50)))
                     .rounding(2.0)
                     .inner_margin(egui::Margin::symmetric(3.0, 1.0));
                 frame.show(ui, |ui| {
-                    ui.horizontal(|ui| {
-                        ui.spacing_mut().item_spacing = Vec2::new(2.0, 0.0);
-                        // Polarity toggle — `+` for normal, `−` for inverted.
-                        // Shown FIRST so the slider's % visually matches the
-                        // sign next to it.
+                    ui.spacing_mut().item_spacing = Vec2::new(3.0, 1.0);
+                    // First row: polarity · depth slider · % readout
+                    // (+ inlined chip strip when the card is compact so
+                    // 1-cell-tall modules don't overflow their strip).
+                    ui.horizontal_wrapped(|ui| {
                         let pol_label = if cur_invert { "−" } else { "+" };
                         if chip_button(ui, pol_label, cur_invert).clicked() {
                             invert_changes.push((p.port.module_id, idx, !cur_invert));
                         }
+                        // polarity ~14, pct readout ~30, frame padding 6,
+                        // item spacing 3*2 — leaves the rest for the slider.
+                        // In compact mode the slider shrinks further so the
+                        // chip row fits on the same line; otherwise it can
+                        // stretch up to 140 px on wider cards.
+                        let slider_w = if compact {
+                            (overlay_max_w - 14.0 - 30.0 - 12.0).clamp(14.0, 40.0)
+                        } else {
+                            (overlay_max_w - 14.0 - 30.0 - 12.0).clamp(20.0, 140.0)
+                        };
                         let mut d = cur_depth;
-                        ui.spacing_mut().slider_width = 50.0;
+                        // Aggressively shrink the slider's interact size,
+                        // padding, and item spacing so the handle + track
+                        // are noticeably smaller than the default and the
+                        // depth row stays single-line even on the
+                        // narrowest 2-cell-wide FX cards.
+                        let style = ui.style_mut();
+                        style.spacing.slider_width = slider_w;
+                        style.spacing.interact_size.y = 8.0;
+                        style.spacing.button_padding = egui::vec2(2.0, 0.0);
+                        style.spacing.item_spacing = egui::vec2(2.0, 0.0);
                         ui.add(egui::Slider::new(&mut d, 0.0..=1.0).show_value(false))
                             .on_hover_text(format!(
                                 "Depth {}{:.0}%",
                                 if cur_invert { "-" } else { "+" },
                                 cur_depth * 100.0
                             ));
-                        ui.label(
-                            egui::RichText::new(format!(
-                                "{}{:>3}%",
-                                if cur_invert { "-" } else { " " },
-                                (d * 100.0).round() as i32
-                            ))
-                            .monospace()
-                            .size(7.5)
-                            .color(Color32::from_gray(170)),
+                        // Allocate a fixed-size slot matching the slider's
+                        // 12-px row height so `centered_and_justified` can
+                        // vertically centre the % readout inside it — the
+                        // outer `horizontal_wrapped` is Align::TOP which
+                        // would otherwise float the small label at the top
+                        // of the tall slider row.
+                        ui.allocate_ui_with_layout(
+                            egui::vec2(28.0, 12.0),
+                            egui::Layout::centered_and_justified(egui::Direction::LeftToRight),
+                            |ui| {
+                                ui.label(
+                                    egui::RichText::new(format!(
+                                        "{}{:>3}%",
+                                        if cur_invert { "-" } else { " " },
+                                        (d * 100.0).round() as i32
+                                    ))
+                                    .monospace()
+                                    .size(7.0)
+                                    .color(Color32::from_gray(170)),
+                                );
+                            },
                         );
                         if d != cur_depth {
                             depth_changes.push((p.port.module_id, idx, d));
                         }
-                        if is_selector {
-                            // "—" / ALL meta-chip
+                        // Compact + Selector: inline chip strip right after
+                        // the % readout so the overlay stays single-row.
+                        if compact && is_selector {
+                            ui.add_space(2.0);
                             if chip_button(ui, "—", all_selected).clicked() {
                                 let new_targets = if all_selected {
                                     Vec::new()
@@ -362,7 +447,6 @@ pub fn draw_mod_selector_dropdowns(
                                 };
                                 sel_changes.push((p.port.module_id, idx, new_targets));
                             }
-                            // Per-target toggle chips (multi-select)
                             for t in &real_targets {
                                 let active = cur_targets.contains(t);
                                 if chip_button(ui, lfo_target_short_label(*t), active).clicked() {
@@ -377,6 +461,38 @@ pub fn draw_mod_selector_dropdowns(
                             }
                         }
                     });
+                    if is_selector && !compact {
+                        // Second (+) row: ALL meta-chip + per-target chips.
+                        // Wrapped so wide kits split into multiple lines
+                        // instead of running off the side of the card.
+                        ui.scope(|ui| {
+                            ui.set_max_width(chip_strip_w);
+                            ui.horizontal_wrapped(|ui| {
+                                ui.spacing_mut().item_spacing = Vec2::new(2.0, 1.0);
+                                if chip_button(ui, "—", all_selected).clicked() {
+                                    let new_targets = if all_selected {
+                                        Vec::new()
+                                    } else {
+                                        real_targets.clone()
+                                    };
+                                    sel_changes.push((p.port.module_id, idx, new_targets));
+                                }
+                                for t in &real_targets {
+                                    let active = cur_targets.contains(t);
+                                    if chip_button(ui, lfo_target_short_label(*t), active).clicked()
+                                    {
+                                        let mut next = cur_targets.clone();
+                                        if active {
+                                            next.retain(|x| x != t);
+                                        } else {
+                                            next.push(*t);
+                                        }
+                                        sel_changes.push((p.port.module_id, idx, next));
+                                    }
+                                }
+                            });
+                        });
+                    }
                 });
             });
     }

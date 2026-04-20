@@ -48,6 +48,3 @@ echo.
 echo [OK] Built: %TARGET%
 echo.
 echo This server handles: Qwen3, Qwen3-14B, Gemma 4, and all standard GGUF models.
-echo The PrismML server (.llama-build\) is still required for Bonsai 8B.
-echo.
-echo Impulse Instruct picks the right binary automatically based on model name.

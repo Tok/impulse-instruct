@@ -3,16 +3,16 @@
 
 use serde::{Deserialize, Serialize};
 
-/// How much Huth *Farbige Noten* color theory is applied to the UI.
+/// Whether Huth *Farbige Noten* coloring is applied to the piano + sequencer.
+/// Older sessions used `PianoOnly` / `Full` — both deserialize to `On`.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum HuthStyle {
-    /// Huth colors only on the piano keyboard (existing behavior).
-    #[default]
-    PianoOnly,
-    /// Piano + sequencer melodic note cells rendered as Huth U-shapes.
-    Full,
-    /// All UI chrome is monochrome; piano uses standard black/white.
+    /// Monochrome — piano uses standard black/white, sequencer dots are gray.
     Off,
+    /// Huth colors on the piano keyboard and sequencer LED dots.
+    #[default]
+    #[serde(alias = "PianoOnly", alias = "Full")]
+    On,
 }
 
 /// How often the session is auto-saved to `session.json`.
@@ -113,6 +113,13 @@ pub struct UiPrefs {
     /// Rack grid columns (3–6). Determines cell size: rack_width / N.
     #[serde(default = "default_grid_cols")]
     pub rack_grid_cols: u8,
+    /// When true, app startup reshapes the rack to match the active
+    /// style's `rack_modules` (via `style_rack::apply`) instead of
+    /// preserving whatever was saved in `session.json`.  Off by default
+    /// so existing users keep their customised rack; opt-in for users
+    /// who prefer a clean slate each time they relaunch a style.
+    #[serde(default)]
+    pub autosync_rack_on_start: bool,
 }
 
 fn default_grid_cols() -> u8 {
@@ -160,7 +167,7 @@ impl UiPrefs {
 impl Default for UiPrefs {
     fn default() -> Self {
         Self {
-            huth_style: HuthStyle::PianoOnly,
+            huth_style: HuthStyle::On,
             bloom_enabled: false,
             bloom_intensity: 0.5,
             log_level_idx: 2, // Info
@@ -181,6 +188,7 @@ impl Default for UiPrefs {
             show_event_stream: true,
             stream_stereo: false,
             rack_grid_cols: 5,
+            autosync_rack_on_start: false,
         }
     }
 }

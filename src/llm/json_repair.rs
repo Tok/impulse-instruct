@@ -93,7 +93,7 @@ pub fn sanitize_json_structure(v: serde_json::Value) -> serde_json::Value {
 
     // Fix LFO format variants — model emits one of three formats:
     //   A) dot-notation: {"lfo[0].enabled": true, "lfo[0].rate": 0.1}
-    //   B) named-slot:   {"lfo_0": {"enabled": true}, "lfo_1": {...}}   ← Bonsai
+    //   B) named-slot:   {"lfo_0": {"enabled": true}, "lfo_1": {...}}
     //   C) correct array: [{"enabled": true}, ...]
     // Normalise A and B → C (array indexed 0–3).
     if let Some(lfo_val) = obj.get("lfo")

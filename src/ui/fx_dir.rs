@@ -9,9 +9,9 @@ use crate::ui::theme;
 /// Returns true if the user clicked (so the caller can flush state).
 pub fn draw_fx_dir_button(ui: &mut egui::Ui, dir: &mut u8, hover_prefix: &str) -> bool {
     let label = match *dir {
-        1 => "REV",
-        2 => "MIR",
-        _ => "FWD",
+        1 => "REVERSE",
+        2 => "MIRROR",
+        _ => "FORWARD",
     };
     let active = *dir != 0;
     let col = if active { theme::CHALK } else { theme::SMOKE };

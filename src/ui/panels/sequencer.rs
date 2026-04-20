@@ -1,12 +1,8 @@
 // ─── ui/panels/sequencer.rs ───────────────────────────────────────────────────
 // Step sequencer panel.
 
-use super::sequencer_chain::draw_pattern_chain;
 use super::sequencer_drums::draw_drum_rows;
-use crate::state::{
-    DrumVoice, MAX_STEPS, ROOT_NAMES, Scale, set_an1x_step, set_hoover_step, set_root_note,
-    set_scale, set_scale_snap, toggle_bass_accent, toggle_bass_slide,
-};
+use crate::state::{DrumVoice, set_an1x_step, set_hoover_step};
 use crate::ui::{ImpulseApp, SEQ_LABEL_H, SEQ_LABEL_W, SEQ_VOL_H, SEQ_VOL_W, theme, widgets};
 
 /// Maximum step buttons visible (MAX_STEPS = 64 fits 2 rows of 32).
@@ -16,7 +12,7 @@ pub(super) const STEPS_PER_ROW: usize = 32;
 
 /// Number of sub-rows (wrapped 32-step rows) needed for `seq_steps`.
 /// 1..=32 → 1 row, 33..=64 → 2 rows.
-pub(super) fn sub_rows_for(seq_steps: usize) -> usize {
+pub(crate) fn sub_rows_for(seq_steps: usize) -> usize {
     seq_steps.min(STEPS_PER_PAGE).div_ceil(STEPS_PER_ROW).max(1)
 }
 
@@ -115,21 +111,18 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         let drum_sub = 14.0;
         let header_h = 55.0;
 
-        let has_bass = s
-            .rack
-            .modules
-            .iter()
-            .any(|m| m.kind == crate::state::ModuleKind::AcidBass);
-        let has_hoover = s
-            .rack
-            .modules
-            .iter()
-            .any(|m| m.kind == crate::state::ModuleKind::HooverLead);
-        let has_an1x = s
-            .rack
-            .modules
-            .iter()
-            .any(|m| m.kind == crate::state::ModuleKind::An1xVoice);
+        // Same predicate the front-panel LED uses: module is enabled AND
+        // its audio reaches MASTER.  Hides rows for voices that the user
+        // hasn't patched into the audio path yet.
+        let has_active = |k: crate::state::ModuleKind| -> bool {
+            s.rack
+                .modules
+                .iter()
+                .any(|m| m.kind == k && m.enabled && s.rack.reaches_master(m.id))
+        };
+        let has_bass = has_active(crate::state::ModuleKind::AcidBass);
+        let has_hoover = has_active(crate::state::ModuleKind::HooverLead);
+        let has_an1x = has_active(crate::state::ModuleKind::An1xVoice);
 
         // Drum voices with at least one active step or currently expanded.
         let drum_rows: usize = s
@@ -140,12 +133,15 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             .count()
             + app.expanded_seq_voices.len();
 
-        let sub_rows = s.sequencer.steps.min(64).div_ceil(32).max(1) as f32;
-        let bass_h = if has_bass {
-            sub_rows * (step_row + marker_row + marker_row)
+        let sub_rows = sub_rows_for(s.sequencer.steps) as f32;
+        // Each enabled bass voice now gets its own block of rows
+        // (note + ACCENT + SLIDE + PAN), so multiply by the voice count.
+        let n_bass_voices = if has_bass {
+            s.bass_voices.iter().filter(|v| v.enabled).count() as f32
         } else {
             0.0
         };
+        let bass_h = n_bass_voices * sub_rows * (step_row + marker_row * 3.0);
         let hoover_h = if has_hoover { sub_rows * step_row } else { 0.0 };
         let an1x_h = if has_an1x { sub_rows * step_row } else { 0.0 };
         let drums_h = drum_rows as f32 * sub_rows * (step_row + drum_sub);
@@ -153,17 +149,7 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         let h = (header_h + bass_h + hoover_h + an1x_h + drums_h).max(120.0);
         ui.set_min_height(h);
     }
-    let (
-        current_step,
-        running,
-        seq_steps,
-        time_sig_num,
-        pad_px,
-        root_note,
-        scale,
-        scale_snap,
-        huth_full,
-    ) = {
+    let (current_step, running, seq_steps, time_sig_num, pad_px) = {
         let s = app.state.read();
         (
             s.sequencer.current_step,
@@ -171,250 +157,13 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             s.sequencer.steps,
             s.sequencer.time_sig_num as usize,
             s.ui_prefs.effective_pad_px(),
-            s.sequencer.root_note,
-            s.sequencer.scale,
-            s.sequencer.scale_snap,
-            s.ui_prefs.huth_style == crate::state::HuthStyle::Full,
         )
     };
-    // ── Line 1: Bank | Chain | Steps | ← right: BPM SYNC ──────────────
-    ui.horizontal(|ui| {
-        draw_pattern_chain(app, ui);
-
-        ui.separator();
-
-        // Steps
-        ui.label(
-            egui::RichText::new("STEPS")
-                .color(theme::SMOKE)
-                .monospace()
-                .size(8.0),
-        );
-        let mut steps = app.state.read().sequencer.steps;
-        if ui.small_button("−").clicked() && steps > 1 {
-            steps -= 1;
-            app.state.write().sequencer.steps = steps;
-        }
-        ui.label(
-            egui::RichText::new(format!("{:02}", steps))
-                .color(theme::FOG)
-                .monospace()
-                .size(9.0),
-        );
-        if ui.small_button("+").clicked() && steps < MAX_STEPS {
-            steps += 1;
-            let new_state = crate::state::expand_sequencer_steps(app.state.read().clone(), steps);
-            *app.state.write() = new_state;
-        }
-        for &preset in &[16usize, 32, 64] {
-            if ui
-                .add_sized(
-                    [20.0, 14.0],
-                    egui::Button::new(
-                        egui::RichText::new(format!("{}", preset))
-                            .monospace()
-                            .size(7.5)
-                            .color(theme::IRON),
-                    ),
-                )
-                .clicked()
-            {
-                let new_state =
-                    crate::state::expand_sequencer_steps(app.state.read().clone(), preset);
-                *app.state.write() = new_state;
-            }
-        }
-
-        // Right-justified: SYNC | (pad) | BPM label | slider | value
-        // Label slot width is fixed so BPM and SWING labels left-align vertically.
-        const HDR_LABEL_W: f32 = 40.0;
-        const HDR_SLIDER_W: f32 = 600.0;
-        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            let (mut bpm, sync_on) = {
-                let s = app.state.read();
-                (s.sequencer.bpm, s.sequencer.midi_clock_sync)
-            };
-            // RTL order: rightmost first
-            ui.label(
-                egui::RichText::new(format!("{:.0}", bpm))
-                    .color(if sync_on { theme::IRON } else { theme::FOG })
-                    .monospace()
-                    .size(9.0),
-            );
-            let slider_col = if sync_on { theme::FOG } else { theme::IRON };
-            ui.visuals_mut().selection.bg_fill = slider_col;
-            if fixed_slider(ui, HDR_SLIDER_W, 14.0, &mut bpm, 40.0..=300.0).changed() && !sync_on {
-                app.state.write().sequencer.bpm = bpm;
-                app.push_audio_params();
-            }
-            fixed_label(ui, HDR_LABEL_W, 14.0, "BPM", theme::SMOKE, 8.0);
-            // Padding between BPM label and SYNC button.
-            ui.add_space(14.0);
-            let sync_color = if sync_on {
-                egui::Color32::from_rgb(80, 180, 80)
-            } else {
-                theme::SMOKE
-            };
-            if ui
-                .add(
-                    egui::Button::new(
-                        egui::RichText::new("SYNC")
-                            .monospace()
-                            .size(7.5)
-                            .color(sync_color),
-                    )
-                    .min_size(egui::Vec2::new(34.0, 14.0)),
-                )
-                .clicked()
-            {
-                app.state.write().sequencer.midi_clock_sync = !sync_on;
-            }
-        });
-    });
-
+    super::sequencer_header::draw_line_1(app, ui);
     ui.add_space(2.0);
-
-    // ── Line 2: Time Sig | Key | Scale SNAP | ← right: Swing ────────
-    ui.horizontal(|ui| {
-        // Time signature
-        let current_ts = app.state.read().sequencer.time_sig_num;
-        ui.label(
-            egui::RichText::new("TS")
-                .color(theme::SMOKE)
-                .monospace()
-                .size(8.0),
-        );
-        for n in [3u8, 4, 5, 6, 7] {
-            let active = n == current_ts;
-            let color = if active { theme::CHALK } else { theme::IRON };
-            let fill = if active {
-                egui::Color32::from_gray(50)
-            } else {
-                egui::Color32::TRANSPARENT
-            };
-            if ui
-                .add_sized(
-                    [14.0, 14.0],
-                    egui::Button::new(
-                        egui::RichText::new(format!("{}", n))
-                            .monospace()
-                            .size(8.0)
-                            .color(color),
-                    )
-                    .fill(fill),
-                )
-                .clicked()
-            {
-                app.state.write().sequencer.time_sig_num = n;
-            }
-        }
-
-        ui.separator();
-
-        // Key
-        ui.label(
-            egui::RichText::new("KEY")
-                .color(theme::SMOKE)
-                .monospace()
-                .size(8.0),
-        );
-        for note in 0u8..12 {
-            let active = note == root_note;
-            let color = if active { theme::CHALK } else { theme::IRON };
-            let fill = if active {
-                egui::Color32::from_gray(50)
-            } else {
-                egui::Color32::TRANSPARENT
-            };
-            if ui
-                .add_sized(
-                    [18.0, 14.0],
-                    egui::Button::new(
-                        egui::RichText::new(ROOT_NAMES[note as usize])
-                            .monospace()
-                            .size(7.5)
-                            .color(color),
-                    )
-                    .fill(fill),
-                )
-                .clicked()
-            {
-                let s = app.state.read().clone();
-                *app.state.write() = set_root_note(s, note);
-            }
-        }
-
-        ui.separator();
-
-        // Scale + SNAP
-        for &sc in Scale::all() {
-            let active = sc == scale;
-            let color = if active { theme::CHALK } else { theme::IRON };
-            let fill = if active {
-                egui::Color32::from_gray(50)
-            } else {
-                egui::Color32::TRANSPARENT
-            };
-            if ui
-                .add_sized(
-                    [38.0, 14.0],
-                    egui::Button::new(
-                        egui::RichText::new(sc.name())
-                            .monospace()
-                            .size(7.0)
-                            .color(color),
-                    )
-                    .fill(fill),
-                )
-                .clicked()
-            {
-                let s = app.state.read().clone();
-                *app.state.write() = set_scale(s, sc);
-            }
-        }
-        let snap_color = if scale_snap { theme::CHALK } else { theme::PIT };
-        let snap_fill = if scale_snap {
-            egui::Color32::from_gray(50)
-        } else {
-            egui::Color32::TRANSPARENT
-        };
-        if ui
-            .add_sized(
-                [36.0, 14.0],
-                egui::Button::new(
-                    egui::RichText::new("SNAP")
-                        .monospace()
-                        .size(7.0)
-                        .color(snap_color),
-                )
-                .fill(snap_fill),
-            )
-            .on_hover_text("Snap LLM bass notes to the active scale")
-            .clicked()
-        {
-            let s = app.state.read().clone();
-            *app.state.write() = set_scale_snap(s, !scale_snap);
-        }
-
-        // Right-justified: Swing — same slot widths as BPM row so SWING and
-        // BPM labels left-align vertically.
-        const HDR_LABEL_W: f32 = 40.0;
-        const HDR_SLIDER_W: f32 = 600.0;
-        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            let mut swing = app.state.read().sequencer.swing;
-            ui.label(
-                egui::RichText::new(format!("{:.2}", swing))
-                    .color(theme::FOG)
-                    .monospace()
-                    .size(8.0),
-            );
-            if fixed_slider(ui, HDR_SLIDER_W, 14.0, &mut swing, 0.0..=1.0).changed() {
-                app.state.write().sequencer.swing = swing;
-            }
-            fixed_label(ui, HDR_LABEL_W, 14.0, "SWING", theme::SMOKE, 8.0);
-        });
-    });
-
+    super::sequencer_header::draw_line_2(app, ui);
+    ui.add_space(2.0);
+    super::sequencer_chain::draw_song_timeline(app, ui);
     ui.add_space(4.0);
 
     let page_start = app.seq_page * STEPS_PER_PAGE;
@@ -449,11 +198,19 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
 
     ui.add_space(2.0);
 
-    // ── Rack-presence flags — only show rows for modules that are in the rack ──
+    // ── Rack-presence flags — only show rows for modules that are
+    // enabled AND patched into the audio path (same predicate the
+    // front-panel LED uses).  Modules sitting in the rack with no
+    // cable to MASTER won't take a sequencer row.
     let (rack_has_bass, rack_has_hoover, rack_has_an1x, active_drum_voices) = {
         use crate::state::ModuleKind;
         let s = app.state.read();
-        let has = |k: ModuleKind| s.rack.modules.iter().any(|m| m.kind == k && m.enabled);
+        let has = |k: ModuleKind| {
+            s.rack
+                .modules
+                .iter()
+                .any(|m| m.kind == k && m.enabled && s.rack.reaches_master(m.id))
+        };
         let filtered: Vec<DrumVoice> = DrumVoice::ALL
             .iter()
             .filter(|v| has(v.module_kind()))
@@ -506,64 +263,91 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         );
         let row_spacer = (ui.available_width() - prefix_w - grid_w - 8.0).max(0.0);
 
-        // ── Bass rows — only shown when AcidBass is in the rack ───────────────
+        // ── Bass rows — one block per ENABLED bass voice.  voice 0
+        // mirrors `bass_pattern`; other voices write `bass_patterns[vi]`.
         if rack_has_bass {
-            let bass_steps = app.state.read().sequencer.bass_steps;
-            let bass_cursor = if running {
-                current_step % bass_steps.max(1)
-            } else {
-                usize::MAX
-            };
-            let bass_page: Vec<crate::state::TB303Step> = {
+            let enabled_voices: Vec<usize> = {
                 let s = app.state.read();
-                let end = (page_start + STEPS_PER_PAGE).min(s.sequencer.bass_pattern.len());
-                s.sequencer.bass_pattern[page_start..end].to_vec()
+                (0..crate::state::MAX_BASS_VOICES)
+                    .filter(|&vi| s.bass_voices.get(vi).is_some_and(|v| v.enabled))
+                    .collect()
             };
-            for sub in 0..sub_rows {
-                ui.horizontal(|ui| {
-                    fixed_space(ui, 10.0);
-                    fixed_space(ui, 10.0);
-                    if sub == 0 {
-                        fixed_label(
-                            ui,
-                            SEQ_LABEL_W - 20.0,
-                            SEQ_LABEL_H,
-                            "BASS",
-                            theme::SMOKE,
-                            8.5,
-                        );
-                        let mut vol = app.state.read().bass_voices[0].synth.volume;
-                        if fixed_slider(ui, SEQ_VOL_W, SEQ_VOL_H, &mut vol, 0.0..=1.0).changed() {
-                            app.state.write().bass_voices[0].synth.volume = vol;
-                            app.push_audio_params();
+            let marker_h = (pad_px * 0.35).clamp(10.0, 16.0);
+            let row_h = marker_h.max(SEQ_VOL_H);
+            for vi in enabled_voices {
+                // Snapshot per-voice pattern + cycle length.
+                let (voice_steps, voice_pat, vol, accent_lvl, slide_t) = {
+                    let s = app.state.read();
+                    let pat = s
+                        .sequencer
+                        .bass_patterns
+                        .get(vi)
+                        .cloned()
+                        .unwrap_or_else(|| s.sequencer.bass_pattern.clone());
+                    let vsteps = s
+                        .sequencer
+                        .bass_voice_steps
+                        .get(vi)
+                        .copied()
+                        .unwrap_or(s.sequencer.bass_steps)
+                        .max(1);
+                    let v = &s.bass_voices[vi.min(s.bass_voices.len() - 1)].synth;
+                    (vsteps, pat, v.volume, v.accent_level, v.portamento_time)
+                };
+                let voice_cursor = if running {
+                    current_step % voice_steps
+                } else {
+                    usize::MAX
+                };
+                let voice_page: Vec<crate::state::TB303Step> = {
+                    let end = (page_start + STEPS_PER_PAGE).min(voice_pat.len());
+                    voice_pat[page_start..end].to_vec()
+                };
+                let label_str = if vi == 0 {
+                    "BASS".to_string()
+                } else {
+                    format!("BASS{}", vi + 1)
+                };
+
+                // ── Note row ─────────────────────────────────────────────
+                for sub in 0..sub_rows {
+                    ui.horizontal(|ui| {
+                        fixed_space(ui, 10.0);
+                        fixed_space(ui, 10.0);
+                        if sub == 0 {
+                            fixed_label(
+                                ui,
+                                SEQ_LABEL_W - 20.0,
+                                SEQ_LABEL_H,
+                                &label_str,
+                                theme::SMOKE,
+                                8.5,
+                            );
+                            let mut v = vol;
+                            if fixed_slider(ui, SEQ_VOL_W, SEQ_VOL_H, &mut v, 0.0..=1.0).changed() {
+                                app.state.write().bass_voices[vi].synth.volume = v;
+                                app.push_audio_params();
+                            }
+                        } else {
+                            fixed_space(ui, SEQ_LABEL_W - 20.0);
+                            fixed_space(ui, SEQ_VOL_W);
                         }
-                    } else {
-                        fixed_space(ui, SEQ_LABEL_W - 20.0);
-                        fixed_space(ui, SEQ_VOL_W);
-                    }
-                    fixed_space(ui, 18.0);
-                    if row_spacer > 0.0 {
-                        ui.add_space(row_spacer);
-                    }
-                    let base = sub * STEPS_PER_ROW;
-                    for j in 0..STEPS_PER_ROW {
-                        let i = base + j;
-                        if i >= seq_steps {
-                            break;
+                        fixed_space(ui, 18.0);
+                        if row_spacer > 0.0 {
+                            ui.add_space(row_spacer);
                         }
-                        let abs = page_start + i;
-                        beat_div(ui, j, abs);
-                        let step = bass_page.get(i).copied();
-                        let is_active = step.map(|s| s.active).unwrap_or(false);
-                        let is_current = abs == bass_cursor;
-                        ui.add_enabled_ui(abs < bass_steps, |ui| {
-                            let clicked = if huth_full {
-                                let note = step.map(|s| s.note).unwrap_or(36);
-                                let gate = step.map(|s| s.gate).unwrap_or(0.5);
-                                widgets::huth_note_cell(
-                                    ui, note, gate, is_active, is_current, pad_px,
-                                )
-                            } else {
+                        let base = sub * STEPS_PER_ROW;
+                        for j in 0..STEPS_PER_ROW {
+                            let i = base + j;
+                            if i >= seq_steps {
+                                break;
+                            }
+                            let abs = page_start + i;
+                            beat_div(ui, j, abs);
+                            let step = voice_page.get(i).copied();
+                            let is_active = step.map(|s| s.active).unwrap_or(false);
+                            let is_current = abs == voice_cursor;
+                            ui.add_enabled_ui(abs < voice_steps, |ui| {
                                 let note = step.map(|s| s.note).unwrap_or(36);
                                 let note_col = if is_active {
                                     Some(theme::note_color(note))
@@ -575,192 +359,190 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                                 } else {
                                     None
                                 };
-                                widgets::step_button(
+                                if let Some(new_active) = widgets::step_button(
                                     ui, is_active, is_current, 1.0, 1.0, note_col, label, pad_px,
-                                )
+                                ) {
+                                    let s = app.state.read().clone();
+                                    let cur_note = s
+                                        .sequencer
+                                        .bass_patterns
+                                        .get(vi)
+                                        .and_then(|p| p.get(abs))
+                                        .map(|b| b.note)
+                                        .unwrap_or(36);
+                                    *app.state.write() = crate::state::set_bass_step_voice(
+                                        s, vi, abs, cur_note, new_active,
+                                    );
+                                }
+                            });
+                        }
+                    });
+                }
+
+                // ── ACCENT + SLIDE + PAN rows for this voice ────────────
+                let prev_spacing = ui.spacing().item_spacing.y;
+                ui.spacing_mut().item_spacing.y = 0.0;
+                for sub in 0..sub_rows {
+                    ui.horizontal(|ui| {
+                        fixed_space(ui, 10.0);
+                        fixed_space(ui, 10.0);
+                        if sub == 0 {
+                            fixed_label(ui, SEQ_LABEL_W - 20.0, row_h, "ACCENT", theme::IRON, 7.0);
+                            let mut a = accent_lvl;
+                            if fixed_slider(ui, SEQ_VOL_W, SEQ_VOL_H, &mut a, 0.0..=1.0).changed() {
+                                app.state.write().bass_voices[vi].synth.accent_level = a;
+                                app.push_audio_params();
+                            }
+                        } else {
+                            fixed_space(ui, SEQ_LABEL_W - 20.0);
+                            fixed_space(ui, SEQ_VOL_W);
+                        }
+                        fixed_space(ui, 18.0);
+                        if row_spacer > 0.0 {
+                            ui.add_space(row_spacer);
+                        }
+                        let base = sub * STEPS_PER_ROW;
+                        for j in 0..STEPS_PER_ROW {
+                            let i = base + j;
+                            if i >= seq_steps {
+                                break;
+                            }
+                            let abs = page_start + i;
+                            beat_div(ui, j, abs);
+                            let is_accent =
+                                voice_page.get(i).map(|s| s.accent > 0.0).unwrap_or(false);
+                            let enabled = abs < voice_steps;
+                            let color = if !enabled || !is_accent {
+                                theme::PIT
+                            } else {
+                                theme::CHALK
                             };
-                            if clicked {
-                                let s = app.state.read().clone();
-                                let note = s
-                                    .sequencer
-                                    .bass_pattern
-                                    .get(abs)
-                                    .map(|b| b.note)
-                                    .unwrap_or(36);
-                                let was = s
-                                    .sequencer
-                                    .bass_pattern
-                                    .get(abs)
-                                    .map(|b| b.active)
-                                    .unwrap_or(false);
-                                *app.state.write() =
-                                    crate::state::set_bass_step(s, abs, note, !was);
-                            }
-                        });
-                    }
-                });
-            }
-
-            // Accent + slide rows — compact vertical spacing
-            let marker_h = (pad_px * 0.35).clamp(10.0, 16.0);
-            let row_h = marker_h.max(SEQ_VOL_H);
-            let prev_spacing = ui.spacing().item_spacing.y;
-            ui.spacing_mut().item_spacing.y = 0.0;
-            for sub in 0..sub_rows {
-                ui.horizontal(|ui| {
-                    fixed_space(ui, 10.0);
-                    fixed_space(ui, 10.0);
-                    if sub == 0 {
-                        fixed_label(ui, SEQ_LABEL_W - 20.0, row_h, "ACCENT", theme::IRON, 7.0);
-                        let mut accent = app.state.read().bass_voices[0].synth.accent_level;
-                        if fixed_slider(ui, SEQ_VOL_W, SEQ_VOL_H, &mut accent, 0.0..=1.0).changed()
-                        {
-                            app.state.write().bass_voices[0].synth.accent_level = accent;
-                            app.push_audio_params();
-                        }
-                    } else {
-                        fixed_space(ui, SEQ_LABEL_W - 20.0);
-                        fixed_space(ui, SEQ_VOL_W);
-                    }
-                    fixed_space(ui, 18.0);
-                    if row_spacer > 0.0 {
-                        ui.add_space(row_spacer);
-                    }
-                    let base = sub * STEPS_PER_ROW;
-                    for j in 0..STEPS_PER_ROW {
-                        let i = base + j;
-                        if i >= seq_steps {
-                            break;
-                        }
-                        let abs = page_start + i;
-                        beat_div(ui, j, abs);
-                        let is_accent = bass_page.get(i).map(|s| s.accent).unwrap_or(false);
-                        let enabled = abs < bass_steps;
-                        let color = if !enabled {
-                            theme::PIT
-                        } else if is_accent {
-                            theme::CHALK
-                        } else {
-                            theme::PIT
-                        };
-                        let text = egui::RichText::new("A").monospace().size(7.0).color(color);
-                        if ui
-                            .add_sized(
-                                [pad_px, row_h],
-                                egui::Button::new(text).fill(egui::Color32::TRANSPARENT),
-                            )
-                            .clicked()
-                            && enabled
-                        {
-                            let s = app.state.read().clone();
-                            *app.state.write() = toggle_bass_accent(s, abs);
-                        }
-                    }
-                });
-            }
-
-            // Slide row
-            for sub in 0..sub_rows {
-                ui.horizontal(|ui| {
-                    fixed_space(ui, 10.0);
-                    fixed_space(ui, 10.0);
-                    if sub == 0 {
-                        fixed_label(ui, SEQ_LABEL_W - 20.0, row_h, "SLIDE", theme::IRON, 7.0);
-                        let mut slide = app.state.read().bass_voices[0].synth.portamento_time;
-                        if fixed_slider(ui, SEQ_VOL_W, SEQ_VOL_H, &mut slide, 0.0..=1.0).changed() {
-                            app.state.write().bass_voices[0].synth.portamento_time = slide;
-                            app.push_audio_params();
-                        }
-                    } else {
-                        fixed_space(ui, SEQ_LABEL_W - 20.0);
-                        fixed_space(ui, SEQ_VOL_W);
-                    }
-                    fixed_space(ui, 18.0);
-                    if row_spacer > 0.0 {
-                        ui.add_space(row_spacer);
-                    }
-                    let base = sub * STEPS_PER_ROW;
-                    for j in 0..STEPS_PER_ROW {
-                        let i = base + j;
-                        if i >= seq_steps {
-                            break;
-                        }
-                        let abs = page_start + i;
-                        beat_div(ui, j, abs);
-                        let is_slide = bass_page.get(i).map(|s| s.slide).unwrap_or(false);
-                        let enabled = abs < bass_steps;
-                        let color = if !enabled {
-                            theme::PIT
-                        } else if is_slide {
-                            theme::CHALK
-                        } else {
-                            theme::PIT
-                        };
-                        let text = egui::RichText::new("S").monospace().size(7.0).color(color);
-                        if ui
-                            .add_sized(
-                                [pad_px, row_h],
-                                egui::Button::new(text).fill(egui::Color32::TRANSPARENT),
-                            )
-                            .clicked()
-                            && enabled
-                        {
-                            let s = app.state.read().clone();
-                            *app.state.write() = toggle_bass_slide(s, abs);
-                        }
-                    }
-                });
-            }
-
-            // PAN row — drag horizontally to set, right-click to centre.
-            for sub in 0..sub_rows {
-                ui.horizontal(|ui| {
-                    fixed_space(ui, 20.0);
-                    if sub == 0 {
-                        fixed_label(ui, SEQ_LABEL_W - 20.0, row_h, "PAN", theme::IRON, 7.0);
-                        let reset_w = 14.0;
-                        let resp = ui
-                            .add_sized(
-                                [reset_w, row_h],
-                                egui::Button::new(
-                                    egui::RichText::new("○")
-                                        .monospace()
-                                        .size(9.0)
-                                        .color(theme::IRON),
+                            let text = egui::RichText::new("A").monospace().size(7.0).color(color);
+                            if ui
+                                .add_sized(
+                                    [pad_px, row_h],
+                                    egui::Button::new(text).fill(egui::Color32::TRANSPARENT),
                                 )
-                                .fill(egui::Color32::TRANSPARENT),
-                            )
-                            .on_hover_text("Reset all step pans to centre");
-                        if resp.clicked() {
-                            let mut s = app.state.write();
-                            for step in s.sequencer.bass_pattern.iter_mut() {
-                                step.pan = 0.0;
+                                .clicked()
+                                && enabled
+                            {
+                                let s = app.state.read().clone();
+                                *app.state.write() =
+                                    crate::state::toggle_bass_accent_voice(s, vi, abs);
                             }
                         }
-                        let item_x = ui.spacing().item_spacing.x;
-                        fixed_space(ui, SEQ_VOL_W + 18.0 - reset_w - item_x);
-                    } else {
-                        fixed_space(ui, SEQ_LABEL_W - 20.0);
-                        fixed_space(ui, SEQ_VOL_W + 18.0);
-                    }
-                    if row_spacer > 0.0 {
-                        ui.add_space(row_spacer);
-                    }
-                    let base = sub * STEPS_PER_ROW;
-                    for j in 0..STEPS_PER_ROW {
-                        let i = base + j;
-                        if i >= seq_steps {
-                            break;
+                    });
+                }
+                for sub in 0..sub_rows {
+                    ui.horizontal(|ui| {
+                        fixed_space(ui, 10.0);
+                        fixed_space(ui, 10.0);
+                        if sub == 0 {
+                            fixed_label(ui, SEQ_LABEL_W - 20.0, row_h, "SLIDE", theme::IRON, 7.0);
+                            let mut s_ = slide_t;
+                            if fixed_slider(ui, SEQ_VOL_W, SEQ_VOL_H, &mut s_, 0.0..=1.0).changed()
+                            {
+                                app.state.write().bass_voices[vi].synth.portamento_time = s_;
+                                app.push_audio_params();
+                            }
+                        } else {
+                            fixed_space(ui, SEQ_LABEL_W - 20.0);
+                            fixed_space(ui, SEQ_VOL_W);
                         }
-                        let abs = page_start + i;
-                        beat_div(ui, j, abs);
-                        let enabled = abs < bass_steps;
-                        let pan = bass_page.get(i).map(|s| s.pan).unwrap_or(0.0);
-                        super::sequencer_chain::pan_cell(ui, app, abs, pan, enabled, pad_px, row_h);
-                    }
-                });
+                        fixed_space(ui, 18.0);
+                        if row_spacer > 0.0 {
+                            ui.add_space(row_spacer);
+                        }
+                        let base = sub * STEPS_PER_ROW;
+                        for j in 0..STEPS_PER_ROW {
+                            let i = base + j;
+                            if i >= seq_steps {
+                                break;
+                            }
+                            let abs = page_start + i;
+                            beat_div(ui, j, abs);
+                            let is_slide =
+                                voice_page.get(i).map(|s| s.slide > 0.0).unwrap_or(false);
+                            let enabled = abs < voice_steps;
+                            let color = if !enabled || !is_slide {
+                                theme::PIT
+                            } else {
+                                theme::CHALK
+                            };
+                            let text = egui::RichText::new("S").monospace().size(7.0).color(color);
+                            if ui
+                                .add_sized(
+                                    [pad_px, row_h],
+                                    egui::Button::new(text).fill(egui::Color32::TRANSPARENT),
+                                )
+                                .clicked()
+                                && enabled
+                            {
+                                let s = app.state.read().clone();
+                                *app.state.write() =
+                                    crate::state::toggle_bass_slide_voice(s, vi, abs);
+                            }
+                        }
+                    });
+                }
+                for sub in 0..sub_rows {
+                    ui.horizontal(|ui| {
+                        fixed_space(ui, 20.0);
+                        if sub == 0 {
+                            fixed_label(ui, SEQ_LABEL_W - 20.0, row_h, "PAN", theme::IRON, 7.0);
+                            let reset_w = 14.0;
+                            let resp = ui
+                                .add_sized(
+                                    [reset_w, row_h],
+                                    egui::Button::new(
+                                        egui::RichText::new("○")
+                                            .monospace()
+                                            .size(9.0)
+                                            .color(theme::IRON),
+                                    )
+                                    .fill(egui::Color32::TRANSPARENT),
+                                )
+                                .on_hover_text("Reset all step pans to centre");
+                            if resp.clicked() {
+                                let mut s = app.state.write();
+                                if let Some(pat) = s.sequencer.bass_patterns.get_mut(vi) {
+                                    for step in pat.iter_mut() {
+                                        step.pan = 0.0;
+                                    }
+                                }
+                                if vi == 0 {
+                                    for step in s.sequencer.bass_pattern.iter_mut() {
+                                        step.pan = 0.0;
+                                    }
+                                }
+                            }
+                            let item_x = ui.spacing().item_spacing.x;
+                            fixed_space(ui, SEQ_VOL_W + 18.0 - reset_w - item_x);
+                        } else {
+                            fixed_space(ui, SEQ_LABEL_W - 20.0);
+                            fixed_space(ui, SEQ_VOL_W + 18.0);
+                        }
+                        if row_spacer > 0.0 {
+                            ui.add_space(row_spacer);
+                        }
+                        let base = sub * STEPS_PER_ROW;
+                        for j in 0..STEPS_PER_ROW {
+                            let i = base + j;
+                            if i >= seq_steps {
+                                break;
+                            }
+                            let abs = page_start + i;
+                            beat_div(ui, j, abs);
+                            let enabled = abs < voice_steps;
+                            let pan = voice_page.get(i).map(|s| s.pan).unwrap_or(0.0);
+                            super::sequencer_chain::pan_cell_voice(
+                                ui, app, vi, abs, pan, enabled, pad_px, row_h,
+                            );
+                        }
+                    });
+                }
+                ui.spacing_mut().item_spacing.y = prev_spacing;
             }
-            ui.spacing_mut().item_spacing.y = prev_spacing;
         } // end if rack_has_bass
 
         // ── Hoover row — only shown when HooverLead is in the rack ────────────
@@ -822,29 +604,20 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                         let is_active = step.map(|s| s.active).unwrap_or(false);
                         let is_current = abs == hoover_cursor;
                         ui.add_enabled_ui(abs < hoover_steps, |ui| {
-                            let clicked = if huth_full {
-                                let note = step.map(|s| s.note).unwrap_or(57);
-                                let gate = step.map(|s| s.gate).unwrap_or(0.5);
-                                widgets::huth_note_cell(
-                                    ui, note, gate, is_active, is_current, pad_px,
-                                )
+                            let note = step.map(|s| s.note).unwrap_or(57);
+                            let note_col = if is_active {
+                                Some(theme::note_color(note))
                             } else {
-                                let note = step.map(|s| s.note).unwrap_or(36);
-                                let note_col = if is_active {
-                                    Some(theme::note_color(note))
-                                } else {
-                                    None
-                                };
-                                let label = if is_active {
-                                    Some(crate::ui::note_name(note))
-                                } else {
-                                    None
-                                };
-                                widgets::step_button(
-                                    ui, is_active, is_current, 1.0, 1.0, note_col, label, pad_px,
-                                )
+                                None
                             };
-                            if clicked {
+                            let label = if is_active {
+                                Some(crate::ui::note_name(note))
+                            } else {
+                                None
+                            };
+                            if let Some(new_active) = widgets::step_button(
+                                ui, is_active, is_current, 1.0, 1.0, note_col, label, pad_px,
+                            ) {
                                 let s = app.state.read().clone();
                                 let note = s
                                     .sequencer
@@ -852,13 +625,7 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                                     .get(abs)
                                     .map(|b| b.note)
                                     .unwrap_or(57);
-                                let was = s
-                                    .sequencer
-                                    .hoover_pattern
-                                    .get(abs)
-                                    .map(|b| b.active)
-                                    .unwrap_or(false);
-                                *app.state.write() = set_hoover_step(s, abs, note, !was);
+                                *app.state.write() = set_hoover_step(s, abs, note, new_active);
                             }
                         });
                     }
@@ -925,29 +692,20 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                         let is_active = step.map(|s| s.active).unwrap_or(false);
                         let is_current = abs == an1x_cursor;
                         ui.add_enabled_ui(abs < an1x_steps, |ui| {
-                            let clicked = if huth_full {
-                                let note = step.map(|s| s.note).unwrap_or(57);
-                                let gate = step.map(|s| s.gate).unwrap_or(0.5);
-                                widgets::huth_note_cell(
-                                    ui, note, gate, is_active, is_current, pad_px,
-                                )
+                            let note = step.map(|s| s.note).unwrap_or(57);
+                            let note_col = if is_active {
+                                Some(theme::note_color(note))
                             } else {
-                                let note = step.map(|s| s.note).unwrap_or(36);
-                                let note_col = if is_active {
-                                    Some(theme::note_color(note))
-                                } else {
-                                    None
-                                };
-                                let label = if is_active {
-                                    Some(crate::ui::note_name(note))
-                                } else {
-                                    None
-                                };
-                                widgets::step_button(
-                                    ui, is_active, is_current, 1.0, 1.0, note_col, label, pad_px,
-                                )
+                                None
                             };
-                            if clicked {
+                            let label = if is_active {
+                                Some(crate::ui::note_name(note))
+                            } else {
+                                None
+                            };
+                            if let Some(new_active) = widgets::step_button(
+                                ui, is_active, is_current, 1.0, 1.0, note_col, label, pad_px,
+                            ) {
                                 let s = app.state.read().clone();
                                 let note = s
                                     .sequencer
@@ -955,13 +713,7 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                                     .get(abs)
                                     .map(|b| b.note)
                                     .unwrap_or(57);
-                                let was = s
-                                    .sequencer
-                                    .an1x_pattern
-                                    .get(abs)
-                                    .map(|b| b.active)
-                                    .unwrap_or(false);
-                                *app.state.write() = set_an1x_step(s, abs, note, !was);
+                                *app.state.write() = set_an1x_step(s, abs, note, new_active);
                             }
                         });
                     }

@@ -1,10 +1,20 @@
 // ─── midi/mod.rs ─────────────────────────────────────────────────────────────
 #![allow(dead_code)] // MIDI wiring grows with hardware support
-// MIDI input/output via midir.
+// MIDI input/output via midir, plus SMF export for the sequencer pattern.
 // Maps incoming MIDI to AppState mutations sent back to the UI thread.
+
+pub mod export;
+pub use export::{
+    drum_voice_to_gm_note, export_sequencer_smf, save_midi_export, save_midi_export_to,
+};
 
 use crossbeam_channel::Sender;
 use midir::{MidiInput, MidiInputConnection, MidiOutput, MidiOutputConnection};
+
+/// MIDI timing-clock resolution: 24 pulses per quarter note, as specified by
+/// the MIDI 1.0 standard.  Used to compute the clock-out tick interval from
+/// BPM and to recover BPM from incoming clock pulses.
+pub const MIDI_CLOCK_PPQN: f64 = 24.0;
 
 // ─── MIDI events we emit to the UI thread ─────────────────────────────────────
 

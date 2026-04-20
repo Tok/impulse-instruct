@@ -12,8 +12,28 @@
 // active preecho, so the user can see at a glance which voices are
 // being modulated without clicking through each tab.
 
-use crate::sequencer::PreechoConfig;
+use crate::sequencer::{NoteApproach, PreechoConfig, RampCurve};
 use crate::ui::{ImpulseApp, SEQ_LABEL_W, theme, widgets};
+
+/// Short label for the curve dropdown.  Keeps the dropdown narrow.
+fn curve_label(c: RampCurve) -> &'static str {
+    match c {
+        RampCurve::Linear => "LIN",
+        RampCurve::Exp => "EXP",
+        RampCurve::Log => "LOG",
+        RampCurve::Cosine => "COS",
+    }
+}
+
+/// Short label for the note-approach dropdown (melodic tabs only).
+fn approach_label(a: NoteApproach) -> &'static str {
+    match a {
+        NoteApproach::Off => "OFF",
+        NoteApproach::Chromatic => "CHR",
+        NoteApproach::Scale => "SCL",
+        NoteApproach::Arp => "ARP",
+    }
+}
 
 /// Default cell height for the anchor strip; cell width tracks the
 /// sequencer's `effective_pad_px()` at draw time so anchors align with
@@ -241,7 +261,7 @@ pub(super) fn draw_preecho_row(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                 painter.rect_stroke(
                     r,
                     egui::Rounding::same(1.5),
-                    egui::Stroke::new(0.6, egui::Color32::from_gray(90)),
+                    egui::Stroke::new(0.6, theme::ASH),
                 );
             }
         }
@@ -320,6 +340,110 @@ pub(super) fn draw_preecho_row(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             .clicked()
         {
             clear_clicked = true;
+        }
+    });
+
+    // ── Line 3 — v2 controls: CURVE / AUTO / PROB / ACC / SLD ─────────────
+    // Curve shapes every scalar ramp; AUTO fills the lead-in from the gap
+    // to the prior anchor; PROB / ACC / SLD add probability, accent, and
+    // slide-cascade ramps alongside VEL / RAT from line 2.
+    ui.horizontal(|ui| {
+        ui.add_space(10.0);
+        ui.add_space(10.0);
+        ui.add_space(SEQ_LABEL_W - 20.0);
+        ui.label(
+            egui::RichText::new("CURVE")
+                .monospace()
+                .size(7.5)
+                .color(theme::SMOKE),
+        );
+        let mut new_curve: Option<RampCurve> = None;
+        egui::ComboBox::from_id_source("preecho_curve")
+            .selected_text(
+                egui::RichText::new(curve_label(cfg.curve))
+                    .monospace()
+                    .size(8.0)
+                    .color(theme::FOG),
+            )
+            .width(54.0)
+            .show_ui(ui, |ui| {
+                for c in [
+                    RampCurve::Linear,
+                    RampCurve::Exp,
+                    RampCurve::Log,
+                    RampCurve::Cosine,
+                ] {
+                    if ui
+                        .selectable_label(
+                            cfg.curve == c,
+                            egui::RichText::new(curve_label(c)).monospace().size(8.5),
+                        )
+                        .clicked()
+                    {
+                        new_curve = Some(c);
+                    }
+                }
+            });
+        if let Some(c) = new_curve {
+            cfg.curve = c;
+            changed = true;
+        }
+        let mut auto_len = cfg.auto_length;
+        if widgets::toggle_button(ui, if auto_len { "AUTO" } else { "auto" }, &mut auto_len) {
+            cfg.auto_length = auto_len;
+            changed = true;
+        }
+        let mut pr = cfg.probability_ramp;
+        if widgets::toggle_button(ui, if pr { "PROB" } else { "prob" }, &mut pr) {
+            cfg.probability_ramp = pr;
+            changed = true;
+        }
+        let mut ar = cfg.accent_ramp;
+        if widgets::toggle_button(ui, if ar { "ACC" } else { "acc" }, &mut ar) {
+            cfg.accent_ramp = ar;
+            changed = true;
+        }
+        let mut sc = cfg.slide_cascade;
+        if widgets::toggle_button(ui, if sc { "SLD" } else { "sld" }, &mut sc) {
+            cfg.slide_cascade = sc;
+            changed = true;
+        }
+        // Note-approach picker — only meaningful for melodic tabs; showing
+        // it on drum tabs would mislead since TB303Step.note on drums is
+        // the slice index, not a pitch.
+        let is_melodic = matches!(selected.as_str(), "bass" | "hoover" | "an1x");
+        if is_melodic {
+            let mut new_app: Option<NoteApproach> = None;
+            egui::ComboBox::from_id_source("preecho_note_approach")
+                .selected_text(
+                    egui::RichText::new(approach_label(cfg.note_approach))
+                        .monospace()
+                        .size(8.0)
+                        .color(theme::FOG),
+                )
+                .width(48.0)
+                .show_ui(ui, |ui| {
+                    for a in [
+                        NoteApproach::Off,
+                        NoteApproach::Chromatic,
+                        NoteApproach::Scale,
+                        NoteApproach::Arp,
+                    ] {
+                        if ui
+                            .selectable_label(
+                                cfg.note_approach == a,
+                                egui::RichText::new(approach_label(a)).monospace().size(8.5),
+                            )
+                            .clicked()
+                        {
+                            new_app = Some(a);
+                        }
+                    }
+                });
+            if let Some(a) = new_app {
+                cfg.note_approach = a;
+                changed = true;
+            }
         }
     });
 

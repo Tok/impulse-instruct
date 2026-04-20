@@ -6,14 +6,35 @@ pub(super) const REVERB_COMBS: usize = 8;
 pub(super) const REVERB_ALLPASS: usize = 4;
 pub(super) const MAX_CHORUS_SIZE: usize = 4096; // ~85ms @ 48kHz
 
+/// Reverb feedback bounds.  `room_size = 0` → `REVERB_FB_MIN` (tight,
+/// short decay); `room_size = 1` → `REVERB_FB_MIN + REVERB_FB_SCALE`
+/// (≈ 0.98, near the edge of self-oscillation).  Tuned by ear — raising
+/// the scale above 0.3 pushes the tail into runaway territory.
+const REVERB_FB_MIN: f32 = 0.7;
+const REVERB_FB_SCALE: f32 = 0.28;
+
+/// Low-pass coefficient for the comb filter's damping path.  `damp` is
+/// the user knob 0..1; the effective coefficient is `damp * REVERB_DAMP_SCALE`
+/// so the knob hits a musically useful amount (0.4 ceiling) before
+/// killing all highs.
+const REVERB_DAMP_SCALE: f32 = 0.4;
+
+/// Allpass loop feedback — unity would ring forever; 0.5 gives the
+/// classic Schroeder diffuser decay.
+const REVERB_ALLPASS_FEEDBACK: f32 = 0.5;
+
+/// Pre-divided 1.0 / REVERB_COMBS for the summed-comb mixdown.  Keeps
+/// the math loud-but-not-clipping at room_size=1 / damp=0.
+const REVERB_COMB_SUM_SCALE: f32 = 1.0 / REVERB_COMBS as f32;
+
 // ─── Simple Schroeder reverb ──────────────────────────────────────────────────
 
-pub(super) struct Reverb {
-    pub(super) comb_delays: [Vec<f32>; REVERB_COMBS],
-    pub(super) comb_ptrs: [usize; REVERB_COMBS],
-    pub(super) comb_filters: [f32; REVERB_COMBS],
-    pub(super) allpass_delays: [Vec<f32>; REVERB_ALLPASS],
-    pub(super) allpass_ptrs: [usize; REVERB_ALLPASS],
+pub(crate) struct Reverb {
+    pub(crate) comb_delays: [Vec<f32>; REVERB_COMBS],
+    pub(crate) comb_ptrs: [usize; REVERB_COMBS],
+    pub(crate) comb_filters: [f32; REVERB_COMBS],
+    pub(crate) allpass_delays: [Vec<f32>; REVERB_ALLPASS],
+    pub(crate) allpass_ptrs: [usize; REVERB_ALLPASS],
 }
 
 // Freeverb-inspired delay lengths (prime-ish, tuned for ~44.1kHz)
@@ -21,7 +42,7 @@ const COMB_LENGTHS: [usize; REVERB_COMBS] = [1116, 1188, 1277, 1356, 1422, 1491,
 const ALLPASS_LENGTHS: [usize; REVERB_ALLPASS] = [556, 441, 341, 225];
 
 impl Reverb {
-    pub(super) fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self {
             comb_delays: std::array::from_fn(|i| vec![0.0f32; COMB_LENGTHS[i]]),
             comb_ptrs: [0; REVERB_COMBS],
@@ -31,14 +52,14 @@ impl Reverb {
         }
     }
 
-    pub(super) fn process(&mut self, input: f32, room_size: f32, damp: f32, freeze: bool) -> f32 {
+    pub(crate) fn process(&mut self, input: f32, room_size: f32, damp: f32, freeze: bool) -> f32 {
         // Freeze: feedback = 1.0, no new input → reverb tail holds indefinitely
         let (feedback, input) = if freeze {
             (1.0, 0.0)
         } else {
-            (room_size * 0.28 + 0.7, input) // 0.7–0.98
+            (room_size * REVERB_FB_SCALE + REVERB_FB_MIN, input)
         };
-        let damp1 = damp * 0.4;
+        let damp1 = damp * REVERB_DAMP_SCALE;
         let damp2 = 1.0 - damp1;
 
         // Parallel comb filters
@@ -54,14 +75,14 @@ impl Reverb {
             self.comb_ptrs[i] = (ptr + 1) % len;
             out += delayed;
         }
-        out *= 0.125; // scale by num combs
+        out *= REVERB_COMB_SUM_SCALE;
 
         // Series all-pass filters
         for (i, &len) in ALLPASS_LENGTHS.iter().enumerate() {
             let ptr = self.allpass_ptrs[i];
             let delayed = self.allpass_delays[i][ptr];
 
-            self.allpass_delays[i][ptr] = out + delayed * 0.5;
+            self.allpass_delays[i][ptr] = out + delayed * REVERB_ALLPASS_FEEDBACK;
             self.allpass_ptrs[i] = (ptr + 1) % len;
             out = delayed - out;
         }
@@ -72,32 +93,46 @@ impl Reverb {
 
 // ─── Delay line ───────────────────────────────────────────────────────────────
 
-pub(super) struct DelayLine {
-    pub(super) buf: Vec<f32>,
-    pub(super) ptr: usize,
+pub(crate) struct DelayLine {
+    pub(crate) buf: Vec<f32>,
+    pub(crate) ptr: usize,
     wow_phase: f32,     // slow sine LFO for wow (0–1)
     flutter_phase: f32, // faster LFO for flutter (0–1)
+    /// One-pole state for the feedback-path HPF (dub send thinner).
+    hpf_state: f32,
+    /// One-pole state for the feedback-path LPF (dub send drift).
+    lpf_state: f32,
 }
 
 impl DelayLine {
-    pub(super) fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self {
             buf: vec![0.0; MAX_DELAY_SAMPLES],
             ptr: 0,
             wow_phase: 0.0,
             flutter_phase: 0.0,
+            hpf_state: 0.0,
+            lpf_state: 0.0,
         }
     }
 
     /// Tape-style delay with wow/flutter modulation and feedback saturation.
     /// `wow_flutter`: 0–1 depth of pitch wobble. `sat`: 0–1 tape saturation on feedback.
-    pub(super) fn process_tape(
+    /// `freeze`: infinite-hold — suppresses new input and pins feedback to ~1.0 so
+    /// the echo loop sustains (dub send/return).
+    /// `hpf_amt` / `lpf_amt`: 0–1, one-pole high/low pass filters on the feedback
+    /// path.  0 = bypass; 1 = aggressive cut (≈1.7 kHz HPF / ≈75 Hz LPF).
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn process_tape(
         &mut self,
         input: f32,
         delay_samples: usize,
         feedback: f32,
         wow_flutter: f32,
         sat: f32,
+        freeze: bool,
+        hpf_amt: f32,
+        lpf_amt: f32,
         sr: f32,
     ) -> f32 {
         let max = MAX_DELAY_SAMPLES - 2; // leave room for interpolation
@@ -122,15 +157,45 @@ impl DelayLine {
         let next = (idx + 1) % MAX_DELAY_SAMPLES;
         let delayed = self.buf[idx] + (self.buf[next] - self.buf[idx]) * frac;
 
+        // Dub freeze: infinite-hold. Suppress input, sustain feedback at ~1.0.
+        // (Clamped just below 1 to keep the filter state from drifting to
+        // infinity on DC after long holds.)
+        let eff_input = if freeze { 0.0 } else { input };
+        let eff_fb = if freeze { 0.999 } else { feedback };
+
         // Tape saturation on feedback — soft clip
-        let fb_signal = if sat > 0.001 {
+        let fb_sat = if sat > 0.001 {
             let drive = 1.0 + sat * 3.0;
-            super::tanh(delayed * drive * feedback) / drive
+            super::tanh(delayed * drive * eff_fb) / drive
         } else {
-            delayed * feedback
+            delayed * eff_fb
         };
 
-        self.buf[self.ptr] = input + fb_signal;
+        // One-pole HPF on the feedback path — thins each round-trip.
+        // alpha_hpf maps knob 0..1 linearly to 0..0.2 (≈0..1.7 kHz cutoff
+        // at 48 kHz), enough to scrub low rumble without nuking the echo.
+        let fb_after_hpf = if hpf_amt > 0.001 {
+            let alpha = hpf_amt * 0.2;
+            self.hpf_state += alpha * (fb_sat - self.hpf_state);
+            fb_sat - self.hpf_state
+        } else {
+            // Reset state so turning the knob back up starts clean.
+            self.hpf_state *= 0.99;
+            fb_sat
+        };
+
+        // One-pole LPF on the feedback path — classic dub "drift into smoke".
+        // alpha_lpf maps knob 1..0 → alpha 0.01..0.3 (≈75 Hz..3 kHz cutoff).
+        let fb_after_lpf = if lpf_amt > 0.001 {
+            let alpha = (0.3 - lpf_amt * 0.29).max(0.01);
+            self.lpf_state += alpha * (fb_after_hpf - self.lpf_state);
+            self.lpf_state
+        } else {
+            self.lpf_state *= 0.99;
+            fb_after_hpf
+        };
+
+        self.buf[self.ptr] = eff_input + fb_after_lpf;
         self.ptr = (self.ptr + 1) % MAX_DELAY_SAMPLES;
         delayed
     }
@@ -138,14 +203,14 @@ impl DelayLine {
 
 // ─── Chorus / ensemble effect ─────────────────────────────────────────────────
 
-pub(super) struct Chorus {
-    pub(super) buf: [f32; MAX_CHORUS_SIZE],
-    pub(super) write: usize,
-    pub(super) lfo_phase: f32,
+pub(crate) struct Chorus {
+    pub(crate) buf: [f32; MAX_CHORUS_SIZE],
+    pub(crate) write: usize,
+    pub(crate) lfo_phase: f32,
 }
 
 impl Chorus {
-    pub(super) fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self {
             buf: [0.0; MAX_CHORUS_SIZE],
             write: 0,
@@ -155,7 +220,7 @@ impl Chorus {
 
     /// Two-voice BBD-style chorus: base ±10ms modulated by two phase-offset LFOs.
     /// `rate`: 0–1 → 0.1–8 Hz, `depth`: 0–1 → 0–10ms, `mix`: 0–1 wet/dry.
-    pub(super) fn process(&mut self, input: f32, rate: f32, depth: f32, mix: f32, sr: f32) -> f32 {
+    pub(crate) fn process(&mut self, input: f32, rate: f32, depth: f32, mix: f32, sr: f32) -> f32 {
         if mix < 0.001 {
             return input;
         }
@@ -192,7 +257,7 @@ impl Chorus {
 
     /// Read a sample at a fractional delay position (0–1 → 0–MAX_CHORUS_SIZE).
     /// Used for stereo decorrelation.
-    pub(super) fn read_tap(&self, pos: f32) -> f32 {
+    pub(crate) fn read_tap(&self, pos: f32) -> f32 {
         let off = ((pos * MAX_CHORUS_SIZE as f32) as usize).clamp(1, MAX_CHORUS_SIZE - 1);
         let r = (self.write + MAX_CHORUS_SIZE - off) % MAX_CHORUS_SIZE;
         self.buf[r]
@@ -202,18 +267,18 @@ impl Chorus {
 // ─── 3-band parametric EQ (biquad shelves + peak) ─────────────────────────────
 
 /// One biquad filter in direct form II transposed.
-struct Biquad {
-    b0: f32,
-    b1: f32,
-    b2: f32,
-    a1: f32,
-    a2: f32,
-    s1: f32,
-    s2: f32,
+pub(crate) struct Biquad {
+    pub(crate) b0: f32,
+    pub(crate) b1: f32,
+    pub(crate) b2: f32,
+    pub(crate) a1: f32,
+    pub(crate) a2: f32,
+    pub(crate) s1: f32,
+    pub(crate) s2: f32,
 }
 
 impl Biquad {
-    fn process(&mut self, x: f32) -> f32 {
+    pub(crate) fn process(&mut self, x: f32) -> f32 {
         let y = self.b0 * x + self.s1;
         self.s1 = self.b1 * x - self.a1 * y + self.s2;
         self.s2 = self.b2 * x - self.a2 * y;
@@ -221,7 +286,7 @@ impl Biquad {
     }
 
     /// Low shelf at `fc` Hz with `gain_db` boost/cut.
-    fn low_shelf(fc: f32, gain_db: f32, sr: f32) -> Self {
+    pub(crate) fn low_shelf(fc: f32, gain_db: f32, sr: f32) -> Self {
         let a = 10.0f32.powf(gain_db / 40.0);
         let w0 = std::f32::consts::TAU * fc / sr;
         let cos_w0 = w0.cos();
@@ -244,7 +309,7 @@ impl Biquad {
     }
 
     /// High shelf at `fc` Hz with `gain_db` boost/cut.
-    fn high_shelf(fc: f32, gain_db: f32, sr: f32) -> Self {
+    pub(crate) fn high_shelf(fc: f32, gain_db: f32, sr: f32) -> Self {
         let a = 10.0f32.powf(gain_db / 40.0);
         let w0 = std::f32::consts::TAU * fc / sr;
         let cos_w0 = w0.cos();
@@ -267,7 +332,7 @@ impl Biquad {
     }
 
     /// Peaking EQ at `fc` Hz, bandwidth Q, with `gain_db` boost/cut.
-    fn peak(fc: f32, q: f32, gain_db: f32, sr: f32) -> Self {
+    pub(crate) fn peak(fc: f32, q: f32, gain_db: f32, sr: f32) -> Self {
         let a = 10.0f32.powf(gain_db / 40.0);
         let w0 = std::f32::consts::TAU * fc / sr;
         let alpha = w0.sin() / (2.0 * q);
@@ -291,7 +356,7 @@ impl Biquad {
 
 /// 3-band EQ: low shelf 200 Hz · mid peak 1 kHz · high shelf 5 kHz.
 /// Coefficients are recomputed only when gain values change (per-block comparison).
-pub(super) struct EqBands {
+pub(crate) struct EqBands {
     low: Biquad,
     mid: Biquad,
     hi: Biquad,
@@ -302,7 +367,7 @@ pub(super) struct EqBands {
 }
 
 impl EqBands {
-    pub(super) fn new(sr: f32) -> Self {
+    pub(crate) fn new(sr: f32) -> Self {
         Self {
             low: Biquad::low_shelf(200.0, 0.0, sr),
             mid: Biquad::peak(1000.0, 1.0, 0.0, sr),
@@ -315,7 +380,7 @@ impl EqBands {
     }
 
     /// `low/mid/hi_gain`: -1..+1 → -12..+12 dB.
-    pub(super) fn process(
+    pub(crate) fn process(
         &mut self,
         input: f32,
         low_gain: f32,
@@ -344,7 +409,7 @@ impl EqBands {
 
 // ─── Compressor / limiter ─────────────────────────────────────────────────────
 
-pub(super) struct Compressor {
+pub(crate) struct Compressor {
     env: f32, // peak envelope follower state
     // Multiband: per-band envelope followers + crossover filter state
     band_env: [f32; 3],
@@ -363,12 +428,29 @@ impl Compressor {
     }
 
     /// Single-band compressor (static — no &self to avoid borrow conflicts).
-    fn compress_band(input: f32, env: &mut f32, threshold: f32, ratio: f32, sr: f32) -> f32 {
+    ///
+    /// `reverse` swaps the attack / release time constants.  Normal
+    /// shape is fast attack + slow release (1 ms / 80 ms): catches
+    /// transients hard and releases slowly, classic peak limiting.
+    /// Reversed shape (80 ms / 1 ms) makes the envelope miss the
+    /// initial transient almost entirely — the compressor can't ramp
+    /// its gain reduction up fast enough — then clamps the sustain
+    /// once the envelope catches up, creating the classic reverse-
+    /// compression swell-into-hit feel without any look-ahead.
+    pub(crate) fn compress_band(
+        input: f32,
+        env: &mut f32,
+        threshold: f32,
+        ratio: f32,
+        sr: f32,
+        reverse: bool,
+    ) -> f32 {
         let thresh_db = -40.0 * (1.0 - threshold);
         let ratio_val = 1.0 + ratio * 19.0;
         let level = input.abs();
-        let att = (-1.0 / (sr * 0.001)).exp();
-        let rel = (-1.0 / (sr * 0.08)).exp();
+        let fast = (-1.0 / (sr * 0.001)).exp(); // 1 ms
+        let slow = (-1.0 / (sr * 0.08)).exp(); // 80 ms
+        let (att, rel) = if reverse { (slow, fast) } else { (fast, slow) };
         *env = if level > *env {
             *env * att + level * (1.0 - att)
         } else {
@@ -385,6 +467,8 @@ impl Compressor {
 
     /// `threshold`: 0–1 → −40..0 dB. `ratio`: 0–1 → 1:1..20:1. `mix`: 0–1 wet/dry.
     /// `multiband`: 0 = single band, >0 = 3-band split (low/mid/high).
+    /// `reverse`: swap attack/release constants for swell-into-hit feel.
+    #[allow(clippy::too_many_arguments)]
     pub(super) fn process(
         &mut self,
         input: f32,
@@ -392,6 +476,7 @@ impl Compressor {
         ratio: f32,
         mix: f32,
         multiband: f32,
+        reverse: bool,
         sr: f32,
     ) -> f32 {
         if mix < 0.001 {
@@ -418,13 +503,16 @@ impl Compressor {
             let mid = input - low - high;
 
             // Compress each band independently
-            let c_low = Self::compress_band(low, &mut self.band_env[0], threshold, ratio, sr);
-            let c_mid = Self::compress_band(mid, &mut self.band_env[1], threshold, ratio, sr);
-            let c_high = Self::compress_band(high, &mut self.band_env[2], threshold, ratio, sr);
+            let c_low =
+                Self::compress_band(low, &mut self.band_env[0], threshold, ratio, sr, reverse);
+            let c_mid =
+                Self::compress_band(mid, &mut self.band_env[1], threshold, ratio, sr, reverse);
+            let c_high =
+                Self::compress_band(high, &mut self.band_env[2], threshold, ratio, sr, reverse);
 
             c_low + c_mid + c_high
         } else {
-            Self::compress_band(input, &mut self.env, threshold, ratio, sr)
+            Self::compress_band(input, &mut self.env, threshold, ratio, sr, reverse)
         };
 
         input * (1.0 - mix) + compressed * mix
@@ -433,17 +521,17 @@ impl Compressor {
 
 // ─── Tape saturation ──────────────────────────────────────────────────────────
 
-pub(super) struct TapeSat {
+pub(crate) struct TapeSat {
     flutter_phase: f32,
 }
 
 impl TapeSat {
-    pub(super) fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self { flutter_phase: 0.0 }
     }
 
     /// `drive`: 0–1 saturation amount. `mix`: 0–1 wet/dry. `flutter`: 0–1 wow depth (~2.5 Hz).
-    pub(super) fn process(
+    pub(crate) fn process(
         &mut self,
         input: f32,
         drive: f32,
@@ -474,14 +562,14 @@ impl TapeSat {
 
 // ─── Phaser (4-stage all-pass cascade) ────────────────────────────────────────
 
-pub(super) struct Phaser {
+pub(crate) struct Phaser {
     /// All-pass filter states (one per stage, Chamberlin transposed-direct-form-II).
     stages: [f32; 4],
     lfo_phase: f32,
 }
 
 impl Phaser {
-    pub(super) fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self {
             stages: [0.0; 4],
             lfo_phase: 0.0,
@@ -491,7 +579,7 @@ impl Phaser {
     /// `rate`: 0–1 → 0.05–5 Hz LFO rate.
     /// `depth`: 0–1 sweep width (0 = narrow, 1 = full 300–4000 Hz sweep).
     /// `mix`: 0–1 wet/dry.
-    pub(super) fn process(&mut self, input: f32, rate: f32, depth: f32, mix: f32, sr: f32) -> f32 {
+    pub(crate) fn process(&mut self, input: f32, rate: f32, depth: f32, mix: f32, sr: f32) -> f32 {
         if mix < 0.001 {
             return input;
         }
@@ -536,7 +624,7 @@ impl Phaser {
 const AUTOTUNE_BUF: usize = 4096; // ~93 ms @ 44.1 kHz — no heap alloc
 const AUTOTUNE_GRAIN: f32 = 1024.0; // ~23 ms crossfade period
 
-pub(super) struct Autotune {
+pub(crate) struct Autotune {
     buf: [f32; AUTOTUNE_BUF],
     write: usize,
     r1: f32,  // grain-1 read head (fractional sample index into ring buffer)
@@ -545,7 +633,7 @@ pub(super) struct Autotune {
 }
 
 impl Autotune {
-    pub(super) fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self {
             buf: [0.0; AUTOTUNE_BUF],
             write: 0,
@@ -556,7 +644,7 @@ impl Autotune {
     }
 
     /// Process one sample.  `amount`: 0–1.  `mix`: 0–1 wet/dry.
-    pub(super) fn process(&mut self, input: f32, amount: f32, mix: f32) -> f32 {
+    pub(crate) fn process(&mut self, input: f32, amount: f32, mix: f32) -> f32 {
         if mix < 0.001 || amount < 0.001 {
             return input;
         }

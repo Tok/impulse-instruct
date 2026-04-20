@@ -2,8 +2,7 @@
 # ─── build-llama-server.sh ────────────────────────────────────────────────────
 # Build the official upstream llama.cpp server for standard GGUF models.
 #
-# Use this for: Qwen3, Qwen3-14B, Gemma 4, and any other
-# standard GGUF model that the PrismML fork doesn't support.
+# Use this for: Gemma 4, Qwen3, Qwen3-14B, and any other standard GGUF model.
 #
 # Output: .llama-official-build/bin/llama-server
 #
@@ -50,8 +49,4 @@ cmake --build "$BUILD_DIR" --target llama-server -j "$(nproc)"
 echo ""
 echo "✓ Built: $TARGET"
 echo ""
-echo "This server handles: Qwen3, Qwen3-14B, Gemma 4, and all"
-echo "standard GGUF models. The PrismML server (.llama-build/) is still"
-echo "required for Bonsai 8B (1-bit Q1_0_g128 format)."
-echo ""
-echo "Impulse Instruct picks the right binary automatically based on model name."
+echo "This server handles: Qwen3, Qwen3-14B, Gemma 4, and all standard GGUF models."

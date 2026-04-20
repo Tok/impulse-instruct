@@ -4,7 +4,7 @@
 #
 # Usage:
 #   ./scripts/run-llm-style.sh                        # all models in models/
-#   ./scripts/run-llm-style.sh models/Bonsai-8B.gguf  # single model
+#   ./scripts/run-llm-style.sh models/gemma-4-E4B-it-Q4_K_M.gguf  # single model
 #   ./scripts/run-llm-style.sh --verbose               # full JSON output
 # ─────────────────────────────────────────────────────────────────────────────
 LLM_SUITE=llm_suite_style exec "$(dirname "$0")/run-llm-tests.sh" "$@"

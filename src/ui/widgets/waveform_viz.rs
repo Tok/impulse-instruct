@@ -3,6 +3,8 @@
 
 use egui::{Color32, Pos2, Sense, Stroke, Ui, Vec2};
 
+use crate::ui::theme;
+
 /// Draw an animated oscillator waveform icon.
 /// `kind`: 0=Saw, 1=Square, 2=Supersaw (detuned saws), 3=Sine, 4=Triangle
 /// `width`/`height`: pixel dimensions (typically 60–100 × 30–50).
@@ -249,7 +251,7 @@ pub fn lfo_preview(
             egui::Align2::RIGHT_TOP,
             target_name,
             font,
-            Color32::from_gray(60),
+            theme::IRON,
         );
     }
 

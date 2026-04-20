@@ -4,8 +4,8 @@
 pub use super::llm_apply::{apply_llm_step_array, apply_llm_update};
 
 use super::{
-    AgentRole, AppState, ConversationMode, DrumVoice, FilterMode, LlmAgentState, MAX_STEPS,
-    ModuleKind, Scale, Waveform, rack_kind_name_matches,
+    AgentRole, AppState, ConversationMode, DrumVoice, LlmAgentState, MAX_STEPS, ModuleKind, Scale,
+    rack_kind_name_matches,
 };
 
 /// Set the active step count, tiling existing patterns into the new slots when expanding.
@@ -202,17 +202,23 @@ pub fn set_lane_steps(state: AppState, lane: &str, n: usize) -> AppState {
     s
 }
 
-/// Set a 303 step note (on the active voice's pattern).
-pub fn set_bass_step(state: AppState, step: usize, note: u8, active: bool) -> AppState {
+/// Set a 303 step note on a specific voice's pattern.  Voice 0 mirrors
+/// `bass_pattern` (the legacy field) so existing callers stay in sync.
+pub fn set_bass_step_voice(
+    state: AppState,
+    voice_idx: usize,
+    step: usize,
+    note: u8,
+    active: bool,
+) -> AppState {
     let mut s = state;
-    let vi = s.active_voice.min(crate::state::MAX_BASS_VOICES - 1);
+    let vi = voice_idx.min(crate::state::MAX_BASS_VOICES - 1);
     if let Some(pat) = s.sequencer.bass_patterns.get_mut(vi)
         && step < pat.len()
     {
         pat[step].active = active;
         pat[step].note = note;
     }
-    // Keep legacy bass_pattern in sync for voice 0
     if vi == 0 && step < s.sequencer.bass_pattern.len() {
         s.sequencer.bass_pattern[step].active = active;
         s.sequencer.bass_pattern[step].note = note;
@@ -220,65 +226,68 @@ pub fn set_bass_step(state: AppState, step: usize, note: u8, active: bool) -> Ap
     s
 }
 
-/// Toggle accent on a 303 step (active voice).
-pub fn toggle_bass_accent(state: AppState, step: usize) -> AppState {
+/// Set a 303 step note on the active voice's pattern.
+pub fn set_bass_step(state: AppState, step: usize, note: u8, active: bool) -> AppState {
+    let vi = state.active_voice;
+    set_bass_step_voice(state, vi, step, note, active)
+}
+
+/// Toggle accent on a 303 step on a specific voice.  Intensity flips
+/// between 0.0 (off) and 1.0 (full accent); non-zero values round to
+/// "on" semantics so a partially-set accent toggles cleanly back to 0.
+pub fn toggle_bass_accent_voice(state: AppState, voice_idx: usize, step: usize) -> AppState {
     let mut s = state;
-    let vi = s.active_voice.min(crate::state::MAX_BASS_VOICES - 1);
+    let vi = voice_idx.min(crate::state::MAX_BASS_VOICES - 1);
+    let new_val = if let Some(pat) = s.sequencer.bass_patterns.get(vi)
+        && step < pat.len()
+    {
+        if pat[step].accent > 0.0 { 0.0 } else { 1.0 }
+    } else {
+        1.0
+    };
     if let Some(pat) = s.sequencer.bass_patterns.get_mut(vi)
         && step < pat.len()
     {
-        pat[step].accent = !pat[step].accent;
+        pat[step].accent = new_val;
     }
     if vi == 0 && step < s.sequencer.bass_pattern.len() {
-        s.sequencer.bass_pattern[step].accent = !s.sequencer.bass_pattern[step].accent;
+        s.sequencer.bass_pattern[step].accent = new_val;
+    }
+    s
+}
+
+/// Toggle accent on a 303 step (active voice).
+pub fn toggle_bass_accent(state: AppState, step: usize) -> AppState {
+    let vi = state.active_voice;
+    toggle_bass_accent_voice(state, vi, step)
+}
+
+/// Toggle slide on a 303 step on a specific voice.
+pub fn toggle_bass_slide_voice(state: AppState, voice_idx: usize, step: usize) -> AppState {
+    let mut s = state;
+    let vi = voice_idx.min(crate::state::MAX_BASS_VOICES - 1);
+    let new_val = if let Some(pat) = s.sequencer.bass_patterns.get(vi)
+        && step < pat.len()
+    {
+        if pat[step].slide > 0.0 { 0.0 } else { 1.0 }
+    } else {
+        1.0
+    };
+    if let Some(pat) = s.sequencer.bass_patterns.get_mut(vi)
+        && step < pat.len()
+    {
+        pat[step].slide = new_val;
+    }
+    if vi == 0 && step < s.sequencer.bass_pattern.len() {
+        s.sequencer.bass_pattern[step].slide = new_val;
     }
     s
 }
 
 /// Toggle slide on a 303 step (active voice).
 pub fn toggle_bass_slide(state: AppState, step: usize) -> AppState {
-    let mut s = state;
-    let vi = s.active_voice.min(crate::state::MAX_BASS_VOICES - 1);
-    if let Some(pat) = s.sequencer.bass_patterns.get_mut(vi)
-        && step < pat.len()
-    {
-        pat[step].slide = !pat[step].slide;
-    }
-    if vi == 0 && step < s.sequencer.bass_pattern.len() {
-        s.sequencer.bass_pattern[step].slide = !s.sequencer.bass_pattern[step].slide;
-    }
-    s
-}
-
-/// Apply the Reese bass preset.
-/// Detuned dual saws + sub oscillator + highpass to cut sub mud + light chorus.
-/// LLM trigger: "Reese bass", "detuned bass", "jungle bass".
-pub fn apply_reese_preset(state: AppState) -> AppState {
-    let mut s = state;
-    s.bass_voices[0].synth.waveform = Waveform::Supersaw;
-    s.bass_voices[0].synth.supersaw_voices = 2;
-    s.bass_voices[0].synth.supersaw_detune = 0.3; // tight detuning — beating without flange
-    s.bass_voices[0].synth.sub_osc_level = 0.5;
-    s.bass_voices[0].synth.filter_mode = FilterMode::Highpass;
-    s.bass_voices[0].synth.cutoff = 0.25; // HP removes low mud, keeps mid growl
-    s.bass_voices[0].synth.resonance = 0.35;
-    s.bass_voices[0].synth.env_mod = 0.0;
-    s.bass_voices[0].synth.distortion = 0.15;
-    s.bass_voices[0].synth.fm_depth = 0.0;
-    s
-}
-
-/// Gabber kick preset: extreme pitch envelope + hard clip for distorted swooping kick.
-pub fn apply_gabber_kick_preset(state: AppState) -> AppState {
-    let mut s = state;
-    s.kit_a.kick.pitch = 0.35; // lower base pitch
-    s.kit_a.kick.decay = 0.7; // long tail
-    s.kit_a.kick.punch = 0.9; // maximum transient
-    s.kit_a.kick.pitch_env_depth = 0.9; // extreme pitch sweep
-    s.kit_a.kick.pitch_env_time = 0.6; // long sweep time — the gabber "swooop"
-    s.kit_a.kick.clip = 0.8; // heavy hard clipping
-    s.kit_a.kick.volume = 0.85;
-    s
+    let vi = state.active_voice;
+    toggle_bass_slide_voice(state, vi, step)
 }
 
 /// Set a hoover sequencer step.
@@ -298,174 +307,6 @@ pub fn set_an1x_step(state: AppState, step: usize, note: u8, active: bool) -> Ap
         s.sequencer.an1x_pattern[step].active = active;
         s.sequencer.an1x_pattern[step].note = note;
     }
-    s
-}
-
-/// Apply the Hoover lead preset — sets canonical Hoover parameters.
-/// LLM trigger: "add a hoover", "rave lead", "dominator".
-pub fn apply_hoover_preset(state: AppState) -> AppState {
-    let mut s = state;
-    s.hoover.enabled = true;
-    s.hoover.filter_start = 0.82;
-    s.hoover.sweep_time = 0.55;
-    s.hoover.resonance = 0.76;
-    s.hoover.detune = 0.42;
-    s.hoover.voices = 5;
-    s.hoover.pitch_lfo_rate = 1.3;
-    s.hoover.pitch_lfo_depth = 0.18;
-    s.hoover.volume = 0.72;
-    s
-}
-
-/// Apply the BoC-style AN1X preset — warm detuned pad with slow attack and LFO drift.
-/// LLM trigger: "add a pad", "warm lead", "BoC", "ambient".
-pub fn apply_boc_preset(state: AppState) -> AppState {
-    let mut s = state;
-    s.an1x.enabled = true;
-    s.an1x.osc1_wave = crate::state::An1xWave::Saw;
-    s.an1x.osc2_wave = crate::state::An1xWave::Saw;
-    s.an1x.osc1_level = 0.8;
-    s.an1x.osc2_level = 0.65;
-    s.an1x.osc2_detune = 0.53; // ~+2.9 semitones — classic detuned beating
-    s.an1x.osc2_octave = 0;
-    s.an1x.sub_level = 0.15;
-    s.an1x.filter_cutoff = 0.42;
-    s.an1x.filter_resonance = 0.28;
-    s.an1x.filter_env_amount = 0.58; // gentle positive mod
-    s.an1x.filter_attack = 0.15;
-    s.an1x.filter_decay = 0.5;
-    s.an1x.filter_sustain = 0.35;
-    s.an1x.filter_release = 0.4;
-    s.an1x.amp_attack = 0.32; // slow pad attack
-    s.an1x.amp_decay = 0.55;
-    s.an1x.amp_sustain = 0.65;
-    s.an1x.amp_release = 0.5;
-    s.an1x.lfo_rate = 0.09; // ~0.12 Hz — barely perceptible breathing
-    s.an1x.lfo_depth = 0.12;
-    s.an1x.lfo_target = crate::state::An1xLfoTarget::Pitch;
-    s.an1x.lfo_delay = 0.4; // LFO fades in over ~1.6s after note is struck
-    s.an1x.pitch_env_attack = 0.0;
-    s.an1x.pitch_env_decay = 0.1;
-    s.an1x.pitch_env_amount = 0.5; // neutral — no pitch transient on pads
-    s.an1x.hard_sync = false;
-    s.an1x.lfo_bpm_sync = false;
-    s.an1x.lfo_sync_beats = 4.0;
-    s.an1x.drift = 0.14;
-    s.an1x.glide_time = 0.18;
-    s.an1x.glide_legato = true;
-    s.an1x.volume = 0.75;
-    s
-}
-
-/// Warm Pad preset — lush, slow-moving, classic analog pad sound.
-pub fn apply_warm_pad_preset(state: AppState) -> AppState {
-    let mut s = state;
-    s.an1x.enabled = true;
-    s.an1x.osc1_wave = crate::state::An1xWave::Saw;
-    s.an1x.osc2_wave = crate::state::An1xWave::Saw;
-    s.an1x.osc1_level = 0.75;
-    s.an1x.osc2_level = 0.7;
-    s.an1x.osc2_detune = 0.52;
-    s.an1x.sub_level = 0.3;
-    s.an1x.filter_cutoff = 0.35;
-    s.an1x.filter_resonance = 0.15;
-    s.an1x.filter_env_amount = 0.55;
-    s.an1x.filter_attack = 0.4;
-    s.an1x.filter_decay = 0.6;
-    s.an1x.filter_sustain = 0.4;
-    s.an1x.filter_release = 0.55;
-    s.an1x.amp_attack = 0.45;
-    s.an1x.amp_decay = 0.5;
-    s.an1x.amp_sustain = 0.7;
-    s.an1x.amp_release = 0.6;
-    s.an1x.drift = 0.08;
-    s.an1x.volume = 0.7;
-    s
-}
-
-/// Evolving Texture preset — slowly morphing sound with LFO on filter.
-pub fn apply_evolving_texture_preset(state: AppState) -> AppState {
-    let mut s = state;
-    s.an1x.enabled = true;
-    s.an1x.osc1_wave = crate::state::An1xWave::Saw;
-    s.an1x.osc2_wave = crate::state::An1xWave::Triangle;
-    s.an1x.osc1_level = 0.6;
-    s.an1x.osc2_level = 0.8;
-    s.an1x.osc2_detune = 0.54;
-    s.an1x.filter_cutoff = 0.5;
-    s.an1x.filter_resonance = 0.35;
-    s.an1x.filter_env_amount = 0.6;
-    s.an1x.filter_attack = 0.3;
-    s.an1x.filter_decay = 0.7;
-    s.an1x.filter_sustain = 0.3;
-    s.an1x.filter_release = 0.7;
-    s.an1x.amp_attack = 0.5;
-    s.an1x.amp_decay = 0.6;
-    s.an1x.amp_sustain = 0.55;
-    s.an1x.amp_release = 0.75;
-    s.an1x.lfo_rate = 0.06;
-    s.an1x.lfo_depth = 0.25;
-    s.an1x.lfo_target = crate::state::An1xLfoTarget::FilterCutoff;
-    s.an1x.lfo_delay = 0.5;
-    s.an1x.drift = 0.2;
-    s.an1x.volume = 0.65;
-    s
-}
-
-/// Glass Pad preset — bright, crystalline, shimmering pad.
-pub fn apply_glass_pad_preset(state: AppState) -> AppState {
-    let mut s = state;
-    s.an1x.enabled = true;
-    s.an1x.osc1_wave = crate::state::An1xWave::Triangle;
-    s.an1x.osc2_wave = crate::state::An1xWave::Sine;
-    s.an1x.osc1_level = 0.9;
-    s.an1x.osc2_level = 0.5;
-    s.an1x.osc2_detune = 0.53;
-    s.an1x.osc2_octave = 1;
-    s.an1x.filter_cutoff = 0.7;
-    s.an1x.filter_resonance = 0.4;
-    s.an1x.filter_env_amount = 0.62;
-    s.an1x.filter_attack = 0.2;
-    s.an1x.filter_decay = 0.5;
-    s.an1x.filter_sustain = 0.5;
-    s.an1x.filter_release = 0.65;
-    s.an1x.amp_attack = 0.35;
-    s.an1x.amp_decay = 0.45;
-    s.an1x.amp_sustain = 0.6;
-    s.an1x.amp_release = 0.8;
-    s.an1x.hard_sync = true;
-    s.an1x.drift = 0.05;
-    s.an1x.volume = 0.6;
-    s
-}
-
-/// Sub Drone preset — deep, sustained, barely audible movement.
-pub fn apply_sub_drone_preset(state: AppState) -> AppState {
-    let mut s = state;
-    s.an1x.enabled = true;
-    s.an1x.osc1_wave = crate::state::An1xWave::Sine;
-    s.an1x.osc2_wave = crate::state::An1xWave::Triangle;
-    s.an1x.osc1_level = 0.9;
-    s.an1x.osc2_level = 0.4;
-    s.an1x.osc2_detune = 0.505;
-    s.an1x.osc2_octave = -1;
-    s.an1x.sub_level = 0.6;
-    s.an1x.filter_cutoff = 0.2;
-    s.an1x.filter_resonance = 0.1;
-    s.an1x.filter_env_amount = 0.5;
-    s.an1x.filter_attack = 0.6;
-    s.an1x.filter_decay = 0.8;
-    s.an1x.filter_sustain = 0.6;
-    s.an1x.filter_release = 0.9;
-    s.an1x.amp_attack = 0.7;
-    s.an1x.amp_decay = 0.7;
-    s.an1x.amp_sustain = 0.8;
-    s.an1x.amp_release = 0.95;
-    s.an1x.lfo_rate = 0.03;
-    s.an1x.lfo_depth = 0.08;
-    s.an1x.lfo_target = crate::state::An1xLfoTarget::Pitch;
-    s.an1x.drift = 0.25;
-    s.an1x.volume = 0.7;
     s
 }
 
@@ -517,6 +358,24 @@ pub fn set_pattern_edit(state: AppState, slot: usize) -> AppState {
 pub fn set_chain(state: AppState, chain: Vec<usize>) -> AppState {
     let mut s = state;
     s.chain = chain.into_iter().map(|v| v.min(7)).take(8).collect();
+    s
+}
+
+/// Swap two chain slots (and their overrides) in place.  Used by the
+/// timeline UI's drag-to-reorder.  No-op if either index is out of
+/// bounds or both are the same — keeps the caller free of bounds
+/// checks.  `chain_overrides` is padded with defaults to match
+/// `chain`'s length before swapping so indices stay aligned afterward.
+pub fn swap_chain_slots(state: AppState, a: usize, b: usize) -> AppState {
+    let mut s = state;
+    if a == b || a >= s.chain.len() || b >= s.chain.len() {
+        return s;
+    }
+    s.chain.swap(a, b);
+    while s.chain_overrides.len() < s.chain.len() {
+        s.chain_overrides.push(super::ChainSlotOverride::default());
+    }
+    s.chain_overrides.swap(a, b);
     s
 }
 
@@ -740,12 +599,149 @@ pub fn observe_user_edit(state: AppState, param_path: &str, value: f32) -> AppSt
     s
 }
 
+// ─── Song-mode helpers ──────────────────────────────────────────────────────
+// Set / clear per-chain-slot overrides.  All take ownership and return
+// the updated state — same discipline as the rest of `transitions.rs`.
+// Overrides are kept in a parallel vec; the vec is extended with defaults
+// as needed so `overrides[pos]` is always safe to write.
+
+/// Ensure `state.chain_overrides` is at least `len` entries long by
+/// padding with `ChainSlotOverride::default()`.  Pure + local to this
+/// file — used by the set_* helpers below.
+fn ensure_chain_overrides_len(state: &mut AppState, len: usize) {
+    if state.chain_overrides.len() < len {
+        state.chain_overrides.resize_with(len, Default::default);
+    }
+}
+
+/// Set the style override for chain slot `pos`.  `style == None` clears
+/// the override (slot falls back to the pattern's intrinsic `pattern_style`).
+pub fn set_chain_slot_style(state: AppState, pos: usize, style: Option<String>) -> AppState {
+    let mut s = state;
+    if pos >= s.chain.len() {
+        return s;
+    }
+    ensure_chain_overrides_len(&mut s, pos + 1);
+    s.chain_overrides[pos].style = style;
+    s
+}
+
+/// Set the BPM override for chain slot `pos`.  `bpm == None` clears the
+/// override.  BPM is clamped to the sequencer's valid range on set.
+pub fn set_chain_slot_bpm(state: AppState, pos: usize, bpm: Option<f32>) -> AppState {
+    let mut s = state;
+    if pos >= s.chain.len() {
+        return s;
+    }
+    ensure_chain_overrides_len(&mut s, pos + 1);
+    s.chain_overrides[pos].bpm = bpm.map(|b| b.clamp(crate::state::BPM_MIN, crate::state::BPM_MAX));
+    s
+}
+
+/// Set the repeat count for chain slot `pos`.  Clamped to `1..=64`
+/// (1 = classic chain, 64 is the upper UI cap so a stuck slot doesn't
+/// eat minutes of song time).
+pub fn set_chain_slot_repeats(state: AppState, pos: usize, repeats: u8) -> AppState {
+    let mut s = state;
+    if pos >= s.chain.len() {
+        return s;
+    }
+    ensure_chain_overrides_len(&mut s, pos + 1);
+    s.chain_overrides[pos].repeats = repeats.clamp(1, 64);
+    s
+}
+
+/// Clear every override on the given slot — brings it back to plain
+/// chain-position behaviour (no style swap, no BPM force, one loop).
+pub fn clear_chain_slot_override(state: AppState, pos: usize) -> AppState {
+    let mut s = state;
+    if let Some(entry) = s.chain_overrides.get_mut(pos) {
+        *entry = crate::state::ChainSlotOverride::default();
+    }
+    s
+}
+
+/// Replace the whole chain + overrides + enabled state at once.  Used by
+/// the `/api/song` bulk-set endpoint and the Song-mode UI's bulk save.
+/// Chains are clamped to 8 entries / slot indices 0..=7 to match the
+/// existing chain helpers.
+pub fn set_song(
+    state: AppState,
+    chain: Vec<usize>,
+    overrides: Vec<crate::state::ChainSlotOverride>,
+    enabled: bool,
+) -> AppState {
+    let mut s = state;
+    s.chain = chain.into_iter().map(|v| v.min(7)).take(8).collect();
+    s.chain_overrides = overrides.into_iter().take(s.chain.len()).collect();
+    s.chain_enabled = enabled;
+    if !enabled {
+        s.chain_pos = 0;
+    }
+    s.chain_repeat_count = 0;
+    s
+}
+
 /// Propagate a style change to all agents whose style is not locked.
 pub fn propagate_style(state: AppState, style_id: &str) -> AppState {
     let mut s = state;
     for agent in &mut s.llm_agents {
         if !agent.style_locked {
             agent.active_style = Some(style_id.to_string());
+        }
+    }
+    s
+}
+
+/// Apply a pattern's `pattern_style` tag on chain advance.  When the song
+/// chain walks into a slot whose loaded `SequencerState.pattern_style` is
+/// `Some(id)`, this sets the global `llm.active_style` and propagates it
+/// to all unlocked agents — the core of per-chain style transitions.
+/// `None` leaves the active style unchanged.
+pub fn apply_pattern_style_on_advance(state: AppState, style: Option<&str>) -> AppState {
+    match style {
+        Some(id) => {
+            let mut s = state;
+            s.llm.active_style = Some(id.to_string());
+            propagate_style(s, id)
+        }
+        None => state,
+    }
+}
+
+/// Transport-field reconciliation for a chain advance.  Takes the slot
+/// just loaded into `sequencer` and the prior transport values; returns
+/// the sequencer with transport populated according to the loaded slot's
+/// `pattern_bpm_apply` opt-in:
+/// * `false` (default) — preserve `prior_bpm` and `prior_swing` (classic
+///   chain behaviour; existing projects upgrade cleanly).
+/// * `true` — keep the loaded slot's own `bpm` and `swing`, so Song-mode
+///   chains can drive tempo changes at pattern boundaries.
+///
+/// `running` is always preserved so the chain never pauses mid-song.
+pub fn chain_advance_transport(
+    loaded: crate::state::SequencerState,
+    prior_bpm: f32,
+    prior_swing: f32,
+    prior_running: bool,
+) -> crate::state::SequencerState {
+    let mut s = loaded;
+    if !s.pattern_bpm_apply {
+        s.bpm = prior_bpm;
+        s.swing = prior_swing;
+    }
+    s.running = prior_running;
+    s
+}
+
+/// Propagate a seed change to all agents whose seed is not locked.  Mirrors
+/// `propagate_style` — `seed = -1` means "random each call".
+pub fn propagate_seed(state: AppState, seed: i64) -> AppState {
+    let mut s = state;
+    s.llm.seed = seed;
+    for agent in &mut s.llm_agents {
+        if !agent.seed_locked {
+            agent.seed = seed;
         }
     }
     s
@@ -760,6 +756,27 @@ pub fn push_agent_memory(state: AppState, agent_id: u32, snippet: String) -> App
             agent
                 .memory
                 .drain(..agent.memory.len() - super::AGENT_MEMORY_MAX);
+        }
+    }
+    s
+}
+
+/// Push a short-term conversation snippet to an agent's `recent_outputs`
+/// trail, capping at `AGENT_RECENT_OUTPUTS_MAX`.  Empty / whitespace-only
+/// snippets are no-ops so the inference loop can unconditionally call
+/// this even when a cycle returns nothing interesting.  Unlike
+/// `push_agent_memory` (unbounded long-term recall) this trail is
+/// intentionally small — it exists to give the agent short-term context
+/// of its own recent moves, not to archive history.
+pub fn push_agent_recent_output(state: AppState, agent_id: u32, snippet: String) -> AppState {
+    let mut s = state;
+    if snippet.trim().is_empty() {
+        return s;
+    }
+    if let Some(agent) = s.llm_agents.iter_mut().find(|a| a.id == agent_id) {
+        agent.recent_outputs.push_back(snippet);
+        while agent.recent_outputs.len() > super::AGENT_RECENT_OUTPUTS_MAX {
+            agent.recent_outputs.pop_front();
         }
     }
     s

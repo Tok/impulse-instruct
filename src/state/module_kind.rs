@@ -103,8 +103,11 @@ impl ModuleKind {
             Self::LlmConsole => (grid_cols, 1),
             Self::MasterOutput => (grid_cols, 1),
             Self::AcidBass => (4, 7),
-            Self::DrumKit808 => (3, 3),
-            Self::DrumKit909 => (4, 3),
+            // Drum kits are 4 rows tall so the 3 per-voice glass groups
+            // (kick / snare / hihat or clap) each with an XY pad beside
+            // their knobs don't get clipped / scrollbar'd.
+            Self::DrumKit808 => (4, 5),
+            Self::DrumKit909 => (4, 4),
             Self::HooverLead => (4, 2),
             Self::An1xVoice => (6, 6),
             Self::AmenSampler => (3, 3),
@@ -118,8 +121,8 @@ impl ModuleKind {
             Self::StereoMeter => (2, 1),
             Self::LfoModule => (2, 2),
             // FX modules — exhaustive so new variants cause a compile error
+            Self::FxDelay => (2, 2), // 5-button row can't fit in 1 row
             Self::FxReverb
-            | Self::FxDelay
             | Self::FxChorus
             | Self::FxPhaser
             | Self::FxRingMod
@@ -167,6 +170,61 @@ impl ModuleKind {
             | Self::ActivityTimeline
             | Self::LfoModule => Zone::FxMod,
         }
+    }
+
+    /// True if this module produces an audio bus signal (voice or FX).  Used by
+    /// the back-panel "reaches MASTER" indicator — modules without an audio
+    /// output (sequencer, LFO, agents, meters) are not part of the audio
+    /// graph and their LED is hidden entirely.
+    pub fn has_audio_output(self) -> bool {
+        matches!(
+            self,
+            Self::AcidBass
+                | Self::HooverLead
+                | Self::DrumKit808
+                | Self::DrumKit909
+                | Self::AmenSampler
+                | Self::GranularTexture
+                | Self::GabberKick
+                | Self::NoiseVoice
+                | Self::An1xVoice
+                | Self::NeuTts
+                | Self::FxReverb
+                | Self::FxDelay
+                | Self::FxChorus
+                | Self::FxPhaser
+                | Self::FxRingMod
+                | Self::FxWaveshaper
+                | Self::FxBitcrush
+                | Self::FxEq
+                | Self::FxCompressor
+                | Self::FxTapeSat
+                | Self::FxDrive
+                | Self::FxAutotune
+                | Self::FxPan
+        )
+    }
+
+    /// True for FX modules that offer an XY pad in the expanded view.
+    /// Modules returning true get an extra grid row when `pad_expanded` is
+    /// true on their `RackModule`, plus a chevron toggle in the title bar.
+    pub fn supports_xy_pad(self) -> bool {
+        matches!(
+            self,
+            Self::FxReverb
+                | Self::FxDelay
+                | Self::FxChorus
+                | Self::FxPhaser
+                | Self::FxRingMod
+                | Self::FxWaveshaper
+                | Self::FxBitcrush
+                | Self::FxEq
+                | Self::FxCompressor
+                | Self::FxTapeSat
+                | Self::FxDrive
+                | Self::FxAutotune
+                | Self::FxPan
+        )
     }
 
     /// Whether this module type may have more than one instance in the rack.

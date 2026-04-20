@@ -46,7 +46,7 @@ pub fn draw_hoover(app: &mut ImpulseApp, ui: &mut egui::Ui) {
     // ── Three equal-width glass groups ────────────────────────────────────────
     let gw = widgets::even_group_width(ui, 3);
     // Uniform height across all groups — matches the tallest (OSC with PAN + voices)
-    let group_h = ctrl.knob_size * 2.0 + 60.0;
+    let group_h = widgets::glass_group_height(ctrl, 60.0);
     ui.horizontal(|ui| {
         // FILTER group: START, SWEEP, RESO (horizontal)
         widgets::glass_group_fill(ui, gw, gw, |ui| {
@@ -75,7 +75,7 @@ pub fn draw_hoover(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                 }
                 {
                     let mut v = app.state.read().hoover.resonance;
-                    if widgets::param_control(ui, "RESO", &mut v, ParamMode::Free, ctrl).0 {
+                    if widgets::param_control(ui, "RESONANCE", &mut v, ParamMode::Free, ctrl).0 {
                         app.state.write().hoover.resonance = v;
                         app.push_audio_params();
                     }
@@ -182,7 +182,7 @@ pub fn draw_hoover(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                     .size(7.5)
                     .color(theme::SMOKE),
             )
-            .fill(egui::Color32::from_gray(28)),
+            .fill(theme::PIT),
         )
         .on_hover_text("Apply classic Hoover lead settings and enable voice")
         .clicked()

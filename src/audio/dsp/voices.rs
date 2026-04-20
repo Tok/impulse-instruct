@@ -3,14 +3,14 @@
 
 /// Moog-style 4-pole ladder filter state.
 #[derive(Clone, Copy, Default)]
-pub(super) struct LadderFilter {
-    pub(super) s: [f32; 4],
+pub(crate) struct LadderFilter {
+    pub(crate) s: [f32; 4],
 }
 
 impl LadderFilter {
     /// `g` is the per-stage filter coefficient (0–~0.99).
     /// Callers must map cutoff to a proper g before calling.
-    pub(super) fn process(&mut self, input: f32, g: f32, resonance: f32) -> f32 {
+    pub(crate) fn process(&mut self, input: f32, g: f32, resonance: f32) -> f32 {
         let f = g.clamp(0.001, 0.99);
         let k = resonance * 4.0; // self-oscillation at k=4.0
 
@@ -29,12 +29,12 @@ impl LadderFilter {
 
 /// Simple one-pole smoothing filter.
 #[derive(Clone, Copy, Default)]
-pub(super) struct OnePole {
-    pub(super) state: f32,
+pub(crate) struct OnePole {
+    pub(crate) state: f32,
 }
 
 impl OnePole {
-    pub(super) fn process(&mut self, input: f32, coeff: f32) -> f32 {
+    pub(crate) fn process(&mut self, input: f32, coeff: f32) -> f32 {
         self.state = self.state * coeff + input * (1.0 - coeff);
         self.state
     }
@@ -42,15 +42,15 @@ impl OnePole {
 
 /// PRNG for noise generation (xorshift32 — no stdlib, no heap).
 #[derive(Clone, Copy)]
-pub(super) struct NoiseGen {
-    pub(super) state: u32,
+pub(crate) struct NoiseGen {
+    pub(crate) state: u32,
 }
 
 impl NoiseGen {
-    pub(super) fn new(seed: u32) -> Self {
+    pub(crate) fn new(seed: u32) -> Self {
         Self { state: seed.max(1) }
     }
-    pub(super) fn next(&mut self) -> f32 {
+    pub(crate) fn next(&mut self) -> f32 {
         self.state ^= self.state << 13;
         self.state ^= self.state >> 17;
         self.state ^= self.state << 5;
@@ -61,17 +61,17 @@ impl NoiseGen {
 // ─── Drum voice generic base ──────────────────────────────────────────────────
 
 #[derive(Clone, Copy, Default)]
-pub(super) struct Envelope {
-    pub(super) value: f32,
-    pub(super) active: bool,
+pub(crate) struct Envelope {
+    pub(crate) value: f32,
+    pub(crate) active: bool,
 }
 
 impl Envelope {
-    pub(super) fn trigger(&mut self) {
+    pub(crate) fn trigger(&mut self) {
         self.value = 1.0;
         self.active = true;
     }
-    pub(super) fn tick(&mut self, decay_coeff: f32) -> f32 {
+    pub(crate) fn tick(&mut self, decay_coeff: f32) -> f32 {
         if !self.active {
             return 0.0;
         }
@@ -439,12 +439,22 @@ pub(super) struct HooverVoice {
     phase: f32,
     unison_phases: [f32; 6],
     freq: f32,
+    /// Glide target.  Equal to `freq` when no slide is in progress.
+    target_freq: f32,
     gate: bool,
     amp_env: f32,  // VCA envelope
     filt_env: f32, // Filter sweep: 1.0 = LP wide open (bright), decays to 0.0 (dark)
     svf_low: f32,
     svf_band: f32,
     lfo_phase: f32,
+    /// Per-step accent (0..=1).  Scales the final output level: 0 leaves the
+    /// voice at its baseline, 1 lifts by `ACCENT_LIFT` (see `process`).
+    /// Populated by melodic preecho's `accent_ramp`.
+    accent: f32,
+    /// Per-step slide (0..=1).  Non-zero enables an exponential pitch glide
+    /// from `freq` → `target_freq`; zero snaps.  Populated by melodic
+    /// preecho's `slide_cascade`.
+    slide: f32,
 }
 
 impl HooverVoice {
@@ -453,17 +463,36 @@ impl HooverVoice {
             phase: 0.0,
             unison_phases: [0.0; 6],
             freq: 220.0,
+            target_freq: 220.0,
             gate: false,
             amp_env: 0.0,
             filt_env: 0.0,
             svf_low: 0.0,
             svf_band: 0.0,
             lfo_phase: 0.0,
+            accent: 0.0,
+            slide: 0.0,
         }
     }
 
-    pub(super) fn trigger(&mut self, note: u8, tuning: u8) {
-        self.freq = super::dsp_util::midi_to_hz_tuned(note, tuning);
+    pub(super) fn trigger(
+        &mut self,
+        note: u8,
+        tuning: super::TuningSystem,
+        accent: f32,
+        slide: f32,
+    ) {
+        let new_freq = super::dsp_util::midi_to_hz_tuned(note, tuning);
+        self.accent = accent.clamp(0.0, 1.0);
+        self.slide = slide.clamp(0.0, 1.0);
+        // When slide > 0 we leave `self.freq` where it was so `process`
+        // glides into `target_freq`; otherwise we snap.
+        if self.slide > 0.0 && self.freq > 0.0 {
+            self.target_freq = new_freq;
+        } else {
+            self.freq = new_freq;
+            self.target_freq = new_freq;
+        }
         self.gate = true;
         self.amp_env = 0.0; // will rise on fast attack
         self.filt_env = 1.0; // start wide open (LP fully bright)
@@ -495,6 +524,16 @@ impl HooverVoice {
             self.filt_env *= sweep_coeff;
         } else {
             self.filt_env = 0.0;
+        }
+
+        // Slide glide: exponential approach from self.freq → target_freq.
+        // Glide time ramps with slide intensity so a `slide_cascade` step
+        // produces an audibly-smeared lead-in; slide=0 short-circuits the
+        // update path (target == freq).
+        if self.slide > 0.0 && (self.freq - self.target_freq).abs() > 1e-3 {
+            let glide_time_s = 0.01 + self.slide * 0.15; // 10..160 ms
+            let coeff = (-1.0_f32 / (glide_time_s * sr)).exp();
+            self.freq = self.target_freq - (self.target_freq - self.freq) * coeff;
         }
 
         // Pitch LFO (sine, adds the wailing character)
@@ -555,15 +594,19 @@ impl HooverVoice {
         // Soft saturation via tanh to round off harsh clipping at high resonance
         let saturated = mixed.tanh() * 1.15;
 
-        saturated * self.amp_env * p.hoover_volume
+        // Accent lift: 0 leaves baseline, 1 scales output up by ACCENT_LIFT.
+        // Keeps legacy un-accented triggers at their original level.
+        let accent_gain = 1.0 + super::dsp_util::ACCENT_LIFT * self.accent;
+
+        saturated * self.amp_env * p.hoover_volume * accent_gain
     }
 }
 
 // ─── AN1X-style virtual analog voice ─────────────────────────────────────────
 
 /// ADSR envelope phase.
-#[derive(Clone, Copy, PartialEq)]
-enum AdsrPhase {
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub(crate) enum AdsrPhase {
     Idle,
     Attack,
     Decay,
@@ -578,13 +621,13 @@ const ADSR_MAX_RELEASE_MS: f32 = 30_000.0; // 30 s
 
 /// Maps a 0–1 ADSR time knob to samples. Quadratic curve: 0→1ms, 1→max_ms.
 #[inline]
-fn adsr_samples(v: f32, sr: f32, max_ms: f32) -> f32 {
+pub(crate) fn adsr_samples(v: f32, sr: f32, max_ms: f32) -> f32 {
     let ms = 1.0 + v * v * (max_ms - 1.0);
     (ms * 0.001 * sr).max(1.0)
 }
 
 /// Step one ADSR sample; returns current envelope value.
-fn adsr_tick(
+pub(crate) fn adsr_tick(
     phase: &mut AdsrPhase,
     val: &mut f32,
     gate: bool,
@@ -635,298 +678,29 @@ fn adsr_tick(
 
 /// Generate one sample from a waveform. `phase` is 0–1.
 #[inline]
-fn osc_sample(wave: u8, phase: f32, noise_state: &mut u32) -> f32 {
+pub(crate) fn osc_sample(wave: crate::state::An1xWave, phase: f32, noise_state: &mut u32) -> f32 {
+    use crate::state::An1xWave;
     match wave {
-        0 => phase * 2.0 - 1.0, // saw
-        1 => {
+        An1xWave::Saw => phase * 2.0 - 1.0,
+        An1xWave::Square => {
             if phase < 0.5 {
                 1.0
             } else {
                 -1.0
             }
-        } // square
-        2 => 1.0 - 4.0 * (phase - 0.5).abs(), // triangle (bipolar)
-        3 => (phase * std::f32::consts::TAU).sin(), // sine
-        _ => {
-            // noise (LCG)
+        }
+        An1xWave::Triangle => 1.0 - 4.0 * (phase - 0.5).abs(),
+        An1xWave::Sine => (phase * std::f32::consts::TAU).sin(),
+        An1xWave::Noise => {
+            // LCG — cheap; the An1x noise osc is fine with mediocre quality.
             *noise_state = noise_state.wrapping_mul(1664525).wrapping_add(1013904223);
             (*noise_state as i32) as f32 / i32::MAX as f32
         }
     }
 }
 
-pub(super) struct An1xVoice {
-    active: bool,
-    gate: bool,
-    note: f32,          // current target MIDI note (float for glide)
-    current_pitch: f32, // actual pitch in semitones (gliding toward note)
-
-    osc1_phase: f32,
-    osc2_phase: f32,
-    sub_phase: f32,
-    noise_state: u32,
-
-    amp_phase: AdsrPhase,
-    amp_val: f32,
-    filt_phase: AdsrPhase,
-    filt_val: f32,
-    pitch_phase: AdsrPhase, // AD-only pitch envelope
-    pitch_val: f32,
-
-    svf_low: f32,
-    svf_band: f32,
-
-    lfo_phase: f32,
-    lfo_delay_samples: u32, // counts down; LFO fades in as this approaches 0
-    lfo_depth_cur: f32,     // current LFO depth (fades in from 0)
-
-    drift_target: f32,
-    drift_prev: f32,
-    drift_step_counter: u32,
-}
-
-impl An1xVoice {
-    pub(super) fn new() -> Self {
-        Self {
-            active: false,
-            gate: false,
-            note: 60.0,
-            current_pitch: 60.0,
-            osc1_phase: 0.0,
-            osc2_phase: 0.0,
-            sub_phase: 0.0,
-            noise_state: 0xDEAD_BEEF,
-            amp_phase: AdsrPhase::Idle,
-            amp_val: 0.0,
-            filt_phase: AdsrPhase::Idle,
-            filt_val: 0.0,
-            pitch_phase: AdsrPhase::Idle,
-            pitch_val: 0.0,
-            svf_low: 0.0,
-            svf_band: 0.0,
-            lfo_phase: 0.0,
-            lfo_delay_samples: 0,
-            lfo_depth_cur: 0.0,
-            drift_target: 0.0,
-            drift_prev: 0.0,
-            drift_step_counter: 0,
-        }
-    }
-
-    pub(super) fn trigger(&mut self, note: u8, sr: f32, p: &super::AudioParams) {
-        let new_note = note as f32;
-        // Legato mode: snap to new note only when gate was off (staccato).
-        // Always-glide mode: never snap — glide from wherever current_pitch is.
-        if p.an1x_glide_legato && !self.gate {
-            self.current_pitch = new_note;
-        }
-        self.note = new_note;
-        self.gate = true;
-        self.active = true;
-        self.amp_phase = AdsrPhase::Attack;
-        self.filt_phase = AdsrPhase::Attack;
-        self.pitch_phase = AdsrPhase::Attack;
-        self.pitch_val = 0.0;
-        // Reset LFO delay counter
-        let delay_secs = p.an1x_lfo_delay * 4.0; // 0–4 s
-        self.lfo_delay_samples = (delay_secs * sr) as u32;
-        self.lfo_depth_cur = 0.0;
-    }
-
-    pub(super) fn gate_off(&mut self) {
-        self.gate = false;
-        if self.amp_phase != AdsrPhase::Idle {
-            self.amp_phase = AdsrPhase::Release;
-        }
-        if self.filt_phase != AdsrPhase::Idle {
-            self.filt_phase = AdsrPhase::Release;
-        }
-    }
-
-    pub(super) fn process(&mut self, sr: f32, p: &super::AudioParams) -> f32 {
-        if !self.active || (!self.gate && self.amp_val < 1e-5) {
-            self.active = false;
-            return 0.0;
-        }
-
-        // ── Glide ────────────────────────────────────────────────────────────
-        let glide_time = p.an1x_glide_time * 0.5; // 0–500 ms
-        if glide_time > 0.001 {
-            let coeff = (-1.0_f32 / (glide_time * sr)).exp();
-            self.current_pitch = self.note - (self.note - self.current_pitch) * coeff;
-        } else {
-            self.current_pitch = self.note;
-        }
-
-        // ── Drift (random micro-pitch wobble) ────────────────────────────────
-        self.drift_step_counter += 1;
-        let drift_period = (sr * 0.1) as u32; // new drift target every 100ms
-        if self.drift_step_counter >= drift_period {
-            self.drift_step_counter = 0;
-            self.drift_prev = self.drift_target;
-            self.noise_state = self
-                .noise_state
-                .wrapping_mul(1664525)
-                .wrapping_add(1013904223);
-            self.drift_target = (self.noise_state as i32) as f32 / i32::MAX as f32;
-        }
-        let drift_t = self.drift_step_counter as f32 / drift_period as f32;
-        let drift_st = (self.drift_prev + (self.drift_target - self.drift_prev) * drift_t)
-            * p.an1x_drift
-            * 0.15; // max ±0.15 semitones
-
-        // ── LFO ─────────────────────────────────────────────────────────────
-        self.lfo_phase += p.an1x_lfo_rate_hz / sr;
-        if self.lfo_phase >= 1.0 {
-            self.lfo_phase -= 1.0;
-        }
-        let lfo_raw = (self.lfo_phase * std::f32::consts::TAU).sin();
-
-        // LFO delay fade-in
-        if self.lfo_delay_samples > 0 {
-            self.lfo_delay_samples -= 1;
-            // Fade depth in over the last quarter of the delay period
-            // (keep depth_cur = 0 until delay expires, then ramp up)
-        } else {
-            self.lfo_depth_cur = (self.lfo_depth_cur + 0.0005).min(p.an1x_lfo_depth);
-        }
-        let lfo = lfo_raw * self.lfo_depth_cur;
-
-        // ── Pitch envelope (AD only — sustain=0, release=decay) ─────────────
-        adsr_tick(
-            &mut self.pitch_phase,
-            &mut self.pitch_val,
-            false, // gate=false → env decays immediately after attack
-            p.an1x_pitch_env_attack,
-            p.an1x_pitch_env_decay,
-            0.0, // sustain = 0
-            p.an1x_pitch_env_decay,
-            sr,
-        );
-        let pitch_env_st = (p.an1x_pitch_env_amount - 0.5) * 48.0 * self.pitch_val; // ±24 st
-
-        // ── OSC frequencies ─────────────────────────────────────────────────
-        let pitch_lfo_st = if p.an1x_lfo_target == 0 {
-            lfo * 2.0
-        } else {
-            0.0
-        }; // ±2 st
-        let pitch_st =
-            self.current_pitch + drift_st + pitch_lfo_st + pitch_env_st + p.an1x_pitch_mod_st;
-        let base_freq = super::dsp_util::midi_to_hz_tuned(pitch_st.round() as u8, p.tuning)
-            * 2.0_f32.powf((pitch_st - pitch_st.round()) / 12.0);
-
-        let osc2_detune_st = (p.an1x_osc2_detune - 0.5) * 48.0; // -24..+24 semitones
-        let osc2_octave_shift = p.an1x_osc2_octave as f32 * 12.0;
-        let osc2_freq = base_freq * 2.0_f32.powf((osc2_detune_st + osc2_octave_shift) / 12.0);
-
-        self.osc1_phase += base_freq / sr;
-        let osc1_wrapped = self.osc1_phase >= 1.0;
-        if osc1_wrapped {
-            self.osc1_phase -= 1.0;
-        }
-        self.osc2_phase += osc2_freq / sr;
-        // Hard sync: reset OSC2 on every OSC1 cycle boundary
-        if p.an1x_hard_sync && osc1_wrapped {
-            self.osc2_phase = 0.0;
-        }
-        if self.osc2_phase >= 1.0 {
-            self.osc2_phase -= 1.0;
-        }
-        let sub_freq = base_freq * 0.5;
-        self.sub_phase += sub_freq / sr;
-        if self.sub_phase >= 1.0 {
-            self.sub_phase -= 1.0;
-        }
-
-        let s1 = osc_sample(p.an1x_osc1_wave, self.osc1_phase, &mut self.noise_state);
-        let s2 = osc_sample(p.an1x_osc2_wave, self.osc2_phase, &mut self.noise_state);
-        let sub = if self.sub_phase < 0.5 {
-            1.0_f32
-        } else {
-            -1.0_f32
-        }; // sub square
-
-        let ring = s1 * s2;
-        let mut osc_mix = s1 * p.an1x_osc1_level
-            + s2 * p.an1x_osc2_level
-            + sub * p.an1x_sub_level
-            + if p.an1x_ring_mod { ring * 0.5 } else { 0.0 };
-        osc_mix *= 0.5; // normalise against potential loud mix
-
-        // ── Filter ADSR ──────────────────────────────────────────────────────
-        adsr_tick(
-            &mut self.filt_phase,
-            &mut self.filt_val,
-            self.gate,
-            p.an1x_filter_attack,
-            p.an1x_filter_decay,
-            p.an1x_filter_sustain,
-            p.an1x_filter_release,
-            sr,
-        );
-
-        // Filter cutoff modulation
-        let cutoff_lfo = if p.an1x_lfo_target == 1 {
-            lfo * 0.3
-        } else {
-            0.0
-        };
-        let env_amount = (p.an1x_filter_env_amount - 0.5) * 2.0; // -1..+1
-        let key_track = (self.current_pitch - 60.0) / 12.0 * p.an1x_filter_key_track;
-        let cutoff_norm = (p.an1x_filter_cutoff
-            + env_amount * self.filt_val * 0.4
-            + key_track * 0.1
-            + cutoff_lfo)
-            .clamp(0.0, 1.0);
-        let cutoff_hz = (80.0_f32 * 225.0_f32.powf(cutoff_norm)).min(sr * 0.45);
-        let f_coeff = (std::f32::consts::PI * cutoff_hz / sr).clamp(0.001, 0.49);
-        // Allow q to reach near-zero for self-oscillation at resonance ≥ ~0.95
-        let q = (1.0 - p.an1x_filter_resonance * 0.995).max(0.005);
-        // Reduce input at high resonance to prevent blow-up when self-oscillating
-        let input_gain = 1.0 - p.an1x_filter_resonance * 0.65;
-
-        // Chamberlin SVF (LP / HP / BP selector)
-        let high = osc_mix * input_gain - self.svf_low - q * self.svf_band;
-        let band_new = f_coeff * high + self.svf_band;
-        let low_new = f_coeff * band_new + self.svf_low;
-        // Soft-clip the band to prevent blow-up; produces a sine at self-oscillation
-        self.svf_band = band_new.tanh();
-        self.svf_low = low_new.clamp(-1.5, 1.5);
-        let filtered = match p.an1x_filter_mode {
-            0 => self.svf_low,
-            1 => high,
-            _ => self.svf_band,
-        };
-
-        // ── Amplitude ADSR ───────────────────────────────────────────────────
-        let amp_lfo = if p.an1x_lfo_target == 2 {
-            lfo * 0.25
-        } else {
-            0.0
-        };
-        adsr_tick(
-            &mut self.amp_phase,
-            &mut self.amp_val,
-            self.gate,
-            p.an1x_amp_attack,
-            p.an1x_amp_decay,
-            p.an1x_amp_sustain,
-            p.an1x_amp_release,
-            sr,
-        );
-        let amp = (self.amp_val + amp_lfo).clamp(0.0, 1.0);
-
-        if self.amp_phase == AdsrPhase::Idle {
-            self.active = false;
-        }
-
-        filtered * amp * p.an1x_volume
-    }
-}
-
 /// Map DrumVoice to its index in the drum_velocity array (matches DrumVoice::ALL order).
-pub(super) fn drum_voice_idx(voice: &crate::state::DrumVoice) -> usize {
+pub(crate) fn drum_voice_idx(voice: &crate::state::DrumVoice) -> usize {
     use crate::state::DrumVoice::*;
     match voice {
         Kick808 => 0,

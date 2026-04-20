@@ -54,6 +54,7 @@ pub const RACK_PRESETS: &[RackPreset] = &[
             ModuleKind::AcidBass,
             ModuleKind::DrumKit808,
             ModuleKind::DrumKit909,
+            ModuleKind::GabberKick,
             ModuleKind::HooverLead,
             ModuleKind::An1xVoice,
             ModuleKind::AmenSampler,

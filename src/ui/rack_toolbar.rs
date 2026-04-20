@@ -4,7 +4,7 @@
 
 use egui::Color32;
 
-use crate::ui::ImpulseApp;
+use crate::ui::{ImpulseApp, theme};
 
 pub fn draw_toolbar(app: &mut ImpulseApp, ui: &mut egui::Ui) {
     ui.horizontal_wrapped(|ui| {
@@ -61,7 +61,7 @@ pub fn draw_toolbar(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         let flip_col = if app.rack_flipped {
             Color32::from_gray(220)
         } else {
-            Color32::from_gray(90)
+            theme::ASH
         };
         let flip_fill = if app.rack_flipped {
             Color32::from_gray(55)
@@ -91,14 +91,14 @@ pub fn draw_toolbar(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                     egui::RichText::new(label)
                         .monospace()
                         .size(7.5)
-                        .color(Color32::from_gray(90)),
+                        .color(theme::ASH),
                 )
                 .fill(Color32::from_gray(22))
                 .min_size(egui::vec2(16.0, 16.0)),
             )
             .clicked()
         };
-        if tbtn(ui, "ARR") {
+        if tbtn(ui, "ARRANGE") {
             app.state.write().rack.arrange_canonical();
             app.session_dirty = true;
         }

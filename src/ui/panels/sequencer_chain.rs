@@ -2,14 +2,21 @@
 // Pattern bank selector and chain editor for the sequencer panel.
 // Also home to small shared sequencer-row helpers (e.g. per-step pan).
 
-use crate::state::{bank_swap, bank_write, chain_pop, chain_push, set_chain_enabled};
+use crate::llm::styles::StyleCatalog;
+use crate::state::{
+    bank_swap, bank_write, chain_pop, chain_push, clear_chain_slot_override, set_chain_enabled,
+    set_chain_slot_bpm, set_chain_slot_repeats, set_chain_slot_style, swap_chain_slots,
+};
 use crate::ui::{ImpulseApp, theme};
 
 /// Per-step bass pan cell — paints a centre-line + tick at the current
-/// pan value; drag-to-set, right-click resets to centre.
-pub(crate) fn pan_cell(
+/// pan value; drag-to-set, right-click resets to centre.  Voice 0
+/// mirrors `bass_pattern`; other voices write into `bass_patterns[vi]`.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn pan_cell_voice(
     ui: &mut egui::Ui,
     app: &mut ImpulseApp,
+    voice_idx: usize,
     abs: usize,
     pan: f32,
     enabled: bool,
@@ -42,20 +49,29 @@ pub(crate) fn pan_cell(
             egui::Stroke::new(1.5, col),
         );
     }
+    let write_pan = |app: &mut ImpulseApp, np: f32| {
+        let vi = voice_idx.min(crate::state::MAX_BASS_VOICES - 1);
+        let mut s = app.state.write();
+        if let Some(pat) = s.sequencer.bass_patterns.get_mut(vi)
+            && let Some(step) = pat.get_mut(abs)
+        {
+            step.pan = np;
+        }
+        if vi == 0
+            && let Some(step) = s.sequencer.bass_pattern.get_mut(abs)
+        {
+            step.pan = np;
+        }
+    };
     if enabled
         && (resp.dragged() || resp.clicked())
         && let Some(pos) = resp.interact_pointer_pos()
     {
         let np = ((pos.x - rect.min.x) / rect.width().max(1.0) * 2.0 - 1.0).clamp(-1.0, 1.0);
-        if let Some(step) = app.state.write().sequencer.bass_pattern.get_mut(abs) {
-            step.pan = np;
-        }
+        write_pan(app, np);
     }
-    if enabled
-        && resp.secondary_clicked()
-        && let Some(step) = app.state.write().sequencer.bass_pattern.get_mut(abs)
-    {
-        step.pan = 0.0;
+    if enabled && resp.secondary_clicked() {
+        write_pan(app, 0.0);
     }
 }
 
@@ -176,5 +192,448 @@ pub fn draw_pattern_chain(app: &mut ImpulseApp, ui: &mut egui::Ui) {
     {
         let s = app.state.read().clone();
         *app.state.write() = set_chain_enabled(s, !chain_enabled);
+    }
+
+    // Per-slot style tag — pick a style to apply on chain-advance into the
+    // currently-edited slot.  None = "leave active style unchanged when
+    // this slot plays".  Shown as "STYLE [name]" after ON/OF so the whole
+    // row reads as an arrangement tool.
+    ui.separator();
+    let cur_style = app.state.read().sequencer.pattern_style.clone();
+    let cur_label = match cur_style.as_deref() {
+        Some(id) => StyleCatalog::get()
+            .styles()
+            .iter()
+            .find(|s| s.id == id)
+            .map(|s| s.name.clone())
+            .unwrap_or_else(|| id.to_string()),
+        None => "—".to_string(),
+    };
+    ui.label(
+        egui::RichText::new("STYLE")
+            .color(theme::SMOKE)
+            .monospace()
+            .size(8.0),
+    );
+    let mut new_style: Option<Option<String>> = None;
+    egui::ComboBox::from_id_source("pattern_style_combo")
+        .selected_text(
+            egui::RichText::new(cur_label)
+                .monospace()
+                .size(8.0)
+                .color(theme::FOG),
+        )
+        .width(110.0)
+        .show_ui(ui, |ui| {
+            if ui
+                .selectable_label(
+                    cur_style.is_none(),
+                    egui::RichText::new("— (no style change)")
+                        .monospace()
+                        .size(9.0),
+                )
+                .clicked()
+            {
+                new_style = Some(None);
+            }
+            ui.separator();
+            for s in StyleCatalog::get().styles() {
+                if ui
+                    .selectable_label(
+                        cur_style.as_deref() == Some(s.id.as_str()),
+                        egui::RichText::new(&s.name).monospace().size(9.0),
+                    )
+                    .clicked()
+                {
+                    new_style = Some(Some(s.id.clone()));
+                }
+            }
+        });
+    if let Some(sel) = new_style {
+        app.state.write().sequencer.pattern_style = sel;
+    }
+
+    // Per-slot tempo opt-in — when lit, chain advance into this slot uses
+    // the slot's own bpm / swing instead of preserving the prior transport.
+    // Off by default so existing chain projects don't surprise-jump tempos.
+    let bpm_apply = app.state.read().sequencer.pattern_bpm_apply;
+    let (bpm_col, bpm_fill) = if bpm_apply {
+        (theme::CHALK, egui::Color32::from_gray(50))
+    } else {
+        (theme::IRON, egui::Color32::TRANSPARENT)
+    };
+    let bpm_resp = ui
+        .add_sized(
+            [30.0, 14.0],
+            egui::Button::new(
+                egui::RichText::new("BPM⇥")
+                    .monospace()
+                    .size(8.0)
+                    .color(bpm_col),
+            )
+            .fill(bpm_fill),
+        )
+        .on_hover_text(if bpm_apply {
+            "This slot drives its bpm/swing on chain advance. Click to disable."
+        } else {
+            "This slot's bpm/swing persists across chain advances. Click to drive tempo on entry."
+        });
+    if bpm_resp.clicked() {
+        app.state.write().sequencer.pattern_bpm_apply = !bpm_apply;
+    }
+
+    // ── Export current pattern as .mid ───────────────────────────────────
+    // Writes `pattern-<unix_secs>.mid` in cwd.  Sequencer-only export —
+    // FX state stays in the project JSON.
+    ui.separator();
+    let export_resp = ui
+        .add_sized(
+            [54.0, 14.0],
+            egui::Button::new(
+                egui::RichText::new("MIDI ⇩")
+                    .monospace()
+                    .size(8.0)
+                    .color(theme::FOG),
+            ),
+        )
+        .on_hover_text(
+            "Export the active pattern as a Standard MIDI File in the current directory.",
+        );
+    if export_resp.clicked() {
+        let seq = app.state.read().sequencer.clone();
+        match crate::midi::save_midi_export(&seq) {
+            Ok(path) => log::info!("MIDI export → {}", path.display()),
+            Err(e) => log::error!("MIDI export failed: {}", e),
+        }
+    }
+}
+
+// ─── Song-mode timeline ──────────────────────────────────────────────────────
+// Gantt-style visualisation of the chain, sitting below the compact
+// bank/chain row.  Each chain slot renders as a wider bar showing:
+//   • pattern letter (A–H)          • ×N repeat badge (if > 1)
+//   • style override tag (if set)   • BPM override tag (if set)
+// The currently-playing slot gets a highlighted frame; a thin playhead
+// line inside it shows which repeat is active.  Click a bar to open a
+// popover for editing the slot's overrides.  Drag bars to reorder.
+
+const TIMELINE_BAR_W: f32 = 78.0;
+const TIMELINE_BAR_H: f32 = 22.0;
+const TIMELINE_GAP: f32 = 3.0;
+
+/// Format a per-slot override summary line for the bar.  Returns an
+/// empty string when the slot has no overrides so the visual stays
+/// uncluttered.
+fn override_summary(ov: &crate::state::ChainSlotOverride) -> String {
+    let mut parts: Vec<String> = Vec::new();
+    if ov.repeats > 1 {
+        parts.push(format!("×{}", ov.repeats));
+    }
+    if let Some(id) = &ov.style {
+        let name = StyleCatalog::get()
+            .find_by_id(id)
+            .map(|s| s.name.clone())
+            .unwrap_or_else(|| id.clone());
+        let short = name.chars().take(6).collect::<String>();
+        parts.push(format!("s:{}", short));
+    }
+    if let Some(b) = ov.bpm {
+        parts.push(format!("{:.0}bpm", b));
+    }
+    parts.join(" ")
+}
+
+pub fn draw_song_timeline(app: &mut ImpulseApp, ui: &mut egui::Ui) {
+    let (chain, overrides, chain_enabled, chain_pos, repeat_count) = {
+        let s = app.state.read();
+        (
+            s.chain.clone(),
+            s.chain_overrides.clone(),
+            s.chain_enabled,
+            s.chain_pos,
+            s.chain_repeat_count,
+        )
+    };
+    if chain.is_empty() {
+        // Nothing to draw — keep the vertical rhythm by emitting a
+        // subtle "add patterns above to build a song" hint so the
+        // section doesn't silently disappear for new users.
+        ui.horizontal(|ui| {
+            ui.add_space(4.0);
+            ui.label(
+                egui::RichText::new(
+                    "SONG — chain is empty; push bank slots above to compose a song",
+                )
+                .color(theme::IRON)
+                .monospace()
+                .size(8.0),
+            );
+        });
+        return;
+    }
+
+    // Drag-to-reorder bookkeeping.  `drag_src` tracks the slot the
+    // pointer picked up this frame; on hover over a different slot it
+    // swaps with it and follows.
+    let drag_key = egui::Id::new("song_timeline_drag_src");
+    let popover_key = egui::Id::new("song_timeline_popover");
+
+    ui.horizontal(|ui| {
+        ui.label(
+            egui::RichText::new("SONG")
+                .color(theme::SMOKE)
+                .monospace()
+                .size(8.0),
+        );
+        ui.add_space(2.0);
+
+        let mut swap_request: Option<(usize, usize)> = None;
+        let mut open_popover: Option<usize> = None;
+
+        for (pos, &bank_idx) in chain.iter().enumerate() {
+            let (rect, resp) = ui.allocate_exact_size(
+                egui::vec2(TIMELINE_BAR_W, TIMELINE_BAR_H),
+                egui::Sense::click_and_drag(),
+            );
+            ui.add_space(TIMELINE_GAP);
+
+            // ── Paint ─────────────────────────────────────────────
+            let cursor_here = chain_enabled && !chain.is_empty() && chain_pos % chain.len() == pos;
+            let hovered = resp.hovered();
+            let fill = if cursor_here {
+                egui::Color32::from_gray(55)
+            } else if hovered {
+                egui::Color32::from_gray(38)
+            } else {
+                egui::Color32::from_gray(26)
+            };
+            let stroke = if cursor_here {
+                egui::Stroke::new(1.5, theme::CHALK)
+            } else {
+                egui::Stroke::new(0.5, theme::IRON)
+            };
+            let painter = ui.painter_at(rect);
+            let rounding = egui::Rounding::same(3.0);
+            painter.rect_filled(rect, rounding, fill);
+            painter.rect_stroke(rect, rounding, stroke);
+
+            // Pattern letter, big, top-left.
+            let letter = SLOT_NAMES.get(bank_idx.min(7)).copied().unwrap_or("?");
+            painter.text(
+                egui::pos2(rect.min.x + 5.0, rect.center().y),
+                egui::Align2::LEFT_CENTER,
+                letter,
+                egui::FontId::monospace(11.0),
+                theme::CHALK,
+            );
+
+            // Override summary — repeat count + style + bpm — right-side.
+            let ov = overrides.get(pos).cloned().unwrap_or_default();
+            let summary = override_summary(&ov);
+            if !summary.is_empty() {
+                painter.text(
+                    egui::pos2(rect.max.x - 4.0, rect.center().y),
+                    egui::Align2::RIGHT_CENTER,
+                    summary,
+                    egui::FontId::monospace(8.0),
+                    theme::FOG,
+                );
+            }
+
+            // Playhead — a thin vertical line inside the currently-
+            // playing slot, positioned by how many repeats have passed.
+            // Gives a rough "where am I in this slot" sense without
+            // needing per-step granularity.
+            if cursor_here {
+                let total_reps = ov.repeats.max(1) as f32;
+                let t = (repeat_count as f32 / total_reps).clamp(0.0, 1.0);
+                let x = rect.min.x + 2.0 + (rect.width() - 4.0) * t;
+                painter.line_segment(
+                    [
+                        egui::pos2(x, rect.min.y + 2.0),
+                        egui::pos2(x, rect.max.y - 2.0),
+                    ],
+                    egui::Stroke::new(1.0, theme::CHALK),
+                );
+            }
+
+            // ── Interactions ──────────────────────────────────────
+            if resp.drag_started() {
+                ui.ctx().data_mut(|d| d.insert_temp(drag_key, pos));
+            }
+            if resp.dragged() {
+                // While dragging, swap with any slot we're hovering
+                // over — the visual follows the pointer.
+                if let Some(pointer) = ui.input(|i| i.pointer.interact_pos())
+                    && let Some(src) = ui.ctx().data(|d| d.get_temp::<usize>(drag_key))
+                    && src != pos
+                {
+                    // If the pointer has crossed into this bar, swap.
+                    if rect.contains(pointer) {
+                        swap_request = Some((src, pos));
+                        ui.ctx().data_mut(|d| d.insert_temp(drag_key, pos));
+                    }
+                }
+            }
+            // Click (no drag) opens a per-slot override popover.
+            if resp.clicked() && !resp.drag_started() {
+                open_popover = Some(pos);
+            }
+        }
+
+        if let Some((a, b)) = swap_request {
+            let s = app.state.read().clone();
+            *app.state.write() = swap_chain_slots(s, a, b);
+        }
+        if let Some(pos) = open_popover {
+            ui.ctx().data_mut(|d| d.insert_temp(popover_key, pos));
+        }
+        // Clear drag source on pointer release — otherwise a subsequent
+        // click without a preceding drag_started keeps the stale src.
+        if !ui.input(|i| i.pointer.primary_down()) {
+            ui.ctx().data_mut(|d| d.remove::<usize>(drag_key));
+        }
+    });
+
+    // Popover — one floating window that edits whichever slot the user
+    // most recently clicked on.  Lets the user set bpm / style / repeats
+    // without cluttering the bar itself.
+    let popover_pos: Option<usize> = ui.ctx().data(|d| d.get_temp(popover_key));
+    if let Some(pos) = popover_pos
+        && pos < chain.len()
+    {
+        let mut open = true;
+        egui::Window::new("")
+            .id(egui::Id::new(("song_popover", pos)))
+            .title_bar(false)
+            .resizable(false)
+            .collapsible(false)
+            .open(&mut open)
+            .fixed_pos(ui.cursor().min + egui::vec2(60.0, 28.0))
+            .show(ui.ctx(), |ui| {
+                let cur = overrides.get(pos).cloned().unwrap_or_default();
+                ui.label(
+                    egui::RichText::new(format!(
+                        "Slot {} — pattern {}",
+                        pos + 1,
+                        SLOT_NAMES.get(chain[pos].min(7)).copied().unwrap_or("?"),
+                    ))
+                    .color(theme::CHALK)
+                    .monospace()
+                    .size(10.0),
+                );
+                ui.separator();
+
+                // Repeats
+                ui.horizontal(|ui| {
+                    ui.label(
+                        egui::RichText::new("×repeats")
+                            .color(theme::FOG)
+                            .monospace()
+                            .size(9.0),
+                    );
+                    let mut r = cur.repeats as i32;
+                    if ui
+                        .add(egui::DragValue::new(&mut r).range(1..=64).speed(0.1))
+                        .changed()
+                    {
+                        let s = app.state.read().clone();
+                        *app.state.write() = set_chain_slot_repeats(s, pos, r.max(1) as u8);
+                    }
+                });
+
+                // Style override
+                ui.horizontal(|ui| {
+                    ui.label(
+                        egui::RichText::new("style")
+                            .color(theme::FOG)
+                            .monospace()
+                            .size(9.0),
+                    );
+                    let cur_label = match &cur.style {
+                        Some(id) => StyleCatalog::get()
+                            .find_by_id(id)
+                            .map(|s| s.name.clone())
+                            .unwrap_or_else(|| id.clone()),
+                        None => "—".to_string(),
+                    };
+                    let mut pick: Option<Option<String>> = None;
+                    egui::ComboBox::from_id_source(("song_popover_style", pos))
+                        .selected_text(egui::RichText::new(cur_label).monospace().size(9.0))
+                        .width(120.0)
+                        .show_ui(ui, |ui| {
+                            if ui
+                                .selectable_label(
+                                    cur.style.is_none(),
+                                    egui::RichText::new("—").monospace().size(9.0),
+                                )
+                                .clicked()
+                            {
+                                pick = Some(None);
+                            }
+                            for s in StyleCatalog::get().styles() {
+                                if ui
+                                    .selectable_label(
+                                        cur.style.as_deref() == Some(s.id.as_str()),
+                                        egui::RichText::new(&s.name).monospace().size(9.0),
+                                    )
+                                    .clicked()
+                                {
+                                    pick = Some(Some(s.id.clone()));
+                                }
+                            }
+                        });
+                    if let Some(p) = pick {
+                        let st = app.state.read().clone();
+                        *app.state.write() = set_chain_slot_style(st, pos, p);
+                    }
+                });
+
+                // BPM override
+                ui.horizontal(|ui| {
+                    ui.label(
+                        egui::RichText::new("bpm")
+                            .color(theme::FOG)
+                            .monospace()
+                            .size(9.0),
+                    );
+                    let mut use_bpm = cur.bpm.is_some();
+                    if ui.checkbox(&mut use_bpm, "").changed() {
+                        let st = app.state.read().clone();
+                        let new_bpm = if use_bpm {
+                            Some(cur.bpm.unwrap_or(120.0))
+                        } else {
+                            None
+                        };
+                        *app.state.write() = set_chain_slot_bpm(st, pos, new_bpm);
+                    }
+                    if use_bpm {
+                        let mut b = cur.bpm.unwrap_or(120.0);
+                        if ui
+                            .add(egui::DragValue::new(&mut b).range(40.0..=300.0).speed(0.5))
+                            .changed()
+                        {
+                            let st = app.state.read().clone();
+                            *app.state.write() = set_chain_slot_bpm(st, pos, Some(b));
+                        }
+                    }
+                });
+
+                ui.separator();
+                if ui
+                    .button(
+                        egui::RichText::new("Clear all overrides")
+                            .monospace()
+                            .size(9.0),
+                    )
+                    .clicked()
+                {
+                    let st = app.state.read().clone();
+                    *app.state.write() = clear_chain_slot_override(st, pos);
+                }
+            });
+        if !open {
+            ui.ctx().data_mut(|d| d.remove::<usize>(popover_key));
+        }
     }
 }

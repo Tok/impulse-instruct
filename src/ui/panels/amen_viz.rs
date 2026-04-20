@@ -294,11 +294,7 @@ pub(super) fn draw_slice_wheel(
         ui.ctx().request_repaint();
     }
     painter.circle_filled(center, r_inner, egui::Color32::from_gray(12));
-    painter.circle_stroke(
-        center,
-        r_outer,
-        egui::Stroke::new(1.0, egui::Color32::from_gray(90)),
-    );
+    painter.circle_stroke(center, r_outer, egui::Stroke::new(1.0, theme::ASH));
     if active_slice.is_some() || !trail.is_empty() {
         let pa = pointer_angle;
         let tip = center + egui::vec2(pa.cos(), pa.sin()) * (r_outer + 4.0);

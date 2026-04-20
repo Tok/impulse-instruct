@@ -1,7 +1,7 @@
 // ─── ui/ui_helpers.rs ── small utility methods on ImpulseApp ─────────────────
 // Extracted from mod.rs to stay under the 1000-line limit.
 
-use crate::audio::{AudioCommand, AudioParams};
+use crate::audio::{AudioCommand, AudioParams, SAMPLE_RATE, SAMPLE_RATE_HZ};
 use crate::state::compile_fx_plan;
 
 use super::ImpulseApp;
@@ -20,7 +20,7 @@ impl ImpulseApp {
         let params = {
             let s = self.state.read();
             let mut p = AudioParams::from_app_state(&s);
-            p.sample_rate = 44100.0;
+            p.sample_rate = SAMPLE_RATE;
             p
         };
         let _ = self
@@ -54,12 +54,12 @@ impl ImpulseApp {
         let now = ctx.input(|i| i.time);
         if now - self.last_analysis_time > 2.0 {
             self.last_analysis_time = now;
-            let mut captured: Vec<f32> = Vec::with_capacity(88200);
+            let mut captured: Vec<f32> = Vec::with_capacity(SAMPLE_RATE_HZ as usize * 2);
             while let Ok(s) = self.capture_rx.pop() {
                 captured.push(s);
             }
             if !captured.is_empty() {
-                let analysis = crate::audio::analysis::analyse_audio(&captured, 44100.0);
+                let analysis = crate::audio::analysis::analyse_audio(&captured, SAMPLE_RATE);
                 // Compact snapshot for LLM context (injected into every system prompt)
                 let mut all_alerts: Vec<String> =
                     analysis.alerts().iter().map(|s| s.to_string()).collect();
@@ -92,7 +92,7 @@ impl ImpulseApp {
         if self.scope_buf.len() < 256 {
             return;
         }
-        let raw = crate::audio::spectrum::compute_spectrum(&self.scope_buf, 44100.0);
+        let raw = crate::audio::spectrum::compute_spectrum(&self.scope_buf, SAMPLE_RATE);
         let alpha = self.state.read().spectrum.smoothing;
         if self.spectrum_magnitudes.len() != raw.magnitudes.len() {
             self.spectrum_magnitudes = raw.magnitudes.clone();

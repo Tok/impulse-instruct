@@ -2,9 +2,7 @@
 // AudioParams snapshot — copied from AppState for the audio thread.
 // This module has no side effects; all types are Copy/Clone.
 
-use crate::state::{
-    An1xLfoTarget, An1xWave, AppState, FilterMode, LfoTarget, LfoWaveform, ModuleKind,
-};
+use crate::state::{AppState, LfoTarget};
 
 /// Walk the rack's Mod cables and emit a fixed-size array of compiled mod
 /// routes for the audio thread to consume.  Each route resolves the source
@@ -165,6 +163,7 @@ pub fn lfo_target_to_u8(t: LfoTarget) -> u8 {
         GabberKickDecay => 69,
         GabberKickClip => 70,
         GabberKickPan => 71,
+        NeuTtsVolume => 72,
     }
 }
 
@@ -186,12 +185,11 @@ pub struct ModRouteCopy {
 #[derive(Clone, Copy, Debug)]
 pub struct LfoParamsCopy {
     pub enabled: bool,
-    pub waveform: u8,      // 0=Sine 1=Triangle 2=Saw 3=InvSaw 4=Square 5=S&H
+    pub waveform: crate::state::LfoWaveform,
     pub rate: f32,         // 0–1
     pub depth: f32,        // 0–1
     pub phase_offset: f32, // 0–1
-    pub target: u8,        // 0=None 1=BassCutoff 2=BassResonance 3=BassPitch 4=BassVolume
-                           // 5=ReverbMix 6=DelayTime 7=DelayFeedback 8=ChorusMix 9=ChorusRate 10=Kick808Pitch
+    pub target: u8,        // opcode from `lfo_target_to_u8`
 }
 
 /// Per-voice bass synth params — one per Bass303 instance.
@@ -214,7 +212,7 @@ pub struct BassVoiceParams {
     pub fm_depth: f32,
     pub distortion: f32,
     pub volume: f32,
-    pub filter_mode: u8, // 0=LP, 1=HP, 2=BP
+    pub filter_mode: crate::state::FilterMode,
     // ADSR shaping (101-style).  Defaults preserve 303 behavior.
     pub amp_attack: f32,     // 0–1 → 0–1s
     pub amp_sustain: f32,    // 0–1
@@ -223,19 +221,19 @@ pub struct BassVoiceParams {
     pub filter_sustain: f32, // 0–1
     pub filter_release: f32, // 0–1 → 0–2s
     pub pulse_width: f32,    // 0.05..0.95 (centered at 0.5 = square)
-    // Per-voice LFO — SH-101 style.  target=0 (Off) disables.
-    pub lfo_target: u8,   // 0=Off 1=Pitch 2=PWM 3=Cutoff 4=Amp
-    pub lfo_rate: f32,    // 0–1 → 0.01–20 Hz (free)
-    pub lfo_depth: f32,   // 0–1
-    pub lfo_waveform: u8, // mirror of LfoWaveform index (Sine=1, Tri=2, Saw=3, InvSaw=4, Square=5)
-    pub lfo_delay: f32,   // 0–1 → 0–4 s fade-in
+    // Per-voice LFO — SH-101 style.
+    pub lfo_target: crate::state::BassLfoTarget,
+    pub lfo_rate: f32,  // 0–1 → 0.01–20 Hz (free)
+    pub lfo_depth: f32, // 0–1
+    pub lfo_waveform: crate::state::LfoWaveform,
+    pub lfo_delay: f32, // 0–1 → 0–4 s fade-in
     pub lfo_bpm_sync: bool,
     pub lfo_sync_beats: f32,
 }
 
 impl BassVoiceParams {
-    fn from_bass_state(b: &crate::state::BassState) -> Self {
-        use crate::state::{FilterMode, Waveform};
+    pub(super) fn from_bass_state(b: &crate::state::BassState) -> Self {
+        use crate::state::Waveform;
         Self {
             cutoff: b.cutoff,
             resonance: b.resonance,
@@ -254,11 +252,7 @@ impl BassVoiceParams {
             fm_depth: b.fm_depth,
             distortion: b.distortion,
             volume: b.volume,
-            filter_mode: match b.filter_mode {
-                FilterMode::Lowpass => 0,
-                FilterMode::Highpass => 1,
-                FilterMode::Bandpass => 2,
-            },
+            filter_mode: b.filter_mode,
             amp_attack: b.amp_attack.clamp(0.0, 1.0),
             amp_sustain: b.amp_sustain.clamp(0.0, 1.0),
             amp_release: b.amp_release.clamp(0.0, 1.0),
@@ -266,25 +260,14 @@ impl BassVoiceParams {
             filter_sustain: b.filter_sustain.clamp(0.0, 1.0),
             filter_release: b.filter_release.clamp(0.0, 1.0),
             pulse_width: b.pulse_width.clamp(0.05, 0.95),
-            lfo_target: match b.lfo_target {
-                crate::state::BassLfoTarget::Off => 0,
-                crate::state::BassLfoTarget::Pitch => 1,
-                crate::state::BassLfoTarget::PulseWidth => 2,
-                crate::state::BassLfoTarget::FilterCutoff => 3,
-                crate::state::BassLfoTarget::Amplitude => 4,
-            },
+            lfo_target: b.lfo_target,
             lfo_rate: b.lfo_rate.clamp(0.0, 1.0),
             lfo_depth: b.lfo_depth.clamp(0.0, 1.0),
-            lfo_waveform: match b.lfo_waveform {
-                crate::state::LfoWaveform::Sine => 1,
-                crate::state::LfoWaveform::Triangle => 2,
-                crate::state::LfoWaveform::Saw => 3,
-                crate::state::LfoWaveform::InvSaw => 4,
-                crate::state::LfoWaveform::Square => 5,
-                // SampleAndHold not supported by the bass voice LFO yet;
-                // fall back to square (closest stepped-ish behavior).
-                _ => 5,
-            },
+            // Pass the enum through verbatim — the bass voice's
+            // `lfo_wave` dispatch matches on LfoWaveform directly.
+            // SampleAndHold isn't modelled by the per-voice LFO; the
+            // dispatch falls back to sine for it.
+            lfo_waveform: b.lfo_waveform,
             lfo_delay: b.lfo_delay.clamp(0.0, 1.0),
             lfo_bpm_sync: b.lfo_bpm_sync,
             lfo_sync_beats: b.lfo_sync_beats.clamp(0.03125, 16.0),
@@ -378,17 +361,24 @@ pub struct AudioParams {
     pub reverb_gate_time: f32, // 0 = no gate; gate close time in seconds
     pub reverb_freeze: bool,
     /// 0=FWD, 1=REV (preverb), 2=MIRROR.
-    pub reverb_dir: u8,
+    pub reverb_dir: super::FxDirection,
     /// Beat-division snap for the reverse-tap loop length.
-    pub reverb_rev_quant: u8,
+    pub reverb_rev_quant: super::FxRevQuant,
     pub delay_time: f32,
     pub delay_feedback: f32,
     pub delay_mix: f32,
     /// 0=FWD, 1=REV (anti-echo), 2=MIRROR.
-    pub delay_dir: u8,
-    pub delay_rev_quant: u8,
+    pub delay_dir: super::FxDirection,
+    pub delay_rev_quant: super::FxRevQuant,
     pub delay_wow_flutter: f32,
     pub delay_saturation: f32,
+    /// Dub send/return: infinite hold on the delay.  When true, feedback
+    /// pins at 1.0 and new input is suppressed.
+    pub delay_freeze: bool,
+    /// One-pole HPF on the delay's feedback path (0–1, 0 = bypass).
+    pub delay_hpf: f32,
+    /// One-pole LPF on the delay's feedback path (0–1, 0 = bypass).
+    pub delay_lpf: f32,
     pub distortion_drive: f32,
     pub distortion_mix: f32,
     pub master_volume: f32,
@@ -401,7 +391,7 @@ pub struct AudioParams {
     pub sidechain_release: f32,
     pub compressor_multiband: f32,
     pub stereo_width: f32, // 0=mono, 0.5=normal, 1=wide
-    pub tuning: u8,        // 0=12-TET, 1=just, 2=slendro, 3=pelog
+    pub tuning: super::TuningSystem,
     // Bitcrush
     pub bitcrush_bits: f32,
     pub bitcrush_rate: f32,
@@ -435,13 +425,16 @@ pub struct AudioParams {
     pub compressor_threshold: f32,
     pub compressor_ratio: f32,
     pub compressor_mix: f32,
+    /// See `FxState.compressor_reverse`.  When true, the envelope
+    /// follower's attack and release time constants are swapped inside
+    /// `Compressor::compress_band`.
+    pub compressor_reverse: bool,
     // Tape saturation
     pub tape_drive: f32,
     pub tape_mix: f32,
     pub tape_flutter: f32,
     pub master_pitch_st: f32, // -12..+12 semitones added to all melodic voices
-    // Filter mode (0=LP, 1=HP, 2=BP)
-    pub filter_mode: u8,
+    pub filter_mode: crate::state::FilterMode,
     // Sample rate
     pub sample_rate: f32,
     // LFO
@@ -496,9 +489,9 @@ pub struct AudioParams {
     // AN1X voice
     pub an1x_enabled: bool,
     pub an1x_volume: f32,
-    pub an1x_osc1_wave: u8, // 0=Saw 1=Square 2=Triangle 3=Sine 4=Noise
+    pub an1x_osc1_wave: crate::state::An1xWave,
     pub an1x_osc1_level: f32,
-    pub an1x_osc2_wave: u8,
+    pub an1x_osc2_wave: crate::state::An1xWave,
     pub an1x_osc2_level: f32,
     pub an1x_osc2_detune: f32, // 0–1 (0.5 = unison)
     pub an1x_osc2_octave: i8,  // -2..+2
@@ -507,7 +500,7 @@ pub struct AudioParams {
     pub an1x_hard_sync: bool,
     pub an1x_filter_cutoff: f32,
     pub an1x_filter_resonance: f32,
-    pub an1x_filter_mode: u8, // 0=LP 1=HP 2=BP
+    pub an1x_filter_mode: crate::state::FilterMode,
     pub an1x_filter_key_track: f32,
     pub an1x_filter_env_amount: f32,
     pub an1x_filter_attack: f32,
@@ -518,9 +511,9 @@ pub struct AudioParams {
     pub an1x_amp_decay: f32,
     pub an1x_amp_sustain: f32,
     pub an1x_amp_release: f32,
-    pub an1x_lfo_rate_hz: f32,      // Hz (0.01–20)
-    pub an1x_lfo_depth: f32,        // 0–1
-    pub an1x_lfo_target: u8,        // 0=Pitch 1=FilterCutoff 2=Amplitude
+    pub an1x_lfo_rate_hz: f32, // Hz (0.01–20)
+    pub an1x_lfo_depth: f32,   // 0–1
+    pub an1x_lfo_target: crate::state::An1xLfoTarget,
     pub an1x_lfo_delay: f32,        // 0–1 → 0–4s fade-in
     pub an1x_pitch_env_attack: f32, // 0–1
     pub an1x_pitch_env_decay: f32,  // 0–1
@@ -550,6 +543,12 @@ pub struct AudioParams {
     /// Per-slice volume multiplier (0..2, NaN sentinel in slot 0 = unused
     /// → all slices share the global amen_volume).  Applied multiplicatively.
     pub amen_slice_volumes: [f32; 16],
+    /// Per-slice playback direction override.  `-1` in a slot = inherit
+    /// the global `amen_reverse` flag; `0` = force forward; `1` = force
+    /// reverse.  All slots default to `-1` so unless the user / LLM
+    /// populates `AmenState.slice_reverses`, the voice behaves exactly
+    /// like the pre-per-slice version.
+    pub amen_slice_reverses: [i8; 16],
     /// BPM the source sample was originally recorded at.  Used only when
     /// amen_bpm_stretch is true.
     pub amen_source_bpm: f32,
@@ -557,6 +556,10 @@ pub struct AudioParams {
     /// the sample is resampled, which also shifts its pitch).  For classic
     /// D&B drumbreak treatment, leave this on and accept the pitch shift.
     pub amen_bpm_stretch: bool,
+    /// See `AmenState.bpm_stretch_preserve`.  When true alongside
+    /// `amen_bpm_stretch`, the voice switches to the granular stretch
+    /// path in `AmenVoice::process` instead of the resample-based one.
+    pub amen_bpm_stretch_preserve: bool,
     /// Host/sequencer BPM — mirror of s.sequencer.bpm.  Used by the amen
     /// voice for tempo-matching; other voices sync via different paths.
     pub sequencer_bpm: f32,
@@ -568,333 +571,10 @@ pub struct AudioParams {
     pub rack_hoover: bool,
     pub rack_an1x: bool,
     pub rack_gabber_kick: bool,
-}
-
-impl AudioParams {
-    pub fn from_app_state(s: &AppState) -> Self {
-        let bass = &s.bass_voices[0].synth;
-        let bvp: [BassVoiceParams; crate::state::MAX_BASS_VOICES] =
-            std::array::from_fn(|i| BassVoiceParams::from_bass_state(&s.bass_voices[i].synth));
-        let (mod_routes, mod_route_count) = compile_mod_routes(s);
-        Self {
-            cutoff: bass.cutoff,
-            resonance: bass.resonance,
-            env_mod: bass.env_mod,
-            decay_303: bass.decay,
-            accent_level: bass.accent_level,
-            waveform_saw: bass.waveform == crate::state::Waveform::Saw,
-            waveform_supersaw: bass.waveform == crate::state::Waveform::Supersaw,
-            supersaw_detune: bass.supersaw_detune,
-            supersaw_voices: bass.supersaw_voices,
-            sub_osc_level: bass.sub_osc_level,
-            portamento_time_303: bass.portamento_time,
-            noise_mix_303: bass.noise_mix,
-            osc_detune_303: bass.osc_detune,
-            fm_ratio_303: bass.fm_ratio,
-            fm_depth_303: bass.fm_depth,
-            distortion_303: bass.distortion,
-            volume_303: bass.volume,
-            pan_303: bass.pan,
-            bass_voice_params: bvp,
-            kick808_pitch: s.kit_a.kick.pitch,
-            kick808_decay: s.kit_a.kick.decay,
-            kick808_punch: s.kit_a.kick.punch,
-            kick808_volume: s.kit_a.kick.volume,
-            kick808_pitch_env_depth: s.kit_a.kick.pitch_env_depth,
-            kick808_pitch_env_time: s.kit_a.kick.pitch_env_time,
-            kick808_clip: s.kit_a.kick.clip,
-            snare808_tone: s.kit_a.snare.tone,
-            snare808_snappy: s.kit_a.snare.snappy,
-            snare808_decay: s.kit_a.snare.decay,
-            snare808_volume: s.kit_a.snare.volume,
-            hihat_closed808_decay: s.kit_a.hihat_closed.decay,
-            hihat_open808_decay: s.kit_a.hihat_open.decay,
-            hihat808_volume: s.kit_a.hihat_closed.volume,
-            kick909_pitch: s.kit_b.kick.pitch,
-            kick909_decay: s.kit_b.kick.decay,
-            kick909_punch: s.kit_b.kick.punch,
-            kick909_volume: s.kit_b.kick.volume,
-            kick909_pitch_env_depth: s.kit_b.kick.pitch_env_depth,
-            kick909_pitch_env_time: s.kit_b.kick.pitch_env_time,
-            kick909_clip: s.kit_b.kick.clip,
-            snare909_tone: s.kit_b.snare.tone,
-            snare909_snappy: s.kit_b.snare.snappy,
-            snare909_decay: s.kit_b.snare.decay,
-            snare909_volume: s.kit_b.snare.volume,
-            hihat_closed909_decay: s.kit_b.hihat_closed.decay,
-            hihat_open909_decay: s.kit_b.hihat_open.decay,
-            hihat909_volume: s.kit_b.hihat_closed.volume,
-            clap909_decay: s.kit_b.clap.decay,
-            clap909_volume: s.kit_b.clap.volume,
-            gabber_pitch: s.gabber_kick.pitch,
-            gabber_decay: s.gabber_kick.decay,
-            gabber_pitch_env_depth: s.gabber_kick.pitch_env_depth,
-            gabber_pitch_env_time: s.gabber_kick.pitch_env_time,
-            gabber_clip: s.gabber_kick.clip.clamp(0.0, 1.0),
-            gabber_transient: s.gabber_kick.transient.clamp(0.0, 1.0),
-            gabber_volume: s.gabber_kick.volume.clamp(0.0, 1.5),
-            gabber_pan: s.gabber_kick.pan.clamp(-1.0, 1.0),
-            pan_kick808: s.kit_a.kick.pan,
-            pan_snare808: s.kit_a.snare.pan,
-            pan_hihat808: s.kit_a.hihat_closed.pan,
-            pan_kick909: s.kit_b.kick.pan,
-            pan_snare909: s.kit_b.snare.pan,
-            pan_hihat909: s.kit_b.hihat_closed.pan,
-            pan_clap909: s.kit_b.clap.pan,
-            pan_hoover: s.hoover.pan,
-            pan_an1x: s.an1x.pan,
-            pan_noise: s.noise_voice.pan,
-            reverb_size: s.fx.reverb_size,
-            reverb_damp: s.fx.reverb_damp,
-            reverb_mix: s.fx.reverb_mix,
-            reverb_gate_time: s.fx.reverb_gate_time,
-            reverb_freeze: s.fx.reverb_freeze,
-            reverb_dir: s.fx.reverb_dir.min(2),
-            reverb_rev_quant: s.fx.reverb_rev_quant.min(4),
-            delay_time: s.fx.delay_time,
-            delay_feedback: s.fx.delay_feedback,
-            delay_mix: s.fx.delay_mix,
-            delay_dir: s.fx.delay_dir.min(2),
-            delay_rev_quant: s.fx.delay_rev_quant.min(4),
-            delay_wow_flutter: s.fx.delay_wow_flutter,
-            delay_saturation: s.fx.delay_saturation,
-            distortion_drive: s.fx.distortion_drive,
-            distortion_mix: s.fx.distortion_mix,
-            master_volume: s.fx.master_volume,
-            xmod_bass_to_an1x_pitch: s.fx.xmod_bass_to_an1x_pitch,
-            xmod_noise_to_filter: s.fx.xmod_noise_to_filter,
-            sidechain_amount: s.fx.sidechain_amount,
-            sidechain_attack: s.fx.sidechain_attack,
-            sidechain_release: s.fx.sidechain_release,
-            compressor_multiband: s.fx.compressor_multiband,
-            stereo_width: s.fx.stereo_width,
-            tuning: s.fx.tuning,
-            bitcrush_bits: s.fx.bitcrush_bits,
-            bitcrush_rate: s.fx.bitcrush_rate,
-            bitcrush_mix: s.fx.bitcrush_mix,
-            chorus_rate: s.fx.chorus_rate,
-            chorus_depth: s.fx.chorus_depth,
-            chorus_mix: s.fx.chorus_mix,
-            phaser_rate: s.fx.phaser_rate,
-            phaser_depth: s.fx.phaser_depth,
-            phaser_mix: s.fx.phaser_mix,
-            waveshaper_drive: s.fx.waveshaper_drive,
-            waveshaper_mix: s.fx.waveshaper_mix,
-            ring_mod_freq: s.fx.ring_mod_freq,
-            ring_mod_mix: s.fx.ring_mod_mix,
-            eq_low_gain: s.fx.eq_low_gain,
-            eq_mid_gain: s.fx.eq_mid_gain,
-            eq_hi_gain: s.fx.eq_hi_gain,
-            autotune_amount: s.fx.autotune_amount,
-            autotune_mix: s.fx.autotune_mix,
-            fx_pan_pos: s.fx.fx_pan_pos.clamp(-1.0, 1.0),
-            fx_pan_width: s.fx.fx_pan_width.clamp(0.0, 1.0),
-            fx_pan_rate: s.fx.fx_pan_rate.clamp(0.0, 1.0),
-            compressor_threshold: s.fx.compressor_threshold,
-            compressor_ratio: s.fx.compressor_ratio,
-            compressor_mix: s.fx.compressor_mix,
-            tape_drive: s.fx.tape_drive,
-            tape_mix: s.fx.tape_mix,
-            tape_flutter: s.fx.tape_flutter,
-            master_pitch_st: s.fx.master_pitch_st,
-            filter_mode: match bass.filter_mode {
-                FilterMode::Lowpass => 0,
-                FilterMode::Highpass => 1,
-                FilterMode::Bandpass => 2,
-            },
-            sample_rate: 44100.0,
-            lfo: {
-                let mut arr = [LfoParamsCopy {
-                    enabled: false,
-                    waveform: 0,
-                    rate: 0.2,
-                    depth: 0.3,
-                    phase_offset: 0.0,
-                    target: 0,
-                }; 4];
-                for (i, slot) in s.lfo.iter().enumerate() {
-                    arr[i] = LfoParamsCopy {
-                        enabled: slot.enabled,
-                        waveform: match slot.waveform {
-                            LfoWaveform::Sine => 0,
-                            LfoWaveform::Triangle => 1,
-                            LfoWaveform::Saw => 2,
-                            LfoWaveform::InvSaw => 3,
-                            LfoWaveform::Square => 4,
-                            LfoWaveform::SampleAndHold => 5,
-                        },
-                        rate: slot.rate,
-                        depth: slot.depth,
-                        phase_offset: slot.phase_offset,
-                        target: lfo_target_to_u8(slot.target),
-                    };
-                }
-                arr
-            },
-            mod_routes,
-            mod_route_count,
-            sequencer_running: s.sequencer.running,
-            lfo_pitch_mod_st: 0.0,
-            an1x_pitch_mod_st: 0.0,
-            free_eg_enabled: s.free_eg.enabled,
-            free_eg_values: s.free_eg.values,
-            free_eg_period: 0.5 * 64.0_f32.powf(s.free_eg.period), // 0→0.5s, 1→32s
-            free_eg_depth: s.free_eg.depth,
-            free_eg_target: lfo_target_to_u8(s.free_eg.target),
-            free_eg_loop: s.free_eg.loop_mode,
-            noise_voice_enabled: s.noise_voice.enabled,
-            noise_voice_volume: s.noise_voice.volume,
-            noise_voice_color: s.noise_voice.color,
-            noise_voice_cutoff: s.noise_voice.cutoff,
-            noise_attack: s.noise_voice.attack,
-            noise_release: s.noise_voice.release,
-            noise_filter_lfo_rate: s.noise_voice.filter_lfo_rate,
-            noise_filter_lfo_depth: s.noise_voice.filter_lfo_depth,
-            noise_sh_rate: s.noise_voice.sh_rate,
-            noise_sh_depth: s.noise_voice.sh_depth,
-            granular_enabled: s.granular.enabled,
-            granular_volume: s.granular.volume,
-            granular_density: s.granular.density,
-            granular_grain_size: s.granular.grain_size,
-            granular_position: s.granular.position,
-            granular_position_jitter: s.granular.position_jitter,
-            granular_pitch_scatter: s.granular.pitch_scatter,
-            granular_spray: s.granular.spray,
-            hoover_enabled: s.hoover.enabled,
-            hoover_filter_start: s.hoover.filter_start,
-            hoover_sweep_time: s.hoover.sweep_time.clamp(0.1, 4.0),
-            hoover_resonance: s.hoover.resonance,
-            hoover_detune: s.hoover.detune,
-            hoover_voices: s.hoover.voices,
-            hoover_pitch_lfo_rate: s.hoover.pitch_lfo_rate,
-            hoover_pitch_lfo_depth: s.hoover.pitch_lfo_depth,
-            hoover_volume: s.hoover.volume,
-            an1x_enabled: s.an1x.enabled,
-            an1x_volume: s.an1x.volume,
-            an1x_osc1_wave: match s.an1x.osc1_wave {
-                An1xWave::Saw => 0,
-                An1xWave::Square => 1,
-                An1xWave::Triangle => 2,
-                An1xWave::Sine => 3,
-                An1xWave::Noise => 4,
-            },
-            an1x_osc1_level: s.an1x.osc1_level,
-            an1x_osc2_wave: match s.an1x.osc2_wave {
-                An1xWave::Saw => 0,
-                An1xWave::Square => 1,
-                An1xWave::Triangle => 2,
-                An1xWave::Sine => 3,
-                An1xWave::Noise => 4,
-            },
-            an1x_osc2_level: s.an1x.osc2_level,
-            an1x_osc2_detune: s.an1x.osc2_detune,
-            an1x_osc2_octave: s.an1x.osc2_octave,
-            an1x_sub_level: s.an1x.sub_level,
-            an1x_ring_mod: s.an1x.ring_mod,
-            an1x_hard_sync: s.an1x.hard_sync,
-            an1x_filter_cutoff: s.an1x.filter_cutoff,
-            an1x_filter_resonance: s.an1x.filter_resonance,
-            an1x_filter_mode: match s.an1x.filter_mode {
-                FilterMode::Lowpass => 0,
-                FilterMode::Highpass => 1,
-                FilterMode::Bandpass => 2,
-            },
-            an1x_filter_key_track: s.an1x.filter_key_track,
-            an1x_filter_env_amount: s.an1x.filter_env_amount,
-            an1x_filter_attack: s.an1x.filter_attack,
-            an1x_filter_decay: s.an1x.filter_decay,
-            an1x_filter_sustain: s.an1x.filter_sustain,
-            an1x_filter_release: s.an1x.filter_release,
-            an1x_amp_attack: s.an1x.amp_attack,
-            an1x_amp_decay: s.an1x.amp_decay,
-            an1x_amp_sustain: s.an1x.amp_sustain,
-            an1x_amp_release: s.an1x.amp_release,
-            an1x_lfo_rate_hz: if s.an1x.lfo_bpm_sync && s.an1x.lfo_sync_beats > 0.0 {
-                (s.sequencer.bpm / 60.0) / s.an1x.lfo_sync_beats
-            } else {
-                0.01 + s.an1x.lfo_rate * s.an1x.lfo_rate * 19.99
-            },
-            an1x_lfo_depth: s.an1x.lfo_depth,
-            an1x_lfo_target: match s.an1x.lfo_target {
-                An1xLfoTarget::Pitch => 0,
-                An1xLfoTarget::FilterCutoff => 1,
-                An1xLfoTarget::Amplitude => 2,
-            },
-            an1x_lfo_delay: s.an1x.lfo_delay,
-            an1x_pitch_env_attack: s.an1x.pitch_env_attack,
-            an1x_pitch_env_decay: s.an1x.pitch_env_decay,
-            an1x_pitch_env_amount: s.an1x.pitch_env_amount,
-            an1x_drift: s.an1x.drift,
-            an1x_glide_time: s.an1x.glide_time,
-            an1x_glide_legato: s.an1x.glide_legato,
-            amen_pitch: s.amen.pitch,
-            amen_volume: s.amen.volume,
-            amen_loop: s.amen.loop_mode,
-            amen_slice_count: s.amen.slice_count.max(1),
-            amen_start_offset: s.amen.start_offset.clamp(0.0, 1.0),
-            amen_end_offset: s.amen.end_offset.clamp(0.0, 1.0),
-            amen_reverse: s.amen.reverse,
-            amen_gate: s.amen.gate.clamp(0.05, 1.0),
-            amen_stutter: s.amen.stutter.min(4),
-            amen_slice_positions: {
-                let mut arr = [f32::NAN; 16];
-                for (i, p) in s.amen.slice_positions.iter().take(16).enumerate() {
-                    arr[i] = p.clamp(0.0, 1.0);
-                }
-                arr
-            },
-            amen_slice_pitches: {
-                let mut arr = [f32::NAN; 16];
-                for (i, p) in s.amen.slice_pitches.iter().take(16).enumerate() {
-                    arr[i] = p.clamp(-24.0, 24.0);
-                }
-                arr
-            },
-            amen_slice_volumes: {
-                let mut arr = [f32::NAN; 16];
-                for (i, v) in s.amen.slice_volumes.iter().take(16).enumerate() {
-                    arr[i] = v.clamp(0.0, 2.0);
-                }
-                arr
-            },
-            amen_source_bpm: s.amen.source_bpm.clamp(40.0, 300.0),
-            amen_bpm_stretch: s.amen.bpm_stretch,
-            sequencer_bpm: s.sequencer.bpm,
-            rack_bass: s
-                .rack
-                .modules
-                .iter()
-                .any(|m| m.kind == ModuleKind::AcidBass && m.enabled),
-            rack_drums808: s
-                .rack
-                .modules
-                .iter()
-                .any(|m| m.kind == ModuleKind::DrumKit808 && m.enabled),
-            rack_drums909: s
-                .rack
-                .modules
-                .iter()
-                .any(|m| m.kind == ModuleKind::DrumKit909 && m.enabled),
-            rack_amen: s
-                .rack
-                .modules
-                .iter()
-                .any(|m| m.kind == ModuleKind::AmenSampler && m.enabled),
-            rack_hoover: s
-                .rack
-                .modules
-                .iter()
-                .any(|m| m.kind == ModuleKind::HooverLead && m.enabled),
-            rack_an1x: s
-                .rack
-                .modules
-                .iter()
-                .any(|m| m.kind == ModuleKind::An1xVoice && m.enabled),
-            rack_gabber_kick: s
-                .rack
-                .modules
-                .iter()
-                .any(|m| m.kind == ModuleKind::GabberKick && m.enabled),
-        }
-    }
+    /// NeuTts output bus gain (0..=1.5).  Scales the TTS ring-buffer
+    /// signal before FX and master mixing.  Derived from the first
+    /// `TtsModuleState.volume` at frame boundary; exposed as an
+    /// `AudioParams` field so it's modulatable via the `NeuTtsVolume`
+    /// LFO target like any other DSP knob.
+    pub tts_voice_volume: f32,
 }

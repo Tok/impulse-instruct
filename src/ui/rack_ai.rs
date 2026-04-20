@@ -4,10 +4,8 @@
 use crate::state::{ModuleKind, Zone, rack::GRID_COLS};
 use crate::ui::ImpulseApp;
 use crate::ui::module_card::{self, PortPos};
-use crate::ui::rack_canvas::{
-    card_x, draw_zone_grid_dots, grid_step, module_grid_h, module_grid_w,
-};
 use crate::ui::rack_content::{draw_llm_agent_content, handle_title_drag, reorder_module_by_drop};
+use crate::ui::rack_grid::{card_x, draw_zone_backdrop, grid_step, module_grid_h, module_grid_w};
 
 #[allow(clippy::too_many_arguments)]
 pub(super) fn draw_ai_zone(
@@ -22,8 +20,15 @@ pub(super) fn draw_ai_zone(
 ) {
     app.zone_y[0] = ui.cursor().top() - content_top;
     {
-        let (add, toggle, toggle_all) =
-            module_card::zone_rail(ui, "AI", true, 24, app.zone_ai_collapsed, all_collapsed);
+        let (add, toggle, toggle_all, _) = module_card::zone_rail(
+            ui,
+            "AI",
+            true,
+            None,
+            24,
+            app.zone_ai_collapsed,
+            all_collapsed,
+        );
         if toggle {
             app.zone_ai_collapsed = !app.zone_ai_collapsed;
         }
@@ -69,6 +74,8 @@ pub(super) fn draw_ai_zone(
     let zone_rect = ui
         .allocate_exact_size(egui::Vec2::new(available_w, zone_h), egui::Sense::hover())
         .0;
+    // Backdrop first so cards paint on top.
+    draw_zone_backdrop(ui, zone_left, zone_top, zone_top + zone_h, col_w);
 
     for &(id, kind, enabled, gc, gr) in &ai_mods {
         let slot_w = module_grid_w(kind, col_w);
@@ -79,12 +86,14 @@ pub(super) fn draw_ai_zone(
         let card_rect =
             egui::Rect::from_min_size(egui::Pos2::new(x, y), egui::Vec2::new(slot_w, slot_h));
         let mut child = ui.child_ui(card_rect, egui::Layout::top_down(egui::Align::LEFT), None);
+        let reaches_master = app.state.read().rack.reaches_master(id);
         let resp = if app.rack_flipped {
             module_card::module_card_back(
                 &mut child,
                 id,
                 kind,
                 enabled,
+                reaches_master,
                 Some(slot_w),
                 Some(slot_h),
                 app.kind_scale(kind),
@@ -96,9 +105,11 @@ pub(super) fn draw_ai_zone(
                 id,
                 kind,
                 enabled,
+                reaches_master,
                 Some(slot_w),
                 Some(slot_h),
                 app.kind_scale(kind),
+                None,
                 ports,
                 |ui| match kind {
                     ModuleKind::LlmConsole => app.draw_llm_console_content(ui),
@@ -131,8 +142,6 @@ pub(super) fn draw_ai_zone(
             }
         }
     }
-
-    draw_zone_grid_dots(ui, zone_left, zone_top, zone_top + zone_h, col_w);
 }
 
 /// Fixed 6-line preview of an agent's last JSON response, painted directly

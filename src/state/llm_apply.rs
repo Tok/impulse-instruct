@@ -1,12 +1,13 @@
 // ─── state/llm_apply.rs ── LLM update application (extracted from transitions).
+use super::llm_apply_seq::{
+    SeqScope, apply_amen_update, apply_bass_notes, apply_bass_pans, apply_euclidean_update,
+    apply_melodic_lane_lens, apply_preecho_voices, apply_sequencer_globals,
+};
 use super::llm_helpers::{
     apply_an1x_update, apply_bass_update, apply_fx_update, apply_hoover_update, unlocked_f32,
 };
-use super::transitions::{
-    expand_sequencer_steps, set_drum_step_ratchet, set_drum_voice_steps, set_lane_steps,
-};
-use super::{AppState, DrumVoice, LfoTarget, LfoWaveform, MAX_STEPS, Scale, snap_to_scale};
-use crate::sequencer::euclidean_rhythm;
+use super::transitions::{set_drum_step_probability, set_drum_step_ratchet, set_drum_voice_steps};
+use super::{AppState, DrumVoice, LfoTarget, LfoWaveform, MAX_STEPS};
 
 /// Apply an LLM-generated partial update, respecting locked params.
 pub fn apply_llm_update(state: AppState, update: &serde_json::Value, scope: &[String]) -> AppState {
@@ -39,49 +40,13 @@ pub fn apply_llm_update(state: AppState, update: &serde_json::Value, scope: &[St
     // voice's scope — a BASS agent with scope=["bass"] must still be able
     // to rewrite bass_steps/bass_notes. Gate each subsection by whichever
     // scope it actually belongs to. A "sequencer" scope grants everything.
-    let seq_scope = in_scope("sequencer");
-    let bass_ok = seq_scope || in_scope("bass");
-    let hoover_ok = seq_scope || in_scope("hoover");
-    let an1x_ok = seq_scope || in_scope("an1x");
-    let kit_a_ok = seq_scope || in_scope("kit_a");
-    let kit_b_ok = seq_scope || in_scope("kit_b");
-    let amen_ok = seq_scope || in_scope("amen");
-    let any_seq_scope =
-        seq_scope || bass_ok || hoover_ok || an1x_ok || kit_a_ok || kit_b_ok || amen_ok;
-    if any_seq_scope && let Some(seq) = update.get("sequencer").and_then(|v| v.as_object()) {
-        // ── Global fields — require explicit "sequencer" scope ───────
-        if seq_scope {
-            if !locked.contains("sequencer.bpm")
-                && let Some(bpm) = seq.get("bpm").and_then(|v| v.as_f64())
-            {
-                s.sequencer.bpm = (bpm as f32).clamp(40.0, 250.0);
-            }
-            if !locked.contains("sequencer.swing")
-                && let Some(v) = seq.get("swing").and_then(|v| v.as_f64())
-            {
-                s.sequencer.swing = (v as f32).clamp(0.0, 1.0);
-            }
-            if !locked.contains("sequencer.steps")
-                && let Some(steps) = seq.get("steps").and_then(|v| v.as_u64())
-            {
-                s = expand_sequencer_steps(s, steps as usize);
-            }
-            if !locked.contains("sequencer.time_sig_num")
-                && let Some(v) = seq.get("time_sig_num").and_then(|v| v.as_u64())
-            {
-                s.sequencer.time_sig_num = (v as u8).clamp(2, 9);
-            }
-            if !locked.contains("sequencer.root_note")
-                && let Some(v) = seq.get("root_note").and_then(|v| v.as_u64())
-            {
-                s.sequencer.root_note = (v as u8).clamp(0, 11);
-            }
-            if !locked.contains("sequencer.scale")
-                && let Some(v) = seq.get("scale").and_then(|v| v.as_str())
-                && let Some(sc) = Scale::from_str(v)
-            {
-                s.sequencer.scale = sc;
-            }
+    let seq_scope_flags = SeqScope::from_scope(scope);
+    if seq_scope_flags.any()
+        && let Some(seq) = update.get("sequencer").and_then(|v| v.as_object())
+    {
+        // Global fields — require explicit "sequencer" scope.
+        if seq_scope_flags.seq {
+            apply_sequencer_globals(&mut s, seq, locked);
         }
 
         // ── Per-drum-kit lengths + ratchets ──────────────────────────
@@ -103,10 +68,10 @@ pub fn apply_llm_update(state: AppState, update: &serde_json::Value, scope: &[St
             && let Some(obj) = seq.get("drum_lengths").and_then(|v| v.as_object())
         {
             let mut voices_to_apply: Vec<(&str, DrumVoice)> = Vec::new();
-            if kit_a_ok {
+            if seq_scope_flags.kit_a {
                 voices_to_apply.extend_from_slice(kit_a_voices);
             }
-            if kit_b_ok {
+            if seq_scope_flags.kit_b {
                 voices_to_apply.extend_from_slice(kit_b_voices);
             }
             for (key, voice) in &voices_to_apply {
@@ -119,10 +84,10 @@ pub fn apply_llm_update(state: AppState, update: &serde_json::Value, scope: &[St
             && let Some(obj) = seq.get("drum_ratchets").and_then(|v| v.as_object())
         {
             let mut voices_to_apply: Vec<(&str, DrumVoice)> = Vec::new();
-            if kit_a_ok {
+            if seq_scope_flags.kit_a {
                 voices_to_apply.extend_from_slice(kit_a_voices);
             }
-            if kit_b_ok {
+            if seq_scope_flags.kit_b {
                 voices_to_apply.extend_from_slice(kit_b_voices);
             }
             for (key, voice) in &voices_to_apply {
@@ -135,76 +100,117 @@ pub fn apply_llm_update(state: AppState, update: &serde_json::Value, scope: &[St
                 }
             }
         }
+        // Per-step probabilities — parallel of `drum_ratchets`.  Each
+        // voice key maps to a float array 0..=1; missing / out-of-range
+        // entries are skipped so partial updates stay safe.  Lets the LLM
+        // sculpt humanised fills, ghost-note hats, or conditional snares
+        // without bookkeeping the full step array every cycle.
+        if !locked.contains("sequencer.drum_probabilities")
+            && let Some(obj) = seq.get("drum_probabilities").and_then(|v| v.as_object())
+        {
+            let mut voices_to_apply: Vec<(&str, DrumVoice)> = Vec::new();
+            if seq_scope_flags.kit_a {
+                voices_to_apply.extend_from_slice(kit_a_voices);
+            }
+            if seq_scope_flags.kit_b {
+                voices_to_apply.extend_from_slice(kit_b_voices);
+            }
+            for (key, voice) in &voices_to_apply {
+                if let Some(arr) = obj.get(*key).and_then(|v| v.as_array()) {
+                    for (step, val) in arr.iter().enumerate().take(MAX_STEPS) {
+                        if let Some(p) = val.as_f64() {
+                            s = set_drum_step_probability(s, *voice, step, p as f32);
+                        }
+                    }
+                }
+            }
+        }
 
-        // ── Per-melodic-voice fields ─────────────────────────────────
-        if bass_ok {
-            if !locked.contains("sequencer.bass_len")
-                && let Some(n) = seq.get("bass_len").and_then(|v| v.as_u64())
-            {
-                s = set_lane_steps(s, "bass", n as usize);
-            }
-            if !locked.contains("sequencer.bass_steps")
-                && let Some(arr) = seq.get("bass_steps").and_then(|v| v.as_array())
-            {
-                apply_llm_step_array(arr, &mut s.sequencer.bass_pattern, MAX_STEPS, |step, a| {
-                    step.active = a;
-                });
-                let bass_pattern_clone = s.sequencer.bass_pattern.clone();
-                if let Some(pat) = s.sequencer.bass_patterns.get_mut(0) {
-                    *pat = bass_pattern_clone;
+        // Per-melodic-voice lane lengths + bass step / note / pan arrays.
+        // Each helper checks its own scope flag + lock path; cheap to call
+        // unconditionally.
+        apply_melodic_lane_lens(&mut s, seq, seq_scope_flags, locked);
+        // Per-voice bass step/accent/slide arrays.  Voice 0 reads the legacy
+        // `bass_{field}` key (and keeps mirroring into `bass_pattern`); voices
+        // 1..=3 read `bass{N+1}_{field}`.  Each field has its own lock path
+        // so the user can pin one voice without freezing the others.
+        let mut voice0_dirty = false;
+        if seq_scope_flags.bass {
+            let voice_count = s.sequencer.bass_patterns.len();
+            for voice_idx in 0..voice_count {
+                let steps_key = super::llm_apply_seq::bass_voice_field(voice_idx, "steps");
+                let touched_steps = seq.get(&steps_key).is_some();
+                // bass_steps uses bool semantics (step active/inactive).
+                {
+                    let key = &steps_key;
+                    if !locked.contains(&format!("sequencer.{}", key))
+                        && let Some(arr) = seq.get(key).and_then(|v| v.as_array())
+                        && let Some(pat) = s.sequencer.bass_patterns.get_mut(voice_idx)
+                    {
+                        apply_llm_step_array(arr, pat, MAX_STEPS, apply_step_active);
+                        if voice_idx == 0 {
+                            voice0_dirty = true;
+                        }
+                    }
                 }
-            }
-        }
-        if hoover_ok
-            && !locked.contains("sequencer.hoover_len")
-            && let Some(n) = seq.get("hoover_len").and_then(|v| v.as_u64())
-        {
-            s = set_lane_steps(s, "hoover", n as usize);
-        }
-        if an1x_ok
-            && !locked.contains("sequencer.an1x_len")
-            && let Some(n) = seq.get("an1x_len").and_then(|v| v.as_u64())
-        {
-            s = set_lane_steps(s, "an1x", n as usize);
-        }
-        if bass_ok
-            && !locked.contains("sequencer.bass_notes")
-            && let Some(arr) = seq.get("bass_notes").and_then(|v| v.as_array())
-        {
-            let snap = s.sequencer.scale_snap;
-            let root = s.sequencer.root_note;
-            let scale = s.sequencer.scale;
-            for (i, val) in arr.iter().enumerate().take(MAX_STEPS) {
-                if let Some(note) = val.as_u64() {
-                    let note = note.clamp(0, 127) as u8;
-                    let snapped = if snap {
-                        snap_to_scale(note, root, scale)
-                    } else {
-                        note
+                // bass_accents / bass_slides are now intensity arrays
+                // (0..=1).  Bool and index-list formats still accepted
+                // for backwards compat with older LLM output.
+                fn set_accent(s: &mut crate::state::TB303Step, v: f32) {
+                    s.accent = v;
+                }
+                fn set_slide(s: &mut crate::state::TB303Step, v: f32) {
+                    s.slide = v;
+                }
+                for (field, set_field) in [
+                    (
+                        "accents",
+                        set_accent as fn(&mut crate::state::TB303Step, f32),
+                    ),
+                    ("slides", set_slide as fn(&mut crate::state::TB303Step, f32)),
+                ] {
+                    let key = super::llm_apply_seq::bass_voice_field(voice_idx, field);
+                    if locked.contains(&format!("sequencer.{}", key)) {
+                        continue;
+                    }
+                    let Some(arr) = seq.get(&key).and_then(|v| v.as_array()) else {
+                        continue;
                     };
-                    s.sequencer.bass_pattern[i].note = snapped;
-                    // Keep voice 0 pattern in sync
-                    if let Some(pat) = s.sequencer.bass_patterns.get_mut(0) {
-                        pat[i].note = snapped;
+                    if let Some(pat) = s.sequencer.bass_patterns.get_mut(voice_idx) {
+                        apply_llm_intensity_array(arr, pat, set_field);
+                        if voice_idx == 0 {
+                            voice0_dirty = true;
+                        }
+                    }
+                }
+                // Subset-of-active cleanup: when the same update rewrote
+                // `steps` for this voice, strip accent/slide flags from any
+                // step that is now inactive.  Mirrors the SUBSET RULE in
+                // the prompt — the pattern should be self-consistent even
+                // if the agent listed indices that fell off the rhythm.
+                if touched_steps && let Some(pat) = s.sequencer.bass_patterns.get_mut(voice_idx) {
+                    for step in pat.iter_mut() {
+                        if !step.active {
+                            step.accent = 0.0;
+                            step.slide = 0.0;
+                        }
+                    }
+                    if voice_idx == 0 {
+                        voice0_dirty = true;
                     }
                 }
             }
         }
-        // Per-step pan parallel to bass_notes (-1..1; 0 = use voice static).
-        if bass_ok
-            && !locked.contains("sequencer.bass_pans")
-            && let Some(arr) = seq.get("bass_pans").and_then(|v| v.as_array())
-        {
-            for (i, val) in arr.iter().enumerate().take(MAX_STEPS) {
-                if let Some(p) = val.as_f64() {
-                    let p = (p as f32).clamp(-1.0, 1.0);
-                    s.sequencer.bass_pattern[i].pan = p;
-                    if let Some(pat) = s.sequencer.bass_patterns.get_mut(0) {
-                        pat[i].pan = p;
-                    }
-                }
-            }
+        apply_bass_notes(&mut s, seq, seq_scope_flags, locked);
+        apply_bass_pans(&mut s, seq, seq_scope_flags, locked);
+        // Mirror voice 0 into the legacy single-voice `bass_pattern` only
+        // when something actually changed — otherwise pre-existing values
+        // set outside the LLM path (tests / UI / other code) would be
+        // overwritten by the default voice-0 pattern on every no-op apply.
+        if voice0_dirty && let Some(pat) = s.sequencer.bass_patterns.first() {
+            s.sequencer.bass_pattern = pat.clone();
         }
+
         let drum_step_fields: &[(&str, DrumVoice, f32, bool)] = &[
             ("kick_a_steps", DrumVoice::Kick808, 1.0, true),
             ("hihat_a_steps", DrumVoice::HihatClosed808, 0.7, true),
@@ -215,7 +221,11 @@ pub fn apply_llm_update(state: AppState, update: &serde_json::Value, scope: &[St
             ("hihat_b_steps", DrumVoice::HihatClosed909, 0.7, false),
         ];
         for &(field, voice, default_vel, is_kit_a) in drum_step_fields {
-            let kit_ok = if is_kit_a { kit_a_ok } else { kit_b_ok };
+            let kit_ok = if is_kit_a {
+                seq_scope_flags.kit_a
+            } else {
+                seq_scope_flags.kit_b
+            };
             if !kit_ok {
                 continue;
             }
@@ -234,67 +244,11 @@ pub fn apply_llm_update(state: AppState, update: &serde_json::Value, scope: &[St
             }
         }
 
-        // Pre-echo (anchor lead-ins).  JSON shape:
-        //   "sequencer": { "preecho": { "kit_a": { "anchors": [0,16],
-        //     "length": 4, "velocity_ramp": true, "ratchet_ramp": true }}}.
-        // null clears that voice; voice keys match scope naming.
-        if any_seq_scope && let Some(obj) = seq.get("preecho").and_then(|v| v.as_object()) {
-            for (voice_key, val) in obj {
-                let lock_key = format!("sequencer.preecho.{}", voice_key);
-                if locked.contains(&lock_key) {
-                    continue;
-                }
-                let scope_ok = match voice_key.as_str() {
-                    "bass" => bass_ok,
-                    "hoover" => hoover_ok,
-                    "an1x" => an1x_ok,
-                    "kit_a" => kit_a_ok,
-                    "kit_b" => kit_b_ok,
-                    "amen" => amen_ok,
-                    _ => seq_scope,
-                };
-                if !scope_ok {
-                    continue;
-                }
-                if val.is_null() {
-                    s.sequencer.preecho.remove(voice_key);
-                    continue;
-                }
-                let Some(cfg_obj) = val.as_object() else {
-                    continue;
-                };
-                let mut cfg = s
-                    .sequencer
-                    .preecho
-                    .get(voice_key)
-                    .cloned()
-                    .unwrap_or_default();
-                if let Some(v) = cfg_obj.get("enabled").and_then(|v| v.as_bool()) {
-                    cfg.enabled = v;
-                }
-                if let Some(arr) = cfg_obj.get("anchors").and_then(|v| v.as_array()) {
-                    cfg.anchors = arr
-                        .iter()
-                        .filter_map(|x| x.as_u64())
-                        .map(|n| (n as u8).min(63))
-                        .collect();
-                }
-                if let Some(v) = cfg_obj.get("length").and_then(|v| v.as_u64()) {
-                    cfg.length = (v as u8).min(16);
-                }
-                if let Some(v) = cfg_obj.get("velocity_ramp").and_then(|v| v.as_bool()) {
-                    cfg.velocity_ramp = v;
-                }
-                if let Some(v) = cfg_obj.get("ratchet_ramp").and_then(|v| v.as_bool()) {
-                    cfg.ratchet_ramp = v;
-                }
-                s.sequencer.preecho.insert(voice_key.clone(), cfg);
-            }
-        }
+        apply_preecho_voices(&mut s, seq, seq_scope_flags, locked);
 
         // amen_steps + amen_slices — standard step array + optional per-step
         // slice indices (0 = auto-advance, 1..=slice_count = explicit).
-        if amen_ok
+        if seq_scope_flags.amen
             && !locked.contains("sequencer.amen_steps")
             && let Some(arr) = seq.get("amen_steps").and_then(|v| v.as_array())
         {
@@ -308,7 +262,7 @@ pub fn apply_llm_update(state: AppState, update: &serde_json::Value, scope: &[St
                 });
             }
         }
-        if amen_ok
+        if seq_scope_flags.amen
             && !locked.contains("sequencer.amen_slices")
             && let Some(arr) = seq.get("amen_slices").and_then(|v| v.as_array())
             && let Some(pattern) = s.sequencer.drum_patterns.get_mut(&DrumVoice::Amen)
@@ -656,135 +610,19 @@ pub fn apply_llm_update(state: AppState, update: &serde_json::Value, scope: &[St
         apply_an1x_update(&mut s, a, locked);
     }
 
-    // ── Amen sampler params (pitch, volume, loop, slice settings) ───────────
-    // JSON: { "amen": { "slice_count": 8, "gate": 0.85, "reverse": false,
-    //                   "stutter": 0, "start_offset": 0.0, "end_offset": 1.0,
-    //                   "loop_mode": true, "pitch": 0, "volume": 0.75 } }
+    // Amen sampler params (pitch, volume, loop, slice settings).
+    // See `state::llm_apply_seq::apply_amen_update` for the per-field rules.
     if in_scope("amen")
         && let Some(a) = update.get("amen").and_then(|v| v.as_object())
     {
-        s.amen.pitch =
-            unlocked_f32(s.amen.pitch, a, "pitch", "amen.pitch", locked).clamp(-24.0, 24.0);
-        s.amen.volume = unlocked_f32(s.amen.volume, a, "volume", "amen.volume", locked);
-        if let Some(v) = a.get("loop_mode").and_then(|v| v.as_bool())
-            && !locked.contains("amen.loop_mode")
-        {
-            s.amen.loop_mode = v;
-        }
-        if let Some(v) = a.get("slice_count").and_then(|v| v.as_u64())
-            && !locked.contains("amen.slice_count")
-        {
-            s.amen.slice_count = (v as u8).clamp(1, 16);
-        }
-        s.amen.start_offset = unlocked_f32(
-            s.amen.start_offset,
-            a,
-            "start_offset",
-            "amen.start_offset",
-            locked,
-        )
-        .clamp(0.0, 1.0);
-        s.amen.end_offset = unlocked_f32(
-            s.amen.end_offset,
-            a,
-            "end_offset",
-            "amen.end_offset",
-            locked,
-        )
-        .clamp(0.0, 1.0);
-        if s.amen.end_offset <= s.amen.start_offset {
-            s.amen.end_offset = (s.amen.start_offset + 0.01).min(1.0);
-        }
-        if let Some(v) = a.get("reverse").and_then(|v| v.as_bool())
-            && !locked.contains("amen.reverse")
-        {
-            s.amen.reverse = v;
-        }
-        s.amen.gate = unlocked_f32(s.amen.gate, a, "gate", "amen.gate", locked).clamp(0.05, 1.0);
-        if let Some(v) = a.get("stutter").and_then(|v| v.as_u64())
-            && !locked.contains("amen.stutter")
-        {
-            s.amen.stutter = (v as u8).min(4);
-        }
-        s.amen.source_bpm = unlocked_f32(
-            s.amen.source_bpm,
-            a,
-            "source_bpm",
-            "amen.source_bpm",
-            locked,
-        )
-        .clamp(40.0, 300.0);
-        if let Some(v) = a.get("bpm_stretch").and_then(|v| v.as_bool())
-            && !locked.contains("amen.bpm_stretch")
-        {
-            s.amen.bpm_stretch = v;
-        }
-        // Per-slice pitch array: either an array of semitone offsets or
-        // clears via empty array / null.
-        if !locked.contains("amen.slice_pitches")
-            && let Some(v) = a.get("slice_pitches")
-        {
-            if let Some(arr) = v.as_array() {
-                s.amen.slice_pitches = arr
-                    .iter()
-                    .filter_map(|x| x.as_f64())
-                    .map(|x| (x as f32).clamp(-24.0, 24.0))
-                    .take(16)
-                    .collect();
-            } else if v.is_null() {
-                s.amen.slice_pitches.clear();
-            }
-        }
-        if !locked.contains("amen.slice_volumes")
-            && let Some(v) = a.get("slice_volumes")
-        {
-            if let Some(arr) = v.as_array() {
-                s.amen.slice_volumes = arr
-                    .iter()
-                    .filter_map(|x| x.as_f64())
-                    .map(|x| (x as f32).clamp(0.0, 2.0))
-                    .take(16)
-                    .collect();
-            } else if v.is_null() {
-                s.amen.slice_volumes.clear();
-            }
-        }
+        apply_amen_update(&mut s, a, locked);
     }
 
-    // ── Euclidean rhythm ──────────────────────────────────────────────────────
-    // JSON: { "euclidean": { "voice": "kick_a", "pulses": 5, "steps": 16 } }
+    // Euclidean rhythm shortcut — see `apply_euclidean_update`.
     if in_scope("euclidean")
         && let Some(e) = update.get("euclidean").and_then(|v| v.as_object())
     {
-        let voice_str = e.get("voice").and_then(|v| v.as_str()).unwrap_or("");
-        let pulses = e.get("pulses").and_then(|v| v.as_u64()).unwrap_or(4) as usize;
-        let n_steps = e
-            .get("steps")
-            .and_then(|v| v.as_u64())
-            .unwrap_or(s.sequencer.steps as u64) as usize;
-        let drum_voice = match voice_str {
-            "kick_a" => Some(DrumVoice::Kick808),
-            "snare_a" => Some(DrumVoice::Snare808),
-            "hihat_a" | "closed_hat_a" => Some(DrumVoice::HihatClosed808),
-            "hihat_a_open" | "open_hat_a" => Some(DrumVoice::HihatOpen808),
-            "kick_b" => Some(DrumVoice::Kick909),
-            "snare_b" => Some(DrumVoice::Snare909),
-            "hihat_b" | "closed_hat_b" => Some(DrumVoice::HihatClosed909),
-            "hihat_b_open" | "open_hat_b" => Some(DrumVoice::HihatOpen909),
-            "clap_b" => Some(DrumVoice::Clap909),
-            _ => None,
-        };
-        if let Some(voice) = drum_voice {
-            let lock_path = format!("sequencer.{}_steps", voice_str);
-            if !locked.contains(&lock_path) {
-                let pattern = euclidean_rhythm(pulses, n_steps);
-                if let Some(row) = s.sequencer.drum_patterns.get_mut(&voice) {
-                    for (i, &active) in pattern.iter().enumerate().take(row.len()) {
-                        row[i].active = active;
-                    }
-                }
-            }
-        }
+        apply_euclidean_update(&mut s, e, locked);
     }
 
     // ── Internal music API ────────────────────────────────────────────────────
@@ -829,6 +667,64 @@ pub fn apply_llm_update(state: AppState, update: &serde_json::Value, scope: &[St
 // ─── Step-array parser ────────────────────────────────────────────────────────
 
 /// Apply a JSON step array to a mutable pattern slice.
+/// Setter helpers for the three bool-array fields on a `TB303Step` — kept
+/// as named `fn`s so the dispatch table in the per-voice bass loop can hold
+/// a `fn` pointer rather than a trait object per closure.
+fn apply_step_active(s: &mut crate::state::TB303Step, a: bool) {
+    s.active = a;
+}
+
+/// Apply an intensity array (`bass_accents` / `bass_slides`) to the
+/// `.accent` or `.slide` field of every step in `pattern`.  Three wire
+/// formats are accepted; precedence matches `apply_llm_step_array`:
+///   • `[]` — clear all (set every step's field to 0.0)
+///   • short (< 16) — integer index list → set listed indices to 1.0
+///   • ≥ 16 — inline per-step values: bools (true→1.0), integers
+///     (0/1 → 0.0/1.0), or floats in [0, 1] (proportional intensity)
+pub fn apply_llm_intensity_array<F>(
+    arr: &[serde_json::Value],
+    pattern: &mut [crate::state::TB303Step],
+    mut set_field: F,
+) where
+    F: FnMut(&mut crate::state::TB303Step, f32),
+{
+    let n = pattern.len().min(MAX_STEPS);
+    if arr.is_empty() {
+        for step in pattern[..n].iter_mut() {
+            set_field(step, 0.0);
+        }
+        return;
+    }
+    let looks_like_index_list = arr.len() < 16 && arr.iter().all(|v| v.is_u64() || v.is_i64());
+    if looks_like_index_list {
+        for step in pattern[..n].iter_mut() {
+            set_field(step, 0.0);
+        }
+        for val in arr {
+            if let Some(idx) = val.as_u64().map(|i| i as usize)
+                && idx < n
+            {
+                set_field(&mut pattern[idx], 1.0);
+            }
+        }
+        return;
+    }
+    // Inline: element-by-element.  Booleans, 0/1 ints, and floats all
+    // valid.  Out-of-range floats are clamped to [0, 1].
+    for (i, val) in arr.iter().enumerate().take(n) {
+        let v = if let Some(b) = val.as_bool() {
+            if b { 1.0 } else { 0.0 }
+        } else if let Some(f) = val.as_f64() {
+            (f as f32).clamp(0.0, 1.0)
+        } else if let Some(u) = val.as_u64() {
+            if u == 0 { 0.0 } else { 1.0 }
+        } else {
+            continue;
+        };
+        set_field(&mut pattern[i], v);
+    }
+}
+
 ///
 /// Accepts: `[]` clear, `[0,4,8]` index list (< 16), `[1,0,…]` inline 0/1 (≥ 16).
 /// `set_active` must update `active` plus any default fields.

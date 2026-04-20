@@ -1,163 +1,185 @@
 # Impulse Instruct - Roadmap
 
 What's already built is documented in [docs/features.md](docs/features.md).
+This file lists **future** work only - completed items are removed once
+they ship and are reflected in `features.md`.
 
 ---
 
-## Shipped in v0.7.6
+## Agent tooling - gradual control & expressiveness
 
-For a detailed log see [docs/features.md](docs/features.md).
-Highlights of the cycle:
+- [ ] **Cross-agent broadcast hints** - `send_hint` already exists for
+  single-target agent-to-agent messaging; add a broadcast variant that
+  fans a hint out to every agent matching a scope string (`"bass"` ->
+  every enabled bass agent).  Useful for "everyone go half-time for
+  the next 8 bars" one-shots.
+- [ ] **Persona library** - save / load named agent configurations
+  (persona + instructions + prompt override + conv mode + temp).
+  Ships with a handful of curated personas; user can stamp their own.
+  Loaded from `~/.impulse_instruct/personas/*.json` so they survive
+  session reloads.
+- [ ] **Auto-retry with temperature bump** - when a lane's JSON fails
+  to parse after repair, retry the same lane once with temperature +
+  0.1 before falling through to the `default_plan` fallback.  Should
+  reduce the "model got stuck on one lane so the whole turn stalled"
+  failure mode.
+- [ ] **Per-agent token-budget tracking** - carry prompt / completion
+  tokens per cycle on `LlmAgentState` and surface the running total +
+  per-cycle average on the agent card.  Lets the user see which
+  agents are dominating VRAM / throughput.
+- [ ] **Agent sleep mode** - an explicit "sleeping" state that unloads
+  the agent's server process (or demotes it to a shared pool slot)
+  until heat rises or the round-robin reaches it.  Saves VRAM for
+  specialists that only need to fire occasionally.
 
-- **Per-knob modulation system** — third cable kind (`PortKind::Mod`),
-  every module declares `mod_inputs(kind)`, multi-select target chips,
-  per-cable depth + polarity, audio-thread routing via `ModRouteCopy`.
-- **Gabber kick voice** — dedicated `ModuleKind::GabberKick` voice with
-  pitch sweep, tanh saturator, transient click layer, 4 LFO targets.
-- **Pan FX module** + **LFO target: StereoWidth** + **Tempo-quantized
-  FX direction buffer** (`rev_tap_len_for_quant`).
-- **TTS audibility fix** — sample-rate mismatch (24 kHz NeuTTS Air) +
-  agent-triggered TTS hoisted out of the `param_update` gate.
-- **Bass voice LFO panel row** + **per-step pan** (`TB303Step.pan`,
-  PAN row in the sequencer).
-- **Amen step → slice mapping** + stutter knob fix + waveform/wheel
-  animation + chop randomization.
-- **Style → rack auto-setup** + `POST /api/randomize` smart
-  randomization.
-- **Shell log colorization** + Huth filter fixes.
-- **Quick-command pills** on agent card (REWRITE / VARI / FILL / etc).
-- **Cable visual hierarchy** — three styles: audio (fattest), signal
-  (mid, used by `PortKind::Cv` / `PortKind::Mod` and synthesised LFO
-  cables), control (thinnest, AI agent links).
-- **Preecho UI polish** — voice tabs sized like BANK / CHAIN slots,
-  two-line layout (PRE-ECHO + tabs + strip on line 1; ON / LEN / VEL /
-  RAT / CLEAR on line 2), strip stride mirrors the sequencer step
-  grid exactly (item_spacing + bar/beat dividers), both rows
-  left-align with the sequencer sliders above.
-- **Sequencer PAN reset button** zeros every step's pan in one click.
-- **Mod-overlay top clip** — back-panel mod sliders no longer paint
-  over the header info panel or prompt strip when the rack scrolls.
+## DSP
 
-### Regression coverage
+- [ ] **Parametric EQ with curve editor** - replace the fixed 3-band EQ
+  on the master with a draggable-node curve (4-6 nodes, shelf at the
+  ends, bell in the middle).  Keeps the grayscale language; curve
+  rendered over the spectrum analyser.
+- [ ] **Standalone pitch-shifter FX** - grain-based pitch shift (reuse
+  the preserve-pitch stretch code in `samplers.rs`) as a dedicated
+  FxStep so lanes can patch it into an arbitrary voice.  Autotune
+  already covers the "snap to key" use case; this covers harmonies
+  and octave doubles.
+- [ ] **Convolution reverb** - load a user-supplied impulse response
+  from `samples/impulses/*.wav`.  FFT-based convolution, block size
+  1024 for the 48 kHz engine.  Same `FxStep` slot shape as the
+  existing Reverb.
+- [ ] **Mid/side master processing** - mid/side split with separate
+  width / EQ / saturation per side on the `MasterOutput` module.
+  Opens up "wider than stereo" moves that stay mono-sum-safe.
+- [ ] **Karplus-Strong plucked string voice** - cheap delay-line
+  synthesis for acoustic-ish tones.  New `ModuleKind::PluckString`,
+  single oscillator + damping knob + excitation noise burst.
+  Fills the "dry melodic" gap between bass and an1x.
+- [ ] **Wavetable voice** - single-table scan + pos/phase knobs, load
+  user wavetables from `samples/wavetables/*.wav`.  Complements AN1X
+  (analog) and Hoover (fixed-shape) with user-extensible character.
 
-- Per-voice LFO regression tests (`lfo_rate_hz`, `lfo_fade_step`).
-- Preecho integration test
-  (`preecho_scales_velocity_through_advance_clock`).
-- Amen slice playback (7 tests against `AmenVoice`).
-- LLM `rack.add` / `rack.remove` round-trips.
+## Sequencer
 
----
+- [ ] **Polymeter** - per-voice step length independent of the global
+  step count, so a 5-step bass line loops against a 16-step drum
+  pattern for classic cross-rhythms.  Already have `*_len` keys in
+  the LLM schema; implement the tick math + UI.
+- [ ] **Per-step velocity curves** - promote `accent` from boolean-ish
+  (0 / 1) to a real 0..1 scalar with a per-step slider lane in the UI,
+  so "quiet-loud-quiet-medium" grooves are expressible without the
+  LLM forcing an accent flip.
+- [ ] **Conditional triggers** - per-step "fire only every Nth cycle"
+  flags (N = 2 / 3 / 4) for Monome-style evolving patterns.  Stored
+  as a 2-bit field per step; rendered as a small marker above the
+  step pad.
+- [ ] **Pattern morphing on chain advance** - smooth crossfade / step-
+  by-step pattern swap instead of the current hard cut.  New
+  `ChainSlotOverride::morph_bars` field (0 = hard cut, >0 = bars to
+  crossfade over).
 
-## v0.7.7 — next release
+## Intelligence
 
-### Regression coverage
+- [ ] **Test additional LLM models** - evaluate
+  DeepSeek-R1-Distill-Qwen-7B / 14B and Qwen3-8B / 14B for JSON
+  accuracy and music theory.  Gemma 4 26B-A4B is now downloadable
+  (three quants); needs a head-to-head vs. E4B on the style + bass +
+  theory suites.
+- [ ] **Lane-score auto-tuner** - observe lane-score trends per style +
+  persona combination, then nudge the planner's heuristic weighting
+  toward the lanes that score higher.  Keeps the planner learning
+  without retraining the model.
+- [ ] **Per-lane few-shot example bank** - an editable JSON file of
+  `{ prompt, output }` pairs per LaneKind that the pipeline injects
+  into the relevant lane's prompt as in-context examples.  Lets the
+  user steer a lane's style without touching the system prompt.
+- [ ] **Agent personality evolution** - let `style_observations`
+  trickle into the agent's system prompt over time (cap at N
+  observations) so long-running agents develop a "feel" for what the
+  user likes without needing explicit instruction edits.
 
-- [ ] **State size-limit watch** — `state/mod.rs` keeps bumping
-  against the 1000-line cap.  Extract `bass` / `amen` / `preecho`
-  accessors into dedicated modules so the core mod.rs stays lean.
+## UI / UX
 
-### Agent tooling — gradual control & expressiveness
+- [ ] **Rack mini-map** - bird's-eye navigator in a corner of the rack
+  view showing the full module grid as thumbnails, with a draggable
+  viewport rectangle for quick nav on tall racks (many agents + many
+  FX).
+- [ ] **Undo/redo timeline scrubber** - the undo stack already exists
+  internally; surface it as a horizontal scrubber above the log so
+  users can A/B compare past states visually instead of mashing Ctrl-Z
+  blind.
+- [ ] **Per-knob MIDI-learn** - right-click any knob -> "Learn MIDI CC"
+  -> user sends a CC -> app binds it.  Stored in `UiPrefs` / session
+  so it persists.  Current MIDI path is input-only on the sequencer;
+  this extends it to every parameter.
+- [ ] **Pattern snapshot slots (A/B/C/D)** - four one-shot slots that
+  capture the full sequencer pattern state (all voices + steps +
+  notes + accents).  Click to swap between them live.  Keyboard:
+  Shift+1 / 2 / 3 / 4.  Great for live performance.
+- [ ] **Keyboard shortcut overlay** - F1 (or ?) pops a translucent
+  overlay listing every shortcut in groups (sequencer / rack /
+  agents).  Reads the actual keybinding map so it can't drift.
+- [ ] **LLM writeback diff viewer** - when a pipeline turn applies
+  changes, show a collapsible "what changed this turn" panel: per-
+  lane before/after values with highlighted deltas.  Helps users
+  build intuition for what the LLM actually does per turn.
+- [ ] **Automation lane overlay on the sequencer grid** - a toggled
+  lane that shows LFO / free-EG / ramp values as a sparkline
+  underneath the step grid, so the user sees the modulator's shape
+  aligned to the beat grid.
+- [ ] **Performance mode** - bigger knobs + touch-friendly targets,
+  hide the LLM console and log, expose only the sequencer + master
+  section.  Toggle via header button; state saved per-session so
+  demos can launch straight into it.
 
-- [ ] **XY pad control** — expose cutoff/resonance pad as a
-  first-class tool the agent can move.  Currently agents set values
-  but the pad position doesn't visually track mid-change.
-- [ ] **Melodic voice preecho** — TB303Step has no velocity field,
-  only accent/slide.  Design a preecho mapping for bass/hoover/an1x
-  that uses accent-ramping or slide-cascading instead of velocity
-  scaling.
+## Integration
 
-### DSP
+- [ ] **OSC API mirror** - port the HTTP API to an OSC server so
+  TouchOSC / external controllers can drive the same endpoints
+  without needing to speak HTTP.  Reuse the request-type structs
+  (`/api/prompt`, `/api/params`, etc.) as the OSC address space.
+- [ ] **Ableton Link tempo sync** - bidirectional BPM + bar-phase
+  sync via the `ableton_link` crate.  Useful for jamming alongside
+  Live / Ableton Push or another synth setup.
+- [ ] **Recording -> auto-chop -> AmenSampler** - one-click record a
+  loop from the app's own master bus, run `detect_onsets`, load it
+  straight into AmenSampler with auto slice positions.  Lets the
+  user sample their own jam back into the break rotation.
+- [ ] **WebSocket state push** - mirror `/api/state` over a WebSocket
+  so external web dashboards or the live-coding editor can observe
+  changes without polling.
+- [ ] **MPE / MIDI 2.0 input** - the `midir` path only takes Note
+  On/Off + CC today.  Adding per-note pitch / pressure / slide lets
+  the bass voice become a proper MPE instrument instead of the
+  current monophonic step driver.
 
-- [ ] **Dub techno send/return** — dedicated send/return FX
-  workflow for dub-style infinite delay feedback chains.
-- [ ] **Pitch-preserving BPM stretch on amen** — current stretch
-  shifts pitch; phase-vocoder / granular stretch for when you want
-  to match tempo without the pitch change.
-- [ ] **Per-slice playback direction on amen** — currently reverse
-  is a global flag; per-slice reverse would enable edit-era glitch
-  patterns.
-- [ ] **Reverse mode for compressor envelope** — third FX worth
-  reversing (envelope follower).  Would give "reverse compression"
-  swell-into-hit transient shaping.
+## Demo recording
 
-### Sequencer
-
-- [ ] **Pattern probability per step** — already implemented but
-  LLM doesn't use it well; improve prompt guidance for
-  probability-based patterns.
-- [ ] **Song mode** — chain patterns with per-chain tempo/style
-  transitions.
-- [ ] **MIDI export** — export sequencer pattern as .mid file.
-- [ ] **Preecho v2** — note approach (chromatic / scale-step / arp
-  resolving to the anchor note), probability ramp, accent/slide
-  trailing, curve shapes (exp / log), auto-length from gap between
-  anchors.
-
-### Intelligence
-
-- [ ] **Agent conversation history** — multi-turn within a single
-  jam cycle; agent sees its own previous outputs for coherent
-  evolution.
-- [ ] **Prompt templates per style** — styles can define custom
-  prompt templates that replace the generic "generate all
-  parameters" jam prompt.
-- [ ] **VRAM-aware model fallback** — when spawn is rejected,
-  auto-suggest or auto-select a lighter model that fits the
-  remaining VRAM budget.
-- [ ] **Test additional LLM models** — evaluate
-  DeepSeek-R1-Distill-Qwen-7B/14B and Qwen3-8B/14B for JSON
-  accuracy and music theory understanding.
-- [ ] **Jam-via-API** — currently API prompts are always
-  one_shot (no jam loop).  Need safe jam support that doesn't do
-  full-state replacement.
-- [ ] **Style mc_lines/themes UI editor** — allow editing
-  mc_lines and themes per style from the UI preferences.
-- [ ] **Style-aware agent-preset naming** — styles override the
-  default multi-agent setup name ("Crew" → "Band" / "Posse" /
-  "Squad" / "Ensemble" per style).
-
-### UI / UX
-
-- [ ] **Touch mode improvements** — touch-paint mode for
-  mobile/tablet; gesture support for zoom/scroll.
-- [ ] **NeuTts mod targets** — Amen/Granular got per-voice
-  LfoTarget variants this cycle but NeuTts still has none; its TTS
-  bus volume isn't an `AudioParams` knob, so wiring needs a small
-  audio-thread-side restructure.
-
-### Demo recording
-
-- [ ] **`demo/scenarios/setup-mc-singer.sh`** — Jungle MC + TTS
-  Singer through autotune.  Non-deterministic, 100%
-  agent-controlled.
-- [ ] **Preecho demo scene** — agent writes anchors into a drum
+- [ ] **Next acid demo re-record** - showcase the **two bass voices**
+  (V1 + V2 playing complementary lines), plus FX routes that last
+  session's demo didn't cover (delay/phaser/chorus/ringmod).  Use the
+  bigger NeuTTS quant for the MC/vocal line.  **Bonsai references
+  removed** from the demo script (module no longer in the codebase).
+- [ ] **`demo/scenarios/setup-mc-singer.sh`** - Jungle MC + TTS
+  Singer through autotune.  Non-deterministic, 100 % agent-controlled.
+- [ ] **Preecho demo scene** - agent writes anchors into a drum
   pattern and you hear the build-up ramp into each downbeat.
-- [ ] **LFO assignment scene** — agent schedules filter sweep via
+- [ ] **LFO assignment scene** - agent schedules filter sweep via
   the per-voice bass LFO.
-- [ ] **Parameter ramp scene** — gradual cutoff sweep over bars.
-- [ ] **Event stream scene** — Huth-colored note history scrolling
-  in real time.
-- [ ] **Re-record the D&B demo** — the 0.7.5 scenario rewrite
-  with amen + reese + drone pad + MC is ready; waiting on a clean
-  recording run.
+- [ ] **Parameter ramp scene** - gradual cutoff sweep over bars.
+- [ ] **Event stream scene** - Huth-coloured note history scrolling
+  in real time, with the new past-side log preserving past notes.
+- [ ] **Re-record the D&B demo** - amen + reese + drone pad + MC
+  scenario is ready; waiting on a clean recording run.
 
-### Refactoring
+## Refactoring
 
-- [ ] **Panel typography constants** — define
-  `FONT_XS`/`FONT_SM`/`FONT_MD`/`FONT_LG`.
-- [ ] **Panel spacing constants** — define
-  `SPACING_SM`/`SPACING_MD`/`SPACING_LG`.
-- [ ] **Glass group helpers** — `glass_label(ui, text)`,
-  `glass_group_height(ctrl)`.
-- [ ] **Module card constants** — `TITLE_BAR_H`, `CARD_ROUNDING`,
-  `GLASS_ROUNDING`.
-
-### Infrastructure
-
-- [ ] **CI: run LLM integration tests on release** — currently
-  manual; automate in GitHub Actions with a Gemma model cache.
-- [ ] **Codecov improvement** — currently ~37%; target higher with
-  the new DSP and preecho suites.
+- [ ] **Glass group helpers** - `glass_label(ui, text)` still to do
+  (the inline pattern varies too much across panels for a single
+  helper).
+- [ ] **Large-file splits (remaining)** - top remaining file now is
+  `src/llm/pipeline.rs` (938 lines), followed by `src/llm/mod.rs`
+  (914) and `src/state/rack.rs` (897).  None over cap, but worth
+  watching on the next feature round.
 
 ---
 
@@ -165,7 +187,4 @@ Highlights of the cycle:
 
 | Issue | Cause | Status |
 |-------|-------|--------|
-| Wizard always shows on startup | By design — resume or start fresh | Working as intended |
 | Hoover doesn't sound like a hoover | DSP tuning, not a code bug | Needs filter sweep shape tuning |
-| Pre-echo ignores melodic voices | TB303Step has no velocity field | Planned for v0.7.7 |
-| NeuTts Selector mod jacks show only "—" | No NeuTts-specific LfoTarget yet | Needs TTS bus volume on AudioParams |

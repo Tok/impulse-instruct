@@ -4,7 +4,11 @@
 
 use crate::state::ModuleKind;
 use crate::ui::fx_dir::draw_fx_dir_button;
-use crate::ui::{ImpulseApp, module_card};
+use crate::ui::rack_content_pad::{PAD_SECTION_TOP_GAP, render_three_pad, render_two_pad};
+// Re-export so the drum kits (ui/panels/drums.rs) can pull the pad helpers
+// from rack_content without reaching into the split sub-module directly.
+pub(crate) use crate::ui::rack_content_pad::{render_three_pad_bare, render_two_pad_bare};
+use crate::ui::{ImpulseApp, module_card, theme};
 
 pub(super) fn draw_voice_content(
     app: &mut ImpulseApp,
@@ -27,7 +31,12 @@ pub(super) fn draw_voice_content(
     }
 }
 
-pub(super) fn draw_fx_content(app: &mut ImpulseApp, ui: &mut egui::Ui, kind: ModuleKind) {
+pub(super) fn draw_fx_content(
+    app: &mut ImpulseApp,
+    ui: &mut egui::Ui,
+    kind: ModuleKind,
+    module_id: u32,
+) {
     use crate::ui::widgets;
 
     let scale: f32 = ui
@@ -40,6 +49,17 @@ pub(super) fn draw_fx_content(app: &mut ImpulseApp, ui: &mut egui::Ui, kind: Mod
     let pm = |path: &str| crate::state::param_mode(path, &locked, &focused);
     let mut changed = false;
     ui.spacing_mut().item_spacing.x = crate::ui::panels::KNOB_SPACING;
+    let user_owned = |path: &str| matches!(pm(path), crate::state::ParamMode::UserOwned);
+    let (pad_expanded, initial_pad_pair) = {
+        let s = app.state.read();
+        s.rack
+            .modules
+            .iter()
+            .find(|m| m.id == module_id)
+            .map(|m| (m.pad_expanded, m.pad_pair))
+            .unwrap_or((false, 0))
+    };
+    let mut pad_pair = initial_pad_pair;
 
     // Helper: horizontal row of knobs
     macro_rules! hk {
@@ -68,8 +88,34 @@ pub(super) fn draw_fx_content(app: &mut ImpulseApp, ui: &mut egui::Ui, kind: Mod
                 ("DAMPING", &mut rd, pm("fx.reverb_damp")),
                 ("MIX", &mut rm, pm("fx.reverb_mix"))
             );
-            let dir_changed = draw_fx_dir_button(ui, &mut rdir, "Reverb direction");
-            let q_changed = crate::ui::fx_dir::draw_fx_rev_quant_button(ui, &mut rq, "Reverb");
+            // Direction + reverse-quant share one row so the rev-quant
+            // button doesn't get clipped onto a second row that would
+            // overflow narrow Reverb cards.
+            let (dir_changed, q_changed) = ui
+                .horizontal(|ui| {
+                    let d = draw_fx_dir_button(ui, &mut rdir, "Reverb direction");
+                    let q = crate::ui::fx_dir::draw_fx_rev_quant_button(ui, &mut rq, "Reverb");
+                    (d, q)
+                })
+                .inner;
+            if pad_expanded {
+                ui.add_space(PAD_SECTION_TOP_GAP);
+                let (vc, _) = render_three_pad(
+                    ui,
+                    &format!("reverb_xy_{module_id}"),
+                    ["SIZE", "DAMP", "MIX"],
+                    &mut pad_pair,
+                    (&mut rs, &mut rd, &mut rm),
+                    [
+                        user_owned("fx.reverb_size"),
+                        user_owned("fx.reverb_damp"),
+                        user_owned("fx.reverb_mix"),
+                    ],
+                );
+                if vc {
+                    changed = true;
+                }
+            }
             if changed || rs != app.state.read().fx.reverb_size || dir_changed || q_changed {
                 let mut s = app.state.write();
                 s.fx.reverb_size = rs;
@@ -80,7 +126,7 @@ pub(super) fn draw_fx_content(app: &mut ImpulseApp, ui: &mut egui::Ui, kind: Mod
             }
         }
         ModuleKind::FxDelay => {
-            let (mut dt, mut df, mut dm, mut ddir, mut dq) = {
+            let (mut dt, mut df, mut dm, mut ddir, mut dq, mut dfz, mut dhpf, mut dlpf) = {
                 let s = app.state.read();
                 (
                     s.fx.delay_time,
@@ -88,6 +134,9 @@ pub(super) fn draw_fx_content(app: &mut ImpulseApp, ui: &mut egui::Ui, kind: Mod
                     s.fx.delay_mix,
                     s.fx.delay_dir,
                     s.fx.delay_rev_quant,
+                    s.fx.delay_freeze,
+                    s.fx.delay_hpf,
+                    s.fx.delay_lpf,
                 )
             };
             hk!(
@@ -96,15 +145,60 @@ pub(super) fn draw_fx_content(app: &mut ImpulseApp, ui: &mut egui::Ui, kind: Mod
                 ("FEEDBACK", &mut df, pm("fx.delay_feedback")),
                 ("MIX", &mut dm, pm("fx.delay_mix"))
             );
-            let dir_changed = draw_fx_dir_button(ui, &mut ddir, "Delay direction");
-            let q_changed = crate::ui::fx_dir::draw_fx_rev_quant_button(ui, &mut dq, "Delay");
-            if changed || dt != app.state.read().fx.delay_time || dir_changed || q_changed {
+            // Dub send/return row: HPF + LPF feedback filters + FREEZE toggle.
+            hk!(
+                ui,
+                ("HPF", &mut dhpf, pm("fx.delay_hpf")),
+                ("LPF", &mut dlpf, pm("fx.delay_lpf"))
+            );
+            let freeze_changed = ui
+                .horizontal(|ui| {
+                    let d = draw_fx_dir_button(ui, &mut ddir, "Delay direction");
+                    let q = crate::ui::fx_dir::draw_fx_rev_quant_button(ui, &mut dq, "Delay");
+                    let prev = dfz;
+                    if widgets::toggle_button(ui, if dfz { "FRZ" } else { "frz" }, &mut dfz) {
+                        // toggle_button only returns `true` when clicked; dfz
+                        // already mutated via &mut.  Keep the existing dir/q
+                        // change semantics separate so we don't trigger a
+                        // write when the user hasn't touched freeze.
+                    }
+                    (d, q, dfz != prev)
+                })
+                .inner;
+            let (dir_changed, q_changed, fz_changed) = freeze_changed;
+            if pad_expanded {
+                ui.add_space(PAD_SECTION_TOP_GAP);
+                let (vc, _) = render_three_pad(
+                    ui,
+                    &format!("delay_xy_{module_id}"),
+                    ["TIME", "FBK", "MIX"],
+                    &mut pad_pair,
+                    (&mut dt, &mut df, &mut dm),
+                    [
+                        user_owned("fx.delay_time"),
+                        user_owned("fx.delay_feedback"),
+                        user_owned("fx.delay_mix"),
+                    ],
+                );
+                if vc {
+                    changed = true;
+                }
+            }
+            if changed
+                || dt != app.state.read().fx.delay_time
+                || dir_changed
+                || q_changed
+                || fz_changed
+            {
                 let mut s = app.state.write();
                 s.fx.delay_time = dt;
                 s.fx.delay_feedback = df;
                 s.fx.delay_mix = dm;
                 s.fx.delay_dir = ddir;
                 s.fx.delay_rev_quant = dq;
+                s.fx.delay_freeze = dfz;
+                s.fx.delay_hpf = dhpf;
+                s.fx.delay_lpf = dlpf;
             }
         }
         ModuleKind::FxChorus => {
@@ -118,6 +212,24 @@ pub(super) fn draw_fx_content(app: &mut ImpulseApp, ui: &mut egui::Ui, kind: Mod
                 ("DEPTH", &mut d, pm("fx.chorus_depth")),
                 ("MIX", &mut m, pm("fx.chorus_mix"))
             );
+            if pad_expanded {
+                ui.add_space(PAD_SECTION_TOP_GAP);
+                let (vc, _) = render_three_pad(
+                    ui,
+                    &format!("chorus_xy_{module_id}"),
+                    ["RATE", "DEPTH", "MIX"],
+                    &mut pad_pair,
+                    (&mut r, &mut d, &mut m),
+                    [
+                        user_owned("fx.chorus_rate"),
+                        user_owned("fx.chorus_depth"),
+                        user_owned("fx.chorus_mix"),
+                    ],
+                );
+                if vc {
+                    changed = true;
+                }
+            }
             if changed || r != app.state.read().fx.chorus_rate {
                 let mut s = app.state.write();
                 s.fx.chorus_rate = r;
@@ -136,6 +248,24 @@ pub(super) fn draw_fx_content(app: &mut ImpulseApp, ui: &mut egui::Ui, kind: Mod
                 ("DEPTH", &mut d, pm("fx.phaser_depth")),
                 ("MIX", &mut m, pm("fx.phaser_mix"))
             );
+            if pad_expanded {
+                ui.add_space(PAD_SECTION_TOP_GAP);
+                let (vc, _) = render_three_pad(
+                    ui,
+                    &format!("phaser_xy_{module_id}"),
+                    ["RATE", "DEPTH", "MIX"],
+                    &mut pad_pair,
+                    (&mut r, &mut d, &mut m),
+                    [
+                        user_owned("fx.phaser_rate"),
+                        user_owned("fx.phaser_depth"),
+                        user_owned("fx.phaser_mix"),
+                    ],
+                );
+                if vc {
+                    changed = true;
+                }
+            }
             if changed || r != app.state.read().fx.phaser_rate {
                 let mut s = app.state.write();
                 s.fx.phaser_rate = r;
@@ -154,6 +284,24 @@ pub(super) fn draw_fx_content(app: &mut ImpulseApp, ui: &mut egui::Ui, kind: Mod
                 ("MID", &mut mi, pm("fx.eq_mid_gain")),
                 ("HIGH", &mut hi, pm("fx.eq_hi_gain"))
             );
+            if pad_expanded {
+                ui.add_space(PAD_SECTION_TOP_GAP);
+                let (vc, _) = render_three_pad(
+                    ui,
+                    &format!("eq_xy_{module_id}"),
+                    ["LOW", "MID", "HIGH"],
+                    &mut pad_pair,
+                    (&mut lo, &mut mi, &mut hi),
+                    [
+                        user_owned("fx.eq_low_gain"),
+                        user_owned("fx.eq_mid_gain"),
+                        user_owned("fx.eq_hi_gain"),
+                    ],
+                );
+                if vc {
+                    changed = true;
+                }
+            }
             if changed || lo != app.state.read().fx.eq_low_gain {
                 let mut s = app.state.write();
                 s.fx.eq_low_gain = lo;
@@ -176,6 +324,24 @@ pub(super) fn draw_fx_content(app: &mut ImpulseApp, ui: &mut egui::Ui, kind: Mod
                 ("RATIO", &mut ra, pm("fx.compressor_ratio")),
                 ("MIX", &mut mi, pm("fx.compressor_mix"))
             );
+            if pad_expanded {
+                ui.add_space(PAD_SECTION_TOP_GAP);
+                let (vc, _) = render_three_pad(
+                    ui,
+                    &format!("comp_xy_{module_id}"),
+                    ["THR", "RATIO", "MIX"],
+                    &mut pad_pair,
+                    (&mut th, &mut ra, &mut mi),
+                    [
+                        user_owned("fx.compressor_threshold"),
+                        user_owned("fx.compressor_ratio"),
+                        user_owned("fx.compressor_mix"),
+                    ],
+                );
+                if vc {
+                    changed = true;
+                }
+            }
             if changed || th != app.state.read().fx.compressor_threshold {
                 let mut s = app.state.write();
                 s.fx.compressor_threshold = th;
@@ -194,6 +360,24 @@ pub(super) fn draw_fx_content(app: &mut ImpulseApp, ui: &mut egui::Ui, kind: Mod
                 ("FLUTTER", &mut fl, pm("fx.tape_flutter")),
                 ("MIX", &mut mi, pm("fx.tape_mix"))
             );
+            if pad_expanded {
+                ui.add_space(PAD_SECTION_TOP_GAP);
+                let (vc, _) = render_three_pad(
+                    ui,
+                    &format!("tape_xy_{module_id}"),
+                    ["DRIVE", "FLUT", "MIX"],
+                    &mut pad_pair,
+                    (&mut dr, &mut fl, &mut mi),
+                    [
+                        user_owned("fx.tape_drive"),
+                        user_owned("fx.tape_flutter"),
+                        user_owned("fx.tape_mix"),
+                    ],
+                );
+                if vc {
+                    changed = true;
+                }
+            }
             if changed || dr != app.state.read().fx.tape_drive {
                 let mut s = app.state.write();
                 s.fx.tape_drive = dr;
@@ -211,6 +395,21 @@ pub(super) fn draw_fx_content(app: &mut ImpulseApp, ui: &mut egui::Ui, kind: Mod
                 ("DRIVE", &mut dr, pm("fx.distortion_drive")),
                 ("MIX", &mut mi, pm("fx.distortion_mix"))
             );
+            if pad_expanded {
+                ui.add_space(PAD_SECTION_TOP_GAP);
+                if render_two_pad(
+                    ui,
+                    &format!("drive_xy_{module_id}"),
+                    "DRIVE",
+                    "MIX",
+                    &mut dr,
+                    &mut mi,
+                    user_owned("fx.distortion_drive"),
+                    user_owned("fx.distortion_mix"),
+                ) {
+                    changed = true;
+                }
+            }
             if changed {
                 let mut s = app.state.write();
                 s.fx.distortion_drive = dr;
@@ -227,6 +426,21 @@ pub(super) fn draw_fx_content(app: &mut ImpulseApp, ui: &mut egui::Ui, kind: Mod
                 ("AMOUNT", &mut amt, pm("fx.autotune_amount")),
                 ("MIX", &mut mi, pm("fx.autotune_mix"))
             );
+            if pad_expanded {
+                ui.add_space(PAD_SECTION_TOP_GAP);
+                if render_two_pad(
+                    ui,
+                    &format!("autotune_xy_{module_id}"),
+                    "AMOUNT",
+                    "MIX",
+                    &mut amt,
+                    &mut mi,
+                    user_owned("fx.autotune_amount"),
+                    user_owned("fx.autotune_mix"),
+                ) {
+                    changed = true;
+                }
+            }
             if changed {
                 let mut s = app.state.write();
                 s.fx.autotune_amount = amt;
@@ -247,6 +461,24 @@ pub(super) fn draw_fx_content(app: &mut ImpulseApp, ui: &mut egui::Ui, kind: Mod
                 ("WIDTH", &mut width, pm("fx.fx_pan_width")),
                 ("RATE", &mut rate, pm("fx.fx_pan_rate"))
             );
+            if pad_expanded {
+                ui.add_space(PAD_SECTION_TOP_GAP);
+                let (vc, _) = render_three_pad(
+                    ui,
+                    &format!("pan_xy_{module_id}"),
+                    ["POS", "WIDTH", "RATE"],
+                    &mut pad_pair,
+                    (&mut pos_norm, &mut width, &mut rate),
+                    [
+                        user_owned("fx.fx_pan_pos"),
+                        user_owned("fx.fx_pan_width"),
+                        user_owned("fx.fx_pan_rate"),
+                    ],
+                );
+                if vc {
+                    changed = true;
+                }
+            }
             if changed {
                 pos = (pos_norm * 2.0 - 1.0).clamp(-1.0, 1.0);
                 let mut s = app.state.write();
@@ -265,6 +497,21 @@ pub(super) fn draw_fx_content(app: &mut ImpulseApp, ui: &mut egui::Ui, kind: Mod
                 ("DRIVE", &mut dr, pm("fx.waveshaper_drive")),
                 ("MIX", &mut mi, pm("fx.waveshaper_mix"))
             );
+            if pad_expanded {
+                ui.add_space(PAD_SECTION_TOP_GAP);
+                if render_two_pad(
+                    ui,
+                    &format!("waveshaper_xy_{module_id}"),
+                    "DRIVE",
+                    "MIX",
+                    &mut dr,
+                    &mut mi,
+                    user_owned("fx.waveshaper_drive"),
+                    user_owned("fx.waveshaper_mix"),
+                ) {
+                    changed = true;
+                }
+            }
             if changed {
                 let mut s = app.state.write();
                 s.fx.waveshaper_drive = dr;
@@ -282,6 +529,24 @@ pub(super) fn draw_fx_content(app: &mut ImpulseApp, ui: &mut egui::Ui, kind: Mod
                 ("RATE", &mut ra, pm("fx.bitcrush_rate")),
                 ("MIX", &mut mi, pm("fx.bitcrush_mix"))
             );
+            if pad_expanded {
+                ui.add_space(PAD_SECTION_TOP_GAP);
+                let (vc, _) = render_three_pad(
+                    ui,
+                    &format!("bitcrush_xy_{module_id}"),
+                    ["BITS", "RATE", "MIX"],
+                    &mut pad_pair,
+                    (&mut bi, &mut ra, &mut mi),
+                    [
+                        user_owned("fx.bitcrush_bits"),
+                        user_owned("fx.bitcrush_rate"),
+                        user_owned("fx.bitcrush_mix"),
+                    ],
+                );
+                if vc {
+                    changed = true;
+                }
+            }
             if changed || bi != app.state.read().fx.bitcrush_bits {
                 let mut s = app.state.write();
                 s.fx.bitcrush_bits = bi;
@@ -299,6 +564,21 @@ pub(super) fn draw_fx_content(app: &mut ImpulseApp, ui: &mut egui::Ui, kind: Mod
                 ("FREQ", &mut fr, pm("fx.ring_mod_freq")),
                 ("MIX", &mut mi, pm("fx.ring_mod_mix"))
             );
+            if pad_expanded {
+                ui.add_space(PAD_SECTION_TOP_GAP);
+                if render_two_pad(
+                    ui,
+                    &format!("ringmod_xy_{module_id}"),
+                    "FREQ",
+                    "MIX",
+                    &mut fr,
+                    &mut mi,
+                    user_owned("fx.ring_mod_freq"),
+                    user_owned("fx.ring_mod_mix"),
+                ) {
+                    changed = true;
+                }
+            }
             if changed {
                 let mut s = app.state.write();
                 s.fx.ring_mod_freq = fr;
@@ -306,6 +586,20 @@ pub(super) fn draw_fx_content(app: &mut ImpulseApp, ui: &mut egui::Ui, kind: Mod
             }
         }
         _ => {}
+    }
+
+    // Persist pair cycling (from cycle-chip clicks or right-click on pad)
+    // back to the module so it survives save/restore and is API-addressable.
+    if pad_pair != initial_pad_pair
+        && let Some(m) = app
+            .state
+            .write()
+            .rack
+            .modules
+            .iter_mut()
+            .find(|m| m.id == module_id)
+    {
+        m.pad_pair = pad_pair;
     }
 
     if changed {
@@ -347,10 +641,10 @@ pub(super) fn draw_master_content(app: &mut ImpulseApp, ui: &mut egui::Ui) {
 
     ui.horizontal(|ui| {
         ui.label(
-            egui::RichText::new("MASTER VOL")
+            egui::RichText::new("MASTER VOLUME")
                 .monospace()
                 .size(9.0)
-                .color(egui::Color32::from_gray(90)),
+                .color(theme::ASH),
         );
         if widgets::param_control(ui, "", &mut master_vol, crate::state::ParamMode::Free, ctrl).0 {
             app.state.write().fx.master_volume = master_vol;
@@ -376,7 +670,7 @@ pub(super) fn draw_master_content(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             let col = if present {
                 egui::Color32::from_gray(160)
             } else {
-                egui::Color32::from_gray(28)
+                theme::PIT
             };
             ui.label(egui::RichText::new(*label).monospace().size(8.0).color(col));
         }
@@ -474,15 +768,15 @@ pub(super) fn handle_title_drag(
 ) -> bool {
     if resp.title_dragged {
         if app.module_drag.as_ref().map(|d| d.module_id) != Some(id) {
-            let (cw, rh) = app
-                .state
-                .read()
-                .rack
-                .modules
-                .iter()
-                .find(|m| m.id == id)
-                .map(|m| m.kind.grid_size(crate::state::GRID_COLS))
-                .unwrap_or((1, 1));
+            let (cw, rh) = {
+                let s = app.state.read();
+                s.rack
+                    .modules
+                    .iter()
+                    .find(|m| m.id == id)
+                    .map(|m| s.rack.effective_grid_size(m))
+                    .unwrap_or((1, 1))
+            };
             app.module_drag = Some(ModuleDrag {
                 module_id: id,
                 pointer: ctx.pointer_latest_pos().unwrap_or_default(),
@@ -515,15 +809,15 @@ pub(super) fn reorder_module_by_drop(
     step: f32,
     col_w: f32,
 ) {
-    let (col_span, row_span) = app
-        .state
-        .read()
-        .rack
-        .modules
-        .iter()
-        .find(|m| m.id == dragged_id)
-        .map(|m| m.kind.grid_size(crate::state::GRID_COLS))
-        .unwrap_or((1, 1));
+    let (col_span, row_span) = {
+        let s = app.state.read();
+        s.rack
+            .modules
+            .iter()
+            .find(|m| m.id == dragged_id)
+            .map(|m| s.rack.effective_grid_size(m))
+            .unwrap_or((1, 1))
+    };
 
     // Compute snap target from pointer position relative to zone origin.
     let rel_x = drop_pos.x - zone_origin.x;
@@ -554,7 +848,7 @@ pub(super) fn reorder_module_by_drop(
             .iter()
             .filter(|m| m.id != dragged_id && m.zone == zone)
             .any(|m| {
-                let (mw, mh) = m.kind.grid_size(crate::state::GRID_COLS);
+                let (mw, mh) = s.rack.effective_grid_size(m);
                 // AABB overlap test
                 snap_col < m.grid_col + mw
                     && m.grid_col < snap_col + col_span

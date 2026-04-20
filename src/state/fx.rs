@@ -36,6 +36,25 @@ pub struct FxState {
     pub delay_wow_flutter: f32, // 0–1 tape wow/flutter depth
     #[serde(default)]
     pub delay_saturation: f32, // 0–1 tape saturation on feedback
+    /// Dub-style infinite hold: when true, the delay line's feedback
+    /// sustains at ~1.0 and new input is suppressed, so the echo loop
+    /// carries on indefinitely without adding more material.  Mirrors
+    /// `reverb_freeze`; paired with `delay_hpf` / `delay_lpf` it
+    /// becomes the classic dub send/return chain.
+    #[serde(default)]
+    pub delay_freeze: bool,
+    /// One-pole high-pass filter on the delay's feedback path (0–1).
+    /// 0 = bypass; 1 = aggressive low cut that makes each echo
+    /// progressively thinner, so the dub loop fades into airy
+    /// whispers instead of piling up bass mud.
+    #[serde(default)]
+    pub delay_hpf: f32,
+    /// One-pole low-pass filter on the delay's feedback path (0–1).
+    /// 0 = bypass; 1 = heavy high cut (≈100 Hz cutoff) so echoes lose
+    /// presence with every round-trip — the classic dub "drift into
+    /// smoke" characteristic.
+    #[serde(default)]
+    pub delay_lpf: f32,
     pub distortion_drive: f32,     // 0–1
     pub distortion_mix: f32,       // 0–1 wet/dry
     pub compressor_threshold: f32, // 0–1 → -40–0 dB
@@ -43,7 +62,15 @@ pub struct FxState {
     pub compressor_mix: f32,       // 0–1 wet/dry (0 = bypassed)
     #[serde(default)]
     pub compressor_multiband: f32, // 0 = single band, >0 = 3-band (low/mid/high)
-    pub master_volume: f32,        // 0–1
+    /// Swap the envelope follower's attack / release time constants.
+    /// Normal: 1 ms attack + 80 ms release clamps transients fast and
+    /// releases slowly.  Reverse: 80 ms attack + 1 ms release lets the
+    /// initial transient punch through while the sustain gets compressed,
+    /// creating a perceived swell-into-hit shape (third FX with a
+    /// reversal mode, alongside reverb and delay).
+    #[serde(default)]
+    pub compressor_reverse: bool,
+    pub master_volume: f32, // 0–1
     #[serde(default)]
     pub stereo_width: f32, // 0–1: 0=mono, 0.5=normal, 1=wide
     #[serde(default)]
@@ -58,27 +85,27 @@ pub struct FxState {
     pub sidechain_attack: f32, // 0–1 → 0.1–50 ms attack
     #[serde(default)]
     pub sidechain_release: f32, // 0–1 → 10–500 ms release
-    pub tape_drive: f32,           // 0–1 saturation amount
-    pub tape_mix: f32,             // 0–1 wet/dry
-    pub tape_flutter: f32,         // 0–1 wow/flutter depth
+    pub tape_drive: f32,    // 0–1 saturation amount
+    pub tape_mix: f32,      // 0–1 wet/dry
+    pub tape_flutter: f32,  // 0–1 wow/flutter depth
     #[serde(default)]
     pub master_pitch_st: f32, // -12..+12 semitones: global pitch offset for melodic voices
-    pub bitcrush_bits: f32,        // 0–1: 1.0 = full quality (bypass), 0.0 = 1-bit
-    pub bitcrush_rate: f32,        // 0–1: 0.0 = no decimation, 1.0 = extreme downsampling
-    pub bitcrush_mix: f32,         // 0–1: wet/dry
-    pub chorus_rate: f32,          // 0–1 → 0.1–8 Hz LFO rate
-    pub chorus_depth: f32,         // 0–1 modulation depth
-    pub chorus_mix: f32,           // 0–1 wet/dry
-    pub phaser_rate: f32,          // 0–1 → 0.05–5 Hz LFO rate
-    pub phaser_depth: f32,         // 0–1 sweep depth
-    pub phaser_mix: f32,           // 0–1 wet/dry
-    pub waveshaper_drive: f32,     // 0–1 → soft-clip drive amount (pre-FX)
-    pub waveshaper_mix: f32,       // 0–1 wet/dry
-    pub ring_mod_freq: f32,        // 0–1 → 50–500 Hz carrier frequency
-    pub ring_mod_mix: f32,         // 0–1 wet/dry
-    pub eq_low_gain: f32,          // -1..+1 → -12..+12 dB low shelf (~200 Hz)
-    pub eq_mid_gain: f32,          // -1..+1 → -12..+12 dB mid peak (~1 kHz)
-    pub eq_hi_gain: f32,           // -1..+1 → -12..+12 dB high shelf (~5 kHz)
+    pub bitcrush_bits: f32, // 0–1: 1.0 = full quality (bypass), 0.0 = 1-bit
+    pub bitcrush_rate: f32, // 0–1: 0.0 = no decimation, 1.0 = extreme downsampling
+    pub bitcrush_mix: f32,  // 0–1: wet/dry
+    pub chorus_rate: f32,   // 0–1 → 0.1–8 Hz LFO rate
+    pub chorus_depth: f32,  // 0–1 modulation depth
+    pub chorus_mix: f32,    // 0–1 wet/dry
+    pub phaser_rate: f32,   // 0–1 → 0.05–5 Hz LFO rate
+    pub phaser_depth: f32,  // 0–1 sweep depth
+    pub phaser_mix: f32,    // 0–1 wet/dry
+    pub waveshaper_drive: f32, // 0–1 → soft-clip drive amount (pre-FX)
+    pub waveshaper_mix: f32, // 0–1 wet/dry
+    pub ring_mod_freq: f32, // 0–1 → 50–500 Hz carrier frequency
+    pub ring_mod_mix: f32,  // 0–1 wet/dry
+    pub eq_low_gain: f32,   // -1..+1 → -12..+12 dB low shelf (~200 Hz)
+    pub eq_mid_gain: f32,   // -1..+1 → -12..+12 dB mid peak (~1 kHz)
+    pub eq_hi_gain: f32,    // -1..+1 → -12..+12 dB high shelf (~5 kHz)
     #[serde(default)]
     pub autotune_amount: f32, // 0–1 → 0..+12 semitones upward pitch shift
     #[serde(default)]
@@ -115,12 +142,16 @@ impl Default for FxState {
             delay_rev_quant: 0,
             delay_wow_flutter: 0.0,
             delay_saturation: 0.0,
+            delay_freeze: false,
+            delay_hpf: 0.0,
+            delay_lpf: 0.0,
             distortion_drive: 0.0,
             distortion_mix: 0.0,
             compressor_threshold: 0.7,
             compressor_ratio: 0.3,
             compressor_mix: 0.0,
             compressor_multiband: 0.0,
+            compressor_reverse: false,
             master_volume: 0.85,
             stereo_width: 0.5,
             tuning: 0,

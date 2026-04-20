@@ -1,6 +1,13 @@
 // ─── DSP utilities ───────────────────────────────────────────────────────────
 // Small pure functions shared across DSP modules.
 
+/// Accent-step gain lift.  An accent value of 1.0 multiplies the voice's
+/// output by `1.0 + ACCENT_LIFT`; 0.0 leaves it at baseline.  Shared by
+/// bass / drum / an1x voices so per-voice accent semantics stay uniform
+/// — changing one voice's lift used to require hunting down N local
+/// constants.
+pub(super) const ACCENT_LIFT: f32 = 0.3;
+
 /// Fast tanh approximation (used by LadderFilter, Bass303, delay saturation).
 pub(crate) fn tanh(x: f32) -> f32 {
     let x2 = x * x;
@@ -12,14 +19,44 @@ pub fn midi_to_hz(note: u8) -> f32 {
     440.0 * 2.0f32.powf((note as f32 - 69.0) / 12.0)
 }
 
+/// Convert frequency in Hz to fractional MIDI note number (12-TET, A4=440).
+/// Inverse of `midi_to_hz`; callers round/clamp as needed.
+pub fn hz_to_midi(hz: f32) -> f32 {
+    69.0 + 12.0 * (hz / 440.0).log2()
+}
+
+/// Tuning system used by `midi_to_hz_tuned`.  The integer discriminants
+/// match the persisted `u8` in `FxState::tuning` so old sessions load
+/// without migration — `TuningSystem::from_u8` recovers the enum, and
+/// unknown values fall back to `TwelveTet`.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[repr(u8)]
+pub enum TuningSystem {
+    #[default]
+    TwelveTet = 0,
+    JustIntonation = 1,
+    Slendro = 2,
+    Pelog = 3,
+}
+
+impl TuningSystem {
+    pub fn from_u8(v: u8) -> Self {
+        match v {
+            1 => Self::JustIntonation,
+            2 => Self::Slendro,
+            3 => Self::Pelog,
+            _ => Self::TwelveTet,
+        }
+    }
+}
+
 /// Convert MIDI note to Hz using the specified tuning system.
-/// `tuning`: 0=12-TET (default), 1=just intonation, 2=slendro, 3=pelog.
-pub fn midi_to_hz_tuned(note: u8, tuning: u8) -> f32 {
+pub fn midi_to_hz_tuned(note: u8, tuning: TuningSystem) -> f32 {
     match tuning {
-        1 => midi_to_hz_just(note),
-        2 => midi_to_hz_slendro(note),
-        3 => midi_to_hz_pelog(note),
-        _ => midi_to_hz(note),
+        TuningSystem::TwelveTet => midi_to_hz(note),
+        TuningSystem::JustIntonation => midi_to_hz_just(note),
+        TuningSystem::Slendro => midi_to_hz_slendro(note),
+        TuningSystem::Pelog => midi_to_hz_pelog(note),
     }
 }
 
@@ -45,11 +82,12 @@ fn midi_to_hz_just(note: u8) -> f32 {
     base_c4 * RATIOS[degree] * 2.0f32.powi(octave)
 }
 
-/// Javanese slendro (5-tone equal temperament mapped to the black keys).
+/// Javanese slendro — 5-tone equal temperament.  Each MIDI step is one
+/// slendro step of `2^(1/5)`, so 5 MIDI steps equal one octave (rather
+/// than 12, the 12-TET default).
 fn midi_to_hz_slendro(note: u8) -> f32 {
     let base = 261.626; // C4 = MIDI 60
-    let step = (note as f32 - 60.0) / 5.0; // 5 notes per octave
-    base * 2.0f32.powf(step / (12.0 / 5.0))
+    base * 2.0f32.powf((note as f32 - 60.0) / 5.0)
 }
 
 /// Javanese pelog (7-tone non-equal scale, approximated).

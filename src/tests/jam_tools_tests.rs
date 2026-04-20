@@ -467,3 +467,117 @@ fn baseline_ramps_skip_unchanged_params() {
     let (out, _) = schedule_baseline_ramps(state, &baseline, 4.0);
     assert!(out.llm.active_ramps.is_empty()); // no change needed
 }
+
+// ─── schedule_lane_fade_in (Phase 2/3 companion) ─────────────────────────────
+
+use crate::llm::lanes::LaneKind;
+use crate::state::jam_tools::{LANE_FADE_FLOOR, LANE_FADE_STEPS, schedule_lane_fade_in};
+use crate::state::lock_params;
+
+#[test]
+fn lane_fade_in_schedules_bass0_ramp() {
+    let state = AppState::default();
+    let v0 = state.bass_voices[0].synth.volume;
+    assert!(v0 > 0.02, "default bass volume should be audible");
+    let out = schedule_lane_fade_in(state, LaneKind::Bass(0));
+    assert_eq!(out.llm.active_ramps.len(), 1);
+    let r = &out.llm.active_ramps[0];
+    assert_eq!(r.param, "bass.volume");
+    assert!((r.from - v0 * LANE_FADE_FLOOR).abs() < 1e-4);
+    assert!((r.target - v0).abs() < 1e-4);
+    assert_eq!(r.total_global_steps, LANE_FADE_STEPS);
+}
+
+#[test]
+fn lane_fade_in_uses_nested_path_for_bass_voice_n() {
+    let state = AppState::default();
+    let out = schedule_lane_fade_in(state, LaneKind::Bass(2));
+    assert_eq!(out.llm.active_ramps.len(), 1);
+    assert_eq!(out.llm.active_ramps[0].param, "bass_voices.2.volume");
+}
+
+#[test]
+fn lane_fade_in_schedules_for_hoover_an1x_amen() {
+    for (lane, expected_path) in [
+        (LaneKind::Hoover, "hoover.volume"),
+        (LaneKind::An1x, "an1x.volume"),
+        (LaneKind::Amen, "amen.volume"),
+    ] {
+        let out = schedule_lane_fade_in(AppState::default(), lane);
+        assert_eq!(out.llm.active_ramps.len(), 1, "missing ramp for {:?}", lane);
+        assert_eq!(out.llm.active_ramps[0].param, expected_path);
+    }
+}
+
+#[test]
+fn lane_fade_in_noops_for_kit_fx_settings_mod_rack() {
+    // Kits have per-drum volumes (no master), fx/settings/mod/rack aren't
+    // voices — all should no-op rather than schedule an invalid ramp.
+    for lane in [
+        LaneKind::KitA,
+        LaneKind::KitB,
+        LaneKind::Fx,
+        LaneKind::Settings,
+        LaneKind::Modulation,
+        LaneKind::Rack,
+    ] {
+        let out = schedule_lane_fade_in(AppState::default(), lane);
+        assert!(
+            out.llm.active_ramps.is_empty(),
+            "{:?} should not schedule a fade-in",
+            lane
+        );
+    }
+}
+
+#[test]
+fn lane_fade_in_noops_for_silent_voice() {
+    // Voice sitting at near-zero volume — fading would just bring it back
+    // to near-zero, wasting a ramp slot.
+    let mut state = AppState::default();
+    state.bass_voices[0].synth.volume = 0.01;
+    let out = schedule_lane_fade_in(state, LaneKind::Bass(0));
+    assert!(out.llm.active_ramps.is_empty());
+}
+
+#[test]
+fn lane_fade_in_respects_lock() {
+    // User pinned bass.volume → ramp must not schedule (would dip a
+    // locked value and immediately fight apply_llm_update's lock guard).
+    let state = lock_params(AppState::default(), &["bass.volume".into()]);
+    let out = schedule_lane_fade_in(state, LaneKind::Bass(0));
+    assert!(out.llm.active_ramps.is_empty());
+}
+
+#[test]
+fn lane_fade_in_replaces_ramp_on_repeat_apply() {
+    // Two applies of the same lane must leave only one active ramp (the
+    // schedule_ramp dedup applies).  Otherwise stacking a ramp per cycle
+    // would leak ramps in long-running jams.
+    let mut state = schedule_lane_fade_in(AppState::default(), LaneKind::Bass(0));
+    state.global_step_count = 32;
+    state = schedule_lane_fade_in(state, LaneKind::Bass(0));
+    assert_eq!(state.llm.active_ramps.len(), 1);
+    assert_eq!(state.llm.active_ramps[0].start_global_step, 32);
+}
+
+#[test]
+fn lane_fade_in_nested_path_reaches_apply_layer() {
+    // End-to-end: running tick_bar_ramps on a bass_voices.N.volume ramp
+    // actually hits the voice slot through the extended
+    // apply_param_by_path branch.
+    let mut state = AppState::default();
+    state.bass_voices[2].synth.volume = 0.8;
+    state = schedule_lane_fade_in(state, LaneKind::Bass(2));
+    state.global_step_count = 8; // halfway through the 16-step fade
+    let out = tick_bar_ramps(state);
+    // Volume should now sit between floor and target.
+    let v = out.bass_voices[2].synth.volume;
+    let floor = 0.8 * LANE_FADE_FLOOR;
+    assert!(
+        v > floor && v < 0.8,
+        "mid-ramp voice-2 volume should be between floor {:.3} and 0.8, got {:.3}",
+        floor,
+        v
+    );
+}

@@ -30,8 +30,8 @@ impl ImpulseApp {
                         .push(AudioCommand::Trigger(TriggerEvent::BassTrigger {
                             voice_idx: 0,
                             note,
-                            accent: vel > 0.8,
-                            slide: false,
+                            accent: if vel > 0.8 { 1.0 } else { 0.0 },
+                            slide: 0.0,
                             gate_samples: 22050,
                             pan: 0.0,
                         }));

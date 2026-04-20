@@ -11,13 +11,10 @@ use super::{LlmBackend, LlmOutput, SamplingParams, extract_llm_actions};
 // ── Constants ────────────────────────────────────────────────────────────────
 
 /// Candidate paths for the llama-server binary.
-/// Checked in order — PrismML fork first (required for Bonsai 1-bit),
-/// then official llama.cpp build (required for Gemma 4 / newer architectures),
-/// then $PATH fallback.
+/// Checked in order — local build first, then $PATH fallback.
 const SERVER_BINARY_CANDIDATES: &[&str] = &[
-    ".llama-build/bin/llama-server", // PrismML fork — build-bonsai-server.sh
-    ".llama-official-build/bin/llama-server", // official llama.cpp — build-llama-server.sh
-    "llama-server",                  // $PATH
+    ".llama-official-build/bin/llama-server", // build-llama-server.sh
+    "llama-server",                           // $PATH
 ];
 
 /// Default base port for the server pool.
@@ -36,29 +33,12 @@ fn which_in_path(name: &str) -> bool {
         .unwrap_or(false)
 }
 
-/// Pick the right llama-server binary (Bonsai → PrismML fork, else official → fork → $PATH).
-fn pick_server_binary(model_path: &str) -> Option<&'static str> {
-    let is_bonsai = model_path.to_lowercase().contains("bonsai");
-
-    if is_bonsai {
-        // Bonsai requires the PrismML fork — try it first
-        SERVER_BINARY_CANDIDATES
-            .iter()
-            .copied()
-            .find(|&p| std::path::Path::new(p).exists() || which_in_path(p))
-    } else {
-        // For standard GGUF models prefer the official build, then PrismML fork, then $PATH.
-        // Official build handles newer architectures (Gemma 4, etc.) that the fork may not.
-        let preference: &[&str] = &[
-            ".llama-official-build/bin/llama-server",
-            ".llama-build/bin/llama-server",
-            "llama-server",
-        ];
-        preference
-            .iter()
-            .copied()
-            .find(|&p| std::path::Path::new(p).exists() || which_in_path(p))
-    }
+/// Pick the first available llama-server binary (local build, then $PATH).
+fn pick_server_binary(_model_path: &str) -> Option<&'static str> {
+    SERVER_BINARY_CANDIDATES
+        .iter()
+        .copied()
+        .find(|&p| std::path::Path::new(p).exists() || which_in_path(p))
 }
 
 /// Kill any leftover llama-server processes from a previous run.
@@ -92,10 +72,7 @@ impl LlamaServerBackend {
         let bin = pick_server_binary(model_path);
 
         let Some(bin) = bin else {
-            log::error!(
-                "llama-server binary not found — run ./scripts/build-llama-server.sh \
-                 (or ./scripts/build-bonsai-server.sh for the 1-bit Bonsai fork)."
-            );
+            log::error!("llama-server binary not found — run ./scripts/build-llama-server.sh.");
             return Self {
                 child: None,
                 base_url: String::new(),
@@ -170,26 +147,43 @@ impl LlamaServerBackend {
             .map(std::process::Stdio::from)
             .unwrap_or(std::process::Stdio::null());
 
-        let child = std::process::Command::new(bin)
-            .args([
-                "--model",
-                model_path,
-                "--host",
-                "127.0.0.1",
-                "--port",
-                &port.to_string(),
-                "--ctx-size",
-                &ctx_size.to_string(),
-                "--n-gpu-layers",
-                "99",
-                "--flash-attn",
-                "on",             // ~30% faster on CUDA; auto-detected if unsupported
-                "--cache-type-k", // KV cache quantization: less VRAM, faster
-                "q8_0",
-                "--cache-type-v",
-                "q8_0",
-                "--log-disable", // reduce noise; we log our own status
-            ])
+        let mut cmd = std::process::Command::new(bin);
+        cmd.args([
+            "--model",
+            model_path,
+            "--host",
+            "127.0.0.1",
+            "--port",
+            &port.to_string(),
+            "--ctx-size",
+            &ctx_size.to_string(),
+            "--n-gpu-layers",
+            "99",
+            "--flash-attn",
+            "on",             // ~30% faster on CUDA; auto-detected if unsupported
+            "--cache-type-k", // KV cache quantization: less VRAM, faster
+            "q8_0",
+            "--cache-type-v",
+            "q8_0",
+            // Reuse cached KV for any prompt prefix that matches a
+            // previous request (min 256 tokens). Combined with
+            // `cache_prompt: true` on the request body, this makes
+            // identical system-prompt requests skip the ~5-8 s prefill.
+            "--cache-reuse",
+            "256",
+            "--log-disable", // reduce noise; we log our own status
+        ]);
+        // Optional sampling seed — demo recorder passes IMPULSE_LLM_SEED for
+        // reproducible runs. Unset (or unparseable) → llama-server picks a
+        // random seed, same as before.
+        let seed_arg = std::env::var("IMPULSE_LLM_SEED")
+            .ok()
+            .and_then(|s| s.parse::<u64>().ok());
+        if let Some(seed) = seed_arg {
+            log::info!("llama-server seed fixed via IMPULSE_LLM_SEED: {seed}");
+            cmd.args(["--seed", &seed.to_string()]);
+        }
+        let child = cmd
             .stdout(std::process::Stdio::null())
             .stderr(stderr_log)
             .spawn();
@@ -318,7 +312,6 @@ impl LlamaServerBackend {
             let _ = child.wait();
         }
         // Also kill any detached server that was reused without owning the child PID.
-        // Try both builds — either could be holding the port.
         for &bin in SERVER_BINARY_CANDIDATES {
             if std::path::Path::new(bin).exists() || which_in_path(bin) {
                 kill_leaked_servers(bin);
@@ -348,6 +341,140 @@ impl Drop for LlamaServerBackend {
     }
 }
 
+// ── Pipeline backend impl ────────────────────────────────────────────────────
+//
+// Structured-JSON inference for the lane pipeline.  Takes an explicit
+// schema and sends it as `response_format.json_schema` so llama-server's
+// grammar converter enforces the shape — the per-lane required fields
+// land by construction instead of relying on the prompt to nag.
+
+impl crate::llm::pipeline::PipelineBackend for LlamaServerBackend {
+    fn infer_lane_json(
+        &mut self,
+        system: &str,
+        user: &str,
+        schema: &serde_json::Value,
+        sampling: &SamplingParams,
+    ) -> Result<serde_json::Value> {
+        if !self.live {
+            // Fall through to mock for dev / missing-model flows.
+            let mock = mock_response(user, sampling.heat)?;
+            return Ok(mock.param_update.unwrap_or_default());
+        }
+
+        let url = format!("{}/v1/chat/completions", self.base_url);
+        let heat_f = (sampling.heat as f64).clamp(0.0, 1.0);
+        let temperature = ((sampling.temperature as f64) * (1.0 + heat_f * 0.8)).clamp(0.0, 2.0);
+        let top_p =
+            (sampling.top_p as f64 + heat_f * (1.0 - sampling.top_p as f64)).clamp(0.0, 1.0);
+        let min_p = ((sampling.min_p as f64) * (1.0 - heat_f * 0.9)).clamp(0.0, 1.0);
+        let frequency_penalty = (sampling.frequency_penalty as f64 + heat_f * 0.4).clamp(0.0, 2.0);
+
+        // OpenAI structured-output format: `response_format.type` =
+        // `json_schema` tells llama.cpp to build a GBNF grammar from the
+        // schema and constrain every output token.  Per-lane calls use
+        // tight schemas (required fields + additionalProperties:false),
+        // so the server can't emit something off-spec.
+        //
+        // Per-lane max_tokens sized for the largest realistic lane
+        // payload (bass with 5 arrays × 32 steps + schema padding ≈
+        // 600-800 tokens).  Non-thinking models only need ~1600; thinking
+        // models (Qwen, Gemma-thinking) burn their whole budget on
+        // <think> before any JSON shows up, so we give 3000 to leave
+        // room for a reasoning pass followed by the answer.  The
+        // caller is expected to append /no_think when thinking is off
+        // — this is just insurance for models that reason anyway.
+        let body = serde_json::json!({
+            "model": "local",
+            "messages": [
+                { "role": "system",  "content": system },
+                { "role": "user",    "content": user   }
+            ],
+            "temperature": temperature,
+            "top_k": sampling.top_k,
+            "top_p": top_p,
+            "min_p": min_p,
+            "repeat_penalty": sampling.repeat_penalty as f64,
+            "frequency_penalty": frequency_penalty,
+            "seed": sampling.seed,
+            "max_tokens": 3000,
+            "cache_prompt": true,
+            "response_format": {
+                "type": "json_schema",
+                "json_schema": {
+                    "name": "lane_output",
+                    "strict": true,
+                    "schema": schema,
+                }
+            }
+        });
+
+        let agent = ureq::AgentBuilder::new()
+            .timeout(std::time::Duration::from_secs(INFER_TIMEOUT_SECS))
+            .build();
+
+        let resp = agent
+            .post(&url)
+            .set("Content-Type", "application/json")
+            .send_json(&body)
+            .map_err(|e| match e {
+                ureq::Error::Status(code, response) => {
+                    let body = response.into_string().unwrap_or_default();
+                    anyhow::anyhow!("llama-server lane request failed: status {code}\nbody: {body}")
+                }
+                other => anyhow::anyhow!("llama-server lane request failed: {other}"),
+            })?;
+
+        let resp_text = resp.into_string()?;
+        let resp_json: serde_json::Value = serde_json::from_str(&resp_text).map_err(|e| {
+            anyhow::anyhow!("lane response JSON parse failed: {e}\nbody: {resp_text}")
+        })?;
+        let raw_content = resp_json["choices"][0]["message"]["content"]
+            .as_str()
+            .unwrap_or("")
+            .to_string();
+        let finish_reason = resp_json["choices"][0]["finish_reason"]
+            .as_str()
+            .unwrap_or("")
+            .to_string();
+        if raw_content.is_empty() {
+            // Salvage attempt: some reasoning-model chat templates dump
+            // the whole turn — including the final JSON — into
+            // `reasoning_content` when the grammar constraint plus the
+            // /think directive collide.  If that field happens to carry
+            // parseable JSON, use it; otherwise surface a more
+            // actionable error (length-stop without `/no_think` is the
+            // usual culprit).
+            let reasoning = resp_json["choices"][0]["message"]["reasoning_content"]
+                .as_str()
+                .unwrap_or("");
+            if !reasoning.is_empty() {
+                let (_thinking_tag, json_text) = split_thinking(reasoning);
+                if let Some(parsed) = repair_json(json_text.trim()) {
+                    log::warn!(
+                        "lane content empty; salvaged JSON from reasoning_content ({} chars)",
+                        reasoning.len()
+                    );
+                    return Ok(parsed);
+                }
+            }
+            let hint = if finish_reason == "length" {
+                " (finish_reason=length — model likely exhausted max_tokens inside <think>; enable_thinking=false appends /no_think)"
+            } else {
+                ""
+            };
+            return Err(anyhow::anyhow!(
+                "lane response content empty{hint}\nbody: {resp_text}"
+            ));
+        }
+        let (_thinking_tag, json_text) = split_thinking(&raw_content);
+        let parsed = repair_json(json_text.trim()).ok_or_else(|| {
+            anyhow::anyhow!("lane JSON parse + repair both failed\nraw: {json_text}")
+        })?;
+        Ok(parsed)
+    }
+}
+
 // ── Backend inference impl ───────────────────────────────────────────────────
 
 impl LlmBackend for LlamaServerBackend {
@@ -373,6 +500,11 @@ impl LlmBackend for LlamaServerBackend {
         // json_object mode keeps the server honest about emitting valid JSON.
         // max_tokens: full-reset responses (all voices + FX + LFO) can exceed 1200 tokens
         // and truncate mid-JSON.  2400 gives headroom for the largest possible response.
+        // cache_prompt: llama-server reuses the KV cache for the shared prefix
+        // between requests when true — our ~11 k-token system prompt is
+        // identical across every inference, so this drops prefill time from
+        // ~5-8 s to ~0 s once warm.  Unknown field is silently ignored by
+        // older server builds, so safe to always send.
         let body = serde_json::json!({
             "model": "local",
             "messages": [
@@ -387,6 +519,7 @@ impl LlmBackend for LlamaServerBackend {
             "frequency_penalty": frequency_penalty,
             "seed": sampling.seed,
             "max_tokens": 2400,
+            "cache_prompt": true,
             "response_format": { "type": "json_object" }
         });
 
@@ -614,6 +747,26 @@ impl LlamaServerPool {
         inst.backend.infer(system, user, sampling)
     }
 
+    /// Lane-pipeline structured inference.  Routes to the backend on
+    /// `port` and invokes its `PipelineBackend` impl.  Used by the
+    /// lane pipeline — one call per lane, schema-constrained output.
+    pub fn infer_lane(
+        &mut self,
+        port: u16,
+        system: &str,
+        user: &str,
+        schema: &serde_json::Value,
+        sampling: &SamplingParams,
+    ) -> Result<serde_json::Value> {
+        use crate::llm::pipeline::PipelineBackend;
+        let inst = self
+            .servers
+            .iter_mut()
+            .find(|s| s.port == port)
+            .ok_or_else(|| anyhow::anyhow!("No server on port {}", port))?;
+        inst.backend.infer_lane_json(system, user, schema, sampling)
+    }
+
     /// True if at least one server is live.
     pub fn is_any_live(&self) -> bool {
         self.servers.iter().any(|s| s.backend.is_live())
@@ -633,6 +786,23 @@ impl LlamaServerPool {
             inst.backend.shutdown();
         }
         self.servers.clear();
+    }
+
+    /// Shut down every server whose model_path != `keep`.  Used by the console
+    /// "set model" path: console acts as master switch, so any agent override
+    /// or stale leaked ref is unconditionally unloaded.  Bypasses ref counts —
+    /// callers are expected to also reset agent state to None so agents
+    /// re-acquire (with the new global) on their next inference.
+    pub fn shutdown_all_except(&mut self, keep: &str) {
+        let mut i = 0;
+        while i < self.servers.len() {
+            if self.servers[i].model_path != keep {
+                self.servers[i].backend.shutdown();
+                self.servers.remove(i);
+            } else {
+                i += 1;
+            }
+        }
     }
 
     fn next_free_port(&self) -> u16 {

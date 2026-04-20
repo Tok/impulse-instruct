@@ -7,6 +7,15 @@ pub fn param_json_schema() -> serde_json::Value {
     let bool_array =
         serde_json::json!({ "type": "array", "items": { "type": "boolean" }, "maxItems": 64 });
     let note_array = serde_json::json!({ "type": "array", "items": { "type": "integer", "minimum": 0, "maximum": 127 }, "maxItems": 64 });
+    let pan_array = serde_json::json!({ "type": "array", "items": { "type": "number", "minimum": -1.0, "maximum": 1.0 }, "maxItems": 64 });
+    // Accent / slide arrays accept either booleans (binary on/off), integer
+    // indices (index-list format — only-on steps), or floats in [0, 1]
+    // (proportional intensity — 0.5 = half accent).
+    let intensity_array = serde_json::json!({
+        "type": "array",
+        "items": { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+        "maxItems": 64
+    });
     serde_json::json!({
         "$schema": "http://json-schema.org/draft-07/schema",
         "type": "object",
@@ -63,8 +72,40 @@ pub fn param_json_schema() -> serde_json::Value {
                         },
                         "additionalProperties": false
                     },
+                    "drum_probabilities": {
+                        "type": "object",
+                        "description": "per-step fire chance (0..=1) per drum voice. 1.0 = always fires, 0.7 = 70% chance, 0 = never. Use to humanise hats, add ghost snares, carve tension with conditional hits.",
+                        "properties": {
+                            "kick_a":  intensity_array.clone(),
+                            "snare_a": intensity_array.clone(),
+                            "hihat_a": intensity_array.clone(),
+                            "kick_b":  intensity_array.clone(),
+                            "snare_b": intensity_array.clone(),
+                            "clap_b":  intensity_array.clone(),
+                            "hihat_b": intensity_array.clone()
+                        },
+                        "additionalProperties": false
+                    },
                     "bass_steps":    bool_array.clone(),
-                    "bass_notes":    note_array,
+                    "bass_notes":    note_array.clone(),
+                    "bass_accents":  intensity_array.clone(),
+                    "bass_slides":   intensity_array.clone(),
+                    "bass_pans":     pan_array.clone(),
+                    "bass2_steps":   bool_array.clone(),
+                    "bass2_notes":   note_array.clone(),
+                    "bass2_accents": intensity_array.clone(),
+                    "bass2_slides":  intensity_array.clone(),
+                    "bass2_pans":    pan_array.clone(),
+                    "bass3_steps":   bool_array.clone(),
+                    "bass3_notes":   note_array.clone(),
+                    "bass3_accents": intensity_array.clone(),
+                    "bass3_slides":  intensity_array.clone(),
+                    "bass3_pans":    pan_array.clone(),
+                    "bass4_steps":   bool_array.clone(),
+                    "bass4_notes":   note_array,
+                    "bass4_accents": intensity_array.clone(),
+                    "bass4_slides":  intensity_array,
+                    "bass4_pans":    pan_array,
                     "kick_a_steps":  bool_array.clone(),
                     "snare_a_steps": bool_array.clone(),
                     "hihat_a_steps": bool_array.clone(),
@@ -223,7 +264,20 @@ pub fn param_json_schema() -> serde_json::Value {
                     "sidechain_release": { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "sidechain release 10-500ms (longer=more pumping)" },
                     "compressor_multiband": { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "0=single-band, >0=3-band split (low/mid/high) compression" },
                     "stereo_width": { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "stereo width: 0=mono, 0.5=normal, 1=wide" },
-                    "tuning": { "type": "integer", "minimum": 0, "maximum": 3, "description": "tuning system: 0=12-TET (default), 1=just intonation, 2=slendro (gamelan), 3=pelog (gamelan)" }
+                    "tuning": { "type": "integer", "minimum": 0, "maximum": 3, "description": "tuning system: 0=12-TET (default), 1=just intonation, 2=slendro (gamelan), 3=pelog (gamelan)" },
+                    "reverb_xy":     { "type": "array", "items": { "type": "number" }, "minItems": 2, "maxItems": 2, "description": "pad shortcut: [x,y] → [reverb_size, reverb_damp]" },
+                    "delay_xy":      { "type": "array", "items": { "type": "number" }, "minItems": 2, "maxItems": 2, "description": "pad shortcut: [x,y] → [delay_time, delay_feedback]" },
+                    "chorus_xy":     { "type": "array", "items": { "type": "number" }, "minItems": 2, "maxItems": 2, "description": "pad shortcut: [x,y] → [chorus_rate, chorus_depth]" },
+                    "phaser_xy":     { "type": "array", "items": { "type": "number" }, "minItems": 2, "maxItems": 2, "description": "pad shortcut: [x,y] → [phaser_rate, phaser_depth]" },
+                    "ring_mod_xy":   { "type": "array", "items": { "type": "number" }, "minItems": 2, "maxItems": 2, "description": "pad shortcut: [x,y] → [ring_mod_freq, ring_mod_mix]" },
+                    "waveshaper_xy": { "type": "array", "items": { "type": "number" }, "minItems": 2, "maxItems": 2, "description": "pad shortcut: [x,y] → [waveshaper_drive, waveshaper_mix]" },
+                    "bitcrush_xy":   { "type": "array", "items": { "type": "number" }, "minItems": 2, "maxItems": 2, "description": "pad shortcut: [x,y] → [bitcrush_bits, bitcrush_rate]" },
+                    "eq_xy":         { "type": "array", "items": { "type": "number", "minimum": -1.0, "maximum": 1.0 }, "minItems": 2, "maxItems": 2, "description": "pad shortcut: [x,y] → [eq_low_gain, eq_mid_gain] (bipolar)" },
+                    "compressor_xy": { "type": "array", "items": { "type": "number" }, "minItems": 2, "maxItems": 2, "description": "pad shortcut: [x,y] → [compressor_threshold, compressor_ratio]" },
+                    "tape_xy":       { "type": "array", "items": { "type": "number" }, "minItems": 2, "maxItems": 2, "description": "pad shortcut: [x,y] → [tape_drive, tape_flutter]" },
+                    "distortion_xy": { "type": "array", "items": { "type": "number" }, "minItems": 2, "maxItems": 2, "description": "pad shortcut: [x,y] → [distortion_drive, distortion_mix]" },
+                    "autotune_xy":   { "type": "array", "items": { "type": "number" }, "minItems": 2, "maxItems": 2, "description": "pad shortcut: [x,y] → [autotune_amount, autotune_mix]" },
+                    "fx_pan_xy":     { "type": "array", "items": { "type": "number" }, "minItems": 2, "maxItems": 2, "description": "pad shortcut: [x,y] → [fx_pan_pos, fx_pan_width]" }
                 },
                 "additionalProperties": false
             },

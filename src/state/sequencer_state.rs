@@ -77,8 +77,18 @@ impl Default for Step {
 pub struct TB303Step {
     pub active: bool,
     pub note: u8, // MIDI note number
-    pub accent: bool,
-    pub slide: bool,
+    /// Accent intensity 0..=1.  Drives amp-peak lift on the 303 voice
+    /// proportionally (stronger accent → louder hit, bigger dot in UI).
+    /// Values ≤ 0 are "no accent"; any positive value lifts the voice.
+    /// Deserialises from legacy `bool` for project-file backwards compat.
+    #[serde(default, deserialize_with = "de_bool_or_f32")]
+    pub accent: f32,
+    /// Slide amount 0..=1 — controls glide length into this step.  When
+    /// the next active step fires while this flag is > 0, the pitch glide
+    /// time is proportional to the value (0 = no glide, 1 = full glide).
+    /// Deserialises from legacy `bool` for project-file backwards compat.
+    #[serde(default, deserialize_with = "de_bool_or_f32")]
+    pub slide: f32,
     pub gate: f32, // 0–1 gate length ratio
     /// Per-step stereo pan, -1.0 = hard left, 0.0 = centre, 1.0 = hard right.
     /// Applied at trigger time on top of the voice's static pan setting.
@@ -87,13 +97,33 @@ pub struct TB303Step {
     pub pan: f32,
 }
 
+/// Accept either a legacy `bool` (true→1.0, false→0.0) or a numeric
+/// value in [0, 1].  Keeps old project JSON round-tripping through the
+/// new f32 fields without a migration step.
+fn de_bool_or_f32<'de, D>(deserializer: D) -> Result<f32, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    use serde::Deserialize;
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum BoolOrF32 {
+        B(bool),
+        F(f32),
+    }
+    match BoolOrF32::deserialize(deserializer)? {
+        BoolOrF32::B(b) => Ok(if b { 1.0 } else { 0.0 }),
+        BoolOrF32::F(f) => Ok(f.clamp(0.0, 1.0)),
+    }
+}
+
 impl Default for TB303Step {
     fn default() -> Self {
         Self {
             active: false,
             note: 36,
-            accent: false,
-            slide: false,
+            accent: 0.0,
+            slide: 0.0,
             gate: 0.5,
             pan: 0.0,
         }
@@ -157,6 +187,22 @@ pub struct SequencerState {
     /// `[3, 0, 1, 2]` shifts the whole pattern by 3 slices).
     #[serde(default)]
     pub amen_slice_order: Vec<u8>,
+    /// Song-mode style tag.  When the pattern bank is playing through a
+    /// chain and this slot becomes active, `pattern_style` (if `Some`)
+    /// is applied as the global `LlmState.active_style` and propagated
+    /// to all unlocked agents — the core of "per-chain style
+    /// transitions".  `None` = leave the active style unchanged when
+    /// the chain advances to this slot.
+    #[serde(default)]
+    pub pattern_style: Option<String>,
+    /// Song-mode tempo-transition opt-in.  When `true`, the chain
+    /// advance adopts *this* slot's `bpm` + `swing` instead of
+    /// preserving the prior transport; `false` (the default, and the
+    /// pre-Song-mode behaviour) keeps the existing bpm/swing so
+    /// existing chain projects don't surprise-jump tempos on upgrade.
+    /// `running` is always preserved regardless of this flag.
+    #[serde(default)]
+    pub pattern_bpm_apply: bool,
 }
 
 impl Default for SequencerState {
@@ -208,6 +254,45 @@ impl Default for SequencerState {
             bass_voice_enabled: default_bass_voice_enabled(),
             preecho: std::collections::HashMap::new(),
             amen_slice_order: Vec::new(),
+            pattern_style: None,
+            pattern_bpm_apply: false,
         }
     }
+}
+
+// ─── Huth temperature for a melodic pattern slice ────────────────────────────
+// Pure helper.  Returns running totals (weighted_sum, total_weight) so the
+// caller can sum across multiple voices / lanes before averaging.  The
+// `semi_temps` argument is the 12-entry pitch-class table from
+// `crate::ui::theme::NOTE_TEMP` (passed in to keep state ↛ ui dep clean).
+
+/// Accent boost applied on top of a step's gate when weighting note temperature.
+const TEMP_ACCENT_BOOST: f32 = 1.5;
+
+/// Accumulate (weighted_sum, total_weight) of `theme::note_temperature(note)`
+/// across the first `len` active steps, weighted by `gate × accent_boost`.
+pub fn pattern_temperature_acc(
+    steps: &[TB303Step],
+    len: usize,
+    semi_temps: &[f32; 12],
+) -> (f32, f32) {
+    let mut sum = 0.0_f32;
+    let mut wsum = 0.0_f32;
+    for s in steps.iter().take(len) {
+        if !s.active {
+            continue;
+        }
+        // Accent now carries an intensity 0..=1 — scale the boost
+        // proportionally so a half-strength accent counts as half the
+        // extra weight a full accent would add.
+        let accent_mult = 1.0 + s.accent.clamp(0.0, 1.0) * (TEMP_ACCENT_BOOST - 1.0);
+        let w = s.gate.max(0.0) * accent_mult;
+        if w <= 0.0 {
+            continue;
+        }
+        let pc = (s.note % 12) as usize;
+        sum += w * semi_temps[pc];
+        wsum += w;
+    }
+    (sum, wsum)
 }

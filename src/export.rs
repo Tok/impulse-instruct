@@ -4,11 +4,11 @@
 
 use std::path::{Path, PathBuf};
 
+use crate::audio::SAMPLE_RATE;
 use crate::audio::dsp::{AudioParams, DspState};
 use crate::sequencer::{ClockState, advance_clock};
 use crate::state::{AppState, DrumVoice, compile_fx_plan};
 
-const EXPORT_SR: f32 = 44100.0;
 const BLOCK_SIZE: usize = 512;
 
 // ─── Render ───────────────────────────────────────────────────────────────────
@@ -17,11 +17,11 @@ const BLOCK_SIZE: usize = 512;
 /// Returns a mono f32 PCM buffer at 44100 Hz.
 fn render_bars(state: &AppState, bars: u32) -> Vec<f32> {
     let mut params = AudioParams::from_app_state(state);
-    params.sample_rate = EXPORT_SR;
+    params.sample_rate = SAMPLE_RATE;
 
     // Dummy TTS consumer — export never mixes live TTS audio.
     let (_tts_tx, tts_rx) = rtrb::RingBuffer::<f32>::new(1);
-    let mut dsp = DspState::new(EXPORT_SR, params, compile_fx_plan(&state.rack), tts_rx);
+    let mut dsp = DspState::new(SAMPLE_RATE, params, compile_fx_plan(&state.rack), tts_rx);
     let mut clock = ClockState::default();
 
     // Force sequencer running for export regardless of UI play state
@@ -29,7 +29,7 @@ fn render_bars(state: &AppState, bars: u32) -> Vec<f32> {
     seq.running = true;
 
     let beats_per_bar = 4.0_f32;
-    let samples_per_beat = EXPORT_SR * 60.0 / seq.bpm;
+    let samples_per_beat = SAMPLE_RATE * 60.0 / seq.bpm;
     let total_samples = (bars as f32 * beats_per_bar * samples_per_beat) as usize;
 
     let mut out = vec![0.0f32; total_samples];
@@ -41,7 +41,7 @@ fn render_bars(state: &AppState, bars: u32) -> Vec<f32> {
         let n = remaining.min(BLOCK_SIZE);
         let block = &mut block_buf[..n];
 
-        let (new_clock, events) = advance_clock(clock.clone(), &seq, n, EXPORT_SR);
+        let (new_clock, events) = advance_clock(clock.clone(), &seq, n, SAMPLE_RATE);
         clock = new_clock;
         for event in events {
             dsp.handle_trigger(&event);
@@ -73,7 +73,7 @@ pub fn export_wav(state: &AppState, bars: u32) -> Result<PathBuf, String> {
 fn write_wav(path: &Path, samples: &[f32]) -> Result<(), String> {
     let spec = hound::WavSpec {
         channels: 1,
-        sample_rate: EXPORT_SR as u32,
+        sample_rate: SAMPLE_RATE as u32,
         bits_per_sample: 32,
         sample_format: hound::SampleFormat::Float,
     };

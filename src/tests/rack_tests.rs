@@ -206,6 +206,7 @@ fn strip_audio_cycles_removes_offenders() {
             index: 0,
         },
         color,
+        audio_gain: 1.0,
     });
     let color2 = rack.next_cable_color();
     rack.cables.push(Cable {
@@ -222,6 +223,7 @@ fn strip_audio_cycles_removes_offenders() {
             index: 0,
         },
         color: color2,
+        audio_gain: 1.0,
     });
     assert_eq!(rack.cables.len(), 2);
     let removed = rack.strip_audio_cycles();

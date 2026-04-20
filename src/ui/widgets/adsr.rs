@@ -3,6 +3,8 @@
 
 use egui::{Color32, Pos2, Sense, Stroke, Ui, Vec2};
 
+use crate::ui::theme;
+
 /// Interactive ADSR envelope display. Draws the classic attack-decay-sustain-release
 /// shape as a polyline. Drag in each zone to edit the corresponding parameter:
 ///   - Left zone       → A (attack time)
@@ -131,7 +133,7 @@ pub fn adsr_display(
         }
 
         // Always-on parameter labels
-        let label_col = Color32::from_gray(90);
+        let label_col = theme::ASH;
         let font = egui::FontId::monospace(7.0);
         // A label (attack time as ms: 0–1 → 0–500ms)
         let a_ms = *attack * 500.0;
@@ -264,7 +266,7 @@ pub fn decay_display(ui: &mut Ui, decay: &mut f32, env_mod: f32, width: f32, hei
         painter.circle_filled(pts[1], 2.5, Color32::from_gray(180));
 
         // Labels: peak Hz value + decay time
-        let label_col = Color32::from_gray(90);
+        let label_col = theme::ASH;
         let font = egui::FontId::monospace(7.0);
         // Decay time: 0–1 → 50–2000 ms
         let d_ms = 50.0 + *decay * 1950.0;
@@ -295,7 +297,7 @@ pub fn filter_response(
     ui: &mut Ui,
     cutoff: f32,
     resonance: f32,
-    filter_mode: u8, // 0=LP, 1=HP, 2=BP
+    filter_mode: crate::state::FilterMode,
     width: f32,
     height: f32,
 ) {
@@ -356,9 +358,9 @@ pub fn filter_response(
             (base * peak_boost).min(3.0)
         };
 
+        use crate::state::FilterMode;
         let mag = match filter_mode {
-            1 => {
-                // HP
+            FilterMode::Highpass => {
                 let r8 = ratio.powi(8);
                 let hp_base = (r8 / (1.0 + r8)).sqrt();
                 let peak_boost = if k > 0.01 {
@@ -370,14 +372,13 @@ pub fn filter_response(
                 };
                 (hp_base * peak_boost).min(3.0)
             }
-            2 => {
-                // BP
+            FilterMode::Bandpass => {
                 let bw = 0.5 + (1.0 - resonance) * 2.0;
                 let bp = 1.0 / (1.0 + (ratio.ln() / bw).powi(2));
                 let peak_boost = if k > 0.01 { 1.0 + k * 0.3 } else { 1.0 };
                 (bp * peak_boost).min(3.0)
             }
-            _ => mag_lp,
+            FilterMode::Lowpass => mag_lp,
         };
 
         let db = 20.0 * mag.max(0.001).log10();
@@ -417,7 +418,7 @@ pub fn filter_response(
     );
 
     // Labels
-    let label_col = Color32::from_gray(90);
+    let label_col = theme::ASH;
     let font = egui::FontId::monospace(7.0);
 
     // Cutoff frequency
@@ -444,10 +445,11 @@ pub fn filter_response(
     );
 
     // Filter mode label
+    use crate::state::FilterMode;
     let mode_name = match filter_mode {
-        1 => "HP",
-        2 => "BP",
-        _ => "LP",
+        FilterMode::Lowpass => "LP",
+        FilterMode::Highpass => "HP",
+        FilterMode::Bandpass => "BP",
     };
     painter.text(
         rect.left_top() + Vec2::new(4.0, 3.0),

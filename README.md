@@ -20,18 +20,29 @@ Everything runs entirely offline: no cloud calls, no subscriptions, no latency. 
 ---
 
 <p align="center">
-  <img src="assets/screenshots/v0.7.4-snapshot-intro-sequencer.png" alt="Sequencer — 32-step wrap, per-voice sliders, bass/accent/slide intensity, 303 centered between 808 and 909" width="900"/>
+  <a href="https://www.youtube.com/@Impulse-Instruct/videos">
+    <img src="https://img.shields.io/badge/YouTube-Impulse%20Instruct-red?logo=youtube&logoColor=white&style=for-the-badge" alt="Watch Impulse Instruct on YouTube" />
+  </a>
+  <br/>
+  ▶ <a href="https://www.youtube.com/@Impulse-Instruct/videos">youtube.com/@Impulse-Instruct</a> — demo videos of the agents jamming
+</p>
+
+<p align="center">
+  <img src="assets/screenshots/v0.7.7-intro-band.png" alt="Multi-agent band — bass / drums / FX specialists jamming together under a conductor, each wired to its own instruments via control cables" width="900"/>
 </p>
 <p align="center">
-  <img src="assets/screenshots/v0.7.4-snapshot-intro-bass-detail.png" alt="Bass detail — 303-style filter with chrome knobs, full-word labels, XY pad" width="900"/>
+  <img src="assets/screenshots/v0.7.7-intro-two-voices.png" alt="Sequencer with two bass voices — 32-step wrap, per-voice step rows, accent / slide intensity, pan offsets for stereo separation" width="900"/>
 </p>
 <p align="center">
-  <img src="assets/screenshots/v0.7.4-snapshot-intro-cables.png" alt="Back panel — cable topology filter dims modules not in the signal path" width="900"/>
+  <img src="assets/screenshots/v0.7.7-intro-cables-flip.png" alt="Back panel — auto-wired audio chain from voices through FX into the master, LFOs + mod destinations, control cables from agents to their scoped modules"  width="900"/>
+</p>
+<p align="center">
+  <img src="assets/screenshots/v0.7.7-intro-live-filter.png" alt="Live performance — manual XY-pad filter sweep over an autonomous band, with the cutoff / resonance locks protecting other parameters" width="900"/>
 </p>
 
 ---
 
-## v0.7.5-snapshot — Pre-release
+## v0.7.7 — Pre-release
 
 **This is pre-release software.** It works and makes sound, but expect rough edges. The UI is functional but visually unpolished in places.
 
@@ -71,22 +82,23 @@ The release zip ships without model files. You need at least **Gemma 4 E4B Q4_K_
 4. Done — launch the app.
 
 Optional extras, same process:
-- **Bonsai 8B** (~1.1 GB) — lightweight specialist agents for multi-model setups: [prism-ml/Bonsai-8B-gguf](https://huggingface.co/prism-ml/Bonsai-8B-gguf) → `Bonsai-8B.gguf`
-- **NeuTTS Air Q4** (~527 MB) — neural voice cloning for MC/DJ modules: [neuphonic/neutts-air-q4-gguf](https://huggingface.co/neuphonic/neutts-air-q4-gguf) → rename `neutts-air-Q4_0.gguf` to `neutts-air-q4.gguf`
+- **NeuTTS Air Q8** (~803 MB) — neural voice cloning for MC/DJ modules: [neuphonic/neutts-air-q8-gguf](https://huggingface.co/neuphonic/neutts-air-q8-gguf) → rename `neutts-air-Q8_0.gguf` to `neutts-air-q8.gguf`. The Q4 quant (~527 MB, [neuphonic/neutts-air-q4-gguf](https://huggingface.co/neuphonic/neutts-air-q4-gguf)) is also accepted as a smaller fallback.
 
 **Option B — Script (if you already have `hf`/`huggingface-cli`/`curl`):**
 
 Linux:
 ```bash
-./download-models.sh          # Gemma 4 E4B (default)
-./download-models.sh bonsai   # optional: Bonsai 8B
-./download-models.sh neutts   # optional: NeuTTS Air
+./download-models.sh                # Gemma 4 E4B (default)
+./download-models.sh gemma-26b      # optional: Gemma 4 26B-A4B IQ4_XS (~13.4 GB, needs 16 GB GPU)
+./download-models.sh gemma-26b-q3   # optional: Gemma 4 26B-A4B Q3_K_M  (~12.5 GB)
+./download-models.sh gemma-26b-iq2  # optional: Gemma 4 26B-A4B IQ2_XXS (~9.9 GB)
+./download-models.sh neutts         # optional: NeuTTS Air
 ```
 
 Windows:
 ```
 download-models.bat
-download-models.bat bonsai
+download-models.bat gemma-26b
 download-models.bat neutts
 ```
 
@@ -123,68 +135,21 @@ The app auto-detects models in `models/` and connects. The startup wizard detect
 
 | Model | Size | VRAM | Notes |
 |-------|------|------|-------|
-| **Gemma 4 E4B Q4_K_M** | ~4.6 GB | ~6 GB | **Recommended.** Best JSON accuracy, passes all integration tests. |
-| **Bonsai 8B Q1_0_g128** | ~1.1 GB | ~2 GB | Lightweight agent. Fits in 2 GB VRAM. Great for specialist agents in a multi-model team. |
-| **NeuTTS Air Q4** | ~527 MB | CPU | Neural TTS voice cloning for MC/DJ modules. Apache 2.0. |
+| **Gemma 4 E4B Q4_K_M** | ~4.6 GB | ~6 GB | **Recommended default.** Mobile-targeted Gemma 4, fast on any 6 GB GPU, passes all integration tests. |
+| **Gemma 4 26B-A4B UD-IQ4_XS** | ~13.4 GB | ~14 GB | Optional. MoE (4B active / 26B total) — same speed as E4B, much more knowledge. Needs a 16 GB+ GPU. |
+| **Gemma 4 26B-A4B UD-Q3_K_M** | ~12.5 GB | ~13 GB | Optional. Smaller quant of the MoE for tighter VRAM budgets. |
+| **Gemma 4 26B-A4B UD-IQ2_XXS** | ~9.9 GB | ~10 GB | Optional. Smallest 26B-A4B quant. |
+| **NeuTTS Air Q8** | ~803 MB | CPU | Neural TTS voice cloning for MC/DJ modules. Q4 (~527 MB) also supported as a smaller fallback. NeuTTS License. |
 
-Each agent can run a different model. A `LlamaServerPool` manages server processes — agents sharing the same model share a single server (ref-counted). Typical multi-agent VRAM budgets:
+Each agent can run a different model. A `LlamaServerPool` manages server processes — agents sharing the same model share a single server (ref-counted).  Same-model agents share VRAM, so a 5-agent Crew of Gemmas costs the same ~6 GB as a single Gemma. Typical multi-agent VRAM budgets:
 
 | Setup | Agents | VRAM |
 |-------|--------|------|
 | **Solo** | 1x Gemma | ~6 GB |
-| **Duo** | 2x Gemma (shared server) | ~6 GB |
-| **Crew** | 1x Gemma conductor + 4x Bonsai specialists | ~8 GB |
-| **Swarm** | 1x Gemma + 3x Bonsai | ~8 GB |
-| **Lite** | 1x Bonsai | ~2 GB |
-
----
-
-## What's new since v0.7.4
-
-Heavy-focus session on the AMEN sampler, the bass voice's 101 gap,
-and a new pattern modulator:
-
-- **AMEN break chopper** — the voice went from "play the whole WAV"
-  to a proper slicer.  Per-step slice selection, transient-based AUTO
-  detect, per-slice pitch/volume, BPM-stretch to host tempo, forward
-  and reverse playback with gate + stutter, waveform thumbnail with
-  slice markers, and a circular slice wheel that lights the active
-  wedge.  Samples live in `samples/amen/` — the panel has GET /
-  RANDOM / LOAD / PLAY buttons and a scrollable picker.
-- **Granular CAPTURE** — the granular voice can freeze the current
-  master-output buffer into its source.  A live scrolling ring-buffer
-  viz shows what's currently in the tap.  Textures can also be loaded
-  from `samples/textures/` (archive.org / freesound / LibriVox links
-  baked into the panel).
-- **Bass voice → SH-101 territory** — full ADSR on both amp and
-  filter envelopes, PWM on the pulse wave, and a per-voice LFO with
-  routable targets (pitch / PWM / cutoff / amp).  Free-rate or
-  BPM-synced.  The 303 squelch still lives at default values.
-- **Pre-echo modulator** — anchor-driven lead-in reinforcement.
-  Declare anchor step indices per voice, set a lead-in length, pick
-  velocity ramp and/or ratchet build; the lead-in cells ramp into
-  each anchor for a build-up feel.  Compact one-row UI with a
-  clickable step strip at the bottom of the sequencer panel.
-- **TTS panel overhaul** — live NeuTTS server status with a one-click
-  START, SAY field that synthesises arbitrary text immediately,
-  ASK row (THEME / RHYME / SING) that prompts the controlling agent,
-  conditioning preview line showing the voice's transcript, empty-SAY
-  fallback asks the agent to improvise in character.
-- **Demo scenario rewrite for D&B** — jump-up style seed (32-step
-  seeds, kick on 1 + late-3 + just-before-4, AN1X as drone pad,
-  bass as reese), MC scene spawns via API and shouts a single line,
-  record-demo.sh keeps NeuTTS running so runtime lines actually
-  synthesise.
-- **LLM action surface** — rack.add / rack.remove for creating
-  modules from agent JSON, spawn_agent gains mode + tts fields,
-  new POST /api/style, /api/amen, /api/granular endpoints.
-- **Module layout refinements** — AmenSampler 3×3 with grouped
-  knobs and waveform placeholders, granular 3×2, sequencer dynamic
-  sizer now reserves space for the preecho row so it doesn't clip.
-
-489 unit tests, 36 commits since v0.7.4.
-
-Full details in [docs/features.md](docs/features.md).
+| **Duo** | 2x Gemma — bass + drums/FX | ~6 GB |
+| **Swarm** | 4x Gemma — lead + 3 helpers | ~6 GB |
+| **Crew** | 5x Gemma — conductor + 4 specialists | ~6 GB |
+| **Voices** | 5x Gemma — one agent per voice | ~6 GB |
 
 ---
 
@@ -233,10 +198,9 @@ Full details in [docs/features.md](docs/features.md).
 - Agent memory and style learning across sessions
 
 **TTS / MC mode**
-- NeuTTS Air voice cloning (local GGUF, ~527MB model) with espeak-ng phonemization
+- NeuTTS Air voice cloning (local GGUF, ~527MB model)
 - Per-module settings: voice reference, temperature, top-k, pitch snap
 - Wired via rack control cables from agents
-- Voice characters: Jungle MC, Rave Announcer, Robot, Smooth DJ
 
 **I/O and integration**
 - MIDI in: NoteOn/Off to bass synth and live record; CC to synth params; Start/Stop transport
@@ -357,7 +321,7 @@ The LLM understands musical intent well. When a style doesn't land, the cause is
 
 ## Test Suites
 
-489 unit tests plus 3 LLM integration suites that run against a real model:
+1374 unit tests plus 3 LLM integration suites that run against a real model:
 
 | Suite | What it tests |
 |-------|--------------|
@@ -390,7 +354,7 @@ Written in Rust. Key dependencies:
 | UI | [egui](https://github.com/emilk/egui) / eframe 0.28 |
 | Audio I/O | [cpal](https://github.com/RustAudio/cpal) 0.15 |
 | Audio thread - DSP | [rtrb](https://github.com/mgeier/rtrb) lock-free ring buffer |
-| LLM inference | [llama-server](https://github.com/ggml-org/llama.cpp) (official) / [PrismML fork](https://github.com/prism-ml/llama.cpp) for Bonsai 1-bit |
+| LLM inference | [llama-server](https://github.com/ggml-org/llama.cpp) (official) |
 | TTS voice cloning | [NeuTTS Air](https://huggingface.co/neuphonic/neutts-air) (GGUF, local) + [espeak-ng](https://github.com/espeak-ng/espeak-ng) (phonemization) |
 | HTTP/MCP API | [axum](https://github.com/tokio-rs/axum) 0.7 |
 | MIDI | [midir](https://github.com/Boddlnagg/midir) 0.9 |
@@ -402,7 +366,6 @@ Written in Rust. Key dependencies:
 MIT - see [LICENSE](LICENSE)
 
 Gemma 4 model: [Google Gemma Terms of Use](https://ai.google.dev/gemma/terms)
-Bonsai 8B model: Apache 2.0 - credit to [prism-ml](https://huggingface.co/prism-ml)
 NeuTTS Air model: Apache 2.0 - credit to [Neuphonic](https://huggingface.co/neuphonic/neutts-air)
 
 ---

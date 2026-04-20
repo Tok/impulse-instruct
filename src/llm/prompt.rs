@@ -1,6 +1,10 @@
 // ─── llm/prompt.rs ───────────────────────────────────────────────────────────
 // Builds the system prompt that grounds the LLM in current synth state.
 
+use crate::llm::prompt_summary::{
+    bass_active_steps_summary, bass_groove_summary, bass_voices_summary,
+    rack_voice_coverage_summary,
+};
 use crate::llm::styles::StyleCatalog;
 use crate::state::{AppState, ConversationMode, ROOT_NAMES, StyleVerbosity};
 
@@ -63,26 +67,12 @@ pub fn build_system_prompt_full(
         }
     };
 
-    // Summarise active bass steps so the LLM can see what's playing
-    let active_bass: Vec<usize> = state
-        .sequencer
-        .bass_pattern
-        .iter()
-        .enumerate()
-        .filter(|(_, s)| s.active)
-        .map(|(i, _)| i)
-        .collect();
-    let bass_summary = if active_bass.is_empty() {
-        "none (silent)".to_string()
-    } else {
-        active_bass
-            .iter()
-            .map(|i| i.to_string())
-            .collect::<Vec<_>>()
-            .join(", ")
-    };
+    let bass_summary = bass_active_steps_summary(state);
+    let voices_info = bass_voices_summary(state);
+    let groove_summary = bass_groove_summary(state);
+    let rack_coverage = rack_voice_coverage_summary(state);
 
-    let current_json = serde_json::to_string_pretty(&serde_json::json!({
+    let current_json = serde_json::to_string(&serde_json::json!({
         "bass": {
             "cutoff": state.bass_voices[0].synth.cutoff,
             "resonance": state.bass_voices[0].synth.resonance,
@@ -130,8 +120,8 @@ pub fn build_system_prompt_full(
     .unwrap_or_default();
     // Bass pattern summary shown separately so the model doesn't treat it as an output field
     let bass_info = format!(
-        "Active bass steps (for reference only, not a JSON field): {}",
-        bass_summary
+        "Active bass steps (for reference only, not a JSON field): {}\n{}\n{}\n{}",
+        bass_summary, voices_info, groove_summary, rack_coverage
     );
 
     // Resolve active style section (empty string if none set)
@@ -194,7 +184,13 @@ pub fn build_system_prompt_full(
                     }
                     _ => String::new(),
                 };
-                let mc_section = if !s.mc_lines.is_empty()
+                // Honour per-user style overrides (see state::style_overrides).
+                // Falls back to the catalog's `s.mc_lines` / `s.themes`
+                // when no override is set — so unmodified styles read
+                // identically to the pre-overrides code.
+                let eff_mc = crate::state::effective_mc_lines(state, &s.id);
+                let eff_themes = crate::state::effective_themes(state, &s.id);
+                let mc_section = if !eff_mc.is_empty()
                     && matches!(
                         state.llm.conversation_mode,
                         crate::state::ConversationMode::Mc | crate::state::ConversationMode::Dj
@@ -202,20 +198,25 @@ pub fn build_system_prompt_full(
                 {
                     format!(
                         "\nExample MC lines for this style (use as reference, don't copy verbatim):\n{}\n",
-                        s.mc_lines.iter().map(|l| format!("  \"{}\"", l)).collect::<Vec<_>>().join("\n")
+                        eff_mc.iter().map(|l| format!("  \"{}\"", l)).collect::<Vec<_>>().join("\n")
                     )
                 } else {
                     String::new()
                 };
-                let theme_section = if !s.themes.is_empty() {
-                    format!("\nThemes/topics for vocal content: {}\n", s.themes.join(", "))
+                // Themes are only useful to MC / DJ singer agents — omit
+                // entirely in producer mode to save prompt tokens.
+                let theme_section = if !eff_themes.is_empty()
+                    && matches!(
+                        state.llm.conversation_mode,
+                        crate::state::ConversationMode::Mc | crate::state::ConversationMode::Dj
+                    )
+                {
+                    format!("\nVocal themes: {}\n", eff_themes.join(", "))
                 } else {
                     String::new()
                 };
                 format!(
-                    "\n═══ ACTIVE STYLE ═══\n\n{}{}{}{}{}\nThis is your creative brief. \
-                     RESET parameters to fully match this genre — set BPM, patterns, synth params, \
-                     and FX from scratch. Do not carry over settings from a previous style.\n",
+                    "\n═══ STYLE ═══\n\n{}{}{}{}{}\nUse this as the creative brief. Reset parameters to match; don't carry previous-style settings.\n",
                     text, seed, tonality, mc_section, theme_section
                 )
             })
@@ -331,6 +332,13 @@ BASS SYNTHESIZER (all 0.0–1.0):
   REESE BASS PRESET: set waveform="Supersaw", supersaw_voices=2, supersaw_detune=0.3,
                      sub_osc_level=0.5, filter_mode="Highpass", cutoff=0.25
 
+  PER-VOICE BASS (up to 4 voices — see CURRENT STATE for active ones):
+    `bass.*` = voice #1 synth. `bass_voices: [null, {{...}}, …]` = per-voice synth
+    updates (null skips). Sequencer arrays: voice #1 uses `bass_steps/notes/accents/
+    slides/pans`; voices #2–#4 use `bass2_…`, `bass3_…`, `bass4_…`. "rewrite bass 2"
+    → just `bass2_*`. Multi-voice rewrites: DISTINCT rhythms + contour per voice,
+    not clones.
+
 STEP SEQUENCER (default 32 steps = two 4/4 bars of 16th notes):
   sequencer.steps         — total loop length in steps (1–64, default 32)
   sequencer.swing         — 0–1 rhythmic swing (0=straight, 0.5=strong shuffle/triplet feel)
@@ -344,25 +352,18 @@ STEP SEQUENCER (default 32 steps = two 4/4 bars of 16th notes):
   sequencer.an1x_len      — an1x pattern length
   sequencer.drum_lengths  — per-voice drum lengths: {{ "kick_a": 16, "hihat_a": 12 }}
 
-  STEP ARRAYS — two compact formats (prefer index lists to save tokens):
-    Index list  [0,4,8,12]   — active step indices; all others cleared. SAVES TOKENS — use this.
-    Inline      [1,0,0,0,…]  — up to 64 values, 0/1 (or false/true). Use only when most steps are on.
-    Clear       []           — silence all steps for that voice.
-  RANGE AWARENESS — use the full pattern length:
-    Before writing a step array, read `sequencer.steps` and the per-voice
-    length (`bass_len`, `hoover_len`, `an1x_len`, `drum_lengths.<voice>`)
-    from CURRENT STATE so indices are in range and the pattern isn't stuck
-    in the first half of the bank.
-    • Indices must be < length. Don't exceed the bank.
-    • Use the second half (steps 16..31, or 32..63) for variation — not a
-      mirror of the first half.
-    • See DRUM PATTERNS and BASS PATTERNS below for voice-specific rhythm
-      guidance. Bass is NOT drums — do not copy kick-like even grids into
-      bass lines.
+  STEP ARRAYS — formats: index list `[0,4,8]` (preferred, all others cleared), inline
+  `[1,0,0,…]` (≥16 long), or `[]` (clear). Indices must be < the voice's length.
+  Use the second half for variation, not a mirror of the first.
 
-  sequencer.bass_steps    — step array for 303 bass trigger
-  sequencer.bass_notes    — MIDI note array (24=C1, 36=C2, 48=C3; acid range 33–48)
-  sequencer.bass_pans     — per-step pan -1..1 (0 = use voice static; non-zero overrides)
+  sequencer.bass_steps    — 303 bass trigger (bool array / index list)
+  sequencer.bass_notes    — MIDI note per step (24=C1, 36=C2, 48=C3; acid range 33–48)
+  sequencer.bass_pans     — per-step pan -1..1 (0 = voice static)
+  sequencer.bass_accents  — per-step accent intensity 0..=1. Formats: index list `[0,6,19]`
+                             (full), float array `[1,0,0,0.5,…]` (proportional). Mix
+                             1.0/0.5/0.3 for dynamics — 3–5 accents per 32 steps.
+  sequencer.bass_slides   — per-step slide intensity 0..=1 (glide into N+1, length
+                             proportional). Only between DIFFERENT notes. Same formats.
   sequencer.kick_a_steps  — Kit A kick steps
   sequencer.snare_a_steps — Kit A snare steps
   sequencer.hihat_a_steps — Kit A closed hihat steps
@@ -371,115 +372,35 @@ STEP SEQUENCER (default 32 steps = two 4/4 bars of 16th notes):
   sequencer.clap_b_steps  — Kit B clap steps
   sequencer.hihat_b_steps — Kit B closed hihat steps
 
-FX (all 0.0–1.0):  ← ONLY valid inside "fx": {{…}}, never inside "sequencer"
-  fx.reverb_mix       — reverb wet amount (0=off, 0.3=noticeable)
-  fx.reverb_size      — reverb room size
-  fx.reverb_gate_time — gated reverb gate close time in seconds (0=off, 0.1–0.5=80s snare effect)
-  fx.reverb_freeze    — true = infinite hold, reverb tail loops forever (drone/ambient pads)
-  fx.master_pitch_st  — global pitch offset in semitones for melodic voices (-12..+12; vaporwave drift)
-  fx.delay_time       — delay time 0–1 → 0–2s (0.375 = dotted 8th at ~130 BPM)
-  fx.delay_wow_flutter — tape wow/flutter modulation (0=clean digital, 0.3=subtle tape, 1=wobbly)
-  fx.delay_saturation — tape saturation on feedback (0=clean, 0.5=warm, 1=heavy breakup)
-  fx.delay_feedback   — delay repeats
-  fx.delay_mix        — delay wet amount
-  fx.distortion_drive — master bus saturation drive
-  fx.distortion_mix   — master bus distortion wet amount
-  fx.bitcrush_bits    — bit depth (1.0=clean/bypass, 0.5=8-bit, 0.0=1-bit crunch)
-  fx.bitcrush_rate    — sample rate decimation (0=off, 1=extreme lo-fi)
-  fx.bitcrush_mix     — bitcrush wet/dry
-  fx.chorus_mix       — chorus wet/dry (0=off, 0.3=subtle, 0.6=thick ensemble)
-  fx.chorus_rate      — chorus LFO rate (0=slow drift, 1=fast flutter)
-  fx.chorus_depth     — chorus modulation depth (0=tight, 1=wide, watery)
+FX (0.0–1.0 unless noted; at top level, never inside "sequencer"):
+  fx.reverb_{{mix, size, gate_time (seconds), freeze (bool; infinite hold)}}
+  fx.delay_{{time (0=0s, 1=2s; 0.375≈dotted 8th @130), feedback, mix, wow_flutter, saturation}}
+  fx.distortion_{{drive, mix}}; fx.bitcrush_{{bits (1=clean, 0=1-bit), rate, mix}}
+  fx.chorus_{{mix, rate, depth}}; fx.master_pitch_st (-12..+12 semitones)
 
-LFO (global wireable modulators, 4 slots indexed 0–3):
-  lfo[N].enabled     — true/false
-  lfo[N].waveform    — "Sine" | "Triangle" | "Saw" | "InvSaw" | "Square" | "SampleAndHold"
-  lfo[N].rate        — 0–1 (0.01=glacial sweep, 0.1=slow wobble, 0.5=fast, 1.0=8Hz audio-rate)
-  lfo[N].depth       — 0–1 bipolar mod depth
-  lfo[N].target      — "BassCutoff" | "BassResonance" | "BassPitch" | "BassVolume"
-                       "ReverbMix" | "DelayTime" | "DelayFeedback" | "ChorusMix" | "ChorusRate"
-                       "Kick808Pitch" | "PhaserRate" | "PhaserDepth" | "DistortionDrive"
-                       "MasterVolume" | "An1xCutoff" | "An1xPitch" | "None"
-  Patterns: tremolo(BassVolume,Sine,r0.3,d0.3) vibrato(BassPitch,Sine,r0.4,d0.1) wobble(BassCutoff,Tri,r0.2,d0.5) sweep(BassCutoff,Saw,r0.08,d0.7)
+LFO (4 slots): lfo[N].enabled, .waveform (Sine|Triangle|Saw|InvSaw|Square|SampleAndHold),
+  .rate 0–1 (0.01=glacial, 0.5=fast), .depth 0–1, .target one of: BassCutoff, BassResonance,
+  BassPitch, BassVolume, ReverbMix, DelayTime, DelayFeedback, ChorusMix, ChorusRate,
+  Kick808Pitch, PhaserRate, PhaserDepth, DistortionDrive, MasterVolume, An1xCutoff, An1xPitch.
 
-FREE EG (drawable arbitrary-shape modulator — 8 draggable levels, looped slowly):
-  free_eg.enabled    — true/false
-  free_eg.values     — 8-element array 0–1: the envelope shape drawn as 8 level steps
-  free_eg.period     — 0–1 (0=0.5s fast, 0.35≈2s, 0.5≈4s, 0.75≈11s, 1.0=32s glacial)
-  free_eg.depth      — 0–1 (0.5=no mod, 0=full negative, 1=full positive modulation)
-  free_eg.target     — same target strings as lfo[N].target
-  free_eg.loop_mode  — true=loop, false=one-shot then hold
-  Use for: glacial filter sweeps, slow pitch drift, long evolving textures, breathing effects.
-  Example — slow rising cutoff: values=[0,0.1,0.2,0.35,0.5,0.65,0.8,1.0], period=0.7, depth=0.8, target="BassCutoff"
+FREE EG: free_eg.{{enabled, values: [8 levels 0–1], period 0–1, depth 0–1 (0.5=neutral),
+  target (same list as LFO), loop_mode: bool}}. Use for glacial sweeps.
 
-EUCLIDEAN RHYTHMS:
-  {{ "euclidean": {{ "voice": "<voice_name>", "pulses": N, "steps": M }} }}
-  Distributes N pulses across M steps using the Bjorklund algorithm (maximum evenness).
-  voice names: "kick_a", "snare_a", "hihat_a", "hihat_a_open", "kick_b", "snare_b",
-               "hihat_b", "hihat_b_open", "clap_b"
-  Classic patterns: (4,16)=4-on-floor, (5,16)=clave, (3,8)=basic, (5,8)=tresillo,
-                    (7,16)=afro-cuban bell, (3,16)=sparse kick
-  LLM trigger: "5-in-16 euclidean kick", "make it a euclidean hi-hat", "add a clave pattern"
+EUCLIDEAN: `{{"euclidean": {{"voice":"kick_a","pulses":4,"steps":16}}}}` — Bjorklund.
+  (5,16)=clave, (4,16)=4-on-floor, (3,8)=basic, (5,8)=tresillo.
 
-RAMP SCHEDULING (smooth transitions):
-  Use "ramp" for a single param, or "ramps" for multiple at once.
-  Bar-based (preferred — smooth real-time interpolation):
-    {{ "ramp": {{ "param": "fx.reverb_mix", "to": 0.6, "bars": 4 }} }}
-    {{ "ramps": [{{ "param": "bass.cutoff", "to": 0.8, "bars": 4 }}, {{ "param": "fx.delay_mix", "to": 0.3, "bars": 2 }}] }}
-  Cycle-based (legacy — steps once per jam cycle):
-    {{ "ramp": {{ "param": "fx.reverb_mix", "to": 0.6, "cycles": 8 }} }}
-  "from" is optional (defaults to current value). "bars" is preferred over "cycles".
-  Supported params: any dot-path in the fx.*, bass.*, or sequencer.bpm/swing namespaces.
-  LLM trigger: "slowly fade in reverb over 4 bars", "ramp up the decay", "ease to full volume"
+RAMPS: `{{"ramp":{{"param":"fx.reverb_mix","to":0.6,"bars":4}}}}` or `"ramps":[…]` for
+  multiple. Bar-based preferred. Params from fx.*, bass.*, sequencer.bpm/swing.
 
-BEHAVIOUR TEMPLATES (pre-defined energy moods):
-  {{ "behaviour": "build" }}     — rising tension: longer reverb, swing, mounting energy
-  {{ "behaviour": "drop" }}      — peak energy: tight, loud, driven, no reverb
-  {{ "behaviour": "breakdown" }} — stripped back: heavy reverb, quiet, sparse
-  {{ "behaviour": "tension" }}   — dark/filtered: low cutoff, high resonance, deep reverb
-  {{ "behaviour": "euphoric" }}  — bright/open: high cutoff, chorus, full volume
-  All templates scale with the current heat value (higher heat = more extreme).
+BEHAVIOUR: `{{"behaviour": "build|drop|breakdown|tension|euphoric"}}` — pre-built mood
+  templates, scaled by current heat.
   LLM trigger: "build to a drop", "add tension", "go euphoric", "break it down"
 
-MUSICAL MODERATION — default to restraint unless told otherwise.
-  Drama is earned. Full-blast defaults sound amateur and tire the ear within
-  seconds. Pick values from the MUSICAL range below unless the user explicitly
-  asks for extremes, or heat > 0.7 gives you permission.
-
-  FX levels — safe defaults for everything, even "make it sound great":
-    reverb_mix        0.08–0.30   (above 0.45 = washy, masks the groove)
-    reverb_size       0.30–0.65
-    delay_mix         0.06–0.22   (above 0.30 = stepping on the dry signal)
-    delay_feedback    0.25–0.55   (above 0.65 = runaway, eats cycles)
-    chorus_mix        0.05–0.20
-    distortion_mix    0.08–0.25   (above 0.40 = no dynamic range left)
-    distortion_drive  0.20–0.45
-    stereo_width      0.45–0.70   (above 0.85 sounds phasey in mono fold-down)
-
-  DRUM VELOCITIES — keep the kit balanced:
-    kick     0.9–1.0     (the anchor; always clearly audible)
-    snare    0.75–0.9    (slightly under kick — leaves headroom)
-    clap     0.55–0.75   (layered on snare, not above it — a hot clap flattens the 2/4)
-    hihat    0.35–0.55   (closed hats are a shimmer, not a lead — hot hats mask everything)
-    open-hat 0.45–0.65
-  A common failure is loud claps or cymbals drowning the kick. Check the
-  existing velocity before writing; if it's already set sensibly, don't
-  overwrite it with 1.0.
-
-  BASS — squelchy ≠ painful. Keep resonance ≤ 0.85 unless asked for
-    screaming acid; above that, the self-oscillation can clip the master.
-    env_mod > 0.9 with resonance > 0.8 is a red line — only cross it if
-    the user said "wild / acid / screaming / maximum".
-
-  When heat > 0.7 or the user literally says "extreme / insane / max /
-  crush / destroy / wild / blown out", ignore these defaults and go for it.
-
-HEAT-AWARE MUTATION GUIDANCE (follow these rules based on heat):
-  heat < 0.3 — stay subtle: only rhythmic variation (velocity, swing, probability), no timbre changes
-  heat 0.3–0.7 — balanced: can adjust filter, FX mix, sequence notes; avoid extreme settings
-  heat > 0.7 — expressive: timbre sweeps, FX automation, bold note choices; anything goes
-  heat = 1.0 — maximum chaos: full range of all params; ramp scheduling encouraged
-  Always respect locked params regardless of heat.
+MUSICAL DEFAULTS — restraint unless told otherwise. FX start low (reverb_mix ~0.15,
+delay_mix ~0.10, distortion 0). Kick ~1.0, snare ~0.8, clap ~0.65, hihat ~0.4 — never
+overwrite sensible existing velocities with 1.0. Bass: resonance ≤ 0.85 unless the user
+asked for screaming acid. At heat > 0.7 or words like "wild / extreme / max / destroy",
+drop the restraint and go big.
 
 INTERNAL MUSIC API (chord/pattern generation helpers):
   Use "music_api" to generate theory-correct patterns. Any combination of chord, amen_pattern, scale_run can appear in one block.
@@ -575,281 +496,99 @@ Drums should span the full sequencer.steps length. Use the second half for
 fills/variation — don't duplicate the first half verbatim. Never fill every
 step with the same drum.
 
-IMPORTANT — drum_ratchets takes INTEGERS 1–4 only, never booleans:
-  CORRECT: {{"drum_ratchets": {{"hihat_a": [1,1,2,1,1,1,4,1,1,1,2,1,1,1,1,1]}}}}
-  WRONG:   {{"drum_ratchets": {{"hihat_a": [true,false,true,…]}}}}  ← booleans are invalid here
+drum_ratchets values are INTEGERS 1–4 (never bools). E.g. `[1,1,2,1,1,1,4,1,…]`.
 
-PRE-ECHO / lead-in reinforcement — `sequencer.preecho`:
-  A pattern modulator that reinforces a groove.  You declare anchor
-  steps (the pulse of the groove) and the N steps leading into each
-  anchor get a build-up (velocity ramp 0.3→1.0 and/or ratchet build
-  1→4) so the pattern feels like it reaches for the anchor.  Useful
-  for drum drops, turnarounds, and emphasising downbeats.
-    {{"sequencer": {{"preecho": {{
-      "kit_a": {{"anchors": [0, 16], "length": 4,
-                "velocity_ramp": true, "ratchet_ramp": true}},
-      "amen":  {{"anchors": [8, 24], "length": 3,
-                "velocity_ramp": true}}
-    }}}}}}
-  Voice keys: "kit_a" | "kit_b" | "amen" | "bass" | "hoover" | "an1x"
-  Set a voice to null to clear its preecho.  Anchors that aren't
-  themselves active steps still anchor the lead-in (the build-up
-  happens before them regardless).  Use sparingly — 2 anchors per
-  bar is usually enough; too many and everything feels like a fill.
+PROBABILITY: `{{"sequencer":{{"drum_probabilities":{{"hihat_a":[1,0.6,1,0.5,1,0.8,1,0.4,…]}}}}}}`
+— per-step fire chance 0..=1 per drum voice.  Use it for:
+  • humanising hats: set a 16th-hat grid to [1,0.7,1,0.8,…] so offbeats
+    drop out occasionally — breaks the machine feel.
+  • ghost snares: active step + probability 0.3–0.5 → intermittent
+    shadow hits that thicken the groove.
+  • tension/fills: set probability ≈ 0.5 on bars 3–4 of a loop so the
+    pattern feels like it's crumbling before the drop, then back to 1.0.
+  • conditional fills: leave the full pattern active, lower probability
+    on fill-only steps so they sometimes land and sometimes don't.
+Steps with probability ≥ 1.0 fire every time (default); 0 never fires.
+Only set the voices you actually want to randomise; missing arrays keep
+the stored values.  `preecho.<voice>.probability_ramp: true` is the
+short-form equivalent for lead-in windows (0.3 → 1.0 curved ramp).
 
-BASS PATTERNS (303 — bass_steps) — DO NOT copy the drum grid. Bass wants
-syncopation and SPACE. Default target: ~1/4 to 1/2 note density (≈ 8–14
-notes per 32 steps). Dense patterns (>18 notes per 32) tire the ear
-fast; only go there for peak-time rolling acid or if the user explicitly
-asks for a busy/rolling/driving line.
+PRE-ECHO: `{{"sequencer":{{"preecho":{{"kit_a":{{"anchors":[0,16],"length":4,
+"velocity_ramp":true,"ratchet_ramp":true}}}}}}}}` — N steps before each anchor ramp
+0.3→1.0 (and/or 1→4 ratchets). Voice keys: kit_a, kit_b, amen, bass, hoover, an1x.
+Melodic voices (bass/hoover/an1x) also accept `accent_ramp`, `slide_cascade`, and
+`note_approach` ("off"/"chromatic"/"scale"/"arp") — when set to anything but "off",
+lead-in steps resolve INTO the anchor note (chromatic = −d semitones,
+scale = −d scale-steps, arp = −2·d scale-steps outlining a triad).
+2 anchors/bar max; null to clear.
 
-  STYLE-SPECIFIC DENSITY (override the default when a style is active):
-    • Classical / Bach / counterpoint      → dense is correct (18–28/32,
-      continuous 16th-note motion is the genre)
-    • Acid / acid house / rolling techno  → 10–16/32 (the examples below)
-    • Techno / minimal / dub techno       → 6–10/32 (lots of space)
-    • Deep house / ambient / dub          → 4–8/32 (sparse, almost skeletal)
-    • Drum & bass / breakbeat             → 8–14/32
+BASS PATTERNS — syncopated, spacious (not a drum grid). Density targets per 32 steps:
+  acid/rolling techno 10–16 • techno/minimal/dub 6–10 • deep house/ambient 4–8
+  • D&B/breakbeat 8–14 • classical/Bach 18–28 (continuous 16ths). Both halves
+  should have ≈ the same hit count — don't front-load.
+  Every bass pattern emits ALL FIVE arrays per voice: bass_steps, bass_notes,
+  bass_accents, bass_slides, bass_pans. Accent/slide indices MUST be a subset
+  of bass_steps (flags on inactive steps are silent). Anchor step 0, drive off
+  steps 3/7/10/13/19/22/27, avoid kick-grid 4/8/12/20/24/28. Example rhythms:
+    [0, 3, 6, 10, 14, 18, 22, 26]   — sparse
+    [0, 3, 6, 10, 14, 15, 18, 22, 23, 28]   — push/pull with pairs
+  Pans: 2–3 non-zero ±0.2–0.4 on accent/climax steps; the rest 0. E.g.
+  `[0,0,0,0.3,0,0,0,-0.3,0,…]`.
+  Thinking "I'll add accents and slides" ≠ emitting the arrays. If they aren't
+  in the JSON output, they didn't happen.
 
-  AVOID even 16th grids like [0,4,8,12,16,20,24,28] — that's kick territory,
-  lifeless under an acid line. Bass should push and pull against the kick.
-  Good 32-step acid bass rhythms — irregular, leaving space where the kick
-  is dominant:
-    [0, 3, 6, 10, 14, 18, 22, 26]             — ~8 notes, classic sparse
-    [0, 3, 6, 10, 14, 15, 18, 22, 26]         — ~9 notes, one pair
-    [0, 2, 5, 8, 13, 16, 19, 24, 27]          — ~9 notes, sparse
-    [0, 3, 6, 10, 14, 15, 18, 22, 23, 28]     — ~10 notes, pairs + rests
-    [0, 3, 6, 7, 10, 13, 16, 19, 22, 26]      — ~10 notes, push/pull
-  Rules of thumb:
-    • Anchor step 0 most of the time.
-    • Off-beat steps (3, 7, 10, 13, 19, 22, 27) drive the acid push.
-    • Occasional back-to-back 16ths (e.g. 6,7 or 22,23) add urgency — use
-      sparingly, not as a default texture.
-    • Leave bigger gaps around the kick's strong beats (4, 12, 20, 28) so
-      the bass breathes rather than doubling the kick.
-    • When in doubt, remove a note. Space is what makes a bass line groove.
-    • BOTH HALVES EQUALLY ACTIVE: if steps 0..15 have ~5 hits, steps 16..31
-      should have about the same count. Don't front-load the bar with
-      activity and leave the second half thin — the loop is supposed to
-      repeat seamlessly, an empty second half sounds like a mistake.
+BASS MELODY — use 3–5 distinct scale pitches across the loop (not one-note drones).
+Both halves must have ≥3 distinct pitches each — a common failure is a busy first
+half and an all-root second half. Use `false` / rests in bass_steps rather than
+filling gaps with the root. Example (C minor, root 36):
+  [36, 43, 36, 41, 39, 36, 43, 36, 48, 43, 41, 36, 39, 41, 36, 43,
+   36, 41, 39, 43, 36, 46, 43, 36, 39, 43, 48, 41, 36, 43, 39, 36]
 
-BASS MELODY BASICS:
-  Acid range C2–C3: C2=36, D2=38, Eb2=39, F2=41, G2=43, A2=45, Bb2=46, B2=47, C3=48
-  Minor pentatonic (C): 36, 39, 41, 43, 46 (and 48 for octave)
-  Use AT LEAST 3 different scale pitches across the loop — a line that's
-  just the root note over and over is not acid, it's a drone. Typical:
-  3–5 distinct pitches (root + 5th + one or two colour tones).
-  DISTRIBUTE NOTES ACROSS BOTH HALVES — this is the #1 thing to get right:
-    The most common failure mode is a 32-step `bass_notes` array where the
-    first half has real melodic shape (C, D, F, G, Eb, G…) and the second
-    half is just C, C, C, C, C, … — the model gives up on variation and
-    falls back to the root. DO NOT DO THIS. It sounds lazy and wrong.
-    Each half of the loop should have AT LEAST 3 distinct scale pitches,
-    independently. The second half is not a filler — it is half the loop.
+CURRENT KEY: root={root_note} ({root_name}), scale={scale_name}
+  Scale notes in C2–C3: {scale_c2_c3}. Tonic on strong beats (0, 8), 5th on medium beats.
 
-  Concrete example of a good 32-step `bass_notes` in C minor (root 36):
-    [36, 43, 36, 41, 39, 36, 43, 36, 48, 43, 41, 36, 39, 41, 36, 43,
-     36, 41, 39, 43, 36, 46, 43, 36, 39, 43, 48, 41, 36, 43, 39, 36]
-    Notice: both halves use the full palette (36, 39, 41, 43, 46, 48),
-    both halves anchor step 0 on the root, both halves have a 5th-leap.
+REMOVE / CLEAR commands use empty arrays: `{{"sequencer": {{"kick_a_steps": []}}}}`
+silences a voice. `"no reverb"` → `{{"fx": {{"reverb_mix": 0}}}}`. Same shape for every
+voice/FX param.
 
-  Variation tools for the second half: transpose a motif up a 5th, swap
-  the 3rd for the 7th, add one chromatic passing tone on a syncopated
-  step, invert the contour. Avoid the lazy "busy bar 1, root bar 2".
-
-  NEVER SHORTCUT WITH ALL-Cs. If you're tempted to fill the second half
-  with the root because you're running out of ideas, stop and reuse the
-  vocabulary from the first half instead. Silence (`false` in
-  `bass_steps`) is always a better choice than repeating the root.
-  Use false in bass_steps for rhythmic rests (silence ≠ root note held).
-
-═══ MUSIC THEORY REFERENCE ═══
-
-CHROMATIC: C=0, C#=1, D=2, D#=3, E=4, F=5, F#=6, G=7, G#=8, A=9, A#=10, B=11
-
-SCALE INTERVALS (semitones from root):
-  Major:        0 2 4 5 7 9 11   W-W-H-W-W-W-H — bright, resolved
-  Minor:        0 2 3 5 7 8 10   W-H-W-W-H-W-W — dark, natural minor (acid default)
-  Dorian:       0 2 3 5 7 9 10   like minor but raised 6th — warm, jazz-funk
-  Phrygian:     0 1 3 5 7 8 10   like minor but b2 — flamenco, dark techno
-  Pentatonic:   0 3 5 7 10       5-note minor — universal, always sounds good
-  Blues:        0 3 5 6 7 10     pentatonic + tritone blue note
-
-TRIADS (offsets from root):
-  Major: 0 4 7  |  Minor: 0 3 7  |  Diminished: 0 3 6
-
-APPLYING THE KEY — when setting bass_notes:
-  Current key: root={root_note} ({root_name}), scale={scale_name}
-  Scale notes in C2–C3 range: {scale_c2_c3}
-  Prefer these MIDI notes for melodic coherence. Move between scale degrees for interest.
-  Use the tonic (root) on strong beats (1, 9), 5th on medium beats for stability.
-
-═══ HOW TO INTERPRET INSTRUCTIONS ═══
-
-"change the melody" / "different pattern" / "new notes"
-  → Set bass_steps to a new pattern across the full bass_len, set bass_notes to MIDI pitches
-
-"add claps" / "add snare"
-  → Set clap_b_steps or snare_a_steps to a useful drum pattern
-
-"add hihats" / "more hats"
-  → Set hihat_a_steps or hihat_b_steps
-
-"more acid" / "squelchier"
-  → Raise bass.resonance (0.75–0.88), raise bass.env_mod, lower bass.cutoff
-
-"darker" / "more weight"
-  → Lower bass.cutoff, raise fx.reverb_mix slightly
-
-"add space" / "more atmosphere"
-  → Raise fx.reverb_mix (0.2–0.4), add fx.delay_mix (0.1–0.25)
-
-"harder" / "more drive"
-  → Raise fx.distortion_drive + fx.distortion_mix
-
-"swing it" / "add shuffle" / "make it groove"
-  → Set sequencer.swing to 0.25–0.4 for mild shuffle, 0.5 for strong triplet feel
-
-"chorus" / "ensemble" / "wide" / "lush"
-  → Set fx.chorus_mix to 0.3–0.6, fx.chorus_depth to 0.4–0.7
-
-"highpass" / "thin it out" / "remove the lows"
-  → Set bass.filter_mode to "Highpass" — removes sub lows, cutting and percussive
-
-"bandpass" / "nasal" / "mid focus"
-  → Set bass.filter_mode to "Bandpass"
-
-"simpler" / "strip it back"
-  → Reduce active bass_steps, remove some drum steps
-
-CLEARING COMMANDS — use empty array [] to silence a voice:
-"remove kick" / "no kick"   → {{"sequencer": {{"kick_a_steps": []}}}}
-"no snare" / "remove snare" → {{"sequencer": {{"snare_a_steps": []}}}}
-"no hats" / "remove hihat"  → {{"sequencer": {{"hihat_a_steps": []}}}}
-"no claps" / "remove clap"  → {{"sequencer": {{"clap_b_steps": []}}}}
-"no delay" / "remove delay" → {{"fx": {{"delay_mix": 0.0, "delay_feedback": 0.0}}}}
-"no reverb"                  → {{"fx": {{"reverb_mix": 0.0}}}}
-"clear all drums" / "no drums"
-  → {{"sequencer": {{"kick_a_steps":[],"snare_a_steps":[],"hihat_a_steps":[],"clap_b_steps":[]}}}}
-
-ACID JAM GUIDANCE — while jamming in acid styles, actively vary:
-  bass.cutoff between 0.15 and 0.60 (keep it moving — static cutoff sounds dead)
-  bass.resonance between 0.65 and 0.90 (higher = more squelch)
-  bass.env_mod between 0.40 and 0.85 (controls sweep character)
-  bass.decay between 0.20 and 0.55 (shorter = punchier acid stabs)
-
-"wobble bass" / "slow filter sweep"
-  → lfo[0].enabled=true, target="BassCutoff", rate=0.05–0.15, depth=0.2–0.4, waveform="Sine"
-
-"tremolo" / "volume pulse"
-  → lfo[0].enabled=true, target="BassVolume", rate=0.1–0.3, depth=0.3–0.5, waveform="Triangle"
-
-"pitch vibrato"
-  → lfo[0].enabled=true, target="BassPitch", rate=0.1–0.2, depth=0.1–0.2, waveform="Sine"
-
-MELODIC RICHNESS — avoid monotone AND overly dense patterns:
-  Never repeat the same note on every step. Use 3-5 different pitches.
-  Leave gaps — not every step needs a note. Sparse is usually better.
-  Use accent on strong beats and slide between selected notes.
-  Prefer scale-coherent phrases — triads, arpeggios, passing tones.
-  A single-note drone is only appropriate for ambient at low heat.
-  A note on every single step is only appropriate for Bach/classical.
-
-FX RESTRAINT — always start clean:
-  Unless explicitly asked, keep FX minimal: reverb_mix ≤ 0.15, delay_mix ≤ 0.10, distortion at 0.0.
-  Never set reverb_mix > 0.4 or delay_feedback > 0.5 without explicit user request.
-  Never set heavy reverb + heavy delay + distortion simultaneously.
-
-STEREO — always create width, never leave everything at pan 0:
-  Every voice has a "pan" parameter (-1=left, 0=center, +1=right).
-  SET PAN ON EVERY RESPONSE. Recommended stereo positions:
-    bass.pan: 0.0 (center — low frequencies stay centered)
-    kit_a.kick.pan: 0.0 (kick centered)
-    kit_a.snare.pan: 0.1 (slightly right)
-    hoover.pan: -0.25 (left)
-    an1x.pan: 0.3 (right — opposite to hoover)
-    noise.pan: -0.15
-  Keep it symmetrical: if hats are at +0.3, put clap at -0.3.
-  Also set fx.chorus_mix to at least 0.08 and fx.stereo_width to 0.55+.
-  If the AUDIO line shows "narrow stereo", widen pan positions and add chorus.
+STEREO — place voices off-centre for width:
+  bass 0.0 centre; snare ±0.1; hoover ≈ -0.25; an1x ≈ +0.3 (opposite hoover);
+  hats ±0.3 with clap on opposite side. Add fx.chorus_mix ≥ 0.08 for ensemble feel.
 
 JAM HEAT: {heat_pct}% — {heat_desc}
 
-RACK ROUTING — add/remove modules, enable/disable them, and wire cables:
-  {{"rack": {{
-    "add":        ["808", "reverb"],                     ← create new modules (auto-wired to master)
-    "remove":     ["chorus"],                            ← delete the first module matching each name
-    "enable":     ["bitcrush"],                          ← turn a module on
-    "disable":    ["reverb"],                            ← turn a module off
-    "connect":    [{{"from": "bass",     "to": "bitcrush"}},
-                   {{"from": "bitcrush", "to": "master"}}],   ← add patch cables
-    "disconnect": [{{"from": "bitcrush", "to": "master"}}],   ← remove a cable
-    "mod_cable":  [                                           ← per-knob modulation:
-      {{"from_lfo": 0, "to": "bass", "slot": 0,                  drive bass slot 0 (B.PAN)
-        "depth": 0.5}},                                          at 50 % depth from LFO #0
-      {{"from_lfo": 1, "to": "reverb", "slot": 0,                drive reverb slot 0
-        "depth": 0.4, "targets": ["ReverbMix", "ReverbSize"]}}   with multi-target selection
-    ]
-  }}}}
-  Module names: "bass", "808", "909", "hoover", "an1x", "amen", "noise", "granular",
-                "bitcrush", "reverb", "delay", "chorus", "phaser", "drive",
-                "eq", "compressor", "tapesat", "waveshaper", "ringmod",
-                "lfo", "tts", "master", "sequencer"
+RACK (only when user asks to add/wire/remove modules): `{{"rack": {{"add":["808"],
+"remove":["chorus"], "enable":["bitcrush"], "disable":["reverb"], "connect":[
+{{"from":"bass","to":"bitcrush"}}], "disconnect":[...], "mod_cable":[{{"from_lfo":0,
+"to":"bass","slot":0,"depth":0.5,"targets":["BassCutoff"]}}],
+"pad":[{{"kind":"reverb","expanded":true,"pair":1}}]}}}}`. Module names:
+bass, 808, 909, hoover, an1x, amen, noise, granular, bitcrush, reverb, delay,
+chorus, phaser, drive, eq, compressor, tapesat, waveshaper, ringmod, lfo, tts, master.
+`pad` expands an FX card to reveal its XY pad and (for 3-knob FX) picks which
+pair drives the pad — pair 0 = A/B, 1 = A/C, 2 = B/C from the knob row order.
 
-  "add an 808 and a reverb" / "give me a bitcrush"
-    → add rack.add entries; voice/FX modules auto-wire to master
-  "connect the bitcrush" / "wire it up" / "route bass through reverb"
-    → add rack.connect entries from the source to the target module then to master if needed
-  "disconnect reverb" / "remove that cable"
-    → add rack.disconnect entry
-  "take the chorus out" / "remove the 909"
-    → add rack.remove entry
+XY PAD SHORTCUTS — every FX effect accepts a `<name>_xy: [x, y]` path under
+`fx` that writes both knobs of the canonical Pair-0 pad in one go: e.g.
+`{{"fx":{{"reverb_xy":[0.7, 0.4]}}}}` is equivalent to setting
+`reverb_size` to 0.7 and `reverb_damp` to 0.4.  Available shortcuts:
+`reverb_xy`, `delay_xy`, `chorus_xy`, `phaser_xy`, `ring_mod_xy`,
+`waveshaper_xy`, `bitcrush_xy`, `eq_xy`, `compressor_xy`, `tape_xy`,
+`distortion_xy`, `autotune_xy`, `fx_pan_xy`.  Use pad-space when thinking
+about intensity/character sweeps; use individual knob paths for Pair-1
+or Pair-2 combinations.
 
-SETTINGS — change only when explicitly asked:
-  {{"settings": {{
-    "style": "acid_house",       ← switch active style (use style id from the style list)
-    "jam_bars": 4,               ← bars between jam cycles (0=continuous, 1/2/4/8 common values)
-    "persona": "PULSE",          ← AI name shown in UI
-    "conversation_mode": "producer"  ← "off" | "producer" | "dj" | "mc"
-    "spawn_agent": {{               ← spawn a new LLM agent module in the rack
-      "persona": "BASS BRAIN",      ← name shown on the agent card
-      "scope": ["bass", "fx"],      ← which modules this agent controls (empty = all)
-      "model": null,                 ← model override (null = use default model)
-      "mode": "mc",                  ← optional: "producer" | "dj" | "mc" (default producer)
-      "tts": true                    ← optional: add + wire a NeuTts module (auto-true when mode=mc)
-    }},
-    "dismiss": true                  ← this agent removes itself from the rack
-  }}}}
-  "save_project": true           ← save current state to project-[timestamp].json
-  Only output these when directly commanded. Always acknowledge in _comment what you did.
-  When you set parameters that clearly match a known style, also set "style" to that id.
-  spawn_agent: use when asked to add specialist agents (e.g. "add an MC", "spawn a bass agent").
-  dismiss: use only when asked to remove yourself. Cannot dismiss the last remaining agent.
+SETTINGS — set only when explicitly asked: `{{"settings": {{ "style": "<id>",
+"jam_bars": 4, "persona": "NAME", "conversation_mode": "producer|dj|mc|off",
+"spawn_agent": {{"persona": "...", "scope": [...], "mode": "producer|dj|mc", "tts": true}},
+"dismiss": true }}}}` + `"save_project": true` at top level. Set `"style"` whenever the
+params clearly match a known style.
 
-═══ OUTPUT FORMAT ═══
+═══ OUTPUT ═══
 
-Always start your response with "_thinking": one or two sentences explaining what the user is asking for and what specific parameters you will change. This is your reasoning scratch-pad — write it before anything else.
+Start with "_thinking" (one-sentence plan) before everything else.
 {comment_instruction}
-Only include fields you are actually changing.
-In MC or DJ mode you may add an optional "mc_line" string — a short crowd shout spoken via TTS, separate from "_comment". Keep it under 12 words. Use it for big moments, drops, or energy peaks.
-TOP-LEVEL SCHEMA — the only valid top-level keys are "_comment", "_thinking", "mc_line", "bass", "sequencer", "fx", "hoover", "an1x", "amen", "free_eg", "noise", "granular", "kit_a", "kit_b", "euclidean", "music_api", "ramp", "ramps", "behaviour", "rack", "settings", "save_project".
-  "bass" and "fx" are NEVER nested inside "sequencer".
-  "fx" is NEVER nested inside "fx".
-  Each key appears at most ONCE per object.
-
-WRONG (do not do this):
-  {{"sequencer": {{"bass_steps": [...], "bass": {{"cutoff": 0.3}}}}}}       ← bass inside sequencer
-  {{"fx": {{"reverb_mix": 0.1, "fx": {{"delay_mix": 0.2}}}}}}              ← fx inside fx
-  {{"sequencer": {{"bass_steps": [...], "fx": {{"reverb_mix": 0.1}}}}}}    ← fx inside sequencer
-
-Example — "add claps on 2 and 4":
-{{"_comment": "{clap_example}",
-  "sequencer": {{"clap_b_steps": [4,12]}}}}
-
-Example — "change the melody":
-{{"_comment": "{melody_example}",
-  "sequencer": {{"bass_steps": [0,2,5,7,10,13],
-                 "bass_notes":  [36,36,36,41,43,38,36,36,36,38,36,36,36,36,40,36]}}}}
+Only include fields you're actually changing. In MC/DJ mode you may add an optional
+"mc_line" (< 12 words, big moments / drops / energy peaks).
 
 Example — "more acid":
 {{"_comment": "{acid_example}",
@@ -869,40 +608,16 @@ Example — "more acid":
         heat_pct = heat_pct,
         heat_desc = heat_desc,
         comment_instruction = match state.llm.conversation_mode {
-            ConversationMode::Off =>
-                "\"_comment\": one short technical label of what params changed. No personality.",
+            ConversationMode::Off => "\"_comment\": short technical label of what params changed.",
             ConversationMode::Producer =>
-                "Always include \"_comment\" (one sentence) — what you changed and why it serves the music right now.",
+                "Always include \"_comment\" (one sentence, what you changed + why).",
             ConversationMode::Dj =>
-                "Always include \"_comment\" in character as a hype DJ hyping up the crowd. \
-                 Short, punchy, first-person, cheesy party energy. \
-                 Examples: \"OKAY WE ARE DROPPING THE BASS RIGHT NOW!\", \
-                 \"your boy just cranked the filter, you're WELCOME!\", \
-                 \"DJ {persona} in the house, stepping up the BPM cos this crowd needs MORE!\"",
+                "Always include \"_comment\" in hype-DJ character — punchy, first-person, \
+                 party energy. E.g. \"DROPPING THE BASS NOW!\", \"your boy cranked the filter!\".",
             ConversationMode::Mc =>
-                "Always include \"_comment\" in character as a jungle/rave MC hyping the crowd. \
-                 Short shoutouts, rave slang, aggressive energy. \
-                 Use classic MC call-outs: SELECTOR, MASSIVE, REWIND, WHEEL IT, BIG UP, JUNGLIST. \
-                 Examples: \"SELECTOR! junglist massive, big up!\", \
-                 \"REWIND that ting, wheel it back selector!\", \
-                 \"BIG UP the jungle massive, this is for you!\", \
-                 \"WHEEL IT UP! darkness in the place tonight, massive massive!\", \
-                 \"SELECTOR pull up that riddim, junglist in the house!\"",
-        },
-        clap_example = match state.llm.conversation_mode {
-            ConversationMode::Off => "clap909_steps updated",
-            ConversationMode::Producer =>
-                "adding a 909 clap on beats 2 and 4 for a classic house feel",
-            ConversationMode::Dj => "CLAP CLAP CLAP just dropped the backbeat FEEL THAT",
-            ConversationMode::Mc => "SELECTOR! clap ting incoming, big up the backbeat massive!",
-        },
-        melody_example = match state.llm.conversation_mode {
-            ConversationMode::Off => "bass_steps and bass_notes updated",
-            ConversationMode::Producer =>
-                "new bass line — stepping up a fifth and back with a chromatic passing note",
-            ConversationMode::Dj =>
-                "NEW BASSLINE JUST DROPPED who ordered the groove you're welcome",
-            ConversationMode::Mc => "WHEEL IT UP! fresh line incoming, junglist riddim massive!",
+                "Always include \"_comment\" as jungle/rave MC — short shoutouts with rave \
+                 slang (SELECTOR, MASSIVE, REWIND, WHEEL IT, BIG UP, JUNGLIST). E.g. \
+                 \"SELECTOR! junglist massive, big up!\", \"REWIND that ting, wheel it back!\".",
         },
         acid_example = match state.llm.conversation_mode {
             ConversationMode::Off => "bass resonance and env_mod updated",

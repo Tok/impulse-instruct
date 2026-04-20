@@ -4,360 +4,80 @@
 // Layout (resizable panel, drag the bottom border):
 //   TOP row  — LEFT: style + instructions  |  RIGHT: log (fills height)
 //   BOTTOM row — full-width prompt input + ASK button (vertically centred)
+//
+// The Huth note colorizer for the log pane lives in `ui/llm_log_color.rs`.
 
 use crate::llm::LlmInput;
 use crate::llm::styles::StyleCatalog;
 use crate::state::apply_llm_update;
 use crate::ui::{ImpulseApp, theme};
 
-// ─── Huth note colorizer ──────────────────────────────────────────────────────
-
-/// Parse `text` and return a LayoutJob where note references are colored with
-/// Huth *Farbige Noten* colors.
-///
-/// Recognized patterns:
-/// • Note+octave: `C4`, `A#3`, `Bb2` etc.  (`[A-G][#b]?\d`)
-/// • Plain note name at a word boundary: `C`, `G#`, `Bb` etc.
-///   (only when the note letter is NOT surrounded by other letters)
-/// • Frequency: `440Hz`, `261.6 Hz` etc. — mapped to nearest chromatic semitone
-/// • MIDI number context: `note 60`, `midi 72`, `pitch 48`
-pub(super) fn colorize_log(text: &str, _default_color: egui::Color32) -> egui::text::LayoutJob {
-    use egui::text::{LayoutJob, TextFormat};
-
-    let mut job = LayoutJob::default();
-    let font = egui::FontId::monospace(13.0);
-
-    // Per-line base color, prioritizing importance:
-    //   agent speak  — CHALK  (near white, most important)
-    //   agent think  — HAZE   (bright, slightly dimmer than speak)
-    //   user prompt  — FOG    (mid bright)
-    //   api / system — SMOKE  (mid)
-    let line_color_at = |p: usize, bytes: &[u8], text: &str| -> egui::Color32 {
-        let end = bytes[p..]
-            .iter()
-            .position(|&b| b == b'\n')
-            .map(|i| p + i)
-            .unwrap_or(bytes.len());
-        let line = &text[p..end];
-        if line.contains("(thinking):") {
-            theme::HAZE
-        } else if line.starts_with("► ") {
-            theme::CHALK
-        } else if line.starts_with("YOU ") {
-            theme::FOG
-        } else if line.starts_with('[') && !line.contains("[API]") {
-            theme::ASH
-        } else if crate::log_fmt::starts_with_persona(line) {
-            theme::CHALK
-        } else {
-            theme::SMOKE
-        }
-    };
-
-    // Semitone index 0..12 for a note letter + optional accidental.
-    let note_semitone = |c: char, acc: Option<char>| -> Option<u8> {
-        let base: i8 = match c {
-            'C' => 0,
-            'D' => 2,
-            'E' => 4,
-            'F' => 5,
-            'G' => 7,
-            'A' => 9,
-            'B' => 11,
-            _ => return None,
-        };
-        let offset: i8 = match acc {
-            Some('#') => 1,
-            Some('b') => -1,
-            _ => 0,
-        };
-        Some(((base + offset).rem_euclid(12)) as u8)
-    };
-
-    // Hz → chromatic semitone 0..12
-    let freq_semitone = |hz: f64| -> u8 {
-        let midi = 69.0 + 12.0 * (hz / 440.0_f64).log2();
-        (midi.round() as i64).rem_euclid(12) as u8
-    };
-
-    // MIDI note number → chromatic semitone 0..12
-    let midi_semitone = |n: u8| -> u8 { n % 12 };
-
-    let bytes = text.as_bytes();
-    let len = bytes.len();
-    let mut pos = 0usize; // current byte offset
-    let mut seg = 0usize; // start of pending plain segment
-    // Base color for the current line (updated on each newline).
-    let mut cur_line_color = line_color_at(0, bytes, text);
-
-    // Flush a plain segment from `seg` to `end` using the current line color.
-    macro_rules! flush {
-        ($end:expr) => {
-            if seg < $end {
-                job.append(
-                    &text[seg..$end],
-                    0.0,
-                    TextFormat {
-                        font_id: font.clone(),
-                        color: cur_line_color,
-                        ..Default::default()
-                    },
-                );
-                seg = $end;
-            }
-        };
+/// Truncate `s` to at most `max_chars` characters, suffixing `…` when cut.
+/// Used for fixed-width status slots that mustn't reflow the surrounding
+/// layout when a lane name happens to be longer than usual.
+fn truncate_label(s: &str, max_chars: usize) -> String {
+    if s.chars().count() <= max_chars {
+        s.to_string()
+    } else {
+        let mut out: String = s.chars().take(max_chars.saturating_sub(1)).collect();
+        out.push('…');
+        out
     }
-
-    // Append a colored span (Huth color), preceded by any pending plain segment.
-    // Inlines the flush to avoid a seg write that would be immediately overwritten.
-    macro_rules! colored {
-        ($start:expr, $end:expr, $semitone:expr) => {
-            if seg < $start {
-                job.append(
-                    &text[seg..$start],
-                    0.0,
-                    TextFormat {
-                        font_id: font.clone(),
-                        color: cur_line_color,
-                        ..Default::default()
-                    },
-                );
-            }
-            job.append(
-                &text[$start..$end],
-                0.0,
-                TextFormat {
-                    font_id: font.clone(),
-                    color: theme::NOTE_COLORS[$semitone as usize],
-                    ..Default::default()
-                },
-            );
-            seg = $end;
-            pos = $end;
-        };
-    }
-
-    while pos < len {
-        let b = bytes[pos];
-
-        // On newline, flush the current line and update color for the next line.
-        if b == b'\n' {
-            flush!(pos + 1);
-            pos += 1;
-            if pos < len {
-                cur_line_color = line_color_at(pos, bytes, text);
-            }
-            continue;
-        }
-
-        // ── Note name (ASCII A–G) ─────────────────────────────────────────────
-        if b.is_ascii_uppercase() && matches!(b, b'A'..=b'G') {
-            // Require word-start: pos==0 or previous byte not alphabetic
-            let prev_ok = pos == 0 || !bytes[pos - 1].is_ascii_alphabetic();
-            if prev_ok {
-                let note_char = b as char;
-                let mut j = pos + 1;
-                // Optional accidental (lowercase b for flat, # for sharp)
-                let acc = if j < len && (bytes[j] == b'#' || bytes[j] == b'b') {
-                    j += 1;
-                    Some(bytes[j - 1] as char)
-                } else {
-                    None
-                };
-                // Word-end required: next byte must not be alphabetic (handles CTRL, BPM etc.)
-                let next_ok = j >= len || !bytes[j].is_ascii_alphabetic();
-                if next_ok && let Some(st) = note_semitone(note_char, acc) {
-                    // Optionally consume a trailing octave digit (makes C4, A#3 etc.)
-                    let has_octave = j < len && bytes[j].is_ascii_digit();
-                    if has_octave {
-                        j += 1;
-                        // Reject `E4B`, `C4_K_M.gguf` etc. — after the octave
-                        // digit we still need a word boundary (non-alpha).
-                        if j < len && bytes[j].is_ascii_alphabetic() {
-                            pos += 1;
-                            continue;
-                        }
-                    }
-                    // For bare notes (no accidental, no octave), require safe punctuation
-                    // on both sides — prevents "D" in "D&B", "E" in "E-flat", etc.
-                    let bare = acc.is_none() && !has_octave;
-                    if bare {
-                        let prev_char = if pos > 0 { bytes[pos - 1] } else { b' ' };
-                        let safe_before = matches!(
-                            prev_char,
-                            b' ' | b'\t'
-                                | b'\n'
-                                | b'\r'
-                                | b'('
-                                | b'['
-                                | b'{'
-                                | b'"'
-                                | b'\''
-                                | b'`'
-                                | b'/'
-                        );
-                        let next_char = if j < len { bytes[j] } else { b' ' };
-                        let safe_after = matches!(
-                            next_char,
-                            b' ' | b'\t'
-                                | b'\n'
-                                | b'\r'
-                                | b')'
-                                | b']'
-                                | b'}'
-                                | b','
-                                | b'.'
-                                | b':'
-                                | b';'
-                                | b'"'
-                                | b'\''
-                                | b'`'
-                                | b'/'
-                        );
-                        if !safe_before || !safe_after {
-                            pos += 1;
-                            continue;
-                        }
-                        // Ignore-list: if the bare letter is the target of a
-                        // non-musical label like "Kit A" / "Kit B", skip the
-                        // Huth coloring.  The letter is technically a valid
-                        // note name but in this context it's just an ID.
-                        //
-                        // The preceding character is already known to be a
-                        // word-boundary (safe_before), so look back past it
-                        // to find the previous word.
-                        const IGNORE_PRECEDING_WORDS: &[&[u8]] = &[
-                            b"kit",  // "Kit A", "Kit B"
-                            b"pad",  // "Pad A", "Pad B" (future-proofing)
-                            b"part", // "Part A", "Part B"
-                            b"bank", // "Bank A", "Bank B"
-                            b"slot", // "Slot A", "Slot B"
-                        ];
-                        let mut ws = pos.saturating_sub(1); // pos-1 is the word-boundary char
-                        while ws > 0 && matches!(bytes[ws], b' ' | b'\t') {
-                            ws -= 1;
-                        }
-                        // ws now points at the last char of the preceding word (or is 0).
-                        let word_end = ws + 1;
-                        let mut word_start = word_end;
-                        while word_start > 0 && bytes[word_start - 1].is_ascii_alphabetic() {
-                            word_start -= 1;
-                        }
-                        let prev_word = &bytes[word_start..word_end];
-                        let skip = IGNORE_PRECEDING_WORDS.iter().any(|ign| {
-                            prev_word.len() == ign.len()
-                                && prev_word
-                                    .iter()
-                                    .zip(*ign)
-                                    .all(|(a, b)| a.to_ascii_lowercase() == *b)
-                        });
-                        if skip {
-                            pos += 1;
-                            continue;
-                        }
-                        // Extend span to cover "A minor", "G major", etc.
-                        if next_char == b' ' && j < len {
-                            let rest = &bytes[j + 1..];
-                            for q in crate::log_fmt::QUALITIES {
-                                let qlen = q.len();
-                                if rest.len() >= qlen {
-                                    let matches_ci = rest[..qlen]
-                                        .iter()
-                                        .zip(*q)
-                                        .all(|(a, b)| a.to_ascii_lowercase() == *b);
-                                    let word_end =
-                                        rest.len() == qlen || !rest[qlen].is_ascii_alphabetic();
-                                    if matches_ci && word_end {
-                                        j += 1 + qlen;
-                                        break;
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    colored!(pos, j, st);
-                    continue;
-                }
-            }
-        }
-
-        // ── Frequency: digits (optional dot+digits) optionally space then Hz ─
-        // Word boundary required before the number — otherwise "44100 Hz"
-        // would re-match starting at the second '4' as "4100 Hz" (blue).
-        if b.is_ascii_digit() {
-            let prev_word_break =
-                pos == 0 || !(bytes[pos - 1].is_ascii_digit() || bytes[pos - 1] == b'.');
-            if !prev_word_break {
-                pos += 1;
-                continue;
-            }
-            let mut j = pos;
-            while j < len && (bytes[j].is_ascii_digit() || bytes[j] == b'.') {
-                j += 1;
-            }
-            let num_str = &text[pos..j];
-            let mut k = j;
-            if k < len && bytes[k] == b' ' {
-                k += 1;
-            }
-            // No upper Hz cap — semitone class wraps cleanly so 44100 Hz
-            // colours by its octave-equivalent semitone, not blue at the 4.
-            if k + 2 <= len
-                && bytes[k..k + 2].eq_ignore_ascii_case(b"Hz")
-                && let Ok(hz) = num_str.parse::<f64>()
-                && hz >= 20.0
-            {
-                let st = freq_semitone(hz);
-                colored!(pos, k + 2, st);
-                continue;
-            }
-            // ── MIDI number context: "note 60", "midi 72", "pitch 48" ─────────
-            let prefix_end = pos;
-            let mut prefix_start = pos.saturating_sub(7);
-            // Ensure we don't slice inside a multi-byte UTF-8 character
-            while prefix_start > 0 && !text.is_char_boundary(prefix_start) {
-                prefix_start -= 1;
-            }
-            let prefix = &text[prefix_start..prefix_end];
-            let is_midi_ctx = ["note ", "midi ", "pitch ", "step "]
-                .iter()
-                .any(|kw| prefix.ends_with(kw));
-            if is_midi_ctx && let Ok(n) = num_str.parse::<u8>() {
-                let st = midi_semitone(n);
-                colored!(pos, j, st);
-                continue;
-            }
-        }
-
-        pos += 1;
-    }
-    flush!(len);
-    let _ = seg; // last flush writes seg but nothing reads it after
-    job
 }
 
 impl ImpulseApp {
+    /// Send an `LlmInput::Infer` to the LLM thread and update the UI-side
+    /// queue shadow that drives the LLM console's cycle viz.  Wraps every
+    /// in-UI Infer dispatch so the visualiser stays in sync with what the
+    /// LLM thread will see.  Direct API / OSC sends bypass this — they're
+    /// not represented in the viz for v1.
+    pub(crate) fn send_llm_infer(&mut self, prompt: String, one_shot: bool, agent_id: Option<u32>) {
+        self.llm_queue.note_send(agent_id);
+        let _ = self.llm_tx.try_send(crate::llm::LlmInput::Infer {
+            prompt,
+            one_shot,
+            agent_id,
+        });
+    }
+
+    /// Effective jam prompt — style template if the active style sets
+    /// one, else the generic fallback.  All three jam re-trigger sites
+    /// (heartbeat, deferred fire, [jam_cycle_done]) route through this
+    /// so swapping styles actually rewrites the model's direction
+    /// instead of always saying "evolve the pattern".
+    pub(crate) fn jam_prompt_for_active_style(&self) -> String {
+        const FALLBACK: &str = "continue jamming, evolve the pattern";
+        let style_id = self.state.read().llm.active_style.clone();
+        let Some(id) = style_id else {
+            return FALLBACK.to_string();
+        };
+        let catalog = StyleCatalog::get();
+        catalog
+            .find_by_id(&id)
+            .and_then(|s| s.jam_prompt_template.as_ref())
+            .filter(|t| !t.trim().is_empty())
+            .cloned()
+            .unwrap_or_else(|| FALLBACK.to_string())
+    }
+
     /// Drain the audio capture buffer, run analysis, and fire a one-shot LLM
     /// prompt with the results. No-op if no audio has been captured yet.
     pub(crate) fn trigger_listen(&mut self) {
         use crate::audio::analysis::{analyse_audio, format_snapshot};
-        let mut captured: Vec<f32> = Vec::with_capacity(441_000);
+        use crate::audio::{SAMPLE_RATE, SAMPLE_RATE_HZ};
+        let mut captured: Vec<f32> = Vec::with_capacity(SAMPLE_RATE_HZ as usize * 10);
         while let Ok(s) = self.capture_rx.pop() {
             captured.push(s);
         }
         if !captured.is_empty() {
-            let analysis = analyse_audio(&captured, 44100.0);
+            let analysis = analyse_audio(&captured, SAMPLE_RATE);
             let snapshot = format_snapshot(&analysis);
             let prompt = format!(
                 "{}\nYou are listening to the audio you just produced. React — correct any mix or arrangement issues. Respond in JSON.",
                 snapshot
             );
             self.log_text.push_str("LISTEN → analysing…\n");
-            let _ = self.llm_tx.try_send(LlmInput::Infer {
-                prompt,
-                one_shot: true,
-                agent_id: None,
-            });
+            self.send_llm_infer(prompt, true, None);
             self.audio_analysis = Some(analysis);
             self.listen_pending = true;
         } else {
@@ -372,6 +92,7 @@ impl ImpulseApp {
     }
 
     fn apply_style_selection(&mut self, maybe_id: Option<String>) {
+        log::info!("apply_style_selection: maybe_id = {:?}", maybe_id);
         match maybe_id {
             None => {
                 self.state.write().llm.active_style = None;
@@ -380,11 +101,11 @@ impl ImpulseApp {
             Some(ref id) if id == "__free__" => {
                 self.state.write().llm.active_style = Some(id.clone());
                 self.log_text.push_str("Style → Free\n");
-                let _ = self.llm_tx.try_send(LlmInput::Infer {
-                    prompt: "we're going free — be creative and unpredictable, surprise me".into(),
-                    one_shot: true,
-                    agent_id: None,
-                });
+                self.send_llm_infer(
+                    "we're going free — be creative and unpredictable, surprise me".into(),
+                    true,
+                    None,
+                );
             }
             Some(ref id) if id == "__custom__" => {
                 self.state.write().llm.active_style = Some(id.clone());
@@ -403,6 +124,15 @@ impl ImpulseApp {
                     })
                     .unwrap_or_default();
                 if let Some(ref bp) = baseline {
+                    // Snapshot OUTSIDE the write lock — the clone is the
+                    // expensive part.  Apply ramps + remainder on the
+                    // snapshot, then commit only the synth/sequencer/fx
+                    // fields the style cares about.  Don't replace the
+                    // entire state: a full `*self.state.write() = next`
+                    // copies the rack, llm_agents, and llm queues, which
+                    // both blocks the LLM thread (write lock held during
+                    // the heavy copy) and overwrites whatever it had
+                    // updated since the snapshot.
                     let current = self.state.read().clone();
                     let (ramped, remainder) =
                         crate::state::jam_tools::schedule_baseline_ramps(current, bp, 8.0);
@@ -411,21 +141,32 @@ impl ImpulseApp {
                     } else {
                         ramped
                     };
-                    *self.state.write() = next;
+                    let mut s = self.state.write();
+                    s.bass_voices = next.bass_voices;
+                    s.kit_a = next.kit_a;
+                    s.kit_b = next.kit_b;
+                    crate::state::preserve_sequencer_transport(&mut s.sequencer, next.sequencer);
+                    s.fx = next.fx;
+                    s.hoover = next.hoover;
+                    s.an1x = next.an1x;
+                    s.noise_voice = next.noise_voice;
+                    s.lfo = next.lfo;
+                    // Rack, llm_agents, llm queues, ui_prefs, etc. left
+                    // untouched — they're not style-driven.
                 }
                 self.apply_style_rack_modules(&rack_modules);
                 self.state.write().llm.active_style = Some(id);
                 let _ = self.llm_tx.try_send(LlmInput::ResetContext);
                 self.log_text
                     .push_str(&format!("Style → {} (reset)\n", name));
-                let _ = self.llm_tx.try_send(LlmInput::Infer {
-                    prompt: format!(
+                self.send_llm_infer(
+                    format!(
                         "FULL RESET to {} — generate all parameters from scratch.",
                         name
                     ),
-                    one_shot: true,
-                    agent_id: None,
-                });
+                    true,
+                    None,
+                );
             }
         }
         // Propagate style to all sub-agents that don't have style_locked
@@ -437,10 +178,58 @@ impl ImpulseApp {
     }
 
     pub(super) fn draw_llm_console_content(&mut self, ui: &mut egui::Ui) {
-        // Override the centered layout from module_card — console needs full-width
-        // text fields, log area, and prompt input that fill the card.
-        ui.with_layout(egui::Layout::top_down(egui::Align::Min), |ui| {
-            self.draw_llm_console_inner(ui);
+        // Split the card into LEFT = round-robin cycle viz + score strip,
+        // RIGHT = existing console rows.  Cycle stays square; score strip
+        // is a fixed 26 px band directly under it, so adding scores never
+        // reshapes the right panel or pushes the prompt/log around.
+        let total_w = ui.available_width();
+        let total_h = ui.available_height();
+        // Reserve the score strip first so `cycle_size` can still fit the
+        // remaining height + stay square.
+        let score_strip_h = 26.0_f32.min((total_h * 0.22).max(0.0));
+        let cycle_budget_h = (total_h - score_strip_h).max(80.0);
+        let cycle_size = cycle_budget_h.max(96.0).min((total_w * 0.35).max(96.0));
+        let gap = 6.0;
+        let right_w = (total_w - cycle_size - gap).max(220.0);
+
+        let cursor = ui.cursor().min;
+        let cycle_rect = egui::Rect::from_min_size(cursor, egui::vec2(cycle_size, cycle_size));
+        // Score strip fills the same width as the cycle, directly below
+        // it, inset a couple pixels so its bezel doesn't touch the cycle.
+        let score_rect = egui::Rect::from_min_size(
+            egui::pos2(cursor.x, cursor.y + cycle_size + 2.0),
+            egui::vec2(cycle_size, (total_h - cycle_size - 4.0).max(0.0)),
+        );
+        let right_rect = egui::Rect::from_min_size(
+            egui::pos2(cursor.x + cycle_size + gap, cursor.y),
+            egui::vec2(right_w, total_h),
+        );
+
+        ui.allocate_ui_at_rect(cycle_rect, |ui| {
+            let secs_to_next_fire = self.jam_next_fire.map(|(at, _)| {
+                at.saturating_duration_since(std::time::Instant::now())
+                    .as_secs_f32()
+            });
+            let s = self.state.read();
+            super::widgets::llm_cycle(
+                ui,
+                &s,
+                &self.llm_queue,
+                self.jam_next_agent,
+                secs_to_next_fire,
+                cycle_size,
+            );
+        });
+        if score_rect.height() >= 14.0 {
+            ui.allocate_ui_at_rect(score_rect, |ui| {
+                let s = self.state.read();
+                super::widgets::lane_scores(ui, &s, score_rect);
+            });
+        }
+        ui.allocate_ui_at_rect(right_rect, |ui| {
+            ui.with_layout(egui::Layout::top_down(egui::Align::Min), |ui| {
+                self.draw_llm_console_inner(ui);
+            });
         });
     }
 
@@ -499,8 +288,20 @@ impl ImpulseApp {
                             .clicked()
                             && !selected
                         {
+                            // Optimistic UI: reset every agent override to None
+                            // immediately so the agent dropdowns flip to (Default)
+                            // this frame, without waiting for the LLM thread to
+                            // process the SwitchModel message.  The LLM thread's
+                            // SwitchModel handler GCs the pool via shutdown_all_except,
+                            // which is robust to this state already being None.
+                            {
+                                let mut s = self.state.write();
+                                for a in s.llm_agents.iter_mut() {
+                                    a.model_path = None;
+                                }
+                                s.llm.llm_initializing = true;
+                            }
                             let _ = self.llm_tx.try_send(LlmInput::SwitchModel(path.clone()));
-                            self.state.write().llm.llm_initializing = true;
                         }
                     }
                 });
@@ -512,7 +313,7 @@ impl ImpulseApp {
                 0.0
             };
             ui.label(
-                egui::RichText::new(format!("CTX {:.0}%", pct * 100.0))
+                egui::RichText::new(format!("CONTEXT {:.0}%", pct * 100.0))
                     .monospace()
                     .size(8.0)
                     .color(if pct > 0.85 { theme::FOG } else { theme::ASH }),
@@ -532,7 +333,7 @@ impl ImpulseApp {
             if ui
                 .add(
                     egui::Button::new(
-                        egui::RichText::new("RST")
+                        egui::RichText::new("RESET")
                             .monospace()
                             .size(7.5)
                             .color(theme::IRON),
@@ -571,6 +372,105 @@ impl ImpulseApp {
                 ui.ctx().request_repaint();
             }
 
+            ui.separator();
+
+            // ── Pipeline progress (always visible — empty when idle) ───
+            // Two stacked bars, no red tint.  Top = lane-completion
+            // fraction; bottom = error-count fraction (same denominator,
+            // visible only when failures > 0).  Errors render in a
+            // dimmer gray, not red.
+            let progress = self.state.read().llm.pipeline_progress.clone();
+
+            ui.label(
+                egui::RichText::new("PIPE")
+                    .monospace()
+                    .size(8.0)
+                    .color(theme::ASH),
+            );
+            let bar_w = 180.0_f32;
+            let bar_h = 3.0_f32;
+            let bar_gap = 1.0_f32;
+            let group_h = bar_h * 2.0 + bar_gap;
+            let (group_rect, _) =
+                ui.allocate_exact_size(egui::vec2(bar_w, group_h), egui::Sense::hover());
+            let pa = ui.painter();
+            let progress_rect = egui::Rect::from_min_size(group_rect.min, egui::vec2(bar_w, bar_h));
+            let error_rect = egui::Rect::from_min_size(
+                egui::pos2(group_rect.min.x, group_rect.min.y + bar_h + bar_gap),
+                egui::vec2(bar_w, bar_h),
+            );
+            pa.rect_filled(progress_rect, 1.0, egui::Color32::from_gray(38));
+            pa.rect_filled(error_rect, 1.0, egui::Color32::from_gray(38));
+
+            let (frac, err_frac, total_failed) = match &progress {
+                Some(p) if p.total_lanes > 0 => (
+                    p.lanes_done as f32 / p.total_lanes as f32,
+                    p.failed_count as f32 / p.total_lanes as f32,
+                    p.failed_count,
+                ),
+                _ => (0.0, 0.0, 0),
+            };
+            let progress_w = (bar_w * frac.clamp(0.0, 1.0)).max(0.0);
+            if progress_w > 0.0 {
+                pa.rect_filled(
+                    egui::Rect::from_min_size(progress_rect.min, egui::vec2(progress_w, bar_h)),
+                    1.0,
+                    egui::Color32::from_gray(140),
+                );
+            }
+            let error_w = (bar_w * err_frac.clamp(0.0, 1.0)).max(0.0);
+            if error_w > 0.0 {
+                pa.rect_filled(
+                    egui::Rect::from_min_size(error_rect.min, egui::vec2(error_w, bar_h)),
+                    1.0,
+                    egui::Color32::from_gray(95),
+                );
+            }
+
+            let label = match &progress {
+                Some(p) => match &p.current_lane {
+                    Some(name) => format!("{}/{} {}", p.lanes_done + 1, p.total_lanes, name),
+                    None if p.lanes_done >= p.total_lanes => {
+                        format!("{}/{} done", p.total_lanes, p.total_lanes)
+                    }
+                    None => format!("{}/{} plan…", p.lanes_done, p.total_lanes),
+                },
+                None => "idle".to_string(),
+            };
+            let label = if total_failed > 0 {
+                format!("{} · {}e", label, total_failed)
+            } else {
+                label
+            };
+            // Fixed-width slot so the bar + label combo doesn't reflow as
+            // the lane name changes length each pipeline step.
+            let label_box_w = 100.0_f32;
+            let (label_rect, _) = ui.allocate_exact_size(
+                egui::vec2(label_box_w, group_h.max(10.0)),
+                egui::Sense::hover(),
+            );
+            let label_color = if progress.is_some() {
+                theme::FOG
+            } else {
+                theme::IRON
+            };
+            ui.painter().text(
+                egui::pos2(label_rect.left() + 4.0, label_rect.center().y),
+                egui::Align2::LEFT_CENTER,
+                truncate_label(&label, 14),
+                egui::FontId::monospace(8.0),
+                label_color,
+            );
+            // Keep animating while pipeline is live.
+            if progress.is_some() {
+                ui.ctx().request_repaint();
+            }
+
+            // Phase-1 lane scores intentionally not rendered here — the
+            // log stream (`lane_eval: bass1 → 0.72 [#3]`) is enough for
+            // tuning the evaluator.  Phase 2's scheduler will surface
+            // them in a dedicated widget that doesn't reflow the layout
+            // each pipeline tick.
             ui.separator();
 
             // ── JAM timing (same line as model/ctx) ─────────────────
@@ -646,52 +546,8 @@ impl ImpulseApp {
                         .color(theme::ASH),
                 );
             }
-
-            // ── Agent round-robin (right-justified on same line) ────
-            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                let s = self.state.read();
-                let agents = &s.llm_agents;
-                let enabled: Vec<_> = agents
-                    .iter()
-                    .filter(|a| s.rack.modules.iter().any(|m| m.id == a.id && m.enabled))
-                    .collect();
-                if !enabled.is_empty() {
-                    let time = ui.ctx().input(|i| i.time) as f32;
-                    // Right-to-left: draw in reverse so they appear left-to-right
-                    for a in enabled.iter().rev() {
-                        let scope_str = a.scope.join(",");
-                        if !scope_str.is_empty() {
-                            ui.label(
-                                egui::RichText::new(format!("[{}]", scope_str))
-                                    .color(theme::IRON)
-                                    .monospace()
-                                    .size(6.5),
-                            );
-                        }
-                        let name_col = if a.is_inferring {
-                            theme::CHALK
-                        } else {
-                            theme::IRON
-                        };
-                        ui.label(
-                            egui::RichText::new(&a.persona_name)
-                                .color(name_col)
-                                .monospace()
-                                .size(7.5),
-                        );
-                        let dot_col = if a.is_inferring {
-                            let p = (time * 4.0 * std::f32::consts::TAU).sin() * 0.3 + 0.7;
-                            egui::Color32::from_gray((220.0 * p) as u8)
-                        } else {
-                            egui::Color32::from_gray(60)
-                        };
-                        ui.label(egui::RichText::new("●").color(dot_col).size(7.5));
-                    }
-                    if agents.iter().any(|a| a.is_inferring) {
-                        ui.ctx().request_repaint();
-                    }
-                }
-            });
+            // Round-robin cycle viz now lives in the right-side panel
+            // (set up by `draw_llm_console_content`).
         });
 
         // ── Style selector + instructions ────────────────────────────
@@ -794,6 +650,84 @@ impl ImpulseApp {
             }
         });
 
+        // ── Seed row (mirrors STYLE: lock + editable value + random reset) ──
+        ui.horizontal(|ui| {
+            // Reuse `style_lock` as a "global broadcast lock" toggle?  No —
+            // seed has its own lock semantics: when locked, agents won't
+            // auto-pick up global seed changes.  Stored on each agent;
+            // here the global "[L]" suffix is informational, indicating
+            // whether changes propagate (i.e. NOT locked across all agents).
+            let any_agent_locked = self
+                .state
+                .read()
+                .llm_agents
+                .iter()
+                .any(|a| a.seed_locked);
+            let lock_label = if any_agent_locked {
+                "SEED [L]"
+            } else {
+                "SEED"
+            };
+            let lock_col = if any_agent_locked {
+                theme::FOG
+            } else {
+                theme::ASH
+            };
+            ui.add(
+                egui::Label::new(
+                    egui::RichText::new(lock_label)
+                        .monospace()
+                        .size(9.0)
+                        .color(lock_col),
+                )
+                .selectable(false),
+            )
+            .on_hover_text(if any_agent_locked {
+                "At least one agent has its own locked seed. Use the agent card to clear locks."
+            } else {
+                "Seed change propagates to every agent."
+            });
+            ui.add_space(4.0);
+            let mut seed = self.state.read().llm.seed;
+            if ui
+                .add(
+                    egui::DragValue::new(&mut seed)
+                        .range(-1..=i64::MAX)
+                        .speed(1)
+                        .custom_formatter(|n, _| {
+                            if (n as i64) < 0 {
+                                "random".to_string()
+                            } else {
+                                format!("{}", n as i64)
+                            }
+                        }),
+                )
+                .on_hover_text("Random seed (-1 = randomise on every call). Propagates to all unlocked agents.")
+                .changed()
+            {
+                let snap = self.state.read().clone();
+                let new_state = crate::state::propagate_seed(snap, seed);
+                *self.state.write() = new_state;
+            }
+            if ui
+                .add(
+                    egui::Button::new(
+                        egui::RichText::new("RANDOM")
+                            .monospace()
+                            .size(8.0)
+                            .color(theme::ASH),
+                    )
+                    .fill(egui::Color32::TRANSPARENT),
+                )
+                .on_hover_text("Reset to random (seed = -1)")
+                .clicked()
+            {
+                let snap = self.state.read().clone();
+                let new_state = crate::state::propagate_seed(snap, -1);
+                *self.state.write() = new_state;
+            }
+        });
+
         // Prompt input moved to the rack toolbar (draw_prompt_input).
     }
 
@@ -861,138 +795,13 @@ impl ImpulseApp {
                     .collect()
             };
             if enabled_agents.is_empty() {
-                let _ = self.llm_tx.try_send(LlmInput::Infer {
-                    prompt,
-                    one_shot: true,
-                    agent_id: None,
-                });
+                self.send_llm_infer(prompt, true, None);
             } else {
                 for aid in enabled_agents {
-                    let _ = self.llm_tx.try_send(LlmInput::Infer {
-                        prompt: prompt.clone(),
-                        one_shot: true,
-                        agent_id: Some(aid),
-                    });
+                    self.send_llm_infer(prompt.clone(), true, Some(aid));
                 }
             }
             self.prompt_input.clear();
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::colorize_log;
-    use crate::ui::theme;
-
-    /// Collect all distinct colors used in the LayoutJob (excluding the default FOG).
-    fn colored_spans(text: &str) -> Vec<(String, egui::Color32)> {
-        let job = colorize_log(text, theme::FOG);
-        job.sections
-            .iter()
-            .filter(|s| s.format.color != theme::FOG && s.format.color != theme::SMOKE)
-            .map(|s| {
-                let range = s.byte_range.clone();
-                (text[range].to_string(), s.format.color)
-            })
-            .collect()
-    }
-
-    fn has_note_color(text: &str) -> bool {
-        let job = colorize_log(text, theme::FOG);
-        job.sections
-            .iter()
-            .any(|s| theme::NOTE_COLORS.iter().any(|&nc| nc == s.format.color))
-    }
-
-    #[test]
-    fn dnb_not_colored() {
-        assert!(
-            !has_note_color("D&B is a genre"),
-            "D in D&B must not be colored"
-        );
-        assert!(
-            !has_note_color("listen to D&B"),
-            "D in D&B must not be colored"
-        );
-    }
-
-    #[test]
-    fn e_flat_not_colored() {
-        assert!(!has_note_color("E-flat"), "E in E-flat must not be colored");
-    }
-
-    #[test]
-    fn kit_a_b_not_colored() {
-        // "Kit A" / "Kit B" are non-musical module IDs — the A/B must
-        // stay uncolored even though they're valid note letters.
-        assert!(
-            !has_note_color("added Kit A to the rack"),
-            "Kit A — the A must not be colored"
-        );
-        assert!(
-            !has_note_color("Kit B snare on 4"),
-            "Kit B — the B must not be colored"
-        );
-        // Case insensitivity.
-        assert!(
-            !has_note_color("kit a hihat rolls"),
-            "kit a (lowercase) — a must not be colored"
-        );
-        // Other ignore-words.
-        assert!(!has_note_color("Pad A layered"));
-        assert!(!has_note_color("Bank B active"));
-        assert!(!has_note_color("Slot F loaded"));
-    }
-
-    #[test]
-    fn note_with_accidental_is_colored() {
-        assert!(has_note_color("play D#3"), "D#3 should be colored");
-        assert!(has_note_color("root is Gb"), "Gb should be colored");
-    }
-
-    #[test]
-    fn note_with_octave_is_colored() {
-        assert!(has_note_color("note C4"), "C4 should be colored");
-    }
-
-    #[test]
-    fn bare_note_at_word_boundary_is_colored() {
-        assert!(
-            has_note_color("root note is G"),
-            "bare G at end should be colored"
-        );
-        assert!(
-            has_note_color("key of D major"),
-            "D in D major should be colored"
-        );
-    }
-
-    #[test]
-    fn quality_expression_colored_as_one_span() {
-        let spans = colored_spans("key of A minor");
-        assert_eq!(spans.len(), 1, "A minor should be one colored span");
-        assert_eq!(spans[0].0, "A minor");
-    }
-
-    #[test]
-    fn bare_note_before_punctuation_is_colored() {
-        assert!(
-            has_note_color("chord: G,"),
-            "G before comma should be colored"
-        );
-        assert!(has_note_color("(G)"), "G in parens should be colored");
-    }
-
-    #[test]
-    fn hz_is_colored() {
-        assert!(has_note_color("440 Hz"), "440 Hz should be colored");
-        assert!(has_note_color("440Hz"), "440Hz should be colored");
-    }
-
-    #[test]
-    fn midi_context_is_colored() {
-        assert!(has_note_color("note 60"), "note 60 should be colored");
-        assert!(has_note_color("midi 69"), "midi 69 should be colored");
     }
 }

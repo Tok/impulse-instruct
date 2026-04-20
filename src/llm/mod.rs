@@ -5,8 +5,17 @@
 
 pub mod instructions;
 pub mod json_repair;
+pub mod lane_eval;
+pub mod lane_scheduler;
+pub mod lanes;
 pub mod mock;
+pub mod pipeline;
+pub mod pipeline_events;
+pub mod planner;
+pub mod planner_heuristic;
+pub mod planner_jam;
 pub mod prompt;
+pub mod prompt_summary;
 pub mod schema;
 pub mod styles;
 pub mod vram;
@@ -15,7 +24,6 @@ use mock::run_mock_loop;
 pub use prompt::build_system_prompt;
 pub use prompt::param_json_schema;
 
-use anyhow::Result;
 use crossbeam_channel::{Receiver, Sender};
 use parking_lot::RwLock;
 use std::sync::Arc;
@@ -23,101 +31,10 @@ use std::time::Instant;
 
 use crate::state::{AppState, ConversationMode, apply_llm_update};
 
-#[derive(Clone, Debug)]
-pub enum LlmInput {
-    Infer {
-        prompt: String,
-        one_shot: bool,
-        #[allow(dead_code)]
-        agent_id: Option<u32>,
-    },
-    SwitchModel(String),
-    ResetContext,
-}
-
-#[derive(Clone, Debug)]
-pub enum LlmAction {
-    SaveProject,
-    SetHeat(f32),
-    SetStyle(String),
-    SetPersona(String),
-    SetConversationMode(String),
-    SetJamBars(f32),
-    SpawnAgent {
-        persona: String,
-        scope: Vec<String>,
-        model: Option<String>,
-        /// Conversation mode override ("off" | "producer" | "dj" | "mc").
-        /// When Some("mc"), the UI dispatch also auto-wires TTS even if
-        /// `tts` is false — MC without voice isn't meaningful.
-        mode: Option<String>,
-        /// When true, spawn a NeuTts module alongside the agent and wire a
-        /// control cable from agent → TTS (mirrors the /api/rack/agent
-        /// `tts: true` path).
-        tts: bool,
-    },
-    DismissAgent,
-    /// Send a structured hint to another agent by persona name.
-    SendHint {
-        to: String,
-        hint: String,
-    },
-}
+pub mod types;
+pub use types::{LlmAction, LlmBackend, LlmInput, LlmOutput, SamplingParams};
 
 pub use json_repair::extract_llm_actions;
-
-#[derive(Clone, Debug, Default)]
-pub struct LlmOutput {
-    pub text: String,
-    pub param_update: Option<serde_json::Value>,
-    pub tokens_per_sec: f32,
-    pub prompt_tokens: usize,
-    pub completion_tokens: usize,
-    pub context_used: usize,
-    pub is_jam: bool,
-    /// Reasoning extracted from the "_thinking" JSON field.
-    pub thinking: Option<String>,
-    /// MC crowd line — spoken via TTS in MC/DJ mode; displayed in log with a marker.
-    pub mc_line: Option<String>,
-    /// Snapshot of `AppState` taken immediately before the param update was applied.
-    /// The UI uses this to push a correct undo entry.
-    pub before_state: Option<Box<AppState>>,
-    /// Actions extracted from the JSON response (save_project, heat, settings changes).
-    pub actions: Vec<LlmAction>,
-    /// Which agent produced this output (None = singleton/legacy).
-    pub agent_id: Option<u32>,
-}
-
-#[derive(Clone, Debug)]
-pub struct SamplingParams {
-    pub heat: f32, // 0–1: jam mutation intensity (used for top_p widening and mock responses)
-    pub temperature: f32, // 0–2: inference sampling temperature sent directly to llama-server
-    pub top_k: i32, // 0 = disabled; Gemma default 64
-    pub top_p: f32, // 0.0–1.0 nucleus; Gemma default 0.95
-    pub min_p: f32, // 0.0–1.0 min prob floor; llama.cpp default 0.05
-    pub repeat_penalty: f32, // 1.0 = off; >1.0 penalises repeats
-    pub frequency_penalty: f32, // 0.0 = off (OpenAI-compat)
-    pub seed: i64, // -1 = random
-}
-
-impl Default for SamplingParams {
-    fn default() -> Self {
-        Self {
-            heat: 0.4,
-            temperature: 0.9,
-            top_k: 64,
-            top_p: 0.95,
-            min_p: 0.05,
-            repeat_penalty: 1.0,
-            frequency_penalty: 0.0,
-            seed: -1,
-        }
-    }
-}
-
-pub trait LlmBackend: Send {
-    fn infer(&mut self, system: &str, user: &str, sampling: &SamplingParams) -> Result<LlmOutput>;
-}
 
 pub mod server_pool;
 pub use server_pool::{LLAMA_BASE_PORT, LlamaServerBackend, LlamaServerPool};
@@ -220,7 +137,22 @@ pub fn run_llm_loop(
                 let new_path = new_path.clone();
                 let old_path = state.read().llm.model_path.clone();
                 log::info!("LLM: switching global model {} -> {}", old_path, new_path);
-                pool.release(&old_path);
+
+                // Console acts as master switch: reset every agent override
+                // to None so they all inherit the new global on next infer,
+                // and unconditionally GC every server in the pool that
+                // isn't the new global.  Using shutdown_all_except (instead
+                // of per-agent release) makes this robust against the UI's
+                // optimistic agent reset — the pool ends up in a clean
+                // state regardless of when agent.model_path flipped to None.
+                {
+                    let mut s = state.write();
+                    for a in s.llm_agents.iter_mut() {
+                        a.model_path = None;
+                    }
+                }
+                pool.shutdown_all_except(&new_path);
+
                 state.write().llm.model_path = new_path.clone();
                 state.write().llm.context_used = 0;
                 let live = pool.acquire(&new_path).is_ok() && pool.is_any_live();
@@ -252,6 +184,47 @@ pub fn run_llm_loop(
                     actions: vec![],
                     agent_id: None,
                 });
+                continue;
+            }
+            LlmInput::SwitchAgentModel {
+                agent_id,
+                old_path,
+                new_path,
+            } => {
+                let agent_id = *agent_id;
+                let old_path = old_path.clone();
+                let new_path = new_path.clone();
+                // UI already optimistically wrote `new_path` to state; we
+                // just need to keep the pool ref counts in sync with the
+                // diff carried by the message.  Defensively make sure
+                // state actually reflects `new_path` in case the LLM
+                // thread is processing this turn before any UI frame.
+                {
+                    let mut s = state.write();
+                    if let Some(a) = s.llm_agents.iter_mut().find(|a| a.id == agent_id) {
+                        a.model_path = new_path.clone();
+                    } else {
+                        log::warn!("LLM: SwitchAgentModel for unknown agent_id={}", agent_id);
+                        continue;
+                    }
+                }
+                if old_path == new_path {
+                    continue;
+                }
+                log::info!(
+                    "LLM: agent {} model {:?} -> {:?}",
+                    agent_id,
+                    old_path,
+                    new_path
+                );
+                if let Some(old) = old_path {
+                    pool.release(&old);
+                }
+                if let Some(new) = new_path
+                    && let Err(e) = pool.acquire(&new)
+                {
+                    log::error!("LLM: agent {} acquire({}) failed: {}", agent_id, new, e);
+                }
                 continue;
             }
             LlmInput::ResetContext => {
@@ -400,13 +373,174 @@ pub fn run_llm_loop(
             }
         }
 
-        // Build system prompt with per-agent overrides patched in.
         let agent_label = agent_persona.clone().unwrap_or_else(|| "default".into());
         log::info!(
             "LLM: infer start (agent={}, one_shot={})",
             agent_label,
             one_shot
         );
+
+        // Build sampling params up front — the pipeline branch needs them,
+        // and the monolithic path would build identical params anyway.
+        let sampling = {
+            let s = state.read();
+            let agent_seed = agent_id
+                .and_then(|aid| s.llm_agents.iter().find(|a| a.id == aid))
+                .map(|a| a.seed)
+                .unwrap_or(s.llm.seed);
+            SamplingParams {
+                heat: agent_heat,
+                temperature: agent_temp,
+                top_k: s.llm.top_k,
+                top_p: s.llm.top_p,
+                min_p: s.llm.min_p,
+                repeat_penalty: s.llm.repeat_penalty,
+                frequency_penalty: s.llm.frequency_penalty,
+                seed: agent_seed,
+            }
+        };
+
+        // ── Pipeline branch (default) ───────────────────────────────────────
+        // When `use_pipeline` is on, user turns go through planner +
+        // per-lane inferences instead of one monolithic call.  Each
+        // lane has its own focused prompt + required-fields schema so
+        // outputs are short and the model can't skip required arrays.
+        // The pipeline drives its own state apply + UI logging; on
+        // success we `continue` past the monolithic path below.
+        // Append /think or /no_think the same way the monolithic path does
+        // (see below).  Reasoning-capable models (Qwen, Gemma-thinking) honour
+        // this chat-template directive — without it they eat the entire
+        // max_tokens budget on <think> before any JSON is emitted and every
+        // lane fails with `content: ""` + `finish_reason: length`.  Plain
+        // models silently ignore the extra suffix.
+        let think_tag = if agent_enable_thinking {
+            "/think"
+        } else {
+            "/no_think"
+        };
+        let think_prompt = format!("{} {}", prompt, think_tag);
+
+        let use_pipeline_this_turn = state.read().llm.use_pipeline;
+        if use_pipeline_this_turn {
+            log::info!(
+                "LLM: starting lane pipeline on port {} (prompt {} chars, {})",
+                infer_port,
+                think_prompt.len(),
+                think_tag
+            );
+            let t0 = Instant::now();
+            let before_state = Box::new(state.read().clone());
+
+            // Apply agent overrides to the snapshot used as pipeline
+            // input — these only affect prompt-building; final state
+            // still lands in the real app state.
+            let mut snap = state.read().clone();
+            if let Some(m) = agent_conv_mode.clone() {
+                snap.llm.conversation_mode = m;
+            }
+            if let Some(s) = agent_style.clone() {
+                snap.llm.active_style = s;
+            }
+            if let Some(c) = agent_custom_style.clone() {
+                snap.llm.custom_style_text = c;
+            }
+            if let Some(p) = agent_persona.clone() {
+                snap.llm.persona_name = p;
+            }
+            snap.llm.heat = agent_heat;
+
+            let mut lanes_ran = 0usize;
+            // Per-lane write-back: as soon as a lane applies, copy its
+            // sequencer/synth/fx state into the shared app state so the
+            // audio thread hears the change immediately instead of
+            // waiting for every lane to finish.  Without this the
+            // whole turn's worth of patterns switches on simultaneously
+            // at the end, which feels blocky.
+            let state_for_writeback = state.clone();
+            // Apply ONLY the lane's emitted JSON to live state (not the
+            // whole pipeline snapshot).  The old implementation copied
+            // full sub-structs (`bass_voices`, `kit_a`, `kit_b`, `lfo`,
+            // …) from a snapshot frozen at pipeline start, which meant
+            // any `api_params` change the user (or the scenario) made
+            // while the pipeline was in flight got silently clobbered
+            // — voice-2 `enabled`, kit volumes, and LFO targets were
+            // all reverting.  `apply_llm_update` already knows how to
+            // merge a lane's JSON into an AppState while honouring the
+            // apply scope, so we just re-run it against live state.
+            let write_lane_back = move |update: &serde_json::Value, scope: &[String]| {
+                let mut s = state_for_writeback.write();
+                let cur = s.clone();
+                *s = crate::state::apply_llm_update(cur, update, scope);
+            };
+            let state_for_progress = state.clone();
+            let tx_for_cb = output_tx.clone();
+            let label_for_cb = agent_label.clone();
+            let new_state = pipeline::run_pipeline_via_pool(
+                snap,
+                &think_prompt,
+                &mut pool,
+                infer_port,
+                &sampling,
+                !one_shot,    // is_jam — jam cycles use Phase 2 single-lane picker
+                Some(&state), // mid-pipeline live-state re-check — skips lanes whose module was removed
+                |event| {
+                    pipeline_events::handle_pipeline_event(
+                        event,
+                        &state_for_progress,
+                        &tx_for_cb,
+                        agent_id,
+                        &label_for_cb,
+                        &mut lanes_ran,
+                    )
+                },
+                write_lane_back,
+            );
+            let _ = new_state; // per-lane write-back already committed everything
+            // Clear inferring + progress flags now that the pipeline is done.
+            // Belt-and-braces: PipelineDone clears `pipeline_progress`, but if
+            // the pipeline ever returns early without emitting it the bars
+            // would otherwise stick.
+            {
+                let mut s = state.write();
+                s.llm.is_inferring = false;
+                s.llm.pipeline_progress = None;
+                if let Some(aid) = agent_id
+                    && let Some(a) = s.llm_agents.iter_mut().find(|a| a.id == aid)
+                {
+                    a.is_inferring = false;
+                    a.pipeline_progress = None;
+                }
+            }
+            let elapsed = t0.elapsed().as_secs_f32();
+            let _ = output_tx.try_send(LlmOutput {
+                text: format!("[pipeline: {} lanes applied in {:.1}s]", lanes_ran, elapsed),
+                agent_id,
+                before_state: Some(before_state),
+                ..LlmOutput::default()
+            });
+            // Jam loop hand-off: jam cycles (one_shot=false) need the
+            // `[jam_cycle_done]` signal so `drain_llm_outputs` re-fires
+            // the next turn on the round-robin agent.  The monolithic
+            // path sends this at the bottom of the loop; our `continue`
+            // above skips that path, so we mirror it here.  One-shot
+            // user prompts never need this (they're not in a jam).
+            if !one_shot {
+                let _ = output_tx.try_send(LlmOutput {
+                    text: "[jam_cycle_done]".to_string(),
+                    is_jam: true,
+                    ..LlmOutput::default()
+                });
+            }
+            // Release the per-inference acquire (paired with the acquire at
+            // `pool.acquire(&agent_model)` above).  Without this, the pool's
+            // ref_count grows on every inference and servers never unload —
+            // so model switches never reclaim VRAM.
+            pool.release(&agent_model);
+            continue;
+        }
+
+        // ── Monolithic path (legacy, `use_pipeline=false`) ──────────────────
+        // Build system prompt with per-agent overrides patched in.
         log::debug!("LLM: building system prompt...");
         let system = {
             let mut snap = state.read().clone();
@@ -432,13 +566,14 @@ pub fn run_llm_loop(
                 snap.llm.system_prompt_override = override_text;
             }
             snap.llm.heat = agent_heat;
-            let (agent_memory, style_obs, hints) = agent_id
+            let (agent_memory, style_obs, hints, recent_outputs) = agent_id
                 .and_then(|aid| snap.llm_agents.iter().find(|a| a.id == aid))
                 .map(|a| {
                     (
                         a.memory.clone(),
                         a.style_observations.clone(),
                         a.pending_hints.clone(),
+                        a.recent_outputs.clone(),
                     )
                 })
                 .unwrap_or_default();
@@ -449,10 +584,15 @@ pub fn run_llm_loop(
                     a.pending_hints.clear();
                 }
             }
-            // Combine memory with hints for the prompt
+            // Combine memory with hints + recent-output trail for the prompt.
+            // Distinct prefixes let the model tell persistent memory apart
+            // from cross-agent hints and its own short-term trail.
             let mut full_memory = agent_memory;
             for h in &hints {
                 full_memory.push(format!("[hint from another agent] {}", h));
+            }
+            for (i, o) in recent_outputs.iter().enumerate() {
+                full_memory.push(format!("[cycle -{}] {}", recent_outputs.len() - i, o));
             }
             log::debug!("LLM: calling build_system_prompt_full...");
             let result =
@@ -464,34 +604,12 @@ pub fn run_llm_loop(
             state.write().llm.last_prompt = prompt.clone();
         }
 
-        let sampling = {
-            let s = state.read();
-            SamplingParams {
-                heat: agent_heat,
-                temperature: agent_temp,
-                top_k: s.llm.top_k,
-                top_p: s.llm.top_p,
-                min_p: s.llm.min_p,
-                repeat_penalty: s.llm.repeat_penalty,
-                frequency_penalty: s.llm.frequency_penalty,
-                seed: s.llm.seed,
-            }
-        };
-        let enable_thinking = agent_enable_thinking;
-        let think_prompt = format!(
-            "{} {}",
-            prompt,
-            if enable_thinking {
-                "/think"
-            } else {
-                "/no_think"
-            }
-        );
         log::info!(
-            "LLM: sending inference to port {} ({} system chars, {} prompt chars)",
+            "LLM: sending inference to port {} ({} system chars, {} prompt chars, {})",
             infer_port,
             system.len(),
-            think_prompt.len()
+            think_prompt.len(),
+            think_tag
         );
         let t0 = Instant::now();
         let result = pool.infer(infer_port, &system, &think_prompt, &sampling);
@@ -544,12 +662,13 @@ pub fn run_llm_loop(
                     let t2 = Instant::now();
                     {
                         let mut s = state.write();
-                        let step = s.sequencer.current_step;
                         s.bass_voices = next.bass_voices;
                         s.kit_a = next.kit_a;
                         s.kit_b = next.kit_b;
-                        s.sequencer = next.sequencer;
-                        s.sequencer.current_step = step;
+                        crate::state::preserve_sequencer_transport(
+                            &mut s.sequencer,
+                            next.sequencer,
+                        );
                         s.fx = next.fx;
                         s.hoover = next.hoover;
                         s.an1x = next.an1x;
@@ -704,6 +823,36 @@ pub fn run_llm_loop(
                                     .drain(..a.memory.len() - crate::state::AGENT_MEMORY_MAX);
                             }
                         }
+                        // Short-term recent-output trail — inject into the
+                        // next cycle's prompt so the agent sees its own
+                        // recent moves and can evolve instead of repeating.
+                        // Prefer the `_thinking` line when present (it
+                        // summarises the intent in one sentence); fall back
+                        // to `_comment` and then to a truncated raw text.
+                        let snippet = output
+                            .param_update
+                            .as_ref()
+                            .and_then(|u| u.get("_thinking").and_then(|v| v.as_str()))
+                            .map(|s| s.trim().to_string())
+                            .or_else(|| {
+                                output
+                                    .param_update
+                                    .as_ref()
+                                    .and_then(|u| u.get("_comment").and_then(|v| v.as_str()))
+                                    .map(|s| s.trim().to_string())
+                            })
+                            .unwrap_or_else(|| {
+                                let t = output.text.trim();
+                                let end =
+                                    t.char_indices().nth(200).map(|(i, _)| i).unwrap_or(t.len());
+                                t[..end].to_string()
+                            });
+                        if !snippet.is_empty() {
+                            a.recent_outputs.push_back(snippet);
+                            while a.recent_outputs.len() > crate::state::AGENT_RECENT_OUTPUTS_MAX {
+                                a.recent_outputs.pop_front();
+                            }
+                        }
                     }
                 }
                 let _ = output_tx.try_send(output);
@@ -722,10 +871,18 @@ pub fn run_llm_loop(
             }
         }
 
+        // Release the per-inference acquire — paired with the acquire above.
+        // Without this the pool ref_count leaks every inference.
+        pool.release(&agent_model);
+
         if one_shot {
             // wait for next prompt
         } else {
-            let _ = input_rx.try_recv();
+            // NOTE: an old `let _ = input_rx.try_recv();` lived here as
+            // (apparently) jam-message dedup, but it would also discard
+            // the next user prompt or control message that happened to
+            // be queued — silent command loss.  The jam loop drives
+            // itself via the `[jam_cycle_done]` output below.
             let _ = output_tx.send(LlmOutput {
                 text: "[jam_cycle_done]".to_string(),
                 param_update: None,

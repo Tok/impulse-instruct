@@ -99,7 +99,25 @@ pub struct Cable {
     pub from: PortRef,
     pub to: PortRef,
     pub color: CableColor,
+    /// Per-cable gain for audio cables (0.0..=1.5).  Default 1.0 (unity).
+    /// For forward audio cables on a voice→FX route, the gain scales the
+    /// voice signal before it enters the chain (per-cable send amount).
+    /// For back-edges (feedback cables), the gain is further clamped to
+    /// `FEEDBACK_GAIN_MAX` (0.95) when compiled into the FX plan so the
+    /// loop can't diverge regardless of what the user sets.
+    /// Non-audio cables ignore this field.
+    #[serde(default = "default_audio_gain")]
+    pub audio_gain: f32,
 }
+
+fn default_audio_gain() -> f32 {
+    1.0
+}
+
+/// Maximum feedback-edge gain — keeps FX→FX loops stable regardless of
+/// what the user puts on `Cable.audio_gain`.  Picked just shy of 1.0 so
+/// long reverb / delay tails can still build but can't run away to +∞.
+pub const FEEDBACK_GAIN_MAX: f32 = 0.95;
 
 // `ModuleKind`, `Zone`, and `GRID_COLS` live in state/module_kind.rs.
 // Re-exported here so `super::rack::{ModuleKind, Zone, GRID_COLS}` keeps
@@ -141,6 +159,19 @@ pub struct RackModule {
     /// modulation pulls the target down where it would normally push up.
     #[serde(default)]
     pub mod_input_invert: Vec<bool>,
+    /// XY-pad expansion: when true, modules whose `kind.supports_xy_pad()`
+    /// is true reserve an extra grid row and render an XY pad below their
+    /// knobs.  Kinds that don't support an XY pad ignore this flag.
+    /// Defaults to false so the rack starts compact and users opt into
+    /// pads per-module via the title-bar chevron.
+    #[serde(default)]
+    pub pad_expanded: bool,
+    /// For multi-pair XY pads (3-knob FX), which pair the pad currently
+    /// drives: 0 = A/B, 1 = A/C, 2 = B/C.  Persisted so the selection
+    /// survives save/restore and is API / LLM addressable.  Ignored by
+    /// single-pair pads (and by kinds without a pad).
+    #[serde(default)]
+    pub pad_pair: u8,
 }
 
 impl RackModule {
@@ -156,6 +187,22 @@ impl RackModule {
             mod_selectors: Vec::new(),
             mod_input_depths: Vec::new(),
             mod_input_invert: Vec::new(),
+            pad_expanded: false,
+            pad_pair: 0,
+        }
+    }
+
+    /// Grid (col_span, row_span) taking `pad_expanded` into account.
+    /// Returns `(w, h + 1)` when this module supports an XY pad and the
+    /// pad is currently expanded; otherwise the base size from `kind.grid_size()`.
+    /// Callers that need to respect dynamic overrides like `StepSequencer`
+    /// should go through `RackState::effective_grid_size()` instead.
+    pub fn grid_size(&self, grid_cols: u8) -> (u8, u8) {
+        let (w, h) = self.kind.grid_size(grid_cols);
+        if self.kind.supports_xy_pad() && self.pad_expanded {
+            (w, h + 1)
+        } else {
+            (w, h)
         }
     }
 }
@@ -186,6 +233,88 @@ impl RackState {
     /// Find a module by id.
     pub fn module(&self, id: u32) -> Option<&RackModule> {
         self.modules.iter().find(|m| m.id == id)
+    }
+
+    /// Whether `module_id` has any audible path through audio cables to a
+    /// `MasterOutput` module.  Walks `Audio` cables forward (out→in), only
+    /// stepping through enabled modules.  Modules without an audio output
+    /// (LFO, LlmAgent, etc.) always return `true` — they contribute via
+    /// other channels and shouldn't be flagged "disconnected from master".
+    pub fn reaches_master(&self, module_id: u32) -> bool {
+        let master_id = match self
+            .modules
+            .iter()
+            .find(|m| m.kind == ModuleKind::MasterOutput)
+        {
+            Some(m) => m.id,
+            None => return false,
+        };
+        if module_id == master_id {
+            return true;
+        }
+        // Modules without an Audio Out are not part of the audio graph.
+        let start = match self.module(module_id) {
+            Some(m) => m,
+            None => return false,
+        };
+        let has_audio_out = self.cables.iter().any(|c| {
+            c.from.module_id == module_id
+                && c.from.dir == PortDir::Out
+                && c.from.kind == PortKind::Audio
+        }) || matches!(
+            start.kind,
+            ModuleKind::AcidBass
+                | ModuleKind::HooverLead
+                | ModuleKind::DrumKit808
+                | ModuleKind::DrumKit909
+                | ModuleKind::AmenSampler
+                | ModuleKind::GranularTexture
+                | ModuleKind::GabberKick
+                | ModuleKind::NoiseVoice
+                | ModuleKind::An1xVoice
+                | ModuleKind::NeuTts
+                | ModuleKind::FxReverb
+                | ModuleKind::FxDelay
+                | ModuleKind::FxChorus
+                | ModuleKind::FxPhaser
+                | ModuleKind::FxRingMod
+                | ModuleKind::FxWaveshaper
+                | ModuleKind::FxBitcrush
+                | ModuleKind::FxEq
+                | ModuleKind::FxCompressor
+                | ModuleKind::FxTapeSat
+                | ModuleKind::FxDrive
+                | ModuleKind::FxAutotune
+                | ModuleKind::FxPan
+        );
+        if !has_audio_out {
+            return true;
+        }
+        let mut visited: std::collections::HashSet<u32> = std::collections::HashSet::new();
+        let mut stack = vec![module_id];
+        while let Some(id) = stack.pop() {
+            if !visited.insert(id) {
+                continue;
+            }
+            if id == master_id {
+                return true;
+            }
+            for cable in self.cables.iter().filter(|c| {
+                c.from.module_id == id
+                    && c.from.dir == PortDir::Out
+                    && c.from.kind == PortKind::Audio
+                    && c.to.kind == PortKind::Audio
+            }) {
+                if let Some(dst) = self.module(cable.to.module_id) {
+                    // MasterOutput is reachable even if marked disabled —
+                    // walking through other disabled modules drops the path.
+                    if dst.kind == ModuleKind::MasterOutput || dst.enabled {
+                        stack.push(dst.id);
+                    }
+                }
+            }
+        }
+        false
     }
 
     /// Modules in a given zone, sorted by slot.
@@ -221,6 +350,9 @@ impl RackState {
     /// Returns (0, 0) as a fallback if the zone is completely full.
     fn find_free_position(&self, kind: ModuleKind) -> (u8, u8) {
         let (w, h) = kind.grid_size(GRID_COLS);
+        // New modules start with `pad_expanded: false`, so we only need the
+        // base grid height — the extra row is allocated once the user
+        // expands the pad (arrange_grid reflows at that point).
         let cols = GRID_COLS as usize;
         let max_rows = 64usize;
         let zone = kind.default_zone();
@@ -231,8 +363,7 @@ impl RackState {
             if m.zone != zone {
                 continue;
             }
-            let (mw, static_h) = m.kind.grid_size(GRID_COLS);
-            let mh = self.dyn_height_override(m.kind).unwrap_or(static_h);
+            let (mw, mh) = self.effective_grid_size(m);
             for dr in 0..mh as usize {
                 for dc in 0..mw as usize {
                     let r = m.grid_row as usize + dr;
@@ -259,6 +390,20 @@ impl RackState {
             }
         }
         (0, 0)
+    }
+
+    /// Effective grid size for a specific module instance, combining the
+    /// kind's static size with per-module expansion (`pad_expanded`) and
+    /// dynamic overrides like the sequencer's visible-lane count.
+    pub fn effective_grid_size(&self, m: &RackModule) -> (u8, u8) {
+        let (w, h) = m.kind.grid_size(GRID_COLS);
+        let h = if m.kind.supports_xy_pad() && m.pad_expanded {
+            h + 1
+        } else {
+            h
+        };
+        let h = self.dyn_height_override(m.kind).unwrap_or(h);
+        (w, h)
     }
 
     /// Remove a module and any cables connected to it.
@@ -337,19 +482,24 @@ impl RackState {
 
         for zone in [Zone::Ai, Zone::Global, Zone::Voice, Zone::FxMod] {
             // Collect and sort by canonical order
-            let mut ids: Vec<(u32, ModuleKind)> = self
+            let mut ids: Vec<(u32, ModuleKind, bool)> = self
                 .modules
                 .iter()
                 .filter(|m| m.zone == zone)
-                .map(|m| (m.id, m.kind))
+                .map(|m| (m.id, m.kind, m.pad_expanded))
                 .collect();
-            ids.sort_by_key(|&(_, k)| order(k));
+            ids.sort_by_key(|&(_, k, _)| order(k));
 
             // 2D occupancy grid
             let mut occ = vec![vec![false; cols]; max_rows];
 
-            for (slot_idx, &(id, kind)) in ids.iter().enumerate() {
+            for (slot_idx, &(id, kind, pad_expanded)) in ids.iter().enumerate() {
                 let (w, h) = kind.grid_size(GRID_COLS);
+                let h = if kind.supports_xy_pad() && pad_expanded {
+                    h + 1
+                } else {
+                    h
+                };
                 let h = self.dyn_height_override(kind).unwrap_or(h);
                 let w = w as usize;
                 let h = h as usize;
@@ -395,7 +545,7 @@ impl RackState {
                 .iter()
                 .filter(|m| m.zone == zone)
                 .map(|m| {
-                    let (w, h) = m.kind.grid_size(GRID_COLS);
+                    let (w, h) = self.effective_grid_size(m);
                     (m.id, m.grid_col, m.grid_row, w, h)
                 })
                 .collect();
@@ -464,6 +614,8 @@ impl RackState {
         };
         let master_id = find(&self.modules, ModuleKind::MasterOutput);
         let seq_id = find(&self.modules, ModuleKind::StepSequencer);
+        // Voices that get a direct CV trigger from the sequencer and their
+        // dry audio cabled to master.
         let voice_ids: Vec<u32> = [
             ModuleKind::AcidBass,
             ModuleKind::DrumKit808,
@@ -473,30 +625,31 @@ impl RackState {
             ModuleKind::AmenSampler,
             ModuleKind::NoiseVoice,
             ModuleKind::GranularTexture,
+            ModuleKind::GabberKick,
         ]
         .iter()
         .filter_map(|&k| find(&self.modules, k))
         .collect();
         let tts_id = find(&self.modules, ModuleKind::NeuTts);
         let reverb_id = find(&self.modules, ModuleKind::FxReverb);
-        let fx_ids: Vec<u32> = [
-            ModuleKind::FxWaveshaper,
-            ModuleKind::FxReverb,
-            ModuleKind::FxDelay,
-            ModuleKind::FxBitcrush,
-            ModuleKind::FxChorus,
-            ModuleKind::FxPhaser,
-            ModuleKind::FxRingMod,
-            ModuleKind::FxEq,
-            ModuleKind::FxCompressor,
-            ModuleKind::FxTapeSat,
-            ModuleKind::FxDrive,
-            ModuleKind::FxAutotune,
-            ModuleKind::FxPan,
-        ]
-        .iter()
-        .filter_map(|&k| find(&self.modules, k))
-        .collect();
+        let delay_id = find(&self.modules, ModuleKind::FxDelay);
+
+        let audio_cable = |from_id: u32, to_id: u32| {
+            (
+                PortRef {
+                    module_id: from_id,
+                    dir: PortDir::Out,
+                    kind: PortKind::Audio,
+                    index: 0,
+                },
+                PortRef {
+                    module_id: to_id,
+                    dir: PortDir::In,
+                    kind: PortKind::Audio,
+                    index: 0,
+                },
+            )
+        };
 
         // Seq → voices (CV)
         if let Some(sid) = seq_id {
@@ -517,58 +670,29 @@ impl RackState {
                 );
             }
         }
-        // TTS → reverb
-        if let (Some(tid), Some(rid)) = (tts_id, reverb_id) {
-            self.connect(
-                PortRef {
-                    module_id: tid,
-                    dir: PortDir::Out,
-                    kind: PortKind::Audio,
-                    index: 0,
-                },
-                PortRef {
-                    module_id: rid,
-                    dir: PortDir::In,
-                    kind: PortKind::Audio,
-                    index: 0,
-                },
-            );
-        }
-        // Voices → master
+        // Voices → master (dry direct path)
         if let Some(mid) = master_id {
             for vid in &voice_ids {
-                self.connect(
-                    PortRef {
-                        module_id: *vid,
-                        dir: PortDir::Out,
-                        kind: PortKind::Audio,
-                        index: 0,
-                    },
-                    PortRef {
-                        module_id: mid,
-                        dir: PortDir::In,
-                        kind: PortKind::Audio,
-                        index: 0,
-                    },
-                );
+                let (a, b) = audio_cable(*vid, mid);
+                self.connect(a, b);
             }
         }
-        // FX serial chain
-        for pair in fx_ids.windows(2) {
-            self.connect(
-                PortRef {
-                    module_id: pair[0],
-                    dir: PortDir::Out,
-                    kind: PortKind::Audio,
-                    index: 0,
-                },
-                PortRef {
-                    module_id: pair[1],
-                    dir: PortDir::In,
-                    kind: PortKind::Audio,
-                    index: 0,
-                },
-            );
+        // TTS → Reverb (TTS gets ambience).  Reverb output is wired to
+        // master below so this stays in the audio path.
+        if let (Some(tid), Some(rid)) = (tts_id, reverb_id) {
+            let (a, b) = audio_cable(tid, rid);
+            self.connect(a, b);
+        }
+        // ── Wire the "important" FX to master so they have a complete
+        // path.  Other FX live in the rack but stay unwired by default —
+        // the user can patch them in as needed (transparent FX nodes).
+        if let (Some(rid), Some(mid)) = (reverb_id, master_id) {
+            let (a, b) = audio_cable(rid, mid);
+            self.connect(a, b);
+        }
+        if let (Some(did), Some(mid)) = (delay_id, master_id) {
+            let (a, b) = audio_cable(did, mid);
+            self.connect(a, b);
         }
         // Agent → all controllable
         let agent_id = find(&self.modules, ModuleKind::LlmAgent);
@@ -600,6 +724,8 @@ impl RackState {
         for cable in old_cables {
             if cable.from.kind == PortKind::Audio
                 && self.would_create_audio_cycle(cable.from.module_id, cable.to.module_id)
+                && !(self.is_fx_module(cable.from.module_id)
+                    && self.is_fx_module(cable.to.module_id))
             {
                 log::warn!(
                     "Stripped cyclic audio cable {} → {} during load",
@@ -611,6 +737,15 @@ impl RackState {
             self.cables.push(cable);
         }
         before - self.cables.len()
+    }
+
+    /// Whether `module_id` is an FX module — used to scope cycle checks
+    /// so FX→FX feedback loops are allowed while voice-path cycles stay
+    /// rejected.  Returns `false` for unknown ids.
+    pub fn is_fx_module(&self, module_id: u32) -> bool {
+        self.module(module_id)
+            .map(|m| super::fx_plan::kind_is_fx(m.kind))
+            .unwrap_or(false)
     }
 
     /// Returns true if adding an audio cable from → to would create a cycle.
@@ -652,18 +787,29 @@ impl RackState {
         if self.cables.iter().any(|c| c.from == from && c.to == to) {
             return false;
         }
+        // Loosen the cycle check: FX→FX cycles are allowed (they become
+        // feedback routes at compile time with a clamped gain so the loop
+        // can't diverge).  Cycles involving a voice / master / LLM module
+        // stay rejected — those would be genuine graph errors, not
+        // musical feedback.
         if from.kind == PortKind::Audio
             && self.would_create_audio_cycle(from.module_id, to.module_id)
+            && !(self.is_fx_module(from.module_id) && self.is_fx_module(to.module_id))
         {
             log::warn!(
-                "Rejected audio cable {} → {}: would create a cycle",
+                "Rejected audio cable {} → {}: would create a non-FX cycle",
                 from.module_id,
                 to.module_id
             );
             return false;
         }
         let color = self.next_cable_color();
-        self.cables.push(Cable { from, to, color });
+        self.cables.push(Cable {
+            from,
+            to,
+            color,
+            audio_gain: default_audio_gain(),
+        });
         true
     }
 
@@ -746,42 +892,6 @@ impl Default for RackState {
     }
 }
 
-// ─── FX routing plan ──────────────────────────────────────────────────────────
-
-/// One processing step in the compiled FX routing plan.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum FxStep {
-    Waveshaper,
-    Reverb,
-    Delay,
-    Bitcrush,
-    Chorus,
-    Phaser,
-    RingMod,
-    Eq,
-    Compressor,
-    TapeSat,
-    Drive,
-    Autotune,
-    Pan,
-}
-
-/// Compiled FX processing order derived from the rack cable graph.
-///
-/// Computed outside the audio thread and sent via `AudioCommand::SetFxPlan`
-/// whenever the rack topology changes.  The audio thread stores this in
-/// `DspState` and iterates it in `process_block()`.
-#[derive(Clone, Debug, Default)]
-pub struct FxPlan {
-    /// Global FX chain order (from FX→FX cable topology).
-    /// Applied to all voice buses that have no explicit voice_routes entry.
-    pub steps: Vec<FxStep>,
-    /// Per-voice-bus explicit FX chains (from Voice→FX cable topology).
-    ///
-    /// Key = voice module kind (AcidBass, DrumKit808, DrumKit909, AmenSampler, …).
-    /// Value = ordered FX steps reachable from that voice's explicit cables.
-    ///
-    /// When non-empty for a voice, the DSP routes that bus through its own
-    /// chain instead of the global chain.
-    pub voice_routes: HashMap<ModuleKind, Vec<FxStep>>,
-}
+// FX routing plan types live in `state/fx_types.rs` now — re-exported
+// from state/mod.rs for backwards compatibility with `state::FxStep`,
+// `state::FeedbackRoute`, etc.  The runtime compiler is in `fx_plan.rs`.

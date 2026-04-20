@@ -25,14 +25,53 @@ pub const MODEL_PROFILES: &[ModelProfile] = &[
         vram_mb: 6000,
     },
     ModelProfile {
+        pattern: "gemma-4-e2b",
+        label: "Gemma 4 E2B",
+        vram_mb: 4000,
+    },
+    // Gemma 4 26B-A4B is MoE (4B active, 26B total).  VRAM listed below
+    // is the disk-size-derived ceiling for the recommended quants on
+    // unsloth/gemma-4-26B-A4B-it-GGUF.  Pattern order matters — list the
+    // most-specific quant patterns first.
+    ModelProfile {
+        pattern: "gemma-4-26b-a4b-it-ud-iq2",
+        label: "Gemma 4 26B-A4B IQ2",
+        vram_mb: 11000,
+    },
+    ModelProfile {
+        pattern: "gemma-4-26b-a4b-it-ud-q2",
+        label: "Gemma 4 26B-A4B Q2",
+        vram_mb: 11500,
+    },
+    ModelProfile {
+        pattern: "gemma-4-26b-a4b-it-ud-iq3",
+        label: "Gemma 4 26B-A4B IQ3",
+        vram_mb: 12500,
+    },
+    ModelProfile {
+        pattern: "gemma-4-26b-a4b-it-ud-q3",
+        label: "Gemma 4 26B-A4B Q3",
+        vram_mb: 13500,
+    },
+    ModelProfile {
+        pattern: "gemma-4-26b-a4b-it-ud-iq4",
+        label: "Gemma 4 26B-A4B IQ4",
+        vram_mb: 14500,
+    },
+    ModelProfile {
+        pattern: "gemma-4-26b-a4b",
+        label: "Gemma 4 26B-A4B",
+        vram_mb: 17500,
+    },
+    ModelProfile {
+        pattern: "gemma-4-31b",
+        label: "Gemma 4 31B",
+        vram_mb: 20000,
+    },
+    ModelProfile {
         pattern: "gemma",
         label: "Gemma (other)",
         vram_mb: 6000,
-    },
-    ModelProfile {
-        pattern: "bonsai",
-        label: "Bonsai 8B",
-        vram_mb: 2000,
     },
     ModelProfile {
         pattern: "deepseek-r1-distill-qwen-14b",
@@ -197,7 +236,7 @@ pub const PRESETS: &[AgentPreset] = &[
     },
     AgentPreset {
         name: "Swarm",
-        description: "1x Gemma + 3x Bonsai — lead + lightweight helpers",
+        description: "4x Gemma — lead + 3 scoped helpers (bass / drums / fx)",
         agents: &[
             PresetAgent {
                 model_pattern: "gemma",
@@ -206,29 +245,30 @@ pub const PRESETS: &[AgentPreset] = &[
                 role: AgentRole::Producer,
             },
             PresetAgent {
-                model_pattern: "bonsai",
+                model_pattern: "gemma",
                 persona: "ACID",
                 scope: &["bass"],
                 role: AgentRole::Specialist,
             },
             PresetAgent {
-                model_pattern: "bonsai",
+                model_pattern: "gemma",
                 persona: "DRUMS",
                 scope: &["kit_a", "kit_b"],
                 role: AgentRole::Specialist,
             },
             PresetAgent {
-                model_pattern: "bonsai",
+                model_pattern: "gemma",
                 persona: "FX",
                 scope: &["fx"],
                 role: AgentRole::Specialist,
             },
         ],
-        total_vram_mb: 8000, // 6000 Gemma + 2000 Bonsai (shared)
+        // Same model → shared server, single VRAM cost.
+        total_vram_mb: 6000,
     },
     AgentPreset {
         name: "Crew",
-        description: "1x Gemma conductor + 4x Bonsai specialists",
+        description: "5x Gemma — conductor + 4 scoped specialists",
         agents: &[
             PresetAgent {
                 model_pattern: "gemma",
@@ -237,35 +277,35 @@ pub const PRESETS: &[AgentPreset] = &[
                 role: AgentRole::Producer,
             },
             PresetAgent {
-                model_pattern: "bonsai",
+                model_pattern: "gemma",
                 persona: "BASS",
                 scope: &["bass"],
                 role: AgentRole::Specialist,
             },
             PresetAgent {
-                model_pattern: "bonsai",
+                model_pattern: "gemma",
                 persona: "DRUMS",
                 scope: &["kit_a", "kit_b"],
                 role: AgentRole::Specialist,
             },
             PresetAgent {
-                model_pattern: "bonsai",
+                model_pattern: "gemma",
                 persona: "KEYS",
                 scope: &["hoover", "an1x"],
                 role: AgentRole::Specialist,
             },
             PresetAgent {
-                model_pattern: "bonsai",
+                model_pattern: "gemma",
                 persona: "FX",
                 scope: &["fx"],
                 role: AgentRole::Specialist,
             },
         ],
-        total_vram_mb: 8000, // 6000 Gemma + 2000 Bonsai (shared)
+        total_vram_mb: 6000,
     },
     AgentPreset {
         name: "Voices",
-        description: "1x Gemma + 4x Bonsai — one agent per voice",
+        description: "5x Gemma — one agent per voice",
         agents: &[
             PresetAgent {
                 model_pattern: "gemma",
@@ -274,44 +314,58 @@ pub const PRESETS: &[AgentPreset] = &[
                 role: AgentRole::Producer,
             },
             PresetAgent {
-                model_pattern: "bonsai",
+                model_pattern: "gemma",
                 persona: "ACID",
                 scope: &["bass", "sequencer"],
                 role: AgentRole::Specialist,
             },
             PresetAgent {
-                model_pattern: "bonsai",
+                model_pattern: "gemma",
                 persona: "DRUMS",
                 scope: &["kit_a", "kit_b", "amen"],
                 role: AgentRole::Specialist,
             },
             PresetAgent {
-                model_pattern: "bonsai",
+                model_pattern: "gemma",
                 persona: "SYNTH",
                 scope: &["hoover", "an1x", "noise"],
                 role: AgentRole::Specialist,
             },
             PresetAgent {
-                model_pattern: "bonsai",
+                model_pattern: "gemma",
                 persona: "FX",
                 scope: &["fx", "lfo"],
                 role: AgentRole::Specialist,
             },
         ],
-        total_vram_mb: 8000,
-    },
-    AgentPreset {
-        name: "Lite",
-        description: "1x Bonsai 8B — minimal VRAM, fast responses",
-        agents: &[PresetAgent {
-            model_pattern: "bonsai",
-            persona: "PULSE",
-            scope: &[],
-            role: AgentRole::Producer,
-        }],
-        total_vram_mb: 2000,
+        total_vram_mb: 6000,
     },
 ];
+
+/// Return a style-flavored display name for an agent preset.  The underlying
+/// `AgentPreset::name` (`"Crew"`, `"Solo"`, …) remains the canonical id used
+/// by the API and tests; this helper just re-labels it for the UI.  Only the
+/// `Crew` preset is renamed today — the plan calls out `Crew → Band / Posse
+/// / Squad / Ensemble per style`.
+pub fn styled_preset_name(preset_name: &'static str, style_id: Option<&str>) -> &'static str {
+    if preset_name != "Crew" {
+        return preset_name;
+    }
+    match style_id {
+        // Posse — MC/rave lineage, sound-system heritage.
+        Some("jungle" | "drum_and_bass" | "uk_garage" | "dubstep" | "breakcore") => "Posse",
+        // Squad — hard, aggressive, tight-knit kit.
+        Some("gabber" | "early_rave" | "darksynth" | "electro") => "Squad",
+        // Band — retro, song-oriented.
+        Some("synthwave" | "vaporwave" | "lo_fi_hip_hop") => "Band",
+        // Ensemble — contemplative / orchestral.
+        Some(
+            "ambient_house" | "ambient_techno" | "dark_ambient" | "space_ambient" | "meditation"
+            | "baroque_bach" | "idm",
+        ) => "Ensemble",
+        _ => "Crew",
+    }
+}
 
 /// Result of checking a preset against available resources.
 pub struct PresetStatus {
@@ -364,6 +418,42 @@ pub fn find_model(pattern: &str, available_models: &[String]) -> Option<String> 
         .cloned()
 }
 
+/// When adding `candidate_model` as a new agent would blow the VRAM
+/// budget, pick the *heaviest* model from `available_models` that still
+/// fits — i.e. the nearest-quality downgrade.  Returns `None` if no
+/// available model fits the remaining budget (e.g. even the smallest
+/// model is too big for the current agent roster).
+///
+/// The chosen model is strictly smaller than the candidate (so callers
+/// never re-try the exact same bind) and honours the same
+/// `would_exceed_vram` rule the spawn path uses, so callers can
+/// confidently swap the candidate for the fallback without re-checking.
+pub fn pick_fallback_model(
+    agents: &[crate::state::LlmAgentState],
+    global_model: &str,
+    candidate_model: &str,
+    available_models: &[String],
+    vram_total_mb: u64,
+) -> Option<String> {
+    if vram_total_mb == 0 {
+        return None; // CPU mode — nothing to downgrade for
+    }
+    let candidate_vram = estimate_vram(candidate_model);
+    let mut ranked: Vec<(&String, u64)> = available_models
+        .iter()
+        .map(|m| (m, estimate_vram(m)))
+        .filter(|(m, v)| *v < candidate_vram && m.as_str() != candidate_model)
+        .collect();
+    // Heaviest first — nearest-quality downgrade.
+    ranked.sort_by_key(|entry| std::cmp::Reverse(entry.1));
+    for (path, _) in ranked {
+        if !would_exceed_vram(agents, global_model, Some(path), vram_total_mb) {
+            return Some(path.clone());
+        }
+    }
+    None
+}
+
 // ─── Tests ───────────────────────────────────────────────────────────────────
 
 #[cfg(test)]
@@ -376,8 +466,26 @@ mod tests {
     }
 
     #[test]
-    fn estimate_bonsai() {
-        assert_eq!(estimate_vram("models/bonsai-v0.1-8b-Q1_0_g128.gguf"), 2000);
+    fn estimate_gemma_26b_quants() {
+        // Pattern order in MODEL_PROFILES means the more-specific quant
+        // patterns must beat the generic "gemma-4-26b-a4b" fallback.
+        assert_eq!(
+            estimate_vram("models/gemma-4-26B-A4B-it-UD-IQ2_XXS.gguf"),
+            11000
+        );
+        assert_eq!(
+            estimate_vram("models/gemma-4-26B-A4B-it-UD-Q3_K_M.gguf"),
+            13500
+        );
+        assert_eq!(
+            estimate_vram("models/gemma-4-26B-A4B-it-UD-IQ4_XS.gguf"),
+            14500
+        );
+        // Generic fallback for an unknown 26B-A4B quant.
+        assert_eq!(
+            estimate_vram("models/gemma-4-26B-A4B-it-UD-Q4_K_XL.gguf"),
+            17500
+        );
     }
 
     #[test]
@@ -408,10 +516,6 @@ mod tests {
             model_label("models/gemma-4-e4b-it-Q4_K_M.gguf"),
             "Gemma 4 E4B"
         );
-        assert_eq!(
-            model_label("models/bonsai-v0.1-8b-Q1_0_g128.gguf"),
-            "Bonsai 8B"
-        );
     }
 
     #[test]
@@ -429,48 +533,38 @@ mod tests {
     }
 
     #[test]
-    fn presets_all_available_8gb() {
-        let models = vec![
-            "models/gemma-4-e4b-it-Q4_K_M.gguf".to_string(),
-            "models/bonsai-v0.1-8b-Q1_0_g128.gguf".to_string(),
-        ];
-        let statuses = check_presets(8000, &models);
-        assert!(find_status(&statuses, "Solo").fits_vram);
-        assert!(find_status(&statuses, "Solo").models_available);
-        assert!(find_status(&statuses, "Duo").fits_vram);
-        assert!(find_status(&statuses, "Swarm").fits_vram);
-        assert!(find_status(&statuses, "Crew").fits_vram);
-        assert!(find_status(&statuses, "Voices").fits_vram);
-        assert!(find_status(&statuses, "Lite").fits_vram);
+    fn presets_all_available_6gb() {
+        let models = vec!["models/gemma-4-e4b-it-Q4_K_M.gguf".to_string()];
+        let statuses = check_presets(6000, &models);
+        for name in ["Solo", "Duo", "Swarm", "Crew", "Voices"] {
+            let s = find_status(&statuses, name);
+            assert!(s.fits_vram, "{name} should fit 6 GB");
+            assert!(s.models_available, "{name} should find Gemma");
+        }
     }
 
     #[test]
-    fn presets_no_bonsai() {
-        let models = vec!["models/gemma-4-e4b-it-Q4_K_M.gguf".to_string()];
+    fn presets_no_gemma() {
+        let models: Vec<String> = vec![];
         let statuses = check_presets(12000, &models);
-        let swarm = find_status(&statuses, "Swarm");
-        assert!(!swarm.models_available);
-        assert_eq!(swarm.missing_models, vec!["bonsai"]);
-        assert!(!find_status(&statuses, "Lite").models_available);
-        assert!(!find_status(&statuses, "Crew").models_available);
-        assert!(!find_status(&statuses, "Voices").models_available);
-        // Gemma-only presets are fine
-        assert!(find_status(&statuses, "Solo").models_available);
-        assert!(find_status(&statuses, "Duo").models_available);
+        for name in ["Solo", "Duo", "Swarm", "Crew", "Voices"] {
+            let s = find_status(&statuses, name);
+            assert!(!s.models_available, "{name} should require Gemma");
+            assert_eq!(s.missing_models, vec!["gemma"]);
+        }
     }
 
     #[test]
     fn presets_small_vram() {
-        let models = vec![
-            "models/gemma-4-e4b.gguf".to_string(),
-            "models/bonsai-8b.gguf".to_string(),
-        ];
+        let models = vec!["models/gemma-4-e4b.gguf".to_string()];
         let statuses = check_presets(4000, &models);
-        assert!(!find_status(&statuses, "Solo").fits_vram); // 6G
-        assert!(!find_status(&statuses, "Duo").fits_vram); // 6G
-        assert!(!find_status(&statuses, "Swarm").fits_vram); // 8G
-        assert!(!find_status(&statuses, "Crew").fits_vram); // 8G
-        assert!(find_status(&statuses, "Lite").fits_vram); // 2G
+        // All presets need 6 GB → none fit on a 4 GB budget.
+        for name in ["Solo", "Duo", "Swarm", "Crew", "Voices"] {
+            assert!(
+                !find_status(&statuses, name).fits_vram,
+                "{name} should not fit 4 GB"
+            );
+        }
     }
 
     #[test]
@@ -503,6 +597,30 @@ mod tests {
     #[test]
     fn find_model_missing() {
         let models = vec!["models/gemma.gguf".to_string()];
-        assert!(find_model("bonsai", &models).is_none());
+        assert!(find_model("qwen3", &models).is_none());
+    }
+
+    #[test]
+    fn styled_preset_name_renames_crew() {
+        assert_eq!(styled_preset_name("Crew", Some("jungle")), "Posse");
+        assert_eq!(styled_preset_name("Crew", Some("drum_and_bass")), "Posse");
+        assert_eq!(styled_preset_name("Crew", Some("gabber")), "Squad");
+        assert_eq!(styled_preset_name("Crew", Some("synthwave")), "Band");
+        assert_eq!(styled_preset_name("Crew", Some("dark_ambient")), "Ensemble");
+    }
+
+    #[test]
+    fn styled_preset_name_crew_default_when_unmapped() {
+        assert_eq!(styled_preset_name("Crew", None), "Crew");
+        assert_eq!(styled_preset_name("Crew", Some("acid_techno")), "Crew");
+        assert_eq!(styled_preset_name("Crew", Some("__unknown__")), "Crew");
+    }
+
+    #[test]
+    fn styled_preset_name_leaves_other_presets_alone() {
+        for preset in ["Solo", "Duo", "Swarm", "Voices"] {
+            assert_eq!(styled_preset_name(preset, Some("jungle")), preset);
+            assert_eq!(styled_preset_name(preset, None), preset);
+        }
     }
 }

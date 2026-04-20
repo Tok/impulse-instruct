@@ -317,14 +317,9 @@ pub(crate) fn note_name(midi: u8) -> &'static str {
     NAMES.get(idx).copied().unwrap_or("?")
 }
 
-/// Frequency in Hz for a MIDI note (A4 = 440 Hz, midi 69).
-pub(crate) fn note_freq_hz(midi: u8) -> f32 {
-    440.0 * 2.0_f32.powf((midi as f32 - 69.0) / 12.0)
-}
-
 /// Short frequency label for a MIDI note — e.g. "262", "1.0k", "4.2k".
 pub(crate) fn note_freq_label(midi: u8) -> String {
-    let f = note_freq_hz(midi);
+    let f = crate::audio::dsp::midi_to_hz(midi);
     if f < 1000.0 {
         format!("{:.0}", f)
     } else {

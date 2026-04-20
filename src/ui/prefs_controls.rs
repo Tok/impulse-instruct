@@ -80,6 +80,26 @@ impl ImpulseApp {
             dirty = true;
         }
 
+        ui.add_space(4.0);
+        widgets::section_header(ui, "STARTUP");
+        if toggle_row(
+            ui,
+            "Auto-sync rack to style",
+            "ON",
+            "OFF",
+            &mut prefs.autosync_rack_on_start,
+        ) {
+            dirty = true;
+        }
+        ui.label(
+            egui::RichText::new(
+                "  When on, app start reshapes the rack to the active style's modules",
+            )
+            .monospace()
+            .size(8.0)
+            .color(theme::IRON),
+        );
+
         if dirty {
             self.state.write().ui_prefs = prefs;
             self.session_dirty = true;

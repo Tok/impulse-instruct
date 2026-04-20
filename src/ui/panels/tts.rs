@@ -9,7 +9,6 @@
 //      controls this TTS module (via control cable) and let it emit
 //      an mc_line; the existing LLM → TTS pipeline handles playback.
 
-use crate::llm::LlmInput;
 use crate::state::TtsModuleState;
 use crate::state::tts_types::NEUTTS_PORT;
 use crate::ui::{ImpulseApp, theme, widgets};
@@ -92,15 +91,11 @@ fn controlling_agent(app: &ImpulseApp, tts_module_id: u32) -> Option<(u32, Strin
 /// Send a one-shot inference prompt to the agent controlling this TTS
 /// module.  The agent's MC/DJ conversation mode causes it to emit an
 /// mc_line which the LLM thread routes back through NeuTTS.
-fn ask_controller(app: &ImpulseApp, tts_module_id: u32, prompt: &str) {
+fn ask_controller(app: &mut ImpulseApp, tts_module_id: u32, prompt: &str) {
     let Some((agent_id, _)) = controlling_agent(app, tts_module_id) else {
         return;
     };
-    let _ = app.llm_tx.try_send(LlmInput::Infer {
-        prompt: prompt.to_string(),
-        one_shot: true,
-        agent_id: Some(agent_id),
-    });
+    app.send_llm_infer(prompt.to_string(), true, Some(agent_id));
 }
 
 /// Load the first line of voices/<name>.txt as a transcript preview.
@@ -116,9 +111,10 @@ fn read_voice_transcript(voice_ref: &str) -> String {
         .unwrap_or_default()
 }
 
-/// Read the current style's themes and mc_lines (if any) from
-/// StyleCatalog so the ask-controller prompts can name them
-/// specifically.  Empty vec if no active style or no themes defined.
+/// Read the current style's effective themes (user override + baseline)
+/// so the ask-controller prompts can name them specifically.  Empty vec
+/// if no active style, the style is `__custom__` / `__free__`, or it
+/// has no themes defined.
 fn active_style_themes(app: &ImpulseApp) -> Vec<String> {
     let s = app.state.read();
     let Some(ref id) = s.llm.active_style else {
@@ -127,10 +123,7 @@ fn active_style_themes(app: &ImpulseApp) -> Vec<String> {
     if id == "__custom__" || id == "__free__" {
         return vec![];
     }
-    crate::llm::styles::StyleCatalog::get()
-        .find_by_id(id)
-        .map(|st| st.themes.clone())
-        .unwrap_or_default()
+    crate::state::effective_themes(&s, id)
 }
 
 pub fn draw_tts(app: &mut ImpulseApp, ui: &mut egui::Ui, module_id: u32) {
@@ -145,7 +138,7 @@ pub fn draw_tts(app: &mut ImpulseApp, ui: &mut egui::Ui, module_id: u32) {
     }
 
     // ── Snapshot ─────────────────────────────────────────────────────────────
-    let (voice_ref, temperature, top_k, top_p, pitch_snap, enabled, tts_state) = {
+    let (voice_ref, temperature, top_k, top_p, pitch_snap, volume, enabled, tts_state) = {
         let s = app.state.read();
         let t = s.tts_modules.iter().find(|t| t.id == module_id).unwrap();
         let mod_enabled = s
@@ -161,6 +154,7 @@ pub fn draw_tts(app: &mut ImpulseApp, ui: &mut egui::Ui, module_id: u32) {
             t.top_k,
             t.top_p,
             t.pitch_snap,
+            t.volume,
             mod_enabled,
             t.clone(),
         )
@@ -212,11 +206,11 @@ pub fn draw_tts(app: &mut ImpulseApp, ui: &mut egui::Ui, module_id: u32) {
         if !app.neutts_online
             && ui
                 .small_button(egui::RichText::new("START").monospace().size(7.0))
-                .on_hover_text(
-                    "Spawn scripts/neutts-server.py on port 8770.\n\
+                .on_hover_text(format!(
+                    "Spawn scripts/neutts-server.py on port {NEUTTS_PORT}.\n\
                      Uses .neutts-venv/bin/python if present, else python3.\n\
                      First start takes a few seconds to load the model.",
-                )
+                ))
                 .clicked()
         {
             spawn_neutts_server();
@@ -370,11 +364,7 @@ pub fn draw_tts(app: &mut ImpulseApp, ui: &mut egui::Ui, module_id: u32) {
                      most in character.  One line only, peak-time energy.{}",
                     theme_hint
                 );
-                let _ = app.llm_tx.try_send(LlmInput::Infer {
-                    prompt,
-                    one_shot: true,
-                    agent_id: Some(*agent_id),
-                });
+                app.send_llm_infer(prompt, true, Some(*agent_id));
             }
         }
     });
@@ -521,6 +511,17 @@ pub fn draw_tts(app: &mut ImpulseApp, ui: &mut egui::Ui, module_id: u32) {
             .changed()
         {
             with_tts(app, module_id, |t| t.top_p = v);
+        }
+    });
+
+    // ── Volume — modulatable via the NeuTtsVolume LFO target ──────────────
+    labelled_row(ui, "VOLUME", &mut |ui| {
+        let mut v = volume;
+        if ui
+            .add(egui::DragValue::new(&mut v).range(0.0..=1.5).speed(0.01))
+            .changed()
+        {
+            with_tts(app, module_id, |t| t.volume = v);
         }
     });
 

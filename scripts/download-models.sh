@@ -3,16 +3,37 @@
 # Download GGUF models for Impulse Instruct.
 #
 # Usage:
-#   ./scripts/download-models.sh                  # Gemma 4 E4B (default, ~4.6 GB, best overall)
-#   ./scripts/download-models.sh bonsai           # Bonsai-8B (1-bit Q1, ~1.1 GB, lightweight)
+#   ./scripts/download-models.sh                  # Gemma 4 E4B (default, ~4.6 GB, runs on 6 GB GPU)
+#   ./scripts/download-models.sh gemma-26b        # Gemma 4 26B-A4B UD-IQ4_XS (~13.4 GB, needs 16 GB GPU)
+#   ./scripts/download-models.sh gemma-26b-q3     # Gemma 4 26B-A4B UD-Q3_K_M (~12.5 GB)
+#   ./scripts/download-models.sh gemma-26b-iq2    # Gemma 4 26B-A4B UD-IQ2_XXS (~9.9 GB, smallest)
 #   ./scripts/download-models.sh deepseek-r1-7b   # DeepSeek-R1-Distill-Qwen-7B (~5 GB, CoT, fast)
 #   ./scripts/download-models.sh deepseek-r1-14b  # DeepSeek-R1-Distill-Qwen-14B (~9 GB, CoT, accurate)
 #   ./scripts/download-models.sh qwen3            # Qwen3-8B Q4_K_M (~5 GB, optional)
 #   ./scripts/download-models.sh qwen3-14b        # Qwen3-14B Q4_K_M (~9 GB, optional)
+#   ./scripts/download-models.sh neutts           # NeuTTS Air Q8 (~803 MB, default TTS)
+#   ./scripts/download-models.sh neutts-q4        # NeuTTS Air Q4 (~527 MB, smaller quant)
 #
 # NOTE: A free HuggingFace account is required.
 #   Sign up at https://huggingface.co/join
 #   Then log in: huggingface-cli login
+#
+# TTS DEPENDENCIES: NeuTTS Air runs through a small Python helper, so it needs
+# Python 3.10+ and espeak-ng on the host.  The first `./download-models.sh
+# neutts` run creates a `.neutts-venv/` and installs the `neutts` package
+# automatically; without these, the MC/TTS rack module silently no-ops.
+#   Linux:   sudo apt install espeak-ng python3-venv
+#   macOS:   brew install espeak-ng
+#   Windows: install eSpeak-NG from https://github.com/espeak-ng/espeak-ng/releases
+#
+# OTHER QUANTS / VARIANTS: the aliases above cover the curated set we test
+# against.  Many more quants and fine-tunes exist on HuggingFace — drop any
+# `*.gguf` into `models/` and the app will auto-detect it.  Worth experimenting
+# with if you have headroom or want to compare quality vs. size:
+#   Gemma 4 26B-A4B (all quants):  https://huggingface.co/unsloth/gemma-4-26B-A4B-it-GGUF
+#   Gemma 4 31B (all quants):      https://huggingface.co/unsloth/gemma-4-31B-it-GGUF
+#   Gemma 4 E4B / E2B:             https://huggingface.co/unsloth?search_models=gemma-4
+#   NeuTTS Air (Q4 / Q8):          https://huggingface.co/neuphonic
 # ──────────────────────────────────────────────────────────────────────────────
 set -euo pipefail
 printf "\n  \033[38;2;110;110;110m▁▂▄▅▇██▇▅▄▂▁▁▂▄▅▇█\033[38;2;160;160;160m I M P U L S E • I N S T R U C T \033[38;2;110;110;110m█▇▅▄▂▁▁▂▄▅▇██▇▅▄▂▁\033[0m\n\n"
@@ -28,12 +49,22 @@ case "$MODEL" in
   gemma4|"")
     HF_REPO="unsloth/gemma-4-E4B-it-GGUF"
     MODEL_FILE="gemma-4-E4B-it-Q4_K_M.gguf"
-    MODEL_DESC="Gemma 4 E4B Q4_K_M (unsloth, ~4.6 GB) — default, best accuracy + speed"
+    MODEL_DESC="Gemma 4 E4B Q4_K_M (unsloth, ~4.6 GB) — default, runs on any 6 GB+ GPU"
     ;;
-  bonsai)
-    HF_REPO="prism-ml/Bonsai-8B-gguf"
-    MODEL_FILE="Bonsai-8B.gguf"
-    MODEL_DESC="Bonsai-8B Q1_0_g128 (PrismML, ~1.1 GB) — tiny fallback, no chain-of-thought"
+  gemma-26b)
+    HF_REPO="unsloth/gemma-4-26B-A4B-it-GGUF"
+    MODEL_FILE="gemma-4-26B-A4B-it-UD-IQ4_XS.gguf"
+    MODEL_DESC="Gemma 4 26B-A4B UD-IQ4_XS (unsloth, ~13.4 GB) — MoE, 4B active; needs ~14 GB VRAM"
+    ;;
+  gemma-26b-q3)
+    HF_REPO="unsloth/gemma-4-26B-A4B-it-GGUF"
+    MODEL_FILE="gemma-4-26B-A4B-it-UD-Q3_K_M.gguf"
+    MODEL_DESC="Gemma 4 26B-A4B UD-Q3_K_M (unsloth, ~12.5 GB) — MoE, 4B active; needs ~13 GB VRAM"
+    ;;
+  gemma-26b-iq2)
+    HF_REPO="unsloth/gemma-4-26B-A4B-it-GGUF"
+    MODEL_FILE="gemma-4-26B-A4B-it-UD-IQ2_XXS.gguf"
+    MODEL_DESC="Gemma 4 26B-A4B UD-IQ2_XXS (unsloth, ~9.9 GB) — smallest 26B quant; needs ~10 GB VRAM"
     ;;
   qwen3)
     HF_REPO="bartowski/Qwen_Qwen3-8B-GGUF"
@@ -56,14 +87,20 @@ case "$MODEL" in
     MODEL_DESC="DeepSeek-R1-Distill-Qwen-14B Q4_K_M (~9 GB) — CoT, needs ~12 GB VRAM; newer distills may exist"
     ;;
   neutts)
+    HF_REPO="neuphonic/neutts-air-q8-gguf"
+    MODEL_FILE="neutts-air-q8.gguf"
+    HF_FILE="neutts-air-Q8_0.gguf"
+    MODEL_DESC="NeuTTS Air Q8 GGUF (~803 MB) — neural TTS voice cloning, default"
+    ;;
+  neutts-q4)
     HF_REPO="neuphonic/neutts-air-q4-gguf"
     MODEL_FILE="neutts-air-q4.gguf"
     HF_FILE="neutts-air-Q4_0.gguf"
-    MODEL_DESC="NeuTTS Air Q4 GGUF (~527 MB) — neural TTS voice cloning"
+    MODEL_DESC="NeuTTS Air Q4 GGUF (~527 MB) — smaller, more compressed quant"
     ;;
   *)
     echo "Unknown model: '$MODEL'"
-    echo "Available: gemma4 (default), bonsai, deepseek-r1-7b, deepseek-r1-14b, qwen3, qwen3-14b, neutts"
+    echo "Available: gemma4 (default), gemma-26b, gemma-26b-q3, gemma-26b-iq2, deepseek-r1-7b, deepseek-r1-14b, qwen3, qwen3-14b, neutts (Q8), neutts-q4"
     exit 1
     ;;
 esac
@@ -177,13 +214,9 @@ fi
 echo ""
 echo "─── License notice ─────────────────────────────────────────────────────────"
 case "$MODEL" in
-  gemma4)
-    echo "Gemma 4 E4B is released under the Gemma Terms of Use by Google DeepMind."
+  gemma4|gemma-26b|gemma-26b-q3|gemma-26b-iq2)
+    echo "Gemma 4 is released under the Gemma Terms of Use by Google DeepMind."
     echo "Quantisation by unsloth. See: https://huggingface.co/${HF_REPO}"
-    ;;
-  bonsai)
-    echo "Bonsai 8B is released under the Apache License 2.0 by prism-ml."
-    echo "See: https://huggingface.co/${HF_REPO}"
     ;;
   qwen3|qwen3-14b)
     echo "Qwen3 is released under the Qwen Research License by Alibaba Cloud."
@@ -193,7 +226,7 @@ case "$MODEL" in
     echo "DeepSeek-R1-Distill is released under the MIT License by DeepSeek AI."
     echo "Quantisation by bartowski. See: https://huggingface.co/${HF_REPO}"
     ;;
-  neutts)
+  neutts|neutts-q4)
     echo "NeuTTS Air is released by Neuphonic under the NeuTTS License."
     echo "See: https://huggingface.co/${HF_REPO}"
     ;;
@@ -202,7 +235,16 @@ echo "────────────────────────�
 
 # ── NeuTTS Air setup function ─────────────────────────────────────────────────
 NEUTTS_VENV=".neutts-venv"
-NEUTTS_MODEL="${MODEL_DIR}/neutts-air-q4.gguf"
+NEUTTS_MODEL_Q8="${MODEL_DIR}/neutts-air-q8.gguf"
+NEUTTS_MODEL_Q4="${MODEL_DIR}/neutts-air-q4.gguf"
+# Default to Q8 (better quality) but accept an existing Q4 install.
+if [[ -f "$NEUTTS_MODEL_Q8" ]]; then
+  NEUTTS_MODEL="$NEUTTS_MODEL_Q8"
+elif [[ -f "$NEUTTS_MODEL_Q4" ]]; then
+  NEUTTS_MODEL="$NEUTTS_MODEL_Q4"
+else
+  NEUTTS_MODEL="$NEUTTS_MODEL_Q8"
+fi
 
 setup_neutts() {
   echo ""
@@ -236,20 +278,21 @@ setup_neutts() {
   "$NEUTTS_VENV/bin/pip" install --quiet --upgrade pip
   "$NEUTTS_VENV/bin/pip" install --quiet "neutts[llama]" soundfile numpy
 
-  # Download model
-  if [[ ! -f "$NEUTTS_MODEL" ]]; then
-    echo "  Downloading NeuTTS Air Q4 GGUF (~527 MB)..."
-    DL_FILE="neutts-air-Q4_0.gguf"
+  # Download model — prefer Q8 (default), fall back to existing Q4 if present.
+  if [[ ! -f "$NEUTTS_MODEL_Q8" && ! -f "$NEUTTS_MODEL_Q4" ]]; then
+    echo "  Downloading NeuTTS Air Q8 GGUF (~803 MB)..."
+    DL_FILE="neutts-air-Q8_0.gguf"
     if [[ -n "${HF_CMD:-}" ]]; then
-      $HF_CMD download "neuphonic/neutts-air-q4-gguf" "$DL_FILE" --local-dir "$MODEL_DIR"
-      [[ -f "${MODEL_DIR}/${DL_FILE}" ]] && mv "${MODEL_DIR}/${DL_FILE}" "$NEUTTS_MODEL"
+      $HF_CMD download "neuphonic/neutts-air-q8-gguf" "$DL_FILE" --local-dir "$MODEL_DIR"
+      [[ -f "${MODEL_DIR}/${DL_FILE}" ]] && mv "${MODEL_DIR}/${DL_FILE}" "$NEUTTS_MODEL_Q8"
     elif command -v wget &>/dev/null; then
-      wget -q --show-progress -O "$NEUTTS_MODEL" \
-        "https://huggingface.co/neuphonic/neutts-air-q4-gguf/resolve/main/$DL_FILE"
+      wget -q --show-progress -O "$NEUTTS_MODEL_Q8" \
+        "https://huggingface.co/neuphonic/neutts-air-q8-gguf/resolve/main/$DL_FILE"
     elif command -v curl &>/dev/null; then
-      curl -L --progress-bar -o "$NEUTTS_MODEL" \
-        "https://huggingface.co/neuphonic/neutts-air-q4-gguf/resolve/main/$DL_FILE"
+      curl -L --progress-bar -o "$NEUTTS_MODEL_Q8" \
+        "https://huggingface.co/neuphonic/neutts-air-q8-gguf/resolve/main/$DL_FILE"
     fi
+    NEUTTS_MODEL="$NEUTTS_MODEL_Q8"
   fi
 
   # Generate voice references if missing
@@ -276,42 +319,13 @@ fi
 
 # ── Optional recommended downloads ────────────────────────────────────────────
 
-# Bonsai 8B (lightweight multi-agent model)
-BONSAI_MODEL="${MODEL_DIR}/Bonsai-8B.gguf"
-if [[ "$MODEL" != "bonsai" ]]; then
-  if [[ -f "$BONSAI_MODEL" ]]; then
-    echo ""
-    echo "✓ Bonsai 8B already present."
-  else
-    echo ""
-    echo "Bonsai 8B is a lightweight 1-bit model (~1.1 GB) for multi-agent setups."
-    read -r -p "Also download Bonsai 8B? [Y/n] " reply
-    reply="${reply:-y}"
-    if [[ "$reply" =~ ^[Yy]$ ]] || [[ -z "$reply" ]]; then
-      echo "  Downloading Bonsai 8B..."
-      if [[ -n "${HF_CMD:-}" ]]; then
-        $HF_CMD download "prism-ml/Bonsai-8B-gguf" "Bonsai-8B.gguf" --local-dir "$MODEL_DIR"
-      elif command -v wget &>/dev/null; then
-        wget -q --show-progress -O "$BONSAI_MODEL" \
-          "https://huggingface.co/prism-ml/Bonsai-8B-gguf/resolve/main/Bonsai-8B.gguf"
-      elif command -v curl &>/dev/null; then
-        curl -L --progress-bar -o "$BONSAI_MODEL" \
-          "https://huggingface.co/prism-ml/Bonsai-8B-gguf/resolve/main/Bonsai-8B.gguf"
-      fi
-      [[ -f "$BONSAI_MODEL" ]] && echo "  ✓ Bonsai 8B ready ($(du -h "$BONSAI_MODEL" | cut -f1))" || echo "  Download failed."
-    else
-      echo "  Skipped. Run later: ./scripts/download-models.sh bonsai"
-    fi
-  fi
-fi
-
 # NeuTTS Air (voice cloning for TTS modules)
 if [[ -f "$NEUTTS_MODEL" ]] && [[ -d "$NEUTTS_VENV" ]]; then
   echo ""
   echo "✓ NeuTTS Air already set up."
 else
   echo ""
-  echo "NeuTTS Air enables neural voice cloning for TTS modules (~527 MB download)."
+  echo "NeuTTS Air enables neural voice cloning for TTS modules (~803 MB download, Q8)."
   read -r -p "Set up NeuTTS Air? [Y/n] " reply
   reply="${reply:-y}"
   if [[ "$reply" =~ ^[Yy]$ ]] || [[ -z "$reply" ]]; then

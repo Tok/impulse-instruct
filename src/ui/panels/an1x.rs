@@ -233,7 +233,7 @@ pub fn draw_an1x(app: &mut ImpulseApp, ui: &mut Ui) {
     }
 
     // Consistent glass group height — row 1 has 2 knob rows, row 2 adds PAN
-    let group_h = ctrl.knob_size * 2.0 + 50.0;
+    let group_h = widgets::glass_group_height(ctrl, 50.0);
     let group_h2 = group_h + 24.0; // extra space for PAN slider in A.ADSR
 
     // ── Row 1 (3 cols): F.ADSR | FILTER | AMP ADSR ──────────────────────
@@ -272,7 +272,7 @@ pub fn draw_an1x(app: &mut ImpulseApp, ui: &mut Ui) {
                 );
                 widgets::centered_row(ui, |ui| {
                     ak!(ui, "CUTOFF", filter_cutoff);
-                    ak!(ui, "RESO", filter_resonance);
+                    ak!(ui, "RESONANCE", filter_resonance);
                 });
                 widgets::centered_row(ui, |ui| {
                     ak!(ui, "ENVAMT", filter_env_amount);

@@ -82,6 +82,16 @@ pub fn draw_piano(app: &mut ImpulseApp, ui: &mut egui::Ui, ctx: &egui::Context) 
     }
 
     let painter = ui.painter();
+    // Foreground-layer painter for scale-degree LEDs — the piano widget
+    // draws each key's rect chrome via `painter`, which would cover the
+    // LED dot when the next key draws.  Lifting the LEDs to a
+    // foreground layer keeps their halos intact across key boundaries.
+    let glow = ui.ctx().layer_painter(egui::LayerId::new(
+        egui::Order::Foreground,
+        egui::Id::new("piano_glow")
+            .with(rect.min.x.to_bits())
+            .with(rect.min.y.to_bits()),
+    ));
     painter.rect_filled(rect, 0.0, theme::VOID);
 
     let ox = rect.min.x; // origin x
@@ -171,22 +181,34 @@ pub fn draw_piano(app: &mut ImpulseApp, ui: &mut egui::Ui, ctx: &egui::Context) 
             Stroke::new(0.5, Color32::from_gray(if active { 170 } else { 72 })),
         );
 
-        // Scale degree dot — small marker near the top of scale-tone keys
-        if !active && let Some(degree) = scale_degree(note, root_note, seq_scale) {
+        // Scale degree dot — only tonic, 3rd, and 5th render.  Lower-
+        // rank degrees were hidden to tame LED density on small screens.
+        if !active
+            && let Some(degree) = scale_degree(note, root_note, seq_scale)
+            && (degree == 0 || degree == 2 || degree == 4)
+        {
             let dot_y = key_rect.min.y + wk_h * 0.18;
             let dot_x = key_rect.center().x;
-            let (dot_r, dot_alpha) = if degree == 0 {
-                (2.8, 200u8) // tonic — brighter, larger
-            } else if degree == 2 || degree == 4 {
-                (2.0, 120u8) // 3rd / 5th — medium
+            let (dot_r, intensity) = if degree == 0 {
+                (2.8, 0.95) // tonic — brighter, larger
             } else {
-                (1.5, 70u8) // other degrees — subtle
+                (2.0, 0.55) // 3rd / 5th — medium
             };
-            painter.circle_filled(
-                Pos2::new(dot_x, dot_y),
-                dot_r,
-                Color32::from_rgba_unmultiplied(200, 200, 200, dot_alpha),
-            );
+            // Bright white LEDs disappear on bare-white keys — when Huth
+            // coloring is disabled, fall back to a dark "black LED" that
+            // emits darkness instead.  With Huth on, keys are tinted, so
+            // the white LED reads fine.
+            if huth_on {
+                theme::led(
+                    &glow,
+                    Pos2::new(dot_x, dot_y),
+                    dot_r,
+                    Color32::from_gray(220),
+                    intensity,
+                );
+            } else {
+                theme::led_dark(&glow, Pos2::new(dot_x, dot_y), dot_r, intensity);
+            }
         }
 
         // Labels: C notes always visible; all notes when show_label is on
@@ -311,9 +333,9 @@ pub fn draw_piano(app: &mut ImpulseApp, ui: &mut egui::Ui, ctx: &egui::Context) 
 
             // Neumorphic edges
             let (bhi, bsh) = if active {
-                (Color32::from_gray(100), Color32::from_gray(8))
+                (Color32::from_gray(100), theme::VOID)
             } else {
-                (Color32::from_gray(52), Color32::from_gray(8))
+                (Color32::from_gray(52), theme::VOID)
             };
             painter.line_segment(
                 [key_rect.left_top(), key_rect.right_top()],
@@ -332,14 +354,20 @@ pub fn draw_piano(app: &mut ImpulseApp, ui: &mut egui::Ui, ctx: &egui::Context) 
                 Stroke::new(1.0, bsh),
             );
 
-            // Scale degree dot for black keys
-            if !active && let Some(degree) = scale_degree(note, root_note, seq_scale) {
-                let dot_alpha: u8 = if degree == 0 { 200 } else { 100 };
+            // Scale degree dot for black keys — only tonic / 3rd / 5th,
+            // matching the white-key density gate above.
+            if !active
+                && let Some(degree) = scale_degree(note, root_note, seq_scale)
+                && (degree == 0 || degree == 2 || degree == 4)
+            {
+                let intensity = if degree == 0 { 0.85 } else { 0.45 };
                 let dot_r = if degree == 0 { 2.2 } else { 1.5 };
-                painter.circle_filled(
+                theme::led(
+                    &glow,
                     Pos2::new(x + bk_w * 0.5, key_rect.min.y + bk_h * 0.22),
                     dot_r,
-                    Color32::from_rgba_unmultiplied(200, 200, 200, dot_alpha),
+                    Color32::from_gray(220),
+                    intensity,
                 );
             }
 
@@ -403,8 +431,8 @@ pub fn draw_piano(app: &mut ImpulseApp, ui: &mut egui::Ui, ctx: &egui::Context) 
                 .push(AudioCommand::Trigger(TriggerEvent::BassTrigger {
                     voice_idx: 0,
                     note,
-                    accent: false,
-                    slide: false,
+                    accent: 0.0,
+                    slide: 0.0,
                     gate_samples: 22050,
                     pan: 0.0,
                 }));

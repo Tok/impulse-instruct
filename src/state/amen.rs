@@ -58,6 +58,15 @@ pub struct AmenState {
     /// slice N multiplicatively.
     #[serde(default)]
     pub slice_volumes: Vec<f32>,
+    /// Per-slice playback direction.  Empty = every slice follows the
+    /// global `reverse` flag (backwards compat).  When populated, entry
+    /// N overrides that slice's direction (true = reverse, false =
+    /// forward), enabling edit-era glitch patterns where specific
+    /// slices stutter backwards while the rest of the break plays
+    /// forward.  Unspecified slots (indices ≥ `slice_reverses.len()`)
+    /// fall through to the global `reverse` flag.
+    #[serde(default)]
+    pub slice_reverses: Vec<bool>,
     /// The BPM the loaded sample was originally recorded at.  Only used
     /// when `bpm_stretch` is true.  Default is 136 (classic Amen Brother
     /// tempo) — change per-sample in the UI or via the API.
@@ -70,6 +79,13 @@ pub struct AmenState {
     /// 90% use case.
     #[serde(default)]
     pub bpm_stretch: bool,
+    /// When `bpm_stretch` is on and this is also true, the voice runs a
+    /// granular time-stretch instead of the resample-based one: timing
+    /// follows the host tempo while pitch stays at the source's
+    /// original.  Ignored when `bpm_stretch` is off (pitch is already
+    /// preserved because nothing's being stretched).
+    #[serde(default)]
+    pub bpm_stretch_preserve: bool,
     /// Cached metadata about the currently-loaded WAV (display-only).
     /// Not serialized — populated by the UI panel when a file is loaded.
     #[serde(skip)]
@@ -121,8 +137,10 @@ impl Default for AmenState {
             slice_positions: Vec::new(),
             slice_pitches: Vec::new(),
             slice_volumes: Vec::new(),
+            slice_reverses: Vec::new(),
             source_bpm: default_source_bpm(),
             bpm_stretch: false,
+            bpm_stretch_preserve: false,
             meta: None,
         }
     }

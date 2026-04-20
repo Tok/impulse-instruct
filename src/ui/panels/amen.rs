@@ -8,8 +8,8 @@
 //   slice wheel + SLICES / REV / LOOP       → volume/pitch sliders
 //   start/end offset sliders                → gate/stutter sliders
 
-use crate::audio::{AudioCommand, load_wav_to_44100};
-use crate::state::ParamMode;
+use crate::audio::{AudioCommand, SAMPLE_RATE, load_wav_to_44100};
+use crate::state::{BPM_MAX, BPM_MIN, ParamMode};
 use crate::ui::{ImpulseApp, theme, widgets};
 
 // ─── Amen / WAV sampler panel ─────────────────────────────────────────────────
@@ -94,103 +94,6 @@ fn build_wave_thumb(samples: &[f32], n_cols: usize) -> Vec<(f32, f32)> {
     out
 }
 
-/// Render the slice-order edit strip — one cell per step position, each
-/// showing which slice plays at that step.  Click any cell to cycle through
-/// 1..=slice_count (wrapping back to 1).  A small `RESET` button restores
-/// the identity mapping (empty `amen_slice_order`).
-///
-/// `order` is mutated in-place; returns `true` if anything changed.
-fn draw_slice_order_strip(
-    ui: &mut egui::Ui,
-    order: &mut Vec<u8>,
-    slice_count: u8,
-    active_slice: Option<u8>,
-) -> bool {
-    let n = slice_count.max(1) as usize;
-    if order.len() != n {
-        // Auto-resize to match current slice count.  Initialise new entries
-        // with their identity index so resizing slice count from 4 → 8 leaves
-        // the existing cells alone and adds 4..7 at the end.
-        let prev_len = order.len();
-        order.resize(n, 0);
-        for (i, slot) in order.iter_mut().enumerate().skip(prev_len) {
-            *slot = i as u8;
-        }
-    }
-    let mut changed = false;
-    ui.horizontal(|ui| {
-        ui.spacing_mut().item_spacing.x = 2.0;
-        ui.label(
-            egui::RichText::new("ORDER")
-                .color(theme::SMOKE)
-                .monospace()
-                .size(7.5),
-        );
-        #[allow(clippy::needless_range_loop)]
-        for i in 0..n {
-            let slot = order[i] as usize;
-            let label = format!("{}", slot + 1);
-            // Highlight the cell whose POSITION matches the active step
-            // (where the playhead currently is in the order strip).
-            let is_active = active_slice.map(|s| s as usize) == Some(slot);
-            let bg = if is_active {
-                egui::Color32::from_gray(80)
-            } else {
-                egui::Color32::from_gray(28)
-            };
-            let fg = if is_active { theme::CHALK } else { theme::FOG };
-            if ui
-                .add(
-                    egui::Button::new(egui::RichText::new(&label).monospace().size(8.0).color(fg))
-                        .fill(bg)
-                        .min_size(egui::vec2(18.0, 16.0)),
-                )
-                .on_hover_text(format!(
-                    "Step {} → slice {} (click to cycle)",
-                    i + 1,
-                    slot + 1
-                ))
-                .clicked()
-            {
-                order[i] = ((slot + 1) % n) as u8;
-                changed = true;
-            }
-        }
-        if ui
-            .small_button(egui::RichText::new("RESET").monospace().size(7.0))
-            .on_hover_text("Reset to identity (step N → slice N)")
-            .clicked()
-        {
-            order.clear();
-            changed = true;
-        }
-        if ui
-            .small_button(egui::RichText::new("RAND").monospace().size(7.0))
-            .on_hover_text("Shuffle the order into a random permutation of slices 1..N")
-            .clicked()
-        {
-            // SystemTime-seeded Fisher-Yates over 0..n.  Permutes the whole
-            // strip; pair with RESET if you want the identity back.
-            let seed = std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .map(|d| d.as_nanos() as u64)
-                .unwrap_or(0xC0FFEE);
-            let mut perm: Vec<u8> = (0..n as u8).collect();
-            let mut s = seed | 1;
-            for i in (1..perm.len()).rev() {
-                s = s
-                    .wrapping_mul(6364136223846793005)
-                    .wrapping_add(1442695040888963407);
-                let j = ((s >> 33) as usize) % (i + 1);
-                perm.swap(i, j);
-            }
-            *order = perm;
-            changed = true;
-        }
-    });
-    changed
-}
-
 /// Find the slice index of the most recently-played amen step.
 /// Returns None if no step or the drum isn't playing.
 fn current_amen_slice(app: &ImpulseApp) -> Option<u8> {
@@ -245,6 +148,7 @@ pub fn draw_amen(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         mut stutter,
         mut source_bpm,
         mut bpm_stretch,
+        mut bpm_stretch_preserve,
         meta,
     ) = {
         let s = app.state.read();
@@ -260,6 +164,7 @@ pub fn draw_amen(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             s.amen.stutter,
             s.amen.source_bpm,
             s.amen.bpm_stretch,
+            s.amen.bpm_stretch_preserve,
             s.amen.meta.clone(),
         )
     };
@@ -378,7 +283,7 @@ pub fn draw_amen(app: &mut ImpulseApp, ui: &mut egui::Ui) {
 
     // ── Metadata strip ───────────────────────────────────────────────────────
     if let Some(m) = meta {
-        let sec = m.samples as f32 / 44100.0;
+        let sec = m.samples as f32 / SAMPLE_RATE;
         let size_kb = m.file_bytes as f32 / 1024.0;
         let info = format!(
             "{:.2}s  {}ch  {}-bit  {:.1}kHz  {:.0}KB",
@@ -499,8 +404,11 @@ pub fn draw_amen(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                 .clicked()
                 && let Some(data) = load_wav_to_44100(&path)
             {
-                let positions =
-                    crate::audio::onset::detect_onsets(&data, 44100.0, slice_count.max(2) as usize);
+                let positions = crate::audio::onset::detect_onsets(
+                    &data,
+                    SAMPLE_RATE,
+                    slice_count.max(2) as usize,
+                );
                 app.state.write().amen.slice_positions = positions;
                 changed = true;
             }
@@ -591,7 +499,11 @@ pub fn draw_amen(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             // so the state reads cleanly without needing the hub arrow.
             ui.horizontal(|ui| {
                 lbl(ui, "DIR");
-                if widgets::toggle_button(ui, if reverse { "REV" } else { "FWD" }, &mut reverse) {
+                if widgets::toggle_button(
+                    ui,
+                    if reverse { "REVERSE" } else { "FORWARD" },
+                    &mut reverse,
+                ) {
                     changed = true;
                 }
                 if widgets::toggle_button(
@@ -611,7 +523,11 @@ pub fn draw_amen(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                 lbl(ui, "BPM");
                 let mut v = source_bpm;
                 if ui
-                    .add(egui::DragValue::new(&mut v).range(40.0..=300.0).speed(0.5))
+                    .add(
+                        egui::DragValue::new(&mut v)
+                            .range(BPM_MIN..=BPM_MAX)
+                            .speed(0.5),
+                    )
                     .changed()
                 {
                     source_bpm = v;
@@ -632,6 +548,32 @@ pub fn draw_amen(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                 ) {
                     changed = true;
                 }
+                // Pitch-preserving toggle — only meaningful while
+                // STRETCH is on.  PITCH=preserve (granular path), TUNE=
+                // classic resample (pitch shifts with tempo).  The
+                // granular path has no crossfade yet, so splice clicks
+                // at strong stretch ratios are a known v1 trade-off.
+                let mut preserve_ui = bpm_stretch_preserve;
+                ui.add_enabled_ui(bpm_stretch, |ui| {
+                    if widgets::toggle_button(
+                        ui,
+                        if preserve_ui { "PITCH" } else { "TUNE" },
+                        &mut preserve_ui,
+                    ) {
+                        bpm_stretch_preserve = preserve_ui;
+                        changed = true;
+                    }
+                })
+                .response
+                .on_hover_text(if preserve_ui {
+                    "Pitch-preserving granular stretch: timing follows the \
+                     host BPM while pitch stays at the source's original.  \
+                     Splice clicks at strong ratios (v1)."
+                } else {
+                    "Classic resample stretch: the whole sample is pitched \
+                     along with the tempo change (move source BPM and hear \
+                     it as pitch)."
+                });
             });
         });
     });
@@ -641,13 +583,30 @@ pub fn draw_amen(app: &mut ImpulseApp, ui: &mut egui::Ui) {
     // Each cell shows the slice number that fires at that step position;
     // click to cycle through 1..slice_count.  Active step is highlighted
     // so the user can visually track the live playhead through the order.
-    let order_changed = draw_slice_order_strip(
+    let order_changed = super::amen_strips::draw_slice_order_strip(
         ui,
         &mut app.state.write().sequencer.amen_slice_order,
         slice_count,
         active,
     );
     if order_changed {
+        app.push_audio_params();
+    }
+
+    // ── Per-slice DIR strip ───────────────────────────────────────────────
+    // Mirrors the order strip's layout but toggles direction per slice so
+    // specific slices glitch backwards while others play forward — the
+    // edit-era chop move.  When the vec is empty, every slice inherits
+    // the global REV/FWD; first click populates and promotes out of
+    // inherit mode.
+    let reverse_changed = super::amen_strips::draw_slice_reverse_strip(
+        ui,
+        &mut app.state.write().amen.slice_reverses,
+        slice_count,
+        active,
+        reverse,
+    );
+    if reverse_changed {
         app.push_audio_params();
     }
 
@@ -716,8 +675,9 @@ pub fn draw_amen(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         s.amen.reverse = reverse;
         s.amen.gate = gate.clamp(0.05, 1.0);
         s.amen.stutter = stutter.min(4);
-        s.amen.source_bpm = source_bpm.clamp(40.0, 300.0);
+        s.amen.source_bpm = source_bpm.clamp(BPM_MIN, BPM_MAX);
         s.amen.bpm_stretch = bpm_stretch;
+        s.amen.bpm_stretch_preserve = bpm_stretch_preserve;
         drop(s);
         app.push_audio_params();
     }

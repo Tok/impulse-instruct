@@ -183,4 +183,42 @@ pub(crate) fn apply_llm_rack_update(
             apply_llm_mod_cable_entry(&mut s.rack, v);
         }
     }
+
+    // rack.pad — expand / collapse the XY pad and pick the active pair.
+    // Each entry: {"kind": "reverb", "expanded": true, "pair": 1}
+    //         OR: {"id": 7, "expanded": false}
+    // Either `expanded` or `pair` is optional (omitted fields stay unchanged).
+    // Pair is clamped to 0..=2 for 3-knob FX; ignored by 2-knob FX.
+    if let Some(arr) = rack_upd.get("pad").and_then(|v| v.as_array()) {
+        let mut reflow = false;
+        for v in arr {
+            let target_id = if let Some(id) = v.get("id").and_then(|x| x.as_u64()) {
+                Some(id as u32)
+            } else if let Some(name) = v.get("kind").and_then(|x| x.as_str()) {
+                s.rack
+                    .modules
+                    .iter()
+                    .find(|m| rack_kind_name_matches(m.kind, name))
+                    .map(|m| m.id)
+            } else {
+                None
+            };
+            let Some(id) = target_id else { continue };
+            let Some(m) = s.rack.modules.iter_mut().find(|m| m.id == id) else {
+                continue;
+            };
+            if let Some(e) = v.get("expanded").and_then(|x| x.as_bool())
+                && m.pad_expanded != e
+            {
+                m.pad_expanded = e;
+                reflow = true;
+            }
+            if let Some(p) = v.get("pair").and_then(|x| x.as_u64()) {
+                m.pad_pair = (p as u8).min(2);
+            }
+        }
+        if reflow {
+            s.rack.arrange_grid();
+        }
+    }
 }

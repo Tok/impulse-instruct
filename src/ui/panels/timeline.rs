@@ -26,7 +26,7 @@ pub fn draw_timeline(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                     .unwrap_or(0.0);
                 let tag = match entry.action {
                     ActivityAction::Response => "RSP",
-                    ActivityAction::Thinking => "THK",
+                    ActivityAction::Thinking => "THINK",
                     ActivityAction::ParamUpdate => "UPD",
                     ActivityAction::Spawn => "NEW",
                     ActivityAction::Dismiss => "DEL",

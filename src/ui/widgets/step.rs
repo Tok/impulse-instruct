@@ -1,14 +1,27 @@
 // ─── ui/widgets/step.rs ───────────────────────────────────────────────────────
 // Sequencer step widgets: standard step button + Huth Farbige Noten U-cup cell.
 
-use egui::{Color32, Pos2, Rect, Sense, Stroke, Ui, Vec2};
+use egui::{Color32, Pos2, Sense, Stroke, Ui, Vec2};
 
 use crate::ui::theme;
 
 // ─── Step Button ─────────────────────────────────────────────────────────────
 
 /// A sequencer step button with neumorphic raised/pressed chrome style.
-/// Returns true when clicked (toggle request).
+///
+/// Returns `Some(new_active)` when the user's interaction asks to set
+/// this step's state, and `None` otherwise.  Two gestures produce a
+/// request:
+///
+///   • **Click / tap**: returns `Some(!active)` — classic toggle.
+///   • **Drag-paint**: holding the pointer down and dragging across
+///     steps activates (or clears) each step that enters the path.
+///     The paint direction is locked at the drag's start — pressing
+///     on an inactive step paints ON as the user drags over more
+///     inactive steps; pressing on an active step paints OFF.  A step
+///     that already matches the paint direction is left alone (so the
+///     gesture is idempotent and doesn't flip back and forth).
+///
 /// `vel` tints the fill when active (0 = dim, 1 = full bright).
 /// `dot_color`: when Some, the button body stays neutral and only a small
 ///   coloured dot is drawn — used for bass steps so the palette stays subtle.
@@ -25,12 +38,59 @@ pub fn step_button(
     dot_color: Option<Color32>,
     note_label: Option<&str>,
     size_px: f32,
-) -> bool {
+) -> Option<bool> {
     let sz = Vec2::splat(size_px);
-    let (rect, response) = ui.allocate_exact_size(sz, Sense::click());
+    let (rect, response) = ui.allocate_exact_size(sz, Sense::click_and_drag());
+
+    // Drag-paint bookkeeping shared across every step-button widget in
+    // this frame.  The key is a single global `Id` because only one
+    // pointer can be mid-drag at a time — two grids can coexist because
+    // the pointer can only be hovering over one cell per frame.
+    let paint_key = egui::Id::new("step_paint_dir");
+    let mut action: Option<bool> = None;
+
+    // Plain click (including touch-tap) → toggle.
+    if response.clicked() {
+        action = Some(!active);
+    } else if response.drag_started() {
+        // Drag begins on this cell — the opposite state becomes the
+        // paint direction for the rest of the gesture.
+        let dir = !active;
+        ui.ctx().data_mut(|d| d.insert_temp(paint_key, dir));
+        action = Some(dir);
+    } else if response.contains_pointer() && ui.input(|i| i.pointer.primary_down()) {
+        // Pointer is down and has entered this cell — honour the paint
+        // direction set at drag start.  `active != d` check keeps the
+        // gesture idempotent: hovering over a cell that already matches
+        // the direction doesn't re-toggle it.
+        let dir: Option<bool> = ui.ctx().data(|d| d.get_temp(paint_key));
+        if let Some(d) = dir
+            && active != d
+        {
+            action = Some(d);
+        }
+    }
+    // Clear the paint direction once the pointer is up, regardless of
+    // where the release happened.  Idempotent across every widget, so
+    // doing it here instead of a central loop keeps step_button self-
+    // contained.
+    if !ui.input(|i| i.pointer.primary_down()) {
+        ui.ctx().data_mut(|d| d.remove::<bool>(paint_key));
+    }
 
     if ui.is_rect_visible(rect) {
         let painter = ui.painter();
+        // Foreground-layer painter for the LED halo + current-step bloom.
+        // Keeps the glow from being covered by the next step's chrome or
+        // clipped at the widget's allocation edge — mirror of the fix
+        // agent_card.rs applied to its status LED.  Scoped per-widget
+        // via the rect position so stacking stays deterministic.
+        let glow_id = egui::Id::new("step_glow")
+            .with(rect.min.x.to_bits())
+            .with(rect.min.y.to_bits());
+        let glow = ui
+            .ctx()
+            .layer_painter(egui::LayerId::new(egui::Order::Foreground, glow_id));
         // Generous rounding — no hard square corners visible
         let r = egui::Rounding::same((size_px * 0.22).max(4.0));
         let inner = rect.shrink(1.5);
@@ -38,15 +98,11 @@ pub fn step_button(
         if active {
             // Debossed / pressed look:
             // Dark inset shadow frame, slightly brighter outer ring, deep inner well.
-            painter.rect_filled(inner, r, Color32::from_gray(18));
+            painter.rect_filled(inner, r, theme::DEEP);
             // Bright bottom-right rim (light bounces off raised surround)
-            painter.rect_stroke(
-                inner.shrink(0.5),
-                r,
-                Stroke::new(1.0, Color32::from_gray(60)),
-            );
+            painter.rect_stroke(inner.shrink(0.5), r, Stroke::new(1.0, theme::IRON));
             // Dark top-left rim (pressed inward — shadow side)
-            painter.rect_stroke(inner, r, Stroke::new(1.0, Color32::from_gray(8)));
+            painter.rect_stroke(inner, r, Stroke::new(1.0, theme::VOID));
             // Inset well
             let inset = inner.shrink(2.5);
             painter.rect_filled(inset, r, Color32::from_gray(22));
@@ -54,8 +110,7 @@ pub fn step_button(
             if let Some(col) = dot_color {
                 let dot_r = (size_px * 0.18).max(2.5);
                 let dot_pos = Pos2::new(inset.center().x, inset.max.y - dot_r - 1.0);
-                painter.circle_filled(dot_pos, dot_r, col);
-                painter.circle_stroke(dot_pos, dot_r, Stroke::new(1.0, Color32::from_gray(0)));
+                theme::led(&glow, dot_pos, dot_r, col, 1.0);
                 // Note name label above the dot (only when cell is large enough)
                 if let Some(label) = note_label
                     && size_px >= 26.0
@@ -99,23 +154,21 @@ pub fn step_button(
             if let Some(col) = dot_color {
                 let dot_r = (size_px * 0.14).max(2.0);
                 let dot_pos = Pos2::new(inner.center().x, inner.max.y - dot_r - 2.0);
-                let dim_col = Color32::from_rgba_unmultiplied(col.r(), col.g(), col.b(), 80);
-                painter.circle_filled(dot_pos, dot_r, dim_col);
-                painter.circle_stroke(
-                    dot_pos,
-                    dot_r,
-                    Stroke::new(1.0, Color32::from_rgba_unmultiplied(0, 0, 0, 80)),
-                );
+                // Dim LED — half-intensity so inactive steps still feel "on standby"
+                theme::led(&glow, dot_pos, dot_r, col, 0.45);
             }
         }
 
-        // Current-step cursor: outer bloom glow + bright border + inner ring
+        // Current-step cursor: outer bloom glow + bright border + inner ring.
+        // Bloom paints on the foreground layer so it extends past the
+        // widget rect into neighbouring cells without being covered by
+        // their chrome (draw-order fix, not a clip fix).
         if current {
             // Outer bloom halos
             for i in 1..=3u8 {
                 let expand = i as f32 * 1.5;
                 let alpha = 40u8.saturating_sub(i * 12);
-                painter.rect_filled(
+                glow.rect_filled(
                     rect.expand(expand),
                     r,
                     Color32::from_rgba_unmultiplied(220, 220, 220, alpha),
@@ -132,128 +185,5 @@ pub fn step_button(
         }
     }
 
-    response.clicked()
-}
-
-// ─── Huth Note Cell ──────────────────────────────────────────────────────────
-//
-// Renders a single sequencer step as a Huth *Farbige Noten* U-cup:
-//
-//   ┌─────┐  ← open top (unused / background)
-//   │█████│
-//   │█████│  ← colored fill rising from the bottom; height = gate fraction
-//   └──┬──┘
-//      └── rounded bottom corners only
-//
-// White-key notes (natural C D E F G A B): solid Huth color fill.
-// Black-key notes (sharps/flats C# D# F# G# A#): Huth color with a white
-//   inner rectangle — the "double U" Huth used for semitones.
-//
-// `gate` 0–1 controls fill height (0.3 minimum so short notes stay visible).
-// Returns true when clicked.
-
-pub fn huth_note_cell(
-    ui: &mut Ui,
-    note: u8,
-    gate: f32,
-    active: bool,
-    current: bool,
-    size_px: f32,
-) -> bool {
-    let sz = Vec2::splat(size_px);
-    let (rect, response) = ui.allocate_exact_size(sz, Sense::click());
-
-    if ui.is_rect_visible(rect) {
-        let painter = ui.painter();
-        // Background — same as inactive step
-        let bg = Color32::from_gray(22);
-        painter.rect_filled(rect.shrink(1.0), egui::Rounding::same(2.0), bg);
-
-        if active {
-            let huth = theme::note_color(note);
-            let pitch_class = note % 12;
-            // Black keys: C#=1, D#=3, F#=6, G#=8, A#=10
-            let is_black_key = matches!(pitch_class, 1 | 3 | 6 | 8 | 10);
-
-            // Fill height rises from the bottom; gate clamped to 0.3–1.0 range
-            let fill_frac = gate.clamp(0.3, 1.0);
-            let cell_h = rect.height() - 2.0;
-            let fill_h = cell_h * fill_frac;
-            let fill_top = rect.max.y - 1.0 - fill_h;
-
-            let fill_rect = Rect::from_min_max(
-                Pos2::new(rect.min.x + 1.0, fill_top),
-                Pos2::new(rect.max.x - 1.0, rect.max.y - 1.0),
-            );
-            let rounding = egui::Rounding {
-                nw: 0.0,
-                ne: 0.0,
-                sw: (size_px * 0.22).max(3.0),
-                se: (size_px * 0.22).max(3.0),
-            };
-            painter.rect_filled(fill_rect, rounding, huth);
-
-            // White inner shape for black-key (semitone) notes
-            if is_black_key {
-                let inset = (size_px * 0.18).max(2.5);
-                let inner_h = (fill_h - inset * 1.5).max(0.0);
-                if inner_h > 2.0 {
-                    let inner = Rect::from_min_max(
-                        Pos2::new(
-                            fill_rect.min.x + inset,
-                            fill_rect.max.y - inner_h - inset * 0.5,
-                        ),
-                        Pos2::new(fill_rect.max.x - inset, fill_rect.max.y - inset * 0.5),
-                    );
-                    let inner_r = egui::Rounding {
-                        nw: 0.0,
-                        ne: 0.0,
-                        sw: (size_px * 0.14).max(2.0),
-                        se: (size_px * 0.14).max(2.0),
-                    };
-                    painter.rect_filled(
-                        inner,
-                        inner_r,
-                        Color32::from_rgba_unmultiplied(255, 255, 255, 200),
-                    );
-                }
-            }
-        }
-
-        // Note name label — top-center of cell, over the Huth fill
-        if active && size_px >= 26.0 {
-            let font_sz = (size_px * 0.22).clamp(7.0, 10.0);
-            let text_pos = Pos2::new(rect.center().x, rect.min.y + font_sz * 0.5 + 2.0);
-            let label = crate::ui::note_name(note);
-            painter.text(
-                text_pos,
-                egui::Align2::CENTER_CENTER,
-                label,
-                egui::FontId::monospace(font_sz),
-                Color32::from_white_alpha(200),
-            );
-        }
-
-        // Current-step cursor — outer bloom + bright border + inner ring
-        if current {
-            let r = egui::Rounding::same(2.0);
-            for i in 1..=3u8 {
-                let expand = i as f32 * 1.5;
-                let alpha = 40u8.saturating_sub(i * 12);
-                painter.rect_filled(
-                    rect.expand(expand),
-                    r,
-                    Color32::from_rgba_unmultiplied(220, 220, 220, alpha),
-                );
-            }
-            painter.rect_stroke(rect.shrink(0.5), r, Stroke::new(1.5, theme::CHALK));
-            painter.rect_stroke(
-                rect.shrink(2.5),
-                r,
-                Stroke::new(1.0, Color32::from_rgba_unmultiplied(200, 200, 200, 45)),
-            );
-        }
-    }
-
-    response.clicked()
+    action
 }

@@ -18,41 +18,13 @@
 use egui::{Color32, ScrollArea};
 
 use crate::state::{ModuleKind, Zone, rack::GRID_COLS};
-use crate::ui::module_card::PortPos;
+use crate::ui::module_card::{CARD_ROUNDING, PortPos};
 use crate::ui::{ImpulseApp, module_card, rack_cables};
 // Re-export so callers referencing `rack_canvas::CableDrag` keep working.
 pub use crate::ui::rack_cables::{CableDrag, ModuleDrag};
-// ─── Available module kinds per zone (for add menus) ─────────────────────────
-const VOICE_KINDS: &[ModuleKind] = &[
-    ModuleKind::AcidBass,
-    ModuleKind::DrumKit808,
-    ModuleKind::DrumKit909,
-    ModuleKind::GabberKick,
-    ModuleKind::HooverLead,
-    ModuleKind::An1xVoice,
-    ModuleKind::AmenSampler,
-    ModuleKind::NoiseVoice,
-];
-const AI_KINDS: &[ModuleKind] = &[ModuleKind::LlmConsole, ModuleKind::LlmAgent];
-const GLOBAL_KINDS: &[ModuleKind] = &[];
-const FXMOD_KINDS: &[ModuleKind] = &[
-    ModuleKind::FxReverb,
-    ModuleKind::FxDelay,
-    ModuleKind::FxChorus,
-    ModuleKind::FxPhaser,
-    ModuleKind::FxEq,
-    ModuleKind::FxCompressor,
-    ModuleKind::FxTapeSat,
-    ModuleKind::FxDrive,
-    ModuleKind::FxAutotune,
-    ModuleKind::FxWaveshaper,
-    ModuleKind::FxBitcrush,
-    ModuleKind::FxRingMod,
-    ModuleKind::SpectrumAnalyzer,
-    ModuleKind::StereoMeter,
-    ModuleKind::ActivityTimeline,
-    ModuleKind::LfoModule,
-];
+// Zone-scoped module-kind lookup tables + the `draw_remove_confirm` /
+// `draw_add_menu` pop-ups live in `rack_canvas_menus.rs`.
+use super::rack_canvas_menus::{draw_add_menu, draw_remove_confirm};
 
 // ─── Main rack canvas ─────────────────────────────────────────────────────────
 
@@ -243,10 +215,10 @@ pub fn draw_rack(app: &mut ImpulseApp, ctx: &egui::Context, ui: &mut egui::Ui) {
                 Color32::from_gray(140),
             )
         };
-        painter.rect_filled(ghost_rect, egui::Rounding::same(8.0), fill);
+        painter.rect_filled(ghost_rect, egui::Rounding::same(CARD_ROUNDING), fill);
         painter.rect_stroke(
             ghost_rect,
-            egui::Rounding::same(8.0),
+            egui::Rounding::same(CARD_ROUNDING),
             egui::Stroke::new(2.0, stroke_col),
         );
         ctx.request_repaint();
@@ -255,275 +227,11 @@ pub fn draw_rack(app: &mut ImpulseApp, ctx: &egui::Context, ui: &mut egui::Ui) {
     draw_remove_confirm(app, ctx);
 }
 
-fn draw_remove_confirm(app: &mut ImpulseApp, ctx: &egui::Context) {
-    let module_id = match app.confirm_remove_module {
-        Some(id) => id,
-        None => return,
-    };
-    let label = app
-        .state
-        .read()
-        .rack
-        .modules
-        .iter()
-        .find(|m| m.id == module_id)
-        .map(|m| m.kind.label().to_string())
-        .unwrap_or_else(|| format!("Module #{}", module_id));
-    let mut open = true;
-    egui::Window::new("confirm_remove")
-        .title_bar(false)
-        .resizable(false)
-        .collapsible(false)
-        .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
-        .open(&mut open)
-        .show(ctx, |ui| {
-            ui.label(
-                egui::RichText::new(format!("Remove {}?", label))
-                    .monospace()
-                    .size(9.5)
-                    .color(Color32::from_gray(200)),
-            );
-            ui.add_space(4.0);
-            ui.horizontal(|ui| {
-                if ui.button("Remove").clicked() {
-                    let is_agent = app
-                        .state
-                        .read()
-                        .rack
-                        .modules
-                        .iter()
-                        .any(|m| m.id == module_id && m.kind == ModuleKind::LlmAgent);
-                    app.state.write().rack.remove_module(module_id);
-                    if is_agent {
-                        app.state.write().llm_agents.retain(|a| a.id != module_id);
-                    }
-                    app.push_fx_plan();
-                    app.confirm_remove_module = None;
-                }
-                if ui.button("Cancel").clicked() {
-                    app.confirm_remove_module = None;
-                }
-            });
-        });
-    if !open {
-        app.confirm_remove_module = None;
-    }
-}
-
-fn draw_add_menu(app: &mut ImpulseApp, ctx: &egui::Context) {
-    let zone = match app.add_menu_zone {
-        Some(z) => z,
-        None => return,
-    };
-    let kinds: &[ModuleKind] = match zone {
-        crate::state::Zone::Ai => AI_KINDS,
-        crate::state::Zone::Voice => VOICE_KINDS,
-        crate::state::Zone::FxMod => FXMOD_KINDS,
-        crate::state::Zone::Global => GLOBAL_KINDS,
-    };
-
-    let mut open = true;
-    egui::Window::new("add_module_popup")
-        .title_bar(false)
-        .resizable(false)
-        .collapsible(false)
-        .open(&mut open)
-        .show(ctx, |ui| {
-            ui.set_min_width(160.0);
-            ui.label(
-                egui::RichText::new("ADD MODULE")
-                    .monospace()
-                    .size(8.5)
-                    .color(Color32::from_gray(100)),
-            );
-            ui.separator();
-            let mut close = false;
-            for kind in kinds {
-                let already_exists = !kind.allows_multiple()
-                    && app
-                        .state
-                        .read()
-                        .rack
-                        .modules
-                        .iter()
-                        .any(|m| m.kind == *kind);
-                if already_exists {
-                    ui.add_enabled(
-                        false,
-                        egui::Button::new(egui::RichText::new(kind.label()).monospace().size(9.5)),
-                    );
-                } else if ui
-                    .button(egui::RichText::new(kind.label()).monospace().size(9.5))
-                    .clicked()
-                {
-                    let id = app.state.write().rack.add_module(*kind);
-                    // Place the new module on the grid
-                    app.state.write().rack.arrange_grid();
-                    if *kind == ModuleKind::LlmAgent {
-                        let agent =
-                            crate::state::LlmAgentState::from_singleton(id, &app.state.read().llm);
-                        app.state.write().llm_agents.push(agent);
-                    }
-                    close = true;
-                }
-            }
-            if close
-                || ui
-                    .button(egui::RichText::new("cancel").monospace().size(8.5))
-                    .clicked()
-            {
-                app.add_menu_zone = None;
-            }
-        });
-    if !open {
-        app.add_menu_zone = None;
-    }
-}
-
-// ─── Grid-based rack layout ──────────────────────────────────────────────────
-// Fixed 12-column grid (like CSS/Bootstrap).  Each module spans a number of
-// columns and rows defined in `ModuleKind::grid_size()`.
-
-pub(super) const RACK_GAP: f32 = 4.0;
-
-/// Size of one grid column (floored to whole pixels for crisp alignment).
-pub(super) fn grid_col_w(available_w: f32) -> f32 {
-    let n = GRID_COLS as f32;
-    ((available_w - (n - 1.0) * RACK_GAP) / n).floor()
-}
-
-/// Pixel width for a module's grid column span.
-pub(super) fn module_grid_w(kind: ModuleKind, col_w: f32) -> f32 {
-    let (c, _) = kind.grid_size(GRID_COLS);
-    c as f32 * col_w + (c as f32 - 1.0).max(0.0) * RACK_GAP
-}
-
-/// Pixel height for a module's grid row span.
-pub(super) fn module_grid_h(kind: ModuleKind, col_w: f32) -> f32 {
-    let (_, r) = kind.grid_size(GRID_COLS);
-    let r = r as f32;
-    r * col_w + (r - 1.0).max(0.0) * RACK_GAP
-}
-
-/// Dynamic row count for the sequencer grid cell — adapts to visible lanes.
-pub(super) fn sequencer_grid_rows(state: &crate::state::AppState, col_w: f32) -> u8 {
-    use crate::state::ModuleKind;
-    let has = |k: ModuleKind| state.rack.modules.iter().any(|m| m.kind == k && m.enabled);
-    let has_bass = has(ModuleKind::AcidBass);
-    let has_hoover = has(ModuleKind::HooverLead);
-    let has_an1x = has(ModuleKind::An1xVoice);
-    let active_drum_voices = state
-        .sequencer
-        .drum_patterns
-        .iter()
-        .filter(|(_, p)| p.iter().any(|st| st.active))
-        .count();
-    // Pixel estimate — mirrors draw_sequencer. Tuned so the grid cell fits
-    // the content exactly (no trailing empty row).
-    let pad = state.ui_prefs.effective_pad_px();
-    let step_row = pad + 22.0; // main step button row with padding
-    let marker_row = 16.0; // accent / slide marker row (compact)
-    let drum_sub = 14.0; // vel/prob/ratchet sub-lane under drum step row
-    let header_h = 55.0;
-    let sub_rows = state.sequencer.steps.min(64).div_ceil(32).max(1) as f32;
-    let bass_h = if has_bass {
-        sub_rows * (step_row + marker_row + marker_row)
-    } else {
-        0.0
-    };
-    let hoover_h = if has_hoover { sub_rows * step_row } else { 0.0 };
-    let an1x_h = if has_an1x { sub_rows * step_row } else { 0.0 };
-    let drums_h = active_drum_voices as f32 * sub_rows * (step_row + drum_sub);
-    // Pre-echo row that lives at the bottom of the sequencer panel
-    // (always rendered): padding + horizontal row with the anchor
-    // strip (21 px square cells + leading/trailing 6 px pads)
-    // + labels + toggles + trailing pad.  Budget 42 px covers it
-    // with a few px of margin so the cell isn't shaved close.
-    let preecho_h = 42.0;
-    let total_h = header_h + bass_h + hoover_h + an1x_h + drums_h + preecho_h;
-    // Convert pixel height to grid rows: each grid row occupies col_w + RACK_GAP
-    // (minus one trailing gap on the last row).
-    let step = col_w + RACK_GAP;
-    let grid_rows = ((total_h + RACK_GAP) / step).ceil() as u8;
-    grid_rows.max(2)
-}
-
-/// Pixel height for the sequencer, dynamically sized by rack contents.
-pub(super) fn sequencer_grid_h(state: &crate::state::AppState, col_w: f32) -> f32 {
-    let r = sequencer_grid_rows(state, col_w) as f32;
-    r * col_w + (r - 1.0).max(0.0) * RACK_GAP
-}
-
-/// Grid step: col_w + gap. Cards at adjacent grid positions are separated by this.
-pub(super) fn grid_step(col_w: f32) -> f32 {
-    col_w + RACK_GAP
-}
-
-/// Width spanning `n` grid columns (including internal gaps).
-#[allow(dead_code)]
-pub(crate) fn span_w(n: u8, col_w: f32) -> f32 {
-    n as f32 * col_w + (n as f32 - 1.0).max(0.0) * RACK_GAP
-}
-
-/// Published grid column width — readable from any panel via egui temp data.
-/// Stored by `draw_rack_inner`, read via `grid_unit()`.
-const GRID_COL_W_ID: &str = "rack_grid_col_w";
-
-/// Read the current grid column width from egui temp data.
-/// Panels can use this to size sub-elements to grid multiples.
-/// Returns 0.0 if called outside the rack draw cycle.
-#[allow(dead_code)]
-pub(crate) fn grid_unit(ctx: &egui::Context) -> f32 {
-    ctx.data(|d| d.get_temp::<f32>(egui::Id::new(GRID_COL_W_ID)))
-        .unwrap_or(0.0)
-}
-
-/// Compute card X position — mirrored horizontally when the rack is flipped.
-pub(super) fn card_x(zone_left: f32, gc: u8, col_span: u8, step: f32, flipped: bool) -> f32 {
-    if flipped {
-        // Mirror: a card at column gc with width col_span maps to
-        // column (GRID_COLS - gc - col_span) from the left.
-        let mirror_col = GRID_COLS.saturating_sub(gc + col_span);
-        zone_left + mirror_col as f32 * step
-    } else {
-        zone_left + gc as f32 * step
-    }
-}
-
-/// Paint subtle dots at grid intersections within a zone's content area.
-/// Called per-zone so each collapsible section gets its own aligned grid.
-/// `zone_left` is the X where modules actually start (cursor X at zone start).
-pub(super) fn draw_zone_grid_dots(
-    ui: &egui::Ui,
-    zone_left: f32,
-    zone_top: f32,
-    zone_bottom: f32,
-    col_w: f32,
-) {
-    if col_w < 5.0 || zone_bottom <= zone_top {
-        return;
-    }
-    let painter = ui.painter();
-    let dot_color = Color32::from_gray(35);
-    let step = col_w + RACK_GAP;
-    // Dots sit at gap centerlines — offset by half_gap so a card spanning
-    // columns c..c+n has dots at its left edge, between it and its neighbour,
-    // and at its right edge.
-    let half = RACK_GAP * 0.5;
-    let ox = zone_left - half;
-    let oy = zone_top - half;
-    let right = ox + GRID_COLS as f32 * step + RACK_GAP;
-    let mut y = oy;
-    while y <= zone_bottom + step {
-        for c in 0..=GRID_COLS {
-            let x = ox + c as f32 * step;
-            if x <= right + 1.0 {
-                painter.circle_filled(egui::Pos2::new(x, y), 1.0, dot_color);
-            }
-        }
-        y += step;
-    }
-}
+// Grid helpers moved to `ui/rack_grid.rs`.
+use super::rack_grid::{
+    GRID_COL_W_ID, RACK_GAP, card_x, draw_zone_backdrop, grid_col_w, grid_step, module_grid_h,
+    module_grid_w, sequencer_grid_h, sequencer_grid_rows,
+};
 
 fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<PortPos>) {
     let available_w = (ui.available_width() - 8.0).max(200.0);
@@ -586,10 +294,11 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
     // ─── MAIN AUDIO zone (sequencer + master) ────────────────────────────────
     app.zone_y[1] = ui.cursor().top() - content_top;
     {
-        let (add, toggle, toggle_all) = module_card::zone_rail(
+        let (add, toggle, toggle_all, _) = module_card::zone_rail(
             ui,
             "MAIN AUDIO",
             true,
+            None,
             24,
             app.zone_global_collapsed,
             all_collapsed,
@@ -652,6 +361,8 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
         let zone_rect = ui
             .allocate_exact_size(egui::Vec2::new(available_w, zone_h), egui::Sense::hover())
             .0;
+        // Backdrop first so cards paint on top.
+        draw_zone_backdrop(ui, zone_left, zone_top, zone_top + zone_h, col_w);
 
         for &(id, kind, enabled, gc, gr) in &global_mods {
             let slot_w = module_grid_w(kind, col_w);
@@ -666,12 +377,14 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
             let card_rect =
                 egui::Rect::from_min_size(egui::Pos2::new(x, y), egui::Vec2::new(slot_w, slot_h));
             let mut child = ui.child_ui(card_rect, egui::Layout::top_down(egui::Align::LEFT), None);
+            let reaches_master = app.state.read().rack.reaches_master(id);
             let resp = if app.rack_flipped {
                 module_card::module_card_back(
                     &mut child,
                     id,
                     kind,
                     enabled,
+                    reaches_master,
                     Some(slot_w),
                     Some(slot_h),
                     app.kind_scale(kind),
@@ -683,9 +396,11 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
                     id,
                     kind,
                     enabled,
+                    reaches_master,
                     Some(slot_w),
                     Some(slot_h),
                     app.kind_scale(kind),
+                    None,
                     ports,
                     |ui| {
                         // Global zone content dispatch
@@ -724,16 +439,15 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
                 }
             }
         }
-
-        draw_zone_grid_dots(ui, zone_left, zone_top, zone_top + zone_h, col_w);
     } // end zone_global_collapsed guard
 
     app.zone_y[2] = ui.cursor().top() - content_top;
     {
-        let (add, toggle, toggle_all) = module_card::zone_rail(
+        let (add, toggle, toggle_all, _) = module_card::zone_rail(
             ui,
             "VOICES",
             true,
+            None,
             18,
             app.zone_voice_collapsed,
             all_collapsed,
@@ -785,6 +499,8 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
         let zone_rect = ui
             .allocate_exact_size(egui::Vec2::new(available_w, zone_h), egui::Sense::hover())
             .0;
+        // Backdrop first so cards paint on top.
+        draw_zone_backdrop(ui, zone_left, zone_top, zone_top + zone_h, col_w);
 
         // Place each module at its grid coordinates
         for &(id, kind, enabled, gc, gr) in &voice_mods {
@@ -798,12 +514,14 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
             let mut child = ui.child_ui(card_rect, egui::Layout::top_down(egui::Align::LEFT), None);
             let is_dragging = app.module_drag.as_ref().map(|d| d.module_id) == Some(id);
             let eff_enabled = if is_dragging { false } else { enabled };
+            let reaches_master = app.state.read().rack.reaches_master(id);
             let resp = if app.rack_flipped {
                 module_card::module_card_back(
                     &mut child,
                     id,
                     kind,
                     eff_enabled,
+                    reaches_master,
                     Some(slot_w),
                     Some(slot_h),
                     app.kind_scale(kind),
@@ -815,9 +533,11 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
                     id,
                     kind,
                     eff_enabled,
+                    reaches_master,
                     Some(slot_w),
                     Some(slot_h),
                     app.kind_scale(kind),
+                    None,
                     ports,
                     |ui| {
                         draw_voice_content(app, ui, kind, id);
@@ -848,15 +568,24 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
                 reorder_module_by_drop(app, id, drop_pos, Zone::Voice, zo, step, col_w);
             }
         }
-        draw_zone_grid_dots(ui, zone_left, zone_top, zone_top + zone_h, col_w);
     } // end zone_voice_collapsed guard
 
     app.zone_y[3] = ui.cursor().top() - content_top;
     {
-        let (add, toggle, toggle_all) = module_card::zone_rail(
+        // Any-expanded flag drives the chip's glyph (▾ vs ▸) so one click
+        // always flips the zone into the opposite state.
+        let fx_any_expanded = {
+            let s = app.state.read();
+            s.rack
+                .modules
+                .iter()
+                .any(|m| m.zone == Zone::FxMod && m.kind.supports_xy_pad() && m.pad_expanded)
+        };
+        let (add, toggle, toggle_all, pad_toggle_all) = module_card::zone_rail(
             ui,
             "FX + MODULATION",
             true,
+            Some(fx_any_expanded),
             14,
             app.zone_fxmod_collapsed,
             all_collapsed,
@@ -871,6 +600,19 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
             app.zone_voice_collapsed = target;
             app.zone_fxmod_collapsed = target;
         }
+        if pad_toggle_all {
+            let target = !fx_any_expanded;
+            {
+                let mut s = app.state.write();
+                for m in &mut s.rack.modules {
+                    if m.zone == Zone::FxMod && m.kind.supports_xy_pad() {
+                        m.pad_expanded = target;
+                    }
+                }
+                s.rack.arrange_grid();
+            }
+            ui.ctx().request_repaint();
+        }
         if add {
             app.add_menu_zone = Some(Zone::FxMod);
         }
@@ -880,30 +622,41 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
         let zone_left = ui.cursor().left();
         let zone_top = ui.cursor().top();
         let step = grid_step(col_w);
-        let fx_mods: Vec<(u32, ModuleKind, bool, u8, u8)> = {
+        // (id, kind, enabled, grid_col, grid_row, pad_expanded, effective_rows)
+        let fx_mods: Vec<(u32, ModuleKind, bool, u8, u8, bool, u8)> = {
             let s = app.state.read();
             s.rack
                 .modules
                 .iter()
                 .filter(|m| m.zone == Zone::FxMod)
-                .map(|m| (m.id, m.kind, m.enabled, m.grid_col, m.grid_row))
+                .map(|m| {
+                    let (_, eff_h) = s.rack.effective_grid_size(m);
+                    (
+                        m.id,
+                        m.kind,
+                        m.enabled,
+                        m.grid_col,
+                        m.grid_row,
+                        m.pad_expanded,
+                        eff_h,
+                    )
+                })
                 .collect()
         };
         let zone_rows = fx_mods
             .iter()
-            .map(|&(_, kind, _, _, gr)| {
-                let (_, h) = kind.grid_size(GRID_COLS);
-                gr as usize + h as usize
-            })
+            .map(|&(_, _, _, _, gr, _, eff_h)| gr as usize + eff_h as usize)
             .max()
             .unwrap_or(0);
         let zone_h = zone_rows as f32 * step;
         let zone_rect = ui
             .allocate_exact_size(egui::Vec2::new(available_w, zone_h), egui::Sense::hover())
             .0;
-        for &(id, kind, enabled, gc, gr) in &fx_mods {
+        // Backdrop first so cards paint on top.
+        draw_zone_backdrop(ui, zone_left, zone_top, zone_top + zone_h, col_w);
+        for &(id, kind, enabled, gc, gr, pad_expanded, eff_h) in &fx_mods {
             let slot_w = module_grid_w(kind, col_w);
-            let slot_h = module_grid_h(kind, col_w);
+            let slot_h = crate::ui::rack_grid::module_grid_h_rows(eff_h, col_w);
             let (col_span, _) = kind.grid_size(GRID_COLS);
             let x = card_x(zone_rect.min.x, gc, col_span, step, app.rack_flipped);
             let y = zone_rect.min.y + gr as f32 * step;
@@ -912,12 +665,19 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
             let mut child = ui.child_ui(card_rect, egui::Layout::top_down(egui::Align::LEFT), None);
             let is_dragging = app.module_drag.as_ref().map(|d| d.module_id) == Some(id);
             let eff_enabled = if is_dragging { false } else { enabled };
+            let reaches_master = app.state.read().rack.reaches_master(id);
+            let pad_param = if kind.supports_xy_pad() {
+                Some(pad_expanded)
+            } else {
+                None
+            };
             let resp = if app.rack_flipped {
                 module_card::module_card_back(
                     &mut child,
                     id,
                     kind,
                     eff_enabled,
+                    reaches_master,
                     Some(slot_w),
                     Some(slot_h),
                     app.kind_scale(kind),
@@ -929,9 +689,11 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
                     id,
                     kind,
                     eff_enabled,
+                    reaches_master,
                     Some(slot_w),
                     Some(slot_h),
                     app.kind_scale(kind),
+                    pad_param,
                     ports,
                     |ui| {
                         if kind == ModuleKind::LfoModule {
@@ -943,7 +705,7 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
                         } else if kind == ModuleKind::ActivityTimeline {
                             crate::ui::panels::draw_timeline(app, ui);
                         } else {
-                            draw_fx_content(app, ui, kind);
+                            draw_fx_content(app, ui, kind, id);
                         }
                     },
                 )
@@ -955,7 +717,7 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
                 let p = ui.painter();
                 p.rect_filled(
                     resp.card_rect,
-                    egui::Rounding::same(8.0),
+                    egui::Rounding::same(CARD_ROUNDING),
                     Color32::from_rgba_premultiplied(0, 0, 0, 120),
                 );
             }
@@ -972,6 +734,16 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
                 }
                 app.push_fx_plan();
             }
+            if resp.xy_pad_toggle_clicked && !is_dragging {
+                {
+                    let mut s = app.state.write();
+                    if let Some(m) = s.rack.modules.iter_mut().find(|m| m.id == id) {
+                        m.pad_expanded = !m.pad_expanded;
+                    }
+                    s.rack.arrange_grid();
+                }
+                ctx_ref.request_repaint();
+            }
             if resp.remove_clicked {
                 app.confirm_remove_module = Some(id);
             }
@@ -981,7 +753,6 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
                 reorder_module_by_drop(app, id, drop_pos, Zone::FxMod, zo, step, col_w);
             }
         }
-        draw_zone_grid_dots(ui, zone_left, zone_top, zone_top + zone_h, col_w);
     } // end zone_fxmod_collapsed guard
 
     ui.ctx().memory_mut(|m| {

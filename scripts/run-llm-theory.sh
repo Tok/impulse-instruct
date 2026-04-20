@@ -8,7 +8,7 @@
 #
 # Usage:
 #   ./scripts/run-llm-theory.sh                        # all models in models/
-#   ./scripts/run-llm-theory.sh models/Bonsai-8B.gguf  # single model
+#   ./scripts/run-llm-theory.sh models/gemma-4-E4B-it-Q4_K_M.gguf  # single model
 #   ./scripts/run-llm-theory.sh --verbose               # full JSON output
 # ─────────────────────────────────────────────────────────────────────────────
 LLM_SUITE=llm_suite_theory exec "$(dirname "$0")/run-llm-tests.sh" "$@"

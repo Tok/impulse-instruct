@@ -7,7 +7,7 @@ avoid the 5–10 s cold-start per utterance.
 
 Usage:
     # Persistent server (for in-app TTS and demo recording)
-    python3 scripts/neutts-server.py [--port 8770] [--model models/neutts-air-q4.gguf]
+    python3 scripts/neutts-server.py [--port 8770] [--model models/neutts-air-q8.gguf]
 
     # One-shot mode (generate a single clip and exit)
     python3 scripts/neutts-server.py --oneshot \
@@ -72,8 +72,12 @@ def _get_tts(model_path: str | None = None):
 
     # Resolve model path
     if model_path is None:
-        # Search common locations
+        # Search common locations.  Prefer Q8 over Q4 — Q8 is the new default
+        # (better quality, ~803 MB), Q4 (~527 MB) stays a supported fallback
+        # so existing installs keep working without re-downloading.
         candidates = [
+            "models/neutts-air-q8.gguf",
+            "models/neutts-air-Q8_0.gguf",
             "models/neutts-air-q4.gguf",
             "models/neutts-air-Q4_0.gguf",
         ]

@@ -23,7 +23,7 @@ say "Bass, two drum kits, reverb, delay."
 add_agent RAGGA gemma
 
 # MC agent in MC mode with TTS — auto-adds a TTS module and wires it
-add_agent SELECTA bonsai "" mc tts
+add_agent SELECTA gemma "" mc tts
 
 wait_for_model
 

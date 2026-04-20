@@ -193,6 +193,7 @@ pub fn draw_fx(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         mut comp_mb,
         mut stereo_w,
         mut rev_freeze,
+        mut comp_reverse,
         locked,
     ) = {
         let s = app.state.read();
@@ -235,6 +236,7 @@ pub fn draw_fx(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             s.fx.compressor_multiband,
             s.fx.stereo_width,
             s.fx.reverb_freeze,
+            s.fx.compressor_reverse,
             s.llm.locked_params.clone(),
         )
     };
@@ -313,11 +315,27 @@ pub fn draw_fx(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                 hknobs!(ui, ("LOW", &mut eq_low, ParamMode::Free), ("MID", &mut eq_mid, ParamMode::Free), ("HIGH", &mut eq_hi, ParamMode::Free));
             });
 
-            // ── COMPRESSOR (2×2) ───────────────────────────────────────────────
+            // ── COMPRESSOR (2×2 + REVERSE toggle) ──────────────────────────────
             widgets::glass_group_fill(ui, gw, gw, |ui| {
                 ui.label(egui::RichText::new("COMP").color(theme::FOG).monospace().size(9.5));
                 hknobs!(ui, ("MIX", &mut comp_mix, ParamMode::Free), ("THRESH", &mut comp_thresh, ParamMode::Free));
                 hknobs!(ui, ("RATIO", &mut comp_ratio, ParamMode::Free), ("MULTI", &mut comp_mb, pm("fx.compressor_multiband")));
+                // Attack/release swap — the envelope misses the initial
+                // transient (slow attack) and releases fast, giving a
+                // swell-into-hit feel.  Third FX with a reversal toggle
+                // alongside reverb (reverb_dir) and delay (delay_dir).
+                if ui
+                    .add(egui::SelectableLabel::new(comp_reverse, "REVERSE"))
+                    .on_hover_text(
+                        "Swap attack/release so the envelope misses the \
+                         initial transient and clamps the sustain — classic \
+                         reverse-comp swell-into-hit shape."
+                    )
+                    .clicked()
+                {
+                    comp_reverse = !comp_reverse;
+                    changed = true;
+                }
             });
 
             // ── SIDECHAIN (1 row) ──────────────────────────────────────────────
@@ -400,6 +418,7 @@ pub fn draw_fx(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         s.fx.compressor_multiband = comp_mb;
         s.fx.stereo_width = stereo_w;
         s.fx.reverb_freeze = rev_freeze;
+        s.fx.compressor_reverse = comp_reverse;
         drop(s);
         app.push_audio_params();
         app.observe_edits(&[

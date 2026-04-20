@@ -80,7 +80,7 @@ Output: `demo/output/impulse_demo_<timestamp>.mp4`
 - LLM builds pattern from natural language
 - Filter tweaking, FX modules, parameter locking
 
-**Part 2: Multi-agent band** (Gemma 4 + Bonsai specialists)
+**Part 2: Multi-agent band** (Gemma 4 — shared server across agents)
 - Remove PULSE → add BASS, DRUMS, FX agents
 - Show per-agent control cables
 - Each agent receives individual prompts
@@ -91,7 +91,7 @@ Output: `demo/output/impulse_demo_<timestamp>.mp4`
 ```
 POST /api/rack/reset                    strip to seq + master + console
 POST /api/rack/add    {"kind":"bass"}   add module (auto-wires audio cable)
-POST /api/rack/agent  {"persona":"BASS","scope":["bass"],"model":"bonsai"}
+POST /api/rack/agent  {"persona":"BASS","scope":["bass"],"model":"gemma"}
 POST /api/scroll      {"target":"bass"} scroll to module
 POST /api/flip        {"show_back":true} show cables
 POST /api/prompt      {"prompt":"...","agent":"BASS"} target specific agent
@@ -106,6 +106,5 @@ POST /api/unlock      {"paths":["sequencer.kick_a_steps"]}
 - **Best of 5** — LLM responses vary. Run multiple takes and pick the best.
 - **Kill stale servers** — `pkill -f llama-server` before recording.
 - **Kill stale ffmpeg** — `pkill -f ffmpeg` if a previous run left zombies.
-- **Bonsai needs explicit prompts** — include parameter values ("set cutoff to 0.3").
 - **Check wiring** — flip the rack (`/api/flip`) to verify control cables.
 - **TTS cache** — delete `demo/tts_cache/` to regenerate after editing narration text.

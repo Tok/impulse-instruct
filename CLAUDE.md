@@ -14,10 +14,11 @@ cargo test                           # unit tests (split across src/tests/)
 ./start.sh --dev                     # build + launch (debug + verbose)
 ./scripts/run-tests.sh --coverage    # HTML coverage report
 ./scripts/build-all.sh               # Linux + Windows EXE → dist/
-./scripts/download-models.sh         # fetch Gemma 4 E4B GGUF (~4.6 GB, default) + NeuTTS Air (~527 MB, optional)
+./scripts/download-models.sh         # fetch Gemma 4 E4B GGUF (~4.6 GB, default) + NeuTTS Air Q8 (~803 MB, optional)
 ./scripts/run-llm-tests.sh           # all LLM integration suites (needs running model)
 ./scripts/run-llm-style.sh           # artist/genre reference tests only
 ./scripts/run-llm-theory.sh          # music theory + producer lingo tests only
+./scripts/run-llm-bass.sh            # bass directive tests (multi-voice, accent/slide, subset, coverage)
 ```
 
 Windows equivalents (`.bat` files mirror every `.sh` script):
@@ -27,10 +28,10 @@ scripts\run-tests.bat
 scripts\build-all.bat
 scripts\download-models.bat
 scripts\build-llama-server.bat
-scripts\build-bonsai-server.bat
 scripts\run-llm-tests.bat
 scripts\run-llm-style.bat
 scripts\run-llm-theory.bat
+scripts\run-llm-bass.bat
 ```
 
 ## Architecture - what lives where
@@ -106,12 +107,10 @@ Quick summary of the key rules:
 
 Models (ranked by test suite results):
 - **Gemma 4 E4B Q4_K_M** - default, 4.6 GB, best accuracy, passes all 39 LLM integration tests
-- **Bonsai 8B Q1_0_g128** - 1.1 GB lightweight fallback, no chain-of-thought, requires PrismML llama-server fork
 - **Qwen3-8B / 14B** - optional, chain-of-thought capable; not recommended as default (heavier, no accuracy gain over Gemma 4)
 - **Other GGUF models** (e.g. Llama variants) - technically compatible with llama-server but not evaluated; system prompt is not tuned for them. Users are free to experiment.
 
-Server selection: Bonsai uses `.llama-build/bin/llama-server` (PrismML fork, Q1_0_g128 format).
-All other models use `.llama-official-build/bin/llama-server` (standard llama.cpp).
+Server: `.llama-official-build/bin/llama-server` (standard llama.cpp), built via `./scripts/build-llama-server.sh`.
 
 - Mock mode: runs without model, returns plausible JSON based on prompt keywords + instruction set
 - Real mode: any GGUF model via llama-server subprocess; model selected at runtime via UI
@@ -125,15 +124,18 @@ All other models use `.llama-official-build/bin/llama-server` (standard llama.cp
 ```
 GET  /api/state          full AppState as JSON
 GET  /api/schema         parameter JSON schema
-POST /api/prompt         { "prompt": "make it acid" }
+POST /api/prompt         { "prompt": "make it acid" }           (one_shot default true)
+POST /api/prompt         { "prompt": "jam", "one_shot": false }  (self-perpetuates while heat>0)
 POST /api/params         { "params": { "tb303": { "cutoff": 0.4 } } }
 POST /api/lock           { "paths": ["tb303.cutoff"] }
 POST /api/unlock         { "paths": ["tb303.cutoff"] }
 POST /api/sequencer/play
 POST /api/sequencer/stop
+GET  /api/song                                    returns { chain, overrides, enabled, pos, repeat_count }
+POST /api/song           { "chain": [0,1,2], "overrides": [{ "style": "jungle", "repeats": 2 }, {}, { "bpm": 140.0 }], "enabled": true }
 POST /api/scroll         { "target": "voice" }  (global/voice/fxmod/bass/808/fx/…)
 POST /api/scroll         { "target": "bass", "collapse_others": true }  focus mode
-POST /api/preset         { "name": "Crew" }     (Solo/Duo/Swarm/Crew/Voices/Lite)
+POST /api/preset         { "name": "Crew" }     (Solo/Duo/Swarm/Crew/Voices)
 POST /api/style          { "id": "drum_and_bass" }  set global style + propagate to agents (id=null clears)
 POST /api/randomize                              random style + auto-rack + LLM "generate from scratch"
 POST /api/amen           { "path": "samples/amen/foo.wav" }  load a specific amen sample
@@ -143,12 +145,15 @@ POST /api/granular       { "random": true }     load a random sample from sample
 POST /api/flip           { "show_back": true }   (true=cables, false=knobs)
 POST /api/rack/reset                              strip to sequencer + master + console
 POST /api/rack/add       { "kind": "808" }        add module, returns { "id": N }
-POST /api/rack/agent     { "persona": "BASS", "scope": ["bass"], "model": "bonsai", "mode": "mc", "tts": true }
-POST /api/rack/cable     { "from": 1, "to": 5 }  connect modules (default: control cable)
+POST /api/rack/agent     { "persona": "BASS", "scope": ["bass"], "model": "gemma", "mode": "mc", "tts": true }
+POST /api/rack/cable     { "from": 1, "to": 5, "kind": "audio", "audio_gain": 0.4 }  connect modules (default kind: control; audio_gain 0..1.5, optional)
+POST /api/rack/cable_gain{ "from": 1, "to": 5, "gain": 0.8 }  set per-cable audio gain (feedback-edge clamp applies automatically)
 POST /api/rack/mod_cable { "from": 7, "to": 1, "slot": 0, "depth": 0.5 }  LFO→Mod-In jack
 POST /api/rack/mod_target{ "module": 1, "slot": 0, "targets": ["BassPan", "BassCutoff"] }
 POST /api/rack/mod_depth { "module": 1, "slot": 0, "depth": 0.5 }  per-jack depth 0..1
 POST /api/rack/remove    { "id": 5 }              remove module + its cables
+POST /api/rack/pad       { "id": 5, "expanded": true, "pair": 1 }  XY pad expand + pair
+POST /api/midi/export    { "path": "pattern.mid" }  export sequencer as SMF (Type 1)
 POST /api/rack/collapse  { "action": "all" }      all/none/global/voice/fxmod
 ```
 

@@ -120,6 +120,22 @@ mod apply_session_tests {
     }
 
     #[test]
+    fn apply_session_autosync_rack_flag_round_trips() {
+        use crate::state::persistence::{SessionData, apply_session};
+        let mut state = AppState::default();
+        assert!(
+            !state.ui_prefs.autosync_rack_on_start,
+            "default is off — existing users keep their customised rack"
+        );
+        let data = SessionData {
+            autosync_rack_on_start: Some(true),
+            ..Default::default()
+        };
+        apply_session(&mut state, data);
+        assert!(state.ui_prefs.autosync_rack_on_start);
+    }
+
+    #[test]
     fn apply_session_ui_prefs() {
         let mut state = AppState::default();
         let data = SessionData {
@@ -346,6 +362,56 @@ mod project_file_tests {
         let result = load_project(&path);
         assert!(result.is_err());
         let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn list_recent_projects_orders_newest_first_and_filters_prefix() {
+        use crate::ui::header::list_recent_projects_in;
+        // Isolated tempdir so the test never reads real project files.
+        let dir = std::env::temp_dir().join("impulse_test_recent_projects");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).expect("mkdir");
+
+        // Write three project files with distinct, increasing mtimes.
+        let paths = ["project-a.json", "project-b.json", "project-c.json"];
+        for (i, name) in paths.iter().enumerate() {
+            let p = dir.join(name);
+            std::fs::write(&p, "{}").expect("write");
+            // Push mtime forward so ordering is stable — sleep is too slow,
+            // so use filetime via std::fs::File::set_modified instead.
+            let f = std::fs::OpenOptions::new()
+                .write(true)
+                .open(&p)
+                .expect("open");
+            let t = std::time::SystemTime::UNIX_EPOCH
+                + std::time::Duration::from_secs(1_000_000 + i as u64);
+            f.set_modified(t).expect("set mtime");
+        }
+        // A file that doesn't match the prefix — must be excluded.
+        std::fs::write(dir.join("notes.txt"), "x").expect("write noise");
+        std::fs::write(dir.join("other.json"), "{}").expect("write noise");
+
+        let found = list_recent_projects_in(&dir);
+        let names: Vec<String> = found
+            .iter()
+            .map(|p| p.file_name().unwrap().to_string_lossy().into_owned())
+            .collect();
+        // Newest first (c, b, a) and only project-*.json entries.
+        assert_eq!(
+            names,
+            vec!["project-c.json", "project-b.json", "project-a.json"]
+        );
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn list_recent_projects_empty_on_nonexistent_dir() {
+        use crate::ui::header::list_recent_projects_in;
+        let dir = std::env::temp_dir().join("impulse_test_recent_does_not_exist");
+        let _ = std::fs::remove_dir_all(&dir); // ensure missing
+        let found = list_recent_projects_in(&dir);
+        assert!(found.is_empty());
     }
 }
 

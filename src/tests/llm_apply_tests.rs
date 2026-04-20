@@ -73,141 +73,8 @@ mod llm_apply_bass_tests {
     }
 }
 
-#[cfg(test)]
-mod llm_apply_sequencer_tests {
-    use crate::state::{AppState, DrumVoice, Scale, apply_llm_update, lock_param};
-
-    #[test]
-    fn sequencer_bpm_applied_and_clamped() {
-        let s = AppState::default();
-        let update = serde_json::json!({ "sequencer": { "bpm": 180.0 } });
-        let s = apply_llm_update(s, &update, &[]);
-        assert!((s.sequencer.bpm - 180.0).abs() < 0.01);
-
-        let update = serde_json::json!({ "sequencer": { "bpm": 999.0 } });
-        let s = apply_llm_update(s, &update, &[]);
-        assert!(s.sequencer.bpm <= 250.0);
-    }
-
-    #[test]
-    fn sequencer_swing() {
-        let s = AppState::default();
-        let update = serde_json::json!({ "sequencer": { "swing": 0.65 } });
-        let s = apply_llm_update(s, &update, &[]);
-        assert!((s.sequencer.swing - 0.65).abs() < 1e-4);
-    }
-
-    #[test]
-    fn sequencer_time_sig_num() {
-        let s = AppState::default();
-        let update = serde_json::json!({ "sequencer": { "time_sig_num": 7 } });
-        let s = apply_llm_update(s, &update, &[]);
-        assert_eq!(s.sequencer.time_sig_num, 7);
-    }
-
-    #[test]
-    fn sequencer_time_sig_num_clamps() {
-        let s = AppState::default();
-        let update = serde_json::json!({ "sequencer": { "time_sig_num": 99 } });
-        let s = apply_llm_update(s, &update, &[]);
-        assert_eq!(s.sequencer.time_sig_num, 9);
-    }
-
-    #[test]
-    fn sequencer_root_note_and_scale() {
-        let s = AppState::default();
-        let update = serde_json::json!({ "sequencer": { "root_note": 5, "scale": "Dorian" } });
-        let s = apply_llm_update(s, &update, &[]);
-        assert_eq!(s.sequencer.root_note, 5);
-        assert_eq!(s.sequencer.scale, Scale::Dorian);
-    }
-
-    #[test]
-    fn sequencer_drum_lengths_polyrhythm() {
-        let s = AppState::default();
-        let update = serde_json::json!({
-            "sequencer": { "drum_lengths": { "kick_a": 12, "hihat_a": 7 } }
-        });
-        let s = apply_llm_update(s, &update, &[]);
-        assert_eq!(s.sequencer.drum_steps[&DrumVoice::Kick808], 12);
-        assert_eq!(s.sequencer.drum_steps[&DrumVoice::HihatClosed808], 7);
-    }
-
-    #[test]
-    fn sequencer_drum_ratchets() {
-        let s = AppState::default();
-        let update = serde_json::json!({
-            "sequencer": { "drum_ratchets": { "kick_a": [2, 1, 1, 3] } }
-        });
-        let s = apply_llm_update(s, &update, &[]);
-        assert_eq!(s.sequencer.drum_patterns[&DrumVoice::Kick808][0].ratchet, 2);
-        assert_eq!(s.sequencer.drum_patterns[&DrumVoice::Kick808][3].ratchet, 3);
-    }
-
-    #[test]
-    fn sequencer_bass_len_hoover_len_an1x_len() {
-        let s = AppState::default();
-        let update = serde_json::json!({
-            "sequencer": { "bass_len": 8, "hoover_len": 12, "an1x_len": 24 }
-        });
-        let s = apply_llm_update(s, &update, &[]);
-        assert_eq!(s.sequencer.bass_steps, 8);
-        assert_eq!(s.sequencer.hoover_steps, 12);
-        assert_eq!(s.sequencer.an1x_steps, 24);
-    }
-
-    #[test]
-    fn sequencer_bass_steps_index_list() {
-        let s = AppState::default();
-        // Index list format: [0, 4, 8] activates those positions, clears rest
-        let update = serde_json::json!({ "sequencer": { "bass_steps": [0, 4, 8] } });
-        let s = apply_llm_update(s, &update, &[]);
-        assert!(s.sequencer.bass_pattern[0].active);
-        assert!(!s.sequencer.bass_pattern[1].active);
-        assert!(s.sequencer.bass_pattern[4].active);
-        assert!(s.sequencer.bass_pattern[8].active);
-    }
-
-    #[test]
-    fn sequencer_bass_notes() {
-        let s = AppState::default();
-        let update = serde_json::json!({ "sequencer": { "bass_notes": [36, 38, 40, 41] } });
-        let s = apply_llm_update(s, &update, &[]);
-        assert_eq!(s.sequencer.bass_pattern[0].note, 36);
-        assert_eq!(s.sequencer.bass_pattern[1].note, 38);
-        assert_eq!(s.sequencer.bass_pattern[3].note, 41);
-    }
-
-    #[test]
-    fn sequencer_kick_a_steps_index_list() {
-        let s = AppState::default();
-        let update = serde_json::json!({ "sequencer": { "kick_a_steps": [0, 4, 8, 12] } });
-        let s = apply_llm_update(s, &update, &[]);
-        let kick = &s.sequencer.drum_patterns[&DrumVoice::Kick808];
-        assert!(kick[0].active);
-        assert!(!kick[1].active);
-        assert!(kick[4].active);
-        assert!(kick[12].active);
-    }
-
-    #[test]
-    fn sequencer_locked_bpm_not_overwritten() {
-        let s = lock_param(AppState::default(), "sequencer.bpm");
-        let orig = s.sequencer.bpm;
-        let update = serde_json::json!({ "sequencer": { "bpm": 200.0 } });
-        let s = apply_llm_update(s, &update, &[]);
-        assert_eq!(s.sequencer.bpm, orig);
-    }
-
-    #[test]
-    fn sequencer_drum_steps_locked() {
-        let s = lock_param(AppState::default(), "sequencer.kick_a_steps");
-        let update = serde_json::json!({ "sequencer": { "kick_a_steps": [0, 2, 4] } });
-        let before = s.sequencer.drum_patterns[&DrumVoice::Kick808].clone();
-        let s = apply_llm_update(s, &update, &[]);
-        assert_eq!(s.sequencer.drum_patterns[&DrumVoice::Kick808], before);
-    }
-}
+// Sequencer-branch tests (BPM/swing/time-sig + per-voice pattern decoding)
+// moved to `llm_apply_seq_param_tests.rs` to keep this file under 1000 lines.
 
 #[cfg(test)]
 mod llm_apply_kit_tests {
@@ -272,6 +139,115 @@ mod llm_apply_fx_tests {
         assert!((s.fx.delay_time - 0.4).abs() < 1e-4);
         assert!((s.fx.delay_feedback - 0.6).abs() < 1e-4);
         assert!((s.fx.delay_mix - 0.3).abs() < 1e-4);
+    }
+
+    #[test]
+    fn fx_reverb_xy_pad_writes_pair_0() {
+        // `reverb_xy: [x, y]` maps to the canonical Pair 0 knobs
+        // (reverb_size × reverb_damp).  reverb_mix stays untouched so
+        // agents using Pair 1 / Pair 2 via individual paths aren't
+        // overwritten.
+        let s = AppState::default();
+        let mix_before = s.fx.reverb_mix;
+        let update = serde_json::json!({ "fx": { "reverb_xy": [0.72, 0.44] } });
+        let s = apply_llm_update(s, &update, &[]);
+        assert!((s.fx.reverb_size - 0.72).abs() < 1e-4);
+        assert!((s.fx.reverb_damp - 0.44).abs() < 1e-4);
+        assert_eq!(s.fx.reverb_mix, mix_before);
+    }
+
+    #[test]
+    fn fx_xy_pads_cover_every_declared_pair() {
+        // Smoke test across all 13 FX pads: send a distinct [x,y] to each
+        // pad's _xy path and verify the pair's fields land on those
+        // values.  Guards the XY_PAIRS table against field renames.
+        let cases: &[(&str, [f32; 2], fn(&crate::state::FxState) -> (f32, f32))] = &[
+            ("reverb_xy", [0.1, 0.2], |f| (f.reverb_size, f.reverb_damp)),
+            ("delay_xy", [0.3, 0.4], |f| (f.delay_time, f.delay_feedback)),
+            ("chorus_xy", [0.5, 0.6], |f| (f.chorus_rate, f.chorus_depth)),
+            ("phaser_xy", [0.7, 0.8], |f| (f.phaser_rate, f.phaser_depth)),
+            ("ring_mod_xy", [0.12, 0.24], |f| {
+                (f.ring_mod_freq, f.ring_mod_mix)
+            }),
+            ("waveshaper_xy", [0.36, 0.48], |f| {
+                (f.waveshaper_drive, f.waveshaper_mix)
+            }),
+            ("bitcrush_xy", [0.6, 0.72], |f| {
+                (f.bitcrush_bits, f.bitcrush_rate)
+            }),
+            ("eq_xy", [-0.5, 0.5], |f| (f.eq_low_gain, f.eq_mid_gain)),
+            ("compressor_xy", [0.25, 0.75], |f| {
+                (f.compressor_threshold, f.compressor_ratio)
+            }),
+            ("tape_xy", [0.35, 0.65], |f| (f.tape_drive, f.tape_flutter)),
+            ("distortion_xy", [0.45, 0.55], |f| {
+                (f.distortion_drive, f.distortion_mix)
+            }),
+            ("autotune_xy", [0.15, 0.85], |f| {
+                (f.autotune_amount, f.autotune_mix)
+            }),
+            ("fx_pan_xy", [0.3, 0.7], |f| (f.fx_pan_pos, f.fx_pan_width)),
+        ];
+        for (key, [x, y], read) in cases {
+            let update = serde_json::json!({ "fx": { *key: [*x, *y] } });
+            let s = apply_llm_update(AppState::default(), &update, &[]);
+            let (a, b) = read(&s.fx);
+            assert!(
+                (a - x).abs() < 1e-4 && (b - y).abs() < 1e-4,
+                "{}: expected ({},{}), got ({},{})",
+                key,
+                x,
+                y,
+                a,
+                b
+            );
+        }
+    }
+
+    #[test]
+    fn fx_xy_pad_respects_xy_lock_path() {
+        // Locking `fx.reverb_xy` blocks the pad but leaves the underlying
+        // knobs individually writeable — a selective lock, not a nuke.
+        let s = lock_param(AppState::default(), "fx.reverb_xy");
+        let size_before = s.fx.reverb_size;
+        let update = serde_json::json!({ "fx": { "reverb_xy": [0.99, 0.99] } });
+        let s = apply_llm_update(s, &update, &[]);
+        assert_eq!(s.fx.reverb_size, size_before);
+        // Individual knob still works.
+        let update = serde_json::json!({ "fx": { "reverb_size": 0.6 } });
+        let s = apply_llm_update(s, &update, &[]);
+        assert!((s.fx.reverb_size - 0.6).abs() < 1e-4);
+    }
+
+    #[test]
+    fn fx_xy_pad_respects_individual_knob_lock() {
+        // Locking a single field inside a pad lets the other axis still
+        // move — avoids the pad silently bypassing a per-knob lock.
+        let base = AppState::default();
+        let size_before = base.fx.reverb_size;
+        let s = lock_param(base, "fx.reverb_size");
+        let update = serde_json::json!({ "fx": { "reverb_xy": [0.9, 0.1] } });
+        let s = apply_llm_update(s, &update, &[]);
+        assert_eq!(s.fx.reverb_size, size_before);
+        assert!((s.fx.reverb_damp - 0.1).abs() < 1e-4);
+    }
+
+    #[test]
+    fn fx_xy_pad_ignores_non_two_element_arrays() {
+        // Malformed inputs (wrong arity, non-numbers) are a no-op —
+        // caller's knobs stay put, and the next valid field in the
+        // same update still applies.
+        let s = AppState::default();
+        let size_before = s.fx.reverb_size;
+        let update = serde_json::json!({
+            "fx": {
+                "reverb_xy": [0.5, 0.5, 0.5],
+                "reverb_mix": 0.3
+            }
+        });
+        let s = apply_llm_update(s, &update, &[]);
+        assert_eq!(s.fx.reverb_size, size_before);
+        assert!((s.fx.reverb_mix - 0.3).abs() < 1e-4);
     }
 
     #[test]

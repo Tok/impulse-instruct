@@ -197,6 +197,103 @@ has a pulsing bright dot and `CHALK` text; idle agents show `IRON`.
 
 ---
 
+## Round-robin Visualisation
+
+Two complementary widgets show where the LLM pipeline is inside its
+rotation: a **big cycle viz** in the LLM console
+(`src/ui/widgets/llm_cycle.rs`) and a **per-agent mini clock** on each
+agent card (`src/ui/widgets/agent_clock.rs`). They share the same visual
+language - a recessed screen bezel with a guide ring, a 12 o'clock tick,
+a pulsing LED on the currently-inferring slot, and a progress arc whose
+leading edge tracks lane-plan progress.
+
+### Big cycle viz (LLM console, left side)
+
+Think of it as a clock face for the agent rotation, with a radar-style
+sweep layered on top showing progress inside the current turn.
+
+**Static layout (never moves):**
+
+- **Rim LEDs** - one per enabled agent, placed around the rim starting
+  at 12 o'clock and walking clockwise. Each LED has its persona name
+  printed just outside the rim at its slot.
+- **12 o'clock tick** (the short mark just above the top LED) - marks
+  the start of the cycle. The round-robin fires agents clockwise from
+  this tick.
+- **Triangle wedge just outside the rim** - points at the next agent
+  to fire. This is a cursor, not a sweep.
+
+**Dynamic elements:**
+
+- **Pulsing LED + expanding ping rings** on one of the rim slots - the
+  agent currently inferring. Ping rings are independent of pipeline
+  progress so even a slow lane still feels alive.
+- **The progress arc (the "wipe")** and its bright tracer dot - how far
+  the currently-inferring agent has gotten through its lane plan this
+  turn.
+
+**How to read the arc:**
+
+Each agent's turn is a plan of several lanes (e.g. `[Settings, KitA,
+Bass, Fx]` = 4 lanes). The arc represents `lanes_done / total_lanes` of
+the full ring, drawn as a clockwise sweep.
+
+- **Arc start** = the inferring agent's slot on the rim (not 12 o'clock).
+- **Arc span** = the fraction `lanes_done / total_lanes` of the 360° ring.
+- **Bright tracer dot** = the arc's leading edge. This is the wiping
+  point - where the current lane is being written. When the tracer has
+  swept the full loop back to the agent's own slot, the turn is done.
+- **Clockwise motion** = same direction as the round-robin.
+
+One agent's turn = one full 360° sweep. The arc visually "owns" the
+whole ring during that agent's turn, not just the slice between its
+slot and the next agent's slot. If the wipe crosses over another
+agent's slot, that's normal - the LED stays visible through the thin
+arc stroke.
+
+**At a glance:**
+
+| You see | It means |
+|---|---|
+| Bright dot just leaving a rim LED | That agent just started, on lane 1 |
+| Bright dot halfway around the ring | Agent is ~halfway through its plan |
+| Bright dot crossing another agent's slot | Wipe is sweeping past - normal |
+| Arc near full-circle, tracer nearing start | Agent is almost done, next fire imminent |
+| No arc at all | No agent currently inferring |
+
+To read who's active, look at the pulsing LED + ping rings, not the
+arc end point. The arc is about turn progress, not who is active.
+
+**Side elements:**
+
+- **Dots just inside the rim at an agent's slot** - prompt asks queued
+  for that specific agent (e.g. `/api/prompt { agent: "BASS", … }`).
+- **Dots below the centre** - queued asks scoped globally (no specific
+  agent).
+- **Centre text** - `1.2s` (countdown to next scheduled fire), `▶`
+  (inferring), `···` (idle but queue has work), `idle` (nothing pending).
+
+### Per-agent mini clock (each agent card)
+
+The agent card's own round-robin dial shows the same arc + tracer on a
+smaller ring, but scoped to the one agent. Extras over the big cycle:
+
+- A next-fire triangle at 12 o'clock when this specific agent is
+  scheduled next (`jam_next_fire` matches `agent_id`).
+- Centre readout: `1.2s` countdown, `▶` while inferring, `42t/s` on
+  wider cells when actively inferring, `#N` cycle count at rest, `·`
+  when idle.
+
+### Layout discipline
+
+Both widgets live in fixed-size allocations, so their animation never
+reflows surrounding panels. The agent card's lane-progress sub-label
+(`"1/5 bass"`) below the clock is always rendered - "idle" in dim when
+no pipeline is live - so the rows underneath don't jiggle as inference
+starts and stops. Same semantics on the LLM console's `PIPE` row.
+
+---
+
 ## What Not to Do
 
 - **No tinted backgrounds.** `Color32::from_rgb(20, 20, 35)` is a blue-tinted dark - use `DEEP` `(18,18,18)` instead.

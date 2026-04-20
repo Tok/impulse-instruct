@@ -4,6 +4,1240 @@ A detailed log of what's built.
 
 ---
 
+### Lane-local writeback — preserve `api_params` during jam cycles
+
+- **The bug.** `run_pipeline`'s per-lane writeback in `src/llm/mod.rs`
+  copied full sub-structs (`bass_voices`, `kit_a`, `kit_b`, `lfo`,
+  `fx`, …) from the pipeline's start-of-pipeline snapshot back to the
+  live `AppState`.  Any `api_params` or UI edit made *while* the
+  pipeline was in flight got silently reverted when the lane finished
+  — voice-2 `enabled` flipping back to false, kit volumes re-rising
+  to defaults, LFO targets resetting to `None`, `fx.stereo_width`
+  snapping back to 0.5.  The original code had a special-case
+  exclusion for `rack` with a comment explaining the exact failure
+  mode; every other user-owned field had been hit by the same trap.
+- **The fix.** `on_lane_applied` callback signature changed from
+  `FnMut(&AppState)` → `FnMut(&Value, &[String])`.  It now receives
+  the lane's filtered JSON output + apply scope, and mod.rs replays
+  that update against the LIVE state via `apply_llm_update`.  Only
+  fields the lane actually emitted get mutated; user-originated
+  changes survive across every lane boundary.
+- Tests updated to the new `|_, _| {}` callback arity (5 call sites
+  in `src/llm/pipeline.rs`).
+
+### FX lane schema — phaser + ring modulator writable
+
+- `fx` lane's JSON schema + system prompt now list `phaser_mix`,
+  `phaser_rate`, `phaser_depth`, `ring_mod_mix`, `ring_mod_freq`.
+  The fields and their `apply_llm_update` handlers had always
+  existed in `FxState` + `src/state/llm_helpers.rs`, but the
+  grammar-constrained lane schema didn't mention them, so the LLM
+  answered phaser / ringmod asks by writing `reverb_mix` with a
+  `_comment` noting the field wasn't in the allowed list.  Matching
+  range hints added to the lane prompt (phaser_mix 0.15-0.45,
+  ring_mod_mix 0.05-0.2 sparingly).
+
+### Kit density caps in lane prompts
+
+- `kit_a` and `kit_b` lane prompts now carry explicit per-voice
+  density caps per 32-step bar: kick 6-10 hits, snare 2-6, clap 2-6,
+  hihat_closed 6-10 (with a "avoid 16th runs; prefer offbeat 8ths"
+  note), hihat_open 0-4.  Jam cycles were otherwise prone to
+  emitting `hihat_a_steps: [1,2,3,6,7,10,11,14,15,…]` — 17 hits
+  that piled on the master bus and forced the peak meter into the
+  CLIPPING alert.  The cap is paired with a "more hits = more gain"
+  rationale so the model understands why, and an "unless the user
+  prompt explicitly asks for a busy pattern" clause so requests like
+  "busier clap pattern" still land.
+
+### Pipeline — voice-2 activation + heuristic tag strip
+
+- `api/rack/agent` (the `add_agent` HTTP endpoint) now mirrors the
+  wizard's model-inheritance guard: if the requested pattern already
+  matches the globally-loaded model path, `model_path` stays `None`
+  and the agent inherits instead of forcing a second llama-server.
+  Without this, `add_agent PULSE gemma` was resolving to the first
+  `gemma-*` GGUF in lexical order — on machines with both E4B and
+  26B-A4B on disk, that was the 26B-A4B thinking variant, whose CoT
+  exhausted max_tokens inside `<think>` and every lane failed with
+  `content:""` + `finish_reason=length`.
+- `llm/pipeline.rs`: the heuristic planner now strips a trailing
+  ` /think` or ` /no_think` before matching.  The think tag is
+  appended by the LLM worker for the inference server, but it was
+  pushing otherwise-short prompts past the heuristic's 120-char
+  sanity cap, forcing the slow LLM planner path and a fallback
+  `default_plan` that drops newly-enabled bass voices.
+- `llm/server_pool.rs`: lane `max_tokens` bumped 1600 → 3000 for
+  reasoning-model headroom; when `content` is empty but
+  `reasoning_content` holds JSON, parse+repair the reasoning text as
+  a salvage path before surfacing an actionable "finish_reason=length
+  — /no_think?" hint.
+- `llm/pipeline_events.rs`: `LaneApplied` now emits an `LlmOutput`
+  carrying the lane JSON as `param_update`, so the UI console
+  renders the per-lane `"<persona>: …"` activity line.  The pipeline
+  refactor had previously only sent bracket-prefixed status messages
+  (`[plan: …]`, `[pipeline: …]`), which the drain filter deliberately
+  hides — so the LLM console had gone silent between user prompts.
+
+### Demo recorder — persistent sink capture + `--resume`
+
+- `create_recording_sink` switched from `pw-cli create-node adapter`
+  (ephemeral — the null-sink died the moment `pw-cli` exited, so the
+  function always silently returned an empty string and the script
+  fell through to raw stream capture) to `pactl load-module
+  module-null-sink`.  The pactl module is hosted by the long-lived
+  pipewire-pulse service, so the sink persists for the whole
+  recording.  Module id stashed in `/tmp/impulse-record-sink.module`
+  for a clean unload; a fallback scan of `pactl list short modules`
+  cleans up sinks left behind by crashed runs.
+- Capture uses `parecord --device=impulse-record.monitor` instead of
+  `pw-record --target <node_id>`.  The latter reports "No such
+  entity" for null-sink node ids and silently falls back to the
+  default source (usually silence); parecord resolves the monitor by
+  stable PulseAudio name.
+- `narrate` fans out TTS playback to both the default sink (live
+  monitoring) and the recording sink (capture lands in the mp4).
+  Without this, the isolated-sink recording had no voice-over —
+  narration went to the speakers, not the capture target.
+- New `--resume` flag on `record-demo.sh`: picks the newest
+  `YYYYMMDD_HHMMSS` directory under `demo/output/` as `BATCH_DIR`
+  and points `TTS_DIR` at its cached `tts/` subfolder.  `tts_generate`
+  already short-circuits on existing `${id}.wav` files, so a retry
+  skips the ~5-minute TTS pre-gen step; only genuinely new narration
+  lines re-synthesize.
+
+---
+
+### Rack visual polish — chrome tiles + LED z-order + card resizing
+
+- **Zone backdrop.** The rack's empty cells now show a subtle per-cell
+  chrome gradient (vertical light-grey top → darker-grey bottom via
+  `epaint::Mesh`) plus a hairline separator, replacing the old blank
+  void.  The existing dot grid paints on top of the tiles.  Works
+  identically on the front panel and the back panel (flipped).
+  `draw_zone_grid_dots` → `draw_zone_backdrop`; moved to run BEFORE
+  each zone's card loop so cards and UI sit cleanly above the tiles.
+- **LED halo z-index fix.**  The module-card LED's extended clip rect
+  now intersects with `ctx.available_rect()` (the post-header central
+  panel area) so the halo can bloom into the inter-module gap but can
+  never escape upward into the header log when the LLM console /
+  agent card scrolls past the rack's top edge.  The agent-card LED
+  gets the same treatment by clipping its Foreground layer painter to
+  `ctx.available_rect()`.
+- **808 kit** — re-sized from (3, 4) to (4, 5); each voice wraps its
+  knobs in a nested glass pane (fixed width so pads line up
+  vertically) and a 1.8× bigger XY pad (90-144 px clamp vs the 909's
+  50-80 px) anchored to the top of a `horizontal_top` row.
+- **Delay FX** — (2, 1) → (2, 2) so the 5-button direction / reverse
+  / quantise row no longer overflows the card's right edge.
+- **Agent card layout.**  Left column wraps persona/model, progress
+  sub-label, T/B controls and Scope; right column holds a big
+  right-flushed round-robin clock (80 px, ≈3× the old 26 px inline
+  size) spanning the full height of the left column.  Instructions,
+  t/s badge, conv-mode, pills and prompt override continue full-width
+  below the split.  `t/s` moved directly under Instructions.
+
+### Back-panel mod-overlay tightening
+
+- **Per-slot spacing, keyed off slot kind + card height.**
+  - `PORT_SPACING_FIXED` = 24 px (polarity + slider + % row only).
+  - `PORT_SPACING_SELECTOR` = 42 px (slider row + wrapped chip strip).
+  - `PORT_SPACING_COMPACT` = 24 px — applied to Selectors on 1-cell
+    cards where the chip strip **inlines onto** the slider row
+    instead of wrapping below.
+  - New `back_is_compact(kind)` helper keyed off `grid_size(...).1 <=
+    1`; 1-cell FX (reverb / chorus / phaser / ring-mod / waveshaper /
+    bitcrush / EQ / compressor / tape-sat / drive / autotune / pan)
+    and the `NoiseVoice` drop into compact mode.
+  - `back_strip_height` sums per-slot spacing so each card gets
+    exactly the strip height it needs instead of a flat multiplier.
+- **Slider widget.**  `interact_size.y` 10 → 8 px.  Width clamp upper
+  raised 60 → 140 px on wide cards so the depth slider resolves small
+  nudges on drum kits / 4-col FX.  Compact mode shrinks it further
+  (14–40 px) to reserve room for the inline chips.
+- **% readout centring.**  Now lives inside an
+  `allocate_ui_with_layout(28 × 12, centered_and_justified)` slot so
+  the label sits vertically centred on the slider row instead of
+  floating at the top of the `horizontal_wrapped`.
+- `mod_start_y` bumped 28 → 32 px so the first slider row clears the
+  AUD / CV / CTL label text above it.
+
+### Sequencer transport — preserve `running` across LLM writebacks
+
+- New pure helper `state::transport::preserve_sequencer_transport(live,
+  incoming)`: applies `incoming` onto `live`'s `SequencerState` but
+  keeps `running` and `current_step` from the live copy.  Fixes the
+  "play button turns off after a few beats" bug — the LLM pipeline
+  captures a snapshot at inference start and writes the full
+  sequencer back when the lane completes; if the user pressed Play
+  after the snapshot was captured, the stale `running=false` clobbered
+  the live `running=true`.  Startup one-shot prompt was the common
+  trigger (~3 s inference, user hits Play in between).
+- Routed through the helper at every wholesale writeback site:
+  - `src/llm/mod.rs` (per-lane + monolithic paths).
+  - `src/ui/llm_drain.rs` (jam_cycle_done handler).
+  - `src/ui/llm_strip.rs` (style baseline writeback).
+  - `src/llm/mock.rs` (full-state replace; inline save/restore).
+- 3 regression tests in `tests/transport_tests.rs`: live-running vs
+  stopped-incoming, live-stopped vs running-incoming, and
+  non-transport fields still landing.
+
+### Song mode — timeline UI
+
+- New `draw_song_timeline` row sits below the compact bank/chain row.
+  Each chain slot renders as a Gantt-style bar (78×22 px) showing:
+  pattern letter, `×N` repeat badge (when > 1), style override tag,
+  BPM override tag.  The currently-playing slot gets a `theme::CHALK`
+  frame + a thin playhead line whose x-position reflects how many
+  repeats of the slot have played so far.
+- Drag a bar onto another to reorder — swaps chain positions and their
+  overrides together via the new `swap_chain_slots` transition (plus 2
+  tests: atomic swap + out-of-bounds no-op).  The visual follows the
+  pointer through the drag so the user sees the reorder live.
+- Click a bar to open an inline popover that edits the slot's
+  overrides: `×repeats` (1..=64), `style` dropdown (— / any style),
+  `bpm` checkbox + drag-value (40..=300, only applied when the
+  checkbox is lit).  `Clear all overrides` button reverts the slot
+  to plain chain-position behaviour.
+- Empty chain renders a hint line ("push bank slots above to compose
+  a song") so the section doesn't silently disappear when a user
+  hasn't built anything yet.
+
+### Send-bus multi-destination sends
+
+- `FxPlan.voice_routes` switches from `HashMap<ModuleKind, Vec<FxStep>>`
+  (single chain per voice) to `HashMap<ModuleKind, Vec<VoiceSend>>`
+  where each `VoiceSend { chain, gain }` is an independent parallel
+  branch.  The old `voice_send_gain` map is removed — gain lives
+  inside each send now.
+- `compile_fx_plan`: every Voice→FX cable becomes its own `VoiceSend`,
+  not just the first.  Classic "bass → reverb at 30% + bass →
+  delay at 50%" patches now compile correctly.
+- Audio thread: new `DspState::route_voice_sends` helper sums the
+  output of every send for a voice.  Stack-friendly
+  `VoiceSendsSnap { chains[MAX_SENDS][MAX_CHAIN], gains, count }`
+  snapshot means the per-frame loop does zero HashMap touches.
+  `MAX_SENDS = 3` covers dry + reverb send + delay send with
+  headroom.
+- 2 new / updated tests: `voice_send_gain_captured_on_voice_fx_cable`
+  verifies single-send gain survives the refactor;
+  `multiple_voice_fx_cables_produce_parallel_sends` proves two
+  cables from the same voice produce two `VoiceSend` entries with
+  distinct chains and gains.
+
+### Mid-pipeline live state checks
+
+- `run_pipeline` + `run_pipeline_via_pool` gain an optional
+  `live_state: Option<&Arc<RwLock<AppState>>>` parameter.  When set,
+  the lane loop re-checks `lane_is_live_pub` against the shared
+  state right before firing each lane — catches modules that were
+  removed / disabled between the plan-time filter and the inference
+  call.  `None` preserves the pre-refactor snapshot-only behaviour
+  for tests and one-shot turns.
+- New `PipelineEvent::LaneSkipped { lane, reason }` variant — the
+  progress UI ticks `lanes_done` without bumping `failed_count`, so
+  mid-cycle removals aren't framed as model errors.
+- Wired into the real inference loop so a lane for a just-removed
+  module is skipped before burning an inference call.  2 new tests
+  (`pipeline_skips_lane_when_module_removed_mid_cycle` confirms the
+  skip fires when the live rack changes; `_keeps_snapshot_behaviour`
+  confirms `None` is a pure pass-through).
+
+### UX — touch paint, gesture zoom, LED escape, style auto-sync
+
+- **Step-button drag-paint.**  `step_button` now returns
+  `Option<bool>` (the desired active state).  Clicking is unchanged;
+  pressing-and-dragging locks a paint direction at drag start
+  (inactive → paint-on, active → paint-off) and applies it
+  idempotently to every step the pointer enters — the natural
+  behaviour for laying long hat runs or carving sections on touch
+  devices.  Gesture state lives in a single egui-memory key so two
+  grids can't cross-paint.
+- **Multi-touch gestures on the rack canvas.**  `ctx.multi_touch()`
+  is read in `rack_scroll`: two-finger vertical pan drives the
+  rack `ScrollArea` offset; pinch-zoom scales `ui_prefs.ui_scale`
+  (clamped 0.5..=3.0×) — tablet users can now steer the rack
+  without chrome.
+- **LED halos escape widget bounds.**  Step-button current-cursor
+  bloom + scale-degree LED dot, plus piano-panel scale-degree LEDs,
+  paint via `Order::Foreground` layer painters.  Mirrors the fix
+  `agent_card.rs` applied earlier — halos no longer clip at step /
+  key edges.
+- **Auto-sync rack to active style on startup (opt-in).**  New
+  `UiPrefs.autosync_rack_on_start` toggle (Preferences → Controls →
+  Startup).  When on and a genre style is active (not `__free__` /
+  `__custom__`), app launch calls `style_rack::apply` with the
+  style's `rack_modules` so restarting in Classic Acid never leaves
+  a Hoover behind.  Off by default — existing users keep their
+  customised rack.  Round-trips through `session.json`.
+
+### Intelligence — agent memory, style prompts, VRAM fallback, overrides
+
+- **Agent conversation history.** `LlmAgentState.recent_outputs`
+  (VecDeque, cap `AGENT_RECENT_OUTPUTS_MAX = 3`) accumulates one-line
+  condensed summaries of each cycle's output (`_thinking` →
+  `_comment` → truncated raw text).  Injected into the next prompt
+  as `[cycle -N]` lines alongside the existing memory / hint trail,
+  so agents evolve coherently instead of treating every jam cycle
+  as a blank slate.  New `push_agent_recent_output` transition + 3
+  tests (append+cap, empty no-op, unknown-id no-op).
+- **Style prompt templates.** Styles gain an optional
+  `jam_prompt_template: Option<String>` field.  When set, every jam
+  re-trigger uses it instead of the generic
+  "continue jamming, evolve the pattern" directive.  26 styles
+  shipped with genre-flavoured templates via a bulk-edit script,
+  e.g. *jungle* → "chop the amen differently, tighten the reese,
+  add a snare fill".  Single `jam_prompt_for_active_style()` helper
+  funnels all three re-trigger sites.
+- **VRAM-aware model fallback.**  `pick_fallback_model(agents,
+  global_model, candidate, available, vram_total_mb) -> Option<String>`
+  picks the heaviest-yet-fitting lighter model when the spawn
+  candidate blows the VRAM budget.  Wired into the `SpawnAgent`
+  action handler so agent-initiated spawns gracefully downgrade
+  instead of failing silently.  CPU mode (vram_total_mb = 0) is a
+  no-op; never picks same-or-heavier models.  4 new tests.
+- **Per-style mc_lines / themes overrides.**  New `StyleOverride
+  { mc_lines, themes }` on `AppState.style_overrides: HashMap<String,
+  StyleOverride>`; `effective_mc_lines` / `effective_themes` helpers
+  resolve override-first, baseline-fallback.  UI editor in
+  Preferences → AI → Personality lets users pick a style, edit both
+  fields, save or revert.  Empty override = explicit clear, not
+  fallback — so a user can silence a style's MC vocab without
+  touching `styles.json`.  5 new tests.
+
+### File menu — Open / Recent projects / style-seeded wizard
+
+- File menu grows an `Open project…` entry that opens a native file
+  dialog via `rfd` (new dep).  The picker is filtered to `.json`.
+  Drop-in replacement for the old "Load latest" shortcut, which stays
+  as a one-click fallback for the common case.
+- `Recent projects` sub-menu lists up to 10 `project-*.json` files
+  from the working directory, newest first.  Entries route through
+  the same `load_project_from_path` helper as "Open…" and "Load
+  latest" so error handling / logging stay uniform.
+- `list_recent_projects_in(dir)` is the pure helper the UI calls with
+  `"."` and tests exercise with a tempdir — 2 new tests cover the
+  "newest first" ordering + filter, and the missing-dir case.
+- Wizard gets an optional "or seed from style" dropdown that lets
+  users pick a genre at onboarding.  When set, the rack is reshaped
+  from that style's `rack_modules` via the existing
+  `style_rack::apply` pipeline, baseline params are stamped, and
+  `llm.active_style` is pinned — so the first jam cycle already
+  inherits the genre.  Generic `RACK_PRESETS` still picked by default
+  for users who don't have a style in mind.
+
+### Send-bus routing — per-cable gain + FX→FX feedback
+
+- Every audio `Cable` gains a `audio_gain: f32` field (default 1.0,
+  range 0..=1.5).  Forward Voice→FX cables use it as a per-voice send
+  amount on the first FX of the voice's chain; the rest of the chain
+  processes at unity.  Captured in `FxPlan.voice_send_gain`.
+- `would_create_audio_cycle` loosened to accept FX→FX cycles while
+  still rejecting cycles that touch a voice / master / LLM module —
+  musical feedback only makes sense between effects.  Non-FX cycles
+  continue to fail-closed in both `connect()` and `strip_audio_cycles`.
+- Cycle-closing FX→FX cables are classified as feedback edges at
+  compile time and stored in `FxPlan.feedback_routes`.  The graph
+  builder picks the back-edge deterministically (first-cable-wins
+  forward DAG, rest become feedback) so saves round-trip stably.
+- Audio-thread implementation: `DspState.prev_fx_output: [f32; 13]`
+  keeps the previous sample of every FX type.  `apply_fx_chain`
+  mixes `prev_fx_output[source] * gain` into the target's input
+  before processing, then writes the fresh output back.  The implicit
+  one-sample delay across samples makes the loop algebraically well-
+  defined; user `audio_gain` is clamped to `FEEDBACK_GAIN_MAX` (0.95)
+  at compile time so the graph can't diverge regardless of input.
+- API: `POST /api/rack/cable { audio_gain }` sets the gain at cable
+  creation; `POST /api/rack/cable_gain { from, to, gain }` updates an
+  existing cable.  Feedback clamping applies automatically when the
+  cable turns out to be a back-edge.
+- 4 new tests cover FX-only-cycle acceptance, voice→voice rejection,
+  feedback-gain clamping, and voice_send_gain capture.  Two existing
+  tests (`cycle_rejected_by_connect`, `strip_audio_cycles_removes_cycle`)
+  were flipped / deleted to reflect the new semantics.
+
+### Song mode — per-chain-slot overrides
+
+- `ChainSlotOverride { bpm, style, repeats }` parallels the chain vec.
+  Missing / default entries preserve v1 behaviour (pattern's own
+  `pattern_style` + `pattern_bpm_apply`).  The same pattern-bank slot
+  can now appear twice in a chain with different overrides — e.g. the
+  same 16-step loop at 128 BPM then again at 160 BPM for the outro.
+- Audio-thread advance honours `repeats` (1..=64) by holding the slot
+  through N pattern loops before moving on, tracked via a new
+  `chain_repeat_count` counter in `AppState`.  Style overrides feed
+  the existing `apply_pattern_style_on_advance` hook; BPM overrides
+  force the tempo regardless of the pattern's `pattern_bpm_apply`
+  flag, so v1 pattern-based transitions keep working untouched.
+- New API: `POST /api/song { chain, overrides, enabled }` and
+  `GET /api/song` for state snapshots.  7 new transition tests cover
+  clamping (BPM 40–300, repeats 1–64), out-of-bounds no-ops, and
+  atomic `set_song` replacement.
+- UI still shows the flat chain row.  A proper timeline-view editor
+  (Gantt bar per slot + drag-reorder + playhead scrubber) is on the
+  roadmap.
+
+### Per-step drum probability — LLM-writable
+
+- `sequencer.drum_probabilities: { voice: [p0, p1, ...] }` exposes
+  `Step.probability` (0..=1, default 1.0) to the LLM / API.  Same
+  shape as `drum_ratchets`: one float array per voice key (`kick_a`,
+  `snare_a`, `hihat_a`, `kick_b`, `snare_b`, `clap_b`, `hihat_b`).
+  Out-of-range values clamp to `[0, 1]`; missing arrays preserve the
+  stored values.
+- Prompt now documents the four canonical use cases: humanised hats,
+  ghost snares, tension-building under density collapses, and
+  conditional fills — so the model reaches for probability instead of
+  muting a step to achieve the same sparseness statically.
+- Schema entry uses the shared `intensity_array` so grammar-constrained
+  generation can emit it directly.  `preecho.<voice>.probability_ramp`
+  remains the quick-win shortcut for lead-in windows.
+
+### XY pad — first-class agent path
+
+- Every FX effect gets a `fx.<name>_xy: [x, y]` JSON path that writes
+  both knobs of the canonical Pair-0 pad in one update.  Individual
+  knob paths (`fx.reverb_size`, etc.) still work — the XY paths are
+  additions, not replacements.  Pair-1 / Pair-2 combinations stay
+  reachable via the individual knob paths.
+- Supported pads: `reverb_xy`, `delay_xy`, `chorus_xy`, `phaser_xy`,
+  `ring_mod_xy`, `waveshaper_xy`, `bitcrush_xy`, `eq_xy`,
+  `compressor_xy`, `tape_xy`, `distortion_xy`, `autotune_xy`,
+  `fx_pan_xy`.
+- Lock paths compose: locking `fx.reverb_xy` blocks the pad but leaves
+  individual knobs writeable; locking `fx.reverb_size` still lets the
+  pad move the Y axis (`reverb_damp`) without silently bypassing the
+  lock.  5 new tests, 13-pad smoke suite.
+
+### NeuTts bus volume + LFO target
+
+- `TtsModuleState.volume` (0.0..=1.5, default 1.0) scales the TTS
+  ring-buffer output before it hits the master mix.  Pipes through
+  `AudioParams.tts_voice_volume` at frame boundary so the value is
+  live-editable and modulatable.
+- `LfoTarget::NeuTtsVolume` added (opcode 72, label `TTS.VOL`).  The
+  three Selector mod-jacks on the NeuTts back panel now have a real
+  target to route to — previously the selector dropdown was empty and
+  the jacks showed "—".
+- UI: the NeuTts front panel grows a `VOLUME` row under `TOP-P`,
+  matching the Amen/Granular pattern.  Audio-thread cost: one extra
+  float multiply per frame on the TTS bus.
+
+## v0.7.7-snapshot — model overhaul, jam loop, cycle viz, lane scoring
+
+### Model lineup
+
+- **Bonsai 8B + PrismML llama.cpp fork removed** — accuracy gap no longer
+  worth the extra server binary, model download, and dual-fork branching.
+  Pool now uses a single `.llama-official-build/bin/llama-server`.  Swarm/
+  Crew/Voices presets converted to all-Gemma (same model, ref-counted, so
+  a 5-agent Crew costs the same ~6 GB VRAM as Solo); Lite preset deleted.
+- **Gemma 4 26B-A4B added as opt-in** — MoE (4B active / 26B total), same
+  speed as E4B but much more knowledge.  Three quants exposed via
+  `download-models.sh`: `gemma-26b` (UD-IQ4_XS, ~13.4 GB), `gemma-26b-q3`
+  (UD-Q3_K_M, ~12.5 GB), `gemma-26b-iq2` (UD-IQ2_XXS, ~9.9 GB).  Quant-
+  aware `ModelProfile` entries so the wizard estimates VRAM correctly.
+  E4B remains the install default — it's the "works on any 6 GB GPU" floor.
+- **NeuTTS Air Q8 is the new default TTS** — `./download-models.sh neutts`
+  fetches Q8 (~803 MB) instead of Q4.  `neutts-server.py` searches Q8 first
+  then Q4 so existing installs keep working.  `neutts-q4` alias still
+  available.  Header comments on both `download-models.{sh,bat}` document
+  the Python + espeak-ng host deps and link to the unsloth/Neuphonic HF
+  repos for "drop a custom GGUF in models/" exploration.
+
+### Model-switching infrastructure
+
+- **Plugged the pool ref-count leak** — every `pool.acquire()` in the
+  inference path now has a paired `pool.release()` at the tail of both
+  pipeline + monolithic branches.  Servers actually unload at ref_count=0
+  now; previous behaviour was monotonic growth.
+- **Console = master switch** — `LlmInput::SwitchModel` resets every
+  agent override to `None` and shuts down every server except the new
+  global via `LlamaServerPool::shutdown_all_except`.  One canonical model
+  by default; agents can re-add overrides via their dropdown.
+- **`LlmInput::SwitchAgentModel { agent_id, old_path, new_path }`** —
+  agent dropdown change carries the previous override so the LLM thread
+  can update pool ref counts even after the UI optimistically wrote the
+  new value to state.  Same instant-feedback pattern as the console.
+- **Optimistic UI for both dropdowns** — console + per-agent dropdown
+  clicks update state immediately, so the UI reflects the choice this
+  frame instead of waiting for the LLM thread to drain its queue (could
+  be 30+ s during a long pipeline turn).
+- **Model picks persist** — autosave dirty-detection now hashes
+  `state.llm.model_path` plus every `agent.model_path`; any change flips
+  `session_dirty` so the existing session.json autosave catches model
+  picks too (the rack-signature alone missed them).  Channel `bounded(16)`
+  → `unbounded()` so model loads can't drop user prompts.
+- **Wizard preset agents inherit the user's global model** — when a
+  preset's `model_pattern` matches the current global, agents stay on
+  `model_path = None` instead of getting pinned to the first alphabetical
+  Gemma file via `find_model("gemma", ...)` (which used to silently load
+  IQ2 alongside E4B and OOM the GPU).
+
+### Jam loop
+
+- **Heartbeat kickoff** — when `heat > 0` and the loop is dormant (no
+  in-flight inference, no scheduled fire, not initialising), the UI fires
+  one Infer to spark it.  500 ms cooldown stops re-fires while the LLM
+  thread picks the message up.  Self-perpetuating from then via the
+  existing `[jam_cycle_done]` re-fire; previously a fresh start with
+  `heat > 0` sat silent until the user typed a prompt.
+- **Stopped silently dropping commands** — input channel `bounded(16)`
+  → `unbounded()`; removed a destructive `let _ = input_rx.try_recv();`
+  in the monolithic jam path that consumed whichever message happened to
+  be queued (incl. user prompts and SwitchAgentModel control messages).
+- **Pipeline no longer overwrites the rack** — per-lane writeback was
+  doing `s.rack = snapshot.rack.clone()`, silently restoring the
+  pre-style-switch rack mid-pipeline.  Dropped that line — voice/FX
+  lanes have no business mutating the rack.
+
+### Per-lane lifecycle scoring (Phase 1)
+
+- `state::LaneScore { score, last_changed_cycle, change_count }` keyed
+  by `LaneKind::label()`, transient on `LlmState`.
+- `llm/lane_eval.rs` — pure per-lane scoring functions:
+    - bass: density (3–7 ideal) + variety + accent ratio + slide ratio
+    - kits: full-coverage rule (kick + hat) + density bands
+    - amen: presence + reasonable hit count
+    - hoover / an1x: density + variety
+    - fx: not all-zero / not all-one + mid-band knob ratio
+    - settings: bpm + swing in plausible range
+- Hook in `pipeline_events::handle_pipeline_event` LaneApplied: scores
+  the apply against the rules we encode in the system prompt and stashes
+  the score on `LlmState.lane_scores` (logged as `lane_eval: bass1 → 0.72`).
+  Phase 1 is read-only; the weighted scheduler below consumes these.
+
+### Weighted single-lane jam scheduler (Phase 2)
+
+- `llm/lane_scheduler.rs` — weighted pick formula
+  `weight = dynamism(lane) * (1 - score) * recency_decay * heat_jitter`.
+  `lane_dynamism` bakes genre-neutral defaults (bass/kits high, settings
+  low, rack always 0 — never scheduler-picked).  `recency_decay` is
+  `1 - 1/(1+gap)` on `jam_cycle_count - last_changed_cycle`, so a
+  just-fired lane zeros out until the next cycle.  `heat_jitter` adds a
+  heat-scaled multiplier (0 at heat=0, up to ×1.6 at heat=1).
+- `planner::jam_plan` assembles every live lane as a candidate, passes
+  them to `pick_jam_lane`, wraps the result in a single-lane `LanePlan`
+  (or empty → caller falls back to `default_plan`).
+- `pipeline::run_pipeline` gained an `is_jam: bool` parameter; jam cycles
+  (one_shot=false) go through `jam_plan` instead of the planner/default
+  chain, so each cycle rewrites exactly one voice/kit rather than the
+  whole rack.  High-scoring lanes "live longer" between rewrites; low
+  scorers naturally surface for retry without a separate queue.
+- Tiny no-deps `Xorshift32` seeded from wall-clock nanos — good enough
+  for weighted sampling over a handful of lanes, deterministic under a
+  fixed seed so the 21 scheduler tests pin every decision.
+
+### Lane-score strip in the LLM console
+
+- `ui/widgets/lane_scores.rs` — compact horizontal cell strip drawn
+  directly under the cycle viz.  One cell per live lane on the rack
+  (Settings + active bass voices + present kits + FX, in `default_plan`
+  order), each showing the lane label, latest `lane_eval` score (two
+  decimals), and a mini fill-bar.  Cells are fixed once the rack is
+  wired, so new scores overwrite values in place rather than reflowing
+  the widget each pipeline tick.
+- The currently-inferring lane pulses with a grayscale ring so the strip
+  mirrors the cycle viz's "this lane is working" cue.
+- Hover any cell for a tooltip with the raw score, `change_count`, and
+  "N cycles ago" bookkeeping from `LlmState.lane_scores` — useful for
+  debugging why the Phase 2 scheduler picked (or skipped) a lane.
+- Reserved 26 px strip; the cycle viz shrinks to match so the right
+  panel layout (model bar, prompt, log) stays unchanged.
+
+### Jam-via-API
+
+- `POST /api/prompt` now honours a `"one_shot": false` field; the
+  handler plumbs it through to `LlmInput::Infer` instead of hardcoding
+  one-shot mode.  Default stays `true` so existing clients keep getting
+  single-turn behaviour.
+- With `one_shot: false`, the LLM worker emits `[jam_cycle_done]` after
+  the pipeline finishes; the UI's drain picks it up and schedules the
+  next agent's turn (requires `llm.heat > 0.0` for re-fire — heat is
+  user-owned, so clients must set it via `/api/params` or the slider
+  before starting a jam).
+- Pipeline writeback is already surgical (the "don't clobber user-owned
+  rack" guard landed earlier), so jam-via-API inherits that safety: no
+  full-state replacement, rack / ui_prefs / llm_agents untouched.
+- Log line now tags mode: `[API] prompt (jam) → BASS: …` vs
+  `(one-shot)` for quick tailing.
+- 4 new serde tests pin the default + field parsing.
+
+### Per-agent cycle clock on agent cards
+
+- `ui/widgets/agent_clock.rs` — 26 px mini clock-face living on each
+  `LlmAgent` card.  Same grayscale language as the big `llm_cycle` in
+  the LLM console: recessed screen bezel, 12-o'clock turn tick, a
+  progress arc drawn from the agent's own `pipeline_progress` fraction,
+  a pulse ring that animates independently of the arc so slow lanes
+  still read as "alive", and a small outward wedge at 12 o'clock when
+  this specific agent is the jam loop's next scheduled fire.
+- Centre text cascades by signal strength: countdown `Ns` when
+  scheduled next → `t/s` during inference on wider cells → `▶` glyph
+  during inference on narrow cells → `#N` cycle count at rest →
+  `·` idle.
+- Replaces the previous pair of linear progress bars — the clock is
+  the single per-agent status glyph now.  The "{done}/{total} lane"
+  sub-label stays underneath for users who want the exact lane name.
+- Ties into the big LLM-console cycle viz: the console shows
+  round-robin context (which agent is about to fire next), each card's
+  clock shows that agent's own work.  Between them, jam state is
+  legible without hunting through the log.
+
+### Melodic voice preecho (bass / hoover / an1x)
+
+- `PreechoConfig` gained two melodic flags: `accent_ramp` and
+  `slide_cascade`.  Drum preecho (`velocity_ramp` + `ratchet_ramp`)
+  keeps its semantics; these are the TB-303 counterparts.
+- `preecho_melodic(step, total_steps, cfg) -> (Option<f32>,
+  Option<f32>)` is the pure core: returns `Some(accent_override)` on
+  lead-in steps (linear ramp 0.3 → 1.0 from earliest to
+  anchor-adjacent) and `Some(1.0)` for `slide` on the step
+  immediately before an anchor (`d == 1`).  Anchor steps and
+  non-lead-in steps return `(None, None)` so the user's stored
+  accents/slides shine through.
+- `sequencer::advance_clock` looks up `seq.preecho.get("bass")` per
+  bass voice and applies the overrides before emitting
+  `BassTrigger`.  The shared `"bass"` key covers every voice 0..3;
+  per-voice keys aren't needed until the LLM starts wanting that
+  level of control.
+- `apply_preecho_voices` accepts the two new bools; partial updates
+  (e.g. setting only `length`) preserve them.  `Bass` lane's
+  `sequencer_subkeys` now includes `"preecho"` so pipeline filtering
+  doesn't strip a bass-lane preecho update.
+- Hoover and An1x consume the same overrides under the `"hoover"` and
+  `"an1x"` preecho keys.  Their `TriggerEvent` variants carry `accent`
+  and `slide` fields, and their voices scale output gain by accent (up
+  to +30 % on full accent) plus extend glide time by slide (Hoover
+  runs a 10–160 ms exponential approach; An1x uses
+  `max(global_glide_time, slide)` so a cascade step audibly smears
+  even when the global glide is off).
+- 11 new tests: 8 unit tests on `preecho_melodic` (wrap-around,
+  multi-anchor nearest wins, both toggles composing), 1 end-to-end
+  sequencer test confirming the ramp lands on `BassTrigger.accent`
+  + cascade lands on `BassTrigger.slide`, 2 apply-layer tests for
+  bass-key JSON + partial-update preservation.
+
+### Pre-echo v2
+
+- `RampCurve` enum (`Linear` / `Exp` / `Log` / `Cosine`) shapes every
+  scalar ramp (velocity / ratchet / probability / accent) via a
+  `curve.apply(pos) -> f32` helper — slow-starts, fast-starts, and
+  smoothstep ease-in/out in addition to v1's pure linear.  Linear is
+  the default so existing configs read identically.
+- `probability_ramp` overrides `Step.probability` across the lead-in
+  (0.3 at earliest step → 1.0 at anchor-adjacent, curved).  Leading
+  steps fire less often, building up density toward the anchor
+  without user bookkeeping.
+- `auto_length`: when lit, the lead-in window for each anchor is
+  `gap_to_prev_anchor − 1` (wrap-aware), so uneven anchor spacings
+  produce variable-length build-ups without per-anchor config.
+  Single-anchor configs fall back to `length.max(4)` so the toggle
+  can't silently disable the effect.
+- `preecho_scale` + `preecho_melodic` collapsed into one
+  `preecho_apply(step, total, cfg) -> PreechoApply` that returns a
+  single struct with `velocity_mul` / `ratchet_add` /
+  `probability_override` / `accent_override` / `slide_override` —
+  drums read the first three, bass the melodic pair, and future
+  hoover / an1x callers get one entry point.
+- UI picks up a CURVE dropdown, AUTO toggle, PROB / ACC / SLD
+  toggles on a new third row of the preecho editor (the first two
+  rows stay as-is: voice tabs + anchor strip, then ON / LEN / VEL /
+  RAT / CLEAR).  Accent / slide ramps were in the v1 config but
+  never exposed in the panel — they're surfaced now alongside the
+  new v2 toggles so the whole modulation vocabulary is editable.
+- `note_approach` (melodic voices: bass / hoover / an1x) rewrites
+  lead-in step notes so they resolve into the anchor note.  Modes:
+  `Chromatic` (d-th step = anchor − d semitones), `Scale` (− d
+  scale-degrees under the project's active root / scale), `Arp` (− 2·d
+  scale-degrees, outlining a triad below the anchor).  Pure resolver
+  `resolve_note_shift(anchor_note, shift, root, scale) -> u8` lives
+  next to `preecho_apply`; it never allocates and is safe to call from
+  the audio thread.  UI exposes it as an `OFF / CHR / SCL / ARP`
+  dropdown shown only on the bass / hoover / an1x tabs (drum tabs
+  store slice indices in `TB303Step.note`, so a pitch shift on those
+  would be meaningless).
+
+### Pitch-preserving BPM stretch on amen (granular v1)
+
+- `AmenState.bpm_stretch_preserve: bool` pairs with the existing
+  `bpm_stretch`.  When both are on, `AmenVoice::process` runs a
+  granular time-stretch: the per-sample read rate stays at native
+  pitch (no BPM-ramped `extra_pitch`), and at every grain boundary
+  (`AMEN_GRAIN_LEN` = 2048 samples ≈ 46 ms at 44.1 kHz) the read
+  position jumps by `(host_bpm / source_bpm - 1) * GRAIN_LEN` in the
+  direction of playback so the average source advance per output
+  sample matches the host-to-source ratio.
+- Keeps per-slice pitch overrides composable: a slice that wanted
+  +12 semitones still gets them; only the BPM's pitch baggage is
+  moved out of `extra_pitch` and into the grain scheduler.
+- Slice boundaries are enforced — rewinds past `slice_start` wrap to
+  the tail, skips past `slice_end` wrap to the head, so the stretcher
+  stays within the currently playing slice instead of marching into
+  the next one.
+- Stretch ratio clamps to `0.25..=4.0` so extreme host/source ratios
+  don't explode the grain math.
+- UI: a PITCH / TUNE toggle sits next to STRETCH / FREE in the Amen
+  panel's BPM row.  PITCH engages granular; TUNE keeps the classic
+  resample that pitches with tempo.  The toggle stays disabled
+  until STRETCH is on (preserve without stretch is a no-op).
+- **v2 crossfade** eliminates the v1 splice click.  During the last
+  `AMEN_GRAIN_FADE` samples (256 ≈ 5.8 ms at 44.1 kHz) of each grain,
+  the output linearly blends from the current read at `self.pos` toward
+  the lookahead read at `self.pos + jump` (the predicted post-splice
+  read position, wrapped at slice boundaries via the new shared
+  `wrap_into_slice` helper).  At the splice, `self.pos` jumps to the
+  same target the crossfade was heading toward — the output curve is
+  continuous through the boundary.  Splice sample-to-sample delta
+  drops from ~600× the pre-splice slope to under 10× — below audible
+  click threshold for all reasonable stretch ratios.
+- 4 new DSP tests: trigger captures both flags correctly, preserve
+  mode zeroes out `extra_pitch`, classic mode still applies the
+  log2-based pitch shift, grain boundary actually rewinds the read
+  position relative to classic mode.
+
+### Reverse-mode compressor
+
+- `FxState.compressor_reverse: bool` — swaps the envelope follower's
+  attack and release time constants inside `Compressor::compress_band`.
+  Normal shape (1 ms attack + 80 ms release) clamps transients fast
+  and releases slowly.  Reverse shape (80 ms / 1 ms) lets the initial
+  transient punch through while the envelope slowly catches up and
+  clamps the sustain — classic reverse-compression swell-into-hit
+  without any look-ahead.
+- Third FX with a reversal mode alongside `reverb_dir` and `delay_dir`.
+  UI: `REVERSE` toggle under the RATIO / MULTI row in the COMP glass
+  pane on the FX panel.  LLM / API accept `{"fx":
+  {"compressor_reverse": true}}`; honours the
+  `fx.compressor_reverse` lock path.
+- 4 new DSP tests pin the asymmetric envelope behaviour: slow rise,
+  fast fall, initial transient preserved, sustain still clamped.
+
+### Per-slice amen reverse UI
+
+- `draw_slice_reverse_strip` in `panels/amen.rs` — a per-slice direction
+  row laid out just under the slice-order strip.  Each cell shows `→`
+  forward or `←` reverse, tinted the same way as the order strip
+  (active-slice highlight while the playhead sits on it).
+- When `AmenState.slice_reverses` is empty, every cell shows the global
+  `reverse` flag with a slightly dimmer glyph — "inherits global".  The
+  first click on any cell populates the vec with the current global
+  direction, then flips that slice; subsequent clicks are simple in-place
+  flips.  A `RESET` button clears the vec back to inherit-global mode.
+- Slice-count changes auto-resize the vec: clicking on a slice that
+  didn't exist when the vec was first populated pads up to the new count
+  with the current global direction before flipping.
+- Ties into the state/DSP/params work that landed in 29b1ac2 — users
+  can now drive the glitch-chop feature entirely from the panel without
+  touching the API or LLM JSON.
+
+### Per-slice amen reverse
+
+- `AmenState.slice_reverses: Vec<bool>` — parallel to `slice_pitches` /
+  `slice_volumes`.  Empty (default) → every slice inherits the global
+  `reverse` flag (fully backwards-compatible).  Populated → entry N
+  forces slice N's direction (`true` = reverse, `false` = forward),
+  unused trailing slots fall back to global.
+- `AudioParams.amen_slice_reverses: [i8; 16]` encodes the Vec with a
+  `-1` sentinel for "inherit global"; `0` = forward, `1` = reverse.
+  The DSP trigger consults this slot before falling back to the global
+  flag, so specific slices can glitch backwards while the rest of the
+  break plays forward — classic edit-era chop patterns.
+- `apply_llm_update` takes `{"amen": {"slice_reverses": [true, false,
+  ...]}}` (bools or 0/1 integers tolerated), `null` clears, truncates
+  at 16.  Honours the `amen.slice_reverses` lock path.
+- Backend-only for now — exposed via state + DSP + LLM apply + API; UI
+  toggles on the Amen panel are listed as a follow-up in `PLAN.md`.
+- 10 new tests pin the DSP per-slice override path (both directions +
+  sentinel), the apply-layer bool/int/null handling, lock preservation,
+  16-entry truncation, and the params i8 encoding.
+
+### Lane fade-in ramp
+
+- Phase 2 cycles only replace one voice at a time, which made pattern
+  snaps much more noticeable.  `state::jam_tools::schedule_lane_fade_in`
+  now dips the applied voice's volume to `LANE_FADE_FLOOR` (15 %) of
+  its current value and schedules a bar-based `ParamRamp` back to
+  target over `LANE_FADE_STEPS` (16 steps ≈ 1 bar in 4/4).
+- Hooked into `pipeline_events::handle_pipeline_event` on `LaneApplied`;
+  writes only `llm.active_ramps` to the shared state so it can't
+  trample the voice fields the pipeline just landed.
+- Single-voice lanes only: `Bass(0..3)`, `Hoover`, `An1x`, `Amen`.
+  Kits (per-drum volumes, no master), FX, Settings, Modulation, and
+  Rack no-op by design.  Voices under 0.02 volume or with a locked
+  volume lock-path also no-op.
+- `apply_param_by_path` gained a third-level `bass_voices.N.volume`
+  branch so voices 1-3 reach the apply layer with the right nested
+  JSON (`{"bass_voices": [null, ..., {"volume": v}]}`).
+- Existing `ui_helpers::tick_ramps` already fires `push_audio_params`
+  when ramps are active, so the fade actually reaches the audio thread
+  without any new wiring.
+- 8 new jam_tools tests pin paths, lock/silence no-ops, dedup on
+  repeat apply, and an end-to-end mid-ramp voice-2 volume check.
+
+### Retry-on-low-score queue (Phase 3)
+
+- `LlmState.retry_queue: VecDeque<String>` — lane labels whose last
+  `evaluate_lane` score came in at or below `RETRY_THRESHOLD` (0.3).
+- `lane_eval::record_lane_score` enqueues on a bad score, deduping
+  against any entry already in the queue so the "fresh failures first"
+  order is preserved.  Queue capped at `RETRY_QUEUE_MAX` (4); overflow
+  drops the oldest pending entry so a stuck-in-retry lane can't block
+  fresh ones.
+- `planner::jam_plan` drains the queue before running the Phase 2
+  weighted picker: walks heads until a lane that's still live on the
+  rack turns up, returns a single-lane plan with `from_retry: true`,
+  and logs `retry_queue: popped bass1 …`.  Dead entries (lane's
+  module left the rack since the score fired) are skipped, not
+  returned — the rack is authoritative over the queue.
+- `pipeline_events::handle_pipeline_event` reads `plan.from_retry` on
+  `PlanReady` and calls `consume_retry_prefix_mut` to remove the
+  consumed entry (plus any dead heads that were skipped) from the
+  shared queue, so the next cycle doesn't re-pick the same lane
+  unless it scores low again.
+- 9 new Phase-3 tests in `lane_scheduler_tests.rs` pin the threshold,
+  dedup, cap, and `jam_plan` retry-first ordering behaviour.
+
+### Per-style lane dynamism overrides (Phase 4)
+
+- `Style.lane_dynamism: HashMap<String, f32>` in `styles.json` — optional
+  map overriding `lane_scheduler::baseline_dynamism` per genre.
+- Lookup order on each pick: exact label (`"bass1"`) → group label
+  (`"bass"`) → baked-in default.  A single `"bass": 0.9` entry covers
+  every bass voice; per-voice entries still win over the group.
+- `Rack` stays at 0 regardless of style — user-owned composition.
+- `pick_jam_lane` resolves the active style via `StyleCatalog::find_by_id`
+  and threads it through `compute_weight`; values outside `0..=1` are
+  clamped.  Schema is wired and tested (6 new Phase-4 tests); populating
+  the per-style maps in `styles.json` is left as a follow-up knob-twist.
+- **Defensive plan filter** in `pipeline::run_pipeline` — drops any lane
+  whose voice/module isn't currently live before the loop, so a stale
+  planner output (e.g. after a mid-cycle style switch) doesn't burn an
+  inference call on a no-op lane.
+
+### Style → rack destructive sync
+
+- `ui/style_rack.rs` rewritten to be destructive: voices and FX not in
+  the spec are removed, missing ones added, then `arrange_canonical()`
+  runs (the same ARRANGE-toolbar pass) so the rack stays compact after
+  the churn.  Always-keep chrome (Sequencer / MasterOutput / LlmConsole
+  / LlmAgent / NeuTts) is never touched, and the LFO floor is enforced
+  (≥ 3 LfoModule instances always present).
+- **Count notation** — entries support a trailing-digit count: `"bass2"`
+  enables 2 bass voices via `sequencer.bass_voice_enabled`, `"lfo3"`
+  loads 3 LFO modules.  Digits-only aliases (`"808"`, `"909"`) preserved.
+  Repeated entries collapse via max-count.
+- All 29 styles in `styles.json` now have a `rack_modules` field
+  (5 pre-existing entries untouched; 24 added).  `styles.json` reformatted
+  so primitive arrays render single-line — file dropped 3578 → 1341 lines.
+
+### LLM console — round-robin cycle viz
+
+- New `widgets::llm_cycle` widget on the LEFT side of the LLM console.
+  Cycles → circles, top = 12 o'clock = round-robin start.  Square chip
+  matching the ring oscilloscope's geometry (full panel height = same
+  width, recessed-screen bezel, `theme::SLATE` / `theme::IRON` guides).
+- Each enabled agent occupies one slot on the rim with its persona name
+  outside; the inferring agent gets a flat in-screen dot (not a 3-D LED
+  — it's "inside" a screen) plus expanding-ring "pings" for visible
+  motion frame-to-frame.
+- **Pipeline progress arc** sweeps clockwise from the inferring agent's
+  slot as `lanes_done / total_lanes` grows, with a soft tween between
+  lane completions and a bright tracer dot at the leading edge.
+- **Cursor wedge** marks the next slot the round-robin will fire on.
+- **Queue shadow** in `ImpulseApp` (UI-side approximation of the LLM
+  input channel queue, broken down per-agent + a global bucket).  Pending
+  Infer messages render as small dots inside the rim at the target
+  agent's slot.  All UI try_send sites now route through a single
+  `send_llm_infer` helper that bumps the shadow; transitions of agent
+  `is_inferring` from false→true decrement (the LLM thread just popped a
+  message off the channel).  Agent transitions handled before global to
+  avoid double-decrementing when an agent-bound Infer flips both flags.
+
+### LLM console — pipeline progress bar
+
+- Two stacked horizontal bars under the model row: top = lane-completion
+  fraction (gray 140), bottom = error fraction (gray 95, NOT red).
+  Persistent (not flashing); fixed-width 100-px label slot to the right
+  with `lane name` / `idle` / `done` / `N err` truncated at 14 chars
+  with `…`.  Identical-shape mini-bars on each agent card (40×2 each
+  with 1 px gap).
+
+### Per-agent pipeline progress
+
+- `LlmAgentState.pipeline_progress: Option<PipelineProgress>` (transient,
+  `#[serde(skip)]`).  `pipeline_events::handle_pipeline_event` updates
+  both global + per-agent slots when an inference is bound to an agent.
+  Each agent card shows its own mini progress bar in the status spot
+  during inference, taking precedence over the existing tok/s readout.
+
+### Event stream — jitter, truncation, leaves
+
+- **Playhead jitter eliminated.**  Two compounding bugs: (a) audio
+  thread did `global_step_count += 1` per block but `advance_clock` can
+  cross multiple step boundaries when block_size approaches step
+  duration — fixed by adding the actual delta with `MAX_STEPS` wrap
+  arithmetic; (b) `event_stream` used a sign-dependent `if off <
+  -WRAP_SLACK { off += span }` fix-up which oscillates near the wrap
+  boundary — replaced with `(step_idx - local_pos + WRAP_SLACK)
+  .rem_euclid(span) - WRAP_SLACK`, deterministic.
+- **Smooth-playhead state-read race fixed.**  `mod.rs` did the step-
+  change detection in one state read (setting `last_step_time`); header
+  did a SEPARATE state read for the smooth calc.  When the audio thread
+  updated `global_step_count` between those, smooth_global jumped back-
+  wards by ~1 step then snapped forward.  Snapshot `global_step_count`
+  atomically with `last_step_time` into `last_step_global` and derive
+  `smooth_global` from that, decoupling the playhead from live state.
+- **Past-grid lines no longer disappear early.**  Loop iterated
+  `0..(display_steps + 2)`; with `now_x` at 75 % from the left the past
+  side needed `[-display_steps * past_frac, +display_steps * future_frac
+  + steps]`.  Switched to a negative-to-positive `i` range with
+  `rem_euclid` for bar/beat alignment.
+- **Now-line moved to the golden-ratio split** (`1/φ ≈ 0.618` from
+  the left, was 0.75) so past:future = 1.618:1 — past pane stays
+  dominant while future grows from 25 % → 38 %.
+- **ADSR envelope "leaf" behind each future note** — Y-symmetric filled
+  shape tracing the voice's amp envelope (bass A-S-R, AN1X full ADSR,
+  Hoover synthesised from `sweep_time`).  Punchy 303 stabs render as
+  tight diamonds; pad-y AN1X notes show elongated leaves.
+
+### LED polish
+
+- **16-ring falloff** (was 8) with reshaped alpha curve so the halo
+  fades to translucent quicker.  Lit core stays bright; bloom is gentler
+  and stops competing with adjacent panel chrome.
+- **Perceptual-luminance compensation** in `theme::led` — high-luminance
+  colours (yellow / white / light cyan) get progressively reduced alpha
+  above 0.4 luminance, so a yellow halo at the same nominal alpha now
+  reads as subtly as a red one.  Floor at 0.45 so even white shows.
+- **Module-card LED halo escapes panel border** — clip extended by
+  `led_r * 6.0` on sides + down (and 0 px upward to avoid bleeding
+  into the global header log scrolling past above), so the bloom
+  bleeds into the inter-module gap as intended.  Same draw layer —
+  cables / piano / drag previews still cover.
+- **Agent-card LED on a foreground layer** — the persona-row indicator
+  is painted via `ctx.layer_painter(LayerId::new(Order::Foreground, …))`
+  so the persona TextEdit (drawn after) can no longer cover it.
+
+### Misc
+
+- **Per-agent model dropdown** on each agent card writes through the new
+  `SwitchAgentModel` message instead of mutating state directly.  No
+  more "set model in console, agent silently keeps the previous one."
+- **Cycle viz lane-name label fixed-width** so the bar+label combo
+  doesn't reflow as the current lane name cycles each pipeline tick.
+- **NeuTTS Q8 prefer-then-fall-back** in `neutts-server.py` candidates
+  list so existing Q4 installs continue to work without reconfiguration.
+
+---
+
+## v0.7.7-snapshot — lane-pipeline + prompt infrastructure
+
+### Sequential lane pipeline (planner + per-voice calls)
+
+User turns now fan out into a planner call + one focused inference per
+voice slice, instead of one monolithic "generate everything" response.
+Each lane ships short output (100–400 tokens) under a required-fields
+JSON schema, so the model can't skip `bass_accents` / `bass_slides`
+and can't truncate its pattern mid-array.
+
+- **`LaneKind` enum** — `Settings / Bass(0..=3) / KitA / KitB / Amen /
+  Hoover / An1x / Fx / Modulation / Rack`.  Each lane carries its own
+  `output_keys`, `sequencer_subkeys`, `task_description`, and JSON
+  schema.  `Bass(idx)` routes voice-0 through legacy `bass_*` fields
+  and voices 1..=3 through `bass{N+1}_*` naming.
+- **`build_lane_prompt(state, lane)`** — compact focused prompt
+  (~1–2 k tokens) with state header, style brief, locked-params list,
+  a `HARMONY` block for melodic lanes (key + in-key MIDI palette in
+  C2–C3) and the lane's task description with concrete example rhythms.
+- **`lane_schema(lane)`** — per-lane JSON Schema.  Required pattern
+  arrays use `min_steps_array` (minItems ≥ 2) so grammar-constrained
+  generation can't emit `[]`.  `additionalProperties: false` on every
+  lane, so the server blocks off-scope fields at the token level.
+- **`heuristic_plan(state, prompt)`** — deterministic pre-parser that
+  catches narrow single-topic commands without calling the LLM.
+  Recognises `"bass2"`, `"BASS 2"`, `"second bass"`, `"bass voice
+  two"`, `"1st bass"`, `"bass one"` → specific Bass(idx); `"add
+  reverb"` / `"more delay"` → Fx; `"808"` / `"kit a"` / `"kick a"` →
+  KitA; `"909"` / `"clap"` → KitB.  Multi-topic or broad prompts fall
+  through to the LLM planner.
+- **`planner_plan`** — tiny LLM call (50–150 token output) with a
+  13-lane enum schema + 7 rules, decides which lanes fire for broader
+  prompts.  Bass expansion is enforced in code: any bass-containing
+  plan auto-covers every active bass voice (so "change the bass"
+  never leaves voice 2 silent).
+- **`default_plan(state)`** — deterministic fallback when the planner
+  LLM fails / returns empty.  Walks the rack in order `Settings →
+  KitA → KitB → Amen → Bass(0..N) → Hoover → An1x → Fx`.
+- **`run_pipeline`** — the executor.  For each lane: builds prompt +
+  schema, calls `PipelineBackend::infer_lane_json`, filters output to
+  the lane's scope, applies to `AppState`, fires an `on_lane_applied`
+  callback.  Per-lane failures don't abort the pipeline.  `PoolBackend`
+  adapts `LlamaServerPool` into the trait so the real server spawns
+  the planner + lane calls on the live model.
+- **Per-lane immediate writeback** — `on_lane_applied` in
+  `run_llm_loop` commits each lane's changes to the shared
+  `Arc<RwLock<AppState>>` the moment it lands.  The audio thread
+  hears drums the second the `kit_a` lane finishes, without waiting
+  for the bass or FX lanes.  Previously everything switched on at
+  the end of the pipeline; now it builds audibly.
+- **Jam-loop hand-off** — pipeline emits `[jam_cycle_done]` at the
+  end of a non-one-shot turn, so the round-robin auto-jam keeps
+  firing at `heat > 0`.
+- **Empty-array guard** — when a lane emits a degenerate
+  `"bass_steps": []`, the filter drops the field with a warn log so
+  the previous pattern survives instead of getting silenced.
+- **Style-is-user-owned** — Settings lane has no `settings.style`
+  field; planner prompt explicitly forbids lanes that change style.
+  User sets the style via the UI, the pipeline respects it.
+- **Feature flag** — `LlmState.use_pipeline: bool` (default true).
+  Preferences window exposes the toggle; when off the legacy
+  monolithic path still runs for debugging.
+
+### Prompt baseline — trim & bass voice expressivity
+
+- **Monolithic prompt trimmed ~56 %** (10.8 K → 4.8 K tokens).  Cut
+  MUSIC THEORY REFERENCE (scales/triads — model knows these),
+  HEAT-AWARE MUTATION GUIDANCE (18 lines of redundant breakpoints),
+  MUSICAL MODERATION prose (→ one-line summary), HOW TO INTERPRET
+  INSTRUCTIONS / ACID JAM GUIDANCE lookup tables, WRONG-example
+  block, LFO / FREE EG / EUCLIDEAN / RAMPS / FX docs (all
+  condensed).  Themes / mc_lines omitted in producer mode.
+  `current_json` state block minified (`to_string` not
+  `to_string_pretty`).
+- **Per-voice bass step arrays** — `bass2_steps/notes/accents/slides/
+  pans`, `bass3_*`, `bass4_*`.  Each voice has its own lock path.
+  Voice-0 still mirrors the legacy unnumbered keys + `bass_pattern`.
+- **Proportional accent / slide** — `TB303Step.accent` and `.slide`
+  are `f32` (0..=1), not `bool`.  DSP scales amp peak 0.8 → 1.0 with
+  accent intensity, portamento time with slide intensity.  Event
+  stream renders dot size by accent and trail length by slide.
+  Schema accepts float arrays or index lists; bool arrays still work
+  for backwards compat.  `de_bool_or_f32` serde adapter round-trips
+  old project JSON.
+- **Grammar-constrained output** — `response_format.type =
+  "json_schema"` sent on every lane call, so llama.cpp compiles the
+  lane schema into a GBNF grammar and enforces required fields at
+  the token level.
+
+### LLM infra
+
+- **Context default 32 K → 64 K** — Gemma 4 E4B (128 K native) handles
+  64 K comfortably.  Test harness matches.  ~11 K-token system prompt plus
+  headroom for memory / style observations / multi-turn growth.
+- **Prompt-prefix cache reuse** — `--cache-reuse 256` on server spawn
+  + `cache_prompt: true` on every lane body.  Shared system-prompt
+  prefix reused between calls: ~5 s prefill → ~0 s once warm.
+- **NeuTTS excluded from integration suite** — `run-llm-tests.sh`
+  hard-skips `*neutts*` / `*-tts*` models; they're voice clones, not
+  chat LLMs.
+- **Egui id-clash overlay off** — `ctx.options_mut(|o|
+  o.warn_on_id_clash = false)` silences the "first use of ID …"
+  debug labels dev builds were painting over widgets.
+- **Wizard default → Full** — first launch / New Project lands on
+  the everything-included rack layout.
+
+### Event-stream polish
+
+- **Drum-hit history** — parallel `drum_log: VecDeque<DrumLogEntry>`
+  to the melodic one; past side of the event stream now renders
+  drum past from the frozen log instead of wrapping the live
+  pattern.  No more "drum wiped the second it's edited".
+- **Wrap-slack fix** — 0.5-step slack on the cycle-wrap threshold
+  in the future loop, bridges the 1–2 frame race between
+  `current_step` advancing and the UI step listener pushing into the
+  log.  Fixes the "blink at every cycle boundary" report.
+
+### Header + small UI
+
+- **TEMP chip** in the top header band — the Huth warm/cold display
+  moved out of the event stream header so it's always visible
+  regardless of the lower panel's size.  HEAT column shrinks
+  34 → 26 cols to make room for TEMP 8.
+- **Per-agent seed chip** on the agent card — mirrors the LLM
+  Console's global SEED row but scoped per-agent.
+- **Style-aware preset naming** — `Crew` preset re-labels itself
+  in the wizard based on active style: jungle/dnb/uk-garage/dubstep
+  → `Posse`; gabber/early-rave/darksynth/electro → `Squad`;
+  synthwave/vaporwave/lo-fi hiphop → `Band`; ambient/baroque/idm →
+  `Ensemble`.  Canonical preset ids stay `Crew` so API + tests are
+  unaffected.
+- **303 lane visibility fix** — sequencer panel now filters lanes
+  by `bass_voices[vi].enabled` directly instead of via
+  `sequencer.bass_voice_enabled`, which was only synced inside the
+  audio-thread snapshot.  Toggling voice 2 from the bass panel
+  correctly shows a second lane.
+- **Piano LEDs** drop the 2nd/6th/7th tier — only tonic / 3rd / 5th
+  render now for easier reading on small screens.
+- **Startup auto-prompt** uses the selected style: "Create a pattern
+  in the style of Acid House." replaces the old "Pick a style…"
+  placeholder that was confusing the model.
+
+### 303 DSP
+
+- **Slide envelope retrigger** — slide steps no longer skip envelope
+  attack.  Previous behaviour (legato with no re-attack) produced
+  silent slides on percussive 303 patches where `amp_sustain ≈ 0`;
+  now every trigger re-attacks while preserving `self.freq` so the
+  pitch still glides into the target.  LFO fade-in stays legato
+  (doesn't reset on slide-linked chains).
+
+---
+
+## v0.7.7 — UI overhaul cycle
+
+### Header redesign
+
+- 105-column virtual grid shared by both header strips so chip widths
+  line up across the transport bar and the lower log/scope band.
+- Top header: `LOGO` split into `TITLE` (15 pt strong) + `STATUS`
+  (5-column dB table for sub/low/mid/hi/peak, colour-coded by signal
+  strength) + `WARN` (rotating alert lines / "OK") chips, plus
+  centred BPM, compact STOP/REC, HEAT, MUTE+MON, VRAM/RAM.
+- Lower band: free-form layout — square ring oscilloscope on the
+  right (= panel height), centre column defaults to ~40 % of width
+  (bar oscilloscope on top, event stream below), log fills the rest,
+  with a draggable splitter on the log/centre seam that persists for
+  the session.
+- Global log embossed with `theme::draw_screen_panel` (DEEP fill,
+  slightly lighter than the screen `VOID` of the oscilloscopes).
+- All TLA labels spelled out: `MON → MONITOR`, `ARR → ARRANGE`,
+  `CTX → CONTEXT`, `RST → RESET`, `TS → TIME SIG.`, `THK → THINK`,
+  `PRD → PRODUCER`, `MASTER VOL → MASTER VOLUME`, `P.DPT → P.DEPTH`,
+  `P.TIM → P.TIME`, `RESO → RESONANCE`, `ENVMOD → ENV. MOD`,
+  `FWD → FORWARD`, `REV → REVERSE`, `MIR → MIRROR`.
+- Audio-analysis "near clip" warning tightened from a 2 dB to a 1 dB
+  window so default-volume material stops tripping it.
+
+### LED skeuomorphism
+
+- New `theme::led(painter, center, radius, color, intensity)` —
+  5-ring concentric falloff with very transparent outermost ring,
+  hot-spot brightening toward white, dark housing rim, top-left
+  specular highlight.
+- New `theme::led_dark` — inverse-light variant for bright surfaces
+  (used by piano white-key scale dots when Huth coloring is off).
+- New `theme::led_flat` — 2D variant used inside the event stream so
+  dots don't read as physical raised buttons.
+- Module-card title-bar LED on both front and back panels — same
+  chrome, only renders on modules that emit audio
+  (`ModuleKind::has_audio_output()`), lit when
+  `enabled && reaches_master`.  Front-panel title shifts +18 px past
+  the LED so wide names like "BASS SYNTH" don't lose their leading
+  character.
+- Hover tooltip explains the indicator: *Audio path indicator —
+  lit when this module is enabled and its audio reaches MASTER*.
+
+### Rack reachability + wiring
+
+- `RackState::reaches_master(module_id) -> bool` — pure BFS over
+  audio cables (out → in), only stepping through enabled modules.
+  `MasterOutput` counts as reachable even if its own enabled flag
+  is unset.
+- `wire_default_cables` no longer chains all 12 FX serially with no
+  terminus.  New strategy: voices → MASTER (dry direct), TTS →
+  Reverb (sends), Reverb → MASTER and Delay → MASTER.  All other FX
+  live in the rack but stay unwired (transparent placeholders the
+  user patches in).
+- 16 unit tests covering `reaches_master` and the sequencer
+  lane-visibility predicate (`module enabled AND reaches_master`).
+
+### Sequencer lane visibility
+
+- Sequencer panel uses the same predicate the LED does.  Hoover,
+  GabberKick, AmenSampler, etc. only get a lane when the
+  corresponding module is in the rack, enabled, AND patched into
+  the audio path — orphan modules don't take row space.
+- Dynamic-height calculation auto-shrinks to match: no empty rows,
+  no whitespace when a voice is unpatched.
+- `Full` rack preset gains GabberKick.  Wizard now enables
+  `bass_voice_enabled[1]` whenever the chosen preset includes
+  `AcidBass`, so two 303 lanes are on by default.
+
+### Event stream history
+
+- Notes for all melodic voices: bass voices (multi-voice 303),
+  AN1X, and Hoover are folded into the auto-range and rendered as
+  the same Huth-coloured dots.
+- New `MelodicLogEntry` ring buffer in `ImpulseApp` (cap 256, ≈ 8
+  bars at 32-step patterns).  Each sequencer step transition
+  snapshots the active notes from every melodic pattern and stamps
+  them with the current `global_step_count`.
+- Render split: past (offset ≤ 0) reads from the frozen log;
+  future (offset > 0) reads from the live pattern.  Pattern
+  mutations after the fact don't erase or shift visible past
+  notes — once a note has fired it scrolls left until off-screen.
+- Per-voice cycle length honoured for the future side
+  (`bass_voice_steps`, `an1x_steps`, `hoover_steps`).
+
+### Huth temperature display
+
+- `NOTE_TEMP[12]` per-semitone warm/cold scalar derived from
+  cos(hue − 60°); warm pole F-orange (+1.0), cold pole C-blue
+  (−1.0).
+- `audio::spectrum::spectrum_temperature(magnitudes, bin_hz, semi_temps)`
+  pure fn weighted by FFT bin magnitude across 30 Hz – 5 kHz.
+- `state::sequencer_state::pattern_temperature_acc` does the same
+  for melodic patterns weighted by `gate × accent`.
+- Event stream gains a TEMP strip — blue→neutral→orange gradient
+  with a live needle (spectrum) and a small bank tick (pattern
+  data) plus a numeric readout.  Hover tooltip explains both
+  markers.
+
+### Mod-overlay (back-panel LFO chip strip)
+
+- 5-ring LED falloff for chips; `led_flat` for inside-display dots.
+- Card-width-aware wrap budget — `back_card_w` published into
+  ctx-temp by `module_card_back`, consumed by `module_card_mod`.
+- Slider width derived from stable `overlay_max_w` (clamped 20-60
+  px), so it always fits and never jitters as wrapped chips reflow.
+- Chip text 6.5 pt + tighter button padding so drum-kit Selectors
+  pack densely and wrap into 2 rows only when they have to.
+- Anchor on the same row as the jack/label (right of label), so a
+  wrapped chip strip doesn't push the next jack off-screen and
+  `PORT_SPACING = 32` stays tight.
+- Z-clip extended (`screen_bottom − 105 − 70`) so wrapped chip
+  strips never punch through the keyboard panel when the rack is
+  scrolled.
+
+### Per-agent seed (mirrors style)
+
+- `LlmAgentState` gains `seed: i64` (default −1 = random) and
+  `seed_locked: bool`.
+- `propagate_seed(state, seed)` writes the global `LlmState.seed`
+  and copies it to every agent whose `seed_locked == false`.
+- LLM Console gains a SEED row under STYLE: lock-aware label,
+  custom-formatted DragValue (`random` for −1), RANDOM button.
+- Inference path reads `agent.seed` instead of `LlmState.seed` when
+  an `agent_id` is in scope.
+
+### File / project flow
+
+- File menu gains **New project** (re-opens the wizard) and **Load
+  latest project** (newest `project-*.json` in cwd, no rfd dep).
+- Wizard auto-skips on subsequent launches when the saved session
+  has `wizard_done == true`.
+- Stray "Bars:" DragValue removed from the File menu.
+
+### Heat — chaos mode
+
+- `LlmState` default heat 0.4 → 0.5.
+- 5-band heat guidance in the system prompt: `<0.25` minimal,
+  `0.25-0.5` balanced, `0.5-0.75` bold (FX automation kicks in),
+  `0.75-0.95` chaotic (extreme drives, dense ratchets), `≥0.95`
+  *anything goes — break the rules, overdrive everything, ramp
+  every parameter*.
+- `mock_response` jam curve re-tuned to the same ladder.
+
+### Refactoring
+
+- `module_card.rs` split into `module_card.rs` (front) and
+  `module_card_back.rs` (back).  `module_card.rs` re-exports
+  `module_card_back` so existing call sites keep compiling.
+- `focused_title_bg` + `draw_focus_shine` made `pub(super)`.
+
+---
+
 ## v0.7.6 release polish
 
 ### Cable visual hierarchy
@@ -447,9 +1681,6 @@ scrolls.
 - **Reliable llama-server cleanup between runs** — the demo script's
   cleanup trap now SIGTERM-then-SIGKILLs the app with a 3-second grace
   window for Drop, then `pkill`s orphans
-- **BASS agent on Gemma, DRUMS + FX on Bonsai** — Q1 Bonsai couldn't
-  reliably follow the pitch-distribution rules for melody rewrites.
-  Bigger model handles the bass voice; Bonsai stays on rhythm/knob work
 - **Female narrator + longer subtitle display** — intro TTS voice
   swap, reading-time-friendly subtitle durations, intro line tweaks
 - **Runtime-timestamped SRT** — subtitles derive from actual narrate()
@@ -458,8 +1689,6 @@ scrolls.
   visible before the modulation starts
 - **TTS retry + server restart** — up to 10× with server bounce;
   graceful handling of missing WAVs in narration
-- **Model shoutout in live-filter scene** — names "Gemma 4 E4B" and
-  "Bonsai 8B, one bit quantized" during pad sweep before the outro
 - **Free & open source outro line**
 
 ---
@@ -621,9 +1850,12 @@ scrolls.
 - Per-step: velocity, probability (0-100%), ratchet (1-4x), accent, slide
 - Euclidean rhythm generator
 - Pattern bank (8 slots), chain playback (up to 8 patterns in sequence)
+- **Song mode style transitions** - `SequencerState.pattern_style: Option<String>` per bank slot; when the chain auto-advances into a slot whose style is `Some(id)`, `apply_pattern_style_on_advance` sets the global `llm.active_style` + propagates to unlocked agents so the chain can drive genre shifts mid-song.  Picker lives at the end of the pattern-bank row (sequencer_chain.rs); persists with the project JSON like any other sequencer field.
+- **Song mode tempo transitions** - per-slot `pattern_bpm_apply: bool` opt-in (default `false`); when lit, `chain_advance_transport` drops the prior bpm/swing and adopts the loaded slot's own values on chain advance.  Default-off means existing chain projects upgrade without surprise tempo jumps; flipped via a `BPM⇥` chip next to the style picker.  `running` is always preserved regardless of the flag so the chain never pauses mid-song.
 - Live record - MIDI keyboard writes directly into steps
 - Time signature selector (4/4, 3/4, 5/4, 6/8, 7/8...)
 - Mute/solo per row, pattern copy/paste
+- **MIDI export** — `src/midi/export.rs` serialises the active pattern to a Standard MIDI File (Type 1, PPQ 480).  Track 0 carries the tempo + time-signature meta; drums merge onto channel 10 via a GM kit map (`drum_voice_to_gm_note`); each melodic voice (bass / hoover / an1x) lands on its own channel with accent → velocity (64 baseline + up to +63) and `TB303Step.gate` → note length.  Patterns without any active steps don't emit a track so the SMF stays clean in a DAW.  Triggered via the `MIDI ⇩` button at the end of the pattern-bank row (writes `pattern-<unix_secs>.mid` to cwd) or via `POST /api/midi/export { path? }` for scripted exports.
 
 ## FX chain and routing
 
@@ -638,10 +1870,11 @@ scrolls.
 - **Gated reverb** - `fx.reverb_gate_time` (0-2 s), GATE knob in FX panel
 - **Master pitch offset** - `fx.master_pitch_st` (+-12 st), PITCH knob in MASTER group
 - **Autotune FX module** - `ModuleKind::FxAutotune`; two-head grain overlap-add pitch shifter (`fx.autotune_amount` 0–1 → 0..+12 st, `fx.autotune_mix`); pre-allocated 4096-sample ring buffer (no audio-thread allocations); LLM-addressable via `fx.autotune_amount` / `fx.autotune_mix`
+- **Expandable FX XY pad** - `RackModule.pad_expanded` (persisted, defaults to `false`) + `RackModule.pad_pair` (u8, 0/1/2) on every FX kind; `ModuleKind::supports_xy_pad()` gates both; chevron (▾/▸) in the title bar expands per-instance and calls `arrange_grid()` so neighbours reflow.  2-knob FX (Autotune, Drive, Waveshaper, RingMod) show a direct pad; 3-knob FX (Reverb, Delay, Chorus, Phaser, EQ, Compressor, TapeSat, Bitcrush, Pan) show a glass-wrapped pad + side-mounted `A × B ↻` cycle chip covering all A/B · A/C · B/C pairs (pad's right-click cycle still works).  `render_two_pad` / `render_three_pad` factor the layout; `POST /api/rack/pad { id, expanded?, pair? }` + `"rack": {"pad": [{"kind": "reverb", "expanded": true, "pair": 1}]}` in LLM JSON make pads addressable from scripts and agents.
 
 ## Intelligence
 
-- LLM runs locally via llama-server subprocess (official llama.cpp for Gemma/Qwen; PrismML fork for Bonsai 1-bit)
+- LLM runs locally via llama-server subprocess (official llama.cpp build)
 - Jam mode - PULSE evolves the pattern autonomously; heat slider 0-100% gates/throttles jam rate
 - Behaviour templates: "build", "drop", "breakdown", "tension", "euphoric"
 - Lock system - touch a knob to claim it; LLM won't override it
@@ -664,9 +1897,9 @@ scrolls.
 - **Round-robin scheduling** - agents take turns during jam cycles; only enabled rack modules participate
 - **Cable-driven scope** - `PortKind::Control` cables from agent to module define what each agent may control; `scope_from_control_cables()` resolves scope at inference time; empty scope = agent controls everything
 - **Dynamic spawning** - agents can request new agents (`LlmAction::SpawnAgent`) or dismiss themselves (`LlmAction::DismissAgent`) via JSON; gated by `agent_autonomy` flag; auto-wire control cables on spawn
-- **VRAM budget module** - `src/llm/vram.rs` with model profiles (Gemma, Bonsai, DeepSeek, Qwen3), VRAM estimates, and preset configurations
+- **VRAM budget module** - `src/llm/vram.rs` with model profiles (Gemma, DeepSeek, Qwen3), VRAM estimates, and preset configurations
 - **VRAM budget guard** - `would_exceed_vram()` rejects agent spawns that would exceed GPU memory; checked at SpawnAgent action + server pool acquire; prevents silent OOM crashes
-- **Startup wizard** - always shows on startup; resume last session or start fresh with a preset (Solo/Duo/Swarm/Crew/Voices/Lite); GPU VRAM detection + budget bar
+- **Startup wizard** - always shows on startup; resume last session or start fresh with a preset (Solo/Duo/Swarm/Crew/Voices); GPU VRAM detection + budget bar
 - **VRAM estimate on agent cards** - shows `~X.XG VRAM` below model selector
 - **Agent persona in log** - output and thinking lines show the correct agent persona name, not the global singleton
 - **Console routes to agents** - typed prompts go to the first enabled agent instead of bypassing the agent system
@@ -796,7 +2029,7 @@ Alerts cycle in the header (2 at a time, rotating each second). Multiple alerts 
 - Pre-commit hook: fmt + clippy + tests + 1000-line LOC limit
 - `scripts/run-tests.sh --coverage` - HTML coverage report (lcov)
 - Cross-compile to Windows EXE via `cargo-xwin` + `scripts/build-all.sh`
-- `scripts/download-models.sh` - Gemma 4 E4B (default), Bonsai 8B, Qwen3-8B, Qwen3-14B
+- `scripts/download-models.sh` - Gemma 4 E4B (default), Qwen3-8B, Qwen3-14B, DeepSeek-R1 7B/14B
 - Windows `.bat` equivalents for all scripts (`start.bat`, `scripts/*.bat`)
 - **CI/CD security** - `ci.yml` runs tests + tarpaulin + Codecov on `main` and `develop`; `release` job on `v*` tags builds Linux+Windows in GH Actions (no local builds), attaches `.sha256` sidecars and SLSA level-2 build provenance attestation
 - Release zips include start scripts (`start.sh`/`start.bat`) and download helpers
@@ -845,6 +2078,7 @@ Alerts cycle in the header (2 at a time, rotating each second). Multiple alerts 
 - **Granular texture module** (`ModuleKind::GranularTexture`) - new voice: loads WAV via `AudioCommand::LoadGranular`, plays up to 32 overlapping Hann-windowed grains with density, size, position, jitter, pitch scatter, spray params; true stereo output with per-grain pan law; full rack/UI/LLM integration
 - **Tape delay with modulation** - wow/flutter LFO modulates delay read position (fractional interpolation), soft-clip tape saturation on feedback, max time extended to 2s; `delay_wow_flutter`, `delay_saturation` params
 - **Reverb freeze** - `reverb_freeze` bool sets comb feedback to 1.0 and input to 0.0; tail holds indefinitely for drone/ambient
+- **Dub delay send/return** — `delay_freeze` mirrors `reverb_freeze` (input suppressed, feedback pinned to ~1.0 for infinite hold); `delay_hpf` + `delay_lpf` are one-pole filters on the feedback path so each repeat loses highs / lows on every round-trip. Classic dub "drift into smoke" chain: seed a voice, engage freeze, tweak filters to shape the tail. `styles.json`'s `dub_techno` baseline seeds these fields and adds TapeSat to the default rack. UI: HPF/LPF knobs + `FRZ` toggle on the Delay card, alongside the direction / rev-quant buttons. LLM-addressable as `fx.delay_hpf`, `fx.delay_lpf`, `fx.delay_freeze`.
 - **Pad presets** - 4 AN1X presets: warm pad, evolving texture, glass pad, sub drone; meditation style in styles.json; dark/space ambient baselines now enable AN1X with pad settings
 - **Noise voice improvements** - AR envelope (attack 5s, release 10s), filter LFO (0.05-10 Hz), sample-and-hold modulation (0.5-20 Hz) for rhythmic texture
 - **Cross-modulation** - bass osc → AN1X pitch FM (±24 st), noise → bass filter cutoff; `xmod_bass_to_an1x_pitch`, `xmod_noise_to_filter` params
@@ -877,7 +2111,8 @@ Alerts cycle in the header (2 at a time, rotating each second). Multiple alerts 
 
 ### Refactoring and test coverage
 
-- **479 unit tests**; suites: `llm_apply_tests` (68), `persistence_tests` (25), `helpers_tests` (7), `music_tests` (13), `dsp_tests` (16), `fx_plan_tests` (7), `vram_tests` (9)
+- **987 unit tests** across ~30 test files (up from 479 milestone)
+- **2026-04 refactor round** — 13 proactive file splits when the largest sources approached the 1000-line pre-commit cap.  Tests: `rack_tests` → +`rack_reach_tests`, `llm_apply_extra_tests` → +`llm_apply_seq_tests`, `dsp_tests` → +`dsp_voice_primitives_tests`, `llm_tests` → +`llm_plumbing_tests`.  Library: `llm/mod.rs` → +`types.rs`, `api/mod.rs` → +`preset.rs`, `audio/dsp/params.rs` → +`params_from.rs`, `audio/dsp/voices.rs` → +`an1x.rs`, `audio/dsp/mod.rs` → +`fx_step.rs`, `llm/planner.rs` → +`planner_heuristic.rs`, `ui/mod.rs` → +`app_update.rs`, `ui/widgets/mod.rs` → +`knob.rs`.  Top-file count dropped 982 → 973; only one file still above 950 (`audio/dsp/samplers.rs`, one self-contained `AmenVoice`).  Added `planner_tests.rs` (18 tests covering `lane_from_label` / `lane_is_live_pub` / `heuristic_plan` — previously 0 coverage on a 964-line file).
 - **`rack.connect_control(from_id, to_id)`** - replaces 8-line PortRef boilerplate at 6 call sites
 - **`spawn_agent()` pure function** - transitions.rs; wizard.rs and SpawnAgent handler refactored to use it
 - **`format_llm_display()` pure function** - extracted from drain_llm_outputs into transitions.rs
