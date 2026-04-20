@@ -212,24 +212,34 @@ fn draw_llm_agent_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, module_id: u32)
                 }
             });
             // Lane-progress sub-label — the big agent_clock shows the dial;
-            // this keeps the per-lane "{done}/{total} {name}" text visible
-            // underneath the persona/model row.
+            // this keeps the per-lane "{done}/{total} {name}" tick visible
+            // underneath the persona/model row.  Always rendered (falls
+            // back to "idle" when no pipeline is live) so the rows below
+            // don't shift up/down as inference starts and stops.  Matches
+            // the LLM console's semantics so the two displays read alike.
             let agent_progress = app.state.read().llm_agents[idx].pipeline_progress.clone();
-            if let Some(p) = agent_progress {
-                let mut label = match &p.current_lane {
-                    Some(name) => format!("{}/{} {}", p.lanes_done + 1, p.total_lanes, name),
-                    None => format!("{}/{}", p.lanes_done, p.total_lanes),
-                };
-                if p.failed_count > 0 {
-                    label = format!("{} · {}e", label, p.failed_count);
+            let (label, label_color) = match &agent_progress {
+                Some(p) => {
+                    let mut s = match &p.current_lane {
+                        Some(name) => format!("{}/{} {}", p.lanes_done + 1, p.total_lanes, name),
+                        None if p.lanes_done >= p.total_lanes => {
+                            format!("{}/{} done", p.total_lanes, p.total_lanes)
+                        }
+                        None => format!("{}/{} plan…", p.lanes_done, p.total_lanes),
+                    };
+                    if p.failed_count > 0 {
+                        s = format!("{} · {}e", s, p.failed_count);
+                    }
+                    (s, theme::FOG)
                 }
-                ui.label(
-                    egui::RichText::new(label)
-                        .color(theme::FOG)
-                        .monospace()
-                        .size(7.5),
-                );
-            }
+                None => ("idle".to_string(), theme::IRON),
+            };
+            ui.label(
+                egui::RichText::new(label)
+                    .color(label_color)
+                    .monospace()
+                    .size(7.5),
+            );
 
             // ── Temp / Bars controls ───────────────────────────────────────────
             ui.horizontal(|ui| {
