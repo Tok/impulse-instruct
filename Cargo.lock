@@ -1712,7 +1712,7 @@ dependencies = [
 
 [[package]]
 name = "impulse-instruct"
-version = "0.7.7-snapshot"
+version = "0.7.7"
 dependencies = [
  "anyhow",
  "axum",

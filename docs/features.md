@@ -4,6 +4,110 @@ A detailed log of what's built.
 
 ---
 
+### Lane-local writeback — preserve `api_params` during jam cycles
+
+- **The bug.** `run_pipeline`'s per-lane writeback in `src/llm/mod.rs`
+  copied full sub-structs (`bass_voices`, `kit_a`, `kit_b`, `lfo`,
+  `fx`, …) from the pipeline's start-of-pipeline snapshot back to the
+  live `AppState`.  Any `api_params` or UI edit made *while* the
+  pipeline was in flight got silently reverted when the lane finished
+  — voice-2 `enabled` flipping back to false, kit volumes re-rising
+  to defaults, LFO targets resetting to `None`, `fx.stereo_width`
+  snapping back to 0.5.  The original code had a special-case
+  exclusion for `rack` with a comment explaining the exact failure
+  mode; every other user-owned field had been hit by the same trap.
+- **The fix.** `on_lane_applied` callback signature changed from
+  `FnMut(&AppState)` → `FnMut(&Value, &[String])`.  It now receives
+  the lane's filtered JSON output + apply scope, and mod.rs replays
+  that update against the LIVE state via `apply_llm_update`.  Only
+  fields the lane actually emitted get mutated; user-originated
+  changes survive across every lane boundary.
+- Tests updated to the new `|_, _| {}` callback arity (5 call sites
+  in `src/llm/pipeline.rs`).
+
+### FX lane schema — phaser + ring modulator writable
+
+- `fx` lane's JSON schema + system prompt now list `phaser_mix`,
+  `phaser_rate`, `phaser_depth`, `ring_mod_mix`, `ring_mod_freq`.
+  The fields and their `apply_llm_update` handlers had always
+  existed in `FxState` + `src/state/llm_helpers.rs`, but the
+  grammar-constrained lane schema didn't mention them, so the LLM
+  answered phaser / ringmod asks by writing `reverb_mix` with a
+  `_comment` noting the field wasn't in the allowed list.  Matching
+  range hints added to the lane prompt (phaser_mix 0.15-0.45,
+  ring_mod_mix 0.05-0.2 sparingly).
+
+### Kit density caps in lane prompts
+
+- `kit_a` and `kit_b` lane prompts now carry explicit per-voice
+  density caps per 32-step bar: kick 6-10 hits, snare 2-6, clap 2-6,
+  hihat_closed 6-10 (with a "avoid 16th runs; prefer offbeat 8ths"
+  note), hihat_open 0-4.  Jam cycles were otherwise prone to
+  emitting `hihat_a_steps: [1,2,3,6,7,10,11,14,15,…]` — 17 hits
+  that piled on the master bus and forced the peak meter into the
+  CLIPPING alert.  The cap is paired with a "more hits = more gain"
+  rationale so the model understands why, and an "unless the user
+  prompt explicitly asks for a busy pattern" clause so requests like
+  "busier clap pattern" still land.
+
+### Pipeline — voice-2 activation + heuristic tag strip
+
+- `api/rack/agent` (the `add_agent` HTTP endpoint) now mirrors the
+  wizard's model-inheritance guard: if the requested pattern already
+  matches the globally-loaded model path, `model_path` stays `None`
+  and the agent inherits instead of forcing a second llama-server.
+  Without this, `add_agent PULSE gemma` was resolving to the first
+  `gemma-*` GGUF in lexical order — on machines with both E4B and
+  26B-A4B on disk, that was the 26B-A4B thinking variant, whose CoT
+  exhausted max_tokens inside `<think>` and every lane failed with
+  `content:""` + `finish_reason=length`.
+- `llm/pipeline.rs`: the heuristic planner now strips a trailing
+  ` /think` or ` /no_think` before matching.  The think tag is
+  appended by the LLM worker for the inference server, but it was
+  pushing otherwise-short prompts past the heuristic's 120-char
+  sanity cap, forcing the slow LLM planner path and a fallback
+  `default_plan` that drops newly-enabled bass voices.
+- `llm/server_pool.rs`: lane `max_tokens` bumped 1600 → 3000 for
+  reasoning-model headroom; when `content` is empty but
+  `reasoning_content` holds JSON, parse+repair the reasoning text as
+  a salvage path before surfacing an actionable "finish_reason=length
+  — /no_think?" hint.
+- `llm/pipeline_events.rs`: `LaneApplied` now emits an `LlmOutput`
+  carrying the lane JSON as `param_update`, so the UI console
+  renders the per-lane `"<persona>: …"` activity line.  The pipeline
+  refactor had previously only sent bracket-prefixed status messages
+  (`[plan: …]`, `[pipeline: …]`), which the drain filter deliberately
+  hides — so the LLM console had gone silent between user prompts.
+
+### Demo recorder — persistent sink capture + `--resume`
+
+- `create_recording_sink` switched from `pw-cli create-node adapter`
+  (ephemeral — the null-sink died the moment `pw-cli` exited, so the
+  function always silently returned an empty string and the script
+  fell through to raw stream capture) to `pactl load-module
+  module-null-sink`.  The pactl module is hosted by the long-lived
+  pipewire-pulse service, so the sink persists for the whole
+  recording.  Module id stashed in `/tmp/impulse-record-sink.module`
+  for a clean unload; a fallback scan of `pactl list short modules`
+  cleans up sinks left behind by crashed runs.
+- Capture uses `parecord --device=impulse-record.monitor` instead of
+  `pw-record --target <node_id>`.  The latter reports "No such
+  entity" for null-sink node ids and silently falls back to the
+  default source (usually silence); parecord resolves the monitor by
+  stable PulseAudio name.
+- `narrate` fans out TTS playback to both the default sink (live
+  monitoring) and the recording sink (capture lands in the mp4).
+  Without this, the isolated-sink recording had no voice-over —
+  narration went to the speakers, not the capture target.
+- New `--resume` flag on `record-demo.sh`: picks the newest
+  `YYYYMMDD_HHMMSS` directory under `demo/output/` as `BATCH_DIR`
+  and points `TTS_DIR` at its cached `tts/` subfolder.  `tts_generate`
+  already short-circuits on existing `${id}.wav` files, so a retry
+  skips the ~5-minute TTS pre-gen step; only genuinely new narration
+  lines re-synthesize.
+
+---
+
 ### Rack visual polish — chrome tiles + LED z-order + card resizing
 
 - **Zone backdrop.** The rack's empty cells now show a subtle per-cell

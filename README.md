@@ -20,18 +20,29 @@ Everything runs entirely offline: no cloud calls, no subscriptions, no latency. 
 ---
 
 <p align="center">
-  <img src="assets/screenshots/v0.7.4-snapshot-intro-sequencer.png" alt="Sequencer — 32-step wrap, per-voice sliders, bass/accent/slide intensity, 303 centered between 808 and 909" width="900"/>
+  <a href="https://www.youtube.com/@Impulse-Instruct/videos">
+    <img src="https://img.shields.io/badge/YouTube-Impulse%20Instruct-red?logo=youtube&logoColor=white&style=for-the-badge" alt="Watch Impulse Instruct on YouTube" />
+  </a>
+  <br/>
+  ▶ <a href="https://www.youtube.com/@Impulse-Instruct/videos">youtube.com/@Impulse-Instruct</a> — demo videos of the agents jamming
+</p>
+
+<p align="center">
+  <img src="assets/screenshots/v0.7.7-intro-band.png" alt="Multi-agent band — bass / drums / FX specialists jamming together under a conductor, each wired to its own instruments via control cables" width="900"/>
 </p>
 <p align="center">
-  <img src="assets/screenshots/v0.7.4-snapshot-intro-bass-detail.png" alt="Bass detail — 303-style filter with chrome knobs, full-word labels, XY pad" width="900"/>
+  <img src="assets/screenshots/v0.7.7-intro-two-voices.png" alt="Sequencer with two bass voices — 32-step wrap, per-voice step rows, accent / slide intensity, pan offsets for stereo separation" width="900"/>
 </p>
 <p align="center">
-  <img src="assets/screenshots/v0.7.4-snapshot-intro-cables.png" alt="Back panel — cable topology filter dims modules not in the signal path"  width="900"/>
+  <img src="assets/screenshots/v0.7.7-intro-cables-flip.png" alt="Back panel — auto-wired audio chain from voices through FX into the master, LFOs + mod destinations, control cables from agents to their scoped modules"  width="900"/>
+</p>
+<p align="center">
+  <img src="assets/screenshots/v0.7.7-intro-live-filter.png" alt="Live performance — manual XY-pad filter sweep over an autonomous band, with the cutoff / resonance locks protecting other parameters" width="900"/>
 </p>
 
 ---
 
-## v0.7.7-snapshot — Pre-release
+## v0.7.7 — Pre-release
 
 **This is pre-release software.** It works and makes sound, but expect rough edges. The UI is functional but visually unpolished in places.
 
@@ -310,7 +321,7 @@ The LLM understands musical intent well. When a style doesn't land, the cause is
 
 ## Test Suites
 
-489 unit tests plus 3 LLM integration suites that run against a real model:
+1374 unit tests plus 3 LLM integration suites that run against a real model:
 
 | Suite | What it tests |
 |-------|--------------|
