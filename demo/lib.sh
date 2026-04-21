@@ -1071,6 +1071,51 @@ set_bpm() {
     api_params "{\"sequencer\":{\"bpm\":$1}}"
 }
 
+start_opposing_pan_lfo() {
+    # Run a background sine LFO that pans bass voices 0 and 1 in
+    # anti-phase — voice 0 follows sin(2π·rate·t), voice 1 follows the
+    # same sine 180° out of phase, so the two hands cross through the
+    # centre at opposite times.  Drives a `/api/params` write at 20 Hz
+    # so the motion reads as smooth in the event stream.  Starts
+    # detached (&) and parks its PID in /tmp/impulse-pan-lfo.pid so
+    # `stop_pan_lfo` can kill it cleanly even if the scenario exits
+    # early.
+    # Usage: start_opposing_pan_lfo [rate_hz=0.2] [depth_0_to_1=0.7]
+    local rate="${1:-0.2}"
+    local depth="${2:-0.7}"
+    python3 -u -c "
+import math, time, subprocess
+rate, depth = $rate, $depth
+t0 = time.time()
+while True:
+    t = time.time() - t0
+    phase = 2 * math.pi * rate * t
+    p0 = depth * math.sin(phase)
+    p1 = depth * math.sin(phase + math.pi)
+    body = '{\"params\":{\"bass_voices\":[{\"pan\":%.3f},{\"pan\":%.3f}]}}' % (p0, p1)
+    subprocess.run(
+        ['curl', '-sf', '-X', 'POST', '$API/api/params',
+         '-H', 'Content-Type: application/json', '-d', body],
+        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    time.sleep(0.05)
+" >/dev/null 2>&1 &
+    local pid=$!
+    echo "$pid" > /tmp/impulse-pan-lfo.pid
+    echo "  [pan-lfo] started pid=$pid rate=${rate}Hz depth=${depth}"
+}
+
+stop_pan_lfo() {
+    # Kill the background pan LFO started by `start_opposing_pan_lfo`.
+    # Safe to call multiple times — missing PID file is a no-op.
+    if [ -f /tmp/impulse-pan-lfo.pid ]; then
+        local pid
+        pid=$(cat /tmp/impulse-pan-lfo.pid)
+        kill "$pid" 2>/dev/null || true
+        rm -f /tmp/impulse-pan-lfo.pid
+        echo "  [pan-lfo] stopped pid=$pid"
+    fi
+}
+
 load_midi() {
     # Import a MIDI file and populate shell vars from the summary so the
     # scenario can pace itself against the piece's real duration.
