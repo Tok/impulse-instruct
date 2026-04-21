@@ -11,9 +11,10 @@
 #     touching pan, no HTTP hammering during playback.
 #   - One PAD agent drifts the 303 filter (cutoff + resonance) across
 #     the movement.  That's its ONLY remit.
-#   - 808 arrives mid-piece for a deterministic half-time pulse
-#     (kicks on 0/8, closed hat on 4/12) written directly via
-#     api_params — no KIT agent needed.
+#   - 808 arrives mid-piece; a KIT agent writes a half-time pulse
+#     (kicks on 0/8, closed hat on 4/12 of a 16-step loop).  Agent-
+#     driven so the drums read as a live decision, not a pre-baked
+#     pattern; scope=kit_a keeps it away from the bass sequencer.
 #   - One FX agent escalates reverb + bitcrush into the outro.
 #   - Camera tracks each addition: focus_on the new module, linger a
 #     few seconds, then return to the score.
@@ -153,18 +154,19 @@ fill_wait 60
 add_instrument 808
 show_then_return 808 5
 
-# Bass 2× drums — Bach stays centre-stage.
+# Bass 2× drums — Bach stays centre-stage.  Tuned well below the
+# intro mix because the filter sweep can get loud on resonance peaks.
 api_params '{"kit_a": {"kick": {"volume": 0.45}, "hihat_closed": {"volume": 0.30}}}'
 
-# Half-time kick (steps 0, 8) + closed-hihat (steps 4, 12) on a
-# 16-step loop.  `kick_a_steps` / `hihat_a_steps` accept an index
-# list, which is 4× shorter on the wire than a bool array.
-api_params '{
-  "sequencer": {
-    "kick_a_steps": [0, 8],
-    "hihat_a_steps": [4, 12]
-  }
-}'
+add_agent KIT gemma "kit_a"
+wait_for_model
+
+# KIT writes a half-time pulse that feels like 120 under the running
+# 240 BPM bass.  Scope=kit_a keeps it away from the bass sequencer.
+# Pattern is deliberately specific — kick on 0/8, closed hat on 4/12
+# of a 16-step loop — so the first response has concrete targets
+# instead of drifting to a full 4-on-the-floor that'd overwhelm Bach.
+ask "KIT: half-time drums under a 240 BPM Bach outro.  Kit_a only, 16-step loop.  Kick on steps 0 and 8 ONLY (not every 4 — that's too dense at this tempo).  Closed hi-hat on steps 4 and 12.  NO snare on 2 and 4 — this is not pop.  Add one or two quiet ghost hits somewhere unusual for texture (a soft hat on a weird step, or a single tom ping).  Everything quiet, velocity ~0.4 max.  The drums should feel half the speed of the bass — a slow pulse under a running melodic line, not a dance beat.  DO NOT touch kit_b / hoover / an1x / bass — kit_a only." KIT 0
 
 # ── Scene 4: FX outro ───────────────────────────────────────────────────────
 # One FX agent, tight scope: reverb + bitcrush only.  Three asks
