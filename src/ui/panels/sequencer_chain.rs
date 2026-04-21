@@ -112,6 +112,16 @@ pub fn draw_pattern_chain(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         )
     };
 
+    // Tight button padding for this compact strip — default style
+    // pads buttons 6 × 3 px which makes the 16 × 14 slot cells render
+    // as `[   A   ]` instead of `[A]`, because egui grows a button's
+    // intrinsic size past the requested `add_sized` when text +
+    // padding exceeds it.  Shrinking to 2 × 1 keeps "A" snug inside
+    // its 16-px cell.  Scoped via `ui.style_mut` so only this strip
+    // is affected; surrounding panels keep their normal button feel.
+    ui.style_mut().spacing.button_padding = egui::vec2(2.0, 1.0);
+    ui.spacing_mut().item_spacing.x = 2.0;
+
     // Bank slots
     ui.label(
         egui::RichText::new("BANK")
