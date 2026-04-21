@@ -352,31 +352,9 @@ pub fn draw_pattern_chain(app: &mut ImpulseApp, ui: &mut egui::Ui) {
 // line inside it shows which repeat is active.  Click a bar to open a
 // popover for editing the slot's overrides.  Drag bars to reorder.
 
-const TIMELINE_BAR_W: f32 = 78.0;
+const TIMELINE_BAR_W: f32 = 20.0;
 const TIMELINE_BAR_H: f32 = 22.0;
-const TIMELINE_GAP: f32 = 3.0;
-
-/// Format a per-slot override summary line for the bar.  Returns an
-/// empty string when the slot has no overrides so the visual stays
-/// uncluttered.
-fn override_summary(ov: &crate::state::ChainSlotOverride) -> String {
-    let mut parts: Vec<String> = Vec::new();
-    if ov.repeats > 1 {
-        parts.push(format!("×{}", ov.repeats));
-    }
-    if let Some(id) = &ov.style {
-        let name = StyleCatalog::get()
-            .find_by_id(id)
-            .map(|s| s.name.clone())
-            .unwrap_or_else(|| id.clone());
-        let short = name.chars().take(6).collect::<String>();
-        parts.push(format!("s:{}", short));
-    }
-    if let Some(b) = ov.bpm {
-        parts.push(format!("{:.0}bpm", b));
-    }
-    parts.join(" ")
-}
+const TIMELINE_GAP: f32 = 2.0;
 
 pub fn draw_song_timeline(app: &mut ImpulseApp, ui: &mut egui::Ui) {
     let (chain, overrides, chain_enabled, chain_pos, repeat_count) = {
@@ -488,30 +466,25 @@ pub fn draw_song_timeline(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             painter.rect_filled(rect, rounding, fill);
             painter.rect_stroke(rect, rounding, stroke);
 
-            // Pattern letter / number, big, top-left.  Numeric for
-            // indices past H so a long MIDI chain doesn't render as
-            // "H H H H H" after the eighth bar.
+            // Pattern number, centred in the narrow bar.  Font sized
+            // so up to 3 digits ("999") still fits cleanly inside
+            // TIMELINE_BAR_W (20 px); longer labels just truncate —
+            // a chain longer than 999 banks is well past MAX_BANKS
+            // so this is purely a render fallback.
             let letter = slot_label(bank_idx);
             painter.text(
-                egui::pos2(rect.min.x + 5.0, rect.center().y),
-                egui::Align2::LEFT_CENTER,
+                rect.center(),
+                egui::Align2::CENTER_CENTER,
                 &letter,
-                egui::FontId::monospace(11.0),
+                egui::FontId::monospace(10.0),
                 theme::CHALK,
             );
 
-            // Override summary — repeat count + style + bpm — right-side.
+            // Override summary doesn't fit in a 20 px bar — surface
+            // it via the popover instead (click the bar to open).
+            // Re-fetch the override below for the drag / click
+            // handlers that still need it; paint nothing here.
             let ov = overrides.get(pos).cloned().unwrap_or_default();
-            let summary = override_summary(&ov);
-            if !summary.is_empty() {
-                painter.text(
-                    egui::pos2(rect.max.x - 4.0, rect.center().y),
-                    egui::Align2::RIGHT_CENTER,
-                    summary,
-                    egui::FontId::monospace(8.0),
-                    theme::FOG,
-                );
-            }
 
             // Playhead — a thin vertical line inside the currently-
             // playing slot, positioned by how many repeats have passed.
