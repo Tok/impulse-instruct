@@ -1,9 +1,12 @@
 #!/usr/bin/env bash
 # ─── J.S. Bach — Italian Concerto III (MIDI score import) ───────────────────
-# Plays a 2-voice piano MIDI of Bach's third movement on two 303 voices,
-# start to end.  The source file is encoded at 240 BPM (8th-note
-# density) — we halfstep to 120 after import so the Presto reads as
-# brisk rather than brutal on acid basses.  ~7 minutes of playback.
+# Plays a 2-voice piano MIDI of Bach's third movement on two 303 voices
+# at its intended 240 BPM, start to end (~3:30 of playback).
+#
+# The 240 is brutal if the drums match it, so the KIT agent's prompt
+# asks for half-density patterns: kicks only on steps 0 + 8 of a
+# 16-step loop, hats on 4 + 12.  That puts the drums at effectively
+# 120-BPM pulse under a 240-BPM bass, which is the intended feel.
 #
 # No narration during playback — the prompt console and the filter /
 # drum / FX panels carry the story.  Agents come in staggered:
@@ -11,9 +14,8 @@
 #   t=play         PAD agent drifts the filter across a wide swath of
 #                  the res/cutoff pad; a background sine LFO pans voice
 #                  0 and voice 1 in anti-phase
-#   t=play+60s     808 arrives; KIT agent lays very sparse 4otf
-#                  (kick on 0/4/8/12, CHH on 2/6/10/14, a couple of
-#                  ghost hits for texture)
+#   t=play+60s     808 arrives; KIT agent lays a half-density 4otf
+#                  under the bass
 #   t=end-90s..end Three staggered FX asks escalate bitcrush + reverb +
 #                  delay into a final-30s freak-out
 #   t=end          chain_loop=false stops the transport on its own; pan
@@ -22,7 +24,6 @@
 scene_count 6
 
 BACH_MIDI="${BACH_MIDI:-demo/scenarios/bach-italian-3rd.mid}"
-TARGET_BPM=120
 
 # ── Scene 1: Setup + explanation ────────────────────────────────────────────
 
@@ -58,17 +59,13 @@ if ! load_midi "$BACH_MIDI"; then
     exit 1
 fi
 
-# Halfstep the source tempo (240 BPM on the file) down to 120 so Bach
-# reads as a brisk Presto on acid basses rather than a panic attack.
-# `chain_advance_preserve_non_bass` inherits BPM from the live
-# sequencer, so this sticks across every one of the ~50 bank swaps.
-set_bpm "$TARGET_BPM"
-# Duration at the halfstepped tempo.  MIDI_DURATION is computed at
-# MIDI_BPM; scale by the ratio.  Not narrated — the shell log gets it
-# for timing debugging only.
-PLAY_DURATION=$(echo "$MIDI_DURATION * $MIDI_BPM / $TARGET_BPM" | bc -l)
+# Bach plays at the file's native 240 BPM — halfstepping the tempo
+# down slowed the whole piece including the bass, so instead we keep
+# the bass at 240 and sparsify the drums (KIT prompt below) so they
+# feel half-time under the running bass line.
+PLAY_DURATION="$MIDI_DURATION"
 PLAY_DURATION_INT=${PLAY_DURATION%.*}
-echo "  [scenario] will play for ${PLAY_DURATION_INT}s at ${TARGET_BPM} BPM"
+echo "  [scenario] will play for ${PLAY_DURATION_INT}s at ${MIDI_BPM} BPM"
 
 # Per-voice starting timbre.  Voice 0 (right hand) slightly brighter;
 # voice 1 (left hand) slightly darker.  Pan will be overwritten every
@@ -127,7 +124,7 @@ api_params '{"kit_a": {"volume": 0.2}}'
 
 add_agent KIT gemma "kit_a"
 
-ask "KIT: extremely sparse four-on-the-floor under Bach.  Kit_a only.  Kick on every 4th step (0, 4, 8, 12 in a 16-step loop).  Closed hi-hat between kicks (steps 2, 6, 10, 14).  NO snare on 2 and 4 — this is not pop.  Add one or two ghost hits somewhere unusual for texture (a quiet hat on a weird step, or a single tom ping).  Everything quiet (velocity ~0.4 max).  Stay out of the bass's way." KIT 0
+ask "KIT: half-time drums under a fast Bach at 240 BPM.  Kit_a only, 16-step loop.  Kick on steps 0 and 8 ONLY (not every 4 — that's too dense at this tempo).  Closed hi-hat on steps 4 and 12 for the between-kick accents.  NO snare on 2 and 4.  Add one or two ghost hits somewhere unusual for texture (a quiet hat on a weird step, or a single tom ping).  Everything quiet (velocity ~0.4 max).  The drums should feel half the speed of the bass — a slow pulse under a running melodic line, not a dance beat." KIT 0
 
 # ── Scene 4: FX takeover (end - 90s) ────────────────────────────────────────
 # Three staggered asks, ~30 seconds apart, so the escalation reads as
