@@ -127,7 +127,7 @@ pub fn set_param_mode(state: AppState, path: &str, mode: ParamMode) -> AppState 
 }
 
 pub mod ui_prefs;
-pub use ui_prefs::{AutosaveInterval, HuthStyle, UiPrefs};
+pub use ui_prefs::{AutosaveInterval, UiPrefs};
 
 pub(crate) mod fx_plan;
 pub mod fx_types;

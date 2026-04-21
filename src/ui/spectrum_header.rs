@@ -9,10 +9,11 @@
 // buffer).  We just do the display math here.
 //
 // Grayscale (default): bar brightness tracks amplitude, 40 → 200.
-// Huth mode (toggled via `ui_prefs.huth_oscilloscope`): every bar
-// is tinted by the pitch class of its centre frequency, so a chord's
-// tonal make-up reads visually — C-blue cold on the low end, F-orange
-// warm in the middle, Rose / Pensée on the upper partials.
+// Huth mode (toggled via `ui_prefs.huth_spectrum`): every bar is tinted
+// by the pitch class of its centre frequency, so a chord's tonal
+// make-up reads visually — C-blue cold on the low end, F-orange warm
+// in the middle, Rose / Pensée on the upper partials.  Low-energy
+// bars fade toward grayscale so silence reads neutral.
 
 use crate::audio::SAMPLE_RATE;
 use crate::ui::theme;
@@ -31,17 +32,15 @@ const DB_CEIL: f32 = 0.0;
 /// out of the same rect without special-casing sizes.
 ///
 /// `peaks` are the exponential-max peak-hold values maintained by
-/// `update_spectrum` — same length as `magnitudes`.  When `huth_color`
-/// carries a value it overrides the per-band tint (chosen to match
-/// the dominant note of the current scope frame, matching the
-/// scope widgets' global-tint behaviour).
+/// `update_spectrum` — same length as `magnitudes`.  `huth_per_band`
+/// toggles the per-pitch-class tint on each bar; when false, bars
+/// are pure grayscale.
 pub fn draw_spectrum_bars(
     ui: &mut egui::Ui,
     magnitudes: &[f32],
     peaks: &[f32],
     w: f32,
     h: f32,
-    huth_color: Option<Color32>,
     huth_per_band: bool,
 ) {
     let (rect, _) = ui.allocate_exact_size(egui::vec2(w, h), egui::Sense::hover());
@@ -90,29 +89,21 @@ pub fn draw_spectrum_bars(
             egui::vec2((bar_w - 1.0).max(1.0), bar_h),
         );
 
+        let base = Color32::from_gray((40.0 + norm * 160.0) as u8);
         let color = if huth_per_band {
-            // Centre freq of band i on the log scale → MIDI note → Huth color.
+            // Centre freq of band i on the log scale → MIDI note → Huth
+            // color.  Fade toward grayscale at low amplitudes so quiet
+            // bins don't paint a saturated rainbow over silence: at
+            // norm=0 the bar is `base` gray, at norm=1 it's full Huth.
             let f =
                 ((log_lo + (log_hi - log_lo) * (i as f32 + 0.5) / NUM_BANDS as f32).exp()).max(1.0);
             let midi = (69.0 + 12.0 * (f / 440.0).log2()).round().clamp(0.0, 127.0) as u8;
-            // Fade dim bars toward grayscale so low-energy bins don't
-            // paint a saturated rainbow over silence.  `norm` rides
-            // 0..1 with amplitude; at norm=0 the bar is the same gray
-            // as the default path, at norm=1 it's full Huth saturation.
-            let h = theme::note_color(midi);
-            let base = Color32::from_gray((40.0 + norm * 160.0) as u8);
-            lerp_color(base, h, (norm * 0.85).clamp(0.0, 1.0))
-        } else if let Some(c) = huth_color {
-            // Global Huth tint (waveform-wide pitch detection — same
-            // source as the scope widgets).  Blend toward grayscale at
-            // low amplitudes so silence still reads neutral.
-            let base = Color32::from_gray((40.0 + norm * 160.0) as u8);
-            lerp_color(base, c, (norm * 0.80).clamp(0.0, 1.0))
+            lerp_color(base, theme::note_color(midi), (norm * 0.85).clamp(0.0, 1.0))
         } else {
-            // Default grayscale: brightness ramps 40..200 with amplitude,
+            // Pure grayscale: brightness ramps 40..200 with amplitude,
             // matching the sparkline treatment so the whole header
             // shares one visual language.
-            Color32::from_gray((40.0 + norm * 160.0) as u8)
+            base
         };
         painter.rect_filled(bar_rect, egui::Rounding::ZERO, color);
     }

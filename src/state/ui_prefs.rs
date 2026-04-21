@@ -3,18 +3,6 @@
 
 use serde::{Deserialize, Serialize};
 
-/// Whether Huth *Farbige Noten* coloring is applied to the piano + sequencer.
-/// Older sessions used `PianoOnly` / `Full` — both deserialize to `On`.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
-pub enum HuthStyle {
-    /// Monochrome — piano uses standard black/white, sequencer dots are gray.
-    Off,
-    /// Huth colors on the piano keyboard and sequencer LED dots.
-    #[default]
-    #[serde(alias = "PianoOnly", alias = "Full")]
-    On,
-}
-
 /// How often the session is auto-saved to `session.json`.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum AutosaveInterval {
@@ -52,8 +40,6 @@ impl AutosaveInterval {
 /// Persistent UI preferences stored in AppState so they survive across sessions.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct UiPrefs {
-    /// How broadly Huth *Farbige Noten* colors are applied.
-    pub huth_style: HuthStyle,
     /// Post-process bloom glow on note highlights (future: needs wgpu pass).
     pub bloom_enabled: bool,
     /// Bloom intensity 0–1.
@@ -77,9 +63,23 @@ pub struct UiPrefs {
     /// Oscilloscope phosphor glow intensity (0.0–1.0, default 0.6).
     #[serde(default = "default_phosphor_intensity")]
     pub phosphor_intensity: f32,
-    /// When true, oscilloscope waveform is Huth-colored based on detected frequency.
+    // ── Huth *Farbige Noten* per-component toggles ─────────────────────────
+    // Sequencer step dots and the event-stream history are always Huth-
+    // coloured — the toggles below only gate the places where a Huth
+    // treatment competes with a legible grayscale alternative.
+    /// Huth colors on the piano keyboard (key fills + note labels).
+    #[serde(default = "default_true_pref")]
+    pub huth_piano: bool,
+    /// Tint the bar oscilloscope waveform by the detected fundamental pitch.
     #[serde(default)]
-    pub huth_oscilloscope: bool,
+    pub huth_bar_osc: bool,
+    /// Tint the ring oscilloscope waveform by the detected fundamental pitch.
+    #[serde(default)]
+    pub huth_ring_osc: bool,
+    /// Color each spectrum bar by its centre-frequency pitch class, fading
+    /// to grayscale at low amplitudes so silence reads neutral.
+    #[serde(default)]
+    pub huth_spectrum: bool,
     // ── Event stream display layers ─────────────────────────────────────────
     /// Show bass note events (Huth-colored circles).
     #[serde(default = "default_true_pref")]
@@ -176,7 +176,6 @@ impl UiPrefs {
 impl Default for UiPrefs {
     fn default() -> Self {
         Self {
-            huth_style: HuthStyle::On,
             bloom_enabled: false,
             bloom_intensity: 0.5,
             log_level_idx: 2, // Info
@@ -186,7 +185,10 @@ impl Default for UiPrefs {
             crt_effect: false,
             phosphor_frames: default_phosphor_frames(),
             phosphor_intensity: default_phosphor_intensity(),
-            huth_oscilloscope: false,
+            huth_piano: true,
+            huth_bar_osc: false,
+            huth_ring_osc: false,
+            huth_spectrum: false,
             stream_bass_notes: true,
             stream_drums: false,
             stream_hz_scale: true,

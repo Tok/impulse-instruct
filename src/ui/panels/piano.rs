@@ -54,7 +54,7 @@ pub fn draw_piano(app: &mut ImpulseApp, ui: &mut egui::Ui, ctx: &egui::Context) 
     // Key / scale for degree highlighting
     let (root_note, seq_scale, huth_on) = {
         let s = app.state.read();
-        let huth_on = s.ui_prefs.huth_style != crate::state::HuthStyle::Off;
+        let huth_on = s.ui_prefs.huth_piano;
         (s.sequencer.root_note, s.sequencer.scale, huth_on)
     };
 

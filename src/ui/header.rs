@@ -69,14 +69,24 @@ impl ImpulseApp {
             .max_height(screen_h * 0.5)
             .default_height(160.0)
             .show(ctx, |ui| {
-                let (show_bar, show_spectrum, show_ring, show_stream, huth_pref) = {
+                let (
+                    show_bar,
+                    show_spectrum,
+                    show_ring,
+                    show_stream,
+                    huth_bar,
+                    huth_ring,
+                    huth_spec,
+                ) = {
                     let p = &self.state.read().ui_prefs;
                     (
                         p.show_bar_oscilloscope,
                         p.show_spectrum_bars,
                         p.show_ring_oscilloscope,
                         p.show_event_stream,
-                        p.huth_oscilloscope,
+                        p.huth_bar_osc,
+                        p.huth_ring_osc,
+                        p.huth_spectrum,
                     )
                 };
                 // Center column shows ONE of { spectrum, bar oscilloscope }
@@ -85,9 +95,21 @@ impl ImpulseApp {
                 // mainly for the future rackable-viz wiring (see PLAN.md).
                 let show_center_top = show_spectrum || show_bar;
 
-                let huth_col = if huth_pref {
+                // Detect once if ANY scope wants a Huth tint.  The detection
+                // is a zero-crossing FFT-free cycle count, cheap enough but
+                // no reason to run it if nobody's using the result.
+                let detected_note = if huth_bar || huth_ring {
                     super::scope_footer::detect_note(&self.scope_buf, crate::audio::SAMPLE_RATE)
-                        .map(theme::note_color)
+                } else {
+                    None
+                };
+                let huth_bar_col = if huth_bar {
+                    detected_note.map(theme::note_color)
+                } else {
+                    None
+                };
+                let huth_ring_col = if huth_ring {
+                    detected_note.map(theme::note_color)
                 } else {
                     None
                 };
@@ -186,8 +208,7 @@ impl ImpulseApp {
                                 &self.spectrum_peaks,
                                 top_rect.width(),
                                 top_rect.height(),
-                                huth_col,
-                                huth_pref,
+                                huth_spec,
                             );
                         } else {
                             super::scope_footer::draw_scope_colored(
@@ -196,7 +217,7 @@ impl ImpulseApp {
                                 &self.scope_history,
                                 top_rect.width(),
                                 top_rect.height(),
-                                huth_col,
+                                huth_bar_col,
                             );
                         }
                     });
@@ -252,7 +273,7 @@ impl ImpulseApp {
                             &self.scope_buf,
                             &self.scope_history,
                             ring_w,
-                            huth_col,
+                            huth_ring_col,
                         );
                     });
                 }
