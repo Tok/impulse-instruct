@@ -12,23 +12,16 @@ use super::{MAX_BASS_VOICES, MAX_STEPS};
 // ─── Bass pattern defaults (used by SequencerState::default + serde) ─────────
 
 fn default_bass_patterns() -> Vec<Vec<TB303Step>> {
-    // Voice 0 gets the same starter pattern as `bass_pattern`; voices 1-3 are silent.
-    let mut patterns = Vec::with_capacity(MAX_BASS_VOICES);
-
-    // Voice 0: A minor starter pattern (mirrors SequencerState default)
-    let mut p0 = vec![TB303Step::default(); MAX_STEPS];
-    let bass_notes: &[(usize, u8)] = &[(0, 45), (6, 48), (12, 52)];
-    for &(step, note) in bass_notes {
-        p0[step].active = true;
-        p0[step].note = note;
-    }
-    patterns.push(p0);
-
-    // Voices 1-3: silent
-    for _ in 1..MAX_BASS_VOICES {
-        patterns.push(vec![TB303Step::default(); MAX_STEPS]);
-    }
-    patterns
+    // Empty patterns for every voice.  `TB303Step::default()` is
+    // inactive, so nothing fires until the agent / scenario writes
+    // real notes.  Keeping a hardcoded starter pattern here (it used
+    // to be an A-minor riff on voice 0) meant fresh sessions loaded
+    // with leftover sound — confusing when you want a blank canvas,
+    // and flatly wrong for MIDI imports where the real notes land
+    // via `bass_patterns` on the pattern_bank slots.  Genre-specific
+    // example patterns still live in `seed_patterns` as prompt
+    // reference only; we never feed them into state directly.
+    vec![vec![TB303Step::default(); MAX_STEPS]; MAX_BASS_VOICES]
 }
 
 fn default_bass_voice_steps() -> Vec<usize> {

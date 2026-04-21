@@ -1273,6 +1273,35 @@ tour_rack() {
     done
 }
 
+fill_wait() {
+    # Occupy a stretch of playback by scrolling around the rack instead
+    # of staring at a single module.  Front → voice → sequencer, then
+    # flip to the back panel for a cable tour, then flip front again
+    # and land on the sequencer so the next scene starts stable.
+    #
+    # Usage: fill_wait 40           # ~40 s total, evenly divided across
+    #                               # 8 camera moves (~5 s each)
+    #
+    # Clamps to 8 s minimum so quick gaps still look deliberate.
+    local total="${1:-30}"
+    local per
+    per=$(echo "scale=2; if ($total / 8 < 2) 2 else $total / 8" | bc -l 2>/dev/null)
+    local steps=(
+        "look_at sequencer"
+        "focus_on bass"
+        "look_at ai"
+        "show_cables"
+        "tour_rack $per"
+        "show_knobs"
+        "look_at voice"
+        "look_at sequencer"
+    )
+    for step in "${steps[@]}"; do
+        eval "$step"
+        pause "$per"
+    done
+}
+
 # ── Parameter control ────────────────────────────────────────────────────────
 
 lock() {

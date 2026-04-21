@@ -451,18 +451,25 @@ pub fn apply_llm_update(state: AppState, update: &serde_json::Value, scope: &[St
                     };
                 }
                 if let Some(v) = obj.get("target").and_then(|v| v.as_str()) {
+                    // Fall back to the full `parse_lfo_target` for
+                    // names the short list below doesn't cover —
+                    // scenarios / power users can target any LFO
+                    // variant without this file having to mirror every
+                    // enum arm.  Short-circuits to the common cases
+                    // first for readability.
                     s.lfo[i].target = match v {
                         "BassCutoff" => LfoTarget::BassCutoff,
                         "BassResonance" => LfoTarget::BassResonance,
                         "BassPitch" => LfoTarget::BassPitch,
                         "BassVolume" => LfoTarget::BassVolume,
+                        "BassPan" => LfoTarget::BassPan,
                         "ReverbMix" => LfoTarget::ReverbMix,
                         "DelayTime" => LfoTarget::DelayTime,
                         "DelayFeedback" => LfoTarget::DelayFeedback,
                         "ChorusMix" => LfoTarget::ChorusMix,
                         "ChorusRate" => LfoTarget::ChorusRate,
                         "Kick808Pitch" => LfoTarget::Kick808Pitch,
-                        _ => LfoTarget::None,
+                        other => crate::state::parse_lfo_target(other).unwrap_or(LfoTarget::None),
                     };
                 }
             }
