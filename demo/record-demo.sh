@@ -143,10 +143,13 @@ VERSION=$(grep '^version' "$PROJECT_DIR/Cargo.toml" | head -1 | sed 's/.*"\(.*\)
 BASENAME="v${VERSION}-${SCENARIO}"
 
 if [ "$RESUME" -eq 1 ]; then
-    # Pick the newest timestamped batch dir (YYYYMMDD_HHMMSS). Lexical sort
-    # matches chronological order for that format, so `sort | tail -1` wins.
+    # Pick the newest timestamped batch dir.  The scenario suffix is
+    # optional in the regex so this keeps working with pre-suffix
+    # batch dirs (old recordings) and the new `YYYYMMDD_HHMMSS_<scenario>`
+    # layout alike.  Lexical sort matches chronological order because
+    # the timestamp prefix is fixed-width.
     LAST_BATCH=$(find "$OUTPUT_DIR" -maxdepth 1 -mindepth 1 -type d \
-        -regextype posix-extended -regex '.*/[0-9]{8}_[0-9]{6}$' 2>/dev/null \
+        -regextype posix-extended -regex '.*/[0-9]{8}_[0-9]{6}(_[^/]*)?$' 2>/dev/null \
         | sort | tail -1)
     if [ -z "$LAST_BATCH" ] || [ ! -d "$LAST_BATCH" ]; then
         echo "ERROR: --resume: no previous batch directory found in $OUTPUT_DIR" >&2
@@ -157,7 +160,12 @@ if [ "$RESUME" -eq 1 ]; then
     echo "  [--resume] Reusing batch: $BATCH_DIR"
 else
     TIMESTAMP=$(date +%Y%m%d_%H%M%S)
-    BATCH_DIR="$OUTPUT_DIR/${TIMESTAMP}"
+    # Tag the batch dir with the scenario name so `ls output/` at a
+    # glance identifies which recording produced each mp4/srt/log,
+    # rather than forcing the user to open each dir to check its
+    # contents.  Filesystem-safe: scenario names are already
+    # `a-z0-9-_` (they're filename stems under demo/scenarios/).
+    BATCH_DIR="$OUTPUT_DIR/${TIMESTAMP}_${SCENARIO}"
 fi
 mkdir -p "$BATCH_DIR"
 # TTS clip cache location — per-batch by default so each recording owns its

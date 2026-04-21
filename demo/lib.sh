@@ -113,6 +113,23 @@ api_rack_reset() {
     curl -sf -X POST "$API/api/rack/reset" >/dev/null 2>&1 || true
 }
 
+api_midi_import() {
+    # Import a MIDI file into the sequencer as two bass voices.
+    # Usage: api_midi_import /abs/path/to/score.mid
+    #        api_midi_import /abs/path/to/score.mid 8        (force 32nd grid)
+    # Returns JSON summary from the server (bpm, step_division, banks_used,
+    # notes_voice_0, notes_voice_1, was_truncated, picked_tracks).
+    local path="$1"
+    local div="${2:-}"
+    local div_json=""
+    if [ -n "$div" ]; then
+        div_json=", \"step_division\": $div"
+    fi
+    curl -sf -X POST "$API/api/midi/import" \
+        -H "Content-Type: application/json" \
+        -d "{\"path\": \"$path\" $div_json}" 2>/dev/null
+}
+
 api_state_reset() {
     # Full AppState wipe — everything back to defaults (Empty rack preset),
     # preserving only the currently-loaded model path.  Guarantees a blank
@@ -1052,6 +1069,51 @@ stop()  { api_stop; }
 set_bpm() {
     # Force sequencer tempo. Usage: set_bpm 170
     api_params "{\"sequencer\":{\"bpm\":$1}}"
+}
+
+load_midi() {
+    # Import a MIDI file and populate shell vars from the summary so the
+    # scenario can pace itself against the piece's real duration.
+    #   Usage: load_midi demo/scenarios/bach-italian-3rd.mid
+    #          load_midi demo/scenarios/foo.mid 8           (force /8 grid)
+    # Sets on success (leaks into the caller's shell — bash scoping):
+    #   MIDI_OK=1
+    #   MIDI_BPM               e.g. 240.0
+    #   MIDI_DURATION          playback seconds (float)
+    #   MIDI_BANKS_USED        int
+    #   MIDI_NOTES_V0 / V1     int
+    #   MIDI_TRUNCATED         0 or 1
+    # On failure sets MIDI_OK=0 (returns non-zero too).
+    local path="$1"
+    local div="${2:-}"
+    local resp
+    resp=$(api_midi_import "$path" "$div")
+    # One python pass extracts every field and emits `VAR=value` lines
+    # for `eval` — much faster than 5 separate python invocations.
+    local vars
+    vars=$(printf '%s' "$resp" | python3 -c "
+import sys, json
+try:
+    d = json.load(sys.stdin)
+    ok = 1 if d.get('ok', False) else 0
+    print(f'MIDI_OK={ok}')
+    if ok:
+        print(f\"MIDI_BPM={d.get('bpm', 0)}\")
+        print(f\"MIDI_DURATION={d.get('duration_seconds', 0)}\")
+        print(f\"MIDI_BANKS_USED={d.get('banks_used', 0)}\")
+        print(f\"MIDI_NOTES_V0={d.get('notes_voice_0', 0)}\")
+        print(f\"MIDI_NOTES_V1={d.get('notes_voice_1', 0)}\")
+        print(f\"MIDI_TRUNCATED={1 if d.get('was_truncated') else 0}\")
+except Exception:
+    print('MIDI_OK=0')
+" 2>/dev/null)
+    eval "$vars"
+    if [ "${MIDI_OK:-0}" = "1" ]; then
+        echo "  [midi] $path — ${MIDI_BPM} BPM, ${MIDI_DURATION}s, ${MIDI_BANKS_USED} banks, v0=${MIDI_NOTES_V0} v1=${MIDI_NOTES_V1} trunc=${MIDI_TRUNCATED}"
+        return 0
+    fi
+    echo "  [midi] import failed — response: $resp" >&2
+    return 1
 }
 
 # ── AI prompts ───────────────────────────────────────────────────────────────
