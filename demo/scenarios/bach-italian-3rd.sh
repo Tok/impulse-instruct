@@ -36,6 +36,13 @@ reset_all
 look_at ai
 set_style ""
 
+# Bach-specific Huth-per-component pinning: grayscale piano (the 303 is
+# the expressive voice, not the keyboard chrome), Huth-coloured
+# spectrum bars so the harmonic make-up of the counterpoint reads as
+# colour, oscilloscopes left grayscale.  Sequencer step dots and the
+# event-stream history are Huth-coloured unconditionally.
+set_ui_prefs '{"huth_piano": false, "huth_bar_osc": false, "huth_ring_osc": false, "huth_spectrum": true}'
+
 add_instrument bass
 
 say "J.S. Bach — Italian Concerto, third movement. Two voices: right hand and left hand. Both played by a 303-style bass."

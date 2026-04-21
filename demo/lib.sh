@@ -113,6 +113,19 @@ api_rack_reset() {
     curl -sf -X POST "$API/api/rack/reset" >/dev/null 2>&1 || true
 }
 
+api_ui_prefs() {
+    # Pin UI preferences from a scenario so demo setup doesn't depend
+    # on whatever the user left in their session.  Only fields present
+    # in the JSON are updated.  Recognised keys include huth_piano /
+    # huth_bar_osc / huth_ring_osc / huth_spectrum, the show_*
+    # visualization toggles, the stream_* event-stream layers, plus
+    # ui_scale / bloom / phosphor numeric fields.
+    # Usage: api_ui_prefs '{"huth_piano": false, "huth_spectrum": true}'
+    curl -sf -X POST "$API/api/ui_prefs" \
+        -H "Content-Type: application/json" \
+        -d "$1" >/dev/null 2>&1 || true
+}
+
 api_midi_import() {
     # Import a MIDI file into the sequencer as two bass voices.
     # Usage: api_midi_import /abs/path/to/score.mid
@@ -1114,6 +1127,13 @@ stop_pan_lfo() {
         rm -f /tmp/impulse-pan-lfo.pid
         echo "  [pan-lfo] stopped pid=$pid"
     fi
+}
+
+set_ui_prefs() {
+    # Thin alias for scenario readability.  Same contract as
+    # `api_ui_prefs` — JSON body with any subset of UiPrefs fields.
+    # Usage: set_ui_prefs '{"huth_piano": false, "huth_spectrum": true}'
+    api_ui_prefs "$1"
 }
 
 load_midi() {

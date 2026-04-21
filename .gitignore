@@ -10,6 +10,8 @@
 llama-server.log
 settings.json
 session.json
+# User-saved project snapshots (File → Save project writes these).
+project-*.json
 cobertura.xml
 .claude/
 /demo/output/
