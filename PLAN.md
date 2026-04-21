@@ -76,6 +76,18 @@ they ship and are reflected in `features.md`.
   by-step pattern swap instead of the current hard cut.  New
   `ChainSlotOverride::morph_bars` field (0 = hard cut, >0 = bars to
   crossfade over).
+- [ ] **Rackable viz modules (visualizers as rack modules)** - move
+  the header oscillographs / spectrum / event stream into optional
+  visualizer rack modules so the user can add / remove / position
+  them alongside the synth voices.  Header keeps the ring scope +
+  spectrum as always-on "transport indicators"; everything else
+  (bar oscilloscope, stereo meter, activity timeline, event stream
+  variants) becomes a rackable module with the same cable-fed input
+  model as SpectrumAnalyzer / StereoMeter already use.  The existing
+  `draw_scope_colored` path in `scope_footer.rs` is kept alive in
+  the header as a Preferences-toggleable fallback so it's available
+  to wire into a rack module without reimplementing the phosphor
+  trail rendering.
 - [ ] **Paginated bank selector for >8 banks** - `MAX_BANKS` was
   raised to 64 so MIDI imports of longer pieces (e.g. Bach III at a
   32nd-note grid needs ~48 banks) can chain end-to-end.  The

@@ -98,9 +98,18 @@ pub struct UiPrefs {
     #[serde(default)]
     pub llm_auto_scroll: bool,
     // ── Header visualization toggles ────────────────────────────────────────
-    /// Show the linear (bar) oscilloscope in the header.
-    #[serde(default = "default_true_pref")]
+    /// Show the linear (bar) oscilloscope in the header.  Off by default
+    /// now that the spectrum analyser occupies the same slot; kept
+    /// available via Preferences and set to on if both are enabled
+    /// (oscilloscope draws on top).  The existing renderer lives in
+    /// `scope_footer::draw_scope_colored` and will graduate to a
+    /// rackable viz module — see PLAN.md.
+    #[serde(default)]
     pub show_bar_oscilloscope: bool,
+    /// Show the spectrum analyser (log-band FFT bars) in the header.
+    /// Replaces the bar oscilloscope as the default center-panel viz.
+    #[serde(default = "default_true_pref")]
+    pub show_spectrum_bars: bool,
     /// Show the ring (circular) oscilloscope in the header.
     #[serde(default = "default_true_pref")]
     pub show_ring_oscilloscope: bool,
@@ -183,7 +192,8 @@ impl Default for UiPrefs {
             stream_hz_scale: true,
             stream_ramps: true,
             llm_auto_scroll: false,
-            show_bar_oscilloscope: true,
+            show_bar_oscilloscope: false,
+            show_spectrum_bars: true,
             show_ring_oscilloscope: true,
             show_event_stream: true,
             stream_stereo: false,

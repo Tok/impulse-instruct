@@ -26,6 +26,7 @@ mod rack_grid;
 mod rack_scroll;
 mod rack_toolbar;
 mod scope_footer;
+mod spectrum_header;
 pub mod style_rack;
 pub mod theme;
 mod ui_helpers;

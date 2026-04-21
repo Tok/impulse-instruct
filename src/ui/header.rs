@@ -69,16 +69,23 @@ impl ImpulseApp {
             .max_height(screen_h * 0.5)
             .default_height(160.0)
             .show(ctx, |ui| {
-                let (show_bar, show_ring, show_stream) = {
+                let (show_bar, show_spectrum, show_ring, show_stream, huth_pref) = {
                     let p = &self.state.read().ui_prefs;
                     (
                         p.show_bar_oscilloscope,
+                        p.show_spectrum_bars,
                         p.show_ring_oscilloscope,
                         p.show_event_stream,
+                        p.huth_oscilloscope,
                     )
                 };
+                // Center column shows ONE of { spectrum, bar oscilloscope }
+                // stacked above the event stream.  Spectrum wins when both
+                // are enabled — the bar oscilloscope is kept in Prefs
+                // mainly for the future rackable-viz wiring (see PLAN.md).
+                let show_center_top = show_spectrum || show_bar;
 
-                let huth_col = if self.state.read().ui_prefs.huth_oscilloscope {
+                let huth_col = if huth_pref {
                     super::scope_footer::detect_note(&self.scope_buf, crate::audio::SAMPLE_RATE)
                         .map(theme::note_color)
                 } else {
@@ -90,7 +97,7 @@ impl ImpulseApp {
                 // splitter on the log/center seam.
                 let avail_w = ui.available_width();
                 let total_h = ui.available_height();
-                let any_center = show_bar || show_stream;
+                let any_center = show_center_top || show_stream;
 
                 // Ring is square — width = height (like the original layout).
                 let ring_w = if show_ring { total_h } else { 0.0 };
@@ -156,31 +163,46 @@ impl ImpulseApp {
                     }
                 }
 
-                // ── CENTER: bar-osc (top half) + event stream (bottom half) ─
+                // ── CENTER: (spectrum or bar-osc) on top + event stream below
                 let center_x = origin.x + log_w;
-                let split_h = if show_bar && show_stream {
+                let split_h = if show_center_top && show_stream {
                     total_h * 0.5
                 } else {
                     total_h
                 };
-                if show_bar {
-                    let bar_rect = egui::Rect::from_min_size(
+                if show_center_top {
+                    let top_rect = egui::Rect::from_min_size(
                         egui::pos2(center_x, origin.y),
                         egui::vec2(center_w, split_h),
                     );
-                    ui.allocate_ui_at_rect(bar_rect, |ui| {
-                        super::scope_footer::draw_scope_colored(
-                            ui,
-                            &self.scope_buf,
-                            &self.scope_history,
-                            bar_rect.width(),
-                            bar_rect.height(),
-                            huth_col,
-                        );
+                    ui.allocate_ui_at_rect(top_rect, |ui| {
+                        // Spectrum wins when both toggles are on — the bar
+                        // oscilloscope is reachable via Prefs for the
+                        // rackable-viz path (see PLAN.md).
+                        if show_spectrum {
+                            super::spectrum_header::draw_spectrum_bars(
+                                ui,
+                                &self.spectrum_magnitudes,
+                                &self.spectrum_peaks,
+                                top_rect.width(),
+                                top_rect.height(),
+                                huth_col,
+                                huth_pref,
+                            );
+                        } else {
+                            super::scope_footer::draw_scope_colored(
+                                ui,
+                                &self.scope_buf,
+                                &self.scope_history,
+                                top_rect.width(),
+                                top_rect.height(),
+                                huth_col,
+                            );
+                        }
                     });
                 }
                 if show_stream {
-                    let stream_y = origin.y + if show_bar { split_h } else { 0.0 };
+                    let stream_y = origin.y + if show_center_top { split_h } else { 0.0 };
                     let stream_rect = egui::Rect::from_min_size(
                         egui::pos2(center_x, stream_y),
                         egui::vec2(center_w, split_h),

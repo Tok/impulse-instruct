@@ -412,10 +412,17 @@ impl ImpulseApp {
                                 out
                             };
                             let prefs = self.state.read().ui_prefs.clone();
-                            let bar = viz_toggle(ui, "Bar oscilloscope", prefs.show_bar_oscilloscope);
-                            let ring = viz_toggle(ui, "Ring oscilloscope", prefs.show_ring_oscilloscope);
+                            let spectrum =
+                                viz_toggle(ui, "Spectrum bars", prefs.show_spectrum_bars);
+                            let bar =
+                                viz_toggle(ui, "Bar oscilloscope", prefs.show_bar_oscilloscope);
+                            let ring =
+                                viz_toggle(ui, "Ring oscilloscope", prefs.show_ring_oscilloscope);
                             let stream = viz_toggle(ui, "Event stream", prefs.show_event_stream);
                             let stereo = viz_toggle(ui, "Stereo pan layer", prefs.stream_stereo);
+                            if spectrum != prefs.show_spectrum_bars {
+                                self.state.write().ui_prefs.show_spectrum_bars = spectrum;
+                            }
                             if bar != prefs.show_bar_oscilloscope {
                                 self.state.write().ui_prefs.show_bar_oscilloscope = bar;
                             }
