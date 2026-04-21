@@ -75,21 +75,21 @@ pub(crate) fn pan_cell_voice(
     }
 }
 
-const SLOT_NAMES: [&str; 8] = ["A", "B", "C", "D", "E", "F", "G", "H"];
+/// Number of user-visible bank slots in the compact BANK strip.
+/// Matches `DEFAULT_BANKS` — the first 8 slots are the ones the
+/// A/B/C card UI renders.  Kept as a local const for loop bounds;
+/// chain timelines render however many entries the chain actually
+/// holds (up to `MAX_BANKS`).
+const VISIBLE_BANK_SLOTS: usize = 8;
 
-/// Compact label for a bank slot index in the 0..MAX_BANKS range.
-/// Slots 0..=7 are the user-visible A..H bank cards; slots 8+ are
-/// machine-generated (MIDI imports, long chains), so those render as
-/// plain decimals so they fit in a narrow timeline bar.  Previously
-/// every index > 7 clamped to `SLOT_NAMES[7]` and every bank past H
-/// in a long chain rendered as "H" — confusing when a 53-bank Bach
-/// chain looked like "A B C D E F G H H H H H H…".
+/// Compact label for a bank slot index.  1-based throughout — bank
+/// index 0 shows as "1", index 7 as "8", index 52 as "53".
+/// Previously the first 8 banks used letters A..H and machine-
+/// generated banks past H rendered as decimals; mixing letters with
+/// numbers (A..H then 9, 10, 11) was confusing, so everything is now
+/// a plain 1-based count.
 fn slot_label(idx: usize) -> String {
-    if idx < SLOT_NAMES.len() {
-        SLOT_NAMES[idx].to_string()
-    } else {
-        idx.to_string()
-    }
+    (idx + 1).to_string()
 }
 
 /// How many chain slots the song timeline renders inline before it
@@ -129,7 +129,8 @@ pub fn draw_pattern_chain(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             .monospace()
             .size(8.0),
     );
-    for (slot, &name) in SLOT_NAMES.iter().enumerate() {
+    for slot in 0..VISIBLE_BANK_SLOTS {
+        let name = slot_label(slot);
         let is_edit = slot == pattern_edit;
         let col = if is_edit { theme::CHALK } else { theme::PIT };
         let fill = if is_edit {
@@ -139,7 +140,7 @@ pub fn draw_pattern_chain(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         };
         let resp = ui.add_sized(
             [16.0, 14.0],
-            egui::Button::new(egui::RichText::new(name).monospace().size(8.0).color(col))
+            egui::Button::new(egui::RichText::new(&name).monospace().size(8.0).color(col))
                 .fill(fill),
         );
         if resp.clicked() {
@@ -598,7 +599,7 @@ pub fn draw_song_timeline(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                     egui::RichText::new(format!(
                         "Slot {} — pattern {}",
                         pos + 1,
-                        SLOT_NAMES.get(chain[pos].min(7)).copied().unwrap_or("?"),
+                        slot_label(chain[pos]),
                     ))
                     .color(theme::CHALK)
                     .monospace()
