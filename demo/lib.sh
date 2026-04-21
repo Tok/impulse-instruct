@@ -1088,14 +1088,22 @@ start_opposing_pan_lfo() {
     # Run a background sine LFO that pans bass voices 0 and 1 in
     # anti-phase — voice 0 follows sin(2π·rate·t), voice 1 follows the
     # same sine 180° out of phase, so the two hands cross through the
-    # centre at opposite times.  Drives a `/api/params` write at 20 Hz
-    # so the motion reads as smooth in the event stream.  Starts
-    # detached (&) and parks its PID in /tmp/impulse-pan-lfo.pid so
-    # `stop_pan_lfo` can kill it cleanly even if the scenario exits
-    # early.
-    # Usage: start_opposing_pan_lfo [rate_hz=0.2] [depth_0_to_1=0.7]
-    local rate="${1:-0.2}"
-    local depth="${2:-0.7}"
+    # centre at opposite times.  Writes at 10 Hz (down from 20 Hz) so
+    # the cpal/state write-lock path isn't hammered; at a typical
+    # 0.15 Hz oscillation rate that's ~66 samples per cycle — still
+    # visually smooth in the stream / pan indicators.
+    #
+    # Each request carries `"quiet":true` so it doesn't hit the UI log.
+    # Requires the app to be running the post-`quiet` binary (commit
+    # 69416c5 or later); older binaries silently ignore the flag and
+    # will spam the in-app log.
+    #
+    # Cleanest fix long-term: add `BassLfoTarget::Pan` + a per-voice
+    # phase offset so the audio thread runs the anti-phase LFO
+    # natively with zero HTTP traffic — see PLAN.md.
+    # Usage: start_opposing_pan_lfo [rate_hz=0.15] [depth_0_to_1=0.65]
+    local rate="${1:-0.15}"
+    local depth="${2:-0.65}"
     python3 -u -c "
 import math, time, subprocess
 rate, depth = $rate, $depth
@@ -1105,15 +1113,12 @@ while True:
     phase = 2 * math.pi * rate * t
     p0 = depth * math.sin(phase)
     p1 = depth * math.sin(phase + math.pi)
-    # quiet=true keeps the 20Hz write off the API log — otherwise the
-    # UI console fills up with repeated '[API] params: bass_voices'
-    # lines even with the drain_api_log repeat dedup in place.
     body = '{\"params\":{\"bass_voices\":[{\"pan\":%.3f},{\"pan\":%.3f}]},\"quiet\":true}' % (p0, p1)
     subprocess.run(
         ['curl', '-sf', '-X', 'POST', '$API/api/params',
          '-H', 'Content-Type: application/json', '-d', body],
         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    time.sleep(0.05)
+    time.sleep(0.10)
 " >/dev/null 2>&1 &
     local pid=$!
     echo "$pid" > /tmp/impulse-pan-lfo.pid
