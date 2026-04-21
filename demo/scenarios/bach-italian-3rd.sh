@@ -42,11 +42,11 @@ scene "Setup"
 reset_all
 set_style ""
 
-# Bach-specific Huth-per-component pinning: grayscale piano, Huth-
-# coloured spectrum bars.  Sequencer step dots and event-stream
-# history are Huth-coloured unconditionally.  `show_thinking_in_log`
-# is on so the PAD / FX agents' reasoning traces are visible.
-set_ui_prefs '{"huth_piano": false, "huth_bar_osc": false, "huth_ring_osc": false, "huth_spectrum": true, "show_thinking_in_log": true, "enable_thinking": true}'
+# Bach-specific Huth-per-component pinning: everything grayscale
+# except the sequencer step dots + event-stream history, which are
+# Huth-coloured unconditionally.  `show_thinking_in_log` is on so
+# the PAD / KIT / FX agents' reasoning traces are visible.
+set_ui_prefs '{"huth_piano": false, "huth_bar_osc": false, "huth_ring_osc": false, "huth_spectrum": false, "show_thinking_in_log": true, "enable_thinking": true}'
 
 # Master volume tuned down from the default 0.85 — the resonance
 # sweeps + bitcrush outro push peak loudness into clip territory at

@@ -1275,29 +1275,37 @@ tour_rack() {
 
 fill_wait() {
     # Occupy a stretch of playback by scrolling around the rack instead
-    # of staring at a single module.  Front → voice → sequencer, then
-    # flip to the back panel for a cable tour, then flip front again
-    # and land on the sequencer so the next scene starts stable.
+    # of staring at a single module.  Total duration closely matches
+    # the `$1` argument — each of the 8 moves below sleeps `total/N`
+    # seconds on top of its own short built-in pause (~0.5-1 s).  For
+    # a 60 s fill that's ~7 s per move + overhead.
     #
-    # Usage: fill_wait 40           # ~40 s total, evenly divided across
-    #                               # 8 camera moves (~5 s each)
+    # The last two moves are `show_knobs` → `look_at sequencer`, so
+    # playback ALWAYS returns to the front panel with the sequencer
+    # in view before the next scene runs — no "stuck on back" state
+    # leaking into the next `add_instrument`.
     #
-    # Clamps to 8 s minimum so quick gaps still look deliberate.
+    # Usage: fill_wait 40           # ~40 s total
     local total="${1:-30}"
-    local per
-    per=$(echo "scale=2; if ($total / 8 < 2) 2 else $total / 8" | bc -l 2>/dev/null)
-    local steps=(
-        "look_at sequencer"
+    local moves=(
         "focus_on bass"
         "look_at ai"
         "show_cables"
-        "tour_rack $per"
-        "show_knobs"
         "look_at voice"
+        "look_at global"
+        "look_at fxmod"
+        "show_knobs"
         "look_at sequencer"
     )
-    for step in "${steps[@]}"; do
-        eval "$step"
+    local n=${#moves[@]}
+    local per
+    per=$(echo "scale=2; $total / $n" | bc -l 2>/dev/null)
+    # Minimum dwell so each move is legible even on short fills.
+    if [ "$(echo "$per < 1.5" | bc 2>/dev/null)" = "1" ]; then
+        per="1.5"
+    fi
+    for m in "${moves[@]}"; do
+        eval "$m"
         pause "$per"
     done
 }
