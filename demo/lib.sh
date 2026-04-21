@@ -1016,6 +1016,11 @@ reset_all() {
     # all params. Stronger than reset_rack: use at the top of style scenarios
     # to prevent a prior session's active_style (or any leftover state) from
     # bleeding into the new demo.
+    # Also sweeps any stray background pan-LFO python loops from a
+    # previous (crashed) scenario run — those orphans keep hammering
+    # `/api/params` at 10 Hz until killed, which shows up as clicks
+    # in the audio and `bass_voices (x777)` in the UI log.
+    stop_pan_lfo
     api_state_reset
     api_flip_front
     api_collapse "none"
@@ -1127,13 +1132,32 @@ while True:
 
 stop_pan_lfo() {
     # Kill the background pan LFO started by `start_opposing_pan_lfo`.
-    # Safe to call multiple times — missing PID file is a no-op.
+    # Safe to call multiple times.  First path: pid file written by a
+    # still-alive start.  Second path: a pkill fallback that catches
+    # orphans from a scenario that crashed / was force-quit before it
+    # could run its End scene — those processes keep hammering the
+    # API at 10 Hz, showing up as `[API] params: bass_voices (x777)`
+    # in the UI log even after the current scenario stopped using
+    # pan LFOs.  The match pattern is narrow (`bass_voices` + `pan`
+    # + the curl command shape) so we don't accidentally kill
+    # unrelated python processes.
     if [ -f /tmp/impulse-pan-lfo.pid ]; then
         local pid
         pid=$(cat /tmp/impulse-pan-lfo.pid)
         kill "$pid" 2>/dev/null || true
         rm -f /tmp/impulse-pan-lfo.pid
         echo "  [pan-lfo] stopped pid=$pid"
+    fi
+    # Orphan sweep.  Matches the exact signature of the python loop:
+    # a `python3` process whose cmdline contains `bass_voices` AND
+    # `pan`.  `-f` matches the full cmdline; `2>/dev/null` swallows
+    # the "no process found" exit code.
+    local killed
+    killed=$(pgrep -af 'python3.*bass_voices.*pan' 2>/dev/null || true)
+    if [ -n "$killed" ]; then
+        pkill -f 'python3.*bass_voices.*pan' 2>/dev/null || true
+        echo "  [pan-lfo] swept orphan(s):"
+        echo "$killed" | while read -r line; do echo "    $line"; done
     fi
 }
 
