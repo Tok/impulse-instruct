@@ -100,7 +100,14 @@ impl ModuleKind {
         match self {
             //                                     W     H
             Self::StepSequencer => (grid_cols, 2),
-            Self::LlmConsole => (grid_cols, 1),
+            // LlmConsole: 2 rows.  The content (square cycle-viz widget +
+            // lane-score strip + prompt/log panel) needs more than a
+            // single grid cell of height at typical col_w values —
+            // rendered content otherwise spills past its allocated slot
+            // into the zone below, where the next zone's backdrop / the
+            // first card paints over the overflow and the console
+            // partly disappears.
+            Self::LlmConsole => (grid_cols, 2),
             Self::MasterOutput => (grid_cols, 1),
             Self::AcidBass => (4, 7),
             // Drum kits are 4 rows tall so the 3 per-voice glass groups

@@ -29,11 +29,6 @@ TARGET_BPM=120
 scene "Setup"
 
 reset_all
-# Park the view on the AI console right away — the rack is empty at
-# this point (only the default sequencer + master + console sit there),
-# so without the scroll the viewer sees a row of blank slots drift into
-# shot during the opening narration.
-look_at ai
 set_style ""
 
 # Bach-specific Huth-per-component pinning: grayscale piano (the 303 is
@@ -45,7 +40,13 @@ set_ui_prefs '{"huth_piano": false, "huth_bar_osc": false, "huth_ring_osc": fals
 
 add_instrument bass
 
-say "J.S. Bach — Italian Concerto, third movement. Two voices: right hand and left hand. Both played by a 303-style bass."
+# Scroll to the AI console AFTER the bass is added — otherwise the
+# rack's zone layout shifts when the voice zone inflates for the bass
+# module, and a pre-add look_at lands on the wrong y-position and the
+# console can fall off-screen or sit under a zone boundary.
+look_at ai
+
+say "Bach's Italian Concerto, third movement. Two acid basses, two hands."
 
 # Import the score.  Populates pattern_bank[0..banks_used-1], chain
 # walks them once (chain_loop=false), bass voice 0 gets the right hand,
@@ -63,12 +64,11 @@ fi
 # sequencer, so this sticks across every one of the ~50 bank swaps.
 set_bpm "$TARGET_BPM"
 # Duration at the halfstepped tempo.  MIDI_DURATION is computed at
-# MIDI_BPM; scale by the ratio.
+# MIDI_BPM; scale by the ratio.  Not narrated — the shell log gets it
+# for timing debugging only.
 PLAY_DURATION=$(echo "$MIDI_DURATION * $MIDI_BPM / $TARGET_BPM" | bc -l)
 PLAY_DURATION_INT=${PLAY_DURATION%.*}
 echo "  [scenario] will play for ${PLAY_DURATION_INT}s at ${TARGET_BPM} BPM"
-
-say "The piece runs about ${PLAY_DURATION_INT} seconds. During playback: a filter agent drifts the 303, drums arrive at sixty seconds, and a bitcrusher takes over for the outro."
 
 # Per-voice starting timbre.  Voice 0 (right hand) slightly brighter;
 # voice 1 (left hand) slightly darker.  Pan will be overwritten every

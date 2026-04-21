@@ -16,6 +16,8 @@ cobertura.xml
 .claude/
 /demo/output/
 /demo/tts_cache/
+# Runtime-generated subtitle playlist used by the demo recorder.
+/demo/.narration_playlist
 .tts-venv/
 .neutts-venv/
 voices/*.wav
