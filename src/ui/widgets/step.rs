@@ -80,17 +80,18 @@ pub fn step_button(
 
     if ui.is_rect_visible(rect) {
         let painter = ui.painter();
-        // Foreground-layer painter for the LED halo + current-step bloom.
-        // Keeps the glow from being covered by the next step's chrome or
-        // clipped at the widget's allocation edge — mirror of the fix
-        // agent_card.rs applied to its status LED.  Scoped per-widget
-        // via the rect position so stacking stays deterministic.
-        let glow_id = egui::Id::new("step_glow")
-            .with(rect.min.x.to_bits())
-            .with(rect.min.y.to_bits());
-        let glow = ui
-            .ctx()
-            .layer_painter(egui::LayerId::new(egui::Order::Foreground, glow_id));
+        // Expanded-clip painter for the LED halo + current-step bloom —
+        // the halo reaches up to ~5× the dot radius so we widen the
+        // clip rect past the step boundary to let it bleed.  Stays on
+        // the parent panel's natural layer (NOT Order::Foreground)
+        // so opened windows (Preferences, dialogs) and later-drawn
+        // panels (piano when scrolled over the sequencer) correctly
+        // occlude the halo — Foreground drew above everything
+        // including modals.  Adjacent steps drawn later in the same
+        // pass naturally cover any halo bleed that extends into
+        // their rect, which is fine: the bloom falls off fast.
+        let halo_reach = (size_px * 0.95).max(8.0);
+        let glow = ui.painter_at(rect.expand(halo_reach));
         // Generous rounding — no hard square corners visible
         let r = egui::Rounding::same((size_px * 0.22).max(4.0));
         let inner = rect.shrink(1.5);
@@ -160,9 +161,12 @@ pub fn step_button(
         }
 
         // Current-step cursor: outer bloom glow + bright border + inner ring.
-        // Bloom paints on the foreground layer so it extends past the
-        // widget rect into neighbouring cells without being covered by
-        // their chrome (draw-order fix, not a clip fix).
+        // Bloom paints on `glow` (expanded-clip painter on the parent
+        // panel layer — see `halo_reach` above) so the three bloom
+        // rings extend past this step's rect.  Neighbouring steps
+        // drawn later in the same pass will cover the portion of the
+        // bloom that falls inside their rect; the remaining bleed is
+        // the visible bloom signature.
         if current {
             // Outer bloom halos
             for i in 1..=3u8 {

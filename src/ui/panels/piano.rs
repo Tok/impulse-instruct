@@ -82,16 +82,15 @@ pub fn draw_piano(app: &mut ImpulseApp, ui: &mut egui::Ui, ctx: &egui::Context) 
     }
 
     let painter = ui.painter();
-    // Foreground-layer painter for scale-degree LEDs — the piano widget
-    // draws each key's rect chrome via `painter`, which would cover the
-    // LED dot when the next key draws.  Lifting the LEDs to a
-    // foreground layer keeps their halos intact across key boundaries.
-    let glow = ui.ctx().layer_painter(egui::LayerId::new(
-        egui::Order::Foreground,
-        egui::Id::new("piano_glow")
-            .with(rect.min.x.to_bits())
-            .with(rect.min.y.to_bits()),
-    ));
+    // LED halo painter for scale-degree dots.  The chrome pass draws
+    // each key rect into `painter`, which without clip expansion would
+    // cover the previous key's halo once the next key's rect is
+    // filled.  `painter_at(rect.expand(…))` keeps the halos on the
+    // parent panel's natural layer but widens the clip to the whole
+    // piano rect so bloom can span key boundaries.  Stays BELOW
+    // windows / modal overlays — Order::Foreground here used to float
+    // the halos above the Preferences window.
+    let glow = ui.painter_at(rect.expand(12.0));
     painter.rect_filled(rect, 0.0, theme::VOID);
 
     let ox = rect.min.x; // origin x

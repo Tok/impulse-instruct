@@ -96,16 +96,20 @@ fn draw_llm_agent_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, module_id: u32)
                 } else {
                     0.30
                 };
-                // Foreground layer so the LED halo lands on top of the
-                // persona TextEdit + model combo, but clipped to the
-                // CentralPanel's rect so the halo can't escape upward
-                // into the header log panel when the agent card scrolls
-                // past the rack's top edge.
-                let mut overlay = ui.ctx().layer_painter(egui::LayerId::new(
-                    egui::Order::Foreground,
-                    ui.id().with("agent_led").with(module_id),
-                ));
-                overlay.set_clip_rect(ui.ctx().available_rect());
+                // LED halo painted on the parent panel's natural layer
+                // with an expanded clip so the halo can bleed past the
+                // tiny 12 px LED rect onto the persona field beside
+                // it — but NOT above opened windows (Preferences etc.)
+                // or later-drawn panels (piano when it scrolls up
+                // over the rack), which is what Order::Foreground used
+                // to do.  Clip to the CentralPanel so a halo on the
+                // bottom row of the agent card still can't escape
+                // upward into the header log when the rack scrolls.
+                let halo_reach = 30.0_f32;
+                let clip = led_rect
+                    .expand(halo_reach)
+                    .intersect(ui.ctx().available_rect());
+                let overlay = ui.painter_at(clip);
                 theme::led(
                     &overlay,
                     led_rect.center(),
