@@ -562,10 +562,25 @@ pub fn apply_agent_mode_and_tts(
 pub fn format_llm_display(
     param_update: Option<&serde_json::Value>,
     text: &str,
-    conversation_mode: &ConversationMode,
+    _conversation_mode: &ConversationMode,
 ) -> String {
     match param_update {
         Some(update) => {
+            // Producer commentary is on by default: whenever the agent
+            // included a `_comment`, surface it verbatim regardless of
+            // conversation_mode.  The mode only shapes WHAT the model
+            // writes into `_comment` via the system prompt (producer
+            // voice vs DJ hype vs MC slang); it doesn't gate whether we
+            // SHOW a comment the model already produced.  Falls back to
+            // a key list when `_comment` is absent so the log still
+            // carries something the user can read.
+            if let Some(comment) = update
+                .get("_comment")
+                .and_then(|v| v.as_str())
+                .filter(|s| !s.trim().is_empty())
+            {
+                return comment.to_string();
+            }
             let keys: Vec<&str> = update
                 .as_object()
                 .map(|o| {
@@ -575,13 +590,7 @@ pub fn format_llm_display(
                         .collect()
                 })
                 .unwrap_or_default();
-            if *conversation_mode == ConversationMode::Off {
-                format!("updated {}", keys.join(", "))
-            } else if let Some(comment) = update.get("_comment").and_then(|v| v.as_str()) {
-                comment.to_string()
-            } else {
-                format!("updated {}", keys.join(", "))
-            }
+            format!("updated {}", keys.join(", "))
         }
         None => text.to_string(),
     }

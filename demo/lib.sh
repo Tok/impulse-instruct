@@ -1105,7 +1105,10 @@ while True:
     phase = 2 * math.pi * rate * t
     p0 = depth * math.sin(phase)
     p1 = depth * math.sin(phase + math.pi)
-    body = '{\"params\":{\"bass_voices\":[{\"pan\":%.3f},{\"pan\":%.3f}]}}' % (p0, p1)
+    # quiet=true keeps the 20Hz write off the API log — otherwise the
+    # UI console fills up with repeated '[API] params: bass_voices'
+    # lines even with the drain_api_log repeat dedup in place.
+    body = '{\"params\":{\"bass_voices\":[{\"pan\":%.3f},{\"pan\":%.3f}]},\"quiet\":true}' % (p0, p1)
     subprocess.run(
         ['curl', '-sf', '-X', 'POST', '$API/api/params',
          '-H', 'Content-Type: application/json', '-d', body],

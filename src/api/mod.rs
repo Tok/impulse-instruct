@@ -57,6 +57,13 @@ fn default_one_shot() -> bool {
 #[derive(Deserialize)]
 pub struct ParamsRequest {
     pub params: serde_json::Value,
+    /// When true, skip the API-log line for this request.  Scripted
+    /// high-frequency writers (e.g. the Bach scenario's 20 Hz
+    /// anti-phase pan LFO) set this so they don't flood the log with
+    /// identical "[API] params: bass_voices" messages.  Default
+    /// false keeps the log visible for normal one-shot API calls.
+    #[serde(default)]
+    pub quiet: bool,
 }
 
 #[derive(Deserialize)]
@@ -204,12 +211,14 @@ async fn post_params(
     // Snapshot first, then release read lock before acquiring write lock.
     let current = snapshot(&api.app_state);
     let next = apply_llm_update(current, &req.params, &[]);
-    let keys: Vec<&str> = req
-        .params
-        .as_object()
-        .map(|o| o.keys().map(|k| k.as_str()).collect())
-        .unwrap_or_default();
-    api_log(&api, format!("[API] params: {}", keys.join(", ")));
+    if !req.quiet {
+        let keys: Vec<&str> = req
+            .params
+            .as_object()
+            .map(|o| o.keys().map(|k| k.as_str()).collect())
+            .unwrap_or_default();
+        api_log(&api, format!("[API] params: {}", keys.join(", ")));
+    }
     *api.app_state.write() = next;
     api.params_dirty
         .store(true, std::sync::atomic::Ordering::Relaxed);

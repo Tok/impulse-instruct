@@ -79,6 +79,26 @@ pub async fn post_ui_prefs(
             p.rack_grid_cols = (v as u8).clamp(3, 6);
             touched.push(format!("rack_grid_cols={}", p.rack_grid_cols));
         }
+
+        // LLM-facing log prefs live on `state.llm` (not ui_prefs) but
+        // they're user-scope preferences in practice — let the endpoint
+        // set them too so scenarios don't need a second request to
+        // toggle "show thinking / show model reasoning" before the LLM
+        // starts firing.
+        if let Some(v) = obj.get("show_thinking_in_log").and_then(|v| v.as_bool()) {
+            s.llm.show_thinking_in_log = v;
+            touched.push(format!("show_thinking_in_log={v}"));
+        }
+        if let Some(v) = obj.get("enable_thinking").and_then(|v| v.as_bool()) {
+            s.llm.enable_thinking = v;
+            // Propagate to every agent so jam cycles pick up the flag
+            // immediately instead of waiting for the next explicit
+            // per-agent toggle.
+            for a in &mut s.llm_agents {
+                a.enable_thinking = v;
+            }
+            touched.push(format!("enable_thinking={v}"));
+        }
     }
 
     let msg = if touched.is_empty() {

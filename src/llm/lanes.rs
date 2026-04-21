@@ -383,8 +383,9 @@ pub fn build_lane_prompt(state: &AppState, lane: LaneKind) -> String {
          TASK: {task}\n\
          \n\
          The style above is USER-FIXED — if the user prompt says \"pick a style\" or \
-         similar, ignore that and write within the style listed above. Emit ONLY the \
-         required fields; skip `_thinking` / `_comment`. Prefer index lists \
+         similar, ignore that and write within the style listed above. Emit the \
+         required fields plus a one-sentence `_comment` describing what you changed \
+         and why (producer voice, ≤ 80 chars). Skip `_thinking`. Prefer index lists \
          (`[0, 4, 8]`) over inline bool arrays — 4× shorter.\n\
          Never emit an empty array like `[]` for a required pattern field — that \
          silences the voice. If you don't have ideas, reuse the example rhythm above.",

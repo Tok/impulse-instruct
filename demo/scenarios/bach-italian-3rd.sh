@@ -37,7 +37,13 @@ set_style ""
 # spectrum bars so the harmonic make-up of the counterpoint reads as
 # colour, oscilloscopes left grayscale.  Sequencer step dots and the
 # event-stream history are Huth-coloured unconditionally.
-set_ui_prefs '{"huth_piano": false, "huth_bar_osc": false, "huth_ring_osc": false, "huth_spectrum": true}'
+set_ui_prefs '{"huth_piano": false, "huth_bar_osc": false, "huth_ring_osc": false, "huth_spectrum": true, "show_thinking_in_log": true, "enable_thinking": true}'
+
+# Master volume tuned down from the default 0.85 — the Bach demo's
+# resonance-heavy filter sweeps + bitcrush outro push peak loudness
+# into clip territory at the default gain.  0.60 leaves headroom for
+# the FX escalation without tripping the CLIPPING warning.
+api_params '{"fx":{"master_volume":0.60}}'
 
 add_instrument bass
 

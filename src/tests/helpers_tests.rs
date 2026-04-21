@@ -538,12 +538,27 @@ mod format_llm_display_tests {
     }
 
     #[test]
-    fn off_mode_lists_changed_keys_even_if_comment_present() {
-        let upd = json!({ "_comment": "ignored", "bass": {} });
+    fn off_mode_with_no_comment_lists_changed_keys() {
+        // Off mode (or any mode) without a `_comment` falls back to
+        // the key list so the log always carries something the user
+        // can read.  The mode gate that used to hide `_comment` in
+        // Off was removed — producer commentary is on by default.
+        let upd = json!({ "bass": {}, "fx": {} });
         let out = format_llm_display(Some(&upd), "raw", &ConversationMode::Off);
         assert!(out.starts_with("updated "));
         assert!(out.contains("bass"));
-        assert!(!out.contains("_comment"));
+        assert!(out.contains("fx"));
+    }
+
+    #[test]
+    fn off_mode_still_surfaces_comment_when_present() {
+        // New default: `_comment` wins regardless of mode.  The prompt
+        // builder still shapes WHAT the model writes into `_comment`
+        // per mode (producer voice / DJ hype / MC slang), but the
+        // DISPLAY gate no longer depends on mode.
+        let upd = json!({ "_comment": "half-time kick under the running bass", "bass": {} });
+        let out = format_llm_display(Some(&upd), "raw", &ConversationMode::Off);
+        assert_eq!(out, "half-time kick under the running bass");
     }
 
     #[test]

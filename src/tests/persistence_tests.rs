@@ -495,17 +495,24 @@ mod format_display_tests {
     }
 
     #[test]
-    fn off_mode_excludes_comment() {
+    fn comment_is_shown_regardless_of_mode() {
+        // Producer commentary is on by default — a `_comment` from the
+        // agent is always surfaced, independent of conversation_mode.
+        // `_conversation_mode` only shapes the prompt (what the model
+        // writes INTO `_comment`), not the display gate.
         let update = serde_json::json!({
             "bass": { "cutoff": 0.5 },
             "_comment": "I made it acid"
         });
-        let display = format_llm_display(Some(&update), "", &ConversationMode::Off);
-        assert!(
-            !display.contains("acid"),
-            "Off mode should not show _comment"
-        );
-        assert!(display.contains("bass"));
+        for mode in [
+            ConversationMode::Off,
+            ConversationMode::Producer,
+            ConversationMode::Dj,
+            ConversationMode::Mc,
+        ] {
+            let display = format_llm_display(Some(&update), "", &mode);
+            assert_eq!(display, "I made it acid", "{mode:?} should show comment");
+        }
     }
 
     #[test]
