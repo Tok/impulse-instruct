@@ -176,10 +176,17 @@ pub struct RackModule {
 
 impl RackModule {
     pub fn new(id: u32, kind: ModuleKind) -> Self {
+        // FX modules start DISABLED so a freshly-added effect can't
+        // click the signal at its default wet mix.  The user (or an
+        // agent) toggles them on when they want the effect active;
+        // until then the module sits in the rack inert.  Voices /
+        // analysers / utility modules stay enabled — their "on by
+        // default" is the usual expectation.
+        let enabled = crate::state::fx_plan::kind_to_fx_step(kind).is_none();
         Self {
             id,
             kind,
-            enabled: true,
+            enabled,
             zone: kind.default_zone(),
             slot: 0,
             grid_col: 0,

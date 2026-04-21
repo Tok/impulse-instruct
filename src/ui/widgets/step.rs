@@ -80,18 +80,20 @@ pub fn step_button(
 
     if ui.is_rect_visible(rect) {
         let painter = ui.painter();
-        // Expanded-clip painter for the LED halo + current-step bloom —
-        // the halo reaches up to ~5× the dot radius so we widen the
-        // clip rect past the step boundary to let it bleed.  Stays on
-        // the parent panel's natural layer (NOT Order::Foreground)
-        // so opened windows (Preferences, dialogs) and later-drawn
-        // panels (piano when scrolled over the sequencer) correctly
-        // occlude the halo — Foreground drew above everything
-        // including modals.  Adjacent steps drawn later in the same
-        // pass naturally cover any halo bleed that extends into
-        // their rect, which is fine: the bloom falls off fast.
-        let halo_reach = (size_px * 0.95).max(8.0);
-        let glow = ui.painter_at(rect.expand(halo_reach));
+        // LED halo + current-step bloom use the SAME painter as the
+        // step chrome.  Previously this was a foreground-layer
+        // painter (Order::Foreground), then a `painter_at(rect.expand(…))`
+        // with a wider clip — both variants caused the sequencer grid
+        // to disappear in some recording geometries (expanded clip
+        // replaced the parent's clip, which in a nested ScrollArea
+        // sometimes culled the step chrome itself).  Using
+        // `painter.clone()` keeps the glow on the parent layer with
+        // the parent's clip, so rendering stays inside the panel no
+        // matter what the scroll position is.  The halo will be
+        // clipped at the step rect's boundary rather than extending
+        // into the gap, which is fine — the bloom falls off fast and
+        // the step's own chrome was covering the bleed anyway.
+        let glow = painter.clone();
         // Generous rounding — no hard square corners visible
         let r = egui::Rounding::same((size_px * 0.22).max(4.0));
         let inner = rect.shrink(1.5);

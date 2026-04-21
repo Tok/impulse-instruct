@@ -199,6 +199,18 @@ api_rack_remove() {
         -d "{\"id\": $1}" >/dev/null 2>&1 || true
 }
 
+api_rack_enable() {
+    # Toggle a module's enabled flag.  FX modules come in DISABLED
+    # on `add` so they don't click at their default wet mix; call
+    # this to flip them on when the scene wants the effect active.
+    # Usage: api_rack_enable bitcrush true   | api_rack_enable bass false
+    local kind="$1"
+    local on="${2:-true}"
+    curl -sf -X POST "$API/api/rack/enable" \
+        -H "Content-Type: application/json" \
+        -d "{\"kind\": \"$kind\", \"enabled\": $on}" >/dev/null 2>&1 || true
+}
+
 api_preset() {
     # Apply an agent preset: Solo, Duo, Swarm, Band, Voices, Lite
     # Usage: api_preset "Band"
@@ -1043,7 +1055,20 @@ add_instrument() {
 
 add_effect() {
     # Add an effect module.  Usage: add_effect reverb
+    # FX modules come in DISABLED by default so they don't click at
+    # their default wet mix when first added.  Call `enable_fx "$1"`
+    # when the scene wants the effect in-signal.
     api_rack_add "$1"
+}
+
+enable_fx() {
+    # Turn on a previously-added FX module so it processes audio.
+    # Pair with `add_effect` to add-then-reveal: the module appears
+    # in the rack silently, then (potentially after a brief camera
+    # linger) the signal starts flowing through it.
+    # Usage: enable_fx bitcrush           # default: enable
+    #        enable_fx bitcrush false     # explicitly disable
+    api_rack_enable "$1" "${2:-true}"
 }
 
 add_agent() {
@@ -1274,40 +1299,55 @@ tour_rack() {
 }
 
 fill_wait() {
-    # Occupy a stretch of playback by scrolling around the rack instead
-    # of staring at a single module.  Total duration closely matches
-    # the `$1` argument — each of the 8 moves below sleeps `total/N`
-    # seconds on top of its own short built-in pause (~0.5-1 s).  For
-    # a 60 s fill that's ~7 s per move + overhead.
+    # Occupy a stretch of playback by scrolling around the rack.  The
+    # back panel gets a BRIEF peek — one short scroll on the back, not
+    # a lingering dwell — then we flip back to the front and keep
+    # cycling through the front zones until the time's up.
     #
-    # The last two moves are `show_knobs` → `look_at sequencer`, so
-    # playback ALWAYS returns to the front panel with the sequencer
-    # in view before the next scene runs — no "stuck on back" state
-    # leaking into the next `add_instrument`.
+    # The sequence always ends on the front panel with `look_at
+    # sequencer`, so the next scene's `add_instrument` doesn't land
+    # while the rack is still showing cables.
     #
     # Usage: fill_wait 40           # ~40 s total
     local total="${1:-30}"
-    local moves=(
+    # Budget split:
+    #   back-panel peek:  2 s flip + 3 s look_at voice + 2 s flip = 7 s total
+    #   front cycling:    remaining time divided evenly across 5 front moves
+    local back_peek=7
+    local front_budget
+    front_budget=$(echo "scale=2; $total - $back_peek" | bc -l 2>/dev/null)
+    if [ "$(echo "$front_budget < 5" | bc 2>/dev/null)" = "1" ]; then
+        # Too short for a back peek — just cycle the front.
+        back_peek=0
+        front_budget="$total"
+    fi
+    local front_moves=(
         "focus_on bass"
         "look_at ai"
-        "show_cables"
-        "look_at voice"
-        "look_at global"
         "look_at fxmod"
-        "show_knobs"
+        "look_at global"
         "look_at sequencer"
     )
-    local n=${#moves[@]}
+    local n=${#front_moves[@]}
     local per
-    per=$(echo "scale=2; $total / $n" | bc -l 2>/dev/null)
-    # Minimum dwell so each move is legible even on short fills.
+    per=$(echo "scale=2; $front_budget / $n" | bc -l 2>/dev/null)
     if [ "$(echo "$per < 1.5" | bc 2>/dev/null)" = "1" ]; then
         per="1.5"
     fi
-    for m in "${moves[@]}"; do
-        eval "$m"
-        pause "$per"
-    done
+    # 1. Front: bass.
+    focus_on bass; pause "$per"
+    # 2. Front: AI console.
+    look_at ai;    pause "$per"
+    # 3. Quick back-panel peek at the voice zone.
+    if [ "$back_peek" -gt 0 ]; then
+        show_cables
+        look_at voice; pause 3
+        show_knobs
+    fi
+    # 4+. Front cycling until the time budget runs out.
+    look_at fxmod;     pause "$per"
+    look_at global;    pause "$per"
+    look_at sequencer; pause "$per"
 }
 
 # ── Parameter control ────────────────────────────────────────────────────────

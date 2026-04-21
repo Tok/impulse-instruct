@@ -7,13 +7,28 @@ mod fx_plan_tests {
         FxStep, ModuleKind, PortDir, PortKind, PortRef, RackState, compile_fx_plan,
     };
 
+    /// Force every FX module in the rack to `enabled = true`.
+    /// Newly-added FX modules are disabled by default (see
+    /// `RackModule::new` — prevents freshly-added effects from
+    /// clicking the signal at their default wet mix); the plan /
+    /// routing tests here don't care about that UX behaviour and
+    /// want to verify plan shape against an all-active rack.
+    fn enable_all_fx(rack: &mut RackState) {
+        for m in rack.modules.iter_mut() {
+            if crate::state::fx_plan::kind_to_fx_step(m.kind).is_some() {
+                m.enabled = true;
+            }
+        }
+    }
+
     #[test]
     fn default_rack_compiles_only_wired_fx() {
         // `wire_default_cables` no longer chains every FX serially —
         // only the "important" ones (Reverb + Delay) are wired straight
         // to MASTER, so the plan should contain just those two steps.
         // Other FX live in the rack but are intentionally orphaned.
-        let rack = RackState::default();
+        let mut rack = RackState::default();
+        enable_all_fx(&mut rack);
         let plan = compile_fx_plan(&rack);
         assert!(plan.steps.contains(&FxStep::Reverb));
         assert!(plan.steps.contains(&FxStep::Delay));
@@ -40,6 +55,7 @@ mod fx_plan_tests {
     #[test]
     fn disabled_fx_module_excluded_from_plan() {
         let mut rack = RackState::default();
+        enable_all_fx(&mut rack);
         if let Some(m) = rack
             .modules
             .iter_mut()
@@ -67,6 +83,7 @@ mod fx_plan_tests {
         };
         let rev_id = rack.add_module(ModuleKind::FxReverb);
         let del_id = rack.add_module(ModuleKind::FxDelay);
+        enable_all_fx(&mut rack);
         rack.connect(
             PortRef {
                 module_id: rev_id,
@@ -87,7 +104,8 @@ mod fx_plan_tests {
 
     #[test]
     fn default_rack_tts_has_reverb_route() {
-        let rack = RackState::default();
+        let mut rack = RackState::default();
+        enable_all_fx(&mut rack);
         let plan = compile_fx_plan(&rack);
         let tts_route = plan.voice_routes.get(&ModuleKind::NeuTts);
         assert!(
@@ -111,6 +129,7 @@ mod fx_plan_tests {
         let bass_id = rack.add_module(ModuleKind::AcidBass);
         let rev_id = rack.add_module(ModuleKind::FxReverb);
         let del_id = rack.add_module(ModuleKind::FxDelay);
+        enable_all_fx(&mut rack);
         rack.connect(
             PortRef {
                 module_id: rev_id,
@@ -160,6 +179,7 @@ mod fx_plan_tests {
         };
         let bass_id = rack.add_module(ModuleKind::AcidBass);
         let rev_id = rack.add_module(ModuleKind::FxReverb);
+        enable_all_fx(&mut rack);
         rack.connect(
             PortRef {
                 module_id: bass_id,
@@ -197,6 +217,7 @@ mod fx_plan_tests {
         };
         let bass_id = rack.add_module(ModuleKind::AcidBass);
         let rev_id = rack.add_module(ModuleKind::FxReverb);
+        enable_all_fx(&mut rack);
         rack.connect(
             PortRef {
                 module_id: bass_id,
@@ -235,6 +256,7 @@ mod fx_plan_tests {
         let bass_id = rack.add_module(ModuleKind::AcidBass);
         let rev_id = rack.add_module(ModuleKind::FxReverb);
         let dly_id = rack.add_module(ModuleKind::FxDelay);
+        enable_all_fx(&mut rack);
         rack.connect(
             PortRef {
                 module_id: bass_id,
@@ -290,6 +312,7 @@ mod fx_plan_tests {
         };
         let a = rack.add_module(ModuleKind::FxDelay);
         let b = rack.add_module(ModuleKind::FxReverb);
+        enable_all_fx(&mut rack);
         // Forward A → B.
         rack.cables.push(crate::state::Cable {
             from: PortRef {
@@ -430,6 +453,7 @@ mod fx_plan_tests {
         };
         let a = rack.add_module(ModuleKind::FxDelay);
         let b = rack.add_module(ModuleKind::FxReverb);
+        enable_all_fx(&mut rack);
         // Force a cycle by pushing cables directly
         rack.cables.push(crate::state::Cable {
             from: PortRef {

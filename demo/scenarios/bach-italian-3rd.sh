@@ -183,6 +183,10 @@ fill_wait "$FX_START_OFFSET"
 
 add_effect bitcrush
 show_then_return bitcrush 4
+# Flip bitcrush on — it was added disabled by default so the module
+# could sit in the rack briefly without clicking the signal.  The FX
+# agent's ramps below then have something to affect.
+enable_fx bitcrush
 
 add_agent FX gemma fx
 

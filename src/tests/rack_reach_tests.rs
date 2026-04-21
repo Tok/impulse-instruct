@@ -16,6 +16,20 @@ fn empty_rack() -> RackState {
     }
 }
 
+/// Force every FX module in the rack to `enabled = true`.
+/// `RackModule::new` adds FX modules in a disabled state so freshly-
+/// added effects can't click the signal at their default wet mix
+/// (see the top of `state/rack.rs`).  These reachability tests
+/// assert on plan-shape against an all-active rack, so they flip
+/// the enabled bit back on before checking.
+fn enable_all_fx(rack: &mut RackState) {
+    for m in rack.modules.iter_mut() {
+        if crate::state::fx_plan::kind_to_fx_step(m.kind).is_some() {
+            m.enabled = true;
+        }
+    }
+}
+
 // ── reaches_master ──────────────────────────────────────────────────────────
 
 fn audio_cable(from_id: u32, to_id: u32) -> Cable {
@@ -92,6 +106,7 @@ fn reaches_master_through_fx_chain() {
     let bass = rack.add_module(ModuleKind::AcidBass);
     let reverb = rack.add_module(ModuleKind::FxReverb);
     let delay = rack.add_module(ModuleKind::FxDelay);
+    enable_all_fx(&mut rack);
     rack.cables.push(audio_cable(bass, reverb));
     rack.cables.push(audio_cable(reverb, delay));
     rack.cables.push(audio_cable(delay, master));
@@ -196,6 +211,7 @@ fn lane_visible_when_voice_reaches_via_fx() {
     let master = rack.add_module(ModuleKind::MasterOutput);
     let bass = rack.add_module(ModuleKind::AcidBass);
     let reverb = rack.add_module(ModuleKind::FxReverb);
+    enable_all_fx(&mut rack);
     rack.cables.push(audio_cable(bass, reverb));
     rack.cables.push(audio_cable(reverb, master));
     assert!(lane_visible(&rack, ModuleKind::AcidBass));
@@ -267,9 +283,13 @@ fn lane_visible_for_default_preset() {
 #[test]
 fn reaches_master_default_preset_voices_all_reach() {
     // All voices in every preset should reach MASTER through the default
-    // wiring.  Catches regressions in `wire_default_cables`.
+    // wiring.  Catches regressions in `wire_default_cables`.  FX
+    // modules are created disabled by default — enable them here so
+    // "voice → FX → master" reachability walks aren't blocked by the
+    // disabled bit.
     for preset in crate::state::RACK_PRESETS {
-        let rack = RackState::from_preset(preset);
+        let mut rack = RackState::from_preset(preset);
+        enable_all_fx(&mut rack);
         for m in &rack.modules {
             if !m.kind.has_audio_output() {
                 continue;

@@ -61,6 +61,21 @@ pub struct RackRemoveRequest {
 }
 
 #[derive(Deserialize)]
+pub struct RackEnableRequest {
+    /// Module kind to toggle (e.g. "bitcrush", "FxBitcrush", "reverb").
+    /// Routed through `parse_module_kind` so the same aliases that
+    /// work elsewhere (`/api/rack/add`, scenario helpers) work here.
+    #[serde(default)]
+    pub kind: Option<String>,
+    /// Module id to toggle (exact match).  Wins over `kind` when both
+    /// are supplied.
+    #[serde(default)]
+    pub id: Option<u32>,
+    /// Desired state.
+    pub enabled: bool,
+}
+
+#[derive(Deserialize)]
 pub struct RackCableGainRequest {
     pub from: u32,
     pub to: u32,
@@ -324,5 +339,44 @@ pub async fn post_rack_remove(
     Json(OkResponse {
         ok: true,
         message: Some(format!("removed {}", req.id)),
+    })
+}
+
+/// Toggle a module's `enabled` flag.  Counterpart to `add`/`remove` —
+/// lets scenarios / external controllers switch an FX in or out of
+/// signal without re-cabling.  Useful because FX modules are added
+/// DISABLED by default (so freshly-added effects don't click the
+/// signal at their default wet mix); the scenario calls this when
+/// it's time to bring the effect online.  When `id` is provided it
+/// wins over `kind`; otherwise every module matching `kind` flips.
+pub async fn post_rack_enable(
+    AxumState(api): AxumState<ApiState>,
+    Json(req): Json<RackEnableRequest>,
+) -> Json<OkResponse> {
+    let mut s = api.app_state.write();
+    let mut touched = 0usize;
+    if let Some(id) = req.id {
+        if let Some(m) = s.rack.modules.iter_mut().find(|m| m.id == id) {
+            m.enabled = req.enabled;
+            touched += 1;
+        }
+    } else if let Some(kind_str) = req.kind.as_deref()
+        && let Some(kind) = parse_module_kind(kind_str)
+    {
+        for m in s.rack.modules.iter_mut().filter(|m| m.kind == kind) {
+            m.enabled = req.enabled;
+            touched += 1;
+        }
+    }
+    drop(s);
+    let msg = format!(
+        "[API] rack: {} {} module(s)",
+        if req.enabled { "enabled" } else { "disabled" },
+        touched
+    );
+    api_log(&api, msg.clone());
+    Json(OkResponse {
+        ok: touched > 0,
+        message: Some(msg),
     })
 }

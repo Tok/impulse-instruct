@@ -95,8 +95,9 @@ pub struct PresetRequest {
 
 mod rack;
 pub use rack::{
-    RackAddRequest, RackAgentRequest, RackCableGainRequest, RackCableRequest, RackRemoveRequest,
-    post_rack_add, post_rack_agent, post_rack_cable, post_rack_cable_gain, post_rack_remove,
+    RackAddRequest, RackAgentRequest, RackCableGainRequest, RackCableRequest, RackEnableRequest,
+    RackRemoveRequest, post_rack_add, post_rack_agent, post_rack_cable, post_rack_cable_gain,
+    post_rack_enable, post_rack_remove,
 };
 
 mod instrument;
@@ -364,6 +365,7 @@ pub fn build_router(api_state: ApiState) -> Router {
         .route("/api/rack/mod_target", post(post_rack_mod_target))
         .route("/api/rack/mod_depth", post(post_rack_mod_depth))
         .route("/api/rack/remove", post(post_rack_remove))
+        .route("/api/rack/enable", post(post_rack_enable))
         .route("/api/rack/pad", post(post_rack_pad))
         .route("/api/rack/reset", post(post_rack_reset))
         .route("/api/state/reset", post(post_state_reset))
