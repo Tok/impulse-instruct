@@ -14,7 +14,11 @@ use egui::{Color32, Pos2, Rect, Sense, Stroke, Ui, Vec2};
 /// fractional sub-step time, so the past-side log can be positioned
 /// relative to absolute time instead of the per-cycle step counter.
 /// `melodic_log`: frozen history of fired notes (rendered for the past
-/// half of the strip — the future half still reads from the live pattern).
+/// half of the strip).  The future half reads from the live pattern
+/// when chain playback is off, and walks forward through
+/// `chain` + `pattern_bank` when chain_enabled is true, so an imported
+/// MIDI score renders its upcoming bars instead of looping whatever
+/// bank is currently live.
 pub fn event_stream(
     ui: &mut Ui,
     state: &AppState,
