@@ -112,11 +112,20 @@ wait_for_model
 # AI moves the knobs, so we give the agent explicit permission to
 # drift pan too (and to do it in anti-phase between the two voices
 # when it feels right).
-ask "PAD: over the next few jam cycles, drift both bass voices across the filter pad freely — cutoff anywhere in 0.05 to 0.55, resonance 0.70 to 1.0.  Go as low as 0.05 on cutoff for squelchy dives, as high as 0.55 for opened-up breaths.  Changes of 0.1-0.2 per response are fine — this is the outro of a Bach movement, not a meditation app.  Keep the two voices within 0.12 of each other on both filter axes so the counterpoint still reads as one instrument.
+ask "PAD: drift both bass voices across the filter pad and the stereo field over the movement.  Cutoff anywhere in 0.05 to 0.55, resonance 0.70 to 1.0.  Keep the two voices within 0.12 of each other on both filter axes so the counterpoint still reads as one instrument.  Pan range -0.8..+0.8, with voice 0 and voice 1 drifting in OPPOSITE directions (voice 0 left while voice 1 right, then swap).
 
-Also move pan: voice 0 and voice 1 should drift in OPPOSITE directions (when voice 0 goes left, voice 1 goes right, and vice versa) so the two hands swap stereo positions across the piece.  Pan range: -0.8..+0.8.  Pan changes 0.2-0.4 per response are fine — visible but not jarring.
+Use \`ramp\` / \`ramps\` for the motion — NOT step-jump writes.  Each ramp should span 4 or 8 bars so the filter reads as evolving across multiple pattern cycles, not twitching per jam cycle.  Example shape:
 
-DO NOT touch notes, steps, gate, accent, slide, volume, distortion, or env_mod.  Filter axes + pan only." PAD 0
+  {\"ramps\":[
+    {\"param\":\"bass.cutoff\",\"to\":0.18,\"bars\":8},
+    {\"param\":\"bass.resonance\",\"to\":0.92,\"bars\":8},
+    {\"param\":\"bass.pan\",\"to\":-0.6,\"bars\":8},
+    {\"param\":\"bass_voices.1.cutoff\",\"to\":0.22,\"bars\":8},
+    {\"param\":\"bass_voices.1.resonance\",\"to\":0.88,\"bars\":8},
+    {\"param\":\"bass_voices.1.pan\",\"to\":0.6,\"bars\":8}
+  ]}
+
+On each next cycle, re-target to new values at the other corner of the pad (and swap pan directions again) so the motion reads as a continuous sweep.  DO NOT touch notes, steps, gate, accent, slide, volume, distortion, or env_mod." PAD 0
 
 # ── Scene 3: Drums arrive (+60s) ───────────────────────────────────────────
 # At +60s we layer an 808 with a very sparse pulse underneath.

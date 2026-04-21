@@ -255,6 +255,23 @@ pub fn build_system_prompt_full(
                 entries.join("\n")
             ));
         }
+        // Short-lived apply-layer feedback — the LLM sees what its
+        // recent output looked like from the engine's side and can
+        // correct (e.g. "your last ramp was a no-op, pick a real
+        // target").  Capped at FEEDBACK_MAX entries so the section
+        // stays under a few hundred chars even when full.
+        if !state.llm.recent_feedback.is_empty() {
+            let entries: Vec<&str> = state
+                .llm
+                .recent_feedback
+                .iter()
+                .map(|s| s.as_str())
+                .collect();
+            parts.push(format!(
+                "Recent feedback from the engine (avoid these mistakes next turn):\n{}",
+                entries.join("\n")
+            ));
+        }
         if parts.is_empty() {
             String::new()
         } else {
@@ -391,6 +408,12 @@ EUCLIDEAN: `{{"euclidean": {{"voice":"kick_a","pulses":4,"steps":16}}}}` — Bjo
 
 RAMPS: `{{"ramp":{{"param":"fx.reverb_mix","to":0.6,"bars":4}}}}` or `"ramps":[…]` for
   multiple. Bar-based preferred. Params from fx.*, bass.*, sequencer.bpm/swing.
+  DURATION: prefer `bars`: 2, 4, 8, or 16 — these are the musical lengths that
+  read as an evolving arc in the event stream.  1-bar ramps finish faster
+  than a listener registers them and collapse into step-jumps; anything
+  above 16 bars rarely finishes before the next ask re-targets the param.
+  Default to `bars: 4` when unsure; use 8 or 16 for slow FX sweeps / BPM
+  transitions; use 2 only when a fast but still-smooth snap is called for.
 
 BEHAVIOUR: `{{"behaviour": "build|drop|breakdown|tension|euphoric"}}` — pre-built mood
   templates, scaled by current heat.

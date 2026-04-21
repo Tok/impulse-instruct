@@ -214,18 +214,36 @@ pub fn parse_and_schedule_ramp(
         .map(|v| v as f32)
         .unwrap_or_else(|| current_param_value(&state, &param));
 
-    // No-op guard: if the ramp target is already (effectively) where we are,
-    // don't schedule — it would waste a ramp slot and show a flat line in the
-    // event stream. 0.002 ≈ 0.2 %, below visible knob movement.
-    if (from - to).abs() < 0.002 {
-        log::debug!(
-            "ramp: skipping no-op ({} already at {:.3}, target {:.3})",
-            param,
-            from,
-            to
+    // Validate the delta.  Model-emitted ramps sometimes aim at a value
+    // essentially identical to the current one, producing a flat line in
+    // the event stream and no audible motion — a wasted ramp slot.
+    // Three bands:
+    //   ERROR  (|delta| < 0.001) — target equals source; drop the ramp
+    //          and feed back to the LLM so it stops emitting no-ops.
+    //   WARN   (|delta| < 0.05)  — target is too close to be heard;
+    //          schedule anyway (motion exists) but flag the weak choice.
+    //   OK     (|delta| ≥ 0.05)  — proceed silently.
+    let delta = (from - to).abs();
+    let mut s = state;
+    if delta < 0.001 {
+        let line = format!(
+            "ramp ERROR: {param} from {from:.3} to {to:.3} is a no-op — \
+             pick a target at least 0.05 away (or omit the ramp)"
         );
-        return state;
+        log::error!("{line}");
+        crate::state::push_llm_feedback(&mut s.llm, line);
+        return s;
     }
+    if delta < 0.05 {
+        let line = format!(
+            "ramp WARN: {param} delta only {delta:.3} ({from:.3}→{to:.3}) — \
+             barely audible; next time use deltas ≥ 0.1 for obvious motion"
+        );
+        log::warn!("{line}");
+        crate::state::push_llm_feedback(&mut s.llm, line);
+        // Fall through and still schedule — some motion beats none.
+    }
+    let state = s;
 
     // Bar-based ramp: { "bars": 4 }  →  smooth interpolation over N bars.
     // Convention: `bars` here counts pattern loops, not musical bars — a

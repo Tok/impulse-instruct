@@ -471,7 +471,20 @@ pub struct LlmState {
     /// on overflow (`RETRY_QUEUE_MAX`).  Transient — not serialised.
     #[serde(skip)]
     pub retry_queue: VecDeque<String>,
+    /// Short-lived feedback lines surfaced from the apply layer when the
+    /// model produced something weak (e.g. a ramp whose target matches
+    /// the current value, a ramp with an imperceptible delta, …).
+    /// Threaded into the next system prompt as `RECENT FEEDBACK:` so
+    /// the LLM can correct on the next turn.  Capped at `FEEDBACK_MAX`
+    /// entries (FIFO).  Transient — not serialised.
+    #[serde(skip)]
+    pub recent_feedback: VecDeque<String>,
 }
+
+/// Cap on `LlmState.recent_feedback` — small enough that the next
+/// prompt's FEEDBACK section stays under ~400 chars even if every slot
+/// is filled.
+pub const FEEDBACK_MAX: usize = 5;
 
 /// One row of `LlmState.lane_scores`.  Tracks how well a lane's last
 /// generated output matched the rules we encode in the system prompt
@@ -560,8 +573,21 @@ impl Default for LlmState {
             pipeline_progress: None,
             lane_scores: HashMap::new(),
             retry_queue: VecDeque::new(),
+            recent_feedback: VecDeque::new(),
         }
     }
+}
+
+/// Push a short feedback line onto `state.llm.recent_feedback`, capping
+/// at `FEEDBACK_MAX` (oldest-out).  Used by the apply layer when model
+/// output is weak but not invalid — the line gets threaded into the
+/// next system prompt so the LLM can self-correct.
+pub fn push_llm_feedback(state: &mut LlmState, msg: impl Into<String>) {
+    let s = msg.into();
+    while state.recent_feedback.len() >= FEEDBACK_MAX {
+        state.recent_feedback.pop_front();
+    }
+    state.recent_feedback.push_back(s);
 }
 
 // ─── Per-agent LLM state (rackable LLM modules) ─────────────────────────────
