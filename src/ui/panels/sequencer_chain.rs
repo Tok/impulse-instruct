@@ -77,6 +77,29 @@ pub(crate) fn pan_cell_voice(
 
 const SLOT_NAMES: [&str; 8] = ["A", "B", "C", "D", "E", "F", "G", "H"];
 
+/// Compact label for a bank slot index in the 0..MAX_BANKS range.
+/// Slots 0..=7 are the user-visible A..H bank cards; slots 8+ are
+/// machine-generated (MIDI imports, long chains), so those render as
+/// plain decimals so they fit in a narrow timeline bar.  Previously
+/// every index > 7 clamped to `SLOT_NAMES[7]` and every bank past H
+/// in a long chain rendered as "H" — confusing when a 53-bank Bach
+/// chain looked like "A B C D E F G H H H H H H…".
+fn slot_label(idx: usize) -> String {
+    if idx < SLOT_NAMES.len() {
+        SLOT_NAMES[idx].to_string()
+    } else {
+        idx.to_string()
+    }
+}
+
+/// How many chain slots the song timeline renders inline before it
+/// windows around the playhead.  For a 53-bank MIDI import the full
+/// timeline would be ~53 × 78 px of horizontal buttons, pushing the
+/// sequencer panel off-screen; we show at most this many bars
+/// centred on `chain_pos` instead, so the timeline stays the same
+/// width regardless of chain length.
+const TIMELINE_VISIBLE_MAX: usize = 12;
+
 /// Compact bank + chain on a single horizontal line.
 pub fn draw_pattern_chain(app: &mut ImpulseApp, ui: &mut egui::Ui) {
     let (pattern_edit, chain, chain_enabled, chain_pos) = {
@@ -129,7 +152,8 @@ pub fn draw_pattern_chain(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             .size(8.0),
     );
     for pos in 0..8usize {
-        let label = chain.get(pos).map(|&s| SLOT_NAMES[s % 8]).unwrap_or("·");
+        let label_owned = chain.get(pos).map(|&s| slot_label(s));
+        let label: &str = label_owned.as_deref().unwrap_or("·");
         let cursor_here = chain_enabled && !chain.is_empty() && chain_pos % chain.len() == pos;
         let fill = if cursor_here {
             egui::Color32::from_gray(70)
@@ -390,7 +414,43 @@ pub fn draw_song_timeline(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         let mut swap_request: Option<(usize, usize)> = None;
         let mut open_popover: Option<usize> = None;
 
-        for (pos, &bank_idx) in chain.iter().enumerate() {
+        // Windowed range — at most `TIMELINE_VISIBLE_MAX` bars, centred
+        // on the current playhead when possible.  For short chains
+        // (<= MAX) this is a no-op and we render the whole thing; for
+        // the ~53-bank Bach MIDI import we render a 12-bar window
+        // sliding with the playhead so the sequencer panel stays
+        // on-screen.  When the window is clipped, a small "…/N" hint
+        // before / after tells the user the chain extends further.
+        let chain_len = chain.len();
+        let (win_start, win_end) = if chain_len <= TIMELINE_VISIBLE_MAX {
+            (0, chain_len)
+        } else {
+            let half = TIMELINE_VISIBLE_MAX / 2;
+            let center = chain_pos.min(chain_len.saturating_sub(1));
+            let start = center.saturating_sub(half);
+            let end = (start + TIMELINE_VISIBLE_MAX).min(chain_len);
+            // Pull start back if we hit the right edge so the window
+            // stays full-sized even near the end of the chain.
+            let start = end.saturating_sub(TIMELINE_VISIBLE_MAX);
+            (start, end)
+        };
+
+        if win_start > 0 {
+            ui.label(
+                egui::RichText::new(format!("…{}", win_start))
+                    .color(theme::IRON)
+                    .monospace()
+                    .size(8.0),
+            );
+            ui.add_space(2.0);
+        }
+
+        for (pos, &bank_idx) in chain
+            .iter()
+            .enumerate()
+            .skip(win_start)
+            .take(win_end - win_start)
+        {
             let (rect, resp) = ui.allocate_exact_size(
                 egui::vec2(TIMELINE_BAR_W, TIMELINE_BAR_H),
                 egui::Sense::click_and_drag(),
@@ -417,12 +477,14 @@ pub fn draw_song_timeline(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             painter.rect_filled(rect, rounding, fill);
             painter.rect_stroke(rect, rounding, stroke);
 
-            // Pattern letter, big, top-left.
-            let letter = SLOT_NAMES.get(bank_idx.min(7)).copied().unwrap_or("?");
+            // Pattern letter / number, big, top-left.  Numeric for
+            // indices past H so a long MIDI chain doesn't render as
+            // "H H H H H" after the eighth bar.
+            let letter = slot_label(bank_idx);
             painter.text(
                 egui::pos2(rect.min.x + 5.0, rect.center().y),
                 egui::Align2::LEFT_CENTER,
-                letter,
+                &letter,
                 egui::FontId::monospace(11.0),
                 theme::CHALK,
             );
@@ -479,6 +541,16 @@ pub fn draw_song_timeline(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             if resp.clicked() && !resp.drag_started() {
                 open_popover = Some(pos);
             }
+        }
+
+        if win_end < chain_len {
+            ui.add_space(2.0);
+            ui.label(
+                egui::RichText::new(format!("+{}…", chain_len - win_end))
+                    .color(theme::IRON)
+                    .monospace()
+                    .size(8.0),
+            );
         }
 
         if let Some((a, b)) = swap_request {
