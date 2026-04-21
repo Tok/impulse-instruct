@@ -9,17 +9,20 @@
 # 120-BPM pulse under a 240-BPM bass, which is the intended feel.
 #
 # No narration during playback — the prompt console and the filter /
-# drum / FX panels carry the story.  Agents come in staggered:
+# drum / FX panels carry the story.  Agents come in staggered, and
+# the scenario's role is to set up the scene and kick each agent off —
+# the AI does the actual parameter motion (filter drift, pan moves,
+# drum patterns, FX escalation).  No scripted sine loops from the
+# scenario side.
 #
-#   t=play         PAD agent drifts the filter across a wide swath of
-#                  the res/cutoff pad; a background sine LFO pans voice
-#                  0 and voice 1 in anti-phase
+#   t=play         PAD agent drifts cutoff / resonance / pan on both
+#                  303 voices across the outro of the movement
 #   t=play+60s     808 arrives; KIT agent lays a half-density 4otf
 #                  under the bass
 #   t=end-90s..end Three staggered FX asks escalate bitcrush + reverb +
 #                  delay into a final-30s freak-out
-#   t=end          chain_loop=false stops the transport on its own; pan
-#                  LFO killed in Scene 5 and a short outro line plays
+#   t=end          chain_loop=false stops the transport on its own; a
+#                  short outro line plays
 
 scene_count 6
 
@@ -73,21 +76,22 @@ PLAY_DURATION="$MIDI_DURATION"
 PLAY_DURATION_INT=${PLAY_DURATION%.*}
 echo "  [scenario] will play for ${PLAY_DURATION_INT}s at ${MIDI_BPM} BPM"
 
-# Per-voice starting timbre.  Voice 0 (right hand) slightly brighter;
-# voice 1 (left hand) slightly darker.  Pan will be overwritten every
-# 50ms by the background LFO below, so the static values here are just
-# initial conditions.
+# Per-voice starting timbre.  Voice 0 (right hand) slightly brighter
+# and panned a touch left; voice 1 (left hand) darker and panned a
+# touch right.  These are starting values only — the PAD agent will
+# drift cutoff / resonance / pan from here.
 api_params '{
   "bass_voices": [
-    { "enabled": true, "volume": 1.0, "cutoff": 0.55, "resonance": 0.35, "env_mod": 0.45, "decay": 0.40, "accent_level": 0.5, "distortion": 0.10, "pan": 0.0 },
-    { "enabled": true, "volume": 1.0, "cutoff": 0.32, "resonance": 0.55, "env_mod": 0.35, "decay": 0.65, "accent_level": 0.4, "distortion": 0.05, "pan": 0.0 }
+    { "enabled": true, "volume": 1.0, "cutoff": 0.55, "resonance": 0.35, "env_mod": 0.45, "decay": 0.40, "accent_level": 0.5, "distortion": 0.10, "pan": -0.25 },
+    { "enabled": true, "volume": 1.0, "cutoff": 0.32, "resonance": 0.55, "env_mod": 0.35, "decay": 0.65, "accent_level": 0.4, "distortion": 0.05, "pan":  0.25 }
   ]
 }'
 
-# Lock notes/patterns so the PAD agent can't overwrite the imported
-# score via sequencer updates.  Pan is deliberately NOT locked — the
-# 20 Hz sine LFO overwrites any occasional agent pan writes within a
-# frame, and locking pan would also block our own api_params sine.
+# Lock the imported score's notes / patterns so the PAD agent can't
+# overwrite them via sequencer updates.  Everything else — cutoff,
+# resonance, pan, volume, accent, distortion — stays unlocked and the
+# agent is free to move it.  The scenario's job is setup; the motion
+# is the agent's.
 lock "bass_voices.0.note" "bass_voices.1.note" "sequencer.bass_pattern" "sequencer.bass_patterns"
 
 wait_seconds 1
@@ -99,19 +103,20 @@ scene "Play"
 look_at sequencer
 play
 
-# Anti-phase pan LFO: voice 0 sweeps left-centre-right while voice 1
-# does the opposite.  Rate 0.15 Hz ≈ 6.6-second cycle; depth 0.65 so
-# the voices cross centre without hitting the hard edges.
-start_opposing_pan_lfo 0.15 0.65
-
 add_agent PAD gemma bass
 wait_for_model
 
-# Wider-than-before filter roam: cutoff 0.05..0.55 opens a lot more
-# of the lowpass sweep, and the resonance range keeps the acid bite.
-# We still keep the voices close to each other so the two hands read
-# as one instrument, and explicitly block pan writes (the LFO owns pan).
-ask "PAD: drift both bass voices across the filter pad freely — cutoff anywhere in 0.05 to 0.55, resonance 0.70 to 1.0.  Go as low as 0.05 on cutoff for squelchy dives, as high as 0.55 for opened-up breaths.  Move in bigger steps than usual (changes of 0.1-0.2 per response are fine — this is the outro of a Bach movement, not a meditation app).  Keep voice 0 and voice 1 within 0.12 of each other on both axes.  DO NOT touch notes, steps, gate, accent, slide, pan, or volume — filter axes only." PAD 0
+# Wide roam across the filter pad + stereo pan: PAD owns cutoff,
+# resonance, and pan for both voices.  The scenario is deliberately
+# NOT scripting a sine LFO — the whole point of the demo is that the
+# AI moves the knobs, so we give the agent explicit permission to
+# drift pan too (and to do it in anti-phase between the two voices
+# when it feels right).
+ask "PAD: over the next few jam cycles, drift both bass voices across the filter pad freely — cutoff anywhere in 0.05 to 0.55, resonance 0.70 to 1.0.  Go as low as 0.05 on cutoff for squelchy dives, as high as 0.55 for opened-up breaths.  Changes of 0.1-0.2 per response are fine — this is the outro of a Bach movement, not a meditation app.  Keep the two voices within 0.12 of each other on both filter axes so the counterpoint still reads as one instrument.
+
+Also move pan: voice 0 and voice 1 should drift in OPPOSITE directions (when voice 0 goes left, voice 1 goes right, and vice versa) so the two hands swap stereo positions across the piece.  Pan range: -0.8..+0.8.  Pan changes 0.2-0.4 per response are fine — visible but not jarring.
+
+DO NOT touch notes, steps, gate, accent, slide, volume, distortion, or env_mod.  Filter axes + pan only." PAD 0
 
 # ── Scene 3: Drums arrive (+60s) ───────────────────────────────────────────
 # At +60s we layer an 808 with a very sparse pulse underneath.
@@ -166,13 +171,12 @@ wait_seconds 30
 
 # ── Scene 5: End ────────────────────────────────────────────────────────────
 # chain_loop=false on the import stops the transport on its own at the
-# end of the last bank.  We stop defensively (in case timing drifted),
-# kill the pan LFO, and narrate a short outro line.
+# end of the last bank.  We stop defensively (in case timing drifted)
+# and narrate a short outro line.
 
 scene "End"
 
 stop
-stop_pan_lfo
 
 say "Bach, full stop. Eighteenth-century counterpoint, played by two acid basses, panned against each other, and smeared by a bitcrusher — all driven by local AI."
 wait_seconds 2
