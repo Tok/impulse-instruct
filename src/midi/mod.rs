@@ -4,9 +4,11 @@
 // Maps incoming MIDI to AppState mutations sent back to the UI thread.
 
 pub mod export;
+pub mod import;
 pub use export::{
     drum_voice_to_gm_note, export_sequencer_smf, save_midi_export, save_midi_export_to,
 };
+pub use import::{ImportSummary, MidiImport, import_midi_file, import_midi_into};
 
 use crossbeam_channel::Sender;
 use midir::{MidiInput, MidiInputConnection, MidiOutput, MidiOutputConnection};

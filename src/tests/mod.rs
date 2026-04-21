@@ -36,6 +36,7 @@ mod llm_intensity_array_tests;
 mod llm_plumbing_tests;
 mod llm_tests;
 mod midi_export_tests;
+mod midi_import_tests;
 mod mod_cable_entry_tests;
 mod music_api_tests;
 mod music_tests;

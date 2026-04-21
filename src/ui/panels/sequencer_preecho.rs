@@ -152,11 +152,12 @@ pub(super) fn draw_preecho_row(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         // sequencer.rs).  Without this the strip ends up several
         // pixels narrower than the grid above and anchor cells drift
         // left of their step buttons.
-        let (seq_steps, time_sig_num) = {
+        let (seq_steps, time_sig_num, step_division) = {
             let s = app.state.read();
             (
                 s.sequencer.steps.clamp(1, 64),
                 s.sequencer.time_sig_num as usize,
+                s.sequencer.step_division.max(1) as usize,
             )
         };
         let cell_w = {
@@ -164,14 +165,15 @@ pub(super) fn draw_preecho_row(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             if p > 1.0 { p } else { ANCHOR_STEP_W_FALLBACK }
         };
         let item_spacing_x = ui.spacing().item_spacing.x;
+        let steps_per_beat = step_division.max(1);
+        let steps_per_bar = (time_sig_num * steps_per_beat).max(1);
         let extra_before = |i: usize| -> f32 {
             if i == 0 {
                 return 0.0;
             }
-            let beat_pos = i % time_sig_num.max(1);
-            if beat_pos == 0 {
+            if i.is_multiple_of(steps_per_bar) {
                 4.0
-            } else if i.is_multiple_of(4) {
+            } else if i.is_multiple_of(steps_per_beat) {
                 2.0
             } else {
                 0.0

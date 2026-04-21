@@ -41,6 +41,10 @@ fn default_bass_voice_enabled() -> [bool; MAX_BASS_VOICES] {
     arr
 }
 
+fn default_step_division() -> u8 {
+    4
+}
+
 // ─── Step types ──────────────────────────────────────────────────────────────
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq)]
@@ -140,6 +144,15 @@ pub struct SequencerState {
     pub running: bool,
     pub swing: f32,       // 0–1: 0=straight, 0.5=strong shuffle (75/25 triplet feel)
     pub time_sig_num: u8, // beats per bar (2–9, default 4); denominator always /4
+    /// Step subdivisions per beat.  4 = 16th-note grid (the pre-existing
+    /// behaviour, default); 8 = 32nd-note grid; 2 = 8th-note grid.  The
+    /// sequencer clock and MIDI export both read this to derive samples
+    /// per step and SMF ticks per step respectively.  Bumping it lets a
+    /// pattern address faster subdivisions without changing BPM — e.g.
+    /// importing a Bach Presto at a 32nd grid preserves 32nd-note runs
+    /// that would otherwise collide on a 16th grid.
+    #[serde(default = "default_step_division")]
+    pub step_division: u8,
     pub drum_patterns: std::collections::HashMap<DrumVoice, Vec<Step>>,
     pub bass_pattern: Vec<TB303Step>,
     pub hoover_pattern: Vec<TB303Step>,
@@ -229,6 +242,7 @@ impl Default for SequencerState {
             running: false,
             swing: 0.0,
             time_sig_num: 4,
+            step_division: 4,
             drum_patterns,
             bass_pattern: bass_pattern.clone(),
             hoover_pattern: vec![TB303Step::default(); MAX_STEPS],

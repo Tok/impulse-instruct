@@ -76,6 +76,16 @@ they ship and are reflected in `features.md`.
   by-step pattern swap instead of the current hard cut.  New
   `ChainSlotOverride::morph_bars` field (0 = hard cut, >0 = bars to
   crossfade over).
+- [ ] **Paginated bank selector for >8 banks** - `MAX_BANKS` was
+  raised to 64 so MIDI imports of longer pieces (e.g. Bach III at a
+  32nd-note grid needs ~48 banks) can chain end-to-end.  The
+  A-H card strip in `src/ui/panels/sequencer_header.rs` still
+  renders only the first 8; banks I-onward are reachable from the
+  chain but invisible in the UI.  Add pagination (‹ › arrows, or a
+  page row) so users can see / edit any bank.  Machine-generated
+  MIDI imports don't need editing so this is low priority, but
+  anything that drives beyond bank H via `bank_write` / `bank_load`
+  loses its in-place editing affordance.
 
 ## Intelligence
 

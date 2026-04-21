@@ -1,6 +1,6 @@
 [package]
 name = "impulse-instruct"
-version = "0.7.7"
+version = "0.7.8-snapshot"
 edition = "2024"
 
 [[bin]]
@@ -34,6 +34,10 @@ ureq = { version = "2", features = ["json"] }
 
 # MIDI
 midir = "0.9"
+# SMF (Standard MIDI File) parser for File → Import MIDI and the Bach
+# scenario import.  Pure Rust, zero-copy, no_std-friendly — pulls in no
+# extra runtime dependencies.
+midly = "0.5"
 
 # OSC (Open Sound Control) — UDP listener for Max/MSP, TouchOSC, Ableton
 rosc = "0.9"

@@ -262,6 +262,7 @@ impl AudioEngine {
                         chain_enabled,
                         chain_pos_snap,
                         chain_repeat_snap,
+                        chain_loop_snap,
                     ) = {
                         let s = state_clone.read();
                         let mut seq = s.sequencer.clone();
@@ -281,11 +282,12 @@ impl AudioEngine {
                             s.chain_enabled,
                             s.chain_pos,
                             s.chain_repeat_count,
+                            s.chain_loop,
                         )
                     };
 
                     let prev_loop_count = clock.loop_count;
-                    let (new_clock, events) =
+                    let (new_clock, mut events) =
                         advance_clock(clock.clone(), &seq_snap, engine_block_frames, SAMPLE_RATE);
                     clock = new_clock;
 
@@ -328,6 +330,35 @@ impl AudioEngine {
                                 // Stay on the current slot; bump the repeat counter
                                 // and let the audio thread re-enter the same pattern.
                                 s.chain_repeat_count = chain_repeat_snap + 1;
+                            } else if !chain_loop_snap && cur_pos + 1 >= chain_snap.len() {
+                                // One-shot song (e.g. a MIDI import of a
+                                // piece with a definite end) just finished
+                                // its last slot's last repeat.  Stop the
+                                // transport instead of wrapping back to
+                                // the first slot.  Leave chain_pos on the
+                                // final slot so the UI shows "we stopped
+                                // at the end", not "we're queued to play
+                                // slot 0 next".
+                                s.sequencer.running = false;
+                                s.chain_repeat_count = 0;
+                                // `advance_clock` already wrapped the step
+                                // counter and emitted step-0 note-ons for
+                                // the restarted (would-loop) pattern
+                                // before we hit this branch.  Drop those
+                                // note-ons so the piece ends where it
+                                // should instead of firing one trailing
+                                // note past the intended stop.  Keep
+                                // gate-offs so any note that was actively
+                                // sounding into the last step gets a
+                                // clean release.
+                                events.retain(|e| {
+                                    matches!(
+                                        e,
+                                        crate::sequencer::TriggerEvent::BassGateOff { .. }
+                                            | crate::sequencer::TriggerEvent::HooverGateOff
+                                            | crate::sequencer::TriggerEvent::An1xGateOff
+                                    )
+                                });
                             } else {
                                 let next_pos = (cur_pos + 1) % chain_snap.len();
                                 let next_slot = chain_snap[next_pos];
@@ -365,9 +396,23 @@ impl AudioEngine {
                                 loaded.bpm = eff_bpm;
                                 loaded.swing = eff_swing;
                                 loaded.pattern_bpm_apply = true;
-                                s.sequencer = crate::state::chain_advance_transport(
-                                    loaded, eff_bpm, eff_swing, running,
-                                );
+                                // MIDI-playback imports set chain_loop=false as
+                                // a signal that banks are "bass-only" and
+                                // non-bass state (drums, FX, agent-authored
+                                // layers) should survive the bank swap — see
+                                // `chain_advance_preserve_non_bass`.  For
+                                // user-composed songs (chain_loop=true, the
+                                // legacy default) we replace everything,
+                                // preserving the classic per-bank behaviour.
+                                s.sequencer = if chain_loop_snap {
+                                    crate::state::chain_advance_transport(
+                                        loaded, eff_bpm, eff_swing, running,
+                                    )
+                                } else {
+                                    crate::state::chain_advance_preserve_non_bass(
+                                        loaded, &seq_snap, running,
+                                    )
+                                };
                                 s.sequencer.current_step = clock.current_step;
                                 s.pattern_edit = next_slot;
                                 if effective_style.is_some() {

@@ -102,12 +102,16 @@ impl Default for ClockState {
     }
 }
 
-/// Compute samples per 16th note at given BPM and sample rate.
-pub fn samples_per_step(bpm: f32, sample_rate: f32) -> f64 {
-    // 1 beat = 4 16th notes; beats_per_sec = bpm/60
-    // samples_per_beat = sr / (bpm/60) = sr * 60 / bpm
-    // samples_per_16th = samples_per_beat / 4
-    (sample_rate as f64 * 60.0) / (bpm as f64 * 4.0)
+/// Compute samples per step at given BPM and sample rate.
+/// `step_division` is the number of steps per beat (4 = 16th-note grid,
+/// 8 = 32nd-note grid, 2 = 8th-note grid).  Pass `seq.step_division` so the
+/// clock advances at whatever subdivision the pattern was authored at.
+pub fn samples_per_step(bpm: f32, sample_rate: f32, step_division: u8) -> f64 {
+    // beats_per_sec = bpm / 60
+    // samples_per_beat = sr / (bpm / 60) = sr * 60 / bpm
+    // samples_per_step = samples_per_beat / step_division
+    let div = step_division.max(1) as f64;
+    (sample_rate as f64 * 60.0) / (bpm as f64 * div)
 }
 
 /// Advance the sequencer clock by `block_size` samples.
@@ -122,7 +126,7 @@ pub fn advance_clock(
         return (clock, vec![]);
     }
 
-    let sps = samples_per_step(seq.bpm, sample_rate);
+    let sps = samples_per_step(seq.bpm, sample_rate, seq.step_division);
     let mut events: Vec<TriggerEvent> = Vec::new();
     let mut acc = clock.sample_accumulator + block_size as f64;
     let mut step = clock.current_step;

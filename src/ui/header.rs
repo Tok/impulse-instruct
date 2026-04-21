@@ -188,7 +188,9 @@ impl ImpulseApp {
                     ui.allocate_ui_at_rect(stream_rect, |ui| {
                         let state = self.state.read();
                         let now = ctx.input(|i| i.time);
-                        let secs_per_step = 60.0 / (state.sequencer.bpm as f64 * 4.0);
+                        let secs_per_step = 60.0
+                            / (state.sequencer.bpm as f64
+                                * state.sequencer.step_division.max(1) as f64);
                         let elapsed = (now - self.last_step_time).max(0.0);
                         let frac = if state.sequencer.running && secs_per_step > 0.001 {
                             (elapsed / secs_per_step).clamp(0.0, 0.99)

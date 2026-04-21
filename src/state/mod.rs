@@ -41,6 +41,18 @@ pub use style_overrides::{StyleOverride, effective_mc_lines, effective_themes};
 
 pub const MAX_STEPS: usize = 64;
 pub const MAX_BASS_VOICES: usize = 4;
+/// Hard cap on `pattern_bank` / `chain` length.  MIDI imports of longer
+/// pieces (Bach Italian Concerto III at a 32nd-note grid needs ~48
+/// banks) write banks beyond the 8 rendered by the UI bank-selector
+/// strip — the chain traverses them invisibly until the bank-selector
+/// gets pagination (see PLAN.md `Sequencer → Paginated bank selector`).
+pub const MAX_BANKS: usize = 64;
+/// Number of bank slots pre-allocated by `default_pattern_bank` — matches
+/// the visible A–H card strip.  Anything higher grows on demand when
+/// `bank_write` / `bank_swap` / chain ops touch a higher slot.  Kept
+/// separate from `MAX_BANKS` so fresh state only carries the 8 default
+/// patterns in memory, not 64.
+pub const DEFAULT_BANKS: usize = 8;
 
 /// Valid sequencer BPM bounds — used by sliders, drag-values, clamp()s, and the
 /// amen source-BPM field.  Narrower than General MIDI's 0–500 on purpose:
@@ -148,7 +160,11 @@ mod gabber;
 
 // ─── Top-level ───────────────────────────────────────────────────────────────
 fn default_pattern_bank() -> Vec<SequencerState> {
-    vec![SequencerState::default(); 8]
+    vec![SequencerState::default(); DEFAULT_BANKS]
+}
+
+fn default_chain_loop() -> bool {
+    true
 }
 
 /// Spectrum analyser display parameters.
@@ -228,6 +244,14 @@ pub struct AppState {
     /// teleport forward.
     #[serde(default)]
     pub chain_repeat_count: u8,
+    /// When true (the legacy default), the audio thread wraps `chain_pos`
+    /// back to 0 after the last slot's last repeat — the song loops
+    /// forever.  When false, playback stops instead (sets
+    /// `sequencer.running = false`), leaving `chain_pos` on the final
+    /// slot.  One-shot imports (MIDI scores with a definite end) set
+    /// this to false so the piece plays exactly once.
+    #[serde(default = "default_chain_loop")]
+    pub chain_loop: bool,
     /// When true, piano/MIDI note-ons while running write into the bass pattern.
     #[serde(default)]
     pub live_record: bool,
@@ -297,6 +321,7 @@ impl Default for AppState {
             chain_enabled: false,
             chain_pos: 0,
             chain_repeat_count: 0,
+            chain_loop: true,
             live_record: false,
             spectrum: Default::default(),
             rack: Default::default(),

@@ -162,7 +162,7 @@ mod probability_tests {
 
     fn kick808_count_over_loops(prob: f32, loops: u32) -> usize {
         let sr = 44100.0_f32;
-        let sps = samples_per_step(120.0, sr) as usize;
+        let sps = samples_per_step(120.0, sr, 4) as usize;
         let seq = seq_with_single_kick(prob);
         let mut clock = ClockState::default();
         let mut count = 0usize;

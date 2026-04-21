@@ -228,9 +228,13 @@ pub fn parse_and_schedule_ramp(
     }
 
     // Bar-based ramp: { "bars": 4 }  →  smooth interpolation over N bars.
+    // Convention: `bars` here counts pattern loops, not musical bars — a
+    // historical vocabulary quirk predating `step_division`.  Renaming is
+    // a separate task; for now preserve the pattern-loop semantics so
+    // existing LLM prompts and tests keep their timing.
     if let Some(bars) = obj.get("bars").and_then(|v| v.as_f64()) {
         let bars = bars.max(1.0) as u64;
-        let steps_per_bar = state.sequencer.steps as u64; // 1 pattern = 1 bar
+        let steps_per_bar = state.sequencer.steps as u64;
         let total_global_steps = bars * steps_per_bar;
         let ramp = ParamRamp {
             param,

@@ -19,8 +19,11 @@ use crate::state::{DrumVoice, SequencerState, Step, TB303Step};
 
 /// Pulses per quarter note.  480 is the de-facto DAW standard.
 pub const PPQ: u16 = 480;
-/// Ticks per sequencer step (16th at PPQ=480).
-pub const TICKS_PER_STEP: u32 = (PPQ as u32) / 4;
+/// Ticks per sequencer step for `step_division` subdivisions per beat.
+/// 4 → 120 ticks (16ths at PPQ=480); 8 → 60 ticks (32nds); 2 → 240 (8ths).
+pub fn ticks_per_step(step_division: u8) -> u32 {
+    (PPQ as u32) / (step_division.max(1) as u32)
+}
 /// Fixed short gate for drum hits.  Drum one-shots don't sustain, but the
 /// note still needs an explicit Note-Off to keep DAWs happy.
 pub const DRUM_GATE_TICKS: u32 = 24;
@@ -118,7 +121,7 @@ fn encode_tempo_track(seq: &SequencerState) -> Vec<u8> {
 /// Build a list of (absolute_tick, event_bytes) pairs for a drum pattern
 /// at `note` on channel 10.  Velocity mapped from `Step.velocity` into
 /// the 1..127 MIDI range (0 is reserved for note-off).
-fn drum_events(pattern: &[Step], steps: usize, note: u8) -> Vec<(u32, Vec<u8>)> {
+fn drum_events(pattern: &[Step], steps: usize, note: u8, tps: u32) -> Vec<(u32, Vec<u8>)> {
     let mut events = Vec::new();
     let n = pattern.len().min(steps);
     for (i, step) in pattern.iter().take(n).enumerate() {
@@ -126,7 +129,7 @@ fn drum_events(pattern: &[Step], steps: usize, note: u8) -> Vec<(u32, Vec<u8>)> 
             continue;
         }
         let vel = (step.velocity.clamp(0.0, 1.0) * 127.0).round().max(1.0) as u8;
-        let tick_on = i as u32 * TICKS_PER_STEP;
+        let tick_on = i as u32 * tps;
         let tick_off = tick_on + DRUM_GATE_TICKS;
         events.push((tick_on, vec![0x99, note, vel])); // NoteOn ch10
         events.push((tick_off, vec![0x89, note, 0])); // NoteOff ch10
@@ -137,13 +140,14 @@ fn drum_events(pattern: &[Step], steps: usize, note: u8) -> Vec<(u32, Vec<u8>)> 
 /// Merge every active drum voice into one channel-10 track.
 fn encode_drum_track(seq: &SequencerState) -> Vec<u8> {
     let mut events: Vec<(u32, Vec<u8>)> = Vec::new();
+    let tps = ticks_per_step(seq.step_division);
     // Deterministic voice ordering (DrumVoice::ALL) so exports are stable.
     for v in DrumVoice::ALL {
         if let Some(pattern) = seq.drum_patterns.get(v)
             && pattern.iter().any(|s| s.active)
         {
             let steps = seq.drum_steps.get(v).copied().unwrap_or(seq.steps);
-            events.extend(drum_events(pattern, steps, drum_voice_to_gm_note(*v)));
+            events.extend(drum_events(pattern, steps, drum_voice_to_gm_note(*v), tps));
         }
     }
     // Stable sort so same-tick events keep their relative order (note-off
@@ -169,7 +173,13 @@ fn encode_drum_track(seq: &SequencerState) -> Vec<u8> {
 /// Encode a TB303-style melodic pattern to one track on `channel`
 /// (0-indexed).  Accent modulates velocity; `gate` scales the note
 /// length within a step.
-fn encode_melodic_track(pattern: &[TB303Step], steps: usize, channel: u8, name: &str) -> Vec<u8> {
+fn encode_melodic_track(
+    pattern: &[TB303Step],
+    steps: usize,
+    channel: u8,
+    name: &str,
+    tps: u32,
+) -> Vec<u8> {
     let chan = channel & 0x0F;
     let note_on = 0x90 | chan;
     let note_off = 0x80 | chan;
@@ -185,8 +195,8 @@ fn encode_melodic_track(pattern: &[TB303Step], steps: usize, channel: u8, name: 
         let vel = (64.0 + step.accent.clamp(0.0, 1.0) * 63.0)
             .round()
             .clamp(1.0, 127.0) as u8;
-        let gate = (step.gate.clamp(0.0, 1.0) * TICKS_PER_STEP as f32).max(1.0) as u32;
-        let tick_on = i as u32 * TICKS_PER_STEP;
+        let gate = (step.gate.clamp(0.0, 1.0) * tps as f32).max(1.0) as u32;
+        let tick_on = i as u32 * tps;
         let tick_off = tick_on + gate;
         events.push((tick_on, vec![note_on, step.note, vel]));
         events.push((tick_off, vec![note_off, step.note, 0]));
@@ -232,6 +242,8 @@ pub fn export_sequencer_smf(seq: &SequencerState) -> Vec<u8> {
     file.extend_from_slice(&ntrks.to_be_bytes());
     file.extend_from_slice(&PPQ.to_be_bytes());
 
+    let tps = ticks_per_step(seq.step_division);
+
     append_track(&mut file, &encode_tempo_track(seq));
     if has_drums {
         append_track(&mut file, &encode_drum_track(seq));
@@ -239,19 +251,19 @@ pub fn export_sequencer_smf(seq: &SequencerState) -> Vec<u8> {
     if has_bass {
         append_track(
             &mut file,
-            &encode_melodic_track(&seq.bass_pattern, seq.bass_steps, 0, "bass"),
+            &encode_melodic_track(&seq.bass_pattern, seq.bass_steps, 0, "bass", tps),
         );
     }
     if has_hoover {
         append_track(
             &mut file,
-            &encode_melodic_track(&seq.hoover_pattern, seq.hoover_steps, 1, "hoover"),
+            &encode_melodic_track(&seq.hoover_pattern, seq.hoover_steps, 1, "hoover", tps),
         );
     }
     if has_an1x {
         append_track(
             &mut file,
-            &encode_melodic_track(&seq.an1x_pattern, seq.an1x_steps, 2, "an1x"),
+            &encode_melodic_track(&seq.an1x_pattern, seq.an1x_steps, 2, "an1x", tps),
         );
     }
     file

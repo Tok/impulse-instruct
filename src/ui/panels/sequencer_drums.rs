@@ -24,6 +24,7 @@ pub(super) fn draw_drum_rows(
     current_step: usize,
     sub_rows: usize,
     time_sig_num: usize,
+    step_division: usize,
 ) {
     if !voices.is_empty() {
         ui.add_space(2.0);
@@ -81,14 +82,15 @@ pub(super) fn draw_drum_rows(
     // Helper: beat division spacing (same as sequencer.rs).
     // `local_i` is the position within the sub-row (no leading spacer);
     // `abs_i` is the absolute step index for beat-position calculation.
+    let steps_per_beat = step_division.max(1);
+    let steps_per_bar = (time_sig_num * steps_per_beat).max(1);
     let beat_div = |ui: &mut egui::Ui, local_i: usize, abs_i: usize| {
         if local_i == 0 {
             return;
         }
-        let beat_pos = abs_i % time_sig_num;
-        if beat_pos == 0 {
+        if abs_i.is_multiple_of(steps_per_bar) {
             ui.add_space(4.0);
-        } else if abs_i.is_multiple_of(4) {
+        } else if abs_i.is_multiple_of(steps_per_beat) {
             ui.add_space(2.0);
         }
     };

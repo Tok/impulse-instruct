@@ -73,24 +73,25 @@ mod bass_voice_field_tests {
 // ── set_chain clamping semantics ───────────────────────────────────────────
 #[cfg(test)]
 mod set_chain_tests {
-    use crate::state::{AppState, set_chain};
+    use crate::state::{AppState, MAX_BANKS, set_chain};
 
     #[test]
-    fn caps_chain_at_eight_entries() {
-        // Chain length is hard-capped at 8 — extra entries are silently
-        // dropped at the tail.  Guards against rogue API requests that
-        // push a 16-entry chain through `POST /api/song`.
-        let chain: Vec<usize> = (0..20).map(|i| i % 8).collect();
+    fn caps_chain_at_max_banks_entries() {
+        // Chain length is hard-capped at MAX_BANKS — extra entries are
+        // silently dropped at the tail.  Guards against rogue API
+        // requests that push an over-long chain through `POST /api/song`.
+        let chain: Vec<usize> = (0..(MAX_BANKS * 2)).map(|i| i % MAX_BANKS).collect();
         let s = set_chain(AppState::default(), chain);
-        assert_eq!(s.chain.len(), 8);
+        assert_eq!(s.chain.len(), MAX_BANKS);
     }
 
     #[test]
-    fn clamps_out_of_range_slot_indices_to_seven() {
-        // Slot indices must land in 0..=7 (8 bank slots).  Larger values
-        // clamp to 7 rather than failing silently or panicking.
-        let s = set_chain(AppState::default(), vec![0, 99, 5, 42]);
-        assert_eq!(s.chain, vec![0, 7, 5, 7]);
+    fn clamps_out_of_range_slot_indices_to_max() {
+        // Slot indices must land in `0..MAX_BANKS`.  Larger values clamp
+        // to the last valid slot rather than failing silently or panicking.
+        let max = MAX_BANKS - 1;
+        let s = set_chain(AppState::default(), vec![0, 9999, 5, MAX_BANKS + 100]);
+        assert_eq!(s.chain, vec![0, max, 5, max]);
     }
 
     #[test]

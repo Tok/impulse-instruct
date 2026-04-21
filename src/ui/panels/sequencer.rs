@@ -84,16 +84,19 @@ pub(super) fn fixed_slider(
 pub(super) fn step_grid_width(
     pad_px: f32,
     time_sig_num: usize,
+    step_division: usize,
     page_start: usize,
     item_spacing_x: f32,
     row_steps: usize,
 ) -> f32 {
+    let steps_per_beat = step_division.max(1);
+    let steps_per_bar = (time_sig_num * steps_per_beat).max(1);
     let mut w = 0.0f32;
     for i in 0..row_steps {
-        let beat_pos = (page_start + i) % time_sig_num;
-        if i > 0 && beat_pos == 0 {
+        let abs_i = page_start + i;
+        if i > 0 && abs_i.is_multiple_of(steps_per_bar) {
             w += 4.0;
-        } else if i > 0 && i.is_multiple_of(4) {
+        } else if i > 0 && abs_i.is_multiple_of(steps_per_beat) {
             w += 2.0;
         }
         w += pad_px + item_spacing_x;
@@ -149,13 +152,14 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         let h = (header_h + bass_h + hoover_h + an1x_h + drums_h).max(120.0);
         ui.set_min_height(h);
     }
-    let (current_step, running, seq_steps, time_sig_num, pad_px) = {
+    let (current_step, running, seq_steps, time_sig_num, step_division, pad_px) = {
         let s = app.state.read();
         (
             s.sequencer.current_step,
             s.sequencer.running,
             s.sequencer.steps,
             s.sequencer.time_sig_num as usize,
+            s.sequencer.step_division.max(1) as usize,
             s.ui_prefs.effective_pad_px(),
         )
     };
@@ -228,14 +232,15 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
     // ── Helper closure: emit beat dividers ────────────────────────────────────
     // `local_i` is the position within the sub-row (0..STEPS_PER_ROW); no leading
     // spacer at local_i==0. `abs_i` is the absolute step index for beat calculation.
+    let steps_per_beat = step_division.max(1);
+    let steps_per_bar = (time_sig_num * steps_per_beat).max(1);
     let beat_div = |ui: &mut egui::Ui, local_i: usize, abs_i: usize| {
         if local_i == 0 {
             return;
         }
-        let beat_pos = abs_i % time_sig_num;
-        if beat_pos == 0 {
+        if abs_i.is_multiple_of(steps_per_bar) {
             ui.add_space(4.0);
-        } else if abs_i.is_multiple_of(4) {
+        } else if abs_i.is_multiple_of(steps_per_beat) {
             ui.add_space(2.0);
         }
     };
@@ -257,6 +262,7 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         let grid_w = step_grid_width(
             pad_px,
             time_sig_num,
+            step_division,
             page_start,
             ui.spacing().item_spacing.x,
             widest_row_steps,
@@ -733,6 +739,7 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             current_step,
             sub_rows,
             time_sig_num,
+            step_division,
         );
     });
 

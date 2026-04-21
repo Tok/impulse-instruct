@@ -132,6 +132,7 @@ pub fn event_stream(
     let bpm = seq.bpm;
     let steps = seq.steps;
     let time_sig = seq.time_sig_num as usize;
+    let step_division = seq.step_division.max(1) as usize;
     let current_step = seq.current_step;
 
     // Show notes only while the sequencer is actively running.
@@ -143,10 +144,11 @@ pub fn event_stream(
     let step_w = inner_w / display_steps;
 
     // The "now" position splits past:future at the golden ratio
-    // (1.618:1), so the now-line sits at 1/φ ≈ 0.618 from the left —
-    // larger past pane (where the played history reads) and a smaller
-    // but still useful future pane.
-    let now_frac = 1.0 / 1.618;
+    // (1:1.618) — now-line at 1 - 1/φ ≈ 0.382 from the left, so the
+    // future pane (on the right) is the larger one.  Reading a score
+    // or an imported MIDI chain benefits from seeing more of what's
+    // coming than what already played.
+    let now_frac = 1.0 - 1.0 / 1.618;
     let now_x = inner.min.x + inner_w * now_frac;
 
     // ── Auto-range: find min/max notes in all active patterns ───────────────
@@ -243,7 +245,9 @@ pub fn event_stream(
     }
 
     // ── Beat / bar grid ─────────────────────────────────────────────────────
-    let steps_per_beat = (steps as f32 / time_sig as f32).max(1.0);
+    // `step_division` steps per beat; `time_sig × step_division` steps per bar.
+    let steps_per_beat = step_division as f32;
+    let steps_per_bar = (time_sig * step_division).max(1);
     // Position within the current pattern cycle (0..steps, fractional).
     // Both global_step_count and current_step increment in lock-step, so
     // (global % steps) == (current_step % steps); using the global form
@@ -269,7 +273,7 @@ pub fn event_stream(
         // Determine absolute step index to check bar/beat alignment.
         // `rem_euclid` keeps the index non-negative when `i` is negative.
         let abs_step = i.rem_euclid(steps as i32) as usize;
-        let is_bar = abs_step == 0;
+        let is_bar = abs_step.is_multiple_of(steps_per_bar);
         let is_beat = (abs_step as f32 % steps_per_beat).abs() < 0.5;
 
         if is_bar {

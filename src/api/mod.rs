@@ -119,6 +119,9 @@ pub use resets::{post_rack_reset, post_state_reset};
 mod midi_export;
 pub use midi_export::{MidiExportRequest, post_midi_export};
 
+mod midi_import;
+pub use midi_import::{MidiImportRequest, MidiImportResponse, post_midi_import};
+
 #[derive(Serialize)]
 pub struct OkResponse {
     pub ok: bool,
@@ -354,6 +357,7 @@ pub fn build_router(api_state: ApiState) -> Router {
         .route("/api/state/reset", post(post_state_reset))
         .route("/api/rack/collapse", post(post_collapse))
         .route("/api/midi/export", post(post_midi_export))
+        .route("/api/midi/import", post(post_midi_import))
         .layer(cors)
         .with_state(api_state)
 }

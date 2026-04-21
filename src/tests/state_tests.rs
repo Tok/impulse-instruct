@@ -423,13 +423,18 @@ mod bank_chain_tests {
     }
 
     #[test]
-    fn chain_push_caps_at_8() {
+    fn chain_push_caps_at_max_banks() {
+        use crate::state::MAX_BANKS;
         let state = AppState::default();
         let mut s = state;
-        for i in 0..10 {
-            s = chain_push(s, i % 8);
+        for i in 0..(MAX_BANKS * 2) {
+            s = chain_push(s, i % MAX_BANKS);
         }
-        assert_eq!(s.chain.len(), 8, "chain should cap at 8 entries");
+        assert_eq!(
+            s.chain.len(),
+            MAX_BANKS,
+            "chain should cap at MAX_BANKS entries"
+        );
     }
 
     #[test]
