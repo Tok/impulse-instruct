@@ -36,17 +36,45 @@ pub(super) fn module_grid_h_rows(rows: u8, col_w: f32) -> f32 {
 
 /// Dynamic row count for the sequencer grid cell — adapts to visible lanes.
 pub(super) fn sequencer_grid_rows(state: &crate::state::AppState, col_w: f32) -> u8 {
-    use crate::state::ModuleKind;
-    let has = |k: ModuleKind| state.rack.modules.iter().any(|m| m.kind == k && m.enabled);
+    use crate::state::{DrumVoice, ModuleKind};
+    // Mirror the predicate in `draw_sequencer` so "what we budget height
+    // for" equals "what actually renders": enabled AND wired to master.
+    // (Previously we only checked `enabled` here, which overcounted for
+    // orphan modules and — more damagingly — underestimated the drum
+    // rows, since we counted "voices with active steps" while the panel
+    // also renders a collapsed-chip row for kit voices whose module is
+    // patched but pattern is still empty.  That row was getting drawn
+    // past the card boundary and clipped by the grid backdrop below.)
+    let has = |k: ModuleKind| {
+        state
+            .rack
+            .modules
+            .iter()
+            .any(|m| m.kind == k && m.enabled && state.rack.reaches_master(m.id))
+    };
     let has_bass = has(ModuleKind::AcidBass);
     let has_hoover = has(ModuleKind::HooverLead);
     let has_an1x = has(ModuleKind::An1xVoice);
-    let active_drum_voices = state
-        .sequencer
-        .drum_patterns
+    // Drum voices the panel will actually render.  Voices whose module
+    // is patched but whose pattern has no active steps still appear
+    // (either expanded or as a chip in the collapsed strip), so both
+    // contribute to height.
+    let present_drums: Vec<DrumVoice> = DrumVoice::ALL
         .iter()
-        .filter(|(_, p)| p.iter().any(|st| st.active))
+        .filter(|v| has(v.module_kind()))
+        .copied()
+        .collect();
+    let active_drum_count = present_drums
+        .iter()
+        .filter(|v| {
+            state
+                .sequencer
+                .drum_patterns
+                .get(*v)
+                .is_some_and(|p| p.iter().any(|st| st.active))
+        })
         .count();
+    let collapsed_drum_count = present_drums.len().saturating_sub(active_drum_count);
     // Pixel estimate — mirrors draw_sequencer. Tuned so the grid cell fits
     // the content exactly (no trailing empty row).
     let pad = state.ui_prefs.effective_pad_px();
@@ -62,7 +90,14 @@ pub(super) fn sequencer_grid_rows(state: &crate::state::AppState, col_w: f32) ->
     };
     let hoover_h = if has_hoover { sub_rows * step_row } else { 0.0 };
     let an1x_h = if has_an1x { sub_rows * step_row } else { 0.0 };
-    let drums_h = active_drum_voices as f32 * sub_rows * (step_row + drum_sub);
+    // draw_drum_rows emits `add_space(2) + separator + add_space(2)` once
+    // when any drum voice is present, then the collapsed chip strip
+    // (one wrapped row, ~18 px including padding) if any voices are
+    // inactive, then the full rows for active voices.
+    let drum_header_h = if !present_drums.is_empty() { 8.0 } else { 0.0 };
+    let drum_chip_h = if collapsed_drum_count > 0 { 18.0 } else { 0.0 };
+    let drums_h =
+        drum_header_h + drum_chip_h + active_drum_count as f32 * sub_rows * (step_row + drum_sub);
     // Pre-echo row that lives at the bottom of the sequencer panel
     // (always rendered): padding + horizontal row with the anchor
     // strip (21 px square cells + leading/trailing 6 px pads)

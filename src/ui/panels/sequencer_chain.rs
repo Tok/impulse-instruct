@@ -92,13 +92,11 @@ fn slot_label(idx: usize) -> String {
     (idx + 1).to_string()
 }
 
-/// How many chain slots the song timeline renders inline before it
-/// windows around the playhead.  For a 53-bank MIDI import the full
-/// timeline would be ~53 × 78 px of horizontal buttons, pushing the
-/// sequencer panel off-screen; we show at most this many bars
-/// centred on `chain_pos` instead, so the timeline stays the same
-/// width regardless of chain length.
-const TIMELINE_VISIBLE_MAX: usize = 12;
+/// Minimum number of chain slots the song timeline renders inline.
+/// The actual count is computed from `ui.available_width()` so the row
+/// fills the sequencer panel; this is just a floor for very narrow
+/// windows where the divisor math would otherwise yield 0.
+const TIMELINE_VISIBLE_MIN: usize = 8;
 
 /// Compact bank + chain on a single horizontal line.
 pub fn draw_pattern_chain(app: &mut ImpulseApp, ui: &mut egui::Ui) {
@@ -392,6 +390,7 @@ pub fn draw_song_timeline(app: &mut ImpulseApp, ui: &mut egui::Ui) {
     let popover_key = egui::Id::new("song_timeline_popover");
 
     ui.horizontal(|ui| {
+        ui.add_space(2.0);
         ui.label(
             egui::RichText::new("SONG")
                 .color(theme::SMOKE)
@@ -403,24 +402,29 @@ pub fn draw_song_timeline(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         let mut swap_request: Option<(usize, usize)> = None;
         let mut open_popover: Option<usize> = None;
 
-        // Windowed range — at most `TIMELINE_VISIBLE_MAX` bars, centred
-        // on the current playhead when possible.  For short chains
-        // (<= MAX) this is a no-op and we render the whole thing; for
-        // the ~53-bank Bach MIDI import we render a 12-bar window
-        // sliding with the playhead so the sequencer panel stays
-        // on-screen.  When the window is clipped, a small "…/N" hint
-        // before / after tells the user the chain extends further.
+        // Windowed range — fit as many bars as the available width
+        // allows, centred on the current playhead.  For short chains
+        // this is a no-op and we render the whole thing; for the ~53-
+        // bank Bach MIDI import we slide a window with the playhead so
+        // the sequencer panel stays on-screen.  When the window is
+        // clipped, a small "…/N" hint before / after tells the user the
+        // chain extends further.  ~60 px reserved for the SONG label +
+        // any "…N" / "+N…" side hints that may appear at the edges.
         let chain_len = chain.len();
-        let (win_start, win_end) = if chain_len <= TIMELINE_VISIBLE_MAX {
+        let per_bar = TIMELINE_BAR_W + TIMELINE_GAP;
+        let visible_max = ((ui.available_width() - 60.0) / per_bar)
+            .floor()
+            .max(TIMELINE_VISIBLE_MIN as f32) as usize;
+        let (win_start, win_end) = if chain_len <= visible_max {
             (0, chain_len)
         } else {
-            let half = TIMELINE_VISIBLE_MAX / 2;
+            let half = visible_max / 2;
             let center = chain_pos.min(chain_len.saturating_sub(1));
             let start = center.saturating_sub(half);
-            let end = (start + TIMELINE_VISIBLE_MAX).min(chain_len);
+            let end = (start + visible_max).min(chain_len);
             // Pull start back if we hit the right edge so the window
             // stays full-sized even near the end of the chain.
-            let start = end.saturating_sub(TIMELINE_VISIBLE_MAX);
+            let start = end.saturating_sub(visible_max);
             (start, end)
         };
 
@@ -461,7 +465,11 @@ pub fn draw_song_timeline(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             } else {
                 egui::Stroke::new(0.5, theme::IRON)
             };
-            let painter = ui.painter_at(rect);
+            // Paint on the parent layer's painter (cloned, same clip)
+            // so the 1.5 px cursor stroke isn't half-clipped by a
+            // per-rect clip rect — which reads as "the left column of
+            // pixels is missing" on the highlighted bar.
+            let painter = ui.painter().clone();
             let rounding = egui::Rounding::same(3.0);
             painter.rect_filled(rect, rounding, fill);
             painter.rect_stroke(rect, rounding, stroke);
