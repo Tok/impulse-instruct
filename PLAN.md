@@ -8,10 +8,6 @@ they ship and are reflected in `features.md`.
 
 ## DSP
 
-- [ ] **Parametric EQ with curve editor** - replace the fixed 3-band EQ
-  on the master with a draggable-node curve (4-6 nodes, shelf at the
-  ends, bell in the middle).  Keeps the grayscale language; curve
-  rendered over the spectrum analyser.
 - [ ] **Standalone pitch-shifter FX** - grain-based pitch shift (reuse
   the preserve-pitch stretch code in `samplers.rs`) as a dedicated
   FxStep so lanes can patch it into an arbitrary voice.  Autotune

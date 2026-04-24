@@ -4,6 +4,43 @@ A detailed log of what's built.
 
 ---
 
+### 8-band parametric EQ with draggable curve editor
+
+- **New `FxParamEq` module + `FxStep::ParamEq`** — lives alongside the
+  legacy fixed 3-band `FxEq` so existing sessions don't need to
+  migrate.  Rackable from the FX menu, allows multiple instances for
+  send-return colour / master-bus shaping patches.
+- **8 bands** — two shelves bracketing six peaks from 100 Hz to 15 kHz
+  by default.  Per-band `{kind: LowShelf|Peak|HighShelf, freq_hz,
+  gain_db, q, enabled}` stored in `FxState.param_eq_bands: [ParamEqBand; 8]`.
+  Defaults at 0 dB so adding the module is transparent until the user
+  moves a node; disabled bands stay dim but keep their freq/gain/Q
+  stored for easy A/B.
+- **DSP: Transposed-Direct-Form-II biquads** via the RBJ Audio EQ
+  Cookbook coefficient formulas in `src/audio/dsp/param_eq.rs`.
+  Per-band dirty-check caches the last-known source params so coefs
+  only recompute when the UI / LLM moves a knob.  Zero-gain or
+  disabled bands short-circuit to pass-through so the cascade stays
+  cheap even at maximum band count.
+- **Pure `band_magnitude` + `cascade_db`** helpers — the UI curve
+  renderer and the DSP share one response function, so what you see
+  on screen matches what the filter does.
+- **Curve editor widget** (`src/ui/widgets/param_eq_curve.rs`) —
+  log-freq × ±18 dB plot with an octave grid and ±6 / ±12 dB reference
+  lines.  One draggable handle per band: primary drag moves freq +
+  gain, scroll over a handle adjusts Q (narrower / wider), right-click
+  cycles kind (shelf/peak), double-click toggles enabled.  Below the
+  curve a monospaced readout strip lists every band's kind short-
+  name + freq + gain dB; disabled bands render dimmed.
+- **LLM schema**: `fx.param_eq_bands` is an 8-slot positional array;
+  each entry is an object with `{kind: 0|1|2, freq, gain, q, enabled}`,
+  with `null` skipping that slot.  Per-band lock paths
+  (`fx.param_eq_bands.N.<field>`) honour user edits through pipeline
+  writebacks, mirroring the `bass_voices.N` lock granularity.
+- Recursion limit for the schema macro bumped to 512.
+- 11 tests cover the coefficient math, the cascade DSP, the LLM
+  apply path, per-band locking, and the module-kind wiring.
+
 ### Convolution reverb — IR-driven FxStep with stereo mid/side
 
 - **New `FxStep::ConvReverb` + `ModuleKind::FxConvReverb`** — rackable
