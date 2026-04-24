@@ -10,6 +10,7 @@ mod fx_step;
 pub mod gabber_kick;
 pub mod granular_voice;
 pub mod mod_apply;
+pub mod param_eq;
 mod params;
 mod params_from;
 mod rev_tap;
@@ -28,6 +29,7 @@ use fx_math::{
 use gabber_kick::GabberKick;
 use granular_voice::GranularVoice;
 use mod_apply::apply_mod_target;
+use param_eq::ParamEq;
 pub use params::{AudioParams, MAX_MOD_ROUTES, compile_mod_routes, lfo_target_to_u8};
 pub use rev_tap::{FxDirection, FxRevQuant};
 use samplers::*;
@@ -81,6 +83,7 @@ pub struct DspState {
     // FX
     reverb: Reverb,
     conv_reverb: ConvReverb,
+    param_eq: ParamEq,
     delay: DelayLine,
     chorus: Chorus,
     phaser: Phaser,
@@ -178,6 +181,7 @@ impl DspState {
             gabber_kick: GabberKick::new(0xab12),
             reverb: Reverb::new(),
             conv_reverb: ConvReverb::new(),
+            param_eq: ParamEq::new(),
             delay: DelayLine::new(),
             chorus: Chorus::new(),
             phaser: Phaser::new(),

@@ -643,6 +643,54 @@ pub(super) fn apply_fx_update(
     {
         s.fx.conv_reverb_reverse = v;
     }
+
+    // ── Parametric EQ bands ──────────────────────────────────────────────
+    // `fx.param_eq_bands` is a positional sparse array — entries may be
+    // null to skip that band, so the LLM can edit a single band without
+    // re-emitting the whole 8-band set.  Each per-band field respects an
+    // `fx.param_eq_bands.N.<field>` lock path, mirroring how
+    // `bass_voices.N` edits gate per-field locks.
+    if !locked.contains("fx.param_eq_bands")
+        && let Some(arr) = fx.get("param_eq_bands").and_then(|v| v.as_array())
+    {
+        for (i, entry) in arr.iter().enumerate().take(s.fx.param_eq_bands.len()) {
+            let Some(obj) = entry.as_object() else {
+                continue;
+            };
+            let band = &mut s.fx.param_eq_bands[i];
+            let lock_kind = format!("fx.param_eq_bands.{}.kind", i);
+            let lock_freq = format!("fx.param_eq_bands.{}.freq", i);
+            let lock_gain = format!("fx.param_eq_bands.{}.gain", i);
+            let lock_q = format!("fx.param_eq_bands.{}.q", i);
+            let lock_enabled = format!("fx.param_eq_bands.{}.enabled", i);
+            if !locked.contains(&lock_kind)
+                && let Some(k) = obj.get("kind").and_then(|v| v.as_u64())
+            {
+                band.kind = super::fx::ParamEqBandKind::from_u8(k as u8);
+            }
+            if !locked.contains(&lock_freq)
+                && let Some(f) = obj.get("freq").and_then(|v| v.as_f64())
+            {
+                band.freq_hz = (f as f32).clamp(20.0, 20_000.0);
+            }
+            if !locked.contains(&lock_gain)
+                && let Some(g) = obj.get("gain").and_then(|v| v.as_f64())
+            {
+                band.gain_db = (g as f32).clamp(-18.0, 18.0);
+            }
+            if !locked.contains(&lock_q)
+                && let Some(q) = obj.get("q").and_then(|v| v.as_f64())
+            {
+                band.q = (q as f32).clamp(0.1, 10.0);
+            }
+            if !locked.contains(&lock_enabled)
+                && let Some(e) = obj.get("enabled").and_then(|v| v.as_bool())
+            {
+                band.enabled = e;
+            }
+        }
+    }
+
     u!(s.fx.master_volume, "master_volume", "fx.master_volume");
     u!(
         s.fx.xmod_bass_to_an1x_pitch,

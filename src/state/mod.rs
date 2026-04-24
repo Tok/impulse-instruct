@@ -31,7 +31,7 @@ pub mod sequencer_state;
 pub use sequencer_state::{SequencerState, Step, TB303Step};
 
 pub mod fx;
-pub use fx::FxState;
+pub use fx::{FxState, ParamEqBand, ParamEqBandKind, default_param_eq_bands};
 
 pub mod song;
 pub use song::ChainSlotOverride;

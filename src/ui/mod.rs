@@ -22,6 +22,7 @@ pub mod rack_canvas;
 mod rack_canvas_menus;
 pub(crate) mod rack_content;
 pub(crate) mod rack_content_pad;
+pub(crate) mod rack_content_param_eq;
 mod rack_grid;
 mod rack_scroll;
 mod rack_toolbar;

@@ -429,6 +429,8 @@ pub struct AudioParams {
     pub conv_reverb_lowcut: f32,
     pub conv_reverb_width: f32,
     pub conv_reverb_reverse: bool,
+    // Parametric EQ (8-band cascade)
+    pub param_eq_bands: [crate::state::ParamEqBand; 8],
     // Compressor
     pub compressor_threshold: f32,
     pub compressor_ratio: f32,

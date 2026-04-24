@@ -1,5 +1,79 @@
 use serde::{Deserialize, Serialize};
 
+/// Parametric EQ band shape — shelf or peak.  Serialised as an integer
+/// so the LLM schema / API can set it with a number.  The three variants
+/// cover every band we care about: low-shelf (cuts/boosts everything
+/// below `freq_hz`), bell/peak (Q-shaped boost or cut centred on
+/// `freq_hz`), high-shelf (everything above).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ParamEqBandKind {
+    LowShelf,
+    Peak,
+    HighShelf,
+}
+
+impl ParamEqBandKind {
+    pub fn from_u8(v: u8) -> Self {
+        match v {
+            0 => Self::LowShelf,
+            2 => Self::HighShelf,
+            _ => Self::Peak,
+        }
+    }
+    pub fn to_u8(self) -> u8 {
+        match self {
+            Self::LowShelf => 0,
+            Self::Peak => 1,
+            Self::HighShelf => 2,
+        }
+    }
+}
+
+/// One parametric-EQ band.  The active set is always 8; individual
+/// bands can be `enabled: false` to bypass without losing their
+/// stored freq/gain/Q so the user can A/B a band in and out.
+#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
+pub struct ParamEqBand {
+    pub kind: ParamEqBandKind,
+    /// Centre / corner frequency in Hz.  Clamped to (20, 20_000).
+    pub freq_hz: f32,
+    /// Band gain in dB.  Clamped to ±18 dB at DSP time.
+    pub gain_db: f32,
+    /// Q — band width for Peak, shelf slope for LowShelf / HighShelf.
+    /// Clamped to [0.1, 10.0] so the cascade stays stable.
+    pub q: f32,
+    pub enabled: bool,
+}
+
+impl ParamEqBand {
+    pub fn new(kind: ParamEqBandKind, freq_hz: f32, q: f32) -> Self {
+        Self {
+            kind,
+            freq_hz,
+            gain_db: 0.0,
+            q,
+            enabled: true,
+        }
+    }
+}
+
+/// Default 8-band parametric EQ layout: two shelves bracketing six
+/// peaks spread roughly-octavewise across 100 Hz–15 kHz.  All bands
+/// start at 0 dB so the cascade is unity-gain — adding the module
+/// doesn't colour the signal until the user moves a node.
+pub fn default_param_eq_bands() -> [ParamEqBand; 8] {
+    [
+        ParamEqBand::new(ParamEqBandKind::LowShelf, 100.0, 0.7),
+        ParamEqBand::new(ParamEqBandKind::Peak, 250.0, 1.0),
+        ParamEqBand::new(ParamEqBandKind::Peak, 500.0, 1.0),
+        ParamEqBand::new(ParamEqBandKind::Peak, 1_000.0, 1.0),
+        ParamEqBand::new(ParamEqBandKind::Peak, 2_500.0, 1.0),
+        ParamEqBand::new(ParamEqBandKind::Peak, 5_000.0, 1.0),
+        ParamEqBand::new(ParamEqBandKind::Peak, 10_000.0, 1.0),
+        ParamEqBand::new(ParamEqBandKind::HighShelf, 15_000.0, 0.7),
+    ]
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct FxState {
     pub reverb_size: f32, // 0–1 room size
@@ -154,6 +228,12 @@ pub struct FxState {
     /// string = no IR loaded (the step acts as a wet-coloured dry pass).
     #[serde(default)]
     pub conv_reverb_ir_path: String,
+    /// 8-band parametric EQ — replaces the fixed 3-band EQ for the
+    /// ParamEq FX module.  The existing `eq_low_gain` / `eq_mid_gain`
+    /// / `eq_hi_gain` fields above stay live for `FxEq` (the legacy
+    /// 3-knob card) so existing sessions don't have to migrate.
+    #[serde(default = "default_param_eq_bands")]
+    pub param_eq_bands: [ParamEqBand; 8],
 }
 
 fn default_fx_pan_rate() -> f32 {
@@ -236,6 +316,7 @@ impl Default for FxState {
             conv_reverb_width: default_conv_reverb_width(),
             conv_reverb_reverse: false,
             conv_reverb_ir_path: String::new(),
+            param_eq_bands: default_param_eq_bands(),
         }
     }
 }

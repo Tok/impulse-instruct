@@ -142,6 +142,16 @@ pub fn rack_kind_name_matches(kind: ModuleKind, name: &str) -> bool {
             n.as_str(),
             "convreverb" | "conv_reverb" | "conv reverb" | "convolution" | "ir" | "fx"
         ),
+        ModuleKind::FxParamEq => matches!(
+            n.as_str(),
+            "parameq"
+                | "param_eq"
+                | "param eq"
+                | "parametric"
+                | "parametric_eq"
+                | "curve_eq"
+                | "fx"
+        ),
         ModuleKind::LfoModule => matches!(n.as_str(), "lfo"),
         ModuleKind::AcidBass => matches!(n.as_str(), "bass" | "acid" | "303"),
         ModuleKind::DrumKit808 => matches!(n.as_str(), "808" | "kit_a" | "drum_a" | "drums_a"),

@@ -284,7 +284,8 @@ pub fn param_json_schema() -> serde_json::Value {
                     "conv_reverb_damp":     { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "lowpass on wet: 0=bright, 1=very dark (~400Hz cutoff)" },
                     "conv_reverb_lowcut":   { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "highpass on wet: 0=bypass, 1=cuts below ~800Hz (removes mud)" },
                     "conv_reverb_width":    { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "stereo width of wet (mono IRs clamp to mono)" },
-                    "conv_reverb_reverse":  { "type": "boolean", "description": "play IR reversed for the classic reverse-reverb build-up effect" }
+                    "conv_reverb_reverse":  { "type": "boolean", "description": "play IR reversed for the classic reverse-reverb build-up effect" },
+                    "param_eq_bands": { "type": "array", "description": "8-band parametric EQ cascade.  Positional — entry N targets band N.  Each entry is an object with { kind: 0|1|2 (low shelf / peak / high shelf), freq: 20..20000 Hz, gain: -18..+18 dB, q: 0.1..10, enabled: bool }; use `null` to skip that band.", "maxItems": 8 }
                 },
                 "additionalProperties": false
             },

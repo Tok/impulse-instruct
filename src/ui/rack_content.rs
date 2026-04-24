@@ -673,6 +673,11 @@ pub(super) fn draw_fx_content(
                 s.fx.conv_reverb_reverse = rev;
             }
         }
+        ModuleKind::FxParamEq => {
+            if super::rack_content_param_eq::draw_param_eq(app, ui, module_id) {
+                changed = true;
+            }
+        }
         ModuleKind::FxRingMod => {
             let (mut fr, mut mi) = {
                 let s = app.state.read();

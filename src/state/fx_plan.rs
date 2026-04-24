@@ -24,6 +24,7 @@ pub(crate) fn kind_to_fx_step(kind: ModuleKind) -> Option<FxStep> {
         ModuleKind::FxAutotune => Some(FxStep::Autotune),
         ModuleKind::FxPan => Some(FxStep::Pan),
         ModuleKind::FxConvReverb => Some(FxStep::ConvReverb),
+        ModuleKind::FxParamEq => Some(FxStep::ParamEq),
         _ => None,
     }
 }

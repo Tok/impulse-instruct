@@ -142,6 +142,7 @@ impl AudioParams {
             conv_reverb_lowcut: s.fx.conv_reverb_lowcut.clamp(0.0, 1.0),
             conv_reverb_width: s.fx.conv_reverb_width.clamp(0.0, 1.0),
             conv_reverb_reverse: s.fx.conv_reverb_reverse,
+            param_eq_bands: s.fx.param_eq_bands,
             compressor_threshold: s.fx.compressor_threshold,
             compressor_ratio: s.fx.compressor_ratio,
             compressor_mix: s.fx.compressor_mix,

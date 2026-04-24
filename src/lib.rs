@@ -1,4 +1,4 @@
-#![recursion_limit = "256"]
+#![recursion_limit = "512"]
 // ─── lib.rs ───────────────────────────────────────────────────────────────���───
 // Library crate root — re-exports all modules so both the main binary and
 // auxiliary binaries (model_eval, etc.) can share the same code.

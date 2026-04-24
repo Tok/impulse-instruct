@@ -481,6 +481,9 @@ impl RackState {
                 // ConvReverb sorts right next to the stock reverb so the two
                 // reverbs sit side-by-side in the FX strip.
                 ModuleKind::FxConvReverb => 37,
+                // ParamEq sorts right after the fixed 3-band EQ so they
+                // appear next to each other in the FX strip.
+                ModuleKind::FxParamEq => 38,
                 ModuleKind::SpectrumAnalyzer => 32,
                 ModuleKind::StereoMeter => 33,
                 ModuleKind::ActivityTimeline => 34,

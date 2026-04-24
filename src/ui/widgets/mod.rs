@@ -15,6 +15,9 @@ mod knob;
 use knob::draw_arc;
 pub use knob::knob;
 
+pub mod param_eq_curve;
+pub use param_eq_curve::param_eq_curve;
+
 use egui::{Color32, Painter, Pos2, Rect, Sense, Stroke, Ui, Vec2};
 use std::f32::consts::TAU;
 

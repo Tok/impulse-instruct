@@ -43,6 +43,7 @@ pub enum ModuleKind {
     FxAutotune,
     FxPan,
     FxConvReverb,
+    FxParamEq,
     // ── Analysis ──────────────────────────────────────────────────────────────
     SpectrumAnalyzer,
     StereoMeter,
@@ -85,6 +86,7 @@ impl ModuleKind {
             Self::FxAutotune => "AUTOTUNE",
             Self::FxPan => "PAN",
             Self::FxConvReverb => "CONV REV",
+            Self::FxParamEq => "PARAM EQ",
             Self::SpectrumAnalyzer => "SPECTRUM",
             Self::StereoMeter => "STEREO METER",
             Self::ActivityTimeline => "TIMELINE",
@@ -135,6 +137,10 @@ impl ModuleKind {
             // need three grid rows; the picker label eats horizontal space
             // so 3 cols wide matches the content.
             Self::FxConvReverb => (3, 3),
+            // Param EQ — curve editor dominates the card; 4 cols gives
+            // the 20 Hz–20 kHz axis room to breathe, 4 rows leaves room
+            // for the curve + band-param readout strip below it.
+            Self::FxParamEq => (4, 4),
             Self::FxReverb
             | Self::FxChorus
             | Self::FxPhaser
@@ -179,6 +185,7 @@ impl ModuleKind {
             | Self::FxAutotune
             | Self::FxPan
             | Self::FxConvReverb
+            | Self::FxParamEq
             | Self::SpectrumAnalyzer
             | Self::StereoMeter
             | Self::ActivityTimeline
@@ -217,6 +224,7 @@ impl ModuleKind {
                 | Self::FxAutotune
                 | Self::FxPan
                 | Self::FxConvReverb
+                | Self::FxParamEq
         )
     }
 
@@ -261,6 +269,7 @@ impl ModuleKind {
                 | Self::FxAutotune
                 | Self::FxPan
                 | Self::FxConvReverb
+                | Self::FxParamEq
                 | Self::LfoModule
                 | Self::LlmAgent
         )

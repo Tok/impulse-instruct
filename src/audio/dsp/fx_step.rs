@@ -162,6 +162,7 @@ impl DspState {
                 p.conv_reverb_width,
                 sr,
             ),
+            FxStep::ParamEq => self.param_eq.process(sig, &p.param_eq_bands, sr),
         }
     }
 
