@@ -726,3 +726,105 @@ pub fn load_wav_to_44100(path: &str) -> Option<Arc<Vec<f32>>> {
     );
     Some(Arc::new(out))
 }
+
+/// Load a WAV file preserving its channel layout and resampling to the
+/// engine rate.  Returns (samples, channels) where samples is mono or
+/// interleaved stereo.  Mirrors `load_wav_to_44100` but keeps the
+/// stereo content that the convolution reverb uses to drive its
+/// `mid ± side` output from a stereo impulse response.
+///
+/// 16-bit PCM only — matches `load_wav_to_44100`'s constraint.  Returns
+/// `None` for non-RIFF, non-WAVE, non-16-bit, or zero-length files.
+pub fn load_wav_stereo_to_engine(path: &str) -> Option<(Arc<Vec<f32>>, u8)> {
+    let bytes = std::fs::read(path).ok()?;
+    if bytes.len() < 44 || &bytes[0..4] != b"RIFF" || &bytes[8..12] != b"WAVE" {
+        return None;
+    }
+
+    let mut pos = 12usize;
+    let mut channels = 1u16;
+    let mut src_rate = SAMPLE_RATE_HZ;
+    let mut bits = 16u16;
+    let mut data_start = 0usize;
+    let mut data_len = 0usize;
+
+    while pos + 8 <= bytes.len() {
+        let tag = &bytes[pos..pos + 4];
+        let chunk_len = u32::from_le_bytes(bytes[pos + 4..pos + 8].try_into().ok()?) as usize;
+        pos += 8;
+        if tag == b"fmt " && chunk_len >= 16 {
+            channels = u16::from_le_bytes(bytes[pos + 2..pos + 4].try_into().ok()?);
+            src_rate = u32::from_le_bytes(bytes[pos + 4..pos + 8].try_into().ok()?);
+            bits = u16::from_le_bytes(bytes[pos + 14..pos + 16].try_into().ok()?);
+        } else if tag == b"data" {
+            data_start = pos;
+            data_len = chunk_len;
+            break;
+        }
+        pos += chunk_len + (chunk_len & 1);
+    }
+
+    if data_start == 0 || bits != 16 || channels == 0 {
+        return None;
+    }
+    // Clamp to mono or stereo — higher channel counts get downmixed to
+    // stereo (L = ch0, R = ch1) since convolution reverb only wires
+    // two-channel IRs, and saving arbitrary multichannel material is
+    // niche enough to handle separately.
+    let out_channels = channels.min(2) as usize;
+
+    let frame_bytes = channels as usize * 2;
+    let n_frames = data_len / frame_bytes;
+    let mut interleaved = Vec::with_capacity(n_frames * out_channels);
+
+    for i in 0..n_frames {
+        let base = data_start + i * frame_bytes;
+        for out_ch in 0..out_channels {
+            let off = base + out_ch * 2;
+            if off + 2 > bytes.len() {
+                break;
+            }
+            let raw = i16::from_le_bytes(bytes[off..off + 2].try_into().ok()?);
+            interleaved.push(raw as f32 / 32768.0);
+        }
+    }
+
+    // Resample to engine rate (linear interp) while preserving channel
+    // layout.  Interleaved data means stride `out_channels` between
+    // consecutive frames; the loop walks per-channel.
+    let out: Vec<f32> = if src_rate == SAMPLE_RATE_HZ {
+        interleaved
+    } else {
+        let ratio = src_rate as f32 / SAMPLE_RATE;
+        let new_frames = (n_frames as f32 / ratio) as usize;
+        let mut resampled = Vec::with_capacity(new_frames * out_channels);
+        for i in 0..new_frames {
+            let src = i as f32 * ratio;
+            let idx = src as usize;
+            let frac = src - idx as f32;
+            for ch in 0..out_channels {
+                let a = interleaved
+                    .get(idx * out_channels + ch)
+                    .copied()
+                    .unwrap_or(0.0);
+                let b = interleaved
+                    .get((idx + 1) * out_channels + ch)
+                    .copied()
+                    .unwrap_or(0.0);
+                resampled.push(a + (b - a) * frac);
+            }
+        }
+        resampled
+    };
+
+    log::info!(
+        "Loaded IR WAV: {} ({} Hz, {} ch, {} frames → {} ch-interleaved samples at {} Hz)",
+        path,
+        src_rate,
+        out_channels,
+        n_frames,
+        out.len(),
+        SAMPLE_RATE_HZ
+    );
+    Some((Arc::new(out), out_channels as u8))
+}

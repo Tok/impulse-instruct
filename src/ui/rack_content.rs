@@ -610,12 +610,12 @@ pub(super) fn draw_fx_content(
                     crate::ui::header_menu::pick_file_via_portal("WAV", &["wav", "WAV"])
             {
                 let ps = p.to_string_lossy().to_string();
-                if let Some(data) = crate::audio::load_wav_to_44100(&ps) {
+                if let Some((data, ch)) = crate::audio::load_wav_stereo_to_engine(&ps) {
                     let _ = app
                         .audio_tx
                         .push(crate::audio::AudioCommand::LoadImpulseResponse {
                             data,
-                            channels: 1,
+                            channels: ch,
                             reversed: rev,
                         });
                     app.state.write().fx.conv_reverb_ir_path = ps.clone();
@@ -633,12 +633,12 @@ pub(super) fn draw_fx_content(
             // from under us (e.g. /api/conv_reverb), reload the WAV + push
             // the DSP command.  Mirrors the amen panel's wave_cache poll.
             if !ir_path.is_empty() && app.last_conv_reverb_ir_path != ir_path {
-                if let Some(data) = crate::audio::load_wav_to_44100(&ir_path) {
+                if let Some((data, ch)) = crate::audio::load_wav_stereo_to_engine(&ir_path) {
                     let _ = app
                         .audio_tx
                         .push(crate::audio::AudioCommand::LoadImpulseResponse {
                             data,
-                            channels: 1,
+                            channels: ch,
                             reversed: rev,
                         });
                 }

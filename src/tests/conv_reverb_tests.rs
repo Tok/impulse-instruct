@@ -184,9 +184,9 @@ fn conv_reverb_blends_wet_into_output_when_mix_is_positive() {
 
 #[test]
 fn conv_reverb_load_ir_stores_but_does_not_panic() {
-    // Phase 1 doesn't read the IR inside `process`, but the API path
-    // stores it.  A panic here — e.g. from a bad channel cast or
-    // length assumption — would crash the audio thread.
+    // The API path stores an IR outside the audio callback; a panic
+    // here — bad channel cast, length assumption, FFT planner quirk —
+    // would crash the audio thread.
     let mut cr = crate::audio::dsp::conv_reverb::ConvReverb::new();
     let ir = std::sync::Arc::new(vec![0.1_f32; 512]);
     cr.load_ir(ir, /*channels*/ 1, /*reversed*/ false);
@@ -195,4 +195,222 @@ fn conv_reverb_load_ir_stores_but_does_not_panic() {
     cr.clear_ir();
     let out2 = cr.process(0.25, 0.5, 0.1, 0.2, 0.1, 1.0, 1.0, 48_000.0);
     assert!(out2.is_finite(), "output must be finite after IR clear");
+}
+
+// ─── Phase 2 — partitioned overlap-save convolution ──────────────────────────
+//
+// Ground-truth tests: convolving against hand-built IRs whose impulse
+// response is known exactly, so numerical drift from the FFT path
+// (rustfft's f32 mantissa, IFFT normalisation, accumulator ordering)
+// shows up as a visible failure rather than a plausible-looking wet
+// tail.  Each test drives the stream for more samples than one
+// partition so we see through the startup-silence warm-up.
+
+use crate::audio::dsp::conv_reverb::{CONV_PART, ConvReverb};
+
+/// Feed `n` samples from `input` (zero-padded) and collect the wet
+/// samples emitted by `process`.  Mix is held at 1.0 so the return
+/// value equals the wet (mid) channel — dry contributes zero.
+fn drive_conv(cr: &mut ConvReverb, input: &[f32], n: usize, sr: f32) -> (Vec<f32>, Vec<f32>) {
+    // Run with damp/lowcut/predelay at zero so wet = pure convolution
+    // output.  Width=1 so the side latch reflects the real L-R split.
+    let mut out = Vec::with_capacity(n);
+    let mut side = Vec::with_capacity(n);
+    for i in 0..n {
+        let x = input.get(i).copied().unwrap_or(0.0);
+        let mid = cr.process(x, /*mix*/ 1.0, 0.0, 0.0, 0.0, 1.0, 1.0, sr);
+        out.push(mid);
+        side.push(cr.side);
+    }
+    (out, side)
+}
+
+/// The first real output sample appears at this call index: one
+/// partition minus one because the block-filling push on call
+/// `CONV_PART - 1` triggers the FFT block AND reads `out_l[0]` on
+/// the same call.  All downstream "sample at IR offset N" checks
+/// live at `IMPULSE_LANDING + N`.
+const IMPULSE_LANDING: usize = CONV_PART - 1;
+
+#[test]
+fn conv_reverb_unit_impulse_ir_reproduces_input_after_warmup() {
+    // IR = [1.0] (a unit impulse).  Convolution with a unit impulse
+    // is the identity, so driving x[0] = 1 (rest = 0) through the
+    // reverb must emit x[0] exactly at the first post-warm-up sample.
+    let mut cr = ConvReverb::new();
+    let ir = std::sync::Arc::new(vec![1.0_f32]);
+    cr.load_ir(ir, 1, false);
+    assert_eq!(
+        cr.partition_count(),
+        1,
+        "single-sample IR should be 1 partition"
+    );
+
+    let mut x = vec![0.0_f32; CONV_PART * 2];
+    x[0] = 1.0;
+    let (wet, _) = drive_conv(&mut cr, &x, CONV_PART * 2, 48_000.0);
+
+    // Warm-up: samples before IMPULSE_LANDING are zero (block not yet
+    // processed; the out queue is still marked empty).
+    for (i, &w) in wet.iter().take(IMPULSE_LANDING).enumerate() {
+        assert!(
+            w.abs() < 1e-4,
+            "wet[{}] during warm-up should be ~0, got {}",
+            i,
+            w,
+        );
+    }
+    assert!(
+        (wet[IMPULSE_LANDING] - 1.0).abs() < 1e-3,
+        "wet[{}] should be ~1.0 (unit impulse), got {}",
+        IMPULSE_LANDING,
+        wet[IMPULSE_LANDING],
+    );
+    for (i, &w) in wet
+        .iter()
+        .enumerate()
+        .take(CONV_PART * 2)
+        .skip(IMPULSE_LANDING + 1)
+    {
+        assert!(
+            w.abs() < 1e-3,
+            "wet[{}] after the impulse should be ~0, got {}",
+            i,
+            w,
+        );
+    }
+}
+
+#[test]
+fn conv_reverb_delayed_dirac_ir_delays_input_by_that_many_samples() {
+    // IR with a dirac at sample N delays the input by N samples.
+    // The reverb's startup adds CONV_PART, so an input impulse at
+    // time 0 lands at output index CONV_PART + N.
+    const N: usize = 37;
+    let mut cr = ConvReverb::new();
+    let mut ir_samples = vec![0.0_f32; N + 1];
+    ir_samples[N] = 0.5;
+    cr.load_ir(std::sync::Arc::new(ir_samples), 1, false);
+
+    let mut x = vec![0.0_f32; CONV_PART * 2];
+    x[0] = 1.0;
+    let (wet, _) = drive_conv(&mut cr, &x, CONV_PART * 2, 48_000.0);
+
+    let target = IMPULSE_LANDING + N;
+    assert!(
+        (wet[target] - 0.5).abs() < 1e-3,
+        "wet[{}] should be ~0.5 (delayed half-amplitude dirac), got {}",
+        target,
+        wet[target],
+    );
+    // Neighbouring samples should stay quiet — the IR has no energy
+    // outside sample N.
+    assert!(wet[target - 1].abs() < 1e-3);
+    assert!(wet[target + 1].abs() < 1e-3);
+}
+
+#[test]
+fn conv_reverb_reverse_flag_flips_the_ir() {
+    // IR [a, 0, 0, b] played reversed should land `b` at sample 0 and
+    // `a` at sample 3 instead of the other way around.  Compare the
+    // forward and reversed runs sample-for-sample at the known IR
+    // positions.
+    let ir = vec![0.4_f32, 0.0, 0.0, 0.9];
+    let mut x = vec![0.0_f32; CONV_PART * 2];
+    x[0] = 1.0;
+
+    let mut cr_fwd = ConvReverb::new();
+    cr_fwd.load_ir(std::sync::Arc::new(ir.clone()), 1, false);
+    let (w_fwd, _) = drive_conv(&mut cr_fwd, &x, CONV_PART * 2, 48_000.0);
+
+    let mut cr_rev = ConvReverb::new();
+    cr_rev.load_ir(std::sync::Arc::new(ir), 1, true);
+    let (w_rev, _) = drive_conv(&mut cr_rev, &x, CONV_PART * 2, 48_000.0);
+
+    // Forward: wet[landing] = 0.4, wet[landing + 3] = 0.9.
+    // Reversed: wet[landing] = 0.9, wet[landing + 3] = 0.4.
+    assert!((w_fwd[IMPULSE_LANDING] - 0.4).abs() < 1e-3);
+    assert!((w_fwd[IMPULSE_LANDING + 3] - 0.9).abs() < 1e-3);
+    assert!((w_rev[IMPULSE_LANDING] - 0.9).abs() < 1e-3);
+    assert!((w_rev[IMPULSE_LANDING + 3] - 0.4).abs() < 1e-3);
+}
+
+#[test]
+fn conv_reverb_stereo_ir_drives_side_signal() {
+    // Stereo IR with asymmetric L/R channels: a unit impulse should
+    // produce a non-zero side = (L - R) / 2.  With L=0.8, R=0.2 the
+    // expected side at the impulse sample is (0.8 - 0.2) / 2 = 0.3.
+    let mut interleaved = vec![0.0_f32; 2]; // one frame
+    interleaved[0] = 0.8; // L
+    interleaved[1] = 0.2; // R
+    let mut cr = ConvReverb::new();
+    cr.load_ir(std::sync::Arc::new(interleaved), 2, false);
+
+    let mut x = vec![0.0_f32; CONV_PART * 2];
+    x[0] = 1.0;
+    let (wet, side) = drive_conv(&mut cr, &x, CONV_PART * 2, 48_000.0);
+
+    assert!(
+        (wet[IMPULSE_LANDING] - 0.5).abs() < 1e-3,
+        "mid at landing should be (L+R)/2 = 0.5, got {}",
+        wet[IMPULSE_LANDING],
+    );
+    assert!(
+        (side[IMPULSE_LANDING] - 0.3).abs() < 1e-3,
+        "side at landing should be (L-R)/2 = 0.3, got {}",
+        side[IMPULSE_LANDING],
+    );
+}
+
+#[test]
+fn conv_reverb_size_knob_truncates_ir_tail() {
+    // IR with energy only in its last partition — a pulse at
+    // (n_parts - 1) * CONV_PART so the LATE tail carries all the
+    // audible content.  At size=1.0 the convolution hears it; at
+    // size=0.3 (only first ~30 % of partitions) the late pulse is
+    // truncated away and the output stays near-silent.
+    let n_parts = 4;
+    let mut ir_samples = vec![0.0_f32; n_parts * CONV_PART];
+    let late_pos = (n_parts - 1) * CONV_PART + CONV_PART / 2;
+    ir_samples[late_pos] = 1.0;
+    let ir = std::sync::Arc::new(ir_samples);
+
+    // Full size run.
+    let mut cr_full = ConvReverb::new();
+    cr_full.load_ir(ir.clone(), 1, false);
+    assert_eq!(cr_full.partition_count(), n_parts);
+    // Process enough samples to get past the late pulse's landing
+    // point (IMPULSE_LANDING + late_pos) with headroom.
+    let total = IMPULSE_LANDING + late_pos + CONV_PART;
+    let mut x = vec![0.0_f32; total];
+    x[0] = 1.0;
+    let (wet_full, _) = drive_conv(&mut cr_full, &x, total, 48_000.0);
+
+    // Size=0.3 → 1 partition kept (rounded).  The late pulse lives in
+    // partition 3 and is therefore excluded from the active set.
+    let mut cr_trunc = ConvReverb::new();
+    cr_trunc.load_ir(ir, 1, false);
+    let mut cr_trunc_x = vec![0.0_f32; total];
+    cr_trunc_x[0] = 1.0;
+    // Drive with a custom size by calling `process` directly so we
+    // can pick an active partition count < n_parts.
+    let mut wet_trunc = Vec::with_capacity(total);
+    for i in 0..total {
+        let s = cr_trunc_x.get(i).copied().unwrap_or(0.0);
+        wet_trunc.push(cr_trunc.process(s, 1.0, 0.0, 0.0, 0.0, 0.3, 1.0, 48_000.0));
+    }
+
+    let target = IMPULSE_LANDING + late_pos;
+    let full_energy = wet_full[target].abs();
+    let trunc_energy = wet_trunc[target].abs();
+    assert!(
+        full_energy > 0.3,
+        "full-size run should reproduce the late-partition pulse (got {})",
+        full_energy,
+    );
+    assert!(
+        trunc_energy < 0.05,
+        "size=0.3 should truncate the late partition, got {}",
+        trunc_energy,
+    );
 }
