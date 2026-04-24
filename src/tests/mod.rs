@@ -7,6 +7,7 @@ mod analysis_tests;
 mod api_tests;
 mod audio_analysis_tests;
 mod compile_mod_routes_tests;
+mod conv_reverb_tests;
 mod coverage_tests;
 mod drum_voice_tests;
 mod dsp_fx_tests;

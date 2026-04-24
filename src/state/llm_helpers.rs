@@ -608,6 +608,41 @@ pub(super) fn apply_fx_update(
     u!(s.fx.fx_pan_pos, "fx_pan_pos", "fx.fx_pan_pos");
     u!(s.fx.fx_pan_width, "fx_pan_width", "fx.fx_pan_width");
     u!(s.fx.fx_pan_rate, "fx_pan_rate", "fx.fx_pan_rate");
+    u!(
+        s.fx.conv_reverb_mix,
+        "conv_reverb_mix",
+        "fx.conv_reverb_mix"
+    );
+    u!(
+        s.fx.conv_reverb_size,
+        "conv_reverb_size",
+        "fx.conv_reverb_size"
+    );
+    u!(
+        s.fx.conv_reverb_predelay,
+        "conv_reverb_predelay",
+        "fx.conv_reverb_predelay"
+    );
+    u!(
+        s.fx.conv_reverb_damp,
+        "conv_reverb_damp",
+        "fx.conv_reverb_damp"
+    );
+    u!(
+        s.fx.conv_reverb_lowcut,
+        "conv_reverb_lowcut",
+        "fx.conv_reverb_lowcut"
+    );
+    u!(
+        s.fx.conv_reverb_width,
+        "conv_reverb_width",
+        "fx.conv_reverb_width"
+    );
+    if !locked.contains("fx.conv_reverb_reverse")
+        && let Some(v) = fx.get("conv_reverb_reverse").and_then(|v| v.as_bool())
+    {
+        s.fx.conv_reverb_reverse = v;
+    }
     u!(s.fx.master_volume, "master_volume", "fx.master_volume");
     u!(
         s.fx.xmod_bass_to_an1x_pitch,
@@ -747,6 +782,12 @@ fn fx_field_mut<'a>(fx: &'a mut super::FxState, key: &str) -> Option<&'a mut f32
         "fx_pan_pos" => &mut fx.fx_pan_pos,
         "fx_pan_width" => &mut fx.fx_pan_width,
         "fx_pan_rate" => &mut fx.fx_pan_rate,
+        "conv_reverb_mix" => &mut fx.conv_reverb_mix,
+        "conv_reverb_size" => &mut fx.conv_reverb_size,
+        "conv_reverb_predelay" => &mut fx.conv_reverb_predelay,
+        "conv_reverb_damp" => &mut fx.conv_reverb_damp,
+        "conv_reverb_lowcut" => &mut fx.conv_reverb_lowcut,
+        "conv_reverb_width" => &mut fx.conv_reverb_width,
         _ => return None,
     })
 }

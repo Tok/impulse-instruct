@@ -152,6 +152,16 @@ impl DspState {
                 self.fx_pan_side = sig * pan_mult * 0.5;
                 sig
             }
+            FxStep::ConvReverb => self.conv_reverb.process(
+                sig,
+                p.conv_reverb_mix,
+                p.conv_reverb_predelay,
+                p.conv_reverb_damp,
+                p.conv_reverb_lowcut,
+                p.conv_reverb_size,
+                p.conv_reverb_width,
+                sr,
+            ),
         }
     }
 

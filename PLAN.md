@@ -6,44 +6,6 @@ they ship and are reflected in `features.md`.
 
 ---
 
-## Agent tooling - gradual control & expressiveness
-
-- [ ] **Cross-agent broadcast hints** - `send_hint` already exists for
-  single-target agent-to-agent messaging; add a broadcast variant that
-  fans a hint out to every agent matching a scope string (`"bass"` ->
-  every enabled bass agent).  Useful for "everyone go half-time for
-  the next 8 bars" one-shots.
-- [ ] **Persona library** - save / load named agent configurations
-  (persona + instructions + prompt override + conv mode + temp).
-  Ships with a handful of curated personas; user can stamp their own.
-  Loaded from `~/.impulse_instruct/personas/*.json` so they survive
-  session reloads.
-- [ ] **Auto-retry with temperature bump** - when a lane's JSON fails
-  to parse after repair, retry the same lane once with temperature +
-  0.1 before falling through to the `default_plan` fallback.  Should
-  reduce the "model got stuck on one lane so the whole turn stalled"
-  failure mode.
-- [ ] **Per-agent token-budget tracking** - carry prompt / completion
-  tokens per cycle on `LlmAgentState` and surface the running total +
-  per-cycle average on the agent card.  Lets the user see which
-  agents are dominating VRAM / throughput.
-- [ ] **Agent sleep mode** - an explicit "sleeping" state that unloads
-  the agent's server process (or demotes it to a shared pool slot)
-  until heat rises or the round-robin reaches it.  Saves VRAM for
-  specialists that only need to fire occasionally.
-
-## Modulation
-
-- [ ] **Native per-voice `BassLfoTarget::Pan` + phase offset** — the
-  Bach demo's anti-phase pan sweep between voice 0 and voice 1
-  currently runs as a 10 Hz Python loop over `/api/params`, because
-  `BassLfoTarget` (Pitch / PulseWidth / FilterCutoff / Amplitude) has
-  no `Pan` variant and `BassVoice` has no phase field.  Add `Pan` to
-  the enum, a `lfo_phase: f32` (0..1 → 0..2π) to `BassVoice`, and
-  wire both into the DSP — the scenario can then configure the
-  anti-phase sweep once and let the audio thread animate it, zero
-  HTTP traffic, zero state-lock contention.
-
 ## DSP
 
 - [ ] **Parametric EQ with curve editor** - replace the fixed 3-band EQ
@@ -69,6 +31,18 @@ they ship and are reflected in `features.md`.
 - [ ] **Wavetable voice** - single-table scan + pos/phase knobs, load
   user wavetables from `samples/wavetables/*.wav`.  Complements AN1X
   (analog) and Hoover (fixed-shape) with user-extensible character.
+
+## Modulation
+
+- [ ] **Native per-voice `BassLfoTarget::Pan` + phase offset** — the
+  Bach demo's anti-phase pan sweep between voice 0 and voice 1
+  currently runs as a 10 Hz Python loop over `/api/params`, because
+  `BassLfoTarget` (Pitch / PulseWidth / FilterCutoff / Amplitude) has
+  no `Pan` variant and `BassVoice` has no phase field.  Add `Pan` to
+  the enum, a `lfo_phase: f32` (0..1 → 0..2π) to `BassVoice`, and
+  wire both into the DSP — the scenario can then configure the
+  anti-phase sweep once and let the audio thread animate it, zero
+  HTTP traffic, zero state-lock contention.
 
 ## Sequencer
 
@@ -111,26 +85,6 @@ they ship and are reflected in `features.md`.
   anything that drives beyond bank H via `bank_write` / `bank_load`
   loses its in-place editing affordance.
 
-## Intelligence
-
-- [ ] **Test additional LLM models** - evaluate
-  DeepSeek-R1-Distill-Qwen-7B / 14B and Qwen3-8B / 14B for JSON
-  accuracy and music theory.  Gemma 4 26B-A4B is now downloadable
-  (three quants); needs a head-to-head vs. E4B on the style + bass +
-  theory suites.
-- [ ] **Lane-score auto-tuner** - observe lane-score trends per style +
-  persona combination, then nudge the planner's heuristic weighting
-  toward the lanes that score higher.  Keeps the planner learning
-  without retraining the model.
-- [ ] **Per-lane few-shot example bank** - an editable JSON file of
-  `{ prompt, output }` pairs per LaneKind that the pipeline injects
-  into the relevant lane's prompt as in-context examples.  Lets the
-  user steer a lane's style without touching the system prompt.
-- [ ] **Agent personality evolution** - let `style_observations`
-  trickle into the agent's system prompt over time (cap at N
-  observations) so long-running agents develop a "feel" for what the
-  user likes without needing explicit instruction edits.
-
 ## UI / UX
 
 - [ ] **Rack mini-map** - bird's-eye navigator in a corner of the rack
@@ -165,6 +119,26 @@ they ship and are reflected in `features.md`.
   section.  Toggle via header button; state saved per-session so
   demos can launch straight into it.
 
+## Intelligence
+
+- [ ] **Test additional LLM models** - evaluate
+  DeepSeek-R1-Distill-Qwen-7B / 14B and Qwen3-8B / 14B for JSON
+  accuracy and music theory.  Gemma 4 26B-A4B is now downloadable
+  (three quants); needs a head-to-head vs. E4B on the style + bass +
+  theory suites.
+- [ ] **Lane-score auto-tuner** - observe lane-score trends per style +
+  persona combination, then nudge the planner's heuristic weighting
+  toward the lanes that score higher.  Keeps the planner learning
+  without retraining the model.
+- [ ] **Per-lane few-shot example bank** - an editable JSON file of
+  `{ prompt, output }` pairs per LaneKind that the pipeline injects
+  into the relevant lane's prompt as in-context examples.  Lets the
+  user steer a lane's style without touching the system prompt.
+- [ ] **Agent personality evolution** - let `style_observations`
+  trickle into the agent's system prompt over time (cap at N
+  observations) so long-running agents develop a "feel" for what the
+  user likes without needing explicit instruction edits.
+
 ## Integration
 
 - [ ] **OSC API mirror** - port the HTTP API to an OSC server so
@@ -186,6 +160,42 @@ they ship and are reflected in `features.md`.
   the bass voice become a proper MPE instrument instead of the
   current monophonic step driver.
 
+## Agent tooling - gradual control & expressiveness
+
+- [ ] **Cross-agent broadcast hints** - `send_hint` already exists for
+  single-target agent-to-agent messaging; add a broadcast variant that
+  fans a hint out to every agent matching a scope string (`"bass"` ->
+  every enabled bass agent).  Useful for "everyone go half-time for
+  the next 8 bars" one-shots.
+- [ ] **Persona library** - save / load named agent configurations
+  (persona + instructions + prompt override + conv mode + temp).
+  Ships with a handful of curated personas; user can stamp their own.
+  Loaded from `~/.impulse_instruct/personas/*.json` so they survive
+  session reloads.
+- [ ] **Auto-retry with temperature bump** - when a lane's JSON fails
+  to parse after repair, retry the same lane once with temperature +
+  0.1 before falling through to the `default_plan` fallback.  Should
+  reduce the "model got stuck on one lane so the whole turn stalled"
+  failure mode.
+- [ ] **Per-agent token-budget tracking** - carry prompt / completion
+  tokens per cycle on `LlmAgentState` and surface the running total +
+  per-cycle average on the agent card.  Lets the user see which
+  agents are dominating VRAM / throughput.
+- [ ] **Agent sleep mode** - an explicit "sleeping" state that unloads
+  the agent's server process (or demotes it to a shared pool slot)
+  until heat rises or the round-robin reaches it.  Saves VRAM for
+  specialists that only need to fire occasionally.
+
+## Refactoring
+
+- [ ] **Glass group helpers** - `glass_label(ui, text)` still to do
+  (the inline pattern varies too much across panels for a single
+  helper).
+- [ ] **Large-file splits (remaining)** - top remaining file now is
+  `src/llm/pipeline.rs` (938 lines), followed by `src/llm/mod.rs`
+  (914) and `src/state/rack.rs` (897).  None over cap, but worth
+  watching on the next feature round.
+
 ## Demo recording
 
 - [ ] **Next acid demo re-record** - showcase the **two bass voices**
@@ -204,16 +214,6 @@ they ship and are reflected in `features.md`.
   in real time, with the new past-side log preserving past notes.
 - [ ] **Re-record the D&B demo** - amen + reese + drone pad + MC
   scenario is ready; waiting on a clean recording run.
-
-## Refactoring
-
-- [ ] **Glass group helpers** - `glass_label(ui, text)` still to do
-  (the inline pattern varies too much across panels for a single
-  helper).
-- [ ] **Large-file splits (remaining)** - top remaining file now is
-  `src/llm/pipeline.rs` (938 lines), followed by `src/llm/mod.rs`
-  (914) and `src/state/rack.rs` (897).  None over cap, but worth
-  watching on the next feature round.
 
 ---
 

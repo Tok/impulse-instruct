@@ -44,3 +44,26 @@ Outside of archive.org:
 Same workflow as amen: drop `.wav` files into `samples/textures/`
 and the module's picker will list them.  Size doesn't matter much —
 the voice only reads small random windows at a time.
+
+## Impulse responses (convolution reverb)
+
+The `CONV REV` convolution-reverb module reads `.wav` files from
+`samples/impulses/`.  An impulse response (IR) captures the tail of a
+real space — a cathedral, hall, plate, or hardware spring — and lets
+the reverb recreate that space's acoustic signature when you convolve
+a dry signal against it.
+
+Archive.org and public-domain IR packs worth checking:
+
+- https://archive.org/details/ir-library — mixed IR library covering
+  halls, plates, and outdoor spaces.
+- https://openairlib.net — academic IR archive from the University of
+  York; rooms, cathedrals, odd spaces.  Filter by CC license.
+- https://www.voxengo.com/impulses/ — small Voxengo free pack (mostly
+  rooms and plates).  Dual-use for mono/stereo.
+
+Workflow: drop `.wav` files (any sample rate; the loader resamples to
+the engine rate) into `samples/impulses/` and use the `LOAD IR` button
+on the ConvReverb card, or hit `/api/conv_reverb` with `{ "random":
+true }`.  Short IRs (0.5–2 s) work best for musical reverb; longer
+tails (3+ s) dominate the mix unless MIX is kept low.

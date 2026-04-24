@@ -61,6 +61,20 @@ pub enum AudioCommand {
     LoadSampler(Arc<Vec<f32>>),
     /// Load sample data into the granular texture voice.
     LoadGranular(Arc<Vec<f32>>),
+    /// Load an impulse-response into the convolution-reverb FX step.
+    /// `channels` is 1 for mono, 2 for interleaved stereo; `reversed`
+    /// stores the IR back-to-front for the reverse-reverb effect.
+    /// The Arc keeps the call allocation-free on the audio thread — the
+    /// DSP's FFT partition re-computation happens inside the handler
+    /// before the callback sees the new IR.
+    LoadImpulseResponse {
+        data: Arc<Vec<f32>>,
+        channels: u8,
+        reversed: bool,
+    },
+    /// Drop the currently loaded impulse response.  The ConvReverb FX
+    /// step falls back to its Phase 1 filter-only wet path.
+    ClearImpulseResponse,
     /// Updated FX routing plan derived from the rack cable graph.
     /// Sent whenever the rack topology changes (connect/disconnect/enable).
     SetFxPlan(FxPlan),
@@ -235,6 +249,12 @@ impl AudioEngine {
                             AudioCommand::SetMonitorVolume(v) => monitor_vol = v,
                             AudioCommand::LoadSampler(data) => dsp.load_amen(data),
                             AudioCommand::LoadGranular(data) => dsp.load_granular(data),
+                            AudioCommand::LoadImpulseResponse {
+                                data,
+                                channels: ch,
+                                reversed,
+                            } => dsp.load_impulse_response(data, ch, reversed),
+                            AudioCommand::ClearImpulseResponse => dsp.clear_impulse_response(),
                             AudioCommand::SetFxPlan(plan) => dsp.set_fx_plan(plan),
                         }
                     }

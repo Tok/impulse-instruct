@@ -554,6 +554,125 @@ pub(super) fn draw_fx_content(
                 s.fx.bitcrush_mix = mi;
             }
         }
+        ModuleKind::FxConvReverb => {
+            let (mut mix, mut size, mut pre, mut damp, mut lc, mut wd, mut rev, ir_path) = {
+                let s = app.state.read();
+                (
+                    s.fx.conv_reverb_mix,
+                    s.fx.conv_reverb_size,
+                    s.fx.conv_reverb_predelay,
+                    s.fx.conv_reverb_damp,
+                    s.fx.conv_reverb_lowcut,
+                    s.fx.conv_reverb_width,
+                    s.fx.conv_reverb_reverse,
+                    s.fx.conv_reverb_ir_path.clone(),
+                )
+            };
+            hk!(
+                ui,
+                ("MIX", &mut mix, pm("fx.conv_reverb_mix")),
+                ("SIZE", &mut size, pm("fx.conv_reverb_size")),
+                ("PREDLY", &mut pre, pm("fx.conv_reverb_predelay"))
+            );
+            hk!(
+                ui,
+                ("DAMP", &mut damp, pm("fx.conv_reverb_damp")),
+                ("LOCUT", &mut lc, pm("fx.conv_reverb_lowcut")),
+                ("WIDTH", &mut wd, pm("fx.conv_reverb_width"))
+            );
+            let (rev_changed, load_clicked, clear_clicked) = ui
+                .horizontal(|ui| {
+                    let prev_rev = rev;
+                    widgets::toggle_button(ui, if rev { "REV" } else { "rev" }, &mut rev);
+                    let load = ui.button("LOAD IR").clicked();
+                    let clear = ui
+                        .add_enabled(!ir_path.is_empty(), egui::Button::new("×"))
+                        .clicked();
+                    let name = if ir_path.is_empty() {
+                        "(no ir)".to_string()
+                    } else {
+                        std::path::Path::new(&ir_path)
+                            .file_name()
+                            .map(|f| f.to_string_lossy().to_string())
+                            .unwrap_or_default()
+                    };
+                    ui.label(
+                        egui::RichText::new(name)
+                            .monospace()
+                            .size(8.0)
+                            .color(theme::ASH),
+                    );
+                    (rev != prev_rev, load, clear)
+                })
+                .inner;
+            if load_clicked
+                && let Some(p) =
+                    crate::ui::header_menu::pick_file_via_portal("WAV", &["wav", "WAV"])
+            {
+                let ps = p.to_string_lossy().to_string();
+                if let Some(data) = crate::audio::load_wav_to_44100(&ps) {
+                    let _ = app
+                        .audio_tx
+                        .push(crate::audio::AudioCommand::LoadImpulseResponse {
+                            data,
+                            channels: 1,
+                            reversed: rev,
+                        });
+                    app.state.write().fx.conv_reverb_ir_path = ps.clone();
+                    app.last_conv_reverb_ir_path = ps;
+                }
+            }
+            if clear_clicked {
+                let _ = app
+                    .audio_tx
+                    .push(crate::audio::AudioCommand::ClearImpulseResponse);
+                app.state.write().fx.conv_reverb_ir_path = String::new();
+                app.last_conv_reverb_ir_path = String::new();
+            }
+            // API/LLM path: when state.fx.conv_reverb_ir_path changes out
+            // from under us (e.g. /api/conv_reverb), reload the WAV + push
+            // the DSP command.  Mirrors the amen panel's wave_cache poll.
+            if !ir_path.is_empty() && app.last_conv_reverb_ir_path != ir_path {
+                if let Some(data) = crate::audio::load_wav_to_44100(&ir_path) {
+                    let _ = app
+                        .audio_tx
+                        .push(crate::audio::AudioCommand::LoadImpulseResponse {
+                            data,
+                            channels: 1,
+                            reversed: rev,
+                        });
+                }
+                app.last_conv_reverb_ir_path = ir_path.clone();
+            }
+            if pad_expanded {
+                ui.add_space(PAD_SECTION_TOP_GAP);
+                let (vc, _) = render_three_pad(
+                    ui,
+                    &format!("conv_reverb_xy_{module_id}"),
+                    ["MIX", "SIZE", "DAMP"],
+                    &mut pad_pair,
+                    (&mut mix, &mut size, &mut damp),
+                    [
+                        user_owned("fx.conv_reverb_mix"),
+                        user_owned("fx.conv_reverb_damp"),
+                        user_owned("fx.conv_reverb_size"),
+                    ],
+                );
+                if vc {
+                    changed = true;
+                }
+            }
+            if changed || rev_changed {
+                let mut s = app.state.write();
+                s.fx.conv_reverb_mix = mix;
+                s.fx.conv_reverb_size = size;
+                s.fx.conv_reverb_predelay = pre;
+                s.fx.conv_reverb_damp = damp;
+                s.fx.conv_reverb_lowcut = lc;
+                s.fx.conv_reverb_width = wd;
+                s.fx.conv_reverb_reverse = rev;
+            }
+        }
         ModuleKind::FxRingMod => {
             let (mut fr, mut mi) = {
                 let s = app.state.read();

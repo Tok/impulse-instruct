@@ -2,6 +2,7 @@
 
 pub mod an1x;
 mod bass303;
+pub mod conv_reverb;
 mod dsp_util;
 pub mod fx;
 pub mod fx_math;
@@ -16,6 +17,7 @@ pub mod samplers;
 pub mod voices;
 use an1x::An1xVoice;
 use bass303::Bass303;
+use conv_reverb::ConvReverb;
 use dsp_util::*;
 pub use dsp_util::{TuningSystem, hz_to_midi, midi_to_hz, midi_to_hz_tuned};
 use fx::*;
@@ -78,6 +80,7 @@ pub struct DspState {
     gabber_kick: GabberKick,
     // FX
     reverb: Reverb,
+    conv_reverb: ConvReverb,
     delay: DelayLine,
     chorus: Chorus,
     phaser: Phaser,
@@ -174,6 +177,7 @@ impl DspState {
             rim909: Snare::new(0xffff),
             gabber_kick: GabberKick::new(0xab12),
             reverb: Reverb::new(),
+            conv_reverb: ConvReverb::new(),
             delay: DelayLine::new(),
             chorus: Chorus::new(),
             phaser: Phaser::new(),
@@ -238,6 +242,26 @@ impl DspState {
 
     pub fn load_granular(&mut self, data: std::sync::Arc<Vec<f32>>) {
         self.granular.load(data);
+    }
+
+    /// Load a new impulse response into the convolution reverb.  Called
+    /// outside the audio callback (via `AudioCommand::LoadImpulseResponse`)
+    /// so allocation/FFT pre-computation in here is fine.  `channels`
+    /// is 1 for mono IRs, 2 for interleaved stereo.  `reversed` stores
+    /// the IR back-to-front for the classic reverse-reverb effect.
+    pub fn load_impulse_response(
+        &mut self,
+        data: std::sync::Arc<Vec<f32>>,
+        channels: u8,
+        reversed: bool,
+    ) {
+        self.conv_reverb.load_ir(data, channels, reversed);
+    }
+
+    /// Drop any loaded impulse response — the wet path falls back to the
+    /// filter-only Phase 1 behaviour.
+    pub fn clear_impulse_response(&mut self) {
+        self.conv_reverb.clear_ir();
     }
 
     pub fn handle_trigger(&mut self, event: &TriggerEvent) {
@@ -850,10 +874,15 @@ impl DspState {
             // hasn't run this sample, so switching it off stops the
             // auto-pan cleanly instead of latching the last side value.
             self.fx_pan_side *= 0.995;
+            // ConvReverb side contribution decays the same way so the
+            // wet tail drops to mono when the step stops running.
+            let conv_reverb_side = self.conv_reverb.side;
+            self.conv_reverb.side *= 0.995;
             let has_stereo = (p.stereo_width - 0.5).abs() > 0.01
                 || granular_side.abs() > 0.001
                 || pan_side.abs() > 0.0001
-                || self.fx_pan_side.abs() > 0.0001;
+                || self.fx_pan_side.abs() > 0.0001
+                || conv_reverb_side.abs() > 0.0001;
             if channels >= 2 && has_stereo {
                 let mid = out;
                 let chorus_side = self.chorus.read_tap(0.4) * 0.3;
@@ -863,7 +892,11 @@ impl DspState {
                 } else {
                     0.0
                 };
-                let side = chorus_side * w + granular_side * gran_w + pan_side + self.fx_pan_side;
+                let side = chorus_side * w
+                    + granular_side * gran_w
+                    + pan_side
+                    + self.fx_pan_side
+                    + conv_reverb_side;
                 let left = (mid + side).clamp(-1.0, 1.0);
                 let right = (mid - side).clamp(-1.0, 1.0);
                 frame[0] = left;

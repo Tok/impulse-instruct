@@ -102,8 +102,8 @@ pub use rack::{
 
 mod instrument;
 pub use instrument::{
-    AmenRequest, FlipRequest, GranularRequest, StyleRequest, post_amen, post_flip, post_granular,
-    post_randomize, post_style,
+    AmenRequest, ConvReverbRequest, FlipRequest, GranularRequest, StyleRequest, post_amen,
+    post_conv_reverb, post_flip, post_granular, post_randomize, post_style,
 };
 
 mod rack_mod;
@@ -356,6 +356,7 @@ pub fn build_router(api_state: ApiState) -> Router {
         .route("/api/randomize", post(post_randomize))
         .route("/api/amen", post(post_amen))
         .route("/api/granular", post(post_granular))
+        .route("/api/conv_reverb", post(post_conv_reverb))
         .route("/api/flip", post(post_flip))
         .route("/api/rack/add", post(post_rack_add))
         .route("/api/rack/agent", post(post_rack_agent))

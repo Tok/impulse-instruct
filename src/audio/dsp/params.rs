@@ -421,6 +421,14 @@ pub struct AudioParams {
     pub fx_pan_pos: f32,
     pub fx_pan_width: f32,
     pub fx_pan_rate: f32,
+    // Convolution reverb
+    pub conv_reverb_mix: f32,
+    pub conv_reverb_size: f32,
+    pub conv_reverb_predelay: f32,
+    pub conv_reverb_damp: f32,
+    pub conv_reverb_lowcut: f32,
+    pub conv_reverb_width: f32,
+    pub conv_reverb_reverse: bool,
     // Compressor
     pub compressor_threshold: f32,
     pub compressor_ratio: f32,

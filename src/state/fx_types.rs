@@ -24,12 +24,13 @@ pub enum FxStep {
     Drive,
     Autotune,
     Pan,
+    ConvReverb,
 }
 
 /// Total FxStep variants — sized to pack dense per-FX audio-thread
 /// caches (e.g. previous-sample outputs for feedback routes) without
 /// allocating a HashMap every block.
-pub const FX_STEP_COUNT: usize = 13;
+pub const FX_STEP_COUNT: usize = 14;
 
 impl FxStep {
     /// Dense 0..`FX_STEP_COUNT` index — stable; keep in lock-step with
@@ -50,6 +51,7 @@ impl FxStep {
             FxStep::Drive => 10,
             FxStep::Autotune => 11,
             FxStep::Pan => 12,
+            FxStep::ConvReverb => 13,
         }
     }
 }

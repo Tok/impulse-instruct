@@ -277,7 +277,14 @@ pub fn param_json_schema() -> serde_json::Value {
                     "tape_xy":       { "type": "array", "items": { "type": "number" }, "minItems": 2, "maxItems": 2, "description": "pad shortcut: [x,y] → [tape_drive, tape_flutter]" },
                     "distortion_xy": { "type": "array", "items": { "type": "number" }, "minItems": 2, "maxItems": 2, "description": "pad shortcut: [x,y] → [distortion_drive, distortion_mix]" },
                     "autotune_xy":   { "type": "array", "items": { "type": "number" }, "minItems": 2, "maxItems": 2, "description": "pad shortcut: [x,y] → [autotune_amount, autotune_mix]" },
-                    "fx_pan_xy":     { "type": "array", "items": { "type": "number" }, "minItems": 2, "maxItems": 2, "description": "pad shortcut: [x,y] → [fx_pan_pos, fx_pan_width]" }
+                    "fx_pan_xy":     { "type": "array", "items": { "type": "number" }, "minItems": 2, "maxItems": 2, "description": "pad shortcut: [x,y] → [fx_pan_pos, fx_pan_width]" },
+                    "conv_reverb_mix":      { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "convolution reverb wet/dry; 0=off" },
+                    "conv_reverb_size":     { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "IR truncation: 1=full tail, 0.5=shorter/gated feel" },
+                    "conv_reverb_predelay": { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "predelay before wet onset: 0=0ms, 1=200ms (pushes reverb back in mix)" },
+                    "conv_reverb_damp":     { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "lowpass on wet: 0=bright, 1=very dark (~400Hz cutoff)" },
+                    "conv_reverb_lowcut":   { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "highpass on wet: 0=bypass, 1=cuts below ~800Hz (removes mud)" },
+                    "conv_reverb_width":    { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "stereo width of wet (mono IRs clamp to mono)" },
+                    "conv_reverb_reverse":  { "type": "boolean", "description": "play IR reversed for the classic reverse-reverb build-up effect" }
                 },
                 "additionalProperties": false
             },

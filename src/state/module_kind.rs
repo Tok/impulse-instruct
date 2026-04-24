@@ -42,6 +42,7 @@ pub enum ModuleKind {
     FxDrive,
     FxAutotune,
     FxPan,
+    FxConvReverb,
     // ── Analysis ──────────────────────────────────────────────────────────────
     SpectrumAnalyzer,
     StereoMeter,
@@ -83,6 +84,7 @@ impl ModuleKind {
             Self::FxDrive => "DRIVE",
             Self::FxAutotune => "AUTOTUNE",
             Self::FxPan => "PAN",
+            Self::FxConvReverb => "CONV REV",
             Self::SpectrumAnalyzer => "SPECTRUM",
             Self::StereoMeter => "STEREO METER",
             Self::ActivityTimeline => "TIMELINE",
@@ -129,6 +131,10 @@ impl ModuleKind {
             Self::LfoModule => (2, 2),
             // FX modules — exhaustive so new variants cause a compile error
             Self::FxDelay => (2, 2), // 5-button row can't fit in 1 row
+            // Convolution Reverb — 6 knobs + reverse toggle + IR picker row
+            // need three grid rows; the picker label eats horizontal space
+            // so 3 cols wide matches the content.
+            Self::FxConvReverb => (3, 3),
             Self::FxReverb
             | Self::FxChorus
             | Self::FxPhaser
@@ -172,6 +178,7 @@ impl ModuleKind {
             | Self::FxDrive
             | Self::FxAutotune
             | Self::FxPan
+            | Self::FxConvReverb
             | Self::SpectrumAnalyzer
             | Self::StereoMeter
             | Self::ActivityTimeline
@@ -209,6 +216,7 @@ impl ModuleKind {
                 | Self::FxDrive
                 | Self::FxAutotune
                 | Self::FxPan
+                | Self::FxConvReverb
         )
     }
 
@@ -231,6 +239,7 @@ impl ModuleKind {
                 | Self::FxDrive
                 | Self::FxAutotune
                 | Self::FxPan
+                | Self::FxConvReverb
         )
     }
 
@@ -251,6 +260,7 @@ impl ModuleKind {
                 | Self::FxDrive
                 | Self::FxAutotune
                 | Self::FxPan
+                | Self::FxConvReverb
                 | Self::LfoModule
                 | Self::LlmAgent
         )

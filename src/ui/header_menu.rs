@@ -50,7 +50,7 @@ fn picker_runtime() -> &'static tokio::runtime::Runtime {
 /// matches the behaviour of `rfd::FileDialog::pick_file()` that the rest
 /// of the menu already depends on.  A picker handle on the worker
 /// thread closes the dialog automatically if the future is dropped.
-fn pick_file_via_portal(filter_name: &str, extensions: &[&str]) -> Option<PathBuf> {
+pub(crate) fn pick_file_via_portal(filter_name: &str, extensions: &[&str]) -> Option<PathBuf> {
     let filter_name = filter_name.to_string();
     let extensions: Vec<String> = extensions.iter().map(|s| s.to_string()).collect();
     picker_runtime().block_on(async move {

@@ -478,6 +478,9 @@ impl RackState {
                 ModuleKind::FxDrive => 30,
                 ModuleKind::FxAutotune => 31,
                 ModuleKind::FxPan => 36,
+                // ConvReverb sorts right next to the stock reverb so the two
+                // reverbs sit side-by-side in the FX strip.
+                ModuleKind::FxConvReverb => 37,
                 ModuleKind::SpectrumAnalyzer => 32,
                 ModuleKind::StereoMeter => 33,
                 ModuleKind::ActivityTimeline => 34,

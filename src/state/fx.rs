@@ -119,10 +119,53 @@ pub struct FxState {
     /// Pan FX: auto-pan LFO rate 0..1 → 0.05..8 Hz.
     #[serde(default = "default_fx_pan_rate")]
     pub fx_pan_rate: f32,
+    // ── Convolution Reverb ───────────────────────────────────────────────
+    /// Wet/dry mix (0 = dry, 1 = 100 % wet).
+    #[serde(default)]
+    pub conv_reverb_mix: f32,
+    /// IR truncation (0..1 of the loaded impulse length).  1.0 = full IR;
+    /// lower values shorten the tail (equivalent to a gated reverb without
+    /// the re-open behaviour).  0.0 falls back to a minimum of one partition
+    /// so the convolution keeps running.
+    #[serde(default = "default_conv_reverb_size")]
+    pub conv_reverb_size: f32,
+    /// Predelay in samples-at-time-of-processing (0..1 → 0..200 ms at the
+    /// live engine sample rate).  Moves the onset of the wet signal
+    /// relative to the dry so the reverb feels further back in the mix.
+    #[serde(default)]
+    pub conv_reverb_predelay: f32,
+    /// One-pole low-pass on the wet signal (0..1 → fully open .. ~800 Hz).
+    /// Darkens the reverb tail without affecting the dry.
+    #[serde(default)]
+    pub conv_reverb_damp: f32,
+    /// One-pole high-pass on the wet signal (0..1 → bypass .. ~800 Hz).
+    /// Removes mud so the wet blends cleanly under a busy mix.
+    #[serde(default)]
+    pub conv_reverb_lowcut: f32,
+    /// Stereo width of the wet (0 = mono, 1 = full stereo from a stereo IR).
+    /// For mono IRs this degrades gracefully to mono regardless of the knob.
+    #[serde(default = "default_conv_reverb_width")]
+    pub conv_reverb_width: f32,
+    /// Play the loaded IR reversed (classic reverse-reverb effect).  The IR
+    /// transform is recomputed when this toggles so no per-block cost.
+    #[serde(default)]
+    pub conv_reverb_reverse: bool,
+    /// Filesystem path of the currently loaded impulse response.  Empty
+    /// string = no IR loaded (the step acts as a wet-coloured dry pass).
+    #[serde(default)]
+    pub conv_reverb_ir_path: String,
 }
 
 fn default_fx_pan_rate() -> f32 {
     0.3
+}
+
+fn default_conv_reverb_size() -> f32 {
+    1.0
+}
+
+fn default_conv_reverb_width() -> f32 {
+    1.0
 }
 
 impl Default for FxState {
@@ -185,6 +228,14 @@ impl Default for FxState {
             fx_pan_pos: 0.0,
             fx_pan_width: 0.5,
             fx_pan_rate: default_fx_pan_rate(),
+            conv_reverb_mix: 0.0,
+            conv_reverb_size: default_conv_reverb_size(),
+            conv_reverb_predelay: 0.0,
+            conv_reverb_damp: 0.0,
+            conv_reverb_lowcut: 0.0,
+            conv_reverb_width: default_conv_reverb_width(),
+            conv_reverb_reverse: false,
+            conv_reverb_ir_path: String::new(),
         }
     }
 }

@@ -138,6 +138,10 @@ pub fn rack_kind_name_matches(kind: ModuleKind, name: &str) -> bool {
             "autotune" | "auto_tune" | "pitch_correct" | "tune" | "fx"
         ),
         ModuleKind::FxPan => matches!(n.as_str(), "pan" | "autopan" | "fx"),
+        ModuleKind::FxConvReverb => matches!(
+            n.as_str(),
+            "convreverb" | "conv_reverb" | "conv reverb" | "convolution" | "ir" | "fx"
+        ),
         ModuleKind::LfoModule => matches!(n.as_str(), "lfo"),
         ModuleKind::AcidBass => matches!(n.as_str(), "bass" | "acid" | "303"),
         ModuleKind::DrumKit808 => matches!(n.as_str(), "808" | "kit_a" | "drum_a" | "drums_a"),

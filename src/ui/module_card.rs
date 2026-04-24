@@ -59,6 +59,7 @@ fn title_fill(kind: ModuleKind) -> Color32 {
         | ModuleKind::FxDrive
         | ModuleKind::FxAutotune
         | ModuleKind::FxPan
+        | ModuleKind::FxConvReverb
         | ModuleKind::SpectrumAnalyzer
         | ModuleKind::StereoMeter
         | ModuleKind::ActivityTimeline => 20,

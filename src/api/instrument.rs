@@ -31,6 +31,16 @@ pub struct GranularRequest {
     pub random: bool,
 }
 
+/// Request body for /api/conv_reverb.  Either `path` names a specific
+/// IR file or `random: true` picks one from `samples/impulses/`.
+#[derive(Deserialize)]
+pub struct ConvReverbRequest {
+    #[serde(default)]
+    pub path: Option<String>,
+    #[serde(default)]
+    pub random: bool,
+}
+
 #[derive(Deserialize)]
 pub struct StyleRequest {
     /// Style id from styles.json (e.g. "drum_and_bass"), "__free__",
@@ -81,6 +91,75 @@ pub async fn post_amen(
             Json(OkResponse {
                 ok: false,
                 message: Some("no path and no samples found in samples/amen/".into()),
+            })
+        }
+    }
+}
+
+/// Scan `samples/impulses/` for .wav files.  Returns paths sorted by name.
+pub fn scan_impulse_samples() -> Vec<std::path::PathBuf> {
+    let mut out: Vec<std::path::PathBuf> = std::fs::read_dir("samples/impulses")
+        .into_iter()
+        .flatten()
+        .flatten()
+        .map(|e| e.path())
+        .filter(|p| {
+            p.is_file()
+                && p.extension()
+                    .and_then(|e| e.to_str())
+                    .is_some_and(|e| e.eq_ignore_ascii_case("wav"))
+        })
+        .collect();
+    out.sort();
+    out
+}
+
+/// Pick a random impulse-response path from `samples/impulses/`.
+/// Time-nanos based — good enough for a "surprise me" roll without
+/// dragging in an RNG crate.
+pub fn pick_random_impulse() -> Option<String> {
+    let samples = scan_impulse_samples();
+    if samples.is_empty() {
+        return None;
+    }
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.subsec_nanos() as usize)
+        .unwrap_or(0);
+    samples
+        .get(nanos % samples.len())
+        .map(|p| p.to_string_lossy().to_string())
+}
+
+/// Load an impulse response into the convolution-reverb FX step —
+/// mirror of /api/amen.  The API writes `fx.conv_reverb_ir_path`; the
+/// UI's ConvReverb card picks up the change and pushes the decoded
+/// samples to the audio thread via `AudioCommand::LoadImpulseResponse`.
+pub async fn post_conv_reverb(
+    AxumState(api): AxumState<ApiState>,
+    Json(req): Json<ConvReverbRequest>,
+) -> Json<OkResponse> {
+    let resolved: Option<String> = if let Some(p) = req.path.as_deref().filter(|s| !s.is_empty()) {
+        Some(p.to_string())
+    } else if req.random {
+        pick_random_impulse()
+    } else {
+        None
+    };
+    match resolved {
+        Some(p) => {
+            api.app_state.write().fx.conv_reverb_ir_path = p.clone();
+            api_log(&api, format!("[API] conv_reverb: loaded {}", p));
+            Json(OkResponse {
+                ok: true,
+                message: Some(format!("conv_reverb: {}", p)),
+            })
+        }
+        None => {
+            api_log(&api, "[API] conv_reverb: no IR resolved".to_string());
+            Json(OkResponse {
+                ok: false,
+                message: Some("no path and no samples found in samples/impulses/".into()),
             })
         }
     }

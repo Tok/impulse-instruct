@@ -6,7 +6,7 @@ mod app_update;
 mod flip;
 pub mod fx_dir;
 pub(crate) mod header;
-mod header_menu;
+pub(crate) mod header_menu;
 mod llm_drain;
 mod llm_log_color;
 mod llm_strip;
@@ -232,6 +232,11 @@ pub struct ImpulseApp {
     dsp_load_rx: rtrb::Consumer<f32>,
     dsp_load_buf: Vec<f32>,
     pub(crate) amen_ui: panels::amen_viz::AmenUiState,
+    /// Most recently loaded IR path for the convolution reverb.  The
+    /// main update tick watches `fx.conv_reverb_ir_path` and reloads when
+    /// it diverges from this — covers the API path that writes the
+    /// string without sending a LoadImpulseResponse command directly.
+    pub(crate) last_conv_reverb_ir_path: String,
     pub(crate) neutts_online: bool,
     pub(crate) granular_capture_rx: rtrb::Consumer<f32>,
     pub(crate) granular_tap: Vec<f32>, // ring buffer, ~3s master output for CAPTURE
@@ -422,6 +427,7 @@ impl ImpulseApp {
             dsp_load_rx: audio.dsp_load_rx,
             dsp_load_buf: Vec::with_capacity(64),
             amen_ui: Default::default(),
+            last_conv_reverb_ir_path: String::new(),
             neutts_online: false,
             granular_capture_rx: audio.granular_capture_rx,
             granular_tap: vec![0.0; crate::audio::SAMPLE_RATE_HZ as usize * 3], // 3s ring buffer
