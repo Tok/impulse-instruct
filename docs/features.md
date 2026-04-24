@@ -4,6 +4,45 @@ A detailed log of what's built.
 
 ---
 
+### Convolution reverb — IR-driven FxStep with stereo mid/side
+
+- **New `FxStep::ConvReverb` + `ModuleKind::FxConvReverb`** — rackable
+  FX module with MIX / SIZE / PREDELAY / DAMP / LOWCUT / WIDTH knobs +
+  REVERSE toggle + LOAD IR picker on the front panel.  3-knob XY pad
+  expansion mirrors the other FX cards; back-panel exposes 3 Selector
+  mod-input jacks.  `allows_multiple()` so users can stack two
+  ConvReverbs for send-return colour patches.
+- **Partitioned overlap-save FFT convolution** via `rustfft` in
+  `src/audio/dsp/conv_reverb.rs`.  IR split into 1024-sample partitions,
+  forward-FFT'd at load time; per-block one forward FFT of
+  `(prev || current)` input, freq-domain multiply-accumulate across an
+  FDL ring buffer, one IFFT for mono / two for stereo, back half of
+  the IFFT output is the valid wet.  Startup latency = 1 partition
+  (21.3 ms at 48 kHz).  Fallback when no IR is loaded: predelay +
+  LP (damp) + HP (lowcut) stub, so the module always responds audibly.
+- **True stereo IRs** — `load_wav_stereo_to_engine` preserves the L/R
+  split through resampling; `ConvReverb` convolves each channel
+  separately and emits `mid = (L+R)/2` as the FX return + latches
+  `side = (L-R)/2 · width` into the master mid/side bus (same path
+  `fx_pan_side` / `granular_side` already use).  Mono IRs degrade
+  gracefully (side = 0).
+- **REVERSE flag** reverses the IR data before FFT so the partition
+  cache stays branch-free in the hot path.  SIZE truncates the active
+  partition count at process time (0 still keeps 1 partition so early
+  reflections survive).  PREDELAY 0..200 ms via 16 k-sample ring
+  buffer; fixed to be a true zero-delay read at knob=0.
+- **POST `/api/conv_reverb` { path | random: true }** mirrors
+  `/api/amen`: writes `fx.conv_reverb_ir_path`, UI polls and pushes
+  `AudioCommand::LoadImpulseResponse { data, channels, reversed }`.
+  Drop WAVs into `samples/impulses/`.  LLM schema exposes every knob
+  + reverse flag at `fx.conv_reverb_*`; ramps and XY pairs wired
+  through `apply_fx_update` / `fx_field_mut` / `jam_tools`.
+- 14 tests in `src/tests/conv_reverb_tests.rs`: defaults, LLM writes,
+  lock respect, rack-module flags, kind→step mapping, ramp start
+  value, DSP bypass, wet blend bounds, load/clear safety, unit
+  impulse identity, delayed dirac, reverse flip, stereo side split,
+  size-knob truncation.
+
 ### Lane-local writeback — preserve `api_params` during jam cycles
 
 - **The bug.** `run_pipeline`'s per-lane writeback in `src/llm/mod.rs`

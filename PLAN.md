@@ -17,10 +17,6 @@ they ship and are reflected in `features.md`.
   FxStep so lanes can patch it into an arbitrary voice.  Autotune
   already covers the "snap to key" use case; this covers harmonies
   and octave doubles.
-- [ ] **Convolution reverb** - load a user-supplied impulse response
-  from `samples/impulses/*.wav`.  FFT-based convolution, block size
-  1024 for the 48 kHz engine.  Same `FxStep` slot shape as the
-  existing Reverb.
 - [ ] **Mid/side master processing** - mid/side split with separate
   width / EQ / saturation per side on the `MasterOutput` module.
   Opens up "wider than stereo" moves that stay mono-sum-safe.
