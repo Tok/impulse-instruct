@@ -72,13 +72,14 @@ The 9 main stages are shipped (see features.md).  Remaining slices:
   helper).
 - [ ] **Large-file watch list** (none over the 1000-line cap; just
   noting the largest ones in case a future change pushes one
-  over):
-  `src/ui/panels/sequencer.rs`, `src/state/rack.rs`,
-  `src/llm/mod.rs`, `src/state/transitions.rs`, `src/llm/lanes.rs`,
-  `src/audio/dsp/mod.rs`.  The cleanest split candidates remain
-  `state/transitions.rs` (song-mode helpers + bank/chain into a
-  sibling) and `audio/dsp/mod.rs` (DspState process block per-voice
-  mix branches).
+  over).  Current top: `src/llm/lanes.rs` (962),
+  `src/ui/panels/sequencer.rs` (944), `src/state/transitions.rs`
+  (925), `src/llm/mod.rs` (921).  `src/state/transitions.rs`
+  remains the cleanest split candidate (song-mode helpers +
+  bank/chain into a sibling).  `audio/dsp/mod.rs` and
+  `src/state/rack.rs` were split out in earlier sessions
+  (`process_block.rs` and `rack_wiring.rs` siblings); both now sit
+  comfortably under the cap.
 
 ## Demo recording
 
