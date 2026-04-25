@@ -4,6 +4,27 @@ A detailed log of what's built.
 
 ---
 
+### WebSocket state push — `/api/ws/state`
+
+- New `GET /api/ws/state` upgrades the connection to a WebSocket
+  and streams `AppState` JSON whenever the engine state changes.
+  Mirrors `GET /api/state` for clients that want to react instead
+  of poll — external dashboards, live-coding editors, OBS overlays.
+- Protocol (V1): on connect the server sends a full snapshot, then
+  pushes the latest snapshot at most every 250 ms (4 Hz) but only
+  when the bytes have changed since the last push.  A FNV-1a 64-bit
+  rolling hash gates "did anything change"; full diff payloads are
+  out of V1 scope (clients can diff client-side cheaply).  Inbound
+  frames are ignored — use the existing POST endpoints for writes.
+- Connection lifetime: one tokio task per client.  Any send error
+  (client closed, network gone) drops the task — abandoned
+  connections don't leak.
+- 7 tests cover the hash helper: empty-input invariant, identity,
+  one-byte sensitivity, byte-order sensitivity, large-buffer
+  termination, and that BPM change → different hash on a real
+  AppState (the unchanged-skip gate depends on this).  Full suite
+  at 1563 passing.
+
 ### Performance mode — stripped chrome for live use
 
 - New `UiPrefs.performance_mode` toggle persists across sessions.

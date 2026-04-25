@@ -55,9 +55,6 @@ they ship and are reflected in `features.md`.
   loop from the app's own master bus, run `detect_onsets`, load it
   straight into AmenSampler with auto slice positions.  Lets the
   user sample their own jam back into the break rotation.
-- [ ] **WebSocket state push** - mirror `/api/state` over a WebSocket
-  so external web dashboards or the live-coding editor can observe
-  changes without polling.
 - [ ] **MPE / MIDI 2.0 input** - the `midir` path only takes Note
   On/Off + CC today.  Adding per-note pitch / pressure / slide lets
   the bass voice become a proper MPE instrument instead of the

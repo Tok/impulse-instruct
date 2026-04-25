@@ -134,6 +134,9 @@ pub use midi_import::{MidiImportRequest, MidiImportResponse, post_midi_import};
 mod ui_prefs_api;
 pub use ui_prefs_api::post_ui_prefs;
 
+pub mod ws;
+pub use ws::{ws_state_handler, ws_state_hash};
+
 #[derive(Serialize)]
 pub struct OkResponse {
     pub ok: bool,
@@ -343,6 +346,7 @@ pub fn build_router(api_state: ApiState) -> Router {
 
     Router::new()
         .route("/api/state", get(get_state))
+        .route("/api/ws/state", get(ws_state_handler))
         .route("/api/schema", get(get_schema))
         .route("/api/prompt", post(post_prompt))
         .route("/api/params", post(post_params))

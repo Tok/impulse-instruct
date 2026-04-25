@@ -27,7 +27,7 @@ egui = "0.28"
 rfd = { version = "0.14", default-features = false, features = ["xdg-portal", "tokio"] }
 
 # HTTP API (MCP bridge) + llama-server HTTP client
-axum = { version = "0.7", features = ["json"] }
+axum = { version = "0.7", features = ["json", "ws"] }
 tokio = { version = "1", features = ["full"] }
 tower-http = { version = "0.5", features = ["cors"] }
 ureq = { version = "2", features = ["json"] }
