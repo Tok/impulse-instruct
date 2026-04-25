@@ -329,16 +329,16 @@ impl AudioEngine {
                         // showed up as a per-pattern jitter on the playhead.
                         let prev_step = s.sequencer.current_step;
                         let curr_step = clock.current_step;
-                        if curr_step > prev_step {
-                            // Polymeter fix: the global tick no longer
-                            // wraps at MAX_STEPS, so the delta is the
-                            // straight difference.  Older builds had
-                            // a wrap-fallback branch — superfluous
-                            // now and a footgun on session restore
-                            // since the saved current_step can be
-                            // arbitrarily large.
-                            s.global_step_count += (curr_step - prev_step) as u64;
-                        }
+                        // `step_count_delta` is the polymeter-aware
+                        // saturating diff — see its docs for the
+                        // wrap-fallback removal history.  Pulled out as
+                        // a pure helper so the delta math is testable
+                        // without standing up an audio engine.
+                        s.global_step_count =
+                            s.global_step_count
+                                .saturating_add(crate::sequencer::step_count_delta(
+                                    prev_step, curr_step,
+                                ));
                         s.sequencer.current_step = clock.current_step;
                         if clock.loop_count != prev_loop_count {
                             // Pattern morph in flight — progress it
@@ -403,14 +403,7 @@ impl AudioEngine {
                                     // gets a release.
                                     s.sequencer.running = false;
                                     s.chain_repeat_count = 0;
-                                    events.retain(|e| {
-                                        matches!(
-                                            e,
-                                            crate::sequencer::TriggerEvent::BassGateOff { .. }
-                                                | crate::sequencer::TriggerEvent::HooverGateOff
-                                                | crate::sequencer::TriggerEvent::An1xGateOff
-                                        )
-                                    });
+                                    events.retain(crate::sequencer::TriggerEvent::is_gate_off);
                                 }
                                 LoopBoundaryAction::AdvanceTo {
                                     next_pos,
@@ -485,9 +478,10 @@ impl AudioEngine {
                         midi_clock_running = running_now;
 
                         if running_now {
-                            // tick_interval = sr * 60 / (bpm * 24 PPQN), at engine rate
-                            let tick_interval = (SAMPLE_RATE as f64 * 60.0)
-                                / (seq_snap.bpm as f64 * crate::midi::MIDI_CLOCK_PPQN);
+                            let tick_interval = crate::midi::midi_clock_tick_interval_samples(
+                                seq_snap.bpm,
+                                SAMPLE_RATE,
+                            );
                             midi_clock_acc += engine_block_frames as f64;
                             while midi_clock_acc >= tick_interval {
                                 midi_clock_acc -= tick_interval;

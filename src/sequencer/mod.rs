@@ -83,6 +83,41 @@ pub enum TriggerEvent {
     WavetableGateOff,
 }
 
+impl TriggerEvent {
+    /// True for events that release a sustaining note rather than start
+    /// a new one.  Used by the chain advance "stop at end" path —
+    /// `advance_clock` may have emitted step-zero note-ons for a
+    /// pattern restart that's about to be cancelled, so the audio
+    /// thread filters those out while keeping gate-offs (any note
+    /// still sounding into the boundary needs a clean release).
+    /// Pure helper so the filter logic is unit-testable.
+    pub fn is_gate_off(&self) -> bool {
+        matches!(
+            self,
+            TriggerEvent::BassGateOff { .. }
+                | TriggerEvent::HooverGateOff
+                | TriggerEvent::An1xGateOff
+                | TriggerEvent::PluckGateOff
+                | TriggerEvent::WavetableGateOff
+        )
+    }
+}
+
+/// Compute the per-block delta to add to `AppState.global_step_count`.
+/// Returns 0 when the clock didn't advance (or the saved cursor is
+/// somehow ahead of the current step, e.g. session restore from a
+/// future timeline — defensively saturating so the counter never
+/// runs backwards).
+///
+/// Polymeter-aware: the global tick no longer wraps at MAX_STEPS, so
+/// the delta is the straight saturating difference.  Older builds
+/// had a wrap-fallback branch which silently dropped one slot per
+/// MAX_STEPS for any voice whose length didn't divide MAX_STEPS.
+#[inline]
+pub fn step_count_delta(prev_step: usize, curr_step: usize) -> u64 {
+    curr_step.saturating_sub(prev_step) as u64
+}
+
 // ─── Clock state (audio-thread local, not in shared AppState) ─────────────────
 
 /// Number of drum voices — must match DrumVoice::ALL.len()

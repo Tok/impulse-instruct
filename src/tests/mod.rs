@@ -85,6 +85,7 @@ mod song_mode_tests;
 mod spectrum_onset_tests;
 mod state_tests;
 mod transitions_presets_tests;
+mod transport_helpers_tests;
 mod transport_tests;
 mod tts_tests;
 mod tuning_tests;

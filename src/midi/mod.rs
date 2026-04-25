@@ -18,6 +18,18 @@ use midir::{MidiInput, MidiInputConnection, MidiOutput, MidiOutputConnection};
 /// BPM and to recover BPM from incoming clock pulses.
 pub const MIDI_CLOCK_PPQN: f64 = 24.0;
 
+/// Samples between consecutive MIDI clock pulses (0xF8) at the given
+/// BPM and sample rate.  24 PPQN means a 120-BPM clock fires every
+/// 60s ÷ (120 × 24) ≈ 20.8 ms — at 48 kHz that's exactly 1000 samples.
+/// Pure helper so the audio thread's clock-out accumulator can be
+/// unit-tested without an audio engine.  Returns f64 to keep the
+/// accumulator math precise across millions of pulses per session.
+#[inline]
+pub fn midi_clock_tick_interval_samples(bpm: f32, sample_rate: f32) -> f64 {
+    let bpm = (bpm as f64).max(1.0);
+    (sample_rate as f64 * 60.0) / (bpm * MIDI_CLOCK_PPQN)
+}
+
 // ─── MIDI events we emit to the UI thread ─────────────────────────────────────
 
 #[derive(Clone, Debug)]
