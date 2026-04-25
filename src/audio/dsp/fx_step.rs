@@ -307,6 +307,13 @@ impl DspState {
                 }
                 sig
             }
+            FxStep::FreqShift => self.freq_shift.process(
+                sig,
+                p.freq_shift_amount,
+                p.freq_shift_feedback,
+                p.freq_shift_mix,
+                sr,
+            ),
         }
     }
 

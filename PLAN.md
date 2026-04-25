@@ -23,12 +23,16 @@ Tier 1 (small, well-defined, no new infra):
 - [x] **Tilt EQ (`FxTilt`)** — shipped.
 - [x] **Transient designer (`FxTransient`)** — shipped.
 - [x] **Exciter (`FxExciter`)** — shipped.
-- [ ] **Frequency shifter (`FxFreqShift`)** — Hilbert-pair
-  single-sideband shift in Hz. Deferred from the tier-1 batch
-  because a faithful Hilbert allpass cascade is genuinely subtle
-  DSP (Olli Niemitalo's HilbertOLA-style coefficient design); a
-  rushed implementation would sound off. Pick this back up with
-  more attention than a batched-through tier-1 slot allows.
+- [x] **Frequency shifter (`FxFreqShift`)** — shipped.  Two
+  4-section parallel allpass cascades (H(z) = (a + z⁻²) / (1 +
+  a·z⁻²) per section) produce the analytic-signal real / imag
+  pair; complex-multiply with a `cos / sin` carrier at ±1000 Hz
+  gives the SSB-shifted output.  Coefficients are the
+  Hartmann-style pair (~1° phase error in 100 Hz–20 kHz).
+  Feedback knob (capped at 0.85) + tanh-clamped feedback tap
+  prevent runaway under sustained input.  Distinct from
+  `FxPitchShift` — adds the same Hz to every component, so
+  harmonics become inharmonic.
 - [x] **Stereo widener (`FxWiden`)** — shipped via the
   master-stage latch pattern (mirrors `FxPan` / `FxConvReverb`'s
   side-latch idiom).  Chain step is a mono passthrough that flips

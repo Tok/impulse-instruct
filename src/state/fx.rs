@@ -388,6 +388,20 @@ pub struct FxState {
     /// bypass (master skips Haas + side scaling); 1 = full effect.
     #[serde(default)]
     pub widen_mix: f32,
+    // ── Frequency shifter (FxFreqShift, Hilbert SSB) ──────────────
+    /// Shift amount 0..1 (0.5 = no shift / 0 Hz, mapped to ±1000 Hz
+    /// linear).  Sign of the offset picks shift direction (up = subtract
+    /// the imaginary projection, down = add).
+    #[serde(default = "default_freq_shift_amount")]
+    pub freq_shift_amount: f32,
+    /// Feedback 0..1 → 0..0.95 of the previous shifted output mixed
+    /// back into the input.  Builds Sean-Costello-style "shimmer
+    /// ladders" when paired with reverb upstream.
+    #[serde(default)]
+    pub freq_shift_feedback: f32,
+    /// Wet/dry 0..1 (0 = bypass).
+    #[serde(default)]
+    pub freq_shift_mix: f32,
     // ── Convolution Reverb ───────────────────────────────────────────────
     /// Wet/dry mix (0 = dry, 1 = 100 % wet).
     #[serde(default)]
@@ -605,6 +619,10 @@ fn default_widen_haas() -> f32 {
     0.4 // ~12 ms — comfortable Haas window without flam at the kick.
 }
 
+fn default_freq_shift_amount() -> f32 {
+    0.5 // 0 Hz centre — engaging the FX with default knobs is no-op.
+}
+
 impl Default for FxState {
     fn default() -> Self {
         Self {
@@ -717,6 +735,9 @@ impl Default for FxState {
             widen_haas: default_widen_haas(),
             widen_side: 0.0,
             widen_mix: 0.0,
+            freq_shift_amount: default_freq_shift_amount(),
+            freq_shift_feedback: 0.0,
+            freq_shift_mix: 0.0,
             conv_reverb_mix: 0.0,
             conv_reverb_size: default_conv_reverb_size(),
             conv_reverb_predelay: 0.0,

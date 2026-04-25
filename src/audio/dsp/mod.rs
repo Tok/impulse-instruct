@@ -6,6 +6,7 @@ pub mod conv_reverb;
 mod dsp_util;
 pub mod fx;
 pub mod fx_extras;
+pub mod fx_freq_shift;
 pub mod fx_math;
 pub mod fx_sidechain;
 mod fx_step;
@@ -31,6 +32,7 @@ use dsp_util::*;
 pub use dsp_util::{TuningSystem, hz_to_midi, midi_to_hz, midi_to_hz_tuned};
 use fx::*;
 use fx_extras::*;
+use fx_freq_shift::FreqShift;
 use fx_math::{
     free_eg_value_at, gated_reverb_envelope_step, lfo_value_at, sidechain_duck,
     sidechain_envelope_step,
@@ -120,6 +122,7 @@ pub struct DspState {
     freeze: Freeze,
     gate: Gate,
     vocoder: Vocoder,
+    freq_shift: FreqShift,
     bitcrush_held: f32,
     bitcrush_counter: u32,
     // FX state
@@ -263,6 +266,7 @@ impl DspState {
             freeze: Freeze::new(),
             gate: Gate::new(),
             vocoder: Vocoder::new(sample_rate),
+            freq_shift: FreqShift::new(),
             compressor: Compressor::new(),
             tape_sat: TapeSat::new(),
             autotune: Autotune::new(),

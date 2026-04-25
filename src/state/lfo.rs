@@ -194,6 +194,10 @@ pub enum LfoTarget {
     WidenHaas,
     WidenSide,
     WidenMix,
+    // FX: Frequency shifter (Hilbert SSB)
+    FreqShiftAmount,
+    FreqShiftFeedback,
+    FreqShiftMix,
     // FX: Tape Sat
     TapeDrive,
     TapeMix,

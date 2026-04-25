@@ -143,6 +143,9 @@ pub fn apply_mod_target(p: &mut AudioParams, target: u8, mod_val: f32) {
         119 => p.widen_haas = (p.widen_haas + mod_val).clamp(0.0, 1.0),
         120 => p.widen_side = (p.widen_side + mod_val).clamp(0.0, 1.0),
         121 => p.widen_mix = (p.widen_mix + mod_val).clamp(0.0, 1.0),
+        122 => p.freq_shift_amount = (p.freq_shift_amount + mod_val * 0.5).clamp(0.0, 1.0),
+        123 => p.freq_shift_feedback = (p.freq_shift_feedback + mod_val * 0.5).clamp(0.0, 1.0),
+        124 => p.freq_shift_mix = (p.freq_shift_mix + mod_val).clamp(0.0, 1.0),
         _ => {}
     }
 }

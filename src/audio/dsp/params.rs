@@ -213,6 +213,9 @@ pub fn lfo_target_to_u8(t: LfoTarget) -> u8 {
         WidenHaas => 119,
         WidenSide => 120,
         WidenMix => 121,
+        FreqShiftAmount => 122,
+        FreqShiftFeedback => 123,
+        FreqShiftMix => 124,
     }
 }
 
@@ -530,6 +533,10 @@ pub struct AudioParams {
     pub widen_haas: f32,
     pub widen_side: f32,
     pub widen_mix: f32,
+    // Frequency shifter (Hilbert SSB)
+    pub freq_shift_amount: f32,
+    pub freq_shift_feedback: f32,
+    pub freq_shift_mix: f32,
     /// Mid/side mode flag for `FxParamEq` — see `FxState.param_eq_ms_mode`.
     pub param_eq_ms_mode: bool,
     // Convolution reverb

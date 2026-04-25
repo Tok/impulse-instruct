@@ -96,6 +96,11 @@ pub fn mod_inputs(kind: ModuleKind) -> &'static [ModInput] {
         FxTapeSat => &[Fixed(TapeDrive), Fixed(TapeMix), Fixed(TapeFlutter)],
         FxAutotune => &[Fixed(AutotuneAmount), Fixed(AutotuneMix)],
         FxWiden => &[Fixed(WidenHaas), Fixed(WidenSide), Fixed(WidenMix)],
+        FxFreqShift => &[
+            Fixed(FreqShiftAmount),
+            Fixed(FreqShiftFeedback),
+            Fixed(FreqShiftMix),
+        ],
         // ── FX >3 knobs → 3 selectors ──────────────────────────────────────
         FxReverb | FxDelay | FxCompressor | FxPan | FxConvReverb | FxParamEq | FxPitchShift => {
             &[Selector, Selector, Selector]
@@ -237,6 +242,9 @@ pub fn lfo_target_short_label(target: LfoTarget) -> &'static str {
         WidenHaas => "WD.HS",
         WidenSide => "WD.SD",
         WidenMix => "WD.MX",
+        FreqShiftAmount => "FS.AM",
+        FreqShiftFeedback => "FS.FB",
+        FreqShiftMix => "FS.MX",
         TapeDrive => "TP.DR",
         TapeMix => "TP.MX",
         TapeFlutter => "TP.FL",
@@ -299,6 +307,7 @@ pub(crate) fn lfo_target_module_kind(target: LfoTarget) -> Option<ModuleKind> {
         GateThreshold | GateAttack | GateRelease | GateDepth | GateMix => Some(ModuleKind::FxGate),
         VocoderBands | VocoderCarrierMix | VocoderSense | VocoderMix => Some(ModuleKind::FxVocoder),
         WidenHaas | WidenSide | WidenMix => Some(ModuleKind::FxWiden),
+        FreqShiftAmount | FreqShiftFeedback | FreqShiftMix => Some(ModuleKind::FxFreqShift),
         TapeDrive | TapeMix | TapeFlutter => Some(ModuleKind::FxTapeSat),
         AutotuneAmount | AutotuneMix => Some(ModuleKind::FxAutotune),
         GabberKickPitch | GabberKickDecay | GabberKickClip | GabberKickPan => {
@@ -426,6 +435,9 @@ pub fn parse_lfo_target(name: &str) -> Option<LfoTarget> {
         "widenhaas" => WidenHaas,
         "widenside" => WidenSide,
         "widenmix" => WidenMix,
+        "freqshiftamount" | "freqshift" => FreqShiftAmount,
+        "freqshiftfeedback" => FreqShiftFeedback,
+        "freqshiftmix" => FreqShiftMix,
         "tapedrive" => TapeDrive,
         "tapemix" => TapeMix,
         "tapeflutter" => TapeFlutter,

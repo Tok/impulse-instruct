@@ -46,6 +46,7 @@ mod fx_step_idx_tests {
             FxStep::Gate,
             FxStep::Vocoder,
             FxStep::Widen,
+            FxStep::FreqShift,
         ];
         assert_eq!(variants.len(), FX_STEP_COUNT);
         let mut seen = [false; FX_STEP_COUNT];

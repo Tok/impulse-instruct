@@ -177,6 +177,9 @@ impl AudioParams {
             widen_haas: s.fx.widen_haas.clamp(0.0, 1.0),
             widen_side: s.fx.widen_side.clamp(0.0, 1.0),
             widen_mix: s.fx.widen_mix.clamp(0.0, 1.0),
+            freq_shift_amount: s.fx.freq_shift_amount.clamp(0.0, 1.0),
+            freq_shift_feedback: s.fx.freq_shift_feedback.clamp(0.0, 1.0),
+            freq_shift_mix: s.fx.freq_shift_mix.clamp(0.0, 1.0),
             param_eq_ms_mode: s.fx.param_eq_ms_mode,
             conv_reverb_mix: s.fx.conv_reverb_mix.clamp(0.0, 1.0),
             // Cabinet mode caps the IR length at 10 % of the loaded

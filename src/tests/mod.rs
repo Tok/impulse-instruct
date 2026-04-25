@@ -24,6 +24,7 @@ mod dsp_voice_extra_tests;
 mod dsp_voice_primitives_tests;
 mod enum_method_tests;
 mod few_shot_tests;
+mod fx_freq_shift_tests;
 mod fx_math_tests;
 mod fx_plan_tests;
 mod fx_sidechain_tests;

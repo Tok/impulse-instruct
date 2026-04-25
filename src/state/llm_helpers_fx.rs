@@ -236,6 +236,17 @@ pub(super) fn apply_fx_update(
     u!(s.fx.widen_haas, "widen_haas", "fx.widen_haas");
     u!(s.fx.widen_side, "widen_side", "fx.widen_side");
     u!(s.fx.widen_mix, "widen_mix", "fx.widen_mix");
+    u!(
+        s.fx.freq_shift_amount,
+        "freq_shift_amount",
+        "fx.freq_shift_amount"
+    );
+    u!(
+        s.fx.freq_shift_feedback,
+        "freq_shift_feedback",
+        "fx.freq_shift_feedback"
+    );
+    u!(s.fx.freq_shift_mix, "freq_shift_mix", "fx.freq_shift_mix");
     if !locked.contains("fx.param_eq_ms_mode")
         && let Some(v) = fx.get("param_eq_ms_mode").and_then(|v| v.as_bool())
     {
@@ -458,6 +469,13 @@ pub(super) fn apply_fx_update(
             1.0,
         ),
         ("widen_xy", "widen_haas", "widen_side", 0.0, 1.0),
+        (
+            "freq_shift_xy",
+            "freq_shift_amount",
+            "freq_shift_feedback",
+            0.0,
+            1.0,
+        ),
     ];
     for (xy_key, field_a, field_b, min, max) in XY_PAIRS {
         let Some(arr) = fx.get(*xy_key).and_then(|v| v.as_array()) else {
@@ -571,6 +589,9 @@ fn fx_field_mut<'a>(fx: &'a mut super::FxState, key: &str) -> Option<&'a mut f32
         "widen_haas" => &mut fx.widen_haas,
         "widen_side" => &mut fx.widen_side,
         "widen_mix" => &mut fx.widen_mix,
+        "freq_shift_amount" => &mut fx.freq_shift_amount,
+        "freq_shift_feedback" => &mut fx.freq_shift_feedback,
+        "freq_shift_mix" => &mut fx.freq_shift_mix,
         "tape_drive" => &mut fx.tape_drive,
         "tape_mix" => &mut fx.tape_mix,
         "tape_flutter" => &mut fx.tape_flutter,

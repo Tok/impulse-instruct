@@ -80,6 +80,14 @@ pub enum ModuleKind {
     FxConvReverb,
     FxParamEq,
     FxPitchShift,
+    /// Single-sideband frequency shifter (Hilbert-pair allpass
+    /// cascade + complex-multiplied carrier).  Distinct from
+    /// `FxPitchShift` (which preserves harmonic ratios): adds the
+    /// same Hz to every component, so harmonics become inharmonic
+    /// and timbres turn metallic / bell-like.  Tier 1 carved-out
+    /// from the original sidechain batch — the Hilbert design is
+    /// subtle enough to deserve its own slot.
+    FxFreqShift,
     // ── Analysis ──────────────────────────────────────────────────────────────
     SpectrumAnalyzer,
     StereoMeter,
@@ -187,6 +195,7 @@ impl ModuleKind {
             Self::FxConvReverb => "CONV REV",
             Self::FxParamEq => "PARAM EQ",
             Self::FxPitchShift => "PITCH",
+            Self::FxFreqShift => "FREQSHIFT",
             Self::SpectrumAnalyzer => "SPECTRUM",
             Self::StereoMeter => "STEREO METER",
             Self::ActivityTimeline => "TIMELINE",
@@ -292,6 +301,9 @@ impl ModuleKind {
             // PitchShift — SHIFT / MIX / FBK on row 1, FINE on row 2
             // so the semitone knob doesn't crowd the cents readout.
             Self::FxPitchShift => (2, 2),
+            // FreqShift — 3 knobs (shift, feedback, mix) so 2x2 fits
+            // them in a 2-row card matching the other Tier-1 FX.
+            Self::FxFreqShift => (2, 2),
             // Flanger — 4 knobs (rate / depth / feedback / mix) is one
             // more than the phaser bundle, so it gets a 2×2 footprint
             // like the delay rather than the 2×1 used by the smaller FX.
@@ -382,6 +394,7 @@ impl ModuleKind {
             | Self::FxConvReverb
             | Self::FxParamEq
             | Self::FxPitchShift
+            | Self::FxFreqShift
             | Self::SpectrumAnalyzer
             | Self::StereoMeter
             | Self::ActivityTimeline
@@ -449,6 +462,7 @@ impl ModuleKind {
                 | Self::FxConvReverb
                 | Self::FxParamEq
                 | Self::FxPitchShift
+                | Self::FxFreqShift
         )
     }
 
@@ -498,6 +512,7 @@ impl ModuleKind {
                 | Self::FxWiden
                 | Self::FxConvReverb
                 | Self::FxPitchShift
+                | Self::FxFreqShift
         )
     }
 
@@ -536,6 +551,7 @@ impl ModuleKind {
                 | Self::FxConvReverb
                 | Self::FxParamEq
                 | Self::FxPitchShift
+                | Self::FxFreqShift
                 | Self::LfoModule
                 | Self::LlmAgent
         )

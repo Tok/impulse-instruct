@@ -239,6 +239,11 @@ fn mentions_fx(lower: &str) -> bool {
         "mid/side",
         "mid-side",
         "ms eq",
+        "freqshift",
+        "freq shift",
+        "frequency shift",
+        "ssb",
+        "bode",
     ];
     FX_WORDS.iter().any(|w| lower.contains(w))
 }

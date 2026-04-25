@@ -47,7 +47,8 @@ pub(super) fn try_draw_fx_extras_content(
         | ModuleKind::FxFreeze
         | ModuleKind::FxGate
         | ModuleKind::FxVocoder
-        | ModuleKind::FxWiden => {}
+        | ModuleKind::FxWiden
+        | ModuleKind::FxFreqShift => {}
         _ => return None,
     }
 
@@ -570,6 +571,46 @@ pub(super) fn try_draw_fx_extras_content(
                 s.fx.gate_release = rl;
                 s.fx.gate_depth = dp;
                 s.fx.gate_mix = m;
+            }
+        }
+        ModuleKind::FxFreqShift => {
+            let (mut a, mut f, mut m) = {
+                let st = app.state.read();
+                (
+                    st.fx.freq_shift_amount,
+                    st.fx.freq_shift_feedback,
+                    st.fx.freq_shift_mix,
+                )
+            };
+            hk!(
+                ui,
+                ("SHIFT", &mut a, pm("fx.freq_shift_amount")),
+                ("FBK", &mut f, pm("fx.freq_shift_feedback"))
+            );
+            hk!(ui, ("MIX", &mut m, pm("fx.freq_shift_mix")));
+            if pad_expanded {
+                ui.add_space(PAD_SECTION_TOP_GAP);
+                let (vc, _) = render_three_pad(
+                    ui,
+                    &format!("freq_shift_xy_{module_id}"),
+                    ["SHIFT", "FBK", "MIX"],
+                    &mut pad_pair,
+                    (&mut a, &mut f, &mut m),
+                    [
+                        user_owned("fx.freq_shift_amount"),
+                        user_owned("fx.freq_shift_feedback"),
+                        user_owned("fx.freq_shift_mix"),
+                    ],
+                );
+                if vc {
+                    changed = true;
+                }
+            }
+            if changed || a != app.state.read().fx.freq_shift_amount {
+                let mut st = app.state.write();
+                st.fx.freq_shift_amount = a;
+                st.fx.freq_shift_feedback = f;
+                st.fx.freq_shift_mix = m;
             }
         }
         ModuleKind::FxWiden => {

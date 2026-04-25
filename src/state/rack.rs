@@ -296,6 +296,7 @@ impl RackState {
                 | ModuleKind::FxAutotune
                 | ModuleKind::FxPan
                 | ModuleKind::FxWiden
+                | ModuleKind::FxFreqShift
         );
         if !has_audio_out {
             return true;
@@ -528,6 +529,8 @@ impl RackState {
                 ModuleKind::FxParamEq => 38,
                 // PitchShift next to Autotune (both are pitch-domain FX).
                 ModuleKind::FxPitchShift => 39,
+                // FreqShift sits next to PitchShift — both pitch-domain.
+                ModuleKind::FxFreqShift => 39,
                 ModuleKind::SpectrumAnalyzer => 32,
                 ModuleKind::StereoMeter => 33,
                 ModuleKind::ActivityTimeline => 34,

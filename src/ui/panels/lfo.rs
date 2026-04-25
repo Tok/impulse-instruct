@@ -45,6 +45,8 @@ const TARGET_LABELS: &[(&str, LfoTarget)] = &[
     ("WIDEN.HAAS", LfoTarget::WidenHaas),
     ("WIDEN.SIDE", LfoTarget::WidenSide),
     ("WIDEN.MIX", LfoTarget::WidenMix),
+    ("FREQSH.AMT", LfoTarget::FreqShiftAmount),
+    ("FREQSH.FBK", LfoTarget::FreqShiftFeedback),
     ("DRIVE", LfoTarget::DistortionDrive),
     ("MASTER", LfoTarget::MasterVolume),
     ("AN1X.CUTOFF", LfoTarget::An1xCutoff),

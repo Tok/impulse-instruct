@@ -129,6 +129,9 @@ const ALL_TARGETS: &[LfoTarget] = &[
     LfoTarget::WidenHaas,
     LfoTarget::WidenSide,
     LfoTarget::WidenMix,
+    LfoTarget::FreqShiftAmount,
+    LfoTarget::FreqShiftFeedback,
+    LfoTarget::FreqShiftMix,
     LfoTarget::TapeDrive,
     LfoTarget::TapeMix,
     LfoTarget::TapeFlutter,
@@ -230,6 +233,7 @@ pub fn has_audio_in(kind: ModuleKind) -> bool {
             | FxDrive
             | FxAutotune
             | FxWiden
+            | FxFreqShift
             | MasterOutput
     )
 }
