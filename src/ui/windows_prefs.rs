@@ -461,6 +461,49 @@ impl ImpulseApp {
                             if minimap != prefs.show_rack_minimap {
                                 self.state.write().ui_prefs.show_rack_minimap = minimap;
                             }
+
+                            // ── Ableton Link ─────────────────────────
+                            ui.add_space(8.0);
+                            ui.separator();
+                            ui.add_space(4.0);
+                            ui.label(
+                                egui::RichText::new("ABLETON LINK")
+                                    .monospace()
+                                    .size(9.5)
+                                    .color(theme::ASH),
+                            );
+                            ui.add_space(2.0);
+                            let supported = crate::sync::LinkSync::is_supported();
+                            if supported {
+                                let link_on = viz_toggle(
+                                    ui,
+                                    "Network tempo sync",
+                                    prefs.link_enabled,
+                                );
+                                if link_on != prefs.link_enabled {
+                                    self.state.write().ui_prefs.link_enabled = link_on;
+                                }
+                                let peers = self.link_sync.num_peers();
+                                ui.label(
+                                    egui::RichText::new(format!(
+                                        "{} peer{} connected",
+                                        peers,
+                                        if peers == 1 { "" } else { "s" },
+                                    ))
+                                    .monospace()
+                                    .size(8.5)
+                                    .color(theme::FOG),
+                                );
+                            } else {
+                                ui.label(
+                                    egui::RichText::new(
+                                        "Unavailable — rebuild with `cargo build --features link`",
+                                    )
+                                    .monospace()
+                                    .size(8.5)
+                                    .color(theme::PIT),
+                                );
+                            }
                         }
                     }
 

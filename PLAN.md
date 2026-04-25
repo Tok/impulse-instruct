@@ -398,9 +398,15 @@ sequencer / MIDI note. Fills the gap between existing modules:
 
 ## Integration
 
-- [ ] **Ableton Link tempo sync** - bidirectional BPM + bar-phase
-  sync via the `ableton_link` crate.  Useful for jamming alongside
-  Live / Ableton Push or another synth setup.
+- [x] **Ableton Link tempo sync** — bidirectional BPM sync shipped
+  via the `link` cargo feature (default off).  When enabled,
+  `cargo build --features link` pulls in `rusty_link` and the app
+  joins the local-network Link session: peers see our BPM and we
+  follow theirs.  UI toggle in Preferences → Display shows
+  "Unavailable" when the feature is off so default builds without
+  cmake / a C++ toolchain stay unblocked.  Bar-phase alignment
+  (snap our sequencer step counter to Link's quantum) is the
+  follow-up — needs threading through the sequencer clock advance.
 
 ## Agent tooling - gradual control & expressiveness
 

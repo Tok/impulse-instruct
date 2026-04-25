@@ -23,6 +23,7 @@ pub mod music_api;
 pub mod osc;
 pub mod sequencer;
 pub mod state;
+pub mod sync;
 pub mod sysinfo;
 #[cfg(test)]
 pub mod tests;

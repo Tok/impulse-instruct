@@ -62,6 +62,7 @@ impl eframe::App for ImpulseApp {
         self.drain_llm_outputs();
         self.drain_api_log();
         self.drain_midi_events();
+        self.tick_link_sync();
         // Poll API params_dirty flag — push audio params when API changed state
         if self
             .api_params_dirty

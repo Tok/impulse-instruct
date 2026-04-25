@@ -99,6 +99,12 @@ pub struct UiPrefs {
     /// default so the existing dot rendering stays the canonical view.
     #[serde(default)]
     pub stream_heatmap: bool,
+    /// Ableton Link participation toggle.  When true and the build has
+    /// the `link` cargo feature, the app joins the local-network Link
+    /// session on startup — peers see our BPM and we follow theirs.
+    /// Persisted so a Link-set user starts each session in sync.
+    #[serde(default)]
+    pub link_enabled: bool,
     /// When true, LLM responses auto-scroll to the affected module.
     /// Off by default — mainly useful for demo recordings.
     #[serde(default)]
@@ -230,6 +236,7 @@ impl Default for UiPrefs {
             stream_hz_scale: true,
             stream_ramps: true,
             stream_heatmap: false,
+            link_enabled: false,
             llm_auto_scroll: false,
             show_bar_oscilloscope: false,
             show_spectrum_bars: true,

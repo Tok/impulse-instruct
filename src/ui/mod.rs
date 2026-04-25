@@ -7,6 +7,7 @@ mod flip;
 pub mod fx_dir;
 pub(crate) mod header;
 pub(crate) mod header_menu;
+mod link_handler;
 mod llm_drain;
 mod llm_log_color;
 mod llm_strip;
@@ -272,6 +273,16 @@ pub struct ImpulseApp {
     /// loaded (single-WAV mode shows the waveform thumbnail instead).
     /// Cheap copy because each entry's `samples` is an `Arc`.
     pub(crate) sample_sfz_regions: Vec<crate::audio::dsp::sample_instrument::SfzRegionRuntime>,
+    /// Ableton Link bidirectional tempo sync.  Disabled by default;
+    /// the user toggles via Preferences → Sync.  When enabled +
+    /// built with the `link` feature, `update()` polls every frame
+    /// to keep `state.sequencer.bpm` aligned with the network and
+    /// pushes local edits back to peers.
+    pub(crate) link_sync: crate::sync::LinkSync,
+    /// Last BPM written to AppState by the Link pull — used to
+    /// distinguish "user edited bpm" (push to network) from "network
+    /// pulled the bpm" (don't push, would create a feedback loop).
+    pub(crate) last_link_bpm: f32,
     /// Min/max waveform thumbnail for the SampleInstrument's loaded
     /// single-WAV buffer.  Cached on path so the per-frame paint just
     /// reads the vec.  Empty / stale-path → rebuilt on next paint.
@@ -495,6 +506,8 @@ impl ImpulseApp {
             last_sample_instrument_path: String::new(),
             sample_sfz_regions: Vec::new(),
             sample_wave_cache: (String::new(), Vec::new()),
+            link_sync: crate::sync::LinkSync::new(120.0),
+            last_link_bpm: 0.0,
             neutts_online: false,
             granular_capture_rx: audio.granular_capture_rx,
             granular_tap: vec![0.0; crate::audio::SAMPLE_RATE_HZ as usize * 3], // 3s ring buffer

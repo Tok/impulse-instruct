@@ -65,10 +65,22 @@ env_logger = "0.11"
 thiserror = "1"
 rustfft = "6"
 
+# Ableton Link — optional, gated behind the `link` feature so default
+# builds skip the C++ toolchain dependency.  Build with
+# `cargo build --features link` (needs cmake + a C++ compiler).
+rusty_link = { version = "0.4", optional = true }
+
 [features]
 # Run LLM response suite against a real llama-server
 # ./run-llm-tests.sh   (or: cargo test --features llm-tests)
 llm-tests = []
+# Ableton Link bidirectional tempo + bar-phase sync.  Off by default
+# because the underlying `rusty_link` crate compiles a bundled C++
+# library via cmake — turn this on when you want network sync with
+# Live, LinkHut, or another impulse-instruct instance.  The UI toggle
+# stays visible either way; without the feature it shows
+# "Link unavailable (build with --features link)".
+link = ["dep:rusty_link"]
 
 [profile.release]
 opt-level = 3
