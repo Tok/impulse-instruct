@@ -68,6 +68,14 @@ pub struct Step {
     /// Ignored by purely synthesised drum voices.
     #[serde(default)]
     pub slice: u8,
+    /// Conditional trigger — fire only every Nth voice cycle.  Stored
+    /// as a 2-bit field: 0 = always fire (the default that keeps every
+    /// existing pattern unchanged), 1 = every 2nd cycle, 2 = every
+    /// 3rd, 3 = every 4th.  Inspired by Monome-style evolving
+    /// patterns where a conditional fill develops over multiple
+    /// passes through the same loop.
+    #[serde(default)]
+    pub cond: u8,
 }
 
 fn default_ratchet() -> u8 {
@@ -82,6 +90,7 @@ impl Default for Step {
             probability: 1.0,
             ratchet: 1,
             slice: 0,
+            cond: 0,
         }
     }
 }
@@ -108,6 +117,11 @@ pub struct TB303Step {
     /// Defaults to 0 so old patterns deserialize unchanged.
     #[serde(default)]
     pub pan: f32,
+    /// Conditional trigger — see `Step::cond` for the field meaning.
+    /// Lets melodic voices participate in the same Monome-style
+    /// every-Nth-cycle gating as drum hits.
+    #[serde(default)]
+    pub cond: u8,
 }
 
 /// Accept either a legacy `bool` (true→1.0, false→0.0) or a numeric
@@ -139,6 +153,7 @@ impl Default for TB303Step {
             slide: 0.0,
             gate: 0.5,
             pan: 0.0,
+            cond: 0,
         }
     }
 }

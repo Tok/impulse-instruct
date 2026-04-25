@@ -29,12 +29,15 @@ use crate::ui::theme;
 ///   `dot_color` inside the cell, above the dot. Ignored for drum rows.
 /// `size_px` comes from `UiPrefs.pad_size.px()`.
 /// `probability` — 0.0–1.0, shown as a dim ring when < 1.0 to indicate uncertainty.
+/// `cond` — 0=always; 1/2/3 fire every 2nd/3rd/4th cycle and render a small
+///   "2"/"3"/"4" digit in the top-left corner.
 pub fn step_button(
     ui: &mut Ui,
     active: bool,
     current: bool,
     vel: f32,
     probability: f32,
+    cond: u8,
     dot_color: Option<Color32>,
     note_label: Option<&str>,
     size_px: f32,
@@ -160,6 +163,26 @@ pub fn step_button(
                 // Dim LED — half-intensity so inactive steps still feel "on standby"
                 theme::led(&glow, dot_pos, dot_r, col, 0.45);
             }
+        }
+
+        // Cond marker: tiny digit in the top-left when this step fires
+        // every Nth cycle.  cond=1→"2", cond=2→"3", cond=3→"4".
+        if cond > 0 && size_px >= 18.0 {
+            let n = cond + 1;
+            let font_sz = (size_px * 0.26).clamp(8.0, 11.0);
+            let text_pos = Pos2::new(rect.min.x + font_sz * 0.55, rect.min.y + font_sz * 0.55);
+            let col = if active {
+                Color32::from_gray(210)
+            } else {
+                Color32::from_gray(120)
+            };
+            painter.text(
+                text_pos,
+                egui::Align2::CENTER_CENTER,
+                format!("{n}"),
+                egui::FontId::monospace(font_sz),
+                col,
+            );
         }
 
         // Current-step cursor: outer bloom glow + bright border + inner ring.

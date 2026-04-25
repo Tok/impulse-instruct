@@ -184,6 +184,24 @@ pub fn apply_llm_update(state: AppState, update: &serde_json::Value, scope: &[St
                         }
                     }
                 }
+                // bass_conds — per-step "fire only every Nth voice
+                // cycle" (0 = always, 1..=3 = every 2nd/3rd/4th).
+                // Stored as u8 so the array is JSON integers; we
+                // clamp to the 2-bit range and write into the step.
+                let cond_key = super::llm_apply_seq::bass_voice_field(voice_idx, "conds");
+                if !locked.contains(&format!("sequencer.{}", cond_key))
+                    && let Some(arr) = seq.get(&cond_key).and_then(|v| v.as_array())
+                    && let Some(pat) = s.sequencer.bass_patterns.get_mut(voice_idx)
+                {
+                    for (i, v) in arr.iter().enumerate().take(pat.len()) {
+                        if let Some(n) = v.as_u64() {
+                            pat[i].cond = (n as u8).min(3);
+                        }
+                    }
+                    if voice_idx == 0 {
+                        voice0_dirty = true;
+                    }
+                }
                 // Subset-of-active cleanup: when the same update rewrote
                 // `steps` for this voice, strip accent/slide flags from any
                 // step that is now inactive.  Mirrors the SUBSET RULE in
@@ -242,6 +260,40 @@ pub fn apply_llm_update(state: AppState, update: &serde_json::Value, scope: &[St
                         step.velocity = default_vel;
                     }
                 });
+            }
+        }
+
+        // Per-drum-voice conditional triggers.  Same naming as the
+        // step-array fields ("kick_a_conds", "snare_b_conds", …) so
+        // the LLM can sketch evolving fills with one extra array.
+        let drum_cond_fields: &[(&str, DrumVoice, bool)] = &[
+            ("kick_a_conds", DrumVoice::Kick808, true),
+            ("hihat_a_conds", DrumVoice::HihatClosed808, true),
+            ("snare_a_conds", DrumVoice::Snare808, true),
+            ("kick_b_conds", DrumVoice::Kick909, false),
+            ("snare_b_conds", DrumVoice::Snare909, false),
+            ("clap_b_conds", DrumVoice::Clap909, false),
+            ("hihat_b_conds", DrumVoice::HihatClosed909, false),
+        ];
+        for &(field, voice, is_kit_a) in drum_cond_fields {
+            let kit_ok = if is_kit_a {
+                seq_scope_flags.kit_a
+            } else {
+                seq_scope_flags.kit_b
+            };
+            if !kit_ok {
+                continue;
+            }
+            let lock_key = format!("sequencer.{}", field);
+            if !locked.contains(&lock_key)
+                && let Some(arr) = seq.get(field).and_then(|v| v.as_array())
+                && let Some(pattern) = s.sequencer.drum_patterns.get_mut(&voice)
+            {
+                for (i, val) in arr.iter().enumerate().take(pattern.len()) {
+                    if let Some(n) = val.as_u64() {
+                        pattern[i].cond = (n as u8).min(3);
+                    }
+                }
             }
         }
 

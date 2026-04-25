@@ -8,10 +8,6 @@ they ship and are reflected in `features.md`.
 
 ## Sequencer
 
-- [ ] **Conditional triggers** - per-step "fire only every Nth cycle"
-  flags (N = 2 / 3 / 4) for Monome-style evolving patterns.  Stored
-  as a 2-bit field per step; rendered as a small marker above the
-  step pad.
 - [ ] **Pattern morphing on chain advance** - smooth crossfade / step-
   by-step pattern swap instead of the current hard cut.  New
   `ChainSlotOverride::morph_bars` field (0 = hard cut, >0 = bars to

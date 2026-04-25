@@ -94,6 +94,7 @@ mod sequencer_tests {
             probability: 1.0,
             ratchet: 1,
             slice: 0,
+            cond: 0,
         };
 
         let sps = samples_per_step(120.0, 44100.0, 4) as usize;
@@ -135,6 +136,7 @@ mod sequencer_tests {
                 probability: 1.0,
                 ratchet: 1,
                 slice: 0,
+                cond: 0,
             };
         }
         seq.preecho.insert(
@@ -233,6 +235,7 @@ mod sequencer_tests {
                 slide: 0.0,
                 pan: 0.0,
                 gate: 0.5,
+                cond: 0,
             };
         }
         seq.preecho.insert(
@@ -348,6 +351,7 @@ mod sequencer_tests {
                 slide: 0.0,
                 pan: 0.0,
                 gate: 0.5,
+                cond: 0,
             };
         }
         seq.preecho.insert(
@@ -433,6 +437,7 @@ mod sequencer_tests {
                 slide: 0.0,
                 pan: 0.0,
                 gate: 0.5,
+                cond: 0,
             };
         }
         seq.preecho.insert(
@@ -514,6 +519,7 @@ mod sequencer_tests {
                 slide: 0.0,
                 pan: 0.0,
                 gate: 0.5,
+                cond: 0,
             };
         }
         seq.preecho.insert(
@@ -587,6 +593,7 @@ mod sequencer_tests {
                 slide: 0.0,
                 pan: 0.0,
                 gate: 0.5,
+                cond: 0,
             };
         }
         seq.preecho.insert(
@@ -645,6 +652,7 @@ mod sequencer_tests {
             probability: 1.0,
             ratchet: 2,
             slice: 0,
+            cond: 0,
         };
 
         let sps = samples_per_step(120.0, 44100.0, 4);

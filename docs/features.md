@@ -4,6 +4,28 @@ A detailed log of what's built.
 
 ---
 
+### Conditional triggers — per-step every-Nth-cycle gating
+
+- New `cond: u8` field on `Step` and `TB303Step` (2-bit semantic:
+  0 = always, 1/2/3 fire every 2nd / 3rd / 4th voice cycle).  The
+  cycle index is `step / voice_steps` so each voice keeps its own
+  loop count even under polymeter.
+- DSP gate lives in `cond_gate(voice_cycle, cond)` in
+  `src/sequencer/mod.rs` and is wired into all six trigger emitters
+  (drum, bass, hoover, an1x, pluck, wavetable) — a step that fails
+  the cond is skipped entirely (no probability roll, no event).
+- LLM schema/apply: `bass_conds` / `bass2..4_conds` and
+  `kick_a/b_conds`, `snare_a/b_conds`, `hat_c_conds`,
+  `hat_o_conds`, `clap_conds`.  Same compact array format as
+  accents/slides; clamped 0–3.
+- Step button paints a tiny digit ("2" / "3" / "4") in the
+  top-left corner when `cond > 0`, dimmer when the step is
+  inactive.  Read-only for v1 — users author cond patterns via
+  the LLM, click-to-cycle UI is a follow-up.
+- 8 cond tests lock purity, defaults, drum gating (cond=1 fires
+  2× over 4 cycles, cond=3 fires 3× over 12 cycles), bass gating,
+  and the apply-path round-trip.
+
 ### Per-step velocity curves — fractional bass accents
 
 - `TB303Step.accent` was always a `f32` and the LLM

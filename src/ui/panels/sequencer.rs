@@ -364,6 +364,7 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                             let is_current = abs == voice_cursor;
                             ui.add_enabled_ui(abs < voice_steps, |ui| {
                                 let note = step.map(|s| s.note).unwrap_or(36);
+                                let cond = step.map(|s| s.cond).unwrap_or(0);
                                 let note_col = if is_active {
                                     Some(theme::note_color(note))
                                 } else {
@@ -375,7 +376,8 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                                     None
                                 };
                                 if let Some(new_active) = widgets::step_button(
-                                    ui, is_active, is_current, 1.0, 1.0, note_col, label, pad_px,
+                                    ui, is_active, is_current, 1.0, 1.0, cond, note_col, label,
+                                    pad_px,
                                 ) {
                                     let s = app.state.read().clone();
                                     let cur_note = s
@@ -667,6 +669,7 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                         let is_current = abs == hoover_cursor;
                         ui.add_enabled_ui(abs < hoover_steps, |ui| {
                             let note = step.map(|s| s.note).unwrap_or(57);
+                            let cond = step.map(|s| s.cond).unwrap_or(0);
                             let note_col = if is_active {
                                 Some(theme::note_color(note))
                             } else {
@@ -678,7 +681,7 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                                 None
                             };
                             if let Some(new_active) = widgets::step_button(
-                                ui, is_active, is_current, 1.0, 1.0, note_col, label, pad_px,
+                                ui, is_active, is_current, 1.0, 1.0, cond, note_col, label, pad_px,
                             ) {
                                 let s = app.state.read().clone();
                                 let note = s
@@ -755,6 +758,7 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                         let is_current = abs == pluck_cursor;
                         ui.add_enabled_ui(abs < pluck_steps, |ui| {
                             let note = step.map(|s| s.note).unwrap_or(57);
+                            let cond = step.map(|s| s.cond).unwrap_or(0);
                             let note_col = if is_active {
                                 Some(theme::note_color(note))
                             } else {
@@ -766,7 +770,7 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                                 None
                             };
                             if let Some(new_active) = widgets::step_button(
-                                ui, is_active, is_current, 1.0, 1.0, note_col, label, pad_px,
+                                ui, is_active, is_current, 1.0, 1.0, cond, note_col, label, pad_px,
                             ) {
                                 let s = app.state.read().clone();
                                 let note = s
@@ -843,6 +847,7 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                         let is_current = abs == wavetable_cursor;
                         ui.add_enabled_ui(abs < wavetable_steps, |ui| {
                             let note = step.map(|s| s.note).unwrap_or(57);
+                            let cond = step.map(|s| s.cond).unwrap_or(0);
                             let note_col = if is_active {
                                 Some(theme::note_color(note))
                             } else {
@@ -854,7 +859,7 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                                 None
                             };
                             if let Some(new_active) = widgets::step_button(
-                                ui, is_active, is_current, 1.0, 1.0, note_col, label, pad_px,
+                                ui, is_active, is_current, 1.0, 1.0, cond, note_col, label, pad_px,
                             ) {
                                 let s = app.state.read().clone();
                                 let note = s
@@ -931,6 +936,7 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                         let is_current = abs == an1x_cursor;
                         ui.add_enabled_ui(abs < an1x_steps, |ui| {
                             let note = step.map(|s| s.note).unwrap_or(57);
+                            let cond = step.map(|s| s.cond).unwrap_or(0);
                             let note_col = if is_active {
                                 Some(theme::note_color(note))
                             } else {
@@ -942,7 +948,7 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                                 None
                             };
                             if let Some(new_active) = widgets::step_button(
-                                ui, is_active, is_current, 1.0, 1.0, note_col, label, pad_px,
+                                ui, is_active, is_current, 1.0, 1.0, cond, note_col, label, pad_px,
                             ) {
                                 let s = app.state.read().clone();
                                 let note = s

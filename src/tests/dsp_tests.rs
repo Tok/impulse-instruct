@@ -297,6 +297,7 @@ mod chain_preserve_non_bass_tests {
             slide: 0.0,
             gate: 0.5,
             pan: 0.0,
+            cond: 0,
         };
         s.pattern_bpm_apply = true;
         s.bpm = 180.0;
@@ -315,6 +316,7 @@ mod chain_preserve_non_bass_tests {
                 probability: 1.0,
                 ratchet: 1,
                 slice: 0,
+                cond: 0,
             };
             pat[4] = pat[0];
             pat[8] = pat[0];

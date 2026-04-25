@@ -547,6 +547,7 @@ fn export_import_round_trip_preserves_voice0_notes() {
             slide: 0.0,
             gate: 0.5,
             pan: 0.0,
+            cond: 0,
         };
     }
     // Hoover: single note to force a second exported track.
@@ -557,6 +558,7 @@ fn export_import_round_trip_preserves_voice0_notes() {
         slide: 0.0,
         gate: 0.5,
         pan: 0.0,
+        cond: 0,
     };
     seq.bass_steps = 16;
     seq.hoover_steps = 16;

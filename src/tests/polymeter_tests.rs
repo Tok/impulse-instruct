@@ -20,6 +20,7 @@ fn step_active(velocity: f32) -> Step {
         probability: 1.0,
         ratchet: 1,
         slice: 0,
+        cond: 0,
     }
 }
 
@@ -31,6 +32,7 @@ fn bass_step_active(note: u8) -> TB303Step {
         slide: 0.0,
         gate: 0.5,
         pan: 0.0,
+        cond: 0,
     }
 }
 

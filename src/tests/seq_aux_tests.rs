@@ -150,6 +150,7 @@ mod probability_tests {
                     probability: 1.0,
                     ratchet: 1,
                     slice: 0,
+                    cond: 0,
                 };
             }
             pattern[0] = Step {
@@ -158,6 +159,7 @@ mod probability_tests {
                 probability: prob,
                 ratchet: 1,
                 slice: 0,
+                cond: 0,
             };
         }
         seq
@@ -245,6 +247,7 @@ mod pattern_temperature_tests {
             slide: 0.0,
             gate,
             pan: 0.0,
+            cond: 0,
         }
     }
 

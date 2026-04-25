@@ -374,6 +374,7 @@ mod tests {
             probability: 1.0,
             ratchet: 1,
             slice: 0,
+            cond: 0,
         };
         let smf = export_sequencer_smf(&seq);
         // Expect at least one byte sequence of [0x99, 36, 127] (NoteOn ch10
@@ -394,6 +395,7 @@ mod tests {
             slide: 0.0,
             gate: 0.5,
             pan: 0.0,
+            cond: 0,
         };
         let smf = export_sequencer_smf(&seq);
         // Accent 0 → velocity 64.

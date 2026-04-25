@@ -16,6 +16,13 @@ pub fn param_json_schema() -> serde_json::Value {
         "items": { "type": "number", "minimum": 0.0, "maximum": 1.0 },
         "maxItems": 64
     });
+    // Conditional-trigger arrays: per-step "fire only every Nth voice
+    // cycle" — 0 = always, 1 = every 2nd, 2 = every 3rd, 3 = every 4th.
+    let cond_array = serde_json::json!({
+        "type": "array",
+        "items": { "type": "integer", "minimum": 0, "maximum": 3 },
+        "maxItems": 64
+    });
     serde_json::json!({
         "$schema": "http://json-schema.org/draft-07/schema",
         "type": "object",
@@ -98,28 +105,39 @@ pub fn param_json_schema() -> serde_json::Value {
                     "bass_accents":  intensity_array.clone(),
                     "bass_slides":   intensity_array.clone(),
                     "bass_pans":     pan_array.clone(),
+                    "bass_conds":    cond_array.clone(),
                     "bass2_steps":   bool_array.clone(),
                     "bass2_notes":   note_array.clone(),
                     "bass2_accents": intensity_array.clone(),
                     "bass2_slides":  intensity_array.clone(),
                     "bass2_pans":    pan_array.clone(),
+                    "bass2_conds":   cond_array.clone(),
                     "bass3_steps":   bool_array.clone(),
                     "bass3_notes":   note_array.clone(),
                     "bass3_accents": intensity_array.clone(),
                     "bass3_slides":  intensity_array.clone(),
                     "bass3_pans":    pan_array.clone(),
+                    "bass3_conds":   cond_array.clone(),
                     "bass4_steps":   bool_array.clone(),
                     "bass4_notes":   note_array,
                     "bass4_accents": intensity_array.clone(),
                     "bass4_slides":  intensity_array,
                     "bass4_pans":    pan_array,
+                    "bass4_conds":   cond_array.clone(),
                     "kick_a_steps":  bool_array.clone(),
+                    "kick_a_conds":  cond_array.clone(),
                     "snare_a_steps": bool_array.clone(),
+                    "snare_a_conds": cond_array.clone(),
                     "hihat_a_steps": bool_array.clone(),
+                    "hihat_a_conds": cond_array.clone(),
                     "kick_b_steps":  bool_array.clone(),
+                    "kick_b_conds":  cond_array.clone(),
                     "snare_b_steps": bool_array.clone(),
+                    "snare_b_conds": cond_array.clone(),
                     "clap_b_steps":  bool_array.clone(),
-                    "hihat_b_steps": bool_array
+                    "clap_b_conds":  cond_array.clone(),
+                    "hihat_b_steps": bool_array,
+                    "hihat_b_conds": cond_array
                 },
                 "additionalProperties": false
             },

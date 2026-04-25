@@ -325,7 +325,9 @@ pub fn advance_clock(
                     .map(|cfg| preecho::preecho_apply(vstep, voice_steps, cfg))
                     .unwrap_or(preecho::PreechoApply::IDENTITY);
 
+                let voice_cycle = step / voice_steps;
                 if s.active
+                    && cond_gate(voice_cycle, s.cond)
                     && prob_hit(
                         pre.probability_override.unwrap_or(s.probability),
                         vstep,
@@ -395,7 +397,7 @@ pub fn advance_clock(
                     .unwrap_or(&[])
             };
             let bs = pattern.get(bstep).copied().unwrap_or_default();
-            if bs.active {
+            if bs.active && cond_gate(step / vsteps, bs.cond) {
                 let gate_samples = (sps * bs.gate as f64) as u32;
                 gate_counters[vi] = gate_samples;
                 // Melodic preecho: when the "bass" voice has accent_ramp
@@ -439,7 +441,7 @@ pub fn advance_clock(
         // just like the bass path above.
         let hstep = step % seq.hoover_steps.max(1);
         let hs = seq.hoover_pattern.get(hstep).copied().unwrap_or_default();
-        if hs.active {
+        if hs.active && cond_gate(step / seq.hoover_steps.max(1), hs.cond) {
             let gate_samples = (sps * 0.75) as u32;
             gate_counter_hoover = gate_samples;
             let hsteps = seq.hoover_steps.max(1);
@@ -471,7 +473,7 @@ pub fn advance_clock(
         // AN1X trigger — independent step length, same preecho shape.
         let astep = step % seq.an1x_steps.max(1);
         let ax = seq.an1x_pattern.get(astep).copied().unwrap_or_default();
-        if ax.active {
+        if ax.active && cond_gate(step / seq.an1x_steps.max(1), ax.cond) {
             let gate_samples = (sps * ax.gate as f64) as u32;
             gate_counter_an1x = gate_samples;
             let asteps = seq.an1x_steps.max(1);
@@ -506,7 +508,7 @@ pub fn advance_clock(
         // through for future legato / freq-interp work.
         let pstep = step % seq.pluck_steps.max(1);
         let ps = seq.pluck_pattern.get(pstep).copied().unwrap_or_default();
-        if ps.active {
+        if ps.active && cond_gate(step / seq.pluck_steps.max(1), ps.cond) {
             let gate_samples = (sps * ps.gate as f64) as u32;
             gate_counter_pluck = gate_samples;
             let psteps = seq.pluck_steps.max(1);
@@ -543,7 +545,7 @@ pub fn advance_clock(
             .get(wstep)
             .copied()
             .unwrap_or_default();
-        if ws.active {
+        if ws.active && cond_gate(step / seq.wavetable_steps.max(1), ws.cond) {
             let gate_samples = (sps * ws.gate as f64) as u32;
             gate_counter_wavetable = gate_samples;
             let wsteps = seq.wavetable_steps.max(1);
@@ -589,6 +591,17 @@ pub fn advance_clock(
         ratchet_slice,
     };
     (new_clock, events)
+}
+
+/// Conditional-trigger gate — Monome-style "fire only every Nth voice
+/// cycle".  `cond` is the 2-bit value stored on the step (0 = always,
+/// 1 = every 2nd cycle, 2 = every 3rd, 3 = every 4th).  `voice_cycle`
+/// is `step / voice_steps`, so the gate is independent for each
+/// voice's natural cycle length and stays correct under polymeter.
+#[inline]
+pub(crate) fn cond_gate(voice_cycle: usize, cond: u8) -> bool {
+    let n = (cond as usize + 1).max(1);
+    voice_cycle.is_multiple_of(n)
 }
 
 /// Cheap deterministic probability gate — no allocation, no global state.

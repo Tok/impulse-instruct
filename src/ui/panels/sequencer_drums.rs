@@ -169,8 +169,9 @@ pub(super) fn draw_drum_rows(
                         let vel = pattern.get(i).map(|s| s.velocity).unwrap_or(0.0);
                         ui.add_enabled_ui(abs < voice_steps, |ui| {
                             let prob = pattern.get(i).map(|s| s.probability).unwrap_or(1.0);
+                            let cond = pattern.get(i).map(|s| s.cond).unwrap_or(0);
                             if let Some(new_active) = widgets::step_button(
-                                ui, is_active, is_current, vel, prob, None, None, pad_px,
+                                ui, is_active, is_current, vel, prob, cond, None, None, pad_px,
                             ) {
                                 // Remember intended state so only the last
                                 // paint-target per row toggles — matches v1
@@ -354,8 +355,9 @@ pub(super) fn draw_drum_rows(
                     let vel = pattern.get(i).map(|s| s.velocity).unwrap_or(0.0);
                     ui.add_enabled_ui(abs < voice_steps, |ui| {
                         let prob = pattern.get(i).map(|s| s.probability).unwrap_or(1.0);
+                        let cond = pattern.get(i).map(|s| s.cond).unwrap_or(0);
                         if let Some(new_active) = widgets::step_button(
-                            ui, is_active, is_current, vel, prob, None, None, pad_px,
+                            ui, is_active, is_current, vel, prob, cond, None, None, pad_px,
                         ) {
                             toggled = Some((abs, new_active));
                         }

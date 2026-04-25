@@ -396,6 +396,7 @@ FX (0.0–1.0 unless noted; at top level, never inside "sequencer"):
   fx.pitch_shift_{{semi (-24..+24 st, 0=bypass), fine (-100..+100 cents), mix, fbk}} — grain-based bidirectional pitch shift (harmonies, octave doubles).  Distinct from Autotune (upward snap-to-key).
   pluck.{{enabled, damping (decay length), brightness (output tone), volume, pan, pitch_offset_semi (-24..+24)}} — Karplus-Strong plucked-string voice.  Own sequencer lane: pluck.pluck_steps (bool array) + pluck.pluck_notes (MIDI note per step).
   bass.lfo_target ∈ {{off,pitch,pwm,cutoff,amp,pan}} + bass.lfo_phase 0..1 — per-voice LFO + phase offset.  Two voices targeting `pan` with phases 0 and 0.5 produce an anti-phase stereo sweep without any host automation.
+  *_conds (per-step int 0-3) — fire-only-every-Nth-cycle gates: 0=always, 1=every 2nd, 2=every 3rd, 3=every 4th.  Available for bass / bass2..4 / kick_a / snare_a / hihat_a / kick_b / snare_b / clap_b / hihat_b.  Use sparingly to evolve patterns over multiple bars without stacking accents.
   wavetable.{{enabled, position (0..1, frame scan), phase_offset, volume, pan, pitch_offset_semi}} — single-table wavetable voice (user-supplied .wav from samples/wavetables/).  Own sequencer lane: wavetable.wavetable_steps + wavetable.wavetable_notes.
   fx.ms_{{mid,side}}_{{gain, tilt, sat}} — mid/side master bus; 0.5 = unity on gain + tilt, 0 = off on sat.  Side gain below 0.5 narrows the stereo image; tilt toward treble widens the air.
   fx.delay_{{time (0=0s, 1=2s; 0.375≈dotted 8th @130), feedback, mix, wow_flutter, saturation}}

@@ -493,6 +493,7 @@ pub fn quantise_monophonic(
             slide: 0.0,
             gate,
             pan: 0.0,
+            cond: 0,
         };
     }
     out
