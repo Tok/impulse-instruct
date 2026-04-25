@@ -4,6 +4,66 @@ A detailed log of what's built.
 
 ---
 
+### Refactor + coverage pass — pure logic isolated from impure shells
+
+Session-long refactor following `docs/coding-guide.md`'s "pure
+functions for core logic" rule.  Lifted testable kernels out of
+the audio thread + UI dispatch shells, split files near the
+1000-line cap, and added 62 new unit tests.
+
+Pure helpers extracted (each one with a dedicated test module):
+
+- `state/chain_advance.rs` — `LoopBoundaryAction` enum +
+  `classify_loop_boundary()` + `build_advance_target()`.  Replaced
+  ~150 lines of inline decision tree in the audio thread; the
+  thread is now a thin dispatcher over the action.  17 tests cover
+  every classifier branch (empty / repeat / one-shot stop / loop
+  wrap / morph passthrough / BPM + style override precedence /
+  defaults / determinism).
+- `sequencer::step_count_delta(prev, curr) -> u64` — polymeter-
+  aware saturating diff.  Removed an inline wrap-fallback that had
+  silently dropped one slot per MAX_STEPS for any voice whose
+  length didn't divide it.  5 tests.
+- `TriggerEvent::is_gate_off(&self) -> bool` — gate-off classifier
+  for the StopAtEnd filter.  Extracting it caught a latent bug:
+  Pluck + Wavetable gate-offs were being dropped by the inline
+  filter.  Now they survive cleanly.  3 tests.
+- `midi::midi_clock_tick_interval_samples(bpm, sr)` —
+  `midi::is_valid_clock_interval(secs)` —
+  `midi::clock_interval_to_bpm(avg)` — three small MIDI clock
+  helpers.  Round-trip locked (142 BPM in → 142 BPM back through
+  both halves of the conversion).  11 tests covering boundary
+  values + divide-by-zero guard.
+- `ConversationMode::from_str_lossy(s) -> Self` — case-insensitive
+  parser, whitespace trim, unknown → Producer fallback.  3 tests.
+- `state::agent_matches_broadcast_scope(agent, scope) -> bool` +
+  `state::push_pending_hint(agent, hint)` + `HINT_QUEUE_MAX = 5` —
+  scope matcher (case-insensitive scope-list OR persona-name
+  fallback ONLY when scope is empty) plus the cap helper.  Locks
+  the "scoped agents don't fall through to persona match"
+  contract.  9 tests.
+- `StyleCatalog::resolve_style_id(query) -> Option<String>` —
+  exact id → ci id → ci display name → None.  Locks the "no
+  whitespace trim" contract.  7 tests.
+- `ui::util::zoom_step_from_delta(delta)` +
+  `next_module_scale(cur, step)` + `next_global_scale(cur, step)`
+  — three pure pieces of `detect_ctrl_zoom`.  Saturation at half
+  a notch's worth of zoom; module range 0.5..=2.0 / global
+  0.5..=3.0 (wider for chrome).  7 tests.
+
+Structural splits (no behaviour change):
+
+- `state/llm_helpers.rs` 995→607 by extracting `apply_fx_update`
+  (~390 lines) to a new `state/llm_helpers_fx.rs`.
+- `state/mod.rs` 981→793 by extracting `LlmAgentState` +
+  `AgentRole` + the agent-related constants to a new
+  `state/llm_agent_state.rs`.
+
+Test count: 1667 → 1729 (+62 across 7 new test modules).  Every
+commit clean clippy + fmt + 1000-line cap + pre-commit hooks.
+Largest source files now 996 (sequencer.rs UI), 924 (rack.rs),
+921 (llm/mod.rs) — all well under cap.
+
 ### MPE DSP integration — bend / pressure / timbre drive the bass voice
 
 Closes the loop on the MPE parser wiring.  `AppState.mpe` values now

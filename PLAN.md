@@ -33,10 +33,18 @@ they ship and are reflected in `features.md`.
 - [ ] **Glass group helpers** - `glass_label(ui, text)` still to do
   (the inline pattern varies too much across panels for a single
   helper).
-- [ ] **Large-file splits (remaining)** - top remaining file now is
-  `src/llm/pipeline.rs` (938 lines), followed by `src/llm/mod.rs`
-  (914) and `src/state/rack.rs` (897).  None over cap, but worth
-  watching on the next feature round.
+- [ ] **Large-file splits (remaining)** - top remaining files (none
+  over cap, all just for the watch list):
+  `src/ui/panels/sequencer.rs` (996), `src/state/rack.rs` (924),
+  `src/llm/mod.rs` (921), `src/state/transitions.rs` (915),
+  `src/llm/lanes.rs` (901), `src/audio/dsp/mod.rs` (898).  The
+  sequencer panel is UI and hard to split cleanly; rack.rs is
+  intentionally object-oriented (RackState owns its own coherence
+  invariants); llm/mod.rs is one big run_llm_loop with thread
+  plumbing.  The candidates with the cleanest split are
+  `state/transitions.rs` (could group song-mode helpers + bank /
+  chain into a sibling) and `audio/dsp/mod.rs` (DspState process
+  block could split per-voice mix branches).
 
 ## Demo recording
 
