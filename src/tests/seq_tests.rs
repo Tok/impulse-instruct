@@ -52,9 +52,13 @@ mod sequencer_tests {
     }
 
     #[test]
-    fn advance_clock_wraps_at_max_steps() {
-        // current_step is a global tick counter that wraps at MAX_STEPS (64).
-        // Per-voice lengths are applied as modulo at trigger time.
+    fn advance_clock_does_not_wrap_at_max_steps() {
+        // Polymeter: the global tick counter no longer wraps at
+        // MAX_STEPS so voices whose length doesn't divide MAX_STEPS
+        // (e.g. a 5-step bass against a 16-step drum kit) keep
+        // phasing cleanly across the boundary instead of skipping
+        // a step on every wrap.  Voice indexing applies its own
+        // modulo, so this is purely a fix for the global counter.
         let seq = SequencerState {
             running: true,
             bpm: 120.0,
@@ -69,8 +73,8 @@ mod sequencer_tests {
 
         let (new_clock, _) = advance_clock(clock, &seq, sps + 1, 44100.0);
         assert_eq!(
-            new_clock.current_step, 0,
-            "should wrap from MAX_STEPS-1 to 0"
+            new_clock.current_step, MAX_STEPS,
+            "step should advance past MAX_STEPS without wrapping",
         );
     }
 

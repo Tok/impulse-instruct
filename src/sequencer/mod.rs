@@ -254,12 +254,24 @@ pub fn advance_clock(
             break;
         }
         acc -= step_sps;
-        let prev_step = step;
-        // Advance the global tick counter, wrapping at MAX_STEPS.
-        // Each voice uses `step % voice_steps` to index its own pattern.
-        step = (step + 1) % crate::state::MAX_STEPS;
-        if step < prev_step {
-            loop_count = loop_count.wrapping_add(1);
+        // Advance the global tick counter without wrapping.  Voice
+        // indexing uses `step % voice_steps` so any voice length is
+        // honoured cleanly — wrapping at MAX_STEPS used to skip a
+        // step when `MAX_STEPS % voice_steps != 0` (e.g. a 5-step
+        // bass against the 64-cap dropped one slot every 64 ticks).
+        // `usize` on 64-bit holds ~18 quintillion ticks; even at a
+        // hot 16 steps/sec this overflows after centuries of
+        // continuous play, so a deliberate wrap is unnecessary.
+        step += 1;
+        // Loop count derives from the global cycle length; chain
+        // advancement + probability-RNG seeds use this to detect
+        // pattern boundaries.  Computing it here (rather than
+        // tracking a hand-incremented counter) makes the value
+        // robust against polymetric voice lengths that don't divide
+        // `seq.steps`.
+        let new_loop_count = (step / seq.steps.max(1)) as u32;
+        if new_loop_count != loop_count {
+            loop_count = new_loop_count;
         }
 
         // Drum triggers — each voice uses its own step length for polyrhythm.

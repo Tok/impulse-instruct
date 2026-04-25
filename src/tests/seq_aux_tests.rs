@@ -132,6 +132,9 @@ mod probability_tests {
 
     /// Build a sequencer with only step 0 of Kick808 active, all other kick steps cleared.
     /// The 16-step pattern cycles 4× per global 64-step loop, so step 0 visits 4 times per loop.
+    /// Build a sequencer with only step 0 of Kick808 active.  Default
+    /// drum_steps for kick808 is 32 ticks, default seq.steps is 32 →
+    /// step 0 visits exactly once per `loop_count` increment.
     fn seq_with_single_kick(prob: f32) -> SequencerState {
         let mut seq = SequencerState {
             running: true,
@@ -197,11 +200,12 @@ mod probability_tests {
 
     #[test]
     fn probability_one_fires_every_visit() {
-        // prob=1.0 — step 0 of a 32-step pattern in a 64-step global loop fires 2×/loop
+        // prob=1.0 — under the polymeter loop_count semantic, one
+        // loop = `seq.steps` ticks (32 by default), and step 0 of
+        // the 32-step kick pattern fires once per loop.
         let loops: u32 = 20;
         let count = kick808_count_over_loops(1.0, loops);
-        // 32-step pattern, 64 global steps per loop → 2 visits to step 0 per loop
-        let expected = loops as usize * 2;
+        let expected = loops as usize;
         assert_eq!(
             count, expected,
             "prob=1.0 over {} loops: expected {}, got {}",
@@ -211,12 +215,12 @@ mod probability_tests {
 
     #[test]
     fn probability_half_fires_roughly_half_the_visits() {
-        // Deterministic hash — prob=0.5 over 100 loops × 2 visits = 200 opportunities
-        // Expect roughly 100 ± wide margin (50–150)
+        // Deterministic hash — prob=0.5 over 100 loops × 1 visit/loop
+        // = 100 opportunities.  Expect ~50 ± wide margin.
         let count = kick808_count_over_loops(0.5, 100);
         assert!(
-            (50..=150).contains(&count),
-            "prob=0.5 over 100 loops: expected ~100, got {}",
+            (25..=75).contains(&count),
+            "prob=0.5 over 100 loops: expected ~50, got {}",
             count
         );
     }

@@ -329,14 +329,15 @@ impl AudioEngine {
                         // showed up as a per-pattern jitter on the playhead.
                         let prev_step = s.sequencer.current_step;
                         let curr_step = clock.current_step;
-                        if curr_step != prev_step {
-                            let delta = if curr_step >= prev_step {
-                                (curr_step - prev_step) as u64
-                            } else {
-                                // Wrapped at MAX_STEPS (e.g. 63 → 0).
-                                (crate::state::MAX_STEPS - prev_step + curr_step) as u64
-                            };
-                            s.global_step_count += delta;
+                        if curr_step > prev_step {
+                            // Polymeter fix: the global tick no longer
+                            // wraps at MAX_STEPS, so the delta is the
+                            // straight difference.  Older builds had
+                            // a wrap-fallback branch — superfluous
+                            // now and a footgun on session restore
+                            // since the saved current_step can be
+                            // arbitrarily large.
+                            s.global_step_count += (curr_step - prev_step) as u64;
                         }
                         s.sequencer.current_step = clock.current_step;
                         if clock.loop_count != prev_loop_count
