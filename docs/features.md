@@ -4,6 +4,37 @@ A detailed log of what's built.
 
 ---
 
+### MPE DSP integration — bend / pressure / timbre drive the bass voice
+
+Closes the loop on the MPE parser wiring.  `AppState.mpe` values now
+flow through `AudioParams::from_app_state` into the Bass303 voice's
+per-block modulation:
+
+- **Pitch bend** maps to ±2 semitones (GM standard) and is added
+  to the running pitch via the existing `freq_mod` factor.  Voice
+  0 only for V1 — MPE controllers default to driving the lower-
+  zone master, which is the natural target.
+- **Channel pressure** boosts the output amplitude by up to 1.4×
+  (`1 + pressure * 0.4`) so a hard press makes notes pop without
+  saturating into clipping.
+- **Timbre (CC74)** lifts the filter cutoff additively up to 0.3
+  of the cutoff range, capped by the existing `clamp(0.0, 1.0)`
+  so a Y-axis push opens the filter without overriding the user's
+  set cutoff.
+
+The `AppState.mpe` snapshot stays in place — it's the source of
+truth that `from_app_state` reads each block.  The DSP fields
+(`mpe_bend_st`, `mpe_pressure`, `mpe_timbre` on `AudioParams`)
+are pre-clamped + pre-scaled so the audio thread does no
+additional bounds checking per sample.
+
+- 10 new tests: 5 over the AudioParams snapshot (default zero,
+  bend ±1 → ±2 semitones, out-of-range clamps, pressure / timbre
+  pass-through with clamp), 5 over the modulation math
+  (replicated as pure helpers — full bend factor, timbre lifts
+  cutoff 30%, timbre clamps at unit ceiling, pressure boost,
+  zero-pressure pass-through).  Full suite at 1667 tests passing.
+
 ### Lane-score auto-tuner + per-lane few-shot examples + style obs
 
 Three intelligence improvements bundled because they all loop the

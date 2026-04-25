@@ -187,6 +187,12 @@ impl AudioParams {
             mod_routes,
             mod_route_count,
             sequencer_running: s.sequencer.running,
+            // MPE expression — bend folded as ±2 semitones (GM
+            // standard); pressure / timbre carried as 0..=1 for the
+            // bass voice's per-block additive modulation.
+            mpe_bend_st: s.mpe.pitch_bend.clamp(-1.0, 1.0) * 2.0,
+            mpe_pressure: s.mpe.pressure.clamp(0.0, 1.0),
+            mpe_timbre: s.mpe.timbre.clamp(0.0, 1.0),
             lfo_pitch_mod_st: 0.0,
             an1x_pitch_mod_st: 0.0,
             free_eg_enabled: s.free_eg.enabled,

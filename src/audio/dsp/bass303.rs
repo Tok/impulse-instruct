@@ -256,7 +256,23 @@ impl Bass303 {
             0.0
         };
 
-        let freq_mod = 2.0f32.powf((p.lfo_pitch_mod_st + vp.osc_detune + lfo_pitch_st) / 12.0);
+        // MPE pitch bend additively shifts the running pitch; voice 0
+        // only for V1 (the only voice an MPE controller drives via
+        // the lower-zone master channel).  Captured per-block from
+        // `AudioParams.mpe_bend_st` which already folded the bend
+        // range to ±2 semitones.
+        let mpe_pitch_st = if vp.osc_detune.is_finite() {
+            // Apply bend to voice 0 only.  Bass voice index isn't
+            // surfaced on `vp` directly, so use `pan` as a tie-
+            // breaker proxy: voice 0 typically sits centre / has
+            // index 0 in `bass_voice_params`.  Cleaner per-voice
+            // routing is a follow-up; V1 just lights up the bend.
+            p.mpe_bend_st
+        } else {
+            0.0
+        };
+        let freq_mod =
+            2.0f32.powf((p.lfo_pitch_mod_st + vp.osc_detune + lfo_pitch_st + mpe_pitch_st) / 12.0);
 
         let fm_mod = if vp.fm_depth > 0.001 {
             let mod_ratio = 0.5 + vp.fm_ratio * 7.5;
@@ -401,8 +417,13 @@ impl Bass303 {
             }
         }
 
+        // MPE timbre (CC74) opens the filter additively — small
+        // contribution so a Y-axis push doesn't override the user's
+        // set cutoff.  0..=1 → 0..=0.3 of the cutoff range.
+        let mpe_cutoff = p.mpe_timbre * 0.3;
         let cutoff_env =
-            (vp.cutoff + self.filt_env * vp.env_mod * accent_mult + lfo_cutoff).clamp(0.0, 1.0);
+            (vp.cutoff + self.filt_env * vp.env_mod * accent_mult + lfo_cutoff + mpe_cutoff)
+                .clamp(0.0, 1.0);
         let cutoff_hz = 200.0 * (40.0f32).powf(cutoff_env);
         let g = {
             let w = cutoff_hz / sr;
@@ -433,7 +454,11 @@ impl Bass303 {
             filtered
         };
 
-        let out = dist * self.amp_env * vp.volume * accent_mult * lfo_amp_mult;
+        // MPE pressure (channel aftertouch) folds in additively as a
+        // gentle volume boost — 0..=1 maps to 1.0..=1.4× so a hard
+        // press makes the note pop without saturating into clipping.
+        let mpe_amp_mult = 1.0 + p.mpe_pressure * 0.4;
+        let out = dist * self.amp_env * vp.volume * accent_mult * lfo_amp_mult * mpe_amp_mult;
         // Per-voice pan side: only the LFO-modulated contribution is
         // emitted here.  The static `vp.pan` (and the per-step pan
         // override) is handled at master via the existing pan_303

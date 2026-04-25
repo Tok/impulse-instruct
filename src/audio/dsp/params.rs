@@ -471,6 +471,21 @@ pub struct AudioParams {
     pub mod_routes: [ModRouteCopy; MAX_MOD_ROUTES],
     pub mod_route_count: u8,
     pub sequencer_running: bool,
+    /// MPE per-note pitch bend, semitones.  Populated from
+    /// `AppState.mpe.pitch_bend` × the configured bend range
+    /// (currently fixed at ±2 semitones, the GM standard).  Added
+    /// to the bass voice's running pitch each block; voice 0 only
+    /// for V1 since MPE controllers default to monophonic
+    /// expression on the lower zone master.
+    pub mpe_bend_st: f32,
+    /// MPE channel pressure, 0..=1.  Folded additively into the
+    /// bass voice's accent envelope so harder pressure → louder /
+    /// brighter on the next note trigger.
+    pub mpe_pressure: f32,
+    /// MPE timbre (CC74), 0..=1.  Mixed into the bass cutoff with
+    /// a small additive offset so a Y-axis push opens the filter
+    /// without overriding the user's set cutoff knob entirely.
+    pub mpe_timbre: f32,
     pub lfo_pitch_mod_st: f32,
     /// AN1X pitch modulation (semitones) accumulated this block from the
     /// cable-routed mod system (LfoTarget::An1xPitch / opcode 16).  Added
