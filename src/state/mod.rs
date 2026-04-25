@@ -496,6 +496,13 @@ pub struct LlmState {
     /// on overflow (`RETRY_QUEUE_MAX`).  Transient — not serialised.
     #[serde(skip)]
     pub retry_queue: VecDeque<String>,
+    /// Writeback diff log — last `LANE_APPLY_LOG_MAX` successful lane
+    /// applies, newest at the back.  Each row holds the JSON payload
+    /// that was applied (keys = params that changed) so the UI can
+    /// render a "what changed this turn" diff panel.  Transient —
+    /// not serialised; rebuilt as the pipeline runs.
+    #[serde(skip)]
+    pub recent_lane_applies: VecDeque<LaneApplyRecord>,
     /// Short-lived feedback lines surfaced from the apply layer when the
     /// model produced something weak (e.g. a ramp whose target matches
     /// the current value, a ramp with an imperceptible delta, …).
@@ -539,6 +546,25 @@ pub struct PipelineProgress {
     pub failed_count: usize,
     /// Label of the lane currently inferring, or `None` between lanes.
     pub current_lane: Option<String>,
+}
+
+/// One row in the writeback diff log — captured each time a lane
+/// successfully applies its JSON update to AppState.  The `update`
+/// field already contains *only the keys that changed* (the schema +
+/// filter strip everything outside the lane's scope), so it doubles as
+/// a "what changed this turn" diff payload for the UI.
+#[derive(Clone, Debug, PartialEq)]
+pub struct LaneApplyRecord {
+    /// Display label of the lane (e.g. "BASS 1", "KITA", "FX").
+    pub lane_label: String,
+    /// JSON payload that was applied — keys are the params that
+    /// actually changed, values are the new values.
+    pub update: serde_json::Value,
+    /// Wall-clock time the lane's inference took, in milliseconds.
+    pub ms: u128,
+    /// `LlmState.jam_cycle_count` at apply time — lets the UI group
+    /// rows by jam cycle / one-shot turn.
+    pub cycle: u32,
 }
 
 fn default_true() -> bool {
@@ -598,10 +624,17 @@ impl Default for LlmState {
             pipeline_progress: None,
             lane_scores: HashMap::new(),
             retry_queue: VecDeque::new(),
+            recent_lane_applies: VecDeque::new(),
             recent_feedback: VecDeque::new(),
         }
     }
 }
+
+/// Maximum number of `LaneApplyRecord` rows kept in
+/// `LlmState.recent_lane_applies`.  Two jam cycles' worth of lanes is
+/// plenty for a "recently changed" panel; older history goes through
+/// the regular log.
+pub const LANE_APPLY_LOG_MAX: usize = 16;
 
 /// Push a short feedback line onto `state.llm.recent_feedback`, capping
 /// at `FEEDBACK_MAX` (oldest-out).  Used by the apply layer when model

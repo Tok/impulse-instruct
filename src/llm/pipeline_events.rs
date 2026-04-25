@@ -97,6 +97,26 @@ pub fn handle_pipeline_event(
                 p.lanes_done = p.lanes_done.saturating_add(1);
                 p.current_lane = None;
             });
+            // Writeback diff log — push this lane's update onto the
+            // capped recent-applies queue so the UI can render a
+            // "what changed" panel.  Filter has already narrowed the
+            // payload to keys the lane actually wrote, so each row
+            // doubles as the diff for that turn.
+            {
+                let cycle = state.read().llm.jam_cycle_count;
+                let mut s = state.write();
+                if s.llm.recent_lane_applies.len() >= crate::state::LANE_APPLY_LOG_MAX {
+                    s.llm.recent_lane_applies.pop_front();
+                }
+                s.llm
+                    .recent_lane_applies
+                    .push_back(crate::state::LaneApplyRecord {
+                        lane_label: lane.label().to_string(),
+                        update: update.clone(),
+                        ms,
+                        cycle,
+                    });
+            }
             // Mirror the monolithic path's per-inference output: send an
             // LlmOutput carrying the lane's JSON as `param_update` so
             // `drain_llm_outputs` renders a `"<persona>: …"` line in the

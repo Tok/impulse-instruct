@@ -467,6 +467,13 @@ impl ImpulseApp {
                             self.show_sysinfo = true;
                             ui.close_menu();
                         }
+                        if ui
+                            .button(egui::RichText::new("Lane Diff").monospace().size(10.0))
+                            .clicked()
+                        {
+                            self.show_lane_diff = true;
+                            ui.close_menu();
+                        }
                         ui.separator();
                         if ui
                             .button(egui::RichText::new("About").monospace().size(10.0))

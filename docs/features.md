@@ -4,6 +4,30 @@ A detailed log of what's built.
 
 ---
 
+### LLM writeback diff viewer
+
+- The pipeline already filters every lane's JSON down to the keys
+  it actually wrote, so each LaneApplied event carries an exact
+  "what changed" payload.  Now those payloads survive past the
+  log-line emit: a capped queue keeps the last 16 lane applies on
+  hand for inspection.
+- New `state::LaneApplyRecord { lane_label, update, ms, cycle }`
+  + `LlmState.recent_lane_applies: VecDeque<LaneApplyRecord>` (cap
+  `LANE_APPLY_LOG_MAX = 16`, transient, not serialised).  The
+  pipeline-events handler pushes one record per LaneApplied,
+  popping the oldest on overflow.
+- New "Lane Diff" floating window (toggled from the header view
+  menu, default off): newest-first list of recent lane applies,
+  each row showing `lane · cycle · ms · N keys` in a
+  `CollapsingHeader`.  Expanding a row dumps the JSON payload
+  pretty-printed; the JSON IS the diff because the pipeline
+  filter narrowed it.  "clear" button empties the queue.
+- 9 lane-diff tests: default-empty, capacity cap drops oldest,
+  newest pinned to back, clone round-trip, plus 5 tests for the
+  `count_diff_keys` heuristic over flat / nested / mixed / non-
+  object payloads + a real filter_lane_output bass payload.
+  Full suite at 1523 tests passing.
+
 ### MIDI learn — user-defined CC → param bindings
 
 - The MIDI input path used to consult only a static built-in CC

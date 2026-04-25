@@ -10,5 +10,6 @@ impl ImpulseApp {
         self.draw_about_window(ctx);
         self.draw_sysinfo_window(ctx);
         self.draw_wizard_window(ctx);
+        self.draw_lane_diff_window(ctx);
     }
 }

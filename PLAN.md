@@ -25,10 +25,6 @@ they ship and are reflected in `features.md`.
 - [ ] **Keyboard shortcut overlay** - F1 (or ?) pops a translucent
   overlay listing every shortcut in groups (sequencer / rack /
   agents).  Reads the actual keybinding map so it can't drift.
-- [ ] **LLM writeback diff viewer** - when a pipeline turn applies
-  changes, show a collapsible "what changed this turn" panel: per-
-  lane before/after values with highlighted deltas.  Helps users
-  build intuition for what the LLM actually does per turn.
 - [ ] **Automation lane overlay on the sequencer grid** - a toggled
   lane that shows LFO / free-EG / ramp values as a sparkline
   underneath the step grid, so the user sees the modulator's shape

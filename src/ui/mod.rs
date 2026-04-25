@@ -40,6 +40,7 @@ pub(crate) use util::{scan_models, webbrowser_open};
 mod prefs_controls;
 mod windows;
 mod windows_about;
+mod windows_lane_diff;
 mod windows_prefs;
 mod windows_sysinfo;
 mod wizard;
@@ -318,6 +319,10 @@ pub struct ImpulseApp {
     pub(crate) flip_to_back_count: u32, // flips-to-back count, cycles scroll target
     pub(crate) ctrl_locked: bool,
     pub(crate) show_shortcuts: bool,
+    /// Toggle for the Lane Diff window — shows the per-lane writeback
+    /// log captured by the pipeline.  Off by default; opened from the
+    /// header's view menu.
+    pub(crate) show_lane_diff: bool,
     pub(crate) add_menu_zone: Option<crate::state::Zone>,
     // Module being dragged by its title bar (id + current pointer position).
     pub(crate) module_drag: Option<rack_canvas::ModuleDrag>,
@@ -520,6 +525,7 @@ impl ImpulseApp {
             flip_to_back_count: 0,
             ctrl_locked: false,
             show_shortcuts: false,
+            show_lane_diff: false,
             add_menu_zone: None,
             module_drag: None,
             session_dirty: false,

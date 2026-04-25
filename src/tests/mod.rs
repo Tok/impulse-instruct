@@ -26,6 +26,7 @@ mod helpers_tests;
 mod heuristic_plan_edge_tests;
 mod jam_tools_tests;
 mod json_repair_tests;
+mod lane_diff_tests;
 mod lane_method_tests;
 mod lane_prompt_tests;
 mod lane_scheduler_tests;
