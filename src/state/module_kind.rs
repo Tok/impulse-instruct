@@ -35,6 +35,13 @@ pub enum ModuleKind {
     FxDelay,
     FxChorus,
     FxPhaser,
+    FxFlanger,
+    FxLimiter,
+    FxFilter,
+    FxComb,
+    FxTilt,
+    FxTransient,
+    FxExciter,
     FxRingMod,
     FxWaveshaper,
     FxBitcrush,
@@ -92,6 +99,13 @@ impl ModuleKind {
             Self::FxDelay => "DELAY",
             Self::FxChorus => "CHORUS",
             Self::FxPhaser => "PHASER",
+            Self::FxFlanger => "FLANGER",
+            Self::FxLimiter => "LIMITER",
+            Self::FxFilter => "FILTER",
+            Self::FxComb => "COMB",
+            Self::FxTilt => "TILT EQ",
+            Self::FxTransient => "TRANSIENT",
+            Self::FxExciter => "EXCITER",
             Self::FxRingMod => "RING MOD",
             Self::FxWaveshaper => "WAVESHAPER",
             Self::FxBitcrush => "BITCRUSH",
@@ -179,9 +193,21 @@ impl ModuleKind {
             // PitchShift — SHIFT / MIX / FBK on row 1, FINE on row 2
             // so the semitone knob doesn't crowd the cents readout.
             Self::FxPitchShift => (2, 2),
+            // Flanger — 4 knobs (rate / depth / feedback / mix) is one
+            // more than the phaser bundle, so it gets a 2×2 footprint
+            // like the delay rather than the 2×1 used by the smaller FX.
+            Self::FxFlanger => (2, 2),
+            // Limiter, Filter, Comb each have 4 knobs (some plus a mode
+            // selector); they need 2×2 to fit two rows.
+            Self::FxLimiter => (2, 2),
+            Self::FxFilter => (2, 2),
+            Self::FxComb => (2, 2),
             Self::FxReverb
             | Self::FxChorus
             | Self::FxPhaser
+            | Self::FxTilt
+            | Self::FxTransient
+            | Self::FxExciter
             | Self::FxRingMod
             | Self::FxWaveshaper
             | Self::FxBitcrush
@@ -215,6 +241,13 @@ impl ModuleKind {
             | Self::FxDelay
             | Self::FxChorus
             | Self::FxPhaser
+            | Self::FxFlanger
+            | Self::FxLimiter
+            | Self::FxFilter
+            | Self::FxComb
+            | Self::FxTilt
+            | Self::FxTransient
+            | Self::FxExciter
             | Self::FxRingMod
             | Self::FxWaveshaper
             | Self::FxBitcrush
@@ -259,6 +292,13 @@ impl ModuleKind {
                 | Self::FxDelay
                 | Self::FxChorus
                 | Self::FxPhaser
+                | Self::FxFlanger
+                | Self::FxLimiter
+                | Self::FxFilter
+                | Self::FxComb
+                | Self::FxTilt
+                | Self::FxTransient
+                | Self::FxExciter
                 | Self::FxRingMod
                 | Self::FxWaveshaper
                 | Self::FxBitcrush
@@ -284,6 +324,13 @@ impl ModuleKind {
                 | Self::FxDelay
                 | Self::FxChorus
                 | Self::FxPhaser
+                | Self::FxFlanger
+                | Self::FxLimiter
+                | Self::FxFilter
+                | Self::FxComb
+                | Self::FxTilt
+                | Self::FxTransient
+                | Self::FxExciter
                 | Self::FxRingMod
                 | Self::FxWaveshaper
                 | Self::FxBitcrush
@@ -306,6 +353,13 @@ impl ModuleKind {
                 | Self::FxDelay
                 | Self::FxChorus
                 | Self::FxPhaser
+                | Self::FxFlanger
+                | Self::FxLimiter
+                | Self::FxFilter
+                | Self::FxComb
+                | Self::FxTilt
+                | Self::FxTransient
+                | Self::FxExciter
                 | Self::FxRingMod
                 | Self::FxWaveshaper
                 | Self::FxBitcrush

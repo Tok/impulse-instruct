@@ -302,6 +302,13 @@ fn reaches_master_default_preset_voices_all_reach() {
                     | ModuleKind::FxDelay
                     | ModuleKind::FxChorus
                     | ModuleKind::FxPhaser
+                    | ModuleKind::FxFlanger
+                    | ModuleKind::FxLimiter
+                    | ModuleKind::FxFilter
+                    | ModuleKind::FxComb
+                    | ModuleKind::FxTilt
+                    | ModuleKind::FxTransient
+                    | ModuleKind::FxExciter
                     | ModuleKind::FxRingMod
                     | ModuleKind::FxWaveshaper
                     | ModuleKind::FxBitcrush
@@ -334,6 +341,13 @@ fn supports_xy_pad_true_for_every_fx_kind_only() {
         ModuleKind::FxDelay,
         ModuleKind::FxChorus,
         ModuleKind::FxPhaser,
+        ModuleKind::FxFlanger,
+        ModuleKind::FxLimiter,
+        ModuleKind::FxFilter,
+        ModuleKind::FxComb,
+        ModuleKind::FxTilt,
+        ModuleKind::FxTransient,
+        ModuleKind::FxExciter,
         ModuleKind::FxRingMod,
         ModuleKind::FxWaveshaper,
         ModuleKind::FxBitcrush,

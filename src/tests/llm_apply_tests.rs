@@ -158,7 +158,7 @@ mod llm_apply_fx_tests {
 
     #[test]
     fn fx_xy_pads_cover_every_declared_pair() {
-        // Smoke test across all 13 FX pads: send a distinct [x,y] to each
+        // Smoke test across all 20 FX pads: send a distinct [x,y] to each
         // pad's _xy path and verify the pair's fields land on those
         // values.  Guards the XY_PAIRS table against field renames.
         let cases: &[(&str, [f32; 2], fn(&crate::state::FxState) -> (f32, f32))] = &[
@@ -166,6 +166,21 @@ mod llm_apply_fx_tests {
             ("delay_xy", [0.3, 0.4], |f| (f.delay_time, f.delay_feedback)),
             ("chorus_xy", [0.5, 0.6], |f| (f.chorus_rate, f.chorus_depth)),
             ("phaser_xy", [0.7, 0.8], |f| (f.phaser_rate, f.phaser_depth)),
+            ("flanger_xy", [0.42, 0.84], |f| {
+                (f.flanger_rate, f.flanger_depth)
+            }),
+            ("limiter_xy", [0.31, 0.62], |f| {
+                (f.limiter_threshold, f.limiter_ceiling)
+            }),
+            ("svf_xy", [0.55, 0.45], |f| (f.svf_cutoff, f.svf_resonance)),
+            ("comb_xy", [0.27, 0.73], |f| (f.comb_pitch, f.comb_feedback)),
+            ("tilt_xy", [0.6, 0.4], |f| (f.tilt_tilt, f.tilt_pivot)),
+            ("transient_xy", [0.65, 0.35], |f| {
+                (f.transient_attack, f.transient_sustain)
+            }),
+            ("exciter_xy", [0.45, 0.55], |f| {
+                (f.exciter_amount, f.exciter_freq)
+            }),
             ("ring_mod_xy", [0.12, 0.24], |f| {
                 (f.ring_mod_freq, f.ring_mod_mix)
             }),

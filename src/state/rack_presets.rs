@@ -69,6 +69,7 @@ pub const RACK_PRESETS: &[RackPreset] = &[
             ModuleKind::FxBitcrush,
             ModuleKind::FxChorus,
             ModuleKind::FxPhaser,
+            ModuleKind::FxFlanger,
             ModuleKind::FxRingMod,
             ModuleKind::FxEq,
             ModuleKind::FxCompressor,

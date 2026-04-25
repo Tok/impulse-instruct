@@ -109,6 +109,38 @@ pub enum LfoTarget {
     PhaserRate,
     PhaserDepth,
     PhaserMix,
+    // FX: Flanger
+    FlangerRate,
+    FlangerDepth,
+    FlangerFeedback,
+    FlangerMix,
+    // FX: Limiter
+    LimiterThreshold,
+    LimiterCeiling,
+    LimiterRelease,
+    LimiterLookahead,
+    // FX: State-variable filter (FxFilter module)
+    SvfCutoff,
+    SvfResonance,
+    SvfDrive,
+    SvfMix,
+    // FX: Comb resonator
+    CombPitch,
+    CombFeedback,
+    CombDamp,
+    CombMix,
+    // FX: Tilt EQ
+    TiltTilt,
+    TiltPivot,
+    TiltMix,
+    // FX: Transient designer
+    TransientAttack,
+    TransientSustain,
+    TransientMix,
+    // FX: Exciter
+    ExciterAmount,
+    ExciterFreq,
+    ExciterMix,
     // FX: Waveshaper (pre-FX soft clipper)
     WaveshaperDrive,
     WaveshaperMix,

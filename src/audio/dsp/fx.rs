@@ -5,6 +5,10 @@ pub(super) const MAX_DELAY_SAMPLES: usize = 96_000; // 2s @ 48kHz
 pub(super) const REVERB_COMBS: usize = 8;
 pub(super) const REVERB_ALLPASS: usize = 4;
 pub(super) const MAX_CHORUS_SIZE: usize = 4096; // ~85ms @ 48kHz
+/// Flanger ring — must be longer than the maximum sweep delay
+/// (~10 ms @ 48 kHz = 480 samples) plus headroom for fractional
+/// interpolation.  Power of two so wrap is a mask, not a modulo.
+pub(super) const MAX_FLANGER_SIZE: usize = 1024;
 
 /// Reverb feedback bounds.  `room_size = 0` → `REVERB_FB_MIN` (tight,
 /// short decay); `room_size = 1` → `REVERB_FB_MIN + REVERB_FB_SCALE`

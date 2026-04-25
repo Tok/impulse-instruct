@@ -21,6 +21,7 @@ const FX_KINDS: &[ModuleKind] = &[
     ModuleKind::FxDelay,
     ModuleKind::FxChorus,
     ModuleKind::FxPhaser,
+    ModuleKind::FxFlanger,
     ModuleKind::FxWaveshaper,
     ModuleKind::FxBitcrush,
     ModuleKind::FxEq,
@@ -31,7 +32,7 @@ const FX_KINDS: &[ModuleKind] = &[
     ModuleKind::FxAutotune,
 ];
 const FX_LABELS: &[&str] = &[
-    "REV", "DLY", "CHR", "PHS", "WVS", "BIT", "EQ", "CMP", "TAPE", "DRV", "RING", "AUTO",
+    "REV", "DLY", "CHR", "PHS", "FLG", "WVS", "BIT", "EQ", "CMP", "TAPE", "DRV", "RING", "AUTO",
 ];
 
 fn draw_send_matrix(app: &mut ImpulseApp, ui: &mut egui::Ui) {

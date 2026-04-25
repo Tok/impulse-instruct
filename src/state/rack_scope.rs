@@ -52,6 +52,13 @@ fn kind_to_scope_name(kind: ModuleKind) -> Option<String> {
         | ModuleKind::FxDelay
         | ModuleKind::FxChorus
         | ModuleKind::FxPhaser
+        | ModuleKind::FxFlanger
+        | ModuleKind::FxLimiter
+        | ModuleKind::FxFilter
+        | ModuleKind::FxComb
+        | ModuleKind::FxTilt
+        | ModuleKind::FxTransient
+        | ModuleKind::FxExciter
         | ModuleKind::FxRingMod
         | ModuleKind::FxWaveshaper
         | ModuleKind::FxBitcrush
@@ -89,6 +96,13 @@ pub fn parse_module_kind(name: &str) -> Option<ModuleKind> {
         "fxdelay" | "delay" | "echo" => Some(FxDelay),
         "fxchorus" | "chorus" | "ensemble" => Some(FxChorus),
         "fxphaser" | "phaser" | "phase" => Some(FxPhaser),
+        "fxflanger" | "flanger" | "flange" => Some(FxFlanger),
+        "fxlimiter" | "limiter" | "brickwall" | "brick" => Some(FxLimiter),
+        "fxfilter" | "filter" | "svf" | "vcf" => Some(FxFilter),
+        "fxcomb" | "comb" | "resonator" => Some(FxComb),
+        "fxtilt" | "tilt" | "tilteq" => Some(FxTilt),
+        "fxtransient" | "transient" | "transients" | "envshape" => Some(FxTransient),
+        "fxexciter" | "exciter" | "aural" | "shimmer" => Some(FxExciter),
         "fxeq" | "eq" | "equalizer" | "equaliser" => Some(FxEq),
         "fxcompressor" | "compressor" | "comp" => Some(FxCompressor),
         "fxtapesat" | "tapesat" | "tape" | "saturation" => Some(FxTapeSat),
@@ -119,6 +133,13 @@ pub fn rack_kind_name_matches(kind: ModuleKind, name: &str) -> bool {
         ModuleKind::FxDelay => matches!(n.as_str(), "delay" | "echo" | "fx"),
         ModuleKind::FxChorus => matches!(n.as_str(), "chorus" | "ensemble" | "fx"),
         ModuleKind::FxPhaser => matches!(n.as_str(), "phaser" | "phase" | "fx"),
+        ModuleKind::FxFlanger => matches!(n.as_str(), "flanger" | "flange" | "fx"),
+        ModuleKind::FxLimiter => matches!(n.as_str(), "limiter" | "brickwall" | "brick" | "fx"),
+        ModuleKind::FxFilter => matches!(n.as_str(), "filter" | "svf" | "vcf" | "fx"),
+        ModuleKind::FxComb => matches!(n.as_str(), "comb" | "resonator" | "fx"),
+        ModuleKind::FxTilt => matches!(n.as_str(), "tilt" | "tilteq" | "fx"),
+        ModuleKind::FxTransient => matches!(n.as_str(), "transient" | "transients" | "fx"),
+        ModuleKind::FxExciter => matches!(n.as_str(), "exciter" | "aural" | "shimmer" | "fx"),
         ModuleKind::FxRingMod => {
             matches!(
                 n.as_str(),

@@ -275,6 +275,30 @@ pub(super) fn draw_fx_content(
                 s.fx.phaser_mix = m;
             }
         }
+        ModuleKind::FxFlanger
+        | ModuleKind::FxLimiter
+        | ModuleKind::FxFilter
+        | ModuleKind::FxComb
+        | ModuleKind::FxTilt
+        | ModuleKind::FxTransient
+        | ModuleKind::FxExciter => {
+            // All seven Tier-1 FX cards live in
+            // `rack_content_fx_extras.rs` to keep this file under the
+            // 1000-line cap.  The helper returns the new pad_pair value.
+            if let Some(new_pair) = crate::ui::rack_content_fx_extras::try_draw_fx_extras_content(
+                app,
+                ui,
+                kind,
+                module_id,
+                ctrl,
+                &locked,
+                &focused,
+                pad_expanded,
+                pad_pair,
+            ) {
+                pad_pair = new_pair;
+            }
+        }
         ModuleKind::FxEq => {
             let (mut lo, mut mi, mut hi) = {
                 let s = app.state.read();

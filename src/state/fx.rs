@@ -173,13 +173,96 @@ pub struct FxState {
     pub phaser_rate: f32,   // 0–1 → 0.05–5 Hz LFO rate
     pub phaser_depth: f32,  // 0–1 sweep depth
     pub phaser_mix: f32,    // 0–1 wet/dry
+    /// Flanger LFO rate — 0..1 → 0.05..4 Hz.
+    #[serde(default = "default_flanger_rate")]
+    pub flanger_rate: f32,
+    /// Flanger sweep depth — 0..1 → 0..~9 ms swing on top of a 1 ms base
+    /// delay.
+    #[serde(default = "default_flanger_depth")]
+    pub flanger_depth: f32,
+    /// Flanger feedback — bipolar around 0.5 (no feedback).  0.0 →
+    /// strong negative feedback (peaks become notches), 1.0 → strong
+    /// positive feedback (resonant comb).
+    #[serde(default = "default_flanger_feedback")]
+    pub flanger_feedback: f32,
+    /// Flanger wet/dry — 0..1.
+    #[serde(default)]
+    pub flanger_mix: f32,
+    /// Brick-wall limiter threshold 0..1 → −24..0 dB.
+    #[serde(default = "default_limiter_threshold")]
+    pub limiter_threshold: f32,
+    /// Brick-wall limiter ceiling 0..1 → −12..0 dB.
+    #[serde(default = "default_limiter_ceiling")]
+    pub limiter_ceiling: f32,
+    /// Limiter release 0..1 → 5..500 ms.
+    #[serde(default = "default_limiter_release")]
+    pub limiter_release: f32,
+    /// Limiter lookahead 0..1 → 0.5..10 ms peek window.
+    #[serde(default = "default_limiter_lookahead")]
+    pub limiter_lookahead: f32,
+    /// State-variable filter cutoff 0..1 (log-mapped 20 Hz–18 kHz).
+    /// Named `svf_*` to avoid collision with the per-voice `filter_*`
+    /// fields (bass / an1x have their own filter knobs).
+    #[serde(default = "default_svf_cutoff")]
+    pub svf_cutoff: f32,
+    /// SVF resonance 0..1 (Q ≈ 0.5..20).
+    #[serde(default)]
+    pub svf_resonance: f32,
+    /// SVF pre-saturation drive 0..1.
+    #[serde(default)]
+    pub svf_drive: f32,
+    /// SVF wet/dry mix 0..1.
+    #[serde(default)]
+    pub svf_mix: f32,
+    /// SVF mode: 0=LP, 1=BP, 2=HP, 3=Notch.
+    #[serde(default)]
+    pub svf_mode: u8,
+    /// Comb resonator pitch 0..1 (40 Hz–2 kHz log).
+    #[serde(default = "default_comb_pitch")]
+    pub comb_pitch: f32,
+    /// Comb feedback 0..1.
+    #[serde(default)]
+    pub comb_feedback: f32,
+    /// Comb damping 0..1 (lowpass on the feedback path).
+    #[serde(default)]
+    pub comb_damp: f32,
+    /// Comb wet/dry mix 0..1.
+    #[serde(default)]
+    pub comb_mix: f32,
+    /// Tilt EQ tilt 0..1 (0.5 = flat, 0 = bass-heavy, 1 = treble-heavy).
+    #[serde(default = "default_ms_unity")]
+    pub tilt_tilt: f32,
+    /// Tilt EQ pivot 0..1 (200 Hz–5 kHz log).
+    #[serde(default = "default_tilt_pivot")]
+    pub tilt_pivot: f32,
+    /// Tilt EQ wet/dry 0..1.
+    #[serde(default)]
+    pub tilt_mix: f32,
+    /// Transient designer attack 0..1 (0.5 = flat, ±12 dB).
+    #[serde(default = "default_ms_unity")]
+    pub transient_attack: f32,
+    /// Transient designer sustain 0..1 (0.5 = flat).
+    #[serde(default = "default_ms_unity")]
+    pub transient_sustain: f32,
+    /// Transient designer wet/dry 0..1.
+    #[serde(default)]
+    pub transient_mix: f32,
+    /// Exciter saturation amount 0..1.
+    #[serde(default)]
+    pub exciter_amount: f32,
+    /// Exciter HP corner 0..1 (1 kHz–10 kHz log).
+    #[serde(default = "default_exciter_freq")]
+    pub exciter_freq: f32,
+    /// Exciter wet/dry on the added harmonics 0..1.
+    #[serde(default)]
+    pub exciter_mix: f32,
     pub waveshaper_drive: f32, // 0–1 → soft-clip drive amount (pre-FX)
-    pub waveshaper_mix: f32, // 0–1 wet/dry
-    pub ring_mod_freq: f32, // 0–1 → 50–500 Hz carrier frequency
-    pub ring_mod_mix: f32,  // 0–1 wet/dry
-    pub eq_low_gain: f32,   // -1..+1 → -12..+12 dB low shelf (~200 Hz)
-    pub eq_mid_gain: f32,   // -1..+1 → -12..+12 dB mid peak (~1 kHz)
-    pub eq_hi_gain: f32,    // -1..+1 → -12..+12 dB high shelf (~5 kHz)
+    pub waveshaper_mix: f32,   // 0–1 wet/dry
+    pub ring_mod_freq: f32,    // 0–1 → 50–500 Hz carrier frequency
+    pub ring_mod_mix: f32,     // 0–1 wet/dry
+    pub eq_low_gain: f32,      // -1..+1 → -12..+12 dB low shelf (~200 Hz)
+    pub eq_mid_gain: f32,      // -1..+1 → -12..+12 dB mid peak (~1 kHz)
+    pub eq_hi_gain: f32,       // -1..+1 → -12..+12 dB high shelf (~5 kHz)
     #[serde(default)]
     pub autotune_amount: f32, // 0–1 → 0..+12 semitones upward pitch shift
     #[serde(default)]
@@ -290,6 +373,50 @@ fn default_fx_pan_rate() -> f32 {
     0.3
 }
 
+fn default_flanger_rate() -> f32 {
+    0.2
+}
+
+fn default_flanger_depth() -> f32 {
+    0.5
+}
+
+fn default_flanger_feedback() -> f32 {
+    0.5
+}
+
+fn default_limiter_threshold() -> f32 {
+    1.0 // 0 dB → no limiting until threshold knob is pulled down
+}
+
+fn default_limiter_ceiling() -> f32 {
+    1.0 // 0 dB ceiling
+}
+
+fn default_limiter_release() -> f32 {
+    0.3
+}
+
+fn default_limiter_lookahead() -> f32 {
+    0.4
+}
+
+fn default_svf_cutoff() -> f32 {
+    0.7 // ~3 kHz — open by default
+}
+
+fn default_comb_pitch() -> f32 {
+    0.4 // ~250 Hz
+}
+
+fn default_tilt_pivot() -> f32 {
+    0.5 // 1 kHz log-mapped
+}
+
+fn default_exciter_freq() -> f32 {
+    0.3 // ~2 kHz HP
+}
+
 fn default_conv_reverb_size() -> f32 {
     1.0
 }
@@ -346,6 +473,32 @@ impl Default for FxState {
             phaser_rate: 0.3,
             phaser_depth: 0.5,
             phaser_mix: 0.0,
+            flanger_rate: default_flanger_rate(),
+            flanger_depth: default_flanger_depth(),
+            flanger_feedback: default_flanger_feedback(),
+            flanger_mix: 0.0,
+            limiter_threshold: default_limiter_threshold(),
+            limiter_ceiling: default_limiter_ceiling(),
+            limiter_release: default_limiter_release(),
+            limiter_lookahead: default_limiter_lookahead(),
+            svf_cutoff: default_svf_cutoff(),
+            svf_resonance: 0.0,
+            svf_drive: 0.0,
+            svf_mix: 0.0,
+            svf_mode: 0,
+            comb_pitch: default_comb_pitch(),
+            comb_feedback: 0.0,
+            comb_damp: 0.0,
+            comb_mix: 0.0,
+            tilt_tilt: default_ms_unity(),
+            tilt_pivot: default_tilt_pivot(),
+            tilt_mix: 0.0,
+            transient_attack: default_ms_unity(),
+            transient_sustain: default_ms_unity(),
+            transient_mix: 0.0,
+            exciter_amount: 0.0,
+            exciter_freq: default_exciter_freq(),
+            exciter_mix: 0.0,
             waveshaper_drive: 0.0,
             waveshaper_mix: 0.0,
             ring_mod_freq: 0.2,

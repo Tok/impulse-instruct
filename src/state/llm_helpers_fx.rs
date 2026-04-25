@@ -82,6 +82,59 @@ pub(super) fn apply_fx_update(
     u!(s.fx.phaser_rate, "phaser_rate", "fx.phaser_rate");
     u!(s.fx.phaser_depth, "phaser_depth", "fx.phaser_depth");
     u!(s.fx.phaser_mix, "phaser_mix", "fx.phaser_mix");
+    u!(s.fx.flanger_rate, "flanger_rate", "fx.flanger_rate");
+    u!(s.fx.flanger_depth, "flanger_depth", "fx.flanger_depth");
+    u!(
+        s.fx.flanger_feedback,
+        "flanger_feedback",
+        "fx.flanger_feedback"
+    );
+    u!(s.fx.flanger_mix, "flanger_mix", "fx.flanger_mix");
+    u!(
+        s.fx.limiter_threshold,
+        "limiter_threshold",
+        "fx.limiter_threshold"
+    );
+    u!(
+        s.fx.limiter_ceiling,
+        "limiter_ceiling",
+        "fx.limiter_ceiling"
+    );
+    u!(
+        s.fx.limiter_release,
+        "limiter_release",
+        "fx.limiter_release"
+    );
+    u!(
+        s.fx.limiter_lookahead,
+        "limiter_lookahead",
+        "fx.limiter_lookahead"
+    );
+    u!(s.fx.svf_cutoff, "svf_cutoff", "fx.svf_cutoff");
+    u!(s.fx.svf_resonance, "svf_resonance", "fx.svf_resonance");
+    u!(s.fx.svf_drive, "svf_drive", "fx.svf_drive");
+    u!(s.fx.svf_mix, "svf_mix", "fx.svf_mix");
+    u!(s.fx.comb_pitch, "comb_pitch", "fx.comb_pitch");
+    u!(s.fx.comb_feedback, "comb_feedback", "fx.comb_feedback");
+    u!(s.fx.comb_damp, "comb_damp", "fx.comb_damp");
+    u!(s.fx.comb_mix, "comb_mix", "fx.comb_mix");
+    u!(s.fx.tilt_tilt, "tilt_tilt", "fx.tilt_tilt");
+    u!(s.fx.tilt_pivot, "tilt_pivot", "fx.tilt_pivot");
+    u!(s.fx.tilt_mix, "tilt_mix", "fx.tilt_mix");
+    u!(
+        s.fx.transient_attack,
+        "transient_attack",
+        "fx.transient_attack"
+    );
+    u!(
+        s.fx.transient_sustain,
+        "transient_sustain",
+        "fx.transient_sustain"
+    );
+    u!(s.fx.transient_mix, "transient_mix", "fx.transient_mix");
+    u!(s.fx.exciter_amount, "exciter_amount", "fx.exciter_amount");
+    u!(s.fx.exciter_freq, "exciter_freq", "fx.exciter_freq");
+    u!(s.fx.exciter_mix, "exciter_mix", "fx.exciter_mix");
     u!(
         s.fx.waveshaper_drive,
         "waveshaper_drive",
@@ -285,6 +338,25 @@ pub(super) fn apply_fx_update(
         ("delay_xy", "delay_time", "delay_feedback", 0.0, 1.0),
         ("chorus_xy", "chorus_rate", "chorus_depth", 0.0, 1.0),
         ("phaser_xy", "phaser_rate", "phaser_depth", 0.0, 1.0),
+        ("flanger_xy", "flanger_rate", "flanger_depth", 0.0, 1.0),
+        (
+            "limiter_xy",
+            "limiter_threshold",
+            "limiter_ceiling",
+            0.0,
+            1.0,
+        ),
+        ("svf_xy", "svf_cutoff", "svf_resonance", 0.0, 1.0),
+        ("comb_xy", "comb_pitch", "comb_feedback", 0.0, 1.0),
+        ("tilt_xy", "tilt_tilt", "tilt_pivot", 0.0, 1.0),
+        (
+            "transient_xy",
+            "transient_attack",
+            "transient_sustain",
+            0.0,
+            1.0,
+        ),
+        ("exciter_xy", "exciter_amount", "exciter_freq", 0.0, 1.0),
         ("ring_mod_xy", "ring_mod_freq", "ring_mod_mix", 0.0, 1.0),
         (
             "waveshaper_xy",
@@ -362,6 +434,31 @@ fn fx_field_mut<'a>(fx: &'a mut super::FxState, key: &str) -> Option<&'a mut f32
         "phaser_rate" => &mut fx.phaser_rate,
         "phaser_depth" => &mut fx.phaser_depth,
         "phaser_mix" => &mut fx.phaser_mix,
+        "flanger_rate" => &mut fx.flanger_rate,
+        "flanger_depth" => &mut fx.flanger_depth,
+        "flanger_feedback" => &mut fx.flanger_feedback,
+        "flanger_mix" => &mut fx.flanger_mix,
+        "limiter_threshold" => &mut fx.limiter_threshold,
+        "limiter_ceiling" => &mut fx.limiter_ceiling,
+        "limiter_release" => &mut fx.limiter_release,
+        "limiter_lookahead" => &mut fx.limiter_lookahead,
+        "svf_cutoff" => &mut fx.svf_cutoff,
+        "svf_resonance" => &mut fx.svf_resonance,
+        "svf_drive" => &mut fx.svf_drive,
+        "svf_mix" => &mut fx.svf_mix,
+        "comb_pitch" => &mut fx.comb_pitch,
+        "comb_feedback" => &mut fx.comb_feedback,
+        "comb_damp" => &mut fx.comb_damp,
+        "comb_mix" => &mut fx.comb_mix,
+        "tilt_tilt" => &mut fx.tilt_tilt,
+        "tilt_pivot" => &mut fx.tilt_pivot,
+        "tilt_mix" => &mut fx.tilt_mix,
+        "transient_attack" => &mut fx.transient_attack,
+        "transient_sustain" => &mut fx.transient_sustain,
+        "transient_mix" => &mut fx.transient_mix,
+        "exciter_amount" => &mut fx.exciter_amount,
+        "exciter_freq" => &mut fx.exciter_freq,
+        "exciter_mix" => &mut fx.exciter_mix,
         "ring_mod_freq" => &mut fx.ring_mod_freq,
         "ring_mod_mix" => &mut fx.ring_mod_mix,
         "waveshaper_drive" => &mut fx.waveshaper_drive,

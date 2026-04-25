@@ -103,6 +103,53 @@ impl DspState {
                 self.phaser
                     .process(sig, p.phaser_rate, p.phaser_depth, p.phaser_mix, sr)
             }
+            FxStep::Flanger => self.flanger.process(
+                sig,
+                p.flanger_rate,
+                p.flanger_depth,
+                p.flanger_feedback,
+                p.flanger_mix,
+                sr,
+            ),
+            FxStep::Limiter => self.limiter.process(
+                sig,
+                p.limiter_threshold,
+                p.limiter_ceiling,
+                p.limiter_release,
+                p.limiter_lookahead,
+                sr,
+            ),
+            FxStep::Filter => self.svf.process(
+                sig,
+                p.svf_cutoff,
+                p.svf_resonance,
+                p.svf_drive,
+                p.svf_mode,
+                p.svf_mix,
+                sr,
+            ),
+            FxStep::Comb => self.comb.process(
+                sig,
+                p.comb_pitch,
+                p.comb_feedback,
+                p.comb_damp,
+                p.comb_mix,
+                sr,
+            ),
+            FxStep::Tilt => self
+                .tilt
+                .process(sig, p.tilt_tilt, p.tilt_pivot, p.tilt_mix),
+            FxStep::Transient => self.transient.process(
+                sig,
+                p.transient_attack,
+                p.transient_sustain,
+                p.transient_mix,
+                sr,
+            ),
+            FxStep::Exciter => {
+                self.exciter
+                    .process(sig, p.exciter_amount, p.exciter_freq, p.exciter_mix, sr)
+            }
             FxStep::RingMod => {
                 if p.ring_mod_mix > 0.001 {
                     let freq_hz = 50.0 + p.ring_mod_freq * 450.0;

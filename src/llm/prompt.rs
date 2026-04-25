@@ -406,7 +406,14 @@ FX (0.0–1.0 unless noted; at top level, never inside "sequencer"):
 LFO (4 slots): lfo[N].enabled, .waveform (Sine|Triangle|Saw|InvSaw|Square|SampleAndHold),
   .rate 0–1 (0.01=glacial, 0.5=fast), .depth 0–1, .target one of: BassCutoff, BassResonance,
   BassPitch, BassVolume, ReverbMix, DelayTime, DelayFeedback, ChorusMix, ChorusRate,
-  Kick808Pitch, PhaserRate, PhaserDepth, DistortionDrive, MasterVolume, An1xCutoff, An1xPitch.
+  Kick808Pitch, PhaserRate, PhaserDepth, FlangerRate, FlangerDepth, FlangerFeedback, FlangerMix,
+  LimiterThreshold, LimiterCeiling, LimiterRelease, LimiterLookahead,
+  SvfCutoff, SvfResonance, SvfDrive, SvfMix,
+  CombPitch, CombFeedback, CombDamp, CombMix,
+  TiltTilt, TiltPivot, TiltMix,
+  TransientAttack, TransientSustain, TransientMix,
+  ExciterAmount, ExciterFreq, ExciterMix,
+  DistortionDrive, MasterVolume, An1xCutoff, An1xPitch.
 
 FREE EG: free_eg.{{enabled, values: [8 levels 0–1], period 0–1, depth 0–1 (0.5=neutral),
   target (same list as LFO), loop_mode: bool}}. Use for glacial sweeps.
@@ -594,7 +601,8 @@ RACK (only when user asks to add/wire/remove modules): `{{"rack": {{"add":["808"
 "to":"bass","slot":0,"depth":0.5,"targets":["BassCutoff"]}}],
 "pad":[{{"kind":"reverb","expanded":true,"pair":1}}]}}}}`. Module names:
 bass, 808, 909, hoover, an1x, amen, noise, granular, bitcrush, reverb, delay,
-chorus, phaser, drive, eq, compressor, tapesat, waveshaper, ringmod, lfo, tts, master.
+chorus, phaser, flanger, filter, comb, tilt, transient, exciter, limiter,
+drive, eq, compressor, tapesat, waveshaper, ringmod, lfo, tts, master.
 `pad` expands an FX card to reveal its XY pad and (for 3-knob FX) picks which
 pair drives the pad — pair 0 = A/B, 1 = A/C, 2 = B/C from the knob row order.
 
@@ -602,7 +610,9 @@ XY PAD SHORTCUTS — every FX effect accepts a `<name>_xy: [x, y]` path under
 `fx` that writes both knobs of the canonical Pair-0 pad in one go: e.g.
 `{{"fx":{{"reverb_xy":[0.7, 0.4]}}}}` is equivalent to setting
 `reverb_size` to 0.7 and `reverb_damp` to 0.4.  Available shortcuts:
-`reverb_xy`, `delay_xy`, `chorus_xy`, `phaser_xy`, `ring_mod_xy`,
+`reverb_xy`, `delay_xy`, `chorus_xy`, `phaser_xy`, `flanger_xy`,
+`limiter_xy`, `svf_xy`, `comb_xy`, `tilt_xy`, `transient_xy`, `exciter_xy`,
+`ring_mod_xy`,
 `waveshaper_xy`, `bitcrush_xy`, `eq_xy`, `compressor_xy`, `tape_xy`,
 `distortion_xy`, `autotune_xy`, `fx_pan_xy`.  Use pad-space when thinking
 about intensity/character sweeps; use individual knob paths for Pair-1

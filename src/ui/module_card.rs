@@ -53,6 +53,13 @@ fn title_fill(kind: ModuleKind) -> Color32 {
         | ModuleKind::FxDelay
         | ModuleKind::FxChorus
         | ModuleKind::FxPhaser
+        | ModuleKind::FxFlanger
+        | ModuleKind::FxLimiter
+        | ModuleKind::FxFilter
+        | ModuleKind::FxComb
+        | ModuleKind::FxTilt
+        | ModuleKind::FxTransient
+        | ModuleKind::FxExciter
         | ModuleKind::FxRingMod
         | ModuleKind::FxWaveshaper
         | ModuleKind::FxBitcrush

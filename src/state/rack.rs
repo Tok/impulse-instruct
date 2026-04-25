@@ -476,7 +476,22 @@ impl RackState {
                 ModuleKind::FxBitcrush => 23,
                 ModuleKind::FxChorus => 24,
                 ModuleKind::FxPhaser => 25,
-                ModuleKind::FxRingMod => 26,
+                // Flanger sits adjacent to the phaser in the FX strip — both
+                // are LFO-modulated comb-flavour effects, the user reaches
+                // for them in the same context.
+                ModuleKind::FxFlanger => 25,
+                // Comb belongs in the modulation-flavour cluster too —
+                // it's a feedback comb tuned to a pitch.
+                ModuleKind::FxComb => 26,
+                ModuleKind::FxRingMod => 27,
+                // Filter / Tilt slot near the EQ family.
+                ModuleKind::FxFilter => 28,
+                ModuleKind::FxTilt => 29,
+                // Transient / Exciter / Limiter — dynamics + mastering
+                // tools, near the compressor / tape sat cluster.
+                ModuleKind::FxTransient => 32,
+                ModuleKind::FxExciter => 33,
+                ModuleKind::FxLimiter => 34,
                 ModuleKind::FxEq => 27,
                 ModuleKind::FxCompressor => 28,
                 ModuleKind::FxTapeSat => 29,

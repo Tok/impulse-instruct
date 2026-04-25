@@ -65,6 +65,31 @@ const ALL_TARGETS: &[LfoTarget] = &[
     LfoTarget::PhaserRate,
     LfoTarget::PhaserDepth,
     LfoTarget::PhaserMix,
+    LfoTarget::FlangerRate,
+    LfoTarget::FlangerDepth,
+    LfoTarget::FlangerFeedback,
+    LfoTarget::FlangerMix,
+    LfoTarget::LimiterThreshold,
+    LfoTarget::LimiterCeiling,
+    LfoTarget::LimiterRelease,
+    LfoTarget::LimiterLookahead,
+    LfoTarget::SvfCutoff,
+    LfoTarget::SvfResonance,
+    LfoTarget::SvfDrive,
+    LfoTarget::SvfMix,
+    LfoTarget::CombPitch,
+    LfoTarget::CombFeedback,
+    LfoTarget::CombDamp,
+    LfoTarget::CombMix,
+    LfoTarget::TiltTilt,
+    LfoTarget::TiltPivot,
+    LfoTarget::TiltMix,
+    LfoTarget::TransientAttack,
+    LfoTarget::TransientSustain,
+    LfoTarget::TransientMix,
+    LfoTarget::ExciterAmount,
+    LfoTarget::ExciterFreq,
+    LfoTarget::ExciterMix,
     LfoTarget::WaveshaperDrive,
     LfoTarget::WaveshaperMix,
     LfoTarget::DistortionDrive,
@@ -158,6 +183,13 @@ pub fn has_audio_in(kind: ModuleKind) -> bool {
             | FxDelay
             | FxChorus
             | FxPhaser
+            | FxFlanger
+            | FxLimiter
+            | FxFilter
+            | FxComb
+            | FxTilt
+            | FxTransient
+            | FxExciter
             | FxRingMod
             | FxWaveshaper
             | FxBitcrush

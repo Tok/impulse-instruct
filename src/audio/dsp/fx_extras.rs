@@ -1,0 +1,478 @@
+// ─── audio/dsp/fx_extras.rs ──────────────────────────────────────────────────
+// Tier-1 FX structs split out of `fx.rs` to keep that file under the
+// 1000-line cap.  Same module-private exposure (`pub(crate)`) as the
+// originals; `pub use fx_extras::*` in `audio/dsp/mod.rs` keeps the
+// existing `use fx::*;` import sites unchanged.
+//
+// Structs in this file: Flanger, Limiter, Svf, CombRes, Tilt, Transient,
+// Exciter.  All allocation-free in `process()`; ring buffers that are
+// too large for the stack are `Box<[f32; N]>`-allocated once at
+// construction.
+
+use super::fx::{Biquad, MAX_FLANGER_SIZE};
+
+// ─── Flanger (short modulated delay with feedback) ───────────────────────────
+//
+// Sibling to the phaser but voiced by a comb filter (a short delay line with
+// feedback).  The delay is swept by a low-rate LFO between ~0.5 ms and ~10 ms,
+// producing the characteristic moving comb-notch series.  Negative feedback
+// inverts the comb (notches become peaks) for the metallic / through-zero
+// flavour.
+//
+// Stack-sized [f32; MAX_FLANGER_SIZE] keeps process() allocation-free.
+
+pub(crate) struct Flanger {
+    pub(crate) buf: [f32; MAX_FLANGER_SIZE],
+    pub(crate) write: usize,
+    pub(crate) lfo_phase: f32,
+}
+
+impl Flanger {
+    pub(crate) fn new() -> Self {
+        Self {
+            buf: [0.0; MAX_FLANGER_SIZE],
+            write: 0,
+            lfo_phase: 0.0,
+        }
+    }
+
+    /// `rate`: 0–1 → 0.05–4 Hz LFO rate.
+    /// `depth`: 0–1 → sweep range up to ~9 ms around a 1 ms base.
+    /// `feedback`: 0–1 → −0.95..+0.95 (centred at 0.5 = no feedback).
+    /// `mix`: 0–1 wet/dry.
+    pub(crate) fn process(
+        &mut self,
+        input: f32,
+        rate: f32,
+        depth: f32,
+        feedback: f32,
+        mix: f32,
+        sr: f32,
+    ) -> f32 {
+        if mix < 0.001 && (feedback - 0.5).abs() < 0.001 {
+            // Pure bypass when no wet and no feedback — still has to advance
+            // the write head so the ring tracks `input` for when mix rises.
+            self.buf[self.write] = input;
+            self.write = (self.write + 1) & (MAX_FLANGER_SIZE - 1);
+            return input;
+        }
+
+        let rate_hz = 0.05 + rate * 3.95;
+        self.lfo_phase += rate_hz / sr;
+        if self.lfo_phase >= 1.0 {
+            self.lfo_phase -= 1.0;
+        }
+
+        // Triangle would also work, sine is smoother and matches the phaser.
+        let lfo = 0.5 - 0.5 * (self.lfo_phase * std::f32::consts::TAU).cos();
+
+        // Base 1 ms, sweep up to ~9 ms more.  Cap at MAX_FLANGER_SIZE−2 so
+        // the linear interpolation never reads past the end of the ring.
+        let base = (0.001 * sr).max(1.0);
+        let sweep_max = (depth.clamp(0.0, 1.0) * 0.009 * sr).max(0.0);
+        let delay = (base + lfo * sweep_max).clamp(1.0, (MAX_FLANGER_SIZE - 2) as f32);
+
+        let read_pos = self.write as f32 + MAX_FLANGER_SIZE as f32 - delay;
+        let idx = read_pos as usize & (MAX_FLANGER_SIZE - 1);
+        let frac = read_pos - read_pos.floor();
+        let next = (idx + 1) & (MAX_FLANGER_SIZE - 1);
+        let delayed = self.buf[idx] + (self.buf[next] - self.buf[idx]) * frac;
+
+        // 0.5-centred knob → ±0.95 signed feedback.  Clamp the absolute
+        // amount just under unity to keep the comb stable.
+        let fb = ((feedback.clamp(0.0, 1.0) - 0.5) * 1.9).clamp(-0.95, 0.95);
+        let to_buf = input + delayed * fb;
+        self.buf[self.write] = to_buf;
+        self.write = (self.write + 1) & (MAX_FLANGER_SIZE - 1);
+
+        input * (1.0 - mix) + delayed * mix
+    }
+}
+
+// ─── Brick-wall lookahead limiter ─────────────────────────────────────────────
+//
+// Peak limiter with a fixed-size lookahead ring.  Reads the future N samples,
+// computes the running peak, and ramps the gain *down* before the peak hits
+// the output — so the actual ceiling is never overshot.  Release ramps the
+// gain back up between peaks.  As a final safety net, the output is hard-
+// clipped at the user ceiling, which is inaudible in normal operation but
+// catches numerical edge cases.
+//
+// `threshold`: 0–1 → −24..0 dB (where limiting kicks in).
+// `ceiling`:   0–1 → −12..0 dB (absolute output ceiling).
+// `release`:   0–1 → 5–500 ms recovery time.
+// `lookahead`: 0–1 → 0.5–10 ms peek window.
+
+const LIMITER_BUF: usize = 1024; // ~21 ms @ 48 kHz — heap-allocated at construction
+
+pub(crate) struct Limiter {
+    /// Pre-allocated lookahead buffer; size never changes after `new()`.
+    buf: Box<[f32; LIMITER_BUF]>,
+    write: usize,
+    /// Smoothed gain reduction in linear units (1.0 = no reduction).
+    gain: f32,
+    /// Running max of |x| across the lookahead window — recomputed lazily so
+    /// we don't scan every sample (the running window is cheap to maintain
+    /// since the buffer is small).
+    win_peak: f32,
+}
+
+impl Limiter {
+    pub(crate) fn new() -> Self {
+        Self {
+            buf: Box::new([0.0; LIMITER_BUF]),
+            write: 0,
+            gain: 1.0,
+            win_peak: 0.0,
+        }
+    }
+
+    pub(crate) fn process(
+        &mut self,
+        input: f32,
+        threshold: f32,
+        ceiling: f32,
+        release: f32,
+        lookahead: f32,
+        sr: f32,
+    ) -> f32 {
+        let look_s = ((0.0005 + lookahead.clamp(0.0, 1.0) * 0.0095) * sr) as usize;
+        let look_s = look_s.clamp(2, LIMITER_BUF - 2);
+        // Threshold 0..1 → −24..0 dB.  Ceiling 0..1 → −12..0 dB.
+        let thr_lin = 10.0f32.powf((-24.0 * (1.0 - threshold)) / 20.0);
+        let ceil_lin = 10.0f32.powf((-12.0 * (1.0 - ceiling)) / 20.0);
+        let rel_s = (0.005 + release.clamp(0.0, 1.0) * 0.495) * sr;
+        let rel_coef = (-1.0 / rel_s).exp();
+
+        // Write current sample into ring at write head.
+        self.buf[self.write] = input;
+        // Read the (write - lookahead) sample as the delayed output.
+        let read = (self.write + LIMITER_BUF - look_s) & (LIMITER_BUF - 1);
+        let delayed = self.buf[read];
+
+        // Update running peak across the next `look_s` samples.  Cheap full
+        // scan since the window is small (≤480 samples) and we avoid the
+        // book-keeping of a true monotonic deque.
+        let mut peak = 0.0f32;
+        for i in 0..look_s {
+            let idx = (read + i) & (LIMITER_BUF - 1);
+            let m = self.buf[idx].abs();
+            if m > peak {
+                peak = m;
+            }
+        }
+        self.win_peak = peak;
+
+        // Target gain so peak·gain ≤ ceiling.  Limit only when over threshold.
+        let target = if peak > thr_lin {
+            (ceil_lin / peak).min(1.0)
+        } else {
+            1.0
+        };
+        // Attack is instantaneous (lookahead lets us pre-empt); release is
+        // exponential.  Going *down* (gain reduction) snaps to target,
+        // going *up* eases via `rel_coef`.
+        if target < self.gain {
+            self.gain = target;
+        } else {
+            self.gain = target + (self.gain - target) * rel_coef;
+        }
+
+        self.write = (self.write + 1) & (LIMITER_BUF - 1);
+        let y = delayed * self.gain;
+        // Final hard clip at the ceiling — safety net for the rare case the
+        // attack hasn't quite caught up (e.g. peak ramped between scans).
+        y.clamp(-ceil_lin, ceil_lin)
+    }
+}
+
+// ─── State-variable filter (LP / BP / HP / Notch) ─────────────────────────────
+//
+// Chamberlin SVF (oversampled 2× internally for stability at high cutoff).
+// Provides all four outputs simultaneously; the `mode` selector picks one.
+// Drive saturates the input for analog-flavour filter overdrive.
+
+pub(crate) struct Svf {
+    /// Bandpass integrator state.
+    band: f32,
+    /// Lowpass integrator state.
+    low: f32,
+}
+
+impl Svf {
+    pub(crate) fn new() -> Self {
+        Self {
+            band: 0.0,
+            low: 0.0,
+        }
+    }
+
+    /// `cutoff`: 0–1 → 20 Hz–18 kHz logarithmic.
+    /// `resonance`: 0–1 → Q ≈ 0.5..20.
+    /// `drive`: 0–1 → 0..6 pre-saturation.
+    /// `mode`: 0=LP, 1=BP, 2=HP, 3=Notch.
+    /// `mix`: 0–1 wet/dry.
+    pub(crate) fn process(
+        &mut self,
+        input: f32,
+        cutoff: f32,
+        resonance: f32,
+        drive: f32,
+        mode: u8,
+        mix: f32,
+        sr: f32,
+    ) -> f32 {
+        if mix < 0.001 {
+            return input;
+        }
+        // Log-mapped cutoff so the knob feels musical across the audio band.
+        let fc = 20.0 * 900.0f32.powf(cutoff.clamp(0.0, 1.0)).clamp(20.0, sr * 0.45);
+        let q = 0.5 + resonance.clamp(0.0, 1.0) * 19.5;
+        let damp = (1.0 / q).min(2.0 - 1e-3);
+
+        // Drive: gentle tanh-ish curve so the resonance peak doesn't blow up
+        // when the user pushes drive AND resonance high simultaneously.
+        let drive_amt = 1.0 + drive.clamp(0.0, 1.0) * 5.0;
+        let xin = if drive > 0.001 {
+            super::tanh(input * drive_amt) / drive_amt
+        } else {
+            input
+        };
+
+        // 2× oversample for stability at high cutoff.
+        let f = 2.0 * (std::f32::consts::PI * fc / (sr * 2.0)).sin();
+        let mut wet = 0.0f32;
+        for _ in 0..2 {
+            self.low += f * self.band;
+            let high = xin - self.low - damp * self.band;
+            self.band += f * high;
+            wet = match mode {
+                0 => self.low,
+                1 => self.band,
+                2 => high,
+                _ => self.low + high, // notch = LP + HP
+            };
+        }
+        input * (1.0 - mix) + wet * mix
+    }
+}
+
+// ─── Comb resonator (tuned feedback comb) ─────────────────────────────────────
+//
+// Karplus-style feedback comb tuned to a pitch in Hz.  Distinct from the
+// reverb (which is a stack of detuned combs) and the delay (which is a long
+// modulated tape) — this is a single short comb whose feedback creates a
+// resonant tone at `pitch` Hz with damping rolling off the highs.
+//
+// `pitch`:    0–1 → 40 Hz (low growl) .. 2000 Hz (metallic).
+// `feedback`: 0–1 → 0..0.99.
+// `damp`:     0–1 → 0..1 lowpass-coefficient on the feedback path.
+// `mix`:      0–1 wet/dry.
+
+const COMB_BUF: usize = 2048; // 40 Hz @ 48 kHz needs ~1200 samples; 2048 = power of two for masking
+
+pub(crate) struct CombRes {
+    buf: Box<[f32; COMB_BUF]>,
+    write: usize,
+    lp_state: f32,
+}
+
+impl CombRes {
+    pub(crate) fn new() -> Self {
+        Self {
+            buf: Box::new([0.0; COMB_BUF]),
+            write: 0,
+            lp_state: 0.0,
+        }
+    }
+
+    pub(crate) fn process(
+        &mut self,
+        input: f32,
+        pitch: f32,
+        feedback: f32,
+        damp: f32,
+        mix: f32,
+        sr: f32,
+    ) -> f32 {
+        if mix < 0.001 && feedback < 0.001 {
+            self.buf[self.write] = input;
+            self.write = (self.write + 1) & (COMB_BUF - 1);
+            return input;
+        }
+        // Pitch maps log-style across 40..2000 Hz so the knob is musical.
+        let hz = 40.0 * 50.0f32.powf(pitch.clamp(0.0, 1.0));
+        let delay_s = (sr / hz).clamp(2.0, (COMB_BUF - 2) as f32);
+        let read_pos = self.write as f32 + COMB_BUF as f32 - delay_s;
+        let idx = read_pos as usize & (COMB_BUF - 1);
+        let frac = read_pos - read_pos.floor();
+        let next = (idx + 1) & (COMB_BUF - 1);
+        let delayed = self.buf[idx] + (self.buf[next] - self.buf[idx]) * frac;
+
+        // One-pole LP on the feedback for tone-darkening / damping.
+        let d = damp.clamp(0.0, 0.95);
+        self.lp_state = self.lp_state * d + delayed * (1.0 - d);
+
+        let fb = feedback.clamp(0.0, 0.99);
+        let to_buf = input + self.lp_state * fb;
+        self.buf[self.write] = to_buf;
+        self.write = (self.write + 1) & (COMB_BUF - 1);
+
+        input * (1.0 - mix) + delayed * mix
+    }
+}
+
+// ─── Tilt EQ (single-knob spectral tilt) ──────────────────────────────────────
+//
+// Pivot frequency splits the spectrum into "low" and "high" halves; the tilt
+// knob simultaneously boosts one half and cuts the other, total ±12 dB.
+// Cheap reuse of the `Biquad` shelves below — one low-shelf + one high-shelf
+// with mirrored gain.
+
+pub(crate) struct Tilt {
+    low: Biquad,
+    hi: Biquad,
+    sr: f32,
+    last_tilt: f32,
+    last_pivot: f32,
+}
+
+impl Tilt {
+    pub(crate) fn new(sr: f32) -> Self {
+        Self {
+            low: Biquad::low_shelf(700.0, 0.0, sr),
+            hi: Biquad::high_shelf(700.0, 0.0, sr),
+            sr,
+            last_tilt: f32::NAN,
+            last_pivot: f32::NAN,
+        }
+    }
+
+    /// `tilt`: 0–1 → −12..+12 dB (0.5 = flat). −1 = bass-heavy, +1 = treble-heavy.
+    /// `pivot`: 0–1 → 200 Hz–5 kHz logarithmic.
+    /// `mix`: 0–1 wet/dry.
+    pub(crate) fn process(&mut self, input: f32, tilt: f32, pivot: f32, mix: f32) -> f32 {
+        if mix < 0.001 {
+            return input;
+        }
+        // Recompute coefficients only when knobs move appreciably.
+        if (tilt - self.last_tilt).abs() > 0.001 || (pivot - self.last_pivot).abs() > 0.001 {
+            let fc = 200.0 * 25.0f32.powf(pivot.clamp(0.0, 1.0));
+            let signed = (tilt.clamp(0.0, 1.0) - 0.5) * 24.0;
+            self.low = Biquad::low_shelf(fc, -signed, self.sr);
+            self.hi = Biquad::high_shelf(fc, signed, self.sr);
+            self.last_tilt = tilt;
+            self.last_pivot = pivot;
+        }
+        let wet = self.hi.process(self.low.process(input));
+        input * (1.0 - mix) + wet * mix
+    }
+}
+
+// ─── Transient designer ───────────────────────────────────────────────────────
+//
+// Two envelope followers: one fast (transient-tracking), one slow (sustain-
+// tracking).  Their *difference* is the transient envelope; ratio between
+// them is the sustain envelope.  User knobs scale each in dB before the
+// signal is gain-modulated.
+
+pub(crate) struct Transient {
+    fast_env: f32,
+    slow_env: f32,
+}
+
+impl Transient {
+    pub(crate) fn new() -> Self {
+        Self {
+            fast_env: 0.0,
+            slow_env: 0.0,
+        }
+    }
+
+    /// `attack`: 0–1 → −12..+12 dB transient gain (0.5 = flat).
+    /// `sustain`: 0–1 → −12..+12 dB sustain gain.
+    /// `mix`: 0–1 wet/dry.
+    pub(crate) fn process(
+        &mut self,
+        input: f32,
+        attack: f32,
+        sustain: f32,
+        mix: f32,
+        sr: f32,
+    ) -> f32 {
+        if mix < 0.001 {
+            return input;
+        }
+        let level = input.abs();
+        // Fast follower: 1 ms attack, 30 ms release.
+        let fast_a = (-1.0 / (sr * 0.001)).exp();
+        let fast_r = (-1.0 / (sr * 0.030)).exp();
+        // Slow follower: 25 ms attack, 200 ms release.
+        let slow_a = (-1.0 / (sr * 0.025)).exp();
+        let slow_r = (-1.0 / (sr * 0.200)).exp();
+        self.fast_env = if level > self.fast_env {
+            self.fast_env * fast_a + level * (1.0 - fast_a)
+        } else {
+            self.fast_env * fast_r + level * (1.0 - fast_r)
+        };
+        self.slow_env = if level > self.slow_env {
+            self.slow_env * slow_a + level * (1.0 - slow_a)
+        } else {
+            self.slow_env * slow_r + level * (1.0 - slow_r)
+        };
+
+        // Transient = fast minus slow (positive when a sudden burst arrives).
+        let trans = (self.fast_env - self.slow_env).max(0.0);
+        // Sustain proxy = slow envelope itself.
+        let sus = self.slow_env;
+        // Map both knobs to ±12 dB linear-ish gains.
+        let att_g = 10.0f32.powf(((attack.clamp(0.0, 1.0) - 0.5) * 24.0) / 20.0);
+        let sus_g = 10.0f32.powf(((sustain.clamp(0.0, 1.0) - 0.5) * 24.0) / 20.0);
+
+        // Apply: signal scaled by sustain gain, then add the (att_g − 1) ×
+        // transient times its sign so we don't punch DC.  Transient is
+        // already non-negative, so blend it scaled by `sign(input)` to
+        // preserve waveshape.
+        let sign = if input >= 0.0 { 1.0 } else { -1.0 };
+        let wet = input * (sus_g - 1.0) * (sus / (level.max(1e-6)))
+            + sign * trans * (att_g - 1.0)
+            + input;
+        input * (1.0 - mix) + wet * mix
+    }
+}
+
+// ─── Exciter (high-shelf saturation) ──────────────────────────────────────────
+//
+// Highpass-isolate the upper band, soft-clip it, mix back into the dry signal.
+// Adds shimmer / air without the broad hash of `FxDrive`.
+
+pub(crate) struct Exciter {
+    hp_state: f32,
+}
+
+impl Exciter {
+    pub(crate) fn new() -> Self {
+        Self { hp_state: 0.0 }
+    }
+
+    /// `amount`: 0–1 → 0..6 saturation drive on the isolated highs.
+    /// `freq`:   0–1 → 1 kHz–10 kHz HP corner.
+    /// `mix`:    0–1 wet/dry on the added harmonics.
+    pub(crate) fn process(&mut self, input: f32, amount: f32, freq: f32, mix: f32, sr: f32) -> f32 {
+        if mix < 0.001 {
+            return input;
+        }
+        let fc = 1000.0 * 10.0f32.powf(freq.clamp(0.0, 1.0));
+        // One-pole HP: y = x − lp(x); lp coefficient via RC time constant.
+        let rc = 1.0 / (std::f32::consts::TAU * fc);
+        let alpha = (1.0 / sr) / (rc + 1.0 / sr);
+        self.hp_state += alpha * (input - self.hp_state);
+        let hp = input - self.hp_state;
+
+        let drive = 1.0 + amount.clamp(0.0, 1.0) * 5.0;
+        let sat = super::tanh(hp * drive) / drive;
+        // Harmonics blend in *additive* — mix=0 returns dry, mix=1 returns
+        // dry+sat (we don't want to lose body when exciting).
+        input + sat * mix
+    }
+}

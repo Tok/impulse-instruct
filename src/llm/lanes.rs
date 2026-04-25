@@ -260,11 +260,14 @@ impl LaneKind {
                 step. Do not write other voices."
                 .into(),
             LaneKind::Fx => "Write ONLY the `fx` object — reverb / delay / distortion / \
-                chorus / phaser / ring_mod / bitcrush / master_pitch. Defaults for a subtle jam:\n\
+                chorus / phaser / flanger / filter / comb / tilt / transient / exciter / limiter / \
+                ring_mod / bitcrush / master_pitch. Defaults for a subtle jam:\n\
                 reverb_mix 0.10-0.25, reverb_size 0.4-0.6\n\
                 delay_mix 0.06-0.18, delay_feedback 0.3-0.5\n\
                 chorus_mix 0.10-0.25 (width / stereo ensemble)\n\
                 phaser_mix 0.15-0.45, phaser_rate 0.1-0.3, phaser_depth 0.4-0.7\n\
+                flanger_mix 0.15-0.40, flanger_rate 0.1-0.3, flanger_depth 0.4-0.7, \
+                flanger_feedback 0.55-0.75 (light positive feedback for that jet-airliner sweep)\n\
                 ring_mod_mix 0.05-0.2, ring_mod_freq 0.1-0.5 (inharmonic clangs — use sparingly)\n\
                 distortion_drive + _mix only if style asks (gabber / hard techno).\n\
                 Heavier values OK when the user prompt or style explicitly calls for it. \
@@ -658,6 +661,32 @@ pub fn lane_schema(lane: LaneKind) -> serde_json::Value {
                         "phaser_mix":       { "type": "number", "minimum": 0.0, "maximum": 1.0 },
                         "phaser_rate":      { "type": "number", "minimum": 0.0, "maximum": 1.0 },
                         "phaser_depth":     { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+                        "flanger_mix":      { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+                        "flanger_rate":     { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+                        "flanger_depth":    { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+                        "flanger_feedback": { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+                        "limiter_threshold":{ "type": "number", "minimum": 0.0, "maximum": 1.0 },
+                        "limiter_ceiling":  { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+                        "limiter_release":  { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+                        "limiter_lookahead":{ "type": "number", "minimum": 0.0, "maximum": 1.0 },
+                        "svf_cutoff":       { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+                        "svf_resonance":    { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+                        "svf_drive":        { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+                        "svf_mix":          { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+                        "svf_mode":         { "type": "integer", "minimum": 0, "maximum": 3 },
+                        "comb_pitch":       { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+                        "comb_feedback":    { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+                        "comb_damp":        { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+                        "comb_mix":         { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+                        "tilt_tilt":        { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+                        "tilt_pivot":       { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+                        "tilt_mix":         { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+                        "transient_attack": { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+                        "transient_sustain":{ "type": "number", "minimum": 0.0, "maximum": 1.0 },
+                        "transient_mix":    { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+                        "exciter_amount":   { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+                        "exciter_freq":     { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+                        "exciter_mix":      { "type": "number", "minimum": 0.0, "maximum": 1.0 },
                         "ring_mod_mix":     { "type": "number", "minimum": 0.0, "maximum": 1.0 },
                         "ring_mod_freq":    { "type": "number", "minimum": 0.0, "maximum": 1.0 },
                         "bitcrush_bits":    { "type": "number", "minimum": 0.0, "maximum": 1.0 },

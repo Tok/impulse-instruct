@@ -5,6 +5,7 @@ pub mod bass303;
 pub mod conv_reverb;
 mod dsp_util;
 pub mod fx;
+pub mod fx_extras;
 pub mod fx_math;
 mod fx_step;
 pub mod gabber_kick;
@@ -27,6 +28,7 @@ use conv_reverb::ConvReverb;
 use dsp_util::*;
 pub use dsp_util::{TuningSystem, hz_to_midi, midi_to_hz, midi_to_hz_tuned};
 use fx::*;
+use fx_extras::*;
 use fx_math::{
     free_eg_value_at, gated_reverb_envelope_step, lfo_value_at, sidechain_duck,
     sidechain_envelope_step,
@@ -97,6 +99,13 @@ pub struct DspState {
     delay: DelayLine,
     chorus: Chorus,
     phaser: Phaser,
+    flanger: Flanger,
+    limiter: Limiter,
+    svf: Svf,
+    comb: CombRes,
+    tilt: Tilt,
+    transient: Transient,
+    exciter: Exciter,
     bitcrush_held: f32,
     bitcrush_counter: u32,
     // FX state
@@ -199,6 +208,13 @@ impl DspState {
             delay: DelayLine::new(),
             chorus: Chorus::new(),
             phaser: Phaser::new(),
+            flanger: Flanger::new(),
+            limiter: Limiter::new(),
+            svf: Svf::new(),
+            comb: CombRes::new(),
+            tilt: Tilt::new(sample_rate),
+            transient: Transient::new(),
+            exciter: Exciter::new(),
             compressor: Compressor::new(),
             tape_sat: TapeSat::new(),
             autotune: Autotune::new(),

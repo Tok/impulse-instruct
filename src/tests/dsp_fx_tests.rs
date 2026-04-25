@@ -689,6 +689,241 @@ mod phaser_tests {
 }
 
 #[cfg(test)]
+mod flanger_tests {
+    use crate::audio::dsp::fx_extras::Flanger;
+
+    #[test]
+    fn zero_mix_zero_feedback_returns_dry() {
+        let mut f = Flanger::new();
+        // feedback=0.5 is the no-feedback midpoint; mix=0 is full dry.
+        assert_eq!(f.process(0.3, 0.5, 0.5, 0.5, 0.0, 48000.0), 0.3);
+    }
+
+    #[test]
+    fn full_wet_produces_a_finite_modulated_signal() {
+        let mut f = Flanger::new();
+        let mut nonzero = false;
+        for i in 0..4_000 {
+            let x = 0.5 * (i as f32 * 0.05).sin();
+            let out = f.process(x, 0.4, 0.8, 0.5, 1.0, 48000.0);
+            assert!(out.is_finite());
+            if out.abs() > 0.05 {
+                nonzero = true;
+            }
+        }
+        assert!(nonzero, "expected audible output from full-wet flanger");
+    }
+
+    #[test]
+    fn positive_feedback_does_not_blow_up() {
+        // Flanger feedback knob is bipolar around 0.5; 1.0 maps to ~+0.95
+        // signed feedback, the highest-stress setting before runaway.
+        let mut f = Flanger::new();
+        let mut peak: f32 = 0.0;
+        for i in 0..20_000 {
+            let x = 0.5 * (i as f32 * 0.07).sin();
+            let out = f.process(x, 0.3, 0.6, 1.0, 1.0, 48000.0);
+            assert!(out.is_finite());
+            peak = peak.max(out.abs());
+        }
+        // Worst-case should still be bounded by single-digit linear
+        // amplitude — the internal clamp tops feedback below unity.
+        assert!(peak < 8.0, "flanger blew up at max feedback (peak={peak})");
+    }
+
+    #[test]
+    fn negative_feedback_inverts_comb_pattern() {
+        // At feedback=0.0 (max negative) the comb has notches where it
+        // would have peaks at feedback=1.0.  We don't measure spectrum
+        // here, just confirm the process is stable + finite at the
+        // negative extreme.
+        let mut f = Flanger::new();
+        for i in 0..4_000 {
+            let x = 0.5 * (i as f32 * 0.03).sin();
+            let out = f.process(x, 0.2, 0.7, 0.0, 1.0, 48000.0);
+            assert!(out.is_finite());
+        }
+    }
+}
+
+#[cfg(test)]
+mod limiter_tests {
+    use crate::audio::dsp::fx_extras::Limiter;
+
+    #[test]
+    fn full_threshold_returns_dry_within_lookahead() {
+        // threshold=1.0 (0 dB) → no limiting kicks in for any sample below
+        // ceiling.  Output is the lookahead-delayed input plus the safety
+        // clip at the ceiling, so verify a low-amplitude sine passes
+        // through with the same shape (modulo delay).
+        let mut l = Limiter::new();
+        let sr = 48_000.0;
+        let mut nonzero = false;
+        // First N samples come from the unfilled buffer (zeros) before the
+        // delayed signal arrives.
+        for i in 0..2_000 {
+            let x = 0.3 * (i as f32 * 0.05).sin();
+            let out = l.process(x, 1.0, 1.0, 0.3, 0.5, sr);
+            assert!(out.is_finite());
+            if i > 600 && out.abs() > 0.05 {
+                nonzero = true;
+            }
+        }
+        assert!(nonzero);
+    }
+
+    #[test]
+    fn loud_input_is_clamped_at_ceiling() {
+        let mut l = Limiter::new();
+        let sr = 48_000.0;
+        let mut peak = 0.0f32;
+        for i in 0..4_000 {
+            // 2.0 amplitude — way over the ceiling.
+            let x = 2.0 * (i as f32 * 0.05).sin();
+            let out = l.process(x, 0.0, 0.5, 0.3, 0.5, sr);
+            assert!(out.is_finite());
+            if i > 800 {
+                peak = peak.max(out.abs());
+            }
+        }
+        // ceiling = 0.5 → −6 dB → linear ≈ 0.501.  Allow tiny overshoot for
+        // attack lag at the very first peak before the limiter catches up.
+        let ceil_lin = 10.0f32.powf(-6.0 / 20.0);
+        assert!(
+            peak <= ceil_lin * 1.05,
+            "peak {peak} exceeded ceiling {ceil_lin}"
+        );
+    }
+}
+
+#[cfg(test)]
+mod svf_tests {
+    use crate::audio::dsp::fx_extras::Svf;
+
+    #[test]
+    fn zero_mix_returns_dry() {
+        let mut f = Svf::new();
+        assert_eq!(f.process(0.4, 0.5, 0.5, 0.0, 0, 0.0, 48_000.0), 0.4);
+    }
+
+    #[test]
+    fn full_wet_each_mode_is_finite_and_audible() {
+        for mode in 0..=3u8 {
+            let mut f = Svf::new();
+            let mut nonzero = false;
+            for i in 0..4_000 {
+                let x = 0.5 * (i as f32 * 0.05).sin();
+                let out = f.process(x, 0.7, 0.4, 0.0, mode, 1.0, 48_000.0);
+                assert!(out.is_finite(), "mode {mode} produced NaN");
+                if out.abs() > 0.01 {
+                    nonzero = true;
+                }
+            }
+            assert!(nonzero, "SVF mode {mode} fell silent");
+        }
+    }
+}
+
+#[cfg(test)]
+mod comb_tests {
+    use crate::audio::dsp::fx_extras::CombRes;
+
+    #[test]
+    fn zero_mix_zero_feedback_returns_dry() {
+        let mut c = CombRes::new();
+        assert_eq!(c.process(0.3, 0.5, 0.0, 0.0, 0.0, 48_000.0), 0.3);
+    }
+
+    #[test]
+    fn high_feedback_stays_finite() {
+        let mut c = CombRes::new();
+        for i in 0..10_000 {
+            let x = 0.5 * (i as f32 * 0.05).sin();
+            let out = c.process(x, 0.4, 0.95, 0.3, 1.0, 48_000.0);
+            assert!(out.is_finite());
+        }
+    }
+}
+
+#[cfg(test)]
+mod tilt_tests {
+    use crate::audio::dsp::fx_extras::Tilt;
+
+    #[test]
+    fn zero_mix_returns_dry() {
+        let mut t = Tilt::new(48_000.0);
+        assert_eq!(t.process(0.25, 0.5, 0.5, 0.0), 0.25);
+    }
+
+    #[test]
+    fn full_wet_unity_at_flat_tilt() {
+        // tilt=0.5 means flat shelves; output should be very close to input.
+        let mut t = Tilt::new(48_000.0);
+        let mut diff_sum = 0.0f32;
+        let mut count = 0usize;
+        for i in 0..2_000 {
+            let x = 0.4 * (i as f32 * 0.05).sin();
+            let y = t.process(x, 0.5, 0.5, 1.0);
+            assert!(y.is_finite());
+            if i > 200 {
+                diff_sum += (x - y).abs();
+                count += 1;
+            }
+        }
+        let mean_err = diff_sum / count as f32;
+        assert!(
+            mean_err < 0.05,
+            "tilt at 0.5 should be near unity, err={mean_err}"
+        );
+    }
+}
+
+#[cfg(test)]
+mod transient_tests {
+    use crate::audio::dsp::fx_extras::Transient;
+
+    #[test]
+    fn zero_mix_returns_dry() {
+        let mut t = Transient::new();
+        assert_eq!(t.process(0.3, 0.5, 0.5, 0.0, 48_000.0), 0.3);
+    }
+
+    #[test]
+    fn full_wet_finite_under_pulses() {
+        // Bursts of energy followed by silence — the regime where attack /
+        // sustain knobs actually do work.
+        let mut t = Transient::new();
+        for i in 0..8_000 {
+            let burst = if (i / 200) % 2 == 0 { 0.5 } else { 0.0 };
+            let x = burst * (i as f32 * 0.3).sin();
+            let out = t.process(x, 0.8, 0.3, 1.0, 48_000.0);
+            assert!(out.is_finite());
+        }
+    }
+}
+
+#[cfg(test)]
+mod exciter_tests {
+    use crate::audio::dsp::fx_extras::Exciter;
+
+    #[test]
+    fn zero_mix_returns_dry() {
+        let mut e = Exciter::new();
+        assert_eq!(e.process(0.5, 0.5, 0.5, 0.0, 48_000.0), 0.5);
+    }
+
+    #[test]
+    fn full_drive_is_additive_and_finite() {
+        let mut e = Exciter::new();
+        for i in 0..2_000 {
+            let x = 0.4 * (i as f32 * 0.05).sin();
+            let out = e.process(x, 1.0, 0.5, 0.5, 48_000.0);
+            assert!(out.is_finite());
+        }
+    }
+}
+
+#[cfg(test)]
 mod autotune_tests {
     use crate::audio::dsp::fx::Autotune;
 
