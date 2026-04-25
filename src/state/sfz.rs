@@ -27,7 +27,7 @@ use std::path::{Path, PathBuf};
 /// resolved (cascaded from `<global>` → `<group>` → `<region>`); the
 /// SampleInstrument voice consumes this list directly without
 /// re-walking the cascade.
-#[derive(Clone, Debug, Default, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct SfzRegion {
     /// Resolved absolute path to the audio file referenced by `sample=`.
     /// Empty when the region carries no `sample=` opcode (rare; usually
@@ -93,10 +93,12 @@ pub enum SfzFilType {
     Bpf2p,
 }
 
-impl SfzRegion {
-    /// SFZ defaults for unspecified opcodes.  Used as the starting
-    /// `<global>` accumulator so a bare `<region>` inherits these.
-    fn defaults() -> Self {
+impl Default for SfzRegion {
+    /// SFZ-spec defaults for unspecified opcodes.  Also used as the
+    /// starting `<global>` accumulator so a bare `<region>` inherits
+    /// these (lokey=0, hikey=127, lovel=0, hivel=127, key center C4,
+    /// flat envelope at 100% sustain, no filter).
+    fn default() -> Self {
         Self {
             sample_path: PathBuf::new(),
             lokey: 0,
@@ -122,7 +124,9 @@ impl SfzRegion {
             fil_type: None,
         }
     }
+}
 
+impl SfzRegion {
     /// Whether this region produced any playable audio file reference
     /// (`<global>` / `<group>` headers without a `sample=` opcode get
     /// dropped from the final list).
@@ -150,8 +154,8 @@ impl SfzRegion {
 pub fn parse_sfz(text: &str, base_dir: &Path) -> Vec<SfzRegion> {
     let tokens = tokenize(text);
     let mut regions = Vec::new();
-    let mut global = SfzRegion::defaults();
-    let mut group = SfzRegion::defaults();
+    let mut global = SfzRegion::default();
+    let mut group = SfzRegion::default();
     let mut region: Option<SfzRegion> = None;
     // Active scope: which struct receives the next opcode.  Starts at
     // global before any header has been seen — most SFZs open with a

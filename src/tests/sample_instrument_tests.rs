@@ -336,6 +336,72 @@ mod sample_instrument_sfz_mode_tests {
     }
 
     #[test]
+    fn velocity_layer_filters_by_accent() {
+        // Two layers at the same key range, different velocity bands.
+        // Default trigger uses accent=0.0 → vel=64 → matches the upper
+        // layer (lovel=64) only.  Accent=1.0 still vel<128 → upper.
+        // Stage-5 accent→velocity mapping deliberately spans 64..127
+        // so sequencer-driven hits land in the mf..fff bracket.
+        let mut soft = region(60, 60, 60, 0.3);
+        soft.region.lovel = 0;
+        soft.region.hivel = 63;
+        let mut loud = region(60, 60, 60, 0.6);
+        loud.region.lovel = 64;
+        loud.region.hivel = 127;
+        let mut v = SampleInstrumentVoice::new();
+        v.load_sfz(vec![soft, loud]);
+        // Accent 0 → vel 64 → loud only.
+        v.trigger(
+            60,
+            crate::audio::dsp::TuningSystem::TwelveTet,
+            0.0,
+            0.0,
+            0.0,
+        );
+        assert_eq!(
+            v.active_voice_count(),
+            1,
+            "velocity-layer filter should narrow to one layer per trigger"
+        );
+    }
+
+    #[test]
+    fn round_robin_cycles_through_seq_positions() {
+        // Three regions cover the same key/vel.  Each has seq_length=3
+        // with seq_position 1/2/3.  Three triggers should hit each
+        // region exactly once across the cycle (order driven by the
+        // global rr_counter).
+        let mut rr1 = region(60, 60, 60, 0.1);
+        rr1.region.seq_position = 1;
+        rr1.region.seq_length = 3;
+        let mut rr2 = region(60, 60, 60, 0.2);
+        rr2.region.seq_position = 2;
+        rr2.region.seq_length = 3;
+        let mut rr3 = region(60, 60, 60, 0.3);
+        rr3.region.seq_position = 3;
+        rr3.region.seq_length = 3;
+        let mut v = SampleInstrumentVoice::new();
+        v.load_sfz(vec![rr1, rr2, rr3]);
+        // Each trigger should fire exactly one region (the one whose
+        // seq_position matches the counter).
+        for _ in 0..3 {
+            v.trigger(
+                60,
+                crate::audio::dsp::TuningSystem::TwelveTet,
+                0.0,
+                0.0,
+                0.0,
+            );
+        }
+        // All three triggers fired separate slots — total active = 3.
+        assert_eq!(
+            v.active_voice_count(),
+            3,
+            "round-robin should fire one region per trigger across the cycle"
+        );
+    }
+
+    #[test]
     fn region_volume_db_scales_output() {
         // Two regions covering the same note (different velocity bands
         // would normally disambiguate, but for this test we just hand

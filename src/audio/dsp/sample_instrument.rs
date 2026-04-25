@@ -109,6 +109,15 @@ pub struct SampleInstrumentVoice {
     /// Global trigger counter — incremented per trigger so newer slots
     /// have higher `age`.
     next_age: u64,
+    /// Round-robin counter — incremented per trigger.  When a matching
+    /// SFZ region has `seq_length > 0`, only the one whose
+    /// `seq_position` equals `(rr_counter % seq_length) + 1` (1-indexed
+    /// per the SFZ spec) fires.  This is a single global counter — for
+    /// instruments with multiple distinct RR groups (different
+    /// `seq_length` values), the cycles interleave but the per-group
+    /// rotation behaviour is preserved.  Strict per-group counters
+    /// would need a HashMap which the audio thread can't allocate.
+    rr_counter: u32,
 }
 
 impl SampleInstrumentVoice {
@@ -119,6 +128,7 @@ impl SampleInstrumentVoice {
             single_root_freq: 261.625_56, // C4
             regions: Vec::new(),
             next_age: 0,
+            rr_counter: 0,
         }
     }
 
@@ -172,18 +182,32 @@ impl SampleInstrumentVoice {
         self.single_root_freq = midi_to_hz_tuned(midi, tuning).max(20.0);
     }
 
-    /// Indices of every region whose `lokey..=hikey` covers `note`.
-    /// V2 Stage 4: with overlapping SFZ regions (common in orchestral
-    /// patches that layer e.g. close + room recordings on the same
-    /// key), the trigger fires one slot per match — letting all the
-    /// authored layers sound together instead of arbitrarily picking
-    /// the first.  Velocity layers + round-robin (Stage 5) narrow
-    /// this list further; for now the only filter is the key range.
-    fn pick_regions(&self, note: u8) -> impl Iterator<Item = usize> + '_ {
+    /// Indices of every region matching `note` + `velocity` + the
+    /// current round-robin counter.  Velocity layers (lovel..=hivel)
+    /// and seq_position/seq_length cycling both apply here — V2 Stage
+    /// 5.  Multiple regions can still match (overlapping layers from
+    /// Stage 4), so each one fires its own slot.
+    fn pick_regions(&self, note: u8, velocity: u8, rr: u32) -> impl Iterator<Item = usize> + '_ {
         self.regions
             .iter()
             .enumerate()
-            .filter(move |(_, r)| r.region.matches_note(note))
+            .filter(move |(_, r)| {
+                if !r.region.matches_note(note) {
+                    return false;
+                }
+                if !r.region.matches_velocity(velocity) {
+                    return false;
+                }
+                // Round-robin: only fire when the global counter modulo
+                // seq_length matches seq_position (SFZ uses 1-indexed
+                // positions).  seq_length = 0 means the region isn't
+                // part of an RR group and always fires.
+                if r.region.seq_length > 0 {
+                    let pos = (rr % r.region.seq_length as u32) as u8 + 1;
+                    return r.region.seq_position == pos;
+                }
+                true
+            })
             .map(|(i, _)| i)
     }
 
@@ -229,9 +253,19 @@ impl SampleInstrumentVoice {
             // audio thread must stay allocation-free; matches past
             // POLY_VOICES are dropped (the polyphony cap absorbs them
             // if the user's SFZ tries to layer more).
+            //
+            // Velocity for SFZ filtering: accent maps non-accented
+            // (0.0) → vel 64 (mf), full accent (1.0) → vel 127 (fff).
+            // Lower-vel layers stay reachable from MIDI / API input
+            // (which can pass arbitrary velocities once that path
+            // lands); for now the sequencer accent covers the typical
+            // mf..fff dynamic.
+            let velocity = (64.0 + accent.clamp(0.0, 1.0) * 63.0).round() as u8;
+            let rr = self.rr_counter;
+            self.rr_counter = self.rr_counter.wrapping_add(1);
             let mut pending: [Option<TriggerShape>; POLY_VOICES] = std::array::from_fn(|_| None);
             let mut count = 0usize;
-            for idx in self.pick_regions(note) {
+            for idx in self.pick_regions(note, velocity, rr) {
                 if count >= POLY_VOICES {
                     break;
                 }
