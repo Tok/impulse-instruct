@@ -45,6 +45,7 @@ mod music_api_tests;
 mod music_tests;
 mod param_eq_tests;
 mod param_mode_tests;
+mod per_step_velocity_tests;
 mod persistence_tests;
 mod pipeline_filter_tests;
 mod pitch_shift_tests;

@@ -262,6 +262,33 @@ pub fn toggle_bass_accent(state: AppState, step: usize) -> AppState {
     toggle_bass_accent_voice(state, vi, step)
 }
 
+/// Set the per-step accent intensity to an explicit 0..=1 value.
+/// Companion to `toggle_bass_accent_voice` for the per-step velocity-
+/// curve editor, where users want to dial in fractional accents
+/// ("quiet-loud-quiet-medium" grooves) instead of just binary
+/// flips.  Voice 0's `bass_pattern` is kept in sync with
+/// `bass_patterns[0]` so any UI that still reads the legacy slot
+/// stays correct.
+pub fn set_bass_accent_voice(
+    state: AppState,
+    voice_idx: usize,
+    step: usize,
+    value: f32,
+) -> AppState {
+    let mut s = state;
+    let vi = voice_idx.min(crate::state::MAX_BASS_VOICES - 1);
+    let v = value.clamp(0.0, 1.0);
+    if let Some(pat) = s.sequencer.bass_patterns.get_mut(vi)
+        && step < pat.len()
+    {
+        pat[step].accent = v;
+    }
+    if vi == 0 && step < s.sequencer.bass_pattern.len() {
+        s.sequencer.bass_pattern[step].accent = v;
+    }
+    s
+}
+
 /// Toggle slide on a 303 step on a specific voice.
 pub fn toggle_bass_slide_voice(state: AppState, voice_idx: usize, step: usize) -> AppState {
     let mut s = state;

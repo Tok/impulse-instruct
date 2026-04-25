@@ -424,26 +424,73 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                             }
                             let abs = page_start + i;
                             beat_div(ui, j, abs);
-                            let is_accent =
-                                voice_page.get(i).map(|s| s.accent > 0.0).unwrap_or(false);
+                            let value = voice_page.get(i).map(|s| s.accent).unwrap_or(0.0);
                             let enabled = abs < voice_steps;
-                            let color = if !enabled || !is_accent {
-                                theme::PIT
-                            } else {
-                                theme::CHALK
-                            };
-                            let text = egui::RichText::new("A").monospace().size(7.0).color(color);
-                            if ui
-                                .add_sized(
-                                    [pad_px, row_h],
-                                    egui::Button::new(text).fill(egui::Color32::TRANSPARENT),
-                                )
-                                .clicked()
-                                && enabled
-                            {
+                            // Click toggles binary 0↔1 (legacy UX);
+                            // drag-vertical or scroll-wheel set a
+                            // fractional 0..=1 for per-step velocity
+                            // curves without a separate slider lane.
+                            let (rect, resp) = ui.allocate_exact_size(
+                                egui::vec2(pad_px, row_h),
+                                egui::Sense::click_and_drag(),
+                            );
+                            if ui.is_rect_visible(rect) {
+                                let v = value.clamp(0.0, 1.0);
+                                let fill_h = rect.height() * v;
+                                let bar_color = if !enabled {
+                                    theme::PIT
+                                } else if v > 0.001 {
+                                    egui::Color32::from_gray(140)
+                                } else {
+                                    egui::Color32::from_gray(28)
+                                };
+                                let bar = egui::Rect::from_min_max(
+                                    egui::pos2(rect.left(), rect.bottom() - fill_h),
+                                    egui::pos2(rect.right(), rect.bottom()),
+                                );
+                                ui.painter().rect_filled(bar, 1.0, bar_color);
+                                let letter_color = if enabled && v > 0.001 {
+                                    theme::CHALK
+                                } else {
+                                    theme::PIT
+                                };
+                                ui.painter().text(
+                                    rect.center(),
+                                    egui::Align2::CENTER_CENTER,
+                                    "A",
+                                    egui::FontId::monospace(7.0),
+                                    letter_color,
+                                );
+                            }
+                            if !enabled {
+                                continue;
+                            }
+                            if resp.clicked() {
                                 let s = app.state.read().clone();
                                 *app.state.write() =
                                     crate::state::toggle_bass_accent_voice(s, vi, abs);
+                            }
+                            // Drag-vertical: top edge → 1.0, bottom → 0.0.
+                            if resp.dragged()
+                                && let Some(p) = resp.interact_pointer_pos()
+                            {
+                                let frac =
+                                    1.0 - ((p.y - rect.top()) / rect.height()).clamp(0.0, 1.0);
+                                let s = app.state.read().clone();
+                                *app.state.write() =
+                                    crate::state::set_bass_accent_voice(s, vi, abs, frac);
+                            }
+                            // Hover-gated scroll: ±0.1 increments.
+                            if resp.hovered() {
+                                let dy = ui.ctx().input(|i| i.smooth_scroll_delta.y);
+                                if dy.abs() > 0.5 {
+                                    let next = (value + dy.signum() * 0.1).clamp(0.0, 1.0);
+                                    if (next - value).abs() > 1e-4 {
+                                        let s = app.state.read().clone();
+                                        *app.state.write() =
+                                            crate::state::set_bass_accent_voice(s, vi, abs, next);
+                                    }
+                                }
                             }
                         }
                     });
