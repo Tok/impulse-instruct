@@ -642,6 +642,85 @@ fn draw_llm_agent_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, module_id: u32)
             "Click to put this agent to sleep — it'll skip its turn until woken."
         });
     });
+    // ── Persona presets (save / load) ──────────────────────────────────
+    // Tucked into a thin row.  Save grabs the agent's current
+    // personality knobs and writes them as
+    // `~/.impulse_instruct/personas/<slug>.json`; Load applies a
+    // selected preset onto the agent without touching scope /
+    // patterns / model overrides.
+    ui.horizontal(|ui| {
+        ui.label(
+            egui::RichText::new("preset:")
+                .color(theme::IRON)
+                .monospace()
+                .size(7.5),
+        );
+        if ui
+            .small_button(egui::RichText::new("save").monospace().size(7.5))
+            .on_hover_text(
+                "Save this agent's persona / instructions / prompt /\n\
+                 conv mode / temperature as a reusable preset under\n\
+                 ~/.impulse_instruct/personas/<slug>.json",
+            )
+            .clicked()
+        {
+            let agent = app.state.read().llm_agents[idx].clone();
+            let preset = crate::state::PersonaPreset::from_agent(&agent);
+            match crate::state::save_preset(&preset) {
+                Ok(p) => {
+                    app.log_text
+                        .push_str(&format!("[preset] saved: {}\n", p.display()));
+                }
+                Err(e) => {
+                    app.log_text
+                        .push_str(&format!("[preset] save failed: {e}\n"));
+                }
+            }
+        }
+        let presets = crate::state::list_presets();
+        let label = if presets.is_empty() {
+            "(none saved)".to_string()
+        } else {
+            "load…".to_string()
+        };
+        let mut load_path: Option<std::path::PathBuf> = None;
+        egui::ComboBox::from_id_source(("persona_preset_combo", module_id))
+            .width(140.0)
+            .selected_text(egui::RichText::new(label).monospace().size(7.5))
+            .show_ui(ui, |ui| {
+                for p in &presets {
+                    let name = p
+                        .file_stem()
+                        .and_then(|n| n.to_str())
+                        .unwrap_or("?")
+                        .to_string();
+                    if ui
+                        .selectable_label(false, egui::RichText::new(name).monospace().size(7.5))
+                        .clicked()
+                    {
+                        load_path = Some(p.clone());
+                    }
+                }
+            });
+        if let Some(p) = load_path {
+            match crate::state::load_preset_from_path(&p) {
+                Ok(preset) => {
+                    let mut s = app.state.write();
+                    if let Some(a) = s.llm_agents.get_mut(idx) {
+                        preset.apply_to(a);
+                    }
+                    app.log_text
+                        .push_str(&format!("[preset] loaded: {}\n", p.display()));
+                    app.session_dirty = true;
+                }
+                Err(e) => {
+                    app.log_text
+                        .push_str(&format!("[preset] load failed: {e}\n"));
+                }
+            }
+        }
+    });
+
     // ── System prompt override ──────────────────────────────────────────
     let has_override = !prompt_override.is_empty();
     let ovr_header = if has_override {

@@ -42,6 +42,12 @@ pub use fx::{FxState, ParamEqBand, ParamEqBandKind, default_param_eq_bands};
 pub mod morph;
 pub use morph::{ChainMorph, bit_reverse_rank, morph_tick, step_swapped};
 
+pub mod persona_preset;
+pub use persona_preset::{
+    PersonaPreset, list_presets, list_presets_in, load_preset_from_path, personas_dir, save_preset,
+    save_preset_to_dir, slugify,
+};
+
 pub mod song;
 pub use song::ChainSlotOverride;
 

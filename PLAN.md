@@ -44,11 +44,6 @@ they ship and are reflected in `features.md`.
 
 ## Agent tooling - gradual control & expressiveness
 
-- [ ] **Persona library** - save / load named agent configurations
-  (persona + instructions + prompt override + conv mode + temp).
-  Ships with a handful of curated personas; user can stamp their own.
-  Loaded from `~/.impulse_instruct/personas/*.json` so they survive
-  session reloads.
 
 ## Refactoring
 

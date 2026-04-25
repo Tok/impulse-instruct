@@ -56,6 +56,7 @@ mod param_mode_tests;
 mod per_step_velocity_tests;
 mod performance_mode_tests;
 mod persistence_tests;
+mod persona_preset_tests;
 mod pipeline_filter_tests;
 mod pitch_shift_tests;
 mod planner_output_tests;

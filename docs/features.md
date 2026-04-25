@@ -4,6 +4,33 @@ A detailed log of what's built.
 
 ---
 
+### Persona library — save / load named agent configurations
+
+- Captures the user-curated subset of an agent (persona name,
+  role, conversation mode, instructions, system-prompt override,
+  temperature, thinking flag) as a `PersonaPreset` JSON file
+  under `~/.impulse_instruct/personas/<slug>.json`.  Pattern
+  state, scope, model_path, and runtime counters are deliberately
+  excluded — those are session-context, not personality.
+- Agent card now exposes a tiny `preset:` row with a "save"
+  button (capture this agent's knobs into a preset file) and a
+  "load…" combobox listing every preset on disk.  Save names
+  the file via `slugify(persona_name)`; load applies the preset
+  onto the agent without disturbing scope / patterns / model
+  routing.
+- Public API: `PersonaPreset` struct, `save_preset` /
+  `load_preset_from_path` / `list_presets`, plus `_to_dir` /
+  `_in` overrides for callers that need an explicit directory
+  (used by tests to avoid mutating `HOME`).  `slugify(name)`
+  is exposed too so external tooling can predict filenames.
+- 16 new tests: 6 over slugify (case / whitespace / punctuation
+  / empty / unicode / trailing strip), 6 over agent ↔ preset
+  round-trip + apply non-destructiveness + temperature clamp +
+  missing-field defaults + idempotence, 4 over the FS path
+  (creates dir if missing, save→load round-trip, list ignores
+  non-JSON, missing dir returns empty).  Full suite at 1632
+  tests passing.
+
 ### Cross-agent broadcast hints + per-agent budget + sleep mode
 
 Three agent-tooling improvements bundled together because they all
