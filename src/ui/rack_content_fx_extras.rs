@@ -46,7 +46,8 @@ pub(super) fn try_draw_fx_extras_content(
         | ModuleKind::FxStutter
         | ModuleKind::FxFreeze
         | ModuleKind::FxGate
-        | ModuleKind::FxVocoder => {}
+        | ModuleKind::FxVocoder
+        | ModuleKind::FxWiden => {}
         _ => return None,
     }
 
@@ -569,6 +570,42 @@ pub(super) fn try_draw_fx_extras_content(
                 s.fx.gate_release = rl;
                 s.fx.gate_depth = dp;
                 s.fx.gate_mix = m;
+            }
+        }
+        ModuleKind::FxWiden => {
+            let (mut h, mut s, mut m) = {
+                let st = app.state.read();
+                (st.fx.widen_haas, st.fx.widen_side, st.fx.widen_mix)
+            };
+            hk!(
+                ui,
+                ("HAAS", &mut h, pm("fx.widen_haas")),
+                ("SIDE", &mut s, pm("fx.widen_side")),
+                ("MIX", &mut m, pm("fx.widen_mix"))
+            );
+            if pad_expanded {
+                ui.add_space(PAD_SECTION_TOP_GAP);
+                let (vc, _) = render_three_pad(
+                    ui,
+                    &format!("widen_xy_{module_id}"),
+                    ["HAAS", "SIDE", "MIX"],
+                    &mut pad_pair,
+                    (&mut h, &mut s, &mut m),
+                    [
+                        user_owned("fx.widen_haas"),
+                        user_owned("fx.widen_side"),
+                        user_owned("fx.widen_mix"),
+                    ],
+                );
+                if vc {
+                    changed = true;
+                }
+            }
+            if changed || h != app.state.read().fx.widen_haas {
+                let mut st = app.state.write();
+                st.fx.widen_haas = h;
+                st.fx.widen_side = s;
+                st.fx.widen_mix = m;
             }
         }
         ModuleKind::FxVocoder => {

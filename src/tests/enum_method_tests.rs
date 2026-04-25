@@ -204,6 +204,7 @@ fn allows_multiple_is_true_for_fx_lfo_and_agents() {
         ModuleKind::FxDrive,
         ModuleKind::FxAutotune,
         ModuleKind::FxPan,
+        ModuleKind::FxWiden,
         ModuleKind::LfoModule,
         ModuleKind::LlmAgent,
     ] {

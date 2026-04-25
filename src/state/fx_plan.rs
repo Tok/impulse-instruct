@@ -37,6 +37,7 @@ pub(crate) fn kind_to_fx_step(kind: ModuleKind) -> Option<FxStep> {
         ModuleKind::FxPan => Some(FxStep::Pan),
         ModuleKind::FxGate => Some(FxStep::Gate),
         ModuleKind::FxVocoder => Some(FxStep::Vocoder),
+        ModuleKind::FxWiden => Some(FxStep::Widen),
         ModuleKind::FxConvReverb => Some(FxStep::ConvReverb),
         ModuleKind::FxParamEq => Some(FxStep::ParamEq),
         ModuleKind::FxPitchShift => Some(FxStep::PitchShift),

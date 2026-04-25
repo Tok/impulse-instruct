@@ -256,7 +256,18 @@ impl DspState {
                 p.conv_reverb_width,
                 sr,
             ),
-            FxStep::ParamEq => self.param_eq.process(sig, &p.param_eq_bands, sr),
+            FxStep::ParamEq => {
+                // M/S mode: skip the chain cascade and latch a flag so
+                // the master stage runs separate cascades on the
+                // decoded mid + side channels.  Passthrough here
+                // because there's no L/R available in the mono chain.
+                if p.param_eq_ms_mode {
+                    self.param_eq_ms_active = true;
+                    sig
+                } else {
+                    self.param_eq.process(sig, &p.param_eq_bands, sr)
+                }
+            }
             FxStep::PitchShift => self.pitch_shift.process(
                 sig,
                 p.pitch_shift_semi,
@@ -283,6 +294,19 @@ impl DspState {
                 p.vocoder_mix,
                 sr,
             ),
+            FxStep::Widen => {
+                // Passthrough that latches the active widen knobs so
+                // the master stage applies Haas + side scaling on the
+                // final L/R after the per-voice pan side has already
+                // been computed.  Same idiom as FxStep::Pan.
+                if p.widen_mix > 0.001 {
+                    self.fx_widen_active = true;
+                    self.fx_widen_haas_amt = p.widen_haas;
+                    self.fx_widen_side_amt = p.widen_side;
+                    self.fx_widen_mix_amt = p.widen_mix;
+                }
+                sig
+            }
         }
     }
 

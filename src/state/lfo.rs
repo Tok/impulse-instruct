@@ -190,6 +190,10 @@ pub enum LfoTarget {
     VocoderCarrierMix,
     VocoderSense,
     VocoderMix,
+    // FX: Widener (master-stage Haas + side-scaling)
+    WidenHaas,
+    WidenSide,
+    WidenMix,
     // FX: Tape Sat
     TapeDrive,
     TapeMix,

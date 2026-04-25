@@ -29,12 +29,14 @@ Tier 1 (small, well-defined, no new infra):
   DSP (Olli Niemitalo's HilbertOLA-style coefficient design); a
   rushed implementation would sound off. Pick this back up with
   more attention than a batched-through tier-1 slot allows.
-- [ ] **Stereo widener (`FxWiden`)** — Haas-delay + mid/side
-  scaling for width. **Blocked on stereo FX pipeline** — the
-  current `apply_fx_step(sig: f32) -> f32` is mono per-FX, with
-  stereo only at the master stage. A widener fundamentally needs
-  stereo I/O. Lift this once we add a stereo dispatch path (or a
-  dual-channel FX trait alongside the mono one).
+- [x] **Stereo widener (`FxWiden`)** — shipped via the
+  master-stage latch pattern (mirrors `FxPan` / `FxConvReverb`'s
+  side-latch idiom).  Chain step is a mono passthrough that flips
+  `fx_widen_active = true` and copies the live haas / side / mix
+  knobs; the master stage applies a Haas delay (0–30 ms ring on
+  the L channel's mid component) plus side scaling (1–3× on the
+  existing mid/side decomposition) before L/R recombination.
+  Avoids converting the entire chain to stereo I/O.
 
 Tier 2 (need a sidechain / second input port — solve once,
 share):
@@ -86,9 +88,14 @@ Tier 3 (heavier — build once Tier 1+2 settle):
   (`conv_reverb_cabinet: bool`).  When true, caps `conv_reverb_size`
   internally at 0.1 (10 % of loaded IR) and the file picker
   browses `samples/cabinets/` instead of `samples/impulses/`.
-- [-] **Mid/side EQ flag on `FxParamEq`** — *blocked on stereo FX
-  pipeline*.  The dispatch is mono per-FX; mid/side decoding
-  fundamentally needs L+R IO.  Same blocker as `FxWiden`.
+- [x] **Mid/side EQ flag on `FxParamEq`** — shipped via the same
+  master-stage latch pattern.  When `param_eq_ms_mode` is on, the
+  chain's ParamEq step is a passthrough that flags
+  `param_eq_ms_active = true`; the master stage runs two extra
+  `ParamEq` cascades (`param_eq_mid` + `param_eq_side`) on the
+  decoded mid + side channels of the final L/R, using the same
+  band list.  UI: `MN`/`M/S` toggle on the ParamEq band-readout
+  strip.
 - [-] **Shimmer mode flag on `FxConvReverb`** — *deferred*.
   Pitch-shift (+12 / +7) in the feedback loop is doable but needs
   careful integration with `ConvReverb`'s data flow + an extra

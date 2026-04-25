@@ -71,6 +71,12 @@ pub enum ModuleKind {
     FxDrive,
     FxAutotune,
     FxPan,
+    /// Stereo widener — Haas delay (short L-channel offset) +
+    /// mid/side side-scaling.  Implemented as a master-stage latch
+    /// (the chain step is a passthrough that flags the master to
+    /// apply Haas + side scaling on the final L/R, mirroring the
+    /// FxPan "side latch" pattern).  Tier 1 stereo FX.
+    FxWiden,
     FxConvReverb,
     FxParamEq,
     FxPitchShift,
@@ -177,6 +183,7 @@ impl ModuleKind {
             Self::FxDrive => "DRIVE",
             Self::FxAutotune => "AUTOTUNE",
             Self::FxPan => "PAN",
+            Self::FxWiden => "WIDEN",
             Self::FxConvReverb => "CONV REV",
             Self::FxParamEq => "PARAM EQ",
             Self::FxPitchShift => "PITCH",
@@ -314,7 +321,8 @@ impl ModuleKind {
             | Self::FxTapeSat
             | Self::FxDrive
             | Self::FxAutotune
-            | Self::FxPan => (2, 1),
+            | Self::FxPan
+            | Self::FxWiden => (2, 1),
             // Gate has 4 knobs (threshold / attack / release / depth) +
             // mix — 2 rows.
             Self::FxGate => (2, 2),
@@ -370,6 +378,7 @@ impl ModuleKind {
             | Self::FxDrive
             | Self::FxAutotune
             | Self::FxPan
+            | Self::FxWiden
             | Self::FxConvReverb
             | Self::FxParamEq
             | Self::FxPitchShift
@@ -436,6 +445,7 @@ impl ModuleKind {
                 | Self::FxDrive
                 | Self::FxAutotune
                 | Self::FxPan
+                | Self::FxWiden
                 | Self::FxConvReverb
                 | Self::FxParamEq
                 | Self::FxPitchShift
@@ -485,6 +495,7 @@ impl ModuleKind {
                 | Self::FxDrive
                 | Self::FxAutotune
                 | Self::FxPan
+                | Self::FxWiden
                 | Self::FxConvReverb
                 | Self::FxPitchShift
         )
@@ -521,6 +532,7 @@ impl ModuleKind {
                 | Self::FxDrive
                 | Self::FxAutotune
                 | Self::FxPan
+                | Self::FxWiden
                 | Self::FxConvReverb
                 | Self::FxParamEq
                 | Self::FxPitchShift

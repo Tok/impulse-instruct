@@ -74,7 +74,8 @@ fn kind_to_scope_name(kind: ModuleKind) -> Option<String> {
         | ModuleKind::FxVocoder
         | ModuleKind::FxTapeSat
         | ModuleKind::FxDrive
-        | ModuleKind::FxAutotune => Some("fx".to_string()),
+        | ModuleKind::FxAutotune
+        | ModuleKind::FxWiden => Some("fx".to_string()),
         ModuleKind::LfoModule => Some("lfo".to_string()),
         _ => None,
     }
@@ -128,6 +129,7 @@ pub fn parse_module_kind(name: &str) -> Option<ModuleKind> {
         "fxbitcrush" | "bitcrush" | "lofi" => Some(FxBitcrush),
         "fxringmod" | "ringmod" | "ring" => Some(FxRingMod),
         "fxpan" | "pan" | "autopan" => Some(FxPan),
+        "fxwiden" | "widen" | "widener" | "stereowidth" | "haas" => Some(FxWiden),
         "lfomodule" | "lfo" => Some(LfoModule),
         "spectrumanalyzer" | "spectrum" | "analyser" | "analyzer" => Some(SpectrumAnalyzer),
         "stereometer" | "stereo" | "correlation" | "meter" => Some(StereoMeter),
@@ -199,6 +201,10 @@ pub fn rack_kind_name_matches(kind: ModuleKind, name: &str) -> bool {
             "autotune" | "auto_tune" | "pitch_correct" | "tune" | "fx"
         ),
         ModuleKind::FxPan => matches!(n.as_str(), "pan" | "autopan" | "fx"),
+        ModuleKind::FxWiden => matches!(
+            n.as_str(),
+            "widen" | "widener" | "haas" | "stereowidth" | "fx"
+        ),
         ModuleKind::FxConvReverb => matches!(
             n.as_str(),
             "convreverb" | "conv_reverb" | "conv reverb" | "convolution" | "ir" | "fx"

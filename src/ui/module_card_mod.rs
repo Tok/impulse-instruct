@@ -126,6 +126,9 @@ const ALL_TARGETS: &[LfoTarget] = &[
     LfoTarget::VocoderCarrierMix,
     LfoTarget::VocoderSense,
     LfoTarget::VocoderMix,
+    LfoTarget::WidenHaas,
+    LfoTarget::WidenSide,
+    LfoTarget::WidenMix,
     LfoTarget::TapeDrive,
     LfoTarget::TapeMix,
     LfoTarget::TapeFlutter,
@@ -226,6 +229,7 @@ pub fn has_audio_in(kind: ModuleKind) -> bool {
             | FxTapeSat
             | FxDrive
             | FxAutotune
+            | FxWiden
             | MasterOutput
     )
 }

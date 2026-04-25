@@ -28,6 +28,7 @@ mod fx_math_tests;
 mod fx_plan_tests;
 mod fx_sidechain_tests;
 mod fx_step_idx_tests;
+mod fx_stereo_tests;
 mod helpers_tests;
 mod heuristic_plan_edge_tests;
 mod jam_tools_tests;

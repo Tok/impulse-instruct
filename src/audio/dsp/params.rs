@@ -210,6 +210,9 @@ pub fn lfo_target_to_u8(t: LfoTarget) -> u8 {
         VocoderCarrierMix => 116,
         VocoderSense => 117,
         VocoderMix => 118,
+        WidenHaas => 119,
+        WidenSide => 120,
+        WidenMix => 121,
     }
 }
 
@@ -523,6 +526,12 @@ pub struct AudioParams {
     pub fx_pan_pos: f32,
     pub fx_pan_width: f32,
     pub fx_pan_rate: f32,
+    // Stereo widener (master-stage latch)
+    pub widen_haas: f32,
+    pub widen_side: f32,
+    pub widen_mix: f32,
+    /// Mid/side mode flag for `FxParamEq` — see `FxState.param_eq_ms_mode`.
+    pub param_eq_ms_mode: bool,
     // Convolution reverb
     pub conv_reverb_mix: f32,
     pub conv_reverb_size: f32,

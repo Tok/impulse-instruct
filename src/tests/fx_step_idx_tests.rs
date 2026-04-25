@@ -45,6 +45,7 @@ const ALL_FX_STEPS: &[FxStep] = &[
     FxStep::PitchShift,
     FxStep::Gate,
     FxStep::Vocoder,
+    FxStep::Widen,
 ];
 
 #[test]

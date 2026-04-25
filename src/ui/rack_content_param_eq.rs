@@ -22,8 +22,30 @@ pub(super) fn draw_param_eq(app: &mut ImpulseApp, ui: &mut egui::Ui, module_id: 
         curve_size,
     );
     ui.add_space(2.0);
+    let mut ms_changed = false;
     ui.horizontal(|ui| {
         ui.spacing_mut().item_spacing.x = 3.0;
+        // M/S mode toggle on the leftmost cell of the band-readout
+        // strip — when on, the cascade splits into mid + side at
+        // master so each channel gets the same band curve.
+        let ms_on = app.state.read().fx.param_eq_ms_mode;
+        let ms_label = if ms_on { "M/S" } else { "MN" };
+        let ms_col = if ms_on { theme::CHALK } else { theme::IRON };
+        if ui
+            .add_sized(
+                [28.0, 16.0],
+                egui::Button::new(
+                    egui::RichText::new(ms_label)
+                        .monospace()
+                        .size(8.0)
+                        .color(ms_col),
+                ),
+            )
+            .clicked()
+        {
+            app.state.write().fx.param_eq_ms_mode = !ms_on;
+            ms_changed = true;
+        }
         for (i, b) in local.iter().enumerate() {
             let kind_short = match b.kind {
                 crate::state::ParamEqBandKind::LowShelf => "LS",
@@ -48,5 +70,5 @@ pub(super) fn draw_param_eq(app: &mut ImpulseApp, ui: &mut egui::Ui, module_id: 
     if any_changed {
         app.state.write().fx.param_eq_bands = local;
     }
-    any_changed
+    any_changed || ms_changed
 }

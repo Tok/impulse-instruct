@@ -77,6 +77,7 @@ fn title_fill(kind: ModuleKind) -> Color32 {
         | ModuleKind::FxDrive
         | ModuleKind::FxAutotune
         | ModuleKind::FxPan
+        | ModuleKind::FxWiden
         | ModuleKind::FxConvReverb
         | ModuleKind::FxParamEq
         | ModuleKind::FxPitchShift

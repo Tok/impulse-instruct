@@ -232,6 +232,13 @@ fn mentions_fx(lower: &str) -> bool {
         "vocode",
         "talkbox",
         "sidechain",
+        "widen",
+        "widener",
+        "haas",
+        "stereo width",
+        "mid/side",
+        "mid-side",
+        "ms eq",
     ];
     FX_WORDS.iter().any(|w| lower.contains(w))
 }

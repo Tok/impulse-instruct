@@ -140,6 +140,9 @@ pub fn apply_mod_target(p: &mut AudioParams, target: u8, mod_val: f32) {
         116 => p.vocoder_carrier_mix = (p.vocoder_carrier_mix + mod_val).clamp(0.0, 1.0),
         117 => p.vocoder_sense = (p.vocoder_sense + mod_val).clamp(0.0, 1.0),
         118 => p.vocoder_mix = (p.vocoder_mix + mod_val).clamp(0.0, 1.0),
+        119 => p.widen_haas = (p.widen_haas + mod_val).clamp(0.0, 1.0),
+        120 => p.widen_side = (p.widen_side + mod_val).clamp(0.0, 1.0),
+        121 => p.widen_mix = (p.widen_mix + mod_val).clamp(0.0, 1.0),
         _ => {}
     }
 }

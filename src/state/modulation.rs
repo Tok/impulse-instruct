@@ -95,6 +95,7 @@ pub fn mod_inputs(kind: ModuleKind) -> &'static [ModInput] {
         FxEq => &[Fixed(EqLow), Fixed(EqMid), Fixed(EqHigh)],
         FxTapeSat => &[Fixed(TapeDrive), Fixed(TapeMix), Fixed(TapeFlutter)],
         FxAutotune => &[Fixed(AutotuneAmount), Fixed(AutotuneMix)],
+        FxWiden => &[Fixed(WidenHaas), Fixed(WidenSide), Fixed(WidenMix)],
         // ── FX >3 knobs → 3 selectors ──────────────────────────────────────
         FxReverb | FxDelay | FxCompressor | FxPan | FxConvReverb | FxParamEq | FxPitchShift => {
             &[Selector, Selector, Selector]
@@ -233,6 +234,9 @@ pub fn lfo_target_short_label(target: LfoTarget) -> &'static str {
         VocoderCarrierMix => "VC.CR",
         VocoderSense => "VC.SN",
         VocoderMix => "VC.MX",
+        WidenHaas => "WD.HS",
+        WidenSide => "WD.SD",
+        WidenMix => "WD.MX",
         TapeDrive => "TP.DR",
         TapeMix => "TP.MX",
         TapeFlutter => "TP.FL",
@@ -294,6 +298,7 @@ pub(crate) fn lfo_target_module_kind(target: LfoTarget) -> Option<ModuleKind> {
         CompThresh | CompRatio | CompMix => Some(ModuleKind::FxCompressor),
         GateThreshold | GateAttack | GateRelease | GateDepth | GateMix => Some(ModuleKind::FxGate),
         VocoderBands | VocoderCarrierMix | VocoderSense | VocoderMix => Some(ModuleKind::FxVocoder),
+        WidenHaas | WidenSide | WidenMix => Some(ModuleKind::FxWiden),
         TapeDrive | TapeMix | TapeFlutter => Some(ModuleKind::FxTapeSat),
         AutotuneAmount | AutotuneMix => Some(ModuleKind::FxAutotune),
         GabberKickPitch | GabberKickDecay | GabberKickClip | GabberKickPan => {
@@ -418,6 +423,9 @@ pub fn parse_lfo_target(name: &str) -> Option<LfoTarget> {
         "vocodercarriermix" => VocoderCarrierMix,
         "vocodersense" => VocoderSense,
         "vocodermix" => VocoderMix,
+        "widenhaas" => WidenHaas,
+        "widenside" => WidenSide,
+        "widenmix" => WidenMix,
         "tapedrive" => TapeDrive,
         "tapemix" => TapeMix,
         "tapeflutter" => TapeFlutter,

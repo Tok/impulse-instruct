@@ -371,6 +371,23 @@ pub struct FxState {
     /// Pan FX: auto-pan LFO rate 0..1 → 0.05..8 Hz.
     #[serde(default = "default_fx_pan_rate")]
     pub fx_pan_rate: f32,
+    // ── Stereo widener (FxWiden, master-stage latch) ──────────────
+    /// Haas-delay amount 0..1 → 0..30 ms delay applied to the L
+    /// channel only at the master stage.  Creates the classic
+    /// psychoacoustic-widening illusion without any side-channel
+    /// computation.
+    #[serde(default = "default_widen_haas")]
+    pub widen_haas: f32,
+    /// Side-channel scaling 0..1 → 1..4× scaling on the existing
+    /// mid/side decomposition at the master stage.  At 0, side stays
+    /// untouched; at 1, side is boosted 4× — wider but more
+    /// mono-incompatible.
+    #[serde(default)]
+    pub widen_side: f32,
+    /// Wet/dry blend 0..1 — multiplier on the widening effect.  0 =
+    /// bypass (master skips Haas + side scaling); 1 = full effect.
+    #[serde(default)]
+    pub widen_mix: f32,
     // ── Convolution Reverb ───────────────────────────────────────────────
     /// Wet/dry mix (0 = dry, 1 = 100 % wet).
     #[serde(default)]
@@ -420,6 +437,14 @@ pub struct FxState {
     /// 3-knob card) so existing sessions don't have to migrate.
     #[serde(default = "default_param_eq_bands")]
     pub param_eq_bands: [ParamEqBand; 8],
+    /// Mid/side mode flag for `FxParamEq`.  When true, the chain step
+    /// is a passthrough (just records that M/S is requested) and the
+    /// master stage runs two extra `ParamEq` cascades on the M and S
+    /// channels of the final L/R buses.  When false, the standard
+    /// in-chain mono cascade applies.  Same master-stage latch
+    /// pattern as `FxWiden` / `FxPan`.
+    #[serde(default)]
+    pub param_eq_ms_mode: bool,
     /// Standalone pitch shifter — semitone offset stored directly so
     /// the LLM can write a musical value (`"pitch_shift_semi": 7`).
     /// Clamped to ±24 st at DSP time.
@@ -576,6 +601,10 @@ fn default_vocoder_sense() -> f32 {
     0.5 // mid-range detector gain.
 }
 
+fn default_widen_haas() -> f32 {
+    0.4 // ~12 ms — comfortable Haas window without flam at the kick.
+}
+
 impl Default for FxState {
     fn default() -> Self {
         Self {
@@ -685,6 +714,9 @@ impl Default for FxState {
             fx_pan_pos: 0.0,
             fx_pan_width: 0.5,
             fx_pan_rate: default_fx_pan_rate(),
+            widen_haas: default_widen_haas(),
+            widen_side: 0.0,
+            widen_mix: 0.0,
             conv_reverb_mix: 0.0,
             conv_reverb_size: default_conv_reverb_size(),
             conv_reverb_predelay: 0.0,
@@ -695,6 +727,7 @@ impl Default for FxState {
             conv_reverb_cabinet: false,
             conv_reverb_ir_path: String::new(),
             param_eq_bands: default_param_eq_bands(),
+            param_eq_ms_mode: false,
             pitch_shift_semi: 0.0,
             pitch_shift_fine: 0.0,
             pitch_shift_mix: 0.0,

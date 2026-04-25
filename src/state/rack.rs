@@ -1,13 +1,8 @@
 // ─── state/rack.rs ────────────────────────────────────────────────────────────
-// Modular rack state: which modules are active and how they are cabled.
-//
-// The rack replaces the fixed 5-tab layout.  Every voice, FX unit, and
-// modulation source is a `RackModule` with a stable `id`, a `kind`, optional
-// enabled flag, and a layout position used by the UI.
-//
-// Cables connect output ports to input ports.  In this first iteration the DSP
-// still uses the existing fixed chain; cable state drives the visual routing
-// overlay and will be wired into `compile_fx_plan` in a follow-up.
+// Modular rack state: modules + cables.  Each `RackModule` has a stable id,
+// a kind, an enabled flag, and a layout position; cables connect output
+// ports to input ports.  Cycle-checked at connect time (FX→FX cycles are
+// allowed and lifted into feedback edges by `compile_fx_plan`).
 
 use std::collections::{HashMap, HashSet, VecDeque};
 
@@ -300,6 +295,7 @@ impl RackState {
                 | ModuleKind::FxDrive
                 | ModuleKind::FxAutotune
                 | ModuleKind::FxPan
+                | ModuleKind::FxWiden
         );
         if !has_audio_out {
             return true;
@@ -522,6 +518,8 @@ impl RackState {
                 ModuleKind::FxDrive => 30,
                 ModuleKind::FxAutotune => 31,
                 ModuleKind::FxPan => 36,
+                // Widen sits next to Pan — both stereo master-stage FX.
+                ModuleKind::FxWiden => 36,
                 // ConvReverb sorts right next to the stock reverb so the two
                 // reverbs sit side-by-side in the FX strip.
                 ModuleKind::FxConvReverb => 37,

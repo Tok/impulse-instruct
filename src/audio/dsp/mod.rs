@@ -188,7 +188,33 @@ pub struct DspState {
     /// step is inactive.
     fx_pan_phase: f32,
     fx_pan_side: f32,
+    /// FxWiden master-stage latch.  The chain step is a passthrough
+    /// that flips this true with the latest knob amounts; the master
+    /// stage reads + applies them, then resets `fx_widen_active` for
+    /// the next sample.  Same idiom as `fx_pan_side`.  Haas delay buf
+    /// is a small ring on the L channel — sized to MAX_HAAS_SAMPLES at
+    /// 48 kHz × 30 ms × headroom.
+    fx_widen_active: bool,
+    fx_widen_haas_amt: f32,
+    fx_widen_side_amt: f32,
+    fx_widen_mix_amt: f32,
+    fx_widen_haas_buf: Vec<f32>,
+    fx_widen_haas_pos: usize,
+    /// Mid/side `FxParamEq` cascades — instantiated once, used only
+    /// when `param_eq_ms_mode` is active and the chain's ParamEq step
+    /// runs.  When idle, they stay zero-state and don't drift; their
+    /// state initialises lazily on first use.  The chain ParamEq step
+    /// is a passthrough in M/S mode so the master gets the dry signal
+    /// to decode.
+    param_eq_mid: ParamEq,
+    param_eq_side: ParamEq,
+    param_eq_ms_active: bool,
 }
+
+/// Maximum Haas delay length in samples — 48 kHz × 50 ms (headroom
+/// past the user-facing 0..30 ms range).  Heap-allocated once at
+/// `DspState::new` so per-block paths stay allocation-free.
+const FX_WIDEN_HAAS_MAX_SAMPLES: usize = 2400;
 
 impl DspState {
     pub fn new(
@@ -280,6 +306,15 @@ impl DspState {
             duck_release: 1.0 - (-2.0_f32 / sample_rate).exp(),
             fx_pan_phase: 0.0,
             fx_pan_side: 0.0,
+            fx_widen_active: false,
+            fx_widen_haas_amt: 0.4,
+            fx_widen_side_amt: 0.0,
+            fx_widen_mix_amt: 0.0,
+            fx_widen_haas_buf: vec![0.0; FX_WIDEN_HAAS_MAX_SAMPLES],
+            fx_widen_haas_pos: 0,
+            param_eq_mid: ParamEq::new(),
+            param_eq_side: ParamEq::new(),
+            param_eq_ms_active: false,
         }
     }
 
@@ -862,11 +897,20 @@ impl DspState {
             // wet tail drops to mono when the step stops running.
             let conv_reverb_side = self.conv_reverb.side;
             self.conv_reverb.side *= 0.995;
+            // FxWiden / M/S ParamEq latches force the stereo path even
+            // when nothing else is producing side, so the master can
+            // apply Haas delay or M/S filtering to a mono mid.
+            let widen_active = self.fx_widen_active;
+            let ms_eq_active = self.param_eq_ms_active;
+            self.fx_widen_active = false;
+            self.param_eq_ms_active = false;
             let has_stereo = (p.stereo_width - 0.5).abs() > 0.01
                 || granular_side.abs() > 0.001
                 || pan_side.abs() > 0.0001
                 || self.fx_pan_side.abs() > 0.0001
-                || conv_reverb_side.abs() > 0.0001;
+                || conv_reverb_side.abs() > 0.0001
+                || widen_active
+                || ms_eq_active;
             if channels >= 2 && has_stereo {
                 let mid_raw = out;
                 let chorus_side = self.chorus.read_tap(0.4) * 0.3;
@@ -894,9 +938,49 @@ impl DspState {
                     side_tilt: p.ms_side_tilt,
                     side_sat: p.ms_side_sat,
                 };
-                let (mid, side) = self.ms_master.process(mid_raw, side_raw, sr, ms_params);
-                let left = (mid + side).clamp(-1.0, 1.0);
-                let right = (mid - side).clamp(-1.0, 1.0);
+                let (mut mid, mut side) = self.ms_master.process(mid_raw, side_raw, sr, ms_params);
+
+                // M/S ParamEq: when the chain ParamEq step ran in M/S
+                // mode this sample, route mid + side through their
+                // dedicated cascades.  Same band list, but the user
+                // hears different curves on the centre and the sides
+                // — useful for surgical "tame the sides" mastering
+                // moves without affecting the lead vocal centre.
+                if ms_eq_active {
+                    mid = self.param_eq_mid.process(mid, &p.param_eq_bands, sr);
+                    side = self.param_eq_side.process(side, &p.param_eq_bands, sr);
+                }
+
+                // FxWiden: Haas delay on the L channel + side
+                // scaling.  Push current mid into the ring; tap a
+                // delayed sample for the L computation.  When the
+                // chain step didn't run this sample, fall back to
+                // current mid (no delay).
+                let (mid_for_left, side_widened) = if widen_active {
+                    let haas_amt = self.fx_widen_haas_amt.clamp(0.0, 1.0);
+                    let mix = self.fx_widen_mix_amt.clamp(0.0, 1.0);
+                    // 0..30 ms at the engine sample rate.
+                    let haas_samples =
+                        ((haas_amt * 0.030 * sr) as usize).min(FX_WIDEN_HAAS_MAX_SAMPLES - 1);
+                    self.fx_widen_haas_buf[self.fx_widen_haas_pos] = mid;
+                    let read = (self.fx_widen_haas_pos + FX_WIDEN_HAAS_MAX_SAMPLES - haas_samples)
+                        % FX_WIDEN_HAAS_MAX_SAMPLES;
+                    let mid_delayed = self.fx_widen_haas_buf[read];
+                    self.fx_widen_haas_pos =
+                        (self.fx_widen_haas_pos + 1) % FX_WIDEN_HAAS_MAX_SAMPLES;
+                    let mid_left = mid * (1.0 - mix) + mid_delayed * mix;
+                    let side_scale = 1.0 + self.fx_widen_side_amt.clamp(0.0, 1.0) * 2.0 * mix;
+                    (mid_left, side * side_scale)
+                } else {
+                    // Keep the ring tracking mid even when the FX is
+                    // off so re-engaging mid-bar doesn't pop.
+                    self.fx_widen_haas_buf[self.fx_widen_haas_pos] = mid;
+                    self.fx_widen_haas_pos =
+                        (self.fx_widen_haas_pos + 1) % FX_WIDEN_HAAS_MAX_SAMPLES;
+                    (mid, side)
+                };
+                let left = (mid_for_left + side_widened).clamp(-1.0, 1.0);
+                let right = (mid - side_widened).clamp(-1.0, 1.0);
                 frame[0] = left;
                 frame[1] = right;
                 for s in frame.iter_mut().skip(2) {

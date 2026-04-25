@@ -233,6 +233,14 @@ pub(super) fn apply_fx_update(
     u!(s.fx.fx_pan_pos, "fx_pan_pos", "fx.fx_pan_pos");
     u!(s.fx.fx_pan_width, "fx_pan_width", "fx.fx_pan_width");
     u!(s.fx.fx_pan_rate, "fx_pan_rate", "fx.fx_pan_rate");
+    u!(s.fx.widen_haas, "widen_haas", "fx.widen_haas");
+    u!(s.fx.widen_side, "widen_side", "fx.widen_side");
+    u!(s.fx.widen_mix, "widen_mix", "fx.widen_mix");
+    if !locked.contains("fx.param_eq_ms_mode")
+        && let Some(v) = fx.get("param_eq_ms_mode").and_then(|v| v.as_bool())
+    {
+        s.fx.param_eq_ms_mode = v;
+    }
     u!(
         s.fx.conv_reverb_mix,
         "conv_reverb_mix",
@@ -449,6 +457,7 @@ pub(super) fn apply_fx_update(
             0.0,
             1.0,
         ),
+        ("widen_xy", "widen_haas", "widen_side", 0.0, 1.0),
     ];
     for (xy_key, field_a, field_b, min, max) in XY_PAIRS {
         let Some(arr) = fx.get(*xy_key).and_then(|v| v.as_array()) else {
@@ -559,6 +568,9 @@ fn fx_field_mut<'a>(fx: &'a mut super::FxState, key: &str) -> Option<&'a mut f32
         "vocoder_carrier_mix" => &mut fx.vocoder_carrier_mix,
         "vocoder_sense" => &mut fx.vocoder_sense,
         "vocoder_mix" => &mut fx.vocoder_mix,
+        "widen_haas" => &mut fx.widen_haas,
+        "widen_side" => &mut fx.widen_side,
+        "widen_mix" => &mut fx.widen_mix,
         "tape_drive" => &mut fx.tape_drive,
         "tape_mix" => &mut fx.tape_mix,
         "tape_flutter" => &mut fx.tape_flutter,
