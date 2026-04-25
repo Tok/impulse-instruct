@@ -250,6 +250,7 @@ pub struct ImpulseApp {
     /// the next frame without coupling the API thread to the audio
     /// command queue directly.
     pub(crate) last_wavetable_path: String,
+    pub(crate) last_sample_instrument_path: String,
     pub(crate) neutts_online: bool,
     pub(crate) granular_capture_rx: rtrb::Consumer<f32>,
     pub(crate) granular_tap: Vec<f32>, // ring buffer, ~3s master output for CAPTURE
@@ -466,6 +467,7 @@ impl ImpulseApp {
             amen_ui: Default::default(),
             last_conv_reverb_ir_path: String::new(),
             last_wavetable_path: String::new(),
+            last_sample_instrument_path: String::new(),
             neutts_online: false,
             granular_capture_rx: audio.granular_capture_rx,
             granular_tap: vec![0.0; crate::audio::SAMPLE_RATE_HZ as usize * 3], // 3s ring buffer

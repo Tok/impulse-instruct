@@ -622,6 +622,13 @@ pub struct AudioParams {
     pub wavetable_pan: f32,
     pub wavetable_pitch_offset_semi: f32,
     pub rack_wavetable: bool,
+    // Sample Instrument voice
+    pub sample_enabled: bool,
+    pub sample_root_note: u8,
+    pub sample_volume: f32,
+    pub sample_pan: f32,
+    pub sample_pitch_offset_cents: f32,
+    pub rack_sample: bool,
     // Hoover lead
     pub hoover_enabled: bool,
     pub hoover_filter_start: f32,

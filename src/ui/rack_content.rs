@@ -23,6 +23,7 @@ pub(super) fn draw_voice_content(
         ModuleKind::HooverLead => crate::ui::panels::draw_hoover(app, ui),
         ModuleKind::PluckString => crate::ui::panels::draw_pluck(app, ui),
         ModuleKind::WavetableVoice => crate::ui::panels::draw_wavetable(app, ui),
+        ModuleKind::SampleInstrument => crate::ui::panels::draw_sample_instrument(app, ui),
         ModuleKind::An1xVoice => crate::ui::panels::draw_an1x(app, ui),
         ModuleKind::AmenSampler => crate::ui::panels::draw_amen(app, ui),
         ModuleKind::NoiseVoice => crate::ui::panels::draw_noise(app, ui),

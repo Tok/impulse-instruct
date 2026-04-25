@@ -18,6 +18,7 @@ mod params_from;
 pub mod pitch_shift;
 pub mod pluck;
 mod rev_tap;
+pub mod sample_instrument;
 pub mod samplers;
 mod trigger_handler;
 pub mod voices;
@@ -42,6 +43,7 @@ pub use params::{AudioParams, MAX_MOD_ROUTES, compile_mod_routes, lfo_target_to_
 use pitch_shift::PitchShift;
 use pluck::PluckVoice;
 pub use rev_tap::{FxDirection, FxRevQuant};
+use sample_instrument::SampleInstrumentVoice;
 use samplers::*;
 use voices::*;
 use wavetable::WavetableVoice;
@@ -124,6 +126,7 @@ pub struct DspState {
     hoover: HooverVoice,
     pluck: PluckVoice,
     wavetable: WavetableVoice,
+    sample_instrument: SampleInstrumentVoice,
     an1x: An1xVoice,
     amen: AmenVoice,
     // LFO state
@@ -237,6 +240,7 @@ impl DspState {
             hoover: HooverVoice::new(),
             pluck: PluckVoice::new(),
             wavetable: WavetableVoice::new(),
+            sample_instrument: SampleInstrumentVoice::new(),
             an1x: An1xVoice::new(),
             amen: AmenVoice::new(),
             lfo_phases: [0.0; 4],
@@ -296,6 +300,13 @@ impl DspState {
     /// allocation.
     pub fn load_wavetable(&mut self, data: std::sync::Arc<Vec<f32>>) {
         self.wavetable.load(data);
+    }
+
+    /// Load a freshly-decoded sample buffer into the SampleInstrument
+    /// voice.  Audio-thread routing only — actual file I/O happens off
+    /// the realtime path.
+    pub fn load_sample_instrument(&mut self, data: std::sync::Arc<Vec<f32>>) {
+        self.sample_instrument.load(data);
     }
 
     /// Load a new impulse response into the convolution reverb.  Called
@@ -449,6 +460,7 @@ impl DspState {
         let sends_hoover = snap_sends(ModuleKind::HooverLead);
         let sends_pluck = snap_sends(ModuleKind::PluckString);
         let sends_wavetable = snap_sends(ModuleKind::WavetableVoice);
+        let sends_sample = snap_sends(ModuleKind::SampleInstrument);
         let sends_an1x = snap_sends(ModuleKind::An1xVoice);
         let sends_amen = snap_sends(ModuleKind::AmenSampler);
         let sends_noise = snap_sends(ModuleKind::NoiseVoice);
@@ -565,6 +577,11 @@ impl DspState {
             } else {
                 0.0
             };
+            let sample_out = if p.sample_enabled && p.rack_sample {
+                self.sample_instrument.process(sr, &p)
+            } else {
+                0.0
+            };
             // Cross-modulation: bass → AN1X pitch (one-sample delay via bass_out)
             if p.xmod_bass_to_an1x_pitch > 0.001 {
                 p.lfo_pitch_mod_st += bass_out * p.xmod_bass_to_an1x_pitch * 24.0;
@@ -613,6 +630,7 @@ impl DspState {
             let bus_hoover = hoover_out;
             let bus_pluck = pluck_out;
             let bus_wavetable = wavetable_out;
+            let bus_sample = sample_out;
             let bus_an1x = an1x_out;
             let bus_amen = amen_out * dv[13];
             let bus_noise = noise_out;
@@ -644,6 +662,7 @@ impl DspState {
                 + bus_hoover
                 + bus_pluck
                 + bus_wavetable
+                + bus_sample
                 + bus_an1x
                 + bus_amen
                 + bus_noise
@@ -791,12 +810,26 @@ impl DspState {
                 } else {
                     bus_wavetable
                 };
+                let routed_sample = if sends_sample.count > 0 {
+                    self.route_voice_sends(
+                        bus_sample,
+                        &sends_sample,
+                        fb,
+                        &p,
+                        delay_samples,
+                        sr,
+                        gate_env,
+                    )
+                } else {
+                    bus_sample
+                };
                 let mixed = (routed_bass
                     + routed_808
                     + routed_909
                     + routed_hoover
                     + routed_pluck
                     + routed_wavetable
+                    + routed_sample
                     + routed_an1x
                     + routed_amen
                     + routed_noise
@@ -864,6 +897,7 @@ impl DspState {
                 + hoover_out * p.pan_hoover * 0.5
                 + pluck_out * p.pluck_pan * 0.5
                 + wavetable_out * p.wavetable_pan * 0.5
+                + sample_out * p.sample_pan * 0.5
                 + an1x_out * p.pan_an1x * 0.5
                 + noise_out * p.pan_noise * 0.5;
             // Decay the Pan FxStep side-contribution when the step

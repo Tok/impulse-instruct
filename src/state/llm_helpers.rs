@@ -426,6 +426,60 @@ pub(super) fn apply_wavetable_update(
     }
 }
 
+/// Apply SampleInstrument fields from an LLM JSON update object.
+/// Mirrors `apply_wavetable_update` — voice params + sequencer pattern.
+pub(super) fn apply_sample_instrument_update(
+    s: &mut AppState,
+    w: &serde_json::Map<String, serde_json::Value>,
+    locked: &HashSet<String>,
+) {
+    if !locked.contains("sample.enabled")
+        && let Some(v) = w.get("enabled").and_then(|v| v.as_bool())
+    {
+        s.sample_instrument.enabled = v;
+    }
+    if !locked.contains("sample.root_note")
+        && let Some(v) = w.get("root_note").and_then(|v| v.as_u64())
+    {
+        s.sample_instrument.root_note = v.clamp(0, 127) as u8;
+    }
+    s.sample_instrument.volume = unlocked_f32(
+        s.sample_instrument.volume,
+        w,
+        "volume",
+        "sample.volume",
+        locked,
+    );
+    if !locked.contains("sample.pan")
+        && let Some(v) = w.get("pan").and_then(|v| v.as_f64())
+    {
+        s.sample_instrument.pan = (v as f32).clamp(-1.0, 1.0);
+    }
+    if !locked.contains("sample.pitch_offset_cents")
+        && let Some(v) = w.get("pitch_offset_cents").and_then(|v| v.as_f64())
+    {
+        s.sample_instrument.pitch_offset_cents = (v as f32).clamp(-100.0, 100.0);
+    }
+    if !locked.contains("sequencer.sample_steps")
+        && let Some(arr) = w.get("sample_steps").and_then(|v| v.as_array())
+    {
+        for (i, val) in arr.iter().enumerate().take(MAX_STEPS) {
+            if let Some(a) = val.as_bool() {
+                s.sequencer.sample_pattern[i].active = a;
+            }
+        }
+    }
+    if !locked.contains("sequencer.sample_notes")
+        && let Some(arr) = w.get("sample_notes").and_then(|v| v.as_array())
+    {
+        for (i, val) in arr.iter().enumerate().take(MAX_STEPS) {
+            if let Some(n) = val.as_u64() {
+                s.sequencer.sample_pattern[i].note = n.clamp(0, 127) as u8;
+            }
+        }
+    }
+}
+
 /// Apply AN1X voice fields from an LLM JSON update object.
 pub(super) fn apply_an1x_update(
     s: &mut AppState,

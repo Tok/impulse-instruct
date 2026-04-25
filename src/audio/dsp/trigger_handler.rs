@@ -162,6 +162,31 @@ impl DspState {
                     self.wavetable.gate_off();
                 }
             }
+            SampleTrigger {
+                note,
+                accent,
+                slide,
+            } => {
+                if self.params.rack_sample {
+                    // Refresh the source-recording reference each trigger
+                    // so a UI-side root-note change takes effect on the
+                    // very next note rather than on a load.
+                    self.sample_instrument
+                        .set_root_note(self.params.sample_root_note, self.params.tuning);
+                    self.sample_instrument.trigger(
+                        *note,
+                        self.params.tuning,
+                        *accent,
+                        *slide,
+                        self.params.sample_pitch_offset_cents,
+                    );
+                }
+            }
+            SampleGateOff => {
+                if self.params.rack_sample {
+                    self.sample_instrument.gate_off();
+                }
+            }
         }
     }
 }

@@ -357,6 +357,16 @@ pub fn set_wavetable_step(state: AppState, step: usize, note: u8, active: bool) 
     s
 }
 
+/// Set a Sample-Instrument sequencer step.
+pub fn set_sample_step(state: AppState, step: usize, note: u8, active: bool) -> AppState {
+    let mut s = state;
+    if step < s.sequencer.sample_pattern.len() {
+        s.sequencer.sample_pattern[step].active = active;
+        s.sequencer.sample_pattern[step].note = note;
+    }
+    s
+}
+
 // ─── LLM state update — see llm_apply.rs ─────────────────────────────────────
 
 // ─── Pattern bank & chain ─────────────────────────────────────────────────────

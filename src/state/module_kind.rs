@@ -18,6 +18,11 @@ pub enum ModuleKind {
     HooverLead,
     PluckString,
     WavetableVoice,
+    /// Pitched sample-playback instrument — load a single recording and
+    /// retune it across the keyboard via ratio resampling.  Distinct from
+    /// `AmenSampler` (plays slices at original pitch) and `WavetableVoice`
+    /// (single-cycle frame scan).  Single instance per rack in V1.
+    SampleInstrument,
     An1xVoice,
     AmenSampler,
     NoiseVoice,
@@ -127,6 +132,7 @@ impl ModuleKind {
             Self::HooverLead => "HOOVER",
             Self::PluckString => "PLUCK",
             Self::WavetableVoice => "WAVETABLE",
+            Self::SampleInstrument => "SAMPLER+",
             Self::An1xVoice => "AN1X",
             Self::AmenSampler => "AMEN",
             Self::NoiseVoice => "NOISE",
@@ -212,6 +218,9 @@ impl ModuleKind {
             // Wavetable — pos/phase + vol/pan/pitch + LOAD button +
             // filename label.  Same 3x2 envelope as Pluck.
             Self::WavetableVoice => (3, 2),
+            // Sample Instrument — file picker + 4 knobs (root, vol, pan,
+            // pitch trim) + enable toggle.  Match Wavetable's footprint.
+            Self::SampleInstrument => (3, 2),
             Self::An1xVoice => (6, 6),
             Self::AmenSampler => (3, 3),
             Self::NoiseVoice => (2, 1),
@@ -307,6 +316,7 @@ impl ModuleKind {
             | Self::HooverLead
             | Self::PluckString
             | Self::WavetableVoice
+            | Self::SampleInstrument
             | Self::An1xVoice
             | Self::AmenSampler
             | Self::NoiseVoice
@@ -368,6 +378,7 @@ impl ModuleKind {
                 | Self::HooverLead
                 | Self::PluckString
                 | Self::WavetableVoice
+                | Self::SampleInstrument
                 | Self::DrumKit808
                 | Self::DrumKit909
                 | Self::AmenSampler

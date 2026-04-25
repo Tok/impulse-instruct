@@ -20,6 +20,7 @@ pub(super) const VOICE_KINDS: &[ModuleKind] = &[
     ModuleKind::HooverLead,
     ModuleKind::An1xVoice,
     ModuleKind::AmenSampler,
+    ModuleKind::SampleInstrument,
     ModuleKind::NoiseVoice,
 ];
 pub(super) const AI_KINDS: &[ModuleKind] = &[ModuleKind::LlmConsole, ModuleKind::LlmAgent];

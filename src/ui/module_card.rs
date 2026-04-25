@@ -40,7 +40,8 @@ fn title_fill(kind: ModuleKind) -> Color32 {
         ModuleKind::AcidBass
         | ModuleKind::HooverLead
         | ModuleKind::PluckString
-        | ModuleKind::WavetableVoice => 26,
+        | ModuleKind::WavetableVoice
+        | ModuleKind::SampleInstrument => 26,
         ModuleKind::DrumKit808
         | ModuleKind::DrumKit909
         | ModuleKind::AmenSampler

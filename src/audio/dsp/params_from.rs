@@ -287,6 +287,16 @@ impl AudioParams {
                 .modules
                 .iter()
                 .any(|m| m.kind == ModuleKind::WavetableVoice && m.enabled),
+            sample_enabled: s.sample_instrument.enabled,
+            sample_root_note: s.sample_instrument.root_note,
+            sample_volume: s.sample_instrument.volume.clamp(0.0, 1.5),
+            sample_pan: s.sample_instrument.pan.clamp(-1.0, 1.0),
+            sample_pitch_offset_cents: s.sample_instrument.pitch_offset_cents.clamp(-100.0, 100.0),
+            rack_sample: s
+                .rack
+                .modules
+                .iter()
+                .any(|m| m.kind == ModuleKind::SampleInstrument && m.enabled),
             hoover_enabled: s.hoover.enabled,
             hoover_filter_start: s.hoover.filter_start,
             hoover_sweep_time: s.hoover.sweep_time.clamp(0.1, 4.0),

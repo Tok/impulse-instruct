@@ -120,7 +120,45 @@ Tier 2 (heavier — guard with reduce-cost path):
   adding fading-polyline depth is pure eye-candy and can come
   back if visual demand surfaces.
 
-## New module — `SampleInstrument` (full scope)
+## New module — `SampleInstrument` (V1 shipped)
+
+V1 has shipped — see commit history.  V1 scope as built:
+
+- New `ModuleKind::SampleInstrument` (Voice zone, single instance per
+  rack, label "SAMPLER+").
+- `SampleInstrumentState` (path, root_note, volume, pan,
+  pitch_offset_cents) wired into `AppState`.
+- DSP voice in `audio/dsp/sample_instrument.rs` — linear-interp
+  resample, AR amp envelope, always-loops the buffer.  Pitch ratio =
+  `2^((played_note − root_note) / 12)`.
+- New `AudioCommand::LoadSampleInstrument(Arc<Vec<f32>>)` + handler.
+- Own sequencer lane: `sequencer.sample_pattern` + `sample_steps`.
+- New `TriggerEvent::SampleTrigger / SampleGateOff` with the standard
+  gate-counter machinery in `sequencer/mod.rs`.
+- Panel: ON/OFF + LOAD WAV + filename + ROOT note + VOL/PAN/TRIM knobs.
+- LLM apply path covers `sample.{enabled, root_note, volume, pan,
+  pitch_offset_cents, sample_steps, sample_notes}`.
+- 7 unit tests cover defaults, ModuleKind metadata, voice load /
+  trigger / resample, LLM apply.
+
+V1.1 follow-ups (deferred from the original plan, all small slices):
+
+- Auto-detect root note via `detect_pitch_hz` on load (helper
+  already shipped with the Tuner viz module).
+- Loop start/end markers + loop-on/off toggle (V1 always loops the
+  whole buffer).
+- Full ADSR (V1 uses simple AR like Wavetable / Pluck).
+- Render the `sample_*` lane in the sequencer panel UI (V1 only
+  drives the lane via LLM-applied JSON or programmatic state writes).
+- `/api/sample` HTTP endpoint mirroring `/api/wavetable`.
+
+V2 still in scope per the original plan: `.sfz` multisample mode,
+velocity layers + round-robin, polyphony with voice stealing,
+per-voice filter + LFO routing, formant-preserving pitch shift via
+PSOLA / phase vocoder, time-stretch decoupled from pitch, the sample
+editor with waveform + zone-map UI, starter pack curation.
+
+## New module — `SampleInstrument` (V1 implementation notes)
 
 A keyboard-playable sampler instrument: load one or more pitched
 recordings (piano notes, vocal phrases, drum hits, ...) and play

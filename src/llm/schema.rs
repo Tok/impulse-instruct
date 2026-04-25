@@ -239,6 +239,20 @@ pub fn param_json_schema() -> serde_json::Value {
                 },
                 "additionalProperties": false
             },
+            "sample": {
+                "type": "object",
+                "description": "SampleInstrument voice — load a single recording and play it across the keyboard via ratio resampling.  Distinct from amen (plays at original pitch) and wavetable (single-cycle frames).  Each note triggers playback at rate = 2^((note - root_note)/12).",
+                "properties": {
+                    "enabled":             { "type": "boolean" },
+                    "root_note":           { "type": "integer", "minimum": 0, "maximum": 127, "description": "Source-recording MIDI note. Played notes shift relative to this." },
+                    "volume":              { "type": "number", "minimum": 0.0, "maximum": 1.5 },
+                    "pan":                 { "type": "number", "minimum": -1.0, "maximum": 1.0 },
+                    "pitch_offset_cents":  { "type": "number", "minimum": -100.0, "maximum": 100.0 },
+                    "sample_steps":        bool_array,
+                    "sample_notes":        { "type": "array", "items": { "type": "integer", "minimum": 0, "maximum": 127 }, "maxItems": 64, "description": "MIDI note per sample-instrument step" }
+                },
+                "additionalProperties": false
+            },
             "pluck": {
                 "type": "object",
                 "description": "Karplus-Strong plucked-string voice — dry melodic voice filling the gap between bass and AN1X.  LLM triggers: 'add a pluck', 'acoustic melody', 'string pad'.",

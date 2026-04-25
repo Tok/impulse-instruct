@@ -81,6 +81,13 @@ pub enum TriggerEvent {
         slide: f32,
     },
     WavetableGateOff,
+    /// Sample-Instrument trigger — same shape as Wavetable.
+    SampleTrigger {
+        note: u8,
+        accent: f32,
+        slide: f32,
+    },
+    SampleGateOff,
 }
 
 impl TriggerEvent {
@@ -133,6 +140,7 @@ pub struct ClockState {
     pub gate_counter_an1x: u32, // samples remaining in AN1X gate
     pub gate_counter_pluck: u32, // samples remaining in pluck gate
     pub gate_counter_wavetable: u32, // samples remaining in wavetable gate
+    pub gate_counter_sample: u32, // samples remaining in sample-instrument gate
     // Ratchet sub-hit tracking — fixed arrays, no allocation
     pub ratchet_remaining: [u8; NUM_DRUM_VOICES], // sub-hits left per voice
     pub ratchet_acc: [f64; NUM_DRUM_VOICES],      // sample accumulator since step fire
@@ -152,6 +160,7 @@ impl Default for ClockState {
             gate_counter_an1x: 0,
             gate_counter_pluck: 0,
             gate_counter_wavetable: 0,
+            gate_counter_sample: 0,
             ratchet_remaining: [0; NUM_DRUM_VOICES],
             ratchet_acc: [0.0; NUM_DRUM_VOICES],
             ratchet_interval: [0.0; NUM_DRUM_VOICES],
@@ -195,6 +204,7 @@ pub fn advance_clock(
     let mut gate_counter_an1x = clock.gate_counter_an1x;
     let mut gate_counter_pluck = clock.gate_counter_pluck;
     let mut gate_counter_wavetable = clock.gate_counter_wavetable;
+    let mut gate_counter_sample = clock.gate_counter_sample;
     let mut ratchet_remaining = clock.ratchet_remaining;
     let mut ratchet_acc = clock.ratchet_acc;
     let mut ratchet_interval = clock.ratchet_interval;
@@ -268,6 +278,16 @@ pub fn advance_clock(
             gate_counter_wavetable = 0;
         } else {
             gate_counter_wavetable -= block_size as u32;
+        }
+    }
+
+    // Handle gate-off for Sample Instrument
+    if gate_counter_sample > 0 {
+        if block_size as u32 >= gate_counter_sample {
+            events.push(TriggerEvent::SampleGateOff);
+            gate_counter_sample = 0;
+        } else {
+            gate_counter_sample -= block_size as u32;
         }
     }
 
@@ -608,6 +628,21 @@ pub fn advance_clock(
                 slide,
             });
         }
+
+        // Sample-Instrument trigger — V1 reuses the WavetableVoice
+        // pattern shape but reads from `sample_pattern` / `sample_steps`.
+        // No preecho hookup yet (deferred with the rest of V1.1).
+        let sstep = step % seq.sample_steps.max(1);
+        let ss = seq.sample_pattern.get(sstep).copied().unwrap_or_default();
+        if ss.active && cond_gate(step / seq.sample_steps.max(1), ss.cond) {
+            let gate_samples = (sps * ss.gate as f64) as u32;
+            gate_counter_sample = gate_samples;
+            events.push(TriggerEvent::SampleTrigger {
+                note: ss.note,
+                accent: ss.accent,
+                slide: ss.slide,
+            });
+        }
     }
 
     let new_clock = ClockState {
@@ -619,6 +654,7 @@ pub fn advance_clock(
         gate_counter_an1x,
         gate_counter_pluck,
         gate_counter_wavetable,
+        gate_counter_sample,
         ratchet_remaining,
         ratchet_acc,
         ratchet_interval,
