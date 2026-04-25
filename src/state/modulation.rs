@@ -56,7 +56,7 @@ pub fn mod_inputs(kind: ModuleKind) -> &'static [ModInput] {
         }
         // ── Explicit opt-outs ─────────────────────────────────────────────
         MasterOutput | LfoModule | LlmAgent | LlmConsole | SpectrumAnalyzer | StereoMeter
-        | ActivityTimeline => &[],
+        | ActivityTimeline | BarOscilloscope | EventStream => &[],
     }
 }
 

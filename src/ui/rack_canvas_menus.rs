@@ -40,6 +40,8 @@ pub(super) const FXMOD_KINDS: &[ModuleKind] = &[
     ModuleKind::SpectrumAnalyzer,
     ModuleKind::StereoMeter,
     ModuleKind::ActivityTimeline,
+    ModuleKind::BarOscilloscope,
+    ModuleKind::EventStream,
     ModuleKind::LfoModule,
 ];
 

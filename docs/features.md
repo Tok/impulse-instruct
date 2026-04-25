@@ -4,6 +4,28 @@ A detailed log of what's built.
 
 ---
 
+### Rackable viz modules — bar oscilloscope + event stream as modules
+
+- The header used to be the only home for the colored phosphor
+  oscilloscope (`draw_scope_colored`) and the scrolling note /
+  drum event stream.  Both are now rack modules, joining the
+  pre-existing `SpectrumAnalyzer`, `StereoMeter`, and
+  `ActivityTimeline` visualisers in the FX/Mod zone.
+- New `ModuleKind::BarOscilloscope` (4×2 grid) wraps
+  `scope_footer::draw_scope_colored` — same buffer + history
+  source as the header path, so phosphor trails carry over without
+  reimplementation.
+- New `ModuleKind::EventStream` (6×2 grid) wraps
+  `widgets::event_stream` and computes the smooth-step
+  interpolation locally from `bpm` / `last_step_time` /
+  `last_step_global` so the scroll speed matches the header.
+- Both kinds opt out of audio output and mod inputs (visualisers
+  read existing buffers / state directly), default to FxMod zone,
+  and appear in the Add menu next to the other analysis modules.
+- 2 new enum-method tests lock the FxMod placement, distinct
+  labels, and the no-audio / no-mod-io invariant against future
+  enum additions silently re-purposing them.
+
 ### Paginated bank selector — all 64 banks reachable from the strip
 
 - `MAX_BANKS = 64` already supported chains up to that length (Bach

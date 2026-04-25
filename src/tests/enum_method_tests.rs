@@ -225,3 +225,36 @@ fn allows_multiple_is_false_for_singletons() {
         );
     }
 }
+
+// ─── Visualiser modules ─────────────────────────────────────────────────────
+
+#[test]
+fn viz_modules_default_to_fxmod_and_carry_labels() {
+    // BarOscilloscope and EventStream were lifted from the always-on
+    // header into rack-placeable visualisers.  Lock the zone +
+    // distinct labels so future enum additions don't quietly steal
+    // the same label or land in the wrong zone.
+    for k in [ModuleKind::BarOscilloscope, ModuleKind::EventStream] {
+        assert_eq!(k.default_zone(), Zone::FxMod, "{k:?} expected in FxMod");
+        let l = k.label();
+        assert!(!l.is_empty(), "{k:?} label must not be empty");
+    }
+    assert_ne!(
+        ModuleKind::BarOscilloscope.label(),
+        ModuleKind::EventStream.label(),
+        "viz module labels must be distinct"
+    );
+}
+
+#[test]
+fn viz_modules_have_no_audio_or_mod_io() {
+    // Visualisers don't produce audio (no MASTER reach indicator) and
+    // don't expose mod-input jacks (nothing to modulate).
+    for k in [ModuleKind::BarOscilloscope, ModuleKind::EventStream] {
+        assert!(!k.has_audio_output(), "{k:?} must not produce audio");
+        assert!(
+            crate::state::mod_inputs(k).is_empty(),
+            "{k:?} must not declare mod inputs"
+        );
+    }
+}

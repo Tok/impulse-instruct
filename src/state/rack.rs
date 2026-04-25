@@ -495,6 +495,13 @@ impl RackState {
                 ModuleKind::StereoMeter => 33,
                 ModuleKind::ActivityTimeline => 34,
                 ModuleKind::LfoModule => 35,
+                // Bar oscilloscope sorts next to the spectrum module —
+                // both are global-bus visualisers; users tend to want
+                // them adjacent.
+                ModuleKind::BarOscilloscope => 40,
+                // Event stream is melodic / rhythmic activity, parks
+                // next to ActivityTimeline.
+                ModuleKind::EventStream => 41,
             }
         }
         let cols = GRID_COLS as usize;

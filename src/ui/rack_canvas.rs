@@ -704,6 +704,10 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
                             crate::ui::panels::draw_stereo_meter(app, ui);
                         } else if kind == ModuleKind::ActivityTimeline {
                             crate::ui::panels::draw_timeline(app, ui);
+                        } else if kind == ModuleKind::BarOscilloscope {
+                            crate::ui::panels::draw_scope_module(app, ui);
+                        } else if kind == ModuleKind::EventStream {
+                            crate::ui::panels::draw_event_stream_module(app, ui);
                         } else {
                             draw_fx_content(app, ui, kind, id);
                         }

@@ -195,5 +195,9 @@ pub fn rack_kind_name_matches(kind: ModuleKind, name: &str) -> bool {
         ModuleKind::SpectrumAnalyzer => matches!(n.as_str(), "spectrum" | "analyser" | "analyzer"),
         ModuleKind::StereoMeter => matches!(n.as_str(), "stereo" | "correlation" | "meter"),
         ModuleKind::ActivityTimeline => matches!(n.as_str(), "timeline" | "activity" | "log"),
+        ModuleKind::BarOscilloscope => {
+            matches!(n.as_str(), "scope" | "oscilloscope" | "waveform")
+        }
+        ModuleKind::EventStream => matches!(n.as_str(), "events" | "stream" | "notes"),
     }
 }

@@ -67,7 +67,9 @@ fn title_fill(kind: ModuleKind) -> Color32 {
         | ModuleKind::FxPitchShift
         | ModuleKind::SpectrumAnalyzer
         | ModuleKind::StereoMeter
-        | ModuleKind::ActivityTimeline => 20,
+        | ModuleKind::ActivityTimeline
+        | ModuleKind::BarOscilloscope
+        | ModuleKind::EventStream => 20,
         ModuleKind::LfoModule => 18,
         ModuleKind::LlmAgent => 30,
         ModuleKind::LlmConsole => 28,

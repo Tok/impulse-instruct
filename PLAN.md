@@ -8,18 +8,6 @@ they ship and are reflected in `features.md`.
 
 ## Sequencer
 
-- [ ] **Rackable viz modules (visualizers as rack modules)** - move
-  the header oscillographs / spectrum / event stream into optional
-  visualizer rack modules so the user can add / remove / position
-  them alongside the synth voices.  Header keeps the ring scope +
-  spectrum as always-on "transport indicators"; everything else
-  (bar oscilloscope, stereo meter, activity timeline, event stream
-  variants) becomes a rackable module with the same cable-fed input
-  model as SpectrumAnalyzer / StereoMeter already use.  The existing
-  `draw_scope_colored` path in `scope_footer.rs` is kept alive in
-  the header as a Preferences-toggleable fallback so it's available
-  to wire into a rack module without reimplementing the phosphor
-  trail rendering.
 ## UI / UX
 
 - [ ] **Rack mini-map** - bird's-eye navigator in a corner of the rack

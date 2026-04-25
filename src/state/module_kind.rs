@@ -51,6 +51,17 @@ pub enum ModuleKind {
     SpectrumAnalyzer,
     StereoMeter,
     ActivityTimeline,
+    /// Phosphor-style colored bar oscilloscope — mirrors the header
+    /// `draw_scope_colored` widget but lives as a rack module so users
+    /// can park it anywhere in the FX/Mod zone.  Reads the global
+    /// scope buffer + history; no audio input cable needed.
+    BarOscilloscope,
+    /// Real-time note / drum event stream — mirrors the header event
+    /// stream widget.  Rendered as a rack module so multiple instances
+    /// can show different scroll speeds / focus voices in future
+    /// iterations.  V1: one canonical instance reads the global
+    /// AppState log buffers.
+    EventStream,
     // ── Modulation ────────────────────────────────────────────────────────────
     LfoModule,
     LlmAgent,
@@ -96,6 +107,8 @@ impl ModuleKind {
             Self::SpectrumAnalyzer => "SPECTRUM",
             Self::StereoMeter => "STEREO METER",
             Self::ActivityTimeline => "TIMELINE",
+            Self::BarOscilloscope => "OSCILLOSCOPE",
+            Self::EventStream => "EVENT STREAM",
             Self::LfoModule => "LFO",
             Self::LlmAgent => "LLM AGENT",
             Self::LlmConsole => "LLM CONSOLE",
@@ -144,6 +157,14 @@ impl ModuleKind {
             Self::SpectrumAnalyzer => (4, 2),
             Self::ActivityTimeline => (4, 2),
             Self::StereoMeter => (2, 1),
+            // Bar oscilloscope — wide enough that its phosphor trails
+            // read clearly without dominating the rack.  Same envelope
+            // as the spectrum module so they line up when stacked.
+            Self::BarOscilloscope => (4, 2),
+            // Event stream — wider than the analysis modules so notes
+            // have horizontal room to scroll past.  Two rows tall so
+            // the future / past split is legible.
+            Self::EventStream => (6, 2),
             Self::LfoModule => (2, 2),
             // FX modules — exhaustive so new variants cause a compile error
             Self::FxDelay => (2, 2), // 5-button row can't fit in 1 row
@@ -209,6 +230,8 @@ impl ModuleKind {
             | Self::SpectrumAnalyzer
             | Self::StereoMeter
             | Self::ActivityTimeline
+            | Self::BarOscilloscope
+            | Self::EventStream
             | Self::LfoModule => Zone::FxMod,
         }
     }
