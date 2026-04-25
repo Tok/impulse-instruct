@@ -150,6 +150,8 @@ POST /api/amen           { "path": "samples/amen/foo.wav" }  load a specific ame
 POST /api/amen           { "random": true }     load a random sample from samples/amen/
 POST /api/granular       { "path": "samples/textures/pad.wav" }  load a granular texture
 POST /api/granular       { "random": true }     load a random sample from samples/textures/
+POST /api/sample         { "path": "samples/instruments/piano_C4.wav" }  load a specific sample-instrument recording
+POST /api/sample         { "random": true }     load a random sample from samples/instruments/
 POST /api/flip           { "show_back": true }   (true=cables, false=knobs)
 POST /api/rack/reset                              strip to sequencer + master + console
 POST /api/rack/add       { "kind": "808" }        add module, returns { "id": N }

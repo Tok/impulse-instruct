@@ -34,6 +34,47 @@ pub struct SampleInstrumentState {
     /// surface to the panel.
     #[serde(default)]
     pub sample_path: String,
+    /// Attack time 0..1 → 0.5..1500 ms.
+    #[serde(default = "default_attack")]
+    pub attack: f32,
+    /// Decay time 0..1 → 5..2000 ms.
+    #[serde(default = "default_decay")]
+    pub decay: f32,
+    /// Sustain level 0..1 (0 = full decay, 1 = no decay).
+    #[serde(default = "default_sustain")]
+    pub sustain: f32,
+    /// Release time 0..1 → 5..2000 ms.
+    #[serde(default = "default_release")]
+    pub release: f32,
+    /// Loop start position (0..1 of buffer).
+    #[serde(default)]
+    pub loop_start: f32,
+    /// Loop end position (0..1 of buffer; if ≤ loop_start, loop is disabled).
+    #[serde(default = "default_loop_end")]
+    pub loop_end: f32,
+    /// True = play loops between loop_start and loop_end while gate held.
+    /// False = one-shot; voice plays from loop_start once and falls silent.
+    #[serde(default = "default_loop_enabled")]
+    pub loop_enabled: bool,
+}
+
+fn default_attack() -> f32 {
+    0.0 // 0.5 ms — matches the V1 AR envelope
+}
+fn default_decay() -> f32 {
+    0.0 // 5 ms — no audible decay by default
+}
+fn default_sustain() -> f32 {
+    1.0 // sustain at full
+}
+fn default_release() -> f32 {
+    0.1 // 100 ms — matches the V1 AR release tail
+}
+fn default_loop_end() -> f32 {
+    1.0 // play to end of buffer
+}
+fn default_loop_enabled() -> bool {
+    true // V1 always-loops; V1.1 default keeps that behaviour
 }
 
 impl Default for SampleInstrumentState {
@@ -45,6 +86,13 @@ impl Default for SampleInstrumentState {
             pan: 0.0,
             pitch_offset_cents: 0.0,
             sample_path: String::new(),
+            attack: default_attack(),
+            decay: default_decay(),
+            sustain: default_sustain(),
+            release: default_release(),
+            loop_start: 0.0,
+            loop_end: default_loop_end(),
+            loop_enabled: default_loop_enabled(),
         }
     }
 }

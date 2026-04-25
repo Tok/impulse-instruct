@@ -460,6 +460,53 @@ pub(super) fn apply_sample_instrument_update(
     {
         s.sample_instrument.pitch_offset_cents = (v as f32).clamp(-100.0, 100.0);
     }
+    s.sample_instrument.attack = unlocked_f32(
+        s.sample_instrument.attack,
+        w,
+        "attack",
+        "sample.attack",
+        locked,
+    );
+    s.sample_instrument.decay = unlocked_f32(
+        s.sample_instrument.decay,
+        w,
+        "decay",
+        "sample.decay",
+        locked,
+    );
+    s.sample_instrument.sustain = unlocked_f32(
+        s.sample_instrument.sustain,
+        w,
+        "sustain",
+        "sample.sustain",
+        locked,
+    );
+    s.sample_instrument.release = unlocked_f32(
+        s.sample_instrument.release,
+        w,
+        "release",
+        "sample.release",
+        locked,
+    );
+    s.sample_instrument.loop_start = unlocked_f32(
+        s.sample_instrument.loop_start,
+        w,
+        "loop_start",
+        "sample.loop_start",
+        locked,
+    );
+    s.sample_instrument.loop_end = unlocked_f32(
+        s.sample_instrument.loop_end,
+        w,
+        "loop_end",
+        "sample.loop_end",
+        locked,
+    );
+    if !locked.contains("sample.loop_enabled")
+        && let Some(v) = w.get("loop_enabled").and_then(|v| v.as_bool())
+    {
+        s.sample_instrument.loop_enabled = v;
+    }
     if !locked.contains("sequencer.sample_steps")
         && let Some(arr) = w.get("sample_steps").and_then(|v| v.as_array())
     {

@@ -114,6 +114,78 @@ mod sample_instrument_dsp_tests {
 }
 
 #[cfg(test)]
+mod sample_instrument_v11_tests {
+    use crate::audio::dsp::sample_instrument::SampleInstrumentVoice;
+    use std::sync::Arc;
+
+    fn make_params() -> crate::audio::dsp::AudioParams {
+        let s = crate::state::AppState::default();
+        crate::audio::dsp::AudioParams::from_app_state(&s)
+    }
+
+    #[test]
+    fn adsr_release_decays_to_silence_after_gate_off() {
+        // Trigger, run a bit, gate off, run more — output should decay
+        // to silence within a few hundred ms (default release ≈ 100 ms).
+        let mut v = SampleInstrumentVoice::new();
+        let data: Vec<f32> = (0..4096).map(|i| (i as f32 * 0.1).sin() * 0.5).collect();
+        v.load(Arc::new(data));
+        v.set_root_note(60, crate::audio::dsp::TuningSystem::TwelveTet);
+        v.trigger(
+            60,
+            crate::audio::dsp::TuningSystem::TwelveTet,
+            0.0,
+            0.0,
+            0.0,
+        );
+        let p = make_params();
+        for _ in 0..1024 {
+            v.process(48_000.0, &p);
+        }
+        v.gate_off();
+        // Run 2 s — release tail (default ≈ 200 ms tau) should be far
+        // below audible threshold by then.  We assert <1 % residual,
+        // which is comfortably inside the noise floor of any rendered
+        // mix; tighter thresholds would be sensitive to the EMA's
+        // exponential-tail constant rather than the actual UX.
+        for _ in 0..96_000 {
+            let _ = v.process(48_000.0, &p);
+        }
+        let out = v.process(48_000.0, &p);
+        assert!(out.abs() < 0.01, "release tail didn't decay; final={out}");
+    }
+
+    #[test]
+    fn loop_disabled_one_shot_eventually_silences() {
+        // Set loop_enabled = false via a custom AudioParams.
+        let mut s = crate::state::AppState::default();
+        s.sample_instrument.loop_enabled = false;
+        let p = crate::audio::dsp::AudioParams::from_app_state(&s);
+        let mut v = SampleInstrumentVoice::new();
+        let data: Vec<f32> = (0..2048).map(|i| (i as f32 * 0.05).sin() * 0.5).collect();
+        v.load(Arc::new(data));
+        v.set_root_note(60, crate::audio::dsp::TuningSystem::TwelveTet);
+        v.trigger(
+            60,
+            crate::audio::dsp::TuningSystem::TwelveTet,
+            0.0,
+            0.0,
+            0.0,
+        );
+        // Run long enough for the buffer to fully play through + release
+        // tail to complete.
+        for _ in 0..96_000 {
+            let _ = v.process(48_000.0, &p);
+        }
+        let out = v.process(48_000.0, &p);
+        assert!(
+            out.abs() < 1e-3,
+            "one-shot voice should fall silent after buffer+release; got {out}",
+        );
+    }
+}
+
+#[cfg(test)]
 mod sample_instrument_llm_apply_tests {
     use crate::state::{AppState, apply_llm_update};
 
@@ -135,6 +207,30 @@ mod sample_instrument_llm_apply_tests {
         assert!((s.sample_instrument.volume - 0.85).abs() < 1e-4);
         assert!((s.sample_instrument.pan - (-0.3)).abs() < 1e-4);
         assert!((s.sample_instrument.pitch_offset_cents - 7.0).abs() < 1e-4);
+    }
+
+    #[test]
+    fn apply_sample_writes_adsr_and_loop_fields() {
+        let s = AppState::default();
+        let update = serde_json::json!({
+            "sample": {
+                "attack": 0.4,
+                "decay": 0.3,
+                "sustain": 0.7,
+                "release": 0.5,
+                "loop_start": 0.1,
+                "loop_end": 0.9,
+                "loop_enabled": false
+            }
+        });
+        let s = apply_llm_update(s, &update, &[]);
+        assert!((s.sample_instrument.attack - 0.4).abs() < 1e-4);
+        assert!((s.sample_instrument.decay - 0.3).abs() < 1e-4);
+        assert!((s.sample_instrument.sustain - 0.7).abs() < 1e-4);
+        assert!((s.sample_instrument.release - 0.5).abs() < 1e-4);
+        assert!((s.sample_instrument.loop_start - 0.1).abs() < 1e-4);
+        assert!((s.sample_instrument.loop_end - 0.9).abs() < 1e-4);
+        assert!(!s.sample_instrument.loop_enabled);
     }
 
     #[test]

@@ -297,6 +297,13 @@ impl AudioParams {
                 .modules
                 .iter()
                 .any(|m| m.kind == ModuleKind::SampleInstrument && m.enabled),
+            sample_attack: s.sample_instrument.attack.clamp(0.0, 1.0),
+            sample_decay: s.sample_instrument.decay.clamp(0.0, 1.0),
+            sample_sustain: s.sample_instrument.sustain.clamp(0.0, 1.0),
+            sample_release: s.sample_instrument.release.clamp(0.0, 1.0),
+            sample_loop_start: s.sample_instrument.loop_start.clamp(0.0, 1.0),
+            sample_loop_end: s.sample_instrument.loop_end.clamp(0.0, 1.0),
+            sample_loop_enabled: s.sample_instrument.loop_enabled,
             hoover_enabled: s.hoover.enabled,
             hoover_filter_start: s.hoover.filter_start,
             hoover_sweep_time: s.hoover.sweep_time.clamp(0.1, 4.0),

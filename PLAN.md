@@ -141,16 +141,22 @@ V1 has shipped — see commit history.  V1 scope as built:
 - 7 unit tests cover defaults, ModuleKind metadata, voice load /
   trigger / resample, LLM apply.
 
-V1.1 follow-ups (deferred from the original plan, all small slices):
+V1.1 — shipped:
 
-- Auto-detect root note via `detect_pitch_hz` on load (helper
-  already shipped with the Tuner viz module).
-- Loop start/end markers + loop-on/off toggle (V1 always loops the
-  whole buffer).
-- Full ADSR (V1 uses simple AR like Wavetable / Pluck).
-- Render the `sample_*` lane in the sequencer panel UI (V1 only
-  drives the lane via LLM-applied JSON or programmatic state writes).
-- `/api/sample` HTTP endpoint mirroring `/api/wavetable`.
+- [x] Auto-detect root note via `detect_pitch_hz` on Load button.
+  Confidence ≥ 0.5 sets the root MIDI note; manual root knob still
+  wins for subsequent edits.
+- [x] Loop start / end fractions + `loop_enabled` toggle.  When
+  `loop_end ≤ loop_start` (or toggle off) the voice plays one-shot
+  and falls silent at the buffer end.
+- [x] Full ADSR (4-stage state machine with attack / decay / sustain
+  / release knobs).  Defaults match the V1 AR shape so older
+  sessions preserve behaviour.
+- [x] Sample lane rendered in the sequencer panel (SAMP row mirrors
+  the Wavetable lane shape).
+- [x] `/api/sample` HTTP endpoint with `path` or `random` body, plus
+  `scan_sample_instrument_samples` / `pick_random_sample_instrument`
+  helpers backing it.
 
 V2 still in scope per the original plan: `.sfz` multisample mode,
 velocity layers + round-robin, polyphony with voice stealing,

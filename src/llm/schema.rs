@@ -248,6 +248,13 @@ pub fn param_json_schema() -> serde_json::Value {
                     "volume":              { "type": "number", "minimum": 0.0, "maximum": 1.5 },
                     "pan":                 { "type": "number", "minimum": -1.0, "maximum": 1.0 },
                     "pitch_offset_cents":  { "type": "number", "minimum": -100.0, "maximum": 100.0 },
+                    "attack":              { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "ADSR attack: 0=0.5ms, 1=1500ms" },
+                    "decay":               { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "ADSR decay: 0=5ms, 1=2000ms" },
+                    "sustain":             { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "ADSR sustain level (1=no decay)" },
+                    "release":             { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "ADSR release: 0=5ms, 1=2000ms" },
+                    "loop_start":          { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "Loop start as fraction of buffer length" },
+                    "loop_end":            { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "Loop end as fraction of buffer length" },
+                    "loop_enabled":        { "type": "boolean", "description": "true = loop between loop_start..loop_end while gate held; false = one-shot" },
                     "sample_steps":        bool_array,
                     "sample_notes":        { "type": "array", "items": { "type": "integer", "minimum": 0, "maximum": 127 }, "maxItems": 64, "description": "MIDI note per sample-instrument step" }
                 },

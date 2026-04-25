@@ -218,9 +218,10 @@ impl ModuleKind {
             // Wavetable — pos/phase + vol/pan/pitch + LOAD button +
             // filename label.  Same 3x2 envelope as Pluck.
             Self::WavetableVoice => (3, 2),
-            // Sample Instrument — file picker + 4 knobs (root, vol, pan,
-            // pitch trim) + enable toggle.  Match Wavetable's footprint.
-            Self::SampleInstrument => (3, 2),
+            // Sample Instrument — V1.1 grew a row for ADSR + loop, so
+            // 3×3 holds the file picker, root knob, mix knobs, ADSR
+            // knobs, and the loop start / end / toggle.
+            Self::SampleInstrument => (3, 3),
             Self::An1xVoice => (6, 6),
             Self::AmenSampler => (3, 3),
             Self::NoiseVoice => (2, 1),

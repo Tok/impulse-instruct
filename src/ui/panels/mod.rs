@@ -36,6 +36,7 @@ pub mod sequencer_chain;
 pub(super) mod sequencer_drums;
 pub(super) mod sequencer_header;
 pub(super) mod sequencer_preecho;
+pub(super) mod sequencer_sample_lane;
 pub mod spectrum;
 pub mod stereo_meter;
 pub mod timeline;

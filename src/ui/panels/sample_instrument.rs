@@ -42,6 +42,11 @@ pub fn draw_sample_instrument(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         }
 
         // LOAD WAV button + filename — same picker pattern as Wavetable.
+        // V1.1: also runs auto-detect-root via `detect_pitch_hz` on the
+        // loaded buffer; if confidence is decent (>= 0.5) we set the
+        // root note to the detected pitch so users don't have to know
+        // their sample's source pitch.  Manual root knob still wins —
+        // the detect only fires when a fresh file is loaded.
         if ui
             .add_sized([56.0, 20.0], egui::Button::new("LOAD WAV"))
             .clicked()
@@ -49,6 +54,13 @@ pub fn draw_sample_instrument(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         {
             let ps = p.to_string_lossy().to_string();
             if let Some(data) = load_wav_to_44100(&ps) {
+                if let Some((hz, conf)) =
+                    crate::audio::analysis::detect_pitch_hz(&data, crate::audio::SAMPLE_RATE)
+                    && conf >= 0.5
+                {
+                    let midi = crate::audio::dsp::hz_to_midi(hz).round().clamp(0.0, 127.0) as u8;
+                    app.state.write().sample_instrument.root_note = midi;
+                }
                 let _ = app.audio_tx.push(AudioCommand::LoadSampleInstrument(data));
                 app.state.write().sample_instrument.sample_path = ps.clone();
                 app.last_sample_instrument_path = ps;
@@ -134,6 +146,91 @@ pub fn draw_sample_instrument(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                             ((v - 0.5) * 200.0).clamp(-100.0, 100.0);
                         app.push_audio_params();
                     }
+                }
+            });
+        });
+    });
+
+    ui.add_space(2.0);
+
+    // Row 2: ADSR + loop window.  Two glass groups again.
+    ui.horizontal(|ui| {
+        widgets::glass_group_fill(ui, gw, gw, |ui| {
+            ui.set_min_height(group_h);
+            ui.label(
+                egui::RichText::new("ADSR")
+                    .color(theme::FOG)
+                    .monospace()
+                    .size(9.5),
+            );
+            widgets::centered_row(ui, |ui| {
+                {
+                    let mut v = app.state.read().sample_instrument.attack;
+                    if widgets::param_control(ui, "A", &mut v, ParamMode::Free, ctrl).0 {
+                        app.state.write().sample_instrument.attack = v;
+                        app.push_audio_params();
+                    }
+                }
+                {
+                    let mut v = app.state.read().sample_instrument.decay;
+                    if widgets::param_control(ui, "D", &mut v, ParamMode::Free, ctrl).0 {
+                        app.state.write().sample_instrument.decay = v;
+                        app.push_audio_params();
+                    }
+                }
+                {
+                    let mut v = app.state.read().sample_instrument.sustain;
+                    if widgets::param_control(ui, "S", &mut v, ParamMode::Free, ctrl).0 {
+                        app.state.write().sample_instrument.sustain = v;
+                        app.push_audio_params();
+                    }
+                }
+                {
+                    let mut v = app.state.read().sample_instrument.release;
+                    if widgets::param_control(ui, "R", &mut v, ParamMode::Free, ctrl).0 {
+                        app.state.write().sample_instrument.release = v;
+                        app.push_audio_params();
+                    }
+                }
+            });
+        });
+        widgets::glass_group_fill(ui, gw, gw, |ui| {
+            ui.set_min_height(group_h);
+            ui.label(
+                egui::RichText::new("LOOP")
+                    .color(theme::FOG)
+                    .monospace()
+                    .size(9.5),
+            );
+            widgets::centered_row(ui, |ui| {
+                {
+                    let mut v = app.state.read().sample_instrument.loop_start;
+                    if widgets::param_control(ui, "STR", &mut v, ParamMode::Free, ctrl).0 {
+                        app.state.write().sample_instrument.loop_start = v.clamp(0.0, 1.0);
+                        app.push_audio_params();
+                    }
+                }
+                {
+                    let mut v = app.state.read().sample_instrument.loop_end;
+                    if widgets::param_control(ui, "END", &mut v, ParamMode::Free, ctrl).0 {
+                        app.state.write().sample_instrument.loop_end = v.clamp(0.0, 1.0);
+                        app.push_audio_params();
+                    }
+                }
+                let on = app.state.read().sample_instrument.loop_enabled;
+                let label = if on { "LP" } else { "1×" };
+                let col = if on { theme::CHALK } else { theme::IRON };
+                if ui
+                    .add_sized(
+                        [28.0, 18.0],
+                        egui::Button::new(
+                            egui::RichText::new(label).monospace().size(8.0).color(col),
+                        ),
+                    )
+                    .clicked()
+                {
+                    app.state.write().sample_instrument.loop_enabled = !on;
+                    app.push_audio_params();
                 }
             });
         });

@@ -629,6 +629,15 @@ pub struct AudioParams {
     pub sample_pan: f32,
     pub sample_pitch_offset_cents: f32,
     pub rack_sample: bool,
+    // ADSR envelope
+    pub sample_attack: f32,
+    pub sample_decay: f32,
+    pub sample_sustain: f32,
+    pub sample_release: f32,
+    // Loop window
+    pub sample_loop_start: f32,
+    pub sample_loop_end: f32,
+    pub sample_loop_enabled: bool,
     // Hoover lead
     pub hoover_enabled: bool,
     pub hoover_filter_start: f32,
