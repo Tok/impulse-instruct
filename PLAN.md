@@ -8,10 +8,6 @@ they ship and are reflected in `features.md`.
 
 ## Sequencer
 
-- [ ] **Per-step velocity curves** - promote `accent` from boolean-ish
-  (0 / 1) to a real 0..1 scalar with a per-step slider lane in the UI,
-  so "quiet-loud-quiet-medium" grooves are expressible without the
-  LLM forcing an accent flip.
 - [ ] **Conditional triggers** - per-step "fire only every Nth cycle"
   flags (N = 2 / 3 / 4) for Monome-style evolving patterns.  Stored
   as a 2-bit field per step; rendered as a small marker above the

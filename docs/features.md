@@ -4,6 +4,26 @@ A detailed log of what's built.
 
 ---
 
+### Per-step velocity curves — fractional bass accents
+
+- `TB303Step.accent` was always a `f32` and the LLM
+  `bass_accents` schema accepted floats, but the sequencer panel
+  rendered each step as a binary "A on / off" button and the only
+  edit path was a 0↔1 toggle.  Every pipeline tick that re-applied
+  user-touched defaults flipped fractional accents back to binary.
+- Each ACCENT cell now paints a vertical fill from the bottom whose
+  height matches the stored value (a 0.4 accent → 40%-tall bar).
+  Click still toggles 0↔1 (preserves the binary muscle-memory),
+  drag-vertical sets the value from cursor y (top → 1.0, bottom →
+  0.0), hover + scroll-wheel adjusts in 0.1 increments.
+- New pure transition `set_bass_accent_voice(state, vi, step,
+  value)` writes a clamped 0..=1 directly.  Voice 0 mirrors into
+  `bass_pattern` for legacy compat; voices 1-3 only touch their own
+  `bass_patterns[N]` slot.
+- 5 tests lock the legacy-mirror invariant, voice isolation,
+  unit-interval clamp, out-of-range voice clamp, and a fractional
+  `bass_accents` LLM round-trip.
+
 ### Polymeter — global tick no longer wraps at MAX_STEPS
 
 - The voice-indexing math always did `step % voice_steps`, so per-
