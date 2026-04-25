@@ -4,6 +4,325 @@ A detailed log of what's built.
 
 ---
 
+### Ableton Link bidirectional tempo sync
+
+Optional `link` cargo feature (default off) pulls in `rusty_link`,
+which wraps Ableton's official C++ Link library; default builds get
+a no-op stub so users without `cmake` / a C++ toolchain stay
+unblocked.  Build with `cargo build --features link`.
+
+- `LinkSync` wrapper (`src/sync/link.rs`) exposes a narrow surface:
+  `enable(bool)`, `pull_tempo(local_bpm) -> Option<f32>`, `push_tempo`,
+  `num_peers`.  The `is_supported()` flag mirrors the cargo feature so
+  the UI can render either the working toggle or an
+  "Unavailable — rebuild with --features link" stub.
+- Per-frame `ImpulseApp::tick_link_sync` (in `src/ui/link_handler.rs`)
+  runs once per UI tick.  Pull: when network BPM differs from
+  `state.sequencer.bpm` by > 0.01 BPM, write the network value into
+  AppState + push audio params.  Push: when local BPM diverges from
+  the last-pulled value by > 0.05 BPM, the user / LLM / MIDI clock
+  changed it — broadcast our value to peers.  Tolerance bands
+  prevent float-jitter feedback loops.
+- UI: Preferences → Display gains an "ABLETON LINK" section with the
+  network-sync toggle + peer-count readout.  `ui_prefs.link_enabled`
+  persists across sessions so a Link-set user stays in sync after a
+  relaunch.
+- Verifiable with two impulse-instruct instances on the LAN, the
+  free LinkHut tester from Ableton, or any other Link-aware app
+  (Algoriddim djay, AUM, MOD devices, Live).
+- Bar-phase alignment (snap our sequencer step counter to Link's
+  quantum) is the planned follow-up — needs threading through the
+  sequencer clock advance.
+- 4 new tests over the LinkSync wrapper (constructs cleanly,
+  pull-when-disabled returns None, peer count zero when disabled,
+  is_supported matches the feature flag).  Total: **1868 tests
+  passing**.
+
+### SampleInstrument V2 — `.sfz` multisamples + polyphony + formant-preserving pitch
+
+Nine-stage build-out of the V1 SAMPLER+ voice into a full pitched-
+sample instrument that loads `.sfz` multisample banks (Salamander
+Grand, Sonatina, VSCO 2 CE) alongside single `.wav`s.  The instrument
+gains polyphony, multi-zone key mapping, velocity layers + round-
+robin, a per-voice filter, an LFO routing surface, a zone-map / wave
+visualizer strip, formant-preserving pitch shift, and curated
+documentation for the starter pack.
+
+**Stage 1 — SFZ parser** (`src/state/sfz.rs`).  Pure parser
+`parse_sfz(text, base_dir) -> Vec<SfzRegion>`.  Handles `<global>` /
+`<group>` / `<region>` headers with cascading opcode inheritance and
+the PLAN-listed opcode subset: `sample`, `lokey`/`hikey`/
+`pitch_keycenter`, `lovel`/`hivel`, `loop_mode`/`loop_start`/
+`loop_end`, `volume`, `pan`, `seq_position`/`seq_length`,
+`tune`, `transpose`, `ampeg_attack`/`decay`/`sustain`/`release`,
+`cutoff`, `resonance`, `fil_type`.  Real-world quirks handled: spaces
+in sample paths, Windows backslashes, `//` line + `/* */` block
+comments, unknown opcodes / headers logged + skipped (partial-load
+beats hard failure on malformed packs).  22 parser tests.
+
+**Stage 2 — Load SFZ + single-zone playback**.  New audio command
+`LoadSampleInstrumentSfz` carries pre-loaded `Vec<SfzRegionRuntime>`.
+`audio/sfz_loader.rs` reads `.sfz`, parses, loads each referenced WAV
+via `load_wav_to_44100` (de-duped via Arc cache), ships the runtime
+list to the audio thread.  The voice's `load_sfz()` switches into
+multisample mode; the trigger picks the first region whose
+`lokey..=hikey` covers the played note, derives `root_freq` from
+that region's `pitch_keycenter`, applies region `tune_cents` /
+`transpose` / `volume_db` per trigger.  Single-WAV mode preserved
+exactly (V1.1 behaviour) when no regions loaded.  UI's LOAD button
++ `/api/sample` path-poll both sniff extension and dispatch to the
+right loader.
+
+**Stage 3 — Polyphony + voice stealing**.  `SampleInstrumentVoice`
+becomes an 8-slot pool (`POLY_VOICES = 8`).  Trigger picks the first
+`Off` slot or steals the lowest-`age` slot when full; each slot
+carries its own samples Arc, ADSR state, freq, region_gain.
+`gate_off()` releases every gated slot — matches V1.1's monophonic
+sequencer semantics, but release tails now overlap with the next
+attack instead of being chopped.
+
+**Stage 4 — Multi-zone overlap layering**.  `pick_regions(note)`
+returns *every* region whose key range covers the note (was: first
+match).  Overlapping SFZ regions (typical in orchestral patches that
+layer close + room mics on the same key) all sound together on
+parallel polyphony slots; non-overlapping mapping unchanged.
+
+**Stage 5 — Velocity layers + round-robin**.  Trigger derives a
+64..127 MIDI velocity from accent (0..1) and filters regions by
+`lovel..=hivel`.  Regions with `seq_length > 0` only fire when
+`(rr_counter % seq_length) + 1 == seq_position` (1-indexed per spec).
+A single global RR counter keeps the audio thread allocation-free —
+strict per-group counters would need a HashMap.
+
+**Stage 6 — Per-voice filter + LFO routing**.  Each polyphony slot
+carries an SVF (`fx_extras::Svf`, LP/BP/HP modes); cutoff /
+resonance / mode / mix shared across slots, driven from
+`SampleInstrumentState`.  Four new LfoTarget variants
+(`SampleVolume`, `SamplePan`, `SamplePitch`, `SampleCutoff`) +
+opcodes route LFO modulation to the voice.  Filter mix=0
+shortcuts the SVF call so a bypassed filter is one cheap branch
+per slot.
+
+**Stage 7 — Zone-map + waveform visualizer**.  Bottom-strip viz on
+the SAMPLER+ panel: SFZ mode shows a piano-keyboard zone map (each
+region as a horizontal band across its `lokey..=hikey` range,
+banded vertically by declaration order so close+room layered packs
+render as parallel strips, with ticks at `pitch_keycenter`); single-
+WAV mode shows a min/max waveform thumbnail with loop-window shading
++ bright stem lines at the loop boundaries.  UI-side
+`sample_sfz_regions` + `sample_wave_cache` populated by the load
+helper before the runtime list ships to the audio thread.
+
+**Stage 8 — Formant-preserving phase vocoder**
+(`src/audio/dsp/formant_shifter.rs`).  Per-slot phase-vocoder pitch
+shifter: STFT (FFT 512, hop 128, 75 % Hann OLA), cepstral envelope
+approximation via moving-average smoothed log-magnitude, whiten →
+shift bins by ratio (with phase-vocoder coherence: track each input
+bin's phase advance vs. its expected free-running advance, accumulate
+ratio-scaled true freq advance into the synthesis phase) → re-multiply
+by the *original* envelope so formants stay anchored while harmonics
+move → ISTFT + Hann² OLA back into the output ring.  All FFT plans +
+scratch buffers allocated once at construction; the realtime
+`process()` is alloc-free.  ~12 KB state per slot, ~100 KB across
+the 8-slot pool.  Engages when `sample_formant_preserve` is on; the
+cheap linear-resample path stays the default.  UI toggle (`FRMT` /
+`frmt`) lives in the FILTER row of the panel.
+
+**Stage 9 — Starter pack scaffolding**.  `samples/instruments/` +
+`samples/instruments/starter/` folders so the path-scan resolves on
+a fresh checkout.  `samples/instruments/README.md` covers single-WAV
+vs SFZ modes, the supported opcode subset, free CC-licensed pack
+sources (Salamander Grand, Sonatina, VSCO 2 CE, sfzInstruments
+collection), and a minimal authoring example.  `samples/README.md`
+gains a "Pitched samples + multisamples" section pointing at the
+new folder.
+
+V1.1 (already shipped before this round): auto-detect-root via
+`detect_pitch_hz` on load (≥ 0.5 confidence), full 4-stage ADSR,
+loop start / end / `loop_enabled` toggle, sample lane in the
+sequencer, `/api/sample` HTTP endpoint.
+
+Tests: ~50 new across `sample_instrument_tests`, `sfz_parser_tests`,
+`formant_shifter_tests` (defaults, ModuleKind metadata, single-WAV
+DSP, ADSR release decay, loop-disabled one-shot silencing, SFZ
+mode mode switch, region-by-note picking, out-of-range silencing,
+volume_db scaling, overlap layering, velocity-layer filter,
+round-robin cycle, polyphony overlap / stealing / gate-off all,
+filter bypass + closed LP attenuation, LFO target routing, formant
+shifter pass-through / no-divergence at ±octave / reset, viz
+thumbnail builder, formant_preserve flag round-trip).
+
+### Per-voice activity heatmap on EventStream
+
+Optional bottom-strip overlay on the EventStream module showing per-
+voice activity binned per sequencer step.  `MelodicLogEntry` gained
+a `voice: MelodicVoice` enum (`Bass(u8)` / `An1x` / `Hoover`) so the
+heatmap can split per source voice; drum hits already carried voice
+identity.  Rows: BASS / AN1X / HOOV / KICK / SN / HAT / CLAP —
+recent activity bright, fading with age.  Toggle via
+`ui_prefs.stream_heatmap` (default off; Preferences → Display →
+"Per-voice heatmap strip").  Render extracted to
+`src/ui/widgets/event_stream_heatmap.rs` to keep `event_stream.rs`
+under the LOC cap.  4 new tests.
+
+### Master panel collapsed to a single row
+
+`MasterOutput` card grew from a 2-row layout (master volume + voice
+strip on top, M/S knobs below) into a single-row strip:
+`MASTER VOL | MID G T S | SIDE G T S | voice-presence labels`.
+Saves a grid cell of vertical space at the top of the rack without
+dropping any controls.  Card grid_size went from `(grid_cols, 2)`
+to `(grid_cols, 1)`.
+
+### Frequency shifter (`FxFreqShift`) — single-sideband Hilbert pitch
+
+Distinct from `FxPitchShift` (which preserves harmonic ratios):
+`FxFreqShift` adds the same Hz to every spectral component, so
+harmonics stop being integer multiples of the fundamental and the
+timbre becomes inharmonic / metallic.  Classic radio-jamming, bell-
+tine, and Sean-Costello-shimmer territory.
+
+- Two parallel cascades of 4 second-order allpass sections produce
+  the analytic-signal real / imaginary pair (`H(z) = (a + z⁻²) / (1 +
+  a·z⁻²)` per section).  Hartmann-style coefficient pair (HBI
+  flavour) gives ~1° phase error in 100 Hz – 20 kHz.
+- Complex multiply with a `cos` / `sin` carrier at ±1000 Hz produces
+  the SSB-shifted output; sign of `shift_hz` picks direction (subtract
+  imaginary projection for upshift, add for downshift).
+- Feedback path: capped at 0.85 with a `tanh`-clamped tap so the
+  regen loop stays bounded under sustained input even at max
+  feedback + max mix.
+- 11 new tests covering DSP stability, FxState round-trip, ModuleKind
+  metadata, panel XY-pad fan-out.
+
+### Stereo widener (`FxWiden`) + M/S mode on `FxParamEq`
+
+Both implemented via the master-stage latch pattern (mirroring
+`FxPan` / `FxConvReverb`'s side-latch idiom): the chain step is a
+mono passthrough that flips a state flag with the live knob values;
+the master stage applies the actual stereo math after the existing
+mid/side decomposition.  Avoids converting the whole FX chain to
+stereo I/O while still unblocking the deferred items.
+
+- **`FxWiden`**: knobs HAAS (0..30 ms delay on the L channel's mid
+  component), SIDE (1..3× scaling on the existing mid/side
+  decomposition), MIX.  Master stage maintains a small ring on the
+  L-channel mid for the Haas delay; side scaling multiplies the
+  decoded side signal before L/R recombination.
+- **`FxParamEq` M/S mode**: when `param_eq_ms_mode` is on, the
+  chain's ParamEq step is a passthrough; the master stage runs two
+  extra `ParamEq` cascades (`param_eq_mid` + `param_eq_side`) on
+  the decoded mid + side channels, using the same band list.  UI:
+  `MN`/`M/S` toggle on the ParamEq band-readout strip.
+- 11 new tests across the two surfaces.
+
+### Tier-2 sidechain trio — `FxGate`, `FxVocoder`, sidechain `FxCompressor`
+
+New `PortKind::SidechainIn` (5th port kind) + `connect_sidechain()`
+helper on `RackState`.  Sidechain edges are taps, not part of the
+forward signal chain — `compile_fx_plan` records the source in
+`FxPlan.sidechain_routes: HashMap<FxStep, SidechainSource>` (where
+`SidechainSource = Voice(ModuleKind) | Fx(FxStep)`), and the audio
+thread reads the source via the previous-sample voice / FX cache
+(one-sample delay, so cycles are safe by construction — the cycle
+check skips `to.kind == SidechainIn` cables).
+
+- **`FxGate`** — knobs THR (-60..0 dBFS) / ATK (0.5..50 ms) / REL
+  (10..500 ms) / DEPTH / MIX.  Detector envelope on the sidechain
+  drives threshold-gated gain reduction; falls back to the main
+  signal as detector when the sidechain port isn't connected (gate
+  becomes a noise gate then).
+- **`FxVocoder`** — 16-band channel vocoder (log-spaced 100 Hz →
+  8 kHz, fixed Q ≈ 3); per-band envelope follower on the modulator
+  drives gain on the matching carrier band.  Knobs: BANDS (active
+  fraction), CRR.MX (dry-carrier blend for talkbox flavour), SENSE
+  (detector gain), MIX.  Pairs with `NeuTts` for talkbox patches.
+- **Sidechain mode on `FxCompressor`** — `compressor_sidechain`
+  bool flag; new `process_with_detector` reads the level detector
+  from the sidechain cable but applies gain reduction to the input.
+  Falls back gracefully to self-detect when no cable is connected.
+  Multiband sidechain not in V1 (the 3-band path keeps self-
+  detecting when the flag is on).
+
+Audio thread carries a `SidechainSnap` snapshot alongside
+`VoiceSendsSnap` / feedback array, refreshed each sample after
+voices process.  16 new tests covering the rack plumbing + each
+FX's DSP behaviour.
+
+### Tier-3 heavy FX — Multitap / RevDelay / TapeStop / Stutter / Freeze
+
+- **`FxMultitap`** — 4 fixed taps with knob-controlled spread.
+  Per-tap pan + filter from the original spec deferred — the simpler
+  4-tap mono variant covers the rhythmic-dub use case.
+- **`FxRevDelay`** — ping-pong segment buffer (one fills while the
+  other plays back reversed).
+- **`FxTapeStop`** — mix knob doubles as ramp progress (0=normal,
+  1=halted) with a darkening lowpass that tracks the slowing tape.
+- **`FxStutter`** — BPM-synced glitch repeater (1/4, 1/8, 1/16, 1/32
+  by quartiles of the rate knob).
+- **`FxFreeze`** — spectral freezer.  Captures one FFT frame on
+  rising-edge engage; resynths with random phases per hop via
+  overlap-add (1024 FFT, 256 hop, Hann window).  xorshift32 phase
+  randomization keeps successive frames decorrelated.
+- **Cabinet IR mode** — flag on `FxConvReverb` (`conv_reverb_cabinet:
+  bool`).  When true, caps `conv_reverb_size` internally at 0.1
+  (10 % of loaded IR) and the file picker browses
+  `samples/cabinets/` instead of `samples/impulses/`.
+
+### Tier-1 FX modules — Flanger / Limiter / Filter / Comb / Tilt / Transient / Exciter
+
+Seven small, well-defined FX modules to fill out the FX strip:
+
+- **`FxFlanger`** — short modulated delay with bipolar feedback.
+  Knobs: rate (0.05–4 Hz LFO), depth (sweep range up to ~9 ms
+  around 1 ms base), feedback (-0.95..+0.95 centred at 0.5),
+  mix.  Stack-allocated ring buffer.
+- **`FxLimiter`** — brick-wall limiter with threshold / ceiling /
+  release / lookahead knobs.
+- **`FxFilter`** — state-variable filter with LP/BP/HP/Notch via
+  mode selector.  Fields named `svf_*` to avoid collision with the
+  per-voice bass filter knobs.
+- **`FxComb`** — Karplus-style feedback comb tuned to a pitch in
+  Hz; knobs: pitch (40 Hz–2 kHz), feedback, damp (lowpass on
+  feedback path), mix.
+- **`FxTilt`** — broad tilt EQ with tilt + pivot knobs.
+- **`FxTransient`** — transient designer with attack + sustain
+  shapers.
+- **`FxExciter`** — saturation-based aural exciter with HP corner
+  + amount + mix.
+
+All allocation-free in `process()`; ring buffers live on the heap
+(boxed) when too large for the stack.
+
+### Visualization modules — Tier 1 + Tier 2
+
+Tier 1 (cheap, reuse existing buffers):
+
+- **`StereoVectorscope`** — XY plot of L vs R from the engine's
+  interleaved stereo buffer (reads `app.stereo_buf`).  Square card so
+  the lissajous lobes aren't squashed into an oval.
+- **`LfoScope`** — phosphor-style waveform trace of the LFO module
+  output.  V1 picks the first enabled LFO slot; CV-cable wiring of
+  slot ↔ module is a follow-up.
+- **`PitchTracker`** — autocorrelation pitch detect with cents-off
+  needle, big note-name readout.  Reuses `detect_pitch_hz` from
+  `audio/analysis.rs`.
+- **`ChordDisplay`** — chroma-vector folding of the existing spectrum,
+  matched against 24 major+minor triad templates.  Reuses
+  `compute_spectrum` so the module is essentially free DSP-wise.
+
+Tier 2 (heavier, but bounded):
+
+- **`Spectrogram`** — rolling FFT-history waterfall rendered as a
+  fresh `egui::ColorImage` per repaint with log-frequency Y axis.
+  Uses the existing spectrum cache.
+- **`LoudnessMeter`** — K-weighted (BS.1770 hard-coded 48 kHz
+  coefficients) momentary + short-term LUFS EMAs.  Integrated LUFS
+  (gated) deferred — momentary + short-term covers the meter use
+  case.
+- **`PhaseWheel`** — circular bar/beat indicator with beat-tick
+  highlights.  Reads sequencer state directly.
+
 ### Refactor + coverage pass — pure logic isolated from impure shells
 
 Session-long refactor following `docs/coding-guide.md`'s "pure
