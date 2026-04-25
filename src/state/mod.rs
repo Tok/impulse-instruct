@@ -26,6 +26,8 @@ pub use wavetable::WavetableState;
 
 pub mod sample_instrument;
 pub use sample_instrument::SampleInstrumentState;
+pub mod sfz;
+pub use sfz::{SfzFilType, SfzLoopMode, SfzRegion, parse_sfz};
 
 pub mod noise;
 pub use noise::NoiseVoiceState;
