@@ -175,6 +175,7 @@ pub fn draw_bass(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         mut lfo_target,
         mut lfo_rate,
         mut lfo_depth,
+        mut lfo_phase,
         mut lfo_waveform,
         mut lfo_bpm_sync,
         mut lfo_sync_beats,
@@ -203,6 +204,7 @@ pub fn draw_bass(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             b.lfo_target,
             b.lfo_rate,
             b.lfo_depth,
+            b.lfo_phase,
             b.lfo_waveform,
             b.lfo_bpm_sync,
             b.lfo_sync_beats,
@@ -536,6 +538,12 @@ pub fn draw_bass(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                 if widgets::param_control(ui, "DEPTH", &mut lfo_depth, ParamMode::Free, ctrl_sm).0 {
                     changed = true;
                 }
+                // PHASE — per-voice offset (0..1).  Set voice 0 to 0
+                // and voice 1 to 0.5 for an anti-phase pan sweep when
+                // both are targeting Pan.
+                if widgets::param_control(ui, "PHASE", &mut lfo_phase, ParamMode::Free, ctrl_sm).0 {
+                    changed = true;
+                }
             });
         });
     }
@@ -564,6 +572,7 @@ pub fn draw_bass(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             snap.bass_voices[av].synth.lfo_target = lfo_target;
             snap.bass_voices[av].synth.lfo_rate = lfo_rate;
             snap.bass_voices[av].synth.lfo_depth = lfo_depth;
+            snap.bass_voices[av].synth.lfo_phase = lfo_phase;
             snap.bass_voices[av].synth.lfo_waveform = lfo_waveform;
             snap.bass_voices[av].synth.lfo_bpm_sync = lfo_bpm_sync;
             snap.bass_voices[av].synth.lfo_sync_beats = lfo_sync_beats;

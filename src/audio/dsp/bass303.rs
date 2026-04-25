@@ -18,7 +18,7 @@ enum EnvPhase {
 }
 
 #[derive(Clone)]
-pub(super) struct Bass303 {
+pub struct Bass303 {
     phase: f32,
     sub_phase: f32,
     fm_phase: f32,
@@ -48,6 +48,12 @@ pub(super) struct Bass303 {
     // from 0 on retrigger to honor lfo_delay.
     lfo_phase: f32,
     lfo_fade: f32, // 0..1 — 1 = full depth reached
+    /// Per-voice side-bus contribution from the LFO Pan target.
+    /// Updated every sample inside `process`; the master mixer reads
+    /// this and sums it across voices into the global pan_side bus.
+    /// Zero when the voice's LFO target isn't `Pan` so non-pan
+    /// patches stay silent on the side bus.
+    pub pan_side: f32,
 }
 
 impl Default for Bass303 {
@@ -72,6 +78,7 @@ impl Default for Bass303 {
             noise_gen: NoiseGen::new(0xBAD_C0DE),
             lfo_phase: 0.0,
             lfo_fade: 0.0,
+            pan_side: 0.0,
         }
     }
 }
@@ -138,13 +145,7 @@ pub(super) fn lfo_wave(p: f32, waveform: crate::state::LfoWaveform) -> f32 {
 }
 
 impl Bass303 {
-    pub(super) fn trigger(
-        &mut self,
-        note: u8,
-        accent: f32,
-        slide: f32,
-        tuning: super::TuningSystem,
-    ) {
+    pub fn trigger(&mut self, note: u8, accent: f32, slide: f32, tuning: super::TuningSystem) {
         let new_freq = super::dsp_util::midi_to_hz_tuned(note, tuning);
         // `slide` is a property of the NEW step (intensity 0..=1): any
         // positive value asks the voice to glide *into* this note.  The
@@ -183,13 +184,13 @@ impl Bass303 {
         }
     }
 
-    pub(super) fn gate_off(&mut self) {
+    pub fn gate_off(&mut self) {
         self.gate = false;
         self.amp_phase = EnvPhase::Release;
         self.filt_phase = EnvPhase::Release;
     }
 
-    pub(super) fn process(&mut self, p: &AudioParams, vp: &params::BassVoiceParams) -> f32 {
+    pub fn process(&mut self, p: &AudioParams, vp: &params::BassVoiceParams) -> f32 {
         let sr = p.sample_rate;
 
         if self.slide > 0.0 {
@@ -218,7 +219,12 @@ impl Bass303 {
                 vp.lfo_sync_beats,
             );
             self.lfo_phase = (self.lfo_phase + rate_hz / sr).rem_euclid(1.0);
-            let raw = lfo_wave(self.lfo_phase, vp.lfo_waveform);
+            // Apply the per-voice phase offset before the waveform
+            // lookup so two voices sharing a rate can run anti-phase
+            // (offset 0.5), 90° apart (0.25), etc.  rem_euclid keeps
+            // negative results non-negative for the LUT.
+            let lookup_phase = (self.lfo_phase + vp.lfo_phase).rem_euclid(1.0);
+            let raw = lfo_wave(lookup_phase, vp.lfo_waveform);
             self.lfo_fade = lfo_fade_step(self.lfo_fade, sr, vp.lfo_delay);
             raw * vp.lfo_depth * self.lfo_fade
         };
@@ -243,6 +249,11 @@ impl Bass303 {
             1.0 + lfo_value * 0.5
         } else {
             1.0
+        };
+        let lfo_pan = if vp.lfo_target == BassLfoTarget::Pan {
+            lfo_value
+        } else {
+            0.0
         };
 
         let freq_mod = 2.0f32.powf((p.lfo_pitch_mod_st + vp.osc_detune + lfo_pitch_st) / 12.0);
@@ -422,7 +433,17 @@ impl Bass303 {
             filtered
         };
 
-        dist * self.amp_env * vp.volume * accent_mult * lfo_amp_mult
+        let out = dist * self.amp_env * vp.volume * accent_mult * lfo_amp_mult;
+        // Per-voice pan side: only the LFO-modulated contribution is
+        // emitted here.  The static `vp.pan` (and the per-step pan
+        // override) is handled at master via the existing pan_303
+        // path, so a voice that doesn't target Pan stays exactly as
+        // it was before this commit.  At target=Pan the depth + fade
+        // shaping is already baked into `lfo_pan` (== `lfo_value`);
+        // multiply by the audible output to get the side signal the
+        // master mixer adds to its stereo bus.
+        self.pan_side = out * lfo_pan * 0.5;
+        out
     }
 }
 

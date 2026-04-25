@@ -1,7 +1,7 @@
 // ─── audio/dsp/mod.rs ── Pure DSP synthesis, no allocations in process_block()
 
 pub mod an1x;
-mod bass303;
+pub mod bass303;
 pub mod conv_reverb;
 mod dsp_util;
 pub mod fx;
@@ -819,7 +819,14 @@ impl DspState {
             } else {
                 p.pan_303
             };
+            // Per-voice bass pan-LFO contribution — each Bass303 sets
+            // `pan_side` inside its `process` call when its LFO target
+            // is `BassLfoTarget::Pan`.  Summed here so two voices
+            // running anti-phase (lfo_phase 0 vs 0.5) produce
+            // mono-safe stereo motion without any host automation.
+            let bass_lfo_pan_side: f32 = self.bass.iter().map(|v| v.pan_side).sum();
             let pan_side = bus_bass * bass_pan * 0.5
+                + bass_lfo_pan_side
                 + k808 * dv[0] * p.pan_kick808 * 0.5
                 + s808 * dv[1] * p.pan_snare808 * 0.5
                 + (hh808c * dv[2] + hh808o * dv[3]) * p.pan_hihat808 * 0.5

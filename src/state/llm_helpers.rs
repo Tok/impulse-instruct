@@ -184,7 +184,7 @@ pub(super) fn apply_bass_update(
     }
 
     // ── Per-voice LFO (101-style) ────────────────────────────────────────
-    // "lfo_target": "off" | "pitch" | "pwm" | "cutoff" | "amp"
+    // "lfo_target": "off" | "pitch" | "pwm" | "cutoff" | "amp" | "pan"
     let bp = format!("{}.lfo_target", prefix);
     if !locked.contains(&bp)
         && let Some(t) = b.get("lfo_target").and_then(|v| v.as_str())
@@ -195,6 +195,7 @@ pub(super) fn apply_bass_update(
             "pwm" | "pulse_width" | "pulse" => BassLfoTarget::PulseWidth,
             "cutoff" | "filter" | "filter_cutoff" => BassLfoTarget::FilterCutoff,
             "amp" | "amplitude" | "tremolo" => BassLfoTarget::Amplitude,
+            "pan" | "stereo" => BassLfoTarget::Pan,
             _ => BassLfoTarget::Off,
         };
     }
@@ -207,6 +208,9 @@ pub(super) fn apply_bass_update(
     let bp = format!("{}.lfo_delay", prefix);
     let v = s.bass_voices[voice_idx].synth.lfo_delay;
     s.bass_voices[voice_idx].synth.lfo_delay = unlocked_f32(v, b, "lfo_delay", &bp, locked);
+    let bp = format!("{}.lfo_phase", prefix);
+    let v = s.bass_voices[voice_idx].synth.lfo_phase;
+    s.bass_voices[voice_idx].synth.lfo_phase = unlocked_f32(v, b, "lfo_phase", &bp, locked);
     // "lfo_waveform": "sine" | "triangle" | "saw" | "inv_saw" | "square"
     let bp = format!("{}.lfo_waveform", prefix);
     if !locked.contains(&bp)

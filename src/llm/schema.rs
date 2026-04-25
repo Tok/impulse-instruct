@@ -42,7 +42,14 @@ pub fn param_json_schema() -> serde_json::Value {
                     "osc_detune":        { "type": "number", "minimum": -1.0, "maximum": 1.0, "description": "oscillator pitch offset in semitones: -1=down 1st, 0=center, +1=up 1st" },
                     "fm_depth":          { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "2-op FM depth: 0=off (pure additive), 0.3=subtle metallic, 1=extreme bell/clang" },
                     "fm_ratio":          { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "FM modulator/carrier ratio 0->0.5x (sub-harmonic), 0.13->1x (unison FM), 0.2->2x (octave), 1.0->8x (bell/metallic)" },
-                    "pan":               { "type": "number", "minimum": -1.0, "maximum": 1.0, "description": "stereo pan: -1=left, 0=center, +1=right" }
+                    "pan":               { "type": "number", "minimum": -1.0, "maximum": 1.0, "description": "stereo pan: -1=left, 0=center, +1=right" },
+                    "lfo_target":        { "type": "string", "enum": ["off", "pitch", "pwm", "cutoff", "amp", "pan"], "description": "per-voice LFO routing — `pan` modulates the side bus, useful with lfo_phase for anti-phase stereo motion across voices" },
+                    "lfo_rate":          { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "free LFO rate 0-1 → 0.01-20 Hz (ignored when lfo_bpm_sync=true)" },
+                    "lfo_depth":         { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+                    "lfo_delay":         { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "LFO fade-in time 0-1 → 0-4 s" },
+                    "lfo_phase":         { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "per-voice LFO phase offset 0-1 (1 = full cycle).  Set voice 0 to 0 and voice 1 to 0.5 for an anti-phase pan sweep." },
+                    "lfo_bpm_sync":      { "type": "boolean" },
+                    "lfo_sync_beats":    { "type": "number", "description": "LFO division when bpm_sync: 4=bar, 1=quarter, 0.5=8th, 0.25=16th" }
                 },
                 "additionalProperties": false
             },

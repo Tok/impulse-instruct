@@ -229,6 +229,10 @@ pub struct BassVoiceParams {
     pub lfo_delay: f32, // 0–1 → 0–4 s fade-in
     pub lfo_bpm_sync: bool,
     pub lfo_sync_beats: f32,
+    /// Phase offset 0..1 added to the running LFO phase before the
+    /// waveform lookup — drives anti-phase / multi-voice stereo
+    /// effects when paired with `BassLfoTarget::Pan`.
+    pub lfo_phase: f32,
 }
 
 impl BassVoiceParams {
@@ -271,6 +275,7 @@ impl BassVoiceParams {
             lfo_delay: b.lfo_delay.clamp(0.0, 1.0),
             lfo_bpm_sync: b.lfo_bpm_sync,
             lfo_sync_beats: b.lfo_sync_beats.clamp(0.03125, 16.0),
+            lfo_phase: b.lfo_phase.rem_euclid(1.0),
         }
     }
 }
