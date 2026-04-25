@@ -158,7 +158,7 @@ pub mod rack;
 mod rack_presets;
 pub mod rack_scope;
 pub use fx_plan::compile_fx_plan;
-pub use fx_types::{FX_STEP_COUNT, FeedbackRoute, FxPlan, FxStep, VoiceSend};
+pub use fx_types::{FX_STEP_COUNT, FeedbackRoute, FxPlan, FxStep, SidechainSource, VoiceSend};
 pub use modulation::{
     ModInput, lfo_target_short_label, mod_input_label, mod_inputs, parse_lfo_target,
 };

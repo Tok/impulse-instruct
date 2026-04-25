@@ -43,6 +43,8 @@ const ALL_FX_STEPS: &[FxStep] = &[
     FxStep::ConvReverb,
     FxStep::ParamEq,
     FxStep::PitchShift,
+    FxStep::Gate,
+    FxStep::Vocoder,
 ];
 
 #[test]

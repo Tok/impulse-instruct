@@ -38,20 +38,34 @@ Tier 1 (small, well-defined, no new infra):
 
 Tier 2 (need a sidechain / second input port — solve once,
 share):
-- [ ] **Sidechain port plumbing in `RackState`** — second cable
-  kind `PortKind::SidechainIn` with its own routing. Required by
-  the next three. Keep it backward-compatible with the existing
-  audio cable graph; `compile_fx_plan()` already does Kahn's
-  topo, just add the new edge type.
-- [ ] **Vocoder (`FxVocoder`)** — N-band (16 default, 32 max)
-  envelope follower on the sidechain modulating the main carrier.
-  Pairs with `NeuTts` (TTS → modulator, bass/hoover → carrier).
-- [ ] **Noise gate / ducker (`FxGate`)** — sidechain-aware gate.
-  Sidechain = trigger; main = signal. Carves kick room out of a
-  pad bus.
-- [ ] **Sidechain compressor mode on `FxCompressor`** — the
-  existing module gains a "sidechain enabled" flag rather than
-  a new kind.
+- [x] **Sidechain port plumbing in `RackState`** — shipped.
+  `PortKind::SidechainIn` (5th port kind), `connect_sidechain()`
+  helper, cycle-check exemption (sidechain edges read with a
+  one-sample delay so cycles are safe by construction).
+  `FxPlan.sidechain_routes: HashMap<FxStep, SidechainSource>`
+  with `SidechainSource::{Voice(ModuleKind), Fx(FxStep)}` —
+  resolved by `compile_fx_plan` from `to.kind == SidechainIn`
+  cables.  Audio thread carries a `SidechainSnap` snapshot
+  alongside `VoiceSendsSnap` / feedback array, refreshed each
+  sample after voices process.
+- [x] **Vocoder (`FxVocoder`)** — shipped.  16-band channel
+  vocoder (log-spaced 100 Hz → 8 kHz, fixed Q ≈ 3); per-band
+  envelope follower on the modulator drives gain on the matching
+  carrier band.  Knobs: BANDS (active fraction), CRR.MX (dry
+  carrier blend for talkbox flavour), SENSE (detector gain),
+  MIX.  Pairs with `NeuTts` for talkbox patches.
+- [x] **Noise gate / ducker (`FxGate`)** — shipped.  Detector on
+  sidechain (or main signal when unconnected — falls back to
+  noise-gate flavour).  Asymmetric one-pole envelope drives
+  threshold-gated gain reduction.  Knobs: THR (-60..0 dBFS),
+  ATK (0.5..50 ms), REL (10..500 ms), DEPTH, MIX.
+- [x] **Sidechain compressor mode on `FxCompressor`** — shipped.
+  `compressor_sidechain` boolean flag; `process_with_detector`
+  reads detector from the sidechain cable but applies gain
+  reduction to the input.  Falls back gracefully to self-detect
+  when no cable is connected.  Multiband sidechain not in V1 (the
+  3-band path keeps self-detecting; users disable multiband when
+  they enable sidechain).
 
 Tier 3 (heavier — build once Tier 1+2 settle):
 - [x] **Multitap delay (`FxMultitap`)** — shipped, 4 fixed taps

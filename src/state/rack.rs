@@ -27,6 +27,11 @@ pub enum PortKind {
     /// Per-knob modulation input (LFO → target knob).  Distinct from Cv so
     /// the rack UI and fx_plan can treat mod cables separately.
     Mod,
+    /// Sidechain audio input (ducker / vocoder modulator / sidechain
+    /// compressor).  Carries audio but is treated as a tap — recorded
+    /// in `sidechain_routes` and read with a one-sample delay, so
+    /// cycles are safe by construction.
+    SidechainIn,
 }
 
 /// Direction of a port relative to its module.
@@ -289,6 +294,8 @@ impl RackState {
                 | ModuleKind::FxBitcrush
                 | ModuleKind::FxEq
                 | ModuleKind::FxCompressor
+                | ModuleKind::FxGate
+                | ModuleKind::FxVocoder
                 | ModuleKind::FxTapeSat
                 | ModuleKind::FxDrive
                 | ModuleKind::FxAutotune
@@ -506,6 +513,11 @@ impl RackState {
                 ModuleKind::FxFreeze => 24,
                 ModuleKind::FxEq => 27,
                 ModuleKind::FxCompressor => 28,
+                // Gate / Vocoder cluster with the dynamics tools — same
+                // sidechain idiom as the compressor, users reach for them
+                // in the same context.
+                ModuleKind::FxGate => 28,
+                ModuleKind::FxVocoder => 28,
                 ModuleKind::FxTapeSat => 29,
                 ModuleKind::FxDrive => 30,
                 ModuleKind::FxAutotune => 31,
@@ -824,9 +836,12 @@ impl RackState {
         }
         // Build adjacency from existing audio cables, then check if to_id can
         // already reach from_id (i.e. adding from→to would close a cycle).
+        // Sidechain edges (`to.kind == SidechainIn`) are excluded — they're
+        // taps, read with a one-sample delay, and don't propagate signal
+        // forward in the chain.
         let mut adj: HashMap<u32, Vec<u32>> = HashMap::new();
         for c in &self.cables {
-            if c.from.kind == PortKind::Audio {
+            if c.from.kind == PortKind::Audio && c.to.kind != PortKind::SidechainIn {
                 adj.entry(c.from.module_id)
                     .or_default()
                     .push(c.to.module_id);
@@ -860,8 +875,10 @@ impl RackState {
         // feedback routes at compile time with a clamped gain so the loop
         // can't diverge).  Cycles involving a voice / master / LLM module
         // stay rejected — those would be genuine graph errors, not
-        // musical feedback.
+        // musical feedback.  Sidechain destinations are taps — they read
+        // the source with a one-sample delay so no cycle check applies.
         if from.kind == PortKind::Audio
+            && to.kind != PortKind::SidechainIn
             && self.would_create_audio_cycle(from.module_id, to.module_id)
             && !(self.is_fx_module(from.module_id) && self.is_fx_module(to.module_id))
         {
@@ -880,6 +897,21 @@ impl RackState {
             audio_gain: default_audio_gain(),
         });
         true
+    }
+
+    /// Connect a sidechain cable: `from_id`'s audio out → `to_id`'s
+    /// sidechain in.  Tap, not a forward send.
+    pub fn connect_sidechain(&mut self, from_id: u32, to_id: u32) -> bool {
+        let mk = |id, dir, kind| PortRef {
+            module_id: id,
+            dir,
+            kind,
+            index: 0,
+        };
+        self.connect(
+            mk(from_id, PortDir::Out, PortKind::Audio),
+            mk(to_id, PortDir::In, PortKind::SidechainIn),
+        )
     }
 
     /// Connect a control cable from `from_id` (Out) to `to_id` (In).

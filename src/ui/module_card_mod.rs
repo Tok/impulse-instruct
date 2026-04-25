@@ -117,6 +117,15 @@ const ALL_TARGETS: &[LfoTarget] = &[
     LfoTarget::CompThresh,
     LfoTarget::CompRatio,
     LfoTarget::CompMix,
+    LfoTarget::GateThreshold,
+    LfoTarget::GateAttack,
+    LfoTarget::GateRelease,
+    LfoTarget::GateDepth,
+    LfoTarget::GateMix,
+    LfoTarget::VocoderBands,
+    LfoTarget::VocoderCarrierMix,
+    LfoTarget::VocoderSense,
+    LfoTarget::VocoderMix,
     LfoTarget::TapeDrive,
     LfoTarget::TapeMix,
     LfoTarget::TapeFlutter,
@@ -212,6 +221,8 @@ pub fn has_audio_in(kind: ModuleKind) -> bool {
             | FxBitcrush
             | FxEq
             | FxCompressor
+            | FxGate
+            | FxVocoder
             | FxTapeSat
             | FxDrive
             | FxAutotune

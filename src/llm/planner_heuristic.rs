@@ -223,6 +223,15 @@ fn mentions_fx(lower: &str) -> bool {
         "tape sat",
         "tapesat",
         "flutter",
+        "gate",
+        "ducker",
+        "ducking",
+        "noise gate",
+        "noisegate",
+        "vocoder",
+        "vocode",
+        "talkbox",
+        "sidechain",
     ];
     FX_WORDS.iter().any(|w| lower.contains(w))
 }

@@ -4,7 +4,7 @@
 // Lifted out of dsp/mod.rs to keep that file under the 1000-line cap;
 // the match arm set grows every time a new FX ships.
 
-use crate::state::{FeedbackRoute, FxStep};
+use crate::state::{FeedbackRoute, FxStep, SidechainSource};
 
 use super::DspState;
 use super::fx_math::{BitcrushState, bitcrush_step, drive_step, waveshaper_step};
@@ -13,11 +13,18 @@ use super::rev_tap::{rev_tap_len_for_quant, step_rev_tap};
 
 impl DspState {
     /// Apply one FX step to `sig` and return the result.
+    /// `sidechain` is the resolved sidechain audio sample for this step
+    /// (read from the previous-sample voice / FX cache via
+    /// `apply_fx_chain`), or `sig` itself when the step has no sidechain
+    /// route.  Most FX ignore it; only Gate / Vocoder / Compressor
+    /// (sidechain mode) consume it.
     /// Must not hold any borrow on `self.fx_plan` when called.
+    #[allow(clippy::too_many_arguments)]
     pub(super) fn apply_fx_step(
         &mut self,
         step: FxStep,
         sig: f32,
+        sidechain: f32,
         p: &AudioParams,
         delay_samples: usize,
         sr: f32,
@@ -194,15 +201,28 @@ impl DspState {
             FxStep::Eq => self
                 .eq
                 .process(sig, p.eq_low_gain, p.eq_mid_gain, p.eq_hi_gain),
-            FxStep::Compressor => self.compressor.process(
-                sig,
-                p.compressor_threshold,
-                p.compressor_ratio,
-                p.compressor_mix,
-                p.compressor_multiband,
-                p.compressor_reverse,
-                sr,
-            ),
+            FxStep::Compressor => {
+                // In sidechain mode the level detector reads `sidechain`
+                // (the cable-fed signal) but the gain reduction still
+                // applies to `sig`.  Compressor::process takes a single
+                // input + handles internal envelope state — we feed it
+                // the right detector via `process_with_detector`.
+                let detector = if p.compressor_sidechain {
+                    sidechain
+                } else {
+                    sig
+                };
+                self.compressor.process_with_detector(
+                    sig,
+                    detector,
+                    p.compressor_threshold,
+                    p.compressor_ratio,
+                    p.compressor_mix,
+                    p.compressor_multiband,
+                    p.compressor_reverse,
+                    sr,
+                )
+            }
             FxStep::TapeSat => {
                 self.tape_sat
                     .process(sig, p.tape_drive, p.tape_mix, p.tape_flutter, sr)
@@ -244,6 +264,25 @@ impl DspState {
                 p.pitch_shift_mix,
                 p.pitch_shift_fbk,
             ),
+            FxStep::Gate => self.gate.process(
+                sig,
+                sidechain,
+                p.gate_threshold,
+                p.gate_attack,
+                p.gate_release,
+                p.gate_depth,
+                p.gate_mix,
+                sr,
+            ),
+            FxStep::Vocoder => self.vocoder.process(
+                sig,
+                sidechain,
+                p.vocoder_bands,
+                p.vocoder_carrier_mix,
+                p.vocoder_sense,
+                p.vocoder_mix,
+                sr,
+            ),
         }
     }
 
@@ -258,6 +297,7 @@ impl DspState {
         sig: f32,
         snap: &super::VoiceSendsSnap,
         feedback_routes: &[FeedbackRoute],
+        sidechain_snap: &super::SidechainSnap,
         p: &AudioParams,
         delay_samples: usize,
         sr: f32,
@@ -273,6 +313,7 @@ impl DspState {
                 sig * snap.gains[i],
                 chain,
                 feedback_routes,
+                sidechain_snap,
                 p,
                 delay_samples,
                 sr,
@@ -293,12 +334,21 @@ impl DspState {
     /// algebraically well-defined — no instantaneous cycles — so the
     /// graph can't blow up numerically.  The compile-time clamp to
     /// `FEEDBACK_GAIN_MAX` (0.95) preserves the stability margin.
+    ///
+    /// `sidechain_snap` resolves the per-step sidechain signal: for steps
+    /// with a `SidechainSource::Voice(kind)` route, it pulls from the
+    /// per-sample voice cache; for `SidechainSource::Fx(step)`, it pulls
+    /// from `prev_fx_output` (one-sample delay, same machinery as
+    /// feedback edges).  Steps with no sidechain route get `sig` itself
+    /// — keeps unconnected gate / vocoder / compressor sane (gate
+    /// becomes a noise gate, etc.).
     #[allow(clippy::too_many_arguments)]
     pub(super) fn apply_fx_chain(
         &mut self,
         mut sig: f32,
         chain: &[FxStep],
         feedback_routes: &[FeedbackRoute],
+        sidechain_snap: &super::SidechainSnap,
         p: &AudioParams,
         delay_samples: usize,
         sr: f32,
@@ -310,7 +360,21 @@ impl DspState {
                     sig += self.prev_fx_output[fr.source.idx()] * fr.gain;
                 }
             }
-            sig = self.apply_fx_step(step, sig, p, delay_samples, sr, gate_env);
+            // Resolve sidechain source for this step.  The lookup walks
+            // the small (≤MAX_SIDECHAIN) snapshot array — linear scan is
+            // faster than a HashMap probe for typical sizes (0–4
+            // entries).
+            let mut sidechain = sig;
+            for i in 0..sidechain_snap.count {
+                if sidechain_snap.targets[i] == step {
+                    sidechain = match sidechain_snap.sources[i] {
+                        SidechainSource::Voice(_) => sidechain_snap.voice_signals[i],
+                        SidechainSource::Fx(src) => self.prev_fx_output[src.idx()],
+                    };
+                    break;
+                }
+            }
+            sig = self.apply_fx_step(step, sig, sidechain, p, delay_samples, sr, gate_env);
             self.prev_fx_output[step.idx()] = sig;
         }
         sig

@@ -201,6 +201,15 @@ pub fn lfo_target_to_u8(t: LfoTarget) -> u8 {
         StutterSlice => 107,
         StutterMix => 108,
         FreezeMix => 109,
+        GateThreshold => 110,
+        GateAttack => 111,
+        GateRelease => 112,
+        GateDepth => 113,
+        GateMix => 114,
+        VocoderBands => 115,
+        VocoderCarrierMix => 116,
+        VocoderSense => 117,
+        VocoderMix => 118,
     }
 }
 
@@ -544,6 +553,22 @@ pub struct AudioParams {
     /// follower's attack and release time constants are swapped inside
     /// `Compressor::compress_band`.
     pub compressor_reverse: bool,
+    /// See `FxState.compressor_sidechain`.  When true and a sidechain
+    /// cable feeds the compressor, the level detector reads the
+    /// sidechain signal instead of the input.  Gain reduction still
+    /// applies to the input.
+    pub compressor_sidechain: bool,
+    // Gate / ducker (sidechain FX)
+    pub gate_threshold: f32,
+    pub gate_attack: f32,
+    pub gate_release: f32,
+    pub gate_depth: f32,
+    pub gate_mix: f32,
+    // Vocoder (sidechain FX)
+    pub vocoder_bands: f32,
+    pub vocoder_carrier_mix: f32,
+    pub vocoder_sense: f32,
+    pub vocoder_mix: f32,
     // Tape saturation
     pub tape_drive: f32,
     pub tape_mix: f32,

@@ -57,6 +57,16 @@ pub enum ModuleKind {
     FxBitcrush,
     FxEq,
     FxCompressor,
+    /// Sidechain ducker / noise gate — envelope follower on a sidechain
+    /// audio input drives the gain on the main signal.  When sidechain
+    /// is unconnected falls back to the main signal as its own detector
+    /// (acts as a simple noise gate).  Tier 2 sidechain FX.
+    FxGate,
+    /// 16-band vocoder — N-band envelope follower on the sidechain
+    /// modulates per-band amplitude on the main carrier.  Pairs with
+    /// `NeuTts` for talkbox-flavoured patches (TTS → modulator,
+    /// bass / hoover → carrier).  Tier 2 sidechain FX.
+    FxVocoder,
     FxTapeSat,
     FxDrive,
     FxAutotune,
@@ -161,6 +171,8 @@ impl ModuleKind {
             Self::FxBitcrush => "BITCRUSH",
             Self::FxEq => "EQ",
             Self::FxCompressor => "COMPRESSOR",
+            Self::FxGate => "GATE",
+            Self::FxVocoder => "VOCODER",
             Self::FxTapeSat => "TAPE SAT",
             Self::FxDrive => "DRIVE",
             Self::FxAutotune => "AUTOTUNE",
@@ -303,6 +315,13 @@ impl ModuleKind {
             | Self::FxDrive
             | Self::FxAutotune
             | Self::FxPan => (2, 1),
+            // Gate has 4 knobs (threshold / attack / release / depth) +
+            // mix — 2 rows.
+            Self::FxGate => (2, 2),
+            // Vocoder — bands selector + carrier-mix + sense + mix on
+            // top of the band visualiser; 3 cols × 2 rows is comfy
+            // without dominating the FX strip.
+            Self::FxVocoder => (3, 2),
         }
     }
 
@@ -345,6 +364,8 @@ impl ModuleKind {
             | Self::FxBitcrush
             | Self::FxEq
             | Self::FxCompressor
+            | Self::FxGate
+            | Self::FxVocoder
             | Self::FxTapeSat
             | Self::FxDrive
             | Self::FxAutotune
@@ -409,6 +430,8 @@ impl ModuleKind {
                 | Self::FxBitcrush
                 | Self::FxEq
                 | Self::FxCompressor
+                | Self::FxGate
+                | Self::FxVocoder
                 | Self::FxTapeSat
                 | Self::FxDrive
                 | Self::FxAutotune
@@ -417,6 +440,16 @@ impl ModuleKind {
                 | Self::FxParamEq
                 | Self::FxPitchShift
         )
+    }
+
+    /// True if this module exposes a sidechain audio input port.  Sidechain
+    /// FX consume a tap from another voice / FX as their detector or
+    /// modulator without that source feeding the forward chain.  Used
+    /// by the rack UI (renders the extra input jack) and by
+    /// `compile_fx_plan` (treats the cable as a sidechain edge instead
+    /// of a regular send).
+    pub fn has_sidechain_in(self) -> bool {
+        matches!(self, Self::FxCompressor | Self::FxGate | Self::FxVocoder)
     }
 
     /// True for FX modules that offer an XY pad in the expanded view.
@@ -446,6 +479,8 @@ impl ModuleKind {
                 | Self::FxBitcrush
                 | Self::FxEq
                 | Self::FxCompressor
+                | Self::FxGate
+                | Self::FxVocoder
                 | Self::FxTapeSat
                 | Self::FxDrive
                 | Self::FxAutotune
@@ -480,6 +515,8 @@ impl ModuleKind {
                 | Self::FxBitcrush
                 | Self::FxEq
                 | Self::FxCompressor
+                | Self::FxGate
+                | Self::FxVocoder
                 | Self::FxTapeSat
                 | Self::FxDrive
                 | Self::FxAutotune

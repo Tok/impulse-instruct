@@ -179,6 +179,17 @@ pub enum LfoTarget {
     CompThresh,
     CompRatio,
     CompMix,
+    // FX: Gate (sidechain ducker)
+    GateThreshold,
+    GateAttack,
+    GateRelease,
+    GateDepth,
+    GateMix,
+    // FX: Vocoder (sidechain modulator)
+    VocoderBands,
+    VocoderCarrierMix,
+    VocoderSense,
+    VocoderMix,
     // FX: Tape Sat
     TapeDrive,
     TapeMix,

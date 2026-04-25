@@ -198,6 +198,8 @@ fn allows_multiple_is_true_for_fx_lfo_and_agents() {
         ModuleKind::FxBitcrush,
         ModuleKind::FxEq,
         ModuleKind::FxCompressor,
+        ModuleKind::FxGate,
+        ModuleKind::FxVocoder,
         ModuleKind::FxTapeSat,
         ModuleKind::FxDrive,
         ModuleKind::FxAutotune,

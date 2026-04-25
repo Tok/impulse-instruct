@@ -71,6 +71,8 @@ fn title_fill(kind: ModuleKind) -> Color32 {
         | ModuleKind::FxBitcrush
         | ModuleKind::FxEq
         | ModuleKind::FxCompressor
+        | ModuleKind::FxGate
+        | ModuleKind::FxVocoder
         | ModuleKind::FxTapeSat
         | ModuleKind::FxDrive
         | ModuleKind::FxAutotune

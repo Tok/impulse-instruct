@@ -282,7 +282,9 @@ pub(super) fn draw_fx_content(
         | ModuleKind::FxComb
         | ModuleKind::FxTilt
         | ModuleKind::FxTransient
-        | ModuleKind::FxExciter => {
+        | ModuleKind::FxExciter
+        | ModuleKind::FxGate
+        | ModuleKind::FxVocoder => {
             // All seven Tier-1 FX cards live in
             // `rack_content_fx_extras.rs` to keep this file under the
             // 1000-line cap.  The helper returns the new pad_pair value.
@@ -337,12 +339,13 @@ pub(super) fn draw_fx_content(
             }
         }
         ModuleKind::FxCompressor => {
-            let (mut th, mut ra, mut mi) = {
+            let (mut th, mut ra, mut mi, sc_on) = {
                 let s = app.state.read();
                 (
                     s.fx.compressor_threshold,
                     s.fx.compressor_ratio,
                     s.fx.compressor_mix,
+                    s.fx.compressor_sidechain,
                 )
             };
             hk!(
@@ -351,6 +354,31 @@ pub(super) fn draw_fx_content(
                 ("RATIO", &mut ra, pm("fx.compressor_ratio")),
                 ("MIX", &mut mi, pm("fx.compressor_mix"))
             );
+            // Sidechain toggle.  Compact button below the knob row —
+            // when on, the level detector reads the sidechain audio
+            // input port (cable into PortKind::SidechainIn) instead of
+            // the main signal.  Falls back gracefully to self-detection
+            // when no cable is connected.
+            ui.horizontal(|ui| {
+                let label = if sc_on { "SC ON" } else { "SC" };
+                let col = if sc_on {
+                    crate::ui::theme::CHALK
+                } else {
+                    crate::ui::theme::IRON
+                };
+                if ui
+                    .add_sized(
+                        [44.0, 16.0],
+                        egui::Button::new(
+                            egui::RichText::new(label).monospace().size(8.0).color(col),
+                        ),
+                    )
+                    .clicked()
+                {
+                    app.state.write().fx.compressor_sidechain = !sc_on;
+                    changed = true;
+                }
+            });
             if pad_expanded {
                 ui.add_space(PAD_SECTION_TOP_GAP);
                 let (vc, _) = render_three_pad(

@@ -422,7 +422,7 @@ pub(crate) struct Compressor {
 }
 
 impl Compressor {
-    pub(super) fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self {
             env: 0.0,
             band_env: [0.0; 3],
@@ -469,11 +469,64 @@ impl Compressor {
         input * 10.0f32.powf(-gain_db / 20.0)
     }
 
+    /// Sidechain-aware variant of `process` — the level detector reads
+    /// `detector` instead of `input`.  When the detector and input are
+    /// the same signal the behaviour is identical to `process`.  Used
+    /// when `FxState.compressor_sidechain` is on and a sidechain cable
+    /// drives the compressor's detector port.
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn process_with_detector(
+        &mut self,
+        input: f32,
+        detector: f32,
+        threshold: f32,
+        ratio: f32,
+        mix: f32,
+        multiband: f32,
+        reverse: bool,
+        sr: f32,
+    ) -> f32 {
+        if mix < 0.001 {
+            return input;
+        }
+        // Single-band path: track detector envelope, derive gain
+        // reduction in dB from `detector`'s level vs threshold, apply to
+        // `input`.  Simpler than the general 3-band path which still
+        // self-detects (multiband sidechain is not in scope here).
+        if multiband < 0.001 {
+            let thresh_db = -40.0 * (1.0 - threshold);
+            let ratio_val = 1.0 + ratio * 19.0;
+            let level = detector.abs();
+            let fast = (-1.0 / (sr * 0.001)).exp();
+            let slow = (-1.0 / (sr * 0.08)).exp();
+            let (att, rel) = if reverse { (slow, fast) } else { (fast, slow) };
+            self.env = if level > self.env {
+                self.env * att + level * (1.0 - att)
+            } else {
+                self.env * rel + level * (1.0 - rel)
+            };
+            let env_db = 20.0 * self.env.max(1e-9).log10();
+            let gain_db = if env_db > thresh_db {
+                (env_db - thresh_db) * (1.0 - 1.0 / ratio_val)
+            } else {
+                0.0
+            };
+            let compressed = input * 10.0f32.powf(-gain_db / 20.0);
+            return input * (1.0 - mix) + compressed * mix;
+        }
+        // Multiband path: fall back to non-sidechain processing — adding
+        // sidechain to the per-band detectors is a bigger design (each
+        // band needs its own detector signal split).  Out of scope for
+        // the sidechain V1 — the user can disable multiband when they
+        // turn on sidechain.
+        self.process(input, threshold, ratio, mix, multiband, reverse, sr)
+    }
+
     /// `threshold`: 0–1 → −40..0 dB. `ratio`: 0–1 → 1:1..20:1. `mix`: 0–1 wet/dry.
     /// `multiband`: 0 = single band, >0 = 3-band split (low/mid/high).
     /// `reverse`: swap attack/release constants for swell-into-hit feel.
     #[allow(clippy::too_many_arguments)]
-    pub(super) fn process(
+    pub(crate) fn process(
         &mut self,
         input: f32,
         threshold: f32,

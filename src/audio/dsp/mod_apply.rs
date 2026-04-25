@@ -131,6 +131,15 @@ pub fn apply_mod_target(p: &mut AudioParams, target: u8, mod_val: f32) {
         107 => p.stutter_slice = (p.stutter_slice + mod_val).clamp(0.0, 1.0),
         108 => p.stutter_mix = (p.stutter_mix + mod_val).clamp(0.0, 1.0),
         109 => p.freeze_mix = (p.freeze_mix + mod_val).clamp(0.0, 1.0),
+        110 => p.gate_threshold = (p.gate_threshold + mod_val).clamp(0.0, 1.0),
+        111 => p.gate_attack = (p.gate_attack + mod_val).clamp(0.0, 1.0),
+        112 => p.gate_release = (p.gate_release + mod_val).clamp(0.0, 1.0),
+        113 => p.gate_depth = (p.gate_depth + mod_val).clamp(0.0, 1.0),
+        114 => p.gate_mix = (p.gate_mix + mod_val).clamp(0.0, 1.0),
+        115 => p.vocoder_bands = (p.vocoder_bands + mod_val).clamp(0.0, 1.0),
+        116 => p.vocoder_carrier_mix = (p.vocoder_carrier_mix + mod_val).clamp(0.0, 1.0),
+        117 => p.vocoder_sense = (p.vocoder_sense + mod_val).clamp(0.0, 1.0),
+        118 => p.vocoder_mix = (p.vocoder_mix + mod_val).clamp(0.0, 1.0),
         _ => {}
     }
 }

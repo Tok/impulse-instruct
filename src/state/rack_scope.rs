@@ -70,6 +70,8 @@ fn kind_to_scope_name(kind: ModuleKind) -> Option<String> {
         | ModuleKind::FxBitcrush
         | ModuleKind::FxEq
         | ModuleKind::FxCompressor
+        | ModuleKind::FxGate
+        | ModuleKind::FxVocoder
         | ModuleKind::FxTapeSat
         | ModuleKind::FxDrive
         | ModuleKind::FxAutotune => Some("fx".to_string()),
@@ -117,6 +119,8 @@ pub fn parse_module_kind(name: &str) -> Option<ModuleKind> {
         "fxfreeze" | "freeze" | "spectralfreeze" | "drone" => Some(FxFreeze),
         "fxeq" | "eq" | "equalizer" | "equaliser" => Some(FxEq),
         "fxcompressor" | "compressor" | "comp" => Some(FxCompressor),
+        "fxgate" | "gate" | "noisegate" | "ducker" | "ducking" => Some(FxGate),
+        "fxvocoder" | "vocoder" | "talkbox" | "vocode" => Some(FxVocoder),
         "fxtapesat" | "tapesat" | "tape" | "saturation" => Some(FxTapeSat),
         "fxdrive" | "drive" | "overdrive" | "distortion" => Some(FxDrive),
         "fxautotune" | "autotune" | "pitchcorrect" | "tune" => Some(FxAutotune),
@@ -175,6 +179,14 @@ pub fn rack_kind_name_matches(kind: ModuleKind, name: &str) -> bool {
         }
         ModuleKind::FxEq => matches!(n.as_str(), "eq" | "equalizer" | "equaliser" | "fx"),
         ModuleKind::FxCompressor => matches!(n.as_str(), "compressor" | "comp" | "fx"),
+        ModuleKind::FxGate => matches!(
+            n.as_str(),
+            "gate" | "noisegate" | "noise_gate" | "ducker" | "ducking" | "fx"
+        ),
+        ModuleKind::FxVocoder => matches!(
+            n.as_str(),
+            "vocoder" | "vocode" | "talkbox" | "talk_box" | "fx"
+        ),
         ModuleKind::FxTapeSat => matches!(
             n.as_str(),
             "tapesat" | "tape_sat" | "tape sat" | "tape" | "saturation" | "fx"

@@ -36,6 +36,8 @@ pub(super) const FXMOD_KINDS: &[ModuleKind] = &[
     ModuleKind::FxTilt,
     ModuleKind::FxEq,
     ModuleKind::FxCompressor,
+    ModuleKind::FxGate,
+    ModuleKind::FxVocoder,
     ModuleKind::FxLimiter,
     ModuleKind::FxTapeSat,
     ModuleKind::FxTransient,

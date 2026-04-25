@@ -44,7 +44,9 @@ pub(super) fn try_draw_fx_extras_content(
         | ModuleKind::FxRevDelay
         | ModuleKind::FxTapeStop
         | ModuleKind::FxStutter
-        | ModuleKind::FxFreeze => {}
+        | ModuleKind::FxFreeze
+        | ModuleKind::FxGate
+        | ModuleKind::FxVocoder => {}
         _ => return None,
     }
 
@@ -518,6 +520,101 @@ pub(super) fn try_draw_fx_extras_content(
             hk!(ui, ("FREEZE", &mut m, pm("fx.freeze_mix")));
             if changed || m != app.state.read().fx.freeze_mix {
                 app.state.write().fx.freeze_mix = m;
+            }
+        }
+        ModuleKind::FxGate => {
+            let (mut th, mut at, mut rl, mut dp, mut m) = {
+                let s = app.state.read();
+                (
+                    s.fx.gate_threshold,
+                    s.fx.gate_attack,
+                    s.fx.gate_release,
+                    s.fx.gate_depth,
+                    s.fx.gate_mix,
+                )
+            };
+            hk!(
+                ui,
+                ("THR", &mut th, pm("fx.gate_threshold")),
+                ("ATK", &mut at, pm("fx.gate_attack"))
+            );
+            hk!(
+                ui,
+                ("REL", &mut rl, pm("fx.gate_release")),
+                ("DEPTH", &mut dp, pm("fx.gate_depth"))
+            );
+            hk!(ui, ("MIX", &mut m, pm("fx.gate_mix")));
+            if pad_expanded {
+                ui.add_space(PAD_SECTION_TOP_GAP);
+                let (vc, _) = render_three_pad(
+                    ui,
+                    &format!("gate_xy_{module_id}"),
+                    ["THR", "DEPTH", "MIX"],
+                    &mut pad_pair,
+                    (&mut th, &mut dp, &mut m),
+                    [
+                        user_owned("fx.gate_threshold"),
+                        user_owned("fx.gate_depth"),
+                        user_owned("fx.gate_mix"),
+                    ],
+                );
+                if vc {
+                    changed = true;
+                }
+            }
+            if changed || th != app.state.read().fx.gate_threshold {
+                let mut s = app.state.write();
+                s.fx.gate_threshold = th;
+                s.fx.gate_attack = at;
+                s.fx.gate_release = rl;
+                s.fx.gate_depth = dp;
+                s.fx.gate_mix = m;
+            }
+        }
+        ModuleKind::FxVocoder => {
+            let (mut bd, mut cm, mut sn, mut m) = {
+                let s = app.state.read();
+                (
+                    s.fx.vocoder_bands,
+                    s.fx.vocoder_carrier_mix,
+                    s.fx.vocoder_sense,
+                    s.fx.vocoder_mix,
+                )
+            };
+            hk!(
+                ui,
+                ("BANDS", &mut bd, pm("fx.vocoder_bands")),
+                ("CRR.MX", &mut cm, pm("fx.vocoder_carrier_mix"))
+            );
+            hk!(
+                ui,
+                ("SENSE", &mut sn, pm("fx.vocoder_sense")),
+                ("MIX", &mut m, pm("fx.vocoder_mix"))
+            );
+            if pad_expanded {
+                ui.add_space(PAD_SECTION_TOP_GAP);
+                let (vc, _) = render_three_pad(
+                    ui,
+                    &format!("vocoder_xy_{module_id}"),
+                    ["BANDS", "CARR", "MIX"],
+                    &mut pad_pair,
+                    (&mut bd, &mut cm, &mut m),
+                    [
+                        user_owned("fx.vocoder_bands"),
+                        user_owned("fx.vocoder_carrier_mix"),
+                        user_owned("fx.vocoder_mix"),
+                    ],
+                );
+                if vc {
+                    changed = true;
+                }
+            }
+            if changed || bd != app.state.read().fx.vocoder_bands {
+                let mut s = app.state.write();
+                s.fx.vocoder_bands = bd;
+                s.fx.vocoder_carrier_mix = cm;
+                s.fx.vocoder_sense = sn;
+                s.fx.vocoder_mix = m;
             }
         }
         _ => unreachable!("guarded by the early return above"),

@@ -144,6 +144,57 @@ pub struct FxState {
     /// reversal mode, alongside reverb and delay).
     #[serde(default)]
     pub compressor_reverse: bool,
+    /// When true, the compressor's level detector reads from the
+    /// sidechain audio input (cable into `PortKind::SidechainIn`)
+    /// instead of the main signal.  Gain reduction still applies to
+    /// the main signal — classic "kick ducks pad" patch when paired
+    /// with a kick → sidechain cable.  Has no audible effect when no
+    /// sidechain cable is connected (detector falls back to the main
+    /// signal so the compressor behaves identically to non-sidechain
+    /// mode).
+    #[serde(default)]
+    pub compressor_sidechain: bool,
+    // ── Gate / ducker (FxGate, sidechain) ─────────────────────────────
+    /// Gate threshold 0..1 → −60..0 dBFS.  Detector envelope must rise
+    /// above this for the gate to open.
+    #[serde(default = "default_gate_threshold")]
+    pub gate_threshold: f32,
+    /// Gate attack 0..1 → 0.5..50 ms (time for gain to recover when
+    /// sidechain crosses threshold).
+    #[serde(default = "default_gate_attack")]
+    pub gate_attack: f32,
+    /// Gate release 0..1 → 10..500 ms (time for gain to decay when
+    /// sidechain falls below threshold).
+    #[serde(default = "default_gate_release")]
+    pub gate_release: f32,
+    /// Gate depth 0..1 — fraction of unity gain pulled down when the
+    /// gate is closed.  At 1.0 the gate fully mutes the signal; at 0.5
+    /// it ducks by 6 dB; at 0 the FX is inactive.
+    #[serde(default = "default_gate_depth")]
+    pub gate_depth: f32,
+    /// Gate wet/dry 0..1 (0 = bypass).
+    #[serde(default)]
+    pub gate_mix: f32,
+    // ── Vocoder (FxVocoder, sidechain) ────────────────────────────────
+    /// Vocoder bands-active 0..1 — fraction of the 16-band cascade that
+    /// processes audio.  Lower values give a coarser, more "robotic"
+    /// vocode; near 1.0 is the canonical full-resolution channel
+    /// vocoder.
+    #[serde(default = "default_vocoder_bands")]
+    pub vocoder_bands: f32,
+    /// Vocoder dry-carrier mix 0..1 — talkbox flavour rises with this.
+    /// 0 = pure vocoder (band-summed only), 1 = full carrier blended
+    /// alongside the vocoded bands.
+    #[serde(default)]
+    pub vocoder_carrier_mix: f32,
+    /// Vocoder modulator-detector sense 0..1 → 0.5..5.0× detector gain.
+    /// Higher values exaggerate the modulator's influence (clearer
+    /// consonants but more pumping).
+    #[serde(default = "default_vocoder_sense")]
+    pub vocoder_sense: f32,
+    /// Vocoder wet/dry 0..1 (0 = bypass).
+    #[serde(default)]
+    pub vocoder_mix: f32,
     pub master_volume: f32, // 0–1
     #[serde(default)]
     pub stereo_width: f32, // 0–1: 0=mono, 0.5=normal, 1=wide
@@ -501,6 +552,30 @@ fn default_conv_reverb_width() -> f32 {
     1.0
 }
 
+fn default_gate_threshold() -> f32 {
+    0.5 // ~−30 dBFS — sits between the noise floor and a typical signal.
+}
+
+fn default_gate_attack() -> f32 {
+    0.05 // ~3 ms — fast enough to track a kick, soft enough to avoid clicks.
+}
+
+fn default_gate_release() -> f32 {
+    0.4 // ~200 ms — comfortable kick-ducks-pad release.
+}
+
+fn default_gate_depth() -> f32 {
+    0.7 // moderate ducking by default — full mute is harsh.
+}
+
+fn default_vocoder_bands() -> f32 {
+    1.0 // all 16 bands active.
+}
+
+fn default_vocoder_sense() -> f32 {
+    0.5 // mid-range detector gain.
+}
+
 impl Default for FxState {
     fn default() -> Self {
         Self {
@@ -528,6 +603,16 @@ impl Default for FxState {
             compressor_mix: 0.0,
             compressor_multiband: 0.0,
             compressor_reverse: false,
+            compressor_sidechain: false,
+            gate_threshold: default_gate_threshold(),
+            gate_attack: default_gate_attack(),
+            gate_release: default_gate_release(),
+            gate_depth: default_gate_depth(),
+            gate_mix: 0.0,
+            vocoder_bands: default_vocoder_bands(),
+            vocoder_carrier_mix: 0.0,
+            vocoder_sense: default_vocoder_sense(),
+            vocoder_mix: 0.0,
             master_volume: 0.85,
             stereo_width: 0.5,
             tuning: 0,

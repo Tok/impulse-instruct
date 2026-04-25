@@ -7,6 +7,7 @@ mod dsp_util;
 pub mod fx;
 pub mod fx_extras;
 pub mod fx_math;
+pub mod fx_sidechain;
 mod fx_step;
 pub mod gabber_kick;
 pub mod granular_voice;
@@ -34,6 +35,7 @@ use fx_math::{
     free_eg_value_at, gated_reverb_envelope_step, lfo_value_at, sidechain_duck,
     sidechain_envelope_step,
 };
+use fx_sidechain::{Gate, MAX_SIDECHAIN, SidechainSnap, Vocoder};
 use gabber_kick::GabberKick;
 use granular_voice::GranularVoice;
 use mod_apply::apply_mod_target;
@@ -72,6 +74,9 @@ struct VoiceSendsSnap {
     gains: [f32; MAX_SENDS],
     count: usize,
 }
+
+// `SidechainSnap` + MAX_SIDECHAIN now live alongside the sidechain DSP
+// in `fx_sidechain.rs`.
 
 // ─── Full DSP state ───────────────────────────────────────────────────────────
 
@@ -113,6 +118,8 @@ pub struct DspState {
     tape_stop: TapeStop,
     stutter: Stutter,
     freeze: Freeze,
+    gate: Gate,
+    vocoder: Vocoder,
     bitcrush_held: f32,
     bitcrush_counter: u32,
     // FX state
@@ -228,6 +235,8 @@ impl DspState {
             tape_stop: TapeStop::new(),
             stutter: Stutter::new(),
             freeze: Freeze::new(),
+            gate: Gate::new(),
+            vocoder: Vocoder::new(sample_rate),
             compressor: Compressor::new(),
             tape_sat: TapeSat::new(),
             autotune: Autotune::new(),
@@ -468,6 +477,22 @@ impl DspState {
         let sends_tts = snap_sends(ModuleKind::NeuTts);
         let have_voice_routes = !self.fx_plan.voice_routes.is_empty();
 
+        // Snapshot sidechain routes into a stack-friendly array.  The
+        // targets / sources are static for the block; only `voice_signals`
+        // gets refreshed each sample once the voice buses have been
+        // computed.  `apply_fx_chain` then walks this snap when it hits
+        // a sidechain-capable FX step.
+        let mut sidechain_snap = SidechainSnap::empty();
+        for (target, source) in self.fx_plan.sidechain_routes.iter() {
+            if sidechain_snap.count >= MAX_SIDECHAIN {
+                break;
+            }
+            let i = sidechain_snap.count;
+            sidechain_snap.targets[i] = *target;
+            sidechain_snap.sources[i] = *source;
+            sidechain_snap.count += 1;
+        }
+
         // Snapshot feedback routes into a stack array — the audio thread
         // consults this every apply_fx_chain call without re-borrowing
         // self.fx_plan inside the frame loop.
@@ -676,16 +701,32 @@ impl DspState {
             );
             let gate_env = self.reverb_gate_env;
 
+            sidechain_snap.refresh_voice_signals(
+                bus_bass,
+                bus_808,
+                bus_909,
+                bus_hoover,
+                bus_pluck,
+                bus_wavetable,
+                bus_sample,
+                bus_an1x,
+                bus_amen,
+                bus_noise,
+                bus_granular,
+            );
+
             // Route voices through FX chains and sum to output.
             // Fast path: no voice routes → apply global chain to full dry mix (unchanged behaviour).
             // Per-voice path: each bus through its own chain, then sum, then global chain.
             let fb = &feedback_arr[..feedback_len];
+            let scs = &sidechain_snap;
             let synth_out = if !have_voice_routes {
                 let dry = detection_sum; // already scaled 0.60 above
                 self.apply_fx_chain(
                     dry,
                     &global_chain[..global_len],
                     fb,
+                    scs,
                     &p,
                     delay_samples,
                     sr,
@@ -696,133 +737,36 @@ impl DspState {
                 // sends; the helper sums the FX outputs and returns the
                 // bus signal unchanged when the voice has no sends
                 // (fallback to dry so un-wired voices stay audible).
-                let routed_bass = if sends_bass.count > 0 {
-                    self.route_voice_sends(
-                        bus_bass,
-                        &sends_bass,
-                        fb,
-                        &p,
-                        delay_samples,
-                        sr,
-                        gate_env,
-                    )
-                } else {
-                    bus_bass
-                };
-                let routed_808 = if sends_808.count > 0 {
-                    self.route_voice_sends(bus_808, &sends_808, fb, &p, delay_samples, sr, gate_env)
-                } else {
-                    bus_808
-                };
-                let routed_909 = if sends_909.count > 0 {
-                    self.route_voice_sends(bus_909, &sends_909, fb, &p, delay_samples, sr, gate_env)
-                } else {
-                    bus_909
-                };
-                let routed_hoover = if sends_hoover.count > 0 {
-                    self.route_voice_sends(
-                        bus_hoover,
-                        &sends_hoover,
-                        fb,
-                        &p,
-                        delay_samples,
-                        sr,
-                        gate_env,
-                    )
-                } else {
-                    bus_hoover
-                };
-                let routed_an1x = if sends_an1x.count > 0 {
-                    self.route_voice_sends(
-                        bus_an1x,
-                        &sends_an1x,
-                        fb,
-                        &p,
-                        delay_samples,
-                        sr,
-                        gate_env,
-                    )
-                } else {
-                    bus_an1x
-                };
-                let routed_amen = if sends_amen.count > 0 {
-                    self.route_voice_sends(
-                        bus_amen,
-                        &sends_amen,
-                        fb,
-                        &p,
-                        delay_samples,
-                        sr,
-                        gate_env,
-                    )
-                } else {
-                    bus_amen
-                };
-                let routed_noise = if sends_noise.count > 0 {
-                    self.route_voice_sends(
-                        bus_noise,
-                        &sends_noise,
-                        fb,
-                        &p,
-                        delay_samples,
-                        sr,
-                        gate_env,
-                    )
-                } else {
-                    bus_noise
-                };
-                let routed_granular = if sends_granular.count > 0 {
-                    self.route_voice_sends(
-                        bus_granular,
-                        &sends_granular,
-                        fb,
-                        &p,
-                        delay_samples,
-                        sr,
-                        gate_env,
-                    )
-                } else {
-                    bus_granular
-                };
-                let routed_pluck = if sends_pluck.count > 0 {
-                    self.route_voice_sends(
-                        bus_pluck,
-                        &sends_pluck,
-                        fb,
-                        &p,
-                        delay_samples,
-                        sr,
-                        gate_env,
-                    )
-                } else {
-                    bus_pluck
-                };
-                let routed_wavetable = if sends_wavetable.count > 0 {
-                    self.route_voice_sends(
-                        bus_wavetable,
-                        &sends_wavetable,
-                        fb,
-                        &p,
-                        delay_samples,
-                        sr,
-                        gate_env,
-                    )
-                } else {
-                    bus_wavetable
-                };
-                let routed_sample = if sends_sample.count > 0 {
-                    self.route_voice_sends(
-                        bus_sample,
-                        &sends_sample,
-                        fb,
-                        &p,
-                        delay_samples,
-                        sr,
-                        gate_env,
-                    )
-                } else {
-                    bus_sample
-                };
+                // The macro collapses 11 identical routed_X branches.
+                macro_rules! route_or_dry {
+                    ($bus:expr, $sends:ident) => {
+                        if $sends.count > 0 {
+                            self.route_voice_sends(
+                                $bus,
+                                &$sends,
+                                fb,
+                                scs,
+                                &p,
+                                delay_samples,
+                                sr,
+                                gate_env,
+                            )
+                        } else {
+                            $bus
+                        }
+                    };
+                }
+                let routed_bass = route_or_dry!(bus_bass, sends_bass);
+                let routed_808 = route_or_dry!(bus_808, sends_808);
+                let routed_909 = route_or_dry!(bus_909, sends_909);
+                let routed_hoover = route_or_dry!(bus_hoover, sends_hoover);
+                let routed_an1x = route_or_dry!(bus_an1x, sends_an1x);
+                let routed_amen = route_or_dry!(bus_amen, sends_amen);
+                let routed_noise = route_or_dry!(bus_noise, sends_noise);
+                let routed_granular = route_or_dry!(bus_granular, sends_granular);
+                let routed_pluck = route_or_dry!(bus_pluck, sends_pluck);
+                let routed_wavetable = route_or_dry!(bus_wavetable, sends_wavetable);
+                let routed_sample = route_or_dry!(bus_sample, sends_sample);
                 let mixed = (routed_bass
                     + routed_808
                     + routed_909
@@ -840,6 +784,7 @@ impl DspState {
                     mixed,
                     &global_chain[..global_len],
                     fb,
+                    scs,
                     &p,
                     delay_samples,
                     sr,
@@ -853,7 +798,16 @@ impl DspState {
             // activity tied to the raw sample stream regardless of gain.
             let tts_raw = self.tts_consumer.pop().unwrap_or(0.0);
             let tts_fx = if tts_raw != 0.0 && sends_tts.count > 0 {
-                self.route_voice_sends(tts_raw, &sends_tts, fb, &p, delay_samples, sr, gate_env)
+                self.route_voice_sends(
+                    tts_raw,
+                    &sends_tts,
+                    fb,
+                    scs,
+                    &p,
+                    delay_samples,
+                    sr,
+                    gate_env,
+                )
             } else {
                 tts_raw
             };

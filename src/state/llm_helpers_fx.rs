@@ -197,6 +197,24 @@ pub(super) fn apply_fx_update(
     {
         s.fx.compressor_reverse = v;
     }
+    if !locked.contains("fx.compressor_sidechain")
+        && let Some(v) = fx.get("compressor_sidechain").and_then(|v| v.as_bool())
+    {
+        s.fx.compressor_sidechain = v;
+    }
+    u!(s.fx.gate_threshold, "gate_threshold", "fx.gate_threshold");
+    u!(s.fx.gate_attack, "gate_attack", "fx.gate_attack");
+    u!(s.fx.gate_release, "gate_release", "fx.gate_release");
+    u!(s.fx.gate_depth, "gate_depth", "fx.gate_depth");
+    u!(s.fx.gate_mix, "gate_mix", "fx.gate_mix");
+    u!(s.fx.vocoder_bands, "vocoder_bands", "fx.vocoder_bands");
+    u!(
+        s.fx.vocoder_carrier_mix,
+        "vocoder_carrier_mix",
+        "fx.vocoder_carrier_mix"
+    );
+    u!(s.fx.vocoder_sense, "vocoder_sense", "fx.vocoder_sense");
+    u!(s.fx.vocoder_mix, "vocoder_mix", "fx.vocoder_mix");
     u!(s.fx.stereo_width, "stereo_width", "fx.stereo_width");
     if !locked.contains("fx.tuning")
         && let Some(v) = fx.get("tuning").and_then(|v| v.as_u64())
@@ -423,6 +441,14 @@ pub(super) fn apply_fx_update(
         ),
         ("autotune_xy", "autotune_amount", "autotune_mix", 0.0, 1.0),
         ("fx_pan_xy", "fx_pan_pos", "fx_pan_width", 0.0, 1.0),
+        ("gate_xy", "gate_threshold", "gate_depth", 0.0, 1.0),
+        (
+            "vocoder_xy",
+            "vocoder_bands",
+            "vocoder_carrier_mix",
+            0.0,
+            1.0,
+        ),
     ];
     for (xy_key, field_a, field_b, min, max) in XY_PAIRS {
         let Some(arr) = fx.get(*xy_key).and_then(|v| v.as_array()) else {
@@ -524,6 +550,15 @@ fn fx_field_mut<'a>(fx: &'a mut super::FxState, key: &str) -> Option<&'a mut f32
         "compressor_threshold" => &mut fx.compressor_threshold,
         "compressor_ratio" => &mut fx.compressor_ratio,
         "compressor_mix" => &mut fx.compressor_mix,
+        "gate_threshold" => &mut fx.gate_threshold,
+        "gate_attack" => &mut fx.gate_attack,
+        "gate_release" => &mut fx.gate_release,
+        "gate_depth" => &mut fx.gate_depth,
+        "gate_mix" => &mut fx.gate_mix,
+        "vocoder_bands" => &mut fx.vocoder_bands,
+        "vocoder_carrier_mix" => &mut fx.vocoder_carrier_mix,
+        "vocoder_sense" => &mut fx.vocoder_sense,
+        "vocoder_mix" => &mut fx.vocoder_mix,
         "tape_drive" => &mut fx.tape_drive,
         "tape_mix" => &mut fx.tape_mix,
         "tape_flutter" => &mut fx.tape_flutter,

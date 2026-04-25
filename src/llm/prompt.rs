@@ -611,7 +611,7 @@ RACK (only when user asks to add/wire/remove modules): `{{"rack": {{"add":["808"
 bass, 808, 909, hoover, an1x, amen, noise, granular, bitcrush, reverb, delay,
 chorus, phaser, flanger, filter, comb, tilt, transient, exciter, limiter,
 multitap, revdelay, tapestop, stutter, freeze,
-drive, eq, compressor, tapesat, waveshaper, ringmod, lfo, tts, master.
+drive, eq, compressor, gate, vocoder, tapesat, waveshaper, ringmod, lfo, tts, master.
 `pad` expands an FX card to reveal its XY pad and (for 3-knob FX) picks which
 pair drives the pad — pair 0 = A/B, 1 = A/C, 2 = B/C from the knob row order.
 
@@ -624,7 +624,7 @@ XY PAD SHORTCUTS — every FX effect accepts a `<name>_xy: [x, y]` path under
 `multitap_xy`, `revdelay_xy`, `stutter_xy`,
 `ring_mod_xy`,
 `waveshaper_xy`, `bitcrush_xy`, `eq_xy`, `compressor_xy`, `tape_xy`,
-`distortion_xy`, `autotune_xy`, `fx_pan_xy`.  Use pad-space when thinking
+`distortion_xy`, `autotune_xy`, `fx_pan_xy`, `gate_xy`, `vocoder_xy`.  Use pad-space when thinking
 about intensity/character sweeps; use individual knob paths for Pair-1
 or Pair-2 combinations.
 

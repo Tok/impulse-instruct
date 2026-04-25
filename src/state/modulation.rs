@@ -99,6 +99,11 @@ pub fn mod_inputs(kind: ModuleKind) -> &'static [ModInput] {
         FxReverb | FxDelay | FxCompressor | FxPan | FxConvReverb | FxParamEq | FxPitchShift => {
             &[Selector, Selector, Selector]
         }
+        // Sidechain FX (Gate / Vocoder) — knob counts in the >3 bucket;
+        // 3 selectors keep the back-panel uniform.  The sidechain audio
+        // input is its own jack on the front (rendered separately from
+        // these modulation jacks).
+        FxGate | FxVocoder => &[Selector, Selector, Selector],
         // ── Explicit opt-outs ─────────────────────────────────────────────
         MasterOutput | LfoModule | LlmAgent | LlmConsole | SpectrumAnalyzer | StereoMeter
         | ActivityTimeline | BarOscilloscope | StereoVectorscope | LfoScope | PitchTracker
@@ -219,6 +224,15 @@ pub fn lfo_target_short_label(target: LfoTarget) -> &'static str {
         CompThresh => "CP.TH",
         CompRatio => "CP.RT",
         CompMix => "CP.MX",
+        GateThreshold => "GT.TH",
+        GateAttack => "GT.AT",
+        GateRelease => "GT.RL",
+        GateDepth => "GT.DP",
+        GateMix => "GT.MX",
+        VocoderBands => "VC.BD",
+        VocoderCarrierMix => "VC.CR",
+        VocoderSense => "VC.SN",
+        VocoderMix => "VC.MX",
         TapeDrive => "TP.DR",
         TapeMix => "TP.MX",
         TapeFlutter => "TP.FL",
@@ -278,6 +292,8 @@ pub(crate) fn lfo_target_module_kind(target: LfoTarget) -> Option<ModuleKind> {
         RingModFreq | RingModMix => Some(ModuleKind::FxRingMod),
         EqLow | EqMid | EqHigh => Some(ModuleKind::FxEq),
         CompThresh | CompRatio | CompMix => Some(ModuleKind::FxCompressor),
+        GateThreshold | GateAttack | GateRelease | GateDepth | GateMix => Some(ModuleKind::FxGate),
+        VocoderBands | VocoderCarrierMix | VocoderSense | VocoderMix => Some(ModuleKind::FxVocoder),
         TapeDrive | TapeMix | TapeFlutter => Some(ModuleKind::FxTapeSat),
         AutotuneAmount | AutotuneMix => Some(ModuleKind::FxAutotune),
         GabberKickPitch | GabberKickDecay | GabberKickClip | GabberKickPan => {
@@ -393,6 +409,15 @@ pub fn parse_lfo_target(name: &str) -> Option<LfoTarget> {
         "compthresh" => CompThresh,
         "compratio" => CompRatio,
         "compmix" => CompMix,
+        "gatethreshold" => GateThreshold,
+        "gateattack" => GateAttack,
+        "gaterelease" => GateRelease,
+        "gatedepth" => GateDepth,
+        "gatemix" => GateMix,
+        "vocoderbands" => VocoderBands,
+        "vocodercarriermix" => VocoderCarrierMix,
+        "vocodersense" => VocoderSense,
+        "vocodermix" => VocoderMix,
         "tapedrive" => TapeDrive,
         "tapemix" => TapeMix,
         "tapeflutter" => TapeFlutter,

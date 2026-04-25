@@ -39,12 +39,14 @@ pub enum FxStep {
     ConvReverb,
     ParamEq,
     PitchShift,
+    Gate,
+    Vocoder,
 }
 
 /// Total FxStep variants — sized to pack dense per-FX audio-thread
 /// caches (e.g. previous-sample outputs for feedback routes) without
 /// allocating a HashMap every block.
-pub const FX_STEP_COUNT: usize = 28;
+pub const FX_STEP_COUNT: usize = 30;
 
 impl FxStep {
     /// Dense 0..`FX_STEP_COUNT` index — stable; keep in lock-step with
@@ -80,8 +82,23 @@ impl FxStep {
             FxStep::ConvReverb => 25,
             FxStep::ParamEq => 26,
             FxStep::PitchShift => 27,
+            FxStep::Gate => 28,
+            FxStep::Vocoder => 29,
         }
     }
+}
+
+/// Where an FX step's sidechain detector reads its signal from.  Resolved
+/// from a `to.kind == PortKind::SidechainIn` cable in `compile_fx_plan`.
+/// The audio thread looks up the value by FxStep target and reads the
+/// corresponding cached sample (one-sample delay) before applying the FX.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum SidechainSource {
+    /// Voice bus output, keyed by `ModuleKind` (e.g. DrumKit808 → 808 mix).
+    Voice(ModuleKind),
+    /// Another FX's previous-sample output (one-sample delay, same
+    /// machinery as feedback routes).
+    Fx(FxStep),
 }
 
 /// One compiled feedback route — an FX→FX back-edge in the cable graph.
@@ -140,4 +157,12 @@ pub struct FxPlan {
     /// thread reads each source's previous-sample output and mixes it into
     /// the target's input before the target processes the current sample.
     pub feedback_routes: Vec<FeedbackRoute>,
+    /// Sidechain edges (`to.kind == PortKind::SidechainIn`).  Keyed by
+    /// the target FxStep so the audio thread can look up the sidechain
+    /// source for each step in O(1).  When a step has no entry, the
+    /// FX's sidechain input is treated as silent — gate / vocoder
+    /// detectors fall back to the main signal so unconnected sidechain
+    /// FX still behave gracefully (gate becomes a noise gate, vocoder
+    /// becomes self-modulating).
+    pub sidechain_routes: HashMap<FxStep, SidechainSource>,
 }
