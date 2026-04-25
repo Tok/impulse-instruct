@@ -11,6 +11,8 @@ pub mod lanes;
 pub mod mock;
 pub mod pipeline;
 pub mod pipeline_events;
+pub mod pipeline_filter;
+pub mod pipeline_pool;
 pub mod planner;
 pub mod planner_heuristic;
 pub mod planner_jam;

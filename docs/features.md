@@ -4,6 +4,32 @@ A detailed log of what's built.
 
 ---
 
+### Auto-retry on lane failure with temperature bump
+
+- When a lane inference returned an error (parse failure, repair
+  giving up, or transient server error) the pipeline used to log it
+  as `LaneFailed` and move on, leaving that lane silent for the
+  whole turn.  Common failure mode: grammar-constrained decode hit a
+  dead-end token sequence and the JSON came back truncated.
+- New helper `infer_lane_with_retry` wraps every lane call: first
+  attempt uses the caller's `SamplingParams` as-is; on Err it logs
+  the first failure and retries once with `temperature +
+  LANE_RETRY_TEMP_BUMP` (0.1, clamped to 2.0).  The bump perturbs
+  the sampler enough to break out of the stuck-token mode that
+  triggered the initial parse failure.
+- One retry only — chained retries would stall the whole pipeline
+  if a lane is fundamentally broken (e.g. schema mismatch).  Both-
+  attempt failures still propagate to `LaneFailed` so the UI / logs
+  see the original error path.
+- 4 new pipeline tests cover the retry success path (lane applies
+  on second attempt, retry runs at the bumped temperature),
+  both-attempts-fail propagation, the clamp-to-2.0 invariant for
+  high base temperatures, and a no-retry-on-first-success sanity
+  check that locks the call count.  `MockBackend` gained a
+  `MockResp::{Ok, Err}` queue type so failure can be injected at a
+  specific call slot without touching the existing `with_responses`
+  call sites.
+
 ### Rackable viz modules — bar oscilloscope + event stream as modules
 
 - The header used to be the only home for the colored phosphor

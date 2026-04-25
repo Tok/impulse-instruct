@@ -95,11 +95,6 @@ they ship and are reflected in `features.md`.
   Ships with a handful of curated personas; user can stamp their own.
   Loaded from `~/.impulse_instruct/personas/*.json` so they survive
   session reloads.
-- [ ] **Auto-retry with temperature bump** - when a lane's JSON fails
-  to parse after repair, retry the same lane once with temperature +
-  0.1 before falling through to the `default_plan` fallback.  Should
-  reduce the "model got stuck on one lane so the whole turn stalled"
-  failure mode.
 - [ ] **Per-agent token-budget tracking** - carry prompt / completion
   tokens per cycle on `LlmAgentState` and surface the running total +
   per-cycle average on the agent card.  Lets the user see which
