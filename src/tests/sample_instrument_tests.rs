@@ -316,6 +316,128 @@ mod sample_instrument_sfz_mode_tests {
 }
 
 #[cfg(test)]
+mod sample_instrument_poly_tests {
+    use std::sync::Arc;
+
+    use crate::audio::dsp::sample_instrument::SampleInstrumentVoice;
+
+    fn make_params() -> crate::audio::dsp::AudioParams {
+        let s = crate::state::AppState::default();
+        crate::audio::dsp::AudioParams::from_app_state(&s)
+    }
+
+    #[test]
+    fn overlapping_triggers_keep_previous_release_alive() {
+        // Trigger at 60, immediately re-trigger at 67 — the first slot
+        // should be in release (envelope still > 0) while the second
+        // slot is in attack.  Pre-V2 monophonic behaviour would have
+        // killed the first slot's tail.
+        let mut v = SampleInstrumentVoice::new();
+        let data: Vec<f32> = (0..2048).map(|i| (i as f32 * 0.05).sin() * 0.5).collect();
+        v.load(Arc::new(data));
+        v.set_root_note(60, crate::audio::dsp::TuningSystem::TwelveTet);
+        v.trigger(
+            60,
+            crate::audio::dsp::TuningSystem::TwelveTet,
+            0.0,
+            0.0,
+            0.0,
+        );
+        // Run a few samples so the first slot is past its attack ramp.
+        let p = make_params();
+        for _ in 0..200 {
+            let _ = v.process(48_000.0, &p);
+        }
+        v.gate_off();
+        v.trigger(
+            67,
+            crate::audio::dsp::TuningSystem::TwelveTet,
+            0.0,
+            0.0,
+            0.0,
+        );
+        // Two slots should be active: the first in Release tail, the
+        // second in Attack.
+        assert_eq!(
+            v.active_voice_count(),
+            2,
+            "previous note's release tail should overlap with the new attack"
+        );
+    }
+
+    #[test]
+    fn allocator_steals_oldest_when_pool_full() {
+        // Fire POLY_VOICES + 1 triggers in a row without gating off; the
+        // last trigger must steal a slot, so the active count caps at
+        // POLY_VOICES.
+        let mut v = SampleInstrumentVoice::new();
+        let data: Vec<f32> = (0..1024).map(|i| (i as f32 * 0.1).sin() * 0.3).collect();
+        v.load(Arc::new(data));
+        v.set_root_note(60, crate::audio::dsp::TuningSystem::TwelveTet);
+        for note in 0..(SampleInstrumentVoice::POLY_VOICES as u8 + 1) {
+            v.trigger(
+                60 + note,
+                crate::audio::dsp::TuningSystem::TwelveTet,
+                0.0,
+                0.0,
+                0.0,
+            );
+        }
+        assert_eq!(
+            v.active_voice_count(),
+            SampleInstrumentVoice::POLY_VOICES,
+            "trigger past pool size should steal — caps at POLY_VOICES",
+        );
+    }
+
+    #[test]
+    fn gate_off_releases_all_gated_slots() {
+        let mut v = SampleInstrumentVoice::new();
+        let data: Vec<f32> = (0..1024).map(|i| (i as f32 * 0.1).sin() * 0.3).collect();
+        v.load(Arc::new(data));
+        v.set_root_note(60, crate::audio::dsp::TuningSystem::TwelveTet);
+        v.trigger(
+            60,
+            crate::audio::dsp::TuningSystem::TwelveTet,
+            0.0,
+            0.0,
+            0.0,
+        );
+        v.trigger(
+            64,
+            crate::audio::dsp::TuningSystem::TwelveTet,
+            0.0,
+            0.0,
+            0.0,
+        );
+        v.trigger(
+            67,
+            crate::audio::dsp::TuningSystem::TwelveTet,
+            0.0,
+            0.0,
+            0.0,
+        );
+        // Run a bit so the slots reach release-eligible amplitude.
+        let p = make_params();
+        for _ in 0..200 {
+            let _ = v.process(48_000.0, &p);
+        }
+        v.gate_off();
+        // After enough time, every slot's envelope should hit Off.
+        // Default release knob ≈ 200 ms tau; budget 4 seconds (~20 tau)
+        // so the 1e-5 cutoff is comfortably reached on every slot.
+        for _ in 0..192_000 {
+            let _ = v.process(48_000.0, &p);
+        }
+        assert_eq!(
+            v.active_voice_count(),
+            0,
+            "gate-off + release tail should silence every slot"
+        );
+    }
+}
+
+#[cfg(test)]
 mod sample_instrument_llm_apply_tests {
     use crate::state::{AppState, apply_llm_update};
 
