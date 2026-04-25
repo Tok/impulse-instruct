@@ -13,6 +13,7 @@ pub mod mod_apply;
 pub mod param_eq;
 mod params;
 mod params_from;
+pub mod pitch_shift;
 mod rev_tap;
 pub mod samplers;
 pub mod voices;
@@ -31,6 +32,7 @@ use granular_voice::GranularVoice;
 use mod_apply::apply_mod_target;
 use param_eq::ParamEq;
 pub use params::{AudioParams, MAX_MOD_ROUTES, compile_mod_routes, lfo_target_to_u8};
+use pitch_shift::PitchShift;
 pub use rev_tap::{FxDirection, FxRevQuant};
 use samplers::*;
 use voices::*;
@@ -84,6 +86,7 @@ pub struct DspState {
     reverb: Reverb,
     conv_reverb: ConvReverb,
     param_eq: ParamEq,
+    pitch_shift: PitchShift,
     delay: DelayLine,
     chorus: Chorus,
     phaser: Phaser,
@@ -182,6 +185,7 @@ impl DspState {
             reverb: Reverb::new(),
             conv_reverb: ConvReverb::new(),
             param_eq: ParamEq::new(),
+            pitch_shift: PitchShift::new(),
             delay: DelayLine::new(),
             chorus: Chorus::new(),
             phaser: Phaser::new(),

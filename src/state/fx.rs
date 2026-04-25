@@ -234,6 +234,25 @@ pub struct FxState {
     /// 3-knob card) so existing sessions don't have to migrate.
     #[serde(default = "default_param_eq_bands")]
     pub param_eq_bands: [ParamEqBand; 8],
+    /// Standalone pitch shifter — semitone offset stored directly so
+    /// the LLM can write a musical value (`"pitch_shift_semi": 7`).
+    /// Clamped to ±24 st at DSP time.
+    #[serde(default)]
+    pub pitch_shift_semi: f32,
+    /// Pitch shifter fine tuning in cents (-100..+100) — added to the
+    /// semitone offset at DSP time so users can detune the wet
+    /// harmony by a few cents for doubled-voice thickening.
+    #[serde(default)]
+    pub pitch_shift_fine: f32,
+    /// Pitch shifter wet/dry mix (0..1).  0 = bypass.
+    #[serde(default)]
+    pub pitch_shift_mix: f32,
+    /// Pitch shifter feedback (0..1) — pipes the wet back into the
+    /// input so repeated-shift stacks pile up (classic +7 st feedback
+    /// ladders into +7, +14, +21 … harmonies).  Internally clamped
+    /// to 0.95 to stop runaway overflow.
+    #[serde(default)]
+    pub pitch_shift_fbk: f32,
 }
 
 fn default_fx_pan_rate() -> f32 {
@@ -317,6 +336,10 @@ impl Default for FxState {
             conv_reverb_reverse: false,
             conv_reverb_ir_path: String::new(),
             param_eq_bands: default_param_eq_bands(),
+            pitch_shift_semi: 0.0,
+            pitch_shift_fine: 0.0,
+            pitch_shift_mix: 0.0,
+            pitch_shift_fbk: 0.0,
         }
     }
 }

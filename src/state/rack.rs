@@ -484,6 +484,8 @@ impl RackState {
                 // ParamEq sorts right after the fixed 3-band EQ so they
                 // appear next to each other in the FX strip.
                 ModuleKind::FxParamEq => 38,
+                // PitchShift next to Autotune (both are pitch-domain FX).
+                ModuleKind::FxPitchShift => 39,
                 ModuleKind::SpectrumAnalyzer => 32,
                 ModuleKind::StereoMeter => 33,
                 ModuleKind::ActivityTimeline => 34,

@@ -285,7 +285,11 @@ pub fn param_json_schema() -> serde_json::Value {
                     "conv_reverb_lowcut":   { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "highpass on wet: 0=bypass, 1=cuts below ~800Hz (removes mud)" },
                     "conv_reverb_width":    { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "stereo width of wet (mono IRs clamp to mono)" },
                     "conv_reverb_reverse":  { "type": "boolean", "description": "play IR reversed for the classic reverse-reverb build-up effect" },
-                    "param_eq_bands": { "type": "array", "description": "8-band parametric EQ cascade.  Positional — entry N targets band N.  Each entry is an object with { kind: 0|1|2 (low shelf / peak / high shelf), freq: 20..20000 Hz, gain: -18..+18 dB, q: 0.1..10, enabled: bool }; use `null` to skip that band.", "maxItems": 8 }
+                    "param_eq_bands": { "type": "array", "description": "8-band parametric EQ cascade.  Positional — entry N targets band N.  Each entry is an object with { kind: 0|1|2 (low shelf / peak / high shelf), freq: 20..20000 Hz, gain: -18..+18 dB, q: 0.1..10, enabled: bool }; use `null` to skip that band.", "maxItems": 8 },
+                    "pitch_shift_semi": { "type": "number", "minimum": -24.0, "maximum": 24.0, "description": "pitch shifter semitones: 0=bypass, ±12=octave, ±7=fifth harmony, ±24=two-octave limit" },
+                    "pitch_shift_fine": { "type": "number", "minimum": -100.0, "maximum": 100.0, "description": "pitch shifter fine tune in cents; added to semi — detune wet by a few cents for doubled-voice thickening" },
+                    "pitch_shift_mix":  { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "pitch shifter wet/dry mix; 0=bypass" },
+                    "pitch_shift_fbk":  { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "pitch shifter feedback — pipes wet back into input so stacked shifts accumulate (e.g. +7 st + fbk = fifth ladder)" }
                 },
                 "additionalProperties": false
             },

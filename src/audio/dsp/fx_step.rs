@@ -163,6 +163,13 @@ impl DspState {
                 sr,
             ),
             FxStep::ParamEq => self.param_eq.process(sig, &p.param_eq_bands, sr),
+            FxStep::PitchShift => self.pitch_shift.process(
+                sig,
+                p.pitch_shift_semi,
+                p.pitch_shift_fine,
+                p.pitch_shift_mix,
+                p.pitch_shift_fbk,
+            ),
         }
     }
 

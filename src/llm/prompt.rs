@@ -393,6 +393,7 @@ FX (0.0–1.0 unless noted; at top level, never inside "sequencer"):
   fx.reverb_{{mix, size, gate_time (seconds), freeze (bool; infinite hold)}}
   fx.conv_reverb_{{mix, size (IR truncation), predelay, damp, lowcut, width, reverse (bool)}}
   fx.param_eq_bands[0..7]: {{kind (0=low shelf, 1=peak, 2=high shelf), freq Hz, gain dB ±18, q 0.1–10, enabled}} — 8-band parametric EQ, shelves at 0 and 7 by default
+  fx.pitch_shift_{{semi (-24..+24 st, 0=bypass), fine (-100..+100 cents), mix, fbk}} — grain-based bidirectional pitch shift (harmonies, octave doubles).  Distinct from Autotune (upward snap-to-key).
   fx.delay_{{time (0=0s, 1=2s; 0.375≈dotted 8th @130), feedback, mix, wow_flutter, saturation}}
   fx.distortion_{{drive, mix}}; fx.bitcrush_{{bits (1=clean, 0=1-bit), rate, mix}}
   fx.chorus_{{mix, rate, depth}}; fx.master_pitch_st (-12..+12 semitones)

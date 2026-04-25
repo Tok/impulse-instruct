@@ -431,6 +431,11 @@ pub struct AudioParams {
     pub conv_reverb_reverse: bool,
     // Parametric EQ (8-band cascade)
     pub param_eq_bands: [crate::state::ParamEqBand; 8],
+    // Standalone pitch shifter
+    pub pitch_shift_semi: f32,
+    pub pitch_shift_fine: f32,
+    pub pitch_shift_mix: f32,
+    pub pitch_shift_fbk: f32,
     // Compressor
     pub compressor_threshold: f32,
     pub compressor_ratio: f32,

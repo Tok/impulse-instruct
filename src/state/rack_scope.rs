@@ -152,6 +152,10 @@ pub fn rack_kind_name_matches(kind: ModuleKind, name: &str) -> bool {
                 | "curve_eq"
                 | "fx"
         ),
+        ModuleKind::FxPitchShift => matches!(
+            n.as_str(),
+            "pitch" | "pitch_shift" | "pitchshift" | "pitch shift" | "shifter" | "harmony" | "fx"
+        ),
         ModuleKind::LfoModule => matches!(n.as_str(), "lfo"),
         ModuleKind::AcidBass => matches!(n.as_str(), "bass" | "acid" | "303"),
         ModuleKind::DrumKit808 => matches!(n.as_str(), "808" | "kit_a" | "drum_a" | "drums_a"),

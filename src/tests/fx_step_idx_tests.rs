@@ -30,6 +30,7 @@ const ALL_FX_STEPS: &[FxStep] = &[
     FxStep::Pan,
     FxStep::ConvReverb,
     FxStep::ParamEq,
+    FxStep::PitchShift,
 ];
 
 #[test]
@@ -99,6 +100,7 @@ fn kind_to_fx_step_maps_every_fx_kind_to_its_matching_step() {
         (ModuleKind::FxPan, FxStep::Pan),
         (ModuleKind::FxConvReverb, FxStep::ConvReverb),
         (ModuleKind::FxParamEq, FxStep::ParamEq),
+        (ModuleKind::FxPitchShift, FxStep::PitchShift),
     ] {
         assert_eq!(
             fx_plan::kind_to_fx_step(kind),

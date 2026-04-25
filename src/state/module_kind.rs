@@ -44,6 +44,7 @@ pub enum ModuleKind {
     FxPan,
     FxConvReverb,
     FxParamEq,
+    FxPitchShift,
     // ── Analysis ──────────────────────────────────────────────────────────────
     SpectrumAnalyzer,
     StereoMeter,
@@ -87,6 +88,7 @@ impl ModuleKind {
             Self::FxPan => "PAN",
             Self::FxConvReverb => "CONV REV",
             Self::FxParamEq => "PARAM EQ",
+            Self::FxPitchShift => "PITCH",
             Self::SpectrumAnalyzer => "SPECTRUM",
             Self::StereoMeter => "STEREO METER",
             Self::ActivityTimeline => "TIMELINE",
@@ -141,6 +143,9 @@ impl ModuleKind {
             // the 20 Hz–20 kHz axis room to breathe, 4 rows leaves room
             // for the curve + band-param readout strip below it.
             Self::FxParamEq => (4, 4),
+            // PitchShift — SHIFT / MIX / FBK on row 1, FINE on row 2
+            // so the semitone knob doesn't crowd the cents readout.
+            Self::FxPitchShift => (2, 2),
             Self::FxReverb
             | Self::FxChorus
             | Self::FxPhaser
@@ -186,6 +191,7 @@ impl ModuleKind {
             | Self::FxPan
             | Self::FxConvReverb
             | Self::FxParamEq
+            | Self::FxPitchShift
             | Self::SpectrumAnalyzer
             | Self::StereoMeter
             | Self::ActivityTimeline
@@ -225,6 +231,7 @@ impl ModuleKind {
                 | Self::FxPan
                 | Self::FxConvReverb
                 | Self::FxParamEq
+                | Self::FxPitchShift
         )
     }
 
@@ -248,6 +255,7 @@ impl ModuleKind {
                 | Self::FxAutotune
                 | Self::FxPan
                 | Self::FxConvReverb
+                | Self::FxPitchShift
         )
     }
 
@@ -270,6 +278,7 @@ impl ModuleKind {
                 | Self::FxPan
                 | Self::FxConvReverb
                 | Self::FxParamEq
+                | Self::FxPitchShift
                 | Self::LfoModule
                 | Self::LlmAgent
         )

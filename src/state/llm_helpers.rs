@@ -691,6 +691,29 @@ pub(super) fn apply_fx_update(
         }
     }
 
+    // ── Pitch shifter (standalone bidirectional shifter, distinct
+    //     from Autotune which is upward-only) ─────────────────────────
+    if !locked.contains("fx.pitch_shift_semi")
+        && let Some(v) = fx.get("pitch_shift_semi").and_then(|v| v.as_f64())
+    {
+        s.fx.pitch_shift_semi = (v as f32).clamp(-24.0, 24.0);
+    }
+    if !locked.contains("fx.pitch_shift_fine")
+        && let Some(v) = fx.get("pitch_shift_fine").and_then(|v| v.as_f64())
+    {
+        s.fx.pitch_shift_fine = (v as f32).clamp(-100.0, 100.0);
+    }
+    u!(
+        s.fx.pitch_shift_mix,
+        "pitch_shift_mix",
+        "fx.pitch_shift_mix"
+    );
+    u!(
+        s.fx.pitch_shift_fbk,
+        "pitch_shift_fbk",
+        "fx.pitch_shift_fbk"
+    );
+
     u!(s.fx.master_volume, "master_volume", "fx.master_volume");
     u!(
         s.fx.xmod_bass_to_an1x_pitch,
@@ -836,6 +859,10 @@ fn fx_field_mut<'a>(fx: &'a mut super::FxState, key: &str) -> Option<&'a mut f32
         "conv_reverb_damp" => &mut fx.conv_reverb_damp,
         "conv_reverb_lowcut" => &mut fx.conv_reverb_lowcut,
         "conv_reverb_width" => &mut fx.conv_reverb_width,
+        "pitch_shift_semi" => &mut fx.pitch_shift_semi,
+        "pitch_shift_fine" => &mut fx.pitch_shift_fine,
+        "pitch_shift_mix" => &mut fx.pitch_shift_mix,
+        "pitch_shift_fbk" => &mut fx.pitch_shift_fbk,
         _ => return None,
     })
 }

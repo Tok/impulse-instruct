@@ -45,6 +45,7 @@ mod param_eq_tests;
 mod param_mode_tests;
 mod persistence_tests;
 mod pipeline_filter_tests;
+mod pitch_shift_tests;
 mod planner_output_tests;
 mod planner_schema_tests;
 mod planner_tests;
