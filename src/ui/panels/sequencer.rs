@@ -396,6 +396,13 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                     });
                 }
 
+                // ── Automation overlay (LFO sparkline) ───────────────────
+                // Opt-in via Preferences → Display; helper lives in
+                // sequencer_automation.rs to keep this file under cap.
+                super::sequencer_automation::draw_bass_voice_overlay(
+                    app, ui, vi, page_start, seq_steps, sub_rows, pad_px, marker_h, row_spacer,
+                );
+
                 // ── ACCENT + SLIDE + PAN rows for this voice ────────────
                 let prev_spacing = ui.spacing().item_spacing.y;
                 ui.spacing_mut().item_spacing.y = 0.0;

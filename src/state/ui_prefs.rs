@@ -137,6 +137,12 @@ pub struct UiPrefs {
     /// survive relaunches.
     #[serde(default)]
     pub midi_cc_bindings: std::collections::BTreeMap<u8, String>,
+    /// When true, the sequencer paints a per-voice automation lane
+    /// under each step row showing the bass LFO's value at each
+    /// step.  Off by default so the grid stays compact for users
+    /// who don't use modulation.  Toggle in Preferences → Display.
+    #[serde(default)]
+    pub show_automation_overlay: bool,
 }
 
 fn default_grid_cols() -> u8 {
@@ -210,6 +216,7 @@ impl Default for UiPrefs {
             rack_grid_cols: 5,
             autosync_rack_on_start: false,
             midi_cc_bindings: std::collections::BTreeMap::new(),
+            show_automation_overlay: false,
         }
     }
 }

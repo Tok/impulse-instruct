@@ -162,6 +162,11 @@ pub use rack_scope::{parse_module_kind, rack_kind_name_matches, scope_from_contr
 pub use amen::{AmenMeta, AmenState};
 use bass::default_bass_voices;
 pub use bass::{BassLfoTarget, BassState, BassVoiceState};
+
+pub mod automation_overlay;
+pub use automation_overlay::{
+    bass_lfo_curve_for_view, free_phase_per_step, rate_knob_to_hz, synced_phase_per_step,
+};
 pub use gabber::GabberKickParams;
 mod amen;
 mod bass;

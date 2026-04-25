@@ -25,10 +25,6 @@ they ship and are reflected in `features.md`.
 - [ ] **Keyboard shortcut overlay** - F1 (or ?) pops a translucent
   overlay listing every shortcut in groups (sequencer / rack /
   agents).  Reads the actual keybinding map so it can't drift.
-- [ ] **Automation lane overlay on the sequencer grid** - a toggled
-  lane that shows LFO / free-EG / ramp values as a sparkline
-  underneath the step grid, so the user sees the modulator's shape
-  aligned to the beat grid.
 - [ ] **Performance mode** - bigger knobs + touch-friendly targets,
   hide the LLM console and log, expose only the sequencer + master
   section.  Toggle via header button; state saved per-session so

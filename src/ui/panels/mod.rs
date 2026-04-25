@@ -30,6 +30,7 @@ pub mod piano;
 pub mod pluck;
 pub mod scope_module;
 pub mod sequencer;
+pub(super) mod sequencer_automation;
 pub mod sequencer_chain;
 pub(super) mod sequencer_drums;
 pub(super) mod sequencer_header;

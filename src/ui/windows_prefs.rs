@@ -428,6 +428,11 @@ impl ImpulseApp {
                                 viz_toggle(ui, "Ring oscilloscope", prefs.show_ring_oscilloscope);
                             let stream = viz_toggle(ui, "Event stream", prefs.show_event_stream);
                             let stereo = viz_toggle(ui, "Stereo pan layer", prefs.stream_stereo);
+                            let automation = viz_toggle(
+                                ui,
+                                "Automation overlay (LFO sparkline)",
+                                prefs.show_automation_overlay,
+                            );
                             if spectrum != prefs.show_spectrum_bars {
                                 self.state.write().ui_prefs.show_spectrum_bars = spectrum;
                             }
@@ -442,6 +447,9 @@ impl ImpulseApp {
                             }
                             if stereo != prefs.stream_stereo {
                                 self.state.write().ui_prefs.stream_stereo = stereo;
+                            }
+                            if automation != prefs.show_automation_overlay {
+                                self.state.write().ui_prefs.show_automation_overlay = automation;
                             }
                         }
                     }

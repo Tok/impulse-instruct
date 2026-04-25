@@ -4,6 +4,33 @@ A detailed log of what's built.
 
 ---
 
+### Automation lane overlay — LFO sparkline under the step grid
+
+- New optional sparkline row under each enabled bass voice's step
+  pads showing where the per-voice LFO sits at every step.  Lets
+  the user see the modulator aligned to the beat grid instead of
+  inferring it from the LFO knob's rate / depth values.
+- Pure helper `bass_lfo_curve_for_view(synth, bpm, step_division,
+  page_start, visible_steps) -> Vec<f32>` lives in
+  `state/automation_overlay.rs` so the math is unit-testable
+  without an egui context.  Returns one bipolar (-1..1) value per
+  step, scaled by the LFO's depth.  Phase advance is computed from
+  `lfo_bpm_sync` / `lfo_sync_beats` (synced) or `lfo_rate` knob
+  (free) using a quartic 0.01..20 Hz mapping.
+- Six waveforms supported (Sine, Triangle, Saw, InvSaw, Square);
+  Sample-and-Hold paints flat in V1 because faking it without the
+  DSP's noise source would diverge from playback.  Off / zero-
+  depth lanes elide the paint entirely.
+- Toggle in Preferences → Display → "Automation overlay (LFO
+  sparkline)".  Off by default so the grid stays compact for
+  users who don't use modulation.
+- 15 new tests cover the rate-knob mapping (floor at 0.01 Hz,
+  cap at 20 Hz, quartic shape), synced phase math at a 16th grid
+  for one-bar / one-quarter cycles, free-running phase at 120 BPM,
+  curve sampling (off / zero-depth / synced sine cycle / depth
+  scaling / square-wave alternation / S&H flat / page offset
+  continuity / output clamp).  Full suite at 1538 passing.
+
 ### LLM writeback diff viewer
 
 - The pipeline already filters every lane's JSON down to the keys
