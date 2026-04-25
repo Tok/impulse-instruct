@@ -80,6 +80,9 @@ fn title_fill(kind: ModuleKind) -> Color32 {
         | ModuleKind::LfoScope
         | ModuleKind::PitchTracker
         | ModuleKind::ChordDisplay
+        | ModuleKind::Spectrogram
+        | ModuleKind::LoudnessMeter
+        | ModuleKind::PhaseWheel
         | ModuleKind::EventStream => 20,
         ModuleKind::LfoModule => 18,
         ModuleKind::LlmAgent => 30,

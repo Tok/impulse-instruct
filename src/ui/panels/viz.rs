@@ -308,3 +308,239 @@ pub fn draw_chord_display(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         }
     }
 }
+
+// ─── Spectrogram waterfall ───────────────────────────────────────────────────
+
+/// Render the rolling FFT history as a 2D heatmap: time on X (newest on the
+/// right), log-frequency on Y (low at the bottom).  Each magnitude is mapped
+/// from −96..0 dB to a brightness gradient.
+pub fn draw_spectrogram(app: &mut ImpulseApp, ui: &mut egui::Ui) {
+    let avail_w = ui.available_width().max(80.0);
+    let avail_h = ui.available_height().max(40.0);
+    let (rect, _) = ui.allocate_exact_size(egui::Vec2::new(avail_w, avail_h), egui::Sense::hover());
+    if !ui.is_rect_visible(rect) {
+        return;
+    }
+    let painter = ui.painter_at(rect);
+    painter.rect_filled(rect, egui::Rounding::same(2.0), egui::Color32::from_gray(8));
+
+    let history = &app.spectrogram_history;
+    if history.is_empty() {
+        painter.text(
+            rect.center(),
+            egui::Align2::CENTER_CENTER,
+            "(no audio)",
+            egui::FontId::monospace(8.0),
+            egui::Color32::from_gray(60),
+        );
+        return;
+    }
+
+    // Determine bin_hz from the most recent frame's length — every frame is
+    // FFT_SIZE/2 magnitudes wide, so bin_hz = sr/FFT_SIZE.  We don't store
+    // bin_hz alongside each frame to keep the history struct small.
+    let n_frames = history.len();
+    let frame_len = history.back().map(|f| f.len()).unwrap_or(0).max(1);
+    let bin_hz = crate::audio::SAMPLE_RATE / (2.0 * frame_len as f32).max(1.0);
+
+    // Each pixel column corresponds to one history frame; pad with empty
+    // columns if history is shorter than the canvas.
+    let cols = (avail_w as usize).max(8);
+    let rows = (avail_h as usize).max(8);
+
+    // Build a fresh ColorImage each repaint — small enough that the
+    // allocation cost is acceptable, and avoids a long-lived texture
+    // that would have to be invalidated on resize.
+    let mut img = egui::ColorImage::new([cols, rows], egui::Color32::from_gray(8));
+
+    for px_x in 0..cols {
+        // Map screen-x to history-frame index (newest column on the right).
+        let frame_pos = px_x as f32 / cols as f32;
+        let frame_idx = ((frame_pos * n_frames as f32) as usize).min(n_frames - 1);
+        let frame = &history[frame_idx];
+        if frame.is_empty() {
+            continue;
+        }
+
+        for px_y in 0..rows {
+            // Log-frequency axis: bottom = 30 Hz, top = 16 kHz.
+            let v = 1.0 - (px_y as f32 / rows as f32);
+            let f = 30.0 * (16_000.0_f32 / 30.0).powf(v);
+            let bin = (f / bin_hz).round() as usize;
+            if bin >= frame.len() {
+                continue;
+            }
+            let db = frame[bin];
+            // dBFS → 0..1 brightness (-90 dB = black, 0 dB = white-ish).
+            let bright = ((db + 90.0) / 90.0).clamp(0.0, 1.0);
+            // Slight green bias for readability.
+            let g = (bright * 220.0) as u8;
+            let r = (bright * bright * 200.0) as u8;
+            let b = ((bright * 0.5).powf(1.5) * 200.0) as u8;
+            img.pixels[px_y * cols + px_x] = egui::Color32::from_rgb(r, g, b);
+        }
+    }
+
+    let tex = ui.ctx().load_texture(
+        format!("spectrogram_{}", rect.left() as i32 + rect.top() as i32),
+        img,
+        egui::TextureOptions::NEAREST,
+    );
+    painter.image(
+        tex.id(),
+        rect,
+        egui::Rect::from_min_max(egui::Pos2::new(0.0, 0.0), egui::Pos2::new(1.0, 1.0)),
+        egui::Color32::WHITE,
+    );
+}
+
+// ─── Loudness / LUFS meter ───────────────────────────────────────────────────
+
+/// Twin LUFS readouts — momentary (400 ms) on the left, short-term (3 s) on
+/// the right — with a horizontal scale from −36..0 LUFS.  Numbers in
+/// monospace; level bar widths driven by the same scale so the visual
+/// meter and the readout stay in lockstep.
+pub fn draw_loudness_meter(app: &mut ImpulseApp, ui: &mut egui::Ui) {
+    let m = app.lufs_meter.momentary_lufs();
+    let s = app.lufs_meter.short_term_lufs();
+
+    let avail_w = ui.available_width().max(80.0);
+    let avail_h = ui.available_height().max(40.0);
+    let (rect, _) = ui.allocate_exact_size(egui::Vec2::new(avail_w, avail_h), egui::Sense::hover());
+    if !ui.is_rect_visible(rect) {
+        return;
+    }
+    let painter = ui.painter_at(rect);
+    painter.rect_filled(rect, egui::Rounding::same(2.0), egui::Color32::from_gray(8));
+
+    // Helper: map LUFS in [-36, 0] → 0..1 normalised bar fill.
+    let bar_norm = |lufs: f32| -> f32 { ((lufs + 36.0) / 36.0).clamp(0.0, 1.0) };
+
+    let row_h = ((rect.height() - 12.0) / 2.0).max(8.0);
+    for (i, (label, value, col)) in [
+        ("M", m, egui::Color32::from_gray(180)),
+        ("S", s, egui::Color32::from_gray(140)),
+    ]
+    .iter()
+    .enumerate()
+    {
+        let row_top = rect.top() + 4.0 + (i as f32 * (row_h + 2.0));
+        let bar_left = rect.left() + 18.0;
+        let bar_right = rect.right() - 36.0;
+        let bar_y0 = row_top + 2.0;
+        let bar_y1 = row_top + row_h - 2.0;
+        // Track.
+        painter.rect_filled(
+            egui::Rect::from_min_max(
+                egui::Pos2::new(bar_left, bar_y0),
+                egui::Pos2::new(bar_right, bar_y1),
+            ),
+            egui::Rounding::ZERO,
+            egui::Color32::from_gray(20),
+        );
+        // Fill.
+        let fill_x = bar_left + (bar_right - bar_left) * bar_norm(*value);
+        painter.rect_filled(
+            egui::Rect::from_min_max(
+                egui::Pos2::new(bar_left, bar_y0),
+                egui::Pos2::new(fill_x, bar_y1),
+            ),
+            egui::Rounding::ZERO,
+            *col,
+        );
+        // M/S label, left.
+        painter.text(
+            egui::Pos2::new(rect.left() + 4.0, (bar_y0 + bar_y1) * 0.5),
+            egui::Align2::LEFT_CENTER,
+            *label,
+            egui::FontId::monospace(9.0),
+            theme::FOG,
+        );
+        // LUFS value, right.
+        let txt = if *value > -110.0 {
+            format!("{:>5.1}", *value)
+        } else {
+            "  -inf".to_string()
+        };
+        painter.text(
+            egui::Pos2::new(rect.right() - 4.0, (bar_y0 + bar_y1) * 0.5),
+            egui::Align2::RIGHT_CENTER,
+            &txt,
+            egui::FontId::monospace(9.0),
+            theme::FOG,
+        );
+    }
+}
+
+// ─── Transport phase wheel ───────────────────────────────────────────────────
+
+/// Circular bar/beat indicator.  The wheel divides the cycle into
+/// `state.sequencer.steps` ticks, with longer ticks every 4 steps for
+/// beat boundaries.  A radial pointer moves around the rim at the
+/// current step + sub-step fraction.
+pub fn draw_phase_wheel(app: &mut ImpulseApp, ui: &mut egui::Ui) {
+    let s = app.state.read();
+    let steps = s.sequencer.steps.max(1);
+    let cur = s.sequencer.current_step.min(steps - 1);
+    drop(s);
+
+    let avail_w = ui.available_width().max(48.0);
+    let avail_h = ui.available_height().max(48.0);
+    let side = avail_w.min(avail_h);
+    let (rect, _) = ui.allocate_exact_size(egui::Vec2::new(side, side), egui::Sense::hover());
+    if !ui.is_rect_visible(rect) {
+        return;
+    }
+    let painter = ui.painter_at(rect);
+    painter.rect_filled(rect, egui::Rounding::same(2.0), egui::Color32::from_gray(8));
+
+    let centre = rect.center();
+    let radius = (side * 0.5) - 4.0;
+
+    // Outer ring.
+    painter.circle_stroke(
+        centre,
+        radius,
+        egui::Stroke::new(1.0, egui::Color32::from_gray(40)),
+    );
+
+    // Tick marks.  Beat ticks (every 4 steps) drawn longer + brighter.
+    for i in 0..steps {
+        let theta =
+            -std::f32::consts::FRAC_PI_2 + (i as f32 / steps as f32) * std::f32::consts::TAU;
+        let is_beat = i % 4 == 0;
+        let r0 = radius - (if is_beat { 8.0 } else { 5.0 });
+        let r1 = radius;
+        let p0 = egui::Pos2::new(centre.x + theta.cos() * r0, centre.y + theta.sin() * r0);
+        let p1 = egui::Pos2::new(centre.x + theta.cos() * r1, centre.y + theta.sin() * r1);
+        let g = if is_beat { 160 } else { 70 };
+        painter.line_segment(
+            [p0, p1],
+            egui::Stroke::new(if is_beat { 1.5 } else { 1.0 }, egui::Color32::from_gray(g)),
+        );
+    }
+
+    // Pointer at the current step (no sub-step interpolation in V1 — the
+    // step counter advances at audio-block granularity, which already feels
+    // smooth at typical UI rates).
+    let theta_cur =
+        -std::f32::consts::FRAC_PI_2 + (cur as f32 / steps as f32) * std::f32::consts::TAU;
+    let p_outer = egui::Pos2::new(
+        centre.x + theta_cur.cos() * (radius - 2.0),
+        centre.y + theta_cur.sin() * (radius - 2.0),
+    );
+    painter.line_segment(
+        [centre, p_outer],
+        egui::Stroke::new(2.0, egui::Color32::from_gray(220)),
+    );
+    painter.circle_filled(p_outer, 3.0, egui::Color32::from_gray(220));
+
+    // Centre readout: current step number + total steps.
+    painter.text(
+        centre,
+        egui::Align2::CENTER_CENTER,
+        format!("{}/{}", cur + 1, steps),
+        egui::FontId::monospace((radius * 0.32).min(13.0)),
+        theme::FOG,
+    );
+}

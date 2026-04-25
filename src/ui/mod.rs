@@ -295,6 +295,12 @@ pub struct ImpulseApp {
     stereo_buf: Vec<f32>,
     pub(crate) stereo_corr: f32,
     pub(crate) stereo_balance: f32,
+    /// Rolling FFT history for the `Spectrogram` viz module.  One entry
+    /// per UI update tick; capped at `SPECTROGRAM_HISTORY_LEN` frames
+    /// (≈5 s of scroll at typical UI rates).
+    pub(crate) spectrogram_history: std::collections::VecDeque<Vec<f32>>,
+    /// LUFS meter — driven from the master scope buffer per UI tick.
+    pub(crate) lufs_meter: crate::audio::analysis::LufsMeter,
     last_thinking: Option<String>,
     seq_page: usize,
     pub(crate) seq_prefix_width: f32,
@@ -495,6 +501,10 @@ impl ImpulseApp {
             stereo_buf: Vec::with_capacity(4096),
             stereo_corr: 0.0,
             stereo_balance: 0.0,
+            spectrogram_history: std::collections::VecDeque::with_capacity(
+                crate::audio::analysis::SPECTROGRAM_HISTORY_LEN,
+            ),
+            lufs_meter: crate::audio::analysis::LufsMeter::new(crate::audio::SAMPLE_RATE),
             last_thinking: None,
             seq_page: 0,
             seq_prefix_width: 0.0,

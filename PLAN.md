@@ -100,22 +100,25 @@ Tier 1 (cheap, reuse existing buffers):
   a heatmap mode there would be a small, distinct slice.
 
 Tier 2 (heavier — guard with reduce-cost path):
-- [ ] **Spectrogram waterfall (`Spectrogram`)** — rolling FFT
-  history (~5 s scroll). Render to `egui::ColorImage`; reuse
-  `compute_spectrum()`. Heavier than the bars; reduce on
-  demo-mode.
-- [ ] **Loudness / LUFS meter (`LoudnessMeter`)** — short-term
-  + integrated LUFS (K-weighted RMS over a sliding window).
-  Distinct from peak/RMS in `StereoMeter`.
-- [ ] **Phase correlation strip (`CorrMeter`)** — single-row
-  -1..+1 correlation bar; cheaper than the goniometer if you
-  only want a number, and pairs with it.
-- [ ] **Lissajous-3D / oscilloscope-3Ddepth** — XY-with-trail
-  rendered as a stack of fading polylines. Eye-candy version of
-  the goniometer. Optional.
-- [ ] **Transport phase wheel (`PhaseWheel`)** — circular bar /
-  beat indicator with sub-divisions. UI-only; reads transport
-  state. Companion to the `EventStream`.
+- [x] **Spectrogram waterfall (`Spectrogram`)** — shipped, rolling
+  FFT history rendered as a fresh `egui::ColorImage` per repaint
+  with log-frequency Y axis.
+- [x] **Loudness / LUFS meter (`LoudnessMeter`)** — shipped,
+  K-weighted (BS.1770 hard-coded 48 kHz coefficients) momentary +
+  short-term EMAs.  Integrated LUFS (gated) deferred — momentary
+  + short-term covers the meter use case.
+- [x] **Transport phase wheel (`PhaseWheel`)** — shipped, circular
+  bar/beat indicator with beat-tick highlights.
+- [-] **Phase correlation strip (`CorrMeter`)** — *not separately
+  shipped*; the existing `StereoMeter` already shows correlation +
+  L/R balance as a horizontal strip, which covers the same use
+  case more comprehensively.  Re-open if a slimmed-down
+  correlation-only variant becomes necessary.
+- [-] **Lissajous-3D / oscilloscope-3D depth** — *deferred*; was
+  marked "Optional" in the original plan.  The shipped
+  `StereoVectorscope` (Tier 1) covers the goniometer use case;
+  adding fading-polyline depth is pure eye-candy and can come
+  back if visual demand surfaces.
 
 ## New module — `SampleInstrument` (full scope)
 

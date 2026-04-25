@@ -120,6 +120,9 @@ pub fn parse_module_kind(name: &str) -> Option<ModuleKind> {
         "lfoscope" => Some(LfoScope),
         "pitchtracker" | "tuner" | "pitchdetect" => Some(PitchTracker),
         "chorddisplay" | "chord" | "key" => Some(ChordDisplay),
+        "spectrogram" | "waterfall" => Some(Spectrogram),
+        "loudnessmeter" | "lufs" | "loudness" => Some(LoudnessMeter),
+        "phasewheel" | "transport" | "beatwheel" | "bar" => Some(PhaseWheel),
         "neutts" | "tts" | "voice" | "mc" => Some(NeuTts),
         _ => None,
     }
@@ -230,6 +233,9 @@ pub fn rack_kind_name_matches(kind: ModuleKind, name: &str) -> bool {
         ModuleKind::LfoScope => matches!(n.as_str(), "lfoscope" | "lfo_scope"),
         ModuleKind::PitchTracker => matches!(n.as_str(), "tuner" | "pitch" | "pitchtracker"),
         ModuleKind::ChordDisplay => matches!(n.as_str(), "chord" | "key" | "chords"),
+        ModuleKind::Spectrogram => matches!(n.as_str(), "spectrogram" | "waterfall"),
+        ModuleKind::LoudnessMeter => matches!(n.as_str(), "lufs" | "loudness" | "loudnessmeter"),
+        ModuleKind::PhaseWheel => matches!(n.as_str(), "phasewheel" | "phase" | "transport"),
         ModuleKind::EventStream => matches!(n.as_str(), "events" | "stream" | "notes"),
     }
 }

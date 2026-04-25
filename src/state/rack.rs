@@ -522,9 +522,16 @@ impl RackState {
                 // Tuner + chord display group with the spectrum cluster.
                 ModuleKind::PitchTracker => 43,
                 ModuleKind::ChordDisplay => 44,
+                // Spectrogram pairs with the bar spectrum — same data,
+                // different time-axis treatment.
+                ModuleKind::Spectrogram => 46,
+                // LUFS sits with the rest of the analysis cluster.
+                ModuleKind::LoudnessMeter => 47,
+                // Phase wheel pairs with EventStream (transport readout).
+                ModuleKind::PhaseWheel => 48,
                 // Event stream is melodic / rhythmic activity, parks
                 // next to ActivityTimeline.
-                ModuleKind::EventStream => 45,
+                ModuleKind::EventStream => 49,
             }
         }
         let cols = GRID_COLS as usize;

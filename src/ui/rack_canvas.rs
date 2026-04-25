@@ -725,6 +725,12 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
                             crate::ui::panels::draw_pitch_tracker(app, ui);
                         } else if kind == ModuleKind::ChordDisplay {
                             crate::ui::panels::draw_chord_display(app, ui);
+                        } else if kind == ModuleKind::Spectrogram {
+                            crate::ui::panels::draw_spectrogram(app, ui);
+                        } else if kind == ModuleKind::LoudnessMeter {
+                            crate::ui::panels::draw_loudness_meter(app, ui);
+                        } else if kind == ModuleKind::PhaseWheel {
+                            crate::ui::panels::draw_phase_wheel(app, ui);
                         } else if kind == ModuleKind::EventStream {
                             crate::ui::panels::draw_event_stream_module(app, ui);
                         } else {

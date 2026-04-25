@@ -533,6 +533,140 @@ pub const PITCH_CLASS_NAMES: [&str; 12] = [
     "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B",
 ];
 
+// ─── Spectrogram history sizing ──────────────────────────────────────────────
+
+/// Number of past FFT frames to retain for the scrolling Spectrogram
+/// module.  At typical UI rates (~60 Hz pushing every 2nd frame) this is
+/// roughly 7 s of history; on faster machines closer to 4 s.
+pub const SPECTROGRAM_HISTORY_LEN: usize = 200;
+
+// ─── LUFS meter (K-weighted, momentary + short-term) ─────────────────────────
+//
+// K-weighting per ITU-R BS.1770-4: two biquads in series — a pre-filter
+// (high-shelf at ≈ 1.5 kHz, +4 dB) followed by an RLB high-pass at ≈ 38 Hz.
+// After K-weighting we exponentially-average the squared signal at two time
+// constants: 400 ms for the momentary readout, 3 s for short-term.  The
+// integrated LUFS measurement (with relative-level gating) is *not*
+// implemented yet — the display uses momentary + short-term, which matches
+// what most loudness meters surface to users.
+//
+// The biquad coefficients are hard-coded for 48 kHz — the engine ships at a
+// fixed 48 kHz sample rate.  If we later support multi-SR, regenerate the
+// coefficients per BS.1770 Annex 1.
+
+const LUFS_PRE_B0: f32 = 1.535_124_9;
+const LUFS_PRE_B1: f32 = -2.691_696_2;
+const LUFS_PRE_B2: f32 = 1.198_392_8;
+const LUFS_PRE_A1: f32 = -1.690_659_3;
+const LUFS_PRE_A2: f32 = 0.732_480_8;
+
+const LUFS_RLB_B0: f32 = 1.0;
+const LUFS_RLB_B1: f32 = -2.0;
+const LUFS_RLB_B2: f32 = 1.0;
+const LUFS_RLB_A1: f32 = -1.990_047_5;
+const LUFS_RLB_A2: f32 = 0.990_072_3;
+
+/// LUFS calibration constant from BS.1770 (for K-weighted RMS → LUFS).
+const LUFS_OFFSET_DB: f32 = -0.691;
+
+/// Stateful momentary + short-term LUFS meter.  `process_sample` is cheap
+/// enough to run on every UI tick.
+#[derive(Debug, Clone)]
+pub struct LufsMeter {
+    /// Pre-filter biquad state: x[n-1], x[n-2], y[n-1], y[n-2].
+    pre: [f32; 4],
+    /// RLB high-pass biquad state.
+    rlb: [f32; 4],
+    /// EMA of K-weighted squared sample at the 400 ms time constant.
+    momentary_ms: f32,
+    /// EMA of K-weighted squared sample at the 3 s time constant.
+    short_term_ms: f32,
+    /// Pre-computed EMA coefficients (cached on construction).
+    momentary_coef: f32,
+    short_term_coef: f32,
+}
+
+impl LufsMeter {
+    pub fn new(sample_rate: f32) -> Self {
+        // EMA coefficient α such that the impulse decays to 1/e in τ seconds.
+        let alpha = |tau: f32| -> f32 {
+            let s = (sample_rate * tau).max(1.0);
+            1.0 - (-1.0 / s).exp()
+        };
+        Self {
+            pre: [0.0; 4],
+            rlb: [0.0; 4],
+            momentary_ms: 0.0,
+            short_term_ms: 0.0,
+            momentary_coef: alpha(0.400),
+            short_term_coef: alpha(3.000),
+        }
+    }
+
+    /// Push one sample through the K-weighting filters and update the EMAs.
+    pub fn process_sample(&mut self, x: f32) {
+        // Pre-filter biquad — direct form I.
+        let pre_y = LUFS_PRE_B0 * x + LUFS_PRE_B1 * self.pre[0] + LUFS_PRE_B2 * self.pre[1]
+            - LUFS_PRE_A1 * self.pre[2]
+            - LUFS_PRE_A2 * self.pre[3];
+        self.pre[1] = self.pre[0];
+        self.pre[0] = x;
+        self.pre[3] = self.pre[2];
+        self.pre[2] = pre_y;
+
+        // RLB high-pass biquad.
+        let rlb_y = LUFS_RLB_B0 * pre_y + LUFS_RLB_B1 * self.rlb[0] + LUFS_RLB_B2 * self.rlb[1]
+            - LUFS_RLB_A1 * self.rlb[2]
+            - LUFS_RLB_A2 * self.rlb[3];
+        self.rlb[1] = self.rlb[0];
+        self.rlb[0] = pre_y;
+        self.rlb[3] = self.rlb[2];
+        self.rlb[2] = rlb_y;
+
+        let sq = rlb_y * rlb_y;
+        self.momentary_ms =
+            self.momentary_ms * (1.0 - self.momentary_coef) + sq * self.momentary_coef;
+        self.short_term_ms =
+            self.short_term_ms * (1.0 - self.short_term_coef) + sq * self.short_term_coef;
+    }
+
+    /// Push a slice of samples through the filters.  Convenience wrapper
+    /// around `process_sample`.
+    pub fn process_block(&mut self, samples: &[f32]) {
+        for &s in samples {
+            self.process_sample(s);
+        }
+    }
+
+    /// Convert a mean-square value to LUFS (K-weighted dB) per BS.1770.
+    fn ms_to_lufs(ms: f32) -> f32 {
+        if ms < 1e-12 {
+            -120.0
+        } else {
+            (LUFS_OFFSET_DB + 10.0 * ms.log10()).max(-120.0)
+        }
+    }
+
+    /// 400 ms windowed loudness in LUFS (more responsive).
+    pub fn momentary_lufs(&self) -> f32 {
+        Self::ms_to_lufs(self.momentary_ms)
+    }
+
+    /// 3 s windowed loudness in LUFS (smoother, more representative).
+    pub fn short_term_lufs(&self) -> f32 {
+        Self::ms_to_lufs(self.short_term_ms)
+    }
+
+    /// Reset internal filter state and EMAs.  Use when restarting playback
+    /// or switching sources.
+    pub fn reset(&mut self) {
+        self.pre = [0.0; 4];
+        self.rlb = [0.0; 4];
+        self.momentary_ms = 0.0;
+        self.short_term_ms = 0.0;
+    }
+}
+
 // ─── Tests ────────────────────────────────────────────────────────────────────
 
 #[cfg(test)]
@@ -707,6 +841,67 @@ mod tests {
         let (root, kind, _) = detect_chord(&chroma).expect("should detect chord");
         assert_eq!(root, 9);
         assert_eq!(kind, ChordKind::Minor);
+    }
+
+    #[test]
+    fn lufs_meter_silence_floors_below_minus_70() {
+        let mut m = LufsMeter::new(48_000.0);
+        let silence = vec![0.0f32; 48_000];
+        m.process_block(&silence);
+        assert!(
+            m.momentary_lufs() < -70.0,
+            "silence should floor; got {}",
+            m.momentary_lufs()
+        );
+        assert!(m.short_term_lufs() < -70.0);
+    }
+
+    #[test]
+    fn lufs_meter_full_scale_sine_is_in_negative_range() {
+        // A 0 dBFS peak 1 kHz sine has RMS −3 dBFS; K-weighting at 1 kHz
+        // adds ~+1 dB, so steady-state LUFS lands around −2..−5.  We
+        // check momentary (400 ms tau, converges in ~1 s) rather than
+        // short-term (3 s tau, would need many more samples to settle).
+        let sr = 48_000.0_f32;
+        let samples: Vec<f32> = (0..(sr as usize) * 2)
+            .map(|i| (2.0 * std::f32::consts::PI * 1_000.0 * i as f32 / sr).sin())
+            .collect();
+        let mut m = LufsMeter::new(sr);
+        m.process_block(&samples);
+        let mom = m.momentary_lufs();
+        assert!(
+            (-6.0..=2.0).contains(&mom),
+            "0 dBFS sine M LUFS should be near 0; got {mom}",
+        );
+    }
+
+    #[test]
+    fn lufs_meter_quieter_input_is_lower_lufs() {
+        // Same test idea as above but using the momentary meter so the
+        // EMA has time to settle within the 2 s test window.
+        let sr = 48_000.0_f32;
+        let n = (sr as usize) * 2;
+        let mut loud = LufsMeter::new(sr);
+        let mut quiet = LufsMeter::new(sr);
+        for i in 0..n {
+            let s = (2.0 * std::f32::consts::PI * 1_000.0 * i as f32 / sr).sin();
+            loud.process_sample(s);
+            quiet.process_sample(s * 0.1); // -20 dB
+        }
+        let delta = loud.momentary_lufs() - quiet.momentary_lufs();
+        assert!(
+            (delta - 20.0).abs() < 1.0,
+            "expected ~20 dB delta, got {delta}",
+        );
+    }
+
+    #[test]
+    fn lufs_reset_clears_state() {
+        let mut m = LufsMeter::new(48_000.0);
+        m.process_block(&vec![0.5_f32; 48_000]);
+        assert!(m.momentary_lufs() > -50.0);
+        m.reset();
+        assert!(m.momentary_lufs() < -100.0);
     }
 
     #[test]

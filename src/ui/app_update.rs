@@ -351,6 +351,21 @@ impl eframe::App for ImpulseApp {
             self.stereo_corr = self.stereo_corr * 0.8 + c * 0.2;
             self.stereo_balance = self.stereo_balance * 0.8 + b * 0.2;
         }
+        // Spectrogram history — push the latest FFT magnitudes (already
+        // computed by `update_spectrum`) so the Spectrogram viz module
+        // can render a scrolling waterfall.  Cap at the history length
+        // so memory usage stays bounded across long sessions.
+        if !self.spectrum_magnitudes.is_empty() {
+            self.spectrogram_history
+                .push_back(self.spectrum_magnitudes.clone());
+            while self.spectrogram_history.len() > crate::audio::analysis::SPECTROGRAM_HISTORY_LEN {
+                self.spectrogram_history.pop_front();
+            }
+        }
+        // LUFS — push the same scope buffer through the K-weighting
+        // filters.  The meter integrates internally; we just feed it
+        // the latest block.
+        self.lufs_meter.process_block(&self.scope_buf);
         while let Ok(load) = self.dsp_load_rx.pop() {
             self.dsp_load_buf.push(load);
         }

@@ -247,6 +247,9 @@ fn viz_modules_default_to_fxmod_and_carry_labels() {
         ModuleKind::LfoScope,
         ModuleKind::PitchTracker,
         ModuleKind::ChordDisplay,
+        ModuleKind::Spectrogram,
+        ModuleKind::LoudnessMeter,
+        ModuleKind::PhaseWheel,
         ModuleKind::EventStream,
     ] {
         assert_eq!(k.default_zone(), Zone::FxMod, "{k:?} expected in FxMod");
@@ -261,6 +264,9 @@ fn viz_modules_default_to_fxmod_and_carry_labels() {
         ModuleKind::LfoScope.label(),
         ModuleKind::PitchTracker.label(),
         ModuleKind::ChordDisplay.label(),
+        ModuleKind::Spectrogram.label(),
+        ModuleKind::LoudnessMeter.label(),
+        ModuleKind::PhaseWheel.label(),
         ModuleKind::EventStream.label(),
     ];
     for i in 0..labels.len() {
@@ -280,6 +286,9 @@ fn viz_modules_have_no_audio_or_mod_io() {
         ModuleKind::LfoScope,
         ModuleKind::PitchTracker,
         ModuleKind::ChordDisplay,
+        ModuleKind::Spectrogram,
+        ModuleKind::LoudnessMeter,
+        ModuleKind::PhaseWheel,
         ModuleKind::EventStream,
     ] {
         assert!(!k.has_audio_output(), "{k:?} must not produce audio");

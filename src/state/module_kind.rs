@@ -81,6 +81,22 @@ pub enum ModuleKind {
     /// Reuses `compute_spectrum` so adding the module is essentially
     /// free DSP-wise.
     ChordDisplay,
+    /// Spectrogram waterfall — rolling FFT history rendered as a
+    /// scrolling 2D ColorImage (time on X, frequency on Y).  Heavier
+    /// than the static spectrum bars; the UI paints a fixed-height
+    /// pixel column per frame and recycles a `ColorImage` between
+    /// repaints to keep the per-frame allocation bounded.
+    Spectrogram,
+    /// Loudness / LUFS meter — K-weighted (BS.1770) momentary + short-term
+    /// loudness display.  Distinct from the per-frame peak / RMS in
+    /// `StereoMeter` because LUFS is the integrated, perceptually
+    /// weighted measure mastering engineers actually target.
+    LoudnessMeter,
+    /// Transport phase wheel — circular bar / beat indicator with
+    /// sub-divisions, rendered from the current sequencer step + step
+    /// fraction.  UI-only; no DSP.  Companion to `EventStream` —
+    /// glanceable indicator of where in the bar we are.
+    PhaseWheel,
     /// Real-time note / drum event stream — mirrors the header event
     /// stream widget.  Rendered as a rack module so multiple instances
     /// can show different scroll speeds / focus voices in future
@@ -144,6 +160,9 @@ impl ModuleKind {
             Self::LfoScope => "LFO SCOPE",
             Self::PitchTracker => "TUNER",
             Self::ChordDisplay => "CHORD",
+            Self::Spectrogram => "SPECTROGRAM",
+            Self::LoudnessMeter => "LUFS",
+            Self::PhaseWheel => "PHASE",
             Self::EventStream => "EVENT STREAM",
             Self::LfoModule => "LFO",
             Self::LlmAgent => "LLM AGENT",
@@ -208,6 +227,14 @@ impl ModuleKind {
             // Chord display — slightly wider so "Cm7" / "F#maj"
             // readouts have room to breathe.
             Self::ChordDisplay => (3, 2),
+            // Spectrogram — wide so the time axis has room to scroll;
+            // matches the spectrum-analyzer footprint at 4×2 so the two
+            // align visually when stacked.
+            Self::Spectrogram => (4, 2),
+            // LUFS — single-row meter with two big numbers.
+            Self::LoudnessMeter => (2, 2),
+            // Phase wheel — square so the circle isn't squashed.
+            Self::PhaseWheel => (2, 2),
             // Event stream — wider than the analysis modules so notes
             // have horizontal room to scroll past.  Two rows tall so
             // the future / past split is legible.
@@ -301,6 +328,9 @@ impl ModuleKind {
             | Self::LfoScope
             | Self::PitchTracker
             | Self::ChordDisplay
+            | Self::Spectrogram
+            | Self::LoudnessMeter
+            | Self::PhaseWheel
             | Self::EventStream
             | Self::LfoModule => Zone::FxMod,
         }

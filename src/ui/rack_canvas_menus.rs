@@ -52,6 +52,9 @@ pub(super) const FXMOD_KINDS: &[ModuleKind] = &[
     ModuleKind::LfoScope,
     ModuleKind::PitchTracker,
     ModuleKind::ChordDisplay,
+    ModuleKind::Spectrogram,
+    ModuleKind::LoudnessMeter,
+    ModuleKind::PhaseWheel,
     ModuleKind::EventStream,
     ModuleKind::LfoModule,
 ];
