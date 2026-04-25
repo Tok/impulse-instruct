@@ -4,6 +4,36 @@ A detailed log of what's built.
 
 ---
 
+### OSC API mirror — TouchOSC-driven control surface
+
+- The pre-existing OSC listener handled `/impulse/<section>/<param>`
+  param updates, `/impulse/sequencer/play|stop`, and
+  `/impulse/prompt`.  Now it also mirrors the live-performance
+  surface of the HTTP API, so a TouchOSC layout / Max patch /
+  hardware controller can drive the same things HTTP can without
+  speaking JSON-over-TCP.
+- New OSC address routes:
+  - `/impulse/lock <path>` — lock a param dot-path (mirrors
+    `POST /api/lock`).
+  - `/impulse/unlock <path>` — clear a lock.
+  - `/impulse/scroll <target>` — set `scroll_target` so the UI
+    animates to the named zone / module ("voice", "fxmod",
+    "AcidBass", …).
+  - `/impulse/style <id>` — set `llm.active_style` and propagate
+    to all unlocked agents.  Empty string clears the style
+    (lets a single TouchOSC text widget toggle on/off).
+  - `/impulse/preset <name>` — accepted-and-logged stub for V1;
+    full preset application is non-trivial sync code so we'd
+    rather route through HTTP than fork the logic.
+- `OscAction` enum + `parse_osc_addr` are now `pub(crate)` so the
+  parser is unit-testable without standing up a UDP listener.
+- 14 OSC tests cover address rejection (no-prefix, unknown
+  sub-addr), play/stop no-args, prompt with string + reject when
+  missing, lock/unlock/scroll/preset/style routing, the empty-
+  string clears style contract, param-update routing for both
+  Float and Int args (so int-sending hardware works for BPM),
+  and unsupported arg-type rejection.  Full suite at 1552 passing.
+
 ### Automation lane overlay — LFO sparkline under the step grid
 
 - New optional sparkline row under each enabled bass voice's step

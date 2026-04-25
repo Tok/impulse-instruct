@@ -52,10 +52,6 @@ they ship and are reflected in `features.md`.
 
 ## Integration
 
-- [ ] **OSC API mirror** - port the HTTP API to an OSC server so
-  TouchOSC / external controllers can drive the same endpoints
-  without needing to speak HTTP.  Reuse the request-type structs
-  (`/api/prompt`, `/api/params`, etc.) as the OSC address space.
 - [ ] **Ableton Link tempo sync** - bidirectional BPM + bar-phase
   sync via the `ableton_link` crate.  Useful for jamming alongside
   Live / Ableton Push or another synth setup.

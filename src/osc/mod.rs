@@ -5,10 +5,15 @@
 // parameter changes, transport control, and LLM prompts.
 //
 // Address scheme:
-//   /impulse/<section>/<param>  <value>   → apply param (same path as HTTP API)
-//   /impulse/sequencer/play               → start transport
-//   /impulse/sequencer/stop               → stop transport
-//   /impulse/prompt             <string>  → send prompt to LLM
+//   /impulse/<section>/<param>  <value>     → apply param (same path as HTTP API)
+//   /impulse/sequencer/play                 → start transport
+//   /impulse/sequencer/stop                 → stop transport
+//   /impulse/prompt             <string>    → send prompt to LLM (jam mode)
+//   /impulse/lock               <path>      → lock a param dot-path
+//   /impulse/unlock             <path>      → unlock a param dot-path
+//   /impulse/scroll             <target>    → scroll UI to target zone / module
+//   /impulse/preset             <name>      → apply rack preset by name
+//   /impulse/style              <id|"">     → set global style (empty string clears)
 //
 // Examples (oscsend / TouchOSC / Max):
 //   /impulse/bass/cutoff       0.7
@@ -18,6 +23,9 @@
 //   /impulse/sequencer/play
 //   /impulse/sequencer/stop
 //   /impulse/prompt            "make it darker"
+//   /impulse/lock              "bass.cutoff"
+//   /impulse/style             "drum_and_bass"
+//   /impulse/preset            "Crew"
 //
 // Enable:  cargo run -- --osc            (port 57120, the SuperCollider default)
 //          cargo run -- --osc-port 9000  (custom port)
@@ -47,11 +55,23 @@ impl OscListener {
 
 // ─── Internal types ───────────────────────────────────────────────────────────
 
-enum OscAction {
+/// Translated OSC dispatch.  Made `pub(crate)` so the test module can
+/// drive `parse_osc_addr` end-to-end without poking at private types.
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) enum OscAction {
     ParamUpdate(serde_json::Value),
     Play,
     Stop,
     Prompt(String),
+    Lock(String),
+    Unlock(String),
+    Scroll(String),
+    /// `Some(id)` sets the active style, `None` clears it (equivalent
+    /// to the HTTP `POST /api/style` with `null`).  An OSC string of
+    /// length 0 maps to `None` so TouchOSC users can clear the style
+    /// from a single text widget without a separate command.
+    Style(Option<String>),
+    Preset(String),
 }
 
 // ─── Receive loop ─────────────────────────────────────────────────────────────
@@ -97,7 +117,7 @@ fn handle_packet(packet: OscPacket, state: &Arc<RwLock<AppState>>, llm_tx: &Send
 
 // ─── Address parsing ──────────────────────────────────────────────────────────
 
-fn parse_osc_addr(addr: &str, args: &[OscType]) -> Option<OscAction> {
+pub(crate) fn parse_osc_addr(addr: &str, args: &[OscType]) -> Option<OscAction> {
     // Strip leading slash and split into up to 3 segments
     let parts: Vec<&str> = addr.trim_start_matches('/').splitn(3, '/').collect();
 
@@ -106,15 +126,25 @@ fn parse_osc_addr(addr: &str, args: &[OscType]) -> Option<OscAction> {
         return None;
     }
 
+    let arg_string = || -> Option<String> {
+        args.first().and_then(|a| match a {
+            OscType::String(s) => Some(s.clone()),
+            _ => None,
+        })
+    };
+
     match parts.as_slice() {
         ["impulse", "sequencer", "play"] => Some(OscAction::Play),
         ["impulse", "sequencer", "stop"] => Some(OscAction::Stop),
-        ["impulse", "prompt"] => {
-            let s = args.first().and_then(|a| match a {
-                OscType::String(s) => Some(s.clone()),
-                _ => None,
-            })?;
-            Some(OscAction::Prompt(s))
+        ["impulse", "prompt"] => Some(OscAction::Prompt(arg_string()?)),
+        ["impulse", "lock"] => Some(OscAction::Lock(arg_string()?)),
+        ["impulse", "unlock"] => Some(OscAction::Unlock(arg_string()?)),
+        ["impulse", "scroll"] => Some(OscAction::Scroll(arg_string()?)),
+        ["impulse", "preset"] => Some(OscAction::Preset(arg_string()?)),
+        ["impulse", "style"] => {
+            // Empty string clears the style (matches POST /api/style with null).
+            let s = arg_string()?;
+            Some(OscAction::Style(if s.is_empty() { None } else { Some(s) }))
         }
         ["impulse", section, param] => {
             let val = args.first().and_then(osc_arg_to_json)?;
@@ -161,6 +191,55 @@ fn dispatch(action: OscAction, state: &Arc<RwLock<AppState>>, llm_tx: &Sender<Ll
                 one_shot: false,
                 agent_id: None,
             });
+        }
+        OscAction::Lock(path) => {
+            let snapshot = state.read().clone();
+            let next = crate::state::lock_params(snapshot, &[path.as_str()]);
+            *state.write() = next;
+            log::info!("OSC: locked {path}");
+        }
+        OscAction::Unlock(path) => {
+            let snapshot = state.read().clone();
+            let next = crate::state::unlock_params(snapshot, &[path.as_str()]);
+            *state.write() = next;
+            log::info!("OSC: unlocked {path}");
+        }
+        OscAction::Scroll(target) => {
+            // Mirror POST /api/scroll's primary effect — set the
+            // scroll target so the UI's per-frame poll picks it up
+            // and animates to the right zone / module.
+            state.write().scroll_target = Some(target.clone());
+            log::info!("OSC: scroll → {target}");
+        }
+        OscAction::Style(maybe_id) => {
+            let snapshot = state.read().clone();
+            let next = match maybe_id {
+                Some(id) => {
+                    let mut s = snapshot;
+                    s.llm.active_style = Some(id.clone());
+                    let after = crate::state::propagate_style(s, &id);
+                    log::info!("OSC: style → {id}");
+                    after
+                }
+                None => {
+                    let mut s = snapshot;
+                    s.llm.active_style = None;
+                    log::info!("OSC: style cleared");
+                    s
+                }
+            };
+            *state.write() = next;
+        }
+        OscAction::Preset(name) => {
+            // Preset application is non-trivial (rack mutation +
+            // agent roster swap + model pinning) — mirroring the
+            // full HTTP handler in sync code is out of V1 scope.
+            // For now, just log; users wanting preset switching
+            // via OSC can route through the HTTP API.
+            log::warn!(
+                "OSC: preset '{name}' ignored — preset application not yet mirrored in OSC; \
+                 use POST /api/preset"
+            );
         }
     }
 }

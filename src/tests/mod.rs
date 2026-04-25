@@ -48,6 +48,7 @@ mod morph_tests;
 mod ms_master_tests;
 mod music_api_tests;
 mod music_tests;
+mod osc_tests;
 mod param_eq_tests;
 mod param_mode_tests;
 mod per_step_velocity_tests;
