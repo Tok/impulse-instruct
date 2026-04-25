@@ -63,6 +63,24 @@ pub enum ModuleKind {
     /// can park it anywhere in the FX/Mod zone.  Reads the global
     /// scope buffer + history; no audio input cable needed.
     BarOscilloscope,
+    /// Stereo vectorscope / goniometer — XY plot of L vs R from the
+    /// engine's interleaved stereo buffer.  Reads `app.stereo_buf`
+    /// (already maintained for the header phase-correlation strip).
+    /// Pure UI; no audio thread interaction.
+    StereoVectorscope,
+    /// LFO output trace — waveform of the LFO module connected via
+    /// the back-panel CV cable, rendered with the same phosphor look
+    /// as the bar oscilloscope.  No audio path.
+    LfoScope,
+    /// Pitch tracker / tuner — autocorrelation pitch on the master
+    /// scope buffer, displays note name + cents-off needle.  Cheap
+    /// reuse of `detect_pitch_hz` in src/audio/analysis.rs.
+    PitchTracker,
+    /// Chord / key display — chroma-vector folding of the existing
+    /// spectrum, matched against 24 major+minor triad templates.
+    /// Reuses `compute_spectrum` so adding the module is essentially
+    /// free DSP-wise.
+    ChordDisplay,
     /// Real-time note / drum event stream — mirrors the header event
     /// stream widget.  Rendered as a rack module so multiple instances
     /// can show different scroll speeds / focus voices in future
@@ -122,6 +140,10 @@ impl ModuleKind {
             Self::StereoMeter => "STEREO METER",
             Self::ActivityTimeline => "TIMELINE",
             Self::BarOscilloscope => "OSCILLOSCOPE",
+            Self::StereoVectorscope => "GONIOMETER",
+            Self::LfoScope => "LFO SCOPE",
+            Self::PitchTracker => "TUNER",
+            Self::ChordDisplay => "CHORD",
             Self::EventStream => "EVENT STREAM",
             Self::LfoModule => "LFO",
             Self::LlmAgent => "LLM AGENT",
@@ -175,6 +197,17 @@ impl ModuleKind {
             // read clearly without dominating the rack.  Same envelope
             // as the spectrum module so they line up when stacked.
             Self::BarOscilloscope => (4, 2),
+            // Stereo vectorscope — square card so the lissajous lobes
+            // aren't squashed into an oval.
+            Self::StereoVectorscope => (2, 2),
+            // LFO scope — same 4×2 envelope as the bar scope so the
+            // two viz modules line up visually when stacked.
+            Self::LfoScope => (4, 2),
+            // Tuner — compact, single big note + cents needle.
+            Self::PitchTracker => (2, 2),
+            // Chord display — slightly wider so "Cm7" / "F#maj"
+            // readouts have room to breathe.
+            Self::ChordDisplay => (3, 2),
             // Event stream — wider than the analysis modules so notes
             // have horizontal room to scroll past.  Two rows tall so
             // the future / past split is legible.
@@ -264,6 +297,10 @@ impl ModuleKind {
             | Self::StereoMeter
             | Self::ActivityTimeline
             | Self::BarOscilloscope
+            | Self::StereoVectorscope
+            | Self::LfoScope
+            | Self::PitchTracker
+            | Self::ChordDisplay
             | Self::EventStream
             | Self::LfoModule => Zone::FxMod,
         }

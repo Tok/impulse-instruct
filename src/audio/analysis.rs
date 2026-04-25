@@ -338,6 +338,201 @@ pub fn stereo_correlation(interleaved: &[f32]) -> (f32, f32) {
     (corr.clamp(-1.0, 1.0), balance.clamp(-1.0, 1.0))
 }
 
+// ─── Pitch detection (autocorrelation, continuous Hz) ───────────────────────
+//
+// Returns `(freq_hz, confidence)` from a mono buffer.  Confidence is 0..1 —
+// higher means more periodic / less noise.  Used by the Tuner viz module
+// (which wants cents-off precision the integer-MIDI `detect_note` can't
+// provide).
+//
+// The algorithm: cumulative-mean-normalised autocorrelation difference,
+// the core idea behind YIN.  We compute d(τ) = Σ (x[n] − x[n+τ])² over
+// a search range, normalise, and pick the lag with the lowest dip below
+// a threshold.  Cheap and good enough for a UI tuner display.
+//
+// Search range: 60 Hz–2000 Hz (covers bass through middle treble).
+
+const PITCH_MIN_HZ: f32 = 60.0;
+const PITCH_MAX_HZ: f32 = 2000.0;
+
+pub fn detect_pitch_hz(buf: &[f32], sample_rate: f32) -> Option<(f32, f32)> {
+    if buf.len() < 512 {
+        return None;
+    }
+    // RMS gate — skip silent input.
+    let rms = rms_of(buf);
+    if rms < 0.005 {
+        return None;
+    }
+
+    let max_lag = (sample_rate / PITCH_MIN_HZ) as usize;
+    let min_lag = (sample_rate / PITCH_MAX_HZ).max(2.0) as usize;
+    if buf.len() <= max_lag * 2 {
+        return None;
+    }
+
+    // Cumulative mean normalised difference.
+    let n = buf.len() - max_lag;
+    let mut diff = vec![0.0f32; max_lag + 1];
+    for tau in 1..=max_lag {
+        let mut sum = 0.0f32;
+        for i in 0..n {
+            let d = buf[i] - buf[i + tau];
+            sum += d * d;
+        }
+        diff[tau] = sum;
+    }
+    let mut cmnd = vec![1.0f32; max_lag + 1];
+    let mut running = 0.0f32;
+    for tau in 1..=max_lag {
+        running += diff[tau];
+        cmnd[tau] = if running > 0.0 {
+            diff[tau] * tau as f32 / running
+        } else {
+            1.0
+        };
+    }
+
+    // Find the first dip below threshold within search range.
+    let threshold = 0.15;
+    let mut chosen: Option<usize> = None;
+    for tau in min_lag..max_lag {
+        if cmnd[tau] < threshold && cmnd[tau] < cmnd[tau + 1] {
+            chosen = Some(tau);
+            break;
+        }
+    }
+    // Fallback: pick the lowest-dip lag in the search range.
+    let tau = chosen.unwrap_or_else(|| {
+        let mut best = min_lag;
+        let mut best_v = cmnd[min_lag];
+        for (t, &v) in cmnd.iter().enumerate().take(max_lag).skip(min_lag) {
+            if v < best_v {
+                best_v = v;
+                best = t;
+            }
+        }
+        best
+    });
+
+    // Parabolic interpolation around `tau` for sub-sample precision.
+    let refined_tau = if tau > 1 && tau < max_lag {
+        let a = cmnd[tau - 1];
+        let b = cmnd[tau];
+        let c = cmnd[tau + 1];
+        let denom = 2.0 * (a - 2.0 * b + c);
+        if denom.abs() > 1e-9 {
+            tau as f32 + (a - c) / denom
+        } else {
+            tau as f32
+        }
+    } else {
+        tau as f32
+    };
+    if refined_tau < 2.0 {
+        return None;
+    }
+    let freq = sample_rate / refined_tau;
+    let confidence = (1.0 - cmnd[tau]).clamp(0.0, 1.0);
+    Some((freq, confidence))
+}
+
+// ─── Chroma vector + chord detection ─────────────────────────────────────────
+//
+// `chroma_from_spectrum` folds an FFT magnitude spectrum into 12 pitch-class
+// bins (C, C#, D, ..., B).  Each bin sums all spectral peaks that map to
+// that pitch class regardless of octave.
+//
+// `detect_chord` matches a chroma vector against the 24 major+minor triad
+// templates and returns the best-fitting `(root_pc, ChordKind)`.
+
+/// Bin a magnitude spectrum into 12 pitch classes.  `bin_hz` is the FFT bin
+/// spacing (same value used by `compute_spectrum`).  Magnitudes are
+/// expected in **dBFS** (the convention used by `compute_spectrum`); they
+/// are converted back to linear amplitude before summing so quiet bins
+/// don't drag the chroma toward zero.  Anything below −60 dBFS is
+/// dropped as effectively silent.
+pub fn chroma_from_spectrum(mags: &[f32], bin_hz: f32) -> [f32; 12] {
+    let mut chroma = [0.0f32; 12];
+    if bin_hz <= 0.0 {
+        return chroma;
+    }
+    let lowest_bin = ((27.5 / bin_hz).ceil() as usize).max(1);
+    for (i, &m_db) in mags.iter().enumerate().skip(lowest_bin) {
+        if m_db < -60.0 {
+            continue;
+        }
+        let f = i as f32 * bin_hz;
+        if !(27.5..=4000.0).contains(&f) {
+            continue;
+        }
+        let lin = 10.0f32.powf(m_db / 20.0);
+        // MIDI = 69 + 12*log2(f/440); split contribution across the two
+        // nearest pitch classes by fractional MIDI so a 440 Hz peak
+        // landing in an off-centre FFT bin (1024-FFT @ 48 kHz has only
+        // ~46 Hz resolution) doesn't round into a neighbouring pitch
+        // class on its own.
+        let midi = 69.0 + 12.0 * (f / 440.0).log2();
+        let lo = midi.floor();
+        let frac = midi - lo;
+        let pc_lo = (lo as i32).rem_euclid(12) as usize;
+        let pc_hi = ((lo as i32) + 1).rem_euclid(12) as usize;
+        chroma[pc_lo] += lin * (1.0 - frac);
+        chroma[pc_hi] += lin * frac;
+    }
+    // Normalise so the strongest pitch class is 1.0 (or all-zero on silence).
+    let peak = chroma.iter().copied().fold(0.0f32, f32::max);
+    if peak > 1e-9 {
+        for v in &mut chroma {
+            *v /= peak;
+        }
+    }
+    chroma
+}
+
+/// Triad quality used by `detect_chord`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ChordKind {
+    Major,
+    Minor,
+}
+
+/// Match a chroma vector against the 24 major/minor triad templates.
+/// Returns `(root_pitch_class, kind, confidence)` where confidence is the
+/// dot-product score normalised by template+chroma magnitudes (~0..1).
+pub fn detect_chord(chroma: &[f32; 12]) -> Option<(u8, ChordKind, f32)> {
+    let total: f32 = chroma.iter().sum();
+    if total < 1e-3 {
+        return None;
+    }
+    // Major triad mask: root, M3 (+4), P5 (+7).
+    // Minor triad mask: root, m3 (+3), P5 (+7).
+    let major: [f32; 12] = [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0];
+    let minor: [f32; 12] = [1.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0];
+
+    let mut best: Option<(u8, ChordKind, f32)> = None;
+    for root in 0..12u8 {
+        for (kind, mask) in [(ChordKind::Major, &major), (ChordKind::Minor, &minor)] {
+            let mut score = 0.0f32;
+            for i in 0..12 {
+                score += chroma[i] * mask[(i + 12 - root as usize) % 12];
+            }
+            // 3 active bins per template; normalise to ~0..1.
+            let confidence = (score / 3.0).clamp(0.0, 1.0);
+            if best.is_none_or(|(_, _, b)| confidence > b) {
+                best = Some((root, kind, confidence));
+            }
+        }
+    }
+    best
+}
+
+/// Pitch-class names in the canonical order used by `chroma_from_spectrum`
+/// and `detect_chord` (root index 0 = C).
+pub const PITCH_CLASS_NAMES: [&str; 12] = [
+    "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B",
+];
+
 // ─── Tests ────────────────────────────────────────────────────────────────────
 
 #[cfg(test)]
@@ -436,6 +631,88 @@ mod tests {
             .collect();
         let (corr, _bal) = super::stereo_correlation(&interleaved);
         assert!((corr - (-1.0)).abs() < 0.01, "corr={corr}");
+    }
+
+    #[test]
+    fn detect_pitch_silence_is_none() {
+        let buf = vec![0.0f32; 2048];
+        assert!(detect_pitch_hz(&buf, 48_000.0).is_none());
+    }
+
+    #[test]
+    fn detect_pitch_440_hz_sine_lands_within_5_cents() {
+        let sr = 48_000.0_f32;
+        let samples: Vec<f32> = (0..4096)
+            .map(|i| (2.0 * std::f32::consts::PI * 440.0 * i as f32 / sr).sin() * 0.5)
+            .collect();
+        let (hz, conf) = detect_pitch_hz(&samples, sr).expect("should detect 440 Hz");
+        let cents_off = 1200.0 * (hz / 440.0).log2();
+        assert!(
+            cents_off.abs() < 5.0,
+            "detected {hz} Hz, off by {cents_off} cents",
+        );
+        assert!(conf > 0.5, "confidence too low: {conf}");
+    }
+
+    #[test]
+    fn detect_pitch_220_hz_sine_lands_within_5_cents() {
+        let sr = 48_000.0_f32;
+        let samples: Vec<f32> = (0..4096)
+            .map(|i| (2.0 * std::f32::consts::PI * 220.0 * i as f32 / sr).sin() * 0.4)
+            .collect();
+        let (hz, _) = detect_pitch_hz(&samples, sr).expect("should detect 220 Hz");
+        let cents_off = 1200.0 * (hz / 220.0).log2();
+        assert!(cents_off.abs() < 5.0, "detected {hz} Hz");
+    }
+
+    #[test]
+    fn chroma_a880_peaks_at_a_pitch_class() {
+        // 880 Hz = A5 → pitch class 9.  The 1024-FFT at 48 kHz has only
+        // ~46 Hz resolution, which is too coarse around A4 (440 Hz)
+        // to land on a single bin reliably; at A5 the bins-per-semitone
+        // is sufficient for a clean result.
+        let sr = 48_000.0_f32;
+        let samples: Vec<f32> = (0..1024)
+            .map(|i| (2.0 * std::f32::consts::PI * 880.0 * i as f32 / sr).sin() * 0.5)
+            .collect();
+        let spec = crate::audio::spectrum::compute_spectrum(&samples, sr);
+        let chroma = chroma_from_spectrum(&spec.magnitudes, spec.bin_hz);
+        let max_idx = (0..12)
+            .max_by(|a, b| chroma[*a].partial_cmp(&chroma[*b]).unwrap())
+            .unwrap();
+        assert_eq!(max_idx, 9, "expected A (idx 9), got {max_idx}");
+    }
+
+    #[test]
+    fn detect_chord_c_major_triad() {
+        // Mock chroma directly — A sum of C (0), E (4), G (7) should
+        // resolve as C major.
+        let mut chroma = [0.0f32; 12];
+        chroma[0] = 1.0;
+        chroma[4] = 1.0;
+        chroma[7] = 1.0;
+        let (root, kind, conf) = detect_chord(&chroma).expect("should detect chord");
+        assert_eq!(root, 0);
+        assert_eq!(kind, ChordKind::Major);
+        assert!(conf > 0.9, "confidence {conf} too low for clean triad");
+    }
+
+    #[test]
+    fn detect_chord_a_minor_triad() {
+        // A (9), C (0), E (4) → A minor.
+        let mut chroma = [0.0f32; 12];
+        chroma[9] = 1.0;
+        chroma[0] = 1.0;
+        chroma[4] = 1.0;
+        let (root, kind, _) = detect_chord(&chroma).expect("should detect chord");
+        assert_eq!(root, 9);
+        assert_eq!(kind, ChordKind::Minor);
+    }
+
+    #[test]
+    fn detect_chord_silence_is_none() {
+        let chroma = [0.0f32; 12];
+        assert!(detect_chord(&chroma).is_none());
     }
 
     #[test]

@@ -85,23 +85,19 @@ Tier 3 (heavier — build once Tier 1+2 settle):
 ## Visualizations — new analysis modules
 
 Tier 1 (cheap, reuse existing buffers):
-- [ ] **Goniometer / vectorscope (`StereoVectorscope`)** — XY
-  plot of L vs R; reads the existing scope ring buffer. Shows
-  phase correlation visually (mono = vertical line, stereo
-  spread = lissajous lobes). 2×2 card.
-- [ ] **LFO scope (`LfoScope`)** — render the connected LFO's
-  output waveform with the same phosphor look as the bar scope.
-  Input: LFO via mod cable. Pure UI; no DSP.
-- [ ] **Tuner (`PitchTracker`)** — YIN pitch detect on the
-  master (or any tapped voice). Display: note name + cents-off
-  with a Huth-coloured needle. Companion to the bass /
-  autotune loop.
-- [ ] **Chord / key display (`ChordDisplay`)** — chroma-vector
-  pitch-class folding from the existing spectrum → guess key +
-  chord. Cheap; reuses `compute_spectrum()`.
-- [ ] **Per-voice activity heatmap** — overlay mode on the
-  existing `ActivityTimeline` rather than a new kind: stacked
-  rows per voice, brightness = trigger density.
+- [x] **Goniometer / vectorscope (`StereoVectorscope`)** — shipped.
+- [x] **LFO scope (`LfoScope`)** — shipped (V1 picks the first enabled
+  LFO slot; CV-cable wiring of slot ↔ module is a follow-up).
+- [x] **Tuner (`PitchTracker`)** — shipped, autocorrelation-based
+  pitch detect with cents-off needle.
+- [x] **Chord / key display (`ChordDisplay`)** — shipped, chroma
+  vector + 24-template (major/minor) match.
+- [ ] **Per-voice activity heatmap** — original plan said "overlay
+  mode on `ActivityTimeline`", but `ActivityTimeline` is the LLM
+  agent action log, not a per-voice trigger surface. The right
+  source is the existing `EventStream`'s `MelodicLogEntry` /
+  `DrumLogEntry` queues. Defer until we revisit the EventStream UI;
+  a heatmap mode there would be a small, distinct slice.
 
 Tier 2 (heavier — guard with reduce-cost path):
 - [ ] **Spectrogram waterfall (`Spectrogram`)** — rolling FFT

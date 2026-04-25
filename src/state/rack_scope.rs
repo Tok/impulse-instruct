@@ -116,6 +116,10 @@ pub fn parse_module_kind(name: &str) -> Option<ModuleKind> {
         "spectrumanalyzer" | "spectrum" | "analyser" | "analyzer" => Some(SpectrumAnalyzer),
         "stereometer" | "stereo" | "correlation" | "meter" => Some(StereoMeter),
         "activitytimeline" | "timeline" | "activity" | "log" => Some(ActivityTimeline),
+        "stereovectorscope" | "vectorscope" | "goniometer" | "lissajous" => Some(StereoVectorscope),
+        "lfoscope" => Some(LfoScope),
+        "pitchtracker" | "tuner" | "pitchdetect" => Some(PitchTracker),
+        "chorddisplay" | "chord" | "key" => Some(ChordDisplay),
         "neutts" | "tts" | "voice" | "mc" => Some(NeuTts),
         _ => None,
     }
@@ -219,6 +223,13 @@ pub fn rack_kind_name_matches(kind: ModuleKind, name: &str) -> bool {
         ModuleKind::BarOscilloscope => {
             matches!(n.as_str(), "scope" | "oscilloscope" | "waveform")
         }
+        ModuleKind::StereoVectorscope => matches!(
+            n.as_str(),
+            "vectorscope" | "goniometer" | "lissajous" | "stereoscope"
+        ),
+        ModuleKind::LfoScope => matches!(n.as_str(), "lfoscope" | "lfo_scope"),
+        ModuleKind::PitchTracker => matches!(n.as_str(), "tuner" | "pitch" | "pitchtracker"),
+        ModuleKind::ChordDisplay => matches!(n.as_str(), "chord" | "key" | "chords"),
         ModuleKind::EventStream => matches!(n.as_str(), "events" | "stream" | "notes"),
     }
 }

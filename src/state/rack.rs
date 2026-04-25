@@ -514,9 +514,17 @@ impl RackState {
                 // both are global-bus visualisers; users tend to want
                 // them adjacent.
                 ModuleKind::BarOscilloscope => 40,
+                // Goniometer / vectorscope sits next to the bar scope —
+                // both are global-bus stereo / waveform visualisers.
+                ModuleKind::StereoVectorscope => 41,
+                // LFO scope groups with the LFO modules.
+                ModuleKind::LfoScope => 42,
+                // Tuner + chord display group with the spectrum cluster.
+                ModuleKind::PitchTracker => 43,
+                ModuleKind::ChordDisplay => 44,
                 // Event stream is melodic / rhythmic activity, parks
                 // next to ActivityTimeline.
-                ModuleKind::EventStream => 41,
+                ModuleKind::EventStream => 45,
             }
         }
         let cols = GRID_COLS as usize;

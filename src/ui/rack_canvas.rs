@@ -717,6 +717,14 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
                             crate::ui::panels::draw_timeline(app, ui);
                         } else if kind == ModuleKind::BarOscilloscope {
                             crate::ui::panels::draw_scope_module(app, ui);
+                        } else if kind == ModuleKind::StereoVectorscope {
+                            crate::ui::panels::draw_vectorscope(app, ui);
+                        } else if kind == ModuleKind::LfoScope {
+                            crate::ui::panels::draw_lfo_scope(app, ui, id);
+                        } else if kind == ModuleKind::PitchTracker {
+                            crate::ui::panels::draw_pitch_tracker(app, ui);
+                        } else if kind == ModuleKind::ChordDisplay {
+                            crate::ui::panels::draw_chord_display(app, ui);
                         } else if kind == ModuleKind::EventStream {
                             crate::ui::panels::draw_event_stream_module(app, ui);
                         } else {

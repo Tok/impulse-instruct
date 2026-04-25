@@ -39,6 +39,7 @@ pub mod spectrum;
 pub mod stereo_meter;
 pub mod timeline;
 pub mod tts;
+pub mod viz;
 pub mod wavetable;
 
 pub use amen::draw_amen;
@@ -60,4 +61,5 @@ pub use spectrum::draw_spectrum;
 pub use stereo_meter::draw_stereo_meter;
 pub use timeline::draw_timeline;
 pub use tts::draw_tts;
+pub use viz::{draw_chord_display, draw_lfo_scope, draw_pitch_tracker, draw_vectorscope};
 pub use wavetable::draw_wavetable;

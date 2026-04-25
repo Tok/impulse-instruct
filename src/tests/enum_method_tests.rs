@@ -241,23 +241,47 @@ fn viz_modules_default_to_fxmod_and_carry_labels() {
     // header into rack-placeable visualisers.  Lock the zone +
     // distinct labels so future enum additions don't quietly steal
     // the same label or land in the wrong zone.
-    for k in [ModuleKind::BarOscilloscope, ModuleKind::EventStream] {
+    for k in [
+        ModuleKind::BarOscilloscope,
+        ModuleKind::StereoVectorscope,
+        ModuleKind::LfoScope,
+        ModuleKind::PitchTracker,
+        ModuleKind::ChordDisplay,
+        ModuleKind::EventStream,
+    ] {
         assert_eq!(k.default_zone(), Zone::FxMod, "{k:?} expected in FxMod");
         let l = k.label();
         assert!(!l.is_empty(), "{k:?} label must not be empty");
     }
-    assert_ne!(
+    // All viz labels must be distinct so the title bar never repeats
+    // across two different module kinds.
+    let labels = [
         ModuleKind::BarOscilloscope.label(),
+        ModuleKind::StereoVectorscope.label(),
+        ModuleKind::LfoScope.label(),
+        ModuleKind::PitchTracker.label(),
+        ModuleKind::ChordDisplay.label(),
         ModuleKind::EventStream.label(),
-        "viz module labels must be distinct"
-    );
+    ];
+    for i in 0..labels.len() {
+        for j in (i + 1)..labels.len() {
+            assert_ne!(labels[i], labels[j], "viz module labels must be distinct");
+        }
+    }
 }
 
 #[test]
 fn viz_modules_have_no_audio_or_mod_io() {
     // Visualisers don't produce audio (no MASTER reach indicator) and
     // don't expose mod-input jacks (nothing to modulate).
-    for k in [ModuleKind::BarOscilloscope, ModuleKind::EventStream] {
+    for k in [
+        ModuleKind::BarOscilloscope,
+        ModuleKind::StereoVectorscope,
+        ModuleKind::LfoScope,
+        ModuleKind::PitchTracker,
+        ModuleKind::ChordDisplay,
+        ModuleKind::EventStream,
+    ] {
         assert!(!k.has_audio_output(), "{k:?} must not produce audio");
         assert!(
             crate::state::mod_inputs(k).is_empty(),
