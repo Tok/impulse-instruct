@@ -46,6 +46,7 @@ pub enum ModuleKind {
     FxRevDelay,
     FxTapeStop,
     FxStutter,
+    FxFreeze,
     FxRingMod,
     FxWaveshaper,
     FxBitcrush,
@@ -148,6 +149,7 @@ impl ModuleKind {
             Self::FxRevDelay => "REV DELAY",
             Self::FxTapeStop => "TAPE STOP",
             Self::FxStutter => "STUTTER",
+            Self::FxFreeze => "FREEZE",
             Self::FxRingMod => "RING MOD",
             Self::FxWaveshaper => "WAVESHAPER",
             Self::FxBitcrush => "BITCRUSH",
@@ -281,6 +283,7 @@ impl ModuleKind {
             | Self::FxTransient
             | Self::FxExciter
             | Self::FxTapeStop
+            | Self::FxFreeze
             | Self::FxRingMod
             | Self::FxWaveshaper
             | Self::FxBitcrush
@@ -325,6 +328,7 @@ impl ModuleKind {
             | Self::FxRevDelay
             | Self::FxTapeStop
             | Self::FxStutter
+            | Self::FxFreeze
             | Self::FxRingMod
             | Self::FxWaveshaper
             | Self::FxBitcrush
@@ -387,6 +391,7 @@ impl ModuleKind {
                 | Self::FxRevDelay
                 | Self::FxTapeStop
                 | Self::FxStutter
+                | Self::FxFreeze
                 | Self::FxRingMod
                 | Self::FxWaveshaper
                 | Self::FxBitcrush
@@ -423,6 +428,7 @@ impl ModuleKind {
                 | Self::FxRevDelay
                 | Self::FxTapeStop
                 | Self::FxStutter
+                | Self::FxFreeze
                 | Self::FxRingMod
                 | Self::FxWaveshaper
                 | Self::FxBitcrush
@@ -456,6 +462,7 @@ impl ModuleKind {
                 | Self::FxRevDelay
                 | Self::FxTapeStop
                 | Self::FxStutter
+                | Self::FxFreeze
                 | Self::FxRingMod
                 | Self::FxWaveshaper
                 | Self::FxBitcrush

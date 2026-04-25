@@ -101,6 +101,7 @@ const ALL_TARGETS: &[LfoTarget] = &[
     LfoTarget::StutterRate,
     LfoTarget::StutterSlice,
     LfoTarget::StutterMix,
+    LfoTarget::FreezeMix,
     LfoTarget::WaveshaperDrive,
     LfoTarget::WaveshaperMix,
     LfoTarget::DistortionDrive,
@@ -205,6 +206,7 @@ pub fn has_audio_in(kind: ModuleKind) -> bool {
             | FxRevDelay
             | FxTapeStop
             | FxStutter
+            | FxFreeze
             | FxRingMod
             | FxWaveshaper
             | FxBitcrush

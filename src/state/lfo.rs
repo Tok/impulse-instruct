@@ -156,6 +156,8 @@ pub enum LfoTarget {
     StutterRate,
     StutterSlice,
     StutterMix,
+    // FX: Spectral freezer
+    FreezeMix,
     // FX: Waveshaper (pre-FX soft clipper)
     WaveshaperDrive,
     WaveshaperMix,

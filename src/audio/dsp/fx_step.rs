@@ -176,6 +176,7 @@ impl DspState {
                 p.sequencer_bpm,
                 sr,
             ),
+            FxStep::Freeze => self.freeze.process(sig, p.freeze_mix, sr),
             FxStep::RingMod => {
                 if p.ring_mod_mix > 0.001 {
                     let freq_hz = 50.0 + p.ring_mod_freq * 450.0;

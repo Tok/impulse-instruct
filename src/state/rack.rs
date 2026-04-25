@@ -499,6 +499,8 @@ impl RackState {
                 // park them near the bitcrush / drive cluster.
                 ModuleKind::FxTapeStop => 23,
                 ModuleKind::FxStutter => 23,
+                // Freezer parks near the convolution / spectral cluster.
+                ModuleKind::FxFreeze => 24,
                 ModuleKind::FxEq => 27,
                 ModuleKind::FxCompressor => 28,
                 ModuleKind::FxTapeSat => 29,

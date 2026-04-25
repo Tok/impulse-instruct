@@ -415,7 +415,7 @@ LFO (4 slots): lfo[N].enabled, .waveform (Sine|Triangle|Saw|InvSaw|Square|Sample
   ExciterAmount, ExciterFreq, ExciterMix,
   MultitapTime, MultitapSpread, MultitapFeedback, MultitapMix,
   RevDelayTime, RevDelayFeedback, RevDelayMix,
-  TapeStopMix, StutterRate, StutterSlice, StutterMix,
+  TapeStopMix, StutterRate, StutterSlice, StutterMix, FreezeMix,
   DistortionDrive, MasterVolume, An1xCutoff, An1xPitch.
 
 FREE EG: free_eg.{{enabled, values: [8 levels 0–1], period 0–1, depth 0–1 (0.5=neutral),
@@ -605,7 +605,7 @@ RACK (only when user asks to add/wire/remove modules): `{{"rack": {{"add":["808"
 "pad":[{{"kind":"reverb","expanded":true,"pair":1}}]}}}}`. Module names:
 bass, 808, 909, hoover, an1x, amen, noise, granular, bitcrush, reverb, delay,
 chorus, phaser, flanger, filter, comb, tilt, transient, exciter, limiter,
-multitap, revdelay, tapestop, stutter,
+multitap, revdelay, tapestop, stutter, freeze,
 drive, eq, compressor, tapesat, waveshaper, ringmod, lfo, tts, master.
 `pad` expands an FX card to reveal its XY pad and (for 3-knob FX) picks which
 pair drives the pad — pair 0 = A/B, 1 = A/C, 2 = B/C from the knob row order.

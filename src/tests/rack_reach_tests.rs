@@ -313,6 +313,7 @@ fn reaches_master_default_preset_voices_all_reach() {
                     | ModuleKind::FxRevDelay
                     | ModuleKind::FxTapeStop
                     | ModuleKind::FxStutter
+                    | ModuleKind::FxFreeze
                     | ModuleKind::FxRingMod
                     | ModuleKind::FxWaveshaper
                     | ModuleKind::FxBitcrush
@@ -356,6 +357,7 @@ fn supports_xy_pad_true_for_every_fx_kind_only() {
         ModuleKind::FxRevDelay,
         ModuleKind::FxTapeStop,
         ModuleKind::FxStutter,
+        ModuleKind::FxFreeze,
         ModuleKind::FxRingMod,
         ModuleKind::FxWaveshaper,
         ModuleKind::FxBitcrush,

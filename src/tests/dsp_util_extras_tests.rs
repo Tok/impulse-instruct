@@ -126,6 +126,7 @@ fn kind_is_fx_covers_every_fx_kind() {
         ModuleKind::FxRevDelay,
         ModuleKind::FxTapeStop,
         ModuleKind::FxStutter,
+        ModuleKind::FxFreeze,
         ModuleKind::FxRingMod,
         ModuleKind::FxWaveshaper,
         ModuleKind::FxBitcrush,

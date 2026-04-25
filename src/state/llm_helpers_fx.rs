@@ -159,6 +159,12 @@ pub(super) fn apply_fx_update(
     u!(s.fx.stutter_rate, "stutter_rate", "fx.stutter_rate");
     u!(s.fx.stutter_slice, "stutter_slice", "fx.stutter_slice");
     u!(s.fx.stutter_mix, "stutter_mix", "fx.stutter_mix");
+    u!(s.fx.freeze_mix, "freeze_mix", "fx.freeze_mix");
+    if !locked.contains("fx.conv_reverb_cabinet")
+        && let Some(v) = fx.get("conv_reverb_cabinet").and_then(|v| v.as_bool())
+    {
+        s.fx.conv_reverb_cabinet = v;
+    }
     u!(
         s.fx.waveshaper_drive,
         "waveshaper_drive",
@@ -504,6 +510,7 @@ fn fx_field_mut<'a>(fx: &'a mut super::FxState, key: &str) -> Option<&'a mut f32
         "stutter_rate" => &mut fx.stutter_rate,
         "stutter_slice" => &mut fx.stutter_slice,
         "stutter_mix" => &mut fx.stutter_mix,
+        "freeze_mix" => &mut fx.freeze_mix,
         "ring_mod_freq" => &mut fx.ring_mod_freq,
         "ring_mod_mix" => &mut fx.ring_mod_mix,
         "waveshaper_drive" => &mut fx.waveshaper_drive,

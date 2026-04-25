@@ -65,19 +65,22 @@ Tier 3 (heavier — build once Tier 1+2 settle):
 - [x] **Tape stop (`FxTapeStop`)** — shipped, mix knob doubles as
   ramp progress (0=normal, 1=halted) with darkening lowpass that
   tracks the slowing.
-- [ ] **Spectral freezer (`FxFreeze`)** — *deferred*.  Needs FFT +
-  IFFT plumbing with framing / overlap-add — bigger than a batch
-  slot and worth doing properly when picked up.
-- [ ] **Cabinet / amp IR (`FxCabinet`)** — *deferred*.  Could be
-  a flag on `FxConvReverb` (cap IR length, point at
-  `samples/cabinets/`) or its own module; pick a direction next
-  pass.
-- [ ] **Mid/side EQ flag on `FxParamEq`** — *deferred*.  Per-band
-  `ms_mode: u8` selector (stereo / mid / side); needs care around
-  default migration so existing sessions don't drift.
-- [ ] **Shimmer mode flag on `FxConvReverb`** — *deferred*.
-  Pitch-shift (+12 / +7) inside the feedback loop; same default-
-  migration concern as the mid/side flag.
+- [x] **Spectral freezer (`FxFreeze`)** — shipped.  Captures one FFT
+  frame on rising-edge engage; resynths with random phases per hop
+  via overlap-add (1024 FFT, 256 hop, Hann window).
+- [x] **Cabinet IR mode** — shipped as a flag on `FxConvReverb`
+  (`conv_reverb_cabinet: bool`).  When true, caps `conv_reverb_size`
+  internally at 0.1 (10 % of loaded IR) and the file picker
+  browses `samples/cabinets/` instead of `samples/impulses/`.
+- [-] **Mid/side EQ flag on `FxParamEq`** — *blocked on stereo FX
+  pipeline*.  The dispatch is mono per-FX; mid/side decoding
+  fundamentally needs L+R IO.  Same blocker as `FxWiden`.
+- [-] **Shimmer mode flag on `FxConvReverb`** — *deferred*.
+  Pitch-shift (+12 / +7) in the feedback loop is doable but needs
+  careful integration with `ConvReverb`'s data flow + an extra
+  `PitchShift` instance inside the convolver; bigger than a flag,
+  smaller than a new module.  Pick up when ConvReverb gets
+  attention next.
 
 ## Visualizations — new analysis modules
 

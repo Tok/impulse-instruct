@@ -63,6 +63,7 @@ fn kind_to_scope_name(kind: ModuleKind) -> Option<String> {
         | ModuleKind::FxRevDelay
         | ModuleKind::FxTapeStop
         | ModuleKind::FxStutter
+        | ModuleKind::FxFreeze
         | ModuleKind::FxRingMod
         | ModuleKind::FxWaveshaper
         | ModuleKind::FxBitcrush
@@ -111,6 +112,7 @@ pub fn parse_module_kind(name: &str) -> Option<ModuleKind> {
         "fxrevdelay" | "revdelay" | "reversedelay" | "reverseecho" => Some(FxRevDelay),
         "fxtapestop" | "tapestop" | "halt" | "stop" => Some(FxTapeStop),
         "fxstutter" | "stutter" | "repeater" | "glitch" => Some(FxStutter),
+        "fxfreeze" | "freeze" | "spectralfreeze" | "drone" => Some(FxFreeze),
         "fxeq" | "eq" | "equalizer" | "equaliser" => Some(FxEq),
         "fxcompressor" | "compressor" | "comp" => Some(FxCompressor),
         "fxtapesat" | "tapesat" | "tape" | "saturation" => Some(FxTapeSat),
@@ -159,6 +161,7 @@ pub fn rack_kind_name_matches(kind: ModuleKind, name: &str) -> bool {
         ModuleKind::FxRevDelay => matches!(n.as_str(), "revdelay" | "reverse" | "rev" | "fx"),
         ModuleKind::FxTapeStop => matches!(n.as_str(), "tapestop" | "halt" | "stop" | "fx"),
         ModuleKind::FxStutter => matches!(n.as_str(), "stutter" | "repeater" | "glitch" | "fx"),
+        ModuleKind::FxFreeze => matches!(n.as_str(), "freeze" | "spectralfreeze" | "drone" | "fx"),
         ModuleKind::FxRingMod => {
             matches!(
                 n.as_str(),

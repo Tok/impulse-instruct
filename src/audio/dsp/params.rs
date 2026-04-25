@@ -200,6 +200,7 @@ pub fn lfo_target_to_u8(t: LfoTarget) -> u8 {
         StutterRate => 106,
         StutterSlice => 107,
         StutterMix => 108,
+        FreezeMix => 109,
     }
 }
 
@@ -494,6 +495,8 @@ pub struct AudioParams {
     pub stutter_rate: f32,
     pub stutter_slice: f32,
     pub stutter_mix: f32,
+    // Spectral freezer
+    pub freeze_mix: f32,
     // Waveshaper
     pub waveshaper_drive: f32,
     pub waveshaper_mix: f32,

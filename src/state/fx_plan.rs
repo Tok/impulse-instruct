@@ -27,6 +27,7 @@ pub(crate) fn kind_to_fx_step(kind: ModuleKind) -> Option<FxStep> {
         ModuleKind::FxRevDelay => Some(FxStep::RevDelay),
         ModuleKind::FxTapeStop => Some(FxStep::TapeStop),
         ModuleKind::FxStutter => Some(FxStep::Stutter),
+        ModuleKind::FxFreeze => Some(FxStep::Freeze),
         ModuleKind::FxRingMod => Some(FxStep::RingMod),
         ModuleKind::FxEq => Some(FxStep::Eq),
         ModuleKind::FxCompressor => Some(FxStep::Compressor),

@@ -37,6 +37,7 @@ const TARGET_LABELS: &[(&str, LfoTarget)] = &[
     ("TAPESTOP", LfoTarget::TapeStopMix),
     ("STUTTER.RATE", LfoTarget::StutterRate),
     ("STUTTER.SLICE", LfoTarget::StutterSlice),
+    ("FREEZE", LfoTarget::FreezeMix),
     ("DRIVE", LfoTarget::DistortionDrive),
     ("MASTER", LfoTarget::MasterVolume),
     ("AN1X.CUTOFF", LfoTarget::An1xCutoff),

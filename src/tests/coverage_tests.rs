@@ -32,6 +32,7 @@ mod fx_step_idx_tests {
             FxStep::RevDelay,
             FxStep::TapeStop,
             FxStep::Stutter,
+            FxStep::Freeze,
             FxStep::RingMod,
             FxStep::Eq,
             FxStep::Compressor,

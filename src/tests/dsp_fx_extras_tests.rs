@@ -77,6 +77,57 @@ mod tape_stop_tests {
 }
 
 #[cfg(test)]
+mod freeze_tests {
+    use crate::audio::dsp::fx_extras::Freeze;
+
+    #[test]
+    fn mix_zero_returns_dry() {
+        let mut f = Freeze::new();
+        assert_eq!(f.process(0.5, 0.0, 48_000.0), 0.5);
+    }
+
+    #[test]
+    fn engaged_freeze_is_finite_and_eventually_audible() {
+        // Push 2 s of a sine through with mix=0 (priming), then engage
+        // freeze and run another 2 s.  Output should remain finite and
+        // produce some signal once the captured spectrum has been
+        // synthesised.
+        let mut f = Freeze::new();
+        let sr = 48_000.0_f32;
+        // Prime.
+        for i in 0..(sr as usize * 2) {
+            let x = (2.0 * std::f32::consts::PI * 440.0 * i as f32 / sr).sin() * 0.5;
+            let _ = f.process(x, 0.0, sr);
+        }
+        // Engage and resynthesise.
+        let mut nonzero = false;
+        for i in 0..(sr as usize * 2) {
+            let x = (2.0 * std::f32::consts::PI * 440.0 * i as f32 / sr).sin() * 0.5;
+            let out = f.process(x, 1.0, sr);
+            assert!(out.is_finite());
+            if i > 4096 && out.abs() > 0.01 {
+                nonzero = true;
+            }
+        }
+        assert!(nonzero, "freeze should emit audible output once engaged");
+    }
+
+    #[test]
+    fn disengaging_freeze_returns_to_pass_through() {
+        let mut f = Freeze::new();
+        let sr = 48_000.0_f32;
+        // Engage briefly.
+        for i in 0..2_000 {
+            let x = (i as f32 * 0.05).sin() * 0.4;
+            let _ = f.process(x, 0.6, sr);
+        }
+        // Disengage — output should equal input within float tolerance.
+        let out = f.process(0.314, 0.0, sr);
+        assert!((out - 0.314).abs() < 1e-5);
+    }
+}
+
+#[cfg(test)]
 mod stutter_tests {
     use crate::audio::dsp::fx_extras::Stutter;
 

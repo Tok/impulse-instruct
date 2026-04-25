@@ -161,6 +161,7 @@ impl AudioParams {
             stutter_rate: s.fx.stutter_rate.clamp(0.0, 1.0),
             stutter_slice: s.fx.stutter_slice.clamp(0.05, 1.0),
             stutter_mix: s.fx.stutter_mix.clamp(0.0, 1.0),
+            freeze_mix: s.fx.freeze_mix.clamp(0.0, 1.0),
             waveshaper_drive: s.fx.waveshaper_drive,
             waveshaper_mix: s.fx.waveshaper_mix,
             ring_mod_freq: s.fx.ring_mod_freq,
@@ -174,7 +175,14 @@ impl AudioParams {
             fx_pan_width: s.fx.fx_pan_width.clamp(0.0, 1.0),
             fx_pan_rate: s.fx.fx_pan_rate.clamp(0.0, 1.0),
             conv_reverb_mix: s.fx.conv_reverb_mix.clamp(0.0, 1.0),
-            conv_reverb_size: s.fx.conv_reverb_size.clamp(0.0, 1.0),
+            // Cabinet mode caps the IR length at 10 % of the loaded
+            // impulse so even hall-length recordings get treated as
+            // short cab responses.
+            conv_reverb_size: if s.fx.conv_reverb_cabinet {
+                s.fx.conv_reverb_size.clamp(0.0, 0.1)
+            } else {
+                s.fx.conv_reverb_size.clamp(0.0, 1.0)
+            },
             conv_reverb_predelay: s.fx.conv_reverb_predelay.clamp(0.0, 1.0),
             conv_reverb_damp: s.fx.conv_reverb_damp.clamp(0.0, 1.0),
             conv_reverb_lowcut: s.fx.conv_reverb_lowcut.clamp(0.0, 1.0),

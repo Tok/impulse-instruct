@@ -192,6 +192,7 @@ fn allows_multiple_is_true_for_fx_lfo_and_agents() {
         ModuleKind::FxRevDelay,
         ModuleKind::FxTapeStop,
         ModuleKind::FxStutter,
+        ModuleKind::FxFreeze,
         ModuleKind::FxRingMod,
         ModuleKind::FxWaveshaper,
         ModuleKind::FxBitcrush,

@@ -110,6 +110,7 @@ pub struct DspState {
     rev_delay: RevDelay,
     tape_stop: TapeStop,
     stutter: Stutter,
+    freeze: Freeze,
     bitcrush_held: f32,
     bitcrush_counter: u32,
     // FX state
@@ -223,6 +224,7 @@ impl DspState {
             rev_delay: RevDelay::new(),
             tape_stop: TapeStop::new(),
             stutter: Stutter::new(),
+            freeze: Freeze::new(),
             compressor: Compressor::new(),
             tape_sat: TapeSat::new(),
             autotune: Autotune::new(),

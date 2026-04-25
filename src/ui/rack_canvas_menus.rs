@@ -43,6 +43,7 @@ pub(super) const FXMOD_KINDS: &[ModuleKind] = &[
     ModuleKind::FxRevDelay,
     ModuleKind::FxTapeStop,
     ModuleKind::FxStutter,
+    ModuleKind::FxFreeze,
     ModuleKind::FxDrive,
     ModuleKind::FxAutotune,
     ModuleKind::FxWaveshaper,

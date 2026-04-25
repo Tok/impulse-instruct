@@ -413,6 +413,7 @@ fn current_param_value(state: &AppState, path: &str) -> f32 {
         "fx.stutter_rate" => state.fx.stutter_rate,
         "fx.stutter_slice" => state.fx.stutter_slice,
         "fx.stutter_mix" => state.fx.stutter_mix,
+        "fx.freeze_mix" => state.fx.freeze_mix,
         "fx.waveshaper_drive" => state.fx.waveshaper_drive,
         "fx.waveshaper_mix" => state.fx.waveshaper_mix,
         "fx.ring_mod_freq" => state.fx.ring_mod_freq,

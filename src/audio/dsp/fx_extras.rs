@@ -9,6 +9,10 @@
 // too large for the stack are `Box<[f32; N]>`-allocated once at
 // construction.
 
+use std::sync::Arc;
+
+use rustfft::{Fft, FftPlanner, num_complex::Complex};
+
 use super::fx::{Biquad, MAX_FLANGER_SIZE};
 
 // ─── Flanger (short modulated delay with feedback) ───────────────────────────
@@ -784,5 +788,202 @@ impl Stutter {
         }
 
         input * (1.0 - mix) + wet * mix
+    }
+}
+
+// ─── Spectral freezer (FFT magnitudes hold + random-phase resynth) ───────────
+//
+// Captures one FFT frame on the rising edge of `mix > 0`; thereafter
+// regenerates output frames at the same magnitudes but with fresh random
+// phases per frame, IFFT'd and overlap-add'd into the output buffer.
+//
+// FFT_SIZE = 1024 with a 256-sample hop (75 % overlap) — standard for
+// spectral-domain effects.  Both forward + inverse FFTs are pre-planned at
+// construction so process() never allocates.
+//
+// The user knob is just `mix`: > 0 engages capture-and-hold; back to 0
+// resets and resumes pass-through.  Future enhancements: re-trigger knob
+// (force a new capture mid-freeze), spread knob (smear magnitudes across
+// neighbouring bins for chorus-like motion).
+
+const FREEZE_FFT_SIZE: usize = 1024;
+const FREEZE_HOP_SIZE: usize = 256;
+const FREEZE_BINS: usize = FREEZE_FFT_SIZE / 2 + 1;
+
+pub(crate) struct Freeze {
+    /// Forward FFT plan (pre-allocated by FftPlanner).
+    fft_fwd: Arc<dyn Fft<f32>>,
+    /// Inverse FFT plan.
+    fft_inv: Arc<dyn Fft<f32>>,
+    /// Scratch buffer for in-place FFT (sized to the larger of fwd / inv).
+    fft_scratch: Vec<Complex<f32>>,
+    /// Working complex buffer for FFT input/output.
+    work: Vec<Complex<f32>>,
+    /// Pre-computed Hann window of length FREEZE_FFT_SIZE.
+    hann: Vec<f32>,
+    /// Input ring buffer — last FFT_SIZE samples, ordered with `in_pos`
+    /// pointing at the next write position.
+    in_buf: Vec<f32>,
+    in_pos: usize,
+    /// Output ring buffer for overlap-add.  Must be at least
+    /// FFT_SIZE + HOP samples; we use 2 * FFT_SIZE for headroom.
+    out_buf: Vec<f32>,
+    out_read: usize,
+    out_write_anchor: usize,
+    /// Captured magnitude spectrum.  Only populated when mix > 0 and we've
+    /// taken a snapshot.
+    captured_mag: Vec<f32>,
+    captured: bool,
+    /// Sample counter since last hop.
+    hop_counter: usize,
+    /// xorshift RNG state for per-frame phase randomisation.
+    rng_state: u32,
+    /// Last-frame mix to detect rising edge.
+    last_mix: f32,
+}
+
+impl Freeze {
+    pub(crate) fn new() -> Self {
+        let mut planner = FftPlanner::new();
+        let fft_fwd = planner.plan_fft_forward(FREEZE_FFT_SIZE);
+        let fft_inv = planner.plan_fft_inverse(FREEZE_FFT_SIZE);
+        let scratch_len = fft_fwd
+            .get_inplace_scratch_len()
+            .max(fft_inv.get_inplace_scratch_len());
+        let hann: Vec<f32> = (0..FREEZE_FFT_SIZE)
+            .map(|n| 0.5 - 0.5 * (std::f32::consts::TAU * n as f32 / FREEZE_FFT_SIZE as f32).cos())
+            .collect();
+        Self {
+            fft_fwd,
+            fft_inv,
+            fft_scratch: vec![Complex::new(0.0, 0.0); scratch_len],
+            work: vec![Complex::new(0.0, 0.0); FREEZE_FFT_SIZE],
+            hann,
+            in_buf: vec![0.0; FREEZE_FFT_SIZE],
+            in_pos: 0,
+            out_buf: vec![0.0; FREEZE_FFT_SIZE * 2],
+            out_read: 0,
+            out_write_anchor: 0,
+            captured_mag: vec![0.0; FREEZE_BINS],
+            captured: false,
+            hop_counter: 0,
+            rng_state: 0x6D2B_79F5,
+            last_mix: 0.0,
+        }
+    }
+
+    /// xorshift32 — fast deterministic RNG for the random-phase resynth.
+    /// Matches the style used elsewhere in the engine (NoiseGen).
+    fn rand_u32(&mut self) -> u32 {
+        let mut x = self.rng_state;
+        x ^= x << 13;
+        x ^= x >> 17;
+        x ^= x << 5;
+        self.rng_state = x;
+        x
+    }
+
+    fn rand_phase(&mut self) -> f32 {
+        // Uniform 0..2π.
+        (self.rand_u32() as f32 / u32::MAX as f32) * std::f32::consts::TAU
+    }
+
+    /// Run one FFT capture on the most recent FFT_SIZE input samples,
+    /// ordered linearly (oldest first).  Stores magnitude per bin in
+    /// `captured_mag`.
+    fn capture(&mut self) {
+        // Copy in_buf into work in time order, applying the Hann window.
+        for i in 0..FREEZE_FFT_SIZE {
+            let idx = (self.in_pos + i) % FREEZE_FFT_SIZE;
+            self.work[i] = Complex::new(self.in_buf[idx] * self.hann[i], 0.0);
+        }
+        self.fft_fwd
+            .process_with_scratch(&mut self.work, &mut self.fft_scratch);
+        for (i, m) in self.captured_mag.iter_mut().enumerate().take(FREEZE_BINS) {
+            *m = self.work[i].norm();
+        }
+        self.captured = true;
+    }
+
+    /// Synthesise one output frame and overlap-add into `out_buf` starting
+    /// at `out_write_anchor`.  Advances `out_write_anchor` by HOP_SIZE.
+    fn synthesise_frame(&mut self) {
+        // Build a complex spectrum with captured magnitudes + random phases,
+        // mirrored for negative frequencies (Hermitian symmetry → real
+        // output).
+        for i in 0..FREEZE_BINS {
+            let mag = self.captured_mag[i];
+            let phase = if i == 0 || i == FREEZE_FFT_SIZE / 2 {
+                0.0 // DC + Nyquist must be real
+            } else {
+                self.rand_phase()
+            };
+            let (s, c) = phase.sin_cos();
+            self.work[i] = Complex::new(mag * c, mag * s);
+        }
+        // Mirror conjugate for the upper half.
+        for i in 1..FREEZE_FFT_SIZE / 2 {
+            let conj = self.work[i].conj();
+            self.work[FREEZE_FFT_SIZE - i] = conj;
+        }
+        self.fft_inv
+            .process_with_scratch(&mut self.work, &mut self.fft_scratch);
+        // Overlap-add with Hann window into out_buf.  Normalise by FFT_SIZE
+        // (rustfft's inverse is unscaled) and by the Hann² overlap-add gain
+        // factor (≈ 1.5 at 75 % overlap with Hann window) to keep level
+        // roughly equal to dry input.
+        let norm = 1.0 / (FREEZE_FFT_SIZE as f32 * 1.5);
+        for i in 0..FREEZE_FFT_SIZE {
+            let idx = (self.out_write_anchor + i) % self.out_buf.len();
+            self.out_buf[idx] += self.work[i].re * self.hann[i] * norm;
+        }
+        self.out_write_anchor = (self.out_write_anchor + FREEZE_HOP_SIZE) % self.out_buf.len();
+    }
+
+    pub(crate) fn process(&mut self, input: f32, mix: f32, _sr: f32) -> f32 {
+        // Always write input into the input ring; we need it ready when
+        // freeze first engages.
+        self.in_buf[self.in_pos] = input;
+        self.in_pos = (self.in_pos + 1) % FREEZE_FFT_SIZE;
+
+        // Detect rising / falling edges of mix > 0.
+        if self.last_mix < 0.001 && mix > 0.001 {
+            // Engaging — schedule a capture on the next hop boundary.
+            self.captured = false;
+        } else if mix < 0.001 {
+            // Disengaging — clear the captured snapshot and silence the
+            // pending output so the next engagement starts fresh.
+            self.captured = false;
+            for s in &mut self.out_buf {
+                *s = 0.0;
+            }
+            self.out_read = self.out_write_anchor;
+        }
+        self.last_mix = mix;
+
+        // Read the next overlap-add output sample.
+        let wet = self.out_buf[self.out_read];
+        // Clear the slot we just consumed so subsequent overlap-adds don't
+        // accumulate stale energy.
+        self.out_buf[self.out_read] = 0.0;
+        self.out_read = (self.out_read + 1) % self.out_buf.len();
+
+        // Hop boundary: capture (if newly engaged) and synthesise one frame.
+        self.hop_counter += 1;
+        if self.hop_counter >= FREEZE_HOP_SIZE {
+            self.hop_counter = 0;
+            if mix > 0.001 {
+                if !self.captured {
+                    self.capture();
+                }
+                self.synthesise_frame();
+            }
+        }
+
+        if mix < 0.001 {
+            input
+        } else {
+            input * (1.0 - mix) + wet * mix
+        }
     }
 }

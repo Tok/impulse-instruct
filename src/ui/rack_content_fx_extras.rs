@@ -43,7 +43,8 @@ pub(super) fn try_draw_fx_extras_content(
         | ModuleKind::FxMultitap
         | ModuleKind::FxRevDelay
         | ModuleKind::FxTapeStop
-        | ModuleKind::FxStutter => {}
+        | ModuleKind::FxStutter
+        | ModuleKind::FxFreeze => {}
         _ => return None,
     }
 
@@ -510,6 +511,13 @@ pub(super) fn try_draw_fx_extras_content(
                 s.fx.stutter_rate = r;
                 s.fx.stutter_slice = sl;
                 s.fx.stutter_mix = m;
+            }
+        }
+        ModuleKind::FxFreeze => {
+            let mut m = app.state.read().fx.freeze_mix;
+            hk!(ui, ("FREEZE", &mut m, pm("fx.freeze_mix")));
+            if changed || m != app.state.read().fx.freeze_mix {
+                app.state.write().fx.freeze_mix = m;
             }
         }
         _ => unreachable!("guarded by the early return above"),

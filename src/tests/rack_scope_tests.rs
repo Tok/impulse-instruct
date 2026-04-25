@@ -86,6 +86,7 @@ fn parse_module_kind_handles_fx_aliases() {
     assert_eq!(parse_module_kind("revdelay"), Some(ModuleKind::FxRevDelay));
     assert_eq!(parse_module_kind("tapestop"), Some(ModuleKind::FxTapeStop));
     assert_eq!(parse_module_kind("stutter"), Some(ModuleKind::FxStutter));
+    assert_eq!(parse_module_kind("freeze"), Some(ModuleKind::FxFreeze));
     assert_eq!(parse_module_kind("eq"), Some(ModuleKind::FxEq));
     assert_eq!(
         parse_module_kind("compressor"),
@@ -149,6 +150,7 @@ fn rack_kind_name_matches_fx_catchall_covers_all_fx_kinds() {
         ModuleKind::FxRevDelay,
         ModuleKind::FxTapeStop,
         ModuleKind::FxStutter,
+        ModuleKind::FxFreeze,
         ModuleKind::FxRingMod,
         ModuleKind::FxWaveshaper,
         ModuleKind::FxBitcrush,

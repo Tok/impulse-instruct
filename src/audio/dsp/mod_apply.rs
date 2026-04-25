@@ -130,6 +130,7 @@ pub fn apply_mod_target(p: &mut AudioParams, target: u8, mod_val: f32) {
         106 => p.stutter_rate = (p.stutter_rate + mod_val).clamp(0.0, 1.0),
         107 => p.stutter_slice = (p.stutter_slice + mod_val).clamp(0.0, 1.0),
         108 => p.stutter_mix = (p.stutter_mix + mod_val).clamp(0.0, 1.0),
+        109 => p.freeze_mix = (p.freeze_mix + mod_val).clamp(0.0, 1.0),
         _ => {}
     }
 }

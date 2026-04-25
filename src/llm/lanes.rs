@@ -261,7 +261,7 @@ impl LaneKind {
                 .into(),
             LaneKind::Fx => "Write ONLY the `fx` object — reverb / delay / distortion / \
                 chorus / phaser / flanger / filter / comb / tilt / transient / exciter / limiter / \
-                multitap / revdelay / tapestop / stutter / \
+                multitap / revdelay / tapestop / stutter / freeze / \
                 ring_mod / bitcrush / master_pitch. Defaults for a subtle jam:\n\
                 reverb_mix 0.10-0.25, reverb_size 0.4-0.6\n\
                 delay_mix 0.06-0.18, delay_feedback 0.3-0.5\n\
@@ -700,6 +700,8 @@ pub fn lane_schema(lane: LaneKind) -> serde_json::Value {
                         "stutter_rate":     { "type": "number", "minimum": 0.0, "maximum": 1.0 },
                         "stutter_slice":    { "type": "number", "minimum": 0.0, "maximum": 1.0 },
                         "stutter_mix":      { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+                        "freeze_mix":       { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+                        "conv_reverb_cabinet":{ "type": "boolean" },
                         "ring_mod_mix":     { "type": "number", "minimum": 0.0, "maximum": 1.0 },
                         "ring_mod_freq":    { "type": "number", "minimum": 0.0, "maximum": 1.0 },
                         "bitcrush_bits":    { "type": "number", "minimum": 0.0, "maximum": 1.0 },

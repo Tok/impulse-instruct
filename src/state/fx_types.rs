@@ -28,6 +28,7 @@ pub enum FxStep {
     RevDelay,
     TapeStop,
     Stutter,
+    Freeze,
     RingMod,
     Eq,
     Compressor,
@@ -43,7 +44,7 @@ pub enum FxStep {
 /// Total FxStep variants — sized to pack dense per-FX audio-thread
 /// caches (e.g. previous-sample outputs for feedback routes) without
 /// allocating a HashMap every block.
-pub const FX_STEP_COUNT: usize = 27;
+pub const FX_STEP_COUNT: usize = 28;
 
 impl FxStep {
     /// Dense 0..`FX_STEP_COUNT` index — stable; keep in lock-step with
@@ -68,16 +69,17 @@ impl FxStep {
             FxStep::RevDelay => 14,
             FxStep::TapeStop => 15,
             FxStep::Stutter => 16,
-            FxStep::RingMod => 17,
-            FxStep::Eq => 18,
-            FxStep::Compressor => 19,
-            FxStep::TapeSat => 20,
-            FxStep::Drive => 21,
-            FxStep::Autotune => 22,
-            FxStep::Pan => 23,
-            FxStep::ConvReverb => 24,
-            FxStep::ParamEq => 25,
-            FxStep::PitchShift => 26,
+            FxStep::Freeze => 17,
+            FxStep::RingMod => 18,
+            FxStep::Eq => 19,
+            FxStep::Compressor => 20,
+            FxStep::TapeSat => 21,
+            FxStep::Drive => 22,
+            FxStep::Autotune => 23,
+            FxStep::Pan => 24,
+            FxStep::ConvReverb => 25,
+            FxStep::ParamEq => 26,
+            FxStep::PitchShift => 27,
         }
     }
 }

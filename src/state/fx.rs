@@ -296,6 +296,10 @@ pub struct FxState {
     /// Stutter wet/dry 0..1.
     #[serde(default)]
     pub stutter_mix: f32,
+    /// Spectral-freezer mix (also acts as engage trigger — > 0 captures
+    /// the current FFT magnitudes and resynths with random phases).
+    #[serde(default)]
+    pub freeze_mix: f32,
     pub waveshaper_drive: f32, // 0–1 → soft-clip drive amount (pre-FX)
     pub waveshaper_mix: f32,   // 0–1 wet/dry
     pub ring_mod_freq: f32,    // 0–1 → 50–500 Hz carrier frequency
@@ -351,6 +355,14 @@ pub struct FxState {
     /// string = no IR loaded (the step acts as a wet-coloured dry pass).
     #[serde(default)]
     pub conv_reverb_ir_path: String,
+    /// Cabinet-IR mode — UI hint that the loaded IR is a guitar / bass cab
+    /// (short — typically <200 ms) rather than a hall reverb.  When true,
+    /// the file picker browses `samples/cabinets/` instead of
+    /// `samples/impulses/`, and `conv_reverb_size` is internally capped at
+    /// 0.1 (10 % of the loaded IR) so even long impulses get treated as
+    /// short cabinet responses.
+    #[serde(default)]
+    pub conv_reverb_cabinet: bool,
     /// 8-band parametric EQ — replaces the fixed 3-band EQ for the
     /// ParamEq FX module.  The existing `eq_low_gain` / `eq_mid_gain`
     /// / `eq_hi_gain` fields above stay live for `FxEq` (the legacy
@@ -575,6 +587,7 @@ impl Default for FxState {
             stutter_rate: default_stutter_rate(),
             stutter_slice: default_stutter_slice(),
             stutter_mix: 0.0,
+            freeze_mix: 0.0,
             waveshaper_drive: 0.0,
             waveshaper_mix: 0.0,
             ring_mod_freq: 0.2,
@@ -594,6 +607,7 @@ impl Default for FxState {
             conv_reverb_lowcut: 0.0,
             conv_reverb_width: default_conv_reverb_width(),
             conv_reverb_reverse: false,
+            conv_reverb_cabinet: false,
             conv_reverb_ir_path: String::new(),
             param_eq_bands: default_param_eq_bands(),
             pitch_shift_semi: 0.0,
