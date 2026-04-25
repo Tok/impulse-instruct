@@ -96,3 +96,4 @@ mod vram_helpers_tests;
 mod vram_tests;
 mod wavetable_tests;
 mod ws_state_tests;
+mod zoom_helpers_tests;

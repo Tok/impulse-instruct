@@ -43,6 +43,31 @@ pub(crate) enum ZoomTarget {
     Global(f32),
 }
 
+/// Convert a raw scroll-wheel delta to a unit-scale zoom step.  One
+/// notch on a typical mouse wheel reports ±120 in `raw_scroll_delta`;
+/// we map that to ±0.1 of zoom-scale and clamp the per-tick magnitude
+/// at 0.05 (= half a notch) so a runaway / boosted wheel can't flip
+/// the scale by half a unit in one frame.  Pure helper so the
+/// damping curve is unit-testable.
+pub(crate) fn zoom_step_from_delta(delta: f32) -> f32 {
+    (delta / 120.0).clamp(-0.5, 0.5) * 0.1
+}
+
+/// Apply `step` to a per-module zoom scale and clamp to the
+/// allowed range (0.5×..2.0×).  Per-module zoom is a finer band
+/// than the global zoom because it stacks on top of the global
+/// scale at render time.
+pub(crate) fn next_module_scale(current: f32, step: f32) -> f32 {
+    (current + step).clamp(0.5, 2.0)
+}
+
+/// Apply `step` to the global zoom scale and clamp to the allowed
+/// range (0.5×..3.0×).  Global zoom can go higher than per-module
+/// because it's the only knob that affects chrome (text, log, etc.).
+pub(crate) fn next_global_scale(current: f32, step: f32) -> f32 {
+    (current + step).clamp(0.5, 3.0)
+}
+
 /// Detect Ctrl+MW zoom and return the appropriate target.
 /// Card rects (kind + rect) are read from egui temp memory (set during rack render).
 pub(crate) fn detect_ctrl_zoom(
@@ -63,7 +88,7 @@ pub(crate) fn detect_ctrl_zoom(
     if delta.abs() <= 0.1 {
         return None;
     }
-    let step = (delta / 120.0).clamp(-0.5, 0.5) * 0.1;
+    let step = zoom_step_from_delta(delta);
     let card_rects: Vec<(ModuleKind, egui::Rect)> = ctx
         .memory(|m| m.data.get_temp(egui::Id::new("module_card_rects")))
         .unwrap_or_default();
@@ -75,9 +100,9 @@ pub(crate) fn detect_ctrl_zoom(
     });
     if let Some(kind) = hovered {
         let cur = kind_scales.get(&kind).copied().unwrap_or(1.0);
-        Some(ZoomTarget::Kind(kind, (cur + step).clamp(0.5, 2.0)))
+        Some(ZoomTarget::Kind(kind, next_module_scale(cur, step)))
     } else {
-        Some(ZoomTarget::Global((current_global + step).clamp(0.5, 3.0)))
+        Some(ZoomTarget::Global(next_global_scale(current_global, step)))
     }
 }
 

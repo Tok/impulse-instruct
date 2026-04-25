@@ -34,7 +34,7 @@ mod spectrum_header;
 pub mod style_rack;
 pub mod theme;
 mod ui_helpers;
-mod util;
+pub(crate) mod util;
 pub mod widgets;
 pub(crate) use note::{ansi_colorize_notes, note_freq_label, note_name};
 pub(crate) use util::{scan_models, webbrowser_open};
