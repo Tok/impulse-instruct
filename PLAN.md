@@ -6,12 +6,6 @@ they ship and are reflected in `features.md`.
 
 ---
 
-## DSP
-
-- [ ] **Wavetable voice** - single-table scan + pos/phase knobs, load
-  user wavetables from `samples/wavetables/*.wav`.  Complements AN1X
-  (analog) and Hoover (fixed-shape) with user-extensible character.
-
 ## Modulation
 
 - [ ] **Native per-voice `BassLfoTarget::Pan` + phase offset** — the

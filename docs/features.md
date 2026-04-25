@@ -4,6 +4,49 @@ A detailed log of what's built.
 
 ---
 
+### Wavetable voice (Serum-format frame stacks, single-table scan)
+
+- **New `ModuleKind::WavetableVoice`** — user-supplied `.wav` files
+  are split at load time into 2048-sample single-cycle frames
+  (Serum convention).  POSITION knob fractionally indexes the frame
+  list with linear interpolation between adjacent frames; PHASE
+  OFFSET shifts the read inside each frame so users can detune the
+  cycle's start without retriggering.
+- **DSP** (`src/audio/dsp/wavetable.rs`): per-trigger phase reset,
+  per-sample phase advance at `freq * 2048 / sr`, lerp inside the
+  active frame and lerp again across adjacent frames so POSITION
+  sweeps morph smoothly.  Same fast-attack / slow-release amp
+  envelope as Pluck masks retrigger clicks; accent gain follows
+  the TB303Step accent for per-step articulation.
+- **State** (`src/state/wavetable.rs`): enabled / position /
+  phase_offset / volume / pan / `pitch_offset_semi` / `wave_path`.
+  Pattern + step count live on SequencerState as `wavetable_pattern`
+  / `wavetable_steps`.
+- **UI**: panel mirrors Pluck — ON/OFF + LOAD WAV (portal-backed
+  picker) + filename label; SCAN group (POSITION / PHASE) + MIX
+  group (VOL / PAN / PITCH ±24 st with 0.5-detent knob).  The
+  sequencer panel gains a WTBL row when an enabled WavetableVoice
+  is in the rack and reaches MASTER.
+- **File loading**: `AudioCommand::LoadWavetable` carries the
+  resampled mono buffer to the DSP, which re-derives `frame_count`
+  and Arc-swaps the buffer in place — no allocation on the audio
+  thread.  UI polls `wavetable.wave_path` so `/api/wavetable`
+  writes from external scripts surface in the audio path on the
+  next frame.
+- **API**: `POST /api/wavetable { path | random: true }` mirrors
+  `/api/conv_reverb`; reads from `samples/wavetables/`.  README
+  updated with pointers to free wavetable libraries.
+- **LLM schema** exposes `wavetable.{enabled, position,
+  phase_offset, volume, pan, pitch_offset_semi}` +
+  `wavetable.wavetable_steps` / `wavetable.wavetable_notes`.
+  Per-field lock paths via `apply_wavetable_update`.
+- 11 tests cover defaults, sequencer pre-alloc, module flags, LLM
+  voice + sequencer apply, lock respect, silent-without-table
+  contract, audible-after-trigger, autocorrelation period match
+  (440 Hz sine table → 109-sample period at 48 kHz, on-period
+  correlation > 0.8 and clearly above half-period), and load-time
+  frame-split correctness via POSITION-knob probing.
+
 ### Karplus-Strong plucked-string voice
 
 - **New `ModuleKind::PluckString`** — melodic voice filling the dry-
