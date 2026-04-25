@@ -10,13 +10,6 @@ they ship and are reflected in `features.md`.
 
 ## UI / UX
 
-- [ ] **Pattern snapshot slots (A/B/C/D)** - four one-shot slots that
-  capture the full sequencer pattern state (all voices + steps +
-  notes + accents).  Click to swap between them live.  Keyboard:
-  Shift+1 / 2 / 3 / 4.  Great for live performance.
-- [ ] **Keyboard shortcut overlay** - F1 (or ?) pops a translucent
-  overlay listing every shortcut in groups (sequencer / rack /
-  agents).  Reads the actual keybinding map so it can't drift.
 
 ## Intelligence
 

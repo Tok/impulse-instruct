@@ -4,6 +4,27 @@ A detailed log of what's built.
 
 ---
 
+### Pattern snapshot slots A/B/C/D + grouped shortcut overlay
+
+- **Snapshot slots**: Shift+1..=4 instantly load pattern bank slots
+  0..=3 via `bank_load(state, slot, keep_transport=true)` so a live
+  performer can flip between four banked patterns at any time
+  without touching the mouse.  Right-click on the bank strip cells
+  (or the existing bank-write API) is still the way to capture
+  into a slot.  Just keyboard wiring — no new state, leverages
+  the pre-existing pattern_bank pipeline.
+- **Shortcut overlay refresh**: F1 / ? overlay now reads from a
+  canonical `SHORTCUT_GROUPS` const grouped into Transport / View /
+  Editing.  Single source of truth so future handlers register
+  there once and the help can't drift out of sync with what the
+  app responds to.  Added the four snapshot slots, F2 performance
+  mode, and the existing entries.
+- 6 tests over `SHORTCUT_GROUPS`: at-least-one-group, every-group-
+  has-rows, every-row-has-non-empty-key-and-desc, no-duplicate-keys
+  across groups, snapshot slots listed under Transport,
+  performance mode listed under View.  Full suite at 1605 tests
+  passing.
+
 ### MPE input — pitch bend / channel pressure / per-note CC74 wiring
 
 - The `midir` parser used to handle Note On/Off + ControlChange +

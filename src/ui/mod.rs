@@ -29,7 +29,7 @@ mod rack_grid;
 pub(crate) mod rack_minimap;
 mod rack_scroll;
 mod rack_toolbar;
-mod scope_footer;
+pub(crate) mod scope_footer;
 mod spectrum_header;
 pub mod style_rack;
 pub mod theme;

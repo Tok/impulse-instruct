@@ -310,6 +310,44 @@ pub fn draw_footer_status(
     });
 }
 
+/// Canonical keyboard-shortcut map.  Single source of truth — when
+/// adding a new `consume_key` handler in `app_update.rs`, register
+/// the row here so the F1 overlay can't drift out of sync with what
+/// the app actually responds to.
+///
+/// Format: outer slice = groups, each group is `(group_label, rows)`,
+/// each row is `(key_combo, description)`.
+pub const SHORTCUT_GROUPS: &[(&str, &[(&str, &str)])] = &[
+    (
+        "Transport",
+        &[
+            ("Space", "Play / Stop sequencer"),
+            ("Shift+1", "Snapshot slot A — load pattern bank 1"),
+            ("Shift+2", "Snapshot slot B — load pattern bank 2"),
+            ("Shift+3", "Snapshot slot C — load pattern bank 3"),
+            ("Shift+4", "Snapshot slot D — load pattern bank 4"),
+        ],
+    ),
+    (
+        "View",
+        &[
+            ("Tab", "Flip rack (front / back)"),
+            ("F1 / ?", "Toggle this help overlay"),
+            ("F2", "Toggle performance mode"),
+        ],
+    ),
+    (
+        "Editing",
+        &[
+            ("Ctrl+Z", "Undo"),
+            ("Ctrl+Y", "Redo"),
+            ("Ctrl+Scroll", "Zoom (global or per-module)"),
+            ("Alt+Click", "Cycle param lock mode"),
+            ("Arrow keys", "Navigate / adjust focused knob"),
+        ],
+    ),
+];
+
 /// Keyboard shortcuts help overlay. Returns true if close was clicked.
 pub fn draw_shortcuts_overlay(ctx: &egui::Context) -> bool {
     let mut close = false;
@@ -342,15 +380,20 @@ pub fn draw_shortcuts_overlay(ctx: &egui::Context) -> bool {
                             );
                         });
                     };
-                    row(ui, "Space", "Play / Stop sequencer");
-                    row(ui, "Tab", "Flip rack (front / back)");
-                    row(ui, "Ctrl+Z", "Undo");
-                    row(ui, "Ctrl+Y", "Redo");
-                    row(ui, "Ctrl+Scroll", "Zoom (global or per-module)");
-                    row(ui, "Alt+Click", "Cycle param lock mode");
-                    row(ui, "Arrow keys", "Navigate / adjust focused knob");
-                    row(ui, "? / F1", "Toggle this help overlay");
-                    ui.add_space(8.0);
+                    for (group, rows) in SHORTCUT_GROUPS {
+                        ui.label(
+                            egui::RichText::new(*group)
+                                .monospace()
+                                .size(11.0)
+                                .color(egui::Color32::from_gray(220))
+                                .strong(),
+                        );
+                        for (k, d) in *rows {
+                            row(ui, k, d);
+                        }
+                        ui.add_space(4.0);
+                    }
+                    ui.add_space(4.0);
                     if ui.button("Close").clicked() {
                         close = true;
                     }

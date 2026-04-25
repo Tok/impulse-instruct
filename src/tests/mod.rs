@@ -74,6 +74,7 @@ mod rec_chop_tests;
 mod seed_patterns_tests;
 mod seq_aux_tests;
 mod seq_tests;
+mod shortcut_overlay_tests;
 mod song_mode_tests;
 mod spectrum_onset_tests;
 mod state_tests;

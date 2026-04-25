@@ -224,6 +224,23 @@ impl eframe::App for ImpulseApp {
             s.ui_prefs.performance_mode = !s.ui_prefs.performance_mode;
             self.session_dirty = true;
         }
+        // Pattern snapshot slots — Shift+1..=4 instantly load pattern
+        // bank slots 0..=3 without saving the current edits, so a
+        // live performer can flip A/B/C/D at any time.  Right-click
+        // on the bank strip cells (or the bank-write API) is still
+        // the way to capture into a slot.
+        for (key, slot) in [
+            (egui::Key::Num1, 0usize),
+            (egui::Key::Num2, 1),
+            (egui::Key::Num3, 2),
+            (egui::Key::Num4, 3),
+        ] {
+            if ctx.input_mut(|i| i.consume_key(egui::Modifiers::SHIFT, key)) {
+                let s = self.state.read().clone();
+                *self.state.write() = crate::state::bank_load(s, slot, true);
+                self.push_audio_params();
+            }
+        }
 
         // ── Startup hook — auto-prompt after wizard closes ──────────────────
         // Once the wizard is dismissed and the LLM is ready, send a one-shot
