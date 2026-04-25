@@ -10,10 +10,6 @@ they ship and are reflected in `features.md`.
 
 ## UI / UX
 
-- [ ] **Undo/redo timeline scrubber** - the undo stack already exists
-  internally; surface it as a horizontal scrubber above the log so
-  users can A/B compare past states visually instead of mashing Ctrl-Z
-  blind.
 - [ ] **Pattern snapshot slots (A/B/C/D)** - four one-shot slots that
   capture the full sequencer pattern state (all voices + steps +
   notes + accents).  Click to swap between them live.  Keyboard:

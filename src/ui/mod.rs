@@ -44,6 +44,7 @@ mod windows_about;
 mod windows_lane_diff;
 mod windows_prefs;
 mod windows_sysinfo;
+mod windows_undo_timeline;
 mod wizard;
 
 /// Convert a dot-path + float value into a nested JSON object.
@@ -324,6 +325,11 @@ pub struct ImpulseApp {
     /// log captured by the pipeline.  Off by default; opened from the
     /// header's view menu.
     pub(crate) show_lane_diff: bool,
+    /// Toggle for the Undo Timeline window — slider over the
+    /// `StateHistory` past/future stacks for visual A/B comparison
+    /// of recent state changes.  Off by default; opened from the
+    /// header's view menu.
+    pub(crate) show_undo_timeline: bool,
     pub(crate) add_menu_zone: Option<crate::state::Zone>,
     // Module being dragged by its title bar (id + current pointer position).
     pub(crate) module_drag: Option<rack_canvas::ModuleDrag>,
@@ -527,6 +533,7 @@ impl ImpulseApp {
             ctrl_locked: false,
             show_shortcuts: false,
             show_lane_diff: false,
+            show_undo_timeline: false,
             add_menu_zone: None,
             module_drag: None,
             session_dirty: false,

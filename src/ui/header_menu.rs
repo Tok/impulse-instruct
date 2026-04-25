@@ -474,6 +474,15 @@ impl ImpulseApp {
                             self.show_lane_diff = true;
                             ui.close_menu();
                         }
+                        if ui
+                            .button(
+                                egui::RichText::new("Undo Timeline").monospace().size(10.0),
+                            )
+                            .clicked()
+                        {
+                            self.show_undo_timeline = true;
+                            ui.close_menu();
+                        }
                         ui.separator();
                         if ui
                             .button(egui::RichText::new("About").monospace().size(10.0))

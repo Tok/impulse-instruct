@@ -4,6 +4,29 @@ A detailed log of what's built.
 
 ---
 
+### Undo timeline scrubber — slider over the past/future stacks
+
+- The Ctrl+Z / Ctrl+Shift+Z stack always existed but was step-by-
+  step only.  Now there's an opt-in window with a slider over
+  the linearised timeline (`past + current + future`) so users
+  can A/B compare past states visually without mashing Ctrl-Z
+  blind.  Drag the slider to walk the history; Undo / Redo
+  buttons nudge by one.  A "Mid-history — any new edit clears
+  the future entries" hint surfaces when the slider sits past
+  the latest mutation.
+- Toggle in the header view menu → "Undo Timeline".  Off by
+  default; primary keyboard shortcuts stay the main path.
+- New `StateHistory::scrub_to(target, current)` helper does
+  step-at-a-time walking so past/future stacks remain coherent.
+  Out-of-range targets clamp to the timeline ends; same-slot
+  targets short-circuit.  `current_index` / `total_slots`
+  expose the linearised view for the slider.
+- 7 tests cover the empty-history baseline, push + undo index
+  walking, scrub-to-current no-op, scrub-back / scrub-forward
+  state restoration, out-of-range clamping, and the regression
+  invariant that a fresh push after mid-history scrub clears
+  the future stack.  Full suite at 1577 tests passing.
+
 ### Rack mini-map — bird's-eye navigator with click-to-pan
 
 - New optional overlay anchored bottom-right of the rack canvas
