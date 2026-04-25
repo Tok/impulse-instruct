@@ -18,6 +18,7 @@ use std::sync::Arc;
 
 use super::AudioParams;
 use super::dsp_util::{TuningSystem, midi_to_hz_tuned};
+use super::fx_extras::Svf;
 use crate::state::SfzRegion;
 
 /// One region from a parsed `.sfz` file paired with its pre-loaded mono
@@ -59,7 +60,6 @@ enum AdsrStage {
 /// Per-voice playback state — one slot in the polyphony pool.  Tracks
 /// the active sample buffer, read position, ADSR stage, and an `age`
 /// counter the allocator uses to pick the oldest slot when stealing.
-#[derive(Clone)]
 struct SampleInstrumentSlot {
     samples: Arc<Vec<f32>>,
     pos: f32,
@@ -72,6 +72,11 @@ struct SampleInstrumentSlot {
     region_gain: f32,
     /// Monotonic counter set at trigger time — lowest = oldest slot.
     age: u64,
+    /// Per-slot SVF state for the per-voice filter.  Each slot keeps
+    /// independent state so polyphonic voices don't bleed integrator
+    /// values into each other.  Constant per-process Hz cost — the
+    /// SVF is allocation-free.
+    filter: Svf,
 }
 
 impl SampleInstrumentSlot {
@@ -87,6 +92,7 @@ impl SampleInstrumentSlot {
             accent: 0.0,
             region_gain: 1.0,
             age: 0,
+            filter: Svf::new(),
         }
     }
 
@@ -415,7 +421,24 @@ impl SampleInstrumentVoice {
         }
 
         let accent_gain = 1.0 + slot.accent * 0.4;
-        sample * slot.adsr_value * accent_gain * slot.region_gain
+        let dry = sample * slot.adsr_value * accent_gain * slot.region_gain;
+        // Per-voice SVF — applied before the global volume.  At
+        // `filter_mix == 0` the SVF returns the dry input as-is and
+        // the integrator state stays at rest, so the cost of a
+        // bypassed filter is one cheap branch per slot.
+        if p.sample_filter_mix > 0.001 {
+            slot.filter.process(
+                dry,
+                p.sample_filter_cutoff,
+                p.sample_filter_resonance,
+                0.0,
+                p.sample_filter_mode,
+                p.sample_filter_mix,
+                sr,
+            )
+        } else {
+            dry
+        }
     }
 
     pub fn process(&mut self, sr: f32, p: &AudioParams) -> f32 {

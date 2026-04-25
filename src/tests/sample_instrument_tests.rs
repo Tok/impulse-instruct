@@ -552,6 +552,96 @@ mod sample_instrument_poly_tests {
 }
 
 #[cfg(test)]
+mod sample_instrument_filter_tests {
+    use std::sync::Arc;
+
+    use crate::audio::dsp::sample_instrument::SampleInstrumentVoice;
+
+    fn make_params(filter_mix: f32, filter_cutoff: f32) -> crate::audio::dsp::AudioParams {
+        let mut s = crate::state::AppState::default();
+        s.sample_instrument.filter_mix = filter_mix;
+        s.sample_instrument.filter_cutoff = filter_cutoff;
+        s.sample_instrument.filter_mode = 0; // LP
+        crate::audio::dsp::AudioParams::from_app_state(&s)
+    }
+
+    /// Run a brief tone burst through the voice and return its peak
+    /// amplitude across the run.  Used to compare filter on/off
+    /// states without depending on absolute output levels.
+    fn peak_through(filter_mix: f32, filter_cutoff: f32) -> f32 {
+        let mut v = SampleInstrumentVoice::new();
+        // Buffer at ~3 kHz (with the 48 kHz engine) so a closed LP at
+        // 0.0 cutoff = 20 Hz definitively kills it.
+        let sr = 48_000.0;
+        let data: Vec<f32> = (0..8192)
+            .map(|i| ((i as f32) * (3000.0 * std::f32::consts::TAU / sr)).sin() * 0.5)
+            .collect();
+        v.load(Arc::new(data));
+        v.set_root_note(60, crate::audio::dsp::TuningSystem::TwelveTet);
+        v.trigger(
+            60,
+            crate::audio::dsp::TuningSystem::TwelveTet,
+            0.0,
+            0.0,
+            0.0,
+        );
+        let p = make_params(filter_mix, filter_cutoff);
+        let mut peak = 0.0_f32;
+        for _ in 0..4_000 {
+            peak = peak.max(v.process(sr, &p).abs());
+        }
+        peak
+    }
+
+    #[test]
+    fn filter_bypass_passes_full_signal() {
+        // mix = 0 → SVF skipped → output matches the dry-only path.
+        let dry = peak_through(0.0, 1.0);
+        assert!(
+            dry > 0.05,
+            "dry path should produce audible output; got {dry}"
+        );
+    }
+
+    #[test]
+    fn closed_lpf_drops_high_frequency_content() {
+        // mix = 1, cutoff = 0 → 20 Hz LP — a 3 kHz sine should be
+        // attenuated to a fraction of its dry level.
+        let dry = peak_through(0.0, 1.0);
+        let filtered = peak_through(1.0, 0.0);
+        assert!(
+            filtered < dry * 0.5,
+            "closed LP should drop high-frequency content (dry={dry}, filtered={filtered})"
+        );
+    }
+}
+
+#[cfg(test)]
+mod sample_lfo_target_tests {
+    use crate::state::LfoTarget;
+    use crate::state::lfo_target_short_label;
+    use crate::state::modulation::lfo_target_module_kind;
+
+    #[test]
+    fn sample_lfo_targets_route_to_sample_instrument() {
+        for t in [
+            LfoTarget::SampleVolume,
+            LfoTarget::SamplePan,
+            LfoTarget::SamplePitch,
+            LfoTarget::SampleCutoff,
+        ] {
+            assert_eq!(
+                lfo_target_module_kind(t),
+                Some(crate::state::ModuleKind::SampleInstrument),
+                "{t:?} should route to SampleInstrument",
+            );
+            // Short labels must be ≤6 chars (back-panel jack space).
+            assert!(lfo_target_short_label(t).len() <= 6);
+        }
+    }
+}
+
+#[cfg(test)]
 mod sample_instrument_llm_apply_tests {
     use crate::state::{AppState, apply_llm_update};
 

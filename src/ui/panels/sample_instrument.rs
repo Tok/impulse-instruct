@@ -224,6 +224,68 @@ pub fn draw_sample_instrument(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             });
         });
     });
+
+    ui.add_space(2.0);
+
+    // Row 3: filter — cutoff / resonance / mix + LP/BP/HP mode toggle.
+    // Always shown so the user can dial in a per-voice colour even
+    // when no SFZ region carries cutoff/resonance opcodes.
+    ui.horizontal(|ui| {
+        widgets::glass_group_fill(ui, gw * 2.0 + crate::ui::panels::GLASS_GAP, gw, |ui| {
+            ui.set_min_height(group_h);
+            ui.label(
+                egui::RichText::new("FILTER")
+                    .color(theme::FOG)
+                    .monospace()
+                    .size(9.5),
+            );
+            widgets::centered_row(ui, |ui| {
+                {
+                    let mut v = app.state.read().sample_instrument.filter_cutoff;
+                    if widgets::param_control(ui, "CUT", &mut v, ParamMode::Free, ctrl).0 {
+                        app.state.write().sample_instrument.filter_cutoff = v.clamp(0.0, 1.0);
+                        app.push_audio_params();
+                    }
+                }
+                {
+                    let mut v = app.state.read().sample_instrument.filter_resonance;
+                    if widgets::param_control(ui, "RES", &mut v, ParamMode::Free, ctrl).0 {
+                        app.state.write().sample_instrument.filter_resonance = v.clamp(0.0, 1.0);
+                        app.push_audio_params();
+                    }
+                }
+                {
+                    let mut v = app.state.read().sample_instrument.filter_mix;
+                    if widgets::param_control(ui, "MIX", &mut v, ParamMode::Free, ctrl).0 {
+                        app.state.write().sample_instrument.filter_mix = v.clamp(0.0, 1.0);
+                        app.push_audio_params();
+                    }
+                }
+                let mode = app.state.read().sample_instrument.filter_mode;
+                let label = match mode {
+                    1 => "BP",
+                    2 => "HP",
+                    _ => "LP",
+                };
+                if ui
+                    .add_sized(
+                        [28.0, 18.0],
+                        egui::Button::new(
+                            egui::RichText::new(label)
+                                .monospace()
+                                .size(8.0)
+                                .color(theme::CHALK),
+                        ),
+                    )
+                    .clicked()
+                {
+                    let next = (mode + 1) % 3;
+                    app.state.write().sample_instrument.filter_mode = next;
+                    app.push_audio_params();
+                }
+            });
+        });
+    });
 }
 
 /// Load a path into the SampleInstrument voice.  Sniffs `.sfz` vs

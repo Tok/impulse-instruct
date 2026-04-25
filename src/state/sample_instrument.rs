@@ -56,6 +56,24 @@ pub struct SampleInstrumentState {
     /// False = one-shot; voice plays from loop_start once and falls silent.
     #[serde(default = "default_loop_enabled")]
     pub loop_enabled: bool,
+    /// Per-voice filter cutoff 0..1 (log-mapped 20 Hz..18 kHz inside
+    /// the SVF DSP).  Drives every active polyphony slot through the
+    /// same shared cutoff + resonance + mode setting.  V2 Stage 6.
+    #[serde(default = "default_filter_cutoff")]
+    pub filter_cutoff: f32,
+    /// Per-voice filter resonance 0..1 → Q ≈ 0.5..20.
+    #[serde(default)]
+    pub filter_resonance: f32,
+    /// Filter mode: 0 = LP, 1 = BP, 2 = HP.  Stored as u8 to match the
+    /// existing FxFilter (`svf_mode`) so the LLM can write a number.
+    #[serde(default)]
+    pub filter_mode: u8,
+    /// Filter wet/dry 0..1.  At 0 the filter is bypassed entirely
+    /// (no per-slot SVF state runs).  Default 0 so adding the module
+    /// to a rack doesn't suddenly lop off the high end of every
+    /// loaded sample.
+    #[serde(default)]
+    pub filter_mix: f32,
 }
 
 fn default_attack() -> f32 {
@@ -76,6 +94,9 @@ fn default_loop_end() -> f32 {
 fn default_loop_enabled() -> bool {
     true // V1 always-loops; V1.1 default keeps that behaviour
 }
+fn default_filter_cutoff() -> f32 {
+    1.0 // fully open — no audible filter when the user just enables the mix
+}
 
 impl Default for SampleInstrumentState {
     fn default() -> Self {
@@ -93,6 +114,10 @@ impl Default for SampleInstrumentState {
             loop_start: 0.0,
             loop_end: default_loop_end(),
             loop_enabled: default_loop_enabled(),
+            filter_cutoff: default_filter_cutoff(),
+            filter_resonance: 0.0,
+            filter_mode: 0,
+            filter_mix: 0.0,
         }
     }
 }

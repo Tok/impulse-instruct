@@ -198,6 +198,11 @@ pub enum LfoTarget {
     FreqShiftAmount,
     FreqShiftFeedback,
     FreqShiftMix,
+    // SampleInstrument voice (V2)
+    SampleVolume,
+    SamplePan,
+    SamplePitch,
+    SampleCutoff,
     // FX: Tape Sat
     TapeDrive,
     TapeMix,

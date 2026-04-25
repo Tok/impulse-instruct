@@ -146,6 +146,10 @@ pub fn apply_mod_target(p: &mut AudioParams, target: u8, mod_val: f32) {
         122 => p.freq_shift_amount = (p.freq_shift_amount + mod_val * 0.5).clamp(0.0, 1.0),
         123 => p.freq_shift_feedback = (p.freq_shift_feedback + mod_val * 0.5).clamp(0.0, 1.0),
         124 => p.freq_shift_mix = (p.freq_shift_mix + mod_val).clamp(0.0, 1.0),
+        125 => p.sample_volume = (p.sample_volume + mod_val).clamp(0.0, 1.5),
+        126 => p.sample_pan = (p.sample_pan + mod_val).clamp(-1.0, 1.0),
+        127 => p.sample_pitch_offset_cents += mod_val * 100.0,
+        128 => p.sample_filter_cutoff = (p.sample_filter_cutoff + mod_val).clamp(0.0, 1.0),
         _ => {}
     }
 }

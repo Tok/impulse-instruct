@@ -507,6 +507,32 @@ pub(super) fn apply_sample_instrument_update(
     {
         s.sample_instrument.loop_enabled = v;
     }
+    s.sample_instrument.filter_cutoff = unlocked_f32(
+        s.sample_instrument.filter_cutoff,
+        w,
+        "filter_cutoff",
+        "sample.filter_cutoff",
+        locked,
+    );
+    s.sample_instrument.filter_resonance = unlocked_f32(
+        s.sample_instrument.filter_resonance,
+        w,
+        "filter_resonance",
+        "sample.filter_resonance",
+        locked,
+    );
+    s.sample_instrument.filter_mix = unlocked_f32(
+        s.sample_instrument.filter_mix,
+        w,
+        "filter_mix",
+        "sample.filter_mix",
+        locked,
+    );
+    if !locked.contains("sample.filter_mode")
+        && let Some(v) = w.get("filter_mode").and_then(|v| v.as_u64())
+    {
+        s.sample_instrument.filter_mode = (v as u8).min(2);
+    }
     if !locked.contains("sequencer.sample_steps")
         && let Some(arr) = w.get("sample_steps").and_then(|v| v.as_array())
     {

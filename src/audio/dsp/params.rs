@@ -216,6 +216,10 @@ pub fn lfo_target_to_u8(t: LfoTarget) -> u8 {
         FreqShiftAmount => 122,
         FreqShiftFeedback => 123,
         FreqShiftMix => 124,
+        SampleVolume => 125,
+        SamplePan => 126,
+        SamplePitch => 127,
+        SampleCutoff => 128,
     }
 }
 
@@ -679,6 +683,11 @@ pub struct AudioParams {
     pub sample_loop_start: f32,
     pub sample_loop_end: f32,
     pub sample_loop_enabled: bool,
+    // Per-voice filter (V2 Stage 6)
+    pub sample_filter_cutoff: f32,
+    pub sample_filter_resonance: f32,
+    pub sample_filter_mode: u8,
+    pub sample_filter_mix: f32,
     // Hoover lead
     pub hoover_enabled: bool,
     pub hoover_filter_start: f32,
