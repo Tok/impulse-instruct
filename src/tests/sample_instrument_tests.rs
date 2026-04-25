@@ -288,6 +288,54 @@ mod sample_instrument_sfz_mode_tests {
     }
 
     #[test]
+    fn overlapping_regions_fire_parallel_slots() {
+        // Two regions intentionally cover the same note — a layered
+        // patch (e.g. close + room mics).  Both should fire on
+        // separate polyphony slots so the layered sound plays.
+        let mut v = SampleInstrumentVoice::new();
+        v.load_sfz(vec![
+            region(48, 60, 54, 0.3),
+            region(48, 60, 54, 0.4), // same key range, different "layer"
+        ]);
+        v.trigger(
+            54,
+            crate::audio::dsp::TuningSystem::TwelveTet,
+            0.0,
+            0.0,
+            0.0,
+        );
+        assert_eq!(
+            v.active_voice_count(),
+            2,
+            "overlapping SFZ regions should fire one slot each"
+        );
+    }
+
+    #[test]
+    fn non_overlapping_regions_pick_only_the_matching_one() {
+        // Standard Salamander-style mapping: contiguous, non-overlapping
+        // bands.  Only one region should fire per note.
+        let mut v = SampleInstrumentVoice::new();
+        v.load_sfz(vec![
+            region(48, 53, 50, 0.2), // C3..F3
+            region(54, 59, 56, 0.7), // F#3..B3
+            region(60, 71, 65, 0.5), // C4..B4
+        ]);
+        v.trigger(
+            56,
+            crate::audio::dsp::TuningSystem::TwelveTet,
+            0.0,
+            0.0,
+            0.0,
+        );
+        assert_eq!(
+            v.active_voice_count(),
+            1,
+            "non-overlapping mapping should fire exactly one region per note"
+        );
+    }
+
+    #[test]
     fn region_volume_db_scales_output() {
         // Two regions covering the same note (different velocity bands
         // would normally disambiguate, but for this test we just hand

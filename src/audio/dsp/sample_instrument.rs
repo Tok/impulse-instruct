@@ -36,6 +36,16 @@ pub struct SfzRegionRuntime {
 /// state.  When every slot is busy, the trigger steals the oldest.
 const POLY_VOICES: usize = 8;
 
+/// Per-trigger playback recipe — resolved before slot allocation so the
+/// hot-path slot fill is a straight copy.  Kept private; both the
+/// single-WAV and SFZ-multi-region trigger paths build one of these.
+struct TriggerShape {
+    samples: Arc<Vec<f32>>,
+    root_freq: f32,
+    freq: f32,
+    region_gain: f32,
+}
+
 /// ADSR stages tracked per-trigger.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum AdsrStage {
@@ -162,14 +172,19 @@ impl SampleInstrumentVoice {
         self.single_root_freq = midi_to_hz_tuned(midi, tuning).max(20.0);
     }
 
-    /// First region whose key range covers `note`.  V1 is single-active
-    /// — velocity layers + round-robin pick the right region among the
-    /// matches in Stage 5.  Returns `None` when no region claims the
-    /// note.
-    fn pick_region(&self, note: u8) -> Option<usize> {
+    /// Indices of every region whose `lokey..=hikey` covers `note`.
+    /// V2 Stage 4: with overlapping SFZ regions (common in orchestral
+    /// patches that layer e.g. close + room recordings on the same
+    /// key), the trigger fires one slot per match — letting all the
+    /// authored layers sound together instead of arbitrarily picking
+    /// the first.  Velocity layers + round-robin (Stage 5) narrow
+    /// this list further; for now the only filter is the key range.
+    fn pick_regions(&self, note: u8) -> impl Iterator<Item = usize> + '_ {
         self.regions
             .iter()
-            .position(|r| r.region.matches_note(note))
+            .enumerate()
+            .filter(move |(_, r)| r.region.matches_note(note))
+            .map(|(i, _)| i)
     }
 
     /// Pick a slot to use for the next trigger: prefer any `Off` slot,
@@ -202,36 +217,62 @@ impl SampleInstrumentVoice {
     ) {
         let _ = slide;
 
-        // Resolve the buffer + root + tune + gain for this trigger.
-        // SFZ mode: pick a region; bail to silence if none matches.
-        // Single-WAV mode: use the global buffer + root.
-        let (samples, root_freq, region_offset_cents, region_gain) = if !self.regions.is_empty() {
-            let Some(idx) = self.pick_region(note) else {
-                return;
-            };
-            let r = &self.regions[idx];
-            let region_offset = r.region.transpose as f32 * 100.0 + r.region.tune_cents;
-            let v = r.region.volume_db.clamp(-60.0, 12.0);
-            (
-                r.samples.clone(),
-                midi_to_hz_tuned(r.region.pitch_keycenter, tuning).max(20.0),
-                region_offset,
-                10.0_f32.powf(v / 20.0),
-            )
+        if !self.regions.is_empty() {
+            // SFZ mode: collect every matching region's resolved
+            // playback shape, then fire one slot per match.  Overlapping
+            // regions (intentional in orchestral patches) all sound
+            // together; non-overlapping regions still get one slot
+            // each — the typical Salamander-style "one region per
+            // key band" case is unchanged.
+            //
+            // Stack-allocated `[Option<...>; POLY_VOICES]` because the
+            // audio thread must stay allocation-free; matches past
+            // POLY_VOICES are dropped (the polyphony cap absorbs them
+            // if the user's SFZ tries to layer more).
+            let mut pending: [Option<TriggerShape>; POLY_VOICES] = std::array::from_fn(|_| None);
+            let mut count = 0usize;
+            for idx in self.pick_regions(note) {
+                if count >= POLY_VOICES {
+                    break;
+                }
+                let r = &self.regions[idx];
+                let region_offset = r.region.transpose as f32 * 100.0 + r.region.tune_cents;
+                let cents_ratio = 2.0_f32.powf((pitch_offset_cents + region_offset) / 1200.0);
+                let v = r.region.volume_db.clamp(-60.0, 12.0);
+                pending[count] = Some(TriggerShape {
+                    samples: r.samples.clone(),
+                    root_freq: midi_to_hz_tuned(r.region.pitch_keycenter, tuning).max(20.0),
+                    freq: (midi_to_hz_tuned(note, tuning) * cents_ratio).max(20.0),
+                    region_gain: 10.0_f32.powf(v / 20.0),
+                });
+                count += 1;
+            }
+            for shape in pending.iter().take(count).flatten() {
+                self.fire_slot(shape, accent);
+            }
         } else {
-            (self.single_samples.clone(), self.single_root_freq, 0.0, 1.0)
-        };
+            let cents_ratio = 2.0_f32.powf(pitch_offset_cents / 1200.0);
+            let shape = TriggerShape {
+                samples: self.single_samples.clone(),
+                root_freq: self.single_root_freq,
+                freq: (midi_to_hz_tuned(note, tuning) * cents_ratio).max(20.0),
+                region_gain: 1.0,
+            };
+            self.fire_slot(&shape, accent);
+        }
+    }
 
-        let cents_ratio = 2.0_f32.powf((pitch_offset_cents + region_offset_cents) / 1200.0);
-        let freq = (midi_to_hz_tuned(note, tuning) * cents_ratio).max(20.0);
-
+    /// Stamp `shape` onto a fresh slot, allocating + bumping the age
+    /// counter.  Centralised so single-WAV and per-region SFZ paths
+    /// stay in lock-step.
+    fn fire_slot(&mut self, shape: &TriggerShape, accent: f32) {
         let i = self.allocate_slot();
         self.next_age = self.next_age.wrapping_add(1);
         let slot = &mut self.slots[i];
-        slot.samples = samples;
-        slot.root_freq = root_freq;
-        slot.freq = freq;
-        slot.region_gain = region_gain;
+        slot.samples = shape.samples.clone();
+        slot.root_freq = shape.root_freq;
+        slot.freq = shape.freq;
+        slot.region_gain = shape.region_gain;
         slot.pos = 0.0;
         slot.adsr_stage = AdsrStage::Attack;
         slot.adsr_value = 0.0;
