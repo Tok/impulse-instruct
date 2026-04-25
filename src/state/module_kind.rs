@@ -16,6 +16,7 @@ pub enum ModuleKind {
     DrumKit808,
     DrumKit909,
     HooverLead,
+    PluckString,
     An1xVoice,
     AmenSampler,
     NoiseVoice,
@@ -66,6 +67,7 @@ impl ModuleKind {
             Self::DrumKit808 => "808 KIT",
             Self::DrumKit909 => "909 KIT",
             Self::HooverLead => "HOOVER",
+            Self::PluckString => "PLUCK",
             Self::An1xVoice => "AN1X",
             Self::AmenSampler => "AMEN",
             Self::NoiseVoice => "NOISE",
@@ -124,6 +126,9 @@ impl ModuleKind {
             Self::DrumKit808 => (4, 5),
             Self::DrumKit909 => (4, 4),
             Self::HooverLead => (4, 2),
+            // Pluck — few knobs (damp/bright/vol/pan/offset + on-off),
+            // comfortably fits in 3x2.
+            Self::PluckString => (3, 2),
             Self::An1xVoice => (6, 6),
             Self::AmenSampler => (3, 3),
             Self::NoiseVoice => (2, 1),
@@ -172,6 +177,7 @@ impl ModuleKind {
             | Self::DrumKit808
             | Self::DrumKit909
             | Self::HooverLead
+            | Self::PluckString
             | Self::An1xVoice
             | Self::AmenSampler
             | Self::NoiseVoice
@@ -210,6 +216,7 @@ impl ModuleKind {
             self,
             Self::AcidBass
                 | Self::HooverLead
+                | Self::PluckString
                 | Self::DrumKit808
                 | Self::DrumKit909
                 | Self::AmenSampler

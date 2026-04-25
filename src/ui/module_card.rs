@@ -37,7 +37,7 @@ fn title_fill(kind: ModuleKind) -> Color32 {
     let v: u8 = match kind {
         ModuleKind::StepSequencer => 22,
         ModuleKind::MasterOutput => 20,
-        ModuleKind::AcidBass | ModuleKind::HooverLead => 26,
+        ModuleKind::AcidBass | ModuleKind::HooverLead | ModuleKind::PluckString => 26,
         ModuleKind::DrumKit808
         | ModuleKind::DrumKit909
         | ModuleKind::AmenSampler

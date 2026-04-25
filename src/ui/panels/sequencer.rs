@@ -2,7 +2,7 @@
 // Step sequencer panel.
 
 use super::sequencer_drums::draw_drum_rows;
-use crate::state::{DrumVoice, set_an1x_step, set_hoover_step};
+use crate::state::{DrumVoice, set_an1x_step, set_hoover_step, set_pluck_step};
 use crate::ui::{ImpulseApp, SEQ_LABEL_H, SEQ_LABEL_W, SEQ_VOL_H, SEQ_VOL_W, theme, widgets};
 
 /// Maximum step buttons visible (MAX_STEPS = 64 fits 2 rows of 32).
@@ -206,7 +206,7 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
     // enabled AND patched into the audio path (same predicate the
     // front-panel LED uses).  Modules sitting in the rack with no
     // cable to MASTER won't take a sequencer row.
-    let (rack_has_bass, rack_has_hoover, rack_has_an1x, active_drum_voices) = {
+    let (rack_has_bass, rack_has_hoover, rack_has_pluck, rack_has_an1x, active_drum_voices) = {
         use crate::state::ModuleKind;
         let s = app.state.read();
         let has = |k: ModuleKind| {
@@ -223,6 +223,7 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         (
             has(ModuleKind::AcidBass),
             has(ModuleKind::HooverLead),
+            has(ModuleKind::PluckString),
             has(ModuleKind::An1xVoice),
             filtered,
         )
@@ -638,6 +639,94 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                 });
             }
         } // end if rack_has_hoover
+
+        // ── Pluck row — only shown when PluckString is in the rack ───────────
+        if rack_has_pluck {
+            let (pluck_enabled, pluck_steps) = {
+                let s = app.state.read();
+                (s.pluck.enabled, s.sequencer.pluck_steps)
+            };
+            let pluck_cursor = if running {
+                current_step % pluck_steps.max(1)
+            } else {
+                usize::MAX
+            };
+            let pluck_page: Vec<crate::state::TB303Step> = {
+                let s = app.state.read();
+                let end = (page_start + STEPS_PER_PAGE).min(s.sequencer.pluck_pattern.len());
+                s.sequencer.pluck_pattern[page_start..end].to_vec()
+            };
+            for sub in 0..sub_rows {
+                ui.horizontal(|ui| {
+                    let label_color = if pluck_enabled {
+                        theme::SMOKE
+                    } else {
+                        theme::PIT
+                    };
+                    fixed_space(ui, 10.0);
+                    fixed_space(ui, 10.0);
+                    if sub == 0 {
+                        fixed_label(
+                            ui,
+                            SEQ_LABEL_W - 20.0,
+                            SEQ_LABEL_H,
+                            "PLUCK",
+                            label_color,
+                            8.5,
+                        );
+                        let mut vol = app.state.read().pluck.volume;
+                        if fixed_slider(ui, SEQ_VOL_W, SEQ_VOL_H, &mut vol, 0.0..=1.0).changed() {
+                            app.state.write().pluck.volume = vol;
+                            app.push_audio_params();
+                        }
+                    } else {
+                        fixed_space(ui, SEQ_LABEL_W - 20.0);
+                        fixed_space(ui, SEQ_VOL_W);
+                    }
+                    fixed_space(ui, 18.0);
+                    if row_spacer > 0.0 {
+                        ui.add_space(row_spacer);
+                    }
+                    let base = sub * STEPS_PER_ROW;
+                    for j in 0..STEPS_PER_ROW {
+                        let i = base + j;
+                        if i >= seq_steps {
+                            break;
+                        }
+                        let abs = page_start + i;
+                        beat_div(ui, j, abs);
+                        let step = pluck_page.get(i).copied();
+                        let is_active = step.map(|s| s.active).unwrap_or(false);
+                        let is_current = abs == pluck_cursor;
+                        ui.add_enabled_ui(abs < pluck_steps, |ui| {
+                            let note = step.map(|s| s.note).unwrap_or(57);
+                            let note_col = if is_active {
+                                Some(theme::note_color(note))
+                            } else {
+                                None
+                            };
+                            let label = if is_active {
+                                Some(crate::ui::note_name(note))
+                            } else {
+                                None
+                            };
+                            if let Some(new_active) = widgets::step_button(
+                                ui, is_active, is_current, 1.0, 1.0, note_col, label, pad_px,
+                            ) {
+                                let s = app.state.read().clone();
+                                let note = s
+                                    .sequencer
+                                    .pluck_pattern
+                                    .get(abs)
+                                    .map(|b| b.note)
+                                    .unwrap_or(57);
+                                *app.state.write() = set_pluck_step(s, abs, note, new_active);
+                            }
+                        });
+                    }
+                });
+            }
+        } // end if rack_has_pluck
 
         // ── AN1X row — only shown when An1xVoice is in the rack ───────────────
         if rack_has_an1x {

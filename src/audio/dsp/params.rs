@@ -498,6 +498,14 @@ pub struct AudioParams {
     pub granular_position_jitter: f32,
     pub granular_pitch_scatter: f32,
     pub granular_spray: f32,
+    // Karplus-Strong pluck voice
+    pub pluck_enabled: bool,
+    pub pluck_damping: f32,
+    pub pluck_brightness: f32,
+    pub pluck_volume: f32,
+    pub pluck_pan: f32,
+    pub pluck_pitch_offset_semi: f32,
+    pub rack_pluck: bool,
     // Hoover lead
     pub hoover_enabled: bool,
     pub hoover_filter_start: f32,

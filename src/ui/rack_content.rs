@@ -21,6 +21,7 @@ pub(super) fn draw_voice_content(
         ModuleKind::DrumKit808 => crate::ui::panels::draw_kit_a(app, ui),
         ModuleKind::DrumKit909 => crate::ui::panels::draw_kit_b(app, ui),
         ModuleKind::HooverLead => crate::ui::panels::draw_hoover(app, ui),
+        ModuleKind::PluckString => crate::ui::panels::draw_pluck(app, ui),
         ModuleKind::An1xVoice => crate::ui::panels::draw_an1x(app, ui),
         ModuleKind::AmenSampler => crate::ui::panels::draw_amen(app, ui),
         ModuleKind::NoiseVoice => crate::ui::panels::draw_noise(app, ui),

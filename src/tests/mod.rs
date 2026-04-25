@@ -50,6 +50,7 @@ mod pitch_shift_tests;
 mod planner_output_tests;
 mod planner_schema_tests;
 mod planner_tests;
+mod pluck_tests;
 mod preecho_apply_tests;
 mod preecho_config_tests;
 mod prompt_summary_tests;

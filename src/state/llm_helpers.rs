@@ -313,6 +313,58 @@ pub(super) fn apply_hoover_update(
     }
 }
 
+/// Apply Karplus-Strong pluck-voice fields from an LLM JSON update
+/// object.  Mirrors `apply_hoover_update`: voice params plus the
+/// sequencer's pluck_steps/pluck_notes arrays.
+pub(super) fn apply_pluck_update(
+    s: &mut AppState,
+    pl: &serde_json::Map<String, serde_json::Value>,
+    locked: &HashSet<String>,
+) {
+    if !locked.contains("pluck.enabled")
+        && let Some(v) = pl.get("enabled").and_then(|v| v.as_bool())
+    {
+        s.pluck.enabled = v;
+    }
+    s.pluck.damping = unlocked_f32(s.pluck.damping, pl, "damping", "pluck.damping", locked);
+    s.pluck.brightness = unlocked_f32(
+        s.pluck.brightness,
+        pl,
+        "brightness",
+        "pluck.brightness",
+        locked,
+    );
+    s.pluck.volume = unlocked_f32(s.pluck.volume, pl, "volume", "pluck.volume", locked);
+    if !locked.contains("pluck.pan")
+        && let Some(v) = pl.get("pan").and_then(|v| v.as_f64())
+    {
+        s.pluck.pan = (v as f32).clamp(-1.0, 1.0);
+    }
+    if !locked.contains("pluck.pitch_offset_semi")
+        && let Some(v) = pl.get("pitch_offset_semi").and_then(|v| v.as_f64())
+    {
+        s.pluck.pitch_offset_semi = (v as f32).clamp(-24.0, 24.0);
+    }
+    if !locked.contains("sequencer.pluck_steps")
+        && let Some(arr) = pl.get("pluck_steps").and_then(|v| v.as_array())
+    {
+        for (i, val) in arr.iter().enumerate().take(MAX_STEPS) {
+            if let Some(a) = val.as_bool() {
+                s.sequencer.pluck_pattern[i].active = a;
+            }
+        }
+    }
+    if !locked.contains("sequencer.pluck_notes")
+        && let Some(arr) = pl.get("pluck_notes").and_then(|v| v.as_array())
+    {
+        for (i, val) in arr.iter().enumerate().take(MAX_STEPS) {
+            if let Some(n) = val.as_u64() {
+                s.sequencer.pluck_pattern[i].note = n.clamp(0, 127) as u8;
+            }
+        }
+    }
+}
+
 /// Apply AN1X voice fields from an LLM JSON update object.
 pub(super) fn apply_an1x_update(
     s: &mut AppState,

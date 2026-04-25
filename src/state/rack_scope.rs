@@ -40,6 +40,7 @@ fn kind_to_scope_name(kind: ModuleKind) -> Option<String> {
         ModuleKind::DrumKit808 => Some("kit_a".to_string()),
         ModuleKind::DrumKit909 => Some("kit_b".to_string()),
         ModuleKind::HooverLead => Some("hoover".to_string()),
+        ModuleKind::PluckString => Some("pluck".to_string()),
         ModuleKind::An1xVoice => Some("an1x".to_string()),
         ModuleKind::AmenSampler => Some("amen".to_string()),
         ModuleKind::NoiseVoice => Some("noise".to_string()),
@@ -76,6 +77,7 @@ pub fn parse_module_kind(name: &str) -> Option<ModuleKind> {
         "drumkit808" | "808" | "kita" | "druma" | "drumsa" => Some(DrumKit808),
         "drumkit909" | "909" | "kitb" | "drumb" | "drumsb" => Some(DrumKit909),
         "hooverlead" | "hoover" | "lead" => Some(HooverLead),
+        "pluckstring" | "pluck" | "karplus" | "string" | "kstring" => Some(PluckString),
         "an1xvoice" | "an1x" | "an-1x" | "pad" | "synth" => Some(An1xVoice),
         "amensampler" | "amen" | "sampler" | "break" => Some(AmenSampler),
         "noisevoice" | "noise" => Some(NoiseVoice),
@@ -161,6 +163,10 @@ pub fn rack_kind_name_matches(kind: ModuleKind, name: &str) -> bool {
         ModuleKind::DrumKit808 => matches!(n.as_str(), "808" | "kit_a" | "drum_a" | "drums_a"),
         ModuleKind::DrumKit909 => matches!(n.as_str(), "909" | "kit_b" | "drum_b" | "drums_b"),
         ModuleKind::HooverLead => matches!(n.as_str(), "hoover" | "lead"),
+        ModuleKind::PluckString => matches!(
+            n.as_str(),
+            "pluck" | "pluckstring" | "pluck_string" | "karplus" | "string" | "kstring"
+        ),
         ModuleKind::An1xVoice => matches!(n.as_str(), "an1x" | "an-1x" | "pad" | "synth"),
         ModuleKind::AmenSampler => matches!(n.as_str(), "amen" | "sampler" | "break"),
         ModuleKind::NoiseVoice => matches!(n.as_str(), "noise"),

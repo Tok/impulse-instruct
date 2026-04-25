@@ -460,6 +460,9 @@ impl RackState {
                 // Gabber kick sits next to the drum kits — it's a drum voice.
                 ModuleKind::GabberKick => 13,
                 ModuleKind::HooverLead => 14,
+                // Pluck sits next to Hoover in the voice strip — both
+                // are monophonic melodic voices.
+                ModuleKind::PluckString => 14,
                 ModuleKind::An1xVoice => 15,
                 ModuleKind::AmenSampler => 16,
                 ModuleKind::NoiseVoice => 17,

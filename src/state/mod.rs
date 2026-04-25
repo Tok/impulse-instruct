@@ -18,6 +18,9 @@ pub use synth_types::{FilterMode, Waveform};
 pub mod hoover;
 pub use hoover::HooverState;
 
+pub mod pluck;
+pub use pluck::PluckState;
+
 pub mod noise;
 pub use noise::NoiseVoiceState;
 
@@ -208,6 +211,8 @@ pub struct AppState {
     #[serde(default)]
     pub hoover: HooverState,
     #[serde(default)]
+    pub pluck: PluckState,
+    #[serde(default)]
     pub an1x: An1xState,
     #[serde(default)]
     pub amen: AmenState,
@@ -310,6 +315,7 @@ impl Default for AppState {
             noise_voice: Default::default(),
             granular: Default::default(),
             hoover: Default::default(),
+            pluck: Default::default(),
             an1x: Default::default(),
             amen: Default::default(),
             gabber_kick: Default::default(),

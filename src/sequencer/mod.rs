@@ -61,6 +61,17 @@ pub enum TriggerEvent {
         slide: f32,
     },
     An1xGateOff,
+    /// Karplus-Strong pluck trigger.  Accent boosts the amp envelope's
+    /// initial gain; slide is reserved (the plucked-string voice
+    /// doesn't glide pitch today — each trigger re-primes the delay
+    /// line fresh — but the field is carried through so a future
+    /// legato mode can respect it).
+    PluckTrigger {
+        note: u8,
+        accent: f32,
+        slide: f32,
+    },
+    PluckGateOff,
 }
 
 // ─── Clock state (audio-thread local, not in shared AppState) ─────────────────
@@ -76,6 +87,7 @@ pub struct ClockState {
     pub gate_counters: [u32; crate::state::MAX_BASS_VOICES], // samples remaining per bass voice
     pub gate_counter_hoover: u32, // samples remaining in hoover gate
     pub gate_counter_an1x: u32, // samples remaining in AN1X gate
+    pub gate_counter_pluck: u32, // samples remaining in pluck gate
     // Ratchet sub-hit tracking — fixed arrays, no allocation
     pub ratchet_remaining: [u8; NUM_DRUM_VOICES], // sub-hits left per voice
     pub ratchet_acc: [f64; NUM_DRUM_VOICES],      // sample accumulator since step fire
@@ -93,6 +105,7 @@ impl Default for ClockState {
             gate_counters: [0; crate::state::MAX_BASS_VOICES],
             gate_counter_hoover: 0,
             gate_counter_an1x: 0,
+            gate_counter_pluck: 0,
             ratchet_remaining: [0; NUM_DRUM_VOICES],
             ratchet_acc: [0.0; NUM_DRUM_VOICES],
             ratchet_interval: [0.0; NUM_DRUM_VOICES],
@@ -134,6 +147,7 @@ pub fn advance_clock(
     let mut gate_counters = clock.gate_counters;
     let mut gate_counter_hoover = clock.gate_counter_hoover;
     let mut gate_counter_an1x = clock.gate_counter_an1x;
+    let mut gate_counter_pluck = clock.gate_counter_pluck;
     let mut ratchet_remaining = clock.ratchet_remaining;
     let mut ratchet_acc = clock.ratchet_acc;
     let mut ratchet_interval = clock.ratchet_interval;
@@ -187,6 +201,16 @@ pub fn advance_clock(
             gate_counter_an1x = 0;
         } else {
             gate_counter_an1x -= block_size as u32;
+        }
+    }
+
+    // Handle gate-off for Pluck
+    if gate_counter_pluck > 0 {
+        if block_size as u32 >= gate_counter_pluck {
+            events.push(TriggerEvent::PluckGateOff);
+            gate_counter_pluck = 0;
+        } else {
+            gate_counter_pluck -= block_size as u32;
         }
     }
 
@@ -441,6 +465,41 @@ pub fn advance_clock(
                 slide,
             });
         }
+
+        // Pluck trigger — independent step length, same preecho shape.
+        // The Karplus-Strong voice re-primes its delay line on every
+        // trigger so slide is informational today, but we carry it
+        // through for future legato / freq-interp work.
+        let pstep = step % seq.pluck_steps.max(1);
+        let ps = seq.pluck_pattern.get(pstep).copied().unwrap_or_default();
+        if ps.active {
+            let gate_samples = (sps * ps.gate as f64) as u32;
+            gate_counter_pluck = gate_samples;
+            let psteps = seq.pluck_steps.max(1);
+            let pre = seq
+                .preecho
+                .get("pluck")
+                .map(|cfg| preecho::preecho_apply(pstep, psteps, cfg))
+                .unwrap_or(preecho::PreechoApply::IDENTITY);
+            let accent = pre.accent_override.unwrap_or(ps.accent);
+            let slide = pre.slide_override.unwrap_or(ps.slide);
+            let note = match pre.note_override {
+                Some(ov) => {
+                    let anchor_note = seq
+                        .pluck_pattern
+                        .get(ov.anchor_step as usize)
+                        .map(|s| s.note)
+                        .unwrap_or(ps.note);
+                    preecho::resolve_note_shift(anchor_note, ov.shift, seq.root_note, seq.scale)
+                }
+                None => ps.note,
+            };
+            events.push(TriggerEvent::PluckTrigger {
+                note,
+                accent,
+                slide,
+            });
+        }
     }
 
     let new_clock = ClockState {
@@ -450,6 +509,7 @@ pub fn advance_clock(
         gate_counters,
         gate_counter_hoover,
         gate_counter_an1x,
+        gate_counter_pluck,
         ratchet_remaining,
         ratchet_acc,
         ratchet_interval,

@@ -15,6 +15,7 @@ pub mod param_eq;
 mod params;
 mod params_from;
 pub mod pitch_shift;
+pub mod pluck;
 mod rev_tap;
 pub mod samplers;
 pub mod voices;
@@ -35,6 +36,7 @@ use ms_master::{MsMaster, MsMasterParams};
 use param_eq::ParamEq;
 pub use params::{AudioParams, MAX_MOD_ROUTES, compile_mod_routes, lfo_target_to_u8};
 use pitch_shift::PitchShift;
+use pluck::PluckVoice;
 pub use rev_tap::{FxDirection, FxRevQuant};
 use samplers::*;
 use voices::*;
@@ -104,6 +106,7 @@ pub struct DspState {
     noise_voice: NoiseVoice,
     granular: GranularVoice,
     hoover: HooverVoice,
+    pluck: PluckVoice,
     an1x: An1xVoice,
     amen: AmenVoice,
     // LFO state
@@ -203,6 +206,7 @@ impl DspState {
             noise_voice: NoiseVoice::new(0x4015_EB3D),
             granular: GranularVoice::new(0xBEEF_CAFE),
             hoover: HooverVoice::new(),
+            pluck: PluckVoice::new(),
             an1x: An1xVoice::new(),
             amen: AmenVoice::new(),
             lfo_phases: [0.0; 4],
@@ -387,6 +391,27 @@ impl DspState {
                     self.an1x.gate_off();
                 }
             }
+            PluckTrigger {
+                note,
+                accent,
+                slide,
+            } => {
+                if self.params.rack_pluck {
+                    self.pluck.trigger(
+                        *note,
+                        self.params.tuning,
+                        *accent,
+                        *slide,
+                        self.sample_rate,
+                        self.params.pluck_pitch_offset_semi,
+                    );
+                }
+            }
+            PluckGateOff => {
+                if self.params.rack_pluck {
+                    self.pluck.gate_off();
+                }
+            }
         }
     }
 
@@ -516,6 +541,7 @@ impl DspState {
         let sends_808 = snap_sends(ModuleKind::DrumKit808);
         let sends_909 = snap_sends(ModuleKind::DrumKit909);
         let sends_hoover = snap_sends(ModuleKind::HooverLead);
+        let sends_pluck = snap_sends(ModuleKind::PluckString);
         let sends_an1x = snap_sends(ModuleKind::An1xVoice);
         let sends_amen = snap_sends(ModuleKind::AmenSampler);
         let sends_noise = snap_sends(ModuleKind::NoiseVoice);
@@ -622,6 +648,11 @@ impl DspState {
             } else {
                 0.0
             };
+            let pluck_out = if p.pluck_enabled && p.rack_pluck {
+                self.pluck.process(sr, &p)
+            } else {
+                0.0
+            };
             // Cross-modulation: bass → AN1X pitch (one-sample delay via bass_out)
             if p.xmod_bass_to_an1x_pitch > 0.001 {
                 p.lfo_pitch_mod_st += bass_out * p.xmod_bass_to_an1x_pitch * 24.0;
@@ -668,6 +699,7 @@ impl DspState {
                 + clap * dv[11]
                 + rim * dv[12];
             let bus_hoover = hoover_out;
+            let bus_pluck = pluck_out;
             let bus_an1x = an1x_out;
             let bus_amen = amen_out * dv[13];
             let bus_noise = noise_out;
@@ -697,6 +729,7 @@ impl DspState {
                 + bus_808
                 + bus_909
                 + bus_hoover
+                + bus_pluck
                 + bus_an1x
                 + bus_amen
                 + bus_noise
@@ -818,10 +851,24 @@ impl DspState {
                 } else {
                     bus_granular
                 };
+                let routed_pluck = if sends_pluck.count > 0 {
+                    self.route_voice_sends(
+                        bus_pluck,
+                        &sends_pluck,
+                        fb,
+                        &p,
+                        delay_samples,
+                        sr,
+                        gate_env,
+                    )
+                } else {
+                    bus_pluck
+                };
                 let mixed = (routed_bass
                     + routed_808
                     + routed_909
                     + routed_hoover
+                    + routed_pluck
                     + routed_an1x
                     + routed_amen
                     + routed_noise
@@ -880,6 +927,7 @@ impl DspState {
                 + clap * dv[11] * p.pan_clap909 * 0.5
                 + gk * dv[14] * p.gabber_pan * 0.5
                 + hoover_out * p.pan_hoover * 0.5
+                + pluck_out * p.pluck_pan * 0.5
                 + an1x_out * p.pan_an1x * 0.5
                 + noise_out * p.pan_noise * 0.5;
             // Decay the Pan FxStep side-contribution when the step

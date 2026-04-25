@@ -310,6 +310,16 @@ pub fn set_an1x_step(state: AppState, step: usize, note: u8, active: bool) -> Ap
     s
 }
 
+/// Set a Pluck (Karplus-Strong) sequencer step.
+pub fn set_pluck_step(state: AppState, step: usize, note: u8, active: bool) -> AppState {
+    let mut s = state;
+    if step < s.sequencer.pluck_pattern.len() {
+        s.sequencer.pluck_pattern[step].active = active;
+        s.sequencer.pluck_pattern[step].note = note;
+    }
+    s
+}
+
 // ─── LLM state update — see llm_apply.rs ─────────────────────────────────────
 
 // ─── Pattern bank & chain ─────────────────────────────────────────────────────

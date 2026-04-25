@@ -199,6 +199,21 @@ pub fn param_json_schema() -> serde_json::Value {
                 },
                 "additionalProperties": false
             },
+            "pluck": {
+                "type": "object",
+                "description": "Karplus-Strong plucked-string voice — dry melodic voice filling the gap between bass and AN1X.  LLM triggers: 'add a pluck', 'acoustic melody', 'string pad'.",
+                "properties": {
+                    "enabled":           { "type": "boolean" },
+                    "damping":           { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "Decay length: 0=fast pluck, 1=long sustain (maps to feedback coefficient 0.92–0.995)" },
+                    "brightness":        { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "Output lowpass cutoff: 0=dark (400 Hz), 1=wide open (15 kHz)" },
+                    "volume":            { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+                    "pan":               { "type": "number", "minimum": -1.0, "maximum": 1.0, "description": "Stereo pan: -1=left, 0=centre, +1=right" },
+                    "pitch_offset_semi": { "type": "number", "minimum": -24.0, "maximum": 24.0, "description": "Global pitch offset in semitones applied to every pluck_notes trigger" },
+                    "pluck_steps":       bool_array,
+                    "pluck_notes":       { "type": "array", "items": { "type": "integer", "minimum": 0, "maximum": 127 }, "maxItems": 64, "description": "MIDI note per pluck step" }
+                },
+                "additionalProperties": false
+            },
             "hoover": {
                 "type": "object",
                 "description": "Hoover lead voice — supersaw + HP filter sweep. LLM triggers: 'add a hoover', 'rave lead', 'dominator'.",

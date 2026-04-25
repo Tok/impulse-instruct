@@ -213,6 +213,17 @@ impl AudioParams {
             granular_position_jitter: s.granular.position_jitter,
             granular_pitch_scatter: s.granular.pitch_scatter,
             granular_spray: s.granular.spray,
+            pluck_enabled: s.pluck.enabled,
+            pluck_damping: s.pluck.damping.clamp(0.0, 1.0),
+            pluck_brightness: s.pluck.brightness.clamp(0.0, 1.0),
+            pluck_volume: s.pluck.volume.clamp(0.0, 1.5),
+            pluck_pan: s.pluck.pan.clamp(-1.0, 1.0),
+            pluck_pitch_offset_semi: s.pluck.pitch_offset_semi.clamp(-24.0, 24.0),
+            rack_pluck: s
+                .rack
+                .modules
+                .iter()
+                .any(|m| m.kind == ModuleKind::PluckString && m.enabled),
             hoover_enabled: s.hoover.enabled,
             hoover_filter_start: s.hoover.filter_start,
             hoover_sweep_time: s.hoover.sweep_time.clamp(0.1, 4.0),
