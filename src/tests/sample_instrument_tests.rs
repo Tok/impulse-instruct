@@ -642,6 +642,50 @@ mod sample_lfo_target_tests {
 }
 
 #[cfg(test)]
+mod sample_instrument_viz_tests {
+    use crate::ui::panels::sample_instrument_viz::build_thumbnail;
+
+    #[test]
+    fn empty_buffer_returns_empty_thumbnail() {
+        assert!(build_thumbnail(&[], 32).is_empty());
+    }
+
+    #[test]
+    fn thumbnail_columns_track_min_max_per_bin() {
+        // 100-sample buffer ramping 0..1; bin to 4 columns.  Each bin
+        // should hold 25 samples; min should be the first sample of
+        // the bin, max the last.
+        let data: Vec<f32> = (0..100).map(|i| i as f32 / 99.0).collect();
+        let thumb = build_thumbnail(&data, 4);
+        assert_eq!(thumb.len(), 4);
+        for (i, (mn, mx)) in thumb.iter().enumerate() {
+            // First bin's min is around 0; last bin's max is around 1.
+            // The exact values depend on the bin size; assert
+            // monotonic-increasing across columns.
+            if i > 0 {
+                assert!(thumb[i].0 > thumb[i - 1].0, "bins must climb monotonically");
+            }
+            assert!(*mn <= *mx, "min ≤ max within each bin");
+        }
+    }
+
+    #[test]
+    fn thumbnail_handles_smaller_than_cols() {
+        // Fewer samples than columns — bin = 1, every sample becomes
+        // its own column; extra columns get the last sample's pair or
+        // zeros.
+        let data: Vec<f32> = vec![0.5; 8];
+        let thumb = build_thumbnail(&data, 16);
+        // Implementation guarantees `cols` length output.
+        assert_eq!(thumb.len(), 16);
+        for (mn, mx) in thumb.iter().take(8) {
+            assert!((*mn - 0.5).abs() < 1e-6);
+            assert!((*mx - 0.5).abs() < 1e-6);
+        }
+    }
+}
+
+#[cfg(test)]
 mod sample_instrument_llm_apply_tests {
     use crate::state::{AppState, apply_llm_update};
 

@@ -247,9 +247,10 @@ impl ModuleKind {
             // filename label.  Same 3x2 envelope as Pluck.
             Self::WavetableVoice => (3, 2),
             // Sample Instrument — V2 Stage 6 added a per-voice filter
-            // row (cutoff / res / mix / mode) on top of the V1.1
-            // ADSR + loop layout, so the card grew to 3×4.
-            Self::SampleInstrument => (3, 4),
+            // row, Stage 7 added a viz strip (zone map in SFZ mode,
+            // waveform thumbnail in single-WAV mode); the card now
+            // sits at 3×5.
+            Self::SampleInstrument => (3, 5),
             Self::An1xVoice => (6, 6),
             Self::AmenSampler => (3, 3),
             Self::NoiseVoice => (2, 1),

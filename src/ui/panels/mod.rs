@@ -29,6 +29,7 @@ pub mod noise;
 pub mod piano;
 pub mod pluck;
 pub mod sample_instrument;
+pub(crate) mod sample_instrument_viz;
 pub mod scope_module;
 pub mod sequencer;
 pub(super) mod sequencer_automation;

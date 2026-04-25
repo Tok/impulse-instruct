@@ -286,6 +286,41 @@ pub fn draw_sample_instrument(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             });
         });
     });
+
+    ui.add_space(2.0);
+
+    // V2 Stage 7: visualizer row.  In SFZ mode shows the zone map
+    // (regions banded across a piano keyboard); in single-WAV mode
+    // shows the waveform thumbnail with loop-window shading.  Both
+    // modes are read-only for now — drag-to-edit lands in Stage 7.5.
+    let viz_w = ui.available_width().max(120.0);
+    let viz_h = 40.0_f32;
+    if !app.sample_sfz_regions.is_empty() {
+        crate::ui::panels::sample_instrument_viz::draw_zone_map(
+            ui,
+            &app.sample_sfz_regions,
+            viz_w,
+            viz_h,
+        );
+    } else {
+        let (loop_start, loop_end, loop_enabled) = {
+            let s = app.state.read();
+            (
+                s.sample_instrument.loop_start,
+                s.sample_instrument.loop_end,
+                s.sample_instrument.loop_enabled,
+            )
+        };
+        crate::ui::panels::sample_instrument_viz::draw_waveform(
+            ui,
+            &app.sample_wave_cache.1,
+            loop_start,
+            loop_end,
+            loop_enabled,
+            viz_w,
+            viz_h,
+        );
+    }
 }
 
 /// Load a path into the SampleInstrument voice.  Sniffs `.sfz` vs
@@ -302,6 +337,11 @@ fn load_sample_instrument_path(app: &mut ImpulseApp, path: &str) {
         .unwrap_or(false);
     if is_sfz {
         if let Some(regions) = crate::audio::sfz_loader::load_sfz_file(path) {
+            // Stash a UI-side copy for the zone-map visualizer before
+            // the Vec is moved into the audio command — the audio
+            // thread owns the runtime list, but the UI needs to read
+            // the metadata for paint.
+            app.sample_sfz_regions = regions.clone();
             let _ = app
                 .audio_tx
                 .push(AudioCommand::LoadSampleInstrumentSfz(regions));
@@ -316,6 +356,11 @@ fn load_sample_instrument_path(app: &mut ImpulseApp, path: &str) {
             let midi = crate::audio::dsp::hz_to_midi(hz).round().clamp(0.0, 127.0) as u8;
             app.state.write().sample_instrument.root_note = midi;
         }
+        // Single-WAV mode replaces SFZ regions; clear the UI-side
+        // cache + rebuild the waveform thumbnail for paint.
+        app.sample_sfz_regions.clear();
+        let thumb = crate::ui::panels::sample_instrument_viz::build_thumbnail(&data, 128);
+        app.sample_wave_cache = (path.to_string(), thumb);
         let _ = app.audio_tx.push(AudioCommand::LoadSampleInstrument(data));
         app.state.write().sample_instrument.sample_path = path.to_string();
         app.last_sample_instrument_path = path.to_string();

@@ -266,6 +266,16 @@ pub struct ImpulseApp {
     /// command queue directly.
     pub(crate) last_wavetable_path: String,
     pub(crate) last_sample_instrument_path: String,
+    /// SampleInstrument runtime regions cached on the UI side for the
+    /// zone-map visualizer.  Mirrors what the audio thread holds —
+    /// populated when an SFZ loads and cleared when a single WAV is
+    /// loaded (single-WAV mode shows the waveform thumbnail instead).
+    /// Cheap copy because each entry's `samples` is an `Arc`.
+    pub(crate) sample_sfz_regions: Vec<crate::audio::dsp::sample_instrument::SfzRegionRuntime>,
+    /// Min/max waveform thumbnail for the SampleInstrument's loaded
+    /// single-WAV buffer.  Cached on path so the per-frame paint just
+    /// reads the vec.  Empty / stale-path → rebuilt on next paint.
+    pub(crate) sample_wave_cache: (String, Vec<(f32, f32)>),
     pub(crate) neutts_online: bool,
     pub(crate) granular_capture_rx: rtrb::Consumer<f32>,
     pub(crate) granular_tap: Vec<f32>, // ring buffer, ~3s master output for CAPTURE
@@ -483,6 +493,8 @@ impl ImpulseApp {
             last_conv_reverb_ir_path: String::new(),
             last_wavetable_path: String::new(),
             last_sample_instrument_path: String::new(),
+            sample_sfz_regions: Vec::new(),
+            sample_wave_cache: (String::new(), Vec::new()),
             neutts_online: false,
             granular_capture_rx: audio.granular_capture_rx,
             granular_tap: vec![0.0; crate::audio::SAMPLE_RATE_HZ as usize * 3], // 3s ring buffer
