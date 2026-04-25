@@ -87,3 +87,23 @@ the engine rate) into `samples/impulses/` and use the `LOAD IR` button
 on the ConvReverb card, or hit `/api/conv_reverb` with `{ "random":
 true }`.  Short IRs (0.5–2 s) work best for musical reverb; longer
 tails (3+ s) dominate the mix unless MIX is kept low.
+
+## Pitched samples + multisamples (SAMPLER+)
+
+The `SAMPLER+` module (`SampleInstrument`) reads pitched recordings
+from `samples/instruments/`.  Two flavours:
+
+- **Single `.wav`** — one recording mapped across the keyboard via
+  ratio resampling.  Auto-detect-root sets the root note on load.
+- **`.sfz` multisample** — a text manifest mapping several samples
+  to different key + velocity ranges, with optional round-robin.
+  The parser supports the opcode subset listed in
+  `src/state/sfz.rs` (key range, velocity layers, loop points,
+  ADSR, filter, RR).  See `samples/instruments/README.md` for
+  authoring notes + free CC-licensed pack sources (Salamander Grand,
+  Sonatina, VSCO 2 CE, sfzInstruments).
+
+Drop files into `samples/instruments/` (or a sub-folder per pack)
+and load via `LOAD` on the SAMPLER+ card or `/api/sample`.  The
+zone-map strip at the bottom of the card visualises SFZ region
+coverage; the waveform thumbnail shows the active single-WAV.

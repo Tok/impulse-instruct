@@ -533,6 +533,11 @@ pub(super) fn apply_sample_instrument_update(
     {
         s.sample_instrument.filter_mode = (v as u8).min(2);
     }
+    if !locked.contains("sample.formant_preserve")
+        && let Some(v) = w.get("formant_preserve").and_then(|v| v.as_bool())
+    {
+        s.sample_instrument.formant_preserve = v;
+    }
     if !locked.contains("sequencer.sample_steps")
         && let Some(arr) = w.get("sample_steps").and_then(|v| v.as_array())
     {

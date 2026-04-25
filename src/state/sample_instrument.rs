@@ -74,6 +74,14 @@ pub struct SampleInstrumentState {
     /// loaded sample.
     #[serde(default)]
     pub filter_mix: f32,
+    /// Formant-preserving pitch shift opt-in.  V2 Stage 8 lands the
+    /// API surface (state field + LLM apply + UI toggle); the actual
+    /// PSOLA / phase-vocoder DSP is deferred to a follow-up — until
+    /// then this flag is a no-op (the cheap linear-resample path
+    /// runs regardless).  Persisting it now means existing sessions
+    /// pick up the real implementation transparently when it ships.
+    #[serde(default)]
+    pub formant_preserve: bool,
 }
 
 fn default_attack() -> f32 {
@@ -118,6 +126,7 @@ impl Default for SampleInstrumentState {
             filter_resonance: 0.0,
             filter_mode: 0,
             filter_mix: 0.0,
+            formant_preserve: false,
         }
     }
 }

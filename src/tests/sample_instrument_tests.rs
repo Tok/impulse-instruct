@@ -734,6 +734,23 @@ mod sample_instrument_llm_apply_tests {
     }
 
     #[test]
+    fn formant_preserve_flag_defaults_off_and_round_trips() {
+        // V2 Stage 8: flag wired through state + LLM apply.  The
+        // actual PSOLA / phase-vocoder DSP is deferred — pinning the
+        // flag's plumbing now means future-me's implementation
+        // surfaces transparently for sessions that already opted in.
+        let s = AppState::default();
+        assert!(!s.sample_instrument.formant_preserve);
+        let update = serde_json::json!({ "sample": { "formant_preserve": true } });
+        let s = apply_llm_update(s, &update, &[]);
+        assert!(s.sample_instrument.formant_preserve);
+        // Locked path should skip.
+        let s = AppState::default();
+        let s = apply_llm_update(s, &update, &["sample.formant_preserve".to_string()]);
+        assert!(!s.sample_instrument.formant_preserve);
+    }
+
+    #[test]
     fn apply_sample_writes_pattern_steps_and_notes() {
         let s = AppState::default();
         let update = serde_json::json!({

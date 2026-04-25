@@ -283,6 +283,29 @@ pub fn draw_sample_instrument(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                     app.state.write().sample_instrument.filter_mode = next;
                     app.push_audio_params();
                 }
+                // Formant-preserve opt-in (V2 Stage 8 — flag wired,
+                // DSP lands in a follow-up).  Renders as `FRMT` /
+                // `frmt` so the user can pre-set it to flip on once
+                // the implementation ships without touching their
+                // session.
+                let fp_on = app.state.read().sample_instrument.formant_preserve;
+                let fp_label = if fp_on { "FRMT" } else { "frmt" };
+                let fp_col = if fp_on { theme::CHALK } else { theme::IRON };
+                if ui
+                    .add_sized(
+                        [32.0, 18.0],
+                        egui::Button::new(
+                            egui::RichText::new(fp_label)
+                                .monospace()
+                                .size(8.0)
+                                .color(fp_col),
+                        ),
+                    )
+                    .clicked()
+                {
+                    app.state.write().sample_instrument.formant_preserve = !fp_on;
+                    app.push_audio_params();
+                }
             });
         });
     });

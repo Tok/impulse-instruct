@@ -186,11 +186,30 @@ V1.1 — shipped:
   `scan_sample_instrument_samples` / `pick_random_sample_instrument`
   helpers backing it.
 
-V2 still in scope per the original plan: `.sfz` multisample mode,
-velocity layers + round-robin, polyphony with voice stealing,
-per-voice filter + LFO routing, formant-preserving pitch shift via
-PSOLA / phase vocoder, time-stretch decoupled from pitch, the sample
-editor with waveform + zone-map UI, starter pack curation.
+V2 status — most stages shipped:
+
+- [x] Stage 1 — SFZ parser (subset per `src/state/sfz.rs`).
+- [x] Stage 2 — load SFZ + single-zone playback.
+- [x] Stage 3 — polyphony (8 slots) + oldest-steal allocator.
+- [x] Stage 4 — multi-zone overlap layering.
+- [x] Stage 5 — velocity layers + round-robin.
+- [x] Stage 6 — per-voice SVF (LP/BP/HP) + LFO routing
+  (`SampleVolume` / `SamplePan` / `SamplePitch` / `SampleCutoff`).
+- [x] Stage 7 — zone-map + waveform-thumb visualizer strip.
+- [-] Stage 8 — formant-preserving pitch shift.  Flag wired
+  (`sample_instrument.formant_preserve` + UI toggle + LLM apply);
+  the actual PSOLA / phase-vocoder DSP is *deferred* to a follow-up.
+  Pinning the API now means user sessions that opt in pick up the
+  real implementation transparently when it lands.
+- [x] Stage 9 — starter sample pack scaffolding
+  (`samples/instruments/{,starter,README.md}` with author + free-pack
+  source links).  Curation of the actual bundled CC0 content is the
+  user's call.
+
+Time-stretch decoupled from pitch (separate from formant preservation
+in the original plan) is still TODO — currently the loop_start/end
+window controls sustain duration but the engine has no real
+time-stretch DSP.
 
 ## New module — `SampleInstrument` (V1 implementation notes)
 
