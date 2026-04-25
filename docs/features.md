@@ -4,6 +4,34 @@ A detailed log of what's built.
 
 ---
 
+### MPE input — pitch bend / channel pressure / per-note CC74 wiring
+
+- The `midir` parser used to handle Note On/Off + ControlChange +
+  PitchBend + clock messages.  ChannelPressure (0xD0) was missing,
+  and PitchBend events were dropped entirely by the UI handler.
+  Now all three MPE expression axes flow into `AppState.mpe`:
+  - PitchBend on any channel → `mpe.pitch_bend` (-1..=1)
+  - ChannelPressure → `mpe.pressure` (0..=1)
+  - CC74 on a non-zero (per-note) channel → `mpe.timbre` (0..=1)
+- `AppState.mpe: MpeExpression` is transient (skip-serialised) so
+  controllers can drive expression without polluting session JSON.
+  Surfaced via `/api/state` + the WebSocket push so external
+  patches / OSC bridges can react to MPE controllers immediately.
+- New helpers in `crate::midi`: `is_mpe_note_channel(ch)` (true for
+  any non-zero channel — heuristic that works for the standard
+  lower-zone layout), `pressure_to_unit(value)` (7-bit → 0..1
+  with high-bit masking).
+- CC74 routing now SHORT-CIRCUITS the static `cc_to_param_path`
+  table when the CC came from a per-note channel — otherwise an
+  MPE controller would wrench bass.cutoff on every Y-axis wiggle.
+- DSP integration (per-note pitch bend / pressure → accent /
+  timbre → cutoff) is a documented follow-up; V1 ships the wiring
+  + state surface so users can patch the missing pieces externally.
+- 13 new tests: parse_midi for ChannelPressure decoding, PitchBend
+  centre/min, NoteOn unaffected; classifier helpers (master vs.
+  note channels, pressure 0/127/64/0xFF mapping); AppState.mpe
+  default state + clone/eq derives.  Full suite at 1599 passing.
+
 ### REC→CHOP — record master bus into AmenSampler with auto slices
 
 - Lets the user sample their own jam back into the break rotation.

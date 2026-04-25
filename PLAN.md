@@ -43,10 +43,11 @@ they ship and are reflected in `features.md`.
 - [ ] **Ableton Link tempo sync** - bidirectional BPM + bar-phase
   sync via the `ableton_link` crate.  Useful for jamming alongside
   Live / Ableton Push or another synth setup.
-- [ ] **MPE / MIDI 2.0 input** - the `midir` path only takes Note
-  On/Off + CC today.  Adding per-note pitch / pressure / slide lets
-  the bass voice become a proper MPE instrument instead of the
-  current monophonic step driver.
+- [ ] **MPE / MIDI 2.0 input — DSP integration** - the parser /
+  channel-pressure / dispatch wiring shipped (PitchBend +
+  ChannelPressure + per-note CC74 land in `AppState.mpe`).  Routing
+  these to per-note bass voice modulation (per-note pitch bend,
+  pressure → accent, timbre → cutoff) is the follow-up.
 
 ## Agent tooling - gradual control & expressiveness
 

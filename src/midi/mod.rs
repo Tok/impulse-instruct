@@ -22,13 +22,51 @@ pub const MIDI_CLOCK_PPQN: f64 = 24.0;
 
 #[derive(Clone, Debug)]
 pub enum MidiEvent {
-    NoteOn { channel: u8, note: u8, velocity: u8 },
-    NoteOff { channel: u8, note: u8 },
-    ControlChange { channel: u8, cc: u8, value: u8 },
-    PitchBend { channel: u8, value: f32 }, // -1.0–+1.0
+    NoteOn {
+        channel: u8,
+        note: u8,
+        velocity: u8,
+    },
+    NoteOff {
+        channel: u8,
+        note: u8,
+    },
+    ControlChange {
+        channel: u8,
+        cc: u8,
+        value: u8,
+    },
+    PitchBend {
+        channel: u8,
+        value: f32,
+    }, // -1.0–+1.0
+    /// MIDI Channel Pressure (aftertouch), 1 data byte (0..127).  MPE
+    /// uses this on per-note channels (typically chs 2-N) for the
+    /// "Z" expression axis (pressure / volume).
+    ChannelPressure {
+        channel: u8,
+        value: u8,
+    },
     Clock,
     Start,
     Stop,
+}
+
+/// True when `channel` is part of an MPE per-note zone — any channel
+/// other than 0 (i.e. master ch 1 in 1-indexed MIDI numbering).
+/// Treated as a heuristic rather than a strict zone-manager parse;
+/// most MPE controllers default to chs 2-N for note channels and ch
+/// 1 for master, which matches "channel != 0" perfectly.  Pure helper
+/// so the dispatch path can be unit-tested without midir.
+#[inline]
+pub fn is_mpe_note_channel(channel: u8) -> bool {
+    channel != 0
+}
+
+/// Map a 7-bit pressure value to a unit-interval expression value.
+#[inline]
+pub fn pressure_to_unit(value: u8) -> f32 {
+    (value & 0x7F) as f32 / 127.0
 }
 
 // ─── CC → param mapping ───────────────────────────────────────────────────────
@@ -135,7 +173,7 @@ fn try_open_midi(port_name: &str, event_tx: Sender<MidiEvent>) -> Option<MidiInp
     Some(connection)
 }
 
-fn parse_midi(msg: &[u8]) -> Option<MidiEvent> {
+pub(crate) fn parse_midi(msg: &[u8]) -> Option<MidiEvent> {
     if msg.is_empty() {
         return None;
     }
@@ -164,6 +202,11 @@ fn parse_midi(msg: &[u8]) -> Option<MidiEvent> {
                 value: val,
             })
         }
+        // Channel Pressure (aftertouch) — 1 data byte = pressure.
+        0xD0 if msg.len() >= 2 => Some(MidiEvent::ChannelPressure {
+            channel,
+            value: msg[1],
+        }),
         0xF8 => Some(MidiEvent::Clock),
         0xFA => Some(MidiEvent::Start),
         0xFC => Some(MidiEvent::Stop),

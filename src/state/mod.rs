@@ -320,6 +320,31 @@ pub struct AppState {
     /// Injected into every LLM system prompt as global context.
     #[serde(skip)]
     pub audio_snapshot: String,
+    /// MPE per-note expression — captures the latest pitch bend,
+    /// channel pressure, and timbre (CC74) from any non-zero MIDI
+    /// channel.  Surfaced via `/api/state` and `/api/ws/state` so
+    /// downstream patches / OSC bridges can react to MPE
+    /// controllers; DSP integration (per-note pitch / cutoff
+    /// modulation) is a follow-up.  Transient — not serialised.
+    #[serde(skip)]
+    pub mpe: MpeExpression,
+}
+
+/// Latest MPE expression values from any non-zero MIDI channel.
+/// Each channel that emits expression overwrites the same fields,
+/// so V1 is "last-channel-wins" — fine for monophonic bass control,
+/// extensible to per-channel later.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct MpeExpression {
+    /// Channel that last sent any expression event (1..=15).  Zero
+    /// = uninitialised (no MPE traffic yet).
+    pub channel: u8,
+    /// Pitch bend, -1.0..=1.0 (raw bend, not semitones).
+    pub pitch_bend: f32,
+    /// Channel pressure / aftertouch, 0.0..=1.0.
+    pub pressure: f32,
+    /// Timbre (CC74), 0.0..=1.0.  Y-axis on the ROLI Seaboard etc.
+    pub timbre: f32,
 }
 
 impl Default for AppState {
@@ -363,6 +388,7 @@ impl Default for AppState {
             global_step_count: 0,
             collapse_requested: None,
             audio_snapshot: String::new(),
+            mpe: MpeExpression::default(),
         };
         // Create a default agent for the LlmAgent rack module.
         if let Some(agent_id) = s
