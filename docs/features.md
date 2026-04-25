@@ -4,6 +4,42 @@ A detailed log of what's built.
 
 ---
 
+### Karplus-Strong plucked-string voice
+
+- **New `ModuleKind::PluckString`** — melodic voice filling the dry-
+  string gap between acid bass and AN1X pad.  Own sequencer lane
+  (`pluck_steps` / `pluck_pattern`), own `PluckTrigger` +
+  `PluckGateOff` events, own gate counter on `ClockState`.
+- **DSP** (`src/audio/dsp/pluck.rs`): classic Karplus-Strong — 16 k-
+  sample pre-allocated delay buffer, per-trigger white-noise
+  excitation fill sized to `round(sr / freq(note))`, 2-tap averaging
+  feedback `(y + prev) * 0.5 * damping` with a single read+overwrite
+  pointer (one slot covers the full round-trip).  `brightness`
+  applies a one-pole LP on the *output* tap — independent of the
+  feedback damping so users can tame the raw edge without
+  shortening the decay.  Fast-attack / slow-release amp envelope
+  masks retrigger clicks; `accent` scales the peak gain per step.
+- **State** (`src/state/pluck.rs`): enabled / damping / brightness /
+  volume / pan / `pitch_offset_semi` (-24..+24).  Damping knob maps
+  to a feedback coefficient in 0.92..0.995 — low end plucks fast,
+  high end sustains for seconds.
+- **UI**: voice panel with ON/OFF toggle + TONE group
+  (damping / brightness) + MIX group (vol / pan / pitch offset
+  mapped via the standard 0..1 knob with 0.5 at the zero-detent).
+  Sequencer panel gains a PLUCK row when the rack contains an
+  enabled PluckString module that reaches MASTER.
+- **LLM schema**: `pluck.{enabled, damping, brightness, volume, pan,
+  pitch_offset_semi}` + `pluck.pluck_steps` / `pluck.pluck_notes`
+  for the sequencer lane.  Per-field lock paths honour UI touches
+  through pipeline writebacks via `apply_pluck_update`.
+- 9 tests: state defaults, sequencer pattern pre-alloc, module-kind
+  flags, LLM voice-field + sequencer apply, per-field lock respect,
+  silence before trigger, audible output after, and an auto-
+  correlation check that the output's period matches `round(sr /
+  freq)` (zero-crossing counting would inflate the rate from K-S's
+  harmonic-rich noise burst, so the test correlates the signal
+  against itself at the delay-line lag instead).
+
 ### Mid/side master processing on `MasterOutput`
 
 - **Six new knobs on the master module**: GAIN / TILT / SAT per side,

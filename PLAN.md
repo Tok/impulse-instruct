@@ -8,10 +8,6 @@ they ship and are reflected in `features.md`.
 
 ## DSP
 
-- [ ] **Karplus-Strong plucked string voice** - cheap delay-line
-  synthesis for acoustic-ish tones.  New `ModuleKind::PluckString`,
-  single oscillator + damping knob + excitation noise burst.
-  Fills the "dry melodic" gap between bass and an1x.
 - [ ] **Wavetable voice** - single-table scan + pos/phase knobs, load
   user wavetables from `samples/wavetables/*.wav`.  Complements AN1X
   (analog) and Hoover (fixed-shape) with user-extensible character.
