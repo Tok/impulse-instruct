@@ -10,6 +10,7 @@ mod fx_step;
 pub mod gabber_kick;
 pub mod granular_voice;
 pub mod mod_apply;
+pub mod ms_master;
 pub mod param_eq;
 mod params;
 mod params_from;
@@ -30,6 +31,7 @@ use fx_math::{
 use gabber_kick::GabberKick;
 use granular_voice::GranularVoice;
 use mod_apply::apply_mod_target;
+use ms_master::{MsMaster, MsMasterParams};
 use param_eq::ParamEq;
 pub use params::{AudioParams, MAX_MOD_ROUTES, compile_mod_routes, lfo_target_to_u8};
 use pitch_shift::PitchShift;
@@ -87,6 +89,7 @@ pub struct DspState {
     conv_reverb: ConvReverb,
     param_eq: ParamEq,
     pitch_shift: PitchShift,
+    ms_master: MsMaster,
     delay: DelayLine,
     chorus: Chorus,
     phaser: Phaser,
@@ -186,6 +189,7 @@ impl DspState {
             conv_reverb: ConvReverb::new(),
             param_eq: ParamEq::new(),
             pitch_shift: PitchShift::new(),
+            ms_master: MsMaster::new(),
             delay: DelayLine::new(),
             chorus: Chorus::new(),
             phaser: Phaser::new(),
@@ -892,7 +896,7 @@ impl DspState {
                 || self.fx_pan_side.abs() > 0.0001
                 || conv_reverb_side.abs() > 0.0001;
             if channels >= 2 && has_stereo {
-                let mid = out;
+                let mid_raw = out;
                 let chorus_side = self.chorus.read_tap(0.4) * 0.3;
                 let w = p.stereo_width * 2.0;
                 let gran_w = if p.granular_enabled {
@@ -900,11 +904,25 @@ impl DspState {
                 } else {
                     0.0
                 };
-                let side = chorus_side * w
+                let side_raw = chorus_side * w
                     + granular_side * gran_w
                     + pan_side
                     + self.fx_pan_side
                     + conv_reverb_side;
+                // Mid/side master processing: per-side gain + tilt EQ
+                // + arctan saturation.  Runs after the raw (mid, side)
+                // computation and before L/R recombination so every
+                // voice + FX contribution is shaped by the same
+                // mastering chain.
+                let ms_params = MsMasterParams {
+                    mid_gain: p.ms_mid_gain,
+                    mid_tilt: p.ms_mid_tilt,
+                    mid_sat: p.ms_mid_sat,
+                    side_gain: p.ms_side_gain,
+                    side_tilt: p.ms_side_tilt,
+                    side_sat: p.ms_side_sat,
+                };
+                let (mid, side) = self.ms_master.process(mid_raw, side_raw, sr, ms_params);
                 let left = (mid + side).clamp(-1.0, 1.0);
                 let right = (mid - side).clamp(-1.0, 1.0);
                 frame[0] = left;

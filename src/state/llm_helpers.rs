@@ -714,6 +714,14 @@ pub(super) fn apply_fx_update(
         "fx.pitch_shift_fbk"
     );
 
+    // ── Mid/side master knobs ───────────────────────────────────────────
+    u!(s.fx.ms_mid_gain, "ms_mid_gain", "fx.ms_mid_gain");
+    u!(s.fx.ms_mid_tilt, "ms_mid_tilt", "fx.ms_mid_tilt");
+    u!(s.fx.ms_mid_sat, "ms_mid_sat", "fx.ms_mid_sat");
+    u!(s.fx.ms_side_gain, "ms_side_gain", "fx.ms_side_gain");
+    u!(s.fx.ms_side_tilt, "ms_side_tilt", "fx.ms_side_tilt");
+    u!(s.fx.ms_side_sat, "ms_side_sat", "fx.ms_side_sat");
+
     u!(s.fx.master_volume, "master_volume", "fx.master_volume");
     u!(
         s.fx.xmod_bass_to_an1x_pitch,
@@ -863,6 +871,12 @@ fn fx_field_mut<'a>(fx: &'a mut super::FxState, key: &str) -> Option<&'a mut f32
         "pitch_shift_fine" => &mut fx.pitch_shift_fine,
         "pitch_shift_mix" => &mut fx.pitch_shift_mix,
         "pitch_shift_fbk" => &mut fx.pitch_shift_fbk,
+        "ms_mid_gain" => &mut fx.ms_mid_gain,
+        "ms_mid_tilt" => &mut fx.ms_mid_tilt,
+        "ms_mid_sat" => &mut fx.ms_mid_sat,
+        "ms_side_gain" => &mut fx.ms_side_gain,
+        "ms_side_tilt" => &mut fx.ms_side_tilt,
+        "ms_side_sat" => &mut fx.ms_side_sat,
         _ => return None,
     })
 }

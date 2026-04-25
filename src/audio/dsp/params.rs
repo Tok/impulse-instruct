@@ -436,6 +436,13 @@ pub struct AudioParams {
     pub pitch_shift_fine: f32,
     pub pitch_shift_mix: f32,
     pub pitch_shift_fbk: f32,
+    // Mid/side master knobs (all 0..1)
+    pub ms_mid_gain: f32,
+    pub ms_mid_tilt: f32,
+    pub ms_mid_sat: f32,
+    pub ms_side_gain: f32,
+    pub ms_side_tilt: f32,
+    pub ms_side_sat: f32,
     // Compressor
     pub compressor_threshold: f32,
     pub compressor_ratio: f32,

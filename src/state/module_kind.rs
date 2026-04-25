@@ -114,7 +114,9 @@ impl ModuleKind {
             // first card paints over the overflow and the console
             // partly disappears.
             Self::LlmConsole => (grid_cols, 2),
-            Self::MasterOutput => (grid_cols, 1),
+            // Master: row 1 = MASTER VOLUME + voice-presence strip,
+            // row 2 = mid/side master knobs (6 rotaries).
+            Self::MasterOutput => (grid_cols, 2),
             Self::AcidBass => (4, 7),
             // Drum kits are 4 rows tall so the 3 per-voice glass groups
             // (kick / snare / hihat or clap) each with an XY pad beside

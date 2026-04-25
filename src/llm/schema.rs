@@ -289,7 +289,13 @@ pub fn param_json_schema() -> serde_json::Value {
                     "pitch_shift_semi": { "type": "number", "minimum": -24.0, "maximum": 24.0, "description": "pitch shifter semitones: 0=bypass, ±12=octave, ±7=fifth harmony, ±24=two-octave limit" },
                     "pitch_shift_fine": { "type": "number", "minimum": -100.0, "maximum": 100.0, "description": "pitch shifter fine tune in cents; added to semi — detune wet by a few cents for doubled-voice thickening" },
                     "pitch_shift_mix":  { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "pitch shifter wet/dry mix; 0=bypass" },
-                    "pitch_shift_fbk":  { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "pitch shifter feedback — pipes wet back into input so stacked shifts accumulate (e.g. +7 st + fbk = fifth ladder)" }
+                    "pitch_shift_fbk":  { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "pitch shifter feedback — pipes wet back into input so stacked shifts accumulate (e.g. +7 st + fbk = fifth ladder)" },
+                    "ms_mid_gain":  { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "master mid-channel gain 0..1 (0.5 = unity, ±12 dB at extremes)" },
+                    "ms_mid_tilt":  { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "master mid tilt EQ (0.5 = flat, 0 = bass-heavy, 1 = treble-heavy, ±6 dB shelves at 200 Hz + 5 kHz)" },
+                    "ms_mid_sat":   { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "master mid arctan saturation (0 = off)" },
+                    "ms_side_gain": { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "master side-channel gain — pull in the stereo energy at 0, widen at 1" },
+                    "ms_side_tilt": { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "master side tilt EQ — tilt toward treble to widen the air without thickening bass" },
+                    "ms_side_sat":  { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "master side arctan saturation" }
                 },
                 "additionalProperties": false
             },

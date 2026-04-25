@@ -253,6 +253,37 @@ pub struct FxState {
     /// to 0.95 to stop runaway overflow.
     #[serde(default)]
     pub pitch_shift_fbk: f32,
+    // ── Mid/side master processing ────────────────────────────────────
+    // 0..1 normalised.  Gain + tilt use 0.5 as the unity/flat detent
+    // so the master stays transparent at the default rest position.
+    // Saturation uses 0 as off.
+    /// Mid-channel gain (0..1 → -12..+12 dB).  0.5 = unity.
+    #[serde(default = "default_ms_unity")]
+    pub ms_mid_gain: f32,
+    /// Mid-channel tilt EQ (0..1 → bass-heavy..treble-heavy via
+    /// opposing low-shelf / high-shelf pair at 200 Hz and 5 kHz).
+    /// 0.5 = flat; 0.0 = −6 dB treble / +6 dB bass; 1.0 = the inverse.
+    #[serde(default = "default_ms_unity")]
+    pub ms_mid_tilt: f32,
+    /// Mid-channel saturation (arctan soft clip; 0 = off).
+    #[serde(default)]
+    pub ms_mid_sat: f32,
+    /// Side-channel gain — same mapping as `ms_mid_gain`.  Pulls back
+    /// the side at 0, widens at 1.
+    #[serde(default = "default_ms_unity")]
+    pub ms_side_gain: f32,
+    /// Side-channel tilt EQ — same mapping as `ms_mid_tilt`.
+    /// Tilting side toward treble widens the air without thickening
+    /// the low end (classic mastering move).
+    #[serde(default = "default_ms_unity")]
+    pub ms_side_tilt: f32,
+    /// Side-channel saturation.
+    #[serde(default)]
+    pub ms_side_sat: f32,
+}
+
+fn default_ms_unity() -> f32 {
+    0.5
 }
 
 fn default_fx_pan_rate() -> f32 {
@@ -340,6 +371,12 @@ impl Default for FxState {
             pitch_shift_fine: 0.0,
             pitch_shift_mix: 0.0,
             pitch_shift_fbk: 0.0,
+            ms_mid_gain: default_ms_unity(),
+            ms_mid_tilt: default_ms_unity(),
+            ms_mid_sat: 0.0,
+            ms_side_gain: default_ms_unity(),
+            ms_side_tilt: default_ms_unity(),
+            ms_side_sat: 0.0,
         }
     }
 }

@@ -810,6 +810,61 @@ pub(super) fn draw_master_content(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             ui.label(egui::RichText::new(*label).monospace().size(8.0).color(col));
         }
     });
+
+    // Mid/side master strip — 6 knobs arranged MID {G T S} | SIDE {G T S}.
+    let (mut mid_gain, mut mid_tilt, mut mid_sat, mut side_gain, mut side_tilt, mut side_sat) = {
+        let s = app.state.read();
+        (
+            s.fx.ms_mid_gain,
+            s.fx.ms_mid_tilt,
+            s.fx.ms_mid_sat,
+            s.fx.ms_side_gain,
+            s.fx.ms_side_tilt,
+            s.fx.ms_side_sat,
+        )
+    };
+    let locked = app.state.read().llm.locked_params.clone();
+    let focused = app.state.read().llm.focused_params.clone();
+    let pm = |path: &str| crate::state::param_mode(path, &locked, &focused);
+    let mut ms_changed = false;
+    ui.horizontal(|ui| {
+        ui.label(
+            egui::RichText::new("M/S")
+                .monospace()
+                .size(9.0)
+                .color(theme::ASH),
+        );
+        if widgets::param_control(ui, "MID G", &mut mid_gain, pm("fx.ms_mid_gain"), ctrl).0 {
+            ms_changed = true;
+        }
+        if widgets::param_control(ui, "MID T", &mut mid_tilt, pm("fx.ms_mid_tilt"), ctrl).0 {
+            ms_changed = true;
+        }
+        if widgets::param_control(ui, "MID S", &mut mid_sat, pm("fx.ms_mid_sat"), ctrl).0 {
+            ms_changed = true;
+        }
+        ui.separator();
+        if widgets::param_control(ui, "SIDE G", &mut side_gain, pm("fx.ms_side_gain"), ctrl).0 {
+            ms_changed = true;
+        }
+        if widgets::param_control(ui, "SIDE T", &mut side_tilt, pm("fx.ms_side_tilt"), ctrl).0 {
+            ms_changed = true;
+        }
+        if widgets::param_control(ui, "SIDE S", &mut side_sat, pm("fx.ms_side_sat"), ctrl).0 {
+            ms_changed = true;
+        }
+    });
+    if ms_changed {
+        let mut s = app.state.write();
+        s.fx.ms_mid_gain = mid_gain;
+        s.fx.ms_mid_tilt = mid_tilt;
+        s.fx.ms_mid_sat = mid_sat;
+        s.fx.ms_side_gain = side_gain;
+        s.fx.ms_side_tilt = side_tilt;
+        s.fx.ms_side_sat = side_sat;
+        drop(s);
+        app.push_audio_params();
+    }
 }
 
 pub(super) use super::agent_card::draw_llm_agent_content;
