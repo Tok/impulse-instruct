@@ -11,8 +11,8 @@
 use egui::{CentralPanel, Frame, TopBottomPanel};
 
 use super::{
-    DRUM_LOG_CAP, DrumLogEntry, ImpulseApp, MELODIC_LOG_CAP, MelodicLogEntry, panels, rack_canvas,
-    scope_footer, theme, util,
+    DRUM_LOG_CAP, DrumLogEntry, ImpulseApp, MELODIC_LOG_CAP, MelodicLogEntry, MelodicVoice, panels,
+    rack_canvas, scope_footer, theme, util,
 };
 
 impl eframe::App for ImpulseApp {
@@ -386,15 +386,17 @@ impl eframe::App for ImpulseApp {
                 self.last_step_global = s.global_step_count;
                 let fired_at = s.global_step_count;
                 let seq = &s.sequencer;
-                let mut push = |note: u8, gate: f32, accent: f32, slide: f32| {
-                    self.melodic_log.push_back(MelodicLogEntry {
-                        fired_at,
-                        note,
-                        gate,
-                        accent,
-                        slide,
-                    });
-                };
+                let mut push =
+                    |voice: MelodicVoice, note: u8, gate: f32, accent: f32, slide: f32| {
+                        self.melodic_log.push_back(MelodicLogEntry {
+                            fired_at,
+                            note,
+                            gate,
+                            accent,
+                            slide,
+                            voice,
+                        });
+                    };
                 // Bass voices (multi-voice) — voice 0 mirrors bass_pattern.
                 for (vi, voice) in s.bass_voices.iter().enumerate() {
                     if !voice.enabled {
@@ -416,7 +418,13 @@ impl eframe::App for ImpulseApp {
                     if let Some(st) = pattern.get(step % voice_steps)
                         && st.active
                     {
-                        push(st.note, st.gate, st.accent, st.slide);
+                        push(
+                            MelodicVoice::Bass(vi as u8),
+                            st.note,
+                            st.gate,
+                            st.accent,
+                            st.slide,
+                        );
                     }
                 }
                 // AN1X
@@ -425,7 +433,7 @@ impl eframe::App for ImpulseApp {
                     if let Some(st) = seq.an1x_pattern.get(step % n)
                         && st.active
                     {
-                        push(st.note, st.gate, st.accent, st.slide);
+                        push(MelodicVoice::An1x, st.note, st.gate, st.accent, st.slide);
                     }
                 }
                 // Hoover
@@ -434,7 +442,7 @@ impl eframe::App for ImpulseApp {
                     if let Some(st) = seq.hoover_pattern.get(step % n)
                         && st.active
                     {
-                        push(st.note, st.gate, st.accent, st.slide);
+                        push(MelodicVoice::Hoover, st.note, st.gate, st.accent, st.slide);
                     }
                 }
                 while self.melodic_log.len() > MELODIC_LOG_CAP {

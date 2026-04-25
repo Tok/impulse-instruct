@@ -53,6 +53,7 @@ pub async fn post_ui_prefs(
         set_bool("stream_hz_scale", &mut p.stream_hz_scale);
         set_bool("stream_ramps", &mut p.stream_ramps);
         set_bool("stream_stereo", &mut p.stream_stereo);
+        set_bool("stream_heatmap", &mut p.stream_heatmap);
         set_bool("crt_effect", &mut p.crt_effect);
         set_bool("bloom_enabled", &mut p.bloom_enabled);
         set_bool("wasd_as_arrows", &mut p.wasd_as_arrows);

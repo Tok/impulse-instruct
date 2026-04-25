@@ -117,12 +117,15 @@ Tier 1 (cheap, reuse existing buffers):
   pitch detect with cents-off needle.
 - [x] **Chord / key display (`ChordDisplay`)** — shipped, chroma
   vector + 24-template (major/minor) match.
-- [ ] **Per-voice activity heatmap** — original plan said "overlay
-  mode on `ActivityTimeline`", but `ActivityTimeline` is the LLM
-  agent action log, not a per-voice trigger surface. The right
-  source is the existing `EventStream`'s `MelodicLogEntry` /
-  `DrumLogEntry` queues. Defer until we revisit the EventStream UI;
-  a heatmap mode there would be a small, distinct slice.
+- [x] **Per-voice activity heatmap** — shipped as an optional
+  bottom-strip overlay on `EventStream`.  Reads `melodic_log` /
+  `drum_log` queues; rows: BASS (folded across all bass voices) /
+  AN1X / HOOV / KICK / SN / HAT / CLAP, time-binned per
+  sequencer step and grayscale-shaded by recent-activity
+  intensity.  Toggled via `ui_prefs.stream_heatmap` (default
+  off; Preferences → Display → "Per-voice heatmap strip").
+  `MelodicLogEntry` gained a `voice: MelodicVoice` field so the
+  bins can split per source voice.
 
 Tier 2 (heavier — guard with reduce-cost path):
 - [x] **Spectrogram waterfall (`Spectrogram`)** — shipped, rolling

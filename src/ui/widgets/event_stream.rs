@@ -5,6 +5,7 @@
 
 use crate::state::AppState;
 use crate::ui::theme;
+use crate::ui::widgets::event_stream_heatmap::draw_heatmap;
 use crate::ui::{DrumLogEntry, MelodicLogEntry};
 use egui::{Color32, Pos2, Rect, Sense, Stroke, Ui, Vec2};
 
@@ -39,7 +40,28 @@ pub fn event_stream(
     theme::draw_screen_bezel(&painter, rect, egui::Rounding::same(2.0));
 
     let pad = 2.0_f32;
-    let inner = Rect::from_min_max(rect.min + Vec2::splat(pad), rect.max - Vec2::splat(pad));
+    let outer = Rect::from_min_max(rect.min + Vec2::splat(pad), rect.max - Vec2::splat(pad));
+
+    // Heatmap zone reserved at the bottom when enabled.  The note /
+    // dot rendering uses the smaller `inner` rect that excludes this
+    // strip so the two views don't overlap.
+    let heatmap_enabled = state.ui_prefs.stream_heatmap;
+    let heatmap_h = if heatmap_enabled {
+        (outer.height() * 0.40).clamp(28.0, 64.0)
+    } else {
+        0.0
+    };
+    let heatmap_rect =
+        Rect::from_min_max(Pos2::new(outer.min.x, outer.max.y - heatmap_h), outer.max);
+    let inner = if heatmap_enabled {
+        let pad_between = 2.0;
+        Rect::from_min_max(
+            outer.min,
+            Pos2::new(outer.max.x, outer.max.y - heatmap_h - pad_between),
+        )
+    } else {
+        outer
+    };
     let inner_w = inner.width();
     let inner_h = inner.height();
 
@@ -833,6 +855,22 @@ pub fn event_stream(
         font,
         Color32::from_gray(40),
     );
+
+    // ── Per-voice activity heatmap (bottom strip when enabled) ─────────────
+    if heatmap_enabled {
+        draw_heatmap(
+            &painter,
+            heatmap_rect,
+            melodic_log,
+            drum_log,
+            smooth_global_step,
+            step_w,
+            display_steps,
+            now_x,
+            inner.min.x,
+            inner.max.x,
+        );
+    }
 
     if seq.running {
         ui.ctx().request_repaint();

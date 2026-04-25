@@ -135,6 +135,17 @@ use undo::StateHistory;
 pub(crate) const MELODIC_LOG_CAP: usize = 256;
 pub(crate) const DRUM_LOG_CAP: usize = 512;
 
+/// Which melodic voice fired a given log entry.  Bass tracks the per-voice
+/// index so the heatmap can split bass1 / bass2 / etc., while the other
+/// voices are singletons.  Variants kept narrow so the per-entry footprint
+/// stays at one byte.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum MelodicVoice {
+    Bass(u8),
+    An1x,
+    Hoover,
+}
+
 /// One entry in the melodic-note history.  Recorded on each sequencer
 /// step transition by snapshotting active notes from every melodic
 /// pattern, so the event stream can render past notes from a frozen log
@@ -151,6 +162,10 @@ pub struct MelodicLogEntry {
     pub accent: f32,
     /// Slide intensity 0..=1 — renders proportionally longer trail.
     pub slide: f32,
+    /// Source voice — used by the heatmap overlay to bin per-voice
+    /// activity.  Existing dot rendering ignores this (every melodic
+    /// entry renders identically).
+    pub voice: MelodicVoice,
 }
 
 /// One entry in the drum-hit history — analogous to `MelodicLogEntry`

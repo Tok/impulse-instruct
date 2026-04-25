@@ -93,6 +93,12 @@ pub struct UiPrefs {
     /// Show active ramp indicators.
     #[serde(default = "default_true_pref")]
     pub stream_ramps: bool,
+    /// Show the per-voice activity heatmap overlay along the bottom of
+    /// the EventStream — one row per voice, recent activity time-binned
+    /// per sequencer step and grayscale-shaded by intensity.  Off by
+    /// default so the existing dot rendering stays the canonical view.
+    #[serde(default)]
+    pub stream_heatmap: bool,
     /// When true, LLM responses auto-scroll to the affected module.
     /// Off by default — mainly useful for demo recordings.
     #[serde(default)]
@@ -223,6 +229,7 @@ impl Default for UiPrefs {
             stream_drums: false,
             stream_hz_scale: true,
             stream_ramps: true,
+            stream_heatmap: false,
             llm_auto_scroll: false,
             show_bar_oscilloscope: false,
             show_spectrum_bars: true,

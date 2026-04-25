@@ -350,6 +350,7 @@ mod waveform_viz;
 pub use waveform_viz::{lfo_preview, waveform_icon};
 
 mod event_stream;
+mod event_stream_heatmap;
 pub use event_stream::event_stream;
 
 mod llm_cycle;
