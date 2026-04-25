@@ -4,6 +4,25 @@ A detailed log of what's built.
 
 ---
 
+### Paginated bank selector — all 64 banks reachable from the strip
+
+- `MAX_BANKS = 64` already supported chains up to that length (Bach
+  III at a 32nd-note grid imports as ~48 banks), but the BANK strip
+  in the sequencer header only rendered the first 8 — slots 9-64
+  were edit-unreachable from the UI.
+- The strip now paginates 8 slots at a time with `‹ ›` arrows and a
+  page indicator (`1/8`, `2/8`, …).  Cells widen to 18 px on pages
+  past the first so 2-digit numbers fit, and slot labels stay
+  1-based throughout (`9`, `10`, …, `64`).
+- Page state lives in egui's per-frame data — no AppState bloat.
+  When the strip first renders it auto-jumps to whichever page
+  contains `pattern_edit`, so machine-generated long imports flip
+  into view without manual navigation; subsequent arrow clicks
+  override the auto-track until the session ends.
+- Bank cells keep their click-to-swap / right-click-to-write
+  semantics, so authoring a bank past the original 8 works the
+  same way as the first page.
+
 ### Pattern morphing on chain advance — step-by-step crossfade
 
 - New `ChainSlotOverride.morph_bars: u8` field (0 = classic hard

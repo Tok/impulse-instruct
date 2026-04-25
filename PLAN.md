@@ -20,17 +20,6 @@ they ship and are reflected in `features.md`.
   the header as a Preferences-toggleable fallback so it's available
   to wire into a rack module without reimplementing the phosphor
   trail rendering.
-- [ ] **Paginated bank selector for >8 banks** - `MAX_BANKS` was
-  raised to 64 so MIDI imports of longer pieces (e.g. Bach III at a
-  32nd-note grid needs ~48 banks) can chain end-to-end.  The
-  A-H card strip in `src/ui/panels/sequencer_header.rs` still
-  renders only the first 8; banks I-onward are reachable from the
-  chain but invisible in the UI.  Add pagination (‹ › arrows, or a
-  page row) so users can see / edit any bank.  Machine-generated
-  MIDI imports don't need editing so this is low priority, but
-  anything that drives beyond bank H via `bank_write` / `bank_load`
-  loses its in-place editing affordance.
-
 ## UI / UX
 
 - [ ] **Rack mini-map** - bird's-eye navigator in a corner of the rack

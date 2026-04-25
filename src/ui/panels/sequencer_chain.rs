@@ -76,12 +76,10 @@ pub(crate) fn pan_cell_voice(
     }
 }
 
-/// Number of user-visible bank slots in the compact BANK strip.
-/// Matches `DEFAULT_BANKS` — the first 8 slots are the ones the
-/// A/B/C card UI renders.  Kept as a local const for loop bounds;
-/// chain timelines render however many entries the chain actually
-/// holds (up to `MAX_BANKS`).
-const VISIBLE_BANK_SLOTS: usize = 8;
+/// Bank slots per pagination page.  `MAX_BANKS = 64` divides into 8
+/// pages of 8 — keeps each page exactly the width of the historical
+/// A..H strip so layout is unchanged when the user stays on page 1.
+const BANKS_PER_PAGE: usize = 8;
 
 /// Compact label for a bank slot index.  1-based throughout — bank
 /// index 0 shows as "1", index 7 as "8", index 52 as "53".
@@ -121,14 +119,52 @@ pub fn draw_pattern_chain(app: &mut ImpulseApp, ui: &mut egui::Ui) {
     ui.style_mut().spacing.button_padding = egui::vec2(2.0, 1.0);
     ui.spacing_mut().item_spacing.x = 2.0;
 
-    // Bank slots
+    // Bank slots — paginated when MAX_BANKS > BANKS_PER_PAGE.
+    // Page tracking lives in egui's per-frame data so it survives
+    // re-renders without bloating AppState.  Default page follows
+    // whichever page contains `pattern_edit` so machine-generated
+    // long imports (Bach III at 53 banks) auto-flip into view.
+    let total_pages = crate::state::MAX_BANKS.div_ceil(BANKS_PER_PAGE);
+    let edit_page = pattern_edit / BANKS_PER_PAGE;
+    let page_key = egui::Id::new("bank_page");
+    let stored: Option<usize> = ui.ctx().data(|d| d.get_temp(page_key));
+    let mut page = stored
+        .unwrap_or(edit_page)
+        .min(total_pages.saturating_sub(1));
+    // Auto-track edit_page when it changes outside the user's current
+    // view — only rewinds when stored is stale (different from edit
+    // page AND nothing has been navigated manually this session).
+    if stored.is_none() {
+        page = edit_page;
+    }
+
     ui.label(
         egui::RichText::new("BANK")
             .color(theme::SMOKE)
             .monospace()
             .size(8.0),
     );
-    for slot in 0..VISIBLE_BANK_SLOTS {
+    if total_pages > 1 {
+        let prev_resp = ui.add_sized(
+            [10.0, 14.0],
+            egui::Button::new(
+                egui::RichText::new("‹")
+                    .monospace()
+                    .size(9.0)
+                    .color(theme::FOG),
+            ),
+        );
+        if prev_resp.clicked() && page > 0 {
+            page -= 1;
+            ui.ctx().data_mut(|d| d.insert_temp(page_key, page));
+        }
+    }
+    let page_start = page * BANKS_PER_PAGE;
+    for i in 0..BANKS_PER_PAGE {
+        let slot = page_start + i;
+        if slot >= crate::state::MAX_BANKS {
+            break;
+        }
         let name = slot_label(slot);
         let is_edit = slot == pattern_edit;
         let col = if is_edit { theme::CHALK } else { theme::PIT };
@@ -137,8 +173,10 @@ pub fn draw_pattern_chain(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         } else {
             egui::Color32::TRANSPARENT
         };
+        // Wider cells on pages past the first so 2-digit numbers fit.
+        let cell_w = if page == 0 { 16.0 } else { 18.0 };
         let resp = ui.add_sized(
-            [16.0, 14.0],
+            [cell_w, 14.0],
             egui::Button::new(egui::RichText::new(&name).monospace().size(8.0).color(col))
                 .fill(fill),
         );
@@ -150,6 +188,27 @@ pub fn draw_pattern_chain(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             let s = app.state.read().clone();
             *app.state.write() = bank_write(s, slot);
         }
+    }
+    if total_pages > 1 {
+        let next_resp = ui.add_sized(
+            [10.0, 14.0],
+            egui::Button::new(
+                egui::RichText::new("›")
+                    .monospace()
+                    .size(9.0)
+                    .color(theme::FOG),
+            ),
+        );
+        if next_resp.clicked() && page + 1 < total_pages {
+            page += 1;
+            ui.ctx().data_mut(|d| d.insert_temp(page_key, page));
+        }
+        ui.label(
+            egui::RichText::new(format!("{}/{}", page + 1, total_pages))
+                .color(theme::FOG)
+                .monospace()
+                .size(8.0),
+        );
     }
 
     ui.separator();
