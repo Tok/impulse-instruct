@@ -253,10 +253,12 @@ pub async fn post_wavetable(
     }
 }
 
-/// Scan `samples/instruments/` for .wav files.  Mirrors
+/// Scan `samples/instruments/` for `.wav` and `.sfz` files.  Mirrors
 /// `scan_wavetable_samples` but with a different source folder so the
 /// LLM and HTTP API browse the right pool when picking a recording for
-/// the `SampleInstrument` voice.
+/// the `SampleInstrument` voice.  `.sfz` multisample packs are
+/// included alongside single `.wav` files since V2 — the loader
+/// dispatches on extension.
 pub fn scan_sample_instrument_samples() -> Vec<std::path::PathBuf> {
     let mut out: Vec<std::path::PathBuf> = std::fs::read_dir("samples/instruments")
         .into_iter()
@@ -267,7 +269,7 @@ pub fn scan_sample_instrument_samples() -> Vec<std::path::PathBuf> {
             p.is_file()
                 && p.extension()
                     .and_then(|e| e.to_str())
-                    .is_some_and(|e| e.eq_ignore_ascii_case("wav"))
+                    .is_some_and(|e| e.eq_ignore_ascii_case("wav") || e.eq_ignore_ascii_case("sfz"))
         })
         .collect();
     out.sort();

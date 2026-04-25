@@ -8,11 +8,29 @@
 // via the existing `detect_pitch_hz` helper.  V1's behaviour is
 // preserved when the new fields take their defaults (no attack, full
 // sustain, short release, loop the whole buffer).
+//
+// V2 (in progress) layers an SFZ multisample mode on top: when a list
+// of `SfzRegionRuntime` is loaded, the trigger picks the region whose
+// `lokey..=hikey` covers the played note and plays back from that
+// region's pre-loaded buffer with `pitch_keycenter` as the resample
+// root.  Single-WAV mode (no regions) preserves V1.1 behaviour exactly.
 
 use std::sync::Arc;
 
 use super::AudioParams;
 use super::dsp_util::{TuningSystem, midi_to_hz_tuned};
+use crate::state::SfzRegion;
+
+/// One region from a parsed `.sfz` file paired with its pre-loaded mono
+/// audio buffer.  Built off the audio thread (UI / API loads + resamples
+/// to engine SR), then handed to the voice via
+/// `AudioCommand::LoadSampleInstrumentSfz`.  The audio thread reads but
+/// never allocates against this list.
+#[derive(Clone, Debug)]
+pub struct SfzRegionRuntime {
+    pub region: SfzRegion,
+    pub samples: Arc<Vec<f32>>,
+}
 
 /// ADSR stages tracked per-trigger.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -25,13 +43,17 @@ enum AdsrStage {
 }
 
 pub struct SampleInstrumentVoice {
-    /// Loaded mono sample data.  Empty when nothing is loaded.
+    /// Loaded mono sample data.  Empty when nothing is loaded.  In SFZ
+    /// mode this is a pointer-copy of the active region's buffer,
+    /// swapped at trigger time when the played note picks a different
+    /// region.
     samples: Arc<Vec<f32>>,
     /// Read position in samples (fractional for linear interpolation).
     pos: f32,
     /// Source-recording reference Hz — set on `load()` from the user's
     /// `root_note` so the pitch ratio is always note-relative.  Defaults
-    /// to C4 frequency until a sample is loaded.
+    /// to C4 frequency until a sample is loaded.  In SFZ mode this is
+    /// derived per-trigger from the matching region's `pitch_keycenter`.
     root_freq: f32,
     /// Current playback frequency (Hz) — set on trigger.
     freq: f32,
@@ -42,6 +64,15 @@ pub struct SampleInstrumentVoice {
     gate: bool,
     /// Per-step accent (0..=1).
     accent: f32,
+    /// SFZ-mode region list.  Empty = single-WAV mode (V1.1 path).
+    /// Trigger walks this for the first region whose `lokey..=hikey`
+    /// covers the played note.  Pre-loaded buffers stay alive for the
+    /// voice's lifetime — Arc keeps the swap allocation-free.
+    regions: Vec<SfzRegionRuntime>,
+    /// Per-trigger gain multiplier (linear) — set when the region's
+    /// `volume_db` is applied so the process loop doesn't have to
+    /// recompute the dB→linear conversion every sample.
+    region_gain: f32,
 }
 
 impl SampleInstrumentVoice {
@@ -55,16 +86,55 @@ impl SampleInstrumentVoice {
             adsr_value: 0.0,
             gate: false,
             accent: 0.0,
+            regions: Vec::new(),
+            region_gain: 1.0,
         }
     }
 
-    /// Swap in a freshly-loaded mono sample buffer.  `data` must already
-    /// be at the engine sample rate.
+    /// Swap in a freshly-loaded mono sample buffer (single-WAV mode).
+    /// Drops any SFZ regions previously loaded — the two modes are
+    /// mutually exclusive at any given moment.  `data` must already be
+    /// at the engine sample rate.
     pub fn load(&mut self, data: Arc<Vec<f32>>) {
         self.samples = data;
         self.pos = 0.0;
         self.adsr_stage = AdsrStage::Off;
         self.adsr_value = 0.0;
+        self.regions.clear();
+        self.region_gain = 1.0;
+    }
+
+    /// Switch into SFZ multisample mode.  Replaces any active single-WAV
+    /// buffer; the next trigger picks the right region by note.  All
+    /// regions' sample buffers must already be at the engine sample
+    /// rate.
+    pub fn load_sfz(&mut self, regions: Vec<SfzRegionRuntime>) {
+        self.regions = regions;
+        // Pre-clear playback state so the next trigger starts cleanly
+        // — without this an in-flight release tail could continue
+        // chewing through a stale buffer until the envelope completes.
+        self.samples = Arc::new(Vec::new());
+        self.pos = 0.0;
+        self.adsr_stage = AdsrStage::Off;
+        self.adsr_value = 0.0;
+        self.region_gain = 1.0;
+    }
+
+    /// True when at least one SFZ region is loaded — the voice is in
+    /// multisample mode rather than single-WAV mode.
+    pub fn is_sfz_mode(&self) -> bool {
+        !self.regions.is_empty()
+    }
+
+    /// First region whose key range covers `note`.  V1 is single-active
+    /// — velocity layers + round-robin pick the right region among the
+    /// matches in Stage 5.  Returns `None` when no region claims the
+    /// note (the trigger then plays nothing — silence is the right
+    /// outcome for an out-of-range key).
+    fn pick_region(&self, note: u8) -> Option<usize> {
+        self.regions
+            .iter()
+            .position(|r| r.region.matches_note(note))
     }
 
     /// Borrow the loaded buffer (used by the UI thread to run pitch
@@ -89,8 +159,34 @@ impl SampleInstrumentVoice {
         pitch_offset_cents: f32,
     ) {
         let _ = slide;
-        let cents_ratio = 2.0_f32.powf(pitch_offset_cents / 1200.0);
-        self.freq = (midi_to_hz_tuned(note, tuning) * cents_ratio).max(20.0);
+        // SFZ mode: select the matching region first; bail to silence
+        // when the played note falls outside every region's range.
+        if !self.regions.is_empty() {
+            let Some(idx) = self.pick_region(note) else {
+                self.adsr_stage = AdsrStage::Off;
+                self.adsr_value = 0.0;
+                self.gate = false;
+                return;
+            };
+            let r = &self.regions[idx];
+            self.samples = r.samples.clone();
+            // Region's pitch_keycenter is the resample anchor; tune /
+            // transpose offset the played note relative to it.
+            let region_offset = r.region.transpose as f32 + r.region.tune_cents / 100.0;
+            self.root_freq = midi_to_hz_tuned(r.region.pitch_keycenter, tuning).max(20.0);
+            let cents_ratio = 2.0_f32.powf((pitch_offset_cents + region_offset * 100.0) / 1200.0);
+            self.freq = (midi_to_hz_tuned(note, tuning) * cents_ratio).max(20.0);
+            // dB → linear once per trigger so the per-sample loop is a
+            // bare multiply.  SFZ allows positive volumes (rare); we
+            // honour them but cap at +12 dB so a malformed file can't
+            // blow the master.
+            let v = r.region.volume_db.clamp(-60.0, 12.0);
+            self.region_gain = 10.0_f32.powf(v / 20.0);
+        } else {
+            let cents_ratio = 2.0_f32.powf(pitch_offset_cents / 1200.0);
+            self.freq = (midi_to_hz_tuned(note, tuning) * cents_ratio).max(20.0);
+            self.region_gain = 1.0;
+        }
         self.pos = 0.0;
         self.adsr_stage = AdsrStage::Attack;
         self.adsr_value = 0.0;
@@ -203,7 +299,7 @@ impl SampleInstrumentVoice {
         }
 
         let accent_gain = 1.0 + self.accent * 0.4;
-        sample * self.adsr_value * accent_gain * p.sample_volume.clamp(0.0, 1.5)
+        sample * self.adsr_value * accent_gain * self.region_gain * p.sample_volume.clamp(0.0, 1.5)
     }
 }
 

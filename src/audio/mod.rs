@@ -5,6 +5,7 @@
 pub mod analysis;
 pub mod dsp;
 pub mod onset;
+pub mod sfz_loader;
 pub mod spectrum;
 
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
@@ -67,6 +68,12 @@ pub enum AudioCommand {
     /// Load sample data into the SampleInstrument voice.  Plays the
     /// recording back at a pitch derived from the played note.
     LoadSampleInstrument(Arc<Vec<f32>>),
+    /// Switch the SampleInstrument voice into SFZ multisample mode.
+    /// The vec carries one entry per region in the parsed `.sfz`,
+    /// each paired with its pre-loaded mono buffer (already resampled
+    /// to the engine sample rate).  Triggers then pick the region
+    /// covering the played note.
+    LoadSampleInstrumentSfz(Vec<crate::audio::dsp::sample_instrument::SfzRegionRuntime>),
     /// Load an impulse-response into the convolution-reverb FX step.
     /// `channels` is 1 for mono, 2 for interleaved stereo; `reversed`
     /// stores the IR back-to-front for the reverse-reverb effect.
@@ -258,6 +265,9 @@ impl AudioEngine {
                             AudioCommand::LoadWavetable(data) => dsp.load_wavetable(data),
                             AudioCommand::LoadSampleInstrument(data) => {
                                 dsp.load_sample_instrument(data)
+                            }
+                            AudioCommand::LoadSampleInstrumentSfz(regions) => {
+                                dsp.load_sample_instrument_sfz(regions)
                             }
                             AudioCommand::LoadImpulseResponse {
                                 data,

@@ -47,7 +47,7 @@ pub use params::{AudioParams, MAX_MOD_ROUTES, compile_mod_routes, lfo_target_to_
 use pitch_shift::PitchShift;
 use pluck::PluckVoice;
 pub use rev_tap::{FxDirection, FxRevQuant};
-use sample_instrument::SampleInstrumentVoice;
+use sample_instrument::{SampleInstrumentVoice, SfzRegionRuntime};
 use samplers::*;
 use voices::*;
 use wavetable::WavetableVoice;
@@ -56,19 +56,15 @@ use crate::state::{FX_STEP_COUNT, FxPlan, FxStep, ModuleKind};
 
 use rev_tap::REV_BUF_LEN;
 
-/// Max FX steps in any one chain snapshot — sized to the union of every
-/// voice's chain + the global chain.  Sends beyond this are silently
-/// truncated at snap time (shouldn't happen with the current FX count).
+/// Max FX steps per chain snapshot — sized to the union of every voice's
+/// chain + the global chain.  Truncated at snap time on overflow.
 const MAX_CHAIN: usize = 16;
-/// Max parallel sends per voice.  Three covers "dry + two distinct FX
-/// sends" (classic reverb + delay split) with headroom for a third
-/// colour chain.  Cables beyond this count are truncated at snap time.
+/// Max parallel sends per voice.  Three = dry + reverb + delay-style
+/// split, with headroom for a third colour chain.
 const MAX_SENDS: usize = 3;
 
 /// Stack-friendly per-voice send snapshot — mirrors `FxPlan.voice_routes`
-/// on the audio thread without any HashMap / Vec touches inside the
-/// frame loop.  Each of the `count` active sends has its own chain
-/// (up to `MAX_CHAIN` FxSteps) and per-send gain.
+/// on the audio thread without HashMap / Vec touches in the frame loop.
 #[derive(Clone, Copy)]
 struct VoiceSendsSnap {
     chains: [[FxStep; MAX_CHAIN]; MAX_SENDS],
@@ -76,9 +72,7 @@ struct VoiceSendsSnap {
     gains: [f32; MAX_SENDS],
     count: usize,
 }
-
-// `SidechainSnap` + MAX_SIDECHAIN now live alongside the sidechain DSP
-// in `fx_sidechain.rs`.
+// `SidechainSnap` + MAX_SIDECHAIN now live in `fx_sidechain.rs`.
 
 // ─── Full DSP state ───────────────────────────────────────────────────────────
 
@@ -350,11 +344,13 @@ impl DspState {
         self.wavetable.load(data);
     }
 
-    /// Load a freshly-decoded sample buffer into the SampleInstrument
-    /// voice.  Audio-thread routing only — actual file I/O happens off
-    /// the realtime path.
+    /// Load a single mono buffer into the SampleInstrument voice.
     pub fn load_sample_instrument(&mut self, data: std::sync::Arc<Vec<f32>>) {
         self.sample_instrument.load(data);
+    }
+    /// Switch the SampleInstrument voice to SFZ multisample mode.
+    pub fn load_sample_instrument_sfz(&mut self, regions: Vec<SfzRegionRuntime>) {
+        self.sample_instrument.load_sfz(regions);
     }
 
     /// Load a new impulse response into the convolution reverb.  Called

@@ -186,6 +186,136 @@ mod sample_instrument_v11_tests {
 }
 
 #[cfg(test)]
+mod sample_instrument_sfz_mode_tests {
+    use std::path::PathBuf;
+    use std::sync::Arc;
+
+    use crate::audio::dsp::sample_instrument::{SampleInstrumentVoice, SfzRegionRuntime};
+    use crate::state::SfzRegion;
+
+    fn region(lokey: u8, hikey: u8, pitch_keycenter: u8, sample_value: f32) -> SfzRegionRuntime {
+        let mut r = SfzRegion {
+            lokey,
+            hikey,
+            pitch_keycenter,
+            ..Default::default()
+        };
+        r.sample_path = PathBuf::from("/synthetic.wav");
+        // Constant-value buffer — every read returns `sample_value` so a
+        // tested process loop produces a clear, region-identifiable
+        // output without needing real audio decoding.
+        let buf: Vec<f32> = vec![sample_value; 1024];
+        SfzRegionRuntime {
+            region: r,
+            samples: Arc::new(buf),
+        }
+    }
+
+    fn make_params() -> crate::audio::dsp::AudioParams {
+        let s = crate::state::AppState::default();
+        crate::audio::dsp::AudioParams::from_app_state(&s)
+    }
+
+    #[test]
+    fn load_sfz_switches_voice_into_multisample_mode() {
+        let mut v = SampleInstrumentVoice::new();
+        assert!(!v.is_sfz_mode());
+        v.load_sfz(vec![region(36, 47, 42, 0.1)]);
+        assert!(v.is_sfz_mode());
+        // Loading a single WAV should reset back to single-mode.
+        v.load(Arc::new(vec![0.0; 100]));
+        assert!(!v.is_sfz_mode());
+    }
+
+    #[test]
+    fn trigger_picks_region_by_note() {
+        // Two distinct regions: low band emits 0.2, high band emits
+        // 0.7.  Triggering inside the low band should produce 0.2;
+        // inside the high band should produce 0.7.  Confirms region
+        // selection actually drives the sample buffer.
+        let mut v = SampleInstrumentVoice::new();
+        v.load_sfz(vec![region(36, 47, 42, 0.2), region(48, 72, 60, 0.7)]);
+        let p = make_params();
+        v.trigger(
+            42,
+            crate::audio::dsp::TuningSystem::TwelveTet,
+            0.0,
+            0.0,
+            0.0,
+        );
+        // First sample after trigger — attack starts at 0 envelope, so
+        // accumulate a few samples and check the running max.
+        let mut max_lo = 0.0_f32;
+        for _ in 0..1000 {
+            max_lo = max_lo.max(v.process(48_000.0, &p).abs());
+        }
+        v.trigger(
+            60,
+            crate::audio::dsp::TuningSystem::TwelveTet,
+            0.0,
+            0.0,
+            0.0,
+        );
+        let mut max_hi = 0.0_f32;
+        for _ in 0..1000 {
+            max_hi = max_hi.max(v.process(48_000.0, &p).abs());
+        }
+        // Output ratio should track the buffer values' ratio (0.7 / 0.2).
+        assert!(
+            max_lo < max_hi,
+            "low region {max_lo} should be quieter than high region {max_hi}"
+        );
+    }
+
+    #[test]
+    fn out_of_range_note_silences_voice() {
+        // Region covers c3..=c4 only; triggering at c5 falls outside.
+        // Voice must produce silence rather than chasing a stale
+        // buffer or reusing the previous region.
+        let mut v = SampleInstrumentVoice::new();
+        v.load_sfz(vec![region(48, 60, 54, 0.5)]);
+        v.trigger(
+            72, // c5, outside region
+            crate::audio::dsp::TuningSystem::TwelveTet,
+            0.0,
+            0.0,
+            0.0,
+        );
+        let p = make_params();
+        for _ in 0..200 {
+            assert_eq!(v.process(48_000.0, &p), 0.0);
+        }
+    }
+
+    #[test]
+    fn region_volume_db_scales_output() {
+        // Two regions covering the same note (different velocity bands
+        // would normally disambiguate, but for this test we just hand
+        // back the first match).  The volume_db on the matched region
+        // should multiply the output.
+        let mut quiet_region = region(60, 60, 60, 0.5);
+        quiet_region.region.volume_db = -6.0; // ~0.5× linear
+        let mut v = SampleInstrumentVoice::new();
+        v.load_sfz(vec![quiet_region]);
+        v.trigger(
+            60,
+            crate::audio::dsp::TuningSystem::TwelveTet,
+            0.0,
+            0.0,
+            0.0,
+        );
+        let p = make_params();
+        let mut max_out = 0.0_f32;
+        for _ in 0..1000 {
+            max_out = max_out.max(v.process(48_000.0, &p).abs());
+        }
+        // -6 dB ≈ 0.501× of buffer value (0.5) × default volume (0.7)
+        // = ~0.175.  Allow generous slop for ADSR ramp + accent.
+        assert!(max_out < 0.3, "expected -6 dB attenuation; got {max_out}");
+    }
+}
+
+#[cfg(test)]
 mod sample_instrument_llm_apply_tests {
     use crate::state::{AppState, apply_llm_update};
 

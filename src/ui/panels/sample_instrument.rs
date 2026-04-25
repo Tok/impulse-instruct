@@ -48,23 +48,15 @@ pub fn draw_sample_instrument(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         // their sample's source pitch.  Manual root knob still wins —
         // the detect only fires when a fresh file is loaded.
         if ui
-            .add_sized([56.0, 20.0], egui::Button::new("LOAD WAV"))
+            .add_sized([60.0, 20.0], egui::Button::new("LOAD"))
             .clicked()
-            && let Some(p) = crate::ui::header_menu::pick_file_via_portal("WAV", &["wav", "WAV"])
+            && let Some(p) = crate::ui::header_menu::pick_file_via_portal(
+                "WAV/SFZ",
+                &["wav", "WAV", "sfz", "SFZ"],
+            )
         {
             let ps = p.to_string_lossy().to_string();
-            if let Some(data) = load_wav_to_44100(&ps) {
-                if let Some((hz, conf)) =
-                    crate::audio::analysis::detect_pitch_hz(&data, crate::audio::SAMPLE_RATE)
-                    && conf >= 0.5
-                {
-                    let midi = crate::audio::dsp::hz_to_midi(hz).round().clamp(0.0, 127.0) as u8;
-                    app.state.write().sample_instrument.root_note = midi;
-                }
-                let _ = app.audio_tx.push(AudioCommand::LoadSampleInstrument(data));
-                app.state.write().sample_instrument.sample_path = ps.clone();
-                app.last_sample_instrument_path = ps;
-            }
+            load_sample_instrument_path(app, &ps);
         }
         let path = app.state.read().sample_instrument.sample_path.clone();
         let name = if path.is_empty() {
@@ -84,10 +76,7 @@ pub fn draw_sample_instrument(app: &mut ImpulseApp, ui: &mut egui::Ui) {
 
         // Poll for API-driven sample_path changes.
         if !path.is_empty() && app.last_sample_instrument_path != path {
-            if let Some(data) = load_wav_to_44100(&path) {
-                let _ = app.audio_tx.push(AudioCommand::LoadSampleInstrument(data));
-            }
-            app.last_sample_instrument_path = path;
+            load_sample_instrument_path(app, &path);
         }
     });
 
@@ -235,4 +224,38 @@ pub fn draw_sample_instrument(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             });
         });
     });
+}
+
+/// Load a path into the SampleInstrument voice.  Sniffs `.sfz` vs
+/// `.wav` by extension; on `.sfz`, parses + loads every referenced WAV
+/// off the audio thread and sends the runtime region list.  On `.wav`,
+/// preserves the V1.1 single-sample path (load + auto-detect-root +
+/// `LoadSampleInstrument` command).  Centralised so the LOAD button
+/// and the API-poll path can share it.
+fn load_sample_instrument_path(app: &mut ImpulseApp, path: &str) {
+    let is_sfz = std::path::Path::new(path)
+        .extension()
+        .and_then(|e| e.to_str())
+        .map(|e| e.eq_ignore_ascii_case("sfz"))
+        .unwrap_or(false);
+    if is_sfz {
+        if let Some(regions) = crate::audio::sfz_loader::load_sfz_file(path) {
+            let _ = app
+                .audio_tx
+                .push(AudioCommand::LoadSampleInstrumentSfz(regions));
+            app.state.write().sample_instrument.sample_path = path.to_string();
+            app.last_sample_instrument_path = path.to_string();
+        }
+    } else if let Some(data) = load_wav_to_44100(path) {
+        if let Some((hz, conf)) =
+            crate::audio::analysis::detect_pitch_hz(&data, crate::audio::SAMPLE_RATE)
+            && conf >= 0.5
+        {
+            let midi = crate::audio::dsp::hz_to_midi(hz).round().clamp(0.0, 127.0) as u8;
+            app.state.write().sample_instrument.root_note = midi;
+        }
+        let _ = app.audio_tx.push(AudioCommand::LoadSampleInstrument(data));
+        app.state.write().sample_instrument.sample_path = path.to_string();
+        app.last_sample_instrument_path = path.to_string();
+    }
 }
