@@ -61,6 +61,9 @@ pub enum AudioCommand {
     LoadSampler(Arc<Vec<f32>>),
     /// Load sample data into the granular texture voice.
     LoadGranular(Arc<Vec<f32>>),
+    /// Load sample data into the wavetable voice.  The DSP splits
+    /// `data` into 2048-sample frames at load time.
+    LoadWavetable(Arc<Vec<f32>>),
     /// Load an impulse-response into the convolution-reverb FX step.
     /// `channels` is 1 for mono, 2 for interleaved stereo; `reversed`
     /// stores the IR back-to-front for the reverse-reverb effect.
@@ -249,6 +252,7 @@ impl AudioEngine {
                             AudioCommand::SetMonitorVolume(v) => monitor_vol = v,
                             AudioCommand::LoadSampler(data) => dsp.load_amen(data),
                             AudioCommand::LoadGranular(data) => dsp.load_granular(data),
+                            AudioCommand::LoadWavetable(data) => dsp.load_wavetable(data),
                             AudioCommand::LoadImpulseResponse {
                                 data,
                                 channels: ch,

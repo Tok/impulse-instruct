@@ -224,6 +224,17 @@ impl AudioParams {
                 .modules
                 .iter()
                 .any(|m| m.kind == ModuleKind::PluckString && m.enabled),
+            wavetable_enabled: s.wavetable.enabled,
+            wavetable_position: s.wavetable.position.clamp(0.0, 1.0),
+            wavetable_phase_offset: s.wavetable.phase_offset.clamp(0.0, 1.0),
+            wavetable_volume: s.wavetable.volume.clamp(0.0, 1.5),
+            wavetable_pan: s.wavetable.pan.clamp(-1.0, 1.0),
+            wavetable_pitch_offset_semi: s.wavetable.pitch_offset_semi.clamp(-24.0, 24.0),
+            rack_wavetable: s
+                .rack
+                .modules
+                .iter()
+                .any(|m| m.kind == ModuleKind::WavetableVoice && m.enabled),
             hoover_enabled: s.hoover.enabled,
             hoover_filter_start: s.hoover.filter_start,
             hoover_sweep_time: s.hoover.sweep_time.clamp(0.1, 4.0),

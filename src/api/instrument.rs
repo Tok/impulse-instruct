@@ -41,6 +41,16 @@ pub struct ConvReverbRequest {
     pub random: bool,
 }
 
+/// Request body for /api/wavetable — either an explicit path or a
+/// random pick from `samples/wavetables/`.
+#[derive(Deserialize)]
+pub struct WavetableRequest {
+    #[serde(default)]
+    pub path: Option<String>,
+    #[serde(default)]
+    pub random: bool,
+}
+
 #[derive(Deserialize)]
 pub struct StyleRequest {
     /// Style id from styles.json (e.g. "drum_and_bass"), "__free__",
@@ -160,6 +170,73 @@ pub async fn post_conv_reverb(
             Json(OkResponse {
                 ok: false,
                 message: Some("no path and no samples found in samples/impulses/".into()),
+            })
+        }
+    }
+}
+
+/// Scan `samples/wavetables/` for .wav files.
+pub fn scan_wavetable_samples() -> Vec<std::path::PathBuf> {
+    let mut out: Vec<std::path::PathBuf> = std::fs::read_dir("samples/wavetables")
+        .into_iter()
+        .flatten()
+        .flatten()
+        .map(|e| e.path())
+        .filter(|p| {
+            p.is_file()
+                && p.extension()
+                    .and_then(|e| e.to_str())
+                    .is_some_and(|e| e.eq_ignore_ascii_case("wav"))
+        })
+        .collect();
+    out.sort();
+    out
+}
+
+/// Pick a random wavetable path — mirrors `pick_random_impulse`.
+pub fn pick_random_wavetable() -> Option<String> {
+    let samples = scan_wavetable_samples();
+    if samples.is_empty() {
+        return None;
+    }
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.subsec_nanos() as usize)
+        .unwrap_or(0);
+    samples
+        .get(nanos % samples.len())
+        .map(|p| p.to_string_lossy().to_string())
+}
+
+/// Load a wavetable into the WavetableVoice — mirror of /api/amen.
+/// Writes `wavetable.wave_path` in AppState; the UI panel polls and
+/// pushes the decoded samples to the audio thread via
+/// `AudioCommand::LoadWavetable`.
+pub async fn post_wavetable(
+    AxumState(api): AxumState<ApiState>,
+    Json(req): Json<WavetableRequest>,
+) -> Json<OkResponse> {
+    let resolved: Option<String> = if let Some(p) = req.path.as_deref().filter(|s| !s.is_empty()) {
+        Some(p.to_string())
+    } else if req.random {
+        pick_random_wavetable()
+    } else {
+        None
+    };
+    match resolved {
+        Some(p) => {
+            api.app_state.write().wavetable.wave_path = p.clone();
+            api_log(&api, format!("[API] wavetable: loaded {}", p));
+            Json(OkResponse {
+                ok: true,
+                message: Some(format!("wavetable: {}", p)),
+            })
+        }
+        None => {
+            api_log(&api, "[API] wavetable: no sample resolved".to_string());
+            Json(OkResponse {
+                ok: false,
+                message: Some("no path and no samples found in samples/wavetables/".into()),
             })
         }
     }

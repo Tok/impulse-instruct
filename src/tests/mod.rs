@@ -71,3 +71,4 @@ mod tuning_tests;
 mod ui_prefs_tests;
 mod vram_helpers_tests;
 mod vram_tests;
+mod wavetable_tests;

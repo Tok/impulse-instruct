@@ -46,6 +46,14 @@ fn default_pluck_steps() -> usize {
     32
 }
 
+fn default_wavetable_pattern() -> Vec<TB303Step> {
+    vec![TB303Step::default(); MAX_STEPS]
+}
+
+fn default_wavetable_steps() -> usize {
+    32
+}
+
 // ─── Step types ──────────────────────────────────────────────────────────────
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq)]
@@ -160,6 +168,8 @@ pub struct SequencerState {
     pub an1x_pattern: Vec<TB303Step>,
     #[serde(default = "default_pluck_pattern")]
     pub pluck_pattern: Vec<TB303Step>,
+    #[serde(default = "default_wavetable_pattern")]
+    pub wavetable_pattern: Vec<TB303Step>,
     /// Tonic note (0=C … 11=B). Used for scale highlighting and LLM music theory.
     pub root_note: u8,
     /// Active scale / mode for this pattern.
@@ -175,6 +185,8 @@ pub struct SequencerState {
     pub an1x_steps: usize,
     #[serde(default = "default_pluck_steps")]
     pub pluck_steps: usize,
+    #[serde(default = "default_wavetable_steps")]
+    pub wavetable_steps: usize,
     /// Per-voice bass patterns for multi-voice support. Voice 0 mirrors `bass_pattern`.
     #[serde(default = "default_bass_patterns")]
     pub bass_patterns: Vec<Vec<TB303Step>>,
@@ -253,6 +265,7 @@ impl Default for SequencerState {
             hoover_pattern: vec![TB303Step::default(); MAX_STEPS],
             an1x_pattern: vec![TB303Step::default(); MAX_STEPS],
             pluck_pattern: vec![TB303Step::default(); MAX_STEPS],
+            wavetable_pattern: vec![TB303Step::default(); MAX_STEPS],
             root_note: 9, // A
             scale: Scale::NaturalMinor,
             scale_snap: false,
@@ -261,6 +274,7 @@ impl Default for SequencerState {
             hoover_steps: 32,
             an1x_steps: 32,
             pluck_steps: 32,
+            wavetable_steps: 32,
             muted_drums: std::collections::HashSet::new(),
             soloed_drums: std::collections::HashSet::new(),
             midi_clock_sync: false,

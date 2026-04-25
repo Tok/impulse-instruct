@@ -36,6 +36,7 @@ pub mod spectrum;
 pub mod stereo_meter;
 pub mod timeline;
 pub mod tts;
+pub mod wavetable;
 
 pub use amen::draw_amen;
 pub use an1x::draw_an1x;
@@ -54,3 +55,4 @@ pub use spectrum::draw_spectrum;
 pub use stereo_meter::draw_stereo_meter;
 pub use timeline::draw_timeline;
 pub use tts::draw_tts;
+pub use wavetable::draw_wavetable;

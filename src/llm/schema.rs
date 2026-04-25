@@ -199,6 +199,21 @@ pub fn param_json_schema() -> serde_json::Value {
                 },
                 "additionalProperties": false
             },
+            "wavetable": {
+                "type": "object",
+                "description": "Wavetable voice — scans a user-loaded WAV split into 2048-sample single-cycle frames. Triggered from its own sequencer lane.",
+                "properties": {
+                    "enabled":           { "type": "boolean" },
+                    "position":          { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "Frame position 0..1 — 0=first frame, 1=last frame, fractional values morph between adjacent frames" },
+                    "phase_offset":      { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "Phase offset 0..1 inside the active frame (cycles 0..2π)" },
+                    "volume":            { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+                    "pan":               { "type": "number", "minimum": -1.0, "maximum": 1.0 },
+                    "pitch_offset_semi": { "type": "number", "minimum": -24.0, "maximum": 24.0 },
+                    "wavetable_steps":   bool_array,
+                    "wavetable_notes":   { "type": "array", "items": { "type": "integer", "minimum": 0, "maximum": 127 }, "maxItems": 64, "description": "MIDI note per wavetable step" }
+                },
+                "additionalProperties": false
+            },
             "pluck": {
                 "type": "object",
                 "description": "Karplus-Strong plucked-string voice — dry melodic voice filling the gap between bass and AN1X.  LLM triggers: 'add a pluck', 'acoustic melody', 'string pad'.",

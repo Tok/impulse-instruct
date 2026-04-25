@@ -365,6 +365,63 @@ pub(super) fn apply_pluck_update(
     }
 }
 
+/// Apply Wavetable voice fields from an LLM JSON update object.
+/// Mirrors `apply_pluck_update`: voice params + sequencer pattern.
+pub(super) fn apply_wavetable_update(
+    s: &mut AppState,
+    w: &serde_json::Map<String, serde_json::Value>,
+    locked: &HashSet<String>,
+) {
+    if !locked.contains("wavetable.enabled")
+        && let Some(v) = w.get("enabled").and_then(|v| v.as_bool())
+    {
+        s.wavetable.enabled = v;
+    }
+    s.wavetable.position = unlocked_f32(
+        s.wavetable.position,
+        w,
+        "position",
+        "wavetable.position",
+        locked,
+    );
+    s.wavetable.phase_offset = unlocked_f32(
+        s.wavetable.phase_offset,
+        w,
+        "phase_offset",
+        "wavetable.phase_offset",
+        locked,
+    );
+    s.wavetable.volume = unlocked_f32(s.wavetable.volume, w, "volume", "wavetable.volume", locked);
+    if !locked.contains("wavetable.pan")
+        && let Some(v) = w.get("pan").and_then(|v| v.as_f64())
+    {
+        s.wavetable.pan = (v as f32).clamp(-1.0, 1.0);
+    }
+    if !locked.contains("wavetable.pitch_offset_semi")
+        && let Some(v) = w.get("pitch_offset_semi").and_then(|v| v.as_f64())
+    {
+        s.wavetable.pitch_offset_semi = (v as f32).clamp(-24.0, 24.0);
+    }
+    if !locked.contains("sequencer.wavetable_steps")
+        && let Some(arr) = w.get("wavetable_steps").and_then(|v| v.as_array())
+    {
+        for (i, val) in arr.iter().enumerate().take(MAX_STEPS) {
+            if let Some(a) = val.as_bool() {
+                s.sequencer.wavetable_pattern[i].active = a;
+            }
+        }
+    }
+    if !locked.contains("sequencer.wavetable_notes")
+        && let Some(arr) = w.get("wavetable_notes").and_then(|v| v.as_array())
+    {
+        for (i, val) in arr.iter().enumerate().take(MAX_STEPS) {
+            if let Some(n) = val.as_u64() {
+                s.sequencer.wavetable_pattern[i].note = n.clamp(0, 127) as u8;
+            }
+        }
+    }
+}
+
 /// Apply AN1X voice fields from an LLM JSON update object.
 pub(super) fn apply_an1x_update(
     s: &mut AppState,

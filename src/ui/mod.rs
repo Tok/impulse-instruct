@@ -240,6 +240,11 @@ pub struct ImpulseApp {
     /// it diverges from this — covers the API path that writes the
     /// string without sending a LoadImpulseResponse command directly.
     pub(crate) last_conv_reverb_ir_path: String,
+    /// Same poll-cache pattern for the wavetable voice's `wave_path`
+    /// — surfaces `/api/wavetable` writes into the audio thread on
+    /// the next frame without coupling the API thread to the audio
+    /// command queue directly.
+    pub(crate) last_wavetable_path: String,
     pub(crate) neutts_online: bool,
     pub(crate) granular_capture_rx: rtrb::Consumer<f32>,
     pub(crate) granular_tap: Vec<f32>, // ring buffer, ~3s master output for CAPTURE
@@ -431,6 +436,7 @@ impl ImpulseApp {
             dsp_load_buf: Vec::with_capacity(64),
             amen_ui: Default::default(),
             last_conv_reverb_ir_path: String::new(),
+            last_wavetable_path: String::new(),
             neutts_online: false,
             granular_capture_rx: audio.granular_capture_rx,
             granular_tap: vec![0.0; crate::audio::SAMPLE_RATE_HZ as usize * 3], // 3s ring buffer

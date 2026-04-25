@@ -395,6 +395,7 @@ FX (0.0–1.0 unless noted; at top level, never inside "sequencer"):
   fx.param_eq_bands[0..7]: {{kind (0=low shelf, 1=peak, 2=high shelf), freq Hz, gain dB ±18, q 0.1–10, enabled}} — 8-band parametric EQ, shelves at 0 and 7 by default
   fx.pitch_shift_{{semi (-24..+24 st, 0=bypass), fine (-100..+100 cents), mix, fbk}} — grain-based bidirectional pitch shift (harmonies, octave doubles).  Distinct from Autotune (upward snap-to-key).
   pluck.{{enabled, damping (decay length), brightness (output tone), volume, pan, pitch_offset_semi (-24..+24)}} — Karplus-Strong plucked-string voice.  Own sequencer lane: pluck.pluck_steps (bool array) + pluck.pluck_notes (MIDI note per step).
+  wavetable.{{enabled, position (0..1, frame scan), phase_offset, volume, pan, pitch_offset_semi}} — single-table wavetable voice (user-supplied .wav from samples/wavetables/).  Own sequencer lane: wavetable.wavetable_steps + wavetable.wavetable_notes.
   fx.ms_{{mid,side}}_{{gain, tilt, sat}} — mid/side master bus; 0.5 = unity on gain + tilt, 0 = off on sat.  Side gain below 0.5 narrows the stereo image; tilt toward treble widens the air.
   fx.delay_{{time (0=0s, 1=2s; 0.375≈dotted 8th @130), feedback, mix, wow_flutter, saturation}}
   fx.distortion_{{drive, mix}}; fx.bitcrush_{{bits (1=clean, 0=1-bit), rate, mix}}

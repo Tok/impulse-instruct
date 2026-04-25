@@ -18,7 +18,9 @@ pub mod pitch_shift;
 pub mod pluck;
 mod rev_tap;
 pub mod samplers;
+mod trigger_handler;
 pub mod voices;
+pub mod wavetable;
 use an1x::An1xVoice;
 use bass303::Bass303;
 use conv_reverb::ConvReverb;
@@ -40,9 +42,9 @@ use pluck::PluckVoice;
 pub use rev_tap::{FxDirection, FxRevQuant};
 use samplers::*;
 use voices::*;
+use wavetable::WavetableVoice;
 
-use crate::sequencer::TriggerEvent;
-use crate::state::{DrumVoice, FX_STEP_COUNT, FxPlan, FxStep, ModuleKind};
+use crate::state::{FX_STEP_COUNT, FxPlan, FxStep, ModuleKind};
 
 use rev_tap::REV_BUF_LEN;
 
@@ -107,6 +109,7 @@ pub struct DspState {
     granular: GranularVoice,
     hoover: HooverVoice,
     pluck: PluckVoice,
+    wavetable: WavetableVoice,
     an1x: An1xVoice,
     amen: AmenVoice,
     // LFO state
@@ -207,6 +210,7 @@ impl DspState {
             granular: GranularVoice::new(0xBEEF_CAFE),
             hoover: HooverVoice::new(),
             pluck: PluckVoice::new(),
+            wavetable: WavetableVoice::new(),
             an1x: An1xVoice::new(),
             amen: AmenVoice::new(),
             lfo_phases: [0.0; 4],
@@ -260,6 +264,14 @@ impl DspState {
         self.granular.load(data);
     }
 
+    /// Load mono samples (resampled to engine rate) into the wavetable
+    /// voice.  The voice splits the buffer into 2048-sample frames at
+    /// load time so the audio thread reads frames without further
+    /// allocation.
+    pub fn load_wavetable(&mut self, data: std::sync::Arc<Vec<f32>>) {
+        self.wavetable.load(data);
+    }
+
     /// Load a new impulse response into the convolution reverb.  Called
     /// outside the audio callback (via `AudioCommand::LoadImpulseResponse`)
     /// so allocation/FFT pre-computation in here is fine.  `channels`
@@ -280,140 +292,8 @@ impl DspState {
         self.conv_reverb.clear_ir();
     }
 
-    pub fn handle_trigger(&mut self, event: &TriggerEvent) {
-        use crate::sequencer::TriggerEvent::*;
-        match event {
-            DrumTrigger {
-                voice,
-                velocity,
-                slice,
-            } => {
-                let in_rack = match voice {
-                    DrumVoice::Kick808
-                    | DrumVoice::Snare808
-                    | DrumVoice::HihatClosed808
-                    | DrumVoice::HihatOpen808
-                    | DrumVoice::TomHi808
-                    | DrumVoice::TomMid808
-                    | DrumVoice::TomLo808 => self.params.rack_drums808,
-                    DrumVoice::Kick909
-                    | DrumVoice::Snare909
-                    | DrumVoice::HihatClosed909
-                    | DrumVoice::HihatOpen909
-                    | DrumVoice::Clap909
-                    | DrumVoice::Rim909 => self.params.rack_drums909,
-                    DrumVoice::Amen => self.params.rack_amen,
-                    DrumVoice::GabberKick => self.params.rack_gabber_kick,
-                };
-                if !in_rack {
-                    return;
-                }
-                self.drum_velocity[voices::drum_voice_idx(voice)] = velocity.clamp(0.0, 1.0);
-                match voice {
-                    DrumVoice::Kick808 => self.kick808.trigger(),
-                    DrumVoice::Snare808 => self.snare808.trigger(),
-                    DrumVoice::HihatClosed808 => self.hihat_closed808.trigger(),
-                    DrumVoice::HihatOpen808 => self.hihat_open808.trigger(),
-                    DrumVoice::TomHi808 => self.tom_hi808.trigger(),
-                    DrumVoice::TomMid808 => self.tom_mid808.trigger(),
-                    DrumVoice::TomLo808 => self.tom_lo808.trigger(),
-                    DrumVoice::Kick909 => self.kick909.trigger(),
-                    DrumVoice::Snare909 => self.snare909.trigger(),
-                    DrumVoice::HihatClosed909 => self.hihat_closed909.trigger(),
-                    DrumVoice::HihatOpen909 => self.hihat_open909.trigger(),
-                    DrumVoice::Clap909 => self.clap909.trigger(),
-                    DrumVoice::Rim909 => self.rim909.trigger(),
-                    DrumVoice::Amen => self.amen.trigger(
-                        *slice,
-                        self.params.amen_slice_count,
-                        self.params.amen_start_offset,
-                        self.params.amen_end_offset,
-                        self.params.amen_reverse,
-                        self.params.amen_gate,
-                        self.params.amen_stutter,
-                        &self.params.amen_slice_positions,
-                        &self.params.amen_slice_pitches,
-                        &self.params.amen_slice_volumes,
-                        &self.params.amen_slice_reverses,
-                        self.params.amen_bpm_stretch,
-                        self.params.amen_bpm_stretch_preserve,
-                        self.params.amen_source_bpm,
-                        self.params.sequencer_bpm,
-                    ),
-                    DrumVoice::GabberKick => self.gabber_kick.trigger(),
-                }
-            }
-            BassTrigger {
-                voice_idx,
-                note,
-                accent,
-                slide,
-                gate_samples: _,
-                pan,
-            } => {
-                if self.params.rack_bass && *voice_idx < crate::state::MAX_BASS_VOICES {
-                    self.bass[*voice_idx].trigger(*note, *accent, *slide, self.params.tuning);
-                    self.bass_step_pan = pan.clamp(-1.0, 1.0);
-                }
-            }
-            BassGateOff { voice_idx } => {
-                if self.params.rack_bass && *voice_idx < crate::state::MAX_BASS_VOICES {
-                    self.bass[*voice_idx].gate_off();
-                }
-            }
-            HooverTrigger {
-                note,
-                accent,
-                slide,
-            } => {
-                if self.params.rack_hoover {
-                    self.hoover
-                        .trigger(*note, self.params.tuning, *accent, *slide);
-                }
-            }
-            HooverGateOff => {
-                if self.params.rack_hoover {
-                    self.hoover.gate_off();
-                }
-            }
-            An1xTrigger {
-                note,
-                accent,
-                slide,
-            } => {
-                if self.params.rack_an1x {
-                    self.an1x
-                        .trigger(*note, *accent, *slide, self.sample_rate, &self.params);
-                }
-            }
-            An1xGateOff => {
-                if self.params.rack_an1x {
-                    self.an1x.gate_off();
-                }
-            }
-            PluckTrigger {
-                note,
-                accent,
-                slide,
-            } => {
-                if self.params.rack_pluck {
-                    self.pluck.trigger(
-                        *note,
-                        self.params.tuning,
-                        *accent,
-                        *slide,
-                        self.sample_rate,
-                        self.params.pluck_pitch_offset_semi,
-                    );
-                }
-            }
-            PluckGateOff => {
-                if self.params.rack_pluck {
-                    self.pluck.gate_off();
-                }
-            }
-        }
-    }
+    // `handle_trigger` lives in `trigger_handler.rs` (extracted to
+    // keep this file under the 1000-line cap).
 
     /// Process one buffer — pure computation, no I/O, no allocation.
     pub fn process_block(&mut self, output: &mut [f32], channels: usize) {
@@ -542,6 +422,7 @@ impl DspState {
         let sends_909 = snap_sends(ModuleKind::DrumKit909);
         let sends_hoover = snap_sends(ModuleKind::HooverLead);
         let sends_pluck = snap_sends(ModuleKind::PluckString);
+        let sends_wavetable = snap_sends(ModuleKind::WavetableVoice);
         let sends_an1x = snap_sends(ModuleKind::An1xVoice);
         let sends_amen = snap_sends(ModuleKind::AmenSampler);
         let sends_noise = snap_sends(ModuleKind::NoiseVoice);
@@ -653,6 +534,11 @@ impl DspState {
             } else {
                 0.0
             };
+            let wavetable_out = if p.wavetable_enabled && p.rack_wavetable {
+                self.wavetable.process(sr, &p)
+            } else {
+                0.0
+            };
             // Cross-modulation: bass → AN1X pitch (one-sample delay via bass_out)
             if p.xmod_bass_to_an1x_pitch > 0.001 {
                 p.lfo_pitch_mod_st += bass_out * p.xmod_bass_to_an1x_pitch * 24.0;
@@ -700,6 +586,7 @@ impl DspState {
                 + rim * dv[12];
             let bus_hoover = hoover_out;
             let bus_pluck = pluck_out;
+            let bus_wavetable = wavetable_out;
             let bus_an1x = an1x_out;
             let bus_amen = amen_out * dv[13];
             let bus_noise = noise_out;
@@ -730,6 +617,7 @@ impl DspState {
                 + bus_909
                 + bus_hoover
                 + bus_pluck
+                + bus_wavetable
                 + bus_an1x
                 + bus_amen
                 + bus_noise
@@ -864,11 +752,25 @@ impl DspState {
                 } else {
                     bus_pluck
                 };
+                let routed_wavetable = if sends_wavetable.count > 0 {
+                    self.route_voice_sends(
+                        bus_wavetable,
+                        &sends_wavetable,
+                        fb,
+                        &p,
+                        delay_samples,
+                        sr,
+                        gate_env,
+                    )
+                } else {
+                    bus_wavetable
+                };
                 let mixed = (routed_bass
                     + routed_808
                     + routed_909
                     + routed_hoover
                     + routed_pluck
+                    + routed_wavetable
                     + routed_an1x
                     + routed_amen
                     + routed_noise
@@ -928,6 +830,7 @@ impl DspState {
                 + gk * dv[14] * p.gabber_pan * 0.5
                 + hoover_out * p.pan_hoover * 0.5
                 + pluck_out * p.pluck_pan * 0.5
+                + wavetable_out * p.wavetable_pan * 0.5
                 + an1x_out * p.pan_an1x * 0.5
                 + noise_out * p.pan_noise * 0.5;
             // Decay the Pan FxStep side-contribution when the step

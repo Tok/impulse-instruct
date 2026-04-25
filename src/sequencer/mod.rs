@@ -72,6 +72,15 @@ pub enum TriggerEvent {
         slide: f32,
     },
     PluckGateOff,
+    /// Wavetable voice trigger.  Same shape as PluckTrigger; `slide`
+    /// is reserved for future legato handling — the wavetable voice
+    /// snaps pitch on every trigger today.
+    WavetableTrigger {
+        note: u8,
+        accent: f32,
+        slide: f32,
+    },
+    WavetableGateOff,
 }
 
 // ─── Clock state (audio-thread local, not in shared AppState) ─────────────────
@@ -88,6 +97,7 @@ pub struct ClockState {
     pub gate_counter_hoover: u32, // samples remaining in hoover gate
     pub gate_counter_an1x: u32, // samples remaining in AN1X gate
     pub gate_counter_pluck: u32, // samples remaining in pluck gate
+    pub gate_counter_wavetable: u32, // samples remaining in wavetable gate
     // Ratchet sub-hit tracking — fixed arrays, no allocation
     pub ratchet_remaining: [u8; NUM_DRUM_VOICES], // sub-hits left per voice
     pub ratchet_acc: [f64; NUM_DRUM_VOICES],      // sample accumulator since step fire
@@ -106,6 +116,7 @@ impl Default for ClockState {
             gate_counter_hoover: 0,
             gate_counter_an1x: 0,
             gate_counter_pluck: 0,
+            gate_counter_wavetable: 0,
             ratchet_remaining: [0; NUM_DRUM_VOICES],
             ratchet_acc: [0.0; NUM_DRUM_VOICES],
             ratchet_interval: [0.0; NUM_DRUM_VOICES],
@@ -148,6 +159,7 @@ pub fn advance_clock(
     let mut gate_counter_hoover = clock.gate_counter_hoover;
     let mut gate_counter_an1x = clock.gate_counter_an1x;
     let mut gate_counter_pluck = clock.gate_counter_pluck;
+    let mut gate_counter_wavetable = clock.gate_counter_wavetable;
     let mut ratchet_remaining = clock.ratchet_remaining;
     let mut ratchet_acc = clock.ratchet_acc;
     let mut ratchet_interval = clock.ratchet_interval;
@@ -211,6 +223,16 @@ pub fn advance_clock(
             gate_counter_pluck = 0;
         } else {
             gate_counter_pluck -= block_size as u32;
+        }
+    }
+
+    // Handle gate-off for Wavetable
+    if gate_counter_wavetable > 0 {
+        if block_size as u32 >= gate_counter_wavetable {
+            events.push(TriggerEvent::WavetableGateOff);
+            gate_counter_wavetable = 0;
+        } else {
+            gate_counter_wavetable -= block_size as u32;
         }
     }
 
@@ -500,6 +522,43 @@ pub fn advance_clock(
                 slide,
             });
         }
+
+        // Wavetable trigger — own step length + preecho hookup, same
+        // shape as the other melodic lanes.
+        let wstep = step % seq.wavetable_steps.max(1);
+        let ws = seq
+            .wavetable_pattern
+            .get(wstep)
+            .copied()
+            .unwrap_or_default();
+        if ws.active {
+            let gate_samples = (sps * ws.gate as f64) as u32;
+            gate_counter_wavetable = gate_samples;
+            let wsteps = seq.wavetable_steps.max(1);
+            let pre = seq
+                .preecho
+                .get("wavetable")
+                .map(|cfg| preecho::preecho_apply(wstep, wsteps, cfg))
+                .unwrap_or(preecho::PreechoApply::IDENTITY);
+            let accent = pre.accent_override.unwrap_or(ws.accent);
+            let slide = pre.slide_override.unwrap_or(ws.slide);
+            let note = match pre.note_override {
+                Some(ov) => {
+                    let anchor_note = seq
+                        .wavetable_pattern
+                        .get(ov.anchor_step as usize)
+                        .map(|s| s.note)
+                        .unwrap_or(ws.note);
+                    preecho::resolve_note_shift(anchor_note, ov.shift, seq.root_note, seq.scale)
+                }
+                None => ws.note,
+            };
+            events.push(TriggerEvent::WavetableTrigger {
+                note,
+                accent,
+                slide,
+            });
+        }
     }
 
     let new_clock = ClockState {
@@ -510,6 +569,7 @@ pub fn advance_clock(
         gate_counter_hoover,
         gate_counter_an1x,
         gate_counter_pluck,
+        gate_counter_wavetable,
         ratchet_remaining,
         ratchet_acc,
         ratchet_interval,

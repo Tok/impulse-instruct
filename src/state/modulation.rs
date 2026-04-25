@@ -30,6 +30,7 @@ pub fn mod_inputs(kind: ModuleKind) -> &'static [ModInput] {
         AcidBass => &[Fixed(BassPan), Selector, Selector],
         HooverLead => &[Fixed(HooverPan), Selector],
         PluckString => &[Selector, Selector, Selector],
+        WavetableVoice => &[Selector, Selector, Selector],
         An1xVoice => &[Fixed(An1xPan), Selector, Selector],
         NoiseVoice => &[Fixed(NoisePan), Selector],
         // ── Voices without a single pan (multi-voice kits / pan-less) ─────

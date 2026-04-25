@@ -506,6 +506,14 @@ pub struct AudioParams {
     pub pluck_pan: f32,
     pub pluck_pitch_offset_semi: f32,
     pub rack_pluck: bool,
+    // Wavetable voice
+    pub wavetable_enabled: bool,
+    pub wavetable_position: f32,
+    pub wavetable_phase_offset: f32,
+    pub wavetable_volume: f32,
+    pub wavetable_pan: f32,
+    pub wavetable_pitch_offset_semi: f32,
+    pub rack_wavetable: bool,
     // Hoover lead
     pub hoover_enabled: bool,
     pub hoover_filter_start: f32,

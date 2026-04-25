@@ -5,7 +5,7 @@ use super::llm_apply_seq::{
 };
 use super::llm_helpers::{
     apply_an1x_update, apply_bass_update, apply_fx_update, apply_hoover_update, apply_pluck_update,
-    unlocked_f32,
+    apply_wavetable_update, unlocked_f32,
 };
 use super::transitions::{set_drum_step_probability, set_drum_step_ratchet, set_drum_voice_steps};
 use super::{AppState, DrumVoice, LfoTarget, LfoWaveform, MAX_STEPS};
@@ -616,6 +616,12 @@ pub fn apply_llm_update(state: AppState, update: &serde_json::Value, scope: &[St
         && let Some(pl) = update.get("pluck").and_then(|v| v.as_object())
     {
         apply_pluck_update(&mut s, pl, locked);
+    }
+
+    if in_scope("wavetable")
+        && let Some(w) = update.get("wavetable").and_then(|v| v.as_object())
+    {
+        apply_wavetable_update(&mut s, w, locked);
     }
 
     if in_scope("an1x")

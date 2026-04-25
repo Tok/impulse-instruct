@@ -320,6 +320,16 @@ pub fn set_pluck_step(state: AppState, step: usize, note: u8, active: bool) -> A
     s
 }
 
+/// Set a Wavetable sequencer step.
+pub fn set_wavetable_step(state: AppState, step: usize, note: u8, active: bool) -> AppState {
+    let mut s = state;
+    if step < s.sequencer.wavetable_pattern.len() {
+        s.sequencer.wavetable_pattern[step].active = active;
+        s.sequencer.wavetable_pattern[step].note = note;
+    }
+    s
+}
+
 // ─── LLM state update — see llm_apply.rs ─────────────────────────────────────
 
 // ─── Pattern bank & chain ─────────────────────────────────────────────────────

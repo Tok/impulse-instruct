@@ -21,6 +21,9 @@ pub use hoover::HooverState;
 pub mod pluck;
 pub use pluck::PluckState;
 
+pub mod wavetable;
+pub use wavetable::WavetableState;
+
 pub mod noise;
 pub use noise::NoiseVoiceState;
 
@@ -213,6 +216,8 @@ pub struct AppState {
     #[serde(default)]
     pub pluck: PluckState,
     #[serde(default)]
+    pub wavetable: WavetableState,
+    #[serde(default)]
     pub an1x: An1xState,
     #[serde(default)]
     pub amen: AmenState,
@@ -316,6 +321,7 @@ impl Default for AppState {
             granular: Default::default(),
             hoover: Default::default(),
             pluck: Default::default(),
+            wavetable: Default::default(),
             an1x: Default::default(),
             amen: Default::default(),
             gabber_kick: Default::default(),

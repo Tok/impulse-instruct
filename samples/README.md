@@ -45,6 +45,26 @@ Same workflow as amen: drop `.wav` files into `samples/textures/`
 and the module's picker will list them.  Size doesn't matter much —
 the voice only reads small random windows at a time.
 
+## Wavetables
+
+The `WAVETABLE` voice reads `.wav` files from `samples/wavetables/`.
+Files are interpreted as Serum-style single-cycle frame stacks: the
+buffer is split into 2048-sample frames at load time, and the
+voice's POSITION knob scans through them.  A 32-frame Serum
+wavetable comes out as 32 × 2048 = 65 536 samples in the WAV.
+
+Free wavetable sources:
+
+- https://wavetables.com — large CC0 collection of Serum-format
+  tables.
+- https://waveedit.online — browse + download single-cycle stacks.
+- Adventure Kid's free single-cycles: https://www.adventurekid.se/akrt/
+
+Drop `.wav` files into `samples/wavetables/` and load via the
+`LOAD` button on the WAVETABLE card or `/api/wavetable`.  Files
+that aren't a multiple of 2048 samples are tolerated — extra
+samples at the tail are dropped.
+
 ## Impulse responses (convolution reverb)
 
 The `CONV REV` convolution-reverb module reads `.wav` files from
