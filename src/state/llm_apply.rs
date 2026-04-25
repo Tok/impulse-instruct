@@ -4,9 +4,10 @@ use super::llm_apply_seq::{
     apply_melodic_lane_lens, apply_preecho_voices, apply_sequencer_globals,
 };
 use super::llm_helpers::{
-    apply_an1x_update, apply_bass_update, apply_fx_update, apply_hoover_update, apply_pluck_update,
+    apply_an1x_update, apply_bass_update, apply_hoover_update, apply_pluck_update,
     apply_wavetable_update, unlocked_f32,
 };
+use super::llm_helpers_fx::apply_fx_update;
 use super::transitions::{set_drum_step_probability, set_drum_step_ratchet, set_drum_voice_steps};
 use super::{AppState, DrumVoice, LfoTarget, LfoWaveform, MAX_STEPS};
 

@@ -363,126 +363,107 @@ impl AudioEngine {
                             && chain_enabled
                             && !chain_snap.is_empty()
                         {
-                            // Respect per-slot repeat count before actually
-                            // advancing.  The override vec is parallel to
-                            // the chain — missing entries = repeats 1 (v1
-                            // chain behaviour).
+                            // Decision lives in the pure
+                            // `classify_loop_boundary` (state/chain_advance.rs);
+                            // the audio thread is just a dispatcher.
+                            use crate::state::LoopBoundaryAction;
                             let cur_pos = chain_pos_snap % chain_snap.len();
-                            let cur_override = chain_overrides_snap.get(cur_pos);
-                            let cur_repeats = cur_override.map(|o| o.repeats.max(1)).unwrap_or(1);
-                            if chain_repeat_snap + 1 < cur_repeats {
-                                // Stay on the current slot; bump the repeat counter
-                                // and let the audio thread re-enter the same pattern.
-                                s.chain_repeat_count = chain_repeat_snap + 1;
-                            } else if !chain_loop_snap && cur_pos + 1 >= chain_snap.len() {
-                                // One-shot song (e.g. a MIDI import of a
-                                // piece with a definite end) just finished
-                                // its last slot's last repeat.  Stop the
-                                // transport instead of wrapping back to
-                                // the first slot.  Leave chain_pos on the
-                                // final slot so the UI shows "we stopped
-                                // at the end", not "we're queued to play
-                                // slot 0 next".
-                                s.sequencer.running = false;
-                                s.chain_repeat_count = 0;
-                                // `advance_clock` already wrapped the step
-                                // counter and emitted step-0 note-ons for
-                                // the restarted (would-loop) pattern
-                                // before we hit this branch.  Drop those
-                                // note-ons so the piece ends where it
-                                // should instead of firing one trailing
-                                // note past the intended stop.  Keep
-                                // gate-offs so any note that was actively
-                                // sounding into the last step gets a
-                                // clean release.
-                                events.retain(|e| {
-                                    matches!(
-                                        e,
-                                        crate::sequencer::TriggerEvent::BassGateOff { .. }
-                                            | crate::sequencer::TriggerEvent::HooverGateOff
-                                            | crate::sequencer::TriggerEvent::An1xGateOff
-                                    )
-                                });
-                            } else {
-                                let next_pos = (cur_pos + 1) % chain_snap.len();
-                                let next_slot = chain_snap[next_pos];
-                                let next_override = chain_overrides_snap.get(next_pos);
-                                let morph_bars = next_override.map(|o| o.morph_bars).unwrap_or(0);
-                                let bpm = s.sequencer.bpm;
-                                let swing = s.sequencer.swing;
-                                let running = s.sequencer.running;
-                                // Auto-save current edits to the active bank slot before switching.
-                                let current_edit = s.pattern_edit;
-                                let snap = s.sequencer.clone();
-                                if let Some(slot) = s.pattern_bank.get_mut(current_edit) {
-                                    *slot = snap;
+                            let preview_next = (cur_pos + 1) % chain_snap.len();
+                            let preview_slot = chain_snap[preview_next];
+                            let preview_loaded = s
+                                .pattern_bank
+                                .get(preview_slot)
+                                .cloned()
+                                .unwrap_or_default();
+                            let action = crate::state::classify_loop_boundary(
+                                &chain_snap,
+                                &chain_overrides_snap,
+                                chain_pos_snap,
+                                chain_repeat_snap,
+                                chain_loop_snap,
+                                Some(&preview_loaded),
+                                s.sequencer.bpm,
+                                s.sequencer.swing,
+                            );
+                            match action {
+                                LoopBoundaryAction::None => {}
+                                LoopBoundaryAction::BumpRepeatCount(n) => {
+                                    s.chain_repeat_count = n;
                                 }
-                                s.chain_pos = next_pos;
-                                s.chain_repeat_count = 0;
-                                let loaded =
-                                    s.pattern_bank.get(next_slot).cloned().unwrap_or_default();
-                                // Song-slot style override wins over the
-                                // pattern's intrinsic pattern_style; falling
-                                // back to the pattern's tag keeps v1 chains
-                                // unchanged.
-                                let effective_style = next_override
-                                    .and_then(|o| o.style.clone())
-                                    .or_else(|| loaded.pattern_style.clone());
-                                // Song-slot BPM override forces the tempo
-                                // regardless of the pattern's pattern_bpm_apply
-                                // flag, so the same bank slot can play at
-                                // different tempos in different positions.
-                                let (eff_bpm, eff_swing) = match next_override.and_then(|o| o.bpm) {
-                                    Some(b) => (b, loaded.swing),
-                                    None if loaded.pattern_bpm_apply => (loaded.bpm, loaded.swing),
-                                    None => (bpm, swing),
-                                };
-                                let mut loaded = loaded;
-                                loaded.bpm = eff_bpm;
-                                loaded.swing = eff_swing;
-                                loaded.pattern_bpm_apply = true;
-                                // MIDI-playback imports set chain_loop=false as
-                                // a signal that banks are "bass-only" and
-                                // non-bass state (drums, FX, agent-authored
-                                // layers) should survive the bank swap — see
-                                // `chain_advance_preserve_non_bass`.  For
-                                // user-composed songs (chain_loop=true, the
-                                // legacy default) we replace everything,
-                                // preserving the classic per-bank behaviour.
-                                let target = if chain_loop_snap {
-                                    crate::state::chain_advance_transport(
-                                        loaded, eff_bpm, eff_swing, running,
-                                    )
-                                } else {
-                                    crate::state::chain_advance_preserve_non_bass(
-                                        loaded, &seq_snap, running,
-                                    )
-                                };
-                                if morph_bars > 0 {
-                                    // Pattern-morph path: keep the prior
-                                    // sequencer playing and stash the
-                                    // target.  Subsequent loop boundaries
-                                    // run `morph_tick` which progressively
-                                    // swaps step indices in the live
-                                    // patterns.  Apply BPM / swing
-                                    // immediately so transport changes
-                                    // don't lag behind the morph.
-                                    s.sequencer.bpm = target.bpm;
-                                    s.sequencer.swing = target.swing;
-                                    s.chain_morph =
-                                        Some(crate::state::ChainMorph::new(target, morph_bars));
-                                } else {
-                                    s.sequencer = target;
-                                    s.chain_morph = None;
+                                LoopBoundaryAction::StopAtEnd => {
+                                    // One-shot song just finished its
+                                    // last slot's last repeat.  Stop
+                                    // transport; leave chain_pos on the
+                                    // final slot so the UI shows "we
+                                    // stopped at the end".  `advance_clock`
+                                    // already emitted step-0 note-ons for
+                                    // the would-loop pattern; drop them so
+                                    // the piece ends cleanly.  Gate-offs
+                                    // survive so anything still sounding
+                                    // gets a release.
+                                    s.sequencer.running = false;
+                                    s.chain_repeat_count = 0;
+                                    events.retain(|e| {
+                                        matches!(
+                                            e,
+                                            crate::sequencer::TriggerEvent::BassGateOff { .. }
+                                                | crate::sequencer::TriggerEvent::HooverGateOff
+                                                | crate::sequencer::TriggerEvent::An1xGateOff
+                                        )
+                                    });
                                 }
-                                s.sequencer.current_step = clock.current_step;
-                                s.pattern_edit = next_slot;
-                                if effective_style.is_some() {
-                                    let owned = std::mem::take(&mut *s);
-                                    *s = crate::state::apply_pattern_style_on_advance(
-                                        owned,
-                                        effective_style.as_deref(),
+                                LoopBoundaryAction::AdvanceTo {
+                                    next_pos,
+                                    next_slot,
+                                    morph_bars,
+                                    eff_bpm,
+                                    eff_swing,
+                                    effective_style,
+                                } => {
+                                    let running = s.sequencer.running;
+                                    // Auto-save current edits to the
+                                    // active bank slot before switching.
+                                    let current_edit = s.pattern_edit;
+                                    let snap = s.sequencer.clone();
+                                    if let Some(slot) = s.pattern_bank.get_mut(current_edit) {
+                                        *slot = snap;
+                                    }
+                                    s.chain_pos = next_pos;
+                                    s.chain_repeat_count = 0;
+                                    let loaded =
+                                        s.pattern_bank.get(next_slot).cloned().unwrap_or_default();
+                                    let target = crate::state::build_advance_target(
+                                        loaded,
+                                        &seq_snap,
+                                        chain_loop_snap,
+                                        eff_bpm,
+                                        eff_swing,
+                                        running,
                                     );
+                                    if morph_bars > 0 {
+                                        // Morph path: keep the prior
+                                        // sequencer playing and stash the
+                                        // target for `morph_tick` to
+                                        // progressively swap in.  BPM /
+                                        // swing apply immediately so
+                                        // transport changes don't lag.
+                                        s.sequencer.bpm = target.bpm;
+                                        s.sequencer.swing = target.swing;
+                                        s.chain_morph =
+                                            Some(crate::state::ChainMorph::new(target, morph_bars));
+                                    } else {
+                                        s.sequencer = target;
+                                        s.chain_morph = None;
+                                    }
+                                    s.sequencer.current_step = clock.current_step;
+                                    s.pattern_edit = next_slot;
+                                    if effective_style.is_some() {
+                                        let owned = std::mem::take(&mut *s);
+                                        *s = crate::state::apply_pattern_style_on_advance(
+                                            owned,
+                                            effective_style.as_deref(),
+                                        );
+                                    }
                                 }
                             }
                         }

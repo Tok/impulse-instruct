@@ -39,6 +39,9 @@ pub use sequencer_state::{SequencerState, Step, TB303Step};
 pub mod fx;
 pub use fx::{FxState, ParamEqBand, ParamEqBandKind, default_param_eq_bands};
 
+pub mod chain_advance;
+pub use chain_advance::{LoopBoundaryAction, build_advance_target, classify_loop_boundary};
+
 pub mod morph;
 pub use morph::{ChainMorph, bit_reverse_rank, morph_tick, step_swapped};
 
@@ -928,6 +931,7 @@ pub mod jam_tools;
 pub mod llm_apply;
 pub mod llm_apply_seq;
 pub(crate) mod llm_helpers;
+pub(crate) mod llm_helpers_fx;
 pub(crate) mod llm_rack;
 pub mod transitions;
 pub mod transitions_presets;
