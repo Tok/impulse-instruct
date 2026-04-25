@@ -4,6 +4,29 @@ A detailed log of what's built.
 
 ---
 
+### REC→CHOP — record master bus into AmenSampler with auto slices
+
+- Lets the user sample their own jam back into the break rotation.
+  Click REC→CHOP on the amen panel: the shared master-output ring
+  buffer is frozen, run through `detect_onsets`, and loaded into
+  the AmenSampler with `slice_positions` set to the detected
+  transients.  Per-slice pitch / volume / reverse overrides are
+  cleared (the new break has its own dynamics).
+- Source ring buffer is now drained centrally in `app_update.rs`
+  rather than inside the granular panel — both granular CAPTURE
+  and amen REC→CHOP read from the same up-to-date tap, so the
+  amen button works whether or not the granular panel is visible.
+- New helpers in `panels/amen.rs`: `linearise_tap(tap, head) ->
+  Vec<f32>` re-orders the ring so slot 0 is the oldest sample;
+  `record_chop_into_amen(app)` runs the full freeze-detect-load
+  flow.  Wave thumbnail rebuilds against the captured buffer so
+  the panel waveform display matches what's loaded.
+- 10 new tests: linearise round-trip (empty / head=0 / head mid /
+  head=len wraps / length preservation) and the onset detector's
+  contract on a synthetic pulse-train break (slice-0 anchor,
+  sorted unit-range, silent-buffer safe default, short-buffer
+  default, max_slices cap).  Full suite at 1587 tests passing.
+
 ### Undo timeline scrubber — slider over the past/future stacks
 
 - The Ctrl+Z / Ctrl+Shift+Z stack always existed but was step-by-

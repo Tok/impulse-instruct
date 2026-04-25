@@ -157,16 +157,10 @@ pub fn draw_granular(app: &mut ImpulseApp, ui: &mut egui::Ui) {
     }
 
     // ── Live master-output ring buffer + CAPTURE button ─────────────────────
-    // Drain any samples the audio thread has produced since the last frame
-    // into our local ring (granular_tap / granular_tap_head).  Then render
-    // a compact min/max strip with a moving "head" cursor so the user can
-    // see what's currently in the buffer before clicking CAPTURE.
+    // The drain into `granular_tap` runs centrally (in app_update.rs) so
+    // the amen panel's REC→CHOP button can also read it.  Here we only
+    // render the visualisation + handle the CAPTURE button.
     let tap_len = app.granular_tap.len();
-    while let Ok(s) = app.granular_capture_rx.pop() {
-        let h = app.granular_tap_head;
-        app.granular_tap[h] = s;
-        app.granular_tap_head = (h + 1) % tap_len;
-    }
     // Bigger waveform strip (66 px — matches the amen panel) so the
     // ring buffer is actually legible.  Same dark-rect styling +
     // 0.5 stroke so the look is consistent with the amen display.

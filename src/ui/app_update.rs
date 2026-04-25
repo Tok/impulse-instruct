@@ -425,6 +425,21 @@ impl eframe::App for ImpulseApp {
         }
         self.update_audio_analysis(ctx);
         self.tick_ramps();
+        // Drain the master-output capture ring buffer into the shared
+        // tap so any panel (granular OR amen rec-chop) can read the
+        // most recent few seconds without competing for the rtrb
+        // consumer.  Was previously inline in the granular panel,
+        // which meant the tap went stale whenever the user wasn't
+        // looking at granular — so a "record into amen" button had no
+        // recent audio to slice.
+        let tap_len = self.granular_tap.len();
+        if tap_len > 0 {
+            while let Ok(s) = self.granular_capture_rx.pop() {
+                let h = self.granular_tap_head;
+                self.granular_tap[h] = s;
+                self.granular_tap_head = (h + 1) % tap_len;
+            }
+        }
         self.draw_windows(ctx);
         self.draw_menu_and_header(ctx);
         TopBottomPanel::bottom("footer")

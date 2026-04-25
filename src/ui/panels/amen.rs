@@ -66,6 +66,63 @@ fn load_and_cache(app: &mut ImpulseApp, path: &str) {
     app.state.write().amen.meta = meta;
 }
 
+/// Synthetic path label used by the REC→CHOP button so the amen
+/// panel's "auto-reload from disk" path doesn't try to load a file
+/// that doesn't exist.  Same pattern the granular panel uses for its
+/// in-memory CAPTURE.
+const REC_CHOP_LABEL: &str = "«rec→chop»";
+
+/// Re-order the `granular_tap` ring buffer so slot 0 holds the oldest
+/// sample, then return it as a flat `Vec<f32>`.  Pulled out so the
+/// amen REC→CHOP button can reuse the same logic the granular CAPTURE
+/// uses — both freeze the same shared master-output tap.
+pub(crate) fn linearise_tap(tap: &[f32], head: usize) -> Vec<f32> {
+    let n = tap.len();
+    if n == 0 {
+        return Vec::new();
+    }
+    let head = head % n;
+    let mut out = Vec::with_capacity(n);
+    out.extend_from_slice(&tap[head..]);
+    out.extend_from_slice(&tap[..head]);
+    out
+}
+
+/// Hand the captured master-output buffer to the AmenSampler with
+/// `detect_onsets`-derived slice positions.  Pure beyond the wave
+/// thumbnail rebuild + state mutations.  Pulled out so a unit test
+/// can drive the slice-positions math without touching audio /
+/// rtrb infrastructure.
+pub(crate) fn record_chop_into_amen(app: &mut ImpulseApp) {
+    let buf = linearise_tap(&app.granular_tap, app.granular_tap_head);
+    if buf.iter().all(|s| s.abs() < 1e-5) {
+        log::warn!("[amen] REC→CHOP: tap is silent, ignoring");
+        return;
+    }
+    let slice_count = app.state.read().amen.slice_count.max(1) as usize;
+    let onsets = crate::audio::onset::detect_onsets(&buf, SAMPLE_RATE, slice_count);
+    app.amen_ui.wave_cache = (REC_CHOP_LABEL.to_string(), build_wave_thumb(&buf, 256));
+    let arc = std::sync::Arc::new(buf);
+    let _ = app.audio_tx.push(AudioCommand::LoadSampler(arc));
+    {
+        let mut s = app.state.write();
+        s.amen.path = REC_CHOP_LABEL.to_string();
+        s.amen.slice_positions = onsets;
+        s.amen.start_offset = 0.0;
+        s.amen.end_offset = 1.0;
+        // Wipe per-slice overrides — the new break has its own
+        // dynamics, so old per-slice pitch / volume / reverse settings
+        // would be musically wrong on the freshly chopped material.
+        s.amen.slice_pitches.clear();
+        s.amen.slice_volumes.clear();
+        s.amen.slice_reverses.clear();
+        // No metadata for in-memory recordings — clear the stale
+        // entry so the strip says "no metadata" instead of
+        // showing the previous file's values.
+        s.amen.meta = None;
+    }
+}
+
 /// Downsample a mono sample buffer into `n_cols` min/max pairs for cheap
 /// waveform rendering.  Returns empty if `samples` is empty.
 fn build_wave_thumb(samples: &[f32], n_cols: usize) -> Vec<(f32, f32)> {
@@ -277,6 +334,22 @@ pub fn draw_amen(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                         velocity: 1.0,
                         slice: 0,
                     }));
+            }
+            // REC→CHOP — freeze the shared master-output ring buffer,
+            // run onset detection, and load it into AmenSampler with
+            // auto-set slice positions.  Lets the user record their
+            // own jam back into the break rotation.
+            if ui
+                .small_button(egui::RichText::new("REC→CHOP").monospace().size(7.0))
+                .on_hover_text(
+                    "Freeze the last few seconds of master output and\n\
+                     load it as the amen sample with slices auto-set\n\
+                     to detected onsets (slice_count entries).  In-\n\
+                     memory only — no file written.",
+                )
+                .clicked()
+            {
+                record_chop_into_amen(app);
             }
         });
     }

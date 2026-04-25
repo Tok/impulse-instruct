@@ -43,10 +43,6 @@ they ship and are reflected in `features.md`.
 - [ ] **Ableton Link tempo sync** - bidirectional BPM + bar-phase
   sync via the `ableton_link` crate.  Useful for jamming alongside
   Live / Ableton Push or another synth setup.
-- [ ] **Recording -> auto-chop -> AmenSampler** - one-click record a
-  loop from the app's own master bus, run `detect_onsets`, load it
-  straight into AmenSampler with auto slice positions.  Lets the
-  user sample their own jam back into the break rotation.
 - [ ] **MPE / MIDI 2.0 input** - the `midir` path only takes Note
   On/Off + CC today.  Adding per-note pitch / pressure / slide lets
   the bass voice become a proper MPE instrument instead of the
