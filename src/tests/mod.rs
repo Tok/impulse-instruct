@@ -36,6 +36,7 @@ mod lane_method_tests;
 mod lane_prompt_tests;
 mod lane_scheduler_tests;
 mod lane_schema_tests;
+mod llm_action_helpers_tests;
 mod llm_apply_extra_tests;
 mod llm_apply_seq_param_tests;
 mod llm_apply_seq_tests;

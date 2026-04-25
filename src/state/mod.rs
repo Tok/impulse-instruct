@@ -567,6 +567,39 @@ pub struct LlmState {
 /// is filled.
 pub const FEEDBACK_MAX: usize = 5;
 
+/// Cap on `LlmAgentState.pending_hints` — five queued hints is plenty
+/// for any cycle's prompt-injection budget.  Older entries get
+/// drained when this cap is exceeded.
+pub const HINT_QUEUE_MAX: usize = 5;
+
+/// True when `agent` matches the broadcast scope label.  Scope match
+/// is case-insensitive: an agent whose `scope` contains the label
+/// directly, OR whose persona name matches the label when scope is
+/// empty (i.e. agent is unscoped → reachable by any persona-name
+/// broadcast).  Pure helper so the matcher is unit-testable.
+pub fn agent_matches_broadcast_scope(agent: &LlmAgentState, scope: &str) -> bool {
+    let scope_lower = scope.to_ascii_lowercase();
+    let scope_match = agent
+        .scope
+        .iter()
+        .any(|sc| sc.eq_ignore_ascii_case(&scope_lower));
+    let persona_match =
+        agent.scope.is_empty() && agent.persona_name.eq_ignore_ascii_case(&scope_lower);
+    scope_match || persona_match
+}
+
+/// Push a hint into an agent's `pending_hints` queue, draining the
+/// oldest entries to stay at most `HINT_QUEUE_MAX` deep.  Pure helper
+/// (`&mut LlmAgentState` is a method-style receiver, fine per the
+/// guide — the agent owns its own consistency).
+pub fn push_pending_hint(agent: &mut LlmAgentState, hint: String) {
+    agent.pending_hints.push(hint);
+    if agent.pending_hints.len() > HINT_QUEUE_MAX {
+        let drop_n = agent.pending_hints.len() - HINT_QUEUE_MAX;
+        agent.pending_hints.drain(..drop_n);
+    }
+}
+
 /// One row of `LlmState.lane_scores`.  Tracks how well a lane's last
 /// generated output matched the rules we encode in the system prompt
 /// (subset rule, density, in-scale ratio, …) plus light bookkeeping

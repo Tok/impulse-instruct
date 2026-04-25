@@ -212,13 +212,7 @@ impl ImpulseApp {
                         self.session_dirty = true;
                     }
                     LlmAction::SetConversationMode(m) => {
-                        use crate::state::ConversationMode;
-                        let mode = match m.to_lowercase().as_str() {
-                            "off" => ConversationMode::Off,
-                            "dj" => ConversationMode::Dj,
-                            "mc" => ConversationMode::Mc,
-                            _ => ConversationMode::Producer,
-                        };
+                        let mode = crate::state::ConversationMode::from_str_lossy(m);
                         self.state.write().llm.conversation_mode = mode;
                         self.session_dirty = true;
                     }
@@ -351,34 +345,15 @@ impl ImpulseApp {
                             .iter_mut()
                             .find(|a| a.persona_name.eq_ignore_ascii_case(to))
                         {
-                            target.pending_hints.push(hint.clone());
-                            // Cap at 5 pending hints
-                            if target.pending_hints.len() > 5 {
-                                target.pending_hints.drain(..target.pending_hints.len() - 5);
-                            }
+                            crate::state::push_pending_hint(target, hint.clone());
                         }
                     }
                     LlmAction::BroadcastHint { scope, hint } => {
                         let mut s = self.state.write();
-                        let scope_lower = scope.to_ascii_lowercase();
                         let mut count = 0usize;
                         for agent in s.llm_agents.iter_mut() {
-                            // Match if agent's scope contains the
-                            // requested label (case-insensitive) OR
-                            // the agent's persona name matches when
-                            // their scope is empty (= "all").
-                            let scope_match = agent
-                                .scope
-                                .iter()
-                                .any(|sc| sc.eq_ignore_ascii_case(&scope_lower));
-                            let persona_match = agent.scope.is_empty()
-                                && agent.persona_name.eq_ignore_ascii_case(&scope_lower);
-                            if scope_match || persona_match {
-                                agent.pending_hints.push(hint.clone());
-                                if agent.pending_hints.len() > 5 {
-                                    let drop_n = agent.pending_hints.len() - 5;
-                                    agent.pending_hints.drain(..drop_n);
-                                }
+                            if crate::state::agent_matches_broadcast_scope(agent, scope) {
+                                crate::state::push_pending_hint(agent, hint.clone());
                                 count += 1;
                             }
                         }

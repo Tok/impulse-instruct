@@ -13,6 +13,22 @@ pub enum ConversationMode {
     Mc,  // jungle/rave MC — "selector!", "junglist massive!", "rewind!"
 }
 
+impl ConversationMode {
+    /// Case-insensitive parse from the LLM's `mode` field.  Unknown
+    /// strings (typos, future modes, empty input) fall back to
+    /// `Producer` — the safe default that emits readable comments.
+    /// Pure helper so the parser logic is unit-testable independent
+    /// of the ui::llm_drain dispatch path.
+    pub fn from_str_lossy(s: &str) -> Self {
+        match s.trim().to_lowercase().as_str() {
+            "off" => Self::Off,
+            "dj" => Self::Dj,
+            "mc" => Self::Mc,
+            _ => Self::Producer,
+        }
+    }
+}
+
 /// NeuTTS server port.
 pub const NEUTTS_PORT: u16 = 8770;
 
