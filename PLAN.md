@@ -8,9 +8,6 @@ they ship and are reflected in `features.md`.
 
 ## DSP
 
-- [ ] **Mid/side master processing** - mid/side split with separate
-  width / EQ / saturation per side on the `MasterOutput` module.
-  Opens up "wider than stereo" moves that stay mono-sum-safe.
 - [ ] **Karplus-Strong plucked string voice** - cheap delay-line
   synthesis for acoustic-ish tones.  New `ModuleKind::PluckString`,
   single oscillator + damping knob + excitation noise burst.

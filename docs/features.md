@@ -4,6 +4,33 @@ A detailed log of what's built.
 
 ---
 
+### Mid/side master processing on `MasterOutput`
+
+- **Six new knobs on the master module**: GAIN / TILT / SAT per side,
+  running after the raw (mid, side) computation and before L/R
+  recombination in the audio master stage.  The existing
+  `fx.stereo_width` still handles global width scaling; these add
+  per-side tonal control + saturation character.
+- **DSP** (`src/audio/dsp/ms_master.rs`): per-side 200 Hz low shelf +
+  5 kHz high shelf pair whose gains track the tilt knob (opposing,
+  ±6 dB), gain pre-trim (±12 dB), and arctan soft-clip saturator.
+  Biquads reuse ParamEq's RBJ coefficient helper + dirty-check
+  caching; flat defaults (0.5 on gain/tilt, 0 on sat) short-circuit
+  to pass-through so an un-touched master adds no colour.  Soft-clip
+  scaled by 2/π so over-driven input lands strictly inside ±1 and
+  the downstream master clamp never hits the saturator output.
+- **UI**: MasterOutput grid grows to 2 rows — row 1 keeps the
+  original MASTER VOLUME + voice-presence strip, row 2 adds
+  `M/S | MID G / MID T / MID S | SIDE G / SIDE T / SIDE S` knobs
+  (the usual grayscale params).
+- **LLM schema**: `fx.ms_{mid,side}_{gain,tilt,sat}` exposed with
+  per-knob lock paths; `apply_fx_update` + `fx_field_mut` +
+  `jam_tools` all wired for ramps.
+- 10 tests cover flat-default transparency, ±12 dB gain mapping,
+  side-gain narrowing, tilt raising a 6 kHz sine's RMS when
+  treble-biased, saturation bypass at 0, mid-range lift at 1, and
+  the strict ±1 bound on over-driven saturation.
+
 ### Standalone pitch-shifter FX (PSOLA, ±24 st + feedback)
 
 - **New `FxPitchShift` module + `FxStep::PitchShift`** — dedicated
