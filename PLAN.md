@@ -8,10 +8,6 @@ they ship and are reflected in `features.md`.
 
 ## Sequencer
 
-- [ ] **Polymeter** - per-voice step length independent of the global
-  step count, so a 5-step bass line loops against a 16-step drum
-  pattern for classic cross-rhythms.  Already have `*_len` keys in
-  the LLM schema; implement the tick math + UI.
 - [ ] **Per-step velocity curves** - promote `accent` from boolean-ish
   (0 / 1) to a real 0..1 scalar with a per-step slider lane in the UI,
   so "quiet-loud-quiet-medium" grooves are expressible without the

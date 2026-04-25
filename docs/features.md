@@ -4,6 +4,34 @@ A detailed log of what's built.
 
 ---
 
+### Polymeter — global tick no longer wraps at MAX_STEPS
+
+- The voice-indexing math always did `step % voice_steps`, so per-
+  voice step lengths could already differ — but the global tick
+  counter wrapped at `MAX_STEPS = 64`, silently dropping one slot
+  every 64 ticks for any voice whose length didn't divide 64.  A
+  5-step bass against a 16-step kit jumped from bass slot 3 at
+  tick 63 straight to slot 0 at tick 64, skipping slot 4 every
+  cycle.
+- This commit removes the wrap.  `step` keeps growing as `usize`;
+  on 32-bit platforms it overflows after ~13 years of continuous
+  play at 16 steps/sec, so an explicit wrap is unnecessary.  Voice
+  indexing applies its own modulo and is unchanged.
+- `loop_count` previously incremented when wrap-detection saw
+  `step < prev_step`.  It now derives from
+  `step / seq.steps.max(1)`, so a "loop" is one full cycle of the
+  configured global step count.  Chain advancement (which fires
+  when `loop_count` changes) and `prob_hit`'s seed variation keep
+  working with the same semantics.
+- `audio/mod.rs`: `global_step_count` delta simplifies to plain
+  `curr - prev`; the wrap-fallback branch is gone.
+- 3 new tests in `polymeter_tests.rs` lock the cross-rhythm
+  contract: a 5-step bass against a 16-step kit fires its full
+  LCM(5,16)=80 cycle correctly; voice indexing stays continuous
+  across the would-be MAX_STEPS boundary (slot 3 → slot 4 → slot 0,
+  no skip, no double-fire); `loop_count` tracks `seq.steps`
+  cycles.  The existing wrap-test was renamed + inverted.
+
 ### Native bass LFO `Pan` target + per-voice `lfo_phase` offset
 
 - **Replaces the Bach demo's 10 Hz Python pan loop** with a DSP
