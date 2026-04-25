@@ -91,6 +91,16 @@ pub enum AudioCommand {
     /// Updated FX routing plan derived from the rack cable graph.
     /// Sent whenever the rack topology changes (connect/disconnect/enable).
     SetFxPlan(FxPlan),
+    /// Snap the sequencer clock to a specific step boundary,
+    /// resetting the sample accumulator.  Used by Ableton Link
+    /// bar-phase alignment (`tick_link_sync`) to align our pattern
+    /// with the network's bar boundary on enable.  Snapping the
+    /// accumulator to 0 means the next block starts a fresh step
+    /// rather than carrying over a partial sample count from the
+    /// pre-snap position.
+    SnapClock {
+        step: usize,
+    },
 }
 
 // ─── Audio Engine ─────────────────────────────────────────────────────────────
@@ -276,6 +286,10 @@ impl AudioEngine {
                             } => dsp.load_impulse_response(data, ch, reversed),
                             AudioCommand::ClearImpulseResponse => dsp.clear_impulse_response(),
                             AudioCommand::SetFxPlan(plan) => dsp.set_fx_plan(plan),
+                            AudioCommand::SnapClock { step } => {
+                                clock.current_step = step;
+                                clock.sample_accumulator = 0.0;
+                            }
                         }
                     }
 

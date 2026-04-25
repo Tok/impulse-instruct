@@ -15,6 +15,7 @@ cargo test                           # unit tests (split across src/tests/)
 ./scripts/run-tests.sh --coverage    # HTML coverage report
 ./scripts/build-all.sh               # Linux + Windows EXE → dist/
 ./scripts/download-models.sh         # fetch Gemma 4 E4B GGUF (~4.6 GB, default) + NeuTTS Air Q8 (~803 MB, optional)
+./scripts/download-samples.sh <pack> # fetch CC-licensed sample packs (salamander/sso/vsco2/instruments-all + reference-only amen/textures/wavetables/impulses)
 ./scripts/run-llm-tests.sh           # all LLM integration suites (needs running model)
 ./scripts/run-llm-style.sh           # artist/genre reference tests only
 ./scripts/run-llm-theory.sh          # music theory + producer lingo tests only
@@ -27,6 +28,7 @@ start.bat                            # build + launch
 scripts\run-tests.bat
 scripts\build-all.bat
 scripts\download-models.bat
+scripts\download-samples.bat
 scripts\build-llama-server.bat
 scripts\run-llm-tests.bat
 scripts\run-llm-style.bat

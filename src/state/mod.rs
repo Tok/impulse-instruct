@@ -159,6 +159,7 @@ pub mod module_kind;
 pub mod rack;
 mod rack_presets;
 pub mod rack_scope;
+mod rack_wiring;
 pub use fx_plan::compile_fx_plan;
 pub use fx_types::{FX_STEP_COUNT, FeedbackRoute, FxPlan, FxStep, SidechainSource, VoiceSend};
 pub use modulation::{

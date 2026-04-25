@@ -6,42 +6,6 @@ This file lists **future work only** — completed items get moved into
 
 ---
 
-## Next session — kickoff items
-
-These two are explicitly queued for the next session:
-
-- [ ] **Sample-pack download helper(s)** — mirror the
-  `scripts/download-models.sh` / `download-models.bat` pattern for the
-  CC-licensed instrument packs the SAMPLER+ module can play
-  (Salamander Grand, Sonatina Symphonic Orchestra, VSCO 2 CE).
-  See `samples/instruments/README.md` for the source URLs already
-  curated.  Likely shape: `scripts/download-instruments.sh` with a
-  `--pack <name>` selector, fetching into
-  `samples/instruments/<pack_name>/` so the existing path-scan
-  resolves automatically.  Same idea probably wants extending to
-  amen / textures / wavetables / IRs (one umbrella
-  `download-samples.sh` with sub-commands).
-- [ ] **Audit the `Full` rack preset** —
-  `src/state/rack_presets.rs::RACK_PRESETS[2] (name = "Full")` was
-  authored before the V2 module sprint and is missing every module
-  added since.  Concretely, it should pick up:
-  - **Voices**: `PluckString`, `WavetableVoice`, `SampleInstrument`
-  - **FX**: `FxLimiter`, `FxFilter`, `FxComb`, `FxTilt`,
-    `FxTransient`, `FxExciter`, `FxMultitap`, `FxRevDelay`,
-    `FxTapeStop`, `FxStutter`, `FxFreeze`, `FxConvReverb`,
-    `FxParamEq`, `FxPitchShift`, `FxFreqShift`, `FxWiden`,
-    `FxGate`, `FxVocoder`, `FxPan`
-  - **Analysis / viz**: `SpectrumAnalyzer`, `StereoMeter`,
-    `ActivityTimeline`, `BarOscilloscope`, `StereoVectorscope`,
-    `LfoScope`, `PitchTracker`, `ChordDisplay`, `Spectrogram`,
-    `LoudnessMeter`, `PhaseWheel`, `EventStream`
-  Decide if "Full" really wants *every* module (could be visually
-  overwhelming) or a curated "showcase" selection — and confirm
-  the smaller presets ("Solo / Duo / Swarm / Crew") still feel
-  right next to the new modules.
-
----
-
 ## SampleInstrument V2 — outstanding follow-ups
 
 The 9 main stages are shipped (see features.md).  Remaining slices:
@@ -87,11 +51,11 @@ The 9 main stages are shipped (see features.md).  Remaining slices:
 
 ## Integration — open
 
-- [ ] **Ableton Link bar-phase alignment** (Link V2).  Tempo sync
-  shipped; bar-phase needs threading Link's quantum (typically
-  4 beats) through the sequencer clock advance so our step
-  counter snaps to the network's bar boundary on enable / on
-  long-running drift.
+- [ ] **Continuous Link bar-phase drift correction**.  V2 added
+  bar-phase snap on the off→on transition (see features.md);
+  long-running drift correction during a session is still open —
+  needs a tolerance window and re-snap policy that doesn't
+  disturb a stable performance.
 
 ## Intelligence
 

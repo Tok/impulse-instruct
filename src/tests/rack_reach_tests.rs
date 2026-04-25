@@ -295,36 +295,12 @@ fn reaches_master_default_preset_voices_all_reach() {
                 continue;
             }
             // Voice modules MUST reach master.  FX may not (the chain
-            // is intentionally orphaned in some presets).
-            let is_voice = !matches!(
-                m.kind,
-                ModuleKind::FxReverb
-                    | ModuleKind::FxDelay
-                    | ModuleKind::FxChorus
-                    | ModuleKind::FxPhaser
-                    | ModuleKind::FxFlanger
-                    | ModuleKind::FxLimiter
-                    | ModuleKind::FxFilter
-                    | ModuleKind::FxComb
-                    | ModuleKind::FxTilt
-                    | ModuleKind::FxTransient
-                    | ModuleKind::FxExciter
-                    | ModuleKind::FxMultitap
-                    | ModuleKind::FxRevDelay
-                    | ModuleKind::FxTapeStop
-                    | ModuleKind::FxStutter
-                    | ModuleKind::FxFreeze
-                    | ModuleKind::FxRingMod
-                    | ModuleKind::FxWaveshaper
-                    | ModuleKind::FxBitcrush
-                    | ModuleKind::FxEq
-                    | ModuleKind::FxCompressor
-                    | ModuleKind::FxTapeSat
-                    | ModuleKind::FxDrive
-                    | ModuleKind::FxAutotune
-                    | ModuleKind::FxPan
-            );
-            if is_voice {
+            // is intentionally orphaned in some presets).  Use the
+            // module's declared zone instead of an FX kinds match —
+            // adding a new FxXxx variant then doesn't require touching
+            // this list, and Zone::Voice is the canonical answer to
+            // "is this a voice?" elsewhere in the rack code.
+            if m.kind.default_zone() == crate::state::Zone::Voice {
                 assert!(
                     rack.reaches_master(m.id),
                     "preset '{}' voice {:?} should reach master",

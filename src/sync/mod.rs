@@ -4,4 +4,4 @@
 // MIDI clock master / OSC tempo sync would slot in here too.
 
 pub mod link;
-pub use link::LinkSync;
+pub use link::{LINK_QUANTUM, LinkSync};

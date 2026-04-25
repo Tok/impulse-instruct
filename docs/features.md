@@ -4,6 +4,108 @@ A detailed log of what's built.
 
 ---
 
+### Ableton Link bar-phase alignment (V2)
+
+Tempo sync shipped in V1; V2 adds the bar-phase snap follow-up
+flagged in PLAN.md.  When the user toggles Link on, the sequencer's
+`current_step` is realigned to the network's current bar position
+so our 16-step pattern starts from the correct sub-beat instead of
+wherever it happened to be sitting.
+
+- `LinkSync::pull_phase(quantum)` — wraps `rusty_link`'s
+  `phase_at_time(clock_micros, quantum)`.  Returns `Some(beats)` in
+  `[0, quantum)` when Link is enabled, `None` on the stub build or
+  when disabled.  Mirrors the `pull_tempo` shape so callers don't
+  need to gate on the cargo feature.
+- `AudioCommand::SnapClock { step }` — new lock-free command from
+  the UI thread.  The audio callback resets `clock.current_step`
+  and `clock.sample_accumulator` on receipt, so the next block
+  starts fresh on the snapped step instead of carrying over a
+  partial sample count.
+- `tick_link_sync` detects the off→on edge by comparing
+  `was_enabled` against the user's `link_enabled` pref before
+  calling `enable()`, then routes through `snap_clock_to_link_phase`
+  when the transition fires.  Pure mapping
+  `link_phase_to_step(phase, step_division)` — `phase * step_division`
+  modulo bar length — is a free function so the math is testable
+  without the audio thread or a Link session.
+- 7 new tests (5 over the phase→step mapping covering the 16th /
+  8th / 32nd grids, pathological phase wrapping, and zero
+  `step_division`; 2 over `pull_phase` returning `None` when
+  disabled or on the stub build).  Total: **1875 tests passing**.
+- Continuous drift correction within a session (re-snap when the
+  cumulative phase delta crosses a tolerance) is intentionally
+  deferred — V2 stays one-shot to keep the UX surprise contained.
+
+### `Full` rack preset audit + new `Full + Viz` showcase
+
+The `Full` rack preset (`src/state/rack_presets.rs`) was authored
+before the V2 module sprint and was missing every voice / FX added
+since.  Caught up:
+
+- **Voices** — added `PluckString`, `WavetableVoice`,
+  `SampleInstrument` so all 13 voice modules are present.
+- **FX** — added the 19 missing FX (`FxLimiter`, `FxFilter`,
+  `FxComb`, `FxTilt`, `FxTransient`, `FxExciter`, `FxMultitap`,
+  `FxRevDelay`, `FxTapeStop`, `FxStutter`, `FxFreeze`,
+  `FxConvReverb`, `FxParamEq`, `FxPitchShift`, `FxFreqShift`,
+  `FxWiden`, `FxGate`, `FxVocoder`, `FxPan`) and reordered the FX
+  list by family (distortion → filter → modulation → time-domain
+  → pitch → glitch → dynamics → stereo) so neighbouring cards on
+  the rack share a sonic role.
+- **LFO count** — bumped 4 → 6, since the larger FX pool justifies
+  more modulation sources.
+- **New `Full + Viz` preset** — a curated showcase that extends
+  `Full` with one representative analysis module per family
+  (`StereoMeter`, `SpectrumAnalyzer`, `BarOscilloscope`,
+  `EventStream`, `LoudnessMeter`, `PhaseWheel`).  Kept separate
+  from `Full` because the 12 viz modules together would clutter
+  the rack and most overlap functionally; users who want the full
+  diagnostic gallery now have a one-click path without burying the
+  audio path in `Full`.
+- **`wire_default_cables` fix** — the V2 voices weren't in the
+  default-wiring voice list, so even when added to a preset they'd
+  appear silent on the rack (no sequencer-CV trigger, no master
+  audio cable).  Added them so the cards actually make sound out
+  of the box.
+- **Reachability test refactor** —
+  `tests::rack_reach_tests::reaches_master_default_preset_voices_all_reach`
+  was hand-enumerating FX kinds to exclude from "must reach
+  master" assertions, which silently became incomplete every time
+  a new FX module shipped.  Replaced with `default_zone() ==
+  Zone::Voice`, the canonical answer to "is this a voice?" used
+  elsewhere in the rack code.  Adding a new FX no longer requires
+  touching this test.
+- 1868 tests still passing.
+
+### Sample-pack download helper
+
+`scripts/download-samples.sh` (+ `download-samples.bat` on Windows)
+mirrors the `download-models.sh` UX as a single umbrella entry point
+for fetching CC-licensed audio packs.
+
+- **Automated** (drops into `samples/instruments/<pack>/`):
+  - `salamander` — Salamander Grand Piano V3, CC-BY 3.0 (~730 MB)
+  - `sso` — Sonatina Symphonic Orchestra, free-use (~1.3 GB)
+  - `vsco2` — VSCO 2 Community Edition, CC0 (~2.3 GB)
+  - `instruments-all` — runs all three in sequence (~4.4 GB total)
+  Uses `git clone --depth 1` when git is available; otherwise falls
+  back to the GitHub zipball (`/archive/refs/heads/master.zip`) via
+  curl/wget + unzip on Linux/macOS, or the built-in `curl` + `tar`
+  on Windows 10/11 — so end-user binaries without git installed
+  still work.  Each pack prompts before downloading and skips
+  cleanly if the destination directory already exists.
+- **Reference-only** (for libraries that don't ship a clean
+  non-interactive archive — prints the curated source URLs from
+  `samples/README.md` plus the **absolute** install path so the
+  user can't get confused about where files belong):
+  `amen`, `textures`, `wavetables`, `impulses`.
+- After cloning, the SAMPLER+ card's LOAD button can navigate into
+  the pack subfolder to pick a `.sfz`.  The `/api/sample
+  {random:true}` picker only scans top-level `samples/instruments/`,
+  so the file-dialog path is the canonical workflow for subfolder
+  packs (a recursive scan is a future cleanup, not a blocker).
+
 ### Ableton Link bidirectional tempo sync
 
 Optional `link` cargo feature (default off) pulls in `rusty_link`,

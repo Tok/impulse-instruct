@@ -22,10 +22,11 @@
 //   3. `push(local_bpm)` — call when the user changes BPM locally,
 //      so peers see the new tempo.
 //
-// V1 stays tempo-only.  Bar-phase alignment (snap our sequencer
-// step counter to Link's quantum) is a planned follow-up — it
-// requires touching the sequencer clock advance logic, so it ships
-// as Link-V2.
+// V2 adds bar-phase alignment (`pull_phase`) — snap our sequencer
+// step counter to the network's bar boundary on enable.  The snap
+// itself happens audio-side via `AudioCommand::SnapClock`; this
+// module's job is just to report the network phase.  Continuous
+// drift correction within a session is intentionally deferred.
 
 use std::sync::atomic::{AtomicBool, Ordering};
 
@@ -45,7 +46,7 @@ mod imp {
 
     impl Inner {
         pub fn new(initial_bpm: f32) -> Self {
-            let mut link = AblLink::new(initial_bpm as f64);
+            let link = AblLink::new(initial_bpm as f64);
             link.enable(false); // wait for the user toggle
             Self {
                 link,
@@ -55,10 +56,6 @@ mod imp {
 
         pub fn enable(&mut self, on: bool) {
             self.link.enable(on);
-        }
-
-        pub fn is_enabled(&self) -> bool {
-            self.link.is_enabled()
         }
 
         pub fn num_peers(&self) -> usize {
@@ -87,6 +84,18 @@ mod imp {
                 .set_tempo(local_bpm as f64, self.link.clock_micros());
             self.link.commit_app_session_state(&self.scratch);
         }
+
+        /// Read the network's current beat-phase within `quantum`
+        /// (typically `LINK_QUANTUM` = 4 beats).  Returns a value in
+        /// `[0, quantum)` representing how far into the current bar
+        /// the shared clock thinks we are.  Used by bar-phase
+        /// alignment to snap our sequencer to the network's bar
+        /// boundary.
+        pub fn pull_phase(&mut self, quantum: f64) -> f64 {
+            self.link.capture_app_session_state(&mut self.scratch);
+            self.scratch
+                .phase_at_time(self.link.clock_micros(), quantum)
+        }
     }
 }
 
@@ -110,6 +119,12 @@ mod imp {
             None
         }
         pub fn push_tempo(&mut self, _local_bpm: f32) {}
+        /// Stub returns 0.0 — the LinkSync wrapper never calls this on
+        /// the disabled / stub path (the public `pull_phase` early-
+        /// returns `None`), so the value is unused.
+        pub fn pull_phase(&mut self, _quantum: f64) -> f64 {
+            0.0
+        }
     }
 }
 
@@ -168,6 +183,17 @@ impl LinkSync {
         }
         self.inner.push_tempo(local_bpm);
     }
+
+    /// Read the network's current bar-phase in `[0, quantum)` beats.
+    /// Returns `None` when Link is disabled or the build is the no-op
+    /// stub — callers can treat both as "no phase information, keep
+    /// the local clock".
+    pub fn pull_phase(&mut self, quantum: f64) -> Option<f64> {
+        if !self.is_enabled() || !Self::is_supported() {
+            return None;
+        }
+        Some(self.inner.pull_phase(quantum))
+    }
 }
 
 #[cfg(test)]
@@ -206,5 +232,27 @@ mod tests {
     fn is_supported_matches_feature_flag() {
         // True only when built with `--features link`.
         assert_eq!(LinkSync::is_supported(), cfg!(feature = "link"));
+    }
+
+    #[test]
+    fn pull_phase_returns_none_when_disabled() {
+        // Mirrors `pull_tempo_returns_none_when_disabled` — the
+        // bar-phase path also early-exits when Link is off so the
+        // caller doesn't need to remember to gate.
+        let mut link = LinkSync::new(120.0);
+        assert_eq!(link.pull_phase(LINK_QUANTUM), None);
+    }
+
+    #[test]
+    fn pull_phase_returns_none_when_stub_build() {
+        // On the stub build (no `link` feature), pull_phase should
+        // never return Some even after `enable(true)` — the stub
+        // can't observe network state.  This test still passes on
+        // the real build because there `is_enabled()` is what gates
+        // (we never `enable(true)` here).
+        let link = LinkSync::new(120.0);
+        if !LinkSync::is_supported() {
+            assert!(!link.is_enabled());
+        }
     }
 }
